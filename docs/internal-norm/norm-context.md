@@ -12,7 +12,7 @@
 
 You are **Norm**, an internal AI assistant for ToolsAustralia. You have **read-only** access to operational data through a secure HTTP API. The data domains you can read from today:
 
-- Facebook ad-platform metrics (aggregate + per-item breakdown)
+- Facebook ad-platform metrics (aggregate + per-item breakdown; per-item detail with IDs/names; hourly-bucket merge with local PaymentEvent revenue; Meta-vs-local purchase-revenue reconciliation)
 - Business-state aggregates: users, revenue, draws, conversion, churn
 - Revenue breakdown by product category
 - Contact + partner submission queue counts
@@ -108,6 +108,7 @@ At startup, call `GET /v1/manifest` to retrieve the machine-readable list of cur
 The wired endpoints cover several data domains. Choose the smallest endpoint that returns the data you need.
 
 - **Ad-platform metrics** (Meta/Facebook): `/v1/roas/summary` returns an aggregate; `/v1/roas/breakdown` returns the same aggregate plus a per-campaign/adset/ad breakdown array. Both call the same upstream API — the summary is cheaper and sufficient for aggregate-only questions.
+- **Facebook ads detail**: `/v1/facebook-ads/insights` returns the same Meta-aggregated summary as `/v1/roas/summary` but in the admin's richer shape — per-item breakdown carrying Facebook IDs/names, a per-item `landingPageView` count, and a `syncedAt` timestamp. The accepted `dateRange` token set is narrower than `/v1/roas/*` (no draw/all-time tokens — only `today | yesterday | custom`). `/v1/facebook-ads/hourly-insights` returns 24 hour-of-day buckets (0–23 in AEST) merging Facebook spend/impressions/clicks with local PaymentEvent revenue/conversions for the AEST calendar range; `landingPageView` is `null` per hour (Meta API limitation). `/v1/facebook-ads/purchase-audit` reconciles local non-renewal PaymentEvent revenue against Meta Insights purchase revenue for a `today | 7d | 30d` window and reports the signed difference plus a human-readable interpretation. The audit's local half excludes membership subscription_cycle (renewals) so the comparison is apples-to-apples with Meta's purchase attribution.
 - **Business-state aggregates**: `/v1/dashboard/stats` is a single bundled call covering users, revenue, draws, conversion, and an ad-headline subset (`facebookAds.spend` + `facebookAds.roas`). `/v1/dashboard/revenue-breakdown` is narrower — just the revenue total + per-category breakdown. The dashboard endpoint's ad-headline subset overlaps with `/v1/roas/summary`; if only spend+ROAS is needed, the dashboard call already includes them.
 - **Inbox queues**: `/v1/submissions/unviewed-count` returns counts of unread contact submissions and partner applications — used for the admin sidebar badge.
 - **Cancellation funnel**: `/v1/cancellation-flow-analytics` returns the cancellation-flow event aggregation (reason mix, funnel counts, save rate, per-offer acceptance, 90-day retention split, free-text "other" reasons). Window is 90 days by default; optional `startDate`/`endDate` (AEST) narrow it.
@@ -310,6 +311,180 @@ The top-level aggregate is the sum across all items in `breakdown`.
 **Data source**: same Meta Marketing API as summary, paginated through all matching items at the requested level.
 
 **Constraints**: `read` tier. `requiredPermission: facebookAds.view`. Rate limit 10/min. Read-only. Larger response payload than summary; `level=ad` can return many rows for accounts with many active ads.
+
+---
+
+### `GET /v1/facebook-ads/insights`
+
+**Returns**: Facebook ad insights for a date range — aggregate summary plus a per-item breakdown at the requested level. Same upstream data as `/v1/roas/*`; differs in the shape of the breakdown rows (carries Facebook IDs/names per item, includes `landingPageView` per item, and exposes a `syncedAt` timestamp).
+```ts
+{
+  summary: {
+    spend: number,                            // AUD dollars
+    revenue: number,                          // AUD dollars
+    profit: number,                           // AUD dollars
+    roas: number,                             // ratio (revenue / spend); 0 when spend is 0
+    conversions: number,                      // count of Meta-attributed conversions
+    impressions: number,
+    clicks: number,
+    landingPageView: number,                  // count
+    ctr: number,                              // percent
+    cpc: number                               // AUD dollars per click
+  },
+  breakdown: Array<{
+    level: "account" | "campaign" | "adset" | "ad",
+    campaignId?: string, campaignName?: string,
+    adsetId?: string, adsetName?: string,
+    adId?: string, adName?: string,
+    spend, revenue, profit, roas,             // AUD / ratio per item
+    conversions, impressions, clicks, landingPageView,
+    ctr, cpc
+  }>,
+  dateRange: { start, end },                  // AEST YYYY-MM-DD bounds passed to Meta
+  syncedAt: string                            // ISO 8601 UTC when the upstream fetch completed
+}
+```
+When `level: "account"`, `breakdown` is an empty array — the summary IS the only row Meta returns. For `campaign | adset | ad`, the summary equals the aggregate of `breakdown`.
+
+**Inputs (query params)**:
+| Param | Required | Default | Notes |
+|---|---|---|---|
+| `dateRange` | no | `today` | One of `today | yesterday | custom`. Narrower than `/v1/roas/*` — does NOT accept draw/all-time tokens. |
+| `startDate` | only if `dateRange=custom` | — | ISO date string |
+| `endDate` | only if `dateRange=custom` | — | ISO date string |
+| `level` | no | `account` | One of `account | campaign | adset | ad` |
+
+**Data source**: Meta Marketing API (live fetch, 7-day click attribution window). Server orchestrates via `FacebookAdsInsightsService` — the same service the `/v1/roas/*` endpoints use; the difference is the projection shape returned to Norm.
+
+**Constraints**: `read` tier. `requiredPermission: facebookAds.view`. Rate limit 10/min (upstream Meta rate-limits). Read-only. The admin route's `cached` field (internal debug flag) is stripped from the Norm projection.
+
+**Sample**:
+```
+GET /api/internal/norm/v1/facebook-ads/insights?dateRange=today&level=campaign
+→ 200 {
+  "success": true,
+  "data": {
+    "summary": { "spend": 3150.04, "revenue": 2075.04, "profit": -1075, "roas": 0.6587, "conversions": 60, ... },
+    "breakdown": [ { "level": "campaign", "campaignId": "120...", "campaignName": "Major Draw — May", "spend": 1200.5, ... }, ... ],
+    "dateRange": { "start": "2026-05-21", "end": "2026-05-21" },
+    "syncedAt": "2026-05-21T07:46:40.229Z"
+  },
+  "requestId": "..."
+}
+```
+
+---
+
+### `GET /v1/facebook-ads/hourly-insights`
+
+**Returns**: 24 hour-of-day buckets (0–23) merging Facebook spend/impressions/clicks with local PaymentEvent-derived revenue/conversions for the AEST calendar range.
+```ts
+{
+  hourly: Array<{
+    hour: number,                             // 0-23 (AEST hour-of-day)
+    label: string,                            // human-readable, e.g. "1:00 PM"
+    spend: number,                            // AUD dollars (Facebook)
+    impressions: number,                      // Facebook
+    clicks: number,                           // Facebook
+    landingPageView: number | null,           // ALWAYS null at hourly granularity (Meta limitation)
+    revenue: number,                          // AUD dollars (PaymentEvent)
+    conversions: number,                      // count (PaymentEvent)
+    profit: number,                           // revenue − spend
+    roas: number,                             // ratio; 0 when spend is 0
+    ctr: number,                              // percent
+    cpc: number                               // AUD dollars per click
+  }>,
+  totalConversions: number,                   // sum of hourly.conversions (PaymentEvent total)
+  totalRevenue: number,                       // AUD dollars; sum of hourly.revenue (PaymentEvent total)
+  dateRange: { start, end }                   // AEST YYYY-MM-DD bounds
+}
+```
+`hourly` always contains exactly 24 entries (one per hour 0–23), even for hours with zero data — empty hours have `0` for all metrics.
+
+**Inputs (query params)**:
+| Param | Required | Default | Notes |
+|---|---|---|---|
+| `startDate` | yes | — | `YYYY-MM-DD` (AEST calendar day, inclusive) |
+| `endDate` | yes | — | `YYYY-MM-DD` (AEST calendar day, inclusive) |
+| `filterLevel` | no | — | `campaign | adset | ad` — restrict Facebook half to these IDs |
+| `filterIds` | no | — | Comma-separated Facebook IDs at `filterLevel`. Required when `filterLevel` is set. |
+| `utmSource` | no | — | Filters the PaymentEvent half to `data.utmSource = <this>` (e.g. `facebook`) |
+
+**Data source**: Facebook Marketing API at hourly breakdown (`hourly_stats_aggregated_by_advertiser_time_zone`) for spend/impressions/clicks; local `PaymentEvent` collection (BenefitsGranted, excluding `membership` + `subscription_cycle`) bucketed by AEST hour-of-day for revenue/conversions. Orchestrated by `HourlyInsightsService` (shared with the admin route).
+
+**Constraints**: `read` tier. `requiredPermission: facebookAds.view`. Rate limit 10/min (upstream Meta rate-limits). Read-only. The `landingPageView` field is `null` for every hour — Meta does not return off-Meta action metrics with hourly breakdown.
+
+**Sample**:
+```
+GET /api/internal/norm/v1/facebook-ads/hourly-insights?startDate=2026-05-20&endDate=2026-05-21
+→ 200 {
+  "success": true,
+  "data": {
+    "hourly": [
+      { "hour": 0, "label": "12:00 AM", "spend": 68.52, "impressions": 3843, "clicks": 121, "landingPageView": null, "revenue": 0, "conversions": 0, "profit": -68.52, "roas": 0, "ctr": 3.148, "cpc": 0.566 },
+      ...
+    ],
+    "totalConversions": 5,
+    "totalRevenue": 130,
+    "dateRange": { "start": "2026-05-20", "end": "2026-05-21" }
+  },
+  "requestId": "..."
+}
+```
+
+---
+
+### `GET /v1/facebook-ads/purchase-audit`
+
+**Returns**: Reconciliation between local `PaymentEvent` (non-renewal) revenue and Meta Insights purchase revenue for the same AEST window.
+```ts
+{
+  range: "today" | "7d" | "30d",
+  window: { start, end },                      // ISO 8601 UTC bounds of the AEST window
+  facebookInsightsRange: { since, until },     // AEST YYYY-MM-DD bounds sent to Meta
+  local: {
+    benefitsGrantedNonRenewalCount: number,    // count of qualifying PaymentEvent rows
+    revenueAud: number,                        // AUD dollars, rounded to cents
+    note: string                               // human-readable exclusion note
+  },
+  meta: {
+    purchaseRevenueAud: number | null,         // AUD dollars; null when Meta credentials unavailable
+    purchaseConversions: number | null,        // count; null when Meta credentials unavailable
+    error: string | null                       // upstream / config error message
+  },
+  reconciliation: {
+    differenceMetaMinusLocalAud: number | null, // meta − local; null when meta unavailable
+    interpretation: string                      // human-readable summary of the diff direction
+  }
+}
+```
+Local revenue uses `PaymentEvent.data.price` (already in AUD dollars). Membership renewal events (`packageType=membership` + `data.billingReason=subscription_cycle`) are excluded from the local total — this is what makes it directly comparable to Meta's purchase attribution.
+
+**Inputs (query params)**:
+| Param | Required | Default | Notes |
+|---|---|---|---|
+| `range` | no | `today` | One of `today | 7d | 30d`. No custom range. |
+
+**Data source**: local `PaymentEvent` collection (filtered, non-renewal BenefitsGranted) for the local half; Meta Marketing API `account`-level insights for the Meta half. Orchestrated by `PurchaseAuditService` (shared with the admin route).
+
+**Constraints**: `read` tier. `requiredPermission: facebookAds.view`. Read-only. When Meta credentials are unavailable or the upstream call fails, `meta.purchaseRevenueAud` / `meta.purchaseConversions` / `reconciliation.differenceMetaMinusLocalAud` are `null` and `meta.error` carries the reason — the local half is still returned.
+
+**Sample**:
+```
+GET /api/internal/norm/v1/facebook-ads/purchase-audit?range=today
+→ 200 {
+  "success": true,
+  "data": {
+    "range": "today",
+    "window": { "start": "2026-05-20T14:00:00.000Z", "end": "2026-05-21T13:59:59.999Z" },
+    "facebookInsightsRange": { "since": "2026-05-21", "until": "2026-05-21" },
+    "local": { "benefitsGrantedNonRenewalCount": 3, "revenueAud": 85, "note": "Excludes membership subscription_cycle (renewals). Uses PaymentEvent.data.price." },
+    "meta": { "purchaseRevenueAud": 2075.04, "purchaseConversions": 60, "error": null },
+    "reconciliation": { "differenceMetaMinusLocalAud": 1990.04, "interpretation": "Meta attributes more purchase revenue than local non-renewal total (duplicates, attribution window, or refunds)" }
+  },
+  "requestId": "..."
+}
+```
 
 ---
 
@@ -1712,6 +1887,8 @@ Per-tier ceilings (per-endpoint overrides apply where stricter):
 Per-endpoint overrides currently in effect:
 - `/v1/roas/summary` — 10/min (Meta upstream)
 - `/v1/roas/breakdown` — 10/min (Meta upstream)
+- `/v1/facebook-ads/insights` — 10/min (Meta upstream)
+- `/v1/facebook-ads/hourly-insights` — 10/min (Meta upstream)
 
 On `429 rate_limited`, the response includes `Retry-After: <seconds>`. Honor it.
 
@@ -1732,4 +1909,4 @@ If an operator requests a capability not in this document and not in the current
 
 ## Last updated
 
-`2026-05-21` — Added 3 read endpoints in the allowlist domain: audit-feed (`/v1/allowlist/actions`), currently-blocked-cards page (`/v1/allowlist/blocked-cards`), and active-allowlist count (`/v1/allowlist/stats`). All three sit behind `users.view` and the underlying admin routes still use the legacy `requireAdminUser` check (separate migration concern). Email + Stripe-customer-ID are stripped from the Norm projections. Also added 2 read endpoints in the error-reports domain: paged list (`/v1/error-reports`) and per-id detail (`/v1/error-reports/{id}`), both behind `errorReports.view`. The admin route's heavy aggregation/list block was extracted to `ErrorReportQueryService` and shared with the Norm projection. Stack traces, console dumps, user emails, hashed IPs, browser/UA, and referrer are stripped from the Norm projections. Also added 2 read endpoints in the snapshot-health domain: `/v1/health/dashboard-stats-snapshot` and `/v1/health/membership-snapshot`, both behind `overview.view`. Inline business logic in the two admin routes (`/api/admin/health/{dashboard-stats-snapshot,membership-snapshot}`) was extracted to `getDashboardStatsSnapshotHealth` and `getMembershipSnapshotHealth` in `src/services/admin/dashboard-stats/snapshotHealth.ts` so admin and Norm share the same code. Also added 2 read endpoints: `/v1/stripe-webhook-queue` (behind `errorReports.view`) returning a paged page of `StripeWebhookQueue` rows (raw event `payload` stripped), and `/v1/invoices/charge-past-due` (behind `users.view`) returning the bulk past-due charge-run preview — what the not-yet-wired POST (`trigger_human_approve`) would target. The admin GET handlers for both were extracted to `src/services/stripe-webhook-queue/listQueue.ts` and `src/services/admin/previewChargePastDueInvoices.ts` so admin and Norm share one code path. Also added 2 read endpoints in the affiliate domain: paged list (`/v1/affiliate`) and per-id detail (`/v1/affiliate/{id}`), both behind `affiliates.view`. The admin list route's inline `$lookup` + unpaid-commission aggregation and the detail route's commission-ledger + referred-users + payouts orchestration were extracted to `listAffiliates` and `getAffiliateDetail` in `src/services/affiliate/AffiliateAdminListService.ts` (~190-line admin list route shrunk to ~38 lines; ~300-line admin detail route shrunk to ~60 lines), shared with the Norm projection. PII fields (affiliate email/phone/bank details, referred-user email/phone/name, processing-admin email/name) are intentionally stripped from the Norm projections — `affiliateCode`, `username`, and User._id correlation keys are retained. Also added 5 read endpoints in the A/B testing domain: experiment list (`/v1/ab-testing/experiments`), experiment detail with variants (`/v1/ab-testing/experiments/{id}`), aggregate analytics with significance + stopping rules + winner (`/v1/ab-testing/experiments/{id}/analytics`), mutation history (`/v1/ab-testing/experiments/{id}/history`), and winner-info read (`/v1/ab-testing/experiments/{id}/winner`) — all behind `abTesting.view`. Three new service methods were added to share code with the admin routes: `ExperimentService.listExperiments` + `ExperimentService.getExperimentDetail` (extracted from the inline `[id]` GET handler, ~52→~16 line shrink) and `ExperimentAnalyticsService.getExperimentAnalyticsSummary` + `ExperimentAnalyticsService.getExperimentWinnerInfo` (extracted from the inline analytics + winner GET handlers, ~78→~30 lines analytics, ~45→~20 lines winner). The variant `config` payload (hero image overrides, package color maps, banner copy), ExperimentHistory `changes` blocks (before/after snapshots), and admin `firstName`/`lastName`/`email` populated on `changedBy` are intentionally stripped from the Norm projections — only aggregate metrics, inference outputs, and opaque User._id correlation keys are projected. Total wired surface now 35 business endpoints + framework.
+`2026-05-21` — Added 3 read endpoints in the facebook-ads domain: `/v1/facebook-ads/insights` (richer admin-shape projection of Meta insights with per-item Facebook IDs/names, `landingPageView`, and `syncedAt` — distinct from the thinner `/v1/roas/*` projection that already shared the same underlying `FacebookAdsInsightsService`), `/v1/facebook-ads/hourly-insights` (24-bucket hourly merge of Meta spend/impressions/clicks with local PaymentEvent revenue/conversions; `landingPageView` is null per hour by design — Meta API limitation), and `/v1/facebook-ads/purchase-audit` (Meta-vs-local reconciliation of purchase revenue for a `today | 7d | 30d` window). The two fat admin handlers were extracted to new services: `HourlyInsightsService` (~250-line admin route shrunk to ~100 lines) and `PurchaseAuditService` (~140-line admin route shrunk to ~40 lines), each shared with the Norm projection so the numbers match by construction. The first two new endpoints carry a 10/min override (upstream Meta API rate-limits). `purchase-audit` has no override (local Mongo + a single Meta call). All behind `facebookAds.view`. The admin route's `cached` debug flag is stripped from the Norm insights projection. Total wired surface now 38 business endpoints + framework. Previously on this date: Added 3 read endpoints in the allowlist domain: audit-feed (`/v1/allowlist/actions`), currently-blocked-cards page (`/v1/allowlist/blocked-cards`), and active-allowlist count (`/v1/allowlist/stats`). All three sit behind `users.view` and the underlying admin routes still use the legacy `requireAdminUser` check (separate migration concern). Email + Stripe-customer-ID are stripped from the Norm projections. Also added 2 read endpoints in the error-reports domain: paged list (`/v1/error-reports`) and per-id detail (`/v1/error-reports/{id}`), both behind `errorReports.view`. The admin route's heavy aggregation/list block was extracted to `ErrorReportQueryService` and shared with the Norm projection. Stack traces, console dumps, user emails, hashed IPs, browser/UA, and referrer are stripped from the Norm projections. Also added 2 read endpoints in the snapshot-health domain: `/v1/health/dashboard-stats-snapshot` and `/v1/health/membership-snapshot`, both behind `overview.view`. Inline business logic in the two admin routes (`/api/admin/health/{dashboard-stats-snapshot,membership-snapshot}`) was extracted to `getDashboardStatsSnapshotHealth` and `getMembershipSnapshotHealth` in `src/services/admin/dashboard-stats/snapshotHealth.ts` so admin and Norm share the same code. Also added 2 read endpoints: `/v1/stripe-webhook-queue` (behind `errorReports.view`) returning a paged page of `StripeWebhookQueue` rows (raw event `payload` stripped), and `/v1/invoices/charge-past-due` (behind `users.view`) returning the bulk past-due charge-run preview — what the not-yet-wired POST (`trigger_human_approve`) would target. The admin GET handlers for both were extracted to `src/services/stripe-webhook-queue/listQueue.ts` and `src/services/admin/previewChargePastDueInvoices.ts` so admin and Norm share one code path. Also added 2 read endpoints in the affiliate domain: paged list (`/v1/affiliate`) and per-id detail (`/v1/affiliate/{id}`), both behind `affiliates.view`. The admin list route's inline `$lookup` + unpaid-commission aggregation and the detail route's commission-ledger + referred-users + payouts orchestration were extracted to `listAffiliates` and `getAffiliateDetail` in `src/services/affiliate/AffiliateAdminListService.ts` (~190-line admin list route shrunk to ~38 lines; ~300-line admin detail route shrunk to ~60 lines), shared with the Norm projection. PII fields (affiliate email/phone/bank details, referred-user email/phone/name, processing-admin email/name) are intentionally stripped from the Norm projections — `affiliateCode`, `username`, and User._id correlation keys are retained. Also added 5 read endpoints in the A/B testing domain: experiment list (`/v1/ab-testing/experiments`), experiment detail with variants (`/v1/ab-testing/experiments/{id}`), aggregate analytics with significance + stopping rules + winner (`/v1/ab-testing/experiments/{id}/analytics`), mutation history (`/v1/ab-testing/experiments/{id}/history`), and winner-info read (`/v1/ab-testing/experiments/{id}/winner`) — all behind `abTesting.view`. Three new service methods were added to share code with the admin routes: `ExperimentService.listExperiments` + `ExperimentService.getExperimentDetail` (extracted from the inline `[id]` GET handler, ~52→~16 line shrink) and `ExperimentAnalyticsService.getExperimentAnalyticsSummary` + `ExperimentAnalyticsService.getExperimentWinnerInfo` (extracted from the inline analytics + winner GET handlers, ~78→~30 lines analytics, ~45→~20 lines winner). The variant `config` payload (hero image overrides, package color maps, banner copy), ExperimentHistory `changes` blocks (before/after snapshots), and admin `firstName`/`lastName`/`email` populated on `changedBy` are intentionally stripped from the Norm projections — only aggregate metrics, inference outputs, and opaque User._id correlation keys are projected. Total wired surface now 35 business endpoints + framework.

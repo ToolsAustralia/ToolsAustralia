@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-05-21T07:35:10.369Z",
+  "generatedAt": "2026-05-21T07:48:48.020Z",
   "endpoints": [
     {
       "registryKey": "roas.summary",
@@ -148,6 +148,27 @@
       "path": "/v1/error-reports/:id",
       "method": "GET",
       "summary": "Get a single error report by id (PII-redacted projection)"
+    },
+    {
+      "registryKey": "facebook-ads.insights",
+      "tier": "read",
+      "path": "/v1/facebook-ads/insights",
+      "method": "GET",
+      "summary": "Facebook ad insights for a date range: summary + per-item breakdown at the requested level"
+    },
+    {
+      "registryKey": "facebook-ads.hourly-insights.list",
+      "tier": "read",
+      "path": "/v1/facebook-ads/hourly-insights",
+      "method": "GET",
+      "summary": "Hourly Facebook ad insights for an AEST date range, merged with local PaymentEvent revenue"
+    },
+    {
+      "registryKey": "facebook-ads.purchase-audit",
+      "tier": "read",
+      "path": "/v1/facebook-ads/purchase-audit",
+      "method": "GET",
+      "summary": "Reconcile local PaymentEvent (non-renewal) revenue vs Meta Insights purchase revenue"
     },
     {
       "registryKey": "health.dashboard-stats-snapshot",

@@ -49,6 +49,11 @@ import {
   NormExperimentHistorySchema,
   NormExperimentWinnerSchema,
 } from "./schemas/ab-testing";
+import {
+  NormFacebookAdsInsightsSchema,
+  NormFacebookAdsHourlyInsightsSchema,
+  NormFacebookAdsPurchaseAuditSchema,
+} from "./schemas/facebook-ads";
 
 // "forbidden" is NOT a tier — endpoints not in the registry are simply unreachable.
 // Tier and Permission are orthogonal axes: tier = orchestration shape; permission = "is Norm allowed?".
@@ -505,20 +510,24 @@ export const NORM_ENDPOINTS = {
     summary: "Bulk-update error report statuses",
   },
 
-  // ─── Facebook ads (roadmap) ───────────────────────────────────────────
+  // ─── Facebook ads (wired list/hourly/audit; sync roadmap) ─────────────
   "facebook-ads.insights": {
     tier: "read",
     requiredPermission: "facebookAds.view",
     path: "/v1/facebook-ads/insights",
     method: "GET",
-    summary: "Daily Facebook ad insights",
+    summary: "Facebook ad insights for a date range: summary + per-item breakdown at the requested level",
+    rateLimit: { perMinute: 10 },
+    responseSchema: NormFacebookAdsInsightsSchema,
   },
   "facebook-ads.hourly-insights.list": {
     tier: "read",
     requiredPermission: "facebookAds.view",
     path: "/v1/facebook-ads/hourly-insights",
     method: "GET",
-    summary: "Hourly Facebook ad insights",
+    summary: "Hourly Facebook ad insights for an AEST date range, merged with local PaymentEvent revenue",
+    rateLimit: { perMinute: 10 },
+    responseSchema: NormFacebookAdsHourlyInsightsSchema,
   },
   "facebook-ads.hourly-insights.sync": {
     tier: "trigger_human_approve",
@@ -532,7 +541,8 @@ export const NORM_ENDPOINTS = {
     requiredPermission: "facebookAds.view",
     path: "/v1/facebook-ads/purchase-audit",
     method: "GET",
-    summary: "Purchase audit comparing Stripe vs Facebook CAPI",
+    summary: "Reconcile local PaymentEvent (non-renewal) revenue vs Meta Insights purchase revenue",
+    responseSchema: NormFacebookAdsPurchaseAuditSchema,
   },
 
   // ─── Health snapshots (roadmap) ───────────────────────────────────────
