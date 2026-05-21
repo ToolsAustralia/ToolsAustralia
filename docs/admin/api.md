@@ -18,6 +18,16 @@ The `/api/admin/**` namespace. Per the manifest, this domain is the catch-all fo
 
 > _TODO: read [src/app/api/admin/](../../src/app/api/admin/) and enumerate every sub-route._
 
+## Bulk past-due charge — preview endpoint
+
+### `GET /api/admin/invoices/charge-past-due`
+
+Permission: `users.view`. Read-only preview of the bulk past-due charge run — returns what the POST handler *would* attempt right now without making any Stripe charges or DB writes. Pulls every open `charge_automatically` Stripe invoice (with `data.customer` expanded inline to avoid the N+1), joins to MongoDB users whose `subscription.status === "past_due"`, runs the eligibility filters (`wrongCollectionMethod`, `noAmountRemaining`, `noPaymentMethod`, `noCustomerId`, `userNotFound`, `notPastDue`), then collapses per-customer via `selectCurrentSubscriptionChargeable` so each customer contributes exactly one invoice (the one attached to their current subscription); older / duplicate-cycle invoices count toward `filterStats.duplicateOrStaleCycle`.
+
+The eligibility math lives in `previewChargePastDueInvoices` ([src/services/admin/previewChargePastDueInvoices.ts](../../src/services/admin/previewChargePastDueInvoices.ts)) so the POST run and this GET preview cannot diverge — both call the same per-row filters and the same per-customer scoping helper. The Norm mirror at `GET /api/internal/norm/v1/invoices/charge-past-due` (registry key `invoices.charge-past-due.preview`, `users.view`) calls the same service.
+
+Response: `{ success: true, preview: { eligibleCount, totalInvoices, filterStats, debug, users } }` — `amount` on each user row is in Stripe currency-minor-unit (cents). The POST handler is `trigger_human_approve` in the Norm registry and is not yet wired.
+
 ## Charge-past-due history endpoints
 
 All three routes are admin-only (`requireAdmin(session)`). Return shapes are defined in [src/services/admin/chargePastDueHistory.ts](../../src/services/admin/chargePastDueHistory.ts).

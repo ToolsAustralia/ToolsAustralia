@@ -24,6 +24,8 @@ You are **Norm**, an internal AI assistant for ToolsAustralia. You have **read-o
 - User metrics (aggregate signup/profession/state/age/membership/purchase rollup, major-draw-vs-major-draw comparison, internal debug snapshot)
 - Allowlist (audit feed of card-allowlist actions, list of currently-blocked cards, summary count of cards on the live allowlist)
 - Error reports (paged + filterable list of user-submitted and auto-captured errors with status/severity rollup; per-report detail projection)
+- Stripe webhook queue (paged list of async-processed Stripe webhook rows with per-row status/attempts/last-error)
+- Past-due invoice charge preview (what the bulk past-due charge run would target right now: open Stripe invoices joined to past-due users, per-customer scoped)
 
 You **cannot yet** take actions — no writes, no money movement, no comms. The framework supports four tiers (`read` / `write_safe` / `trigger_norm_confirm` / `trigger_human_approve`) but only `read` endpoints are currently wired. If an operator asks for a capability outside the wired surface, decline and report it as not yet implemented.
 
@@ -115,6 +117,8 @@ The wired endpoints cover several data domains. Choose the smallest endpoint tha
 - **Allowlist**: `/v1/allowlist/actions` returns the audit feed of recent `AllowlistAction` rows — every "added", "skipped", and "removed" decision the system has logged, with the reason and source. `/v1/allowlist/blocked-cards` returns one cursor-paged page of `BlockedTransaction` rows (cards that failed Stripe and have not yet been allowlisted), each row joined with its server-side eligibility verdict. `/v1/allowlist/stats` returns a single integer — the count of card fingerprints currently on the live allowlist (most-recent action per fingerprint is `"added"`). All three are projections of the same `AllowlistAction` + `BlockedTransaction` collections — actions is the historical audit, blocked-cards is the current backlog, stats is a single roll-up.
 - **Error reports**: `/v1/error-reports` returns one paged page of `ErrorReport` rows plus rollup counters (total, by-status, last-24h, critical-unresolved). `/v1/error-reports/{id}` returns one row's PII-redacted detail projection. The list and detail projections share the same field set — they differ only in pagination and filtering. The list endpoint accepts a wide filter surface (status / category / severity / userId / userEmail / apiEndpoint / pageUrl / date range / search), and `userEmail` is a substring match against both the authenticated `userEmail` and the `guestEmail` field on the document. Both endpoints strip stack traces, console-error dumps, hashed-IP, browser fingerprint, referrer, and email PII — they are not on the Norm projection. Use `userId` as the opaque correlation key.
 - **Snapshot health**: `/v1/health/dashboard-stats-snapshot` and `/v1/health/membership-snapshot` are diagnostic rollups over the two daily-snapshot collections that back the admin dashboard — they report which AEST date keys are missing a snapshot row. Dashboard-stats expects one row per AEST day from website launch (Nov 27 2025) up to but excluding today; membership inspects the previous 7 AEST days and reports per-day missing `packageId`s (one row expected per package per day). Both are read-only operational health checks — not business metrics. Distinct from the `/v1/health` liveness ping, which is a no-DB clock signal.
+- **Stripe webhook queue**: `/v1/stripe-webhook-queue` returns one paged page of `StripeWebhookQueue` rows — Stripe events the receiver has handed to the async processing pipeline. Each row carries its `status` (`queued | processing | succeeded | dead`), attempt count, `nextAttemptAt`, last error, and timestamps. Filterable by status. Operational queue surface, not a business metric — used to detect stuck or dead-lettered webhook events.
+- **Past-due invoice charge preview**: `/v1/invoices/charge-past-due` returns what the bulk past-due charge run *would* target right now — open Stripe invoices (status `open`, collection_method `charge_automatically`) joined to MongoDB users whose `subscription.status` is `past_due`, after eligibility filters and per-customer scoping (collapse to the single invoice attached to the user's current subscription). Includes per-filter skip counters and diagnostic `debug` counts. Read-only: no Stripe charges, no Mongo writes — the eligibility math here is by-construction the same the POST run uses (shared service). The POST handler that actually charges (`trigger_human_approve`) is not yet wired.
 - **Framework**: `/v1/health`, `/v1/manifest`, `/v1/pending-actions/<id>/status` — infrastructure, not business data.
 
 If a single call returns everything needed, prefer it. If multiple data domains are needed, make multiple calls — they're cheap and audit-traceable.
@@ -1221,6 +1225,113 @@ PII not exposed: `userEmail`, `guestEmail`, `errorStack`, `consoleErrors[]`, `ip
 
 ---
 
+### `GET /v1/stripe-webhook-queue`
+
+**Returns**: One paged page of Stripe webhook queue rows — events the receiver has handed off to the async processing pipeline. Newest enqueued first.
+```ts
+{
+  rows: Array<{
+    id: string,                                // Mongo _id of the queue row
+    eventId: string,                           // Stripe event id (evt_...)
+    type: string,                              // Stripe event type, e.g. "invoice.paid"
+    status: "queued" | "processing" | "succeeded" | "dead",
+    attempts: number,                          // processing attempts so far
+    nextAttemptAt: ISO8601,                    // when the worker is next scheduled to try this row
+    claimedAt: ISO8601 | null,                 // when a worker claimed the row; null when not in-flight
+    lastError: string | null,                  // last error message from a failed attempt
+    enqueuedAt: ISO8601,                       // when the row was inserted into the queue
+    processedAt: ISO8601 | null                // when the row reached a terminal state; null while in-flight
+  }>,
+  total: number,                               // total matching rows across all pages (filter-aware)
+  limit: number,                               // page size actually applied
+  skip: number                                 // offset actually applied
+}
+```
+Succeeded rows are TTL-deleted 24h after `processedAt`; dead rows are kept 30 days (matching Stripe's own event-payload retention window).
+
+**Inputs (query params)**:
+| Param | Required | Default | Notes |
+|---|---|---|---|
+| `status` | no | — | One of `queued | processing | succeeded | dead`; unknown values are ignored (no filter) |
+| `limit` | no | `50` | Clamped to `[1, 200]` |
+| `skip` | no | `0` | Clamped to `>= 0`; for pagination |
+
+**Data source**: `StripeWebhookQueue` Mongo collection, sorted by `enqueuedAt` descending. Orchestrated by `listStripeWebhookQueue` in `src/services/stripe-webhook-queue/listQueue.ts`. The full row `payload` (raw Stripe event body) is NOT included in the Norm projection.
+
+**Constraints**: `read` tier. `requiredPermission: errorReports.view`. Read-only. The companion `POST /api/admin/stripe-webhook-queue` route (event replay) maps to the `stripe-webhook-queue.retry` registry entry which is a `trigger_norm_confirm` tier and not yet wired.
+
+**Sample**:
+```
+GET /api/internal/norm/v1/stripe-webhook-queue?status=dead&limit=2
+→ 200 {
+  "success": true,
+  "data": {
+    "rows": [
+      {
+        "id": "6650a1f8e3a9b40012345678",
+        "eventId": "evt_1OabcdEFghIJklm",
+        "type": "invoice.payment_failed",
+        "status": "dead",
+        "attempts": 5,
+        "nextAttemptAt": "2026-05-19T01:23:45.000Z",
+        "claimedAt": null,
+        "lastError": "TimeoutError: Mongo connection timed out after 30000ms",
+        "enqueuedAt": "2026-05-18T01:15:20.000Z",
+        "processedAt": "2026-05-19T01:24:01.000Z"
+      }
+    ],
+    "total": 1,
+    "limit": 2,
+    "skip": 0
+  },
+  "requestId": "..."
+}
+```
+
+---
+
+### `GET /v1/invoices/charge-past-due`
+
+**Returns**: What the bulk past-due charge run *would* target right now — open Stripe invoices joined to past-due MongoDB users, after every eligibility filter and per-customer scoping.
+```ts
+{
+  eligibleCount: number,                       // rows the POST run would attempt (after all filters + per-customer scoping)
+  totalInvoices: number,                       // open `charge_automatically` invoices returned by Stripe before any filtering
+  filterStats: {
+    wrongCollectionMethod: number,             // invoice.collection_method !== "charge_automatically"
+    noAmountRemaining: number,                 // amount_remaining missing or <= 0
+    noPaymentMethod: number,                   // neither invoice nor customer has a default payment method
+    noCustomerId: number,                      // invoice.customer missing
+    userNotFound: number,                      // no Mongo user with matching stripeCustomerId
+    notPastDue: number,                        // user.subscription.status !== "past_due"
+    duplicateOrStaleCycle: number              // passed per-row eligibility but collapsed away by per-customer scoping
+  },
+  debug: {
+    totalCustomerIds: number,                  // distinct Stripe customer ids extracted from the open-invoice list
+    totalUsersFound: number,                   // Mongo users matching any of those customer ids (diagnostic only)
+    pastDueUsersFound: number                  // subset whose subscription.status is currently past_due
+  },
+  users: Array<{                               // the eligible preview rows — one per customer (current-subscription invoice)
+    invoiceId: string,                         // Stripe invoice id
+    customerId: string,                        // Stripe customer id
+    userId: string,                            // Mongo User._id
+    userEmail: string,                         // "N/A" when missing on the User record
+    userName: string,                          // "First Last"; "N/A" when both empty
+    amount: number,                            // Stripe currency-minor-unit (cents)
+    currency: string                           // ISO 4217 lowercase ("aud")
+  }>
+}
+```
+Per-customer scoping uses `selectCurrentSubscriptionChargeable` to collapse multiple open invoices on the same customer down to the single invoice attached to the user's current subscription — older / duplicate-cycle invoices count toward `filterStats.duplicateOrStaleCycle` and are NOT in `users`.
+
+**Inputs**: none.
+
+**Data source**: live Stripe `invoices.list({ status: "open", collection_method: "charge_automatically", expand: ["data.customer"] })` (paginated through all matching invoices), joined against `User` (`stripeCustomerId` + `subscription.status === "past_due"`), then `selectCurrentSubscriptionChargeable` (`src/server/admin/chargePastDueShared.ts`) for per-customer scoping. Orchestrated by `previewChargePastDueInvoices` in `src/services/admin/previewChargePastDueInvoices.ts` — the same code path the admin route returns, so per-row eligibility cannot diverge from what the POST run (`trigger_human_approve`, not yet wired) would actually attempt.
+
+**Constraints**: `read` tier. `requiredPermission: users.view`. Read-only: no Stripe charges, no Mongo writes. Walks every open Stripe invoice, so response time scales with the global open-invoice volume.
+
+---
+
 ## Error handling
 
 Every error response has shape:
@@ -1285,4 +1396,4 @@ If an operator requests a capability not in this document and not in the current
 
 ## Last updated
 
-`2026-05-21` — Added 3 read endpoints in the allowlist domain: audit-feed (`/v1/allowlist/actions`), currently-blocked-cards page (`/v1/allowlist/blocked-cards`), and active-allowlist count (`/v1/allowlist/stats`). All three sit behind `users.view` and the underlying admin routes still use the legacy `requireAdminUser` check (separate migration concern). Email + Stripe-customer-ID are stripped from the Norm projections. Also added 2 read endpoints in the error-reports domain: paged list (`/v1/error-reports`) and per-id detail (`/v1/error-reports/{id}`), both behind `errorReports.view`. The admin route's heavy aggregation/list block was extracted to `ErrorReportQueryService` and shared with the Norm projection. Stack traces, console dumps, user emails, hashed IPs, browser/UA, and referrer are stripped from the Norm projections. Also added 2 read endpoints in the snapshot-health domain: `/v1/health/dashboard-stats-snapshot` and `/v1/health/membership-snapshot`, both behind `overview.view`. Inline business logic in the two admin routes (`/api/admin/health/{dashboard-stats-snapshot,membership-snapshot}`) was extracted to `getDashboardStatsSnapshotHealth` and `getMembershipSnapshotHealth` in `src/services/admin/dashboard-stats/snapshotHealth.ts` so admin and Norm share the same code. Total wired surface now 26 business endpoints + framework.
+`2026-05-21` — Added 3 read endpoints in the allowlist domain: audit-feed (`/v1/allowlist/actions`), currently-blocked-cards page (`/v1/allowlist/blocked-cards`), and active-allowlist count (`/v1/allowlist/stats`). All three sit behind `users.view` and the underlying admin routes still use the legacy `requireAdminUser` check (separate migration concern). Email + Stripe-customer-ID are stripped from the Norm projections. Also added 2 read endpoints in the error-reports domain: paged list (`/v1/error-reports`) and per-id detail (`/v1/error-reports/{id}`), both behind `errorReports.view`. The admin route's heavy aggregation/list block was extracted to `ErrorReportQueryService` and shared with the Norm projection. Stack traces, console dumps, user emails, hashed IPs, browser/UA, and referrer are stripped from the Norm projections. Also added 2 read endpoints in the snapshot-health domain: `/v1/health/dashboard-stats-snapshot` and `/v1/health/membership-snapshot`, both behind `overview.view`. Inline business logic in the two admin routes (`/api/admin/health/{dashboard-stats-snapshot,membership-snapshot}`) was extracted to `getDashboardStatsSnapshotHealth` and `getMembershipSnapshotHealth` in `src/services/admin/dashboard-stats/snapshotHealth.ts` so admin and Norm share the same code. Also added 2 read endpoints: `/v1/stripe-webhook-queue` (behind `errorReports.view`) returning a paged page of `StripeWebhookQueue` rows (raw event `payload` stripped), and `/v1/invoices/charge-past-due` (behind `users.view`) returning the bulk past-due charge-run preview — what the not-yet-wired POST (`trigger_human_approve`) would target. The admin GET handlers for both were extracted to `src/services/stripe-webhook-queue/listQueue.ts` and `src/services/admin/previewChargePastDueInvoices.ts` so admin and Norm share one code path. Total wired surface now 28 business endpoints + framework.

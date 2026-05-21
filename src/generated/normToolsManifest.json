@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-05-21T06:51:00.267Z",
+  "generatedAt": "2026-05-21T07:03:47.361Z",
   "endpoints": [
     {
       "registryKey": "roas.summary",
@@ -115,6 +115,13 @@
       "summary": "Membership daily snapshot health"
     },
     {
+      "registryKey": "invoices.charge-past-due.preview",
+      "tier": "read",
+      "path": "/v1/invoices/charge-past-due",
+      "method": "GET",
+      "summary": "Preview the upcoming past-due charge run"
+    },
+    {
       "registryKey": "klaviyo.draw-reset.preview",
       "tier": "read",
       "path": "/v1/klaviyo/draw-reset-preview",
@@ -169,6 +176,13 @@
       "path": "/v1/promo-analytics/page-detail",
       "method": "GET",
       "summary": "Promo analytics for a single page: per-UTM-campaign attribution + visits-from"
+    },
+    {
+      "registryKey": "stripe-webhook-queue.list",
+      "tier": "read",
+      "path": "/v1/stripe-webhook-queue",
+      "method": "GET",
+      "summary": "List Stripe webhook queue items"
     },
     {
       "registryKey": "submissions.unviewed-count",

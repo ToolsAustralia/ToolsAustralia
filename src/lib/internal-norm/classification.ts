@@ -39,6 +39,8 @@ import {
   NormDashboardStatsSnapshotHealthSchema,
   NormMembershipSnapshotHealthSchema,
 } from "./schemas/health";
+import { NormStripeWebhookQueueListSchema } from "./schemas/stripe-webhook-queue";
+import { NormChargePastDuePreviewSchema } from "./schemas/invoices";
 
 // "forbidden" is NOT a tier — endpoints not in the registry are simply unreachable.
 // Tier and Permission are orthogonal axes: tier = orchestration shape; permission = "is Norm allowed?".
@@ -543,6 +545,7 @@ export const NORM_ENDPOINTS = {
     path: "/v1/invoices/charge-past-due",
     method: "GET",
     summary: "Preview the upcoming past-due charge run",
+    responseSchema: NormChargePastDuePreviewSchema,
   },
   "invoices.charge-past-due.run": {
     tier: "trigger_human_approve",
@@ -1126,6 +1129,7 @@ export const NORM_ENDPOINTS = {
     path: "/v1/stripe-webhook-queue",
     method: "GET",
     summary: "List Stripe webhook queue items",
+    responseSchema: NormStripeWebhookQueueListSchema,
   },
   "stripe-webhook-queue.retry": {
     tier: "trigger_norm_confirm",

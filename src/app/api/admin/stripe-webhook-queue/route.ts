@@ -4,13 +4,10 @@ import mongoose from "mongoose";
 import connectDB from "@/lib/mongodb";
 import StripeWebhookQueue, { type StripeWebhookQueueStatus } from "@/models/StripeWebhookQueue";
 import { processQueuedEvent } from "@/services/stripe-webhook-queue/processQueuedEvent";
-
-const ALLOWED_STATUSES: ReadonlyArray<StripeWebhookQueueStatus> = [
-  "queued",
-  "processing",
-  "succeeded",
-  "dead",
-];
+import {
+  STRIPE_WEBHOOK_QUEUE_STATUSES,
+  listStripeWebhookQueue,
+} from "@/services/stripe-webhook-queue/listQueue";
 
 export async function GET(request: NextRequest) {
   const _guard = await requirePermission("errorReports.view");
@@ -19,25 +16,22 @@ export async function GET(request: NextRequest) {
   await connectDB();
   const { searchParams } = new URL(request.url);
   const statusParam = searchParams.get("status");
-  const limit = Math.min(Number(searchParams.get("limit") ?? 50), 200);
-  const skip = Math.max(Number(searchParams.get("skip") ?? 0), 0);
+  const limitParam = Number(searchParams.get("limit") ?? 50);
+  const skipParam = Number(searchParams.get("skip") ?? 0);
 
-  const filter: Record<string, unknown> = {};
-  if (statusParam && (ALLOWED_STATUSES as ReadonlyArray<string>).includes(statusParam)) {
-    filter.status = statusParam;
-  }
+  const status =
+    statusParam &&
+    (STRIPE_WEBHOOK_QUEUE_STATUSES as ReadonlyArray<string>).includes(statusParam)
+      ? (statusParam as StripeWebhookQueueStatus)
+      : null;
 
-  const [rows, total] = await Promise.all([
-    StripeWebhookQueue.find(filter)
-      .sort({ enqueuedAt: -1 })
-      .skip(skip)
-      .limit(limit)
-      .select("eventId type status attempts nextAttemptAt claimedAt lastError enqueuedAt processedAt")
-      .lean(),
-    StripeWebhookQueue.countDocuments(filter),
-  ]);
+  const result = await listStripeWebhookQueue({
+    status,
+    limit: limitParam,
+    skip: skipParam,
+  });
 
-  return NextResponse.json({ rows, total, limit, skip });
+  return NextResponse.json(result);
 }
 
 export async function POST(request: NextRequest) {

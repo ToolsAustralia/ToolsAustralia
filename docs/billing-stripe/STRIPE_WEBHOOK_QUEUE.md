@@ -177,6 +177,10 @@ The sweeper route runs on a scheduled cron job (every minute, `* * * * *`) to:
 2. Does NOT reset `attempts` — preserves the audit trail.
 3. `const result = await processQueuedEvent(row.eventId)` — runs in-process synchronously (no fan-out, no sweeper wait) and returns `result` in the JSON response (`{ replayed: true, eventId, result }`) so the admin sees the outcome immediately.
 
+### `GET /api/admin/stripe-webhook-queue`
+
+Permission: `errorReports.view`. Returns one paged page of queue rows for the admin UI table — `{ rows, total, limit, skip }` — sorted by `enqueuedAt` desc. Query params: optional `status` (one of `queued | processing | succeeded | dead`), `limit` (default 50, clamped to `[1, 200]`), `skip` (default 0). The list query lives in `src/services/stripe-webhook-queue/listQueue.ts` (`listStripeWebhookQueue`) so the admin route and the Norm projection at `GET /api/internal/norm/v1/stripe-webhook-queue` call the same code. The raw event `payload` is NOT in the response — only the row's `eventId`, `type`, `status`, `attempts`, `nextAttemptAt`, `claimedAt`, `lastError`, `enqueuedAt`, `processedAt`.
+
 ## Index management
 
 Core MongoDB indexes are **no longer ensured on the request path**. The
