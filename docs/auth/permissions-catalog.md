@@ -71,5 +71,6 @@ When deciding whether to add a sub-action instead of reusing `edit`, ask: *would
 | `affiliates` | view, edit, processPayout, delete | `processPayout` moves money to an affiliate; gate separately. |
 | `errorReports` | view, edit, delete | `edit` = status changes / individual PATCH; `delete` = bulk archive. |
 | `abTesting` | view, edit, selectWinner, delete | `selectWinner` declares an experiment winner. |
+| `rewards` | view, edit, delete | Milestone rewards + monthly coupon campaigns. `edit` covers create/update/toggle and target-user previews; `delete` removes a milestone reward or soft-deactivates a campaign with existing issuances. |
 | `settings` | view, edit | Admin Settings tab (Roles & Staff sub-screens). |
 | `audit` | view | Staff activity log (audit trail of staff mutations). |

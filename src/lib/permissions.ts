@@ -27,6 +27,7 @@ export const AREA_ACTIONS = {
   affiliates: ["view", "edit", "processPayout", "delete"],
   errorReports: ["view", "edit", "delete"],
   abTesting: ["view", "edit", "selectWinner", "delete"],
+  rewards: ["view", "edit", "delete"],
   settings: ["view", "edit", "delete"],
   audit: ["view"],
 } as const satisfies Record<string, readonly string[]>;

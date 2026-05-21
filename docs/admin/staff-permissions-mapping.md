@@ -149,6 +149,20 @@ Updated as each task in the user-roles migration replaces legacy `session.user.r
 | `/api/admin/staff/[id]` | PATCH | `settings.edit` |
 | `/api/admin/staff/[id]` | DELETE | `settings.delete` |
 | `/api/admin/staff-activity` | GET | `audit.view` |
+| `/api/admin/milestone-rewards` | GET | `rewards.view` |
+| `/api/admin/milestone-rewards` | POST | `rewards.edit` |
+| `/api/admin/milestone-rewards/[id]` | PUT, PATCH (toggle active) | `rewards.edit` |
+| `/api/admin/milestone-rewards/[id]` | DELETE | `rewards.delete` |
+| `/api/admin/monthly-coupon/campaign` | GET | `rewards.view` |
+| `/api/admin/monthly-coupon/campaign` | POST | `rewards.edit` |
+| `/api/admin/monthly-coupon/campaign/[id]` | PUT | `rewards.edit` |
+| `/api/admin/monthly-coupon/campaign/[id]` | DELETE | `rewards.delete` |
+| `/api/admin/monthly-coupon/campaign/[id]/toggle` | PATCH | `rewards.edit` |
+| `/api/admin/monthly-coupon/campaign/[id]/redemptions` | GET | `rewards.view` |
+| `/api/admin/monthly-coupon/target-users/csv` | POST (read-only preview) | `rewards.view` |
+| `/api/admin/monthly-coupon/target-users/manual` | POST (read-only preview) | `rewards.view` |
+| `/api/admin/monthly-coupon/target-users/dynamic` | POST (read-only preview) | `rewards.view` |
+| `/api/admin/monthly-coupon/target-users/filter` | POST (read-only preview) | `rewards.view` |
 
 | `/api/users/[id]` | GET (self) | _(any authenticated user — self-only)_ |
 | `/api/users/[id]` | GET (other user) | `users.view` |

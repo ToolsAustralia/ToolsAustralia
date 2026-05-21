@@ -66,7 +66,7 @@ export default function StaffSetupPage({
       const data = await r.json();
       if (!r.ok) throw new Error(data.error ?? "Failed to set password");
       router.push(
-        `/login?email=${encodeURIComponent(data.email)}&staffSetup=ok`
+        `/login?email=${encodeURIComponent(data.data.email)}&staffSetup=ok`
       );
     } catch (e) {
       setError((e as Error).message);

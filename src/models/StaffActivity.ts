@@ -34,6 +34,10 @@ const StaffActivitySchema = new Schema<IStaffActivity>(
     actorEmail: { type: String, required: true },
     actorRoleName: { type: String, required: true },
     action: { type: String, required: true },
+    // "GET" is reserved for the held-back `audit.logReads` toggle (see spec
+    // future-work checklist). Phase 1 only ever writes mutations, so a "GET"
+    // row in production today is a bug; keeping the enum value here avoids a
+    // schema migration when read logging is added.
     method: {
       type: String,
       enum: ["GET", "POST", "PATCH", "PUT", "DELETE"],

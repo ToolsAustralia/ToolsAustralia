@@ -34,12 +34,34 @@ interface SafeLogInput {
 type LogFn = (status: number) => Promise<void>;
 
 /**
+ * Build the audit row's `actorRoleName` snapshot. Preference order:
+ *   1. session.user.roleName — set when the user has a custom Role.
+ *   2. session.user.userType === "admin" → "Admin" (seeded super-role).
+ *   3. Legacy bridge: session.user.role === "admin" → "Admin (legacy)" so
+ *      historical rows distinguish the pre-RBAC super-admin path from the
+ *      seeded staff Admin role. Phase 5 cleanup removes the bridge.
+ *   4. session.user.userType === "staff" → "Staff" (no role assigned yet).
+ *   5. Last-resort "Unknown" so the field is never empty.
+ */
+function resolveActorRoleName(user: Session["user"]): string {
+  if (user.roleName) return user.roleName;
+  if (user.userType === "admin") return "Admin";
+  if (user.role === "admin") return "Admin (legacy)";
+  if (user.userType === "staff") return "Staff";
+  return "Unknown";
+}
+
+/**
  * Drop-in replacement for `requirePermission` that also writes one row to
  * the StaffActivity collection. Logs:
  *  - successful actions (when the route handler calls `log(status)` after
  *    the work completes)
- *  - forbidden attempts (status 403 is written by this helper itself before
- *    returning the NextResponse)
+ *  - forbidden attempts (status 403) by *logged-in* users who lack the
+ *    required permission. Anonymous 401s do NOT write a row — there's no
+ *    actor to attribute the attempt to, and route handlers will see a 401
+ *    NextResponse from `requirePermission` regardless. If you need to track
+ *    anonymous probe traffic, use rate limiting or middleware, not this
+ *    helper.
  *
  * Writes are awaited but best-effort: a Mongo failure logs an error and
  * lets the route handler proceed.
@@ -58,17 +80,16 @@ export async function requirePermissionWithAudit(
 
   const guard = await requirePermission(permission);
   if (guard instanceof NextResponse) {
-    // Forbidden — resolve the session via getServerSession (the caller's
-    // session is available even when the permission check failed: 403 means
-    // "logged in but missing the right perm").
+    // Permission denied. Resolve the session: if `session?.user?.id` exists
+    // the guard returned 403 (logged-in but missing the right permission) and
+    // we write the forbidden row. If session is null the guard returned 401
+    // (unauthenticated) and we skip the write — no actor to attribute it to.
     const session = await getServerSession(authOptions);
     if (session?.user?.id) {
       await safeLog({
         actorId: session.user.id,
         actorEmail: session.user.email ?? "unknown",
-        actorRoleName:
-          session.user.roleName ??
-          (session.user.userType === "admin" ? "Admin" : "Staff"),
+        actorRoleName: resolveActorRoleName(session.user),
         action: permission,
         method,
         path: pathname,
@@ -87,9 +108,7 @@ export async function requirePermissionWithAudit(
       await safeLog({
         actorId: guard.session.user.id,
         actorEmail: guard.session.user.email ?? "unknown",
-        actorRoleName:
-          guard.session.user.roleName ??
-          (guard.session.user.userType === "admin" ? "Admin" : "Staff"),
+        actorRoleName: resolveActorRoleName(guard.session.user),
         action: permission,
         method,
         path: pathname,
@@ -102,15 +121,27 @@ export async function requirePermissionWithAudit(
   };
 }
 
-async function safeLog(
-  input: SafeLogInput,
-  modelOverride?: { create: (input: SafeLogInput) => Promise<unknown> }
-): Promise<void> {
+/**
+ * Test-only dependency injection. In production both fields are unset and
+ * the real connectDB / StaffActivity.create() are used. Tests inject throwing
+ * stubs to prove the catch covers BOTH I/O paths (connect + create), not just
+ * the model write.
+ */
+interface SafeLogDeps {
+  connect?: () => Promise<unknown>;
+  create?: (input: SafeLogInput) => Promise<unknown>;
+}
+
+async function safeLog(input: SafeLogInput, deps?: SafeLogDeps): Promise<void> {
   try {
-    if (modelOverride) {
-      await modelOverride.create(input);
+    if (deps?.connect) {
+      await deps.connect();
     } else {
       await connectDB();
+    }
+    if (deps?.create) {
+      await deps.create(input);
+    } else {
       await StaffActivity.create(input);
     }
   } catch (err) {
@@ -124,8 +155,8 @@ async function safeLog(
 
 /**
  * Test-only re-export. Kept as a `__`-prefixed alias so tests can call
- * `safeLog` with a stub model without exposing it in autocomplete for
- * production code-paths. Production callers go through
- * `requirePermissionWithAudit` and never see this.
+ * `safeLog` with stub I/O without exposing it in autocomplete for production
+ * code-paths. Production callers go through `requirePermissionWithAudit` and
+ * never see this.
  */
 export const __safeLogForTest = safeLog;

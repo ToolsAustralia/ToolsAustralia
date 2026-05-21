@@ -85,6 +85,10 @@ export const AREA_META: Record<Area, AreaMeta> = {
     label: "A/B Testing",
     description: "Experiments, variants, analytics, and winner declaration.",
   },
+  rewards: {
+    label: "Rewards",
+    description: "Milestone rewards and monthly coupon campaigns — issuance rules, targeting, and the redeemable codes they generate.",
+  },
   settings: {
     label: "Settings",
     description: "The Settings tab itself — Roles + Staff sub-screens.",
@@ -297,6 +301,21 @@ export const PERMISSION_META: Record<Permission, PermissionMeta> = {
   "abTesting.delete": {
     label: "Archive experiment",
     description: "Soft-delete (archive) an experiment in draft or paused state.",
+    danger: true,
+  },
+
+  // Rewards
+  "rewards.view": {
+    label: "View",
+    description: "Open the Milestone Rewards list and Monthly Coupon campaign manager. See performance counts and targeting previews.",
+  },
+  "rewards.edit": {
+    label: "Edit",
+    description: "Create, update, activate/deactivate milestone rewards and monthly coupon campaigns. Resolve target-user previews from CSV / manual / dynamic segments.",
+  },
+  "rewards.delete": {
+    label: "Delete",
+    description: "Delete a milestone reward or monthly coupon campaign. Campaigns with issuances are soft-deactivated instead of hard-deleted; rewards are removed when no issuances exist.",
     danger: true,
   },
 

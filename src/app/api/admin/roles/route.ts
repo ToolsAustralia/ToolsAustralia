@@ -93,10 +93,7 @@ export async function POST(req: NextRequest) {
       { status: 201 }
     );
   } catch (e: unknown) {
-    if (
-      e instanceof Error &&
-      (e.message.includes("duplicate key") || (e as { code?: number }).code === 11000)
-    ) {
+    if ((e as { code?: number })?.code === 11000) {
       return NextResponse.json(
         { error: "A role with that name already exists" },
         { status: 409 }

@@ -40,27 +40,52 @@ async function main() {
     assert.ok(PERMISSION_META["audit.view"].description.length > 0);
   });
 
+  const sampleInput = {
+    actorId: "507f1f77bcf86cd799439011",
+    actorEmail: "test@example.com",
+    actorRoleName: "Test",
+    action: "users.view",
+    method: "GET" as const,
+    path: "/api/admin/users",
+    status: 200,
+    timestamp: new Date(),
+  };
+
   await test("safeLog never throws when StaffActivity.create rejects", async () => {
-    // Stub the model so create() rejects. The helper must swallow the error
-    // and not propagate it to the route handler.
+    // The model write throws (e.g. Mongo write failure). The helper must
+    // swallow the error and not propagate it to the route handler.
     const { __safeLogForTest } = await import("@/lib/audit-log");
-    const stubModel = {
-      create: () => Promise.reject(new Error("simulated mongo down")),
-    };
-    // Should resolve without throwing
-    await __safeLogForTest(
-      {
-        actorId: "507f1f77bcf86cd799439011",
-        actorEmail: "test@example.com",
-        actorRoleName: "Test",
-        action: "users.view",
-        method: "GET",
-        path: "/api/admin/users",
-        status: 200,
-        timestamp: new Date(),
+    await __safeLogForTest(sampleInput, {
+      connect: () => Promise.resolve(),
+      create: () => Promise.reject(new Error("simulated mongo write failure")),
+    });
+  });
+
+  await test("safeLog never throws when connectDB rejects", async () => {
+    // The DB connection itself throws (e.g. Mongo unreachable). The helper
+    // must catch this earlier path too — if it didn't, every route adopting
+    // requirePermissionWithAudit would inherit the unhandled rejection.
+    const { __safeLogForTest } = await import("@/lib/audit-log");
+    let createCalled = false;
+    await __safeLogForTest(sampleInput, {
+      connect: () => Promise.reject(new Error("simulated mongo unreachable")),
+      create: () => {
+        createCalled = true;
+        return Promise.resolve();
       },
-      stubModel as never
-    );
+    });
+    assert.equal(createCalled, false, "create() must not run when connect() fails");
+  });
+
+  await test("rewards area exists with view/edit/delete actions", () => {
+    // Sanity check that the new rewards area landed in the catalog. The
+    // existing AREA_META + PERMISSION_META iteration tests cover the metadata,
+    // but pin the action list here so a future trim of the area doesn't go
+    // un-noticed.
+    assert.ok(AREA_ACTIONS.rewards, "AREA_ACTIONS.rewards is missing");
+    assert.deepEqual([...AREA_ACTIONS.rewards], ["view", "edit", "delete"]);
+    assert.equal(isValidPermission("rewards.edit"), true);
+    assert.equal(isValidPermission("rewards.delete"), true);
   });
 
   if (failures > 0) {

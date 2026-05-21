@@ -144,6 +144,14 @@ export async function DELETE(
   // Force-sign-out the removed user on the next request so they lose admin
   // access immediately even if their JWT cookie is still valid.
   user.tokenVersion = (user.tokenVersion ?? 0) + 1;
+  // validateBeforeSave:false intentional: this is a demote-to-customer flow.
+  // The User schema's `userType` enum can be stricter than the value we're
+  // saving back (e.g. a partially-invited record may not satisfy every legacy
+  // schema invariant). We've already explicitly set userType/role/isActive to
+  // the customer shape above, so we trust this write and bypass validation
+  // for the specific case of stepping someone OUT of the staff workflow. Do
+  // not lift this without auditing what fields the User schema currently
+  // requires.
   await user.save({ validateBeforeSave: false });
 
   await log(200);

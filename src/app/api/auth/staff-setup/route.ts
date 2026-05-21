@@ -110,5 +110,5 @@ export async function POST(req: NextRequest) {
   user.inviteTokenExpires = undefined;
   await user.save();
 
-  return NextResponse.json({ success: true, email: user.email });
+  return NextResponse.json({ success: true, data: { email: user.email } });
 }

@@ -26,7 +26,7 @@ const test = (name: string, fn: () => void) => {
 
 test("AREAS matches AREA_ACTIONS keys exactly", () => {
   assert.deepEqual(AREAS, Object.keys(AREA_ACTIONS));
-  assert.equal(AREAS.length, 16);
+  assert.equal(AREAS.length, 17);
 });
 
 test("every area declares at least a 'view' action", () => {

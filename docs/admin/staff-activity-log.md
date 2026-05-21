@@ -20,8 +20,8 @@ Does not capture (held back from Phase 1 — see [spec](../superpowers/specs/202
 
 ## Where it lives in the UI
 
-- **Top-level page:** `/admin/staff-activity`. Sidebar group: **Audit** (last group, below Team). Filter by actor, action, status, date range. Infinite scroll. 403 rows carry a red ⚠️ badge.
-- **Per-user embed:** the **Activity** tab inside `UserDetailModal` shows only rows where `resourceType = "User"` and `resourceId` matches that user — quick forensic shortcut when investigating a single account.
+- **Inside Team → Logs sub-tab.** The audit viewer lives under the existing **Team** sidebar entry (`/admin/team`) as the third sub-tab (Staff / Roles / **Logs**), not as a standalone top-level tab. Filter by status (All / Successful / Forbidden), free-text search, infinite scroll. 403 rows carry a red ⚠️ badge. The sub-tab itself is hidden when the viewer lacks `audit.view`.
+- **Per-user embed:** the **Staff actions** tab inside `UserDetailModal` shows only rows where `resourceType = "User"` and `resourceId` matches that user — quick forensic shortcut when investigating a single account.
 
 ## Permission gating
 

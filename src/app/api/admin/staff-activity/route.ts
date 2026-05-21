@@ -4,7 +4,7 @@ import connectDB from "@/lib/mongodb";
 import StaffActivity from "@/models/StaffActivity";
 import { z } from "zod";
 import { isValidObjectId } from "mongoose";
-import { PERMISSIONS, type Permission } from "@/lib/permissions";
+import { isValidPermission } from "@/lib/permissions";
 
 /**
  * GET /api/admin/staff-activity
@@ -27,7 +27,12 @@ import { PERMISSIONS, type Permission } from "@/lib/permissions";
  */
 const QuerySchema = z.object({
   actorId: z.string().optional(),
-  action: z.enum(PERMISSIONS as [Permission, ...Permission[]]).optional(),
+  // Lightweight refine rather than z.enum(PERMISSIONS) — avoids re-walking a
+  // 50-entry tuple on every request. isValidPermission is an O(1) Set lookup.
+  action: z
+    .string()
+    .refine(isValidPermission, "Unknown permission")
+    .optional(),
   status: z.coerce.number().int().positive().optional(),
   resourceType: z.string().optional(),
   resourceId: z.string().optional(),
