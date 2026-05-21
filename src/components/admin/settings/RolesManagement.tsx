@@ -8,6 +8,7 @@ import {
 } from "@tanstack/react-query";
 import {
   AlertCircle,
+  ArrowLeft,
   ChevronDown,
   Loader2,
   Plus,
@@ -84,6 +85,9 @@ export default function RolesManagement() {
   const selected = selectedId ? roles.find((r) => r.id === selectedId) ?? null : null;
   const [creating, setCreating] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  // Mobile: 'list' shows the sidebar full-width, 'editor' shows the editor
+  // full-width with a back-arrow header. On md+ both panes are always visible.
+  const [mobileView, setMobileView] = useState<"list" | "editor">("list");
 
   // Default selection: first non-system role (or first if only Admin exists).
   useEffect(() => {
@@ -91,6 +95,11 @@ export default function RolesManagement() {
     const first = roles.find((r) => !r.isSystem) ?? roles[0];
     setSelectedId(first?.id ?? null);
   }, [roles, selectedId]);
+
+  function handleSelect(id: string) {
+    setSelectedId(id);
+    setMobileView("editor");
+  }
 
   if (isLoading) {
     return (
@@ -108,29 +117,42 @@ export default function RolesManagement() {
   }
 
   return (
-    <div className="flex h-[calc(100vh-220px)] min-h-[520px] bg-gray-50 dark:bg-neutral-950 rounded-2xl overflow-hidden border border-gray-200 dark:border-gray-800 shadow-sm">
-      <RolesSidebar
-        roles={roles}
-        selectedId={selectedId}
-        onSelect={setSelectedId}
-        onCreate={canEditSettings ? () => setCreating(true) : undefined}
-      />
-
-      {selected ? (
-        <RoleEditor
-          key={selected.id}
-          role={selected}
-          onDeleteRequest={
-            canDeleteSettings ? () => setDeletingId(selected.id) : undefined
-          }
+    <div className="flex h-[calc(100vh-220px)] min-h-[420px] md:min-h-[520px] bg-gray-50 dark:bg-neutral-950 rounded-2xl overflow-hidden border border-gray-200 dark:border-gray-800 shadow-sm">
+      <div
+        className={`${
+          mobileView === "editor" ? "hidden md:flex" : "flex"
+        } w-full md:w-72 flex-shrink-0`}
+      >
+        <RolesSidebar
+          roles={roles}
+          selectedId={selectedId}
+          onSelect={handleSelect}
+          onCreate={canEditSettings ? () => setCreating(true) : undefined}
         />
-      ) : (
-        <div className="flex-1 grid place-items-center text-gray-500 dark:text-gray-400 text-sm">
-          {roles.length === 0
-            ? "No roles yet. Click the + to create one."
-            : "Select a role on the left."}
-        </div>
-      )}
+      </div>
+
+      <div
+        className={`${
+          mobileView === "list" ? "hidden md:flex" : "flex"
+        } flex-1 min-w-0`}
+      >
+        {selected ? (
+          <RoleEditor
+            key={selected.id}
+            role={selected}
+            onMobileBack={() => setMobileView("list")}
+            onDeleteRequest={
+              canDeleteSettings ? () => setDeletingId(selected.id) : undefined
+            }
+          />
+        ) : (
+          <div className="flex-1 grid place-items-center text-gray-500 dark:text-gray-400 text-sm">
+            {roles.length === 0
+              ? "No roles yet. Click the + to create one."
+              : "Select a role on the left."}
+          </div>
+        )}
+      </div>
 
       {creating && (
         <CreateRoleModal
@@ -171,7 +193,7 @@ function RolesSidebar({
   onCreate?: () => void;
 }) {
   return (
-    <aside className="w-72 bg-white dark:bg-neutral-900 border-r border-gray-200 dark:border-gray-800 flex flex-col">
+    <aside className="w-full bg-white dark:bg-neutral-900 md:border-r border-gray-200 dark:border-gray-800 flex flex-col">
       <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-800 flex items-center justify-between">
         <h3 className="font-semibold text-gray-900 dark:text-gray-100">Roles</h3>
         {onCreate && (
@@ -228,9 +250,12 @@ function RolesSidebar({
 
 function RoleEditor({
   role,
+  onMobileBack,
   onDeleteRequest,
 }: {
   role: ApiRole;
+  /** Mobile-only: returns the user to the roles list pane. */
+  onMobileBack: () => void;
   /** Undefined hides the Delete button (caller gates by settings.delete). */
   onDeleteRequest?: () => void;
 }) {
@@ -303,8 +328,16 @@ function RoleEditor({
 
   return (
     <section className="flex-1 overflow-y-auto bg-white dark:bg-neutral-900">
-      <header className="flex items-center justify-between px-8 py-6 border-b border-gray-200 dark:border-gray-800 sticky top-0 bg-white/95 dark:bg-neutral-900/95 backdrop-blur z-10">
-        <div className="flex items-center gap-3 min-w-0 flex-1">
+      <header className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 px-4 sm:px-8 py-4 sm:py-6 border-b border-gray-200 dark:border-gray-800 sticky top-0 bg-white/95 dark:bg-neutral-900/95 backdrop-blur z-10">
+        <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
+          <button
+            type="button"
+            onClick={onMobileBack}
+            aria-label="Back to roles"
+            className="md:hidden -ml-1 p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-neutral-800 text-gray-600 dark:text-gray-300 flex-shrink-0"
+          >
+            <ArrowLeft className="w-5 h-5" />
+          </button>
           <ColorSwatch
             color={color}
             onChange={setColor}
@@ -315,15 +348,15 @@ function RoleEditor({
             onChange={(e) => setName(e.target.value)}
             disabled={nameLocked}
             maxLength={60}
-            className="text-2xl font-bold bg-transparent outline-none text-gray-900 dark:text-gray-100 disabled:opacity-70 min-w-0 flex-1 truncate"
+            className="text-xl sm:text-2xl font-bold bg-transparent outline-none text-gray-900 dark:text-gray-100 disabled:opacity-70 min-w-0 flex-1 truncate"
           />
           {isAdminRole && (
-            <span className="text-[10px] uppercase tracking-wide font-semibold text-[#ee0000] dark:text-[#ff4444] bg-red-50 dark:bg-red-950/40 px-2 py-0.5 rounded">
+            <span className="text-[10px] uppercase tracking-wide font-semibold text-[#ee0000] dark:text-[#ff4444] bg-red-50 dark:bg-red-950/40 px-2 py-0.5 rounded whitespace-nowrap">
               Super-role
             </span>
           )}
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
           {dirty && !adminPermsLocked && (
             <button
               type="button"
@@ -359,7 +392,7 @@ function RoleEditor({
         </div>
       </header>
 
-      <div className="p-8 space-y-3">
+      <div className="p-4 sm:p-8 space-y-3">
         {adminPermsLocked && (
           <div className="px-4 py-3 rounded-lg bg-red-50/60 dark:bg-red-950/30 border border-red-200 dark:border-red-900 text-sm text-red-800 dark:text-red-300">
             The Admin role&apos;s permissions are managed by the seed script. Toggles are read-only.
@@ -468,7 +501,7 @@ function AreaSection({
       <button
         type="button"
         onClick={onToggleCollapsed}
-        className="w-full flex items-center gap-3 px-5 py-4 bg-gray-50 dark:bg-neutral-950/60 hover:bg-gray-100 dark:hover:bg-neutral-900 transition-colors text-left"
+        className="w-full flex items-center gap-3 px-4 sm:px-5 py-3 sm:py-4 bg-gray-50 dark:bg-neutral-950/60 hover:bg-gray-100 dark:hover:bg-neutral-900 transition-colors text-left"
       >
         <ChevronDown
           className={`w-4 h-4 text-gray-500 dark:text-gray-400 transition-transform ${
@@ -540,7 +573,7 @@ function ActionRow({
       aria-pressed={on}
       disabled={disabled}
       onClick={onClick}
-      className={`w-full text-left flex items-start gap-4 px-5 py-4 transition-colors ${
+      className={`w-full text-left flex items-start gap-3 sm:gap-4 px-4 sm:px-5 py-3 sm:py-4 transition-colors ${
         disabled
           ? "cursor-not-allowed opacity-80"
           : "hover:bg-gray-50 dark:hover:bg-neutral-800/60 cursor-pointer"

@@ -42,14 +42,22 @@ Save semantics:
 
 ## SettingsTab wrapper
 
-`src/app/admin/component/SettingsTab.tsx` is the small wrapper rendered for `selectedTab === "team"` inside `AdminPage.tsx`. It owns the Staff / Roles sub-nav (Staff is default) and delegates to the two management components. The component is named `SettingsTab` for historical reasons (the tab was originally called "Settings"); the file can be renamed in a follow-up if anyone trips on it.
+`src/app/admin/component/SettingsTab.tsx` is the small wrapper rendered for `selectedTab === "team"` inside `AdminPage.tsx`. It owns the **Staff / Roles / Logs** sub-nav and delegates to the three management components. Each sub-tab is per-permission gated: Staff and Roles require `settings.view`; Logs requires `audit.view`. A staff member with only `audit.view` sees only the Logs sub-tab; a staff member with only `settings.view` sees only Staff + Roles. The component is named `SettingsTab` for historical reasons (the tab was originally called "Settings"); the file can be renamed in a follow-up if anyone trips on it.
 
-Sidebar already gates the tab on `settings.view`, so this component does not duplicate the permission check.
+The sidebar gates the parent Team entry on `settings.view`, so an `audit.view`-only role currently needs `settings.view` to be granted as well to reach the page. This is the documented trade-off for keeping the Team group in the sidebar to a single entry rather than splitting Audit out again.
 
-## Staff Activity (Audit)
+Sub-nav layout: a horizontal scrollable bar at the top of the page. On mobile the icons + labels remain inline; if more sub-tabs are added later, the bar already supports horizontal overflow scroll.
 
-`src/app/admin/component/StaffActivityManagement.tsx` is the top-level audit viewer rendered at `/admin/staff-activity`. It lists every row from the `StaffActivity` collection (see [staff-activity-log.md](./staff-activity-log.md)) newest-first with cursor-paginated infinite scroll. Filter chips toggle between all rows, 200 successes, and 403 forbidden attempts. The free-text search filters client-side across actor email, role name, and request path — server-side full-text is deferred per the spec.
+## Staff Activity (Audit log — "Logs" sub-tab)
+
+`src/app/admin/component/StaffActivityManagement.tsx` is the audit viewer rendered inside `SettingsTab` as the **Logs** sub-tab (it is no longer a top-level admin tab). It lists every row from the `StaffActivity` collection (see [staff-activity-log.md](./staff-activity-log.md)) newest-first with cursor-paginated infinite scroll. Filter chips toggle between all rows, 200 successes, and 403 forbidden attempts. The free-text search filters client-side across actor email, role name, and request path — server-side full-text is deferred per the spec.
 
 Forbidden (403) rows are highlighted with a faint red background and a "403 Forbidden" badge so privilege drift is easy to spot at a glance.
 
-The page is gated by `usePermissions().has("audit.view")` and re-checks server-side via the GET endpoint.
+The sub-tab is hidden when the viewer lacks `audit.view`; if the viewer reaches the underlying GET endpoint directly without the permission, the API returns 403.
+
+## Mobile responsiveness (Discord-style)
+
+Roles management uses a master-detail layout. On `md+` viewports the list of roles sits in a fixed-width sidebar with the editor to its right. On smaller viewports the list takes the full width; selecting a role slides the editor in over the list with a back-arrow in the editor header to return. Implementation lives in `src/components/admin/settings/RolesManagement.tsx` via a `mobileView` state (`'list' | 'editor'`).
+
+Staff rows stack into two rows on mobile (identity + status above, role selector + actions below) and collapse to a single horizontal row on `sm+`. Implementation in `src/components/admin/settings/StaffManagement.tsx`.

@@ -136,8 +136,8 @@ export default function StaffManagement() {
 
   return (
     <div className="bg-gray-50 dark:bg-neutral-950 rounded-2xl border border-gray-200 dark:border-gray-800 overflow-hidden shadow-sm">
-      <header className="px-6 py-4 border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-neutral-900 flex items-center justify-between gap-4">
-        <div className="relative flex-1 max-w-md">
+      <header className="px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-neutral-900 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
+        <div className="relative flex-1 sm:max-w-md">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
           <input
             type="text"
@@ -151,7 +151,7 @@ export default function StaffManagement() {
           <button
             type="button"
             onClick={() => setInviting(true)}
-            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-gradient-to-r from-[#ee0000] to-[#ff4444] text-white font-medium hover:shadow-lg hover:shadow-red-500/20 transition-shadow"
+            className="flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-gradient-to-r from-[#ee0000] to-[#ff4444] text-white font-medium hover:shadow-lg hover:shadow-red-500/20 transition-shadow flex-shrink-0"
           >
             <Plus className="w-4 h-4" /> Invite staff
           </button>
@@ -260,43 +260,52 @@ function StaffRow({
   });
 
   return (
-    <li className="px-6 py-4">
-      <div className="flex items-center gap-4 hover:bg-gray-50 dark:hover:bg-neutral-800/40 -mx-2 px-2 py-1 rounded-lg transition-colors">
-        <div
-          className="w-10 h-10 rounded-full flex items-center justify-center text-white font-semibold flex-shrink-0 ring-2 ring-white dark:ring-neutral-900 shadow-sm"
-          style={{ background: `linear-gradient(135deg, ${avatarColor}, ${avatarColor}cc)` }}
-          aria-hidden
-        >
-          {staff.firstName[0]?.toUpperCase()}
-          {staff.lastName[0]?.toUpperCase()}
-        </div>
-        <div className="flex-1 min-w-0">
-          <div className="font-medium text-gray-900 dark:text-gray-100 flex items-center gap-1.5">
-            <span className="truncate">
-              {staff.firstName} {staff.lastName}
-            </span>
-            {staff.userType === "admin" && (
-              <Crown
-                className="w-3.5 h-3.5 text-[#ee0000] dark:text-[#ff4444]"
-                aria-label="Super-admin"
-              />
-            )}
-            {isSelf && (
-              <span className="text-[10px] uppercase tracking-wide text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-neutral-800 px-1.5 py-0.5 rounded">
-                You
-              </span>
-            )}
+    <li className="px-4 sm:px-6 py-3 sm:py-4">
+      <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 hover:bg-gray-50 dark:hover:bg-neutral-800/40 -mx-2 px-2 py-1 rounded-lg transition-colors">
+        {/* Top row on mobile: avatar + identity + status. Inline on sm+. */}
+        <div className="flex items-center gap-3 sm:gap-4 flex-1 min-w-0">
+          <div
+            className="w-10 h-10 rounded-full flex items-center justify-center text-white font-semibold flex-shrink-0 ring-2 ring-white dark:ring-neutral-900 shadow-sm"
+            style={{ background: `linear-gradient(135deg, ${avatarColor}, ${avatarColor}cc)` }}
+            aria-hidden
+          >
+            {staff.firstName[0]?.toUpperCase()}
+            {staff.lastName[0]?.toUpperCase()}
           </div>
-          <div className="text-sm text-gray-500 dark:text-gray-400 truncate">
-            {staff.email}
+          <div className="flex-1 min-w-0">
+            <div className="font-medium text-gray-900 dark:text-gray-100 flex items-center gap-1.5">
+              <span className="truncate">
+                {staff.firstName} {staff.lastName}
+              </span>
+              {staff.userType === "admin" && (
+                <Crown
+                  className="w-3.5 h-3.5 text-[#ee0000] dark:text-[#ff4444] flex-shrink-0"
+                  aria-label="Super-admin"
+                />
+              )}
+              {isSelf && (
+                <span className="text-[10px] uppercase tracking-wide text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-neutral-800 px-1.5 py-0.5 rounded flex-shrink-0">
+                  You
+                </span>
+              )}
+            </div>
+            <div className="text-sm text-gray-500 dark:text-gray-400 truncate">
+              {staff.email}
+            </div>
+          </div>
+          {/* Status badge sits next to identity on mobile so the bottom row is just controls */}
+          <div className="sm:hidden flex-shrink-0">
+            <StatusBadge status={staff.inviteStatus} />
           </div>
         </div>
 
+        {/* Bottom row on mobile (controls). Inline on sm+. */}
+        <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
         <select
           value={staff.roleId ?? ""}
           disabled={changeRole.isPending}
           onChange={(e) => changeRole.mutate(e.target.value)}
-          className="px-3 py-1.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-neutral-800 text-sm font-medium text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-[#ee0000]/40 disabled:opacity-50"
+          className="flex-1 sm:flex-none px-3 py-1.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-neutral-800 text-sm font-medium text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-[#ee0000]/40 disabled:opacity-50"
         >
           {staff.roleId === null && <option value="">No role</option>}
           {roles.map((r) => (
@@ -306,7 +315,9 @@ function StaffRow({
           ))}
         </select>
 
-        <StatusBadge status={staff.inviteStatus} />
+        <div className="hidden sm:block">
+          <StatusBadge status={staff.inviteStatus} />
+        </div>
 
         <div className="flex gap-1">
           {staff.inviteStatus !== "active" && (
@@ -336,10 +347,11 @@ function StaffRow({
             </button>
           )}
         </div>
+        </div>
       </div>
 
       {error && (
-        <div className="mt-2 ml-14 flex items-start gap-1.5 text-xs text-red-700 dark:text-red-400">
+        <div className="mt-2 sm:ml-14 flex items-start gap-1.5 text-xs text-red-700 dark:text-red-400">
           <AlertCircle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
           <span>{error}</span>
         </div>

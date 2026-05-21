@@ -24,7 +24,6 @@ import {
   Megaphone,
   ScrollText,
   Shield,
-  ShieldCheck,
   TrendingUp,
   Trophy,
   UserCheck,
@@ -111,28 +110,15 @@ export const ADMIN_TAB_GROUPS: AdminTabGroup[] = [
   },
   // Team lives in its own group at the bottom of the sidebar so the owner can
   // grow it (API keys, integrations, audit) without crowding day-to-day tabs.
+  // The Team page hosts three sub-tabs: Staff, Roles, Logs (audit trail).
+  // `requires: "settings.view"` covers Staff/Roles; the in-page Logs sub-tab
+  // additionally requires `audit.view` and is hidden when absent.
   {
     id: "team",
     label: "Team",
     groupIcon: Shield,
     tabs: [
       { id: "team", label: "Team", icon: Shield, requires: "settings.view" },
-    ],
-  },
-  // Audit lives in its own group at the bottom — it's a security tool,
-  // not a daily-driver tab. Future audit.export / audit.delete actions
-  // can grow under this group without rearranging.
-  {
-    id: "audit",
-    label: "Audit",
-    groupIcon: ShieldCheck,
-    tabs: [
-      {
-        id: "staff-activity",
-        label: "Staff Activity",
-        icon: ShieldCheck,
-        requires: "audit.view",
-      },
     ],
   },
 ];

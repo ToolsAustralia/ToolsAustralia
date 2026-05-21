@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { AlertTriangle, Loader2, Search, ShieldCheck } from "lucide-react";
+import { AlertTriangle, Loader2, Search } from "lucide-react";
 import { usePermissions } from "@/hooks/usePermissions";
 import {
   useStaffActivity,
@@ -72,23 +72,15 @@ export default function StaffActivityManagement() {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-        <div className="flex items-center gap-2">
-          <ShieldCheck className="w-5 h-5 text-[#ee0000] dark:text-[#ff4444]" />
-          <h2 className="text-lg sm:text-xl font-bold text-gray-900 dark:text-white">
-            Staff Activity
-          </h2>
-        </div>
-        <div className="relative flex-1 max-w-md">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search actor email, path, role…"
-            className="w-full pl-9 pr-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-neutral-800 text-gray-900 dark:text-gray-100 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#ee0000]/40"
-          />
-        </div>
+      <div className="relative w-full">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+        <input
+          type="text"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search actor email, path, role…"
+          className="w-full pl-9 pr-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-neutral-800 text-gray-900 dark:text-gray-100 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#ee0000]/40"
+        />
       </div>
 
       <div className="flex flex-wrap gap-2 text-xs">

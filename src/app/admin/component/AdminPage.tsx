@@ -29,10 +29,9 @@ import PromoAnalyticsManagement from "@/components/admin/PromoAnalyticsManagemen
 import CancellationFlowAnalytics from "@/components/admin/CancellationFlowAnalytics";
 import ActivityLogManagement from "./ActivityLogManagement";
 import SettingsTab from "./SettingsTab";
-import StaffActivityManagement from "./StaffActivityManagement";
 import UnviewedSubmissionsNotification from "@/components/admin/UnviewedSubmissionsNotification";
 import { HeaderThemeToggle } from "@/components/ui/HeaderThemeToggle";
-import { Shield, Menu, BarChart3 } from "lucide-react";
+import { Menu, BarChart3 } from "lucide-react";
 
 export default function AdminPage({ user, navigateTo, selectedTab = "overview" }: AdminDashboardProps) {
   const router = useRouter();
@@ -88,26 +87,13 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
     };
   }, [isMobileSidebarOpen]);
 
-  // Access denied component
-  if (!user.isAdmin) {
-    return (
-      <div className="h-screen-dvh bg-gray-50 dark:bg-neutral-950 flex items-center justify-center">
-        <div className="max-w-md mx-auto text-center bg-white dark:bg-neutral-900 rounded-2xl shadow-2xl border-2 border-red-100 dark:border-red-900/40 p-12">
-          <div className="w-20 h-20 bg-gradient-to-r from-red-600 to-red-400 rounded-full mx-auto mb-6 flex items-center justify-center">
-            <Shield className="w-10 h-10 text-white" />
-          </div>
-          <h2 className="text-3xl font-bold mb-4 text-gray-900 dark:text-white">Access Denied</h2>
-          <p className="text-gray-600 dark:text-neutral-300 mb-8 text-lg">You don&apos;t have permission to access the admin panel.</p>
-          <button
-            onClick={() => navigateTo("home")}
-            className="bg-gradient-to-r from-red-600 to-red-400 hover:from-red-675 hover:to-red-650 text-white font-semibold px-8 py-3 rounded-xl transition-all duration-200"
-          >
-            Return to Home
-          </button>
-        </div>
-      </div>
-    );
-  }
+  // Access gating happens in two places that are sufficient on their own:
+  // - src/app/admin/layout.tsx server-side: blocks any non-staff/non-admin user.
+  // - src/app/admin/page.tsx client-side: redirects staff without `overview.view`
+  //   to their first accessible tab via firstAccessibleTabId(has).
+  // Each tab/sub-tab additionally self-gates by its `requires` permission. So no
+  // panel-level "isAdmin" check is needed here — that legacy check rejected
+  // custom-role staff even when their role granted them tabs.
 
   return (
     <div className="h-screen-dvh bg-gray-50 dark:bg-neutral-950 flex text-gray-900 dark:text-neutral-100">
@@ -190,8 +176,7 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
                   {selectedTab === "past-due-history" && "History of bulk and manual past-due charge attempts"}
                   {selectedTab === "stripe-webhook-queue" && "Async Stripe webhook processing queue — replay failed events"}
                   {selectedTab === "activity-log" && "Complete activity history with filters and search"}
-                  {selectedTab === "team" && "Manage staff accounts and the roles that gate the admin panel"}
-                  {selectedTab === "staff-activity" && "Audit trail of every mutation by staff or admin users"}
+                  {selectedTab === "team" && "Manage staff accounts, roles, and audit logs"}
                 </p>
               </div>
             </div>
@@ -268,11 +253,8 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
           {/* ACTIVITY LOG TAB */}
           {selectedTab === "activity-log" && <ActivityLogManagement />}
 
-          {/* TEAM TAB (Staff + Roles sub-screens) */}
+          {/* TEAM TAB (Staff + Roles + Logs sub-screens) */}
           {selectedTab === "team" && <SettingsTab />}
-
-          {/* AUDIT — staff activity log */}
-          {selectedTab === "staff-activity" && <StaffActivityManagement />}
 
           {/* Placeholder for other tabs - temporarily disabled since tabs are hidden */}
           {false && (
