@@ -114,6 +114,7 @@ The wired endpoints cover several data domains. Choose the smallest endpoint tha
 - **User metrics**: `/v1/metrics/users` returns a single aggregate over a date range — counts of users created in range bucketed by signup source / profession / state / age group, plus membership status (live or snapshot-derived depending on whether the window ends in the past), per-package membership breakdown, and purchase-history totals. `/v1/metrics/users/major-draw-comparison` answers a different question: pick two specific `MajorDraw` IDs (by `_id`) and the endpoint computes per-draw totals (totalUsers/newSignups/activeMemberships/purchases/revenue) plus a percent comparison between them, using each draw's `activationDate→drawDate` window. `/v1/metrics/debug` is an engineer-facing diagnostic — recent BenefitsGranted PaymentEvent count + small sample for a sliding window of days; shape may change without notice and the `paymentEvents.totalRevenue` field sums the sample only, not the full window. Some membership fields in `/v1/metrics/users` partially overlap with `/v1/dashboard/stats.users` — `dashboard/stats` is range-anchored for renewal/churn deltas and uses the central `DashboardStatsService` rollup; `metrics/users` is signup-cohort-anchored (users *created* in range) with demographic breakdowns the dashboard does not return.
 - **Allowlist**: `/v1/allowlist/actions` returns the audit feed of recent `AllowlistAction` rows — every "added", "skipped", and "removed" decision the system has logged, with the reason and source. `/v1/allowlist/blocked-cards` returns one cursor-paged page of `BlockedTransaction` rows (cards that failed Stripe and have not yet been allowlisted), each row joined with its server-side eligibility verdict. `/v1/allowlist/stats` returns a single integer — the count of card fingerprints currently on the live allowlist (most-recent action per fingerprint is `"added"`). All three are projections of the same `AllowlistAction` + `BlockedTransaction` collections — actions is the historical audit, blocked-cards is the current backlog, stats is a single roll-up.
 - **Error reports**: `/v1/error-reports` returns one paged page of `ErrorReport` rows plus rollup counters (total, by-status, last-24h, critical-unresolved). `/v1/error-reports/{id}` returns one row's PII-redacted detail projection. The list and detail projections share the same field set — they differ only in pagination and filtering. The list endpoint accepts a wide filter surface (status / category / severity / userId / userEmail / apiEndpoint / pageUrl / date range / search), and `userEmail` is a substring match against both the authenticated `userEmail` and the `guestEmail` field on the document. Both endpoints strip stack traces, console-error dumps, hashed-IP, browser fingerprint, referrer, and email PII — they are not on the Norm projection. Use `userId` as the opaque correlation key.
+- **Snapshot health**: `/v1/health/dashboard-stats-snapshot` and `/v1/health/membership-snapshot` are diagnostic rollups over the two daily-snapshot collections that back the admin dashboard — they report which AEST date keys are missing a snapshot row. Dashboard-stats expects one row per AEST day from website launch (Nov 27 2025) up to but excluding today; membership inspects the previous 7 AEST days and reports per-day missing `packageId`s (one row expected per package per day). Both are read-only operational health checks — not business metrics. Distinct from the `/v1/health` liveness ping, which is a no-DB clock signal.
 - **Framework**: `/v1/health`, `/v1/manifest`, `/v1/pending-actions/<id>/status` — infrastructure, not business data.
 
 If a single call returns everything needed, prefer it. If multiple data domains are needed, make multiple calls — they're cheap and audit-traceable.
@@ -139,6 +140,81 @@ If a single call returns everything needed, prefer it. If multiple data domains 
 ```
 GET /api/internal/norm/v1/health
 → 200 { "success": true, "data": { "ok": true, "serverTime": "2026-05-21T04:12:06.835Z", "version": 1 }, "requestId": "..." }
+```
+
+---
+
+### `GET /v1/health/dashboard-stats-snapshot`
+
+**Returns**: Freshness audit of the dashboard-stats daily snapshot collection — which AEST date keys are missing a snapshot row.
+```ts
+{
+  expectedCount: number,                       // AEST date keys from website launch up to (excluding) today
+  presentCount: number,                        // expected keys that have a snapshot row
+  missingCount: number,                        // expectedCount − presentCount
+  missingDates: string[],                      // AEST YYYY-MM-DD keys with no snapshot row
+  latestPresent: string[]                      // up to 3 most-recent present keys, ascending
+}
+```
+Today's date is intentionally excluded from `expectedCount` — the snapshot cron does not roll up today until midnight AEST passes, so its absence is normal.
+
+**Inputs**: none.
+
+**Data source**: `DashboardStatsDailySnapshot` Mongo collection (`date` field). The expected key list is computed from the website launch date (`WEBSITE_LAUNCH_DATE_AEST = 2025-11-27`) up to (but excluding) the current AEST date via `expandDateKeyRange`. Orchestrated by `getDashboardStatsSnapshotHealth` in `src/services/admin/dashboard-stats/snapshotHealth.ts`.
+
+**Constraints**: `read` tier. `requiredPermission: overview.view`. Read-only. Operational health check — not a business metric. A non-empty `missingDates` indicates the snapshot writer cron has not completed for those days; not a data-loss signal by itself (the underlying source data may still be available for re-aggregation).
+
+**Sample**:
+```
+GET /api/internal/norm/v1/health/dashboard-stats-snapshot
+→ 200 {
+  "success": true,
+  "data": {
+    "expectedCount": 175,
+    "presentCount": 175,
+    "missingCount": 0,
+    "missingDates": [],
+    "latestPresent": ["2026-05-18", "2026-05-19", "2026-05-20"]
+  },
+  "requestId": "..."
+}
+```
+
+---
+
+### `GET /v1/health/membership-snapshot`
+
+**Returns**: Freshness audit of the per-package membership daily snapshot — for each of the previous 7 AEST days, which subscription packages are missing a snapshot row.
+```ts
+{
+  ok: boolean,                                 // true iff every package has a row for every checked day
+  checked: string[],                           // 7 AEST YYYY-MM-DD keys (yesterday → 7 days ago)
+  missingDays: Array<{
+    date: string,                              // AEST YYYY-MM-DD
+    missingPackages: string[]                  // packageIds with no snapshot row for this date
+  }>
+}
+```
+The 3 subscription packages inspected are `tradie-subscription`, `foreman-subscription`, and `boss-subscription`. Days where every expected package is present are omitted from `missingDays` (its length equals `0` when `ok` is `true`).
+
+**Inputs**: none.
+
+**Data source**: `MembershipDailySnapshot` Mongo collection (`date` + `packageId` fields). The 7 checked keys are computed in AEST from the current server time. Orchestrated by `getMembershipSnapshotHealth` in `src/services/admin/dashboard-stats/snapshotHealth.ts`.
+
+**Constraints**: `read` tier. `requiredPermission: overview.view`. Read-only. Operational health check — not a business metric. A non-empty `missingDays` indicates the membership snapshot writer cron has not completed for those package/day combinations.
+
+**Sample**:
+```
+GET /api/internal/norm/v1/health/membership-snapshot
+→ 200 {
+  "success": true,
+  "data": {
+    "ok": true,
+    "checked": ["2026-05-20", "2026-05-19", "2026-05-18", "2026-05-17", "2026-05-16", "2026-05-15", "2026-05-14"],
+    "missingDays": []
+  },
+  "requestId": "..."
+}
 ```
 
 ---
@@ -1209,4 +1285,4 @@ If an operator requests a capability not in this document and not in the current
 
 ## Last updated
 
-`2026-05-21` — Added 3 read endpoints in the allowlist domain: audit-feed (`/v1/allowlist/actions`), currently-blocked-cards page (`/v1/allowlist/blocked-cards`), and active-allowlist count (`/v1/allowlist/stats`). All three sit behind `users.view` and the underlying admin routes still use the legacy `requireAdminUser` check (separate migration concern). Email + Stripe-customer-ID are stripped from the Norm projections. Also added 2 read endpoints in the error-reports domain: paged list (`/v1/error-reports`) and per-id detail (`/v1/error-reports/{id}`), both behind `errorReports.view`. The admin route's heavy aggregation/list block was extracted to `ErrorReportQueryService` and shared with the Norm projection. Stack traces, console dumps, user emails, hashed IPs, browser/UA, and referrer are stripped from the Norm projections. Total wired surface now 24 business endpoints + framework.
+`2026-05-21` — Added 3 read endpoints in the allowlist domain: audit-feed (`/v1/allowlist/actions`), currently-blocked-cards page (`/v1/allowlist/blocked-cards`), and active-allowlist count (`/v1/allowlist/stats`). All three sit behind `users.view` and the underlying admin routes still use the legacy `requireAdminUser` check (separate migration concern). Email + Stripe-customer-ID are stripped from the Norm projections. Also added 2 read endpoints in the error-reports domain: paged list (`/v1/error-reports`) and per-id detail (`/v1/error-reports/{id}`), both behind `errorReports.view`. The admin route's heavy aggregation/list block was extracted to `ErrorReportQueryService` and shared with the Norm projection. Stack traces, console dumps, user emails, hashed IPs, browser/UA, and referrer are stripped from the Norm projections. Also added 2 read endpoints in the snapshot-health domain: `/v1/health/dashboard-stats-snapshot` and `/v1/health/membership-snapshot`, both behind `overview.view`. Inline business logic in the two admin routes (`/api/admin/health/{dashboard-stats-snapshot,membership-snapshot}`) was extracted to `getDashboardStatsSnapshotHealth` and `getMembershipSnapshotHealth` in `src/services/admin/dashboard-stats/snapshotHealth.ts` so admin and Norm share the same code. Total wired surface now 26 business endpoints + framework.

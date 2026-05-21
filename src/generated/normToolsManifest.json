@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-05-21T06:40:36.384Z",
+  "generatedAt": "2026-05-21T06:51:00.267Z",
   "endpoints": [
     {
       "registryKey": "roas.summary",
@@ -99,6 +99,20 @@
       "path": "/v1/error-reports/:id",
       "method": "GET",
       "summary": "Get a single error report by id (PII-redacted projection)"
+    },
+    {
+      "registryKey": "health.dashboard-stats-snapshot",
+      "tier": "read",
+      "path": "/v1/health/dashboard-stats-snapshot",
+      "method": "GET",
+      "summary": "Dashboard stats daily snapshot health"
+    },
+    {
+      "registryKey": "health.membership-snapshot",
+      "tier": "read",
+      "path": "/v1/health/membership-snapshot",
+      "method": "GET",
+      "summary": "Membership daily snapshot health"
     },
     {
       "registryKey": "klaviyo.draw-reset.preview",

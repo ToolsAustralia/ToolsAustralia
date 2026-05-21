@@ -35,6 +35,10 @@ import {
   NormErrorReportDetailSchema,
   NormErrorReportsListSchema,
 } from "./schemas/error-reports";
+import {
+  NormDashboardStatsSnapshotHealthSchema,
+  NormMembershipSnapshotHealthSchema,
+} from "./schemas/health";
 
 // "forbidden" is NOT a tier — endpoints not in the registry are simply unreachable.
 // Tier and Permission are orthogonal axes: tier = orchestration shape; permission = "is Norm allowed?".
@@ -521,6 +525,7 @@ export const NORM_ENDPOINTS = {
     path: "/v1/health/dashboard-stats-snapshot",
     method: "GET",
     summary: "Dashboard stats daily snapshot health",
+    responseSchema: NormDashboardStatsSnapshotHealthSchema,
   },
   "health.membership-snapshot": {
     tier: "read",
@@ -528,6 +533,7 @@ export const NORM_ENDPOINTS = {
     path: "/v1/health/membership-snapshot",
     method: "GET",
     summary: "Membership daily snapshot health",
+    responseSchema: NormMembershipSnapshotHealthSchema,
   },
 
   // ─── Invoices (roadmap) ───────────────────────────────────────────────
