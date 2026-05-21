@@ -23,6 +23,7 @@ You are **Norm**, an internal AI assistant for ToolsAustralia. You have **read-o
 - Promo-page analytics (per-page, per-UTM-source, per-channel, per-page-with-campaign attribution)
 - User metrics (aggregate signup/profession/state/age/membership/purchase rollup, major-draw-vs-major-draw comparison, internal debug snapshot)
 - Allowlist (audit feed of card-allowlist actions, list of currently-blocked cards, summary count of cards on the live allowlist)
+- Error reports (paged + filterable list of user-submitted and auto-captured errors with status/severity rollup; per-report detail projection)
 
 You **cannot yet** take actions — no writes, no money movement, no comms. The framework supports four tiers (`read` / `write_safe` / `trigger_norm_confirm` / `trigger_human_approve`) but only `read` endpoints are currently wired. If an operator asks for a capability outside the wired surface, decline and report it as not yet implemented.
 
@@ -112,6 +113,7 @@ The wired endpoints cover several data domains. Choose the smallest endpoint tha
 - **Promo analytics**: `/v1/promo-analytics` is the aggregate — per-page metrics (visits, signups, conversions, revenue, conversion rates) and a parallel per-`utmSource` breakdown for the same window. `/v1/promo-analytics/channel-detail` drills into one `utmSource`: which pages it drove traffic to, and which campaigns inside that source. `/v1/promo-analytics/page-detail` drills into one (`pageType`, `slug`) page: per-`(utmSource, utmMedium, utmCampaign)` rows plus a `visitsFrom` list of other toolset pages that referred visitors. Channel-detail and page-detail are orthogonal slices of the same `PromoAnalyticsVisit` + `User.signupAttribution` + `PaymentEvent.BenefitsGranted` joined dataset that summary aggregates.
 - **User metrics**: `/v1/metrics/users` returns a single aggregate over a date range — counts of users created in range bucketed by signup source / profession / state / age group, plus membership status (live or snapshot-derived depending on whether the window ends in the past), per-package membership breakdown, and purchase-history totals. `/v1/metrics/users/major-draw-comparison` answers a different question: pick two specific `MajorDraw` IDs (by `_id`) and the endpoint computes per-draw totals (totalUsers/newSignups/activeMemberships/purchases/revenue) plus a percent comparison between them, using each draw's `activationDate→drawDate` window. `/v1/metrics/debug` is an engineer-facing diagnostic — recent BenefitsGranted PaymentEvent count + small sample for a sliding window of days; shape may change without notice and the `paymentEvents.totalRevenue` field sums the sample only, not the full window. Some membership fields in `/v1/metrics/users` partially overlap with `/v1/dashboard/stats.users` — `dashboard/stats` is range-anchored for renewal/churn deltas and uses the central `DashboardStatsService` rollup; `metrics/users` is signup-cohort-anchored (users *created* in range) with demographic breakdowns the dashboard does not return.
 - **Allowlist**: `/v1/allowlist/actions` returns the audit feed of recent `AllowlistAction` rows — every "added", "skipped", and "removed" decision the system has logged, with the reason and source. `/v1/allowlist/blocked-cards` returns one cursor-paged page of `BlockedTransaction` rows (cards that failed Stripe and have not yet been allowlisted), each row joined with its server-side eligibility verdict. `/v1/allowlist/stats` returns a single integer — the count of card fingerprints currently on the live allowlist (most-recent action per fingerprint is `"added"`). All three are projections of the same `AllowlistAction` + `BlockedTransaction` collections — actions is the historical audit, blocked-cards is the current backlog, stats is a single roll-up.
+- **Error reports**: `/v1/error-reports` returns one paged page of `ErrorReport` rows plus rollup counters (total, by-status, last-24h, critical-unresolved). `/v1/error-reports/{id}` returns one row's PII-redacted detail projection. The list and detail projections share the same field set — they differ only in pagination and filtering. The list endpoint accepts a wide filter surface (status / category / severity / userId / userEmail / apiEndpoint / pageUrl / date range / search), and `userEmail` is a substring match against both the authenticated `userEmail` and the `guestEmail` field on the document. Both endpoints strip stack traces, console-error dumps, hashed-IP, browser fingerprint, referrer, and email PII — they are not on the Norm projection. Use `userId` as the opaque correlation key.
 - **Framework**: `/v1/health`, `/v1/manifest`, `/v1/pending-actions/<id>/status` — infrastructure, not business data.
 
 If a single call returns everything needed, prefer it. If multiple data domains are needed, make multiple calls — they're cheap and audit-traceable.
@@ -1038,6 +1040,111 @@ Source-of-truth note: Stripe's `card_fingerprint_allowlist` Radar value list is 
 
 ---
 
+### `GET /v1/error-reports`
+
+**Returns**: One paged page of `ErrorReport` rows plus rollup counters across the filtered set. Newest first by default.
+```ts
+{
+  reports: Array<{
+    id: string,                                // ErrorReport _id
+    userId: string | null,                     // Mongo User._id of the authenticated reporter; null for guest reports
+    isAuthenticated: boolean,
+    errorName: string | null,                  // e.g. "TypeError"
+    errorMessage: string,                      // human-readable error text (truncated to 2000 chars at the model level)
+    category:
+      | "payment" | "network" | "api" | "system" | "recovery"
+      | null,
+    severity: "critical" | "high" | "medium" | null,
+    autoLogged: boolean,                       // true if captured by the auto-logger; false if user-submitted
+    apiEndpoint: string | null,                // route path the error originated on, if known
+    httpMethod: string | null,                 // "GET" | "POST" | ...
+    httpStatus: number | null,                 // HTTP status that the failing request returned
+    requestUrl: string | null,                 // full URL of the failing request
+    currentUrl: string | null,                 // page URL at the time of error
+    route: string | null,                      // route token from the in-app router
+    status: "new" | "investigating" | "resolved" | "dismissed",
+    adminNotes: string | null,                 // free-text triage notes added by admin
+    resolvedAt: ISO8601 | null,
+    resolvedBy: string | null,                 // Mongo User._id of the resolving admin
+    createdAt: ISO8601,
+    updatedAt: ISO8601
+  }>,
+  pagination: { page: number, limit: number, total: number, totalPages: number },
+  statistics: {
+    total: number,                             // rows matching the filter (across all pages)
+    byStatus: { new: number, investigating: number, resolved: number, dismissed: number },
+    recentCount: number,                       // rows in filter set created in the last 24 hours
+    needsAttention: number,                    // byStatus.new + byStatus.investigating
+    criticalUnresolved: number                 // severity === "critical" AND status ∈ {new, investigating}
+  }
+}
+```
+PII not exposed: `userEmail`, `guestEmail`, `errorStack`, `consoleErrors[]`, `ipAddressHash`, `userAgent`, `browserInfo`, `referrer` are present on the underlying document but stripped from the Norm projection. Use `userId` as the opaque correlation key.
+
+**Inputs (query params)**:
+| Param | Required | Default | Notes |
+|---|---|---|---|
+| `page` | no | `1` | 1-indexed |
+| `limit` | no | `20` | 1–100 |
+| `status` | no | — | One of `new | investigating | resolved | dismissed` |
+| `userId` | no | — | Mongo `User._id`; ignored if not a valid ObjectId |
+| `startDate` | no | — | ISO date string, filters by `createdAt` |
+| `endDate` | no | — | ISO date string, inclusive end-of-day |
+| `search` | no | — | Case-insensitive regex across error message, name, notes, endpoint, URLs, emails. Up to 200 chars. |
+| `category` | no | — | One of the 5 category values, or the literal `missing` to match rows with no category |
+| `severity` | no | — | One of `critical | high | medium`, or `missing` |
+| `userEmail` | no | — | Case-insensitive substring against both `userEmail` and `guestEmail` |
+| `autoLogged` | no | — | `true` or `false` |
+| `apiEndpoint` | no | — | Case-insensitive substring against `apiEndpoint` |
+| `pageUrl` | no | — | Case-insensitive substring against `route` and `currentUrl` |
+| `sortBy` | no | `createdAt` | One of `createdAt | status | errorMessage | category | severity` |
+| `sortOrder` | no | `desc` | `asc` or `desc` |
+| `includeArchived` | no | `false` | When `true`, includes rows with `archivedAt` set |
+
+**Data source**: `ErrorReport` Mongo collection. Orchestrated by `listErrorReports` in `src/services/error-reporting/ErrorReportQueryService.ts` — the same function the admin UI uses, so per-row counts and totals are by construction identical to the admin Error Reports table.
+
+**Constraints**: `read` tier. `requiredPermission: errorReports.view`. Read-only. The admin endpoint's broader analytics block (per-category / per-severity buckets, 30-day trend, top errors, top endpoints, top users, repeated-error rollup, resolution-time metrics) is NOT included in the Norm projection — Norm gets the simpler `statistics` summary. If broader rollups are needed, request a dedicated endpoint.
+
+---
+
+### `GET /v1/error-reports/{id}`
+
+**Returns**: A single error report by its Mongo `_id`. Same field set and same PII redaction as a row in `/v1/error-reports.reports`.
+```ts
+{
+  report: {
+    id: string,
+    userId: string | null,
+    isAuthenticated: boolean,
+    errorName: string | null,
+    errorMessage: string,
+    category: "payment" | "network" | "api" | "system" | "recovery" | null,
+    severity: "critical" | "high" | "medium" | null,
+    autoLogged: boolean,
+    apiEndpoint: string | null,
+    httpMethod: string | null,
+    httpStatus: number | null,
+    requestUrl: string | null,
+    currentUrl: string | null,
+    route: string | null,
+    status: "new" | "investigating" | "resolved" | "dismissed",
+    adminNotes: string | null,
+    resolvedAt: ISO8601 | null,
+    resolvedBy: string | null,
+    createdAt: ISO8601,
+    updatedAt: ISO8601
+  }
+}
+```
+
+**Inputs**: `id` as path segment (Mongo `ErrorReport._id`). No query params.
+
+**Data source**: `ErrorReport` collection. Orchestrated by `getErrorReportById` in `src/services/error-reporting/ErrorReportQueryService.ts`. `404 not_found` when the ID is malformed or no matching document exists.
+
+**Constraints**: `read` tier. `requiredPermission: errorReports.view`. Read-only. No new PII vs the list projection — the detail endpoint is a convenience for retrieving one row by ID, not a higher-privilege view.
+
+---
+
 ## Error handling
 
 Every error response has shape:
@@ -1091,7 +1198,7 @@ On `429 rate_limited`, the response includes `Retry-After: <seconds>`. Honor it.
 
 The classification matrix lists ~150 admin endpoints, but only the read endpoints above are currently wired. Future specs will add:
 
-- Additional `read` endpoints across other domains (activity log, error reports, A/B test analytics, draws, promos, affiliates, partner data).
+- Additional `read` endpoints across other domains (activity log, A/B test analytics, draws, promos, affiliates, partner data).
 - `write_safe` endpoints (single-call writes with no money/comms side-effects).
 - `trigger_norm_confirm` endpoints (two-step dry-run + Norm-self-confirm for narrow single-target actions).
 - `trigger_human_approve` endpoints (two-step dry-run + operator click-to-approve in admin UI for high-risk actions).
@@ -1102,4 +1209,4 @@ If an operator requests a capability not in this document and not in the current
 
 ## Last updated
 
-`2026-05-21` — Added 3 read endpoints in the allowlist domain: audit-feed (`/v1/allowlist/actions`), currently-blocked-cards page (`/v1/allowlist/blocked-cards`), and active-allowlist count (`/v1/allowlist/stats`). All three sit behind `users.view` and the underlying admin routes still use the legacy `requireAdminUser` check (separate migration concern). Email + Stripe-customer-ID are stripped from the Norm projections. Total wired surface now 22 business endpoints + framework.
+`2026-05-21` — Added 3 read endpoints in the allowlist domain: audit-feed (`/v1/allowlist/actions`), currently-blocked-cards page (`/v1/allowlist/blocked-cards`), and active-allowlist count (`/v1/allowlist/stats`). All three sit behind `users.view` and the underlying admin routes still use the legacy `requireAdminUser` check (separate migration concern). Email + Stripe-customer-ID are stripped from the Norm projections. Also added 2 read endpoints in the error-reports domain: paged list (`/v1/error-reports`) and per-id detail (`/v1/error-reports/{id}`), both behind `errorReports.view`. The admin route's heavy aggregation/list block was extracted to `ErrorReportQueryService` and shared with the Norm projection. Stack traces, console dumps, user emails, hashed IPs, browser/UA, and referrer are stripped from the Norm projections. Total wired surface now 24 business endpoints + framework.

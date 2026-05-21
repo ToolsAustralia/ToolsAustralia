@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-05-21T06:31:41.406Z",
+  "generatedAt": "2026-05-21T06:40:36.384Z",
   "endpoints": [
     {
       "registryKey": "roas.summary",
@@ -85,6 +85,20 @@
       "path": "/v1/charge-past-due/runs/:runId",
       "method": "GET",
       "summary": "Get details for a single past-due charge run"
+    },
+    {
+      "registryKey": "error-reports.list",
+      "tier": "read",
+      "path": "/v1/error-reports",
+      "method": "GET",
+      "summary": "List error reports (paged, filterable) with status/severity rollup counts"
+    },
+    {
+      "registryKey": "error-reports.get",
+      "tier": "read",
+      "path": "/v1/error-reports/:id",
+      "method": "GET",
+      "summary": "Get a single error report by id (PII-redacted projection)"
     },
     {
       "registryKey": "klaviyo.draw-reset.preview",

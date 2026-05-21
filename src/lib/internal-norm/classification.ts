@@ -31,6 +31,10 @@ import {
   NormAllowlistBlockedCardsListSchema,
   NormAllowlistStatsSchema,
 } from "./schemas/allowlist";
+import {
+  NormErrorReportDetailSchema,
+  NormErrorReportsListSchema,
+} from "./schemas/error-reports";
 
 // "forbidden" is NOT a tier — endpoints not in the registry are simply unreachable.
 // Tier and Permission are orthogonal axes: tier = orchestration shape; permission = "is Norm allowed?".
@@ -441,20 +445,22 @@ export const NORM_ENDPOINTS = {
     responseSchema: NormChargePastDueRunDetailSchema,
   },
 
-  // ─── Error reports (roadmap) ──────────────────────────────────────────
+  // ─── Error reports (wired list/get; rest roadmap) ─────────────────────
   "error-reports.list": {
     tier: "read",
     requiredPermission: "errorReports.view",
     path: "/v1/error-reports",
     method: "GET",
-    summary: "List error reports",
+    summary: "List error reports (paged, filterable) with status/severity rollup counts",
+    responseSchema: NormErrorReportsListSchema,
   },
   "error-reports.get": {
     tier: "read",
     requiredPermission: "errorReports.view",
     path: "/v1/error-reports/:id",
     method: "GET",
-    summary: "Get a single error report",
+    summary: "Get a single error report by id (PII-redacted projection)",
+    responseSchema: NormErrorReportDetailSchema,
   },
   "error-reports.update": {
     tier: "write_safe",
