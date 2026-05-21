@@ -6,10 +6,18 @@ import { extractPageMetadata } from "@/utils/tracking/page-metadata-helpers";
 import { shouldTrackRoute, EXCLUDED_TRACKING_PREFIXES } from "@/utils/tracking/should-track-route";
 import { trackConversion } from "@/lib/tracking/dispatch-client";
 import { buildPurchaseEvent } from "@/lib/tracking/canonical-event";
+import { getAllowedHostnames } from "@/lib/tracking/hostname-gate";
 
-/** Production-only hostnames for the browser pixel (must match server CAPI prod routing). */
+/**
+ * Hostnames where the browser pixel is allowed to fire. Reads from
+ * `getAllowedHostnames()` so the staging-opt-in env var
+ * `NEXT_PUBLIC_PIXEL_ALLOWED_HOSTNAMES` actually takes effect here too.
+ * Previously this was hardcoded to production-only, which broke staging
+ * end-to-end testing (the inline init script and trackFacebookEvent both
+ * call this).
+ */
 export function isProductionBrowserHostname(hostname: string): boolean {
-  return hostname === "toolsaustralia.com.au" || hostname === "www.toolsaustralia.com.au";
+  return getAllowedHostnames().includes(hostname);
 }
 
 declare global {
@@ -177,13 +185,20 @@ export default function FacebookPixel({
         script.setAttribute("nonce", nonce);
       }
 
+      // Embed the env-aware allowed-hostnames list as a JS literal so the
+      // inline script can gate against it pre-hydration. Mirrors the React-level
+      // gate above so staging deployments (whitelisted via
+      // NEXT_PUBLIC_PIXEL_ALLOWED_HOSTNAMES) can fire the pixel for testing.
+      const allowedHostnamesJson = JSON.stringify(getAllowedHostnames());
+
       // Set inline script content
       script.innerHTML = `
         (function(){
         var host = typeof window !== 'undefined' ? window.location.hostname : '';
-        var isProdHost = host === 'toolsaustralia.com.au' || host === 'www.toolsaustralia.com.au';
+        var _fbAllowed = ${allowedHostnamesJson};
+        var isProdHost = _fbAllowed.indexOf(host) !== -1;
         if (!isProdHost) {
-          console.warn('[FB Pixel] Inline init skipped on non-prod host:', host);
+          console.warn('[FB Pixel] Inline init skipped on non-allowed host:', host);
           return;
         }
         !function(f,b,e,v,n,t,s)
