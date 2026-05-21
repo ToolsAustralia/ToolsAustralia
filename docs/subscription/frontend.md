@@ -79,11 +79,11 @@ Cancelled users (`subscription.status === "canceled"`) no longer see a single "R
 | `ResubscribeEmptyState` | Wraps the picker in the styled empty-state card (gradient bg, border). Rendered as the cancelled-state body when packages are available. |
 | `ResubscribeEmptyStateFallback` | Legacy single-CTA fallback ("Reactivate Subscription" button) shown when no packages are loaded. |
 
-**Branching in `InactiveSubscriptionState`** ([`EmptyStates.tsx`](../../src/components/modals/SubscriptionManagementModal/EmptyStates.tsx)):
+**Branching in `InactiveSubscriptionState`** ([`EmptyStates.tsx`](../../src/components/modals/SubscriptionManagementModal/EmptyStates.tsx)) — _superseded by Phase 2 (2026-05-21); see "Inactive-state simplification" below for the current branching rules._
 
-- `status === "canceled"` + `packages.length > 0` + `onPickTier` → `ResubscribeEmptyState` (tier picker).
-- `status === "canceled"` without packages → `ResubscribeEmptyStateFallback` (legacy CTA).
-- Other inactive statuses → unchanged legacy "Subscription Inactive" card.
+- ~~`status === "canceled"` + `packages.length > 0` + `onPickTier` → `ResubscribeEmptyState` (tier picker).~~
+- ~~`status === "canceled"` without packages → `ResubscribeEmptyStateFallback` (legacy CTA).~~
+- ~~Other inactive statuses → unchanged legacy "Subscription Inactive" card.~~ (Legacy card removed in Phase 2.)
 
 **Parent wiring** ([`SubscriptionManagementModal/index.tsx`](../../src/components/modals/SubscriptionManagementModal/index.tsx)):
 
@@ -126,6 +126,20 @@ interface ResubscribeTierCardProps {
 **Per-card copy refresh.** The previous per-row "Your carry-over: N" wording is replaced with **"Accumulated entries: N"**. The "Sign-up grant: N" and "Next renewal: N" lines are retained. Underlying entry math (display-only `entriesPerMonth × promoMultiplier`, `lastMonthAccumulatedEntries + grant + entriesPerMonth`) is unchanged.
 
 Reference spec: [`docs/superpowers/specs/2026-05-21-dashboard-tier-picker-polish-design.md`](../superpowers/specs/2026-05-21-dashboard-tier-picker-polish-design.md) — Phase 1.
+
+### Inactive-state simplification — universal picker (Phase 2, 2026-05-21)
+
+The legacy yellow "Subscription Inactive" CTA card (with the `AlertTriangle` icon and "Reactivate Subscription" button) has been deleted from [`EmptyStates.tsx`](../../src/components/modals/SubscriptionManagementModal/EmptyStates.tsx). `InactiveSubscriptionState` no longer branches on `subscription.status` — every non-active state (`canceled`, `unpaid`, `incomplete`, `incomplete_expired`, never-subscribed) now renders the tier picker via `ResubscribeEmptyState` whenever `packages.length > 0` and `onPickTier` is provided. The only remaining branch is the defensive `ResubscribeEmptyStateFallback` (legacy single CTA) used when no packages are loaded.
+
+**Past-due is intentionally excluded.** Past-due users must continue to route through the failed-renewal recovery flow upstream — `InactiveSubscriptionState` is never reached for them. This guard is **caller responsibility**: the direct render inside `legacyStateBody` in [`SubscriptionManagementModal/index.tsx`](../../src/components/modals/SubscriptionManagementModal/index.tsx) and the [`SettingsRedesignSubscription`](../../src/components/modals/SubscriptionManagementModal/SettingsRedesignSubscription.tsx) wrapper both filter past-due before mounting this component.
+
+**Cancelled-footer gating.** `ResubscribeEmptyState` now accepts an optional `showCancelledFooter?: boolean` (default `true`) which hides the "Your subscription was cancelled. Pick any tier to come back — your entries history is preserved." footer when `false`. `InactiveSubscriptionState` passes `showCancelledFooter={Boolean(previousPackageId)}` so the cancelled framing only renders for users with subscription history — never-subscribed users picking a tier for the first time don't see that copy.
+
+**Picker subheader.** Still context-aware (driven by `lastMonthAccumulatedEntries > 0`):
+- Has accumulated → `"You have N accumulated entries."`
+- No accumulated → `"Pick a tier to come back."`
+
+Reference spec: [`docs/superpowers/specs/2026-05-21-dashboard-tier-picker-polish-design.md`](../superpowers/specs/2026-05-21-dashboard-tier-picker-polish-design.md) — Phase 2 (§7 Inactive-state simplification).
 
 ## Upgrade preview parity with the webhook (Phase 2, 2026-05-20)
 

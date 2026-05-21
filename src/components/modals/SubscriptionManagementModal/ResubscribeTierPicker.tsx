@@ -65,19 +65,30 @@ interface ResubscribeEmptyStateProps {
   promoMultiplier: number;
   lastMonthAccumulatedEntries: number;
   onPickTier: (packageId: string) => void;
+  /**
+   * When true, render the "Your subscription was cancelled" footer note.
+   * Default true (cancelled callers); pass false for never-subscribed
+   * callers where the cancelled framing does not apply.
+   */
+  showCancelledFooter?: boolean;
 }
 
 /**
  * Empty-state shell shown in place of `InactiveSubscriptionState` when
  * `status === "canceled"` and we want the tier-picker UX.
  */
-export const ResubscribeEmptyState: React.FC<ResubscribeEmptyStateProps> = (props) => (
+export const ResubscribeEmptyState: React.FC<ResubscribeEmptyStateProps> = ({
+  showCancelledFooter = true,
+  ...pickerProps
+}) => (
   <div className="py-4">
     <div className="bg-gradient-to-br from-gray-50 to-gray-100 dark:from-neutral-800 dark:to-neutral-900 rounded-xl p-4 sm:p-6 border border-gray-200 dark:border-neutral-700 shadow-sm">
-      <ResubscribeTierPicker {...props} />
-      <p className="text-xs text-center text-gray-500 dark:text-neutral-400 mt-4">
-        Your subscription was cancelled. Pick any tier to come back — your entries history is preserved.
-      </p>
+      <ResubscribeTierPicker {...pickerProps} />
+      {showCancelledFooter ? (
+        <p className="text-xs text-center text-gray-500 dark:text-neutral-400 mt-4">
+          Your subscription was cancelled. Pick any tier to come back — your entries history is preserved.
+        </p>
+      ) : null}
     </div>
   </div>
 );
