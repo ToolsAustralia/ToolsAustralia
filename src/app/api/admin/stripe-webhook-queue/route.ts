@@ -42,10 +42,6 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const guard = await requirePermissionWithAudit("errorReports.edit", request);
-  if (guard instanceof NextResponse) return guard;
-  const { log } = guard;
-
   let body: { _id?: string };
   try {
     body = (await request.json()) as { _id?: string };
@@ -55,6 +51,13 @@ export async function POST(request: NextRequest) {
   if (!body._id || !mongoose.isValidObjectId(body._id)) {
     return NextResponse.json({ error: "Invalid _id" }, { status: 400 });
   }
+
+  const guard = await requirePermissionWithAudit("errorReports.edit", request, {
+    resourceType: "StripeWebhookQueue",
+    resourceId: body._id,
+  });
+  if (guard instanceof NextResponse) return guard;
+  const { log } = guard;
 
   await connectDB();
   const row = await StripeWebhookQueue.findById(body._id);

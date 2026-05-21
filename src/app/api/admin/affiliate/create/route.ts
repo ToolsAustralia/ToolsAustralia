@@ -75,7 +75,7 @@ export async function POST(request: NextRequest) {
     await affiliate.save();
     const affiliateId = (affiliate._id as mongoose.Types.ObjectId).toString();
 
-    await log(201);
+    await log(200);
     return NextResponse.json({
       success: true,
       data: {

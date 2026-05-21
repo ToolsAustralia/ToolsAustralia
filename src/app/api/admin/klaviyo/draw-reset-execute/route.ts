@@ -26,6 +26,7 @@ export async function POST(request: NextRequest) {
     // Check if sync is already in progress
     if (isManualSyncInProgress) {
       console.warn("⚠️ Manual Klaviyo sync already in progress - rejecting concurrent request");
+      await log(409);
       return NextResponse.json(
         {
           success: false,

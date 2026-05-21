@@ -103,7 +103,7 @@ export async function POST(request: NextRequest) {
       }
     );
 
-    await log(201);
+    await log(200);
     return NextResponse.json({
       success: true,
       data: experiment,
