@@ -80,6 +80,14 @@ npm run norm:smoke -- GET /api/internal/norm/v1/users/abc123/recover-past-due-in
 
 You should see `200` with the schema-validated payload. The `requestId` in the response matches a fresh row in the `NormCallLog` collection.
 
+### 8. Update `norm-context.md` ← required, not optional
+
+Add a new endpoint section to [norm-context.md](./norm-context.md). It must include: purpose, when-to-use, tier + required permission + rate limit, query param table, sample request, sample response with field meanings, and (where useful) a "when to choose which endpoint" entry.
+
+This file is the brief the operator pastes into Norm's context window. Skipping this step means Norm doesn't learn about the new capability — `GET /v1/manifest` will surface the path but Norm won't know parameter shapes, response field meanings, or when to prefer this endpoint over another. The operator will see Norm fumble with 400s in the audit log.
+
+Bump the "Last updated" date at the bottom of `norm-context.md`. Then re-feed the file into Norm's context.
+
 ## P2. Trigger endpoints — dry-run + confirm
 
 For `trigger_norm_confirm` and `trigger_human_approve` tiers, the recipe is the same but you ship two routes (`…/dry-run`, `…/confirm`) and the underlying service must accept `dryRun: true` (which makes it compute the plan and write nothing). The wrapper handles receipt creation, single-use enforcement, and (for `trigger_human_approve`) queue insertion. The handler stays thin — just call the service with the appropriate `dryRun` flag.
