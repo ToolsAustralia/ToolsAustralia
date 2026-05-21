@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-05-21T08:30:19.148Z",
+  "generatedAt": "2026-05-21T08:45:52.825Z",
   "endpoints": [
     {
       "registryKey": "roas.summary",
@@ -358,6 +358,55 @@
       "path": "/v1/promo/history",
       "method": "GET",
       "summary": "Promo history"
+    },
+    {
+      "registryKey": "promo.alternating-multiplier.list",
+      "tier": "read",
+      "path": "/v1/promo/alternating-multiplier",
+      "method": "GET",
+      "summary": "List alternating-multiplier promos"
+    },
+    {
+      "registryKey": "promo.banner-text.list",
+      "tier": "read",
+      "path": "/v1/promo/banner-text",
+      "method": "GET",
+      "summary": "List promo banner texts"
+    },
+    {
+      "registryKey": "promo.banner-text.active",
+      "tier": "read",
+      "path": "/v1/promo/banner-text/active",
+      "method": "GET",
+      "summary": "Currently-active promo banner text"
+    },
+    {
+      "registryKey": "promo.bonus-entry.list",
+      "tier": "read",
+      "path": "/v1/promo/bonus-entry/list",
+      "method": "GET",
+      "summary": "List bonus-entry promos"
+    },
+    {
+      "registryKey": "promo.bonus-entry.active",
+      "tier": "read",
+      "path": "/v1/promo/bonus-entry/active",
+      "method": "GET",
+      "summary": "Currently-active bonus-entry promo"
+    },
+    {
+      "registryKey": "promo.link.list",
+      "tier": "read",
+      "path": "/v1/promo/link/list",
+      "method": "GET",
+      "summary": "List promo links"
+    },
+    {
+      "registryKey": "promo.scheduled.list",
+      "tier": "read",
+      "path": "/v1/promo/scheduled/list",
+      "method": "GET",
+      "summary": "List scheduled promos"
     },
     {
       "registryKey": "stripe-webhook-queue.list",

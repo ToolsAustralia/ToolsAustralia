@@ -21,7 +21,7 @@ You are **Norm**, an internal AI assistant for ToolsAustralia. You have **read-o
 - Klaviyo post-draw profile-reset preview and progress
 - Past-due charge history (decline-reason summary, batch runs, manual retries)
 - Promo-page analytics (per-page, per-UTM-source, per-channel, per-page-with-campaign attribution)
-- Promo (currently-active toggle-system `Promo` rows; resolved effective multiplier per package type with its winning source from the priority chain `scheduled → toggle → alternating → derived-from-membership → none`; paged promo history). Overlaps the promo-analytics surface only at the slug/page-naming level — promo-analytics answers "how is each promo *page* performing in the funnel", while these endpoints answer "what *multiplier* is configured / in effect right now and across history". The two surfaces do NOT share underlying collections.
+- Promo (currently-active toggle-system `Promo` rows; resolved effective multiplier per package type with its winning source from the priority chain `scheduled → toggle → alternating → derived-from-membership → none`; paged promo history). Plus per-sub-domain reads for the other promo-configuration collections: alternating multiplier configs, banner-text schedules + current active text, bonus-entry promos (list + currently-active by type), promo links (shareable bonus-entry codes), and scheduled promos (date-bounded multiplier phases). Overlaps the promo-analytics surface only at the slug/page-naming level — promo-analytics answers "how is each promo *page* performing in the funnel", while these endpoints answer "what *multiplier* / *bonus-entry* / *link* / *banner* is configured / in effect right now and across history". The two surfaces do NOT share underlying collections.
 - User metrics (aggregate signup/profession/state/age/membership/purchase rollup, major-draw-vs-major-draw comparison, internal debug snapshot)
 - Allowlist (audit feed of card-allowlist actions, list of currently-blocked cards, summary count of cards on the live allowlist)
 - Error reports (paged + filterable list of user-submitted and auto-captured errors with status/severity rollup; per-report detail projection)
@@ -1232,6 +1232,264 @@ GET /v1/promo/history?page=1&limit=2&type=membership-packages
   "requestId": "01J..."
 }
 ```
+
+---
+
+### `GET /v1/promo/alternating-multiplier`
+
+**Returns**: All `AlternatingPromoMultiplier` configuration rows (one per package type — the model enforces uniqueness on `type`). Each row holds a tuple of exactly two multipliers; the resolver rotates between them based on the daily cadence when this config wins the priority chain.
+```ts
+{
+  data: Array<{
+    id: string,                                  // AlternatingPromoMultiplier._id as opaque string
+    type: "membership-packages" | "one-time-packages" | "mini-packages",
+    multipliers: [number, number],               // fixed-length 2-tuple, e.g. [5, 10]
+    isEnabled: boolean,                          // when false the resolver skips this row
+    description?: string,
+    createdAt: ISO8601,
+    updatedAt: ISO8601,
+    createdBy: {                                 // admin user who created the row; null if the legacy createdBy ref is unresolved
+      id: string,
+      name: string,                              // "firstName lastName"
+      email: string                              // admin-internal metadata, not customer PII
+    } | null
+  }>,
+  count: number                                  // length of data
+}
+```
+
+**Inputs (query params)**:
+| Param | Required | Default | Notes |
+|---|---|---|---|
+| `type` | no | — | One of `membership-packages | one-time-packages | mini-packages`. When supplied, returns at most one row (the unique config for that type) or zero. |
+
+**Data source**: `AlternatingPromoMultiplier` Mongo collection with a populated `createdBy` (User firstName/lastName/email). Orchestrated by `listAlternatingMultipliers` in `src/services/promo/PromoQueryService.ts`.
+
+**Constraints**: `read` tier. `requiredPermission: promos.view`. Read-only. Within the resolver chain (`scheduled → toggle → alternating → derived-from-membership → none`), an alternating row only takes effect when no scheduled or toggle promo wins first. `isEnabled: false` rows are still returned by this endpoint — filtering them is the caller's responsibility.
+
+---
+
+### `GET /v1/promo/banner-text`
+
+**Returns**: Every `PromoBannerText` row (active + inactive), newest first. Banner texts schedule a left-column image on the promo banner — either as a one-time date range or as a recurring weekday/weekend/named-day pattern. Date fields are AEST-shifted at the service boundary; the ISO strings reflect AEST clock time, not UTC.
+```ts
+{
+  data: Array<{
+    id: string,                                  // PromoBannerText._id as opaque string
+    imageUrl: string,                            // Cloudinary URL or site-relative path
+    altText?: string,
+    scheduleType: "one-time" | "recurring",
+    startDate: ISO8601 | null,                   // AEST-shifted; null for recurring schedules with no lower bound
+    endDate: ISO8601 | null,                     // AEST-shifted; null for recurring schedules with no upper bound
+    recurrencePattern?:                          // present iff scheduleType === "recurring"
+      | "weekdays" | "weekends"
+      | "monday" | "tuesday" | "wednesday" | "thursday" | "friday"
+      | "saturday" | "sunday",
+    isActive: boolean,
+    description?: string,
+    createdAt: ISO8601,
+    updatedAt: ISO8601,
+    createdBy: {                                 // admin user who created the row; null if the legacy createdBy ref is unresolved
+      id: string,
+      name: string,
+      email: string                              // admin-internal metadata, not customer PII
+    } | null
+  }>,
+  count: number                                  // length of data
+}
+```
+
+**Inputs (query params)**: none.
+
+**Data source**: `PromoBannerText` Mongo collection with a populated `createdBy`. Orchestrated by `PromoBannerTextService.listBannerTextsProjection` in `src/services/admin/PromoBannerTextService.ts` — the same service the admin route uses.
+
+**Constraints**: `read` tier. `requiredPermission: promos.view`. Read-only. `isActive: true` is a row-level toggle independent of schedule matching — a row may be `isActive: true` and still not be the currently-displayed banner if its schedule doesn't match the current AEST date. For the "which banner is showing right now" view, call `/v1/promo/banner-text/active`.
+
+---
+
+### `GET /v1/promo/banner-text/active`
+
+**Returns**: The single banner-text row whose schedule matches the current AEST date (or `null` when none match). Schedule matching uses string-based AEST `YYYY-MM-DD` comparison (timezone-independent across dev/production server clocks) plus, for recurring schedules, weekday-name resolution in AEST. When multiple rows match, the most-recently-created row wins.
+```ts
+{
+  data: {                                        // same row shape as /v1/promo/banner-text
+    id: string,
+    imageUrl: string,
+    altText?: string,
+    scheduleType: "one-time" | "recurring",
+    startDate: ISO8601 | null,                   // AEST-shifted
+    endDate: ISO8601 | null,                     // AEST-shifted
+    recurrencePattern?: "weekdays" | "weekends" | "monday" | ... | "sunday",
+    isActive: boolean,                           // always true here (only active rows reach this resolver)
+    description?: string,
+    createdAt: ISO8601,
+    updatedAt: ISO8601,
+    createdBy: { id, name, email } | null
+  } | null
+}
+```
+
+**Inputs (query params)**: none.
+
+**Data source**: `PromoBannerText` Mongo collection (`isActive: true`), resolved via `PromoBannerTextService.getActiveBannerTextProjection` in `src/services/admin/PromoBannerTextService.ts` — calls `getAllBannerTexts` + `resolveActiveText`, the same code path the admin route uses.
+
+**Constraints**: `read` tier. `requiredPermission: promos.view`. Read-only. The public site's `/api/admin/promo/banner-text/active` route does NOT require authentication (banner display); the Norm route gates on `promos.view`. A `data: null` response means no active schedule currently matches — not an error.
+
+---
+
+### `GET /v1/promo/bonus-entry/list`
+
+**Returns**: All `BonusEntryPromo` rows matching the filter, newest first. Bonus-entry promos grant a fixed number of bonus entries (not a multiplier) when a user purchases inside the configured `startDate → endDate` window. Three derived booleans (`isCurrentlyActive`, `isUpcoming`, `isExpired`) are computed server-side from `isActive` and the date range — Norm doesn't need to recompute.
+```ts
+{
+  data: Array<{
+    id: string,                                  // BonusEntryPromo._id as opaque string
+    type: "membership-packages" | "one-time-packages" | "mini-packages",
+    bonusEntries: number,                        // fixed bonus-entry count granted to qualifying purchases
+    startDate: ISO8601,                          // UTC; represents an AEST clock time at write time
+    endDate: ISO8601,                            // UTC; represents an AEST clock time at write time
+    isActive: boolean,                           // admin toggle
+    isCurrentlyActive: boolean,                  // isActive && now ∈ [startDate, endDate]
+    isUpcoming: boolean,                         // isActive && startDate > now
+    isExpired: boolean,                          // !isActive || endDate < now
+    description?: string,
+    createdAt: ISO8601,
+    updatedAt: ISO8601,
+    createdBy: { id, name, email } | null        // admin-internal metadata, not customer PII
+  }>,
+  count: number                                  // length of data
+}
+```
+
+**Inputs (query params)**:
+| Param | Required | Default | Notes |
+|---|---|---|---|
+| `type` | no | — | Filter by package type. One of `membership-packages | one-time-packages | mini-packages`. |
+| `isActive` | no | — | `true` or `false` — admin toggle filter (distinct from date-window membership). |
+| `dateFrom` | no | — | ISO date string; filters by `startDate >= dateFrom`. |
+| `dateTo` | no | — | ISO date string; filters by `startDate <= dateTo`. |
+
+**Data source**: `BonusEntryPromo` Mongo collection with a populated `createdBy`. Orchestrated by `listBonusEntryPromos` in `src/services/promo/PromoQueryService.ts`.
+
+**Constraints**: `read` tier. `requiredPermission: promos.view`. Read-only. Distinct from `promo.alternating-multiplier` (multiplier rotation) and `promo.scheduled` (multiplier phases) — bonus-entry promos add a flat count of free entries, they don't multiply existing entries.
+
+---
+
+### `GET /v1/promo/bonus-entry/active`
+
+**Returns**: The currently-active `BonusEntryPromo` for a single package type, or `null` when no row satisfies `isActive && startDate ≤ now ≤ endDate` for that type. When multiple rows match, the most-recently-created row wins (matches the admin's display ordering).
+```ts
+{
+  data: {                                        // same row shape as /v1/promo/bonus-entry/list
+    id: string,
+    type: "membership-packages" | "one-time-packages" | "mini-packages",
+    bonusEntries: number,
+    startDate: ISO8601,
+    endDate: ISO8601,
+    isActive: boolean,                           // always true here
+    isCurrentlyActive: boolean,                  // always true here
+    isUpcoming: boolean,                         // always false here
+    isExpired: boolean,                          // always false here
+    description?: string,
+    createdAt: ISO8601,
+    updatedAt: ISO8601,
+    createdBy: { id, name, email } | null
+  } | null
+}
+```
+
+**Inputs (query params)**:
+| Param | Required | Default | Notes |
+|---|---|---|---|
+| `type` | yes | — | One of `membership-packages | one-time-packages | mini-packages`. `400 bad_query` on missing or invalid value. |
+
+**Data source**: `BonusEntryPromo` Mongo collection. Orchestrated by `getActiveBonusEntryPromo` in `src/services/promo/PromoQueryService.ts`.
+
+**Constraints**: `read` tier. `requiredPermission: promos.view`. Read-only. A `data: null` response is the steady state — most package types have no active bonus-entry promo at any given moment.
+
+---
+
+### `GET /v1/promo/link/list`
+
+**Returns**: All `PromoLink` rows matching the filter, newest first. Promo links are shareable bonus-entry codes (one-time use per user) tied to specific campaign types and audience eligibility rules. Two derived booleans (`isExpired`, `usedByCount`) summarise the rest of the row.
+```ts
+{
+  data: Array<{
+    id: string,                                  // PromoLink._id as opaque string
+    code: string,                                // uppercase, 6-32 chars, A-Z 0-9 (optional hyphen separators)
+    bonusEntries: number,                        // fixed bonus-entry count granted on use
+    expiresAt: ISO8601 | null,                   // null means no expiration
+    isActive: boolean,
+    appliesToMembership: boolean,                // when true, granted on membership/subscription purchases
+    appliesToOneTime: boolean,                   // when true, granted on one-time package purchases
+    campaignType: "general" | "cancelled-membership-comeback",
+    eligibilityAudience: "all" | "cancelled-members",
+    eligibilityRules?: {                         // present when audience requires extra gating
+      requireInactiveSubscription?: boolean,
+      cancelledWithinDays?: number
+    },
+    isExpired: boolean,                          // expiresAt != null && expiresAt < now
+    description?: string,
+    usageCount: number,                          // total times the code has been used (lifetime)
+    usedByCount: number,                         // distinct users who have used the code (for one-time enforcement)
+    createdAt: ISO8601,
+    updatedAt: ISO8601,
+    createdBy: { id, name, email } | null        // admin-internal metadata, not customer PII
+  }>,
+  count: number                                  // length of data (after `expired` filtering)
+}
+```
+
+**Inputs (query params)**:
+| Param | Required | Default | Notes |
+|---|---|---|---|
+| `isActive` | no | — | `true` or `false` — admin toggle filter. |
+| `expired` | no | — | `true` or `false` — applied AFTER the DB fetch using each row's `expiresAt < now` derivation. |
+
+**Data source**: `PromoLink` Mongo collection with a populated `createdBy`. Orchestrated by `listPromoLinks` in `src/services/promo/PromoQueryService.ts`. The admin route also computes a `promoUrl` per row (using `NEXT_PUBLIC_APP_URL` + `DEFAULT_PRIZE_SLUG`); that derived field is intentionally NOT in the Norm projection — Norm gets the canonical `code` and can synthesize the URL itself if needed. The `usedBy` array of User._id values is NOT projected — only its length surfaces as `usedByCount`.
+
+**Constraints**: `read` tier. `requiredPermission: promos.view`. Read-only. `usageCount` and `usedByCount` can disagree only if a legacy code allowed multiple uses per user; new codes enforce one-time-use per user via `usedBy`. Active codes require at least one of `appliesToMembership` / `appliesToOneTime` to be true (model-level pre-save check).
+
+---
+
+### `GET /v1/promo/scheduled/list`
+
+**Returns**: All `ScheduledPromo` rows matching the filter, sorted ascending by `startDate`. Scheduled promos are date-bounded multiplier phases per package type — they win the resolver chain over toggle promos and alternating-multiplier rows when their window covers `now`. Three derived booleans (`isCurrentlyActive`, `isUpcoming`, `isExpired`) summarise schedule state, plus a `deletedAt` field for the soft-delete convention.
+```ts
+{
+  data: Array<{
+    id: string,                                  // ScheduledPromo._id as opaque string
+    type: "membership-packages" | "one-time-packages" | "mini-packages",
+    multiplier: number,                          // one of the allowed PROMO_MULTIPLIERS literals
+    startDate: ISO8601,                          // UTC
+    endDate: ISO8601,                            // UTC
+    isActive: boolean,                           // admin toggle
+    isCurrentlyActive: boolean,                  // isActive && !deletedAt && now ∈ [startDate, endDate]
+    isUpcoming: boolean,                         // isActive && !deletedAt && startDate > now
+    isExpired: boolean,                          // deletedAt || !isActive || endDate < now
+    name?: string,
+    description?: string,
+    deletedAt: ISO8601 | null,                   // soft-delete timestamp; null when not deleted
+    createdAt: ISO8601,
+    updatedAt: ISO8601,
+    createdBy: { id, name, email } | null        // admin-internal metadata, not customer PII
+  }>,
+  count: number                                  // length of data
+}
+```
+
+**Inputs (query params)**:
+| Param | Required | Default | Notes |
+|---|---|---|---|
+| `type` | no | — | Filter by package type. |
+| `isActive` | no | — | `true` or `false` — admin toggle filter. |
+| `dateFrom` | no | — | ISO date string; filters by `startDate >= dateFrom`. |
+| `dateTo` | no | — | ISO date string; filters by `startDate <= dateTo`. |
+| `includeDeleted` | no | `false` | When `false`, rows with `deletedAt` set are excluded from `data`. |
+
+**Data source**: `ScheduledPromo` Mongo collection with a populated `createdBy`. Orchestrated by `listScheduledPromos` in `src/services/promo/PromoQueryService.ts`. Soft-delete is the canonical removal convention here — `deletedAt` is a timestamp rather than a hard delete, so rows can be audited after the fact via `includeDeleted=true`.
+
+**Constraints**: `read` tier. `requiredPermission: promos.view`. Read-only. Within the resolver chain, an active scheduled-promo row beats both toggle (`Promo` with `isActive: true`) and alternating-multiplier configs — see `/v1/promo/effective` for the resolver's verdict per package type. Scheduled promos with `deletedAt` set are always excluded from the resolver, even when `includeDeleted=true` here.
 
 ---
 
@@ -2661,4 +2919,4 @@ If an operator requests a capability not in this document and not in the current
 
 ## Last updated
 
-`2026-05-21` — Added 3 read endpoints in the promo core domain: `/v1/promo/active` (raw list of `Promo` rows with `isActive: true` in the toggle system — `startDate` / `endDate` / `duration` are legacy fields preserved for backward compatibility, `timeRemaining` is always 0 and `isExpired` is always false on this endpoint), `/v1/promo/effective` (resolved effective multiplier per package type — `membership-packages`, `one-time-packages`, `mini-packages` — with a `source` field surfacing which mechanism won the priority chain `scheduled → toggle → alternating → derived-from-membership → none`; the resolver shared with the live payment-resolution path, so the reported multiplier is exactly what a purchase made right now would receive), and `/v1/promo/history` (paged history of all `Promo` rows active + inactive, newest first, with the populated `createdBy` projected to `{id, name, email}` — admin-internal metadata, not customer PII). All three behind `promos.view`. A new shared service `PromoQueryService` (`src/services/promo/PromoQueryService.ts`) was created to host `listActivePromos` and `listPromoHistory` — the two admin GET routes (`/api/admin/promo/active` GET portion and `/api/admin/promo/history` GET) shrunk from ~55 / ~127 lines to ~52 / ~58 lines respectively, sharing the projection code path with the Norm route. The third Norm route reuses the existing `PromoMultiplierResolverService.getEffectiveMultipliers` (no extraction needed — the admin `/effective` route already delegated to it). Note the relationship to the existing promo-analytics endpoints (`/v1/promo-analytics`, `/v1/promo-analytics/channel-detail`, `/v1/promo-analytics/page-detail`): those describe per-page / per-UTM funnel attribution; these new endpoints describe promo-config state and effective multiplier resolution. They overlap at the slug/page-naming level only, and draw from different collections — `Promo` / `ScheduledPromo` / `AlternatingPromoMultiplier` here, `PromoAnalyticsVisit` / `User.signupAttribution` / `PaymentEvent` there. Total wired surface now 55 business endpoints + framework. Previously on this date: Added 3 read endpoints: `/v1/winners/{id}` (single Winner record with the joined parent-draw name; PII-safe — `firstName` + `state` exposed, `lastName` / `email` / the entire `selectedBy` admin block stripped; works for both major and mini draws via the `drawType` discriminator), `/v1/analytics/spend-by-url` (per-canonical-URL spend / delivery / conversion aggregate for a date range, summed from materialized `LandingPageMetricsDaily` rows), and `/v1/analytics/spend-by-url/detail` (per-ad breakdown for one or more canonical URLs over the same date range, joined to `MetaAdInsightsDaily`). `winners.get` sits behind `majorDraw.view`; both `analytics.spend-by-url.*` reads behind `facebookAds.view`. The admin route `/api/admin/winners/{id}` GET was extracted to `getWinnerDetail` in `MajorDrawService.ts` (~95-line inline handler shrunk to ~30 lines) — the full result includes the winner-user's PII so the admin route can render firstName/lastName/email/state and the selecting-admin block; the Norm route projects down to the PII-safe subset before responding. The two admin spend-by-url routes were extracted to `SpendByUrlAggregationService.getSpendByUrlListFormatted` / `getSpendByUrlDetailFormatted` (the formatting / `centsToAud` / `cpc` / `roas` derivation lifted out of the route handler so admin + Norm share one code path). Note on numeric typing: `spendCents` / `revenueCents` / `impressions` / `clicks` / `conversions` are NOT integer-typed in the Norm schemas — upstream Meta returns fractional cents on some rows, so summed totals can carry floating-point artifacts (`28.000000000000004`); the schemas treat them as continuous `number`. Total wired surface now 52 business endpoints + framework. Previously on this date: Added 4 read endpoints in the mini-draw domain: `/v1/mini-draw/full-capacity-count` (single integer — count of `MiniDraw` rows with `status: "completed"` awaiting winner selection), `/v1/mini-draw/list` (paged list with per-row latest-winner join via `latestWinnerId`; `entries` array + `winner` sub-doc stripped — only counts surface), `/v1/mini-draw/{id}` (single-draw detail with no per-participant rows — `entries` / `winner` excluded at the projection; participant counts via `totalEntries` / `minimumEntries` / `entriesRemaining`), and `/v1/mini-draw/{id}/export` (**aggregate-only projection** — admin CSV/Excel returns full per-participant PII (firstName / lastName / email / mobile / state / totalEntries) for legal/operational reasons, Norm receives only total counts plus a per-state aggregate breakdown; unlike major-draw export, NO state-eligibility exclusion and NO repeat-winner exclusion are applied — mini draws have no such restrictions). All four behind `miniDraws.view`. A new shared service `MiniDrawService` (`src/services/admin/MiniDrawService.ts`, ~370 lines) was created to host the projections — the three simple admin routes (`full-capacity-count`, `list`, `[id]` GET) were shrunk to delegate to the service (~30 / ~150 / ~95 lines respectively → ~21 / ~58 / ~38 lines), preserving their existing response envelope (`success: true, data: ...`); the export admin route was intentionally left in place since the CSV/Excel binary-response contract cannot be cleanly extracted, and `MiniDrawService.getMiniDrawExportAggregate` re-implements the same `MiniDraw.entries` + `User.state` join logic so admin and Norm numbers match by construction. PII discipline highlights: `get` strips all per-participant rows; `export` collapses to aggregate-only (no per-user rows); list strips the `entries` + `winner` arrays. The MiniDraw schema uses status enum `{active | completed | cancelled}` (narrower than MajorDraw's). Total wired surface now 49 business endpoints + framework. Previously on this date: Added 7 read endpoints in the major-draw domain: `/v1/major-draw/current-and-last` (current + last completed draw, AEST `YYYY-MM-DD` no-overlap-adjusted ranges), `/v1/major-draw/history` (paged history with per-draw Winner join + filter-aware rollup stats), `/v1/major-draw/scheduled-months` (distinct months with scheduled draws for the calendar UI), `/v1/major-draw/participants` (PII-safe paged participants — lastName / email / mobile stripped; firstName + state retained; opaque `userId` correlation key), `/v1/major-draw/export` (**aggregate-only projection** — admin CSV/Excel returns full PII per legal requirement, Norm receives only exclusion counts (10-month-repeat-winner per terms 5.4, SA/ACT state-eligibility) plus per-state participants/entries breakdown of the eligible set), `/v1/major-draw/select-winner` GET (PII-safe winner-recorded preview — only `state` exposed; the companion POST trigger is `trigger_human_approve` and not yet wired), and `/v1/major-draw/update` GET (editable-fields read for the admin update form; the companion PUT is `write_safe` and not yet wired). All seven behind `majorDraw.view`. A new shared service `MajorDrawService` (`src/services/admin/MajorDrawService.ts`, ~620 lines) was created to host the Norm projections — the two simplest admin routes (`current-and-last` and `scheduled-months`) were shrunk to delegate to the service (~117 / ~78 lines → ~22 / ~24 lines respectively), preserving their existing response shape; the five complex admin routes (history, participants, export, select-winner, update) were intentionally left in place to avoid regressing the admin UI / CSV-export contract — `MajorDrawService` re-implements the same Mongo query logic so admin and Norm numbers match by construction. PII discipline highlights: participants strips lastName/email/mobile; export collapses to aggregate-only (no per-user rows); select-winner.preview strips firstName/lastName/email/mobile and exposes only `state`; history strips populated `winner.userDetails` and `winner.selectedByDetails`. Note: the MajorDraw schema uses `activationDate` (start) and `drawDate` (end), and status enum `{queued | active | frozen | completed | cancelled}` — there is no `startDate`/`endDate` on the schema; the Norm projection always uses the canonical schema fields (see gotcha G4 + the model file). Total wired surface now 45 business endpoints + framework. Previously on this date: Added 3 read endpoints in the facebook-ads domain: `/v1/facebook-ads/insights` (richer admin-shape projection of Meta insights with per-item Facebook IDs/names, `landingPageView`, and `syncedAt` — distinct from the thinner `/v1/roas/*` projection that already shared the same underlying `FacebookAdsInsightsService`), `/v1/facebook-ads/hourly-insights` (24-bucket hourly merge of Meta spend/impressions/clicks with local PaymentEvent revenue/conversions; `landingPageView` is null per hour by design — Meta API limitation), and `/v1/facebook-ads/purchase-audit` (Meta-vs-local reconciliation of purchase revenue for a `today | 7d | 30d` window). The two fat admin handlers were extracted to new services: `HourlyInsightsService` (~250-line admin route shrunk to ~100 lines) and `PurchaseAuditService` (~140-line admin route shrunk to ~40 lines), each shared with the Norm projection so the numbers match by construction. The first two new endpoints carry a 10/min override (upstream Meta API rate-limits). `purchase-audit` has no override (local Mongo + a single Meta call). All behind `facebookAds.view`. The admin route's `cached` debug flag is stripped from the Norm insights projection. Total wired surface previously 38 business endpoints + framework. Previously on this date: Added 3 read endpoints in the allowlist domain: audit-feed (`/v1/allowlist/actions`), currently-blocked-cards page (`/v1/allowlist/blocked-cards`), and active-allowlist count (`/v1/allowlist/stats`). All three sit behind `users.view` and the underlying admin routes still use the legacy `requireAdminUser` check (separate migration concern). Email + Stripe-customer-ID are stripped from the Norm projections. Also added 2 read endpoints in the error-reports domain: paged list (`/v1/error-reports`) and per-id detail (`/v1/error-reports/{id}`), both behind `errorReports.view`. The admin route's heavy aggregation/list block was extracted to `ErrorReportQueryService` and shared with the Norm projection. Stack traces, console dumps, user emails, hashed IPs, browser/UA, and referrer are stripped from the Norm projections. Also added 2 read endpoints in the snapshot-health domain: `/v1/health/dashboard-stats-snapshot` and `/v1/health/membership-snapshot`, both behind `overview.view`. Inline business logic in the two admin routes (`/api/admin/health/{dashboard-stats-snapshot,membership-snapshot}`) was extracted to `getDashboardStatsSnapshotHealth` and `getMembershipSnapshotHealth` in `src/services/admin/dashboard-stats/snapshotHealth.ts` so admin and Norm share the same code. Also added 2 read endpoints: `/v1/stripe-webhook-queue` (behind `errorReports.view`) returning a paged page of `StripeWebhookQueue` rows (raw event `payload` stripped), and `/v1/invoices/charge-past-due` (behind `users.view`) returning the bulk past-due charge-run preview — what the not-yet-wired POST (`trigger_human_approve`) would target. The admin GET handlers for both were extracted to `src/services/stripe-webhook-queue/listQueue.ts` and `src/services/admin/previewChargePastDueInvoices.ts` so admin and Norm share one code path. Also added 2 read endpoints in the affiliate domain: paged list (`/v1/affiliate`) and per-id detail (`/v1/affiliate/{id}`), both behind `affiliates.view`. The admin list route's inline `$lookup` + unpaid-commission aggregation and the detail route's commission-ledger + referred-users + payouts orchestration were extracted to `listAffiliates` and `getAffiliateDetail` in `src/services/affiliate/AffiliateAdminListService.ts` (~190-line admin list route shrunk to ~38 lines; ~300-line admin detail route shrunk to ~60 lines), shared with the Norm projection. PII fields (affiliate email/phone/bank details, referred-user email/phone/name, processing-admin email/name) are intentionally stripped from the Norm projections — `affiliateCode`, `username`, and User._id correlation keys are retained. Also added 5 read endpoints in the A/B testing domain: experiment list (`/v1/ab-testing/experiments`), experiment detail with variants (`/v1/ab-testing/experiments/{id}`), aggregate analytics with significance + stopping rules + winner (`/v1/ab-testing/experiments/{id}/analytics`), mutation history (`/v1/ab-testing/experiments/{id}/history`), and winner-info read (`/v1/ab-testing/experiments/{id}/winner`) — all behind `abTesting.view`. Three new service methods were added to share code with the admin routes: `ExperimentService.listExperiments` + `ExperimentService.getExperimentDetail` (extracted from the inline `[id]` GET handler, ~52→~16 line shrink) and `ExperimentAnalyticsService.getExperimentAnalyticsSummary` + `ExperimentAnalyticsService.getExperimentWinnerInfo` (extracted from the inline analytics + winner GET handlers, ~78→~30 lines analytics, ~45→~20 lines winner). The variant `config` payload (hero image overrides, package color maps, banner copy), ExperimentHistory `changes` blocks (before/after snapshots), and admin `firstName`/`lastName`/`email` populated on `changedBy` are intentionally stripped from the Norm projections — only aggregate metrics, inference outputs, and opaque User._id correlation keys are projected. Total wired surface now 35 business endpoints + framework.
+`2026-05-21` — Added 7 read endpoints in the promo sub-domain area: `/v1/promo/alternating-multiplier` (`AlternatingPromoMultiplier` configs — one row per package type, fixed-length `[a, b]` multiplier tuple, `isEnabled` toggle), `/v1/promo/banner-text` (paged list of `PromoBannerText` schedules — left-column banner image schedules, one-time or recurring — with AEST-shifted start/end dates), `/v1/promo/banner-text/active` (the single banner-text row whose schedule matches the current AEST date, or `null`), `/v1/promo/bonus-entry/list` (`BonusEntryPromo` rows — date-bounded fixed-bonus-entry campaigns — with derived `isCurrentlyActive`/`isUpcoming`/`isExpired` booleans), `/v1/promo/bonus-entry/active` (the currently-active bonus-entry promo for a single package type), `/v1/promo/link/list` (`PromoLink` rows — shareable bonus-entry codes — with `usedByCount` collapsed from the underlying `usedBy` array, no per-user IDs projected), and `/v1/promo/scheduled/list` (`ScheduledPromo` rows — date-bounded multiplier phases that win the resolver chain over toggle and alternating — with `deletedAt` soft-delete and an optional `includeDeleted` filter). All seven behind `promos.view`. `PromoQueryService` (`src/services/promo/PromoQueryService.ts`) was extended with five new functions: `listAlternatingMultipliers`, `listBonusEntryPromos`, `getActiveBonusEntryPromo`, `listPromoLinks`, `listScheduledPromos` (~340 added lines; the existing fat admin GET handlers under `/api/admin/promo/{alternating-multiplier,bonus-entry,link,scheduled}/*` were intentionally left in place to avoid regressing the admin UI contract — `PromoQueryService` re-implements the same Mongo query + projection logic so admin and Norm numbers match by construction). `PromoBannerTextService` (`src/services/admin/PromoBannerTextService.ts`) gained two new methods: `listBannerTextsProjection` and `getActiveBannerTextProjection` — wrappers around the existing `getAllBannerTexts` / `getActiveBannerText` calls that project to the shared Norm shape with `createdBy` collapsed to `{id, name, email}`. A new schema file `src/lib/internal-norm/schemas/promo-sub-domains.ts` hosts all five response schemas so the existing core-promo `schemas/promo.ts` stays focused on the toggle-system rows (active/effective/history). All `createdBy` projections collapse to `{id, name, email}` admin-internal metadata — not customer PII. Date fields serialise to ISO 8601 UTC except banner-text `startDate`/`endDate`, which are AEST-shifted at the service boundary (matches the admin route's existing behaviour). Total wired surface now 62 business endpoints + framework. Previously on this date: Added 3 read endpoints in the promo core domain: `/v1/promo/active` (raw list of `Promo` rows with `isActive: true` in the toggle system — `startDate` / `endDate` / `duration` are legacy fields preserved for backward compatibility, `timeRemaining` is always 0 and `isExpired` is always false on this endpoint), `/v1/promo/effective` (resolved effective multiplier per package type — `membership-packages`, `one-time-packages`, `mini-packages` — with a `source` field surfacing which mechanism won the priority chain `scheduled → toggle → alternating → derived-from-membership → none`; the resolver shared with the live payment-resolution path, so the reported multiplier is exactly what a purchase made right now would receive), and `/v1/promo/history` (paged history of all `Promo` rows active + inactive, newest first, with the populated `createdBy` projected to `{id, name, email}` — admin-internal metadata, not customer PII). All three behind `promos.view`. A new shared service `PromoQueryService` (`src/services/promo/PromoQueryService.ts`) was created to host `listActivePromos` and `listPromoHistory` — the two admin GET routes (`/api/admin/promo/active` GET portion and `/api/admin/promo/history` GET) shrunk from ~55 / ~127 lines to ~52 / ~58 lines respectively, sharing the projection code path with the Norm route. The third Norm route reuses the existing `PromoMultiplierResolverService.getEffectiveMultipliers` (no extraction needed — the admin `/effective` route already delegated to it). Note the relationship to the existing promo-analytics endpoints (`/v1/promo-analytics`, `/v1/promo-analytics/channel-detail`, `/v1/promo-analytics/page-detail`): those describe per-page / per-UTM funnel attribution; these new endpoints describe promo-config state and effective multiplier resolution. They overlap at the slug/page-naming level only, and draw from different collections — `Promo` / `ScheduledPromo` / `AlternatingPromoMultiplier` here, `PromoAnalyticsVisit` / `User.signupAttribution` / `PaymentEvent` there. Total wired surface now 55 business endpoints + framework. Previously on this date: Added 3 read endpoints: `/v1/winners/{id}` (single Winner record with the joined parent-draw name; PII-safe — `firstName` + `state` exposed, `lastName` / `email` / the entire `selectedBy` admin block stripped; works for both major and mini draws via the `drawType` discriminator), `/v1/analytics/spend-by-url` (per-canonical-URL spend / delivery / conversion aggregate for a date range, summed from materialized `LandingPageMetricsDaily` rows), and `/v1/analytics/spend-by-url/detail` (per-ad breakdown for one or more canonical URLs over the same date range, joined to `MetaAdInsightsDaily`). `winners.get` sits behind `majorDraw.view`; both `analytics.spend-by-url.*` reads behind `facebookAds.view`. The admin route `/api/admin/winners/{id}` GET was extracted to `getWinnerDetail` in `MajorDrawService.ts` (~95-line inline handler shrunk to ~30 lines) — the full result includes the winner-user's PII so the admin route can render firstName/lastName/email/state and the selecting-admin block; the Norm route projects down to the PII-safe subset before responding. The two admin spend-by-url routes were extracted to `SpendByUrlAggregationService.getSpendByUrlListFormatted` / `getSpendByUrlDetailFormatted` (the formatting / `centsToAud` / `cpc` / `roas` derivation lifted out of the route handler so admin + Norm share one code path). Note on numeric typing: `spendCents` / `revenueCents` / `impressions` / `clicks` / `conversions` are NOT integer-typed in the Norm schemas — upstream Meta returns fractional cents on some rows, so summed totals can carry floating-point artifacts (`28.000000000000004`); the schemas treat them as continuous `number`. Total wired surface now 52 business endpoints + framework. Previously on this date: Added 4 read endpoints in the mini-draw domain: `/v1/mini-draw/full-capacity-count` (single integer — count of `MiniDraw` rows with `status: "completed"` awaiting winner selection), `/v1/mini-draw/list` (paged list with per-row latest-winner join via `latestWinnerId`; `entries` array + `winner` sub-doc stripped — only counts surface), `/v1/mini-draw/{id}` (single-draw detail with no per-participant rows — `entries` / `winner` excluded at the projection; participant counts via `totalEntries` / `minimumEntries` / `entriesRemaining`), and `/v1/mini-draw/{id}/export` (**aggregate-only projection** — admin CSV/Excel returns full per-participant PII (firstName / lastName / email / mobile / state / totalEntries) for legal/operational reasons, Norm receives only total counts plus a per-state aggregate breakdown; unlike major-draw export, NO state-eligibility exclusion and NO repeat-winner exclusion are applied — mini draws have no such restrictions). All four behind `miniDraws.view`. A new shared service `MiniDrawService` (`src/services/admin/MiniDrawService.ts`, ~370 lines) was created to host the projections — the three simple admin routes (`full-capacity-count`, `list`, `[id]` GET) were shrunk to delegate to the service (~30 / ~150 / ~95 lines respectively → ~21 / ~58 / ~38 lines), preserving their existing response envelope (`success: true, data: ...`); the export admin route was intentionally left in place since the CSV/Excel binary-response contract cannot be cleanly extracted, and `MiniDrawService.getMiniDrawExportAggregate` re-implements the same `MiniDraw.entries` + `User.state` join logic so admin and Norm numbers match by construction. PII discipline highlights: `get` strips all per-participant rows; `export` collapses to aggregate-only (no per-user rows); list strips the `entries` + `winner` arrays. The MiniDraw schema uses status enum `{active | completed | cancelled}` (narrower than MajorDraw's). Total wired surface now 49 business endpoints + framework. Previously on this date: Added 7 read endpoints in the major-draw domain: `/v1/major-draw/current-and-last` (current + last completed draw, AEST `YYYY-MM-DD` no-overlap-adjusted ranges), `/v1/major-draw/history` (paged history with per-draw Winner join + filter-aware rollup stats), `/v1/major-draw/scheduled-months` (distinct months with scheduled draws for the calendar UI), `/v1/major-draw/participants` (PII-safe paged participants — lastName / email / mobile stripped; firstName + state retained; opaque `userId` correlation key), `/v1/major-draw/export` (**aggregate-only projection** — admin CSV/Excel returns full PII per legal requirement, Norm receives only exclusion counts (10-month-repeat-winner per terms 5.4, SA/ACT state-eligibility) plus per-state participants/entries breakdown of the eligible set), `/v1/major-draw/select-winner` GET (PII-safe winner-recorded preview — only `state` exposed; the companion POST trigger is `trigger_human_approve` and not yet wired), and `/v1/major-draw/update` GET (editable-fields read for the admin update form; the companion PUT is `write_safe` and not yet wired). All seven behind `majorDraw.view`. A new shared service `MajorDrawService` (`src/services/admin/MajorDrawService.ts`, ~620 lines) was created to host the Norm projections — the two simplest admin routes (`current-and-last` and `scheduled-months`) were shrunk to delegate to the service (~117 / ~78 lines → ~22 / ~24 lines respectively), preserving their existing response shape; the five complex admin routes (history, participants, export, select-winner, update) were intentionally left in place to avoid regressing the admin UI / CSV-export contract — `MajorDrawService` re-implements the same Mongo query logic so admin and Norm numbers match by construction. PII discipline highlights: participants strips lastName/email/mobile; export collapses to aggregate-only (no per-user rows); select-winner.preview strips firstName/lastName/email/mobile and exposes only `state`; history strips populated `winner.userDetails` and `winner.selectedByDetails`. Note: the MajorDraw schema uses `activationDate` (start) and `drawDate` (end), and status enum `{queued | active | frozen | completed | cancelled}` — there is no `startDate`/`endDate` on the schema; the Norm projection always uses the canonical schema fields (see gotcha G4 + the model file). Total wired surface now 45 business endpoints + framework. Previously on this date: Added 3 read endpoints in the facebook-ads domain: `/v1/facebook-ads/insights` (richer admin-shape projection of Meta insights with per-item Facebook IDs/names, `landingPageView`, and `syncedAt` — distinct from the thinner `/v1/roas/*` projection that already shared the same underlying `FacebookAdsInsightsService`), `/v1/facebook-ads/hourly-insights` (24-bucket hourly merge of Meta spend/impressions/clicks with local PaymentEvent revenue/conversions; `landingPageView` is null per hour by design — Meta API limitation), and `/v1/facebook-ads/purchase-audit` (Meta-vs-local reconciliation of purchase revenue for a `today | 7d | 30d` window). The two fat admin handlers were extracted to new services: `HourlyInsightsService` (~250-line admin route shrunk to ~100 lines) and `PurchaseAuditService` (~140-line admin route shrunk to ~40 lines), each shared with the Norm projection so the numbers match by construction. The first two new endpoints carry a 10/min override (upstream Meta API rate-limits). `purchase-audit` has no override (local Mongo + a single Meta call). All behind `facebookAds.view`. The admin route's `cached` debug flag is stripped from the Norm insights projection. Total wired surface previously 38 business endpoints + framework. Previously on this date: Added 3 read endpoints in the allowlist domain: audit-feed (`/v1/allowlist/actions`), currently-blocked-cards page (`/v1/allowlist/blocked-cards`), and active-allowlist count (`/v1/allowlist/stats`). All three sit behind `users.view` and the underlying admin routes still use the legacy `requireAdminUser` check (separate migration concern). Email + Stripe-customer-ID are stripped from the Norm projections. Also added 2 read endpoints in the error-reports domain: paged list (`/v1/error-reports`) and per-id detail (`/v1/error-reports/{id}`), both behind `errorReports.view`. The admin route's heavy aggregation/list block was extracted to `ErrorReportQueryService` and shared with the Norm projection. Stack traces, console dumps, user emails, hashed IPs, browser/UA, and referrer are stripped from the Norm projections. Also added 2 read endpoints in the snapshot-health domain: `/v1/health/dashboard-stats-snapshot` and `/v1/health/membership-snapshot`, both behind `overview.view`. Inline business logic in the two admin routes (`/api/admin/health/{dashboard-stats-snapshot,membership-snapshot}`) was extracted to `getDashboardStatsSnapshotHealth` and `getMembershipSnapshotHealth` in `src/services/admin/dashboard-stats/snapshotHealth.ts` so admin and Norm share the same code. Also added 2 read endpoints: `/v1/stripe-webhook-queue` (behind `errorReports.view`) returning a paged page of `StripeWebhookQueue` rows (raw event `payload` stripped), and `/v1/invoices/charge-past-due` (behind `users.view`) returning the bulk past-due charge-run preview — what the not-yet-wired POST (`trigger_human_approve`) would target. The admin GET handlers for both were extracted to `src/services/stripe-webhook-queue/listQueue.ts` and `src/services/admin/previewChargePastDueInvoices.ts` so admin and Norm share one code path. Also added 2 read endpoints in the affiliate domain: paged list (`/v1/affiliate`) and per-id detail (`/v1/affiliate/{id}`), both behind `affiliates.view`. The admin list route's inline `$lookup` + unpaid-commission aggregation and the detail route's commission-ledger + referred-users + payouts orchestration were extracted to `listAffiliates` and `getAffiliateDetail` in `src/services/affiliate/AffiliateAdminListService.ts` (~190-line admin list route shrunk to ~38 lines; ~300-line admin detail route shrunk to ~60 lines), shared with the Norm projection. PII fields (affiliate email/phone/bank details, referred-user email/phone/name, processing-admin email/name) are intentionally stripped from the Norm projections — `affiliateCode`, `username`, and User._id correlation keys are retained. Also added 5 read endpoints in the A/B testing domain: experiment list (`/v1/ab-testing/experiments`), experiment detail with variants (`/v1/ab-testing/experiments/{id}`), aggregate analytics with significance + stopping rules + winner (`/v1/ab-testing/experiments/{id}/analytics`), mutation history (`/v1/ab-testing/experiments/{id}/history`), and winner-info read (`/v1/ab-testing/experiments/{id}/winner`) — all behind `abTesting.view`. Three new service methods were added to share code with the admin routes: `ExperimentService.listExperiments` + `ExperimentService.getExperimentDetail` (extracted from the inline `[id]` GET handler, ~52→~16 line shrink) and `ExperimentAnalyticsService.getExperimentAnalyticsSummary` + `ExperimentAnalyticsService.getExperimentWinnerInfo` (extracted from the inline analytics + winner GET handlers, ~78→~30 lines analytics, ~45→~20 lines winner). The variant `config` payload (hero image overrides, package color maps, banner copy), ExperimentHistory `changes` blocks (before/after snapshots), and admin `firstName`/`lastName`/`email` populated on `changedBy` are intentionally stripped from the Norm projections — only aggregate metrics, inference outputs, and opaque User._id correlation keys are projected. Total wired surface now 35 business endpoints + framework.

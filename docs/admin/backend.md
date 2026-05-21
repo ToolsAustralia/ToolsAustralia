@@ -223,3 +223,9 @@ const adminCheck = requireAdmin(session);
 if (adminCheck) return adminCheck; // 401/403
 // ... admin work
 ```
+
+## Cross-domain projection helpers
+
+Some services under `src/services/admin/` expose secondary "projection" methods consumed by the internal-norm read tier so that admin + Norm share one code path:
+
+- `PromoBannerTextService.listBannerTextsProjection()` / `.getActiveBannerTextProjection()` — return banner-text rows in the shared `{id, ..., createdBy: {id, name, email}}` shape with `startDate` / `endDate` AEST-converted at the service boundary. The existing `getAllBannerTexts` / `getActiveBannerText` remain for the admin route's response envelope; the projection wrappers are what `/api/internal/norm/v1/promo/banner-text` and `…/banner-text/active` call.

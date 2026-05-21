@@ -79,6 +79,15 @@ import {
   NormPromoEffectiveSchema,
   NormPromoHistorySchema,
 } from "./schemas/promo";
+import {
+  NormPromoAlternatingMultiplierListSchema,
+  NormPromoBannerTextActiveSchema,
+  NormPromoBannerTextListSchema,
+  NormPromoBonusEntryActiveSchema,
+  NormPromoBonusEntryListSchema,
+  NormPromoLinkListSchema,
+  NormPromoScheduledListSchema,
+} from "./schemas/promo-sub-domains";
 
 // "forbidden" is NOT a tier — endpoints not in the registry are simply unreachable.
 // Tier and Permission are orthogonal axes: tier = orchestration shape; permission = "is Norm allowed?".
@@ -1024,6 +1033,7 @@ export const NORM_ENDPOINTS = {
     path: "/v1/promo/alternating-multiplier",
     method: "GET",
     summary: "List alternating-multiplier promos",
+    responseSchema: NormPromoAlternatingMultiplierListSchema,
   },
   "promo.alternating-multiplier.create": {
     tier: "write_safe",
@@ -1054,6 +1064,7 @@ export const NORM_ENDPOINTS = {
     path: "/v1/promo/banner-text",
     method: "GET",
     summary: "List promo banner texts",
+    responseSchema: NormPromoBannerTextListSchema,
   },
   "promo.banner-text.create": {
     tier: "write_safe",
@@ -1068,6 +1079,7 @@ export const NORM_ENDPOINTS = {
     path: "/v1/promo/banner-text/active",
     method: "GET",
     summary: "Currently-active promo banner text",
+    responseSchema: NormPromoBannerTextActiveSchema,
   },
   "promo.banner-text.update": {
     tier: "write_safe",
@@ -1091,6 +1103,7 @@ export const NORM_ENDPOINTS = {
     path: "/v1/promo/bonus-entry/list",
     method: "GET",
     summary: "List bonus-entry promos",
+    responseSchema: NormPromoBonusEntryListSchema,
   },
   "promo.bonus-entry.active": {
     tier: "read",
@@ -1098,6 +1111,7 @@ export const NORM_ENDPOINTS = {
     path: "/v1/promo/bonus-entry/active",
     method: "GET",
     summary: "Currently-active bonus-entry promo",
+    responseSchema: NormPromoBonusEntryActiveSchema,
   },
   "promo.bonus-entry.create": {
     tier: "write_safe",
@@ -1128,6 +1142,7 @@ export const NORM_ENDPOINTS = {
     path: "/v1/promo/link/list",
     method: "GET",
     summary: "List promo links",
+    responseSchema: NormPromoLinkListSchema,
   },
   "promo.link.create": {
     tier: "write_safe",
@@ -1158,6 +1173,7 @@ export const NORM_ENDPOINTS = {
     path: "/v1/promo/scheduled/list",
     method: "GET",
     summary: "List scheduled promos",
+    responseSchema: NormPromoScheduledListSchema,
   },
   "promo.scheduled.create": {
     tier: "write_safe",
