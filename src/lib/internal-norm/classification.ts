@@ -69,6 +69,11 @@ import {
   NormMiniDrawGetSchema,
   NormMiniDrawListSchema,
 } from "./schemas/mini-draw";
+import { NormWinnerDetailSchema } from "./schemas/winners";
+import {
+  NormAnalyticsSpendByUrlDetailSchema,
+  NormAnalyticsSpendByUrlListSchema,
+} from "./schemas/analytics-spend";
 
 // "forbidden" is NOT a tier — endpoints not in the registry are simply unreachable.
 // Tier and Permission are orthogonal axes: tier = orchestration shape; permission = "is Norm allowed?".
@@ -419,20 +424,22 @@ export const NORM_ENDPOINTS = {
     responseSchema: NormAllowlistStatsSchema,
   },
 
-  // ─── Analytics — spend-by-url (roadmap) ───────────────────────────────
+  // ─── Analytics — spend-by-url (wired list/detail; sync roadmap) ───────
   "analytics.spend-by-url.list": {
     tier: "read",
     requiredPermission: "facebookAds.view",
     path: "/v1/analytics/spend-by-url",
     method: "GET",
-    summary: "Ad spend grouped by destination URL",
+    summary: "Ad spend grouped by destination URL for a date range (materialized daily rows summed per canonical URL)",
+    responseSchema: NormAnalyticsSpendByUrlListSchema,
   },
   "analytics.spend-by-url.detail": {
     tier: "read",
     requiredPermission: "facebookAds.view",
     path: "/v1/analytics/spend-by-url/detail",
     method: "GET",
-    summary: "Spend-by-URL detail breakdown",
+    summary: "Per-ad spend / delivery / conversion breakdown for one or more canonical destination URLs",
+    responseSchema: NormAnalyticsSpendByUrlDetailSchema,
   },
   "analytics.spend-by-url.sync": {
     tier: "trigger_human_approve",
@@ -1331,13 +1338,14 @@ export const NORM_ENDPOINTS = {
     summary: "Reverse a single payment event (refund-class money movement)",
   },
 
-  // ─── Winners (roadmap) ───────────────────────────────────────────────
+  // ─── Winners (wired get; update/delete roadmap) ───────────────────────
   "winners.get": {
     tier: "read",
     requiredPermission: "majorDraw.view",
     path: "/v1/winners/:id",
     method: "GET",
-    summary: "Get a single winner record",
+    summary: "Get a single winner record with the joined draw name (PII-safe projection: firstName + state only)",
+    responseSchema: NormWinnerDetailSchema,
   },
   "winners.update": {
     tier: "write_safe",

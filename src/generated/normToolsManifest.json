@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-05-21T08:09:35.615Z",
+  "generatedAt": "2026-05-21T08:23:01.834Z",
   "endpoints": [
     {
       "registryKey": "roas.summary",
@@ -99,6 +99,20 @@
       "path": "/v1/allowlist/stats",
       "method": "GET",
       "summary": "Allowlist summary stats"
+    },
+    {
+      "registryKey": "analytics.spend-by-url.list",
+      "tier": "read",
+      "path": "/v1/analytics/spend-by-url",
+      "method": "GET",
+      "summary": "Ad spend grouped by destination URL for a date range (materialized daily rows summed per canonical URL)"
+    },
+    {
+      "registryKey": "analytics.spend-by-url.detail",
+      "tier": "read",
+      "path": "/v1/analytics/spend-by-url/detail",
+      "method": "GET",
+      "summary": "Per-ad spend / delivery / conversion breakdown for one or more canonical destination URLs"
     },
     {
       "registryKey": "cancellation-flow-analytics.list",
@@ -344,6 +358,13 @@
       "path": "/v1/upsell-multipliers",
       "method": "GET",
       "summary": "List upsell multipliers"
+    },
+    {
+      "registryKey": "winners.get",
+      "tier": "read",
+      "path": "/v1/winners/:id",
+      "method": "GET",
+      "summary": "Get a single winner record with the joined draw name (PII-safe projection: firstName + state only)"
     }
   ]
 }

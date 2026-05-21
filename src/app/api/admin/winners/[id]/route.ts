@@ -12,8 +12,9 @@ import connectDB from "@/lib/mongodb";
 import Winner from "@/models/Winner";
 import MajorDraw from "@/models/MajorDraw";
 import MiniDraw from "@/models/MiniDraw";
-import mongoose, { Types } from "mongoose";
+import mongoose from "mongoose";
 import { z } from "zod";
+import { getWinnerDetail } from "@/services/admin/MajorDrawService";
 type RouteParams = { params: Promise<{ id: string }> };
 
 // Validation schema for updating winner
@@ -28,91 +29,30 @@ const updateWinnerSchema = z.object({
 
 /**
  * GET /api/admin/winners/[id]
- * Get detailed winner information including user details and draw information
+ * Get detailed winner information including user details and draw information.
+ *
+ * Delegates to `getWinnerDetail` so the Norm `/v1/winners/{id}` projection
+ * shares the same code path (PII fields are present on the full result; the
+ * Norm route strips lastName/email/selectedBy before responding).
  */
 export async function GET(request: NextRequest, { params }: RouteParams) {
   try {
     const _guard = await requirePermission("majorDraw.view");
     if (_guard instanceof NextResponse) return _guard;
 
-    await connectDB();
-
     const { id: winnerId } = await params;
 
-    if (!mongoose.Types.ObjectId.isValid(winnerId)) {
-      return NextResponse.json({ error: "Invalid winner ID" }, { status: 400 });
-    }
-
-    // Fetch winner with populated user and draw information
-    const winner = await Winner.findById(winnerId)
-      .populate("userId", "firstName lastName email state")
-      .populate("selectedBy", "firstName lastName email")
-      .lean();
-
-    if (!winner) {
+    const outcome = await getWinnerDetail(winnerId);
+    if (!outcome.ok) {
+      if (outcome.code === "bad_id") {
+        return NextResponse.json({ error: "Invalid winner ID" }, { status: 400 });
+      }
       return NextResponse.json({ error: "Winner not found" }, { status: 404 });
     }
 
-    // Get draw information based on draw type
-    let drawInfo: { name?: string; id?: string } = {};
-    if (winner.drawType === "major") {
-      const majorDraw = await MajorDraw.findById(winner.drawId).select("name").lean();
-      if (majorDraw && !Array.isArray(majorDraw) && majorDraw._id) {
-        const drawId = typeof majorDraw._id === 'object' && '_id' in majorDraw._id 
-          ? (majorDraw._id as { _id: Types.ObjectId })._id.toString()
-          : String(majorDraw._id);
-        drawInfo = { name: majorDraw.name, id: drawId };
-      }
-    } else {
-      const miniDraw = await MiniDraw.findById(winner.drawId).select("name").lean();
-      if (miniDraw && !Array.isArray(miniDraw) && miniDraw._id) {
-        const drawId = typeof miniDraw._id === 'object' && '_id' in miniDraw._id 
-          ? (miniDraw._id as { _id: Types.ObjectId })._id.toString()
-          : String(miniDraw._id);
-        drawInfo = { name: miniDraw.name, id: drawId };
-      }
-    }
-
-    // Format response
-    const winnerUser = winner.userId as unknown as { firstName?: string; lastName?: string; email?: string; state?: string };
-    const selectedByUser = winner.selectedBy as unknown as { firstName?: string; lastName?: string; email?: string } | null;
-
     return NextResponse.json({
       success: true,
-      winner: {
-        id: winner._id.toString(),
-        drawId: winner.drawId.toString(),
-        drawName: drawInfo.name || "Unknown Draw",
-        drawType: winner.drawType,
-        userId: winner.userId.toString(),
-        winnerFirstName: winnerUser?.firstName || "",
-        winnerLastName: winnerUser?.lastName || "",
-        winnerEmail: winnerUser?.email || "",
-        winnerState: winnerUser?.state || "",
-        prize: {
-          name: winner.prizeSnapshot?.name || "",
-          description: winner.prizeSnapshot?.description || "",
-          value: winner.prizeSnapshot?.value || 0,
-          images: winner.prizeSnapshot?.images || [],
-        },
-        entryNumber: winner.entryNumber,
-        selectedDate: winner.selectedDate,
-        imageUrl: winner.imageUrl,
-        drawResultUrl: winner.drawResultUrl ?? null,
-        testimony: winner.testimony || null,
-        selectedPrize: (winner.selectedPrize || winner.selectedPrizeSlug) || null, // Prefer new field, fallback to legacy
-        selectedPrizeSlug: winner.selectedPrizeSlug || null, // Legacy field
-        selectedBy: selectedByUser
-          ? {
-              id: winner.selectedBy?.toString(),
-              name: `${selectedByUser.firstName || ""} ${selectedByUser.lastName || ""}`.trim(),
-              email: selectedByUser.email || "",
-            }
-          : null,
-        cycle: winner.cycle,
-        createdAt: winner.createdAt,
-        updatedAt: winner.updatedAt,
-      },
+      winner: outcome.data,
     });
   } catch (error) {
     console.error("Error fetching winner:", error);

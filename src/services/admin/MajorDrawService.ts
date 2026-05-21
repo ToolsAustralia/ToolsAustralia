@@ -16,6 +16,7 @@
 import connectDB from "@/lib/mongodb";
 import mongoose, { Types } from "mongoose";
 import MajorDraw, { IMajorDraw } from "@/models/MajorDraw";
+import MiniDraw from "@/models/MiniDraw";
 import User from "@/models/User";
 import Winner from "@/models/Winner";
 import { getCurrentMajorDrawForDisplay } from "@/utils/draws/major-draw-helpers";
@@ -892,6 +893,149 @@ export async function getMajorDrawSelectWinnerPreview(
         selectedPrize: winner.selectedPrize ?? winner.selectedPrizeSlug ?? null,
         drawResultUrl: winner.drawResultUrl ?? null,
       },
+    },
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// winners.get — single Winner detail, joined to its parent draw
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// The full result is returned (including the winner-user's PII so the admin
+// route can present firstName/lastName/email/state) — the Norm route projects
+// down to a PII-safe subset before responding (firstName + state only).
+//
+// `selectedByDetails` (the admin who chose the winner) is also included on the
+// full result so the admin UI can show "selected by X". The Norm projection
+// strips it entirely.
+
+export interface WinnerDetailResult {
+  id: string;                                       // Winner._id
+  drawId: string;
+  drawName: string;
+  drawType: "major" | "mini";
+  userId: string;                                   // opaque correlation key (Mongo User._id)
+  winnerFirstName: string;
+  winnerLastName: string;                           // admin only — Norm strips
+  winnerEmail: string;                              // admin only — Norm strips
+  winnerState: string;
+  prize: {
+    name: string;
+    description: string;
+    value: number;                                  // AUD dollars
+    images: string[];
+  };
+  entryNumber: number | null;
+  selectedDate: string;                             // ISO 8601 UTC
+  imageUrl: string | null;
+  drawResultUrl: string | null;
+  testimony: string | null;
+  selectedPrize: string | null;                     // free-text, falls back to legacy selectedPrizeSlug
+  selectedPrizeSlug: string | null;                 // legacy
+  selectedBy: {
+    id: string;
+    name: string;                                   // admin only — Norm strips entire selectedBy block
+    email: string;                                  // admin only
+  } | null;
+  cycle: number;
+  createdAt: string;                                // ISO 8601 UTC
+  updatedAt: string;                                // ISO 8601 UTC
+}
+
+export type WinnerDetailOutcome =
+  | { ok: true; data: WinnerDetailResult }
+  | { ok: false; code: "not_found" | "bad_id" };
+
+type WinnerUserPopulated = {
+  firstName?: string;
+  lastName?: string;
+  email?: string;
+  state?: string;
+};
+
+type WinnerSelectedByPopulated = {
+  firstName?: string;
+  lastName?: string;
+  email?: string;
+};
+
+export async function getWinnerDetail(winnerId: string): Promise<WinnerDetailOutcome> {
+  await connectDB();
+  if (!Types.ObjectId.isValid(winnerId)) return { ok: false, code: "bad_id" };
+
+  const winner = await Winner.findById(winnerId)
+    .populate("userId", "firstName lastName email state")
+    .populate("selectedBy", "firstName lastName email")
+    .lean();
+
+  if (!winner || Array.isArray(winner)) return { ok: false, code: "not_found" };
+
+  // drawName comes from the matching MajorDraw or MiniDraw row
+  let drawName = "Unknown Draw";
+  if (winner.drawType === "major") {
+    const draw = await MajorDraw.findById(winner.drawId).select("name").lean();
+    if (draw && !Array.isArray(draw) && draw.name) drawName = draw.name;
+  } else {
+    const draw = await MiniDraw.findById(winner.drawId).select("name").lean();
+    if (draw && !Array.isArray(draw) && draw.name) drawName = draw.name;
+  }
+
+  const userPop = winner.userId as unknown as WinnerUserPopulated | null;
+  const selectedByPop = winner.selectedBy as unknown as WinnerSelectedByPopulated | null;
+
+  // userId is populated on the doc — but when populated it's an object with _id.
+  // String() on a populated doc returns its _id by Mongoose convention; coerce
+  // explicitly for clarity.
+  const userIdRaw = winner.userId as unknown as { _id?: Types.ObjectId | string } | Types.ObjectId | string;
+  const userIdStr =
+    userIdRaw && typeof userIdRaw === "object" && "_id" in userIdRaw && userIdRaw._id
+      ? String(userIdRaw._id)
+      : String(userIdRaw);
+
+  const selectedByIdRaw = winner.selectedBy as unknown as { _id?: Types.ObjectId | string } | Types.ObjectId | string | null | undefined;
+  const selectedById =
+    selectedByIdRaw && typeof selectedByIdRaw === "object" && "_id" in selectedByIdRaw && selectedByIdRaw._id
+      ? String(selectedByIdRaw._id)
+      : selectedByIdRaw
+        ? String(selectedByIdRaw)
+        : null;
+
+  return {
+    ok: true,
+    data: {
+      id: String(winner._id),
+      drawId: String(winner.drawId),
+      drawName,
+      drawType: winner.drawType,
+      userId: userIdStr,
+      winnerFirstName: userPop?.firstName ?? "",
+      winnerLastName: userPop?.lastName ?? "",
+      winnerEmail: userPop?.email ?? "",
+      winnerState: userPop?.state ?? "",
+      prize: {
+        name: winner.prizeSnapshot?.name ?? "",
+        description: winner.prizeSnapshot?.description ?? "",
+        value: winner.prizeSnapshot?.value ?? 0,
+        images: winner.prizeSnapshot?.images ?? [],
+      },
+      entryNumber: winner.entryNumber ?? null,
+      selectedDate: winner.selectedDate ? new Date(winner.selectedDate).toISOString() : "",
+      imageUrl: winner.imageUrl ?? null,
+      drawResultUrl: winner.drawResultUrl ?? null,
+      testimony: winner.testimony ?? null,
+      selectedPrize: winner.selectedPrize ?? winner.selectedPrizeSlug ?? null,
+      selectedPrizeSlug: winner.selectedPrizeSlug ?? null,
+      selectedBy:
+        selectedById && selectedByPop
+          ? {
+              id: selectedById,
+              name: `${selectedByPop.firstName ?? ""} ${selectedByPop.lastName ?? ""}`.trim(),
+              email: selectedByPop.email ?? "",
+            }
+          : null,
+      cycle: winner.cycle ?? 1,
+      createdAt: winner.createdAt ? new Date(winner.createdAt).toISOString() : "",
+      updatedAt: winner.updatedAt ? new Date(winner.updatedAt).toISOString() : "",
     },
   };
 }
