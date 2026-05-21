@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-05-21T06:15:43.333Z",
+  "generatedAt": "2026-05-21T06:24:28.913Z",
   "endpoints": [
     {
       "registryKey": "roas.summary",
@@ -78,6 +78,27 @@
       "path": "/v1/klaviyo/draw-reset-progress",
       "method": "GET",
       "summary": "Progress of an in-flight Klaviyo draw reset"
+    },
+    {
+      "registryKey": "metrics.debug",
+      "tier": "read",
+      "path": "/v1/metrics/debug",
+      "method": "GET",
+      "summary": "Engineer-facing debug snapshot of recent BenefitsGranted PaymentEvents (sample + total count)"
+    },
+    {
+      "registryKey": "metrics.users",
+      "tier": "read",
+      "path": "/v1/metrics/users",
+      "method": "GET",
+      "summary": "Aggregate user metrics for a date range: signup source, profession, state, age, membership, purchase history"
+    },
+    {
+      "registryKey": "metrics.users.major-draw-comparison",
+      "tier": "read",
+      "path": "/v1/metrics/users/major-draw-comparison",
+      "method": "GET",
+      "summary": "Per-draw user/revenue totals + percent comparison between two major draws"
     },
     {
       "registryKey": "promo-analytics.summary",

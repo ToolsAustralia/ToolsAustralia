@@ -21,6 +21,11 @@ import {
   NormPromoAnalyticsPageDetailSchema,
   NormPromoAnalyticsSummarySchema,
 } from "./schemas/promo-analytics";
+import {
+  NormMetricsDebugSchema,
+  NormUserMajorDrawComparisonSchema,
+  NormUserMetricsSchema,
+} from "./schemas/metrics";
 
 // "forbidden" is NOT a tier — endpoints not in the registry are simply unreachable.
 // Tier and Permission are orthogonal axes: tier = orchestration shape; permission = "is Norm allowed?".
@@ -631,27 +636,30 @@ export const NORM_ENDPOINTS = {
     summary: "Read major-draw fields for the update form",
   },
 
-  // ─── Metrics (roadmap) ────────────────────────────────────────────────
+  // ─── Metrics (wired) ──────────────────────────────────────────────────
   "metrics.debug": {
     tier: "read",
     requiredPermission: "overview.view",
     path: "/v1/metrics/debug",
     method: "GET",
-    summary: "Internal metrics debug payload",
+    summary: "Engineer-facing debug snapshot of recent BenefitsGranted PaymentEvents (sample + total count)",
+    responseSchema: NormMetricsDebugSchema,
   },
   "metrics.users": {
     tier: "read",
     requiredPermission: "overview.view",
     path: "/v1/metrics/users",
     method: "GET",
-    summary: "User metrics for a date range",
+    summary: "Aggregate user metrics for a date range: signup source, profession, state, age, membership, purchase history",
+    responseSchema: NormUserMetricsSchema,
   },
   "metrics.users.major-draw-comparison": {
     tier: "read",
     requiredPermission: "overview.view",
     path: "/v1/metrics/users/major-draw-comparison",
     method: "GET",
-    summary: "User metrics compared across major draws",
+    summary: "Per-draw user/revenue totals + percent comparison between two major draws",
+    responseSchema: NormUserMajorDrawComparisonSchema,
   },
 
   // ─── Milestone rewards (roadmap; legacy admin) ────────────────────────

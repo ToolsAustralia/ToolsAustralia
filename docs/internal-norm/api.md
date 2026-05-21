@@ -137,6 +137,27 @@ Query: `pageType=evergreen|toolset` + `slug` (both required), optional `startDat
 
 Response: `{ pageType, slug, pageLabel, summary, byCampaign: UTMCampaignMetrics[], visitsFrom?: VisitsFromMetric[] }` from [`PromoAnalyticsService.getPageDetailMetrics`](../../src/services/promo-analytics/PromoAnalyticsService.ts). An invalid slug throws and surfaces as `500 handler_exception`.
 
+### `GET /v1/metrics/users`
+Tier `read`; required permission `overview.view`.
+
+Query: `dateRange=today|yesterday|current-draw|last-draw|all-time|custom` (default `today`); for `custom` also `startDate`, `endDate` (ISO). Draw-based ranges are resolved via [`resolveNormDateRange`](../../src/utils/admin/resolveNormDateRange.ts).
+
+Response: aggregate signup-cohort user rollup with demographic + membership + purchase blocks — `{ dateRange, totalUsers, signupSource, profession, state, ageGroup, membershipStatus, membershipByPackage, purchaseHistory }`. Backed by [`UserMetricsService.getUserMetrics`](../../src/services/metrics/UserMetricsService.ts) — the same service the admin route uses. Membership counts switch to snapshot mode (from `MembershipDailySnapshot`) when the window ends in the past; live current-state otherwise.
+
+### `GET /v1/metrics/users/major-draw-comparison`
+Tier `read`; required permission `overview.view`.
+
+Query: `currentDrawId` + `previousDrawId` (both required `MajorDraw._id` strings). 404 `not_found` if either does not resolve.
+
+Response: two-draw side-by-side — `{ currentDrawInfo, previousDrawInfo, currentDrawTotal, previousDrawTotal, comparison }`. Each per-draw window is the draw's `activationDate → drawDate`. Backed by [`UserMajorDrawComparisonService.getUserMajorDrawComparison`](../../src/services/metrics/UserMajorDrawComparisonService.ts), which in turn batches `DailyUserMetricsService` calls (in-process 5-min cache per window).
+
+### `GET /v1/metrics/debug`
+Tier `read`; required permission `overview.view`.
+
+Query: optional `days` (default 7, clamped `[1, 365]`).
+
+Response: engineer-facing diagnostic snapshot — `{ dateRange, paymentEvents: { count, totalRevenue (sample-only), sample[≤10] }, facebookAds: { note }, note }`. Shape is unstable and `paymentEvents.totalRevenue` covers only the 10-row sample — do not use as a revenue figure. Backed by [`getMetricsDebugSnapshot`](../../src/services/metrics/MetricsDebugService.ts), extracted from the admin route during wiring.
+
 ## Roadmap (registered but not yet wired)
 
 The [classification registry](../../src/lib/internal-norm/classification.ts) has ~100 additional entries spanning admin domains (A/B testing, affiliates, allowlist, charge-past-due, error reports, mini draws, monthly coupons, promos, users, winners, etc.). They show up in the admin Endpoints tab with a `wired: false` flag but are NOT exposed via `/v1/manifest` — Norm cannot discover or call them until each gets a `responseSchema` + route file. See [patterns.md](./patterns.md) for the recipe.
