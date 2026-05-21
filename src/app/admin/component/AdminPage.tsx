@@ -29,6 +29,7 @@ import PromoAnalyticsManagement from "@/components/admin/PromoAnalyticsManagemen
 import CancellationFlowAnalytics from "@/components/admin/CancellationFlowAnalytics";
 import ActivityLogManagement from "./ActivityLogManagement";
 import SettingsTab from "./SettingsTab";
+import StaffActivityManagement from "./StaffActivityManagement";
 import UnviewedSubmissionsNotification from "@/components/admin/UnviewedSubmissionsNotification";
 import { HeaderThemeToggle } from "@/components/ui/HeaderThemeToggle";
 import { Shield, Menu, BarChart3 } from "lucide-react";
@@ -190,6 +191,7 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
                   {selectedTab === "stripe-webhook-queue" && "Async Stripe webhook processing queue — replay failed events"}
                   {selectedTab === "activity-log" && "Complete activity history with filters and search"}
                   {selectedTab === "team" && "Manage staff accounts and the roles that gate the admin panel"}
+                  {selectedTab === "staff-activity" && "Audit trail of every mutation by staff or admin users"}
                 </p>
               </div>
             </div>
@@ -268,6 +270,9 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
 
           {/* TEAM TAB (Staff + Roles sub-screens) */}
           {selectedTab === "team" && <SettingsTab />}
+
+          {/* AUDIT — staff activity log */}
+          {selectedTab === "staff-activity" && <StaffActivityManagement />}
 
           {/* Placeholder for other tabs - temporarily disabled since tabs are hidden */}
           {false && (

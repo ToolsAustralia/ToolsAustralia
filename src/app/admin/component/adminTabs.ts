@@ -24,6 +24,7 @@ import {
   Megaphone,
   ScrollText,
   Shield,
+  ShieldCheck,
   TrendingUp,
   Trophy,
   UserCheck,
@@ -116,6 +117,22 @@ export const ADMIN_TAB_GROUPS: AdminTabGroup[] = [
     groupIcon: Shield,
     tabs: [
       { id: "team", label: "Team", icon: Shield, requires: "settings.view" },
+    ],
+  },
+  // Audit lives in its own group at the bottom — it's a security tool,
+  // not a daily-driver tab. Future audit.export / audit.delete actions
+  // can grow under this group without rearranging.
+  {
+    id: "audit",
+    label: "Audit",
+    groupIcon: ShieldCheck,
+    tabs: [
+      {
+        id: "staff-activity",
+        label: "Staff Activity",
+        icon: ShieldCheck,
+        requires: "audit.view",
+      },
     ],
   },
 ];
