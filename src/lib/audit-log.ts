@@ -102,33 +102,30 @@ export async function requirePermissionWithAudit(
   };
 }
 
-async function safeLog(input: SafeLogInput): Promise<void> {
+async function safeLog(
+  input: SafeLogInput,
+  modelOverride?: { create: (input: SafeLogInput) => Promise<unknown> }
+): Promise<void> {
   try {
-    await connectDB();
-    await StaffActivity.create(input);
+    if (modelOverride) {
+      await modelOverride.create(input);
+    } else {
+      await connectDB();
+      await StaffActivity.create(input);
+    }
   } catch (err) {
     // Best-effort. A logging failure must never break the action.
+    // Using console.error (not console.log) so it survives next.config's
+    // compiler.removeConsole in production builds. ErrorReport is for
+    // user-facing errors; audit-log failures are infra noise only.
     console.error("[audit-log] failed to record activity:", err);
   }
 }
 
 /**
- * Test-only export so `safeLog` can be exercised against a stub model.
- * The second argument lets the test inject a different `create()` target
- * without touching the real Mongoose model. Production callers go through
+ * Test-only re-export. Kept as a `__`-prefixed alias so tests can call
+ * `safeLog` with a stub model without exposing it in autocomplete for
+ * production code-paths. Production callers go through
  * `requirePermissionWithAudit` and never see this.
  */
-export async function __safeLogForTest(
-  input: SafeLogInput,
-  modelOverride?: { create: (input: SafeLogInput) => Promise<unknown> }
-): Promise<void> {
-  if (modelOverride) {
-    try {
-      await modelOverride.create(input);
-    } catch (err) {
-      console.error("[audit-log] failed to record activity:", err);
-    }
-    return;
-  }
-  await safeLog(input);
-}
+export const __safeLogForTest = safeLog;
