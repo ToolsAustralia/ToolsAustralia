@@ -99,6 +99,34 @@ These five props (`packages`, `previousPackageId`, `promoMultiplier`, `lastMonth
 
 The reference spec is [`docs/superpowers/specs/2026-05-20-resubscribe-tier-choice-ux-design.md`](../superpowers/specs/2026-05-20-resubscribe-tier-choice-ux-design.md).
 
+### Visual refresh — `ResubscribeTierCard` (Phase 1, 2026-05-21)
+
+The picker's inline soft-pastel `<button>` mapping was replaced with a dedicated card component, [`ResubscribeTierCard.tsx`](../../src/components/modals/SubscriptionManagementModal/ResubscribeTierCard.tsx), that visually mirrors `ElectricPackageCard` (tier-gradient background via `getMembershipSectionColorScheme`, package icon via `getPackageIcon`, bundled multiplier badge via `PromoBadgeImage`, and a glowing big sign-up-grant number with `textShadow` driven by `scheme.accentHex`).
+
+**Card prop surface:**
+
+```ts
+interface ResubscribeTierCardProps {
+  plan: ResubscribeTierOption;            // packageId, name, price, entriesPerMonth
+  promoMultiplier: number;                // active promo multiplier; >1 → bundled badge
+  lastMonthAccumulatedEntries: number;    // carry-over count, shown in body
+  isPrevious: boolean;                    // appends "(previously)" label next to tier name
+  theme?: "light" | "dark";               // defaults to "dark"
+  onSelect: (packageId: string) => void;
+}
+```
+
+**Picker rendering** ([`ResubscribeTierPicker.tsx`](../../src/components/modals/SubscriptionManagementModal/ResubscribeTierPicker.tsx)) now maps each entry in `packages` to one `<ResubscribeTierCard>` inside a `grid-cols-1 sm:grid-cols-2 gap-3` grid — no inline tier markup remains.
+
+**Two-state subheader copy** (driven by `lastMonthAccumulatedEntries > 0`):
+
+- Has accumulated → `"You have N accumulated entries."`
+- No accumulated → `"Pick a tier to come back."`
+
+**Per-card copy refresh.** The previous per-row "Your carry-over: N" wording is replaced with **"Accumulated entries: N"**. The "Sign-up grant: N" and "Next renewal: N" lines are retained. Underlying entry math (display-only `entriesPerMonth × promoMultiplier`, `lastMonthAccumulatedEntries + grant + entriesPerMonth`) is unchanged.
+
+Reference spec: [`docs/superpowers/specs/2026-05-21-dashboard-tier-picker-polish-design.md`](../superpowers/specs/2026-05-21-dashboard-tier-picker-polish-design.md) — Phase 1.
+
 ## Upgrade preview parity with the webhook (Phase 2, 2026-05-20)
 
 The upgrade-modal preview numbers must match what the webhook will eventually grant — the calculator behind both is `calculateUpgradeEntries` ([src/utils/payment/subscription-entries-calculator.ts](../../src/utils/payment/subscription-entries-calculator.ts)), which has two modes (see [rules.md → R3a](./rules.md#r3a-upgrade-entries-stack-lastmonthaccumulated-unless-a-membership-grant-already-landed-this-draw) and [backend.md → calculateUpgradeEntries — two modes](./backend.md#calculateupgradeentries--two-modes)).

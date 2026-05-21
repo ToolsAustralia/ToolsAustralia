@@ -75,7 +75,7 @@ export default function PurchaseSuccessClient({ searchParams }: PurchaseSuccessC
               Welcome back!
             </h2>
             <p className="text-sm text-gray-700 dark:text-neutral-300 mb-3">
-              Your previous <strong>{previousAccum.toLocaleString()}</strong> accumulated entries carried over.
+              Your <strong>{previousAccum.toLocaleString()}</strong> accumulated entries carried over.
             </p>
             <ul className="text-sm text-gray-700 dark:text-neutral-300 space-y-1">
               <li>

@@ -3,7 +3,7 @@
 import React from "react";
 import { CreditCard } from "lucide-react";
 import { Button } from "../ui";
-import { getMembershipSectionColorScheme } from "@/utils/package-colors/packageColorScheme";
+import ResubscribeTierCard from "./ResubscribeTierCard";
 
 export interface ResubscribeTierOption {
   packageId: string;
@@ -27,7 +27,7 @@ export const ResubscribeTierPicker: React.FC<ResubscribeTierPickerProps> = ({
   lastMonthAccumulatedEntries,
   onPickTier,
 }) => {
-  const promoActive = promoMultiplier > 1;
+  const hasAccumulated = lastMonthAccumulatedEntries > 0;
   return (
     <div className="py-2">
       <div className="text-center mb-6">
@@ -35,59 +35,25 @@ export const ResubscribeTierPicker: React.FC<ResubscribeTierPickerProps> = ({
           <CreditCard className="w-7 h-7 text-white" />
         </div>
         <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-1">Welcome back — pick a tier</h2>
-        <p className="text-sm text-gray-600 dark:text-neutral-300">
-          Your <strong>{lastMonthAccumulatedEntries.toLocaleString()}</strong> accumulated entries carry over.
-        </p>
+        {hasAccumulated ? (
+          <p className="text-sm text-gray-600 dark:text-neutral-300">
+            You have <strong>{lastMonthAccumulatedEntries.toLocaleString()}</strong> accumulated entries.
+          </p>
+        ) : (
+          <p className="text-sm text-gray-600 dark:text-neutral-300">Pick a tier to come back.</p>
+        )}
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        {packages.map((pkg) => {
-          const scheme = getMembershipSectionColorScheme(pkg.packageId, true);
-          const grant = pkg.entriesPerMonth * promoMultiplier;
-          const nextRenewal = lastMonthAccumulatedEntries + grant + pkg.entriesPerMonth;
-          const isPrevious = previousPackageId === pkg.packageId;
-          return (
-            <button
-              key={pkg.packageId}
-              type="button"
-              onClick={() => onPickTier(pkg.packageId)}
-              className={[
-                "text-left rounded-xl border p-4 transition-all hover:shadow-md",
-                "bg-white dark:bg-neutral-900 border-gray-200 dark:border-neutral-700",
-                scheme.border ?? "",
-              ].join(" ")}
-            >
-              <div className="flex items-baseline justify-between mb-2">
-                <h3 className="font-semibold text-gray-900 dark:text-white">
-                  {pkg.name}
-                  {isPrevious && (
-                    <span className="ml-2 text-xs font-normal text-gray-500 dark:text-neutral-400">
-                      (previously)
-                    </span>
-                  )}
-                </h3>
-                <span className="text-sm font-medium text-gray-700 dark:text-neutral-300">
-                  ${pkg.price}/mo
-                </span>
-              </div>
-              <div className="text-xs text-gray-600 dark:text-neutral-400 space-y-0.5">
-                <div>
-                  Sign-up grant: <strong>{grant.toLocaleString()}</strong>
-                  {promoActive && (
-                    <span className="ml-1 inline-block px-1.5 py-0.5 text-[10px] font-semibold rounded bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">
-                      {promoMultiplier}× promo
-                    </span>
-                  )}
-                </div>
-                <div>
-                  Your carry-over: <strong>{lastMonthAccumulatedEntries.toLocaleString()}</strong>
-                </div>
-                <div className="pt-1 text-gray-700 dark:text-neutral-300">
-                  Next renewal: <strong>{nextRenewal.toLocaleString()}</strong>
-                </div>
-              </div>
-            </button>
-          );
-        })}
+        {packages.map((pkg) => (
+          <ResubscribeTierCard
+            key={pkg.packageId}
+            plan={pkg}
+            promoMultiplier={promoMultiplier}
+            lastMonthAccumulatedEntries={lastMonthAccumulatedEntries}
+            isPrevious={previousPackageId === pkg.packageId}
+            onSelect={onPickTier}
+          />
+        ))}
       </div>
     </div>
   );
