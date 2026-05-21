@@ -116,6 +116,27 @@ Tier `read`; required permission `overview.view`.
 
 Response: `null` when no manual sync is running on the answering process, otherwise `{ isRunning, total, processed, synced, errors, currentUserEmail?, startTime? }`. Sourced from in-process state inside the draw-reset util (see G2 in [gotchas.md](./gotchas.md) for the multi-instance caveat — a different Lambda will see `null`).
 
+### `GET /v1/promo-analytics`
+Tier `read`; required permission `promos.view`.
+
+Query: `dateRange=today|yesterday|custom` (default `today`); for `custom` also `startDate`, `endDate` (`YYYY-MM-DD`, AEST). Note this domain does NOT accept the draw-anchored ranges (`current-draw`, `last-draw`, `all-time`) — its admin counterpart never offered them.
+
+Response: `{ dateRange, totalVisits, totalSignups, totalConversions, totalRevenue, byPage: PromoPageMetrics[], byUTMSource: UTMSourceMetrics[] }`. Backed by [`PromoAnalyticsService.getAggregatedMetrics`](../../src/services/promo-analytics/PromoAnalyticsService.ts) + `getAggregatedByUTMSource`, both reading the joined `PromoAnalyticsVisit` + `User.signupAttribution` + `PaymentEvent.BenefitsGranted` view.
+
+### `GET /v1/promo-analytics/channel-detail`
+Tier `read`; required permission `promos.view`.
+
+Query: `utmSource` (required), optional `startDate`/`endDate` (both must be supplied to override the default AEST "today" window).
+
+Response: `{ utmSource, summary, byPage: ChannelPageMetrics[], byCampaign: ChannelCampaignMetrics[] }` from [`PromoAnalyticsService.getChannelDetailMetrics`](../../src/services/promo-analytics/PromoAnalyticsService.ts).
+
+### `GET /v1/promo-analytics/page-detail`
+Tier `read`; required permission `promos.view`.
+
+Query: `pageType=evergreen|toolset` + `slug` (both required), optional `startDate`/`endDate`.
+
+Response: `{ pageType, slug, pageLabel, summary, byCampaign: UTMCampaignMetrics[], visitsFrom?: VisitsFromMetric[] }` from [`PromoAnalyticsService.getPageDetailMetrics`](../../src/services/promo-analytics/PromoAnalyticsService.ts). An invalid slug throws and surfaces as `500 handler_exception`.
+
 ## Roadmap (registered but not yet wired)
 
 The [classification registry](../../src/lib/internal-norm/classification.ts) has ~100 additional entries spanning admin domains (A/B testing, affiliates, allowlist, charge-past-due, error reports, mini draws, monthly coupons, promos, users, winners, etc.). They show up in the admin Endpoints tab with a `wired: false` flag but are NOT exposed via `/v1/manifest` — Norm cannot discover or call them until each gets a `responseSchema` + route file. See [patterns.md](./patterns.md) for the recipe.

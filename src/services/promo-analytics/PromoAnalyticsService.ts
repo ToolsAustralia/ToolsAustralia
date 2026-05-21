@@ -5,6 +5,8 @@
  *
  * @see docs/PROMO_PAGE_ANALYTICS.md
  */
+import { subDays } from "date-fns";
+import { formatInTimeZone } from "date-fns-tz";
 import PromoAnalyticsRepository, {
   type PromoAnalyticsSummary,
   type PromoPageMetrics,
@@ -13,6 +15,51 @@ import PromoAnalyticsRepository, {
 import { isValidPromoSlug, getPageTypeFromSlug } from "@/utils/promo-analytics/validate-promo-slug";
 import type { PromoPageType } from "@/models/PromoAnalyticsVisit";
 import type { PageDetailResult, ChannelDetailResult } from "@/types/promo-analytics";
+import { createAESTDateAsUTC, getStartOfTodayInAEST } from "@/utils/common/timezone";
+
+const AEST_TIMEZONE = "Australia/Sydney";
+
+export type PromoAnalyticsRangeKey = "today" | "yesterday" | "custom";
+
+export interface ResolvedPromoAnalyticsRange {
+  start: Date;
+  end: Date;
+}
+
+/**
+ * Resolve a promo-analytics date range. Defaults to AEST "today" when no params.
+ * `custom` requires both `startDate` and `endDate` as `YYYY-MM-DD` (AEST-anchored).
+ */
+export function resolvePromoAnalyticsRange(input: {
+  range?: PromoAnalyticsRangeKey;
+  startDate?: string;
+  endDate?: string;
+}): ResolvedPromoAnalyticsRange {
+  const range = input.range ?? "today";
+  const startOfToday = getStartOfTodayInAEST();
+  const now = new Date();
+  const yyyy = parseInt(formatInTimeZone(now, AEST_TIMEZONE, "yyyy"), 10);
+  const mm = parseInt(formatInTimeZone(now, AEST_TIMEZONE, "M"), 10);
+  const dd = parseInt(formatInTimeZone(now, AEST_TIMEZONE, "d"), 10);
+  const endOfToday = createAESTDateAsUTC(yyyy, mm, dd, 23, 59);
+  endOfToday.setUTCSeconds(59, 999);
+
+  if (range === "custom") {
+    if (!input.startDate || !input.endDate) {
+      throw new Error("custom range requires startDate and endDate (YYYY-MM-DD)");
+    }
+    const [sy, sm, sd] = input.startDate.split("-").map(Number);
+    const [ey, em, ed] = input.endDate.split("-").map(Number);
+    const start = createAESTDateAsUTC(sy, sm, sd, 0, 0);
+    const end = createAESTDateAsUTC(ey, em, ed, 23, 59);
+    end.setUTCSeconds(59, 999);
+    return { start, end };
+  }
+  if (range === "yesterday") {
+    return { start: subDays(startOfToday, 1), end: new Date(startOfToday.getTime() - 1) };
+  }
+  return { start: startOfToday, end: endOfToday };
+}
 
 export class PromoAnalyticsService {
   /**

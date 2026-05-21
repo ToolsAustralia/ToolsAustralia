@@ -13,7 +13,8 @@ The `/api/admin/**` namespace. Per the manifest, this domain is the catch-all fo
 | `/api/admin/invoices/recover-past-due` | admin | Bulk stranded-invoice recovery |
 | `/api/admin/error-reports/**` | [error-reporting](../error-reporting/) | Error triage |
 | `/api/admin/contact-submissions/**` | [contact](../contact/) | Submission review |
-| _TODO_ | — | Promo, affiliate, draw, analytics admin routes |
+| `/api/admin/promo-analytics/**` | [promo](../promo/) | Promo-page analytics: summary, channel-detail, page-detail. All gated by `requirePermission("promos.view")`. The three routes share `resolvePromoAnalyticsRange()` from `src/services/promo-analytics/PromoAnalyticsService.ts` for AEST `today \| yesterday \| custom` date resolution, kept in lockstep with the Norm read mirror under `/api/internal/norm/v1/promo-analytics/**`. |
+| _TODO_ | — | Affiliate, draw, other admin routes |
 
 > _TODO: read [src/app/api/admin/](../../src/app/api/admin/) and enumerate every sub-route._
 

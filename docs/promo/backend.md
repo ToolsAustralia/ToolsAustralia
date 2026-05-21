@@ -5,7 +5,7 @@
 | Service dir | Role |
 |---|---|
 | [src/services/promo/](../../src/services/promo/) | Promo evaluation: resolve which promo applies, compute multipliers/bonuses, validate codes. |
-| [src/services/promo-analytics/](../../src/services/promo-analytics/) | Aggregate `PromoAnalyticsVisit` rows for admin dashboards. |
+| [src/services/promo-analytics/](../../src/services/promo-analytics/) | Aggregate `PromoAnalyticsVisit` rows for admin dashboards. Also exports `resolvePromoAnalyticsRange({ range, startDate, endDate })` — the AEST-anchored `today \| yesterday \| custom` date resolver shared between the admin and internal Norm routes so date boundaries stay in lockstep. |
 
 ## Utilities
 

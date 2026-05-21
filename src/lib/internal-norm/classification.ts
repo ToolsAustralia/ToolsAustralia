@@ -16,6 +16,11 @@ import {
   NormChargePastDueRunDetailSchema,
   NormChargePastDueRunsListSchema,
 } from "./schemas/charge-past-due";
+import {
+  NormPromoAnalyticsChannelDetailSchema,
+  NormPromoAnalyticsPageDetailSchema,
+  NormPromoAnalyticsSummarySchema,
+} from "./schemas/promo-analytics";
 
 // "forbidden" is NOT a tier — endpoints not in the registry are simply unreachable.
 // Tier and Permission are orthogonal axes: tier = orchestration shape; permission = "is Norm allowed?".
@@ -838,27 +843,30 @@ export const NORM_ENDPOINTS = {
     summary: "Resolve users via dynamic segment for coupon targeting",
   },
 
-  // ─── Promo analytics (roadmap) ────────────────────────────────────────
+  // ─── Promo analytics (wired) ──────────────────────────────────────────
   "promo-analytics.summary": {
     tier: "read",
     requiredPermission: "promos.view",
     path: "/v1/promo-analytics",
     method: "GET",
-    summary: "Promo analytics summary",
+    summary: "Promo analytics summary: per-page + per-UTM-source visits, signups, conversions, revenue",
+    responseSchema: NormPromoAnalyticsSummarySchema,
   },
   "promo-analytics.channel-detail": {
     tier: "read",
     requiredPermission: "promos.view",
     path: "/v1/promo-analytics/channel-detail",
     method: "GET",
-    summary: "Promo analytics by channel",
+    summary: "Promo analytics for a single utmSource: pages and campaigns it drove",
+    responseSchema: NormPromoAnalyticsChannelDetailSchema,
   },
   "promo-analytics.page-detail": {
     tier: "read",
     requiredPermission: "promos.view",
     path: "/v1/promo-analytics/page-detail",
     method: "GET",
-    summary: "Promo analytics by page",
+    summary: "Promo analytics for a single page: per-UTM-campaign attribution + visits-from",
+    responseSchema: NormPromoAnalyticsPageDetailSchema,
   },
 
   // ─── Promo — core (roadmap) ───────────────────────────────────────────

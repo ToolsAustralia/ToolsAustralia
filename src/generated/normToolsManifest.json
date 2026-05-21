@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-05-21T06:00:37.383Z",
+  "generatedAt": "2026-05-21T06:15:43.333Z",
   "endpoints": [
     {
       "registryKey": "roas.summary",
@@ -78,6 +78,27 @@
       "path": "/v1/klaviyo/draw-reset-progress",
       "method": "GET",
       "summary": "Progress of an in-flight Klaviyo draw reset"
+    },
+    {
+      "registryKey": "promo-analytics.summary",
+      "tier": "read",
+      "path": "/v1/promo-analytics",
+      "method": "GET",
+      "summary": "Promo analytics summary: per-page + per-UTM-source visits, signups, conversions, revenue"
+    },
+    {
+      "registryKey": "promo-analytics.channel-detail",
+      "tier": "read",
+      "path": "/v1/promo-analytics/channel-detail",
+      "method": "GET",
+      "summary": "Promo analytics for a single utmSource: pages and campaigns it drove"
+    },
+    {
+      "registryKey": "promo-analytics.page-detail",
+      "tier": "read",
+      "path": "/v1/promo-analytics/page-detail",
+      "method": "GET",
+      "summary": "Promo analytics for a single page: per-UTM-campaign attribution + visits-from"
     },
     {
       "registryKey": "submissions.unviewed-count",

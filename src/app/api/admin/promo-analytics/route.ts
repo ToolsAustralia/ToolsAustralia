@@ -1,12 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requirePermission } from "@/lib/api-auth-permissions";
-import PromoAnalyticsService from "@/services/promo-analytics/PromoAnalyticsService";
-import { getStartOfTodayInAEST, createAESTDateAsUTC } from "@/utils/common/timezone";
-import { subDays } from "date-fns";
-import { formatInTimeZone } from "date-fns-tz";
+import PromoAnalyticsService, {
+  resolvePromoAnalyticsRange,
+} from "@/services/promo-analytics/PromoAnalyticsService";
 import { z } from "zod";
-
-const AEST_TIMEZONE = "Australia/Sydney";
 
 const querySchema = z.object({
   dateRange: z.enum(["today", "yesterday", "custom"]).optional().default("today"),
@@ -43,45 +40,19 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const { dateRange, startDate, endDate } = parsed.data;
-
-    const startOfToday = getStartOfTodayInAEST();
-    const now = new Date();
-    const todayYear = parseInt(formatInTimeZone(now, AEST_TIMEZONE, "yyyy"), 10);
-    const todayMonth = parseInt(formatInTimeZone(now, AEST_TIMEZONE, "M"), 10);
-    const todayDay = parseInt(formatInTimeZone(now, AEST_TIMEZONE, "d"), 10);
-    const endOfToday = createAESTDateAsUTC(todayYear, todayMonth, todayDay, 23, 59);
-    endOfToday.setUTCSeconds(59, 999);
-
-    let rangeStart: Date;
-    let rangeEnd: Date;
-
-    if (dateRange === "custom" && startDate && endDate) {
-      const [startY, startM, startD] = startDate.split("-").map(Number);
-      const [endY, endM, endD] = endDate.split("-").map(Number);
-      rangeStart = createAESTDateAsUTC(startY, startM, startD, 0, 0);
-      rangeEnd = createAESTDateAsUTC(endY, endM, endD, 23, 59);
-      rangeEnd.setUTCSeconds(59, 999);
-    } else {
-      switch (dateRange) {
-        case "today":
-          rangeStart = startOfToday;
-          rangeEnd = endOfToday;
-          break;
-        case "yesterday":
-          rangeStart = subDays(startOfToday, 1);
-          rangeEnd = new Date(startOfToday.getTime() - 1);
-          break;
-        default:
-          // custom or fallback: requires startDate/endDate (handled above)
-          rangeStart = subDays(startOfToday, 6);
-          rangeEnd = endOfToday;
-      }
+    let range;
+    try {
+      range = resolvePromoAnalyticsRange(parsed.data);
+    } catch (e) {
+      return NextResponse.json(
+        { success: false, error: (e as Error).message },
+        { status: 400 }
+      );
     }
 
     const [summary, utmSummary] = await Promise.all([
-      PromoAnalyticsService.getAggregatedMetrics(rangeStart, rangeEnd),
-      PromoAnalyticsService.getAggregatedByUTMSource(rangeStart, rangeEnd),
+      PromoAnalyticsService.getAggregatedMetrics(range.start, range.end),
+      PromoAnalyticsService.getAggregatedByUTMSource(range.start, range.end),
     ]);
 
     return NextResponse.json({
@@ -89,7 +60,7 @@ export async function GET(request: NextRequest) {
       data: {
         ...summary,
         byUTMSource: utmSummary.byUTMSource,
-        dateRange: { start: rangeStart.toISOString(), end: rangeEnd.toISOString() },
+        dateRange: { start: range.start.toISOString(), end: range.end.toISOString() },
       },
     });
   } catch (error) {
