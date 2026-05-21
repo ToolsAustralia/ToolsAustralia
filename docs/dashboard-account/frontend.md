@@ -209,6 +209,28 @@ Both utility classes are wrapped in `@media (prefers-reduced-motion: no-preferen
 
 No new props, no new API, no service or model change — the nudge is purely a client-side presentational layer on top of the existing empty-state detection. Reference spec: `docs/superpowers/specs/2026-05-21-dashboard-tier-picker-polish-design.md` §4.
 
+## Member-badge scoping fixes (2026-05-21)
+
+Two related fixes ensure the "Member" label is **subscription-only** — a user holding only a one-time pack is no longer surfaced as a Member.
+
+### `settings/page.tsx` — `deriveSettingsUserState`
+
+[`settings/page.tsx`](../../src/app/(site)/my-account/settings/page.tsx) `deriveSettingsUserState` no longer returns `state: "member"` for one-time-pack-only holders. The fallthrough branch (when `!hasFailed` and `!user.subscription?.isActive`) now always returns `{ state: "guest" }`, regardless of any active one-time pack. Active subscribers (`user.subscription?.isActive === true`) and `past_due` users are unchanged. User-visible effect: the identity-card badge on the settings index shows "Guest" for one-time-only users instead of "Member", and the guest CTA card appears.
+
+### `my-account/page.tsx` — Membership-badge source gating
+
+[`my-account/page.tsx`](../../src/app/(site)/my-account/page.tsx) now scopes `membershipPackage` and `showMembershipBadge` to `activePackage.source === "subscription"`:
+
+```ts
+const membershipPackage =
+  activePackage?.source === "subscription" ? activePackage.packageData : null;
+const showMembershipBadge = Boolean(
+  activePackage?.isActive && activePackage.source === "subscription" && membershipPackage,
+);
+```
+
+Previously `getActivePackage` returned the one-time pack as the "effective" package (with `packageData` set, `source: "one-time"`) for one-time-only users, which caused the pack to render under the Membership badge slot. Now the Membership badge only shows when a real subscription is active; the separate One-time badge continues to surface owned one-time packs independently. No API or hook change.
+
 ## Settings page back-button hard-route (Phase 5, 2026-05-21)
 
 [`settings/page.tsx`](../../src/app/(site)/my-account/settings/page.tsx) passes an explicit `onBackClick={() => router.push("/my-account")}` to `DashboardHeader` (alongside the existing `showBackButton` flag). The chevron now always routes to `/my-account` rather than relying on browser-history previous or stepping through the settings index from a sub-tab. The previously-defined `handleBackClick` callback that routed sub-tabs back to the settings index has been removed — `?tab=` deep links still work via `searchParams`, but the back button itself is a single hard route.

@@ -28,20 +28,22 @@ export const ResubscribeTierPicker: React.FC<ResubscribeTierPickerProps> = ({
   onPickTier,
 }) => {
   const hasAccumulated = lastMonthAccumulatedEntries > 0;
+  const hasPreviousMembership = Boolean(previousPackageId);
+  const header = hasPreviousMembership ? "Welcome back — pick a tier" : "Pick a tier to get started";
   return (
     <div className="py-2">
       <div className="text-center mb-6">
         <div className="w-14 h-14 mx-auto mb-3 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-full flex items-center justify-center shadow-md">
           <CreditCard className="w-7 h-7 text-white" />
         </div>
-        <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-1">Welcome back — pick a tier</h2>
+        <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-1">{header}</h2>
         {hasAccumulated ? (
           <p className="text-sm text-gray-600 dark:text-neutral-300">
             You have <strong>{lastMonthAccumulatedEntries.toLocaleString()}</strong> accumulated entries.
           </p>
-        ) : (
+        ) : hasPreviousMembership ? (
           <p className="text-sm text-gray-600 dark:text-neutral-300">Pick a tier to come back.</p>
-        )}
+        ) : null}
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         {packages.map((pkg) => (

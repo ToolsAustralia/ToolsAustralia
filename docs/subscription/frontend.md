@@ -143,6 +143,16 @@ The legacy yellow "Subscription Inactive" CTA card (with the `AlertTriangle` ico
 
 Reference spec: [`docs/superpowers/specs/2026-05-21-dashboard-tier-picker-polish-design.md`](../superpowers/specs/2026-05-21-dashboard-tier-picker-polish-design.md) — Phase 2 (§7 Inactive-state simplification).
 
+#### Never-subscribed copy fix (2026-05-21)
+
+[`ResubscribeTierPicker.tsx`](../../src/components/modals/SubscriptionManagementModal/ResubscribeTierPicker.tsx) now discriminates a never-subscribed user from a returning one via `hasPreviousMembership = Boolean(previousPackageId)`. The picker header/subheader collapses to three states:
+
+- Has accumulated entries → header `"Welcome back — pick a tier"`, subheader `"You have N accumulated entries."`.
+- Past member, 0 accumulated → header `"Welcome back — pick a tier"`, subheader `"Pick a tier to come back."`.
+- Never subscribed (no `previousPackageId`) → header `"Pick a tier to get started"`, **no subheader**.
+
+This pairs with the Phase 2 universal-picker change: one-time-only and never-subscribed users now reach the same picker but no longer see returning-user framing. The `ResubscribeEmptyState` cancelled-footer gate (`showCancelledFooter={Boolean(previousPackageId)}`) remains the other half of this guard.
+
 ### Active-member hero — "Next renewal entries" tile (Phase 3, 2026-05-21)
 
 The active-member "Current plan" hero in [`SettingsRedesignSubscription.tsx`](../../src/components/modals/SubscriptionManagementModal/SettingsRedesignSubscription.tsx) now renders a third fact tile in the `grid-cols-2` block alongside `Started` and `Next billing` (or `Subscription ends` / `Failed on`): **`Next renewal entries: N`**. The value mirrors `calculateRenewalEntries` ([`src/utils/payment/subscription-entries-calculator.ts`](../../src/utils/payment/subscription-entries-calculator.ts)) — computed inline as `(user.subscription.lastMonthAccumulatedEntries ?? baseEntries) + baseEntries`, where `baseEntries` is the package's `entriesPerMonth` (with the same `metadata.entriesCount` / `metadata.originalEntries` / `15` fallback chain used by the plan-benefits text).

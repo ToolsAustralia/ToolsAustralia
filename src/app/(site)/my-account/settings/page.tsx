@@ -57,9 +57,9 @@ function deriveSettingsUserState(
       tierPrice: user.subscriptionPackageData?.price,
     };
   }
-  if (user.enrichedOneTimePackages?.some((p) => p.isActive)) {
-    return { state: "member" };
-  }
+  // "Member" is a subscription-only label. One-time-pack holders without an
+  // active subscription fall through to "guest" — they keep their one-time
+  // benefits but are not classified as a Member here.
   return { state: "guest" };
 }
 
