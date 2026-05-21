@@ -225,6 +225,17 @@ const SettingsRedesignSubscription: React.FC<SettingsRedesignSubscriptionProps> 
     const lastMonthAccumulated =
       (user.subscription as { lastMonthAccumulatedEntries?: number } | undefined)
         ?.lastMonthAccumulatedEntries ?? baseEntries;
+
+    // Projected next-renewal entry count — mirrors calculateRenewalEntries:
+    // entriesToGrant = (lastMonthAccumulatedEntries ?? baseEntries) + baseEntries.
+    const subscriptionWithEntries = user.subscription as
+      | { lastMonthAccumulatedEntries?: number }
+      | undefined;
+    const rawLastMonthAccumulated = subscriptionWithEntries?.lastMonthAccumulatedEntries;
+    const nextRenewalEntries =
+      typeof baseEntries === "number" && baseEntries > 0
+        ? (rawLastMonthAccumulated ?? baseEntries) + baseEntries
+        : null;
     const renderFeature = (feature: unknown, index: number): string => {
       const text = featureToText(feature);
       const isFirst = index === 0;
@@ -334,6 +345,12 @@ const SettingsRedesignSubscription: React.FC<SettingsRedesignSubscriptionProps> 
                     <span className="sm:hidden">{endShort}</span>
                     <span className="hidden sm:inline">{endLong}</span>
                   </p>
+                </div>
+              )}
+              {nextRenewalEntries !== null && (
+                <div className="rounded-2xl bg-white/10 border border-white/15 px-3 py-2.5">
+                  <p className="text-[10px] font-bold tracking-[0.14em] uppercase opacity-70">Next renewal entries</p>
+                  <p className="text-sm font-semibold mt-0.5">{nextRenewalEntries.toLocaleString()}</p>
                 </div>
               )}
             </div>

@@ -141,6 +141,18 @@ The legacy yellow "Subscription Inactive" CTA card (with the `AlertTriangle` ico
 
 Reference spec: [`docs/superpowers/specs/2026-05-21-dashboard-tier-picker-polish-design.md`](../superpowers/specs/2026-05-21-dashboard-tier-picker-polish-design.md) — Phase 2 (§7 Inactive-state simplification).
 
+### Active-member hero — "Next renewal entries" tile (Phase 3, 2026-05-21)
+
+The active-member "Current plan" hero in [`SettingsRedesignSubscription.tsx`](../../src/components/modals/SubscriptionManagementModal/SettingsRedesignSubscription.tsx) now renders a third fact tile in the `grid-cols-2` block alongside `Started` and `Next billing` (or `Subscription ends` / `Failed on`): **`Next renewal entries: N`**. The value mirrors `calculateRenewalEntries` ([`src/utils/payment/subscription-entries-calculator.ts`](../../src/utils/payment/subscription-entries-calculator.ts)) — computed inline as `(user.subscription.lastMonthAccumulatedEntries ?? baseEntries) + baseEntries`, where `baseEntries` is the package's `entriesPerMonth` (with the same `metadata.entriesCount` / `metadata.originalEntries` / `15` fallback chain used by the plan-benefits text).
+
+The tile is **hidden** when `baseEntries` is missing or `0` (the inline computation evaluates `nextRenewalEntries` to `null` and the JSX skips the tile).
+
+`past_due` users still see the tile — the past-due gate (`hasFailed`) only swaps the second tile's label to `"Failed on"` and adds the `PastDueAlert`; it does not affect the projection. The projection is useful while payment is failing because it reflects what they would receive once recovered.
+
+Math is unchanged — no new endpoint, no schema change. Display-only.
+
+Reference spec: [`docs/superpowers/specs/2026-05-21-dashboard-tier-picker-polish-design.md`](../superpowers/specs/2026-05-21-dashboard-tier-picker-polish-design.md) — Phase 3 (§5).
+
 ## Upgrade preview parity with the webhook (Phase 2, 2026-05-20)
 
 The upgrade-modal preview numbers must match what the webhook will eventually grant — the calculator behind both is `calculateUpgradeEntries` ([src/utils/payment/subscription-entries-calculator.ts](../../src/utils/payment/subscription-entries-calculator.ts)), which has two modes (see [rules.md → R3a](./rules.md#r3a-upgrade-entries-stack-lastmonthaccumulated-unless-a-membership-grant-already-landed-this-draw) and [backend.md → calculateUpgradeEntries — two modes](./backend.md#calculateupgradeentries--two-modes)).
