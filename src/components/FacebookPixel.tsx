@@ -211,6 +211,26 @@ export default function FacebookPixel({
         'https://connect.facebook.net/en_US/fbevents.js');
         if(typeof window !== 'undefined' && !window._fbPixelInit) {
           window._fbPixelInit = true;
+
+          // 1) Disable Meta's HTML5 History State (pushState) listener — without this,
+          //    the Pixel auto-fires PageView on every Next.js SPA route change,
+          //    including /admin, /my-account, /affiliate (bypasses our shouldTrackRoute
+          //    gate entirely because the auto-fire happens inside fbevents.js).
+          //    Per Meta's SPA tagging guide:
+          //    https://developers.facebook.com/ads/blog/post/2017/05/29/tagging-a-single-page-application-facebook-pixel/
+          //    With this flag set, only OUR explicit fbq('track','PageView',...) calls
+          //    fire — and those are gated by shouldTrackRoute() in the route-change
+          //    useEffect above.
+          window.fbq.disablePushState = true;
+
+          // 2) Disable Meta's "Automatic Configuration" — stops the pixel from
+          //    auto-firing SubscribedButtonClick / ButtonClick / FormSubmit and from
+          //    auto-scraping form inputs for advanced matching. We supply our own
+          //    hashed advanced matching server-side via CAPI's user_data.
+          //    Per Meta's Advanced doc: https://developers.facebook.com/docs/meta-pixel/advanced/
+          //    MUST come BEFORE the init call.
+          window.fbq('set', 'autoConfig', false, '${pixelId}');
+
           ${
             dataProcessingOptions
               ? `window.fbq('init', '${pixelId}', ${JSON.stringify(dataProcessingOptions)});`
