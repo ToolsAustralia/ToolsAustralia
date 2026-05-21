@@ -185,9 +185,10 @@ Wraps a single `InvoiceChargeLog.aggregate` over `status: "failed"` rows in the 
 - Error reports
 - Contact submissions
 - Partner applications
+- **Inbox unread count** (`/api/admin/submissions/unviewed-count`): returns `{ contact, partner, total }` for the admin sidebar badge. Delegates to [`getUnviewedSubmissionsCount`](../../src/services/admin/submissionsCountService.ts) (extracted from the route during the Norm wiring so the same code answers both the admin GET and the Norm tool).
 - Promo management
 - **Upsell multipliers** (`/api/admin/upsell-multipliers`):
-  - `GET /api/admin/upsell-multipliers` — returns the singleton `UpsellMultiplierConfig` document (`{ membership, oneTime, additional }`). Returns defaults `{ membership: 10, oneTime: 2, additional: 2 }` if no document exists yet.
+  - `GET /api/admin/upsell-multipliers` — returns the singleton `UpsellMultiplierConfig` document (`{ membership, oneTime, additional, updatedAt }`). Returns defaults `{ membership: 10, oneTime: 2, additional: 2 }` if no document exists yet. The GET body now delegates to [`getUpsellMultiplierConfig`](../../src/services/upsell/UpsellMultiplierResolver.ts) (shared with the Norm wiring at `/api/internal/norm/v1/upsell-multipliers`).
   - `PUT /api/admin/upsell-multipliers` — upserts the config document. Zod-validated; all three fields required; values must be members of `PROMO_MULTIPLIERS`. Called by `useUpsellMultipliersMutation()` in the admin panel.
 - Affiliate management
 - Draw management

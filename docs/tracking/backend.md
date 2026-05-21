@@ -37,6 +37,15 @@
 - After cancellation (in `CancelSubscriptionService` step 4 of side effects, non-blocking)
 - After refund (`trackRefundedOrder` + sync, after a 500ms barrier)
 
+## Post-draw profile reset (Klaviyo)
+
+When a new MajorDraw activates, draw-specific user properties on the Klaviyo side need to be reset and recomputed. The orchestration lives in [src/utils/integrations/klaviyo/klaviyo-draw-reset.ts](../../src/utils/integrations/klaviyo/klaviyo-draw-reset.ts) (it predates the services layer and is also called from cron / migrations). Read-side access — for the admin preview UI and for Norm's `klaviyo.draw-reset.*` tools — goes through the thin wrapper [src/services/klaviyo/klaviyoDrawResetService.ts](../../src/services/klaviyo/klaviyoDrawResetService.ts):
+
+- `getKlaviyoDrawResetPreview()` — returns `{ targetDraw, cutoffDate, totalUsers, totalParticipants, skippedUsers, reductionPercentage, sampleUsers }`. Does not perform a sync.
+- `getKlaviyoDrawResetProgress()` — returns the in-memory progress object for an in-flight manual sync, or `null` when none is running. **Per-process**: on Vercel, a different Lambda will see `null` even while a sync is running on another instance.
+
+The actual reset (`resetDrawPropertiesForAllUsers`) is still invoked from the existing trigger flows and is not wrapped by the read-tier service.
+
 ## Marketing preference sync (Klaviyo)
 
 `syncKlaviyoEmailMarketingFromAdminPreference(user, wantsPromotionalEmail)` in `src/utils/integrations/klaviyo/klaviyo-profile-sync.ts` synchronises both email and SMS marketing consent to Klaviyo when an admin (or the cancellation flow via `applyMarketingUnsubscribe`) changes `User.acceptsPromotionalEmail`.

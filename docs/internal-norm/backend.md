@@ -74,6 +74,10 @@ Route files under `src/app/api/internal/norm/v1/**` are **thin**: parse query �
 
 - ROAS: `FacebookAdsInsightsService` ([src/services/facebook-ads/](../../src/services/facebook-ads/))
 - Dashboard: `DashboardStatsService` ([src/services/admin/DashboardStatsService.ts](../../src/services/admin/DashboardStatsService.ts))
+- Submissions inbox: `getUnviewedSubmissionsCount` ([src/services/admin/submissionsCountService.ts](../../src/services/admin/submissionsCountService.ts)) — extracted from the admin route during wiring so both the admin GET and the Norm route call the same code.
+- Cancellation flow: `getCancellationFlowAnalytics` ([src/services/admin/cancellationFlowAnalytics.ts](../../src/services/admin/cancellationFlowAnalytics.ts)) — already a service; route just builds the AEST-aware window from optional `startDate`/`endDate`.
+- Upsell config: `getUpsellMultiplierConfig` ([src/services/upsell/UpsellMultiplierResolver.ts](../../src/services/upsell/UpsellMultiplierResolver.ts)) — added alongside the existing `getAllUpsellMultipliers` to include the `updatedAt` timestamp.
+- Klaviyo draw reset: `getKlaviyoDrawResetPreview` / `getKlaviyoDrawResetProgress` ([src/services/klaviyo/klaviyoDrawResetService.ts](../../src/services/klaviyo/klaviyoDrawResetService.ts)) — thin service wrapper around the long-standing draw-reset util so the admin and Norm routes share the same import path. The util itself stays under `src/utils/integrations/klaviyo/` because cron and migrations also import it.
 - Date ranges: `resolveNormDateRange` ([src/utils/admin/resolveNormDateRange.ts](../../src/utils/admin/resolveNormDateRange.ts)) — resolves draw-based and `all-time` ranges to absolute ISO dates server-side so Norm doesn't need to know draw dates.
 
 This is enforced by the [must-import-service ESLint rule](./rules.md#norm-must-import-service).

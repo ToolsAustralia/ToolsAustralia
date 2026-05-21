@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-05-21T04:11:11.679Z",
+  "generatedAt": "2026-05-21T05:55:22.970Z",
   "endpoints": [
     {
       "registryKey": "roas.summary",
@@ -29,6 +29,41 @@
       "path": "/v1/dashboard/revenue-breakdown",
       "method": "GET",
       "summary": "Revenue total + per-category breakdown for a date range"
+    },
+    {
+      "registryKey": "cancellation-flow-analytics.list",
+      "tier": "read",
+      "path": "/v1/cancellation-flow-analytics",
+      "method": "GET",
+      "summary": "Cancellation funnel analytics"
+    },
+    {
+      "registryKey": "klaviyo.draw-reset.preview",
+      "tier": "read",
+      "path": "/v1/klaviyo/draw-reset-preview",
+      "method": "GET",
+      "summary": "Preview the post-draw Klaviyo profile reset"
+    },
+    {
+      "registryKey": "klaviyo.draw-reset.progress",
+      "tier": "read",
+      "path": "/v1/klaviyo/draw-reset-progress",
+      "method": "GET",
+      "summary": "Progress of an in-flight Klaviyo draw reset"
+    },
+    {
+      "registryKey": "submissions.unviewed-count",
+      "tier": "read",
+      "path": "/v1/submissions/unviewed-count",
+      "method": "GET",
+      "summary": "Count of unviewed contact submissions"
+    },
+    {
+      "registryKey": "upsell-multipliers.list",
+      "tier": "read",
+      "path": "/v1/upsell-multipliers",
+      "method": "GET",
+      "summary": "List upsell multipliers"
     }
   ]
 }

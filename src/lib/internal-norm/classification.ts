@@ -3,6 +3,13 @@ import type { z } from "zod";
 import { ALL_PERMISSIONS, type Permission } from "@/lib/permissions";
 import { NormRoasSummarySchema, NormRoasBreakdownSchema } from "./schemas/roas";
 import { NormDashboardStatsSchema, NormRevenueBreakdownSchema } from "./schemas/dashboard";
+import { NormSubmissionsUnviewedCountSchema } from "./schemas/submissions";
+import { NormCancellationFlowAnalyticsSchema } from "./schemas/cancellation-flow";
+import { NormUpsellMultipliersSchema } from "./schemas/upsell";
+import {
+  NormKlaviyoDrawResetPreviewSchema,
+  NormKlaviyoDrawResetProgressSchema,
+} from "./schemas/klaviyo";
 
 // "forbidden" is NOT a tier — endpoints not in the registry are simply unreachable.
 // Tier and Permission are orthogonal axes: tier = orchestration shape; permission = "is Norm allowed?".
@@ -373,6 +380,7 @@ export const NORM_ENDPOINTS = {
     path: "/v1/cancellation-flow-analytics",
     method: "GET",
     summary: "Cancellation funnel analytics",
+    responseSchema: NormCancellationFlowAnalyticsSchema,
   },
 
   // ─── Charge past-due (roadmap) ────────────────────────────────────────
@@ -518,6 +526,7 @@ export const NORM_ENDPOINTS = {
     path: "/v1/klaviyo/draw-reset-preview",
     method: "GET",
     summary: "Preview the post-draw Klaviyo profile reset",
+    responseSchema: NormKlaviyoDrawResetPreviewSchema,
   },
   "klaviyo.draw-reset.execute": {
     tier: "trigger_human_approve",
@@ -532,6 +541,7 @@ export const NORM_ENDPOINTS = {
     path: "/v1/klaviyo/draw-reset-progress",
     method: "GET",
     summary: "Progress of an in-flight Klaviyo draw reset",
+    responseSchema: NormKlaviyoDrawResetProgressSchema,
   },
 
   // ─── Major draw (roadmap) ─────────────────────────────────────────────
@@ -1086,6 +1096,7 @@ export const NORM_ENDPOINTS = {
     path: "/v1/submissions/unviewed-count",
     method: "GET",
     summary: "Count of unviewed contact submissions",
+    responseSchema: NormSubmissionsUnviewedCountSchema,
   },
 
   // ─── Upsell multipliers (roadmap) ────────────────────────────────────
@@ -1095,6 +1106,7 @@ export const NORM_ENDPOINTS = {
     path: "/v1/upsell-multipliers",
     method: "GET",
     summary: "List upsell multipliers",
+    responseSchema: NormUpsellMultipliersSchema,
   },
   "upsell-multipliers.update": {
     tier: "write_safe",

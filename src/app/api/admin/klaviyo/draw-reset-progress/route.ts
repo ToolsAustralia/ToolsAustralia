@@ -1,15 +1,15 @@
 /**
  * GET /api/admin/klaviyo/draw-reset-progress
- * 
+ *
  * Progress endpoint to check sync progress
  * Returns current progress status for manual syncs
- * 
+ *
  * Authentication: Admin only
  */
 
 import { NextRequest, NextResponse } from "next/server";
 import { requirePermission } from "@/lib/api-auth-permissions";
-import { getSyncProgress } from "@/utils/integrations/klaviyo/klaviyo-draw-reset";
+import { getKlaviyoDrawResetProgress } from "@/services/klaviyo/klaviyoDrawResetService";
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -19,7 +19,7 @@ export async function GET(_request: NextRequest) {
     const _guard = await requirePermission("overview.view");
     if (_guard instanceof NextResponse) return _guard;
 
-    const progress = getSyncProgress();
+    const progress = getKlaviyoDrawResetProgress();
 
     return NextResponse.json(
       {

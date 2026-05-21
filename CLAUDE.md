@@ -385,11 +385,13 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
     "upsell": {
       "docs": "docs/upsell/",
       "paths": [
+        "src/services/upsell/**",
         "src/utils/upsell/**",
         "src/app/api/upsell/**",
         "src/app/api/cancellation-upsell/**",
         "src/app/(site)/upsell-success/**",
         "src/components/upload/**",
+        "src/models/UpsellMultiplierConfig.ts",
         "src/generated/upsellImageManifest.ts",
         "scripts/build-upsell-image-manifest.ts"
       ],
@@ -489,6 +491,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/utils/utm/**",
         "src/services/meta/**",
         "src/services/facebook-ads/**",
+        "src/services/klaviyo/**",
         "src/models/MetaAdDestination.ts",
         "src/models/MetaAdInsightsDaily.ts",
         "src/models/TikTokAdInsightsDaily.ts",

@@ -82,11 +82,18 @@ You should see `200` with the schema-validated payload. The `requestId` in the r
 
 ### 8. Update `norm-context.md` ← required, not optional
 
-Add a new endpoint section to [norm-context.md](./norm-context.md). It must include: purpose, when-to-use, tier + required permission + rate limit, query param table, sample request, sample response with field meanings, and (where useful) a "when to choose which endpoint" entry.
+Add a new endpoint section to [norm-context.md](./norm-context.md) following the existing structure:
+- **Returns**: the response shape with field meanings, units, and what's NOT included
+- **Inputs**: query/body params as a table
+- **Data source**: which service / Mongo collection / upstream API the data comes from
+- **Constraints**: tier, required permission, rate limit, side effects (none, for reads)
+- **Sample**: literal request + response example
 
-This file is the brief the operator pastes into Norm's context window. Skipping this step means Norm doesn't learn about the new capability — `GET /v1/manifest` will surface the path but Norm won't know parameter shapes, response field meanings, or when to prefer this endpoint over another. The operator will see Norm fumble with 400s in the audit log.
+**Authoring principle — describe the tool, not the use case.** Do NOT write "use this when the operator asks X" or "best for questions about Y". That pattern trains pattern-matching instead of reasoning, and ages badly when more endpoints share overlapping data. Let Norm decide when to call based on capability vs operator intent — the same way Anthropic/OpenAI tool descriptions are written. The only "when" guidance that belongs in this file is protocol facts (e.g. "don't poll status speculatively — only after queueing an action").
 
-Bump the "Last updated" date at the bottom of `norm-context.md`. Then re-feed the file into Norm's context.
+Also update the "Data domains overview" section at the top if this endpoint adds a new domain or meaningfully overlaps with an existing one (describe the overlap neutrally — "endpoint A returns a subset of endpoint B" — not "if you need X, call A").
+
+Bump the "Last updated" date at the bottom. Then re-feed the file into Norm's context.
 
 ## P2. Trigger endpoints — dry-run + confirm
 

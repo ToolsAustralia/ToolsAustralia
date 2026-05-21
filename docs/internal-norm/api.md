@@ -89,6 +89,33 @@ Query: `dateRange` (+ `custom` start/end).
 
 Response: just the `revenue` block from `dashboard.stats`, sliced more verbosely so Norm can answer narrow questions ("renewals revenue last week?") without parsing the bigger stats blob.
 
+### `GET /v1/submissions/unviewed-count`
+Tier `read`; required permission `overview.view`.
+
+Response: `{ contact: number, partner: number, total: number }` — counts of unread `ContactSubmission` and `PartnerApplication` rows (`readAt` null/absent). Backed by [`getUnviewedSubmissionsCount`](../../src/services/admin/submissionsCountService.ts) (extracted from the admin route during wiring).
+
+### `GET /v1/cancellation-flow-analytics`
+Tier `read`; required permission `overview.view`.
+
+Query: optional `startDate` / `endDate` (`YYYY-MM-DD`, AEST-inclusive). Defaults to a rolling 90-day window so the underlying collection scan is always bounded.
+
+Response: the full `CancellationFlowSummary` from [`getCancellationFlowAnalytics`](../../src/services/admin/cancellationFlowAnalytics.ts) — `triggered`, per-reason breakdown, funnel counts, `saveRate` / `saveRatePct`, per-offer acceptance, `retention90` and `retention90ByOffer` splits, and `otherReasonTexts` for free-text "other" reasons.
+
+### `GET /v1/upsell-multipliers`
+Tier `read`; required permission `overview.view`.
+
+Response: `{ membership, oneTime, additional, updatedAt }` — the singleton `UpsellMultiplierConfig` row, via [`getUpsellMultiplierConfig`](../../src/services/upsell/UpsellMultiplierResolver.ts). Each multiplier is a literal from `PROMO_MULTIPLIERS`.
+
+### `GET /v1/klaviyo/draw-reset-preview`
+Tier `read`; required permission `overview.view`.
+
+Response: a `PreviewResult` describing which users a post-draw Klaviyo reset *would* sync — `targetDraw`, `cutoffDate`, `totalUsers`, `totalParticipants`, `skippedUsers`, `reductionPercentage`, plus up to 50 `sampleUsers`. Backed by [`getKlaviyoDrawResetPreview`](../../src/services/klaviyo/klaviyoDrawResetService.ts), which delegates to the existing draw-reset util.
+
+### `GET /v1/klaviyo/draw-reset-progress`
+Tier `read`; required permission `overview.view`.
+
+Response: `null` when no manual sync is running on the answering process, otherwise `{ isRunning, total, processed, synced, errors, currentUserEmail?, startTime? }`. Sourced from in-process state inside the draw-reset util (see G2 in [gotchas.md](./gotchas.md) for the multi-instance caveat — a different Lambda will see `null`).
+
 ## Roadmap (registered but not yet wired)
 
 The [classification registry](../../src/lib/internal-norm/classification.ts) has ~100 additional entries spanning admin domains (A/B testing, affiliates, allowlist, charge-past-due, error reports, mini draws, monthly coupons, promos, users, winners, etc.). They show up in the admin Endpoints tab with a `wired: false` flag but are NOT exposed via `/v1/manifest` — Norm cannot discover or call them until each gets a `responseSchema` + route file. See [patterns.md](./patterns.md) for the recipe.

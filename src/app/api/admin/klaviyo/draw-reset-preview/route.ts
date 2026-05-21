@@ -1,15 +1,15 @@
 /**
  * GET /api/admin/klaviyo/draw-reset-preview
- * 
+ *
  * Preview endpoint to see which users will be synced to Klaviyo
  * Returns target draw info, user counts, and sample users without actually syncing
- * 
+ *
  * Authentication: Admin only
  */
 
 import { NextRequest, NextResponse } from "next/server";
 import { requirePermission } from "@/lib/api-auth-permissions";
-import { getUsersForKlaviyoResetPreview } from "@/utils/integrations/klaviyo/klaviyo-draw-reset";
+import { getKlaviyoDrawResetPreview } from "@/services/klaviyo/klaviyoDrawResetService";
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -19,9 +19,7 @@ export async function GET(_request: NextRequest) {
     const _guard = await requirePermission("overview.view");
     if (_guard instanceof NextResponse) return _guard;
 
-    console.log("📊 Admin requesting Klaviyo sync preview");
-
-    const previewData = await getUsersForKlaviyoResetPreview();
+    const previewData = await getKlaviyoDrawResetPreview();
 
     return NextResponse.json(
       {
