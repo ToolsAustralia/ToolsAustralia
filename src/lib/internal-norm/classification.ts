@@ -74,6 +74,11 @@ import {
   NormAnalyticsSpendByUrlDetailSchema,
   NormAnalyticsSpendByUrlListSchema,
 } from "./schemas/analytics-spend";
+import {
+  NormPromoActiveSchema,
+  NormPromoEffectiveSchema,
+  NormPromoHistorySchema,
+} from "./schemas/promo";
 
 // "forbidden" is NOT a tier — endpoints not in the registry are simply unreachable.
 // Tier and Permission are orthogonal axes: tier = orchestration shape; permission = "is Norm allowed?".
@@ -965,6 +970,7 @@ export const NORM_ENDPOINTS = {
     path: "/v1/promo/active",
     method: "GET",
     summary: "Currently-active promo",
+    responseSchema: NormPromoActiveSchema,
   },
   "promo.active.refresh": {
     tier: "write_safe",
@@ -986,6 +992,7 @@ export const NORM_ENDPOINTS = {
     path: "/v1/promo/effective",
     method: "GET",
     summary: "Resolve currently-effective promo for context",
+    responseSchema: NormPromoEffectiveSchema,
   },
   "promo.end": {
     tier: "trigger_human_approve",
@@ -1000,6 +1007,7 @@ export const NORM_ENDPOINTS = {
     path: "/v1/promo/history",
     method: "GET",
     summary: "Promo history",
+    responseSchema: NormPromoHistorySchema,
   },
   "promo.toggle": {
     tier: "trigger_norm_confirm",

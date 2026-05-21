@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-05-21T08:23:01.834Z",
+  "generatedAt": "2026-05-21T08:30:19.148Z",
   "endpoints": [
     {
       "registryKey": "roas.summary",
@@ -337,6 +337,27 @@
       "path": "/v1/promo-analytics/page-detail",
       "method": "GET",
       "summary": "Promo analytics for a single page: per-UTM-campaign attribution + visits-from"
+    },
+    {
+      "registryKey": "promo.active",
+      "tier": "read",
+      "path": "/v1/promo/active",
+      "method": "GET",
+      "summary": "Currently-active promo"
+    },
+    {
+      "registryKey": "promo.effective",
+      "tier": "read",
+      "path": "/v1/promo/effective",
+      "method": "GET",
+      "summary": "Resolve currently-effective promo for context"
+    },
+    {
+      "registryKey": "promo.history",
+      "tier": "read",
+      "path": "/v1/promo/history",
+      "method": "GET",
+      "summary": "Promo history"
     },
     {
       "registryKey": "stripe-webhook-queue.list",
