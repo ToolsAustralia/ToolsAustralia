@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-05-21T08:52:05.471Z",
+  "generatedAt": "2026-05-21T09:05:49.114Z",
   "endpoints": [
     {
       "registryKey": "roas.summary",
@@ -323,6 +323,48 @@
       "path": "/v1/mini-draw/:id/export",
       "method": "GET",
       "summary": "Aggregate-only mini-draw export: participant counts + per-state breakdown (no per-user PII)"
+    },
+    {
+      "registryKey": "monthly-coupon.campaigns.list",
+      "tier": "read",
+      "path": "/v1/monthly-coupon/campaign",
+      "method": "GET",
+      "summary": "List monthly-coupon campaigns with per-campaign redeemed-count rollup"
+    },
+    {
+      "registryKey": "monthly-coupon.campaign.redemptions",
+      "tier": "read",
+      "path": "/v1/monthly-coupon/campaign/:id/redemptions",
+      "method": "GET",
+      "summary": "Paged redemption ledger for a monthly-coupon campaign (opaque userId; no email/name)"
+    },
+    {
+      "registryKey": "monthly-coupon.target-users.manual",
+      "tier": "read",
+      "path": "/v1/monthly-coupon/target-users/manual",
+      "method": "POST",
+      "summary": "Resolve manually-supplied user IDs for coupon targeting (POST-body read; opaque userId array)"
+    },
+    {
+      "registryKey": "monthly-coupon.target-users.csv",
+      "tier": "read",
+      "path": "/v1/monthly-coupon/target-users/csv",
+      "method": "POST",
+      "summary": "Resolve CSV-supplied user IDs for coupon targeting (POST-body read; opaque userId array + invalid-row report)"
+    },
+    {
+      "registryKey": "monthly-coupon.target-users.filter",
+      "tier": "read",
+      "path": "/v1/monthly-coupon/target-users/filter",
+      "method": "POST",
+      "summary": "Resolve users matching a coupon-targeting filter (POST-body read; paged opaque-id rows or bulk userId list)"
+    },
+    {
+      "registryKey": "monthly-coupon.target-users.dynamic",
+      "tier": "read",
+      "path": "/v1/monthly-coupon/target-users/dynamic",
+      "method": "POST",
+      "summary": "Resolve users via dynamic segment for coupon targeting (POST-body read; opaque userId array)"
     },
     {
       "registryKey": "promo-analytics.summary",

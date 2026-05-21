@@ -89,6 +89,13 @@ import {
   NormPromoScheduledListSchema,
 } from "./schemas/promo-sub-domains";
 import { NormMilestoneRewardsListSchema } from "./schemas/milestone-rewards";
+import {
+  NormMonthlyCouponCampaignsListSchema,
+  NormMonthlyCouponCampaignRedemptionsSchema,
+  NormMonthlyCouponTargetUsersOpaqueSchema,
+  NormMonthlyCouponTargetUsersCsvSchema,
+  NormMonthlyCouponTargetUsersFilterSchema,
+} from "./schemas/monthly-coupon";
 
 // "forbidden" is NOT a tier — endpoints not in the registry are simply unreachable.
 // Tier and Permission are orthogonal axes: tier = orchestration shape; permission = "is Norm allowed?".
@@ -873,7 +880,8 @@ export const NORM_ENDPOINTS = {
     legacyAdminCheck: true,
     path: "/v1/monthly-coupon/campaign",
     method: "GET",
-    summary: "List monthly-coupon campaigns",
+    summary: "List monthly-coupon campaigns with per-campaign redeemed-count rollup",
+    responseSchema: NormMonthlyCouponCampaignsListSchema,
   },
   "monthly-coupon.campaigns.create": {
     tier: "trigger_human_approve",
@@ -913,7 +921,8 @@ export const NORM_ENDPOINTS = {
     legacyAdminCheck: true,
     path: "/v1/monthly-coupon/campaign/:id/redemptions",
     method: "GET",
-    summary: "Redemptions for a monthly-coupon campaign",
+    summary: "Paged redemption ledger for a monthly-coupon campaign (opaque userId; no email/name)",
+    responseSchema: NormMonthlyCouponCampaignRedemptionsSchema,
   },
   "monthly-coupon.target-users.manual": {
     tier: "read",
@@ -921,7 +930,8 @@ export const NORM_ENDPOINTS = {
     legacyAdminCheck: true,
     path: "/v1/monthly-coupon/target-users/manual",
     method: "POST",
-    summary: "Resolve manually-supplied user IDs for coupon targeting",
+    summary: "Resolve manually-supplied user IDs for coupon targeting (POST-body read; opaque userId array)",
+    responseSchema: NormMonthlyCouponTargetUsersOpaqueSchema,
   },
   "monthly-coupon.target-users.csv": {
     tier: "read",
@@ -929,7 +939,8 @@ export const NORM_ENDPOINTS = {
     legacyAdminCheck: true,
     path: "/v1/monthly-coupon/target-users/csv",
     method: "POST",
-    summary: "Resolve CSV-supplied user IDs for coupon targeting",
+    summary: "Resolve CSV-supplied user IDs for coupon targeting (POST-body read; opaque userId array + invalid-row report)",
+    responseSchema: NormMonthlyCouponTargetUsersCsvSchema,
   },
   "monthly-coupon.target-users.filter": {
     tier: "read",
@@ -937,7 +948,8 @@ export const NORM_ENDPOINTS = {
     legacyAdminCheck: true,
     path: "/v1/monthly-coupon/target-users/filter",
     method: "POST",
-    summary: "Resolve users matching a coupon-targeting filter",
+    summary: "Resolve users matching a coupon-targeting filter (POST-body read; paged opaque-id rows or bulk userId list)",
+    responseSchema: NormMonthlyCouponTargetUsersFilterSchema,
   },
   "monthly-coupon.target-users.dynamic": {
     tier: "read",
@@ -945,7 +957,8 @@ export const NORM_ENDPOINTS = {
     legacyAdminCheck: true,
     path: "/v1/monthly-coupon/target-users/dynamic",
     method: "POST",
-    summary: "Resolve users via dynamic segment for coupon targeting",
+    summary: "Resolve users via dynamic segment for coupon targeting (POST-body read; opaque userId array)",
+    responseSchema: NormMonthlyCouponTargetUsersOpaqueSchema,
   },
 
   // ─── Promo analytics (wired) ──────────────────────────────────────────

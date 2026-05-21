@@ -2,9 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import connectDB from "@/lib/mongodb";
 import { requireAdminUser } from "@/lib/api-auth";
-import { CampaignService, getMonthKey } from "@/services/redeemables";
-import MonthlyEntryCampaign from "@/models/MonthlyEntryCampaign";
-import RedeemableIssuance from "@/models/RedeemableIssuance";
+import {
+  CampaignService,
+  getMonthKey,
+  listCampaignsWithRedemptionCounts,
+} from "@/services/redeemables";
 import { monthlyCouponSegmentConfigSchema } from "@/lib/zod/monthlyCouponSegmentConfig";
 
 const campaignSchema = z.object({
@@ -38,39 +40,32 @@ export async function GET(request: NextRequest) {
     }
 
     await connectDB();
-    const monthKey = request.nextUrl.searchParams.get("monthKey");
-    const filters = monthKey ? { monthKey } : {};
-    const campaigns = await MonthlyEntryCampaign.find(filters)
-      .sort({ monthKey: -1, createdAt: -1 })
-      .select(
-        "monthKey name displayLabel entriesAmount campaignMode targetingMode startsAt endsAt neverExpires isActive code requiresPurchase purchaseRequirement segmentConfig createdAt updatedAt"
-      )
-      .lean();
-    const campaignIds = campaigns.map((campaign) => campaign._id);
-    const redemptionCounts = await RedeemableIssuance.aggregate<{ _id: string; redeemedCount: number }>([
-      {
-        $match: {
-          campaignId: { $in: campaignIds },
-          status: "redeemed",
-        },
-      },
-      {
-        $group: {
-          _id: "$campaignId",
-          redeemedCount: { $sum: 1 },
-        },
-      },
-    ]);
-    const redemptionCountMap = new Map(
-      redemptionCounts.map((item) => [item._id.toString(), item.redeemedCount])
-    );
+    const monthKey = request.nextUrl.searchParams.get("monthKey") || undefined;
+    const rows = await listCampaignsWithRedemptionCounts({ monthKey });
 
+    // Preserve the admin route's existing wire shape (spread-based, with _id and id).
     return NextResponse.json({
       success: true,
-      data: campaigns.map((campaign) => ({
-        ...campaign,
-        id: String(campaign._id),
-        redeemedCount: redemptionCountMap.get(String(campaign._id)) ?? 0,
+      data: rows.map((row) => ({
+        _id: row.id,
+        id: row.id,
+        monthKey: row.monthKey,
+        name: row.name,
+        displayLabel: row.displayLabel,
+        entriesAmount: row.entriesAmount,
+        campaignMode: row.campaignMode,
+        targetingMode: row.targetingMode,
+        startsAt: row.startsAt,
+        endsAt: row.endsAt,
+        neverExpires: row.neverExpires,
+        isActive: row.isActive,
+        code: row.code,
+        requiresPurchase: row.requiresPurchase,
+        purchaseRequirement: row.purchaseRequirement,
+        segmentConfig: row.segmentConfig,
+        createdAt: row.createdAt,
+        updatedAt: row.updatedAt,
+        redeemedCount: row.redeemedCount,
       })),
     });
   } catch (error) {
