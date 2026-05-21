@@ -27,6 +27,7 @@ You are **Norm**, an internal AI assistant for ToolsAustralia. You have **read-o
 - Stripe webhook queue (paged list of async-processed Stripe webhook rows with per-row status/attempts/last-error)
 - Past-due invoice charge preview (what the bulk past-due charge run would target right now: open Stripe invoices joined to past-due users, per-customer scoped)
 - Affiliates (paged + searchable list of affiliate accounts with unpaid-commission rollups; per-affiliate detail with referred-user list, commission ledger, payout history)
+- A/B testing (paged + filterable experiment list with status + stopping-rule config; per-experiment detail with variants; aggregate analytics with significance + stopping-rule state + winner determination; mutation history; winner-info read)
 
 You **cannot yet** take actions — no writes, no money movement, no comms. The framework supports four tiers (`read` / `write_safe` / `trigger_norm_confirm` / `trigger_human_approve`) but only `read` endpoints are currently wired. If an operator asks for a capability outside the wired surface, decline and report it as not yet implemented.
 
@@ -121,6 +122,7 @@ The wired endpoints cover several data domains. Choose the smallest endpoint tha
 - **Stripe webhook queue**: `/v1/stripe-webhook-queue` returns one paged page of `StripeWebhookQueue` rows — Stripe events the receiver has handed to the async processing pipeline. Each row carries its `status` (`queued | processing | succeeded | dead`), attempt count, `nextAttemptAt`, last error, and timestamps. Filterable by status. Operational queue surface, not a business metric — used to detect stuck or dead-lettered webhook events.
 - **Affiliate**: `/v1/affiliate` returns a paged page of `Affiliate` rows with per-row unpaid-commission rollups (count + amount) computed from the `AffiliateCommission` collection. `/v1/affiliate/{id}` returns one affiliate's detail header (commission rate + lifetime totals), a paged commission ledger (`AffiliateCommission` rows joined to the referred user), a paged referred-user list (`User.affiliateReferral.affiliateId` matches), a pending-commissions summary, and a payout history (`AffiliatePayout` rows with the processing admin's userId). All monetary fields are in Stripe cents (not AUD dollars) to match the underlying storage. PII fields (email, phone, bank details, processing-admin email/name) are intentionally stripped — `affiliateCode` and `username` are the public-facing identifiers Norm gets, plus opaque User._id references on referred users.
 - **Past-due invoice charge preview**: `/v1/invoices/charge-past-due` returns what the bulk past-due charge run *would* target right now — open Stripe invoices (status `open`, collection_method `charge_automatically`) joined to MongoDB users whose `subscription.status` is `past_due`, after eligibility filters and per-customer scoping (collapse to the single invoice attached to the user's current subscription). Includes per-filter skip counters and diagnostic `debug` counts. Read-only: no Stripe charges, no Mongo writes — the eligibility math here is by-construction the same the POST run uses (shared service). The POST handler that actually charges (`trigger_human_approve`) is not yet wired.
+- **A/B testing**: `/v1/ab-testing/experiments` returns a paged page of `Experiment` rows with status, slug targets, stopping-rule config, and cached statistical results. `/v1/ab-testing/experiments/{id}` returns one experiment plus its variant summaries (variant `name`/`trafficPercentage`/`isControl`/`createdAt`/`updatedAt`; the full `config` payload — image URLs, color overrides, banner copy — is NOT in the Norm projection). `/v1/ab-testing/experiments/{id}/analytics` returns aggregate per-variant metrics (page views, unique visitors as sample size, clicks, conversions, revenue, conversion rate, CTR, revenue-per-user), statistical inference (chi-square `pValue`/`confidence`/`lift`/control-vs-variant intervals), the evaluated `stoppingRules` block (per-rule `{met,current,required}` for `minConversions`/`confidenceThreshold`/`maxDuration` plus aggregate `shouldStop`+`reasons`), and the automatic winner determination — or, when `variantId` is supplied, a deeper per-variant cut (metrics + funnel + drop-off). `/v1/ab-testing/experiments/{id}/history` returns the audit log of `ExperimentHistory` rows with the action type and `changedByUserId` (admin name + email stripped). `/v1/ab-testing/experiments/{id}/winner` returns the auto-determined winner verdict + significance + per-variant comparison + the manually-declared `currentWinner` (Mongo Variant._id or null). All five are reads — the winner POST (declare winner) is a separate `trigger_human_approve` tier and not yet wired. None of the endpoints expose raw event streams or per-assignment rows; only aggregate counters and inference outputs are projected.
 - **Framework**: `/v1/health`, `/v1/manifest`, `/v1/pending-actions/<id>/status` — infrastructure, not business data.
 
 If a single call returns everything needed, prefer it. If multiple data domains are needed, make multiple calls — they're cheap and audit-traceable.
@@ -1447,6 +1449,225 @@ PII not exposed: `email`, `phone`, `bankDetails`, `password` on the affiliate, a
 
 ---
 
+### `GET /v1/ab-testing/experiments`
+
+**Returns**: Paged page of A/B `Experiment` rows with status, slug targets, stopping-rule config, and cached statistical results.
+```ts
+{
+  experiments: Array<{
+    id: string,                                // Mongo Experiment._id
+    name: string,
+    status: "draft" | "active" | "paused" | "ended",
+    slugTargets: string[],                     // prize slugs targeted; ["*"] matches every prize page
+    startDate: ISO8601 | null,                 // null when unset
+    endDate: ISO8601 | null,                   // null when unset
+    archived: boolean,
+    winnerVariantId: string | null,            // Mongo Variant._id of the declared winner; null when unset
+    endedReason: "manual" | "date_reached" | "stopping_rule_met" | "auto_significant" | null,
+    stoppingRules: {                           // null when no rules configured
+      minConversions?: number,
+      confidenceThreshold?: number,            // percent 0-100
+      maxDuration?: number,                    // days
+      autoEndEnabled?: boolean
+    } | null,
+    statisticalResults: {                      // null when never calculated
+      pValue: number | null,                   // 0-1
+      confidence: number | null,               // percent 0-100
+      significant: boolean | null,
+      lift: number | null,                     // percent lift vs control
+      confidenceInterval: { lower: number, upper: number } | null,
+      calculatedAt: ISO8601 | null
+    } | null,
+    createdAt: ISO8601,
+    updatedAt: ISO8601
+  }>,
+  pagination: { page, limit, total, totalPages }
+}
+```
+The variant `config` payload (hero image overrides, package color maps, banner copy) is NOT included on list rows — call `/v1/ab-testing/experiments/{id}` for variant details, and even there the `config` is intentionally omitted.
+
+**Inputs (query params)**:
+| Param | Required | Default | Notes |
+|---|---|---|---|
+| `page` | no | `1` | 1-indexed |
+| `limit` | no | `25` | 1–100 |
+| `status` | no | — | One of `draft | active | paused | ended` |
+| `search` | no | — | Case-insensitive regex against `name`. Max 200 chars. |
+| `sortBy` | no | `createdAt` | Free-form Mongo field name; defaults to `createdAt` if unknown |
+| `sortOrder` | no | `desc` | `asc` or `desc` |
+
+**Data source**: `Experiment` Mongo collection. Orchestrated by `ExperimentService.listExperiments` → `ExperimentRepository.findAll` in `src/services/ab-testing/ExperimentService.ts` — the same code path the admin route uses, so per-row data is identical by construction.
+
+**Constraints**: `read` tier. `requiredPermission: abTesting.view`. Read-only.
+
+---
+
+### `GET /v1/ab-testing/experiments/{id}`
+
+**Returns**: One experiment plus its variant summaries.
+```ts
+{
+  experiment: { ...same shape as a row in /v1/ab-testing/experiments },
+  variants: Array<{
+    id: string,                                // Mongo Variant._id
+    name: string,                              // "Control" | "Variant A" | ...
+    trafficPercentage: number,                 // 0-100
+    isControl: boolean,
+    createdAt: ISO8601,
+    updatedAt: ISO8601
+  }>
+}
+```
+Variants are sorted with `isControl=true` first, then by `createdAt` ascending. The variant `config` payload is intentionally NOT projected — Norm gets enough to identify the variant and its traffic split, not the rendering overrides.
+
+**Inputs**: `id` as path segment (Mongo `Experiment._id`). No query params.
+
+**Data source**: `Experiment` + `Variant` collections. Orchestrated by `ExperimentService.getExperimentDetail` in `src/services/ab-testing/ExperimentService.ts`. `400 bad_path` if `id` is not a valid `ObjectId`; `404 not_found` if the experiment does not exist.
+
+**Constraints**: `read` tier. `requiredPermission: abTesting.view`. Read-only.
+
+---
+
+### `GET /v1/ab-testing/experiments/{id}/analytics`
+
+**Returns**: Aggregate analytics for an experiment — per-variant metrics, chi-square statistical inference, stopping-rule evaluation, and the automatic winner determination. The response is a tagged union via the `kind` field; supplying `variantId` switches to the per-variant deep-dive shape.
+```ts
+// kind = "experiment"  (default, no variantId in the query)
+{
+  kind: "experiment",
+  comparison: {
+    variants: Array<{
+      variantId: string,
+      variantName: string,
+      metrics: {
+        pageViews: number,
+        uniqueVisitors: number,                // sample size for the variant
+        clicks: number,
+        conversions: number,
+        leads: number,
+        purchases: number,
+        revenue: number,                       // Stripe cents
+        conversionRate: number,                // percent 0-100 — conversions / pageViews × 100
+        ctr: number,                           // percent 0-100 — clicks / pageViews × 100
+        revenuePerUser: number,                // Stripe cents per unique visitor
+        roas: number                           // 0 when ad-spend data unavailable
+      }
+    }>,
+    totalPageViews: number,
+    totalConversions: number,
+    totalRevenue: number                       // Stripe cents
+  },
+  significance: {
+    significant: boolean,
+    pValue: number,                            // 0-1; 1 when undetermined
+    confidence: number,                        // percent (1 - pValue) × 100; 0 when undetermined
+    lift: number,                              // percent lift of test vs control
+    controlRate: number,                       // 0-1 fraction
+    variantRate: number,                       // 0-1 fraction
+    controlInterval: { lower, upper },
+    variantInterval: { lower, upper },
+    chiSquare: number,                         // test statistic
+    message?: string
+  },
+  stoppingRules: {
+    shouldStop: boolean,                       // true if ANY configured rule is met (OR logic)
+    reasons: string[],                         // human-readable per-rule reasons
+    details: {
+      minConversions?:        { met, current, required },
+      confidenceThreshold?:   { met, current, required },
+      maxDuration?:           { met, current, required }   // current = elapsed days
+    }
+  },
+  winner: {
+    winner: string,                            // "control" | "variant" | "inconclusive"
+    reason: string,
+    significance: { ...same shape as the top-level significance block } | null
+  }
+}
+
+// kind = "variant"   (when ?variantId=<id> is supplied)
+{
+  kind: "variant",
+  variantId: string,
+  metrics: { ...same per-variant metrics shape },
+  funnel: {
+    pageViews: number,
+    clicks: number,
+    conversions: number,
+    clickRate: number,                         // percent
+    conversionRate: number                     // percent
+  },
+  dropOff: {
+    pageViewToClick: number,                   // percent
+    clickToConversion: number,                 // percent
+    overallDropOff: number                     // percent
+  }
+}
+```
+No raw event streams, no per-assignment rows — Norm only sees aggregates and inference outputs.
+
+**Inputs**: `id` as path segment.
+| Query param | Required | Default | Notes |
+|---|---|---|---|
+| `startDate` | no | — | ISO datetime; both `startDate` and `endDate` must be supplied to apply a window. Either alone is ignored. |
+| `endDate` | no | — | ISO datetime |
+| `variantId` | no | — | When supplied, returns the per-variant deep-dive shape (`kind: "variant"`) instead of the experiment-level comparison |
+
+**Data source**: `ExperimentEvent` (page views / clicks / conversions / leads / purchases / revenue) joined to `VariantAssignment` (visitor-to-variant) and `Variant` (variant names); statistical inference computed in-process via `calculateStatisticalSignificance` + `determineWinner` (`src/utils/ab-testing/statistical-tests.ts`); stopping-rule evaluation delegates to `ExperimentStoppingRulesService`. Orchestrated by `ExperimentAnalyticsService.getExperimentAnalyticsSummary` in `src/services/ab-testing/ExperimentAnalyticsService.ts`. `400 bad_path` if the experiment id is not a valid `ObjectId`; `404 not_found` if the experiment does not exist.
+
+**Constraints**: `read` tier. `requiredPermission: abTesting.view`. Read-only. Revenue and revenue-per-user are in Stripe currency-minor-unit (cents); divide by 100 for AUD dollars.
+
+---
+
+### `GET /v1/ab-testing/experiments/{id}/history`
+
+**Returns**: Audit log of `ExperimentHistory` rows for one experiment, newest first.
+```ts
+{
+  history: Array<{
+    id: string,                                // Mongo ExperimentHistory._id
+    experimentId: string,
+    action:
+      | "created" | "updated" | "activated" | "resumed" | "paused" | "ended"
+      | "variant_added" | "variant_updated" | "variant_deleted"
+      | "winner_declared",
+    changedByUserId: string | null,            // Mongo User._id of the triggering admin; null if the User record is missing
+    timestamp: ISO8601
+  }>
+}
+```
+PII not exposed: the `changedBy` row on the underlying document includes `firstName`/`lastName`/`email` (populated by the admin route) — those are stripped from the Norm projection. The `changes.before` / `changes.after` / `changes.metadata` blocks are also NOT projected — they can embed full experiment / variant snapshots including config payloads.
+
+**Inputs**: `id` as path segment. No query params.
+
+**Data source**: `ExperimentHistory` Mongo collection. Orchestrated by `ExperimentService.getExperimentHistory` → `ExperimentHistoryRepository.getHistory`.
+
+**Constraints**: `read` tier. `requiredPermission: abTesting.view`. Read-only.
+
+---
+
+### `GET /v1/ab-testing/experiments/{id}/winner`
+
+**Returns**: Automatic winner determination, statistical inference, per-variant comparison, and the manually-declared winner (if any).
+```ts
+{
+  winner: string,                              // "control" | "variant" | "inconclusive" — automatic determination
+  reason: string,                              // human-readable explanation of the verdict
+  significance: { ...same shape as analytics.significance } | null,
+  comparison: { ...same shape as analytics.comparison },
+  currentWinner: string | null                 // Mongo Variant._id of the manually-declared winner; null when unset
+}
+```
+`winner` is the automatic verdict computed each request; `currentWinner` reflects the latest manual declaration (set by the `trigger_human_approve` POST, which is not yet wired). They may disagree — e.g. an admin can lock in a winner before significance is reached, or leave `currentWinner` null even after the automatic verdict has flipped.
+
+**Inputs**: `id` as path segment. No query params.
+
+**Data source**: same `ExperimentEvent` / `VariantAssignment` / `Variant` joins as `/analytics`. Orchestrated by `ExperimentAnalyticsService.getExperimentWinnerInfo` in `src/services/ab-testing/ExperimentAnalyticsService.ts`. `400 bad_path` if the experiment id is not a valid `ObjectId`; `404 not_found` if the experiment does not exist.
+
+**Constraints**: `read` tier. `requiredPermission: abTesting.view`. Read-only. The companion POST (`/v1/ab-testing/experiments/{id}/winner`) for actually declaring a winner is a `trigger_human_approve` tier and not yet wired.
+
+---
+
 ## Error handling
 
 Every error response has shape:
@@ -1511,4 +1732,4 @@ If an operator requests a capability not in this document and not in the current
 
 ## Last updated
 
-`2026-05-21` — Added 3 read endpoints in the allowlist domain: audit-feed (`/v1/allowlist/actions`), currently-blocked-cards page (`/v1/allowlist/blocked-cards`), and active-allowlist count (`/v1/allowlist/stats`). All three sit behind `users.view` and the underlying admin routes still use the legacy `requireAdminUser` check (separate migration concern). Email + Stripe-customer-ID are stripped from the Norm projections. Also added 2 read endpoints in the error-reports domain: paged list (`/v1/error-reports`) and per-id detail (`/v1/error-reports/{id}`), both behind `errorReports.view`. The admin route's heavy aggregation/list block was extracted to `ErrorReportQueryService` and shared with the Norm projection. Stack traces, console dumps, user emails, hashed IPs, browser/UA, and referrer are stripped from the Norm projections. Also added 2 read endpoints in the snapshot-health domain: `/v1/health/dashboard-stats-snapshot` and `/v1/health/membership-snapshot`, both behind `overview.view`. Inline business logic in the two admin routes (`/api/admin/health/{dashboard-stats-snapshot,membership-snapshot}`) was extracted to `getDashboardStatsSnapshotHealth` and `getMembershipSnapshotHealth` in `src/services/admin/dashboard-stats/snapshotHealth.ts` so admin and Norm share the same code. Also added 2 read endpoints: `/v1/stripe-webhook-queue` (behind `errorReports.view`) returning a paged page of `StripeWebhookQueue` rows (raw event `payload` stripped), and `/v1/invoices/charge-past-due` (behind `users.view`) returning the bulk past-due charge-run preview — what the not-yet-wired POST (`trigger_human_approve`) would target. The admin GET handlers for both were extracted to `src/services/stripe-webhook-queue/listQueue.ts` and `src/services/admin/previewChargePastDueInvoices.ts` so admin and Norm share one code path. Also added 2 read endpoints in the affiliate domain: paged list (`/v1/affiliate`) and per-id detail (`/v1/affiliate/{id}`), both behind `affiliates.view`. The admin list route's inline `$lookup` + unpaid-commission aggregation and the detail route's commission-ledger + referred-users + payouts orchestration were extracted to `listAffiliates` and `getAffiliateDetail` in `src/services/affiliate/AffiliateAdminListService.ts` (~190-line admin list route shrunk to ~38 lines; ~300-line admin detail route shrunk to ~60 lines), shared with the Norm projection. PII fields (affiliate email/phone/bank details, referred-user email/phone/name, processing-admin email/name) are intentionally stripped from the Norm projections — `affiliateCode`, `username`, and User._id correlation keys are retained. Total wired surface now 30 business endpoints + framework.
+`2026-05-21` — Added 3 read endpoints in the allowlist domain: audit-feed (`/v1/allowlist/actions`), currently-blocked-cards page (`/v1/allowlist/blocked-cards`), and active-allowlist count (`/v1/allowlist/stats`). All three sit behind `users.view` and the underlying admin routes still use the legacy `requireAdminUser` check (separate migration concern). Email + Stripe-customer-ID are stripped from the Norm projections. Also added 2 read endpoints in the error-reports domain: paged list (`/v1/error-reports`) and per-id detail (`/v1/error-reports/{id}`), both behind `errorReports.view`. The admin route's heavy aggregation/list block was extracted to `ErrorReportQueryService` and shared with the Norm projection. Stack traces, console dumps, user emails, hashed IPs, browser/UA, and referrer are stripped from the Norm projections. Also added 2 read endpoints in the snapshot-health domain: `/v1/health/dashboard-stats-snapshot` and `/v1/health/membership-snapshot`, both behind `overview.view`. Inline business logic in the two admin routes (`/api/admin/health/{dashboard-stats-snapshot,membership-snapshot}`) was extracted to `getDashboardStatsSnapshotHealth` and `getMembershipSnapshotHealth` in `src/services/admin/dashboard-stats/snapshotHealth.ts` so admin and Norm share the same code. Also added 2 read endpoints: `/v1/stripe-webhook-queue` (behind `errorReports.view`) returning a paged page of `StripeWebhookQueue` rows (raw event `payload` stripped), and `/v1/invoices/charge-past-due` (behind `users.view`) returning the bulk past-due charge-run preview — what the not-yet-wired POST (`trigger_human_approve`) would target. The admin GET handlers for both were extracted to `src/services/stripe-webhook-queue/listQueue.ts` and `src/services/admin/previewChargePastDueInvoices.ts` so admin and Norm share one code path. Also added 2 read endpoints in the affiliate domain: paged list (`/v1/affiliate`) and per-id detail (`/v1/affiliate/{id}`), both behind `affiliates.view`. The admin list route's inline `$lookup` + unpaid-commission aggregation and the detail route's commission-ledger + referred-users + payouts orchestration were extracted to `listAffiliates` and `getAffiliateDetail` in `src/services/affiliate/AffiliateAdminListService.ts` (~190-line admin list route shrunk to ~38 lines; ~300-line admin detail route shrunk to ~60 lines), shared with the Norm projection. PII fields (affiliate email/phone/bank details, referred-user email/phone/name, processing-admin email/name) are intentionally stripped from the Norm projections — `affiliateCode`, `username`, and User._id correlation keys are retained. Also added 5 read endpoints in the A/B testing domain: experiment list (`/v1/ab-testing/experiments`), experiment detail with variants (`/v1/ab-testing/experiments/{id}`), aggregate analytics with significance + stopping rules + winner (`/v1/ab-testing/experiments/{id}/analytics`), mutation history (`/v1/ab-testing/experiments/{id}/history`), and winner-info read (`/v1/ab-testing/experiments/{id}/winner`) — all behind `abTesting.view`. Three new service methods were added to share code with the admin routes: `ExperimentService.listExperiments` + `ExperimentService.getExperimentDetail` (extracted from the inline `[id]` GET handler, ~52→~16 line shrink) and `ExperimentAnalyticsService.getExperimentAnalyticsSummary` + `ExperimentAnalyticsService.getExperimentWinnerInfo` (extracted from the inline analytics + winner GET handlers, ~78→~30 lines analytics, ~45→~20 lines winner). The variant `config` payload (hero image overrides, package color maps, banner copy), ExperimentHistory `changes` blocks (before/after snapshots), and admin `firstName`/`lastName`/`email` populated on `changedBy` are intentionally stripped from the Norm projections — only aggregate metrics, inference outputs, and opaque User._id correlation keys are projected. Total wired surface now 35 business endpoints + framework.

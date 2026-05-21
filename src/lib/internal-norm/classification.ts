@@ -42,6 +42,13 @@ import {
 import { NormStripeWebhookQueueListSchema } from "./schemas/stripe-webhook-queue";
 import { NormChargePastDuePreviewSchema } from "./schemas/invoices";
 import { NormAffiliateListSchema, NormAffiliateDetailSchema } from "./schemas/affiliate";
+import {
+  NormExperimentsListSchema,
+  NormExperimentDetailSchema,
+  NormExperimentAnalyticsSchema,
+  NormExperimentHistorySchema,
+  NormExperimentWinnerSchema,
+} from "./schemas/ab-testing";
 
 // "forbidden" is NOT a tier — endpoints not in the registry are simply unreachable.
 // Tier and Permission are orthogonal axes: tier = orchestration shape; permission = "is Norm allowed?".
@@ -188,7 +195,8 @@ export const NORM_ENDPOINTS = {
     requiredPermission: "abTesting.view",
     path: "/v1/ab-testing/experiments",
     method: "GET",
-    summary: "List A/B experiments",
+    summary: "List A/B experiments (paged, filterable by status / search)",
+    responseSchema: NormExperimentsListSchema,
   },
   "ab-testing.experiments.create": {
     tier: "write_safe",
@@ -202,7 +210,8 @@ export const NORM_ENDPOINTS = {
     requiredPermission: "abTesting.view",
     path: "/v1/ab-testing/experiments/:id",
     method: "GET",
-    summary: "Get a single A/B experiment",
+    summary: "Get a single A/B experiment with its variant summaries",
+    responseSchema: NormExperimentDetailSchema,
   },
   "ab-testing.experiment.update": {
     tier: "write_safe",
@@ -223,14 +232,16 @@ export const NORM_ENDPOINTS = {
     requiredPermission: "abTesting.view",
     path: "/v1/ab-testing/experiments/:id/analytics",
     method: "GET",
-    summary: "Analytics for a single A/B experiment",
+    summary: "Aggregate analytics for an A/B experiment: per-variant metrics, significance, stopping rules, winner",
+    responseSchema: NormExperimentAnalyticsSchema,
   },
   "ab-testing.experiment-history": {
     tier: "read",
     requiredPermission: "abTesting.view",
     path: "/v1/ab-testing/experiments/:id/history",
     method: "GET",
-    summary: "Mutation history for an A/B experiment",
+    summary: "Mutation history (audit log) for an A/B experiment",
+    responseSchema: NormExperimentHistorySchema,
   },
   "ab-testing.variants.create": {
     tier: "write_safe",
@@ -265,7 +276,8 @@ export const NORM_ENDPOINTS = {
     requiredPermission: "abTesting.view",
     path: "/v1/ab-testing/experiments/:id/winner",
     method: "GET",
-    summary: "Read the winning variant for an A/B experiment",
+    summary: "Read the auto-determined winner + currently-declared winner for an A/B experiment",
+    responseSchema: NormExperimentWinnerSchema,
   },
   "ab-testing.preview.create": {
     tier: "write_safe",

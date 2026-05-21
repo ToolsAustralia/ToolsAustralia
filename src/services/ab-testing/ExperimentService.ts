@@ -1,8 +1,42 @@
 import ExperimentRepository from "@/repositories/ab-testing/ExperimentRepository";
 import ExperimentHistoryRepository from "@/repositories/ab-testing/ExperimentHistoryRepository";
 import VariantRepository from "@/repositories/ab-testing/VariantRepository";
-import { ExperimentHistoryAction } from "@/models/ab-testing/ExperimentHistory";
+import { ExperimentHistoryAction, IExperimentHistory } from "@/models/ab-testing/ExperimentHistory";
+import { IExperiment } from "@/models/ab-testing/Experiment";
+import { IVariant } from "@/models/ab-testing/Variant";
 import mongoose from "mongoose";
+
+/**
+ * Filter / paging args for the experiment list reader.
+ */
+export interface ListExperimentsArgs {
+  status?: string;
+  search?: string;
+  page?: number;
+  limit?: number;
+  sortBy?: string;
+  sortOrder?: "asc" | "desc";
+}
+
+export interface ListExperimentsResult {
+  experiments: IExperiment[];
+  total: number;
+  page: number;
+  limit: number;
+}
+
+export interface ExperimentDetailResult {
+  experiment: IExperiment;
+  variants: IVariant[];
+}
+
+/**
+ * Validate that a string is a well-formed Mongo ObjectId. Used by `[id]` routes
+ * to split the 400 "bad path" vs 404 "not found" branches.
+ */
+export function isValidExperimentId(id: string): boolean {
+  return mongoose.Types.ObjectId.isValid(id);
+}
 
 /**
  * Experiment Service
@@ -173,8 +207,37 @@ export class ExperimentService {
   /**
    * Get experiment history
    */
-  async getExperimentHistory(experimentId: string) {
+  async getExperimentHistory(experimentId: string): Promise<IExperimentHistory[]> {
     return ExperimentHistoryRepository.getHistory(experimentId);
+  }
+
+  /**
+   * Paged + filtered list of experiments. Thin wrapper around
+   * ExperimentRepository.findAll — extracted so the admin route and the Norm
+   * projection share a single entry point (numbers match by construction).
+   */
+  async listExperiments(args: ListExperimentsArgs): Promise<ListExperimentsResult> {
+    return ExperimentRepository.findAll({
+      status: args.status,
+      search: args.search,
+      page: args.page,
+      limit: args.limit,
+      sortBy: args.sortBy,
+      sortOrder: args.sortOrder,
+    });
+  }
+
+  /**
+   * Single experiment + its variants. Returns null when the id is well-formed
+   * but no document matches; returns null when the id is malformed too, so
+   * callers should validate via {@link isValidExperimentId} for the 400 vs 404
+   * split.
+   */
+  async getExperimentDetail(experimentId: string): Promise<ExperimentDetailResult | null> {
+    const experiment = await ExperimentRepository.findById(experimentId);
+    if (!experiment) return null;
+    const variants = await VariantRepository.findByExperimentId(experimentId);
+    return { experiment, variants };
   }
 }
 

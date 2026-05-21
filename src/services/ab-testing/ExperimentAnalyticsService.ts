@@ -3,6 +3,7 @@ import VariantAssignmentRepository from "@/repositories/ab-testing/VariantAssign
 import VariantRepository from "@/repositories/ab-testing/VariantRepository";
 import { calculateStatisticalSignificance, determineWinner } from "@/utils/ab-testing/statistical-tests";
 import Experiment from "@/models/ab-testing/Experiment";
+import ExperimentRepository from "@/repositories/ab-testing/ExperimentRepository";
 import mongoose from "mongoose";
 
 interface DateRange {
@@ -381,6 +382,86 @@ export class ExperimentAnalyticsService {
       minConversions: { met: false, current: 0, required: 100 },
       confidenceThreshold: { met: false, current: 0, required: 95 },
       maxDuration: { met: false, current: 0, required: 30 },
+    };
+  }
+
+  /**
+   * Aggregate analytics snapshot used by both the admin and Norm
+   * experiment analytics endpoints. Returns the per-variant comparison,
+   * statistical significance, stopping-rule evaluation, and winner
+   * determination for an experiment, OR a per-variant deep-dive when
+   * `variantId` is supplied.
+   *
+   * Throws `experiment_not_found` if the experiment id does not resolve —
+   * callers map this to a 404. Other errors propagate (server bugs).
+   */
+  async getExperimentAnalyticsSummary(
+    experimentId: string,
+    dateRange?: DateRange,
+    variantId?: string
+  ) {
+    const experiment = await ExperimentRepository.findById(experimentId);
+    if (!experiment) {
+      throw new Error("experiment_not_found");
+    }
+
+    if (variantId) {
+      const metrics = await this.getVariantMetrics(experimentId, variantId, dateRange);
+      const funnel = await this.getFunnelMetrics(variantId, dateRange);
+      const dropOff = await this.getDropOffRates(variantId, dateRange);
+      return { kind: "variant" as const, variantId, metrics, funnel, dropOff };
+    }
+
+    const comparison = await this.getExperimentComparison(experimentId, dateRange);
+    const significance = await this.getStatisticalSignificance(experimentId, dateRange);
+    // Lazy import to avoid the import cycle with ExperimentStoppingRulesService
+    // (which depends on this module at boot).
+    const { default: ExperimentStoppingRulesService } = await import(
+      "@/services/ab-testing/ExperimentStoppingRulesService"
+    );
+    const stoppingRules = await ExperimentStoppingRulesService.evaluateStoppingRules(experimentId);
+    const confidenceThreshold = experiment.stoppingRules?.confidenceThreshold || 95;
+    const winner = await this.determineWinner(experimentId, dateRange, confidenceThreshold);
+
+    return {
+      kind: "experiment" as const,
+      comparison,
+      significance,
+      stoppingRules,
+      winner,
+    };
+  }
+
+  /**
+   * Winner-info snapshot used by both the admin and Norm winner GET endpoints.
+   * Computes the automatic winner determination, returns the current
+   * comparison rollup, and surfaces the experiment's already-declared winner
+   * (`currentWinner` — Mongo Variant._id as a string, or null when unset).
+   *
+   * Throws `experiment_not_found` when the experiment id does not resolve.
+   */
+  async getExperimentWinnerInfo(experimentId: string) {
+    const experiment = await ExperimentRepository.findById(experimentId);
+    if (!experiment) {
+      throw new Error("experiment_not_found");
+    }
+
+    const confidenceThreshold = experiment.stoppingRules?.confidenceThreshold || 95;
+    const winnerResult = await this.determineWinner(experimentId, undefined, confidenceThreshold);
+    const comparison = await this.getExperimentComparison(experimentId);
+
+    const currentWinner = experiment.winnerVariantId
+      ? experiment.winnerVariantId instanceof mongoose.Types.ObjectId
+        ? experiment.winnerVariantId.toString()
+        : String(experiment.winnerVariantId)
+      : null;
+
+    return {
+      winner: winnerResult.winner,
+      reason: winnerResult.reason,
+      significance: winnerResult.significance,
+      comparison,
+      currentWinner,
     };
   }
 }
