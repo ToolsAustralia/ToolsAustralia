@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
+import { requirePermission } from "@/lib/api-auth-permissions";
 import mongoose from "mongoose";
-import { authOptions } from "@/lib/auth";
 import connectDB from "@/lib/mongodb";
 import StripeWebhookQueue, { type StripeWebhookQueueStatus } from "@/models/StripeWebhookQueue";
 import { processQueuedEvent } from "@/services/stripe-webhook-queue/processQueuedEvent";
@@ -13,15 +12,9 @@ const ALLOWED_STATUSES: ReadonlyArray<StripeWebhookQueueStatus> = [
   "dead",
 ];
 
-async function requireAdmin() {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.id || session.user.role !== "admin") return null;
-  return session;
-}
-
 export async function GET(request: NextRequest) {
-  const session = await requireAdmin();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const _guard = await requirePermission("errorReports.view");
+  if (_guard instanceof NextResponse) return _guard;
 
   await connectDB();
   const { searchParams } = new URL(request.url);
@@ -48,8 +41,8 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const session = await requireAdmin();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const _guard = await requirePermission("errorReports.edit");
+  if (_guard instanceof NextResponse) return _guard;
 
   let body: { _id?: string };
   try {

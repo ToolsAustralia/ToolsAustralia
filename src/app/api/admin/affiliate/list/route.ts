@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import { requirePermission } from "@/lib/api-auth-permissions";
 import connectDB from "@/lib/mongodb";
 import Affiliate from "@/models/Affiliate";
 import AffiliateCommission from "@/models/AffiliateCommission";
@@ -15,10 +14,8 @@ import mongoose from "mongoose";
  */
 export async function GET(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id || session.user.role !== "admin") {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const guard = await requirePermission("affiliates.view");
+    if (guard instanceof NextResponse) return guard;
 
     await connectDB();
 

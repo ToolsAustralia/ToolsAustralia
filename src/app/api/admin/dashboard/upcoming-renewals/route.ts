@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import { requirePermission } from "@/lib/api-auth-permissions";
 import connectDB from "@/lib/mongodb";
 import User from "@/models/User";
 import { getPackageById } from "@/data/membershipPackages";
@@ -18,12 +17,10 @@ const MAX_LIMIT = 100;
  */
 export async function GET(request: NextRequest) {
   try {
-    await connectDB();
+    const guard = await requirePermission("overview.view");
+    if (guard instanceof NextResponse) return guard;
 
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id || session.user.role !== "admin") {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    await connectDB();
 
     const rangeParam = request.nextUrl.searchParams.get("range");
     const range = rangeParam ? parseInt(rangeParam, 10) : 7;

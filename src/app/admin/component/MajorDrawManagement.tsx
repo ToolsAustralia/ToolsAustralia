@@ -22,8 +22,12 @@ import {
   UserPlus,
 } from "lucide-react";
 import { AdminBadge } from "@/components/admin/ui/AdminBadge";
+import { usePermissions } from "@/hooks/usePermissions";
 
 export default function MajorDrawManagement() {
+  const { has } = usePermissions();
+  const canEditMajor = has("majorDraw.edit");
+  const canSelectMajorWinner = has("majorDraw.selectWinner");
   const { showToast } = useToast();
   const { data: currentMajorDraw, isLoading, error, refetch } = useCurrentMajorDraw();
   const { activePrize } = usePrizeCatalog();
@@ -575,14 +579,16 @@ export default function MajorDrawManagement() {
           <p className="text-sm text-gray-600 dark:text-neutral-400 mb-4">
             Select the winner using our enhanced user search and selection system.
           </p>
-          <button
-            onClick={() => setIsWinnerModalOpen(true)}
-            disabled={isSubmitting}
-            className="w-full px-4 py-3 bg-amber-600 hover:bg-amber-700 text-white rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-semibold flex items-center justify-center gap-2"
-          >
-            <UserPlus className="w-5 h-5" />
-            {isSubmitting ? "Processing..." : "Select Winner"}
-          </button>
+          {canSelectMajorWinner && (
+            <button
+              onClick={() => setIsWinnerModalOpen(true)}
+              disabled={isSubmitting}
+              className="w-full px-4 py-3 bg-amber-600 hover:bg-amber-700 text-white rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-semibold flex items-center justify-center gap-2"
+            >
+              <UserPlus className="w-5 h-5" />
+              {isSubmitting ? "Processing..." : "Select Winner"}
+            </button>
+          )}
         </div>
       )}
 
@@ -594,7 +600,7 @@ export default function MajorDrawManagement() {
                 <Trophy className="w-5 h-5 text-amber-600" />
                 Winner Selected
               </h3>
-              {currentWinner.winnerId && (
+              {currentWinner.winnerId && canEditMajor && (
                 <button
                   onClick={() => setIsEditWinnerModalOpen(true)}
                   className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-medium text-sm flex items-center justify-center gap-2 w-full sm:w-auto transition-colors"

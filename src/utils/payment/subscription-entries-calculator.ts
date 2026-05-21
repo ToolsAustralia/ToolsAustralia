@@ -1,18 +1,19 @@
 /**
  * Subscription Entries Calculator
  *
- * This module handles all subscription entry calculation logic for:
+ * Handles subscription entry calculation for:
  * - Initial subscriptions (with promo multiplier)
  * - Renewals (without promo, accumulating)
- * - Upgrades (immediate grant of new base entries)
+ * - Upgrades (Mode A — stacks lastMonthAccumulated; Mode B — legacy, used when
+ *   a membership grant already landed in the active major draw)
  * - Resubscriptions (with promo multiplier, continuing from last accumulated)
  *
- * The accumulated entries system works as follows:
- * - Month 1 (initial): baseEntries * promoMultiplier (e.g., 100 * 10 = 1000)
- * - Month 2 (renewal): lastMonthAccumulatedEntries + baseEntries (e.g., 1000 + 100 = 1100)
- * - Month 3 (renewal): lastMonthAccumulatedEntries + baseEntries (e.g., 1100 + 100 = 1200)
- * - Upgrade: lastMonthAccumulatedEntries + (newBaseEntries * promoMultiplier) (e.g., 165 + (40 * 10) = 565)
- * - Resubscribe: lastMonthAccumulatedEntries + (baseEntries * promoMultiplier)
+ * Examples:
+ * - Initial: baseEntries × promoMultiplier (e.g. 100 × 10 = 1000)
+ * - Renewal: lastMonthAccumulated + baseEntries (e.g. 1000 + 100 = 1100)
+ * - Upgrade Mode A: lastMonthAccumulated + (newBase × promo) (e.g. 1115 + 500 = 1615)
+ * - Upgrade Mode B: newBase × promo (e.g. 500), accum += grant
+ * - Resubscribe: lastMonthAccumulated + (baseEntries × promoMultiplier)
  */
 
 export interface CalculateSubscriptionEntriesParams {
@@ -23,6 +24,15 @@ export interface CalculateSubscriptionEntriesParams {
   promoMultiplier?: number;
   isUpgrade: boolean;
   currentAccumulatedEntries?: number;
+  /**
+   * True when the user already received a membership-source entry grant
+   * in the currently active major draw before this upgrade event.
+   * When true, the upgrade falls back to the legacy formula (newBase × promo)
+   * to avoid double-crediting the draw. When false (default), the upgrade
+   * stacks the lastMonthAccumulatedEntries baseline into the grant.
+   * Only consulted when isUpgrade === true.
+   */
+  hasMembershipGrantInCurrentDrawPeriod?: boolean;
 }
 
 export interface CalculateSubscriptionEntriesResult {
@@ -107,39 +117,57 @@ export function calculateRenewalEntries(
 }
 
 /**
- * Calculate upgrade entries (immediate grant of new base entries)
+ * Calculate upgrade entries.
+ *
+ * Mode A — no prior membership grant in the active draw (common case):
+ *   entriesToGrant          = lastMonthAccumulated + (newBase × promo)
+ *   newLastMonthAccumulated = entriesToGrant
+ *
+ * Mode B — a membership grant already landed in the active draw (rare edge
+ * case: renewal-then-upgrade within the same draw period). Falls back to the
+ * legacy formula so we do not double-credit the draw:
+ *   entriesToGrant          = newBase × promo
+ *   newLastMonthAccumulated = lastMonthAccumulated + entriesToGrant
  *
  * @param newBaseEntries - Base entries per month for the new package
- * @param lastMonthAccumulatedEntries - User's last month accumulated entries (base for calculation)
- * @param promoMultiplier - Active promo multiplier (defaults to 1 if not provided)
+ * @param lastMonthAccumulatedEntries - User's last month accumulated entries
+ * @param promoMultiplier - Active promo multiplier (defaults to 1)
+ * @param hasMembershipGrantInCurrentDrawPeriod - True if a membership grant
+ *   already landed in the active major draw before this upgrade fires
  * @returns Calculation result with entries to grant and new accumulated value
  */
 export function calculateUpgradeEntries(
   newBaseEntries: number,
   lastMonthAccumulatedEntries: number = 0,
-  promoMultiplier: number = 1
+  promoMultiplier: number = 1,
+  hasMembershipGrantInCurrentDrawPeriod: boolean = false
 ): CalculateSubscriptionEntriesResult {
-  // Validate inputs
   if (newBaseEntries < 0) {
-    // console.warn(`Invalid newBaseEntries: ${newBaseEntries}, defaulting to 0`);
     newBaseEntries = 0;
   }
-
   if (lastMonthAccumulatedEntries < 0) {
-    // console.warn(`Invalid lastMonthAccumulatedEntries: ${lastMonthAccumulatedEntries}, defaulting to 0`);
     lastMonthAccumulatedEntries = 0;
   }
-
   if (promoMultiplier < 1) {
-    // console.warn(`Invalid promoMultiplier: ${promoMultiplier}, defaulting to 1`);
     promoMultiplier = 1;
   }
 
-  // Apply promo multiplier to upgrade entries
-  const entriesToGrant = newBaseEntries * promoMultiplier;
-  // Use lastMonthAccumulatedEntries as base (not total accumulated)
-  const newLastMonthAccumulatedEntries = lastMonthAccumulatedEntries + entriesToGrant;
+  const promoEntries = newBaseEntries * promoMultiplier;
 
+  if (hasMembershipGrantInCurrentDrawPeriod) {
+    // Mode B — legacy formula
+    const entriesToGrant = promoEntries;
+    const newLastMonthAccumulatedEntries = lastMonthAccumulatedEntries + entriesToGrant;
+    return {
+      entriesToGrant,
+      newLastMonthAccumulatedEntries,
+      calculationType: "upgrade",
+    };
+  }
+
+  // Mode A — stack
+  const entriesToGrant = lastMonthAccumulatedEntries + promoEntries;
+  const newLastMonthAccumulatedEntries = entriesToGrant;
   return {
     entriesToGrant,
     newLastMonthAccumulatedEntries,
@@ -219,8 +247,9 @@ export function calculateSubscriptionEntries(
   if (isUpgrade) {
     return calculateUpgradeEntries(
       baseEntries,
-      lastMonthAccumulatedEntries ?? 0,  // Use lastMonthAccumulatedEntries
-      promoMultiplier  // Pass promo multiplier
+      lastMonthAccumulatedEntries ?? 0,
+      promoMultiplier,
+      params.hasMembershipGrantInCurrentDrawPeriod ?? false
     );
   }
 

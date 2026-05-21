@@ -13,3 +13,7 @@ The admin panel — user management, payments, draws, promo, error reports, part
 - [gotchas.md](./gotchas.md) — middleware vs handler gating
 - [models.md](./models.md) — `DashboardStatsDailySnapshot`, `ChargeJobRun` (admin-owned collections)
 - [testing.md](./testing.md) — unit tests for admin services; dashboard stats snapshot tests
+- [staff-permissions-mapping.md](./staff-permissions-mapping.md) — route → required permission map
+- [roles-api.md](./roles-api.md) — `/api/admin/roles/**` CRUD
+- [staff-api.md](./staff-api.md) — `/api/admin/staff/**` list, invite, change role, deactivate
+- [staff-activity-log.md](./staff-activity-log.md) — audit trail of staff mutations (design + held-back items + future-work checklist)

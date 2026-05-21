@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import { requirePermission } from "@/lib/api-auth-permissions";
 import mongoose from "mongoose";
 import {
   attachReferredUserForAdmin,
@@ -14,10 +13,8 @@ import {
  */
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id || session.user.role !== "admin") {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const _guard = await requirePermission("affiliates.edit");
+    if (_guard instanceof NextResponse) return _guard;
 
     const { id: affiliateId } = await params;
     if (!mongoose.Types.ObjectId.isValid(affiliateId)) {
@@ -72,10 +69,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
  */
 export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id || session.user.role !== "admin") {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const _guard = await requirePermission("affiliates.edit");
+    if (_guard instanceof NextResponse) return _guard;
 
     const { id: affiliateId } = await params;
     if (!mongoose.Types.ObjectId.isValid(affiliateId)) {

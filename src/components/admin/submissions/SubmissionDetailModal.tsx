@@ -9,6 +9,7 @@ import type { ThreadMessage } from "./ConversationThread";
 import ReplyForm from "./ReplyForm";
 import { SubmissionStatusBadge } from "./StatusSelect";
 import ModalContainer from "@/components/modals/ui/ModalContainer";
+import { usePermissions } from "@/hooks/usePermissions";
 
 interface Reply {
   _id: string;
@@ -77,6 +78,8 @@ export default function SubmissionDetailModal({
   onClose,
   onUpdated,
 }: SubmissionDetailModalProps) {
+  const { has } = usePermissions();
+  const canEditSubmissions = has("submissions.edit");
   const [submission, setSubmission] = useState<Submission>(initialSubmission);
   const [toast, setToast] = useState<{ message: string; variant: "success" | "error" } | null>(null);
   /** Contact submissions on small screens: composer hidden until Reply is tapped (message stays in view first). */
@@ -268,7 +271,7 @@ export default function SubmissionDetailModal({
         </div>
 
         {/* Contact: mobile — composer hidden until Reply (thread/message visible first) */}
-        {type === "contact" && (
+        {type === "contact" && canEditSubmissions && (
           <div
             ref={mobileReplyFooterRef}
             className="flex-shrink-0 border-t border-gray-200 bg-gray-50/90 px-4 py-3 dark:border-neutral-700 dark:bg-neutral-900/95 md:hidden"
@@ -302,14 +305,17 @@ export default function SubmissionDetailModal({
           </div>
         )}
 
-        {/* Reply form — desktop for contact; all sizes for partner */}
-        <div
-          className={`flex-shrink-0 border-t border-gray-200 bg-gray-50/80 px-4 py-4 dark:border-neutral-700 dark:bg-neutral-900/90 sm:px-6 ${
-            type === "contact" ? "hidden md:block" : ""
-          }`}
-        >
-          <ReplyForm defaultSubject={getDefaultSubject()} onSend={handleReplyFromForm} />
-        </div>
+        {/* Reply form — desktop for contact; all sizes for partner. Hidden when
+            the role doesn't have submissions.edit — the API would 403 anyway. */}
+        {canEditSubmissions && (
+          <div
+            className={`flex-shrink-0 border-t border-gray-200 bg-gray-50/80 px-4 py-4 dark:border-neutral-700 dark:bg-neutral-900/90 sm:px-6 ${
+              type === "contact" ? "hidden md:block" : ""
+            }`}
+          >
+            <ReplyForm defaultSubject={getDefaultSubject()} onSend={handleReplyFromForm} />
+          </div>
+        )}
 
         {/* Toast notification */}
         {toast && (

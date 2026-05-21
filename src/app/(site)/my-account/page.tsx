@@ -339,7 +339,7 @@ export default function MyAccountPage() {
   const _isActive = currentMajorDraw?.status === "active";
   const _isQueued = currentMajorDraw?.status === "queued";
 
-  const userSubscription = user.subscription as { lastMonthAccumulatedEntries?: number } | undefined;
+  const userSubscription = user.subscription as { lastMonthAccumulatedEntries?: number; lastResubscribedAt?: string | Date } | undefined;
   const displayMembershipEntries = dashboardEntries.membershipEntries;
   const displayOneTimeEntries = dashboardEntries.oneTimeEntries;
   const displayTotalEntries = dashboardEntries.currentDrawEntries;
@@ -454,6 +454,7 @@ export default function MyAccountPage() {
         drawName={currentMajorDraw?.name || "Major Draw"}
         drawStatus={currentMajorDraw?.status || "active"}
         drawDate={currentMajorDraw?.drawDate}
+        activationDate={currentMajorDraw?.activationDate}
         totalEntries={displayTotalEntries}
         membershipEntries={displayMembershipEntries}
         oneTimeEntries={displayOneTimeEntries}

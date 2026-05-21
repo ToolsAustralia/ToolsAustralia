@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import { requirePermission } from "@/lib/api-auth-permissions";
 import connectDB from "@/lib/mongodb";
 import AlternatingPromoMultiplier from "@/models/AlternatingPromoMultiplier";
 import { z } from "zod";
@@ -29,10 +28,8 @@ const createAlternatingMultiplierSchema = z.object({
  */
 export async function GET(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id || session.user.role !== "admin") {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const guard = await requirePermission("promos.view");
+    if (guard instanceof NextResponse) return guard;
 
     await connectDB();
 
@@ -139,10 +136,9 @@ export async function GET(request: NextRequest) {
  */
 export async function POST(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id || session.user.role !== "admin") {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const guard = await requirePermission("promos.edit");
+    if (guard instanceof NextResponse) return guard;
+    const { session } = guard;
 
     const body = (await request.json()) as CreateAlternatingPromoMultiplierPayload;
 

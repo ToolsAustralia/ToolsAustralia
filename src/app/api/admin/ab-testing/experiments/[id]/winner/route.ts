@@ -15,8 +15,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import { requirePermission } from "@/lib/api-auth-permissions";
 import ExperimentRepository from "@/repositories/ab-testing/ExperimentRepository";
 import ExperimentAnalyticsService from "@/services/ab-testing/ExperimentAnalyticsService";
 import ExperimentHistoryRepository from "@/repositories/ab-testing/ExperimentHistoryRepository";
@@ -38,11 +37,9 @@ const declareWinnerSchema = z.object({
  */
 export async function POST(request: NextRequest, { params }: RouteParams) {
   try {
-    // Check authentication
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id || session.user.role !== "admin") {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const guard = await requirePermission("abTesting.selectWinner");
+    if (guard instanceof NextResponse) return guard;
+    const { session } = guard;
 
     const { id: experimentId } = await params;
     const body = await request.json();
@@ -153,11 +150,8 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
  */
 export async function GET(request: NextRequest, { params }: RouteParams) {
   try {
-    // Check authentication
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id || session.user.role !== "admin") {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const guard = await requirePermission("abTesting.view");
+    if (guard instanceof NextResponse) return guard;
 
     const { id: experimentId } = await params;
 

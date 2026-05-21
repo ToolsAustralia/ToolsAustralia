@@ -11,6 +11,7 @@ import { authenticateWithPopup } from "@/utils/auth/popupAuth";
 import { queryKeys } from "@/lib/queryKeys";
 import { useToast } from "@/components/ui/Toast";
 import { useKlaviyoTracking } from "@/hooks/useKlaviyoTracking";
+import { usePermissions } from "@/hooks/usePermissions";
 
 interface LoginModalProps {
   isOpen: boolean;
@@ -45,6 +46,7 @@ function GoogleIcon() {
 const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, email }) => {
   const router = useRouter();
   const { data: session, status } = useSession();
+  const { isStaff } = usePermissions();
   const queryClient = useQueryClient();
   const { showToast } = useToast();
   const { identify } = useKlaviyoTracking();
@@ -83,11 +85,11 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, email }) => {
   useEffect(() => {
     if (!isOpen) return;
     if (status === "authenticated" && session) {
-      const dest = session.user?.role === "admin" ? "/admin" : "/my-account";
+      const dest = isStaff ? "/admin" : "/my-account";
       router.push(dest);
       onClose();
     }
-  }, [isOpen, status, session, router, onClose]);
+  }, [isOpen, status, session, isStaff, router, onClose]);
 
   // Clear error when a valid 6-digit code is entered
   useEffect(() => {

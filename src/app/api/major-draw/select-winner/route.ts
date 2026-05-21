@@ -3,8 +3,7 @@ import connectDB from "@/lib/mongodb";
 import MajorDraw from "@/models/MajorDraw";
 import User from "@/models/User";
 import Winner from "@/models/Winner";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import { requirePermission } from "@/lib/api-auth-permissions";
 import { klaviyo } from "@/lib/klaviyo";
 import { createMajorDrawWonEvent } from "@/utils/integrations/klaviyo/klaviyo-events";
 import mongoose, { Types } from "mongoose";
@@ -17,30 +16,12 @@ export async function POST() {
   try {
     console.log("🎯 Selecting major draw winner...");
 
-    // Check if user is admin
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Unauthorized",
-        },
-        { status: 401 }
-      );
-    }
+    // Verify staff permission before hitting the database
+    const guard = await requirePermission("majorDraw.selectWinner");
+    if (guard instanceof NextResponse) return guard;
+    const { session } = guard;
 
-    // Get user to check role
     await connectDB();
-    const user = await User.findById(session.user.id);
-    if (!user || user.role !== "admin") {
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Admin access required",
-        },
-        { status: 403 }
-      );
-    }
 
     // Get the active major draw
     const majorDraw = await MajorDraw.findOne({ isActive: true }).sort({ createdAt: -1 });

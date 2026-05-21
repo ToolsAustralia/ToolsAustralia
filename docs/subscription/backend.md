@@ -119,6 +119,58 @@ Error codes (`SUBSCRIPTION_REFERENCE_ERROR_CODES`):
 
 > _TODO: enumerate the exact exports from each helper file and document any non-obvious invariants. The above is a structural overview — refresh when touching these files._
 
+## Entry-calculation dispatcher — `calculateSubscriptionEntries`
+
+[`src/utils/payment/subscription-entries-calculator.ts`](../../src/utils/payment/subscription-entries-calculator.ts) is the single pure-function entry point that decides how many entries a subscription event grants and what the user's new `lastMonthAccumulatedEntries` should be. It is dispatched from the `invoice.payment_succeeded` webhook (see [billing-stripe/architecture.md](../billing-stripe/architecture.md#upgrade-entries--mode-a--mode-b)) and from the four upgrade-modal preview call sites.
+
+Branches (in priority order):
+
+| Scenario | Function | Formula |
+|---|---|---|
+| Upgrade (`isUpgrade: true`) | `calculateUpgradeEntries` | Mode A / Mode B — see below |
+| Resubscribe (`isResubscribe: true`, `lastMonthAccumulatedEntries` defined) | `calculateResubscribeEntries` | `grant = base × promo`; `accum = lastMonth + (base × promo)` |
+| Initial (`billing_reason === "subscription_create"`) | `calculateInitialSubscriptionEntries` | `grant = base × promo`; `accum = grant` |
+| Renewal (`billing_reason === "subscription_cycle"`) | `calculateRenewalEntries` | `grant = lastMonth + base`; `accum = grant` (no promo on renewal) |
+
+### `calculateUpgradeEntries` — two modes
+
+Signature: `calculateUpgradeEntries(newBaseEntries, lastMonthAccumulatedEntries = 0, promoMultiplier = 1, hasMembershipGrantInCurrentDrawPeriod = false)`. The dispatcher threads the same `hasMembershipGrantInCurrentDrawPeriod?: boolean` param through to the upgrade branch.
+
+**Mode A — no prior membership grant in the active draw (common case):**
+```
+entriesToGrant            = lastMonthAccumulated + (newBase × promoMultiplier)
+newLastMonthAccumulated   = entriesToGrant
+```
+
+**Mode B — a membership grant already landed in the active draw (renewal-then-upgrade within the same major-draw period):**
+```
+entriesToGrant            = newBase × promoMultiplier        // legacy formula
+newLastMonthAccumulated   = lastMonthAccumulated + entriesToGrant
+```
+
+Worked examples (from spec §3):
+
+| Scenario | lastAccum | newBase | promo | hasGrantThisDraw | grant | newAccum |
+|---|---|---|---|---|---|---|
+| Apr Tradie renewal → May Boss upgrade (5×) | 1115 | 100 | 5 | false | **1615** | 1615 |
+| Apr Tradie renewal → May Boss upgrade (no promo) | 1115 | 100 | 1 | false | 1215 | 1215 |
+| May Tradie renewal → May Boss upgrade same draw (5×) | 1130 | 100 | 5 | true | **500** | 1630 |
+| Fresh user initial → upgrade same draw (5×) | 150 | 100 | 5 | true | 500 | 650 |
+| `lastAccum = 0` (no history) | 0 | 100 | 5 | false | 500 | 500 |
+
+**Invariant.** Total membership entries credited to a user in any single major-draw period = `lastMonthAccumulated_at_start_of_period + (newBase × promo)`, regardless of how many entry-granting events fire in that period. Mode B preserves the invariant by crediting only the differential to the draw while still accumulating the full baseline for the next renewal.
+
+Why two modes: prior to this design, mid-cycle upgrades granted only `newBase × promo`, which could be *fewer* entries than letting the cheaper tier renew — a backwards incentive. Mode A stacks `lastMonthAccumulated` into the grant. Mode B is the guard that prevents double-counting when a renewal already credited the current draw.
+
+`hasMembershipGrantInCurrentDrawPeriod` is computed by [`src/utils/draws/has-membership-grant-this-draw.ts`](../../src/utils/draws/has-membership-grant-this-draw.ts) (see [draws/backend.md](../draws/backend.md#has-membership-grant-this-draw-helper)) and fails open to `false` (Mode A) on any error. Tests live in [`src/utils/payment/__tests__/subscription-entries-calculator.test.ts`](../../src/utils/payment/__tests__/subscription-entries-calculator.test.ts) — runnable via `npm run test:subscription-entries-calculator`.
+
+**Modal preview parity (Phase 2, 2026-05-20).** The same boolean is surfaced to the client as `user.hasCurrentDrawMembershipGrant` by `GET /api/users/[id]/my-account` (see [dashboard-account/api.md](../dashboard-account/api.md#get-apiusersidmy-account)). All four `calculateUpgradeEntries` invocations in the upgrade modal pass it as the 4th argument so the previewed entry total matches what the webhook will actually grant:
+
+- [`UpgradeList.tsx`](../../src/components/modals/SubscriptionManagementModal/UpgradeList.tsx) — per-row preview in the upgrade list.
+- [`SubscriptionManagementModal/index.tsx`](../../src/components/modals/SubscriptionManagementModal/index.tsx) — the `upgradeModalData` memo, the pending-change banner's upgrade branch, and `totalEntriesAfterUpgrade`.
+
+Stale-payload caveat: a renewal landing between page load and click can drift the preview by one mode; the webhook is still authoritative and a refresh re-fetches the flag.
+
 ## Membership upsell semantics (upsell-remap — 2026-05-14)
 
 When a membership subscriber completes a purchase, they are offered a post-payment upsell. Under the remap the upsell references the **next tier down** base pack (not a bespoke "Plus" SKU):

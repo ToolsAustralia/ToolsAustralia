@@ -22,6 +22,16 @@ Reference: [CancelSubscriptionService.ts:88-104](../../src/services/subscription
 
 Even when cancelling immediately, the user document's `subscription.lastMonthAccumulatedEntries` field is **not** cleared — it must persist so that if the user resubscribes, the entry-accumulation continuity is maintained. See [SUBSCRIPTION_RESUBSCRIBE_ENTRIES](./gotchas.md#resubscribe-entries-continuity) (migrated content).
 
+### R3a. Upgrade entries stack `lastMonthAccumulated` unless a membership grant already landed this draw
+
+`calculateUpgradeEntries` runs in **Mode A** by default — `entriesToGrant = lastMonthAccumulated + (newBase × promo)`, `newAccum = entriesToGrant` — so a mid-cycle upgrade is never penalised relative to letting the cheaper tier renew. **Mode B** (legacy `newBase × promo` formula, with `newAccum = lastMonthAccumulated + grant`) is only used when `hasMembershipGrantInCurrentDrawPeriod === true` — i.e. when a renewal or initial already credited the active major draw — to avoid double-counting that draw period.
+
+The webhook is the source of truth: `handleInvoicePaymentSucceeded` calls `hasMembershipGrantInCurrentDrawPeriod(user._id)` ([src/utils/draws/has-membership-grant-this-draw.ts](../../src/utils/draws/has-membership-grant-this-draw.ts)) before invoking the calculator on the `isUpgrade` branch. The helper fails open (returns `false` → Mode A) on any error — the design accepts a rare over-credit on the same-period edge case over reverting the headline fix.
+
+**Modal preview parity (Phase 2, 2026-05-20).** The four `calculateUpgradeEntries` call sites in the upgrade modal — the `UpgradeList` row map ([src/components/modals/SubscriptionManagementModal/UpgradeList.tsx](../../src/components/modals/SubscriptionManagementModal/UpgradeList.tsx)) and the three `index.tsx` call sites (the `upgradeModalData` memo, the pending-change banner's upgrade branch, and `totalEntriesAfterUpgrade`) — now read `user.hasCurrentDrawMembershipGrant` (served by `GET /api/users/[id]/my-account` — see [dashboard-account/api.md](../dashboard-account/api.md#get-apiusersidmy-account)) and pass it as the 4th argument so the displayed preview matches the webhook's eventual grant (Mode A vs Mode B). **Stale-payload caveat:** if a renewal lands between page load and the user clicking "Upgrade," the preview can drift by one mode. The webhook remains the source of truth; refreshing the dashboard re-fetches the flag and corrects the preview.
+
+Full math, worked examples, and the invariant are in [backend.md](./backend.md#entry-calculation-dispatcher--calculatesubscriptionentries). Tests: `npm run test:subscription-entries-calculator`.
+
 ### R4. Cancellation analytics events come from the webhook only
 
 The "Subscription Cancelled" Klaviyo / Meta event is emitted **exclusively** from the `customer.subscription.deleted` webhook handler. The cancel API path writes the `MembershipStatusHistory` row but **does not** fire any external tracking event — this prevents duplicate events when both API + webhook fire on the same cancel.

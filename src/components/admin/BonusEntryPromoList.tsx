@@ -8,6 +8,7 @@ import { Gift, Edit2, Trash2, Calendar, Loader2, RefreshCw, CheckCircle } from "
 import { AdminBadge } from "@/components/admin/ui/AdminBadge";
 import { formatDateReadable } from "@/utils/common/timezone";
 import { cn } from "@/utils/cn";
+import { usePermissions } from "@/hooks/usePermissions";
 
 interface BonusEntryPromoListProps {
   filters?: {
@@ -21,6 +22,9 @@ interface BonusEntryPromoListProps {
  * Displays a list of bonus entry promos with edit and delete actions
  */
 export default function BonusEntryPromoList({ filters }: BonusEntryPromoListProps) {
+  const { has } = usePermissions();
+  const canEditPromos = has("promos.edit");
+  const canDeletePromos = has("promos.delete");
   const { data: promos = [], isLoading, refetch } = useBonusEntryPromos(filters);
   const deleteMutation = useDeleteBonusEntryPromo();
 
@@ -145,25 +149,29 @@ export default function BonusEntryPromoList({ filters }: BonusEntryPromoListProp
                       </div>
                       <div className="flex items-center gap-1 shrink-0">
                         {getStatusBadge(promo)}
-                        <button
-                          onClick={() => handleEdit(promo)}
-                          className="rounded p-1.5 text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300"
-                          title="Edit"
-                        >
-                          <Edit2 className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => handleDelete(promo.id)}
-                          disabled={deletingId === promo.id}
-                          className="rounded p-1.5 text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300 disabled:opacity-50"
-                          title="Delete"
-                        >
-                          {deletingId === promo.id ? (
-                            <Loader2 className="w-4 h-4 animate-spin" />
-                          ) : (
-                            <Trash2 className="w-4 h-4" />
-                          )}
-                        </button>
+                        {canEditPromos && (
+                          <button
+                            onClick={() => handleEdit(promo)}
+                            className="rounded p-1.5 text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300"
+                            title="Edit"
+                          >
+                            <Edit2 className="w-4 h-4" />
+                          </button>
+                        )}
+                        {canDeletePromos && (
+                          <button
+                            onClick={() => handleDelete(promo.id)}
+                            disabled={deletingId === promo.id}
+                            className="rounded p-1.5 text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300 disabled:opacity-50"
+                            title="Delete"
+                          >
+                            {deletingId === promo.id ? (
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                            ) : (
+                              <Trash2 className="w-4 h-4" />
+                            )}
+                          </button>
+                        )}
                       </div>
                     </div>
                     <div className="text-xs text-gray-600 dark:text-neutral-400 space-y-0.5">
@@ -247,25 +255,29 @@ export default function BonusEntryPromoList({ filters }: BonusEntryPromoListProp
                         </td>
                         <td className="whitespace-nowrap px-4 py-3 text-right text-sm font-medium">
                           <div className="flex items-center justify-end gap-2">
-                            <button
-                              onClick={() => handleEdit(promo)}
-                              className="rounded p-1.5 text-blue-600 transition-colors hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300"
-                              title="Edit promo"
-                            >
-                              <Edit2 className="w-4 h-4" />
-                            </button>
-                            <button
-                              onClick={() => handleDelete(promo.id)}
-                              disabled={deletingId === promo.id}
-                              className="rounded p-1.5 text-red-600 transition-colors hover:text-red-900 dark:text-red-400 dark:hover:text-red-300 disabled:cursor-not-allowed disabled:opacity-50"
-                              title="Delete promo"
-                            >
-                              {deletingId === promo.id ? (
-                                <Loader2 className="w-4 h-4 animate-spin" />
-                              ) : (
-                                <Trash2 className="w-4 h-4" />
-                              )}
-                            </button>
+                            {canEditPromos && (
+                              <button
+                                onClick={() => handleEdit(promo)}
+                                className="rounded p-1.5 text-blue-600 transition-colors hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300"
+                                title="Edit promo"
+                              >
+                                <Edit2 className="w-4 h-4" />
+                              </button>
+                            )}
+                            {canDeletePromos && (
+                              <button
+                                onClick={() => handleDelete(promo.id)}
+                                disabled={deletingId === promo.id}
+                                className="rounded p-1.5 text-red-600 transition-colors hover:text-red-900 dark:text-red-400 dark:hover:text-red-300 disabled:cursor-not-allowed disabled:opacity-50"
+                                title="Delete promo"
+                              >
+                                {deletingId === promo.id ? (
+                                  <Loader2 className="w-4 h-4 animate-spin" />
+                                ) : (
+                                  <Trash2 className="w-4 h-4" />
+                                )}
+                              </button>
+                            )}
                           </div>
                         </td>
                       </tr>

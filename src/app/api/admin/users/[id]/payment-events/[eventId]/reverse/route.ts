@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import { requirePermission } from "@/lib/api-auth-permissions";
 import connectDB from "@/lib/mongodb";
 import mongoose from "mongoose";
 import { replayRefundReversalForBenefitsGrantedEvent } from "@/utils/payment/refund-processing";
@@ -14,11 +13,10 @@ type RouteParams = { params: Promise<{ id: string; eventId: string }> };
  */
 export async function POST(_request: NextRequest, { params }: RouteParams) {
   try {
+    const _guard = await requirePermission("users.refund");
+    if (_guard instanceof NextResponse) return _guard;
+
     await connectDB();
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id || session.user.role !== "admin") {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
 
     const { id: userId, eventId: rawEventId } = await params;
 

@@ -1,9 +1,8 @@
 import { NextResponse } from "next/server";
+import { requirePermission } from "@/lib/api-auth-permissions";
 import connectDB from "@/lib/mongodb";
 import ContactSubmission from "@/models/ContactSubmission";
 import PartnerApplication from "@/models/PartnerApplication";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
 
 /**
  * GET /api/admin/submissions/unviewed-count
@@ -11,12 +10,10 @@ import { authOptions } from "@/lib/auth";
  */
 export async function GET() {
   try {
-    await connectDB();
+    const _guard = await requirePermission("overview.view");
+    if (_guard instanceof NextResponse) return _guard;
 
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    await connectDB();
 
     const unreadQuery = { $or: [{ readAt: null }, { readAt: { $exists: false } }] };
     const [contactCount, partnerCount] = await Promise.all([

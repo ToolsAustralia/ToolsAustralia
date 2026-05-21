@@ -8,8 +8,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import { requirePermission } from "@/lib/api-auth-permissions";
 import connectDB from "@/lib/mongodb";
 import MajorDraw from "@/models/MajorDraw";
 import User from "@/models/User";
@@ -34,18 +33,11 @@ const selectWinnerSchema = z.object({
  */
 export async function POST(request: NextRequest) {
   try {
+    const guard = await requirePermission("majorDraw.selectWinner");
+    if (guard instanceof NextResponse) return guard;
+
+    const { session } = guard;
     await connectDB();
-
-    // Verify admin authentication
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    // Check if user is admin
-    if (session.user.role !== "admin") {
-      return NextResponse.json({ error: "Forbidden - Admin access required" }, { status: 403 });
-    }
 
     // Parse JSON request (image is uploaded to /api/upload/cloudinary first, then URL is sent here)
     const body = await request.json();
@@ -288,18 +280,10 @@ export async function POST(request: NextRequest) {
  */
 export async function GET(request: NextRequest) {
   try {
+    const _guard = await requirePermission("majorDraw.view");
+    if (_guard instanceof NextResponse) return _guard;
+
     await connectDB();
-
-    // Verify admin authentication
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    // Check if user is admin
-    if (session.user.role !== "admin") {
-      return NextResponse.json({ error: "Forbidden - Admin access required" }, { status: 403 });
-    }
 
     // Get major draw ID from query params
     const searchParams = request.nextUrl.searchParams;

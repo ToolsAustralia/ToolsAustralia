@@ -1,7 +1,6 @@
 // src/app/api/admin/users/[id]/force-charge/route.ts
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import { requirePermission } from "@/lib/api-auth-permissions";
 import connectDB from "@/lib/mongodb";
 import { z } from "zod";
 import {
@@ -33,11 +32,11 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const guard = await requirePermission("users.charge");
+    if (guard instanceof NextResponse) return guard;
+    const { session } = guard;
+
     await connectDB();
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id || session.user.role !== "admin") {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
     const { id: userId } = await params;
 
     const body = await request.json();

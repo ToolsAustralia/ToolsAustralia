@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import { requirePermission } from "@/lib/api-auth-permissions";
 import connectDB from "@/lib/mongodb";
 import { z } from "zod";
 import {
@@ -17,11 +16,10 @@ export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const guard = await requirePermission("users.charge");
+  if (guard instanceof NextResponse) return guard;
+
   await connectDB();
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.id || session.user.role !== "admin") {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
   const { id: userId } = await params;
   const url = new URL(request.url);
   const originalInvoiceId = url.searchParams.get("invoiceId");
@@ -45,12 +43,11 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await connectDB();
+    const guard = await requirePermission("users.charge");
+    if (guard instanceof NextResponse) return guard;
+    const { session } = guard;
 
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id || session.user.role !== "admin") {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    await connectDB();
 
     const { id: userId } = await params;
 

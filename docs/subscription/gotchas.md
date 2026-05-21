@@ -102,6 +102,8 @@ Result: even users with broken canonical references can still cancel through the
 
 The cancel service intentionally preserves this field; see the comment at [CancelSubscriptionService.ts:136-140](../../src/services/subscription/CancelSubscriptionService.ts#L136-L140).
 
+**UI exposure (Phase 1, 2026-05-20):** the backend has always accepted *any* `packageId` via `POST /api/stripe/create-subscription-existing-user`, and `calculateResubscribeEntries` correctly preserves `lastMonthAccumulatedEntries` regardless of which tier the member picks on the way back. Until 2026-05-20 the UI restricted cancelled users to a single "Reactivate same tier" CTA; the new `ResubscribeTierPicker` (see [frontend.md → Resubscribe tier picker](./frontend.md#resubscribe-tier-picker-phase-1-2026-05-20)) now exposes the existing backend capability so members can resubscribe to a higher or lower tier and still keep their accumulated-entries carry-over.
+
 ### Cancelled-membership comeback promo
 
 There is a separate flow that targets cancelled members with a comeback promo. See the [promo](../promo/) domain — specifically the migrated `CANCELLED_MEMBERSHIP_COMEBACK_PROMO.md` content (will land in `docs/promo/gotchas.md` when that domain is bootstrapped).

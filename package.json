@@ -135,6 +135,7 @@
     "test:revenue-detail": "tsx --require ./src/components/modals/RevenueDetailModal/__tests__/asset-stubs.cjs src/components/modals/RevenueDetailModal/__tests__/RevenueDetailModal.test.ts",
     "test:upsell-modal": "tsx --require ./src/components/modals/UpsellModal/__tests__/asset-stubs.cjs src/components/modals/UpsellModal/__tests__/UpsellModal.test.ts",
     "test:special-packages": "tsx --require ./src/components/modals/SpecialPackagesModal/__tests__/asset-stubs.cjs src/components/modals/SpecialPackagesModal/__tests__/SpecialPackagesModal.test.ts",
+    "test:subscription-entries-calculator": "tsx src/utils/payment/__tests__/subscription-entries-calculator.test.ts",
     "test:subscription-management": "tsx --require ./src/components/modals/SubscriptionManagementModal/__tests__/asset-stubs.cjs src/components/modals/SubscriptionManagementModal/__tests__/SubscriptionManagementModal.test.ts",
     "test:payment-methods-tab": "tsx --require ./src/components/modals/PaymentMethodsTab/__tests__/asset-stubs.cjs src/components/modals/PaymentMethodsTab/__tests__/PaymentMethodsTab.test.ts",
     "test:payment-method-selector": "tsx --require ./src/components/modals/PaymentMethodSelector/__tests__/asset-stubs.cjs src/components/modals/PaymentMethodSelector/__tests__/PaymentMethodSelector.test.ts",
@@ -162,7 +163,11 @@
     "test:retention-discount": "tsx src/services/subscription/__tests__/RetentionDiscountService.test.ts",
     "test:retention-resume-cron": "tsx src/app/api/cron/__tests__/cancellation-retention-resume.test.ts",
     "test:cancellation-analytics": "tsx src/services/admin/__tests__/cancellationFlowAnalytics.test.ts",
-    "test:retention-maturity": "tsx src/app/api/cron/__tests__/cancellation-retention-maturity.test.ts"
+    "test:retention-maturity": "tsx src/app/api/cron/__tests__/cancellation-retention-maturity.test.ts",
+    "test:permissions": "tsx src/lib/__tests__/permissions.test.ts",
+    "test:api-auth-permissions": "tsx src/lib/__tests__/api-auth-permissions.test.ts",
+    "migrate:seed-staff-roles": "tsx scripts/migrate-seed-staff-roles.ts",
+    "migrate:seed-staff-roles:dry": "tsx scripts/migrate-seed-staff-roles.ts --dry-run"
   },
   "dependencies": {
     "@auth/mongodb-adapter": "^3.10.0",

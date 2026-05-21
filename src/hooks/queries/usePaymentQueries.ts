@@ -86,6 +86,14 @@ export interface PaymentStatusResponse {
     message?: string;
     latestEventType?: string;
     latestEventAt?: string;
+    // Resubscribe carry-over context for the success-page banner. Only
+    // populated on completed payments; `wasRecentResubscribe` is true only if
+    // the user's `subscription.lastResubscribedAt` is within the route's
+    // 10-minute banner window. Client computes
+    // `previousAccum = lastMonthAccumulatedEntries − entriesGranted`.
+    wasRecentResubscribe?: boolean;
+    lastMonthAccumulatedEntries?: number;
+    entriesGranted?: number;
   };
 }
 

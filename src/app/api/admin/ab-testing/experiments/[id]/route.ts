@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import { requirePermission } from "@/lib/api-auth-permissions";
 import ExperimentRepository from "@/repositories/ab-testing/ExperimentRepository";
 import ExperimentService from "@/services/ab-testing/ExperimentService";
 import VariantRepository from "@/repositories/ab-testing/VariantRepository";
@@ -26,11 +25,8 @@ const updateExperimentSchema = z.object({
  */
 export async function GET(request: NextRequest, { params }: RouteParams) {
   try {
-    // Check authentication
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id || session.user.role !== "admin") {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const guard = await requirePermission("abTesting.view");
+    if (guard instanceof NextResponse) return guard;
 
     const { id } = await params;
     const experiment = await ExperimentRepository.findById(id);
@@ -61,13 +57,11 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
  */
 export async function PATCH(request: NextRequest, { params }: RouteParams) {
   let experimentId: string | undefined;
-  
+
   try {
-    // Check authentication
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id || session.user.role !== "admin") {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const guard = await requirePermission("abTesting.edit");
+    if (guard instanceof NextResponse) return guard;
+    const { session } = guard;
 
     const { id } = await params;
     experimentId = id; // ✅ Store id outside try block for error handling
@@ -185,11 +179,8 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
  */
 export async function DELETE(request: NextRequest, { params }: RouteParams) {
   try {
-    // Check authentication
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id || session.user.role !== "admin") {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const guard = await requirePermission("abTesting.delete");
+    if (guard instanceof NextResponse) return guard;
 
     const { id } = await params;
     const experiment = await ExperimentRepository.findById(id);

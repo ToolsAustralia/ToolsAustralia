@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import { requirePermission } from "@/lib/api-auth-permissions";
 import { PromoMultiplierResolverService } from "@/services/admin/PromoMultiplierResolverService";
 
 /**
@@ -10,17 +9,8 @@ import { PromoMultiplierResolverService } from "@/services/admin/PromoMultiplier
  */
 export async function GET(_request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.email) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const { default: User } = await import("@/models/User");
-    await (await import("@/lib/mongodb")).default();
-    const user = await User.findOne({ email: session.user.email });
-    if (!user || user.role !== "admin") {
-      return NextResponse.json({ error: "Admin access required" }, { status: 403 });
-    }
+    const guard = await requirePermission("promos.view");
+    if (guard instanceof NextResponse) return guard;
 
     const resolver = new PromoMultiplierResolverService();
     const effective = await resolver.getEffectiveMultipliers();

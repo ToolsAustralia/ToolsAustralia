@@ -2,8 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import connectDB from "@/lib/mongodb";
 import PartnerApplication from "@/models/PartnerApplication";
 import { z } from "zod";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import { requirePermission } from "@/lib/api-auth-permissions";
 import mongoose from "mongoose";
 
 /**
@@ -28,16 +27,10 @@ const paramsSchema = z.object({
  */
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
+    const guard = await requirePermission("users.view");
+    if (guard instanceof NextResponse) return guard;
+
     await connectDB();
-
-    // Check if user is authenticated and has admin role
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    // TODO: Add admin role check here
-    // For now, we'll allow any authenticated user to view applications
 
     const { id } = paramsSchema.parse(await params);
 
@@ -74,16 +67,11 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
  */
 export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
+    const guard = await requirePermission("users.edit");
+    if (guard instanceof NextResponse) return guard;
+    const { session } = guard;
+
     await connectDB();
-
-    // Check if user is authenticated and has admin role
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    // TODO: Add admin role check here
-    // For now, we'll allow any authenticated user to update applications
 
     const { id } = paramsSchema.parse(await params);
     const body = await request.json();
@@ -134,12 +122,10 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
  */
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    await connectDB();
+    const guard = await requirePermission("users.view");
+    if (guard instanceof NextResponse) return guard;
 
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    await connectDB();
 
     const { id } = paramsSchema.parse(await params);
 
@@ -177,16 +163,10 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
  */
 export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
+    const guard = await requirePermission("users.edit");
+    if (guard instanceof NextResponse) return guard;
+
     await connectDB();
-
-    // Check if user is authenticated and has admin role
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    // TODO: Add admin role check here
-    // For now, we'll allow any authenticated user to delete applications
 
     const { id } = paramsSchema.parse(await params);
 

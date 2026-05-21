@@ -76,6 +76,11 @@ export interface IUser extends Document {
     // Tracks accumulated entries for next renewal calculation
     // Persists even when subscription is cancelled (for resubscribe continuation)
     lastMonthAccumulatedEntries?: number;
+
+    // Timestamp of the most recent resubscribe event (when the user reactivated
+    // after a cancellation). Drives the carry-over banner on the success page
+    // and the activity-card sub-line. Optional — only set on resubscribe.
+    lastResubscribedAt?: Date;
   };
 
   // One-time packages (can have multiple)
@@ -280,6 +285,24 @@ export interface IUser extends Document {
     stripePaymentIntentId?: string; // For refund tracking
   }>;
 
+  // Staff RBAC (see docs/auth/roles.md)
+  roleId?: mongoose.Types.ObjectId | null; // null = customer
+  userType: "customer" | "staff" | "admin"; // default "customer"
+
+  // Staff invitation flow
+  inviteToken?: string;
+  inviteTokenExpires?: Date;
+  invitedBy?: mongoose.Types.ObjectId;
+  invitedAt?: Date;
+
+  /**
+   * Bumped whenever the user's effective permissions change (role reassignment,
+   * staff removal, or any permission edit on the role they hold). The JWT
+   * callback compares its stored value to the DB value on each request and
+   * forces a sign-out when they differ. See docs/auth/roles.md.
+   */
+  tokenVersion: number;
+
   // Timestamps
   createdAt: Date;
   updatedAt: Date;
@@ -373,6 +396,32 @@ const UserSchema = new Schema<IUser>(
       type: String,
       enum: ["user", "admin"],
       default: "user",
+    },
+
+    // Staff RBAC fields (see docs/auth/roles.md)
+    roleId: {
+      type: Schema.Types.ObjectId,
+      ref: "Role",
+      default: null,
+    },
+    userType: {
+      type: String,
+      enum: ["customer", "staff", "admin"],
+      default: "customer",
+    },
+    inviteToken: {
+      type: String,
+      trim: true,
+    },
+    inviteTokenExpires: Date,
+    invitedBy: {
+      type: Schema.Types.ObjectId,
+      ref: "User",
+    },
+    invitedAt: Date,
+    tokenVersion: {
+      type: Number,
+      default: 0,
     },
 
     // Stripe Integration Fields
@@ -527,6 +576,12 @@ const UserSchema = new Schema<IUser>(
         type: Number,
         required: false,
         min: [0, "Last month accumulated entries cannot be negative"],
+      },
+
+      // Timestamp of most recent resubscribe — see interface comment.
+      lastResubscribedAt: {
+        type: Date,
+        required: false,
       },
     },
 
@@ -1158,6 +1213,11 @@ UserSchema.index({ "signupAttribution.promotionSlug": 1, createdAt: 1 });
 UserSchema.index({ "miniDrawParticipation.miniDrawId": 1 });
 UserSchema.index({ "miniDrawParticipation.isActive": 1 });
 UserSchema.index({ "miniDrawPackages.miniDrawId": 1 });
+
+// Staff RBAC indexes
+UserSchema.index({ userType: 1 });
+UserSchema.index({ roleId: 1 }, { sparse: true });
+UserSchema.index({ inviteToken: 1 }, { sparse: true, unique: true });
 
 // Clear any cached model to ensure schema changes take effect
 if (mongoose.models.User) {

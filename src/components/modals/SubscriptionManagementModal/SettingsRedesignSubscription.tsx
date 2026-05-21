@@ -39,6 +39,7 @@ import {
 import PastDueAlert from "./PastDueAlert";
 import PendingChangeBanner from "./PendingChangeBanner";
 import { OneTimeOnlyState, InactiveSubscriptionState, NoSubscriptionState } from "./EmptyStates";
+import type { ResubscribeTierOption } from "./ResubscribeTierPicker";
 import type {
   SubMgmtUser,
   ActiveSubscription,
@@ -74,6 +75,14 @@ export interface SettingsRedesignSubscriptionProps {
   onSelectDowngrade: (downgrade: UpgradeOption) => void;
   onPendingExpired: () => void;
   onSubscribeClick: () => void;
+  // Resubscribe tier picker — threaded through from the parent orchestrator so
+  // cancelled users on the settings redesign body see the tier picker instead
+  // of the legacy "Subscribe to Membership Packages" fallback CTA.
+  packages?: ResubscribeTierOption[];
+  previousPackageId?: string;
+  promoMultiplier?: number;
+  lastMonthAccumulatedEntries?: number;
+  onPickTier?: (packageId: string) => void;
 }
 
 const planIdOf = (pkg: ResolvedMembershipPackage): string =>
@@ -169,6 +178,11 @@ const SettingsRedesignSubscription: React.FC<SettingsRedesignSubscriptionProps> 
   onSelectDowngrade,
   onPendingExpired,
   onSubscribeClick,
+  packages,
+  previousPackageId,
+  promoMultiplier,
+  lastMonthAccumulatedEntries,
+  onPickTier,
 }) => {
   // ── Active (or past-due-with-autorenew) subscription ──────────────────────
   if (membershipPackage && activeSubscription) {
@@ -561,6 +575,11 @@ const SettingsRedesignSubscription: React.FC<SettingsRedesignSubscriptionProps> 
         <InactiveSubscriptionState
           status={user.subscription.status}
           onSubscribeClick={onSubscribeClick}
+          packages={packages}
+          previousPackageId={previousPackageId}
+          promoMultiplier={promoMultiplier}
+          lastMonthAccumulatedEntries={lastMonthAccumulatedEntries}
+          onPickTier={onPickTier}
         />
       </div>
     );
