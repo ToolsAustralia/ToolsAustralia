@@ -28,6 +28,24 @@ export interface NormCtx {
   ok: <T>(data: T) => NextResponse;
   /** Emit a structured error response. */
   error: (status: number, code: string, message: string, details?: unknown) => NextResponse;
+  /**
+   * Extract a route param from the URL pathname for `[id]`-style routes. The
+   * `position` is the zero-based offset of the param from the END of the path
+   * after trimming the trailing slash if present.
+   *
+   * Examples (registered registry path → call site):
+   *   `/v1/winners/:id`                            → ctx.param(0) // → "<id>"
+   *   `/v1/affiliate/:id`                          → ctx.param(0) // → "<id>"
+   *   `/v1/pending-actions/:id/status`             → ctx.param(1) // → "<id>"
+   *   `/v1/charge-past-due/runs/:runId`            → ctx.param(0) // → "<runId>"
+   *   `/v1/users/:id/payment-events`               → ctx.param(1) // → "<id>"
+   *   `/v1/users/:id/deletion-summary`             → ctx.param(1) // → "<id>"
+   *
+   * Returns null when the position is out of range. Prefer this over
+   * hand-rolling `ctx.url.pathname.split("/")` — keeps trailing-slash and
+   * empty-segment handling consistent across all [id] routes.
+   */
+  param: (position: number) => string | null;
 }
 
 export type NormHandler = (ctx: NormCtx) => Promise<NextResponse> | NextResponse;
@@ -173,10 +191,19 @@ export function withNorm(options: WithNormOptions, handler: NormHandler) {
     let responseBody = "";
     let errorCode: string | undefined;
     try {
+      // Pre-compute the URL segments once per request for ctx.param().
+      // Trim leading/trailing slashes and drop empty segments so a trailing
+      // slash doesn't shift positions (e.g. "/v1/users/abc/" still yields
+      // ["v1", "users", "abc"]).
+      const pathSegments = url.pathname.split("/").filter(Boolean);
       const ctx: NormCtx = {
         requestId,
         url,
         request,
+        param: (position: number) => {
+          const idx = pathSegments.length - 1 - position;
+          return idx >= 0 && idx < pathSegments.length ? pathSegments[idx] : null;
+        },
         ok: <T,>(data: T) => {
           if (options.responseSchema) {
             const parsed = options.responseSchema.safeParse(data);

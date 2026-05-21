@@ -14,7 +14,8 @@ interface NormPendingActionDoc extends Document {
 export const GET = withNorm(
   { tier: "read", registryKey: "pending-actions.status", requiredPermission: "overview.view", responseSchema: NormPendingActionStatusSchema },
   async (ctx) => {
-    const id = ctx.url.pathname.split("/").slice(-2, -1)[0];
+    const id = ctx.param(1) ?? "";
+    if (!id) return ctx.error(400, "bad_path", "Missing pending-action id");
     const action = await NormPendingAction.findById(id).lean() as NormPendingActionDoc | null;
     if (!action) return ctx.error(404, "not_found", "Pending action not found");
     return ctx.ok({

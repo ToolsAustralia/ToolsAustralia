@@ -10,8 +10,7 @@ export const GET = withNorm(
     responseSchema: NormWinnerDetailSchema,
   },
   async (ctx) => {
-    // /api/internal/norm/v1/winners/<id>
-    const id = ctx.url.pathname.split("/").filter(Boolean).pop() ?? "";
+    const id = ctx.param(0) ?? "";
     if (!id) return ctx.error(400, "bad_path", "Missing winner id");
 
     const outcome = await getWinnerDetail(id);

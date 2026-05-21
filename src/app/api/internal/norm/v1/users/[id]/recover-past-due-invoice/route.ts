@@ -18,9 +18,7 @@ export const GET = withNorm(
     responseSchema: NormUsersRecoverPastDueInvoicePreviewSchema,
   },
   async (ctx) => {
-    // /api/internal/norm/v1/users/<id>/recover-past-due-invoice?invoiceId=in_...
-    const parts = ctx.url.pathname.split("/").filter(Boolean);
-    const id = parts[parts.length - 2] ?? "";
+    const id = ctx.param(1) ?? "";
     if (!id) return ctx.error(400, "bad_path", "Missing user id");
     if (!isValidUserObjectId(id)) return ctx.error(400, "bad_path", "Invalid user id");
 

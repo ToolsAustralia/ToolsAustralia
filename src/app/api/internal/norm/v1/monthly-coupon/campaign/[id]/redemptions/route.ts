@@ -17,9 +17,7 @@ export const GET = withNorm(
     responseSchema: NormMonthlyCouponCampaignRedemptionsSchema,
   },
   async (ctx) => {
-    // /api/internal/norm/v1/monthly-coupon/campaign/<id>/redemptions
-    const segments = ctx.url.pathname.split("/").filter(Boolean);
-    const id = segments[segments.indexOf("campaign") + 1] ?? "";
+    const id = ctx.param(1) ?? "";
     if (!id || !mongoose.Types.ObjectId.isValid(id)) {
       return ctx.error(400, "bad_path", "Invalid campaign id");
     }

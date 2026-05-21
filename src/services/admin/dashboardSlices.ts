@@ -145,7 +145,13 @@ export interface RecentActivity {
     | "system_alert"
     | "membership_upgrade"
     | "subscription_past_due";
+  /** Combined "FirstName LastName" for admin display. */
   user: string;
+  /** First name as a separate field — set from the underlying User doc so
+   * compound first names ("Jean Pierre") are preserved. `null` for System
+   * events. PII-safe consumers (like the Norm route) prefer this over
+   * splitting `user` on whitespace. */
+  firstName: string | null;
   userId?: string;
   action: string;
   time: string;
@@ -240,6 +246,7 @@ export async function getRecentActivities(input: { page: number; limit: number }
       id: `signup-${user._id}`,
       type: "user_signup",
       user: `${user.firstName} ${user.lastName}`,
+      firstName: user.firstName || null,
       userId: user._id.toString(),
       action,
       time: timeAgo,
@@ -346,6 +353,7 @@ export async function getRecentActivities(input: { page: number; limit: number }
       id: `payment-${payment._id}`,
       type,
       user: user ? `${user.firstName} ${user.lastName}` : "Unknown User",
+      firstName: user?.firstName || null,
       userId: payment.userId ? (payment.userId as mongoose.Types.ObjectId).toString() : undefined,
       action,
       time: timeAgo,
@@ -394,6 +402,7 @@ export async function getRecentActivities(input: { page: number; limit: number }
         id: `upgrade-${user._id}-${user.subscription.lastUpgradeDate.getTime()}`,
         type: "membership_upgrade",
         user: `${user.firstName} ${user.lastName}`,
+        firstName: user.firstName || null,
         userId: user._id.toString(),
         action: `Upgraded subscription from ${previousPackageName} to ${currentPackageName}`,
         time: timeAgo,
@@ -414,6 +423,7 @@ export async function getRecentActivities(input: { page: number; limit: number }
         id: `downgrade-${user._id}-${user.subscription.lastDowngradeDate.getTime()}`,
         type: "membership_upgrade",
         user: `${user.firstName} ${user.lastName}`,
+        firstName: user.firstName || null,
         userId: user._id.toString(),
         action: `Downgraded subscription from ${previousPackageName} to ${currentPackageName}`,
         time: timeAgo,
@@ -434,6 +444,7 @@ export async function getRecentActivities(input: { page: number; limit: number }
         id: `cancel-${user._id}-${user.subscription.cancelledAt.getTime()}`,
         type: "membership_upgrade",
         user: `${user.firstName} ${user.lastName}`,
+        firstName: user.firstName || null,
         userId: user._id.toString(),
         action: `Cancelled ${packageName} membership`,
         time: timeAgo,
@@ -450,6 +461,7 @@ export async function getRecentActivities(input: { page: number; limit: number }
         id: `past-due-${user._id}-${user.subscription.pastDueAt.getTime()}`,
         type: "subscription_past_due",
         user: `${user.firstName} ${user.lastName}`,
+        firstName: user.firstName || null,
         userId: user._id.toString(),
         action: `Membership renewal failed — ${packageName} account past due`,
         time: timeAgo,
@@ -485,6 +497,7 @@ export async function getRecentActivities(input: { page: number; limit: number }
       id: `draw-${drawId}`,
       type: "draw_complete",
       user: "System",
+      firstName: null,
       action: `${drawTyped.name} completed - ${winnerName}`,
       time: timeAgo,
       status: "info",
@@ -515,6 +528,7 @@ export async function getRecentActivities(input: { page: number; limit: number }
       id: `order-${order._id}`,
       type: "high_value_order",
       user: user ? `${user.firstName} ${user.lastName}` : "Unknown User",
+      firstName: user?.firstName || null,
       action: `Purchased $${order.totalAmount} worth of tools`,
       time: timeAgo,
       status: "success",

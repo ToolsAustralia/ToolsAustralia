@@ -10,8 +10,7 @@ export const GET = withNorm(
     responseSchema: NormErrorReportDetailSchema,
   },
   async (ctx) => {
-    // /api/internal/norm/v1/error-reports/<id>
-    const id = ctx.url.pathname.split("/").filter(Boolean).pop() ?? "";
+    const id = ctx.param(0) ?? "";
     if (!id) return ctx.error(400, "bad_path", "Missing report id");
 
     const report = await getErrorReportById(id);

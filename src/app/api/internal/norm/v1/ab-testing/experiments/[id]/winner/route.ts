@@ -11,9 +11,7 @@ export const GET = withNorm(
     responseSchema: NormExperimentWinnerSchema,
   },
   async (ctx) => {
-    // /api/internal/norm/v1/ab-testing/experiments/<id>/winner
-    const parts = ctx.url.pathname.split("/").filter(Boolean);
-    const experimentId = parts[parts.length - 2] ?? "";
+    const experimentId = ctx.param(1) ?? "";
     if (!experimentId) return ctx.error(400, "bad_path", "Missing experiment id");
     if (!isValidExperimentId(experimentId)) {
       return ctx.error(400, "bad_path", "Invalid experiment id");

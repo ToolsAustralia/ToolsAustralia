@@ -10,8 +10,7 @@ export const GET = withNorm(
     responseSchema: NormChargePastDueRunDetailSchema,
   },
   async (ctx) => {
-    // /api/internal/norm/v1/charge-past-due/runs/<runId>
-    const runId = ctx.url.pathname.split("/").filter(Boolean).pop() ?? "";
+    const runId = ctx.param(0) ?? "";
     if (!runId) return ctx.error(400, "bad_path", "Missing runId");
 
     const detail = await getChargeRunDetail(runId);

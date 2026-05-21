@@ -28,8 +28,7 @@ export const GET = withNorm(
     responseSchema: NormAffiliateDetailSchema,
   },
   async (ctx) => {
-    // /api/internal/norm/v1/affiliate/<id>
-    const id = ctx.url.pathname.split("/").filter(Boolean).pop() ?? "";
+    const id = ctx.param(0) ?? "";
     if (!id) return ctx.error(400, "bad_path", "Missing affiliate id");
     if (!isValidAffiliateId(id)) {
       return ctx.error(400, "bad_path", "Invalid affiliate id");

@@ -48,7 +48,7 @@ export const GET = withNorm(
       })),
       pagination: result.pagination,
       searchInfo: {
-        query: parsed.data.q,
+        query: parsed.data.q || null,
         resultsFound: result.pagination.totalCount,
         currentDraw: result.currentDraw,
       },

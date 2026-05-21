@@ -139,6 +139,16 @@ export interface NormEndpointSpec {
   requestSchema?: z.ZodTypeAny;
   /** True if the underlying admin route still uses requireAdminUser (not requirePermission). Follow-up to migrate. */
   legacyAdminCheck?: boolean;
+  /**
+   * Explicit opt-in for `tier: "read"` endpoints that use HTTP POST because
+   * their input doesn't fit a query string (e.g. CSV blobs, complex filter
+   * objects, large user-id arrays). Without this marker, a non-GET method
+   * on a `read`-tier entry is treated as a registry mistake at boot — the
+   * guard exists to prevent a careless future contributor from accidentally
+   * classifying a side-effecting POST as `read` to bypass the permission
+   * check (reads bypass the per-permission grant; see withNorm).
+   */
+  postBodyRead?: true;
 }
 
 // Wired endpoints (have responseSchema) appear in the published manifest.
@@ -957,6 +967,7 @@ export const NORM_ENDPOINTS = {
     legacyAdminCheck: true,
     path: "/v1/monthly-coupon/target-users/manual",
     method: "POST",
+    postBodyRead: true,
     summary: "Resolve manually-supplied user IDs for coupon targeting (POST-body read; opaque userId array)",
     responseSchema: NormMonthlyCouponTargetUsersOpaqueSchema,
   },
@@ -966,6 +977,7 @@ export const NORM_ENDPOINTS = {
     legacyAdminCheck: true,
     path: "/v1/monthly-coupon/target-users/csv",
     method: "POST",
+    postBodyRead: true,
     summary: "Resolve CSV-supplied user IDs for coupon targeting (POST-body read; opaque userId array + invalid-row report)",
     responseSchema: NormMonthlyCouponTargetUsersCsvSchema,
   },
@@ -975,6 +987,7 @@ export const NORM_ENDPOINTS = {
     legacyAdminCheck: true,
     path: "/v1/monthly-coupon/target-users/filter",
     method: "POST",
+    postBodyRead: true,
     summary: "Resolve users matching a coupon-targeting filter (POST-body read; paged opaque-id rows or bulk userId list)",
     responseSchema: NormMonthlyCouponTargetUsersFilterSchema,
   },
@@ -984,6 +997,7 @@ export const NORM_ENDPOINTS = {
     legacyAdminCheck: true,
     path: "/v1/monthly-coupon/target-users/dynamic",
     method: "POST",
+    postBodyRead: true,
     summary: "Resolve users via dynamic segment for coupon targeting (POST-body read; opaque userId array)",
     responseSchema: NormMonthlyCouponTargetUsersOpaqueSchema,
   },
@@ -1454,11 +1468,23 @@ export function getWiredEndpoints(): NormEndpointSpec[] {
 }
 
 /**
- * Boot-time validation: every registry entry's requiredPermission must be a valid
- * catalog permission. Catches typos at module-load time.
+ * Boot-time validation:
+ *  - Every registry entry's `requiredPermission` must be a valid catalog
+ *    permission. Catches typos at module-load time.
+ *  - `tier: "read"` entries must be GET unless they declare `postBodyRead: true`.
+ *    Reads bypass the per-permission grant in `withNorm`; without this guard a
+ *    careless future contributor could land a side-effecting POST classified as
+ *    `read` and have it skip the permission check.
  */
 for (const [key, spec] of Object.entries(NORM_ENDPOINTS)) {
   if (!ALL_PERMISSIONS.has(spec.requiredPermission)) {
     throw new Error(`NORM_ENDPOINTS["${key}"].requiredPermission "${spec.requiredPermission}" is not in PERMISSIONS catalog`);
+  }
+  if (spec.tier === "read" && spec.method !== "GET" && spec.postBodyRead !== true) {
+    throw new Error(
+      `NORM_ENDPOINTS["${key}"] is tier:"read" with method:"${spec.method}". ` +
+        `Non-GET reads must explicitly opt in via postBodyRead:true (see NormEndpointSpec docstring). ` +
+        `If this endpoint mutates state it should not be tier:"read".`
+    );
   }
 }

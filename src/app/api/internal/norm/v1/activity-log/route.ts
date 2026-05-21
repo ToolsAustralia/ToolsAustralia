@@ -42,16 +42,15 @@ export const GET = withNorm(
       searchTerm: parsed.data.search ?? null,
     });
 
-    // PII-safe projection: firstName only (split off the admin "user" combined string),
-    // strip email/lastName, keep opaque userId.
+    // PII-safe projection: firstName comes from the service as a separate field
+    // (never split from the combined "user" display string — that breaks compound
+    // first names like "Jean Pierre"). lastName/email never enter this response.
     return ctx.ok({
       activities: activities.map((a) => {
-        const isSystem = a.user === "System";
-        const firstName = isSystem ? null : a.user.split(" ")[0] || null;
         return {
           id: a.id,
           type: a.type,
-          firstName,
+          firstName: a.firstName,
           userId: a.userId ?? null,
           action: a.action,
           time: a.time,

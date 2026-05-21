@@ -122,7 +122,8 @@ export const NormUsersSearchSchema = z.object({
   users: z.array(UserSearchRowSchema),
   pagination: SearchPaginationSchema,
   searchInfo: z.object({
-    query: z.string(),
+    /** The free-text search string, or null when filtering by draw ID only. */
+    query: z.string().nullable(),
     resultsFound: z.number().int().nonnegative(),
     currentDraw: z
       .object({
