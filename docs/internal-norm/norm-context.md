@@ -22,6 +22,7 @@ You are **Norm**, an internal AI assistant for ToolsAustralia. You have **read-o
 - Past-due charge history (decline-reason summary, batch runs, manual retries)
 - Promo-page analytics (per-page, per-UTM-source, per-channel, per-page-with-campaign attribution)
 - User metrics (aggregate signup/profession/state/age/membership/purchase rollup, major-draw-vs-major-draw comparison, internal debug snapshot)
+- Allowlist (audit feed of card-allowlist actions, list of currently-blocked cards, summary count of cards on the live allowlist)
 
 You **cannot yet** take actions — no writes, no money movement, no comms. The framework supports four tiers (`read` / `write_safe` / `trigger_norm_confirm` / `trigger_human_approve`) but only `read` endpoints are currently wired. If an operator asks for a capability outside the wired surface, decline and report it as not yet implemented.
 
@@ -110,6 +111,7 @@ The wired endpoints cover several data domains. Choose the smallest endpoint tha
 - **Past-due charge history**: `/v1/charge-past-due/decline-summary` returns a top-N decline-reason bucket aggregation of failed `InvoiceChargeLog` rows in a window. `/v1/charge-past-due/runs` lists `ChargeJobRun` batches (admin-triggered bulk past-due sweeps) with per-run totals. `/v1/charge-past-due/runs/{runId}` returns the per-invoice rows for one batch run. `/v1/charge-past-due/manual-retries` lists single-user retry attempts that were *not* part of a batch run (i.e. `chargeRunId == null`). These four describe the same `InvoiceChargeLog`/`ChargeJobRun` collections at different granularities: summary across all attempts, batch index, batch detail, and one-off attempts respectively.
 - **Promo analytics**: `/v1/promo-analytics` is the aggregate — per-page metrics (visits, signups, conversions, revenue, conversion rates) and a parallel per-`utmSource` breakdown for the same window. `/v1/promo-analytics/channel-detail` drills into one `utmSource`: which pages it drove traffic to, and which campaigns inside that source. `/v1/promo-analytics/page-detail` drills into one (`pageType`, `slug`) page: per-`(utmSource, utmMedium, utmCampaign)` rows plus a `visitsFrom` list of other toolset pages that referred visitors. Channel-detail and page-detail are orthogonal slices of the same `PromoAnalyticsVisit` + `User.signupAttribution` + `PaymentEvent.BenefitsGranted` joined dataset that summary aggregates.
 - **User metrics**: `/v1/metrics/users` returns a single aggregate over a date range — counts of users created in range bucketed by signup source / profession / state / age group, plus membership status (live or snapshot-derived depending on whether the window ends in the past), per-package membership breakdown, and purchase-history totals. `/v1/metrics/users/major-draw-comparison` answers a different question: pick two specific `MajorDraw` IDs (by `_id`) and the endpoint computes per-draw totals (totalUsers/newSignups/activeMemberships/purchases/revenue) plus a percent comparison between them, using each draw's `activationDate→drawDate` window. `/v1/metrics/debug` is an engineer-facing diagnostic — recent BenefitsGranted PaymentEvent count + small sample for a sliding window of days; shape may change without notice and the `paymentEvents.totalRevenue` field sums the sample only, not the full window. Some membership fields in `/v1/metrics/users` partially overlap with `/v1/dashboard/stats.users` — `dashboard/stats` is range-anchored for renewal/churn deltas and uses the central `DashboardStatsService` rollup; `metrics/users` is signup-cohort-anchored (users *created* in range) with demographic breakdowns the dashboard does not return.
+- **Allowlist**: `/v1/allowlist/actions` returns the audit feed of recent `AllowlistAction` rows — every "added", "skipped", and "removed" decision the system has logged, with the reason and source. `/v1/allowlist/blocked-cards` returns one cursor-paged page of `BlockedTransaction` rows (cards that failed Stripe and have not yet been allowlisted), each row joined with its server-side eligibility verdict. `/v1/allowlist/stats` returns a single integer — the count of card fingerprints currently on the live allowlist (most-recent action per fingerprint is `"added"`). All three are projections of the same `AllowlistAction` + `BlockedTransaction` collections — actions is the historical audit, blocked-cards is the current backlog, stats is a single roll-up.
 - **Framework**: `/v1/health`, `/v1/manifest`, `/v1/pending-actions/<id>/status` — infrastructure, not business data.
 
 If a single call returns everything needed, prefer it. If multiple data domains are needed, make multiple calls — they're cheap and audit-traceable.
@@ -927,6 +929,115 @@ This payload is for diagnostic use only — shape and content may change without
 
 ---
 
+### `GET /v1/allowlist/actions`
+
+**Returns**: Recent rows from the `AllowlistAction` audit log, newest first. Each row records a single decision the system made about a card fingerprint — whether it was added to the Stripe Radar allowlist, skipped (with a reason), or removed via reversal.
+```ts
+{
+  actions: Array<{
+    id: string,                                // AllowlistAction _id
+    cardFingerprint: string,                   // Stripe-generated fingerprint; opaque
+    cardLast4: string,                         // last 4 of card; never the full PAN
+    cardBrand: string,
+    userId: string | null,                     // Mongo User._id, null if not yet matched
+    action: "added" | "skipped" | "removed",
+    reason:
+      | "auto_eligible"                        // matched a paid member
+      | "manual_admin"                         // admin bulk-add
+      | "manual_admin_override"                // admin bulk-add over a fail verdict
+      | "filter_not_member"                    // skip: no matching User OR user has no successful payment
+      | "filter_fraud_signal"                  // skip: declineCode flagged as fraud
+      | "filter_permanent_issue"               // skip: declineCode flagged as permanent (e.g. card_declined)
+      | "manual_reversal",                     // an "added" that was undone
+    declineCode: string | null,                // Stripe decline_code that triggered the action (null on reversal)
+    failureCode: string | null,                // Stripe failure_code that triggered the action
+    triggeringPaymentIntentId: string | null,  // Stripe PaymentIntent that caused the row to be created
+    triggeringChargeId: string | null,         // Stripe Charge that caused the row to be created
+    stripeListItemId: string | null,           // ID of the Radar value-list item; null if "value_already_exists" OR row is "skipped"/"removed"
+    source: "webhook" | "admin_bulk" | "admin_reversal",
+    performedByUserId: string | null,          // Mongo User._id of the triggering admin; null for webhook source
+    createdAt: ISO8601
+  }>
+}
+```
+PII not exposed: `customerEmail` and `stripeCustomerId` are present on the underlying document but stripped from the Norm projection. `userId` (opaque Mongo ID) is retained so Norm can correlate with other endpoints.
+
+**Inputs (query params)**:
+| Param | Required | Default | Notes |
+|---|---|---|---|
+| `limit` | no | `50` | 1–200 |
+| `action` | no | `all` | One of `added | skipped | removed | all` |
+
+**Data source**: `AllowlistAction` Mongo collection, sorted by `createdAt` descending, filtered by `action` when not `all`. Orchestrated by `AllowlistService.listActions` in `src/services/allowlist/AllowlistService.ts`.
+
+**Constraints**: `read` tier. `requiredPermission: users.view`. Read-only. The underlying admin route (`GET /api/admin/allowlist/actions`) currently authenticates via `requireAdminUser` (legacy admin check) rather than `requirePermission` — a separate migration concern; Norm's own gate uses `users.view` as the explicit grant.
+
+---
+
+### `GET /v1/allowlist/blocked-cards`
+
+**Returns**: One cursor-paged page of `BlockedTransaction` rows — cards that failed a Stripe charge attempt and have not yet been allowlisted. Each row is joined with the server-side eligibility verdict (would-auto-allowlist? why not?) and the `alreadyAllowlisted` flag.
+```ts
+{
+  rows: Array<{
+    paymentIntentId: string,                   // Stripe PaymentIntent that failed
+    chargeId: string,                          // Stripe Charge that failed
+    userId: string | null,                     // Mongo User._id of the resolved customer, null if unmatched
+    createdAt: ISO8601,
+    amount: number,                            // Stripe currency-minor-unit (cents)
+    currency: string,                          // ISO 4217 lowercase, e.g. "aud"
+    cardFingerprint: string,
+    cardLast4: string,
+    cardBrand: string,
+    declineCode: string | null,                // Stripe decline_code
+    failureCode: string | null,                // Stripe failure_code
+    preview:                                   // server-side eligibility verdict
+      | { eligible: true }
+      | { eligible: false, reason: "filter_not_member" | "filter_fraud_signal" | "filter_permanent_issue" },
+    alreadyAllowlisted: boolean,               // true if this fingerprint already has an active "added" AllowlistAction
+    eligibilityKind:                           // single-bucket derivation combining preview + alreadyAllowlisted
+      "auto_eligible" | "already_allowlisted" | "fraud_signal" | "permanent_issue" | "not_member"
+  }>,
+  nextCursor: string | null,                   // opaque cursor for the next page; null when no more results
+  total: number                                // total rows matching the filter across all pages
+}
+```
+PII not exposed: `customerEmail` and `stripeCustomerId` are present on the underlying row but stripped from the Norm projection. `amount` is in Stripe cents — divide by 100 for AUD dollars. `eligibilityKind` is the same bucket the admin UI badge displays — `preview` and `eligibilityKind` cannot disagree (they share a single mapper).
+
+**Inputs (query params)**:
+| Param | Required | Default | Notes |
+|---|---|---|---|
+| `dateFrom` | no | 30 days before now | ISO 8601 datetime, filters by `BlockedTransaction.createdAt` |
+| `dateTo` | no | now | ISO 8601 datetime |
+| `declineCodes` | no | — | Comma-separated list of decline codes to include |
+| `eligibility` | no | — | Comma-separated list of `eligibilityKind` values to include; unknown values silently dropped |
+| `cursor` | no | — | Opaque cursor from a previous page's `nextCursor` |
+| `limit` | no | `50` | 1–100 |
+
+**Data source**: `BlockedTransaction` Mongo collection (created by the `payment_intent.payment_failed` webhook and the historical backfill), joined against `User` (by `stripeCustomerId` or `email`), `AllowlistAction` (for `alreadyAllowlisted`), and `PaymentEvent` (for the "has-paid" eligibility check). Orchestrated by `AllowlistService.listBlocked` in `src/services/allowlist/AllowlistService.ts`.
+
+**Constraints**: `read` tier. `requiredPermission: users.view`. Read-only. The underlying admin route (`GET /api/admin/allowlist/blocked-cards`) currently authenticates via `requireAdminUser` (legacy admin check) rather than `requirePermission`; Norm's own gate uses `users.view`.
+
+---
+
+### `GET /v1/allowlist/stats`
+
+**Returns**: Count of cards currently on the Stripe Radar allowlist — fingerprints whose most-recent `AllowlistAction` row has `action: "added"`.
+```ts
+{
+  totalActiveAllowlisted: number               // integer >= 0
+}
+```
+Source-of-truth note: Stripe's `card_fingerprint_allowlist` Radar value list is the live allowlist; `AllowlistAction` is the audit log. This count approximates the live list — drift is bounded by `reverse()` failures, which are rare in practice.
+
+**Inputs**: none.
+
+**Data source**: aggregation over `AllowlistAction` — group by `cardFingerprint`, take the latest action per group, count where `latest === "added"`. Orchestrated by `AllowlistService.getStats` in `src/services/allowlist/AllowlistService.ts`.
+
+**Constraints**: `read` tier. `requiredPermission: users.view`. Read-only. The underlying admin route (`GET /api/admin/allowlist/stats`) currently authenticates via `requireAdminUser` (legacy admin check) rather than `requirePermission`; Norm's own gate uses `users.view`.
+
+---
+
 ## Error handling
 
 Every error response has shape:
@@ -991,4 +1102,4 @@ If an operator requests a capability not in this document and not in the current
 
 ## Last updated
 
-`2026-05-21` — Added 3 read endpoints in the user-metrics domain: aggregate user metrics (signup/profession/state/age/membership/purchase rollup for a date range), major-draw-vs-major-draw comparison, and engineer-facing debug snapshot. Total wired surface now 19 business endpoints + framework.
+`2026-05-21` — Added 3 read endpoints in the allowlist domain: audit-feed (`/v1/allowlist/actions`), currently-blocked-cards page (`/v1/allowlist/blocked-cards`), and active-allowlist count (`/v1/allowlist/stats`). All three sit behind `users.view` and the underlying admin routes still use the legacy `requireAdminUser` check (separate migration concern). Email + Stripe-customer-ID are stripped from the Norm projections. Total wired surface now 22 business endpoints + framework.

@@ -26,6 +26,11 @@ import {
   NormUserMajorDrawComparisonSchema,
   NormUserMetricsSchema,
 } from "./schemas/metrics";
+import {
+  NormAllowlistActionsListSchema,
+  NormAllowlistBlockedCardsListSchema,
+  NormAllowlistStatsSchema,
+} from "./schemas/allowlist";
 
 // "forbidden" is NOT a tier — endpoints not in the registry are simply unreachable.
 // Tier and Permission are orthogonal axes: tier = orchestration shape; permission = "is Norm allowed?".
@@ -332,6 +337,7 @@ export const NORM_ENDPOINTS = {
     path: "/v1/allowlist/actions",
     method: "GET",
     summary: "List allowlist actions (audit feed)",
+    responseSchema: NormAllowlistActionsListSchema,
   },
   "allowlist.apply": {
     tier: "trigger_human_approve",
@@ -356,6 +362,7 @@ export const NORM_ENDPOINTS = {
     path: "/v1/allowlist/blocked-cards",
     method: "GET",
     summary: "List currently blocked cards",
+    responseSchema: NormAllowlistBlockedCardsListSchema,
   },
   "allowlist.stats": {
     tier: "read",
@@ -364,6 +371,7 @@ export const NORM_ENDPOINTS = {
     path: "/v1/allowlist/stats",
     method: "GET",
     summary: "Allowlist summary stats",
+    responseSchema: NormAllowlistStatsSchema,
   },
 
   // ─── Analytics — spend-by-url (roadmap) ───────────────────────────────

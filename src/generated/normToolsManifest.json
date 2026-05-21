@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-05-21T06:24:28.913Z",
+  "generatedAt": "2026-05-21T06:31:41.406Z",
   "endpoints": [
     {
       "registryKey": "roas.summary",
@@ -29,6 +29,27 @@
       "path": "/v1/dashboard/revenue-breakdown",
       "method": "GET",
       "summary": "Revenue total + per-category breakdown for a date range"
+    },
+    {
+      "registryKey": "allowlist.actions.list",
+      "tier": "read",
+      "path": "/v1/allowlist/actions",
+      "method": "GET",
+      "summary": "List allowlist actions (audit feed)"
+    },
+    {
+      "registryKey": "allowlist.blocked-cards.list",
+      "tier": "read",
+      "path": "/v1/allowlist/blocked-cards",
+      "method": "GET",
+      "summary": "List currently blocked cards"
+    },
+    {
+      "registryKey": "allowlist.stats",
+      "tier": "read",
+      "path": "/v1/allowlist/stats",
+      "method": "GET",
+      "summary": "Allowlist summary stats"
     },
     {
       "registryKey": "cancellation-flow-analytics.list",
