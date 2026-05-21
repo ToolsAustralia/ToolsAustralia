@@ -25,7 +25,9 @@ import {
   Cake,
   Copy,
   Check,
+  ShieldCheck,
 } from "lucide-react";
+import ActivityTab from "./UserDetailModal/ActivityTab";
 import { Controller, useFieldArray, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -204,7 +206,7 @@ interface UserDetailModalProps {
   onCloseAction: () => void;
 }
 
-type TabType = "overview" | "subscription" | "activity";
+type TabType = "overview" | "subscription" | "activity" | "staff-activity";
 type EditTabType = TabType | "purchases";
 
 const overviewFormSchema = z.object({
@@ -360,6 +362,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
   const canCharge = has("users.charge");
   const canCancelSubscription = has("users.cancelSubscription");
   const canDeleteUser = has("users.delete");
+  const canViewAudit = has("audit.view");
   const [activeTab, setActiveTab] = useState<TabType>("overview");
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [showActionModal, setShowActionModal] = useState<{
@@ -745,6 +748,9 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
     { id: "overview" as TabType, label: "Overview", icon: User },
     { id: "subscription" as TabType, label: "Subscription", icon: CreditCard },
     { id: "activity" as TabType, label: "Activity", icon: Activity },
+    ...(canViewAudit
+      ? [{ id: "staff-activity" as TabType, label: "Staff actions", icon: ShieldCheck }]
+      : []),
   ];
 
   const inputClasses =
@@ -3702,6 +3708,10 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                   </div>
                 )}
               </div>
+            )}
+
+            {activeTab === "staff-activity" && userId && (
+              <ActivityTab userId={userId} enabled={activeTab === "staff-activity"} />
             )}
           </ModalContent>
         </div>
