@@ -28,6 +28,7 @@ export const AREA_ACTIONS = {
   errorReports: ["view", "edit", "delete"],
   abTesting: ["view", "edit", "selectWinner", "delete"],
   settings: ["view", "edit", "delete"],
+  audit: ["view"],
 } as const satisfies Record<string, readonly string[]>;
 
 export const AREAS = Object.keys(AREA_ACTIONS) as Array<keyof typeof AREA_ACTIONS>;

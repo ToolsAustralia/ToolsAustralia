@@ -72,3 +72,4 @@ When deciding whether to add a sub-action instead of reusing `edit`, ask: *would
 | `errorReports` | view, edit, delete | `edit` = status changes / individual PATCH; `delete` = bulk archive. |
 | `abTesting` | view, edit, selectWinner, delete | `selectWinner` declares an experiment winner. |
 | `settings` | view, edit | Admin Settings tab (Roles & Staff sub-screens). |
+| `audit` | view | Staff activity log (audit trail of staff mutations). |

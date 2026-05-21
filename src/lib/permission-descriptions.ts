@@ -89,6 +89,10 @@ export const AREA_META: Record<Area, AreaMeta> = {
     label: "Settings",
     description: "The Settings tab itself — Roles + Staff sub-screens.",
   },
+  audit: {
+    label: "Audit",
+    description: "Staff activity log — who did what, when, and whether they were allowed.",
+  },
 };
 
 export const PERMISSION_META: Record<Permission, PermissionMeta> = {
@@ -294,6 +298,12 @@ export const PERMISSION_META: Record<Permission, PermissionMeta> = {
     label: "Archive experiment",
     description: "Soft-delete (archive) an experiment in draft or paused state.",
     danger: true,
+  },
+
+  // Audit
+  "audit.view": {
+    label: "View",
+    description: "Open the Staff Activity audit log. Records every mutation staff make, plus blocked attempts.",
   },
 
   // Settings
