@@ -602,6 +602,7 @@ The platform doesn't only ship transactional email through SendGrid — it also 
 - **A/B testing** — full first-party framework. Services, components, hooks, repositories, models, `/api/ab-testing` routes. See [docs/ab-testing/](docs/ab-testing/).
 - **Email** — SendGrid for transactional, Klaviyo for marketing, root `*-email-template.html` files for templates, preview UI at `/email-preview`, SMS via `src/lib/sms.ts` (Twilio).
 - **Admin dashboard** — user management, payments, draws, promos, error reports, partner applications, Stripe webhook queue, dashboard stats daily snapshots, charge-past-due tool, blocked transactions / allowlist. See [docs/admin/](docs/admin/).
+- **Internal Norm API** — staff-only HTTP namespace at `/api/internal/norm/v1/*` exposing read-only business analytics (ROAS, dashboard stats) to an external AI assistant ("Norm") running on a Mac mini server, governed by the existing role-based permissions system.
 - **Error reporting** — first-party `ErrorReport` Mongo model + admin routes. Do not bolt on a parallel logger. See [docs/error-reporting/](docs/error-reporting/).
 - **Security / CSP** — per-request nonce in `src/middleware.ts`, CSP assembled in `src/utils/security/csp.ts`, static fallback in `next.config.ts`. Stripe webhook route has special headers (no COEP). See [docs/security-csp/](docs/security-csp/).
 - **DST / timezone** — billing logic uses `date-fns-tz`; there are DST-transition test scripts under `scripts/test-dst-transitions.ts` and `TESTING-TIMEZONE-DST.md` covers the edge cases.

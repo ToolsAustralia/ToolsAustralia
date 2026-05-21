@@ -1,0 +1,858 @@
+warning: in the working copy of 'docs/superpowers/plans/2026-05-20-internal-norm-api.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'docs/superpowers/specs/2026-05-20-internal-norm-api-design.md', LF will be replaced by CRLF the next time Git touches it
+diff --git a/docs/superpowers/plans/2026-05-20-internal-norm-api.md b/docs/superpowers/plans/2026-05-20-internal-norm-api.md
+index 70e6cca2..29e5d81d 100644
+--- a/docs/superpowers/plans/2026-05-20-internal-norm-api.md
++++ b/docs/superpowers/plans/2026-05-20-internal-norm-api.md
+@@ -7 +7 @@
+-**Architecture:** `withNorm()` HOF wraps every Norm route handler — handles bearer + HMAC + replay auth, rate-limiting, response schema validation, and audit logging. A typed registry (`src/lib/internal-norm/classification.ts`) is the single source of truth: every Norm endpoint is declared there with a tier (`read`/`write_safe`/`trigger_norm_confirm`/`trigger_human_approve`/`forbidden`). Norm endpoints delegate to existing `src/services/**` business logic — never duplicate. The first two domains' admin routes get a targeted "fat route → service" extraction so Norm and admin call the same code path.
++**Architecture:** `withNorm()` HOF wraps every Norm route handler — runs bearer+HMAC+replay auth, **then permission check against Norm's Role** (using the org-wide permission catalog from the just-merged RBAC system), then kill-switch, rate-limit, handler, audit. A typed registry (`src/lib/internal-norm/classification.ts`) is the single source of truth: every Norm endpoint declares both a `tier` (`read`/`write_safe`/`trigger_norm_confirm`/`trigger_human_approve`) and a `requiredPermission` (e.g. `"facebookAds.view"`) from the catalog at [src/lib/permissions.ts](src/lib/permissions.ts). Norm is a `userType: "staff"` user with a dedicated "Norm" `Role`; owner grants/revokes capabilities via the existing Settings → Roles UI — no code change. Norm endpoints delegate to existing `src/services/**` business logic — never duplicate. The first two domains' admin routes get a targeted "fat route → service" extraction so Norm and admin call the same code path while preserving the existing `requirePermission(...)` guard on the admin side.
+@@ -22 +22,2 @@ src/lib/internal-norm/
+-  classification.ts              # NORM_ENDPOINTS typed registry + types
++  permissions.ts                 # loads Norm User → Role → permission set (30s cache); hasPermission()
++  classification.ts              # NORM_ENDPOINTS typed registry + types (each entry has requiredPermission)
+@@ -25 +26 @@ src/lib/internal-norm/
+-  withNorm.ts                    # the HOF: orchestrates auth → kill switch → rate limit → handler → schema validate → audit
++  withNorm.ts                    # the HOF: orchestrates auth → permission check → kill switch → rate limit → handler → schema validate → audit
+@@ -78 +79 @@ scripts/
+-    2026-05-20-create-norm-user.ts  # idempotent upsert of Norm User row
++    2026-05-20-create-norm-user-and-role.ts  # idempotent upsert of Norm Role + User
+@@ -81,0 +83 @@ src/lib/internal-norm/__tests__/
++  permissions.test.ts             # loads Norm role permissions; 403 when missing; cache invalidation
+@@ -84,2 +86 @@ src/lib/internal-norm/__tests__/
+-  receipts.test.ts                # create, verify hash, single-use, expiry
+-  withNorm.test.ts                # end-to-end orchestration with fakes
++  withNorm.test.ts                # end-to-end orchestration with fakes (incl. permission step)
+@@ -107,3 +108,3 @@ docs/internal-norm/
+-src/models/User.ts                  # extend role union with "norm"; add serviceAccount?: boolean
+-src/app/api/admin/facebook-ads/insights/route.ts   # shrink to ~15 lines; delegate to FacebookAdsInsightsService
+-src/app/api/admin/dashboard/stats/route.ts         # shrink; delegate to DashboardStatsService
++src/models/User.ts                  # add serviceAccount?: boolean field only (DO NOT extend role union — Norm uses userType="staff")
++src/app/api/admin/facebook-ads/insights/route.ts   # shrink to ~15 lines; preserve requirePermission("facebookAds.view"); delegate to FacebookAdsInsightsService
++src/app/api/admin/dashboard/stats/route.ts         # shrink; preserve requirePermission("overview.view"); delegate to DashboardStatsService
+@@ -124 +125,3 @@ Goal: end-to-end auth proves out with `curl`, no business data exposed yet. Norm
+-## Task 1.1: Extend `User` role to support `"norm"`
++## Task 1.1: Add `serviceAccount` field to `User`
++
++The new RBAC merge (`feature/user-roles`) introduced `userType: "customer"|"staff"|"admin"` plus `roleId`. Norm will use `userType: "staff"` + a dedicated "Norm" `Role`. We do NOT extend the legacy `role` union — that field is being phased out anyway. We only add a new `serviceAccount` boolean so the admin Settings → Staff list can filter Norm out of the human-staff view.
+@@ -127,2 +130 @@ Goal: end-to-end auth proves out with `curl`, no business data exposed yet. Norm
+-- Modify: `src/models/User.ts:14` (role union) and the schema definition (search for `enum:` on `role`)
+-- Modify: `src/lib/api-auth.ts:21` (verify `requireAdminUser` still rejects `"norm"` — it already does because it checks `role !== "admin"`, but pin it with a test)
++- Modify: `src/models/User.ts` — add `serviceAccount?: boolean` to the `IUser` interface and to the schema definition
+@@ -130 +132 @@ Goal: end-to-end auth proves out with `curl`, no business data exposed yet. Norm
+-- [ ] **Step 1: Read User.ts around the role field**
++- [ ] **Step 1: Read User.ts around the new RBAC fields**
+@@ -132 +134 @@ Goal: end-to-end auth proves out with `curl`, no business data exposed yet. Norm
+-  Run: read `src/models/User.ts` and find the `role` interface line + the schema's `role` definition (likely `{ type: String, enum: [...], default: "user" }`).
++  Read `src/models/User.ts` lines 280–315 (interface) and 400–425 (schema) to find where `userType`, `roleId`, `inviteToken` etc. are declared. Add `serviceAccount` alongside them so it sits with the other staff-related fields.
+@@ -134 +136 @@ Goal: end-to-end auth proves out with `curl`, no business data exposed yet. Norm
+-- [ ] **Step 2: Extend the role union and enum**
++- [ ] **Step 2: Add the field**
+@@ -136 +138 @@ Goal: end-to-end auth proves out with `curl`, no business data exposed yet. Norm
+-  In the `IUser` interface:
++  In the `IUser` interface (next to `userType`):
+@@ -138 +140 @@ Goal: end-to-end auth proves out with `curl`, no business data exposed yet. Norm
+-  role: "user" | "admin" | "norm";
++  /** True for non-human service accounts (e.g. Norm AI). Hides the user from the human-staff list. */
+@@ -141 +143 @@ Goal: end-to-end auth proves out with `curl`, no business data exposed yet. Norm
+-  In the schema:
++  In the schema (next to the `userType` definition):
+@@ -143 +144,0 @@ Goal: end-to-end auth proves out with `curl`, no business data exposed yet. Norm
+-  role: { type: String, enum: ["user", "admin", "norm"], default: "user" },
+@@ -147 +148 @@ Goal: end-to-end auth proves out with `curl`, no business data exposed yet. Norm
+-- [ ] **Step 3: Add a tsx test that proves `requireAdminUser` rejects role `"norm"`**
++- [ ] **Step 3: Write a tsx smoke test that creates a userType=staff serviceAccount=true user and reads it back**
+@@ -149 +150 @@ Goal: end-to-end auth proves out with `curl`, no business data exposed yet. Norm
+-  Create `src/lib/__tests__/apiAuth.norm.test.ts`:
++  Create `src/models/__tests__/User.serviceAccount.test.ts`:
+@@ -150,0 +152,2 @@ Goal: end-to-end auth proves out with `curl`, no business data exposed yet. Norm
++  import dotenv from "dotenv"; import path from "node:path";
++  dotenv.config({ path: path.resolve(process.cwd(), ".env.local") });
+@@ -152,4 +155,16 @@ Goal: end-to-end auth proves out with `curl`, no business data exposed yet. Norm
+-  // Inline-mock NextAuth + Mongo. The test asserts the role guard semantics, not the HTTP layer.
+-  // Importing the actual module would pull in DB; instead we re-encode the guard rule here:
+-  function isAdminRole(role: string): boolean {
+-    return role === "admin";
++  import mongoose from "mongoose";
++  import connectDB from "@/lib/mongodb";
++  import User from "@/models/User";
++
++  async function run() {
++    await connectDB();
++    const email = `__norm_test_${Date.now()}@internal.test`;
++    const u = await User.create({
++      firstName: "Test", lastName: "Service",
++      email, userType: "staff", serviceAccount: true,
++    });
++    assert.equal(u.userType, "staff");
++    assert.equal(u.serviceAccount, true);
++    await User.deleteOne({ _id: u._id });
++    await mongoose.disconnect();
++    console.log("✓ User.serviceAccount round-trip ok");
+@@ -157,4 +172 @@ Goal: end-to-end auth proves out with `curl`, no business data exposed yet. Norm
+-  assert.equal(isAdminRole("user"), false);
+-  assert.equal(isAdminRole("norm"), false);
+-  assert.equal(isAdminRole("admin"), true);
+-  console.log("✓ requireAdminUser rejects 'norm' and 'user'; accepts 'admin'");
++  void run();
+@@ -167 +179 @@ Goal: end-to-end auth proves out with `curl`, no business data exposed yet. Norm
+-  "test:norm-auth-role": "tsx src/lib/__tests__/apiAuth.norm.test.ts"
++  "test:norm-user-service-account": "tsx src/models/__tests__/User.serviceAccount.test.ts"
+@@ -172,2 +184,2 @@ Goal: end-to-end auth proves out with `curl`, no business data exposed yet. Norm
+-  Run: `npm run test:norm-auth-role`
+-  Expected: `✓ requireAdminUser rejects 'norm' and 'user'; accepts 'admin'`
++  Run: `npm run test:norm-user-service-account`
++  Expected: `✓ User.serviceAccount round-trip ok`
+@@ -176,2 +188,2 @@ Goal: end-to-end auth proves out with `curl`, no business data exposed yet. Norm
+-  git add src/models/User.ts src/lib/__tests__/apiAuth.norm.test.ts package.json
+-  git commit -m "feat(internal-norm): extend User.role with 'norm' service-account role"
++  git add src/models/User.ts src/models/__tests__/User.serviceAccount.test.ts package.json
++  git commit -m "feat(internal-norm): add serviceAccount boolean to User (for non-human staff accounts)"
+@@ -180 +192,3 @@ Goal: end-to-end auth proves out with `curl`, no business data exposed yet. Norm
+-## Task 1.2: Create idempotent Norm-user migration
++## Task 1.2: Seed Norm Role + Norm User (idempotent migration)
++
++Norm needs both a dedicated `Role` (initially holding just the permissions for Phase 2 + Phase 3 reads) AND a `User` linked to it. The migration upserts both.
+@@ -183,2 +197,2 @@ Goal: end-to-end auth proves out with `curl`, no business data exposed yet. Norm
+-- Create: `scripts/migrations/2026-05-20-create-norm-user.ts`
+-- Modify: `package.json` (add `migrate:create-norm-user` script)
++- Create: `scripts/migrations/2026-05-20-create-norm-user-and-role.ts`
++- Modify: `package.json` (add `migrate:create-norm` script)
+@@ -195,0 +210 @@ Goal: end-to-end auth proves out with `curl`, no business data exposed yet. Norm
++  import Role from "../../src/models/Role";
+@@ -197 +212,6 @@ Goal: end-to-end auth proves out with `curl`, no business data exposed yet. Norm
+-  const NORM_EMAIL = "norm@internal.toolsaustralia";
++  const NORM_EMAIL = "norm@internal.toolsaustralia.com.au";
++  const NORM_ROLE_NAME = "Norm";
++  const NORM_ROLE_COLOR = "#2563eb";
++  // Initial permissions for Phase 2 + Phase 3 endpoints. Anything beyond this is granted by the
++  // owner via Settings → Roles → Norm.
++  const NORM_INITIAL_PERMISSIONS = ["facebookAds.view", "overview.view"];
+@@ -202,7 +222,20 @@ Goal: end-to-end auth proves out with `curl`, no business data exposed yet. Norm
+-      const existing = await User.findOne({ email: NORM_EMAIL });
+-      if (existing) {
+-        if (existing.role !== "norm" || existing.serviceAccount !== true) {
+-          existing.role = "norm";
+-          existing.serviceAccount = true;
+-          await existing.save();
+-          console.log("✓ Norm user updated (role/serviceAccount aligned)");
++      // 1) Upsert Norm Role
++      let role = await Role.findOne({ name: NORM_ROLE_NAME });
++      if (!role) {
++        role = await Role.create({
++          name: NORM_ROLE_NAME,
++          color: NORM_ROLE_COLOR,
++          permissions: NORM_INITIAL_PERMISSIONS,
++          isSystem: true,
++          createdBy: null,
++        });
++        console.log(`✓ Created Norm role (${role._id})`);
++      } else {
++        // Leave existing permissions alone — owner may have edited them.
++        // Just align color + isSystem if they drifted.
++        let changed = false;
++        if (!role.color) { role.color = NORM_ROLE_COLOR; changed = true; }
++        if (!role.isSystem) { role.isSystem = true; changed = true; }
++        if (changed) {
++          await role.save();
++          console.log("✓ Aligned Norm role (color/isSystem)");
+@@ -210 +243,27 @@ Goal: end-to-end auth proves out with `curl`, no business data exposed yet. Norm
+-          console.log("✓ Norm user already present and aligned, no change");
++          console.log("✓ Norm role already present and aligned");
++        }
++      }
++
++      // 2) Upsert Norm User
++      let user = await User.findOne({ email: NORM_EMAIL });
++      if (!user) {
++        user = await User.create({
++          firstName: "Norm",
++          lastName: "(AI Assistant)",
++          email: NORM_EMAIL,
++          userType: "staff",
++          roleId: role._id,
++          serviceAccount: true,
++          isActive: true,
++        });
++        console.log(`✓ Created Norm user (${user._id})`);
++      } else {
++        let changed = false;
++        if (user.userType !== "staff") { user.userType = "staff"; changed = true; }
++        if (String(user.roleId) !== String(role._id)) { user.roleId = role._id; changed = true; }
++        if (user.serviceAccount !== true) { user.serviceAccount = true; changed = true; }
++        if (changed) {
++          await user.save({ validateBeforeSave: false });
++          console.log("✓ Aligned Norm user (userType/roleId/serviceAccount)");
++        } else {
++          console.log("✓ Norm user already present and aligned");
+@@ -212 +270,0 @@ Goal: end-to-end auth proves out with `curl`, no business data exposed yet. Norm
+-        return;
+@@ -214,9 +271,0 @@ Goal: end-to-end auth proves out with `curl`, no business data exposed yet. Norm
+-      await User.create({
+-        firstName: "Norm",
+-        lastName: "(AI Assistant)",
+-        email: NORM_EMAIL,
+-        role: "norm",
+-        serviceAccount: true,
+-        isActive: true,
+-      });
+-      console.log("✓ Norm user created");
+@@ -237 +286 @@ Goal: end-to-end auth proves out with `curl`, no business data exposed yet. Norm
+-  "migrate:create-norm-user": "tsx scripts/migrations/2026-05-20-create-norm-user.ts"
++  "migrate:create-norm": "tsx scripts/migrations/2026-05-20-create-norm-user-and-role.ts"
+@@ -242,4 +291,4 @@ Goal: end-to-end auth proves out with `curl`, no business data exposed yet. Norm
+-  Run: `npm run migrate:create-norm-user`
+-  Expected first run: `✓ Norm user created`
+-  Run again: `npm run migrate:create-norm-user`
+-  Expected: `✓ Norm user already present and aligned, no change`
++  Run: `npm run migrate:create-norm`
++  Expected first run: `✓ Created Norm role (...)` then `✓ Created Norm user (...)`
++  Run again: `npm run migrate:create-norm`
++  Expected: `✓ Norm role already present and aligned` and `✓ Norm user already present and aligned`
+@@ -247 +296,5 @@ Goal: end-to-end auth proves out with `curl`, no business data exposed yet. Norm
+-- [ ] **Step 4: Commit**
++- [ ] **Step 4: Verify in Mongo**
++
++  Open Mongo Compass / connect to the DB. Check the `roles` collection for a row with `name: "Norm"`, `permissions: ["facebookAds.view", "overview.view"]`. Check the `users` collection for the synthetic Norm email with `userType: "staff"`, `roleId` matching the Norm role's `_id`, `serviceAccount: true`.
++
++- [ ] **Step 5: Commit**
+@@ -250,2 +303,2 @@ Goal: end-to-end auth proves out with `curl`, no business data exposed yet. Norm
+-  git add scripts/migrations/2026-05-20-create-norm-user.ts package.json
+-  git commit -m "feat(internal-norm): add idempotent migration creating Norm service-account user"
++  git add scripts/migrations/2026-05-20-create-norm-user-and-role.ts package.json
++  git commit -m "feat(internal-norm): idempotent migration seeding Norm Role + User under new RBAC"
+@@ -633,0 +687 @@ Goal: end-to-end auth proves out with `curl`, no business data exposed yet. Norm
++  import { ALL_PERMISSIONS } from "@/lib/permissions";
+@@ -635,0 +690,2 @@ Goal: end-to-end auth proves out with `curl`, no business data exposed yet. Norm
++  // "forbidden" is NOT a tier under the new design
++  assert.equal((NORM_TIERS as readonly string[]).includes("forbidden"), false);
+@@ -640,0 +697 @@ Goal: end-to-end auth proves out with `curl`, no business data exposed yet. Norm
++  assert.ok(ALL_PERMISSIONS.has(health.requiredPermission), "health.requiredPermission is in catalog");
+@@ -643 +700,5 @@ Goal: end-to-end auth proves out with `curl`, no business data exposed yet. Norm
+-  console.log("✓ classification registry exports + lookup behave correctly");
++  // Every registry entry has a valid permission (boot-time guard already throws on load, this re-asserts)
++  for (const [key, spec] of Object.entries(NORM_ENDPOINTS)) {
++    assert.ok(ALL_PERMISSIONS.has(spec.requiredPermission), `${key}.requiredPermission not in catalog`);
++  }
++  console.log("✓ classification registry exports + lookup + permission validity ok");
+@@ -681,0 +743 @@ Goal: end-to-end auth proves out with `curl`, no business data exposed yet. Norm
++  import { ALL_PERMISSIONS, type Permission } from "@/lib/permissions";
+@@ -682,0 +745,2 @@ Goal: end-to-end auth proves out with `curl`, no business data exposed yet. Norm
++  // "forbidden" is NOT a tier — endpoints not in the registry are simply unreachable.
++  // Tier and Permission are orthogonal axes: tier = orchestration shape; permission = "is Norm allowed?".
+@@ -688 +751,0 @@ Goal: end-to-end auth proves out with `curl`, no business data exposed yet. Norm
+-    "forbidden",
+@@ -693,0 +757,2 @@ Goal: end-to-end auth proves out with `curl`, no business data exposed yet. Norm
++    /** Permission from @/lib/permissions that Norm's Role must hold to call this endpoint. */
++    requiredPermission: Permission;
+@@ -699,0 +765,2 @@ Goal: end-to-end auth proves out with `curl`, no business data exposed yet. Norm
++    /** True if the underlying admin route still uses requireAdminUser (not requirePermission). Follow-up to migrate. */
++    legacyAdminCheck?: boolean;
+@@ -702,0 +770,2 @@ Goal: end-to-end auth proves out with `curl`, no business data exposed yet. Norm
++  // Both health and manifest use "overview.view" as their required permission — they're
++  // framework infra that any staff member with even minimal dashboard access can use.
+@@ -705,0 +775 @@ Goal: end-to-end auth proves out with `curl`, no business data exposed yet. Norm
++      requiredPermission: "overview.view",
+@@ -711,0 +782 @@ Goal: end-to-end auth proves out with `curl`, no business data exposed yet. Norm
++      requiredPermission: "overview.view",
+@@ -722,0 +794,10 @@ Goal: end-to-end auth proves out with `curl`, no business data exposed yet. Norm
++
++  /**
++   * Boot-time validation: every registry entry's requiredPermission must be a valid
++   * catalog permission. Catches typos at module-load time.
++   */
++  for (const [key, spec] of Object.entries(NORM_ENDPOINTS)) {
++    if (!ALL_PERMISSIONS.has(spec.requiredPermission)) {
++      throw new Error(`NORM_ENDPOINTS["${key}"].requiredPermission "${spec.requiredPermission}" is not in PERMISSIONS catalog`);
++    }
++  }
+@@ -1152,0 +1234,126 @@ Goal: end-to-end auth proves out with `curl`, no business data exposed yet. Norm
++## Task 1.9b: Norm permissions loader
++
++The withNorm HOF needs to know what permissions Norm's Role grants. This loader fetches them with a 30-second in-memory cache.
++
++**Files:**
++- Create: `src/lib/internal-norm/permissions.ts`
++- Create: `src/lib/internal-norm/__tests__/permissions.test.ts`
++- Modify: `package.json` (`test:norm-permissions`)
++
++- [ ] **Step 1: Write the failing test**
++
++  ```ts
++  import dotenv from "dotenv"; import path from "node:path";
++  dotenv.config({ path: path.resolve(process.cwd(), ".env.local") });
++  import { strict as assert } from "node:assert";
++  import mongoose from "mongoose";
++  import connectDB from "@/lib/mongodb";
++  import User from "@/models/User";
++  import Role from "@/models/Role";
++  import {
++    getNormPermissions,
++    hasNormPermission,
++    __clearNormPermissionsCacheForTests,
++  } from "@/lib/internal-norm/permissions";
++
++  async function run() {
++    await connectDB();
++    __clearNormPermissionsCacheForTests();
++    // Resolve Norm — the migration must have been run first
++    const role = await Role.findOne({ name: "Norm" });
++    assert.ok(role, "Norm role exists (run npm run migrate:create-norm first)");
++    const user = await User.findOne({ email: "norm@internal.toolsaustralia.com.au" });
++    assert.ok(user, "Norm user exists (run npm run migrate:create-norm first)");
++
++    const perms = await getNormPermissions();
++    assert.ok(perms instanceof Set);
++    assert.equal(perms.has("facebookAds.view"), true);
++    assert.equal(perms.has("overview.view"), true);
++    assert.equal(perms.has("users.delete"), false, "Norm should NOT have destructive permissions by default");
++
++    assert.equal(await hasNormPermission("facebookAds.view"), true);
++    assert.equal(await hasNormPermission("users.delete"), false);
++
++    // Caching: temporarily grant a permission directly in Mongo, observe that the cached read still returns old set
++    await Role.updateOne({ _id: role._id }, { $addToSet: { permissions: "users.view" } });
++    const cached = await getNormPermissions();
++    assert.equal(cached.has("users.view"), false, "cache holds stale set until cleared");
++    __clearNormPermissionsCacheForTests();
++    const fresh = await getNormPermissions();
++    assert.equal(fresh.has("users.view"), true, "after cache clear, fresh read sees the new permission");
++    // Cleanup: revert the temporary permission so subsequent tests aren't affected
++    await Role.updateOne({ _id: role._id }, { $pull: { permissions: "users.view" } });
++
++    await mongoose.disconnect();
++    console.log("✓ Norm permissions loader: read + cache + invalidate");
++  }
++  void run();
++  ```
++
++- [ ] **Step 2: Add npm script**
++
++  ```json
++  "test:norm-permissions": "tsx src/lib/internal-norm/__tests__/permissions.test.ts"
++  ```
++
++- [ ] **Step 3: Run — expect failure**
++
++  Run: `npm run test:norm-permissions`
++
++- [ ] **Step 4: Implement permissions.ts**
++
++  ```ts
++  // src/lib/internal-norm/permissions.ts
++  import connectDB from "@/lib/mongodb";
++  import User from "@/models/User";
++  import Role from "@/models/Role";
++  import type { Permission } from "@/lib/permissions";
++
++  const NORM_EMAIL = "norm@internal.toolsaustralia.com.au";
++  const CACHE_TTL_MS = 30_000;
++
++  let cache: { perms: Set<string>; expiresAt: number } | null = null;
++
++  export async function getNormPermissions(): Promise<Set<string>> {
++    const now = Date.now();
++    if (cache && cache.expiresAt > now) return cache.perms;
++    await connectDB();
++    const user = await User.findOne({ email: NORM_EMAIL }).select("roleId userType").lean();
++    if (!user) {
++      cache = { perms: new Set(), expiresAt: now + CACHE_TTL_MS };
++      return cache.perms;
++    }
++    // Defense: Norm must be userType="staff". If something flipped it to "admin" (super-admin bypass),
++    // that's a configuration error — we still return only what the Role explicitly grants.
++    if (!user.roleId) {
++      cache = { perms: new Set(), expiresAt: now + CACHE_TTL_MS };
++      return cache.perms;
++    }
++    const role = await Role.findById(user.roleId).select("permissions").lean();
++    const perms = new Set<string>(role?.permissions ?? []);
++    cache = { perms, expiresAt: now + CACHE_TTL_MS };
++    return perms;
++  }
++
++  export async function hasNormPermission(perm: Permission | string): Promise<boolean> {
++    const set = await getNormPermissions();
++    return set.has(perm);
++  }
++
++  export function __clearNormPermissionsCacheForTests() {
++    cache = null;
++  }
++  ```
++
++- [ ] **Step 5: Run; verify pass**
++
++  Run: `npm run test:norm-permissions`
++  Expected: `✓ Norm permissions loader: read + cache + invalidate`
++
++- [ ] **Step 6: Commit**
++
++  ```
++  git add src/lib/internal-norm/permissions.ts src/lib/internal-norm/__tests__/permissions.test.ts package.json
++  git commit -m "feat(internal-norm): Norm permissions loader with 30s cache + invalidate helper"
++  ```
++
+@@ -1208 +1415,3 @@ Goal: end-to-end auth proves out with `curl`, no business data exposed yet. Norm
+-    // unit test we bypass by passing the spec inline.
++    // unit test we bypass by passing the spec inline. The Norm User + Role must already exist
++    // (run npm run migrate:create-norm first). We use "facebookAds.view" because it's in Norm's
++    // initial role permission set.
+@@ -1211,0 +1421 @@ Goal: end-to-end auth proves out with `curl`, no business data exposed yet. Norm
++      requiredPermission: "facebookAds.view",
+@@ -1216,0 +1427,8 @@ Goal: end-to-end auth proves out with `curl`, no business data exposed yet. Norm
++    // Also build a handler that requires a permission Norm does NOT have, to verify 403
++    const handlerForbidden = withNorm({
++      tier: "read",
++      registryKey: "test.forbidden",
++      requiredPermission: "users.delete",
++      responseSchema: TestSchema,
++    }, async (ctx) => ctx.ok({ status: "ok" as const, echo: "should never reach here" }));
++
+@@ -1238 +1456,8 @@ Goal: end-to-end auth proves out with `curl`, no business data exposed yet. Norm
+-    await NormCallLog.deleteMany({ registryKey: "test.echo" });
++    // Permission missing → 403
++    const reqForbidden = buildRequest("GET", "/api/internal/norm/v1/test/forbidden", "", "");
++    const res403 = await handlerForbidden(reqForbidden);
++    assert.equal(res403.status, 403);
++    const body403 = await res403.json();
++    assert.equal(body403.code, "permission_denied");
++
++    await NormCallLog.deleteMany({ registryKey: { $in: ["test.echo", "test.forbidden"] } });
+@@ -1240 +1465 @@ Goal: end-to-end auth proves out with `curl`, no business data exposed yet. Norm
+-    console.log("✓ withNorm: happy path + 401 + NormCallLog written");
++    console.log("✓ withNorm: happy path + 401 + 403 + NormCallLog written");
+@@ -1281,0 +1507,2 @@ Goal: end-to-end auth proves out with `curl`, no business data exposed yet. Norm
++    permissionChecked: string;
++    permissionGranted: boolean;
+@@ -1304,0 +1532,7 @@ Goal: end-to-end auth proves out with `curl`, no business data exposed yet. Norm
++  **Also update `NormCallLog` model (Task 1.4) to add the two new fields.** Edit `src/models/NormCallLog.ts` to add:
++  ```ts
++  permissionChecked: { type: String },
++  permissionGranted: { type: Boolean },
++  ```
++  alongside the existing fields. The Task 1.4 test continues to pass (the new fields are optional).
++
+@@ -1311,0 +1546 @@ Goal: end-to-end auth proves out with `curl`, no business data exposed yet. Norm
++  import type { Permission } from "@/lib/permissions";
+@@ -1312,0 +1548 @@ Goal: end-to-end auth proves out with `curl`, no business data exposed yet. Norm
++  import { hasNormPermission } from "./permissions";
+@@ -1320,0 +1557,2 @@ Goal: end-to-end auth proves out with `curl`, no business data exposed yet. Norm
++    /** Permission from @/lib/permissions catalog that Norm's Role must hold. */
++    requiredPermission: Permission;
+@@ -1374 +1612 @@ Goal: end-to-end auth proves out with `curl`, no business data exposed yet. Norm
+-      // 2. Kill switch
++      // 2. Permission check (Norm's Role must grant requiredPermission)
+@@ -1375,0 +1614,19 @@ Goal: end-to-end auth proves out with `curl`, no business data exposed yet. Norm
++      const permissionGranted = await hasNormPermission(options.requiredPermission);
++      if (!permissionGranted) {
++        // Audit the rejection too — useful for "why is Norm getting 403?" debugging
++        await beginAudit({
++          requestId, registryKey: options.registryKey, tier: options.tier,
++          method, path, queryHash: sha256(query), bodyHash: sha256(rawBody),
++          ip: clientKeyFor(request), userAgent: request.headers.get("user-agent") || "",
++          signatureValid: true,
++          rateLimitState: { remaining: 0, limit: 0, windowMs: 0 },
++          permissionChecked: options.requiredPermission, permissionGranted: false,
++        });
++        await endAudit(requestId, { responseStatus: 403, durationMs: Date.now() - started, responseHash: "", errorCode: "permission_denied" });
++        return NextResponse.json(
++          { success: false, error: `Norm role missing permission: ${options.requiredPermission}`, code: "permission_denied", requestId },
++          { status: 403 }
++        );
++      }
++
++      // 3. Kill switch
+@@ -1383 +1640 @@ Goal: end-to-end auth proves out with `curl`, no business data exposed yet. Norm
+-      // 3. Rate limit
++      // 4. Rate limit
+@@ -1398 +1655 @@ Goal: end-to-end auth proves out with `curl`, no business data exposed yet. Norm
+-      // 4. Audit begin
++      // 5. Audit begin
+@@ -1410,0 +1668,2 @@ Goal: end-to-end auth proves out with `curl`, no business data exposed yet. Norm
++        permissionChecked: options.requiredPermission,
++        permissionGranted: true,
+@@ -1413 +1672 @@ Goal: end-to-end auth proves out with `curl`, no business data exposed yet. Norm
+-      // 5. Handler
++      // 6. Handler
+@@ -1454 +1713 @@ Goal: end-to-end auth proves out with `curl`, no business data exposed yet. Norm
+-      // 6. Audit end
++      // 7. Audit end
+@@ -1520 +1779,4 @@ Goal: end-to-end auth proves out with `curl`, no business data exposed yet. Norm
+-      .filter(([, spec]) => spec.tier !== "forbidden")
++      // All registered endpoints belong in the manifest (forbidden isn't a tier — unreachable endpoints
++       // are simply omitted from the registry). Initially we have no responseSchema-less entries; once
++       // the Phase 4 roadmap fills in, the Phase 4 filter (Step 4 of Task 4.1) narrows to wired entries.
++      .filter(([, _spec]) => true)
+@@ -1578 +1840 @@ Goal: end-to-end auth proves out with `curl`, no business data exposed yet. Norm
+-    { tier: "read", registryKey: "health", responseSchema: HealthResponseSchema },
++    { tier: "read", registryKey: "health", requiredPermission: "overview.view", responseSchema: HealthResponseSchema },
+@@ -1593 +1855 @@ Goal: end-to-end auth proves out with `curl`, no business data exposed yet. Norm
+-    { tier: "read", registryKey: "manifest", responseSchema: NormManifestSchema },
++    { tier: "read", registryKey: "manifest", requiredPermission: "overview.view", responseSchema: NormManifestSchema },
+@@ -2000,0 +2263,2 @@ Goal: Norm can answer ROAS questions with the same numbers the admin dashboard s
++  **IMPORTANT:** the existing route at line 49 calls `requirePermission("facebookAds.view")` — this guard MUST be preserved. The extracted `FacebookAdsInsightsService` has no auth check of its own; protection lives at the route layer.
++
+@@ -2004,2 +2268 @@ Goal: Norm can answer ROAS questions with the same numbers the admin dashboard s
+-  import { getServerSession } from "next-auth";
+-  import { authOptions } from "@/lib/auth";
++  import { requirePermission } from "@/lib/api-auth-permissions";
+@@ -2018,0 +2282,3 @@ Goal: Norm can answer ROAS questions with the same numbers the admin dashboard s
++      const guard = await requirePermission("facebookAds.view");
++      if (guard instanceof NextResponse) return guard;
++
+@@ -2020,4 +2285,0 @@ Goal: Norm can answer ROAS questions with the same numbers the admin dashboard s
+-      const session = await getServerSession(authOptions);
+-      if (!session?.user?.id || session.user.role !== "admin") {
+-        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+-      }
+@@ -2226,0 +2489 @@ The admin UI today passes `current-draw`/`last-draw` already resolved (frontend
++    requiredPermission: "facebookAds.view",   // mirrors the admin route's permission
+@@ -2234,0 +2498 @@ The admin UI today passes `current-draw`/`last-draw` already resolved (frontend
++    requiredPermission: "facebookAds.view",
+@@ -2242,0 +2507,2 @@ The admin UI today passes `current-draw`/`last-draw` already resolved (frontend
++  Norm's Role (seeded in Task 1.2) already includes `facebookAds.view`, so these endpoints are immediately reachable. If the owner ever revokes that permission from the Norm Role via Settings → Roles, both endpoints will return 403 on the next request.
++
+@@ -2278 +2544 @@ The admin UI today passes `current-draw`/`last-draw` already resolved (frontend
+-    { tier: "read", registryKey: "roas.summary", responseSchema: NormRoasSummarySchema, perEndpointPerMinute: 10 },
++    { tier: "read", registryKey: "roas.summary", requiredPermission: "facebookAds.view", responseSchema: NormRoasSummarySchema, perEndpointPerMinute: 10 },
+@@ -2329 +2595 @@ The admin UI today passes `current-draw`/`last-draw` already resolved (frontend
+-    { tier: "read", registryKey: "roas.breakdown", responseSchema: NormRoasBreakdownSchema, perEndpointPerMinute: 10 },
++    { tier: "read", registryKey: "roas.breakdown", requiredPermission: "facebookAds.view", responseSchema: NormRoasBreakdownSchema, perEndpointPerMinute: 10 },
+@@ -2414 +2680 @@ Goal: Norm can answer business-state questions — revenue, members, churn, draw
+-  Read `src/app/api/admin/dashboard/stats/route.ts` lines 33–520 carefully. The orchestration to extract is roughly: parse date range → comparison period → user counts → revenue + ad channels via `readStatsForRange` → MajorDraw counts → conversion rate → enhanced metrics + membership analytics. Return both the headline `stats` shape and (for the Norm projection) a strict subset.
++  Read `src/app/api/admin/dashboard/stats/route.ts` carefully. **Lines 34–35 are the `requirePermission("overview.view")` guard — leave those at the route layer.** Lines 37–520 are the orchestration: parse date range → comparison period → user counts → revenue + ad channels via `readStatsForRange` → MajorDraw counts → conversion rate → enhanced metrics + membership analytics. The extracted service body starts from line 37 (after the guard). Return both the headline `stats` shape and (for the Norm projection) a strict subset.
+@@ -2456 +2722 @@ Goal: Norm can answer business-state questions — revenue, members, churn, draw
+-  1. Copy lines ~44–512 of `src/app/api/admin/dashboard/stats/route.ts` into the body of `getStats`.
++  1. Copy lines **~37–512** of `src/app/api/admin/dashboard/stats/route.ts` into the body of `getStats` (post-permission-guard).
+@@ -2460,0 +2727 @@ Goal: Norm can answer business-state questions — revenue, members, churn, draw
++  6. **Do NOT touch the `requirePermission("overview.view")` lines** — those stay in the route handler.
+@@ -2519,0 +2787,2 @@ Goal: Norm can answer business-state questions — revenue, members, churn, draw
++  **IMPORTANT:** preserve the existing `requirePermission("overview.view")` guard.
++
+@@ -2523,2 +2792 @@ Goal: Norm can answer business-state questions — revenue, members, churn, draw
+-  import { getServerSession } from "next-auth";
+-  import { authOptions } from "@/lib/auth";
++  import { requirePermission } from "@/lib/api-auth-permissions";
+@@ -2529,0 +2798,3 @@ Goal: Norm can answer business-state questions — revenue, members, churn, draw
++      const guard = await requirePermission("overview.view");
++      if (guard instanceof NextResponse) return guard;
++
+@@ -2531,4 +2801,0 @@ Goal: Norm can answer business-state questions — revenue, members, churn, draw
+-      const session = await getServerSession(authOptions);
+-      if (!session?.user?.id || session.user.role !== "admin") {
+-        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+-      }
+@@ -2632,0 +2900 @@ Goal: Norm can answer business-state questions — revenue, members, churn, draw
++    requiredPermission: "overview.view",   // mirrors the admin route's guard
+@@ -2639,0 +2908 @@ Goal: Norm can answer business-state questions — revenue, members, churn, draw
++    requiredPermission: "overview.view",
+@@ -2646,0 +2916,2 @@ Goal: Norm can answer business-state questions — revenue, members, churn, draw
++  Norm's Role (seeded in Task 1.2) already includes `overview.view`, so these endpoints are immediately reachable.
++
+@@ -2682 +2953 @@ Goal: Norm can answer business-state questions — revenue, members, churn, draw
+-    { tier: "read", registryKey: "dashboard.stats", responseSchema: NormDashboardStatsSchema },
++    { tier: "read", registryKey: "dashboard.stats", requiredPermission: "overview.view", responseSchema: NormDashboardStatsSchema },
+@@ -2752 +3023 @@ Goal: Norm can answer business-state questions — revenue, members, churn, draw
+-    { tier: "read", registryKey: "dashboard.revenue-breakdown", responseSchema: NormRevenueBreakdownSchema },
++    { tier: "read", registryKey: "dashboard.revenue-breakdown", requiredPermission: "overview.view", responseSchema: NormRevenueBreakdownSchema },
+@@ -2827 +3098,5 @@ Goal: Every existing admin endpoint is mapped to a tier; the audit UI is live; t
+-- [ ] **Step 2: For each endpoint, assign a tier**
++- [ ] **Step 2: For each endpoint, assign tier + requiredPermission**
++
++  For each admin route, open the file and look at its auth call:
++  - **Already uses `requirePermission("<area>.<action>")`** → copy that permission string verbatim into `requiredPermission`.
++  - **Still uses legacy `requireAdminUser()`** → pick the most sensible catalog entry from [src/lib/permissions.ts](src/lib/permissions.ts) (usually the area's `.view` for GETs or `.edit`/`.delete` for mutating ones) and add `legacyAdminCheck: true` to flag it for follow-up. List of legacy holdouts: run `grep -l requireAdminUser src/app/api/admin -r` for the current set.
+@@ -2829 +3104 @@ Goal: Every existing admin endpoint is mapped to a tier; the audit UI is live; t
+-  Rules of thumb:
++  Tier rules of thumb (orthogonal to permission):
+@@ -2834 +3108,0 @@ Goal: Every existing admin endpoint is mapped to a tier; the audit UI is live; t
+-  - Anything touching admin roles, deletes data permanently, modifies secrets/env, or affects auth → `forbidden`
+@@ -2836 +3110,3 @@ Goal: Every existing admin endpoint is mapped to a tier; the audit UI is live; t
+-  Capture in `classification.ts`:
++  Endpoints we do NOT want Norm to ever call (e.g. Settings → Roles management, anything modifying auth) are simply omitted from the registry. Omission = unreachable; no special tier needed.
++
++  Capture in `classification.ts`. Each entry is an inventory line — most are NOT wired to a route yet. Wiring happens in future specs; this matrix is the roadmap.
+@@ -2838,2 +3113,0 @@ Goal: Every existing admin endpoint is mapped to a tier; the audit UI is live; t
+-  // Append to NORM_ENDPOINTS. Each entry is an inventory line — most are NOT wired to a route yet.
+-  // Wiring happens in future specs; this matrix is the roadmap.
+@@ -2841,0 +3116 @@ Goal: Every existing admin endpoint is mapped to a tier; the audit UI is live; t
++    requiredPermission: "abTesting.view",
+@@ -2846 +3121,8 @@ Goal: Every existing admin endpoint is mapped to a tier; the audit UI is live; t
+-  "activity-log.list": { tier: "read", path: "/v1/activity-log", method: "GET", summary: "Recent admin activity feed" },
++  "activity-log.list": {
++    tier: "read",
++    requiredPermission: "overview.view",
++    legacyAdminCheck: true,  // /api/admin/activity-log still uses requireAdminUser; follow up to migrate
++    path: "/v1/activity-log",
++    method: "GET",
++    summary: "Recent admin activity feed",
++  },
+@@ -2848,0 +3131 @@ Goal: Every existing admin endpoint is mapped to a tier; the audit UI is live; t
++    requiredPermission: "affiliates.processPayout",  // matches the catalog's danger-flagged permission
+@@ -2856 +3139,3 @@ Goal: Every existing admin endpoint is mapped to a tier; the audit UI is live; t
+-  This is a manual classification pass. Budget ~2 hours for it. Resist the temptation to skip "obvious" ones — every entry must exist.
++  This is a manual classification pass. Budget ~2 hours for it. Resist the temptation to skip "obvious" ones — every entry must exist with both `tier` AND `requiredPermission`.
++
++  After filling, your Norm Role still has only `facebookAds.view` + `overview.view` — every other registry entry will 403 until the owner grants the matching permission. That's by design.
+@@ -2863,3 +3148,4 @@ Goal: Every existing admin endpoint is mapped to a tier; the audit UI is live; t
+-   * Returns the set of endpoints that have been "wired" (their tier !== "forbidden"
+-   * AND a corresponding route file exists). For now this is a roadmap-only matrix;
+-   * the runtime check is delegated to the manifest builder which omits unwired entries.
++   * Returns the set of endpoints that have been "wired" (a corresponding route file
++   * exists, signaled by the presence of a responseSchema). The classification matrix
++   * may contain many roadmap entries without responseSchema; the manifest builder
++   * filters to wired entries so Norm only discovers what it can actually call.
+@@ -2868 +3154 @@ Goal: Every existing admin endpoint is mapped to a tier; the audit UI is live; t
+-    return Object.values(NORM_ENDPOINTS).filter((e) => e.tier !== "forbidden" && !!e.responseSchema);
++    return Object.values(NORM_ENDPOINTS).filter((e) => !!e.responseSchema);
+@@ -2881 +3167 @@ Goal: Every existing admin endpoint is mapped to a tier; the audit UI is live; t
+-  .filter(([, spec]) => spec.tier !== "forbidden" && !!spec.responseSchema)
++  .filter(([, spec]) => !!spec.responseSchema)  // forbidden is no longer a tier; unwired entries are roadmap-only
+@@ -2905 +3191 @@ Goal: Every existing admin endpoint is mapped to a tier; the audit UI is live; t
+-  import { requireAdminUser } from "@/lib/api-auth";
++  import { requirePermission } from "@/lib/api-auth-permissions";
+@@ -2910,2 +3196,2 @@ Goal: Every existing admin endpoint is mapped to a tier; the audit UI is live; t
+-    const auth = await requireAdminUser();
+-    if ("errorResponse" in auth) return auth.errorResponse;
++    const guard = await requirePermission("settings.view");
++    if (guard instanceof NextResponse) return guard;
+@@ -2931 +3217 @@ Goal: Every existing admin endpoint is mapped to a tier; the audit UI is live; t
+-  import { requireAdminUser } from "@/lib/api-auth";
++  import { requirePermission } from "@/lib/api-auth-permissions";
+@@ -2934,0 +3221 @@ Goal: Every existing admin endpoint is mapped to a tier; the audit UI is live; t
++  import { getNormPermissions } from "@/lib/internal-norm/permissions";
+@@ -2937,2 +3224,3 @@ Goal: Every existing admin endpoint is mapped to a tier; the audit UI is live; t
+-    const auth = await requireAdminUser();
+-    if ("errorResponse" in auth) return auth.errorResponse;
++    // Reuse the "settings.view" permission — the Norm management UI lives in the same area as Roles/Staff
++    const guard = await requirePermission("settings.view");
++    if (guard instanceof NextResponse) return guard;
+@@ -2940 +3228,4 @@ Goal: Every existing admin endpoint is mapped to a tier; the audit UI is live; t
+-    const settings = await NormEndpointSettings.find({}).lean();
++    const [settings, normPerms] = await Promise.all([
++      NormEndpointSettings.find({}).lean(),
++      getNormPermissions(),
++    ]);
+@@ -2944,0 +3236,2 @@ Goal: Every existing admin endpoint is mapped to a tier; the audit UI is live; t
++      requiredPermission: spec.requiredPermission,
++      normHasPermission: normPerms.has(spec.requiredPermission),
+@@ -2949,0 +3243 @@ Goal: Every existing admin endpoint is mapped to a tier; the audit UI is live; t
++      legacyAdminCheck: !!spec.legacyAdminCheck,
+@@ -2959 +3253 @@ Goal: Every existing admin endpoint is mapped to a tier; the audit UI is live; t
+-  import { requireAdminUser } from "@/lib/api-auth";
++  import { requirePermission } from "@/lib/api-auth-permissions";
+@@ -2966,2 +3260,2 @@ Goal: Every existing admin endpoint is mapped to a tier; the audit UI is live; t
+-    const auth = await requireAdminUser();
+-    if ("errorResponse" in auth) return auth.errorResponse;
++    const guard = await requirePermission("settings.edit");
++    if (guard instanceof NextResponse) return guard;
+@@ -2974 +3268 @@ Goal: Every existing admin endpoint is mapped to a tier; the audit UI is live; t
+-      { $set: { disabled: body.data.disabled, updatedBy: auth.adminUser._id, updatedAt: new Date() } },
++      { $set: { disabled: body.data.disabled, updatedBy: guard.session.user.id, updatedAt: new Date() } },
+@@ -2986 +3280 @@ Goal: Every existing admin endpoint is mapped to a tier; the audit UI is live; t
+-  import { requireAdminUser } from "@/lib/api-auth";
++  import { requirePermission } from "@/lib/api-auth-permissions";
+@@ -2991,2 +3285,2 @@ Goal: Every existing admin endpoint is mapped to a tier; the audit UI is live; t
+-    const auth = await requireAdminUser();
+-    if ("errorResponse" in auth) return auth.errorResponse;
++    const guard = await requirePermission("settings.view");
++    if (guard instanceof NextResponse) return guard;
+@@ -3003 +3297 @@ Goal: Every existing admin endpoint is mapped to a tier; the audit UI is live; t
+-  import { requireAdminUser } from "@/lib/api-auth";
++  import { requirePermission } from "@/lib/api-auth-permissions";
+@@ -3013,2 +3307,4 @@ Goal: Every existing admin endpoint is mapped to a tier; the audit UI is live; t
+-    const auth = await requireAdminUser();
+-    if ("errorResponse" in auth) return auth.errorResponse;
++    // Approving a Norm pending action is effectively delegating an action to Norm — same authority needed
++    // as editing role permissions. settings.edit is the right gate.
++    const guard = await requirePermission("settings.edit");
++    if (guard instanceof NextResponse) return guard;
+@@ -3030 +3326 @@ Goal: Every existing admin endpoint is mapped to a tier; the audit UI is live; t
+-      action.resolvedBy = auth.adminUser._id;
++      action.resolvedBy = guard.session.user.id;
+@@ -3039 +3335 @@ Goal: Every existing admin endpoint is mapped to a tier; the audit UI is live; t
+-    action.resolvedBy = auth.adminUser._id;
++    action.resolvedBy = guard.session.user.id;
+@@ -3196,0 +3493 @@ Goal: Every existing admin endpoint is mapped to a tier; the audit UI is live; t
++  import Link from "next/link";
+@@ -3198 +3495,12 @@ Goal: Every existing admin endpoint is mapped to a tier; the audit UI is live; t
+-  type Row = { registryKey: string; tier: string; path: string; method: string; summary: string; disabled: boolean; wired: boolean };
++  type Row = {
++    registryKey: string;
++    tier: string;
++    requiredPermission: string;
++    normHasPermission: boolean;
++    path: string;
++    method: string;
++    summary: string;
++    disabled: boolean;
++    wired: boolean;
++    legacyAdminCheck?: boolean;
++  };
+@@ -3220,0 +3529,3 @@ Goal: Every existing admin endpoint is mapped to a tier; the audit UI is live; t
++        <p className="text-sm text-gray-600 mb-4">
++          To grant Norm a new capability, edit the <Link href="/admin/settings/roles" className="underline">Norm role</Link> in Settings → Roles and add the matching permission.
++        </p>
+@@ -3222 +3533,5 @@ Goal: Every existing admin endpoint is mapped to a tier; the audit UI is live; t
+-          <thead><tr><th>Key</th><th>Tier</th><th>Path</th><th>Wired</th><th>Disabled</th></tr></thead>
++          <thead>
++            <tr>
++              <th>Key</th><th>Tier</th><th>Path</th><th>Required permission</th><th>Norm has it?</th><th>Wired</th><th>Disabled</th>
++            </tr>
++          </thead>
+@@ -3228,0 +3544,9 @@ Goal: Every existing admin endpoint is mapped to a tier; the audit UI is live; t
++                <td className="font-mono text-xs">
++                  {r.requiredPermission}
++                  {r.legacyAdminCheck && <span className="ml-2 text-amber-600" title="Underlying admin route still uses legacy requireAdminUser">⚠ legacy</span>}
++                </td>
++                <td>
++                  {r.normHasPermission
++                    ? <span className="text-green-600">✓</span>
++                    : <span className="text-red-600" title="Norm role does not grant this permission — calls will 403">✗</span>}
++                </td>
+@@ -3386 +3710 @@ Goal: code, docs, and business status are all in sync.
+-      "scripts/migrations/2026-05-20-create-norm-user.ts",
++      "scripts/migrations/2026-05-20-create-norm-user-and-role.ts",
+@@ -3454 +3778 @@ Goal: code, docs, and business status are all in sync.
+-  npm run test:norm-auth-role
++  npm run test:norm-user-service-account
+@@ -3459,0 +3784 @@ Goal: code, docs, and business status are all in sync.
++  npm run test:norm-permissions
+diff --git a/docs/superpowers/specs/2026-05-20-internal-norm-api-design.md b/docs/superpowers/specs/2026-05-20-internal-norm-api-design.md
+index 7967e18f..625972cb 100644
+--- a/docs/superpowers/specs/2026-05-20-internal-norm-api-design.md
++++ b/docs/superpowers/specs/2026-05-20-internal-norm-api-design.md
+@@ -34,2 +34,2 @@ Out of scope for this spec (future work, separate specs):
+-| 5 | Safety model = **5 tiers** (`read` / `write_safe` / `trigger_norm_confirm` / `trigger_human_approve` / `forbidden`) | Fine-grained control. Every existing admin endpoint slots into exactly one tier. |
+-| 6 | Norm is **a `User` row with `role: "norm"`**, not a no-row service principal | Existing services that reference `adminUserId` (charge runs, audit fields) attribute Norm naturally with zero branching. `role: "norm"` (not `"admin"`) prevents existing admin-only logic from over-trusting Norm. |
++| 5 | Safety model = **4 tiers** (`read` / `write_safe` / `trigger_norm_confirm` / `trigger_human_approve`) — orthogonal to the permission catalog (see decision 11). "Forbidden" is not a tier; an endpoint is unreachable to Norm if it's absent from the registry, or registered with a `requiredPermission` Norm's Role doesn't hold. | Fine-grained control over the orchestration shape, separated from authorization. |
++| 6 | Norm is a `userType: "staff"` User row with a dedicated "Norm" `Role`, `serviceAccount: true` — see decision 10 for the full story | The legacy `role: "norm"` idea from earlier drafts is dropped — the `role` field is being phased out. The new model puts Norm under the same governance as human staff, manageable via Settings → Roles. |
+@@ -38,0 +39,3 @@ Out of scope for this spec (future work, separate specs):
++| 10 | **Norm integrates with the new RBAC** (merged from `feature/user-roles`): Norm is a `userType: "staff"` user with `roleId` pointing to a dedicated "Norm" Role | Maximum alignment with the new permission system. Owner manages Norm's authority from the existing Settings → Roles UI — no code change to grant or revoke a Norm capability. |
++| 11 | Tier model and Permission catalog are **orthogonal axes**: permission answers "allowed at all?"; tier answers "what confirmation shape?" | Cleaner separation. Permissions reuse the org-wide catalog; tiers only encode the orchestration flow. The "forbidden" tier from the original draft is dropped — "forbidden" = "permission not in Norm's Role". |
++| 12 | Owner grants Norm permissions via Settings → Roles UI; implementer never auto-grants in code | Every new Norm capability is an explicit owner decision. The Endpoints admin tab makes the granted/not-granted state visible per endpoint. |
+@@ -90,7 +93,22 @@ Two independent secrets means a single leaked credential is recoverable: rotate
+-Norm is represented in MongoDB as a single dedicated `User` document:
+-- `email`: `norm@internal.toolsaustralia` (synthetic, never receives mail)
+-- `role`: `"norm"` — a new role, **not** `"admin"`. The existing `requireAdminUser` helper continues to reject this role.
+-- `serviceAccount`: `true` — new boolean field. The admin UI's user list filters this out by default.
+-- `name`: `"Norm (AI Assistant)"`
+-
+-This is created by a one-shot migration script. Existing services like `ChargeJobRun`, promo audit fields, and error-report acknowledgement already reference `adminUserId` — they'll naturally attribute Norm-triggered actions to this User without code changes.
++Norm is represented in MongoDB as a single dedicated `User` document **plus** a dedicated `Role` document, both seeded by one idempotent migration:
++
++**Norm `User`:**
++- `email`: `norm@internal.toolsaustralia.com.au` (synthetic, never receives mail)
++- `firstName: "Norm"`, `lastName: "(AI Assistant)"`
++- `userType`: `"staff"` — slots Norm under the new RBAC system alongside human staff
++- `roleId`: ObjectId of the seeded "Norm" Role (below)
++- `serviceAccount`: `true` — new boolean field on `User`. The admin UI's user list and the Settings → Staff list filter `serviceAccount: true` out by default so Norm doesn't show up as a clickable team member.
++- `role` (the legacy `"user" | "admin"` field): left at the default `"user"`. The legacy bridge in `requirePermission` doesn't apply to Norm because Norm has `userType: "staff"`, not the absence of `userType`.
++
++**Norm `Role`:**
++- `name`: `"Norm"`
++- `color`: `"#2563eb"` (any distinct hex)
++- `permissions`: initially `["facebookAds.view", "overview.view"]` — just enough for ROAS + Dashboard Stats. Owner edits this from Settings → Roles to grant additional capabilities later.
++- `isSystem`: `true` — prevents accidental deletion/rename from the admin UI
++- `createdBy`: `null`
++
++**Why this is the right shape under the new RBAC:**
++- Existing services that reference `adminUserId` (charge runs, promo audit, error-report acknowledgement) attribute Norm naturally — `userType: "staff"` is a valid internal user.
++- Owner can grant or revoke a permission from the **existing** Settings → Roles UI; no code change, no redeploy.
++- When the owner edits the Norm Role, `User.tokenVersion` bumping applies to JWT users — Norm has no JWT, but `withNorm` re-loads Norm's permission set with a 30-second cache, so the effect is the same: revocations take effect within seconds.
++- The seeded Admin role is **not** reused — Norm explicitly does NOT bypass permission checks via `userType: "admin"`. Norm is governed by explicit permissions only.
+@@ -99,0 +118,4 @@ This is created by a one-shot migration script. Existing services like `ChargeJo
++The tier model and the permission catalog are **orthogonal axes**:
++- **Permission** (from [src/lib/permissions.ts](src/lib/permissions.ts)) answers: *is Norm allowed to call this endpoint at all?* Enforced by `withNorm`'s permission-check step against Norm's Role.
++- **Tier** answers: *what orchestration shape does the call use?* (Single call / two-step Norm-confirm / two-step human-approve.)
++
+@@ -106 +127,0 @@ This is created by a one-shot migration script. Existing services like `ChargeJo
+-| `forbidden` | Explicitly NOT exposed to Norm. The router will refuse to register it. | Anything that changes admin roles, anything touching auth secrets, hard deletes. |
+@@ -108 +129,5 @@ This is created by a one-shot migration script. Existing services like `ChargeJo
+-The tier is declared in the classification registry — there is exactly one source of truth.
++**"Forbidden" is not a tier.** An endpoint is effectively forbidden to Norm in either of two ways:
++1. The endpoint is never registered (the typed registry simply omits it).
++2. The endpoint IS registered with a `requiredPermission`, but the Norm Role does not grant that permission. Calls return 403 from `withNorm`'s permission-check step.
++
++Both the tier and the required permission are declared in the classification registry — one source of truth.
+@@ -186,0 +212,2 @@ Every Norm call writes exactly one `NormCallLog` document:
++  permissionChecked: "facebookAds.view",   // the route's requiredPermission
++  permissionGranted: true,                 // whether Norm's Role had it at request time
+@@ -213,0 +241 @@ The framework is built so adding a new Norm endpoint is a 10-minute job:
++        requiredPermission: "facebookAds.view",  // from src/lib/permissions.ts catalog
+@@ -217,2 +245,2 @@ The framework is built so adding a new Norm endpoint is a 10-minute job:
+-        rateLimit: { perMinute: 10 },          // optional override
+-        responseSchema: NormRoasSummarySchema, // Zod
++        rateLimit: { perMinute: 10 },             // optional override
++        responseSchema: NormRoasSummarySchema,    // Zod
+@@ -223 +251,3 @@ The framework is built so adding a new Norm endpoint is a 10-minute job:
+-    Boot-time check: the router refuses to start if a route file exists with no matching registry entry, OR a registry entry has no route file. Drift impossible.
++    Boot-time checks:
++    - Router refuses to start if a route file exists with no matching registry entry, OR a registry entry has no route file. Drift impossible.
++    - Every entry's `requiredPermission` must be a valid permission from `PERMISSIONS` (the org-wide catalog) — typo in a permission string fails the build.
+@@ -232 +262,9 @@ The framework is built so adding a new Norm endpoint is a 10-minute job:
+-    `withNorm` handles auth, signature, replay, rate-limit, audit-log create-then-update, error mapping, response schema validation, and dry-run/confirm orchestration for trigger tiers. The handler body is the only thing that varies.
++    `withNorm` runs in this order:
++    1. **Auth** (bearer + HMAC + replay) — 401 on failure
++    2. **Permission check** — load Norm's User → resolve `roleId` → fetch `Role.permissions` (30s in-memory cache, invalidated on `User.tokenVersion` bump) → reject 403 if the route's `requiredPermission` is not in the set
++    3. **Kill switch** — 503 if disabled
++    4. **Rate limit** — 429 if exceeded
++    5. **Handler** — or dry-run / confirm orchestration for trigger tiers
++    6. **Audit log** — record everything including `permissionChecked` and `permissionGranted`
++    7. **Response schema validation** — 500 if handler returned a shape that fails Zod
++    The handler body is the only thing that varies per endpoint.
+@@ -250 +288 @@ The framework is built so adding a new Norm endpoint is a 10-minute job:
+-- Move the body of [src/app/api/admin/facebook-ads/insights/route.ts](src/app/api/admin/facebook-ads/insights/route.ts) into the service; admin route shrinks to ~15 lines (auth → call service → return)
++- Move the body of [src/app/api/admin/facebook-ads/insights/route.ts](src/app/api/admin/facebook-ads/insights/route.ts) into the service. The admin route shrinks to ~15 lines: **the existing `requirePermission("facebookAds.view")` guard at line 49 stays**, followed by query parse + service call + return. The extracted service has NO auth check of its own — the guard at the route layer is what protects the admin path.
+@@ -253 +291 @@ The framework is built so adding a new Norm endpoint is a 10-minute job:
+-**Norm endpoints:**
++**Norm endpoints:** Both `tier: "read"`, both `requiredPermission: "facebookAds.view"`.
+@@ -256 +294 @@ The framework is built so adding a new Norm endpoint is a 10-minute job:
+-Tier: `read`. Response (Zod-validated):
++Response (Zod-validated):
+@@ -273 +311 @@ Tier: `read`. Response (Zod-validated):
+-Tier: `read`. Same summary block plus a `breakdown: Array<{ id, name, spend, revenue, roas, conversions, impressions, clicks, ctr, cpc }>` keyed by `level`.
++Same summary block plus a `breakdown: Array<{ id, name, spend, revenue, roas, conversions, impressions, clicks, ctr, cpc }>` keyed by `level`.
+@@ -279 +317 @@ Tier: `read`. Same summary block plus a `breakdown: Array<{ id, name, spend, rev
+-- Move the orchestration body of [src/app/api/admin/dashboard/stats/route.ts](src/app/api/admin/dashboard/stats/route.ts) into the service; admin route shrinks
++- Move the orchestration body of [src/app/api/admin/dashboard/stats/route.ts](src/app/api/admin/dashboard/stats/route.ts) into the service. The admin route shrinks: **the existing `requirePermission("overview.view")` guard at line 34 stays**, followed by query parse + service call + return. The extracted service has NO auth check of its own.
+@@ -282 +320 @@ Tier: `read`. Same summary block plus a `breakdown: Array<{ id, name, spend, rev
+-**Norm endpoints:**
++**Norm endpoints:** Both `tier: "read"`, both `requiredPermission: "overview.view"`.
+@@ -285 +323 @@ Tier: `read`. Same summary block plus a `breakdown: Array<{ id, name, spend, rev
+-Tier: `read`. Response is a **clean projection** of the admin response — no internal-only fields:
++Response is a **clean projection** of the admin response — no internal-only fields:
+@@ -312 +350,4 @@ Each phase is independently shippable and produces a user-visible win.
+-- Migration: idempotent script (`scripts/migrations/create-norm-user.ts`) that upserts the Norm `User` row with `role: "norm"`, `serviceAccount: true`. Safe to re-run.
++- Migration: idempotent script (`scripts/migrations/2026-05-20-create-norm-user-and-role.ts`) that upserts BOTH:
++  1. The `"Norm"` `Role` with initial `permissions: ["facebookAds.view", "overview.view"]`, `color: "#2563eb"`, `isSystem: true`
++  2. The Norm `User` row with `email: "norm@internal.toolsaustralia.com.au"`, `userType: "staff"`, `roleId: <Norm role id>`, `serviceAccount: true`
++  Safe to re-run.
+@@ -315 +356,2 @@ Each phase is independently shippable and produces a user-visible win.
+-- `src/lib/internal-norm/withNorm.ts` HOF (auth, rate-limit, audit, error mapping, dry-run/confirm orchestration)
++- `src/lib/internal-norm/permissions.ts` — loads Norm User → Role → permission set with 30s cache; exposes `getNormPermissions()` and a small `hasPermission(perm)` helper
++- `src/lib/internal-norm/withNorm.ts` HOF (auth, **permission check**, kill switch, rate-limit, audit, error mapping, dry-run/confirm orchestration)
+@@ -345 +387 @@ Each phase is independently shippable and produces a user-visible win.
+-- Fill `classification.ts` with **every** existing admin endpoint mapped to a tier (`read` / `write_safe` / `trigger_norm_confirm` / `trigger_human_approve` / `forbidden`). The matrix is the artifact DJ reviews and signs off — it's the roadmap for future Norm expansion.
++- Fill `classification.ts` with **every** existing admin endpoint. Each entry declares both `tier` (`read` / `write_safe` / `trigger_norm_confirm` / `trigger_human_approve`) AND `requiredPermission` (from the org-wide catalog in [src/lib/permissions.ts](src/lib/permissions.ts)). For endpoints already calling `requirePermission(...)`, copy the same permission string. For the ~15 admin endpoints still on legacy `requireAdminUser`, pick the most sensible catalog entry (usually the area's `.view` for GETs or `.edit`/`.delete` for mutating ones) and flag the entry with a `legacyAdminCheck: true` marker for follow-up.
+@@ -347 +389,2 @@ Each phase is independently shippable and produces a user-visible win.
+-  - `/admin/internal-norm/audit` — `NormCallLog` browser with filters by tier / registry key / status / time; per-row "view full request/response hash"; per-endpoint kill-switch toggle
++  - `/admin/internal-norm/audit` — `NormCallLog` browser with filters by tier / registry key / status / time / `permissionChecked`; per-row "view full request/response hash"; per-endpoint kill-switch toggle
++  - `/admin/internal-norm/endpoints` — every registry entry with three columns: `requiredPermission`, `norm-role-grants-it?` (✓/✗ with a link to Settings → Roles → Norm), and `disabled?` toggle
+@@ -350,2 +393,3 @@ Each phase is independently shippable and produces a user-visible win.
+-- Tests: kill-switch flips an endpoint to 503 within one request cycle; approve actually executes the underlying service; deny doesn't
+-- **Win:** full observability; canonical roadmap for future Norm endpoints exists in code; trigger_human_approve flow is ready even though no triggers are wired up yet.
++- **Norm Role management itself is delegated to the existing Settings → Roles UI — no new screens for that.**
++- Tests: kill-switch flips an endpoint to 503 within one request cycle; revoking a permission from the Norm Role causes the next request to that endpoint to return 403; approve actually executes the underlying service; deny doesn't
++- **Win:** full observability; canonical roadmap for future Norm endpoints exists in code; trigger_human_approve flow is ready even though no triggers are wired up yet; permission grants visible at a glance.
+@@ -395,0 +440,2 @@ Each phase is independently shippable and produces a user-visible win.
++  permissionChecked: string,        // e.g. "facebookAds.view"
++  permissionGranted: boolean,       // whether Norm's Role had it at request time
+@@ -470,2 +516,4 @@ None blocking. Things deliberately deferred:
+-- [ ] Norm `User` row has `role: "norm"`, NOT `"admin"`; existing `requireAdminUser` rejects this role
+-- [ ] `forbidden` endpoints in the registry refuse to register a route file (boot-time check)
++- [ ] Norm `User` has `userType: "staff"` (NOT `"admin"`); the super-admin bypass in `requirePermission` does NOT apply to Norm
++- [ ] Norm Role name is `"Norm"`, `isSystem: true`, holds ONLY the permissions explicitly granted by the owner
++- [ ] `withNorm`'s permission-check step runs BEFORE handler invocation; 403 audited
++- [ ] Every registry entry's `requiredPermission` is validated against `PERMISSIONS` at boot

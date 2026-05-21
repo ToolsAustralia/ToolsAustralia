@@ -14,6 +14,7 @@ import {
   Activity,
   AlertCircle,
   BarChart3,
+  Bot,
   Bug,
   ClipboardList,
   FileText as FileTextIcon,
@@ -116,6 +117,7 @@ export const ADMIN_TAB_GROUPS: AdminTabGroup[] = [
     groupIcon: Shield,
     tabs: [
       { id: "team", label: "Team", icon: Shield, requires: "settings.view" },
+      { id: "norm", label: "Norm", icon: Bot, requires: "settings.view" },
     ],
   },
 ];

@@ -4,7 +4,7 @@
 
 **Goal:** Build a secure, scalable HTTP namespace (`/api/internal/norm/v1/*`) that lets the external "Norm" AI assistant on a Mac mini read this codebase's admin data (and, in later specs, take confirmed actions). Ships the framework, classification matrix scaffolding, ROAS + Dashboard Stats read endpoints, audit/pending-action admin UI, and docs.
 
-**Architecture:** `withNorm()` HOF wraps every Norm route handler — handles bearer + HMAC + replay auth, rate-limiting, response schema validation, and audit logging. A typed registry (`src/lib/internal-norm/classification.ts`) is the single source of truth: every Norm endpoint is declared there with a tier (`read`/`write_safe`/`trigger_norm_confirm`/`trigger_human_approve`/`forbidden`). Norm endpoints delegate to existing `src/services/**` business logic — never duplicate. The first two domains' admin routes get a targeted "fat route → service" extraction so Norm and admin call the same code path.
+**Architecture:** `withNorm()` HOF wraps every Norm route handler — runs bearer+HMAC+replay auth, **then permission check against Norm's Role** (using the org-wide permission catalog from the just-merged RBAC system), then kill-switch, rate-limit, handler, audit. A typed registry (`src/lib/internal-norm/classification.ts`) is the single source of truth: every Norm endpoint declares both a `tier` (`read`/`write_safe`/`trigger_norm_confirm`/`trigger_human_approve`) and a `requiredPermission` (e.g. `"facebookAds.view"`) from the catalog at [src/lib/permissions.ts](src/lib/permissions.ts). Norm is a `userType: "staff"` user with a dedicated "Norm" `Role`; owner grants/revokes capabilities via the existing Settings → Roles UI — no code change. Norm endpoints delegate to existing `src/services/**` business logic — never duplicate. The first two domains' admin routes get a targeted "fat route → service" extraction so Norm and admin call the same code path while preserving the existing `requirePermission(...)` guard on the admin side.
 
 **Tech Stack:** Next.js 15 App Router, TypeScript, Zod, MongoDB/Mongoose, NextAuth (existing admin session for UI pages), `tsx` for tests, existing `createRateLimiter` factory, `crypto.subtle` / Node `crypto` for HMAC.
 
@@ -19,10 +19,11 @@
 ```
 src/lib/internal-norm/
   auth.ts                        # bearer + HMAC + replay verify; signature generation helpers
-  classification.ts              # NORM_ENDPOINTS typed registry + types
+  permissions.ts                 # loads Norm User → Role → permission set (30s cache); hasPermission()
+  classification.ts              # NORM_ENDPOINTS typed registry + types (each entry has requiredPermission)
   killSwitch.ts                  # read NormEndpointSettings + env override with 30s cache
   rateLimits.ts                  # per-tier buckets + per-endpoint override lookup
-  withNorm.ts                    # the HOF: orchestrates auth → kill switch → rate limit → handler → schema validate → audit
+  withNorm.ts                    # the HOF: orchestrates auth → permission check → kill switch → rate limit → handler → schema validate → audit
   audit.ts                       # NormCallLog write helpers (begin/end)
   # NOTE: receipts.ts (dry-run/confirm receipt lifecycle) is deliberately deferred —
   # this spec only creates the NormTriggerReceipt model. The library helper lands
@@ -75,14 +76,14 @@ src/generated/
 scripts/
   build-norm-manifest.ts          # build:norm-manifest npm script
   migrations/
-    2026-05-20-create-norm-user.ts  # idempotent upsert of Norm User row
+    2026-05-20-create-norm-user-and-role.ts  # idempotent upsert of Norm Role + User
 
 src/lib/internal-norm/__tests__/
   auth.test.ts                    # bearer/HMAC/replay positive + negative cases
+  permissions.test.ts             # loads Norm role permissions; 403 when missing; cache invalidation
   killSwitch.test.ts              # env override wins, DB toggle works, 30s cache
   rateLimits.test.ts              # tier buckets, per-endpoint override
-  receipts.test.ts                # create, verify hash, single-use, expiry
-  withNorm.test.ts                # end-to-end orchestration with fakes
+  withNorm.test.ts                # end-to-end orchestration with fakes (incl. permission step)
 
 src/services/facebook-ads/__tests__/
   FacebookAdsInsightsService.test.ts   # mock fetcher; verifies summary + breakdown shape
@@ -104,9 +105,9 @@ docs/internal-norm/
 ### Modified files
 
 ```
-src/models/User.ts                  # extend role union with "norm"; add serviceAccount?: boolean
-src/app/api/admin/facebook-ads/insights/route.ts   # shrink to ~15 lines; delegate to FacebookAdsInsightsService
-src/app/api/admin/dashboard/stats/route.ts         # shrink; delegate to DashboardStatsService
+src/models/User.ts                  # add serviceAccount?: boolean field only (DO NOT extend role union — Norm uses userType="staff")
+src/app/api/admin/facebook-ads/insights/route.ts   # shrink to ~15 lines; preserve requirePermission("facebookAds.view"); delegate to FacebookAdsInsightsService
+src/app/api/admin/dashboard/stats/route.ts         # shrink; preserve requirePermission("overview.view"); delegate to DashboardStatsService
 src/app/admin/component/AdminPage.tsx              # add "Norm" tab and route to new sub-tabs
 .env.example                        # NORM_BEARER_TOKEN, NORM_SIGNING_SECRET, NORM_DISABLED_REGISTRY_KEYS
 package.json                        # build:norm-manifest, prebuild composition, test:norm-*
@@ -121,67 +122,80 @@ README.md  BUSINESS.md              # add internal Norm API to Live section
 
 Goal: end-to-end auth proves out with `curl`, no business data exposed yet. Norm can call `/v1/health` and `/v1/manifest`.
 
-## Task 1.1: Extend `User` role to support `"norm"`
+## Task 1.1: Add `serviceAccount` field to `User`
+
+The new RBAC merge (`feature/user-roles`) introduced `userType: "customer"|"staff"|"admin"` plus `roleId`. Norm will use `userType: "staff"` + a dedicated "Norm" `Role`. We do NOT extend the legacy `role` union — that field is being phased out anyway. We only add a new `serviceAccount` boolean so the admin Settings → Staff list can filter Norm out of the human-staff view.
 
 **Files:**
-- Modify: `src/models/User.ts:14` (role union) and the schema definition (search for `enum:` on `role`)
-- Modify: `src/lib/api-auth.ts:21` (verify `requireAdminUser` still rejects `"norm"` — it already does because it checks `role !== "admin"`, but pin it with a test)
+- Modify: `src/models/User.ts` — add `serviceAccount?: boolean` to the `IUser` interface and to the schema definition
 
-- [ ] **Step 1: Read User.ts around the role field**
+- [ ] **Step 1: Read User.ts around the new RBAC fields**
 
-  Run: read `src/models/User.ts` and find the `role` interface line + the schema's `role` definition (likely `{ type: String, enum: [...], default: "user" }`).
+  Read `src/models/User.ts` lines 280–315 (interface) and 400–425 (schema) to find where `userType`, `roleId`, `inviteToken` etc. are declared. Add `serviceAccount` alongside them so it sits with the other staff-related fields.
 
-- [ ] **Step 2: Extend the role union and enum**
+- [ ] **Step 2: Add the field**
 
-  In the `IUser` interface:
+  In the `IUser` interface (next to `userType`):
   ```ts
-  role: "user" | "admin" | "norm";
+  /** True for non-human service accounts (e.g. Norm AI). Hides the user from the human-staff list. */
   serviceAccount?: boolean;
   ```
-  In the schema:
+  In the schema (next to the `userType` definition):
   ```ts
-  role: { type: String, enum: ["user", "admin", "norm"], default: "user" },
   serviceAccount: { type: Boolean, default: false },
   ```
 
-- [ ] **Step 3: Add a tsx test that proves `requireAdminUser` rejects role `"norm"`**
+- [ ] **Step 3: Write a tsx smoke test that creates a userType=staff serviceAccount=true user and reads it back**
 
-  Create `src/lib/__tests__/apiAuth.norm.test.ts`:
+  Create `src/models/__tests__/User.serviceAccount.test.ts`:
   ```ts
+  import dotenv from "dotenv"; import path from "node:path";
+  dotenv.config({ path: path.resolve(process.cwd(), ".env.local") });
   import { strict as assert } from "node:assert";
-  // Inline-mock NextAuth + Mongo. The test asserts the role guard semantics, not the HTTP layer.
-  // Importing the actual module would pull in DB; instead we re-encode the guard rule here:
-  function isAdminRole(role: string): boolean {
-    return role === "admin";
+  import mongoose from "mongoose";
+  import connectDB from "@/lib/mongodb";
+  import User from "@/models/User";
+
+  async function run() {
+    await connectDB();
+    const email = `__norm_test_${Date.now()}@internal.test`;
+    const u = await User.create({
+      firstName: "Test", lastName: "Service",
+      email, userType: "staff", serviceAccount: true,
+    });
+    assert.equal(u.userType, "staff");
+    assert.equal(u.serviceAccount, true);
+    await User.deleteOne({ _id: u._id });
+    await mongoose.disconnect();
+    console.log("✓ User.serviceAccount round-trip ok");
   }
-  assert.equal(isAdminRole("user"), false);
-  assert.equal(isAdminRole("norm"), false);
-  assert.equal(isAdminRole("admin"), true);
-  console.log("✓ requireAdminUser rejects 'norm' and 'user'; accepts 'admin'");
+  void run();
   ```
 
 - [ ] **Step 4: Wire test into package.json**
 
   Add to `scripts`:
   ```json
-  "test:norm-auth-role": "tsx src/lib/__tests__/apiAuth.norm.test.ts"
+  "test:norm-user-service-account": "tsx src/models/__tests__/User.serviceAccount.test.ts"
   ```
 
 - [ ] **Step 5: Run, verify pass, commit**
 
-  Run: `npm run test:norm-auth-role`
-  Expected: `✓ requireAdminUser rejects 'norm' and 'user'; accepts 'admin'`
+  Run: `npm run test:norm-user-service-account`
+  Expected: `✓ User.serviceAccount round-trip ok`
 
   ```
-  git add src/models/User.ts src/lib/__tests__/apiAuth.norm.test.ts package.json
-  git commit -m "feat(internal-norm): extend User.role with 'norm' service-account role"
+  git add src/models/User.ts src/models/__tests__/User.serviceAccount.test.ts package.json
+  git commit -m "feat(internal-norm): add serviceAccount boolean to User (for non-human staff accounts)"
   ```
 
-## Task 1.2: Create idempotent Norm-user migration
+## Task 1.2: Seed Norm Role + Norm User (idempotent migration)
+
+Norm needs both a dedicated `Role` (initially holding just the permissions for Phase 2 + Phase 3 reads) AND a `User` linked to it. The migration upserts both.
 
 **Files:**
-- Create: `scripts/migrations/2026-05-20-create-norm-user.ts`
-- Modify: `package.json` (add `migrate:create-norm-user` script)
+- Create: `scripts/migrations/2026-05-20-create-norm-user-and-role.ts`
+- Modify: `package.json` (add `migrate:create-norm` script)
 
 - [ ] **Step 1: Write the migration**
 
@@ -193,33 +207,68 @@ Goal: end-to-end auth proves out with `curl`, no business data exposed yet. Norm
   import mongoose from "mongoose";
   import connectDB from "../../src/lib/mongodb";
   import User from "../../src/models/User";
+  import Role from "../../src/models/Role";
 
-  const NORM_EMAIL = "norm@internal.toolsaustralia";
+  const NORM_EMAIL = "norm@internal.toolsaustralia.com.au";
+  const NORM_ROLE_NAME = "Norm";
+  const NORM_ROLE_COLOR = "#2563eb";
+  // Initial permissions for Phase 2 + Phase 3 endpoints. Anything beyond this is granted by the
+  // owner via Settings → Roles → Norm.
+  const NORM_INITIAL_PERMISSIONS = ["facebookAds.view", "overview.view"];
 
   async function run() {
     await connectDB();
     try {
-      const existing = await User.findOne({ email: NORM_EMAIL });
-      if (existing) {
-        if (existing.role !== "norm" || existing.serviceAccount !== true) {
-          existing.role = "norm";
-          existing.serviceAccount = true;
-          await existing.save();
-          console.log("✓ Norm user updated (role/serviceAccount aligned)");
+      // 1) Upsert Norm Role
+      let role = await Role.findOne({ name: NORM_ROLE_NAME });
+      if (!role) {
+        role = await Role.create({
+          name: NORM_ROLE_NAME,
+          color: NORM_ROLE_COLOR,
+          permissions: NORM_INITIAL_PERMISSIONS,
+          isSystem: true,
+          createdBy: null,
+        });
+        console.log(`✓ Created Norm role (${role._id})`);
+      } else {
+        // Leave existing permissions alone — owner may have edited them.
+        // Just align color + isSystem if they drifted.
+        let changed = false;
+        if (!role.color) { role.color = NORM_ROLE_COLOR; changed = true; }
+        if (!role.isSystem) { role.isSystem = true; changed = true; }
+        if (changed) {
+          await role.save();
+          console.log("✓ Aligned Norm role (color/isSystem)");
         } else {
-          console.log("✓ Norm user already present and aligned, no change");
+          console.log("✓ Norm role already present and aligned");
         }
-        return;
       }
-      await User.create({
-        firstName: "Norm",
-        lastName: "(AI Assistant)",
-        email: NORM_EMAIL,
-        role: "norm",
-        serviceAccount: true,
-        isActive: true,
-      });
-      console.log("✓ Norm user created");
+
+      // 2) Upsert Norm User
+      let user = await User.findOne({ email: NORM_EMAIL });
+      if (!user) {
+        user = await User.create({
+          firstName: "Norm",
+          lastName: "(AI Assistant)",
+          email: NORM_EMAIL,
+          userType: "staff",
+          roleId: role._id,
+          serviceAccount: true,
+          isActive: true,
+        });
+        console.log(`✓ Created Norm user (${user._id})`);
+      } else {
+        let changed = false;
+        if (user.userType !== "staff") { user.userType = "staff"; changed = true; }
+        if (String(user.roleId) !== String(role._id)) { user.roleId = role._id; changed = true; }
+        if (user.serviceAccount !== true) { user.serviceAccount = true; changed = true; }
+        if (changed) {
+          await user.save({ validateBeforeSave: false });
+          console.log("✓ Aligned Norm user (userType/roleId/serviceAccount)");
+        } else {
+          console.log("✓ Norm user already present and aligned");
+        }
+      }
     } finally {
       await mongoose.disconnect();
     }
@@ -234,21 +283,25 @@ Goal: end-to-end auth proves out with `curl`, no business data exposed yet. Norm
 - [ ] **Step 2: Add npm script**
 
   ```json
-  "migrate:create-norm-user": "tsx scripts/migrations/2026-05-20-create-norm-user.ts"
+  "migrate:create-norm": "tsx scripts/migrations/2026-05-20-create-norm-user-and-role.ts"
   ```
 
 - [ ] **Step 3: Run twice to verify idempotency**
 
-  Run: `npm run migrate:create-norm-user`
-  Expected first run: `✓ Norm user created`
-  Run again: `npm run migrate:create-norm-user`
-  Expected: `✓ Norm user already present and aligned, no change`
+  Run: `npm run migrate:create-norm`
+  Expected first run: `✓ Created Norm role (...)` then `✓ Created Norm user (...)`
+  Run again: `npm run migrate:create-norm`
+  Expected: `✓ Norm role already present and aligned` and `✓ Norm user already present and aligned`
 
-- [ ] **Step 4: Commit**
+- [ ] **Step 4: Verify in Mongo**
+
+  Open Mongo Compass / connect to the DB. Check the `roles` collection for a row with `name: "Norm"`, `permissions: ["facebookAds.view", "overview.view"]`. Check the `users` collection for the synthetic Norm email with `userType: "staff"`, `roleId` matching the Norm role's `_id`, `serviceAccount: true`.
+
+- [ ] **Step 5: Commit**
 
   ```
-  git add scripts/migrations/2026-05-20-create-norm-user.ts package.json
-  git commit -m "feat(internal-norm): add idempotent migration creating Norm service-account user"
+  git add scripts/migrations/2026-05-20-create-norm-user-and-role.ts package.json
+  git commit -m "feat(internal-norm): idempotent migration seeding Norm Role + User under new RBAC"
   ```
 
 ## Task 1.3: Add env vars + `.env.example`
@@ -631,16 +684,24 @@ Goal: end-to-end auth proves out with `curl`, no business data exposed yet. Norm
   ```ts
   import { strict as assert } from "node:assert";
   import { NORM_ENDPOINTS, NORM_TIERS, getEndpoint } from "@/lib/internal-norm/classification";
+  import { ALL_PERMISSIONS } from "@/lib/permissions";
 
   assert.ok(Array.isArray(NORM_TIERS) || typeof NORM_TIERS === "object", "NORM_TIERS exported");
+  // "forbidden" is NOT a tier under the new design
+  assert.equal((NORM_TIERS as readonly string[]).includes("forbidden"), false);
   assert.equal(typeof NORM_ENDPOINTS, "object");
   // Health must be present in the registry from day one
   const health = getEndpoint("health");
   assert.equal(health.path, "/v1/health");
   assert.equal(health.tier, "read");
+  assert.ok(ALL_PERMISSIONS.has(health.requiredPermission), "health.requiredPermission is in catalog");
   // Unknown key returns null/undefined (NOT throw — caller decides)
   assert.equal(getEndpoint("nope.nonexistent"), undefined);
-  console.log("✓ classification registry exports + lookup behave correctly");
+  // Every registry entry has a valid permission (boot-time guard already throws on load, this re-asserts)
+  for (const [key, spec] of Object.entries(NORM_ENDPOINTS)) {
+    assert.ok(ALL_PERMISSIONS.has(spec.requiredPermission), `${key}.requiredPermission not in catalog`);
+  }
+  console.log("✓ classification registry exports + lookup + permission validity ok");
   ```
 
 - [ ] **Step 2: Add npm script**
@@ -679,36 +740,46 @@ Goal: end-to-end auth proves out with `curl`, no business data exposed yet. Norm
   ```ts
   // src/lib/internal-norm/classification.ts
   import type { z } from "zod";
+  import { ALL_PERMISSIONS, type Permission } from "@/lib/permissions";
 
+  // "forbidden" is NOT a tier — endpoints not in the registry are simply unreachable.
+  // Tier and Permission are orthogonal axes: tier = orchestration shape; permission = "is Norm allowed?".
   export const NORM_TIERS = [
     "read",
     "write_safe",
     "trigger_norm_confirm",
     "trigger_human_approve",
-    "forbidden",
   ] as const;
   export type NormTier = (typeof NORM_TIERS)[number];
 
   export interface NormEndpointSpec {
     tier: NormTier;
+    /** Permission from @/lib/permissions that Norm's Role must hold to call this endpoint. */
+    requiredPermission: Permission;
     path: string;          // "/v1/roas/summary"
     method: "GET" | "POST" | "PATCH" | "DELETE";
     summary: string;
     rateLimit?: { perMinute?: number; perDay?: number };
     responseSchema?: z.ZodTypeAny;
     requestSchema?: z.ZodTypeAny;
+    /** True if the underlying admin route still uses requireAdminUser (not requirePermission). Follow-up to migrate. */
+    legacyAdminCheck?: boolean;
   }
 
   // Real endpoints get added in Phase 2 and Phase 3. Framework endpoints listed below.
+  // Both health and manifest use "overview.view" as their required permission — they're
+  // framework infra that any staff member with even minimal dashboard access can use.
   export const NORM_ENDPOINTS = {
     health: {
       tier: "read",
+      requiredPermission: "overview.view",
       path: "/v1/health",
       method: "GET",
       summary: "Liveness + signing-secret validation",
     },
     manifest: {
       tier: "read",
+      requiredPermission: "overview.view",
       path: "/v1/manifest",
       method: "GET",
       summary: "Full tools manifest for Norm capability discovery",
@@ -719,6 +790,16 @@ Goal: end-to-end auth proves out with `curl`, no business data exposed yet. Norm
 
   export function getEndpoint(key: string): NormEndpointSpec | undefined {
     return (NORM_ENDPOINTS as Record<string, NormEndpointSpec>)[key];
+  }
+
+  /**
+   * Boot-time validation: every registry entry's requiredPermission must be a valid
+   * catalog permission. Catches typos at module-load time.
+   */
+  for (const [key, spec] of Object.entries(NORM_ENDPOINTS)) {
+    if (!ALL_PERMISSIONS.has(spec.requiredPermission)) {
+      throw new Error(`NORM_ENDPOINTS["${key}"].requiredPermission "${spec.requiredPermission}" is not in PERMISSIONS catalog`);
+    }
   }
   ```
 
@@ -1150,6 +1231,132 @@ Goal: end-to-end auth proves out with `curl`, no business data exposed yet. Norm
   git commit -m "feat(internal-norm): kill switch + per-tier rate limits"
   ```
 
+## Task 1.9b: Norm permissions loader
+
+The withNorm HOF needs to know what permissions Norm's Role grants. This loader fetches them with a 30-second in-memory cache.
+
+**Files:**
+- Create: `src/lib/internal-norm/permissions.ts`
+- Create: `src/lib/internal-norm/__tests__/permissions.test.ts`
+- Modify: `package.json` (`test:norm-permissions`)
+
+- [ ] **Step 1: Write the failing test**
+
+  ```ts
+  import dotenv from "dotenv"; import path from "node:path";
+  dotenv.config({ path: path.resolve(process.cwd(), ".env.local") });
+  import { strict as assert } from "node:assert";
+  import mongoose from "mongoose";
+  import connectDB from "@/lib/mongodb";
+  import User from "@/models/User";
+  import Role from "@/models/Role";
+  import {
+    getNormPermissions,
+    hasNormPermission,
+    __clearNormPermissionsCacheForTests,
+  } from "@/lib/internal-norm/permissions";
+
+  async function run() {
+    await connectDB();
+    __clearNormPermissionsCacheForTests();
+    // Resolve Norm — the migration must have been run first
+    const role = await Role.findOne({ name: "Norm" });
+    assert.ok(role, "Norm role exists (run npm run migrate:create-norm first)");
+    const user = await User.findOne({ email: "norm@internal.toolsaustralia.com.au" });
+    assert.ok(user, "Norm user exists (run npm run migrate:create-norm first)");
+
+    const perms = await getNormPermissions();
+    assert.ok(perms instanceof Set);
+    assert.equal(perms.has("facebookAds.view"), true);
+    assert.equal(perms.has("overview.view"), true);
+    assert.equal(perms.has("users.delete"), false, "Norm should NOT have destructive permissions by default");
+
+    assert.equal(await hasNormPermission("facebookAds.view"), true);
+    assert.equal(await hasNormPermission("users.delete"), false);
+
+    // Caching: temporarily grant a permission directly in Mongo, observe that the cached read still returns old set
+    await Role.updateOne({ _id: role._id }, { $addToSet: { permissions: "users.view" } });
+    const cached = await getNormPermissions();
+    assert.equal(cached.has("users.view"), false, "cache holds stale set until cleared");
+    __clearNormPermissionsCacheForTests();
+    const fresh = await getNormPermissions();
+    assert.equal(fresh.has("users.view"), true, "after cache clear, fresh read sees the new permission");
+    // Cleanup: revert the temporary permission so subsequent tests aren't affected
+    await Role.updateOne({ _id: role._id }, { $pull: { permissions: "users.view" } });
+
+    await mongoose.disconnect();
+    console.log("✓ Norm permissions loader: read + cache + invalidate");
+  }
+  void run();
+  ```
+
+- [ ] **Step 2: Add npm script**
+
+  ```json
+  "test:norm-permissions": "tsx src/lib/internal-norm/__tests__/permissions.test.ts"
+  ```
+
+- [ ] **Step 3: Run — expect failure**
+
+  Run: `npm run test:norm-permissions`
+
+- [ ] **Step 4: Implement permissions.ts**
+
+  ```ts
+  // src/lib/internal-norm/permissions.ts
+  import connectDB from "@/lib/mongodb";
+  import User from "@/models/User";
+  import Role from "@/models/Role";
+  import type { Permission } from "@/lib/permissions";
+
+  const NORM_EMAIL = "norm@internal.toolsaustralia.com.au";
+  const CACHE_TTL_MS = 30_000;
+
+  let cache: { perms: Set<string>; expiresAt: number } | null = null;
+
+  export async function getNormPermissions(): Promise<Set<string>> {
+    const now = Date.now();
+    if (cache && cache.expiresAt > now) return cache.perms;
+    await connectDB();
+    const user = await User.findOne({ email: NORM_EMAIL }).select("roleId userType").lean();
+    if (!user) {
+      cache = { perms: new Set(), expiresAt: now + CACHE_TTL_MS };
+      return cache.perms;
+    }
+    // Defense: Norm must be userType="staff". If something flipped it to "admin" (super-admin bypass),
+    // that's a configuration error — we still return only what the Role explicitly grants.
+    if (!user.roleId) {
+      cache = { perms: new Set(), expiresAt: now + CACHE_TTL_MS };
+      return cache.perms;
+    }
+    const role = await Role.findById(user.roleId).select("permissions").lean();
+    const perms = new Set<string>(role?.permissions ?? []);
+    cache = { perms, expiresAt: now + CACHE_TTL_MS };
+    return perms;
+  }
+
+  export async function hasNormPermission(perm: Permission | string): Promise<boolean> {
+    const set = await getNormPermissions();
+    return set.has(perm);
+  }
+
+  export function __clearNormPermissionsCacheForTests() {
+    cache = null;
+  }
+  ```
+
+- [ ] **Step 5: Run; verify pass**
+
+  Run: `npm run test:norm-permissions`
+  Expected: `✓ Norm permissions loader: read + cache + invalidate`
+
+- [ ] **Step 6: Commit**
+
+  ```
+  git add src/lib/internal-norm/permissions.ts src/lib/internal-norm/__tests__/permissions.test.ts package.json
+  git commit -m "feat(internal-norm): Norm permissions loader with 30s cache + invalidate helper"
+  ```
+
 ## Task 1.10: `withNorm` HOF + audit helpers
 
 **Files:**
@@ -1205,14 +1412,25 @@ Goal: end-to-end auth proves out with `curl`, no business data exposed yet. Norm
     await NormCallLog.deleteMany({ registryKey: "test.echo" });
 
     // Register a test endpoint via the registry would normally happen at import-time. For this
-    // unit test we bypass by passing the spec inline.
+    // unit test we bypass by passing the spec inline. The Norm User + Role must already exist
+    // (run npm run migrate:create-norm first). We use "facebookAds.view" because it's in Norm's
+    // initial role permission set.
     const handler = withNorm({
       tier: "read",
       registryKey: "test.echo",
+      requiredPermission: "facebookAds.view",
       responseSchema: TestSchema,
     }, async (ctx) => {
       return ctx.ok({ status: "ok" as const, echo: ctx.url.searchParams.get("msg") ?? "" });
     });
+
+    // Also build a handler that requires a permission Norm does NOT have, to verify 403
+    const handlerForbidden = withNorm({
+      tier: "read",
+      registryKey: "test.forbidden",
+      requiredPermission: "users.delete",
+      responseSchema: TestSchema,
+    }, async (ctx) => ctx.ok({ status: "ok" as const, echo: "should never reach here" }));
 
     // Happy path
     const req = buildRequest("GET", "/api/internal/norm/v1/test/echo", "msg=hi", "");
@@ -1235,9 +1453,16 @@ Goal: end-to-end auth proves out with `curl`, no business data exposed yet. Norm
     const res401 = await handler(reqBad);
     assert.equal(res401.status, 401);
 
-    await NormCallLog.deleteMany({ registryKey: "test.echo" });
+    // Permission missing → 403
+    const reqForbidden = buildRequest("GET", "/api/internal/norm/v1/test/forbidden", "", "");
+    const res403 = await handlerForbidden(reqForbidden);
+    assert.equal(res403.status, 403);
+    const body403 = await res403.json();
+    assert.equal(body403.code, "permission_denied");
+
+    await NormCallLog.deleteMany({ registryKey: { $in: ["test.echo", "test.forbidden"] } });
     await mongoose.disconnect();
-    console.log("✓ withNorm: happy path + 401 + NormCallLog written");
+    console.log("✓ withNorm: happy path + 401 + 403 + NormCallLog written");
   }
   void run();
   ```
@@ -1279,6 +1504,8 @@ Goal: end-to-end auth proves out with `curl`, no business data exposed yet. Norm
     userAgent: string;
     signatureValid: boolean;
     rateLimitState: { remaining: number; limit: number; windowMs: number };
+    permissionChecked: string;
+    permissionGranted: boolean;
   }
 
   export async function beginAudit(input: AuditBeginInput): Promise<unknown> {
@@ -1302,6 +1529,13 @@ Goal: end-to-end auth proves out with `curl`, no business data exposed yet. Norm
   }
   ```
 
+  **Also update `NormCallLog` model (Task 1.4) to add the two new fields.** Edit `src/models/NormCallLog.ts` to add:
+  ```ts
+  permissionChecked: { type: String },
+  permissionGranted: { type: Boolean },
+  ```
+  alongside the existing fields. The Task 1.4 test continues to pass (the new fields are optional).
+
 - [ ] **Step 5: Implement withNorm.ts**
 
   ```ts
@@ -1309,7 +1543,9 @@ Goal: end-to-end auth proves out with `curl`, no business data exposed yet. Norm
   import { NextResponse } from "next/server";
   import type { z } from "zod";
   import connectDB from "@/lib/mongodb";
+  import type { Permission } from "@/lib/permissions";
   import { verifyNormRequest } from "./auth";
+  import { hasNormPermission } from "./permissions";
   import { isEndpointDisabled } from "./killSwitch";
   import { checkNormRateLimit } from "./rateLimits";
   import { beginAudit, endAudit, newRequestId, sha256 } from "./audit";
@@ -1318,6 +1554,8 @@ Goal: end-to-end auth proves out with `curl`, no business data exposed yet. Norm
   interface WithNormOptions {
     tier: NormTier;
     registryKey: string;
+    /** Permission from @/lib/permissions catalog that Norm's Role must hold. */
+    requiredPermission: Permission;
     responseSchema?: z.ZodTypeAny;
     perEndpointPerMinute?: number;
     perEndpointPerDay?: number;
@@ -1371,8 +1609,27 @@ Goal: end-to-end auth proves out with `curl`, no business data exposed yet. Norm
         );
       }
 
-      // 2. Kill switch
+      // 2. Permission check (Norm's Role must grant requiredPermission)
       await connectDB();
+      const permissionGranted = await hasNormPermission(options.requiredPermission);
+      if (!permissionGranted) {
+        // Audit the rejection too — useful for "why is Norm getting 403?" debugging
+        await beginAudit({
+          requestId, registryKey: options.registryKey, tier: options.tier,
+          method, path, queryHash: sha256(query), bodyHash: sha256(rawBody),
+          ip: clientKeyFor(request), userAgent: request.headers.get("user-agent") || "",
+          signatureValid: true,
+          rateLimitState: { remaining: 0, limit: 0, windowMs: 0 },
+          permissionChecked: options.requiredPermission, permissionGranted: false,
+        });
+        await endAudit(requestId, { responseStatus: 403, durationMs: Date.now() - started, responseHash: "", errorCode: "permission_denied" });
+        return NextResponse.json(
+          { success: false, error: `Norm role missing permission: ${options.requiredPermission}`, code: "permission_denied", requestId },
+          { status: 403 }
+        );
+      }
+
+      // 3. Kill switch
       if (await isEndpointDisabled(options.registryKey)) {
         return NextResponse.json(
           { success: false, error: "endpoint disabled", code: "disabled", requestId },
@@ -1380,7 +1637,7 @@ Goal: end-to-end auth proves out with `curl`, no business data exposed yet. Norm
         );
       }
 
-      // 3. Rate limit
+      // 4. Rate limit
       const rl = checkNormRateLimit({
         tier: options.tier,
         registryKey: options.registryKey,
@@ -1395,7 +1652,7 @@ Goal: end-to-end auth proves out with `curl`, no business data exposed yet. Norm
         );
       }
 
-      // 4. Audit begin
+      // 5. Audit begin
       await beginAudit({
         requestId,
         registryKey: options.registryKey,
@@ -1408,9 +1665,11 @@ Goal: end-to-end auth proves out with `curl`, no business data exposed yet. Norm
         userAgent: request.headers.get("user-agent") || "",
         signatureValid: true,
         rateLimitState: { remaining: rl.remaining, limit: rl.limit, windowMs: 60_000 },
+        permissionChecked: options.requiredPermission,
+        permissionGranted: true,
       });
 
-      // 5. Handler
+      // 6. Handler
       let res: NextResponse;
       let responseStatus = 500;
       let responseBody = "";
@@ -1451,7 +1710,7 @@ Goal: end-to-end auth proves out with `curl`, no business data exposed yet. Norm
         responseBody = await res.clone().text();
       }
 
-      // 6. Audit end
+      // 7. Audit end
       await endAudit(requestId, {
         responseStatus,
         durationMs: Date.now() - started,
@@ -1517,7 +1776,10 @@ Goal: end-to-end auth proves out with `curl`, no business data exposed yet. Norm
     version: 1 as const,
     generatedAt: new Date().toISOString(),
     endpoints: Object.entries(NORM_ENDPOINTS)
-      .filter(([, spec]) => spec.tier !== "forbidden")
+      // All registered endpoints belong in the manifest (forbidden isn't a tier — unreachable endpoints
+       // are simply omitted from the registry). Initially we have no responseSchema-less entries; once
+       // the Phase 4 roadmap fills in, the Phase 4 filter (Step 4 of Task 4.1) narrows to wired entries.
+      .filter(([, _spec]) => true)
       .map(([key, spec]) => ({
         registryKey: key,
         tier: spec.tier,
@@ -1575,7 +1837,7 @@ Goal: end-to-end auth proves out with `curl`, no business data exposed yet. Norm
   });
 
   export const GET = withNorm(
-    { tier: "read", registryKey: "health", responseSchema: HealthResponseSchema },
+    { tier: "read", registryKey: "health", requiredPermission: "overview.view", responseSchema: HealthResponseSchema },
     async (ctx) => ctx.ok({ ok: true as const, serverTime: new Date().toISOString(), version: 1 as const })
   );
   ```
@@ -1590,7 +1852,7 @@ Goal: end-to-end auth proves out with `curl`, no business data exposed yet. Norm
   import manifest from "@/generated/normToolsManifest.json";
 
   export const GET = withNorm(
-    { tier: "read", registryKey: "manifest", responseSchema: NormManifestSchema },
+    { tier: "read", registryKey: "manifest", requiredPermission: "overview.view", responseSchema: NormManifestSchema },
     async (ctx) => ctx.ok(manifest)
   );
   ```
@@ -1998,11 +2260,12 @@ Goal: Norm can answer ROAS questions with the same numbers the admin dashboard s
 
 - [ ] **Step 1: Replace the body**
 
+  **IMPORTANT:** the existing route at line 49 calls `requirePermission("facebookAds.view")` — this guard MUST be preserved. The extracted `FacebookAdsInsightsService` has no auth check of its own; protection lives at the route layer.
+
   Final file should be roughly:
   ```ts
   import { NextRequest, NextResponse } from "next/server";
-  import { getServerSession } from "next-auth";
-  import { authOptions } from "@/lib/auth";
+  import { requirePermission } from "@/lib/api-auth-permissions";
   import { z } from "zod";
   import connectDB from "@/lib/mongodb";
   import { FacebookAdsInsightsService } from "@/services/facebook-ads/FacebookAdsInsightsService";
@@ -2016,11 +2279,10 @@ Goal: Norm can answer ROAS questions with the same numbers the admin dashboard s
 
   export async function GET(request: NextRequest) {
     try {
+      const guard = await requirePermission("facebookAds.view");
+      if (guard instanceof NextResponse) return guard;
+
       await connectDB();
-      const session = await getServerSession(authOptions);
-      if (!session?.user?.id || session.user.role !== "admin") {
-        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-      }
       const params = querySchema.safeParse(Object.fromEntries(new URL(request.url).searchParams.entries()));
       if (!params.success) {
         return NextResponse.json({ success: false, error: "Invalid query", details: params.error.issues }, { status: 400 });
@@ -2224,6 +2486,7 @@ The admin UI today passes `current-draw`/`last-draw` already resolved (frontend 
   // inside NORM_ENDPOINTS object:
   "roas.summary": {
     tier: "read",
+    requiredPermission: "facebookAds.view",   // mirrors the admin route's permission
     path: "/v1/roas/summary",
     method: "GET",
     summary: "Headline ad spend, revenue, ROAS, profit for a date range",
@@ -2232,6 +2495,7 @@ The admin UI today passes `current-draw`/`last-draw` already resolved (frontend 
   },
   "roas.breakdown": {
     tier: "read",
+    requiredPermission: "facebookAds.view",
     path: "/v1/roas/breakdown",
     method: "GET",
     summary: "Per-campaign/adset/ad ROAS breakdown for a date range",
@@ -2239,6 +2503,8 @@ The admin UI today passes `current-draw`/`last-draw` already resolved (frontend 
     responseSchema: NormRoasBreakdownSchema,
   },
   ```
+
+  Norm's Role (seeded in Task 1.2) already includes `facebookAds.view`, so these endpoints are immediately reachable. If the owner ever revokes that permission from the Norm Role via Settings → Roles, both endpoints will return 403 on the next request.
 
 - [ ] **Step 3: Regenerate manifest**
 
@@ -2275,7 +2541,7 @@ The admin UI today passes `current-draw`/`last-draw` already resolved (frontend 
   });
 
   export const GET = withNorm(
-    { tier: "read", registryKey: "roas.summary", responseSchema: NormRoasSummarySchema, perEndpointPerMinute: 10 },
+    { tier: "read", registryKey: "roas.summary", requiredPermission: "facebookAds.view", responseSchema: NormRoasSummarySchema, perEndpointPerMinute: 10 },
     async (ctx) => {
       const parsed = QuerySchema.safeParse(Object.fromEntries(ctx.url.searchParams.entries()));
       if (!parsed.success) return ctx.error(400, "bad_query", "Invalid query params", parsed.error.issues);
@@ -2326,7 +2592,7 @@ The admin UI today passes `current-draw`/`last-draw` already resolved (frontend 
   });
 
   export const GET = withNorm(
-    { tier: "read", registryKey: "roas.breakdown", responseSchema: NormRoasBreakdownSchema, perEndpointPerMinute: 10 },
+    { tier: "read", registryKey: "roas.breakdown", requiredPermission: "facebookAds.view", responseSchema: NormRoasBreakdownSchema, perEndpointPerMinute: 10 },
     async (ctx) => {
       const parsed = QuerySchema.safeParse(Object.fromEntries(ctx.url.searchParams.entries()));
       if (!parsed.success) return ctx.error(400, "bad_query", "Invalid query params", parsed.error.issues);
@@ -2411,7 +2677,7 @@ Goal: Norm can answer business-state questions — revenue, members, churn, draw
 
 - [ ] **Step 1: Re-read the existing handler closely**
 
-  Read `src/app/api/admin/dashboard/stats/route.ts` lines 33–520 carefully. The orchestration to extract is roughly: parse date range → comparison period → user counts → revenue + ad channels via `readStatsForRange` → MajorDraw counts → conversion rate → enhanced metrics + membership analytics. Return both the headline `stats` shape and (for the Norm projection) a strict subset.
+  Read `src/app/api/admin/dashboard/stats/route.ts` carefully. **Lines 34–35 are the `requirePermission("overview.view")` guard — leave those at the route layer.** Lines 37–520 are the orchestration: parse date range → comparison period → user counts → revenue + ad channels via `readStatsForRange` → MajorDraw counts → conversion rate → enhanced metrics + membership analytics. The extracted service body starts from line 37 (after the guard). Return both the headline `stats` shape and (for the Norm projection) a strict subset.
 
 - [ ] **Step 2: Write the failing test (smoke against live Mongo)**
 
@@ -2453,11 +2719,12 @@ Goal: Norm can answer business-state questions — revenue, members, churn, draw
   Create `DashboardStatsService.ts` by lifting the orchestration verbatim. This is a **pure code move** — do not change any computation, do not "fix" anything you don't like along the way. The class has one public method `getStats({ dateRange, startDate?, endDate? })` returning the same `stats` object that the existing route handler currently constructs (the literal that gets `return NextResponse.json({ success: true, data: stats })`'d at line ~523 of the existing route).
 
   Concrete mechanical steps:
-  1. Copy lines ~44–512 of `src/app/api/admin/dashboard/stats/route.ts` into the body of `getStats`.
+  1. Copy lines **~37–512** of `src/app/api/admin/dashboard/stats/route.ts` into the body of `getStats` (post-permission-guard).
   2. Replace the route handler's `request.nextUrl.searchParams.get(...)` reads with reads from the `input` argument (`input.dateRange`, `input.startDate`, `input.endDate`).
   3. Replace every `return NextResponse.json(...)` with either `throw new Error("...")` (for the bad-input branches) or `return stats` (for the final happy path).
   4. Remove the outer `try/catch` — the service throws; the route handler will catch.
   5. Leave the `console.error`/`console.log` lines as they are (production stripping handles them).
+  6. **Do NOT touch the `requirePermission("overview.view")` lines** — those stay in the route handler.
 
   Skeleton:
   ```ts
@@ -2517,21 +2784,21 @@ Goal: Norm can answer business-state questions — revenue, members, churn, draw
 
 - [ ] **Step 1: Replace the body**
 
+  **IMPORTANT:** preserve the existing `requirePermission("overview.view")` guard.
+
   ```ts
   // src/app/api/admin/dashboard/stats/route.ts
   import { NextRequest, NextResponse } from "next/server";
-  import { getServerSession } from "next-auth";
-  import { authOptions } from "@/lib/auth";
+  import { requirePermission } from "@/lib/api-auth-permissions";
   import connectDB from "@/lib/mongodb";
   import { DashboardStatsService } from "@/services/admin/DashboardStatsService";
 
   export async function GET(request: NextRequest) {
     try {
+      const guard = await requirePermission("overview.view");
+      if (guard instanceof NextResponse) return guard;
+
       await connectDB();
-      const session = await getServerSession(authOptions);
-      if (!session?.user?.id || session.user.role !== "admin") {
-        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-      }
       const sp = request.nextUrl.searchParams;
       const stats = await new DashboardStatsService().getStats({
         dateRange: (sp.get("dateRange") as "today" | "yesterday" | "all-time" | "custom" | "current-draw" | "last-draw") || "today",
@@ -2630,6 +2897,7 @@ Goal: Norm can answer business-state questions — revenue, members, churn, draw
   ```ts
   "dashboard.stats": {
     tier: "read",
+    requiredPermission: "overview.view",   // mirrors the admin route's guard
     path: "/v1/dashboard/stats",
     method: "GET",
     summary: "Headline business stats: revenue, users, members, draws, conversion, ROAS",
@@ -2637,12 +2905,15 @@ Goal: Norm can answer business-state questions — revenue, members, churn, draw
   },
   "dashboard.revenue-breakdown": {
     tier: "read",
+    requiredPermission: "overview.view",
     path: "/v1/dashboard/revenue-breakdown",
     method: "GET",
     summary: "Revenue total + per-category breakdown for a date range",
     responseSchema: NormRevenueBreakdownSchema,
   },
   ```
+
+  Norm's Role (seeded in Task 1.2) already includes `overview.view`, so these endpoints are immediately reachable.
 
 - [ ] **Step 3: Regenerate manifest**
 
@@ -2679,7 +2950,7 @@ Goal: Norm can answer business-state questions — revenue, members, churn, draw
   });
 
   export const GET = withNorm(
-    { tier: "read", registryKey: "dashboard.stats", responseSchema: NormDashboardStatsSchema },
+    { tier: "read", registryKey: "dashboard.stats", requiredPermission: "overview.view", responseSchema: NormDashboardStatsSchema },
     async (ctx) => {
       const parsed = QuerySchema.safeParse(Object.fromEntries(ctx.url.searchParams.entries()));
       if (!parsed.success) return ctx.error(400, "bad_query", "Invalid query params", parsed.error.issues);
@@ -2749,7 +3020,7 @@ Goal: Norm can answer business-state questions — revenue, members, churn, draw
   });
 
   export const GET = withNorm(
-    { tier: "read", registryKey: "dashboard.revenue-breakdown", responseSchema: NormRevenueBreakdownSchema },
+    { tier: "read", registryKey: "dashboard.revenue-breakdown", requiredPermission: "overview.view", responseSchema: NormRevenueBreakdownSchema },
     async (ctx) => {
       const parsed = QuerySchema.safeParse(Object.fromEntries(ctx.url.searchParams.entries()));
       if (!parsed.success) return ctx.error(400, "bad_query", "Invalid query params", parsed.error.issues);
@@ -2824,28 +3095,40 @@ Goal: Every existing admin endpoint is mapped to a tier; the audit UI is live; t
 
   Run: `Get-ChildItem -Path src/app/api/admin -Recurse -Filter route.ts | ForEach-Object { $_.FullName }` (PowerShell) or equivalent to print all paths. Save to a scratch text file while you classify.
 
-- [ ] **Step 2: For each endpoint, assign a tier**
+- [ ] **Step 2: For each endpoint, assign tier + requiredPermission**
 
-  Rules of thumb:
+  For each admin route, open the file and look at its auth call:
+  - **Already uses `requirePermission("<area>.<action>")`** → copy that permission string verbatim into `requiredPermission`.
+  - **Still uses legacy `requireAdminUser()`** → pick the most sensible catalog entry from [src/lib/permissions.ts](src/lib/permissions.ts) (usually the area's `.view` for GETs or `.edit`/`.delete` for mutating ones) and add `legacyAdminCheck: true` to flag it for follow-up. List of legacy holdouts: run `grep -l requireAdminUser src/app/api/admin -r` for the current set.
+
+  Tier rules of thumb (orthogonal to permission):
   - GET that just returns data → `read`
   - POST/PATCH that updates a small record without money/comms → `write_safe`
   - POST that triggers a stateful job, charges money, sends mail, or modifies many records → `trigger_human_approve` (default — be conservative)
   - POST that triggers exactly ONE narrow action (e.g. retry a specific invoice) → `trigger_norm_confirm`
-  - Anything touching admin roles, deletes data permanently, modifies secrets/env, or affects auth → `forbidden`
 
-  Capture in `classification.ts`:
+  Endpoints we do NOT want Norm to ever call (e.g. Settings → Roles management, anything modifying auth) are simply omitted from the registry. Omission = unreachable; no special tier needed.
+
+  Capture in `classification.ts`. Each entry is an inventory line — most are NOT wired to a route yet. Wiring happens in future specs; this matrix is the roadmap.
   ```ts
-  // Append to NORM_ENDPOINTS. Each entry is an inventory line — most are NOT wired to a route yet.
-  // Wiring happens in future specs; this matrix is the roadmap.
   "ab-testing.experiment-analytics": {
     tier: "read",
+    requiredPermission: "abTesting.view",
     path: "/v1/ab-testing/experiments/:id/analytics",
     method: "GET",
     summary: "Analytics for a single A/B experiment",
   },
-  "activity-log.list": { tier: "read", path: "/v1/activity-log", method: "GET", summary: "Recent admin activity feed" },
+  "activity-log.list": {
+    tier: "read",
+    requiredPermission: "overview.view",
+    legacyAdminCheck: true,  // /api/admin/activity-log still uses requireAdminUser; follow up to migrate
+    path: "/v1/activity-log",
+    method: "GET",
+    summary: "Recent admin activity feed",
+  },
   "affiliate.process-payout": {
     tier: "trigger_human_approve",
+    requiredPermission: "affiliates.processPayout",  // matches the catalog's danger-flagged permission
     path: "/v1/affiliate/:id/process-payout",
     method: "POST",
     summary: "Process pending affiliate payout — money movement, requires human approve",
@@ -2853,19 +3136,22 @@ Goal: Every existing admin endpoint is mapped to a tier; the audit UI is live; t
   // ... continue for every endpoint
   ```
 
-  This is a manual classification pass. Budget ~2 hours for it. Resist the temptation to skip "obvious" ones — every entry must exist.
+  This is a manual classification pass. Budget ~2 hours for it. Resist the temptation to skip "obvious" ones — every entry must exist with both `tier` AND `requiredPermission`.
+
+  After filling, your Norm Role still has only `facebookAds.view` + `overview.view` — every other registry entry will 403 until the owner grants the matching permission. That's by design.
 
 - [ ] **Step 3: Add a boot-time consistency check**
 
   Add to `src/lib/internal-norm/classification.ts`:
   ```ts
   /**
-   * Returns the set of endpoints that have been "wired" (their tier !== "forbidden"
-   * AND a corresponding route file exists). For now this is a roadmap-only matrix;
-   * the runtime check is delegated to the manifest builder which omits unwired entries.
+   * Returns the set of endpoints that have been "wired" (a corresponding route file
+   * exists, signaled by the presence of a responseSchema). The classification matrix
+   * may contain many roadmap entries without responseSchema; the manifest builder
+   * filters to wired entries so Norm only discovers what it can actually call.
    */
   export function getWiredEndpoints(): NormEndpointSpec[] {
-    return Object.values(NORM_ENDPOINTS).filter((e) => e.tier !== "forbidden" && !!e.responseSchema);
+    return Object.values(NORM_ENDPOINTS).filter((e) => !!e.responseSchema);
   }
   ```
   The presence of `responseSchema` is our proxy for "wired" — endpoints without a schema are roadmap-only.
@@ -2878,7 +3164,7 @@ Goal: Every existing admin endpoint is mapped to a tier; the audit UI is live; t
   Adjust `scripts/build-norm-manifest.ts` to filter to wired entries:
   ```ts
   // change the filter:
-  .filter(([, spec]) => spec.tier !== "forbidden" && !!spec.responseSchema)
+  .filter(([, spec]) => !!spec.responseSchema)  // forbidden is no longer a tier; unwired entries are roadmap-only
   ```
 
 - [ ] **Step 5: Commit**
@@ -2902,13 +3188,13 @@ Goal: Every existing admin endpoint is mapped to a tier; the audit UI is live; t
   ```ts
   // src/app/api/admin/internal-norm/audit/route.ts
   import { NextRequest, NextResponse } from "next/server";
-  import { requireAdminUser } from "@/lib/api-auth";
+  import { requirePermission } from "@/lib/api-auth-permissions";
   import connectDB from "@/lib/mongodb";
   import NormCallLog from "@/models/NormCallLog";
 
   export async function GET(request: NextRequest) {
-    const auth = await requireAdminUser();
-    if ("errorResponse" in auth) return auth.errorResponse;
+    const guard = await requirePermission("settings.view");
+    if (guard instanceof NextResponse) return guard;
     await connectDB();
     const sp = request.nextUrl.searchParams;
     const limit = Math.min(Number(sp.get("limit") || 50), 200);
@@ -2928,25 +3214,33 @@ Goal: Every existing admin endpoint is mapped to a tier; the audit UI is live; t
   ```ts
   // src/app/api/admin/internal-norm/endpoints/route.ts
   import { NextResponse } from "next/server";
-  import { requireAdminUser } from "@/lib/api-auth";
+  import { requirePermission } from "@/lib/api-auth-permissions";
   import connectDB from "@/lib/mongodb";
   import NormEndpointSettings from "@/models/NormEndpointSettings";
   import { NORM_ENDPOINTS } from "@/lib/internal-norm/classification";
+  import { getNormPermissions } from "@/lib/internal-norm/permissions";
 
   export async function GET() {
-    const auth = await requireAdminUser();
-    if ("errorResponse" in auth) return auth.errorResponse;
+    // Reuse the "settings.view" permission — the Norm management UI lives in the same area as Roles/Staff
+    const guard = await requirePermission("settings.view");
+    if (guard instanceof NextResponse) return guard;
     await connectDB();
-    const settings = await NormEndpointSettings.find({}).lean();
+    const [settings, normPerms] = await Promise.all([
+      NormEndpointSettings.find({}).lean(),
+      getNormPermissions(),
+    ]);
     const settingsByKey = new Map(settings.map((s) => [s.registryKey, s]));
     const rows = Object.entries(NORM_ENDPOINTS).map(([key, spec]) => ({
       registryKey: key,
       tier: spec.tier,
+      requiredPermission: spec.requiredPermission,
+      normHasPermission: normPerms.has(spec.requiredPermission),
       path: spec.path,
       method: spec.method,
       summary: spec.summary,
       disabled: !!settingsByKey.get(key)?.disabled,
       wired: !!spec.responseSchema,
+      legacyAdminCheck: !!spec.legacyAdminCheck,
     }));
     return NextResponse.json({ success: true, data: rows });
   }
@@ -2956,22 +3250,22 @@ Goal: Every existing admin endpoint is mapped to a tier; the audit UI is live; t
   // src/app/api/admin/internal-norm/endpoints/[key]/route.ts
   import { NextRequest, NextResponse } from "next/server";
   import { z } from "zod";
-  import { requireAdminUser } from "@/lib/api-auth";
+  import { requirePermission } from "@/lib/api-auth-permissions";
   import connectDB from "@/lib/mongodb";
   import NormEndpointSettings from "@/models/NormEndpointSettings";
 
   const BodySchema = z.object({ disabled: z.boolean() });
 
   export async function PATCH(request: NextRequest, { params }: { params: Promise<{ key: string }> }) {
-    const auth = await requireAdminUser();
-    if ("errorResponse" in auth) return auth.errorResponse;
+    const guard = await requirePermission("settings.edit");
+    if (guard instanceof NextResponse) return guard;
     const { key } = await params;
     const body = BodySchema.safeParse(await request.json());
     if (!body.success) return NextResponse.json({ success: false, error: "Invalid body" }, { status: 400 });
     await connectDB();
     await NormEndpointSettings.findOneAndUpdate(
       { registryKey: key },
-      { $set: { disabled: body.data.disabled, updatedBy: auth.adminUser._id, updatedAt: new Date() } },
+      { $set: { disabled: body.data.disabled, updatedBy: guard.session.user.id, updatedAt: new Date() } },
       { upsert: true }
     );
     return NextResponse.json({ success: true });
@@ -2983,13 +3277,13 @@ Goal: Every existing admin endpoint is mapped to a tier; the audit UI is live; t
   ```ts
   // src/app/api/admin/internal-norm/pending/route.ts
   import { NextResponse } from "next/server";
-  import { requireAdminUser } from "@/lib/api-auth";
+  import { requirePermission } from "@/lib/api-auth-permissions";
   import connectDB from "@/lib/mongodb";
   import NormPendingAction from "@/models/NormPendingAction";
 
   export async function GET() {
-    const auth = await requireAdminUser();
-    if ("errorResponse" in auth) return auth.errorResponse;
+    const guard = await requirePermission("settings.view");
+    if (guard instanceof NextResponse) return guard;
     await connectDB();
     const items = await NormPendingAction.find({ status: "pending" }).sort({ createdAt: -1 }).lean();
     return NextResponse.json({ success: true, data: items });
@@ -3000,7 +3294,7 @@ Goal: Every existing admin endpoint is mapped to a tier; the audit UI is live; t
   // src/app/api/admin/internal-norm/pending/[id]/route.ts
   import { NextRequest, NextResponse } from "next/server";
   import { z } from "zod";
-  import { requireAdminUser } from "@/lib/api-auth";
+  import { requirePermission } from "@/lib/api-auth-permissions";
   import connectDB from "@/lib/mongodb";
   import NormPendingAction from "@/models/NormPendingAction";
 
@@ -3010,8 +3304,10 @@ Goal: Every existing admin endpoint is mapped to a tier; the audit UI is live; t
   });
 
   export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-    const auth = await requireAdminUser();
-    if ("errorResponse" in auth) return auth.errorResponse;
+    // Approving a Norm pending action is effectively delegating an action to Norm — same authority needed
+    // as editing role permissions. settings.edit is the right gate.
+    const guard = await requirePermission("settings.edit");
+    if (guard instanceof NextResponse) return guard;
     const { id } = await params;
     const body = BodySchema.safeParse(await request.json());
     if (!body.success) return NextResponse.json({ success: false, error: "Invalid body" }, { status: 400 });
@@ -3027,7 +3323,7 @@ Goal: Every existing admin endpoint is mapped to a tier; the audit UI is live; t
       action.status = "denied";
       action.resolutionNote = body.data.note;
       action.resolvedAt = new Date();
-      action.resolvedBy = auth.adminUser._id;
+      action.resolvedBy = guard.session.user.id;
       await action.save();
       return NextResponse.json({ success: true, data: { status: "denied" } });
     }
@@ -3036,7 +3332,7 @@ Goal: Every existing admin endpoint is mapped to a tier; the audit UI is live; t
     // Later specs will dispatch to the underlying service here.
     action.status = "approved";
     action.resolvedAt = new Date();
-    action.resolvedBy = auth.adminUser._id;
+    action.resolvedBy = guard.session.user.id;
     action.resolutionOutcome = { ok: true };
     await action.save();
     return NextResponse.json({ success: true, data: { status: "approved" } });
@@ -3194,8 +3490,20 @@ Goal: Every existing admin endpoint is mapped to a tier; the audit UI is live; t
   // src/app/admin/component/internal-norm/EndpointsTab.tsx
   "use client";
   import { useEffect, useState } from "react";
+  import Link from "next/link";
 
-  type Row = { registryKey: string; tier: string; path: string; method: string; summary: string; disabled: boolean; wired: boolean };
+  type Row = {
+    registryKey: string;
+    tier: string;
+    requiredPermission: string;
+    normHasPermission: boolean;
+    path: string;
+    method: string;
+    summary: string;
+    disabled: boolean;
+    wired: boolean;
+    legacyAdminCheck?: boolean;
+  };
 
   export default function EndpointsTab() {
     const [rows, setRows] = useState<Row[]>([]);
@@ -3218,14 +3526,30 @@ Goal: Every existing admin endpoint is mapped to a tier; the audit UI is live; t
     return (
       <div>
         <h2 className="text-xl font-semibold mb-4">Norm endpoint registry</h2>
+        <p className="text-sm text-gray-600 mb-4">
+          To grant Norm a new capability, edit the <Link href="/admin/settings/roles" className="underline">Norm role</Link> in Settings → Roles and add the matching permission.
+        </p>
         <table className="w-full text-sm">
-          <thead><tr><th>Key</th><th>Tier</th><th>Path</th><th>Wired</th><th>Disabled</th></tr></thead>
+          <thead>
+            <tr>
+              <th>Key</th><th>Tier</th><th>Path</th><th>Required permission</th><th>Norm has it?</th><th>Wired</th><th>Disabled</th>
+            </tr>
+          </thead>
           <tbody>
             {rows.map((r) => (
               <tr key={r.registryKey} className={r.disabled ? "opacity-50" : ""}>
                 <td>{r.registryKey}</td>
                 <td>{r.tier}</td>
                 <td className="font-mono text-xs">{r.method} {r.path}</td>
+                <td className="font-mono text-xs">
+                  {r.requiredPermission}
+                  {r.legacyAdminCheck && <span className="ml-2 text-amber-600" title="Underlying admin route still uses legacy requireAdminUser">⚠ legacy</span>}
+                </td>
+                <td>
+                  {r.normHasPermission
+                    ? <span className="text-green-600">✓</span>
+                    : <span className="text-red-600" title="Norm role does not grant this permission — calls will 403">✗</span>}
+                </td>
                 <td>{r.wired ? "✓" : "—"}</td>
                 <td>
                   <label className="inline-flex gap-2 items-center">
@@ -3383,7 +3707,7 @@ Goal: code, docs, and business status are all in sync.
       "src/app/admin/component/internal-norm/**",
       "scripts/build-norm-manifest.ts",
       "scripts/internal-norm-smoke.ts",
-      "scripts/migrations/2026-05-20-create-norm-user.ts",
+      "scripts/migrations/2026-05-20-create-norm-user-and-role.ts",
       "src/generated/normToolsManifest.json",
       "src/utils/admin/resolveNormDateRange.ts",
       "eslint/rules/norm-must-import-service.js"
@@ -3451,12 +3775,13 @@ Goal: code, docs, and business status are all in sync.
 - [ ] **Step 3: Run all Norm tests**
 
   ```
-  npm run test:norm-auth-role
+  npm run test:norm-user-service-account
   npm run test:norm-call-log
   npm run test:norm-receipt
   npm run test:norm-pending
   npm run test:norm-classification
   npm run test:norm-auth
+  npm run test:norm-permissions
   npm run test:norm-kill-switch
   npm run test:norm-rate-limits
   npm run test:norm-with-norm

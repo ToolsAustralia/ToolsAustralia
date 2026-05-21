@@ -24,12 +24,13 @@ The role editor disables the `settings.edit` checkbox when editing any system ro
 
 ## User model additions
 
-The `User` collection gained six staff-related fields (`src/models/User.ts`):
+The `User` collection gained seven staff-related fields (`src/models/User.ts`):
 
 | Field | Type | Notes |
 |---|---|---|
 | `roleId` | ObjectId → Role, nullable | `null` for customers; set for staff and admin |
 | `userType` | "customer" \| "staff" \| "admin" | Derived from invite; defaults "customer". `"admin"` is the super-role (seeded Admin role only). |
+| `serviceAccount` | Boolean, default `false` | True for non-human service accounts (e.g. Norm AI). Intended to filter out non-human accounts from the human-staff list (filter wiring lands later). |
 | `inviteToken` | String, unique sparse | Single-use; cleared on setup |
 | `inviteTokenExpires` | Date | 7 days from invite |
 | `invitedBy` | ObjectId → User | Audit |

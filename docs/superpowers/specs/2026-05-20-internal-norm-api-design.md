@@ -31,11 +31,14 @@ Out of scope for this spec (future work, separate specs):
 | 2 | Spec ships framework + full classification matrix + first 2 domains (ROAS, Dashboard Stats), not all domains in one go | "Don't overengineer" — five focused phases over a six-week mega-spec. Validates the framework on pure-read domains before introducing write/trigger surface. |
 | 3 | Auth = **bearer token + HMAC-signed request + replay guard**, NOT bearer-only and NOT IP-based | Defense in depth. Two independent secrets, replay protection, no infra dependencies on dynamic IPs. Battle-tested pattern (Stripe webhooks, AWS SigV4). |
 | 4 | First domains = ROAS + Dashboard Stats, both pure-read | Validates the read path of the framework end-to-end without write/trigger risk. Highest immediate utility for Norm. |
-| 5 | Safety model = **5 tiers** (`read` / `write_safe` / `trigger_norm_confirm` / `trigger_human_approve` / `forbidden`) | Fine-grained control. Every existing admin endpoint slots into exactly one tier. |
-| 6 | Norm is **a `User` row with `role: "norm"`**, not a no-row service principal | Existing services that reference `adminUserId` (charge runs, audit fields) attribute Norm naturally with zero branching. `role: "norm"` (not `"admin"`) prevents existing admin-only logic from over-trusting Norm. |
+| 5 | Safety model = **4 tiers** (`read` / `write_safe` / `trigger_norm_confirm` / `trigger_human_approve`) — orthogonal to the permission catalog (see decision 11). "Forbidden" is not a tier; an endpoint is unreachable to Norm if it's absent from the registry, or registered with a `requiredPermission` Norm's Role doesn't hold. | Fine-grained control over the orchestration shape, separated from authorization. |
+| 6 | Norm is a `userType: "staff"` User row with a dedicated "Norm" `Role`, `serviceAccount: true` — see decision 10 for the full story | The legacy `role: "norm"` idea from earlier drafts is dropped — the `role` field is being phased out. The new model puts Norm under the same governance as human staff, manageable via Settings → Roles. |
 | 7 | `trigger_human_approve` queues to an admin UI page; **no Slack/email push** | DJ is the only Norm operator. When DJ asks Norm to do something high-risk, DJ knows to go approve it. Push notifications would be noise. |
 | 8 | Targeted refactor of dashboard + facebook-ads route handlers into services as part of this spec | The handlers are already too fat per the layering rule. Extracting them gives Norm a clean call site AND guarantees identical numbers vs the admin dashboard. Not unrelated refactoring — it's required for correctness. |
 | 9 | Phasing = 5 phases (framework → ROAS → Dashboard Stats → matrix + admin UI → docs) | Each phase is shippable independently and produces a user-visible win. |
+| 10 | **Norm integrates with the new RBAC** (merged from `feature/user-roles`): Norm is a `userType: "staff"` user with `roleId` pointing to a dedicated "Norm" Role | Maximum alignment with the new permission system. Owner manages Norm's authority from the existing Settings → Roles UI — no code change to grant or revoke a Norm capability. |
+| 11 | Tier model and Permission catalog are **orthogonal axes**: permission answers "allowed at all?"; tier answers "what confirmation shape?" | Cleaner separation. Permissions reuse the org-wide catalog; tiers only encode the orchestration flow. The "forbidden" tier from the original draft is dropped — "forbidden" = "permission not in Norm's Role". |
+| 12 | Owner grants Norm permissions via Settings → Roles UI; implementer never auto-grants in code | Every new Norm capability is an explicit owner decision. The Endpoints admin tab makes the granted/not-granted state visible per endpoint. |
 
 ## Architecture
 
@@ -87,15 +90,34 @@ Two independent secrets means a single leaked credential is recoverable: rotate 
 
 ### Identity model
 
-Norm is represented in MongoDB as a single dedicated `User` document:
-- `email`: `norm@internal.toolsaustralia` (synthetic, never receives mail)
-- `role`: `"norm"` — a new role, **not** `"admin"`. The existing `requireAdminUser` helper continues to reject this role.
-- `serviceAccount`: `true` — new boolean field. The admin UI's user list filters this out by default.
-- `name`: `"Norm (AI Assistant)"`
+Norm is represented in MongoDB as a single dedicated `User` document **plus** a dedicated `Role` document, both seeded by one idempotent migration:
 
-This is created by a one-shot migration script. Existing services like `ChargeJobRun`, promo audit fields, and error-report acknowledgement already reference `adminUserId` — they'll naturally attribute Norm-triggered actions to this User without code changes.
+**Norm `User`:**
+- `email`: `norm@internal.toolsaustralia.com.au` (synthetic, never receives mail)
+- `firstName: "Norm"`, `lastName: "(AI Assistant)"`
+- `userType`: `"staff"` — slots Norm under the new RBAC system alongside human staff
+- `roleId`: ObjectId of the seeded "Norm" Role (below)
+- `serviceAccount`: `true` — new boolean field on `User`. The admin UI's user list and the Settings → Staff list filter `serviceAccount: true` out by default so Norm doesn't show up as a clickable team member.
+- `role` (the legacy `"user" | "admin"` field): left at the default `"user"`. The legacy bridge in `requirePermission` doesn't apply to Norm because Norm has `userType: "staff"`, not the absence of `userType`.
+
+**Norm `Role`:**
+- `name`: `"Norm"`
+- `color`: `"#2563eb"` (any distinct hex)
+- `permissions`: initially `["facebookAds.view", "overview.view"]` — just enough for ROAS + Dashboard Stats. Owner edits this from Settings → Roles to grant additional capabilities later.
+- `isSystem`: `true` — prevents accidental deletion/rename from the admin UI
+- `createdBy`: `null`
+
+**Why this is the right shape under the new RBAC:**
+- Existing services that reference `adminUserId` (charge runs, promo audit, error-report acknowledgement) attribute Norm naturally — `userType: "staff"` is a valid internal user.
+- Owner can grant or revoke a permission from the **existing** Settings → Roles UI; no code change, no redeploy.
+- When the owner edits the Norm Role, `User.tokenVersion` bumping applies to JWT users — Norm has no JWT, but `withNorm` re-loads Norm's permission set with a 30-second cache, so the effect is the same: revocations take effect within seconds.
+- The seeded Admin role is **not** reused — Norm explicitly does NOT bypass permission checks via `userType: "admin"`. Norm is governed by explicit permissions only.
 
 ### Tier model
+
+The tier model and the permission catalog are **orthogonal axes**:
+- **Permission** (from [src/lib/permissions.ts](src/lib/permissions.ts)) answers: *is Norm allowed to call this endpoint at all?* Enforced by `withNorm`'s permission-check step against Norm's Role.
+- **Tier** answers: *what orchestration shape does the call use?* (Single call / two-step Norm-confirm / two-step human-approve.)
 
 | Tier | What it allows | Examples |
 |---|---|---|
@@ -103,9 +125,12 @@ This is created by a one-shot migration script. Existing services like `ChargeJo
 | `write_safe` | Single-call POST/PATCH that affects at most one record, has no money/comms side-effects, and is reversible. | Acknowledge an error report, tag a user, add an internal note. |
 | `trigger_norm_confirm` | Two-step: `…/dry-run` + `…/confirm`. Receipt-bound. Norm can self-execute. | Retry ONE specific past-due invoice, end a specific promo, downgrade ONE specific user. |
 | `trigger_human_approve` | Two-step shape, but `…/confirm` only queues. Owner must click approve in admin UI to execute. | Klaviyo blast to all users, mass past-due retry run, select major-draw winner, refund > $X. |
-| `forbidden` | Explicitly NOT exposed to Norm. The router will refuse to register it. | Anything that changes admin roles, anything touching auth secrets, hard deletes. |
 
-The tier is declared in the classification registry — there is exactly one source of truth.
+**"Forbidden" is not a tier.** An endpoint is effectively forbidden to Norm in either of two ways:
+1. The endpoint is never registered (the typed registry simply omits it).
+2. The endpoint IS registered with a `requiredPermission`, but the Norm Role does not grant that permission. Calls return 403 from `withNorm`'s permission-check step.
+
+Both the tier and the required permission are declared in the classification registry — one source of truth.
 
 ### Trigger protocol (dry-run + confirm)
 
@@ -184,6 +209,8 @@ Every Norm call writes exactly one `NormCallLog` document:
   ip, userAgent,
   signatureValid: true,
   rateLimitState: { remaining: 119, limit: 120 },
+  permissionChecked: "facebookAds.view",   // the route's requiredPermission
+  permissionGranted: true,                 // whether Norm's Role had it at request time
   tierContext: {
     dryRunReceiptId?: string,
     confirmedFromReceiptId?: string,
@@ -211,16 +238,19 @@ The framework is built so adding a new Norm endpoint is a 10-minute job:
     export const NORM_ENDPOINTS = {
       "roas.summary": {
         tier: "read",
+        requiredPermission: "facebookAds.view",  // from src/lib/permissions.ts catalog
         path: "/v1/roas/summary",
         method: "GET",
         summary: "Facebook ad spend, ROAS, profit for a date range",
-        rateLimit: { perMinute: 10 },          // optional override
-        responseSchema: NormRoasSummarySchema, // Zod
+        rateLimit: { perMinute: 10 },             // optional override
+        responseSchema: NormRoasSummarySchema,    // Zod
       },
       // ...every other endpoint
     } as const satisfies Record<string, NormEndpointSpec>;
     ```
-    Boot-time check: the router refuses to start if a route file exists with no matching registry entry, OR a registry entry has no route file. Drift impossible.
+    Boot-time checks:
+    - Router refuses to start if a route file exists with no matching registry entry, OR a registry entry has no route file. Drift impossible.
+    - Every entry's `requiredPermission` must be a valid permission from `PERMISSIONS` (the org-wide catalog) — typo in a permission string fails the build.
 
 2. **`withNorm()` HOF wraps every handler.**
     ```ts
@@ -229,7 +259,15 @@ The framework is built so adding a new Norm endpoint is a 10-minute job:
       return ctx.ok(NormRoasSummarySchema, result);
     });
     ```
-    `withNorm` handles auth, signature, replay, rate-limit, audit-log create-then-update, error mapping, response schema validation, and dry-run/confirm orchestration for trigger tiers. The handler body is the only thing that varies.
+    `withNorm` runs in this order:
+    1. **Auth** (bearer + HMAC + replay) — 401 on failure
+    2. **Permission check** — load Norm's User → resolve `roleId` → fetch `Role.permissions` (30s in-memory cache, invalidated on `User.tokenVersion` bump) → reject 403 if the route's `requiredPermission` is not in the set
+    3. **Kill switch** — 503 if disabled
+    4. **Rate limit** — 429 if exceeded
+    5. **Handler** — or dry-run / confirm orchestration for trigger tiers
+    6. **Audit log** — record everything including `permissionChecked` and `permissionGranted`
+    7. **Response schema validation** — 500 if handler returned a shape that fails Zod
+    The handler body is the only thing that varies per endpoint.
 
 3. **Reuse existing admin services — never duplicate.** A custom ESLint rule (`internal-norm/must-import-service`) requires every file under `src/app/api/internal/norm/**` to include at least one `import` from `@/services/**`. Doesn't prove the import is *used*, but is a strong tripwire against copy-pasting service logic into route files. Numbers stay identical to the admin dashboard by construction.
 
@@ -247,13 +285,13 @@ The framework is built so adding a new Norm endpoint is a 10-minute job:
 
 **Refactor first:**
 - New service `src/services/facebook-ads/FacebookAdsInsightsService.ts` exposing `getInsights({ dateRange, level, startDate?, endDate? })`
-- Move the body of [src/app/api/admin/facebook-ads/insights/route.ts](src/app/api/admin/facebook-ads/insights/route.ts) into the service; admin route shrinks to ~15 lines (auth → call service → return)
+- Move the body of [src/app/api/admin/facebook-ads/insights/route.ts](src/app/api/admin/facebook-ads/insights/route.ts) into the service. The admin route shrinks to ~15 lines: **the existing `requirePermission("facebookAds.view")` guard at line 49 stays**, followed by query parse + service call + return. The extracted service has NO auth check of its own — the guard at the route layer is what protects the admin path.
 - New utility `src/utils/admin/resolveNormDateRange.ts` accepting `today | yesterday | current-draw | last-draw | all-time | custom` and resolving draw-based ranges server-side (currently the frontend resolves them to `custom` before calling — for Norm we resolve server-side so Norm doesn't need to know draw dates)
 
-**Norm endpoints:**
+**Norm endpoints:** Both `tier: "read"`, both `requiredPermission: "facebookAds.view"`.
 
 `GET /v1/roas/summary?dateRange=<>`
-Tier: `read`. Response (Zod-validated):
+Response (Zod-validated):
 ```ts
 {
   dateRange: { range: "today" | …, start: ISO, end: ISO },
@@ -270,19 +308,19 @@ Tier: `read`. Response (Zod-validated):
 ```
 
 `GET /v1/roas/breakdown?dateRange=<>&level=campaign|adset|ad`
-Tier: `read`. Same summary block plus a `breakdown: Array<{ id, name, spend, revenue, roas, conversions, impressions, clicks, ctr, cpc }>` keyed by `level`.
+Same summary block plus a `breakdown: Array<{ id, name, spend, revenue, roas, conversions, impressions, clicks, ctr, cpc }>` keyed by `level`.
 
 ### Domain 2 — Dashboard Stats
 
 **Refactor first:**
 - New service `src/services/admin/DashboardStatsService.ts` exposing `getStats({ dateRange, startDate?, endDate? })`
-- Move the orchestration body of [src/app/api/admin/dashboard/stats/route.ts](src/app/api/admin/dashboard/stats/route.ts) into the service; admin route shrinks
+- Move the orchestration body of [src/app/api/admin/dashboard/stats/route.ts](src/app/api/admin/dashboard/stats/route.ts) into the service. The admin route shrinks: **the existing `requirePermission("overview.view")` guard at line 34 stays**, followed by query parse + service call + return. The extracted service has NO auth check of its own.
 - Reuses already-clean sub-services: `readStatsForRange`, `DashboardMetricsService`, `MembershipAnalyticsService`, `trendCalculationService`
 
-**Norm endpoints:**
+**Norm endpoints:** Both `tier: "read"`, both `requiredPermission: "overview.view"`.
 
 `GET /v1/dashboard/stats?dateRange=<>`
-Tier: `read`. Response is a **clean projection** of the admin response — no internal-only fields:
+Response is a **clean projection** of the admin response — no internal-only fields:
 ```ts
 {
   dateRange: { range, start, end },
@@ -309,10 +347,14 @@ Each phase is independently shippable and produces a user-visible win.
 
 ### Phase 1 — Framework foundation
 
-- Migration: idempotent script (`scripts/migrations/create-norm-user.ts`) that upserts the Norm `User` row with `role: "norm"`, `serviceAccount: true`. Safe to re-run.
+- Migration: idempotent script (`scripts/migrations/2026-05-20-create-norm-user-and-role.ts`) that upserts BOTH:
+  1. The `"Norm"` `Role` with initial `permissions: ["facebookAds.view", "overview.view"]`, `color: "#2563eb"`, `isSystem: true`
+  2. The Norm `User` row with `email: "norm@internal.toolsaustralia.com.au"`, `userType: "staff"`, `roleId: <Norm role id>`, `serviceAccount: true`
+  Safe to re-run.
 - New models: `NormCallLog`, `NormTriggerReceipt`, `NormPendingAction`
 - Auth lib: `src/lib/internal-norm/auth.ts` (bearer + HMAC + replay guard with nonce cache)
-- `src/lib/internal-norm/withNorm.ts` HOF (auth, rate-limit, audit, error mapping, dry-run/confirm orchestration)
+- `src/lib/internal-norm/permissions.ts` — loads Norm User → Role → permission set with 30s cache; exposes `getNormPermissions()` and a small `hasPermission(perm)` helper
+- `src/lib/internal-norm/withNorm.ts` HOF (auth, **permission check**, kill switch, rate-limit, audit, error mapping, dry-run/confirm orchestration)
 - `src/lib/internal-norm/classification.ts` — empty registry + types
 - `src/lib/internal-norm/schemas/` — empty
 - `scripts/build-norm-manifest.ts` + npm script `build:norm-manifest`
@@ -342,13 +384,15 @@ Each phase is independently shippable and produces a user-visible win.
 
 ### Phase 4 — Classification matrix + admin UI
 
-- Fill `classification.ts` with **every** existing admin endpoint mapped to a tier (`read` / `write_safe` / `trigger_norm_confirm` / `trigger_human_approve` / `forbidden`). The matrix is the artifact DJ reviews and signs off — it's the roadmap for future Norm expansion.
+- Fill `classification.ts` with **every** existing admin endpoint. Each entry declares both `tier` (`read` / `write_safe` / `trigger_norm_confirm` / `trigger_human_approve`) AND `requiredPermission` (from the org-wide catalog in [src/lib/permissions.ts](src/lib/permissions.ts)). For endpoints already calling `requirePermission(...)`, copy the same permission string. For the ~15 admin endpoints still on legacy `requireAdminUser`, pick the most sensible catalog entry (usually the area's `.view` for GETs or `.edit`/`.delete` for mutating ones) and flag the entry with a `legacyAdminCheck: true` marker for follow-up.
 - New admin pages:
-  - `/admin/internal-norm/audit` — `NormCallLog` browser with filters by tier / registry key / status / time; per-row "view full request/response hash"; per-endpoint kill-switch toggle
+  - `/admin/internal-norm/audit` — `NormCallLog` browser with filters by tier / registry key / status / time / `permissionChecked`; per-row "view full request/response hash"; per-endpoint kill-switch toggle
+  - `/admin/internal-norm/endpoints` — every registry entry with three columns: `requiredPermission`, `norm-role-grants-it?` (✓/✗ with a link to Settings → Roles → Norm), and `disabled?` toggle
   - `/admin/internal-norm/pending` — `NormPendingAction` queue; one-click approve/deny with optional reason; shows the receipt's plan exactly as Norm saw it
 - Admin nav badge: count of pending actions
-- Tests: kill-switch flips an endpoint to 503 within one request cycle; approve actually executes the underlying service; deny doesn't
-- **Win:** full observability; canonical roadmap for future Norm endpoints exists in code; trigger_human_approve flow is ready even though no triggers are wired up yet.
+- **Norm Role management itself is delegated to the existing Settings → Roles UI — no new screens for that.**
+- Tests: kill-switch flips an endpoint to 503 within one request cycle; revoking a permission from the Norm Role causes the next request to that endpoint to return 403; approve actually executes the underlying service; deny doesn't
+- **Win:** full observability; canonical roadmap for future Norm endpoints exists in code; trigger_human_approve flow is ready even though no triggers are wired up yet; permission grants visible at a glance.
 
 ### Phase 5 — Documentation + manifest sync
 
@@ -393,6 +437,8 @@ Each phase is independently shippable and produces a user-visible win.
   userAgent: string,
   signatureValid: boolean,
   rateLimitState: { remaining: number, limit: number, windowMs: number },
+  permissionChecked: string,        // e.g. "facebookAds.view"
+  permissionGranted: boolean,       // whether Norm's Role had it at request time
   tierContext: {
     dryRunReceiptId?: string,
     confirmedFromReceiptId?: string,
@@ -467,8 +513,10 @@ None blocking. Things deliberately deferred:
 - [ ] Receipt `used` flip is atomic (Mongo `findOneAndUpdate` filter on `used: false`)
 - [ ] Kill switch returns 503 within one request (no stale-cache window)
 - [ ] `NormCallLog` writes are best-effort and never block the response — failure to log is logged separately, not propagated
-- [ ] Norm `User` row has `role: "norm"`, NOT `"admin"`; existing `requireAdminUser` rejects this role
-- [ ] `forbidden` endpoints in the registry refuse to register a route file (boot-time check)
+- [ ] Norm `User` has `userType: "staff"` (NOT `"admin"`); the super-admin bypass in `requirePermission` does NOT apply to Norm
+- [ ] Norm Role name is `"Norm"`, `isSystem: true`, holds ONLY the permissions explicitly granted by the owner
+- [ ] `withNorm`'s permission-check step runs BEFORE handler invocation; 403 audited
+- [ ] Every registry entry's `requiredPermission` is validated against `PERMISSIONS` at boot
 - [ ] Response Zod validation catches schema drift before it reaches Norm
 
 ## Conventions inherited from the codebase

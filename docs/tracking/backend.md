@@ -23,6 +23,8 @@
 
 [src/services/meta/](../../src/services/meta/) — Meta-specific service code (likely insights aggregation).
 
+[src/services/facebook-ads/FacebookAdsInsightsService.ts](../../src/services/facebook-ads/FacebookAdsInsightsService.ts) — orchestrates Facebook Marketing API insight fetches for the admin dashboard. Resolves AEST date range (today / yesterday / custom), calls `fetchFacebookInsights` (from `src/lib/facebook-marketing.ts`), aggregates per-row metrics into a summary, and converts monetary fields from cents to dollars before returning the response payload for `/api/admin/facebook-ads/insights`. The fetcher is injectable via the constructor for testing — see `__tests__/FacebookAdsInsightsService.test.ts` (npm: `test:facebook-ads-insights-service`).
+
 ## Repositories
 
 > _TODO: locate any tracking-specific repositories under `src/repositories/`._

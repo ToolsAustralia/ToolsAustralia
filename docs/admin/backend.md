@@ -198,6 +198,19 @@ Wraps a single `InvoiceChargeLog.aggregate` over `status: "failed"` rows in the 
 - User metrics (`/api/admin/metrics/users`)
   - `GET /api/admin/metrics/users`: accepts `startDate`, `endDate`, `groupBy`, `daily`. Also accepts `dateRange` (forwarded to `parseAdminDashboardDateRange` to derive `asOfDate`). When the resolved `asOfDate` is non-null (snapshot mode), `membershipStatus.active/cancelled/pastDue` in the response are sourced from `MembershipDailySnapshot` for that date; `membershipStatus.renewed` remains a live range delta. If no snapshot exists for the date, live values from the User-loop are returned.
 
+### `resolveNormDateRange` utility
+
+[`src/utils/admin/resolveNormDateRange.ts`](../../src/utils/admin/resolveNormDateRange.ts) wraps `parseAdminDashboardDateRange` for the internal Norm API. The admin UI today resolves `current-draw`/`last-draw` client-side and forwards the dates as `custom`; Norm calls server-side without knowing the draw dates, so this utility looks up `MajorDraw` and supplies the dates before delegating:
+
+- `current-draw` → `MajorDraw.findOne({ status: { $in: ["active", "frozen"] } })` sorted by `activationDate desc`.
+- `last-draw` → `MajorDraw.findOne({ status: "completed" })` sorted by `drawDate desc`.
+- Throws `Error("No <range> found in MajorDraw collection")` when no matching draw exists.
+- `today` / `yesterday` / `all-time` / `custom` pass straight through to `parseAdminDashboardDateRange` with no DB call.
+
+The MajorDraw schema uses `activationDate` (start) and `drawDate` (end) — not `startDate`/`endDate`. Status enum is `"queued" | "active" | "frozen" | "completed" | "cancelled"`.
+
+Test: `npm run test:resolve-norm-date-range` (covers today/yesterday/all-time/custom; current-draw degrades cleanly when no active draw exists).
+
 > _TODO: enumerate the exact subdirectories under api/admin/ and document each._
 
 ## Auth pattern
