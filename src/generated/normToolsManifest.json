@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-05-21T09:14:17.813Z",
+  "generatedAt": "2026-05-21T09:23:11.899Z",
   "endpoints": [
     {
       "registryKey": "roas.summary",
@@ -64,6 +64,13 @@
       "path": "/v1/dashboard/upcoming-renewals",
       "method": "GET",
       "summary": "Paged list of subscriptions due to renew within a selected window (PII-safe: opaque IDs only)"
+    },
+    {
+      "registryKey": "activity-log.list",
+      "tier": "read",
+      "path": "/v1/activity-log",
+      "method": "GET",
+      "summary": "Paged + filterable + searchable admin activity feed over a 90-day window (PII-safe: firstName + opaque userId)"
     },
     {
       "registryKey": "ab-testing.experiments.list",

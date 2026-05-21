@@ -104,6 +104,7 @@ import {
   NormMonthlyCouponTargetUsersCsvSchema,
   NormMonthlyCouponTargetUsersFilterSchema,
 } from "./schemas/monthly-coupon";
+import { NormActivityLogSchema } from "./schemas/activity-log";
 
 // "forbidden" is NOT a tier — endpoints not in the registry are simply unreachable.
 // Tier and Permission are orthogonal axes: tier = orchestration shape; permission = "is Norm allowed?".
@@ -240,13 +241,14 @@ export const NORM_ENDPOINTS = {
     responseSchema: NormUpcomingRenewalsSchema,
   },
 
-  // ─── Activity log (roadmap) ───────────────────────────────────────────
+  // ─── Activity log (wired) ─────────────────────────────────────────────
   "activity-log.list": {
     tier: "read",
     requiredPermission: "overview.view",
     path: "/v1/activity-log",
     method: "GET",
-    summary: "Recent admin activity feed",
+    summary: "Paged + filterable + searchable admin activity feed over a 90-day window (PII-safe: firstName + opaque userId)",
+    responseSchema: NormActivityLogSchema,
   },
 
   // ─── A/B testing (roadmap) ────────────────────────────────────────────
