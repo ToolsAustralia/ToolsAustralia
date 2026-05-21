@@ -38,7 +38,7 @@ import {
 } from "@/app/(site)/my-account/components/settings/ui/primitives";
 import PastDueAlert from "./PastDueAlert";
 import PendingChangeBanner from "./PendingChangeBanner";
-import { OneTimeOnlyState, InactiveSubscriptionState, NoSubscriptionState } from "./EmptyStates";
+import { InactiveSubscriptionState, NoSubscriptionState } from "./EmptyStates";
 import type { ResubscribeTierOption } from "./ResubscribeTierPicker";
 import type {
   SubMgmtUser,
@@ -565,32 +565,19 @@ const SettingsRedesignSubscription: React.FC<SettingsRedesignSubscriptionProps> 
     );
   }
 
-  // ── One-time package only ─────────────────────────────────────────────────
-  if (activeOneTimePackage) {
-    return (
-      <div className="space-y-6">
-        <OneTimeOnlyState
-          packageDisplayName={
-            typeof activeOneTimePackage.packageId === "string"
-              ? activeOneTimePackage.packageData?.name ?? "One-Time Package"
-              : activeOneTimePackage.packageId.name
-          }
-          onSubscribeClick={onSubscribeClick}
-        />
-      </div>
-    );
-  }
-
-  // ── Inactive (non-past-due) subscription ──────────────────────────────────
+  // ── One-time-only OR inactive (non-past-due) subscription ─────────────────
+  // Both states route through the universal tier picker — one-time-only users
+  // no longer see a dedicated "Subscribe to Membership Packages" CTA card.
   if (
-    user.subscription &&
-    !user.subscription.isActive &&
-    user.subscription.status !== "past_due"
+    activeOneTimePackage ||
+    (user.subscription &&
+      !user.subscription.isActive &&
+      user.subscription.status !== "past_due")
   ) {
     return (
       <div className="space-y-6">
         <InactiveSubscriptionState
-          status={user.subscription.status}
+          status={user.subscription?.status ?? "none"}
           onSubscribeClick={onSubscribeClick}
           packages={packages}
           previousPackageId={previousPackageId}

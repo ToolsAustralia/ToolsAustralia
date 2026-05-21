@@ -56,7 +56,7 @@ import PendingChangeBanner from "./PendingChangeBanner";
 import UpgradeList from "./UpgradeList";
 import DowngradeList from "./DowngradeList";
 import CancelResumeRow from "./CancelResumeRow";
-import { OneTimeOnlyState, InactiveSubscriptionState, NoSubscriptionState } from "./EmptyStates";
+import { InactiveSubscriptionState, NoSubscriptionState } from "./EmptyStates";
 import type { ResubscribeTierOption } from "./ResubscribeTierPicker";
 import SettingsRedesignSubscription from "./SettingsRedesignSubscription";
 
@@ -900,18 +900,10 @@ const SubscriptionManagementModal: React.FC<SubscriptionManagementModalProps> = 
   const legacyStateBody =
     membershipPackage && activeSubscription ? (
       renderActiveSubscriptionContent()
-    ) : activeOneTimePackage ? (
-      <OneTimeOnlyState
-        packageDisplayName={
-          typeof activeOneTimePackage.packageId === "string"
-            ? (activeOneTimePackage as { packageData?: { name?: string } }).packageData?.name ?? "One-Time Package"
-            : (activeOneTimePackage.packageId as { name: string }).name
-        }
-        onSubscribeClick={handleSubscribeClick}
-      />
-    ) : user.subscription && !user.subscription.isActive && user.subscription.status !== "past_due" ? (
+    ) : activeOneTimePackage ||
+      (user.subscription && !user.subscription.isActive && user.subscription.status !== "past_due") ? (
       <InactiveSubscriptionState
-        status={user.subscription.status}
+        status={user.subscription?.status ?? "none"}
         onSubscribeClick={() => handleSubscribeClick(undefined)}
         packages={resubscribePackages}
         previousPackageId={previousPackageId}
