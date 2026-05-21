@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-05-21T09:05:49.114Z",
+  "generatedAt": "2026-05-21T09:14:17.813Z",
   "endpoints": [
     {
       "registryKey": "roas.summary",
@@ -29,6 +29,41 @@
       "path": "/v1/dashboard/revenue-breakdown",
       "method": "GET",
       "summary": "Revenue total + per-category breakdown for a date range"
+    },
+    {
+      "registryKey": "dashboard.membership-by-package",
+      "tier": "read",
+      "path": "/v1/dashboard/membership-by-package",
+      "method": "GET",
+      "summary": "Membership counts + revenue grouped by package (live or snapshot)"
+    },
+    {
+      "registryKey": "dashboard.projected-income",
+      "tier": "read",
+      "path": "/v1/dashboard/projected-income",
+      "method": "GET",
+      "summary": "Projected income from active subs, upcoming-27th cohort, and past-due risk"
+    },
+    {
+      "registryKey": "dashboard.recent-activities",
+      "tier": "read",
+      "path": "/v1/dashboard/recent-activities",
+      "method": "GET",
+      "summary": "Paged recent admin/site activity feed (PII-safe: firstName + opaque userId)"
+    },
+    {
+      "registryKey": "dashboard.revenue-details",
+      "tier": "read",
+      "path": "/v1/dashboard/revenue-details",
+      "method": "GET",
+      "summary": "Per-user contribution list for one revenue category over a date range (PII-safe: firstName + opaque userId)"
+    },
+    {
+      "registryKey": "dashboard.upcoming-renewals",
+      "tier": "read",
+      "path": "/v1/dashboard/upcoming-renewals",
+      "method": "GET",
+      "summary": "Paged list of subscriptions due to renew within a selected window (PII-safe: opaque IDs only)"
     },
     {
       "registryKey": "ab-testing.experiments.list",

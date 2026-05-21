@@ -2,7 +2,15 @@
 import type { z } from "zod";
 import { ALL_PERMISSIONS, type Permission } from "@/lib/permissions";
 import { NormRoasSummarySchema, NormRoasBreakdownSchema } from "./schemas/roas";
-import { NormDashboardStatsSchema, NormRevenueBreakdownSchema } from "./schemas/dashboard";
+import {
+  NormDashboardStatsSchema,
+  NormMembershipByPackageSchema,
+  NormProjectedIncomeSchema,
+  NormRecentActivitiesSchema,
+  NormRevenueBreakdownSchema,
+  NormRevenueDetailsSchema,
+  NormUpcomingRenewalsSchema,
+} from "./schemas/dashboard";
 import { NormSubmissionsUnviewedCountSchema } from "./schemas/submissions";
 import { NormCancellationFlowAnalyticsSchema } from "./schemas/cancellation-flow";
 import { NormUpsellMultipliersSchema } from "./schemas/upsell";
@@ -196,35 +204,40 @@ export const NORM_ENDPOINTS = {
     requiredPermission: "overview.view",
     path: "/v1/dashboard/membership-by-package",
     method: "GET",
-    summary: "Active membership counts grouped by package",
+    summary: "Membership counts + revenue grouped by package (live or snapshot)",
+    responseSchema: NormMembershipByPackageSchema,
   },
   "dashboard.projected-income": {
     tier: "read",
     requiredPermission: "overview.view",
     path: "/v1/dashboard/projected-income",
     method: "GET",
-    summary: "Projected income for the upcoming billing window",
+    summary: "Projected income from active subs, upcoming-27th cohort, and past-due risk",
+    responseSchema: NormProjectedIncomeSchema,
   },
   "dashboard.recent-activities": {
     tier: "read",
     requiredPermission: "overview.view",
     path: "/v1/dashboard/recent-activities",
     method: "GET",
-    summary: "Recent admin/site activity feed for dashboard",
+    summary: "Paged recent admin/site activity feed (PII-safe: firstName + opaque userId)",
+    responseSchema: NormRecentActivitiesSchema,
   },
   "dashboard.revenue-details": {
     tier: "read",
     requiredPermission: "overview.view",
     path: "/v1/dashboard/revenue-details",
     method: "GET",
-    summary: "Per-source revenue detail for a date range",
+    summary: "Per-user contribution list for one revenue category over a date range (PII-safe: firstName + opaque userId)",
+    responseSchema: NormRevenueDetailsSchema,
   },
   "dashboard.upcoming-renewals": {
     tier: "read",
     requiredPermission: "overview.view",
     path: "/v1/dashboard/upcoming-renewals",
     method: "GET",
-    summary: "Subscriptions due to renew soon",
+    summary: "Paged list of subscriptions due to renew within a selected window (PII-safe: opaque IDs only)",
+    responseSchema: NormUpcomingRenewalsSchema,
   },
 
   // ─── Activity log (roadmap) ───────────────────────────────────────────
