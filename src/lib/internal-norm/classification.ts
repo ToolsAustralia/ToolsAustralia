@@ -54,6 +54,15 @@ import {
   NormFacebookAdsHourlyInsightsSchema,
   NormFacebookAdsPurchaseAuditSchema,
 } from "./schemas/facebook-ads";
+import {
+  NormMajorDrawCurrentAndLastSchema,
+  NormMajorDrawExportAggregateSchema,
+  NormMajorDrawHistorySchema,
+  NormMajorDrawParticipantsSchema,
+  NormMajorDrawScheduledMonthsSchema,
+  NormMajorDrawSelectWinnerPreviewSchema,
+  NormMajorDrawUpdateGetSchema,
+} from "./schemas/major-draw";
 
 // "forbidden" is NOT a tier — endpoints not in the registry are simply unreachable.
 // Tier and Permission are orthogonal axes: tier = orchestration shape; permission = "is Norm allowed?".
@@ -625,35 +634,40 @@ export const NORM_ENDPOINTS = {
     requiredPermission: "majorDraw.view",
     path: "/v1/major-draw/current-and-last",
     method: "GET",
-    summary: "Current + most recent major draw",
+    summary: "Current + most recent major draw with AEST date ranges",
+    responseSchema: NormMajorDrawCurrentAndLastSchema,
   },
   "major-draw.export": {
     tier: "read",
     requiredPermission: "majorDraw.view",
     path: "/v1/major-draw/export",
     method: "GET",
-    summary: "Export major-draw entries",
+    summary: "Aggregate-only major-draw export: eligibility counts + per-state breakdown (no per-user PII)",
+    responseSchema: NormMajorDrawExportAggregateSchema,
   },
   "major-draw.history": {
     tier: "read",
     requiredPermission: "majorDraw.view",
     path: "/v1/major-draw/history",
     method: "GET",
-    summary: "Major-draw history",
+    summary: "Paged major-draw history with per-draw winner summary and rollup stats",
+    responseSchema: NormMajorDrawHistorySchema,
   },
   "major-draw.participants": {
     tier: "read",
     requiredPermission: "majorDraw.view",
     path: "/v1/major-draw/participants",
     method: "GET",
-    summary: "Participants for a major draw",
+    summary: "Paged participants for a major draw (PII-safe projection: omits lastName/email/mobile)",
+    responseSchema: NormMajorDrawParticipantsSchema,
   },
   "major-draw.scheduled-months": {
     tier: "read",
     requiredPermission: "majorDraw.view",
     path: "/v1/major-draw/scheduled-months",
     method: "GET",
-    summary: "Months with scheduled major draws",
+    summary: "Months with scheduled major draws (for calendar restriction UI)",
+    responseSchema: NormMajorDrawScheduledMonthsSchema,
   },
   "major-draw.select-winner": {
     tier: "trigger_human_approve",
@@ -667,7 +681,8 @@ export const NORM_ENDPOINTS = {
     requiredPermission: "majorDraw.view",
     path: "/v1/major-draw/select-winner",
     method: "GET",
-    summary: "Preview winner-selection inputs for a major draw",
+    summary: "Read the recorded winner for a major draw (if any) — PII-safe projection",
+    responseSchema: NormMajorDrawSelectWinnerPreviewSchema,
   },
   "major-draw.update": {
     tier: "write_safe",
@@ -681,7 +696,8 @@ export const NORM_ENDPOINTS = {
     requiredPermission: "majorDraw.view",
     path: "/v1/major-draw/update",
     method: "GET",
-    summary: "Read major-draw fields for the update form",
+    summary: "Read editable major-draw fields (name, description, status, dates, prize meta) for the update form",
+    responseSchema: NormMajorDrawUpdateGetSchema,
   },
 
   // ─── Metrics (wired) ──────────────────────────────────────────────────

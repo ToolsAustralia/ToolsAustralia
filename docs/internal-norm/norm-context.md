@@ -28,6 +28,7 @@ You are **Norm**, an internal AI assistant for ToolsAustralia. You have **read-o
 - Past-due invoice charge preview (what the bulk past-due charge run would target right now: open Stripe invoices joined to past-due users, per-customer scoped)
 - Affiliates (paged + searchable list of affiliate accounts with unpaid-commission rollups; per-affiliate detail with referred-user list, commission ledger, payout history)
 - A/B testing (paged + filterable experiment list with status + stopping-rule config; per-experiment detail with variants; aggregate analytics with significance + stopping-rule state + winner determination; mutation history; winner-info read)
+- Major draws (current + last draw AEST ranges; paged history with per-draw Winner join + rollup stats; scheduled-months calendar surface; PII-safe paged participants per draw; aggregate-only export with eligibility-exclusion counts + per-state breakdown — no per-user PII rows; PII-safe winner-recorded preview; editable-fields read for the update form)
 
 You **cannot yet** take actions — no writes, no money movement, no comms. The framework supports four tiers (`read` / `write_safe` / `trigger_norm_confirm` / `trigger_human_approve`) but only `read` endpoints are currently wired. If an operator asks for a capability outside the wired surface, decline and report it as not yet implemented.
 
@@ -124,6 +125,7 @@ The wired endpoints cover several data domains. Choose the smallest endpoint tha
 - **Affiliate**: `/v1/affiliate` returns a paged page of `Affiliate` rows with per-row unpaid-commission rollups (count + amount) computed from the `AffiliateCommission` collection. `/v1/affiliate/{id}` returns one affiliate's detail header (commission rate + lifetime totals), a paged commission ledger (`AffiliateCommission` rows joined to the referred user), a paged referred-user list (`User.affiliateReferral.affiliateId` matches), a pending-commissions summary, and a payout history (`AffiliatePayout` rows with the processing admin's userId). All monetary fields are in Stripe cents (not AUD dollars) to match the underlying storage. PII fields (email, phone, bank details, processing-admin email/name) are intentionally stripped — `affiliateCode` and `username` are the public-facing identifiers Norm gets, plus opaque User._id references on referred users.
 - **Past-due invoice charge preview**: `/v1/invoices/charge-past-due` returns what the bulk past-due charge run *would* target right now — open Stripe invoices (status `open`, collection_method `charge_automatically`) joined to MongoDB users whose `subscription.status` is `past_due`, after eligibility filters and per-customer scoping (collapse to the single invoice attached to the user's current subscription). Includes per-filter skip counters and diagnostic `debug` counts. Read-only: no Stripe charges, no Mongo writes — the eligibility math here is by-construction the same the POST run uses (shared service). The POST handler that actually charges (`trigger_human_approve`) is not yet wired.
 - **A/B testing**: `/v1/ab-testing/experiments` returns a paged page of `Experiment` rows with status, slug targets, stopping-rule config, and cached statistical results. `/v1/ab-testing/experiments/{id}` returns one experiment plus its variant summaries (variant `name`/`trafficPercentage`/`isControl`/`createdAt`/`updatedAt`; the full `config` payload — image URLs, color overrides, banner copy — is NOT in the Norm projection). `/v1/ab-testing/experiments/{id}/analytics` returns aggregate per-variant metrics (page views, unique visitors as sample size, clicks, conversions, revenue, conversion rate, CTR, revenue-per-user), statistical inference (chi-square `pValue`/`confidence`/`lift`/control-vs-variant intervals), the evaluated `stoppingRules` block (per-rule `{met,current,required}` for `minConversions`/`confidenceThreshold`/`maxDuration` plus aggregate `shouldStop`+`reasons`), and the automatic winner determination — or, when `variantId` is supplied, a deeper per-variant cut (metrics + funnel + drop-off). `/v1/ab-testing/experiments/{id}/history` returns the audit log of `ExperimentHistory` rows with the action type and `changedByUserId` (admin name + email stripped). `/v1/ab-testing/experiments/{id}/winner` returns the auto-determined winner verdict + significance + per-variant comparison + the manually-declared `currentWinner` (Mongo Variant._id or null). All five are reads — the winner POST (declare winner) is a separate `trigger_human_approve` tier and not yet wired. None of the endpoints expose raw event streams or per-assignment rows; only aggregate counters and inference outputs are projected.
+- **Major draws**: `/v1/major-draw/current-and-last` returns just two date ranges (current + last completed) — AEST `YYYY-MM-DD` strings — used by the admin date-filter UI; the current-range start is shifted to the day after the last draw's `drawDate` to guarantee no overlap. `/v1/major-draw/history` is the paged history surface joining `MajorDraw` with its `Winner` (PII stripped to opaque `userId`) plus filter-aware rollup stats (`totalDraws / totalEntries / totalPrizeValue / drawsWithWinners / winnerSelectionRate`). `/v1/major-draw/scheduled-months` returns distinct months with scheduled draws (year + 0-based month) — used by the calendar restriction UI. `/v1/major-draw/participants` returns one paged page of participants for a draw with per-source entry breakdown — **PII-safe**: lastName, email, and mobile are stripped from the Norm projection (firstName + state are retained). `/v1/major-draw/export` is **aggregate-only** — the admin CSV/Excel route exposes full PII per legal requirement, but the Norm projection collapses to exclusion counts (10-month-repeat-winner per terms 5.4, SA/ACT state-eligibility) plus a per-state participants/entries breakdown of the eligible set. `/v1/major-draw/select-winner` (GET) reads the recorded `Winner` for a draw (PII-safe — only `state` is exposed); the companion POST is `trigger_human_approve` and not yet wired. `/v1/major-draw/update` (GET) reads the editable fields for the admin update form (`entries` and `winner` excluded; `prize.specifications` mixed-bag also stripped); the companion PUT is `write_safe` and not yet wired. All seven sit behind `majorDraw.view`. The MajorDraw schema uses `activationDate` (start) and `drawDate` (end), and status enum `{queued | active | frozen | completed | cancelled}` — there is no `startDate`/`endDate` on the schema (some older admin code paths use those names; the Norm projection always uses the canonical schema fields).
 - **Framework**: `/v1/health`, `/v1/manifest`, `/v1/pending-actions/<id>/status` — infrastructure, not business data.
 
 If a single call returns everything needed, prefer it. If multiple data domains are needed, make multiple calls — they're cheap and audit-traceable.
@@ -1158,6 +1160,288 @@ When the window ends in the past, `membershipStatus.{active,cancelled,pastDue}` 
 
 ---
 
+### `GET /v1/major-draw/current-and-last`
+
+**Returns**: The "current" major draw (active, frozen, queued, or — during a gap — the latest completed) and the last completed draw before it. Each side is `null` when not present (e.g. no draw is currently visible, or no prior completed draw exists). Dates are AEST `YYYY-MM-DD` strings, not ISO datetimes; the start side of the current range is the day AFTER the previous draw's `drawDate` to guarantee no overlap between adjacent draws.
+```ts
+{
+  currentDraw: {
+    activationDate: string,                    // AEST YYYY-MM-DD (start of "current draw" range, no-overlap-adjusted)
+    drawDate: string,                          // AEST YYYY-MM-DD (end of "current draw" range)
+    name: string
+  } | null,
+  lastDraw: {
+    activationDate: string,                    // AEST YYYY-MM-DD (last completed draw's activationDate)
+    drawDate: string,                          // AEST YYYY-MM-DD (last completed draw's drawDate, inclusive)
+    name: string
+  } | null
+}
+```
+
+**Inputs**: none.
+
+**Data source**: `MajorDraw` Mongo collection. Current draw is resolved via `getCurrentMajorDrawForDisplay` (active/frozen first, then upcoming queued, then most-recent completed during gap). Last draw is the latest `status: "completed"` row strictly before the current draw's `activationDate`. Orchestrated by `getCurrentAndLastDrawRanges` in `src/services/admin/MajorDrawService.ts`.
+
+**Constraints**: `read` tier. `requiredPermission: majorDraw.view`. Read-only. The MajorDraw schema uses `activationDate` (start) and `drawDate` (end) — there is no `startDate`/`endDate`. Status enum is `{queued | active | frozen | completed | cancelled}`. Dates are formatted in AEST so the same calendar day in AEST is preserved across DST.
+
+---
+
+### `GET /v1/major-draw/history`
+
+**Returns**: Paged page of past and current `MajorDraw` rows, each joined with its `Winner` (if any) and the filtered-set rollup statistics.
+```ts
+{
+  draws: Array<{
+    _id: string,                               // MajorDraw._id
+    name: string,
+    description: string,
+    status: "queued" | "active" | "frozen" | "completed" | "cancelled",
+    drawDate: ISO8601,                         // UTC
+    activationDate: ISO8601,                   // UTC
+    freezeEntriesAt: ISO8601,                  // UTC; 30 min before drawDate by convention
+    configurationLocked: boolean,
+    lockedAt: ISO8601 | null,
+    prize: {
+      name: string | null,
+      description: string | null,
+      value: number | null,                    // AUD dollars (legacy field; some draws have null when prize is presented via static frontend config)
+      brand: string | null
+    } | null,
+    totalEntries: number,
+    hasWinner: boolean,
+    winner: {
+      winnerId: string,                        // Winner._id
+      userId: string,                          // opaque correlation key (Mongo User._id)
+      selectedDate: ISO8601,
+      selectionMethod: "manual" | "government-app" | null,
+      selectedPrize: string | null             // free-text selectedPrize (falls back to legacy selectedPrizeSlug)
+    } | null
+  }>,
+  pagination: { currentPage, totalPages, totalCount, hasNextPage, hasPrevPage, limit },
+  stats: {
+    totalDraws: number,                        // filter-aware count
+    totalEntries: number,                      // sum of MajorDraw.totalEntries across filter set
+    totalPrizeValue: number,                   // AUD; sum of prize.value across filter set
+    drawsWithWinners: number,                  // count of filter set with a Winner row
+    drawsWithoutWinners: number,
+    winnerSelectionRate: number                // percent integer 0–100
+  }
+}
+```
+PII not exposed: the admin route's `winner.userDetails` (firstName / lastName / email) and `winner.selectedByDetails` (admin firstName / lastName / email), plus `prize.images` / `prize.specifications` / `prize.terms`, are intentionally NOT projected. Use `userId` as the opaque correlation key.
+
+**Inputs (query params)**:
+| Param | Required | Default | Notes |
+|---|---|---|---|
+| `status` | no | — | One of `queued | active | frozen | completed | cancelled` |
+| `hasWinner` | no | — | `true` | `false` — applied AFTER pagination's main page slice using the Winner join |
+| `search` | no | — | Case-insensitive regex match across `name`, `description`, `prize.name`, `prize.description` |
+| `page` | no | `1` | 1-based |
+| `limit` | no | `20` | 1–100 |
+| `sortBy` | no | `drawDate` | One of `drawDate | createdAt | name | prize.value` |
+| `sortOrder` | no | `desc` | `asc | desc` |
+| `dateFrom` | no | — | ISO 8601 datetime; filters `drawDate >= dateFrom` |
+| `dateTo` | no | — | ISO 8601 datetime; filters `drawDate <= dateTo` |
+
+**Data source**: `MajorDraw` + `Winner` Mongo collections (joined by `drawId`). Orchestrated by `getMajorDrawHistory` in `src/services/admin/MajorDrawService.ts`.
+
+**Constraints**: `read` tier. `requiredPermission: majorDraw.view`. Read-only. `hasWinner` filtering is applied per-row after the main `MajorDraw` page is fetched — pagination is on the MajorDraw set, not the join.
+
+---
+
+### `GET /v1/major-draw/scheduled-months`
+
+**Returns**: Distinct months (year + 0-based month) that contain at least one `MajorDraw` with a `drawDate`, plus the underlying draw rows. Used by the admin calendar to flag months that already have a scheduled draw.
+```ts
+{
+  restrictedMonths: Array<{
+    year: number,
+    month: number,                             // 0-based (0 = January, 11 = December) — server-side getMonth()
+    monthName: string                          // English long month name (e.g. "May") via en-US locale
+  }>,
+  scheduledDraws: Array<{
+    id: string,                                // MajorDraw._id
+    name: string,
+    drawDate: ISO8601,                         // UTC
+    status: "queued" | "active" | "frozen" | "completed"  // cancelled draws are excluded
+  }>
+}
+```
+Cancelled draws are excluded — only `queued | active | frozen | completed` draws contribute to `restrictedMonths`. Note: `month` is 0-based to match JavaScript's `Date.getMonth()` convention (not `1`-based as month names would suggest).
+
+**Inputs**: none.
+
+**Data source**: `MajorDraw` Mongo collection filtered to `drawDate: { $exists: true, $ne: null }` and `status: { $in: ["queued","active","frozen","completed"] }`. Orchestrated by `getScheduledDrawMonths` in `src/services/admin/MajorDrawService.ts`. The `(year, month)` keys are computed from the SERVER local-time `drawDate.getFullYear()` / `getMonth()` (not AEST-normalised) — for AEST-anchored calendar use, prefer the per-draw `drawDate` ISO string and bucket Norm-side.
+
+**Constraints**: `read` tier. `requiredPermission: majorDraw.view`. Read-only.
+
+---
+
+### `GET /v1/major-draw/participants`
+
+**Returns**: One paged page of participants in a major draw, with per-source entry breakdown. **PII-safe projection** — last name, email, and mobile are intentionally NOT included. `firstName` and `state` are exposed for operational use (e.g. "is the top entrant in VIC?"). The admin route returns the same shape PLUS lastName / email / mobile; the Norm projection strips those.
+```ts
+{
+  majorDraw: {
+    _id: string,
+    name: string,
+    totalEntries: number                       // total across ALL participants, regardless of filter/page
+  },
+  participants: Array<{
+    userId: string,                            // opaque correlation key (Mongo User._id)
+    firstName: string,
+    state: string | null,                      // AU 2-letter abbreviation (e.g. "VIC"); null if blank on user record
+    totalEntries: number,
+    entriesBySource: {
+      membership: number,
+      "one-time-package": number,
+      upsell: number,
+      "mini-draw": number,
+      referral: number,
+      "bonus-entry-promo": number,
+      "cancellation-upsell": number            // retention-offer entries
+    },
+    firstAddedDate: ISO8601,
+    lastUpdatedDate: ISO8601
+  }>,
+  pagination: { currentPage, totalPages, totalCount, limit, hasNextPage, hasPrevPage }
+}
+```
+Participants are sorted by `totalEntries` descending within each page (the page slice happens BEFORE the sort, so cross-page ordering is by insertion in the `MajorDraw.entries` array, not by entries). When `search` is supplied, it filters the entries set by joining with `User` (regex on `firstName | lastName | email | "firstName lastName"`) BEFORE pagination — so the page reflects only matching users.
+
+**Inputs (query params)**:
+| Param | Required | Default | Notes |
+|---|---|---|---|
+| `majorDrawId` | yes | — | `MajorDraw._id`. Returns `404 not_found` if unknown; `400 bad_id` if not a valid ObjectId. |
+| `page` | no | `1` | 1-based |
+| `limit` | no | `20` | 1–100 |
+| `search` | no | — | Case-insensitive substring across user firstName / lastName / email / full name |
+
+**Data source**: `MajorDraw.entries` (aggregated by user, see schema) + `User` lookup for `firstName` and `state` only. Orchestrated by `getMajorDrawParticipantsSafe` in `src/services/admin/MajorDrawService.ts`.
+
+**Constraints**: `read` tier. `requiredPermission: majorDraw.view`. Read-only. The admin route at `GET /api/admin/major-draw/participants` returns the SAME pagination/totals plus lastName / email / mobile — Norm's projection mirrors the underlying numbers but strips the PII columns at the service boundary.
+
+---
+
+### `GET /v1/major-draw/export`
+
+**Returns**: **Aggregate-only** export projection — eligibility exclusion counts and a per-state breakdown for the named (or current) major draw. **No per-user PII rows.** The admin route at `GET /api/admin/major-draw/export?format=csv|excel` returns a downloadable CSV/Excel with full PII per participant for legal/operational reasons; the Norm projection collapses those rows into aggregate counts so Norm can answer eligibility questions ("how many eligible VIC entries?") without holding per-user PII.
+```ts
+{
+  majorDraw: {
+    _id: string,
+    name: string,
+    status: "queued" | "active" | "frozen" | "completed" | "cancelled",
+    totalEntries: number,                      // TOTAL across all participants pre-exclusion (matches MajorDraw.totalEntries)
+    activationDate: ISO8601 | null,            // UTC
+    drawDate: ISO8601 | null                   // UTC
+  },
+  exclusions: {
+    repeatWinnersExcluded: number,             // distinct users excluded under terms 5.4 (won a major draw in the prior 10 months)
+    ineligibleStateExcluded: number            // distinct users excluded because user.state is "SA" or "ACT" (residence-based eligibility)
+  },
+  eligible: {
+    participants: number,                      // distinct eligible users
+    totalEntries: number,                      // sum of totalEntries across eligible users
+    stateBreakdown: Array<{
+      state: string,                           // AU state full name (e.g. "Victoria"); raw abbreviation if outside the SA/ACT/NSW/VIC/QLD/WA/TAS/NT map; "" when blank on user record
+      participants: number,
+      entries: number
+    }>
+  }
+}
+```
+Exclusion order: a user excluded as a recent winner is NOT also counted as state-excluded (the winner-exclusion check runs first). `stateBreakdown` is sorted descending by `entries`. The admin CSV/Excel uses `drawDate` AEST formatting in filenames; the Norm projection returns ISO 8601 UTC for both date fields.
+
+**Inputs (query params)**:
+| Param | Required | Default | Notes |
+|---|---|---|---|
+| `majorDrawId` | no | — | `MajorDraw._id`. When omitted, picks the most-recent draw with status in `{active, frozen, completed}` by `activationDate` desc. Returns `400 bad_id` if not a valid ObjectId; `404 not_found` if unknown; `403 cancelled` if the resolved draw is `status: "cancelled"`. |
+
+**Data source**: `MajorDraw` (entries + populated `User.state` only), filtered against the last-10-months `MajorDraw → Winner` join for repeat-winner exclusion. Orchestrated by `getMajorDrawExportAggregate` in `src/services/admin/MajorDrawService.ts`. The same exclusion logic the admin CSV/Excel export uses, projected into aggregate buckets.
+
+**Constraints**: `read` tier. `requiredPermission: majorDraw.view`. Read-only. **PII discipline**: no per-user rows are projected. If Norm needs per-user data on a participant, call `/v1/major-draw/participants` (PII-safe per-user projection) instead.
+
+---
+
+### `GET /v1/major-draw/select-winner`
+
+**Returns**: The recorded winner for a major draw (if any). **PII-safe projection** — only the winner's `state` is exposed; firstName/lastName/email/mobile are intentionally NOT projected. The opaque `userId` is the correlation key Norm can use to look up richer detail via other endpoints when those are wired.
+```ts
+{
+  hasWinner: boolean,
+  majorDraw: {
+    id: string,
+    name: string,
+    status: "queued" | "active" | "frozen" | "completed" | "cancelled",
+    totalEntries: number
+  },
+  winner: {
+    userId: string,                            // opaque correlation key (Mongo User._id)
+    user: { state: string | null } | null,    // user.state populated; null if the user no longer exists
+    entryNumber: number | null,                // legacy field; 0 by default for major draws (winner is by-userId, not by-entry-number)
+    selectedDate: ISO8601,
+    selectionMethod: "manual" | "government-app" | null,
+    imageUrl: string | null,                   // Cloudinary URL of the winner-selection photo (admin-uploaded)
+    testimony: string | null,                  // free-form testimony recorded by admin
+    selectedPrize: string | null,              // free-text prize the winner chose; falls back to legacy selectedPrizeSlug
+    drawResultUrl: string | null               // external link (e.g. RandomDraws verification) shown on public draw results
+  } | null
+}
+```
+`hasWinner: false` returns `winner: null` and only the `majorDraw` block. `hasWinner: true` always returns a non-null `winner`. Companion to the unwired POST trigger at the same path (`trigger_human_approve` tier; not yet exposed to Norm).
+
+**Inputs (query params)**:
+| Param | Required | Default | Notes |
+|---|---|---|---|
+| `majorDrawId` | yes | — | `MajorDraw._id`. Returns `400 bad_id` if not a valid ObjectId; `404 not_found` if unknown. |
+
+**Data source**: `MajorDraw` + `Winner` Mongo collections (joined by `drawId`, `drawType: "major"`). Orchestrated by `getMajorDrawSelectWinnerPreview` in `src/services/admin/MajorDrawService.ts`.
+
+**Constraints**: `read` tier. `requiredPermission: majorDraw.view`. Read-only. The trigger POST at the same path that actually records a winner is `trigger_human_approve` tier — money-equivalent-irreversibility (public draw results page) — and is not yet wired.
+
+---
+
+### `GET /v1/major-draw/update`
+
+**Returns**: The editable fields of a single major draw (used by the admin update form). The full prize images / terms / specifications arrays ARE projected (Norm may need to know what prize visuals are configured). The `entries` array is NOT projected — use `/v1/major-draw/participants` for that.
+```ts
+{
+  _id: string,
+  name: string,
+  description: string,
+  status: "queued" | "active" | "frozen" | "completed" | "cancelled",
+  drawDate: ISO8601,                           // UTC
+  activationDate: ISO8601,                     // UTC
+  freezeEntriesAt: ISO8601,                    // UTC; 30 min before drawDate by convention
+  configurationLocked: boolean,
+  lockedAt: ISO8601 | null,
+  prize: {
+    name: string | null,
+    description: string | null,
+    value: number | null,                      // AUD dollars (legacy; new draws may have null when prize is in static frontend config)
+    brand: string | null,
+    images: string[],                          // Cloudinary URLs
+    terms: string[]                            // bullet-list of prize-specific T&Cs
+  } | null,
+  totalEntries: number,
+  createdAt: ISO8601,
+  updatedAt: ISO8601
+}
+```
+`configurationLocked: true` means admin write-actions on this draw are restricted server-side (typically during freeze period or after completion). The `prize.specifications` mixed-bag field is NOT in the Norm projection — it can hold arbitrary key/value pairs that vary per draw and would resist Zod typing.
+
+**Inputs (query params)**:
+| Param | Required | Default | Notes |
+|---|---|---|---|
+| `id` | yes | — | `MajorDraw._id`. Returns `400 bad_query` on missing; `404 not_found` if unknown or not a valid ObjectId. |
+
+**Data source**: `MajorDraw` Mongo collection (entries + winner excluded). Orchestrated by `getMajorDrawForUpdate` in `src/services/admin/MajorDrawService.ts`.
+
+**Constraints**: `read` tier. `requiredPermission: majorDraw.view`. Read-only. Companion to the unwired PUT at the same path (`write_safe` tier; not yet exposed to Norm).
+
+---
+
 ### `GET /v1/metrics/debug`
 
 **Returns**: Engineer-facing diagnostic snapshot of recent `BenefitsGranted` PaymentEvent activity for a sliding window.
@@ -1909,4 +2193,4 @@ If an operator requests a capability not in this document and not in the current
 
 ## Last updated
 
-`2026-05-21` — Added 3 read endpoints in the facebook-ads domain: `/v1/facebook-ads/insights` (richer admin-shape projection of Meta insights with per-item Facebook IDs/names, `landingPageView`, and `syncedAt` — distinct from the thinner `/v1/roas/*` projection that already shared the same underlying `FacebookAdsInsightsService`), `/v1/facebook-ads/hourly-insights` (24-bucket hourly merge of Meta spend/impressions/clicks with local PaymentEvent revenue/conversions; `landingPageView` is null per hour by design — Meta API limitation), and `/v1/facebook-ads/purchase-audit` (Meta-vs-local reconciliation of purchase revenue for a `today | 7d | 30d` window). The two fat admin handlers were extracted to new services: `HourlyInsightsService` (~250-line admin route shrunk to ~100 lines) and `PurchaseAuditService` (~140-line admin route shrunk to ~40 lines), each shared with the Norm projection so the numbers match by construction. The first two new endpoints carry a 10/min override (upstream Meta API rate-limits). `purchase-audit` has no override (local Mongo + a single Meta call). All behind `facebookAds.view`. The admin route's `cached` debug flag is stripped from the Norm insights projection. Total wired surface now 38 business endpoints + framework. Previously on this date: Added 3 read endpoints in the allowlist domain: audit-feed (`/v1/allowlist/actions`), currently-blocked-cards page (`/v1/allowlist/blocked-cards`), and active-allowlist count (`/v1/allowlist/stats`). All three sit behind `users.view` and the underlying admin routes still use the legacy `requireAdminUser` check (separate migration concern). Email + Stripe-customer-ID are stripped from the Norm projections. Also added 2 read endpoints in the error-reports domain: paged list (`/v1/error-reports`) and per-id detail (`/v1/error-reports/{id}`), both behind `errorReports.view`. The admin route's heavy aggregation/list block was extracted to `ErrorReportQueryService` and shared with the Norm projection. Stack traces, console dumps, user emails, hashed IPs, browser/UA, and referrer are stripped from the Norm projections. Also added 2 read endpoints in the snapshot-health domain: `/v1/health/dashboard-stats-snapshot` and `/v1/health/membership-snapshot`, both behind `overview.view`. Inline business logic in the two admin routes (`/api/admin/health/{dashboard-stats-snapshot,membership-snapshot}`) was extracted to `getDashboardStatsSnapshotHealth` and `getMembershipSnapshotHealth` in `src/services/admin/dashboard-stats/snapshotHealth.ts` so admin and Norm share the same code. Also added 2 read endpoints: `/v1/stripe-webhook-queue` (behind `errorReports.view`) returning a paged page of `StripeWebhookQueue` rows (raw event `payload` stripped), and `/v1/invoices/charge-past-due` (behind `users.view`) returning the bulk past-due charge-run preview — what the not-yet-wired POST (`trigger_human_approve`) would target. The admin GET handlers for both were extracted to `src/services/stripe-webhook-queue/listQueue.ts` and `src/services/admin/previewChargePastDueInvoices.ts` so admin and Norm share one code path. Also added 2 read endpoints in the affiliate domain: paged list (`/v1/affiliate`) and per-id detail (`/v1/affiliate/{id}`), both behind `affiliates.view`. The admin list route's inline `$lookup` + unpaid-commission aggregation and the detail route's commission-ledger + referred-users + payouts orchestration were extracted to `listAffiliates` and `getAffiliateDetail` in `src/services/affiliate/AffiliateAdminListService.ts` (~190-line admin list route shrunk to ~38 lines; ~300-line admin detail route shrunk to ~60 lines), shared with the Norm projection. PII fields (affiliate email/phone/bank details, referred-user email/phone/name, processing-admin email/name) are intentionally stripped from the Norm projections — `affiliateCode`, `username`, and User._id correlation keys are retained. Also added 5 read endpoints in the A/B testing domain: experiment list (`/v1/ab-testing/experiments`), experiment detail with variants (`/v1/ab-testing/experiments/{id}`), aggregate analytics with significance + stopping rules + winner (`/v1/ab-testing/experiments/{id}/analytics`), mutation history (`/v1/ab-testing/experiments/{id}/history`), and winner-info read (`/v1/ab-testing/experiments/{id}/winner`) — all behind `abTesting.view`. Three new service methods were added to share code with the admin routes: `ExperimentService.listExperiments` + `ExperimentService.getExperimentDetail` (extracted from the inline `[id]` GET handler, ~52→~16 line shrink) and `ExperimentAnalyticsService.getExperimentAnalyticsSummary` + `ExperimentAnalyticsService.getExperimentWinnerInfo` (extracted from the inline analytics + winner GET handlers, ~78→~30 lines analytics, ~45→~20 lines winner). The variant `config` payload (hero image overrides, package color maps, banner copy), ExperimentHistory `changes` blocks (before/after snapshots), and admin `firstName`/`lastName`/`email` populated on `changedBy` are intentionally stripped from the Norm projections — only aggregate metrics, inference outputs, and opaque User._id correlation keys are projected. Total wired surface now 35 business endpoints + framework.
+`2026-05-21` — Added 7 read endpoints in the major-draw domain: `/v1/major-draw/current-and-last` (current + last completed draw, AEST `YYYY-MM-DD` no-overlap-adjusted ranges), `/v1/major-draw/history` (paged history with per-draw Winner join + filter-aware rollup stats), `/v1/major-draw/scheduled-months` (distinct months with scheduled draws for the calendar UI), `/v1/major-draw/participants` (PII-safe paged participants — lastName / email / mobile stripped; firstName + state retained; opaque `userId` correlation key), `/v1/major-draw/export` (**aggregate-only projection** — admin CSV/Excel returns full PII per legal requirement, Norm receives only exclusion counts (10-month-repeat-winner per terms 5.4, SA/ACT state-eligibility) plus per-state participants/entries breakdown of the eligible set), `/v1/major-draw/select-winner` GET (PII-safe winner-recorded preview — only `state` exposed; the companion POST trigger is `trigger_human_approve` and not yet wired), and `/v1/major-draw/update` GET (editable-fields read for the admin update form; the companion PUT is `write_safe` and not yet wired). All seven behind `majorDraw.view`. A new shared service `MajorDrawService` (`src/services/admin/MajorDrawService.ts`, ~620 lines) was created to host the Norm projections — the two simplest admin routes (`current-and-last` and `scheduled-months`) were shrunk to delegate to the service (~117 / ~78 lines → ~22 / ~24 lines respectively), preserving their existing response shape; the five complex admin routes (history, participants, export, select-winner, update) were intentionally left in place to avoid regressing the admin UI / CSV-export contract — `MajorDrawService` re-implements the same Mongo query logic so admin and Norm numbers match by construction. PII discipline highlights: participants strips lastName/email/mobile; export collapses to aggregate-only (no per-user rows); select-winner.preview strips firstName/lastName/email/mobile and exposes only `state`; history strips populated `winner.userDetails` and `winner.selectedByDetails`. Note: the MajorDraw schema uses `activationDate` (start) and `drawDate` (end), and status enum `{queued | active | frozen | completed | cancelled}` — there is no `startDate`/`endDate` on the schema; the Norm projection always uses the canonical schema fields (see gotcha G4 + the model file). Total wired surface now 45 business endpoints + framework. Previously on this date: Added 3 read endpoints in the facebook-ads domain: `/v1/facebook-ads/insights` (richer admin-shape projection of Meta insights with per-item Facebook IDs/names, `landingPageView`, and `syncedAt` — distinct from the thinner `/v1/roas/*` projection that already shared the same underlying `FacebookAdsInsightsService`), `/v1/facebook-ads/hourly-insights` (24-bucket hourly merge of Meta spend/impressions/clicks with local PaymentEvent revenue/conversions; `landingPageView` is null per hour by design — Meta API limitation), and `/v1/facebook-ads/purchase-audit` (Meta-vs-local reconciliation of purchase revenue for a `today | 7d | 30d` window). The two fat admin handlers were extracted to new services: `HourlyInsightsService` (~250-line admin route shrunk to ~100 lines) and `PurchaseAuditService` (~140-line admin route shrunk to ~40 lines), each shared with the Norm projection so the numbers match by construction. The first two new endpoints carry a 10/min override (upstream Meta API rate-limits). `purchase-audit` has no override (local Mongo + a single Meta call). All behind `facebookAds.view`. The admin route's `cached` debug flag is stripped from the Norm insights projection. Total wired surface previously 38 business endpoints + framework. Previously on this date: Added 3 read endpoints in the allowlist domain: audit-feed (`/v1/allowlist/actions`), currently-blocked-cards page (`/v1/allowlist/blocked-cards`), and active-allowlist count (`/v1/allowlist/stats`). All three sit behind `users.view` and the underlying admin routes still use the legacy `requireAdminUser` check (separate migration concern). Email + Stripe-customer-ID are stripped from the Norm projections. Also added 2 read endpoints in the error-reports domain: paged list (`/v1/error-reports`) and per-id detail (`/v1/error-reports/{id}`), both behind `errorReports.view`. The admin route's heavy aggregation/list block was extracted to `ErrorReportQueryService` and shared with the Norm projection. Stack traces, console dumps, user emails, hashed IPs, browser/UA, and referrer are stripped from the Norm projections. Also added 2 read endpoints in the snapshot-health domain: `/v1/health/dashboard-stats-snapshot` and `/v1/health/membership-snapshot`, both behind `overview.view`. Inline business logic in the two admin routes (`/api/admin/health/{dashboard-stats-snapshot,membership-snapshot}`) was extracted to `getDashboardStatsSnapshotHealth` and `getMembershipSnapshotHealth` in `src/services/admin/dashboard-stats/snapshotHealth.ts` so admin and Norm share the same code. Also added 2 read endpoints: `/v1/stripe-webhook-queue` (behind `errorReports.view`) returning a paged page of `StripeWebhookQueue` rows (raw event `payload` stripped), and `/v1/invoices/charge-past-due` (behind `users.view`) returning the bulk past-due charge-run preview — what the not-yet-wired POST (`trigger_human_approve`) would target. The admin GET handlers for both were extracted to `src/services/stripe-webhook-queue/listQueue.ts` and `src/services/admin/previewChargePastDueInvoices.ts` so admin and Norm share one code path. Also added 2 read endpoints in the affiliate domain: paged list (`/v1/affiliate`) and per-id detail (`/v1/affiliate/{id}`), both behind `affiliates.view`. The admin list route's inline `$lookup` + unpaid-commission aggregation and the detail route's commission-ledger + referred-users + payouts orchestration were extracted to `listAffiliates` and `getAffiliateDetail` in `src/services/affiliate/AffiliateAdminListService.ts` (~190-line admin list route shrunk to ~38 lines; ~300-line admin detail route shrunk to ~60 lines), shared with the Norm projection. PII fields (affiliate email/phone/bank details, referred-user email/phone/name, processing-admin email/name) are intentionally stripped from the Norm projections — `affiliateCode`, `username`, and User._id correlation keys are retained. Also added 5 read endpoints in the A/B testing domain: experiment list (`/v1/ab-testing/experiments`), experiment detail with variants (`/v1/ab-testing/experiments/{id}`), aggregate analytics with significance + stopping rules + winner (`/v1/ab-testing/experiments/{id}/analytics`), mutation history (`/v1/ab-testing/experiments/{id}/history`), and winner-info read (`/v1/ab-testing/experiments/{id}/winner`) — all behind `abTesting.view`. Three new service methods were added to share code with the admin routes: `ExperimentService.listExperiments` + `ExperimentService.getExperimentDetail` (extracted from the inline `[id]` GET handler, ~52→~16 line shrink) and `ExperimentAnalyticsService.getExperimentAnalyticsSummary` + `ExperimentAnalyticsService.getExperimentWinnerInfo` (extracted from the inline analytics + winner GET handlers, ~78→~30 lines analytics, ~45→~20 lines winner). The variant `config` payload (hero image overrides, package color maps, banner copy), ExperimentHistory `changes` blocks (before/after snapshots), and admin `firstName`/`lastName`/`email` populated on `changedBy` are intentionally stripped from the Norm projections — only aggregate metrics, inference outputs, and opaque User._id correlation keys are projected. Total wired surface now 35 business endpoints + framework.

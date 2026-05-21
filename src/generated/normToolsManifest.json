@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-05-21T07:48:48.020Z",
+  "generatedAt": "2026-05-21T08:01:11.688Z",
   "endpoints": [
     {
       "registryKey": "roas.summary",
@@ -204,6 +204,55 @@
       "path": "/v1/klaviyo/draw-reset-progress",
       "method": "GET",
       "summary": "Progress of an in-flight Klaviyo draw reset"
+    },
+    {
+      "registryKey": "major-draw.current-and-last",
+      "tier": "read",
+      "path": "/v1/major-draw/current-and-last",
+      "method": "GET",
+      "summary": "Current + most recent major draw with AEST date ranges"
+    },
+    {
+      "registryKey": "major-draw.export",
+      "tier": "read",
+      "path": "/v1/major-draw/export",
+      "method": "GET",
+      "summary": "Aggregate-only major-draw export: eligibility counts + per-state breakdown (no per-user PII)"
+    },
+    {
+      "registryKey": "major-draw.history",
+      "tier": "read",
+      "path": "/v1/major-draw/history",
+      "method": "GET",
+      "summary": "Paged major-draw history with per-draw winner summary and rollup stats"
+    },
+    {
+      "registryKey": "major-draw.participants",
+      "tier": "read",
+      "path": "/v1/major-draw/participants",
+      "method": "GET",
+      "summary": "Paged participants for a major draw (PII-safe projection: omits lastName/email/mobile)"
+    },
+    {
+      "registryKey": "major-draw.scheduled-months",
+      "tier": "read",
+      "path": "/v1/major-draw/scheduled-months",
+      "method": "GET",
+      "summary": "Months with scheduled major draws (for calendar restriction UI)"
+    },
+    {
+      "registryKey": "major-draw.select-winner.preview",
+      "tier": "read",
+      "path": "/v1/major-draw/select-winner",
+      "method": "GET",
+      "summary": "Read the recorded winner for a major draw (if any) — PII-safe projection"
+    },
+    {
+      "registryKey": "major-draw.update.get",
+      "tier": "read",
+      "path": "/v1/major-draw/update",
+      "method": "GET",
+      "summary": "Read editable major-draw fields (name, description, status, dates, prize meta) for the update form"
     },
     {
       "registryKey": "metrics.debug",
