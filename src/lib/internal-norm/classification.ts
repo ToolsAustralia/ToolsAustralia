@@ -63,6 +63,12 @@ import {
   NormMajorDrawSelectWinnerPreviewSchema,
   NormMajorDrawUpdateGetSchema,
 } from "./schemas/major-draw";
+import {
+  NormMiniDrawExportAggregateSchema,
+  NormMiniDrawFullCapacityCountSchema,
+  NormMiniDrawGetSchema,
+  NormMiniDrawListSchema,
+} from "./schemas/mini-draw";
 
 // "forbidden" is NOT a tier — endpoints not in the registry are simply unreachable.
 // Tier and Permission are orthogonal axes: tier = orchestration shape; permission = "is Norm allowed?".
@@ -781,14 +787,16 @@ export const NORM_ENDPOINTS = {
     requiredPermission: "miniDraws.view",
     path: "/v1/mini-draw/full-capacity-count",
     method: "GET",
-    summary: "Count of mini draws at full capacity",
+    summary: "Count of mini draws at full capacity (status=completed) awaiting winner selection",
+    responseSchema: NormMiniDrawFullCapacityCountSchema,
   },
   "mini-draw.list": {
     tier: "read",
     requiredPermission: "miniDraws.view",
     path: "/v1/mini-draw/list",
     method: "GET",
-    summary: "List mini draws",
+    summary: "Paged list of mini draws with per-row latest-winner join",
+    responseSchema: NormMiniDrawListSchema,
   },
   "mini-draw.order": {
     tier: "write_safe",
@@ -809,7 +817,8 @@ export const NORM_ENDPOINTS = {
     requiredPermission: "miniDraws.view",
     path: "/v1/mini-draw/:id",
     method: "GET",
-    summary: "Get a single mini draw",
+    summary: "Get a single mini draw detail (no per-participant rows; counts only)",
+    responseSchema: NormMiniDrawGetSchema,
   },
   "mini-draw.delete": {
     tier: "trigger_human_approve",
@@ -823,7 +832,8 @@ export const NORM_ENDPOINTS = {
     requiredPermission: "miniDraws.view",
     path: "/v1/mini-draw/:id/export",
     method: "GET",
-    summary: "Export entries for a mini draw",
+    summary: "Aggregate-only mini-draw export: participant counts + per-state breakdown (no per-user PII)",
+    responseSchema: NormMiniDrawExportAggregateSchema,
   },
   "mini-draw.select-winner": {
     tier: "trigger_human_approve",
