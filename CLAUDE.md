@@ -620,7 +620,6 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/app/admin/**",
         "src/components/admin/**",
         "src/app/api/admin/**",
-        "src/app/api/admin/staff-activity/**",
         "src/features/admin/**",
         "src/models/ChargeJobLock.ts",
         "src/models/ChargeJobRun.ts",
