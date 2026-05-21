@@ -53,6 +53,9 @@ export function withNorm(options: WithNormOptions, handler: NormHandler) {
     const method = request.method;
     const path = url.pathname;
     const query = url.search.replace(/^\?/, "");
+    // CRITICAL: clone() so the handler can later re-read the body via
+    // ctx.request.json() (e.g. POST-body reads like monthly-coupon.target-users.*).
+    // Reading the original request.body would consume the stream once.
     const rawBody =
       method === "GET" || method === "HEAD" ? "" : await request.clone().text();
 

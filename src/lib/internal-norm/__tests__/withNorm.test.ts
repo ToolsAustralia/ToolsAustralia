@@ -44,7 +44,7 @@ async function run() {
   await connectDB();
   // Drop any test logs first
   await NormCallLog.deleteMany({
-    registryKey: { $in: ["test.echo", "test.forbidden"] },
+    registryKey: { $in: ["test.echo", "test.forbidden", "test.read-bypass"] },
   });
   __clearNormPermissionsCacheForTests();
   __clearKillSwitchCacheForTests();
@@ -107,7 +107,7 @@ async function run() {
     const res401 = await handler(reqBad);
     assert.equal(res401.status, 401);
 
-    // Permission missing → 403
+    // Permission missing on write_safe → 403
     const reqForbidden = buildRequest(
       "GET",
       "/api/internal/norm/v1/test/forbidden",
@@ -119,12 +119,44 @@ async function run() {
     const body403 = await res403.json();
     assert.equal(body403.code, "permission_denied");
 
+    // ── Read-tier bypass: reads succeed even when Norm's role does NOT
+    // hold the registry's requiredPermission. This is the central
+    // invariant introduced by commit 34096392.
+    const handlerReadBypass = withNorm(
+      {
+        tier: "read",
+        registryKey: "test.read-bypass",
+        requiredPermission: "users.delete", // Norm role explicitly does NOT hold this
+        responseSchema: TestSchema,
+      },
+      async (ctx) =>
+        ctx.ok({ status: "ok" as const, echo: "bypass" }),
+    );
+    const reqBypass = buildRequest(
+      "GET",
+      "/api/internal/norm/v1/test/read-bypass",
+      "",
+      "",
+    );
+    const resBypass = await handlerReadBypass(reqBypass);
+    assert.equal(resBypass.status, 200, "read-tier should bypass permission grant");
+    const bodyBypass = await resBypass.json();
+    assert.equal(bodyBypass.success, true);
+    assert.equal(bodyBypass.data.echo, "bypass");
+    // Audit row records permissionGranted: true for the bypass (see NormCallLog
+    // schema docstring — for reads this signals "permitted to proceed", NOT
+    // "explicit grant held").
+    const bypassLog = await NormCallLog.findOne({ requestId: bodyBypass.requestId });
+    assert.ok(bypassLog, "bypass call still audited");
+    assert.equal(bypassLog!.permissionChecked, "users.delete");
+    assert.equal(bypassLog!.permissionGranted, true);
+
     console.log(
-      "✓ withNorm: happy path + 401 + 403 + NormCallLog written",
+      "✓ withNorm: happy path + 401 + 403 + read-bypass + NormCallLog written",
     );
   } finally {
     await NormCallLog.deleteMany({
-      registryKey: { $in: ["test.echo", "test.forbidden"] },
+      registryKey: { $in: ["test.echo", "test.forbidden", "test.read-bypass"] },
     });
     await mongoose.disconnect();
   }

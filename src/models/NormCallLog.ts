@@ -19,8 +19,22 @@ const normCallLogSchema = new Schema(
       limit: Number,
       windowMs: Number,
     },
-    permissionChecked: String, // included now; populated by withNorm in Task 1.10
-    permissionGranted: Boolean, // included now; populated by withNorm in Task 1.10
+    /**
+     * The permission catalog entry this endpoint is registered against.
+     * For tier=="read" this is always populated but the per-grant check
+     * is bypassed in `withNorm` (reads are inherently safe; PII safety
+     * lives in the route's responseSchema projection). For non-read
+     * tiers the value reflects the permission that was actually checked.
+     */
+    permissionChecked: String,
+    /**
+     * Whether Norm was permitted to proceed past the permission step.
+     * For tier=="read" this is always `true` (bypass) — the field does
+     * NOT imply Norm's role explicitly holds `permissionChecked`. For
+     * non-read tiers it reflects the actual `hasNormPermission()` result
+     * at request time (false here = 403 response).
+     */
+    permissionGranted: Boolean,
     tierContext: {
       dryRunReceiptId: String,
       confirmedFromReceiptId: String,
