@@ -68,6 +68,37 @@ test("mapCanonicalToTikTokEvent omits empty user fields", () => {
   assert.equal("ttclid" in tt.user, false);
 });
 
+test("mapCanonicalToTikTokEvent keeps quantity for a single content row", () => {
+  const tt = mapCanonicalToTikTokEvent(
+    {
+      eventName: "Purchase",
+      eventId: "p-single",
+      eventTime: 1,
+      userData: {},
+      customData: { contentType: "product", contentIds: ["only"], numItems: 1 },
+    },
+    {},
+  );
+  assert.equal(tt.properties.contents?.[0]?.quantity, 1);
+});
+
+test("mapCanonicalToTikTokEvent does NOT duplicate numItems across multiple content rows", () => {
+  const tt = mapCanonicalToTikTokEvent(
+    {
+      eventName: "Purchase",
+      eventId: "p-multi",
+      eventTime: 1,
+      userData: {},
+      customData: { contentType: "product", contentIds: ["a", "b"], numItems: 2 },
+    },
+    {},
+  );
+  assert.equal(tt.properties.contents?.length, 2);
+  // numItems is order-wide; it must NOT be stamped as per-row quantity on multi-line carts.
+  assert.equal("quantity" in tt.properties.contents![0], false);
+  assert.equal("quantity" in tt.properties.contents![1], false);
+});
+
 test("buildTikTokRequestBody wraps events with source + pixel id, top-level test code", () => {
   const body = buildTikTokRequestBody(
     [mapCanonicalToTikTokEvent({ eventName: "Purchase", eventId: "x", eventTime: 1, userData: {} }, {})],

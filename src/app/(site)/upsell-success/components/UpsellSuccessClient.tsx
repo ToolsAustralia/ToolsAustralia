@@ -38,6 +38,7 @@ export default function UpsellSuccessClient({ searchParams }: UpsellSuccessClien
           orderId: paymentIntentId,
           contentType: "product",
           contentIds: status.data.packageId ? [status.data.packageId] : undefined,
+          contentName: status.data.packageName,
           numItems: 1,
           packageType: status.data.packageType ?? "upsell",
         },

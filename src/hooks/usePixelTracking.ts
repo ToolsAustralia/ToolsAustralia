@@ -12,12 +12,8 @@ import {
 import {
   trackTikTokEvent,
   trackTikTokPurchase,
-  trackTikTokAddToCart,
-  trackTikTokInitiateCheckout,
-  trackTikTokViewContent,
   trackTikTokSearch,
   trackTikTokCompleteRegistration,
-  trackTikTokLead,
   trackTikTokSubscribe,
   trackTikTokContact,
 } from "@/components/TikTokPixel";
@@ -26,6 +22,9 @@ import {
   generateMirrorEventId,
   type MirrorEventName,
 } from "@/utils/tracking/meta-capi-mirror";
+import { tiktokProvider } from "@/lib/tracking/providers";
+import { eventTimeNow } from "@/lib/tracking/canonical-event";
+import type { CanonicalEvent } from "@/lib/tracking/types";
 
 export interface PixelEventParams {
   value?: number;
@@ -94,93 +93,94 @@ export function usePixelTracking() {
   };
 
   /**
-   * Fire a Meta funnel event via both browser Pixel (4-arg fbq with eventID) AND
-   * server CAPI mirror (POST to /api/tracking/conversion with the SAME event_id).
-   * Meta merges them in Events Manager via dedup. Recovers signal that ad blockers /
-   * iOS ITP / Safari ETP would otherwise drop from the browser-only path.
+   * Fire a funnel event on the requested platforms' browser pixels AND the server
+   * CAPI / Events API, all sharing ONE event_id so each platform dedups its browser
+   * event against its server copy. Recovers signal lost to ad blockers / iOS ITP /
+   * Safari ETP.
+   *
+   * - Facebook: browser Pixel (4-arg fbq with eventID) + CAPI via the mirror.
+   * - TikTok: browser Pixel (3rd-arg event_id, carrying content_id) + Events API via
+   *   the mirror. Fired through `tiktokProvider.pixelTrack` (NOT the legacy
+   *   `trackTikTok*` helpers) so it shares the mirror's event_id — fixing the prior
+   *   double-count where the legacy pixel used a synthetic id the server never matched.
+   *
+   * The mirror POSTs to /api/tracking/conversion → sendConversion, which fans out to
+   * every enabled provider's CAPI with the SAME event_id and server-enriched identity
+   * (hashed email/phone/external_id + ttclid/ttp + IP/UA → high EMQ).
    * See https://developers.facebook.com/docs/marketing-api/conversions-api/deduplicate-pixel-and-server-events/
    */
-  const fireMetaFunnelEvent = (
+  const fireFunnelEvent = (
     eventName: MirrorEventName,
     metaCustomData: Record<string, unknown>,
+    platforms: ("facebook" | "tiktok")[] = ["facebook", "tiktok"],
   ): void => {
     const eventId = generateMirrorEventId(eventName);
-    // Browser Pixel — trackFacebookEvent uses 4-arg fbq when eventID is present
-    trackFacebookEvent(eventName, { ...metaCustomData, eventID: eventId });
-    // Server CAPI mirror via canonical sendConversion — fans out to FB CAPI today,
-    // TikTok/Snap CAPI when those provider stubs are implemented.
-    mirrorMetaEventToCapi({
-      eventName,
-      eventId,
-      value: typeof metaCustomData.value === "number" ? metaCustomData.value : undefined,
-      currency: typeof metaCustomData.currency === "string" ? metaCustomData.currency : undefined,
-      customData: {
-        ...(Array.isArray(metaCustomData.content_ids) && {
-          contentIds: metaCustomData.content_ids as string[],
-        }),
-        ...(typeof metaCustomData.content_type === "string" && {
-          contentType: metaCustomData.content_type,
-        }),
-        ...(typeof metaCustomData.content_name === "string" && {
-          contentName: metaCustomData.content_name,
-        }),
-        ...(typeof metaCustomData.content_category === "string" && {
-          contentCategory: metaCustomData.content_category,
-        }),
-        ...(typeof metaCustomData.num_items === "number" && {
-          numItems: metaCustomData.num_items,
-        }),
-        ...(typeof metaCustomData.order_id === "string" && {
-          orderId: metaCustomData.order_id,
-        }),
-      },
-    });
+
+    // Normalize Meta-format custom_data into the canonical shape once, reused by the
+    // TikTok pixel and the server mirror so both surfaces carry identical parameters.
+    const canonicalCustomData: NonNullable<CanonicalEvent["customData"]> = {
+      ...(Array.isArray(metaCustomData.content_ids) && {
+        contentIds: metaCustomData.content_ids as string[],
+      }),
+      ...(typeof metaCustomData.content_type === "string" && {
+        contentType: metaCustomData.content_type,
+      }),
+      ...(typeof metaCustomData.content_name === "string" && {
+        contentName: metaCustomData.content_name,
+      }),
+      ...(typeof metaCustomData.content_category === "string" && {
+        contentCategory: metaCustomData.content_category,
+      }),
+      ...(typeof metaCustomData.num_items === "number" && {
+        numItems: metaCustomData.num_items,
+      }),
+      ...(typeof metaCustomData.order_id === "string" && {
+        orderId: metaCustomData.order_id,
+      }),
+    };
+    const value = typeof metaCustomData.value === "number" ? metaCustomData.value : undefined;
+    const currency = typeof metaCustomData.currency === "string" ? metaCustomData.currency : undefined;
+
+    // Browser pixels — both fire with the SAME eventId for browser↔server dedup.
+    if (platforms.includes("facebook")) {
+      trackFacebookEvent(eventName, { ...metaCustomData, eventID: eventId });
+    }
+    if (platforms.includes("tiktok")) {
+      tiktokProvider.pixelTrack({
+        eventName,
+        eventId,
+        eventTime: eventTimeNow(),
+        value,
+        currency,
+        customData: canonicalCustomData,
+      });
+    }
+
+    // Server mirror — fans out to every enabled provider's CAPI/Events API with the
+    // SAME eventId. (sendConversion does not filter by `platforms`; the browser-pixel
+    // gates above scope per-platform browser coverage. A server-only event for a
+    // platform whose browser pixel was skipped is harmless — there's nothing to dedup.)
+    mirrorMetaEventToCapi({ eventName, eventId, value, currency, customData: canonicalCustomData });
   };
 
-  // Add to cart — hybrid Pixel + CAPI mirror via shared event_id
+  // Add to cart — hybrid Pixel + CAPI/Events API via shared event_id (FB + TikTok)
   const trackAddToCart = useCallback((params: PixelEventParams, platforms?: ("facebook" | "tiktok")[]) => {
-    const platformsToTrack = platforms || ["facebook", "tiktok"];
-
-    platformsToTrack.forEach((platform) => {
-      if (platform === "facebook") {
-        fireMetaFunnelEvent("AddToCart", buildMetaCustomData(params, { content_type: "product" }));
-      } else if (platform === "tiktok") {
-        trackTikTokAddToCart(params.value || 0, params.currency || "AUD", params.productId);
-      }
-    });
+    fireFunnelEvent("AddToCart", buildMetaCustomData(params, { content_type: "product" }), platforms);
   }, []);
 
-  // Initiate checkout — hybrid Pixel + CAPI mirror
+  // Initiate checkout — hybrid Pixel + CAPI/Events API via shared event_id (FB + TikTok)
   const trackInitiateCheckout = useCallback((params: PixelEventParams, platforms?: ("facebook" | "tiktok")[]) => {
-    const platformsToTrack = platforms || ["facebook", "tiktok"];
-
-    platformsToTrack.forEach((platform) => {
-      if (platform === "facebook") {
-        fireMetaFunnelEvent("InitiateCheckout", buildMetaCustomData(params, { content_type: "product" }));
-      } else if (platform === "tiktok") {
-        trackTikTokInitiateCheckout(params.value || 0, params.currency || "AUD", params.numItems);
-      }
-    });
+    fireFunnelEvent("InitiateCheckout", buildMetaCustomData(params, { content_type: "product" }), platforms);
   }, []);
 
-  // View content — hybrid Pixel + CAPI mirror. Custom params (content_category, content_name,
+  // View content — hybrid Pixel + CAPI/Events API. Custom params (content_category, content_name,
   // brand, page_type, user_type) flow through unchanged to support catalog matching and DPAs.
   const trackViewContent = useCallback((params: PixelEventParams, platforms?: ("facebook" | "tiktok")[]) => {
-    const platformsToTrack = platforms || ["facebook", "tiktok"];
-
-    platformsToTrack.forEach((platform) => {
-      if (platform === "facebook") {
-        fireMetaFunnelEvent(
-          "ViewContent",
-          buildMetaCustomData(params, {
-            content_type: "product",
-            platform: "tools-australia-website",
-          }),
-        );
-      } else if (platform === "tiktok") {
-        trackTikTokViewContent(params.value || 0, params.currency || "AUD", params.productId);
-      }
-    });
+    fireFunnelEvent(
+      "ViewContent",
+      buildMetaCustomData(params, { content_type: "product", platform: "tools-australia-website" }),
+      platforms,
+    );
   }, []);
 
   // Search tracking
@@ -224,17 +224,10 @@ export function usePixelTracking() {
     });
   }, []);
 
-  // Lead tracking — hybrid Pixel + CAPI mirror
+  // Lead tracking — hybrid Pixel + CAPI/Events API via shared event_id (FB + TikTok).
+  // TikTok fires the "Lead" standard event (the current name; legacy "SubmitForm" was renamed).
   const trackLead = useCallback((params: PixelEventParams, platforms?: ("facebook" | "tiktok")[]) => {
-    const platformsToTrack = platforms || ["facebook", "tiktok"];
-
-    platformsToTrack.forEach((platform) => {
-      if (platform === "facebook") {
-        fireMetaFunnelEvent("Lead", buildMetaCustomData(params, { content_type: "lead" }));
-      } else if (platform === "tiktok") {
-        trackTikTokLead(params.value, params.currency || "AUD");
-      }
-    });
+    fireFunnelEvent("Lead", buildMetaCustomData(params, { content_type: "lead" }), platforms);
   }, []);
 
   // Subscribe tracking
@@ -267,21 +260,9 @@ export function usePixelTracking() {
   // Currently no caller (mock /checkout was removed). When the real shop ships,
   // fire this once on payment-form completion.
   const trackAddPaymentInfo = useCallback((params: PixelEventParams, platforms?: ("facebook" | "tiktok")[]) => {
-    const platformsToTrack = platforms || ["facebook", "tiktok"];
-
-    platformsToTrack.forEach((platform) => {
-      if (platform === "facebook") {
-        fireMetaFunnelEvent("AddPaymentInfo", buildMetaCustomData(params, { content_type: "product" }));
-      } else if (platform === "tiktok") {
-        // TikTok doesn't have a specific AddPaymentInfo event, use custom event
-        trackTikTokEvent("AddPaymentInfo", {
-          value: params.value || 0,
-          currency: params.currency || "AUD",
-          content_ids: params.contentIds,
-          num_items: params.numItems,
-        });
-      }
-    });
+    // AddPaymentInfo is a TikTok standard web event, so it flows through the unified
+    // funnel path (browser pixel with content_id + shared event_id + Events API mirror).
+    fireFunnelEvent("AddPaymentInfo", buildMetaCustomData(params, { content_type: "product" }), platforms);
   }, []);
 
   // Remove from cart tracking

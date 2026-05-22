@@ -47,6 +47,7 @@ export default function PurchaseSuccessClient({ searchParams }: PurchaseSuccessC
           orderId: paymentIntentId,
           contentType: "product",
           contentIds: status.data.packageId ? [status.data.packageId] : undefined,
+          contentName: status.data.packageName,
           numItems: 1,
           packageType: status.data.packageType,
         },

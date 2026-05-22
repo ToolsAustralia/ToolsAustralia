@@ -77,13 +77,16 @@ function pixelTrack(event: CanonicalEvent): void {
   const params: Record<string, unknown> = {};
   if (event.value !== undefined) params.value = event.value;
   if (event.currency) params.currency = event.currency;
-  if (event.customData?.contentIds && event.customData.contentIds.length > 0) {
+  const contentIds = event.customData?.contentIds;
+  if (contentIds && contentIds.length > 0) {
     // Match the Events API `properties.contents` shape so pixel ↔ server parameters align.
-    params.contents = event.customData.contentIds.map((id) => ({
+    // quantity is per-row; only attach the order-wide numItems when there's a single id
+    // (avoids duplicating the total across rows on multi-line carts).
+    params.contents = contentIds.map((id) => ({
       content_id: id,
       ...(event.customData?.contentType && { content_type: event.customData.contentType }),
       ...(event.customData?.contentName && { content_name: event.customData.contentName }),
-      ...(event.customData?.numItems !== undefined && { quantity: event.customData.numItems }),
+      ...(event.customData?.numItems !== undefined && contentIds.length === 1 && { quantity: event.customData.numItems }),
     }));
   }
   if (event.customData?.contentType) params.content_type = event.customData.contentType;

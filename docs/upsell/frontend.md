@@ -30,3 +30,7 @@ See `docs/admin/frontend.md#upsell-multiplier-panel` for the full admin-side des
 ## className conventions (2026-05-08)
 
 Upsell components use `cn()` from `@/utils/cn` for conditional class composition. The `sweep-classname-template-literals` codemod (Plan 5 Phase 2) converted template-literal `className={`...`}` patterns to `className={cn(...)}`. Use `cn()` rather than template literals when adding new conditional classes.
+
+## Conversion tracking (Purchase)
+
+`UpsellSuccessClient.tsx` fires the browser Purchase pixel via `trackConversion(buildPurchaseEvent(...))` on mount, with `eventId = paymentIntentId` for browser↔server dedup. It passes `contentName: status.data.packageName` so the Purchase carries `content_name` on both the pixel and the server Events API/CAPI (same source as the server, so values match). Field-by-field reference: [docs/tracking/EVENT_PARAMETER_MATRIX.md](../tracking/EVENT_PARAMETER_MATRIX.md).
