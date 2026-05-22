@@ -65,12 +65,12 @@ export function mapCanonicalToTikTokEvent(
   const u = event.userData ?? {};
   const cd = event.customData ?? {};
 
+  // Normalize phone once (pure fn) — reused for the presence guard and the hash.
+  const phoneE164 = u.phone ? normalizePhoneE164(u.phone) : "";
+
   const user: TikTokEvent["user"] = {
     ...(u.email && { email: hashPII(u.email) }),
-    ...(u.phone &&
-      normalizePhoneE164(u.phone) && {
-        phone_number: hashPII(normalizePhoneE164(u.phone)),
-      }),
+    ...(phoneE164 && { phone_number: hashPII(phoneE164) }),
     ...(u.externalId && { external_id: hashPII(u.externalId) }),
     ...(u.ttclid && { ttclid: u.ttclid }),
     ...(u.ttp && { ttp: u.ttp }),
@@ -82,13 +82,18 @@ export function mapCanonicalToTikTokEvent(
     }),
   };
 
+  // `numItems` is the order-wide item count, not per-row. Only attach it as a row
+  // `quantity` when there's a SINGLE content id (the only shape callers send today).
+  // For multi-line carts we'd need per-item quantities, so we omit it rather than
+  // stamp the order total onto every row and inflate reporting.
+  const ids = cd.contentIds;
   const contents =
-    cd.contentIds && cd.contentIds.length > 0
-      ? cd.contentIds.map((id) => ({
+    ids && ids.length > 0
+      ? ids.map((id) => ({
           content_id: id,
           ...(cd.contentType && { content_type: cd.contentType }),
           ...(cd.contentName && { content_name: cd.contentName }),
-          ...(cd.numItems !== undefined && { quantity: cd.numItems }),
+          ...(cd.numItems !== undefined && ids.length === 1 && { quantity: cd.numItems }),
         }))
       : undefined;
 
