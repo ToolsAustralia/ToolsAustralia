@@ -48,6 +48,12 @@ export interface BuildPurchaseEventInput {
   userData?: CanonicalEvent["userData"];
   customData?: CanonicalEvent["customData"];
   eventSourceUrl?: string;
+  /**
+   * Defaults to "website". Set to "system_generated" for Stripe webhook flows
+   * where no live browser session exists — Meta's spec makes `event_source_url`
+   * optional in that case and treats the event as backend-attributed.
+   */
+  actionSource?: "website" | "system_generated";
 }
 
 /**
@@ -64,5 +70,6 @@ export function buildPurchaseEvent(input: BuildPurchaseEventInput): CanonicalEve
     userData: input.userData,
     customData: input.customData,
     eventSourceUrl: input.eventSourceUrl,
+    actionSource: input.actionSource,
   };
 }

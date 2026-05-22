@@ -40,6 +40,7 @@ import { useAdminUserModal } from "@/contexts/AdminUserModalContext";
 import ChargePastDueModal from "./ChargePastDueModal";
 import KlaviyoSyncButton from "@/features/admin/users/components/KlaviyoSyncButton";
 import { useDebounce } from "@/hooks/useDebounce";
+import { usePermissions } from "@/hooks/usePermissions";
 import { MetricCard } from "@/components/admin/metrics/shared/MetricCard";
 import { UserMetricsView } from "./metrics/UserMetricsView";
 import { membershipPackages } from "@/data/membershipPackages";
@@ -182,6 +183,7 @@ export default function UsersManagement() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const pathname = usePathname();
+  const { has } = usePermissions();
 
   // Filter state
   const [filters, setFilters] = useState<UserFilters>({
@@ -412,30 +414,38 @@ export default function UsersManagement() {
               </>
             )}
           </button>
-          {/* Klaviyo Sync Button — desktop only */}
-          <div className="hidden sm:block">
-            <KlaviyoSyncButton />
-          </div>
-          {/* Charge Past Due Button */}
-          <button
-            onClick={() => setIsChargeModalOpen(true)}
-            disabled={isLoading}
-            className="px-3 py-1.5 sm:px-4 sm:py-2 rounded-lg bg-gradient-to-r from-yellow-600 to-yellow-700 text-white text-xs sm:text-sm font-medium hover:from-yellow-700 hover:to-yellow-800 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5 sm:gap-2 shadow-sm hover:shadow-md"
-            title="Charge past due customers"
-          >
-            <CreditCard className="w-3 h-3 sm:w-4 sm:h-4" />
-            <span className="hidden sm:inline">Charge Past Due</span>
-          </button>
-          {/* Export Button */}
-          <button
-            onClick={() => setIsExportModalOpen(true)}
-            disabled={isLoading || !usersData || usersData.users.length === 0}
-            className="px-3 py-1.5 sm:px-4 sm:py-2 rounded-lg bg-gradient-to-r from-red-600 to-red-700 text-white text-xs sm:text-sm font-medium hover:from-red-700 hover:to-red-800 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5 sm:gap-2 shadow-sm hover:shadow-md"
-            title="Export users"
-          >
-            <Download className="w-3 h-3 sm:w-4 sm:h-4" />
-            <span className="hidden sm:inline">Export</span>
-          </button>
+          {/* Klaviyo Sync Button — desktop only, needs overview.edit (matches the
+              /api/admin/klaviyo/draw-reset-execute permission). */}
+          {has("overview.edit") && (
+            <div className="hidden sm:block">
+              <KlaviyoSyncButton />
+            </div>
+          )}
+          {/* Charge Past Due Button — needs users.charge */}
+          {has("users.charge") && (
+            <button
+              onClick={() => setIsChargeModalOpen(true)}
+              disabled={isLoading}
+              className="px-3 py-1.5 sm:px-4 sm:py-2 rounded-lg bg-gradient-to-r from-yellow-600 to-yellow-700 text-white text-xs sm:text-sm font-medium hover:from-yellow-700 hover:to-yellow-800 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5 sm:gap-2 shadow-sm hover:shadow-md"
+              title="Charge past due customers"
+            >
+              <CreditCard className="w-3 h-3 sm:w-4 sm:h-4" />
+              <span className="hidden sm:inline">Charge Past Due</span>
+            </button>
+          )}
+          {/* Export Button — needs users.export (separate from users.view to
+              keep data leakage gated independently of in-app viewing). */}
+          {has("users.export") && (
+            <button
+              onClick={() => setIsExportModalOpen(true)}
+              disabled={isLoading || !usersData || usersData.users.length === 0}
+              className="px-3 py-1.5 sm:px-4 sm:py-2 rounded-lg bg-gradient-to-r from-red-600 to-red-700 text-white text-xs sm:text-sm font-medium hover:from-red-700 hover:to-red-800 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5 sm:gap-2 shadow-sm hover:shadow-md"
+              title="Export users"
+            >
+              <Download className="w-3 h-3 sm:w-4 sm:h-4" />
+              <span className="hidden sm:inline">Export</span>
+            </button>
+          )}
           {/* View Mode Toggle - Hidden on mobile, shown on desktop */}
           <div className="hidden sm:flex items-center gap-2 bg-gray-100 dark:bg-neutral-800 rounded-lg p-1">
             <button

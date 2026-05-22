@@ -18,12 +18,15 @@ import ExperimentFormModal from "./ExperimentFormModal";
 import ExperimentDetailModal from "./ExperimentDetailModal";
 import { format } from "date-fns";
 import { ExperimentStatusBadge } from "@/components/admin/ui/AdminBadge";
+import { usePermissions } from "@/hooks/usePermissions";
 
 /**
  * A/B Testing Management Component
  * Main component for managing A/B testing experiments
  */
 export default function ABTestingManagement() {
+  const { has } = usePermissions();
+  const canEditAB = has("abTesting.edit");
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -118,15 +121,17 @@ export default function ABTestingManagement() {
             </select>
           </div>
 
-          {/* Create Button */}
-          <button
-            onClick={() => setIsCreateModalOpen(true)}
-            className="flex items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-red-600 to-red-700 px-3 sm:px-4 py-1.5 sm:py-2 text-white hover:from-red-700 hover:to-red-800 shadow-md hover:shadow-lg transition-all duration-200 text-xs sm:text-sm font-medium"
-          >
-            <Plus className="h-4 w-4 sm:h-5 sm:w-5" />
-            <span className="hidden sm:inline">Create Experiment</span>
-            <span className="sm:hidden">Create</span>
-          </button>
+          {/* Create Button — needs abTesting.edit */}
+          {canEditAB && (
+            <button
+              onClick={() => setIsCreateModalOpen(true)}
+              className="flex items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-red-600 to-red-700 px-3 sm:px-4 py-1.5 sm:py-2 text-white hover:from-red-700 hover:to-red-800 shadow-md hover:shadow-lg transition-all duration-200 text-xs sm:text-sm font-medium"
+            >
+              <Plus className="h-4 w-4 sm:h-5 sm:w-5" />
+              <span className="hidden sm:inline">Create Experiment</span>
+              <span className="sm:hidden">Create</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -156,7 +161,7 @@ export default function ABTestingManagement() {
                 ? "Try adjusting your filters"
                 : "Create your first experiment to get started"}
             </p>
-            {!search && statusFilter === "all" && (
+            {!search && statusFilter === "all" && canEditAB && (
               <button
                 onClick={() => setIsCreateModalOpen(true)}
                 className="mt-4 rounded-lg bg-gradient-to-r from-red-600 to-red-700 px-4 py-2 text-white hover:from-red-700 hover:to-red-800 shadow-md hover:shadow-lg transition-all duration-200 text-xs sm:text-sm font-medium"
@@ -234,7 +239,7 @@ export default function ABTestingManagement() {
                         >
                           <Eye className="h-4 w-4" />
                         </button>
-                        {(experiment.status === "draft" || experiment.status === "paused") && (
+                        {canEditAB && (experiment.status === "draft" || experiment.status === "paused") && (
                           <button
                             onClick={() => handleActivate(experiment._id)}
                             disabled={activateMutation.isPending}
@@ -244,7 +249,7 @@ export default function ABTestingManagement() {
                             <Play className="h-4 w-4" />
                           </button>
                         )}
-                        {experiment.status === "active" && (
+                        {canEditAB && experiment.status === "active" && (
                           <button
                             onClick={() => handlePause(experiment._id)}
                             disabled={pauseMutation.isPending}
@@ -254,7 +259,7 @@ export default function ABTestingManagement() {
                             <Pause className="h-4 w-4" />
                           </button>
                         )}
-                        {(experiment.status === "active" || experiment.status === "paused") && (
+                        {canEditAB && (experiment.status === "active" || experiment.status === "paused") && (
                           <button
                             onClick={() => handleEnd(experiment._id)}
                             disabled={endMutation.isPending}

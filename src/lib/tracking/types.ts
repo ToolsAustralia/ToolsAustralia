@@ -51,6 +51,14 @@ export interface CanonicalEvent {
     searchString?: string;
   };
   eventSourceUrl?: string;
+  /**
+   * Maps to Meta's `action_source` (and the equivalent on other providers).
+   * - "website" (default): browser-originated event with a live session.
+   * - "system_generated": server-initiated event with no live session (e.g. Stripe webhook).
+   * Per Meta's spec, `event_source_url` is required for "website" but optional for
+   * "system_generated" — providers should omit URL fabrication in the latter case.
+   */
+  actionSource?: "website" | "system_generated";
   /** Escape hatch for provider-specific custom fields. Use sparingly. */
   providerData?: {
     facebook?: Record<string, unknown>;

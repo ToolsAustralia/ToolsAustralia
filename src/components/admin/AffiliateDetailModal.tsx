@@ -33,6 +33,7 @@ import Input from "@/components/modals/ui/Input";
 import Textarea from "@/components/modals/ui/Textarea";
 import Checkbox from "@/components/modals/ui/Checkbox";
 import { cn } from "@/utils/cn";
+import { usePermissions } from "@/hooks/usePermissions";
 
 interface AffiliateDetail {
   affiliate: {
@@ -139,6 +140,10 @@ export default function AffiliateDetailModal({
   onUpdate,
 }: AffiliateDetailModalProps) {
   const { openUserModal } = useAdminUserModal();
+  const { has } = usePermissions();
+  const canEditAffiliate = has("affiliates.edit");
+  const canProcessPayout = has("affiliates.processPayout");
+  const canDeleteAffiliate = has("affiliates.delete");
   const [data, setData] = useState<AffiliateDetail | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -975,7 +980,7 @@ export default function AffiliateDetailModal({
                     )}
                   </div>
 
-                  {pendingCount > 0 && (
+                  {pendingCount > 0 && canProcessPayout && (
                     <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 sm:p-4 dark:border-amber-800/60 dark:bg-amber-950/35 ring-1 ring-amber-100/80 dark:ring-amber-900/40">
                       <h3 className="font-semibold mb-2 text-sm sm:text-base text-amber-950 dark:text-amber-100">
                         Process Payout
@@ -1519,28 +1524,32 @@ export default function AffiliateDetailModal({
             <div className="flex flex-wrap items-center justify-end gap-2">
               {!isEditing ? (
                 <>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setIsEditing(true)}
-                    icon={Edit2}
-                    className="min-h-[44px] sm:min-h-[40px]"
-                  >
-                    Edit
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="danger"
-                    size="sm"
-                    onClick={handleDelete}
-                    disabled={isDeleting}
-                    loading={isDeleting}
-                    icon={Trash2}
-                    className="min-h-[44px] sm:min-h-[40px]"
-                  >
-                    Delete
-                  </Button>
+                  {canEditAffiliate && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setIsEditing(true)}
+                      icon={Edit2}
+                      className="min-h-[44px] sm:min-h-[40px]"
+                    >
+                      Edit
+                    </Button>
+                  )}
+                  {canDeleteAffiliate && (
+                    <Button
+                      type="button"
+                      variant="danger"
+                      size="sm"
+                      onClick={handleDelete}
+                      disabled={isDeleting}
+                      loading={isDeleting}
+                      icon={Trash2}
+                      className="min-h-[44px] sm:min-h-[40px]"
+                    >
+                      Delete
+                    </Button>
+                  )}
                 </>
               ) : (
                 <>

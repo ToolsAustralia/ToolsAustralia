@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import { requirePermission } from "@/lib/api-auth-permissions";
 import PromoAnalyticsService from "@/services/promo-analytics/PromoAnalyticsService";
 import { getStartOfTodayInAEST, createAESTDateAsUTC } from "@/utils/common/timezone";
 import { subDays } from "date-fns";
@@ -27,10 +26,8 @@ const querySchema = z.object({
  */
 export async function GET(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id || session.user.role !== "admin") {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const _guard = await requirePermission("promos.view");
+    if (_guard instanceof NextResponse) return _guard;
 
     const searchParams = request.nextUrl.searchParams;
     const parsed = querySchema.safeParse({

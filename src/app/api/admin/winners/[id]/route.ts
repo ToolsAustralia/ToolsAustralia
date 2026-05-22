@@ -7,8 +7,8 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import { requirePermission } from "@/lib/api-auth-permissions";
+import { requirePermissionWithAudit } from "@/lib/audit-log";
 import connectDB from "@/lib/mongodb";
 import Winner from "@/models/Winner";
 import MajorDraw from "@/models/MajorDraw";
@@ -33,13 +33,10 @@ const updateWinnerSchema = z.object({
  */
 export async function GET(request: NextRequest, { params }: RouteParams) {
   try {
-    await connectDB();
+    const _guard = await requirePermission("majorDraw.view");
+    if (_guard instanceof NextResponse) return _guard;
 
-    // Verify admin authentication
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id || session.user.role !== "admin") {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    await connectDB();
 
     const { id: winnerId } = await params;
 
@@ -137,15 +134,15 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
  */
 export async function PATCH(request: NextRequest, { params }: RouteParams) {
   try {
-    await connectDB();
-
-    // Verify admin authentication
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id || session.user.role !== "admin") {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
     const { id: winnerId } = await params;
+    const guard = await requirePermissionWithAudit("majorDraw.edit", request, {
+      resourceType: "Winner",
+      resourceId: winnerId,
+    });
+    if (guard instanceof NextResponse) return guard;
+    const { log } = guard;
+
+    await connectDB();
 
     if (!mongoose.Types.ObjectId.isValid(winnerId)) {
       return NextResponse.json({ error: "Invalid winner ID" }, { status: 400 });
@@ -224,6 +221,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
 
     const winnerUser = updatedWinner.userId as unknown as { firstName?: string; lastName?: string; email?: string; state?: string };
 
+    await log(200);
     return NextResponse.json({
       success: true,
       message: "Winner updated successfully",
@@ -279,14 +277,15 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
  */
 export async function DELETE(request: NextRequest, { params }: RouteParams) {
   try {
-    await connectDB();
-
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id || session.user.role !== "admin") {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
     const { id: winnerId } = await params;
+    const guard = await requirePermissionWithAudit("majorDraw.edit", request, {
+      resourceType: "Winner",
+      resourceId: winnerId,
+    });
+    if (guard instanceof NextResponse) return guard;
+    const { log } = guard;
+
+    await connectDB();
 
     if (!mongoose.Types.ObjectId.isValid(winnerId)) {
       return NextResponse.json({ error: "Invalid winner ID" }, { status: 400 });
@@ -320,6 +319,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
 
       await trx.commitTransaction();
 
+      await log(200);
       return NextResponse.json({
         success: true,
         message: "Major draw winner removed. You can select a new winner from Draw Results.",

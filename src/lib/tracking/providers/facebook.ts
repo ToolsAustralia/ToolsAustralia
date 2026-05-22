@@ -13,6 +13,7 @@ import {
   type FacebookEvent,
 } from "@/lib/facebook";
 import { toYYYYMMDD } from "@/utils/tracking/facebook-helpers";
+import { shouldTrackRoute, EXCLUDED_TRACKING_PREFIXES } from "@/utils/tracking/should-track-route";
 
 /** Normalize country to ISO 3166-1 alpha-2 lowercase, or null if not a 2-letter code. */
 function normalizeCountry(input: string | undefined): string | null {
@@ -57,12 +58,32 @@ function loadPixel(opts: { nonce?: string; advancedMatching?: Record<string, str
     ? `window.fbq('init', '${pixelId}', ${JSON.stringify(opts.advancedMatching)});`
     : `window.fbq('init', '${pixelId}');`;
 
+  // Decide whether to fire the initial PageView based on the current route.
+  // The decision is made at load-time (TS) so the inline script doesn't need
+  // its own pathname-gating logic; this is safe because loadPixel runs once
+  // per session on initial mount, when window.location.pathname is reliable.
+  const fireInitialPageView = shouldTrackRoute(window.location.pathname);
+  const pageViewLine = fireInitialPageView ? `window.fbq('track', 'PageView');` : "";
+
   const script = document.createElement("script");
   script.id = "facebook-pixel-script";
   script.async = true;
   if (opts.nonce) script.setAttribute("nonce", opts.nonce);
-  // Same inline init as the legacy FacebookPixel.tsx component. Kept verbatim
-  // so behavior is unchanged after the facade swap.
+
+  // Inline init:
+  //  1) `disablePushState = true` — stop Meta's HTML5 History State listener
+  //     from auto-firing PageView on every Next.js SPA route change. Without
+  //     this, the Pixel fires PageView on /admin, /my-account, etc., bypassing
+  //     our ConversionPixels route-change gate because the auto-fire happens
+  //     inside fbevents.js. Per Meta's SPA tagging guide:
+  //     https://developers.facebook.com/ads/blog/post/2017/05/29/tagging-a-single-page-application-facebook-pixel/
+  //  2) `set autoConfig false` — stops Meta from auto-firing
+  //     SubscribedButtonClick / ButtonClick / FormSubmit / Microdata and from
+  //     auto-scraping form inputs for advanced matching. We supply our own
+  //     hashed advanced matching server-side via CAPI's user_data. MUST come
+  //     BEFORE init. Per https://developers.facebook.com/docs/meta-pixel/advanced/
+  //  3) Initial PageView is conditional on `shouldTrackRoute(pathname)` —
+  //     skipped on excluded routes (admin / my-account / affiliate / etc.)
   script.innerHTML = `
     !function(f,b,e,v,n,t,s)
     {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
@@ -72,12 +93,17 @@ function loadPixel(opts: { nonce?: string; advancedMatching?: Record<string, str
     t.src=v;s=b.getElementsByTagName(e)[0];
     s.parentNode.insertBefore(t,s)}(window, document,'script',
     'https://connect.facebook.net/en_US/fbevents.js');
+    window.fbq.disablePushState = true;
+    window.fbq('set', 'autoConfig', false, '${pixelId}');
     ${initCall}
-    window.fbq('track', 'PageView');
+    ${pageViewLine}
     window._fbPixelInit = true;
   `;
   document.head.appendChild(script);
 }
+
+// Re-export for inline-script consistency between modules.
+export { EXCLUDED_TRACKING_PREFIXES };
 
 function pixelTrack(event: CanonicalEvent): void {
   if (typeof window === "undefined" || !window.fbq) return;
@@ -129,11 +155,18 @@ async function capiSend(event: CanonicalEvent, ctx: RequestContext): Promise<boo
     }),
   };
 
+  // Default to "website". Webhook-originated events (no live browser session) should
+  // pass `actionSource: "system_generated"` via the canonical event so Meta's spec is
+  // honored — `event_source_url` becomes optional for system_generated and we omit it
+  // so we don't claim a stale URL is the source of a backend event.
+  const actionSource: FacebookEvent["action_source"] = event.actionSource ?? "website";
+  const resolvedEventSourceUrl = event.eventSourceUrl ?? ctx.eventSourceUrl;
+
   const fbEvent: FacebookEvent = {
     event_name: event.eventName,
     event_time: event.eventTime,
     event_id: event.eventId,
-    action_source: "website",
+    action_source: actionSource,
     user_data: userData,
     custom_data: {
       ...(event.value !== undefined && { value: event.value }),
@@ -148,7 +181,9 @@ async function capiSend(event: CanonicalEvent, ctx: RequestContext): Promise<boo
       ...(event.customData?.searchString && { search_string: event.customData.searchString }),
       ...fbCustomFields,
     },
-    event_source_url: event.eventSourceUrl ?? ctx.eventSourceUrl,
+    // Only include event_source_url for website events — Meta's spec makes it
+    // required for "website" but expects it omitted for "system_generated".
+    ...(actionSource === "website" && resolvedEventSourceUrl && { event_source_url: resolvedEventSourceUrl }),
   };
 
   return sendFacebookEvent(fbEvent);

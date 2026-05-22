@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import { requirePermissionWithAudit } from "@/lib/audit-log";
 import connectDB from "@/lib/mongodb";
 import PromoLink from "@/models/PromoLink";
 import { z } from "zod";
@@ -56,20 +55,11 @@ const createPromoLinkSchema = z
  */
 export async function POST(request: NextRequest) {
   try {
-    // Check admin authentication
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.email) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const guard = await requirePermissionWithAudit("promos.edit", request, { resourceType: "PromoLink" });
+    if (guard instanceof NextResponse) return guard;
+    const { session, log } = guard;
 
     await connectDB();
-
-    // Get user from database to verify admin role
-    const { default: User } = await import("@/models/User");
-    const user = await User.findOne({ email: session.user.email });
-    if (!user || user.role !== "admin") {
-      return NextResponse.json({ error: "Admin access required" }, { status: 403 });
-    }
 
     // Parse and validate request body
     const body = await request.json();
@@ -134,7 +124,7 @@ export async function POST(request: NextRequest) {
       campaignType,
       eligibilityAudience,
       eligibilityRules,
-      createdBy: user._id,
+      createdBy: session.user.id,
       description: validatedData.description || undefined,
       usageCount: 0,
       usedBy: [],
@@ -157,9 +147,9 @@ export async function POST(request: NextRequest) {
       appliesToOneTime: newPromoLink.appliesToOneTime,
       campaignType: newPromoLink.campaignType,
       eligibilityAudience: newPromoLink.eligibilityAudience,
-      createdBy: user.email,
     });
 
+    await log(201);
     return NextResponse.json(
       {
         success: true,
@@ -180,9 +170,7 @@ export async function POST(request: NextRequest) {
           promoUrl,
           createdAt: newPromoLink.createdAt,
           createdBy: {
-            id: user._id.toString(),
-            email: user.email,
-            name: `${user.firstName} ${user.lastName}`,
+            id: session.user.id,
           },
         },
       },

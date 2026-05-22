@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import connectDB from "@/lib/mongodb";
-import { requireAdminUser } from "@/lib/api-auth";
+import { requirePermission } from "@/lib/api-auth-permissions";
 import { TargetingService } from "@/services/redeemables";
 import { monthlyCouponSegmentConfigSchema } from "@/lib/zod/monthlyCouponSegmentConfig";
 
@@ -11,10 +11,10 @@ const dynamicSchema = z.object({
 
 export async function POST(request: NextRequest) {
   try {
-    const authResult = await requireAdminUser();
-    if ("errorResponse" in authResult) {
-      return authResult.errorResponse;
-    }
+    // Read-only preview: resolves "who would receive this targeting config" without
+    // writing to any collection — gated by view, not audit-logged per spec.
+    const guard = await requirePermission("rewards.view");
+    if (guard instanceof NextResponse) return guard;
 
     await connectDB();
     const body = await request.json();

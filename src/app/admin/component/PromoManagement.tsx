@@ -23,8 +23,11 @@ import type { ScheduledPromo } from "@/types/admin";
 import { Zap, Loader2, RefreshCw, Settings, Gift, Plus, Link2, Calendar, Repeat, Medal, Layers } from "lucide-react";
 import { formatDisplayName } from "@/utils/display-name";
 import { cn } from "@/utils/cn";
+import { usePermissions } from "@/hooks/usePermissions";
 
 export default function PromoManagement() {
+  const { has } = usePermissions();
+  const canEditPromos = has("promos.edit");
   const [isToggleModalOpen, setIsToggleModalOpen] = useState(false);
   const [isScheduledModalOpen, setIsScheduledModalOpen] = useState(false);
   const [isScheduledCalendarModalOpen, setIsScheduledCalendarModalOpen] = useState(false);
@@ -117,25 +120,27 @@ export default function PromoManagement() {
                     Campaign phases with date ranges; apply automatically. Priority: Scheduled &gt; Toggle &gt; Alternating.
                   </p>
                 </div>
-                <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
-                  <button
-                    onClick={() => setIsScheduledCalendarModalOpen(true)}
-                    className="inline-flex items-center justify-center gap-1.5 sm:gap-2 border-2 border-red-600 dark:border-red-500 text-red-700 dark:text-red-300 bg-white dark:bg-neutral-900 px-3 py-1.5 sm:px-4 sm:py-2 rounded-lg font-semibold text-sm sm:text-base hover:bg-red-50 dark:hover:bg-red-950/40 transition-all duration-200 w-full sm:w-auto"
-                  >
-                    <Calendar className="w-4 h-4" />
-                    Month grid
-                  </button>
-                  <button
-                    onClick={() => {
-                      setEditingScheduledPromo(null);
-                      setIsScheduledModalOpen(true);
-                    }}
-                    className={primaryActionButtonClass}
-                  >
-                    <Plus className="w-4 h-4" />
-                    Schedule Promo
-                  </button>
-                </div>
+                {canEditPromos && (
+                  <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+                    <button
+                      onClick={() => setIsScheduledCalendarModalOpen(true)}
+                      className="inline-flex items-center justify-center gap-1.5 sm:gap-2 border-2 border-red-600 dark:border-red-500 text-red-700 dark:text-red-300 bg-white dark:bg-neutral-900 px-3 py-1.5 sm:px-4 sm:py-2 rounded-lg font-semibold text-sm sm:text-base hover:bg-red-50 dark:hover:bg-red-950/40 transition-all duration-200 w-full sm:w-auto"
+                    >
+                      <Calendar className="w-4 h-4" />
+                      Month grid
+                    </button>
+                    <button
+                      onClick={() => {
+                        setEditingScheduledPromo(null);
+                        setIsScheduledModalOpen(true);
+                      }}
+                      className={primaryActionButtonClass}
+                    >
+                      <Plus className="w-4 h-4" />
+                      Schedule Promo
+                    </button>
+                  </div>
+                )}
               </div>
               <div className="bg-white dark:bg-neutral-900 rounded-lg shadow-sm dark:shadow-none border border-gray-200 dark:border-neutral-700 mb-4">
                 <div className="p-3 sm:p-4 border-b border-gray-200 dark:border-neutral-700">
@@ -152,13 +157,15 @@ export default function PromoManagement() {
                       >
                         <RefreshCw className={cn("w-4 h-4", activeLoading ? "animate-spin" : "")} />
                       </button>
-                      <button
-                        onClick={() => setIsToggleModalOpen(true)}
-                        className="inline-flex items-center gap-1.5 bg-gradient-to-r from-red-600 to-red-700 text-white px-3 py-1.5 rounded-lg font-semibold text-xs sm:text-sm hover:from-red-700 hover:to-red-800 transition-all duration-200"
-                      >
-                        <Settings className="w-3.5 h-3.5 shrink-0" />
-                        Toggle Promos
-                      </button>
+                      {canEditPromos && (
+                        <button
+                          onClick={() => setIsToggleModalOpen(true)}
+                          className="inline-flex items-center gap-1.5 bg-gradient-to-r from-red-600 to-red-700 text-white px-3 py-1.5 rounded-lg font-semibold text-xs sm:text-sm hover:from-red-700 hover:to-red-800 transition-all duration-200"
+                        >
+                          <Settings className="w-3.5 h-3.5 shrink-0" />
+                          Toggle Promos
+                        </button>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -222,13 +229,15 @@ export default function PromoManagement() {
                     Date-based promos granting bonus entries during specific periods
                   </p>
                 </div>
-                <button
-                  onClick={() => setIsBonusEntryModalOpen(true)}
-                  className={primaryActionButtonClass}
-                >
-                  <Plus className="w-4 h-4" />
-                  Create Bonus Entry Promo
-                </button>
+                {canEditPromos && (
+                  <button
+                    onClick={() => setIsBonusEntryModalOpen(true)}
+                    className={primaryActionButtonClass}
+                  >
+                    <Plus className="w-4 h-4" />
+                    Create Bonus Entry Promo
+                  </button>
+                )}
               </div>
               <BonusEntryPromoList />
             </>
@@ -246,13 +255,15 @@ export default function PromoManagement() {
                     Shareable promo links with unique codes for bonus entries on next purchase
                   </p>
                 </div>
-                <button
-                  onClick={() => setIsPromoLinkModalOpen(true)}
-                  className={primaryActionButtonClass}
-                >
-                  <Plus className="w-4 h-4" />
-                  Create Promo Link
-                </button>
+                {canEditPromos && (
+                  <button
+                    onClick={() => setIsPromoLinkModalOpen(true)}
+                    className={primaryActionButtonClass}
+                  >
+                    <Plus className="w-4 h-4" />
+                    Create Promo Link
+                  </button>
+                )}
               </div>
               <PromoLinkList />
             </>
@@ -270,13 +281,15 @@ export default function PromoManagement() {
                     Scheduled left banner image for campaigns. One-time or recurring (weekdays/weekends). AEST timezone.
                   </p>
                 </div>
-                <button
-                  onClick={() => setIsBannerTextModalOpen(true)}
-                  className={primaryActionButtonClass}
-                >
-                  <Plus className="w-4 h-4" />
-                  Create scheduled image
-                </button>
+                {canEditPromos && (
+                  <button
+                    onClick={() => setIsBannerTextModalOpen(true)}
+                    className={primaryActionButtonClass}
+                  >
+                    <Plus className="w-4 h-4" />
+                    Create scheduled image
+                  </button>
+                )}
               </div>
               <PromoBannerTextList />
             </>
@@ -294,13 +307,15 @@ export default function PromoManagement() {
                     Daily alternating multipliers at midnight AEST. Priority: Active &gt; Alternating &gt; Default
                   </p>
                 </div>
-                <button
-                  onClick={() => setIsAlternatingMultiplierModalOpen(true)}
-                  className={primaryActionButtonClass}
-                >
-                  <Plus className="w-4 h-4" />
-                  Create Configuration
-                </button>
+                {canEditPromos && (
+                  <button
+                    onClick={() => setIsAlternatingMultiplierModalOpen(true)}
+                    className={primaryActionButtonClass}
+                  >
+                    <Plus className="w-4 h-4" />
+                    Create Configuration
+                  </button>
+                )}
               </div>
               <AlternatingMultiplierList />
             </>

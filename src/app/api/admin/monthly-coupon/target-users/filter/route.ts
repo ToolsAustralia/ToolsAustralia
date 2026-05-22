@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import connectDB from "@/lib/mongodb";
-import { requireAdminUser } from "@/lib/api-auth";
+import { requirePermission } from "@/lib/api-auth-permissions";
 import User from "@/models/User";
 import MajorDraw from "@/models/MajorDraw";
 import { getPackageById } from "@/data/membershipPackages";
@@ -28,10 +28,9 @@ const filterBodySchema = z.object({
 
 export async function POST(request: NextRequest) {
   try {
-    const authResult = await requireAdminUser();
-    if ("errorResponse" in authResult) {
-      return authResult.errorResponse;
-    }
+    // Read-only preview: filtered user search for the targeting picker, no DB writes.
+    const guard = await requirePermission("rewards.view");
+    if (guard instanceof NextResponse) return guard;
 
     await connectDB();
     const body = await request.json();

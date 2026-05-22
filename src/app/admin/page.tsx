@@ -1,26 +1,34 @@
 "use client";
 
+import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
-import { useEffect } from "react";
 import AdminPage from "@/app/admin/component/AdminPage";
 import { AdminUser } from "@/types/admin";
+import { usePermissions } from "@/hooks/usePermissions";
+import { firstAccessibleTabId } from "@/app/admin/component/adminTabs";
 
 export default function AdminDashboard() {
   const router = useRouter();
-  const { data: session, status } = useSession();
+  const { data: session } = useSession();
+  const { isLoading, isStaff, has } = usePermissions();
 
-  // Redirect if not authenticated or not admin
+  // If the user can't see Overview, redirect to the first tab they CAN see.
+  // This catches custom-role staff (e.g. Submissions-only) who would otherwise
+  // land here and stare at Forbidden errors. Runs as soon as permissions are
+  // loaded; layout's server guard already verified they're internal users.
   useEffect(() => {
-    if (status === "loading") return; // Still loading
-
-    if (!session || session.user?.role !== "admin") {
-      router.push("/");
+    if (isLoading) return;
+    if (!isStaff) return;
+    if (has("overview.view")) return;
+    const target = firstAccessibleTabId(has);
+    if (target && target !== "overview") {
+      router.replace(`/admin/${target}`);
     }
-  }, [session, status, router]);
+  }, [isLoading, isStaff, has, router]);
 
   // Show loading while checking authentication
-  if (status === "loading") {
+  if (isLoading) {
     return (
       <div className="min-h-screen-svh flex items-center justify-center">
         <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-red-600"></div>
@@ -28,18 +36,23 @@ export default function AdminDashboard() {
     );
   }
 
-  // Don't render if not authenticated or not admin
-  if (!session || session.user?.role !== "admin") {
+  // Don't render if not staff — the admin layout's server guard handles the redirect,
+  // but we gate here too as a belt-and-suspenders for the client.
+  if (!isStaff) {
+    router.push("/");
     return null;
   }
 
   // Create admin user object from session
+  const roleLabel =
+    session?.user?.roleName ??
+    (session?.user?.userType === "admin" ? "Admin" : "Staff");
   const adminUser: AdminUser = {
-    id: session.user?.id || "",
-    name: `${session.user?.firstName || ""} ${session.user?.lastName || ""}`.trim(),
-    email: session.user?.email || "",
-    role: "admin",
-    isAdmin: true,
+    id: session?.user?.id || "",
+    name: `${session?.user?.firstName || ""} ${session?.user?.lastName || ""}`.trim(),
+    email: session?.user?.email || "",
+    role: roleLabel,
+    isAdmin: session?.user?.userType === "admin",
     lastLogin: new Date(),
   };
 

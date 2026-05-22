@@ -12,6 +12,7 @@ import Order from "@/models/Order";
 import MiniDraw from "@/models/MiniDraw";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
+import { requirePermission } from "@/lib/api-auth-permissions";
 import { getPackageById } from "@/data/membershipPackages";
 import { getEffectiveBenefits } from "@/utils/membership/benefit-resolution";
 import { hasMembershipGrantInCurrentDrawPeriod } from "@/utils/draws/has-membership-grant-this-draw";
@@ -28,9 +29,10 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
     const { id } = await params;
 
-    // Users can only access their own data (unless admin)
-    if (session.user.id !== id && session.user.role !== "admin") {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    // Users can only access their own data; staff with users.view can access any user.
+    if (session.user.id !== id) {
+      const guard = await requirePermission("users.view");
+      if (guard instanceof NextResponse) return guard;
     }
 
     // Find user by ID with populated data

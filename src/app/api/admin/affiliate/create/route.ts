@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import { requirePermissionWithAudit } from "@/lib/audit-log";
 import { z } from "zod";
 import connectDB from "@/lib/mongodb";
 import Affiliate from "@/models/Affiliate";
@@ -24,11 +23,11 @@ const createAffiliateSchema = z.object({
  */
 export async function POST(request: NextRequest) {
   try {
-    // Verify admin authentication
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id || session.user.role !== "admin") {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const guard = await requirePermissionWithAudit("affiliates.edit", request, {
+      resourceType: "Affiliate",
+    });
+    if (guard instanceof NextResponse) return guard;
+    const { log } = guard;
 
     const body = await request.json();
     const validatedData = createAffiliateSchema.parse(body);
@@ -76,6 +75,7 @@ export async function POST(request: NextRequest) {
     await affiliate.save();
     const affiliateId = (affiliate._id as mongoose.Types.ObjectId).toString();
 
+    await log(200);
     return NextResponse.json({
       success: true,
       data: {

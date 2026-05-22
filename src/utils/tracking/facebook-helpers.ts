@@ -14,14 +14,59 @@
 import { hashData } from "@/lib/facebook";
 
 /**
- * Extract Facebook Click ID (fbc) on the browser side.
+ * Cookie storing the click-capture timestamp for the current fbclid.
+ * Per Meta's spec (https://developers.facebook.com/docs/marketing-api/conversions-api/parameters/fbp-and-fbc),
+ * the fbc timestamp MUST be when the click was first observed, not when the event is sent.
+ * We persist it so subsequent events within the attribution window get a consistent fbc value.
+ */
+const FBC_CAPTURE_TS_COOKIE = "_fbc_ts";
+const FBC_COOKIE_MAX_AGE_SECONDS = 90 * 24 * 60 * 60; // 90 days — Meta's default attribution window
+
+function readBrowserCookie(name: string): string | undefined {
+  if (typeof document === "undefined") return undefined;
+  for (const raw of document.cookie.split(";")) {
+    const trimmed = raw.trim();
+    const eq = trimmed.indexOf("=");
+    if (eq === -1) continue;
+    if (trimmed.slice(0, eq) === name) {
+      const value = trimmed.slice(eq + 1);
+      if (value) return value;
+    }
+  }
+  return undefined;
+}
+
+function writeBrowserCookie(name: string, value: string, maxAgeSeconds: number): void {
+  if (typeof document === "undefined") return;
+  document.cookie = `${name}=${value}; path=/; max-age=${maxAgeSeconds}; SameSite=Lax`;
+}
+
+/**
+ * Build a Meta-format fbc value (`fb.1.<captureTimestamp>.<fbclid>`).
+ * Reuses a previously-captured timestamp from `_fbc_ts` cookie when available,
+ * otherwise stamps "now" and persists it for future calls within the attribution window.
+ * The "now" fallback is the closest approximation to click time when the user lands
+ * directly with an fbclid in URL and no prior cookie exists.
+ */
+function buildFbcFromFbclid(fbclid: string, persist: boolean): string {
+  const existingTs = readBrowserCookie(FBC_CAPTURE_TS_COOKIE);
+  if (existingTs && /^\d+$/.test(existingTs)) {
+    return `fb.1.${existingTs}.${fbclid}`;
+  }
+  const captureTs = String(Date.now());
+  if (persist) {
+    writeBrowserCookie(FBC_CAPTURE_TS_COOKIE, captureTs, FBC_COOKIE_MAX_AGE_SECONDS);
+  }
+  return `fb.1.${captureTs}.${fbclid}`;
+}
+
+/**
+ * Extract Facebook Click ID (fbc) from URL parameters or browser cookies.
  *
- * Priority order (matches server-side `extractFBCFromRequest`):
- *   1. The `_fbc` cookie set by the Pixel SDK at click time (this is what
- *      the Pixel itself reads — using it preserves pixel↔CAPI consistency).
- *   2. Fallback: build `fb.1.{Date.now()}.{fbclid}` from the URL when no
- *      cookie is present. The fallback timestamp drifts across calls but
- *      is acceptable for first-touch cookie-blocked visits.
+ * Resolution order:
+ *   1. Meta's own `_fbc` cookie (set by the loaded Pixel — has the correct format & capture time)
+ *   2. `?fbc=` URL param (already-formatted, used in some integrations)
+ *   3. `?fbclid=` URL param → constructed with persisted capture timestamp (or stamped now + persisted)
  *
  * @returns Facebook Click ID if found, undefined otherwise
  */
@@ -29,26 +74,24 @@ export function getFBCFromURL(): string | undefined {
   if (typeof window === "undefined") return undefined;
 
   try {
-    // 1. Cookie set by Pixel SDK (canonical fb.1.{ts}.{fbclid} format).
-    const cookies = document.cookie.split(";");
-    for (const cookie of cookies) {
-      const [name, value] = cookie.trim().split("=");
-      if (name === "_fbc" && value) {
-        // SDK does not URL-encode the value; decode defensively only when
-        // there is a percent sign in the raw value.
-        return value.includes("%") ? decodeURIComponent(value) : value;
-      }
+    // 1. Prefer Meta's own _fbc cookie — has correct click-capture timestamp baked in.
+    // SDK does not URL-encode the value; decode defensively only when there is a percent sign.
+    const metaFbc = readBrowserCookie("_fbc");
+    if (metaFbc) {
+      return metaFbc.includes("%") ? decodeURIComponent(metaFbc) : metaFbc;
     }
 
-    // 2. URL fallback when cookie is absent.
     const urlParams = new URLSearchParams(window.location.search);
-    const fbclid = urlParams.get("fbclid");
-    if (fbclid) {
-      return `fb.1.${Date.now()}.${fbclid}`;
-    }
 
+    // 2. Pre-formatted fbc parameter wins over fbclid construction
     const fbc = urlParams.get("fbc");
     if (fbc) return fbc;
+
+    // 3. fbclid → construct with persisted timestamp (or stamp now + persist)
+    const fbclid = urlParams.get("fbclid");
+    if (fbclid) {
+      return buildFbcFromFbclid(fbclid, /* persist */ true);
+    }
 
     return undefined;
   } catch {
@@ -216,14 +259,17 @@ export function getEventSourceURL(): string | undefined {
 }
 
 /**
- * Extract Facebook Click ID (fbc) from NextRequest.
+ * Extract Facebook Click ID (fbc) from a NextRequest.
  *
- * Reads the `_fbc` cookie set by Facebook Pixel first — this value is
- * stable across server retries (set client-side at click time). Falls back
- * to building from `fbclid` query param using `Date.now()` only when no
- * cookie is present; that fallback drifts between calls and should be
- * avoided where the value flows into a Stripe idempotency-keyed request
- * body. See docs/tracking/gotchas.md.
+ * Resolution order (mirrors the client-side `getFBCFromURL`):
+ *   1. `_fbc` cookie (set by Meta's Pixel — has correct format and capture time;
+ *      stable across server retries — safe for Stripe-idempotent request bodies).
+ *   2. `?fbc=` URL param (pre-formatted)
+ *   3. `?fbclid=` URL param → constructed using `_fbc_ts` cookie's capture timestamp
+ *      if present, otherwise "now" (less accurate but better than no fbc at all).
+ *
+ * @param request - NextRequest-like object with `url`, `headers`, and `cookies`
+ * @returns Facebook Click ID if found, undefined otherwise
  */
 export function extractFBCFromRequest(request: {
   url?: string;
@@ -231,30 +277,25 @@ export function extractFBCFromRequest(request: {
   cookies?: { get: (name: string) => { value: string } | undefined };
 }): string | undefined {
   try {
-    if (request.cookies) {
-      const fbcCookie = request.cookies.get("_fbc");
-      if (fbcCookie?.value) {
-        return fbcCookie.value;
-      }
-    }
+    // Prefer Meta's own _fbc cookie when present (stable across retries).
+    const metaFbc = request.cookies?.get("_fbc")?.value;
+    if (metaFbc) return metaFbc;
 
     if (!request.url) return undefined;
-
     const url = new URL(request.url);
-    const urlParams = url.searchParams;
 
-    const fbclid = urlParams.get("fbclid");
-    if (fbclid) {
-      const timestamp = Date.now();
-      return `fb.1.${timestamp}.${fbclid}`;
-    }
+    // Pre-formatted fbc param wins over fbclid construction
+    const fbc = url.searchParams.get("fbc");
+    if (fbc) return fbc;
 
-    const fbc = urlParams.get("fbc");
-    if (fbc) {
-      return fbc;
-    }
+    const fbclid = url.searchParams.get("fbclid");
+    if (!fbclid) return undefined;
 
-    return undefined;
+    // Use persisted capture timestamp if the client wrote one earlier, else stamp now.
+    // The server can't persist a cookie via this helper — it just reads what's there.
+    const capturedTs = request.cookies?.get(FBC_CAPTURE_TS_COOKIE)?.value;
+    const ts = capturedTs && /^\d+$/.test(capturedTs) ? capturedTs : String(Date.now());
+    return `fb.1.${ts}.${fbclid}`;
   } catch {
     return undefined;
   }

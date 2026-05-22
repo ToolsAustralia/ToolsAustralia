@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import { requirePermissionWithAudit } from "@/lib/audit-log";
 import connectDB from "@/lib/mongodb";
 import User from "@/models/User";
 import mongoose from "mongoose";
@@ -33,13 +32,13 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   try {
     await connectDB();
 
-    // Verify admin authentication
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id || session.user.role !== "admin") {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
     const { id: userId } = await params;
+    const guard = await requirePermissionWithAudit("users.edit", request, {
+      resourceType: "User",
+      resourceId: userId,
+    });
+    if (guard instanceof NextResponse) return guard;
+    const { session, log } = guard;
     const body = (await request.json()) as {
       action: string;
       note?: string;
@@ -155,6 +154,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     //   result: result.success,
     // });
 
+    await log(200);
     return NextResponse.json({
       success: true,
       data: result,

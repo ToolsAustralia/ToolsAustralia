@@ -49,16 +49,14 @@ export async function trackPlacedOrder(
     paymentIntentId: string;
     entriesGranted?: number;
     pointsEarned?: number;
-    timestamp?: number; // Optional timestamp for historical backfill
   }
 ): Promise<void> {
   try {
-    // Generate unique order ID
+    // Generate deterministic order ID (no timestamp — see generateOrderId for rationale)
     const orderId = generateOrderId(
       orderData.packageType,
       orderData.packageId,
-      orderData.paymentIntentId,
-      orderData.timestamp
+      orderData.paymentIntentId
     );
 
     // Create and track "Placed Order" event

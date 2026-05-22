@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import { requirePermission } from "@/lib/api-auth-permissions";
 import connectDB from "@/lib/mongodb";
 import User from "@/models/User";
 import PaymentEvent from "@/models/PaymentEvent";
@@ -44,13 +43,10 @@ export interface ActivityLogItem {
  */
 export async function GET(request: NextRequest) {
   try {
-    await connectDB();
+    const guard = await requirePermission("overview.view");
+    if (guard instanceof NextResponse) return guard;
 
-    // Verify admin authentication
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id || session.user.role !== "admin") {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    await connectDB();
 
     // Get query parameters
     const searchParams = request.nextUrl.searchParams;

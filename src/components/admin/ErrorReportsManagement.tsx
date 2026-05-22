@@ -36,6 +36,7 @@ import { useDebounce } from "@/hooks/useDebounce";
 import { formatDisplayName } from "@/utils/display-name";
 import { ErrorReportStatus, IErrorReport } from "@/types/error-reporting";
 import { cn } from "@/utils/cn";
+import { usePermissions } from "@/hooks/usePermissions";
 
 type SortField = "createdAt" | "status" | "errorMessage" | "category" | "severity";
 type SortOrder = "asc" | "desc";
@@ -470,6 +471,9 @@ export default function ErrorReportsManagement() {
   const searchParams = useSearchParams();
   const queryClient = useQueryClient();
   const { showToast } = useToast();
+  const { has } = usePermissions();
+  const canEditErrorReports = has("errorReports.edit");
+  const canDeleteErrorReports = has("errorReports.delete");
 
   const [page, setPage] = useState(Number(searchParams.get("page") || 1));
   const [limit] = useState(20);
@@ -952,30 +956,33 @@ export default function ErrorReportsManagement() {
         </div>
       </div>
 
-      {selectedReports.size > 0 && (
+      {selectedReports.size > 0 && (canEditErrorReports || canDeleteErrorReports) && (
         <div className="flex flex-col gap-3 rounded-xl border border-red-200 bg-red-50 p-3 dark:border-red-900/60 dark:bg-red-950/30 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-sm font-semibold text-red-900 dark:text-red-100">{selectedReports.size} selected</p>
           <div className="flex flex-wrap gap-2">
-            {(["investigating", "resolved", "dismissed"] as ErrorReportStatus[]).map((action) => (
+            {canEditErrorReports &&
+              (["investigating", "resolved", "dismissed"] as ErrorReportStatus[]).map((action) => (
+                <button
+                  key={action}
+                  type="button"
+                  onClick={() => handleBulkAction(action)}
+                  disabled={bulkStatusMutation.isPending}
+                  className="rounded-lg bg-white px-3 py-2 text-xs font-semibold capitalize text-gray-800 ring-1 ring-red-200 hover:bg-red-50 disabled:opacity-50 dark:bg-neutral-900 dark:text-neutral-100 dark:ring-red-900"
+                >
+                  Mark {action}
+                </button>
+              ))}
+            {canDeleteErrorReports && (
               <button
-                key={action}
                 type="button"
-                onClick={() => handleBulkAction(action)}
-                disabled={bulkStatusMutation.isPending}
-                className="rounded-lg bg-white px-3 py-2 text-xs font-semibold capitalize text-gray-800 ring-1 ring-red-200 hover:bg-red-50 disabled:opacity-50 dark:bg-neutral-900 dark:text-neutral-100 dark:ring-red-900"
+                onClick={() => handleBulkAction("archive")}
+                disabled={archiveMutation.isPending}
+                className="inline-flex items-center gap-2 rounded-lg bg-red-600 px-3 py-2 text-xs font-semibold text-white hover:bg-red-700 disabled:opacity-50"
               >
-                Mark {action}
+                <Archive className="h-4 w-4" />
+                Archive
               </button>
-            ))}
-            <button
-              type="button"
-              onClick={() => handleBulkAction("archive")}
-              disabled={archiveMutation.isPending}
-              className="inline-flex items-center gap-2 rounded-lg bg-red-600 px-3 py-2 text-xs font-semibold text-white hover:bg-red-700 disabled:opacity-50"
-            >
-              <Archive className="h-4 w-4" />
-              Archive
-            </button>
+            )}
           </div>
         </div>
       )}

@@ -16,6 +16,7 @@ import { hasPreservedBenefits, getDaysUntilBenefitsExpire } from "@/utils/member
 import { getActivePackage, type ActivePackageUserInput } from "@/utils/membership/get-active-package";
 import { formatDisplayName, formatNamePart } from "@/utils/display-name";
 import { usePixelTracking } from "@/hooks/usePixelTracking";
+import { usePermissions } from "@/hooks/usePermissions";
 import { environmentFlags } from "@/lib/environment";
 import { rewardsEnabled } from "@/config/featureFlags";
 import { useResolvedMultiplier } from "@/hooks/queries/usePromoQueries";
@@ -147,6 +148,7 @@ export default function Header({ isFixed = true }: HeaderProps) {
   const { items: cartItems, summary, updateCartItem, removeFromCart } = useCart();
   const cartItemCount = summary?.totalItems || 0;
   const { userData, isAuthenticated, loading } = useUserContext();
+  const { isStaff } = usePermissions();
 
   const resolvedActivePackage = useMemo(
     () => (userData ? getActivePackage(userData as unknown as ActivePackageUserInput) : null),
@@ -852,7 +854,7 @@ export default function Header({ isFixed = true }: HeaderProps) {
                         </p>
                         <p className="text-xs text-gray-500 dark:text-neutral-400">{userData?.email}</p>
                       </div>
-                      {userData?.role === "admin" ? (
+                      {isStaff ? (
                         <>
                           <Link
                             href="/admin"
@@ -1039,7 +1041,7 @@ export default function Header({ isFixed = true }: HeaderProps) {
                       </p>
                       <p className="text-xs text-gray-500 dark:text-neutral-400">{userData?.email}</p>
                     </div>
-                    {userData?.role === "admin" ? (
+                    {isStaff ? (
                       <>
                         <Link
                           href="/admin"

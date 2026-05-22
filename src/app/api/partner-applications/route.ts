@@ -2,8 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import connectDB from "@/lib/mongodb";
 import PartnerApplication from "@/models/PartnerApplication";
 import { z } from "zod";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import { requirePermission } from "@/lib/api-auth-permissions";
 import { emailService, checkFormSubmissionRateLimit } from "@/lib/email/";
 
 /**
@@ -39,17 +38,11 @@ const createPartnerApplicationSchema = z.object({
  */
 export async function GET(request: NextRequest) {
   try {
+    // Auth before DB connection
+    const guard = await requirePermission("users.view");
+    if (guard instanceof NextResponse) return guard;
+
     await connectDB();
-
-    // Check if user is authenticated and has admin role
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    // TODO: Add admin role check here
-    // For now, we'll allow any authenticated user to view applications
-    // In production, you should check if user.role === 'admin'
 
     const { searchParams } = new URL(request.url);
     const status = searchParams.get("status");

@@ -4,6 +4,15 @@
 
 See [architecture.md](./architecture.md#categories) for the full inventory.
 
+## Auth-gating conventions (Task 12, 2026-05-20)
+
+Client components must use `usePermissions()` from `@/hooks/usePermissions` for authorization decisions — never read `session?.user?.role` directly in JSX or effects.
+
+- **`Header.tsx`** — The desktop and mobile user-menu dropdowns show "Admin Dashboard" when `isStaff` is true (replaces `userData?.role === "admin"`). Staff still see the same Admin-only branch in the ternary; the `isStaff` signal comes from `usePermissions()` which reads `session.user.userType === "staff"` with a legacy-admin bridge.
+- **`LoginModal/index.tsx`** — The post-login redirect (`/admin` vs `/my-account`) uses `isStaff` from `usePermissions()` instead of `session.user?.role === "admin"`.
+
+Display-only `user.role` reads (e.g. the "Admin" badge on user rows in `UsersManagement.tsx` and `UserRow.tsx`) are intentionally NOT replaced — they show the role of the listed user, not the current viewer.
+
 ## Cards
 
 ### WinnerCard

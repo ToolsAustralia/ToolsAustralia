@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import { requirePermission } from "@/lib/api-auth-permissions";
 import connectDB from "@/lib/mongodb";
 import { parseAdminDashboardDateRange } from "@/utils/admin/dashboardDateRange";
 import { MembershipAnalyticsService } from "@/services/admin/MembershipAnalyticsService";
@@ -13,12 +12,10 @@ import { MembershipAnalyticsService } from "@/services/admin/MembershipAnalytics
  */
 export async function GET(request: NextRequest) {
   try {
-    await connectDB();
+    const guard = await requirePermission("overview.view");
+    if (guard instanceof NextResponse) return guard;
 
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id || session.user.role !== "admin") {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    await connectDB();
 
     const searchParams = request.nextUrl.searchParams;
     const parsed = parseAdminDashboardDateRange({

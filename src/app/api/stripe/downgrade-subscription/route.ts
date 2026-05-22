@@ -238,7 +238,7 @@ export async function POST(request: NextRequest) {
 
     await user.save();
 
-    // ✅ NEW: Track pixel subscription downgrade event
+    // Track Meta CAPI Custom Event `MembershipDowngrade` (server-side — no live Pixel call).
     try {
       const { trackPixelSubscriptionDowngrade } = await import("@/utils/tracking/pixel-purchase-tracking");
       const requestContext = extractRequestContext(request);
@@ -258,7 +258,7 @@ export async function POST(request: NextRequest) {
         userLastName: user.lastName,
         userState: user.state,
         userBirthdate: user.birthdate,
-        prorationAmount: 0,
+        prorationAmount: 0, // No immediate charge for downgrade
         entriesRemoved: (currentPackage.entriesPerMonth || 0) - (newPackage.entriesPerMonth || 0),
         requestContext,
       });

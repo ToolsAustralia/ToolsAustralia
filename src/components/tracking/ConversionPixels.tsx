@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { getAllProviders } from "@/lib/tracking/registry";
 import { trackConversion } from "@/lib/tracking/dispatch-client";
 import { eventTimeNow } from "@/lib/tracking/canonical-event";
+import { shouldTrackRoute } from "@/utils/tracking/should-track-route";
 
 interface ConversionPixelsProps {
   /** CSP nonce from middleware (production). Passed to inline pixel scripts. */
@@ -41,7 +42,14 @@ export default function ConversionPixels({ nonce, disabled = false }: Conversion
   }, [nonce, disabled]);
 
   // Fire PageView on SPA route changes. Skip the very first call (initial mount) —
-  // each provider's loadPixel script already fires a PageView on first load.
+  // each provider's loadPixel script already fires a PageView on first load
+  // (also gated by shouldTrackRoute inside loadPixel).
+  // Also skipped on internal/staff routes (admin / my-account / affiliate / etc.)
+  // so admins navigating around the dashboard don't pollute remarketing audiences,
+  // drag Event Match Quality down with low-signal sessions, or inflate PageView counts.
+  // Note: Meta's pushState auto-PageView is separately disabled in providers/facebook.ts
+  // via `fbq.disablePushState = true` — without that, Meta's own pixel bypasses
+  // this gate via its internal HTML5 History State listener.
   useEffect(() => {
     if (disabled) return;
     if (isInitialMountRef.current) {
@@ -49,6 +57,7 @@ export default function ConversionPixels({ nonce, disabled = false }: Conversion
       return;
     }
     if (typeof window === "undefined") return;
+    if (!shouldTrackRoute(pathname)) return;
 
     trackConversion({
       eventName: "PageView",

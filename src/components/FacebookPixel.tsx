@@ -3,12 +3,21 @@
 import React, { useEffect, useState, useRef } from "react";
 import { usePathname } from "next/navigation";
 import { extractPageMetadata } from "@/utils/tracking/page-metadata-helpers";
+import { shouldTrackRoute, EXCLUDED_TRACKING_PREFIXES } from "@/utils/tracking/should-track-route";
 import { trackConversion } from "@/lib/tracking/dispatch-client";
 import { buildPurchaseEvent } from "@/lib/tracking/canonical-event";
+import { getAllowedHostnames } from "@/lib/tracking/hostname-gate";
 
-/** Production-only hostnames for the browser pixel (must match server CAPI prod routing). */
+/**
+ * Hostnames where the browser pixel is allowed to fire. Reads from
+ * `getAllowedHostnames()` so the staging-opt-in env var
+ * `NEXT_PUBLIC_PIXEL_ALLOWED_HOSTNAMES` actually takes effect here too.
+ * Previously this was hardcoded to production-only, which broke staging
+ * end-to-end testing (the inline init script and trackFacebookEvent both
+ * call this).
+ */
 export function isProductionBrowserHostname(hostname: string): boolean {
-  return hostname === "toolsaustralia.com.au" || hostname === "www.toolsaustralia.com.au";
+  return getAllowedHostnames().includes(hostname);
 }
 
 declare global {
@@ -114,6 +123,11 @@ export default function FacebookPixel({
       return;
     }
 
+    // Skip PageView on internal/staff routes — see should-track-route.ts for rationale
+    if (!shouldTrackRoute(pathname)) {
+      return;
+    }
+
     if (typeof window !== "undefined" && typeof window.fbq === "function") {
       // Extract page metadata and build custom parameters
       const pageMetadata = extractPageMetadata(pathname, window.location.href);
@@ -134,49 +148,11 @@ export default function FacebookPixel({
         // console.log("✅ Facebook Pixel: PageView tracked on route change", pageViewParams);
       }
     }
-  }, [pathname, isInitialized]);
+  }, [pathname, isInitialized, browserPixelHostAllowed]);
 
-  // Fallback: Verify PageView fired after pixel loads (safety net)
-  // Moved before early returns to satisfy React Hooks rules
-  useEffect(() => {
-    if (!browserPixelHostAllowed || !isInitialized || hasTrackedInitialPageView.current) {
-      return;
-    }
-
-    // Check if PageView was actually sent (verify after 2 seconds)
-    const verifyPageView = setTimeout(() => {
-      if (typeof window !== "undefined" && window.fbq) {
-        // Try to manually trigger PageView if it didn't fire
-        // This is a safety net in case the queued PageView didn't execute
-        try {
-          // Extract page metadata and build custom parameters
-          const pageMetadata = extractPageMetadata(pathname, window.location.href);
-          // Default to "guest" since UserProvider is not available at this level
-          const currentUserType = "guest";
-
-          const pageViewParams = {
-            page_type: pageMetadata.page_type,
-            page_name: pageMetadata.page_name,
-            page_url: pageMetadata.page_url,
-            user_type: currentUserType,
-            platform: "tools-australia-website",
-          };
-
-          window.fbq("track", "PageView", pageViewParams);
-          hasTrackedInitialPageView.current = true;
-          if (process.env.NODE_ENV === "development") {
-            // console.log("✅ Facebook Pixel: PageView verified/triggered (fallback)", pageViewParams);
-          }
-        } catch (error) {
-          if (process.env.NODE_ENV === "development") {
-            console.error("⚠️ Facebook Pixel: Could not verify PageView", error);
-          }
-        }
-      }
-    }, 2000);
-
-    return () => clearTimeout(verifyPageView);
-  }, [browserPixelHostAllowed, isInitialized, pathname]);
+  // 2-second PageView fallback was removed: the inline init script's fbq.queue
+  // mechanism already buffers commands until fbevents.js loads, so the fallback
+  // was redundant and caused PageView to double-fire on slow connections.
 
   // Inject script with nonce support (replaces Next.js Script component for CSP compliance)
   // Moved before early returns to satisfy React Hooks rules
@@ -209,13 +185,20 @@ export default function FacebookPixel({
         script.setAttribute("nonce", nonce);
       }
 
+      // Embed the env-aware allowed-hostnames list as a JS literal so the
+      // inline script can gate against it pre-hydration. Mirrors the React-level
+      // gate above so staging deployments (whitelisted via
+      // NEXT_PUBLIC_PIXEL_ALLOWED_HOSTNAMES) can fire the pixel for testing.
+      const allowedHostnamesJson = JSON.stringify(getAllowedHostnames());
+
       // Set inline script content
       script.innerHTML = `
         (function(){
         var host = typeof window !== 'undefined' ? window.location.hostname : '';
-        var isProdHost = host === 'toolsaustralia.com.au' || host === 'www.toolsaustralia.com.au';
+        var _fbAllowed = ${allowedHostnamesJson};
+        var isProdHost = _fbAllowed.indexOf(host) !== -1;
         if (!isProdHost) {
-          console.warn('[FB Pixel] Inline init skipped on non-prod host:', host);
+          console.warn('[FB Pixel] Inline init skipped on non-allowed host:', host);
           return;
         }
         !function(f,b,e,v,n,t,s)
@@ -228,6 +211,26 @@ export default function FacebookPixel({
         'https://connect.facebook.net/en_US/fbevents.js');
         if(typeof window !== 'undefined' && !window._fbPixelInit) {
           window._fbPixelInit = true;
+
+          // 1) Disable Meta's HTML5 History State (pushState) listener — without this,
+          //    the Pixel auto-fires PageView on every Next.js SPA route change,
+          //    including /admin, /my-account, /affiliate (bypasses our shouldTrackRoute
+          //    gate entirely because the auto-fire happens inside fbevents.js).
+          //    Per Meta's SPA tagging guide:
+          //    https://developers.facebook.com/ads/blog/post/2017/05/29/tagging-a-single-page-application-facebook-pixel/
+          //    With this flag set, only OUR explicit fbq('track','PageView',...) calls
+          //    fire — and those are gated by shouldTrackRoute() in the route-change
+          //    useEffect above.
+          window.fbq.disablePushState = true;
+
+          // 2) Disable Meta's "Automatic Configuration" — stops the pixel from
+          //    auto-firing SubscribedButtonClick / ButtonClick / FormSubmit and from
+          //    auto-scraping form inputs for advanced matching. We supply our own
+          //    hashed advanced matching server-side via CAPI's user_data.
+          //    Per Meta's Advanced doc: https://developers.facebook.com/docs/meta-pixel/advanced/
+          //    MUST come BEFORE the init call.
+          window.fbq('set', 'autoConfig', false, '${pixelId}');
+
           ${
             dataProcessingOptions
               ? `window.fbq('init', '${pixelId}', ${JSON.stringify(dataProcessingOptions)});`
@@ -235,14 +238,22 @@ export default function FacebookPixel({
               ? `window.fbq('init', '${pixelId}', null, ${dataProcessingCountry}, ${dataProcessingState || 0});`
               : `window.fbq('init', '${pixelId}');`
           }
+          // Track initial PageView with basic parameters (full parameters added on route changes).
+          // Gate against internal/staff routes (keep in sync with should-track-route.ts).
           const initialPageUrl = typeof window !== 'undefined' ? window.location.href : '';
           const initialPathname = typeof window !== 'undefined' ? window.location.pathname : '';
-          const pageType = initialPathname === '/' ? 'home' : initialPathname.split('/').filter(Boolean)[0] || 'unknown';
-          window.fbq('track', 'PageView', {
-            page_type: pageType,
-            page_url: initialPageUrl,
-            platform: 'tools-australia-website'
+          const excludedPrefixes = ${JSON.stringify([...EXCLUDED_TRACKING_PREFIXES])};
+          const isExcludedRoute = excludedPrefixes.some(function(p){
+            return initialPathname === p || initialPathname.indexOf(p + '/') === 0;
           });
+          if (!isExcludedRoute) {
+            const pageType = initialPathname === '/' ? 'home' : initialPathname.split('/').filter(Boolean)[0] || 'unknown';
+            window.fbq('track', 'PageView', {
+              page_type: pageType,
+              page_url: initialPageUrl,
+              platform: 'tools-australia-website'
+            });
+          }
         }
         })();
       `;
@@ -374,13 +385,11 @@ export const trackFacebookEvent = (
     return;
   }
 
-  // Check if eventID is provided for deduplication
-  const eventID = parameters?.eventID as string | undefined;
-
-  // Prepare event parameters (Meta supports eventID in regular track for deduplication)
-  // When eventID is included in the parameters, Meta automatically handles deduplication
-  // between browser pixel and Conversions API events with the same eventID
-  const eventParams = { ...parameters };
+  // Pull eventID out of parameters — Meta only deduplicates when eventID is passed
+  // as the 4th-argument options object, NOT when it sits inside the 3rd-arg customData.
+  // See https://developers.facebook.com/docs/marketing-api/conversions-api/deduplicate-pixel-and-server-events/
+  const { eventID: rawEventID, ...customData } = parameters ?? {};
+  const eventID = typeof rawEventID === "string" && rawEventID.length > 0 ? rawEventID : undefined;
 
   try {
     // Validate event name (must be a string)
@@ -389,39 +398,27 @@ export const trackFacebookEvent = (
       return;
     }
 
-    // Validate event parameters (must be an object if provided)
-    if (eventParams && typeof eventParams !== "object") {
-      console.error("❌ Facebook Pixel: Event parameters must be an object", eventParams);
-      return;
-    }
-
-    // Create event key for deduplication (prevent same event within 1 second)
-    const eventKey = eventID ? `${eventName}_${eventID}` : `${eventName}_${JSON.stringify(eventParams)}`;
+    // Create event key for the local in-memory 1-second debounce (prevents accidental
+    // re-fires from re-renders). Keyed by eventID when available so two distinct
+    // conversions with different IDs don't get debounced against each other.
+    const eventKey = eventID ? `${eventName}_${eventID}` : `${eventName}_${JSON.stringify(customData)}`;
 
     const now = Date.now();
     const lastSent = recentEvents.get(eventKey);
 
     // Prevent duplicate events within 1 second (unless it has a unique eventID)
     if (lastSent && now - lastSent < 1000 && !eventID) {
-      if (process.env.NODE_ENV === "development") {
-        // console.warn(`⚠️ Facebook Pixel: Duplicate ${eventName} event prevented (sent ${now - lastSent}ms ago)`);
-      }
       return;
     }
 
-    // Use regular track with eventID parameter for deduplication
-    // Meta automatically handles deduplication when eventID matches between browser pixel and Conversions API
-    if (process.env.NODE_ENV === "development") {
-      if (eventID) {
-        // console.log(`📘 Facebook Pixel: Sending ${eventName} with EventID: ${eventID}`, eventParams);
-      } else {
-        // console.log(`📘 Facebook Pixel: Sending ${eventName}`, eventParams);
-      }
+    // 4-arg form when eventID is present so Meta can dedup against the matching CAPI event.
+    // 3-arg form otherwise — fbq normalises a missing 4th arg, but we keep them separate
+    // to avoid sending an empty {eventID: undefined} object that Meta logs as a malformed param.
+    if (eventID) {
+      window.fbq("track", eventName, customData, { eventID });
+    } else {
+      window.fbq("track", eventName, customData);
     }
-
-    // Use regular track - it works even if pixel isn't fully initialized (queues the event)
-    // This is the recommended approach per Facebook's documentation
-    window.fbq("track", eventName, eventParams);
 
     // Record event timestamp for deduplication
     recentEvents.set(eventKey, now);

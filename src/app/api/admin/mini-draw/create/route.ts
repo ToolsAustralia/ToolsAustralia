@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import { requirePermissionWithAudit } from "@/lib/audit-log";
 import connectDB from "@/lib/mongodb";
 import MiniDraw from "@/models/MiniDraw";
 import { z } from "zod";
@@ -85,13 +84,13 @@ async function uploadImageToCloudinary(file: File, folder: string = "mini-draws"
  */
 export async function POST(request: NextRequest) {
   try {
-    await connectDB();
+    const guard = await requirePermissionWithAudit("miniDraws.edit", request, {
+      resourceType: "MiniDraw",
+    });
+    if (guard instanceof NextResponse) return guard;
+    const { log } = guard;
 
-    // Verify admin authentication
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id || session.user.role !== "admin") {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    await connectDB();
 
     // console.log("🎲 Creating new mini draw...");
 
@@ -197,7 +196,7 @@ export async function POST(request: NextRequest) {
     await newMiniDraw.save();
 
     // console.log(`✅ Mini draw created successfully: ${newMiniDraw.name} (ID: ${newMiniDraw._id})`);
-
+    await log(200);
     return NextResponse.json({
       success: true,
       data: {

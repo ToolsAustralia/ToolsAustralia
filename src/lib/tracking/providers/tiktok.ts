@@ -3,6 +3,7 @@
 
 import type { CanonicalEvent, ConversionProvider } from "../types";
 import { getAllowedHostnames } from "../hostname-gate";
+import { shouldTrackRoute } from "@/utils/tracking/should-track-route";
 
 // NOTE: The legacy `src/components/TikTokPixel.tsx` also augments `Window.ttq`. Both
 // declarations must match exactly (TS2687/TS2717) until that component becomes a
@@ -47,7 +48,11 @@ function loadPixel(opts: { nonce?: string; advancedMatching?: Record<string, str
   if (!pixelId) return; // No-op when not configured. No script tag, no console noise.
   if (!getAllowedHostnames().includes(window.location.hostname)) return;
 
-  // Inline init copied verbatim from legacy TikTokPixel.tsx so behavior is unchanged.
+  // Decide whether to fire the initial page() based on the current route.
+  // Excluded routes (admin / my-account / affiliate / etc.) skip the initial fire.
+  const firePagePing = shouldTrackRoute(window.location.pathname);
+  const pageLine = firePagePing ? "ttq.page();" : "";
+
   const script = document.createElement("script");
   if (opts.nonce) script.setAttribute("nonce", opts.nonce);
   script.innerHTML = `
@@ -56,7 +61,7 @@ function loadPixel(opts: { nonce?: string; advancedMatching?: Record<string, str
       var e=ttq._i[t]||[],n=0;n<ttq.methods.length;n++)ttq.setAndDefer(e,ttq.methods[n]);return e},ttq.load=function(e,n){var r="https://analytics.tiktok.com/i18n/pixel/events.js",o=n&&n.partner;ttq._i=ttq._i||{},ttq._i[e]=[],ttq._i[e]._u=r,ttq._t=ttq._t||{},ttq._t[e]=+new Date,ttq._o=ttq._o||{},ttq._o[e]=n||{};n=document.createElement("script")
       ;n.type="text/javascript",n.async=!0,n.src=r+"?sdkid="+e+"&lib="+t;e=document.getElementsByTagName("script")[0];e.parentNode.insertBefore(n,e)};
       ttq.load('${pixelId}');
-      ttq.page();
+      ${pageLine}
     }(window, document, 'ttq');
   `;
   document.head.appendChild(script);

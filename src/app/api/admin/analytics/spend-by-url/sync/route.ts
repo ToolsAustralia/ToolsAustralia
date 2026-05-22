@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import { requirePermissionWithAudit } from "@/lib/audit-log";
 import connectDB from "@/lib/mongodb";
 import { runMetaSpendByUrlSync } from "@/services/meta/runMetaSpendByUrlSync";
 import { z } from "zod";
@@ -19,11 +18,11 @@ const bodySchema = z.object({
  */
 export async function POST(request: NextRequest) {
   try {
+    const guard = await requirePermissionWithAudit("facebookAds.edit", request);
+    if (guard instanceof NextResponse) return guard;
+    const { log } = guard;
+
     await connectDB();
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id || session.user.role !== "admin") {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
 
     const adAccountId = process.env.FACEBOOK_AD_ACCOUNT_ID;
     const accessToken = process.env.FACEBOOK_MARKETING_ACCESS_TOKEN;
@@ -56,6 +55,7 @@ export async function POST(request: NextRequest) {
       until: endDate,
     });
 
+    await log(200);
     return NextResponse.json({ success: true, data: result });
   } catch (e) {
     const message = e instanceof Error ? e.message : "Sync failed";
