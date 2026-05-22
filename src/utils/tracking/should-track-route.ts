@@ -16,11 +16,14 @@
  * is no longer mounted in the root layout. Only its named helper exports are used.)
  */
 export const EXCLUDED_TRACKING_PREFIXES = [
-  "/admin",       // Staff dashboard. Admins repeatedly entering remarketing audiences distorts ad targeting and EMQ.
-  "/my-account",  // Authenticated customer area. Repeat sessions from existing customers don't help acquisition optimization.
-  "/affiliate",   // Affiliate operators. Not consumer traffic.
-  "/test-pixels", // Internal pixel test harness.
-  "/dev",         // Internal developer tooling.
+  "/admin",               // Staff dashboard. Admins entering remarketing audiences distorts ad targeting and EMQ.
+  "/my-account/settings", // Account settings + sub-pages only. The rest of /my-account (dashboard,
+                          // profile, draws, etc.) STILL fires pixels — those are legitimate logged-in
+                          // member sessions useful for retention/remarketing. Settings is pure account
+                          // management with no ad-relevant signal.
+  "/affiliate",           // Affiliate operators. Not consumer traffic.
+  "/test-pixels",         // Internal pixel test harness.
+  "/dev",                 // Internal developer tooling.
 ] as const;
 
 /**
