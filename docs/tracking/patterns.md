@@ -44,3 +44,14 @@ Three steps:
 3. Add it to the `ALL_PROVIDERS` array in [`src/lib/tracking/registry.ts`](../../src/lib/tracking/registry.ts), and extend the `ProviderId` union in [`src/lib/tracking/types.ts`](../../src/lib/tracking/types.ts).
 
 Tests in [`src/lib/tracking/__tests__/dispatch.test.ts`](../../src/lib/tracking/__tests__/dispatch.test.ts) use fakes — no provider-specific changes needed.
+
+### Worked example: TikTok Events API
+
+[`providers/tiktok.ts`](../../src/lib/tracking/providers/tiktok.ts) is the second full provider (after Facebook) and the recommended template for the next one:
+
+- `capiSend` stays thin — it maps the `CanonicalEvent` and delegates the payload/HTTP/`code:0` handling to a dedicated sender [`src/lib/tiktok.ts`](../../src/lib/tiktok.ts) (parallel to `src/lib/facebook.ts`). This keeps the provider readable and gives a clean unit-test target ([`__tests__/tiktok-capi.test.ts`](../../src/lib/tracking/__tests__/tiktok-capi.test.ts), `npm run test:tiktok-capi`) that stops at the network boundary.
+- Provider-specific match signals (`ttclid`/`_ttp`) get a client-safe helper [`src/utils/tracking/tiktok-helpers.ts`](../../src/utils/tracking/tiktok-helpers.ts) (mirrors `facebook-helpers.ts`); the conversion route enriches them server-side and the per-provider `userData` fields (`ttclid`, `ttp`) are read only by the matching provider.
+- Post-login identity (`ttq.identify`) is added to the shared [`ConversionPixelsAdvancedMatching`](../../src/components/tracking/ConversionPixelsAdvancedMatching.tsx) as an independent block — never coupled to another provider's load state.
+- **Normalization that must match across pixel + server (e.g. phone E.164) lives in ONE client-safe module** and is imported by both, so the SDK's client hash equals the server hash.
+
+Full details: [TIKTOK_EVENTS_API_IMPLEMENTATION.md](./TIKTOK_EVENTS_API_IMPLEMENTATION.md).

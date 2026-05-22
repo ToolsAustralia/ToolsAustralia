@@ -5,6 +5,7 @@ import { useEffect, useRef } from "react";
 import { useUserContext } from "@/contexts/UserContext";
 import { buildAdvancedMatching } from "@/lib/tracking/advanced-matching";
 import { getAllowedHostnames } from "@/lib/tracking/hostname-gate";
+import { normalizePhoneE164 } from "@/utils/tracking/tiktok-helpers";
 
 /**
  * Post-login Advanced Matching re-init for the Facebook Pixel.
@@ -36,25 +37,45 @@ export default function ConversionPixelsAdvancedMatching() {
     if (typeof window === "undefined") return;
     if (!isAuthenticated || !userData?._id) return;
 
-    // Skip if we've already sent AM for this user
+    // Skip if we've already sent advanced matching for this user
     if (lastSentForUserIdRef.current === userData._id) return;
-
-    const pixelId = process.env.NEXT_PUBLIC_FACEBOOK_PIXEL_ID;
-    if (!pixelId) return;
 
     // Hostname gate — same rule as the rest of the registry
     if (!getAllowedHostnames().includes(window.location.hostname)) return;
 
-    // fbq must already be loaded (top-level ConversionPixels injected the SDK).
-    // If the SDK is still loading, the call queues; once loaded it'll be replayed.
-    if (!window.fbq) return;
+    // Each provider is independent: a missing/unloaded pixel for one MUST NOT block
+    // the other. We only mark this user as "sent" once at least one pixel received
+    // the identity, so we retry on the next render if the SDKs are still loading.
+    let sentAny = false;
 
-    const am = buildAdvancedMatching(userData);
+    // Facebook Advanced Matching — fbq.init is idempotent, so re-init updates AM in
+    // place and every subsequent fbq('track', ...) automatically includes it.
+    const fbPixelId = process.env.NEXT_PUBLIC_FACEBOOK_PIXEL_ID;
+    if (fbPixelId && window.fbq) {
+      window.fbq("init", fbPixelId, buildAdvancedMatching(userData) as Record<string, unknown>);
+      sentAny = true;
+    }
 
-    // Re-init with AM. fbq.init is idempotent — this updates AM in place
-    // and every subsequent fbq('track', ...) call automatically includes it.
-    window.fbq("init", pixelId, am as Record<string, unknown>);
-    lastSentForUserIdRef.current = userData._id;
+    // TikTok identity (advanced matching). The pixel SDK normalizes + SHA-256-hashes
+    // the plaintext we pass before it leaves the browser; we pre-normalize phone to
+    // E.164 and lower/trim email using the SAME helpers as the server-side Events API
+    // sender so the SDK's hash matches the server hash (dedup-safe).
+    const tiktokPixelId = process.env.NEXT_PUBLIC_TIKTOK_PIXEL_ID;
+    if (tiktokPixelId && window.ttq) {
+      const identify: Record<string, string> = {};
+      if (userData.email) identify.email = userData.email.toLowerCase().trim();
+      if (userData.mobile) {
+        const phone = normalizePhoneE164(userData.mobile);
+        if (phone) identify.phone_number = phone;
+      }
+      if (userData._id) identify.external_id = userData._id;
+      if (Object.keys(identify).length > 0) {
+        window.ttq.identify(identify);
+        sentAny = true;
+      }
+    }
+
+    if (sentAny) lastSentForUserIdRef.current = userData._id;
   }, [isAuthenticated, userData]);
 
   return null;

@@ -9,9 +9,10 @@
 | [src/lib/tracking/canonical-event.ts](../../src/lib/tracking/canonical-event.ts) | `buildPurchaseEvent`, `hashPII`, `assertValidEvent` |
 | [src/lib/tracking/registry.ts](../../src/lib/tracking/registry.ts) | `getAllProviders()` |
 | [src/lib/tracking/providers/facebook.ts](../../src/lib/tracking/providers/facebook.ts) | Facebook provider — wraps `sendFacebookEvent` and `fbq` |
-| [src/lib/tracking/providers/tiktok.ts](../../src/lib/tracking/providers/tiktok.ts) | TikTok provider — pixel works; CAPI stub |
+| [src/lib/tracking/providers/tiktok.ts](../../src/lib/tracking/providers/tiktok.ts) | TikTok provider — pixel + Events API (`capiSend` delegates to `src/lib/tiktok.ts`) |
 | [src/lib/tracking/providers/snapchat.ts](../../src/lib/tracking/providers/snapchat.ts) | Snapchat provider — pixel works; CAPI stub |
 | [src/lib/facebook.ts](../../src/lib/facebook.ts) | Underlying Meta CAPI implementation (wrapped by facebookProvider) |
+| [src/lib/tiktok.ts](../../src/lib/tiktok.ts) | Underlying TikTok Events API v1.3 sender (wrapped by tiktokProvider) — payload builders + `sendTikTokEvent` |
 | [src/lib/facebook-env.ts](../../src/lib/facebook-env.ts) | Env / config |
 | [src/lib/klaviyo.ts](../../src/lib/klaviyo.ts) | Klaviyo server client (NOT a CAPI provider) |
 
@@ -53,6 +54,17 @@
 ## Meta CAPI events
 
 Fired server-side from purchase / cancel / signup paths. Parallel to client-side pixel for redundancy.
+
+## TikTok Events API (v1.3)
+
+`tiktokProvider.capiSend` maps the `CanonicalEvent` to a TikTok event and POSTs via [`sendTikTokEvent`](../../src/lib/tiktok.ts) to `https://business-api.tiktok.com/open_api/v1.3/event/track/`. Key rules (verified — see [TIKTOK_EVENTS_API_IMPLEMENTATION.md](./TIKTOK_EVENTS_API_IMPLEMENTATION.md)):
+
+- **Auth header** `Access-Token`; body `{ event_source:"web", event_source_id:<pixelId>, test_event_code?, data:[{ event, event_time, event_id, user, properties, page }] }`. `event_time` is **Unix seconds**.
+- **Success = HTTP 200 AND body `code === 0`** — a 200 with non-zero `code` is a failure. Never throws (returns `false`).
+- **Hashed (SHA-256, via the shared `hashPII`)**: `user.email` (lowercase+trim), `user.phone_number` (E.164 first), `user.external_id`. **Raw**: `user.ttclid`, `user.ttp`, `user.ip`, `user.user_agent`.
+- **Match signals**: the funnel route [`/api/tracking/conversion`](../../src/app/api/tracking/conversion/route.ts) reads `ttclid` (first-party cookie set on ad-click landing by [`captureTikTokClickId`](../../src/utils/tracking/tiktok-helpers.ts)) and `_ttp` (the pixel's own cookie) via `extractTikTokContext`. The browser pixel also auto-attaches both; on the dual-fired Purchase, TikTok **merges** the browser copy (ttclid/ttp) with the server copy (hashed PII + IP) on the shared `event_id`.
+- **Identity**: [`ConversionPixelsAdvancedMatching`](../../src/components/tracking/ConversionPixelsAdvancedMatching.tsx) calls `ttq.identify({ email, phone_number, external_id })` on login; the SDK hashes client-side using the SAME normalization (`normalizePhoneE164`, lowercase email) as the server, so hashes match.
+- **Event name**: `Purchase` (TikTok's current official web event — `CompletePayment` is the legacy alias). The pixel and Events API MUST send the identical name + `event_id` or dedup fails.
 
 ## Subscribe-family helpers thread `requestContext`
 

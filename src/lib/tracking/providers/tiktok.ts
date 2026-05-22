@@ -1,9 +1,10 @@
 // src/lib/tracking/providers/tiktok.ts
 // Isomorphic — see the matching comment in ./facebook.ts. NO "use client".
 
-import type { CanonicalEvent, ConversionProvider } from "../types";
+import type { CanonicalEvent, ConversionProvider, RequestContext } from "../types";
 import { getAllowedHostnames } from "../hostname-gate";
 import { shouldTrackRoute } from "@/utils/tracking/should-track-route";
+import { mapCanonicalToTikTokEvent, sendTikTokEvent } from "@/lib/tiktok";
 
 // NOTE: The legacy `src/components/TikTokPixel.tsx` also augments `Window.ttq`. Both
 // declarations must match exactly (TS2687/TS2717) until that component becomes a
@@ -76,7 +77,15 @@ function pixelTrack(event: CanonicalEvent): void {
   const params: Record<string, unknown> = {};
   if (event.value !== undefined) params.value = event.value;
   if (event.currency) params.currency = event.currency;
-  if (event.customData?.contentIds) params.content_id = event.customData.contentIds[0];
+  if (event.customData?.contentIds && event.customData.contentIds.length > 0) {
+    // Match the Events API `properties.contents` shape so pixel ↔ server parameters align.
+    params.contents = event.customData.contentIds.map((id) => ({
+      content_id: id,
+      ...(event.customData?.contentType && { content_type: event.customData.contentType }),
+      ...(event.customData?.contentName && { content_name: event.customData.contentName }),
+      ...(event.customData?.numItems !== undefined && { quantity: event.customData.numItems }),
+    }));
+  }
   if (event.customData?.contentType) params.content_type = event.customData.contentType;
   if (event.customData?.contentName) params.content_name = event.customData.contentName;
   if (event.customData?.numItems !== undefined) params.quantity = event.customData.numItems;
@@ -87,12 +96,10 @@ function pixelTrack(event: CanonicalEvent): void {
   window.ttq.track(event.eventName, params, { event_id: event.eventId });
 }
 
-async function capiSend(_event: CanonicalEvent): Promise<boolean> {
-  // STUB. Real TikTok Events API integration lands in follow-up spec.
-  // Returning false here is the documented behavior — callers expect a boolean result map,
-  // and false on a stub is indistinguishable from "credentials missing", which is the right
-  // semantics for code consumers downstream.
-  return false;
+async function capiSend(event: CanonicalEvent, ctx: RequestContext): Promise<boolean> {
+  if (!envEnabled().capi) return false;
+  const ttEvent = mapCanonicalToTikTokEvent(event, ctx);
+  return sendTikTokEvent(ttEvent);
 }
 
 export const tiktokProvider: ConversionProvider = {
