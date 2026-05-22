@@ -7,7 +7,7 @@ All conversion-tracking flows through a single provider registry at [`src/lib/tr
 | Provider | Pixel id env | Access token env | CAPI status |
 |---|---|---|---|
 | **Facebook** | `NEXT_PUBLIC_FACEBOOK_PIXEL_ID` | `FACEBOOK_ACCESS_TOKEN` | Live |
-| **TikTok** | `NEXT_PUBLIC_TIKTOK_PIXEL_ID` | `TIKTOK_ACCESS_TOKEN` | Pixel only — Events API stub returns `false` |
+| **TikTok** | `NEXT_PUBLIC_TIKTOK_PIXEL_ID` | `TIKTOK_ACCESS_TOKEN` | Pixel + Events API (v1.3) — `capiSend` delegates to [`src/lib/tiktok.ts`](../../src/lib/tiktok.ts). See [TIKTOK_EVENTS_API_IMPLEMENTATION.md](./TIKTOK_EVENTS_API_IMPLEMENTATION.md) |
 | **Snapchat** | `NEXT_PUBLIC_SNAPCHAT_PIXEL_ID` | `SNAPCHAT_ACCESS_TOKEN` | Pixel only — CAPI stub returns `false` |
 
 ## Dispatchers
@@ -42,6 +42,8 @@ When pixel id or access token is absent, the matching surface is a silent no-op:
 | [src/components/TikTokPixel.tsx](../../src/components/TikTokPixel.tsx) | TikTok Pixel loader |
 | [src/components/tracking/](../../src/components/tracking/) | Other tracking components |
 | [src/lib/facebook.ts](../../src/lib/facebook.ts) | Meta CAPI server-side |
+| [src/lib/tiktok.ts](../../src/lib/tiktok.ts) | TikTok Events API (v1.3) server-side |
+| [src/utils/tracking/tiktok-helpers.ts](../../src/utils/tracking/tiktok-helpers.ts) | TikTok `ttclid`/`_ttp` capture + `normalizePhoneE164` (client-safe; shared by pixel `identify` and server sender) |
 | [src/lib/facebook-env.ts](../../src/lib/facebook-env.ts) | Env config |
 | [src/lib/facebook-marketing.ts](../../src/lib/facebook-marketing.ts) | Marketing API (read insights) |
 | [src/lib/gtm.ts](../../src/lib/gtm.ts) | GTM helpers |

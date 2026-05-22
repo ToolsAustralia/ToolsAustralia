@@ -80,6 +80,19 @@ Each provider's dedup field has a different name. The canonical `eventId` maps t
 
 If you grep for `eventID` and find no hits in a provider's code, you're looking at the wrong field name.
 
+## TikTok Events API: easy ways to silently lose data
+
+All verified 2026-05-22 against working code (Stape/mParticle/Adobe) + TikTok help center — see [TIKTOK_EVENTS_API_IMPLEMENTATION.md](./TIKTOK_EVENTS_API_IMPLEMENTATION.md).
+
+- **Success is `code: 0`, not HTTP 200.** TikTok returns 200 with a non-zero `code` on logical failures. `sendTikTokEvent` treats `code !== 0` as failure and logs `code`/`message`/`request_id`. Don't "fix" it to key off `res.ok` alone.
+- **`event_time` is Unix SECONDS.** Milliseconds put the event ~50,000 years in the future → dropped. `eventTimeNow()` already returns seconds; don't pass `Date.now()`.
+- **Event name must be identical on pixel + Events API**, or dedup double-counts. We use `Purchase` on both. `CompletePayment`/`PlaceAnOrder` are legacy aliases (`PlaceAnOrder` sunsets 2027) — TikTok officially renamed `CompletePayment` → `Purchase`; use `Purchase` for new work.
+- **v1.3 uses `data[].user`, NOT `context.user`.** The `context.user` + top-level `pixel_code` + `timestamp` shape is the deprecated v1.2 endpoint. v1.3 is `event_source` + `event_source_id` + `data[].user` + `event_time`.
+- **Phone field is `phone_number`** (E.164, then SHA-256) — matches the pixel's `ttq.identify({ phone_number })`. (Some third-party samples use `phone`; we use `phone_number` to match the pixel exactly.)
+- **`ttclid`/`ttp`/`ip`/`user_agent` are sent RAW.** Only `email`/`phone_number`/`external_id` are hashed. Hashing the click id breaks matching.
+- **`test_event_code` is top-level** (next to `event_source`/`event_source_id`/`data`), not inside `data[]`. Without it, non-prod refuses to send (same guard as Meta).
+- **`ttq.identify` auto-hashes.** Pass normalized plaintext (lowercased email, E.164 phone via `normalizePhoneE164`) — do NOT pre-hash, or the SDK double-hashes and the hash won't match the server's.
+
 ## Browser-side Purchase pixel must fire from success pages
 
 Historically, only `PaymentSuccessHandler.tsx` fired the browser Purchase pixel — and only on the 3DS-redirect code path. Most purchases skipped that path, so Meta Events Manager saw Purchase as Conversions API only. The success-page clients (`PurchaseSuccessClient`, `UpsellSuccessClient`, `MiniDrawSuccessClient`, `CheckoutSuccessClient`) now each fire `trackConversion` on mount with `eventId === paymentIntentId` so the browser-side fires for every purchase path.

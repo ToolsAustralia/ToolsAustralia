@@ -175,6 +175,7 @@ export async function trackPixelPurchase(params: PixelPurchaseParams): Promise<b
         orderId,
         contentType: content_type ?? "product",
         contentIds: content_ids ?? (packageId ? [packageId] : undefined),
+        ...(packageName && { contentName: packageName }),
         ...(isResubscribe && { contentCategory: "resubscribe" }),
         numItems: num_items ?? 1,
         packageType,

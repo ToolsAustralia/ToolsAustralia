@@ -2,7 +2,7 @@
 
 ## Endpoints
 
-- **`POST /api/tracking/conversion`** — provider-agnostic conversion event. Body is a `CanonicalEvent`. Response: `{ ok, results: { facebook, tiktok, snapchat } }`. See [`src/app/api/tracking/conversion/route.ts`](../../src/app/api/tracking/conversion/route.ts).
+- **`POST /api/tracking/conversion`** — provider-agnostic conversion event. Body is a `CanonicalEvent`. Response: `{ ok, results: { facebook, tiktok, snapchat } }`. See [`src/app/api/tracking/conversion/route.ts`](../../src/app/api/tracking/conversion/route.ts). The handler enriches `userData` server-side: session PII (when logged in), Meta `fbc`/`fbp`, TikTok `ttclid`/`ttp` (from cookies via `extractTikTokContext`), and IP/UA from request headers — so the browser mirror doesn't have to ship raw identifiers.
 - ~~`POST /api/facebook/track`~~ — **removed 2026-05-12**. Use `POST /api/tracking/conversion`.
 - `POST /api/tracking/promo-page-visit` — unchanged.
 

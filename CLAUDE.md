@@ -479,6 +479,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/lib/facebook.ts",
         "src/lib/facebook-env.ts",
         "src/lib/facebook-marketing.ts",
+        "src/lib/tiktok.ts",
         "src/lib/gtm.ts",
         "src/lib/klaviyo.ts",
         "src/lib/tracking/**",

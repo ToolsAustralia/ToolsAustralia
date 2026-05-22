@@ -37,6 +37,8 @@ export interface CanonicalEvent {
     fbp?: string;
     /** TikTok click id. Read by TikTok provider only. */
     ttclid?: string;
+    /** TikTok first-party browser id (cookie `_ttp`). Read by TikTok provider only. */
+    ttp?: string;
     /** Snapchat click id. Read by Snapchat provider only. */
     scid?: string;
   };
