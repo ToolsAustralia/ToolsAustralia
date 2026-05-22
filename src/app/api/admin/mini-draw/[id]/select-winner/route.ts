@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import { requirePermissionWithAudit } from "@/lib/audit-log";
 import connectDB from "@/lib/mongodb";
 import mongoose, { Types } from "mongoose";
 import MiniDraw from "@/models/MiniDraw";
@@ -25,15 +24,17 @@ const selectWinnerSchema = z.object({
  * POST /api/admin/mini-draw/[id]/select-winner
  * Select winner for a mini draw, persist a Winner document, and reset the draw for the next cycle.
  */
-export async function POST(request: NextRequest) {
+export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    await connectDB();
+    const { id } = await params;
+    const guard = await requirePermissionWithAudit("miniDraws.selectWinner", request, {
+      resourceType: "MiniDraw",
+      resourceId: id,
+    });
+    if (guard instanceof NextResponse) return guard;
+    const { log } = guard;
 
-    // Verify admin authentication
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id || session.user.role !== "admin") {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    await connectDB();
 
     // Parse multipart form payload
     const formData = await request.formData();
@@ -302,7 +303,7 @@ export async function POST(request: NextRequest) {
       trx.endSession();
 
       console.log(`✅ Winner selected and draw reset for mini draw: ${miniDraw.name} (ID: ${miniDraw._id})`);
-
+      await log(200);
       return NextResponse.json({
         success: true,
         data: {

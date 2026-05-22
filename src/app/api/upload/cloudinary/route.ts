@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import { requirePermissionWithAudit } from "@/lib/audit-log";
 import { v2 as cloudinary } from "cloudinary";
 
 // Configure Cloudinary
@@ -13,15 +12,16 @@ cloudinary.config({
 export async function POST(request: NextRequest) {
   try {
     console.log("☁️ [Cloudinary Upload] Request received");
-    
-    // Verify admin authentication
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id || session.user.role !== "admin") {
-      console.error("❌ [Cloudinary Upload] Unauthorized");
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
 
-    console.log("☁️ [Cloudinary Upload] Admin authenticated:", session.user.email);
+    // Verify staff authentication with upload permission
+    const guard = await requirePermissionWithAudit("promos.edit", request);
+    if (guard instanceof NextResponse) {
+      console.error("❌ [Cloudinary Upload] Unauthorized");
+      return guard;
+    }
+    const { session, log } = guard;
+
+    console.log("☁️ [Cloudinary Upload] Staff authenticated:", session.user.email);
     const formData = await request.formData();
     const file = formData.get("file") as File;
     const folder = formData.get("folder") as string || "major-draws";
@@ -86,7 +86,8 @@ export async function POST(request: NextRequest) {
 
     const uploadResult = result as { secure_url: string; public_id: string };
     console.log("✅ [Cloudinary Upload] Returning success response");
-    
+
+    await log(200);
     return NextResponse.json({
       success: true,
       url: uploadResult.secure_url,
@@ -104,11 +105,10 @@ export async function POST(request: NextRequest) {
 
 export async function DELETE(request: NextRequest) {
   try {
-    // Verify admin authentication
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id || session.user.role !== "admin") {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    // Verify staff authentication with upload permission
+    const guard = await requirePermissionWithAudit("promos.edit", request);
+    if (guard instanceof NextResponse) return guard;
+    const { log } = guard;
 
     const { searchParams } = new URL(request.url);
     const publicId = searchParams.get("public_id");
@@ -120,6 +120,7 @@ export async function DELETE(request: NextRequest) {
     // Delete from Cloudinary
     const result = await cloudinary.uploader.destroy(publicId);
 
+    await log(200);
     return NextResponse.json({
       success: true,
       result: result,

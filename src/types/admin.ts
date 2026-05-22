@@ -6,7 +6,12 @@ export interface AdminUser {
   id: string;
   name: string;
   email: string;
-  role: "admin" | "moderator" | "support";
+  /**
+   * Display name of the user's role (e.g. "Admin", "Customer Support", "Ads Manager").
+   * Source: `session.user.roleName` joined from the Role document. Falls back to
+   * "Admin" for super-admins and "Staff" for unmapped staff during the migration window.
+   */
+  role: string;
   isAdmin: boolean;
   avatar?: string;
   lastLogin: Date;

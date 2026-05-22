@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import connectDB from "@/lib/mongodb";
-import { requireAdminUser } from "@/lib/api-auth";
+import { requirePermissionWithAudit } from "@/lib/audit-log";
 import { CampaignService } from "@/services/redeemables";
 
 const toggleSchema = z.object({
@@ -10,13 +10,15 @@ const toggleSchema = z.object({
 
 export async function PATCH(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
-    const authResult = await requireAdminUser();
-    if ("errorResponse" in authResult || !("adminUser" in authResult)) {
-      return authResult.errorResponse;
-    }
+    const { id } = await context.params;
+    const guard = await requirePermissionWithAudit("rewards.edit", request, {
+      resourceType: "MonthlyEntryCampaign",
+      resourceId: id,
+    });
+    if (guard instanceof NextResponse) return guard;
+    const { log } = guard;
 
     await connectDB();
-    const { id } = await context.params;
     const body = await request.json();
     const payload = toggleSchema.parse(body);
 
@@ -25,6 +27,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
       return NextResponse.json({ success: false, error: "Campaign not found" }, { status: 404 });
     }
 
+    await log(200);
     return NextResponse.json({
       success: true,
       data: campaign,

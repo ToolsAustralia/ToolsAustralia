@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import { requirePermissionWithAudit } from "@/lib/audit-log";
 import connectDB from "@/lib/mongodb";
 import AlternatingPromoMultiplier from "@/models/AlternatingPromoMultiplier";
 import { z } from "zod";
@@ -30,12 +29,14 @@ const updateAlternatingMultiplierSchema = z.object({
  */
 export async function PATCH(request: NextRequest, { params }: RouteParams) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id || session.user.role !== "admin") {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
     const { id } = await params;
+
+    const guard = await requirePermissionWithAudit("promos.edit", request, {
+      resourceType: "AlternatingPromoMultiplier",
+      resourceId: id,
+    });
+    if (guard instanceof NextResponse) return guard;
+    const { log } = guard;
     const body = (await request.json()) as UpdateAlternatingPromoMultiplierPayload;
 
     // Validate input
@@ -101,6 +102,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
           : null,
     };
 
+    await log(200);
     return NextResponse.json(
       {
         success: true,
@@ -127,12 +129,14 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
  */
 export async function DELETE(request: NextRequest, { params }: RouteParams) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id || session.user.role !== "admin") {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
     const { id } = await params;
+
+    const guard = await requirePermissionWithAudit("promos.delete", request, {
+      resourceType: "AlternatingPromoMultiplier",
+      resourceId: id,
+    });
+    if (guard instanceof NextResponse) return guard;
+    const { log } = guard;
 
     await connectDB();
 
@@ -149,6 +153,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
       );
     }
 
+    await log(200);
     return NextResponse.json(
       {
         success: true,

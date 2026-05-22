@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import connectDB from "@/lib/mongodb";
 import ContactSubmission from "@/models/ContactSubmission";
 import { z } from "zod";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import { requirePermission } from "@/lib/api-auth-permissions";
+import { requirePermissionWithAudit } from "@/lib/audit-log";
 import mongoose from "mongoose";
 
 /**
@@ -33,14 +33,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   try {
     await connectDB();
 
-    // Check if user is authenticated and has admin role
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    // TODO: Add admin role check here
-    // For now, we'll allow any authenticated user to view submissions
+    const guard = await requirePermission("submissions.view");
+    if (guard instanceof NextResponse) return guard;
 
     const { id } = paramsSchema.parse(await params);
 
@@ -80,16 +74,14 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
   try {
     await connectDB();
 
-    // Check if user is authenticated and has admin role
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    // TODO: Add admin role check here
-    // For now, we'll allow any authenticated user to update submissions
-
     const { id } = paramsSchema.parse(await params);
+    const guard = await requirePermissionWithAudit("submissions.edit", request, {
+      resourceType: "ContactSubmission",
+      resourceId: id,
+    });
+    if (guard instanceof NextResponse) return guard;
+    const { session, log } = guard;
+
     const body = await request.json();
     const validatedData = updateContactSubmissionSchema.parse(body);
 
@@ -125,6 +117,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
      .populate('respondedBy', 'name email')
      .populate({ path: 'replies.sentBy', select: 'name email', strictPopulate: false });
 
+    await log(200);
     return NextResponse.json({
       success: true,
       message: "Contact submission updated successfully",
@@ -147,12 +140,13 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   try {
     await connectDB();
 
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
     const { id } = paramsSchema.parse(await params);
+    const guard = await requirePermissionWithAudit("submissions.edit", request, {
+      resourceType: "ContactSubmission",
+      resourceId: id,
+    });
+    if (guard instanceof NextResponse) return guard;
+    const { log } = guard;
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return NextResponse.json({ error: "Invalid submission ID" }, { status: 400 });
@@ -168,6 +162,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       return NextResponse.json({ error: "Contact submission not found" }, { status: 404 });
     }
 
+    await log(200);
     return NextResponse.json({
       success: true,
       message: "Contact submission marked as read",
@@ -190,16 +185,13 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
   try {
     await connectDB();
 
-    // Check if user is authenticated and has admin role
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    // TODO: Add admin role check here
-    // For now, we'll allow any authenticated user to delete submissions
-
     const { id } = paramsSchema.parse(await params);
+    const guard = await requirePermissionWithAudit("submissions.delete", request, {
+      resourceType: "ContactSubmission",
+      resourceId: id,
+    });
+    if (guard instanceof NextResponse) return guard;
+    const { log } = guard;
 
     // Validate ObjectId
     if (!mongoose.Types.ObjectId.isValid(id)) {
@@ -211,6 +203,7 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
       return NextResponse.json({ error: "Contact submission not found" }, { status: 404 });
     }
 
+    await log(200);
     return NextResponse.json({
       success: true,
       message: "Contact submission deleted successfully",

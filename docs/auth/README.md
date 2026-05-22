@@ -13,6 +13,9 @@ NextAuth (email + Google) for member sessions. Password reset, OAuth redirect ha
 - [gotchas.md](./gotchas.md) — middleware excludes /api, admin gating happens twice
 - [models.md](./models.md) — _N/A — User model lives in [subscription](../subscription/) but is shared_
 - [testing.md](./testing.md) — _TODO_
+- [permissions-catalog.md](./permissions-catalog.md) — areas + actions, sub-action conventions
+- [roles.md](./roles.md) — `Role` model, session shape, super-admin bypass, staff setup flow
+- [rbac-smoke-checklist.md](./rbac-smoke-checklist.md) — pre-merge / post-deploy smoke checks for the role system
 
 ## Related domains
 

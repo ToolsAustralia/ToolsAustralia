@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
+import { requirePermission } from "@/lib/api-auth-permissions";
+import { requirePermissionWithAudit } from "@/lib/audit-log";
 import mongoose from "mongoose";
-import { authOptions } from "@/lib/auth";
 import connectDB from "@/lib/mongodb";
 import StripeWebhookQueue, { type StripeWebhookQueueStatus } from "@/models/StripeWebhookQueue";
 import { processQueuedEvent } from "@/services/stripe-webhook-queue/processQueuedEvent";
@@ -13,15 +13,9 @@ const ALLOWED_STATUSES: ReadonlyArray<StripeWebhookQueueStatus> = [
   "dead",
 ];
 
-async function requireAdmin() {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.id || session.user.role !== "admin") return null;
-  return session;
-}
-
 export async function GET(request: NextRequest) {
-  const session = await requireAdmin();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const _guard = await requirePermission("errorReports.view");
+  if (_guard instanceof NextResponse) return _guard;
 
   await connectDB();
   const { searchParams } = new URL(request.url);
@@ -48,9 +42,6 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const session = await requireAdmin();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
   let body: { _id?: string };
   try {
     body = (await request.json()) as { _id?: string };
@@ -60,6 +51,13 @@ export async function POST(request: NextRequest) {
   if (!body._id || !mongoose.isValidObjectId(body._id)) {
     return NextResponse.json({ error: "Invalid _id" }, { status: 400 });
   }
+
+  const guard = await requirePermissionWithAudit("errorReports.edit", request, {
+    resourceType: "StripeWebhookQueue",
+    resourceId: body._id,
+  });
+  if (guard instanceof NextResponse) return guard;
+  const { log } = guard;
 
   await connectDB();
   const row = await StripeWebhookQueue.findById(body._id);
@@ -76,5 +74,6 @@ export async function POST(request: NextRequest) {
   // Process immediately in-process so the admin sees the result now.
   const result = await processQueuedEvent(row.eventId);
 
+  await log(200);
   return NextResponse.json({ replayed: true, eventId: row.eventId, result });
 }

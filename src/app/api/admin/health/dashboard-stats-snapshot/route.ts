@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import { requirePermission } from "@/lib/api-auth-permissions";
 import { formatInTimeZone } from "date-fns-tz";
 import connectDB from "@/lib/mongodb";
 import DashboardStatsDailySnapshot from "@/models/DashboardStatsDailySnapshot";
@@ -10,10 +9,8 @@ import { getWebsiteLaunchDateUTC } from "@/utils/common/timezone";
 const TZ = "Australia/Sydney";
 
 export async function GET(request: NextRequest) {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.id || session.user.role !== "admin") {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const guard = await requirePermission("overview.view");
+  if (guard instanceof NextResponse) return guard;
 
   // request param is unused — Next 15 App Router still requires the signature.
   void request;

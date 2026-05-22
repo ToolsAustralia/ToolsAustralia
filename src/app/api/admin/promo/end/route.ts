@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import { requirePermissionWithAudit } from "@/lib/audit-log";
 import connectDB from "@/lib/mongodb";
 import Promo from "@/models/Promo";
 import { z } from "zod";
@@ -13,24 +12,18 @@ const endPromoSchema = z.object({
 
 export async function POST(request: NextRequest) {
   try {
-    // Check admin authentication
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.email) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    await connectDB();
-
-    // Get user from database to verify admin role
-    const { default: User } = await import("@/models/User");
-    const user = await User.findOne({ email: session.user.email });
-    if (!user || user.role !== "admin") {
-      return NextResponse.json({ error: "Admin access required" }, { status: 403 });
-    }
-
-    // Parse and validate request body
+    // Parse body first so we can pass promoId as resourceId to the guard (Option A)
     const body = await request.json();
     const { promoId } = endPromoSchema.parse(body);
+
+    const guard = await requirePermissionWithAudit("promos.end", request, {
+      resourceType: "Promo",
+      resourceId: promoId,
+    });
+    if (guard instanceof NextResponse) return guard;
+    const { log } = guard;
+
+    await connectDB();
 
     // Validate ObjectId format
     if (!mongoose.Types.ObjectId.isValid(promoId)) {
@@ -54,10 +47,10 @@ export async function POST(request: NextRequest) {
     console.log(`🛑 Manually ended promo ${promoId}`, {
       type: promo.type,
       multiplier: promo.multiplier,
-      endedBy: user.email,
       endedAt: new Date(),
     });
 
+    await log(200);
     return NextResponse.json({
       success: true,
       message: `Successfully ended ${promo.multiplier}x promo for ${promo.type}`,
@@ -69,7 +62,6 @@ export async function POST(request: NextRequest) {
         endDate: promo.endDate,
         isActive: promo.isActive,
         endedAt: new Date(),
-        endedBy: user.email,
       },
     });
   } catch (error) {

@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import { requirePermissionWithAudit } from "@/lib/audit-log";
 import connectDB from "@/lib/mongodb";
 import ScheduledPromo from "@/models/ScheduledPromo";
 import { z } from "zod";
@@ -26,20 +25,16 @@ const updateScheduledPromoSchema = z.object({
  */
 export async function PATCH(request: NextRequest, { params }: RouteParams) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.email) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const { id } = await params;
+
+    const guard = await requirePermissionWithAudit("promos.edit", request, {
+      resourceType: "ScheduledPromo",
+      resourceId: id,
+    });
+    if (guard instanceof NextResponse) return guard;
+    const { log } = guard;
 
     await connectDB();
-
-    const { default: User } = await import("@/models/User");
-    const user = await User.findOne({ email: session.user.email });
-    if (!user || user.role !== "admin") {
-      return NextResponse.json({ error: "Admin access required" }, { status: 403 });
-    }
-
-    const { id } = await params;
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return NextResponse.json({ error: "Invalid promo ID" }, { status: 400 });
@@ -92,8 +87,9 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
 
     await promo.save();
 
-    console.log(`✅ Updated scheduled promo ${id}`, { updatedBy: user.email });
+    console.log(`✅ Updated scheduled promo ${id}`);
 
+    await log(200);
     return NextResponse.json({
       success: true,
       message: "Scheduled promo updated successfully",
@@ -143,20 +139,16 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
  */
 export async function DELETE(request: NextRequest, { params }: RouteParams) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.email) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const { id } = await params;
+
+    const guard = await requirePermissionWithAudit("promos.delete", request, {
+      resourceType: "ScheduledPromo",
+      resourceId: id,
+    });
+    if (guard instanceof NextResponse) return guard;
+    const { log } = guard;
 
     await connectDB();
-
-    const { default: User } = await import("@/models/User");
-    const user = await User.findOne({ email: session.user.email });
-    if (!user || user.role !== "admin") {
-      return NextResponse.json({ error: "Admin access required" }, { status: 403 });
-    }
-
-    const { id } = await params;
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return NextResponse.json({ error: "Invalid promo ID" }, { status: 400 });
@@ -171,8 +163,9 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
     promo.deletedAt = new Date();
     await promo.save();
 
-    console.log(`🗑️ Soft-deleted scheduled promo ${id}`, { deletedBy: user.email });
+    console.log(`🗑️ Soft-deleted scheduled promo ${id}`);
 
+    await log(200);
     return NextResponse.json({
       success: true,
       message: "Scheduled promo deleted successfully",

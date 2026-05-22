@@ -417,7 +417,13 @@ function LoginPageContent() {
 
       // Check user role and redirect accordingly
 
-      if (session.user?.role === "admin") {
+      // Internal users (staff or admin super-role, or legacy admins) land in
+      // /admin. Customers land in /my-account.
+      const isInternalUser =
+        session.user?.userType === "staff" ||
+        session.user?.userType === "admin" ||
+        session.user?.role === "admin";
+      if (isInternalUser) {
         router.push("/admin");
       } else {
         router.push("/my-account");

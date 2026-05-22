@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import { requirePermissionWithAudit } from "@/lib/audit-log";
 import ExperimentRepository from "@/repositories/ab-testing/ExperimentRepository";
 import VariantRepository from "@/repositories/ab-testing/VariantRepository";
 import VariantConfigService from "@/services/ab-testing/VariantConfigService";
@@ -30,13 +29,13 @@ const updateVariantSchema = z.object({
  */
 export async function POST(request: NextRequest, { params }: RouteParams) {
   try {
-    // Check authentication
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id || session.user.role !== "admin") {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
     const { id: experimentId } = await params;
+    const guard = await requirePermissionWithAudit("abTesting.edit", request, {
+      resourceType: "Experiment",
+      resourceId: experimentId,
+    });
+    if (guard instanceof NextResponse) return guard;
+    const { log } = guard;
     
     // Check if experiment exists and is not locked
     const experiment = await ExperimentRepository.findById(experimentId);
@@ -73,6 +72,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     const trafficSplit = await VariantRepository.validateTrafficSplit(experimentId);
     if (!trafficSplit.valid) {
       // Still return the variant, but warn about traffic split
+      await log(200);
       return NextResponse.json({
         success: true,
         data: variant,
@@ -80,6 +80,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       });
     }
 
+    await log(200);
     return NextResponse.json({
       success: true,
       data: variant,
@@ -104,13 +105,13 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
  */
 export async function PATCH(request: NextRequest, { params }: RouteParams) {
   try {
-    // Check authentication
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id || session.user.role !== "admin") {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
     const { id: experimentId } = await params;
+    const guard = await requirePermissionWithAudit("abTesting.edit", request, {
+      resourceType: "Experiment",
+      resourceId: experimentId,
+    });
+    if (guard instanceof NextResponse) return guard;
+    const { log } = guard;
     const body = await request.json();
     const { variantId, ...updateData } = body;
 
@@ -154,6 +155,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     // Validate traffic split
     const trafficSplit = await VariantRepository.validateTrafficSplit(experimentId);
     if (!trafficSplit.valid) {
+      await log(200);
       return NextResponse.json({
         success: true,
         data: variant,
@@ -161,6 +163,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       });
     }
 
+    await log(200);
     return NextResponse.json({
       success: true,
       data: variant,
@@ -185,13 +188,13 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
  */
 export async function DELETE(request: NextRequest, { params }: RouteParams) {
   try {
-    // Check authentication
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id || session.user.role !== "admin") {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
     const { id: experimentId } = await params;
+    const guard = await requirePermissionWithAudit("abTesting.edit", request, {
+      resourceType: "Experiment",
+      resourceId: experimentId,
+    });
+    if (guard instanceof NextResponse) return guard;
+    const { log } = guard;
     const { searchParams } = new URL(request.url);
     const variantId = searchParams.get("variantId");
 
@@ -224,6 +227,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
     // Delete variant
     await VariantRepository.delete(variantId);
 
+    await log(200);
     return NextResponse.json({
       success: true,
       message: "Variant deleted successfully",

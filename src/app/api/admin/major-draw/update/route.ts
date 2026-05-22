@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import { requirePermission } from "@/lib/api-auth-permissions";
+import { requirePermissionWithAudit } from "@/lib/audit-log";
 import connectDB from "@/lib/mongodb";
 import MajorDraw from "@/models/MajorDraw";
 import { z } from "zod";
@@ -30,20 +30,21 @@ const majorDrawUpdateSchema = z.object({
 
 export async function PUT(request: NextRequest) {
   try {
-    await connectDB();
-
-    // Verify admin authentication
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id || session.user.role !== "admin") {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
     const { searchParams } = new URL(request.url);
     const majorDrawId = searchParams.get("id");
+
+    const guard = await requirePermissionWithAudit("majorDraw.edit", request, {
+      resourceType: "MajorDraw",
+      ...(majorDrawId ? { resourceId: majorDrawId } : {}),
+    });
+    if (guard instanceof NextResponse) return guard;
+    const { log } = guard;
 
     if (!majorDrawId) {
       return NextResponse.json({ error: "Major draw ID is required" }, { status: 400 });
     }
+
+    await connectDB();
 
     // Parse and validate request body
     const body = await request.json();
@@ -149,6 +150,7 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: "Failed to update major draw" }, { status: 500 });
     }
 
+    await log(200);
     return NextResponse.json({
       success: true,
       data: {
@@ -185,13 +187,10 @@ export async function PUT(request: NextRequest) {
 // GET endpoint to fetch major draw details for editing
 export async function GET(request: NextRequest) {
   try {
-    await connectDB();
+    const _guard = await requirePermission("majorDraw.view");
+    if (_guard instanceof NextResponse) return _guard;
 
-    // Verify admin authentication
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id || session.user.role !== "admin") {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    await connectDB();
 
     const { searchParams } = new URL(request.url);
     const majorDrawId = searchParams.get("id");

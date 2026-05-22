@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import connectDB from "@/lib/mongodb";
-import { requireAdminUser } from "@/lib/api-auth";
+import { requirePermissionWithAudit } from "@/lib/audit-log";
 import { MilestoneService } from "@/services/milestones";
 
 const updateMilestoneRewardSchema = z.object({
@@ -24,13 +24,15 @@ const toggleMilestoneRewardSchema = z.object({
 
 export async function PUT(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
-    const authResult = await requireAdminUser();
-    if ("errorResponse" in authResult || !("adminUser" in authResult)) {
-      return authResult.errorResponse;
-    }
+    const { id } = await context.params;
+    const guard = await requirePermissionWithAudit("rewards.edit", request, {
+      resourceType: "MilestoneReward",
+      resourceId: id,
+    });
+    if (guard instanceof NextResponse) return guard;
+    const { log } = guard;
 
     await connectDB();
-    const { id } = await context.params;
     const body = await request.json();
     const payload = updateMilestoneRewardSchema.parse(body);
     const reward = await MilestoneService.updateReward(id, {
@@ -41,6 +43,7 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
     if (!reward) {
       return NextResponse.json({ success: false, error: "Milestone reward not found" }, { status: 404 });
     }
+    await log(200);
     return NextResponse.json({
       success: true,
       data: reward,
@@ -64,19 +67,22 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
 
 export async function PATCH(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
-    const authResult = await requireAdminUser();
-    if ("errorResponse" in authResult || !("adminUser" in authResult)) {
-      return authResult.errorResponse;
-    }
+    const { id } = await context.params;
+    const guard = await requirePermissionWithAudit("rewards.edit", request, {
+      resourceType: "MilestoneReward",
+      resourceId: id,
+    });
+    if (guard instanceof NextResponse) return guard;
+    const { log } = guard;
 
     await connectDB();
-    const { id } = await context.params;
     const body = await request.json();
     const payload = toggleMilestoneRewardSchema.parse(body);
     const reward = await MilestoneService.toggleRewardActive(id, payload.isActive);
     if (!reward) {
       return NextResponse.json({ success: false, error: "Milestone reward not found" }, { status: 404 });
     }
+    await log(200);
     return NextResponse.json({
       success: true,
       data: reward,
@@ -98,16 +104,19 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
   }
 }
 
-export async function DELETE(_request: NextRequest, context: { params: Promise<{ id: string }> }) {
+export async function DELETE(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
-    const authResult = await requireAdminUser();
-    if ("errorResponse" in authResult || !("adminUser" in authResult)) {
-      return authResult.errorResponse;
-    }
+    const { id } = await context.params;
+    const guard = await requirePermissionWithAudit("rewards.delete", request, {
+      resourceType: "MilestoneReward",
+      resourceId: id,
+    });
+    if (guard instanceof NextResponse) return guard;
+    const { log } = guard;
 
     await connectDB();
-    const { id } = await context.params;
     await MilestoneService.deleteReward(id);
+    await log(200);
     return NextResponse.json({
       success: true,
       message: "Milestone reward deleted successfully",

@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
+import { requirePermissionWithAudit } from "@/lib/audit-log";
 import mongoose from "mongoose";
-import { authOptions } from "@/lib/auth";
 import connectDB from "@/lib/mongodb";
 import { z } from "zod";
 import {
@@ -47,18 +46,11 @@ function daysBelongToMonth(year: number, month: number, days: z.infer<typeof bod
  */
 export async function POST(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.email) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const guard = await requirePermissionWithAudit("promos.edit", request);
+    if (guard instanceof NextResponse) return guard;
+    const { session, log } = guard;
 
     await connectDB();
-
-    const { default: User } = await import("@/models/User");
-    const user = await User.findOne({ email: session.user.email });
-    if (!user || user.role !== "admin") {
-      return NextResponse.json({ error: "Admin access required" }, { status: 403 });
-    }
 
     const json = await request.json();
     const body = bodySchema.parse(json);
@@ -73,11 +65,12 @@ export async function POST(request: NextRequest) {
       year: body.year,
       month: body.month,
       days: body.days.map((d) => ({ dateKey: d.dateKey, multiplier: d.multiplier })),
-      createdBy: new mongoose.Types.ObjectId(String(user._id)),
+      createdBy: new mongoose.Types.ObjectId(session.user.id),
       name: body.name,
       description: body.description,
     });
 
+    await log(200);
     return NextResponse.json({
       success: true,
       createdPromoIds: result.createdPromoIds,

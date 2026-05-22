@@ -43,6 +43,7 @@ import { getBrandMeta, defaultBrandLogo } from "@/utils/brand-utils";
 import BrandLogoCard from "@/components/ui/BrandLogoCard";
 import ConfirmationModal from "@/components/modals/ConfirmationModal";
 import { cn } from "@/utils/cn";
+import { usePermissions } from "@/hooks/usePermissions";
 
 interface MiniDraw extends AdminMiniDrawSummary {
   totalEntries: number;
@@ -68,6 +69,10 @@ interface MiniDraw extends AdminMiniDrawSummary {
 export default function MiniDrawManagement() {
   const { data: session } = useSession();
   const { showToast } = useToast();
+  const { has } = usePermissions();
+  const canEditMini = has("miniDraws.edit");
+  const canDeleteMini = has("miniDraws.delete");
+  const canSelectMiniWinner = has("miniDraws.selectWinner");
   const [miniDraws, setMiniDraws] = useState<MiniDraw[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -416,13 +421,15 @@ export default function MiniDrawManagement() {
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
-            <button
-              onClick={() => setIsModalOpen(true)}
-              className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-red-600 to-red-700 text-white rounded-lg hover:from-red-700 hover:to-red-800 transition-all shadow-lg"
-            >
-              <Plus className="w-5 h-5" />
-              Create Mini Draw
-            </button>
+            {canEditMini && (
+              <button
+                onClick={() => setIsModalOpen(true)}
+                className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-red-600 to-red-700 text-white rounded-lg hover:from-red-700 hover:to-red-800 transition-all shadow-lg"
+              >
+                <Plus className="w-5 h-5" />
+                Create Mini Draw
+              </button>
+            )}
             <button
               onClick={() => {
                 if (isReorderMode) {
@@ -537,14 +544,20 @@ export default function MiniDrawManagement() {
                     draw={draw}
                     reorderMode={isReorderMode}
                     statusBadge={getStatusBadge(draw.status)}
-                    onEdit={() => openEditModal(draw)}
-                    onDelete={() => openDeleteModal(draw)}
-                    onSelectWinner={() => {
-                      setSelectedDraw(draw);
-                      setIsWinnerModalOpen(true);
-                    }}
+                    onEdit={canEditMini ? () => openEditModal(draw) : undefined}
+                    onDelete={canDeleteMini ? () => openDeleteModal(draw) : undefined}
+                    onSelectWinner={
+                      canSelectMiniWinner
+                        ? () => {
+                            setSelectedDraw(draw);
+                            setIsWinnerModalOpen(true);
+                          }
+                        : undefined
+                    }
                     onExportCsv={() => handleExport(draw._id, draw.name, "csv")}
-                    onEditLatestWinner={() => void openMiniWinnerEdit(draw)}
+                    onEditLatestWinner={
+                      canEditMini ? () => void openMiniWinnerEdit(draw) : undefined
+                    }
                     isSelectingWinner={isSelectingWinner}
                     isExporting={isExporting}
                     isDeleting={deletingId === draw._id}
@@ -723,11 +736,12 @@ interface MiniDrawCardProps {
   draw: MiniDraw;
   reorderMode: boolean;
   statusBadge: React.ReactNode;
-  onEdit: () => void;
-  onDelete: () => void;
-  onSelectWinner: () => void;
+  /** Undefined hides the corresponding action button (callers gate by permission). */
+  onEdit?: () => void;
+  onDelete?: () => void;
+  onSelectWinner?: () => void;
   onExportCsv: () => void;
-  onEditLatestWinner: () => void;
+  onEditLatestWinner?: () => void;
   isSelectingWinner: boolean;
   isExporting: boolean;
   isDeleting: boolean;
@@ -775,11 +789,22 @@ function MiniDrawCard({
       {...(reorderMode ? { ...attributes, ...listeners } : {})}
     >
       <div
-        role={reorderMode ? undefined : "button"}
-        tabIndex={reorderMode ? undefined : 0}
-        onClick={reorderMode ? undefined : onEdit}
-        onKeyDown={reorderMode ? undefined : (e) => e.key === "Enter" && onEdit()}
-        className={cn("relative rounded-lg bg-white dark:bg-neutral-900 shadow-md dark:shadow-none border border-gray-200 dark:border-neutral-700 overflow-hidden group transition-all flex flex-col h-[290px] md:h-[340px]", reorderMode ? "cursor-grab active:cursor-grabbing touch-none" : "cursor-pointer hover:shadow-lg hover:border-red-200 dark:hover:border-red-800/60")}
+        role={reorderMode || !onEdit ? undefined : "button"}
+        tabIndex={reorderMode || !onEdit ? undefined : 0}
+        onClick={reorderMode || !onEdit ? undefined : onEdit}
+        onKeyDown={
+          reorderMode || !onEdit
+            ? undefined
+            : (e) => e.key === "Enter" && onEdit()
+        }
+        className={cn(
+          "relative rounded-lg bg-white dark:bg-neutral-900 shadow-md dark:shadow-none border border-gray-200 dark:border-neutral-700 overflow-hidden group transition-all flex flex-col h-[290px] md:h-[340px]",
+          reorderMode
+            ? "cursor-grab active:cursor-grabbing touch-none"
+            : onEdit
+              ? "cursor-pointer hover:shadow-lg hover:border-red-200 dark:hover:border-red-800/60"
+              : ""
+        )}
       >
         <div className="relative w-full h-32 md:h-44 bg-gray-100 dark:bg-neutral-800">
           <Image
@@ -833,7 +858,7 @@ function MiniDrawCard({
               />
             </div>
           </div>
-          {!reorderMode && draw.latestWinner && (
+          {!reorderMode && draw.latestWinner && onEditLatestWinner && (
             <button
               type="button"
               onClick={(e) => {
@@ -852,18 +877,20 @@ function MiniDrawCard({
               className="flex items-center justify-between gap-2 md:gap-4 pt-2 border-t border-gray-100 dark:border-neutral-700 shrink-0"
               onClick={(e) => e.stopPropagation()}
             >
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onSelectWinner();
-                }}
-                disabled={draw.totalEntries === 0 || isSelectingWinner}
-                className={iconBtn}
-                title={draw.totalEntries === 0 ? "No entries" : "Select winner"}
-              >
-                <Trophy className="w-3.5 h-3.5 shrink-0 text-red-600" />
-                <span className="hidden md:inline truncate">Winner</span>
-              </button>
+              {onSelectWinner && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onSelectWinner();
+                  }}
+                  disabled={draw.totalEntries === 0 || isSelectingWinner}
+                  className={iconBtn}
+                  title={draw.totalEntries === 0 ? "No entries" : "Select winner"}
+                >
+                  <Trophy className="w-3.5 h-3.5 shrink-0 text-red-600" />
+                  <span className="hidden md:inline truncate">Winner</span>
+                </button>
+              )}
               <button
                 onClick={(e) => {
                   e.stopPropagation();
@@ -876,22 +903,24 @@ function MiniDrawCard({
                 <FileText className="w-3.5 h-3.5 shrink-0 text-green-600" />
                 <span className="hidden md:inline truncate">CSV</span>
               </button>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onDelete();
-                }}
-                disabled={isDeleting}
-                className={iconBtn}
-                title="Delete"
-              >
-                {isDeleting ? (
-                  <Loader2 className="w-3.5 h-3.5 shrink-0 animate-spin text-red-600" />
-                ) : (
-                  <Trash2 className="w-3.5 h-3.5 shrink-0 text-red-600" />
-                )}
-                <span className="hidden md:inline truncate">Delete</span>
-              </button>
+              {onDelete && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onDelete();
+                  }}
+                  disabled={isDeleting}
+                  className={iconBtn}
+                  title="Delete"
+                >
+                  {isDeleting ? (
+                    <Loader2 className="w-3.5 h-3.5 shrink-0 animate-spin text-red-600" />
+                  ) : (
+                    <Trash2 className="w-3.5 h-3.5 shrink-0 text-red-600" />
+                  )}
+                  <span className="hidden md:inline truncate">Delete</span>
+                </button>
+              )}
             </div>
           )}
         </div>

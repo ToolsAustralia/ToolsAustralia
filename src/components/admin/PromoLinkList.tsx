@@ -8,6 +8,7 @@ import { Link2, Edit2, Trash2, Calendar, Loader2, RefreshCw, Copy, Check, CheckC
 import { AdminBadge } from "@/components/admin/ui/AdminBadge";
 import { formatDateReadable } from "@/utils/common/timezone";
 import { cn } from "@/utils/cn";
+import { usePermissions } from "@/hooks/usePermissions";
 
 interface PromoLinkListProps {
   filters?: {
@@ -21,6 +22,9 @@ interface PromoLinkListProps {
  * Displays a list of promo links with edit and delete actions
  */
 export default function PromoLinkList({ filters }: PromoLinkListProps) {
+  const { has } = usePermissions();
+  const canEditPromos = has("promos.edit");
+  const canDeletePromos = has("promos.delete");
   const { data: promoLinks = [], isLoading, refetch } = usePromoLinks(filters);
   const deleteMutation = useDeletePromoLink();
 
@@ -148,25 +152,29 @@ export default function PromoLinkList({ filters }: PromoLinkListProps) {
                       </div>
                       <div className="flex items-center gap-1 shrink-0">
                         {getStatusBadge(promoLink)}
-                        <button
-                          onClick={() => handleEdit(promoLink)}
-                          className="rounded p-1.5 text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300"
-                          title="Edit"
-                        >
-                          <Edit2 className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => handleDelete(promoLink.id)}
-                          disabled={deletingId === promoLink.id}
-                          className="rounded p-1.5 text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300 disabled:opacity-50"
-                          title="Delete"
-                        >
-                          {deletingId === promoLink.id ? (
-                            <Loader2 className="w-4 h-4 animate-spin" />
-                          ) : (
-                            <Trash2 className="w-4 h-4" />
-                          )}
-                        </button>
+                        {canEditPromos && (
+                          <button
+                            onClick={() => handleEdit(promoLink)}
+                            className="rounded p-1.5 text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300"
+                            title="Edit"
+                          >
+                            <Edit2 className="w-4 h-4" />
+                          </button>
+                        )}
+                        {canDeletePromos && (
+                          <button
+                            onClick={() => handleDelete(promoLink.id)}
+                            disabled={deletingId === promoLink.id}
+                            className="rounded p-1.5 text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300 disabled:opacity-50"
+                            title="Delete"
+                          >
+                            {deletingId === promoLink.id ? (
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                            ) : (
+                              <Trash2 className="w-4 h-4" />
+                            )}
+                          </button>
+                        )}
                       </div>
                     </div>
                     <div className="text-xs text-gray-600 dark:text-neutral-400 space-y-0.5">
@@ -352,25 +360,29 @@ export default function PromoLinkList({ filters }: PromoLinkListProps) {
                         </td>
                         <td className="px-4 py-3 whitespace-nowrap text-right text-sm font-medium">
                           <div className="flex items-center justify-end gap-2">
-                            <button
-                              onClick={() => handleEdit(promoLink)}
-                              className="rounded p-1.5 text-blue-600 transition-colors hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300"
-                              title="Edit promo link"
-                            >
-                              <Edit2 className="w-4 h-4" />
-                            </button>
-                            <button
-                              onClick={() => handleDelete(promoLink.id)}
-                              disabled={deletingId === promoLink.id}
-                              className="rounded p-1.5 text-red-600 transition-colors hover:text-red-900 dark:text-red-400 dark:hover:text-red-300 disabled:cursor-not-allowed disabled:opacity-50"
-                              title="Delete promo link"
-                            >
-                              {deletingId === promoLink.id ? (
-                                <Loader2 className="w-4 h-4 animate-spin" />
-                              ) : (
-                                <Trash2 className="w-4 h-4" />
-                              )}
-                            </button>
+                            {canEditPromos && (
+                              <button
+                                onClick={() => handleEdit(promoLink)}
+                                className="rounded p-1.5 text-blue-600 transition-colors hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300"
+                                title="Edit promo link"
+                              >
+                                <Edit2 className="w-4 h-4" />
+                              </button>
+                            )}
+                            {canDeletePromos && (
+                              <button
+                                onClick={() => handleDelete(promoLink.id)}
+                                disabled={deletingId === promoLink.id}
+                                className="rounded p-1.5 text-red-600 transition-colors hover:text-red-900 dark:text-red-400 dark:hover:text-red-300 disabled:cursor-not-allowed disabled:opacity-50"
+                                title="Delete promo link"
+                              >
+                                {deletingId === promoLink.id ? (
+                                  <Loader2 className="w-4 h-4 animate-spin" />
+                                ) : (
+                                  <Trash2 className="w-4 h-4" />
+                                )}
+                              </button>
+                            )}
                           </div>
                         </td>
                       </tr>

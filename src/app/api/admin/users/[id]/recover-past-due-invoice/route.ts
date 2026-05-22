@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import { requirePermissionWithAudit } from "@/lib/audit-log";
 import connectDB from "@/lib/mongodb";
 import { z } from "zod";
 import {
@@ -17,12 +16,14 @@ export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  await connectDB();
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.id || session.user.role !== "admin") {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
   const { id: userId } = await params;
+  const guard = await requirePermissionWithAudit("users.charge", request, {
+    resourceType: "User",
+    resourceId: userId,
+  });
+  if (guard instanceof NextResponse) return guard;
+
+  await connectDB();
   const url = new URL(request.url);
   const originalInvoiceId = url.searchParams.get("invoiceId");
   if (!originalInvoiceId) {
@@ -45,14 +46,15 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await connectDB();
-
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id || session.user.role !== "admin") {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
     const { id: userId } = await params;
+    const guard = await requirePermissionWithAudit("users.charge", request, {
+      resourceType: "User",
+      resourceId: userId,
+    });
+    if (guard instanceof NextResponse) return guard;
+    const { session, log } = guard;
+
+    await connectDB();
 
     const body = await request.json();
     const parsed = bodySchema.safeParse(body);
@@ -99,6 +101,7 @@ export async function POST(
       );
     }
 
+    await log(200);
     return NextResponse.json({
       success: true,
       newInvoiceId: result.newInvoiceId,
