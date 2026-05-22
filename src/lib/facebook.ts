@@ -287,9 +287,7 @@ export async function sendFacebookPurchaseEventDev(event: FacebookEvent): Promis
   if (effectiveTestCode) requestBody.test_event_code = effectiveTestCode;
 
   const cd = sanitizedEvent.custom_data;
-  // TEMP-VERIFY (remove before prod merge): console.error survives next.config removeConsole
-  // on staging builds so we can confirm the Basil PI fix + test_event_code in Vercel logs.
-  console.error("[CAPI] Purchase sent", {
+  console.log("[CAPI] Purchase sent", {
     env: getPixelEnv(),
     event_id: sanitizedEvent.event_id,
     value: cd?.value,
@@ -419,13 +417,9 @@ export async function sendFacebookEvent(event: FacebookEvent, testEventCode?: st
 
     if (sanitizedEvent.event_name === "Purchase") {
       const cd = sanitizedEvent.custom_data;
-      // TEMP-VERIFY (remove before prod merge): console.error survives next.config removeConsole
-      // on staging builds so we can confirm the Basil PI fix + test_event_code in Vercel logs.
-      // This is the path the membership webhook Purchase uses (sendConversion → capiSend → here).
-      console.error("[CAPI] Purchase sent", {
+      console.log("[CAPI] Purchase sent", {
         env: getPixelEnv(),
         event_id: sanitizedEvent.event_id,
-        action_source: sanitizedEvent.action_source,
         value: cd?.value,
         currency: cd?.currency,
         test_event_code: effectiveTestCode ?? null,
