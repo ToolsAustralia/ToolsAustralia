@@ -8,6 +8,7 @@ import { sendConversion } from "@/lib/tracking/dispatch";
 import type { CanonicalEvent, RequestContext } from "@/lib/tracking/types";
 import { eventTimeNow } from "@/lib/tracking/canonical-event";
 import { extractRequestContext } from "@/utils/tracking/facebook-helpers";
+import { extractTikTokContext } from "@/utils/tracking/tiktok-helpers";
 
 const userDataSchema = z
   .object({
@@ -129,13 +130,18 @@ export async function POST(request: NextRequest) {
   // the server reads more reliably). See:
   // https://developers.facebook.com/docs/marketing-api/conversions-api/parameters/fbp-and-fbc
   const reqCtx = extractRequestContext(request);
+  // TikTok click id (ttclid cookie, set on ad-click landing) + the pixel's _ttp
+  // first-party cookie — the highest-value TikTok match signals for the Events API.
+  const ttCtx = extractTikTokContext(request);
 
   const userData: CanonicalEvent["userData"] = {
     ...sessionUserData,
-    // Server-derived browser identifiers (fbc/fbp/IP/UA) are authoritative — they
+    // Server-derived browser identifiers (fbc/fbp/ttclid/ttp/IP/UA) are authoritative — they
     // come from the same-origin request the client cannot tamper with as easily.
     ...(reqCtx.fbc && { fbc: reqCtx.fbc }),
     ...(reqCtx.fbp && { fbp: reqCtx.fbp }),
+    ...(ttCtx.ttclid && { ttclid: ttCtx.ttclid }),
+    ...(ttCtx.ttp && { ttp: ttCtx.ttp }),
     ...(reqCtx.client_ip_address && { clientIpAddress: reqCtx.client_ip_address }),
     ...(reqCtx.client_user_agent && { clientUserAgent: reqCtx.client_user_agent }),
     ...parsed.userData, // client-supplied overrides last (e.g. a deliberate override in tests)
