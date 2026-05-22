@@ -288,6 +288,8 @@ export interface IUser extends Document {
   // Staff RBAC (see docs/auth/roles.md)
   roleId?: mongoose.Types.ObjectId | null; // null = customer
   userType: "customer" | "staff" | "admin"; // default "customer"
+  /** True for non-human service accounts (e.g. Norm AI). Hides the user from the human-staff list. */
+  serviceAccount?: boolean;
 
   // Staff invitation flow
   inviteToken?: string;
@@ -409,6 +411,7 @@ const UserSchema = new Schema<IUser>(
       enum: ["customer", "staff", "admin"],
       default: "customer",
     },
+    serviceAccount: { type: Boolean, default: false },
     inviteToken: {
       type: String,
       trim: true,

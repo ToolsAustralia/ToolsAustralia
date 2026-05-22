@@ -1,8 +1,6 @@
 import { NextResponse } from "next/server";
 import { requirePermission } from "@/lib/api-auth-permissions";
-import connectDB from "@/lib/mongodb";
-import ContactSubmission from "@/models/ContactSubmission";
-import PartnerApplication from "@/models/PartnerApplication";
+import { getUnviewedSubmissionsCount } from "@/services/admin/submissionsCountService";
 
 /**
  * GET /api/admin/submissions/unviewed-count
@@ -13,21 +11,11 @@ export async function GET() {
     const _guard = await requirePermission("overview.view");
     if (_guard instanceof NextResponse) return _guard;
 
-    await connectDB();
-
-    const unreadQuery = { $or: [{ readAt: null }, { readAt: { $exists: false } }] };
-    const [contactCount, partnerCount] = await Promise.all([
-      ContactSubmission.countDocuments(unreadQuery),
-      PartnerApplication.countDocuments(unreadQuery),
-    ]);
+    const data = await getUnviewedSubmissionsCount();
 
     return NextResponse.json({
       success: true,
-      data: {
-        contact: contactCount,
-        partner: partnerCount,
-        total: contactCount + partnerCount,
-      },
+      data,
     });
   } catch (error) {
     console.error("Error fetching unviewed submissions count:", error);

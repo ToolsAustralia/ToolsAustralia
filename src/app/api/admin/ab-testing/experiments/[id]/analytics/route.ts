@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requirePermission } from "@/lib/api-auth-permissions";
 import ExperimentAnalyticsService from "@/services/ab-testing/ExperimentAnalyticsService";
-import ExperimentStoppingRulesService from "@/services/ab-testing/ExperimentStoppingRulesService";
-import ExperimentRepository from "@/repositories/ab-testing/ExperimentRepository";
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -20,58 +18,47 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     const { id: experimentId } = await params;
     const { searchParams } = new URL(request.url);
 
-    // Parse date range
     const startDate = searchParams.get("startDate");
     const endDate = searchParams.get("endDate");
     const variantId = searchParams.get("variantId") || undefined;
 
     const dateRange =
       startDate && endDate
-        ? {
-            startDate: new Date(startDate),
-            endDate: new Date(endDate),
-          }
+        ? { startDate: new Date(startDate), endDate: new Date(endDate) }
         : undefined;
 
-    // Get analytics data
-    if (variantId) {
-      // Get metrics for specific variant
-      const metrics = await ExperimentAnalyticsService.getVariantMetrics(experimentId, variantId, dateRange);
-      const funnel = await ExperimentAnalyticsService.getFunnelMetrics(variantId, dateRange);
-      const dropOff = await ExperimentAnalyticsService.getDropOffRates(variantId, dateRange);
+    const summary = await ExperimentAnalyticsService.getExperimentAnalyticsSummary(
+      experimentId,
+      dateRange,
+      variantId
+    );
 
+    if (summary.kind === "variant") {
       return NextResponse.json({
         success: true,
         data: {
-          variantId,
-          metrics,
-          funnel,
-          dropOff,
-        },
-      });
-    } else {
-      // Get comparison for all variants
-      const comparison = await ExperimentAnalyticsService.getExperimentComparison(experimentId, dateRange);
-      const significance = await ExperimentAnalyticsService.getStatisticalSignificance(experimentId, dateRange);
-      const stoppingRules = await ExperimentStoppingRulesService.evaluateStoppingRules(experimentId);
-
-      // Get winner determination
-      const experiment = await ExperimentRepository.findById(experimentId);
-      const confidenceThreshold = experiment?.stoppingRules?.confidenceThreshold || 95;
-      const winner = await ExperimentAnalyticsService.determineWinner(experimentId, dateRange, confidenceThreshold);
-
-      return NextResponse.json({
-        success: true,
-        data: {
-          comparison,
-          significance,
-          stoppingRules,
-          winner,
+          variantId: summary.variantId,
+          metrics: summary.metrics,
+          funnel: summary.funnel,
+          dropOff: summary.dropOff,
         },
       });
     }
+
+    return NextResponse.json({
+      success: true,
+      data: {
+        comparison: summary.comparison,
+        significance: summary.significance,
+        stoppingRules: summary.stoppingRules,
+        winner: summary.winner,
+      },
+    });
   } catch (error) {
     console.error("Error fetching analytics:", error);
+    if (error instanceof Error && error.message === "experiment_not_found") {
+      return NextResponse.json({ error: "Experiment not found" }, { status: 404 });
+    }
     return NextResponse.json({ error: "Failed to fetch analytics" }, { status: 500 });
   }
 }

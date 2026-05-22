@@ -51,3 +51,6 @@ next-env.d.ts
 
 # git worktrees (each is a sibling checkout — see docs/dev-tooling/worktrees.md)
 .worktrees/
+
+# Local dev server log captured by `npm run dev | tee dev.log` during smoke runs
+dev.log

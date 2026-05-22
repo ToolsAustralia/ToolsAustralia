@@ -5,6 +5,7 @@ import { requirePermissionWithAudit } from "@/lib/audit-log";
 import connectDB from "@/lib/mongodb";
 import UpsellMultiplierConfig from "@/models/UpsellMultiplierConfig";
 import { zPromoMultiplier } from "@/lib/zod/promo-multiplier-schema";
+import { getUpsellMultiplierConfig } from "@/services/upsell/UpsellMultiplierResolver";
 import mongoose from "mongoose";
 
 const updateSchema = z.object({
@@ -22,8 +23,7 @@ export async function GET() {
     const _guard = await requirePermission("overview.view");
     if (_guard instanceof NextResponse) return _guard;
 
-    await connectDB();
-    const config = await UpsellMultiplierConfig.getOrCreate();
+    const config = await getUpsellMultiplierConfig();
 
     return NextResponse.json({
       membership: config.membership,

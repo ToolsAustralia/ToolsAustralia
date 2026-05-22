@@ -10,6 +10,9 @@ import { getNowInAEST, convertUTCToAEST } from "@/utils/common/timezone";
 import { formatInTimeZone } from "date-fns-tz";
 import connectDB from "@/lib/mongodb";
 
+// Re-export so route files can stay tied to the service (R1 rule).
+export type { RecurrencePattern };
+
 const AEST_TIMEZONE = "Australia/Sydney";
 
 export class PromoBannerTextService {
@@ -226,5 +229,77 @@ export class PromoBannerTextService {
 
     return !!result;
   }
+
+  /**
+   * List banner texts in the projection shape shared between admin and Norm.
+   * UTC start/end dates are converted to AEST (matching the admin route's
+   * existing behaviour) before being returned as `Date` objects — callers
+   * format to ISO at the boundary.
+   */
+  async listBannerTextsProjection(): Promise<PromoBannerTextProjection[]> {
+    const texts = await this.getAllBannerTexts();
+    return texts.map(toBannerTextProjection);
+  }
+
+  /**
+   * Get the currently-active banner text in the projection shape, or `null`
+   * when no schedule matches the current AEST date.
+   */
+  async getActiveBannerTextProjection(): Promise<PromoBannerTextProjection | null> {
+    const text = await this.getActiveBannerText();
+    return text ? toBannerTextProjection(text) : null;
+  }
+}
+
+export interface PromoBannerTextProjection {
+  id: string;
+  imageUrl: string;
+  altText?: string;
+  scheduleType: "one-time" | "recurring";
+  startDate: Date | null;
+  endDate: Date | null;
+  recurrencePattern?: RecurrencePattern;
+  isActive: boolean;
+  description?: string;
+  createdAt: Date;
+  updatedAt: Date;
+  createdBy: {
+    id: string;
+    name: string;
+    email: string;
+  } | null;
+}
+
+function toBannerTextProjection(text: IPromoBannerText): PromoBannerTextProjection {
+  const createdBy =
+    text.createdBy && typeof text.createdBy === "object" && "_id" in text.createdBy
+      ? (text.createdBy as {
+          _id: { toString(): string };
+          firstName?: string;
+          lastName?: string;
+          email?: string;
+        })
+      : null;
+
+  return {
+    id: (text._id as { toString(): string }).toString(),
+    imageUrl: text.imageUrl,
+    altText: text.altText,
+    scheduleType: text.scheduleType,
+    startDate: text.startDate ? convertUTCToAEST(text.startDate) : null,
+    endDate: text.endDate ? convertUTCToAEST(text.endDate) : null,
+    recurrencePattern: text.recurrencePattern,
+    isActive: text.isActive,
+    description: text.description,
+    createdAt: text.createdAt,
+    updatedAt: text.updatedAt,
+    createdBy: createdBy
+      ? {
+          id: String(createdBy._id),
+          name: `${createdBy.firstName ?? ""} ${createdBy.lastName ?? ""}`.trim(),
+          email: createdBy.email ?? "",
+        }
+      : null,
+  };
 }
 

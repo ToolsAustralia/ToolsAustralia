@@ -5,9 +5,130 @@ import User from "@/models/User";
 import { RedemptionService } from "@/services/redeemables/RedemptionService";
 import { MilestoneEvaluator } from "./MilestoneEvaluator";
 
+export interface MilestoneRewardPerformance {
+  issuedCount: number;
+  redeemedCount: number;
+  activeCount: number;
+  expiredCount: number;
+  cancelledCount: number;
+  totalEntriesGranted: number;
+  redemptionRate: number;
+}
+
+export interface MilestoneRewardWithPerformance {
+  id: string;
+  name: string;
+  displayLabel?: string;
+  milestoneType: "spend-amount" | "entries-gained" | "loyalty-days";
+  threshold: number;
+  entriesAmount: number;
+  code: string;
+  isActive: boolean;
+  neverExpires: boolean;
+  startsAt: Date | null;
+  endsAt: Date | null;
+  isRecurring: boolean;
+  createdBy: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+  performance: MilestoneRewardPerformance;
+}
+
 export class MilestoneService {
   static async listRewards(): Promise<IMilestoneReward[]> {
     return MilestoneReward.find({}).sort({ createdAt: -1 });
+  }
+
+  /**
+   * Aggregate per-reward issuance performance (issued/redeemed/active/expired/cancelled
+   * counts + total entries granted) keyed by reward id. Shared between the admin GET
+   * route and the Norm read endpoint so the numbers match by construction.
+   */
+  static async aggregatePerformanceByRewardIds(
+    rewardIds: mongoose.Types.ObjectId[],
+  ): Promise<Map<string, MilestoneRewardPerformance>> {
+    if (rewardIds.length === 0) return new Map();
+    const performanceRows = await MilestoneIssuance.aggregate<{
+      _id: mongoose.Types.ObjectId;
+      issuedCount: number;
+      redeemedCount: number;
+      activeCount: number;
+      expiredCount: number;
+      cancelledCount: number;
+      totalEntriesGranted: number;
+    }>([
+      { $match: { milestoneRewardId: { $in: rewardIds } } },
+      {
+        $group: {
+          _id: "$milestoneRewardId",
+          issuedCount: { $sum: 1 },
+          redeemedCount: { $sum: { $cond: [{ $eq: ["$status", "redeemed"] }, 1, 0] } },
+          activeCount: { $sum: { $cond: [{ $eq: ["$status", "active"] }, 1, 0] } },
+          expiredCount: { $sum: { $cond: [{ $eq: ["$status", "expired"] }, 1, 0] } },
+          cancelledCount: { $sum: { $cond: [{ $eq: ["$status", "cancelled"] }, 1, 0] } },
+          totalEntriesGranted: { $sum: "$entriesAmount" },
+        },
+      },
+    ]);
+    return new Map(
+      performanceRows.map((row) => {
+        const issuedCount = row.issuedCount || 0;
+        const redeemedCount = row.redeemedCount || 0;
+        return [
+          String(row._id),
+          {
+            issuedCount,
+            redeemedCount,
+            activeCount: row.activeCount || 0,
+            expiredCount: row.expiredCount || 0,
+            cancelledCount: row.cancelledCount || 0,
+            totalEntriesGranted: row.totalEntriesGranted || 0,
+            redemptionRate: issuedCount > 0 ? Math.round((redeemedCount / issuedCount) * 100) : 0,
+          },
+        ];
+      }),
+    );
+  }
+
+  /**
+   * List rewards joined with per-reward issuance performance aggregates,
+   * projected into the shared Norm shape (createdBy collapsed to id string,
+   * dates left as Date objects for the caller to serialise).
+   */
+  static async listRewardsWithPerformance(): Promise<MilestoneRewardWithPerformance[]> {
+    const rewards = await MilestoneService.listRewards();
+    const rewardIds = rewards.map((reward) => reward._id as mongoose.Types.ObjectId);
+    const performanceMap = await MilestoneService.aggregatePerformanceByRewardIds(rewardIds);
+
+    return rewards.map((reward) => {
+      const performance = performanceMap.get(String(reward._id)) ?? {
+        issuedCount: 0,
+        redeemedCount: 0,
+        activeCount: 0,
+        expiredCount: 0,
+        cancelledCount: 0,
+        totalEntriesGranted: 0,
+        redemptionRate: 0,
+      };
+      return {
+        id: String(reward._id),
+        name: reward.name,
+        displayLabel: reward.displayLabel,
+        milestoneType: reward.milestoneType,
+        threshold: reward.threshold,
+        entriesAmount: reward.entriesAmount,
+        code: reward.code,
+        isActive: reward.isActive,
+        neverExpires: reward.neverExpires,
+        startsAt: reward.startsAt ?? null,
+        endsAt: reward.endsAt ?? null,
+        isRecurring: reward.isRecurring,
+        createdBy: reward.createdBy ? String(reward.createdBy) : null,
+        createdAt: reward.createdAt,
+        updatedAt: reward.updatedAt,
+        performance,
+      };
+    });
   }
 
   static async createReward(input: {

@@ -24,6 +24,7 @@ Membership-driven giveaway and rewards platform for Australian tradies. Members 
 - **Tracking** — Meta Pixel + Facebook CAPI server-side, Google Tag Manager, Klaviyo (page tracker + script loader), UTM persistence.
 - **Email** — SendGrid for transactional, Klaviyo for marketing, SMS via Twilio.
 - **Admin dashboard** — user management, payments, draws, promos, error reports, partner applications, Stripe webhook queue, daily stats snapshots.
+- **Internal Norm API** — secure HTTP namespace at `/api/internal/norm/v1/*` exposing read-only business analytics to an external AI assistant (Norm) running on the Mac mini server. See [docs/internal-norm/](docs/internal-norm/).
 
 ### Coming soon
 

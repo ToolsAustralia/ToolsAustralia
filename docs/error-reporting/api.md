@@ -6,6 +6,10 @@
 | GET | `/api/admin/error-reports/` | Admin triage list + analytics |
 | PATCH | `/api/admin/error-reports/[id]/` | Update status / admin notes |
 | PATCH / DELETE | `/api/admin/error-reports/bulk-delete/` | Bulk status update / archive |
+| GET | `/api/internal/norm/v1/error-reports` | Norm: paged list (PII-redacted projection of admin list) |
+| GET | `/api/internal/norm/v1/error-reports/{id}` | Norm: single-row detail (PII-redacted) |
+
+Both Norm endpoints delegate to `ErrorReportQueryService` so admin and Norm row counts agree by construction. Norm strips email, stack traces, console dumps, hashed IP, browser fingerprint, and referrer; see [internal-norm/norm-context.md](../internal-norm/norm-context.md) for the full projection contract.
 
 ## GET `/api/admin/error-reports` — filter query params
 

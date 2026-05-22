@@ -188,7 +188,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
 ```json
 {
   "version": 1,
-  "lastModified": "2026-05-14",
+  "lastModified": "2026-05-21",
   "domains": {
     "subscription": {
       "docs": "docs/subscription/",
@@ -352,12 +352,13 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/lib/affiliate.ts",
         "src/lib/affiliate-auth.ts",
         "src/utils/affiliate/**",
+        "src/services/affiliate/**",
         "src/app/api/affiliate/**",
         "src/app/(site)/affiliate/**",
         "src/hooks/useAffiliateAuth.ts",
         "src/hooks/useAffiliateLink.ts"
       ],
-      "lastVerified": "2026-05-10"
+      "lastVerified": "2026-05-21"
     },
     "referrals": {
       "docs": "docs/referrals/",
@@ -385,11 +386,13 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
     "upsell": {
       "docs": "docs/upsell/",
       "paths": [
+        "src/services/upsell/**",
         "src/utils/upsell/**",
         "src/app/api/upsell/**",
         "src/app/api/cancellation-upsell/**",
         "src/app/(site)/upsell-success/**",
         "src/components/upload/**",
+        "src/models/UpsellMultiplierConfig.ts",
         "src/generated/upsellImageManifest.ts",
         "scripts/build-upsell-image-manifest.ts"
       ],
@@ -489,6 +492,8 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/utils/meta/**",
         "src/utils/utm/**",
         "src/services/meta/**",
+        "src/services/facebook-ads/**",
+        "src/services/klaviyo/**",
         "src/models/MetaAdDestination.ts",
         "src/models/MetaAdInsightsDaily.ts",
         "src/models/TikTokAdInsightsDaily.ts",
@@ -614,6 +619,28 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/hooks/useConfetti.ts"
       ],
       "lastVerified": "2026-05-20"
+    },
+    "internal-norm": {
+      "docs": "docs/internal-norm/",
+      "paths": [
+        "src/lib/internal-norm/**",
+        "src/app/api/internal/norm/**",
+        "src/app/api/admin/internal-norm/**",
+        "src/app/admin/component/internal-norm/**",
+        "src/services/admin/DashboardStatsService.ts",
+        "src/models/NormCallLog.ts",
+        "src/models/NormTriggerReceipt.ts",
+        "src/models/NormPendingAction.ts",
+        "src/models/NormEndpointSettings.ts",
+        "src/utils/admin/resolveNormDateRange.ts",
+        "src/generated/normToolsManifest.json",
+        "scripts/build-norm-manifest.ts",
+        "scripts/internal-norm-smoke.ts",
+        "scripts/migrations/2026-05-20-create-norm-user-and-role.ts",
+        "eslint/rules/norm-must-import-service.js",
+        "eslint/rules/index.js"
+      ],
+      "lastVerified": "2026-05-21"
     },
     "admin": {
       "docs": "docs/admin/",

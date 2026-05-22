@@ -4,8 +4,8 @@
 
 | Service dir | Role |
 |---|---|
-| [src/services/promo/](../../src/services/promo/) | Promo evaluation: resolve which promo applies, compute multipliers/bonuses, validate codes. |
-| [src/services/promo-analytics/](../../src/services/promo-analytics/) | Aggregate `PromoAnalyticsVisit` rows for admin dashboards. |
+| [src/services/promo/](../../src/services/promo/) | Promo evaluation: resolve which promo applies, compute multipliers/bonuses, validate codes. Also hosts `PromoQueryService.ts` — read-side projections shared between the admin GET routes (`/api/admin/promo/{active,history,alternating-multiplier,bonus-entry/list,bonus-entry/active,link/list,scheduled/list}`) and the Norm read endpoints under `/api/internal/norm/v1/promo/**`. By construction admin + Norm numbers match. |
+| [src/services/promo-analytics/](../../src/services/promo-analytics/) | Aggregate `PromoAnalyticsVisit` rows for admin dashboards. Also exports `resolvePromoAnalyticsRange({ range, startDate, endDate })` — the AEST-anchored `today \| yesterday \| custom` date resolver shared between the admin and internal Norm routes so date boundaries stay in lockstep. |
 
 ## Utilities
 

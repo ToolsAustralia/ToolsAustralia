@@ -28,6 +28,12 @@
 | `get-affiliate-session.ts` | Read affiliate session/cookie. |
 | `referred-user-admin.ts` | Admin tools for the referred-user view. |
 
+## Admin readers ([src/services/affiliate/](../../src/services/affiliate/))
+
+| File | Role |
+|---|---|
+| `AffiliateAdminListService.ts` | `listAffiliates` + `getAffiliateDetail` — the read-side of the admin affiliate page. Extracted from the formerly-fat admin routes (`/api/admin/affiliate/list`, `/api/admin/affiliate/[id]`) so the admin UI and the Norm internal API (`/v1/affiliate`, `/v1/affiliate/{id}`) share one code path. Framework-agnostic — no `Request`/`NextResponse` types. Also exports `resolveAffiliateListSortKey`, `resolveAffiliateDetailSortField`, `resolveAffiliateReferredSortKey`, and `isValidAffiliateId` so both callers normalise sort tokens identically. |
+
 ## Auth
 
 Affiliate portal has its own auth via [src/lib/affiliate-auth.ts](../../src/lib/affiliate-auth.ts) (separate from main NextAuth — affiliates are a different user type).
