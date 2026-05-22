@@ -3809,13 +3809,14 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
     // Resolve the real PaymentIntent id from the invoice so the Facebook Purchase event_id
     // matches what the browser pixel fires with (`pi_…`). Storage key (`invoicePaymentId`)
     // remains `invoice_${invoice.id}` for idempotency; only Meta's event_id is overridden.
-    const invoiceWithPI = expandedInvoice as Stripe.Invoice & {
-      payment_intent?: string | Stripe.PaymentIntent | null;
-    };
-    const facebookTrackingPaymentIntentId: string | undefined =
-      typeof invoiceWithPI.payment_intent === "string"
-        ? invoiceWithPI.payment_intent
-        : invoiceWithPI.payment_intent?.id;
+    //
+    // Basil (2025-08-27): `invoice.payment_intent` is REMOVED — reading it always returns
+    // undefined, which left `trackingOrderId` unset, so the server Purchase fired with
+    // `invoice_<id>` while the browser fired with the real `pi_<id>`. Different event_ids =
+    // NO dedup = Meta counts the membership purchase TWICE (inflated conversions / ROAS).
+    // `paymentIntentIdsOnInvoice` resolves the PI via `payments.data[].payment.payment_intent`
+    // (expandedInvoice is expanded with `payments.data.payment` above), restoring dedup.
+    const [facebookTrackingPaymentIntentId] = paymentIntentIdsOnInvoice(expandedInvoice);
 
     const result = await processPaymentBenefits(
       invoicePaymentId,
