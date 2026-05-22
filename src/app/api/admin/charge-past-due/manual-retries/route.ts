@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import { requirePermission } from "@/lib/api-auth-permissions";
 import connectDB from "@/lib/mongodb";
 import {
   listManualRetries,
@@ -12,10 +11,9 @@ const VALID_STATUS = ["success", "failed", "skipped"] as const;
 type Status = (typeof VALID_STATUS)[number];
 
 export async function GET(request: NextRequest) {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.id || session.user.role !== "admin") {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const guard = await requirePermission("users.view");
+  if (guard instanceof NextResponse) return guard;
+
   await connectDB();
 
   const { searchParams } = new URL(request.url);

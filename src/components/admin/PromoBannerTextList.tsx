@@ -7,8 +7,12 @@ import AdminPromoBannerTextModal from "@/components/modals/AdminPromoBannerTextM
 import type { PromoBannerText } from "@/types/admin";
 import { format } from "date-fns";
 import { formatDisplayName } from "@/utils/display-name";
+import { usePermissions } from "@/hooks/usePermissions";
 
 export default function PromoBannerTextList() {
+  const { has } = usePermissions();
+  const canEditPromos = has("promos.edit");
+  const canDeletePromos = has("promos.delete");
   const { data, isLoading, error } = usePromoBannerTexts();
   const deleteMutation = useDeletePromoBannerText();
   const [editingText, setEditingText] = useState<PromoBannerText | null>(null);
@@ -187,25 +191,29 @@ export default function PromoBannerTextList() {
                   </div>
 
                   <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => handleEdit(text)}
-                      className="rounded-lg p-2 text-gray-600 transition-colors hover:bg-blue-50 hover:text-blue-600 dark:text-neutral-400 dark:hover:bg-blue-950/40 dark:hover:text-blue-400"
-                      title="Edit"
-                    >
-                      <Edit className="w-4 h-4" />
-                    </button>
-                    <button
-                      onClick={() => handleDelete(text.id)}
-                      disabled={deletingId === text.id}
-                      className="rounded-lg p-2 text-gray-600 transition-colors hover:bg-red-50 hover:text-red-600 disabled:opacity-50 dark:text-neutral-400 dark:hover:bg-red-950/40 dark:hover:text-red-400"
-                      title="Delete"
-                    >
-                      {deletingId === text.id ? (
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                      ) : (
-                        <Trash2 className="w-4 h-4" />
-                      )}
-                    </button>
+                    {canEditPromos && (
+                      <button
+                        onClick={() => handleEdit(text)}
+                        className="rounded-lg p-2 text-gray-600 transition-colors hover:bg-blue-50 hover:text-blue-600 dark:text-neutral-400 dark:hover:bg-blue-950/40 dark:hover:text-blue-400"
+                        title="Edit"
+                      >
+                        <Edit className="w-4 h-4" />
+                      </button>
+                    )}
+                    {canDeletePromos && (
+                      <button
+                        onClick={() => handleDelete(text.id)}
+                        disabled={deletingId === text.id}
+                        className="rounded-lg p-2 text-gray-600 transition-colors hover:bg-red-50 hover:text-red-600 disabled:opacity-50 dark:text-neutral-400 dark:hover:bg-red-950/40 dark:hover:text-red-400"
+                        title="Delete"
+                      >
+                        {deletingId === text.id ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                          <Trash2 className="w-4 h-4" />
+                        )}
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>

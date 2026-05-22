@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import { requirePermissionWithAudit } from "@/lib/audit-log";
 import connectDB from "@/lib/mongodb";
 import ScheduledPromo from "@/models/ScheduledPromo";
 import { z } from "zod";
@@ -22,18 +21,11 @@ const createScheduledPromoSchema = z.object({
  */
 export async function POST(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.email) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const guard = await requirePermissionWithAudit("promos.edit", request, { resourceType: "ScheduledPromo" });
+    if (guard instanceof NextResponse) return guard;
+    const { session, log } = guard;
 
     await connectDB();
-
-    const { default: User } = await import("@/models/User");
-    const user = await User.findOne({ email: session.user.email });
-    if (!user || user.role !== "admin") {
-      return NextResponse.json({ error: "Admin access required" }, { status: 403 });
-    }
 
     const body = await request.json();
     const validatedData = createScheduledPromoSchema.parse(body);
@@ -74,7 +66,7 @@ export async function POST(request: NextRequest) {
       startDate: start,
       endDate: end,
       isActive: true,
-      createdBy: user._id,
+      createdBy: session.user.id,
       name: name || undefined,
       description: description || undefined,
     });
@@ -86,9 +78,9 @@ export async function POST(request: NextRequest) {
       multiplier: newPromo.multiplier,
       startDate: newPromo.startDate,
       endDate: newPromo.endDate,
-      createdBy: user.email,
     });
 
+    await log(201);
     return NextResponse.json(
       {
         success: true,
@@ -104,9 +96,7 @@ export async function POST(request: NextRequest) {
           description: newPromo.description,
           createdAt: newPromo.createdAt,
           createdBy: {
-            id: user._id.toString(),
-            email: user.email,
-            name: `${user.firstName} ${user.lastName}`,
+            id: session.user.id,
           },
         },
       },

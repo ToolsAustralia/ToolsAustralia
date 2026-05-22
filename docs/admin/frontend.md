@@ -2,7 +2,7 @@
 
 ## Pages
 
-- `src/app/admin/page.tsx` — entry
+- `src/app/admin/page.tsx` — entry. Auth guard uses `usePermissions().isStaff` (Task 12, 2026-05-20). The legacy `useEffect` redirect and `session.user?.role !== "admin"` early-return have been removed; the component now checks `isLoading` / `isStaff` directly and calls `router.push("/")` when not staff. The admin layout's server-side guard (Task 14) is the primary gating mechanism; this is belt-and-suspenders for the client render.
 - `src/app/admin/layout.tsx` — admin layout (sidebar, header)
 - `src/app/admin/[tab]/` — tabbed feature views
 - `src/app/admin/component/` — likely subroute for component-driven views

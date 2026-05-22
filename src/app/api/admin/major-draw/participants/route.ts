@@ -8,8 +8,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import { requirePermission } from "@/lib/api-auth-permissions";
 import connectDB from "@/lib/mongodb";
 import mongoose from "mongoose";
 import MajorDraw from "@/models/MajorDraw";
@@ -62,18 +61,10 @@ interface Participant {
  */
 export async function GET(request: NextRequest) {
   try {
+    const _guard = await requirePermission("majorDraw.view");
+    if (_guard instanceof NextResponse) return _guard;
+
     await connectDB();
-
-    // Verify admin authentication
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    // Check if user is admin
-    if (session.user.role !== "admin") {
-      return NextResponse.json({ error: "Forbidden - Admin access required" }, { status: 403 });
-    }
 
     // Get query parameters
     const searchParams = request.nextUrl.searchParams;

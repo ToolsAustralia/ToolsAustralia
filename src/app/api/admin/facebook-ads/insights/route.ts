@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import { requirePermission } from "@/lib/api-auth-permissions";
 import connectDB from "@/lib/mongodb";
 import { z } from "zod";
 import { fetchFacebookInsights } from "@/lib/facebook-marketing";
@@ -47,13 +46,10 @@ const insightsQuerySchema = z.object({
  */
 export async function GET(request: NextRequest) {
   try {
-    await connectDB();
+    const guard = await requirePermission("facebookAds.view");
+    if (guard instanceof NextResponse) return guard;
 
-    // Verify admin authentication
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id || session.user.role !== "admin") {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    await connectDB();
 
     // Get and validate query parameters
     const { searchParams } = new URL(request.url);

@@ -12,14 +12,18 @@ export default function AdminTabPage() {
   const { data: session, status } = useSession();
   const tab = params?.tab as string;
 
-  // Redirect if not authenticated or not admin
-  useEffect(() => {
-    if (status === "loading") return; // Still loading
+  // Internal users = userType "staff" / "admin", or legacy role:"admin"
+  // (the legacy bridge stays until Phase 5 drops User.role).
+  const isInternalUser =
+    session?.user?.userType === "staff" ||
+    session?.user?.userType === "admin" ||
+    session?.user?.role === "admin";
 
-    if (!session || session.user?.role !== "admin") {
-      router.push("/");
-    }
-  }, [session, status, router]);
+  // Redirect if not authenticated or not internal
+  useEffect(() => {
+    if (status === "loading") return;
+    if (!session || !isInternalUser) router.push("/");
+  }, [session, status, isInternalUser, router]);
 
   // Show loading while checking authentication
   if (status === "loading") {
@@ -30,18 +34,23 @@ export default function AdminTabPage() {
     );
   }
 
-  // Don't render if not authenticated or not admin
-  if (!session || session.user?.role !== "admin") {
+  // Don't render if not authenticated or not internal
+  if (!session || !isInternalUser) {
     return null;
   }
 
-  // Create admin user object from session
+  // Create admin user object from session — `role` is the display name of
+  // the user's assigned Role document so the sidebar can show "Customer
+  // Support" instead of the legacy "admin" string.
+  const roleLabel =
+    session.user?.roleName ??
+    (session.user?.userType === "admin" ? "Admin" : "Staff");
   const adminUser: AdminUser = {
     id: session.user?.id || "",
     name: `${session.user?.firstName || ""} ${session.user?.lastName || ""}`.trim(),
     email: session.user?.email || "",
-    role: "admin",
-    isAdmin: true,
+    role: roleLabel,
+    isAdmin: session.user?.userType === "admin",
     lastLogin: new Date(),
   };
 

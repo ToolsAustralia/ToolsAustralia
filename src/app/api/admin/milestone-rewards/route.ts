@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import connectDB from "@/lib/mongodb";
-import { requireAdminUser } from "@/lib/api-auth";
+import { requirePermission } from "@/lib/api-auth-permissions";
+import { requirePermissionWithAudit } from "@/lib/audit-log";
 import { MilestoneService } from "@/services/milestones";
 import MilestoneIssuance from "@/models/MilestoneIssuance";
 
@@ -21,10 +22,8 @@ const milestoneRewardSchema = z.object({
 
 export async function GET() {
   try {
-    const authResult = await requireAdminUser();
-    if ("errorResponse" in authResult || !("adminUser" in authResult)) {
-      return authResult.errorResponse;
-    }
+    const guard = await requirePermission("rewards.view");
+    if (guard instanceof NextResponse) return guard;
 
     await connectDB();
     const rewards = await MilestoneService.listRewards();
@@ -104,10 +103,11 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
-    const authResult = await requireAdminUser();
-    if ("errorResponse" in authResult || !("adminUser" in authResult)) {
-      return authResult.errorResponse;
-    }
+    const guard = await requirePermissionWithAudit("rewards.edit", request, {
+      resourceType: "MilestoneReward",
+    });
+    if (guard instanceof NextResponse) return guard;
+    const { session, log } = guard;
 
     await connectDB();
     const body = await request.json();
@@ -116,9 +116,10 @@ export async function POST(request: NextRequest) {
       ...payload,
       startsAt: payload.startsAt ? new Date(payload.startsAt) : undefined,
       endsAt: payload.endsAt ? new Date(payload.endsAt) : undefined,
-      createdBy: authResult.adminUser._id.toString(),
+      createdBy: session.user.id,
     });
 
+    await log(200);
     return NextResponse.json({
       success: true,
       data: reward,

@@ -440,9 +440,16 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/app/login/**",
         "src/app/reset-password/**",
         "src/app/oauth-redirect/**",
+        "src/app/staff-setup/**",
+        "src/lib/api-auth-permissions.ts",
+        "src/lib/permissions.ts",
+        "src/lib/permission-descriptions.ts",
+        "src/hooks/usePermissions.ts",
+        "src/models/Role.ts",
+        "scripts/migrate-seed-staff-roles.ts",
         "src/contexts/UserContext.tsx"
       ],
-      "lastVerified": "2026-05-10"
+      "lastVerified": "2026-05-20"
     },
     "email": {
       "docs": "docs/email/",
@@ -455,7 +462,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/components/email-preview/**",
         "*-email-template.html"
       ],
-      "lastVerified": "2026-04-28"
+      "lastVerified": "2026-05-20"
     },
     "tracking": {
       "docs": "docs/tracking/",
@@ -605,7 +612,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/hooks/usePrefetching.ts",
         "src/hooks/useConfetti.ts"
       ],
-      "lastVerified": "2026-05-09"
+      "lastVerified": "2026-05-20"
     },
     "admin": {
       "docs": "docs/admin/",
@@ -616,6 +623,9 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/features/admin/**",
         "src/models/ChargeJobLock.ts",
         "src/models/ChargeJobRun.ts",
+        "src/models/StaffActivity.ts",
+        "src/lib/audit-log.ts",
+        "src/lib/__tests__/staff-activity.test.ts",
         "src/server/admin/**",
         "src/services/admin/**",
         "src/services/admin/chargePastDueHistory.ts",
@@ -624,7 +634,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/models/DashboardStatsDailySnapshot.ts",
         "src/services/admin/dashboard-stats/**"
       ],
-      "lastVerified": "2026-05-14"
+      "lastVerified": "2026-05-20"
     },
     "dashboard-account": {
       "docs": "docs/dashboard-account/",
@@ -644,7 +654,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/lib/rate-limiting/**",
         "next.config.ts"
       ],
-      "lastVerified": "2026-04-28"
+      "lastVerified": "2026-05-20"
     },
     "mongodb": {
       "docs": "docs/mongodb/",

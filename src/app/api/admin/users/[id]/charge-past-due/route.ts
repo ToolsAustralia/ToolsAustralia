@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import { requirePermissionWithAudit } from "@/lib/audit-log";
 import connectDB from "@/lib/mongodb";
 import { stripe } from "@/lib/stripe";
 import User from "@/models/User";
@@ -90,14 +89,14 @@ async function listOpenInvoicesForCustomer(customerId: string): Promise<Stripe.I
  */
 export async function GET(_request: NextRequest, { params }: RouteParams) {
   try {
-    await connectDB();
-
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id || session.user.role !== "admin") {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
     const { id: userId } = await params;
+    const guard = await requirePermissionWithAudit("users.view", _request, {
+      resourceType: "User",
+      resourceId: userId,
+    });
+    if (guard instanceof NextResponse) return guard;
+
+    await connectDB();
     const loaded = await loadPastDueUserForCharge(userId);
 
     if (!loaded.ok) {
@@ -246,12 +245,15 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
  */
 export async function POST(request: NextRequest, { params }: RouteParams) {
   try {
-    await connectDB();
+    const { id: userId } = await params;
+    const guard = await requirePermissionWithAudit("users.charge", request, {
+      resourceType: "User",
+      resourceId: userId,
+    });
+    if (guard instanceof NextResponse) return guard;
+    const { session, log } = guard;
 
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id || session.user.role !== "admin") {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    await connectDB();
 
     const adminId = session.user.id;
     const body = await request.json();
@@ -265,7 +267,6 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       );
     }
 
-    const { id: userId } = await params;
     const loaded = await loadPastDueUserForCharge(userId);
 
     if (!loaded.ok) {
@@ -376,6 +377,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       });
     }
 
+    await log(200);
     return NextResponse.json({
       success: true,
       summary: {

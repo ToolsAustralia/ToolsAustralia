@@ -8,6 +8,7 @@ import { Calendar, Edit2, Trash2, Loader2, RefreshCw, CheckCircle } from "lucide
 import { AdminBadge } from "@/components/admin/ui/AdminBadge";
 import { formatDateReadable } from "@/utils/common/timezone";
 import { cn } from "@/utils/cn";
+import { usePermissions } from "@/hooks/usePermissions";
 
 interface ScheduledPromoListProps {
   filters?: {
@@ -23,6 +24,9 @@ interface ScheduledPromoListProps {
  * Displays scheduled promo phases with edit and delete actions.
  */
 export default function ScheduledPromoList({ filters, onEditRequested }: ScheduledPromoListProps) {
+  const { has } = usePermissions();
+  const canEditPromos = has("promos.edit");
+  const canDeletePromos = has("promos.delete");
   const { data: promos = [], isLoading, refetch } = useScheduledPromos(filters);
   const deleteMutation = useDeleteScheduledPromo();
 
@@ -135,25 +139,29 @@ export default function ScheduledPromoList({ filters, onEditRequested }: Schedul
                       </div>
                       <div className="flex items-center gap-1 shrink-0">
                         {getStatusBadge(promo)}
-                        <button
-                          onClick={() => handleEdit(promo)}
-                          className="rounded p-1.5 text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300"
-                          title="Edit"
-                        >
-                          <Edit2 className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => handleDelete(promo.id)}
-                          disabled={deletingId === promo.id}
-                          className="rounded p-1.5 text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300 disabled:opacity-50"
-                          title="Delete"
-                        >
-                          {deletingId === promo.id ? (
-                            <Loader2 className="w-4 h-4 animate-spin" />
-                          ) : (
-                            <Trash2 className="w-4 h-4" />
-                          )}
-                        </button>
+                        {canEditPromos && (
+                          <button
+                            onClick={() => handleEdit(promo)}
+                            className="rounded p-1.5 text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300"
+                            title="Edit"
+                          >
+                            <Edit2 className="w-4 h-4" />
+                          </button>
+                        )}
+                        {canDeletePromos && (
+                          <button
+                            onClick={() => handleDelete(promo.id)}
+                            disabled={deletingId === promo.id}
+                            className="rounded p-1.5 text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300 disabled:opacity-50"
+                            title="Delete"
+                          >
+                            {deletingId === promo.id ? (
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                            ) : (
+                              <Trash2 className="w-4 h-4" />
+                            )}
+                          </button>
+                        )}
                       </div>
                     </div>
                     <div className="text-xs text-gray-600 dark:text-neutral-400 space-y-0.5">
@@ -224,25 +232,29 @@ export default function ScheduledPromoList({ filters, onEditRequested }: Schedul
                         <td className="px-4 py-3 whitespace-nowrap">{getStatusBadge(promo)}</td>
                         <td className="whitespace-nowrap px-4 py-3 text-right text-sm font-medium">
                           <div className="flex items-center justify-end gap-2">
-                            <button
-                              onClick={() => handleEdit(promo)}
-                              className="rounded p-1.5 text-blue-600 transition-colors hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300"
-                              title="Edit phase"
-                            >
-                              <Edit2 className="w-4 h-4" />
-                            </button>
-                            <button
-                              onClick={() => handleDelete(promo.id)}
-                              disabled={deletingId === promo.id}
-                              className="rounded p-1.5 text-red-600 transition-colors hover:text-red-900 dark:text-red-400 dark:hover:text-red-300 disabled:cursor-not-allowed disabled:opacity-50"
-                              title="Delete phase"
-                            >
-                              {deletingId === promo.id ? (
-                                <Loader2 className="w-4 h-4 animate-spin" />
-                              ) : (
-                                <Trash2 className="w-4 h-4" />
-                              )}
-                            </button>
+                            {canEditPromos && (
+                              <button
+                                onClick={() => handleEdit(promo)}
+                                className="rounded p-1.5 text-blue-600 transition-colors hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300"
+                                title="Edit phase"
+                              >
+                                <Edit2 className="w-4 h-4" />
+                              </button>
+                            )}
+                            {canDeletePromos && (
+                              <button
+                                onClick={() => handleDelete(promo.id)}
+                                disabled={deletingId === promo.id}
+                                className="rounded p-1.5 text-red-600 transition-colors hover:text-red-900 dark:text-red-400 dark:hover:text-red-300 disabled:cursor-not-allowed disabled:opacity-50"
+                                title="Delete phase"
+                              >
+                                {deletingId === promo.id ? (
+                                  <Loader2 className="w-4 h-4 animate-spin" />
+                                ) : (
+                                  <Trash2 className="w-4 h-4" />
+                                )}
+                              </button>
+                            )}
                           </div>
                         </td>
                       </tr>

@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import { requirePermissionWithAudit } from "@/lib/audit-log";
 import connectDB from "@/lib/mongodb";
 import mongoose from "mongoose";
 import { replayRefundReversalForBenefitsGrantedEvent } from "@/utils/payment/refund-processing";
@@ -12,15 +11,17 @@ type RouteParams = { params: Promise<{ id: string; eventId: string }> };
  * Re-run `processRefundReversal` for a BenefitsGranted row when webhooks were missed.
  * `eventId` is the PaymentEvent `_id` (URL-encoded), e.g. BenefitsGranted-invoice_in_xxx
  */
-export async function POST(_request: NextRequest, { params }: RouteParams) {
+export async function POST(request: NextRequest, { params }: RouteParams) {
   try {
-    await connectDB();
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id || session.user.role !== "admin") {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
     const { id: userId, eventId: rawEventId } = await params;
+    const guard = await requirePermissionWithAudit("users.refund", request, {
+      resourceType: "PaymentEvent",
+      resourceId: rawEventId,
+    });
+    if (guard instanceof NextResponse) return guard;
+    const { log } = guard;
+
+    await connectDB();
 
     if (!mongoose.Types.ObjectId.isValid(userId)) {
       return NextResponse.json({ error: "Invalid user ID" }, { status: 400 });
@@ -38,6 +39,7 @@ export async function POST(_request: NextRequest, { params }: RouteParams) {
     });
 
     if (result.success || result.alreadyProcessed) {
+      await log(200);
       return NextResponse.json({ success: true, data: result });
     }
 

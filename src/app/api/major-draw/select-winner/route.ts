@@ -1,10 +1,9 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import connectDB from "@/lib/mongodb";
 import MajorDraw from "@/models/MajorDraw";
 import User from "@/models/User";
 import Winner from "@/models/Winner";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import { requirePermissionWithAudit } from "@/lib/audit-log";
 import { klaviyo } from "@/lib/klaviyo";
 import { createMajorDrawWonEvent } from "@/utils/integrations/klaviyo/klaviyo-events";
 import mongoose, { Types } from "mongoose";
@@ -13,34 +12,18 @@ import mongoose, { Types } from "mongoose";
  * POST /api/major-draw/select-winner
  * Select a random winner for the major draw
  */
-export async function POST() {
+export async function POST(request: NextRequest) {
   try {
     console.log("🎯 Selecting major draw winner...");
 
-    // Check if user is admin
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Unauthorized",
-        },
-        { status: 401 }
-      );
-    }
+    // Verify staff permission before hitting the database
+    const guard = await requirePermissionWithAudit("majorDraw.selectWinner", request, {
+      resourceType: "MajorDraw",
+    });
+    if (guard instanceof NextResponse) return guard;
+    const { session, log } = guard;
 
-    // Get user to check role
     await connectDB();
-    const user = await User.findById(session.user.id);
-    if (!user || user.role !== "admin") {
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Admin access required",
-        },
-        { status: 403 }
-      );
-    }
 
     // Get the active major draw
     const majorDraw = await MajorDraw.findOne({ isActive: true }).sort({ createdAt: -1 });
@@ -142,6 +125,7 @@ export async function POST() {
       const winner = await User.findById(winningEntry.userId).select("firstName lastName email");
 
       console.log(`✅ Winner selected: ${winner?.firstName} ${winner?.lastName} (Entry #${winningEntryNumber})`);
+      await log(200);
 
       // Track winner notification in Klaviyo (non-blocking)
       if (winner) {

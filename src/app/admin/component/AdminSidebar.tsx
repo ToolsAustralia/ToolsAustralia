@@ -4,33 +4,18 @@ import React, { useState, useEffect, useRef } from "react";
 import Image from "next/image";
 import { useRouter, usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
+import { usePermissions } from "@/hooks/usePermissions";
 import {
-  BarChart3,
-  Trophy,
-  Settings,
-  Shield,
-  LogOut,
-  Home,
-  Activity,
-  Crown,
-  X,
-  Gift,
-  FileText as FileTextIcon,
-  Users,
-  Zap,
-  UserCheck,
-  TrendingUp,
-  FlaskConical,
-  Bug,
-  ScrollText,
+  AlertCircle,
   ChevronDown,
   ChevronRight,
-  LayoutDashboard,
-  LineChart,
-  Megaphone,
-  ClipboardList,
-  AlertCircle,
+  Crown,
+  Home,
+  LogOut,
+  Shield,
+  X,
 } from "lucide-react";
+import { ADMIN_TAB_GROUPS } from "./adminTabs";
 
 const ADMIN_CIRCULAR_LOGO = "/images/Tools Australia Logo/Social Media Profile_Black Background.webp";
 
@@ -47,80 +32,7 @@ interface AdminSidebarProps {
   onClose?: () => void;
 }
 
-type AdminTab = {
-  id: string;
-  label: string;
-  icon: React.ComponentType<{ className?: string }>;
-};
-
-const adminTabGroups: Array<{
-  id: string;
-  label: string;
-  groupIcon: React.ComponentType<{ className?: string }>;
-  tabs: AdminTab[];
-}> = [
-  {
-    id: "core",
-    label: "Core",
-    groupIcon: LayoutDashboard,
-    tabs: [
-      { id: "overview", label: "Overview", icon: BarChart3 },
-      { id: "users", label: "Users", icon: Users },
-      { id: "affiliates", label: "Affiliates", icon: UserCheck },
-    ],
-  },
-  {
-    id: "analytics",
-    label: "Analytics",
-    groupIcon: LineChart,
-    tabs: [
-      { id: "facebook-ads", label: "Facebook Ads", icon: TrendingUp },
-      { id: "tiktok-ads", label: "TikTok Ads", icon: TrendingUp },
-      { id: "snapchat-ads", label: "Snapchat Ads", icon: TrendingUp },
-      { id: "promo-analytics", label: "Page Analytics", icon: BarChart3 },
-      { id: "cancellation-flow", label: "Cancellation Flow", icon: BarChart3 },
-      { id: "ab-testing", label: "A/B Testing", icon: FlaskConical },
-    ],
-  },
-  {
-    id: "promos",
-    label: "Promos",
-    groupIcon: Megaphone,
-    tabs: [{ id: "promos", label: "Promos", icon: Zap }],
-  },
-  {
-    id: "draws",
-    label: "Draws",
-    groupIcon: Trophy,
-    tabs: [
-      { id: "major-draw", label: "Major Draw", icon: Gift },
-      { id: "mini-draws", label: "Mini Draws", icon: Trophy },
-      { id: "draw-results", label: "Draw Results", icon: Trophy },
-      { id: "upcoming-draws", label: "Upcoming Draws", icon: Activity },
-    ],
-  },
-  {
-    id: "operations",
-    label: "Operations",
-    groupIcon: ClipboardList,
-    tabs: [
-      { id: "submissions", label: "Submissions", icon: FileTextIcon },
-      { id: "error-reports", label: "Error Reports", icon: Bug },
-      { id: "activity-log", label: "Activity Log", icon: ScrollText },
-      { id: "settings", label: "Settings", icon: Settings },
-    ],
-  },
-  {
-    id: "billing",
-    label: "Billing",
-    groupIcon: AlertCircle,
-    tabs: [
-      { id: "blocked-transactions", label: "Blocked Transactions", icon: AlertCircle },
-      { id: "past-due-history", label: "Past-Due Charges", icon: ScrollText },
-      { id: "stripe-webhook-queue", label: "Webhook Queue", icon: Activity },
-    ],
-  },
-];
+const adminTabGroups = ADMIN_TAB_GROUPS;
 
 export default function AdminSidebar({
   selectedTab: _selectedTab,
@@ -131,6 +43,7 @@ export default function AdminSidebar({
 }: AdminSidebarProps) {
   const router = useRouter();
   const pathname = usePathname();
+  const { has } = usePermissions();
   const [unviewedCount, setUnviewedCount] = useState(0);
   const [fullCapacityCount, setFullCapacityCount] = useState(0);
   const navScrollRef = useRef<HTMLDivElement>(null);
@@ -316,6 +229,8 @@ export default function AdminSidebar({
       <div ref={navScrollRef} className="flex-1 overflow-y-auto admin-scrollbar">
         <nav className="px-2 py-3 sm:px-3 space-y-4">
           {adminTabGroups.map((group) => {
+            const visibleTabs = group.tabs.filter((t) => has(t.requires));
+            if (visibleTabs.length === 0) return null;
             const isExpanded = expandedGroups.has(group.id);
             const GroupIcon = group.groupIcon;
             const operationsNeedsAttention = group.id === "operations" && unviewedCount > 0;
@@ -372,7 +287,7 @@ export default function AdminSidebar({
                 </button>
                 {isExpanded && (
                   <div className="ml-1.5 pl-2.5 border-l border-red-100 dark:border-red-900/50 space-y-0.5">
-                    {group.tabs.map((tab) => {
+                    {visibleTabs.map((tab) => {
                       const Icon = tab.icon;
                       const isActive =
                         (tab.id === "overview" && (pathname === "/admin" || pathname === "/admin/")) ||

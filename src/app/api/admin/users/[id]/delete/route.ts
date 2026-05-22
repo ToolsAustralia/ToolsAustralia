@@ -6,8 +6,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import { requirePermissionWithAudit } from "@/lib/audit-log";
 import { deleteUserWithCascade } from "@/utils/admin/delete-user-cascade";
 import { getUserDeletionSummary } from "@/utils/admin/get-user-deletion-summary";
 import { removeUserFromIntegrations } from "@/utils/integrations/remove-user-from-integrations";
@@ -21,15 +20,15 @@ import mongoose from "mongoose";
  */
 export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    // Verify admin authentication
-    const session = await getServerSession(authOptions);
-    if (!session?.user || session.user.role !== "admin") {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const { id } = await params;
+    const guard = await requirePermissionWithAudit("users.delete", request, {
+      resourceType: "User",
+      resourceId: id,
+    });
+    if (guard instanceof NextResponse) return guard;
+    const { session, log } = guard;
 
     await connectDB();
-
-    const { id } = await params;
 
     // Validate ObjectId
     if (!mongoose.Types.ObjectId.isValid(id)) {
@@ -100,6 +99,7 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
       );
     }
 
+    await log(200);
     return NextResponse.json({
       success: true,
       message: "User deleted successfully",

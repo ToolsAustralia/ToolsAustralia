@@ -1,14 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import connectDB from "@/lib/mongodb";
-import { requireAdminUser } from "@/lib/api-auth";
+import { requirePermission } from "@/lib/api-auth-permissions";
 import { RedemptionAnalyticsService } from "@/services/redeemables";
 
 export async function GET(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
-    const authResult = await requireAdminUser();
-    if ("errorResponse" in authResult || !("adminUser" in authResult)) {
-      return authResult.errorResponse;
-    }
+    const guard = await requirePermission("rewards.view");
+    if (guard instanceof NextResponse) return guard;
 
     await connectDB();
     const { id } = await context.params;

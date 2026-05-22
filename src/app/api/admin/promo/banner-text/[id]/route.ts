@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import { requirePermissionWithAudit } from "@/lib/audit-log";
 import { PromoBannerTextService } from "@/services/admin/PromoBannerTextService";
 import { convertUTCToAEST } from "@/utils/common/timezone";
 import { z } from "zod";
@@ -29,12 +28,14 @@ type RouteParams = { params: Promise<{ id: string }> };
  */
 export async function PUT(request: NextRequest, { params }: RouteParams) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id || session.user.role !== "admin") {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
     const { id } = await params;
+
+    const guard = await requirePermissionWithAudit("promos.edit", request, {
+      resourceType: "PromoBannerText",
+      resourceId: id,
+    });
+    if (guard instanceof NextResponse) return guard;
+    const { log } = guard;
 
     // Validate ObjectId format
     if (!mongoose.Types.ObjectId.isValid(id)) {
@@ -112,6 +113,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       },
     };
 
+    await log(200);
     return NextResponse.json(
       {
         success: true,
@@ -137,12 +139,14 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
  */
 export async function DELETE(request: NextRequest, { params }: RouteParams) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id || session.user.role !== "admin") {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
     const { id } = await params;
+
+    const guard = await requirePermissionWithAudit("promos.delete", request, {
+      resourceType: "PromoBannerText",
+      resourceId: id,
+    });
+    if (guard instanceof NextResponse) return guard;
+    const { log } = guard;
 
     // Validate ObjectId format
     if (!mongoose.Types.ObjectId.isValid(id)) {
@@ -168,6 +172,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
       );
     }
 
+    await log(200);
     return NextResponse.json(
       {
         success: true,

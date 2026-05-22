@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import { requirePermission } from "@/lib/api-auth-permissions";
 import ExperimentService from "@/services/ab-testing/ExperimentService";
 
 interface RouteParams {
@@ -13,11 +12,8 @@ interface RouteParams {
  */
 export async function GET(request: NextRequest, { params }: RouteParams) {
   try {
-    // Check authentication
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id || session.user.role !== "admin") {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const guard = await requirePermission("abTesting.view");
+    if (guard instanceof NextResponse) return guard;
 
     const { id: experimentId } = await params;
     const history = await ExperimentService.getExperimentHistory(experimentId);

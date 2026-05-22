@@ -10,8 +10,12 @@ import AdminAlternatingMultiplierModal from "@/components/modals/AdminAlternatin
 import type { AlternatingPromoMultiplier } from "@/types/admin";
 import { getAlternatingMultiplier } from "@/utils/promo-banner/alternating-multiplier-manager";
 import { formatDisplayName } from "@/utils/display-name";
+import { usePermissions } from "@/hooks/usePermissions";
 
 export default function AlternatingMultiplierList() {
+  const { has } = usePermissions();
+  const canEditPromos = has("promos.edit");
+  const canDeletePromos = has("promos.delete");
   const { data, isLoading, error } = useAlternatingMultiplierConfigs();
   const deleteMutation = useDeleteAlternatingMultiplier();
   const [editingConfig, setEditingConfig] = useState<AlternatingPromoMultiplier | null>(null);
@@ -165,25 +169,29 @@ export default function AlternatingMultiplierList() {
                 </div>
 
                 <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => handleEdit(config)}
-                    className="rounded-lg p-2 text-blue-600 transition-colors hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-950/40"
-                    title="Edit configuration"
-                  >
-                    <Edit className="w-4 h-4" />
-                  </button>
-                  <button
-                    onClick={() => handleDelete(config.id)}
-                    disabled={deletingId === config.id}
-                    className="rounded-lg p-2 text-red-600 transition-colors hover:bg-red-50 disabled:opacity-50 dark:text-red-400 dark:hover:bg-red-950/40"
-                    title="Delete configuration"
-                  >
-                    {deletingId === config.id ? (
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                    ) : (
-                      <Trash2 className="w-4 h-4" />
-                    )}
-                  </button>
+                  {canEditPromos && (
+                    <button
+                      onClick={() => handleEdit(config)}
+                      className="rounded-lg p-2 text-blue-600 transition-colors hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-950/40"
+                      title="Edit configuration"
+                    >
+                      <Edit className="w-4 h-4" />
+                    </button>
+                  )}
+                  {canDeletePromos && (
+                    <button
+                      onClick={() => handleDelete(config.id)}
+                      disabled={deletingId === config.id}
+                      className="rounded-lg p-2 text-red-600 transition-colors hover:bg-red-50 disabled:opacity-50 dark:text-red-400 dark:hover:bg-red-950/40"
+                      title="Delete configuration"
+                    >
+                      {deletingId === config.id ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <Trash2 className="w-4 h-4" />
+                      )}
+                    </button>
+                  )}
                 </div>
               </div>
             </div>

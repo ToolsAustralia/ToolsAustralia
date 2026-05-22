@@ -2,8 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import connectDB from "@/lib/mongodb";
 import ContactSubmission from "@/models/ContactSubmission";
 import { z } from "zod";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import { requirePermission } from "@/lib/api-auth-permissions";
 import { emailService, checkFormSubmissionRateLimit } from "@/lib/email/";
 
 /**
@@ -38,14 +37,8 @@ export async function GET(request: NextRequest) {
   try {
     await connectDB();
 
-    // Check if user is authenticated and has admin role
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    // TODO: Add admin role check here
-    // For now, we'll allow any authenticated user to view submissions
+    const guard = await requirePermission("submissions.view");
+    if (guard instanceof NextResponse) return guard;
 
     const { searchParams } = new URL(request.url);
     const status = searchParams.get("status");

@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import connectDB from "@/lib/mongodb";
-import { requireAdminUser } from "@/lib/api-auth";
+import { requirePermission } from "@/lib/api-auth-permissions";
+import { requirePermissionWithAudit } from "@/lib/audit-log";
 import { CampaignService, getMonthKey } from "@/services/redeemables";
 import MonthlyEntryCampaign from "@/models/MonthlyEntryCampaign";
 import RedeemableIssuance from "@/models/RedeemableIssuance";
@@ -32,10 +33,8 @@ const campaignSchema = z.object({
 
 export async function GET(request: NextRequest) {
   try {
-    const authResult = await requireAdminUser();
-    if ("errorResponse" in authResult || !("adminUser" in authResult)) {
-      return authResult.errorResponse;
-    }
+    const guard = await requirePermission("rewards.view");
+    if (guard instanceof NextResponse) return guard;
 
     await connectDB();
     const monthKey = request.nextUrl.searchParams.get("monthKey");
@@ -81,10 +80,11 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const authResult = await requireAdminUser();
-    if ("errorResponse" in authResult || !("adminUser" in authResult)) {
-      return authResult.errorResponse;
-    }
+    const guard = await requirePermissionWithAudit("rewards.edit", request, {
+      resourceType: "MonthlyEntryCampaign",
+    });
+    if (guard instanceof NextResponse) return guard;
+    const { session, log } = guard;
 
     await connectDB();
     const body = await request.json();
@@ -120,9 +120,10 @@ export async function POST(request: NextRequest) {
       purchaseRequirement: payload.purchaseRequirement,
       segmentConfig: payload.segmentConfig,
       isActive: payload.isActive,
-      createdBy: authResult.adminUser._id.toString(),
+      createdBy: session.user.id,
     });
 
+    await log(200);
     return NextResponse.json({
       success: true,
       data: campaign,

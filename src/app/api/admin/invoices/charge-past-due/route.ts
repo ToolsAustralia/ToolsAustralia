@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import { requirePermissionWithAudit } from "@/lib/audit-log";
 import connectDB from "@/lib/mongodb";
 import { stripe } from "@/lib/stripe";
 import User from "@/models/User";
@@ -37,13 +36,10 @@ type PastDueUserLean = {
  */
 export async function GET(_request: NextRequest) {
   try {
-    await connectDB();
+    const _guard = await requirePermissionWithAudit("users.view", _request);
+    if (_guard instanceof NextResponse) return _guard;
 
-    // 1. Admin authentication
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id || session.user.role !== "admin") {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    await connectDB();
 
     // 2. Fetch eligible invoices from Stripe with pagination.
     // `expand: ['data.customer']` returns each customer inline, so the
@@ -254,13 +250,11 @@ export async function GET(_request: NextRequest) {
  */
 export async function POST(request: NextRequest) {
   try {
-    await connectDB();
+    const guard = await requirePermissionWithAudit("users.charge", request);
+    if (guard instanceof NextResponse) return guard;
 
-    // 1. Admin authentication
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id || session.user.role !== "admin") {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const { session, log } = guard;
+    await connectDB();
 
     const adminId = session.user.id;
 
@@ -280,6 +274,7 @@ export async function POST(request: NextRequest) {
     if (lock && lock.isLocked) {
       // Check if lock has expired
       if (lock.lockedUntil && new Date(lock.lockedUntil) > now) {
+        await log(409);
         return NextResponse.json(
           {
             error: "Operation in progress",
@@ -363,6 +358,7 @@ export async function POST(request: NextRequest) {
           isLocked: false,
         });
 
+        await log(200);
         return NextResponse.json({
           success: true,
           summary: {
@@ -616,6 +612,7 @@ export async function POST(request: NextRequest) {
         isLocked: false,
       });
 
+      await log(200);
       return NextResponse.json({
         success: true,
         summary: {

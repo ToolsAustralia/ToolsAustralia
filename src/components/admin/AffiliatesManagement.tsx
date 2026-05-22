@@ -23,6 +23,7 @@ import { useDebounce } from "@/hooks/useDebounce";
 import AffiliateDetailModal from "./AffiliateDetailModal";
 import { AccountActiveBadge } from "@/components/admin/ui/AdminBadge";
 import ModalContainer from "@/components/modals/ui/ModalContainer";
+import { usePermissions } from "@/hooks/usePermissions";
 
 interface Affiliate {
   id: string;
@@ -66,6 +67,8 @@ type AffiliateListSort =
  * Main Affiliates Management component
  */
 export default function AffiliatesManagement() {
+  const { has } = usePermissions();
+  const canEditAffiliates = has("affiliates.edit");
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const [selectedAffiliateId, setSelectedAffiliateId] = useState<string | null>(null);
@@ -190,15 +193,17 @@ export default function AffiliatesManagement() {
             Manage affiliate accounts and track commissions
           </p>
         </div>
-        <button
-          type="button"
-          onClick={() => setIsCreateModalOpen(true)}
-          className="flex shrink-0 items-center gap-1 sm:gap-2 px-2.5 py-1.5 sm:px-4 sm:py-2 rounded-lg bg-gradient-to-r from-red-600 to-red-400 text-white text-xs sm:text-sm font-medium hover:from-red-675 hover:to-red-650 transition-all shadow-sm hover:shadow-md"
-        >
-          <Plus className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-          <span className="sm:hidden">Create</span>
-          <span className="hidden sm:inline">Create Affiliate</span>
-        </button>
+        {canEditAffiliates && (
+          <button
+            type="button"
+            onClick={() => setIsCreateModalOpen(true)}
+            className="flex shrink-0 items-center gap-1 sm:gap-2 px-2.5 py-1.5 sm:px-4 sm:py-2 rounded-lg bg-gradient-to-r from-red-600 to-red-400 text-white text-xs sm:text-sm font-medium hover:from-red-675 hover:to-red-650 transition-all shadow-sm hover:shadow-md"
+          >
+            <Plus className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+            <span className="sm:hidden">Create</span>
+            <span className="hidden sm:inline">Create Affiliate</span>
+          </button>
+        )}
       </div>
 
       {/* Search — same density as Users Management filter bar */}
@@ -278,7 +283,7 @@ export default function AffiliatesManagement() {
             <p className="text-gray-600 dark:text-neutral-400 mb-4">
               {search ? "Try adjusting your search criteria" : "Get started by creating your first affiliate account"}
             </p>
-            {!search && (
+            {!search && canEditAffiliates && (
               <button
                 onClick={() => setIsCreateModalOpen(true)}
                 className="px-4 py-2 bg-gradient-to-r from-red-600 to-red-400 text-white rounded-lg hover:from-red-675 hover:to-red-650 transition-all"
