@@ -8,6 +8,8 @@ Per-request nonce is the way. Don't add `unsafe-inline` to script-src "to make i
 
 Adding Facebook / Google / Klaviyo / TikTok / etc. requires their script + img + connect domains in CSP. Update [src/utils/security/csp.ts](../../src/utils/security/csp.ts).
 
+**TikTok pixel uses TWO connect-src hosts:** `https://analytics.tiktok.com` (events) **and** `https://analytics-ipv6.tiktok.com` (IPv6 enrichment — `/ipv6/enrich`, captures the user's IPv6 for match quality). Both must be in `connect-src` or the browser console shows `Refused to connect … violates … connect-src` for the IPv6 host and you silently lose IP-based matching. The Events API (`business-api.tiktok.com`) is server-to-server and needs **no** CSP entry.
+
 ## R3. Don't break the Stripe webhook
 
 The webhook route has a different header set. Don't accidentally apply COEP to it — Stripe POSTs from a different origin and the response would fail.
