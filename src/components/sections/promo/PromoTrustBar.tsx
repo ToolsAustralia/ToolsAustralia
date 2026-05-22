@@ -168,10 +168,12 @@ function Rivet({ className = "" }: { className?: string }) {
   return (
     <span
       aria-hidden
-      className={`absolute rounded-full ${className}`}
+      // Smaller + tighter to the corners on mobile so the short bar reads as four distinct
+      // corner bolts. At the previous 8px size / 8px inset the top and bottom rivets collapsed
+      // onto each other in the middle of the short mobile bar (looking like one centred blob).
+      // Full 8px size and 8px inset restored from sm up, where the bar is tall enough.
+      className={cn("absolute rounded-full h-1.5 w-1.5 sm:h-2 sm:w-2", className)}
       style={{
-        width: 8,
-        height: 8,
         background:
           "radial-gradient(circle at 35% 30%, #f3d07a 0%, #b8893a 45%, #5a3f10 100%)",
         boxShadow:
@@ -214,10 +216,10 @@ function WorkshopShell({
       />
       <div className="w-full" style={edgeStyle} />
       <div className="relative box-border w-full min-w-0 max-w-none max-sm:py-1.5 py-2 pl-[max(0.75rem,env(safe-area-inset-left))] pr-[max(0.75rem,env(safe-area-inset-right))] sm:px-6 sm:py-3 lg:px-10 xl:px-14 2xl:px-16">
-        <Rivet className="left-2 top-2" />
-        <Rivet className="right-2 top-2" />
-        <Rivet className="left-2 bottom-2" />
-        <Rivet className="right-2 bottom-2" />
+        <Rivet className="left-1 top-1 sm:left-2 sm:top-2" />
+        <Rivet className="right-1 top-1 sm:right-2 sm:top-2" />
+        <Rivet className="left-1 bottom-1 sm:left-2 sm:bottom-2" />
+        <Rivet className="right-1 bottom-1 sm:right-2 sm:bottom-2" />
         {children}
       </div>
       <div className="w-full" style={edgeStyle} />
@@ -363,19 +365,25 @@ export default function PromoTrustBar({ initialMajorDraw }: PromoTrustBarProps =
       themePrimary={theme.primary}
       ariaLabel="Trust and giveaway information"
     >
-      <div className="flex w-full min-w-0 flex-row flex-nowrap items-center justify-between gap-1 sm:justify-center sm:gap-6 md:gap-10 lg:justify-between lg:gap-6 xl:gap-10">
+      {/* max-sm:px-5 holds the edge items off the corner rivets on mobile. Kept as a standard
+          utility (not an arbitrary value) so Turbopack HMR regenerates it reliably. */}
+      <div className="flex w-full min-w-0 flex-row flex-nowrap items-center justify-between gap-2 max-sm:px-5 sm:justify-center sm:gap-6 md:gap-10 lg:justify-between lg:gap-6 xl:gap-10">
         {trustItems.map((item) => {
           const Icon = item.icon;
           const key = item.kind === "text" ? item.lineDesktop : item.host;
 
-          /** Mobile: cert is the centre column, flex-1 so the URL fits on one line; side
-           *  columns are content-width. The cert is rendered at every breakpoint in the
-           *  normal state — the urgency state replaces the whole trust-items layout, so it
-           *  disappears automatically during finalHours / drawnTomorrow / drawnTonight /
-           *  frozen. */
+          /** Mobile: all three columns are content-width and the row is justify-between, so
+           *  "Drawn live" sits at the left, "Drawn every 27th" at the right, and the cert centred
+           *  between them. The cert keeps the flex-item default (no grow; can shrink via the base
+           *  `min-w-0`) — restoring its old `flex-1` would collapse the gaps and stretch the centre
+           *  column again. Clearance from the corner rivets comes from the row's `max-sm:px-5`
+           *  (a standard utility, so HMR regenerates it reliably). From sm up the base `sm:flex-1`
+           *  takes over. The cert is rendered at every breakpoint
+           *  in the normal state — the urgency state replaces the whole trust-items layout, so it
+           *  disappears automatically during finalHours / drawnTomorrow / drawnTonight / frozen. */
           const shellMobile =
             item.kind === "cert"
-              ? "max-sm:flex-1 max-sm:min-w-0 max-sm:basis-0"
+              ? ""
               : "max-sm:flex-none max-sm:shrink-0 max-sm:basis-auto";
 
           if (item.kind === "cert") {
@@ -391,12 +399,15 @@ export default function PromoTrustBar({ initialMajorDraw }: PromoTrustBarProps =
                     aria-hidden
                   />
                   {/* Cert link stays white at every breakpoint — readability on dark steel
-                      beats brand expression for an attribution link. */}
+                      beats brand expression for an attribution link. The explicit text-white
+                      MUST come after linkClass: twMerge keeps the last colour utility, and
+                      linkClass's `text-inherit` otherwise wins and lets the link fall back to
+                      the page's dark body text (bg-white page) — black-on-steel on mobile. */}
                   <a
                     href={item.href}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className={cn(labelCn, "min-w-0 lg:hidden", linkClass)}
+                    className={cn(labelCn, "min-w-0 lg:hidden", linkClass, "text-white visited:text-white")}
                     style={TRUST_LABEL_FONT}
                     aria-label="Government-certified draws — randomdraws.com.au"
                   >
