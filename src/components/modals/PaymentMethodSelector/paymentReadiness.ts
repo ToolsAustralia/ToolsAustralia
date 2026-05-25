@@ -10,10 +10,6 @@ export interface PaymentReadinessInput {
   isElementReady: boolean;
 }
 
-export function canSubmitPayment({ stripe, elements, isElementReady }: PaymentReadinessInput): boolean {
-  return Boolean(stripe) && Boolean(elements) && isElementReady;
-}
-
 export function paymentNotReadyReason({ stripe, elements, isElementReady }: PaymentReadinessInput): string | null {
   if (!stripe || !elements) return "Stripe not loaded";
   if (!isElementReady) return "Payment form is still loading. Please wait a moment and try again.";

@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { canSubmitPayment, paymentNotReadyReason } from "../paymentReadiness";
+import { paymentNotReadyReason } from "../paymentReadiness";
 
 let failed = 0;
 function test(name: string, fn: () => void) {
@@ -9,21 +9,18 @@ function test(name: string, fn: () => void) {
 
 const stripe = {}; const elements = {};
 
-test("not submittable when stripe missing → 'Stripe not loaded'", () => {
-  assert.equal(canSubmitPayment({ stripe: null, elements, isElementReady: true }), false);
+test("stripe/elements missing → 'Stripe not loaded'", () => {
   assert.equal(paymentNotReadyReason({ stripe: null, elements, isElementReady: true }), "Stripe not loaded");
 });
 
-test("not submittable when element not ready → loading message (NOT the Stripe submit error)", () => {
-  assert.equal(canSubmitPayment({ stripe, elements, isElementReady: false }), false);
+test("element not ready → loading message (NOT the raw Stripe submit error)", () => {
   assert.equal(
     paymentNotReadyReason({ stripe, elements, isElementReady: false }),
     "Payment form is still loading. Please wait a moment and try again."
   );
 });
 
-test("submittable only when stripe + elements + ready", () => {
-  assert.equal(canSubmitPayment({ stripe, elements, isElementReady: true }), true);
+test("all present → null (submittable)", () => {
   assert.equal(paymentNotReadyReason({ stripe, elements, isElementReady: true }), null);
 });
 
