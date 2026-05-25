@@ -262,8 +262,8 @@ export function usePixelTracking() {
   }, []);
 
   // Add payment info tracking — hybrid Pixel + CAPI mirror.
-  // Currently no caller (mock /checkout was removed). When the real shop ships,
-  // fire this once on payment-form completion.
+  // Fired by CardFormSection once the payment form is complete, with billing-derived
+  // userData for CAPI identity matching.
   const trackAddPaymentInfo = useCallback((params: PixelEventParams, platforms?: ("facebook" | "tiktok")[], userData?: MirrorUserData) => {
     // AddPaymentInfo is a TikTok standard web event, so it flows through the unified
     // funnel path (browser pixel with content_id + shared event_id + Events API mirror).
