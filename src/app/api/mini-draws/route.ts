@@ -5,6 +5,7 @@ import User from "@/models/User";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { z } from "zod";
+import { userScopedCacheControl } from "@/utils/security/cache-control";
 
 // Next.js ISR configuration
 export const revalidate = 60; // Revalidate every 60 seconds (ISR)
@@ -154,23 +155,17 @@ export async function GET(request: NextRequest) {
     const hasNextPage = page < totalPages;
     const hasPrevPage = page > 1;
 
+    const { cacheControl, vary } = userScopedCacheControl(
+      !!session?.user?.id,
+      "public, s-maxage=60, stale-while-revalidate=300"
+    );
+
     return NextResponse.json(
       {
         miniDraws: miniDrawsWithMembership,
-        pagination: {
-          currentPage: page,
-          totalPages,
-          totalCount,
-          hasNextPage,
-          hasPrevPage,
-          limit,
-        },
+        pagination: { currentPage: page, totalPages, totalCount, hasNextPage, hasPrevPage, limit },
       },
-      {
-        headers: {
-          "Cache-Control": "public, s-maxage=60, stale-while-revalidate=300", // Cache 1min, serve stale up to 5min
-        },
-      }
+      { headers: { "Cache-Control": cacheControl, Vary: vary } }
     );
   } catch (error) {
     console.error("Error fetching mini draws:", error);

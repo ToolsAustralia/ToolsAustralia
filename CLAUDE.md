@@ -278,6 +278,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/models/SegmentSnapshot.ts",
         "src/app/api/major-draw/**",
         "src/app/api/mini-draw/**",
+        "src/app/api/mini-draws/**",
         "src/app/api/winners/**",
         "src/app/(site)/major-draw/**",
         "src/app/(site)/mini-draws/**",
