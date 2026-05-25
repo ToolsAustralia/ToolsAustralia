@@ -96,6 +96,8 @@ interface PaymentMethodSelectorProps {
   packageName?: string; // Package name for payment request label
   /** Option A (wallet UX): parent uses this to hide/disable main Purchase when google_pay/apple_pay selected */
   onPaymentMethodTypeChange?: (type: string | null) => void;
+  /** Fired with the PaymentElement's `ready` state so MembershipModal can gate the Purchase button. */
+  onElementReady?: (ready: boolean) => void;
 }
 
 const PaymentMethodSelector: React.FC<PaymentMethodSelectorProps> = ({
@@ -118,6 +120,7 @@ const PaymentMethodSelector: React.FC<PaymentMethodSelectorProps> = ({
   amount,
   packageName,
   onPaymentMethodTypeChange,
+  onElementReady,
 }) => {
   // Determine which clientSecret to use (PaymentIntent takes priority for wallet payments)
   const activeClientSecret = paymentIntentClientSecret || setupIntentClientSecret;
@@ -256,6 +259,7 @@ const PaymentMethodSelector: React.FC<PaymentMethodSelectorProps> = ({
                 amount={amount}
                 packageName={packageName}
                 onPaymentMethodTypeChange={onPaymentMethodTypeChange}
+                onElementReady={onElementReady}
               />
             </Elements>
           ) : cardFormError ? (
@@ -349,6 +353,7 @@ const PaymentMethodSelector: React.FC<PaymentMethodSelectorProps> = ({
                     amount={amount}
                     packageName={packageName}
                     onPaymentMethodTypeChange={onPaymentMethodTypeChange}
+                    onElementReady={onElementReady}
                   />
                 </Elements>
               ) : (

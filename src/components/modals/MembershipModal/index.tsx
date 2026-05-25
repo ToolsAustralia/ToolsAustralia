@@ -227,12 +227,19 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
   const [showCardForm, setShowCardForm] = useState(false);
   const [isCreatingSubscription, setIsCreatingSubscription] = useState(false);
   const [paymentMethodTypeFromElement, setPaymentMethodTypeFromElement] = useState<string | null>(null);
+  // Gates the Purchase button on the Stripe PaymentElement's `ready` event.
+  const [isPaymentElementReady, setIsPaymentElementReady] = useState(false);
 
   // Stripe Elements state
   const [setupIntentClientSecret, setSetupIntentClientSecret] = useState<string | null>(null);
   const [paymentIntentClientSecret, setPaymentIntentClientSecret] = useState<string | null>(null);
   const [paymentIntentId, setPaymentIntentId] = useState<string | null>(null);
   const [cardFormError, setCardFormError] = useState<string | null>(null);
+  // Reset readiness whenever the PaymentElement will remount (new client secret
+  // or the card form (re)opens) so the button re-gates until `ready` fires again.
+  useEffect(() => {
+    setIsPaymentElementReady(false);
+  }, [paymentIntentClientSecret, setupIntentClientSecret, showCardForm]);
   const lastPaymentIntentAmountRef = useRef<number | null>(null);
   const isCreatingPaymentIntentRef = useRef<boolean>(false);
   const isCreatingSetupIntentRef = useRef<boolean>(false);
@@ -4323,11 +4330,11 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
       return useSavedPaymentMethod
         ? selectedPaymentMethod !== null
         : showCardForm
-        ? !cardFormError && hasIntentClientSecret
+        ? !cardFormError && hasIntentClientSecret && isPaymentElementReady
         : false;
     } else {
       const registrationComplete = currentStep === 2 && guestUserData !== null;
-      const cardFormReady = !cardFormError && hasIntentClientSecret;
+      const cardFormReady = !cardFormError && hasIntentClientSecret && isPaymentElementReady;
       return Boolean(registrationComplete && cardFormReady);
     }
   };
@@ -4497,6 +4504,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
                 onAddNewPaymentMethod={handleAddNewPaymentMethod}
                 onCardElementChange={handleCardElementChange}
                 onPaymentMethodTypeChange={setPaymentMethodTypeFromElement}
+                onElementReady={setIsPaymentElementReady}
                 onCouponCodeChange={(value) => {
                   setCouponCode(value);
                   setCouponApplied(false);
