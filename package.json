@@ -46,6 +46,7 @@
     "stripe:list-active-paused-subscriptions": "tsx scripts/list-active-paused-subscriptions.ts",
     "stripe:resume-active-paused-subscriptions:dry": "tsx scripts/list-active-paused-subscriptions.ts --limit=200",
     "find:duplicate-subscriptions": "tsx scripts/find-duplicate-stripe-subscriptions.ts",
+    "find:klaviyo-legacy-fields": "tsx scripts/find-klaviyo-legacy-fields.ts",
     "find:refund-entry-corruption": "tsx scripts/find-refund-entry-corruption.ts",
     "fix:refund-entry-corruption": "tsx scripts/fix-refund-entry-corruption.ts",
     "fix:refund-entry-corruption:dry": "tsx scripts/fix-refund-entry-corruption.ts --force-dry-run",
