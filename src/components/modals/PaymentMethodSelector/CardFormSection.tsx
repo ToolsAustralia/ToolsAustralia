@@ -27,6 +27,7 @@ import { getStatePreservationInstructions } from "@/utils/payment/stripe/payment
 import { getReturnUrlForPaymentTypeClient } from "@/utils/payment/stripe/payment-intent-config";
 import { trackConversion } from "@/lib/tracking/dispatch-client";
 import { eventTimeNow } from "@/lib/tracking/canonical-event";
+import { paymentNotReadyReason } from "./paymentReadiness";
 
 export interface CardFormSectionRef {
   confirmStripeIntent: () => Promise<{
@@ -62,6 +63,8 @@ export interface CardFormSectionProps {
   amount?: number;
   packageName?: string;
   onPaymentMethodTypeChange?: (type: string | null) => void;
+  /** Fired with the PaymentElement's `ready` state so parents can gate submit. */
+  onElementReady?: (ready: boolean) => void;
 }
 
 const CardFormSection = React.forwardRef<CardFormSectionRef, CardFormSectionProps>(
@@ -75,11 +78,16 @@ const CardFormSection = React.forwardRef<CardFormSectionRef, CardFormSectionProp
       amount,
       packageName,
       onPaymentMethodTypeChange,
+      onElementReady,
     },
     ref
   ) => {
     const stripe = useStripe();
     const elements = useElements();
+    // Ref (not state) holds PaymentElement readiness: nothing here re-renders on
+    // it; the imperative confirmStripeIntent() reads the live value and the parent
+    // is notified via onElementReady so MembershipModal can gate the button.
+    const isElementReadyRef = React.useRef(false);
     const [isStripeLoading, setIsStripeLoading] = useState(true);
     const { showToast } = useToast();
     // Tracks whether AddPaymentInfo has fired for this PaymentElement mount.
@@ -132,6 +140,15 @@ const CardFormSection = React.forwardRef<CardFormSectionRef, CardFormSectionProp
         return () => clearTimeout(timeout);
       }
     }, [stripe, elements, showToast]);
+
+    // Reset readiness on unmount so a remount (via the <Elements>/PaymentElement
+    // `key` change) starts un-ready and the parent re-gates the Purchase button.
+    React.useEffect(() => {
+      return () => {
+        isElementReadyRef.current = false;
+        onElementReady?.(false);
+      };
+    }, [onElementReady]);
 
     // Inject custom CSS for wallet payment method layout (icons and text on same row)
     // Note: Stripe uses shadow DOM, so we inject styles that target the iframe content
@@ -292,6 +309,12 @@ const CardFormSection = React.forwardRef<CardFormSectionRef, CardFormSectionProp
     // Expose confirmStripeIntent via ref – handles PaymentIntent (subscription) and SetupIntent (one-time)
     React.useImperativeHandle(ref, () => ({
       confirmStripeIntent: async () => {
+        const notReady = paymentNotReadyReason({ stripe, elements, isElementReady: isElementReadyRef.current });
+        if (notReady) {
+          return { error: notReady };
+        }
+        // notReady already guarantees stripe/elements are non-null; this explicit
+        // guard restores the control-flow narrowing TypeScript needs below.
         if (!stripe || !elements) {
           return { error: "Stripe not loaded" };
         }
@@ -603,6 +626,10 @@ const CardFormSection = React.forwardRef<CardFormSectionRef, CardFormSectionProp
           <PaymentElement
             key={`payment-element-${clientSecret?.split("_secret_")[0] || "default"}-${amount || 0}-${packageName || "default"}`}
             options={paymentElementOptions}
+            onReady={() => {
+              isElementReadyRef.current = true;
+              onElementReady?.(true);
+            }}
             onChange={(event) => {
               // Handle PaymentElement change events
               // PaymentElement onChange provides completion status

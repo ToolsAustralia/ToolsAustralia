@@ -169,7 +169,9 @@
     "test:api-auth-permissions": "tsx src/lib/__tests__/api-auth-permissions.test.ts",
     "migrate:seed-staff-roles": "tsx scripts/migrate-seed-staff-roles.ts",
     "migrate:seed-staff-roles:dry": "tsx scripts/migrate-seed-staff-roles.ts --dry-run",
-    "test:staff-activity": "tsx src/lib/__tests__/staff-activity.test.ts"
+    "test:staff-activity": "tsx src/lib/__tests__/staff-activity.test.ts",
+    "test:cache-control": "tsx src/utils/security/__tests__/cache-control.test.ts",
+    "test:payment-readiness": "tsx src/components/modals/PaymentMethodSelector/__tests__/paymentReadiness.test.ts"
   },
   "dependencies": {
     "@auth/mongodb-adapter": "^3.10.0",

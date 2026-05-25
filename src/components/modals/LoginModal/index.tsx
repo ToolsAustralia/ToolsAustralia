@@ -1,17 +1,16 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
-import { signIn, useSession } from "next-auth/react";
+import { signIn, useSession, getSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { Eye, EyeOff, Clipboard, ClipboardCheck } from "lucide-react";
-import { useQueryClient } from "@tanstack/react-query";
 import { ModalContainer, ModalContent, Button, Input } from "../ui";
 import Hero from "./Hero";
 import { authenticateWithPopup } from "@/utils/auth/popupAuth";
-import { queryKeys } from "@/lib/queryKeys";
 import { useToast } from "@/components/ui/Toast";
 import { useKlaviyoTracking } from "@/hooks/useKlaviyoTracking";
 import { usePermissions } from "@/hooks/usePermissions";
+import { usePurchaseInvalidation } from "@/hooks/usePurchaseInvalidation";
 
 interface LoginModalProps {
   isOpen: boolean;
@@ -47,7 +46,7 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, email }) => {
   const router = useRouter();
   const { data: session, status } = useSession();
   const { isStaff } = usePermissions();
-  const queryClient = useQueryClient();
+  const invalidateForUser = usePurchaseInvalidation();
   const { showToast } = useToast();
   const { identify } = useKlaviyoTracking();
   const [password, setPassword] = useState("");
@@ -132,23 +131,22 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, email }) => {
           duration: 3000,
         });
 
-        // Invalidate queries to ensure fresh data
-        if (session?.user?.id) {
-          queryClient.invalidateQueries({ queryKey: queryKeys.users.account(session.user.id) });
-          queryClient.invalidateQueries({ queryKey: queryKeys.majorDraw.userStats(session.user.id) });
-          queryClient.invalidateQueries({ queryKey: queryKeys.rewards.user(session.user.id) });
-
-          // Identify user in Klaviyo after successful login
-          if (session.user.email) {
+        // signIn() has already refreshed the client session, but the closure
+        // `session` is still the pre-login value — read it fresh.
+        const fresh = await getSession();
+        if (fresh?.user?.id) {
+          invalidateForUser(fresh.user.id);
+          if (fresh.user.email) {
             identify({
-              email: session.user.email,
-              firstName: session.user.firstName,
-              lastName: session.user.lastName,
+              email: fresh.user.email,
+              firstName: fresh.user.firstName,
+              lastName: fresh.user.lastName,
             });
           }
         }
         // Redirect will happen via useEffect
         router.push("/my-account");
+        router.refresh();
       }
     } catch (error) {
       console.error("Login error:", error);
@@ -178,7 +176,6 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, email }) => {
 
         const checkSession = setInterval(async () => {
           attempts++;
-          const { getSession } = await import("next-auth/react");
           const session = await getSession();
 
           if (session) {
@@ -193,9 +190,7 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, email }) => {
 
             // Invalidate queries to ensure fresh data
             if (session.user?.id) {
-              queryClient.invalidateQueries({ queryKey: queryKeys.users.account(session.user.id) });
-              queryClient.invalidateQueries({ queryKey: queryKeys.majorDraw.userStats(session.user.id) });
-              queryClient.invalidateQueries({ queryKey: queryKeys.rewards.user(session.user.id) });
+              invalidateForUser(session.user.id);
 
               // Identify user in Klaviyo after successful Google login
               if (session.user.email) {
@@ -208,6 +203,7 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, email }) => {
             }
             // Redirect will happen via useEffect
             router.push("/my-account");
+            router.refresh();
           } else if (attempts >= maxAttempts) {
             clearInterval(checkSession);
             setError("Authentication may have completed. Please refresh the page or try again.");
@@ -316,13 +312,10 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, email }) => {
 
             if (!autoLoginResult?.error) {
               // Get session to invalidate queries
-              const { getSession } = await import("next-auth/react");
               const newSession = await getSession();
               if (newSession?.user?.id) {
                 // Invalidate queries to ensure fresh data
-                queryClient.invalidateQueries({ queryKey: queryKeys.users.account(newSession.user.id) });
-                queryClient.invalidateQueries({ queryKey: queryKeys.majorDraw.userStats(newSession.user.id) });
-                queryClient.invalidateQueries({ queryKey: queryKeys.rewards.user(newSession.user.id) });
+                invalidateForUser(newSession.user.id);
               }
 
               // Show success toast
@@ -335,6 +328,7 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, email }) => {
 
               // Success - redirect will happen via useEffect
               router.push("/my-account");
+              router.refresh();
             } else {
               // If auto-login fails (e.g., no active membership), show password field
               setNeedsEmailVerification(false);
@@ -536,12 +530,9 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, email }) => {
         });
 
         if (!result?.error) {
-          const { getSession } = await import("next-auth/react");
           const newSession = await getSession();
           if (newSession?.user?.id) {
-            queryClient.invalidateQueries({ queryKey: queryKeys.users.account(newSession.user.id) });
-            queryClient.invalidateQueries({ queryKey: queryKeys.majorDraw.userStats(newSession.user.id) });
-            queryClient.invalidateQueries({ queryKey: queryKeys.rewards.user(newSession.user.id) });
+            invalidateForUser(newSession.user.id);
           }
 
           showToast({
@@ -560,6 +551,7 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, email }) => {
           }
 
           router.push("/my-account");
+          router.refresh();
         } else {
           setError(result.error || "Sign-in failed. Please try again.");
         }

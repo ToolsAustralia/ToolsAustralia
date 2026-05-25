@@ -5,11 +5,9 @@ export const dynamic = "force-dynamic";
 import { Suspense } from "react";
 import { useState, useEffect, useRef } from "react";
 
-import { signIn, useSession } from "next-auth/react";
+import { signIn, useSession, getSession } from "next-auth/react";
 
 import { useRouter } from "next/navigation";
-
-import { useQueryClient } from "@tanstack/react-query";
 
 import Link from "next/link";
 
@@ -33,7 +31,7 @@ import {
   hexToRgbaString,
 } from "@/utils/package-colors/packageColorScheme";
 
-import { queryKeys } from "@/lib/queryKeys";
+import { usePurchaseInvalidation } from "@/hooks/usePurchaseInvalidation";
 import { cn } from "@/utils/cn";
 
 // Google Icon Component
@@ -399,7 +397,7 @@ function LoginPageContent() {
 
   const { showToast } = useToast();
 
-  const queryClient = useQueryClient();
+  const invalidateForUser = usePurchaseInvalidation();
 
   // Redirect if user is already logged in based on their role
 
@@ -408,11 +406,7 @@ function LoginPageContent() {
       // Invalidate queries to ensure fresh data after login
 
       if (session.user?.id) {
-        queryClient.invalidateQueries({ queryKey: queryKeys.users.account(session.user.id) });
-
-        queryClient.invalidateQueries({ queryKey: queryKeys.majorDraw.userStats(session.user.id) });
-
-        queryClient.invalidateQueries({ queryKey: queryKeys.rewards.user(session.user.id) });
+        invalidateForUser(session.user.id);
       }
 
       // Check user role and redirect accordingly
@@ -425,11 +419,13 @@ function LoginPageContent() {
         session.user?.role === "admin";
       if (isInternalUser) {
         router.push("/admin");
+        router.refresh();
       } else {
         router.push("/my-account");
+        router.refresh();
       }
     }
-  }, [status, session, router, queryClient]);
+  }, [status, session, router, invalidateForUser]);
 
   // Show loading while checking authentication status
 
@@ -523,16 +519,12 @@ function LoginPageContent() {
         // Wait a moment for session to update, then invalidate
 
         setTimeout(async () => {
-          const { getSession } = await import("next-auth/react");
-
           const updatedSession = await getSession();
 
           if (updatedSession?.user?.id) {
-            queryClient.invalidateQueries({ queryKey: queryKeys.users.account(updatedSession.user.id) });
-
-            queryClient.invalidateQueries({ queryKey: queryKeys.majorDraw.userStats(updatedSession.user.id) });
-
-            queryClient.invalidateQueries({ queryKey: queryKeys.rewards.user(updatedSession.user.id) });
+            // Only invalidate here; the redirect useEffect owns push + router.refresh()
+            // once the session state propagates (avoids a duplicate refresh).
+            invalidateForUser(updatedSession.user.id);
           }
         }, 500);
 
