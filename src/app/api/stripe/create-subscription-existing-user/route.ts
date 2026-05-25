@@ -16,7 +16,7 @@ import {
   EXISTING_SUBSCRIPTION_CODE,
   EXISTING_SUBSCRIPTION_MESSAGE,
 } from "@/utils/payment/subscription-creation-guard";
-import { shouldWriteCanonicalStripeSubscriptionId, stripeCustomerHasManageableSubscription } from "@/services/subscription";
+import { shouldWriteCanonicalStripeSubscriptionId, stripeCustomerHasManageableSubscription, cancelIncompleteSubscriptionAndVoidInvoice } from "@/services/subscription";
 import { createRateLimiter, getClientIdentifier } from "@/utils/security/rateLimiter";
 import { extractRequestContext } from "@/utils/tracking/facebook-helpers";
 import { safeEventSourceUrl } from "@/utils/tracking/event-source-url";
@@ -311,6 +311,29 @@ export async function POST(request: NextRequest) {
             ...(correlationId && { correlationId }),
           },
           { status: 409 }
+        );
+      }
+    }
+
+    // Hygiene: retire the user's stale pending incomplete sub so abandoned
+    // checkouts don't accumulate (and their initial invoice can't dun later). Safe:
+    // a fresh create call means the previous pending attempt was abandoned — the
+    // sub currently being paid is confirmed without re-calling this route.
+    const stalePendingId = existingUser.subscription?.pendingStripeSubscriptionId;
+    if (stalePendingId && stalePendingId !== validatedData.cancelPreviousSubscriptionId) {
+      try {
+        const reconciled = await cancelIncompleteSubscriptionAndVoidInvoice(stalePendingId);
+        if (correlationId) {
+          console.log("[create-subscription-existing-user] retired stale pending incomplete", {
+            correlationId,
+            ...reconciled,
+          });
+        }
+      } catch (reconcileErr) {
+        // console.error (not warn) so this survives production builds (removeConsole).
+        console.error(
+          "[create-subscription-existing-user] retire stale pending failed (non-fatal):",
+          reconcileErr instanceof Error ? reconcileErr.message : String(reconcileErr)
         );
       }
     }

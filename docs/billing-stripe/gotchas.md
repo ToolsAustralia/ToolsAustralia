@@ -195,6 +195,10 @@ The route at `GET /api/admin/allowlist/blocked-cards` returns `{rows, nextCursor
 
 **Phase E (legacy code removal) is complete.** The legacy `listBlockedFromStripe` code path, its `MAX_PAYMENT_INTENTS_SCANNED` cap, the route's `?source=` query param, and the route's `maxDuration: 60` setting have all been removed — `listBlocked` is now the only read path. Rollback if needed is via `git revert` of the Phase E commit (re-introducing the Stripe-pagination escape hatch is no longer a query-string flip).
 
+## Resubscribe retires the stale pending incomplete sub
+
+Before creating a new subscription, both `create-subscription` routes (`src/app/api/stripe/create-subscription/route.ts` and `create-subscription-existing-user/route.ts`) call `cancelIncompleteSubscriptionAndVoidInvoice(user.subscription.pendingStripeSubscriptionId)` after the resubscribe guard (non-fatal, skipped when the id matches `cancelPreviousSubscriptionId`). This cancels any stale `incomplete` checkout and voids its unpaid initial invoice so abandoned subs don't accumulate in Stripe or generate dunning emails later. The helper is idempotent and never throws — a failure is logged but does not block the new checkout. See [subscription/gotchas.md](../subscription/gotchas.md#list-status-trialing-leaks-incomplete-subs--false-existing-subscription-block) for the root-cause history and the `cleanup-abandoned-incomplete-subscriptions` backfill script for sweeping subs that pre-date this fix.
+
 ## Metadata drift locks customers out of checkout for 24h
 
 Subscription create routes accept a client-supplied `subscriptionRequestId` UUID and use it as the Stripe idempotency key. The same call attaches request-derived metadata (`capi_client_ip`, `capi_user_agent`, `capi_fbc`, `capi_fbp`, `capi_event_source_url`, `attr_*`) which is rebuilt server-side on every call. If the customer retries with the same UUID and **any** of those values has drifted (mobile IP change, fbc rebuilt with different `Date.now()`, different referer), Stripe rejects with `StripeIdempotencyError` and locks the customer out of that key for 24h.

@@ -13,3 +13,5 @@ export {
   shouldAdoptPaidSubscriptionOverStored,
   type SubscriptionReferenceErrorCode,
 } from "./SubscriptionReferenceService";
+export { cancelIncompleteSubscriptionAndVoidInvoice } from "./cancelIncompleteSubscription";
+export type { CancelIncompleteResult } from "./cancelIncompleteSubscription";
