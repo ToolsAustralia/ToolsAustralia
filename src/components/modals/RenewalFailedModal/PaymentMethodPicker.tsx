@@ -47,8 +47,8 @@ const PaymentMethodPicker: React.FC<PaymentMethodPickerProps> = ({
               className={cn(
                 "w-full p-3 sm:p-4 border-2 rounded-xl text-left transition-colors",
                 active
-                  ? "border-red-600 bg-red-50 dark:bg-red-950/40"
-                  : "border-neutral-200 dark:border-neutral-700 hover:border-neutral-300 dark:hover:border-neutral-600 bg-white dark:bg-neutral-900"
+                  ? "border-red-600 bg-red-50"
+                  : "border-neutral-200 hover:border-neutral-300 bg-white"
               )}
             >
               <div className="flex items-center justify-between">
@@ -76,8 +76,8 @@ const PaymentMethodPicker: React.FC<PaymentMethodPickerProps> = ({
           className={cn(
             "w-full p-3 sm:p-4 border-2 rounded-xl text-left transition-colors",
             selectedPaymentMethod === null
-              ? "border-red-600 bg-red-50 dark:bg-red-950/40"
-              : "border-neutral-200 dark:border-neutral-700 hover:border-neutral-300 dark:hover:border-neutral-600 bg-white dark:bg-neutral-900"
+              ? "border-red-600 bg-red-50"
+              : "border-neutral-200 hover:border-neutral-300 bg-white"
           )}
         >
           <div className="flex items-center justify-between">

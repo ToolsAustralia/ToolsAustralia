@@ -16,6 +16,7 @@
 | `/api/cron/dashboard-stats-daily-snapshot` | `0 14 * * *` and `0 15 * * *` | 300s / 1024MB | Re-upserts 90-day sliding window of `DashboardStatsDailySnapshot` rows. Idempotent. Second fire heals first-run failures. |
 | `/api/cron/cancellation-retention-resume` | `0 16 * * *` | 300s / 1024MB | Clears stale `pauseReason="retention"` metadata on Stripe subscriptions after the 30-day retention pause window has elapsed. See [architecture.md](./architecture.md#vercel-cron-schedules). |
 | `/api/cron/cancellation-retention-maturity` | `0 17 * * *` | 300s / 1024MB | Matures saved cancellation-flow events ≥90 days old: sets `retention90` to `retained`/`churned` based on the member's CURRENT subscription state. Read-only on user/subscription. Idempotent. See [architecture.md](./architecture.md#vercel-cron-schedules). |
+| `/api/cron/reconcile-major-draw-entries` | `30 16 * * *` | 300s / 1024MB | Self-heals membership renewals that failed to credit the active `MajorDraw` (the swallowed-`addToMajorDraw` bug). Delegates to [`reconcileActiveMajorDrawEntries`](../../src/utils/draws/reconcile-major-draw-entries.ts). Heals only confirmed gaps (latest in-window renewal has empty `drawGrants` + active sub + not refunded + draw < actual grant), idempotent. Runs after the ~14:00–15:00 UTC anchor-billing spike. See `docs/draws/gotchas.md`. |
 
 See [architecture.md](./architecture.md#vercel-cron-schedules) for the full cron table.
 

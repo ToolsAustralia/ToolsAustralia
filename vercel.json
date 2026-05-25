@@ -51,6 +51,10 @@
     {
       "path": "/api/cron/cancellation-retention-maturity",
       "schedule": "0 17 * * *"
+    },
+    {
+      "path": "/api/cron/reconcile-major-draw-entries",
+      "schedule": "30 16 * * *"
     }
   ],
   "functions": {
@@ -75,6 +79,7 @@
     "src/app/api/cron/monthly-redeemables-issuance/route.ts": { "memory": 1024, "maxDuration": 300 },
     "src/app/api/cron/sync-meta-spend-by-url/route.ts": { "memory": 1024, "maxDuration": 300 },
     "src/app/api/cron/reconcile-blocked-transactions/route.ts": { "memory": 1024, "maxDuration": 300 },
+    "src/app/api/cron/reconcile-major-draw-entries/route.ts": { "memory": 1024, "maxDuration": 300 },
     "src/app/api/cron/dashboard-stats-daily-snapshot/route.ts": { "memory": 1024, "maxDuration": 300 },
     "src/app/api/cron/cancellation-retention-resume/route.ts": { "memory": 1024, "maxDuration": 300 },
     "src/app/api/cron/cancellation-retention-maturity/route.ts": { "memory": 1024, "maxDuration": 300 },

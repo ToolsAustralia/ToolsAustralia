@@ -40,15 +40,24 @@ The contact inbox is dominated by **one root cause expressed many ways**: people
 
 Per-complainant check against Mongo (`users`, `membershipstatushistories`, `paymentevents`, `errorreports`) + Stripe (`charges`, `subscriptions`). Read-only. Verdicts below **supersede** the Part 1 framing where they differ.
 
-### #3 Same-session double charges — ✅ CONFIRMED REAL (not a hunch)
-**8 of 9** sampled complainants have a verified duplicate: two **succeeded** charges of the **same amount**, **2–137 seconds apart**, on **two different PaymentIntents**. Because the webhook dedups at the *benefit* level, they got **one** set of entries but the **card was charged twice**. Examples:
-- `aedanmccu` — two $20, 7s apart (2025-12-09 06:16); both succeeded, **neither refunded**.
-- `gaza-r-k` — two $40, 7s apart (2025-12-27). `jacobrowan85` — two $20, 11s apart. `ben.grantham` — two $20, ~60s apart. `liammurray454` — two $20, 7s apart. `bigdano` — two $40, 7s apart.
-- `rusty_4eva154` — two **$80** 137s apart **plus** two $40 8s apart in one session (the $80 pair on now-`incomplete_expired` subs).
-- `lewis.mayers` — two $50, 2s apart (2026-03-27, matches receipt INV-1774593572079); one already refunded.
-- `gypseymiller67` — **no** duplicate; her two $20 are a month apart → that one is the renewal-surprise, *not* a double charge.
+### #3 Same-session double charges — ❌ LARGELY REFUTED (correction — my first pass was wrong)
+**My initial "8 of 9 double charges" was a bug in my verification script, not a platform bug.** The script counted any Stripe charge with `status: "succeeded"` as money taken. But a charge can be `status: succeeded` while `captured: false` — a temporary **authorization hold** whose PaymentIntent was later **canceled/abandoned** (it shows as *Incomplete*/*Cancelled* in the dashboard and **receives $0**). The `Date.now()` idempotency bug *does* spawn duplicate PaymentIntents, but the extra ones are abandoned holds, not captures.
 
-Root cause exactly as suspected: `Date.now()` in the Stripe idempotency key (`create-one-time-purchase/route.ts:599`, `create-payment-intent/route.ts:129`). **Several duplicates were never refunded — real money owed back.** A full Stripe charge scan can produce the exact refund list on request.
+Re-checked with authoritative fields (`amount_captured`, `amount_refunded`, each PaymentIntent's `amount_received`) and reconciled to the dashboard **"Spent"** for all 9 — every row balances:
+
+| user | dashboard "Spent" = net captured | extra same-second PIs | true double-capture? |
+|---|---|---|---|
+| jacobrowan85 | A$57.50 (one $20 + $25 + $12.50) | 3× $20 canceled/incomplete ($0 received) | **No** |
+| gaza-r-k | A$40.00 (one $40) | 3× $40 canceled ($0) | **No** |
+| aedanmccu | A$120.00 (6 monthly $20) | 1× $20 canceled hold ($0) | **No** |
+| ben.grantham | A$100.00 (5 monthly $20) | canceled hold ($0) | **No** |
+| liammurray454 | A$40.00 (2 monthly $20) | canceled hold ($0) | **No** |
+| rusty_4eva154 | A$200.00 (5 monthly $40) | $80 attempts all failed/canceled ($0) | **No** |
+| ranifesaitu | A$80.00 net ($100 gross − $20 refund) | canceled hold ($0) | **No** |
+| gypseymiller67 | A$40.00 (2 monthly $20, a month apart) | none | **No** (renewal) |
+| **lewis.mayers** | A$100.00 net ($150 gross − **$50 refund**) | — | **Yes — 1 real double-capture, already refunded** |
+
+**Corrected verdict: there is no systemic double-*capture*.** Exactly **one** genuine double-charge in the sample (`lewis.mayers`, 2026-03-27, matches receipt INV-1774593572079) and it was **already refunded**. What customers *perceive* as "charged twice" is the duplicate **authorization hold** showing as *pending* on their bank statement before it drops off — a real, fixable UX problem (remove `Date.now()` from the idempotency key so only one PI is created), **but not lost money.** I retract the earlier "money owed back" statement.
 
 ### #4 Cancelled-but-charged — ❌ REFUTED as a billing bug (my earlier framing was too strong)
 In **every** verifiable case our records show **no cancellation at the date the user claims**; the disputed charges occurred **before** the actual (later) cancellation, and **3 of them were already refunded**. When a cancellation *is* completed, **no further charges occur** — the cancel feature works.
@@ -88,8 +97,8 @@ The eligibility rule exists in code but is enforced/disclosed too late: a guest'
 - Code: excluded states are `["SA","ACT"]` in `src/utils/giveaway-eligibility.ts:6` (a pure helper — it gates nothing in the flow). State is first captured in `src/components/modals/UserSetupModal/Step2Demographics.tsx:85` which renders **after** the charge; for one-time/guest buyers the account is created by the webhook *post-payment* (`src/app/api/stripe/create-one-time-purchase/route.ts:702`), and billing state is hardcoded `"NSW"` at checkout (`src/components/modals/MembershipModal/index.tsx:660`). The only pre-payment mention is buried in `src/app/(site)/terms/page.tsx:88`.
 - Fix direction: collect/confirm state **before** payment (or a pre-payment "not available in SA/ACT" interstitial). Note the user perception also includes VIC — worth confirming the intended excluded set.
 
-### 3. Same-session duplicate charges — **IS-A-BUG**
-Stripe idempotency keys are suffixed with `Date.now()`, so two rapid submits get different keys → two PaymentIntents → two real charges. The dedup that *does* exist only stops re-processing the **same** PaymentIntent, which doesn't help here.
+### 3. Duplicate PaymentIntents → duplicate *authorization holds* (not double captures) — **UX-BUG** *(see Verification #3 for the correction)*
+Stripe idempotency keys are suffixed with `Date.now()`, so two rapid submits get different keys → two PaymentIntents. **Verified against production: the extra PI is abandoned/canceled and captures $0 — only one charge is ever taken** (net captured = dashboard "Spent" in all 9 sampled cases; one isolated true double-capture was already refunded). The real harm is the duplicate **pending authorization hold** on the customer's statement (drives "you charged me twice" complaints) until it drops off — not lost money. The webhook benefit-dedup only stops re-processing the **same** PI.
 
 - Evidence: #3 ("$20 twice"), #10, #17, #26, #27, #51, #107, #108 ("one in the morning and one just now"), #175 (one $50 pack billed twice, receipt #INV-1774593572079-ZQZV), #344.
 - Code: `src/app/api/stripe/create-one-time-purchase/route.ts:599` and `src/app/api/stripe/create-payment-intent/route.ts:129` both build `pi_..._${Date.now()}`. There is **no** server-side purchase cooldown — `src/lib/purchaseCooldown.ts` only pauses client query refetch, despite docs claiming it prevents double-charges (`docs/draws/rules.md:51`, `docs/draws/backend.md:36`, `BUSINESS.md:517` — all stale/wrong).
@@ -100,7 +109,7 @@ Stripe idempotency keys are suffixed with `Date.now()`, so two rapid submits get
 A self-serve cancellation flow exists and works for cleanly-active subs, but two real gaps drive tickets:
 
 - **Cancelled-but-charged:** a healthy cancel only sets `cancel_at_period_end: true` (`src/services/subscription/CancelSubscriptionService.ts:100`); Stripe still bills the in-flight cycle, and there's no lock guarding a self-serve cancel racing the anchor-24 renewal charge job. Evidence: #140, #246, #263, #342 (has cancellation-confirmation email + 3 subsequent charges, bank chargeback opened), #357 ("cancelled and it auto-renewed").
-- **Cancel entry point disappears when the DB thinks you're inactive:** "Manage Membership" only renders when `activeSubscription` is truthy (`src/app/(site)/my-account/components/MembershipStatus.tsx:268`). A past-due/desynced user sees "No Active Membership" with **no way to cancel** even though Stripe may still bill them. Evidence: #62, #119, #132 ("keeps saying failed to cancel, tried phone & computer"), #159, #179, #191, #192, #316.
+- **Cancel is hidden from the main dashboard card for past_due/inactive users (discoverability — NOT "can't cancel"; corrected 2026-05-26):** the dashboard "Manage Membership" button only renders when `isActive=true` (`src/app/(site)/my-account/components/MembershipStatus.tsx:143`), so a past_due user's front card shows "No Active Membership". **However, cancellation IS available** via **Settings → Subscription**, which renders `PastDueAlert` with an explicit **"Cancel Subscription"** button (`SettingsRedesignSubscription.tsx:361` → `PastDueAlert.tsx:38-45` → `handleCancelSubscription` → `CancellationFlowModal`; cancel takes effect immediately for past_due). So the 619 past_due users **can** cancel — the gap is that the path is in Settings, not on the dashboard card, which is likely why some emailed support. Evidence: #62, #119, #132, #159, #179, #191, #192, #316.
 - Fix direction: surface a cancel/stop-billing path even when the local record is inactive; reconcile cancel against the renewal job; show the "ends on <date>, no further charges" state explicitly after cancel.
 
 ### 5. Passwordless users stranded at `/login`; resend & code-retry bugs — **IS-A-BUG**
@@ -164,7 +173,7 @@ The intended model stacks correctly (`lastMonthAccum + newBase × promo`, `src/u
 
 1. **Pre-payment disclosure of recurring billing** (Part 1 #1) — deflates the cancel + refund + unauthorised + chargeback clusters at once. Highest ROI.
 2. **Pre-payment state-eligibility gate/notice** (Part 1 #2) — kills the SA/ACT refund cluster and the ombudsman/legal exposure.
-3. **Fix duplicate-charge idempotency** (Part 1 #3) — small change (`Date.now()` removal), removes a class of "you charged me twice" + chargebacks; also correct the stale docs that claim a protection that doesn't exist.
+3. **Remove `Date.now()` from the idempotency key** (Part 1 #3) — stops the duplicate *authorization holds* that drive "you charged me twice" complaints (note: verified this is a pending-hold UX issue, **not** lost money — no systemic double-capture); also correct the stale docs that claim a cooldown protection that doesn't exist.
 4. **Cancellation hardening** (Part 1 #4) — surface cancel when DB is inactive; reconcile against the renewal job; confirm "no further charges."
 5. **Triage the inbox** — 364/367 untriaged; several are bank-chargeback/ombudsman threats (#229, #263, #302, #314, #342) that need a human now.
 6. **Investigate the May dashboard-load cluster** (Part 1 #6) against production 5xx logs — possible recent regression.

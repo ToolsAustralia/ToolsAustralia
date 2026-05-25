@@ -2,6 +2,12 @@
 
 Real failure modes, surprising behaviours, and tribal knowledge from incidents. Most of these came from production bugs and have lessons attached.
 
+## UI / modals
+
+### RenewalFailedModal renders as an always-light card
+
+The "Complete your renewal payment" modal ([RenewalFailedModal](../../src/components/modals/RenewalFailedModal/)) is intentionally **always light**: its main Stripe `PaymentElement` uses a hardcoded light appearance (`colorBackground:#ffffff`, `colorText:#1f2937`) and it floats over a dark backdrop. It previously had half-applied `dark:bg-*` overrides on the Shell/panels but **no** `dark:` text variants — so in dark mode the body went near-black while the labels (and the Stripe field labels) stayed dark → invisible (only the white inputs showed). Fix: strip the `dark:` background/border overrides across the modal's components (Shell, PaymentMethodPicker, PaymentForm, InlineCardSetup, AlertBanner, the index alert boxes) and force the inline card-setup Stripe appearance light via `buildMembershipStripeAppearance(false)`. If you add UI here, keep it light — do **not** reintroduce `dark:` variants.
+
 ## Stripe & invoices
 
 ### `list({ status: "trialing" })` leaks `incomplete` subs → false "Existing Subscription" block

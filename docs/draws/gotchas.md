@@ -1,5 +1,13 @@
 # Draws — Gotchas
 
+## Renewal entry-loss under billing spikes (`addToMajorDraw` swallow) + the reconciler
+
+During synchronized renewal billing spikes (anchor-day billing fires dozens of `invoice.paid` webhooks at once), the draw-credit in `addToMajorDraw` ([`payment-processing.ts`](../../src/utils/payment/payment-processing.ts)) could transiently fail and was **silently swallowed**, leaving the renewal's `data.grants.drawGrants` empty and the member missing/short on the active draw — while their `accumulatedEntries`/`lastMonthAccumulatedEntries` updated. It was invisible (0 `ErrorReport`s; `stripewebhookqueue` showed `succeeded`, because the swallow was *below* the queue layer). May 2026: 60 active members under-credited by 25,235 entries.
+
+Two defenses now exist:
+1. **Hardened `addToMajorDraw`** — atomic single-op credit (no full-array reload), `matchedCount` upsert (also kills duplicate rows), bounded retry, and an `ErrorReport` instead of the silent swallow. See `docs/payment/gotchas.md`.
+2. **Reconciler** [`reconcileActiveMajorDrawEntries`](../../src/utils/draws/reconcile-major-draw-entries.ts), run by the `reconcile-major-draw-entries` cron (daily 16:30 UTC, after the billing-spike window). **Authoritative basis:** correct draw membership = `data.entries` of the member's LATEST in-window membership `BenefitsGranted` event — **NOT** `subscription.lastMonthAccumulatedEntries`, which drifts ahead of the real grant and false-positives. Heals only when: latest renewal has empty `drawGrants` + sub active + renewal not refunded + draw < grant. Idempotent (re-reads before writing), so it never double-credits. The standalone `scripts/fix-major-draw-renewal-entries.ts` (dry-run by default) is the manual equivalent.
+
 ## Refund reversal must pass `drawId` to `removeMajorDrawEntries`
 
 [`removeMajorDrawEntries`](../../src/utils/draws/remove-draw-entries.ts) accepts an **optional** `drawId` parameter. **Always pass it** when the caller knows which draw the entries originally went to — the refund ledger does (every `BenefitsGranted` event with `data.grants.drawGrants[].drawId`). Omitting `drawId` falls back to the legacy multi-draw walk: the function will query *every* major draw containing this user and consume `sourceType` entries from the oldest forward until the refund amount is satisfied.
