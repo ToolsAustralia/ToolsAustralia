@@ -79,3 +79,7 @@ If you write directly to `TicketEntry` for a mini-draw, also update `User.miniDr
 ## Cron failure
 
 If the daily cron fails, transitions can lag. Monitor: webhooks will still trigger transitions on each call, but if no traffic + no cron, draws can stay in stale states for days. Atlas profiler comments help spot which call site last ran transitions.
+
+## `/api/major-draw` & `/api/mini-draws` embed per-user data — don't public-cache them
+
+Both routes return per-user fields (`userStats` on major-draw, `hasActiveMembership` on mini-draws) derived from the session cookie, alongside the public draw data. They must not be cached as `public` keyed by URL only — a shared/browser cache will serve a guest copy (`userStats: null` → **0 entries**) to a logged-in user, which is exactly the "entries show 0 until reload" bug. Both now route their `Cache-Control` through [`userScopedCacheControl`](../../src/utils/security/cache-control.ts) (`private, no-store` when authenticated; `public …` + `Vary: Cookie` for guests). See [security-csp/rules.md R7](../security-csp/rules.md). Reproduces only on staging/production (dev is `no-store`).

@@ -25,3 +25,9 @@ Anything public (contact, signup, password-reset request) needs IP-based rate li
 ## R6. Mandatory QA review
 
 `.cursor/rules/orchestrator.mdc` requires QA review for security/auth changes. Always.
+
+## R7. Never public-cache per-user responses
+
+A response whose body varies by the authenticated user (anything built from `getServerSession`) must **never** be sent with a shared/`public` `Cache-Control` keyed only by URL. A CDN or browser cache will serve one user's body — or a guest's `null` body — to a different user on the same URL. This caused a production bug where the dashboard showed **0 entries after login**: [`/api/major-draw`](../../src/app/api/major-draw/route.ts) cached a guest copy (`userStats: null`) and served it to a freshly-logged-in user until the cache window lapsed (a reload "fixed" it). It is also a privacy leak (user A's stats served to user B).
+
+Use [`userScopedCacheControl`](../../src/utils/security/cache-control.ts): authenticated requests get `private, no-store`; guests keep the route's public value but with `Vary: Cookie`. `private, no-store` on the authenticated response alone is **not** enough — without `Vary: Cookie`, a previously cached guest `public` entry can still be served to an authenticated (cookie-bearing) request. Because guests on these pages also carry cookies (A/B anonymousId, tracking), `Vary: Cookie` fragments guest caching in practice; the correctness/privacy guarantee takes priority over guest hit-rate. Dev sends `no-store` for these routes, so this class of bug only manifests on staging/production. When adding any route that embeds per-user data, route its `Cache-Control` through the helper.
