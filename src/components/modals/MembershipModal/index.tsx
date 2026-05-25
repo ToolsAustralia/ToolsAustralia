@@ -942,18 +942,10 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
             err instanceof Error ? err.message : "Failed to create subscription. Please try again.";
 
           if (errCode === "EXISTING_SUBSCRIPTION") {
-            showToast({
-              type: "error",
-              title: "Existing Subscription",
-              message: errMsg,
-              duration: 10000,
-              action: {
-                label: "Manage Subscription",
-                onClick: () => {
-                  router.push("/my-account");
-                },
-              },
-            });
+            // Background pre-warm: do NOT toast here. The purchase-click handler
+            // ("Active Subscription Found") is the single source of this message,
+            // so the user sees exactly one actionable toast.
+            console.warn("[MembershipModal] pre-warm blocked by EXISTING_SUBSCRIPTION (toast deferred to purchase click)");
           } else {
             showToast({
               type: "error",

@@ -4,6 +4,18 @@ Real failure modes, surprising behaviours, and tribal knowledge from incidents. 
 
 ## Stripe & invoices
 
+### `list({ status: "trialing" })` leaks `incomplete` subs → false "Existing Subscription" block
+
+**Symptom:** a user who is *not* an active member is permanently blocked from subscribing. The checkout shows two toasts — **"Existing Subscription"** and **"Active Subscription Found"** (both the `EXISTING_SUBSCRIPTION` 409) — and "Manage Subscription" leads nowhere because `/my-account` shows them as unsubscribed.
+
+**Cause:** the resubscribe guard `stripeCustomerHasManageableSubscription` (→ `findRecoverableSubscriptionForCustomer`) used to trust Stripe's `subscriptions.list({ status })` filter. Stripe's `status: "trialing"` filter **also returns subscriptions that merely have a future `trial_end`, even when the object's own `.status` is `incomplete`.** Anchor billing produces exactly this shape for joins on the 25th–27th: `trial_end` set ([anchor-billing.ts](../../src/utils/billing/anchor-billing.ts)) + `payment_behavior: "default_incomplete"` + an unpaid initial `add_invoice_items` charge → the subscription sits at `incomplete` with a future `trial_end`. So an **abandoned checkout** was mis-classified as a live "trialing" membership and blocked all future attempts. Verified live: `retrieve(sub).status === "incomplete"` while `list({status:"trialing"})` returned that same sub.
+
+**Fix:** `findRecoverableSubscriptionForCustomer` now re-validates each returned sub's own `.status` with `isManageableStripeSubscriptionStatus()` before treating it as recoverable — the query filter is advisory only ([SubscriptionReferenceService.ts](../../src/services/subscription/SubscriptionReferenceService.ts)). This fixes both call sites at once: the resubscribe guard *and* the cancel-recovery path (`resolveCancellableStripeSubscription`). Regression test: `npm run test:find-recoverable-subscription`.
+
+**Rule of thumb:** never trust Stripe's `subscriptions.list({ status })` filter as proof of a subscription's status — always check the returned object's `.status` field. The two can disagree for trial + incomplete combinations.
+
+**Now also addressed:** the remaining follow-ups from this fix have since been closed. The new `cancelIncompleteSubscriptionAndVoidInvoice` helper ([cancelIncompleteSubscription.ts](../../src/services/subscription/cancelIncompleteSubscription.ts)) cancels the stale sub and voids its open initial invoice (best-effort, idempotent). Both create-subscription routes call it at-source to retire the user's `pendingStripeSubscriptionId` before creating a new sub, preventing abandoned `incomplete` checkouts from accumulating (see [billing-stripe/gotchas.md](../billing-stripe/gotchas.md#resubscribe-retires-the-stale-pending-incomplete-sub)). The `cleanup-abandoned-incomplete-subscriptions` backfill script (`npm run cleanup:abandoned-incomplete:dry` / `cleanup:abandoned-incomplete`) sweeps any that already exist in Stripe and repairs or clears dead `stripeSubscriptionId` pointers. Finally, the MembershipModal background pre-warm no longer raises an `EXISTING_SUBSCRIPTION` toast — only the single actionable "Active Subscription Found" toast on purchase click remains.
+
 ### Pause-collection orphans
 
 When a renewal fails we set `pause_collection: { behavior: "keep_as_draft" }`. If `resumeAfterSuccessfulRenewalPayment()` doesn't run on the matching success event, the subscription stays paused — and **subsequent cycle invoices stay draft, never finalize, never charge**. The user appears to be active in our DB but Stripe never bills them.
