@@ -17,6 +17,7 @@ import {
   EXISTING_SUBSCRIPTION_MESSAGE,
 } from "@/utils/payment/subscription-creation-guard";
 import { shouldWriteCanonicalStripeSubscriptionId, stripeCustomerHasManageableSubscription, cancelIncompleteSubscriptionAndVoidInvoice } from "@/services/subscription";
+import { rejectAndLog } from "@/utils/error-reporting/reject-and-log";
 import { createRateLimiter, getClientIdentifier } from "@/utils/security/rateLimiter";
 import { extractRequestContext } from "@/utils/tracking/facebook-helpers";
 import { safeEventSourceUrl } from "@/utils/tracking/event-source-url";
@@ -102,7 +103,11 @@ export async function POST(request: NextRequest) {
 
     const canCreate = checkCanCreateSubscription(existingUser);
     if (!canCreate.allowed) {
-      return NextResponse.json(canCreate.body, { status: canCreate.status });
+      return rejectAndLog(request, canCreate.status, canCreate.body, {
+        userId: session.user.id,
+        userEmail: session.user.email ?? undefined,
+        packageId: validatedData.packageId,
+      });
     }
 
     // Get the membership package
@@ -211,12 +216,19 @@ export async function POST(request: NextRequest) {
 
     if (!membershipPackage.stripePriceId) {
       console.error(`❌ No Stripe Price ID configured for package: ${membershipPackage.name}`);
-      return NextResponse.json(
+      return rejectAndLog(
+        request,
+        500,
         {
           success: false,
           error: `Stripe configuration missing for ${membershipPackage.name}. Please contact support.`,
         },
-        { status: 500 }
+        {
+          userId: session.user.id,
+          userEmail: session.user.email ?? undefined,
+          packageId: validatedData.packageId,
+          customerId: stripeCustomerId,
+        }
       );
     }
 
@@ -303,14 +315,21 @@ export async function POST(request: NextRequest) {
     if (stripeCustomerId) {
       const hasLiveStripeSubscription = await stripeCustomerHasManageableSubscription(stripeCustomerId);
       if (hasLiveStripeSubscription) {
-        return NextResponse.json(
+        return rejectAndLog(
+          request,
+          409,
           {
             success: false,
             error: EXISTING_SUBSCRIPTION_MESSAGE,
             code: EXISTING_SUBSCRIPTION_CODE,
             ...(correlationId && { correlationId }),
           },
-          { status: 409 }
+          {
+            userId: session.user.id,
+            userEmail: session.user.email ?? undefined,
+            packageId: validatedData.packageId,
+            customerId: stripeCustomerId,
+          }
         );
       }
     }
@@ -550,7 +569,9 @@ export async function POST(request: NextRequest) {
 
         const excessiveRetry = await analyzeStripePayErrorForExcessiveRetry(stripe, payError);
 
-        return NextResponse.json(
+        return rejectAndLog(
+          request,
+          400,
           {
             success: false,
             error: "Payment failed",
@@ -564,7 +585,12 @@ export async function POST(request: NextRequest) {
               ...(excessiveRetry.failureReason && { failureReason: excessiveRetry.failureReason }),
             }),
           },
-          { status: 400 }
+          {
+            userId: session.user.id,
+            userEmail: session.user.email ?? undefined,
+            packageId: validatedData.packageId,
+            customerId: stripeCustomerId,
+          }
         );
       }
     }
@@ -595,12 +621,19 @@ export async function POST(request: NextRequest) {
         subscriptionId: subscription.id,
         hasLatestInvoice: !!latestInvoice,
       });
-      return NextResponse.json(
+      return rejectAndLog(
+        request,
+        503,
         {
           success: false,
           error: "Payment setup is still in progress. Please try again in a moment.",
         },
-        { status: 503 }
+        {
+          userId: session.user.id,
+          userEmail: session.user.email ?? undefined,
+          packageId: validatedData.packageId,
+          customerId: stripeCustomerId,
+        }
       );
     }
 

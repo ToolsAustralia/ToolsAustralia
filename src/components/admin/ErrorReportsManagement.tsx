@@ -97,6 +97,13 @@ const categoryColors: Record<string, string> = {
   recovery: "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-200",
 };
 
+function httpStatusColor(status?: number): string {
+  if (!status) return "bg-gray-100 text-gray-700 dark:bg-neutral-800 dark:text-neutral-300";
+  if (status >= 500) return "bg-red-100 text-red-800 dark:bg-red-950/50 dark:text-red-200";
+  if (status >= 400) return "bg-amber-100 text-amber-800 dark:bg-amber-950/50 dark:text-amber-200";
+  return "bg-gray-100 text-gray-700 dark:bg-neutral-800 dark:text-neutral-300";
+}
+
 function getUserDisplay(report: IErrorReport) {
   const userId = report.userId as unknown;
   if (report.isAuthenticated) {
@@ -1029,7 +1036,6 @@ export default function ErrorReportsManagement() {
                       ["errorMessage", "Error"],
                       ["category", "Category"],
                       ["severity", "Severity"],
-                      ["status", "Status"],
                     ].map(([field, label]) => (
                       <th key={field} className="bg-gray-50 px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500 dark:bg-neutral-800 dark:text-neutral-400">
                         <SortButton field={field as SortField} activeField={sortBy} sortOrder={sortOrder} onSort={handleSort}>
@@ -1037,6 +1043,7 @@ export default function ErrorReportsManagement() {
                         </SortButton>
                       </th>
                     ))}
+                    <th className="bg-gray-50 px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500 dark:bg-neutral-800 dark:text-neutral-400">Status</th>
                     <th className="bg-gray-50 px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500 dark:bg-neutral-800 dark:text-neutral-400">User</th>
                     <th className="bg-gray-50 px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500 dark:bg-neutral-800 dark:text-neutral-400">API</th>
                     <th className="bg-gray-50 px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500 dark:bg-neutral-800 dark:text-neutral-400">
@@ -1074,7 +1081,15 @@ export default function ErrorReportsManagement() {
                         </td>
                         <td className="px-4 py-3"><Badge value={report.category} type="category" /></td>
                         <td className="px-4 py-3"><Badge value={report.severity} type="severity" /></td>
-                        <td className="px-4 py-3"><Badge value={report.status} type="status" /></td>
+                        <td className="px-4 py-3">
+                          {report.httpStatus ? (
+                            <span className={cn("inline-flex items-center rounded-full px-2 py-1 text-xs font-semibold", httpStatusColor(report.httpStatus))}>
+                              HTTP {report.httpStatus}
+                            </span>
+                          ) : (
+                            <span className="text-xs text-gray-400 dark:text-neutral-500">—</span>
+                          )}
+                        </td>
                         <td className="px-4 py-3 text-sm text-gray-700 dark:text-neutral-300">
                           {user.userId ? <ClickableUserDisplay displayText={user.text} userId={user.userId} /> : user.text}
                         </td>
@@ -1122,7 +1137,13 @@ export default function ErrorReportsManagement() {
                     <div className="mb-3 flex flex-wrap gap-1.5">
                       <Badge value={report.severity} type="severity" />
                       <Badge value={report.category} type="category" />
-                      <Badge value={report.status} type="status" />
+                      {report.httpStatus ? (
+                        <span className={cn("inline-flex items-center rounded-full px-2 py-1 text-xs font-semibold", httpStatusColor(report.httpStatus))}>
+                          HTTP {report.httpStatus}
+                        </span>
+                      ) : (
+                        <span className="text-xs text-gray-400 dark:text-neutral-500">No status</span>
+                      )}
                     </div>
                     <dl className="space-y-1.5 text-xs">
                       <div className="flex items-baseline gap-2">
