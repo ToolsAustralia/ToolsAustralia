@@ -39,7 +39,7 @@ const InlineCardSetup: React.FC<InlineCardSetupProps> = ({
     formatDisplayName(userData?.firstName, userData?.lastName) || undefined;
 
   return (
-    <div className="mb-4 space-y-3 rounded-xl border-2 border-neutral-200 dark:border-neutral-700 border-l-4 border-l-red-600 p-3 sm:p-4 bg-neutral-50 dark:bg-neutral-900 shadow-sm">
+    <div className="mb-4 space-y-3 rounded-xl border-2 border-neutral-200 border-l-4 border-l-red-600 p-3 sm:p-4 bg-neutral-50 shadow-sm">
       <div className="flex items-start gap-2">
         <CreditCard className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
         <div className="min-w-0">

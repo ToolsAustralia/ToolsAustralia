@@ -166,7 +166,7 @@ const PaymentForm: React.FC<PaymentFormProps> = ({
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       {selectedPaymentMethod && (
-        <div className="bg-neutral-50 dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-700 rounded-xl p-3 sm:p-4">
+        <div className="bg-neutral-50 border border-neutral-200 rounded-xl p-3 sm:p-4">
           <div className="flex items-center gap-2 sm:gap-3 min-w-0">
             <CreditCard className="w-4 h-4 sm:w-5 sm:h-5 text-neutral-600 flex-shrink-0" />
             <div className="min-w-0">
@@ -181,7 +181,7 @@ const PaymentForm: React.FC<PaymentFormProps> = ({
       )}
 
       {!selectedPaymentMethod && (
-        <div className="border border-neutral-200 dark:border-neutral-700 rounded-xl p-3 sm:p-4 bg-white dark:bg-neutral-900">
+        <div className="border border-neutral-200 rounded-xl p-3 sm:p-4 bg-white">
           {!stripe || !elements ? (
             <div className="flex items-center justify-center py-8">
               <div className="animate-spin rounded-full h-7 w-7 border-b-2 border-red-600" />

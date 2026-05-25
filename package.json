@@ -52,6 +52,8 @@
     "find:refund-entry-corruption": "tsx scripts/find-refund-entry-corruption.ts",
     "fix:refund-entry-corruption": "tsx scripts/fix-refund-entry-corruption.ts",
     "fix:refund-entry-corruption:dry": "tsx scripts/fix-refund-entry-corruption.ts --force-dry-run",
+    "fix:major-draw-renewal-entries": "tsx scripts/fix-major-draw-renewal-entries.ts --apply",
+    "fix:major-draw-renewal-entries:dry": "tsx scripts/fix-major-draw-renewal-entries.ts",
     "sync:meta-spend-by-url": "tsx scripts/sync-meta-spend-by-url.ts",
     "backfill:affiliate-membership-tied": "tsx scripts/backfill-affiliate-membership-tied.ts",
     "backfill:affiliate-recurring-commissions": "tsx scripts/sync-missing-affiliate-recurring-commissions.ts",
