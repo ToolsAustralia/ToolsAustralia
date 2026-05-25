@@ -34,6 +34,7 @@ npm run test:renewal-failed         # smoke-renders RenewalFailedModal (open + c
 npm run test:ui-primitives          # Button, Badge, Card primitives
 npm run test:upsell-shell           # UpsellHero, InfoGrid, UrgencyBanner, TrustBar primitives
 npm run test:cancellation-flow-hook # pure step-machine reducer (offerPhaseFor/nextOfferState) — locks the cursor-driven OFFER phase incl. the 3-rung `other` waterfall
+npm run test:capi-userdata          # Meta CAPI mirror: stripEmpty drops blank PII; guest userData reaches FB CAPI SHA-256-hashed into em/ph/fn/ln
 ```
 
 - `npm run test:variant-config-membership-theme` — standalone `tsx` unit test

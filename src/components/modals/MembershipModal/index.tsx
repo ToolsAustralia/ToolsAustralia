@@ -70,6 +70,7 @@ import { useAffiliateLink } from "@/hooks/useAffiliateLink";
 import { usePromoLink } from "@/hooks/usePromoLink";
 import { extractAttributionParams } from "@/utils/tracking/utm-helpers";
 import { getStoredUTMParams } from "@/utils/tracking/utm-storage";
+import { getFBCFromURL, getFBPFromCookie } from "@/utils/tracking/facebook-helpers";
 import { formatWinnerName } from "@/utils/winner-name-formatter";
 import { useUserMajorDrawStats } from "@/hooks/queries/useMajorDrawQueries";
 import { useMajorDrawPurchaseGate } from "@/hooks/useMajorDrawPurchaseGate";
@@ -1314,18 +1315,28 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
     setRegistrationErrors({});
 
     // Track Meta InitiateCheckout for the new-user signup path BEFORE the network request.
-    // This mirrors the existing fire in handleSubmit (~line 3067) for logged-in users — new-user
-    // signups previously bypassed it. Browser-only (no CAPI counterpart): InitiateCheckout is a
-    // high-intent signal for Meta optimization, not a conversion event.
+    // This mirrors the existing fire in handleSubmit for logged-in users — new-user signups
+    // previously bypassed it. Hybrid Pixel + CAPI (shared event_id); the guest's form PII is
+    // attached as the 3rd arg so the CAPI event carries identity (hashed server-side).
     try {
       if (!initiateCheckoutFiredRef.current && activePlan) {
         initiateCheckoutFiredRef.current = true;
         const packagePrice = activePlan?.price || 0;
-        trackInitiateCheckout({
-          value: packagePrice,
-          currency: "AUD",
-          numItems: 1, // Single membership package
-        });
+        trackInitiateCheckout(
+          {
+            value: packagePrice,
+            currency: "AUD",
+            numItems: 1,
+          },
+          undefined,
+          {
+            email: formData.email,
+            firstName: formData.firstName,
+            lastName: formData.lastName,
+            phone: formData.phone,
+            country: "AU",
+          },
+        );
       }
     } catch {
       // Non-blocking — never fail registration on tracking error
@@ -1366,6 +1377,9 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
       // Non-blocking
     }
 
+    const fbc = typeof window !== "undefined" ? getFBCFromURL() : undefined;
+    const fbp = typeof window !== "undefined" ? getFBPFromCookie() : undefined;
+
     try {
       const response = await fetch("/api/auth/register", {
         method: "POST",
@@ -1387,6 +1401,8 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
           ...(attributionParams.campaign_id && { campaign_id: attributionParams.campaign_id }),
           ...(attributionParams.adset_id && { adset_id: attributionParams.adset_id }),
           ...(attributionParams.ad_id && { ad_id: attributionParams.ad_id }),
+          ...(fbc && { fbc }),
+          ...(fbp && { fbp }),
         }),
       });
 
@@ -2647,11 +2663,23 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
         initiateCheckoutFiredRef.current = true;
         const packagePrice = activePlan?.price || 0;
 
-        trackInitiateCheckout({
-          value: packagePrice,
-          currency: "AUD",
-          numItems: 1, // Single membership package
-        });
+        trackInitiateCheckout(
+          {
+            value: packagePrice,
+            currency: "AUD",
+            numItems: 1,
+          },
+          undefined,
+          isAuthenticated
+            ? undefined
+            : {
+                email: formData.email,
+                firstName: formData.firstName,
+                lastName: formData.lastName,
+                phone: formData.phone,
+                country: "AU",
+              },
+        );
       }
     } catch {
       if (process.env.NODE_ENV === "development") {

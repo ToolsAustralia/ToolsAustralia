@@ -44,6 +44,35 @@ interface MirrorCustomData {
   searchString?: string;
 }
 
+/**
+ * Client-supplyable PII for CAPI. The server route `/api/tracking/conversion`
+ * SHA-256-hashes these via `hashPII`; never hashed client-side. Excludes
+ * fbc/fbp/IP/UA (server-derived) by design.
+ */
+export interface MirrorUserData {
+  email?: string;
+  phone?: string;
+  firstName?: string;
+  lastName?: string;
+  city?: string;
+  state?: string;
+  zipCode?: string;
+  country?: string;
+  birthdate?: string;
+  externalId?: string;
+}
+
+/** Drop undefined/null/empty-string so we never overwrite server/session data with blanks. */
+export function stripEmpty<T extends Record<string, unknown>>(obj: T): Partial<T> {
+  const out: Partial<T> = {};
+  for (const [k, v] of Object.entries(obj)) {
+    if (v !== undefined && v !== null && v !== "") {
+      out[k as keyof T] = v as T[keyof T];
+    }
+  }
+  return out;
+}
+
 interface MirrorParams {
   eventName: MirrorEventName;
   /** MUST match the event_id passed to the browser Pixel's 4th-arg `{eventID}` so Meta dedupes. */
@@ -52,6 +81,7 @@ interface MirrorParams {
   /** ISO 4217. Will be uppercased server-side. */
   currency?: string;
   customData?: MirrorCustomData;
+  userData?: MirrorUserData;
   /** Defaults to `window.location.href` at fire time. */
   eventSourceUrl?: string;
 }
@@ -82,12 +112,17 @@ export function mirrorMetaEventToCapi(params: MirrorParams): void {
 
   const eventSourceUrl = params.eventSourceUrl ?? window.location.href;
 
+  const cleanedUserData = params.userData
+    ? stripEmpty(params.userData as Record<string, unknown>)
+    : undefined;
+
   const body = {
     eventName: params.eventName,
     eventId: params.eventId,
     ...(params.value !== undefined && { value: params.value }),
     ...(params.currency && { currency: params.currency }),
     ...(params.customData && { customData: params.customData }),
+    ...(cleanedUserData && Object.keys(cleanedUserData).length > 0 && { userData: cleanedUserData }),
     eventSourceUrl,
   };
 

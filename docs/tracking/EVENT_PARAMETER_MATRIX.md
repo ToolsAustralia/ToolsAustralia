@@ -20,6 +20,8 @@ Two server entry points:
 - **Purchase:** `trackPixelPurchase(...)` from the Stripe webhook ([pixel-purchase-tracking.ts](../../src/utils/tracking/pixel-purchase-tracking.ts)) → `sendConversion`.
 - **Funnel events** (ViewContent / AddToCart / InitiateCheckout / AddPaymentInfo / Lead): browser fires via [`usePixelTracking`](../../src/hooks/usePixelTracking.ts) `fireFunnelEvent`, which fires the FB + TikTok browser pixels **and** mirrors to `/api/tracking/conversion` → `sendConversion`, all sharing one `event_id`.
 
+> **Optional `userData` on the mirror.** `fireFunnelEvent` (and the `trackInitiateCheckout` / `trackAddPaymentInfo` wrappers) accept an optional `userData: MirrorUserData` that is forwarded **only to the CAPI mirror**, never to the browser pixel calls. The mirror runs it through `stripEmpty` (drops `undefined` / `null` / `""`) and `/api/tracking/conversion` SHA-256-hashes the supplied fields server-side via `hashPII` → `em / ph / fn / ln / ct / st / zp / country / db / external_id`. Fields: `email, phone, firstName, lastName, city, state, zipCode, country, birthdate, externalId`. fbc/fbp/IP/UA are server-derived and intentionally excluded from `MirrorUserData`. `fireFunnelEvent` also threads `packageType` through to CAPI `custom_data` (AddPaymentInfo needs it; without the passthrough it was dropped).
+
 ---
 
 ## 2. TikTok — events & surfaces
