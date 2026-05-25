@@ -176,7 +176,6 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, email }) => {
 
         const checkSession = setInterval(async () => {
           attempts++;
-          const { getSession } = await import("next-auth/react");
           const session = await getSession();
 
           if (session) {
