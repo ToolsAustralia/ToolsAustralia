@@ -338,6 +338,9 @@ export async function POST(request: NextRequest) {
             const ctx = extractRequestContext(request);
             if (ctx.client_ip_address) userData.client_ip_address = ctx.client_ip_address;
             if (ctx.client_user_agent) userData.client_user_agent = ctx.client_user_agent;
+            // Body wins, cookie is the fallback (opposite of the purchase path): the
+            // register POST can fire before the Meta pixel writes _fbc, and the API URL
+            // has no fbclid to reconstruct from — so the client-sent value is more reliable.
             const fbc = validatedData.fbc ?? ctx.fbc;
             const fbp = validatedData.fbp ?? ctx.fbp;
             if (fbc) userData.fbc = fbc;
