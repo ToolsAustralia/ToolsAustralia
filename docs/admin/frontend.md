@@ -40,7 +40,9 @@ The **API endpoint** input filters on `apiEndpoint` (the route that failed). The
 
 **Desktop table columns** — checkbox / Error (with secondary "Auto-logged · {pageUrl}" line) / Category / Severity / Status / User / API / Date / Actions (right-aligned). The API column shows `{httpMethod}` in a small chip + `apiEndpoint`; an em-dash placeholder renders when no API was involved. Page URL is rendered inline under the error message instead of in its own column to keep the table from growing too wide.
 
-**Mobile cards (sm:hidden)** — error message + auto-logged/timestamp metadata at top, badges row (severity / category / status), then a `<dl>` with explicit `User / API / Page` rows. Full-width red "View Investigation" CTA at the bottom with adequate touch target.
+**Status column (list view, 2026-05-25)** — the "Status" column in the list table and mobile card row now shows the **HTTP status code** instead of the workflow-status badge (e.g. `HTTP 409`). The badge is color-coded: 5xx → red, 4xx → amber, none → `—` (desktop) / "No status" (mobile). The column header is plain (non-sortable). The **workflow status** (new / investigating / resolved / dismissed) is preserved in the detail modal and the Status filter — it has not been removed from the codebase.
+
+**Mobile cards (sm:hidden)** — error message + auto-logged/timestamp metadata at top, badges row (severity / category / HTTP status), then a `<dl>` with explicit `User / API / Page` rows. Full-width red "View Investigation" CTA at the bottom with adequate touch target.
 
 **Detail modal (ErrorReportDetailModal)** — slide-up bottom-sheet on mobile (`items-end` + `rounded-t-2xl`), centred dialog on `sm+`. The info section is a 4-up grid (`grid-cols-1 sm:grid-cols-2 lg:grid-cols-4`) of User / API / Page / Environment panels — split from the previous combined Route+API panel. Diagnostic "Copy Context" string includes both API and Page on separate lines.
 

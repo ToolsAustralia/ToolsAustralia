@@ -231,3 +231,26 @@ route and the HTTP self-call were deleted; processing now runs in-process via
 `processQueuedEvent` (receiver `after()` / sweeper / admin Replay). Receiver is
 now genuinely thin: `connectDB → verify → enqueue → after() → 200`. See
 [STRIPE_WEBHOOK_QUEUE.md](./STRIPE_WEBHOOK_QUEUE.md).
+
+## Error visibility in create-subscription routes
+
+Both `POST /api/stripe/create-subscription` (guest/registration) and
+`POST /api/stripe/create-subscription-existing-user` (session-authenticated) now
+capture non-thrown early returns via `rejectAndLog` from
+`@/utils/error-reporting/reject-and-log`.
+
+**What is captured:**
+- `409 EXISTING_SUBSCRIPTION` — the live-subscription gate (both routes; the primary motivating case)
+- `409` from `checkCanCreateSubscription` when its body carries `code: EXISTING_SUBSCRIPTION`
+- `500` "Stripe configuration missing" (missing `stripePriceId`)
+- `503` "Payment setup is still in progress" (no `confirmation_secret` on `latest_invoice`)
+- `400` "Payment failed" inside the `invoices.pay` try/catch when a Stripe error code is present (existing-user route only; the body uses `...(errorCode && { code: errorCode })`)
+- `400` "Payment method setup failed" in the guest route's customer-attach branch, when `code: errorCode` is set — captured only when the code is present (codeless variant is skipped by the classifier)
+
+**What is intentionally NOT captured:**
+- `401 / 403 / 404 / 429` returns — routine auth/rate-limit signals, not actionable errors
+- Genuinely codeless `4xx` returns (e.g. "Payment method not properly set up", "Invalid or inactive package") — no `code` field, so `classifyHttpRejection` skips them. (Note: returns that conditionally set `code` ARE wrapped — the classifier still skips them at runtime when the code is absent.)
+- The `403` major-draw gate (`enforceMajorDrawOpenForNewPurchasesOr403`) — not a business error
+- The entire top-level `catch` block in each route — thrown errors already auto-log via `ErrorLoggingService` / `autoLogPaymentErrorServer`; wrapping those would double-log
+
+**No double-logging risk:** `rejectAndLog` is only on non-thrown paths; the `catch` blocks are untouched.

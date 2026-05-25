@@ -239,7 +239,7 @@ export async function autoLogStripeError(
   }
 
   await autoLogError(enhancedError, {
-    category: "stripe",
+    category: "payment",
     severity: "critical",
     component: context?.component,
     stripeLoaded: context?.stripeLoaded,

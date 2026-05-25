@@ -30,6 +30,20 @@ The predicate at [src/utils/payment/stripe/is-stripe-noise-error.ts](../../src/u
 
 **Do not strip these errors from the user-facing flow** — the message is still returned for toast display. Only the auto-log to ErrorReport is skipped.
 
+## Invalid `category` silently drops reports
+
+`category` MUST be one of the model-enum values: `payment | network | api | system | recovery`. Any other string (e.g. `"stripe"`) causes the Mongoose save to throw, which is swallowed by the fire-and-forget wrapper — the report is silently lost with no visible error.
+
+This was the root cause of `autoLogStripeError` dropping every report it created: it passed `category: "stripe"`. Fixed by changing it to `category: "payment"` (see `src/utils/error-reporting/auto-log-error.ts`). Historical rows created before this fix show no `category` value.
+
+## `logHttpRejection` must NOT call `detectCategoryAndSeverity`
+
+`ErrorLoggingService.logHttpRejection` derives severity purely from the HTTP status (via `classifyHttpRejection`). It must never call `detectCategoryAndSeverity`, which classifies by error shape and escalates `payment`-context errors to `critical` — that escalation is wrong for HTTP-level rejections. The severity is intentionally capped at `"high"` (5xx) or `"medium"` (4xx).
+
+## `httpStatus` only populated after this change
+
+The `httpStatus` field on `ErrorReport` is only set for reports created via `logHttpRejection` (introduced with the `rejectAndLog` helper). Historical error rows have `httpStatus: null`.
+
 ## Page URL vs API endpoint
 
 `ErrorReport` stores two locator fields that get conflated in the admin UI when only one is present:
