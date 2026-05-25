@@ -522,8 +522,9 @@ function LoginPageContent() {
           const updatedSession = await getSession();
 
           if (updatedSession?.user?.id) {
+            // Only invalidate here; the redirect useEffect owns push + router.refresh()
+            // once the session state propagates (avoids a duplicate refresh).
             invalidateForUser(updatedSession.user.id);
-            router.refresh();
           }
         }, 500);
 
