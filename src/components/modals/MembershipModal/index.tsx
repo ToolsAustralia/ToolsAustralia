@@ -1314,9 +1314,9 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
     setRegistrationErrors({});
 
     // Track Meta InitiateCheckout for the new-user signup path BEFORE the network request.
-    // This mirrors the existing fire in handleSubmit (~line 3067) for logged-in users — new-user
-    // signups previously bypassed it. Browser-only (no CAPI counterpart): InitiateCheckout is a
-    // high-intent signal for Meta optimization, not a conversion event.
+    // This mirrors the existing fire in handleSubmit for logged-in users — new-user signups
+    // previously bypassed it. Hybrid Pixel + CAPI (shared event_id); the guest's form PII is
+    // attached as the 3rd arg so the CAPI event carries identity (hashed server-side).
     try {
       if (!initiateCheckoutFiredRef.current && activePlan) {
         initiateCheckoutFiredRef.current = true;
