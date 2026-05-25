@@ -158,3 +158,7 @@ Meta's CAPI accepts some `user_data` fields **raw** and others as SHA-256 hashes
 ## `db` (birthdate) format is `YYYYMMDD`, not ISO
 
 The `db` parameter must be hashed `YYYYMMDD` digits (e.g. `hashPII("19900615")`), **not** ISO `YYYY-MM-DD`. Use `toYYYYMMDD()` from `facebook-helpers.ts` — it accepts `Date` objects, ISO strings, and pre-formatted 8-digit strings, and returns `null` for unparseable input so the caller can skip the field. Wrong format produces no error but silently drops match quality.
+
+## Funnel CAPI events only carry PII if a caller passes `userData`
+
+`fireFunnelEvent` (and `trackInitiateCheckout` / `trackAddPaymentInfo`) forward an optional `userData: MirrorUserData` **only to the CAPI mirror** ([meta-capi-mirror.ts](../../src/utils/tracking/meta-capi-mirror.ts)) — never to the browser pixel. If no caller passes `userData`, the funnel event reaches CAPI with no identity params beyond what the server route enriches from the session/request (so guest/anonymous funnel events have low EMQ until a caller supplies PII). Empty fields are stripped (`stripEmpty` drops `undefined` / `null` / `""`) so a partially-filled `userData` never clobbers the session enrichment the route layers in.

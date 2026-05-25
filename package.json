@@ -88,6 +88,7 @@
     "test:facebook-capi": "tsx src/lib/__tests__/facebook.test.ts",
     "test:facebook-emq": "tsx src/utils/tracking/__tests__/facebook-emq.test.ts",
     "test:tracking-dispatch": "tsx src/lib/tracking/__tests__/dispatch.test.ts",
+    "test:capi-userdata": "tsx src/lib/tracking/__tests__/capi-userdata-enrichment.test.ts",
     "test:tiktok-capi": "tsx src/lib/tracking/__tests__/tiktok-capi.test.ts",
     "test:advanced-matching": "tsx src/lib/tracking/__tests__/advanced-matching.test.ts",
     "test:facebook-fbc-extract": "tsx src/utils/tracking/__tests__/extractFBCFromRequest.test.ts",
