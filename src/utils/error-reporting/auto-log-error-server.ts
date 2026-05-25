@@ -40,6 +40,8 @@ export async function autoLogErrorServer(
   additionalContext?: {
     category?: "payment" | "stripe" | "system" | "api" | "network" | "recovery";
     severity?: "critical" | "high" | "medium";
+    httpStatus?: number;
+    httpMethod?: string;
     paymentIntentId?: string;
     customerId?: string;
     amount?: number;
@@ -83,7 +85,7 @@ export async function autoLogErrorServer(
 
     // Extract API endpoint from request URL
     let apiEndpoint: string | undefined;
-    const httpMethod = "POST"; // Default to POST for API routes
+    const httpMethod = additionalContext?.httpMethod ?? "POST"; // Real method when provided, else default
     if (request.url) {
       try {
         const url = new URL(request.url);
@@ -114,6 +116,7 @@ export async function autoLogErrorServer(
         : errorName,
       apiEndpoint,
       httpMethod,
+      httpStatus: additionalContext?.httpStatus,
       requestUrl: request.url,
       userId: additionalContext?.userId,
       userEmail, // ✅ ENHANCED: Includes guest email if not authenticated

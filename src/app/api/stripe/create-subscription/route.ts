@@ -26,6 +26,7 @@ import {
   EXISTING_SUBSCRIPTION_MESSAGE,
 } from "@/utils/payment/subscription-creation-guard";
 import { shouldWriteCanonicalStripeSubscriptionId, stripeCustomerHasManageableSubscription, cancelIncompleteSubscriptionAndVoidInvoice } from "@/services/subscription";
+import { rejectAndLog } from "@/utils/error-reporting/reject-and-log";
 import { createRateLimiter, getClientIdentifier } from "@/utils/security/rateLimiter";
 import { buildAttributionMetadata } from "@/utils/tracking/attribution-metadata";
 import { attributionSchema } from "@/utils/tracking/attribution-schema";
@@ -197,9 +198,16 @@ export async function POST(request: NextRequest) {
 
     const canCreate = checkCanCreateSubscription(registeredUser ?? null);
     if (!canCreate.allowed) {
-      return NextResponse.json(
+      return rejectAndLog(
+        request,
+        canCreate.status,
         { success: false, ...canCreate.body },
-        { status: canCreate.status }
+        {
+          userId: registeredUser?._id?.toString(),
+          userEmail: registeredUser ? validatedData.userEmail : undefined,
+          guestEmail: registeredUser ? undefined : validatedData.userEmail,
+          packageId: validatedData.packageId,
+        }
       );
     }
 
@@ -334,7 +342,9 @@ export async function POST(request: NextRequest) {
       // Check if it's a payment method attachment error that should return error response
       if (errorMessage.includes("Failed to attach payment method")) {
         const errorCode = customerResult.reason && typeof customerResult.reason === "object" && "code" in customerResult.reason ? String(customerResult.reason.code) : undefined;
-        return NextResponse.json(
+        return rejectAndLog(
+          request,
+          400,
           {
             success: false,
             error: "Payment method setup failed",
@@ -342,7 +352,12 @@ export async function POST(request: NextRequest) {
             code: errorCode,
             suggestion: "Please try again or use a different payment method.",
           },
-          { status: 400 }
+          {
+            userId: registeredUser?._id?.toString(),
+            userEmail: registeredUser ? validatedData.userEmail : undefined,
+            guestEmail: registeredUser ? undefined : validatedData.userEmail,
+            packageId: validatedData.packageId,
+          }
         );
       }
       
@@ -405,12 +420,20 @@ export async function POST(request: NextRequest) {
 
     if (!membershipPackage.stripePriceId) {
       console.error(`❌ No Stripe Price ID configured for package: ${membershipPackage.name}`);
-      return NextResponse.json(
+      return rejectAndLog(
+        request,
+        500,
         {
           success: false,
           error: `Stripe configuration missing for ${membershipPackage.name}. Please contact support.`,
         },
-        { status: 500 }
+        {
+          userId: registeredUser?._id?.toString(),
+          userEmail: registeredUser ? validatedData.userEmail : undefined,
+          guestEmail: registeredUser ? undefined : validatedData.userEmail,
+          packageId: validatedData.packageId,
+          customerId: customer?.id,
+        }
       );
     }
 
@@ -502,14 +525,22 @@ export async function POST(request: NextRequest) {
 
     const hasLiveStripeSubscription = await stripeCustomerHasManageableSubscription(customer.id);
     if (hasLiveStripeSubscription) {
-      return NextResponse.json(
+      return rejectAndLog(
+        request,
+        409,
         {
           success: false,
           error: EXISTING_SUBSCRIPTION_MESSAGE,
           code: EXISTING_SUBSCRIPTION_CODE,
           ...(correlationId && { correlationId }),
         },
-        { status: 409 }
+        {
+          userId: registeredUser?._id?.toString(),
+          userEmail: registeredUser ? validatedData.userEmail : undefined,
+          guestEmail: registeredUser ? undefined : validatedData.userEmail,
+          packageId: validatedData.packageId,
+          customerId: customer.id,
+        }
       );
     }
 
@@ -589,12 +620,20 @@ export async function POST(request: NextRequest) {
         hasLatestInvoice: !!latestInvoice,
         latestInvoiceType: typeof latestInvoice,
       });
-      return NextResponse.json(
+      return rejectAndLog(
+        request,
+        503,
         {
           success: false,
           error: "Payment setup is still in progress. Please try again in a moment.",
         },
-        { status: 503 }
+        {
+          userId: registeredUser?._id?.toString(),
+          userEmail: registeredUser ? validatedData.userEmail : undefined,
+          guestEmail: registeredUser ? undefined : validatedData.userEmail,
+          packageId: validatedData.packageId,
+          customerId: customer?.id,
+        }
       );
     }
 

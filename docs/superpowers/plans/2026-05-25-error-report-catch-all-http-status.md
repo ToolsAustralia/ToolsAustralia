@@ -6,11 +6,11 @@
 
 > **⚠ Repo rule — doc-sync Stop hook (CLAUDE.md §2):** editing `src/**` requires updating the matching `docs/<domain>/` in the same unit of work or the Stop hook blocks. Doc steps are bundled into the last task of each domain (Tasks 4, 6, 7).
 
-**Goal:** Make ErrorReport capture every non-thrown 4xx/5xx rejection across the **payment/subscription/Stripe route family (~33 routes)** — so `409 EXISTING_SUBSCRIPTION` and every other early-return rejection becomes visible — and surface HTTP status + type in the admin list.
+**Goal:** Make non-thrown business rejections (and real 5xx failures) visible in ErrorReport the moment they happen — so `409 EXISTING_SUBSCRIPTION` and its siblings stop being invisible until a user complains — and surface the HTTP status in the admin list. **Capture policy: log `5xx` + `4xx` that carry a business `code`; skip `<400`, `401/403/404/429`, and codeless `4xx`.**
 
-**Scope:** the family under `api/stripe/**`, `api/subscription/**`, `api/payment-intent/**`, `api/payment-status/**`, `api/invoice/**`, `api/memberships/**`, **excluding `api/stripe/webhook`**. Checkout/cart, auth, and product-admin families are out of scope this round. The 2 `create-subscription` routes are detailed templates (Tasks 5-6); the remaining ~29 are the identical transform (Task 9).
+**Scope:** the payment/subscription family, **led by the two `create-subscription` routes** (the actual reported pain, Tasks 5-6). Other business-coded returns in the family are wired **incrementally** (Task 9 — not a blanket 29-route sweep, not all-families). Per-return `rejectAndLog` is the documented convention for future routes. A **global wrapper across all ~308 routes was evaluated and rejected** (see the design spec's "Why not a global wrapper").
 
-**Architecture:** A pure classifier (`classifyHttpRejection`) decides capture + severity (reusing the existing `medium`/`high` tiers — no new `low` tier). `ErrorLoggingService.logHttpRejection` forces that severity and rides the existing `autoLogErrorServer` + dedup path. A route-layer `rejectAndLog` wrapper turns each non-thrown early return into one line. The admin list swaps the workflow-status badge for an HTTP-status chip; the workflow stays in the detail modal + filter. Existing `catch`-block auto-logging (for thrown errors) is left untouched — no double-logging.
+**Architecture:** A pure classifier (`classifyHttpRejection(status, { hasBusinessCode })`) decides capture + severity (reusing the existing `medium`/`high` tiers — no new `low` tier; `5xx`→high, coded `4xx`→medium, everything else skipped). `ErrorLoggingService.logHttpRejection` forces that severity and rides the existing `autoLogErrorServer` + dedup path. A route-layer `rejectAndLog` helper turns each non-thrown business return into one line; the developer's choice of *where* to call it is the primary noise filter, and the classifier is the safety net. The admin list swaps the workflow-status badge for an HTTP-status chip; the workflow stays in the detail modal + filter. Existing `catch`-block auto-logging (for thrown errors) is left untouched — no double-logging.
 
 **Tech Stack:** Next.js 15 App Router, Mongoose, Zod, standalone `tsx` test scripts (no jest/vitest).
 
@@ -44,7 +44,7 @@ Accepted tradeoff (same as existing behavior): on serverless the detached write 
 - **Modify** `src/components/admin/ErrorReportsManagement.tsx` — HTTP-status column. *admin domain.*
 - **Modify** `package.json` — add `test:http-rejection-severity`. *infrastructure domain.*
 - **Modify (Task 8 — mandatory)** `src/utils/error-reporting/auto-log-error.ts` — fix `category:"stripe"` silent drop.
-- **Modify (Task 9)** the remaining ~29 Stripe-family route files — same `rejectAndLog` transform (enumerated in Task 9). *billing-stripe / subscription / payment domains.*
+- **Modify (Task 9 — incremental, as needed)** other payment/subscription-family route files that have business-coded early returns — same `rejectAndLog` one-liner; codeless/gate returns are auto-skipped by the classifier so they need no wiring. Not a mandatory blanket. *billing-stripe / subscription / payment domains.*
 - **Docs** `docs/error-reporting/*`, `docs/billing-stripe/*`, `docs/subscription/*`, `docs/payment/*`, `docs/admin/*` + manifest `lastVerified`.
 
 ---
@@ -66,28 +66,41 @@ Reference the `writing-tsx-test` skill for the repo's test conventions before wr
 import assert from "node:assert";
 import { classifyHttpRejection } from "../http-rejection-severity";
 
-// < 400 (incl. 3xx) → not captured
+// < 400 (incl. 3xx) → not captured (code irrelevant)
 for (const s of [200, 204, 301, 302, 304, 399]) {
-  assert.equal(classifyHttpRejection(s).capture, false, `status ${s} should NOT be captured`);
+  assert.equal(classifyHttpRejection(s, { hasBusinessCode: true }).capture, false, `status ${s} should NOT be captured`);
 }
 
-// 4xx → captured as "medium"
-for (const s of [400, 401, 403, 404, 409, 429, 499]) {
-  const r = classifyHttpRejection(s);
-  assert.equal(r.capture, true, `status ${s} should be captured`);
-  assert.equal(r.severity, "medium", `status ${s} should be medium`);
+// Routine gate statuses → never captured, even WITH a business code
+for (const s of [401, 403, 404, 429]) {
+  assert.equal(classifyHttpRejection(s, { hasBusinessCode: true }).capture, false, `gate status ${s} should NOT be captured`);
 }
 
-// 5xx → captured as "high"
+// Other 4xx WITH a business code → captured "medium"
+for (const s of [400, 402, 409, 422, 499]) {
+  const r = classifyHttpRejection(s, { hasBusinessCode: true });
+  assert.equal(r.capture, true, `coded ${s} should be captured`);
+  assert.equal(r.severity, "medium", `coded ${s} should be medium`);
+}
+
+// Other 4xx WITHOUT a code → not captured (with or without opts)
+for (const s of [400, 409, 422]) {
+  assert.equal(classifyHttpRejection(s, { hasBusinessCode: false }).capture, false, `codeless ${s} should NOT be captured`);
+  assert.equal(classifyHttpRejection(s).capture, false, `codeless ${s} (no opts) should NOT be captured`);
+}
+
+// 5xx → captured as "high" regardless of code
 for (const s of [500, 502, 503, 599]) {
-  const r = classifyHttpRejection(s);
-  assert.equal(r.capture, true, `status ${s} should be captured`);
-  assert.equal(r.severity, "high", `status ${s} should be high`);
+  for (const opts of [{ hasBusinessCode: true }, { hasBusinessCode: false }, undefined]) {
+    const r = classifyHttpRejection(s, opts);
+    assert.equal(r.capture, true, `status ${s} should be captured`);
+    assert.equal(r.severity, "high", `status ${s} should be high`);
+  }
 }
 
 // invalid input → not captured
 for (const s of [Number.NaN, 0, -1]) {
-  assert.equal(classifyHttpRejection(s).capture, false, `invalid status ${s} should NOT be captured`);
+  assert.equal(classifyHttpRejection(s, { hasBusinessCode: true }).capture, false, `invalid status ${s} should NOT be captured`);
 }
 
 console.log("✅ classifyHttpRejection: all assertions passed");
@@ -114,25 +127,40 @@ Expected: FAIL — `Cannot find module '../http-rejection-severity'`.
 /**
  * Classifies a non-2xx HTTP response for ErrorReport capture.
  *
- * Policy (docs/error-reporting): < 400 (incl. 3xx redirects) is NOT an error and is skipped.
- * 4xx (incl. 401/409/429 on the scoped routes) → "medium"; 5xx → "high".
+ * Policy (docs/error-reporting + the design spec):
+ * - < 400 (incl. 3xx redirects): not an error → skip.
+ * - 401 / 403 / 404 / 429: routine auth / permission / not-found / rate-limit gates → skip
+ *   (high-volume noise; logging them buries the real signal and amplifies brute-force).
+ * - other 4xx: capture as "medium" ONLY if it carries a business `code` (a deliberate, named
+ *   rejection like EXISTING_SUBSCRIPTION); codeless 4xx is generic noise → skip.
+ * - 5xx: capture as "high" (a genuine failure) regardless of code.
  * Reuses existing severity tiers — intentionally no "low" tier (see the design spec).
  */
 import type { ErrorSeverity } from "./error-severity-classifier";
+
+/** Routine gate statuses never worth an ErrorReport row. */
+const NOISE_STATUSES = new Set<number>([401, 403, 404, 429]);
 
 export interface HttpRejectionClassification {
   capture: boolean;
   severity: ErrorSeverity;
 }
 
-export function classifyHttpRejection(status: number): HttpRejectionClassification {
+export function classifyHttpRejection(
+  status: number,
+  options?: { hasBusinessCode?: boolean }
+): HttpRejectionClassification {
   if (!Number.isFinite(status) || status < 400) {
     return { capture: false, severity: "medium" };
   }
   if (status >= 500) {
     return { capture: true, severity: "high" };
   }
-  return { capture: true, severity: "medium" };
+  // 4xx
+  if (NOISE_STATUSES.has(status)) {
+    return { capture: false, severity: "medium" };
+  }
+  return { capture: !!options?.hasBusinessCode, severity: "medium" };
 }
 ```
 
@@ -273,7 +301,10 @@ Add after the existing `logError` method (before the closing `}` of the class):
       customerId?: string;
     };
   }): Promise<void> {
-    const { capture, severity } = classifyHttpRejection(params.status);
+    // 4xx is captured only when it carries a business code; 5xx always; gates/3xx never.
+    const { capture, severity } = classifyHttpRejection(params.status, {
+      hasBusinessCode: typeof params.code === "string" && params.code.length > 0,
+    });
     if (!capture) return;
 
     // Dynamic import keeps the server-only util out of any client bundle (existing pattern).
@@ -410,6 +441,10 @@ Import `rejectAndLog`, then convert each **non-thrown** early `return NextRespon
 
 Context available after line 86 (`validatedData` parsed) and line 58 (`session`): `session.user.id`, `session.user.email`, `validatedData.packageId`, and `stripeCustomerId` (after line 118).
 
+> **Capture-policy note (refined):** with the new classifier, the `404` user-not-found and the **codeless** `400`s below will produce **no ErrorReport row** (auto-skipped). The rows you actually get from this route are: the **`409 EXISTING_SUBSCRIPTION`** (coded), any payment-failed **`400` with a code**, and the **`503`** (5xx). Wrapping the codeless/404 returns is a harmless no-op — do it for uniformity if you like, but don't expect rows from them, and never wrap `401/403/404/429` expecting capture.
+>
+> **Stale line numbers:** this route was edited earlier in the session (a prevent-at-source block + a `console.error` were added), so the line references below are shifted by ~16 lines. **Match by content, not line number** (the `if (hasLiveStripeSubscription)` block, the `checkCanCreateSubscription` guard, etc. are the anchors).
+
 - [ ] **Step 1: Add the import**
 
 After the existing imports:
@@ -522,6 +557,8 @@ git commit -m "feat(billing-stripe): capture non-thrown 4xx/5xx returns on creat
 - Docs: `docs/billing-stripe/` + manifest
 
 This is the **guest/registration** flow — there is no session. Context: `registeredUser?._id?.toString()` (may be undefined for brand-new users) and `validatedData.userEmail`; `customer?.id` after line ~329. For guests (no `userId`), pass the email as `guestEmail`.
+
+> **Same two caveats as Task 5:** (1) the `404` (membership package not found) and **codeless** `400`s will be auto-skipped by the classifier — the rows you get are the coded `409`/`400`s and the `503`; wrapping the rest is a harmless no-op. (2) This route was also edited earlier in the session (prevent-at-source block), so **match by content, not line number**.
 
 - [ ] **Step 1: Add the import**
 
@@ -787,9 +824,13 @@ git commit -m "fix(error-reporting): stop dropping Stripe-load errors (category 
 
 ---
 
-## Task 9: Roll out `rejectAndLog` to the rest of the Stripe family (~29 routes)
+## Task 9 (incremental, not a mandatory blanket): extend `rejectAndLog` to other business-coded returns in the payment/subscription family
 
-> **Execution:** best done **subagent-per-route** (or small batches) — each route is the *identical* transform proven in Tasks 5-6, but each has different return sites and context sources, so a fresh worker reading one route at a time is the safest. Tasks 5-6 are the canonical worked examples; do them first.
+> **Scope correction (post deep-review):** this is **not** a "wire all 29 routes" sweep, and it is **not** all-families. The refined capture policy means the classifier auto-skips `<400`, `401/403/404/429`, and codeless `4xx` — so wrapping a return that isn't a coded business rejection is a harmless no-op, but also pointless. Therefore: extend `rejectAndLog` **only to the genuinely business-coded early returns** (and non-thrown `5xx`) in the routes below, **prioritized by how revenue/UX-critical they are**, and stop when coverage is good enough. The two `create-subscription` routes (Tasks 5-6) already ship the reported pain; everything here is incremental hardening.
+>
+> A global wrapper across all ~308 routes was evaluated and **rejected** (forbidden new pattern, 4xx-is-control-flow flood, no rate cap on the log path, no App Router response post-hook) — see the design spec's "Why not a global wrapper". `rejectAndLog` is the documented **convention for new routes**: a new route's author adds the one-liner at its business rejections; no retrofit obligation.
+
+> **Execution:** best done **subagent-per-route** (or small batches) — each route is the *identical* transform proven in Tasks 5-6, but each has different return sites and context sources, so a fresh worker reading one route at a time is the safest. Tasks 5-6 are the canonical worked examples; do them first. Wrap a return only when it carries a business `code` or is a non-thrown `5xx`; skip the rest.
 
 **Files (each: Modify):**
 
@@ -907,9 +948,10 @@ git commit -m "feat(billing-stripe): capture non-thrown 4xx/5xx across the payme
 
 ## Self-review notes (author)
 
-- **Spec coverage:** Part 1 → Tasks 1-4 + Task 8; Part 2 (full family) → Tasks 5-6 (templates) + Task 9 (rest); Part 3 (admin) → Task 7; Part 4 (test/docs) → Task 1 + doc steps in 4/6/7/9. All covered.
-- **Type consistency:** `classifyHttpRejection` returns `{capture, severity: ErrorSeverity}`; `logHttpRejection` consumes it and passes `severity` (medium/high) to `autoLogErrorServer` whose param type already accepts those. `rejectAndLog` → `logHttpRejection` param names match (`status`, `request`, `code`, `message`, `category`, `httpMethod`, `context`).
+- **Spec coverage:** Part 1 → Tasks 1-4 + Task 8; Part 2 (payment/subscription family, **incremental** — not all-families) → Tasks 5-6 (templates) + Task 9 (other coded returns, as needed); Part 3 (admin) → Task 7; Part 4 (test/docs) → Task 1 + doc steps in 4/6/7/9. All covered.
+- **Type consistency:** `classifyHttpRejection(status, { hasBusinessCode? })` returns `{capture, severity: ErrorSeverity}`; `logHttpRejection` derives `hasBusinessCode` from `!!code` and passes it in, then forwards the forced `severity` (medium/high) to `autoLogErrorServer` (param type accepts those). `rejectAndLog` → `logHttpRejection` param names match (`status`, `request`, `code`, `message`, `category`, `httpMethod`, `context`).
+- **Capture policy:** `5xx`→high (any), coded `4xx`→medium, and `<400` / `401`/`403`/`404`/`429` / codeless `4xx` → skipped — encoded once in `classifyHttpRejection` (safety net) and matched by selective placement of `rejectAndLog`.
 - **No new severity value** — confirmed nothing requires touching the 10 enum sites.
-- **Double-logging** — every wired site is a non-thrown early return; all `catch` blocks left intact across all ~33 routes.
+- **Double-logging** — every wired site is a non-thrown early return; all `catch` blocks left intact.
 - **Non-blocking** — `rejectAndLog` returns synchronously; `logHttpRejection` is never awaited in any route path (verified in Final verification grep step).
-- **Scope** — webhook excluded; checkout/auth/product-admin families deferred (item 6 in held-back).
+- **Scope** — global wrapper rejected after deep review (forbidden new pattern / 4xx-flood / no rate cap / no App Router post-hook); webhook + all non-payment families out of scope; `rejectAndLog` is the convention for new routes (no retrofit).
