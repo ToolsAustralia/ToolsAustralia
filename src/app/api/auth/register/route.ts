@@ -72,6 +72,8 @@ const registerSchema = z.object({
   campaign_id: z.string().optional(),
   adset_id: z.string().optional(),
   ad_id: z.string().optional(),
+  fbc: z.string().optional(),
+  fbp: z.string().optional(),
 });
 
 /**
@@ -336,8 +338,13 @@ export async function POST(request: NextRequest) {
             const ctx = extractRequestContext(request);
             if (ctx.client_ip_address) userData.client_ip_address = ctx.client_ip_address;
             if (ctx.client_user_agent) userData.client_user_agent = ctx.client_user_agent;
-            if (ctx.fbc) userData.fbc = ctx.fbc;
-            if (ctx.fbp) userData.fbp = ctx.fbp;
+            // Body wins, cookie is the fallback (opposite of the purchase path): the
+            // register POST can fire before the Meta pixel writes _fbc, and the API URL
+            // has no fbclid to reconstruct from — so the client-sent value is more reliable.
+            const fbc = validatedData.fbc ?? ctx.fbc;
+            const fbp = validatedData.fbp ?? ctx.fbp;
+            if (fbc) userData.fbc = fbc;
+            if (fbp) userData.fbp = fbp;
 
             const facebookEvent: FacebookEvent = {
               event_name: "CompleteRegistration",
@@ -451,8 +458,10 @@ export async function POST(request: NextRequest) {
         const ctx = extractRequestContext(request);
         if (ctx.client_ip_address) userData.client_ip_address = ctx.client_ip_address;
         if (ctx.client_user_agent) userData.client_user_agent = ctx.client_user_agent;
-        if (ctx.fbc) userData.fbc = ctx.fbc;
-        if (ctx.fbp) userData.fbp = ctx.fbp;
+        const fbc = validatedData.fbc ?? ctx.fbc;
+        const fbp = validatedData.fbp ?? ctx.fbp;
+        if (fbc) userData.fbc = fbc;
+        if (fbp) userData.fbp = fbp;
 
         const facebookEvent: FacebookEvent = {
           event_name: "CompleteRegistration",
@@ -537,8 +546,10 @@ export async function POST(request: NextRequest) {
         const ctx = extractRequestContext(request);
         if (ctx.client_ip_address) userData.client_ip_address = ctx.client_ip_address;
         if (ctx.client_user_agent) userData.client_user_agent = ctx.client_user_agent;
-        if (ctx.fbc) userData.fbc = ctx.fbc;
-        if (ctx.fbp) userData.fbp = ctx.fbp;
+        const fbc = validatedData.fbc ?? ctx.fbc;
+        const fbp = validatedData.fbp ?? ctx.fbp;
+        if (fbc) userData.fbc = fbc;
+        if (fbp) userData.fbp = fbp;
 
         const facebookEvent: FacebookEvent = {
           event_name: "CompleteRegistration",
@@ -696,8 +707,10 @@ export async function POST(request: NextRequest) {
         const ctx = extractRequestContext(request);
         if (ctx.client_ip_address) userData.client_ip_address = ctx.client_ip_address;
         if (ctx.client_user_agent) userData.client_user_agent = ctx.client_user_agent;
-        if (ctx.fbc) userData.fbc = ctx.fbc;
-        if (ctx.fbp) userData.fbp = ctx.fbp;
+        const fbc = validatedData.fbc ?? ctx.fbc;
+        const fbp = validatedData.fbp ?? ctx.fbp;
+        if (fbc) userData.fbc = fbc;
+        if (fbp) userData.fbp = fbp;
 
         // UTM and referrer for Facebook CAPI (utm from client/referer, not request.url)
         const referrerHeader = request.headers.get("referer") || "";
