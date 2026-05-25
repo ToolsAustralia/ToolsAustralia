@@ -1,10 +1,17 @@
 /**
- * Per-user API responses must never be stored by a shared (CDN) or browser cache
- * keyed only by URL — otherwise one user's body (or a guest's userStats: null) is
- * served to another. For authenticated requests force `private, no-store`. For
- * anonymous requests keep the caller's public caching, but always emit `Vary: Cookie`
- * so a shared cache keeps the guest entry separate from any cookie-bearing
- * (authenticated) request and never hands a cached guest copy to a logged-in user.
+ * Prevents per-user API responses from leaking through shared (CDN) or browser caches.
+ *
+ * Two mechanisms, both required:
+ *  - Authenticated requests get `private, no-store` so the per-user body (e.g. userStats)
+ *    is never stored by any cache.
+ *  - Guest responses keep the caller's public caching, but add `Vary: Cookie` so a shared
+ *    cache will NOT serve a stored guest copy (userStats: null) to a later cookie-bearing
+ *    (authenticated) request keyed on the same URL. `private, no-store` alone does NOT
+ *    prevent that — only Vary (or not caching guests at all) does.
+ *
+ * Note: because guests on these pages also carry cookies (A/B anonymousId, tracking),
+ * `Vary: Cookie` fragments the guest cache, so guest CDN sharing is reduced in practice;
+ * the privacy/correctness guarantee is the priority over guest hit-rate.
  *
  * See docs/security-csp/rules.md — "Never public-cache per-user responses".
  */

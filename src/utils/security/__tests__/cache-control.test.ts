@@ -15,7 +15,7 @@ test("authenticated → private, no-store (never shared/stored)", () => {
   assert.equal(r.vary, "Cookie");
 });
 
-test("guest → passes through public value but Vary: Cookie isolates it", () => {
+test("guest → keeps public value + Vary: Cookie so a shared cache won't serve it to an authed request", () => {
   const r = userScopedCacheControl(false, PUBLIC);
   assert.equal(r.cacheControl, PUBLIC);
   assert.equal(r.vary, "Cookie");
@@ -24,6 +24,11 @@ test("guest → passes through public value but Vary: Cookie isolates it", () =>
 test("guest no-store value passes through unchanged", () => {
   const r = userScopedCacheControl(false, "no-store, must-revalidate");
   assert.equal(r.cacheControl, "no-store, must-revalidate");
+});
+
+test("authenticated → always private, no-store even when a no-store public value is passed", () => {
+  const r = userScopedCacheControl(true, "public, s-maxage=60, stale-while-revalidate=300");
+  assert.equal(r.cacheControl, "private, no-store");
 });
 
 console.log(failed === 0 ? "\nAll cache-control tests passed" : `\n${failed} test(s) failed`);

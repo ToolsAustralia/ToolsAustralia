@@ -147,7 +147,9 @@ export async function GET() {
       : Number.POSITIVE_INFINITY;
     const nearestMs = Math.min(msUntilFreeze, msUntilDraw);
 
-    // Compute the value we'd use for an anonymous (cacheable) response …
+    // Cache-Control value used only for anonymous responses (the authenticated
+    // branch below overrides it). Whether the CDN honours s-maxage on this
+    // force-dynamic route is a Vercel detail; the directive is still sent verbatim.
     let publicCacheControl: string;
     if (process.env.NODE_ENV === "development") {
       publicCacheControl = "no-store, must-revalidate";
