@@ -1321,11 +1321,21 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
       if (!initiateCheckoutFiredRef.current && activePlan) {
         initiateCheckoutFiredRef.current = true;
         const packagePrice = activePlan?.price || 0;
-        trackInitiateCheckout({
-          value: packagePrice,
-          currency: "AUD",
-          numItems: 1, // Single membership package
-        });
+        trackInitiateCheckout(
+          {
+            value: packagePrice,
+            currency: "AUD",
+            numItems: 1,
+          },
+          undefined,
+          {
+            email: formData.email,
+            firstName: formData.firstName,
+            lastName: formData.lastName,
+            phone: formData.phone,
+            country: "AU",
+          },
+        );
       }
     } catch {
       // Non-blocking — never fail registration on tracking error
@@ -2647,11 +2657,23 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
         initiateCheckoutFiredRef.current = true;
         const packagePrice = activePlan?.price || 0;
 
-        trackInitiateCheckout({
-          value: packagePrice,
-          currency: "AUD",
-          numItems: 1, // Single membership package
-        });
+        trackInitiateCheckout(
+          {
+            value: packagePrice,
+            currency: "AUD",
+            numItems: 1,
+          },
+          undefined,
+          isAuthenticated
+            ? undefined
+            : {
+                email: formData.email,
+                firstName: formData.firstName,
+                lastName: formData.lastName,
+                phone: formData.phone,
+                country: "AU",
+              },
+        );
       }
     } catch {
       if (process.env.NODE_ENV === "development") {

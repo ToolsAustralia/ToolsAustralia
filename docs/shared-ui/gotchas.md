@@ -56,3 +56,7 @@ After `signIn(..., { redirect: false })`, the `session` from the component's `us
 ## CardFormSection AddPaymentInfo: dual Pixel+CAPI with billing-derived PII
 
 [`CardFormSection`](../../src/components/modals/PaymentMethodSelector/CardFormSection.tsx) fires `AddPaymentInfo` via `usePixelTracking().trackAddPaymentInfo` (dual Pixel+CAPI, shared event_id) with `billingDetails`-derived PII — not the old browser-only `trackConversion`. It no longer fires the Snapchat browser pixel for AddPaymentInfo (consistent with other funnel events; Snap is reached server-side via the mirror).
+
+## MembershipModal InitiateCheckout: guest PII for CAPI identity matching
+
+`MembershipModal` passes guest `formData` PII (email/first/last/phone, country AU) to `trackInitiateCheckout` so guest InitiateCheckout CAPI events carry identity; the checkout fire site sends it only when `!isAuthenticated` (logged-in users rely on session enrichment).
