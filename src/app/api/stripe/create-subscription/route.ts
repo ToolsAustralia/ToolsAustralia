@@ -25,7 +25,7 @@ import {
   EXISTING_SUBSCRIPTION_CODE,
   EXISTING_SUBSCRIPTION_MESSAGE,
 } from "@/utils/payment/subscription-creation-guard";
-import { shouldWriteCanonicalStripeSubscriptionId, stripeCustomerHasManageableSubscription } from "@/services/subscription";
+import { shouldWriteCanonicalStripeSubscriptionId, stripeCustomerHasManageableSubscription, cancelIncompleteSubscriptionAndVoidInvoice } from "@/services/subscription";
 import { createRateLimiter, getClientIdentifier } from "@/utils/security/rateLimiter";
 import { buildAttributionMetadata } from "@/utils/tracking/attribution-metadata";
 import { attributionSchema } from "@/utils/tracking/attribution-schema";
@@ -511,6 +511,27 @@ export async function POST(request: NextRequest) {
         },
         { status: 409 }
       );
+    }
+
+    // Hygiene: retire the registered user's stale pending incomplete sub before
+    // creating a new one (guest flow only has a user when registeredUser exists).
+    const stalePendingId = registeredUser?.subscription?.pendingStripeSubscriptionId;
+    if (stalePendingId && stalePendingId !== validatedData.cancelPreviousSubscriptionId) {
+      try {
+        const reconciled = await cancelIncompleteSubscriptionAndVoidInvoice(stalePendingId);
+        if (correlationId) {
+          console.log("[create-subscription] retired stale pending incomplete", {
+            correlationId,
+            ...reconciled,
+          });
+        }
+      } catch (reconcileErr) {
+        // console.error (not warn) so this survives production builds (removeConsole).
+        console.error(
+          "[create-subscription] retire stale pending failed (non-fatal):",
+          reconcileErr instanceof Error ? reconcileErr.message : String(reconcileErr)
+        );
+      }
     }
 
     let subscription;
