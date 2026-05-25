@@ -198,6 +198,7 @@ const PaymentStep: React.FC<PaymentStepProps> = ({
             isCreatingPaymentIntent={isCreatingPaymentIntentPending}
             isCreatingSubscription={isCreatingSubscription}
             onPaymentMethodTypeChange={onPaymentMethodTypeChange}
+            onElementReady={onElementReady}
             billingDetails={resolvedBillingDetails}
             amount={amount}
             packageName={packageName}
