@@ -2156,25 +2156,22 @@ async function addToMajorDraw(
         await MajorDraw.updateOne(incFilter, incUpdate);
       };
 
-      let credited = false;
-      let lastCreditError: unknown;
-      for (let attempt = 0; attempt < 3; attempt++) {
-        try {
-          await creditDrawAtomic();
-          credited = true;
-          break;
-        } catch (creditErr) {
-          lastCreditError = creditErr;
-          await new Promise((resolve) => setTimeout(resolve, 100 * Math.pow(3, attempt))); // 100ms, 300ms, 900ms
-        }
-      }
-
-      if (!credited) {
-        // VISIBLE (was silently swallowed). drawGrants stays empty, so the
+      // ⚠️ NO application-level retry here ON PURPOSE. `$inc`/`$push` are not
+      // idempotent, and the MongoDB driver's `retryWrites: true` already retries
+      // each updateOne EXACTLY ONCE on safe (write-not-applied) transient errors.
+      // An extra app-level retry would DOUBLE-credit in the one case that matters
+      // most under load — a write that COMMITS but whose acknowledgement is lost
+      // (timeout-after-commit). So we attempt once; a hard failure is reported and
+      // healed idempotently by the reconcile-major-draw-entries cron (which only
+      // credits the missing delta and can never over-credit).
+      try {
+        await creditDrawAtomic();
+      } catch (creditErr) {
+        // VISIBLE (was silently swallowed). drawGrants stays empty so the
         // reconciliation cron / `fix:major-draw-renewal-entries` script detects
         // and heals this idempotently. Fire-and-forget; never throws.
         const { ErrorLoggingService } = await import("@/services/error-reporting/ErrorLoggingService");
-        await ErrorLoggingService.logError(lastCreditError, {
+        await ErrorLoggingService.logError(creditErr, {
           endpoint: "addToMajorDraw",
           userId: user._id.toString(),
           userEmail: user.email,

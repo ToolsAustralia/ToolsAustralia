@@ -44,6 +44,7 @@ import { config } from "dotenv";
 import path from "path";
 import fs from "fs";
 import mongoose from "mongoose";
+import type { UpdateFilter, Document as MongoDoc } from "mongodb";
 import { formatInTimeZone } from "date-fns-tz";
 
 config({ path: path.resolve(process.cwd(), ".env.local") });
@@ -185,19 +186,18 @@ async function main(): Promise<void> {
           }
         );
       } else {
+        const newDrawEntry = {
+          userId: new mongoose.Types.ObjectId(uid),
+          totalEntries: grantEntries,
+          entriesBySource: { membership: grantEntries },
+          firstAddedDate: now,
+          lastUpdatedDate: now,
+        };
+        // Untyped collection: cast the $push so tsc (next build) accepts the
+        // array element. Runtime is unaffected.
         await drawsColl.updateOne(
           { _id: draw._id },
-          {
-            $push: {
-              entries: {
-                userId: new mongoose.Types.ObjectId(uid),
-                totalEntries: grantEntries,
-                entriesBySource: { membership: grantEntries },
-                firstAddedDate: now,
-                lastUpdatedDate: now,
-              },
-            },
-          }
+          { $push: { entries: newDrawEntry } } as unknown as UpdateFilter<MongoDoc>
         );
       }
       // Back-fill the ledger so refund-reversal can attribute it later.

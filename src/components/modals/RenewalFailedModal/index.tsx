@@ -13,7 +13,6 @@ import { ApiError } from "@/lib/queries";
 import { formatPaymentError } from "@/utils/payment/stripe/payment-error-messages";
 import { useSavedPaymentMethods, type SavedPaymentMethod } from "@/hooks/useSavedPaymentMethods";
 import { useUserContext } from "@/contexts/UserContext";
-import { useThemeStore } from "@/stores/useThemeStore";
 import { buildMembershipStripeAppearance } from "@/utils/payment/stripe/membership-stripe-appearance";
 import { getStripePromise } from "@/lib/stripe-client";
 import { queryKeys } from "@/lib/queryKeys";
@@ -72,10 +71,13 @@ const RenewalFailedModal: React.FC<RenewalFailedModalProps> = ({ isOpen, onClose
   const updateSubscriptionPaymentMethod = useUpdateSubscriptionPaymentMethod();
   const { paymentMethods, loading: _paymentMethodsLoading, savePaymentMethod } = useSavedPaymentMethods();
   const { userData } = useUserContext();
-  const isDarkMode = useThemeStore((s) => s.theme === "dark");
+  // This modal renders as an always-light card (the main Stripe PaymentElement
+  // uses a hardcoded light appearance and floats over a dark backdrop), so the
+  // inline card-setup form must stay light too — otherwise its labels/inputs
+  // mismatch the rest of the modal in dark mode.
   const membershipStripeAppearance = useMemo(
-    () => buildMembershipStripeAppearance(isDarkMode),
-    [isDarkMode]
+    () => buildMembershipStripeAppearance(false),
+    []
   );
 
   // State management (14 slices — dead state _showPaymentMethods removed per audit §5)
@@ -545,7 +547,7 @@ const RenewalFailedModal: React.FC<RenewalFailedModalProps> = ({ isOpen, onClose
         <InlineCardSetup
           setupIntentSecret={setupIntentSecret}
           loadingSetupIntent={loadingSetupIntent}
-          isDarkMode={isDarkMode}
+          isDarkMode={false}
           membershipStripeAppearance={membershipStripeAppearance}
           userData={userData ?? {}}
           isLoading={isLoading}
@@ -563,7 +565,7 @@ const RenewalFailedModal: React.FC<RenewalFailedModalProps> = ({ isOpen, onClose
 
       {/* Pay Overdue CTA — shown when the pay-failed-invoice path reports "no payable invoice" */}
       {isNoPayableInvoice && !forceChargeResult ? (
-        <div className="mt-3 mb-3 flex flex-col gap-3 rounded-xl border border-amber-200 dark:border-amber-800/40 bg-amber-50 dark:bg-amber-950/30 p-3 sm:p-4">
+        <div className="mt-3 mb-3 flex flex-col gap-3 rounded-xl border border-amber-200 bg-amber-50 p-3 sm:p-4">
           <p className="text-sm text-amber-900">
             We can settle your overdue cycle by finalizing your held cycle invoice. One-click recovery — no card update needed.
           </p>
@@ -579,13 +581,13 @@ const RenewalFailedModal: React.FC<RenewalFailedModalProps> = ({ isOpen, onClose
       ) : null}
 
       {forceChargeResult && forceChargeResult.success ? (
-        <div className="mt-3 mb-3 bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/40 rounded-xl p-3 sm:p-4">
+        <div className="mt-3 mb-3 bg-emerald-50 border border-emerald-200 rounded-xl p-3 sm:p-4">
           <p className="text-sm text-emerald-800">Payment received. Your subscription is now up to date.</p>
         </div>
       ) : null}
 
       {forceChargeResult && !forceChargeResult.success ? (
-        <div className="mt-3 mb-3 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900/60 rounded-xl p-3 sm:p-4">
+        <div className="mt-3 mb-3 bg-red-50 border border-red-200 rounded-xl p-3 sm:p-4">
           <p className="text-sm text-red-800">
             {forceChargeResult.message || "Could not pay overdue amount. Please contact support."}
           </p>
