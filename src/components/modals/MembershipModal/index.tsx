@@ -70,6 +70,7 @@ import { useAffiliateLink } from "@/hooks/useAffiliateLink";
 import { usePromoLink } from "@/hooks/usePromoLink";
 import { extractAttributionParams } from "@/utils/tracking/utm-helpers";
 import { getStoredUTMParams } from "@/utils/tracking/utm-storage";
+import { getFBCFromURL, getFBPFromCookie } from "@/utils/tracking/facebook-helpers";
 import { formatWinnerName } from "@/utils/winner-name-formatter";
 import { useUserMajorDrawStats } from "@/hooks/queries/useMajorDrawQueries";
 import { useMajorDrawPurchaseGate } from "@/hooks/useMajorDrawPurchaseGate";
@@ -1376,6 +1377,9 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
       // Non-blocking
     }
 
+    const fbc = typeof window !== "undefined" ? getFBCFromURL() : undefined;
+    const fbp = typeof window !== "undefined" ? getFBPFromCookie() : undefined;
+
     try {
       const response = await fetch("/api/auth/register", {
         method: "POST",
@@ -1397,6 +1401,8 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
           ...(attributionParams.campaign_id && { campaign_id: attributionParams.campaign_id }),
           ...(attributionParams.adset_id && { adset_id: attributionParams.adset_id }),
           ...(attributionParams.ad_id && { ad_id: attributionParams.ad_id }),
+          ...(fbc && { fbc }),
+          ...(fbp && { fbp }),
         }),
       });
 
