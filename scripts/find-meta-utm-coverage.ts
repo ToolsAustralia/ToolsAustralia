@@ -5,7 +5,10 @@
  *
  * Run: npx tsx scripts/find-meta-utm-coverage.ts
  */
-import "dotenv/config";
+import { config } from "dotenv";
+import path from "path";
+config({ path: path.resolve(process.cwd(), ".env.local") });
+
 import connectDB from "@/lib/mongodb";
 import MetaAdDestination from "@/models/MetaAdDestination";
 

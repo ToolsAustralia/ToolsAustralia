@@ -6,7 +6,10 @@
  *
  * Run: npm run backfill:meta-adset-metadata -- --dry-run
  */
-import "dotenv/config";
+import { config } from "dotenv";
+import path from "path";
+config({ path: path.resolve(process.cwd(), ".env.local") });
+
 import connectDB from "@/lib/mongodb";
 import MetaAdInsightsDaily from "@/models/MetaAdInsightsDaily";
 import { fetchAdsetMetadata } from "@/services/facebook-ads-health/adsetMetadataFetcher";
