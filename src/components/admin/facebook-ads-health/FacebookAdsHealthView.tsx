@@ -44,7 +44,6 @@ export function FacebookAdsHealthView({ startDate, endDate }: Props) {
   return (
     <div className="p-4">
       <FacebookAdsHealthTopBar
-        trueRoas={data?.accountTrueRoas ?? null}
         alertCount={data?.alertCount ?? { investigate: 0, cut: 0 }}
         onShowAlertedOnly={() => setVerdictFilter(["cut", "investigate"])}
       />

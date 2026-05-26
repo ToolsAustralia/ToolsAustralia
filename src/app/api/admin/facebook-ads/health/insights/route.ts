@@ -5,14 +5,16 @@ import connectDB from "@/lib/mongodb";
 import { aggregateInsights } from "@/services/facebook-ads-health/insightsAggregator";
 import { computeVerdict } from "@/services/facebook-ads-health/verdictEngine";
 import { getOrInitSettings } from "@/services/facebook-ads-health/settingsService";
-import { computeAccountTrueRoas } from "@/services/facebook-ads-health/accountTrueRoasService";
 import { loadActiveSnoozes } from "@/services/facebook-ads-health/snoozeService";
 import { parseISO } from "date-fns";
 
+// Health view is adset-level only. Campaign and ad breakdowns are deliberately
+// not exposed — the view's job is to surface per-adset learning state and
+// scaling decisions. If a future use case needs another level, add it then.
 const querySchema = z.object({
   startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-  level: z.enum(["campaign", "adset", "ad"]).default("adset"),
+  level: z.literal("adset").default("adset"),
   verdict: z.string().optional(),
   learningStatus: z.string().optional(),
   minSpend: z.coerce.number().optional(),
@@ -37,10 +39,12 @@ export async function GET(request: NextRequest) {
   }
   const q = parsed.data;
   const adAccountId = process.env.FACEBOOK_AD_ACCOUNT_ID ?? "";
-  const accessToken = process.env.FACEBOOK_MARKETING_ACCESS_TOKEN ?? "";
-  if (!adAccountId || !accessToken) {
+  // This route reads from Mongo only; it never calls Meta at request time, so it
+  // doesn't need FACEBOOK_MARKETING_ACCESS_TOKEN. adAccountId is still required
+  // for constructing the per-row deep-link to Meta Ads Manager.
+  if (!adAccountId) {
     return NextResponse.json(
-      { success: false, error: "FACEBOOK_AD_ACCOUNT_ID or FACEBOOK_MARKETING_ACCESS_TOKEN not configured" },
+      { success: false, error: "FACEBOOK_AD_ACCOUNT_ID not configured" },
       { status: 500 },
     );
   }
@@ -76,16 +80,6 @@ export async function GET(request: NextRequest) {
   const snoozes = userId
     ? await loadActiveSnoozes(userId, enriched.map((e) => e.row.id))
     : new Map<string, Date>();
-
-  // Account-level TRUE ROAS for the same window
-  const trueRoas = await computeAccountTrueRoas({
-    startDate: parseISO(q.startDate),
-    endDate: parseISO(q.endDate),
-    fbSince: q.startDate,
-    fbUntil: q.endDate,
-    accessToken,
-    adAccountId,
-  });
 
   let investigateCount = 0;
   let cutCount = 0;
@@ -133,11 +127,5 @@ export async function GET(request: NextRequest) {
     success: true,
     rows: out,
     alertCount: { investigate: investigateCount, cut: cutCount },
-    accountTrueRoas: {
-      localRevenueAud: trueRoas.localRevenueAud,
-      metaSpendAud: trueRoas.metaSpendAud,
-      ratio: trueRoas.ratioLocalOverMetaSpend,
-      metaPurchaseRevenueAud: trueRoas.metaPurchaseRevenueAud,
-    },
   });
 }
