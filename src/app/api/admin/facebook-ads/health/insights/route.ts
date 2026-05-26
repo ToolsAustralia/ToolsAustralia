@@ -41,12 +41,16 @@ export async function GET(request: NextRequest) {
   }
   const q = parsed.data;
   const adAccountId = process.env.FACEBOOK_AD_ACCOUNT_ID ?? "";
-  // This route reads from Mongo only; it never calls Meta at request time, so it
-  // doesn't need FACEBOOK_MARKETING_ACCESS_TOKEN. adAccountId is still required
-  // for constructing the per-row deep-link to Meta Ads Manager.
+  const accessToken = process.env.FACEBOOK_MARKETING_ACCESS_TOKEN ?? "";
   if (!adAccountId) {
     return NextResponse.json(
       { success: false, error: "FACEBOOK_AD_ACCOUNT_ID not configured" },
+      { status: 500 },
+    );
+  }
+  if (!accessToken) {
+    return NextResponse.json(
+      { success: false, error: "FACEBOOK_MARKETING_ACCESS_TOKEN not configured" },
       { status: 500 },
     );
   }
@@ -57,6 +61,7 @@ export async function GET(request: NextRequest) {
     startDate: parseISO(q.startDate),
     endDate: parseISO(q.endDate),
     level: q.level,
+    accessToken,
   });
 
   // Apply filters

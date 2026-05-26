@@ -1,4 +1,5 @@
-import MetaAdInsightsDaily from "@/models/MetaAdInsightsDaily";
+import { fetchFacebookAdInsightsDaily, processInsightData } from "@/lib/facebook-marketing";
+import { fetchAdsetMetadata } from "@/services/facebook-ads-health/adsetMetadataFetcher";
 import { subDays, differenceInCalendarDays } from "date-fns";
 import { formatInTimeZone } from "date-fns-tz";
 import { PURCHASE_CAPABLE_OBJECTIVES, type MetaAdInsightsRow, type LearningStatusBucket } from "./types";
@@ -17,6 +18,7 @@ export interface AggregatorInput {
   startDate: Date; // reporting window start
   endDate: Date;   // reporting window end
   level: "campaign" | "adset" | "ad";
+  accessToken: string;
 }
 
 export async function aggregateInsights(input: AggregatorInput): Promise<MetaAdInsightsRow[]> {
@@ -34,11 +36,22 @@ export async function aggregateInsights(input: AggregatorInput): Promise<MetaAdI
 
   // Pull a broad slice: from min(reportingStart, trailing14Start) to today
   const earliest = fbSince < trailing14Start ? fbSince : trailing14Start;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const rows = await (MetaAdInsightsDaily.find({
-    adAccountId: input.adAccountId,
-    date: { $gte: earliest, $lte: todayStr },
-  }).lean() as any) as Array<{
+
+  // Fetch live from Meta's Marketing API and adset metadata in parallel.
+  const [rawInsights, adsetMetadataList] = await Promise.all([
+    fetchFacebookAdInsightsDaily(input.adAccountId, input.accessToken, {
+      since: earliest,
+      until: todayStr,
+    }),
+    fetchAdsetMetadata(input.adAccountId, input.accessToken),
+  ]);
+
+  // Build a lookup map for adset metadata keyed by adset ID.
+  const metadataByAdsetId = new Map(adsetMetadataList.map((m) => [m.adsetId, m]));
+
+  // Transform raw Meta API rows into the shape the aggregator consumes.
+  // Parsing logic mirrors MetaInsightsSyncService to avoid drift.
+  type NormalisedRow = {
     adAccountId: string;
     date: string;
     adId: string;
@@ -57,16 +70,46 @@ export async function aggregateInsights(input: AggregatorInput): Promise<MetaAdI
     campaignObjective: string | null;
     learningStatus: "LEARNING" | "SUCCESS" | "FAIL" | null;
     lastSignificantEdit: Date | null;
-  }>;
+  };
+
+  const rows: NormalisedRow[] = [];
+  for (const raw of rawInsights) {
+    const date = raw.date_start;
+    if (!date || !raw.ad_id) continue;
+
+    const metrics = processInsightData(raw);
+    const meta = raw.adset_id ? metadataByAdsetId.get(raw.adset_id) : undefined;
+
+    rows.push({
+      adAccountId: input.adAccountId,
+      date,
+      adId: raw.ad_id,
+      adsetId: raw.adset_id,
+      campaignId: raw.campaign_id,
+      campaignName: raw.campaign_name,
+      adsetName: raw.adset_name,
+      adName: raw.ad_name,
+      spendCents: metrics.spend,
+      impressions: metrics.impressions,
+      clicks: metrics.clicks,
+      conversions: metrics.conversions,
+      revenueCents: metrics.revenue,
+      linkClicks: metrics.linkClicks,
+      adsetBudgetCents: meta?.dailyBudgetCents ?? meta?.lifetimeBudgetCents ?? null,
+      campaignObjective: meta?.campaignObjective ?? null,
+      learningStatus: meta?.learningStatus ?? null,
+      lastSignificantEdit: meta?.lastSignificantEdit ?? null,
+    });
+  }
 
   // Group by level
-  const groupKey = (r: typeof rows[number]): string => {
+  const groupKey = (r: NormalisedRow): string => {
     if (input.level === "campaign") return r.campaignId ?? "(none)";
     if (input.level === "adset") return r.adsetId ?? "(none)";
     return r.adId;
   };
 
-  const groups = new Map<string, typeof rows>();
+  const groups = new Map<string, NormalisedRow[]>();
   for (const r of rows) {
     const k = groupKey(r);
     const arr = groups.get(k) ?? [];
@@ -82,7 +125,7 @@ export async function aggregateInsights(input: AggregatorInput): Promise<MetaAdI
     const in7 = groupRows.filter((r) => r.date >= trailing7Start && r.date <= todayStr);
     const inPrev7 = groupRows.filter((r) => r.date >= prev7Start && r.date < prev7End);
 
-    const sum = (arr: typeof groupRows, key: "spendCents" | "conversions" | "revenueCents" | "linkClicks" | "impressions") =>
+    const sum = (arr: NormalisedRow[], key: "spendCents" | "conversions" | "revenueCents" | "linkClicks" | "impressions") =>
       arr.reduce((s, r) => s + (r[key] ?? 0), 0);
 
     const windowTotals = {
@@ -123,16 +166,18 @@ export async function aggregateInsights(input: AggregatorInput): Promise<MetaAdI
     // daysAtZeroInWindow
     const daysAtZeroInWindow = inWindow.filter((r) => (r.conversions ?? 0) === 0).length;
 
-    // daysInLearningLimited: count from most recent backwards while learningStatus stays FAIL
-    let daysInLearningLimited = 0;
-    const sortedDesc = [...groupRows].sort((a, b) => (a.date < b.date ? 1 : -1));
-    for (const r of sortedDesc) {
-      if (r.learningStatus === "FAIL") daysInLearningLimited++;
-      else break;
-    }
+    // daysInLearningLimited: Live Meta data only returns the CURRENT adset learning state,
+    // not a per-day historical record. We therefore use a best-effort proxy: if the adset
+    // is currently Learning Limited (FAIL), we report 1 day; otherwise 0.
+    // The Mongo-backed version counted consecutive FAIL days historically — that granularity
+    // is unavailable from the live API. The "Cut? — Learning Limited >= 3 days" verdict rule
+    // therefore degrades to "currently Learning Limited" (still a valid signal, just less precise).
+    const latestLearningStatus = first.learningStatus;
+    const daysInLearningLimited = latestLearningStatus === "FAIL" ? 1 : 0;
 
+    const sortedDesc = [...groupRows].sort((a, b) => (a.date < b.date ? 1 : -1));
     const latest = sortedDesc[0];
-    const learningStatusRaw = (latest?.learningStatus ?? null) as MetaAdInsightsRow["learningStatusRaw"];
+    const learningStatusRaw = (latestLearningStatus ?? null) as MetaAdInsightsRow["learningStatusRaw"];
     const lastSignificantEdit = latest?.lastSignificantEdit ?? null;
     const daysSinceLastSignificantEdit = lastSignificantEdit
       ? differenceInCalendarDays(now, new Date(lastSignificantEdit))

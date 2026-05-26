@@ -33,4 +33,4 @@
   - **INVESTIGATE**: fires when all three groups pass — (a) "Was healthy": best 7d in last 14d had ≥50 conv AND ROAS ≥ breakeven; (b) "Now broken": ROAS dropped >roasDropTriggerPct WoW with ≥50 conv in both weeks, OR status reverted from Active; (c) "Recent edit": lastSignificantEdit ≤7d ago. Requires ≥50 conv in both comparison weeks (stat-confidence floor).
   - **SCALE**: fires when adset is Active, ≥50 conv/7d, ROAS ≥ breakeven, no edit within postEditWaitHours, ROAS stable WoW.
   - **HOLD**: default when none of the above fire.
-- **insightsAggregator** (Task 18) — Builds `MetaAdInsightsRow` from `MetaAdInsightsDaily` snapshots, windows, and trends.
+- **insightsAggregator** (Task 18, updated Task 22) — Builds `MetaAdInsightsRow` by fetching live from Meta's Marketing API via `fetchFacebookAdInsightsDaily` + `fetchAdsetMetadata`. No Mongo dependency — always shows real data regardless of cron state. Known tradeoff: `daysInLearningLimited` is best-effort (0 or 1 based on current state) because Meta's live API does not return historical learning status per day.
