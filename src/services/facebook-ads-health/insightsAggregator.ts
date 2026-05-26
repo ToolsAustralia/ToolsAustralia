@@ -23,12 +23,14 @@ export async function aggregateInsights(input: AggregatorInput): Promise<MetaAdI
   const fbSince = formatInTimeZone(input.startDate, AEST, "yyyy-MM-dd");
   const fbUntil = formatInTimeZone(input.endDate, AEST, "yyyy-MM-dd");
 
+  // Capture "now" once so all window boundaries are consistent within this call.
+  const now = new Date();
   // Trailing 7d, trailing 14d, prev 7d (for WoW comparison)
-  const trailing7Start = formatInTimeZone(subDays(new Date(), 6), AEST, "yyyy-MM-dd");
-  const prev7Start = formatInTimeZone(subDays(new Date(), 13), AEST, "yyyy-MM-dd");
-  const prev7End = formatInTimeZone(subDays(new Date(), 7), AEST, "yyyy-MM-dd");
-  const trailing14Start = formatInTimeZone(subDays(new Date(), 13), AEST, "yyyy-MM-dd");
-  const todayStr = formatInTimeZone(new Date(), AEST, "yyyy-MM-dd");
+  const trailing7Start = formatInTimeZone(subDays(now, 6), AEST, "yyyy-MM-dd");
+  const prev7Start = formatInTimeZone(subDays(now, 13), AEST, "yyyy-MM-dd");
+  const prev7End = formatInTimeZone(subDays(now, 7), AEST, "yyyy-MM-dd");
+  const trailing14Start = formatInTimeZone(subDays(now, 13), AEST, "yyyy-MM-dd");
+  const todayStr = formatInTimeZone(now, AEST, "yyyy-MM-dd");
 
   // Pull a broad slice: from min(reportingStart, trailing14Start) to today
   const earliest = fbSince < trailing14Start ? fbSince : trailing14Start;
@@ -108,8 +110,8 @@ export async function aggregateInsights(input: AggregatorInput): Promise<MetaAdI
     // i=7 is the trailing-7 window (6d ago → today).
     let last14dBestWeek = { conversions: 0, roas: 0 };
     for (let i = 0; i <= 7; i++) {
-      const startStr = formatInTimeZone(subDays(new Date(), 13 - i), AEST, "yyyy-MM-dd");
-      const endStr = formatInTimeZone(subDays(new Date(), 7 - i), AEST, "yyyy-MM-dd");
+      const startStr = formatInTimeZone(subDays(now, 13 - i), AEST, "yyyy-MM-dd");
+      const endStr = formatInTimeZone(subDays(now, 7 - i), AEST, "yyyy-MM-dd");
       const slice = groupRows.filter((r) => r.date >= startStr && r.date <= endStr);
       const c = sum(slice, "conversions");
       const s = sum(slice, "spendCents");
@@ -133,7 +135,7 @@ export async function aggregateInsights(input: AggregatorInput): Promise<MetaAdI
     const learningStatusRaw = (latest?.learningStatus ?? null) as MetaAdInsightsRow["learningStatusRaw"];
     const lastSignificantEdit = latest?.lastSignificantEdit ?? null;
     const daysSinceLastSignificantEdit = lastSignificantEdit
-      ? differenceInCalendarDays(new Date(), new Date(lastSignificantEdit))
+      ? differenceInCalendarDays(now, new Date(lastSignificantEdit))
       : null;
 
     // lastBudgetChangePct: find the largest day-over-day budget change within the reporting window

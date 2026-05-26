@@ -109,7 +109,7 @@ function buildCutReasons(
 
   reasons.push({
     section: "Cut triggers",
-    rule: "Campaign objective is purchase-capable",
+    rule: "Campaign objective is NOT purchase-capable",
     source: "meta",
     passed: !row.isPurchaseCapableObjective,
     value: row.campaignObjective ?? "(unknown)",
