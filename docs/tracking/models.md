@@ -14,3 +14,7 @@
 ## SnapchatAdInsightsDaily
 
 [`src/models/SnapchatAdInsightsDaily.ts`](../../src/models/SnapchatAdInsightsDaily.ts). Same shape and same status as TikTok.
+
+## FacebookAdsHealthSnooze
+
+[`src/models/FacebookAdsHealthSnooze.ts`](../../src/models/FacebookAdsHealthSnooze.ts). Per-user, per-ad snooze for the Facebook Ads Health view's "Investigate" verdict. Includes TTL index for automatic expiration.

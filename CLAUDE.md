@@ -494,6 +494,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/models/MetaAdInsightsDaily.ts",
         "src/models/TikTokAdInsightsDaily.ts",
         "src/models/SnapchatAdInsightsDaily.ts",
+        "src/models/FacebookAdsHealthSnooze.ts",
         "src/app/layout.tsx",
         "src/app/api/facebook/**",
         "src/app/api/tracking/**",
