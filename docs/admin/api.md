@@ -15,6 +15,9 @@ The `/api/admin/**` namespace. Per the manifest, this domain is the catch-all fo
 | `/api/admin/contact-submissions/**` | [contact](../contact/) | Submission review |
 | `/api/admin/facebook-ads/purchase-audit` | [tracking](../tracking/) | Local vs Meta revenue reconciliation (TRUE ROAS) |
 | `/api/admin/facebook-ads/health/insights` | [tracking](../tracking/) | Facebook Ads Health view — aggregated adset/campaign/ad insights with verdict engine, snooze, and account TRUE ROAS |
+| `GET /api/admin/facebook-ads/health/settings` | [tracking](../tracking/) | Read health verdict engine settings (requires `facebookAds.view`) |
+| `PUT /api/admin/facebook-ads/health/settings` | [tracking](../tracking/) | Update health verdict engine settings (requires `facebookAds.edit`) |
+| `POST /api/admin/facebook-ads/health/snooze` | [tracking](../tracking/) | Create or update a snooze for an ad (requires `facebookAds.edit`) |
 | _TODO_ | — | Promo, affiliate, draw, analytics admin routes |
 
 > _TODO: read [src/app/api/admin/](../../src/app/api/admin/) and enumerate every sub-route._

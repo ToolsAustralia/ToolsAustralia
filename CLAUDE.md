@@ -188,7 +188,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
 ```json
 {
   "version": 1,
-  "lastModified": "2026-05-14",
+  "lastModified": "2026-05-27",
   "domains": {
     "subscription": {
       "docs": "docs/subscription/",
@@ -624,7 +624,9 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
       "paths": [
         "src/app/admin/**",
         "src/components/admin/**",
+        "src/components/admin/facebook-ads-health/**",
         "src/app/api/admin/**",
+        "src/app/api/admin/facebook-ads/health/**",
         "src/features/admin/**",
         "src/models/ChargeJobLock.ts",
         "src/models/ChargeJobRun.ts",
