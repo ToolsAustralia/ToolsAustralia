@@ -1772,7 +1772,7 @@ export default function FacebookAdsManagement() {
         <FacebookAdsHealthView startDate={startDate} endDate={endDate} level={level} />
       )}
 
-      {(viewMode === "ads" || viewMode === "spend-by-url") && (
+      {(viewMode === "ads" || viewMode === "spend-by-url" || viewMode === "health") && (
         <CustomDateRangeModal
           isOpen={isCustomDateModalOpen}
           onClose={() => setIsCustomDateModalOpen(false)}

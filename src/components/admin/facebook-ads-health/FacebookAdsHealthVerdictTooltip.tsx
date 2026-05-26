@@ -25,7 +25,7 @@ const VERDICT_META: Record<Props["verdict"], { label: string; color: string }> =
 export function FacebookAdsHealthVerdictTooltip({ verdict, reasons, actionText }: Props) {
   const sections = Array.from(new Set(reasons.map((r) => r.section)));
   return (
-    <div className="w-[380px] rounded-md border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 shadow-xl text-xs">
+    <div className="w-[min(380px,calc(100vw-2rem))] max-w-[380px] rounded-md border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 shadow-xl text-xs break-words">
       <div className="px-3 py-2 border-b border-zinc-200 dark:border-zinc-700">
         <div className={`font-bold text-[13px] ${VERDICT_META[verdict].color}`}>{VERDICT_META[verdict].label}</div>
       </div>

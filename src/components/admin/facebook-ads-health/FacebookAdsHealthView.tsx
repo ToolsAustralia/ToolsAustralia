@@ -4,6 +4,7 @@ import { useFacebookAdsHealth } from "@/hooks/queries/admin/useFacebookAdsHealth
 import { FacebookAdsHealthTopBar } from "./FacebookAdsHealthTopBar";
 import { FacebookAdsHealthFilters, type MetricChoice } from "./FacebookAdsHealthFilters";
 import { FacebookAdsHealthPivotTable } from "./FacebookAdsHealthPivotTable";
+import { FacebookAdsHealthFlatTable } from "./FacebookAdsHealthFlatTable";
 import { FacebookAdsHealthMobileCards } from "./FacebookAdsHealthMobileCards";
 import { FacebookAdsHealthSettingsModal } from "./FacebookAdsHealthSettingsModal";
 
@@ -74,7 +75,11 @@ export function FacebookAdsHealthView({ startDate, endDate, level }: Props) {
         onOpenSettings={() => setSettingsOpen(true)}
       />
       <div className="hidden md:block">
-        <FacebookAdsHealthPivotTable rows={data?.rows ?? []} metric={metric} />
+        {startDate === endDate ? (
+          <FacebookAdsHealthFlatTable rows={data?.rows ?? []} />
+        ) : (
+          <FacebookAdsHealthPivotTable rows={data?.rows ?? []} metric={metric} />
+        )}
       </div>
       <div className="md:hidden">
         <FacebookAdsHealthMobileCards rows={data?.rows ?? []} />
