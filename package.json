@@ -55,6 +55,8 @@
     "fix:major-draw-renewal-entries": "tsx scripts/fix-major-draw-renewal-entries.ts --apply",
     "fix:major-draw-renewal-entries:dry": "tsx scripts/fix-major-draw-renewal-entries.ts",
     "sync:meta-spend-by-url": "tsx scripts/sync-meta-spend-by-url.ts",
+    "backfill:meta-link-clicks": "tsx scripts/backfill-meta-link-clicks.ts",
+    "backfill:meta-link-clicks:dry": "tsx scripts/backfill-meta-link-clicks.ts --dry-run",
     "backfill:affiliate-membership-tied": "tsx scripts/backfill-affiliate-membership-tied.ts",
     "backfill:affiliate-recurring-commissions": "tsx scripts/sync-missing-affiliate-recurring-commissions.ts",
     "backfill:affiliate-recurring-commissions:all": "tsx scripts/sync-missing-affiliate-recurring-commissions.ts --live --no-limit",
