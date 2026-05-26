@@ -34,6 +34,7 @@ export function useFacebookAdsHealth(args: FacebookAdsHealthQueryArgs) {
       return r.json();
     },
     staleTime: 60_000,
+    enabled: !!args.startDate && !!args.endDate,
   });
 }
 
