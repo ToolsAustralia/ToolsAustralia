@@ -1257,11 +1257,6 @@ export default function FacebookAdsManagement() {
     <div className="space-y-4 sm:space-y-6 min-w-0">
       {/* Header with Controls — Ads / Spend toggle full width on mobile so it stays visible */}
       <div className="flex flex-col gap-2 sm:gap-4 min-w-0">
-        <div className="hidden sm:block min-w-0">
-          <h2 className="text-sm sm:text-lg lg:text-xl font-bold text-gray-900 dark:text-white truncate">
-            Facebook Ads Performance
-          </h2>
-        </div>
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-4 min-w-0">
           <div className="flex items-center gap-1.5 sm:gap-2 bg-gray-100 dark:bg-neutral-800 rounded-lg p-1 w-full sm:w-auto flex-shrink-0 min-w-0">
             <button

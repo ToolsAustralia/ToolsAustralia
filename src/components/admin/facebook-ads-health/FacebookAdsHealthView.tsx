@@ -53,7 +53,7 @@ export function FacebookAdsHealthView({ startDate, endDate, level }: Props) {
   if (isError) return <div className="p-6 text-sm text-red-600">Failed to load.</div>;
 
   return (
-    <div className="p-4">
+    <div>
       <FacebookAdsHealthTopBar
         alertCount={data?.alertCount ?? { investigate: 0, cut: 0 }}
         onShowAlertedOnly={() => setVerdictFilter(["cut", "investigate"])}
