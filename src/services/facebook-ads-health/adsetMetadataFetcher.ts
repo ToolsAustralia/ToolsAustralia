@@ -39,13 +39,15 @@ export async function fetchAdsetMetadata(
     "campaign{id,objective}",
   ].join(",");
 
-  // Meta requires effective_status to be a JSON-encoded array, URL-encoded.
-  const effectiveStatus = encodeURIComponent(JSON.stringify(["ACTIVE", "PAUSED"]));
-
+  // Intentionally NO effective_status filter — we want metadata for every adset
+  // that appears in the insights window, including ones that are paused-by-parent,
+  // recently archived, or campaign-paused. The aggregator joins this metadata by
+  // adsetId, and any missing adset surfaces as "Unknown" status in the UI. A
+  // narrow status filter here causes the UI to show UNKNOWN for every row.
   const results: AdsetMetadata[] = [];
   let url:
     | string
-    | null = `https://graph.facebook.com/v19.0/${adAccountId}/adsets?fields=${fields}&limit=200&effective_status=${effectiveStatus}&access_token=${accessToken}`;
+    | null = `https://graph.facebook.com/v19.0/${adAccountId}/adsets?fields=${fields}&limit=200&access_token=${accessToken}`;
 
   while (url) {
     const res = await fetch(url);

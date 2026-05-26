@@ -46,6 +46,23 @@ export async function aggregateInsights(input: AggregatorInput): Promise<MetaAdI
     fetchAdsetMetadata(input.adAccountId, input.accessToken),
   ]);
 
+  // Diagnostic: log payload sizes + a sample row to surface zero-data / parsing issues.
+  // Uses console.error so it survives production console-stripping (per CLAUDE.md).
+  if (rawInsights.length > 0) {
+    const sample = rawInsights[0];
+    const sampleSpend = sample?.spend ?? "(missing)";
+    const sampleActions = Array.isArray(sample?.actions)
+      ? sample!.actions.map((a) => `${a.action_type}=${a.value}`).join(",")
+      : "(no actions)";
+    console.error(
+      `[facebook-ads-health/aggregator] fetched rawInsights=${rawInsights.length} adsetMetadata=${adsetMetadataList.length} window=${earliest}..${todayStr} sample: date=${sample?.date_start} ad_id=${sample?.ad_id} spend=${sampleSpend} actions=${sampleActions}`,
+    );
+  } else {
+    console.error(
+      `[facebook-ads-health/aggregator] EMPTY rawInsights for adAccount=${input.adAccountId} window=${earliest}..${todayStr} — Meta returned zero rows`,
+    );
+  }
+
   // Build a lookup map for adset metadata keyed by adset ID.
   const metadataByAdsetId = new Map(adsetMetadataList.map((m) => [m.adsetId, m]));
 
