@@ -22,3 +22,11 @@
 ## FacebookAdsHealthSettings
 
 [`src/models/FacebookAdsHealthSettings.ts`](../../src/models/FacebookAdsHealthSettings.ts). Singleton settings document for the Facebook Ads Health verdict engine. One document with `scope='global'`, lazy-initialised with defaults on first read by the settings service.
+
+## Facebook Ads Health Services
+
+[`src/services/facebook-ads-health/`](../../src/services/facebook-ads-health/) contains the verdict engine for analyzing Facebook ad performance:
+
+- **types.ts** — Shared types: `Verdict` ("scale" | "hold" | "investigate" | "cut"), `MetaAdInsightsRow`, `VerdictResult`, etc.
+- **computeVerdict** (Task 6) — Decision engine applying tunable rules to insights rows.
+- **insightsAggregator** (Task 18) — Builds `MetaAdInsightsRow` from `MetaAdInsightsDaily` snapshots, windows, and trends.
