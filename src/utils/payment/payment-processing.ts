@@ -50,6 +50,18 @@ export type SubscriptionLedgerContext = {
 // Global processing lock to prevent concurrent processing of same payment
 const processingLocks = new Map<string, Promise<{ success: boolean; alreadyProcessed: boolean; error?: string }>>();
 
+/**
+ * Lift Facebook ad attribution from sessionAttribution into the top-level indexed fields
+ * on PaymentEvent so ad-level TRUE ROAS aggregation can $group by attributionAdId.
+ */
+function buildAttributionFields(sessionAttribution?: AttributionParams | null) {
+  return {
+    attributionAdId: sessionAttribution?.ad_id ?? null,
+    attributionAdsetId: sessionAttribution?.adset_id ?? null,
+    attributionCampaignId: sessionAttribution?.campaign_id ?? null,
+  };
+}
+
 // Type definitions for better type safety
 type PaymentMetadata = {
   created?: number;
@@ -431,6 +443,7 @@ async function processPaymentBenefitsInternal(
           data: paymentEventData,
           processedBy,
           timestamp: new Date(),
+          ...buildAttributionFields(sessionAttribution),
           ...(experimentAssignment && {
             experimentId: experimentAssignment.experimentId,
             variantId: experimentAssignment.variantId,
