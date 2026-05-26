@@ -630,6 +630,20 @@ export function createPlacedOrderEvent(
     entriesGranted?: number;
     pointsEarned?: number;
     paymentIntentId?: string;
+    /**
+     * Raw Stripe `invoice.billing_reason` (e.g. "subscription_create",
+     * "subscription_cycle", "subscription_update", "manual"). Emitted as a
+     * top-level `billing_reason` event property. Omitted from the payload
+     * when undefined so the property isn't created on Klaviyo profiles for
+     * non-Stripe order paths.
+     */
+    billingReason?: string;
+    /**
+     * Whether this Placed Order is an automated subscription renewal cycle.
+     * Always emitted as `is_renewal` (defaults to `false`) so segments and
+     * custom metrics can reliably filter ("EQUALS true" / "EQUALS false").
+     */
+    isRenewal?: boolean;
   }
 ): KlaviyoEvent {
   // Build core revenue properties using schema helper ($value, Currency, Order ID)
@@ -671,6 +685,13 @@ export function createPlacedOrderEvent(
       partner_discount_catalog_percent: partnerDiscountCatalogPercent,
       partner_discount_catalog_summary: getPartnerDiscountCatalogSummaryForPackageId(orderData.packageId),
       purchase_date: formatDateForKlaviyo(),
+      // Renewal discriminator — additive. `is_renewal` is always defined so
+      // segments can use `EQUALS false` (Klaviyo treats missing properties as
+      // "not set", which doesn't match `EQUALS false`). `billing_reason` is
+      // only set when Stripe supplied one, keeping non-Stripe order paths
+      // clean of an empty Klaviyo profile property.
+      is_renewal: orderData.isRenewal ?? false,
+      ...(orderData.billingReason ? { billing_reason: orderData.billingReason } : {}),
       timestamp: formatTimestampForKlaviyo(),
     },
   };

@@ -1584,7 +1584,7 @@ function trackKlaviyoEvent(
   },
   paymentIntentId: string,
   skipInvoice: boolean = false,
-  _billingReason?: string // ✅ Stripe billing_reason to distinguish renewals from initial subscriptions
+  billingReason?: string // Stripe billing_reason; threaded to Placed Order as is_renewal + billing_reason
 ): void {
   try {
     // console.log(`📊 trackKlaviyoEvent called for user: ${user.email}`);
@@ -1656,6 +1656,11 @@ function trackKlaviyoEvent(
       paymentIntentId,
       entriesGranted: packageData.entries,
       pointsEarned: packageData.points,
+      // Discriminate automated subscription renewals so Klaviyo flow/campaign
+      // ROI reports can filter them out. Same `isRenewal` detection used to
+      // skip Facebook Purchase + Subscription Started above.
+      billingReason,
+      isRenewal: billingReason === "subscription_cycle",
     }).catch((error) => {
       // Log error but don't fail payment processing
       console.error(`❌ Failed to track "Placed Order" event:`, error);
