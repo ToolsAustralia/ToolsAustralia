@@ -13,7 +13,11 @@ Critical: post-purchase events fire from the **server**, not the browser. The br
 
 ## API version
 
-`src/lib/klaviyo.ts` uses Klaviyo API revision `2024-10-15`. Klaviyo's revision policy guarantees backward compatibility within a revision — bump only when you need new features. The client uses the Klaviyo Profiles + Events + Subscription Bulk Jobs endpoints.
+`src/lib/klaviyo.ts` defaults to Klaviyo API revision `2025-10-15` (override with `KLAVIYO_API_REVISION`). Klaviyo's revision policy guarantees backward compatibility within a revision — bump only when you need new features. The client uses the Klaviyo Profiles + Events + Subscription Bulk Jobs endpoints.
+
+**Revision quirks worth knowing** (current as of `2025-10-15`):
+- The list endpoints `/templates/`, `/flows/`, `/segments/` **reject** `additional-fields[*]=definition` with HTTP 400. The single-resource endpoint `/flows/{id}/` accepts it. The audit script (`npm run find:klaviyo-legacy-fields`) deep-fetches each flow individually to access the full definition tree (filters + conditional splits) and the related `flow-actions` (inline message bodies).
+- `/templates/` and `/segments/` cap `page[size]` at **10**. `/flows/` caps at **50**.
 
 ## Event inventory (server-side via `klaviyo.trackEventBackground`)
 
@@ -100,6 +104,23 @@ Subscription renewals fire `Subscription Renewed` (lifecycle) + `Placed Order` (
 This split is intentional:
 - **Klaviyo** = full LTV ledger (every dollar counts)
 - **Meta** = new-customer acquisition signal (first month only)
+
+### Renewal `Placed Order` events carry an `is_renewal` discriminator
+
+Klaviyo's automatic revenue attribution will credit a Placed Order to whichever flow/campaign the user most recently engaged with inside the attribution window (default: 5 days email / 24 h SMS) — regardless of whether the order was user-initiated or an automated renewal. That means a welcome email can show "$X attributed revenue" that's partially renewals which would have fired anyway.
+
+To make honest reporting possible, every `Placed Order` event carries an `is_renewal: boolean` property (built by [createPlacedOrderEvent](src/utils/integrations/klaviyo/klaviyo-events.ts) → wired from `billingReason === "subscription_cycle"` at the [grantBenefits callsite](src/utils/payment/payment-processing.ts)). For Stripe-originated orders the raw `billing_reason` is also emitted (`"subscription_create"`, `"subscription_cycle"`, `"subscription_update"`, `"manual"`).
+
+| Order type | `is_renewal` | `billing_reason` |
+|---|---|---|
+| First membership purchase | `false` | `"subscription_create"` |
+| Automated monthly renewal | `true` | `"subscription_cycle"` |
+| Upgrade / downgrade proration | `false` | `"subscription_update"` |
+| One-time / mini-draw / upsell | `false` | (omitted) |
+
+**Default Klaviyo metrics still see all revenue** — `is_renewal` is purely additive. To get a "new revenue only" report, create a custom metric in Klaviyo (Account → Metrics → Create) keyed on `Placed Order` with the condition `is_renewal EQUALS false`. Use that one for "what is this campaign actually driving" analysis; use the default `Placed Order` metric for LTV and total revenue.
+
+Refund linking is unaffected — `Refunded Order` continues to link by `Order ID` only.
 
 ## EMQ-equivalent for Klaviyo: profile properties
 
