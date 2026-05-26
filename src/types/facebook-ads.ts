@@ -48,6 +48,7 @@ export interface FacebookInsightData {
   spend: string; // Facebook returns as string
   impressions: string;
   clicks: string;
+  inline_link_clicks?: string; // Off-Meta link clicks (Facebook returns as string)
   actions?: FacebookAction[];
   action_values?: FacebookActionValue[];
   campaign_id?: string;
@@ -84,6 +85,7 @@ export interface ProcessedInsightMetrics {
   revenue: number;
   impressions: number;
   clicks: number;
+  linkClicks: number; // Off-Meta link clicks (inline_link_clicks from Meta API)
   conversions: number;
   landingPageView: number;
   profit: number;

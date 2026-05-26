@@ -30,6 +30,8 @@ Meta deprecates Graph API versions ~2 years after the next version is released. 
 
 Note: `src/lib/facebook-marketing.ts` uses Graph API `v21.0` for the Marketing Insights API (ad spend / ROAS reporting). That is a separate concern — bumping it can change response shapes for the `actions` field. Currently safe through ~Oct 2026. Bump separately and verify ROAS reporting still matches before/after.
 
+The Marketing API client now requests `inline_link_clicks` on the daily (`fetchFacebookAdInsightsDaily`) and account/campaign/adset (`fetchFacebookInsights`) insight endpoints. The parsed value is exposed as `linkClicks: number` in `ProcessedInsightMetrics`. The hourly endpoint (`fetchFacebookInsightsHourly`) deliberately omits this field — Meta's hourly breakdown does not support off-Meta link-click metrics.
+
 ## Event inventory
 
 Standard Meta events and where they fire:
