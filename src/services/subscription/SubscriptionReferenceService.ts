@@ -95,6 +95,14 @@ export async function retrieveStripeSubscription(
 /**
  * List the best recoverable subscription for a customer (for stale DB pointer repair).
  * Priority: active → trialing → past_due → unpaid → paused
+ *
+ * IMPORTANT: We re-validate each returned subscription's own `status` field
+ * instead of trusting the `status` query filter. Stripe's `list({ status: "trialing" })`
+ * also returns subscriptions that merely have a future `trial_end` even when their
+ * actual status is `incomplete` (an abandoned `payment_behavior: default_incomplete`
+ * checkout with an unpaid initial invoice). Without this filter, such a dead
+ * checkout is mis-classified as a live membership and permanently blocks
+ * resubscribe. See docs/subscription/gotchas.md.
  */
 export async function findRecoverableSubscriptionForCustomer(
   customerId: string,
@@ -106,9 +114,12 @@ export async function findRecoverableSubscriptionForCustomer(
       status,
       limit: 10,
     });
-    if (subs.data.length > 0) {
-      subs.data.sort((a, b) => b.created - a.created);
-      return subs.data[0] as Stripe.Subscription;
+    const manageable = subs.data.filter((sub) =>
+      isManageableStripeSubscriptionStatus(sub.status)
+    );
+    if (manageable.length > 0) {
+      manageable.sort((a, b) => b.created - a.created);
+      return manageable[0] as Stripe.Subscription;
     }
   }
   return null;
