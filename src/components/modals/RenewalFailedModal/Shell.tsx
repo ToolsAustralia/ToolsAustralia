@@ -121,7 +121,7 @@ const Shell: React.FC<ShellProps> = ({
       <div
         className={cn(
           "relative transform transition-all duration-300 ease-out",
-          "w-full max-w-[600px] font-sans text-neutral-950 antialiased",
+          "w-full max-w-[600px] font-sans text-neutral-950 dark:text-neutral-100 antialiased",
           "max-h-[82dvh] flex max-xs:max-h-[88dvh]",
           isVisible
             ? "scale-100 opacity-100 translate-y-0"
@@ -152,7 +152,7 @@ const Shell: React.FC<ShellProps> = ({
         {/* Scrollable frame */}
         <div
           className={cn(
-            "relative rounded-[22px] bg-white",
+            "relative rounded-[22px] bg-white dark:bg-neutral-950",
             "shadow-[0_30px_80px_rgba(0,0,0,0.45),0_8px_24px_rgba(0,0,0,0.2)]",
             "w-full max-h-full overflow-y-auto overflow-x-hidden",
             "[-webkit-overflow-scrolling:touch]",
@@ -250,7 +250,7 @@ const Shell: React.FC<ShellProps> = ({
           </div>
 
           {/* ---- White body slot ---- */}
-          <div className="bg-white px-[22px] pt-4 pb-[18px] max-xs:p-[14px]">
+          <div className="bg-white dark:bg-neutral-950 px-[22px] pt-4 pb-[18px] max-xs:p-[14px]">
             {children}
           </div>
         </div>

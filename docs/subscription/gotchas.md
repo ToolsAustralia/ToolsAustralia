@@ -4,9 +4,12 @@ Real failure modes, surprising behaviours, and tribal knowledge from incidents. 
 
 ## UI / modals
 
-### RenewalFailedModal renders as an always-light card
+### RenewalFailedModal dark mode was half-done (dark bg, dark text)
 
-The "Complete your renewal payment" modal ([RenewalFailedModal](../../src/components/modals/RenewalFailedModal/)) is intentionally **always light**: its main Stripe `PaymentElement` uses a hardcoded light appearance (`colorBackground:#ffffff`, `colorText:#1f2937`) and it floats over a dark backdrop. It previously had half-applied `dark:bg-*` overrides on the Shell/panels but **no** `dark:` text variants — so in dark mode the body went near-black while the labels (and the Stripe field labels) stayed dark → invisible (only the white inputs showed). Fix: strip the `dark:` background/border overrides across the modal's components (Shell, PaymentMethodPicker, PaymentForm, InlineCardSetup, AlertBanner, the index alert boxes) and force the inline card-setup Stripe appearance light via `buildMembershipStripeAppearance(false)`. If you add UI here, keep it light — do **not** reintroduce `dark:` variants.
+The "Complete your renewal payment" modal ([RenewalFailedModal](../../src/components/modals/RenewalFailedModal/)) had `dark:bg-*` overrides on the Shell/panels (body went near-black in dark mode) but the **text colours had no `dark:` variants** (`text-neutral-900`, `text-neutral-500`, etc.) and the main Stripe `PaymentElement` used a **hardcoded light** appearance (`colorBackground:#ffffff`, `colorText:#1f2937`). Result in dark mode: dark body + dark labels (and dark Stripe field labels) → invisible; only the white inputs showed (contrast ~1.08). Fix = **complete** dark mode, don't force light:
+- Add `dark:` light-text variants to every label across `Shell`, `PaymentMethodPicker`, `PaymentForm`, `InlineCardSetup`, `AlertBanner`, `ActionButtons`, and the index alert boxes (e.g. `text-neutral-900 dark:text-neutral-100`, `text-neutral-500 dark:text-neutral-400`).
+- Swap the main card form's hardcoded light appearance for the theme-aware `buildMembershipStripeAppearance(isDarkMode)` (already used for the inline card-setup path) so Stripe renders its `night` theme in dark mode.
+- Keep the dark backgrounds — the modal is meant to be dark in dark mode. When adding UI here, always pair a text colour with its `dark:` variant.
 
 ## Stripe & invoices
 

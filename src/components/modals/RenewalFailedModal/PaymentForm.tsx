@@ -166,26 +166,26 @@ const PaymentForm: React.FC<PaymentFormProps> = ({
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       {selectedPaymentMethod && (
-        <div className="bg-neutral-50 border border-neutral-200 rounded-xl p-3 sm:p-4">
+        <div className="bg-neutral-50 dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-700 rounded-xl p-3 sm:p-4">
           <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-            <CreditCard className="w-4 h-4 sm:w-5 sm:h-5 text-neutral-600 flex-shrink-0" />
+            <CreditCard className="w-4 h-4 sm:w-5 sm:h-5 text-neutral-600 dark:text-neutral-300 flex-shrink-0" />
             <div className="min-w-0">
-              <p className="font-semibold text-neutral-900 text-xs sm:text-sm">
+              <p className="font-semibold text-neutral-900 dark:text-neutral-100 text-xs sm:text-sm">
                 {selectedPaymentMethod.card?.brand?.toUpperCase() || "Card"} ••••{" "}
                 {selectedPaymentMethod.card?.last4 || ""}
               </p>
-              <p className="text-2xs sm:text-xs text-neutral-500">Using saved payment method</p>
+              <p className="text-2xs sm:text-xs text-neutral-500 dark:text-neutral-400">Using saved payment method</p>
             </div>
           </div>
         </div>
       )}
 
       {!selectedPaymentMethod && (
-        <div className="border border-neutral-200 rounded-xl p-3 sm:p-4 bg-white">
+        <div className="border border-neutral-200 dark:border-neutral-700 rounded-xl p-3 sm:p-4 bg-white dark:bg-neutral-900">
           {!stripe || !elements ? (
             <div className="flex items-center justify-center py-8">
               <div className="animate-spin rounded-full h-7 w-7 border-b-2 border-red-600" />
-              <span className="ml-3 text-neutral-600 text-sm">Loading payment form...</span>
+              <span className="ml-3 text-neutral-600 dark:text-neutral-300 text-sm">Loading payment form...</span>
             </div>
           ) : (
             <PaymentElement
@@ -215,7 +215,7 @@ const PaymentForm: React.FC<PaymentFormProps> = ({
           onClick={onCancel}
           disabled={isProcessing}
           className={cn(
-            "inline-flex items-center justify-center px-[14px] py-[11px] rounded-[10px] font-extrabold text-[13px] tracking-[0.01em] leading-[1.2] bg-white text-neutral-600 border-[1.5px] border-neutral-200 disabled:opacity-60 disabled:cursor-not-allowed hover:[&:not(:disabled)]:bg-[#fafafa] hover:[&:not(:disabled)]:border-neutral-400",
+            "inline-flex items-center justify-center px-[14px] py-[11px] rounded-[10px] font-extrabold text-[13px] tracking-[0.01em] leading-[1.2] bg-white text-neutral-600 border-[1.5px] border-neutral-200 dark:bg-neutral-800 dark:text-neutral-200 dark:border-neutral-700 disabled:opacity-60 disabled:cursor-not-allowed hover:[&:not(:disabled)]:bg-[#fafafa] hover:[&:not(:disabled)]:border-neutral-400 dark:hover:[&:not(:disabled)]:bg-neutral-700 dark:hover:[&:not(:disabled)]:border-neutral-600",
             styles.btn
           )}
         >
@@ -244,7 +244,7 @@ const PaymentForm: React.FC<PaymentFormProps> = ({
         </button>
       </div>
 
-      <div className="text-2xs sm:text-xs text-neutral-500 text-center">
+      <div className="text-2xs sm:text-xs text-neutral-500 dark:text-neutral-400 text-center">
         Your payment is secured by Stripe. Card details are never stored on our servers.
       </div>
     </form>

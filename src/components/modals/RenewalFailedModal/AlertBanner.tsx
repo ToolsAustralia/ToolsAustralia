@@ -17,8 +17,8 @@ const banner = cva(
   {
     variants: {
       variant: {
-        warn: "bg-amber-50 border-amber-200 text-amber-800",
-        error: "bg-red-50 border-red-200 text-red-700",
+        warn: "bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-800/40 text-amber-800 dark:text-amber-200",
+        error: "bg-red-50 dark:bg-red-950/40 border-red-200 dark:border-red-900/60 text-red-700 dark:text-red-300",
       },
     },
     defaultVariants: { variant: "warn" },
@@ -28,8 +28,8 @@ const banner = cva(
 const iconColor = cva("flex-shrink-0 mt-0.5 w-4 h-4 sm:w-5 sm:h-5", {
   variants: {
     variant: {
-      warn: "text-amber-700",
-      error: "text-red-600",
+      warn: "text-amber-700 dark:text-amber-400",
+      error: "text-red-600 dark:text-red-400",
     },
   },
   defaultVariants: { variant: "warn" },
@@ -46,7 +46,7 @@ const AlertBanner: React.FC<AlertBannerProps> = ({ variant = "warn", title, mess
           <h4
             className={cn(
               "text-xs sm:text-sm font-semibold mb-1",
-              variant === "warn" ? "text-amber-900" : "text-red-900"
+              variant === "warn" ? "text-amber-900 dark:text-amber-200" : "text-red-900 dark:text-red-200"
             )}
           >
             {title}
@@ -56,7 +56,7 @@ const AlertBanner: React.FC<AlertBannerProps> = ({ variant = "warn", title, mess
           <p
             className={cn(
               "text-xs sm:text-sm",
-              variant === "warn" ? "text-amber-800" : "text-red-700"
+              variant === "warn" ? "text-amber-800 dark:text-amber-200" : "text-red-700 dark:text-red-300"
             )}
           >
             {message}
