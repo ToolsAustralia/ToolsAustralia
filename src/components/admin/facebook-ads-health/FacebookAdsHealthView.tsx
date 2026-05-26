@@ -4,6 +4,7 @@ import { useFacebookAdsHealth } from "@/hooks/queries/admin/useFacebookAdsHealth
 import { FacebookAdsHealthTopBar } from "./FacebookAdsHealthTopBar";
 import { FacebookAdsHealthFilters, type MetricChoice } from "./FacebookAdsHealthFilters";
 import { FacebookAdsHealthPivotTable } from "./FacebookAdsHealthPivotTable";
+import { FacebookAdsHealthMobileCards } from "./FacebookAdsHealthMobileCards";
 import { FacebookAdsHealthSettingsModal } from "./FacebookAdsHealthSettingsModal";
 
 interface Props {
@@ -63,7 +64,12 @@ export function FacebookAdsHealthView({ startDate, endDate }: Props) {
         onSearchChange={setSearch}
         onOpenSettings={() => setSettingsOpen(true)}
       />
-      <FacebookAdsHealthPivotTable rows={data?.rows ?? []} metric={metric} />
+      <div className="hidden md:block">
+        <FacebookAdsHealthPivotTable rows={data?.rows ?? []} metric={metric} />
+      </div>
+      <div className="md:hidden">
+        <FacebookAdsHealthMobileCards rows={data?.rows ?? []} />
+      </div>
       <FacebookAdsHealthSettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />
     </div>
   );
