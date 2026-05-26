@@ -22,7 +22,11 @@
 
 ## Services
 
-[src/services/meta/](../../src/services/meta/) — Meta-specific service code (likely insights aggregation).
+[src/services/meta/](../../src/services/meta/) — Meta-specific service code:
+
+- **MetaInsightsSyncService** — `syncDateRange()` downloads ad-level daily insights from Meta and bulk-upserts into `MetaAdInsightsDaily`. As of 2026-05-27 it also calls `fetchAdsetMetadata` once per ad-account per sync run and denormalizes `linkClicks`, `adsetBudgetCents`, `campaignObjective`, `learningStatus`, and `lastSignificantEdit` onto each upserted row.
+- **runMetaSpendByUrlSync** — end-to-end orchestrator: insights → ad destinations → landing-page aggregates. Delegates to `MetaInsightsSyncService`, `MetaAdDestinationService`, and `SpendByUrlAggregationService` in sequence.
+- **MetaAdDestinationService** — resolves landing-page URLs for each ad ID via the Graph API creative endpoint.
 
 ## Repositories
 

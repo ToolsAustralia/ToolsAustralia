@@ -1,5 +1,6 @@
 import MetaAdInsightsDaily from "@/models/MetaAdInsightsDaily";
 import { fetchFacebookAdInsightsDaily, processInsightData } from "@/lib/facebook-marketing";
+import { fetchAdsetMetadata, type AdsetMetadata } from "@/services/facebook-ads-health/adsetMetadataFetcher";
 
 /** Mongo bulkWrite batch size (ops per round-trip). */
 const INSIGHTS_BULK_BATCH = 800;
@@ -44,6 +45,13 @@ export class MetaInsightsSyncService {
       },
     });
     log?.(`[insights] Download finished: ${raw.length} insight rows. Step 2/2: Upserting into MongoDB…`);
+
+    // Fetch adset metadata once per ad-account to denormalize into each row.
+    const metadataList = await fetchAdsetMetadata(adAccountId, accessToken);
+    const metadataByAdsetId = new Map<string, AdsetMetadata>(
+      metadataList.map((m) => [m.adsetId, m])
+    );
+
     const adIds = new Set<string>();
     let rowsUpserted = 0;
 
@@ -71,6 +79,7 @@ export class MetaInsightsSyncService {
       if (!date || !row.ad_id) continue;
 
       const metrics = processInsightData(row);
+      const meta = row.adset_id ? metadataByAdsetId.get(row.adset_id) : undefined;
       const update = {
         adAccountId,
         date,
@@ -85,6 +94,11 @@ export class MetaInsightsSyncService {
         clicks: metrics.clicks,
         conversions: metrics.conversions,
         revenueCents: metrics.revenue,
+        linkClicks: metrics.linkClicks,
+        adsetBudgetCents: meta?.dailyBudgetCents ?? meta?.lifetimeBudgetCents ?? null,
+        campaignObjective: meta?.campaignObjective ?? null,
+        learningStatus: meta?.learningStatus ?? null,
+        lastSignificantEdit: meta?.lastSignificantEdit ?? null,
         raw: row as unknown as Record<string, unknown>,
         syncedAt: new Date(),
       };
