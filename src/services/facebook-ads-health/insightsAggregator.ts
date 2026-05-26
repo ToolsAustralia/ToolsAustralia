@@ -180,8 +180,43 @@ export async function aggregateInsights(input: AggregatorInput): Promise<MetaAdI
       if (c > last14dBestWeek.conversions) last14dBestWeek = { conversions: c, roas };
     }
 
-    // daysAtZeroInWindow
-    const daysAtZeroInWindow = inWindow.filter((r) => (r.conversions ?? 0) === 0).length;
+    // De-duplicate inWindow rows by date. At adset and campaign levels each
+    // raw row is one ad's daily insight, so a single calendar day can appear
+    // multiple times (once per ad in the group). Without this aggregation the
+    // pivot table renders duplicate date columns and the days-at-zero count
+    // counts ad-rows instead of calendar days.
+    type DayBucket = {
+      date: string;
+      spendCents: number;
+      conversions: number;
+      revenueCents: number;
+      linkClicks: number;
+      impressions: number;
+    };
+    const dailyByDate = new Map<string, DayBucket>();
+    for (const r of inWindow) {
+      const existing = dailyByDate.get(r.date) ?? {
+        date: r.date,
+        spendCents: 0,
+        conversions: 0,
+        revenueCents: 0,
+        linkClicks: 0,
+        impressions: 0,
+      };
+      existing.spendCents += r.spendCents;
+      existing.conversions += r.conversions ?? 0;
+      existing.revenueCents += r.revenueCents ?? 0;
+      existing.linkClicks += r.linkClicks ?? 0;
+      existing.impressions += r.impressions ?? 0;
+      dailyByDate.set(r.date, existing);
+    }
+    const dailyAggregated = Array.from(dailyByDate.values()).sort((a, b) =>
+      a.date.localeCompare(b.date),
+    );
+
+    // daysAtZeroInWindow — count CALENDAR DAYS where total conversions = 0,
+    // not raw ad-rows. Uses the de-duplicated daily array above.
+    const daysAtZeroInWindow = dailyAggregated.filter((d) => d.conversions === 0).length;
 
     // daysInLearningLimited: Live Meta data only returns the CURRENT adset learning state,
     // not a per-day historical record. We therefore use a best-effort proxy: if the adset
@@ -235,14 +270,9 @@ export async function aggregateInsights(input: AggregatorInput): Promise<MetaAdI
       adsetId: first.adsetId,
       adsetName: first.adsetName,
       window: windowTotals,
-      daily: inWindow.map((r) => ({
-        date: r.date,
-        spendCents: r.spendCents,
-        conversions: r.conversions ?? 0,
-        revenueCents: r.revenueCents ?? 0,
-        linkClicks: r.linkClicks ?? 0,
-        impressions: r.impressions ?? 0,
-      })),
+      // Use dailyAggregated (de-duplicated by date) so the pivot table renders
+      // one column per calendar day, not one column per ad-row.
+      daily: dailyAggregated,
       last7d: {
         conversions: last7.conversions,
         spendCents: last7.spendCents,
