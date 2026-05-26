@@ -22,6 +22,11 @@ export interface IMetaAdInsightsDaily extends Document {
   conversions: number;
   /** Meta-reported purchase value in cents (from action_values) */
   revenueCents: number;
+  linkClicks: number;
+  adsetBudgetCents: number | null;
+  campaignObjective: string | null;
+  learningStatus: 'LEARNING' | 'SUCCESS' | 'FAIL' | null;
+  lastSignificantEdit: Date | null;
   raw?: Record<string, unknown>;
   syncedAt: Date;
 }
@@ -41,6 +46,11 @@ const MetaAdInsightsDailySchema = new Schema<IMetaAdInsightsDaily>(
     clicks: { type: Number, required: true, default: 0 },
     conversions: { type: Number, default: 0 },
     revenueCents: { type: Number, default: 0 },
+    linkClicks: { type: Number, required: true, default: 0 },
+    adsetBudgetCents: { type: Number, default: null },
+    campaignObjective: { type: String, default: null },
+    learningStatus: { type: String, enum: ['LEARNING', 'SUCCESS', 'FAIL'], default: null },
+    lastSignificantEdit: { type: Date, default: null },
     raw: { type: Schema.Types.Mixed },
     syncedAt: { type: Date, default: Date.now },
   },
@@ -49,6 +59,7 @@ const MetaAdInsightsDailySchema = new Schema<IMetaAdInsightsDaily>(
 
 MetaAdInsightsDailySchema.index({ adAccountId: 1, date: 1, adId: 1 }, { unique: true });
 MetaAdInsightsDailySchema.index({ adAccountId: 1, date: 1 });
+MetaAdInsightsDailySchema.index({ adAccountId: 1, adsetId: 1, date: 1 });
 
 export default mongoose.models.MetaAdInsightsDaily ||
   mongoose.model<IMetaAdInsightsDaily>("MetaAdInsightsDaily", MetaAdInsightsDailySchema);
