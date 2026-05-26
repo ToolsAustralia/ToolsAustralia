@@ -118,6 +118,83 @@ function buildCutReasons(
   return { anyPass: reasons.some((r) => r.passed === true), reasons };
 }
 
+function buildInvestigateReasons(
+  row: MetaAdInsightsRow,
+  settings: FacebookAdsHealthSettingsValues,
+): { allGroupsPass: boolean; reasons: VerdictReason[] } {
+  const reasons: VerdictReason[] = [];
+
+  // Was healthy group (ALL): a 7d window in last 14d had >=50 conv AND ROAS >= breakeven
+  const wasHealthyConv = row.last14dBestWeek.conversions >= 50;
+  const wasHealthyRoas = row.last14dBestWeek.roas >= settings.breakevenRoas;
+  reasons.push({
+    section: "Was healthy",
+    rule: "Best 7d window in last 14d had ≥50 conv",
+    source: "meta",
+    passed: wasHealthyConv,
+    value: `${row.last14dBestWeek.conversions}`,
+  });
+  reasons.push({
+    section: "Was healthy",
+    rule: "Best 7d window in last 14d had ROAS ≥ breakeven",
+    source: "tunable",
+    passed: wasHealthyRoas,
+    value: row.last14dBestWeek.roas.toFixed(2),
+  });
+
+  // Now broken group (ANY): WoW ROAS dropped > trigger AND both weeks have >=50 conv
+  // OR learningStatusBucket reverted (we approximate: now Learning/Limited but had high conv last week)
+  const hasComparisonData =
+    row.last7d.conversions >= 50 && row.last7d.prev7dConversions >= 50 && row.last7d.prev7dRoas !== null;
+  const roas7d = roasOf(row);
+  let wowRoasChangePct = 0;
+  if (row.last7d.prev7dRoas && row.last7d.prev7dRoas > 0) {
+    wowRoasChangePct = ((roas7d - row.last7d.prev7dRoas) / row.last7d.prev7dRoas) * 100;
+  }
+  const wowDropped = hasComparisonData && wowRoasChangePct < -settings.roasDropTriggerPct;
+  const statusReverted =
+    row.learningStatusBucket !== "Active" && row.last14dBestWeek.conversions >= 50;
+
+  reasons.push({
+    section: "Now broken",
+    rule: "ROAS dropped > roasDropTriggerPct WoW (with ≥50 conv in both weeks)",
+    source: "tunable",
+    passed: hasComparisonData ? wowDropped : "info",
+    value: hasComparisonData
+      ? `${wowRoasChangePct.toFixed(1)}%`
+      : `insufficient data — need ≥50 conv in both weeks`,
+  });
+  reasons.push({
+    section: "Now broken",
+    rule: "Status reverted from Active",
+    source: "meta",
+    passed: statusReverted,
+    value: row.learningStatusBucket,
+  });
+
+  // Recent edit detected (ANY): lastSignificantEdit <= 7d ago
+  const recentEdit =
+    row.daysSinceLastSignificantEdit !== null && row.daysSinceLastSignificantEdit <= 7;
+  reasons.push({
+    section: "Recent edit detected",
+    rule: "lastSignificantEdit ≤ 7d ago",
+    source: "meta",
+    passed: recentEdit,
+    value:
+      row.daysSinceLastSignificantEdit !== null
+        ? `${row.daysSinceLastSignificantEdit}d ago${row.lastBudgetChangePct !== null ? ` (budget ${row.lastBudgetChangePct > 0 ? "+" : ""}${row.lastBudgetChangePct}%)` : ""}`
+        : "never edited",
+  });
+
+  const wasHealthyAll = wasHealthyConv && wasHealthyRoas;
+  const nowBrokenAny = wowDropped || statusReverted;
+  const editDetectedAny = recentEdit;
+  return {
+    allGroupsPass: wasHealthyAll && nowBrokenAny && editDetectedAny,
+    reasons,
+  };
+}
+
 export function computeVerdict(
   row: MetaAdInsightsRow,
   settings: FacebookAdsHealthSettingsValues,
@@ -128,6 +205,16 @@ export function computeVerdict(
       verdict: "cut",
       reasons: cut.reasons,
       actionText: `Pause this adset in Meta. Reallocate $${(row.window.spendCents / 100).toFixed(0)}/window to working adsets.`,
+    };
+  }
+
+  const investigate = buildInvestigateReasons(row, settings);
+  if (investigate.allGroupsPass) {
+    return {
+      verdict: "investigate",
+      reasons: investigate.reasons,
+      actionText:
+        "Open in Meta Ads Manager — review change log. Most likely fix: revert the recent edit. Do NOT pause — audience and creative were proven.",
     };
   }
 

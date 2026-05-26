@@ -28,5 +28,9 @@
 [`src/services/facebook-ads-health/`](../../src/services/facebook-ads-health/) contains the verdict engine for analyzing Facebook ad performance:
 
 - **types.ts** — Shared types: `Verdict` ("scale" | "hold" | "investigate" | "cut"), `MetaAdInsightsRow`, `VerdictResult`, etc.
-- **computeVerdict** (Task 6) — Decision engine applying tunable rules to insights rows.
+- **verdictEngine.ts** — Decision engine with 4-verdict pipeline: CUT → INVESTIGATE → SCALE → HOLD.
+  - **CUT**: fires on any of: LearningLimited ≥3d with spend floor, spend ≥ 2×CPA multiplier with 0 conv or bad CPA, non-purchase-capable campaign objective.
+  - **INVESTIGATE**: fires when all three groups pass — (a) "Was healthy": best 7d in last 14d had ≥50 conv AND ROAS ≥ breakeven; (b) "Now broken": ROAS dropped >roasDropTriggerPct WoW with ≥50 conv in both weeks, OR status reverted from Active; (c) "Recent edit": lastSignificantEdit ≤7d ago. Requires ≥50 conv in both comparison weeks (stat-confidence floor).
+  - **SCALE**: fires when adset is Active, ≥50 conv/7d, ROAS ≥ breakeven, no edit within postEditWaitHours, ROAS stable WoW.
+  - **HOLD**: default when none of the above fire.
 - **insightsAggregator** (Task 18) — Builds `MetaAdInsightsRow` from `MetaAdInsightsDaily` snapshots, windows, and trends.

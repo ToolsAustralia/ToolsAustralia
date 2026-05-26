@@ -99,3 +99,33 @@ runTest("CUT?: spend > 2x target CPA with 0 conv returns cut", () => {
   const result = computeVerdict(row, DEFAULT_SETTINGS);
   assert(result.verdict === "cut", `expected cut for spend with 0 conv, got ${result.verdict}`);
 });
+
+// --- INVESTIGATE tests ---
+runTest("INVESTIGATE: Bid Cap-style (was 91 conv/1.05 ROAS, now 76 conv/0.42 after +73% budget) returns investigate", () => {
+  const row = makeRow({
+    name: "Bid Cap - Adset D",
+    learningStatusRaw: "SUCCESS",
+    learningStatusBucket: "Active",
+    daysInLearningLimited: 0,
+    window: { spendCents: 513200, conversions: 76, revenueCents: 215500, linkClicks: 1200, impressions: 45000 },
+    last7d: { conversions: 76, spendCents: 513200, revenueCents: 215500, prev7dConversions: 91, prev7dRoas: 1.05 },
+    last14dBestWeek: { conversions: 91, roas: 1.05 },
+    lastSignificantEdit: new Date(Date.now() - 4 * 24 * 60 * 60 * 1000),
+    daysSinceLastSignificantEdit: 4,
+    lastBudgetChangePct: 73,
+    lastBudgetChangeDate: new Date(Date.now() - 4 * 24 * 60 * 60 * 1000),
+  });
+  const result = computeVerdict(row, DEFAULT_SETTINGS);
+  assert(result.verdict === "investigate", `expected investigate, got ${result.verdict}`);
+});
+
+runTest("INVESTIGATE: insufficient data (under 50 conv in compared weeks) does NOT fire", () => {
+  const row = makeRow({
+    last7d: { conversions: 20, spendCents: 20000, revenueCents: 8000, prev7dConversions: 25, prev7dRoas: 1.10 },
+    last14dBestWeek: { conversions: 25, roas: 1.10 },
+    lastSignificantEdit: new Date(Date.now() - 4 * 24 * 60 * 60 * 1000),
+    daysSinceLastSignificantEdit: 4,
+  });
+  const result = computeVerdict(row, DEFAULT_SETTINGS);
+  assert(result.verdict !== "investigate", `expected non-investigate due to data floor, got ${result.verdict}`);
+});
