@@ -38,6 +38,7 @@ import CustomDateRangeModal from "./CustomDateRangeModal";
 import { useMajorDrawsForDateRange, useCurrentAndLastDrawDates } from "@/hooks/queries/useAdminQueries";
 import { getWebsiteLaunchDateUTC } from "@/utils/common/timezone";
 import SpendByUrlSection from "./SpendByUrlSection";
+import { FacebookAdsHealthView } from "./facebook-ads-health/FacebookAdsHealthView";
 import { cn } from "@/utils/cn";
 
 const AEST_TIMEZONE = "Australia/Sydney";
@@ -76,9 +77,9 @@ export default function FacebookAdsManagement() {
   const [sortColumn, setSortColumn] = useState<string | null>(null);
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
   // View mode with URL persistence
-  const urlViewMode = (searchParams.get("viewMode") as "ads" | "spend-by-url" | "metrics") || "ads";
-  const [viewMode, setViewMode] = useState<"ads" | "spend-by-url">(
-    urlViewMode === "metrics" ? "ads" : (urlViewMode as "ads" | "spend-by-url")
+  const urlViewMode = (searchParams.get("viewMode") as "ads" | "spend-by-url" | "health" | "metrics") || "ads";
+  const [viewMode, setViewMode] = useState<"ads" | "spend-by-url" | "health">(
+    urlViewMode === "metrics" ? "ads" : (urlViewMode as "ads" | "spend-by-url" | "health")
   );
 
   // Sync viewMode with URL params; legacy "metrics" view removed — redirect to ads
@@ -91,11 +92,11 @@ export default function FacebookAdsManagement() {
       setViewMode("ads");
       return;
     }
-    setViewMode(urlViewModeValue as "ads" | "spend-by-url");
+    setViewMode(urlViewModeValue as "ads" | "spend-by-url" | "health");
   }, [urlViewModeValue, pathname, router, searchParams]);
 
   // Update URL when viewMode changes
-  const handleViewModeChange = (mode: "ads" | "spend-by-url") => {
+  const handleViewModeChange = (mode: "ads" | "spend-by-url" | "health") => {
     setViewMode(mode);
     const params = new URLSearchParams(searchParams.toString());
     params.set("viewMode", mode);
@@ -1255,6 +1256,17 @@ export default function FacebookAdsManagement() {
             >
               Spend by URL
             </button>
+            <button
+              type="button"
+              onClick={() => handleViewModeChange("health")}
+              className={`flex-1 sm:flex-initial px-2.5 sm:px-3 py-1.5 rounded-md text-xs sm:text-sm font-medium transition-colors ${
+                viewMode === "health"
+                  ? "bg-white dark:bg-neutral-900 text-gray-900 dark:text-white shadow-sm"
+                  : "text-gray-600 dark:text-neutral-400 hover:text-gray-900 dark:hover:text-white"
+              }`}
+            >
+              Health
+            </button>
           </div>
           <div className="flex flex-row flex-wrap items-center gap-2 sm:gap-4 min-w-0 sm:justify-end">
             {/* View Level — Ads only */}
@@ -1277,7 +1289,7 @@ export default function FacebookAdsManagement() {
                 />
               </div>
             )}
-            {(viewMode === "ads" || viewMode === "spend-by-url") && (
+            {(viewMode === "ads" || viewMode === "spend-by-url" || viewMode === "health") && (
               <>
                 {!isLgUp && slotEl
                   ? createPortal(
@@ -1723,6 +1735,8 @@ export default function FacebookAdsManagement() {
 
         </>
       )}
+
+      {viewMode === "health" && <FacebookAdsHealthView startDate={startDate} endDate={endDate} />}
 
       {(viewMode === "ads" || viewMode === "spend-by-url") && (
         <CustomDateRangeModal
