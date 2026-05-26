@@ -13,6 +13,7 @@ import { ApiError } from "@/lib/queries";
 import { formatPaymentError } from "@/utils/payment/stripe/payment-error-messages";
 import { useSavedPaymentMethods, type SavedPaymentMethod } from "@/hooks/useSavedPaymentMethods";
 import { useUserContext } from "@/contexts/UserContext";
+import { useThemeStore } from "@/stores/useThemeStore";
 import { buildMembershipStripeAppearance } from "@/utils/payment/stripe/membership-stripe-appearance";
 import { getStripePromise } from "@/lib/stripe-client";
 import { queryKeys } from "@/lib/queryKeys";
@@ -71,13 +72,12 @@ const RenewalFailedModal: React.FC<RenewalFailedModalProps> = ({ isOpen, onClose
   const updateSubscriptionPaymentMethod = useUpdateSubscriptionPaymentMethod();
   const { paymentMethods, loading: _paymentMethodsLoading, savePaymentMethod } = useSavedPaymentMethods();
   const { userData } = useUserContext();
-  // This modal renders as an always-light card (the main Stripe PaymentElement
-  // uses a hardcoded light appearance and floats over a dark backdrop), so the
-  // inline card-setup form must stay light too — otherwise its labels/inputs
-  // mismatch the rest of the modal in dark mode.
+  const isDarkMode = useThemeStore((s) => s.theme === "dark");
+  // Theme-aware Stripe appearance so the PaymentElement renders its dark "night"
+  // theme in dark mode (matching the modal) and the light theme in light mode.
   const membershipStripeAppearance = useMemo(
-    () => buildMembershipStripeAppearance(false),
-    []
+    () => buildMembershipStripeAppearance(isDarkMode),
+    [isDarkMode]
   );
 
   // State management (14 slices — dead state _showPaymentMethods removed per audit §5)
@@ -399,7 +399,7 @@ const RenewalFailedModal: React.FC<RenewalFailedModalProps> = ({ isOpen, onClose
         sub={<>Your subscription has been reactivated and benefits are live again.</>}
       >
         <div className="flex flex-col items-center justify-center py-6 text-center">
-          <p className="text-sm text-neutral-600 max-w-sm">
+          <p className="text-sm text-neutral-600 dark:text-neutral-300 max-w-sm">
             Your accumulated entries and partner access are restored straight away.
           </p>
         </div>
@@ -463,27 +463,9 @@ const RenewalFailedModal: React.FC<RenewalFailedModalProps> = ({ isOpen, onClose
           stripe={stripePromise}
           options={{
             clientSecret: paymentState.clientSecret,
-            appearance: {
-              theme: "stripe",
-              variables: {
-                colorPrimary: "#ee0000",
-                colorBackground: "#ffffff",
-                colorText: "#1f2937",
-                colorDanger: "#dc2626",
-                fontFamily: "system-ui, sans-serif",
-                spacingUnit: "4px",
-                borderRadius: "8px",
-                fontSizeBase: "14px",
-              },
-              rules: {
-                ".Tab": { display: "flex", alignItems: "center", flexDirection: "row", gap: "8px" },
-                ".Tab--selected": { display: "flex", alignItems: "center", flexDirection: "row", gap: "8px" },
-                "button[role='tab']": { display: "flex", alignItems: "center", flexDirection: "row", gap: "8px" },
-                ".TabIcon, svg, img": { display: "inline-flex", alignItems: "center", flexShrink: "0", marginRight: "0" },
-                ".TabLabel, span": { display: "inline-flex", alignItems: "center" },
-                ".Input": { fontSize: "14px", padding: "10px", minHeight: "auto" },
-              },
-            },
+            // Theme-aware appearance (dark "night" theme in dark mode) so the
+            // Stripe field labels/inputs match the modal instead of staying light.
+            appearance: membershipStripeAppearance,
           }}
         >
           <PaymentForm
@@ -547,7 +529,7 @@ const RenewalFailedModal: React.FC<RenewalFailedModalProps> = ({ isOpen, onClose
         <InlineCardSetup
           setupIntentSecret={setupIntentSecret}
           loadingSetupIntent={loadingSetupIntent}
-          isDarkMode={false}
+          isDarkMode={isDarkMode}
           membershipStripeAppearance={membershipStripeAppearance}
           userData={userData ?? {}}
           isLoading={isLoading}
@@ -565,8 +547,8 @@ const RenewalFailedModal: React.FC<RenewalFailedModalProps> = ({ isOpen, onClose
 
       {/* Pay Overdue CTA — shown when the pay-failed-invoice path reports "no payable invoice" */}
       {isNoPayableInvoice && !forceChargeResult ? (
-        <div className="mt-3 mb-3 flex flex-col gap-3 rounded-xl border border-amber-200 bg-amber-50 p-3 sm:p-4">
-          <p className="text-sm text-amber-900">
+        <div className="mt-3 mb-3 flex flex-col gap-3 rounded-xl border border-amber-200 dark:border-amber-800/40 bg-amber-50 dark:bg-amber-950/30 p-3 sm:p-4">
+          <p className="text-sm text-amber-900 dark:text-amber-200">
             We can settle your overdue cycle by finalizing your held cycle invoice. One-click recovery — no card update needed.
           </p>
           <button
@@ -581,14 +563,14 @@ const RenewalFailedModal: React.FC<RenewalFailedModalProps> = ({ isOpen, onClose
       ) : null}
 
       {forceChargeResult && forceChargeResult.success ? (
-        <div className="mt-3 mb-3 bg-emerald-50 border border-emerald-200 rounded-xl p-3 sm:p-4">
-          <p className="text-sm text-emerald-800">Payment received. Your subscription is now up to date.</p>
+        <div className="mt-3 mb-3 bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/40 rounded-xl p-3 sm:p-4">
+          <p className="text-sm text-emerald-800 dark:text-emerald-200">Payment received. Your subscription is now up to date.</p>
         </div>
       ) : null}
 
       {forceChargeResult && !forceChargeResult.success ? (
-        <div className="mt-3 mb-3 bg-red-50 border border-red-200 rounded-xl p-3 sm:p-4">
-          <p className="text-sm text-red-800">
+        <div className="mt-3 mb-3 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900/60 rounded-xl p-3 sm:p-4">
+          <p className="text-sm text-red-800 dark:text-red-200">
             {forceChargeResult.message || "Could not pay overdue amount. Please contact support."}
           </p>
         </div>
