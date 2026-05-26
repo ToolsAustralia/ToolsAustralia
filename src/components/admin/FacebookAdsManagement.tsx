@@ -409,13 +409,25 @@ export default function FacebookAdsManagement() {
           aValue = a.clicks;
           bValue = b.clicks;
           break;
+        case "linkClicks":
+          aValue = a.linkClicks;
+          bValue = b.linkClicks;
+          break;
         case "ctr":
           aValue = a.ctr;
           bValue = b.ctr;
           break;
+        case "linkCtr":
+          aValue = a.linkCtr;
+          bValue = b.linkCtr;
+          break;
         case "cpc":
           aValue = a.cpc;
           bValue = b.cpc;
+          break;
+        case "linkCpc":
+          aValue = a.linkCpc;
+          bValue = b.linkCpc;
           break;
         case "landingPageView":
           aValue = a.landingPageView ?? 0;
@@ -484,15 +496,18 @@ export default function FacebookAdsManagement() {
         conversions: acc.conversions + item.conversions,
         impressions: acc.impressions + item.impressions,
         clicks: acc.clicks + item.clicks,
+        linkClicks: acc.linkClicks + item.linkClicks,
         landingPageView: acc.landingPageView + (item.landingPageView ?? 0),
       }),
-      { spend: 0, revenue: 0, profit: 0, conversions: 0, impressions: 0, clicks: 0, landingPageView: 0 }
+      { spend: 0, revenue: 0, profit: 0, conversions: 0, impressions: 0, clicks: 0, linkClicks: 0, landingPageView: 0 }
     );
     return {
       ...t,
       roas: t.spend > 0 ? t.revenue / t.spend : 0,
       ctr: t.impressions > 0 ? (t.clicks / t.impressions) * 100 : 0,
       cpc: t.clicks > 0 ? t.spend / t.clicks : 0,
+      linkCtr: t.impressions > 0 ? (t.linkClicks / t.impressions) * 100 : 0,
+      linkCpc: t.linkClicks > 0 ? t.spend / t.linkClicks : 0,
     };
   }, [sortedBreakdown]);
 
@@ -791,13 +806,25 @@ export default function FacebookAdsManagement() {
             aValue = a.clicks;
             bValue = b.clicks;
             break;
+          case "linkClicks":
+            aValue = a.linkClicks;
+            bValue = b.linkClicks;
+            break;
           case "ctr":
             aValue = a.ctr;
             bValue = b.ctr;
             break;
+          case "linkCtr":
+            aValue = a.linkCtr;
+            bValue = b.linkCtr;
+            break;
           case "cpc":
             aValue = a.cpc;
             bValue = b.cpc;
+            break;
+          case "linkCpc":
+            aValue = a.linkCpc;
+            bValue = b.linkCpc;
             break;
           case "revenue":
             aValue = a.revenue;
@@ -830,16 +857,19 @@ export default function FacebookAdsManagement() {
           spend: acc.spend + h.spend,
           impressions: acc.impressions + h.impressions,
           clicks: acc.clicks + h.clicks,
+          linkClicks: acc.linkClicks + h.linkClicks,
           revenue: acc.revenue + h.revenue,
           conversions: acc.conversions + h.conversions,
           profit: acc.profit + h.profit,
         }),
-        { spend: 0, impressions: 0, clicks: 0, revenue: 0, conversions: 0, profit: 0 }
+        { spend: 0, impressions: 0, clicks: 0, linkClicks: 0, revenue: 0, conversions: 0, profit: 0 }
       );
       return {
         ...t,
         ctr: t.impressions > 0 ? (t.clicks / t.impressions) * 100 : 0,
         cpc: t.clicks > 0 ? t.spend / t.clicks : 0,
+        linkCtr: t.impressions > 0 ? (t.linkClicks / t.impressions) * 100 : 0,
+        linkCpc: t.linkClicks > 0 ? t.spend / t.linkClicks : 0,
         roas: t.spend > 0 ? t.revenue / t.spend : 0,
       };
     }, [hourlyData]);
@@ -1137,21 +1167,21 @@ export default function FacebookAdsManagement() {
                 </th>
                 <th
                   className={cn("sticky top-0 z-10 bg-gray-50 dark:bg-neutral-800 shadow-[0_1px_0_0_rgba(0,0,0,0.05)] dark:shadow-[0_1px_0_0_rgba(255,255,255,0.06)] text-right py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm font-semibold text-gray-800 dark:text-neutral-100 cursor-pointer hover:bg-gray-100 dark:hover:bg-neutral-700/90 transition-colors select-none", !hourlyColumnsExpanded ? "hidden sm:table-cell" : "")}
-                  onClick={() => handleHourlySort("clicks")}
+                  onClick={() => handleHourlySort("linkClicks")}
                 >
-                  <div className="flex items-center justify-end">Clicks{getHourlySortIcon("clicks")}</div>
+                  <div className="flex items-center justify-end">Link Clicks{getHourlySortIcon("linkClicks")}</div>
                 </th>
                 <th
                   className={cn("sticky top-0 z-10 bg-gray-50 dark:bg-neutral-800 shadow-[0_1px_0_0_rgba(0,0,0,0.05)] dark:shadow-[0_1px_0_0_rgba(255,255,255,0.06)] text-right py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm font-semibold text-gray-800 dark:text-neutral-100 cursor-pointer hover:bg-gray-100 dark:hover:bg-neutral-700/90 transition-colors select-none", !hourlyColumnsExpanded ? "hidden sm:table-cell" : "")}
-                  onClick={() => handleHourlySort("ctr")}
+                  onClick={() => handleHourlySort("linkCtr")}
                 >
-                  <div className="flex items-center justify-end">CTR{getHourlySortIcon("ctr")}</div>
+                  <div className="flex items-center justify-end">Link CTR{getHourlySortIcon("linkCtr")}</div>
                 </th>
                 <th
                   className={cn("sticky top-0 z-10 bg-gray-50 dark:bg-neutral-800 shadow-[0_1px_0_0_rgba(0,0,0,0.05)] dark:shadow-[0_1px_0_0_rgba(255,255,255,0.06)] text-right py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm font-semibold text-gray-800 dark:text-neutral-100 cursor-pointer hover:bg-gray-100 dark:hover:bg-neutral-700/90 transition-colors select-none", !hourlyColumnsExpanded ? "hidden sm:table-cell" : "")}
-                  onClick={() => handleHourlySort("cpc")}
+                  onClick={() => handleHourlySort("linkCpc")}
                 >
-                  <div className="flex items-center justify-end">CPC{getHourlySortIcon("cpc")}</div>
+                  <div className="flex items-center justify-end">Cost/Link Click{getHourlySortIcon("linkCpc")}</div>
                 </th>
                 <th
                   className="sticky top-0 z-10 bg-gray-50 dark:bg-neutral-800 shadow-[0_1px_0_0_rgba(0,0,0,0.05)] dark:shadow-[0_1px_0_0_rgba(255,255,255,0.06)] text-right py-1.5 px-0.5 sm:py-3 sm:px-4 text-xs sm:text-sm font-semibold text-gray-800 dark:text-neutral-100 cursor-pointer hover:bg-gray-100 dark:hover:bg-neutral-700/90 transition-colors select-none"
@@ -1185,9 +1215,9 @@ export default function FacebookAdsManagement() {
                   <td className="py-1.5 px-0.5 sm:py-3 sm:px-4 text-xs sm:text-sm text-gray-900 dark:text-white font-medium">{hour.label}</td>
                   <td className="py-1.5 px-0.5 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900 dark:text-white">{formatCurrency(hour.spend)}</td>
                   <td className={cn("py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900 dark:text-white", !hourlyColumnsExpanded ? "hidden sm:table-cell" : "")}>{formatNumber(hour.impressions)}</td>
-                  <td className={cn("py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900 dark:text-white", !hourlyColumnsExpanded ? "hidden sm:table-cell" : "")}>{formatNumber(hour.clicks)}</td>
-                  <td className={cn("py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900 dark:text-white", !hourlyColumnsExpanded ? "hidden sm:table-cell" : "")}>{formatPercentage(hour.ctr)}</td>
-                  <td className={cn("py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900 dark:text-white", !hourlyColumnsExpanded ? "hidden sm:table-cell" : "")}>{formatCurrency(hour.cpc)}</td>
+                  <td className={cn("py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900 dark:text-white", !hourlyColumnsExpanded ? "hidden sm:table-cell" : "")}>{formatNumber(hour.linkClicks)}</td>
+                  <td className={cn("py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900 dark:text-white", !hourlyColumnsExpanded ? "hidden sm:table-cell" : "")}>{formatPercentage(hour.linkCtr)}</td>
+                  <td className={cn("py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900 dark:text-white", !hourlyColumnsExpanded ? "hidden sm:table-cell" : "")}>{formatCurrency(hour.linkCpc)}</td>
                   <td className="py-1.5 px-0.5 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900 dark:text-white font-semibold">{formatCurrency(hour.revenue)}</td>
                   <td className={cn("py-1.5 px-0.5 sm:py-3 sm:px-4 text-xs sm:text-sm text-right font-semibold", hour.profit >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400", !hourlyColumnsExpanded ? "hidden sm:table-cell" : "")}>
                     {formatCurrency(hour.profit)}
@@ -1203,9 +1233,9 @@ export default function FacebookAdsManagement() {
                   <td className="py-1.5 px-0.5 sm:py-3 sm:px-4 text-xs sm:text-sm text-gray-900 dark:text-white">Total</td>
                   <td className="py-1.5 px-0.5 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900 dark:text-white">{formatCurrency(hourlyTotals.spend)}</td>
                   <td className={cn("py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900 dark:text-white", !hourlyColumnsExpanded ? "hidden sm:table-cell" : "")}>{formatNumber(hourlyTotals.impressions)}</td>
-                  <td className={cn("py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900 dark:text-white", !hourlyColumnsExpanded ? "hidden sm:table-cell" : "")}>{formatNumber(hourlyTotals.clicks)}</td>
-                  <td className={cn("py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900 dark:text-white", !hourlyColumnsExpanded ? "hidden sm:table-cell" : "")}>{formatPercentage(hourlyTotals.ctr)}</td>
-                  <td className={cn("py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900 dark:text-white", !hourlyColumnsExpanded ? "hidden sm:table-cell" : "")}>{formatCurrency(hourlyTotals.cpc)}</td>
+                  <td className={cn("py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900 dark:text-white", !hourlyColumnsExpanded ? "hidden sm:table-cell" : "")}>{formatNumber(hourlyTotals.linkClicks)}</td>
+                  <td className={cn("py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900 dark:text-white", !hourlyColumnsExpanded ? "hidden sm:table-cell" : "")}>{formatPercentage(hourlyTotals.linkCtr)}</td>
+                  <td className={cn("py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900 dark:text-white", !hourlyColumnsExpanded ? "hidden sm:table-cell" : "")}>{formatCurrency(hourlyTotals.linkCpc)}</td>
                   <td className="py-1.5 px-0.5 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900 dark:text-white">{formatCurrency(hourlyTotals.revenue)}</td>
                   <td className={cn("py-1.5 px-0.5 sm:py-3 sm:px-4 text-xs sm:text-sm text-right", hourlyTotals.profit >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400", !hourlyColumnsExpanded ? "hidden sm:table-cell" : "")}>
                     {formatCurrency(hourlyTotals.profit)}
@@ -1383,8 +1413,8 @@ export default function FacebookAdsManagement() {
               color="indigo"
               subtitle="Viewed landing page after click"
             />
-            <MetricCard title="CTR" value={formatPercentage(summary.ctr)} icon={Target} color="yellow" />
-            <MetricCard title="CPC" value={formatCurrency(summary.cpc)} icon={DollarSign} color="blue" />
+            <MetricCard title="Link CTR" value={formatPercentage(summary.linkCtr)} icon={Target} color="yellow" />
+            <MetricCard title="Cost/Link Click" value={formatCurrency(summary.linkCpc)} icon={DollarSign} color="blue" />
           </div>
 
           <div className="bg-white dark:bg-neutral-900 rounded-lg sm:rounded-xl shadow-sm dark:shadow-none border border-gray-200 dark:border-neutral-700 p-3 sm:p-6">
@@ -1501,21 +1531,21 @@ export default function FacebookAdsManagement() {
                   </th>
                   <th
                     className="sticky top-0 z-10 bg-gray-50 dark:bg-neutral-800 shadow-[0_1px_0_0_rgba(0,0,0,0.05)] dark:shadow-[0_1px_0_0_rgba(255,255,255,0.06)] text-right py-1.5 px-0.5 sm:py-3 sm:px-4 text-xs sm:text-sm font-semibold text-gray-800 dark:text-neutral-100 cursor-pointer hover:bg-gray-100 dark:hover:bg-neutral-700/90 transition-colors select-none"
-                    onClick={() => handleSort("clicks")}
+                    onClick={() => handleSort("linkClicks")}
                   >
-                    <div className="flex items-center justify-end">Clicks{getSortIcon("clicks")}</div>
+                    <div className="flex items-center justify-end">Link Clicks{getSortIcon("linkClicks")}</div>
                   </th>
                   <th
                     className="sticky top-0 z-10 bg-gray-50 dark:bg-neutral-800 shadow-[0_1px_0_0_rgba(0,0,0,0.05)] dark:shadow-[0_1px_0_0_rgba(255,255,255,0.06)] text-right py-1.5 px-0.5 sm:py-3 sm:px-4 text-xs sm:text-sm font-semibold text-gray-800 dark:text-neutral-100 cursor-pointer hover:bg-gray-100 dark:hover:bg-neutral-700/90 transition-colors select-none"
-                    onClick={() => handleSort("ctr")}
+                    onClick={() => handleSort("linkCtr")}
                   >
-                    <div className="flex items-center justify-end">CTR{getSortIcon("ctr")}</div>
+                    <div className="flex items-center justify-end">Link CTR{getSortIcon("linkCtr")}</div>
                   </th>
                   <th
                     className="sticky top-0 z-10 bg-gray-50 dark:bg-neutral-800 shadow-[0_1px_0_0_rgba(0,0,0,0.05)] dark:shadow-[0_1px_0_0_rgba(255,255,255,0.06)] text-right py-1.5 px-0.5 sm:py-3 sm:px-4 text-xs sm:text-sm font-semibold text-gray-800 dark:text-neutral-100 cursor-pointer hover:bg-gray-100 dark:hover:bg-neutral-700/90 transition-colors select-none"
-                    onClick={() => handleSort("cpc")}
+                    onClick={() => handleSort("linkCpc")}
                   >
-                    <div className="flex items-center justify-end">CPC{getSortIcon("cpc")}</div>
+                    <div className="flex items-center justify-end">Cost/Link Click{getSortIcon("linkCpc")}</div>
                   </th>
                   <th
                     className="sticky top-0 z-10 bg-gray-50 dark:bg-neutral-800 shadow-[0_1px_0_0_rgba(0,0,0,0.05)] dark:shadow-[0_1px_0_0_rgba(255,255,255,0.06)] text-right py-1.5 px-0.5 sm:py-3 sm:px-4 text-xs sm:text-sm font-semibold text-gray-800 dark:text-neutral-100 cursor-pointer hover:bg-gray-100 dark:hover:bg-neutral-700/90 transition-colors select-none"
@@ -1565,13 +1595,13 @@ export default function FacebookAdsManagement() {
                               {formatNumber(item.impressions)}
                             </td>
                             <td className="py-1.5 px-0.5 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900 dark:text-white">
-                              {formatNumber(item.clicks)}
+                              {formatNumber(item.linkClicks)}
                             </td>
                             <td className="py-1.5 px-0.5 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900 dark:text-white">
-                              {formatPercentage(item.ctr)}
+                              {formatPercentage(item.linkCtr)}
                             </td>
                             <td className="py-1.5 px-0.5 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900 dark:text-white">
-                              {formatCurrency(item.cpc)}
+                              {formatCurrency(item.linkCpc)}
                             </td>
                             <td className="py-1.5 px-0.5 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900 dark:text-white">
                               {formatNumber(item.landingPageView ?? 0)}
@@ -1626,13 +1656,13 @@ export default function FacebookAdsManagement() {
                                   {formatNumber(item.impressions)}
                                 </td>
                                 <td className="py-1.5 px-0.5 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900 dark:text-white">
-                                  {formatNumber(item.clicks)}
+                                  {formatNumber(item.linkClicks)}
                                 </td>
                                 <td className="py-1.5 px-0.5 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900 dark:text-white">
-                                  {formatPercentage(item.ctr)}
+                                  {formatPercentage(item.linkCtr)}
                                 </td>
                                 <td className="py-1.5 px-0.5 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900 dark:text-white">
-                                  {formatCurrency(item.cpc)}
+                                  {formatCurrency(item.linkCpc)}
                                 </td>
                                 <td className="py-1.5 px-0.5 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900 dark:text-white">
                                   {formatNumber(item.landingPageView ?? 0)}
@@ -1677,13 +1707,13 @@ export default function FacebookAdsManagement() {
                       {formatNumber(item.impressions)}
                     </td>
                     <td className="py-1.5 px-0.5 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900 dark:text-white">
-                      {formatNumber(item.clicks)}
+                      {formatNumber(item.linkClicks)}
                     </td>
                     <td className="py-1.5 px-0.5 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900 dark:text-white">
-                      {formatPercentage(item.ctr)}
+                      {formatPercentage(item.linkCtr)}
                     </td>
                     <td className="py-1.5 px-0.5 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900 dark:text-white">
-                      {formatCurrency(item.cpc)}
+                      {formatCurrency(item.linkCpc)}
                     </td>
                     <td className="py-1.5 px-0.5 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900 dark:text-white">
                       {formatNumber(item.landingPageView ?? 0)}
@@ -1716,13 +1746,13 @@ export default function FacebookAdsManagement() {
                       {formatNumber(breakdownTotals.impressions)}
                     </td>
                     <td className="py-2 px-0.5 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900 dark:text-white">
-                      {formatNumber(breakdownTotals.clicks)}
+                      {formatNumber(breakdownTotals.linkClicks)}
                     </td>
                     <td className="py-2 px-0.5 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900 dark:text-white">
-                      {formatPercentage(breakdownTotals.ctr)}
+                      {formatPercentage(breakdownTotals.linkCtr)}
                     </td>
                     <td className="py-2 px-0.5 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900 dark:text-white">
-                      {formatCurrency(breakdownTotals.cpc)}
+                      {formatCurrency(breakdownTotals.linkCpc)}
                     </td>
                     <td className="py-2 px-0.5 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900 dark:text-white">
                       {formatNumber(breakdownTotals.landingPageView ?? 0)}

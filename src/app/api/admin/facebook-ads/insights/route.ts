@@ -269,6 +269,8 @@ export async function GET(request: NextRequest) {
             roas: 0, // Will calculate below
             ctr: 0, // Will calculate below
             cpc: 0, // Will calculate below
+            linkCtr: 0, // Will calculate below
+            linkCpc: 0, // Will calculate below
           }),
           {
             spend: 0,
@@ -282,6 +284,8 @@ export async function GET(request: NextRequest) {
             roas: 0,
             ctr: 0,
             cpc: 0,
+            linkCtr: 0,
+            linkCpc: 0,
           }
         );
 
@@ -292,6 +296,9 @@ export async function GET(request: NextRequest) {
         aggregated.ctr = aggregated.impressions > 0 ? (aggregated.clicks / aggregated.impressions) * 100 : 0;
         // CPC: spend / clicks (both in cents, result is cents per click)
         aggregated.cpc = aggregated.clicks > 0 ? aggregated.spend / aggregated.clicks : 0;
+        // Link CTR and Link CPC (based on inline_link_clicks)
+        aggregated.linkCtr = aggregated.impressions > 0 ? (aggregated.linkClicks / aggregated.impressions) * 100 : 0;
+        aggregated.linkCpc = aggregated.linkClicks > 0 ? aggregated.spend / aggregated.linkClicks : 0;
 
         metrics = aggregated;
 
@@ -316,9 +323,12 @@ export async function GET(request: NextRequest) {
             conversions: item.metrics.conversions,
             impressions: item.metrics.impressions,
             clicks: item.metrics.clicks,
+            linkClicks: item.metrics.linkClicks,
             landingPageView: item.metrics.landingPageView,
             ctr: item.metrics.ctr, // Already a percentage
             cpc: item.metrics.cpc / 100, // Convert cents to dollars
+            linkCtr: item.metrics.linkCtr, // Already a percentage
+            linkCpc: item.metrics.linkCpc / 100, // Convert cents to dollars
           };
         });
       }
@@ -336,6 +346,8 @@ export async function GET(request: NextRequest) {
         roas: 0,
         ctr: 0,
         cpc: 0,
+        linkCtr: 0,
+        linkCpc: 0,
       };
     }
 
@@ -349,9 +361,12 @@ export async function GET(request: NextRequest) {
       conversions: metrics.conversions, // Count, no conversion needed
       impressions: metrics.impressions, // Count, no conversion needed
       clicks: metrics.clicks, // Count, no conversion needed
+      linkClicks: metrics.linkClicks, // Count, no conversion needed
       landingPageView: metrics.landingPageView, // Count, no conversion needed
       ctr: metrics.ctr, // Percentage, already calculated correctly
       cpc: metrics.cpc / 100, // Convert cents to dollars
+      linkCtr: metrics.linkCtr, // Percentage, already calculated correctly
+      linkCpc: metrics.linkCpc / 100, // Convert cents to dollars
     };
 
     // Enhanced logging for data verification

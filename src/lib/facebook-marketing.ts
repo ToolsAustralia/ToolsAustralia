@@ -213,6 +213,8 @@ export async function fetchFacebookInsights(
             roas: 0,
             ctr: 0,
             cpc: 0,
+            linkCtr: 0,
+            linkCpc: 0,
           },
         },
       ];
@@ -293,6 +295,8 @@ export function processInsightData(insight: FacebookInsightData): ProcessedInsig
   const roas = spend > 0 ? revenue / spend : 0;
   const ctr = impressions > 0 ? (clicks / impressions) * 100 : 0;
   const cpc = clicks > 0 ? spend / clicks : 0;
+  const linkCtr = impressions > 0 ? (linkClicks / impressions) * 100 : 0;
+  const linkCpc = linkClicks > 0 ? spend / linkClicks : 0;
 
   return {
     spend,
@@ -306,6 +310,8 @@ export function processInsightData(insight: FacebookInsightData): ProcessedInsig
     roas,
     ctr,
     cpc,
+    linkCtr,
+    linkCpc,
   };
 }
 
@@ -426,6 +432,7 @@ export interface HourlyInsightData {
   spend: number; // in cents
   impressions: number;
   clicks: number;
+  linkClicks: number; // inline_link_clicks from Meta API (meaningful purchase-tracking clicks)
 }
 
 /**
@@ -449,7 +456,7 @@ export async function fetchFacebookInsightsHourly(
   // Build query parameters with hourly breakdown
   const params = new URLSearchParams({
     access_token: accessToken,
-    fields: "spend,impressions,clicks", // Only on-Meta metrics work with hourly breakdown
+    fields: "spend,impressions,clicks,inline_link_clicks",
     time_range: JSON.stringify({
       since: dateRange.since,
       until: dateRange.until,
@@ -497,6 +504,7 @@ export async function fetchFacebookInsightsHourly(
         spend?: string;
         impressions?: string;
         clicks?: string;
+        inline_link_clicks?: string;
         hourly_stats_aggregated_by_advertiser_time_zone?: string;
       }>;
     } = await response.json();
@@ -508,6 +516,7 @@ export async function fetchFacebookInsightsHourly(
       spend: 0,
       impressions: 0,
       clicks: 0,
+      linkClicks: 0,
     }));
 
     // Parse and populate data from Facebook response
@@ -527,6 +536,7 @@ export async function fetchFacebookInsightsHourly(
         const spend = parseFloat(item.spend || "0") * 100; // Convert dollars to cents
         const impressions = parseInt(item.impressions || "0", 10);
         const clicks = parseInt(item.clicks || "0", 10);
+        const linkClicks = parseInt(item.inline_link_clicks || "0", 10);
 
         // Update the corresponding hour
         hourlyData[hour] = {
@@ -535,6 +545,7 @@ export async function fetchFacebookInsightsHourly(
           spend,
           impressions,
           clicks,
+          linkClicks,
         };
       }
     }
@@ -563,7 +574,7 @@ async function fetchHourlyInsightsForEntity(
   const baseUrl = `https://graph.facebook.com/${apiVersion}/${entityId}/insights`;
   const params = new URLSearchParams({
     access_token: accessToken,
-    fields: "spend,impressions,clicks",
+    fields: "spend,impressions,clicks,inline_link_clicks",
     time_range: JSON.stringify({
       since: dateRange.since,
       until: dateRange.until,
@@ -605,6 +616,7 @@ async function fetchHourlyInsightsForEntity(
       spend?: string;
       impressions?: string;
       clicks?: string;
+      inline_link_clicks?: string;
       hourly_stats_aggregated_by_advertiser_time_zone?: string;
     }>;
   } = await response.json();
@@ -615,6 +627,7 @@ async function fetchHourlyInsightsForEntity(
     spend: 0,
     impressions: 0,
     clicks: 0,
+    linkClicks: 0,
   }));
 
   if (data.data && data.data.length > 0) {
@@ -631,10 +644,12 @@ async function fetchHourlyInsightsForEntity(
       const spend = parseFloat(item.spend || "0") * 100;
       const impressions = parseInt(item.impressions || "0", 10);
       const clicks = parseInt(item.clicks || "0", 10);
+      const linkClicks = parseInt(item.inline_link_clicks || "0", 10);
 
       hourlyData[hour].spend += spend;
       hourlyData[hour].impressions += impressions;
       hourlyData[hour].clicks += clicks;
+      hourlyData[hour].linkClicks += linkClicks;
     }
   }
 
@@ -681,6 +696,7 @@ export async function fetchFacebookInsightsHourlyFiltered(
     spend: 0,
     impressions: 0,
     clicks: 0,
+    linkClicks: 0,
   }));
 
   for (const result of results) {
@@ -690,6 +706,7 @@ export async function fetchFacebookInsightsHourlyFiltered(
         hourlyData[h].spend += entityHourly[h].spend;
         hourlyData[h].impressions += entityHourly[h].impressions;
         hourlyData[h].clicks += entityHourly[h].clicks;
+        hourlyData[h].linkClicks += entityHourly[h].linkClicks;
       }
     }
     // Silently skip rejected (e.g. deleted/inaccessible entity)

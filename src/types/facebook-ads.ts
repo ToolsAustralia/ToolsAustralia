@@ -90,8 +90,10 @@ export interface ProcessedInsightMetrics {
   landingPageView: number;
   profit: number;
   roas: number;
-  ctr: number; // Click-through rate
-  cpc: number; // Cost per click
+  ctr: number; // Click-through rate (based on clicks all)
+  cpc: number; // Cost per click (based on clicks all)
+  linkCtr: number; // Link click-through rate (based on inline_link_clicks)
+  linkCpc: number; // Cost per link click (based on inline_link_clicks)
 }
 
 /**
@@ -117,9 +119,12 @@ export interface FacebookAdsSummary {
   conversions: number;
   impressions: number;
   clicks: number;
+  linkClicks: number; // inline_link_clicks — meaningful link clicks for purchase tracking
   landingPageView: number;
   ctr: number;
   cpc: number;
+  linkCtr: number; // CTR based on inline_link_clicks
+  linkCpc: number; // Cost per link click (based on inline_link_clicks)
 }
 
 /**
@@ -140,9 +145,12 @@ export interface FacebookAdsBreakdownItem {
   conversions: number;
   impressions: number;
   clicks: number;
+  linkClicks: number; // inline_link_clicks — meaningful link clicks for purchase tracking
   landingPageView: number;
   ctr: number;
   cpc: number;
+  linkCtr: number; // CTR based on inline_link_clicks
+  linkCpc: number; // Cost per link click (based on inline_link_clicks)
 }
 
 /**
@@ -191,15 +199,18 @@ export interface HourlyInsightItem {
   label: string; // e.g. "12:00 AM", "1:00 PM"
   spend: number; // in dollars (from Facebook)
   impressions: number; // from Facebook
-  clicks: number; // from Facebook
+  clicks: number; // from Facebook (Clicks All)
+  linkClicks: number; // inline_link_clicks from Facebook (meaningful link clicks for purchase tracking)
   /** Landing page views; null when not available by hour (Meta API limitation) */
   landingPageView: number | null;
   revenue: number; // in dollars (from PaymentEvent)
   conversions: number; // count (from PaymentEvent)
   profit: number; // revenue - spend
   roas: number; // revenue / spend (or 0 if spend is 0)
-  ctr: number; // click-through rate
-  cpc: number; // cost per click
+  ctr: number; // click-through rate (based on clicks all)
+  cpc: number; // cost per click (based on clicks all)
+  linkCtr: number; // link click-through rate (based on inline_link_clicks)
+  linkCpc: number; // cost per link click (based on inline_link_clicks)
 }
 
 /**

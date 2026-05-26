@@ -30,7 +30,9 @@ Meta deprecates Graph API versions ~2 years after the next version is released. 
 
 Note: `src/lib/facebook-marketing.ts` uses Graph API `v21.0` for the Marketing Insights API (ad spend / ROAS reporting). That is a separate concern — bumping it can change response shapes for the `actions` field. Currently safe through ~Oct 2026. Bump separately and verify ROAS reporting still matches before/after.
 
-The Marketing API client now requests `inline_link_clicks` on the daily (`fetchFacebookAdInsightsDaily`) and account/campaign/adset (`fetchFacebookInsights`) insight endpoints. The parsed value is exposed as `linkClicks: number` in `ProcessedInsightMetrics`. The hourly endpoint (`fetchFacebookInsightsHourly`) deliberately omits this field — Meta's hourly breakdown does not support off-Meta link-click metrics.
+The Marketing API client now requests `inline_link_clicks` on the daily (`fetchFacebookAdInsightsDaily`), account/campaign/adset (`fetchFacebookInsights`), and hourly (`fetchFacebookInsightsHourly`, `fetchHourlyInsightsForEntity`) insight endpoints. The parsed value is exposed as `linkClicks: number` in `ProcessedInsightMetrics` and `HourlyInsightData`. Derived `linkCtr` (linkClicks/impressions×100) and `linkCpc` (spend/linkClicks) are computed alongside the existing `ctr`/`cpc` (which use Clicks All).
+
+The legacy "Ads" view in `FacebookAdsManagement.tsx` surfaces **Link Clicks / Link CTR / Cost per Link Click** (based on `inline_link_clicks`) instead of Clicks(All)/CTR/CPC in the Hourly Breakdown table, the Campaign/Ad Set/Ad Breakdown table, and the summary MetricCards. The `clicks` (Clicks All) field is still fetched and stored but no longer displayed in this view.
 
 ## Event inventory
 
