@@ -89,6 +89,7 @@
     "src/app/api/subscription/**/route.ts": { "memory": 512, "maxDuration": 60 },
     "src/app/api/invoice/**/route.ts": { "memory": 512, "maxDuration": 60 },
     "src/app/api/orders/**/route.ts": { "memory": 512, "maxDuration": 60 },
+    "src/app/api/admin/facebook-ads/health/insights/route.ts": { "memory": 512, "maxDuration": 30 },
     "src/app/api/**/route.ts": { "memory": 512, "maxDuration": 10 }
   }
 }
