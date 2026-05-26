@@ -2,7 +2,29 @@
 
 Real failure modes, surprising behaviours, and tribal knowledge from incidents. Most of these came from production bugs and have lessons attached.
 
+## UI / modals
+
+### RenewalFailedModal dark mode was half-done (dark bg, dark text)
+
+The "Complete your renewal payment" modal ([RenewalFailedModal](../../src/components/modals/RenewalFailedModal/)) had `dark:bg-*` overrides on the Shell/panels (body went near-black in dark mode) but the **text colours had no `dark:` variants** (`text-neutral-900`, `text-neutral-500`, etc.) and the main Stripe `PaymentElement` used a **hardcoded light** appearance (`colorBackground:#ffffff`, `colorText:#1f2937`). Result in dark mode: dark body + dark labels (and dark Stripe field labels) → invisible; only the white inputs showed (contrast ~1.08). Fix = **complete** dark mode, don't force light:
+- Add `dark:` light-text variants to every label across `Shell`, `PaymentMethodPicker`, `PaymentForm`, `InlineCardSetup`, `AlertBanner`, `ActionButtons`, and the index alert boxes (e.g. `text-neutral-900 dark:text-neutral-100`, `text-neutral-500 dark:text-neutral-400`).
+- Swap the main card form's hardcoded light appearance for the theme-aware `buildMembershipStripeAppearance(isDarkMode)` (already used for the inline card-setup path) so Stripe renders its `night` theme in dark mode.
+- **Derive `isDarkMode` from `useHtmlDarkForUi()` (the actual `.dark` class on `<html>`), NOT `useThemeStore`.** They can disagree — the `<html>` class is set by the bootstrap in `layout.tsx` (incl. a time-based Sydney-night fallback) and by AdminThemeContext, while `useThemeStore.theme` defaults to `"light"`. Wiring the Stripe appearance to the store left the `PaymentElement` rendering its **light** theme (white inputs, invisible labels) inside a dark-classed modal. The HTML around it was already dark via Tailwind `dark:` — only the Stripe iframe was out of sync.
+- Keep the dark backgrounds — the modal is meant to be dark in dark mode. When adding UI here, always pair a text colour with its `dark:` variant.
+
 ## Stripe & invoices
+
+### `list({ status: "trialing" })` leaks `incomplete` subs → false "Existing Subscription" block
+
+**Symptom:** a user who is *not* an active member is permanently blocked from subscribing. The checkout shows two toasts — **"Existing Subscription"** and **"Active Subscription Found"** (both the `EXISTING_SUBSCRIPTION` 409) — and "Manage Subscription" leads nowhere because `/my-account` shows them as unsubscribed.
+
+**Cause:** the resubscribe guard `stripeCustomerHasManageableSubscription` (→ `findRecoverableSubscriptionForCustomer`) used to trust Stripe's `subscriptions.list({ status })` filter. Stripe's `status: "trialing"` filter **also returns subscriptions that merely have a future `trial_end`, even when the object's own `.status` is `incomplete`.** Anchor billing produces exactly this shape for joins on the 25th–27th: `trial_end` set ([anchor-billing.ts](../../src/utils/billing/anchor-billing.ts)) + `payment_behavior: "default_incomplete"` + an unpaid initial `add_invoice_items` charge → the subscription sits at `incomplete` with a future `trial_end`. So an **abandoned checkout** was mis-classified as a live "trialing" membership and blocked all future attempts. Verified live: `retrieve(sub).status === "incomplete"` while `list({status:"trialing"})` returned that same sub.
+
+**Fix:** `findRecoverableSubscriptionForCustomer` now re-validates each returned sub's own `.status` with `isManageableStripeSubscriptionStatus()` before treating it as recoverable — the query filter is advisory only ([SubscriptionReferenceService.ts](../../src/services/subscription/SubscriptionReferenceService.ts)). This fixes both call sites at once: the resubscribe guard *and* the cancel-recovery path (`resolveCancellableStripeSubscription`). Regression test: `npm run test:find-recoverable-subscription`.
+
+**Rule of thumb:** never trust Stripe's `subscriptions.list({ status })` filter as proof of a subscription's status — always check the returned object's `.status` field. The two can disagree for trial + incomplete combinations.
+
+**Now also addressed:** the remaining follow-ups from this fix have since been closed. The new `cancelIncompleteSubscriptionAndVoidInvoice` helper ([cancelIncompleteSubscription.ts](../../src/services/subscription/cancelIncompleteSubscription.ts)) cancels the stale sub and voids its open initial invoice (best-effort, idempotent). Both create-subscription routes call it at-source to retire the user's `pendingStripeSubscriptionId` before creating a new sub, preventing abandoned `incomplete` checkouts from accumulating (see [billing-stripe/gotchas.md](../billing-stripe/gotchas.md#resubscribe-retires-the-stale-pending-incomplete-sub)). The `cleanup-abandoned-incomplete-subscriptions` backfill script (`npm run cleanup:abandoned-incomplete:dry` / `cleanup:abandoned-incomplete`) sweeps any that already exist in Stripe and repairs or clears dead `stripeSubscriptionId` pointers. Finally, the MembershipModal background pre-warm no longer raises an `EXISTING_SUBSCRIPTION` toast — only the single actionable "Active Subscription Found" toast on purchase click remains.
 
 ### Pause-collection orphans
 

@@ -21,6 +21,7 @@
 
 import { detectCategoryAndSeverity } from "@/utils/error-reporting/error-severity-classifier";
 import { autoLogError } from "@/utils/error-reporting/auto-log-error";
+import { classifyHttpRejection } from "@/utils/error-reporting/http-rejection-severity";
 // ✅ FIXED: Dynamic import for server-side utility to prevent client-side bundling
 // autoLogErrorServer is only imported when needed (server-side)
 
@@ -390,5 +391,56 @@ export class ErrorLoggingService {
         await this.logAPIError(error, context, options);
         break;
     }
+  }
+
+  /**
+   * Log a NON-thrown HTTP rejection (an early `return NextResponse.json(body, { status })`).
+   * Capture policy lives in classifyHttpRejection: 5xx → "high"; 4xx → "medium" only when it
+   * carries a business `code`; <400 and 401/403/404/429 and codeless 4xx are skipped. Forces the
+   * severity from the status (never calls detectCategoryAndSeverity, which escalates payment to
+   * "critical"). Fire-and-forget; never throws.
+   */
+  static async logHttpRejection(params: {
+    status: number;
+    request: { headers: Headers; url?: string };
+    code?: string;
+    message?: string;
+    category?: "payment" | "network" | "api" | "system" | "recovery";
+    httpMethod?: string;
+    context?: {
+      userId?: string;
+      userEmail?: string;
+      guestEmail?: string;
+      packageId?: string;
+      customerId?: string;
+    };
+  }): Promise<void> {
+    // 4xx is captured only when it carries a business code; 5xx always; gates/3xx never.
+    const { capture, severity } = classifyHttpRejection(params.status, {
+      hasBusinessCode: typeof params.code === "string" && params.code.length > 0,
+    });
+    if (!capture) return;
+
+    // Dynamic import keeps the server-only util out of any client bundle (existing pattern).
+    const { autoLogErrorServer } = await import("@/utils/error-reporting/auto-log-error-server");
+
+    const codePart = params.code ? `[${params.code}] ` : "";
+    const message = `${codePart}${params.message ?? `HTTP ${params.status}`}`;
+
+    await autoLogErrorServer(
+      new Error(message),
+      params.request,
+      {
+        category: params.category ?? "api", // MUST be a model-enum category — never "stripe"
+        severity, // "medium" (4xx) or "high" (5xx) — both valid enum values
+        httpStatus: params.status,
+        httpMethod: params.httpMethod ?? "POST",
+        userId: params.context?.userId,
+        userEmail: params.context?.userEmail,
+        guestEmail: params.context?.guestEmail,
+        packageId: params.context?.packageId,
+        customerId: params.context?.customerId,
+      }
+    );
   }
 }

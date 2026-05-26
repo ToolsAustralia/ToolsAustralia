@@ -121,7 +121,7 @@ const Shell: React.FC<ShellProps> = ({
       <div
         className={cn(
           "relative transform transition-all duration-300 ease-out",
-          "w-full max-w-[600px] font-sans text-neutral-950 antialiased",
+          "w-full max-w-[600px] font-sans text-neutral-950 dark:text-neutral-100 antialiased",
           "max-h-[82dvh] flex max-xs:max-h-[88dvh]",
           isVisible
             ? "scale-100 opacity-100 translate-y-0"

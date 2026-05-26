@@ -31,7 +31,7 @@ const PaymentMethodPicker: React.FC<PaymentMethodPickerProps> = ({
 }) => {
   return (
     <div className="mb-4">
-      <h4 className="text-2xs font-bold uppercase tracking-[0.18em] text-neutral-500 mb-2">
+      <h4 className="text-2xs font-bold uppercase tracking-[0.18em] text-neutral-500 dark:text-neutral-400 mb-2">
         Choose a payment method
       </h4>
 
@@ -53,13 +53,13 @@ const PaymentMethodPicker: React.FC<PaymentMethodPickerProps> = ({
             >
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-                  <CreditCard className="w-4 h-4 sm:w-5 sm:h-5 text-neutral-600 flex-shrink-0" />
+                  <CreditCard className="w-4 h-4 sm:w-5 sm:h-5 text-neutral-600 dark:text-neutral-300 flex-shrink-0" />
                   <div className="min-w-0">
-                    <p className="font-semibold text-neutral-900 text-xs sm:text-sm truncate">
+                    <p className="font-semibold text-neutral-900 dark:text-neutral-100 text-xs sm:text-sm truncate">
                       {formatCardDisplay(pm)}
                     </p>
                     {pm.isDefault && (
-                      <p className="text-2xs sm:text-xs text-neutral-500">Default payment method</p>
+                      <p className="text-2xs sm:text-xs text-neutral-500 dark:text-neutral-400">Default payment method</p>
                     )}
                   </div>
                 </div>
@@ -82,10 +82,10 @@ const PaymentMethodPicker: React.FC<PaymentMethodPickerProps> = ({
         >
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-              <CreditCard className="w-4 h-4 sm:w-5 sm:h-5 text-neutral-600 flex-shrink-0" />
+              <CreditCard className="w-4 h-4 sm:w-5 sm:h-5 text-neutral-600 dark:text-neutral-300 flex-shrink-0" />
               <div className="min-w-0">
-                <p className="font-semibold text-neutral-900 text-xs sm:text-sm">Enter new payment method</p>
-                <p className="text-2xs sm:text-xs text-neutral-500">Use a different card</p>
+                <p className="font-semibold text-neutral-900 dark:text-neutral-100 text-xs sm:text-sm">Enter new payment method</p>
+                <p className="text-2xs sm:text-xs text-neutral-500 dark:text-neutral-400">Use a different card</p>
               </div>
             </div>
             <RadioIndicator active={selectedPaymentMethod === null} />
