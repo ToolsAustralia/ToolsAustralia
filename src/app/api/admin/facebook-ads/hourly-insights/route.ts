@@ -180,13 +180,13 @@ async function handleHourlyInsights(request: NextRequest) {
       );
     }
 
-    // Merge: Facebook (spend, impressions, clicks, linkClicks) + PaymentEvents (revenue, conversions by hour in AEST)
-    // LPV is not available by hour from Meta (off-Meta action metrics unsupported with hourly breakdown)
+    // Merge: Facebook (spend, impressions, clicks, linkClicks, lpv) + PaymentEvents (revenue, conversions by hour in AEST)
     const hourlyInsights: HourlyInsightItem[] = fbHourlyData.map((fbItem, hour) => {
       const spend = fbItem.spend / 100; // cents to dollars
       const impressions = fbItem.impressions;
       const clicks = fbItem.clicks;
       const linkClicks = fbItem.linkClicks;
+      const lpv = fbItem.lpv;
       const dbItem = dbHourlyData[hour];
       const revenue = dbItem.revenue; // dollars from PaymentEvent.data.price
       const conversions = dbItem.conversions;
@@ -205,7 +205,7 @@ async function handleHourlyInsights(request: NextRequest) {
         impressions,
         clicks,
         linkClicks,
-        landingPageView: null, // Meta API does not provide LPV with hourly breakdown
+        lpv,
         revenue,
         conversions,
         profit,

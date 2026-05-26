@@ -433,6 +433,7 @@ export interface HourlyInsightData {
   impressions: number;
   clicks: number;
   linkClicks: number; // inline_link_clicks from Meta API (meaningful purchase-tracking clicks)
+  lpv: number; // landing_page_view action count
 }
 
 /**
@@ -456,7 +457,7 @@ export async function fetchFacebookInsightsHourly(
   // Build query parameters with hourly breakdown
   const params = new URLSearchParams({
     access_token: accessToken,
-    fields: "spend,impressions,clicks,inline_link_clicks",
+    fields: "spend,impressions,clicks,inline_link_clicks,actions",
     time_range: JSON.stringify({
       since: dateRange.since,
       until: dateRange.until,
@@ -505,6 +506,7 @@ export async function fetchFacebookInsightsHourly(
         impressions?: string;
         clicks?: string;
         inline_link_clicks?: string;
+        actions?: Array<{ action_type?: string; value?: string }>;
         hourly_stats_aggregated_by_advertiser_time_zone?: string;
       }>;
     } = await response.json();
@@ -517,6 +519,7 @@ export async function fetchFacebookInsightsHourly(
       impressions: 0,
       clicks: 0,
       linkClicks: 0,
+      lpv: 0,
     }));
 
     // Parse and populate data from Facebook response
@@ -537,6 +540,11 @@ export async function fetchFacebookInsightsHourly(
         const impressions = parseInt(item.impressions || "0", 10);
         const clicks = parseInt(item.clicks || "0", 10);
         const linkClicks = parseInt(item.inline_link_clicks || "0", 10);
+        const actionsArr = Array.isArray(item.actions) ? item.actions : [];
+        const lpv = parseInt(
+          actionsArr.find((a) => a?.action_type === "landing_page_view")?.value ?? "0",
+          10,
+        );
 
         // Update the corresponding hour
         hourlyData[hour] = {
@@ -546,6 +554,7 @@ export async function fetchFacebookInsightsHourly(
           impressions,
           clicks,
           linkClicks,
+          lpv,
         };
       }
     }
@@ -574,7 +583,7 @@ async function fetchHourlyInsightsForEntity(
   const baseUrl = `https://graph.facebook.com/${apiVersion}/${entityId}/insights`;
   const params = new URLSearchParams({
     access_token: accessToken,
-    fields: "spend,impressions,clicks,inline_link_clicks",
+    fields: "spend,impressions,clicks,inline_link_clicks,actions",
     time_range: JSON.stringify({
       since: dateRange.since,
       until: dateRange.until,
@@ -617,6 +626,7 @@ async function fetchHourlyInsightsForEntity(
       impressions?: string;
       clicks?: string;
       inline_link_clicks?: string;
+      actions?: Array<{ action_type?: string; value?: string }>;
       hourly_stats_aggregated_by_advertiser_time_zone?: string;
     }>;
   } = await response.json();
@@ -628,6 +638,7 @@ async function fetchHourlyInsightsForEntity(
     impressions: 0,
     clicks: 0,
     linkClicks: 0,
+    lpv: 0,
   }));
 
   if (data.data && data.data.length > 0) {
@@ -645,11 +656,17 @@ async function fetchHourlyInsightsForEntity(
       const impressions = parseInt(item.impressions || "0", 10);
       const clicks = parseInt(item.clicks || "0", 10);
       const linkClicks = parseInt(item.inline_link_clicks || "0", 10);
+      const actionsArr = Array.isArray(item.actions) ? item.actions : [];
+      const lpv = parseInt(
+        actionsArr.find((a) => a?.action_type === "landing_page_view")?.value ?? "0",
+        10,
+      );
 
       hourlyData[hour].spend += spend;
       hourlyData[hour].impressions += impressions;
       hourlyData[hour].clicks += clicks;
       hourlyData[hour].linkClicks += linkClicks;
+      hourlyData[hour].lpv += lpv;
     }
   }
 
@@ -697,6 +714,7 @@ export async function fetchFacebookInsightsHourlyFiltered(
     impressions: 0,
     clicks: 0,
     linkClicks: 0,
+    lpv: 0,
   }));
 
   for (const result of results) {
@@ -707,6 +725,7 @@ export async function fetchFacebookInsightsHourlyFiltered(
         hourlyData[h].impressions += entityHourly[h].impressions;
         hourlyData[h].clicks += entityHourly[h].clicks;
         hourlyData[h].linkClicks += entityHourly[h].linkClicks;
+        hourlyData[h].lpv += entityHourly[h].lpv;
       }
     }
     // Silently skip rejected (e.g. deleted/inaccessible entity)

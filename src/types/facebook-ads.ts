@@ -201,8 +201,7 @@ export interface HourlyInsightItem {
   impressions: number; // from Facebook
   clicks: number; // from Facebook (Clicks All)
   linkClicks: number; // inline_link_clicks from Facebook (meaningful link clicks for purchase tracking)
-  /** Landing page views; null when not available by hour (Meta API limitation) */
-  landingPageView: number | null;
+  lpv: number; // landing_page_view action count (from Meta actions array)
   revenue: number; // in dollars (from PaymentEvent)
   conversions: number; // count (from PaymentEvent)
   profit: number; // revenue - spend

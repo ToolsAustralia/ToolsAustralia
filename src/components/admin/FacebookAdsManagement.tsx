@@ -810,6 +810,10 @@ export default function FacebookAdsManagement() {
             aValue = a.linkClicks;
             bValue = b.linkClicks;
             break;
+          case "lpv":
+            aValue = a.lpv;
+            bValue = b.lpv;
+            break;
           case "ctr":
             aValue = a.ctr;
             bValue = b.ctr;
@@ -858,11 +862,12 @@ export default function FacebookAdsManagement() {
           impressions: acc.impressions + h.impressions,
           clicks: acc.clicks + h.clicks,
           linkClicks: acc.linkClicks + h.linkClicks,
+          lpv: acc.lpv + h.lpv,
           revenue: acc.revenue + h.revenue,
           conversions: acc.conversions + h.conversions,
           profit: acc.profit + h.profit,
         }),
-        { spend: 0, impressions: 0, clicks: 0, linkClicks: 0, revenue: 0, conversions: 0, profit: 0 }
+        { spend: 0, impressions: 0, clicks: 0, linkClicks: 0, lpv: 0, revenue: 0, conversions: 0, profit: 0 }
       );
       return {
         ...t,
@@ -1167,6 +1172,12 @@ export default function FacebookAdsManagement() {
                 </th>
                 <th
                   className={cn("sticky top-0 z-10 bg-gray-50 dark:bg-neutral-800 shadow-[0_1px_0_0_rgba(0,0,0,0.05)] dark:shadow-[0_1px_0_0_rgba(255,255,255,0.06)] text-right py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm font-semibold text-gray-800 dark:text-neutral-100 cursor-pointer hover:bg-gray-100 dark:hover:bg-neutral-700/90 transition-colors select-none", !hourlyColumnsExpanded ? "hidden sm:table-cell" : "")}
+                  onClick={() => handleHourlySort("lpv")}
+                >
+                  <div className="flex items-center justify-end" title="Landing page views">LPV{getHourlySortIcon("lpv")}</div>
+                </th>
+                <th
+                  className={cn("sticky top-0 z-10 bg-gray-50 dark:bg-neutral-800 shadow-[0_1px_0_0_rgba(0,0,0,0.05)] dark:shadow-[0_1px_0_0_rgba(255,255,255,0.06)] text-right py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm font-semibold text-gray-800 dark:text-neutral-100 cursor-pointer hover:bg-gray-100 dark:hover:bg-neutral-700/90 transition-colors select-none", !hourlyColumnsExpanded ? "hidden sm:table-cell" : "")}
                   onClick={() => handleHourlySort("linkClicks")}
                 >
                   <div className="flex items-center justify-end">Link Clicks{getHourlySortIcon("linkClicks")}</div>
@@ -1215,6 +1226,7 @@ export default function FacebookAdsManagement() {
                   <td className="py-1.5 px-0.5 sm:py-3 sm:px-4 text-xs sm:text-sm text-gray-900 dark:text-white font-medium">{hour.label}</td>
                   <td className="py-1.5 px-0.5 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900 dark:text-white">{formatCurrency(hour.spend)}</td>
                   <td className={cn("py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900 dark:text-white", !hourlyColumnsExpanded ? "hidden sm:table-cell" : "")}>{formatNumber(hour.impressions)}</td>
+                  <td className={cn("py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900 dark:text-white", !hourlyColumnsExpanded ? "hidden sm:table-cell" : "")}>{formatNumber(hour.lpv)}</td>
                   <td className={cn("py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900 dark:text-white", !hourlyColumnsExpanded ? "hidden sm:table-cell" : "")}>{formatNumber(hour.linkClicks)}</td>
                   <td className={cn("py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900 dark:text-white", !hourlyColumnsExpanded ? "hidden sm:table-cell" : "")}>{formatPercentage(hour.linkCtr)}</td>
                   <td className={cn("py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900 dark:text-white", !hourlyColumnsExpanded ? "hidden sm:table-cell" : "")}>{formatCurrency(hour.linkCpc)}</td>
@@ -1233,6 +1245,7 @@ export default function FacebookAdsManagement() {
                   <td className="py-1.5 px-0.5 sm:py-3 sm:px-4 text-xs sm:text-sm text-gray-900 dark:text-white">Total</td>
                   <td className="py-1.5 px-0.5 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900 dark:text-white">{formatCurrency(hourlyTotals.spend)}</td>
                   <td className={cn("py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900 dark:text-white", !hourlyColumnsExpanded ? "hidden sm:table-cell" : "")}>{formatNumber(hourlyTotals.impressions)}</td>
+                  <td className={cn("py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900 dark:text-white", !hourlyColumnsExpanded ? "hidden sm:table-cell" : "")}>{formatNumber(hourlyTotals.lpv)}</td>
                   <td className={cn("py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900 dark:text-white", !hourlyColumnsExpanded ? "hidden sm:table-cell" : "")}>{formatNumber(hourlyTotals.linkClicks)}</td>
                   <td className={cn("py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900 dark:text-white", !hourlyColumnsExpanded ? "hidden sm:table-cell" : "")}>{formatPercentage(hourlyTotals.linkCtr)}</td>
                   <td className={cn("py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900 dark:text-white", !hourlyColumnsExpanded ? "hidden sm:table-cell" : "")}>{formatCurrency(hourlyTotals.linkCpc)}</td>
