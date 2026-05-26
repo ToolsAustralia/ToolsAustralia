@@ -8,13 +8,15 @@ import { getOrInitSettings } from "@/services/facebook-ads-health/settingsServic
 import { loadActiveSnoozes } from "@/services/facebook-ads-health/snoozeService";
 import { parseISO } from "date-fns";
 
-// Health view is adset-level only. Campaign and ad breakdowns are deliberately
-// not exposed — the view's job is to surface per-adset learning state and
-// scaling decisions. If a future use case needs another level, add it then.
+// Health view mirrors the legacy Ads view's level switcher (campaign/adset/ad).
+// Verdict semantics are most meaningful at adset level, but campaign and ad
+// levels are supported so the team can switch granularity without leaving the
+// Health view. "Account" level is intentionally NOT supported — verdicts don't
+// make sense for a single aggregated row.
 const querySchema = z.object({
   startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-  level: z.literal("adset").default("adset"),
+  level: z.enum(["campaign", "adset", "ad"]).default("adset"),
   verdict: z.string().optional(),
   learningStatus: z.string().optional(),
   minSpend: z.coerce.number().optional(),

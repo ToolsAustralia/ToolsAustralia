@@ -1269,8 +1269,8 @@ export default function FacebookAdsManagement() {
             </button>
           </div>
           <div className="flex flex-row flex-wrap items-center gap-2 sm:gap-4 min-w-0 sm:justify-end">
-            {/* View Level — Ads only */}
-            {viewMode === "ads" && (
+            {/* View Level — Ads and Health views */}
+            {(viewMode === "ads" || viewMode === "health") && (
               <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0 min-w-[200px] sm:min-w-[240px]">
                 <label className="text-xs sm:text-sm font-medium text-gray-700 dark:text-neutral-200 whitespace-nowrap hidden sm:inline">
                   View Level:
@@ -1398,13 +1398,15 @@ export default function FacebookAdsManagement() {
         </>
       )}
 
-      {viewMode === "spend-by-url" ? (
+      {viewMode === "spend-by-url" && (
         <SpendByUrlSection
           startDate={startDate}
           endDate={endDate}
           dateReady={Boolean(startDate && endDate)}
         />
-      ) : (
+      )}
+
+      {viewMode === "ads" && (
         <>
 
       {/* Hourly Breakdown - Show when date range is available (Account level shows account totals) */}
@@ -1736,7 +1738,9 @@ export default function FacebookAdsManagement() {
         </>
       )}
 
-      {viewMode === "health" && <FacebookAdsHealthView startDate={startDate} endDate={endDate} />}
+      {viewMode === "health" && (
+        <FacebookAdsHealthView startDate={startDate} endDate={endDate} level={level} />
+      )}
 
       {(viewMode === "ads" || viewMode === "spend-by-url") && (
         <CustomDateRangeModal

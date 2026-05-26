@@ -10,9 +10,19 @@ import { FacebookAdsHealthSettingsModal } from "./FacebookAdsHealthSettingsModal
 interface Props {
   startDate: string;
   endDate: string;
+  /**
+   * Mirrors the legacy Ads view's level switcher (Account/Campaign/Adset/Ad).
+   * The verdict engine is per-row, so any level except Account is meaningful.
+   * Account rolls up everything into a single row, so we coerce it to "adset"
+   * (the most useful default) — the dropdown stays visible for parity with
+   * the legacy view but Account silently falls back.
+   */
+  level: "account" | "campaign" | "adset" | "ad";
 }
 
-export function FacebookAdsHealthView({ startDate, endDate }: Props) {
+export function FacebookAdsHealthView({ startDate, endDate, level }: Props) {
+  const effectiveLevel: "campaign" | "adset" | "ad" =
+    level === "account" ? "adset" : level;
   const [metric, setMetric] = useState<MetricChoice>("conversions");
   const [verdictFilter, setVerdictFilter] = useState<string[]>([]);
   const [statusFilter, setStatusFilter] = useState<string[]>([]);
@@ -24,7 +34,7 @@ export function FacebookAdsHealthView({ startDate, endDate }: Props) {
   const { data, isLoading, isError } = useFacebookAdsHealth({
     startDate,
     endDate,
-    level: "adset",
+    level: effectiveLevel,
     verdict: verdictFilter.length ? verdictFilter : undefined,
     learningStatus: statusFilter.length ? statusFilter : undefined,
     minSpend: minSpend === "" ? undefined : minSpend,
