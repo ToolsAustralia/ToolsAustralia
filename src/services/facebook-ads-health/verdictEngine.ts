@@ -12,8 +12,6 @@ function roasOf(row: MetaAdInsightsRow): number {
   return row.last7d.spendCents > 0 ? row.last7d.revenueCents / row.last7d.spendCents : 0;
 }
 
-// Used by CUT/INVESTIGATE rules in follow-up tasks (7, 8)
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function effectiveCpaAud(row: MetaAdInsightsRow): number {
   if (row.last7d.conversions <= 0) return Infinity;
   return row.last7d.spendCents / 100 / row.last7d.conversions;
@@ -77,10 +75,62 @@ function buildScaleReasons(
   return { allPass: reasons.every((r) => r.passed === true), reasons };
 }
 
+function buildCutReasons(
+  row: MetaAdInsightsRow,
+  settings: FacebookAdsHealthSettingsValues,
+): { anyPass: boolean; reasons: VerdictReason[] } {
+  const reasons: VerdictReason[] = [];
+  const cpa = effectiveCpaAud(row);
+  const spendAud7d = row.last7d.spendCents / 100;
+  const limitedLongEnough =
+    row.learningStatusBucket === "LearningLimited" && row.daysInLearningLimited >= 3;
+  const limitedSpendFloor = row.window.spendCents / 100 >= 5 * settings.targetCpaAud;
+
+  reasons.push({
+    section: "Cut triggers",
+    rule: "Learning Limited ≥ 3d AND window spend ≥ 5x targetCpa",
+    source: "meta",
+    passed: limitedLongEnough && limitedSpendFloor,
+    value: `LL=${row.daysInLearningLimited}d, spend=$${(row.window.spendCents / 100).toFixed(0)} vs floor $${(5 * settings.targetCpaAud).toFixed(0)}`,
+  });
+
+  const spendVsMultiplier = spendAud7d >= settings.zeroConvSpendMultiplier * settings.targetCpaAud;
+  const badCpa = row.last7d.conversions === 0 || cpa > 2 * settings.targetCpaAud;
+  reasons.push({
+    section: "Cut triggers",
+    rule: "Spend ≥ zeroConvSpendMultiplier × targetCpa AND (0 conv OR CPA > 2x target)",
+    source: "tunable",
+    passed: spendVsMultiplier && badCpa,
+    value:
+      row.last7d.conversions === 0
+        ? `spend $${spendAud7d.toFixed(0)} / 0 conv`
+        : `spend $${spendAud7d.toFixed(0)} / ${row.last7d.conversions} conv = $${cpa.toFixed(0)} CPA vs target $${settings.targetCpaAud}`,
+  });
+
+  reasons.push({
+    section: "Cut triggers",
+    rule: "Campaign objective is purchase-capable",
+    source: "meta",
+    passed: !row.isPurchaseCapableObjective,
+    value: row.campaignObjective ?? "(unknown)",
+  });
+
+  return { anyPass: reasons.some((r) => r.passed === true), reasons };
+}
+
 export function computeVerdict(
   row: MetaAdInsightsRow,
   settings: FacebookAdsHealthSettingsValues,
 ): VerdictResult {
+  const cut = buildCutReasons(row, settings);
+  if (cut.anyPass) {
+    return {
+      verdict: "cut",
+      reasons: cut.reasons,
+      actionText: `Pause this adset in Meta. Reallocate $${(row.window.spendCents / 100).toFixed(0)}/window to working adsets.`,
+    };
+  }
+
   const scale = buildScaleReasons(row, settings);
   if (scale.allPass) {
     return {
@@ -90,7 +140,6 @@ export function computeVerdict(
     };
   }
 
-  // TODO Phase 2 follow-up tasks: Hold, Investigate, Cut
   return {
     verdict: "hold",
     reasons: scale.reasons,

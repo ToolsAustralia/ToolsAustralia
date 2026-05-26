@@ -62,3 +62,40 @@ runTest("SCALE: healthy LTB-C-style adset returns scale", () => {
 });
 
 console.error("All SCALE tests passed.");
+
+// --- CUT tests ---
+runTest("CUT?: Ryobi-style (Learning Limited 8d, $953 spend, 4 conv) returns cut", () => {
+  const row = makeRow({
+    name: "Ryobi - Adset A",
+    learningStatusRaw: "FAIL",
+    learningStatusBucket: "LearningLimited",
+    daysInLearningLimited: 8,
+    window: { spendCents: 95300, conversions: 4, revenueCents: 41000, linkClicks: 200, impressions: 12000 },
+    last7d: { conversions: 4, spendCents: 95300, revenueCents: 41000, prev7dConversions: 6, prev7dRoas: 0.5 },
+    last14dBestWeek: { conversions: 11, roas: 0.4 },
+  });
+  const result = computeVerdict(row, DEFAULT_SETTINGS);
+  assert(result.verdict === "cut", `expected cut, got ${result.verdict}`);
+});
+
+runTest("CUT?: wrong objective (OUTCOME_ENGAGEMENT) returns cut", () => {
+  const row = makeRow({
+    campaignObjective: "OUTCOME_ENGAGEMENT",
+    isPurchaseCapableObjective: false,
+  });
+  const result = computeVerdict(row, DEFAULT_SETTINGS);
+  assert(result.verdict === "cut", `expected cut for non-purchase objective, got ${result.verdict}`);
+});
+
+runTest("CUT?: spend > 2x target CPA with 0 conv returns cut", () => {
+  const row = makeRow({
+    window: { spendCents: 20000, conversions: 0, revenueCents: 0, linkClicks: 80, impressions: 6000 },
+    last7d: { conversions: 0, spendCents: 20000, revenueCents: 0, prev7dConversions: 0, prev7dRoas: 0 },
+    last14dBestWeek: { conversions: 0, roas: 0 },
+    learningStatusBucket: "Learning",
+    learningStatusRaw: "LEARNING",
+    daysInLearningLimited: 0,
+  });
+  const result = computeVerdict(row, DEFAULT_SETTINGS);
+  assert(result.verdict === "cut", `expected cut for spend with 0 conv, got ${result.verdict}`);
+});
