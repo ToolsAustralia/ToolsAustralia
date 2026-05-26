@@ -28,6 +28,10 @@
 - **runMetaSpendByUrlSync** — end-to-end orchestrator: insights → ad destinations → landing-page aggregates. Delegates to `MetaInsightsSyncService`, `MetaAdDestinationService`, and `SpendByUrlAggregationService` in sequence.
 - **MetaAdDestinationService** — resolves landing-page URLs for each ad ID via the Graph API creative endpoint.
 
+[src/services/facebook-ads-health/](../../src/services/facebook-ads-health/) — Facebook Ads Health diagnostic services:
+
+- **accountTrueRoasService** (`computeAccountTrueRoas`) — computes account-level TRUE ROAS by comparing local `PaymentEvent` revenue (non-renewal `BenefitsGranted` events) against Meta Insights spend and purchase revenue for a given date range. Returns `localRevenueAud`, `metaSpendAud`, `metaPurchaseRevenueAud`, `metaPurchaseConversions`, `ratioLocalOverMetaSpend` (TRUE ROAS proxy), `ratioMetaOverLocal` (Meta attribution ratio), and an `error` field if Meta was unreachable. Called by `GET /api/admin/facebook-ads/purchase-audit` and available for reuse by future health-insight routes.
+
 ## Repositories
 
 > _TODO: locate any tracking-specific repositories under `src/repositories/`._
