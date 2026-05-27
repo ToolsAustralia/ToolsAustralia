@@ -22,7 +22,8 @@ import { hasPixelConsent } from "@/components/PixelTracker";
  * automatically apply to Klaviyo as well.
  *
  * @param email - User's email address (required)
- * @param traits - Optional user properties (firstName, lastName, phone, etc.)
+ * @param traits - Optional user properties keyed snake_case to match Klaviyo
+ *                 standard fields (first_name, last_name, phone_number, user_id, ...)
  */
 export function identifyKlaviyoUser(email: string, traits?: Record<string, unknown>): void {
   // If the user has not granted tracking consent, skip identifying them in Klaviyo.
@@ -60,7 +61,8 @@ export function identifyKlaviyoUser(email: string, traits?: Record<string, unkno
  * so that disabling tracking in one place affects all downstream events.
  *
  * @param eventName - Name of the event (e.g., "Added to Cart", "Placed Order")
- * @param properties - Optional event properties (value, currency, productId, etc.)
+ * @param properties - Optional event properties keyed snake_case
+ *                     (value, currency, product_id, order_id, item_count, ...)
  */
 export function trackKlaviyoEvent(eventName: string, properties?: Record<string, unknown>): void {
   // If tracking consent has not been granted, do not send any events to Klaviyo.
