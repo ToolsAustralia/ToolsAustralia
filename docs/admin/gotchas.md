@@ -1,5 +1,9 @@
 # Admin — Gotchas
 
+## ClickableUserDisplay needs a dark-aware base text colour
+
+[`ClickableUserDisplay`](../../src/components/admin/ClickableUserDisplay.tsx) (the clickable user name/email used across admin tables that opens the User Detail modal) treats a caller-supplied `className` as the **entire** typography token set (so a default `text-sm` isn't merged and Tailwind doesn't pick the wrong size winner). The side effect: callers passing a *size-only* className (e.g. `text-2xs sm:text-xs`) — or a light-only colour like `text-gray-900` — left the text with no `dark:` variant → **black text on the dark admin background**. Fix: the component now applies a `baseTextColor = "text-gray-900 dark:text-gray-100"` in the `cn()` base of both the button and span branches, and the subtext uses `text-gray-500 dark:text-gray-400`. `cn` is `twMerge`-based, so an explicit caller colour still wins for the same variant while the `dark:` fallback is preserved. When adding any always-on text colour, pair it with its `dark:` variant.
+
 ## "Edit Entries" never writes `entriesBySource.membership = totalEntries`
 
 The admin major-draw participation form ([`src/components/admin/UserDetailModal.tsx`](../../src/components/admin/UserDetailModal.tsx) "Edit Entries" tab) sends only `{ drawId, totalEntries }` per row to [`syncMajorDrawParticipation`](../../src/features/admin/users/server/mutations.ts). The mutation **must not** force-set `entriesBySource.membership` to `participation.totalEntries` — the previous implementation did, and on every save it silently wiped the source breakdown.

@@ -59,9 +59,9 @@ export default function ProductInteractions({ product }: ProductInteractionsProp
       trackKlaviyoAddToCart({
         value: (product.price as number) * quantity,
         currency: "AUD",
-        productId: productIdValue,
-        productName: product.name,
-        numItems: quantity,
+        product_id: productIdValue,
+        product_name: product.name,
+        num_items: quantity,
       });
 
       await addToCart({

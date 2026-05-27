@@ -13,7 +13,11 @@ Critical: post-purchase events fire from the **server**, not the browser. The br
 
 ## API version
 
-`src/lib/klaviyo.ts` uses Klaviyo API revision `2024-10-15`. Klaviyo's revision policy guarantees backward compatibility within a revision — bump only when you need new features. The client uses the Klaviyo Profiles + Events + Subscription Bulk Jobs endpoints.
+`src/lib/klaviyo.ts` defaults to Klaviyo API revision `2025-10-15` (override with `KLAVIYO_API_REVISION`). Klaviyo's revision policy guarantees backward compatibility within a revision — bump only when you need new features. The client uses the Klaviyo Profiles + Events + Subscription Bulk Jobs endpoints.
+
+**Revision quirks worth knowing** (current as of `2025-10-15`):
+- The list endpoints `/templates/`, `/flows/`, `/segments/` **reject** `additional-fields[*]=definition` with HTTP 400. The single-resource endpoint `/flows/{id}/` accepts it. The audit script (`npm run find:klaviyo-legacy-fields`) deep-fetches each flow individually to access the full definition tree (filters + conditional splits) and the related `flow-actions` (inline message bodies).
+- `/templates/` and `/segments/` cap `page[size]` at **10**. `/flows/` caps at **50**.
 
 ## Event inventory (server-side via `klaviyo.trackEventBackground`)
 
@@ -101,6 +105,23 @@ This split is intentional:
 - **Klaviyo** = full LTV ledger (every dollar counts)
 - **Meta** = new-customer acquisition signal (first month only)
 
+### Renewal `Placed Order` events carry an `is_renewal` discriminator
+
+Klaviyo's automatic revenue attribution will credit a Placed Order to whichever flow/campaign the user most recently engaged with inside the attribution window (default: 5 days email / 24 h SMS) — regardless of whether the order was user-initiated or an automated renewal. That means a welcome email can show "$X attributed revenue" that's partially renewals which would have fired anyway.
+
+To make honest reporting possible, every `Placed Order` event carries an `is_renewal: boolean` property (built by [createPlacedOrderEvent](src/utils/integrations/klaviyo/klaviyo-events.ts) → wired from `billingReason === "subscription_cycle"` at the [grantBenefits callsite](src/utils/payment/payment-processing.ts)). For Stripe-originated orders the raw `billing_reason` is also emitted (`"subscription_create"`, `"subscription_cycle"`, `"subscription_update"`, `"manual"`).
+
+| Order type | `is_renewal` | `billing_reason` |
+|---|---|---|
+| First membership purchase | `false` | `"subscription_create"` |
+| Automated monthly renewal | `true` | `"subscription_cycle"` |
+| Upgrade / downgrade proration | `false` | `"subscription_update"` |
+| One-time / mini-draw / upsell | `false` | (omitted) |
+
+**Default Klaviyo metrics still see all revenue** — `is_renewal` is purely additive. To get a "new revenue only" report, create a custom metric in Klaviyo (Account → Metrics → Create) keyed on `Placed Order` with the condition `is_renewal EQUALS false`. Use that one for "what is this campaign actually driving" analysis; use the default `Placed Order` metric for LTV and total revenue.
+
+Refund linking is unaffected — `Refunded Order` continues to link by `Order ID` only.
+
 ## EMQ-equivalent for Klaviyo: profile properties
 
 Klaviyo doesn't have an "Event Match Quality" score like Meta, but profile linking quality determines whether events attach to the right profile. The codebase pushes profile updates via:
@@ -111,6 +132,66 @@ Klaviyo doesn't have an "Event Match Quality" score like Meta, but profile linki
 
 For all server-side events, `customer_properties` comes from `getCustomerProperties(user)` ([klaviyo-helpers.ts](src/utils/integrations/klaviyo/klaviyo-helpers.ts)) which includes email + phone + first/last name. Events use the SAME email as the upserted profile, so attachment works automatically.
 
+## Property naming contract — snake_case everywhere
+
+All keys sent to Klaviyo — profile attributes, custom properties, identify traits, and event properties — are **snake_case**. Mixed casing creates duplicate profile properties (a camelCase shadow alongside Klaviyo's standard snake_case field) and silently breaks any flow filter, segment condition, or template merge tag set up against the other variant.
+
+- **Profile attributes** (Klaviyo's built-in fields): `email`, `first_name`, `last_name`, `phone_number`. Always send these at the top level of the profile payload, not inside `properties`.
+- **Profile custom properties**: snake_case keys. The canonical typed shape lives in [src/types/klaviyo.ts](src/types/klaviyo.ts) — extend it when you add a new property rather than ad-hoc spreading.
+- **Client identify traits** (`useKlaviyoTracking().identify` / `identifyKlaviyoUser`): `first_name`, `last_name`, `phone_number`, `user_id`. The trait keys must match the server-side `upsertProfile` field names so they merge instead of forking.
+- **Event properties** (`trackKlaviyoEvent`, `useKlaviyoTracking().track*`): snake_case. The typed `KlaviyoEventParams` interface in [src/hooks/useKlaviyoTracking.ts](src/hooks/useKlaviyoTracking.ts) is the source of truth — keys are `product_id`, `product_name`, `order_id`, `num_items`, `content_name`, `content_ids`. (Revenue events additionally use Klaviyo's exact-case `$value`, `Currency`, `Order ID` — built via `buildRevenueProperties()`, never by hand.)
+
+To audit existing Klaviyo assets for legacy camelCase references before changing the client contract, run `npm run find:klaviyo-legacy-fields`. It scans templates (html/text), flow definitions + inline message bodies, segment condition trees, and Draft/Scheduled campaigns for both identify (`firstName`/`lastName`/`userId`) and event-param (`productId`/`productName`/`numItems`/...) tokens and reports any hit by asset name + ID.
+
+## Canonical property names — new events only (drift containment)
+
+This codebase emits Klaviyo events from two eras:
+
+- **Legacy events** (everything defined in [klaviyo-events.ts](src/utils/integrations/klaviyo/klaviyo-events.ts) as of 2026-05-27): `Subscription Started`, `Placed Order`, `Subscription Renewal Failed`, `Invoice Generated`, etc. These ship with property-name drift — `price` (string) vs `amount` vs `total_amount` for the same dollar value; `entries_granted` vs `entries_added` vs `entries_gained` for the same entry count; `purchase_date` (locale string `"December 22, 2025"`) vs `timestamp` (ISO) for the same moment. **Do not refactor them.** Existing Klaviyo flows, email templates, segments, and campaigns are wired against these exact names. Renaming silently breaks production flows (filters stop matching) and emails (merge tags blank out — Klaviyo does not surface a warning).
+- **New events** (anything added after 2026-05-27): use the **canonical names** in the table below. New Klaviyo flows the ads team builds will be written against canonical names from day 1, so there is no migration cost.
+
+This is intentional drift containment — we accept the legacy schema as paid cost and prevent it from compounding.
+
+### Canonical schema
+
+| Concept | Property name | Type | Notes |
+|---|---|---|---|
+| Package price | `price` | **number** | Not string. Templates format via `{{ event.price\|format_number }}`. Klaviyo segment `>` / `<` filters compare numerically only when the property is a number — strings sort lexicographically (`"100"` < `"99"`). |
+| Revenue value | `$value` | number | Klaviyo's revenue triple. Required on `Placed Order` / `Refunded Order` only. Built via `buildRevenueProperties()` — never by hand. Emit alongside `price` when an event represents revenue. |
+| Currency | `currency` | string | Lowercase ISO code (`"AUD"`). The PascalCase `Currency` is reserved for Klaviyo's revenue triple inside Placed Order / Refunded Order. |
+| Package ID | `package_id` | string | Slug-style identifier (`"membership_standard"`). |
+| Package name | `package_name` | string | Human-readable (`"Standard Membership"`). |
+| Package tier | `tier` | string | Not `package_tier`. Omit the key when absent — no empty-string default. |
+| Package type | `package_type` | enum string | One of `"membership"` / `"one-time"` / `"mini-draw"` / `"upsell"`. Always emit, even when implied by the event name — lets the ads team write cross-event aggregations. |
+| Entries change on a single event | `entries_granted` | number | Not `entries_added` / `entries` / `entries_gained`. Use for grants on purchase / renewal / upgrade events. |
+| Lifetime entry count on profile | `entries_purchased` | number | Profile property only — not an event property. Aggregates across all sources. |
+| User ID | `user_id` | string | MongoDB `_id.toString()`. |
+| Payment intent | `payment_intent_id` | string | **Omit the key entirely when absent** — no `""` or `"unknown"` sentinels. Klaviyo's `is set` filter cannot distinguish a sentinel from a real value. |
+| Event timestamp | `<verb>_at` | ISO 8601 string | `started_at`, `purchased_at`, `viewed_at`, `cancelled_at`. **Not** locale strings like `"December 22, 2025"`. Klaviyo segments do date math only on ISO / Unix values. |
+| Whether user is logged in when event fired | `is_authenticated` | boolean | For mixed authed/guest event paths (e.g. `Started Checkout`). |
+| Promo / giveaway context | `promo_slug`, `promo_id`, `promo_title`, `prize_name`, `prize_image_url`, `promo_url` | string | When an event is fired from a promo page, include these so email templates can reference the asset directly. |
+| Deep link back to action | `checkout_url`, `resume_url`, etc. | string (absolute URL with UTM) | When the email's CTA needs to return the user to a specific preselected state. Always include UTM params so the ads team can attribute. |
+
+### When adding a new event
+
+1. Find each property in the canonical schema. If a concept fits an existing row, use that exact name and type. Do not invent an alias.
+2. If your event needs a property that doesn't fit any row, **add a row in the same PR** that introduces the property. Keep names noun-led and snake_case.
+3. Build package-related properties via `formatCanonicalPackageData(...)` (canonical helper). Do **not** call the legacy `formatPackageDataForKlaviyo(...)` for new events — it emits `price` as a string and is preserved only for the legacy events that already depend on its shape.
+4. Add a snapshot test for the event's property keys to `src/utils/integrations/klaviyo/__tests__/canonical-events-shape.test.ts` so future drift attempts fail the test runner before code review.
+5. When in doubt, look at the most recently added event for the pattern — not the oldest one in `klaviyo-events.ts`.
+
+### No-refactor policy on legacy events
+
+Do not rename, drop, or change the type of any property on an event that already fires in production unless **all three** of the following are true:
+
+1. The user has explicitly authorized the migration for this specific property.
+2. The ads team has confirmed (in writing) which dependent flows, templates, segments, and campaigns will be updated, and the timeline.
+3. A dual-write transition is in the code with a `TODO(klaviyo-rename-cleanup)` comment plus a removal date.
+
+Klaviyo does not surface "property no longer emitted" warnings — broken flows fail silently and broken templates send emails with blank merge tags. The legacy drift is amortized; touching it re-introduces the cost.
+
+If you find a legacy property that's actively painful (e.g. a date-string field the ads team can't filter on), raise it as a separate scoped ticket — not as a side-effect of unrelated work.
+
 ## Common bugs to watch for
 
 - **Building revenue events by hand** instead of using `buildRevenueProperties` — easy to typo `$value` as `value`, breaking revenue reporting.
@@ -118,6 +199,7 @@ For all server-side events, `customer_properties` comes from `getCustomerPropert
 - **Calling `trackKlaviyoEvent` (client) from a webhook** — no-ops because `typeof window === "undefined"`. Use `klaviyo.trackEventBackground` (server) instead.
 - **Firing `Placed Order` from both client and server for the same purchase** — risks double-counting revenue if order IDs differ. The current architecture fires `Placed Order` only server-side from `grantBenefits`.
 - **Not passing the customer's email** — Klaviyo can't attach the event to a profile, revenue shows as anonymous.
+- **Sending camelCase keys to Klaviyo** — creates duplicate `firstName` / `lastName` / `userId` / `productId` shadow properties alongside the snake_case standard fields. Any flow filter or merge tag set up against one variant silently ignores the other. The `KlaviyoIdentifyParams` and `KlaviyoEventParams` interfaces enforce snake_case for new code; existing assets are audited via `npm run find:klaviyo-legacy-fields`.
 
 ## References
 

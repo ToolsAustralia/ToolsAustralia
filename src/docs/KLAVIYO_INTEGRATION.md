@@ -49,13 +49,6 @@ This project uses Klaviyo's onsite JavaScript for client-side tracking alongside
     - Check that `window.klaviyo` exists.
     - Respect `hasPixelConsent()` so future consent changes automatically apply.
 
-- Convenience wrapper: `src/utils/tracking/klaviyoClient.ts`
-
-  - `klaviyoClient.identify` → `identifyKlaviyoUser`
-  - `klaviyoClient.track` → `trackKlaviyoEvent`
-  - `klaviyoClient.page` → `trackKlaviyoPageView`
-  - Preferred import for non-React code that wants a simple client-style API.
-
 - React hook: `src/hooks/useKlaviyoTracking.ts`
   - High-level helpers for common flows:
     - `identify`
@@ -90,9 +83,29 @@ For local development, set `NEXT_PUBLIC_KLAVIYO_COMPANY_ID` to your Klaviyo comp
     - Track cart, product views, checkout, and purchases.
 
 - **Non-React code** (utility modules, etc.):
-  - Import from `src/utils/tracking/klaviyoClient.ts` and call:
-    - `klaviyoClient.identify(email, traits)`
-    - `klaviyoClient.track(eventName, properties)`
-    - `klaviyoClient.page(properties)`
+  - Import the helpers directly from `src/utils/tracking/klaviyo-helpers.ts`:
+    - `identifyKlaviyoUser(email, traits)`
+    - `trackKlaviyoEvent(eventName, properties)`
+    - `trackKlaviyoPageView(properties)`
 
 Avoid calling `window.klaviyo` directly so that consent rules and future changes remain centralized.
+
+## Property naming contract — snake_case
+
+All identify traits, event properties, and profile custom properties sent to Klaviyo
+must use **snake_case keys** so they merge cleanly with Klaviyo's standard profile
+attributes and avoid creating duplicate camelCase shadow properties on profiles.
+
+- Identify traits: `first_name`, `last_name`, `phone_number`, `user_id`, …
+  (The TypeScript values often come from session/user objects whose own fields
+  are camelCase — that is fine. The Klaviyo-facing **key** is what must be
+  snake_case.)
+- Event properties: `product_id`, `product_name`, `order_id`, `num_items`,
+  `item_count`, `value`, `currency`, `items[]`, …
+- Profile custom properties: snake_case across the board. See
+  `src/types/klaviyo.ts` for the canonical typed shape.
+
+This contract is enforced by the `KlaviyoIdentifyParams` and `KlaviyoEventParams`
+TypeScript interfaces in `src/hooks/useKlaviyoTracking.ts`. To audit existing
+Klaviyo templates / flows / segments for stragglers, run
+`npm run find:klaviyo-legacy-fields`.

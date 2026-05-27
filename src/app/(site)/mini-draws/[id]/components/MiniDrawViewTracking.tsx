@@ -53,8 +53,8 @@ export default function MiniDrawViewTracking({ miniDraw }: MiniDrawViewTrackingP
     trackKlaviyoViewContent({
       value: miniDraw.prize.value,
       currency: "AUD",
-      productId: miniDraw._id,
-      productName: miniDraw.prize.name,
+      product_id: miniDraw._id,
+      product_name: miniDraw.prize.name,
     });
 
     if (process.env.NODE_ENV === "development") {

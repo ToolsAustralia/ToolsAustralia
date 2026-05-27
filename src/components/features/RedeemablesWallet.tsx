@@ -54,9 +54,9 @@ export default function RedeemablesWallet({ userId, variant = "dashboard", onReq
       }
       const grantedEntries = response.data?.entriesGranted || 0;
       track("Monthly Redeemable Redeemed", {
-        userId,
-        entriesGranted: grantedEntries,
-        redeemMethod: payload.code ? "code-input" : "wallet-item",
+        user_id: userId,
+        entries_granted: grantedEntries,
+        redeem_method: payload.code ? "code-input" : "wallet-item",
       });
       trackEvent("monthly_redeemable_redeemed", {
         userId,
