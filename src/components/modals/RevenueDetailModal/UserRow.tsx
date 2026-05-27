@@ -40,17 +40,29 @@ const UserRow: React.FC<UserRowProps> = ({ user, isExpanded, onToggleExpanded, o
       >
         {/* Mobile View */}
         <div className="lg:hidden space-y-3">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <User className="w-5 h-5 text-gray-400 dark:text-neutral-500" />
-              <div>
-                <p className="font-semibold text-gray-900 dark:text-neutral-100">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2 min-w-0 flex-1">
+              <User className="w-5 h-5 text-gray-400 dark:text-neutral-500 shrink-0" />
+              <div className="min-w-0">
+                <p className="font-semibold text-gray-900 dark:text-neutral-100 truncate">
                   {formatDisplayName(user.userInfo.firstName, user.userInfo.lastName)}
                 </p>
-                <p className="text-sm text-gray-600 dark:text-neutral-400">{user.userInfo.email}</p>
+                <p className="text-sm text-gray-600 dark:text-neutral-400 truncate">{user.userInfo.email}</p>
               </div>
             </div>
-            {isExpanded ? <ChevronUp className="w-5 h-5 text-gray-400 dark:text-neutral-500" /> : <ChevronDown className="w-5 h-5 text-gray-400 dark:text-neutral-500" />}
+            {onUserClick && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onUserClick(user.userId);
+                }}
+                className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold rounded-lg bg-red-600 text-white hover:bg-red-700 transition-colors shrink-0"
+              >
+                <User className="w-3.5 h-3.5" />
+                View
+              </button>
+            )}
           </div>
           <div className="grid grid-cols-2 gap-2 text-sm">
             <div>
@@ -62,17 +74,29 @@ const UserRow: React.FC<UserRowProps> = ({ user, isExpanded, onToggleExpanded, o
               <span className="font-semibold text-emerald-600 dark:text-emerald-400">{formatCurrency(user.totalContributed)}</span>
             </div>
           </div>
+          <div className="flex items-center justify-end text-xs text-gray-500 dark:text-neutral-400">
+            {isExpanded ? (
+              <span className="inline-flex items-center gap-1">
+                Hide purchases <ChevronUp className="w-4 h-4" />
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1">
+                Show purchases <ChevronDown className="w-4 h-4" />
+              </span>
+            )}
+          </div>
         </div>
 
         {/* Desktop View */}
         <div className="hidden lg:grid lg:grid-cols-12 gap-4 items-center">
-          <div className="col-span-3">
-            <p className="font-semibold text-gray-900 dark:text-neutral-100">
+          <div className="col-span-3 min-w-0">
+            <p className="font-semibold text-gray-900 dark:text-neutral-100 truncate flex items-center gap-1">
               {formatDisplayName(user.userInfo.firstName, user.userInfo.lastName)}
+              {isExpanded ? <ChevronUp className="w-4 h-4 text-gray-400 dark:text-neutral-500 shrink-0" /> : <ChevronDown className="w-4 h-4 text-gray-400 dark:text-neutral-500 shrink-0" />}
             </p>
-            {user.userInfo.mobile && <p className="text-xs text-gray-500 dark:text-neutral-400">{user.userInfo.mobile}</p>}
+            {user.userInfo.mobile && <p className="text-xs text-gray-500 dark:text-neutral-400 truncate">{user.userInfo.mobile}</p>}
           </div>
-          <div className="col-span-3 text-sm text-gray-600 dark:text-neutral-400">{user.userInfo.email}</div>
+          <div className="col-span-3 text-sm text-gray-600 dark:text-neutral-400 truncate">{user.userInfo.email}</div>
           <div className="col-span-1 text-right font-medium text-gray-900 dark:text-neutral-100">{user.purchaseCount}</div>
           <div className="col-span-2 text-right font-semibold text-emerald-600 dark:text-emerald-400">
             {formatCurrency(user.totalContributed)}
@@ -80,8 +104,23 @@ const UserRow: React.FC<UserRowProps> = ({ user, isExpanded, onToggleExpanded, o
           <div className="col-span-2 text-sm text-gray-600 dark:text-neutral-400">
             {firstPurchase ? formatDate(firstPurchase.timestamp) : "N/A"}
           </div>
-          <div className="col-span-1 text-center">
-            {isExpanded ? <ChevronUp className="w-5 h-5 text-gray-400 dark:text-neutral-500" /> : <ChevronDown className="w-5 h-5 text-gray-400 dark:text-neutral-500" />}
+          <div className="col-span-1 flex justify-center">
+            {onUserClick ? (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onUserClick(user.userId);
+                }}
+                className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold rounded-lg bg-red-600 text-white hover:bg-red-700 transition-colors"
+                title="View user details"
+              >
+                <User className="w-3.5 h-3.5" />
+                View
+              </button>
+            ) : (
+              <span className="text-gray-400 dark:text-neutral-500 text-xs">—</span>
+            )}
           </div>
         </div>
       </div>
