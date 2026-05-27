@@ -4,31 +4,38 @@ import { useCallback } from "react";
 import { identifyKlaviyoUser, trackKlaviyoEvent } from "@/utils/tracking/klaviyo-helpers";
 
 /**
- * Klaviyo Event Parameters Interface
- * Defines the structure for Klaviyo event tracking parameters.
+ * Klaviyo Event Parameters Interface.
+ *
+ * All keys are snake_case to match Klaviyo's profile-property and event-property
+ * conventions. This avoids creating duplicate camelCase custom properties on the
+ * profile when an event spreads its params over time.
  */
 export interface KlaviyoEventParams {
   value?: number;
   currency?: string;
-  productId?: string;
-  productName?: string;
-  orderId?: string;
-  numItems?: number;
+  product_id?: string;
+  product_name?: string;
+  order_id?: string;
+  num_items?: number;
   method?: string;
-  contentName?: string;
-  contentIds?: string[];
+  content_name?: string;
+  content_ids?: string[];
   [key: string]: unknown;
 }
 
 /**
- * Klaviyo User Identification Parameters Interface
- * Defines the structure for identifying users in Klaviyo.
+ * Klaviyo User Identification Parameters Interface.
+ *
+ * Trait keys are snake_case so they merge with the server-side `upsertProfile`
+ * standard fields (`first_name`, `last_name`, `phone_number`) instead of
+ * creating shadow camelCase custom properties.
  */
 export interface KlaviyoIdentifyParams {
   email: string;
-  firstName?: string;
-  lastName?: string;
-  phone?: string;
+  first_name?: string;
+  last_name?: string;
+  phone_number?: string;
+  user_id?: string;
   [key: string]: unknown;
 }
 
@@ -44,19 +51,19 @@ export interface KlaviyoIdentifyParams {
  * ```tsx
  * const { identify, trackPurchase, trackAddToCart } = useKlaviyoTracking();
  *
- * // Identify user after login
+ * // Identify user after login (snake_case keys match Klaviyo standard fields)
  * identify({
  *   email: user.email,
- *   firstName: user.firstName,
- *   lastName: user.lastName
+ *   first_name: user.firstName,
+ *   last_name: user.lastName,
  * });
  *
- * // Track purchase
+ * // Track purchase (event params are snake_case)
  * trackPurchase({
  *   value: 99.99,
  *   currency: "AUD",
- *   orderId: "order_123",
- *   productId: "prod_123"
+ *   order_id: "order_123",
+ *   product_id: "prod_123",
  * });
  * ```
  */
@@ -65,7 +72,7 @@ export function useKlaviyoTracking() {
    * Identify a user in Klaviyo
    * Links the browser session to a user profile.
    *
-   * @param params - User identification parameters (email, firstName, lastName, etc.)
+   * @param params - User identification parameters (email, first_name, last_name, etc.)
    */
   const identify = useCallback((params: KlaviyoIdentifyParams) => {
     try {
@@ -101,26 +108,25 @@ export function useKlaviyoTracking() {
    * Track a purchase event in Klaviyo
    * Standard Klaviyo event for completed purchases.
    *
-   * @param params - Purchase event parameters (value, currency, orderId, productId, etc.)
+   * @param params - Purchase event parameters (value, currency, order_id, product_id, etc.)
    */
   const trackPurchase = useCallback((params: KlaviyoEventParams) => {
     try {
+      const items = params.product_id
+        ? [
+            {
+              product_id: params.product_id,
+              product_name: params.product_name,
+              value: params.value,
+              quantity: params.num_items ?? 1,
+            },
+          ]
+        : [];
       trackKlaviyoEvent("Placed Order", {
-        value: params.value,
-        currency: params.currency || "AUD",
-        order_id: params.orderId,
-        item_count: params.numItems || 1,
-        items: params.productId
-          ? [
-              {
-                product_id: params.productId,
-                product_name: params.productName,
-                value: params.value,
-                quantity: params.numItems || 1,
-              },
-            ]
-          : [],
         ...params,
+        currency: params.currency || "AUD",
+        item_count: params.num_items ?? 1,
+        items,
       });
     } catch (error) {
       // Silently fail - don't break user experience
@@ -134,25 +140,25 @@ export function useKlaviyoTracking() {
    * Track an "Add to Cart" event in Klaviyo
    * Standard Klaviyo event for when users add items to cart.
    *
-   * @param params - Add to cart event parameters (value, currency, productId, etc.)
+   * @param params - Add to cart event parameters (value, currency, product_id, etc.)
    */
   const trackAddToCart = useCallback((params: KlaviyoEventParams) => {
     try {
+      const items = params.product_id
+        ? [
+            {
+              product_id: params.product_id,
+              product_name: params.product_name,
+              value: params.value,
+              quantity: params.num_items ?? 1,
+            },
+          ]
+        : [];
       trackKlaviyoEvent("Added to Cart", {
-        value: params.value,
-        currency: params.currency || "AUD",
-        item_count: params.numItems || 1,
-        items: params.productId
-          ? [
-              {
-                product_id: params.productId,
-                product_name: params.productName,
-                value: params.value,
-                quantity: params.numItems || 1,
-              },
-            ]
-          : [],
         ...params,
+        currency: params.currency || "AUD",
+        item_count: params.num_items ?? 1,
+        items,
       });
     } catch (error) {
       // Silently fail - don't break user experience
@@ -166,25 +172,25 @@ export function useKlaviyoTracking() {
    * Track a "Remove from Cart" event in Klaviyo
    * Standard Klaviyo event for when users remove items from cart.
    *
-   * @param params - Remove from cart event parameters (value, currency, productId, etc.)
+   * @param params - Remove from cart event parameters (value, currency, product_id, etc.)
    */
   const trackRemoveFromCart = useCallback((params: KlaviyoEventParams) => {
     try {
+      const items = params.product_id
+        ? [
+            {
+              product_id: params.product_id,
+              product_name: params.product_name,
+              value: params.value,
+              quantity: params.num_items ?? 1,
+            },
+          ]
+        : [];
       trackKlaviyoEvent("Removed from Cart", {
-        value: params.value,
-        currency: params.currency || "AUD",
-        item_count: params.numItems || 1,
-        items: params.productId
-          ? [
-              {
-                product_id: params.productId,
-                product_name: params.productName,
-                value: params.value,
-                quantity: params.numItems || 1,
-              },
-            ]
-          : [],
         ...params,
+        currency: params.currency || "AUD",
+        item_count: params.num_items ?? 1,
+        items,
       });
     } catch (error) {
       // Silently fail - don't break user experience
@@ -198,16 +204,14 @@ export function useKlaviyoTracking() {
    * Track a "View Content" event in Klaviyo
    * Standard Klaviyo event for when users view products or pages.
    *
-   * @param params - View content event parameters (value, currency, productId, etc.)
+   * @param params - View content event parameters (value, currency, product_id, etc.)
    */
   const trackViewContent = useCallback((params: KlaviyoEventParams) => {
     try {
       trackKlaviyoEvent("Viewed Product", {
-        value: params.value,
-        currency: params.currency || "AUD",
-        product_id: params.productId,
-        product_name: params.productName || params.contentName,
         ...params,
+        currency: params.currency || "AUD",
+        product_name: params.product_name || params.content_name,
       });
     } catch (error) {
       // Silently fail - don't break user experience
@@ -221,15 +225,14 @@ export function useKlaviyoTracking() {
    * Track an "Initiate Checkout" event in Klaviyo
    * Standard Klaviyo event for when users start checkout.
    *
-   * @param params - Initiate checkout event parameters (value, currency, numItems, etc.)
+   * @param params - Initiate checkout event parameters (value, currency, num_items, etc.)
    */
   const trackInitiateCheckout = useCallback((params: KlaviyoEventParams) => {
     try {
       trackKlaviyoEvent("Started Checkout", {
-        value: params.value,
-        currency: params.currency || "AUD",
-        item_count: params.numItems || 1,
         ...params,
+        currency: params.currency || "AUD",
+        item_count: params.num_items ?? 1,
       });
     } catch (error) {
       // Silently fail - don't break user experience
@@ -247,9 +250,9 @@ export function useKlaviyoTracking() {
    */
   const trackCompleteRegistration = useCallback((params?: KlaviyoEventParams) => {
     try {
-      trackKlaviyoEvent("Placed Order", {
-        method: params?.method || "email",
+      trackKlaviyoEvent("Completed Registration", {
         ...params,
+        method: params?.method || "email",
       });
     } catch (error) {
       // Silently fail - don't break user experience

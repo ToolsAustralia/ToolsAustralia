@@ -139,8 +139,8 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, email }) => {
           if (fresh.user.email) {
             identify({
               email: fresh.user.email,
-              firstName: fresh.user.firstName,
-              lastName: fresh.user.lastName,
+              first_name: fresh.user.firstName,
+              last_name: fresh.user.lastName,
             });
           }
         }
@@ -196,8 +196,8 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, email }) => {
               if (session.user.email) {
                 identify({
                   email: session.user.email,
-                  firstName: session.user.firstName,
-                  lastName: session.user.lastName,
+                  first_name: session.user.firstName,
+                  last_name: session.user.lastName,
                 });
               }
             }
@@ -545,8 +545,8 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, email }) => {
           if (data.user?.email) {
             identify({
               email: data.user.email,
-              firstName: data.user.firstName,
-              lastName: data.user.lastName,
+              first_name: data.user.firstName,
+              last_name: data.user.lastName,
             });
           }
 

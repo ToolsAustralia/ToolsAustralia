@@ -341,6 +341,26 @@ Endpoints + aggregation rules: [api.md](./api.md#cancellation-flow-analytics).
 
 **Client-safe constant copies.** `CancellationFlowAnalytics.tsx` declares its own module-local `CANCELLATION_REASONS` and `OFFER_TYPES` constants (identical values and order to the model) instead of importing them from `@/models/CancellationFlowEvent`. That module is a Mongoose model file — runtime-evaluating it in a client component crashes (`mongoose` is `serverExternalPackages`, so `models.CancellationFlowEvent` is undefined in the browser). The type-only imports (`import type { CancellationReason, OfferType }`) remain safe because types are fully erased at build time. Keep the local constants in sync by hand whenever the model's `CANCELLATION_REASONS` or `OFFER_TYPES` arrays change. This is the same pattern used elsewhere on this branch for the same class of crash.
 
+## Facebook Ads Management — Health view tab (Task 29, 2026-05-27)
+
+`FacebookAdsManagement` (`src/components/admin/FacebookAdsManagement.tsx`) now supports a third `viewMode` value: `"health"`.
+
+**State / URL changes:**
+- `viewMode` type widened from `"ads" | "spend-by-url"` to `"ads" | "spend-by-url" | "health"`.
+- `urlViewMode` cast and `setViewMode` cast updated to include `"health"`.
+- `handleViewModeChange` signature updated to `"ads" | "spend-by-url" | "health"`.
+- The URL-sync `useEffect` now accepts `"health"` as a valid persisted value (legacy `"metrics"` → `"ads"` redirect is unchanged).
+- The DateRangeToggle portal/render guard (`viewMode === "ads" || viewMode === "spend-by-url"`) now also includes `viewMode === "health"` so the date picker remains available when in health mode.
+
+**Render:**
+- A third tab button (`Health`) is added to the switcher next to `Ads` and `Spend by URL`.
+- `{viewMode === "health" && <FacebookAdsHealthView startDate={startDate} endDate={endDate} />}` renders the orchestrator below the tab bar.
+- The account-level summary cards and `CustomDateRangeModal` continue to only render for `"ads"` and `"spend-by-url"` modes.
+
+**Orchestrator:** `src/components/admin/facebook-ads-health/FacebookAdsHealthView.tsx` — wires `useFacebookAdsHealth` to the four health sub-components (`FacebookAdsHealthTopBar`, `FacebookAdsHealthFilters`, `FacebookAdsHealthPivotTable`, `FacebookAdsHealthSettingsModal`). Local state: `metric`, `verdictFilter`, `statusFilter`, `minSpend`, `campaignFilter`, `search`, `settingsOpen`. `campaignOptions` derived from `data.rows` via `useMemo`.
+
+**Client-side filtering (2026-05-27):** `verdict`, `learningStatus`, `minSpend`, and `search` are applied in a `useMemo` over the cached row set — they never reach the server and are excluded from the TanStack `queryKey`. Only `campaign` (data-slice) and `level`/`startDate`/`endDate` (aggregation grain) remain server-side. `filteredAlertCount` is also recomputed client-side from `displayedRows` so the banner reflects what's actually visible in the table.
+
 ## className conventions (2026-05-08)
 
 All admin components use `cn()` from `@/utils/cn` for conditional class composition. The `sweep-classname-template-literals` codemod (Plan 5 Phase 2) converted template-literal `className={`...`}` patterns to `className={cn(...)}` across this domain. When adding new conditional classes, use `cn()` rather than template literals.
