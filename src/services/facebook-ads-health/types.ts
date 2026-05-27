@@ -106,6 +106,10 @@ export interface FacebookAdsHealthSettingsValues {
   zeroConvSpendMultiplier: number;
   roasDropTriggerPct: number;
   postEditWaitHours: number;
+  // Day-over-day spend increase % threshold. Flags spend cells in amber when
+  // exceeded — informational ("notice this scaling event"), not a verdict
+  // input. Default 20.
+  spendIncreaseAlertPct: number;
 }
 
 export const PURCHASE_CAPABLE_OBJECTIVES = new Set<string>([

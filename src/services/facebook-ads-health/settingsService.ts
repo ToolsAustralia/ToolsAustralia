@@ -20,6 +20,7 @@ export async function getOrInitSettings(): Promise<FacebookAdsHealthSettingsValu
     zeroConvSpendMultiplier: doc!.zeroConvSpendMultiplier,
     roasDropTriggerPct: doc!.roasDropTriggerPct,
     postEditWaitHours: doc!.postEditWaitHours,
+    spendIncreaseAlertPct: doc!.spendIncreaseAlertPct ?? 20,
   };
 }
 
@@ -55,5 +56,6 @@ export async function updateSettings(input: UpdateSettingsInput): Promise<Facebo
     zeroConvSpendMultiplier: doc!.zeroConvSpendMultiplier,
     roasDropTriggerPct: doc!.roasDropTriggerPct,
     postEditWaitHours: doc!.postEditWaitHours,
+    spendIncreaseAlertPct: doc!.spendIncreaseAlertPct ?? 20,
   };
 }

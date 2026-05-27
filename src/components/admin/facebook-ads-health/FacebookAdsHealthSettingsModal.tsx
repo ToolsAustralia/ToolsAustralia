@@ -7,12 +7,13 @@ interface Props {
   onClose: () => void;
 }
 
-const FIELDS: Array<{ key: string; label: string; min: number; max: number; step: number }> = [
-  { key: "breakevenRoas", label: "Breakeven ROAS", min: 0, max: 10, step: 0.05 },
+const FIELDS: Array<{ key: string; label: string; min: number; max: number; step: number; hint?: string }> = [
+  { key: "breakevenRoas", label: "Breakeven ROAS", min: 0, max: 10, step: 0.05, hint: "Daily revenue/spend cells turn green at or above this value." },
   { key: "targetCpaAud", label: "Target CPA (AUD)", min: 1, max: 10000, step: 1 },
   { key: "zeroConvSpendMultiplier", label: "Zero-conv spend multiplier", min: 0.5, max: 10, step: 0.1 },
   { key: "roasDropTriggerPct", label: "ROAS-drop trigger %", min: 5, max: 95, step: 1 },
   { key: "postEditWaitHours", label: "Post-edit wait window (hours)", min: 1, max: 168, step: 1 },
+  { key: "spendIncreaseAlertPct", label: "Spend-increase alert %", min: 1, max: 1000, step: 1, hint: "Flags spend cells in amber when day-over-day spend climbs by more than this %." },
 ];
 
 const DEFAULTS: Record<string, number> = {
@@ -21,6 +22,7 @@ const DEFAULTS: Record<string, number> = {
   zeroConvSpendMultiplier: 2.0,
   roasDropTriggerPct: 25,
   postEditWaitHours: 72,
+  spendIncreaseAlertPct: 20,
 };
 
 export function FacebookAdsHealthSettingsModal({ open, onClose }: Props) {
@@ -49,6 +51,7 @@ export function FacebookAdsHealthSettingsModal({ open, onClose }: Props) {
               onChange={(e) => setForm({ ...form, [f.key]: Number(e.target.value) })}
               className="w-full border rounded px-2 py-1 bg-white dark:bg-zinc-800"
             />
+            {f.hint && <span className="block mt-0.5 text-[10px] text-zinc-500 dark:text-zinc-400">{f.hint}</span>}
           </label>
         ))}
         <div className="flex gap-2 justify-end mt-4">

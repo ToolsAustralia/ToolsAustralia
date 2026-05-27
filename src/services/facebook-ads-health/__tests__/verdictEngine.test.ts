@@ -7,6 +7,7 @@ const DEFAULT_SETTINGS: FacebookAdsHealthSettingsValues = {
   zeroConvSpendMultiplier: 2.0,
   roasDropTriggerPct: 25,
   postEditWaitHours: 72,
+  spendIncreaseAlertPct: 20,
 };
 
 function makeRow(overrides: Partial<MetaAdInsightsRow> = {}): MetaAdInsightsRow {

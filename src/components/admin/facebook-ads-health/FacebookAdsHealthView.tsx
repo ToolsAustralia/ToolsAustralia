@@ -69,13 +69,16 @@ export function FacebookAdsHealthView({ startDate, endDate, level }: Props) {
     // selection (you couldn't switch campaigns without clearing first).
   });
 
-  // Settings power the threshold-based cell colouring (ROAS green/red vs
-  // breakeven). Falls back to 1.0 if the settings request is in flight or
-  // failed — sensible default since ROAS >= 1.0 means revenue >= spend.
+  // Settings power the threshold-based cell colouring:
+  //   - ROAS cells green/red vs breakevenRoas
+  //   - Spend cells flagged amber when day-over-day climb > spendIncreaseAlertPct
+  // Both fall back to sane defaults when settings haven't loaded yet.
   // Response shape: { success, settings: FacebookAdsHealthSettingsValues }.
   const { data: settingsData } = useFacebookAdsHealthSettings();
-  const breakevenRoas: number =
-    (settingsData as { settings?: { breakevenRoas?: number } } | undefined)?.settings?.breakevenRoas ?? 1.0;
+  const settingsValues =
+    (settingsData as { settings?: { breakevenRoas?: number; spendIncreaseAlertPct?: number } } | undefined)?.settings;
+  const breakevenRoas: number = settingsValues?.breakevenRoas ?? 1.0;
+  const spendIncreaseAlertPct: number = settingsValues?.spendIncreaseAlertPct ?? 20;
 
   const campaignOptions = useMemo(() => {
     const m = new Map<string, string>();
@@ -164,11 +167,18 @@ export function FacebookAdsHealthView({ startDate, endDate, level }: Props) {
             endDate={endDate}
             level={effectiveLevel}
             breakevenRoas={breakevenRoas}
+            spendIncreaseAlertPct={spendIncreaseAlertPct}
           />
         )}
       </div>
       <div className="md:hidden">
-        <FacebookAdsHealthMobileCards rows={displayedRows} level={effectiveLevel} metric={metric} breakevenRoas={breakevenRoas} />
+        <FacebookAdsHealthMobileCards
+          rows={displayedRows}
+          level={effectiveLevel}
+          metric={metric}
+          breakevenRoas={breakevenRoas}
+          spendIncreaseAlertPct={spendIncreaseAlertPct}
+        />
       </div>
       <FacebookAdsHealthSettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />
     </div>

@@ -18,6 +18,7 @@ const putSchema = z.object({
   zeroConvSpendMultiplier: z.number().min(0.5).max(10).optional(),
   roasDropTriggerPct: z.number().min(5).max(95).optional(),
   postEditWaitHours: z.number().int().min(1).max(168).optional(),
+  spendIncreaseAlertPct: z.number().min(1).max(1000).optional(),
 });
 
 export async function PUT(request: NextRequest) {

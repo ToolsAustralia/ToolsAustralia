@@ -11,6 +11,9 @@ export interface IFacebookAdsHealthSettings extends Document {
   zeroConvSpendMultiplier: number;
   roasDropTriggerPct: number;
   postEditWaitHours: number;
+  // % day-over-day spend increase above which the pivot table flags the
+  // cell in amber. Informational signal — doesn't drive verdicts directly.
+  spendIncreaseAlertPct: number;
   updatedBy?: mongoose.Types.ObjectId;
   updatedAt: Date;
 }
@@ -23,6 +26,7 @@ const FacebookAdsHealthSettingsSchema = new Schema<IFacebookAdsHealthSettings>(
     zeroConvSpendMultiplier: { type: Number, required: true, default: 2.0 },
     roasDropTriggerPct: { type: Number, required: true, default: 25 },
     postEditWaitHours: { type: Number, required: true, default: 72 },
+    spendIncreaseAlertPct: { type: Number, required: true, default: 20 },
     updatedBy: { type: Schema.Types.ObjectId, ref: "User" },
     updatedAt: { type: Date, default: Date.now },
   },
@@ -36,6 +40,7 @@ export const FACEBOOK_ADS_HEALTH_SETTINGS_DEFAULTS = {
   zeroConvSpendMultiplier: 2.0,
   roasDropTriggerPct: 25,
   postEditWaitHours: 72,
+  spendIncreaseAlertPct: 20,
 };
 
 export default mongoose.models.FacebookAdsHealthSettings ||

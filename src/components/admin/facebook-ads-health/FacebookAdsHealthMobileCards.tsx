@@ -12,6 +12,7 @@ interface Props {
   level: "campaign" | "adset" | "ad";
   metric: Metric;
   breakevenRoas: number;
+  spendIncreaseAlertPct: number;
 }
 
 const METRIC_LABEL: Record<Metric, string> = {
@@ -37,7 +38,7 @@ function verdictLabel(verdict: PivotRow["verdict"]): string {
   return verdict[0]!.toUpperCase() + verdict.slice(1);
 }
 
-export function FacebookAdsHealthMobileCards({ rows, level, metric, breakevenRoas }: Props) {
+export function FacebookAdsHealthMobileCards({ rows, level, metric, breakevenRoas, spendIncreaseAlertPct }: Props) {
   const [openId, setOpenId] = useState<string | null>(null);
   const openRow = openId ? rows.find((r) => r.id === openId) ?? null : null;
 
@@ -103,15 +104,19 @@ export function FacebookAdsHealthMobileCards({ rows, level, metric, breakevenRoa
               </a>
             </div>
             <div className="grid grid-cols-7 gap-1 mb-2">
-              {row.daily.slice(-7).map((d) => {
-                const v = metricValue(d, metric);
-                // Threshold-based tone — see PivotTable's cellTone() for rules.
-                return (
-                  <div key={d.date} className={`rounded text-center py-1 text-[10px] font-mono font-semibold ${toneClass(cellTone(metric, d, breakevenRoas)) || "bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300"}`}>
-                    {formatCell(v, metric)}
-                  </div>
-                );
-              })}
+              {(() => {
+                const last7 = row.daily.slice(-7);
+                return last7.map((d, idx) => {
+                  const v = metricValue(d, metric);
+                  // Day-over-day prevCell for spend metric flag; harmless for others.
+                  const prev = idx > 0 ? last7[idx - 1] : undefined;
+                  return (
+                    <div key={d.date} className={`rounded text-center py-1 text-[10px] font-mono font-semibold ${toneClass(cellTone(metric, d, prev, breakevenRoas, spendIncreaseAlertPct)) || "bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300"}`}>
+                      {formatCell(v, metric)}
+                    </div>
+                  );
+                });
+              })()}
             </div>
             <div className="grid grid-cols-7 gap-1 mb-2">
               {row.daily.slice(-7).map((d) => (

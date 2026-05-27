@@ -68,21 +68,29 @@ export function heatClass(value: number, max: number): string {
  * something that actually answers "is this day good or bad?".
  *
  *  - conversions: ≥ 7/day is on pace for Meta's 50-events-per-week learning
- *                 threshold (50 / 7 ≈ 7). 0 conv = bad. 1-6 = neutral (slow
- *                 but not dead).
+ *                 threshold (50 / 7 ≈ 7). 0 conv = bad. 1-6 = neutral.
  *  - revenue:     profitable day if revenue > spend. Loss if revenue < spend
  *                 AND spend > 0. No spend = no judgement.
  *  - roas:        green at or above the team's configured breakeven; red below
  *                 (with spend > 0). Default 1.0 if settings haven't loaded.
- *  - spend / link clicks / link CTR / cost-per-LC: no clear good/bad threshold
- *                 without per-industry benchmarks — leave neutral so the
- *                 numbers speak for themselves rather than mislead with colour.
+ *  - spend:       amber WARN if day-over-day increase exceeds the configured
+ *                 spendIncreaseAlertPct (default 20). Informational — flags
+ *                 scaling events you may want to scrutinise, not a verdict.
+ *                 First day in window has no comparison so it stays neutral.
+ *  - link clicks / link CTR / cost-per-LC: no clear good/bad threshold without
+ *                 per-industry benchmarks — neutral so numbers speak for themselves.
  *
  * If you want to colour CTR or CPC in the future, add their thresholds to
- * FacebookAdsHealthSettings (mirror breakevenRoas) and extend cases here.
+ * FacebookAdsHealthSettings (mirror spendIncreaseAlertPct) and extend cases here.
  */
-export type CellTone = "good" | "bad" | "neutral";
-export function cellTone(metric: Metric, cell: DailyCell, breakevenRoas: number): CellTone {
+export type CellTone = "good" | "bad" | "warn" | "neutral";
+export function cellTone(
+  metric: Metric,
+  cell: DailyCell,
+  prevCell: DailyCell | undefined,
+  breakevenRoas: number,
+  spendIncreaseAlertPct: number,
+): CellTone {
   switch (metric) {
     case "conversions":
       if (cell.conversions >= 7) return "good";
@@ -94,7 +102,11 @@ export function cellTone(metric: Metric, cell: DailyCell, breakevenRoas: number)
     case "roas":
       if (cell.spendCents === 0) return "neutral";
       return cell.roas >= breakevenRoas ? "good" : "bad";
-    case "spend":
+    case "spend": {
+      if (!prevCell || prevCell.spendCents === 0) return "neutral";
+      const pct = ((cell.spendCents - prevCell.spendCents) / prevCell.spendCents) * 100;
+      return pct > spendIncreaseAlertPct ? "warn" : "neutral";
+    }
     case "linkClicks":
     case "linkCtr":
     case "costPerLinkClick":
@@ -105,6 +117,7 @@ export function cellTone(metric: Metric, cell: DailyCell, breakevenRoas: number)
 export function toneClass(tone: CellTone): string {
   if (tone === "good") return "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200";
   if (tone === "bad") return "bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-200";
+  if (tone === "warn") return "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200";
   return "";
 }
 
@@ -152,9 +165,10 @@ interface Props {
   endDate: string;
   level: "campaign" | "adset" | "ad";
   breakevenRoas: number;
+  spendIncreaseAlertPct: number;
 }
 
-export function FacebookAdsHealthPivotTable({ rows, metric, startDate, endDate, level, breakevenRoas }: Props) {
+export function FacebookAdsHealthPivotTable({ rows, metric, startDate, endDate, level, breakevenRoas, spendIncreaseAlertPct }: Props) {
   const [hover, setHover] = useState<{ id: string; rect: DOMRect } | null>(null);
   // Grace-period close timer so the cursor can transit from the trigger chip
   // into the tooltip body without the tooltip vanishing mid-hop. Entering
@@ -328,7 +342,7 @@ export function FacebookAdsHealthPivotTable({ rows, metric, startDate, endDate, 
             {level === "ad" && row.adsetName ? <span>{row.adsetName}</span> : <span>{row.campaignName}</span>}
           </div>
         </td>
-        {dates.map((date) => {
+        {dates.map((date, dateIdx) => {
           const cell = rowDaily.get(date);
           if (!cell) {
             return (
@@ -336,10 +350,13 @@ export function FacebookAdsHealthPivotTable({ rows, metric, startDate, endDate, 
             );
           }
           const v = metricValue(cell, metric);
-          // Threshold-based tone (green/red/neutral) replaces the legacy relative-
-          // intensity heatmap — see cellTone() doc for rules per metric.
+          // Spend metric uses day-over-day comparison to flag scaling events,
+          // so pull the prior visible date's cell (if any). Other metrics don't
+          // use prevCell — passing undefined is safe.
+          const prevDate = dateIdx > 0 ? dates[dateIdx - 1] : undefined;
+          const prevCell = prevDate ? rowDaily.get(prevDate) : undefined;
           return (
-            <td key={date} className={`text-center font-mono font-semibold text-[11px] ${toneClass(cellTone(metric, cell, breakevenRoas))}`}>
+            <td key={date} className={`text-center font-mono font-semibold text-[11px] ${toneClass(cellTone(metric, cell, prevCell, breakevenRoas, spendIncreaseAlertPct))}`}>
               {formatCell(v, metric)}
             </td>
           );
@@ -393,7 +410,7 @@ export function FacebookAdsHealthPivotTable({ rows, metric, startDate, endDate, 
             {dates.map((date) => (
               <th
                 key={date}
-                className="sticky z-20 text-center px-2 py-2 text-[10px] font-semibold uppercase tracking-wider text-zinc-500 border-b border-zinc-200 dark:border-zinc-700 min-w-[56px] bg-zinc-50 dark:bg-zinc-800"
+                className="sticky z-[25] text-center px-2 py-2 text-[10px] font-semibold uppercase tracking-wider text-zinc-500 border-b border-zinc-200 dark:border-zinc-700 min-w-[56px] bg-zinc-50 dark:bg-zinc-800"
                 style={{ top: "calc(var(--fb-toolbar-h, 60px) + var(--fb-filter-h, 60px))" }}
               >
                 <div className="font-normal text-[9px] text-zinc-400">{new Date(date + "T12:00:00Z").toLocaleDateString("en-AU", { weekday: "short" })}</div>
@@ -401,19 +418,19 @@ export function FacebookAdsHealthPivotTable({ rows, metric, startDate, endDate, 
               </th>
             ))}
             <th
-              className="sticky z-20 text-center px-2 py-2 text-[10px] font-semibold uppercase tracking-wider text-zinc-500 border-b border-zinc-200 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-800"
+              className="sticky z-[25] text-center px-2 py-2 text-[10px] font-semibold uppercase tracking-wider text-zinc-500 border-b border-zinc-200 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-800"
               style={{ top: "calc(var(--fb-toolbar-h, 60px) + var(--fb-filter-h, 60px))" }}
             >
               Total
             </th>
             <th
-              className="sticky z-20 text-center px-2 py-2 text-[10px] font-semibold uppercase tracking-wider text-zinc-500 border-b border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800"
+              className="sticky z-[25] text-center px-2 py-2 text-[10px] font-semibold uppercase tracking-wider text-zinc-500 border-b border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800"
               style={{ top: "calc(var(--fb-toolbar-h, 60px) + var(--fb-filter-h, 60px))" }}
             >
               Verdict
             </th>
             <th
-              className="sticky z-20 border-b border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800"
+              className="sticky z-[25] border-b border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800"
               style={{ top: "calc(var(--fb-toolbar-h, 60px) + var(--fb-filter-h, 60px))" }}
             ></th>
           </tr>
