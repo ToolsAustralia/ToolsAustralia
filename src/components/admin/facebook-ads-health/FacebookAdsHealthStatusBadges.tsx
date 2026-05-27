@@ -33,7 +33,27 @@ export type EffectiveStatusUi =
   | "ADSET_PAUSED"
   | "IN_PROCESS"
   | "WITH_ISSUES"
+  // Derived in the aggregator — match Meta UI's "Delivery" column for
+  // adsets that finished or stopped delivering despite being ACTIVE.
+  | "COMPLETED"
+  | "ADS_INACTIVE"
   | "UNKNOWN";
+
+// Delivery states where Meta itself stops tracking learning data because the
+// adset isn't actually delivering. Suppress the Learning pill in these cases
+// so the UI doesn't claim "Learning Limited" for an adset that's just done.
+const NON_DELIVERING_STATES: ReadonlySet<EffectiveStatusUi> = new Set<EffectiveStatusUi>([
+  "COMPLETED",
+  "ADS_INACTIVE",
+  "PAUSED",
+  "ADSET_PAUSED",
+  "CAMPAIGN_PAUSED",
+  "ARCHIVED",
+  "DELETED",
+]);
+export function deliveryIsActive(status: EffectiveStatusUi): boolean {
+  return !NON_DELIVERING_STATES.has(status);
+}
 
 export type LearningBucketUi = "Active" | "Learning" | "LearningLimited" | "Unknown";
 
@@ -116,6 +136,18 @@ function liveSpec(status: EffectiveStatusUi): LivePillSpec | null {
         label: "Billing",
         className: "bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-200",
         title: "Awaiting billing info before delivery resumes",
+      };
+    case "COMPLETED":
+      return {
+        label: "Completed",
+        className: "bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300",
+        title: "Completed — adset finished its scheduled run or exhausted its lifetime budget",
+      };
+    case "ADS_INACTIVE":
+      return {
+        label: "Ads inactive",
+        className: "bg-zinc-200 text-zinc-700 dark:bg-zinc-700 dark:text-zinc-200",
+        title: "Ads inactive — adset is on but no child ads are delivering (no spend in last 7 days)",
       };
     case "UNKNOWN":
       return null;

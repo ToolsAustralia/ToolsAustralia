@@ -56,6 +56,10 @@ type NormalisedRow = {
   // Ads Manager's Learning Phase Progress card exactly.
   learningStageConversions: number | null;
   learningStageLastSigEditTs: Date | null;
+  // Used by the aggregator to derive COMPLETED / ADS_INACTIVE delivery states.
+  endTime: Date | null;
+  budgetRemainingCents: number | null;
+  lifetimeBudgetCentsForCheck: number | null;
 };
 
 /**
@@ -67,7 +71,7 @@ type NormalisedRow = {
  */
 function mongoToNormalised(
   doc: IMetaAdInsightsDaily,
-  metadataByAdsetId: Map<string, { effectiveStatus: EffectiveStatusBucket; learningStatus: "LEARNING" | "SUCCESS" | "FAIL" | null; createdTime: Date | null; learningStageConversions: number | null; learningStageLastSigEditTs: Date | null }>,
+  metadataByAdsetId: Map<string, { effectiveStatus: EffectiveStatusBucket; learningStatus: "LEARNING" | "SUCCESS" | "FAIL" | null; createdTime: Date | null; learningStageConversions: number | null; learningStageLastSigEditTs: Date | null; endTime: Date | null; budgetRemainingCents: number | null; lifetimeBudgetCents: number | null }>,
 ): NormalisedRow {
   // Prefer LIVE metadata over Mongo snapshot for both effectiveStatus and
   // learningStatus. The Mongo value is captured at sync time and goes stale
@@ -99,6 +103,9 @@ function mongoToNormalised(
     createdTime: meta?.createdTime ?? null,
     learningStageConversions: meta?.learningStageConversions ?? null,
     learningStageLastSigEditTs: meta?.learningStageLastSigEditTs ?? null,
+    endTime: meta?.endTime ?? null,
+    budgetRemainingCents: meta?.budgetRemainingCents ?? null,
+    lifetimeBudgetCentsForCheck: meta?.lifetimeBudgetCents ?? null,
   };
 }
 
@@ -108,7 +115,7 @@ function mongoToNormalised(
  */
 function rawToNormalised(
   raw: Parameters<typeof processInsightData>[0],
-  metadataByAdsetId: Map<string, { dailyBudgetCents: number | null; lifetimeBudgetCents: number | null; campaignObjective: string | null; learningStatus: "LEARNING" | "SUCCESS" | "FAIL" | null; effectiveStatus: EffectiveStatusBucket; lastSignificantEdit: Date | null; createdTime: Date | null; learningStageConversions: number | null; learningStageLastSigEditTs: Date | null }>,
+  metadataByAdsetId: Map<string, { dailyBudgetCents: number | null; lifetimeBudgetCents: number | null; campaignObjective: string | null; learningStatus: "LEARNING" | "SUCCESS" | "FAIL" | null; effectiveStatus: EffectiveStatusBucket; lastSignificantEdit: Date | null; createdTime: Date | null; learningStageConversions: number | null; learningStageLastSigEditTs: Date | null; endTime: Date | null; budgetRemainingCents: number | null }>,
   adAccountId: string,
 ): NormalisedRow | null {
   const date = raw.date_start;
@@ -140,6 +147,9 @@ function rawToNormalised(
     createdTime: meta?.createdTime ?? null,
     learningStageConversions: meta?.learningStageConversions ?? null,
     learningStageLastSigEditTs: meta?.learningStageLastSigEditTs ?? null,
+    endTime: meta?.endTime ?? null,
+    budgetRemainingCents: meta?.budgetRemainingCents ?? null,
+    lifetimeBudgetCentsForCheck: meta?.lifetimeBudgetCents ?? null,
   };
 }
 
@@ -391,11 +401,39 @@ export async function aggregateInsights(input: AggregatorInput): Promise<MetaAdI
     // effectiveStatus represents whether the adset is currently delivering.
     // At campaign level the rolled-up row covers many adsets — picking
     // first.effectiveStatus would be misleading (different adsets can be in
-    // different states). Force "UNKNOWN" so the UI hides the pill. Same
-    // reasoning for learningStatusBucket — picking first.learningStatus from
-    // an arbitrary ad in the campaign would surface a meaningless value.
-    const effectiveStatus: EffectiveStatusBucket =
-      input.level === "campaign" ? "UNKNOWN" : first.effectiveStatus;
+    // different states). Force "UNKNOWN" so the UI hides the pill.
+    //
+    // For adset/ad level we DERIVE two extra delivery states beyond what
+    // Meta's raw effective_status returns, to match Meta UI's Delivery column:
+    //   COMPLETED     — adset reached end_time, OR exhausted lifetime budget.
+    //   ADS_INACTIVE  — adset is configured ACTIVE but no spend in trailing 7d
+    //                   (signal that all child ads are paused / inactive).
+    // Precedence: raw non-ACTIVE > COMPLETED > ADS_INACTIVE > ACTIVE.
+    function deriveEffectiveStatus(): EffectiveStatusBucket {
+      if (input.level === "campaign") return "UNKNOWN";
+      const raw = first.effectiveStatus;
+      if (raw !== "ACTIVE") return raw;
+      // raw === ACTIVE — check derived states.
+      if (latest?.endTime && latest.endTime.getTime() < now.getTime()) {
+        return "COMPLETED";
+      }
+      // Lifetime budget exhausted (budget_remaining <= ~$1 of the lifetime
+      // budget). Daily budgets refill every day so we only apply this check
+      // when a lifetime budget was configured.
+      const hasLifetime = (latest?.lifetimeBudgetCentsForCheck ?? 0) > 0;
+      const remaining = latest?.budgetRemainingCents ?? null;
+      if (hasLifetime && remaining !== null && remaining <= 100) {
+        return "COMPLETED";
+      }
+      // Trailing-7d spend is the proxy for "is anything actually delivering?".
+      // 0 spend over a full week while configured ACTIVE matches Meta UI's
+      // "Ads inactive" badge (all child ads paused or otherwise not running).
+      if (last7.spendCents === 0) {
+        return "ADS_INACTIVE";
+      }
+      return "ACTIVE";
+    }
+    const effectiveStatus: EffectiveStatusBucket = deriveEffectiveStatus();
 
     // Learning bucket computation, in priority order:
     //   1. Meta's own learning_stage_info if Meta is currently populating it

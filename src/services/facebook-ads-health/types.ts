@@ -23,6 +23,10 @@ export type EffectiveStatusBucket =
   | "ADSET_PAUSED"
   | "IN_PROCESS"
   | "WITH_ISSUES"
+  // Derived in the aggregator from end_time / budget_remaining and recent-spend
+  // signals — match Meta UI's "Delivery" column for these two states.
+  | "COMPLETED"
+  | "ADS_INACTIVE"
   | "UNKNOWN";
 
 /**

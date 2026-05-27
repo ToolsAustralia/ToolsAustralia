@@ -2,7 +2,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { ChevronDown, ChevronRight, ExternalLink } from "lucide-react";
 import { FacebookAdsHealthVerdictTooltip } from "./FacebookAdsHealthVerdictTooltip";
-import { LearningStatusPill, LiveStatusPill, type EffectiveStatusUi } from "./FacebookAdsHealthStatusBadges";
+import { LearningStatusPill, LiveStatusPill, deliveryIsActive, type EffectiveStatusUi } from "./FacebookAdsHealthStatusBadges";
 
 export type Metric = "spend" | "conversions" | "revenue" | "roas" | "linkClicks" | "linkCtr" | "costPerLinkClick";
 
@@ -346,7 +346,7 @@ export function FacebookAdsHealthPivotTable({ rows, metric, startDate, endDate, 
                 misleading — suppress here, the aggregator also forces them to
                 UNKNOWN as a defense in depth. */}
             {level !== "campaign" && <LiveStatusPill status={row.effectiveStatus} />}
-            {level !== "campaign" && (
+            {level !== "campaign" && deliveryIsActive(row.effectiveStatus) && (
               <LearningStatusPill
                 status={row.learningStatus}
                 conversionsSinceLastSignificantEdit={row.conversionsSinceLastSignificantEdit}

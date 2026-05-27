@@ -7,6 +7,13 @@
 // effective_status reflects whether the adset is actually delivering. ACTIVE means
 // the adset itself is running; CAMPAIGN_PAUSED / ADSET_PAUSED means a parent is paused;
 // PAUSED means the adset is manually paused. Anything other than ACTIVE → not spending.
+// Meta's raw effective_status values + two we DERIVE from other signals so
+// our Live pill matches the "Delivery" column shown in Meta Ads Manager:
+//   COMPLETED     — adset reached end_time, exhausted lifetime budget, or
+//                   campaign budget cap — Meta UI's "Completed" state.
+//   ADS_INACTIVE  — adset is ACTIVE but no child ads are delivering (signal:
+//                   zero spend in trailing 7d). Matches Meta UI's "Ads
+//                   inactive" badge for this exact case.
 export type EffectiveStatus =
   | "ACTIVE"
   | "PAUSED"
@@ -20,6 +27,8 @@ export type EffectiveStatus =
   | "ADSET_PAUSED"
   | "IN_PROCESS"
   | "WITH_ISSUES"
+  | "COMPLETED"
+  | "ADS_INACTIVE"
   | "UNKNOWN";
 
 export interface AdsetMetadata {
@@ -28,6 +37,12 @@ export interface AdsetMetadata {
   campaignObjective: string | null;
   dailyBudgetCents: number | null;
   lifetimeBudgetCents: number | null;
+  // Remaining budget cents (for lifetime budgets) — when 0 with a lifetime
+  // budget configured, Meta marks the adset Completed.
+  budgetRemainingCents: number | null;
+  // Adset schedule end timestamp — when in the past, Meta marks the adset
+  // Completed.
+  endTime: Date | null;
   learningStatus: "LEARNING" | "SUCCESS" | "FAIL" | null;
   // Meta's authoritative count toward the 50-event learning threshold. Populated
   // only when Meta exposes learning_stage_info — usually for adsets recently in
@@ -49,6 +64,8 @@ type MetaAdsetApiResponse = {
     id: string;
     daily_budget?: string;
     lifetime_budget?: string;
+    budget_remaining?: string;
+    end_time?: string;
     effective_status?: string;
     learning_stage_info?: { status?: string; conversions?: number; last_sig_edit_ts?: number };
     // last_significant_edit shape varies in Meta's API. Documented as { time }
@@ -98,6 +115,8 @@ function parseEditTimestamp(raw: unknown): Date | null {
   return null;
 }
 
+// Only Meta's RAW values — COMPLETED/ADS_INACTIVE are derived later in the
+// aggregator and shouldn't pass through normaliseEffectiveStatus.
 const KNOWN_EFFECTIVE_STATUSES: ReadonlySet<EffectiveStatus> = new Set([
   "ACTIVE", "PAUSED", "DELETED", "PENDING_REVIEW", "DISAPPROVED", "PREAPPROVED",
   "PENDING_BILLING_INFO", "CAMPAIGN_PAUSED", "ARCHIVED", "ADSET_PAUSED",
@@ -122,6 +141,9 @@ export async function fetchAdsetMetadata(
     "id",
     "daily_budget",
     "lifetime_budget",
+    // budget_remaining + end_time drive the "Completed" delivery state.
+    "budget_remaining",
+    "end_time",
     "effective_status",
     "learning_stage_info{status,attribution_windows,conversions,last_sig_edit_ts}",
     "last_significant_edit",
@@ -168,6 +190,8 @@ export async function fetchAdsetMetadata(
         campaignObjective: item.campaign?.objective ?? null,
         dailyBudgetCents: item.daily_budget ? parseInt(item.daily_budget, 10) : null,
         lifetimeBudgetCents: item.lifetime_budget ? parseInt(item.lifetime_budget, 10) : null,
+        budgetRemainingCents: item.budget_remaining ? parseInt(item.budget_remaining, 10) : null,
+        endTime: item.end_time ? new Date(item.end_time) : null,
         learningStatus:
           status === "LEARNING" || status === "SUCCESS" || status === "FAIL" ? status : null,
         learningStageConversions:
