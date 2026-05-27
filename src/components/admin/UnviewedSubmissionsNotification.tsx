@@ -48,21 +48,21 @@ export default function UnviewedSubmissionsNotification({
 
   return (
     <div className="fixed bottom-4 right-4 z-50 sm:bottom-6 sm:right-6">
-      <div className="bg-white rounded-xl shadow-2xl border-2 border-red-200 max-w-sm overflow-hidden">
+      <div className="bg-white dark:bg-neutral-900 rounded-xl shadow-2xl dark:shadow-[0_24px_48px_rgba(0,0,0,0.5)] border-2 border-red-200 dark:border-red-800/60 max-w-sm overflow-hidden">
         <div className="p-4">
           <div className="flex items-start justify-between gap-3">
             <div className="flex-1 min-w-0">
-              <h4 className="font-semibold text-gray-900 mb-2">Unviewed submissions</h4>
+              <h4 className="font-semibold text-gray-900 dark:text-white mb-2">Unviewed submissions</h4>
               <div className="space-y-1.5 text-sm text-gray-600 dark:text-neutral-400">
                 {counts.partner > 0 && (
                   <div className="flex items-center gap-2">
-                    <Building className="w-4 h-4 text-red-600 flex-shrink-0" />
+                    <Building className="w-4 h-4 text-red-600 dark:text-red-400 flex-shrink-0" />
                     <span>{counts.partner} unread partner application{counts.partner !== 1 ? "s" : ""}</span>
                   </div>
                 )}
                 {counts.contact > 0 && (
                   <div className="flex items-center gap-2">
-                    <MessageSquare className="w-4 h-4 text-red-600 flex-shrink-0" />
+                    <MessageSquare className="w-4 h-4 text-red-600 dark:text-red-400 flex-shrink-0" />
                     <span>{counts.contact} unread contact submission{counts.contact !== 1 ? "s" : ""}</span>
                   </div>
                 )}

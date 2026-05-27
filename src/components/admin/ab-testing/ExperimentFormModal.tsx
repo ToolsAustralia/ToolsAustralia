@@ -12,7 +12,13 @@ import {
   FormSection,
   Checkbox,
 } from "@/components/modals/ui";
-import { useCreateExperiment, CreateExperimentPayload, StoppingRules } from "@/hooks/queries/useABTestingQueries";
+import {
+  useCreateExperiment,
+  useUpdateExperiment,
+  CreateExperimentPayload,
+  StoppingRules,
+  Experiment,
+} from "@/hooks/queries/useABTestingQueries";
 import { listPrizes } from "@/config/prizes";
 import DateRangeCalendar from "@/components/admin/DateRangeCalendar";
 import { createAESTDateAsUTC } from "@/utils/common/timezone";
@@ -21,13 +27,20 @@ interface ExperimentFormModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSuccess: () => void;
+  /** When provided, the modal is in EDIT mode for this experiment.
+   *  Locked statuses (active, ended) are not editable — caller should not pass
+   *  an active/ended experiment here. */
+  experiment?: Experiment;
 }
 
 /**
  * Experiment Form Modal
- * Create new A/B testing experiment using existing modal template
+ * Create or edit an A/B testing experiment. Mode is chosen by `experiment` prop:
+ *   - undefined → CREATE mode (POST /api/admin/ab-testing/experiments)
+ *   - provided  → EDIT mode   (PATCH /api/admin/ab-testing/experiments/[id])
  */
-export default function ExperimentFormModal({ isOpen, onClose, onSuccess }: ExperimentFormModalProps) {
+export default function ExperimentFormModal({ isOpen, onClose, onSuccess, experiment }: ExperimentFormModalProps) {
+  const isEditMode = !!experiment;
   const [formData, setFormData] = useState<CreateExperimentPayload & { status: string }>({
     name: "",
     status: "draft",
@@ -46,26 +59,44 @@ export default function ExperimentFormModal({ isOpen, onClose, onSuccess }: Expe
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const createMutation = useCreateExperiment();
+  const updateMutation = useUpdateExperiment();
   const prizes = listPrizes();
 
-  // Reset form when modal opens
+  // Reset / hydrate form when modal opens. In edit mode, populate from the
+  // passed experiment so the user is editing existing values, not a blank form.
   useEffect(() => {
-    if (isOpen) {
+    if (!isOpen) return;
+    if (isEditMode && experiment) {
       setFormData({
-        name: "",
-        status: "draft",
-        slugTargets: [],
-        startDate: "",
-        endDate: "",
+        name: experiment.name,
+        status: experiment.status,
+        slugTargets: experiment.slugTargets,
+        startDate: experiment.startDate ?? "",
+        endDate: experiment.endDate ?? "",
       });
-      setSelectedSlugs([]);
-      setSelectAll(false);
-      setStartDate(null);
-      setEndDate(null);
-      setStoppingRules({ autoEndEnabled: false });
+      const hasWildcard = experiment.slugTargets.includes("*");
+      setSelectAll(hasWildcard);
+      setSelectedSlugs(hasWildcard ? [] : experiment.slugTargets);
+      setStartDate(experiment.startDate ? new Date(experiment.startDate) : null);
+      setEndDate(experiment.endDate ? new Date(experiment.endDate) : null);
+      setStoppingRules(experiment.stoppingRules ?? { autoEndEnabled: false });
       setErrors({});
+      return;
     }
-  }, [isOpen]);
+    setFormData({
+      name: "",
+      status: "draft",
+      slugTargets: [],
+      startDate: "",
+      endDate: "",
+    });
+    setSelectedSlugs([]);
+    setSelectAll(false);
+    setStartDate(null);
+    setEndDate(null);
+    setStoppingRules({ autoEndEnabled: false });
+    setErrors({});
+  }, [isOpen, isEditMode, experiment]);
 
   // Convert Date objects to ISO strings for API
   const convertDateToISO = (date: Date | null): string | undefined => {
@@ -103,17 +134,27 @@ export default function ExperimentFormModal({ isOpen, onClose, onSuccess }: Expe
     setIsSubmitting(true);
 
     try {
-      await createMutation.mutateAsync({
+      const payload = {
         ...formData,
         slugTargets: selectAll ? ["*"] : selectedSlugs.length > 0 ? selectedSlugs : [],
         startDate: convertDateToISO(startDate) || undefined,
         endDate: convertDateToISO(endDate) || undefined,
         stoppingRules: stoppingRules.autoEndEnabled ? stoppingRules : undefined,
-      });
+      };
+      if (isEditMode && experiment) {
+        await updateMutation.mutateAsync({ experimentId: experiment._id, payload });
+      } else {
+        await createMutation.mutateAsync(payload);
+      }
       onSuccess();
     } catch (error) {
       setErrors({
-        submit: error instanceof Error ? error.message : "Failed to create experiment",
+        submit:
+          error instanceof Error
+            ? error.message
+            : isEditMode
+              ? "Failed to update experiment"
+              : "Failed to create experiment",
       });
     } finally {
       setIsSubmitting(false);
@@ -157,8 +198,12 @@ export default function ExperimentFormModal({ isOpen, onClose, onSuccess }: Expe
   return (
     <ModalContainer isOpen={isOpen} onClose={handleClose} size="2xl">
       <ModalHeader
-        title="Create A/B Testing Experiment"
-        subtitle="Set up a new experiment to test different variants of your promotion pages"
+        title={isEditMode ? "Edit A/B Testing Experiment" : "Create A/B Testing Experiment"}
+        subtitle={
+          isEditMode
+            ? "Update the experiment's targets, schedule, or stopping rules. Variants are edited from the experiment detail view."
+            : "Set up a new experiment to test different variants of your promotion pages"
+        }
         onClose={handleClose}
         showLogo={false}
       />
@@ -406,8 +451,10 @@ export default function ExperimentFormModal({ isOpen, onClose, onSuccess }: Expe
               {isSubmitting ? (
                 <>
                   <Loader2 className="w-4 h-4 animate-spin mr-2" />
-                  Creating...
+                  {isEditMode ? "Saving..." : "Creating..."}
                 </>
+              ) : isEditMode ? (
+                "Save Changes"
               ) : (
                 "Create Experiment"
               )}

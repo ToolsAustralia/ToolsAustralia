@@ -7,6 +7,7 @@ import CancellationFlowEvent, {
   type OfferType,
   type ICancellationFlowEvent,
 } from "@/models/CancellationFlowEvent";
+import User from "@/models/User";
 
 const ONE_HOUR_MS = 60 * 60 * 1000;
 const NINETY_DAYS_MS = 90 * 24 * 60 * 60 * 1000;
@@ -30,6 +31,37 @@ export interface OtherReasonEntry {
   /** ISO string (Date is serialized over the wire by NextResponse.json). */
   startedAt: string;
   outcome: "in_progress" | "saved" | "cancelled";
+  /** User who submitted the free-text reason. May be absent for legacy events. */
+  userId?: string;
+  userEmail?: string;
+  userFirstName?: string;
+  userLastName?: string;
+}
+
+/**
+ * One user-level row for the "Reason × outcome" drill-down modal. Each row
+ * corresponds to a single CancellationFlowEvent (a user may appear more than
+ * once if they entered the flow multiple times in the window).
+ */
+export interface ReasonUserRow {
+  eventId: string;
+  userId?: string;
+  userEmail?: string;
+  userFirstName?: string;
+  userLastName?: string;
+  /** ISO string. */
+  startedAt: string;
+  outcome: "in_progress" | "saved" | "cancelled";
+  /** Only set when reason === "other". Trimmed; absent if blank. */
+  reasonText?: string;
+  /** When the user accepted an offer (saved outcome). */
+  offerAccepted?: OfferType | null;
+}
+
+export interface ReasonUsersResult {
+  rows: ReasonUserRow[];
+  /** Total before paging — surfaced for the modal subtitle. */
+  totalCount: number;
 }
 
 export interface CancellationFunnel {
@@ -153,6 +185,7 @@ export function summarizeCancellationEvents(
           : new Date(ev.startedAt as unknown as string)
         ).toISOString(),
         outcome: ev.outcome,
+        userId: ev.userId ? String(ev.userId) : undefined,
       });
     }
 
@@ -270,5 +303,113 @@ export async function getCancellationFlowAnalytics(
     .lean()
     .exec()) as unknown as ICancellationFlowEvent[];
 
-  return summarizeCancellationEvents(events, now);
+  const summary = summarizeCancellationEvents(events, now);
+
+  // Hydrate user details for the "Other" free-text entries so admins can
+  // open the User Detail modal directly from the table.
+  const userIds = Array.from(
+    new Set(summary.otherReasonTexts.map((e) => e.userId).filter((v): v is string => !!v))
+  );
+  if (userIds.length > 0) {
+    const users = await User.find({ _id: { $in: userIds } })
+      .select({ email: 1, firstName: 1, lastName: 1 })
+      .lean();
+    const userMap = new Map(users.map((u) => [String(u._id), u]));
+    summary.otherReasonTexts = summary.otherReasonTexts.map((entry) => {
+      if (!entry.userId) return entry;
+      const u = userMap.get(entry.userId);
+      if (!u) return entry;
+      return {
+        ...entry,
+        userEmail: u.email ?? undefined,
+        userFirstName: u.firstName ?? undefined,
+        userLastName: u.lastName ?? undefined,
+      };
+    });
+  }
+
+  return summary;
+}
+
+export interface CancellationFlowUsersByReasonParams {
+  reason: CancellationReason;
+  /** When provided, restrict to events with this outcome. */
+  outcome?: "in_progress" | "saved" | "cancelled";
+  from?: Date;
+  to?: Date;
+  page?: number;
+  limit?: number;
+}
+
+/**
+ * Returns paginated user-level rows for a single reason, optionally filtered
+ * by outcome. Powers the "Reason × outcome" drill-down modal.
+ */
+export async function getCancellationFlowUsersByReason(
+  params: CancellationFlowUsersByReasonParams
+): Promise<ReasonUsersResult> {
+  await connectDB();
+
+  const now = new Date();
+  const page = Math.max(1, params.page ?? 1);
+  const limit = Math.min(100, Math.max(1, params.limit ?? 20));
+
+  const filter: FilterQuery<ICancellationFlowEvent> = {
+    reason: params.reason,
+    startedAt: {
+      $gte: params.from ?? new Date((params.to ?? now).getTime() - NINETY_DAYS_MS),
+    },
+  };
+  if (params.to) {
+    (filter.startedAt as { $lt?: Date }).$lt = params.to;
+  }
+  if (params.outcome) {
+    filter.outcome = params.outcome;
+  }
+
+  const [totalCount, events] = await Promise.all([
+    CancellationFlowEvent.countDocuments(filter),
+    CancellationFlowEvent.find(filter)
+      .sort({ startedAt: -1 })
+      .skip((page - 1) * limit)
+      .limit(limit)
+      .lean()
+      .exec() as unknown as Promise<ICancellationFlowEvent[]>,
+  ]);
+
+  const userIds = Array.from(
+    new Set(events.map((e) => (e.userId ? String(e.userId) : null)).filter((v): v is string => !!v))
+  );
+
+  const users =
+    userIds.length > 0
+      ? await User.find({ _id: { $in: userIds } })
+          .select({ email: 1, firstName: 1, lastName: 1 })
+          .lean()
+      : [];
+  const userMap = new Map(users.map((u) => [String(u._id), u]));
+
+  const rows: ReasonUserRow[] = events.map((ev) => {
+    const userIdStr = ev.userId ? String(ev.userId) : undefined;
+    const u = userIdStr ? userMap.get(userIdStr) : undefined;
+    return {
+      eventId: String((ev as ICancellationFlowEvent & { _id: unknown })._id),
+      userId: userIdStr,
+      userEmail: u?.email ?? undefined,
+      userFirstName: u?.firstName ?? undefined,
+      userLastName: u?.lastName ?? undefined,
+      startedAt: (ev.startedAt instanceof Date
+        ? ev.startedAt
+        : new Date(ev.startedAt as unknown as string)
+      ).toISOString(),
+      outcome: ev.outcome,
+      reasonText:
+        ev.reason === "other" && typeof ev.reasonText === "string" && ev.reasonText.trim().length > 0
+          ? ev.reasonText.trim()
+          : undefined,
+      offerAccepted: ev.offerAccepted ?? null,
+    };
+  });
+
+  return { rows, totalCount };
 }

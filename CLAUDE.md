@@ -188,7 +188,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
 ```json
 {
   "version": 1,
-  "lastModified": "2026-05-14",
+  "lastModified": "2026-05-27",
   "domains": {
     "subscription": {
       "docs": "docs/subscription/",
@@ -490,10 +490,13 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/utils/meta/**",
         "src/utils/utm/**",
         "src/services/meta/**",
+        "src/services/facebook-ads-health/**",
         "src/models/MetaAdDestination.ts",
         "src/models/MetaAdInsightsDaily.ts",
         "src/models/TikTokAdInsightsDaily.ts",
         "src/models/SnapchatAdInsightsDaily.ts",
+        "src/models/FacebookAdsHealthSnooze.ts",
+        "src/models/FacebookAdsHealthSettings.ts",
         "src/app/layout.tsx",
         "src/app/api/facebook/**",
         "src/app/api/tracking/**",
@@ -591,7 +594,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/app/globals.css",
         "src/app/not-found.tsx"
       ],
-      "lastVerified": "2026-05-15"
+      "lastVerified": "2026-05-27"
     },
     "client-state": {
       "docs": "docs/client-state/",
@@ -614,14 +617,16 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/hooks/usePrefetching.ts",
         "src/hooks/useConfetti.ts"
       ],
-      "lastVerified": "2026-05-20"
+      "lastVerified": "2026-05-27"
     },
     "admin": {
       "docs": "docs/admin/",
       "paths": [
         "src/app/admin/**",
         "src/components/admin/**",
+        "src/components/admin/facebook-ads-health/**",
         "src/app/api/admin/**",
+        "src/app/api/admin/facebook-ads/health/**",
         "src/features/admin/**",
         "src/models/ChargeJobLock.ts",
         "src/models/ChargeJobRun.ts",
@@ -636,7 +641,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/models/DashboardStatsDailySnapshot.ts",
         "src/services/admin/dashboard-stats/**"
       ],
-      "lastVerified": "2026-05-20"
+      "lastVerified": "2026-05-27"
     },
     "dashboard-account": {
       "docs": "docs/dashboard-account/",
@@ -689,7 +694,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/utils/validation/**",
         "src/utils/webhook/**",
         "scripts/migrations/**",
-        "scripts/seed-admin-data.ts",
+        "scripts/seed-*.ts",
         "scripts/migrate-*.ts",
         "scripts/fix-*.{ts,mjs,js}",
         "scripts/update-*.ts",

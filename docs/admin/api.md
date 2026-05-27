@@ -13,6 +13,11 @@ The `/api/admin/**` namespace. Per the manifest, this domain is the catch-all fo
 | `/api/admin/invoices/recover-past-due` | admin | Bulk stranded-invoice recovery |
 | `/api/admin/error-reports/**` | [error-reporting](../error-reporting/) | Error triage |
 | `/api/admin/contact-submissions/**` | [contact](../contact/) | Submission review |
+| `/api/admin/facebook-ads/purchase-audit` | [tracking](../tracking/) | Local vs Meta revenue reconciliation (TRUE ROAS) |
+| `/api/admin/facebook-ads/health/insights` | [tracking](../tracking/) | Facebook Ads Health view — Mongo-first aggregated campaign/adset/ad insights (past days from `MetaAdInsightsDaily`, today live from Meta) with verdict engine + per-row snooze state. Server filters: `level`, `startDate`, `endDate`, `campaign`. Filters for verdict/learningStatus/minSpend/search are applied client-side in `FacebookAdsHealthView` (useMemo) — they do not appear in the query schema or TanStack queryKey. No account TRUE ROAS card — purchase-audit route handles that diagnostic separately. |
+| `GET /api/admin/facebook-ads/health/settings` | [tracking](../tracking/) | Read health verdict engine settings (requires `facebookAds.view`) |
+| `PUT /api/admin/facebook-ads/health/settings` | [tracking](../tracking/) | Update health verdict engine settings (requires `facebookAds.edit`) |
+| `POST /api/admin/facebook-ads/health/snooze` | [tracking](../tracking/) | Create or update a snooze for an ad (requires `facebookAds.edit`) |
 | _TODO_ | — | Promo, affiliate, draw, analytics admin routes |
 
 > _TODO: read [src/app/api/admin/](../../src/app/api/admin/) and enumerate every sub-route._
@@ -354,9 +359,20 @@ Thin handler — delegates to `getCancellationFlowAnalytics()` in `src/services/
       "...": { "retained": 0, "churned": 0, "pending": 0 }
     },
     // Free-text entries when reason === "other". Sorted by startedAt desc.
-    // Empty/whitespace-only reasonText is filtered out.
+    // Empty/whitespace-only reasonText is filtered out. The user fields
+    // (userId/userEmail/userFirstName/userLastName) are hydrated server-side
+    // for the admin User-column drill-down; absent for legacy events without
+    // a userId.
     "otherReasonTexts": [
-      { "text": "site keeps crashing", "startedAt": "2026-05-18T10:00:00.000Z", "outcome": "in_progress" }
+      {
+        "text": "site keeps crashing",
+        "startedAt": "2026-05-18T10:00:00.000Z",
+        "outcome": "in_progress",
+        "userId": "65f…",
+        "userEmail": "jo@example.com",
+        "userFirstName": "Jo",
+        "userLastName": "Doe"
+      }
     ]
   },
   "meta": { "timestamp": "..." }
@@ -376,6 +392,55 @@ Thin handler — delegates to `getCancellationFlowAnalytics()` in `src/services/
 - `otherReasonTexts` lists every event with `reason === "other"` and a non-empty trimmed `reasonText`, sorted by `startedAt` desc. Each entry carries the trimmed text, ISO `startedAt`, and the event's current `outcome`. Whitespace-only `reasonText` is excluded.
 
 UI: `src/components/admin/CancellationFlowAnalytics.tsx`, mounted as the **Cancellation Flow** tab under the Analytics sidebar group (`selectedTab === "cancellation-flow"` in `AdminPage`). Data hook: `src/hooks/queries/admin/useCancellationFlowAnalytics.ts` (TanStack, queryKey `["admin", "cancellation-flow-analytics", filter]`).
+
+### `GET /api/admin/cancellation-flow-analytics/users-by-reason`
+
+Paginated user-level rows for a single cancellation reason. Powers the **Reason × outcome** drill-down modal (`CancellationReasonUsersModal`). Guarded by `requirePermission("overview.view")` (not the bare `requireAdmin(session)` used by the parent route).
+
+Validates input via Zod (`querySchema`); malformed query → `400`.
+
+**Query params:**
+
+| Param | Type | Notes |
+|---|---|---|
+| `reason` | `CancellationReason` enum | Required. Must be one of `CANCELLATION_REASONS` from `@/models/CancellationFlowEvent`. |
+| `outcome` | `in_progress \| saved \| cancelled` | Optional. Validated against `OUTCOME_VALUES` from the model. |
+| `startDate` | `YYYY-MM-DD` | Optional. AEST-inclusive lower bound on `startedAt` (start of day at Australia/Sydney midnight, converted to UTC). |
+| `endDate` | `YYYY-MM-DD` | Optional. AEST-inclusive upper bound; the route adds `+1 day` (`addDays(to, 1)`) for the exclusive UTC upper bound — same convention as the parent analytics route. |
+| `page` | integer ≥ 1 | Optional. Default 1. |
+| `limit` | integer 1–100 | Optional. Default 20 (the modal's page size). |
+
+**Response (`HTTP 200`):**
+
+```jsonc
+{
+  "data": {
+    "rows": [
+      {
+        "eventId": "65f…",
+        "userId": "65f…",
+        "userEmail": "jo@example.com",
+        "userFirstName": "Jo",
+        "userLastName": "Doe",
+        "startedAt": "2026-05-18T10:00:00.000Z",
+        "outcome": "saved",
+        "offerAccepted": "discount_50_2mo",
+        "reasonText": null
+      }
+    ],
+    "totalCount": 14
+  },
+  "meta": { "timestamp": "…" }
+}
+```
+
+- `reasonText` is only populated when `reason === "other"` and the original `reasonText` is non-empty after trimming; otherwise undefined.
+- `offerAccepted` is the saved event's accepted offer (when present); otherwise `null`.
+- User fields (`userEmail`/`userFirstName`/`userLastName`) are hydrated from the `User` collection by a batched `User.find({ _id: { $in: [...] } })` keyed on the event `userId`s; absent for legacy events with no `userId`.
+
+Response carries `Cache-Control: private, max-age=120`.
+
+Implementation: thin handler → delegates to `getCancellationFlowUsersByReason()` in [src/services/admin/cancellationFlowAnalytics.ts](../../src/services/admin/cancellationFlowAnalytics.ts) (see [backend.md → cancellationFlowAnalytics.ts](./backend.md#services)).
 
 ## Auth
 
