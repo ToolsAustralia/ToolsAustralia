@@ -134,7 +134,7 @@ export function FacebookAdsHealthView({ startDate, endDate, level }: Props) {
         )}
       </div>
       <div className="md:hidden">
-        <FacebookAdsHealthMobileCards rows={displayedRows} level={effectiveLevel} />
+        <FacebookAdsHealthMobileCards rows={displayedRows} level={effectiveLevel} metric={metric} />
       </div>
       <FacebookAdsHealthSettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />
     </div>

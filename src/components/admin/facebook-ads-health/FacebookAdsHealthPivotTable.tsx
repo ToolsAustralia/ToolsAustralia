@@ -4,9 +4,9 @@ import { ChevronDown, ChevronRight, ExternalLink } from "lucide-react";
 import { FacebookAdsHealthVerdictTooltip } from "./FacebookAdsHealthVerdictTooltip";
 import { LearningStatusPill, LiveStatusPill, type EffectiveStatusUi } from "./FacebookAdsHealthStatusBadges";
 
-type Metric = "spend" | "conversions" | "revenue" | "roas" | "linkClicks" | "linkCtr" | "costPerLinkClick";
+export type Metric = "spend" | "conversions" | "revenue" | "roas" | "linkClicks" | "linkCtr" | "costPerLinkClick";
 
-interface DailyCell {
+export interface DailyCell {
   date: string;
   spendCents: number;
   conversions: number;
@@ -37,7 +37,7 @@ export interface PivotRow {
   snoozedUntil: string | null;
 }
 
-function metricValue(cell: DailyCell, metric: Metric): number {
+export function metricValue(cell: DailyCell, metric: Metric): number {
   switch (metric) {
     case "spend": return cell.spendCents / 100;
     case "conversions": return cell.conversions;
@@ -49,7 +49,7 @@ function metricValue(cell: DailyCell, metric: Metric): number {
   }
 }
 
-function heatClass(value: number, max: number): string {
+export function heatClass(value: number, max: number): string {
   if (value === 0 && max > 0) return "bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-red-300";
   if (max <= 0) return "";
   const pct = value / max;
@@ -60,7 +60,7 @@ function heatClass(value: number, max: number): string {
   return "bg-blue-50 dark:bg-blue-950/40 text-blue-900 dark:text-blue-100";
 }
 
-function formatCell(value: number, metric: Metric): string {
+export function formatCell(value: number, metric: Metric): string {
   if (metric === "spend" || metric === "revenue" || metric === "costPerLinkClick") return `$${value.toFixed(0)}`;
   if (metric === "roas") return value.toFixed(2);
   if (metric === "linkCtr") return `${value.toFixed(1)}%`;
