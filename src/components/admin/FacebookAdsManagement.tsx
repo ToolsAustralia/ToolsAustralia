@@ -73,6 +73,29 @@ export default function FacebookAdsManagement() {
   const [startDate, setStartDate] = useState<string>("");
   const [endDate, setEndDate] = useState<string>("");
   const [isCustomDateModalOpen, setIsCustomDateModalOpen] = useState(false);
+  // Sticky toolbar measurement — publishes the toolbar's measured height as a
+  // CSS custom property on document.documentElement so any sticky child
+  // (currently Health's filter row, future: any other admin panel that adopts
+  // this pattern) can pin itself flush below with no gap or overlap at any
+  // breakpoint. ResizeObserver keeps it in sync as the toolbar wraps/unwraps
+  // across viewports or when the date-range row hides/shows.
+  const toolbarRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    const el = toolbarRef.current;
+    if (!el || typeof window === "undefined") return;
+    const root = document.documentElement;
+    const apply = () => {
+      root.style.setProperty("--fb-toolbar-h", `${Math.ceil(el.getBoundingClientRect().height)}px`);
+    };
+    apply();
+    const ro = new ResizeObserver(apply);
+    ro.observe(el);
+    return () => {
+      ro.disconnect();
+      root.style.removeProperty("--fb-toolbar-h");
+    };
+  }, []);
+
   // View mode with URL persistence — read before level default so Health can start at adset.
   const urlViewMode = (searchParams.get("viewMode") as "ads" | "spend-by-url" | "health" | "metrics") || "ads";
   // Per-row verdicts only make sense at adset granularity or finer, so Health defaults to adset.
@@ -1276,8 +1299,16 @@ export default function FacebookAdsManagement() {
 
   return (
     <div className="space-y-4 sm:space-y-6 min-w-0">
-      {/* Header with Controls — Ads / Spend toggle full width on mobile so it stays visible */}
-      <div className="flex flex-col gap-2 sm:gap-4 min-w-0">
+      {/* Header with Controls — sticky-pinned in EVERY viewMode (Ads / Spend by URL /
+          Health) so users can switch tabs, dates, and view-level without scrolling back
+          to the top. Matches Meta Ads Manager UX. The Health view's filter section
+          sticks immediately below this row using the same z-stack + matching offsets,
+          so the two snap together as one pinned block. Pattern is self-contained —
+          any other admin page can adopt it with the same className set. */}
+      <div
+        ref={toolbarRef}
+        className="sticky top-0 z-30 flex flex-col gap-2 sm:gap-4 min-w-0 pt-2 pb-2 bg-gray-50/95 dark:bg-neutral-950/95 backdrop-blur supports-[backdrop-filter]:bg-gray-50/80 supports-[backdrop-filter]:dark:bg-neutral-950/80 border-b border-gray-200 dark:border-neutral-800"
+      >
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-4 min-w-0">
           <div className="flex items-center gap-1.5 sm:gap-2 bg-gray-100 dark:bg-neutral-800 rounded-lg p-1 w-full sm:w-auto flex-shrink-0 min-w-0">
             <button

@@ -27,6 +27,10 @@ export function FacebookAdsHealthView({ startDate, endDate, level }: Props) {
   const [metric, setMetric] = useState<MetricChoice>("conversions");
   const [verdictFilter, setVerdictFilter] = useState<string[]>([]);
   const [statusFilter, setStatusFilter] = useState<string[]>([]);
+  // Live-only is a single boolean rather than yet another multi-select chip
+  // because the common ad-manager workflow is "hide everything that isn't
+  // actually spending money right now." Anything other than ACTIVE → filtered.
+  const [liveOnly, setLiveOnly] = useState(false);
   const [minSpend, setMinSpend] = useState<number | "">("");
   const [campaignFilter, setCampaignFilter] = useState<string[]>([]);
   const [search, setSearch] = useState("");
@@ -53,14 +57,15 @@ export function FacebookAdsHealthView({ startDate, endDate, level }: Props) {
     const statusSet = statusFilter.length ? new Set(statusFilter) : null;
     const minSpendCents = minSpend === "" ? null : minSpend * 100;
     const searchLower = search.trim().toLowerCase();
-    return data.rows.filter((row: { verdict: string; learningStatus: string; window: { spendCents: number }; name: string }) => {
+    return data.rows.filter((row: { verdict: string; learningStatus: string; effectiveStatus: string; window: { spendCents: number }; name: string }) => {
       if (verdictSet && !verdictSet.has(row.verdict)) return false;
       if (statusSet && !statusSet.has(row.learningStatus)) return false;
+      if (liveOnly && row.effectiveStatus !== "ACTIVE") return false;
       if (minSpendCents !== null && row.window.spendCents < minSpendCents) return false;
       if (searchLower && !row.name.toLowerCase().includes(searchLower)) return false;
       return true;
     });
-  }, [data?.rows, verdictFilter, statusFilter, minSpend, search]);
+  }, [data?.rows, verdictFilter, statusFilter, liveOnly, minSpend, search]);
 
   // Recompute alert count from the filtered visible rows so the banner reflects what's in the table.
   const filteredAlertCount = useMemo(() => {
@@ -78,26 +83,39 @@ export function FacebookAdsHealthView({ startDate, endDate, level }: Props) {
 
   return (
     <div>
-      <FacebookAdsHealthTopBar
-        alertCount={filteredAlertCount}
-        onShowAlertedOnly={() => setVerdictFilter(["cut", "investigate"])}
-      />
-      <FacebookAdsHealthFilters
-        metric={metric}
-        onMetricChange={setMetric}
-        verdictFilter={verdictFilter}
-        onVerdictFilterChange={setVerdictFilter}
-        learningStatusFilter={statusFilter}
-        onLearningStatusFilterChange={setStatusFilter}
-        minSpend={minSpend}
-        onMinSpendChange={setMinSpend}
-        campaignFilter={campaignFilter}
-        campaignOptions={campaignOptions}
-        onCampaignFilterChange={setCampaignFilter}
-        search={search}
-        onSearchChange={setSearch}
-        onOpenSettings={() => setSettingsOpen(true)}
-      />
+      {/* Sticky pinned flush below the parent toolbar so users can toggle filters
+          without scrolling back to the top. The `top` is driven by --fb-toolbar-h,
+          a CSS var set on document.documentElement by FacebookAdsManagement's
+          ResizeObserver — guarantees zero gap and zero overlap at any breakpoint or
+          when the toolbar wraps. Fallback 60px covers SSR / pre-mount paint. z-20
+          sits under the parent toolbar (z-30) so the two snap together cleanly. */}
+      <div
+        className="sticky z-20 pt-2 pb-2 bg-gray-50/95 dark:bg-neutral-950/95 backdrop-blur supports-[backdrop-filter]:bg-gray-50/80 supports-[backdrop-filter]:dark:bg-neutral-950/80 border-b border-gray-200 dark:border-neutral-800"
+        style={{ top: "var(--fb-toolbar-h, 60px)" }}
+      >
+        <FacebookAdsHealthTopBar
+          alertCount={filteredAlertCount}
+          onShowAlertedOnly={() => setVerdictFilter(["cut", "investigate"])}
+        />
+        <FacebookAdsHealthFilters
+          metric={metric}
+          onMetricChange={setMetric}
+          verdictFilter={verdictFilter}
+          onVerdictFilterChange={setVerdictFilter}
+          learningStatusFilter={statusFilter}
+          onLearningStatusFilterChange={setStatusFilter}
+          liveOnly={liveOnly}
+          onLiveOnlyChange={setLiveOnly}
+          minSpend={minSpend}
+          onMinSpendChange={setMinSpend}
+          campaignFilter={campaignFilter}
+          campaignOptions={campaignOptions}
+          onCampaignFilterChange={setCampaignFilter}
+          search={search}
+          onSearchChange={setSearch}
+          onOpenSettings={() => setSettingsOpen(true)}
+        />
+      </div>
       <div className="hidden md:block">
         {startDate === endDate ? (
           <FacebookAdsHealthFlatTable rows={displayedRows} level={effectiveLevel} />

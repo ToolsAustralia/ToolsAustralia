@@ -21,6 +21,8 @@ interface Props {
   onVerdictFilterChange: (v: string[]) => void;
   learningStatusFilter: string[];
   onLearningStatusFilterChange: (v: string[]) => void;
+  liveOnly: boolean;
+  onLiveOnlyChange: (v: boolean) => void;
   minSpend: number | "";
   onMinSpendChange: (n: number | "") => void;
   campaignFilter: string[];
@@ -60,8 +62,16 @@ export function FacebookAdsHealthFilters(props: Props) {
         </button>
       ))}
       <span className="text-zinc-300 dark:text-zinc-700">|</span>
-      <span className="text-zinc-500">Status:</span>
-      {["Active", "Learning", "LearningLimited"].map((s) => (
+      <button
+        onClick={() => props.onLiveOnlyChange(!props.liveOnly)}
+        title="Hide paused, archived, deleted, or in-review ad sets — show only ad sets currently delivering."
+        className={`px-2 py-1 rounded-full border text-[10px] font-semibold ${props.liveOnly ? "bg-emerald-600 text-white border-emerald-600" : "border-zinc-300 dark:border-zinc-700"}`}
+      >
+        Live only
+      </button>
+      <span className="text-zinc-300 dark:text-zinc-700">|</span>
+      <span className="text-zinc-500">Learning:</span>
+      {(["Active", "Learning", "LearningLimited", "Unknown"] as const).map((s) => (
         <button
           key={s}
           onClick={() => props.onLearningStatusFilterChange(toggleInArray(props.learningStatusFilter, s))}

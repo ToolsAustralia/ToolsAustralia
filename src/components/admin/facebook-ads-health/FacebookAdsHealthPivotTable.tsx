@@ -1,5 +1,5 @@
 "use client";
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { ChevronDown, ChevronRight, ExternalLink } from "lucide-react";
 import { FacebookAdsHealthVerdictTooltip } from "./FacebookAdsHealthVerdictTooltip";
 import { LearningStatusPill, LiveStatusPill, type EffectiveStatusUi } from "./FacebookAdsHealthStatusBadges";
@@ -107,6 +107,23 @@ interface Props {
 
 export function FacebookAdsHealthPivotTable({ rows, metric, startDate, endDate, level }: Props) {
   const [hover, setHover] = useState<{ id: string; rect: DOMRect } | null>(null);
+  // Grace-period close timer so the cursor can transit from the trigger chip
+  // into the tooltip body without the tooltip vanishing mid-hop. Entering
+  // either trigger or tooltip cancels the pending close; leaving either
+  // schedules it. Cleared on unmount to avoid setting state on a torn-down tree.
+  const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => { if (closeTimerRef.current) clearTimeout(closeTimerRef.current); }, []);
+  const openHover = (id: string, rect: DOMRect) => {
+    if (closeTimerRef.current) { clearTimeout(closeTimerRef.current); closeTimerRef.current = null; }
+    setHover({ id, rect });
+  };
+  const scheduleClose = () => {
+    if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
+    closeTimerRef.current = setTimeout(() => setHover(null), 120);
+  };
+  const cancelClose = () => {
+    if (closeTimerRef.current) { clearTimeout(closeTimerRef.current); closeTimerRef.current = null; }
+  };
   // Collapsed group keys: prefixed "c:<campaignId>" or "a:<adsetId>"
   // Default is everything expanded (empty set).
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
@@ -279,8 +296,8 @@ export function FacebookAdsHealthPivotTable({ rows, metric, startDate, endDate, 
         <td className="text-center px-2">
           <span
             className={`text-[10px] px-2.5 py-1 rounded font-semibold cursor-help ${VERDICT_CHIP[row.verdict]}`}
-            onMouseEnter={(e) => setHover({ id: row.id, rect: e.currentTarget.getBoundingClientRect() })}
-            onMouseLeave={() => setHover(null)}
+            onMouseEnter={(e) => openHover(row.id, e.currentTarget.getBoundingClientRect())}
+            onMouseLeave={scheduleClose}
           >
             {row.verdict === "scale" ? "Scale +20%" : row.verdict === "cut" ? "Cut?" : row.verdict[0]!.toUpperCase() + row.verdict.slice(1)}
           </span>
@@ -290,6 +307,8 @@ export function FacebookAdsHealthPivotTable({ rows, metric, startDate, endDate, 
               reasons={row.verdictReasons}
               actionText={row.actionText}
               anchorRect={hover.rect}
+              onMouseEnter={cancelClose}
+              onMouseLeave={scheduleClose}
             />
           )}
         </td>

@@ -1,5 +1,5 @@
 "use client";
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { ExternalLink } from "lucide-react";
 import { FacebookAdsHealthVerdictTooltip } from "./FacebookAdsHealthVerdictTooltip";
 import { LearningStatusPill, LiveStatusPill } from "./FacebookAdsHealthStatusBadges";
@@ -30,6 +30,22 @@ const VERDICT_CHIP: Record<PivotRow["verdict"], string> = {
  */
 export function FacebookAdsHealthFlatTable({ rows, level }: Props) {
   const [hover, setHover] = useState<{ id: string; rect: DOMRect } | null>(null);
+  // Grace-period close timer — see FacebookAdsHealthPivotTable for full rationale.
+  // Tooltip body is an interactive hover target; the cursor needs a 120ms grace
+  // window to cross from trigger chip into the tooltip body.
+  const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => { if (closeTimerRef.current) clearTimeout(closeTimerRef.current); }, []);
+  const openHover = (id: string, rect: DOMRect) => {
+    if (closeTimerRef.current) { clearTimeout(closeTimerRef.current); closeTimerRef.current = null; }
+    setHover({ id, rect });
+  };
+  const scheduleClose = () => {
+    if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
+    closeTimerRef.current = setTimeout(() => setHover(null), 120);
+  };
+  const cancelClose = () => {
+    if (closeTimerRef.current) { clearTimeout(closeTimerRef.current); closeTimerRef.current = null; }
+  };
   return (
     <div className="overflow-x-auto rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900">
       <table className="w-full border-collapse text-xs min-w-[900px]">
@@ -81,8 +97,8 @@ export function FacebookAdsHealthFlatTable({ rows, level }: Props) {
                 <td className="text-center px-2 py-2 align-middle">
                   <span
                     className={`text-[10px] px-2.5 py-1 rounded font-semibold cursor-help ${VERDICT_CHIP[row.verdict]}`}
-                    onMouseEnter={(e) => setHover({ id: row.id, rect: e.currentTarget.getBoundingClientRect() })}
-                    onMouseLeave={() => setHover(null)}
+                    onMouseEnter={(e) => openHover(row.id, e.currentTarget.getBoundingClientRect())}
+                    onMouseLeave={scheduleClose}
                   >
                     {row.verdict === "scale"
                       ? "Scale +20%"
@@ -96,6 +112,8 @@ export function FacebookAdsHealthFlatTable({ rows, level }: Props) {
                       reasons={row.verdictReasons}
                       actionText={row.actionText}
                       anchorRect={hover.rect}
+                      onMouseEnter={cancelClose}
+                      onMouseLeave={scheduleClose}
                     />
                   )}
                 </td>

@@ -22,6 +22,17 @@ interface Props {
    * width so it doesn't overflow the parent card.
    */
   anchorRect?: DOMRect | null;
+  /**
+   * Hover handlers wired by the parent table so the tooltip body itself is
+   * a hover target. Without these the tooltip closes the moment the cursor
+   * crosses from the trigger chip into the tooltip body (the trigger's
+   * onMouseLeave fires before the body's onMouseEnter — the so-called
+   * "tooltip dead zone"). Pairs with a grace-period close timer in the
+   * parent: entering either trigger or tooltip cancels the close, leaving
+   * either schedules it.
+   */
+  onMouseEnter?: () => void;
+  onMouseLeave?: () => void;
 }
 
 const VERDICT_META: Record<Props["verdict"], { label: string; color: string }> = {
@@ -96,17 +107,21 @@ function TooltipBody({ verdict, reasons, actionText, width }: BodyProps) {
   );
 }
 
-export function FacebookAdsHealthVerdictTooltip({ verdict, reasons, actionText, anchorRect }: Props) {
+export function FacebookAdsHealthVerdictTooltip({ verdict, reasons, actionText, anchorRect, onMouseEnter, onMouseLeave }: Props) {
   // Portal mode (desktop, hovered chip): position fixed near the anchor in the
   // viewport. SSR-safe via typeof document — no mount-flicker because we don't
-  // briefly render the inline body before the portal.
+  // briefly render the inline body before the portal. Hover handlers are wired
+  // so the tooltip body is interactive (read the rule text, scroll long lists);
+  // pointer-events-none would defeat that.
   if (anchorRect) {
     if (typeof document === "undefined") return null;
     const { top, left, width } = clampToViewport(anchorRect);
     return createPortal(
       <div
-        className="z-[9999] fixed pointer-events-none"
+        className="z-[9999] fixed"
         style={{ top, left, width }}
+        onMouseEnter={onMouseEnter}
+        onMouseLeave={onMouseLeave}
       >
         <TooltipBody verdict={verdict} reasons={reasons} actionText={actionText} width="100%" />
       </div>,
