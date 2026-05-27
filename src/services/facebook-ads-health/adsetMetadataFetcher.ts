@@ -61,12 +61,17 @@ export async function fetchAdsetMetadata(
   adAccountId: string,
   accessToken: string,
 ): Promise<AdsetMetadata[]> {
+  // Request learning_stage_info with explicit subfields. Meta's Graph API
+  // sometimes returns less detail when an object field is requested bare; the
+  // explicit `{status}` form is the documented way to guarantee the status comes
+  // back. Bumped to v21.0 (current stable as of Q4 2024) — v19 is no longer
+  // listed in Meta's supported versions and may be returning a stripped response.
   const fields = [
     "id",
     "daily_budget",
     "lifetime_budget",
     "effective_status",
-    "learning_stage_info",
+    "learning_stage_info{status,attribution_windows,conversions,last_sig_edit_ts}",
     "last_significant_edit",
     "campaign{id,objective}",
   ].join(",");
@@ -74,12 +79,11 @@ export async function fetchAdsetMetadata(
   // Intentionally NO effective_status filter — we want metadata for every adset
   // that appears in the insights window, including ones that are paused-by-parent,
   // recently archived, or campaign-paused. The aggregator joins this metadata by
-  // adsetId, and any missing adset surfaces as "Unknown" status in the UI. A
-  // narrow status filter here causes the UI to show UNKNOWN for every row.
+  // adsetId, and any missing adset surfaces as "Unknown" status in the UI.
   const results: AdsetMetadata[] = [];
   let url:
     | string
-    | null = `https://graph.facebook.com/v19.0/${adAccountId}/adsets?fields=${fields}&limit=200&access_token=${accessToken}`;
+    | null = `https://graph.facebook.com/v21.0/${adAccountId}/adsets?fields=${fields}&limit=200&access_token=${accessToken}`;
 
   while (url) {
     const res = await fetch(url);
@@ -107,6 +111,23 @@ export async function fetchAdsetMetadata(
     }
     url = body.paging?.next ?? null;
   }
+
+  // Diagnostic — surfaces the actual distribution of learning_stage_info across
+  // the account so we can tell whether "all Unknown" is a permissions issue, an
+  // API-version issue, or genuinely just adsets that exited learning long ago
+  // (Meta drops the field once the adset has been stable for a while).
+  // console.error so it survives the production console strip (per CLAUDE.md).
+  const breakdown = results.reduce(
+    (acc, r) => {
+      const k = r.learningStatus ?? "null";
+      acc[k] = (acc[k] ?? 0) + 1;
+      return acc;
+    },
+    {} as Record<string, number>,
+  );
+  console.error(
+    `[adsetMetadataFetcher] fetched ${results.length} adsets — learning_stage_info breakdown: ${JSON.stringify(breakdown)}`,
+  );
 
   return results;
 }

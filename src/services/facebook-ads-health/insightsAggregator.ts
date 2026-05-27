@@ -58,8 +58,15 @@ type NormalisedRow = {
  */
 function mongoToNormalised(
   doc: IMetaAdInsightsDaily,
-  metadataByAdsetId: Map<string, { effectiveStatus: EffectiveStatusBucket }>,
+  metadataByAdsetId: Map<string, { effectiveStatus: EffectiveStatusBucket; learningStatus: "LEARNING" | "SUCCESS" | "FAIL" | null }>,
 ): NormalisedRow {
+  // Prefer LIVE metadata over Mongo snapshot for both effectiveStatus and
+  // learningStatus. The Mongo value is captured at sync time and goes stale
+  // immediately — for a UI badge that says "is this adset currently in
+  // learning?", the only correct answer is the live API state. Falls back
+  // to the Mongo value only if the live lookup misses the adset (deleted,
+  // archived, or simply not in the active set returned by the metadata API).
+  const meta = doc.adsetId ? metadataByAdsetId.get(doc.adsetId) : undefined;
   return {
     adAccountId: doc.adAccountId,
     date: doc.date,
@@ -77,10 +84,8 @@ function mongoToNormalised(
     linkClicks: doc.linkClicks,
     adsetBudgetCents: doc.adsetBudgetCents,
     campaignObjective: doc.campaignObjective,
-    learningStatus: doc.learningStatus,
-    effectiveStatus: doc.adsetId
-      ? metadataByAdsetId.get(doc.adsetId)?.effectiveStatus ?? "UNKNOWN"
-      : "UNKNOWN",
+    learningStatus: meta?.learningStatus ?? doc.learningStatus,
+    effectiveStatus: meta?.effectiveStatus ?? "UNKNOWN",
     lastSignificantEdit: doc.lastSignificantEdit,
   };
 }
