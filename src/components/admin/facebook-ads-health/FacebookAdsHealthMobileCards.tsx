@@ -3,7 +3,7 @@ import React, { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { ExternalLink, X } from "lucide-react";
-import { formatCell, heatClass, metricValue, type Metric, type PivotRow } from "./FacebookAdsHealthPivotTable";
+import { cellTone, formatCell, metricValue, toneClass, type Metric, type PivotRow } from "./FacebookAdsHealthPivotTable";
 import { FacebookAdsHealthVerdictTooltip } from "./FacebookAdsHealthVerdictTooltip";
 import { LearningStatusPill, LiveStatusPill } from "./FacebookAdsHealthStatusBadges";
 
@@ -11,6 +11,7 @@ interface Props {
   rows: PivotRow[];
   level: "campaign" | "adset" | "ad";
   metric: Metric;
+  breakevenRoas: number;
 }
 
 const METRIC_LABEL: Record<Metric, string> = {
@@ -36,7 +37,7 @@ function verdictLabel(verdict: PivotRow["verdict"]): string {
   return verdict[0]!.toUpperCase() + verdict.slice(1);
 }
 
-export function FacebookAdsHealthMobileCards({ rows, level, metric }: Props) {
+export function FacebookAdsHealthMobileCards({ rows, level, metric, breakevenRoas }: Props) {
   const [openId, setOpenId] = useState<string | null>(null);
   const openRow = openId ? rows.find((r) => r.id === openId) ?? null : null;
 
@@ -59,10 +60,6 @@ export function FacebookAdsHealthMobileCards({ rows, level, metric }: Props) {
   return (
     <div className="grid gap-3">
       {rows.map((row) => {
-        // Per-row max across visible daily cells, computed in the SELECTED
-        // metric — was hardcoded to conversions, which made the sparkline
-        // heatmap ignore the user's metric pick and always show conv intensity.
-        const max = row.daily.length ? Math.max(...row.daily.map((d) => metricValue(d, metric))) : 0;
         // Window total in the selected metric. For ratio metrics (ROAS, CTR,
         // cost-per-link-click) we derive from component sums rather than
         // averaging the daily ratios — same weighted-aggregation rule as the
@@ -108,8 +105,9 @@ export function FacebookAdsHealthMobileCards({ rows, level, metric }: Props) {
             <div className="grid grid-cols-7 gap-1 mb-2">
               {row.daily.slice(-7).map((d) => {
                 const v = metricValue(d, metric);
+                // Threshold-based tone — see PivotTable's cellTone() for rules.
                 return (
-                  <div key={d.date} className={`rounded text-center py-1 text-[10px] font-mono font-semibold ${heatClass(v, max)}`}>
+                  <div key={d.date} className={`rounded text-center py-1 text-[10px] font-mono font-semibold ${toneClass(cellTone(metric, d, breakevenRoas)) || "bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300"}`}>
                     {formatCell(v, metric)}
                   </div>
                 );

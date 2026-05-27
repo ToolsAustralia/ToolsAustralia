@@ -49,6 +49,9 @@ export function metricValue(cell: DailyCell, metric: Metric): number {
   }
 }
 
+// Legacy relative-intensity heatmap. Kept exported in case anything still imports
+// it, but cellTone (below) is the canonical scheme — actionable threshold-based
+// coloring instead of meaningless "compared to row max" noise.
 export function heatClass(value: number, max: number): string {
   if (value === 0 && max > 0) return "bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-red-300";
   if (max <= 0) return "";
@@ -58,6 +61,51 @@ export function heatClass(value: number, max: number): string {
   if (pct >= 0.40) return "bg-blue-300 dark:bg-blue-900 text-blue-900 dark:text-blue-100";
   if (pct >= 0.15) return "bg-blue-100 dark:bg-blue-950 text-blue-900 dark:text-blue-100";
   return "bg-blue-50 dark:bg-blue-950/40 text-blue-900 dark:text-blue-100";
+}
+
+/**
+ * Threshold-based "tone" for a daily cell — replaces the legacy heatmap with
+ * something that actually answers "is this day good or bad?".
+ *
+ *  - conversions: ≥ 7/day is on pace for Meta's 50-events-per-week learning
+ *                 threshold (50 / 7 ≈ 7). 0 conv = bad. 1-6 = neutral (slow
+ *                 but not dead).
+ *  - revenue:     profitable day if revenue > spend. Loss if revenue < spend
+ *                 AND spend > 0. No spend = no judgement.
+ *  - roas:        green at or above the team's configured breakeven; red below
+ *                 (with spend > 0). Default 1.0 if settings haven't loaded.
+ *  - spend / link clicks / link CTR / cost-per-LC: no clear good/bad threshold
+ *                 without per-industry benchmarks — leave neutral so the
+ *                 numbers speak for themselves rather than mislead with colour.
+ *
+ * If you want to colour CTR or CPC in the future, add their thresholds to
+ * FacebookAdsHealthSettings (mirror breakevenRoas) and extend cases here.
+ */
+export type CellTone = "good" | "bad" | "neutral";
+export function cellTone(metric: Metric, cell: DailyCell, breakevenRoas: number): CellTone {
+  switch (metric) {
+    case "conversions":
+      if (cell.conversions >= 7) return "good";
+      if (cell.conversions === 0) return "bad";
+      return "neutral";
+    case "revenue":
+      if (cell.spendCents === 0) return "neutral";
+      return cell.revenueCents > cell.spendCents ? "good" : "bad";
+    case "roas":
+      if (cell.spendCents === 0) return "neutral";
+      return cell.roas >= breakevenRoas ? "good" : "bad";
+    case "spend":
+    case "linkClicks":
+    case "linkCtr":
+    case "costPerLinkClick":
+      return "neutral";
+  }
+}
+
+export function toneClass(tone: CellTone): string {
+  if (tone === "good") return "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200";
+  if (tone === "bad") return "bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-200";
+  return "";
 }
 
 export function formatCell(value: number, metric: Metric): string {
@@ -103,9 +151,10 @@ interface Props {
   startDate: string;
   endDate: string;
   level: "campaign" | "adset" | "ad";
+  breakevenRoas: number;
 }
 
-export function FacebookAdsHealthPivotTable({ rows, metric, startDate, endDate, level }: Props) {
+export function FacebookAdsHealthPivotTable({ rows, metric, startDate, endDate, level, breakevenRoas }: Props) {
   const [hover, setHover] = useState<{ id: string; rect: DOMRect } | null>(null);
   // Grace-period close timer so the cursor can transit from the trigger chip
   // into the tooltip body without the tooltip vanishing mid-hop. Entering
@@ -250,9 +299,6 @@ export function FacebookAdsHealthPivotTable({ rows, metric, startDate, endDate, 
 
   const renderDataRow = (row: PivotRow, indentClass: string) => {
     const rowDaily = rowDailyByDate.get(row.id) ?? new Map<string, DailyCell>();
-    const rowMax = row.daily.length
-      ? Math.max(...row.daily.map((d) => metricValue(d, metric)))
-      : 0;
     // Build component sums for THIS row, then derive metric — same weighted
     // logic as the footer. Summing daily ROAS / CTR / Cost-per-click is wrong
     // because they're ratios (a $1-spend day with 1 click would otherwise drown
@@ -290,8 +336,10 @@ export function FacebookAdsHealthPivotTable({ rows, metric, startDate, endDate, 
             );
           }
           const v = metricValue(cell, metric);
+          // Threshold-based tone (green/red/neutral) replaces the legacy relative-
+          // intensity heatmap — see cellTone() doc for rules per metric.
           return (
-            <td key={date} className={`text-center font-mono font-semibold text-[11px] ${cell.conversions === 0 && metric === "conversions" ? "bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-red-300" : heatClass(v, rowMax)}`}>
+            <td key={date} className={`text-center font-mono font-semibold text-[11px] ${toneClass(cellTone(metric, cell, breakevenRoas))}`}>
               {formatCell(v, metric)}
             </td>
           );

@@ -1,6 +1,6 @@
 "use client";
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { useFacebookAdsHealth } from "@/hooks/queries/admin/useFacebookAdsHealth";
+import { useFacebookAdsHealth, useFacebookAdsHealthSettings } from "@/hooks/queries/admin/useFacebookAdsHealth";
 import { FacebookAdsHealthTopBar } from "./FacebookAdsHealthTopBar";
 import { FacebookAdsHealthFilters, type MetricChoice } from "./FacebookAdsHealthFilters";
 import { FacebookAdsHealthPivotTable } from "./FacebookAdsHealthPivotTable";
@@ -68,6 +68,14 @@ export function FacebookAdsHealthView({ startDate, endDate, level }: Props) {
     // campaign into the queryKey collapsed the campaign list to the current
     // selection (you couldn't switch campaigns without clearing first).
   });
+
+  // Settings power the threshold-based cell colouring (ROAS green/red vs
+  // breakeven). Falls back to 1.0 if the settings request is in flight or
+  // failed — sensible default since ROAS >= 1.0 means revenue >= spend.
+  // Response shape: { success, settings: FacebookAdsHealthSettingsValues }.
+  const { data: settingsData } = useFacebookAdsHealthSettings();
+  const breakevenRoas: number =
+    (settingsData as { settings?: { breakevenRoas?: number } } | undefined)?.settings?.breakevenRoas ?? 1.0;
 
   const campaignOptions = useMemo(() => {
     const m = new Map<string, string>();
@@ -155,11 +163,12 @@ export function FacebookAdsHealthView({ startDate, endDate, level }: Props) {
             startDate={startDate}
             endDate={endDate}
             level={effectiveLevel}
+            breakevenRoas={breakevenRoas}
           />
         )}
       </div>
       <div className="md:hidden">
-        <FacebookAdsHealthMobileCards rows={displayedRows} level={effectiveLevel} metric={metric} />
+        <FacebookAdsHealthMobileCards rows={displayedRows} level={effectiveLevel} metric={metric} breakevenRoas={breakevenRoas} />
       </div>
       <FacebookAdsHealthSettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />
     </div>
