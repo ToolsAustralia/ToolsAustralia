@@ -3685,6 +3685,11 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
     let affiliateCode: string | undefined;
     let experimentId: string | undefined;
     let variantId: string | undefined;
+    // A/B-test attribution: only the INITIAL subscription purchase counts toward the experiment.
+    // Renewals (subscription_cycle) and upgrades/downgrades (subscription_update) carry the same
+    // subscription metadata for the lifetime of the subscription — attributing them would inflate
+    // the original variant's revenue every month forever, even after the experiment ended.
+    const isInitialSubscriptionInvoice = expandedInvoice.billing_reason === "subscription_create";
     try {
       const invoiceTyped = expandedInvoice as Stripe.Invoice & {
         payment_intent?: string | Stripe.PaymentIntent;
@@ -3705,15 +3710,30 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
           campaignCode = subscription.metadata.campaignCode;
         }
         // ✅ A/B Testing: Extract experiment assignment from subscription metadata
-        if (subscription.metadata.experimentId && subscription.metadata.variantId) {
+        // Gated on initial-invoice only so renewals don't keep crediting the original variant.
+        if (
+          isInitialSubscriptionInvoice &&
+          subscription.metadata.experimentId &&
+          subscription.metadata.variantId
+        ) {
           experimentId = subscription.metadata.experimentId;
           variantId = subscription.metadata.variantId;
-          webhookLog("info", `✅ Retrieved experiment assignment from subscription metadata:`, { 
-            experimentId, 
+          webhookLog("info", `✅ Retrieved experiment assignment from subscription metadata:`, {
+            experimentId,
             variantId,
             invoiceId: expandedInvoice.id,
             subscriptionId: subscription.id,
           });
+        } else if (
+          !isInitialSubscriptionInvoice &&
+          subscription.metadata.experimentId &&
+          subscription.metadata.variantId
+        ) {
+          webhookLog(
+            "info",
+            `↩️ Skipping A/B attribution for non-initial subscription invoice (billing_reason=${expandedInvoice.billing_reason})`,
+            { invoiceId: expandedInvoice.id, subscriptionId: subscription.id }
+          );
         }
       }
 
@@ -3735,11 +3755,17 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
           campaignCode = paymentIntent.metadata.campaignCode;
         }
         // ✅ A/B Testing: Extract experiment assignment from payment intent metadata (if not in subscription)
-        if (!experimentId && paymentIntent.metadata.experimentId && paymentIntent.metadata.variantId) {
+        // Same initial-invoice gate as METHOD 1.
+        if (
+          !experimentId &&
+          isInitialSubscriptionInvoice &&
+          paymentIntent.metadata.experimentId &&
+          paymentIntent.metadata.variantId
+        ) {
           experimentId = paymentIntent.metadata.experimentId;
           variantId = paymentIntent.metadata.variantId;
-          webhookLog("info", `✅ Retrieved experiment assignment from payment intent metadata:`, { 
-            experimentId, 
+          webhookLog("info", `✅ Retrieved experiment assignment from payment intent metadata:`, {
+            experimentId,
             variantId,
             invoiceId: expandedInvoice.id,
             paymentIntentId: paymentIntent.id,

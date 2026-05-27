@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { Save, X, Image, Type, Package, ShoppingCart, Palette } from "lucide-react";
+import { Save, X, Image, Type, Package, ShoppingCart, Palette, Plus, Trash2 } from "lucide-react";
 import { Input, Textarea, Checkbox, Button, FormSection, Select } from "@/components/modals/ui";
 import ImageUpload from "@/components/modals/ui/ImageUpload";
 import { Variant, CreateVariantPayload } from "@/hooks/queries/useABTestingQueries";
@@ -275,6 +275,22 @@ export default function VariantConfigEditor({ variant, experimentId: _experiment
             label="Hero Messaging (Optional)"
             placeholder="Optional hero text overlay"
             rows={2}
+          />
+
+          {/* Per-slug image overrides — used when one experiment runs across
+              multiple landing slugs (e.g. /promotions/dewalt and
+              /promotions/dewalt-milwaukee) and each needs its own creative. */}
+          <PerSlugImageMapEditor
+            value={formData.config.hero?.imageSrcBySlug ?? {}}
+            onChange={(next) =>
+              setFormData({
+                ...formData,
+                config: {
+                  ...formData.config,
+                  hero: { ...formData.config.hero, imageSrcBySlug: next },
+                },
+              })
+            }
           />
         </div>
       </FormSection>
@@ -697,5 +713,131 @@ export default function VariantConfigEditor({ variant, experimentId: _experiment
         </Button>
       </div>
     </form>
+  );
+}
+
+type PerSlugImageEntry = { desktop?: string; mobile?: string };
+
+interface PerSlugImageMapEditorProps {
+  value: Record<string, PerSlugImageEntry>;
+  onChange: (next: Record<string, PerSlugImageEntry>) => void;
+}
+
+/**
+ * Per-slug hero image overrides editor.
+ *
+ * Used when one experiment targets multiple landing slugs (e.g. /promotions/dewalt
+ * and /promotions/dewalt-milwaukee) and each page needs its own creative. Slug
+ * keys must match `slugTargets` on the experiment exactly.
+ *
+ * Each row's Desktop and Mobile paths are independently optional — leave one
+ * blank to use the default landing-image-resolver path for that viewport. This
+ * supports mobile-only or desktop-only A/B tests.
+ */
+function PerSlugImageMapEditor({ value, onChange }: PerSlugImageMapEditorProps) {
+  const entries = Object.entries(value);
+
+  const updateEntry = (oldSlug: string, nextSlug: string, paths: PerSlugImageEntry) => {
+    // Strip empty strings so the saved config carries only meaningful overrides.
+    const cleaned: PerSlugImageEntry = {};
+    if (paths.desktop && paths.desktop.trim()) cleaned.desktop = paths.desktop.trim();
+    if (paths.mobile && paths.mobile.trim()) cleaned.mobile = paths.mobile.trim();
+    const next: Record<string, PerSlugImageEntry> = {};
+    for (const [k, v] of entries) {
+      if (k === oldSlug) {
+        const trimmedSlug = nextSlug.trim();
+        if (trimmedSlug) next[trimmedSlug] = cleaned;
+      } else {
+        next[k] = v;
+      }
+    }
+    onChange(next);
+  };
+
+  const removeEntry = (slug: string) => {
+    const next = { ...value };
+    delete next[slug];
+    onChange(next);
+  };
+
+  const addEntry = () => {
+    // Find an unused placeholder slug so the new row renders.
+    let candidate = "";
+    let i = 1;
+    while (candidate === "" || candidate in value) {
+      candidate = `new-slug-${i}`;
+      i += 1;
+    }
+    onChange({ ...value, [candidate]: {} });
+  };
+
+  return (
+    <div className="rounded-md border border-gray-200 bg-white p-3 dark:border-neutral-700 dark:bg-neutral-900">
+      <div className="mb-2 flex items-center justify-between">
+        <div>
+          <p className="text-sm font-medium text-gray-700 dark:text-neutral-200">Per-slug hero overrides (optional)</p>
+          <p className="text-xs text-gray-500 dark:text-neutral-400">
+            Each row maps a landing slug to a hero image. Slugs must match the experiment&apos;s slugTargets exactly.
+            Leave Desktop or Mobile blank to fall through to the default landing image for that viewport
+            (useful for mobile-only A/B tests).
+          </p>
+        </div>
+        <Button type="button" variant="secondary" onClick={addEntry} icon={Plus} iconPosition="left">
+          Add slug
+        </Button>
+      </div>
+
+      {entries.length === 0 ? (
+        <p className="py-3 text-center text-xs text-gray-400 dark:text-neutral-500">No per-slug overrides.</p>
+      ) : (
+        <div className="space-y-2">
+          {entries.map(([slug, paths]) => (
+            <div
+              key={slug}
+              className="grid grid-cols-1 gap-2 rounded border border-gray-100 bg-gray-50 p-2 md:grid-cols-[1fr_1fr_1fr_auto] dark:border-neutral-800 dark:bg-neutral-950"
+            >
+              <Input
+                id={`per-slug-key-${slug}`}
+                name={`per-slug-key-${slug}`}
+                type="text"
+                value={slug}
+                onChange={(e) => updateEntry(slug, e.target.value, paths)}
+                label="Slug"
+                placeholder="e.g. dewalt or dewalt-milwaukee"
+              />
+              <Input
+                id={`per-slug-desktop-${slug}`}
+                name={`per-slug-desktop-${slug}`}
+                type="text"
+                value={paths.desktop ?? ""}
+                onChange={(e) => updateEntry(slug, slug, { ...paths, desktop: e.target.value })}
+                label="Desktop path (optional)"
+                placeholder="leave blank to use default"
+              />
+              <Input
+                id={`per-slug-mobile-${slug}`}
+                name={`per-slug-mobile-${slug}`}
+                type="text"
+                value={paths.mobile ?? ""}
+                onChange={(e) => updateEntry(slug, slug, { ...paths, mobile: e.target.value })}
+                label="Mobile path (optional)"
+                placeholder="leave blank to use default"
+              />
+              <div className="flex items-end">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => removeEntry(slug)}
+                  icon={Trash2}
+                  iconPosition="left"
+                >
+                  Remove
+                </Button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
