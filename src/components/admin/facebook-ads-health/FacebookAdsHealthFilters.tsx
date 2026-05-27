@@ -1,8 +1,8 @@
 "use client";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "framer-motion";
-import { Search, SlidersHorizontal, X } from "lucide-react";
+import { ChevronDown, Search, SlidersHorizontal, X } from "lucide-react";
 
 export type MetricChoice = "spend" | "conversions" | "revenue" | "roas" | "linkClicks" | "linkCtr" | "costPerLinkClick";
 
@@ -38,6 +38,99 @@ interface Props {
 function toggleInArray(arr: string[], value: string): string[] {
   return arr.includes(value) ? arr.filter((x) => x !== value) : [...arr, value];
 }
+
+/**
+ * Compact multi-select used on the desktop row layout to collapse what would
+ * otherwise be 4+ chip buttons into a single dropdown button. Click outside or
+ * Esc closes. Active selections shown as a small count badge on the trigger.
+ * Mobile drawer keeps the full chip layout since it already has vertical room.
+ */
+function MultiSelect({ label, options, selected, onChange }: {
+  label: string;
+  options: ReadonlyArray<{ value: string; label?: string }>;
+  selected: string[];
+  onChange: (next: string[]) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const wrapperRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const onMouseDown = (e: MouseEvent) => {
+      if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("mousedown", onMouseDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onMouseDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+  const count = selected.length;
+  const active = count > 0;
+  return (
+    <div ref={wrapperRef} className="relative inline-block">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className={`px-2.5 py-1 rounded-full border text-[11px] font-semibold inline-flex items-center gap-1 ${active ? "bg-blue-600 text-white border-blue-600" : "border-zinc-300 dark:border-zinc-700"}`}
+      >
+        <span>{label}</span>
+        {active && (
+          <span className="bg-white/30 dark:bg-white/20 rounded px-1 text-[9px] leading-tight">{count}</span>
+        )}
+        <ChevronDown size={11} className={active ? "" : "text-zinc-400"} />
+      </button>
+      {open && (
+        <div className="absolute top-full left-0 mt-1 z-30 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded shadow-lg p-1 min-w-[150px]">
+          {options.map((opt) => {
+            const checked = selected.includes(opt.value);
+            return (
+              <label
+                key={opt.value}
+                className="flex items-center gap-2 px-2 py-1 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded cursor-pointer text-xs"
+              >
+                <input
+                  type="checkbox"
+                  checked={checked}
+                  onChange={() =>
+                    onChange(checked ? selected.filter((v) => v !== opt.value) : [...selected, opt.value])
+                  }
+                  className="w-3.5 h-3.5 accent-blue-600"
+                />
+                <span>{opt.label ?? opt.value}</span>
+              </label>
+            );
+          })}
+          {active && (
+            <button
+              type="button"
+              onClick={() => onChange([])}
+              className="w-full text-left px-2 py-1 mt-0.5 border-t border-zinc-100 dark:border-zinc-800 text-[10px] text-zinc-500 hover:bg-zinc-50 dark:hover:bg-zinc-800 rounded"
+            >
+              Clear all
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+const VERDICT_OPTIONS = [
+  { value: "scale", label: "Scale" },
+  { value: "hold", label: "Hold" },
+  { value: "investigate", label: "Investigate" },
+  { value: "cut", label: "Cut?" },
+] as const;
+const LEARNING_OPTIONS = [
+  { value: "Active", label: "Active" },
+  { value: "Learning", label: "Learning" },
+  { value: "LearningLimited", label: "Learning Limited" },
+  { value: "Unknown", label: "Unknown" },
+] as const;
 
 /**
  * Renders the shared filter controls used by BOTH the desktop inline row and
@@ -146,17 +239,14 @@ function FilterControls(props: Props & { layout: "row" | "stack" }) {
         </button>
       ))}
       <span className="text-zinc-300 dark:text-zinc-700">|</span>
-      <span className="text-zinc-500">Verdict:</span>
-      {["scale", "hold", "investigate", "cut"].map((v) => (
-        <button
-          key={v}
-          onClick={() => props.onVerdictFilterChange(toggleInArray(props.verdictFilter, v))}
-          className={`px-2 py-1 rounded-full border text-[10px] ${props.verdictFilter.includes(v) ? "bg-blue-600 text-white border-blue-600" : "border-zinc-300 dark:border-zinc-700"}`}
-        >
-          {v}
-        </button>
-      ))}
-      <span className="text-zinc-300 dark:text-zinc-700">|</span>
+      {/* Verdict + Learning collapsed into dropdowns — saves horizontal room so
+          Spend / Search / Settings fit on the same row instead of wrapping. */}
+      <MultiSelect
+        label="Verdict"
+        options={VERDICT_OPTIONS}
+        selected={props.verdictFilter}
+        onChange={props.onVerdictFilterChange}
+      />
       <button
         onClick={() => props.onLiveOnlyChange(!props.liveOnly)}
         title="Hide paused, archived, deleted, or in-review ad sets — show only ad sets currently delivering."
@@ -164,17 +254,12 @@ function FilterControls(props: Props & { layout: "row" | "stack" }) {
       >
         Live only
       </button>
-      <span className="text-zinc-300 dark:text-zinc-700">|</span>
-      <span className="text-zinc-500">Learning:</span>
-      {(["Active", "Learning", "LearningLimited", "Unknown"] as const).map((s) => (
-        <button
-          key={s}
-          onClick={() => props.onLearningStatusFilterChange(toggleInArray(props.learningStatusFilter, s))}
-          className={`px-2 py-1 rounded-full border text-[10px] ${props.learningStatusFilter.includes(s) ? "bg-blue-600 text-white border-blue-600" : "border-zinc-300 dark:border-zinc-700"}`}
-        >
-          {s}
-        </button>
-      ))}
+      <MultiSelect
+        label="Learning"
+        options={LEARNING_OPTIONS}
+        selected={props.learningStatusFilter}
+        onChange={props.onLearningStatusFilterChange}
+      />
       <span className="text-zinc-300 dark:text-zinc-700">|</span>
       <label className="text-zinc-500">
         Spend ≥ $
