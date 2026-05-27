@@ -45,6 +45,11 @@ export class VariantConfigService {
           ...baseConfig.hero?.ctaStyle,
           ...variantConfig.hero?.ctaStyle,
         },
+        // Merge per-slug image maps so a partial variant config doesn't clobber base entries.
+        imageSrcBySlug: {
+          ...baseConfig.hero?.imageSrcBySlug,
+          ...variantConfig.hero?.imageSrcBySlug,
+        },
       },
       banner: {
         ...baseConfig.banner,
@@ -111,6 +116,32 @@ export class VariantConfigService {
         }
         if (hero.ctaText && typeof hero.ctaText !== "string") {
           errors.push("Hero ctaText must be a string");
+        }
+        if (hero.imageSrcBySlug !== undefined) {
+          if (typeof hero.imageSrcBySlug !== "object" || Array.isArray(hero.imageSrcBySlug) || hero.imageSrcBySlug === null) {
+            errors.push("Hero imageSrcBySlug must be a plain object mapping slug → { desktop?, mobile? }");
+          } else {
+            for (const [slug, paths] of Object.entries(hero.imageSrcBySlug as Record<string, unknown>)) {
+              if (!slug.trim()) {
+                errors.push("Hero imageSrcBySlug contains an empty slug key");
+                continue;
+              }
+              if (!paths || typeof paths !== "object") {
+                errors.push(`Hero imageSrcBySlug["${slug}"] must be an object with optional desktop and mobile string properties`);
+                continue;
+              }
+              const p = paths as Record<string, unknown>;
+              if (p.desktop !== undefined && typeof p.desktop !== "string") {
+                errors.push(`Hero imageSrcBySlug["${slug}"].desktop must be a string when present`);
+              }
+              if (p.mobile !== undefined && typeof p.mobile !== "string") {
+                errors.push(`Hero imageSrcBySlug["${slug}"].mobile must be a string when present`);
+              }
+              if (p.desktop === undefined && p.mobile === undefined) {
+                errors.push(`Hero imageSrcBySlug["${slug}"] must override at least one of desktop or mobile`);
+              }
+            }
+          }
         }
       }
     }

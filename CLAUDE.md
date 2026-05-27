@@ -591,7 +591,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/app/globals.css",
         "src/app/not-found.tsx"
       ],
-      "lastVerified": "2026-05-15"
+      "lastVerified": "2026-05-27"
     },
     "client-state": {
       "docs": "docs/client-state/",
@@ -614,7 +614,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/hooks/usePrefetching.ts",
         "src/hooks/useConfetti.ts"
       ],
-      "lastVerified": "2026-05-20"
+      "lastVerified": "2026-05-27"
     },
     "admin": {
       "docs": "docs/admin/",
@@ -636,7 +636,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/models/DashboardStatsDailySnapshot.ts",
         "src/services/admin/dashboard-stats/**"
       ],
-      "lastVerified": "2026-05-20"
+      "lastVerified": "2026-05-27"
     },
     "dashboard-account": {
       "docs": "docs/dashboard-account/",
@@ -689,7 +689,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/utils/validation/**",
         "src/utils/webhook/**",
         "scripts/migrations/**",
-        "scripts/seed-admin-data.ts",
+        "scripts/seed-*.ts",
         "scripts/migrate-*.ts",
         "scripts/fix-*.{ts,mjs,js}",
         "scripts/update-*.ts",

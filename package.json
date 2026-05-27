@@ -17,6 +17,8 @@
     "lint": "eslint . --ext .ts,.tsx,.js,.jsx",
     "lint:fix": "eslint . --ext .ts,.tsx,.js,.jsx --fix",
     "mini-draw:order": "tsx scripts/update-mini-draw-order.ts",
+    "seed:variation-experiment": "tsx scripts/seed-variation1-vs-variation2-experiment.ts",
+    "seed:variation-experiment:dry": "tsx scripts/seed-variation1-vs-variation2-experiment.ts --dry-run",
     "migrate:accumulated-entries": "tsx scripts/migrate-accumulated-entries.ts",
     "migrate:package-type": "tsx scripts/migrate-package-type-subscription-to-membership.ts",
     "type-check": "tsc --noEmit",

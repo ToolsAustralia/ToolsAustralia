@@ -9,7 +9,6 @@ const MembershipModal = dynamic(() => import("@/components/modals/MembershipModa
   ssr: false,
 });
 import { useMemberships } from "@/hooks/useMemberships";
-import { useMembershipThemeExperiment } from "@/hooks/ab-testing/useMembershipThemeExperiment";
 import { useUserContext } from "@/contexts/UserContext";
 import { useMembershipModal } from "@/hooks/useMembershipModal";
 import { convertToLocalPlan, type LocalMembershipPlan } from "@/utils/membership/membership-adapters";
@@ -32,7 +31,6 @@ import {
 } from "@/utils/package-colors/packageColorScheme";
 import { getElectricPackageColorScheme } from "@/utils/package-colors/electricPackageScheme";
 import { getAdditionalPackDiscount } from "@/utils/membership/additional-pack-discount";
-import { useThemeStore } from "@/stores/useThemeStore";
 import ElectricPackageCard from "@/components/sections/membership/ElectricPackageCard";
 import { usePromoTheme, usePromoThemeStore } from "@/stores/usePromoThemeStore";
 import { hasMultiplierBanner } from "@/utils/promo/multiplier-banner";
@@ -56,8 +54,6 @@ export default function MembershipSection({
   variantConfig,
 }: MembershipSectionProps) {
   const router = useRouter();
-  const { forceLight } = useMembershipThemeExperiment();
-  const isDark = useThemeStore((s) => s.theme === "dark") && !forceLight;
   const theme = usePromoTheme();
   const promoThemeSlug = usePromoThemeStore((s) => s.slug);
   const promoToolsetSlug = usePromoThemeStore((s) => s.toolsetSlug);
@@ -445,7 +441,7 @@ export default function MembershipSection({
           showBestValue={showBestValueRibbon}
           ribbon={showBestValueRibbon ? null : ribbon}
           ctaLabel={ctaLabel}
-          theme={isDark ? "dark" : "light"}
+          theme="light"
         />
       </div>
     );

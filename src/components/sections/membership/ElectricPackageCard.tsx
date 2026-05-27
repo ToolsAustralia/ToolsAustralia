@@ -28,7 +28,7 @@ export interface ElectricPackageCardProps {
   showBestValue?: boolean;
   /** Optional corner ribbon label (e.g. "MOST POPULAR" / "CURRENT"). Ignored when showBestValue is true. */
   ribbon?: string | null;
-  /** Visual theme. "dark" (default) = the final electric design, unchanged. */
+  /** Visual theme. Defaults to "light" — winner of the membership-theme A/B test. */
   theme?: "light" | "dark";
   /** Overrides the interactive CTA text (e.g. "Upgrade to Boss", "Update payment"). Default "Enter Now". */
   ctaLabel?: string;
@@ -55,7 +55,7 @@ export default function ElectricPackageCard({
   onSelect,
   showBestValue = false,
   ribbon = null,
-  theme = "dark",
+  theme = "light",
   ctaLabel,
 }: ElectricPackageCardProps) {
   const icon = getPackageIcon(plan.id);

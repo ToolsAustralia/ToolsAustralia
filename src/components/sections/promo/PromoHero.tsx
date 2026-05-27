@@ -69,6 +69,15 @@ export default function PromoHero({
     ? getLandingHeroImagePaths(effectiveSlug)
     : null;
 
+  /** A/B-test per-slug override: one variant can carry a map of slug → { desktop?, mobile? }
+   *  so a single experiment can run across multiple toolset / evergreen landings with
+   *  page-specific creatives. Each viewport is independently optional — a mobile-only
+   *  A/B test omits `desktop` and the page uses the default theme-aware landing image
+   *  for that slot. */
+  const perSlugVariantImage = effectiveSlug
+    ? variantConfig?.hero?.imageSrcBySlug?.[effectiveSlug] ?? null
+    : null;
+
   const standardHeroPaths = getPromoImagePaths({
     multiplier: resolvedMultiplier,
     majorDrawUrgency,
@@ -83,14 +92,21 @@ export default function PromoHero({
       };
     }
 
-    if (landingHeroPaths) {
-      return {
-        desktop: getImageForMode(landingHeroPaths, themeMode, "desktop"),
-        mobile: getImageForMode(landingHeroPaths, themeMode, "mobile"),
-      };
-    }
+    // Compose desktop and mobile independently:
+    //   1. per-slug variant override for that viewport (highest priority)
+    //   2. default landing-image-resolver path (theme-aware)
+    //   3. fall back to the multiplier/urgency-aware standard promo hero
+    const defaultDesktop = landingHeroPaths
+      ? getImageForMode(landingHeroPaths, themeMode, "desktop")
+      : standardHeroPaths.desktop;
+    const defaultMobile = landingHeroPaths
+      ? getImageForMode(landingHeroPaths, themeMode, "mobile")
+      : standardHeroPaths.mobile;
 
-    return standardHeroPaths;
+    return {
+      desktop: perSlugVariantImage?.desktop || defaultDesktop,
+      mobile: perSlugVariantImage?.mobile || defaultMobile,
+    };
   })();
 
   const ctaText = variantConfig?.hero?.ctaText || "ENTER NOW";

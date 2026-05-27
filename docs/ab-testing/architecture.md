@@ -15,7 +15,35 @@ Run experiments on landing pages and key flows. Each user is sticky-assigned to 
 | API | [src/app/api/ab-testing/](../../src/app/api/ab-testing/) — assignment endpoints |
 | Models | [src/models/ab-testing/](../../src/models/ab-testing/) — experiment, assignment, conversion |
 
-## Site-wide membership dark-mode experiment
+## Per-slug hero image overrides
+
+One experiment can run across multiple landing slugs (e.g. `/promotions/dewalt`
+toolset landing + `/promotions/dewalt-milwaukee` evergreen prize page) and show
+a different hero on each page. The variant carries
+`hero.imageSrcBySlug: Record<slug, { desktop?, mobile? }>`. Each viewport is
+**independently optional** — leaving `desktop` blank for a row means desktop
+visitors on that slug see the theme-aware default landing image, while mobile
+visitors still see the override. This supports mobile-only or desktop-only A/B
+tests without forcing the other viewport into the experiment.
+
+Resolution order per `(slug, viewport)` in [PromoHero.tsx](../../src/components/sections/promo/PromoHero.tsx):
+
+1. `variantConfig.hero.imageSrcBySlug[slug].{desktop|mobile}` if set
+2. The theme-aware default from `getLandingHeroImagePaths(slug)` (handles
+   missing light/dark variants via `resolveLandingHeroImage`'s opposite-mode
+   fallback — important for slugs like `*-sidchrome` that only ship `-dark`)
+3. The multiplier/urgency-aware standard promo hero
+
+Slug keys must match the experiment's `slugTargets` exactly. The admin editor at
+[VariantConfigEditor.tsx](../../src/components/admin/ab-testing/VariantConfigEditor.tsx)
+exposes a `PerSlugImageMapEditor` subcomponent for managing the map — each row
+has independently-optional Desktop and Mobile path inputs.
+
+## Site-wide membership dark-mode experiment (historical — winner shipped)
+
+The "no theme" arm won. `MembershipSection` now passes `theme="light"`
+unconditionally; the hook + API route + VariantConfig field are dormant. The
+section below documents the pattern for future site-wide cosmetic tests.
 
 Targets the membership section site-wide without a global VariantProvider:
 

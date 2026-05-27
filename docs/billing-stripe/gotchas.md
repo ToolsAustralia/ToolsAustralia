@@ -254,3 +254,36 @@ capture non-thrown early returns via `rejectAndLog` from
 - The entire top-level `catch` block in each route — thrown errors already auto-log via `ErrorLoggingService` / `autoLogPaymentErrorServer`; wrapping those would double-log
 
 **No double-logging risk:** `rejectAndLog` is only on non-thrown paths; the `catch` blocks are untouched.
+
+## A/B-test attribution on subscription invoices is initial-only
+
+In `services/stripe-webhook-handlers/index.ts`, the `invoice.payment_succeeded`
+path used to read `experimentId` / `variantId` from `subscription.metadata` for
+every invoice. Because subscription metadata persists for the lifetime of the
+subscription, every monthly renewal credited the original variant — inflating
+the original experiment's "revenue" indefinitely, even months after it ended.
+
+The fix gates the metadata pickup on
+`expandedInvoice.billing_reason === "subscription_create"` (the initial
+sign-up invoice). Renewals (`subscription_cycle`) and tier changes
+(`subscription_update`) skip the A/B attribution but still grant benefits and
+fire tracking normally. Same gate is applied when falling back to
+`paymentIntent.metadata` in METHOD 2.
+
+If you ever want LTV-by-variant analysis, do it as a separate query joining
+the variant assignment to the user's whole subscription history — don't restore
+the renewal-attribution path.
+
+## Multi-experiment attribution collision in `create-one-time-purchase`
+
+Both `create-one-time-purchase` and `create-one-time-purchase-existing-user`
+fall back to reading `ta_ab_assignment_<expId>` cookies when no DB assignment
+is found. The cookie loop iterates active experiments and breaks on first
+match — historically with no priority rule, so a site-wide cosmetic experiment
+(e.g. `__membership-theme__`) could claim purchase credit before a real
+page-targeted promo experiment.
+
+Both routes now sort experiments by `attributionRank` (exported from
+`src/utils/ab-testing/get-user-experiment-assignment.ts`): page-targeted beats
+wildcard `*`, and the membership-theme sentinel is excluded outright. Match
+the priority rule there if you ever add another attribution code path.

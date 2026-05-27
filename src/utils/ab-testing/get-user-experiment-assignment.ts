@@ -2,10 +2,32 @@ import mongoose from "mongoose";
 import VariantAssignmentRepository from "@/repositories/ab-testing/VariantAssignmentRepository";
 import ExperimentRepository from "@/repositories/ab-testing/ExperimentRepository";
 
+/** Cosmetic site-wide experiments that must never be credited with purchases. */
+export const NON_CONVERSION_SENTINEL_SLUGS = new Set(["__membership-theme__"]);
+
+/**
+ * Rank experiments for purchase attribution when no slug is provided.
+ * Lower number = higher priority.
+ *
+ *   0 = page-targeted (slugTargets list real prize/toolset slugs)
+ *   1 = global wildcard ("*")
+ *   2 = cosmetic site-wide sentinel (excluded entirely — never returned)
+ */
+export function attributionRank(slugTargets: string[]): number {
+  if (slugTargets.every((s) => NON_CONVERSION_SENTINEL_SLUGS.has(s))) return 2;
+  if (slugTargets.includes("*")) return 1;
+  return 0;
+}
+
 /**
  * Get user's active experiment assignment
  * Used when recording conversions to link them to the experiment/variant
- * 
+ *
+ * Priority rule (when no `slug` is provided, e.g. from payment metadata):
+ *   page-targeted experiments win over wildcard, and the membership-theme
+ *   sentinel is excluded entirely so a cosmetic UI test cannot steal purchase
+ *   credit from a real promo experiment the same user is also in.
+ *
  * @param userId - User ID (required)
  * @param slug - Optional slug to filter experiments
  * @param anonymousId - Optional anonymous ID to check for anonymous assignments
@@ -26,10 +48,19 @@ export async function getUserActiveExperimentAssignment(
 
     console.log(`🔍 [A/B Testing] Looking for assignment - userId: ${userId}, slug: ${slug || "none"}, anonymousId: ${anonymousId || "none"}, active experiments: ${activeExperiments.experiments.length}`);
 
+    // Order: page-targeted first, wildcard second, sentinel last (and sentinel is
+    // dropped before assignment lookup so it can never be returned for purchase
+    // attribution). Within a tier preserve repo order.
+    const orderedExperiments = [...activeExperiments.experiments]
+      .map((exp) => ({ exp, rank: attributionRank(exp.slugTargets) }))
+      .filter(({ rank }) => rank < 2)
+      .sort((a, b) => a.rank - b.rank)
+      .map(({ exp }) => exp);
+
     // First, try to find user's assignment for any active experiment (without slug filter)
     // This handles cases where slug is not available (e.g., from payment metadata)
     // This ensures purchases are tracked even if we don't know which page they came from
-    for (const exp of activeExperiments.experiments) {
+    for (const exp of orderedExperiments) {
       if (!exp.isActive()) {
         console.log(`⏭️ [A/B Testing] Skipping inactive experiment: ${exp._id}`);
         continue;
@@ -84,10 +115,10 @@ export async function getUserActiveExperimentAssignment(
     // This handles cases where slug is provided but user wasn't assigned yet
     if (slug) {
       console.log(`🔍 [A/B Testing] Trying slug-based lookup for: ${slug}`);
-      const matchingExperiments = activeExperiments.experiments.filter((exp) => {
-        if (!exp.isActive()) return false;
-        return exp.matchesSlug(slug);
-      });
+      // Sort so page-targeted experiments beat wildcard matches for the same slug.
+      const matchingExperiments = activeExperiments.experiments
+        .filter((exp) => exp.isActive() && exp.matchesSlug(slug))
+        .sort((a, b) => attributionRank(a.slugTargets) - attributionRank(b.slugTargets));
 
       console.log(`🔍 [A/B Testing] Found ${matchingExperiments.length} experiments matching slug: ${slug}`);
 
