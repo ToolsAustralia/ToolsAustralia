@@ -320,6 +320,8 @@ Data hook: [src/hooks/queries/admin/useCancellationFlowAnalytics.ts](../../src/h
 
 **Orchestrator:** `src/components/admin/facebook-ads-health/FacebookAdsHealthView.tsx` — wires `useFacebookAdsHealth` to the four health sub-components (`FacebookAdsHealthTopBar`, `FacebookAdsHealthFilters`, `FacebookAdsHealthPivotTable`, `FacebookAdsHealthSettingsModal`). Local state: `metric`, `verdictFilter`, `statusFilter`, `minSpend`, `campaignFilter`, `search`, `settingsOpen`. `campaignOptions` derived from `data.rows` via `useMemo`.
 
+**Client-side filtering (2026-05-27):** `verdict`, `learningStatus`, `minSpend`, and `search` are applied in a `useMemo` over the cached row set — they never reach the server and are excluded from the TanStack `queryKey`. Only `campaign` (data-slice) and `level`/`startDate`/`endDate` (aggregation grain) remain server-side. `filteredAlertCount` is also recomputed client-side from `displayedRows` so the banner reflects what's actually visible in the table.
+
 ## className conventions (2026-05-08)
 
 All admin components use `cn()` from `@/utils/cn` for conditional class composition. The `sweep-classname-template-literals` codemod (Plan 5 Phase 2) converted template-literal `className={`...`}` patterns to `className={cn(...)}` across this domain. When adding new conditional classes, use `cn()` rather than template literals.

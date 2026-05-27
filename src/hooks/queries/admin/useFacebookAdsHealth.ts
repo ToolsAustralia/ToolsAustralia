@@ -5,11 +5,9 @@ export interface FacebookAdsHealthQueryArgs {
   startDate: string;
   endDate: string;
   level: "campaign" | "adset" | "ad";
-  verdict?: string[];
-  learningStatus?: string[];
-  minSpend?: number;
+  // verdict, learningStatus, minSpend, search are applied client-side (useMemo in FacebookAdsHealthView).
+  // They must NOT appear here or in queryKey — doing so defeats TanStack Query caching on every filter toggle.
   campaign?: string[];
-  search?: string;
 }
 
 function buildUrl(args: FacebookAdsHealthQueryArgs): string {
@@ -17,23 +15,22 @@ function buildUrl(args: FacebookAdsHealthQueryArgs): string {
   p.set("startDate", args.startDate);
   p.set("endDate", args.endDate);
   p.set("level", args.level);
-  if (args.verdict?.length) p.set("verdict", args.verdict.join(","));
-  if (args.learningStatus?.length) p.set("learningStatus", args.learningStatus.join(","));
-  if (args.minSpend !== undefined) p.set("minSpend", String(args.minSpend));
   if (args.campaign?.length) p.set("campaign", args.campaign.join(","));
-  if (args.search) p.set("search", args.search);
   return `/api/admin/facebook-ads/health/insights?${p}`;
 }
 
 export function useFacebookAdsHealth(args: FacebookAdsHealthQueryArgs) {
   return useQuery({
-    queryKey: ["facebookAdsHealth", "insights", args],
+    // queryKey intentionally omits client-side filter values (verdict / status / spend / search).
+    // The unfiltered row set is cached; FacebookAdsHealthView filters it locally with useMemo.
+    queryKey: ["facebookAdsHealth", "insights", { startDate: args.startDate, endDate: args.endDate, level: args.level, campaign: args.campaign }],
     queryFn: async () => {
       const r = await fetch(buildUrl(args));
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
       return r.json();
     },
     staleTime: 60_000,
+    gcTime: 10 * 60_000,
     enabled: !!args.startDate && !!args.endDate,
   });
 }

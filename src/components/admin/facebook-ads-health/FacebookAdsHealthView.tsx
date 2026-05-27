@@ -36,11 +36,7 @@ export function FacebookAdsHealthView({ startDate, endDate, level }: Props) {
     startDate,
     endDate,
     level: effectiveLevel,
-    verdict: verdictFilter.length ? verdictFilter : undefined,
-    learningStatus: statusFilter.length ? statusFilter : undefined,
-    minSpend: minSpend === "" ? undefined : minSpend,
     campaign: campaignFilter.length ? campaignFilter : undefined,
-    search: search || undefined,
   });
 
   const campaignOptions = useMemo(() => {
@@ -49,13 +45,41 @@ export function FacebookAdsHealthView({ startDate, endDate, level }: Props) {
     return Array.from(m, ([id, name]) => ({ id, name }));
   }, [data]);
 
+  // Client-side filtering — verdict/status/spend/search never hit the server so filter toggles are instant
+  // and the TanStack Query cache for the unfiltered row set is preserved across filter changes.
+  const displayedRows = useMemo(() => {
+    if (!data?.rows) return [];
+    const verdictSet = verdictFilter.length ? new Set(verdictFilter) : null;
+    const statusSet = statusFilter.length ? new Set(statusFilter) : null;
+    const minSpendCents = minSpend === "" ? null : minSpend * 100;
+    const searchLower = search.trim().toLowerCase();
+    return data.rows.filter((row: { verdict: string; learningStatus: string; window: { spendCents: number }; name: string }) => {
+      if (verdictSet && !verdictSet.has(row.verdict)) return false;
+      if (statusSet && !statusSet.has(row.learningStatus)) return false;
+      if (minSpendCents !== null && row.window.spendCents < minSpendCents) return false;
+      if (searchLower && !row.name.toLowerCase().includes(searchLower)) return false;
+      return true;
+    });
+  }, [data?.rows, verdictFilter, statusFilter, minSpend, search]);
+
+  // Recompute alert count from the filtered visible rows so the banner reflects what's in the table.
+  const filteredAlertCount = useMemo(() => {
+    let investigate = 0;
+    let cut = 0;
+    for (const r of displayedRows) {
+      if ((r as { verdict: string }).verdict === "investigate") investigate++;
+      if ((r as { verdict: string }).verdict === "cut") cut++;
+    }
+    return { investigate, cut };
+  }, [displayedRows]);
+
   if (isLoading) return <div className="p-6 text-sm text-zinc-500">Loading…</div>;
   if (isError) return <div className="p-6 text-sm text-red-600">Failed to load.</div>;
 
   return (
     <div>
       <FacebookAdsHealthTopBar
-        alertCount={data?.alertCount ?? { investigate: 0, cut: 0 }}
+        alertCount={filteredAlertCount}
         onShowAlertedOnly={() => setVerdictFilter(["cut", "investigate"])}
       />
       <FacebookAdsHealthFilters
@@ -76,13 +100,13 @@ export function FacebookAdsHealthView({ startDate, endDate, level }: Props) {
       />
       <div className="hidden md:block">
         {startDate === endDate ? (
-          <FacebookAdsHealthFlatTable rows={data?.rows ?? []} />
+          <FacebookAdsHealthFlatTable rows={displayedRows} />
         ) : (
-          <FacebookAdsHealthPivotTable rows={data?.rows ?? []} metric={metric} />
+          <FacebookAdsHealthPivotTable rows={displayedRows} metric={metric} />
         )}
       </div>
       <div className="md:hidden">
-        <FacebookAdsHealthMobileCards rows={data?.rows ?? []} />
+        <FacebookAdsHealthMobileCards rows={displayedRows} />
       </div>
       <FacebookAdsHealthSettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />
     </div>

@@ -17,11 +17,9 @@ const querySchema = z.object({
   startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   level: z.enum(["campaign", "adset", "ad"]).default("adset"),
-  verdict: z.string().optional(),
-  learningStatus: z.string().optional(),
-  minSpend: z.coerce.number().optional(),
+  // verdict, learningStatus, minSpend, search are applied client-side (useMemo in FacebookAdsHealthView)
+  // so they are intentionally absent from this schema — removing them from queryKey keeps TanStack cache hits.
   campaign: z.string().optional(),
-  search: z.string().optional(),
 });
 
 export async function GET(request: NextRequest) {
@@ -64,9 +62,8 @@ export async function GET(request: NextRequest) {
     accessToken,
   });
 
-  // Apply filters
-  const verdictFilter = q.verdict ? new Set(q.verdict.split(",")) : null;
-  const statusFilter = q.learningStatus ? new Set(q.learningStatus.split(",")) : null;
+  // verdict, learningStatus, minSpend, and search are now client-side filters (see FacebookAdsHealthView useMemo).
+  // Only campaign is still server-side because it selects a genuine data slice.
   const campaignFilter = q.campaign ? new Set(q.campaign.split(",")) : null;
 
   const enriched = rows
@@ -74,12 +71,8 @@ export async function GET(request: NextRequest) {
       const v = computeVerdict(row, settings);
       return { row, v };
     })
-    .filter(({ row, v }) => {
-      if (verdictFilter && !verdictFilter.has(v.verdict)) return false;
-      if (statusFilter && !statusFilter.has(row.learningStatusBucket)) return false;
-      if (q.minSpend !== undefined && row.window.spendCents < q.minSpend * 100) return false;
+    .filter(({ row }) => {
       if (campaignFilter && !campaignFilter.has(row.campaignId)) return false;
-      if (q.search && !row.name.toLowerCase().includes(q.search.toLowerCase())) return false;
       return true;
     });
 
@@ -88,6 +81,8 @@ export async function GET(request: NextRequest) {
     ? await loadActiveSnoozes(userId, enriched.map((e) => e.row.id))
     : new Map<string, Date>();
 
+  // alertCount tallies the full (campaign-filtered) set before any client-side filter is applied.
+  // The client recomputes a filtered alertCount from displayedRows so the banner reflects what's visible.
   let investigateCount = 0;
   let cutCount = 0;
   const out = enriched.map(({ row, v }) => {
