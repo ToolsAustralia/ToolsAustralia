@@ -25,6 +25,7 @@ function makeRow(overrides: Partial<MetaAdInsightsRow> = {}): MetaAdInsightsRow 
     last14dBestWeek: { conversions: 130, roas: 1.12 },
     learningStatusRaw: "SUCCESS",
     learningStatusBucket: "Active",
+    effectiveStatus: "ACTIVE",
     lastSignificantEdit: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000),
     daysSinceLastSignificantEdit: 14,
     daysInLearningLimited: 0,

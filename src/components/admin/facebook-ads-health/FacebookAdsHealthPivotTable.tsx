@@ -2,6 +2,7 @@
 import React, { useMemo, useState } from "react";
 import { ChevronDown, ChevronRight, ExternalLink } from "lucide-react";
 import { FacebookAdsHealthVerdictTooltip } from "./FacebookAdsHealthVerdictTooltip";
+import { LearningStatusPill, LiveStatusPill, type EffectiveStatusUi } from "./FacebookAdsHealthStatusBadges";
 
 type Metric = "spend" | "conversions" | "revenue" | "roas" | "linkClicks" | "linkCtr" | "costPerLinkClick";
 
@@ -25,6 +26,7 @@ export interface PivotRow {
   adsetId?: string;
   adsetName?: string;
   learningStatus: "Active" | "Learning" | "LearningLimited" | "Unknown";
+  effectiveStatus: EffectiveStatusUi;
   daily: DailyCell[];
   window: { spendCents: number; conversions: number; revenueCents: number };
   lastBudgetChangePct: number | null;
@@ -64,13 +66,6 @@ function formatCell(value: number, metric: Metric): string {
   if (metric === "linkCtr") return `${value.toFixed(1)}%`;
   return value.toFixed(0);
 }
-
-const STATUS_BADGE: Record<PivotRow["learningStatus"], string> = {
-  Active: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/50 dark:text-emerald-200",
-  Learning: "bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-200",
-  LearningLimited: "bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-200",
-  Unknown: "bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300",
-};
 
 const VERDICT_CHIP: Record<PivotRow["verdict"], string> = {
   scale: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/50 dark:text-emerald-200",
@@ -261,7 +256,8 @@ export function FacebookAdsHealthPivotTable({ rows, metric, startDate, endDate, 
         <td className={`sticky left-0 bg-white dark:bg-zinc-900 px-3 py-2 align-top ${indentClass}`}>
           <div className="font-semibold text-zinc-900 dark:text-zinc-100">{row.name}</div>
           <div className="flex gap-1.5 items-center text-[10px] text-zinc-500 mt-0.5">
-            <span className={`px-1.5 py-px rounded-full text-[9px] font-semibold uppercase ${STATUS_BADGE[row.learningStatus]}`}>{row.learningStatus}</span>
+            <LiveStatusPill status={row.effectiveStatus} />
+            <LearningStatusPill status={row.learningStatus} />
             {level === "ad" && row.adsetName ? <span>{row.adsetName}</span> : <span>{row.campaignName}</span>}
           </div>
         </td>

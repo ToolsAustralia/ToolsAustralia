@@ -2,6 +2,7 @@
 import React, { useState } from "react";
 import { ExternalLink } from "lucide-react";
 import { FacebookAdsHealthVerdictTooltip } from "./FacebookAdsHealthVerdictTooltip";
+import { LearningStatusPill, LiveStatusPill } from "./FacebookAdsHealthStatusBadges";
 import type { PivotRow } from "./FacebookAdsHealthPivotTable";
 
 interface Props {
@@ -14,13 +15,6 @@ function levelLabel(level: "campaign" | "adset" | "ad"): string {
   if (level === "adset") return "Ad Set";
   return "Ad";
 }
-
-const STATUS_BADGE: Record<PivotRow["learningStatus"], string> = {
-  Active: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/50 dark:text-emerald-200",
-  Learning: "bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-200",
-  LearningLimited: "bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-200",
-  Unknown: "bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300",
-};
 
 const VERDICT_CHIP: Record<PivotRow["verdict"], string> = {
   scale: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/50 dark:text-emerald-200",
@@ -43,6 +37,7 @@ export function FacebookAdsHealthFlatTable({ rows, level }: Props) {
           <tr className="bg-zinc-50 dark:bg-zinc-800 border-b border-zinc-200 dark:border-zinc-700">
             <th className="text-left px-3 py-2 text-[10px] font-semibold uppercase tracking-wider text-zinc-500 min-w-[220px]">{levelLabel(level)}</th>
             <th className="text-left px-2 py-2 text-[10px] font-semibold uppercase tracking-wider text-zinc-500">Status</th>
+            <th className="text-left px-2 py-2 text-[10px] font-semibold uppercase tracking-wider text-zinc-500">Learning</th>
             <th className="text-right px-2 py-2 text-[10px] font-semibold uppercase tracking-wider text-zinc-500">Spend</th>
             <th className="text-right px-2 py-2 text-[10px] font-semibold uppercase tracking-wider text-zinc-500">Conv</th>
             <th className="text-right px-2 py-2 text-[10px] font-semibold uppercase tracking-wider text-zinc-500">Revenue</th>
@@ -71,9 +66,10 @@ export function FacebookAdsHealthFlatTable({ rows, level }: Props) {
                   <div className="text-[10px] text-zinc-500 mt-0.5">{row.campaignName}</div>
                 </td>
                 <td className="px-2 py-2 align-middle">
-                  <span className={`px-1.5 py-px rounded-full text-[9px] font-semibold uppercase ${STATUS_BADGE[row.learningStatus]}`}>
-                    {row.learningStatus}
-                  </span>
+                  <LiveStatusPill status={row.effectiveStatus} />
+                </td>
+                <td className="px-2 py-2 align-middle">
+                  <LearningStatusPill status={row.learningStatus} />
                 </td>
                 <td className="text-right font-mono px-2 py-2 align-middle">${spendAud.toFixed(0)}</td>
                 <td className={`text-right font-mono px-2 py-2 align-middle ${row.window.conversions === 0 ? "text-red-600" : ""}`}>{row.window.conversions}</td>

@@ -40,6 +40,7 @@ function makeRow(reportingDays: number): MetaAdInsightsRow {
     last14dBestWeek: { conversions: 140, roas: 1.10 },
     learningStatusRaw: "SUCCESS",
     learningStatusBucket: "Active",
+    effectiveStatus: "ACTIVE",
     lastSignificantEdit: new Date(Date.now() - 20 * 86400000),
     daysSinceLastSignificantEdit: 20,
     daysInLearningLimited: 0,

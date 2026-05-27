@@ -3,7 +3,7 @@ import { fetchAdsetMetadata } from "@/services/facebook-ads-health/adsetMetadata
 import MetaAdInsightsDaily, { type IMetaAdInsightsDaily } from "@/models/MetaAdInsightsDaily";
 import { subDays, differenceInCalendarDays } from "date-fns";
 import { formatInTimeZone } from "date-fns-tz";
-import { PURCHASE_CAPABLE_OBJECTIVES, type MetaAdInsightsRow, type LearningStatusBucket } from "./types";
+import { PURCHASE_CAPABLE_OBJECTIVES, type MetaAdInsightsRow, type LearningStatusBucket, type EffectiveStatusBucket } from "./types";
 
 const AEST = "Australia/Sydney";
 
@@ -41,15 +41,25 @@ type NormalisedRow = {
   adsetBudgetCents: number | null;
   campaignObjective: string | null;
   learningStatus: "LEARNING" | "SUCCESS" | "FAIL" | null;
+  // Whether the parent adset is currently delivering. Sourced from Meta
+  // metadata (NOT persisted in MetaAdInsightsDaily — historical adset state
+  // isn't available from the Marketing API), so this is always "now" for
+  // every day in the window.
+  effectiveStatus: EffectiveStatusBucket;
   lastSignificantEdit: Date | null;
 };
 
 /**
  * Map a lean MetaAdInsightsDaily Mongo document into a NormalisedRow.
  * The document already has all fields parsed and stored as typed numbers/dates,
- * so this is essentially a shape-adapter.
+ * so this is essentially a shape-adapter. effectiveStatus is layered on from
+ * the live metadata map because the historical adset delivery state isn't
+ * available from the Marketing API — only the current state.
  */
-function mongoToNormalised(doc: IMetaAdInsightsDaily): NormalisedRow {
+function mongoToNormalised(
+  doc: IMetaAdInsightsDaily,
+  metadataByAdsetId: Map<string, { effectiveStatus: EffectiveStatusBucket }>,
+): NormalisedRow {
   return {
     adAccountId: doc.adAccountId,
     date: doc.date,
@@ -68,6 +78,9 @@ function mongoToNormalised(doc: IMetaAdInsightsDaily): NormalisedRow {
     adsetBudgetCents: doc.adsetBudgetCents,
     campaignObjective: doc.campaignObjective,
     learningStatus: doc.learningStatus,
+    effectiveStatus: doc.adsetId
+      ? metadataByAdsetId.get(doc.adsetId)?.effectiveStatus ?? "UNKNOWN"
+      : "UNKNOWN",
     lastSignificantEdit: doc.lastSignificantEdit,
   };
 }
@@ -78,7 +91,7 @@ function mongoToNormalised(doc: IMetaAdInsightsDaily): NormalisedRow {
  */
 function rawToNormalised(
   raw: Parameters<typeof processInsightData>[0],
-  metadataByAdsetId: Map<string, { dailyBudgetCents: number | null; lifetimeBudgetCents: number | null; campaignObjective: string | null; learningStatus: "LEARNING" | "SUCCESS" | "FAIL" | null; lastSignificantEdit: Date | null }>,
+  metadataByAdsetId: Map<string, { dailyBudgetCents: number | null; lifetimeBudgetCents: number | null; campaignObjective: string | null; learningStatus: "LEARNING" | "SUCCESS" | "FAIL" | null; effectiveStatus: EffectiveStatusBucket; lastSignificantEdit: Date | null }>,
   adAccountId: string,
 ): NormalisedRow | null {
   const date = raw.date_start;
@@ -105,6 +118,7 @@ function rawToNormalised(
     adsetBudgetCents: meta?.dailyBudgetCents ?? meta?.lifetimeBudgetCents ?? null,
     campaignObjective: meta?.campaignObjective ?? null,
     learningStatus: meta?.learningStatus ?? null,
+    effectiveStatus: meta?.effectiveStatus ?? "UNKNOWN",
     lastSignificantEdit: meta?.lastSignificantEdit ?? null,
   };
 }
@@ -184,7 +198,7 @@ export async function aggregateInsights(input: AggregatorInput): Promise<MetaAdI
 
   // Combine Mongo past rows + live today rows into a single NormalisedRow array.
   const rows: NormalisedRow[] = [
-    ...mongoRows.map(mongoToNormalised),
+    ...mongoRows.map((doc) => mongoToNormalised(doc, metadataByAdsetId)),
     ...rawTodayInsights
       .map((raw) => rawToNormalised(raw, metadataByAdsetId, input.adAccountId))
       .filter((r): r is NormalisedRow => r !== null),
@@ -327,6 +341,15 @@ export async function aggregateInsights(input: AggregatorInput): Promise<MetaAdI
       ? PURCHASE_CAPABLE_OBJECTIVES.has(first.campaignObjective)
       : true; // unknown defaults to capable
 
+    // effectiveStatus represents whether the adset is currently delivering.
+    // At campaign level the rolled-up row covers many adsets — picking
+    // first.effectiveStatus would be misleading (different adsets can be in
+    // different states). Force "UNKNOWN" so the UI hides the pill. The same
+    // reasoning applies to learningStatusBucket but that's an existing decision
+    // we're not changing in this commit.
+    const effectiveStatus: EffectiveStatusBucket =
+      input.level === "campaign" ? "UNKNOWN" : first.effectiveStatus;
+
     result.push({
       level: input.level,
       adAccountId: input.adAccountId,
@@ -355,6 +378,7 @@ export async function aggregateInsights(input: AggregatorInput): Promise<MetaAdI
       last14dBestWeek,
       learningStatusRaw,
       learningStatusBucket: bucketFromRaw(learningStatusRaw),
+      effectiveStatus,
       lastSignificantEdit,
       daysSinceLastSignificantEdit,
       daysInLearningLimited,

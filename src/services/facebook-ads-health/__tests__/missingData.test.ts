@@ -25,6 +25,7 @@ function baseRow(): MetaAdInsightsRow {
     last14dBestWeek: { conversions: 130, roas: 1.12 },
     learningStatusRaw: null,
     learningStatusBucket: "Unknown",
+    effectiveStatus: "UNKNOWN",
     lastSignificantEdit: null,
     daysSinceLastSignificantEdit: null,
     daysInLearningLimited: 0,

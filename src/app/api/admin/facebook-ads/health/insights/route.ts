@@ -97,6 +97,7 @@ export async function GET(request: NextRequest) {
       adsetName: row.adsetName,
       learningStatus: row.learningStatusBucket,
       metaRawStatus: row.learningStatusRaw,
+      effectiveStatus: row.effectiveStatus,
       daily: row.daily.map((d) => ({
         date: d.date,
         spendCents: d.spendCents,

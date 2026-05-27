@@ -7,6 +7,23 @@
 
 export type Verdict = "scale" | "hold" | "investigate" | "cut";
 export type LearningStatusBucket = "Active" | "Learning" | "LearningLimited" | "Unknown";
+// Effective status reflects whether the adset is actually delivering. Imported
+// here as a string union (instead of re-exporting from adsetMetadataFetcher) to
+// avoid a circular dep between this types module and the fetcher.
+export type EffectiveStatusBucket =
+  | "ACTIVE"
+  | "PAUSED"
+  | "DELETED"
+  | "PENDING_REVIEW"
+  | "DISAPPROVED"
+  | "PREAPPROVED"
+  | "PENDING_BILLING_INFO"
+  | "CAMPAIGN_PAUSED"
+  | "ARCHIVED"
+  | "ADSET_PAUSED"
+  | "IN_PROCESS"
+  | "WITH_ISSUES"
+  | "UNKNOWN";
 
 /**
  * Aggregated row passed to computeVerdict. Built from MetaAdInsightsDaily by the
@@ -54,6 +71,9 @@ export interface MetaAdInsightsRow {
   // Meta-sourced fields
   learningStatusRaw: "LEARNING" | "SUCCESS" | "FAIL" | null;
   learningStatusBucket: LearningStatusBucket;
+  // Whether the adset is actually delivering. Distinct from learningStatusBucket
+  // because an adset can be "Active" (out of learning) but still PAUSED.
+  effectiveStatus: EffectiveStatusBucket;
   lastSignificantEdit: Date | null;
   daysSinceLastSignificantEdit: number | null;
   daysInLearningLimited: number; // computed by aggregator
