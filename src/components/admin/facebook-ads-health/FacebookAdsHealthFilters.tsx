@@ -300,11 +300,15 @@ export function FacebookAdsHealthFilters(props: Props) {
                   aria-hidden
                 />
                 <motion.div
+                  // Tween with iOS-sheet ease curve — see verdict bottom-sheet for full
+                  // rationale. The previous spring overshot and visibly oscillated against
+                  // the body-scroll-lock layout shift on mobile.
                   className="absolute left-0 top-0 h-full w-80 max-w-[90vw] bg-white dark:bg-neutral-900 shadow-xl overflow-y-auto brand-scrollbar border-r-2 border-gray-200 dark:border-red-900/40"
+                  style={{ willChange: "transform" }}
                   initial={{ x: "-100%" }}
                   animate={{ x: 0 }}
                   exit={{ x: "-100%" }}
-                  transition={{ type: "spring", stiffness: 300, damping: 30 }}
+                  transition={{ duration: 0.28, ease: [0.32, 0.72, 0, 1] }}
                   role="dialog"
                   aria-label="Filters"
                   aria-modal="true"
