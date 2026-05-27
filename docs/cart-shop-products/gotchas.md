@@ -44,3 +44,7 @@ pendingOperations: prev.pendingOperations.filter(
 ```
 
 If you ever refactor the sync loop, preserve this invariant: an op in `pendingOperations` means "not yet attempted". Once attempted, it must move to either success (gone) or `failedOperations` (retryable), but never linger in `pendingOperations`.
+
+## Klaviyo event keys are snake_case
+
+The cart and product callsites — `CartContext.trackKlaviyoRemoveFromCart`, `ProductCard.trackKlaviyoAddToCart`, `ProductInteractions.trackKlaviyoAddToCart`, `ProductViewTracking.trackKlaviyoViewContent` — pass `product_id` / `product_name` / `num_items`, not the camelCase equivalents. The shape is enforced by `KlaviyoEventParams` in [src/hooks/useKlaviyoTracking.ts](../../src/hooks/useKlaviyoTracking.ts). Mixing camelCase keys creates duplicate shadow properties on Klaviyo profiles and silently breaks any flow or segment built against the snake_case variant. See [docs/tracking/KLAVIYO_INTEGRATION.md](../tracking/KLAVIYO_INTEGRATION.md) for the full property-naming contract.
