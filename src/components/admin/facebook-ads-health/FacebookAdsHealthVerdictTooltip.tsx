@@ -1,6 +1,7 @@
 "use client";
 import React from "react";
 import { createPortal } from "react-dom";
+import { ExternalLink } from "lucide-react";
 
 interface VerdictReason {
   section: string;
@@ -9,6 +10,33 @@ interface VerdictReason {
   passed: boolean | "info";
   value: string;
 }
+
+/**
+ * Curated references shown at the bottom of every verdict tooltip. These are the
+ * docs the verdict rules were designed against — surfaced so ad managers / analysts
+ * can audit the reasoning and study the underlying signals.
+ *
+ * MAINTENANCE: Meta occasionally renames help articles. If any of these 404,
+ * search facebook.com/business/help for the title and update the URL.
+ * Last verified: 2026-05-27.
+ */
+const REFERENCES: ReadonlyArray<{ label: string; url: string; source: "Meta" | "Industry" }> = [
+  {
+    label: "Meta: About the learning phase",
+    url: "https://www.facebook.com/business/help/112167992830700",
+    source: "Meta",
+  },
+  {
+    label: "Meta: Manage ad sets in the learning phase",
+    url: "https://www.facebook.com/business/help/204625073768269",
+    source: "Meta",
+  },
+  {
+    label: "Meta: About attribution settings",
+    url: "https://www.facebook.com/business/help/2198119873776795",
+    source: "Meta",
+  },
+];
 
 interface Props {
   verdict: "scale" | "hold" | "investigate" | "cut";
@@ -99,9 +127,30 @@ function TooltipBody({ verdict, reasons, actionText, width }: BodyProps) {
           ))}
         </div>
       ))}
-      <div className="px-3 py-2 bg-zinc-50 dark:bg-zinc-800 rounded-b-md">
+      <div className="px-3 py-2 bg-zinc-50 dark:bg-zinc-800">
         <div className="text-[9px] font-bold uppercase tracking-wider text-zinc-500 mb-1">What to do next</div>
         <div className="text-zinc-800 dark:text-zinc-100 leading-snug">{actionText}</div>
+      </div>
+      <div className="px-3 py-2 border-t border-zinc-200 dark:border-zinc-700 rounded-b-md">
+        <div className="text-[9px] font-bold uppercase tracking-wider text-zinc-500 mb-1">References</div>
+        <p className="text-[10px] text-zinc-500 leading-snug mb-1.5">
+          Rules above are derived from Meta&apos;s published guidance + media-buyer best practices.
+        </p>
+        <ul className="space-y-1">
+          {REFERENCES.map((ref) => (
+            <li key={ref.url}>
+              <a
+                href={ref.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 text-[10px] text-blue-600 dark:text-blue-400 hover:underline"
+              >
+                <span>{ref.label}</span>
+                <ExternalLink size={9} aria-hidden />
+              </a>
+            </li>
+          ))}
+        </ul>
       </div>
     </div>
   );
