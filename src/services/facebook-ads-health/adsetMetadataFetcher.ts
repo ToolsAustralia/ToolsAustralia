@@ -29,6 +29,16 @@ export interface AdsetMetadata {
   dailyBudgetCents: number | null;
   lifetimeBudgetCents: number | null;
   learningStatus: "LEARNING" | "SUCCESS" | "FAIL" | null;
+  // Meta's authoritative count toward the 50-event learning threshold. Populated
+  // only when Meta exposes learning_stage_info — usually for adsets recently in
+  // or just exited learning. When present, this is what Meta UI's Learning Phase
+  // Progress popover displays. Prefer this over our self-computed count.
+  learningStageConversions: number | null;
+  // Meta's exact anchor timestamp for the learning counter (Unix seconds → Date).
+  // When present, matches Meta UI's "Since last significant edit" timestamp
+  // precisely (vs `lastSignificantEdit` which may differ if Meta uses a
+  // different anchor internally).
+  learningStageLastSigEditTs: Date | null;
   effectiveStatus: EffectiveStatus;
   lastSignificantEdit: Date | null;
   createdTime: Date | null;
@@ -40,7 +50,7 @@ type MetaAdsetApiResponse = {
     daily_budget?: string;
     lifetime_budget?: string;
     effective_status?: string;
-    learning_stage_info?: { status?: string };
+    learning_stage_info?: { status?: string; conversions?: number; last_sig_edit_ts?: number };
     last_significant_edit?: { time?: string };
     created_time?: string;
     campaign?: { id?: string; objective?: string };
@@ -100,7 +110,14 @@ export async function fetchAdsetMetadata(
     }
     const body: MetaAdsetApiResponse = await res.json();
     for (const item of body.data || []) {
-      const status = item.learning_stage_info?.status;
+      const learningInfo = item.learning_stage_info;
+      const status = learningInfo?.status;
+      // last_sig_edit_ts is Unix seconds (Meta convention). 0 isn't a valid
+      // edit timestamp here so we treat falsy as "absent".
+      const sigEditTs =
+        typeof learningInfo?.last_sig_edit_ts === "number" && learningInfo.last_sig_edit_ts > 0
+          ? new Date(learningInfo.last_sig_edit_ts * 1000)
+          : null;
       results.push({
         adsetId: item.id,
         campaignId: item.campaign?.id ?? null,
@@ -109,6 +126,9 @@ export async function fetchAdsetMetadata(
         lifetimeBudgetCents: item.lifetime_budget ? parseInt(item.lifetime_budget, 10) : null,
         learningStatus:
           status === "LEARNING" || status === "SUCCESS" || status === "FAIL" ? status : null,
+        learningStageConversions:
+          typeof learningInfo?.conversions === "number" ? learningInfo.conversions : null,
+        learningStageLastSigEditTs: sigEditTs,
         effectiveStatus: normaliseEffectiveStatus(item.effective_status),
         lastSignificantEdit: item.last_significant_edit?.time
           ? new Date(item.last_significant_edit.time)
