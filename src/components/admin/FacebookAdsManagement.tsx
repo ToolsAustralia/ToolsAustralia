@@ -38,6 +38,7 @@ import CustomDateRangeModal from "./CustomDateRangeModal";
 import { useMajorDrawsForDateRange, useCurrentAndLastDrawDates } from "@/hooks/queries/useAdminQueries";
 import { getWebsiteLaunchDateUTC } from "@/utils/common/timezone";
 import SpendByUrlSection from "./SpendByUrlSection";
+import { FacebookAdsHealthView } from "./facebook-ads-health/FacebookAdsHealthView";
 import { cn } from "@/utils/cn";
 
 const AEST_TIMEZONE = "Australia/Sydney";
@@ -72,13 +73,38 @@ export default function FacebookAdsManagement() {
   const [startDate, setStartDate] = useState<string>("");
   const [endDate, setEndDate] = useState<string>("");
   const [isCustomDateModalOpen, setIsCustomDateModalOpen] = useState(false);
-  const [level, setLevel] = useState<InsightLevel>("campaign");
+  // Sticky toolbar measurement — publishes the toolbar's measured height as a
+  // CSS custom property on document.documentElement so any sticky child
+  // (currently Health's filter row, future: any other admin panel that adopts
+  // this pattern) can pin itself flush below with no gap or overlap at any
+  // breakpoint. ResizeObserver keeps it in sync as the toolbar wraps/unwraps
+  // across viewports or when the date-range row hides/shows.
+  const toolbarRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    const el = toolbarRef.current;
+    if (!el || typeof window === "undefined") return;
+    const root = document.documentElement;
+    const apply = () => {
+      root.style.setProperty("--fb-toolbar-h", `${Math.ceil(el.getBoundingClientRect().height)}px`);
+    };
+    apply();
+    const ro = new ResizeObserver(apply);
+    ro.observe(el);
+    return () => {
+      ro.disconnect();
+      root.style.removeProperty("--fb-toolbar-h");
+    };
+  }, []);
+
+  // View mode with URL persistence — read before level default so Health can start at adset.
+  const urlViewMode = (searchParams.get("viewMode") as "ads" | "spend-by-url" | "health" | "metrics") || "ads";
+  // Per-row verdicts only make sense at adset granularity or finer, so Health defaults to adset.
+  // The Ads view still defaults to campaign for parity with the legacy breakdown layout.
+  const [level, setLevel] = useState<InsightLevel>(urlViewMode === "health" ? "adset" : "campaign");
   const [sortColumn, setSortColumn] = useState<string | null>(null);
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
-  // View mode with URL persistence
-  const urlViewMode = (searchParams.get("viewMode") as "ads" | "spend-by-url" | "metrics") || "ads";
-  const [viewMode, setViewMode] = useState<"ads" | "spend-by-url">(
-    urlViewMode === "metrics" ? "ads" : (urlViewMode as "ads" | "spend-by-url")
+  const [viewMode, setViewMode] = useState<"ads" | "spend-by-url" | "health">(
+    urlViewMode === "metrics" ? "ads" : (urlViewMode as "ads" | "spend-by-url" | "health")
   );
 
   // Sync viewMode with URL params; legacy "metrics" view removed — redirect to ads
@@ -91,12 +117,18 @@ export default function FacebookAdsManagement() {
       setViewMode("ads");
       return;
     }
-    setViewMode(urlViewModeValue as "ads" | "spend-by-url");
+    setViewMode(urlViewModeValue as "ads" | "spend-by-url" | "health");
   }, [urlViewModeValue, pathname, router, searchParams]);
 
   // Update URL when viewMode changes
-  const handleViewModeChange = (mode: "ads" | "spend-by-url") => {
+  const handleViewModeChange = (mode: "ads" | "spend-by-url" | "health") => {
     setViewMode(mode);
+    // Switching INTO Health from another tab while at account/campaign granularity
+    // would leave the Health view stuck on a meaningless level — verdicts are per-row
+    // at adset/ad. Snap to "adset" in that case; leave adset/ad picks alone.
+    if (mode === "health" && (level === "account" || level === "campaign")) {
+      setLevel("adset");
+    }
     const params = new URLSearchParams(searchParams.toString());
     params.set("viewMode", mode);
     router.replace(`${pathname}?${params.toString()}`, { scroll: false });
@@ -408,13 +440,25 @@ export default function FacebookAdsManagement() {
           aValue = a.clicks;
           bValue = b.clicks;
           break;
+        case "linkClicks":
+          aValue = a.linkClicks;
+          bValue = b.linkClicks;
+          break;
         case "ctr":
           aValue = a.ctr;
           bValue = b.ctr;
           break;
+        case "linkCtr":
+          aValue = a.linkCtr;
+          bValue = b.linkCtr;
+          break;
         case "cpc":
           aValue = a.cpc;
           bValue = b.cpc;
+          break;
+        case "linkCpc":
+          aValue = a.linkCpc;
+          bValue = b.linkCpc;
           break;
         case "landingPageView":
           aValue = a.landingPageView ?? 0;
@@ -483,15 +527,18 @@ export default function FacebookAdsManagement() {
         conversions: acc.conversions + item.conversions,
         impressions: acc.impressions + item.impressions,
         clicks: acc.clicks + item.clicks,
+        linkClicks: acc.linkClicks + item.linkClicks,
         landingPageView: acc.landingPageView + (item.landingPageView ?? 0),
       }),
-      { spend: 0, revenue: 0, profit: 0, conversions: 0, impressions: 0, clicks: 0, landingPageView: 0 }
+      { spend: 0, revenue: 0, profit: 0, conversions: 0, impressions: 0, clicks: 0, linkClicks: 0, landingPageView: 0 }
     );
     return {
       ...t,
       roas: t.spend > 0 ? t.revenue / t.spend : 0,
       ctr: t.impressions > 0 ? (t.clicks / t.impressions) * 100 : 0,
       cpc: t.clicks > 0 ? t.spend / t.clicks : 0,
+      linkCtr: t.impressions > 0 ? (t.linkClicks / t.impressions) * 100 : 0,
+      linkCpc: t.linkClicks > 0 ? t.spend / t.linkClicks : 0,
     };
   }, [sortedBreakdown]);
 
@@ -790,13 +837,29 @@ export default function FacebookAdsManagement() {
             aValue = a.clicks;
             bValue = b.clicks;
             break;
+          case "linkClicks":
+            aValue = a.linkClicks;
+            bValue = b.linkClicks;
+            break;
+          case "lpv":
+            aValue = a.lpv;
+            bValue = b.lpv;
+            break;
           case "ctr":
             aValue = a.ctr;
             bValue = b.ctr;
             break;
+          case "linkCtr":
+            aValue = a.linkCtr;
+            bValue = b.linkCtr;
+            break;
           case "cpc":
             aValue = a.cpc;
             bValue = b.cpc;
+            break;
+          case "linkCpc":
+            aValue = a.linkCpc;
+            bValue = b.linkCpc;
             break;
           case "revenue":
             aValue = a.revenue;
@@ -829,16 +892,20 @@ export default function FacebookAdsManagement() {
           spend: acc.spend + h.spend,
           impressions: acc.impressions + h.impressions,
           clicks: acc.clicks + h.clicks,
+          linkClicks: acc.linkClicks + h.linkClicks,
+          lpv: acc.lpv + h.lpv,
           revenue: acc.revenue + h.revenue,
           conversions: acc.conversions + h.conversions,
           profit: acc.profit + h.profit,
         }),
-        { spend: 0, impressions: 0, clicks: 0, revenue: 0, conversions: 0, profit: 0 }
+        { spend: 0, impressions: 0, clicks: 0, linkClicks: 0, lpv: 0, revenue: 0, conversions: 0, profit: 0 }
       );
       return {
         ...t,
         ctr: t.impressions > 0 ? (t.clicks / t.impressions) * 100 : 0,
         cpc: t.clicks > 0 ? t.spend / t.clicks : 0,
+        linkCtr: t.impressions > 0 ? (t.linkClicks / t.impressions) * 100 : 0,
+        linkCpc: t.linkClicks > 0 ? t.spend / t.linkClicks : 0,
         roas: t.spend > 0 ? t.revenue / t.spend : 0,
       };
     }, [hourlyData]);
@@ -1136,21 +1203,27 @@ export default function FacebookAdsManagement() {
                 </th>
                 <th
                   className={cn("sticky top-0 z-10 bg-gray-50 dark:bg-neutral-800 shadow-[0_1px_0_0_rgba(0,0,0,0.05)] dark:shadow-[0_1px_0_0_rgba(255,255,255,0.06)] text-right py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm font-semibold text-gray-800 dark:text-neutral-100 cursor-pointer hover:bg-gray-100 dark:hover:bg-neutral-700/90 transition-colors select-none", !hourlyColumnsExpanded ? "hidden sm:table-cell" : "")}
-                  onClick={() => handleHourlySort("clicks")}
+                  onClick={() => handleHourlySort("lpv")}
                 >
-                  <div className="flex items-center justify-end">Clicks{getHourlySortIcon("clicks")}</div>
+                  <div className="flex items-center justify-end" title="Landing page views">LPV{getHourlySortIcon("lpv")}</div>
                 </th>
                 <th
                   className={cn("sticky top-0 z-10 bg-gray-50 dark:bg-neutral-800 shadow-[0_1px_0_0_rgba(0,0,0,0.05)] dark:shadow-[0_1px_0_0_rgba(255,255,255,0.06)] text-right py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm font-semibold text-gray-800 dark:text-neutral-100 cursor-pointer hover:bg-gray-100 dark:hover:bg-neutral-700/90 transition-colors select-none", !hourlyColumnsExpanded ? "hidden sm:table-cell" : "")}
-                  onClick={() => handleHourlySort("ctr")}
+                  onClick={() => handleHourlySort("linkClicks")}
                 >
-                  <div className="flex items-center justify-end">CTR{getHourlySortIcon("ctr")}</div>
+                  <div className="flex items-center justify-end">Link Clicks{getHourlySortIcon("linkClicks")}</div>
                 </th>
                 <th
                   className={cn("sticky top-0 z-10 bg-gray-50 dark:bg-neutral-800 shadow-[0_1px_0_0_rgba(0,0,0,0.05)] dark:shadow-[0_1px_0_0_rgba(255,255,255,0.06)] text-right py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm font-semibold text-gray-800 dark:text-neutral-100 cursor-pointer hover:bg-gray-100 dark:hover:bg-neutral-700/90 transition-colors select-none", !hourlyColumnsExpanded ? "hidden sm:table-cell" : "")}
-                  onClick={() => handleHourlySort("cpc")}
+                  onClick={() => handleHourlySort("linkCtr")}
                 >
-                  <div className="flex items-center justify-end">CPC{getHourlySortIcon("cpc")}</div>
+                  <div className="flex items-center justify-end">Link CTR{getHourlySortIcon("linkCtr")}</div>
+                </th>
+                <th
+                  className={cn("sticky top-0 z-10 bg-gray-50 dark:bg-neutral-800 shadow-[0_1px_0_0_rgba(0,0,0,0.05)] dark:shadow-[0_1px_0_0_rgba(255,255,255,0.06)] text-right py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm font-semibold text-gray-800 dark:text-neutral-100 cursor-pointer hover:bg-gray-100 dark:hover:bg-neutral-700/90 transition-colors select-none", !hourlyColumnsExpanded ? "hidden sm:table-cell" : "")}
+                  onClick={() => handleHourlySort("linkCpc")}
+                >
+                  <div className="flex items-center justify-end">Cost/Link Click{getHourlySortIcon("linkCpc")}</div>
                 </th>
                 <th
                   className="sticky top-0 z-10 bg-gray-50 dark:bg-neutral-800 shadow-[0_1px_0_0_rgba(0,0,0,0.05)] dark:shadow-[0_1px_0_0_rgba(255,255,255,0.06)] text-right py-1.5 px-0.5 sm:py-3 sm:px-4 text-xs sm:text-sm font-semibold text-gray-800 dark:text-neutral-100 cursor-pointer hover:bg-gray-100 dark:hover:bg-neutral-700/90 transition-colors select-none"
@@ -1184,9 +1257,10 @@ export default function FacebookAdsManagement() {
                   <td className="py-1.5 px-0.5 sm:py-3 sm:px-4 text-xs sm:text-sm text-gray-900 dark:text-white font-medium">{hour.label}</td>
                   <td className="py-1.5 px-0.5 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900 dark:text-white">{formatCurrency(hour.spend)}</td>
                   <td className={cn("py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900 dark:text-white", !hourlyColumnsExpanded ? "hidden sm:table-cell" : "")}>{formatNumber(hour.impressions)}</td>
-                  <td className={cn("py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900 dark:text-white", !hourlyColumnsExpanded ? "hidden sm:table-cell" : "")}>{formatNumber(hour.clicks)}</td>
-                  <td className={cn("py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900 dark:text-white", !hourlyColumnsExpanded ? "hidden sm:table-cell" : "")}>{formatPercentage(hour.ctr)}</td>
-                  <td className={cn("py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900 dark:text-white", !hourlyColumnsExpanded ? "hidden sm:table-cell" : "")}>{formatCurrency(hour.cpc)}</td>
+                  <td className={cn("py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900 dark:text-white", !hourlyColumnsExpanded ? "hidden sm:table-cell" : "")}>{formatNumber(hour.lpv)}</td>
+                  <td className={cn("py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900 dark:text-white", !hourlyColumnsExpanded ? "hidden sm:table-cell" : "")}>{formatNumber(hour.linkClicks)}</td>
+                  <td className={cn("py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900 dark:text-white", !hourlyColumnsExpanded ? "hidden sm:table-cell" : "")}>{formatPercentage(hour.linkCtr)}</td>
+                  <td className={cn("py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900 dark:text-white", !hourlyColumnsExpanded ? "hidden sm:table-cell" : "")}>{formatCurrency(hour.linkCpc)}</td>
                   <td className="py-1.5 px-0.5 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900 dark:text-white font-semibold">{formatCurrency(hour.revenue)}</td>
                   <td className={cn("py-1.5 px-0.5 sm:py-3 sm:px-4 text-xs sm:text-sm text-right font-semibold", hour.profit >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400", !hourlyColumnsExpanded ? "hidden sm:table-cell" : "")}>
                     {formatCurrency(hour.profit)}
@@ -1202,9 +1276,10 @@ export default function FacebookAdsManagement() {
                   <td className="py-1.5 px-0.5 sm:py-3 sm:px-4 text-xs sm:text-sm text-gray-900 dark:text-white">Total</td>
                   <td className="py-1.5 px-0.5 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900 dark:text-white">{formatCurrency(hourlyTotals.spend)}</td>
                   <td className={cn("py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900 dark:text-white", !hourlyColumnsExpanded ? "hidden sm:table-cell" : "")}>{formatNumber(hourlyTotals.impressions)}</td>
-                  <td className={cn("py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900 dark:text-white", !hourlyColumnsExpanded ? "hidden sm:table-cell" : "")}>{formatNumber(hourlyTotals.clicks)}</td>
-                  <td className={cn("py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900 dark:text-white", !hourlyColumnsExpanded ? "hidden sm:table-cell" : "")}>{formatPercentage(hourlyTotals.ctr)}</td>
-                  <td className={cn("py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900 dark:text-white", !hourlyColumnsExpanded ? "hidden sm:table-cell" : "")}>{formatCurrency(hourlyTotals.cpc)}</td>
+                  <td className={cn("py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900 dark:text-white", !hourlyColumnsExpanded ? "hidden sm:table-cell" : "")}>{formatNumber(hourlyTotals.lpv)}</td>
+                  <td className={cn("py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900 dark:text-white", !hourlyColumnsExpanded ? "hidden sm:table-cell" : "")}>{formatNumber(hourlyTotals.linkClicks)}</td>
+                  <td className={cn("py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900 dark:text-white", !hourlyColumnsExpanded ? "hidden sm:table-cell" : "")}>{formatPercentage(hourlyTotals.linkCtr)}</td>
+                  <td className={cn("py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900 dark:text-white", !hourlyColumnsExpanded ? "hidden sm:table-cell" : "")}>{formatCurrency(hourlyTotals.linkCpc)}</td>
                   <td className="py-1.5 px-0.5 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900 dark:text-white">{formatCurrency(hourlyTotals.revenue)}</td>
                   <td className={cn("py-1.5 px-0.5 sm:py-3 sm:px-4 text-xs sm:text-sm text-right", hourlyTotals.profit >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400", !hourlyColumnsExpanded ? "hidden sm:table-cell" : "")}>
                     {formatCurrency(hourlyTotals.profit)}
@@ -1224,13 +1299,29 @@ export default function FacebookAdsManagement() {
 
   return (
     <div className="space-y-4 sm:space-y-6 min-w-0">
-      {/* Header with Controls — Ads / Spend toggle full width on mobile so it stays visible */}
-      <div className="flex flex-col gap-2 sm:gap-4 min-w-0">
-        <div className="hidden sm:block min-w-0">
-          <h2 className="text-sm sm:text-lg lg:text-xl font-bold text-gray-900 dark:text-white truncate">
-            Facebook Ads Performance
-          </h2>
-        </div>
+      {/* Header with Controls — sticky-pinned in EVERY viewMode (Ads / Spend by URL /
+          Health) so users can switch tabs, dates, and view-level without scrolling back
+          to the top. Matches Meta Ads Manager UX. The Health view's filter section
+          sticks immediately below this row using the same z-stack + matching offsets,
+          so the two snap together as one pinned block. Pattern is self-contained —
+          any other admin page can adopt it with the same className set. */}
+      <div
+        ref={toolbarRef}
+        // Negative margins bleed the sticky bg edge-to-edge so it sits flush
+        // against the admin shell's date filter above (no visible padding gap),
+        // then `px-4 lg:px-6` restores inner content positioning. `-mt-4 lg:-mt-6`
+        // pulls it up so the sticky's top:0 lines up with the very top of the
+        // scroll container — no leftover container-padding gap when scrolled.
+        // Matches the admin layout's `p-4 lg:p-6` padding; if that ever changes
+        // the negatives must change with it. Portal'ing out of the container was
+        // considered and rejected — sticky positioning is scoped to its scroll
+        // ancestor, so a portal would break sticky behavior entirely.
+        // pt-0 — tabs/date row sits FLUSH against the admin page header (no visible
+        // gap), mirroring the mobile pattern where the date filter is already
+        // chrome-level with no top padding. pb keeps separation from the filter row
+        // below. Negative margins still bleed the bg edge-to-edge.
+        className="sticky -top-4 md:-top-5 z-30 flex flex-col gap-2 sm:gap-4 min-w-0 -mt-4 lg:-mt-6 -mx-4 lg:-mx-6 px-4 lg:px-6 pt-0 pb-2 lg:pt-0 lg:pb-3 bg-gray-50/95 dark:bg-neutral-950/95 backdrop-blur supports-[backdrop-filter]:bg-gray-50/80 supports-[backdrop-filter]:dark:bg-neutral-950/80 border-b border-gray-200 dark:border-neutral-800"
+      >
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-4 min-w-0">
           <div className="flex items-center gap-1.5 sm:gap-2 bg-gray-100 dark:bg-neutral-800 rounded-lg p-1 w-full sm:w-auto flex-shrink-0 min-w-0">
             <button
@@ -1255,29 +1346,50 @@ export default function FacebookAdsManagement() {
             >
               Spend by URL
             </button>
+            <button
+              type="button"
+              onClick={() => handleViewModeChange("health")}
+              className={`flex-1 sm:flex-initial px-2.5 sm:px-3 py-1.5 rounded-md text-xs sm:text-sm font-medium transition-colors ${
+                viewMode === "health"
+                  ? "bg-white dark:bg-neutral-900 text-gray-900 dark:text-white shadow-sm"
+                  : "text-gray-600 dark:text-neutral-400 hover:text-gray-900 dark:hover:text-white"
+              }`}
+            >
+              Health
+            </button>
           </div>
           <div className="flex flex-row flex-wrap items-center gap-2 sm:gap-4 min-w-0 sm:justify-end">
-            {/* View Level — Ads only */}
-            {viewMode === "ads" && (
+            {/* View Level — Ads and Health views. Health hides "Account"
+                because per-row verdicts need at least adset granularity;
+                the view silently coerces account → adset if it slipped through. */}
+            {(viewMode === "ads" || viewMode === "health") && (
               <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0 min-w-[200px] sm:min-w-[240px]">
                 <label className="text-xs sm:text-sm font-medium text-gray-700 dark:text-neutral-200 whitespace-nowrap hidden sm:inline">
                   View Level:
                 </label>
                 <Dropdown
-                  options={[
-                    { value: "account", label: "Account", icon: Layers },
-                    { value: "campaign", label: "Campaign", icon: BarChart2 },
-                    { value: "adset", label: "Ad Set", icon: LayoutList },
-                    { value: "ad", label: "Ad", icon: Image },
-                  ]}
-                  value={level}
+                  options={
+                    viewMode === "health"
+                      ? [
+                          { value: "campaign", label: "Campaign", icon: BarChart2 },
+                          { value: "adset", label: "Ad Set", icon: LayoutList },
+                          { value: "ad", label: "Ad", icon: Image },
+                        ]
+                      : [
+                          { value: "account", label: "Account", icon: Layers },
+                          { value: "campaign", label: "Campaign", icon: BarChart2 },
+                          { value: "adset", label: "Ad Set", icon: LayoutList },
+                          { value: "ad", label: "Ad", icon: Image },
+                        ]
+                  }
+                  value={viewMode === "health" && level === "account" ? "adset" : level}
                   onChange={(value) => setLevel(value as InsightLevel)}
                   placeholder="View Level"
                   compact
                 />
               </div>
             )}
-            {(viewMode === "ads" || viewMode === "spend-by-url") && (
+            {(viewMode === "ads" || viewMode === "spend-by-url" || viewMode === "health") && (
               <>
                 {!isLgUp && slotEl
                   ? createPortal(
@@ -1371,8 +1483,8 @@ export default function FacebookAdsManagement() {
               color="indigo"
               subtitle="Viewed landing page after click"
             />
-            <MetricCard title="CTR" value={formatPercentage(summary.ctr)} icon={Target} color="yellow" />
-            <MetricCard title="CPC" value={formatCurrency(summary.cpc)} icon={DollarSign} color="blue" />
+            <MetricCard title="Link CTR" value={formatPercentage(summary.linkCtr)} icon={Target} color="yellow" />
+            <MetricCard title="Cost/Link Click" value={formatCurrency(summary.linkCpc)} icon={DollarSign} color="blue" />
           </div>
 
           <div className="bg-white dark:bg-neutral-900 rounded-lg sm:rounded-xl shadow-sm dark:shadow-none border border-gray-200 dark:border-neutral-700 p-3 sm:p-6">
@@ -1386,13 +1498,15 @@ export default function FacebookAdsManagement() {
         </>
       )}
 
-      {viewMode === "spend-by-url" ? (
+      {viewMode === "spend-by-url" && (
         <SpendByUrlSection
           startDate={startDate}
           endDate={endDate}
           dateReady={Boolean(startDate && endDate)}
         />
-      ) : (
+      )}
+
+      {viewMode === "ads" && (
         <>
 
       {/* Hourly Breakdown - Show when date range is available (Account level shows account totals) */}
@@ -1487,21 +1601,21 @@ export default function FacebookAdsManagement() {
                   </th>
                   <th
                     className="sticky top-0 z-10 bg-gray-50 dark:bg-neutral-800 shadow-[0_1px_0_0_rgba(0,0,0,0.05)] dark:shadow-[0_1px_0_0_rgba(255,255,255,0.06)] text-right py-1.5 px-0.5 sm:py-3 sm:px-4 text-xs sm:text-sm font-semibold text-gray-800 dark:text-neutral-100 cursor-pointer hover:bg-gray-100 dark:hover:bg-neutral-700/90 transition-colors select-none"
-                    onClick={() => handleSort("clicks")}
+                    onClick={() => handleSort("linkClicks")}
                   >
-                    <div className="flex items-center justify-end">Clicks{getSortIcon("clicks")}</div>
+                    <div className="flex items-center justify-end">Link Clicks{getSortIcon("linkClicks")}</div>
                   </th>
                   <th
                     className="sticky top-0 z-10 bg-gray-50 dark:bg-neutral-800 shadow-[0_1px_0_0_rgba(0,0,0,0.05)] dark:shadow-[0_1px_0_0_rgba(255,255,255,0.06)] text-right py-1.5 px-0.5 sm:py-3 sm:px-4 text-xs sm:text-sm font-semibold text-gray-800 dark:text-neutral-100 cursor-pointer hover:bg-gray-100 dark:hover:bg-neutral-700/90 transition-colors select-none"
-                    onClick={() => handleSort("ctr")}
+                    onClick={() => handleSort("linkCtr")}
                   >
-                    <div className="flex items-center justify-end">CTR{getSortIcon("ctr")}</div>
+                    <div className="flex items-center justify-end">Link CTR{getSortIcon("linkCtr")}</div>
                   </th>
                   <th
                     className="sticky top-0 z-10 bg-gray-50 dark:bg-neutral-800 shadow-[0_1px_0_0_rgba(0,0,0,0.05)] dark:shadow-[0_1px_0_0_rgba(255,255,255,0.06)] text-right py-1.5 px-0.5 sm:py-3 sm:px-4 text-xs sm:text-sm font-semibold text-gray-800 dark:text-neutral-100 cursor-pointer hover:bg-gray-100 dark:hover:bg-neutral-700/90 transition-colors select-none"
-                    onClick={() => handleSort("cpc")}
+                    onClick={() => handleSort("linkCpc")}
                   >
-                    <div className="flex items-center justify-end">CPC{getSortIcon("cpc")}</div>
+                    <div className="flex items-center justify-end">Cost/Link Click{getSortIcon("linkCpc")}</div>
                   </th>
                   <th
                     className="sticky top-0 z-10 bg-gray-50 dark:bg-neutral-800 shadow-[0_1px_0_0_rgba(0,0,0,0.05)] dark:shadow-[0_1px_0_0_rgba(255,255,255,0.06)] text-right py-1.5 px-0.5 sm:py-3 sm:px-4 text-xs sm:text-sm font-semibold text-gray-800 dark:text-neutral-100 cursor-pointer hover:bg-gray-100 dark:hover:bg-neutral-700/90 transition-colors select-none"
@@ -1551,13 +1665,13 @@ export default function FacebookAdsManagement() {
                               {formatNumber(item.impressions)}
                             </td>
                             <td className="py-1.5 px-0.5 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900 dark:text-white">
-                              {formatNumber(item.clicks)}
+                              {formatNumber(item.linkClicks)}
                             </td>
                             <td className="py-1.5 px-0.5 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900 dark:text-white">
-                              {formatPercentage(item.ctr)}
+                              {formatPercentage(item.linkCtr)}
                             </td>
                             <td className="py-1.5 px-0.5 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900 dark:text-white">
-                              {formatCurrency(item.cpc)}
+                              {formatCurrency(item.linkCpc)}
                             </td>
                             <td className="py-1.5 px-0.5 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900 dark:text-white">
                               {formatNumber(item.landingPageView ?? 0)}
@@ -1612,13 +1726,13 @@ export default function FacebookAdsManagement() {
                                   {formatNumber(item.impressions)}
                                 </td>
                                 <td className="py-1.5 px-0.5 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900 dark:text-white">
-                                  {formatNumber(item.clicks)}
+                                  {formatNumber(item.linkClicks)}
                                 </td>
                                 <td className="py-1.5 px-0.5 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900 dark:text-white">
-                                  {formatPercentage(item.ctr)}
+                                  {formatPercentage(item.linkCtr)}
                                 </td>
                                 <td className="py-1.5 px-0.5 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900 dark:text-white">
-                                  {formatCurrency(item.cpc)}
+                                  {formatCurrency(item.linkCpc)}
                                 </td>
                                 <td className="py-1.5 px-0.5 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900 dark:text-white">
                                   {formatNumber(item.landingPageView ?? 0)}
@@ -1663,13 +1777,13 @@ export default function FacebookAdsManagement() {
                       {formatNumber(item.impressions)}
                     </td>
                     <td className="py-1.5 px-0.5 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900 dark:text-white">
-                      {formatNumber(item.clicks)}
+                      {formatNumber(item.linkClicks)}
                     </td>
                     <td className="py-1.5 px-0.5 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900 dark:text-white">
-                      {formatPercentage(item.ctr)}
+                      {formatPercentage(item.linkCtr)}
                     </td>
                     <td className="py-1.5 px-0.5 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900 dark:text-white">
-                      {formatCurrency(item.cpc)}
+                      {formatCurrency(item.linkCpc)}
                     </td>
                     <td className="py-1.5 px-0.5 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900 dark:text-white">
                       {formatNumber(item.landingPageView ?? 0)}
@@ -1702,13 +1816,13 @@ export default function FacebookAdsManagement() {
                       {formatNumber(breakdownTotals.impressions)}
                     </td>
                     <td className="py-2 px-0.5 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900 dark:text-white">
-                      {formatNumber(breakdownTotals.clicks)}
+                      {formatNumber(breakdownTotals.linkClicks)}
                     </td>
                     <td className="py-2 px-0.5 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900 dark:text-white">
-                      {formatPercentage(breakdownTotals.ctr)}
+                      {formatPercentage(breakdownTotals.linkCtr)}
                     </td>
                     <td className="py-2 px-0.5 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900 dark:text-white">
-                      {formatCurrency(breakdownTotals.cpc)}
+                      {formatCurrency(breakdownTotals.linkCpc)}
                     </td>
                     <td className="py-2 px-0.5 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900 dark:text-white">
                       {formatNumber(breakdownTotals.landingPageView ?? 0)}
@@ -1724,7 +1838,11 @@ export default function FacebookAdsManagement() {
         </>
       )}
 
-      {(viewMode === "ads" || viewMode === "spend-by-url") && (
+      {viewMode === "health" && (
+        <FacebookAdsHealthView startDate={startDate} endDate={endDate} level={level} />
+      )}
+
+      {(viewMode === "ads" || viewMode === "spend-by-url" || viewMode === "health") && (
         <CustomDateRangeModal
           isOpen={isCustomDateModalOpen}
           onClose={() => setIsCustomDateModalOpen(false)}

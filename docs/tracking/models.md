@@ -3,7 +3,7 @@
 | Model | Path | Purpose |
 |---|---|---|
 | `MetaAdDestination` | [src/models/MetaAdDestination.ts](../../src/models/MetaAdDestination.ts) | Meta ad destination config |
-| `MetaAdInsightsDaily` | [src/models/MetaAdInsightsDaily.ts](../../src/models/MetaAdInsightsDaily.ts) | Daily ad insights snapshots from Meta Marketing API |
+| `MetaAdInsightsDaily` | [src/models/MetaAdInsightsDaily.ts](../../src/models/MetaAdInsightsDaily.ts) | Daily ad insights snapshots from Meta Marketing API. Typed fields: `spendCents`, `impressions`, `clicks`, `linkClicks`, `conversions`, `revenueCents`, `reach`, `frequency`, `cpmCents`, `adsetBudgetCents`, `campaignObjective`, `learningStatus`, `lastSignificantEdit`. TTL index on `syncedAt`: 35d (dev) / 60d (prod). Nightly cron re-upserts the last 8 days refreshing the TTL clock. Seed script: `npm run seed:meta-insights`. |
 
 > _TODO: pull schemas._
 
@@ -14,3 +14,23 @@
 ## SnapchatAdInsightsDaily
 
 [`src/models/SnapchatAdInsightsDaily.ts`](../../src/models/SnapchatAdInsightsDaily.ts). Same shape and same status as TikTok.
+
+## FacebookAdsHealthSnooze
+
+[`src/models/FacebookAdsHealthSnooze.ts`](../../src/models/FacebookAdsHealthSnooze.ts). Per-user, per-ad snooze for the Facebook Ads Health view's "Investigate" verdict. Includes TTL index for automatic expiration.
+
+## FacebookAdsHealthSettings
+
+[`src/models/FacebookAdsHealthSettings.ts`](../../src/models/FacebookAdsHealthSettings.ts). Singleton settings document for the Facebook Ads Health verdict engine. One document with `scope='global'`, lazy-initialised with defaults on first read by the settings service.
+
+## Facebook Ads Health Services
+
+[`src/services/facebook-ads-health/`](../../src/services/facebook-ads-health/) contains the verdict engine for analyzing Facebook ad performance:
+
+- **types.ts** — Shared types: `Verdict` ("scale" | "hold" | "investigate" | "cut"), `MetaAdInsightsRow`, `VerdictResult`, etc.
+- **verdictEngine.ts** — Decision engine with 4-verdict pipeline: CUT → INVESTIGATE → SCALE → HOLD.
+  - **CUT**: fires on any of: LearningLimited ≥3d with spend floor, spend ≥ 2×CPA multiplier with 0 conv or bad CPA, non-purchase-capable campaign objective.
+  - **INVESTIGATE**: fires when all three groups pass — (a) "Was healthy": best 7d in last 14d had ≥50 conv AND ROAS ≥ breakeven; (b) "Now broken": ROAS dropped >roasDropTriggerPct WoW with ≥50 conv in both weeks, OR status reverted from Active; (c) "Recent edit": lastSignificantEdit ≤7d ago. Requires ≥50 conv in both comparison weeks (stat-confidence floor).
+  - **SCALE**: fires when adset is Active, ≥50 conv/7d, ROAS ≥ breakeven, no edit within postEditWaitHours, ROAS stable WoW.
+  - **HOLD**: default when none of the above fire.
+- **insightsAggregator** (Task 18, updated Task 22, mongo-first Task 23) — Builds `MetaAdInsightsRow` via a cache-aside strategy: past days are read from `MetaAdInsightsDaily` in MongoDB (fast, indexed on `{adAccountId, date}`); today's partial row is live-fetched via `fetchFacebookAdInsightsDaily`; adset metadata (learning status, last_significant_edit) is always live via `fetchAdsetMetadata`. All three fetches run in `Promise.all`. Known tradeoff: `daysInLearningLimited` is best-effort (0 or 1 based on current state) because Meta's live API does not return historical learning status per day.
