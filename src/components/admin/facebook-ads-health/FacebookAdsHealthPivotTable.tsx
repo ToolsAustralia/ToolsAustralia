@@ -394,45 +394,25 @@ export function FacebookAdsHealthPivotTable({ rows, metric, startDate, endDate, 
     <div className="overflow-x-auto rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900">
       <table className="w-full border-collapse text-xs min-w-[900px]">
         <thead>
-          {/* Header row is vertically sticky too — pins flush below the filter row so
-              date columns stay visible while scrolling through long ad-set lists.
-              top = parent toolbar height + filter row height (both published as CSS
-              vars by FacebookAdsManagement and FacebookAdsHealthView's ResizeObservers).
-              Z-stack: corner cell z-30 beats tbody sticky-left cells (z-10) AND other
-              thead cells (z-20) when scrolled both axes. */}
+          {/* Header row scrolls with the table (no vertical sticky). The previous
+              two-CSS-var stack attempt mis-positioned the thead in the middle of
+              the page on some viewports — reverted until we have a more robust
+              measurement approach (likely needs the table itself to be the scroll
+              container rather than the page). The first column stays sticky-left
+              for horizontal scroll so the row label is always visible. */}
           <tr>
-            <th
-              className="sticky left-0 z-30 bg-zinc-50 dark:bg-zinc-800 text-left px-3 py-2 text-[10px] font-semibold uppercase tracking-wider text-zinc-500 border-b border-zinc-200 dark:border-zinc-700 min-w-[200px]"
-              style={{ top: "calc(var(--fb-toolbar-h, 60px) + var(--fb-filter-h, 60px))" }}
-            >
+            <th className="sticky left-0 z-10 bg-zinc-50 dark:bg-zinc-800 text-left px-3 py-2 text-[10px] font-semibold uppercase tracking-wider text-zinc-500 border-b border-zinc-200 dark:border-zinc-700 min-w-[200px]">
               {levelLabel(level)}
             </th>
             {dates.map((date) => (
-              <th
-                key={date}
-                className="sticky z-[25] text-center px-2 py-2 text-[10px] font-semibold uppercase tracking-wider text-zinc-500 border-b border-zinc-200 dark:border-zinc-700 min-w-[56px] bg-zinc-50 dark:bg-zinc-800"
-                style={{ top: "calc(var(--fb-toolbar-h, 60px) + var(--fb-filter-h, 60px))" }}
-              >
+              <th key={date} className="text-center px-2 py-2 text-[10px] font-semibold uppercase tracking-wider text-zinc-500 border-b border-zinc-200 dark:border-zinc-700 min-w-[56px]">
                 <div className="font-normal text-[9px] text-zinc-400">{new Date(date + "T12:00:00Z").toLocaleDateString("en-AU", { weekday: "short" })}</div>
                 <div>{date.slice(5)}</div>
               </th>
             ))}
-            <th
-              className="sticky z-[25] text-center px-2 py-2 text-[10px] font-semibold uppercase tracking-wider text-zinc-500 border-b border-zinc-200 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-800"
-              style={{ top: "calc(var(--fb-toolbar-h, 60px) + var(--fb-filter-h, 60px))" }}
-            >
-              Total
-            </th>
-            <th
-              className="sticky z-[25] text-center px-2 py-2 text-[10px] font-semibold uppercase tracking-wider text-zinc-500 border-b border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800"
-              style={{ top: "calc(var(--fb-toolbar-h, 60px) + var(--fb-filter-h, 60px))" }}
-            >
-              Verdict
-            </th>
-            <th
-              className="sticky z-[25] border-b border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800"
-              style={{ top: "calc(var(--fb-toolbar-h, 60px) + var(--fb-filter-h, 60px))" }}
-            ></th>
+            <th className="text-center px-2 py-2 text-[10px] font-semibold uppercase tracking-wider text-zinc-500 border-b border-zinc-200 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-800">Total</th>
+            <th className="text-center px-2 py-2 text-[10px] font-semibold uppercase tracking-wider text-zinc-500 border-b border-zinc-200 dark:border-zinc-700">Verdict</th>
+            <th className="border-b border-zinc-200 dark:border-zinc-700"></th>
           </tr>
         </thead>
         <tbody>
