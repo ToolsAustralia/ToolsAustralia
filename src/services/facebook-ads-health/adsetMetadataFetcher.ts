@@ -31,6 +31,7 @@ export interface AdsetMetadata {
   learningStatus: "LEARNING" | "SUCCESS" | "FAIL" | null;
   effectiveStatus: EffectiveStatus;
   lastSignificantEdit: Date | null;
+  createdTime: Date | null;
 }
 
 type MetaAdsetApiResponse = {
@@ -41,6 +42,7 @@ type MetaAdsetApiResponse = {
     effective_status?: string;
     learning_stage_info?: { status?: string };
     last_significant_edit?: { time?: string };
+    created_time?: string;
     campaign?: { id?: string; objective?: string };
   }>;
   paging?: { cursors?: { after?: string }; next?: string };
@@ -73,6 +75,10 @@ export async function fetchAdsetMetadata(
     "effective_status",
     "learning_stage_info{status,attribution_windows,conversions,last_sig_edit_ts}",
     "last_significant_edit",
+    // created_time is the fallback "anchor" when last_significant_edit is null —
+    // matches Meta UI behaviour which counts learning progress from creation
+    // when no significant edit has happened.
+    "created_time",
     "campaign{id,objective}",
   ].join(",");
 
@@ -107,6 +113,7 @@ export async function fetchAdsetMetadata(
         lastSignificantEdit: item.last_significant_edit?.time
           ? new Date(item.last_significant_edit.time)
           : null,
+        createdTime: item.created_time ? new Date(item.created_time) : null,
       });
     }
     url = body.paging?.next ?? null;
@@ -125,8 +132,13 @@ export async function fetchAdsetMetadata(
     },
     {} as Record<string, number>,
   );
+  const editBreakdown = {
+    hasEdit: results.filter((r) => r.lastSignificantEdit !== null).length,
+    hasCreatedTime: results.filter((r) => r.createdTime !== null).length,
+    neither: results.filter((r) => r.lastSignificantEdit === null && r.createdTime === null).length,
+  };
   console.error(
-    `[adsetMetadataFetcher] fetched ${results.length} adsets — learning_stage_info breakdown: ${JSON.stringify(breakdown)}`,
+    `[adsetMetadataFetcher] fetched ${results.length} adsets — learning_stage_info breakdown: ${JSON.stringify(breakdown)} — anchor availability: ${JSON.stringify(editBreakdown)}`,
   );
 
   return results;

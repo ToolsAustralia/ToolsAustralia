@@ -47,6 +47,9 @@ type NormalisedRow = {
   // every day in the window.
   effectiveStatus: EffectiveStatusBucket;
   lastSignificantEdit: Date | null;
+  // Fallback "anchor" for the learning-phase counter when no significant
+  // edit exists — matches Meta UI which counts from creation in that case.
+  createdTime: Date | null;
 };
 
 /**
@@ -58,7 +61,7 @@ type NormalisedRow = {
  */
 function mongoToNormalised(
   doc: IMetaAdInsightsDaily,
-  metadataByAdsetId: Map<string, { effectiveStatus: EffectiveStatusBucket; learningStatus: "LEARNING" | "SUCCESS" | "FAIL" | null }>,
+  metadataByAdsetId: Map<string, { effectiveStatus: EffectiveStatusBucket; learningStatus: "LEARNING" | "SUCCESS" | "FAIL" | null; createdTime: Date | null }>,
 ): NormalisedRow {
   // Prefer LIVE metadata over Mongo snapshot for both effectiveStatus and
   // learningStatus. The Mongo value is captured at sync time and goes stale
@@ -87,6 +90,7 @@ function mongoToNormalised(
     learningStatus: meta?.learningStatus ?? doc.learningStatus,
     effectiveStatus: meta?.effectiveStatus ?? "UNKNOWN",
     lastSignificantEdit: doc.lastSignificantEdit,
+    createdTime: meta?.createdTime ?? null,
   };
 }
 
@@ -96,7 +100,7 @@ function mongoToNormalised(
  */
 function rawToNormalised(
   raw: Parameters<typeof processInsightData>[0],
-  metadataByAdsetId: Map<string, { dailyBudgetCents: number | null; lifetimeBudgetCents: number | null; campaignObjective: string | null; learningStatus: "LEARNING" | "SUCCESS" | "FAIL" | null; effectiveStatus: EffectiveStatusBucket; lastSignificantEdit: Date | null }>,
+  metadataByAdsetId: Map<string, { dailyBudgetCents: number | null; lifetimeBudgetCents: number | null; campaignObjective: string | null; learningStatus: "LEARNING" | "SUCCESS" | "FAIL" | null; effectiveStatus: EffectiveStatusBucket; lastSignificantEdit: Date | null; createdTime: Date | null }>,
   adAccountId: string,
 ): NormalisedRow | null {
   const date = raw.date_start;
@@ -125,6 +129,7 @@ function rawToNormalised(
     learningStatus: meta?.learningStatus ?? null,
     effectiveStatus: meta?.effectiveStatus ?? "UNKNOWN",
     lastSignificantEdit: meta?.lastSignificantEdit ?? null,
+    createdTime: meta?.createdTime ?? null,
   };
 }
 
@@ -319,30 +324,29 @@ export async function aggregateInsights(input: AggregatorInput): Promise<MetaAdI
     const latest = sortedDesc[0];
     const learningStatusRaw = (latestLearningStatus ?? null) as MetaAdInsightsRow["learningStatusRaw"];
     const lastSignificantEdit = latest?.lastSignificantEdit ?? null;
-    const daysSinceLastSignificantEdit = lastSignificantEdit
-      ? differenceInCalendarDays(now, new Date(lastSignificantEdit))
-      : null;
 
-    // Self-computed "X / 50 since last significant edit" — replicates the exact
-    // counter Meta's Ads Manager UI shows in the "Learning phase progress"
-    // popover. Meta's own API field `learning_stage_info.status` is null for
-    // ~96% of adsets in long-running accounts (the field is only populated for
-    // a brief window during/after learning), so we compute the state ourselves
-    // from data we already have:
-    //   - lastSignificantEdit (from adset metadata, always populated)
-    //   - daily conversions summed from the date of that edit onward
+    // Self-computed "X / 50 since edit" — replicates Meta Ads Manager's
+    // Learning Phase Progress popover. The "anchor" is the date Meta would
+    // count from:
+    //   - last_significant_edit if available (preferred — matches the UI's
+    //     "Since last significant edit" label exactly)
+    //   - created_time as fallback (matches Meta UI behaviour when no
+    //     significant edit has happened — most adsets in the user's account
+    //     have no edit history so this is the common case)
     //
     // Rules mirror Meta's published learning-phase definition:
-    //   conv-since-edit >= 50               -> Active     (out of learning)
-    //   conv-since-edit <  50 AND <= 7 days -> Learning   (still calibrating)
-    //   conv-since-edit <  50 AND >  7 days -> Learning Limited
-    //                                          (Meta gives up after 7 days)
+    //   conv-since-anchor >= 50               -> Active     (out of learning)
+    //   conv-since-anchor <  50 AND <= 7 days -> Learning   (still calibrating)
+    //   conv-since-anchor <  50 AND >  7 days -> Learning Limited
+    const learningAnchor: Date | null = lastSignificantEdit ?? latest?.createdTime ?? null;
+    const daysSinceLastSignificantEdit = learningAnchor
+      ? differenceInCalendarDays(now, new Date(learningAnchor))
+      : null;
     let conversionsSinceLastSignificantEdit: number | null = null;
-    if (lastSignificantEdit) {
-      // Edit timestamp -> AEST yyyy-mm-dd so it matches our daily date strings
-      const editDateStr = formatInTimeZone(lastSignificantEdit, AEST, "yyyy-MM-dd");
+    if (learningAnchor) {
+      const anchorDateStr = formatInTimeZone(learningAnchor, AEST, "yyyy-MM-dd");
       conversionsSinceLastSignificantEdit = groupRows
-        .filter((r) => r.date >= editDateStr)
+        .filter((r) => r.date >= anchorDateStr)
         .reduce((s, r) => s + (r.conversions ?? 0), 0);
     }
 
