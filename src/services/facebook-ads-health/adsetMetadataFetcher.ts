@@ -51,12 +51,52 @@ type MetaAdsetApiResponse = {
     lifetime_budget?: string;
     effective_status?: string;
     learning_stage_info?: { status?: string; conversions?: number; last_sig_edit_ts?: number };
-    last_significant_edit?: { time?: string };
+    // last_significant_edit shape varies in Meta's API. Documented as { time }
+    // but in practice the value can arrive as:
+    //   - { time: "2024-05-24T20:52:00+0000" }   <- documented object form
+    //   - "2024-05-24T20:52:00+0000"             <- bare ISO string (seen in v21)
+    //   - { time: 1716583920 }                   <- Unix seconds in some accounts
+    //   - { time: "1716583920" }                 <- Unix seconds as string
+    // Parser handles all of them — see parseEditTimestamp.
+    last_significant_edit?: unknown;
     created_time?: string;
     campaign?: { id?: string; objective?: string };
   }>;
   paging?: { cursors?: { after?: string }; next?: string };
 };
+
+/**
+ * Robust parser for Meta's last_significant_edit field — see comment on the
+ * response type above for the four shapes we've seen in the wild. Returns
+ * null on anything we can't interpret; logs unknown shapes once so we can
+ * extend if Meta ever invents a fifth.
+ */
+function parseEditTimestamp(raw: unknown): Date | null {
+  if (raw === null || raw === undefined) return null;
+  // Bare ISO string form
+  if (typeof raw === "string") {
+    const d = new Date(raw);
+    return isNaN(d.getTime()) ? null : d;
+  }
+  // Object with `.time` form
+  if (typeof raw === "object" && raw !== null && "time" in raw) {
+    const t = (raw as { time?: unknown }).time;
+    if (typeof t === "string") {
+      // Could be ISO or numeric-as-string (Unix seconds)
+      const asNum = Number(t);
+      if (!isNaN(asNum) && t.length <= 13) {
+        // Numeric — treat as Unix seconds if 10 digits, ms if 13.
+        return new Date(asNum > 1e12 ? asNum : asNum * 1000);
+      }
+      const d = new Date(t);
+      return isNaN(d.getTime()) ? null : d;
+    }
+    if (typeof t === "number") {
+      return new Date(t > 1e12 ? t : t * 1000);
+    }
+  }
+  return null;
+}
 
 const KNOWN_EFFECTIVE_STATUSES: ReadonlySet<EffectiveStatus> = new Set([
   "ACTIVE", "PAUSED", "DELETED", "PENDING_REVIEW", "DISAPPROVED", "PREAPPROVED",
@@ -97,6 +137,9 @@ export async function fetchAdsetMetadata(
   // recently archived, or campaign-paused. The aggregator joins this metadata by
   // adsetId, and any missing adset surfaces as "Unknown" status in the UI.
   const results: AdsetMetadata[] = [];
+  // Capture the first page's raw items so the diagnostic dump below can show
+  // exactly what Meta is returning for last_significant_edit + learning_stage_info.
+  let firstPageRaw: MetaAdsetApiResponse["data"] | null = null;
   let url:
     | string
     | null = `https://graph.facebook.com/v21.0/${adAccountId}/adsets?fields=${fields}&limit=200&access_token=${accessToken}`;
@@ -109,6 +152,7 @@ export async function fetchAdsetMetadata(
       throw new Error(`Meta adsets API error: ${res.status}`);
     }
     const body: MetaAdsetApiResponse = await res.json();
+    if (firstPageRaw === null) firstPageRaw = body.data ?? [];
     for (const item of body.data || []) {
       const learningInfo = item.learning_stage_info;
       const status = learningInfo?.status;
@@ -130,9 +174,7 @@ export async function fetchAdsetMetadata(
           typeof learningInfo?.conversions === "number" ? learningInfo.conversions : null,
         learningStageLastSigEditTs: sigEditTs,
         effectiveStatus: normaliseEffectiveStatus(item.effective_status),
-        lastSignificantEdit: item.last_significant_edit?.time
-          ? new Date(item.last_significant_edit.time)
-          : null,
+        lastSignificantEdit: parseEditTimestamp(item.last_significant_edit),
         createdTime: item.created_time ? new Date(item.created_time) : null,
       });
     }
@@ -155,10 +197,22 @@ export async function fetchAdsetMetadata(
   const editBreakdown = {
     hasEdit: results.filter((r) => r.lastSignificantEdit !== null).length,
     hasCreatedTime: results.filter((r) => r.createdTime !== null).length,
+    hasMetaAnchor: results.filter((r) => r.learningStageLastSigEditTs !== null).length,
     neither: results.filter((r) => r.lastSignificantEdit === null && r.createdTime === null).length,
   };
   console.error(
     `[adsetMetadataFetcher] fetched ${results.length} adsets — learning_stage_info breakdown: ${JSON.stringify(breakdown)} — anchor availability: ${JSON.stringify(editBreakdown)}`,
+  );
+  // One-shot raw dump of the first 3 adsets' last_significant_edit fields,
+  // so if Meta returns yet another shape we haven't seen we can extend the
+  // parser. Stripped to first 3 to keep the log line short.
+  const sample = (firstPageRaw ?? []).slice(0, 3).map((it) => ({
+    id: it.id,
+    last_significant_edit: it.last_significant_edit,
+    learning_stage_info: it.learning_stage_info,
+  }));
+  console.error(
+    `[adsetMetadataFetcher] first-3 raw shapes: ${JSON.stringify(sample)}`,
   );
 
   return results;
