@@ -132,11 +132,18 @@ export async function fetchFacebookInsights(
   const apiVersion = "v21.0";
   const baseUrl = `https://graph.facebook.com/${apiVersion}/${adAccountId}/insights`;
 
-  // Build query parameters
-  // Use 7-day click attribution window (7d_click) - Meta's current best practice (2024+)
-  // 28-day window was deprecated in October 2020
-  // 7-day click balances accuracy with recency and aligns with Meta's default attribution model
-  // Single window prevents duplicate counting while maintaining accurate revenue reporting
+  // Build query parameters.
+  //
+  // use_unified_attribution_setting=true tells Meta to use EACH ADSET'S OWN
+  // configured attribution windows when counting actions, then return a
+  // dedup'd "purchase" entry per adset. This makes our numbers match Meta
+  // Ads Manager UI's "Purchases" column exactly across mixed accounts where
+  // some adsets optimise on 1d_click and others on 7d_click + 1d_view.
+  //
+  // Previously hardcoded `action_attribution_windows: ["7d_click"]` which
+  // ignored view-throughs and used a stricter window than most adsets'
+  // actual setting — caused Meta UI's 45 purchases vs our 18 mismatch on
+  // adsets configured for 1d_click + view.
   const params = new URLSearchParams({
     access_token: accessToken,
     fields:
@@ -146,7 +153,7 @@ export async function fetchFacebookInsights(
       until: dateRange.until,
     }),
     level: level,
-    action_attribution_windows: JSON.stringify(["7d_click"]), // 7-day click attribution window (Meta best practice)
+    use_unified_attribution_setting: "true",
   });
 
   const url = `${baseUrl}?${params.toString()}`;
@@ -404,7 +411,11 @@ export async function fetchFacebookAdInsightsDaily(
     }),
     level: "ad",
     time_increment: "1",
-    action_attribution_windows: JSON.stringify(["7d_click"]),
+    // Match each adset's own attribution windows — see fetchFacebookAdInsights
+    // comment for full rationale. This is the daily-grain feeder for the Health
+    // view and seed script, so the X/50 counter in the Learning popover lines
+    // up with Meta UI's number for each adset.
+    use_unified_attribution_setting: "true",
     limit: String(INSIGHTS_FETCH_PAGE_LIMIT),
   });
 
@@ -478,7 +489,7 @@ export async function fetchFacebookInsightsHourly(
     }),
     level: "account",
     breakdowns: "hourly_stats_aggregated_by_advertiser_time_zone",
-    action_attribution_windows: JSON.stringify(["7d_click"]),
+    use_unified_attribution_setting: "true",
   });
 
   const url = `${baseUrl}?${params.toString()}`;
@@ -603,7 +614,7 @@ async function fetchHourlyInsightsForEntity(
       until: dateRange.until,
     }),
     breakdowns: "hourly_stats_aggregated_by_advertiser_time_zone",
-    action_attribution_windows: JSON.stringify(["7d_click"]),
+    use_unified_attribution_setting: "true",
   });
 
   const response = await fetch(`${baseUrl}?${params.toString()}`, {
