@@ -533,9 +533,9 @@ export function CartProvider({ children }: { children: ReactNode }) {
           trackKlaviyoRemoveFromCart({
             value: itemToRemove.price * itemToRemove.quantity,
             currency: "AUD",
-            productId: type === "product" ? itemId : undefined,
-            productName: type === "product" ? itemToRemove.product?.name : itemToRemove.miniDraw?.name,
-            numItems: itemToRemove.quantity,
+            product_id: type === "product" ? itemId : undefined,
+            product_name: type === "product" ? itemToRemove.product?.name : itemToRemove.miniDraw?.name,
+            num_items: itemToRemove.quantity,
           });
         } catch (error) {
           console.error("Error tracking RemoveFromCart:", error);
