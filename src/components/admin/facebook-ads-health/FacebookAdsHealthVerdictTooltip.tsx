@@ -16,9 +16,9 @@ interface VerdictReason {
  * docs the verdict rules were designed against — surfaced so ad managers / analysts
  * can audit the reasoning and study the underlying signals.
  *
- * MAINTENANCE: Meta occasionally renames help articles. If any of these 404,
- * search facebook.com/business/help for the title and update the URL.
- * Last verified: 2026-05-27.
+ * Direct article URLs verified via HEAD request on 2026-05-27. Meta occasionally
+ * retires articles (the earlier "Manage ad sets in the learning phase" 404'd —
+ * replaced with the Help Center search URL which is permanent).
  */
 const REFERENCES: ReadonlyArray<{ label: string; url: string; source: "Meta" | "Industry" }> = [
   {
@@ -27,8 +27,8 @@ const REFERENCES: ReadonlyArray<{ label: string; url: string; source: "Meta" | "
     source: "Meta",
   },
   {
-    label: "Meta: Manage ad sets in the learning phase",
-    url: "https://www.facebook.com/business/help/204625073768269",
+    label: "Meta Help Center: search ad-set guidance",
+    url: "https://www.facebook.com/business/help/search/?q=learning+phase",
     source: "Meta",
   },
   {

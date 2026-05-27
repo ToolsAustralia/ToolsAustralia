@@ -44,10 +44,12 @@ export function FacebookAdsHealthMobileCards({ rows, level }: Props) {
             <div className="flex justify-between items-start mb-2">
               <div className="min-w-0">
                 <div className="font-semibold text-sm break-words">{row.name}</div>
-                <div className="flex flex-wrap gap-1 items-center mt-0.5">
-                  <LiveStatusPill status={row.effectiveStatus} />
-                  <LearningStatusPill status={row.learningStatus} />
-                </div>
+                {level !== "campaign" && (
+                  <div className="flex flex-wrap gap-1 items-center mt-0.5">
+                    <LiveStatusPill status={row.effectiveStatus} />
+                    <LearningStatusPill status={row.learningStatus} />
+                  </div>
+                )}
                 <div className="text-[10px] text-zinc-500 mt-0.5 break-words">
                   {level === "ad" && row.adsetName ? `${row.adsetName} · ${row.campaignName}` : row.campaignName}
                 </div>

@@ -82,10 +82,11 @@ export function FacebookAdsHealthFlatTable({ rows, level }: Props) {
                   <div className="text-[10px] text-zinc-500 mt-0.5">{row.campaignName}</div>
                 </td>
                 <td className="px-2 py-2 align-middle">
-                  <LiveStatusPill status={row.effectiveStatus} />
+                  {/* Both pills are per-adset signals; suppress at campaign level */}
+                  {level !== "campaign" && <LiveStatusPill status={row.effectiveStatus} />}
                 </td>
                 <td className="px-2 py-2 align-middle">
-                  <LearningStatusPill status={row.learningStatus} />
+                  {level !== "campaign" && <LearningStatusPill status={row.learningStatus} />}
                 </td>
                 <td className="text-right font-mono px-2 py-2 align-middle">${spendAud.toFixed(0)}</td>
                 <td className={`text-right font-mono px-2 py-2 align-middle ${row.window.conversions === 0 ? "text-red-600" : ""}`}>{row.window.conversions}</td>

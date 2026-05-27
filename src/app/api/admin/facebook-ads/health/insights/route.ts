@@ -17,9 +17,10 @@ const querySchema = z.object({
   startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   level: z.enum(["campaign", "adset", "ad"]).default("adset"),
-  // verdict, learningStatus, minSpend, search are applied client-side (useMemo in FacebookAdsHealthView)
-  // so they are intentionally absent from this schema — removing them from queryKey keeps TanStack cache hits.
-  campaign: z.string().optional(),
+  // ALL row-level filters (verdict, learningStatus, liveOnly, minSpend, search, campaign)
+  // are applied client-side. They are intentionally absent from this schema — keeping them
+  // server-side defeats TanStack cache hits AND would shrink the client's campaign list to
+  // the currently-filtered subset, breaking a future multiselect dropdown.
 });
 
 export async function GET(request: NextRequest) {
@@ -62,19 +63,12 @@ export async function GET(request: NextRequest) {
     accessToken,
   });
 
-  // verdict, learningStatus, minSpend, and search are now client-side filters (see FacebookAdsHealthView useMemo).
-  // Only campaign is still server-side because it selects a genuine data slice.
-  const campaignFilter = q.campaign ? new Set(q.campaign.split(",")) : null;
-
-  const enriched = rows
-    .map((row) => {
-      const v = computeVerdict(row, settings);
-      return { row, v };
-    })
-    .filter(({ row }) => {
-      if (campaignFilter && !campaignFilter.has(row.campaignId)) return false;
-      return true;
-    });
+  // All row-level filtering is now client-side. The route returns the full set
+  // so the client can compute a complete campaign list for any future multiselect.
+  const enriched = rows.map((row) => {
+    const v = computeVerdict(row, settings);
+    return { row, v };
+  });
 
   const userId = session.user?.id ?? "";
   const snoozes = userId

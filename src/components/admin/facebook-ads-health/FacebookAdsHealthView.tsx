@@ -40,7 +40,9 @@ export function FacebookAdsHealthView({ startDate, endDate, level }: Props) {
     startDate,
     endDate,
     level: effectiveLevel,
-    campaign: campaignFilter.length ? campaignFilter : undefined,
+    // campaign filter moved client-side — see displayedRows below. Hooking
+    // campaign into the queryKey collapsed the campaign list to the current
+    // selection (you couldn't switch campaigns without clearing first).
   });
 
   const campaignOptions = useMemo(() => {
@@ -57,15 +59,17 @@ export function FacebookAdsHealthView({ startDate, endDate, level }: Props) {
     const statusSet = statusFilter.length ? new Set(statusFilter) : null;
     const minSpendCents = minSpend === "" ? null : minSpend * 100;
     const searchLower = search.trim().toLowerCase();
-    return data.rows.filter((row: { verdict: string; learningStatus: string; effectiveStatus: string; window: { spendCents: number }; name: string }) => {
+    const campaignSet = campaignFilter.length ? new Set(campaignFilter) : null;
+    return data.rows.filter((row: { verdict: string; learningStatus: string; effectiveStatus: string; campaignId: string; window: { spendCents: number }; name: string }) => {
       if (verdictSet && !verdictSet.has(row.verdict)) return false;
       if (statusSet && !statusSet.has(row.learningStatus)) return false;
       if (liveOnly && row.effectiveStatus !== "ACTIVE") return false;
+      if (campaignSet && !campaignSet.has(row.campaignId)) return false;
       if (minSpendCents !== null && row.window.spendCents < minSpendCents) return false;
       if (searchLower && !row.name.toLowerCase().includes(searchLower)) return false;
       return true;
     });
-  }, [data?.rows, verdictFilter, statusFilter, liveOnly, minSpend, search]);
+  }, [data?.rows, verdictFilter, statusFilter, liveOnly, campaignFilter, minSpend, search]);
 
   // Recompute alert count from the filtered visible rows so the banner reflects what's in the table.
   const filteredAlertCount = useMemo(() => {

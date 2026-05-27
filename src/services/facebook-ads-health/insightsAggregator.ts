@@ -344,11 +344,13 @@ export async function aggregateInsights(input: AggregatorInput): Promise<MetaAdI
     // effectiveStatus represents whether the adset is currently delivering.
     // At campaign level the rolled-up row covers many adsets — picking
     // first.effectiveStatus would be misleading (different adsets can be in
-    // different states). Force "UNKNOWN" so the UI hides the pill. The same
-    // reasoning applies to learningStatusBucket but that's an existing decision
-    // we're not changing in this commit.
+    // different states). Force "UNKNOWN" so the UI hides the pill. Same
+    // reasoning for learningStatusBucket — picking first.learningStatus from
+    // an arbitrary ad in the campaign would surface a meaningless value.
     const effectiveStatus: EffectiveStatusBucket =
       input.level === "campaign" ? "UNKNOWN" : first.effectiveStatus;
+    const learningStatusForRow: LearningStatusBucket =
+      input.level === "campaign" ? "Unknown" : bucketFromRaw(learningStatusRaw);
 
     result.push({
       level: input.level,
@@ -377,7 +379,7 @@ export async function aggregateInsights(input: AggregatorInput): Promise<MetaAdI
       },
       last14dBestWeek,
       learningStatusRaw,
-      learningStatusBucket: bucketFromRaw(learningStatusRaw),
+      learningStatusBucket: learningStatusForRow,
       effectiveStatus,
       lastSignificantEdit,
       daysSinceLastSignificantEdit,

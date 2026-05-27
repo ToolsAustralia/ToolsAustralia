@@ -273,8 +273,12 @@ export function FacebookAdsHealthPivotTable({ rows, metric, startDate, endDate, 
         <td className={`sticky left-0 bg-white dark:bg-zinc-900 px-3 py-2 align-top ${indentClass}`}>
           <div className="font-semibold text-zinc-900 dark:text-zinc-100">{row.name}</div>
           <div className="flex gap-1.5 items-center text-[10px] text-zinc-500 mt-0.5">
-            <LiveStatusPill status={row.effectiveStatus} />
-            <LearningStatusPill status={row.learningStatus} />
+            {/* Live + Learning pills are per-adset signals. At campaign level the
+                row is rolled up across many adsets so showing either would be
+                misleading — suppress here, the aggregator also forces them to
+                UNKNOWN as a defense in depth. */}
+            {level !== "campaign" && <LiveStatusPill status={row.effectiveStatus} />}
+            {level !== "campaign" && <LearningStatusPill status={row.learningStatus} />}
             {level === "ad" && row.adsetName ? <span>{row.adsetName}</span> : <span>{row.campaignName}</span>}
           </div>
         </td>
