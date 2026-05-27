@@ -1316,7 +1316,7 @@ export default function FacebookAdsManagement() {
         // the negatives must change with it. Portal'ing out of the container was
         // considered and rejected — sticky positioning is scoped to its scroll
         // ancestor, so a portal would break sticky behavior entirely.
-        className="sticky top-0 z-30 flex flex-col gap-2 sm:gap-4 min-w-0 -mt-4 lg:-mt-6 -mx-4 lg:-mx-6 px-4 lg:px-6 pt-3 pb-3 bg-gray-50/95 dark:bg-neutral-950/95 backdrop-blur supports-[backdrop-filter]:bg-gray-50/80 supports-[backdrop-filter]:dark:bg-neutral-950/80 border-b border-gray-200 dark:border-neutral-800"
+        className="sticky top-0 z-30 flex flex-col gap-2 sm:gap-4 min-w-0 -mt-4 lg:-mt-6 -mx-4 lg:-mx-6 px-4 lg:px-6 pt-1.5 pb-2 lg:pt-3 lg:pb-3 bg-gray-50/95 dark:bg-neutral-950/95 backdrop-blur supports-[backdrop-filter]:bg-gray-50/80 supports-[backdrop-filter]:dark:bg-neutral-950/80 border-b border-gray-200 dark:border-neutral-800"
       >
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-4 min-w-0">
           <div className="flex items-center gap-1.5 sm:gap-2 bg-gray-100 dark:bg-neutral-800 rounded-lg p-1 w-full sm:w-auto flex-shrink-0 min-w-0">

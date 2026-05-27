@@ -16,17 +16,17 @@ export function FacebookAdsHealthTopBar({ alertCount, onShowAlertedOnly }: Props
   const total = alertCount.investigate + alertCount.cut;
   if (total === 0) return null;
   return (
-    <div className="mb-4 rounded-md bg-amber-50 dark:bg-amber-950/40 border-l-4 border-amber-500 px-3 py-2 text-sm text-amber-900 dark:text-amber-200 flex items-center gap-2">
-      <span className="w-1.5 h-1.5 bg-amber-500 rounded-full" />
+    <div className="mb-2 sm:mb-3 rounded-md bg-amber-50 dark:bg-amber-950/40 border-l-4 border-amber-500 px-2.5 py-1.5 sm:px-3 sm:py-2 text-[11px] sm:text-sm text-amber-900 dark:text-amber-200 flex flex-wrap items-center gap-x-2 gap-y-1">
+      <span className="w-1 h-1 sm:w-1.5 sm:h-1.5 bg-amber-500 rounded-full shrink-0" />
       <strong>
         {total} adset{total > 1 ? "s" : ""} need attention.
       </strong>
-      <span>
+      <span className="text-[10px] sm:text-sm">
         {alertCount.cut} Cut? · {alertCount.investigate} Investigate
       </span>
       <button
         onClick={onShowAlertedOnly}
-        className="ml-auto text-xs underline cursor-pointer"
+        className="ml-auto text-[10px] sm:text-xs underline cursor-pointer whitespace-nowrap"
       >
         Show only these
       </button>

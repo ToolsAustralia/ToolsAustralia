@@ -1,5 +1,7 @@
 "use client";
 import React, { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
+import { AnimatePresence, motion } from "framer-motion";
 import { Search, SlidersHorizontal, X } from "lucide-react";
 
 export type MetricChoice = "spend" | "conversions" | "revenue" | "roas" | "linkClicks" | "linkCtr" | "costPerLinkClick";
@@ -278,45 +280,64 @@ export function FacebookAdsHealthFilters(props: Props) {
         <FilterControls {...props} layout="row" />
       </div>
 
-      {/* Mobile drawer — slides in from right. Backdrop closes on click, body scroll
-          locked while open, Esc closes. z-50 sits above sticky toolbars (z-30) and
-          child sticky (z-20). */}
-      {drawerOpen && (
-        <>
-          <div
-            className="fixed inset-0 bg-black/40 z-40 md:hidden"
-            onClick={() => setDrawerOpen(false)}
-            aria-hidden
-          />
-          <div
-            className="fixed top-0 right-0 bottom-0 w-80 max-w-[85vw] bg-white dark:bg-zinc-900 z-50 md:hidden shadow-2xl flex flex-col"
-            role="dialog"
-            aria-label="Filters"
-            aria-modal="true"
-          >
-            <div className="sticky top-0 bg-white dark:bg-zinc-900 border-b border-zinc-200 dark:border-zinc-700 px-4 py-3 flex items-center justify-between">
-              <div className="font-semibold text-sm">
-                Filters
-                {count > 0 && (
-                  <span className="ml-2 bg-blue-600 text-white rounded-full px-1.5 py-0.5 text-[9px] leading-none font-bold align-middle">
-                    {count}
-                  </span>
-                )}
+      {/* Mobile drawer — slides in from LEFT (matches MiniDraws filter pattern).
+          MUST be portaled to document.body because the parent sticky toolbar uses
+          backdrop-blur, which creates a new containing block for `position: fixed`
+          and traps the drawer inside the toolbar's bounding box. Portal escapes
+          that and pins the drawer to the actual viewport.
+          z-[110] matches MiniDraws so it sits above any admin chrome. */}
+      {typeof document !== "undefined" &&
+        createPortal(
+          <AnimatePresence>
+            {drawerOpen && (
+              <div className="fixed inset-0 z-[110] md:hidden">
+                <motion.div
+                  className="absolute inset-0 bg-black/50"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  onClick={() => setDrawerOpen(false)}
+                  aria-hidden
+                />
+                <motion.div
+                  className="absolute left-0 top-0 h-full w-80 max-w-[90vw] bg-white dark:bg-neutral-900 shadow-xl overflow-y-auto brand-scrollbar border-r-2 border-gray-200 dark:border-red-900/40"
+                  initial={{ x: "-100%" }}
+                  animate={{ x: 0 }}
+                  exit={{ x: "-100%" }}
+                  transition={{ type: "spring", stiffness: 300, damping: 30 }}
+                  role="dialog"
+                  aria-label="Filters"
+                  aria-modal="true"
+                >
+                  <div className="p-4 border-b border-gray-200 dark:border-neutral-800 sticky top-0 bg-white/95 dark:bg-neutral-900/95 backdrop-blur-sm z-10">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                        Filters
+                        {count > 0 && (
+                          <span className="ml-2 bg-blue-600 text-white rounded-full px-2 py-0.5 text-[10px] leading-none font-bold align-middle">
+                            {count}
+                          </span>
+                        )}
+                      </h3>
+                      <button
+                        type="button"
+                        onClick={() => setDrawerOpen(false)}
+                        className="p-2 hover:bg-gray-100 dark:hover:bg-neutral-800 dark:hover:text-white rounded-full transition-colors text-gray-700 dark:text-neutral-400"
+                        aria-label="Close filters"
+                      >
+                        <X className="w-5 h-5" />
+                      </button>
+                    </div>
+                  </div>
+                  <div className="p-4">
+                    <FilterControls {...props} layout="stack" />
+                  </div>
+                </motion.div>
               </div>
-              <button
-                onClick={() => setDrawerOpen(false)}
-                className="text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100 p-1"
-                aria-label="Close filters"
-              >
-                <X size={18} />
-              </button>
-            </div>
-            <div className="flex-1 overflow-y-auto p-4">
-              <FilterControls {...props} layout="stack" />
-            </div>
-          </div>
-        </>
-      )}
+            )}
+          </AnimatePresence>,
+          document.body,
+        )}
     </>
   );
 }
