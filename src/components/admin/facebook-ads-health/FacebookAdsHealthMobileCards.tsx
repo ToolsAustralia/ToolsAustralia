@@ -71,7 +71,14 @@ export function FacebookAdsHealthMobileCards({ rows, level }: Props) {
             </div>
             <div className="grid grid-cols-7 gap-1 mb-2">
               {row.daily.slice(-7).map((d) => (
-                <div key={d.date} className="text-center text-[8px] text-zinc-400 uppercase">{new Date(d.date).toLocaleDateString("en-AU", { weekday: "narrow" })}</div>
+                <div key={d.date} className="text-center uppercase leading-tight">
+                  {/* Two-line stacked label: narrow weekday on top, day-of-month
+                      below. Before this each cell only showed the weekday letter
+                      (T/F/S/S/M/T/W) and users couldn't tell which date it was —
+                      especially confusing across DST transitions or month rollovers. */}
+                  <div className="text-[8px] text-zinc-400">{new Date(d.date + "T12:00:00Z").toLocaleDateString("en-AU", { weekday: "narrow" })}</div>
+                  <div className="text-[9px] font-semibold text-zinc-500 dark:text-zinc-400 font-mono">{d.date.slice(8, 10)}</div>
+                </div>
               ))}
             </div>
             <div className="flex justify-between items-center pt-2 border-t border-zinc-100 dark:border-zinc-800 text-xs gap-2">
