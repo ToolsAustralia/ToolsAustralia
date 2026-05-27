@@ -1,5 +1,6 @@
 import { fetchFacebookAdInsightsDaily, processInsightData } from "@/lib/facebook-marketing";
 import { fetchAdsetMetadata } from "@/services/facebook-ads-health/adsetMetadataFetcher";
+import MetaAdInsightsDaily, { type IMetaAdInsightsDaily } from "@/models/MetaAdInsightsDaily";
 import { subDays, differenceInCalendarDays } from "date-fns";
 import { formatInTimeZone } from "date-fns-tz";
 import { PURCHASE_CAPABLE_OBJECTIVES, type MetaAdInsightsRow, type LearningStatusBucket } from "./types";
@@ -19,6 +20,93 @@ export interface AggregatorInput {
   endDate: Date;   // reporting window end
   level: "campaign" | "adset" | "ad";
   accessToken: string;
+}
+
+// Internal normalised row shape — same across Mongo and live-API paths.
+type NormalisedRow = {
+  adAccountId: string;
+  date: string;
+  adId: string;
+  adsetId?: string;
+  campaignId?: string;
+  campaignName?: string;
+  adsetName?: string;
+  adName?: string;
+  spendCents: number;
+  impressions: number;
+  clicks: number;
+  conversions: number;
+  revenueCents: number;
+  linkClicks: number;
+  adsetBudgetCents: number | null;
+  campaignObjective: string | null;
+  learningStatus: "LEARNING" | "SUCCESS" | "FAIL" | null;
+  lastSignificantEdit: Date | null;
+};
+
+/**
+ * Map a lean MetaAdInsightsDaily Mongo document into a NormalisedRow.
+ * The document already has all fields parsed and stored as typed numbers/dates,
+ * so this is essentially a shape-adapter.
+ */
+function mongoToNormalised(doc: IMetaAdInsightsDaily): NormalisedRow {
+  return {
+    adAccountId: doc.adAccountId,
+    date: doc.date,
+    adId: doc.adId,
+    adsetId: doc.adsetId,
+    campaignId: doc.campaignId,
+    campaignName: doc.campaignName,
+    adsetName: doc.adsetName,
+    adName: doc.adName,
+    spendCents: doc.spendCents,
+    impressions: doc.impressions,
+    clicks: doc.clicks,
+    conversions: doc.conversions,
+    revenueCents: doc.revenueCents,
+    linkClicks: doc.linkClicks,
+    adsetBudgetCents: doc.adsetBudgetCents,
+    campaignObjective: doc.campaignObjective,
+    learningStatus: doc.learningStatus,
+    lastSignificantEdit: doc.lastSignificantEdit,
+  };
+}
+
+/**
+ * Transform a raw Meta API insight row into a NormalisedRow.
+ * Parsing logic mirrors MetaInsightsSyncService to avoid drift.
+ */
+function rawToNormalised(
+  raw: Parameters<typeof processInsightData>[0],
+  metadataByAdsetId: Map<string, { dailyBudgetCents: number | null; lifetimeBudgetCents: number | null; campaignObjective: string | null; learningStatus: "LEARNING" | "SUCCESS" | "FAIL" | null; lastSignificantEdit: Date | null }>,
+  adAccountId: string,
+): NormalisedRow | null {
+  const date = raw.date_start;
+  if (!date || !raw.ad_id) return null;
+
+  const metrics = processInsightData(raw);
+  const meta = raw.adset_id ? metadataByAdsetId.get(raw.adset_id) : undefined;
+
+  return {
+    adAccountId,
+    date,
+    adId: raw.ad_id,
+    adsetId: raw.adset_id,
+    campaignId: raw.campaign_id,
+    campaignName: raw.campaign_name,
+    adsetName: raw.adset_name,
+    adName: raw.ad_name,
+    spendCents: metrics.spend,
+    impressions: metrics.impressions,
+    clicks: metrics.clicks,
+    conversions: metrics.conversions,
+    revenueCents: metrics.revenue,
+    linkClicks: metrics.linkClicks,
+    adsetBudgetCents: meta?.dailyBudgetCents ?? meta?.lifetimeBudgetCents ?? null,
+    campaignObjective: meta?.campaignObjective ?? null,
+    learningStatus: meta?.learningStatus ?? null,
+    lastSignificantEdit: meta?.lastSignificantEdit ?? null,
+  };
 }
 
 export async function aggregateInsights(input: AggregatorInput): Promise<MetaAdInsightsRow[]> {
@@ -44,100 +132,63 @@ export async function aggregateInsights(input: AggregatorInput): Promise<MetaAdI
   const trailing14Start = formatInTimeZone(subDays(now, 14), AEST, "yyyy-MM-dd");
   const todayStr = formatInTimeZone(now, AEST, "yyyy-MM-dd");
 
-  // Pull a broad slice: from min(reportingStart, trailing14Start) to today
+  // Pull a broad slice: from min(reportingStart, trailing14Start) to yesterday
   const earliest = fbSince < trailing14Start ? fbSince : trailing14Start;
 
-  // Fetch live from Meta's Marketing API and adset metadata in parallel.
-  const [rawInsights, adsetMetadataList] = await Promise.all([
-    fetchFacebookAdInsightsDaily(input.adAccountId, input.accessToken, {
-      since: earliest,
-      until: todayStr,
-    }),
+  // Decide whether we need a live fetch for today's partial data.
+  // Today is needed if: reporting window includes today, OR trailing-14 window touches today.
+  // (trailing14Start <= todayStr is always true, so we also check fbUntil >= todayStr.)
+  const needToday = fbUntil >= todayStr;
+
+  // Run Mongo read, optional today live-fetch, and adset metadata in parallel.
+  const [mongoRows, rawTodayInsights, adsetMetadataList] = await Promise.all([
+    // Past days: fast indexed Mongo read (excludes today)
+    MetaAdInsightsDaily.find({
+      adAccountId: input.adAccountId,
+      date: { $gte: earliest, $lte: yesterdayStr },
+    }).lean() as unknown as Promise<IMetaAdInsightsDaily[]>,
+
+    // Today: live-fetch only if needed (small payload, ~1 sec)
+    needToday
+      ? fetchFacebookAdInsightsDaily(input.adAccountId, input.accessToken, {
+          since: todayStr,
+          until: todayStr,
+        })
+      : Promise.resolve([]),
+
+    // Adset metadata: always live (learning status and last_significant_edit change intraday)
     fetchAdsetMetadata(input.adAccountId, input.accessToken),
   ]);
 
-  // Diagnostic: log payload sizes + a sample row to surface zero-data / parsing issues.
+  // Diagnostic: log payload sizes to surface zero-data / caching issues.
   // Uses console.error so it survives production console-stripping (per CLAUDE.md).
-  if (rawInsights.length > 0) {
-    const sample = rawInsights[0];
-    const sampleSpend = sample?.spend ?? "(missing)";
-    const sampleActions = Array.isArray(sample?.actions)
-      ? sample!.actions.map((a) => `${a.action_type}=${a.value}`).join(",")
-      : "(no actions)";
-    console.error(
-      `[facebook-ads-health/aggregator] fetched rawInsights=${rawInsights.length} adsetMetadata=${adsetMetadataList.length} window=${earliest}..${todayStr} sample: date=${sample?.date_start} ad_id=${sample?.ad_id} spend=${sampleSpend} actions=${sampleActions}`,
-    );
-  } else {
-    console.error(
-      `[facebook-ads-health/aggregator] EMPTY rawInsights for adAccount=${input.adAccountId} window=${earliest}..${todayStr} — Meta returned zero rows`,
-    );
-  }
-
-  // Build a lookup map for adset metadata keyed by adset ID. Post-fetch we
-  // narrow to adsets that actually appear in this window's insights — Meta
-  // returns metadata for every adset that ever existed on the account, and
-  // the unfiltered map can grow to thousands on long-lived accounts.
-  const insightsAdsetIds = new Set(
-    rawInsights.map((r) => r.adset_id).filter((id): id is string => Boolean(id)),
+  console.error(
+    `[facebook-ads-health/aggregator] mongoRows=${mongoRows.length} todayRows=${rawTodayInsights.length} adsetMetadata=${adsetMetadataList.length} window=${earliest}..${todayStr} (today=${needToday})`,
   );
+
+  // Build a lookup map for adset metadata keyed by adset ID.
+  // Narrow to adsets that actually appear in the mongo results or today's live rows
+  // to avoid holding the full account history in memory.
+  const mongoAdsetIds = new Set(
+    mongoRows.map((r) => r.adsetId).filter((id): id is string => Boolean(id)),
+  );
+  const todayAdsetIds = new Set(
+    rawTodayInsights.map((r) => r.adset_id).filter((id): id is string => Boolean(id)),
+  );
+  const insightsAdsetIds = new Set([...mongoAdsetIds, ...todayAdsetIds]);
   const metadataByAdsetId = new Map(
     adsetMetadataList
       .filter((m) => insightsAdsetIds.has(m.adsetId))
       .map((m) => [m.adsetId, m]),
   );
 
-  // Transform raw Meta API rows into the shape the aggregator consumes.
-  // Parsing logic mirrors MetaInsightsSyncService to avoid drift.
-  type NormalisedRow = {
-    adAccountId: string;
-    date: string;
-    adId: string;
-    adsetId?: string;
-    campaignId?: string;
-    campaignName?: string;
-    adsetName?: string;
-    adName?: string;
-    spendCents: number;
-    impressions: number;
-    clicks: number;
-    conversions: number;
-    revenueCents: number;
-    linkClicks: number;
-    adsetBudgetCents: number | null;
-    campaignObjective: string | null;
-    learningStatus: "LEARNING" | "SUCCESS" | "FAIL" | null;
-    lastSignificantEdit: Date | null;
-  };
-
-  const rows: NormalisedRow[] = [];
-  for (const raw of rawInsights) {
-    const date = raw.date_start;
-    if (!date || !raw.ad_id) continue;
-
-    const metrics = processInsightData(raw);
-    const meta = raw.adset_id ? metadataByAdsetId.get(raw.adset_id) : undefined;
-
-    rows.push({
-      adAccountId: input.adAccountId,
-      date,
-      adId: raw.ad_id,
-      adsetId: raw.adset_id,
-      campaignId: raw.campaign_id,
-      campaignName: raw.campaign_name,
-      adsetName: raw.adset_name,
-      adName: raw.ad_name,
-      spendCents: metrics.spend,
-      impressions: metrics.impressions,
-      clicks: metrics.clicks,
-      conversions: metrics.conversions,
-      revenueCents: metrics.revenue,
-      linkClicks: metrics.linkClicks,
-      adsetBudgetCents: meta?.dailyBudgetCents ?? meta?.lifetimeBudgetCents ?? null,
-      campaignObjective: meta?.campaignObjective ?? null,
-      learningStatus: meta?.learningStatus ?? null,
-      lastSignificantEdit: meta?.lastSignificantEdit ?? null,
-    });
-  }
+  // Combine Mongo past rows + live today rows into a single NormalisedRow array.
+  const rows: NormalisedRow[] = [
+    ...mongoRows.map(mongoToNormalised),
+    ...rawTodayInsights
+      .map((raw) => rawToNormalised(raw, metadataByAdsetId, input.adAccountId))
+      .filter((r): r is NormalisedRow => r !== null),
+  ];
 
   // Group by level
   const groupKey = (r: NormalisedRow): string => {

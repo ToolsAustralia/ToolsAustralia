@@ -140,7 +140,7 @@ export async function fetchFacebookInsights(
   const params = new URLSearchParams({
     access_token: accessToken,
     fields:
-      "spend,impressions,clicks,inline_link_clicks,actions,action_values,campaign_id,campaign_name,adset_id,adset_name,ad_id,ad_name,date_start,date_stop",
+      "spend,impressions,clicks,inline_link_clicks,reach,frequency,cpm,actions,action_values,campaign_id,campaign_name,adset_id,adset_name,ad_id,ad_name,date_start,date_stop",
     time_range: JSON.stringify({
       since: dateRange.since,
       until: dateRange.until,
@@ -215,6 +215,9 @@ export async function fetchFacebookInsights(
             cpc: 0,
             linkCtr: 0,
             linkCpc: 0,
+            reach: 0,
+            frequency: 0,
+            cpmCents: 0,
           },
         },
       ];
@@ -248,6 +251,14 @@ export function processInsightData(insight: FacebookInsightData): ProcessedInsig
   const impressions = parseInt(insight.impressions || "0", 10);
   const clicks = parseInt(insight.clicks || "0", 10);
   const linkClicks = parseInt(insight.inline_link_clicks || "0", 10);
+
+  // Parse reach, frequency, and CPM
+  // reach — unique users who saw the ad (integer string)
+  // frequency — average impressions per unique user (decimal string)
+  // cpm — cost per 1000 impressions in dollars (decimal string) → stored as cents
+  const reach = parseInt(insight.reach || "0", 10);
+  const frequency = parseFloat(insight.frequency || "0");
+  const cpmCents = parseFloat(insight.cpm || "0") * 100; // Convert dollars to cents
 
   // Extract revenue from action_values (purchase events)
   // Handle both "purchase" and "purchase.{window}" formats to catch all purchase events
@@ -312,6 +323,9 @@ export function processInsightData(insight: FacebookInsightData): ProcessedInsig
     cpc,
     linkCtr,
     linkCpc,
+    reach,
+    frequency,
+    cpmCents,
   };
 }
 
@@ -383,7 +397,7 @@ export async function fetchFacebookAdInsightsDaily(
   const params = new URLSearchParams({
     access_token: accessToken,
     fields:
-      "spend,impressions,clicks,inline_link_clicks,actions,action_values,campaign_id,campaign_name,adset_id,adset_name,ad_id,ad_name,date_start,date_stop",
+      "spend,impressions,clicks,inline_link_clicks,reach,frequency,cpm,actions,action_values,campaign_id,campaign_name,adset_id,adset_name,ad_id,ad_name,date_start,date_stop",
     time_range: JSON.stringify({
       since: dateRange.since,
       until: dateRange.until,

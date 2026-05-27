@@ -3,7 +3,7 @@
 | Model | Path | Purpose |
 |---|---|---|
 | `MetaAdDestination` | [src/models/MetaAdDestination.ts](../../src/models/MetaAdDestination.ts) | Meta ad destination config |
-| `MetaAdInsightsDaily` | [src/models/MetaAdInsightsDaily.ts](../../src/models/MetaAdInsightsDaily.ts) | Daily ad insights snapshots from Meta Marketing API (extended with health monitoring fields: `linkClicks`, `adsetBudgetCents`, `campaignObjective`, `learningStatus`, `lastSignificantEdit`) |
+| `MetaAdInsightsDaily` | [src/models/MetaAdInsightsDaily.ts](../../src/models/MetaAdInsightsDaily.ts) | Daily ad insights snapshots from Meta Marketing API. Typed fields: `spendCents`, `impressions`, `clicks`, `linkClicks`, `conversions`, `revenueCents`, `reach`, `frequency`, `cpmCents`, `adsetBudgetCents`, `campaignObjective`, `learningStatus`, `lastSignificantEdit`. TTL index on `syncedAt`: 35d (dev) / 60d (prod). Nightly cron re-upserts the last 8 days refreshing the TTL clock. Seed script: `npm run seed:meta-insights`. |
 
 > _TODO: pull schemas._
 
@@ -33,4 +33,4 @@
   - **INVESTIGATE**: fires when all three groups pass — (a) "Was healthy": best 7d in last 14d had ≥50 conv AND ROAS ≥ breakeven; (b) "Now broken": ROAS dropped >roasDropTriggerPct WoW with ≥50 conv in both weeks, OR status reverted from Active; (c) "Recent edit": lastSignificantEdit ≤7d ago. Requires ≥50 conv in both comparison weeks (stat-confidence floor).
   - **SCALE**: fires when adset is Active, ≥50 conv/7d, ROAS ≥ breakeven, no edit within postEditWaitHours, ROAS stable WoW.
   - **HOLD**: default when none of the above fire.
-- **insightsAggregator** (Task 18, updated Task 22) — Builds `MetaAdInsightsRow` by fetching live from Meta's Marketing API via `fetchFacebookAdInsightsDaily` + `fetchAdsetMetadata`. No Mongo dependency — always shows real data regardless of cron state. Known tradeoff: `daysInLearningLimited` is best-effort (0 or 1 based on current state) because Meta's live API does not return historical learning status per day.
+- **insightsAggregator** (Task 18, updated Task 22, mongo-first Task 23) — Builds `MetaAdInsightsRow` via a cache-aside strategy: past days are read from `MetaAdInsightsDaily` in MongoDB (fast, indexed on `{adAccountId, date}`); today's partial row is live-fetched via `fetchFacebookAdInsightsDaily`; adset metadata (learning status, last_significant_edit) is always live via `fetchAdsetMetadata`. All three fetches run in `Promise.all`. Known tradeoff: `daysInLearningLimited` is best-effort (0 or 1 based on current state) because Meta's live API does not return historical learning status per day.

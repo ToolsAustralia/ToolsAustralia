@@ -49,6 +49,9 @@ export interface FacebookInsightData {
   impressions: string;
   clicks: string;
   inline_link_clicks?: string; // Off-Meta link clicks (Facebook returns as string)
+  reach?: string; // Unique users who saw the ad (integer as string)
+  frequency?: string; // Average impressions per unique user (decimal as string)
+  cpm?: string; // Cost per 1000 impressions in dollars (decimal as string)
   actions?: FacebookAction[];
   action_values?: FacebookActionValue[];
   campaign_id?: string;
@@ -94,6 +97,9 @@ export interface ProcessedInsightMetrics {
   cpc: number; // Cost per click (based on clicks all)
   linkCtr: number; // Link click-through rate (based on inline_link_clicks)
   linkCpc: number; // Cost per link click (based on inline_link_clicks)
+  reach: number; // Unique users who saw the ad
+  frequency: number; // Average impressions per unique user
+  cpmCents: number; // Cost per 1000 impressions in cents
 }
 
 /**

@@ -266,6 +266,9 @@ export async function GET(request: NextRequest) {
             conversions: acc.conversions + item.metrics.conversions,
             landingPageView: acc.landingPageView + item.metrics.landingPageView,
             profit: acc.profit + item.metrics.profit,
+            reach: acc.reach + item.metrics.reach,
+            frequency: 0, // Will calculate below (impressions / reach)
+            cpmCents: 0, // Will calculate below
             roas: 0, // Will calculate below
             ctr: 0, // Will calculate below
             cpc: 0, // Will calculate below
@@ -281,6 +284,9 @@ export async function GET(request: NextRequest) {
             conversions: 0,
             landingPageView: 0,
             profit: 0,
+            reach: 0,
+            frequency: 0,
+            cpmCents: 0,
             roas: 0,
             ctr: 0,
             cpc: 0,
@@ -299,6 +305,10 @@ export async function GET(request: NextRequest) {
         // Link CTR and Link CPC (based on inline_link_clicks)
         aggregated.linkCtr = aggregated.impressions > 0 ? (aggregated.linkClicks / aggregated.impressions) * 100 : 0;
         aggregated.linkCpc = aggregated.linkClicks > 0 ? aggregated.spend / aggregated.linkClicks : 0;
+        // Frequency: average impressions per unique user (impressions / reach)
+        aggregated.frequency = aggregated.reach > 0 ? aggregated.impressions / aggregated.reach : 0;
+        // CPM in cents: (spend / impressions) * 1000
+        aggregated.cpmCents = aggregated.impressions > 0 ? (aggregated.spend / aggregated.impressions) * 1000 : 0;
 
         metrics = aggregated;
 
@@ -348,6 +358,9 @@ export async function GET(request: NextRequest) {
         cpc: 0,
         linkCtr: 0,
         linkCpc: 0,
+        reach: 0,
+        frequency: 0,
+        cpmCents: 0,
       };
     }
 

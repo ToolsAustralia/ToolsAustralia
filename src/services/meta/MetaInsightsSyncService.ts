@@ -95,11 +95,16 @@ export class MetaInsightsSyncService {
         conversions: metrics.conversions,
         revenueCents: metrics.revenue,
         linkClicks: metrics.linkClicks,
+        reach: metrics.reach,
+        frequency: metrics.frequency,
+        cpmCents: metrics.cpmCents,
         adsetBudgetCents: meta?.dailyBudgetCents ?? meta?.lifetimeBudgetCents ?? null,
         campaignObjective: meta?.campaignObjective ?? null,
         learningStatus: meta?.learningStatus ?? null,
         lastSignificantEdit: meta?.lastSignificantEdit ?? null,
         raw: row as unknown as Record<string, unknown>,
+        // CRITICAL for TTL: always use $set (not $setOnInsert) so each re-sync
+        // refreshes the syncedAt clock, extending the TTL on frequently-touched rows.
         syncedAt: new Date(),
       };
 
