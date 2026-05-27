@@ -104,9 +104,14 @@ export function FacebookAdsHealthView({ startDate, endDate, level }: Props) {
           ResizeObserver — guarantees zero gap and zero overlap at any breakpoint or
           when the toolbar wraps. Fallback 60px covers SSR / pre-mount paint. z-20
           sits under the parent toolbar (z-30) so the two snap together cleanly. */}
+      {/* Filter row sits flush below the parent toolbar.
+          Parent uses `-top-4 md:-top-5` (-16px / -20px) so its effective sticky
+          bottom edge sits at: measuredHeight + negativeTop. Filter row's `top`
+          must subtract the same negative offset or there's a visible 16-20px gap.
+          Using Tailwind arbitrary values because inline `style` can't be
+          responsive per breakpoint. */}
       <div
-        className="sticky z-20 pt-2 pb-2 bg-gray-50/95 dark:bg-neutral-950/95 backdrop-blur supports-[backdrop-filter]:bg-gray-50/80 supports-[backdrop-filter]:dark:bg-neutral-950/80 border-b border-gray-200 dark:border-neutral-800"
-        style={{ top: "var(--fb-toolbar-h, 60px)" }}
+        className="sticky z-20 pt-2 pb-2 bg-gray-50/95 dark:bg-neutral-950/95 backdrop-blur supports-[backdrop-filter]:bg-gray-50/80 supports-[backdrop-filter]:dark:bg-neutral-950/80 border-b border-gray-200 dark:border-neutral-800 top-[calc(var(--fb-toolbar-h,60px)-16px)] md:top-[calc(var(--fb-toolbar-h,60px)-20px)]"
       >
         <FacebookAdsHealthTopBar
           alertCount={filteredAlertCount}
