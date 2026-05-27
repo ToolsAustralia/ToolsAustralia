@@ -168,12 +168,29 @@ export function LiveStatusPill({ status }: { status: EffectiveStatusUi }) {
   );
 }
 
-export function LearningStatusPill({ status }: { status: LearningBucketUi }) {
+export function LearningStatusPill({
+  status,
+  conversionsSinceLastSignificantEdit,
+  daysSinceLastSignificantEdit,
+  lastSignificantEdit,
+}: {
+  status: LearningBucketUi;
+  conversionsSinceLastSignificantEdit?: number | null;
+  daysSinceLastSignificantEdit?: number | null;
+  lastSignificantEdit?: string | null;
+}) {
   const spec = learningSpec(status);
+  // Append the X/50 + last-edit context if we have it — matches the
+  // "Learning phase progress" popover Meta shows when you hover the
+  // Delivery column in Ads Manager.
+  const progress =
+    conversionsSinceLastSignificantEdit != null && daysSinceLastSignificantEdit != null
+      ? `\nPurchases since last significant edit: ${conversionsSinceLastSignificantEdit} / 50 (${daysSinceLastSignificantEdit}d ago${lastSignificantEdit ? ` — ${new Date(lastSignificantEdit).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" })}` : ""})`
+      : "";
   return (
     <span
       className={`px-1.5 py-px rounded-full text-[9px] font-semibold uppercase ${spec.className} cursor-help`}
-      title={spec.title}
+      title={`${spec.title}${progress}`}
     >
       {spec.label}
     </span>

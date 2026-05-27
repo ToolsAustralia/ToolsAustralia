@@ -29,6 +29,7 @@ function baseRow(): MetaAdInsightsRow {
     effectiveStatus: "UNKNOWN",
     lastSignificantEdit: null,
     daysSinceLastSignificantEdit: null,
+    conversionsSinceLastSignificantEdit: null,
     daysInLearningLimited: 0,
     lastBudgetChangePct: null,
     lastBudgetChangeDate: null,

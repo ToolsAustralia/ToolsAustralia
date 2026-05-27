@@ -312,9 +312,6 @@ export async function aggregateInsights(input: AggregatorInput): Promise<MetaAdI
     // daysInLearningLimited: Live Meta data only returns the CURRENT adset learning state,
     // not a per-day historical record. We therefore use a best-effort proxy: if the adset
     // is currently Learning Limited (FAIL), we report 1 day; otherwise 0.
-    // The Mongo-backed version counted consecutive FAIL days historically — that granularity
-    // is unavailable from the live API. The "Cut? — Learning Limited >= 3 days" verdict rule
-    // therefore degrades to "currently Learning Limited" (still a valid signal, just less precise).
     const latestLearningStatus = first.learningStatus;
     const daysInLearningLimited = latestLearningStatus === "FAIL" ? 1 : 0;
 
@@ -325,6 +322,29 @@ export async function aggregateInsights(input: AggregatorInput): Promise<MetaAdI
     const daysSinceLastSignificantEdit = lastSignificantEdit
       ? differenceInCalendarDays(now, new Date(lastSignificantEdit))
       : null;
+
+    // Self-computed "X / 50 since last significant edit" — replicates the exact
+    // counter Meta's Ads Manager UI shows in the "Learning phase progress"
+    // popover. Meta's own API field `learning_stage_info.status` is null for
+    // ~96% of adsets in long-running accounts (the field is only populated for
+    // a brief window during/after learning), so we compute the state ourselves
+    // from data we already have:
+    //   - lastSignificantEdit (from adset metadata, always populated)
+    //   - daily conversions summed from the date of that edit onward
+    //
+    // Rules mirror Meta's published learning-phase definition:
+    //   conv-since-edit >= 50               -> Active     (out of learning)
+    //   conv-since-edit <  50 AND <= 7 days -> Learning   (still calibrating)
+    //   conv-since-edit <  50 AND >  7 days -> Learning Limited
+    //                                          (Meta gives up after 7 days)
+    let conversionsSinceLastSignificantEdit: number | null = null;
+    if (lastSignificantEdit) {
+      // Edit timestamp -> AEST yyyy-mm-dd so it matches our daily date strings
+      const editDateStr = formatInTimeZone(lastSignificantEdit, AEST, "yyyy-MM-dd");
+      conversionsSinceLastSignificantEdit = groupRows
+        .filter((r) => r.date >= editDateStr)
+        .reduce((s, r) => s + (r.conversions ?? 0), 0);
+    }
 
     // lastBudgetChangePct: find the largest day-over-day budget change within the reporting window
     let lastBudgetChangePct: number | null = null;
@@ -354,8 +374,29 @@ export async function aggregateInsights(input: AggregatorInput): Promise<MetaAdI
     // an arbitrary ad in the campaign would surface a meaningless value.
     const effectiveStatus: EffectiveStatusBucket =
       input.level === "campaign" ? "UNKNOWN" : first.effectiveStatus;
+
+    // Learning bucket computation, in priority order:
+    //   1. Meta's own learning_stage_info if Meta is currently populating it
+    //      (the ~4% case where Meta knows the state authoritatively).
+    //   2. Self-computed from conv-since-edit + days-since-edit (replicates
+    //      the Meta Ads Manager UI's "1 / 50 since last edit" model).
+    //   3. Fall back to "Unknown" if we have no edit timestamp to anchor
+    //      the calculation.
+    const metaSaysBucket = bucketFromRaw(learningStatusRaw);
+    const computedBucket: LearningStatusBucket =
+      conversionsSinceLastSignificantEdit === null || daysSinceLastSignificantEdit === null
+        ? "Unknown"
+        : conversionsSinceLastSignificantEdit >= 50
+          ? "Active"
+          : daysSinceLastSignificantEdit > 7
+            ? "LearningLimited"
+            : "Learning";
     const learningStatusForRow: LearningStatusBucket =
-      input.level === "campaign" ? "Unknown" : bucketFromRaw(learningStatusRaw);
+      input.level === "campaign"
+        ? "Unknown"
+        : metaSaysBucket !== "Unknown"
+          ? metaSaysBucket
+          : computedBucket;
 
     result.push({
       level: input.level,
@@ -388,6 +429,7 @@ export async function aggregateInsights(input: AggregatorInput): Promise<MetaAdI
       effectiveStatus,
       lastSignificantEdit,
       daysSinceLastSignificantEdit,
+      conversionsSinceLastSignificantEdit,
       daysInLearningLimited,
       lastBudgetChangePct,
       lastBudgetChangeDate,

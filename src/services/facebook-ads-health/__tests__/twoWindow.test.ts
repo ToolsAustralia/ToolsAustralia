@@ -44,6 +44,7 @@ function makeRow(reportingDays: number): MetaAdInsightsRow {
     effectiveStatus: "ACTIVE",
     lastSignificantEdit: new Date(Date.now() - 20 * 86400000),
     daysSinceLastSignificantEdit: 20,
+    conversionsSinceLastSignificantEdit: 60,
     daysInLearningLimited: 0,
     lastBudgetChangePct: null,
     lastBudgetChangeDate: null,

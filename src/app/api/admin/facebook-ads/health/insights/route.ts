@@ -110,6 +110,8 @@ export async function GET(request: NextRequest) {
         prev7dRoas: row.last7d.prev7dRoas,
       },
       lastSignificantEdit: row.lastSignificantEdit,
+      daysSinceLastSignificantEdit: row.daysSinceLastSignificantEdit,
+      conversionsSinceLastSignificantEdit: row.conversionsSinceLastSignificantEdit,
       lastBudgetChangePct: row.lastBudgetChangePct,
       daysAtZero: row.daysAtZeroInWindow,
       verdict: v.verdict,

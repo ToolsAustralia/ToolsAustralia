@@ -27,6 +27,11 @@ export interface PivotRow {
   adsetName?: string;
   learningStatus: "Active" | "Learning" | "LearningLimited" | "Unknown";
   effectiveStatus: EffectiveStatusUi;
+  // Self-computed "X / 50 since edit" — replicates Meta Ads Manager's
+  // Learning Phase Progress popover. Surfaced in the LearningStatusPill tooltip.
+  conversionsSinceLastSignificantEdit: number | null;
+  daysSinceLastSignificantEdit: number | null;
+  lastSignificantEdit: string | null;
   daily: DailyCell[];
   window: { spendCents: number; conversions: number; revenueCents: number };
   lastBudgetChangePct: number | null;
@@ -338,7 +343,14 @@ export function FacebookAdsHealthPivotTable({ rows, metric, startDate, endDate, 
                 misleading — suppress here, the aggregator also forces them to
                 UNKNOWN as a defense in depth. */}
             {level !== "campaign" && <LiveStatusPill status={row.effectiveStatus} />}
-            {level !== "campaign" && <LearningStatusPill status={row.learningStatus} />}
+            {level !== "campaign" && (
+              <LearningStatusPill
+                status={row.learningStatus}
+                conversionsSinceLastSignificantEdit={row.conversionsSinceLastSignificantEdit}
+                daysSinceLastSignificantEdit={row.daysSinceLastSignificantEdit}
+                lastSignificantEdit={row.lastSignificantEdit}
+              />
+            )}
             {level === "ad" && row.adsetName ? <span>{row.adsetName}</span> : <span>{row.campaignName}</span>}
           </div>
         </td>

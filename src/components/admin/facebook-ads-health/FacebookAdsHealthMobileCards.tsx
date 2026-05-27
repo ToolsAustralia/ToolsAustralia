@@ -86,7 +86,12 @@ export function FacebookAdsHealthMobileCards({ rows, level, metric, breakevenRoa
                 {level !== "campaign" && (
                   <div className="flex flex-wrap gap-1 items-center mt-0.5">
                     <LiveStatusPill status={row.effectiveStatus} />
-                    <LearningStatusPill status={row.learningStatus} />
+                    <LearningStatusPill
+                      status={row.learningStatus}
+                      conversionsSinceLastSignificantEdit={row.conversionsSinceLastSignificantEdit}
+                      daysSinceLastSignificantEdit={row.daysSinceLastSignificantEdit}
+                      lastSignificantEdit={row.lastSignificantEdit}
+                    />
                   </div>
                 )}
                 <div className="text-[10px] text-zinc-500 mt-0.5 break-words">

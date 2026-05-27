@@ -76,6 +76,11 @@ export interface MetaAdInsightsRow {
   effectiveStatus: EffectiveStatusBucket;
   lastSignificantEdit: Date | null;
   daysSinceLastSignificantEdit: number | null;
+  // Cumulative optimization events since the last significant edit. Matches
+  // the "X / 50" counter Meta Ads Manager shows in the Learning Phase Progress
+  // popover. null when lastSignificantEdit isn't available. Drives the
+  // computed learningStatusBucket — see insightsAggregator for the rules.
+  conversionsSinceLastSignificantEdit: number | null;
   daysInLearningLimited: number; // computed by aggregator
   lastBudgetChangePct: number | null; // from snapshots over reporting window
   lastBudgetChangeDate: Date | null;
