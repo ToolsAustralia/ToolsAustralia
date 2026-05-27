@@ -161,11 +161,18 @@ export function FacebookAdsHealthMobileCards({ rows, level, metric }: Props) {
                   aria-hidden
                 />
                 <motion.div
+                  // Tween with a "back-out" cubic bezier (the iOS sheet curve) — no bounce,
+                  // no overshoot, no shake at the landing frame. The previous spring
+                  // (stiffness 300, damping 30) overshot and oscillated for a few frames,
+                  // and that oscillation visually beat against the body-scroll-lock layout
+                  // shift to look like jitter. willChange hints the compositor to allocate
+                  // a layer up front so the transform stays GPU-accelerated end-to-end.
                   className="absolute left-0 right-0 bottom-0 max-h-[80vh] bg-white dark:bg-neutral-900 rounded-t-2xl shadow-2xl flex flex-col"
+                  style={{ willChange: "transform" }}
                   initial={{ y: "100%" }}
                   animate={{ y: 0 }}
                   exit={{ y: "100%" }}
-                  transition={{ type: "spring", stiffness: 300, damping: 30 }}
+                  transition={{ duration: 0.28, ease: [0.32, 0.72, 0, 1] }}
                   role="dialog"
                   aria-label="Verdict reasoning"
                   aria-modal="true"
