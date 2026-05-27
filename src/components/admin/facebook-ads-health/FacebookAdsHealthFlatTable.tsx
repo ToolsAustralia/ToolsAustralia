@@ -2,7 +2,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { ExternalLink } from "lucide-react";
 import { FacebookAdsHealthVerdictTooltip } from "./FacebookAdsHealthVerdictTooltip";
-import { LearningStatusPill, LiveStatusPill, deliveryIsActive } from "./FacebookAdsHealthStatusBadges";
+import { LearningStatusPill, LiveStatusPill, deliveryIsActive, learningPillShouldShow } from "./FacebookAdsHealthStatusBadges";
 import type { PivotRow } from "./FacebookAdsHealthPivotTable";
 
 interface Props {
@@ -86,7 +86,7 @@ export function FacebookAdsHealthFlatTable({ rows, level }: Props) {
                   {level !== "campaign" && <LiveStatusPill status={row.effectiveStatus} />}
                 </td>
                 <td className="px-2 py-2 align-middle">
-                  {level !== "campaign" && deliveryIsActive(row.effectiveStatus) && (
+                  {level !== "campaign" && deliveryIsActive(row.effectiveStatus) && learningPillShouldShow(row.learningStatus) && (
                     <LearningStatusPill
                       status={row.learningStatus}
                       conversionsSinceLastSignificantEdit={row.conversionsSinceLastSignificantEdit}

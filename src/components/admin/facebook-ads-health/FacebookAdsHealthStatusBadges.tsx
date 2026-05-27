@@ -55,6 +55,14 @@ export function deliveryIsActive(status: EffectiveStatusUi): boolean {
   return !NON_DELIVERING_STATES.has(status);
 }
 
+// Meta only surfaces the Learning sub-badge for the two transitional states
+// (Learning + Learning Limited). For "out of learning" (our SUCCESS bucket)
+// and Unknown, Meta UI shows nothing — the Delivery column alone suffices.
+// Mirroring that here to keep the row uncluttered.
+export function learningPillShouldShow(status: LearningBucketUi): boolean {
+  return status === "Learning" || status === "LearningLimited";
+}
+
 export type LearningBucketUi = "Active" | "Learning" | "LearningLimited" | "Unknown";
 
 interface LivePillSpec {
@@ -63,37 +71,35 @@ interface LivePillSpec {
   title: string;
 }
 
+// Label vocabulary mirrors Meta Ads Manager's "Delivery" column verbatim so
+// users see the same words they see in Meta UI. Anything Meta itself doesn't
+// label gets a concise descriptor + an explanatory tooltip.
 function liveSpec(status: EffectiveStatusUi): LivePillSpec | null {
   switch (status) {
     case "ACTIVE":
       return {
-        label: "Live",
+        label: "Active",
         className: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/50 dark:text-emerald-200",
-        title: "Live — adset is currently delivering ads",
+        title: "Active — adset is currently delivering ads",
       };
     case "PAUSED":
-      return {
-        label: "Paused",
-        className: "bg-zinc-200 text-zinc-700 dark:bg-zinc-700 dark:text-zinc-200",
-        title: "Paused — manually paused at the adset level",
-      };
     case "ADSET_PAUSED":
       return {
-        label: "Paused",
+        label: "Off",
         className: "bg-zinc-200 text-zinc-700 dark:bg-zinc-700 dark:text-zinc-200",
-        title: "Paused — the adset itself is paused",
+        title: "Off — adset toggle is paused",
       };
     case "CAMPAIGN_PAUSED":
       return {
-        label: "Paused",
+        label: "Campaign off",
         className: "bg-zinc-200 text-zinc-700 dark:bg-zinc-700 dark:text-zinc-200",
-        title: "Paused — parent campaign is paused",
+        title: "Campaign off — adset is on but its parent campaign is paused",
       };
     case "ARCHIVED":
       return {
         label: "Archived",
         className: "bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400",
-        title: "Archived — no longer in the active set",
+        title: "Archived — moved to the archived set in Meta",
       };
     case "DELETED":
       return {
@@ -103,45 +109,40 @@ function liveSpec(status: EffectiveStatusUi): LivePillSpec | null {
       };
     case "DISAPPROVED":
       return {
-        label: "Disapproved",
+        label: "Not delivering",
         className: "bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-200",
-        title: "Disapproved by Meta — not delivering",
+        title: "Not delivering — disapproved by Meta",
       };
     case "WITH_ISSUES":
       return {
-        label: "Has issues",
+        label: "Not delivering",
         className: "bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-200",
-        title: "Delivery is limited by an issue (creative, account, payment, etc.)",
+        title: "Not delivering — delivery blocked by an issue (creative, account, payment, etc.)",
       };
     case "PENDING_REVIEW":
       return {
         label: "In review",
         className: "bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-200",
-        title: "Pending Meta review",
+        title: "In review — pending Meta approval",
       };
     case "IN_PROCESS":
-      return {
-        label: "Processing",
-        className: "bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-200",
-        title: "Being created/updated — not yet delivering",
-      };
     case "PREAPPROVED":
       return {
-        label: "Pre-approved",
+        label: "Pending",
         className: "bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-200",
-        title: "Pre-approved by Meta — not yet delivering",
+        title: "Pending — created/updated but not yet delivering",
       };
     case "PENDING_BILLING_INFO":
       return {
-        label: "Billing",
+        label: "Inactive",
         className: "bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-200",
-        title: "Awaiting billing info before delivery resumes",
+        title: "Inactive — awaiting billing info before delivery resumes",
       };
     case "COMPLETED":
       return {
         label: "Completed",
         className: "bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300",
-        title: "Completed — adset finished its scheduled run or exhausted its lifetime budget",
+        title: "Completed — finished its scheduled run or exhausted its lifetime budget",
       };
     case "ADS_INACTIVE":
       return {

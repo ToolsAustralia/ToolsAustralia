@@ -5,7 +5,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { ExternalLink, X } from "lucide-react";
 import { cellTone, formatCell, metricValue, toneClass, type Metric, type PivotRow } from "./FacebookAdsHealthPivotTable";
 import { FacebookAdsHealthVerdictTooltip } from "./FacebookAdsHealthVerdictTooltip";
-import { LearningStatusPill, LiveStatusPill, deliveryIsActive } from "./FacebookAdsHealthStatusBadges";
+import { LearningStatusPill, LiveStatusPill, deliveryIsActive, learningPillShouldShow } from "./FacebookAdsHealthStatusBadges";
 
 interface Props {
   rows: PivotRow[];
@@ -86,7 +86,7 @@ export function FacebookAdsHealthMobileCards({ rows, level, metric, breakevenRoa
                 {level !== "campaign" && (
                   <div className="flex flex-wrap gap-1 items-center mt-0.5">
                     <LiveStatusPill status={row.effectiveStatus} />
-                    {deliveryIsActive(row.effectiveStatus) && (
+                    {deliveryIsActive(row.effectiveStatus) && learningPillShouldShow(row.learningStatus) && (
                       <LearningStatusPill
                         status={row.learningStatus}
                         conversionsSinceLastSignificantEdit={row.conversionsSinceLastSignificantEdit}
