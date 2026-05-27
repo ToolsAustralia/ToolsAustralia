@@ -70,7 +70,10 @@ const VERDICT_META: Record<Props["verdict"], { label: string; color: string }> =
   cut: { label: "CUT?", color: "text-red-700 dark:text-red-300" },
 };
 
-const TOOLTIP_WIDTH = 380;
+// 480px gives the long rule labels ("Learning Limited >= 3d AND window spend >= 5x targetCpa")
+// enough room to stay on one or two lines instead of wrapping mid-phrase. Narrow viewports are
+// handled by clampToViewport which collapses to (innerWidth - padding) when window is tighter.
+const TOOLTIP_WIDTH = 480;
 const VIEWPORT_PAD = 12;
 
 /**
