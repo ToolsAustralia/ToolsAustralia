@@ -42,14 +42,14 @@ function buildScaleReasons(
   });
   reasons.push({
     section: "Out of learning",
-    rule: "Conversions in last 7d",
+    rule: "Conversions, trailing 7d (ends yesterday — excludes today's partial day)",
     source: "meta",
     passed: row.last7d.conversions >= 50,
     value: `${row.last7d.conversions} (≥50 required)`,
   });
   reasons.push({
     section: "Profitable",
-    rule: "ROAS in last 7d",
+    rule: "ROAS, trailing 7d (ends yesterday)",
     source: "tunable",
     passed: roas >= settings.breakevenRoas,
     value: `${roas.toFixed(2)} (≥ ${settings.breakevenRoas.toFixed(2)} breakeven)`,

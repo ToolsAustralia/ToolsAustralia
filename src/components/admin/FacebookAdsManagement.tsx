@@ -73,11 +73,13 @@ export default function FacebookAdsManagement() {
   const [startDate, setStartDate] = useState<string>("");
   const [endDate, setEndDate] = useState<string>("");
   const [isCustomDateModalOpen, setIsCustomDateModalOpen] = useState(false);
-  const [level, setLevel] = useState<InsightLevel>("campaign");
+  // View mode with URL persistence — read before level default so Health can start at adset.
+  const urlViewMode = (searchParams.get("viewMode") as "ads" | "spend-by-url" | "health" | "metrics") || "ads";
+  // Per-row verdicts only make sense at adset granularity or finer, so Health defaults to adset.
+  // The Ads view still defaults to campaign for parity with the legacy breakdown layout.
+  const [level, setLevel] = useState<InsightLevel>(urlViewMode === "health" ? "adset" : "campaign");
   const [sortColumn, setSortColumn] = useState<string | null>(null);
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
-  // View mode with URL persistence
-  const urlViewMode = (searchParams.get("viewMode") as "ads" | "spend-by-url" | "health" | "metrics") || "ads";
   const [viewMode, setViewMode] = useState<"ads" | "spend-by-url" | "health">(
     urlViewMode === "metrics" ? "ads" : (urlViewMode as "ads" | "spend-by-url" | "health")
   );
@@ -98,6 +100,12 @@ export default function FacebookAdsManagement() {
   // Update URL when viewMode changes
   const handleViewModeChange = (mode: "ads" | "spend-by-url" | "health") => {
     setViewMode(mode);
+    // Switching INTO Health from another tab while at account/campaign granularity
+    // would leave the Health view stuck on a meaningless level — verdicts are per-row
+    // at adset/ad. Snap to "adset" in that case; leave adset/ad picks alone.
+    if (mode === "health" && (level === "account" || level === "campaign")) {
+      setLevel("adset");
+    }
     const params = new URLSearchParams(searchParams.toString());
     params.set("viewMode", mode);
     router.replace(`${pathname}?${params.toString()}`, { scroll: false });
