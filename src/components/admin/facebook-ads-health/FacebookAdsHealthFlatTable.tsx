@@ -6,6 +6,13 @@ import type { PivotRow } from "./FacebookAdsHealthPivotTable";
 
 interface Props {
   rows: PivotRow[];
+  level: "campaign" | "adset" | "ad";
+}
+
+function levelLabel(level: "campaign" | "adset" | "ad"): string {
+  if (level === "campaign") return "Campaign";
+  if (level === "adset") return "Ad Set";
+  return "Ad";
 }
 
 const STATUS_BADGE: Record<PivotRow["learningStatus"], string> = {
@@ -27,14 +34,14 @@ const VERDICT_CHIP: Record<PivotRow["verdict"], string> = {
  * is pointless at 1-day granularity (just 1 day-column + Total), so this
  * variant inlines every metric as its own column for at-a-glance comparison.
  */
-export function FacebookAdsHealthFlatTable({ rows }: Props) {
+export function FacebookAdsHealthFlatTable({ rows, level }: Props) {
   const [hover, setHover] = useState<{ id: string; rect: DOMRect } | null>(null);
   return (
     <div className="overflow-x-auto rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900">
       <table className="w-full border-collapse text-xs min-w-[900px]">
         <thead>
           <tr className="bg-zinc-50 dark:bg-zinc-800 border-b border-zinc-200 dark:border-zinc-700">
-            <th className="text-left px-3 py-2 text-[10px] font-semibold uppercase tracking-wider text-zinc-500 min-w-[220px]">Adset</th>
+            <th className="text-left px-3 py-2 text-[10px] font-semibold uppercase tracking-wider text-zinc-500 min-w-[220px]">{levelLabel(level)}</th>
             <th className="text-left px-2 py-2 text-[10px] font-semibold uppercase tracking-wider text-zinc-500">Status</th>
             <th className="text-right px-2 py-2 text-[10px] font-semibold uppercase tracking-wider text-zinc-500">Spend</th>
             <th className="text-right px-2 py-2 text-[10px] font-semibold uppercase tracking-wider text-zinc-500">Conv</th>

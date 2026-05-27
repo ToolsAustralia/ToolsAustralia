@@ -100,13 +100,19 @@ export function FacebookAdsHealthView({ startDate, endDate, level }: Props) {
       />
       <div className="hidden md:block">
         {startDate === endDate ? (
-          <FacebookAdsHealthFlatTable rows={displayedRows} />
+          <FacebookAdsHealthFlatTable rows={displayedRows} level={effectiveLevel} />
         ) : (
-          <FacebookAdsHealthPivotTable rows={displayedRows} metric={metric} />
+          <FacebookAdsHealthPivotTable
+            rows={displayedRows}
+            metric={metric}
+            startDate={startDate}
+            endDate={endDate}
+            level={effectiveLevel}
+          />
         )}
       </div>
       <div className="md:hidden">
-        <FacebookAdsHealthMobileCards rows={displayedRows} />
+        <FacebookAdsHealthMobileCards rows={displayedRows} level={effectiveLevel} />
       </div>
       <FacebookAdsHealthSettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />
     </div>

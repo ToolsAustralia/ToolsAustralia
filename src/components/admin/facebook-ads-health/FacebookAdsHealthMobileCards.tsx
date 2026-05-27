@@ -6,6 +6,7 @@ import { FacebookAdsHealthVerdictTooltip } from "./FacebookAdsHealthVerdictToolt
 
 interface Props {
   rows: PivotRow[];
+  level: "campaign" | "adset" | "ad";
 }
 
 function classForCount(count: number, max: number): string {
@@ -30,7 +31,7 @@ function verdictLabel(verdict: PivotRow["verdict"]): string {
   return verdict[0]!.toUpperCase() + verdict.slice(1);
 }
 
-export function FacebookAdsHealthMobileCards({ rows }: Props) {
+export function FacebookAdsHealthMobileCards({ rows, level }: Props) {
   const [openId, setOpenId] = useState<string | null>(null);
   return (
     <div className="grid gap-3">
@@ -42,7 +43,7 @@ export function FacebookAdsHealthMobileCards({ rows }: Props) {
             <div className="flex justify-between items-start mb-2">
               <div className="min-w-0">
                 <div className="font-semibold text-sm break-words">{row.name}</div>
-                <div className="text-[10px] text-zinc-500 mt-0.5 break-words">{row.campaignName} · {row.learningStatus}</div>
+                <div className="text-[10px] text-zinc-500 mt-0.5 break-words">{level === "ad" && row.adsetName ? `${row.adsetName} · ${row.campaignName}` : row.campaignName} · {row.learningStatus}</div>
               </div>
               <a
                 href={row.metaAdsManagerUrl}
