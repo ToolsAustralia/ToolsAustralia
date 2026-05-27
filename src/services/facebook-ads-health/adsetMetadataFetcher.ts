@@ -203,16 +203,28 @@ export async function fetchAdsetMetadata(
   console.error(
     `[adsetMetadataFetcher] fetched ${results.length} adsets — learning_stage_info breakdown: ${JSON.stringify(breakdown)} — anchor availability: ${JSON.stringify(editBreakdown)}`,
   );
-  // One-shot raw dump of the first 3 adsets' last_significant_edit fields,
-  // so if Meta returns yet another shape we haven't seen we can extend the
-  // parser. Stripped to first 3 to keep the log line short.
-  const sample = (firstPageRaw ?? []).slice(0, 3).map((it) => ({
-    id: it.id,
-    last_significant_edit: it.last_significant_edit,
-    learning_stage_info: it.learning_stage_info,
-  }));
+  // Sample adsets that ACTUALLY have learning data — the first-3-regardless
+  // version was picking paused/low-spend adsets where Meta returns nothing.
+  // We want to see what shape Meta sends WHEN it sends learning_stage_info,
+  // so we filter to those first.
+  const withLearningInfo = (firstPageRaw ?? []).filter((it) => it.learning_stage_info);
+  const withEditField = (firstPageRaw ?? []).filter((it) => it.last_significant_edit !== undefined);
   console.error(
-    `[adsetMetadataFetcher] first-3 raw shapes: ${JSON.stringify(sample)}`,
+    `[adsetMetadataFetcher] first-3 with learning_stage_info: ${JSON.stringify(withLearningInfo.slice(0, 3))}`,
+  );
+  console.error(
+    `[adsetMetadataFetcher] first-3 with last_significant_edit: ${JSON.stringify(withEditField.slice(0, 3))}`,
+  );
+  // Distinct status values we received — surfaces the "unknown status" cases
+  // (the 136 adsets that have last_sig_edit_ts but a status string we're
+  // currently mapping to null).
+  const distinctStatuses = new Set<string>();
+  for (const it of firstPageRaw ?? []) {
+    const s = it.learning_stage_info?.status;
+    if (s != null) distinctStatuses.add(s);
+  }
+  console.error(
+    `[adsetMetadataFetcher] distinct learning_stage_info.status values seen: ${JSON.stringify([...distinctStatuses])}`,
   );
 
   return results;
