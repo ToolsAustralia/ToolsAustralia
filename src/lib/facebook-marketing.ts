@@ -132,21 +132,28 @@ export async function fetchFacebookInsights(
   const apiVersion = "v21.0";
   const baseUrl = `https://graph.facebook.com/${apiVersion}/${adAccountId}/insights`;
 
-  // Build query parameters
-  // Use 7-day click attribution window (7d_click) - Meta's current best practice (2024+)
-  // 28-day window was deprecated in October 2020
-  // 7-day click balances accuracy with recency and aligns with Meta's default attribution model
-  // Single window prevents duplicate counting while maintaining accurate revenue reporting
+  // Build query parameters.
+  //
+  // use_unified_attribution_setting=true tells Meta to use EACH ADSET'S OWN
+  // configured attribution windows when counting actions, then return a
+  // dedup'd "purchase" entry per adset. This makes our numbers match Meta
+  // Ads Manager UI's "Purchases" column exactly across mixed accounts where
+  // some adsets optimise on 1d_click and others on 7d_click + 1d_view.
+  //
+  // Previously hardcoded `action_attribution_windows: ["7d_click"]` which
+  // ignored view-throughs and used a stricter window than most adsets'
+  // actual setting — caused Meta UI's 45 purchases vs our 18 mismatch on
+  // adsets configured for 1d_click + view.
   const params = new URLSearchParams({
     access_token: accessToken,
     fields:
-      "spend,impressions,clicks,actions,action_values,campaign_id,campaign_name,adset_id,adset_name,ad_id,ad_name,date_start,date_stop",
+      "spend,impressions,clicks,inline_link_clicks,reach,frequency,cpm,actions,action_values,campaign_id,campaign_name,adset_id,adset_name,ad_id,ad_name,date_start,date_stop",
     time_range: JSON.stringify({
       since: dateRange.since,
       until: dateRange.until,
     }),
     level: level,
-    action_attribution_windows: JSON.stringify(["7d_click"]), // 7-day click attribution window (Meta best practice)
+    use_unified_attribution_setting: "true",
   });
 
   const url = `${baseUrl}?${params.toString()}`;
@@ -206,12 +213,18 @@ export async function fetchFacebookInsights(
             revenue: 0,
             impressions: 0,
             clicks: 0,
+            linkClicks: 0,
             conversions: 0,
             landingPageView: 0,
             profit: 0,
             roas: 0,
             ctr: 0,
             cpc: 0,
+            linkCtr: 0,
+            linkCpc: 0,
+            reach: 0,
+            frequency: 0,
+            cpmCents: 0,
           },
         },
       ];
@@ -244,6 +257,15 @@ export function processInsightData(insight: FacebookInsightData): ProcessedInsig
   // Parse impressions and clicks
   const impressions = parseInt(insight.impressions || "0", 10);
   const clicks = parseInt(insight.clicks || "0", 10);
+  const linkClicks = parseInt(insight.inline_link_clicks || "0", 10);
+
+  // Parse reach, frequency, and CPM
+  // reach — unique users who saw the ad (integer string)
+  // frequency — average impressions per unique user (decimal string)
+  // cpm — cost per 1000 impressions in dollars (decimal string) → stored as cents
+  const reach = parseInt(insight.reach || "0", 10);
+  const frequency = parseFloat(insight.frequency || "0");
+  const cpmCents = parseFloat(insight.cpm || "0") * 100; // Convert dollars to cents
 
   // Extract revenue from action_values (purchase events)
   // Handle both "purchase" and "purchase.{window}" formats to catch all purchase events
@@ -291,18 +313,26 @@ export function processInsightData(insight: FacebookInsightData): ProcessedInsig
   const roas = spend > 0 ? revenue / spend : 0;
   const ctr = impressions > 0 ? (clicks / impressions) * 100 : 0;
   const cpc = clicks > 0 ? spend / clicks : 0;
+  const linkCtr = impressions > 0 ? (linkClicks / impressions) * 100 : 0;
+  const linkCpc = linkClicks > 0 ? spend / linkClicks : 0;
 
   return {
     spend,
     revenue,
     impressions,
     clicks,
+    linkClicks,
     conversions,
     landingPageView,
     profit,
     roas,
     ctr,
     cpc,
+    linkCtr,
+    linkCpc,
+    reach,
+    frequency,
+    cpmCents,
   };
 }
 
@@ -374,14 +404,18 @@ export async function fetchFacebookAdInsightsDaily(
   const params = new URLSearchParams({
     access_token: accessToken,
     fields:
-      "spend,impressions,clicks,actions,action_values,campaign_id,campaign_name,adset_id,adset_name,ad_id,ad_name,date_start,date_stop",
+      "spend,impressions,clicks,inline_link_clicks,reach,frequency,cpm,actions,action_values,campaign_id,campaign_name,adset_id,adset_name,ad_id,ad_name,date_start,date_stop",
     time_range: JSON.stringify({
       since: dateRange.since,
       until: dateRange.until,
     }),
     level: "ad",
     time_increment: "1",
-    action_attribution_windows: JSON.stringify(["7d_click"]),
+    // Match each adset's own attribution windows — see fetchFacebookAdInsights
+    // comment for full rationale. This is the daily-grain feeder for the Health
+    // view and seed script, so the X/50 counter in the Learning popover lines
+    // up with Meta UI's number for each adset.
+    use_unified_attribution_setting: "true",
     limit: String(INSIGHTS_FETCH_PAGE_LIMIT),
   });
 
@@ -423,6 +457,8 @@ export interface HourlyInsightData {
   spend: number; // in cents
   impressions: number;
   clicks: number;
+  linkClicks: number; // inline_link_clicks from Meta API (meaningful purchase-tracking clicks)
+  lpv: number; // landing_page_view action count
 }
 
 /**
@@ -446,14 +482,14 @@ export async function fetchFacebookInsightsHourly(
   // Build query parameters with hourly breakdown
   const params = new URLSearchParams({
     access_token: accessToken,
-    fields: "spend,impressions,clicks", // Only on-Meta metrics work with hourly breakdown
+    fields: "spend,impressions,clicks,inline_link_clicks,actions",
     time_range: JSON.stringify({
       since: dateRange.since,
       until: dateRange.until,
     }),
     level: "account",
     breakdowns: "hourly_stats_aggregated_by_advertiser_time_zone",
-    action_attribution_windows: JSON.stringify(["7d_click"]),
+    use_unified_attribution_setting: "true",
   });
 
   const url = `${baseUrl}?${params.toString()}`;
@@ -494,6 +530,8 @@ export async function fetchFacebookInsightsHourly(
         spend?: string;
         impressions?: string;
         clicks?: string;
+        inline_link_clicks?: string;
+        actions?: Array<{ action_type?: string; value?: string }>;
         hourly_stats_aggregated_by_advertiser_time_zone?: string;
       }>;
     } = await response.json();
@@ -505,6 +543,8 @@ export async function fetchFacebookInsightsHourly(
       spend: 0,
       impressions: 0,
       clicks: 0,
+      linkClicks: 0,
+      lpv: 0,
     }));
 
     // Parse and populate data from Facebook response
@@ -524,6 +564,12 @@ export async function fetchFacebookInsightsHourly(
         const spend = parseFloat(item.spend || "0") * 100; // Convert dollars to cents
         const impressions = parseInt(item.impressions || "0", 10);
         const clicks = parseInt(item.clicks || "0", 10);
+        const linkClicks = parseInt(item.inline_link_clicks || "0", 10);
+        const actionsArr = Array.isArray(item.actions) ? item.actions : [];
+        const lpv = parseInt(
+          actionsArr.find((a) => a?.action_type === "landing_page_view")?.value ?? "0",
+          10,
+        );
 
         // Update the corresponding hour
         hourlyData[hour] = {
@@ -532,6 +578,8 @@ export async function fetchFacebookInsightsHourly(
           spend,
           impressions,
           clicks,
+          linkClicks,
+          lpv,
         };
       }
     }
@@ -560,13 +608,13 @@ async function fetchHourlyInsightsForEntity(
   const baseUrl = `https://graph.facebook.com/${apiVersion}/${entityId}/insights`;
   const params = new URLSearchParams({
     access_token: accessToken,
-    fields: "spend,impressions,clicks",
+    fields: "spend,impressions,clicks,inline_link_clicks,actions",
     time_range: JSON.stringify({
       since: dateRange.since,
       until: dateRange.until,
     }),
     breakdowns: "hourly_stats_aggregated_by_advertiser_time_zone",
-    action_attribution_windows: JSON.stringify(["7d_click"]),
+    use_unified_attribution_setting: "true",
   });
 
   const response = await fetch(`${baseUrl}?${params.toString()}`, {
@@ -602,6 +650,8 @@ async function fetchHourlyInsightsForEntity(
       spend?: string;
       impressions?: string;
       clicks?: string;
+      inline_link_clicks?: string;
+      actions?: Array<{ action_type?: string; value?: string }>;
       hourly_stats_aggregated_by_advertiser_time_zone?: string;
     }>;
   } = await response.json();
@@ -612,6 +662,8 @@ async function fetchHourlyInsightsForEntity(
     spend: 0,
     impressions: 0,
     clicks: 0,
+    linkClicks: 0,
+    lpv: 0,
   }));
 
   if (data.data && data.data.length > 0) {
@@ -628,10 +680,18 @@ async function fetchHourlyInsightsForEntity(
       const spend = parseFloat(item.spend || "0") * 100;
       const impressions = parseInt(item.impressions || "0", 10);
       const clicks = parseInt(item.clicks || "0", 10);
+      const linkClicks = parseInt(item.inline_link_clicks || "0", 10);
+      const actionsArr = Array.isArray(item.actions) ? item.actions : [];
+      const lpv = parseInt(
+        actionsArr.find((a) => a?.action_type === "landing_page_view")?.value ?? "0",
+        10,
+      );
 
       hourlyData[hour].spend += spend;
       hourlyData[hour].impressions += impressions;
       hourlyData[hour].clicks += clicks;
+      hourlyData[hour].linkClicks += linkClicks;
+      hourlyData[hour].lpv += lpv;
     }
   }
 
@@ -678,6 +738,8 @@ export async function fetchFacebookInsightsHourlyFiltered(
     spend: 0,
     impressions: 0,
     clicks: 0,
+    linkClicks: 0,
+    lpv: 0,
   }));
 
   for (const result of results) {
@@ -687,6 +749,8 @@ export async function fetchFacebookInsightsHourlyFiltered(
         hourlyData[h].spend += entityHourly[h].spend;
         hourlyData[h].impressions += entityHourly[h].impressions;
         hourlyData[h].clicks += entityHourly[h].clicks;
+        hourlyData[h].linkClicks += entityHourly[h].linkClicks;
+        hourlyData[h].lpv += entityHourly[h].lpv;
       }
     }
     // Silently skip rejected (e.g. deleted/inaccessible entity)
