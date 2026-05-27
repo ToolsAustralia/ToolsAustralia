@@ -146,15 +146,59 @@ export function FacebookAdsHealthPivotTable({ rows, metric, startDate, endDate, 
     return map;
   }, [rows]);
 
-  const totalsByDate = useMemo(
+  // Per-date COMPONENT totals across visible rows. We sum the raw components
+  // (spend, revenue, link clicks, impressions, conversions) rather than the
+  // already-derived metric value, because ratio metrics (ROAS, link CTR,
+  // cost per link click) can't be summed — averaging daily ratios skews
+  // results toward low-spend days. The correct aggregation is weighted:
+  // totalROAS = sumRevenue / sumSpend, totalCTR = sumLinkClicks / sumImpressions.
+  type Components = { spend: number; conversions: number; revenue: number; linkClicks: number; impressions: number };
+  const ZERO_COMPONENTS: Components = { spend: 0, conversions: 0, revenue: 0, linkClicks: 0, impressions: 0 };
+  const componentsByDate = useMemo<Components[]>(
     () =>
-      dates.map((date) =>
-        rows.reduce((sum, r) => {
+      dates.map((date) => {
+        const acc: Components = { ...ZERO_COMPONENTS };
+        for (const r of rows) {
           const cell = rowDailyByDate.get(r.id)?.get(date);
-          return sum + (cell ? metricValue(cell, metric) : 0);
-        }, 0),
+          if (!cell) continue;
+          acc.spend += cell.spendCents;
+          acc.conversions += cell.conversions;
+          acc.revenue += cell.revenueCents;
+          acc.linkClicks += cell.linkClicks;
+          acc.impressions += cell.impressions;
+        }
+        return acc;
+      }),
+    [dates, rows, rowDailyByDate],
+  );
+
+  // Derive a single metric value from accumulated raw components.
+  // Used for both per-day footer cells and the grand-total cell.
+  const metricFromComponents = (c: Components, m: Metric): number => {
+    switch (m) {
+      case "spend": return c.spend / 100;
+      case "conversions": return c.conversions;
+      case "revenue": return c.revenue / 100;
+      case "linkClicks": return c.linkClicks;
+      case "roas": return c.spend > 0 ? c.revenue / c.spend : 0;
+      case "linkCtr": return c.impressions > 0 ? (c.linkClicks / c.impressions) * 100 : 0;
+      case "costPerLinkClick": return c.linkClicks > 0 ? c.spend / c.linkClicks / 100 : 0;
+    }
+  };
+
+  const grandTotalComponents = useMemo<Components>(
+    () =>
+      componentsByDate.reduce<Components>(
+        (acc, c) => ({
+          spend: acc.spend + c.spend,
+          conversions: acc.conversions + c.conversions,
+          revenue: acc.revenue + c.revenue,
+          linkClicks: acc.linkClicks + c.linkClicks,
+          impressions: acc.impressions + c.impressions,
+        }),
+        ZERO_COMPONENTS,
       ),
-    [dates, rows, rowDailyByDate, metric],
+    [componentsByDate],
   );
 
   // Group rows by (campaign) when level=adset, by (campaign > adset) when level=ad.
@@ -197,11 +241,21 @@ export function FacebookAdsHealthPivotTable({ rows, metric, startDate, endDate, 
     const rowMax = row.daily.length
       ? Math.max(...row.daily.map((d) => metricValue(d, metric)))
       : 0;
-    const windowTotal =
-      metric === "spend" ? row.window.spendCents / 100 :
-      metric === "conversions" ? row.window.conversions :
-      metric === "revenue" ? row.window.revenueCents / 100 :
-      row.daily.reduce((s, d) => s + metricValue(d, metric), 0);
+    // Build component sums for THIS row, then derive metric — same weighted
+    // logic as the footer. Summing daily ROAS / CTR / Cost-per-click is wrong
+    // because they're ratios (a $1-spend day with 1 click would otherwise drown
+    // out a $1000-spend day with 100 clicks).
+    const rowComponents: Components = row.daily.reduce<Components>(
+      (acc, d) => ({
+        spend: acc.spend + d.spendCents,
+        conversions: acc.conversions + d.conversions,
+        revenue: acc.revenue + d.revenueCents,
+        linkClicks: acc.linkClicks + d.linkClicks,
+        impressions: acc.impressions + d.impressions,
+      }),
+      ZERO_COMPONENTS,
+    );
+    const windowTotal = metricFromComponents(rowComponents, metric);
     return (
       <tr key={row.id} className="border-b border-zinc-100 dark:border-zinc-800">
         <td className={`sticky left-0 bg-white dark:bg-zinc-900 px-3 py-2 align-top ${indentClass}`}>
@@ -322,10 +376,10 @@ export function FacebookAdsHealthPivotTable({ rows, metric, startDate, endDate, 
         <tfoot>
           <tr className="bg-zinc-100 dark:bg-zinc-800 font-bold">
             <td className="sticky left-0 bg-zinc-100 dark:bg-zinc-800 px-3 py-2">Totals (visible)</td>
-            {totalsByDate.map((t, i) => (
-              <td key={i} className="text-center font-mono text-[11px]">{formatCell(t, metric)}</td>
+            {componentsByDate.map((c, i) => (
+              <td key={i} className="text-center font-mono text-[11px]">{formatCell(metricFromComponents(c, metric), metric)}</td>
             ))}
-            <td className="text-right font-mono px-2">{formatCell(totalsByDate.reduce((a, b) => a + b, 0), metric)}</td>
+            <td className="text-right font-mono px-2">{formatCell(metricFromComponents(grandTotalComponents, metric), metric)}</td>
             <td></td>
             <td></td>
           </tr>
