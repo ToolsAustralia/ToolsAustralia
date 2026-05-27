@@ -28,7 +28,7 @@ const VERDICT_CHIP: Record<PivotRow["verdict"], string> = {
  * variant inlines every metric as its own column for at-a-glance comparison.
  */
 export function FacebookAdsHealthFlatTable({ rows }: Props) {
-  const [hoverId, setHoverId] = useState<string | null>(null);
+  const [hover, setHover] = useState<{ id: string; rect: DOMRect } | null>(null);
   return (
     <div className="overflow-x-auto rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900">
       <table className="w-full border-collapse text-xs min-w-[900px]">
@@ -75,11 +75,11 @@ export function FacebookAdsHealthFlatTable({ rows }: Props) {
                 <td className="text-right font-mono px-2 py-2 align-middle">{linkClicks}</td>
                 <td className="text-right font-mono px-2 py-2 align-middle">{linkCtr.toFixed(1)}%</td>
                 <td className="text-right font-mono px-2 py-2 align-middle">${costPerLinkClick.toFixed(2)}</td>
-                <td className="text-center px-2 py-2 relative align-middle">
+                <td className="text-center px-2 py-2 align-middle">
                   <span
                     className={`text-[10px] px-2.5 py-1 rounded font-semibold cursor-help ${VERDICT_CHIP[row.verdict]}`}
-                    onMouseEnter={() => setHoverId(row.id)}
-                    onMouseLeave={() => setHoverId(null)}
+                    onMouseEnter={(e) => setHover({ id: row.id, rect: e.currentTarget.getBoundingClientRect() })}
+                    onMouseLeave={() => setHover(null)}
                   >
                     {row.verdict === "scale"
                       ? "Scale +20%"
@@ -87,14 +87,13 @@ export function FacebookAdsHealthFlatTable({ rows }: Props) {
                         ? "Cut?"
                         : row.verdict[0]!.toUpperCase() + row.verdict.slice(1)}
                   </span>
-                  {hoverId === row.id && (
-                    <div className="absolute right-0 top-full mt-1 z-50">
-                      <FacebookAdsHealthVerdictTooltip
-                        verdict={row.verdict}
-                        reasons={row.verdictReasons}
-                        actionText={row.actionText}
-                      />
-                    </div>
+                  {hover?.id === row.id && (
+                    <FacebookAdsHealthVerdictTooltip
+                      verdict={row.verdict}
+                      reasons={row.verdictReasons}
+                      actionText={row.actionText}
+                      anchorRect={hover.rect}
+                    />
                   )}
                 </td>
                 <td className="px-2 align-middle">

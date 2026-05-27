@@ -128,7 +128,8 @@ async function handleHourlyInsights(request: NextRequest) {
       ? validatedQuery.filterIds.split(",").map((id) => id.trim()).filter(Boolean)
       : [];
 
-    console.log(
+    // console.error survives production build's compiler.removeConsole strip (per CLAUDE.md)
+    console.error(
       `📊 [Hourly Insights] ${validatedQuery.startDate} to ${validatedQuery.endDate} (AEST)${filterIds.length ? `, filter: ${filterLevel} [${filterIds.length} ids]` : ""}`
     );
 
@@ -233,7 +234,7 @@ async function handleHourlyInsights(request: NextRequest) {
       },
     };
 
-    console.log(`✅ [Hourly Insights] ${hourlyInsights.length} hours, PaymentEvents totalConversions=${totalConversions}, totalRevenue=${totalRevenue.toFixed(2)}`);
+    console.error(`✅ [Hourly Insights] ${hourlyInsights.length} hours, PaymentEvents totalConversions=${totalConversions}, totalRevenue=${totalRevenue.toFixed(2)}`);
 
     return NextResponse.json(response);
   } catch (error) {

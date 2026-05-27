@@ -27,11 +27,21 @@ export async function aggregateInsights(input: AggregatorInput): Promise<MetaAdI
 
   // Capture "now" once so all window boundaries are consistent within this call.
   const now = new Date();
-  // Trailing 7d, trailing 14d, prev 7d (for WoW comparison)
-  const trailing7Start = formatInTimeZone(subDays(now, 6), AEST, "yyyy-MM-dd");
-  const prev7Start = formatInTimeZone(subDays(now, 13), AEST, "yyyy-MM-dd");
-  const prev7End = formatInTimeZone(subDays(now, 7), AEST, "yyyy-MM-dd");
-  const trailing14Start = formatInTimeZone(subDays(now, 13), AEST, "yyyy-MM-dd");
+  // Trailing-7 and prev-7 are both COMPLETE 7-day windows, ending YESTERDAY.
+  // Today is partial-day spend/conv that biases everything low and triggers
+  // false-negative SCALE/INVESTIGATE outcomes; exclude it from learning-window
+  // math entirely. The reporting-window data (which DOES include today if the
+  // user picked it) is computed separately from the inWindow filter below.
+  //
+  // Days numbered backwards from today=0:
+  //   trailing-7 covers days -7..-1 (7 days, complete)
+  //   prev-7     covers days -14..-8 (7 days, complete, immediately before)
+  //   trailing-14 covers days -14..-1 (14 days, for last14dBestWeek scan)
+  const yesterdayStr = formatInTimeZone(subDays(now, 1), AEST, "yyyy-MM-dd");
+  const trailing7Start = formatInTimeZone(subDays(now, 7), AEST, "yyyy-MM-dd");
+  const prev7Start = formatInTimeZone(subDays(now, 14), AEST, "yyyy-MM-dd");
+  const prev7End = formatInTimeZone(subDays(now, 8), AEST, "yyyy-MM-dd");
+  const trailing14Start = formatInTimeZone(subDays(now, 14), AEST, "yyyy-MM-dd");
   const todayStr = formatInTimeZone(now, AEST, "yyyy-MM-dd");
 
   // Pull a broad slice: from min(reportingStart, trailing14Start) to today
@@ -63,8 +73,18 @@ export async function aggregateInsights(input: AggregatorInput): Promise<MetaAdI
     );
   }
 
-  // Build a lookup map for adset metadata keyed by adset ID.
-  const metadataByAdsetId = new Map(adsetMetadataList.map((m) => [m.adsetId, m]));
+  // Build a lookup map for adset metadata keyed by adset ID. Post-fetch we
+  // narrow to adsets that actually appear in this window's insights — Meta
+  // returns metadata for every adset that ever existed on the account, and
+  // the unfiltered map can grow to thousands on long-lived accounts.
+  const insightsAdsetIds = new Set(
+    rawInsights.map((r) => r.adset_id).filter((id): id is string => Boolean(id)),
+  );
+  const metadataByAdsetId = new Map(
+    adsetMetadataList
+      .filter((m) => insightsAdsetIds.has(m.adsetId))
+      .map((m) => [m.adsetId, m]),
+  );
 
   // Transform raw Meta API rows into the shape the aggregator consumes.
   // Parsing logic mirrors MetaInsightsSyncService to avoid drift.
@@ -139,8 +159,9 @@ export async function aggregateInsights(input: AggregatorInput): Promise<MetaAdI
     const first = groupRows[0];
     if (!first) continue;
     const inWindow = groupRows.filter((r) => r.date >= fbSince && r.date <= fbUntil);
-    const in7 = groupRows.filter((r) => r.date >= trailing7Start && r.date <= todayStr);
-    const inPrev7 = groupRows.filter((r) => r.date >= prev7Start && r.date < prev7End);
+    // Both windows are COMPLETE 7-day spans ending yesterday — see header comment.
+    const in7 = groupRows.filter((r) => r.date >= trailing7Start && r.date <= yesterdayStr);
+    const inPrev7 = groupRows.filter((r) => r.date >= prev7Start && r.date <= prev7End);
 
     const sum = (arr: NormalisedRow[], key: "spendCents" | "conversions" | "revenueCents" | "linkClicks" | "impressions") =>
       arr.reduce((s, r) => s + (r[key] ?? 0), 0);
@@ -165,13 +186,13 @@ export async function aggregateInsights(input: AggregatorInput): Promise<MetaAdI
     const prev7Roas = prev7.spendCents > 0 ? prev7.revenueCents / prev7.spendCents : null;
 
     // Best 7d window in last 14d: brute-force compute every 7-day rolling window.
-    // 8 windows total (i=0..7). Each window is [startStr, endStr] inclusive on
-    // both ends — a true 7-day span. i=0 is the oldest window (13d ago → 7d ago),
-    // i=7 is the trailing-7 window (6d ago → today).
+    // 8 windows total (i=0..7), all ending NO LATER THAN YESTERDAY to keep
+    // partial-day today out of the comparison (consistent with trailing-7).
+    // i=0 is the oldest window (-14..-8), i=7 is the trailing-7 window (-7..-1).
     let last14dBestWeek = { conversions: 0, roas: 0 };
     for (let i = 0; i <= 7; i++) {
-      const startStr = formatInTimeZone(subDays(now, 13 - i), AEST, "yyyy-MM-dd");
-      const endStr = formatInTimeZone(subDays(now, 7 - i), AEST, "yyyy-MM-dd");
+      const startStr = formatInTimeZone(subDays(now, 14 - i), AEST, "yyyy-MM-dd");
+      const endStr = formatInTimeZone(subDays(now, 8 - i), AEST, "yyyy-MM-dd");
       const slice = groupRows.filter((r) => r.date >= startStr && r.date <= endStr);
       const c = sum(slice, "conversions");
       const s = sum(slice, "spendCents");

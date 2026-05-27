@@ -83,11 +83,23 @@ interface Props {
 }
 
 export function FacebookAdsHealthPivotTable({ rows, metric }: Props) {
-  const [hoverId, setHoverId] = useState<string | null>(null);
-  const dates = rows[0]?.daily.map((d) => d.date) ?? [];
+  const [hover, setHover] = useState<{ id: string; rect: DOMRect } | null>(null);
+  // Build a UNION of all dates seen across all rows. Using rows[0]?.daily alone
+  // breaks when adsets have differing coverage (newer adsets, paused days, etc.) —
+  // cells slid left under wrong headers and the totals row misaligned.
+  const dateSet = new Set<string>();
+  rows.forEach((r) => r.daily.forEach((d) => dateSet.add(d.date)));
+  const dates = Array.from(dateSet).sort((a, b) => a.localeCompare(b));
+  // Pre-index each row's daily array by date for O(1) per-cell lookup.
+  const rowDailyByDate = new Map<string, Map<string, DailyCell>>();
+  rows.forEach((r) => {
+    const m = new Map<string, DailyCell>();
+    r.daily.forEach((d) => m.set(d.date, d));
+    rowDailyByDate.set(r.id, m);
+  });
   const totalsByDate = dates.map((date) => {
     return rows.reduce((sum, r) => {
-      const cell = r.daily.find((d) => d.date === date);
+      const cell = rowDailyByDate.get(r.id)?.get(date);
       return sum + (cell ? metricValue(cell, metric) : 0);
     }, 0);
   });
@@ -111,7 +123,10 @@ export function FacebookAdsHealthPivotTable({ rows, metric }: Props) {
         </thead>
         <tbody>
           {rows.map((row) => {
-            const rowMax = Math.max(...row.daily.map((d) => metricValue(d, metric)));
+            const rowDaily = rowDailyByDate.get(row.id) ?? new Map<string, DailyCell>();
+            const rowMax = row.daily.length
+              ? Math.max(...row.daily.map((d) => metricValue(d, metric)))
+              : 0;
             const windowTotal =
               metric === "spend" ? row.window.spendCents / 100 :
               metric === "conversions" ? row.window.conversions :
@@ -126,27 +141,36 @@ export function FacebookAdsHealthPivotTable({ rows, metric }: Props) {
                     <span>{row.campaignName}</span>
                   </div>
                 </td>
-                {row.daily.map((cell) => {
+                {dates.map((date) => {
+                  const cell = rowDaily.get(date);
+                  if (!cell) {
+                    return (
+                      <td key={date} className="text-center font-mono text-[11px] text-zinc-300 dark:text-zinc-700">—</td>
+                    );
+                  }
                   const v = metricValue(cell, metric);
                   return (
-                    <td key={cell.date} className={`text-center font-mono font-semibold text-[11px] ${cell.conversions === 0 && metric === "conversions" ? "bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-red-300" : heatClass(v, rowMax)}`}>
+                    <td key={date} className={`text-center font-mono font-semibold text-[11px] ${cell.conversions === 0 && metric === "conversions" ? "bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-red-300" : heatClass(v, rowMax)}`}>
                       {formatCell(v, metric)}
                     </td>
                   );
                 })}
                 <td className="text-right font-mono font-bold px-2 bg-zinc-50 dark:bg-zinc-800">{formatCell(windowTotal, metric)}</td>
-                <td className="text-center px-2 relative">
+                <td className="text-center px-2">
                   <span
                     className={`text-[10px] px-2.5 py-1 rounded font-semibold cursor-help ${VERDICT_CHIP[row.verdict]}`}
-                    onMouseEnter={() => setHoverId(row.id)}
-                    onMouseLeave={() => setHoverId(null)}
+                    onMouseEnter={(e) => setHover({ id: row.id, rect: e.currentTarget.getBoundingClientRect() })}
+                    onMouseLeave={() => setHover(null)}
                   >
                     {row.verdict === "scale" ? "Scale +20%" : row.verdict === "cut" ? "Cut?" : row.verdict[0]!.toUpperCase() + row.verdict.slice(1)}
                   </span>
-                  {hoverId === row.id && (
-                    <div className="absolute right-0 top-full mt-1 z-50">
-                      <FacebookAdsHealthVerdictTooltip verdict={row.verdict} reasons={row.verdictReasons} actionText={row.actionText} />
-                    </div>
+                  {hover?.id === row.id && (
+                    <FacebookAdsHealthVerdictTooltip
+                      verdict={row.verdict}
+                      reasons={row.verdictReasons}
+                      actionText={row.actionText}
+                      anchorRect={hover.rect}
+                    />
                   )}
                 </td>
                 <td className="px-2">

@@ -6,16 +6,20 @@ import StaffActivity from "@/models/StaffActivity";
 import { Types } from "mongoose";
 
 export async function getOrInitSettings(): Promise<FacebookAdsHealthSettingsValues> {
-  let doc = await FacebookAdsHealthSettings.findOne({ scope: "global" });
-  if (!doc) {
-    doc = await FacebookAdsHealthSettings.create(FACEBOOK_ADS_HEALTH_SETTINGS_DEFAULTS);
-  }
+  // Atomic upsert avoids a race where two concurrent first-init requests
+  // both findOne() empty, both create(), and the second hits the unique
+  // index on { scope } and throws.
+  const doc = await FacebookAdsHealthSettings.findOneAndUpdate(
+    { scope: "global" },
+    { $setOnInsert: FACEBOOK_ADS_HEALTH_SETTINGS_DEFAULTS },
+    { upsert: true, new: true, setDefaultsOnInsert: true },
+  );
   return {
-    breakevenRoas: doc.breakevenRoas,
-    targetCpaAud: doc.targetCpaAud,
-    zeroConvSpendMultiplier: doc.zeroConvSpendMultiplier,
-    roasDropTriggerPct: doc.roasDropTriggerPct,
-    postEditWaitHours: doc.postEditWaitHours,
+    breakevenRoas: doc!.breakevenRoas,
+    targetCpaAud: doc!.targetCpaAud,
+    zeroConvSpendMultiplier: doc!.zeroConvSpendMultiplier,
+    roasDropTriggerPct: doc!.roasDropTriggerPct,
+    postEditWaitHours: doc!.postEditWaitHours,
   };
 }
 

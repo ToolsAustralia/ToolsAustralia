@@ -1307,20 +1307,30 @@ export default function FacebookAdsManagement() {
             </button>
           </div>
           <div className="flex flex-row flex-wrap items-center gap-2 sm:gap-4 min-w-0 sm:justify-end">
-            {/* View Level — Ads and Health views */}
+            {/* View Level — Ads and Health views. Health hides "Account"
+                because per-row verdicts need at least adset granularity;
+                the view silently coerces account → adset if it slipped through. */}
             {(viewMode === "ads" || viewMode === "health") && (
               <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0 min-w-[200px] sm:min-w-[240px]">
                 <label className="text-xs sm:text-sm font-medium text-gray-700 dark:text-neutral-200 whitespace-nowrap hidden sm:inline">
                   View Level:
                 </label>
                 <Dropdown
-                  options={[
-                    { value: "account", label: "Account", icon: Layers },
-                    { value: "campaign", label: "Campaign", icon: BarChart2 },
-                    { value: "adset", label: "Ad Set", icon: LayoutList },
-                    { value: "ad", label: "Ad", icon: Image },
-                  ]}
-                  value={level}
+                  options={
+                    viewMode === "health"
+                      ? [
+                          { value: "campaign", label: "Campaign", icon: BarChart2 },
+                          { value: "adset", label: "Ad Set", icon: LayoutList },
+                          { value: "ad", label: "Ad", icon: Image },
+                        ]
+                      : [
+                          { value: "account", label: "Account", icon: Layers },
+                          { value: "campaign", label: "Campaign", icon: BarChart2 },
+                          { value: "adset", label: "Ad Set", icon: LayoutList },
+                          { value: "ad", label: "Ad", icon: Image },
+                        ]
+                  }
+                  value={viewMode === "health" && level === "account" ? "adset" : level}
                   onChange={(value) => setLevel(value as InsightLevel)}
                   placeholder="View Level"
                   compact

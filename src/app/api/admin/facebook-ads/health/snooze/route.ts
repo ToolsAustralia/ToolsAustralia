@@ -12,7 +12,9 @@ const bodySchema = z.object({
 });
 
 export async function POST(request: NextRequest) {
-  const guard = await requirePermission("facebookAds.view");
+  // Snooze is a write — gate on .edit, not .view. docs/admin/api.md
+  // already documents this requirement.
+  const guard = await requirePermission("facebookAds.edit");
   if (guard instanceof NextResponse) return guard;
   const { session } = guard;
   await connectDB();

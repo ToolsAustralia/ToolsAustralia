@@ -14,7 +14,7 @@ The `/api/admin/**` namespace. Per the manifest, this domain is the catch-all fo
 | `/api/admin/error-reports/**` | [error-reporting](../error-reporting/) | Error triage |
 | `/api/admin/contact-submissions/**` | [contact](../contact/) | Submission review |
 | `/api/admin/facebook-ads/purchase-audit` | [tracking](../tracking/) | Local vs Meta revenue reconciliation (TRUE ROAS) |
-| `/api/admin/facebook-ads/health/insights` | [tracking](../tracking/) | Facebook Ads Health view — aggregated adset/campaign/ad insights with verdict engine, snooze, and account TRUE ROAS |
+| `/api/admin/facebook-ads/health/insights` | [tracking](../tracking/) | Facebook Ads Health view — live-from-Meta aggregated campaign/adset/ad insights with verdict engine + per-row snooze state. No account TRUE ROAS card — purchase-audit route handles that diagnostic separately. |
 | `GET /api/admin/facebook-ads/health/settings` | [tracking](../tracking/) | Read health verdict engine settings (requires `facebookAds.view`) |
 | `PUT /api/admin/facebook-ads/health/settings` | [tracking](../tracking/) | Update health verdict engine settings (requires `facebookAds.edit`) |
 | `POST /api/admin/facebook-ads/health/snooze` | [tracking](../tracking/) | Create or update a snooze for an ad (requires `facebookAds.edit`) |
