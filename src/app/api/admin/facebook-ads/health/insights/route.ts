@@ -111,6 +111,7 @@ export async function GET(request: NextRequest) {
       },
       lastSignificantEdit: row.lastSignificantEdit,
       daysSinceLastSignificantEdit: row.daysSinceLastSignificantEdit,
+      createdTime: row.createdTime,
       conversionsSinceLastSignificantEdit: row.conversionsSinceLastSignificantEdit,
       lastBudgetChangePct: row.lastBudgetChangePct,
       daysAtZero: row.daysAtZeroInWindow,

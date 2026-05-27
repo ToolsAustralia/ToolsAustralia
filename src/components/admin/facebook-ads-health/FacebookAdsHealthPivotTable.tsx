@@ -32,6 +32,9 @@ export interface PivotRow {
   conversionsSinceLastSignificantEdit: number | null;
   daysSinceLastSignificantEdit: number | null;
   lastSignificantEdit: string | null;
+  // Falls back as the popover anchor when no significant edit exists —
+  // shows "Never edited · Created (date)" in that case.
+  createdTime: string | null;
   daily: DailyCell[];
   window: { spendCents: number; conversions: number; revenueCents: number };
   lastBudgetChangePct: number | null;
@@ -349,6 +352,7 @@ export function FacebookAdsHealthPivotTable({ rows, metric, startDate, endDate, 
                 conversionsSinceLastSignificantEdit={row.conversionsSinceLastSignificantEdit}
                 daysSinceLastSignificantEdit={row.daysSinceLastSignificantEdit}
                 lastSignificantEdit={row.lastSignificantEdit}
+                createdTime={row.createdTime}
               />
             )}
             {level === "ad" && row.adsetName ? <span>{row.adsetName}</span> : <span>{row.campaignName}</span>}

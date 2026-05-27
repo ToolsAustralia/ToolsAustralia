@@ -43,6 +43,7 @@ function makeRow(reportingDays: number): MetaAdInsightsRow {
     learningStatusBucket: "Active",
     effectiveStatus: "ACTIVE",
     lastSignificantEdit: new Date(Date.now() - 20 * 86400000),
+    createdTime: new Date(Date.now() - 40 * 86400000),
     daysSinceLastSignificantEdit: 20,
     conversionsSinceLastSignificantEdit: 60,
     daysInLearningLimited: 0,

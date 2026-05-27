@@ -28,6 +28,7 @@ function baseRow(): MetaAdInsightsRow {
     learningStatusBucket: "Unknown",
     effectiveStatus: "UNKNOWN",
     lastSignificantEdit: null,
+    createdTime: null,
     daysSinceLastSignificantEdit: null,
     conversionsSinceLastSignificantEdit: null,
     daysInLearningLimited: 0,

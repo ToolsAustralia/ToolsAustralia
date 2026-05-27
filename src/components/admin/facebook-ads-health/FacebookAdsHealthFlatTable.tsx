@@ -92,6 +92,7 @@ export function FacebookAdsHealthFlatTable({ rows, level }: Props) {
                       conversionsSinceLastSignificantEdit={row.conversionsSinceLastSignificantEdit}
                       daysSinceLastSignificantEdit={row.daysSinceLastSignificantEdit}
                       lastSignificantEdit={row.lastSignificantEdit}
+                      createdTime={row.createdTime}
                     />
                   )}
                 </td>

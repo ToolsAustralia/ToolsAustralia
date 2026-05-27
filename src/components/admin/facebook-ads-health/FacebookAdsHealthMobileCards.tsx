@@ -91,6 +91,7 @@ export function FacebookAdsHealthMobileCards({ rows, level, metric, breakevenRoa
                       conversionsSinceLastSignificantEdit={row.conversionsSinceLastSignificantEdit}
                       daysSinceLastSignificantEdit={row.daysSinceLastSignificantEdit}
                       lastSignificantEdit={row.lastSignificantEdit}
+                      createdTime={row.createdTime}
                     />
                   </div>
                 )}

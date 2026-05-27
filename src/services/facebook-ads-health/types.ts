@@ -76,6 +76,12 @@ export interface MetaAdInsightsRow {
   effectiveStatus: EffectiveStatusBucket;
   lastSignificantEdit: Date | null;
   daysSinceLastSignificantEdit: number | null;
+  // Adset's creation timestamp from Meta. Used as the fallback "anchor" for
+  // the learning-phase counter (and the popover's "Since…" line) when no
+  // significant edit has happened — matches Meta UI behaviour for unedited
+  // adsets. Also exposed to the UI so the tooltip can show "Never edited ·
+  // Created (date)" instead of just omitting the line.
+  createdTime: Date | null;
   // Cumulative optimization events since the last significant edit. Matches
   // the "X / 50" counter Meta Ads Manager shows in the Learning Phase Progress
   // popover. null when lastSignificantEdit isn't available. Drives the

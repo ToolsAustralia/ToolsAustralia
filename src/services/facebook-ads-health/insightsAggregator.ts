@@ -433,6 +433,7 @@ export async function aggregateInsights(input: AggregatorInput): Promise<MetaAdI
       effectiveStatus,
       lastSignificantEdit,
       daysSinceLastSignificantEdit,
+      createdTime: latest?.createdTime ?? null,
       conversionsSinceLastSignificantEdit,
       daysInLearningLimited,
       lastBudgetChangePct,

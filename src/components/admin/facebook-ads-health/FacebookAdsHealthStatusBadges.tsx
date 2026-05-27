@@ -239,9 +239,20 @@ interface PopoverProps {
   conversionsSinceLastSignificantEdit: number | null | undefined;
   daysSinceLastSignificantEdit: number | null | undefined;
   lastSignificantEdit: string | null | undefined;
+  createdTime: string | null | undefined;
   anchorRect: DOMRect;
   onMouseEnter: () => void;
   onMouseLeave: () => void;
+}
+
+function formatMetaDate(iso: string): string {
+  return new Date(iso).toLocaleDateString("en-AU", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
 }
 
 function LearningStatusPopover({
@@ -249,6 +260,7 @@ function LearningStatusPopover({
   conversionsSinceLastSignificantEdit,
   daysSinceLastSignificantEdit,
   lastSignificantEdit,
+  createdTime,
   anchorRect,
   onMouseEnter,
   onMouseLeave,
@@ -259,15 +271,15 @@ function LearningStatusPopover({
   const conv = conversionsSinceLastSignificantEdit;
   const hasProgress = typeof conv === "number" && conv >= 0;
   const fillPct = hasProgress ? Math.min(100, (conv! / 50) * 100) : 0;
-  const editDateStr = lastSignificantEdit
-    ? new Date(lastSignificantEdit).toLocaleDateString("en-AU", {
-        day: "numeric",
-        month: "short",
-        year: "numeric",
-        hour: "numeric",
-        minute: "2-digit",
-      })
-    : null;
+  // "Since..." line always renders when we have progress data. Prefers the
+  // real edit timestamp; falls back to adset creation when Meta returns no
+  // edit history (matches Meta's UI behaviour); shows a no-anchor message
+  // as final fallback so the line never silently disappears.
+  const anchorLabel: string | null = (() => {
+    if (lastSignificantEdit) return `Since last significant edit (${formatMetaDate(lastSignificantEdit)})`;
+    if (createdTime) return `Never edited · Created ${formatMetaDate(createdTime)}`;
+    return "Edit history not available from Meta";
+  })();
 
   return createPortal(
     <div
@@ -291,14 +303,12 @@ function LearningStatusPopover({
               <div className="text-zinc-800 dark:text-zinc-100 text-[12px]">
                 Website purchases: <span className="font-semibold">{conv} / 50</span>
               </div>
-              {editDateStr && (
-                <div className="text-[10px] text-zinc-500 mt-0.5">
-                  Since last significant edit ({editDateStr})
-                  {typeof daysSinceLastSignificantEdit === "number" && daysSinceLastSignificantEdit >= 0 && (
-                    <> · {daysSinceLastSignificantEdit}d ago</>
-                  )}
-                </div>
-              )}
+              <div className="text-[10px] text-zinc-500 mt-0.5">
+                {anchorLabel}
+                {typeof daysSinceLastSignificantEdit === "number" && daysSinceLastSignificantEdit >= 0 && (
+                  <> · {daysSinceLastSignificantEdit}d ago</>
+                )}
+              </div>
             </>
           )}
         </div>
@@ -333,11 +343,13 @@ export function LearningStatusPill({
   conversionsSinceLastSignificantEdit,
   daysSinceLastSignificantEdit,
   lastSignificantEdit,
+  createdTime,
 }: {
   status: LearningBucketUi;
   conversionsSinceLastSignificantEdit?: number | null;
   daysSinceLastSignificantEdit?: number | null;
   lastSignificantEdit?: string | null;
+  createdTime?: string | null;
 }) {
   const spec = learningSpec(status);
   const [hover, setHover] = useState<{ rect: DOMRect } | null>(null);
@@ -372,6 +384,7 @@ export function LearningStatusPill({
           conversionsSinceLastSignificantEdit={conversionsSinceLastSignificantEdit}
           daysSinceLastSignificantEdit={daysSinceLastSignificantEdit}
           lastSignificantEdit={lastSignificantEdit}
+          createdTime={createdTime}
           anchorRect={hover.rect}
           onMouseEnter={cancelClose}
           onMouseLeave={scheduleClose}
