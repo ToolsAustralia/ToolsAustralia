@@ -1,5 +1,5 @@
 "use client";
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useFacebookAdsHealth } from "@/hooks/queries/admin/useFacebookAdsHealth";
 import { FacebookAdsHealthTopBar } from "./FacebookAdsHealthTopBar";
 import { FacebookAdsHealthFilters, type MetricChoice } from "./FacebookAdsHealthFilters";
@@ -24,6 +24,30 @@ interface Props {
 export function FacebookAdsHealthView({ startDate, endDate, level }: Props) {
   const effectiveLevel: "campaign" | "adset" | "ad" =
     level === "account" ? "adset" : level;
+  // Publishes the filter sticky region's measured height as a CSS var on the
+  // document root so the PivotTable header can sit flush below it (vertically
+  // sticky table header — third tier of the stacked-sticky stack).
+  //
+  // Stack:  parent toolbar (top:0)
+  //         → filter row     (top: --fb-toolbar-h)
+  //         → table thead    (top: --fb-toolbar-h + --fb-filter-h)
+  const filterStickyRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = filterStickyRef.current;
+    if (!el || typeof window === "undefined") return;
+    const root = document.documentElement;
+    const apply = () => {
+      root.style.setProperty("--fb-filter-h", `${Math.ceil(el.getBoundingClientRect().height)}px`);
+    };
+    apply();
+    const ro = new ResizeObserver(apply);
+    ro.observe(el);
+    return () => {
+      ro.disconnect();
+      root.style.removeProperty("--fb-filter-h");
+    };
+  }, []);
+
   const [metric, setMetric] = useState<MetricChoice>("conversions");
   const [verdictFilter, setVerdictFilter] = useState<string[]>([]);
   const [statusFilter, setStatusFilter] = useState<string[]>([]);
@@ -94,6 +118,7 @@ export function FacebookAdsHealthView({ startDate, endDate, level }: Props) {
           when the toolbar wraps. Fallback 60px covers SSR / pre-mount paint. z-20
           sits under the parent toolbar (z-30) so the two snap together cleanly. */}
       <div
+        ref={filterStickyRef}
         className="sticky z-20 pt-2 pb-2 bg-gray-50/95 dark:bg-neutral-950/95 backdrop-blur supports-[backdrop-filter]:bg-gray-50/80 supports-[backdrop-filter]:dark:bg-neutral-950/80 border-b border-gray-200 dark:border-neutral-800"
         style={{ top: "var(--fb-toolbar-h, 60px)" }}
       >
