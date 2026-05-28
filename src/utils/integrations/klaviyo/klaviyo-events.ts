@@ -19,6 +19,7 @@ import {
   getCustomerProperties,
   formatInvoiceDataForKlaviyo,
   formatPackageDataForKlaviyo,
+  formatCanonicalPackageData,
   formatDateForKlaviyo,
   formatTimestampForKlaviyo,
 } from "./klaviyo-helpers";
@@ -792,6 +793,79 @@ export function createInvoiceGeneratedEvent(
     properties: {
       user_id: user._id.toString(),
       ...formatInvoiceDataForKlaviyo(invoiceData),
+    },
+  };
+}
+
+// ============================================================
+// POST-2026-05 CANONICAL EVENTS
+//
+// Events below this line use the CANONICAL property schema described in
+// docs/tracking/KLAVIYO_INTEGRATION.md ("Canonical property names — new
+// events only"):
+//   - `price` is a NUMBER, not string
+//   - `tier` is the property name (NOT package_tier)
+//   - `package_type` is always emitted
+//   - timestamps use `<verb>_at` ISO (NOT locale strings or `timestamp`)
+//   - optional properties are OMITTED when absent (NOT `""` or `"unknown"`)
+//
+// The `canonical-events-shape.test.ts` snapshot test enforces these rules.
+// Do NOT use `formatPackageDataForKlaviyo` (legacy) here — use
+// `formatCanonicalPackageData` (added 2026-05-28) instead.
+// ============================================================
+
+/**
+ * Create a "Viewed Giveaway" event — fires when a user views a /promotions/<slug>
+ * page. Powers the ads team's "viewed promo but didn't enter" Klaviyo flow.
+ *
+ * Coexists with the existing `Viewed Page` (`PageType: "promotion"`) event from
+ * KlaviyoPageTracker — does not replace it. The richer properties on this event
+ * (promo title, prize name, prize image URL) let email templates render the
+ * specific promo's assets rather than just a slug.
+ *
+ * For cookied users Klaviyo's onsite snippet auto-attaches the event to their
+ * known profile. For never-cookied anonymous users the event lands as anonymous
+ * in Klaviyo until they later identify.
+ *
+ * @param userOrEmail - Full IUser when identified, or `{ email }` when only
+ *   email is known (e.g. after step-1 registration before session is set).
+ * @param promoData - Resolved promo metadata for the page being viewed.
+ */
+export function createViewedGiveawayEvent(
+  userOrEmail: IUser | { email: string; firstName?: string; lastName?: string },
+  promoData: {
+    promoSlug: string;
+    promoId?: string;
+    promoTitle: string;
+    prizeName: string;
+    prizeImageUrl?: string;
+    promoUrl: string;
+    isAuthenticated: boolean;
+  }
+): KlaviyoEvent {
+  const customer_properties =
+    "_id" in userOrEmail
+      ? getCustomerProperties(userOrEmail)
+      : {
+          email: userOrEmail.email,
+          ...(userOrEmail.firstName ? { first_name: userOrEmail.firstName } : {}),
+          ...(userOrEmail.lastName ? { last_name: userOrEmail.lastName } : {}),
+        };
+
+  return {
+    event: "Viewed Giveaway",
+    customer_properties,
+    properties: {
+      // Omit user_id entirely when not available — no `""` sentinel (canonical rule)
+      ...("_id" in userOrEmail ? { user_id: userOrEmail._id.toString() } : {}),
+      promo_slug: promoData.promoSlug,
+      ...(promoData.promoId ? { promo_id: promoData.promoId } : {}),
+      promo_title: promoData.promoTitle,
+      prize_name: promoData.prizeName,
+      ...(promoData.prizeImageUrl ? { prize_image_url: promoData.prizeImageUrl } : {}),
+      promo_url: promoData.promoUrl,
+      is_authenticated: promoData.isAuthenticated,
+      viewed_at: new Date().toISOString(),
     },
   };
 }

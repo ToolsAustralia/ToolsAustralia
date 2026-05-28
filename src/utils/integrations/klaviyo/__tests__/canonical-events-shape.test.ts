@@ -167,16 +167,80 @@ function testAcceptsArbitraryAtSuffix() {
   assertCanonicalShape("Time Suffix Smoke", payload);
 }
 
+// ============================================================
+// Snapshot tests for the canonical event builders
+// ============================================================
+
+import { createViewedGiveawayEvent } from "../klaviyo-events";
+
+function testViewedGiveawayShape() {
+  const sample = createViewedGiveawayEvent(
+    { email: "test@example.com", firstName: "Test", lastName: "User" },
+    {
+      promoSlug: "milwaukee-march",
+      promoId: "promo_abc123",
+      promoTitle: "Win a Milwaukee Tool Pack",
+      prizeName: "Milwaukee 18V Combo Kit",
+      prizeImageUrl: "https://example.com/prize.jpg",
+      promoUrl: "https://toolsaustralia.com.au/promotions/milwaukee-march",
+      isAuthenticated: false,
+    }
+  );
+
+  assert.equal(sample.event, "Viewed Giveaway");
+  assert.equal(sample.customer_properties.email, "test@example.com");
+
+  // Fence the canonical property keys
+  assertCanonicalShape("Viewed Giveaway", sample.properties);
+
+  // Spot-check key values
+  assert.equal(sample.properties.promo_slug, "milwaukee-march");
+  assert.equal(sample.properties.is_authenticated, false);
+  assert.equal(typeof sample.properties.viewed_at, "string");
+  assert.match(sample.properties.viewed_at as string, /^\d{4}-\d{2}-\d{2}T/);
+}
+
+function testViewedGiveawayOmitsOptionalsWhenAbsent() {
+  // promoId and prizeImageUrl are optional — when absent, they should be OMITTED
+  // (not present as `""` or `undefined`) per the canonical no-sentinel rule.
+  const sample = createViewedGiveawayEvent(
+    { email: "test@example.com" },
+    {
+      promoSlug: "no-extras",
+      promoTitle: "Title",
+      prizeName: "Prize",
+      promoUrl: "https://example.com",
+      isAuthenticated: false,
+    }
+  );
+
+  assert.equal(
+    "promo_id" in sample.properties,
+    false,
+    "promo_id must be OMITTED when not provided (no sentinel)"
+  );
+  assert.equal(
+    "prize_image_url" in sample.properties,
+    false,
+    "prize_image_url must be OMITTED when not provided (no sentinel)"
+  );
+  assert.equal(
+    "user_id" in sample.properties,
+    false,
+    "user_id must be OMITTED for email-only (anonymous-then-cookied) callers"
+  );
+  assertCanonicalShape("Viewed Giveaway (minimal)", sample.properties);
+}
+
 function run() {
   testCanonicalKeyAccepted();
   testNonCanonicalKeyRejected();
   testAssertCanonicalShapePassesOnCanonicalPayload();
   testAssertCanonicalShapeFailsOnLegacyDrift();
   testAcceptsArbitraryAtSuffix();
-  console.error("✓ canonical-events-shape: scaffolding self-tests passed");
-  console.error(
-    "  (Phase 1: no event builders to fence yet — Phases 3 and 4 will add `Viewed Giveaway` and `Started Checkout` snapshots)"
-  );
+  testViewedGiveawayShape();
+  testViewedGiveawayOmitsOptionalsWhenAbsent();
+  console.error("✓ canonical-events-shape: all self-tests + Viewed Giveaway snapshot passed");
 }
 
 run();

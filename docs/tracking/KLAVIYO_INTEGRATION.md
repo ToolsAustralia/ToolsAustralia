@@ -54,6 +54,7 @@ Critical: post-purchase events fire from the **server**, not the browser. The br
 | `Viewed Page` | `KlaviyoPageTracker` on route change | ✓ via `shouldTrackRoute()` — internal routes excluded |
 | `Identify` | `KlaviyoUserIdentifier` when user logs in | Not gated — must run on `/my-account` |
 | `Viewed Product`, `Added to Cart`, `Started Checkout` (when wired) | via `useKlaviyoTracking` hook from product components | Not gated |
+| `Viewed Giveaway` (canonical, added 2026-05-28) | `PromoViewTracking` on `/promotions/<slug>` and brand pages (`/promotions/dewalt`, `/makita`, `/milwaukee`, `/ryobi`) | ✓ via `hasPixelConsent()` (called by `trackKlaviyoEvent`) |
 
 ## Revenue tracking — the `$value` rule
 

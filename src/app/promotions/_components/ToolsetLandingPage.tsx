@@ -14,6 +14,8 @@ import {
   getLandingHeroImagePaths,
   type ToolsetLandingSlug,
 } from "@/config/promo-landing-slugs";
+import { getPrizeBySlug } from "@/config/prizes";
+import PromoViewTracking from "./PromoViewTracking";
 import { getEffectivePromosForDisplay } from "@/utils/database/queries/promo-queries";
 import { getCurrentMajorDrawServer } from "@/utils/database/queries/major-draw-server-queries";
 import ExperimentService from "@/services/ab-testing/ExperimentService";
@@ -63,6 +65,9 @@ interface ToolsetLandingPageProps {
 
 export default async function ToolsetLandingPage({ toolsetSlug }: ToolsetLandingPageProps) {
   const defaultPrizeSlug = getDefaultPrizeForToolsetSlug(toolsetSlug);
+  // Resolve the full prize for the Klaviyo `Viewed Giveaway` event payload —
+  // template emails reference promo title / prize name / prize image directly.
+  const prize = getPrizeBySlug(defaultPrizeSlug);
 
   const [effectivePromos, majorDraw, activeExperiment] = await Promise.all([
     getEffectivePromosForDisplay().catch(() => []),
@@ -115,6 +120,16 @@ export default async function ToolsetLandingPage({ toolsetSlug }: ToolsetLanding
         initialAnonymousId={serverAssignment?.anonymousId}
       >
         <PromoThemeInitializer slug={defaultPrizeSlug} toolsetSlug={toolsetSlug} />
+        {prize && (
+          <PromoViewTracking
+            promo={{
+              slug: prize.slug,
+              title: prize.heroHeading || prize.label,
+              prizeName: prize.label,
+              prizeImageUrl: prize.gallery?.[0]?.src,
+            }}
+          />
+        )}
         <div className="min-h-svh bg-white dark:bg-neutral-950 w-full overflow-hidden">
           <PromoBanner initialMembershipPromo={membershipPromo} initialOneTimePromo={oneTimePromo} />
 

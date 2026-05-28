@@ -262,6 +262,48 @@ export function useKlaviyoTracking() {
     }
   }, []);
 
+  /**
+   * Track a "Viewed Giveaway" event in Klaviyo (canonical schema, added 2026-05-28).
+   *
+   * Fires from `/promotions/<slug>` pages via `PromoViewTracking.tsx`. Uses the
+   * canonical property names defined in docs/tracking/KLAVIYO_INTEGRATION.md —
+   * `viewed_at` (ISO), `is_authenticated` (boolean), optional properties omitted
+   * rather than nulled. The cookied-profile auto-attach is handled by Klaviyo's
+   * onsite snippet.
+   *
+   * @param params - Promo metadata: slug, optional id, title, prize name, optional
+   *   prize image URL, full promo URL, is_authenticated flag.
+   */
+  const trackViewedGiveaway = useCallback(
+    (params: {
+      promo_slug: string;
+      promo_id?: string;
+      promo_title: string;
+      prize_name: string;
+      prize_image_url?: string;
+      promo_url: string;
+      is_authenticated: boolean;
+    }) => {
+      try {
+        trackKlaviyoEvent("Viewed Giveaway", {
+          promo_slug: params.promo_slug,
+          ...(params.promo_id ? { promo_id: params.promo_id } : {}),
+          promo_title: params.promo_title,
+          prize_name: params.prize_name,
+          ...(params.prize_image_url ? { prize_image_url: params.prize_image_url } : {}),
+          promo_url: params.promo_url,
+          is_authenticated: params.is_authenticated,
+          viewed_at: new Date().toISOString(),
+        });
+      } catch (error) {
+        if (process.env.NODE_ENV === "development") {
+          console.error("❌ Klaviyo: Error tracking Viewed Giveaway", error);
+        }
+      }
+    },
+    []
+  );
+
   return {
     identify,
     track,
@@ -271,5 +313,6 @@ export function useKlaviyoTracking() {
     trackViewContent,
     trackInitiateCheckout,
     trackCompleteRegistration,
+    trackViewedGiveaway,
   };
 }

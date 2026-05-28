@@ -148,7 +148,12 @@ export interface KlaviyoProfile {
  * and spaces, which are required for Klaviyo's revenue schema.
  */
 export interface KlaviyoEventProperties {
-  user_id: string;
+  // user_id is OPTIONAL because canonical events (added 2026-05-28) may fire for
+  // anonymous users — e.g. `Viewed Giveaway` from a never-cookied visitor lands as
+  // anonymous in Klaviyo until they later identify. All legacy events continue to
+  // emit user_id; new canonical events emit it when available and omit it when not
+  // (per the no-sentinel rule in docs/tracking/KLAVIYO_INTEGRATION.md).
+  user_id?: string;
   [key: string]: string | number | boolean | undefined | null | unknown[] | Record<string, unknown>;
 }
 
