@@ -39,6 +39,24 @@ Slug keys must match the experiment's `slugTargets` exactly. The admin editor at
 exposes a `PerSlugImageMapEditor` subcomponent for managing the map — each row
 has independently-optional Desktop and Mobile path inputs.
 
+### Non-hero consumers of the same per-slug map
+
+The hook [`usePerSlugHeroOverride(slug)`](../../src/hooks/ab-testing/usePerSlugHeroOverride.ts)
+returns the variant's `{ desktop?, mobile? }` override for a slug (or `null`
+when no experiment is active / no override is set). It exists so non-hero
+components that also render the brand-specific landing image stay visually
+consistent with `PromoHero` for an A/B-bucketed visitor. Current consumers:
+
+- [`PrizeShowcase`](../../src/components/sections/promo/PrizeShowcase.tsx) — first
+  carousel slide. Uses the override's `mobile` slot (per product, this slide
+  uses mobile art on both viewports).
+- [`PrizeSpecificationsModal/Hero`](../../src/components/modals/PrizeSpecificationsModal/Hero.tsx)
+  — modal hero strip. Uses the override's `desktop` slot. When no override is
+  set, falls back to the legacy "dark desktop" pick.
+
+When adding a new component that renders a landing-image-resolver path, call
+`usePerSlugHeroOverride` first and prefer its slot before the default resolver.
+
 ## Site-wide membership dark-mode experiment (historical — winner shipped)
 
 The "no theme" arm won. `MembershipSection` now passes `theme="light"`
