@@ -246,28 +246,22 @@ Sets the canonical convention in code and documentation so Phases 2–4 have a f
   }
   ```
 
-- [ ] **Step 3: Add `countDistinctDrawsEntered`** using a single `$facet` aggregation:
+- [ ] **Step 3: Add `countDistinctDrawsEntered`** using two parallel queries (Major Draw entries live as embedded subdocs on `MajorDraw.entries[]`, Mini Draw entries live in the flat `TicketEntry` collection — they cannot be combined in one `$facet`):
   ```ts
+  import MajorDraw from "@/models/MajorDraw";
   import TicketEntry from "@/models/TicketEntry";
 
-  export async function countDistinctDrawsEntered(userId: string): Promise<number> {
-    const [result] = await TicketEntry.aggregate<{
-      majorDrawCount: { count: number }[];
-      miniDrawCount: { count: number }[];
-    }>([
-      { $match: { userId } },
-      {
-        $facet: {
-          majorDrawCount: [{ $group: { _id: "$majorDrawId" } }, { $match: { _id: { $ne: null } } }, { $count: "count" }],
-          miniDrawCount: [{ $group: { _id: "$miniDrawId" } }, { $match: { _id: { $ne: null } } }, { $count: "count" }],
-        },
-      },
+  export async function countDistinctDrawsEntered(userId: mongoose.Types.ObjectId | string): Promise<number> {
+    const [majorCount, miniDrawIds] = await Promise.all([
+      // Major Draw entries are embedded subdocs — indexed at MajorDraw.ts:269 ("entries.userId": 1)
+      MajorDraw.countDocuments({ "entries.userId": userId }),
+      // Mini Draw entries are a flat collection — indexed at TicketEntry.ts:58 ({ userId: 1, miniDrawId: 1 })
+      TicketEntry.distinct("miniDrawId", { userId }),
     ]);
-    const major = result?.majorDrawCount[0]?.count ?? 0;
-    const mini = result?.miniDrawCount[0]?.count ?? 0;
-    return major + mini;
+    return majorCount + miniDrawIds.length;
   }
   ```
+  Both queries are indexed and run in parallel. Total round-trip is one (parallel) Mongo wait per profile sync.
 
 - [ ] **Step 4: Add 5 properties** to the `properties: { ... }` block in `userToKlaviyoProfile` (the function called by `ensureUserProfileSynced`):
   ```ts

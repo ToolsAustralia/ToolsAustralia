@@ -175,6 +175,24 @@ This is intentional drift containment — we accept the legacy schema as paid co
 | Promo / giveaway context | `promo_slug`, `promo_id`, `promo_title`, `prize_name`, `prize_image_url`, `promo_url` | string | When an event is fired from a promo page, include these so email templates can reference the asset directly. |
 | Deep link back to action | `checkout_url`, `resume_url`, etc. | string (absolute URL with UTM) | When the email's CTA needs to return the user to a specific preselected state. Always include UTM params so the ads team can attribute. |
 
+### Profile properties added 2026-05-28
+
+These five canonical profile properties land on every user's Klaviyo profile via `ensureUserProfileSynced` and back-fill via `scripts/backfill-klaviyo-membership-properties.ts`. They power the "Purchased entries but no membership", "At-risk near renewal", and "Long-term member" segments the ads team requested. **Legacy `subscription_status` continues to be written** with raw Stripe values for back-compat with existing flows / segments / templates.
+
+| Property | Type | Computed how |
+|---|---|---|
+| `membership_status` | enum string (`"active"` / `"past_due"` / `"canceled"` / `"never_subscribed"`) | `deriveMembershipStatus(user)` in [klaviyo-helpers.ts](../../src/utils/integrations/klaviyo/klaviyo-helpers.ts). Coerced from raw Stripe state — see coercion table in [patterns.md P7](./patterns.md). `"trialing"` → `"active"`, `"unpaid"` → `"past_due"`, `"incomplete"` → `"never_subscribed"`. |
+| `entries_purchased` | number | Lifetime total: `member + one-time + upsell + mini-draw` entries. Sum of existing `entryBreakdown` counters — no new query. |
+| `giveaways_entered` | number | Distinct draws (Major + Mini) the user has at least one entry in. Two parallel queries via `Promise.all` because Major Draw entries live as embedded subdocs on `MajorDraw.entries[]` (indexed at [MajorDraw.ts:269](../../src/models/MajorDraw.ts#L269)) and Mini Draw entries live in the flat `TicketEntry` collection (indexed at [TicketEntry.ts:58](../../src/models/TicketEntry.ts#L58)). |
+| `membership_active_duration_months` | number \| null | `differenceInMonths(now, user.subscription.startDate)` from `date-fns`. Calendar-aware, DST-safe (no `30.4375 * 86400000` averaging). `null` when never subscribed. |
+| `next_renewal_date` | ISO 8601 string \| null | `subscription.endDate` ISO when `isActive && autoRenew`. `null` for canceled / never-subscribed. ISO required for Klaviyo date math (locale strings are unfilterable as dates). |
+
+Example segments the ads team can now build:
+
+- *Purchased entries but no membership* — `membership_status EQUALS "never_subscribed" AND entries_purchased > 0`
+- *At-risk near renewal* — `membership_status EQUALS "active" AND next_renewal_date is within next 3 days`
+- *Long-term VIP* — `membership_active_duration_months >= 6`
+
 ### When adding a new event
 
 1. Find each property in the canonical schema. If a concept fits an existing row, use that exact name and type. Do not invent an alias.

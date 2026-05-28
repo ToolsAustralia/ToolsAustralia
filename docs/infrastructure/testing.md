@@ -46,9 +46,14 @@ npm run test:klaviyo-canonical       # fences canonical property names for new K
 ```bash
 npm run cleanup:abandoned-incomplete:dry   # scan + plan only (no writes); add -- --older-than-hours=0 to include very recent subs
 npm run cleanup:abandoned-incomplete       # LIVE: cancel abandoned incomplete subs, void open invoices, repair/clear stripeSubscriptionId pointers
+
+npm run backfill:klaviyo-membership-properties:dry  # compute + sample 10 users; no Klaviyo writes
+npm run backfill:klaviyo-membership-properties      # LIVE: re-upsert every active user to backfill 5 new canonical profile properties (membership_status, entries_purchased, giveaways_entered, membership_active_duration_months, next_renewal_date) — see docs/tracking/KLAVIYO_INTEGRATION.md "Profile properties added 2026-05-28"
 ```
 
 Default window is subs older than 24 hours (normal `incomplete` subs self-expire after ~23h anyway; the real targets are trial+incomplete subs). Use `--older-than-hours=0` to sweep very recent ones. Always dry-run first.
+
+The Klaviyo membership-properties backfill is idempotent (upserts by email) — safe to re-run. At the default 100ms throttle the runtime is roughly `active_user_count / 10` seconds. Run after Phase 2 deploys so the ads team's new segments work from day 1; existing users would otherwise only get the properties on their next webhook event (cancellation, renewal, purchase, etc.).
 
 - `npm run test:variant-config-membership-theme` — standalone `tsx` unit test
   for `VariantConfig.membershipTheme.forceLight` default/merge/validation
