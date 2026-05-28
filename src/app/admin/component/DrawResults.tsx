@@ -568,7 +568,7 @@ export default function DrawResults() {
     return (
       <div className="space-y-4 sm:space-y-6">
         <div className="flex flex-row items-center justify-between gap-2 sm:gap-4">
-          <h2 className="text-sm sm:text-lg lg:text-xl font-bold text-gray-900 flex-1 min-w-0 truncate">
+          <h2 className="text-sm sm:text-lg lg:text-xl font-bold text-gray-900 dark:text-white flex-1 min-w-0 truncate">
             Draw Results
           </h2>
         </div>
@@ -627,7 +627,7 @@ export default function DrawResults() {
 
       {/* Filters */}
       <div className="bg-white dark:bg-neutral-900 rounded-lg sm:rounded-xl shadow-sm dark:shadow-none border border-gray-200 dark:border-neutral-700 p-4 sm:p-6">
-        <h3 className="text-base sm:text-lg font-bold text-gray-900 mb-4">Filter & Search</h3>
+        <h3 className="text-base sm:text-lg font-bold text-gray-900 dark:text-white mb-4">Filter & Search</h3>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4">
             <Input
               placeholder="Search draws..."
@@ -672,7 +672,7 @@ export default function DrawResults() {
 
       {/* Error Message */}
       {error && (
-        <div className="bg-red-50 border-2 border-red-200 text-red-700 px-4 py-3 rounded-xl flex items-center gap-2">
+        <div className="bg-red-50 dark:bg-red-950/40 border-2 border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 px-4 py-3 rounded-xl flex items-center gap-2">
           <AlertCircle className="w-5 h-5 flex-shrink-0" />
           <span>{error}</span>
         </div>
@@ -686,7 +686,7 @@ export default function DrawResults() {
                 <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
                   <div className="flex-1 min-w-0">
                       <div className="flex flex-wrap items-center gap-3 mb-2">
-                        <h3 className="text-lg font-semibold text-gray-900">{draw.name}</h3>
+                        <h3 className="text-lg font-semibold text-gray-900 dark:text-white">{draw.name}</h3>
                         <MajorDrawTableStatusBadge status={draw.status} />
                         <DrawWinnerOutcomeBadge
                           status={draw.status}
@@ -715,12 +715,12 @@ export default function DrawResults() {
                       </div>
 
                       {draw.winner && draw.winner.userId && (
-                        <div className="bg-green-50 border border-green-200 rounded-lg p-3 mb-4">
+                        <div className="bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 rounded-lg p-3 mb-4">
                           <div className="flex items-center gap-2 mb-1">
-                            <Trophy className="w-4 h-4 text-green-600" />
-                            <span className="text-sm font-medium text-green-800">Winner Details</span>
+                            <Trophy className="w-4 h-4 text-green-600 dark:text-green-400" />
+                            <span className="text-sm font-medium text-green-800 dark:text-green-200">Winner Details</span>
                           </div>
-                          <div className="text-sm text-green-700">
+                          <div className="text-sm text-green-700 dark:text-green-300">
                             <ClickableUserDisplay
                               displayText={
                                 draw.winner.userDetails
@@ -729,7 +729,7 @@ export default function DrawResults() {
                               }
                               userId={draw.winner.userId}
                               subtext={`Entry #${draw.winner.entryNumber} • ${formatDate(draw.winner.selectedDate)} • ${draw.winner.selectionMethod === "manual" ? "Manual" : "Government App"}`}
-                              className="text-sm text-green-700 hover:text-green-800"
+                              className="text-sm text-green-700 dark:text-green-300 hover:text-green-800 dark:hover:text-green-200"
                             />
                           </div>
                         </div>
@@ -753,7 +753,7 @@ export default function DrawResults() {
                           size="sm"
                           variant="outline"
                           icon={UserX}
-                          className="border-amber-200 text-amber-800 hover:bg-amber-50"
+                          className="border-amber-200 dark:border-amber-700 text-amber-800 dark:text-amber-300 hover:bg-amber-50 dark:hover:bg-amber-950/30"
                         >
                           Remove winner
                         </Button>

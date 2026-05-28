@@ -27,6 +27,10 @@ export interface IPaymentEvent extends Document {
   // A/B Testing fields (optional)
   experimentId?: string;
   variantId?: string;
+  // Attribution fields (denormalized from Stripe metadata for ad-level aggregation)
+  attributionAdId: string | null;
+  attributionAdsetId: string | null;
+  attributionCampaignId: string | null;
 }
 
 const PaymentEventSchema = new Schema<IPaymentEvent>(
@@ -98,6 +102,22 @@ const PaymentEventSchema = new Schema<IPaymentEvent>(
     variantId: {
       type: String,
       required: false,
+    },
+    // Attribution fields (denormalized from Stripe metadata for ad-level aggregation)
+    attributionAdId: {
+      type: String,
+      default: null,
+      index: true,
+    },
+    attributionAdsetId: {
+      type: String,
+      default: null,
+      index: true,
+    },
+    attributionCampaignId: {
+      type: String,
+      default: null,
+      index: true,
     },
   },
   {

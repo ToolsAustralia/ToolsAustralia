@@ -8,6 +8,7 @@ import {
   Pause,
   Square,
   Eye,
+  Pencil,
   Search,
   Filter,
   Target,
@@ -32,6 +33,7 @@ export default function ABTestingManagement() {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [selectedExperimentId, setSelectedExperimentId] = useState<string | null>(null);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
+  const [editingExperimentId, setEditingExperimentId] = useState<string | null>(null);
   const _queryClient = useQueryClient();
 
   const { data: experimentsData, isLoading, error, refetch } = useExperiments({
@@ -241,6 +243,15 @@ export default function ABTestingManagement() {
                         </button>
                         {canEditAB && (experiment.status === "draft" || experiment.status === "paused") && (
                           <button
+                            onClick={() => setEditingExperimentId(experiment._id)}
+                            className="rounded p-1.5 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/40 hover:text-blue-700 dark:hover:text-blue-300 transition-colors"
+                            title="Edit"
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </button>
+                        )}
+                        {canEditAB && (experiment.status === "draft" || experiment.status === "paused") && (
+                          <button
                             onClick={() => handleActivate(experiment._id)}
                             disabled={activateMutation.isPending}
                             className="rounded p-1.5 text-green-600 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-950/40 hover:text-green-700 dark:hover:text-green-300 disabled:opacity-50 transition-colors"
@@ -301,6 +312,22 @@ export default function ABTestingManagement() {
           experimentId={selectedExperimentId}
         />
       )}
+
+      {editingExperimentId && (() => {
+        const editing = experiments.find((e) => e._id === editingExperimentId);
+        if (!editing) return null;
+        return (
+          <ExperimentFormModal
+            isOpen={true}
+            experiment={editing}
+            onClose={() => setEditingExperimentId(null)}
+            onSuccess={() => {
+              setEditingExperimentId(null);
+              refetch();
+            }}
+          />
+        );
+      })()}
     </div>
   );
 }

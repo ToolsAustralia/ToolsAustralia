@@ -262,24 +262,36 @@ export async function GET(request: NextRequest) {
             revenue: acc.revenue + item.metrics.revenue,
             impressions: acc.impressions + item.metrics.impressions,
             clicks: acc.clicks + item.metrics.clicks,
+            linkClicks: acc.linkClicks + item.metrics.linkClicks,
             conversions: acc.conversions + item.metrics.conversions,
             landingPageView: acc.landingPageView + item.metrics.landingPageView,
             profit: acc.profit + item.metrics.profit,
+            reach: acc.reach + item.metrics.reach,
+            frequency: 0, // Will calculate below (impressions / reach)
+            cpmCents: 0, // Will calculate below
             roas: 0, // Will calculate below
             ctr: 0, // Will calculate below
             cpc: 0, // Will calculate below
+            linkCtr: 0, // Will calculate below
+            linkCpc: 0, // Will calculate below
           }),
           {
             spend: 0,
             revenue: 0,
             impressions: 0,
             clicks: 0,
+            linkClicks: 0,
             conversions: 0,
             landingPageView: 0,
             profit: 0,
+            reach: 0,
+            frequency: 0,
+            cpmCents: 0,
             roas: 0,
             ctr: 0,
             cpc: 0,
+            linkCtr: 0,
+            linkCpc: 0,
           }
         );
 
@@ -290,6 +302,13 @@ export async function GET(request: NextRequest) {
         aggregated.ctr = aggregated.impressions > 0 ? (aggregated.clicks / aggregated.impressions) * 100 : 0;
         // CPC: spend / clicks (both in cents, result is cents per click)
         aggregated.cpc = aggregated.clicks > 0 ? aggregated.spend / aggregated.clicks : 0;
+        // Link CTR and Link CPC (based on inline_link_clicks)
+        aggregated.linkCtr = aggregated.impressions > 0 ? (aggregated.linkClicks / aggregated.impressions) * 100 : 0;
+        aggregated.linkCpc = aggregated.linkClicks > 0 ? aggregated.spend / aggregated.linkClicks : 0;
+        // Frequency: average impressions per unique user (impressions / reach)
+        aggregated.frequency = aggregated.reach > 0 ? aggregated.impressions / aggregated.reach : 0;
+        // CPM in cents: (spend / impressions) * 1000
+        aggregated.cpmCents = aggregated.impressions > 0 ? (aggregated.spend / aggregated.impressions) * 1000 : 0;
 
         metrics = aggregated;
 
@@ -314,9 +333,12 @@ export async function GET(request: NextRequest) {
             conversions: item.metrics.conversions,
             impressions: item.metrics.impressions,
             clicks: item.metrics.clicks,
+            linkClicks: item.metrics.linkClicks,
             landingPageView: item.metrics.landingPageView,
             ctr: item.metrics.ctr, // Already a percentage
             cpc: item.metrics.cpc / 100, // Convert cents to dollars
+            linkCtr: item.metrics.linkCtr, // Already a percentage
+            linkCpc: item.metrics.linkCpc / 100, // Convert cents to dollars
           };
         });
       }
@@ -327,12 +349,18 @@ export async function GET(request: NextRequest) {
         revenue: 0,
         impressions: 0,
         clicks: 0,
+        linkClicks: 0,
         conversions: 0,
         landingPageView: 0,
         profit: 0,
         roas: 0,
         ctr: 0,
         cpc: 0,
+        linkCtr: 0,
+        linkCpc: 0,
+        reach: 0,
+        frequency: 0,
+        cpmCents: 0,
       };
     }
 
@@ -346,9 +374,12 @@ export async function GET(request: NextRequest) {
       conversions: metrics.conversions, // Count, no conversion needed
       impressions: metrics.impressions, // Count, no conversion needed
       clicks: metrics.clicks, // Count, no conversion needed
+      linkClicks: metrics.linkClicks, // Count, no conversion needed
       landingPageView: metrics.landingPageView, // Count, no conversion needed
       ctr: metrics.ctr, // Percentage, already calculated correctly
       cpc: metrics.cpc / 100, // Convert cents to dollars
+      linkCtr: metrics.linkCtr, // Percentage, already calculated correctly
+      linkCpc: metrics.linkCpc / 100, // Convert cents to dollars
     };
 
     // Enhanced logging for data verification

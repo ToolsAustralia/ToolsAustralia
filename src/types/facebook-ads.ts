@@ -48,6 +48,10 @@ export interface FacebookInsightData {
   spend: string; // Facebook returns as string
   impressions: string;
   clicks: string;
+  inline_link_clicks?: string; // Off-Meta link clicks (Facebook returns as string)
+  reach?: string; // Unique users who saw the ad (integer as string)
+  frequency?: string; // Average impressions per unique user (decimal as string)
+  cpm?: string; // Cost per 1000 impressions in dollars (decimal as string)
   actions?: FacebookAction[];
   action_values?: FacebookActionValue[];
   campaign_id?: string;
@@ -84,12 +88,18 @@ export interface ProcessedInsightMetrics {
   revenue: number;
   impressions: number;
   clicks: number;
+  linkClicks: number; // Off-Meta link clicks (inline_link_clicks from Meta API)
   conversions: number;
   landingPageView: number;
   profit: number;
   roas: number;
-  ctr: number; // Click-through rate
-  cpc: number; // Cost per click
+  ctr: number; // Click-through rate (based on clicks all)
+  cpc: number; // Cost per click (based on clicks all)
+  linkCtr: number; // Link click-through rate (based on inline_link_clicks)
+  linkCpc: number; // Cost per link click (based on inline_link_clicks)
+  reach: number; // Unique users who saw the ad
+  frequency: number; // Average impressions per unique user
+  cpmCents: number; // Cost per 1000 impressions in cents
 }
 
 /**
@@ -115,9 +125,12 @@ export interface FacebookAdsSummary {
   conversions: number;
   impressions: number;
   clicks: number;
+  linkClicks: number; // inline_link_clicks — meaningful link clicks for purchase tracking
   landingPageView: number;
   ctr: number;
   cpc: number;
+  linkCtr: number; // CTR based on inline_link_clicks
+  linkCpc: number; // Cost per link click (based on inline_link_clicks)
 }
 
 /**
@@ -138,9 +151,12 @@ export interface FacebookAdsBreakdownItem {
   conversions: number;
   impressions: number;
   clicks: number;
+  linkClicks: number; // inline_link_clicks — meaningful link clicks for purchase tracking
   landingPageView: number;
   ctr: number;
   cpc: number;
+  linkCtr: number; // CTR based on inline_link_clicks
+  linkCpc: number; // Cost per link click (based on inline_link_clicks)
 }
 
 /**
@@ -189,15 +205,17 @@ export interface HourlyInsightItem {
   label: string; // e.g. "12:00 AM", "1:00 PM"
   spend: number; // in dollars (from Facebook)
   impressions: number; // from Facebook
-  clicks: number; // from Facebook
-  /** Landing page views; null when not available by hour (Meta API limitation) */
-  landingPageView: number | null;
+  clicks: number; // from Facebook (Clicks All)
+  linkClicks: number; // inline_link_clicks from Facebook (meaningful link clicks for purchase tracking)
+  lpv: number; // landing_page_view action count (from Meta actions array)
   revenue: number; // in dollars (from PaymentEvent)
   conversions: number; // count (from PaymentEvent)
   profit: number; // revenue - spend
   roas: number; // revenue / spend (or 0 if spend is 0)
-  ctr: number; // click-through rate
-  cpc: number; // cost per click
+  ctr: number; // click-through rate (based on clicks all)
+  cpc: number; // cost per click (based on clicks all)
+  linkCtr: number; // link click-through rate (based on inline_link_clicks)
+  linkCpc: number; // cost per link click (based on inline_link_clicks)
 }
 
 /**
