@@ -53,9 +53,20 @@ consistent with `PromoHero` for an A/B-bucketed visitor. Current consumers:
 - [`PrizeSpecificationsModal/Hero`](../../src/components/modals/PrizeSpecificationsModal/Hero.tsx)
   — modal hero strip. Uses the override's `desktop` slot. When no override is
   set, falls back to the legacy "dark desktop" pick.
+- [`DrawResultsHero`](../../src/app/(site)/draw-results/components/DrawResultsHero.tsx)
+  and [`/login`](../../src/app/login/page.tsx) — use the `"cash-prize"` slug
+  key (the canonical slug for the evergreen `all-prizes` collage; see
+  `LANDING_HERO_MAP` in [`promo-landing-slugs.ts`](../../src/config/promo-landing-slugs.ts)).
+  Forward-wired only — these pages don't currently sit under a
+  `VariantAssignmentWrapper`, and `variation{1,2}-{desktop,mobile}/all-prizes.webp`
+  assets don't exist yet, so the override is a no-op today. To activate later:
+  (a) deliver those assets, (b) add a `cash-prize` row to each variant's
+  `imageSrcBySlug`, (c) wrap the pages in a variant context that does a
+  read-only lookup of the visitor's existing experiment assignment.
 
 When adding a new component that renders a landing-image-resolver path, call
 `usePerSlugHeroOverride` first and prefer its slot before the default resolver.
+For evergreen/all-prizes images, use `"cash-prize"` as the slug key.
 
 ## Site-wide membership dark-mode experiment (historical — winner shipped)
 
