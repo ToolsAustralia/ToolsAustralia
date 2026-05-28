@@ -305,14 +305,18 @@ export function useKlaviyoTracking() {
   );
 
   /**
-   * Track a canonical "Started Checkout" event in Klaviyo (added 2026-05-28).
+   * Track a canonical "Started Checkout" event in Klaviyo (added 2026-05-28, revised Phase-7).
    *
-   * Fires client-side from MembershipModal:handleSubmit (L2658) at payment-submit
-   * for BOTH authed users AND guests who skipped step-1 (because `guestUserData`
-   * persisted across modal close/reopen). The `initiateCheckoutFiredRef` is the
-   * dedupe — when handleRegistration fired first on this modal session, the
-   * server-side fire from /api/auth/register already covered this user, so the
-   * ref-guard suppresses this client fire.
+   * Fires from two callsites (the third Started Checkout path is server-side):
+   *
+   *   1. AUTHED user clicks "Enter Now" on a package card (MembershipSection.handlePlanSelect)
+   *      — fires at the moment of intent, BEFORE the modal renders the card form.
+   *      Captures abandoners who close the modal mid-flow. `is_authenticated: true`.
+   *
+   *   2. GUEST reaches payment-submit when `guestUserData` persisted across modal
+   *      close/reopen (handleRegistration didn't run this session → no server-side fire).
+   *      Gated by `if (!isAuthenticated)` in MembershipModal:handleSubmit so authed
+   *      users don't double-fire with #1. `is_authenticated: false`.
    *
    * `step` is the funnel position; `is_authenticated` is the real session state
    * — NOT derived. In this codebase, step-1 registration does NOT auto-login
@@ -350,7 +354,7 @@ export function useKlaviyoTracking() {
           ...(params.num_entries !== undefined ? { num_entries: params.num_entries } : {}),
           checkout_url: params.checkout_url,
           ...(params.promo_slug ? { promo_slug: params.promo_slug } : {}),
-          step: "viewed", // client-side fire is always at payment-submit (the "viewed" funnel step)
+          step: "viewed", // client-side fire — either Enter-Now click (authed, MembershipSection.handlePlanSelect) or Pay-submit (guest second-open fallback). Both are the "viewed" funnel step (pre-Placed-Order).
           is_authenticated: params.is_authenticated,
           started_at: new Date().toISOString(),
         });
