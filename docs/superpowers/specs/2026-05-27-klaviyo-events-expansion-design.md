@@ -1,6 +1,6 @@
 # Spec — Klaviyo events expansion (membership_status feed + Viewed Giveaway + Started Checkout)
 
-**Date:** 2026-05-27 · **Status:** Draft (awaiting implementation per [plan](../plans/2026-05-27-klaviyo-events-expansion.md)) · **Domain:** `tracking`
+**Date:** 2026-05-27 · **Status:** Implemented 2026-05-28 (commits `18ae4a7a` / `53a02556` / `756d137e` / `9d753e95`) · **Domain:** `tracking`
 
 This spec adds three Klaviyo integrations requested by the ads team for new email flows. The work is **events + profile properties only** — the Klaviyo flows that consume these events/properties are configured by the ads team inside the Klaviyo UI and are out of scope for engineering.
 

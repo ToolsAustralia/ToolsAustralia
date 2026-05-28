@@ -196,6 +196,57 @@ Example segments the ads team can now build:
 - *At-risk near renewal* — `membership_status EQUALS "active" AND next_renewal_date is within next 3 days`
 - *Long-term VIP* — `membership_active_duration_months >= 6`
 
+### Recently added canonical events (single-page reference for the ads team)
+
+This section is the **one place** the ads team should look for new-event property shapes when building flows / templates / segments. Each row lists the event, its trigger, and every property they can reference in `{{ event.* }}` merge tags.
+
+#### `Viewed Giveaway` (2026-05-28)
+
+Fires once per route change on `/promotions/*` pages. Cookied profiles auto-attach; anonymous never-cookied users land as anonymous and link up later when they identify.
+
+| Property | Type | Example |
+|---|---|---|
+| `promo_slug` | string | `"milwaukee-march-2026"` |
+| `promo_id` | string (optional, omitted if absent) | `"promo_abc123"` |
+| `promo_title` | string | `"Win a Milwaukee Tool Pack"` |
+| `prize_name` | string | `"Milwaukee 18V Combo Kit"` |
+| `prize_image_url` | string (optional) | `"https://..."` |
+| `promo_url` | string (full URL) | `"https://toolsaustralia.com.au/promotions/milwaukee-march-2026"` |
+| `is_authenticated` | boolean | `true` / `false` |
+| `viewed_at` | ISO 8601 | `"2026-05-28T10:23:00Z"` |
+
+Example flow: *Viewed Giveaway → wait 24h → if no `Placed Order` → send email with `{{ event.promo_title }}` / `{{ event.prize_name }}` / `{{ event.promo_url }}` CTA*.
+
+#### `Started Checkout` (2026-05-28)
+
+Fires from two mutually-exclusive paths — both produce the same event shape, distinguished by the `step` discriminator. The combined funnel: `Started Checkout (step=*) → Placed Order`.
+
+| Property | Type | Example |
+|---|---|---|
+| `package_id` | string | `"membership_standard"` |
+| `package_name` | string | `"Standard Membership"` |
+| `package_type` | enum (`"membership"` / `"one-time"` / `"mini-draw"` / `"upsell"`) | `"membership"` |
+| `tier` | string (optional) | `"tradie"` |
+| `price` | **number** (not string) | `30` |
+| `$value` | number — Klaviyo revenue-template compat | `30` |
+| `currency` | string (lowercase) | `"aud"` |
+| `num_entries` | number (optional) | `100` |
+| `checkout_url` | string (absolute URL with UTM) | `"https://toolsaustralia.com.au/membership?openMembership=1&packageId=tradie-subscription&utm_source=klaviyo&utm_medium=email&utm_campaign=klaviyo_abandoned_checkout"` |
+| `promo_slug` | string (optional, when user originated from `/promotions/<slug>`) | `"milwaukee-march-2026"` |
+| `step` | enum (`"viewed"` / `"registered"`) | `"registered"` |
+| `is_authenticated` | boolean (derived from `step`) | `false` |
+| `started_at` | ISO 8601 | `"2026-05-28T10:23:00Z"` |
+
+`step` distinguishes:
+- `"viewed"` — authenticated user clicked "Pay" in `MembershipModal`. Klaviyo cookie already linked. Client-side fire.
+- `"registered"` — guest completed step-1 registration. Server-side fire from `/api/auth/register`. Email is in `customer_properties.email`.
+
+Example flow: *Started Checkout → wait 1h → if no `Placed Order` → send "pick up where you left off" email with `{{ event.package_name }}` / `{{ event.price|format_number }}` / `{{ event.checkout_url }}` as CTA*.
+
+#### Snapshot test
+
+Every new canonical event has a CI-fenced snapshot in [`canonical-events-shape.test.ts`](../../src/utils/integrations/klaviyo/__tests__/canonical-events-shape.test.ts). The test runs via `npm run test:klaviyo-canonical` and fails when a new event uses non-canonical keys (e.g. `package_tier`, `package_price`, `amount`, `purchase_date`, `entries_added`).
+
 ### When adding a new event
 
 1. Find each property in the canonical schema. If a concept fits an existing row, use that exact name and type. Do not invent an alias.

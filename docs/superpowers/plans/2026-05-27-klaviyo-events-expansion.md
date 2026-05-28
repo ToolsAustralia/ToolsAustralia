@@ -753,6 +753,74 @@ Sets the canonical convention in code and documentation so Phases 2–4 have a f
 
 ---
 
-## Implementation summary (filled in at Task 5.4)
+## Implementation summary
 
-_To be filled in once Phase 5 completes._
+Implemented 2026-05-28 across four phased commits on `feature/klaviyo-audit`. All four Yuval-side asks (`membership_status` feed, `Viewed Giveaway`, `Started Checkout` with deep-link CTA, `num_entries` for packages) shipped with canonical schema. Legacy events untouched.
+
+### Commits
+
+| Phase | Commit | Lines |
+|---|---|---|
+| Phase 1 — Foundation (spec rewrite + canonical helper + snapshot test scaffold + docs) | `18ae4a7a` | +1479 |
+| Phase 2 — `membership_status` profile feed + 3 helpers + backfill script | `53a02556` | +376 / -17 |
+| Phase 3 — `Viewed Giveaway` event + `PromoViewTracking` component + 2 mounts | `756d137e` | +298 / -5 |
+| Phase 4 — `Started Checkout` event (server-side + client ride-along) + `buildCheckoutResumeUrl` helper | `9d753e95` | +373 / -4 |
+
+### Files added
+
+- `docs/superpowers/specs/2026-05-27-klaviyo-events-expansion-design.md` (rewritten in Phase 1)
+- `docs/superpowers/plans/2026-05-27-klaviyo-events-expansion.md` (this file)
+- `src/utils/integrations/klaviyo/__tests__/canonical-events-shape.test.ts` (9 self-tests + snapshots)
+- `src/app/promotions/_components/PromoViewTracking.tsx`
+- `src/utils/integrations/klaviyo/checkout-resume-url.ts`
+- `scripts/backfill-klaviyo-membership-properties.ts`
+
+### Public-API additions in `src/utils/integrations/klaviyo/klaviyo-helpers.ts`
+
+- `formatCanonicalPackageData(p)` — canonical helper for new events (sits next to legacy `formatPackageDataForKlaviyo`)
+- `deriveMembershipStatus(user)` → `"active" | "past_due" | "canceled" | "never_subscribed"`
+- `computeActiveDurationMonths(startDate)` — `date-fns` based, DST-safe
+- `countDistinctDrawsEntered(userId)` — parallel queries on `MajorDraw` (embedded subdocs) + `TicketEntry` (flat collection)
+
+### New event builders in `src/utils/integrations/klaviyo/klaviyo-events.ts`
+
+- `createViewedGiveawayEvent(userOrEmail, promoData)` — supports anonymous-then-cookied via `{ email }`-only param overload
+- `createStartedCheckoutEvent(user, checkoutData)` — uses `formatCanonicalPackageData`, emits both `price` (canonical) and `$value` (Klaviyo revenue compat)
+
+### Hook extensions in `src/hooks/useKlaviyoTracking.ts`
+
+- `trackViewedGiveaway(params)` — client-side wrapper, gated on consent
+- `trackKlaviyoStartedCheckout(params)` — client-side wrapper for AUTHED path only
+
+### Profile properties added to `userToKlaviyoProfile`
+
+5 canonical fields written alongside the existing 30 legacy fields:
+- `membership_status`
+- `entries_purchased`
+- `giveaways_entered`
+- `membership_active_duration_months`
+- `next_renewal_date`
+
+### Variations from the planned design
+
+1. **`giveaways_entered` architecture** — the plan originally specified a single `$facet` aggregation on `TicketEntry`. Discovered during Phase 2 that Major Draw entries live as **embedded subdocs on `MajorDraw.entries[]`**, not in `TicketEntry`. Updated implementation (and spec + plan in-flight) to use two parallel queries via `Promise.all`. Both fields are indexed.
+
+2. **`KlaviyoEventProperties.user_id` made optional** — required for `Viewed Giveaway` to fire anonymously (never-cookied promo-page visitors). All legacy events continue to emit `user_id` — no behavior change for them. Documented inline.
+
+3. **MembershipModal sends `packageId` in the registration POST** — needed so the server can fire `Started Checkout` server-side with proper package context. Registered Zod schema extended to accept optional `packageId`; non-modal registration paths (Google-OAuth, affiliate) omit it and the server-side fire is gracefully skipped.
+
+4. **`Started Checkout` `checkout_url`** — the deep-link CTA currently lands the user on `/membership?packageId=X&utm_*` (or `/promotions/<slug>` when they originated from one). Auto-opening the `MembershipModal` from the `?openMembership=1` query param is documented as a follow-up enhancement — for now, landing on the right page with the right package highlighted is sufficient and is one click away from completing checkout.
+
+### Operational follow-ups
+
+- **Run the backfill** after this branch deploys: `npm run backfill:klaviyo-membership-properties:dry` first, then live. Idempotent. ~10 users/sec at default throttle.
+- **`/major-draw` and `/mini-draws/[id]` `Viewed Giveaway` mounts** — open question for the ads team (spec §10 Q6). Currently scoped to `/promotions/*` only per Yuval's literal ask.
+- **Auto-open `MembershipModal` from `?openMembership=1`** — small UX enhancement that delivers Yuval's "preselected ready for someone to complete the checkout" requirement fully. Not included in this scope; users currently see the right package on `/membership` and click once.
+- **Run `npm run find:klaviyo-legacy-fields`** — operational audit script, needs Klaviyo creds. Run from a workstation with `.env.local` after deploy.
+
+### Verification status
+
+- `npm run type-check` — green
+- `npm run lint` — 3 pre-existing errors in `scripts/codemod-dark-text.js` and `scripts/migrate-klaviyo-draw-properties.ts` (not introduced by this work; unchanged on this branch)
+- `npm run test:klaviyo-canonical` — green (9 tests: 5 self-tests + 2 Viewed Giveaway snapshots + 2 Started Checkout snapshots)
+- Doc-sync hook — green (all `src/` and `scripts/` changes paired with corresponding `docs/<domain>/` updates)
