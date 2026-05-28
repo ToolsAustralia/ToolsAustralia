@@ -69,29 +69,40 @@ function slugToImageKey(slug: string): { brand: Brand; toolbox: Toolbox } {
 }
 
 /**
- * Mobile-only A/B test: each variant only overrides the mobile hero. Desktop is
- * intentionally omitted so PromoHero falls through to the theme-aware default
- * landing-image-resolver — desktop visitors see the existing hero regardless of
- * which variant they're bucketed into.
+ * Full-viewport A/B test: each variant overrides BOTH desktop (2560×1044) and
+ * mobile (1080×1164) hero images. The design team's editor delivered proper
+ * 2560×1044 desktop sources matching the hero container's ~2.45 aspect (same as
+ * the legacy 1808×737 default landing images), so the empty-space-at-bottom
+ * issue is resolved.
  *
- * Why: the design team's first-pass desktop creatives shipped at 2560×737 (aspect
- * 3.47) which doesn't match the hero container aspect (~2.45). Until 2560×1044
- * sources land, the desktop side of this experiment is off. The mobile sources
- * are 1080×1164, a perfect fit, so mobile traffic IS being A/B tested.
+ * The `cash-prize` slug is added on top of the 16 brand+toolbox slugs because
+ * it's the canonical mapping for the evergreen all-prizes hero in
+ * LANDING_HERO_MAP. Adding it here means once /draw-results, /login (or any
+ * other consumer of the evergreen image) is wrapped in a variant context, those
+ * surfaces automatically reflect the bucketed variant's all-prizes artwork.
  *
- * To enable desktop testing later: re-introduce a `desktop` field per row pointing
- * at the new variation{1,2}-desktop webps.
+ * Per-slug entries are still partial-override capable — drop the `desktop` field
+ * here to fall back to default for that viewport, useful when iterating on one
+ * viewport at a time.
  */
 function buildImageSrcBySlug(variation: 1 | 2): Record<string, { desktop?: string; mobile?: string }> {
   const base = "/images/background/promo/landing";
+  const desktopDir = `${base}/variation${variation}-desktop`;
   const mobileDir = `${base}/variation${variation}-mobile`;
   const out: Record<string, { desktop?: string; mobile?: string }> = {};
   for (const slug of SLUG_TARGETS) {
     const { brand, toolbox } = slugToImageKey(slug);
     out[slug] = {
+      desktop: `${desktopDir}/${brand}-${toolbox}.webp`,
       mobile: `${mobileDir}/${brand}-${toolbox}-mobile.webp`,
     };
   }
+  // Evergreen all-prizes mapping (consumed by DrawResultsHero, /login, and
+  // PromoHero on /promotions/cash-prize via LANDING_HERO_MAP["cash-prize"]).
+  out["cash-prize"] = {
+    desktop: `${desktopDir}/all-prizes.webp`,
+    mobile: `${mobileDir}/all-prizes-mobile.webp`,
+  };
   return out;
 }
 
