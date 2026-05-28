@@ -75,6 +75,12 @@ function slugToImageKey(slug: string): { brand: Brand; toolbox: Toolbox } {
  * the legacy 1808×737 default landing images), so the empty-space-at-bottom
  * issue is resolved.
  *
+ * The `cash-prize` slug is added on top of the 16 brand+toolbox slugs because
+ * it's the canonical mapping for the evergreen all-prizes hero in
+ * LANDING_HERO_MAP. Adding it here means once /draw-results, /login (or any
+ * other consumer of the evergreen image) is wrapped in a variant context, those
+ * surfaces automatically reflect the bucketed variant's all-prizes artwork.
+ *
  * Per-slug entries are still partial-override capable — drop the `desktop` field
  * here to fall back to default for that viewport, useful when iterating on one
  * viewport at a time.
@@ -91,6 +97,12 @@ function buildImageSrcBySlug(variation: 1 | 2): Record<string, { desktop?: strin
       mobile: `${mobileDir}/${brand}-${toolbox}-mobile.webp`,
     };
   }
+  // Evergreen all-prizes mapping (consumed by DrawResultsHero, /login, and
+  // PromoHero on /promotions/cash-prize via LANDING_HERO_MAP["cash-prize"]).
+  out["cash-prize"] = {
+    desktop: `${desktopDir}/all-prizes.webp`,
+    mobile: `${mobileDir}/all-prizes-mobile.webp`,
+  };
   return out;
 }
 
