@@ -61,6 +61,8 @@ import { buildPurchaseEvent } from "@/lib/tracking/canonical-event";
 import { useToast } from "@/components/ui/Toast";
 import { trackCompleteRegistration, trackFacebookEvent } from "@/components/FacebookPixel";
 import { usePixelTracking } from "@/hooks/usePixelTracking";
+import { useKlaviyoTracking } from "@/hooks/useKlaviyoTracking";
+import { buildCheckoutResumeUrl } from "@/utils/integrations/klaviyo/checkout-resume-url";
 import { useSetupIntent } from "@/hooks/useSetupIntent";
 import { usePaymentIntent } from "@/hooks/usePaymentIntent";
 import { useResolvedMultiplier } from "@/hooks/queries/usePromoQueries";
@@ -493,6 +495,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
   const { isAuthenticated, userData, isMember } = useUserContext();
   const { gatesClosed, openGateClosedModal } = useMajorDrawPurchaseGate();
   const { trackInitiateCheckout } = usePixelTracking();
+  const { trackKlaviyoStartedCheckout } = useKlaviyoTracking();
   const { data: userMajorDrawStats } = useUserMajorDrawStats(userData?._id);
   const { savePaymentMethod } = useSavedPaymentMethods();
   const purchaseMembership = usePurchaseMembership();
@@ -1334,6 +1337,14 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
       // Non-blocking — never fail registration on tracking error
     }
 
+    // NOTE: Klaviyo "Started Checkout" for the guest path is fired SERVER-SIDE
+    // from /api/auth/register (after ensureUserProfileSynced), not here. That
+    // avoids a race where klaviyo.track() on the client would fire before the
+    // onsite cookie is set for a never-cookied guest — see spec §5 "Fire strategy"
+    // and docs/tracking/KLAVIYO_INTEGRATION.md "Canonical property names".
+    // The packageId is passed through the registration POST below so the server
+    // can resolve the package and emit the event with the canonical schema.
+
     // Extract promotion slug from current URL if on promotions page
     // Format: /promotions/[slug] -> extract slug
     let promotionSlug: string | undefined;
@@ -1372,6 +1383,12 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
     const fbc = typeof window !== "undefined" ? getFBCFromURL() : undefined;
     const fbp = typeof window !== "undefined" ? getFBPFromCookie() : undefined;
 
+    // Resolve the selected packageId so the server can fire a canonical Klaviyo
+    // `Started Checkout` (step="registered") event with the right package context.
+    // Omitted gracefully on Google-OAuth / affiliate / other paths that don't
+    // pass through the modal.
+    const selectedPackageId = getPackageId(activePlan, [...subscriptionPackages, ...oneTimePackages]);
+
     try {
       const response = await fetch("/api/auth/register", {
         method: "POST",
@@ -1385,6 +1402,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
           mobile: formData.phone,
           affiliateCode: affiliateCode || undefined,
           promotionSlug: promotionSlug,
+          ...(selectedPackageId ? { packageId: selectedPackageId } : {}),
           ...(attributionParams.utm_source && { utm_source: attributionParams.utm_source }),
           ...(attributionParams.utm_medium && { utm_medium: attributionParams.utm_medium }),
           ...(attributionParams.utm_campaign && { utm_campaign: attributionParams.utm_campaign }),
@@ -2672,6 +2690,46 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
                 country: "AU",
               },
         );
+
+        // Canonical Klaviyo "Started Checkout" (step="viewed") — AUTHED USERS ONLY.
+        // Guest path fires server-side from /api/auth/register after profile sync
+        // so the event reliably attaches to the just-created Klaviyo profile.
+        // See spec §5 and docs/tracking/KLAVIYO_INTEGRATION.md.
+        if (isAuthenticated) {
+          try {
+            const resolvedPackageId = getPackageId(activePlan, [...subscriptionPackages, ...oneTimePackages]);
+            if (resolvedPackageId && activePlan) {
+              const isSubscriptionPlan = activePlan.period === "mo";
+              // Extract promo slug from URL (mirrors handleRegistration's local extraction)
+              let resolvedPromoSlug: string | undefined;
+              try {
+                const currentPathname = pathname || (typeof window !== "undefined" ? window.location.pathname : "");
+                const promotionsMatch = currentPathname.match(/^\/promotions\/([^/?#]+)/);
+                if (promotionsMatch && promotionsMatch[1]) {
+                  resolvedPromoSlug = promotionsMatch[1];
+                }
+              } catch {
+                // Non-blocking
+              }
+              const checkoutUrl = buildCheckoutResumeUrl({
+                baseUrl: window.location.origin,
+                packageId: resolvedPackageId,
+                promoSlug: resolvedPromoSlug,
+              });
+              trackKlaviyoStartedCheckout({
+                package_id: resolvedPackageId,
+                package_name: promoEnhancedPlan?.name || activePlan.name,
+                package_type: isSubscriptionPlan ? "membership" : "one-time",
+                tier: (promoEnhancedPlan?.name || activePlan.name).toLowerCase(),
+                price: packagePrice,
+                checkout_url: checkoutUrl,
+                ...(resolvedPromoSlug ? { promo_slug: resolvedPromoSlug } : {}),
+              });
+            }
+          } catch {
+            // Non-blocking — never fail checkout on a tracking error
+          }
+        }
       }
     } catch {
       if (process.env.NODE_ENV === "development") {

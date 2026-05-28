@@ -171,7 +171,8 @@ function testAcceptsArbitraryAtSuffix() {
 // Snapshot tests for the canonical event builders
 // ============================================================
 
-import { createViewedGiveawayEvent } from "../klaviyo-events";
+import { createViewedGiveawayEvent, createStartedCheckoutEvent } from "../klaviyo-events";
+import type { IUser } from "@/models/User";
 
 function testViewedGiveawayShape() {
   const sample = createViewedGiveawayEvent(
@@ -232,6 +233,66 @@ function testViewedGiveawayOmitsOptionalsWhenAbsent() {
   assertCanonicalShape("Viewed Giveaway (minimal)", sample.properties);
 }
 
+function fakeUser(overrides: Partial<IUser> = {}): IUser {
+  // Minimal IUser shape for event-builder tests. Cast through unknown to avoid
+  // declaring every field on the model when we only use email + _id.
+  return {
+    _id: { toString: () => "user_123" },
+    email: "test@example.com",
+    firstName: "Test",
+    lastName: "User",
+    mobile: undefined,
+    ...overrides,
+  } as unknown as IUser;
+}
+
+function testStartedCheckoutShape() {
+  const sample = createStartedCheckoutEvent(fakeUser(), {
+    packageId: "membership_standard",
+    packageName: "Standard Membership",
+    packageType: "membership",
+    tier: "standard",
+    price: 30,
+    numEntries: 100,
+    checkoutUrl: "https://example.com/membership?openMembership=1&packageId=membership_standard",
+    promoSlug: "milwaukee-march",
+    step: "registered",
+  });
+
+  assert.equal(sample.event, "Started Checkout");
+  assertCanonicalShape("Started Checkout", sample.properties);
+
+  // Canonical value types — `price` is a number, not a string
+  assert.equal(typeof sample.properties.price, "number");
+  assert.equal(sample.properties.price, 30);
+  assert.equal(sample.properties.$value, 30);
+  assert.equal(sample.properties.currency, "aud");
+  assert.equal(sample.properties.tier, "standard");
+  assert.equal(sample.properties.package_type, "membership");
+  assert.equal(sample.properties.num_entries, 100);
+  assert.equal(sample.properties.step, "registered");
+  // is_authenticated derived from step
+  assert.equal(sample.properties.is_authenticated, false);
+  assert.match(sample.properties.started_at as string, /^\d{4}-\d{2}-\d{2}T/);
+}
+
+function testStartedCheckoutViewedPathDerivesAuthenticated() {
+  const sample = createStartedCheckoutEvent(fakeUser(), {
+    packageId: "membership_premium",
+    packageName: "Premium Membership",
+    packageType: "membership",
+    price: 50,
+    checkoutUrl: "https://example.com/membership",
+    step: "viewed",
+  });
+  assert.equal(sample.properties.step, "viewed");
+  assert.equal(sample.properties.is_authenticated, true);
+  // Optional `tier` and `num_entries` and `promo_slug` omitted when absent
+  assert.equal("tier" in sample.properties, false);
+  assert.equal("num_entries" in sample.properties, false);
+  assert.equal("promo_slug" in sample.properties, false);
+}
+
 function run() {
   testCanonicalKeyAccepted();
   testNonCanonicalKeyRejected();
@@ -240,7 +301,9 @@ function run() {
   testAcceptsArbitraryAtSuffix();
   testViewedGiveawayShape();
   testViewedGiveawayOmitsOptionalsWhenAbsent();
-  console.error("✓ canonical-events-shape: all self-tests + Viewed Giveaway snapshot passed");
+  testStartedCheckoutShape();
+  testStartedCheckoutViewedPathDerivesAuthenticated();
+  console.error("✓ canonical-events-shape: all self-tests + Viewed Giveaway + Started Checkout snapshots passed");
 }
 
 run();

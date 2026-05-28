@@ -3,11 +3,13 @@ import connectDB from "@/lib/mongodb";
 import User from "@/models/User";
 import { z } from "zod";
 import { klaviyo } from "@/lib/klaviyo";
-import { createUserRegisteredEvent } from "@/utils/integrations/klaviyo/klaviyo-events";
+import { createUserRegisteredEvent, createStartedCheckoutEvent } from "@/utils/integrations/klaviyo/klaviyo-events";
 import {
   ensureUserProfileSynced,
   createKlaviyoProfileAndSubscribe,
 } from "@/utils/integrations/klaviyo/klaviyo-profile-sync";
+import { buildCheckoutResumeUrl } from "@/utils/integrations/klaviyo/checkout-resume-url";
+import { getPackageById } from "@/data/membershipPackages";
 // TikTok Pixel tracking disabled for now - client-side only
 // import { trackTikTokEvent } from "@/components/TikTokPixel";
 import { sendFacebookEvent, FacebookEvent, getFacebookTestEventCode } from "@/lib/facebook";
@@ -74,6 +76,12 @@ const registerSchema = z.object({
   ad_id: z.string().optional(),
   fbc: z.string().optional(),
   fbp: z.string().optional(),
+  // Optional package context — when present, the server fires a canonical
+  // Klaviyo `Started Checkout` event (step="registered") after profile sync
+  // so the ads team's abandoned-checkout flow can target this user reliably.
+  // Affiliate / Google-OAuth / other non-modal registration paths omit this
+  // and the Started Checkout fire is gracefully skipped.
+  packageId: z.string().optional(),
 });
 
 /**
@@ -688,6 +696,55 @@ export async function POST(request: NextRequest) {
       // Log error but don't block registration - Klaviyo failures shouldn't prevent user registration
       console.error(`❌ Background Klaviyo profile creation/subscription failed for ${newUser.email}:`, error);
     });
+
+    // ✅ Canonical "Started Checkout" event (step="registered") — fires for the
+    // guest registration path only when the client passes packageId. The authed
+    // path fires client-side from MembershipModal:2658. The two paths are
+    // mutually exclusive so no dedupe is needed. See spec §5 and
+    // docs/tracking/KLAVIYO_INTEGRATION.md "Canonical property names".
+    //
+    // Server-side over client-side here because Klaviyo's onsite cookie is not
+    // yet set for a never-cookied guest at the moment they complete step-1 —
+    // pushing via Events API with explicit customer_properties.email attaches
+    // reliably to the just-created Klaviyo profile.
+    //
+    // Note: this fire is NOT gated on hasPixelConsent() — it represents a
+    // committed action (registration submitted), not browsing behaviour. See
+    // docs/auth/gotchas.md.
+    if (validatedData.packageId) {
+      try {
+        const pkg = getPackageById(validatedData.packageId);
+        if (pkg) {
+          const baseUrl =
+            process.env.NEXT_PUBLIC_SITE_URL ||
+            process.env.NEXT_PUBLIC_APP_URL ||
+            "https://toolsaustralia.com.au";
+          const checkoutUrl = buildCheckoutResumeUrl({
+            baseUrl,
+            packageId: pkg._id,
+            promoSlug: validatedData.promotionSlug,
+          });
+          const packageType: "membership" | "one-time" =
+            pkg.type === "subscription" ? "membership" : "one-time";
+          klaviyo.trackEventBackground(
+            createStartedCheckoutEvent(newUser, {
+              packageId: pkg._id,
+              packageName: pkg.name,
+              packageType,
+              tier: pkg.name.toLowerCase(),
+              price: pkg.price,
+              numEntries: pkg.entriesPerMonth ?? pkg.totalEntries,
+              checkoutUrl,
+              promoSlug: validatedData.promotionSlug,
+              step: "registered",
+            })
+          );
+        }
+      } catch (err) {
+        // Non-blocking: never fail registration on a tracking error.
+        console.error(`Failed to fire Klaviyo Started Checkout for ${newUser.email}:`, err);
+      }
+    }
 
     // ✅ NEW: Track pixel registration event (non-blocking)
     // Generate unique event ID for deduplication (needed for response)

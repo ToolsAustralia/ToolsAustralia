@@ -1,5 +1,13 @@
 # Shared UI — Gotchas
 
+## MembershipModal fires Klaviyo `Started Checkout` for AUTHED users only
+
+The two existing Facebook `trackInitiateCheckout` callsites in `MembershipModal` ([L1317 inside `handleRegistration`](../../src/components/modals/MembershipModal/index.tsx#L1317) and [L2658 inside `handleSubmit`](../../src/components/modals/MembershipModal/index.tsx#L2658)) fire for both guest and authenticated users. The canonical Klaviyo `Started Checkout` event (added 2026-05-28) fires from these callsites **for authenticated users only** (`step="viewed"`).
+
+For the guest path (`step="registered"`), `Started Checkout` fires **server-side** from `/api/auth/register` after `ensureUserProfileSynced` — see [docs/auth/gotchas.md](../auth/gotchas.md). The two paths are mutually exclusive so no client-side dedupe is needed. The modal sends `packageId` in the registration POST so the server can resolve the package and emit the event with the canonical schema.
+
+See [docs/tracking/KLAVIYO_INTEGRATION.md](../tracking/KLAVIYO_INTEGRATION.md) "Canonical property names" + spec `docs/superpowers/specs/2026-05-27-klaviyo-events-expansion-design.md` §5.
+
 ## Z-index conflicts
 
 Modals, banners, tooltips, dropdowns — many things stack. If something disappears behind another, check `z-index.ts` and the constant in use.

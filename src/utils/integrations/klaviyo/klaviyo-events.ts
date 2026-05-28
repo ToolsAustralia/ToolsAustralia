@@ -869,3 +869,66 @@ export function createViewedGiveawayEvent(
     },
   };
 }
+
+/**
+ * Create a "Started Checkout" event — the canonical Klaviyo event for the
+ * abandoned-checkout flow. Yuval's explicit payload requirements (type, name,
+ * cost, deep link, num_entries, email + first name) are all here.
+ *
+ * Fired from two mutually-exclusive paths (see spec §5):
+ *   - Authed user submits payment in MembershipModal → step: "viewed" (client-side
+ *     ride-along next to the existing Facebook `trackInitiateCheckout` callsite)
+ *   - Guest completes step-1 registration → step: "registered" (server-side from
+ *     /api/auth/register after `ensureUserProfileSynced` so the event reliably
+ *     attaches to the just-created Klaviyo profile)
+ *
+ * Uses the canonical schema (price as number, lowercase currency, $value
+ * alongside for Klaviyo revenue-template compatibility, `tier` not
+ * `package_tier`, ISO `started_at`, omit-rather-than-empty for optionals).
+ */
+export function createStartedCheckoutEvent(
+  user: IUser,
+  checkoutData: {
+    packageId: string;
+    packageName: string;
+    packageType: "membership" | "one-time" | "mini-draw" | "upsell";
+    tier?: string;
+    /** Package price in AUD as a NUMBER. Not a string. */
+    price: number;
+    /** Currency ISO code, lowercase ("aud"). Defaults to "aud". */
+    currency?: string;
+    /** Entries the package would grant. Optional. */
+    numEntries?: number;
+    /** Deep-link CTA URL for the abandoned-checkout email. Built via `buildCheckoutResumeUrl`. */
+    checkoutUrl: string;
+    /** Optional promo slug when the user started checkout from a /promotions/<slug> page. */
+    promoSlug?: string;
+    /** Funnel position: "viewed" for authed payment-submit; "registered" for guest post-step-1. */
+    step: "viewed" | "registered";
+  }
+): KlaviyoEvent {
+  return {
+    event: "Started Checkout",
+    customer_properties: getCustomerProperties(user),
+    properties: {
+      user_id: user._id.toString(),
+      ...formatCanonicalPackageData({
+        packageId: checkoutData.packageId,
+        packageName: checkoutData.packageName,
+        packageType: checkoutData.packageType,
+        tier: checkoutData.tier,
+        price: checkoutData.price,
+        numEntries: checkoutData.numEntries,
+      }),
+      // Klaviyo revenue-template compat (segment filters and template merge tags
+      // often reference `event.$value`). Emit alongside the canonical `price`.
+      $value: checkoutData.price,
+      currency: checkoutData.currency ?? "aud",
+      checkout_url: checkoutData.checkoutUrl,
+      ...(checkoutData.promoSlug ? { promo_slug: checkoutData.promoSlug } : {}),
+      step: checkoutData.step,
+      is_authenticated: checkoutData.step === "viewed",
+      started_at: new Date().toISOString(),
+    },
+  };
+}

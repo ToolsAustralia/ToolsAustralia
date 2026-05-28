@@ -304,6 +304,59 @@ export function useKlaviyoTracking() {
     []
   );
 
+  /**
+   * Track a canonical "Started Checkout" event in Klaviyo (added 2026-05-28).
+   *
+   * Fires client-side ONLY for the AUTHED user path (step="viewed"), alongside
+   * the existing Facebook `trackInitiateCheckout` at MembershipModal:2658.
+   *
+   * The GUEST path (step="registered") fires server-side from /api/auth/register
+   * — do NOT call this method from the guest path. The two paths are
+   * mutually exclusive so no dedupe is needed.
+   *
+   * Uses canonical schema: `price` as NUMBER (not string), lowercase `currency`,
+   * `$value` alongside for Klaviyo revenue-template compat, `tier` (not
+   * `package_tier`), ISO `started_at`, optionals omitted when absent.
+   *
+   * @param params - Canonical Started Checkout payload.
+   */
+  const trackKlaviyoStartedCheckout = useCallback(
+    (params: {
+      package_id: string;
+      package_name: string;
+      package_type: "membership" | "one-time" | "mini-draw" | "upsell";
+      tier?: string;
+      /** AUD as a NUMBER. */
+      price: number;
+      num_entries?: number;
+      checkout_url: string;
+      promo_slug?: string;
+    }) => {
+      try {
+        trackKlaviyoEvent("Started Checkout", {
+          package_id: params.package_id,
+          package_name: params.package_name,
+          package_type: params.package_type,
+          ...(params.tier ? { tier: params.tier } : {}),
+          price: params.price,
+          $value: params.price, // Klaviyo revenue-template compat
+          currency: "aud",
+          ...(params.num_entries !== undefined ? { num_entries: params.num_entries } : {}),
+          checkout_url: params.checkout_url,
+          ...(params.promo_slug ? { promo_slug: params.promo_slug } : {}),
+          step: "viewed", // authed-path discriminator
+          is_authenticated: true,
+          started_at: new Date().toISOString(),
+        });
+      } catch (error) {
+        if (process.env.NODE_ENV === "development") {
+          console.error("❌ Klaviyo: Error tracking Started Checkout (viewed)", error);
+        }
+      }
+    },
+    []
+  );
+
   return {
     identify,
     track,
@@ -314,5 +367,6 @@ export function useKlaviyoTracking() {
     trackInitiateCheckout,
     trackCompleteRegistration,
     trackViewedGiveaway,
+    trackKlaviyoStartedCheckout,
   };
 }

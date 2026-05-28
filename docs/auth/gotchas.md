@@ -1,5 +1,16 @@
 # Auth — Gotchas
 
+## `/api/auth/register` fires Klaviyo `Started Checkout` server-side (bypasses consent)
+
+When the MembershipModal posts a guest registration with a `packageId`, `/api/auth/register` fires a canonical Klaviyo `Started Checkout` event (`step="registered"`) **server-side** via `klaviyo.trackEventBackground` right after `ensureUserProfileSynced`. This is the guest path for the abandoned-checkout flow.
+
+**Key behaviour**:
+- Fires server-side because the client-side Klaviyo onsite cookie isn't yet set for a never-cookied guest at the moment they complete step-1 — pushing via Events API with explicit `customer_properties.email` attaches reliably to the just-created Klaviyo profile.
+- **Not gated** on `hasPixelConsent()`. The client-side gate exists for browsing-behaviour events (Viewed Page / Viewed Giveaway / Viewed Product). `Started Checkout` represents a committed action (registration submitted) and is part of transactional analytics.
+- Skipped gracefully when the request payload omits `packageId` (Google-OAuth, affiliate, and other non-modal registration paths).
+
+The mutually-exclusive authed-user path fires client-side from `MembershipModal:handleSubmit` alongside the existing Facebook `trackInitiateCheckout` callsite. See `docs/tracking/KLAVIYO_INTEGRATION.md` "Canonical property names" + spec `docs/superpowers/specs/2026-05-27-klaviyo-events-expansion-design.md` §5.
+
 ## Middleware doesn't gate /api
 
 The most common bug: thinking `/api/admin/**` is gated by middleware. It's NOT. Middleware's matcher excludes `/api`. Each handler must check session + role itself.

@@ -53,8 +53,10 @@ Critical: post-purchase events fire from the **server**, not the browser. The br
 |---|---|---|
 | `Viewed Page` | `KlaviyoPageTracker` on route change | ✓ via `shouldTrackRoute()` — internal routes excluded |
 | `Identify` | `KlaviyoUserIdentifier` when user logs in | Not gated — must run on `/my-account` |
-| `Viewed Product`, `Added to Cart`, `Started Checkout` (when wired) | via `useKlaviyoTracking` hook from product components | Not gated |
+| `Viewed Product`, `Added to Cart` | via `useKlaviyoTracking` hook from product components | Not gated |
 | `Viewed Giveaway` (canonical, added 2026-05-28) | `PromoViewTracking` on `/promotions/<slug>` and brand pages (`/promotions/dewalt`, `/makita`, `/milwaukee`, `/ryobi`) | ✓ via `hasPixelConsent()` (called by `trackKlaviyoEvent`) |
+| `Started Checkout` — **authed path** (`step="viewed"`, canonical, added 2026-05-28) | `MembershipModal:handleSubmit` (L2658) alongside the existing Facebook `trackInitiateCheckout` — fires when authenticated user submits payment | ✓ via `hasPixelConsent()` |
+| `Started Checkout` — **guest path** (`step="registered"`, canonical, added 2026-05-28) | **Server-side** from `/api/auth/register` after `ensureUserProfileSynced` — fires when guest completes step-1 with a `packageId` | **Not gated** — committed action, not browsing. See [docs/auth/gotchas.md](../auth/gotchas.md). |
 
 ## Revenue tracking — the `$value` rule
 
