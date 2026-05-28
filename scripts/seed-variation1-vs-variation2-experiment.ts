@@ -23,6 +23,10 @@ import path from "node:path";
 config({ path: path.resolve(process.cwd(), ".env.local") });
 
 const DRY_RUN = process.argv.includes("--dry-run");
+/** When --force is passed AND the experiment is in `draft`, delete existing variants
+ *  and repopulate from scratch. Refuses to touch active / paused / ended experiments
+ *  even with --force. Intentional friction in prod (no `:force` npm shortcut). */
+const FORCE = process.argv.includes("--force");
 
 /** Matches the admin-created draft "landing page variation 1 and variation 2"
  *  exactly so re-runs upsert that draft rather than creating a duplicate. */
@@ -131,24 +135,32 @@ async function main(): Promise<void> {
   if (existing) {
     if (existing.status !== "draft") {
       console.log(
-        `↩️  Experiment "${EXPERIMENT_NAME}" exists in status="${existing.status}" — locked. Skipping.`
+        `↩️  Experiment "${EXPERIMENT_NAME}" exists in status="${existing.status}" — locked. Skipping.` +
+          (FORCE ? " (--force does NOT override locked experiments — pause first via admin.)" : "")
       );
       process.exit(0);
     }
     const variantCount = await Variant.countDocuments({ experimentId: existing._id });
-    if (variantCount > 0) {
+    if (variantCount > 0 && !FORCE) {
       console.log(
         `↩️  Experiment "${EXPERIMENT_NAME}" already has ${variantCount} variant(s). ` +
           `Skipping to avoid clobbering admin-edited config. ` +
-          `Delete the variants manually if you want to re-seed.`
+          `Re-run with --force to delete and recreate, or delete the variants manually.`
       );
       process.exit(0);
     }
     if (DRY_RUN) {
-      console.log(`[dry-run] Found empty draft "${EXPERIMENT_NAME}" (id=${existing._id}).`);
+      console.log(`[dry-run] Found draft "${EXPERIMENT_NAME}" (id=${existing._id}) with ${variantCount} variant(s).`);
+      if (variantCount > 0 && FORCE) {
+        console.log(`[dry-run] Would DELETE all ${variantCount} existing variant(s) (--force).`);
+      }
       console.log(`[dry-run] Would update slugTargets to ${SLUG_TARGETS.length} slugs and add 2 variants.`);
       console.log("[dry-run] Sample row from Variant A: dewalt-milwaukee →", variantAConfig.hero.imageSrcBySlug["dewalt-milwaukee"]);
       process.exit(0);
+    }
+    if (variantCount > 0 && FORCE) {
+      const del = await Variant.deleteMany({ experimentId: existing._id });
+      console.log(`🗑️  --force: deleted ${del.deletedCount} existing variant(s)`);
     }
     existing.slugTargets = [...SLUG_TARGETS];
     await existing.save();
