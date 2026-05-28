@@ -307,18 +307,22 @@ export function useKlaviyoTracking() {
   /**
    * Track a canonical "Started Checkout" event in Klaviyo (added 2026-05-28).
    *
-   * Fires client-side ONLY for the AUTHED user path (step="viewed"), alongside
-   * the existing Facebook `trackInitiateCheckout` at MembershipModal:2658.
+   * Fires client-side from MembershipModal:handleSubmit (L2658) at payment-submit
+   * for BOTH authed users AND guests who skipped step-1 (because `guestUserData`
+   * persisted across modal close/reopen). The `initiateCheckoutFiredRef` is the
+   * dedupe — when handleRegistration fired first on this modal session, the
+   * server-side fire from /api/auth/register already covered this user, so the
+   * ref-guard suppresses this client fire.
    *
-   * The GUEST path (step="registered") fires server-side from /api/auth/register
-   * — do NOT call this method from the guest path. The two paths are
-   * mutually exclusive so no dedupe is needed.
+   * `step` is the funnel position; `is_authenticated` is the real session state
+   * — NOT derived. In this codebase, step-1 registration does NOT auto-login
+   * (see docs/auth/gotchas.md "registration ≠ authenticated session"). A guest
+   * can fire this event with `step="viewed"` AND `is_authenticated=false` when
+   * they reach payment-submit without ever logging in.
    *
-   * Uses canonical schema: `price` as NUMBER (not string), lowercase `currency`,
-   * `$value` alongside for Klaviyo revenue-template compat, `tier` (not
-   * `package_tier`), ISO `started_at`, optionals omitted when absent.
-   *
-   * @param params - Canonical Started Checkout payload.
+   * Schema: `price` as NUMBER, lowercase `currency`, `$value` alongside for
+   * Klaviyo revenue-template compat, `tier` (not `package_tier`), ISO
+   * `started_at`, optionals omitted when absent.
    */
   const trackKlaviyoStartedCheckout = useCallback(
     (params: {
@@ -331,6 +335,8 @@ export function useKlaviyoTracking() {
       num_entries?: number;
       checkout_url: string;
       promo_slug?: string;
+      /** Real NextAuth session state — NOT derived from step. */
+      is_authenticated: boolean;
     }) => {
       try {
         trackKlaviyoEvent("Started Checkout", {
@@ -344,8 +350,8 @@ export function useKlaviyoTracking() {
           ...(params.num_entries !== undefined ? { num_entries: params.num_entries } : {}),
           checkout_url: params.checkout_url,
           ...(params.promo_slug ? { promo_slug: params.promo_slug } : {}),
-          step: "viewed", // authed-path discriminator
-          is_authenticated: true,
+          step: "viewed", // client-side fire is always at payment-submit (the "viewed" funnel step)
+          is_authenticated: params.is_authenticated,
           started_at: new Date().toISOString(),
         });
       } catch (error) {

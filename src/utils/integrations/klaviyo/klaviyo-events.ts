@@ -903,8 +903,18 @@ export function createStartedCheckoutEvent(
     checkoutUrl: string;
     /** Optional promo slug when the user started checkout from a /promotions/<slug> page. */
     promoSlug?: string;
-    /** Funnel position: "viewed" for authed payment-submit; "registered" for guest post-step-1. */
+    /** Funnel position: "viewed" for payment-submit; "registered" for post-step-1 register. */
     step: "viewed" | "registered";
+    /**
+     * Actual NextAuth session state at the moment the event fires.
+     *
+     * NOT derived from `step` — in this codebase, MembershipModal step-1 success
+     * does NOT auto-login the user. A guest can complete step-1 → step-2 →
+     * submit payment while `isAuthenticated` stays `false` (guestUserData bridges
+     * the two steps). Callers MUST pass the real session state explicitly.
+     * See `docs/auth/gotchas.md` "registration ≠ authenticated session".
+     */
+    isAuthenticated: boolean;
   }
 ): KlaviyoEvent {
   return {
@@ -927,7 +937,7 @@ export function createStartedCheckoutEvent(
       checkout_url: checkoutData.checkoutUrl,
       ...(checkoutData.promoSlug ? { promo_slug: checkoutData.promoSlug } : {}),
       step: checkoutData.step,
-      is_authenticated: checkoutData.step === "viewed",
+      is_authenticated: checkoutData.isAuthenticated,
       started_at: new Date().toISOString(),
     },
   };

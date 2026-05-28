@@ -246,7 +246,7 @@ function fakeUser(overrides: Partial<IUser> = {}): IUser {
   } as unknown as IUser;
 }
 
-function testStartedCheckoutShape() {
+function testStartedCheckoutShape_GuestRegistrationPath() {
   const sample = createStartedCheckoutEvent(fakeUser(), {
     packageId: "membership_standard",
     packageName: "Standard Membership",
@@ -257,6 +257,7 @@ function testStartedCheckoutShape() {
     checkoutUrl: "https://example.com/membership?openMembership=1&packageId=membership_standard",
     promoSlug: "milwaukee-march",
     step: "registered",
+    isAuthenticated: false, // Guest registration — always false
   });
 
   assert.equal(sample.event, "Started Checkout");
@@ -271,12 +272,11 @@ function testStartedCheckoutShape() {
   assert.equal(sample.properties.package_type, "membership");
   assert.equal(sample.properties.num_entries, 100);
   assert.equal(sample.properties.step, "registered");
-  // is_authenticated derived from step
   assert.equal(sample.properties.is_authenticated, false);
   assert.match(sample.properties.started_at as string, /^\d{4}-\d{2}-\d{2}T/);
 }
 
-function testStartedCheckoutViewedPathDerivesAuthenticated() {
+function testStartedCheckoutShape_AuthedPaymentPath() {
   const sample = createStartedCheckoutEvent(fakeUser(), {
     packageId: "membership_premium",
     packageName: "Premium Membership",
@@ -284,13 +284,45 @@ function testStartedCheckoutViewedPathDerivesAuthenticated() {
     price: 50,
     checkoutUrl: "https://example.com/membership",
     step: "viewed",
+    isAuthenticated: true, // Authed payment-submit
   });
   assert.equal(sample.properties.step, "viewed");
   assert.equal(sample.properties.is_authenticated, true);
-  // Optional `tier` and `num_entries` and `promo_slug` omitted when absent
+  // Optional `tier`, `num_entries`, `promo_slug` omitted when absent
   assert.equal("tier" in sample.properties, false);
   assert.equal("num_entries" in sample.properties, false);
   assert.equal("promo_slug" in sample.properties, false);
+}
+
+// CRITICAL: the path that motivated Phase 6 (DJ's localhost test).
+// A guest closes the modal mid-flow, reopens it (modal jumps directly to step-2
+// because guestUserData persisted), clicks Pay. handleSubmit runs WITHOUT
+// handleRegistration running first → ref-guard is false → client-side fire
+// happens with step="viewed" but `is_authenticated` is STILL false because
+// step-1 success didn't auto-login.
+//
+// This combination (step="viewed" + is_authenticated=false) MUST be a valid
+// payload. The previous derivation-from-step would have produced is_authenticated=true
+// here, which is wrong.
+function testStartedCheckoutShape_GuestRecheckoutAfterPersistedGuestUserData() {
+  const sample = createStartedCheckoutEvent(fakeUser(), {
+    packageId: "tradie-onetime",
+    packageName: "Tradie Pack",
+    packageType: "one-time",
+    tier: "tradie",
+    price: 25,
+    numEntries: 50,
+    checkoutUrl: "https://example.com/membership",
+    step: "viewed", // funnel position = payment-submit
+    isAuthenticated: false, // BUT user is still a guest (step-1 didn't auto-login)
+  });
+  assert.equal(sample.properties.step, "viewed");
+  assert.equal(
+    sample.properties.is_authenticated,
+    false,
+    "step='viewed' + is_authenticated=false MUST be a valid combo — step-1 success does not authenticate"
+  );
+  assert.equal(sample.properties.package_type, "one-time");
 }
 
 function run() {
@@ -301,8 +333,9 @@ function run() {
   testAcceptsArbitraryAtSuffix();
   testViewedGiveawayShape();
   testViewedGiveawayOmitsOptionalsWhenAbsent();
-  testStartedCheckoutShape();
-  testStartedCheckoutViewedPathDerivesAuthenticated();
+  testStartedCheckoutShape_GuestRegistrationPath();
+  testStartedCheckoutShape_AuthedPaymentPath();
+  testStartedCheckoutShape_GuestRecheckoutAfterPersistedGuestUserData();
   console.error("✓ canonical-events-shape: all self-tests + Viewed Giveaway + Started Checkout snapshots passed");
 }
 

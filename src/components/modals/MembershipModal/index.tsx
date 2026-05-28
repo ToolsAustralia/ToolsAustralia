@@ -2691,44 +2691,58 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
               },
         );
 
-        // Canonical Klaviyo "Started Checkout" (step="viewed") — AUTHED USERS ONLY.
-        // Guest path fires server-side from /api/auth/register after profile sync
-        // so the event reliably attaches to the just-created Klaviyo profile.
-        // See spec §5 and docs/tracking/KLAVIYO_INTEGRATION.md.
-        if (isAuthenticated) {
-          try {
-            const resolvedPackageId = getPackageId(activePlan, [...subscriptionPackages, ...oneTimePackages]);
-            if (resolvedPackageId && activePlan) {
-              const isSubscriptionPlan = activePlan.period === "mo";
-              // Extract promo slug from URL (mirrors handleRegistration's local extraction)
-              let resolvedPromoSlug: string | undefined;
-              try {
-                const currentPathname = pathname || (typeof window !== "undefined" ? window.location.pathname : "");
-                const promotionsMatch = currentPathname.match(/^\/promotions\/([^/?#]+)/);
-                if (promotionsMatch && promotionsMatch[1]) {
-                  resolvedPromoSlug = promotionsMatch[1];
-                }
-              } catch {
-                // Non-blocking
+        // Canonical Klaviyo "Started Checkout" (step="viewed") — fires for BOTH
+        // authed users AND guests who skipped step-1 because `guestUserData`
+        // persisted across modal close/reopen.
+        //
+        // No `if (isAuthenticated)` gate: in this codebase, step-1 success does
+        // NOT auto-login (the modal uses `hasCompletedRegistration = isAuthenticated
+        // || guestUserData !== null` as the step-2 bridge). A guest can reach
+        // payment-submit while staying `isAuthenticated: false`. See
+        // docs/auth/gotchas.md "registration ≠ authenticated session".
+        //
+        // Dedupe: the surrounding `if (!initiateCheckoutFiredRef.current)` block
+        // ensures we don't double-fire with the server-side fire from
+        // /api/auth/register. handleRegistration sets the ref before /api/auth
+        // returns — so when handleRegistration ran in this modal session, this
+        // block is skipped. When the modal opened directly at step-2 (because
+        // guestUserData persisted from a prior session), handleRegistration did
+        // NOT run, the ref is false, and this block fires.
+        try {
+          const resolvedPackageId = getPackageId(activePlan, [...subscriptionPackages, ...oneTimePackages]);
+          if (resolvedPackageId && activePlan) {
+            const isSubscriptionPlan = activePlan.period === "mo";
+            // Extract promo slug from URL (mirrors handleRegistration's local extraction)
+            let resolvedPromoSlug: string | undefined;
+            try {
+              const currentPathname = pathname || (typeof window !== "undefined" ? window.location.pathname : "");
+              const promotionsMatch = currentPathname.match(/^\/promotions\/([^/?#]+)/);
+              if (promotionsMatch && promotionsMatch[1]) {
+                resolvedPromoSlug = promotionsMatch[1];
               }
-              const checkoutUrl = buildCheckoutResumeUrl({
-                baseUrl: window.location.origin,
-                packageId: resolvedPackageId,
-                promoSlug: resolvedPromoSlug,
-              });
-              trackKlaviyoStartedCheckout({
-                package_id: resolvedPackageId,
-                package_name: promoEnhancedPlan?.name || activePlan.name,
-                package_type: isSubscriptionPlan ? "membership" : "one-time",
-                tier: (promoEnhancedPlan?.name || activePlan.name).toLowerCase(),
-                price: packagePrice,
-                checkout_url: checkoutUrl,
-                ...(resolvedPromoSlug ? { promo_slug: resolvedPromoSlug } : {}),
-              });
+            } catch {
+              // Non-blocking
             }
-          } catch {
-            // Non-blocking — never fail checkout on a tracking error
+            const checkoutUrl = buildCheckoutResumeUrl({
+              baseUrl: window.location.origin,
+              packageId: resolvedPackageId,
+              promoSlug: resolvedPromoSlug,
+            });
+            trackKlaviyoStartedCheckout({
+              package_id: resolvedPackageId,
+              package_name: promoEnhancedPlan?.name || activePlan.name,
+              package_type: isSubscriptionPlan ? "membership" : "one-time",
+              tier: (promoEnhancedPlan?.name || activePlan.name).toLowerCase(),
+              price: packagePrice,
+              checkout_url: checkoutUrl,
+              ...(resolvedPromoSlug ? { promo_slug: resolvedPromoSlug } : {}),
+              // Real session state — NOT derived from `step`. Step-1 success
+              // does not authenticate; guest can be `false` here.
+              is_authenticated: isAuthenticated,
+            });
           }
+        } catch {
+          // Non-blocking — never fail checkout on a tracking error
         }
       }
     } catch {

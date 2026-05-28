@@ -1,15 +1,30 @@
 # Auth — Gotchas
 
+## Registration ≠ authenticated session (this codebase, MembershipModal)
+
+**MembershipModal step-1 success does NOT auto-login the user.** This is non-obvious — most apps log in on register, this one doesn't. Concrete consequences:
+
+- After `/api/auth/register` returns 200 from step-1, `useUserContext().isAuthenticated` is **still `false`**. The user has not been issued a NextAuth session token.
+- The modal bridges step-1 → step-2 via `hasCompletedRegistration = isAuthenticated || guestUserData !== null` (in [MembershipModal:594](../../src/components/modals/MembershipModal/index.tsx#L594)) — `guestUserData` is component state populated on step-1 success and used as the credential for the step-2 payment call.
+- A guest can complete step-1 → step-2 → submit payment while remaining `isAuthenticated: false` throughout. They become authenticated only later (on payment success / explicit login).
+- `guestUserData` **persists across modal close/reopen** because the modal stays mounted (parent controls via `isOpen` prop, not unmount). So a guest who closed the modal after step-1 and reopened it lands directly on step-2 without re-doing registration. This means `handleRegistration` does NOT run for the second open — only `handleSubmit` runs.
+- The three "plain account update" branches at [register/route.ts:327](../../src/app/api/auth/register/route.ts#L327), [:456](../../src/app/api/auth/register/route.ts#L456), [:544](../../src/app/api/auth/register/route.ts#L544) fire `User Registered` again when an existing zero-entry account re-submits step-1 with new field values. This is intentional ("plain account" is effectively a fresh-start guest).
+
+**Rule for any new tracking event or auth-conditional logic in the modal**: never assume `isAuthenticated === true` after step-1. Always pass real `useUserContext().isAuthenticated` through, do not derive from funnel-step name.
+
+This was the source of two Phase-4 bugs (2026-05-28): server-side `Started Checkout` only fired in the new-user branch (missed existing-plain-account re-registration), and client-side `handleSubmit` fire was gated on `if (isAuthenticated)` which skipped guests who re-opened the modal with new package selection. Both fixed in commit `ebd33f94...` of Phase 6.
+
 ## `/api/auth/register` fires Klaviyo `Started Checkout` server-side (bypasses consent)
 
-When the MembershipModal posts a guest registration with a `packageId`, `/api/auth/register` fires a canonical Klaviyo `Started Checkout` event (`step="registered"`) **server-side** via `klaviyo.trackEventBackground` right after `ensureUserProfileSynced`. This is the guest path for the abandoned-checkout flow.
+When the MembershipModal posts a guest registration with a `packageId`, `/api/auth/register` fires a canonical Klaviyo `Started Checkout` event (`step="registered"`) **server-side** via `klaviyo.trackEventBackground`. Fires from **all four** register paths (new-user creation + the three plain-account update branches) so the event stays 1:1 with `User Registered`. Helper: `fireKlaviyoStartedCheckoutForGuestRegistration` in `/api/auth/register/route.ts`.
 
 **Key behaviour**:
-- Fires server-side because the client-side Klaviyo onsite cookie isn't yet set for a never-cookied guest at the moment they complete step-1 — pushing via Events API with explicit `customer_properties.email` attaches reliably to the just-created Klaviyo profile.
+- Fires server-side because the client-side Klaviyo onsite cookie isn't yet set for a never-cookied guest at the moment they complete step-1 — pushing via Events API with explicit `customer_properties.email` attaches reliably to the just-created (or updated) Klaviyo profile.
 - **Not gated** on `hasPixelConsent()`. The client-side gate exists for browsing-behaviour events (Viewed Page / Viewed Giveaway / Viewed Product). `Started Checkout` represents a committed action (registration submitted) and is part of transactional analytics.
 - Skipped gracefully when the request payload omits `packageId` (Google-OAuth, affiliate, and other non-modal registration paths).
+- Always emits `isAuthenticated: false` (this path runs at registration submit — user is by definition a guest).
 
-The mutually-exclusive authed-user path fires client-side from `MembershipModal:handleSubmit` alongside the existing Facebook `trackInitiateCheckout` callsite. See `docs/tracking/KLAVIYO_INTEGRATION.md` "Canonical property names" + spec `docs/superpowers/specs/2026-05-27-klaviyo-events-expansion-design.md` §5.
+The complementary client-side fire from `MembershipModal:handleSubmit` covers the second-open case where `guestUserData` persisted and step-1 was skipped. The `initiateCheckoutFiredRef` ref-guard prevents double-firing when both server-side (handleRegistration) and client-side (handleSubmit) ran in the same modal session. See `docs/tracking/KLAVIYO_INTEGRATION.md` "Canonical property names" + spec `docs/superpowers/specs/2026-05-27-klaviyo-events-expansion-design.md` §5.
 
 ## Middleware doesn't gate /api
 
