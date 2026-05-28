@@ -1,19 +1,22 @@
 # Shared UI — Gotchas
 
-## MembershipModal: Klaviyo `Started Checkout` fires from BOTH server-side and client-side paths (deduped by `initiateCheckoutFiredRef`)
+## MembershipModal: Klaviyo `Started Checkout` fires from THREE paths (split by who is firing it)
 
-The canonical Klaviyo `Started Checkout` event (added 2026-05-28, revised 2026-05-28 Phase-6) fires from two complementary callsites so the abandoned-checkout funnel covers every realistic user path:
+The canonical Klaviyo `Started Checkout` event covers every realistic checkout-entry path with three mutually-exclusive callsites. Revised 2026-05-28 Phase-7 — the original Phase-4 design fired authed users from `MembershipModal:handleSubmit`, but the right semantic for authed users is at **intent capture** (the "Enter Now" click) so abandoners are captured even if they never reach the payment form.
 
-| Path | Where it fires | When it covers |
+| User | Where it fires | Why there |
 |---|---|---|
-| **Server-side** (`step="registered"`) | `fireKlaviyoStartedCheckoutForGuestRegistration` in [`/api/auth/register`](../../src/app/api/auth/register/route.ts) — called from all 4 register branches (new-user + 3 plain-account updates) | First-time registration in this modal session — guest just submitted step-1 form, or existing-plain-account user re-registered |
-| **Client-side** (`step="viewed"`) | [`MembershipModal:handleSubmit`](../../src/components/modals/MembershipModal/index.tsx#L2658) alongside the existing Facebook `trackInitiateCheckout` | Guest re-opened the modal in the same browser session (so `guestUserData` persisted and step-1 was SKIPPED — `handleRegistration` did not run), and is now submitting payment. Also covers fully-authenticated returning members. |
+| **AUTHED user clicks "Enter Now" on a package card** | [`MembershipSection.handlePlanSelect`](../../src/components/sections/MembershipSection.tsx) at the `membershipModal.openModal(plan)` callsite | Intent is the click. The user has selected a package and signalled "I want to buy this." Fires BEFORE the modal even renders the card form, so abandoners who close the modal mid-flow are captured. `package_id` is the canonical API ID (via `getPackageId`); `is_authenticated: true`. |
+| **GUEST first-open** (`step="registered"`) | `fireKlaviyoStartedCheckoutForGuestRegistration` in [`/api/auth/register`](../../src/app/api/auth/register/route.ts) — called from all 4 register branches (new-user + 3 plain-account updates) | Guest just submitted step-1 with a `packageId` — Klaviyo profile is being created in the same request, so server-side fire with explicit `customer_properties.email` attaches reliably. |
+| **GUEST second-open fallback** (`step="viewed"`) | [`MembershipModal.handleSubmit`](../../src/components/modals/MembershipModal/index.tsx) with `if (!isAuthenticated)` gate, alongside existing Facebook `trackInitiateCheckout` | Edge case: `guestUserData` persisted across modal close/reopen so the modal jumped straight to step-2 — `handleRegistration` never ran → server fire never had a chance. The `initiateCheckoutFiredRef` guard ensures one fire per modal lifecycle even when paired with handleRegistration. |
 
-**Dedupe**: the surrounding `if (!initiateCheckoutFiredRef.current)` guard. When `handleRegistration` ran in the same modal lifecycle, it sets the ref before `/api/auth/register` returns — so when `handleSubmit` runs afterward, the client-side block is skipped (because the server-side fire already happened). When `guestUserData` persisted and step-1 was skipped, the ref is still false → client-side fires. The ref also resets on modal close/open and on `activePlan` change ([MembershipModal:574 + 589](../../src/components/modals/MembershipModal/index.tsx#L574)).
+**Why authed users don't fire from `handleSubmit` (Phase-7 change)**: dedupe with the `handlePlanSelect` fire. If both fired, every authed checkout would log two `Started Checkout` events per session. The `if (!isAuthenticated)` gate prevents that.
 
-**`is_authenticated` is passed explicitly, NEVER derived from `step`** — see [docs/auth/gotchas.md](../auth/gotchas.md) "Registration ≠ authenticated session". A guest can fire with `step="viewed"` + `is_authenticated: false` (when they reach payment-submit without ever logging in).
+**`is_authenticated` is always passed explicitly, NEVER derived from `step`** — see [docs/auth/gotchas.md](../auth/gotchas.md) "Registration ≠ authenticated session". A guest can fire with `step="viewed"` + `is_authenticated: false` (when they reach payment-submit without ever logging in).
 
-See [docs/tracking/KLAVIYO_INTEGRATION.md](../tracking/KLAVIYO_INTEGRATION.md) "Canonical property names" + spec `docs/superpowers/specs/2026-05-27-klaviyo-events-expansion-design.md` §5.
+**Modal opens that DO NOT come through `MembershipSection.handlePlanSelect`** — there are other entry points (e.g. `useMembershipModal.openModalWithPackageSelectionFirst()`, RewardsFloatingWidget, my-account direct opens) that don't preselect a plan. For now `Started Checkout` doesn't fire for these — the user has no specific package context yet. If/when those paths need event coverage, fire at the moment the user selects a plan within the modal (not on modal-open).
+
+See [docs/tracking/KLAVIYO_INTEGRATION.md](../tracking/KLAVIYO_INTEGRATION.md) "Recently added canonical events" + spec `docs/superpowers/specs/2026-05-27-klaviyo-events-expansion-design.md` §5.
 
 ## Z-index conflicts
 

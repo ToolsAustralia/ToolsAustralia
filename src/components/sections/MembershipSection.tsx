@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import dynamic from "next/dynamic";
 
 // Lazy-loaded: MembershipModal bundles Stripe + payment forms.
@@ -12,7 +12,9 @@ import { useMemberships } from "@/hooks/useMemberships";
 import { useMembershipThemeExperiment } from "@/hooks/ab-testing/useMembershipThemeExperiment";
 import { useUserContext } from "@/contexts/UserContext";
 import { useMembershipModal } from "@/hooks/useMembershipModal";
-import { convertToLocalPlan, type LocalMembershipPlan } from "@/utils/membership/membership-adapters";
+import { useKlaviyoTracking } from "@/hooks/useKlaviyoTracking";
+import { convertToLocalPlan, getPackageId, type LocalMembershipPlan } from "@/utils/membership/membership-adapters";
+import { buildCheckoutResumeUrl } from "@/utils/integrations/klaviyo/checkout-resume-url";
 import { getPackageDisplayName } from "@/utils/membership/getDisplayName";
 import { useResolvedMultiplier } from "@/hooks/queries/usePromoQueries";
 import { getEffectivePromoType } from "@/utils/promo/get-effective-promo-type";
@@ -79,7 +81,9 @@ export default function MembershipSection({
   const { subscriptionPackages, oneTimePackages, loading, error } = useMemberships();
 
   // Fetch user data to check membership status
-  const { userData, loading: userLoading } = useUserContext();
+  const { userData, isAuthenticated, loading: userLoading } = useUserContext();
+  const { trackKlaviyoStartedCheckout } = useKlaviyoTracking();
+  const pathname = usePathname();
   const { data: userMajorDrawStats } = useUserMajorDrawStats(userData?._id);
   const { whenGatesOpenElseGateModal } = useMajorDrawPurchaseGate();
 
@@ -246,6 +250,56 @@ export default function MembershipSection({
 
       // For new subscriptions (no active subscription), use the modal
       membershipModal.openModal(plan);
+
+      // Canonical Klaviyo "Started Checkout" — fires for AUTHED users at the
+      // EXACT moment of intent (Enter Now click), not at Pay-button submission.
+      // This is the right semantic: clicking Enter Now is the user signalling
+      // "I want this package" — that's the funnel entry. Pay-submit is too late
+      // (user has already filled the card form).
+      //
+      // For guests, this DOES NOT fire — their Klaviyo profile email isn't
+      // known yet. The guest path fires server-side from /api/auth/register
+      // after step-1 success (see docs/auth/gotchas.md). The mutually-exclusive
+      // gate ensures MembershipModal.handleSubmit's Klaviyo block also gates
+      // on `if (!isAuthenticated)` so authed users don't double-fire.
+      //
+      // See docs/tracking/KLAVIYO_INTEGRATION.md "Recently added canonical events".
+      if (isAuthenticated && !userLoading) {
+        try {
+          const apiPackageId = getPackageId(plan, [...subscriptionPackages, ...oneTimePackages]);
+          if (apiPackageId) {
+            const isSubscriptionPlan = plan.period === "mo";
+            // Extract promo slug from URL (so the email's CTA can land the user
+            // back on the same promo page they were viewing)
+            let promoSlug: string | undefined;
+            try {
+              const match = pathname?.match(/^\/promotions\/([^/?#]+)/);
+              if (match && match[1]) promoSlug = match[1];
+            } catch {
+              // Non-blocking
+            }
+
+            const checkoutUrl = buildCheckoutResumeUrl({
+              baseUrl: window.location.origin,
+              packageId: apiPackageId,
+              promoSlug,
+            });
+
+            trackKlaviyoStartedCheckout({
+              package_id: apiPackageId,
+              package_name: plan.name,
+              package_type: isSubscriptionPlan ? "membership" : "one-time",
+              tier: plan.name.toLowerCase(),
+              price: plan.price,
+              checkout_url: checkoutUrl,
+              ...(promoSlug ? { promo_slug: promoSlug } : {}),
+              is_authenticated: true,
+            });
+          }
+        } catch {
+          // Non-blocking — never fail Enter Now click on a tracking error
+        }
+      }
 
       // Call the original onPlanSelect if provided
       if (onPlanSelect) {

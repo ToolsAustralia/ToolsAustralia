@@ -2691,58 +2691,59 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
               },
         );
 
-        // Canonical Klaviyo "Started Checkout" (step="viewed") — fires for BOTH
-        // authed users AND guests who skipped step-1 because `guestUserData`
-        // persisted across modal close/reopen.
+        // Canonical Klaviyo "Started Checkout" — GUEST-ONLY fallback fire.
         //
-        // No `if (isAuthenticated)` gate: in this codebase, step-1 success does
-        // NOT auto-login (the modal uses `hasCompletedRegistration = isAuthenticated
-        // || guestUserData !== null` as the step-2 bridge). A guest can reach
-        // payment-submit while staying `isAuthenticated: false`. See
-        // docs/auth/gotchas.md "registration ≠ authenticated session".
+        // Authed users fire from MembershipSection.handlePlanSelect (the "Enter
+        // Now" click — the true intent moment). They do NOT fire here, to avoid
+        // double-counting.
         //
-        // Dedupe: the surrounding `if (!initiateCheckoutFiredRef.current)` block
-        // ensures we don't double-fire with the server-side fire from
-        // /api/auth/register. handleRegistration sets the ref before /api/auth
-        // returns — so when handleRegistration ran in this modal session, this
-        // block is skipped. When the modal opened directly at step-2 (because
-        // guestUserData persisted from a prior session), handleRegistration did
-        // NOT run, the ref is false, and this block fires.
-        try {
-          const resolvedPackageId = getPackageId(activePlan, [...subscriptionPackages, ...oneTimePackages]);
-          if (resolvedPackageId && activePlan) {
-            const isSubscriptionPlan = activePlan.period === "mo";
-            // Extract promo slug from URL (mirrors handleRegistration's local extraction)
-            let resolvedPromoSlug: string | undefined;
-            try {
-              const currentPathname = pathname || (typeof window !== "undefined" ? window.location.pathname : "");
-              const promotionsMatch = currentPathname.match(/^\/promotions\/([^/?#]+)/);
-              if (promotionsMatch && promotionsMatch[1]) {
-                resolvedPromoSlug = promotionsMatch[1];
+        // Guests primarily fire server-side from /api/auth/register (step-1
+        // submit). This client-side block is the FALLBACK for the edge case
+        // where `guestUserData` persisted across modal close/reopen — modal
+        // jumps directly to step-2, handleRegistration never runs, the server
+        // never gets a chance to fire. The `if (!isAuthenticated)` gate +
+        // `initiateCheckoutFiredRef` together produce one fire across the
+        // whole modal lifecycle.
+        //
+        // See docs/auth/gotchas.md "registration ≠ authenticated session" and
+        // docs/shared-ui/gotchas.md "MembershipModal: Klaviyo Started Checkout
+        // fires from BOTH server-side and client-side paths".
+        if (!isAuthenticated) {
+          try {
+            const resolvedPackageId = getPackageId(activePlan, [...subscriptionPackages, ...oneTimePackages]);
+            if (resolvedPackageId && activePlan) {
+              const isSubscriptionPlan = activePlan.period === "mo";
+              // Extract promo slug from URL (mirrors handleRegistration's local extraction)
+              let resolvedPromoSlug: string | undefined;
+              try {
+                const currentPathname = pathname || (typeof window !== "undefined" ? window.location.pathname : "");
+                const promotionsMatch = currentPathname.match(/^\/promotions\/([^/?#]+)/);
+                if (promotionsMatch && promotionsMatch[1]) {
+                  resolvedPromoSlug = promotionsMatch[1];
+                }
+              } catch {
+                // Non-blocking
               }
-            } catch {
-              // Non-blocking
+              const checkoutUrl = buildCheckoutResumeUrl({
+                baseUrl: window.location.origin,
+                packageId: resolvedPackageId,
+                promoSlug: resolvedPromoSlug,
+              });
+              trackKlaviyoStartedCheckout({
+                package_id: resolvedPackageId,
+                package_name: promoEnhancedPlan?.name || activePlan.name,
+                package_type: isSubscriptionPlan ? "membership" : "one-time",
+                tier: (promoEnhancedPlan?.name || activePlan.name).toLowerCase(),
+                price: packagePrice,
+                checkout_url: checkoutUrl,
+                ...(resolvedPromoSlug ? { promo_slug: resolvedPromoSlug } : {}),
+                // Guest reaching payment-submit without ever logging in
+                is_authenticated: false,
+              });
             }
-            const checkoutUrl = buildCheckoutResumeUrl({
-              baseUrl: window.location.origin,
-              packageId: resolvedPackageId,
-              promoSlug: resolvedPromoSlug,
-            });
-            trackKlaviyoStartedCheckout({
-              package_id: resolvedPackageId,
-              package_name: promoEnhancedPlan?.name || activePlan.name,
-              package_type: isSubscriptionPlan ? "membership" : "one-time",
-              tier: (promoEnhancedPlan?.name || activePlan.name).toLowerCase(),
-              price: packagePrice,
-              checkout_url: checkoutUrl,
-              ...(resolvedPromoSlug ? { promo_slug: resolvedPromoSlug } : {}),
-              // Real session state — NOT derived from `step`. Step-1 success
-              // does not authenticate; guest can be `false` here.
-              is_authenticated: isAuthenticated,
-            });
+          } catch {
+            // Non-blocking — never fail checkout on a tracking error
           }
-        } catch {
-          // Non-blocking — never fail checkout on a tracking error
         }
       }
     } catch {

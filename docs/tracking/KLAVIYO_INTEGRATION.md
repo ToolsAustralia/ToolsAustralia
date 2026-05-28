@@ -55,8 +55,9 @@ Critical: post-purchase events fire from the **server**, not the browser. The br
 | `Identify` | `KlaviyoUserIdentifier` when user logs in | Not gated — must run on `/my-account` |
 | `Viewed Product`, `Added to Cart` | via `useKlaviyoTracking` hook from product components | Not gated |
 | `Viewed Giveaway` (canonical, added 2026-05-28) | `PromoViewTracking` on `/promotions/<slug>` and brand pages (`/promotions/dewalt`, `/makita`, `/milwaukee`, `/ryobi`) | ✓ via `hasPixelConsent()` (called by `trackKlaviyoEvent`) |
-| `Started Checkout` — **authed path** (`step="viewed"`, canonical, added 2026-05-28) | `MembershipModal:handleSubmit` (L2658) alongside the existing Facebook `trackInitiateCheckout` — fires when authenticated user submits payment | ✓ via `hasPixelConsent()` |
-| `Started Checkout` — **guest path** (`step="registered"`, canonical, added 2026-05-28) | **Server-side** from `/api/auth/register` after `ensureUserProfileSynced` — fires when guest completes step-1 with a `packageId` | **Not gated** — committed action, not browsing. See [docs/auth/gotchas.md](../auth/gotchas.md). |
+| `Started Checkout` — **authed path** (`step="viewed"`, canonical, revised 2026-05-28 Phase-7) | [`MembershipSection.handlePlanSelect`](../../src/components/sections/MembershipSection.tsx) at the "Enter Now" click — fires at intent capture, BEFORE the modal renders the card form. Captures abandoners who never reach payment-submit. | ✓ via `hasPixelConsent()` |
+| `Started Checkout` — **guest registration path** (`step="registered"`, canonical, added 2026-05-28) | **Server-side** from `/api/auth/register` after `ensureUserProfileSynced` — fires when guest completes step-1 with a `packageId`, from all 4 register branches (new-user + 3 plain-account updates) | **Not gated** — committed action, not browsing. See [docs/auth/gotchas.md](../auth/gotchas.md). |
+| `Started Checkout` — **guest second-open fallback** (`step="viewed"`, canonical, Phase-7) | `MembershipModal.handleSubmit` with `if (!isAuthenticated)` gate — fires when `guestUserData` persisted across modal close/reopen so step-1 was skipped (no server-side fire) | ✓ via `hasPixelConsent()` |
 
 ## Revenue tracking — the `$value` rule
 
