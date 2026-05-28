@@ -26,6 +26,20 @@ Email / phone in CAPI events use SHA-256 hashing. Use the helper in `lib/faceboo
 
 **Rule:** The `packageName` field on `InvoiceData` and `PurchaseData` structs (and stored in PaymentEvent documents) continues to use the raw `pkg.name` value — only the rendered `item.description` is label-resolved. Do not change the stored `packageName` value; it is used for reconciliation and Stripe-side reference.
 
+## P7. Klaviyo events: canonical schema for new events, freeze for legacy
+
+Events defined in [klaviyo-events.ts](../../src/utils/integrations/klaviyo/klaviyo-events.ts) as of 2026-05-27 (Subscription Started, Placed Order, Subscription Renewal Failed, etc.) have active Klaviyo flows, templates, segments, and campaigns wired against their exact property names. Renaming would silently break production: flow filters stop matching, template merge tags blank out, no error surfaces.
+
+**Rule:** Do NOT refactor legacy event property names. New events added after 2026-05-27 use the canonical schema in [docs/tracking/KLAVIYO_INTEGRATION.md](./KLAVIYO_INTEGRATION.md) (price as number not string, `tier` not `package_tier`, ISO `*_at` timestamps not locale strings, omit-rather-than-empty-sentinel for missing values).
+
+**Helpers:**
+- Legacy events → keep calling `formatPackageDataForKlaviyo` in [klaviyo-helpers.ts](../../src/utils/integrations/klaviyo/klaviyo-helpers.ts).
+- NEW events → call `formatCanonicalPackageData` (added 2026-05-28, same file). It emits `price` as number, `package_type` always, `tier` only when present, optional `num_entries`.
+
+**Enforcement:** [`src/utils/integrations/klaviyo/__tests__/canonical-events-shape.test.ts`](../../src/utils/integrations/klaviyo/__tests__/canonical-events-shape.test.ts) snapshot-tests new event builders against the canonical key list. CI fails if a new event drifts. Run via `npm run test:klaviyo-canonical`.
+
+See [docs/tracking/KLAVIYO_INTEGRATION.md](./KLAVIYO_INTEGRATION.md) — section "Canonical property names — new events only (drift containment)" — for the full table and the no-refactor policy.
+
 ## Cursor agent
 
 `.cursor/agents/growth-integrations.md` covers this domain.

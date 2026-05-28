@@ -650,6 +650,18 @@ export function formatInvoiceDataForKlaviyo(invoiceData: {
 
 /**
  * Format package data for Klaviyo events with consistent formatting
+ *
+ * LEGACY shape — emits `price` as string ("49.99"), `tier` as empty string when
+ * absent, `package_name` falling back to "Unknown Package". Preserved for the
+ * events defined in `klaviyo-events.ts` as of 2026-05-27 (Subscription Started,
+ * Placed Order, etc.) which have active Klaviyo flows / templates / segments
+ * wired against this exact shape.
+ *
+ * For NEW events going forward, use `formatCanonicalPackageData` instead — it
+ * emits `price` as a number, omits `tier` when absent (no `""` sentinel), and
+ * includes `package_type` for cross-event aggregation. See the
+ * "Canonical property names — new events only" section of
+ * `docs/tracking/KLAVIYO_INTEGRATION.md` for the rationale.
  */
 export function formatPackageDataForKlaviyo(packageData: {
   packageId: string;
@@ -662,6 +674,41 @@ export function formatPackageDataForKlaviyo(packageData: {
     package_name: packageData.packageName?.trim() || "Unknown Package",
     tier: packageData.tier?.trim() || "",
     price: packageData.price.toFixed(2), // Format as "49.99"
+  };
+}
+
+/**
+ * Canonical package-data shape for Klaviyo events created after 2026-05-27.
+ *
+ * Emits per the canonical schema in `docs/tracking/KLAVIYO_INTEGRATION.md`:
+ * - `price` as a NUMBER (not string) — Klaviyo segment `>` / `<` filters compare
+ *   numerically only when the property is a number
+ * - `tier` omitted entirely when absent — no `""` / `"unknown"` sentinel
+ * - `package_type` always emitted — enables cross-event aggregations
+ * - `num_entries` optional, for one-time / mini-draw / upsell packages
+ *
+ * Do NOT use this for the legacy events in `klaviyo-events.ts` (Subscription
+ * Started, Placed Order, etc.) — those are frozen against `formatPackageDataForKlaviyo`.
+ *
+ * The `canonical-events-shape.test.ts` snapshot test will fail CI if a new
+ * event drifts from these property names.
+ */
+export function formatCanonicalPackageData(p: {
+  packageId: string;
+  packageName: string;
+  packageType: "membership" | "one-time" | "mini-draw" | "upsell";
+  tier?: string;
+  price: number;
+  numEntries?: number;
+}) {
+  const trimmedTier = p.tier?.trim();
+  return {
+    package_id: p.packageId,
+    package_name: p.packageName.trim(),
+    package_type: p.packageType,
+    price: p.price, // number, not string
+    ...(trimmedTier ? { tier: trimmedTier } : {}),
+    ...(p.numEntries !== undefined ? { num_entries: p.numEntries } : {}),
   };
 }
 

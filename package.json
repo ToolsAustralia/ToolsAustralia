@@ -89,6 +89,7 @@
     "sweep:classname-templates": "tsx scripts/codemods/sweep-classname-template-literals.ts --apply",
     "sweep:classname-templates:dry": "tsx scripts/codemods/sweep-classname-template-literals.ts",
     "test:klaviyo-renewal-preview": "tsx src/utils/integrations/klaviyo/__tests__/klaviyo-renewal-entries-preview.test.ts",
+    "test:klaviyo-canonical": "tsx src/utils/integrations/klaviyo/__tests__/canonical-events-shape.test.ts",
     "test:stripe-refund-amount": "tsx src/utils/payment/__tests__/stripe-refund-amount.test.ts",
     "test:refund-reversal": "tsx src/utils/payment/__tests__/refund-reversal.test.ts",
     "test:facebook-capi": "tsx src/lib/__tests__/facebook.test.ts",
