@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { useSearchParams, useRouter, usePathname } from "next/navigation";
+import { useSearchParams, usePathname } from "next/navigation";
 import { useMemberships } from "@/hooks/useMemberships";
 import {
   convertToLocalPlan,
@@ -52,7 +52,6 @@ export function useMembershipModalDeepLink(
   onOpen: (plan: LocalMembershipPlan) => void,
 ): void {
   const searchParams = useSearchParams();
-  const router = useRouter();
   const pathname = usePathname();
   const { subscriptionPackages, oneTimePackages, loading } = useMemberships();
 
@@ -87,15 +86,31 @@ export function useMembershipModalDeepLink(
       (p) => p._id === packageId,
     );
 
-    // Clean URL params regardless of whether the plan resolved — stale links
-    // shouldn't leave dead query strings in the URL bar.
-    const next = new URLSearchParams(searchParams?.toString() ?? "");
-    next.delete("openMembership");
-    next.delete("packageId");
-    const nextSearch = next.toString();
-    router.replace(`${pathname}${nextSearch ? `?${nextSearch}` : ""}`, {
-      scroll: false,
-    });
+    // Clean URL params via `window.history.replaceState` instead of
+    // `router.replace`. DJ caught this: `router.replace` in Next.js App Router
+    // triggers an RSC stream refetch on every call — visible as repeated
+    // `GET /promotions/<slug>?utm_*` entries in the dev server terminal
+    // (even though the browser network tab is silent because nothing is
+    // navigating). React Strict Mode's double-mount + the modal-priority
+    // store's re-render cascade amplified that into what looked like an
+    // endless loop.
+    //
+    // `history.replaceState` updates the URL bar WITHOUT touching the router
+    // — no RSC refetch, no log spam, no chance of cascading re-renders. The
+    // `useSearchParams` hook won't see the change until React's next render
+    // pass, but we don't care: the `firedRef` latch above ensures this effect
+    // can't re-enter regardless of what `useSearchParams` returns.
+    if (typeof window !== "undefined") {
+      const next = new URLSearchParams(searchParams?.toString() ?? "");
+      next.delete("openMembership");
+      next.delete("packageId");
+      const nextSearch = next.toString();
+      window.history.replaceState(
+        null,
+        "",
+        `${pathname}${nextSearch ? `?${nextSearch}` : ""}`,
+      );
+    }
 
     if (!apiPlan) {
       if (process.env.NODE_ENV === "development") {
@@ -115,5 +130,5 @@ export function useMembershipModalDeepLink(
     return () => clearTimeout(timer);
     // onOpen intentionally NOT in deps — read from ref above.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchParams, subscriptionPackages, oneTimePackages, loading, pathname, router]);
+  }, [searchParams, subscriptionPackages, oneTimePackages, loading, pathname]);
 }
