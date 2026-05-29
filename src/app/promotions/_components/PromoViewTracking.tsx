@@ -2,8 +2,8 @@
 
 import { useEffect } from "react";
 import { usePathname } from "next/navigation";
+import { useSession } from "next-auth/react";
 import { useKlaviyoTracking } from "@/hooks/useKlaviyoTracking";
-import { useUserContext } from "@/contexts/UserContext";
 
 interface PromoViewTrackingProps {
   promo: {
@@ -50,10 +50,27 @@ interface PromoViewTrackingProps {
  */
 export default function PromoViewTracking({ promo }: PromoViewTrackingProps) {
   const { trackViewedGiveaway } = useKlaviyoTracking();
-  const { isAuthenticated } = useUserContext();
+  const { status } = useSession();
   const pathname = usePathname();
 
+  // `status` from next-auth has three values: "loading" | "authenticated" |
+  // "unauthenticated". `useUserContext().isAuthenticated` is derived from the
+  // raw session and reports `false` during the "loading" window — which
+  // previously caused EVERY logged-in viewer to fire one wrong
+  // `is_authenticated: false` event before the session resolved, then a
+  // second correct `is_authenticated: true` event ~50-200ms later. The ads
+  // team's segments saw ~2x noise on the logged-out branch as a result.
+  //
+  // Fix (2026-05-29): wait for the session to actually resolve before firing.
+  // `is_authenticated` is derived once the status is no longer "loading", so
+  // the value reflects the user's true session state at the moment we fire.
+  // Single event per page view, correct on the first try.
+  const isAuthenticated = status === "authenticated";
+
   useEffect(() => {
+    // Guard against firing during the session-loading window.
+    if (status === "loading") return;
+
     const promoUrl = typeof window !== "undefined" ? window.location.href : "";
 
     trackViewedGiveaway({
@@ -65,9 +82,11 @@ export default function PromoViewTracking({ promo }: PromoViewTrackingProps) {
       promo_url: promoUrl,
       is_authenticated: isAuthenticated,
     });
-    // Deps intentionally stable: re-fires only on actual route change or auth flip.
+    // Deps intentionally stable: re-fires only on actual route change, session
+    // resolution, or a true sign-in/sign-out flip — never during the
+    // initial-load "loading" window.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [promo.id, promo.slug, pathname, isAuthenticated]);
+  }, [promo.id, promo.slug, pathname, status, isAuthenticated]);
 
   return null;
 }
