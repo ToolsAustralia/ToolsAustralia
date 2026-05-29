@@ -286,9 +286,42 @@ Admin uses [AdminThemeContext](../theme/architecture.md#three-contexts) — sepa
 
 `VariantConfigEditor` has a "Membership Section Theme" section with a
 **Force light mode on the membership section** checkbox bound to
-`config.membershipTheme.forceLight`. Leave OFF for the control variant; ON for
-the treatment variant of the site-wide membership dark-mode A/B test. See
-docs/ab-testing/architecture.md.
+`config.membershipTheme.forceLight`. The site-wide membership dark-mode test
+has shipped (light won — see [shared-ui/frontend.md](../shared-ui/frontend.md))
+and `MembershipSection` no longer reads this field, but the checkbox stays in
+the editor for future revival.
+
+## A/B variant editor — per-slug hero image map
+
+`VariantConfigEditor` also exposes a **Per-slug hero overrides** editor inside
+the Hero Configuration section, backed by the `PerSlugImageMapEditor`
+subcomponent in the same file. It manages
+`config.hero.imageSrcBySlug: Record<slug, { desktop?, mobile? }>` — one variant
+can carry per-page hero creatives so a single experiment covers multiple
+landing slugs.
+
+Each row's **Desktop** and **Mobile** path inputs are independently optional.
+Leaving Desktop blank keeps desktop visitors on the theme-aware default landing
+image while mobile visitors see the override — this is the mobile-only A/B test
+shape. The editor strips empty strings before saving so the persisted config
+carries only meaningful overrides. Slug keys MUST match the experiment's
+`slugTargets` exactly; empty rows or rows with both paths blank are rejected
+by `VariantConfigService.validateVariantConfig`.
+
+## A/B experiment edit (Pencil icon in list)
+
+`ABTestingManagement.tsx` row actions include a **Pencil (Edit)** button shown
+only when (a) the viewer has `abTesting.edit` permission and (b) the experiment
+status is `draft` or `paused`. Clicking it opens `ExperimentFormModal` in **edit
+mode** — same component as Create, but the `experiment` prop pre-populates the
+form, the title becomes "Edit A/B Testing Experiment", and submit calls
+`useUpdateExperiment()` → `PATCH /api/admin/ab-testing/experiments/[id]`.
+
+Locked statuses (`active`, `ended`) intentionally hide the Edit button — both
+the server (`ExperimentService.canEditExperiment`) and the API
+(`updateExperimentSchema`) refuse edits to locked experiments anyway. Variants
+are still edited from the experiment detail view's variant section, not from
+this modal.
 
 ## Cancellation Flow Analytics view (Admin > Analytics > Cancellation Flow) — Task 18
 
@@ -296,9 +329,15 @@ docs/ab-testing/architecture.md.
 
 **Date filter.** The tab is registered in `ADMIN_TABS_WITH_MOBILE_LAYOUT_DATE_TOOLBAR` ([adminMobileDateToolbarSlot.ts](../../src/app/admin/component/adminMobileDateToolbarSlot.ts)) so it gets the shared mobile date strip under the admin header. Component owns `dateRange` / `startDate` / `endDate` state synced with URL params (same pattern as `PromoAnalyticsManagement`); default range is **today**. `current-draw` / `last-draw` hydrate from `useCurrentAndLastDrawDates`; `custom` opens `CustomDateRangeModal`. The component sends AEST `yyyy-MM-dd` values via the hook; the route handler converts them to UTC bounds (`startDate` → start of day AEST, `endDate` → start of next AEST day for the exclusive upper bound).
 
-Sections: three top cards (Triggered / Save rate / Saved); funnel with four CSS bars (Reached offer → Accepted → Cancelled → Abandoned; the "Reached reason" step is omitted because it is always equal to Triggered); a **Reason × outcome** table (count, share %, Saved, Cancelled, Abandoned per reason); an **"Other" reasons (free text)** table listing every `reason === "other"` event's `reasonText` with outcome chip and AEST timestamp; a 2-card retention summary (Retained 90d %, Pending); and a **90-day retention by offer** table (offer | saved | retained | churned | pending | retained %) showing which offers produce durable saves vs delayed churn. Retained % = `retained ÷ (retained + churned)` over matured saves (“—” when none matured). Short note under the funnel surfaces `pastDueExcludedFromOfferConversion` when non-zero.
+Sections: three top cards (Triggered / Save rate / Saved); funnel with four CSS bars (Reached offer → Accepted → Cancelled → Abandoned; the "Reached reason" step is omitted because it is always equal to Triggered); a **Reason × outcome** table (count, share %, Saved, Cancelled, Abandoned per reason) — **rows with `count > 0` are clickable** and open `CancellationReasonUsersModal` (see below) scoped to the currently-selected date range; an **"Other" reasons (free text)** table listing every `reason === "other"` event's `reasonText` with outcome chip, AEST timestamp, and **a User column** that renders a `ClickableUserDisplay` (email + optional name subtext) opening the standard `AdminUserModal` via `useAdminUserModal` — falls back to a plain "—" when the event has no `userId`; a 2-card retention summary (Retained 90d %, Pending); and a **90-day retention by offer** table (offer | saved | retained | churned | pending | retained %) showing which offers produce durable saves vs delayed churn. Retained % = `retained ÷ (retained + churned)` over matured saves (“—” when none matured). Short note under the funnel surfaces `pastDueExcludedFromOfferConversion` when non-zero.
 
-Data hook: [src/hooks/queries/admin/useCancellationFlowAnalytics.ts](../../src/hooks/queries/admin/useCancellationFlowAnalytics.ts) — TanStack `useQuery`, queryKey `["admin", "cancellation-flow-analytics", filter]`, follows the `useChargePastDueDeclineSummary` admin-hook pattern (inline key, `{ data, isLoading, isError }`). Endpoint + aggregation rules: [api.md](./api.md#cancellation-flow-analytics).
+**Reason drill-down modal** ([src/components/admin/CancellationReasonUsersModal.tsx](../../src/components/admin/CancellationReasonUsersModal.tsx)): paginated (20/page) user-level event list for a single cancellation reason. Toolbar has four outcome filter chips (`All` / `Saved` / `Cancelled` / `In progress`; resets to `All` whenever the modal opens for a new reason). Columns: Outcome chip, Started (AEST `yyyy-MM-dd HH:mm`), User (`ClickableUserDisplay` → opens `AdminUserModal`; "—" for guest/legacy events with no `userId`), and either **Free text** when the reason is `"other"` or **Offer accepted** for every other reason. Filter changes reset to page 1. Backed by `useCancellationFlowUsersByReason` (see below).
+
+Data hooks: [src/hooks/queries/admin/useCancellationFlowAnalytics.ts](../../src/hooks/queries/admin/useCancellationFlowAnalytics.ts) — both hooks live in this file, follow the `useChargePastDueDeclineSummary` admin-hook pattern (inline key, `{ data, isLoading, isError }`):
+- `useCancellationFlowAnalytics(filter)` — TanStack `useQuery`, queryKey `["admin", "cancellation-flow-analytics", filter]`.
+- `useCancellationFlowUsersByReason(filter | null, { enabled? })` — TanStack `useQuery`, queryKey `["admin", "cancellation-flow-analytics", "users-by-reason", filter]`. Caller passes `null` filter or `enabled: false` to prevent fetching when the modal is closed. Returns `{ rows: ReasonUserRow[], totalCount }`.
+
+Endpoints + aggregation rules: [api.md](./api.md#cancellation-flow-analytics).
 
 **Client-safe constant copies.** `CancellationFlowAnalytics.tsx` declares its own module-local `CANCELLATION_REASONS` and `OFFER_TYPES` constants (identical values and order to the model) instead of importing them from `@/models/CancellationFlowEvent`. That module is a Mongoose model file — runtime-evaluating it in a client component crashes (`mongoose` is `serverExternalPackages`, so `models.CancellationFlowEvent` is undefined in the browser). The type-only imports (`import type { CancellationReason, OfferType }`) remain safe because types are fully erased at build time. Keep the local constants in sync by hand whenever the model's `CANCELLATION_REASONS` or `OFFER_TYPES` arrays change. This is the same pattern used elsewhere on this branch for the same class of crash.
 

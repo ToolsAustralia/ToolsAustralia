@@ -41,19 +41,26 @@ Display-only `user.role` reads (e.g. the "Admin" badge on user rows in `UsersMan
 - All colour values come from `colorScheme` (`accentHex`, `badgeStyle`, `textGradientStyle`, etc.) — no local colour literals.
 - **Tier differentiation:** VIP is distinguished from Boss by gold tone and a crisp polished finish, not by larger text or heavier blur. VIP uses brilliant champagne/white-gold (`#FFDF63` accent) with a sharp double-rim outer shadow and tight glow; Boss uses warm amber-gold (`#E0A019` accent) with a calmer, standard finish. Both tiers share the same font sizes as all other electric tiers.
 - **Discount badge:** the price block renders a **swing price tag** (hook ring + string + notched tag body with punched hole) anchored to the top-right of the price button when `discount` is set. The tag is rotated −7° and uses `accent` as its background. The struck regular-price span remains immediately right of the discounted price in the button's `<div>`.
-- **`theme` prop:** `"dark"` (default) renders the electric dark background; `"light"` switches to the branded vivid card background using `colorScheme.bgGradient`. `MembershipSection` drives this via `useHtmlDarkForUi()`.
+- **`theme` prop:** `"light"` (default — winner of the membership-theme A/B test) renders the branded vivid card background using `colorScheme.bgGradient`. `"dark"` renders the electric dark background; no production caller uses this anymore but the option remains in the type for future revival.
 
 The component accepts two optional badge props: `showBestValue` (renders a `BestValueBadge` in the top-left corner) and `ribbon` (renders a `CornerRibbonBadge` with the given label; ignored when `showBestValue` is true). A promo-multiplier lightning badge (`X2`/`X5`/`X10` webp) appears top-right when `entries.multiplied` is active. These badges are caller-driven — no internal tier logic in the card itself.
 
 This component is used by the live `MembershipSection` for both the membership and one-time tabs.
 
-### MembershipSection light/dark + A/B gating
+### MembershipSection card theme — winner shipped (light)
 
-`MembershipSection` light/dark is the single `isDark` value (around line 58)
-that feeds the `theme` prop of every `ElectricPackageCard`. It is gated by the
-site-wide A/B flag: `isDark = useThemeStore(...) && !useMembershipThemeExperiment().forceLight`.
-With no active experiment, behavior is unchanged (schedule/toggle driven). See
-docs/ab-testing/architecture.md.
+The membership-theme A/B test (`__membership-theme__` sentinel slug) is complete
+— the "no theme" arm won. `MembershipSection.tsx` now passes `theme="light"`
+unconditionally to every `ElectricPackageCard`, and the card's default theme
+is `"light"`. The `useMembershipThemeExperiment` hook, the
+`/api/ab-testing/membership-theme-experiment` route, and the
+`VariantConfig.membershipTheme.forceLight` field are still in the codebase but
+no production component reads from them — they're dormant infrastructure that
+can be reused for the next site-wide cosmetic test, or removed later.
+
+Stray `dark:*` Tailwind utilities elsewhere in `MembershipSection` (headers,
+empty-state copy) are NOT part of the card theme and still respond to the
+global dark-mode schedule/toggle. That was the original intent.
 
 ### `features/PartnerDiscountQueue` — tier-themed partner discount card
 
@@ -256,6 +263,8 @@ Twelve flat-file modals were decomposed into the canonical orchestrator-folder p
 - Smoke tests run via `tsx --require ./<folder>/__tests__/asset-stubs.cjs <test-file>` and exercise ≥4 prop combos per modal.
 
 **Skip list** (modals NOT decomposed — see spec §Inventory): `AdminProductModal`, `AdminPromoLinkModal`, `AdminMonthlyRedeemablesModal`, `AdminBonusEntryPromoModal`, `AdminPromoBannerTextModal`, `MiniDrawEditModal`, `UserSearchModal`, `ParticipantsModal`, `MajorDrawEditModal`, `UpsellManager`, `AdminScheduledPromoCalendarModal`, `PartnerModal`, `AdminScheduledPromoModal`, `AdminMiniDrawModal`, `AdminAlternatingMultiplierModal`, `SubscriptionExplainerModal`, `ConfirmationModal`, plus modals <300 LOC. All anti-signal protected per [component-decomposition-criteria.md](./component-decomposition-criteria.md).
+
+**Updated 2026-05-27**: `RevenueDetailModal` user rows now expose an explicit **View** button instead of a chevron-only "Actions" column. [`UserRow.tsx`](../../src/components/modals/RevenueDetailModal/UserRow.tsx) renders the View button in the last desktop grid column and at the top-right of the mobile card (calling `onUserClick(user.userId)` with `e.stopPropagation()` so it does not toggle row expansion); the expand/collapse-on-row-click affordance is preserved as an inline chevron next to the user name on desktop and a "Show/Hide purchases" hint on mobile. [`TableHeader.tsx`](../../src/components/modals/RevenueDetailModal/TableHeader.tsx) renames the last column header from `Actions` to `View user` to match. `MembershipByPackageDetailModal` had a redundant `<div className="flex-1 overflow-y-auto">` inside `<ModalContent>` removed — `ModalContent` is already a `flex-1 overflow-y-auto` container, and the inner wrapper was producing a double vertical scrollbar in the membership breakdown drill-down. See gotcha in [gotchas.md](./gotchas.md).
 
 ## Z-index ordering
 

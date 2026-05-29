@@ -44,7 +44,7 @@ const TableHeader: React.FC<TableHeaderProps> = ({ sortBy, sortOrder, onSort }) 
         First Purchase
         {sortBy === "date" && (sortOrder === "asc" ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />)}
       </div>
-      <div className="col-span-1 text-center">Actions</div>
+      <div className="col-span-1 text-center">View user</div>
     </div>
   );
 };

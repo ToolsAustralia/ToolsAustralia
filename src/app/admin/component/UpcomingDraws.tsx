@@ -387,7 +387,7 @@ export default function UpcomingDraws() {
     return (
       <div className="space-y-4 sm:space-y-6">
         <div className="flex flex-row items-center justify-between gap-2 sm:gap-4">
-          <h2 className="text-sm sm:text-lg lg:text-xl font-bold text-gray-900 flex-1 min-w-0 truncate">
+          <h2 className="text-sm sm:text-lg lg:text-xl font-bold text-gray-900 dark:text-white flex-1 min-w-0 truncate">
             Upcoming Draws
           </h2>
         </div>
@@ -443,7 +443,7 @@ export default function UpcomingDraws() {
 
       {/* Filters */}
       <div className="bg-white dark:bg-neutral-900 rounded-lg sm:rounded-xl shadow-sm dark:shadow-none border border-gray-200 dark:border-neutral-700 p-4 sm:p-6">
-        <h3 className="text-base sm:text-lg font-bold text-gray-900 mb-4">Filter & Search</h3>
+        <h3 className="text-base sm:text-lg font-bold text-gray-900 dark:text-white mb-4">Filter & Search</h3>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
             <Input
               placeholder="Search draws..."
@@ -482,7 +482,7 @@ export default function UpcomingDraws() {
 
       {/* Error Message */}
       {error && (
-        <div className="bg-red-50 border-2 border-red-200 text-red-700 px-4 py-3 rounded-xl flex items-center gap-2">
+        <div className="bg-red-50 dark:bg-red-950/40 border-2 border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 px-4 py-3 rounded-xl flex items-center gap-2">
           <AlertCircle className="w-5 h-5 flex-shrink-0" />
           <span>{error}</span>
         </div>
@@ -498,7 +498,7 @@ export default function UpcomingDraws() {
               <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
                 <div className="flex-1 min-w-0">
                       <div className="flex flex-wrap items-center gap-3 mb-2">
-                        <h3 className="text-lg font-semibold text-gray-900">{draw.name}</h3>
+                        <h3 className="text-lg font-semibold text-gray-900 dark:text-white">{draw.name}</h3>
                         <MajorDrawTableStatusBadge status={draw.status} />
                         {draw.configurationLocked && (
                           <AdminBadge variant="danger" icon={AlertCircle} iconClassName="text-red-600 dark:text-red-400">
@@ -528,10 +528,10 @@ export default function UpcomingDraws() {
                       </div>
 
                       {!canEdit && (draw.status === "queued" || draw.status === "active") && (
-                        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+                        <div className="bg-yellow-50 dark:bg-yellow-950/30 border border-yellow-200 dark:border-yellow-800 rounded-lg p-3">
                           <div className="flex items-center gap-2">
-                            <AlertCircle className="w-4 h-4 text-yellow-600" />
-                            <span className="text-sm text-yellow-800">
+                            <AlertCircle className="w-4 h-4 text-yellow-600 dark:text-yellow-400" />
+                            <span className="text-sm text-yellow-800 dark:text-yellow-200">
                               This draw&apos;s configuration is locked and cannot be edited.
                             </span>
                           </div>

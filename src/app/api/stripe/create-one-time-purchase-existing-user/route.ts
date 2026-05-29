@@ -324,22 +324,32 @@ export async function POST(request: NextRequest) {
     }
     
     // ✅ Fallback: Check cookies if database lookup failed
+    // Priority rule (matches getUserActiveExperimentAssignment): page-targeted
+    // experiments beat wildcard, and the membership-theme sentinel is excluded
+    // so a cosmetic UI test can never steal purchase credit from a real promo.
     if (!experimentAssignment) {
       try {
+        const { attributionRank } = await import("@/utils/ab-testing/get-user-experiment-assignment");
         // Check all assignment cookies (format: ta_ab_assignment_<experimentId>)
         const activeExperiments = await ExperimentRepository.findAll({
           status: "active",
           page: 1,
-          limit: 10,
+          limit: 100,
         });
-        
-        for (const exp of activeExperiments.experiments) {
-          const experimentId = exp._id instanceof mongoose.Types.ObjectId 
-            ? exp._id.toString() 
+
+        const orderedExperiments = [...activeExperiments.experiments]
+          .map((exp) => ({ exp, rank: attributionRank(exp.slugTargets) }))
+          .filter(({ rank }) => rank < 2)
+          .sort((a, b) => a.rank - b.rank)
+          .map(({ exp }) => exp);
+
+        for (const exp of orderedExperiments) {
+          const experimentId = exp._id instanceof mongoose.Types.ObjectId
+            ? exp._id.toString()
             : String(exp._id);
           const cookieName = `ta_ab_assignment_${experimentId}`;
           const cookieValue = request.cookies.get(cookieName)?.value;
-          
+
           if (cookieValue) {
             try {
               const assignmentData = JSON.parse(cookieValue);

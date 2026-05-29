@@ -32,7 +32,12 @@ import {
 } from "@/utils/package-colors/packageColorScheme";
 
 import { usePurchaseInvalidation } from "@/hooks/usePurchaseInvalidation";
+import { usePerSlugHeroOverride } from "@/hooks/ab-testing/usePerSlugHeroOverride";
 import { cn } from "@/utils/cn";
+
+/** Default fallback for the all-prizes hero on /login. Kept as a module-level
+ *  constant so the variant-override site can short-circuit cleanly. */
+const DEFAULT_LOGIN_HERO = "/images/background/promo/landing/all-prizes/all-prizes-mobile.webp";
 
 // Google Icon Component
 
@@ -377,6 +382,13 @@ function RotatingToolsetCard() {
 }
 
 function LoginPageContent() {
+  // A/B-aware all-prizes hero. Returns null today (no VariantAssignmentWrapper on
+  // /login). Forward-compatible: once a wrapper is added + variation*-mobile/all-prizes
+  // assets land + "cash-prize" entries are added to imageSrcBySlug, this activates
+  // automatically. See docs/ab-testing/architecture.md.
+  const variantOverride = usePerSlugHeroOverride("cash-prize");
+  const loginHeroSrc = variantOverride?.mobile ?? DEFAULT_LOGIN_HERO;
+
   const [formData, setFormData] = useState({
     email: "",
 
@@ -860,7 +872,7 @@ function LoginPageContent() {
 
         <div className="absolute inset-0 z-0">
           <Image
-            src="/images/background/promo/landing/all-prizes/all-prizes-mobile.webp"
+            src={loginHeroSrc}
             alt="Tools Australia prize collage"
             fill
             className="object-cover"
