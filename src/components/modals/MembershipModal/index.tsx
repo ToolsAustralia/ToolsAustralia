@@ -2812,9 +2812,44 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
 
       const isAdditionalPackage = packageId.startsWith("additional-");
       if (isAdditionalPackage && (!isAuthenticated || !hasAdditionalPackageAccess(userData, userMajorDrawStats))) {
-        throw new Error(
-          "This package requires an active subscription or entries in the current draw. Please subscribe to a membership or enter the draw first to access additional packages."
-        );
+        // Phase 8 Option B (2026-05-29) — replace the generic Error throw with
+        // an actionable toast that surfaces the most useful next step instead
+        // of leaving the user staring at a dead-end "Payment Error".
+        //
+        // The common path landing here is now a Klaviyo abandoned-checkout email
+        // opened in a different browser where the original member isn't logged
+        // in: the deep-link auto-opens MembershipModal with an `additional-*`
+        // pack preselected, the user registers fresh (or hits the existing-
+        // account flow), advances to step 2, enters card details, clicks
+        // PURCHASE, and only NOW discovers they can't actually buy this pack.
+        // The previous generic error toast wasted all of that effort.
+        //
+        // Note: /login currently always redirects to /my-account on success
+        // (no callbackUrl support). A future enhancement would add returnTo
+        // plumbing so the user lands back on the modal post-login. For now,
+        // they re-click the email link or navigate back manually.
+        const wantsLogin = !isAuthenticated;
+        showToast({
+          type: "error",
+          title: wantsLogin ? "Log in to continue" : "Membership required",
+          message: wantsLogin
+            ? "This pack is for existing members and entry-holders. Log in to your account if you've purchased before — or subscribe to a membership tier first."
+            : "This pack requires an active membership or entries in the current draw. Subscribe to a membership tier to unlock access.",
+          duration: 12000,
+          action: {
+            label: wantsLogin ? "Log in" : "View memberships",
+            onClick: () => {
+              onClose();
+              router.push(wantsLogin ? "/login" : "/membership");
+            },
+          },
+        });
+        // Clean up purchase-in-progress state so the user can interact with the
+        // toast without the loading overlay blocking them.
+        hideLoading();
+        checkoutSubmitLockRef.current = false;
+        setIsSubmitting(false);
+        return;
       }
 
       if (isAuthenticated && hasAdditionalPackageAccess(userData, userMajorDrawStats)) {
