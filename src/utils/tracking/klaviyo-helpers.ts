@@ -54,13 +54,33 @@ export function identifyKlaviyoUser(email: string, traits?: Record<string, unkno
 }
 
 /**
+ * Format event name with [DEV] prefix in development mode (client-side mirror
+ * of the server-side `formatEventName` in `src/lib/klaviyo.ts:149`).
+ *
+ * Without this, client-side events fire to Klaviyo with bare names while
+ * server-side events get `[DEV]` prefixes — they end up mixed on the same
+ * profile in Klaviyo's UI, making dev/prod isolation harder during testing.
+ *
+ * Uses `NODE_ENV === "development"` (matches the server-side fallback when
+ * `KLAVIYO_MODE` env var is not explicitly set — which is the default).
+ * Idempotent: skips when the name already starts with `[DEV] `.
+ */
+function formatClientEventName(eventName: string): string {
+  if (process.env.NODE_ENV === "development" && !eventName.startsWith("[DEV] ")) {
+    return `[DEV] ${eventName}`;
+  }
+  return eventName;
+}
+
+/**
  * Track a custom event in Klaviyo.
  *
  * This is the main low-level helper for all Klaviyo events and is wrapped by
  * higher-level hooks (e.g. useKlaviyoTracking). It also respects pixel consent
  * so that disabling tracking in one place affects all downstream events.
  *
- * @param eventName - Name of the event (e.g., "Added to Cart", "Placed Order")
+ * @param eventName - Name of the event (e.g., "Added to Cart", "Placed Order").
+ *                    Automatically prefixed with "[DEV] " in development.
  * @param properties - Optional event properties keyed snake_case
  *                     (value, currency, product_id, order_id, item_count, ...)
  */
@@ -77,17 +97,22 @@ export function trackKlaviyoEvent(eventName: string, properties?: Record<string,
     return;
   }
 
+  // Match server-side klaviyo.ts:formatEventName behaviour so dev/prod events
+  // stay isolated in Klaviyo's UI (otherwise client-side events would fire
+  // bare while server-side get the [DEV] prefix, mixing them on profiles).
+  const finalEventName = formatClientEventName(eventName);
+
   try {
     // Klaviyo track format: ["track", eventName, properties]
-    window.klaviyo.push(["track", eventName, properties || {}]);
+    window.klaviyo.push(["track", finalEventName, properties || {}]);
 
     if (process.env.NODE_ENV === "development") {
-      console.log(`📧 Klaviyo: Event tracked - ${eventName}`, properties);
+      console.log(`📧 Klaviyo: Event tracked - ${finalEventName}`, properties);
     }
   } catch (error) {
     // Silently fail - don't break user experience
     if (process.env.NODE_ENV === "development") {
-      console.error(`❌ Klaviyo: Error tracking event ${eventName}`, error);
+      console.error(`❌ Klaviyo: Error tracking event ${finalEventName}`, error);
     }
   }
 }

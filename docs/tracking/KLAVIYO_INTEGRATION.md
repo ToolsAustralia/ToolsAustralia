@@ -53,7 +53,11 @@ Critical: post-purchase events fire from the **server**, not the browser. The br
 |---|---|---|
 | `Viewed Page` | `KlaviyoPageTracker` on route change | ✓ via `shouldTrackRoute()` — internal routes excluded |
 | `Identify` | `KlaviyoUserIdentifier` when user logs in | Not gated — must run on `/my-account` |
-| `Viewed Product`, `Added to Cart`, `Started Checkout` (when wired) | via `useKlaviyoTracking` hook from product components | Not gated |
+| `Viewed Product`, `Added to Cart` | via `useKlaviyoTracking` hook from product components | Not gated |
+| `Viewed Giveaway` (canonical, added 2026-05-28) | `PromoViewTracking` on `/promotions/<slug>` and brand pages (`/promotions/dewalt`, `/makita`, `/milwaukee`, `/ryobi`) | ✓ via `hasPixelConsent()` (called by `trackKlaviyoEvent`) |
+| `Started Checkout` — **authed path** (`step="viewed"`, canonical, revised 2026-05-28 Phase-7) | [`MembershipSection.handlePlanSelect`](../../src/components/sections/MembershipSection.tsx) at the "Enter Now" click — fires at intent capture, BEFORE the modal renders the card form. Captures abandoners who never reach payment-submit. | ✓ via `hasPixelConsent()` |
+| `Started Checkout` — **guest registration path** (`step="registered"`, canonical, added 2026-05-28) | **Server-side** from `/api/auth/register` after `ensureUserProfileSynced` — fires when guest completes step-1 with a `packageId`, from all 4 register branches (new-user + 3 plain-account updates) | **Not gated** — committed action, not browsing. See [docs/auth/gotchas.md](../auth/gotchas.md). |
+| `Started Checkout` — **guest second-open fallback** (`step="viewed"`, canonical, Phase-7) | `MembershipModal.handleSubmit` with `if (!isAuthenticated)` gate — fires when `guestUserData` persisted across modal close/reopen so step-1 was skipped (no server-side fire) | ✓ via `hasPixelConsent()` |
 
 ## Revenue tracking — the `$value` rule
 
@@ -165,12 +169,84 @@ This is intentional drift containment — we accept the legacy schema as paid co
 | Package type | `package_type` | enum string | One of `"membership"` / `"one-time"` / `"mini-draw"` / `"upsell"`. Always emit, even when implied by the event name — lets the ads team write cross-event aggregations. |
 | Entries change on a single event | `entries_granted` | number | Not `entries_added` / `entries` / `entries_gained`. Use for grants on purchase / renewal / upgrade events. |
 | Lifetime entry count on profile | `entries_purchased` | number | Profile property only — not an event property. Aggregates across all sources. |
+| Forecast entries (pre-purchase) | `num_entries` | number | Distinct from `entries_granted` — used on funnel events like `Started Checkout` where the entries haven't been granted yet (the purchase hasn't happened). |
+| Membership lifecycle state | `membership_status` | enum string | Profile property only. One of `"active"` / `"past_due"` / `"canceled"` / `"never_subscribed"`. Coerced from raw Stripe state via `deriveMembershipStatus()`. Coexists with legacy `subscription_status` (which keeps the raw Stripe value). |
+| Funnel-step discriminator | `step` | string | Used on multi-fire events like `Started Checkout` (`"viewed"` vs `"registered"`). Lets flow templates differentiate funnel position. |
 | User ID | `user_id` | string | MongoDB `_id.toString()`. |
 | Payment intent | `payment_intent_id` | string | **Omit the key entirely when absent** — no `""` or `"unknown"` sentinels. Klaviyo's `is set` filter cannot distinguish a sentinel from a real value. |
 | Event timestamp | `<verb>_at` | ISO 8601 string | `started_at`, `purchased_at`, `viewed_at`, `cancelled_at`. **Not** locale strings like `"December 22, 2025"`. Klaviyo segments do date math only on ISO / Unix values. |
 | Whether user is logged in when event fired | `is_authenticated` | boolean | For mixed authed/guest event paths (e.g. `Started Checkout`). |
 | Promo / giveaway context | `promo_slug`, `promo_id`, `promo_title`, `prize_name`, `prize_image_url`, `promo_url` | string | When an event is fired from a promo page, include these so email templates can reference the asset directly. |
 | Deep link back to action | `checkout_url`, `resume_url`, etc. | string (absolute URL with UTM) | When the email's CTA needs to return the user to a specific preselected state. Always include UTM params so the ads team can attribute. |
+
+### Profile properties added 2026-05-28
+
+These five canonical profile properties land on every user's Klaviyo profile via `ensureUserProfileSynced` and back-fill via `scripts/backfill-klaviyo-membership-properties.ts`. They power the "Purchased entries but no membership", "At-risk near renewal", and "Long-term member" segments the ads team requested. **Legacy `subscription_status` continues to be written** with raw Stripe values for back-compat with existing flows / segments / templates.
+
+| Property | Type | Computed how |
+|---|---|---|
+| `membership_status` | enum string (`"active"` / `"past_due"` / `"canceled"` / `"never_subscribed"`) | `deriveMembershipStatus(user)` in [klaviyo-helpers.ts](../../src/utils/integrations/klaviyo/klaviyo-helpers.ts). Coerced from raw Stripe state — see coercion table in [patterns.md P7](./patterns.md). `"trialing"` → `"active"`, `"unpaid"` → `"past_due"`, `"incomplete"` → `"never_subscribed"`. |
+| `entries_purchased` | number | Lifetime total: `member + one-time + upsell + mini-draw` entries. Sum of existing `entryBreakdown` counters — no new query. |
+| `giveaways_entered` | number | Distinct draws (Major + Mini) the user has at least one entry in. Two parallel queries via `Promise.all` because Major Draw entries live as embedded subdocs on `MajorDraw.entries[]` (indexed at [MajorDraw.ts:269](../../src/models/MajorDraw.ts#L269)) and Mini Draw entries live in the flat `TicketEntry` collection (indexed at [TicketEntry.ts:58](../../src/models/TicketEntry.ts#L58)). |
+| `membership_active_duration_months` | number \| null | `differenceInMonths(now, user.subscription.startDate)` from `date-fns`. Calendar-aware, DST-safe (no `30.4375 * 86400000` averaging). `null` when never subscribed. |
+| `next_renewal_date` | ISO 8601 string \| null | `subscription.endDate` ISO when `isActive && autoRenew`. `null` for canceled / never-subscribed. ISO required for Klaviyo date math (locale strings are unfilterable as dates). |
+
+Example segments the ads team can now build:
+
+- *Purchased entries but no membership* — `membership_status EQUALS "never_subscribed" AND entries_purchased > 0`
+- *At-risk near renewal* — `membership_status EQUALS "active" AND next_renewal_date is within next 3 days`
+- *Long-term VIP* — `membership_active_duration_months >= 6`
+
+### Recently added canonical events (single-page reference for the ads team)
+
+This section is the **one place** the ads team should look for new-event property shapes when building flows / templates / segments. Each row lists the event, its trigger, and every property they can reference in `{{ event.* }}` merge tags.
+
+#### `Viewed Giveaway` (2026-05-28)
+
+Fires once per route change on `/promotions/*` pages. Cookied profiles auto-attach; anonymous never-cookied users land as anonymous and link up later when they identify.
+
+| Property | Type | Example |
+|---|---|---|
+| `promo_slug` | string | `"milwaukee-march-2026"` |
+| `promo_id` | string (optional, omitted if absent) | `"promo_abc123"` |
+| `promo_title` | string | `"Win a Milwaukee Tool Pack"` |
+| `prize_name` | string | `"Milwaukee 18V Combo Kit"` |
+| `prize_image_url` | string (optional) | `"https://..."` |
+| `promo_url` | string (full URL) | `"https://toolsaustralia.com.au/promotions/milwaukee-march-2026"` |
+| `is_authenticated` | boolean | `true` / `false` |
+| `viewed_at` | ISO 8601 | `"2026-05-28T10:23:00Z"` |
+
+Example flow: *Viewed Giveaway → wait 24h → if no `Placed Order` → send email with `{{ event.promo_title }}` / `{{ event.prize_name }}` / `{{ event.promo_url }}` CTA*.
+
+#### `Started Checkout` (2026-05-28)
+
+Fires from two mutually-exclusive paths — both produce the same event shape, distinguished by the `step` discriminator. The combined funnel: `Started Checkout (step=*) → Placed Order`.
+
+| Property | Type | Example |
+|---|---|---|
+| `package_id` | string | `"membership_standard"` |
+| `package_name` | string | `"Standard Membership"` |
+| `package_type` | enum (`"membership"` / `"one-time"` / `"mini-draw"` / `"upsell"`) | `"membership"` |
+| `tier` | string (optional) | `"tradie"` |
+| `price` | **number** (not string) | `30` |
+| `$value` | number — Klaviyo revenue-template compat | `30` |
+| `currency` | string (lowercase) | `"aud"` |
+| `num_entries` | number (optional) | `100` |
+| `checkout_url` | string (absolute URL with UTM) | `"https://toolsaustralia.com.au/membership?openMembership=1&packageId=tradie-subscription&utm_source=klaviyo&utm_medium=email&utm_campaign=klaviyo_abandoned_checkout"` |
+| `promo_slug` | string (optional, when user originated from `/promotions/<slug>`) | `"milwaukee-march-2026"` |
+| `step` | enum (`"viewed"` / `"registered"`) | `"registered"` |
+| `is_authenticated` | boolean (derived from `step`) | `false` |
+| `started_at` | ISO 8601 | `"2026-05-28T10:23:00Z"` |
+
+`step` distinguishes:
+- `"viewed"` — authenticated user clicked "Pay" in `MembershipModal`. Klaviyo cookie already linked. Client-side fire.
+- `"registered"` — guest completed step-1 registration. Server-side fire from `/api/auth/register`. Email is in `customer_properties.email`.
+
+Example flow: *Started Checkout → wait 1h → if no `Placed Order` → send "pick up where you left off" email with `{{ event.package_name }}` / `{{ event.price|format_number }}` / `{{ event.checkout_url }}` as CTA*.
+
+#### Snapshot test
+
+Every new canonical event has a CI-fenced snapshot in [`canonical-events-shape.test.ts`](../../src/utils/integrations/klaviyo/__tests__/canonical-events-shape.test.ts). The test runs via `npm run test:klaviyo-canonical` and fails when a new event uses non-canonical keys (e.g. `package_tier`, `package_price`, `amount`, `purchase_date`, `entries_added`).
 
 ### When adding a new event
 
