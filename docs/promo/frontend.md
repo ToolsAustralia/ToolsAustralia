@@ -10,6 +10,15 @@
 - `src/app/promotions/` — admin / setup-style promo pages
 - `src/app/(site)/promotion/` — public promo landing pages
 
+### Klaviyo `Viewed Giveaway` event mount (added 2026-05-28)
+
+[`PromoViewTracking.tsx`](../../src/app/promotions/_components/PromoViewTracking.tsx) is a zero-render client component that fires the canonical Klaviyo `Viewed Giveaway` event once per route change. It is mounted in two places to cover every `/promotions/*` route with a single client-side fire:
+
+- [`src/app/promotions/[slug]/page.tsx`](../../src/app/promotions/[slug]/page.tsx) — covers all dynamic-slug promo pages.
+- [`src/app/promotions/_components/ToolsetLandingPage.tsx`](../../src/app/promotions/_components/ToolsetLandingPage.tsx) — covers the four brand pages (`/promotions/dewalt`, `/makita`, `/milwaukee`, `/ryobi`) which all render through this shared component.
+
+Both mounts pass the resolved `prize` from [src/config/prizes.ts](../../src/config/prizes.ts) — `title` prefers `prize.heroHeading` falling back to `prize.label`, `prizeName` is `prize.label`, `prizeImageUrl` is `prize.gallery?.[0]?.src` (omitted when absent, per the canonical no-sentinel rule). Mirrors the established pattern in [`MiniDrawViewTracking.tsx`](../../src/app/(site)/mini-draws/[id]/components/MiniDrawViewTracking.tsx) and [`ProductViewTracking.tsx`](../../src/app/(site)/shop/[slug]/components/ProductViewTracking.tsx). The event coexists with the existing `Viewed Page` (`PageType: "promotion"`) — does not replace it. Schema + snapshot test live under [docs/tracking/](../tracking/KLAVIYO_INTEGRATION.md).
+
 ## Hooks
 
 | Hook | Purpose |

@@ -262,6 +262,111 @@ export function useKlaviyoTracking() {
     }
   }, []);
 
+  /**
+   * Track a "Viewed Giveaway" event in Klaviyo (canonical schema, added 2026-05-28).
+   *
+   * Fires from `/promotions/<slug>` pages via `PromoViewTracking.tsx`. Uses the
+   * canonical property names defined in docs/tracking/KLAVIYO_INTEGRATION.md —
+   * `viewed_at` (ISO), `is_authenticated` (boolean), optional properties omitted
+   * rather than nulled. The cookied-profile auto-attach is handled by Klaviyo's
+   * onsite snippet.
+   *
+   * @param params - Promo metadata: slug, optional id, title, prize name, optional
+   *   prize image URL, full promo URL, is_authenticated flag.
+   */
+  const trackViewedGiveaway = useCallback(
+    (params: {
+      promo_slug: string;
+      promo_id?: string;
+      promo_title: string;
+      prize_name: string;
+      prize_image_url?: string;
+      promo_url: string;
+      is_authenticated: boolean;
+    }) => {
+      try {
+        trackKlaviyoEvent("Viewed Giveaway", {
+          promo_slug: params.promo_slug,
+          ...(params.promo_id ? { promo_id: params.promo_id } : {}),
+          promo_title: params.promo_title,
+          prize_name: params.prize_name,
+          ...(params.prize_image_url ? { prize_image_url: params.prize_image_url } : {}),
+          promo_url: params.promo_url,
+          is_authenticated: params.is_authenticated,
+          viewed_at: new Date().toISOString(),
+        });
+      } catch (error) {
+        if (process.env.NODE_ENV === "development") {
+          console.error("❌ Klaviyo: Error tracking Viewed Giveaway", error);
+        }
+      }
+    },
+    []
+  );
+
+  /**
+   * Track a canonical "Started Checkout" event in Klaviyo (added 2026-05-28, revised Phase-7).
+   *
+   * Fires from two callsites (the third Started Checkout path is server-side):
+   *
+   *   1. AUTHED user clicks "Enter Now" on a package card (MembershipSection.handlePlanSelect)
+   *      — fires at the moment of intent, BEFORE the modal renders the card form.
+   *      Captures abandoners who close the modal mid-flow. `is_authenticated: true`.
+   *
+   *   2. GUEST reaches payment-submit when `guestUserData` persisted across modal
+   *      close/reopen (handleRegistration didn't run this session → no server-side fire).
+   *      Gated by `if (!isAuthenticated)` in MembershipModal:handleSubmit so authed
+   *      users don't double-fire with #1. `is_authenticated: false`.
+   *
+   * `step` is the funnel position; `is_authenticated` is the real session state
+   * — NOT derived. In this codebase, step-1 registration does NOT auto-login
+   * (see docs/auth/gotchas.md "registration ≠ authenticated session"). A guest
+   * can fire this event with `step="viewed"` AND `is_authenticated=false` when
+   * they reach payment-submit without ever logging in.
+   *
+   * Schema: `price` as NUMBER, lowercase `currency`, `$value` alongside for
+   * Klaviyo revenue-template compat, `tier` (not `package_tier`), ISO
+   * `started_at`, optionals omitted when absent.
+   */
+  const trackKlaviyoStartedCheckout = useCallback(
+    (params: {
+      package_id: string;
+      package_name: string;
+      package_type: "membership" | "one-time" | "mini-draw" | "upsell";
+      tier?: string;
+      /** AUD as a NUMBER. */
+      price: number;
+      num_entries?: number;
+      checkout_url: string;
+      promo_slug?: string;
+      /** Real NextAuth session state — NOT derived from step. */
+      is_authenticated: boolean;
+    }) => {
+      try {
+        trackKlaviyoEvent("Started Checkout", {
+          package_id: params.package_id,
+          package_name: params.package_name,
+          package_type: params.package_type,
+          ...(params.tier ? { tier: params.tier } : {}),
+          price: params.price,
+          $value: params.price, // Klaviyo revenue-template compat
+          currency: "aud",
+          ...(params.num_entries !== undefined ? { num_entries: params.num_entries } : {}),
+          checkout_url: params.checkout_url,
+          ...(params.promo_slug ? { promo_slug: params.promo_slug } : {}),
+          step: "viewed", // client-side fire — either Enter-Now click (authed, MembershipSection.handlePlanSelect) or Pay-submit (guest second-open fallback). Both are the "viewed" funnel step (pre-Placed-Order).
+          is_authenticated: params.is_authenticated,
+          started_at: new Date().toISOString(),
+        });
+      } catch (error) {
+        if (process.env.NODE_ENV === "development") {
+          console.error("❌ Klaviyo: Error tracking Started Checkout (viewed)", error);
+        }
+      }
+    },
+    []
+  );
+
   return {
     identify,
     track,
@@ -271,5 +376,7 @@ export function useKlaviyoTracking() {
     trackViewContent,
     trackInitiateCheckout,
     trackCompleteRegistration,
+    trackViewedGiveaway,
+    trackKlaviyoStartedCheckout,
   };
 }

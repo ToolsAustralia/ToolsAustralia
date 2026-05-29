@@ -19,6 +19,10 @@ import { extractBrandFromSlug } from "./brand-extraction";
 import { calculateDrawSpecificPropertiesForUser, calculateDrawSpecificProperties, type DrawSpecificProperties } from "./klaviyo-draw-calculator";
 import { getRenewalEntriesPreviewForProfile } from "./klaviyo-renewal-entries-preview";
 import type { IMajorDraw } from "@/models/MajorDraw";
+import MajorDraw from "@/models/MajorDraw";
+import TicketEntry from "@/models/TicketEntry";
+import mongoose from "mongoose";
+import { differenceInMonths } from "date-fns";
 
 /**
  * Calculate entry breakdown by source
@@ -149,6 +153,24 @@ export async function userToKlaviyoProfile(
   const partnerDiscountStatus = calculatePartnerDiscountStatus(user);
   const upsellMetrics = calculateUpsellMetrics(user);
   const entryBreakdown = calculateEntryBreakdown(user);
+
+  // Canonical profile properties (added 2026-05-28 — see "Canonical property names"
+  // in docs/tracking/KLAVIYO_INTEGRATION.md). These coexist with legacy properties
+  // like subscription_status which continue to be written below for back-compat.
+  const entriesPurchased =
+    entryBreakdown.memberEntries +
+    entryBreakdown.oneTimeEntries +
+    entryBreakdown.upsellEntries +
+    entryBreakdown.miniDrawEntries;
+
+  let giveawaysEntered = 0;
+  try {
+    giveawaysEntered = await countDistinctDrawsEntered(user._id);
+  } catch (err) {
+    // Non-fatal — Klaviyo profile sync should not break if this query fails.
+    // Default to 0 and log for observability.
+    console.error(`Error counting distinct draws entered for user ${user._id}:`, err);
+  }
 
   // Calculate draw-specific properties (non-blocking - use defaults if fails)
   let drawSpecificProperties: Partial<DrawSpecificProperties> & {
@@ -316,6 +338,21 @@ export async function userToKlaviyoProfile(
       current_draw_subscription_active: drawSpecificProperties.current_draw_subscription_active ?? false,
       current_draw_one_time_packages: drawSpecificProperties.current_draw_one_time_packages ?? 0,
       current_draw_entries: drawSpecificProperties.current_draw_entries ?? 0,
+
+      // Canonical properties (added 2026-05-28 — see docs/tracking/KLAVIYO_INTEGRATION.md
+      // "Canonical property names" section). Coexist with legacy `subscription_status`
+      // (which keeps raw Stripe values for the flows / segments / templates already
+      // wired against it). The new properties enable the "Purchased entries but no
+      // membership", "At-risk near renewal", and "Long-term member" segments the
+      // ads team asked for.
+      membership_status: deriveMembershipStatus(user),
+      entries_purchased: entriesPurchased,
+      giveaways_entered: giveawaysEntered,
+      membership_active_duration_months: computeActiveDurationMonths(user.subscription?.startDate),
+      next_renewal_date:
+        user.subscription?.isActive && user.subscription?.autoRenew
+          ? safeDateToISO(user.subscription.endDate) ?? null
+          : null,
     },
   };
 
@@ -650,6 +687,18 @@ export function formatInvoiceDataForKlaviyo(invoiceData: {
 
 /**
  * Format package data for Klaviyo events with consistent formatting
+ *
+ * LEGACY shape — emits `price` as string ("49.99"), `tier` as empty string when
+ * absent, `package_name` falling back to "Unknown Package". Preserved for the
+ * events defined in `klaviyo-events.ts` as of 2026-05-27 (Subscription Started,
+ * Placed Order, etc.) which have active Klaviyo flows / templates / segments
+ * wired against this exact shape.
+ *
+ * For NEW events going forward, use `formatCanonicalPackageData` instead — it
+ * emits `price` as a number, omits `tier` when absent (no `""` sentinel), and
+ * includes `package_type` for cross-event aggregation. See the
+ * "Canonical property names — new events only" section of
+ * `docs/tracking/KLAVIYO_INTEGRATION.md` for the rationale.
  */
 export function formatPackageDataForKlaviyo(packageData: {
   packageId: string;
@@ -662,6 +711,41 @@ export function formatPackageDataForKlaviyo(packageData: {
     package_name: packageData.packageName?.trim() || "Unknown Package",
     tier: packageData.tier?.trim() || "",
     price: packageData.price.toFixed(2), // Format as "49.99"
+  };
+}
+
+/**
+ * Canonical package-data shape for Klaviyo events created after 2026-05-27.
+ *
+ * Emits per the canonical schema in `docs/tracking/KLAVIYO_INTEGRATION.md`:
+ * - `price` as a NUMBER (not string) — Klaviyo segment `>` / `<` filters compare
+ *   numerically only when the property is a number
+ * - `tier` omitted entirely when absent — no `""` / `"unknown"` sentinel
+ * - `package_type` always emitted — enables cross-event aggregations
+ * - `num_entries` optional, for one-time / mini-draw / upsell packages
+ *
+ * Do NOT use this for the legacy events in `klaviyo-events.ts` (Subscription
+ * Started, Placed Order, etc.) — those are frozen against `formatPackageDataForKlaviyo`.
+ *
+ * The `canonical-events-shape.test.ts` snapshot test will fail CI if a new
+ * event drifts from these property names.
+ */
+export function formatCanonicalPackageData(p: {
+  packageId: string;
+  packageName: string;
+  packageType: "membership" | "one-time" | "mini-draw" | "upsell";
+  tier?: string;
+  price: number;
+  numEntries?: number;
+}) {
+  const trimmedTier = p.tier?.trim();
+  return {
+    package_id: p.packageId,
+    package_name: p.packageName.trim(),
+    package_type: p.packageType,
+    price: p.price, // number, not string
+    ...(trimmedTier ? { tier: trimmedTier } : {}),
+    ...(p.numEntries !== undefined ? { num_entries: p.numEntries } : {}),
   };
 }
 
@@ -683,4 +767,82 @@ export function formatDateForKlaviyo(date?: Date): string {
 export function formatTimestampForKlaviyo(date?: Date): string {
   const dateToFormat = date || new Date();
   return dateToFormat.toISOString();
+}
+
+// ============================================================
+// CANONICAL PROFILE-PROPERTY HELPERS (added 2026-05-28)
+// See docs/tracking/KLAVIYO_INTEGRATION.md "Canonical property names".
+// Used by `userToKlaviyoProfile` to populate `membership_status`,
+// `entries_purchased`, `giveaways_entered`, `membership_active_duration_months`,
+// and `next_renewal_date` — the new canonical profile properties that enable
+// the ads team's segments without engineering involvement per-flow.
+// ============================================================
+
+export type MembershipStatus = "active" | "past_due" | "canceled" | "never_subscribed";
+
+/**
+ * Coerce raw User/Stripe subscription state into the 4-value canonical
+ * `membership_status` enum used in Klaviyo segments.
+ *
+ * Coercion table (see also docs/tracking/patterns.md P7 and docs/tracking/KLAVIYO_INTEGRATION.md):
+ *   "active"                          → "active"
+ *   "trialing"                        → "active"   (trial users have full benefits)
+ *   "past_due"                        → "past_due"
+ *   "unpaid"                          → "past_due" (Stripe's continued-dunning state)
+ *   "canceled"                        → "canceled"
+ *   "incomplete" / "incomplete_expired" → "never_subscribed" (never became a member)
+ *   (no subscription object)          → "never_subscribed"
+ *   anything else                     → "never_subscribed" (safest default for segments)
+ *
+ * Legacy `subscription_status` (raw Stripe value) continues to be written by
+ * `userToKlaviyoProfile` for back-compat with existing Klaviyo flows / segments
+ * / templates wired against it — do not remove that property.
+ */
+export function deriveMembershipStatus(user: IUser): MembershipStatus {
+  const status = user.subscription?.status;
+  if (!user.subscription || !status) return "never_subscribed";
+  if (status === "active" || status === "trialing") return "active";
+  if (status === "past_due" || status === "unpaid") return "past_due";
+  if (status === "canceled") return "canceled";
+  if (status === "incomplete" || status === "incomplete_expired") return "never_subscribed";
+  return "never_subscribed";
+}
+
+/**
+ * Number of complete calendar months between `startDate` and now.
+ *
+ * Uses `date-fns` `differenceInMonths` (DST-safe, respects calendar boundaries)
+ * rather than the naive `(now - start) / (30.4375 * 86400000)` that drifts
+ * around DST transitions. Returns `null` when the user has no subscription
+ * start date (i.e. never subscribed).
+ */
+export function computeActiveDurationMonths(startDate: Date | undefined | null): number | null {
+  if (!startDate) return null;
+  const start = startDate instanceof Date ? startDate : new Date(startDate);
+  return Math.max(0, differenceInMonths(new Date(), start));
+}
+
+/**
+ * Count distinct draws (Major + Mini) the user has at least one entry in.
+ *
+ * Two parallel queries because Major Draw and Mini Draw entries live in
+ * different collections:
+ *   - Major Draw entries are embedded subdocs on `MajorDraw.entries[]`
+ *     (indexed at `MajorDraw.ts:269` on `"entries.userId"`)
+ *   - Mini Draw entries are a flat collection (`TicketEntry`, indexed at
+ *     `TicketEntry.ts:58` on `{ userId: 1, miniDrawId: 1 }`)
+ *
+ * Both queries are indexed and run in parallel via `Promise.all` — total
+ * round-trip per profile sync is one (parallel) Mongo wait.
+ *
+ * Callers should wrap in a try/catch; this helper does not swallow errors.
+ */
+export async function countDistinctDrawsEntered(
+  userId: mongoose.Types.ObjectId | string
+): Promise<number> {
+  const [majorCount, miniDrawIds] = await Promise.all([
+    MajorDraw.countDocuments({ "entries.userId": userId }),
+    TicketEntry.distinct("miniDrawId", { userId }),
+  ]);
+  return majorCount + miniDrawIds.length;
 }

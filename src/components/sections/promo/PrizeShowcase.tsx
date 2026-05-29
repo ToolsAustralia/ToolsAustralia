@@ -31,6 +31,7 @@ import { SECTION_CONTAINER_CLASSES } from "@/components/ui";
 import { getLandingHeroImagePaths } from "@/config/promo-landing-slugs";
 import { getImageForMode } from "@/utils/promo/landing-image-resolver";
 import { useThemeStore } from "@/stores/useThemeStore";
+import { usePerSlugHeroOverride } from "@/hooks/ab-testing/usePerSlugHeroOverride";
 import {
   ToolboxSelector,
   PowerToolsetCarousel,
@@ -541,6 +542,10 @@ export default function PrizeShowcase({
   })();
 
   const { prizes, activePrize, activeSlug } = usePrizeCatalog({ slug: effectiveSlugForCatalog ?? undefined });
+  // Read the A/B variant's per-slug hero override at the top of the component to
+  // satisfy the rules-of-hooks ordering — the early returns below would otherwise
+  // make the hook call conditional.
+  const variantHeroOverride = usePerSlugHeroOverride(activeSlug);
 
   const toolboxQueryValue = searchParams.get(TOOLBOX_QUERY_PARAM);
 
@@ -837,14 +842,21 @@ export default function PrizeShowcase({
   const isRyobiOrDewaltTheme = (activeSlug || "").startsWith("ryobi-") || (activeSlug || "").startsWith("dewalt-");
   const highlights = activePrize.highlights ?? [];
 
-  // Insert landing image as first gallery item if available
+  // Insert landing image as first gallery item if available. When the visitor is
+  // bucketed into an A/B variant that overrides the per-slug mobile hero, prefer
+  // that path so the carousel slide stays consistent with the PromoHero variant.
   const landingImagePaths = activeSlug ? getLandingHeroImagePaths(activeSlug) : null;
   const enhancedGallery = ((): EnhancedGalleryItem[] => {
-    if (!landingImagePaths) return activePrize.gallery;
+    if (!landingImagePaths && !variantHeroOverride?.mobile) return activePrize.gallery;
 
-    const landingImageMobile = getImageForMode(landingImagePaths, themeMode, "mobile");
+    // First slide uses the mobile landing art everywhere (desktop + mobile) per
+    // product request, so variant override only needs to compose the mobile slot.
+    const landingImageMobile =
+      variantHeroOverride?.mobile ??
+      (landingImagePaths ? getImageForMode(landingImagePaths, themeMode, "mobile") : null);
 
-    // First slide: use mobile landing art everywhere (desktop + mobile) per product request
+    if (!landingImageMobile) return activePrize.gallery;
+
     const landingImage: EnhancedGalleryItem = {
       src: landingImageMobile,
       alt: `${activePrize.heroHeading} Landing Hero`,

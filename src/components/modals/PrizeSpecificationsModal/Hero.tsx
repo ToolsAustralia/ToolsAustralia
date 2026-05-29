@@ -6,19 +6,26 @@ import { Trophy } from "lucide-react";
 import type { PrizeCatalogEntry } from "@/config/prizes";
 import { getLandingHeroImagePaths } from "@/config/promo-landing-slugs";
 import { getImageForMode } from "@/utils/promo/landing-image-resolver";
+import { usePerSlugHeroOverride } from "@/hooks/ab-testing/usePerSlugHeroOverride";
 import UpsellHero from "../upsell-shell/UpsellHero";
 
 interface HeroProps {
   prize: PrizeCatalogEntry;
 }
 
-/** Resolve the same landscape "landing hero" image PrizeShowcase uses for this prize
- *  (under `public/images/background/promo/landing/<brand>/`). Picks the dark/desktop
- *  variant so it composes cleanly on the modal's dark hero gradient. Falls back to
- *  gallery[0] for any prize the landing resolver doesn't cover. */
+/** Resolve the landscape "landing hero" image PrizeShowcase uses for this prize.
+ *  Default: dark/desktop variant for clean composition over the modal's dark gradient.
+ *  When an A/B variant overrides the desktop slot for this slug, that override is
+ *  used directly (single-mode, theme-agnostic — matches the resolver's behavior on
+ *  brands that only ship one mode). Falls back to gallery[0] if no landing image
+ *  is configured. */
 const pickHeroImage = (
-  prize: PrizeCatalogEntry
+  prize: PrizeCatalogEntry,
+  variantDesktopOverride: string | undefined
 ): { src: string; alt: string } | null => {
+  if (variantDesktopOverride) {
+    return { src: variantDesktopOverride, alt: prize.heroHeading || prize.label };
+  }
   const paths = getLandingHeroImagePaths(prize.slug);
   if (paths) {
     return {
@@ -31,7 +38,8 @@ const pickHeroImage = (
 };
 
 const Hero: React.FC<HeroProps> = ({ prize }) => {
-  const photo = pickHeroImage(prize);
+  const variantOverride = usePerSlugHeroOverride(prize.slug);
+  const photo = pickHeroImage(prize, variantOverride?.desktop);
 
   return (
     <UpsellHero

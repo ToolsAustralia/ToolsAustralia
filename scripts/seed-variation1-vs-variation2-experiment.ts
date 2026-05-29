@@ -23,6 +23,10 @@ import path from "node:path";
 config({ path: path.resolve(process.cwd(), ".env.local") });
 
 const DRY_RUN = process.argv.includes("--dry-run");
+/** When --force is passed AND the experiment is in `draft`, delete existing variants
+ *  and repopulate from scratch. Refuses to touch active / paused / ended experiments
+ *  even with --force. Intentional friction in prod (no `:force` npm shortcut). */
+const FORCE = process.argv.includes("--force");
 
 /** Matches the admin-created draft "landing page variation 1 and variation 2"
  *  exactly so re-runs upsert that draft rather than creating a duplicate. */
@@ -69,29 +73,40 @@ function slugToImageKey(slug: string): { brand: Brand; toolbox: Toolbox } {
 }
 
 /**
- * Mobile-only A/B test: each variant only overrides the mobile hero. Desktop is
- * intentionally omitted so PromoHero falls through to the theme-aware default
- * landing-image-resolver — desktop visitors see the existing hero regardless of
- * which variant they're bucketed into.
+ * Full-viewport A/B test: each variant overrides BOTH desktop (2560×1044) and
+ * mobile (1080×1164) hero images. The design team's editor delivered proper
+ * 2560×1044 desktop sources matching the hero container's ~2.45 aspect (same as
+ * the legacy 1808×737 default landing images), so the empty-space-at-bottom
+ * issue is resolved.
  *
- * Why: the design team's first-pass desktop creatives shipped at 2560×737 (aspect
- * 3.47) which doesn't match the hero container aspect (~2.45). Until 2560×1044
- * sources land, the desktop side of this experiment is off. The mobile sources
- * are 1080×1164, a perfect fit, so mobile traffic IS being A/B tested.
+ * The `cash-prize` slug is added on top of the 16 brand+toolbox slugs because
+ * it's the canonical mapping for the evergreen all-prizes hero in
+ * LANDING_HERO_MAP. Adding it here means once /draw-results, /login (or any
+ * other consumer of the evergreen image) is wrapped in a variant context, those
+ * surfaces automatically reflect the bucketed variant's all-prizes artwork.
  *
- * To enable desktop testing later: re-introduce a `desktop` field per row pointing
- * at the new variation{1,2}-desktop webps.
+ * Per-slug entries are still partial-override capable — drop the `desktop` field
+ * here to fall back to default for that viewport, useful when iterating on one
+ * viewport at a time.
  */
 function buildImageSrcBySlug(variation: 1 | 2): Record<string, { desktop?: string; mobile?: string }> {
   const base = "/images/background/promo/landing";
+  const desktopDir = `${base}/variation${variation}-desktop`;
   const mobileDir = `${base}/variation${variation}-mobile`;
   const out: Record<string, { desktop?: string; mobile?: string }> = {};
   for (const slug of SLUG_TARGETS) {
     const { brand, toolbox } = slugToImageKey(slug);
     out[slug] = {
+      desktop: `${desktopDir}/${brand}-${toolbox}.webp`,
       mobile: `${mobileDir}/${brand}-${toolbox}-mobile.webp`,
     };
   }
+  // Evergreen all-prizes mapping (consumed by DrawResultsHero, /login, and
+  // PromoHero on /promotions/cash-prize via LANDING_HERO_MAP["cash-prize"]).
+  out["cash-prize"] = {
+    desktop: `${desktopDir}/all-prizes.webp`,
+    mobile: `${mobileDir}/all-prizes-mobile.webp`,
+  };
   return out;
 }
 
@@ -120,24 +135,32 @@ async function main(): Promise<void> {
   if (existing) {
     if (existing.status !== "draft") {
       console.log(
-        `↩️  Experiment "${EXPERIMENT_NAME}" exists in status="${existing.status}" — locked. Skipping.`
+        `↩️  Experiment "${EXPERIMENT_NAME}" exists in status="${existing.status}" — locked. Skipping.` +
+          (FORCE ? " (--force does NOT override locked experiments — pause first via admin.)" : "")
       );
       process.exit(0);
     }
     const variantCount = await Variant.countDocuments({ experimentId: existing._id });
-    if (variantCount > 0) {
+    if (variantCount > 0 && !FORCE) {
       console.log(
         `↩️  Experiment "${EXPERIMENT_NAME}" already has ${variantCount} variant(s). ` +
           `Skipping to avoid clobbering admin-edited config. ` +
-          `Delete the variants manually if you want to re-seed.`
+          `Re-run with --force to delete and recreate, or delete the variants manually.`
       );
       process.exit(0);
     }
     if (DRY_RUN) {
-      console.log(`[dry-run] Found empty draft "${EXPERIMENT_NAME}" (id=${existing._id}).`);
+      console.log(`[dry-run] Found draft "${EXPERIMENT_NAME}" (id=${existing._id}) with ${variantCount} variant(s).`);
+      if (variantCount > 0 && FORCE) {
+        console.log(`[dry-run] Would DELETE all ${variantCount} existing variant(s) (--force).`);
+      }
       console.log(`[dry-run] Would update slugTargets to ${SLUG_TARGETS.length} slugs and add 2 variants.`);
       console.log("[dry-run] Sample row from Variant A: dewalt-milwaukee →", variantAConfig.hero.imageSrcBySlug["dewalt-milwaukee"]);
       process.exit(0);
+    }
+    if (variantCount > 0 && FORCE) {
+      const del = await Variant.deleteMany({ experimentId: existing._id });
+      console.log(`🗑️  --force: deleted ${del.deletedCount} existing variant(s)`);
     }
     existing.slugTargets = [...SLUG_TARGETS];
     await existing.save();
