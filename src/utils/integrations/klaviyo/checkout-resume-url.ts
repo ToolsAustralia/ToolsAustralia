@@ -14,9 +14,10 @@
  *     &utm_medium=email
  *     &utm_campaign=klaviyo_abandoned_checkout
  *
- * Auto-opening the MembershipModal from `?openMembership=1` is a follow-up
- * enhancement — for now, landing on the right page with the right package
- * highlighted is sufficient and is one click away from completing checkout.
+ * Auto-opening the MembershipModal from `?openMembership=1` is wired via
+ * `useMembershipModalDeepLink` (Phase 8) — the hook reads the URL on mount
+ * inside MembershipSection and dispatches the open with the right package
+ * pre-selected. URL params are cleaned after firing so refresh doesn't loop.
  *
  * See `Started Checkout` event payload in docs/tracking/KLAVIYO_INTEGRATION.md
  * and the spec at docs/superpowers/specs/2026-05-27-klaviyo-events-expansion-design.md §5.

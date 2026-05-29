@@ -11,6 +11,7 @@ const MembershipModal = dynamic(() => import("@/components/modals/MembershipModa
 import { useMemberships } from "@/hooks/useMemberships";
 import { useUserContext } from "@/contexts/UserContext";
 import { useMembershipModal } from "@/hooks/useMembershipModal";
+import { useMembershipModalDeepLink } from "@/hooks/useMembershipModalDeepLink";
 import { useKlaviyoTracking } from "@/hooks/useKlaviyoTracking";
 import { convertToLocalPlan, getPackageId, type LocalMembershipPlan } from "@/utils/membership/membership-adapters";
 import { buildCheckoutResumeUrl } from "@/utils/integrations/klaviyo/checkout-resume-url";
@@ -85,6 +86,17 @@ export default function MembershipSection({
 
   // Use the centralized membership modal hook
   const membershipModal = useMembershipModal();
+
+  // Klaviyo abandoned-checkout deep-link: when the URL has
+  // `?openMembership=1&packageId=<id>` (built by buildCheckoutResumeUrl in the
+  // abandoned-checkout email CTA), auto-open the modal with the right package.
+  // The host-controlled callback wraps the open in the major-draw purchase gate.
+  useMembershipModalDeepLink((plan) => {
+    whenGatesOpenElseGateModal(() => {
+      membershipModal.setSelectedPlan(plan);
+      membershipModal.openModal();
+    });
+  });
 
   // Get resolved multipliers (includes scheduled, toggle, and alternating)
   const resolvedMembershipMultiplier = useResolvedMultiplier("membership-packages", "display");
