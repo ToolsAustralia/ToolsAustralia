@@ -92,6 +92,14 @@ export interface AdminDashboardStats {
     cancellationImpact?: {
       estimatedMonthlyRevenue: number;
     };
+    renewalProgress?: {
+      base: number;
+      renewed: number;
+      rate: number | null;
+      remaining: number;
+      baseAsOf: string | null;
+      isComplete: boolean;
+    };
   };
   revenue: {
     total: number;

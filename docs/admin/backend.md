@@ -176,6 +176,30 @@ Wraps a single `InvoiceChargeLog.aggregate` over `status: "failed"` rows in the 
   - `getMembershipByPackageLive()` — live per-package counts.
   - `getMembershipByPackageLiveForSnapshot()` — four-count shape used by snapshot writer cron.
   - `getMembershipByPackageSnapshot(asOfDate)` — point-in-time counts from `MembershipDailySnapshot`; falls back to live data with `snapshotMissing: true` when no row exists.
+  - `getRenewalBaseAsOf(date)` *(private)* — queries `MembershipDailySnapshot` for the period's first day and sums `activeCount + pastDueCount` across all subscription packages. If no snapshot exists for the exact date, it uses the nearest later snapshot (capped at 7 days out). Returns `{ base, snapshotDate, snapshotMissing }`.
+
+### Renewal Rate KPI (2026-05-29)
+
+The `getAnalyticsBundle` method populates `renewalProgress: RenewalProgress` only when the `dateRange` parameter resolves to a draw period (`current-draw` or `last-draw`). It is omitted for all other date filters.
+
+**Definition:**
+
+| Field | Value |
+|---|---|
+| `base` | `activeCount + pastDueCount` from `MembershipDailySnapshot` at the period's **first day** (nearest-later-day fallback, up to 7 days) |
+| `renewed` | `successfulRenewalUserCount` — distinct members who had a successful renewal payment in the period, by payment date |
+| `renewalRate` | `renewed / base`, capped at 1.0 (≤ 100%) |
+| `remaining` | `base - renewed` (non-negative) |
+| `remainingLabel` | `"expected"` for `current-draw` (period still open); `"did not renew"` for `last-draw` (closed period) |
+| `snapshotMissing` | `true` when no snapshot was found within the 7-day window |
+
+**Type:** `RenewalProgress` in `src/types/admin/membershipAnalytics.ts`. Added as an optional field on `MembershipAnalyticsBundle`.
+
+**API surface:** `GET /api/admin/dashboard/stats` exposes `stats.users.renewalProgress` when a draw date range is active.
+
+**Validation script:** `npm run find:renewal-rate` (`scripts/find-renewal-rate.ts`). Supports `--last-draw` (last draw period), `--draw N` (specific draw by number), and `--coverage` (snapshot availability audit). Use this to cross-check the KPI card values against raw DB data.
+
+**Spec:** `docs/superpowers/specs/2026-05-29-renewal-rate-metric-design.md`.
 
 ## Routes
 

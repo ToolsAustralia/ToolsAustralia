@@ -431,6 +431,9 @@ export async function GET(request: NextRequest) {
         cancellationImpact: {
           estimatedMonthlyRevenue: membershipAnalytics.cancelledMembershipRevenueImpact,
         },
+        ...(membershipAnalytics.renewalProgress && {
+          renewalProgress: membershipAnalytics.renewalProgress,
+        }),
         ...(snapshotMissingForStanding && { snapshotMissingForStanding: true }),
       },
       revenue: {
