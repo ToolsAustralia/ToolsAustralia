@@ -128,3 +128,5 @@ deriveBackfillAttribution(row: BackfillSourceRow): {
 **Confidence is always `"inferred_backfill"`** — these rows predate click-ID capture, so live resolver confidence levels (`click`, `utm_only`) never apply.
 
 **`isRenewal`** is derived via `classifyIsRenewal({ billingReason })` — `true` only for `subscription_cycle` without an upgrade/resubscribe flag.
+
+**Domain/referrer-form `utm_source` (data-driven, 2026-06-01):** `normalizeUtmToPlatform` (shared by the live resolver's utm fallback AND this backfill) maps the domain forms real ad traffic actually carries — notably `facebook.com` (7,303 historical paid-CPC rows) plus `m./l./lm./web./business.facebook.com`, `fb.com`, `instagram.com`/`m.`/`l.`, `ig.com` → `meta`; `tiktok.com`/`www.`/`vm.` → `tiktok`; `snapchat.com` → `snapchat`; `googleadservices.com` → `google`. Without these, Meta acquisition revenue was silently bucketed to `other` and understated ROAS. **Organic `google.com` is intentionally NOT mapped** — it would credit organic search to the reserved paid-Google channel.
