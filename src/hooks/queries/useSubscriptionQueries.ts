@@ -482,7 +482,9 @@ export function getSubscriptionStatusText(status?: string): string {
     unpaid: "Unpaid",
     incomplete: "Incomplete",
     incomplete_expired: "Expired",
-    trialing: "Trial",
+    // We never sell a real free trial; `trialing` only ever means a paid, active member whose
+    // billing date was anchored/reanchored via Stripe `trial_end`. Always show "Active" to members.
+    trialing: "Active",
     paused: "Paused",
   };
 

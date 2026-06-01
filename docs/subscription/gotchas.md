@@ -156,6 +156,14 @@ npx tsx scripts/migrate-anchor-billing-24.ts --limit=50
 
 Logs every subscription with `subId`, `customerEmail`, `oldAnchorDay`, `newAnchorDay`, `action` for cross-referencing in DB and Stripe Dashboard.
 
+### `createAESTDateAsUTC` returns Invalid Date (NaN) on overflow days
+
+`createAESTDateAsUTC` (and related AEST date helpers) return an Invalid Date when given a day that doesn't exist in the target month (e.g. day 31 in a 30-day month). Always **clamp to the last day of the month first** — use `daysInMonthUTC(year, month)` from `src/utils/billing/anchor-billing.ts` — before constructing the date. The past-due reanchor rule does this via `clampReanchorDay`. Failing to clamp will silently produce a `NaN` timestamp that passes through to Stripe as a bad value.
+
+### Stripe does NOT reject a past `trial_end` — it charges immediately
+
+When you call `stripe.subscriptions.update(id, { trial_end: <timestamp> })` and the timestamp is in the past, Stripe **does not return an error** — it ends the trial immediately and charges the customer right away. The past-due reanchor code **future-floors** the computed `trial_end`: if the computed reanchor date is not strictly in the future, the reanchor is aborted non-fatally. Never pass a non-future `trial_end` when the intent is "schedule next renewal", not "charge now".
+
 ## Frontend
 
 ### Client-derived `isActive`
@@ -187,3 +195,11 @@ The customer-facing Terms & Conditions page lives at [src/app/(site)/terms/page.
 - **Package tiers** (§3) — Mini-draw packs are a **viewer swap**, not a flat list ([getMiniDrawPackagesForViewer](../../src/data/miniDrawPackages.ts)). The split is driven by [`hasAdditionalPackageAccess`](../../src/utils/membership/has-additional-package-access.ts) = *active subscription **OR** any current Major Giveaway entries* — **NOT** membership-exclusive (the `additional-*-pack-mini` records are flagged `isMemberOnly` in data but the access gate was deliberately broadened; the util comment notes they were `previously "member-only"`). So a One-Time Package buyer with current draw entries also sees the Tradie/Foreman/Boss/Power/VIP (Mini Draw) tiers; users with no current draw entries see Mini Pack 1–3. Do not describe these as "member-only/member-exclusive" in the T&C — that would be a false statement. Mini Pack 4–8 were deactivated 2026-05-14. If the active catalog in `src/data/miniDrawPackages.ts` / `membershipPackages.ts` or the access rule changes, update §3/§5/§17.
 
 Open legal item (not a code issue): "non-refundable once purchased" (§4) vs. the Australian Consumer Law savings clause (§11) is a lawyer review item, behaviourally consistent with code (no proration/refund on cancel) but not an enforced rule.
+
+## Past-due reanchor — `attempt_count` is not a reliable dunning signal under `pause_collection`
+
+When a renewal fails, the app sets `pause_collection: { behavior: "keep_as_draft" }` on the subscription. This **blocks Stripe's automatic retry scheduler** — Stripe does not re-attempt the invoice while collection is paused. As a result, a manually recovered invoice (admin charge, user Pay-Now, renew-subscription retry) still has `attempt_count === 1`, even though the member genuinely was past-due.
+
+The reanchor gate (`shouldReanchorAfterRecovery` in `pauseCollectionPolicy.ts`) therefore does **not** rely on `attempt_count > 1` as its primary dunning signal — it is kept only as belt-and-suspenders for the rare no-pause edge. The **primary durable signal** for the `renew-subscription` recovery channel is the `invoice.metadata.dunning_recovery === '1'` marker, stamped on the invoice by `handleInvoicePaymentFailed` at the moment the renewal first fails. This marker survives channel-independently (it is set on the invoice object itself and is not cleared when DB status or `pause_collection` is updated).
+
+See `docs/PAST_DUE_REANCHOR.md` for the full trigger-gate logic and channel analysis.

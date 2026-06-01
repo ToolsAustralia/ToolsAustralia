@@ -48,8 +48,9 @@ import { getSubscriptionPeriodEnd } from "@/utils/payment/stripe/subscription-pe
 import {
   pauseAfterRenewalFailure,
   resumeAfterSuccessfulRenewalPayment,
+  reanchorAfterPastDueRecovery,
 } from "@/services/subscription/SubscriptionCollectionPauseService";
-import { decideClearPause } from "@/services/subscription/pauseCollectionPolicy";
+import { decideClearPause, shouldReanchorAfterRecovery } from "@/services/subscription/pauseCollectionPolicy";
 import { STRIPE_SUBSCRIPTION_METADATA_IS_RESUBSCRIBE } from "@/utils/payment/stripe-subscription-metadata";
 import { trackPixelSubscriptionRenewal } from "@/utils/tracking/pixel-purchase-tracking";
 import { executeBackgroundJob } from "@/utils/webhook/background-jobs";
@@ -1980,6 +1981,8 @@ async function handleSubscriptionUpdated(subscription: Stripe.Subscription) {
 
     // Capture status before any mutations (used below for activation history after save)
     const prevSubStatus = user.subscription?.status;
+    // Capture wasActive before mutations so it is in scope after the if(user.subscription) block
+    const wasActiveBeforeUpdate = user.subscription?.isActive ?? false;
 
     // Update user subscription status based on Stripe subscription
     if (user.subscription) {
@@ -2175,6 +2178,7 @@ async function handleSubscriptionUpdated(subscription: Stripe.Subscription) {
           }
         }
       }
+
     }
 
     // ✅ Mark subscription as modified if we made changes
@@ -2202,6 +2206,18 @@ async function handleSubscriptionUpdated(subscription: Stripe.Subscription) {
       } catch (err) {
         webhookLog("warn", "Failed to append activation history from subscription.updated:", err);
       }
+    }
+
+    // Transition INTO active/trialing (past-due recovery OR a fresh first activation): refresh Klaviyo
+    // so next_renewal_date / past_due_renewal_entries are current. Idempotent upsert; never re-subscribes.
+    // Only fires on transitions INTO active/trialing (wasActiveBeforeUpdate === false), NOT on the fast-path
+    // (wasActive && prevSubStatus === "active") which handles already-active routine updates.
+    if (
+      !wasActiveBeforeUpdate &&
+      (subscription.status === "active" || subscription.status === "trialing")
+    ) {
+      ensureUserProfileSynced(user as IUser);
+      webhookLog("info", `Klaviyo profile sync queued after recovery to ${subscription.status} for ${user.email}`);
     }
 
     // ✅ Verify save for canceled/past_due/unpaid status + Klaviyo profile (past_due renewal entries on profile)
@@ -2624,6 +2640,19 @@ async function handleInvoicePaymentFailed(invoice: Stripe.Invoice) {
           user.subscription.isActive = false;
           if (!wasAlreadyPastDue) {
             user.subscription.pastDueAt = new Date();
+          }
+
+          // Stamp a durable dunning marker on THIS invoice so any later recovery (esp. the
+          // renew-subscription channel, which pre-flips DB status + clears pause before the webhook)
+          // can be detected by the reanchor gate. attempt_count is unreliable under pause_collection.
+          if (invoice.id) {
+            try {
+              await stripe.invoices.update(invoice.id, {
+                metadata: { ...(invoice.metadata ?? {}), dunning_recovery: "1" },
+              });
+            } catch (stampErr) {
+              console.error(`[reanchor] could not stamp dunning_recovery on invoice ${invoice.id}:`, stampErr);
+            }
           }
 
           // ✅ If subscription will be canceled after max retries, set endDate
@@ -3443,6 +3472,9 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
     // — in those cases a late resume never ran, leaving the subscription in "Collection paused" despite a paid invoice.
     const invoiceAmountPaid = expandedInvoice.amount_paid ?? 0;
     const invoiceIsPaid = expandedInvoice.status === "paid" && invoiceAmountPaid > 0;
+    // Snapshot pause_collection BEFORE resumeAfterSuccessfulRenewalPayment clears it in Stripe,
+    // so the reanchor gate can use it as a dunning signal.
+    const pauseCollectionPresentAtPayment = subscription.pause_collection != null;
     if (invoiceIsPaid) {
       const shouldClearPauseForCollection = decideClearPause({
         billingReason: expandedInvoice.billing_reason ?? undefined,
@@ -3460,6 +3492,39 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
           );
         } catch (earlyResumeErr) {
           webhookLog("warn", `Non-critical: could not resume collection before benefits: ${earlyResumeErr}`);
+        }
+      }
+    }
+
+    // --- Past-due reanchor: move future renewals to the recovery-payment date ---
+    if (invoiceIsPaid && expandedInvoice.id) {
+      const reanchorGate = shouldReanchorAfterRecovery({
+        billingReason: expandedInvoice.billing_reason ?? undefined,
+        invoiceIsPaid,
+        previousSubscriptionDbStatus: previousSubscriptionDbStatus ?? undefined,
+        pauseCollectionPresentAtPayment,
+        invoiceAttemptCount: expandedInvoice.attempt_count ?? undefined,
+        invoiceMetadataDunningRecovery: expandedInvoice.metadata?.dunning_recovery === "1",
+        pauseReason: (subscription.metadata?.pauseReason as string | undefined) ?? undefined,
+        cancelAtPeriodEnd: subscription.cancel_at_period_end === true,
+        autoRenew: user.subscription?.autoRenew,
+        alreadyReanchoredInvoiceId: user.subscription?.lastReanchoredInvoiceId,
+        invoiceId: expandedInvoice.id,
+      });
+      if (reanchorGate) {
+        const recoveryDate = paidAtDateFromStripeInvoice(expandedInvoice) ?? new Date();
+        const reanchorResult = await reanchorAfterPastDueRecovery({
+          subscriptionId: subscription.id,
+          userId: new mongoose.Types.ObjectId(String(user._id)),
+          recoveryDate,
+          invoiceId: expandedInvoice.id,
+          packageId: user.subscription?.packageId ?? undefined,
+        });
+        if (reanchorResult.reanchored) {
+          webhookLog(
+            "info",
+            `Reanchored subscription ${subscription.id} after past-due recovery (invoice ${expandedInvoice.id})`
+          );
         }
       }
     }

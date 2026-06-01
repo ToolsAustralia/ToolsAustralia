@@ -46,3 +46,16 @@ npx tsx scripts/migrate-anchor-billing-24.ts --limit=50
 ## Audit
 
 - Migration logs every subscription with `subId`, `customerEmail`, `oldAnchorDay`, `newAnchorDay`, `action` so you can match records in your DB and Stripe dashboard.
+
+## Second anchor-move trigger — past-due reanchor
+
+There are now **two** events that move the billing anchor:
+
+1. **New joiners on 25th/26th/27th** (this doc) — handled at subscription-create time.
+2. **Past-due recovery** — when a `past_due`/`unpaid` subscription recovers, future renewals are reanchored to the recovery-payment date (AEST), clamping 25/26/27 → 24, via `reanchorAfterPastDueRecovery` in `SubscriptionCollectionPauseService`.
+
+See [PAST_DUE_REANCHOR.md](./PAST_DUE_REANCHOR.md) for the full past-due reanchor rule.
+
+## Stripe "Trials" analytics are an anchoring artifact
+
+Anchoring uses Stripe `trial_end`, so Stripe classifies anchored members (25-27 joiners, the migration batch, and past-due reanchors) as **"trials"** — the **Billing → Trials** tab and trial-segmented MRR will show large numbers even though **we never sell a free trial**. This is cosmetic with no functional impact; our DB-based analytics count these members as active subscribers. Do not read Stripe's Trials / MRR-during-trial as a real funnel — use Subscribers/Revenue or the app's own dashboards. See [PAST_DUE_REANCHOR.md](./PAST_DUE_REANCHOR.md).

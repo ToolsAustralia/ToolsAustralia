@@ -287,6 +287,19 @@ The single-platform payment resolver attributes a payment to Klaviyo **only** vi
 
 These resolve at lower priority than paid click IDs (Meta/TikTok/Snap 7d). A user who clicked a Meta ad and then clicked a Klaviyo email link within 7 days will be attributed to Meta (the paid click wins).
 
+## Past-due reanchor and Klaviyo profile sync
+
+When a `past_due`/`unpaid` subscription recovers and is reanchored to the recovery-payment date, the **Klaviyo profile is re-pushed** so the snapshot properties reflect the new anchor. Two independent pushes guard this:
+
+1. **Orchestrator push** — `reanchorAfterPastDueRecovery` calls `ensureUserProfileSynced` immediately after writing the new `endDate` to Mongo.
+2. **Defense-in-depth push** — the active/trialing recovery branch of `handleSubscriptionUpdated` (the `customer.subscription.updated` webhook fired by Stripe when `trial_end` is set) also pushes the profile.
+
+**Why this matters:** Klaviyo profile properties `next_renewal_date`, `subscription_end_date`, and `past_due_renewal_entries` are **pushed snapshots**, not live reads. Without a re-push after reanchor, these properties would show the old anchor date until the next scheduled sync or member action.
+
+Every other surface that shows the renewal date reads `endDate` live per request (my-account, SubscriptionManagementModal, admin panels) and auto-corrects without any action.
+
+See [docs/PAST_DUE_REANCHOR.md](../PAST_DUE_REANCHOR.md) for the full downstream-propagation details.
+
 ## Common bugs to watch for
 
 - **Building revenue events by hand** instead of using `buildRevenueProperties` — easy to typo `$value` as `value`, breaking revenue reporting.

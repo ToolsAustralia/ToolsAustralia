@@ -26,7 +26,7 @@ export const ANCHOR_DAY_OF_MONTH = 24;
 export const ANCHOR_JOIN_DAYS = [25, 26, 27] as const;
 
 /** Version for audits and support; bump when the rule or params change. */
-export const BILLING_ANCHOR_RULE_VERSION = 1;
+export const BILLING_ANCHOR_RULE_VERSION = 2;
 
 /**
  * Returns the calendar day of the month in AEST for a given date.
@@ -93,4 +93,59 @@ export function getSubscriptionCreateParamsForAnchor(joinDate: Date): Record<str
     proration_behavior: "none",
     metadata: { billing_anchor_rule: "join_25_27_to_24" },
   };
+}
+
+/** Leap-safe number of days in a 1-12 month (UTC). The single canonical days-in-month helper. */
+export function daysInMonthUTC(year: number, month1to12: number): number {
+  return new Date(Date.UTC(year, month1to12, 0)).getUTCDate();
+}
+
+/**
+ * Clamp a recovery-landing day to the anchor window: AEST 25/26/27 -> 24, else the day itself.
+ * Only ever lowers or keeps the day, never raises it.
+ */
+export function clampReanchorDay(date: Date): number {
+  const day = getCalendarDayInAEST(date);
+  return (ANCHOR_JOIN_DAYS as readonly number[]).includes(day) ? ANCHOR_DAY_OF_MONTH : day;
+}
+
+/**
+ * Unix seconds (for Stripe `trial_end`) of the clamped recovery day at midnight AEST, at the NEXT
+ * occurrence STRICTLY AFTER recoveryDate (instant comparison, not day-integer). Short months use the
+ * last day (e.g. kept 31 -> Feb 28/29). `createAESTDateAsUTC` does NOT clamp overflow days (returns
+ * Invalid Date), so the Math.min(clampedDay, lastDay) step is mandatory. Throws on invalid input;
+ * the caller aborts the reanchor non-fatally.
+ */
+export function getReanchorTrialEndTimestamp(recoveryDate: Date): number {
+  // Reject malformed input. recoveryDate is built by the caller from a Stripe unix timestamp
+  // (`new Date((paid_at ?? created) * 1000)`), which is always "now-ish". NaN or a non-positive
+  // instant (<= the Unix epoch) means paid_at was missing/zero — bad data, not a real recovery —
+  // so we throw and the caller aborts the reanchor non-fatally.
+  if (!Number.isFinite(recoveryDate.getTime()) || recoveryDate.getTime() <= 0) {
+    throw new Error("getReanchorTrialEndTimestamp: invalid recoveryDate");
+  }
+  const recoveryUnix = Math.floor(recoveryDate.getTime() / 1000);
+  const clampedDay = clampReanchorDay(recoveryDate);
+  let year = parseInt(formatInTimeZone(recoveryDate, AEST_TIMEZONE, "yyyy"), 10);
+  let month = parseInt(formatInTimeZone(recoveryDate, AEST_TIMEZONE, "M"), 10); // 1-12
+
+  const build = (y: number, m: number): Date => {
+    const billDay = Math.min(clampedDay, daysInMonthUTC(y, m));
+    const dt = createAESTDateAsUTC(y, m, billDay, 0, 0);
+    if (Number.isNaN(dt.getTime())) {
+      throw new Error(`getReanchorTrialEndTimestamp: invalid date ${y}-${m}-${billDay}`);
+    }
+    return dt;
+  };
+
+  let candidate = build(year, month);
+  while (Math.floor(candidate.getTime() / 1000) <= recoveryUnix) {
+    month += 1;
+    if (month > 12) {
+      month = 1;
+      year += 1;
+    }
+    candidate = build(year, month);
+  }
+  return Math.floor(candidate.getTime() / 1000);
 }
