@@ -1,5 +1,13 @@
 # Billing-Stripe — Gotchas
 
+## Stripe's $0 "Trial period" invoice double-grants entries — guard it
+
+Setting `trial_end` on an **existing** subscription (the past-due reanchor, the `migrate-anchor-billing-24` migration, join-anchoring 25/26/27→24) makes Stripe **auto-create a separate $0 invoice** with `billing_reason="subscription_update"` and a "Trial period for X" line, and mark it **paid** (it's $0). That fires a second `invoice.payment_succeeded`.
+
+`handleInvoicePaymentSucceeded` normalizes `subscription_update` to a renewal for entry math, so it was **granting membership entries again** for this $0 invoice — double-counting the real `subscription_cycle` renewal — and logging a spurious "Subscribed to X Membership Package" admin-activity row (the recent-activities feed labels any non-`subscription_cycle` membership grant as "Subscribed"). 
+
+Guard: `isZeroAmountTrialUpdateInvoice()` (`src/utils/billing/trial-invoice.ts`) — the webhook early-returns for these. It is narrow: a 100%-off renewal is `subscription_cycle` (still grants); a real upgrade proration is `subscription_update` with `total > 0` (still grants). Audit/cleanup: `npm run find:duplicate-trial-entry-grants`. See `docs/PAST_DUE_REANCHOR.md`.
+
 ## Charge past-due — runbook
 
 (Migrated from former `docs/CHARGE_PAST_DUE_CUSTOMERS.md`.)

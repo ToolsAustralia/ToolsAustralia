@@ -41,6 +41,7 @@ npm run test:http-rejection-severity # pure classifier: 5xx→high, coded 4xx→
 npm run test:klaviyo-canonical       # fences canonical property names for new Klaviyo events (added 2026-05-28). Fails when new event drifts to legacy aliases (package_tier/amount/purchase_date/etc.). See docs/tracking/KLAVIYO_INTEGRATION.md "Canonical property names".
 npm run test:anchor-billing          # date math for both join-anchor and past-due reanchor: clamp 25/26/27→24, short-month last-day clamping, DST boundaries, year rollover, same-day roll, future-floor, invalid input.
 npm run test:reanchor-gate           # trigger predicate for past-due reanchor: signal isolation (past_due DB status / pause_collection present / attempt_count>1), all exclusion arms (cancel_at_period_end, autoRenew=false, pauseReason=retention, already-reanchored).
+npm run test:trial-invoice           # isZeroAmountTrialUpdateInvoice guard: skips Stripe's $0 'Trial period' subscription_update invoice (stops double-granting entries); real cycle/create/upgrade(>0)/100%-off-cycle still grant.
 ```
 
 ## QA seed: past-due member for reanchor recovery testing

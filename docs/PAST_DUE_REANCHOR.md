@@ -97,6 +97,10 @@ It also empirically showed `attempt_count` stays `1` under `pause_collection` �
 - **No UI shows "trialing"/"Trial"** for these members — every member- and admin-facing status renders as "Active" (see *Member-facing status*).
 - The behavior flip is a single commit; commits are the rollback unit.
 
+## Gotcha: Stripe's $0 "Trial period" invoice (do NOT grant benefits for it)
+
+Setting `trial_end` makes Stripe auto-create a **separate $0 invoice** (`billing_reason="subscription_update"`, line "Trial period for X") and mark it paid. That fires a second `invoice.payment_succeeded`. It is **not** a real payment. The webhook **must skip it** — otherwise it double-grants renewal entries (the real renewal is the `subscription_cycle` invoice) and logs a spurious "Subscribed to X" admin activity row. Guarded by `isZeroAmountTrialUpdateInvoice()` (`src/utils/billing/trial-invoice.ts`); the webhook early-returns. This affected every `trial_end` flow (reanchor + the `migrate-anchor-billing-24` migration + join-anchoring) — audit/cleanup via `npm run find:duplicate-trial-entry-grants`. No double *charge* (the invoice is $0).
+
 ## Related
 
 - `docs/BILLING_ANCHOR_24.md` (join-anchor rule; reanchor is the second anchor-move trigger)
