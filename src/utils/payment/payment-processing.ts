@@ -40,6 +40,9 @@ import {
   setLedgerCampaign,
   setLedgerPromoLink,
 } from "@/utils/payment/ledger-helpers";
+import { classifyIsRenewal } from "@/services/attribution/classifyIsRenewal";
+import { normalizeUtmToPlatform } from "@/services/attribution/normalizePlatform";
+import type { ConvertingPlatform, AttributionConfidence } from "@/types/attribution";
 
 /** Optional membership ledger (Stripe invoice path) — lastMonthDelta for refunds. */
 export type SubscriptionLedgerContext = {
@@ -193,7 +196,14 @@ export async function processPaymentBenefits(
   /** Membership re-subscribe — forwarded to Meta CAPI as custom_data.content_category for segmentation. */
   isResubscribe?: boolean,
   /** Membership invoice payments: contribution to lastMonthAccumulatedEntries (refund ledger). */
-  subscriptionLedgerContext?: SubscriptionLedgerContext
+  subscriptionLedgerContext?: SubscriptionLedgerContext,
+  /** Edge-resolved single-platform attribution decision (from Stripe metadata). Null → UTM fallback. */
+  resolvedAttribution?: {
+    platform: ConvertingPlatform;
+    confidence: AttributionConfidence;
+    attributedClickId: string | null;
+    attributedClickTimestamp: number | null;
+  } | null
 ): Promise<{ success: boolean; alreadyProcessed: boolean; error?: string; code?: string }> {
   // ✅ CRITICAL: Validate input parameters
   // console.log(`🔍 processPaymentBenefits called with:`, {
@@ -243,7 +253,8 @@ export async function processPaymentBenefits(
     sessionAttribution,
     affiliateOptions,
     isResubscribe,
-    subscriptionLedgerContext
+    subscriptionLedgerContext,
+    resolvedAttribution
   );
   processingLocks.set(lockKey, processingPromise);
 
@@ -279,7 +290,13 @@ async function processPaymentBenefitsInternal(
   sessionAttribution?: AttributionParams,
   affiliateOptions?: { skipMembershipFirstCommission?: boolean },
   isResubscribe?: boolean,
-  subscriptionLedgerContext?: SubscriptionLedgerContext
+  subscriptionLedgerContext?: SubscriptionLedgerContext,
+  resolvedAttribution?: {
+    platform: ConvertingPlatform;
+    confidence: AttributionConfidence;
+    attributedClickId: string | null;
+    attributedClickTimestamp: number | null;
+  } | null
 ): Promise<{ success: boolean; alreadyProcessed: boolean; error?: string; code?: string }> {
   const maxRetries = 3;
   let retryCount = 0;
@@ -397,6 +414,22 @@ async function processPaymentBenefitsInternal(
           attributionData.promotionSlug = signupAttr.promotionSlug;
         }
 
+        // Single-platform attribution (spec: prefer the edge-resolved decision; otherwise
+        // fall back to a UTM-based resolve from the merged attributionData). Never throws.
+        const isRenewal = classifyIsRenewal({ billingReason, isResubscribe });
+        let convertingPlatform: ConvertingPlatform | null = resolvedAttribution?.platform ?? null;
+        let attributionConfidence: AttributionConfidence | null = resolvedAttribution?.confidence ?? null;
+        const attributedClickId = resolvedAttribution?.attributedClickId ?? null;
+        const attributedClickTimestamp = resolvedAttribution?.attributedClickTimestamp ?? null;
+        if (!convertingPlatform) {
+          const fallback = normalizeUtmToPlatform(
+            typeof attributionData.utmSource === "string" ? attributionData.utmSource : undefined,
+            typeof attributionData.utmMedium === "string" ? attributionData.utmMedium : undefined
+          );
+          convertingPlatform = fallback ?? "direct";
+          attributionConfidence = "utm_only";
+        }
+
         const paymentEventData: Record<string, unknown> = {
           entries: packageData.entries,
           points: packageData.points,
@@ -415,6 +448,10 @@ async function processPaymentBenefitsInternal(
             paymentMetadata?.miniDrawId && { miniDrawId: paymentMetadata.miniDrawId }), // For activity log: "Entered in [mini draw title]"
           ...(Object.keys(attributionData).length > 0 && attributionData),
         };
+
+        // Audit evidence: persist the resolved click signal into the (Mixed) data blob.
+        if (attributedClickId) (paymentEventData as Record<string, unknown>).attributedClickId = attributedClickId;
+        if (attributedClickTimestamp != null) (paymentEventData as Record<string, unknown>).attributedClickTimestamp = attributedClickTimestamp;
 
         // Get user's active experiment assignment (non-blocking - don't fail if this errors)
         // ✅ FIX: Try without slug first (finds all-page experiments or any active experiment)
@@ -444,6 +481,9 @@ async function processPaymentBenefitsInternal(
           processedBy,
           timestamp: new Date(),
           ...buildAttributionFields(sessionAttribution),
+          convertingPlatform,
+          attributionConfidence,
+          isRenewal,
           ...(experimentAssignment && {
             experimentId: experimentAssignment.experimentId,
             variantId: experimentAssignment.variantId,

@@ -154,8 +154,28 @@ Accepts `utm_source`, `utm_medium`, `utm_campaign` in request body. Falls back t
 | New tab/window | Fresh session; no shared sessionStorage |
 | SSR / build time | All functions no-op or return `null` (guard with `typeof window`) |
 
+## Migration: 30-minute sessionStorage → durable `_ta_attr` cookie (2026-06-01)
+
+The original storage used a 30-minute `sessionStorage` TTL (key `tools-aus:utm-attribution`). The single-platform payment attribution feature replaced this with a **durable `_ta_attr` cookie** stored in `sessionStorage` but with a **90-day effective TTL** baked into the JSON payload (`captured_at` + 90-day check on read). SameSite=Lax, first-party.
+
+Key differences:
+
+| | Before | After |
+|---|---|---|
+| Storage key | `tools-aus:utm-attribution` | `_ta_attr` |
+| TTL | 30 minutes | 90 days |
+| Click IDs stored | No | Yes (`fbclid`/`_fbc`, `ttclid`, `ScCid`) |
+| Used by | `useAttribution()` at conversion time | Attribution resolver at `create-*` route edge |
+
+**Back-compat:** the old `tools-aus:utm-attribution` key is still read if `_ta_attr` is absent (legacy sessions). New landings write `_ta_attr` only.
+
+### UTM normalization
+
+UTM values are normalized to lowercase during capture. Klaviyo auto-UTM appends `utm_source=Klaviyo` (capital K) — the normalizer converts this to `klaviyo` before storage and before passing to the resolver. When reading `_ta_attr` always treat `utm_source` as already lowercase; never compare against `"Klaviyo"` (capitalized).
+
 ## Related
 
 - [PROMO_PAGE_ANALYTICS.md](./PROMO_PAGE_ANALYTICS.md) — Promo page visits, signups, conversions (UTM stored per visit)
 - **Klaviyo:** User's UTM snapshot used for list segmentation and attribution
 - **Facebook CAPI:** UTM passed in purchase events for campaign attribution
+- [PAYMENT_ATTRIBUTION.md](./PAYMENT_ATTRIBUTION.md) — Single-platform resolution model built on top of `_ta_attr`

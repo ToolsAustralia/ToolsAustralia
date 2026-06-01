@@ -24,6 +24,7 @@ import mongoose from "mongoose";
 import { createPaymentIntentConfig } from "@/utils/payment/stripe/payment-intent-config";
 import { buildAttributionMetadata } from "@/utils/tracking/attribution-metadata";
 import { attributionSchema } from "@/utils/tracking/attribution-schema";
+import { resolveAttributionAtEdge } from "@/services/attribution/resolveAtEdge";
 import { executeBackgroundJob } from "@/utils/webhook/background-jobs";
 import { enforceMajorDrawOpenForNewPurchasesOr403 } from "@/utils/draws/major-draw-gate-http";
 
@@ -103,6 +104,7 @@ export async function POST(request: NextRequest) {
       request.headers.get("referer") ??
       (process.env.NEXTAUTH_URL ? `${process.env.NEXTAUTH_URL}/shop` : undefined)
     );
+    const { metadata: resolvedAttr } = resolveAttributionAtEdge(request);
 
     const body = await request.json();
     requestBody = body; // Store for error logging
@@ -530,6 +532,7 @@ export async function POST(request: NextRequest) {
         ...(requestContext.fbp ? { capi_fbp: requestContext.fbp } : {}),
         ...(capiEventSourceUrl ? { capi_event_source_url: capiEventSourceUrl } : {}),
         ...buildAttributionMetadata(validatedData.attribution),
+        ...resolvedAttr,
       };
 
       console.log(`📋 Updated metadata:`, updatedMetadata);
@@ -663,6 +666,7 @@ export async function POST(request: NextRequest) {
           ...(requestContext.fbp ? { capi_fbp: requestContext.fbp } : {}),
           ...(capiEventSourceUrl ? { capi_event_source_url: capiEventSourceUrl } : {}),
           ...buildAttributionMetadata(validatedData.attribution),
+          ...resolvedAttr,
         },
       });
 

@@ -108,6 +108,20 @@ The following components are **no longer referenced** by `UserMetricsView` but w
 
 [src/app/admin/component/overview/KPIMetricsGrid.tsx](../../src/app/admin/component/overview/KPIMetricsGrid.tsx) renders a **Renewal Rate** card in the "Users & Performance" group. The card is only shown when the active date filter is `current-draw` or `last-draw` and `stats.users.renewalProgress` is present in the dashboard stats response.
 
+## KPIMetricsGrid — Revenue by Platform section (2026-06-01)
+
+[src/app/admin/component/overview/KPIMetricsGrid.tsx](../../src/app/admin/component/overview/KPIMetricsGrid.tsx) renders a **Revenue by Platform** section at the bottom of the "Ads Group", directly after `advertisingBreakdownSection`. The section iterates `dashboardStats.attributedRevenue` entries and renders one row per platform. It is gated: if `attributedRevenue` is `undefined` or empty, nothing is rendered.
+
+Section subtitle: "Acquisition revenue per channel · ROAS = ad revenue ÷ spend · renewals excluded" — makes the ROAS definition explicit inline.
+
+Per-platform row shows:
+- Human label (meta → "Meta", tiktok → "TikTok", snapchat → "Snapchat", klaviyo_email → "Klaviyo Email", klaviyo_sms → "Klaviyo SMS", google → "Google", direct → "Direct / Organic", other → "Other")
+- **"Ad revenue"** label + acquisition revenue (`data.revenue`) in AUD with optional `revenueTrend` chip (arrow + %). This is the ROAS numerator (initial subs + one-time + upsell + mini-draw; `isRenewal=false` only).
+- Renewal revenue muted sub-line — rendered only when `data.renewalRevenue > 0`: `+ $X recurring renewals · not in ROAS`. Uses the same currency formatter and the same `text-2xs text-gray-500 dark:text-neutral-400` muted class as the confidence line. Renewals are deliberately excluded from ROAS; this line makes that transparent.
+- Confidence split: `$X click · $Y estimated` where estimated = `utm_only + inferred_backfill`
+- Conversion count
+- True ROAS (e.g. `2.14x`) with optional `trueRoasTrend` chip — only rendered when `trueRoas` is present (i.e. the platform has ad spend data). ROAS is computed as `revenue / adSpend` (acquisition revenue only).
+
 - **Metric displayed:** `renewalRate` as a percentage (e.g. "74%"), with a sub-line showing `renewed / base` counts.
 - **Remaining members** are labeled "Expected to renew" (`current-draw`) or "Did not renew" (`last-draw`).
 - When `snapshotMissing: true` the card renders an amber note that the base was estimated from the nearest available snapshot.

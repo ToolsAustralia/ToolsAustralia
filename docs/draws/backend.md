@@ -66,3 +66,7 @@ All ops use `updateMany` with `maxTimeMS: 5000` and idempotent filters.
 ## Reverser integration
 
 When a payment is refunded, [src/utils/draws/remove-draw-entries.ts](../../src/utils/draws/remove-draw-entries.ts) is called by the [payment](../payment/) reverser orchestration to undo `TicketEntry` rows written by the original grant. See [billing-stripe ledger symmetry](../billing-stripe/rules.md#ledger-symmetry).
+
+## Resolved attribution metadata (mini-draw purchase)
+
+[src/app/api/mini-draw/purchase/route.ts](../../src/app/api/mini-draw/purchase/route.ts) resolves attribution at the top of `POST` via `resolveAttributionAtEdge(request)` (from [src/services/attribution/resolveAtEdge.ts](../../src/services/attribution/resolveAtEdge.ts)) and passes the resulting `metadata` into both `handleOneClickPurchase` and `handlePaymentIntentCreation` as `resolvedAttrMetadata`. Each sub-handler spreads `...(resolvedAttrMetadata ?? {})` into its PaymentIntent metadata object alongside `buildAttributionMetadata(attribution)`. This ensures all mini-draw PaymentIntents carry resolved attribution regardless of payment path.

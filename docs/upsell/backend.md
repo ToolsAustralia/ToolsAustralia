@@ -41,3 +41,7 @@ The three membership records are declared inline; one-time, additional, and mini
 ## Eligibility
 
 `cancellation-upsell-eligibility.ts` lives under [src/utils/redeemables/](../../src/utils/redeemables/) (in [rewards-redeemables](../rewards-redeemables/)) — uses redeemable / subscription history to decide who sees the cancel-upsell offer.
+
+## Resolved attribution metadata
+
+[src/app/api/upsell/purchase/route.ts](../../src/app/api/upsell/purchase/route.ts) resolves attribution at the top of `POST` via `resolveAttributionAtEdge(request)` (from [src/services/attribution/resolveAtEdge.ts](../../src/services/attribution/resolveAtEdge.ts)) and passes the resulting `metadata` into both `handleOneClickPurchase` and `handlePaymentIntentCreation` as `resolvedAttrMetadata`. Each sub-handler spreads `...(resolvedAttrMetadata ?? {})` into its `paymentMetadata` object alongside `buildAttributionMetadata(attribution)`. This ensures all upsell PaymentIntents carry resolved attribution (`attr_platform`, `attr_confidence`, etc.) regardless of payment path.
