@@ -31,3 +31,18 @@ if (!live) console.log("DRY RUN — not committing");
 // ... compute changes ...
 if (live) await commit();
 ```
+
+## P6. Read-only audit scripts (`find:*`)
+
+Scripts under `scripts/find-*.ts` are read-only — they never write to the DB. They are exposed as `npm run find:*` entries and are safe to run against production.
+
+**`npm run find:renewal-rate`** (`scripts/find-renewal-rate.ts`) — cross-checks the Renewal Rate KPI by querying live data directly. Modes:
+
+| Flag | Behaviour |
+|---|---|
+| *(default)* | Prints renewal rate buckets for the current and last draw periods |
+| `--last-draw` | Restricts output to the last completed draw period |
+| `--draw N` | Queries a specific draw by number |
+| `--coverage` | Audits `MembershipDailySnapshot` coverage — shows which draw-start dates have a snapshot and which are missing |
+
+Use this to validate that the dashboard KPI card matches raw DB counts. See [admin/backend.md](../admin/backend.md#renewal-rate-kpi-2026-05-29) for the service-layer definition.
