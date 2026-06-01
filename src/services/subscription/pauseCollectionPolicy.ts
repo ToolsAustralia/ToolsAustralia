@@ -68,6 +68,10 @@ export interface ReanchorGateInput {
   pauseCollectionPresentAtPayment: boolean;
   /** `invoice.attempt_count` — durable Stripe fact; > 1 means the cycle invoice already failed. */
   invoiceAttemptCount: number | undefined;
+  /** `invoice.metadata.dunning_recovery === '1'` — durable marker stamped when the renewal FAILED.
+   *  The only signal that survives the renew-subscription channel (which pre-flips DB status to
+   *  active AND clears pause before the webhook; attempt_count stays 1 because pause blocks retries). */
+  invoiceMetadataDunningRecovery: boolean;
   /** `subscription.metadata.pauseReason` — a "retention" pause is never a dunning recovery. */
   pauseReason: string | undefined;
   cancelAtPeriodEnd: boolean;
@@ -96,6 +100,8 @@ export function shouldReanchorAfterRecovery(i: ReanchorGateInput): boolean {
     prev === "past_due" ||
     prev === "unpaid" ||
     i.pauseCollectionPresentAtPayment ||
+    i.invoiceMetadataDunningRecovery ||
+    // Secondary/weak: only fires if pause was somehow not set (pause blocks the retries that bump this).
     (typeof i.invoiceAttemptCount === "number" && i.invoiceAttemptCount > 1)
   );
 }

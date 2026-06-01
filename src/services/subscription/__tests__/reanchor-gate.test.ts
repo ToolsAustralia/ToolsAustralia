@@ -10,6 +10,7 @@ const base: ReanchorGateInput = {
   previousSubscriptionDbStatus: "past_due",
   pauseCollectionPresentAtPayment: false,
   invoiceAttemptCount: 1,
+  invoiceMetadataDunningRecovery: false,
   pauseReason: undefined,
   cancelAtPeriodEnd: false,
   autoRenew: true,
@@ -37,6 +38,11 @@ function run() {
     "attempt_count>1 alone (renew-subscription pre-flip channel)"
   );
   assert.equal(t({ invoiceAttemptCount: undefined }), true, "past_due holds when attempt_count is undefined");
+  assert.equal(
+    t({ previousSubscriptionDbStatus: "active", invoiceMetadataDunningRecovery: true }),
+    true,
+    "dunning_recovery invoice metadata alone (renew-subscription channel)"
+  );
 
   // Exclusions.
   assert.equal(t({ previousSubscriptionDbStatus: "active" }), false, "normal on-time renewal: no dunning signal");

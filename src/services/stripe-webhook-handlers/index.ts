@@ -2626,6 +2626,19 @@ async function handleInvoicePaymentFailed(invoice: Stripe.Invoice) {
             user.subscription.pastDueAt = new Date();
           }
 
+          // Stamp a durable dunning marker on THIS invoice so any later recovery (esp. the
+          // renew-subscription channel, which pre-flips DB status + clears pause before the webhook)
+          // can be detected by the reanchor gate. attempt_count is unreliable under pause_collection.
+          if (invoice.id) {
+            try {
+              await stripe.invoices.update(invoice.id, {
+                metadata: { ...(invoice.metadata ?? {}), dunning_recovery: "1" },
+              });
+            } catch (stampErr) {
+              console.error(`[reanchor] could not stamp dunning_recovery on invoice ${invoice.id}:`, stampErr);
+            }
+          }
+
           // ✅ If subscription will be canceled after max retries, set endDate
           // Only check for renewal failures - initial failures don't have a period to end
           try {
@@ -3475,6 +3488,7 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
         previousSubscriptionDbStatus: previousSubscriptionDbStatus ?? undefined,
         pauseCollectionPresentAtPayment,
         invoiceAttemptCount: expandedInvoice.attempt_count ?? undefined,
+        invoiceMetadataDunningRecovery: expandedInvoice.metadata?.dunning_recovery === "1",
         pauseReason: (subscription.metadata?.pauseReason as string | undefined) ?? undefined,
         cancelAtPeriodEnd: subscription.cancel_at_period_end === true,
         autoRenew: user.subscription?.autoRenew,
