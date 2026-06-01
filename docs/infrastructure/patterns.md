@@ -32,15 +32,30 @@ if (!live) console.log("DRY RUN — not committing");
 if (live) await commit();
 ```
 
+<<<<<<< HEAD
+## P6. Read-only audit scripts (`find:*`)
+
+Scripts under `scripts/find-*.ts` are read-only — they never write to the DB. They are exposed as `npm run find:*` entries and are safe to run against production.
+
+**`npm run find:renewal-rate`** (`scripts/find-renewal-rate.ts`) — cross-checks the Renewal Rate KPI by querying live data directly. Modes:
+
+| Flag | Behaviour |
+|---|---|
+| *(default)* | Prints renewal rate buckets for the current and last draw periods |
+| `--last-draw` | Restricts output to the last completed draw period |
+| `--draw N` | Queries a specific draw by number |
+| `--coverage` | Audits `MembershipDailySnapshot` coverage — shows which draw-start dates have a snapshot and which are missing |
+
+Use this to validate that the dashboard KPI card matches raw DB counts. See [admin/backend.md](../admin/backend.md#renewal-rate-kpi-2026-05-29) for the service-layer definition.
+=======
 ## P6. Read-only audit scripts (`find:*` / `list:*`)
 
 Read-only audits never mutate, so they skip the `--dry-run` / `:dry` rule (there is
 nothing to make safe) and skip `connectDB()` when they only call a third party.
 They still load env via dotenv, fail fast on missing credentials, write the report
 to **stdout** and progress/warnings to **stderr**, and exit non-zero on hard
-failure. Example: `scripts/find-klaviyo-legacy-fields.ts` (`npm run
 find:klaviyo-legacy-fields`) enumerates Klaviyo templates/flows/segments via GET
 and reports any that still reference the legacy camelCase properties
-`firstName` / `lastName` / `userId` instead of the standard
 `first_name` / `last_name` / `user_id`. Add a `--json` flag when the output may
 feed another tool.
+>>>>>>> 3029374ebbae5cf944ea35738bc105ebda837fe5

@@ -51,3 +51,7 @@
 Hooks under [`src/hooks/queries/`](../../src/hooks/queries/) that opt into `refetchInterval` use `refetchIntervalInBackground: false` so polling pauses for hidden tabs and resumes when the tab is focused (the next interval tick fires after focus, and `refetchOnWindowFocus: true` provides immediate catch-up where set). This applies to: `usePromoQueries` (`useActivePromos`, `useAdminActivePromos`, `useEffectiveForBanner`), `usePromoBannerTextQueries`, `useAlternatingMultiplierQueries`, `useMajorDrawQueries` (`useCurrentMajorDraw`, `useUserMajorDrawStats`), `useUserQueries` (`useMyAccountData`). Background polling on hidden tabs would inflate Edge Requests + Function Invocations without user-visible benefit.
 
 NextAuth `<SessionProvider>` in [`src/app/providers.tsx`](../../src/app/providers.tsx) uses `refetchInterval={15 * 60}` (15 min, raised from 5 min). Refresh-on-focus is intentionally disabled (`refetchOnWindowFocus={false}`); the 15-min server poll bounds the worst-case stale-session UI window without flooding `/api/auth/session` invocations on every tab.
+
+## Admin dashboard stats shape
+
+`AdminDashboardStats` (in `src/hooks/queries/useAdminQueries.ts`) includes a `users.renewalProgress?: RenewalProgress` field. This field is only populated when the active date filter is `current-draw` or `last-draw`; it is `undefined` for all other ranges. Components must guard on its presence before rendering. See [admin/backend.md](../admin/backend.md#renewal-rate-kpi-2026-05-29) for the full field definition.
