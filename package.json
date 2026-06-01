@@ -19,6 +19,8 @@
     "mini-draw:order": "tsx scripts/update-mini-draw-order.ts",
     "seed:variation-experiment": "tsx scripts/seed-variation1-vs-variation2-experiment.ts",
     "seed:variation-experiment:dry": "tsx scripts/seed-variation1-vs-variation2-experiment.ts --dry-run",
+    "seed:past-due-member": "tsx scripts/seed-past-due-member.ts",
+    "seed:past-due-member:dry": "tsx scripts/seed-past-due-member.ts --dry-run",
     "migrate:accumulated-entries": "tsx scripts/migrate-accumulated-entries.ts",
     "migrate:package-type": "tsx scripts/migrate-package-type-subscription-to-membership.ts",
     "type-check": "tsc --noEmit",
