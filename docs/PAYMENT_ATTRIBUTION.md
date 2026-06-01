@@ -183,6 +183,36 @@ CAPI dispatch to Meta, TikTok, and Snap is **unchanged** — all enabled platfor
 
 ---
 
+---
+
+## Backfill (historical rows)
+
+### Phase 1 (live, forward-fill)
+
+The single-platform resolver runs at the `create-*` route edge for every payment from its deploy date onward. New `BenefitsGranted` events are stamped with a live `convertingPlatform` (`click` or `utm_only` confidence) before the Stripe webhook handler persists them — no backfill required for these rows.
+
+### Phase 2 (inferred backfill)
+
+Historical `BenefitsGranted` rows written before the resolver shipped have `convertingPlatform: null`. The script [`scripts/backfill-converting-platform.ts`](../scripts/backfill-converting-platform.ts) fills these in post-hoc using `deriveBackfillAttribution`, which reads:
+
+- `data.utmSource` / `data.utmMedium` — UTM signals already captured on the event.
+- Indexed `attribution*` Meta ad-id fields (`campaignId`, `adsetId`, `adId`) — available on events that carried click IDs at purchase time.
+- `data.billingReason` — to set the `isRenewal` flag.
+
+All rows resolved by this script are tagged `attributionConfidence: "inferred_backfill"`. The dashboard segments by confidence so `inferred_backfill` rows never inflate live `click` / `utm_only` ROAS figures — they appear in a separate breakdown tier.
+
+### Idempotency guarantee
+
+The backfill filter is `{ eventType: "BenefitsGranted", convertingPlatform: null }`. Live-resolved rows (`click` or `utm_only`) and previously backfilled rows (`inferred_backfill`) are never overwritten. Re-running the script after a partial failure is safe and converges.
+
+### Dashboard segmentation
+
+The dashboard's `byConfidence` breakdown surfaces three tiers: `click`, `utm_only`, and `inferred_backfill`. Attribution confidence affects only the analytics layer — ROAS exclusion for renewals continues to use `packageType + data.billingReason`, not the `isRenewal` flag that the backfill sets.
+
+See [`docs/infrastructure/architecture.md` — Converting-platform attribution backfill](./infrastructure/architecture.md#converting-platform-attribution-backfill) for the full runbook, CLI flags, and exit-code reference.
+
+---
+
 ## Related Documentation
 
 - [UTM_ATTRIBUTION.md](./UTM_ATTRIBUTION.md) — UTM capture and storage

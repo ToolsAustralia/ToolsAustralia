@@ -107,3 +107,24 @@ resolveAttributionAtEdge(request: NextRequest): { decision: ResolveResult; metad
 **Error contract:** if anything throws, returns `{ platform: "direct", confidence: "utm_only" }` with minimal fallback metadata — never propagates an exception into the payment handler.
 
 **Where it is called:** at the top of each create-* route's `POST` handler (or, for routes that fan out into sub-handler functions, at the point where `request` is in scope in `POST` before delegation). The returned `metadata` is spread into the same Stripe metadata object that already contains `buildAttributionMetadata(...)`. This means every subscription, one-time purchase, upsell, mini-draw, and payment-intent creation stamps resolved attribution.
+
+## Historical backfill derivation (`deriveBackfillAttribution`)
+
+[src/services/attribution/deriveBackfillAttribution.ts](../../src/services/attribution/deriveBackfillAttribution.ts) — pure function used by the PaymentEvent historical backfill to assign a `convertingPlatform` to rows that predate click-ID capture.
+
+```ts
+deriveBackfillAttribution(row: BackfillSourceRow): {
+  convertingPlatform: ConvertingPlatform;
+  attributionConfidence: "inferred_backfill";
+  isRenewal: boolean;
+}
+```
+
+**Signal priority:**
+1. `utmSource` / `utmMedium` — passed through `normalizeUtmToPlatform`; Klaviyo splits by medium (`email` vs `sms`); unknown sources resolve to `"other"`.
+2. `hasMetaAdAttribution` — set when any indexed Meta-shaped ad-id field (attributionAdId / AdsetId / CampaignId) is present on the row; resolves to `"meta"`.
+3. No signal → `"direct"`.
+
+**Confidence is always `"inferred_backfill"`** — these rows predate click-ID capture, so live resolver confidence levels (`click`, `utm_only`) never apply.
+
+**`isRenewal`** is derived via `classifyIsRenewal({ billingReason })` — `true` only for `subscription_cycle` without an upgrade/resubscribe flag.

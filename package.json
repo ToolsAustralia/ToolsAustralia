@@ -86,6 +86,8 @@
     "backfill:dashboard-stats-snapshots:dry": "tsx scripts/backfill-dashboard-stats-snapshots.ts --dry-run",
     "backfill:webhook-queue-processed-at": "tsx scripts/backfill-stripe-webhook-queue-processed-at.ts",
     "backfill:webhook-queue-processed-at:dry": "tsx scripts/backfill-stripe-webhook-queue-processed-at.ts --dry-run",
+    "backfill:converting-platform": "tsx scripts/backfill-converting-platform.ts",
+    "backfill:converting-platform:dry": "tsx scripts/backfill-converting-platform.ts --dry-run",
     "sync:allowlist-from-blocked": "tsx scripts/sync-allowlist-from-blocked-transactions.ts",
     "sync:allowlist-from-blocked:dry": "tsx scripts/sync-allowlist-from-blocked-transactions.ts --dry-run",
     "investigate:blocked": "tsx scripts/investigate-blocked-transactions.ts",
@@ -203,7 +205,8 @@
     "test:attribution-cookie": "tsx src/utils/tracking/__tests__/attribution-cookie.test.ts",
     "test:normalize-platform": "tsx src/services/attribution/__tests__/normalizePlatform.test.ts",
     "test:classify-renewal": "tsx src/services/attribution/__tests__/classifyIsRenewal.test.ts",
-    "test:converting-platform": "tsx src/services/attribution/__tests__/resolveConvertingPlatform.test.ts"
+    "test:converting-platform": "tsx src/services/attribution/__tests__/resolveConvertingPlatform.test.ts",
+    "test:derive-backfill-attribution": "tsx src/services/attribution/__tests__/deriveBackfillAttribution.test.ts"
   },
   "dependencies": {
     "@auth/mongodb-adapter": "^3.10.0",
