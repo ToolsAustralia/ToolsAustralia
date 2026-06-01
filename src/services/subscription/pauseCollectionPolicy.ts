@@ -59,6 +59,47 @@ export function decideClearPause(i: ClearPauseInput): boolean {
   return i.pauseCollectionPresent;
 }
 
+/** Inputs for the past-due reanchor trigger decision. Pure — no Stripe client. */
+export interface ReanchorGateInput {
+  billingReason: string | undefined;
+  invoiceIsPaid: boolean;
+  previousSubscriptionDbStatus: string | undefined;
+  /** `subscription.pause_collection != null`, captured BEFORE resume clears it. */
+  pauseCollectionPresentAtPayment: boolean;
+  /** `invoice.attempt_count` — durable Stripe fact; > 1 means the cycle invoice already failed. */
+  invoiceAttemptCount: number | undefined;
+  /** `subscription.metadata.pauseReason` — a "retention" pause is never a dunning recovery. */
+  pauseReason: string | undefined;
+  cancelAtPeriodEnd: boolean;
+  autoRenew: boolean | undefined;
+  /** `user.subscription.lastReanchoredInvoiceId` — cheap pre-filter (atomic claim is authoritative). */
+  alreadyReanchoredInvoiceId: string | undefined;
+  invoiceId: string;
+}
+
+/**
+ * Whether a paid subscription_cycle invoice represents a past-due/unpaid RECOVERY that should
+ * reanchor future renewals. Dunning is detected via ANY durable signal because no single signal
+ * survives every recovery channel (the renew-subscription retry pre-flips DB status to active AND
+ * clears pause_collection before the webhook — only `attempt_count > 1` catches it).
+ */
+export function shouldReanchorAfterRecovery(i: ReanchorGateInput): boolean {
+  if (i.billingReason !== "subscription_cycle") return false;
+  if (!i.invoiceIsPaid) return false;
+  if (i.cancelAtPeriodEnd === true) return false; // member is ending — do not extend
+  if (i.autoRenew === false) return false;
+  if (i.pauseReason === "retention") return false;
+  if (i.alreadyReanchoredInvoiceId === i.invoiceId) return false;
+
+  const prev = (i.previousSubscriptionDbStatus ?? "").toLowerCase();
+  return (
+    prev === "past_due" ||
+    prev === "unpaid" ||
+    i.pauseCollectionPresentAtPayment ||
+    (typeof i.invoiceAttemptCount === "number" && i.invoiceAttemptCount > 1)
+  );
+}
+
 /**
  * Human-readable label for `pause_collection` on a Stripe subscription (for logs/scripts).
  */
