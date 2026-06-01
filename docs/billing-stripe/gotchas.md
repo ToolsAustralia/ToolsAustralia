@@ -274,6 +274,18 @@ If you ever want LTV-by-variant analysis, do it as a separate query joining
 the variant assignment to the user's whole subscription history — don't restore
 the renewal-attribution path.
 
+## `handleInvoicePaymentFailed` stamps `dunning_recovery` for channel-independent reanchor detection
+
+When a `subscription_cycle` invoice fails (the `isRenewal` branch in `handleInvoicePaymentFailed`, `src/services/stripe-webhook-handlers/index.ts`), the handler stamps `metadata.dunning_recovery = '1'` on the Stripe invoice object. This marker persists on the invoice regardless of what happens next — DB status flips, `pause_collection` clears, or the user retries via any channel.
+
+`handleInvoicePaymentSucceeded` reads this marker in `shouldReanchorAfterRecovery` (`src/services/subscription/pauseCollectionPolicy.ts`) as one of the OR-signals for dunning detection. It is the **only** signal that survives the `renew-subscription` retry channel, which pre-flips the DB status to `active` AND clears `pause_collection` before the success webhook fires — making the other two signals (`previousSubscriptionDbStatus ∈ {past_due, unpaid}` and `pauseCollectionPresentAtPayment`) both false at webhook time.
+
+Key facts verified by live Stripe test-mode probe:
+- A single-failure manual recovery under `pause_collection` has `attempt_count === 1` (Stripe does not auto-retry while paused, so the counter never increments). `attempt_count > 1` is therefore a weak/secondary signal only.
+- The `dunning_recovery` marker is set on the invoice at failure time and is not altered by subsequent payment success, subscription update, or pause-resume calls.
+
+See `docs/PAST_DUE_REANCHOR.md` for the full trigger-gate logic and recovery-channel analysis.
+
 ## Multi-experiment attribution collision in `create-one-time-purchase`
 
 Both `create-one-time-purchase` and `create-one-time-purchase-existing-user`
