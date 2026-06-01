@@ -15,6 +15,7 @@ import { getEffectivePromoType } from "@/utils/promo/get-effective-promo-type";
 import { createPaymentIntentConfig } from "@/utils/payment/stripe/payment-intent-config";
 import { buildAttributionMetadata } from "@/utils/tracking/attribution-metadata";
 import { attributionSchema } from "@/utils/tracking/attribution-schema";
+import { resolveAttributionAtEdge } from "@/services/attribution/resolveAtEdge";
 import { ErrorLoggingService } from "@/services/error-reporting/ErrorLoggingService";
 import { enforceMajorDrawOpenForNewPurchasesOr403 } from "@/utils/draws/major-draw-gate-http";
 
@@ -436,6 +437,8 @@ export async function POST(request: NextRequest) {
       validatedData.idempotencyKey ??
       `pi_upsell_${validatedData.offerId}_${session.user.id}_${Date.now()}`;
 
+    const { metadata: resolvedAttr } = resolveAttributionAtEdge(request);
+
     if (validatedData.useDefaultPayment && validatedData.paymentMethodId) {
       // One-click purchase using the specific payment method provided
       return await handleOneClickPurchase(
@@ -448,7 +451,8 @@ export async function POST(request: NextRequest) {
         validatedData.originalPurchaseContext,
         capiEventSourceUrl,
         validatedData.attribution,
-        stripeIdempotencyKey
+        stripeIdempotencyKey,
+        resolvedAttr
       );
     } else {
       // Create payment intent for manual confirmation
@@ -463,7 +467,8 @@ export async function POST(request: NextRequest) {
         request, // ✅ Pass request for error logging
         capiEventSourceUrl,
         validatedData.attribution,
-        stripeIdempotencyKey
+        stripeIdempotencyKey,
+        resolvedAttr
       );
     }
   } catch (error) {
@@ -503,7 +508,8 @@ async function handleOneClickPurchase(
   originalPurchaseContext?: { packageType?: "membership" | "one-time" | "mini-draw"; paymentIntentId?: string },
   capiEventSourceUrl?: string,
   attribution?: Parameters<typeof buildAttributionMetadata>[0],
-  stripeIdempotencyKey?: string
+  stripeIdempotencyKey?: string,
+  resolvedAttrMetadata?: Record<string, string>
 ) {
   try {
     if (!paymentMethodId) {
@@ -614,6 +620,7 @@ async function handleOneClickPurchase(
         ...(requestContext?.fbp ? { capi_fbp: requestContext.fbp } : {}),
         ...(capiEventSourceUrl ? { capi_event_source_url: capiEventSourceUrl } : {}),
         ...buildAttributionMetadata(attribution),
+        ...(resolvedAttrMetadata ?? {}),
       };
 
       // Log metadata for debugging
@@ -743,7 +750,8 @@ async function handlePaymentIntentCreation(
   request?: NextRequest, // ✅ Pass request for error logging
   capiEventSourceUrl?: string,
   attribution?: Parameters<typeof buildAttributionMetadata>[0],
-  stripeIdempotencyKey?: string
+  stripeIdempotencyKey?: string,
+  resolvedAttrMetadata?: Record<string, string>
 ) {
   try {
     // Derive event source URL for CAPI if not passed (e.g. from request)
@@ -779,6 +787,7 @@ async function handlePaymentIntentCreation(
       ...(requestContext?.fbp ? { capi_fbp: requestContext.fbp } : {}),
       ...(eventSourceUrl ? { capi_event_source_url: eventSourceUrl } : {}),
       ...buildAttributionMetadata(attribution),
+      ...(resolvedAttrMetadata ?? {}),
     };
 
     // Log metadata for debugging

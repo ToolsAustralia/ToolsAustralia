@@ -1,6 +1,9 @@
 import User from "@/models/User";
 import DashboardStatsDailySnapshot, {
   DASHBOARD_STATS_SNAPSHOT_SOURCE_VERSION,
+  ATTRIBUTED_PLATFORM_KEYS,
+  type AttributedPlatformKey,
+  type IAttributedRevenue,
   type IRevenueBucket,
 } from "@/models/DashboardStatsDailySnapshot";
 import { createAESTDateAsUTC } from "@/utils/common/timezone";
@@ -88,6 +91,12 @@ export async function writeSnapshotForDate(
       if (metrics) adChannelsMap.set(provider.key, metrics);
     }
 
+    // Attributed revenue by platform
+    const attributedRevenueMap = new Map<AttributedPlatformKey, IAttributedRevenue>();
+    for (const p of ATTRIBUTED_PLATFORM_KEYS) {
+      attributedRevenueMap.set(p, revenue.byPlatform[p]);
+    }
+
     await DashboardStatsDailySnapshot.findOneAndUpdate(
       { date: dateKey },
       {
@@ -96,6 +105,7 @@ export async function writeSnapshotForDate(
           revenue: { total: revenue.total, buckets: bucketsMap },
           users: { newSignups, cancellationsInDay },
           adChannels: adChannelsMap,
+          attributedRevenue: attributedRevenueMap,
           confidence: "live",
           computedAt: new Date(),
           sourceVersion: DASHBOARD_STATS_SNAPSHOT_SOURCE_VERSION,

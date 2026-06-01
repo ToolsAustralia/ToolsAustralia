@@ -442,6 +442,70 @@ Response carries `Cache-Control: private, max-age=120`.
 
 Implementation: thin handler → delegates to `getCancellationFlowUsersByReason()` in [src/services/admin/cancellationFlowAnalytics.ts](../../src/services/admin/cancellationFlowAnalytics.ts) (see [backend.md → cancellationFlowAnalytics.ts](./backend.md#services)).
 
+## Dashboard stats — `attributedRevenue` response key
+
+### `GET /api/admin/dashboard/stats` — `attributedRevenue` field
+
+Added as a new top-level key on the stats response alongside the existing `facebookAds` field.
+
+**Shape:**
+
+```ts
+Record<AttributedPlatformKey, {
+  revenue: number;          // Acquisition revenue only (newRevenue) — initial subscriptions, one-time, upsell, mini-draw, upgrades/resubscribes. This is the ROAS numerator.
+  renewalRevenue: number;   // Recurring membership renewals (packageType === "membership" && billingReason === "subscription_cycle"). Tracked separately; EXCLUDED from trueRoas.
+  conversions: number;      // Count of acquisition payment events (newRevenue rows only)
+  byConfidence: {
+    click: number;           // Acquisition revenue attributed via a captured click ID
+    utm_only: number;        // Acquisition revenue attributed via UTM params only
+    inferred_backfill: number; // Acquisition revenue attributed from historical data
+  };
+  // Present only when the platform maps to a spend provider with spend > 0:
+  adSpend?: number;
+  trueRoas?: number;        // newRevenue / adSpend — acquisition revenue only; renewalRevenue is NOT in the numerator
+  // Present only when comparison range data is available:
+  revenueTrend?: number;    // % delta in revenue (acquisition) from prior period
+  trueRoasTrend?: number;   // % delta in trueRoas from prior period
+}>
+```
+
+**Platform key union:** `"meta" | "tiktok" | "snapchat" | "klaviyo_email" | "klaviyo_sms" | "google" | "direct" | "other"`
+
+**Rules:**
+
+- Only platforms with at least one attributed payment event in the range appear in the response object. Platforms with zero revenue (acquisition + renewal) are omitted entirely.
+- `adSpend` and `trueRoas` are present **only** when the platform maps to a spend provider (via `PLATFORM_TO_AD_CHANNEL_KEY` in `snapshotSchema.ts`) **and** the mapped `adChannels[key].spend > 0`. Currently `meta → facebook` is the only live mapping. All other platforms (`direct`, `klaviyo_email`, `klaviyo_sms`, `google`, `tiktok`, `snapchat`, `other`) return `revenue`, `renewalRevenue`, `conversions`, and `byConfidence` only.
+- `trueRoas` is computed from the **summed** acquisition totals for the requested range: `newRevenue / adChannels[mappedKey].spend`. It is **not** averaged across snapshot days. Recurring membership renewals are deliberately excluded so ROAS reflects new-customer acquisition performance.
+- `byConfidence.click + byConfidence.utm_only + byConfidence.inferred_backfill === revenue` (acquisition revenue only; renewals do not contribute to `byConfidence`).
+- `revenueTrend` and `trueRoasTrend` mirror the existing `facebookAds` trends computation — they require a comparison range and are absent when no prior-period data is available.
+
+**UI:** The "Revenue by Platform" section shows `revenue` (acquisition) as "Ad revenue" with a true ROAS figure when available. Renewals are shown as a separate muted line ("+ $X recurring renewals · not in ROAS") so they are visible but clearly excluded from the ROAS calculation.
+
+**Example (meta platform with spend data, direct without):**
+
+```json
+{
+  "attributedRevenue": {
+    "meta": {
+      "revenue": 12500,
+      "renewalRevenue": 4200,
+      "conversions": 42,
+      "byConfidence": { "click": 9000, "utm_only": 2500, "inferred_backfill": 1000 },
+      "adSpend": 3200,
+      "trueRoas": 3.91,
+      "revenueTrend": 12.4,
+      "trueRoasTrend": -2.1
+    },
+    "direct": {
+      "revenue": 4800,
+      "renewalRevenue": 1100,
+      "conversions": 18,
+      "byConfidence": { "click": 0, "utm_only": 0, "inferred_backfill": 4800 }
+    }
+  }
+}
+```
+
 ## Auth
 
 Per [auth rules R1-R2](../auth/rules.md): every handler must call `requireAdmin(session)`. Middleware doesn't gate `/api/admin/**`.

@@ -10,6 +10,7 @@
  */
 
 import type { AttributionParams } from "@/types/tracking";
+import { readAttributionCookieClient } from "@/utils/tracking/attribution-cookie";
 
 const UTM_STORAGE_KEY = "tools-aus:utm-attribution";
 const UTM_EXPIRY_MS = 30 * 60 * 1000; // 30 minutes
@@ -33,6 +34,21 @@ interface StoredUTM {
  */
 export function getStoredUTMParams(): AttributionParams | null {
   if (typeof window === "undefined") return null;
+  // Prefer the durable first-party cookie (survives the auth lifecycle incl. OAuth
+  // redirect); fall back to the legacy 30-min sessionStorage below.
+  const cookie = readAttributionCookieClient();
+  if (cookie) {
+    const p: AttributionParams = {};
+    if (cookie.utm_source) p.utm_source = cookie.utm_source;
+    if (cookie.utm_medium) p.utm_medium = cookie.utm_medium;
+    if (cookie.utm_campaign) p.utm_campaign = cookie.utm_campaign;
+    if (cookie.utm_content) p.utm_content = cookie.utm_content;
+    if (cookie.utm_term) p.utm_term = cookie.utm_term;
+    if (cookie.campaign_id) p.campaign_id = cookie.campaign_id;
+    if (cookie.adset_id) p.adset_id = cookie.adset_id;
+    if (cookie.ad_id) p.ad_id = cookie.ad_id;
+    if (Object.keys(p).length > 0) return p;
+  }
   try {
     const raw = sessionStorage.getItem(UTM_STORAGE_KEY);
     if (!raw) return null;

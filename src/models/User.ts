@@ -239,8 +239,8 @@ export interface IUser extends Document {
 
   // Signup attribution (which promotion page led to registration)
   signupAttribution?: {
-    promotionPageType: "evergreen" | "toolset";
-    promotionSlug: string;
+    promotionPageType?: "evergreen" | "toolset";
+    promotionSlug?: string;
     visitedAt: Date;
     anonymousId?: string;
     // UTM snapshot at signup (e.g. klaviyo, facebook for channel attribution)

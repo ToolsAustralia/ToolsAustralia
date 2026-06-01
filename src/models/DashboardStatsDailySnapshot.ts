@@ -1,6 +1,24 @@
 import mongoose, { Document, Schema } from "mongoose";
 
-export const DASHBOARD_STATS_SNAPSHOT_SOURCE_VERSION = 1;
+export const DASHBOARD_STATS_SNAPSHOT_SOURCE_VERSION = 3;
+
+export type AttributedPlatformKey =
+  | "meta" | "tiktok" | "snapchat"
+  | "klaviyo_email" | "klaviyo_sms"
+  | "google" | "direct" | "other";
+
+export const ATTRIBUTED_PLATFORM_KEYS: AttributedPlatformKey[] = [
+  "meta", "tiktok", "snapchat", "klaviyo_email", "klaviyo_sms", "google", "direct", "other",
+];
+
+export type AttributionConfidenceKey = "click" | "utm_only" | "inferred_backfill";
+
+export interface IAttributedRevenue {
+  newRevenue: number;      // acquisition revenue (isRenewal === false) — the ads-ROAS numerator
+  renewalRevenue: number;  // recurring renewals (isRenewal === true) — EXCLUDED from ROAS
+  conversions: number;     // count of NEW (non-renewal) rows
+  byConfidence: { click: number; utm_only: number; inferred_backfill: number }; // partitions newRevenue
+}
 
 export type RevenueBucketKey =
   | "membershipPurchase"
@@ -44,6 +62,7 @@ export interface IDashboardStatsDailySnapshot extends Document {
     cancellationsInDay: number;
   };
   adChannels: Map<string, IAdChannelMetrics>;
+  attributedRevenue: Map<AttributedPlatformKey, IAttributedRevenue>;
   confidence: "live";
   computedAt: Date;
   sourceVersion: number;
@@ -70,6 +89,20 @@ const AdChannelMetricsSchema = new Schema<IAdChannelMetrics>(
   { _id: false }
 );
 
+const AttributedRevenueSchema = new Schema<IAttributedRevenue>(
+  {
+    newRevenue: { type: Number, required: true, default: 0 },
+    renewalRevenue: { type: Number, required: true, default: 0 },
+    conversions: { type: Number, required: true, default: 0 },
+    byConfidence: {
+      click: { type: Number, required: true, default: 0 },
+      utm_only: { type: Number, required: true, default: 0 },
+      inferred_backfill: { type: Number, required: true, default: 0 },
+    },
+  },
+  { _id: false }
+);
+
 const DashboardStatsDailySnapshotSchema = new Schema<IDashboardStatsDailySnapshot>(
   {
     date: { type: String, required: true, unique: true, index: true },
@@ -83,6 +116,7 @@ const DashboardStatsDailySnapshotSchema = new Schema<IDashboardStatsDailySnapsho
       cancellationsInDay: { type: Number, required: true, default: 0 },
     },
     adChannels: { type: Map, of: AdChannelMetricsSchema, required: true, default: () => new Map() },
+    attributedRevenue: { type: Map, of: AttributedRevenueSchema, required: true, default: () => new Map() },
     confidence: { type: String, required: true, enum: ["live"] },
     computedAt: { type: Date, required: true },
     sourceVersion: { type: Number, required: true, default: DASHBOARD_STATS_SNAPSHOT_SOURCE_VERSION },

@@ -20,6 +20,7 @@ import { hashData } from "@/lib/facebook";
  * We persist it so subsequent events within the attribution window get a consistent fbc value.
  */
 const FBC_CAPTURE_TS_COOKIE = "_fbc_ts";
+const FBC_COOKIE = "_fbc";
 const FBC_COOKIE_MAX_AGE_SECONDS = 90 * 24 * 60 * 60; // 90 days — Meta's default attribution window
 
 function readBrowserCookie(name: string): string | undefined {
@@ -38,7 +39,9 @@ function readBrowserCookie(name: string): string | undefined {
 
 function writeBrowserCookie(name: string, value: string, maxAgeSeconds: number): void {
   if (typeof document === "undefined") return;
-  document.cookie = `${name}=${value}; path=/; max-age=${maxAgeSeconds}; SameSite=Lax`;
+  // Domain+Secure in prod so attribution survives an apex<->www switch (spec §3.7).
+  const prod = process.env.NODE_ENV === "production" ? "; Domain=.toolsaustralia.com.au; Secure" : "";
+  document.cookie = `${name}=${value}; path=/; max-age=${maxAgeSeconds}; SameSite=Lax${prod}`;
 }
 
 /**
@@ -58,6 +61,28 @@ function buildFbcFromFbclid(fbclid: string, persist: boolean): string {
     writeBrowserCookie(FBC_CAPTURE_TS_COOKIE, captureTs, FBC_COOKIE_MAX_AGE_SECONDS);
   }
   return `fb.1.${captureTs}.${fbclid}`;
+}
+
+/** At landing: persist the full synthesized fb.1.<ts>.<fbclid> so ITP/ad-block users
+ *  (no Meta SDK) and post-OAuth visits (URL no longer carries fbclid) still resolve. */
+export function persistSyntheticFbcFromUrl(): void {
+  if (typeof window === "undefined") return;
+  try {
+    if (readBrowserCookie(FBC_COOKIE)) return; // don't clobber Meta SDK's own cookie
+    const fbclid = new URLSearchParams(window.location.search).get("fbclid");
+    if (!fbclid) return;
+    const fbc = buildFbcFromFbclid(fbclid, /* persist */ true); // also writes _fbc_ts
+    writeBrowserCookie(FBC_COOKIE, fbc, FBC_COOKIE_MAX_AGE_SECONDS);
+  } catch { /* best-effort */ }
+}
+
+/** Parse the capture timestamp out of an fbc string (fb.1.<ts>.<fbclid>). null if absent/malformed. */
+export function parseFbcCapturedAt(fbc?: string | null): number | null {
+  if (!fbc) return null;
+  const parts = fbc.split(".");
+  if (parts.length < 4) return null;
+  const ts = parts[2];
+  return /^\d+$/.test(ts) ? Number(ts) : null;
 }
 
 /**
