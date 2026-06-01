@@ -47,8 +47,9 @@ import { getSubscriptionPeriodEnd } from "@/utils/payment/stripe/subscription-pe
 import {
   pauseAfterRenewalFailure,
   resumeAfterSuccessfulRenewalPayment,
+  reanchorAfterPastDueRecovery,
 } from "@/services/subscription/SubscriptionCollectionPauseService";
-import { decideClearPause } from "@/services/subscription/pauseCollectionPolicy";
+import { decideClearPause, shouldReanchorAfterRecovery } from "@/services/subscription/pauseCollectionPolicy";
 import { STRIPE_SUBSCRIPTION_METADATA_IS_RESUBSCRIBE } from "@/utils/payment/stripe-subscription-metadata";
 import { trackPixelSubscriptionRenewal } from "@/utils/tracking/pixel-purchase-tracking";
 import { executeBackgroundJob } from "@/utils/webhook/background-jobs";
@@ -3427,6 +3428,9 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
     // — in those cases a late resume never ran, leaving the subscription in "Collection paused" despite a paid invoice.
     const invoiceAmountPaid = expandedInvoice.amount_paid ?? 0;
     const invoiceIsPaid = expandedInvoice.status === "paid" && invoiceAmountPaid > 0;
+    // Snapshot pause_collection BEFORE resumeAfterSuccessfulRenewalPayment clears it in Stripe,
+    // so the reanchor gate can use it as a dunning signal.
+    const pauseCollectionPresentAtPayment = subscription.pause_collection != null;
     if (invoiceIsPaid) {
       const shouldClearPauseForCollection = decideClearPause({
         billingReason: expandedInvoice.billing_reason ?? undefined,
@@ -3444,6 +3448,38 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
           );
         } catch (earlyResumeErr) {
           webhookLog("warn", `Non-critical: could not resume collection before benefits: ${earlyResumeErr}`);
+        }
+      }
+    }
+
+    // --- Past-due reanchor: move future renewals to the recovery-payment date ---
+    if (invoiceIsPaid && expandedInvoice.id) {
+      const reanchorGate = shouldReanchorAfterRecovery({
+        billingReason: expandedInvoice.billing_reason ?? undefined,
+        invoiceIsPaid,
+        previousSubscriptionDbStatus: previousSubscriptionDbStatus ?? undefined,
+        pauseCollectionPresentAtPayment,
+        invoiceAttemptCount: expandedInvoice.attempt_count ?? undefined,
+        pauseReason: (subscription.metadata?.pauseReason as string | undefined) ?? undefined,
+        cancelAtPeriodEnd: subscription.cancel_at_period_end === true,
+        autoRenew: user.subscription?.autoRenew,
+        alreadyReanchoredInvoiceId: user.subscription?.lastReanchoredInvoiceId,
+        invoiceId: expandedInvoice.id,
+      });
+      if (reanchorGate) {
+        const recoveryDate = paidAtDateFromStripeInvoice(expandedInvoice) ?? new Date();
+        const reanchorResult = await reanchorAfterPastDueRecovery({
+          subscriptionId: subscription.id,
+          userId: new mongoose.Types.ObjectId(String(user._id)),
+          recoveryDate,
+          invoiceId: expandedInvoice.id,
+          packageId: user.subscription?.packageId ?? undefined,
+        });
+        if (reanchorResult.reanchored) {
+          webhookLog(
+            "info",
+            `Reanchored subscription ${subscription.id} after past-due recovery (invoice ${expandedInvoice.id})`
+          );
         }
       }
     }
