@@ -26,7 +26,8 @@
       "Read(//c/Users/Genesis/.claude/**)",
       "Bash(cd /c/Codes/ToolsAustralia/.worktrees/architectural-fix && find docs -type f -name \"*.md\" | head -40 && echo \"---\" && find docs/superpowers 2>/dev/null && find docs -name \"*ui-cleanup*\" -o -name \"*plan*\" 2>/dev/null | head -20)",
       "Read(//c/c/Codes/ToolsAustralia/.worktrees/architectural-fix/**)",
-      "Bash(awk '{print $4}')"
+      "Bash(awk '{print $4}')",
+      "Bash(bash scripts/wt-new.sh past-due-reanchor --from staging)"
     ]
   }
 }
