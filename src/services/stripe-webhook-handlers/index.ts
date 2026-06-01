@@ -1965,6 +1965,8 @@ async function handleSubscriptionUpdated(subscription: Stripe.Subscription) {
 
     // Capture status before any mutations (used below for activation history after save)
     const prevSubStatus = user.subscription?.status;
+    // Capture wasActive before mutations so it is in scope after the if(user.subscription) block
+    const wasActiveBeforeUpdate = user.subscription?.isActive ?? false;
 
     // Update user subscription status based on Stripe subscription
     if (user.subscription) {
@@ -2160,6 +2162,7 @@ async function handleSubscriptionUpdated(subscription: Stripe.Subscription) {
           }
         }
       }
+
     }
 
     // ✅ Mark subscription as modified if we made changes
@@ -2186,6 +2189,20 @@ async function handleSubscriptionUpdated(subscription: Stripe.Subscription) {
         });
       } catch (err) {
         webhookLog("warn", "Failed to append activation history from subscription.updated:", err);
+      }
+    }
+
+    // Recovery to active/trialing: refresh Klaviyo so next_renewal_date / past_due_renewal_entries are current.
+    // Only fires on transitions INTO active/trialing (wasActiveBeforeUpdate === false), NOT on the fast-path
+    // (wasActive && prevSubStatus === "active") which handles already-active routine updates.
+    if (
+      !wasActiveBeforeUpdate &&
+      (subscription.status === "active" || subscription.status === "trialing")
+    ) {
+      const savedUserForKlaviyo = await User.findById(user._id);
+      if (savedUserForKlaviyo) {
+        ensureUserProfileSynced(savedUserForKlaviyo as IUser);
+        webhookLog("info", `Klaviyo profile sync queued after recovery to ${subscription.status} for ${savedUserForKlaviyo.email}`);
       }
     }
 
