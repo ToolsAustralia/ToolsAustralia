@@ -117,6 +117,10 @@ export function clampReanchorDay(date: Date): number {
  * the caller aborts the reanchor non-fatally.
  */
 export function getReanchorTrialEndTimestamp(recoveryDate: Date): number {
+  // Reject malformed input. recoveryDate is built by the caller from a Stripe unix timestamp
+  // (`new Date((paid_at ?? created) * 1000)`), which is always "now-ish". NaN or a non-positive
+  // instant (<= the Unix epoch) means paid_at was missing/zero — bad data, not a real recovery —
+  // so we throw and the caller aborts the reanchor non-fatally.
   if (!Number.isFinite(recoveryDate.getTime()) || recoveryDate.getTime() <= 0) {
     throw new Error("getReanchorTrialEndTimestamp: invalid recoveryDate");
   }

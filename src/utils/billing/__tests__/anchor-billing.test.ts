@@ -40,11 +40,15 @@ function testNextOccurrenceAndSameDayRoll() {
   assert.equal(aestWall(getReanchorTrialEndTimestamp(aest("2026-05-10 09:30"))), "2026-06-10 00:00");
   assert.equal(aestWall(getReanchorTrialEndTimestamp(aest("2026-05-01 00:00"))), "2026-06-01 00:00");
   assert.equal(aestWall(getReanchorTrialEndTimestamp(aest("2026-05-26 09:00"))), "2026-06-24 00:00");
+  // Recovery exactly at the anchor day's midnight rolls forward to next month (<= boundary).
+  assert.equal(aestWall(getReanchorTrialEndTimestamp(aest("2026-07-24 00:00"))), "2026-08-24 00:00");
 }
 
 function testShortMonths() {
   assert.equal(aestWall(getReanchorTrialEndTimestamp(aest("2026-01-30 12:00"))), "2026-02-28 00:00");
   assert.equal(aestWall(getReanchorTrialEndTimestamp(aest("2028-01-31 12:00"))), "2028-02-29 00:00");
+  // Kept day 31 into a 30-day month -> last day (Apr 30), guards the Math.min for non-Feb months.
+  assert.equal(aestWall(getReanchorTrialEndTimestamp(aest("2026-03-31 12:00"))), "2026-04-30 00:00");
 }
 
 function testYearRollover() {
