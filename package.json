@@ -61,6 +61,7 @@
     "find:klaviyo-legacy-fields": "tsx scripts/find-klaviyo-legacy-fields.ts",
     "find:refund-entry-corruption": "tsx scripts/find-refund-entry-corruption.ts",
     "find:renewal-rate": "tsx scripts/find-renewal-rate.ts",
+    "find:duplicate-trial-entry-grants": "tsx scripts/find-duplicate-trial-entry-grants.ts",
     "fix:refund-entry-corruption": "tsx scripts/fix-refund-entry-corruption.ts",
     "fix:refund-entry-corruption:dry": "tsx scripts/fix-refund-entry-corruption.ts --force-dry-run",
     "fix:major-draw-renewal-entries": "tsx scripts/fix-major-draw-renewal-entries.ts --apply",
