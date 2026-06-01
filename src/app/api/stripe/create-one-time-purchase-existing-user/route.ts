@@ -20,6 +20,7 @@ import { savePaymentMethodToUser } from "@/utils/payment/payment-method-manager"
 import { createPaymentIntentConfig } from "@/utils/payment/stripe/payment-intent-config";
 import { buildAttributionMetadata } from "@/utils/tracking/attribution-metadata";
 import { attributionSchema } from "@/utils/tracking/attribution-schema";
+import { resolveAttributionAtEdge } from "@/services/attribution/resolveAtEdge";
 import { enforceMajorDrawOpenForNewPurchasesOr403 } from "@/utils/draws/major-draw-gate-http";
 import { executeBackgroundJob } from "@/utils/webhook/background-jobs";
 import { ErrorLoggingService } from "@/services/error-reporting/ErrorLoggingService";
@@ -98,6 +99,7 @@ export async function POST(request: NextRequest) {
       request.headers.get("referer") ??
       (process.env.NEXTAUTH_URL ? `${process.env.NEXTAUTH_URL}/shop` : undefined)
     );
+    const { metadata: resolvedAttr } = resolveAttributionAtEdge(request);
 
     // console.log(`🛒 Creating one-time purchase for existing user: ${session.user.id}`);
 
@@ -431,6 +433,7 @@ export async function POST(request: NextRequest) {
         ...(requestContext.fbp ? { capi_fbp: requestContext.fbp } : {}),
         ...(capiEventSourceUrl ? { capi_event_source_url: capiEventSourceUrl } : {}),
         ...buildAttributionMetadata(validatedData.attribution),
+        ...resolvedAttr,
       },
     });
 

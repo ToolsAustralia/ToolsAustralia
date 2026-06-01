@@ -150,6 +150,39 @@ When building `PaymentEvent.data`, the system merges:
 
 ---
 
+---
+
+## Single-Platform Resolution Model (2026-06-01)
+
+The v1 system above captures raw UTM + campaign IDs and writes them to `PaymentEvent.data` but does not collapse them to a single winner. The single-platform resolver adds that final step.
+
+### How it works
+
+At the `create-*` route edge, the resolver (`src/services/attribution/`) reads the durable `_ta_attr` cookie (90-day first-party, written at landing by the client) plus any click IDs in the request body, and assigns exactly **one** `convertingPlatform` and `attributionConfidence` per payment. The resolved values are stamped into Stripe metadata (`attr_platform`, `attr_confidence`, `attr_click_id`, `attr_click_ts`) and then persisted on `PaymentEvent` by the Stripe webhook handler.
+
+For renewals the resolver reads from `subscription.metadata` written at initial purchase — no client-side signal needed on renewal, making attribution sticky for the subscription lifetime.
+
+### New PaymentEvent fields
+
+| Field | Values |
+|---|---|
+| `convertingPlatform` | `meta \| tiktok \| snapchat \| klaviyo_email \| klaviyo_sms \| google \| direct \| other` |
+| `attributionConfidence` | `click \| utm_only \| inferred_backfill` |
+| `isRenewal` | `boolean` |
+
+### Honest limits of this ledger
+
+- **View-through conversions are not tracked.** The ledger counts only click-based conversions: `fbclid` / `_fbc`, `ttclid`, `ScCid`, and Klaviyo-email/SMS UTM signals. A user who saw an ad but did not click will be attributed as `direct`.
+- **Klaviyo-open conversions are not tracked.** Klaviyo's `_kx` parameter is not used for attribution (it cannot be re-read server-side reliably). Klaviyo is attributed only when `utm_source=klaviyo` + `utm_medium=email|sms` are present.
+- **The ledger will deliberately diverge from each platform's dashboard.** Each ad platform uses its own attribution model (view-through, click, post-view windows). This ledger uses click-only with fixed recency windows (Meta/TikTok/Snap 7d, Klaviyo email/SMS 5d). The divergence is by design: the ledger provides a consistent, auditable cross-platform view, not a replica of any single platform's number.
+- **One payment = one platform.** Multi-touch attribution is intentionally excluded. The most-recent click-ID within its recency window wins.
+
+### Relationship to CAPI fan-out
+
+CAPI dispatch to Meta, TikTok, and Snap is **unchanged** — all enabled platforms continue to receive their conversion events. The single-platform ledger is an analytics layer on top of that signal layer; it does not filter what gets sent to the platforms.
+
+---
+
 ## Related Documentation
 
 - [UTM_ATTRIBUTION.md](./UTM_ATTRIBUTION.md) — UTM capture and storage

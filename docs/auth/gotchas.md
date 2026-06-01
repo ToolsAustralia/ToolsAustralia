@@ -54,6 +54,14 @@ NextAuth callbacks include inline scripts in some cases. The CSP config in [secu
 
 The server-side `CompleteRegistration` Conversions API event (fired from [register/route.ts](../../src/app/api/auth/register/route.ts)) prefers the `fbc`/`fbp` values from the request **body** over the `_fbc`/`_fbp` cookies: `const fbc = validatedData.fbc ?? ctx.fbc`. Why: the register POST can fire **before** the Meta pixel writes the `_fbc` cookie, and the API URL has no `fbclid` to reconstruct from — so sourcing `fbc` only from the cookie often sends an empty value while the browser pixel (firing later) has it, which Meta flags. The client (which can read the cookie *or* reconstruct `fbc` from the landing `fbclid`) supplies them in the body. Cookie fallback via `extractRequestContext` is retained for callers that don't send them. Client counterpart: [MembershipModal](../../src/components/modals/MembershipModal/index.tsx) — see [shared-ui/gotchas.md](../shared-ui/gotchas.md).
 
+## `buildSignupAttribution` now persists attribution without a promo slug (2026-06-01)
+
+`src/app/api/auth/register/route.ts` calls `buildSignupAttribution(data)` to persist marketing attribution to `User.signupAttribution` at the moment of registration. Before this change the helper silently returned early when `data.promotionSlug` was absent (i.e. non-promo landings). After this change it persists UTM + click-ID attribution even when no promo slug is present, so organic and ad-click registrations that did not arrive via a `/promotions/*` page also get attribution stamped.
+
+Practical consequence: `User.signupAttribution.promotionSlug` and `User.signupAttribution.promotionPageType` are now optional — they are only populated when the registration originated from a promo page. Code that reads `signupAttribution` must not assume those two fields are always set.
+
+The attribution resolver (`src/services/attribution/`) reads `signupAttribution` as a fallback when no session-level click ID is present.
+
 ## Login flows: invalidate the full user-scoped cache off the fresh session
 
 After any successful login (password, Google, email-verify auto-login, login-code, and the `/login` page), read the post-login id via `await getSession()` (not the stale `useSession()` closure), invalidate via the canonical [`usePurchaseInvalidation`](../../src/hooks/usePurchaseInvalidation.ts) (covers `users.detail`/`dashboard`/`account`, `majorDraw.*`, orders, rewards — not just the old three keys), then `router.refresh()`. The password-login flow previously guarded this on the closure `session` (null at login time), so invalidation **and** Klaviyo `identify()` were dead code. See [LoginModal](../../src/components/modals/LoginModal/index.tsx) and [/login page](../../src/app/login/page.tsx). Note the real "entries show 0 after login" symptom was an HTTP-caching issue (see [draws/gotchas.md](../draws/gotchas.md)); this invalidation cleanup is defensive.

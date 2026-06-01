@@ -90,3 +90,20 @@ The pure helper `userDataForRegistration(u)` at `src/utils/tracking/registration
 - `/api/tracking/**` — generic tracking endpoints
 
 > _TODO: read each handler._
+
+## Server-side attribution resolution (`resolveAtEdge`)
+
+[src/services/attribution/resolveAtEdge.ts](../../src/services/attribution/resolveAtEdge.ts) — single-call glue used by every create-* route handler to resolve the converting platform at request time:
+
+```ts
+resolveAttributionAtEdge(request: NextRequest): { decision: ResolveResult; metadata: Record<string, string> }
+```
+
+1. Calls `extractClickIdsFromRequest` → paid click signals from request cookies/headers.
+2. Calls `readAttributionCookieFromRequest` → UTM data from the attribution cookie.
+3. Passes both into `resolveConvertingPlatform` → `ResolveResult`.
+4. Converts to Stripe-safe metadata via `buildResolvedAttributionMetadata`.
+
+**Error contract:** if anything throws, returns `{ platform: "direct", confidence: "utm_only" }` with minimal fallback metadata — never propagates an exception into the payment handler.
+
+**Where it is called:** at the top of each create-* route's `POST` handler (or, for routes that fan out into sub-handler functions, at the point where `request` is in scope in `POST` before delegation). The returned `metadata` is spread into the same Stripe metadata object that already contains `buildAttributionMetadata(...)`. This means every subscription, one-time purchase, upsell, mini-draw, and payment-intent creation stamps resolved attribution.

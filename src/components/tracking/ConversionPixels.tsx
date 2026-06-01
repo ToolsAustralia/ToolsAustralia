@@ -7,7 +7,7 @@ import { getAllProviders } from "@/lib/tracking/registry";
 import { trackConversion } from "@/lib/tracking/dispatch-client";
 import { eventTimeNow } from "@/lib/tracking/canonical-event";
 import { shouldTrackRoute } from "@/utils/tracking/should-track-route";
-import { captureTikTokClickId } from "@/utils/tracking/tiktok-helpers";
+import { captureClickIds } from "@/utils/tracking/click-capture";
 
 interface ConversionPixelsProps {
   /** CSP nonce from middleware (production). Passed to inline pixel scripts. */
@@ -36,9 +36,9 @@ export default function ConversionPixels({ nonce, disabled = false }: Conversion
   useEffect(() => {
     if (disabled || ranRef.current) return;
     ranRef.current = true;
-    // Persist TikTok click id from the landing URL so it survives to conversion
-    // and is readable server-side for the Events API. No-op when there's no ?ttclid=.
-    captureTikTokClickId();
+    // Persist all platform click ids from the landing URL so they survive to conversion
+    // and are readable server-side for the Events API. No-op when no params present.
+    captureClickIds();
     for (const provider of getAllProviders()) {
       if (!provider.enabled().pixel) continue;
       provider.loadPixel({ nonce });

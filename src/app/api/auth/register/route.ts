@@ -196,14 +196,16 @@ function getAttributionFromRequest(
 }
 
 /**
- * Build signup attribution from promotion slug and optional attribution for analytics.
+ * Build signup attribution. Persists whenever a valid promo slug OR any attribution
+ * param is present — promotionSlug/promotionPageType are optional (homepage ad-landers
+ * carry UTM but no promo slug, and we must not drop their attribution).
  */
 function buildSignupAttribution(
   promotionSlug?: string,
   attribution?: AttributionParams
 ): {
-  promotionPageType: "evergreen" | "toolset";
-  promotionSlug: string;
+  promotionPageType?: "evergreen" | "toolset";
+  promotionSlug?: string;
   visitedAt: Date;
   utmSource?: string;
   utmMedium?: string;
@@ -214,10 +216,18 @@ function buildSignupAttribution(
   adsetId?: string;
   adId?: string;
 } | undefined {
-  if (!promotionSlug || !isValidPromoSlug(promotionSlug)) return undefined;
+  const hasPromo = !!promotionSlug && isValidPromoSlug(promotionSlug);
+  const hasAttribution = !!(
+    attribution &&
+    (attribution.utm_source || attribution.utm_medium || attribution.utm_campaign ||
+     attribution.campaign_id || attribution.adset_id || attribution.ad_id)
+  );
+  if (!hasPromo && !hasAttribution) return undefined;
   return {
-    promotionPageType: getPageTypeFromSlug(promotionSlug),
-    promotionSlug: promotionSlug.toLowerCase().trim(),
+    ...(hasPromo && {
+      promotionPageType: getPageTypeFromSlug(promotionSlug!),
+      promotionSlug: promotionSlug!.toLowerCase().trim(),
+    }),
     visitedAt: new Date(),
     ...(attribution?.utm_source && { utmSource: attribution.utm_source }),
     ...(attribution?.utm_medium && { utmMedium: attribution.utm_medium }),

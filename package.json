@@ -199,7 +199,11 @@
     "migrate:seed-staff-roles:dry": "tsx scripts/migrate-seed-staff-roles.ts --dry-run",
     "test:staff-activity": "tsx src/lib/__tests__/staff-activity.test.ts",
     "test:cache-control": "tsx src/utils/security/__tests__/cache-control.test.ts",
-    "test:payment-readiness": "tsx src/components/modals/PaymentMethodSelector/__tests__/paymentReadiness.test.ts"
+    "test:payment-readiness": "tsx src/components/modals/PaymentMethodSelector/__tests__/paymentReadiness.test.ts",
+    "test:attribution-cookie": "tsx src/utils/tracking/__tests__/attribution-cookie.test.ts",
+    "test:normalize-platform": "tsx src/services/attribution/__tests__/normalizePlatform.test.ts",
+    "test:classify-renewal": "tsx src/services/attribution/__tests__/classifyIsRenewal.test.ts",
+    "test:converting-platform": "tsx src/services/attribution/__tests__/resolveConvertingPlatform.test.ts"
   },
   "dependencies": {
     "@auth/mongodb-adapter": "^3.10.0",

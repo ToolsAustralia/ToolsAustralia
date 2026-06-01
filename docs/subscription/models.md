@@ -275,6 +275,12 @@ interface ICancellationFlowEvent {
 - `{ retention90: 1 }` — backfill targeting
 - Compound: `{ outcome: 1, savedAt: 1, retention90: 1 }` — analytics queries joining save rate and 90-day retention
 
+## `User.signupAttribution` — `promotionSlug` / `promotionPageType` are now optional (2026-06-01)
+
+The `signupAttribution` subdocument on `User` captures the marketing context at the moment of registration. As part of the single-platform payment attribution work, `promotionSlug` and `promotionPageType` were made **optional**: they are only present when the registration originated from a `/promotions/*` page. Registrations from direct, ad-click, or other non-promo landings now also receive attribution (UTM tuple + click IDs) but will have no `promotionSlug` / `promotionPageType`.
+
+Any code reading `user.signupAttribution.promotionSlug` must guard for `undefined`. The attribution resolver (`src/services/attribution/`) treats the absence of a promo slug as a normal non-promo registration — it does not treat it as missing attribution.
+
 ## `User.retentionOffersConsumed` (top-level flags on `User`)
 
 Two boolean flags that gate the new cancellation-flow one-time retention offers. Both default to `false`. Set to `true` when the user successfully redeems the corresponding offer — prevents repeat redemption across sessions.

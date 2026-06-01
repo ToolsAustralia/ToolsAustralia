@@ -24,6 +24,7 @@ import { getEffectivePromoType } from "@/utils/promo/get-effective-promo-type";
 import { normalizeMembershipPlanId } from "@/utils/membership/member-package-mapping";
 import { getUpsellPackageById } from "@/data/upsellPackages";
 import { processPaymentBenefits, isPaymentProcessed } from "@/utils/payment/payment-processing";
+import { extractResolvedPlatformFromMetadata } from "@/utils/tracking/resolved-attribution-metadata";
 import { calculateSubscriptionEntries } from "@/utils/payment/subscription-entries-calculator";
 import { hasMembershipGrantInCurrentDrawPeriod } from "@/utils/draws/has-membership-grant-this-draw";
 import { createUserFromPaymentMetadata, shouldCreateAccountFromMetadata } from "@/utils/payment/account-manager";
@@ -982,6 +983,7 @@ async function handleUpsellWebhook(user: { _id: { toString: () => string } }, pa
   }
 
   const sessionAttribution = extractAttributionFromMetadata(paymentIntent.metadata);
+  const resolvedAttribution = extractResolvedPlatformFromMetadata(paymentIntent.metadata);
 
   // Process benefits using event-based system with payment metadata
   const result = await processPaymentBenefits(
@@ -1018,7 +1020,11 @@ async function handleUpsellWebhook(user: { _id: { toString: () => string } }, pa
     },
     requestContext, // Pass request context for improved match quality
     undefined, // billingReason (not applicable for upsell)
-    sessionAttribution
+    sessionAttribution,
+    undefined, // affiliateOptions
+    undefined, // isResubscribe
+    undefined, // subscriptionLedgerContext
+    resolvedAttribution
   );
 
   // ✅ ADD: Log if experiment assignment was passed to processPaymentBenefits
@@ -1152,6 +1158,7 @@ async function handleOneTimeWebhook(user: { _id: { toString: () => string } }, p
   });
 
   const sessionAttribution = extractAttributionFromMetadata(paymentIntent.metadata);
+  const resolvedAttribution = extractResolvedPlatformFromMetadata(paymentIntent.metadata);
 
   const result = await processPaymentBenefits(
     paymentIntent.id,
@@ -1180,7 +1187,11 @@ async function handleOneTimeWebhook(user: { _id: { toString: () => string } }, p
     },
     requestContext, // Pass request context for improved match quality
     undefined, // billingReason (not applicable for one-time)
-    sessionAttribution
+    sessionAttribution,
+    undefined, // affiliateOptions
+    undefined, // isResubscribe
+    undefined, // subscriptionLedgerContext
+    resolvedAttribution
   );
 
   // ✅ ADD: Log if experiment assignment was passed to processPaymentBenefits
@@ -1302,6 +1313,7 @@ async function handleMiniDrawWebhook(user: { _id: { toString: () => string } }, 
   }
 
   const sessionAttribution = extractAttributionFromMetadata(paymentIntent.metadata);
+  const resolvedAttribution = extractResolvedPlatformFromMetadata(paymentIntent.metadata);
 
   // Process benefits using event-based system with payment metadata
   const result = await processPaymentBenefits(
@@ -1332,7 +1344,11 @@ async function handleMiniDrawWebhook(user: { _id: { toString: () => string } }, 
     },
     requestContext, // Pass request context for improved match quality
     undefined, // billingReason (not applicable for mini-draw)
-    sessionAttribution
+    sessionAttribution,
+    undefined, // affiliateOptions
+    undefined, // isResubscribe
+    undefined, // subscriptionLedgerContext
+    resolvedAttribution
   );
 
   // ✅ ADD: Log if experiment assignment was passed to processPaymentBenefits
@@ -3829,6 +3845,12 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
       (subscription?.metadata ? extractAttributionFromMetadata(subscription.metadata) : undefined) ??
       (expandedInvoice.metadata ? extractAttributionFromMetadata(expandedInvoice.metadata) : undefined);
 
+    // Renewals inherit the edge-resolved decision stamped on the subscription (sticky);
+    // fall back to the invoice metadata when the subscription has none.
+    const resolvedAttribution =
+      extractResolvedPlatformFromMetadata(subscription?.metadata) ??
+      extractResolvedPlatformFromMetadata(expandedInvoice.metadata);
+
     const previousLastMonthAccumulated = user.subscription?.lastMonthAccumulatedEntries ?? 0;
     const lastMonthDeltaForLedger = newLastMonthAccumulatedEntries - previousLastMonthAccumulated;
 
@@ -3881,7 +3903,8 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
       {
         lastMonthDelta: lastMonthDeltaForLedger,
         calculationType: entryCalculation.calculationType,
-      }
+      },
+      resolvedAttribution
     );
     webhookLog("info", `Affiliate recurring eligibility`, {
       invoiceId: expandedInvoice.id,
