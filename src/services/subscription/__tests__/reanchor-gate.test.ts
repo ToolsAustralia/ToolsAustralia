@@ -54,6 +54,7 @@ function run() {
   assert.equal(t({ pauseReason: "retention" }), false, "retention pause excluded despite past_due");
   assert.equal(t({ alreadyReanchoredInvoiceId: "in_123" }), false, "already reanchored this invoice excluded");
   assert.equal(t({ alreadyReanchoredInvoiceId: "in_OTHER" }), true, "different reanchored invoice does not block");
+  assert.equal(t({ invoiceMetadataDunningRecovery: true, cancelAtPeriodEnd: true }), false, "cancel excludes even with the dunning_recovery marker");
 
   console.log("reanchor-gate tests passed");
 }

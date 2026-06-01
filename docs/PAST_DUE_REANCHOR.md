@@ -26,9 +26,16 @@ All five recovery channels (Stripe auto-retry, admin charge, user retry, Pay-Now
 
 ## Trigger gate
 
-Fires only when: `billing_reason === 'subscription_cycle'` AND invoice paid AND **dunning detected** (`previousSubscriptionDbStatus ∈ {past_due, unpaid}` OR `pause_collection` present at payment OR `invoice.attempt_count > 1`) AND NOT `cancel_at_period_end` AND `autoRenew !== false` AND `pauseReason !== 'retention'` AND not already reanchored for this invoice.
+Fires only when: `billing_reason === 'subscription_cycle'` AND invoice paid AND **dunning detected** AND NOT `cancel_at_period_end` AND `autoRenew !== false` AND `pauseReason !== 'retention'` AND not already reanchored for this invoice.
 
-The `attempt_count > 1` arm is essential: the `renew-subscription` retry channel pre-flips DB status to `active` AND clears `pause_collection` before the webhook, defeating the other two dunning arms.
+**Dunning detected** = ANY of these durable signals (an OR — no single one survives every channel):
+
+- `previousSubscriptionDbStatus ∈ {past_due, unpaid}` — catches Stripe auto-retry, admin charge, Pay-Now, force-charge (none pre-flip the DB status).
+- `pause_collection` present at payment (captured *before* the resume clears it).
+- **`invoice.metadata.dunning_recovery === '1'`** — a durable marker stamped on the invoice when the renewal first FAILED (`handleInvoicePaymentFailed`, the `isRenewal` branch). This is the **only** signal that survives the `renew-subscription` retry channel, which pre-flips DB status to `active` AND clears `pause_collection` before the webhook fires.
+- `invoice.attempt_count > 1` — a **weak/secondary** signal only: because our app sets `pause_collection` on failure, Stripe does **not** auto-retry, so a manual recovery's `attempt_count` stays `1`. Kept as belt-and-suspenders for the no-pause edge.
+
+> Why the metadata marker: a live Stripe test-mode probe (`scripts/stripe-probe-reanchor.ts --full`) confirmed a single-failure manual recovery has `attempt_count === 1` under `pause_collection`. Stamping the failed invoice with `dunning_recovery='1'` is the durable, channel-independent dunning signal that closes the renew-subscription gap.
 
 ## Idempotency & failure semantics
 

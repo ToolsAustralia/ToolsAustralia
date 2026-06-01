@@ -84,8 +84,10 @@ export interface ReanchorGateInput {
 /**
  * Whether a paid subscription_cycle invoice represents a past-due/unpaid RECOVERY that should
  * reanchor future renewals. Dunning is detected via ANY durable signal because no single signal
- * survives every recovery channel (the renew-subscription retry pre-flips DB status to active AND
- * clears pause_collection before the webhook — only `attempt_count > 1` catches it).
+ * survives every recovery channel: the renew-subscription retry pre-flips DB status to active AND
+ * clears pause_collection before the webhook, and `attempt_count` stays 1 because pause_collection
+ * blocks Stripe's auto-retries — so the durable `invoiceMetadataDunningRecovery` marker (stamped on
+ * the invoice when the renewal first failed) is what catches that channel.
  */
 export function shouldReanchorAfterRecovery(i: ReanchorGateInput): boolean {
   if (i.billingReason !== "subscription_cycle") return false;
