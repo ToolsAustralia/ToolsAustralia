@@ -87,7 +87,24 @@ async function main() {
   console.log(`  Filter:     { eventType: "BenefitsGranted", convertingPlatform: null }`);
   console.log(`  Limit:      ${LIMIT === Infinity ? "no limit" : LIMIT}`);
   console.log(`  Batch size: ${BATCH_SIZE}`);
-  console.log(`  CSV log:    ${csvStream ? CSV_PATH : "DISABLED"}\n`);
+  console.log(`  CSV log:    ${csvStream ? CSV_PATH : "DISABLED"}`);
+
+  // Count up front so progress has a denominator + ETA (the convertingPlatform index
+  // makes this cheap). Without a total the run feels like it's hanging.
+  const filter = { eventType: "BenefitsGranted", convertingPlatform: null };
+  const matchedTotal = await PaymentEvent.countDocuments(filter);
+  const totalToProcess = LIMIT === Infinity ? matchedTotal : Math.min(matchedTotal, LIMIT);
+  console.log(
+    `  To process: ${totalToProcess.toLocaleString()} historical rows` +
+      `${LIMIT !== Infinity ? ` (capped at --limit ${LIMIT})` : ""}\n`,
+  );
+  if (totalToProcess === 0) {
+    console.log("Nothing to backfill — every BenefitsGranted row already has a convertingPlatform.\n");
+  }
+
+  // Adaptive cadence: ~20 progress lines regardless of size (so even a few-hundred-row run
+  // shows movement), capped at every 1000 for huge sets, min every row for tiny ones.
+  const PROGRESS_EVERY = Math.max(1, Math.min(1000, Math.floor(totalToProcess / 20)));
 
   const startMs = Date.now();
   let processed = 0, succeeded = 0, errored = 0, aborted = false;
@@ -98,7 +115,7 @@ async function main() {
   let outerError: unknown = null;
   try {
     const query = PaymentEvent.find(
-      { eventType: "BenefitsGranted", convertingPlatform: null },
+      filter,
       { paymentIntentId: 1, data: 1, attributionAdId: 1, attributionAdsetId: 1, attributionCampaignId: 1 }
     );
     if (LIMIT !== Infinity) query.limit(LIMIT);
@@ -148,9 +165,15 @@ async function main() {
           csvWrite({ id, status: "error", error: msg });
           console.error(`✗ ${id}: ${msg}`);
         }
-        if (processed % 1000 === 0) {
+        if (processed % PROGRESS_EVERY === 0) {
           const el = Date.now() - startMs;
-          console.log(`Progress: ${processed} rows · ${succeeded} ok · ${errored} err · ${Math.round(processed / Math.max(el / 1000, 1))}/sec · ${formatDuration(el)}`);
+          const rate = processed / Math.max(el / 1000, 0.001);
+          const pct = totalToProcess > 0 ? Math.round((processed / totalToProcess) * 100) : 100;
+          const etaMs = rate > 0 ? (Math.max(0, totalToProcess - processed) / rate) * 1000 : 0;
+          console.log(
+            `Progress: ${processed.toLocaleString()}/${totalToProcess.toLocaleString()} (${pct}%) · ` +
+              `${succeeded} ok · ${errored} err · ${Math.round(rate)}/sec · elapsed ${formatDuration(el)} · ETA ${formatDuration(etaMs)}`,
+          );
         }
       }
     } finally {
