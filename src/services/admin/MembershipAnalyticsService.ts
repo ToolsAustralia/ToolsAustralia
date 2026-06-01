@@ -12,6 +12,7 @@ import {
 import type { AdminDashboardDateRangeKey, MembershipAsOfMode } from "@/utils/admin/dashboardDateRange";
 import { fetchNetBenefitsGrantedInRange } from "@/utils/payment/payment-event-net-queries";
 import type { MembershipAnalyticsBundle } from "@/types/admin/membershipAnalytics";
+import { summarizeRenewalProgress } from "@/utils/admin/renewalProgress";
 
 export const SUBSCRIPTION_PACKAGE_IDS = ["tradie-subscription", "foreman-subscription", "boss-subscription"] as const;
 
@@ -139,6 +140,18 @@ export class MembershipAnalyticsService {
     }
     cancelledMembershipRevenueImpact = Math.round(cancelledMembershipRevenueImpact * 100) / 100;
 
+    // Draw-aligned renewal progress (only meaningful for the monthly draw cohorts).
+    let renewalProgress: ReturnType<typeof summarizeRenewalProgress> | undefined;
+    if (dateRange === "current-draw" || dateRange === "last-draw") {
+      const { base, baseAsOf } = await this.getRenewalBaseAsOf(startDate);
+      renewalProgress = summarizeRenewalProgress({
+        base,
+        renewed: successfulRenewalUserCount,
+        baseAsOf,
+        isComplete: dateRange === "last-draw",
+      });
+    }
+
     return {
       expectedRenewalsInRange,
       successfulRenewalsInRange,
@@ -147,6 +160,7 @@ export class MembershipAnalyticsService {
       becamePastDueInRange: becamePastDueIds.length,
       cancellationsInRange: cancellationRows.length,
       cancelledMembershipRevenueImpact,
+      renewalProgress,
     };
   }
 
@@ -309,6 +323,45 @@ export class MembershipAnalyticsService {
         fullyCancelledCount: c[packageId] ?? 0,
       })),
     };
+  }
+
+  /**
+   * Renewal base = active + past-due members as of `firstDay` (AEST), from the daily
+   * snapshot. Falls back to the nearest later snapshot day if the exact day has no row.
+   */
+  private async getRenewalBaseAsOf(firstDay: Date): Promise<{ base: number; baseAsOf: string | null }> {
+    const requestedKey = formatInTimeZone(firstDay, "Australia/Sydney", "yyyy-MM-dd");
+    const select = "activeCount pastDueCount";
+    let rows = await MembershipDailySnapshot.find({
+      date: requestedKey,
+      packageId: { $in: [...SUBSCRIPTION_PACKAGE_IDS] },
+    })
+      .select(select)
+      .lean<{ activeCount: number; pastDueCount: number }[]>();
+    let usedKey = requestedKey;
+
+    if (rows.length === 0) {
+      const nearest = await MembershipDailySnapshot.findOne({
+        date: { $gte: requestedKey },
+        packageId: { $in: [...SUBSCRIPTION_PACKAGE_IDS] },
+      })
+        .sort({ date: 1 })
+        .select("date")
+        .lean<{ date?: string }>();
+      if (nearest?.date) {
+        usedKey = nearest.date;
+        rows = await MembershipDailySnapshot.find({
+          date: usedKey,
+          packageId: { $in: [...SUBSCRIPTION_PACKAGE_IDS] },
+        })
+          .select(select)
+          .lean<{ activeCount: number; pastDueCount: number }[]>();
+      }
+    }
+
+    if (rows.length === 0) return { base: 0, baseAsOf: null };
+    const base = rows.reduce((sum, r) => sum + (r.activeCount ?? 0) + (r.pastDueCount ?? 0), 0);
+    return { base, baseAsOf: usedKey };
   }
 
   /**

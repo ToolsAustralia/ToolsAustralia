@@ -104,6 +104,17 @@ The following components are **no longer referenced** by `UserMetricsView` but w
 
 `Charge Past Due` and `Export` buttons remain visible on both breakpoints.
 
+## KPIMetricsGrid — Renewal Rate card (2026-05-29)
+
+[src/app/admin/component/overview/KPIMetricsGrid.tsx](../../src/app/admin/component/overview/KPIMetricsGrid.tsx) renders a **Renewal Rate** card in the "Users & Performance" group. The card is only shown when the active date filter is `current-draw` or `last-draw` and `stats.users.renewalProgress` is present in the dashboard stats response.
+
+- **Metric displayed:** `renewalRate` as a percentage (e.g. "74%"), with a sub-line showing `renewed / base` counts.
+- **Remaining members** are labeled "Expected to renew" (`current-draw`) or "Did not renew" (`last-draw`).
+- When `snapshotMissing: true` the card renders an amber note that the base was estimated from the nearest available snapshot.
+- For other date filters the card is hidden entirely — renewal rate is only meaningful for a full draw period.
+
+Data flows from `AdminDashboardStats.users.renewalProgress` (`RenewalProgress | undefined`). See [backend.md](./backend.md#renewal-rate-kpi-2026-05-29) for service-layer and API details.
+
 ## DashboardOverview — Users Breakdown section — 2026-05-04
 
 [src/app/admin/component/overview/DashboardOverview.tsx](../../src/app/admin/component/overview/DashboardOverview.tsx) renders a new collapsible `UsersBreakdownSection` immediately after `KPIMetricsGrid` (i.e. underneath the "Users & Performance" group inside the grid) and before `RevenueOverview`.

@@ -13,6 +13,7 @@ import {
   UserX,
   ChevronDown,
   ChevronUp,
+  RefreshCw,
 } from "lucide-react";
 import type { DateRange } from "@/components/admin/DateRangeToggle";
 import type { TrendData } from "@/types/admin/trend-types";
@@ -35,6 +36,14 @@ interface DashboardStats {
     periodChurnRate?: number;
     cancellationImpact?: {
       estimatedMonthlyRevenue: number;
+    };
+    renewalProgress?: {
+      base: number;
+      renewed: number;
+      rate: number | null;
+      remaining: number;
+      baseAsOf: string | null;
+      isComplete: boolean;
     };
   };
   conversionRate: number;
@@ -432,6 +441,35 @@ export default function KPIMetricsGrid({
               loading={loading}
             />
           </div>
+
+          {(() => {
+            const rp = dashboardStats?.users?.renewalProgress;
+            if (!rp) return null;
+            return (
+              <MetricCard
+                title="Renewal Rate"
+                value={rp.rate != null ? `${rp.rate}%` : "—"}
+                icon={RefreshCw}
+                color="emerald"
+                subtitle={
+                  <span className="text-2xs sm:text-2xs leading-tight text-gray-500">
+                    {rp.renewed.toLocaleString("en-AU")} of {rp.base.toLocaleString("en-AU")} renewed
+                    {rp.remaining > 0 && (
+                      <>
+                        {" · "}
+                        {rp.remaining.toLocaleString("en-AU")}{" "}
+                        {rp.isComplete ? "did not renew" : "expected"}
+                      </>
+                    )}
+                    {rp.baseAsOf && (
+                      <span className="block text-gray-600">base as of {rp.baseAsOf}</span>
+                    )}
+                  </span>
+                }
+                loading={loading}
+              />
+            );
+          })()}
         </div>
       </div>
     </div>
