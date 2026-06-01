@@ -8,6 +8,8 @@ On a failed **renewal** (`subscription_cycle`), the app may set Stripe `pause_co
 
 When a member successfully pays the recovery/renewal invoice, **`pause_collection` must be cleared** so the next billing cycle creates and charges a normal invoice. Clearing is done with `resumeAfterSuccessfulRenewalPayment` in the same service file (idempotent: safe to call when not paused).
 
+In addition to clearing the pause, successful recovery also **reanchors future renewals** to the recovery-payment date (AEST), clamping days 25/26/27 → 24 — so the recovered member's next charge falls ~1 month from when they caught up rather than on the original (now stale) anchor. See [PAST_DUE_REANCHOR.md](./PAST_DUE_REANCHOR.md).
+
 Recovery paths covered in code:
 
 - `invoice.payment_succeeded` webhook (membership) — `resumeAfterSuccessfulRenewalPayment` runs **before** `processPaymentBenefits` when the invoice is already paid, so a slow or partially failing benefits path (or Stripe CLI / proxy **timeouts** while waiting for the HTTP response) does not leave `pause_collection` uncleared. Policy uses `shouldClearPauseCollectionAfterPaidInvoice`, recurring-affiliate eligibility, and **any subscription** that still has `pause_collection` set.

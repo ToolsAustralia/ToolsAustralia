@@ -37,6 +37,7 @@ Top-level subscription-related fields on `IUser`:
 | `lastUpgradeDate` | `Date?` | upgrade | Webhook interference guard. |
 | `lastMonthAccumulatedEntries` | `number?` | renewal cycle | Persists across cancel for resubscribe continuity. See [rules R3](./rules.md#r3). |
 | `lastResubscribedAt` | `Date?` | `/api/stripe/create-subscription-existing-user` | **UX-only timestamp** — set when a resubscribe is detected (same `isResubscribeForMetadata` heuristic that drives `calculateResubscribeEntries`). Not used by entries math; drives the "Welcome back!" carry-over banner on `/purchase-success` (10-minute window) and the activity-card sub-line. Never set on initial subscribe, upgrade, downgrade, or renewal. |
+| `lastReanchoredInvoiceId` | `string?` | `reanchorAfterPastDueRecovery` (webhook) | Idempotency marker for the past-due reanchor flow. Stores the Stripe invoice ID of the most-recently-reanchored recovery payment. Prevents duplicate reanchor on Stripe dashboard resends (which carry fresh `event.id`s that bypass the normal event-dedup layer). See [docs/PAST_DUE_REANCHOR.md](../PAST_DUE_REANCHOR.md). |
 
 #### `previousSubscription` (downgrade benefit-preservation)
 

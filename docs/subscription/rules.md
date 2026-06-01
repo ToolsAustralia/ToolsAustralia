@@ -74,7 +74,7 @@ The clear-condition lives in `shouldClearPauseCollectionAfterPaidInvoice()` — 
 
 ### R11. New 25th/26th/27th joiners anchor to the 24th
 
-Users joining on those three calendar days (AEST / `Australia/Sydney`) are anchored to renew on the **24th** of each subsequent month. This guarantees ≥ 3 days to recover from a failed renewal before the major-draw window (28th–27th).
+**This rule applies to new joiners only.** Users joining on those three calendar days (AEST / `Australia/Sydney`) are anchored to renew on the **24th** of each subsequent month. This guarantees ≥ 3 days to recover from a failed renewal before the major-draw window (28th–27th).
 
 Implementation:
 - **`trial_end`** = next 24th at midnight AEST
@@ -87,6 +87,16 @@ The helper that builds these create-params: `getSubscriptionCreateParamsForAncho
 ### R12. Anchor migration skips `cancel_at_period_end`
 
 The migration script `scripts/migrate-anchor-billing-24.ts` **never** migrates subscriptions where `cancel_at_period_end === true` — those users have already chosen to end on their current period. Touching `trial_end` or `proration_behavior` could re-charge or extend access. The script logs `skip_cancel_at_period_end` and moves on.
+
+### R16. Recovered past_due/unpaid renewals reanchor to the recovery-payment date
+
+When a `past_due` or `unpaid` subscription recovers (any of the five channels — Stripe auto-retry, admin charge, user retry, Pay-Now, force-charge), future renewals are **reanchored to the recovery-payment date** (AEST), clamping days **25/26/27 → 24** (same draw-buffer window as R11). This prevents the recovered member from being billed again ~2 weeks later on their original stale anchor.
+
+- Mechanism: `stripe.subscriptions.update(id, { trial_end, proration_behavior: 'none' })` via `reanchorAfterPastDueRecovery` in `SubscriptionCollectionPauseService`.
+- Idempotency: `User.subscription.lastReanchoredInvoiceId` atomic claim; the `attempt_count > 1` arm of the trigger gate covers the `renew-subscription` retry channel (which pre-flips DB status to `active` before the webhook).
+- Fully non-fatal — recovery has already succeeded before the reanchor runs.
+
+See [docs/PAST_DUE_REANCHOR.md](../PAST_DUE_REANCHOR.md) for the full rule.
 
 ### R13. Cancellation date for anchored subs = 24th
 

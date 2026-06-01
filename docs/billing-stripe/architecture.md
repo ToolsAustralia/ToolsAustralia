@@ -26,7 +26,7 @@ Stripe → POST /api/stripe/webhook
         ├── customer.subscription.created       → write User.subscription, write MembershipStatusHistory active/trialing
         ├── customer.subscription.updated       → reconcile Mongo state with Stripe; write MembershipStatusHistory active/trialing on non-active→active recovery
         ├── customer.subscription.deleted       → fire cancellation analytics events (single source!)
-        ├── invoice.payment_succeeded           → resumeAfterSuccessfulRenewalPayment, processPaymentBenefits, write PaymentEvent BenefitsGranted
+        ├── invoice.payment_succeeded           → resumeAfterSuccessfulRenewalPayment, processPaymentBenefits, write PaymentEvent BenefitsGranted; on past_due/unpaid recovery: reanchorAfterPastDueRecovery (trial_end, proration_behavior:'none') + Klaviyo re-push
         ├── invoice.payment_failed              → pauseAfterRenewalFailure, write MembershipStatusHistory past_due
         ├── invoice.finalized                   → ensure MembershipRenewalCycle row exists
         ├── charge.failed                       → upsert BlockedTransaction (issuer-blocked dual-write; no allowlist apply here)
@@ -117,6 +117,16 @@ The helper `getSubscriptionCreateParamsForAnchor(joinDate)` lives in [src/utils/
 - `/api/stripe/renew-subscription/route.ts`
 
 Migration script: `scripts/migrate-anchor-billing-24.ts` (`npm run migrate:anchor-billing-24:dry` for dry-run).
+
+### Past-due reanchor — second anchor-move trigger
+
+There is now a **second** trigger that moves the billing anchor: past-due recovery. When a `past_due`/`unpaid` subscription recovers (any of the five channels), `handleInvoicePaymentSucceeded` calls `reanchorAfterPastDueRecovery` to move future renewals to the recovery-payment date (AEST), clamping 25/26/27 → 24.
+
+Mechanism: `stripe.subscriptions.update(id, { trial_end, proration_behavior: 'none' })` — **not** `billing_cycle_anchor`. `trial_end` is future-floored (a non-future value aborts the reanchor non-fatally rather than charging immediately).
+
+Helpers in `src/utils/billing/anchor-billing.ts`: `clampReanchorDay`, `daysInMonthUTC`, `getReanchorTrialEndTimestamp`, `BILLING_ANCHOR_RULE_VERSION` (bumped to 2).
+
+See [docs/PAST_DUE_REANCHOR.md](../PAST_DUE_REANCHOR.md) for the full rule, trigger gate, idempotency semantics, and pre-ship verification checklist.
 
 ## Service inventory — `AllowlistService`
 

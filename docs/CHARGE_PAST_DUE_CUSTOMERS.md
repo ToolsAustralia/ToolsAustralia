@@ -322,8 +322,13 @@ Check `InvoiceChargeLog` collection for:
 - Retry eligibility (`canRetryAt`)
 - Admin who triggered charges
 
+## Post-Recovery Reanchor
+
+A successful charge via this tool emits `invoice.payment_succeeded`, which triggers the **past-due reanchor** flow: future renewals are moved to the recovery-payment date (AEST), clamping days 25/26/27 → 24. No changes to this endpoint were needed — the reanchor runs from the single webhook hook. See [PAST_DUE_REANCHOR.md](./PAST_DUE_REANCHOR.md).
+
 ## Related Documentation
 
 - [Failed Renewal Pay Now](./FAILED_RENEWAL_PAY_NOW.md) - User-facing payment retry feature
+- [Past-Due Reanchor](./PAST_DUE_REANCHOR.md) - Future-renewal reanchor on recovery
 - Stripe Invoice API: https://stripe.com/docs/api/invoices
 - Stripe Idempotency: https://stripe.com/docs/api/idempotent_requests

@@ -268,6 +268,19 @@ Klaviyo does not surface "property no longer emitted" warnings — broken flows 
 
 If you find a legacy property that's actively painful (e.g. a date-string field the ads team can't filter on), raise it as a separate scoped ticket — not as a side-effect of unrelated work.
 
+## Past-due reanchor and Klaviyo profile sync
+
+When a `past_due`/`unpaid` subscription recovers and is reanchored to the recovery-payment date, the **Klaviyo profile is re-pushed** so the snapshot properties reflect the new anchor. Two independent pushes guard this:
+
+1. **Orchestrator push** — `reanchorAfterPastDueRecovery` calls `ensureUserProfileSynced` immediately after writing the new `endDate` to Mongo.
+2. **Defense-in-depth push** — the active/trialing recovery branch of `handleSubscriptionUpdated` (the `customer.subscription.updated` webhook fired by Stripe when `trial_end` is set) also pushes the profile.
+
+**Why this matters:** Klaviyo profile properties `next_renewal_date`, `subscription_end_date`, and `past_due_renewal_entries` are **pushed snapshots**, not live reads. Without a re-push after reanchor, these properties would show the old anchor date until the next scheduled sync or member action.
+
+Every other surface that shows the renewal date reads `endDate` live per request (my-account, SubscriptionManagementModal, admin panels) and auto-corrects without any action.
+
+See [docs/PAST_DUE_REANCHOR.md](../PAST_DUE_REANCHOR.md) for the full downstream-propagation details.
+
 ## Common bugs to watch for
 
 - **Building revenue events by hand** instead of using `buildRevenueProperties` — easy to typo `$value` as `value`, breaking revenue reporting.
