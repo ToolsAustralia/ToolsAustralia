@@ -43,6 +43,19 @@ npm run test:anchor-billing          # date math for both join-anchor and past-d
 npm run test:reanchor-gate           # trigger predicate for past-due reanchor: signal isolation (past_due DB status / pause_collection present / attempt_count>1), all exclusion arms (cancel_at_period_end, autoRenew=false, pauseReason=retention, already-reanchored).
 ```
 
+## Stripe test-mode probe: past-due reanchor
+
+`scripts/stripe-probe-reanchor.ts` confirms — against the **live Stripe API in test mode** — the behaviours the past-due reanchor feature assumes before the behaviour flip merges to main (design spec §9 / `docs/PAST_DUE_REANCHOR.md`). It refuses any key not starting with `sk_test_`, creates throwaway test objects, and deletes them afterwards. Reuses the real `getReanchorTrialEndTimestamp` helper so the date math is validated end-to-end against Stripe.
+
+```bash
+npm run stripe:probe-reanchor:dry          # validate the test key + print the plan; create nothing
+npm run stripe:probe-reanchor              # Part A: trial_end behaviour on an active, just-paid sub
+npx tsx scripts/stripe-probe-reanchor.ts --full   # Part A + Part B (real past_due→recovery via a Test Clock)
+npx tsx scripts/stripe-probe-reanchor.ts --full --keep  # leave test objects for dashboard inspection
+```
+
+Asserts: A1 no new charge after the `trial_end` update, A2 `status==='trialing'` & `items[0].current_period_end===trial_end`, A3 the paid invoice stays paid, A4 (`--full`) the recovery invoice carries `billing_reason==='subscription_cycle'` & `attempt_count>1`, A5 (`--full`) the clear-pause-then-set-`trial_end` ordering succeeds. Exits non-zero if any assertion fails.
+
 ## Cleanup / backfill scripts
 
 ```bash
