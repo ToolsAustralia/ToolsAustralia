@@ -46,3 +46,12 @@ npx tsx scripts/migrate-anchor-billing-24.ts --limit=50
 ## Audit
 
 - Migration logs every subscription with `subId`, `customerEmail`, `oldAnchorDay`, `newAnchorDay`, `action` so you can match records in your DB and Stripe dashboard.
+
+## Second anchor-move trigger — past-due reanchor
+
+There are now **two** events that move the billing anchor:
+
+1. **New joiners on 25th/26th/27th** (this doc) — handled at subscription-create time.
+2. **Past-due recovery** — when a `past_due`/`unpaid` subscription recovers, future renewals are reanchored to the recovery-payment date (AEST), clamping 25/26/27 → 24, via `reanchorAfterPastDueRecovery` in `SubscriptionCollectionPauseService`.
+
+See [PAST_DUE_REANCHOR.md](./PAST_DUE_REANCHOR.md) for the full past-due reanchor rule.

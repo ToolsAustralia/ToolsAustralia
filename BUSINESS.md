@@ -297,7 +297,7 @@ Two parallel concepts coexist under this umbrella:
 
 ## 9. Payments — how money actually moves
 
-Source of truth: [docs/payment/](docs/payment/), [docs/billing-stripe/](docs/billing-stripe/), `docs/BILLING_ANCHOR_24.md`, `docs/REFUND_REVERSAL.md`, `docs/STRIPE_COLLECTION_PAUSE_RECOVERY.md`, `docs/CHARGE_PAST_DUE_CUSTOMERS.md`, `docs/SUBSCRIPTION_PAYMENT_ELEMENT_MIGRATION.md`.
+Source of truth: [docs/payment/](docs/payment/), [docs/billing-stripe/](docs/billing-stripe/), `docs/BILLING_ANCHOR_24.md`, `docs/PAST_DUE_REANCHOR.md`, `docs/REFUND_REVERSAL.md`, `docs/STRIPE_COLLECTION_PAUSE_RECOVERY.md`, `docs/CHARGE_PAST_DUE_CUSTOMERS.md`, `docs/SUBSCRIPTION_PAYMENT_ELEMENT_MIGRATION.md`.
 
 ### 9a. One-time payments
 
@@ -312,7 +312,8 @@ The non-obvious rule that ties everything together:
 - Subscriptions are anchored to **day 24** of the month.
 - Users joining on the **25th / 26th / 27th AEST** get `trial_end = next 24th`, `proration_behavior: "none"`, and `add_invoice_items` so they pay the full price immediately but their next renewal is on the 24th. The subscription is `trialing` until the 24th.
 - This means **renewals settle on the 24th**, giving 3+ days to resolve failed payments before the major draw on the **27th**.
-- See `docs/BILLING_ANCHOR_24.md` for the full migration and rationale.
+- **Past-due recovery reanchors to the catch-up date.** When a past-due/unpaid subscription recovers (any channel), future renewals are moved to the recovery-payment date (AEST), clamping 25/26/27 → 24. This stops the recovered member from being billed again ~2 weeks later on a stale original anchor. The anchor is therefore **not permanently static** — it reflects the most recent successful payment date (clamped to the draw buffer).
+- Source of truth: `docs/BILLING_ANCHOR_24.md` (join-anchor rule), `docs/PAST_DUE_REANCHOR.md` (past-due reanchor).
 
 ### 9c. Refund handling — ledger reversal
 
@@ -324,6 +325,7 @@ The non-obvious rule that ties everything together:
 
 - When a renewal fails (`subscription_cycle`), `pauseAfterRenewalFailure` sets `pause_collection: keep_as_draft` to **stop Stripe from stacking draft invoices**.
 - On a successful payment, `resumeAfterSuccessfulRenewalPayment` clears the pause **before** granting benefits — this is deliberate, so the resume survives a webhook timeout.
+- After clearing the pause and granting benefits, the webhook also **reanchors future renewals** to the recovery-payment date (clamped 25/26/27 → 24) — see §9b and `docs/PAST_DUE_REANCHOR.md`.
 
 ### 9e. Past-due admin charge tool
 
@@ -630,7 +632,7 @@ The platform doesn't only ship transactional email through SendGrid — it also 
 - **Member** — strictly, a user with an **active subscription** (`userData.subscription.isActive === true`). The term is sometimes used loosely to mean "engaged user" — for Additional-pack eligibility, that loose sense applies (active sub OR current-draw entries).
 - **Additional Pack** — a discounted variant of a one-time pack. Eligible to users with an active subscription **or** entries in the current major draw — see §2c.
 - **Upsell** — a post-purchase offer at 50–60% off granting 2× the base pack's entries.
-- **Anchor day** — day 24 of the month, the day all subscriptions renew.
+- **Anchor day** — day 24 of the month, the day subscriptions renew. New joiners on the 25th/26th/27th are anchored to the 24th at signup; recovered past-due members are reanchored to their recovery-payment date (clamped 25/26/27 → 24). See `docs/BILLING_ANCHOR_24.md` and `docs/PAST_DUE_REANCHOR.md`.
 - **Promo multiplier** — the entries-multiplier applied at *purchase time* (Scheduled / Toggle / Alternating). Prioritized, not stacked, within the promo family.
 - **Upsell category multiplier** — the entries-multiplier applied to a *bonus pack* after a trigger purchase. Stacks multiplicatively with the promo multiplier active at the trigger purchase.
 - **BonusEntryPromo** — additive entries grant (not a multiplier), date-windowed, per package type.

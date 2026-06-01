@@ -156,6 +156,14 @@ npx tsx scripts/migrate-anchor-billing-24.ts --limit=50
 
 Logs every subscription with `subId`, `customerEmail`, `oldAnchorDay`, `newAnchorDay`, `action` for cross-referencing in DB and Stripe Dashboard.
 
+### `createAESTDateAsUTC` returns Invalid Date (NaN) on overflow days
+
+`createAESTDateAsUTC` (and related AEST date helpers) return an Invalid Date when given a day that doesn't exist in the target month (e.g. day 31 in a 30-day month). Always **clamp to the last day of the month first** — use `daysInMonthUTC(year, month)` from `src/utils/billing/anchor-billing.ts` — before constructing the date. The past-due reanchor rule does this via `clampReanchorDay`. Failing to clamp will silently produce a `NaN` timestamp that passes through to Stripe as a bad value.
+
+### Stripe does NOT reject a past `trial_end` — it charges immediately
+
+When you call `stripe.subscriptions.update(id, { trial_end: <timestamp> })` and the timestamp is in the past, Stripe **does not return an error** — it ends the trial immediately and charges the customer right away. The past-due reanchor code **future-floors** the computed `trial_end`: if the computed reanchor date is not strictly in the future, the reanchor is aborted non-fatally. Never pass a non-future `trial_end` when the intent is "schedule next renewal", not "charge now".
+
 ## Frontend
 
 ### Client-derived `isActive`

@@ -524,6 +524,10 @@ The modal is shown once per session using sessionStorage:
 
 Subscription reactivation depends on Stripe webhooks. The modal shows a success message immediately after payment, but the actual subscription status update happens via webhook. This is by design and follows Stripe best practices.
 
+### Post-Recovery Reanchor
+
+A successful Pay-Now payment emits `invoice.payment_succeeded`, which also triggers the **past-due reanchor** flow: future renewals are moved to the recovery-payment date (AEST), clamping days 25/26/27 → 24. The user's `endDate` (shown in my-account and the SubscriptionManagementModal) updates automatically on the next fetch. See [PAST_DUE_REANCHOR.md](./PAST_DUE_REANCHOR.md).
+
 ---
 
 ## Version History
