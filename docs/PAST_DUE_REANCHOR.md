@@ -26,6 +26,10 @@ Only `trial_end` can land the clamped 24th without charging — which is also wh
 
 Setting `trial_end` puts the Stripe subscription into `status = 'trialing'` until the new anchor date. **This is cosmetic.** A `trialing` member is a fully paid, **active** member (`isActive = true`, benefits intact) — we never sell a real free trial. The member UI therefore maps `trialing → "Active"` (`getSubscriptionStatusText`; see `docs/client-state/gotchas.md`). Do not surface "Trial" to members. Stripe's own dashboard/MRR views show `trialing` until the next bill; our DB-based analytics are unaffected.
 
+## Stripe native analytics are inflated by anchoring (not real trials)
+
+Because anchoring uses `trial_end`, Stripe classifies **every** anchored member as a "trial." So the **Billing → Trials** tab ("New trials", "Active trials", "Converted trials", "Trial conversion rate") and any trial-segmented MRR are populated by 25-27 joiners, the anchor-billing migration batch, and reanchored recoveries — **we do not sell a free trial**, so these figures are an anchoring artifact, not a real funnel. They have **no functional impact**: our own DB-based analytics (admin dashboards, my-account, `MembershipAnalyticsService`) count these members correctly as active subscribers. **Do not use Stripe's Trials tab or trial-segmented MRR for business numbers** — use Stripe's Subscribers/Revenue tabs or the app's own dashboards.
+
 ## Where it lives
 
 | Concern | Location |
