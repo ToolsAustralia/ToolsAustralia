@@ -2199,11 +2199,8 @@ async function handleSubscriptionUpdated(subscription: Stripe.Subscription) {
       !wasActiveBeforeUpdate &&
       (subscription.status === "active" || subscription.status === "trialing")
     ) {
-      const savedUserForKlaviyo = await User.findById(user._id);
-      if (savedUserForKlaviyo) {
-        ensureUserProfileSynced(savedUserForKlaviyo as IUser);
-        webhookLog("info", `Klaviyo profile sync queued after recovery to ${subscription.status} for ${savedUserForKlaviyo.email}`);
-      }
+      ensureUserProfileSynced(user as IUser);
+      webhookLog("info", `Klaviyo profile sync queued after recovery to ${subscription.status} for ${user.email}`);
     }
 
     // ✅ Verify save for canceled/past_due/unpaid status + Klaviyo profile (past_due renewal entries on profile)
