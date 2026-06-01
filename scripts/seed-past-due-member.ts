@@ -36,7 +36,7 @@ import Stripe from "stripe";
 import bcrypt from "bcryptjs";
 import { formatInTimeZone } from "date-fns-tz";
 import connectDB from "@/lib/mongodb";
-import User from "@/models/User";
+import User, { type IUser } from "@/models/User";
 
 config({ path: path.resolve(process.cwd(), ".env.local") });
 
@@ -355,15 +355,14 @@ async function main(): Promise<void> {
     user.stripeCustomerId = customer.id;
     user.stripeSubscriptionId = sub.id;
     user.profileSetupCompleted = true;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (user as any).subscription = {
+    user.subscription = {
       packageId: PACKAGE_ID,
       status: "active",
       isActive: true,
       startDate: new Date(),
       endDate: periodEndDate,
       autoRenew: true,
-    };
+    } as IUser["subscription"];
     user.markModified("subscription");
     await user.save();
     console.log(`  Updated existing user: ${user._id}`);
@@ -405,6 +404,30 @@ async function main(): Promise<void> {
         `The open invoice may take a moment to process — continuing anyway.`
     );
   }
+
+  // -------------------------------------------------------------------------
+  // Step 9a: Restore a GOOD default PM so recovery channels can succeed
+  //
+  // The decline card was only needed to make the renewal fail. If we leave it
+  // as the default, every recovery channel (admin charge, user retry, pay-now)
+  // will also decline. Swap back to a fresh good card now.
+  // -------------------------------------------------------------------------
+  console.log("\nRestoring good default payment method for recovery…");
+  const recoveryPm = await stripe.paymentMethods.create({
+    type: "card",
+    card: { token: TOKEN_GOOD },
+  });
+  await stripe.paymentMethods.attach(recoveryPm.id, { customer: customer.id });
+  await stripe.customers.update(customer.id, {
+    invoice_settings: { default_payment_method: recoveryPm.id },
+  });
+  try {
+    await stripe.paymentMethods.detach(declinePm.id);
+  } catch {
+    // best-effort — if it's already detached or missing, carry on
+  }
+  const recoveryPmId = recoveryPm.id;
+  console.log(`  recovery PM (good): ${recoveryPmId}  (decline PM ${declinePm.id} detached)`);
 
   // -------------------------------------------------------------------------
   // Step 9: Find the open subscription_cycle invoice
@@ -460,10 +483,14 @@ async function main(): Promise<void> {
   // Step 11: Mirror past_due state to MongoDB
   // -------------------------------------------------------------------------
   console.log("\nMirroring past_due state to MongoDB…");
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  (user as any).subscription = {
+  // Use the real Stripe status when it signals failure; fall back to "past_due".
+  const dbStatus =
+    pastDueSub.status === "past_due" || pastDueSub.status === "unpaid"
+      ? pastDueSub.status
+      : "past_due";
+  user.subscription = {
     packageId: PACKAGE_ID,
-    status: "past_due",
+    status: dbStatus,
     isActive: false,
     startDate: user.subscription?.startDate ?? new Date(),
     endDate: periodEndDate,
@@ -471,10 +498,17 @@ async function main(): Promise<void> {
     pastDueAt: new Date(),
     // clear lastReanchoredInvoiceId so the recovery flow is not blocked
     lastReanchoredInvoiceId: undefined,
-  };
+  } as IUser["subscription"];
+  // Push the good recovery PM to savedPaymentMethods so the user-facing
+  // renew-subscription route (which reads this array, not the Stripe default) works.
+  user.savedPaymentMethods = [
+    { paymentMethodId: recoveryPmId, isDefault: true, createdAt: new Date() },
+  ];
   user.markModified("subscription");
+  user.markModified("savedPaymentMethods");
   await user.save();
-  console.log("  MongoDB user saved with status=past_due, isActive=false, pastDueAt=now.");
+  console.log(`  MongoDB user saved with status=${dbStatus}, isActive=false, pastDueAt=now.`);
+  console.log(`  savedPaymentMethods: [{ paymentMethodId: ${recoveryPmId}, isDefault: true }]`);
 
   // -------------------------------------------------------------------------
   // Step 12: Print QA summary + checklist
@@ -487,9 +521,10 @@ async function main(): Promise<void> {
   console.log("=".repeat(72));
   console.log();
   console.log("LOGIN CREDENTIALS");
-  console.log(`  Email:     ${EMAIL}`);
+  console.log(`  Email:     ${EMAIL.toLowerCase()}`);
   console.log(`  Password:  ${PASSWORD}`);
   console.log(`  User _id:  ${user._id}`);
+  console.log("  NOTE: Log in with the lowercased email exactly as shown (login query is case-sensitive).");
   console.log();
   console.log("STRIPE OBJECTS");
   console.log(`  Customer ID:          ${customer.id}`);
@@ -531,20 +566,20 @@ async function main(): Promise<void> {
   console.log("    [✓] No extra charge (only the recovery invoice was collected)");
   console.log("    [✓] Klaviyo next_renewal_date property updated");
   console.log();
-  console.log("  Channel A — Admin: Charge Past-Due");
-  console.log(`    POST /api/admin/charge-past-due  (user ${user._id})`);
+  console.log("  Channel A — Admin: Bulk Charge Past-Due (Admin → Invoices → Charge Past Due)");
+  console.log(`    POST /api/admin/invoices/charge-past-due  (body: { userId: "${user._id}" })`);
   console.log();
-  console.log("  Channel B — Admin: Force Charge");
-  console.log(`    POST /api/admin/force-charge-past-due  (user ${user._id})`);
+  console.log("  Channel B — Admin: Per-User Charge / Force (Admin → Users → Charge Past Due)");
+  console.log(`    POST /api/admin/users/${user._id}/charge-past-due`);
   console.log();
   console.log("  Channel C — User: renew-subscription retry (the channel the probe found was");
   console.log(
     "    broken — verify it now reanchors correctly after the past-due reanchor fix)"
   );
-  console.log("    POST /api/subscription/renew-subscription");
+  console.log("    POST /api/stripe/renew-subscription");
   console.log();
   console.log("  Channel D — User: Pay-Now / pay-failed-invoice");
-  console.log("    POST /api/invoice/pay-failed-invoice");
+  console.log("    POST /api/stripe/pay-failed-invoice");
   console.log();
   console.log("  After each channel test, re-run the seed to get a fresh past_due state:");
   console.log(`    npm run seed:past-due-member -- --email=${EMAIL} --cleanup`);
@@ -563,14 +598,6 @@ async function main(): Promise<void> {
 // ---------------------------------------------------------------------------
 // Entry point
 // ---------------------------------------------------------------------------
-const key = process.env.STRIPE_SECRET_KEY;
-if (!key || !key.startsWith("sk_test_")) {
-  // Guard before even connecting to Stripe for the cleanup path
-  if (!DRY_RUN && !CLEANUP) {
-    // Will be caught again inside main(), but fail fast for clarity
-  }
-}
-
 (async () => {
   try {
     const stripeKey = process.env.STRIPE_SECRET_KEY;
