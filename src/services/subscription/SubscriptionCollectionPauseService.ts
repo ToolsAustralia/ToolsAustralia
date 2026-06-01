@@ -102,6 +102,11 @@ export async function reanchorAfterPastDueRecovery(params: {
       { $set: { "subscription.endDate": newEndDate } },
       { new: true }
     );
+    if (!updated) {
+      console.error(
+        `[reanchor] endDate write returned null sub=${subscriptionId} invoice=${invoiceId} (user missing?) — relying on subscription.updated backstop`
+      );
+    }
 
     // 5. Re-push Klaviyo so next_renewal_date / subscription_end_date / past_due_renewal_entries refresh.
     if (updated) ensureUserProfileSynced(updated);
