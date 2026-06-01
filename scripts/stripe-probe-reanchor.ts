@@ -48,9 +48,13 @@ const FULL = process.argv.includes("--full");
 const KEEP = process.argv.includes("--keep");
 
 const STRIPE_API_VERSION = "2025-08-27.basil";
-/** Stripe test tokens → fresh PaymentMethods. tok_visa always succeeds; tok_chargeDeclined always declines. */
+/**
+ * Stripe test tokens → fresh PaymentMethods. tok_visa always succeeds. tok_chargeCustomerFail
+ * (card 4000000000000341) ATTACHES successfully but fails when CHARGED — the correct dunning card
+ * (tok_chargeDeclined declines at attach-time validation, which is not what we want to simulate).
+ */
 const TOKEN_GOOD = "tok_visa";
-const TOKEN_DECLINE = "tok_chargeDeclined";
+const TOKEN_DECLINE = "tok_chargeCustomerFail";
 
 interface AssertionResult {
   id: string;
@@ -236,13 +240,22 @@ async function runPartB(stripe: Stripe, priceId: string): Promise<void> {
   await stripe.customers.update(customerId, { invoice_settings: { default_payment_method: goodPmId } });
   const paid = await stripe.invoices.pay(renewalInvoice.id, { payment_method: goodPmId });
 
-  check("A4.recovery_signals", paid.billing_reason === "subscription_cycle" && (paid.attempt_count ?? 0) > 1,
-    `recovered invoice billing_reason=${paid.billing_reason} attempt_count=${paid.attempt_count} (expect subscription_cycle & >1)`);
+  // NOTE: because our app sets pause_collection on failure, Stripe does NOT auto-retry, so a
+  // single-failure recovery has attempt_count === 1. The feature therefore does NOT rely on
+  // attempt_count > 1 as the primary dunning signal — it uses a durable `dunning_recovery` invoice
+  // metadata marker stamped at failure time (which a direct-to-Stripe probe like this does not run).
+  console.log(
+    `  ℹ️  recovered invoice attempt_count=${paid.attempt_count} (weak signal under pause_collection; the metadata marker is authoritative)`
+  );
+  check("A4.cycle_billing_reason", paid.billing_reason === "subscription_cycle",
+    `recovered invoice billing_reason=${paid.billing_reason} (expect subscription_cycle)`);
   check("B3.invoice_paid", paid.status === "paid", `recovered invoice status=${paid.status}`);
 
-  // Our two-step order: clear pause, THEN reanchor.
+  // Our two-step order: clear pause, THEN reanchor. Use the recovery instant (paid_at) as
+  // recoveryDate — NOT real wall-clock — because the sub lives in TEST-CLOCK time ~1 month ahead.
   const recoveredSub = await retrieveSub(stripe, sub.id);
-  const recoveryDate = new Date(); // probe proxy for status_transitions.paid_at
+  const paidAt = paid.status_transitions?.paid_at;
+  const recoveryDate = new Date((paidAt ?? Math.floor(Date.now() / 1000)) * 1000);
   const trialEnd = getReanchorTrialEndTimestamp(recoveryDate);
   try {
     await stripe.subscriptions.update(sub.id, { pause_collection: "" }); // resume
