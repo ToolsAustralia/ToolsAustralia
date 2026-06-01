@@ -8,9 +8,23 @@ When a `past_due`/`unpaid` membership recovers (any channel), we reanchor the me
 
 ## The rule
 
-- New renewal day = the day the recovery payment landed (AEST, from `invoice.status_transitions.paid_at`), clamped: **25/26/27 → 24** (same draw-buffer window as the join-anchor rule; the major-draw period is the 28th–27th).
+- New renewal day = the day the recovery payment landed (AEST, from `invoice.status_transitions.paid_at`), clamped: **25/26/27 → 24** (the major-draw period is the 28th–27th, so the 24th gives ≥3 days before a draw).
+- **One clamp, two cohorts.** This reuses the *exact same constants* as the initial-signup rule — `ANCHOR_JOIN_DAYS = [25, 26, 27]` → `ANCHOR_DAY_OF_MONTH = 24` in `anchor-billing.ts`. So a member who **joins** on the 25/26/27 (`getSubscriptionCreateParamsForAnchor`) **and** a past-due member who **recovers** on the 25/26/27 both land on the 24th — by construction, the two paths cannot drift apart. Recoveries on any other day keep that day (no clamp).
 - **Short months:** a kept day of 29/30/31 in a shorter month → the **last day** of that month.
-- **Mechanism:** `stripe.subscriptions.update(id, { trial_end, proration_behavior: 'none', metadata: { billing_anchor_rule: 'past_due_reanchor' } })` — **not** `billing_cycle_anchor`. `trial_end` is **future-floored**: Stripe does NOT reject a past `trial_end` (it ends the trial immediately and charges), so a non-future computed value aborts the reanchor non-fatally.
+- **Mechanism:** `stripe.subscriptions.update(id, { trial_end, proration_behavior: 'none', metadata: { billing_anchor_rule: 'past_due_reanchor' } })`. See *Why `trial_end`* below. `trial_end` is **future-floored**: Stripe does NOT reject a past `trial_end` (it ends the trial immediately and charges), so a non-future computed value aborts the reanchor non-fatally.
+
+## Why `trial_end` (not `billing_cycle_anchor`)
+
+The clamp is what forces this choice. On an **existing** subscription, `subscriptions.update` only offers two ways to move the billing day:
+
+- `billing_cycle_anchor: 'now' | 'unchanged'` — cannot target a future date, so it **can't hit the clamped 24th**, and `'now'` risks an immediate proration.
+- `trial_end: <future ts>` + `proration_behavior: 'none'` — any future date, **no charge**.
+
+Only `trial_end` can land the clamped 24th without charging — which is also why the migration script (`migrate-anchor-billing-24`) and the join-anchor rule use the same trick. The live probe (below) confirmed it: no new charge, and `current_period_end == trial_end`. **Do not "optimize" this to `billing_cycle_anchor`** — it cannot honor the clamp.
+
+## Member-facing status (`trialing` shows as "Active")
+
+Setting `trial_end` puts the Stripe subscription into `status = 'trialing'` until the new anchor date. **This is cosmetic.** A `trialing` member is a fully paid, **active** member (`isActive = true`, benefits intact) — we never sell a real free trial. The member UI therefore maps `trialing → "Active"` (`getSubscriptionStatusText`; see `docs/client-state/gotchas.md`). Do not surface "Trial" to members. Stripe's own dashboard/MRR views show `trialing` until the next bill; our DB-based analytics are unaffected.
 
 ## Where it lives
 
@@ -62,14 +76,22 @@ Every surface that shows the renewal date reads `endDate` **live** per request (
 - `npm run test:anchor-billing` — date math (clamp, short months, DST boundaries, year rollover, same-day roll, future-floor, invalid input).
 - `npm run test:reanchor-gate` — the trigger predicate (signal isolation + all exclusions).
 
-## Pre-ship gate (Stripe test-mode probe)
+## Pre-ship verification
 
-Three behaviors are documented-but-not-live-verified and must be confirmed in test mode **before the behavior flip merges to main**:
-1. Future `trial_end` + `proration_behavior:'none'` on a just-paid active sub creates no new invoice and leaves the paid invoice paid.
-2. The sub reports `status='trialing'` and `current_period_end == trial_end` after the update.
-3. `pause_collection` + `trial_end` ordering (our flow clears pause before reanchor).
+**Stripe mechanism — VERIFIED.** `scripts/stripe-probe-reanchor.ts` (`npm run stripe:probe-reanchor`; `--full` adds the Test-Clock dunning lifecycle) ran **13/13 green** against live Stripe test mode, confirming:
+1. Future `trial_end` + `proration_behavior:'none'` on a just-paid sub creates no new invoice and leaves the paid invoice paid.
+2. The sub reports `status='trialing'` and `current_period_end == trial_end`.
+3. The `pause_collection` → `trial_end` ordering works.
 
-Also confirm `invoice.attempt_count > 1` on recovered renewals across all five channels.
+It also empirically showed `attempt_count` stays `1` under `pause_collection` — the finding that drove the `dunning_recovery` marker.
+
+**App-level QA — remaining before merge.** Drive a real recovery through the app for each channel. `scripts/seed-past-due-member.ts` (`npm run seed:past-due-member -- --email=<addr>`) creates a ready-to-recover `past_due` member (test-clock sub + loginable user), so this is a few clicks. With `stripe listen` forwarding webhooks, confirm each recovery reanchors `endDate`, sets `lastReanchoredInvoiceId`, writes the `MembershipStatusHistory` row, and refreshes Klaviyo `next_renewal_date`.
+
+## Operations / deploy checklist
+
+- **Stripe Dashboard → Settings → Subscriptions and emails:** ensure **"Send emails about expiring trials" is OFF** — otherwise Stripe emails recovered members about a "trial ending." (The app itself does not handle `customer.subscription.trial_will_end`.)
+- **No UI shows "trialing"/"Trial"** for these members — every member- and admin-facing status renders as "Active" (see *Member-facing status*).
+- The behavior flip is a single commit; commits are the rollback unit.
 
 ## Related
 
