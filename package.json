@@ -29,6 +29,7 @@
     "test:anchor-billing": "tsx src/utils/billing/__tests__/anchor-billing.test.ts",
     "test:reanchor-gate": "tsx src/services/subscription/__tests__/reanchor-gate.test.ts",
     "test:trial-invoice": "tsx src/utils/billing/__tests__/trial-invoice.test.ts",
+    "test:zero-trial-guard": "tsx src/services/stripe-webhook-handlers/__tests__/zero-trial-invoice-guard.test.ts",
     "test:electric-scheme": "tsx src/utils/package-colors/__tests__/electricPackageScheme.test.ts",
     "test:variant-config-membership-theme": "tsx src/services/ab-testing/__tests__/variantConfigService.membershipTheme.test.ts",
     "test:redeemables": "tsx src/services/redeemables/__tests__/redeemables.test.ts",

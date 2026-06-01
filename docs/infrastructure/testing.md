@@ -42,6 +42,7 @@ npm run test:klaviyo-canonical       # fences canonical property names for new K
 npm run test:anchor-billing          # date math for both join-anchor and past-due reanchor: clamp 25/26/27→24, short-month last-day clamping, DST boundaries, year rollover, same-day roll, future-floor, invalid input.
 npm run test:reanchor-gate           # trigger predicate for past-due reanchor: signal isolation (past_due DB status / pause_collection present / attempt_count>1), all exclusion arms (cancel_at_period_end, autoRenew=false, pauseReason=retention, already-reanchored).
 npm run test:trial-invoice           # isZeroAmountTrialUpdateInvoice guard: skips Stripe's $0 'Trial period' subscription_update invoice (stops double-granting entries); real cycle/create/upgrade(>0)/100%-off-cycle still grant.
+npm run test:zero-trial-guard        # webhook-LEVEL regression: handleInvoicePaymentSucceeded HONORS the guard. Mocks stripe.invoices.retrieve, spies on User.findOne (the guard returns before the user lookup). Asserts the $0 subscription_update invoice short-circuits (User.findOne NOT reached, no BenefitsGranted row) while a real subscription_cycle renewal AND a paid (>0) subscription_update upgrade both proceed. Catches a regression where the guard is removed/widened/bypassed — which the predicate unit test alone cannot. Needs MONGODB_URI (the handler connectDB()s before the user lookup).
 ```
 
 ## QA seed: past-due member for reanchor recovery testing
