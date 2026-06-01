@@ -38,7 +38,7 @@ Fully **non-fatal** (recovery already succeeded). On a Stripe-update failure the
 
 ## endDate
 
-Written from the **same computed `trial_end`** (`new Date(trialEndSeconds * 1000)`), never read back from Stripe (`current_period_end` can lag). The emitted `trialing` `customer.subscription.updated` is a backstop (it syncs `endDate` for active/trialing).
+The orchestrator writes `endDate` from the **same computed `trial_end`** (`new Date(trialEndSeconds * 1000)`) immediately after the Stripe update. Note that the existing renewal-endDate sync later in the *same* `handleInvoicePaymentSucceeded` invocation re-reads the subscription from Stripe and writes `endDate` from `current_period_end`; for the now-`trialing` sub `current_period_end == trial_end` (confirmed by the pre-ship probe, item 2 below), so it lands the same value. In effect the late sync is authoritative and the orchestrator's immediate write is belt-and-suspenders. The emitted `trialing` `customer.subscription.updated` is a further backstop. (If the probe ever showed `current_period_end != trial_end`, this late sync — not the orchestrator — would determine `endDate`, so the probe is what guarantees correctness here.)
 
 ## Downstream propagation
 

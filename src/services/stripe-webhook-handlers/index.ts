@@ -2192,7 +2192,8 @@ async function handleSubscriptionUpdated(subscription: Stripe.Subscription) {
       }
     }
 
-    // Recovery to active/trialing: refresh Klaviyo so next_renewal_date / past_due_renewal_entries are current.
+    // Transition INTO active/trialing (past-due recovery OR a fresh first activation): refresh Klaviyo
+    // so next_renewal_date / past_due_renewal_entries are current. Idempotent upsert; never re-subscribes.
     // Only fires on transitions INTO active/trialing (wasActiveBeforeUpdate === false), NOT on the fast-path
     // (wasActive && prevSubStatus === "active") which handles already-active routine updates.
     if (
