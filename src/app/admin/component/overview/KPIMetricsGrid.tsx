@@ -56,6 +56,7 @@ interface DashboardStats {
   };
   attributedRevenue?: Record<string, {
     revenue: number;
+    renewalRevenue: number;
     conversions: number;
     byConfidence: { click: number; utm_only: number; inferred_backfill: number };
     adSpend?: number;
@@ -376,7 +377,7 @@ export default function KPIMetricsGrid({
                   Revenue by Platform
                 </h3>
                 <p className="text-2xs sm:text-xs text-gray-500 dark:text-neutral-400 mt-0.5 sm:mt-1 leading-snug">
-                  Attributed revenue per acquisition channel
+                  Acquisition revenue per channel · ROAS = ad revenue ÷ spend · renewals excluded
                 </p>
               </div>
               <div className="px-3 sm:px-4 lg:px-5 pb-3 sm:pb-4 lg:pb-5 space-y-2 sm:space-y-2.5">
@@ -395,23 +396,33 @@ export default function KPIMetricsGrid({
                           {label}
                         </span>
                         <div className="flex items-center gap-2 shrink-0 tabular-nums">
-                          <span className="text-sm sm:text-base font-bold text-gray-900 dark:text-white">
-                            {fmt(data.revenue)}
-                          </span>
-                          {trendDir && data.revenueTrend && (
-                            <span
-                              className={`text-2xs sm:text-xs font-semibold ${
-                                trendDir === "up"
-                                  ? "text-emerald-600"
-                                  : trendDir === "down"
-                                  ? "text-red-600"
-                                  : "text-gray-500 dark:text-neutral-400"
-                              }`}
-                            >
-                              {trendDir === "up" ? "↑" : trendDir === "down" ? "↓" : "→"}{" "}
-                              {Math.abs(data.revenueTrend.value)}%
-                            </span>
-                          )}
+                          <div className="flex flex-col items-end">
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-2xs sm:text-xs text-gray-500 dark:text-neutral-400 font-medium">Ad revenue</span>
+                              <span className="text-sm sm:text-base font-bold text-gray-900 dark:text-white">
+                                {fmt(data.revenue)}
+                              </span>
+                              {trendDir && data.revenueTrend && (
+                                <span
+                                  className={`text-2xs sm:text-xs font-semibold ${
+                                    trendDir === "up"
+                                      ? "text-emerald-600"
+                                      : trendDir === "down"
+                                      ? "text-red-600"
+                                      : "text-gray-500 dark:text-neutral-400"
+                                  }`}
+                                >
+                                  {trendDir === "up" ? "↑" : trendDir === "down" ? "↓" : "→"}{" "}
+                                  {Math.abs(data.revenueTrend.value)}%
+                                </span>
+                              )}
+                            </div>
+                            {data.renewalRevenue > 0 && (
+                              <span className="text-2xs text-gray-500 dark:text-neutral-400 tabular-nums">
+                                + {fmt(data.renewalRevenue)} recurring renewals · not in ROAS
+                              </span>
+                            )}
+                          </div>
                         </div>
                       </div>
                       <div className="flex items-center justify-between gap-2 flex-wrap">

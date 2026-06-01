@@ -130,6 +130,7 @@ export interface AdminDashboardStats {
   };
   attributedRevenue?: Record<string, {
     revenue: number;
+    renewalRevenue: number;
     conversions: number;
     byConfidence: { click: number; utm_only: number; inferred_backfill: number };
     adSpend?: number;

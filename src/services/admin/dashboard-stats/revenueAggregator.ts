@@ -7,7 +7,8 @@ export interface DayRevenueResult {
   total: number;
   buckets: Record<RevenueBucketKey, { revenue: number; purchaseCount: number }>;
   byPlatform: Record<AttributedPlatformKey, {
-    revenue: number;
+    newRevenue: number;
+    renewalRevenue: number;
     conversions: number;
     byConfidence: { click: number; utm_only: number; inferred_backfill: number };
   }>;
@@ -16,7 +17,7 @@ export interface DayRevenueResult {
 function emptyByPlatform(): DayRevenueResult["byPlatform"] {
   const out = {} as DayRevenueResult["byPlatform"];
   for (const p of ATTRIBUTED_PLATFORM_KEYS) {
-    out[p] = { revenue: 0, conversions: 0, byConfidence: { click: 0, utm_only: 0, inferred_backfill: 0 } };
+    out[p] = { newRevenue: 0, renewalRevenue: 0, conversions: 0, byConfidence: { click: 0, utm_only: 0, inferred_backfill: 0 } };
   }
   return out;
 }
@@ -73,14 +74,28 @@ export async function aggregateRevenueForDay(
       convertingPlatform?: AttributedPlatformKey | null;
       attributionConfidence?: "click" | "utm_only" | "inferred_backfill" | null;
     };
-    const platform: AttributedPlatformKey = evTyped.convertingPlatform ?? "direct";
-    const conf: "click" | "utm_only" | "inferred_backfill" =
-      evTyped.convertingPlatform == null
-        ? "inferred_backfill"
-        : (evTyped.attributionConfidence ?? "utm_only");
-    byPlatform[platform].revenue += price;
-    byPlatform[platform].conversions += 1;
-    byPlatform[platform].byConfidence[conf] += price;
+    const platform = (evTyped.convertingPlatform ?? "direct") as AttributedPlatformKey;
+    // Renewal discriminator MUST match the existing hourly-breakdown predicate
+    // (PaymentEventRepository.aggregateRevenueAndCountByHourOfDay $nor): a membership row
+    // whose data.billingReason is "subscription_cycle". data.billingReason is present on
+    // EVERY row (incl. pre-feature history), so this is robust where the top-level
+    // `isRenewal` field — which defaults false on historical rows — would silently leak
+    // old renewals into acquisition revenue and inflate ROAS.
+    const isRenewal =
+      (ev as { packageType?: string }).packageType === "membership" &&
+      (ev as { data?: { billingReason?: string } }).data?.billingReason === "subscription_cycle";
+    if (isRenewal) {
+      byPlatform[platform].renewalRevenue += price;
+      // renewals are NOT ads revenue: excluded from newRevenue, conversions, byConfidence
+    } else {
+      const conf: "click" | "utm_only" | "inferred_backfill" =
+        evTyped.convertingPlatform == null
+          ? "inferred_backfill"
+          : (evTyped.attributionConfidence ?? "utm_only");
+      byPlatform[platform].newRevenue += price;
+      byPlatform[platform].conversions += 1;
+      byPlatform[platform].byConfidence[conf] += price;
+    }
 
     const bucketKey = classifyRevenueBucket({
       packageType: (ev as { packageType?: string }).packageType,

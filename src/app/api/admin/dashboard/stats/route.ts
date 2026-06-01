@@ -238,6 +238,7 @@ export async function GET(request: NextRequest) {
     // ========================================
     const attributedRevenue: Record<string, {
       revenue: number;
+      renewalRevenue: number;
       conversions: number;
       byConfidence: { click: number; utm_only: number; inferred_backfill: number };
       adSpend?: number;
@@ -247,17 +248,18 @@ export async function GET(request: NextRequest) {
     }> = {};
     for (const p of ATTRIBUTED_PLATFORM_KEYS) {
       const ar = snapshotRead.attributedRevenue[p];
-      if (!ar || (ar.revenue === 0 && ar.conversions === 0)) continue;
+      if (!ar || (ar.newRevenue === 0 && ar.conversions === 0 && ar.renewalRevenue === 0)) continue;
       const adKey = PLATFORM_TO_AD_CHANNEL_KEY[p];
       const spend = adKey ? (snapshotRead.adChannels[adKey]?.spend ?? 0) : 0;
       const entry: (typeof attributedRevenue)[string] = {
-        revenue: ar.revenue,
+        revenue: ar.newRevenue,          // acquisition revenue only — the ads-ROAS numerator
+        renewalRevenue: ar.renewalRevenue,
         conversions: ar.conversions,
         byConfidence: ar.byConfidence,
       };
       if (adKey && spend > 0) {
         entry.adSpend = spend;
-        entry.trueRoas = ar.revenue / spend;
+        entry.trueRoas = ar.newRevenue / spend;  // ROAS uses acquisition revenue only
       }
       attributedRevenue[p] = entry;
     }
@@ -404,14 +406,14 @@ export async function GET(request: NextRequest) {
         if (prevAr) {
           attributedRevenue[p].revenueTrend = trendCalculationService.calculateTrend(
             attributedRevenue[p].revenue,
-            prevAr.revenue
+            prevAr.newRevenue
           );
           const adKey = PLATFORM_TO_AD_CHANNEL_KEY[p as keyof typeof PLATFORM_TO_AD_CHANNEL_KEY];
           const prevSpend = adKey ? (previousSnapshotRead.adChannels[adKey]?.spend ?? 0) : 0;
           if (attributedRevenue[p].trueRoas != null && prevSpend > 0) {
             attributedRevenue[p].trueRoasTrend = trendCalculationService.calculateTrend(
               attributedRevenue[p].trueRoas!,
-              prevAr.revenue / prevSpend
+              prevAr.newRevenue / prevSpend
             );
           }
         }

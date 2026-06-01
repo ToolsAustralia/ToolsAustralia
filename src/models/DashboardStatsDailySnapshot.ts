@@ -1,6 +1,6 @@
 import mongoose, { Document, Schema } from "mongoose";
 
-export const DASHBOARD_STATS_SNAPSHOT_SOURCE_VERSION = 2;
+export const DASHBOARD_STATS_SNAPSHOT_SOURCE_VERSION = 3;
 
 export type AttributedPlatformKey =
   | "meta" | "tiktok" | "snapchat"
@@ -14,9 +14,10 @@ export const ATTRIBUTED_PLATFORM_KEYS: AttributedPlatformKey[] = [
 export type AttributionConfidenceKey = "click" | "utm_only" | "inferred_backfill";
 
 export interface IAttributedRevenue {
-  revenue: number;
-  conversions: number;
-  byConfidence: { click: number; utm_only: number; inferred_backfill: number };
+  newRevenue: number;      // acquisition revenue (isRenewal === false) — the ads-ROAS numerator
+  renewalRevenue: number;  // recurring renewals (isRenewal === true) — EXCLUDED from ROAS
+  conversions: number;     // count of NEW (non-renewal) rows
+  byConfidence: { click: number; utm_only: number; inferred_backfill: number }; // partitions newRevenue
 }
 
 export type RevenueBucketKey =
@@ -90,7 +91,8 @@ const AdChannelMetricsSchema = new Schema<IAdChannelMetrics>(
 
 const AttributedRevenueSchema = new Schema<IAttributedRevenue>(
   {
-    revenue: { type: Number, required: true, default: 0 },
+    newRevenue: { type: Number, required: true, default: 0 },
+    renewalRevenue: { type: Number, required: true, default: 0 },
     conversions: { type: Number, required: true, default: 0 },
     byConfidence: {
       click: { type: Number, required: true, default: 0 },

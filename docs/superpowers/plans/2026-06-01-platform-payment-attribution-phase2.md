@@ -8,7 +8,9 @@
 >
 > **Prereq:** Phase 1 (commit `02ad0629`) must be present — this plan consumes `PaymentEvent.convertingPlatform` / `attributionConfidence` / `isRenewal` and `src/types/attribution.ts`.
 
-**Goal:** Surface per-platform **attributed revenue** (split by confidence) and **true per-platform ROAS** (our attributed revenue ÷ that platform's ad spend) on the admin dashboard, sourced from the Phase-1 `convertingPlatform` field.
+> **Amendment (2026-06-01 implementation):** The `IAttributedRevenue` shape is `{ newRevenue, renewalRevenue, conversions, byConfidence }` — not the single-`revenue` shape shown in Task 1 below. `newRevenue` = acquisition revenue (initial subscriptions, one-time, upsell, mini-draw, upgrades/resubscribes) and is the ROAS numerator. `renewalRevenue` = recurring membership renewals (`packageType === "membership" && data.billingReason === "subscription_cycle"`), tracked separately and **excluded from `trueRoas`**. The `billingReason` predicate (not the top-level `isRenewal` field) is used because it is present on all historical rows. `DASHBOARD_STATS_SNAPSHOT_SOURCE_VERSION` was bumped to `3` (not `2`). All other invariants and task steps remain as written.
+
+**Goal:** Surface per-platform **attributed revenue** (split by confidence) and **true per-platform ROAS** (our attributed acquisition revenue ÷ that platform's ad spend) on the admin dashboard, sourced from the Phase-1 `convertingPlatform` field.
 
 **Architecture:** Add a parallel `attributedRevenue: Map<platform, {...}>` dimension to the daily snapshot (mirroring the existing `adChannels` Map), populated by extending the one revenue aggregator to also group `BenefitsGranted` rows by `convertingPlatform`. The reader sums it across days + live-overlays today (pure sums, no recompute). The `/stats` route joins attributed revenue (keyed by `convertingPlatform`, e.g. `meta`) to ad spend (keyed by provider, e.g. `facebook`) via an explicit mapping table to compute true ROAS, mirroring the existing `facebookAds` block. The UI renders per-platform cards.
 

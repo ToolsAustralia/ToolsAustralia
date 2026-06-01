@@ -24,6 +24,7 @@ const TEST_PI_IDS = [
   "pi_META_UTM",
   "pi_TIKTOK",
   "pi_NULL_PLAT",
+  "pi_META_RENEWAL",
 ];
 
 // Synthetic ObjectIds for test users — 24-char hex strings
@@ -40,6 +41,7 @@ const u10 = new mongoose.Types.ObjectId("444444444444444444444444");
 const u11 = new mongoose.Types.ObjectId("555555555555555555555555");
 const u12 = new mongoose.Types.ObjectId("666666666666666666666666");
 const u13 = new mongoose.Types.ObjectId("777777777777777777777777");
+const u14 = new mongoose.Types.ObjectId("888888888888888888888888");
 
 async function seed() {
   // Day under test: March 5 2099 in AEST (far-future date to avoid collisions with real dev-DB data).
@@ -66,6 +68,11 @@ async function seed() {
     { _id: "BenefitsGranted-pi_META_UTM", eventType: "BenefitsGranted", paymentIntentId: "pi_META_UTM", packageType: "membership", packageId: "apprentice", data: { price: 5, billingReason: "subscription_create" }, convertingPlatform: "meta", attributionConfidence: "utm_only", timestamp: createAESTDateAsUTC(2099, 3, 5, 17, 0), userId: u11, processedBy: "webhook" },
     { _id: "BenefitsGranted-pi_TIKTOK", eventType: "BenefitsGranted", paymentIntentId: "pi_TIKTOK", packageType: "membership", packageId: "apprentice", data: { price: 20, billingReason: "subscription_create" }, convertingPlatform: "tiktok", attributionConfidence: "click", timestamp: createAESTDateAsUTC(2099, 3, 5, 18, 0), userId: u12, processedBy: "webhook" },
     { _id: "BenefitsGranted-pi_NULL_PLAT", eventType: "BenefitsGranted", paymentIntentId: "pi_NULL_PLAT", packageType: "membership", packageId: "apprentice", data: { price: 7, billingReason: "subscription_create" }, convertingPlatform: null, attributionConfidence: null, timestamp: createAESTDateAsUTC(2099, 3, 5, 19, 0), userId: u13, processedBy: "webhook" },
+    // Renewal row — must land in renewalRevenue ONLY (not newRevenue/conversions/byConfidence).
+    // Deliberately OMITS the top-level `isRenewal` field to simulate a PRE-FEATURE/historical
+    // renewal: exclusion must work off packageType + data.billingReason="subscription_cycle"
+    // (matching the hourly-breakdown predicate), NOT the new isRenewal flag.
+    { _id: "BenefitsGranted-pi_META_RENEWAL", eventType: "BenefitsGranted", paymentIntentId: "pi_META_RENEWAL", packageType: "membership", packageId: "apprentice", data: { price: 40, billingReason: "subscription_cycle" }, convertingPlatform: "meta", attributionConfidence: "click", timestamp: createAESTDateAsUTC(2099, 3, 5, 20, 0), userId: u14, processedBy: "webhook" },
   ]);
 
   return { dayStart, dayEnd };
@@ -92,29 +99,34 @@ async function run() {
     }
   }
 
-  // Existing bucket assertions — total now includes 4 new platform rows (+10+5+20+7=42)
-  expect("total revenue excludes refunded + boundary rows", result.total, 49 + 49 + 25 + 15 + 5 + 10 + 10 + 5 + 20 + 7);
+  // Existing bucket assertions — total now includes 4 platform rows (+10+5+20+7=42) + renewal row (+40)
+  expect("total revenue excludes refunded + boundary rows", result.total, 49 + 49 + 25 + 15 + 5 + 10 + 10 + 5 + 20 + 7 + 40);
   expect("membershipPurchase bucket", result.buckets.membershipPurchase, { revenue: 49 + 10 + 5 + 20 + 7, purchaseCount: 5 });
-  expect("membershipRenewal bucket", result.buckets.membershipRenewal, { revenue: 49, purchaseCount: 1 });
+  expect("membershipRenewal bucket", result.buckets.membershipRenewal, { revenue: 49 + 40, purchaseCount: 2 });
   expect("oneTimePurchase bucket", result.buckets.oneTimePurchase, { revenue: 25, purchaseCount: 1 });
   expect("additionalOneTimePurchase bucket", result.buckets.additionalOneTimePurchase, { revenue: 15, purchaseCount: 1 });
   expect("miniDraw bucket", result.buckets.miniDraw, { revenue: 5, purchaseCount: 1 });
   expect("upsell bucket", result.buckets.upsell, { revenue: 10, purchaseCount: 1 });
 
-  // Platform attribution assertions
-  expect("byPlatform.meta.revenue", result.byPlatform.meta.revenue, 15);
+  // Platform attribution assertions (newRevenue excludes renewals)
+  expect("byPlatform.meta.newRevenue", result.byPlatform.meta.newRevenue, 15);
+  expect("byPlatform.meta.renewalRevenue", result.byPlatform.meta.renewalRevenue, 40);
   expect("byPlatform.meta.conversions", result.byPlatform.meta.conversions, 2);
   expect("byPlatform.meta.byConfidence.click", result.byPlatform.meta.byConfidence.click, 10);
   expect(
-    "byPlatform.meta confidence sums to meta revenue",
+    "byPlatform.meta byConfidence sums to newRevenue (not including renewal)",
     result.byPlatform.meta.byConfidence.click + result.byPlatform.meta.byConfidence.utm_only + result.byPlatform.meta.byConfidence.inferred_backfill,
-    result.byPlatform.meta.revenue
+    result.byPlatform.meta.newRevenue
   );
-  expect("byPlatform.tiktok.revenue", result.byPlatform.tiktok.revenue, 20);
-  expect("byPlatform.direct.revenue", result.byPlatform.direct.revenue, 7);
+  expect("byPlatform.tiktok.newRevenue", result.byPlatform.tiktok.newRevenue, 20);
+  expect("byPlatform.tiktok.renewalRevenue", result.byPlatform.tiktok.renewalRevenue, 0);
+  expect("byPlatform.direct.newRevenue", result.byPlatform.direct.newRevenue, 7);
   expect("byPlatform.direct.byConfidence.inferred_backfill", result.byPlatform.direct.byConfidence.inferred_backfill, 7);
-  const sumByPlatform = Object.values(result.byPlatform).reduce((s: number, p) => s + (p as { revenue: number }).revenue, 0);
-  expect("sum of byPlatform revenues equals total", sumByPlatform, result.total);
+  const sumByPlatform = Object.values(result.byPlatform).reduce(
+    (s: number, p) => s + (p as { newRevenue: number; renewalRevenue: number }).newRevenue + (p as { newRevenue: number; renewalRevenue: number }).renewalRevenue,
+    0
+  );
+  expect("sum of byPlatform (newRevenue+renewalRevenue) equals total", sumByPlatform, result.total);
 
   // Cleanup
   await PaymentEvent.deleteMany({ paymentIntentId: { $in: TEST_PI_IDS } });

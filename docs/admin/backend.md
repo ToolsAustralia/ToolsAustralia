@@ -179,11 +179,15 @@ In addition to the existing per-bucket totals, the aggregator now returns a `byP
 - Iterates refund-excluded `BenefitsGranted` `PaymentEvent` rows for the day.
 - Groups by `PaymentEvent.convertingPlatform`. A `null` platform is folded to `"direct"` with confidence `inferred_backfill`.
 - Platform accumulation runs **above** the `!bucketKey` guard, so events that don't map to a revenue bucket (e.g. unrecognized types) still contribute to per-platform totals — ensuring `byPlatform` revenue reconciles to `revenue.total`.
-- Within each platform, revenue is partitioned into `byConfidence` tiers (`click`, `utm_only`, `inferred_backfill`). The three tiers sum to the platform's `revenue`.
+- **Renewal discrimination:** Before accumulating into `newRevenue` vs `renewalRevenue`, each row is tested with the predicate `packageType === "membership" && data.billingReason === "subscription_cycle"`. Rows that match are added to `renewalRevenue` and **excluded** from `newRevenue`, `conversions`, and `byConfidence`. Rows that do not match are counted as acquisition and added to `newRevenue`/`conversions`/`byConfidence`.
+
+  This is the same `$nor: [{ packageType: "membership", "data.billingReason": "subscription_cycle" }]` predicate already used by `PaymentEventRepository.aggregateRevenueAndCountByHourOfDay` (the hourly breakdown). Using `data.billingReason` (present on every PaymentEvent) rather than the top-level `isRenewal` field (defaults `false` on pre-feature rows) ensures the discriminator is robust on all historical data.
+
+- Within each platform, `newRevenue` is partitioned into `byConfidence` tiers (`click`, `utm_only`, `inferred_backfill`). The three tiers sum to the platform's `newRevenue`. Renewal events do not contribute to `byConfidence`.
 
 **`DashboardStatsSnapshotReader.ts`**
 
-When reading across a date range, the reader sums `attributedRevenue` entries additively across completed snapshot days and the live today/missing-day values. The summation is a pure per-platform accumulation; ROAS is **not** recomputed inside the reader — that join happens in the route handler after all totals are available.
+When reading across a date range, the reader sums `attributedRevenue` entries additively across completed snapshot days and the live today/missing-day values. The summation accumulates both `newRevenue` and `renewalRevenue` independently (pure per-platform sums). ROAS is **not** recomputed inside the reader — that join happens in the route handler after all totals are available, using only `newRevenue` as the numerator.
 
 The summed `attributedRevenue` map is returned as part of `SnapshotReadResult`.
 

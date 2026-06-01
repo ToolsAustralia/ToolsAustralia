@@ -24,7 +24,8 @@ export interface SnapshotReadResult {
   };
   adChannels: Record<string, { spend: number; revenue: number; roas: number }>;
   attributedRevenue: Record<AttributedPlatformKey, {
-    revenue: number;
+    newRevenue: number;
+    renewalRevenue: number;
     conversions: number;
     byConfidence: { click: number; utm_only: number; inferred_backfill: number };
   }>;
@@ -86,9 +87,9 @@ export async function readStatsForRange(args: {
 
   const buckets = emptyBuckets();
   const adChannels: Record<string, { spend: number; revenue: number; roas: number }> = {};
-  const attributedRevenue = {} as Record<AttributedPlatformKey, { revenue: number; conversions: number; byConfidence: { click: number; utm_only: number; inferred_backfill: number } }>;
+  const attributedRevenue = {} as Record<AttributedPlatformKey, { newRevenue: number; renewalRevenue: number; conversions: number; byConfidence: { click: number; utm_only: number; inferred_backfill: number } }>;
   for (const p of ATTRIBUTED_PLATFORM_KEYS) {
-    attributedRevenue[p] = { revenue: 0, conversions: 0, byConfidence: { click: 0, utm_only: 0, inferred_backfill: 0 } };
+    attributedRevenue[p] = { newRevenue: 0, renewalRevenue: 0, conversions: 0, byConfidence: { click: 0, utm_only: 0, inferred_backfill: 0 } };
   }
   let revenueTotal = 0;
   let newSignupsInRange = 0;
@@ -132,12 +133,14 @@ export async function readStatsForRange(args: {
         adChannels[chanKey] = acc;
       }
 
-      const arMap = (snap.attributedRevenue ?? new Map()) as Map<string, { revenue: number; conversions: number; byConfidence: { click: number; utm_only: number; inferred_backfill: number } }> | Record<string, { revenue: number; conversions: number; byConfidence: { click: number; utm_only: number; inferred_backfill: number } }>;
+      const arMap = (snap.attributedRevenue ?? new Map()) as Map<string, { newRevenue?: number; renewalRevenue?: number; revenue?: number; conversions: number; byConfidence: { click: number; utm_only: number; inferred_backfill: number } }> | Record<string, { newRevenue?: number; renewalRevenue?: number; revenue?: number; conversions: number; byConfidence: { click: number; utm_only: number; inferred_backfill: number } }>;
       const arEntries = arMap instanceof Map ? Array.from(arMap.entries()) : Object.entries(arMap);
       for (const [p, v] of arEntries) {
         if (!ATTRIBUTED_PLATFORM_KEYS.includes(p as AttributedPlatformKey)) continue;
         const acc = attributedRevenue[p as AttributedPlatformKey];
-        acc.revenue += v.revenue;
+        // v2 snapshots have `revenue` (old field) — guard so missing newRevenue reads as 0
+        acc.newRevenue += v.newRevenue ?? 0;
+        acc.renewalRevenue += v.renewalRevenue ?? 0;
         acc.conversions += v.conversions;
         acc.byConfidence.click += v.byConfidence?.click ?? 0;
         acc.byConfidence.utm_only += v.byConfidence?.utm_only ?? 0;
@@ -175,7 +178,8 @@ export async function readStatsForRange(args: {
 
       for (const p of ATTRIBUTED_PLATFORM_KEYS) {
         const v = rev.byPlatform[p];
-        attributedRevenue[p].revenue += v.revenue;
+        attributedRevenue[p].newRevenue += v.newRevenue;
+        attributedRevenue[p].renewalRevenue += v.renewalRevenue;
         attributedRevenue[p].conversions += v.conversions;
         attributedRevenue[p].byConfidence.click += v.byConfidence.click;
         attributedRevenue[p].byConfidence.utm_only += v.byConfidence.utm_only;

@@ -120,9 +120,10 @@ v1 assumed "resolve at the edge" universally. **That is false in your own code:*
 
 ### 3.5 Read / analytics path (Seam E)
 
-- Extend `DashboardStatsDailySnapshot` (`src/models/DashboardStatsDailySnapshot.ts`) with `attributedRevenue: Map<platform, { revenueCents, conversions, byConfidence }>`, beside the existing product-type `revenue.buckets` and the `adChannels` spend Map.
+- Extend `DashboardStatsDailySnapshot` (`src/models/DashboardStatsDailySnapshot.ts`) with `attributedRevenue: Map<platform, { newRevenue, renewalRevenue, conversions, byConfidence }>`, beside the existing product-type `revenue.buckets` and the `adChannels` spend Map. `DASHBOARD_STATS_SNAPSHOT_SOURCE_VERSION` is `3`.
 - `revenueAggregator.ts` + `distinctUserCounts.ts` additionally group by `convertingPlatform`. The snapshot writer/reader populate and sum it.
-- `GET /api/admin/dashboard/stats` surfaces `attributedRevenue` per platform alongside the existing `facebookAds` block → **true per-platform ROAS** (our attributed revenue ÷ that platform's `adChannels` spend) for the first time.
+- **Per-platform ROAS uses acquisition revenue only (`newRevenue`). Recurring membership renewals (`renewalRevenue`) are excluded from the ROAS numerator.** The renewal discriminator is `packageType === "membership" && data.billingReason === "subscription_cycle"` — the same predicate used by `PaymentEventRepository.aggregateRevenueAndCountByHourOfDay`. `data.billingReason` is used (not the top-level `isRenewal` field) because it is present on all historical PaymentEvent rows.
+- `GET /api/admin/dashboard/stats` surfaces `attributedRevenue` per platform alongside the existing `facebookAds` block. Each platform entry exposes `revenue` (= `newRevenue`, acquisition only), `renewalRevenue`, `conversions`, `byConfidence`, and — when a spend provider exists — `adSpend` and `trueRoas` (`newRevenue / adSpend`). The UI shows renewals as a separate muted "not in ROAS" line.
 - The verdict stays **1:1 on `PaymentEvent`** (one ledger, one writer, natural idempotency) — refund net-conversion (`refund-ledger-reversal.ts`) and per-user lookups need the row-level field; a snapshot-only design can't answer "which platform converted *this* refunded payment." We keep both the row field **and** the snapshot Map.
 
 ### 3.6 Backfill (D4)
@@ -205,6 +206,8 @@ All seven decisions (§2) are locked, with v2 corrections applied.
 | Resolve in webhook (raw IDs) | SITUATIONAL → hybrid | Webhook never sees cookies; adopt as the **fallback** layer (§3.4), not primary. |
 
 ## 10. Honest limits & residual risks (not papered over)
+
+> **Amendment (2026-06-01 implementation):** Per-platform `trueRoas` in the dashboard is computed from acquisition revenue only (`newRevenue` = initial subscriptions, one-time, upsell, mini-draw, upgrades/resubscribes). Recurring membership renewals are accumulated into a separate `renewalRevenue` bucket and excluded from the ROAS numerator. The discriminator is `packageType === "membership" && data.billingReason === "subscription_cycle"` (consistent with the hourly breakdown predicate in `PaymentEventRepository.aggregateRevenueAndCountByHourOfDay`; `isRenewal` is NOT used for this exclusion due to its defaulted-false behavior on pre-feature rows). Renewals remain visible in the UI as a separate muted line so the total is auditable.
 
 1. **View-through and machine-opens are structurally uncapturable by a click-based ladder.** Meta 1d VTA, TikTok 6-sec EVTA, and Klaviyo open/MPP-auto-open conversions have *no click*. "Stop every platform claiming the same conversion" is **unachievable for view-through by any design.** Market the ledger as reconciling **click-based conversions only**; it will deliberately diverge from each platform's dashboard.
 2. **Cross-platform recency tiebreak is our own policy**, unvalidated against incrementality (no holdout). Acceptable at this scale; the raw-evidence fields (§3.1) make it reversible.
