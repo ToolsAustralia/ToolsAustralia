@@ -1,10 +1,24 @@
 import PaymentEvent from "@/models/PaymentEvent";
-import type { RevenueBucketKey } from "@/models/DashboardStatsDailySnapshot";
+import type { RevenueBucketKey, AttributedPlatformKey } from "@/models/DashboardStatsDailySnapshot";
+import { ATTRIBUTED_PLATFORM_KEYS } from "@/models/DashboardStatsDailySnapshot";
 import { REVENUE_BUCKET_KEYS, classifyRevenueBucket, emptyBucket } from "./snapshotSchema";
 
 export interface DayRevenueResult {
   total: number;
   buckets: Record<RevenueBucketKey, { revenue: number; purchaseCount: number }>;
+  byPlatform: Record<AttributedPlatformKey, {
+    revenue: number;
+    conversions: number;
+    byConfidence: { click: number; utm_only: number; inferred_backfill: number };
+  }>;
+}
+
+function emptyByPlatform(): DayRevenueResult["byPlatform"] {
+  const out = {} as DayRevenueResult["byPlatform"];
+  for (const p of ATTRIBUTED_PLATFORM_KEYS) {
+    out[p] = { revenue: 0, conversions: 0, byConfidence: { click: 0, utm_only: 0, inferred_backfill: 0 } };
+  }
+  return out;
 }
 
 function emptyBuckets(): Record<RevenueBucketKey, { revenue: number; purchaseCount: number }> {
@@ -37,12 +51,15 @@ export async function aggregateRevenueForDay(
       packageId: 1,
       data: 1,
       timestamp: 1,
+      convertingPlatform: 1,
+      attributionConfidence: 1,
     }
   )
     .lean()
     .exec();
 
   const buckets = emptyBuckets();
+  const byPlatform = emptyByPlatform();
   let total = 0;
 
   for (const ev of events) {
@@ -50,6 +67,21 @@ export async function aggregateRevenueForDay(
     if (pid && refundedPaymentIntentIds.has(pid)) continue;
 
     const price = (ev as { data?: { price?: number } }).data?.price ?? 0;
+
+    // Platform accumulation: runs for ALL non-refunded rows, regardless of bucket classification.
+    const evTyped = ev as {
+      convertingPlatform?: AttributedPlatformKey | null;
+      attributionConfidence?: "click" | "utm_only" | "inferred_backfill" | null;
+    };
+    const platform: AttributedPlatformKey = evTyped.convertingPlatform ?? "direct";
+    const conf: "click" | "utm_only" | "inferred_backfill" =
+      evTyped.convertingPlatform == null
+        ? "inferred_backfill"
+        : (evTyped.attributionConfidence ?? "utm_only");
+    byPlatform[platform].revenue += price;
+    byPlatform[platform].conversions += 1;
+    byPlatform[platform].byConfidence[conf] += price;
+
     const bucketKey = classifyRevenueBucket({
       packageType: (ev as { packageType?: string }).packageType,
       packageId: (ev as { packageId?: string }).packageId,
@@ -62,7 +94,7 @@ export async function aggregateRevenueForDay(
     total += price;
   }
 
-  return { total, buckets };
+  return { total, buckets, byPlatform };
 }
 
 /**

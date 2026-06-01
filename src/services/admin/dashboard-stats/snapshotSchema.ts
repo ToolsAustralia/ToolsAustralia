@@ -1,4 +1,4 @@
-import type { RevenueBucketKey } from "@/models/DashboardStatsDailySnapshot";
+import type { AttributedPlatformKey, RevenueBucketKey } from "@/models/DashboardStatsDailySnapshot";
 import { REVENUE_BUCKET_KEYS } from "@/models/DashboardStatsDailySnapshot";
 
 export { REVENUE_BUCKET_KEYS };
@@ -27,6 +27,20 @@ export function classifyRevenueBucket(args: {
   }
   return null;
 }
+
+// Bridges the convertingPlatform enum (e.g. "meta") to the ad-spend provider key
+// (e.g. "facebook") for the true-ROAS join. null = no ad-spend channel → attributed
+// revenue only, no ROAS.
+export const PLATFORM_TO_AD_CHANNEL_KEY: Record<AttributedPlatformKey, string | null> = {
+  meta: "facebook",
+  tiktok: "tiktok",
+  snapchat: "snapchat",
+  google: "google",
+  klaviyo_email: null,
+  klaviyo_sms: null,
+  direct: null,
+  other: null,
+};
 
 /** Empty bucket object — used as the seed for accumulation. */
 export function emptyBucket(): { revenue: number; purchaseCount: number } {

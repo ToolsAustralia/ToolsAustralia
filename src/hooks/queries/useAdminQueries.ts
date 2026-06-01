@@ -128,6 +128,15 @@ export interface AdminDashboardStats {
     roas: number;
     roasTrend?: TrendData;
   };
+  attributedRevenue?: Record<string, {
+    revenue: number;
+    conversions: number;
+    byConfidence: { click: number; utm_only: number; inferred_backfill: number };
+    adSpend?: number;
+    trueRoas?: number;
+    revenueTrend?: TrendData;
+    trueRoasTrend?: TrendData;
+  }>;
   dateRange?: {
     start: string;
     end: string;

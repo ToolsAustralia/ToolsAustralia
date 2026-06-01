@@ -1,4 +1,8 @@
-import DashboardStatsDailySnapshot, { type RevenueBucketKey } from "@/models/DashboardStatsDailySnapshot";
+import DashboardStatsDailySnapshot, {
+  ATTRIBUTED_PLATFORM_KEYS,
+  type AttributedPlatformKey,
+  type RevenueBucketKey,
+} from "@/models/DashboardStatsDailySnapshot";
 import { formatInTimeZone } from "date-fns-tz";
 import { aestDayBounds } from "./DashboardStatsSnapshotWriter";
 import { REVENUE_BUCKET_KEYS, emptyBucket } from "./snapshotSchema";
@@ -19,6 +23,11 @@ export interface SnapshotReadResult {
     cancellationsInRange: number;
   };
   adChannels: Record<string, { spend: number; revenue: number; roas: number }>;
+  attributedRevenue: Record<AttributedPlatformKey, {
+    revenue: number;
+    conversions: number;
+    byConfidence: { click: number; utm_only: number; inferred_backfill: number };
+  }>;
   meta: {
     snapshotDaysUsed: number;
     liveDaysComputed: number;
@@ -77,6 +86,10 @@ export async function readStatsForRange(args: {
 
   const buckets = emptyBuckets();
   const adChannels: Record<string, { spend: number; revenue: number; roas: number }> = {};
+  const attributedRevenue = {} as Record<AttributedPlatformKey, { revenue: number; conversions: number; byConfidence: { click: number; utm_only: number; inferred_backfill: number } }>;
+  for (const p of ATTRIBUTED_PLATFORM_KEYS) {
+    attributedRevenue[p] = { revenue: 0, conversions: 0, byConfidence: { click: 0, utm_only: 0, inferred_backfill: 0 } };
+  }
   let revenueTotal = 0;
   let newSignupsInRange = 0;
   let cancellationsInRange = 0;
@@ -118,6 +131,18 @@ export async function readStatsForRange(args: {
         // ROAS will be recomputed at the end as totalRevenue/totalSpend
         adChannels[chanKey] = acc;
       }
+
+      const arMap = (snap.attributedRevenue ?? new Map()) as Map<string, { revenue: number; conversions: number; byConfidence: { click: number; utm_only: number; inferred_backfill: number } }> | Record<string, { revenue: number; conversions: number; byConfidence: { click: number; utm_only: number; inferred_backfill: number } }>;
+      const arEntries = arMap instanceof Map ? Array.from(arMap.entries()) : Object.entries(arMap);
+      for (const [p, v] of arEntries) {
+        if (!ATTRIBUTED_PLATFORM_KEYS.includes(p as AttributedPlatformKey)) continue;
+        const acc = attributedRevenue[p as AttributedPlatformKey];
+        acc.revenue += v.revenue;
+        acc.conversions += v.conversions;
+        acc.byConfidence.click += v.byConfidence?.click ?? 0;
+        acc.byConfidence.utm_only += v.byConfidence?.utm_only ?? 0;
+        acc.byConfidence.inferred_backfill += v.byConfidence?.inferred_backfill ?? 0;
+      }
     } else {
       // Live day — compute on the fly
       liveDaysComputed += 1;
@@ -147,6 +172,15 @@ export async function readStatsForRange(args: {
         acc.revenue += metrics.revenue;
         adChannels[provider.key] = acc;
       }
+
+      for (const p of ATTRIBUTED_PLATFORM_KEYS) {
+        const v = rev.byPlatform[p];
+        attributedRevenue[p].revenue += v.revenue;
+        attributedRevenue[p].conversions += v.conversions;
+        attributedRevenue[p].byConfidence.click += v.byConfidence.click;
+        attributedRevenue[p].byConfidence.utm_only += v.byConfidence.utm_only;
+        attributedRevenue[p].byConfidence.inferred_backfill += v.byConfidence.inferred_backfill;
+      }
     }
   }
 
@@ -166,6 +200,7 @@ export async function readStatsForRange(args: {
     revenue: { total: revenueTotal, buckets },
     users: { newSignupsInRange, cancellationsInRange },
     adChannels,
+    attributedRevenue,
     meta: { snapshotDaysUsed, liveDaysComputed, missingSnapshotDates },
   };
 }

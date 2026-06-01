@@ -13,6 +13,9 @@ import {
   SUBSCRIBED_SUBSCRIPTION_STATUSES,
 } from "@/utils/admin/userFilterBuilder";
 import { trendCalculationService } from "@/services/admin/TrendCalculationService";
+import { PLATFORM_TO_AD_CHANNEL_KEY } from "@/services/admin/dashboard-stats/snapshotSchema";
+import { ATTRIBUTED_PLATFORM_KEYS } from "@/models/DashboardStatsDailySnapshot";
+import type { TrendData } from "@/types/admin/trend-types";
 
 /**
  * GET /api/admin/dashboard/stats
@@ -231,6 +234,35 @@ export async function GET(request: NextRequest) {
     const facebookAdsRoas = snapshotRead.adChannels.facebook?.roas ?? 0;
 
     // ========================================
+    // ATTRIBUTED REVENUE PER PLATFORM
+    // ========================================
+    const attributedRevenue: Record<string, {
+      revenue: number;
+      conversions: number;
+      byConfidence: { click: number; utm_only: number; inferred_backfill: number };
+      adSpend?: number;
+      trueRoas?: number;
+      revenueTrend?: TrendData;
+      trueRoasTrend?: TrendData;
+    }> = {};
+    for (const p of ATTRIBUTED_PLATFORM_KEYS) {
+      const ar = snapshotRead.attributedRevenue[p];
+      if (!ar || (ar.revenue === 0 && ar.conversions === 0)) continue;
+      const adKey = PLATFORM_TO_AD_CHANNEL_KEY[p];
+      const spend = adKey ? (snapshotRead.adChannels[adKey]?.spend ?? 0) : 0;
+      const entry: (typeof attributedRevenue)[string] = {
+        revenue: ar.revenue,
+        conversions: ar.conversions,
+        byConfidence: ar.byConfidence,
+      };
+      if (adKey && spend > 0) {
+        entry.adSpend = spend;
+        entry.trueRoas = ar.revenue / spend;
+      }
+      attributedRevenue[p] = entry;
+    }
+
+    // ========================================
     // COMPARISON PERIOD METRICS (for trends)
     // ========================================
     let totalUsersTrend = undefined;
@@ -366,6 +398,24 @@ export async function GET(request: NextRequest) {
         upsellData.revenue,
         previousUpsellData.revenue
       );
+
+      for (const p of Object.keys(attributedRevenue)) {
+        const prevAr = previousSnapshotRead.attributedRevenue?.[p as keyof typeof previousSnapshotRead.attributedRevenue];
+        if (prevAr) {
+          attributedRevenue[p].revenueTrend = trendCalculationService.calculateTrend(
+            attributedRevenue[p].revenue,
+            prevAr.revenue
+          );
+          const adKey = PLATFORM_TO_AD_CHANNEL_KEY[p as keyof typeof PLATFORM_TO_AD_CHANNEL_KEY];
+          const prevSpend = adKey ? (previousSnapshotRead.adChannels[adKey]?.spend ?? 0) : 0;
+          if (attributedRevenue[p].trueRoas != null && prevSpend > 0) {
+            attributedRevenue[p].trueRoasTrend = trendCalculationService.calculateTrend(
+              attributedRevenue[p].trueRoas!,
+              prevAr.revenue / prevSpend
+            );
+          }
+        }
+      }
     }
 
     // ========================================
@@ -501,6 +551,7 @@ export async function GET(request: NextRequest) {
         roas: facebookAdsRoas,
         ...(roasTrend && { roasTrend }),
       },
+      attributedRevenue,
       dateRange: {
         start: startDate.toISOString(),
         end: endDate.toISOString(),

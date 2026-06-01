@@ -54,6 +54,15 @@ interface DashboardStats {
     roas: number;
     roasTrend?: TrendData;
   };
+  attributedRevenue?: Record<string, {
+    revenue: number;
+    conversions: number;
+    byConfidence: { click: number; utm_only: number; inferred_backfill: number };
+    adSpend?: number;
+    trueRoas?: number;
+    revenueTrend?: TrendData;
+    trueRoasTrend?: TrendData;
+  }>;
 }
 
 interface MembershipSummary {
@@ -338,6 +347,110 @@ export default function KPIMetricsGrid({
         
         {/* Advertising Breakdown Section - Integrated within Advertising Group */}
         {advertisingBreakdownSection}
+
+        {/* Revenue by Platform (attributed revenue) */}
+        {(() => {
+          const attrRev = dashboardStats?.attributedRevenue;
+          if (!attrRev || Object.keys(attrRev).length === 0) return null;
+
+          const PLATFORM_LABELS: Record<string, string> = {
+            meta: "Meta",
+            tiktok: "TikTok",
+            snapchat: "Snapchat",
+            klaviyo_email: "Klaviyo Email",
+            klaviyo_sms: "Klaviyo SMS",
+            google: "Google",
+            direct: "Direct / Organic",
+            other: "Other",
+          };
+
+          const fmt = (n: number) =>
+            `$${n.toLocaleString("en-AU", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
+
+          const entries = Object.entries(attrRev);
+
+          return (
+            <div className="bg-white dark:bg-neutral-900 rounded-lg sm:rounded-xl border border-gray-200 dark:border-neutral-700 shadow-sm dark:shadow-none mt-3">
+              <div className="px-3 sm:px-4 lg:px-5 pt-3 sm:pt-4 lg:pt-5 pb-2 sm:pb-3">
+                <h3 className="text-sm sm:text-base font-semibold text-gray-900 dark:text-white leading-snug">
+                  Revenue by Platform
+                </h3>
+                <p className="text-2xs sm:text-xs text-gray-500 dark:text-neutral-400 mt-0.5 sm:mt-1 leading-snug">
+                  Attributed revenue per acquisition channel
+                </p>
+              </div>
+              <div className="px-3 sm:px-4 lg:px-5 pb-3 sm:pb-4 lg:pb-5 space-y-2 sm:space-y-2.5">
+                {entries.map(([platform, data]) => {
+                  const label = PLATFORM_LABELS[platform] ?? platform;
+                  const estimated = data.byConfidence.utm_only + data.byConfidence.inferred_backfill;
+                  const trendDir = data.revenueTrend?.direction;
+                  const roasTrendDir = data.trueRoasTrend?.direction;
+                  return (
+                    <div
+                      key={platform}
+                      className="flex flex-col gap-0.5 rounded-lg border border-gray-100 dark:border-neutral-800 bg-gray-50 dark:bg-neutral-800/50 px-3 py-2 sm:px-4 sm:py-2.5"
+                    >
+                      <div className="flex items-center justify-between gap-2 min-w-0">
+                        <span className="text-2xs sm:text-xs font-semibold text-gray-600 dark:text-neutral-300 uppercase tracking-wide truncate">
+                          {label}
+                        </span>
+                        <div className="flex items-center gap-2 shrink-0 tabular-nums">
+                          <span className="text-sm sm:text-base font-bold text-gray-900 dark:text-white">
+                            {fmt(data.revenue)}
+                          </span>
+                          {trendDir && data.revenueTrend && (
+                            <span
+                              className={`text-2xs sm:text-xs font-semibold ${
+                                trendDir === "up"
+                                  ? "text-emerald-600"
+                                  : trendDir === "down"
+                                  ? "text-red-600"
+                                  : "text-gray-500 dark:text-neutral-400"
+                              }`}
+                            >
+                              {trendDir === "up" ? "↑" : trendDir === "down" ? "↓" : "→"}{" "}
+                              {Math.abs(data.revenueTrend.value)}%
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex items-center justify-between gap-2 flex-wrap">
+                        <span className="text-2xs sm:text-xs text-gray-500 dark:text-neutral-400">
+                          {fmt(data.byConfidence.click)} click
+                          {estimated > 0 && <> · {fmt(estimated)} estimated</>}
+                        </span>
+                        <div className="flex items-center gap-2 shrink-0 tabular-nums">
+                          <span className="text-2xs sm:text-xs text-gray-500 dark:text-neutral-400">
+                            {data.conversions.toLocaleString()} conv.
+                          </span>
+                          {data.trueRoas !== undefined && (
+                            <span className="flex items-center gap-1 text-2xs sm:text-xs font-semibold text-blue-700 dark:text-blue-400">
+                              {data.trueRoas.toFixed(2)}x ROAS
+                              {roasTrendDir && data.trueRoasTrend && (
+                                <span
+                                  className={`font-semibold ${
+                                    roasTrendDir === "up"
+                                      ? "text-emerald-600"
+                                      : roasTrendDir === "down"
+                                      ? "text-red-600"
+                                      : "text-gray-500 dark:text-neutral-400"
+                                  }`}
+                                >
+                                  {roasTrendDir === "up" ? "↑" : roasTrendDir === "down" ? "↓" : "→"}{" "}
+                                  {Math.abs(data.trueRoasTrend.value)}%
+                                </span>
+                              )}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })()}
       </div>
 
       {/* Users & Performance Group — own chevron on mobile for extra metrics */}

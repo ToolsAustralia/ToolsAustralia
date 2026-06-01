@@ -30,6 +30,38 @@ One document per AEST calendar day. Written (upserted) by the dashboard-stats cr
 
 **Distinct user counts** are NOT stored — they are computed live at read time via `computeDistinctUserCounts` because they are not additive across days (the same user buying on two days counts once in a multi-day range). The `revenue.buckets[k].userCount` field in `SnapshotReadResult` is always a live query.
 
+### `attributedRevenue` field (source version 2)
+
+Added alongside `adChannels`. Stores per-platform payment attribution data for the day.
+
+| Field | Type | Notes |
+|---|---|---|
+| `attributedRevenue` | `Map<AttributedPlatformKey, IAttributedRevenue>` | Keyed by platform. Absent keys mean zero revenue for that platform. |
+
+**`AttributedPlatformKey` union:**
+
+```
+"meta" | "tiktok" | "snapchat" | "klaviyo_email" | "klaviyo_sms" | "google" | "direct" | "other"
+```
+
+**`IAttributedRevenue` shape:**
+
+```ts
+{
+  revenue: number;       // Total attributed revenue (excludes refunds)
+  conversions: number;   // Number of attributed payment events
+  byConfidence: {
+    click: number;           // Revenue where attribution confidence = click
+    utm_only: number;        // Revenue where attribution confidence = utm_only
+    inferred_backfill: number; // Revenue where attribution confidence = inferred_backfill
+  };
+}
+```
+
+`byConfidence.click + byConfidence.utm_only + byConfidence.inferred_backfill === revenue` (the three tiers partition the total).
+
+**Source version:** `DASHBOARD_STATS_SNAPSHOT_SOURCE_VERSION` was bumped from `1` to `2` when this field was added. Snapshot documents written at v1 do not contain `attributedRevenue`; readers guard against this by treating an absent field as an empty Map.
+
 ## ChargeJobRun
 
 [src/models/ChargeJobRun.ts](../../src/models/ChargeJobRun.ts)

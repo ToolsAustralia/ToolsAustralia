@@ -442,6 +442,64 @@ Response carries `Cache-Control: private, max-age=120`.
 
 Implementation: thin handler → delegates to `getCancellationFlowUsersByReason()` in [src/services/admin/cancellationFlowAnalytics.ts](../../src/services/admin/cancellationFlowAnalytics.ts) (see [backend.md → cancellationFlowAnalytics.ts](./backend.md#services)).
 
+## Dashboard stats — `attributedRevenue` response key
+
+### `GET /api/admin/dashboard/stats` — `attributedRevenue` field
+
+Added as a new top-level key on the stats response alongside the existing `facebookAds` field.
+
+**Shape:**
+
+```ts
+Record<AttributedPlatformKey, {
+  revenue: number;
+  conversions: number;
+  byConfidence: {
+    click: number;
+    utm_only: number;
+    inferred_backfill: number;
+  };
+  // Present only when the platform maps to a spend provider with spend > 0:
+  adSpend?: number;
+  trueRoas?: number;
+  // Present only when comparison range data is available:
+  revenueTrend?: number;   // % delta from prior period
+  trueRoasTrend?: number;  // % delta from prior period
+}>
+```
+
+**Platform key union:** `"meta" | "tiktok" | "snapchat" | "klaviyo_email" | "klaviyo_sms" | "google" | "direct" | "other"`
+
+**Rules:**
+
+- Only platforms with at least one attributed payment event in the range appear in the response object. Platforms with zero revenue are omitted entirely.
+- `adSpend` and `trueRoas` are present **only** when the platform maps to a spend provider (via `PLATFORM_TO_AD_CHANNEL_KEY` in `snapshotSchema.ts`) **and** the mapped `adChannels[key].spend > 0`. Currently `meta → facebook` is the only live mapping. All other platforms (`direct`, `klaviyo_email`, `klaviyo_sms`, `google`, `tiktok`, `snapchat`, `other`) return only `revenue`, `conversions`, and `byConfidence`.
+- `trueRoas` is computed from the **summed** totals for the requested range: `attributedRevenue / adChannels[mappedKey].spend`. It is **not** averaged across snapshot days.
+- `revenueTrend` and `trueRoasTrend` mirror the existing `facebookAds` trends computation — they require a comparison range and are absent when no prior-period data is available.
+
+**Example (meta platform with spend data, direct without):**
+
+```json
+{
+  "attributedRevenue": {
+    "meta": {
+      "revenue": 12500,
+      "conversions": 42,
+      "byConfidence": { "click": 9000, "utm_only": 2500, "inferred_backfill": 1000 },
+      "adSpend": 3200,
+      "trueRoas": 3.91,
+      "revenueTrend": 12.4,
+      "trueRoasTrend": -2.1
+    },
+    "direct": {
+      "revenue": 4800,
+      "conversions": 18,
+      "byConfidence": { "click": 0, "utm_only": 0, "inferred_backfill": 4800 }
+    }
+  }
+}
+```
+
 ## Auth
 
 Per [auth rules R1-R2](../auth/rules.md): every handler must call `requireAdmin(session)`. Middleware doesn't gate `/api/admin/**`.
