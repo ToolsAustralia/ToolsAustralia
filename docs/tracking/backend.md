@@ -22,7 +22,15 @@
 
 ## Services
 
-[src/services/meta/](../../src/services/meta/) — Meta-specific service code (likely insights aggregation).
+[src/services/meta/](../../src/services/meta/) — Meta-specific service code:
+
+- **MetaInsightsSyncService** — `syncDateRange()` downloads ad-level daily insights from Meta and bulk-upserts into `MetaAdInsightsDaily`. As of 2026-05-27 it also calls `fetchAdsetMetadata` once per ad-account per sync run and denormalizes `linkClicks`, `adsetBudgetCents`, `campaignObjective`, `learningStatus`, and `lastSignificantEdit` onto each upserted row.
+- **runMetaSpendByUrlSync** — end-to-end orchestrator: insights → ad destinations → landing-page aggregates. Delegates to `MetaInsightsSyncService`, `MetaAdDestinationService`, and `SpendByUrlAggregationService` in sequence.
+- **MetaAdDestinationService** — resolves landing-page URLs for each ad ID via the Graph API creative endpoint.
+
+[src/services/facebook-ads-health/](../../src/services/facebook-ads-health/) — Facebook Ads Health diagnostic services:
+
+- **accountTrueRoasService** (`computeAccountTrueRoas`) — computes account-level TRUE ROAS by comparing local `PaymentEvent` revenue (non-renewal `BenefitsGranted` events) against Meta Insights spend and purchase revenue for a given date range. Returns `localRevenueAud`, `metaSpendAud`, `metaPurchaseRevenueAud`, `metaPurchaseConversions`, `ratioLocalOverMetaSpend` (TRUE ROAS proxy), `ratioMetaOverLocal` (Meta attribution ratio), and an `error` field if Meta was unreachable. Called by `GET /api/admin/facebook-ads/purchase-audit` and available for reuse by future health-insight routes.
 
 ## Repositories
 

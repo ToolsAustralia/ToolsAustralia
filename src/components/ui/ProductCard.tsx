@@ -325,9 +325,9 @@ export default function ProductCard({
       trackKlaviyoAddToCart({
         value: productData.price,
         currency: "AUD",
-        productId: productData.id,
-        productName: productData.name,
-        numItems: 1,
+        product_id: productData.id,
+        product_name: productData.name,
+        num_items: 1,
       });
 
       // Call legacy callback if provided

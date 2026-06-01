@@ -29,7 +29,9 @@
 
 Plus:
 - `scripts/migrations/` — date-prefixed migrations
-- `scripts/seed-admin-data.ts` — dev seed
+- `scripts/seed-*.ts` — dev seeds. Currently:
+  - `scripts/seed-admin-data.ts` — admin user
+  - `scripts/seed-variation1-vs-variation2-experiment.ts` — landing-page variation 1 vs 2 A/B experiment (npm `seed:variation-experiment[:dry]`). Idempotent: populates an empty admin-created draft of the same name in place, or creates a fresh one. See [ab-testing/api.md](../ab-testing/api.md#seed-scripts).
 - `scripts/fix-*.{ts,mjs,js}` → fix:* npm script — one-off corrective scripts; **must** ship with a `:dry` sibling that disables writes
 - `scripts/codemods/` — UI/Tailwind codemod scripts (see [dev-tooling architecture](../dev-tooling/architecture.md))
 

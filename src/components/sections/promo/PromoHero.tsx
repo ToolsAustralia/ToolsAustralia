@@ -69,6 +69,15 @@ export default function PromoHero({
     ? getLandingHeroImagePaths(effectiveSlug)
     : null;
 
+  /** A/B-test per-slug override: one variant can carry a map of slug → { desktop?, mobile? }
+   *  so a single experiment can run across multiple toolset / evergreen landings with
+   *  page-specific creatives. Each viewport is independently optional — a mobile-only
+   *  A/B test omits `desktop` and the page uses the default theme-aware landing image
+   *  for that slot. */
+  const perSlugVariantImage = effectiveSlug
+    ? variantConfig?.hero?.imageSrcBySlug?.[effectiveSlug] ?? null
+    : null;
+
   const standardHeroPaths = getPromoImagePaths({
     multiplier: resolvedMultiplier,
     majorDrawUrgency,
@@ -83,14 +92,21 @@ export default function PromoHero({
       };
     }
 
-    if (landingHeroPaths) {
-      return {
-        desktop: getImageForMode(landingHeroPaths, themeMode, "desktop"),
-        mobile: getImageForMode(landingHeroPaths, themeMode, "mobile"),
-      };
-    }
+    // Compose desktop and mobile independently:
+    //   1. per-slug variant override for that viewport (highest priority)
+    //   2. default landing-image-resolver path (theme-aware)
+    //   3. fall back to the multiplier/urgency-aware standard promo hero
+    const defaultDesktop = landingHeroPaths
+      ? getImageForMode(landingHeroPaths, themeMode, "desktop")
+      : standardHeroPaths.desktop;
+    const defaultMobile = landingHeroPaths
+      ? getImageForMode(landingHeroPaths, themeMode, "mobile")
+      : standardHeroPaths.mobile;
 
-    return standardHeroPaths;
+    return {
+      desktop: perSlugVariantImage?.desktop || defaultDesktop,
+      mobile: perSlugVariantImage?.mobile || defaultMobile,
+    };
   })();
 
   const ctaText = variantConfig?.hero?.ctaText || "ENTER NOW";
@@ -102,7 +118,7 @@ export default function PromoHero({
 
   if (isLoading) {
     return (
-      <section className="relative flex flex-col items-center overflow-visible pt-20 sm:pt-40 aspect-[1080/1164] min-h-[clamp(380px,228px+38vw,520px)] lg:aspect-auto lg:h-[83vh] lg:min-h-0">
+      <section className="relative flex flex-col items-center overflow-visible pt-20 sm:pt-40 aspect-[1080/1164] min-h-[clamp(380px,228px+38vw,520px)] lg:aspect-[2560/1044] lg:min-h-0">
         <div
           className={cn("main-banner-image absolute inset-0 z-0 bg-gradient-to-br from-gray-200 to-gray-300 animate-pulse", !PROMO_HERO_ELLIPSE_CLIP_ENABLED ? "promo-hero-banner--flat" : "")}
         />
@@ -118,7 +134,7 @@ export default function PromoHero({
   return (
     <section
       ref={heroRef}
-      className="relative flex flex-col items-center overflow-visible pt-20 sm:pt-40 aspect-[1080/1164] min-h-[clamp(380px,228px+38vw,520px)] lg:aspect-auto lg:h-[83vh] lg:min-h-0"
+      className="relative flex flex-col items-center overflow-visible pt-20 sm:pt-40 aspect-[1080/1164] min-h-[clamp(380px,228px+38vw,520px)] lg:aspect-[2560/1044] lg:min-h-0"
     >
       <div
         className={cn("main-banner-image absolute inset-0 z-0", !PROMO_HERO_ELLIPSE_CLIP_ENABLED ? "promo-hero-banner--flat" : "")}

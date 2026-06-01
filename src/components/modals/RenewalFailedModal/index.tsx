@@ -13,7 +13,7 @@ import { ApiError } from "@/lib/queries";
 import { formatPaymentError } from "@/utils/payment/stripe/payment-error-messages";
 import { useSavedPaymentMethods, type SavedPaymentMethod } from "@/hooks/useSavedPaymentMethods";
 import { useUserContext } from "@/contexts/UserContext";
-import { useThemeStore } from "@/stores/useThemeStore";
+import { useHtmlDarkForUi } from "@/hooks/useHtmlDarkForUi";
 import { buildMembershipStripeAppearance } from "@/utils/payment/stripe/membership-stripe-appearance";
 import { getStripePromise } from "@/lib/stripe-client";
 import { queryKeys } from "@/lib/queryKeys";
@@ -72,7 +72,11 @@ const RenewalFailedModal: React.FC<RenewalFailedModalProps> = ({ isOpen, onClose
   const updateSubscriptionPaymentMethod = useUpdateSubscriptionPaymentMethod();
   const { paymentMethods, loading: _paymentMethodsLoading, savePaymentMethod } = useSavedPaymentMethods();
   const { userData } = useUserContext();
-  const isDarkMode = useThemeStore((s) => s.theme === "dark");
+  // Source of truth = the actual `.dark` class on <html> (what Tailwind styles
+  // the modal with), NOT useThemeStore — those can disagree (e.g. time-based
+  // auto-dark, or /admin theme), which left the Stripe form light inside a dark
+  // modal. useHtmlDarkForUi reads the class so the PaymentElement matches.
+  const isDarkMode = useHtmlDarkForUi();
   // Theme-aware Stripe appearance so the PaymentElement renders its dark "night"
   // theme in dark mode (matching the modal) and the light theme in light mode.
   const membershipStripeAppearance = useMemo(
@@ -459,7 +463,10 @@ const RenewalFailedModal: React.FC<RenewalFailedModalProps> = ({ isOpen, onClose
         ) : null}
 
         <Elements
-          key={paymentState.clientSecret || "no-secret"}
+          // Include theme in the key (like PaymentMethodSelector) so Stripe
+          // re-mounts with the right appearance if dark/light resolves after the
+          // first render — Stripe bakes `appearance` in at mount.
+          key={`${paymentState.clientSecret || "no-secret"}-${isDarkMode ? "dark" : "light"}`}
           stripe={stripePromise}
           options={{
             clientSecret: paymentState.clientSecret,

@@ -60,12 +60,14 @@ export default function KlaviyoUserIdentifier() {
     // This prevents multiple identification calls when session updates quickly
     debounceTimerRef.current = setTimeout(() => {
       try {
-        // Identify user with available session data
+        // Identify user with available session data.
+        // Trait keys match Klaviyo's standard profile-attribute field names so
+        // they merge with the server-side upsert instead of creating duplicate
+        // custom properties.
         identifyKlaviyoUser(currentEmail, {
-          firstName: session.user.firstName || undefined,
-          lastName: session.user.lastName || undefined,
-          // Add user ID if available for better profile matching
-          userId: session.user.id || undefined,
+          first_name: session.user.firstName || undefined,
+          last_name: session.user.lastName || undefined,
+          user_id: session.user.id || undefined,
         });
 
         // Mark this email as identified to prevent duplicates
@@ -74,8 +76,8 @@ export default function KlaviyoUserIdentifier() {
         if (process.env.NODE_ENV === "development") {
           console.log("📧 Klaviyo: User identified", {
             email: currentEmail,
-            firstName: session.user.firstName,
-            lastName: session.user.lastName,
+            first_name: session.user.firstName,
+            last_name: session.user.lastName,
           });
         }
       } catch (error) {

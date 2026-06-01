@@ -4,6 +4,7 @@ import { Suspense } from "react";
 import dynamic from "next/dynamic";
 
 import PromoThemeInitializer from "@/components/promo/PromoThemeInitializer";
+import PromoViewTracking from "@/app/promotions/_components/PromoViewTracking";
 import PromoBanner from "@/components/sections/promo/PromoBanner";
 import PromoHero from "@/components/sections/promo/PromoHero";
 import BrandsShowcase from "@/components/sections/promo/BrandsShowcase";
@@ -175,6 +176,14 @@ export default async function PromotionsPage({ params }: PromotionsPageProps) {
         initialAnonymousId={serverAssignment?.anonymousId}
       >
         <PromoThemeInitializer slug={prize.slug} />
+        <PromoViewTracking
+          promo={{
+            slug: prize.slug,
+            title: prize.heroHeading || prize.label,
+            prizeName: prize.label,
+            prizeImageUrl: prize.gallery?.[0]?.src,
+          }}
+        />
         <div className="min-h-svh bg-white dark:bg-neutral-950 w-full overflow-hidden">
           <PromoBanner initialMembershipPromo={membershipPromo} initialOneTimePromo={oneTimePromo} />
 

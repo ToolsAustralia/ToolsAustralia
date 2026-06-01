@@ -2,6 +2,7 @@ import ExperimentRepository from "@/repositories/ab-testing/ExperimentRepository
 import ExperimentHistoryRepository from "@/repositories/ab-testing/ExperimentHistoryRepository";
 import VariantRepository from "@/repositories/ab-testing/VariantRepository";
 import { ExperimentHistoryAction } from "@/models/ab-testing/ExperimentHistory";
+import type { StoppingRules } from "@/models/ab-testing/Experiment";
 import mongoose from "mongoose";
 
 /**
@@ -152,6 +153,7 @@ export class ExperimentService {
       slugTargets: string[];
       startDate: Date;
       endDate: Date;
+      stoppingRules: StoppingRules;
     }>,
     changedBy: mongoose.Types.ObjectId
   ): Promise<void> {

@@ -19,6 +19,7 @@ import {
   getCustomerProperties,
   formatInvoiceDataForKlaviyo,
   formatPackageDataForKlaviyo,
+  formatCanonicalPackageData,
   formatDateForKlaviyo,
   formatTimestampForKlaviyo,
 } from "./klaviyo-helpers";
@@ -630,6 +631,20 @@ export function createPlacedOrderEvent(
     entriesGranted?: number;
     pointsEarned?: number;
     paymentIntentId?: string;
+    /**
+     * Raw Stripe `invoice.billing_reason` (e.g. "subscription_create",
+     * "subscription_cycle", "subscription_update", "manual"). Emitted as a
+     * top-level `billing_reason` event property. Omitted from the payload
+     * when undefined so the property isn't created on Klaviyo profiles for
+     * non-Stripe order paths.
+     */
+    billingReason?: string;
+    /**
+     * Whether this Placed Order is an automated subscription renewal cycle.
+     * Always emitted as `is_renewal` (defaults to `false`) so segments and
+     * custom metrics can reliably filter ("EQUALS true" / "EQUALS false").
+     */
+    isRenewal?: boolean;
   }
 ): KlaviyoEvent {
   // Build core revenue properties using schema helper ($value, Currency, Order ID)
@@ -671,6 +686,13 @@ export function createPlacedOrderEvent(
       partner_discount_catalog_percent: partnerDiscountCatalogPercent,
       partner_discount_catalog_summary: getPartnerDiscountCatalogSummaryForPackageId(orderData.packageId),
       purchase_date: formatDateForKlaviyo(),
+      // Renewal discriminator — additive. `is_renewal` is always defined so
+      // segments can use `EQUALS false` (Klaviyo treats missing properties as
+      // "not set", which doesn't match `EQUALS false`). `billing_reason` is
+      // only set when Stripe supplied one, keeping non-Stripe order paths
+      // clean of an empty Klaviyo profile property.
+      is_renewal: orderData.isRenewal ?? false,
+      ...(orderData.billingReason ? { billing_reason: orderData.billingReason } : {}),
       timestamp: formatTimestampForKlaviyo(),
     },
   };
@@ -771,6 +793,152 @@ export function createInvoiceGeneratedEvent(
     properties: {
       user_id: user._id.toString(),
       ...formatInvoiceDataForKlaviyo(invoiceData),
+    },
+  };
+}
+
+// ============================================================
+// POST-2026-05 CANONICAL EVENTS
+//
+// Events below this line use the CANONICAL property schema described in
+// docs/tracking/KLAVIYO_INTEGRATION.md ("Canonical property names — new
+// events only"):
+//   - `price` is a NUMBER, not string
+//   - `tier` is the property name (NOT package_tier)
+//   - `package_type` is always emitted
+//   - timestamps use `<verb>_at` ISO (NOT locale strings or `timestamp`)
+//   - optional properties are OMITTED when absent (NOT `""` or `"unknown"`)
+//
+// The `canonical-events-shape.test.ts` snapshot test enforces these rules.
+// Do NOT use `formatPackageDataForKlaviyo` (legacy) here — use
+// `formatCanonicalPackageData` (added 2026-05-28) instead.
+// ============================================================
+
+/**
+ * Create a "Viewed Giveaway" event — fires when a user views a /promotions/<slug>
+ * page. Powers the ads team's "viewed promo but didn't enter" Klaviyo flow.
+ *
+ * Coexists with the existing `Viewed Page` (`PageType: "promotion"`) event from
+ * KlaviyoPageTracker — does not replace it. The richer properties on this event
+ * (promo title, prize name, prize image URL) let email templates render the
+ * specific promo's assets rather than just a slug.
+ *
+ * For cookied users Klaviyo's onsite snippet auto-attaches the event to their
+ * known profile. For never-cookied anonymous users the event lands as anonymous
+ * in Klaviyo until they later identify.
+ *
+ * @param userOrEmail - Full IUser when identified, or `{ email }` when only
+ *   email is known (e.g. after step-1 registration before session is set).
+ * @param promoData - Resolved promo metadata for the page being viewed.
+ */
+export function createViewedGiveawayEvent(
+  userOrEmail: IUser | { email: string; firstName?: string; lastName?: string },
+  promoData: {
+    promoSlug: string;
+    promoId?: string;
+    promoTitle: string;
+    prizeName: string;
+    prizeImageUrl?: string;
+    promoUrl: string;
+    isAuthenticated: boolean;
+  }
+): KlaviyoEvent {
+  const customer_properties =
+    "_id" in userOrEmail
+      ? getCustomerProperties(userOrEmail)
+      : {
+          email: userOrEmail.email,
+          ...(userOrEmail.firstName ? { first_name: userOrEmail.firstName } : {}),
+          ...(userOrEmail.lastName ? { last_name: userOrEmail.lastName } : {}),
+        };
+
+  return {
+    event: "Viewed Giveaway",
+    customer_properties,
+    properties: {
+      // Omit user_id entirely when not available — no `""` sentinel (canonical rule)
+      ...("_id" in userOrEmail ? { user_id: userOrEmail._id.toString() } : {}),
+      promo_slug: promoData.promoSlug,
+      ...(promoData.promoId ? { promo_id: promoData.promoId } : {}),
+      promo_title: promoData.promoTitle,
+      prize_name: promoData.prizeName,
+      ...(promoData.prizeImageUrl ? { prize_image_url: promoData.prizeImageUrl } : {}),
+      promo_url: promoData.promoUrl,
+      is_authenticated: promoData.isAuthenticated,
+      viewed_at: new Date().toISOString(),
+    },
+  };
+}
+
+/**
+ * Create a "Started Checkout" event — the canonical Klaviyo event for the
+ * abandoned-checkout flow. Yuval's explicit payload requirements (type, name,
+ * cost, deep link, num_entries, email + first name) are all here.
+ *
+ * Fired from two mutually-exclusive paths (see spec §5):
+ *   - Authed user submits payment in MembershipModal → step: "viewed" (client-side
+ *     ride-along next to the existing Facebook `trackInitiateCheckout` callsite)
+ *   - Guest completes step-1 registration → step: "registered" (server-side from
+ *     /api/auth/register after `ensureUserProfileSynced` so the event reliably
+ *     attaches to the just-created Klaviyo profile)
+ *
+ * Uses the canonical schema (price as number, lowercase currency, $value
+ * alongside for Klaviyo revenue-template compatibility, `tier` not
+ * `package_tier`, ISO `started_at`, omit-rather-than-empty for optionals).
+ */
+export function createStartedCheckoutEvent(
+  user: IUser,
+  checkoutData: {
+    packageId: string;
+    packageName: string;
+    packageType: "membership" | "one-time" | "mini-draw" | "upsell";
+    tier?: string;
+    /** Package price in AUD as a NUMBER. Not a string. */
+    price: number;
+    /** Currency ISO code, lowercase ("aud"). Defaults to "aud". */
+    currency?: string;
+    /** Entries the package would grant. Optional. */
+    numEntries?: number;
+    /** Deep-link CTA URL for the abandoned-checkout email. Built via `buildCheckoutResumeUrl`. */
+    checkoutUrl: string;
+    /** Optional promo slug when the user started checkout from a /promotions/<slug> page. */
+    promoSlug?: string;
+    /** Funnel position: "viewed" for payment-submit; "registered" for post-step-1 register. */
+    step: "viewed" | "registered";
+    /**
+     * Actual NextAuth session state at the moment the event fires.
+     *
+     * NOT derived from `step` — in this codebase, MembershipModal step-1 success
+     * does NOT auto-login the user. A guest can complete step-1 → step-2 →
+     * submit payment while `isAuthenticated` stays `false` (guestUserData bridges
+     * the two steps). Callers MUST pass the real session state explicitly.
+     * See `docs/auth/gotchas.md` "registration ≠ authenticated session".
+     */
+    isAuthenticated: boolean;
+  }
+): KlaviyoEvent {
+  return {
+    event: "Started Checkout",
+    customer_properties: getCustomerProperties(user),
+    properties: {
+      user_id: user._id.toString(),
+      ...formatCanonicalPackageData({
+        packageId: checkoutData.packageId,
+        packageName: checkoutData.packageName,
+        packageType: checkoutData.packageType,
+        tier: checkoutData.tier,
+        price: checkoutData.price,
+        numEntries: checkoutData.numEntries,
+      }),
+      // Klaviyo revenue-template compat (segment filters and template merge tags
+      // often reference `event.$value`). Emit alongside the canonical `price`.
+      $value: checkoutData.price,
+      currency: checkoutData.currency ?? "aud",
+      checkout_url: checkoutData.checkoutUrl,
+      ...(checkoutData.promoSlug ? { promo_slug: checkoutData.promoSlug } : {}),
+      step: checkoutData.step,
+      is_authenticated: checkoutData.isAuthenticated,
+      started_at: new Date().toISOString(),
     },
   };
 }

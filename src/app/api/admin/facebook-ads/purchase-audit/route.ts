@@ -1,12 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requirePermission } from "@/lib/api-auth-permissions";
 import connectDB from "@/lib/mongodb";
-import PaymentEvent from "@/models/PaymentEvent";
 import { z } from "zod";
-import { fetchFacebookInsights } from "@/lib/facebook-marketing";
 import { getStartOfTodayInAEST } from "@/utils/common/timezone";
 import { subDays } from "date-fns";
 import { formatInTimeZone } from "date-fns-tz";
+import { computeAccountTrueRoas } from "@/services/facebook-ads-health/accountTrueRoasService";
 
 const querySchema = z.object({
   range: z.enum(["today", "7d", "30d"]).default("today"),
@@ -58,50 +57,33 @@ export async function GET(request: NextRequest) {
       fbUntil = formatInTimeZone(end, AEST, "yyyy-MM-dd");
     }
 
-    const localEvents = await PaymentEvent.find({
-      eventType: "BenefitsGranted",
-      timestamp: { $gte: startDate, $lte: endDate },
-      $nor: [{ packageType: "membership", "data.billingReason": "subscription_cycle" }],
-    })
-      .select("paymentIntentId packageType data.price data.billingReason timestamp")
-      .lean();
+    const accessToken = process.env.FACEBOOK_MARKETING_ACCESS_TOKEN ?? "";
+    const adAccountId = process.env.FACEBOOK_AD_ACCOUNT_ID ?? "";
 
-    let localRevenueAud = 0;
-    for (const ev of localEvents) {
-      const p = ev.data?.price;
-      if (typeof p === "number" && Number.isFinite(p)) {
-        localRevenueAud += p;
-      }
-    }
+    // When credentials are absent, skip the Meta call and surface a clear config error.
+    const missingCredentials = !accessToken || !adAccountId;
 
-    const accessToken = process.env.FACEBOOK_MARKETING_ACCESS_TOKEN;
-    const adAccountId = process.env.FACEBOOK_AD_ACCOUNT_ID;
+    const result = await computeAccountTrueRoas({
+      startDate,
+      endDate,
+      fbSince,
+      fbUntil,
+      accessToken: missingCredentials ? "" : accessToken,
+      adAccountId: missingCredentials ? "" : adAccountId,
+    });
 
-    let metaPurchaseRevenueAud: number | null = null;
-    let metaPurchaseConversions: number | null = null;
-    let metaError: string | null = null;
+    // Override the service error with the config-specific message when env vars are absent.
+    const metaError = missingCredentials
+      ? "FACEBOOK_MARKETING_ACCESS_TOKEN or FACEBOOK_AD_ACCOUNT_ID not configured"
+      : result.error;
 
-    if (accessToken && adAccountId) {
-      try {
-        const insights = await fetchFacebookInsights(adAccountId, accessToken, { since: fbSince, until: fbUntil }, "account");
-        let totalRevenueCents = 0;
-        let totalConversions = 0;
-        for (const row of insights) {
-          const m = row.metrics;
-          totalRevenueCents += m.revenue;
-          totalConversions += m.conversions;
-        }
-        metaPurchaseRevenueAud = totalRevenueCents / 100;
-        metaPurchaseConversions = totalConversions;
-      } catch (e) {
-        metaError = e instanceof Error ? e.message : String(e);
-      }
-    } else {
-      metaError = "FACEBOOK_MARKETING_ACCESS_TOKEN or FACEBOOK_AD_ACCOUNT_ID not configured";
-    }
+    const localRevenueAud = Math.round(result.localRevenueAud * 100) / 100;
+    const metaPurchaseRevenueAud = result.metaPurchaseRevenueAud;
 
     const diffAud =
-      metaPurchaseRevenueAud != null ? Math.round((metaPurchaseRevenueAud - localRevenueAud) * 100) / 100 : null;
+      metaPurchaseRevenueAud != null
+        ? Math.round((metaPurchaseRevenueAud - localRevenueAud) * 100) / 100
+        : null;
 
     return NextResponse.json({
       success: true,
@@ -109,13 +91,13 @@ export async function GET(request: NextRequest) {
       window: { start: startDate.toISOString(), end: endDate.toISOString() },
       facebookInsightsRange: { since: fbSince, until: fbUntil },
       local: {
-        benefitsGrantedNonRenewalCount: localEvents.length,
-        revenueAud: Math.round(localRevenueAud * 100) / 100,
+        benefitsGrantedNonRenewalCount: result.localEventCount,
+        revenueAud: localRevenueAud,
         note: "Excludes membership subscription_cycle (renewals). Uses PaymentEvent.data.price.",
       },
       meta: {
-        purchaseRevenueAud: metaPurchaseRevenueAud,
-        purchaseConversions: metaPurchaseConversions,
+        purchaseRevenueAud: missingCredentials ? null : metaPurchaseRevenueAud,
+        purchaseConversions: missingCredentials ? null : result.metaPurchaseConversions,
         error: metaError,
       },
       reconciliation: {

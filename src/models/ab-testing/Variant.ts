@@ -36,6 +36,22 @@ export interface VariantConfig {
      * and separate mobile/desktop paths (PromoImagePaths) for responsive images
      */
     imageSrc?: string | PromoImagePaths;
+    /**
+     * Per-slug overrides for hero image. Used when one experiment targets
+     * multiple landing pages (e.g. /promotions/dewalt and /promotions/dewalt-milwaukee)
+     * and each page needs its own creative.
+     *
+     * Both `desktop` and `mobile` are independently optional so a single variant
+     * can override just one viewport — e.g. a mobile-only A/B test leaves desktop
+     * undefined and `PromoHero` falls through to the theme-aware default
+     * landing-image-resolver for that slot.
+     *
+     * Resolution order per (slug, viewport):
+     *   1. imageSrcBySlug[slug].{desktop|mobile} if present
+     *   2. imageSrc (variant-wide override)
+     *   3. Default landing-image-resolver (theme-aware)
+     */
+    imageSrcBySlug?: Record<string, { desktop?: string; mobile?: string }>;
     messaging?: string; // Optional hero text overlay
     ctaText?: string; // "ENTER NOW" button text override
     ctaStyle?: {

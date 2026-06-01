@@ -64,13 +64,23 @@ Both files include a "Coming soon" section — when something ships, **move the 
 
 This rule is not hook-enforced. You're expected to apply it on your own. `/review` should also flag it.
 
-### 6. Verify before claiming
+### 6. Verify before claiming — AND before branching on assumed state
 
 Never state a fact about the code, this codebase's runtime behavior, or a third-party API/service without first checking. "Checking" means a Read, Grep, Bash command, doc lookup, or runtime probe — not recall.
 
 - If you cannot reach high confidence, say "I haven't verified X" explicitly. Do not phrase guesses as facts.
 - After a fix, verify the *end-to-end* behavior, not just the first symptom. The Stripe Basil API issue and the MongoDB index collision were both missed by stopping at the first plausible cause.
 - If the user pushes back on a claim, treat that as a signal to re-verify from scratch, not to defend the original claim.
+
+**Verification applies to IMPLEMENTATION decisions, not just statements.** Before writing any conditional that depends on app state (`if (isAuthenticated)`, `if (newUser)`, `if (step === N)`, `if (existingPlainAccount)`), **trace the actual control flow in the code first**. Do not infer from:
+- Component / function / API endpoint names (e.g. `/api/auth/register` does NOT auto-login the user in this codebase — step-1 success leaves `isAuthenticated: false` and bridges to step-2 via `guestUserData`).
+- "What most apps do" (most apps auto-login on register; this one doesn't).
+- Patterns from earlier in the codebase (different modals / endpoints may have different auth flows).
+- Prior conversation context (your own earlier statements can be wrong).
+
+Before adding tracking events, side effects, or any state-conditional logic to a multi-step flow, **walk through every possible user path** (new vs returning, guest vs authed, normal vs error, switching state mid-flow) and verify the event/effect fires correctly in each. The "happy path works in my one test" is not enough — bugs hide in the path you didn't think to test.
+
+When the user corrects your mental model (e.g. DJ: *"my register in the membershipmodal doesnt auto grant or login the user if he registers in step1"*), treat it as a **high-signal correction**. Re-trace from the code, do not defend the original claim.
 
 This rule is not hook-enforced. You're expected to apply it on your own.
 
@@ -188,7 +198,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
 ```json
 {
   "version": 1,
-  "lastModified": "2026-05-14",
+  "lastModified": "2026-05-27",
   "domains": {
     "subscription": {
       "docs": "docs/subscription/",
@@ -490,10 +500,13 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/utils/meta/**",
         "src/utils/utm/**",
         "src/services/meta/**",
+        "src/services/facebook-ads-health/**",
         "src/models/MetaAdDestination.ts",
         "src/models/MetaAdInsightsDaily.ts",
         "src/models/TikTokAdInsightsDaily.ts",
         "src/models/SnapchatAdInsightsDaily.ts",
+        "src/models/FacebookAdsHealthSnooze.ts",
+        "src/models/FacebookAdsHealthSettings.ts",
         "src/app/layout.tsx",
         "src/app/api/facebook/**",
         "src/app/api/tracking/**",
@@ -591,7 +604,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/app/globals.css",
         "src/app/not-found.tsx"
       ],
-      "lastVerified": "2026-05-15"
+      "lastVerified": "2026-05-27"
     },
     "client-state": {
       "docs": "docs/client-state/",
@@ -614,14 +627,16 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/hooks/usePrefetching.ts",
         "src/hooks/useConfetti.ts"
       ],
-      "lastVerified": "2026-05-20"
+      "lastVerified": "2026-05-27"
     },
     "admin": {
       "docs": "docs/admin/",
       "paths": [
         "src/app/admin/**",
         "src/components/admin/**",
+        "src/components/admin/facebook-ads-health/**",
         "src/app/api/admin/**",
+        "src/app/api/admin/facebook-ads/health/**",
         "src/features/admin/**",
         "src/models/ChargeJobLock.ts",
         "src/models/ChargeJobRun.ts",
@@ -637,7 +652,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/models/DashboardStatsDailySnapshot.ts",
         "src/services/admin/dashboard-stats/**"
       ],
-      "lastVerified": "2026-05-20"
+      "lastVerified": "2026-05-27"
     },
     "dashboard-account": {
       "docs": "docs/dashboard-account/",
@@ -690,7 +705,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/utils/validation/**",
         "src/utils/webhook/**",
         "scripts/migrations/**",
-        "scripts/seed-admin-data.ts",
+        "scripts/seed-*.ts",
         "scripts/migrate-*.ts",
         "scripts/fix-*.{ts,mjs,js}",
         "scripts/update-*.ts",

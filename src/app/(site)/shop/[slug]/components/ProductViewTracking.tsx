@@ -53,8 +53,8 @@ export default function ProductViewTracking({ product }: ProductViewTrackingProp
     trackKlaviyoViewContent({
       value: product.price,
       currency: "AUD",
-      productId: product._id,
-      productName: product.name,
+      product_id: product._id,
+      product_name: product.name,
     });
 
     if (process.env.NODE_ENV === "development") {
