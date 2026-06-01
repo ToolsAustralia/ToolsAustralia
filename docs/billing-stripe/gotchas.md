@@ -6,7 +6,7 @@ Setting `trial_end` on an **existing** subscription (the past-due reanchor, the 
 
 `handleInvoicePaymentSucceeded` normalizes `subscription_update` to a renewal for entry math, so it was **granting membership entries again** for this $0 invoice — double-counting the real `subscription_cycle` renewal — and logging a spurious "Subscribed to X Membership Package" admin-activity row (the recent-activities feed labels any non-`subscription_cycle` membership grant as "Subscribed"). 
 
-Guard: `isZeroAmountTrialUpdateInvoice()` (`src/utils/billing/trial-invoice.ts`) — the webhook early-returns for these. It is narrow: a 100%-off renewal is `subscription_cycle` (still grants); a real upgrade proration is `subscription_update` with `total > 0` (still grants). Audit/cleanup: `npm run find:duplicate-trial-entry-grants`. See `docs/PAST_DUE_REANCHOR.md`.
+Guard: `isZeroAmountTrialUpdateInvoice()` (`src/utils/billing/trial-invoice.ts`) — the webhook early-returns for these. It is narrow: a 100%-off renewal is `subscription_cycle` (still grants); a real upgrade proration is `subscription_update` with `total > 0` (still grants). Audit: `npm run find:duplicate-trial-entry-grants`. Remediate already-granted dups: `npm run reverse:duplicate-trial-entry-grants:dry` (dry-run; add `--apply` to write) — reverses only **clean** dups (scoped `removeMajorDrawEntries` + `accumulatedEntries −data.entries` + `lastMonthAccumulatedEntries` SET to the real sibling renewal's value when latest-cycle), writes a `BenefitsReversed` marker first as an atomic idempotency claim, and FLAGS anomalous/standalone grants for manual review. See `docs/PAST_DUE_REANCHOR.md`.
 
 ## Charge past-due — runbook
 

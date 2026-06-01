@@ -140,6 +140,30 @@ async function findSiblingRealGrant(
   return sibling !== null;
 }
 
+/**
+ * READ-ONLY: live MajorDraw membership state for a user across every draw they
+ * appear in. Used to ground-truth the empty-drawGrants gap case (was the draw
+ * actually over-credited, or was the credit swallowed?).
+ */
+async function getUserDrawState(
+  majorDrawsColl: MongoCollection,
+  userId: string
+): Promise<Array<{ drawId: string; name: string; total: number; membership: number }>> {
+  const objId = new mongoose.Types.ObjectId(userId);
+  const draws = await majorDrawsColl
+    .find({ "entries.userId": objId }, { projection: { name: 1, "entries.$": 1 } })
+    .toArray();
+  return draws.map((d) => {
+    const e = (d.entries as Array<{ totalEntries?: number; entriesBySource?: Record<string, number> }>)?.[0];
+    return {
+      drawId: String(d._id),
+      name: (d.name as string) ?? "(unnamed)",
+      total: e?.totalEntries ?? 0,
+      membership: e?.entriesBySource?.membership ?? 0,
+    };
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Per-event reversal
 // ---------------------------------------------------------------------------
@@ -147,7 +171,10 @@ async function findSiblingRealGrant(
 interface ReversalResult {
   skipped: boolean;
   skipReason?: string;
-  entriesReversed: number;
+  anomalous?: boolean; // skipped because data.entries exceeds scoped drawGrants
+  entriesReversed: number; // accumulatedEntries decrement (= data.entries)
+  drawEntriesReversed?: number; // sum of scoped draw-ledger rows
+  drawLedgerGap?: number; // accumulated − draw (entries with no scoped draw row)
   drawIds: string[];
   pointsReversed: number;
   lastMonthAdjusted: boolean;
@@ -191,6 +218,12 @@ async function reverseOneDupEvent(
   const drawGrants = ledger.drawGrants ?? [];
   const ledgerPoints = ledger.rewardsPoints ?? 0;
   const ledgerLastMonthDelta = ledger.lastMonthDelta ?? 0;
+  // `data.entries` is `packageData.entries` — the amount that `grantBenefits`
+  // ALWAYS $inc'd into accumulatedEntries (payment-processing.ts:1070), BEFORE
+  // and INDEPENDENT of the draw write. The draw credit can fail-and-be-swallowed
+  // (leaving drawGrants empty) while accumulatedEntries was still incremented, so
+  // accumulatedEntries MUST be reversed by data.entries — NOT by sum(drawGrants).
+  const ledgerEntries = Number((dupEvent.data as { entries?: number }).entries ?? 0);
 
   // Step 2 — compute which draw rows we can action vs must skip
   const majorGrants = drawGrants.filter((g) => g.kind === "major");
@@ -205,25 +238,74 @@ async function reverseOneDupEvent(
     }
   }
 
-  const totalEntriesToReverse = actionableGrants.reduce((s, g) => s + g.entries, 0);
+  // Draw-level reversal total (scoped per ledger row). May be < accumulated total
+  // when a draw credit was swallowed (empty/partial drawGrants).
+  const drawEntriesToReverse = actionableGrants.reduce((s, g) => s + g.entries, 0);
+  // accumulatedEntries reversal = what was actually added to it (data.entries).
+  // Fall back to the draw total only if data.entries is absent/0.
+  const accumulatedToReverse = ledgerEntries > 0 ? ledgerEntries : drawEntriesToReverse;
+  // Gap = entries that hit accumulatedEntries but have NO scoped draw ledger row.
+  // We can't safely decrement an unknown draw, so the gap is flagged, not actioned.
+  const drawLedgerGap = accumulatedToReverse - drawEntriesToReverse;
   const affectedDrawIds = actionableGrants.map((g) => g.drawId);
   const pointsToReverse = ARG_INCLUDE_POINTS ? ledgerPoints : 0;
 
-  // Step 3 — determine lastMonthAccumulatedEntries plan
-  // Only adjust if this is the MOST RECENT membership BenefitsGranted for this user
-  const laterGrant = await eventsColl.findOne({
+  // Step 3 — determine lastMonthAccumulatedEntries plan.
+  //
+  // lastMonthAccumulatedEntries is an ABSOLUTE $set (last-writer-wins) that is
+  // read back at every FUTURE renewal to size that renewal's grant — so a wrong
+  // value compounds forever. The dup and the real renewal both ran for the SAME
+  // cycle; whichever wrote last won. The CORRECT post-reversal value is simply
+  // what the REAL renewal computed — which it recorded as its own data.entries
+  // (newLastMonthAccumulatedEntries == entriesToGrant == data.entries for a
+  // renewal). So we SET lastMonth to the real sibling's data.entries rather than
+  // decrement by the dup's recorded delta (the delta overstates the dup's net
+  // effect in the concurrent-same-baseline case, e.g. William: both wrote 560,
+  // delta=40, but the dup changed the final value by 0).
+  //
+  // We only touch it when NO subsequent CYCLE has overwritten it. "Subsequent
+  // cycle" = a membership grant more than 1 day after the dup (the same-cycle
+  // real sibling is within ±1 day and must NOT count as a later renewal).
+  const laterCycleGrant = await eventsColl.findOne({
     userId: new mongoose.Types.ObjectId(userId),
     eventType: "BenefitsGranted",
     packageType: "membership",
-    timestamp: { $gt: dupEvent.timestamp },
+    timestamp: { $gt: new Date(dupEvent.timestamp.getTime() + DAY_MS) },
   });
-  const isLatestGrant = laterGrant === null;
+  const isLatestCycle = laterCycleGrant === null;
+
+  // The same-cycle real renewal sibling (closest cycle/create within ±1 day).
+  const siblingCandidates = (await eventsColl
+    .find({
+      userId: new mongoose.Types.ObjectId(userId),
+      eventType: "BenefitsGranted",
+      packageType: "membership",
+      "data.billingReason": { $in: ["subscription_cycle", "subscription_create"] },
+      timestamp: {
+        $gte: new Date(dupEvent.timestamp.getTime() - DAY_MS),
+        $lte: new Date(dupEvent.timestamp.getTime() + DAY_MS),
+      },
+    })
+    .toArray()) as BenefitsGrantedEvent[];
+  siblingCandidates.sort(
+    (a, b) =>
+      Math.abs(a.timestamp.getTime() - dupEvent.timestamp.getTime()) -
+      Math.abs(b.timestamp.getTime() - dupEvent.timestamp.getTime())
+  );
+  const realSibling = siblingCandidates[0];
+  const realSiblingEntries =
+    realSibling != null ? Number((realSibling.data as { entries?: number }).entries ?? 0) : null;
 
   const currentLastMonth = userDoc.subscription?.lastMonthAccumulatedEntries ?? 0;
-  const lastMonthAfter = Math.max(0, currentLastMonth - ledgerLastMonthDelta);
+  // Target = the real renewal's value. Only adjust when this is the latest cycle,
+  // we found the sibling, and the current value actually differs.
+  const lastMonthTarget = realSiblingEntries;
+  const willAdjustLastMonth =
+    isLatestCycle && lastMonthTarget !== null && lastMonthTarget !== currentLastMonth;
+  const lastMonthAfter = willAdjustLastMonth ? lastMonthTarget! : currentLastMonth;
 
   const currentAccumulated = userDoc.accumulatedEntries ?? 0;
-  const accumulatedAfter = Math.max(0, currentAccumulated - totalEntriesToReverse);
+  const accumulatedAfter = Math.max(0, currentAccumulated - accumulatedToReverse);
 
   const currentPoints = userDoc.rewardsPoints ?? 0;
   const pointsAfter = Math.max(0, currentPoints - pointsToReverse);
@@ -233,10 +315,11 @@ async function reverseOneDupEvent(
     `\n  [event] ${sourceEventId}  paymentIntentId=${dupId}  pkg=${dupEvent.packageName ?? dupEvent.packageType}`
   );
   console.error(`    timestamp: ${dupEvent.timestamp.toISOString()}`);
-  console.error(`    ledger drawGrants (major): ${majorGrants.length} row(s)`);
+  console.error(`    data.entries (granted to accumulatedEntries): ${ledgerEntries}`);
+  console.error(`    ledger drawGrants (major): ${majorGrants.length} row(s), summing ${drawEntriesToReverse} entries`);
 
   for (const g of actionableGrants) {
-    console.error(`      → drawId=${g.drawId} sourceKey=${g.sourceKey} entries=${g.entries} [WILL REVERSE]`);
+    console.error(`      → drawId=${g.drawId} sourceKey=${g.sourceKey} entries=${g.entries} [WILL REVERSE in draw]`);
   }
   for (const g of skippedRows) {
     console.error(
@@ -244,17 +327,58 @@ async function reverseOneDupEvent(
     );
   }
 
+  // ANOMALOUS GUARD: a clean duplicate is one where the dup's scoped drawGrants
+  // FULLY account for its data.entries (gap === 0). When data.entries exceeds the
+  // scoped draw rows, the event doesn't fit the clean double-grant model — the
+  // draw may or may not be over-credited, the matched "sibling" may be wrong, and
+  // the live-draw / lastMonth numbers don't reconcile (e.g. logepark: April
+  // draw=1060 but drawGrants empty and sibling=60). Auto-reversing such a case
+  // risks corrupting it further, so we FLAG it for manual review and act on NOTHING.
+  if (drawLedgerGap > 0) {
+    console.error(
+      `    ⚠ ANOMALOUS — FLAGGED, NOT auto-reversed: data.entries (${ledgerEntries}) exceeds scoped drawGrants (${drawEntriesToReverse}) by ${drawLedgerGap}.`
+    );
+    console.error(
+      `      → The clean double-grant model (draw = realSibling + dupDrawGrant) does not hold here. Reconcile by hand against the live-draw state printed above.`
+    );
+    return {
+      skipped: true,
+      skipReason: `anomalous draw-ledger gap (${drawLedgerGap}) — needs manual review`,
+      anomalous: true,
+      entriesReversed: 0,
+      drawEntriesReversed: 0,
+      drawLedgerGap,
+      drawIds: [],
+      pointsReversed: 0,
+      lastMonthAdjusted: false,
+      missingDrawIdRows: skippedRows.length,
+    };
+  }
+
   console.error(
-    `    accumulatedEntries: ${currentAccumulated} → ${accumulatedAfter}  (decrement ${totalEntriesToReverse})`
+    `    accumulatedEntries: ${currentAccumulated} → ${accumulatedAfter}  (decrement ${accumulatedToReverse})`
   );
 
-  if (isLatestGrant) {
+  const siblingDesc =
+    realSibling != null
+      ? `realSibling=${String(realSibling._id)} data.entries=${realSiblingEntries} reason=${realSibling.data.billingReason}`
+      : `realSibling=NONE-FOUND`;
+  console.error(`    ${siblingDesc}  ledger lastMonthDelta(for reference)=${ledgerLastMonthDelta}`);
+  if (!isLatestCycle) {
     console.error(
-      `    lastMonthAccumulatedEntries: ${currentLastMonth} → ${lastMonthAfter}  (this IS the latest grant, decrement ${ledgerLastMonthDelta})`
+      `    lastMonthAccumulatedEntries: ${currentLastMonth} [LEAVE — a later CYCLE overwrote it; laterCycle._id=${String(laterCycleGrant!._id)}]`
+    );
+  } else if (realSibling == null) {
+    console.error(
+      `    lastMonthAccumulatedEntries: ${currentLastMonth} [LEAVE — no real sibling found to derive the correct value; FLAG for manual review]`
+    );
+  } else if (!willAdjustLastMonth) {
+    console.error(
+      `    lastMonthAccumulatedEntries: ${currentLastMonth} [LEAVE — already equals the real renewal value ${lastMonthTarget}]`
     );
   } else {
     console.error(
-      `    lastMonthAccumulatedEntries: ${currentLastMonth} [LEAVE — later renewal overwrote; laterGrant._id=${String(laterGrant!._id)}]`
+      `    lastMonthAccumulatedEntries: ${currentLastMonth} → ${lastMonthAfter}  [SET to real renewal's data.entries — corrects compounding baseline]`
     );
   }
 
@@ -277,17 +401,77 @@ async function reverseOneDupEvent(
   if (DRY_RUN) {
     return {
       skipped: false,
-      entriesReversed: totalEntriesToReverse,
+      entriesReversed: accumulatedToReverse,
+      drawEntriesReversed: drawEntriesToReverse,
+      drawLedgerGap,
       drawIds: affectedDrawIds,
       pointsReversed: pointsToReverse,
-      lastMonthAdjusted: isLatestGrant && ledgerLastMonthDelta > 0,
+      lastMonthAdjusted: willAdjustLastMonth,
       missingDrawIdRows: skippedRows.length,
     };
   }
 
   // ─── APPLY mode ──────────────────────────────────────────────────────────
+  //
+  // ORDER MATTERS. The counter mutations below are NOT individually idempotent
+  // ($inc -N is unclamped and could drive a value negative on a re-run). So we
+  // write the BenefitsReversed marker FIRST as an atomic claim — the unique
+  // {paymentIntentId, eventType} index means a duplicate insert throws, which we
+  // treat as "already reversed" and skip. If a later mutation then fails, the
+  // marker still exists, so a re-run SKIPS (leaving a visible partial reversal to
+  // reconcile by hand) rather than DOUBLE-reversing. Under-applying is safer than
+  // over-applying for entry counts.
 
-  // 2. Remove draw entries per actionable drawGrant row
+  // 1. Claim: write the BenefitsReversed marker first.
+  try {
+    await eventsColl.insertOne({
+      _id: reversalMarkerId as unknown,
+      paymentIntentId: dupId,
+      eventType: "BenefitsReversed",
+      userId: new mongoose.Types.ObjectId(userId),
+      packageType: "membership",
+      processedBy: "admin",
+      timestamp: scriptStartTime,
+      data: {
+        reversed: {
+          entries: accumulatedToReverse,
+          drawEntries: drawEntriesToReverse,
+          drawLedgerGap,
+          drawIds: affectedDrawIds,
+          points: ARG_INCLUDE_POINTS ? ledgerPoints : 0,
+          lastMonthBefore: currentLastMonth,
+          lastMonthAfter: willAdjustLastMonth ? lastMonthAfter : currentLastMonth,
+          lastMonthSetFromSibling: willAdjustLastMonth ? String(realSibling!._id) : null,
+        },
+        reason: "zero-trial-duplicate",
+        sourceEventId,
+      },
+      attributionAdId: null,
+      attributionAdsetId: null,
+      attributionCampaignId: null,
+      convertingPlatform: null,
+      attributionConfidence: null,
+      isRenewal: false,
+    });
+  } catch (err) {
+    // Duplicate-key (code 11000) → another run already claimed it; skip safely.
+    if ((err as { code?: number }).code === 11000) {
+      return {
+        skipped: true,
+        skipReason: "already-reversed (BenefitsReversed marker race)",
+        entriesReversed: 0,
+        drawEntriesReversed: 0,
+        drawLedgerGap,
+        drawIds: [],
+        pointsReversed: 0,
+        lastMonthAdjusted: false,
+        missingDrawIdRows: skippedRows.length,
+      };
+    }
+    throw err;
+  }
+
+  // 2. Remove draw entries per actionable drawGrant row (scoped, clamped).
   const { removeMajorDrawEntries } = await import("../src/utils/draws/remove-draw-entries");
 
   for (const g of actionableGrants) {
@@ -304,11 +488,12 @@ async function reverseOneDupEvent(
     }
   }
 
-  // 3. Decrement accumulatedEntries
-  if (totalEntriesToReverse > 0) {
+  // 3. Decrement accumulatedEntries by the amount that was actually granted
+  //    (data.entries), independent of how many draw rows we could scope-reverse.
+  if (accumulatedToReverse > 0) {
     await usersColl.updateOne(
       { _id: new mongoose.Types.ObjectId(userId) },
-      { $inc: { accumulatedEntries: -totalEntriesToReverse } }
+      { $inc: { accumulatedEntries: -accumulatedToReverse } }
     );
   }
 
@@ -320,41 +505,17 @@ async function reverseOneDupEvent(
     );
   }
 
-  // 5. lastMonthAccumulatedEntries (only if this is the latest grant)
-  if (isLatestGrant && ledgerLastMonthDelta > 0) {
+  // 5. lastMonthAccumulatedEntries — SET to the real renewal's value (the correct
+  //    cumulative baseline). Only when this is the latest cycle, a real sibling
+  //    was found, and the current value actually differs (see Step 3 rationale).
+  if (willAdjustLastMonth) {
     await usersColl.updateOne(
       { _id: new mongoose.Types.ObjectId(userId) },
       { $set: { "subscription.lastMonthAccumulatedEntries": lastMonthAfter } }
     );
   }
 
-  // 6. Write BenefitsReversed marker
-  await eventsColl.insertOne({
-    _id: reversalMarkerId as unknown,
-    paymentIntentId: dupId,
-    eventType: "BenefitsReversed",
-    userId: new mongoose.Types.ObjectId(userId),
-    packageType: "membership",
-    processedBy: "admin",
-    timestamp: scriptStartTime,
-    data: {
-      reversed: {
-        entries: totalEntriesToReverse,
-        drawIds: affectedDrawIds,
-        points: ARG_INCLUDE_POINTS ? ledgerPoints : 0,
-      },
-      reason: "zero-trial-duplicate",
-      sourceEventId,
-    },
-    attributionAdId: null,
-    attributionAdsetId: null,
-    attributionCampaignId: null,
-    convertingPlatform: null,
-    attributionConfidence: null,
-    isRenewal: false,
-  });
-
-  // 7. Neutralize spurious source event:
+  // 6. Neutralize spurious source event:
   //    a) $pull dupId from User.processedPayments
   await usersColl.updateOne(
     { _id: new mongoose.Types.ObjectId(userId) },
@@ -365,10 +526,12 @@ async function reverseOneDupEvent(
 
   return {
     skipped: false,
-    entriesReversed: totalEntriesToReverse,
+    entriesReversed: accumulatedToReverse,
+    drawEntriesReversed: drawEntriesToReverse,
+    drawLedgerGap,
     drawIds: affectedDrawIds,
     pointsReversed: pointsToReverse,
-    lastMonthAdjusted: isLatestGrant && ledgerLastMonthDelta > 0,
+    lastMonthAdjusted: willAdjustLastMonth,
     missingDrawIdRows: skippedRows.length,
   };
 }
@@ -395,6 +558,7 @@ async function main(): Promise<void> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const eventsColl: MongoCollection = db.collection<any>("paymentevents");
   const usersColl: MongoCollection = db.collection("users");
+  const majorDrawsColl: MongoCollection = db.collection("majordraws");
 
   const scriptStartTime = new Date();
 
@@ -460,12 +624,16 @@ async function main(): Promise<void> {
 
   // ── Process confirmed duplicates ──────────────────────────────────────────
 
-  let totalUsersAffected = 0;
   let totalEntriesReversed = 0;
+  let totalDrawEntriesReversed = 0;
   let totalDrawsAffected = 0;
   let totalMissingDrawIdRows = 0;
+  let totalLastMonthAdjusted = 0;
   let eventsSkipped = 0;
+  let eventsAnomalous = 0;
+  let eventsReversed = 0;
   const seenUserIds = new Set<string>();
+  const reversedUserIds = new Set<string>();
 
   console.error(`\n=== CONFIRMED DUPLICATES — PLAN ===`);
 
@@ -488,6 +656,18 @@ async function main(): Promise<void> {
     if (!seenUserIds.has(uid)) {
       seenUserIds.add(uid);
       console.error(`\nUser: ${userEmail}  [${uid}]`);
+      // Live-draw ground truth (read-only) — print BEFORE the per-event plan so
+      // the GAP warning can be checked against actual draw membership counts.
+      const drawState = await getUserDrawState(majorDrawsColl, uid);
+      if (drawState.length === 0) {
+        console.error(`  live draws: (user not present in any MajorDraw)`);
+      } else {
+        for (const ds of drawState) {
+          console.error(
+            `  live draw "${ds.name}" [${ds.drawId}]: membership=${ds.membership}  total=${ds.total}`
+          );
+        }
+      }
     }
 
     const result = await reverseOneDupEvent(
@@ -508,15 +688,20 @@ async function main(): Promise<void> {
     if (result.skipped) {
       console.error(`    [SKIP] ${result.skipReason}`);
       eventsSkipped++;
+      if (result.anomalous) eventsAnomalous++;
       continue;
     }
 
+    eventsReversed++;
+    reversedUserIds.add(uid);
     totalEntriesReversed += result.entriesReversed;
+    totalDrawEntriesReversed += result.drawEntriesReversed ?? 0;
     totalDrawsAffected += result.drawIds.length;
     totalMissingDrawIdRows += result.missingDrawIdRows;
+    if (result.lastMonthAdjusted) totalLastMonthAdjusted++;
   }
 
-  totalUsersAffected = seenUserIds.size;
+  const totalUsersAffected = reversedUserIds.size;
 
   // ── Standalone list ───────────────────────────────────────────────────────
 
@@ -545,11 +730,14 @@ async function main(): Promise<void> {
   // ── Summary ───────────────────────────────────────────────────────────────
 
   console.error(`\n=== SUMMARY ===`);
-  console.error(`Users affected:          ${totalUsersAffected}`);
-  console.error(`Events reversed:         ${confirmedDups.length - eventsSkipped}`);
-  console.error(`Events skipped:          ${eventsSkipped}  (already reversed or user not found)`);
-  console.error(`Total entries reversed:  ${totalEntriesReversed}`);
+  console.error(`Users reversed:          ${totalUsersAffected}`);
+  console.error(`Events reversed:         ${eventsReversed}  (clean duplicates — draw fully accounted by drawGrants)`);
+  console.error(`Events skipped:          ${eventsSkipped}  (already-reversed / user-not-found / anomalous)`);
+  console.error(`  of which ANOMALOUS:    ${eventsAnomalous}  (draw-ledger gap > 0 — FLAGGED for manual review, NOT reversed)`);
+  console.error(`accumulatedEntries rev:  ${totalEntriesReversed}  (= sum of clean data.entries)`);
+  console.error(`draw-ledger entries rev: ${totalDrawEntriesReversed}  (scoped removeMajorDrawEntries rows)`);
   console.error(`MajorDraw rows touched:  ${totalDrawsAffected}`);
+  console.error(`lastMonth baselines set: ${totalLastMonthAdjusted}  (corrected to the real renewal value)`);
   console.error(`Ledger rows w/o drawId:  ${totalMissingDrawIdRows}  (skipped — needs manual review)`);
   console.error(`Standalone flagged:      ${standalone.length}  (NOT reversed)`);
   console.error(`--include-points:        ${ARG_INCLUDE_POINTS}`);
