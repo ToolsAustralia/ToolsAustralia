@@ -205,27 +205,29 @@ export default function KpiGrid({
     { minimumFractionDigits: 2, maximumFractionDigits: 2 },
   )} at risk${dateRange === "all-time" ? " (scheduled)" : ""}`;
 
-  // ---- Renewal Rate (always shown — today's progressive rate of total expected) ----
-  // Prefer renewalProgress (renewed / base for the cycle); fall back to the period
-  // renewal counts so the tile always renders a meaningful "% renewed so far".
+  // ---- Renewal Rate ----
+  // Headline = current billing-cycle progress (renewed / base), always cycle-anchored
+  // regardless of the selected filter. Slice = renewed vs past-due for the SELECTED range.
   const rp = users?.renewalProgress;
   const mr = users?.membershipRenewals;
-  const renewalRate: number | null =
-    rp?.rate != null
-      ? rp.rate
-      : mr && mr.expectedInRange > 0
-        ? (mr.succeededInRange / mr.expectedInRange) * 100
-        : null;
-  const renewalRenewed = rp?.renewed ?? mr?.succeededInRange ?? 0;
-  const renewalBase = rp?.base ?? mr?.expectedInRange ?? 0;
-  const renewalSub =
-    renewalBase > 0
-      ? `${renewalRenewed.toLocaleString("en-AU")} of ${renewalBase.toLocaleString("en-AU")} renewed${
-          rp?.remaining && rp.remaining > 0
-            ? ` · ${rp.remaining.toLocaleString("en-AU")} ${rp.isComplete ? "did not renew" : "expected"}`
-            : ""
-        }`
-      : "No renewals expected this period";
+  const renewalRate: number | null = rp?.rate ?? null;
+  const renewalCountAside =
+    rp && rp.base > 0
+      ? `${rp.renewed.toLocaleString("en-AU")}/${rp.base.toLocaleString("en-AU")} renewed`
+      : undefined;
+  const renewalSliceLabel =
+    dateRange === "today"
+      ? "Today"
+      : dateRange === "yesterday"
+        ? "Yesterday"
+        : dateRange === "current-draw"
+          ? "Current draw"
+          : dateRange === "last-draw"
+            ? "Last draw"
+            : dateRange === "all-time"
+              ? "All-time"
+              : "Range";
+  const renewalSub = `${renewalSliceLabel}: ${(mr?.succeededDistinctMembers ?? 0).toLocaleString("en-AU")} renewed · ${(mr?.becamePastDueInRange ?? 0).toLocaleString("en-AU")} past due`;
 
   return (
     <div className="space-y-5">
@@ -246,7 +248,7 @@ export default function KpiGrid({
             loading={showStatsSkeleton}
           />
           <KpiCard
-            title="Membership Revenue"
+            title="MRR"
             value={moneyWhole(Math.round(summary?.totalActiveRevenue ?? 0))}
             sub={membershipSub}
             icon={TrendingUp}
@@ -331,6 +333,7 @@ export default function KpiGrid({
           <MetricCard
             title="Renewal Rate"
             value={renewalRate != null ? `${renewalRate.toFixed(1)}%` : "—"}
+            valueAside={renewalCountAside}
             sub={renewalSub}
             icon={RefreshCw}
             tone="emerald"

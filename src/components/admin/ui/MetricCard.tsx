@@ -16,22 +16,22 @@ export const TONES = {
 export type Tone = keyof typeof TONES;
 
 export function MetricCard({
-  title, value, sub, icon: Icon, tone = "red", trend, invert = false, onClick, active = false, loading = false,
+  title, value, valueAside, sub, icon: Icon, tone = "red", trend, invert = false, onClick, active = false, loading = false,
 }: {
-  title: string; value: string; sub?: string; icon: ElementType; tone?: Tone;
+  title: string; value: string; valueAside?: string; sub?: string; icon: ElementType; tone?: Tone;
   trend?: number | null; invert?: boolean; onClick?: () => void; active?: boolean; loading?: boolean;
 }) {
   // A loading card is never clickable — keep its shape stable so it doesn't jump when data arrives.
   const interactive = !loading && !!onClick;
   return (
     <button type="button" onClick={interactive ? onClick : undefined} disabled={loading}
-      className={`group relative text-left w-full rounded-2xl border bg-white dark:bg-neutral-900 transition-all p-4 sm:p-[18px] ${
+      className={`group relative text-left w-full rounded-2xl border bg-white dark:bg-neutral-900 transition-all p-3 sm:p-[18px] ${
         active ? "border-neutral-900 dark:border-white ring-1 ring-neutral-900 dark:ring-white lift"
                : "border-neutral-200/80 dark:border-neutral-800 hover:border-neutral-300 dark:hover:border-neutral-700 hover:lift"
       } ${interactive ? "cursor-pointer" : "cursor-default"}`}>
       <div className="flex items-center justify-between gap-2 mb-2.5">
-        <div className={`shrink-0 w-9 h-9 rounded-xl flex items-center justify-center ${TONES[tone]}`}>
-          <Icon className="w-[18px] h-[18px]" strokeWidth={2} />
+        <div className={`shrink-0 w-7 h-7 sm:w-9 sm:h-9 rounded-xl flex items-center justify-center ${TONES[tone]}`}>
+          <Icon className="w-4 h-4 sm:w-[18px] sm:h-[18px]" strokeWidth={2} />
         </div>
         {loading
           ? <div className="h-5 w-12 rounded-md bg-neutral-200 dark:bg-neutral-800 animate-pulse" />
@@ -45,8 +45,11 @@ export function MetricCard({
         </>
       ) : (
         <>
-          <div className="mt-1">
-            <p className="font-display font-extrabold text-2xl sm:text-[27px] leading-none text-neutral-900 dark:text-white num whitespace-nowrap">{value}</p>
+          <div className="mt-1 flex items-baseline gap-1.5 min-w-0">
+            <p className="font-display font-extrabold text-lg sm:text-[27px] leading-none text-neutral-900 dark:text-white num whitespace-nowrap">{value}</p>
+            {valueAside && (
+              <span className="text-2xs sm:text-xs font-semibold text-neutral-400 dark:text-neutral-500 num truncate">{valueAside}</span>
+            )}
           </div>
           {sub && <p className="text-2xs text-neutral-500 dark:text-neutral-400 mt-2 truncate">{sub}</p>}
         </>

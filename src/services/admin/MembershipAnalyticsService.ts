@@ -4,6 +4,8 @@ import MembershipDailySnapshot, { type IMembershipDailySnapshot } from "@/models
 import MembershipRenewalCycle from "@/models/MembershipRenewalCycle";
 import MembershipStatusHistory from "@/models/MembershipStatusHistory";
 import CancellationFlowEvent from "@/models/CancellationFlowEvent";
+import MajorDraw from "@/models/MajorDraw";
+import { aestDayBounds } from "@/services/admin/dashboard-stats/DashboardStatsSnapshotWriter";
 import { getPackageById } from "@/data/membershipPackages";
 import {
   ACTIVE_SUBSCRIPTION_STATUSES,
@@ -150,17 +152,10 @@ export class MembershipAnalyticsService {
     }
     cancelledMembershipRevenueImpact = Math.round(cancelledMembershipRevenueImpact * 100) / 100;
 
-    // Draw-aligned renewal progress (only meaningful for the monthly draw cohorts).
-    let renewalProgress: ReturnType<typeof summarizeRenewalProgress> | undefined;
-    if (dateRange === "current-draw" || dateRange === "last-draw") {
-      const { base, baseAsOf } = await this.getRenewalBaseAsOf(startDate);
-      renewalProgress = summarizeRenewalProgress({
-        base,
-        renewed: successfulRenewalUserCount,
-        baseAsOf,
-        isComplete: dateRange === "last-draw",
-      });
-    }
+    // Renewal Rate headline: always the CURRENT billing cycle, independent of the
+    // selected date range. (The card's per-range "slice" uses the range-scoped
+    // successfulRenewalUserCount / becamePastDueInRange already on this bundle.)
+    const renewalProgress = await this.getCurrentCycleRenewalProgress();
 
     return {
       expectedRenewalsInRange,
@@ -346,6 +341,39 @@ export class MembershipAnalyticsService {
         fullyCancelledCount: c[packageId] ?? 0,
       })),
     };
+  }
+
+  /**
+   * Current-cycle renewal progress, independent of the dashboard's selected date range.
+   * Cycle = day after the last completed draw closed (AEST) → now. Headline of the
+   * Renewal Rate card. Numerator = distinct members whose renewal payment landed in the
+   * cycle; denominator = active + past-due at cycle start (snapshot). Capped <=100%.
+   */
+  private async getCurrentCycleRenewalProgress(): Promise<ReturnType<typeof summarizeRenewalProgress>> {
+    const lastDraw = await MajorDraw.findOne({ status: "completed" })
+      .sort({ drawDate: -1 })
+      .select("drawDate")
+      .lean<{ drawDate?: Date }>();
+    if (!lastDraw?.drawDate) {
+      return summarizeRenewalProgress({ base: 0, renewed: 0, baseAsOf: null, isComplete: false });
+    }
+    const lastDrawKey = formatInTimeZone(lastDraw.drawDate, "Australia/Sydney", "yyyy-MM-dd");
+    // dayEndUTC of the draw's close day = midnight AEST of the NEXT day = cycle start (DST-safe).
+    const cycleStart = aestDayBounds(lastDrawKey).dayEndUTC;
+    const now = new Date();
+
+    const { base, baseAsOf } = await this.getRenewalBaseAsOf(cycleStart);
+
+    const renewedRows = await MembershipRenewalCycle.find({
+      billingReason: "subscription_cycle",
+      status: { $in: ["succeeded", "recovered"] },
+      succeededAt: { $gte: cycleStart, $lt: now },
+    })
+      .select("userId")
+      .lean<Array<{ userId: { toString(): string } }>>();
+    const renewed = new Set(renewedRows.map((r) => String(r.userId))).size;
+
+    return summarizeRenewalProgress({ base, renewed, baseAsOf, isComplete: false });
   }
 
   /**

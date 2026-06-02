@@ -209,6 +209,9 @@ export default function DashboardOverview() {
         membershipLoading={membershipLoading}
       />
 
+      {/* Advertising by platform — moved directly under the KPI grid */}
+      <AdvertisingPlatformCard stats={dashboardStats} loading={statsLoading} />
+
       {/* Charts row (redesign Phase 3) — revenue area chart + membership donut */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 md:gap-6">
         <div className="lg:col-span-2 min-w-0">
@@ -223,18 +226,15 @@ export default function DashboardOverview() {
         </div>
       </div>
 
-      {/* Revenue breakdown + advertising by platform (redesign Phase 4, row 3) */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 md:gap-6">
-        <RevenueBreakdownCard
-          stats={dashboardStats}
-          loading={statsLoading}
-          dateRange={dateRange}
-          startDate={customStartDate || undefined}
-          endDate={customEndDate || undefined}
-          onUserClick={openUserModal}
-        />
-        <AdvertisingPlatformCard stats={dashboardStats} loading={statsLoading} />
-      </div>
+      {/* Revenue breakdown — full width, below the charts */}
+      <RevenueBreakdownCard
+        stats={dashboardStats}
+        loading={statsLoading}
+        dateRange={dateRange}
+        startDate={customStartDate || undefined}
+        endDate={customEndDate || undefined}
+        onUserClick={openUserModal}
+      />
 
       {/* Prize performance — ad spend & return by prize (redesign Phase 4, row 3b) */}
       <PrizePerformanceCard
