@@ -140,12 +140,14 @@ export default function KpiGrid({
   stats,
   membership,
   dateRange,
+  rangeLabel = "",
   statsLoading = false,
   membershipLoading = false,
 }: {
   stats: AdminDashboardStats | undefined;
   membership: MembershipByPackageData | undefined;
   dateRange: DateRange;
+  rangeLabel?: string;
   statsLoading?: boolean;
   membershipLoading?: boolean;
 }) {
@@ -159,15 +161,13 @@ export default function KpiGrid({
   const showStatsSkeleton = statsLoading && !stats;
   const showMembershipSkeleton = membershipLoading && !membership;
 
+  // Per-card date tag (e.g. " (Today)" / " (Nov 2025 – present)"), appended to the
+  // titles of cards whose value is scoped to the selected date filter. Snapshot tiles
+  // (MRR, all-time Total Users) deliberately omit it.
+  const rangeTag = rangeLabel ? ` (${rangeLabel})` : "";
+
   // ---- Revenue tile (clickable) ----
-  const revenueTitle =
-    dateRange === "today"
-      ? "Today's Revenue"
-      : dateRange === "yesterday"
-        ? "Yesterday's Revenue"
-        : dateRange === "all-time"
-          ? "Total Revenue"
-          : "Revenue";
+  const revenueTitle = `Revenue${rangeTag}`;
 
   const revenueBreakdown: BreakdownRow[] = revenue
     ? (
@@ -205,29 +205,22 @@ export default function KpiGrid({
     { minimumFractionDigits: 2, maximumFractionDigits: 2 },
   )} at risk${dateRange === "all-time" ? " (scheduled)" : ""}`;
 
-  // ---- Renewal Rate ----
-  // Headline = current billing-cycle progress (renewed / base), always cycle-anchored
-  // regardless of the selected filter. Slice = renewed vs past-due for the SELECTED range.
+  // ---- Renewals ----
+  // Headline = renewals in the SELECTED range (filter-driven) — renewed + past due.
+  // Sub = current billing-cycle progress (cycle-anchored, filter-independent).
   const rp = users?.renewalProgress;
   const mr = users?.membershipRenewals;
   const renewalRate: number | null = rp?.rate ?? null;
-  const renewalCountAside =
+  // Only the renewed count is the big headline number; the "renewed · N past due"
+  // words ride along as small muted aside text so they don't dominate the tile.
+  const renewalValue = (mr?.succeededDistinctMembers ?? 0).toLocaleString("en-AU");
+  const renewalAside = `renewed · ${(mr?.becamePastDueInRange ?? 0).toLocaleString("en-AU")} past due`;
+  const renewalSub =
     rp && rp.base > 0
-      ? `${rp.renewed.toLocaleString("en-AU")}/${rp.base.toLocaleString("en-AU")} renewed`
-      : undefined;
-  const renewalSliceLabel =
-    dateRange === "today"
-      ? "Today"
-      : dateRange === "yesterday"
-        ? "Yesterday"
-        : dateRange === "current-draw"
-          ? "Current draw"
-          : dateRange === "last-draw"
-            ? "Last draw"
-            : dateRange === "all-time"
-              ? "All-time"
-              : "Range";
-  const renewalSub = `${renewalSliceLabel}: ${(mr?.succeededDistinctMembers ?? 0).toLocaleString("en-AU")} renewed · ${(mr?.becamePastDueInRange ?? 0).toLocaleString("en-AU")} past due`;
+      ? `Cycle: ${renewalRate != null ? `${renewalRate.toFixed(1)}%` : "—"} · ${rp.renewed.toLocaleString("en-AU")}/${rp.base.toLocaleString("en-AU")}`
+      : renewalRate != null
+        ? `Cycle: ${renewalRate.toFixed(1)}%`
+        : "No active cycle";
 
   return (
     <div className="space-y-5">
@@ -257,7 +250,7 @@ export default function KpiGrid({
             loading={showMembershipSkeleton}
           />
           <MetricCard
-            title="Ad Spend"
+            title={`Ad Spend${rangeTag}`}
             value={moneyWhole(Math.round(facebookAds?.spend ?? 0))}
             sub="Facebook Ads spend"
             icon={BarChart3}
@@ -266,7 +259,7 @@ export default function KpiGrid({
             loading={showStatsSkeleton}
           />
           <MetricCard
-            title="ROAS"
+            title={`ROAS${rangeTag}`}
             value={`${(facebookAds?.roas ?? 0).toFixed(2)}x`}
             sub="Return on ad spend"
             icon={Target}
@@ -296,13 +289,7 @@ export default function KpiGrid({
             />
           ) : (
             <MetricCard
-              title={
-                dateRange === "today"
-                  ? "Signups Today"
-                  : dateRange === "yesterday"
-                    ? "Signups Yesterday"
-                    : "New Signups"
-              }
+              title={`New Signups${rangeTag}`}
               value={(users?.newInRange ?? 0).toLocaleString("en-AU")}
               sub={`${(users?.total ?? 0).toLocaleString("en-AU")} total users`}
               icon={UserCheck}
@@ -312,7 +299,7 @@ export default function KpiGrid({
             />
           )}
           <MetricCard
-            title="Conversion Rate"
+            title={`Conversion Rate${rangeTag}`}
             value={`${(stats?.conversionRate ?? 0).toFixed(1)}%`}
             sub="Paying customers"
             icon={Target}
@@ -321,7 +308,7 @@ export default function KpiGrid({
             loading={showStatsSkeleton}
           />
           <MetricCard
-            title="Cancellations"
+            title={`Cancellations${rangeTag}`}
             value={(users?.cancelledMemberships ?? 0).toLocaleString("en-AU")}
             sub={cancellationSub}
             icon={UserX}
@@ -331,9 +318,9 @@ export default function KpiGrid({
             loading={showStatsSkeleton}
           />
           <MetricCard
-            title="Renewal Rate"
-            value={renewalRate != null ? `${renewalRate.toFixed(1)}%` : "—"}
-            valueAside={renewalCountAside}
+            title={`Renewals${rangeTag}`}
+            value={renewalValue}
+            valueAside={renewalAside}
             sub={renewalSub}
             icon={RefreshCw}
             tone="emerald"

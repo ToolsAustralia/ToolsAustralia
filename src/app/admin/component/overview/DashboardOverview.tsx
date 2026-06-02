@@ -169,6 +169,32 @@ export default function DashboardOverview() {
     return undefined;
   }, [dateRange, customStartDate, customEndDate, drawDates]);
 
+  // Per-card date tag for the KPI grid — e.g. "Revenue (Today)" / "(Nov 2025 – present)"
+  // / the active draw name. Draw names + the all-time launch month live here (KpiGrid
+  // only receives the resolved string).
+  const kpiRangeLabel = useMemo(() => {
+    switch (dateRange) {
+      case "today":
+        return "Today";
+      case "yesterday":
+        return "Yesterday";
+      case "current-draw":
+        return drawDates?.currentDraw?.name ?? "Current draw";
+      case "last-draw":
+        return drawDates?.lastDraw?.name ?? "Last draw";
+      case "all-time": {
+        const start = dashboardStats?.dateRange?.start;
+        return start ? `${format(new Date(start), "MMM yyyy")} – present` : "All time";
+      }
+      case "custom":
+        return customStartDate && customEndDate
+          ? formatAbbreviatedDate(customStartDate, customEndDate)
+          : "Custom";
+      default:
+        return "";
+    }
+  }, [dateRange, drawDates, dashboardStats, customStartDate, customEndDate]);
+
   const overviewToolbarProps = {
     dateRange,
     onRangeChange: (range: DateRange) => {
@@ -205,12 +231,23 @@ export default function DashboardOverview() {
         stats={dashboardStats}
         membership={membershipByPackageData}
         dateRange={dateRange}
+        rangeLabel={kpiRangeLabel}
         statsLoading={statsLoading}
         membershipLoading={membershipLoading}
       />
 
-      {/* Advertising by platform — moved directly under the KPI grid */}
-      <AdvertisingPlatformCard stats={dashboardStats} loading={statsLoading} />
+      {/* Revenue breakdown + advertising by platform — same row, above the charts */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-5 md:gap-6">
+        <RevenueBreakdownCard
+          stats={dashboardStats}
+          loading={statsLoading}
+          dateRange={dateRange}
+          startDate={customStartDate || undefined}
+          endDate={customEndDate || undefined}
+          onUserClick={openUserModal}
+        />
+        <AdvertisingPlatformCard stats={dashboardStats} loading={statsLoading} />
+      </div>
 
       {/* Charts row (redesign Phase 3) — revenue area chart + membership donut */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 md:gap-6">
@@ -225,16 +262,6 @@ export default function DashboardOverview() {
           />
         </div>
       </div>
-
-      {/* Revenue breakdown — full width, below the charts */}
-      <RevenueBreakdownCard
-        stats={dashboardStats}
-        loading={statsLoading}
-        dateRange={dateRange}
-        startDate={customStartDate || undefined}
-        endDate={customEndDate || undefined}
-        onUserClick={openUserModal}
-      />
 
       {/* Prize performance — ad spend & return by prize (redesign Phase 4, row 3b) */}
       <PrizePerformanceCard

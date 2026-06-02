@@ -6,6 +6,7 @@ import { X } from "lucide-react";
 import ModalContainer from "../ui/ModalContainer";
 import ModalContent from "../ui/ModalContent";
 import Hero from "./Hero";
+import FeaturePanel from "./FeaturePanel";
 import SpecCard from "./SpecCard";
 import TabBar from "./TabBar";
 import TrustBar from "./TrustBar";
@@ -83,7 +84,12 @@ const PrizeSpecificationsModal = ({ isOpen, onClose, prize }: PrizeSpecification
 
   return (
     <ModalContainer isOpen={isOpen} onClose={onClose} size="4xl" height="auto" closeOnBackdrop>
-      {prize && <Hero prize={prize} />}
+      {/* Mobile: hero banner stacked on top. Desktop: replaced by the left feature column below. */}
+      {prize && (
+        <div className="lg:hidden">
+          <Hero prize={prize} />
+        </div>
+      )}
 
       {/* Absolute close button — sits above the hero so it's reachable while scrolling */}
       <button
@@ -95,7 +101,17 @@ const PrizeSpecificationsModal = ({ isOpen, onClose, prize }: PrizeSpecification
         <X size={14} strokeWidth={2} />
       </button>
 
-      <ModalContent scrollbar="metallic" padding="none" className="max-h-[88dvh] sm:max-h-[80vh]">
+      {/* Body: single column on mobile (hero above, specs below); two columns on desktop
+          (feature panel left, scrollable specs right). */}
+      <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
+        {prize && (
+          <FeaturePanel
+            prize={prize}
+            className="hidden lg:flex lg:w-[38%] lg:shrink-0 lg:overflow-auto"
+          />
+        )}
+
+        <ModalContent scrollbar="metallic" padding="none" className="lg:min-w-0 lg:flex-1">
         <div
           className={cn("min-h-full w-full px-2.5 py-2 sm:p-6", surface.contentRootClass)}
           style={surface.canvasStyle}
@@ -143,7 +159,8 @@ const PrizeSpecificationsModal = ({ isOpen, onClose, prize }: PrizeSpecification
             </>
           )}
         </div>
-      </ModalContent>
+        </ModalContent>
+      </div>
 
       <TrustBar iconColorClass={brandColors?.checkmarkColor} />
     </ModalContainer>

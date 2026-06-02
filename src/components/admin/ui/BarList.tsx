@@ -1,7 +1,7 @@
 export type BarItem = { id: string; label: string; value: number; color: string; count?: number; unit?: string };
 
-export function BarList({ items, fmt = (v: number) => String(v), fmtCount = (n: number) => n.toLocaleString("en-AU"), onItemClick }: {
-  items: BarItem[]; fmt?: (v: number) => string; fmtCount?: (n: number) => string; onItemClick?: (id: string) => void;
+export function BarList({ items, fmt = (v: number) => String(v), fmtCount = (n: number) => n.toLocaleString("en-AU"), onItemClick, equalLength = false }: {
+  items: BarItem[]; fmt?: (v: number) => string; fmtCount?: (n: number) => string; onItemClick?: (id: string) => void; equalLength?: boolean;
 }) {
   const max = items.length ? Math.max(...items.map((i) => i.value)) || 1 : 1;
   return (
@@ -14,10 +14,10 @@ export function BarList({ items, fmt = (v: number) => String(v), fmtCount = (n: 
               <span className="text-xs font-bold text-neutral-900 dark:text-white num shrink-0">{fmt(it.value)}</span>
             </div>
             <div className="flex items-center gap-2">
-              <div className="flex-1 h-2 rounded-full bg-neutral-100 dark:bg-neutral-800 overflow-hidden">
-                <div className="h-full rounded-full transition-all duration-500 group-hover:brightness-110" style={{ width: (it.value / max) * 100 + "%", background: it.color }} />
+              <div className="flex-1 min-w-0 h-2 rounded-full bg-neutral-100 dark:bg-neutral-800 overflow-hidden">
+                <div className="h-full rounded-full transition-all duration-500 group-hover:brightness-110" style={{ width: (equalLength ? 100 : (it.value / max) * 100) + "%", background: it.color }} />
               </div>
-              {it.count != null && <span className="text-2xs text-neutral-400 dark:text-neutral-500 num w-16 text-right shrink-0">{fmtCount(it.count)} {it.unit?.slice(0, 4)}</span>}
+              {it.count != null && <span className="text-2xs text-neutral-400 dark:text-neutral-500 num w-28 text-right shrink-0 truncate">{fmtCount(it.count)} {it.unit}</span>}
             </div>
           </>
         );

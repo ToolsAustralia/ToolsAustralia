@@ -14,9 +14,17 @@
 |---|---|
 | [src/config/brand-theme.ts](../../src/config/brand-theme.ts) | Brand color tokens |
 | [src/config/featureFlags.ts](../../src/config/featureFlags.ts) | Feature-flag values (currently env / static) |
-| [src/config/prizes.ts](../../src/config/prizes.ts) | Prize catalog config |
+| [src/config/prizes.ts](../../src/config/prizes.ts) | Prize catalog config (see Prize spec-item photos below) |
 | [src/config/promo-landing-slugs.ts](../../src/config/promo-landing-slugs.ts) | Slug allowlist for promo pages |
 | [src/config/rewardsSettings.ts](../../src/config/rewardsSettings.ts) | Rewards-system settings |
+
+### Prize spec-item photos
+
+`PrizeSpecItem` has an optional `image?: PrizeMedia`. Photos are assigned from a single map, `SPEC_ITEM_IMAGE_BY_NAME` (keyed by the item's exact `name`), applied to the shared spec arrays (`MILWAUKEE_POWER_TOOLS`, `DEWALT_SIDCHROME_POWER_TOOLS`, `MAKITA_SIDCHROME_POWER_TOOLS`, `RYOBI_POWER_TOOLS`, + the per-brand `*_POWER_SYSTEM`) at module load via `applySpecItemImages()`. Because prize-combo entries reference those arrays by reference, every combo inherits the image. Matches were produced by **visually scanning** each brand's `/public/images/majordraws/{brand}-set/Tools_Aust_Feb26_*.jpg` photos against the tool list (the gallery `alt` labels were unreliable). Items with no clean single-tool photo (most storage pieces, some batteries/chargers) are simply absent from the map and render without a photo. To re-point a photo, edit one entry in the map. Consumed by `SpecCard` in the [PrizeSpecificationsModal](../shared-ui/frontend.md#prizespecificationsmodal).
+
+**Storage systems:** the modular storage arrays (`MILWAUKEE_PACKOUT_STORAGE`, `DEWALT_TOUGHSYSTEM_STORAGE`, `MAKITA_MAKTRAK_STORAGE`, `RYOBI_LINK_STORAGE`) are defined *after* the photo map, so they get a second `applySpecItemImages()` pass. Only Makita MAKTRAK (`makita-maktrak.webp`) and Ryobi LINK (`ryobi-link.webp`) have a composite system photo, attached to the primary rolling-base piece; Milwaukee PACKOUT and DeWalt ToughSystem have no storage photo on disk.
+
+**Milwaukee PACKOUT piece count:** prize copy labels it an **8-piece** PACKOUT system, but only **6** pieces are detailed in `MILWAUKEE_PACKOUT_STORAGE` — details for the remaining 2 are pending (see the `NOTE` above the array). The `8pc`/`8-piece` wording was applied only to PACKOUT phrases (`Packout 8pc`, `PACKOUT™ 8pc`, `8-piece modular storage`) to avoid corrupting the Sidchrome `356-piece` / Kincrome `470pc` substrings.
 
 ## Constants
 

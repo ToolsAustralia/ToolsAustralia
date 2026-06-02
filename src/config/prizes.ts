@@ -23,6 +23,9 @@ export interface PrizeSpecItem {
   description?: string;
   specifications?: string[];
   includes?: string[];
+  /** Optional product photo for this item, shown on its spec card (mobile + desktop).
+   *  Populated from the matched prize gallery shots; omit when no clean single-item photo exists. */
+  image?: PrizeMedia;
 }
 
 export interface PrizeSpecSection {
@@ -1063,9 +1066,108 @@ export const RYOBI_POWER_SYSTEM: PrizeSpecItem[] = [
 ];
 
 // ============================================================================
+// Spec-item product photos
+// Single source of truth mapping each spec item (by its exact `name`) to its
+// product photo. Matched by visually scanning each brand's prize photo set, so
+// the photo genuinely depicts that tool. Items not listed render without a photo
+// (graceful — the spec card falls back to the brand icon). Applied to the shared
+// spec arrays at module load, so every prize combo that reuses an array inherits
+// the images. To re-point a photo, edit one entry here.
+// ============================================================================
+const SPEC_ITEM_IMAGE_BY_NAME: Record<string, string> = {
+  // Milwaukee — /images/majordraws/milwaukee-set/
+  "MILWAUKEE 18V FUEL™ 13mm Hammer Drill/Driver": "/images/majordraws/milwaukee-set/Tools_Aust_Feb26_042.jpg",
+  "MILWAUKEE 18V FUEL™ 1/4inch Hex Impact Driver": "/images/majordraws/milwaukee-set/Tools_Aust_Feb26_050.jpg",
+  "MILWAUKEE 18V FUEL™ Brushless 125mm Angle Grinder": "/images/majordraws/milwaukee-set/Tools_Aust_Feb26_040.jpg",
+  "MILWAUKEE 18V Barrel FUEL™ Jigsaw": "/images/majordraws/milwaukee-set/Tools_Aust_Feb26_046.jpg",
+  "MILWAUKEE 18V FUEL™ HACKZALL™ Reciprocating Saw": "/images/majordraws/milwaukee-set/Tools_Aust_Feb26_039.jpg",
+  "MILWAUKEE 18V FUEL™ 184mm Circular Saw": "/images/majordraws/milwaukee-set/Tools_Aust_Feb26_043.jpg",
+  "MILWAUKEE 18V FUEL™ Brushless Oscillating Multi-Tool": "/images/majordraws/milwaukee-set/Tools_Aust_Feb26_041.jpg",
+  "MILWAUKEE 18V Bluetooth/USB-C Jobsite Speaker": "/images/majordraws/milwaukee-set/Tools_Aust_Feb26_048.jpg",
+  "MILWAUKEE 18V Compact Battery Light w/ USB Charging": "/images/majordraws/milwaukee-set/Tools_Aust_Feb26_074.jpg",
+  "MILWAUKEE 18V Compact Blower": "/images/majordraws/milwaukee-set/Tools_Aust_Feb26_047.jpg",
+  "MILWAUKEE 18V FUEL™ 1/2inch Mid-Torque Impact Wrench": "/images/majordraws/milwaukee-set/Tools_Aust_Feb26_049.jpg",
+  "MILWAUKEE 18V 125mm Random Orbital Sander": "/images/majordraws/milwaukee-set/Tools_Aust_Feb26_051.jpg",
+  "MILWAUKEE 18V FUEL™ 8inch (203Mm) Hatchet Pruning Saw": "/images/majordraws/milwaukee-set/Tools_Aust_Feb26_044.jpg",
+  "MILWAUKEE 18V RedLithium™ 5.0Ah Battery Kit": "/images/majordraws/milwaukee-set/Tools_Aust_Feb26_066.jpg",
+
+  // DeWalt — /images/majordraws/dewalt-set/
+  "DeWalt DCD1007N-XJ 18V XR 3 Speed Premium Brushless Hammer Drill Driver": "/images/majordraws/dewalt-set/Tools_Aust_Feb26_015.jpg",
+  "DeWalt DCF860N-XJ 18V XR Li-ion Brushless 3 Speed Premium Impact Driver": "/images/majordraws/dewalt-set/Tools_Aust_Feb26_017.jpg",
+  'DeWalt DCF892N-XJ 18V XR Cordless Brushless 1/2" Detent Pin Impact Wrench': "/images/majordraws/dewalt-set/Tools_Aust_Feb26_013.jpg",
+  "DeWalt DCP580N-XE 18V XR Brushless Planer": "/images/majordraws/dewalt-set/Tools_Aust_Feb26_014.jpg",
+  "DeWalt DCS334N-XJ 18V XR Brushless Top Handle Jigsaw": "/images/majordraws/dewalt-set/Tools_Aust_Feb26_023.jpg",
+  "DeWalt DCS356N-XJ 18V XR Brushless Multi Tool with Speed Selector": "/images/majordraws/dewalt-set/Tools_Aust_Feb26_018.jpg",
+  "DeWalt DCS578N-XE 54V FlexVolt XR Brushless 184mm Circular Saw": "/images/majordraws/dewalt-set/Tools_Aust_Feb26_021.jpg",
+  "DeWalt DCG418N-XJ 54V FlexVolt XR Brushless 125mm Angle Grinder": "/images/majordraws/dewalt-set/Tools_Aust_Feb26_024.jpg",
+  "DeWalt DCH333NT-XJ 54V FlexVolt XR Brushless 3-Mode SDS Plus Rotary Hammer": "/images/majordraws/dewalt-set/Tools_Aust_Feb26_022.jpg",
+  "DeWalt DCS389N-XJ 54V FlexVolt XR Brushless Reciprocating Saw": "/images/majordraws/dewalt-set/Tools_Aust_Feb26_016.jpg",
+  "DeWalt DWST1-81080-XE 18V-54V XR TSTAK Bluetooth Charger DAB Jobsite Radio": "/images/majordraws/dewalt-set/Tools_Aust_Feb26_025.jpg",
+  "DeWalt DCV100-XE 18V XR Compact Jobsite Blower": "/images/majordraws/dewalt-set/Tools_Aust_Feb26_020.jpg",
+  "DeWalt DCV501LN-XJ 18V XR L-Class Hand-Held Stick Vacuum": "/images/majordraws/dewalt-set/Tools_Aust_Feb26_012.jpg",
+  "DeWalt DCW210N-XJ 18V XR Brushless 125mm Random Orbital Sander": "/images/majordraws/dewalt-set/Tools_Aust_Feb26_019.jpg",
+  "DeWalt DCB547-XJ XR FlexVolt 9.0Ah Battery (x2)": "/images/majordraws/dewalt-set/Tools_Aust_Feb26_068.jpg",
+  "DeWalt DCB184-XJ XR 5.0Ah Slide Battery (x2)": "/images/majordraws/dewalt-set/Tools_Aust_Feb26_068.jpg",
+  "DeWalt DCB132-XE Dual Port FlexVolt Charger": "/images/majordraws/dewalt-set/Tools_Aust_Feb26_075.jpg",
+
+  // Makita — /images/majordraws/makita-set/
+  "Makita DHP486Z - 18V Brushless Heavy Duty Hammer Driver Drill": "/images/majordraws/makita-set/Tools_Aust_Feb26_030.jpg",
+  "Makita DTD173Z - 18V Brushless 4-Stage Impact Driver": "/images/majordraws/makita-set/Tools_Aust_Feb26_035.jpg",
+  "Makita DGA508Z - 18V Mobile Brushless 125mm Paddle Switch Angle Grinder": "/images/majordraws/makita-set/Tools_Aust_Feb26_031.jpg",
+  "Makita DHR242Z - 18V Mobile Brushless 24mm SDS Plus Rotary Hammer": "/images/majordraws/makita-set/Tools_Aust_Feb26_032.jpg",
+  "Makita DHS680Z - 18V Mobile Brushless 165mm Circular Saw": "/images/majordraws/makita-set/Tools_Aust_Feb26_028.jpg",
+  "Makita DJR187Z - 18V Mobile Brushless Recipro Saw": "/images/majordraws/makita-set/Tools_Aust_Feb26_037.jpg",
+  "Makita DTM52ZX3 - 18V Brushless Multi-Tool": "/images/majordraws/makita-set/Tools_Aust_Feb26_029.jpg",
+  'Makita DTW700Z - 18V Brushless 1/2" Impact Wrench': "/images/majordraws/makita-set/Tools_Aust_Feb26_026.jpg",
+  "Makita DBO180Z - 18V Mobile Random Orbital Sander": "/images/majordraws/makita-set/Tools_Aust_Feb26_033.jpg",
+  "Makita DJV184Z - 18V Brushless Jigsaw": "/images/majordraws/makita-set/Tools_Aust_Feb26_036.jpg",
+  "Makita DKP181Z - 18V Brushless AWS* 82mm Planer": "/images/majordraws/makita-set/Tools_Aust_Feb26_038.jpg",
+  "Makita DUB185Z - 18V Blower": "/images/majordraws/makita-set/Tools_Aust_Feb26_027.jpg",
+  "Makita DML812 - 18V LED Long Distance Flashlight": "/images/majordraws/makita-set/Tools_Aust_Feb26_034.jpg",
+
+  // Ryobi — /images/majordraws/ryobi-set/
+  "RYOBI 18V ONE+ 12 Piece 4Ah Kit": "/images/majordraws/ryobi-set/Tools_Aust_Feb26_055.jpg",
+  "RYOBI 18V ONE+ Line Trimmer & Blower 2.0Ah Kit": "/images/majordraws/ryobi-set/Tools_Aust_Feb26_076.jpg",
+  "RYOBI 18V ONE+ HP Brushless 254mm Sliding Mitre Saw": "/images/majordraws/ryobi-set/Tools_Aust_Feb26_077.jpg",
+  "RYOBI 18V ONE+ Jigsaw": "/images/majordraws/ryobi-set/Tools_Aust_Feb26_054.jpg",
+  "RYOBI 18V ONE+ Compact Fan": "/images/majordraws/ryobi-set/Tools_Aust_Feb26_072.jpg",
+  "RYOBI 18V ONE+ HP Brushless 55cm Hedge Trimmer": "/images/majordraws/ryobi-set/Tools_Aust_Feb26_065.jpg",
+  "RYOBI 36V Brushless 46cm Lawn Mower 4Ah Kit": "/images/majordraws/ryobi-set/Tools_Aust_Feb26_079.jpg",
+  "RYOBI 18V ONE+ 2A Charger": "/images/majordraws/ryobi-set/Tools_Aust_Feb26_071.jpg",
+
+  // Storage systems — only Makita MAKTRAK and Ryobi LINK ship a composite system photo;
+  // attached to the primary (rolling-base) piece so the storage section leads with the
+  // full-system shot. Milwaukee PACKOUT and DeWalt ToughSystem have no storage photo on disk.
+  "MAKITA MAKTRAK™ Rolling Tool Chest Storage": "/images/majordraws/makita-set/makita-maktrak.webp",
+  "RYOBI LINK™ 3 Piece Rolling Storage Set": "/images/majordraws/ryobi-set/ryobi-link.webp",
+};
+
+/** Attach the mapped product photo (if any) to each spec item, in place. */
+function applySpecItemImages(items: PrizeSpecItem[]): void {
+  for (const item of items) {
+    const src = SPEC_ITEM_IMAGE_BY_NAME[item.name];
+    if (src && !item.image) {
+      item.image = { src, alt: item.name };
+    }
+  }
+}
+
+[
+  MILWAUKEE_POWER_TOOLS,
+  MILWAUKEE_POWER_SYSTEM,
+  DEWALT_SIDCHROME_POWER_TOOLS,
+  DEWALT_SIDCHROME_POWER_SYSTEM,
+  MAKITA_SIDCHROME_POWER_TOOLS,
+  RYOBI_POWER_TOOLS,
+  RYOBI_POWER_SYSTEM,
+].forEach(applySpecItemImages);
+
+// ============================================================================
 // MODULAR STORAGE SYSTEMS
 // ============================================================================
 
+// NOTE (2026-06-02): Prize copy labels this as an 8-piece PACKOUT system, but only 6 pieces
+// are detailed below — details for the remaining 2 pieces are pending and will be added later.
 export const MILWAUKEE_PACKOUT_STORAGE: PrizeSpecItem[] = [
   {
     name: "MILWAUKEE PACKOUT™ 500MM Tool Bag",
@@ -1439,6 +1541,14 @@ export const RYOBI_LINK_STORAGE: PrizeSpecItem[] = [
   },
 ];
 
+// Storage systems are defined after the photo map above, so apply images to them here.
+[
+  MILWAUKEE_PACKOUT_STORAGE,
+  DEWALT_TOUGHSYSTEM_STORAGE,
+  MAKITA_MAKTRAK_STORAGE,
+  RYOBI_LINK_STORAGE,
+].forEach(applySpecItemImages);
+
 /**
  * Prize catalog entries are the single source of truth for prize imagery/copy.
  * Add new prize packs here – frontend components resolve everything dynamically.
@@ -1446,14 +1556,14 @@ export const RYOBI_LINK_STORAGE: PrizeSpecItem[] = [
 export const PRIZE_CATALOG: PrizeCatalogEntry[] = [
   {
     slug: "milwaukee-sidchrome",
-    label: "Sidchrome Toolbox, Milwaukee 13pc Power Tool Kit + Milwaukee Packout 6pc Modular System, $5000 cash",
-    heroHeading: "Sidchrome Toolbox, Milwaukee 13pc Power Tool Kit + Milwaukee Packout 6pc Modular System, $5000 cash",
+    label: "Sidchrome Toolbox, Milwaukee 13pc Power Tool Kit + Milwaukee Packout 8pc Modular System, $5000 cash",
+    heroHeading: "Sidchrome Toolbox, Milwaukee 13pc Power Tool Kit + Milwaukee Packout 8pc Modular System, $5000 cash",
     heroSubheading:
-      "Complete Milwaukee 18V FUEL™ professional toolkit with Milwaukee PACKOUT™ 6pc modular storage system and Sidchrome SCMT11402 356-piece workshop tower plus $5000 cash.",
+      "Complete Milwaukee 18V FUEL™ professional toolkit with Milwaukee PACKOUT™ 8pc modular storage system and Sidchrome SCMT11402 356-piece workshop tower plus $5000 cash.",
     summary:
-      "Milwaukee 18V FUEL™ power tools, REDLITHIUM™ battery ecosystem, Milwaukee PACKOUT™ 6pc modular storage system, and the Sidchrome SCMT11402 356-piece storage cabinet plus $5000 cash.",
+      "Milwaukee 18V FUEL™ power tools, REDLITHIUM™ battery ecosystem, Milwaukee PACKOUT™ 8pc modular storage system, and the Sidchrome SCMT11402 356-piece storage cabinet plus $5000 cash.",
     detailedDescription:
-      "Win the ultimate Milwaukee 18V FUEL™ professional toolkit featuring 13 premium cordless power tools including a hammer drill, impact driver, angle grinder, jigsaw, reciprocating saw, circular saw, oscillating multi-tool, jobsite speaker, compact battery light, blower, mid-torque impact wrench, random orbital sander, and pruning saw. Keep every skin running with Milwaukee REDLITHIUM™ 5.0Ah battery packs, then transport and organise everything with the Milwaukee PACKOUT™ 6-piece modular storage system featuring rolling tool box, large and standard tool boxes, organisers, and tool bag. Complete your workshop with the Sidchrome SCMT11402 356-piece cabinet stocked with precision hand tools, foam inlays, and mobile workshop storage.",
+      "Win the ultimate Milwaukee 18V FUEL™ professional toolkit featuring 13 premium cordless power tools including a hammer drill, impact driver, angle grinder, jigsaw, reciprocating saw, circular saw, oscillating multi-tool, jobsite speaker, compact battery light, blower, mid-torque impact wrench, random orbital sander, and pruning saw. Keep every skin running with Milwaukee REDLITHIUM™ 5.0Ah battery packs, then transport and organise everything with the Milwaukee PACKOUT™ 8-piece modular storage system featuring rolling tool box, large and standard tool boxes, organisers, and tool bag. Complete your workshop with the Sidchrome SCMT11402 356-piece cabinet stocked with precision hand tools, foam inlays, and mobile workshop storage.",
     prizeValueLabel: "$35,000+ Value",
     cardBackgroundImage: "/images/majordraws/milwaukee-set/milwaukeeSet-sidchrome.webp",
     gallery: [
@@ -1480,7 +1590,7 @@ export const PRIZE_CATALOG: PrizeCatalogEntry[] = [
       {
         icon: "Package",
         title: "PACKOUT™ Modular Storage",
-        description: "6-piece modular storage system with rolling tool box and organisers.",
+        description: "8-piece modular storage system with rolling tool box and organisers.",
       },
       {
         icon: "Battery",
@@ -1509,7 +1619,7 @@ export const PRIZE_CATALOG: PrizeCatalogEntry[] = [
       {
         id: "modular-storage",
         label: "PACKOUT™ Modular Storage",
-        summary: "Milwaukee PACKOUT™ 6pc modular storage system with IP65 rated protection, rolling tool box, organisers, and tool bag for complete jobsite organization.",
+        summary: "Milwaukee PACKOUT™ 8pc modular storage system with IP65 rated protection, rolling tool box, organisers, and tool bag for complete jobsite organization.",
         items: MILWAUKEE_PACKOUT_STORAGE,
       },
       {
@@ -1668,14 +1778,14 @@ export const PRIZE_CATALOG: PrizeCatalogEntry[] = [
   },
   {
     slug: "milwaukee-milwaukee",
-    label: "Milwaukee Toolbox, Milwaukee 13pc Power Tool Kit + Milwaukee Packout 6pc Modular System, $5000 cash",
-    heroHeading: "Milwaukee Toolbox, Milwaukee 13pc Power Tool Kit + Milwaukee Packout 6pc Modular System, $5000 cash",
+    label: "Milwaukee Toolbox, Milwaukee 13pc Power Tool Kit + Milwaukee Packout 8pc Modular System, $5000 cash",
+    heroHeading: "Milwaukee Toolbox, Milwaukee 13pc Power Tool Kit + Milwaukee Packout 8pc Modular System, $5000 cash",
     heroSubheading:
-      "Complete Milwaukee 18V FUEL™ professional toolkit with Milwaukee PACKOUT™ 6pc modular storage system and Milwaukee 56\" High Capacity Combination tool storage plus $5000 cash.",
+      "Complete Milwaukee 18V FUEL™ professional toolkit with Milwaukee PACKOUT™ 8pc modular storage system and Milwaukee 56\" High Capacity Combination tool storage plus $5000 cash.",
     summary:
-      "Milwaukee 18V FUEL™ power tools, REDLITHIUM™ battery ecosystem, Milwaukee PACKOUT™ 6pc modular storage system, and the Milwaukee 56\" High Capacity Combination tool storage plus $5000 cash.",
+      "Milwaukee 18V FUEL™ power tools, REDLITHIUM™ battery ecosystem, Milwaukee PACKOUT™ 8pc modular storage system, and the Milwaukee 56\" High Capacity Combination tool storage plus $5000 cash.",
     detailedDescription:
-      "Win the ultimate Milwaukee 18V FUEL™ professional toolkit featuring 13 premium cordless power tools including a hammer drill, impact driver, angle grinder, jigsaw, reciprocating saw, circular saw, oscillating multi-tool, jobsite speaker, compact battery light, blower, mid-torque impact wrench, random orbital sander, and pruning saw. Keep every skin running with Milwaukee REDLITHIUM™ 5.0Ah battery packs. Transport and organize with the Milwaukee PACKOUT™ 6-piece modular storage system featuring rolling tool box, large and standard tool boxes, organisers, and tool bag. Complete your workshop with the Milwaukee 56\" High Capacity Combination tool storage with 18 gauge construction, 68KG soft close drawer slides, electronic lock, and 4-outlet/2USB power strip. Plus, take home $5000 cold hard cash.",
+      "Win the ultimate Milwaukee 18V FUEL™ professional toolkit featuring 13 premium cordless power tools including a hammer drill, impact driver, angle grinder, jigsaw, reciprocating saw, circular saw, oscillating multi-tool, jobsite speaker, compact battery light, blower, mid-torque impact wrench, random orbital sander, and pruning saw. Keep every skin running with Milwaukee REDLITHIUM™ 5.0Ah battery packs. Transport and organize with the Milwaukee PACKOUT™ 8-piece modular storage system featuring rolling tool box, large and standard tool boxes, organisers, and tool bag. Complete your workshop with the Milwaukee 56\" High Capacity Combination tool storage with 18 gauge construction, 68KG soft close drawer slides, electronic lock, and 4-outlet/2USB power strip. Plus, take home $5000 cold hard cash.",
     prizeValueLabel: "$35,000+ Value",
     gallery: [
       { src: "/images/majordraws/milwaukee-set/milwaukeeSet-milwaukeeTb.webp", alt: "Milwaukee set with Milwaukee toolbox" },
@@ -1701,7 +1811,7 @@ export const PRIZE_CATALOG: PrizeCatalogEntry[] = [
       {
         icon: "Package",
         title: "PACKOUT™ + 56\" Toolbox",
-        description: "6-piece modular storage plus high capacity combination tool storage.",
+        description: "8-piece modular storage plus high capacity combination tool storage.",
       },
       {
         icon: "Battery",
@@ -1730,7 +1840,7 @@ export const PRIZE_CATALOG: PrizeCatalogEntry[] = [
       {
         id: "modular-storage",
         label: "PACKOUT™ Modular Storage",
-        summary: "Milwaukee PACKOUT™ 6pc modular storage system with IP65 rated protection, rolling tool box, organisers, and tool bag for complete jobsite organization.",
+        summary: "Milwaukee PACKOUT™ 8pc modular storage system with IP65 rated protection, rolling tool box, organisers, and tool bag for complete jobsite organization.",
         items: MILWAUKEE_PACKOUT_STORAGE,
       },
       {
@@ -2057,15 +2167,15 @@ export const PRIZE_CATALOG: PrizeCatalogEntry[] = [
   },
   {
     slug: "milwaukee-kincrome",
-    label: "Kincrome CONTOUR® Toolbox, Milwaukee 13pc Power Tool Kit + Milwaukee Packout 6pc Modular System, $5000 cash",
+    label: "Kincrome CONTOUR® Toolbox, Milwaukee 13pc Power Tool Kit + Milwaukee Packout 8pc Modular System, $5000 cash",
     heroHeading:
-      "Kincrome CONTOUR® Toolbox, Milwaukee 13pc Power Tool Kit + Milwaukee Packout 6pc Modular System, $5000 cash",
+      "Kincrome CONTOUR® Toolbox, Milwaukee 13pc Power Tool Kit + Milwaukee Packout 8pc Modular System, $5000 cash",
     heroSubheading:
-      "Complete Milwaukee 18V FUEL™ professional toolkit with Milwaukee PACKOUT™ 6pc modular storage and KINCROME CONTOUR® 470pc 17-drawer workshop kit plus $5000 cash.",
+      "Complete Milwaukee 18V FUEL™ professional toolkit with Milwaukee PACKOUT™ 8pc modular storage and KINCROME CONTOUR® 470pc 17-drawer workshop kit plus $5000 cash.",
     summary:
-      "Milwaukee 18V FUEL™ power tools, REDLITHIUM™ battery ecosystem, Milwaukee PACKOUT™ 6pc modular storage, and the KINCROME CONTOUR® workshop chest & trolley plus $5000 cash.",
+      "Milwaukee 18V FUEL™ power tools, REDLITHIUM™ battery ecosystem, Milwaukee PACKOUT™ 8pc modular storage, and the KINCROME CONTOUR® workshop chest & trolley plus $5000 cash.",
     detailedDescription:
-      "Win the ultimate Milwaukee 18V FUEL™ professional toolkit featuring 13 premium cordless power tools including a hammer drill, impact driver, angle grinder, jigsaw, reciprocating saw, circular saw, oscillating multi-tool, jobsite speaker, compact battery light, blower, mid-torque impact wrench, random orbital sander, and pruning saw. Keep every skin running with Milwaukee REDLITHIUM™ 5.0Ah battery packs. Transport and organize with the Milwaukee PACKOUT™ 6-piece modular storage system featuring rolling tool box, large and standard tool boxes, organisers, and tool bag. Complete your workshop with the KINCROME CONTOUR® 470-piece 17-drawer (42\") workshop kit (P1823) with premium storage and trade-ready features. Plus, take home $5000 cold hard cash.",
+      "Win the ultimate Milwaukee 18V FUEL™ professional toolkit featuring 13 premium cordless power tools including a hammer drill, impact driver, angle grinder, jigsaw, reciprocating saw, circular saw, oscillating multi-tool, jobsite speaker, compact battery light, blower, mid-torque impact wrench, random orbital sander, and pruning saw. Keep every skin running with Milwaukee REDLITHIUM™ 5.0Ah battery packs. Transport and organize with the Milwaukee PACKOUT™ 8-piece modular storage system featuring rolling tool box, large and standard tool boxes, organisers, and tool bag. Complete your workshop with the KINCROME CONTOUR® 470-piece 17-drawer (42\") workshop kit (P1823) with premium storage and trade-ready features. Plus, take home $5000 cold hard cash.",
     prizeValueLabel: "$35,000+ Value",
     gallery: [
       { src: "/images/majordraws/toolbox/kincromeTB.webp", alt: "Milwaukee power tool set with Kincrome CONTOUR toolbox" },
@@ -2091,7 +2201,7 @@ export const PRIZE_CATALOG: PrizeCatalogEntry[] = [
       {
         icon: "Package",
         title: "PACKOUT™ + CONTOUR® Kit",
-        description: "6-piece modular storage plus Kincrome 470pc workshop chest & trolley.",
+        description: "8-piece modular storage plus Kincrome 470pc workshop chest & trolley.",
       },
       {
         icon: "Battery",
@@ -2121,7 +2231,7 @@ export const PRIZE_CATALOG: PrizeCatalogEntry[] = [
         id: "modular-storage",
         label: "PACKOUT™ Modular Storage",
         summary:
-          "Milwaukee PACKOUT™ 6pc modular storage system with IP65 rated protection, rolling tool box, organisers, and tool bag for complete jobsite organization.",
+          "Milwaukee PACKOUT™ 8pc modular storage system with IP65 rated protection, rolling tool box, organisers, and tool bag for complete jobsite organization.",
         items: MILWAUKEE_PACKOUT_STORAGE,
       },
       {
