@@ -203,26 +203,28 @@ The summed `attributedRevenue` map is returned as part of `SnapshotReadResult`.
   - `getMembershipByPackageSnapshot(asOfDate)` — point-in-time counts from `MembershipDailySnapshot`; falls back to live data with `snapshotMissing: true` when no row exists.
   - `getRenewalBaseAsOf(date)` *(private)* — queries `MembershipDailySnapshot` for the period's first day and sums `activeCount + pastDueCount` across all subscription packages. If no snapshot exists for the exact date, it uses the nearest later snapshot (capped at 7 days out). Returns `{ base, snapshotDate, snapshotMissing }`.
 
-### Renewal Rate KPI (2026-05-29)
+### Renewal Rate KPI (2026-05-29, updated 2026-06-02)
 
-The `getAnalyticsBundle` method populates `renewalProgress: RenewalProgress` only when the `dateRange` parameter resolves to a draw period (`current-draw` or `last-draw`). It is omitted for all other date filters.
+`getAnalyticsBundle` now **always** populates `renewalProgress: RenewalProgress` on every call, regardless of the `dateRange` parameter. Previously it was only computed when `dateRange` resolved to `current-draw` or `last-draw`. The computation is performed by the new private method `getCurrentCycleRenewalProgress()`.
+
+**Current-cycle anchoring:** The cycle is always the **current billing cycle** — independent of the selected date range filter. Cycle start = the day after the last completed `MajorDraw.drawDate` (AEST, computed via `aestDayBounds(...).dayEndUTC`); cycle end = now. The `dateRange` parameter no longer controls whether `renewalProgress` is present; it only controls other fields in the bundle (e.g. `membershipRenewals`).
 
 **Definition:**
 
 | Field | Value |
 |---|---|
-| `base` | `activeCount + pastDueCount` from `MembershipDailySnapshot` at the period's **first day** (nearest-later-day fallback, up to 7 days) |
-| `renewed` | `successfulRenewalUserCount` — distinct members who had a successful renewal payment in the period, by payment date |
+| `base` | `getRenewalBaseAsOf(cycleStart)` — `activeCount + pastDueCount` from `MembershipDailySnapshot` at the cycle's first day (nearest-later-day fallback, up to 7 days) |
+| `renewed` | Distinct members with a `MembershipRenewalCycle` row whose `succeededAt` (or `recoveredAt`) falls within the current cycle |
 | `renewalRate` | `renewed / base`, capped at 1.0 (≤ 100%) |
 | `remaining` | `base - renewed` (non-negative) |
-| `remainingLabel` | `"expected"` for `current-draw` (period still open); `"did not renew"` for `last-draw` (closed period) |
+| `remainingLabel` | `"expected"` (cycle still open) |
 | `snapshotMissing` | `true` when no snapshot was found within the 7-day window |
 
-**Type:** `RenewalProgress` in `src/types/admin/membershipAnalytics.ts`. Added as an optional field on `MembershipAnalyticsBundle`.
+**Type:** `RenewalProgress` in `src/types/admin/membershipAnalytics.ts`. Field on `MembershipAnalyticsBundle` changed from optional to always-present.
 
-**API surface:** `GET /api/admin/dashboard/stats` exposes `stats.users.renewalProgress` when a draw date range is active.
+**API surface:** `GET /api/admin/dashboard/stats` always exposes `stats.users.renewalProgress` (not draw-gated).
 
-**Validation script:** `npm run find:renewal-rate` (`scripts/find-renewal-rate.ts`). Supports `--last-draw` (last draw period), `--draw N` (specific draw by number), and `--coverage` (snapshot availability audit). Use this to cross-check the KPI card values against raw DB data.
+**Validation script:** `npm run find:renewal-rate` (`scripts/find-renewal-rate.ts`). Supports `--last-draw`, `--draw N`, `--coverage`, and the new **`--current-cycle`** mode (oracle that mirrors `getCurrentCycleRenewalProgress` exactly — use this to cross-check the headline KPI card value). See [infrastructure/patterns.md](../infrastructure/patterns.md#p6-read-only-audit-scripts-find--list) for the full mode table.
 
 **Spec:** `docs/superpowers/specs/2026-05-29-renewal-rate-metric-design.md`.
 

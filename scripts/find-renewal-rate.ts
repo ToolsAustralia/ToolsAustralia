@@ -261,6 +261,41 @@ async function lastDrawReport() {
   console.log("=".repeat(72));
 }
 
+/** Oracle for MembershipAnalyticsService.getCurrentCycleRenewalProgress(). */
+async function currentCycleReport() {
+  // NOTE: this script declares SUBSCRIPTION_PACKAGE_IDS as a LOCAL const inside each
+  // report fn (not module-scoped), so declare it here too, matching the sibling pattern.
+  const SUBSCRIPTION_PACKAGE_IDS = ["tradie-subscription", "foreman-subscription", "boss-subscription"];
+  const lastDraw = await MajorDraw.findOne({ status: "completed" }).sort({ drawDate: -1 }).select("drawDate name").lean<{ drawDate?: Date; name?: string }>();
+  if (!lastDraw?.drawDate) { console.log("No completed draw."); return; }
+  const lastDrawKey = formatInTimeZone(lastDraw.drawDate, AEST, "yyyy-MM-dd");
+  const cycleStart = aestDayBounds(lastDrawKey).dayEndUTC;
+  const now = new Date();
+
+  const cycleStartKey = formatInTimeZone(cycleStart, AEST, "yyyy-MM-dd");
+  let baseSnaps = await MembershipDailySnapshot.find({ date: cycleStartKey, packageId: { $in: SUBSCRIPTION_PACKAGE_IDS } }).select("activeCount pastDueCount").lean<Array<{ activeCount: number; pastDueCount: number }>>();
+  let baseDateUsed = cycleStartKey;
+  if (baseSnaps.length === 0) {
+    const nearest = await MembershipDailySnapshot.findOne({ date: { $gte: cycleStartKey }, packageId: { $in: SUBSCRIPTION_PACKAGE_IDS } }).sort({ date: 1 }).select("date").lean<{ date?: string }>();
+    if (nearest?.date) {
+      baseDateUsed = nearest.date;
+      baseSnaps = await MembershipDailySnapshot.find({ date: nearest.date, packageId: { $in: SUBSCRIPTION_PACKAGE_IDS } }).select("activeCount pastDueCount").lean<Array<{ activeCount: number; pastDueCount: number }>>();
+    }
+  }
+  const base = baseSnaps.reduce((s, r) => s + (r.activeCount ?? 0) + (r.pastDueCount ?? 0), 0);
+
+  const paid = await MembershipRenewalCycle.find({ billingReason: "subscription_cycle", status: { $in: ["succeeded", "recovered"] }, succeededAt: { $gte: cycleStart, $lt: now } }).select("userId").lean<Array<{ userId: { toString(): string } }>>();
+  const renewed = new Set(paid.map((c) => String(c.userId))).size;
+
+  console.log("=".repeat(72));
+  console.log(`CURRENT CYCLE RENEWAL PROGRESS — base after "${lastDraw.name ?? "?"}"`);
+  console.log(`Cycle start (AEST) : ${cycleStartKey}   base snapshot used: ${baseDateUsed}`);
+  console.log(`Base (active+pastdue): ${base}`);
+  console.log(`Renewed so far      : ${renewed}`);
+  console.log(`RATE                : ${pct(renewed, base)}   [${renewed}/${base}]`);
+  console.log("=".repeat(72));
+}
+
 async function main() {
   await connectDB();
 
@@ -278,6 +313,12 @@ async function main() {
 
   if (process.argv.includes("--last-draw")) {
     await lastDrawReport();
+    await mongoose.disconnect();
+    return;
+  }
+
+  if (process.argv.includes("--current-cycle")) {
+    await currentCycleReport();
     await mongoose.disconnect();
     return;
   }

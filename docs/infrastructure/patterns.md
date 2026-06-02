@@ -44,7 +44,8 @@ Scripts under `scripts/find-*.ts` are read-only — they never write to the DB. 
 | `--last-draw` | Restricts output to the last completed draw period |
 | `--draw N` | Queries a specific draw by number |
 | `--coverage` | Audits `MembershipDailySnapshot` coverage — shows which draw-start dates have a snapshot and which are missing |
+| `--current-cycle` | Oracle mode that mirrors `getCurrentCycleRenewalProgress()` exactly: cycle start = last completed draw date + 1 day (AEST), cycle end = now; numerator = distinct succeeded/recovered `MembershipRenewalCycle` rows in the cycle; denominator = `getRenewalBaseAsOf(cycleStart)`. Use this to cross-check the headline KPI card value. |
 
-Use this to validate that the dashboard KPI card matches raw DB counts. See [admin/backend.md](../admin/backend.md#renewal-rate-kpi-2026-05-29) for the service-layer definition.
+Use this to validate that the dashboard KPI card matches raw DB counts. See [admin/backend.md](../admin/backend.md#renewal-rate-kpi-2026-05-29-updated-2026-06-02) for the service-layer definition.
 
 **`npm run find:klaviyo-legacy-fields`** enumerates Klaviyo templates/flows/segments via GET and reports any that still reference the legacy camelCase properties `first_name` / `last_name` / `user_id`. Add a `--json` flag when the output may feed another tool.

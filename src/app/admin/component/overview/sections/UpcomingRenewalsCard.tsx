@@ -29,13 +29,14 @@ export default function UpcomingRenewalsCard() {
 
   const renewals = data?.renewals ?? [];
   const totalRevenue = data?.totalRevenue ?? 0;
+  const totalMembers = data?.total ?? 0;
   const rangeLabel = selectedRange === 0 ? "today" : "by the 27th";
 
   return (
     <Card className="p-5 h-full">
       <SectionTitle
         title="Upcoming renewals"
-        subtitle={`${formatCurrency(totalRevenue)} expected · ${rangeLabel}`}
+        subtitle={`${formatCurrency(totalRevenue)} · ${totalMembers.toLocaleString("en-AU")} members · ${rangeLabel}`}
         icon={RefreshCw}
         right={
           <Segmented
