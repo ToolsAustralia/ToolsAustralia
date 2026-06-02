@@ -1,7 +1,8 @@
 "use client";
 
 import React from "react";
-import DateRangeToggle, { DateRange } from "@/components/admin/DateRangeToggle";
+import type { DateRange } from "@/components/admin/DateRangeToggle";
+import { DateRangeDropdown } from "@/components/admin/overview/DateRangeDropdown";
 
 interface OverviewToolbarProps {
   dateRange: DateRange;
@@ -24,27 +25,24 @@ export default function OverviewToolbar({
 }: OverviewToolbarProps) {
   const isLayout = placement === "layout";
 
-  const inner = (
-    <div className="w-full min-w-0 lg:w-auto">
-      <DateRangeToggle
-        selectedRange={dateRange}
-        onRangeChange={onRangeChange}
-        onCustomClick={onCustomClick}
-        collapsed={false}
-        displayDate={displayDate}
-        onExpand={() => {}}
-        className="w-full"
-      />
-    </div>
+  const dropdown = (
+    <DateRangeDropdown
+      selectedRange={dateRange}
+      onRangeChange={onRangeChange}
+      onCustomClick={onCustomClick}
+      displayDate={displayDate}
+    />
   );
 
+  // `layout` (mobile) renders inline inside the admin header, beside the theme
+  // toggle — content-sized, not a centered full-width row.
   if (isLayout) {
-    return <div className="w-full flex justify-center">{inner}</div>;
+    return dropdown;
   }
 
   return (
     <div className="sticky top-0 z-30 -mx-4 lg:-mx-6 px-4 lg:px-6 pt-0 pb-3 w-full flex justify-center lg:justify-end">
-      {inner}
+      {dropdown}
     </div>
   );
 }

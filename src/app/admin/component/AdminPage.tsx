@@ -136,13 +136,7 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
       {/* Main Content */}
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Top Bar — on mobile overview, bottom border lives on date row so header + filters read as one block */}
-        <div
-          className={`bg-white dark:bg-neutral-900 px-4 lg:px-6 py-3 flex-shrink-0 ${
-            selectedTab === "overview"
-              ? "max-lg:border-b-0 max-lg:shadow-none lg:border-b lg:border-gray-200 dark:lg:border-neutral-800 lg:shadow-sm dark:lg:shadow-none"
-              : "border-b border-gray-200 dark:border-neutral-800 shadow-sm dark:shadow-none"
-          }`}
-        >
+        <div className="bg-white dark:bg-neutral-900 px-4 lg:px-6 py-3 flex-shrink-0 border-b border-gray-200 dark:border-neutral-800 shadow-sm dark:shadow-none">
           <div className="flex items-center justify-between gap-4 w-full">
             <div className="flex items-center gap-3 min-w-0">
               {/* Mobile Menu Button */}
@@ -180,16 +174,15 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
                 </p>
               </div>
             </div>
-            <HeaderThemeToggle className="shrink-0" />
+            <div className="flex items-center gap-2 shrink-0">
+              {/* Mobile: date filter sits inline in the header, beside the theme toggle */}
+              {adminTabUsesMobileLayoutDateToolbar(selectedTab ?? "") && (
+                <div className="lg:hidden" id={ADMIN_MOBILE_DATE_TOOLBAR_SLOT_ID} />
+              )}
+              <HeaderThemeToggle className="shrink-0" />
+            </div>
           </div>
         </div>
-
-        {/* Mobile: shared date toolbar slot under header (overview, Facebook Ads, Promo Analytics) */}
-        {adminTabUsesMobileLayoutDateToolbar(selectedTab ?? "") && (
-          <div className="lg:hidden shrink-0 bg-white dark:bg-neutral-900 border-b border-gray-200 dark:border-neutral-800">
-            <div id={ADMIN_MOBILE_DATE_TOOLBAR_SLOT_ID} />
-          </div>
-        )}
 
         {/* Content Area */}
         <div className="flex-1 overflow-y-auto admin-scrollbar p-4 lg:p-6 bg-gray-50 dark:bg-neutral-950 min-h-0">
