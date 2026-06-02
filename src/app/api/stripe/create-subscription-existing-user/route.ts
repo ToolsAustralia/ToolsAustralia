@@ -23,6 +23,7 @@ import { extractRequestContext } from "@/utils/tracking/facebook-helpers";
 import { safeEventSourceUrl } from "@/utils/tracking/event-source-url";
 import { buildAttributionMetadata } from "@/utils/tracking/attribution-metadata";
 import { attributionSchema } from "@/utils/tracking/attribution-schema";
+import { resolveAttributionAtEdge } from "@/services/attribution/resolveAtEdge";
 import { STRIPE_SUBSCRIPTION_METADATA_IS_RESUBSCRIBE } from "@/utils/payment/stripe-subscription-metadata";
 import { enforceMajorDrawOpenForNewPurchasesOr403 } from "@/utils/draws/major-draw-gate-http";
 import { analyzeStripePayErrorForExcessiveRetry } from "@/utils/payment/stripe/stripe-excessive-retry";
@@ -246,6 +247,8 @@ export async function POST(request: NextRequest) {
     const hasAnchor = Object.keys(anchorParams).length > 0;
     const next24Date = hasAnchor ? new Date(getNextAnchorTimestamp(new Date()) * 1000) : null;
 
+    const { metadata: resolvedAttr } = resolveAttributionAtEdge(request);
+
     // Compute resubscribe before creating subscription so webhook can use metadata (API may set isActive before webhook runs)
     const isResubscribeForMetadata =
       existingUser.subscription &&
@@ -269,6 +272,7 @@ export async function POST(request: NextRequest) {
       ...(requestContext.fbp ? { capi_fbp: requestContext.fbp } : {}),
       ...(capiEventSourceUrl ? { capi_event_source_url: capiEventSourceUrl } : {}),
       ...buildAttributionMetadata(validatedData.attribution),
+      ...resolvedAttr,
       ...(typeof anchorMetadata === "object" && anchorMetadata !== null ? anchorMetadata : {}),
       ...(isResubscribeForMetadata && { [STRIPE_SUBSCRIPTION_METADATA_IS_RESUBSCRIBE]: "true" }),
     };

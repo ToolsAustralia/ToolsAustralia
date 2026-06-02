@@ -225,9 +225,12 @@ const showUserError = (message: string) => {
  * Handle unauthorized access
  */
 const handleUnauthorized = () => {
-  // Clear any stored authentication data
+  // Clear ONLY stored authentication data. Do NOT call sessionStorage.clear() —
+  // it nukes attribution (tools-aus:utm-attribution), A/B assignment, promo-link,
+  // referral, affiliate, and upsell keys, silently destroying ad attribution for
+  // an unauthenticated ad-clicker who hits a single 401 before purchasing.
+  // NextAuth's session cookie is the real auth state, not sessionStorage.
   localStorage.removeItem("auth-token");
-  sessionStorage.clear();
 
   // Redirect to login page
   if (typeof window !== "undefined") {

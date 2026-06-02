@@ -162,7 +162,7 @@ Admin and protected route gating happens in two places: `src/middleware.ts` (mat
 
 These domains have non-obvious rules documented in `docs/`. Skim the matching doc before changing code in these areas:
 
-- **Billing / Stripe** — `docs/BILLING_ANCHOR_24.md`, `docs/STRIPE_COLLECTION_PAUSE_RECOVERY.md`, `docs/CHARGE_PAST_DUE_CUSTOMERS.md`, `docs/REFUND_REVERSAL.md`, `docs/PAYMENT_ATTRIBUTION.md`, `docs/SUBSCRIPTION_PAYMENT_ELEMENT_MIGRATION.md`. Subscription anchor day, past-due/pause recovery, and refund reversal logic are intricate and have dedicated tests under `src/services/subscription/__tests__/` and `src/utils/payment/__tests__/`.
+- **Billing / Stripe** — `docs/PAST_DUE_REANCHOR.md`, `docs/BILLING_ANCHOR_24.md`, `docs/STRIPE_COLLECTION_PAUSE_RECOVERY.md`, `docs/CHARGE_PAST_DUE_CUSTOMERS.md`, `docs/REFUND_REVERSAL.md`, `docs/PAYMENT_ATTRIBUTION.md`, `docs/SUBSCRIPTION_PAYMENT_ELEMENT_MIGRATION.md`. Subscription anchor day, past-due/pause recovery, and refund reversal logic are intricate and have dedicated tests under `src/services/subscription/__tests__/` and `src/utils/payment/__tests__/`. **Footgun:** any mutation that sets `trial_end` / `billing_cycle_anchor` / `proration_behavior` or swaps items on an *existing* subscription can make Stripe auto-spawn an extra `invoice.payment_succeeded` — classify it in the webhook before granting (guard: `isZeroAmountTrialUpdateInvoice`, test: `npm run test:zero-trial-guard`); idempotency-by-id does **not** protect you (the spawned invoice has its own id). Read the pre-flight checklist in `docs/PAST_DUE_REANCHOR.md` before any such change.
 - **A/B testing** — `docs/AB_TESTING_*.md` (feature, dedup, DB optimization, metrics).
 - **Promo / referrals / affiliates** — `docs/PROMO_BANNER_BEHAVIOUR.md`, `docs/PROMO_PAGE_ANALYTICS.md`, `docs/REFERRAL_SYSTEM.md`, `docs/UTM_ATTRIBUTION.md`. Affiliate commission/recurring backfills have dedicated scripts.
 - **Error reporting** — `docs/ERROR_REPORTING_AND_LOGGING.md`, `docs/ERROR_REPORTING_SYSTEM.md`. There is a real `ErrorReport` Mongo model + admin routes; do not invent a parallel logger.
@@ -181,6 +181,7 @@ This repo has nine specialist Cursor subagents (frontend, backend-api, mongo-dat
 - **Mongo connections** — see `docs/MONGODB_CONNECTION_BEST_PRACTICES.md`. Use `src/lib/mongodb.ts`; do not open ad hoc connections in scripts (the `scripts/*.ts` already follow this).
 - **Console output** — production builds strip `console.log`/`info`/`debug`/`warn` (`next.config.ts` `compiler.removeConsole`). Use `console.error` for genuine errors that must survive, or route through `ErrorReport`. **This also applies when debugging staging / Vercel preview deploys** — those are production builds, so any temporary `console.log` you add to diagnose a live issue will be invisible. Use `console.error` for ad-hoc debug logging on staging too.
 - **`mongoose` is `serverExternalPackages`** — don't try to bundle it into client code.
+- **Operational scripts must show progress.** Long-running `scripts/*.ts` (backfills, migrations, syncs, reconciliations) run via `tsx` — **not** the Next build — so `console.log` is **not** stripped there; use it freely. Every such script must emit: (1) an **up-front total count** (so progress has a denominator), (2) a **periodic progress line** with `processed/total (%) · rate/sec · ETA` on an *adaptive cadence* (~20 lines regardless of size, so even a few-hundred-row run visibly moves), and (3) a **final summary**. A script that prints a header then goes silent for minutes reads as "hung" — never ship that. Reference implementations: `scripts/backfill-converting-platform.ts`, `scripts/backfill-klaviyo-membership-properties.ts` (also: `--dry-run` default-safe, append-mode CSV audit log, 3-tier exit codes). The `writing-ops-script` skill enforces the dry-run + audit parts; this bullet adds the progress-logging requirement.
 
 ## Domain Manifest
 
@@ -715,6 +716,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "scripts/backfill-*.ts",
         "scripts/cleanup-*.ts",
         "scripts/find-*.ts",
+        "scripts/reverse-*.ts",
         "scripts/stripe-*.ts",
         "scripts/verify-*.ts"
       ],

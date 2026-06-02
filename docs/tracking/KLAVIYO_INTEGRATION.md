@@ -268,6 +268,38 @@ Klaviyo does not surface "property no longer emitted" warnings — broken flows 
 
 If you find a legacy property that's actively painful (e.g. a date-string field the ads team can't filter on), raise it as a separate scoped ticket — not as a side-effect of unrelated work.
 
+## Payment attribution via UTM tuple — NOT `_kx` (2026-06-01)
+
+The single-platform payment resolver attributes a payment to Klaviyo **only** via the UTM tuple:
+
+- `utm_source=klaviyo` (case-insensitive — normalised to lowercase at capture; Klaviyo auto-UTM appends the capital-K variant)
+- `utm_medium=email` → resolves to `convertingPlatform: "klaviyo_email"`, 5-day recency window
+- `utm_medium=sms` → resolves to `convertingPlatform: "klaviyo_sms"`, 5-day recency window
+
+**`_kx` is NOT used for attribution.** Klaviyo appends `_kx` to tracked links for its own profile-linking, but the value cannot be re-read reliably server-side (it's a short-lived token that Klaviyo resolves to a profile only in the browser). The payment resolver ignores `_kx` entirely.
+
+**Account auto-UTM must be ON.** In Klaviyo account settings → Tracking → "Automatically add UTM parameters to links", set `utm_medium` to `Message type`. This ensures every email link lands with `utm_source=Klaviyo&utm_medium=Email` (or `SMS`) which the resolver then normalises and matches. If auto-UTM is off, email clicks arrive with no UTM and are attributed as `direct`.
+
+| Attribution signal | `convertingPlatform` | Recency window |
+|---|---|---|
+| `utm_source=klaviyo` + `utm_medium=email` | `klaviyo_email` | 5 days |
+| `utm_source=klaviyo` + `utm_medium=sms` | `klaviyo_sms` | 5 days |
+
+These resolve at lower priority than paid click IDs (Meta/TikTok/Snap 7d). A user who clicked a Meta ad and then clicked a Klaviyo email link within 7 days will be attributed to Meta (the paid click wins).
+
+## Past-due reanchor and Klaviyo profile sync
+
+When a `past_due`/`unpaid` subscription recovers and is reanchored to the recovery-payment date, the **Klaviyo profile is re-pushed** so the snapshot properties reflect the new anchor. Two independent pushes guard this:
+
+1. **Orchestrator push** — `reanchorAfterPastDueRecovery` calls `ensureUserProfileSynced` immediately after writing the new `endDate` to Mongo.
+2. **Defense-in-depth push** — the active/trialing recovery branch of `handleSubscriptionUpdated` (the `customer.subscription.updated` webhook fired by Stripe when `trial_end` is set) also pushes the profile.
+
+**Why this matters:** Klaviyo profile properties `next_renewal_date`, `subscription_end_date`, and `past_due_renewal_entries` are **pushed snapshots**, not live reads. Without a re-push after reanchor, these properties would show the old anchor date until the next scheduled sync or member action.
+
+Every other surface that shows the renewal date reads `endDate` live per request (my-account, SubscriptionManagementModal, admin panels) and auto-corrects without any action.
+
+See [docs/PAST_DUE_REANCHOR.md](../PAST_DUE_REANCHOR.md) for the full downstream-propagation details.
+
 ## Common bugs to watch for
 
 - **Building revenue events by hand** instead of using `buildRevenueProperties` — easy to typo `$value` as `value`, breaking revenue reporting.

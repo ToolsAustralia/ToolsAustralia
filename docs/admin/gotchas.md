@@ -1,5 +1,9 @@
 # Admin — Gotchas
 
+## Never surface `trialing` as a subscription status in admin
+
+`SubscriptionHistoryStatusBadge` ([`AdminBadge.tsx`](../../src/components/admin/ui/AdminBadge.tsx)) renders a membership-history row's `status` raw, so a `trialing` row would literally show "trialing". We never sell a real free trial — `trialing` only ever means a paid, **active** member whose billing date was anchored/reanchored via Stripe `trial_end` (join-25-27→24 and the past-due reanchor). The badge maps `trialing → "active"`; the current-state badge (`renderSubscriptionStateBadge`) already shows "Active" via `isActive`. Do not render the raw `trialing` string anywhere admin-facing. See `docs/PAST_DUE_REANCHOR.md`.
+
 ## ClickableUserDisplay needs a dark-aware base text colour
 
 [`ClickableUserDisplay`](../../src/components/admin/ClickableUserDisplay.tsx) (the clickable user name/email used across admin tables that opens the User Detail modal) treats a caller-supplied `className` as the **entire** typography token set (so a default `text-sm` isn't merged and Tailwind doesn't pick the wrong size winner). The side effect: callers passing a *size-only* className (e.g. `text-2xs sm:text-xs`) — or a light-only colour like `text-gray-900` — left the text with no `dark:` variant → **black text on the dark admin background**. Fix: the component now applies a `baseTextColor = "text-gray-900 dark:text-gray-100"` in the `cn()` base of both the button and span branches, and the subtext uses `text-gray-500 dark:text-gray-400`. `cn` is `twMerge`-based, so an explicit caller colour still wins for the same variant while the `dark:` fallback is preserved. When adding any always-on text colour, pair it with its `dark:` variant.
