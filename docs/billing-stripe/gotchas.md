@@ -18,6 +18,8 @@ Guard: `isZeroAmountTrialUpdateInvoice()` (`src/utils/billing/trial-invoice.ts`)
 
 **Model:** a cancelled member changes tier by **reactivating first, then** using the normal flows — **upgrade** (`/api/stripe/upgrade-subscription-payment`: immediate, full new-tier price, `proration_behavior:"none"` + `billing_cycle_anchor:"now"`, staged via `pendingChange`) or **downgrade** (`/api/stripe/downgrade-subscription`: `proration_behavior:"none"` + `billing_cycle_anchor:"unchanged"`, takes effect at period end via `previousSubscription`). The reactivate UI only ever sends the member's *current* `packageId`, so this was latent, not a live production bug. See `docs/PAST_DUE_REANCHOR.md`.
 
+> The Reactivate button's *visibility* is gated on the DB heuristic `!autoRenew && isActive` (not live Stripe `cancel_at_period_end`), so it's looser than backend reactivate eligibility — a known edge (admin-set `autoRenew=false` / flag drift can show it for a non-scheduled-cancellation member and click → `create_new` full charge). See `docs/subscription/gotchas.md` → "Reactivate button gating is looser than backend reactivate eligibility".
+
 ## Charge past-due — runbook
 
 (Migrated from former `docs/CHARGE_PAST_DUE_CUSTOMERS.md`.)
