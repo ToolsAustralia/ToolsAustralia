@@ -118,9 +118,29 @@ The legacy entry path [src/components/sections/WinnerTestimonySection.tsx](../..
 
 ### `OtherToolsetsCarousel` — Explore other toolsets cards
 
-[`src/components/sections/promo/prize-selection/OtherToolsetsCarousel.tsx`](../../src/components/sections/promo/prize-selection/OtherToolsetsCarousel.tsx) renders the "Explore other toolsets" strip beneath toolset / evergreen promo pages. Each card has a **brand wordmark on top** (`POWERSET_BRAND_TEXT[slug]` → `/images/brands/name/{brand}Text.webp`) followed by the product image filling the rest of the 3:4 frame. The card keeps a brand-coloured border/shadow from [`getToolsetBadgeStyle`](../../src/utils/package-colors/packageColorScheme.ts); no text label is rendered visually — the SR-only announcement comes from the button's `aria-label` driven by `POWERSET_LABELS` (e.g. `"RYOBI 19PC KIT"`).
+[`src/components/sections/promo/prize-selection/OtherToolsetsCarousel.tsx`](../../src/components/sections/promo/prize-selection/OtherToolsetsCarousel.tsx) renders the "Explore other toolsets" strip beneath toolset / evergreen promo pages. Each card has a **brand wordmark on top** (`POWERSET_BRAND_TEXT[slug]` → `/images/brands/name/{brand}Text.webp`) followed by the product image filling the rest of the 3:4 frame. The card keeps a brand-coloured border/shadow from [`getToolsetBadgeStyle`](../../src/utils/package-colors/packageColorScheme.ts); no text label is rendered visually — the SR-only announcement comes from the button's `aria-label` driven by `POWERSET_LABELS` (e.g. `"RYOBI 19PC KIT AND LINK STORAGE"`).
+
+**`POWERSET_LABELS` carry the descriptive kit + storage system** ([`prize-selection/constants.ts`](../../src/components/sections/promo/prize-selection/constants.ts)). Each label spells out its brand storage — `MILWAUKEE 13PC KIT AND 8PC PACKOUT SYSTEM`, `DEWALT 14PC KIT AND TOUGHSYSTEM STORAGE`, `MAKITA 15PC KIT AND 7PC MAKTRAK SYSTEM`, `RYOBI 19PC KIT AND LINK STORAGE` — so every consumer (`PowerToolsetCarousel`, `StaticToolsetHighlight`, `OtherToolsetsCarousel`) renders `"{kit} AND {storage} + $5000 CASH"` from one source (the `+ $5000 CASH` suffix is component-added). The PrizeShowcase/MajorDrawSection picker heading reads **"Pick your Power Toolset / Storage System"** to match.
+
+**`TOOLBOX_LABELS`** (same file) were renamed to descriptive all-caps names — `MONSTER MILWAUKEE TOOLBOX`, `470 PIECE KINCROME TOOLBOX`, `356 PIECE SIDCHROME TOOLBOX` — rendered by [`ToolboxSelector`](../../src/components/sections/promo/prize-selection/ToolboxSelector.tsx); the equivalent inline toggle in `MajorDrawSection` was updated to the same strings. (The two-line combo-summary labels and the `prizes.ts` prize `label`/`heroHeading` strings still say "Milwaukee Toolbox" etc. — a different surface, left unchanged.)
 
 ## Modals
+
+### PrizeSpecificationsModal
+
+[`src/components/modals/PrizeSpecificationsModal/`](../../src/components/modals/PrizeSpecificationsModal/) shows the full spec breakdown for a prize (`prize?: PrizeCatalogEntry`). Built on `ModalContainer` (`size="4xl"`).
+
+**Responsive layout (2026-06-02):**
+- **Mobile (`<lg`)** — stacked: `Hero` landscape banner on top (wrapped in `lg:hidden`), then the scrollable specs below.
+- **Desktop (`lg+`)** — two columns inside a `flex lg:flex-row` body: [`FeaturePanel`](../../src/components/modals/PrizeSpecificationsModal/FeaturePanel.tsx) on the left (`lg:w-[38%]`, sticky-feeling, non-scrolling) and the specs (`TabBar` + `SpecCard` list) scrolling on the right via `ModalContent`. The top `Hero` is hidden at `lg`.
+
+**`FeaturePanel`** resolves the **portrait (mobile) landing image** (`getImageForMode(paths, "dark", "mobile")`, falling back to `gallery[0].mobileSrc ?? .src`) because the narrow/tall left column would letterbox the landscape desktop hero. Renders eyebrow + image + `heroHeading` + `summary` on a dark gradient. The dollar `prizeValueLabel` badge is **deliberately not shown** here (2026-06-02) — surfacing the prize's cash value was judged to risk putting entrants off. `prizeValueLabel` data is kept for the admin `MajorDrawManagement` surface.
+
+**Per-tool photos** — `SpecCard` renders `item.image` (a `PrizeMedia`) as a `w-16 sm:w-24` `object-contain` thumbnail in the card header, replacing the generic `Package` icon when present. Photos are wired in [`prizes.ts`](../../src/config/prizes.ts) (see config-and-data domain) — items with no matched photo keep the icon. Storage sections lead with the composite system photo on the primary (rolling-base) piece (Makita MAKTRAK, Ryobi LINK); Milwaukee PACKOUT / DeWalt ToughSystem have no storage photo on disk yet.
+
+**Tabs** — `TabBar` is horizontally scrollable at every viewport (`overflow-x-auto`). It carries `lg:pr-14` so that in the desktop 2-col layout the absolute modal close button (top-right) never sits over the last tab; the user can scroll the strip to reach every section.
+
+**Scroll-finder footgun:** `ModalContainer.findScrollableElement` matches the first descendant whose class string *contains* `overflow-y-auto`. The `FeaturePanel` therefore uses `lg:overflow-auto` (not `lg:overflow-y-auto`) so the boundary-overscroll handler still binds to the specs `ModalContent`, not the panel — otherwise on mobile (panel `display:none`/`overflow:visible`) the finder falls through to the overflow-hidden panel and `preventDefault`s all touch scrolling.
 
 ### RenewalFailedModal
 

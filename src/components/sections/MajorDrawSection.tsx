@@ -764,7 +764,7 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
     return (
       <div className={layout === "desktop" ? "mt-4 sm:mt-6 max-w-5xl mx-auto" : "mt-4 sm:mt-6"}>
         <p className="text-lg sm:text-xl font-bold text-black dark:text-white font-['Poppins'] mb-2 sm:mb-3 text-center">
-          Pick Your Toolset
+          Pick Your Power Toolset / Storage System
         </p>
         {/* Toolbox type toggle - clickable, updates content only (no URL nav) */}
         <div className="flex flex-wrap justify-center gap-2 sm:gap-3 mb-4 sm:mb-6">
@@ -772,11 +772,11 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
             const isActive = toolboxType === type;
             const label =
               type === "sidchrome"
-                ? "Sidchrome Toolbox"
+                ? "356 PIECE SIDCHROME TOOLBOX"
                 : type === "milwaukee"
-                  ? "Milwaukee Toolbox"
+                  ? "MONSTER MILWAUKEE TOOLBOX"
                   : type === "kincrome"
-                    ? "Kincrome Toolbox"
+                    ? "470 PIECE KINCROME TOOLBOX"
                     : "$10,000 Cash";
             return (
               <button

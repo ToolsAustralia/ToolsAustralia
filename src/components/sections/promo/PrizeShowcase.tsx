@@ -1014,7 +1014,7 @@ export default function PrizeShowcase({
                           ? "DeWalt"
                           : "Makita"}{" "}
                   </span>
-                  Power Toolset
+                  Power Toolset / Storage System
                 </motion.p>
               ) : (
                 <motion.p
@@ -1023,7 +1023,7 @@ export default function PrizeShowcase({
                   transition={{ delay: 0.2, duration: 0.4 }}
                   className="font-sans font-extrabold font-[950] uppercase text-black dark:text-white mb-3 sm:mb-4 text-center text-md sm:text-[32px] lg:text-agency-title leading-[1.08]"
                 >
-                  Pick your <span style={{ color: theme.primary }}>Power Toolset</span>
+                  Pick your <span style={{ color: theme.primary }}>Power Toolset / Storage System</span>
                 </motion.p>
               )}
 

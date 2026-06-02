@@ -24,19 +24,23 @@ export const POWERSET_BRAND_TEXT: Record<string, string> = {
   ryobi: "/images/brands/name/ryobiText.webp",
 };
 
-/** Toolset display labels - short pc kit format for carousel badges (all caps). Add label when adding new toolset. */
+/** Toolset display labels - descriptive kit + storage-system format for carousel badges (all caps).
+ *  Add label when adding new toolset. Each kit ships with its brand storage system, spelled out here
+ *  so the badge reads "{kit} AND {storage} + $5000 CASH" (the "+ $5000 CASH" suffix is added by the
+ *  rendering components). Milwaukee PACKOUT is 8pc, Makita MAKTRAK is 7pc; DeWalt ToughSystem and
+ *  Ryobi LINK have no fixed piece count surfaced. */
 export const POWERSET_LABELS: Record<string, string> = {
-  makita: "MAKITA 15PC KIT",
-  dewalt: "DEWALT 14PC KIT",
-  milwaukee: "MILWAUKEE 13PC KIT",
-  ryobi: "RYOBI 19PC KIT",
+  makita: "MAKITA 15PC KIT AND 7PC MAKTRAK SYSTEM",
+  dewalt: "DEWALT 14PC KIT AND TOUGHSYSTEM STORAGE",
+  milwaukee: "MILWAUKEE 13PC KIT AND 8PC PACKOUT SYSTEM",
+  ryobi: "RYOBI 19PC KIT AND LINK STORAGE",
 };
 
-/** Toolbox display labels - shown as bottom overlay */
+/** Toolbox display labels - shown as bottom overlay (all caps to match the toolset badges) */
 export const TOOLBOX_LABELS: Record<string, string> = {
-  milwaukee: "Milwaukee Toolbox",
-  kincrome: "Kincrome Toolbox",
-  sidchrome: "Sidchrome Toolbox",
+  milwaukee: "MONSTER MILWAUKEE TOOLBOX",
+  kincrome: "470 PIECE KINCROME TOOLBOX",
+  sidchrome: "356 PIECE SIDCHROME TOOLBOX",
 };
 
 /** Toolbox type keys */
