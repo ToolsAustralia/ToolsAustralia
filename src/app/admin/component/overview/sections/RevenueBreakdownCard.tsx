@@ -149,6 +149,7 @@ export default function RevenueBreakdownCard({
           items={items}
           fmt={fmtCompact}
           fmtCount={formatNumber}
+          equalLength
           onItemClick={(id) => {
             setSelectedCategory(id as RevenueCategory);
             setModalOpen(true);
