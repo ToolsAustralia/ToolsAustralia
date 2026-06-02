@@ -180,6 +180,8 @@ export interface MembershipByPackageItem {
 export interface MembershipByPackageSummary {
   totalActiveCount: number;
   totalPastDueCount: number;
+  /** 30-day-retention-pause proxy (distinct users who accepted a `pause_30d` offer in the last 30 days). */
+  totalPausedCount: number;
   totalActiveRevenue: number;
   totalPastDueRevenue: number;
   snapshotPartial?: boolean;
@@ -381,11 +383,15 @@ export interface ActivityLogItem {
     | "user_signup"
     | "membership_purchase"
     | "one_time_purchase"
+    | "upsell_accepted"
     | "draw_complete"
     | "high_value_order"
     | "system_alert"
     | "membership_upgrade"
-    | "subscription_past_due";
+    | "subscription_past_due"
+    | "cancellation_offer_accepted"
+    | "admin_role_update"
+    | "affiliate_payout";
   user: string;
   userId?: string;
   action: string;

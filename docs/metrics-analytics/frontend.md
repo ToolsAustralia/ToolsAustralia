@@ -18,6 +18,19 @@ The actual dashboard pages live under [dashboard-account](../dashboard-account/)
 - TanStack Query for metric reads
 - Formatting via `useMetricsFormatting` (so display is consistent)
 
+## Formatter reference (`src/utils/metrics/formatters.ts`)
+
+| Function | Signature | Output examples |
+|---|---|---|
+| `formatCurrency` | `(amount, currency?)` | `$1,234.56` (AUD Intl) |
+| `formatPercentage` | `(value, decimals?)` | `12.3%` |
+| `formatNumber` | `(value)` | `1,234` (en-AU Intl) |
+| `formatROAS` | `(roas, decimals?)` | `4.50x` |
+| `formatPercentageChange` | `(percentage, decimals?)` | `+5.2%` / `-3.1%` |
+| `fmtCompact` | `(value)` | `$4.22M`, `$214.8k`, `$820`, `-$1.5k` |
+
+`fmtCompact` is a compact AUD money formatter for chart axes and KPI totals. It handles negative values with a leading minus sign before the `$`. All formatters are re-exported from `useMetricsFormatting` for consistent display across components. Test: `npm run test:fmt-compact`.
+
 ## User breakdown components (admin)
 
 [src/components/admin/metrics/users/](../../src/components/admin/metrics/users/) — `AgeBreakdown(Table)`, `StateBreakdown(Table)`, `ProfessionBreakdown(Table)`, `MembershipPackageBreakdown(Table)`. See [admin/frontend.md](../admin/frontend.md#chart-mode) for how they're composed in `UserMetricsView` (toggle) vs `UsersBreakdownSection` (dashboard overview).

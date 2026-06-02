@@ -27,7 +27,8 @@
       "Bash(cd /c/Codes/ToolsAustralia/.worktrees/architectural-fix && find docs -type f -name \"*.md\" | head -40 && echo \"---\" && find docs/superpowers 2>/dev/null && find docs -name \"*ui-cleanup*\" -o -name \"*plan*\" 2>/dev/null | head -20)",
       "Read(//c/c/Codes/ToolsAustralia/.worktrees/architectural-fix/**)",
       "Bash(awk '{print $4}')",
-      "Bash(bash scripts/wt-new.sh past-due-reanchor --from staging)"
+      "Bash(bash scripts/wt-new.sh past-due-reanchor --from staging)",
+      "Bash(curl -sL \"https://api.anthropic.com/v1/design/h/vMQsK2Shqg2ZSxK-CvHJrg\" -o /c/tmp/design-bundle.html -w \"HTTP %{http_code}\\\\nSize: %{size_download} bytes\\\\nContent-Type: %{content_type}\\\\n\")"
     ]
   }
 }

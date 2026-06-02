@@ -135,3 +135,35 @@ Tests use `react-dom/server.renderToString` and don't require any providers (pri
 - [tailwind-conventions.md](./tailwind-conventions.md) — tokens, no-arbitrary rule, `cn()`/CVA usage
 - [component-decomposition-criteria.md](./component-decomposition-criteria.md) — when to split a single file
 - [frontend-architecture-principles.md](./frontend-architecture-principles.md) — atomic design tier system, props discipline, composition patterns
+
+---
+
+## Admin overview UI kit (`src/components/admin/ui/`)
+
+Presentational-only primitives for the admin Overview page redesign. No hooks or API calls — props in, JSX out. Consumed by `src/app/admin/component/overview/sections/`.
+
+| Primitive | Exports | Purpose |
+|---|---|---|
+| `Card.tsx` | `Card`, `SectionTitle` | Container card (rounded-2xl, border, bg) and the title header block with optional icon, subtitle, and right slot |
+| `Badge.tsx` | `Badge`, `TrendPill` | Status badge (5 tones: neutral/success/danger/warning/info) and a trend percentage pill (green/red, `invert` prop for cancellations) |
+| `MetricCard.tsx` | `MetricCard`, `TONES`, `Tone` | KPI tile button — icon chip, value, label, sub-text, `TrendPill`, optional `active` ring; 8 colour tones |
+| `Popover.tsx` | `Popover` | Portal-to-body anchored popover (re-anchors on scroll/resize, click-outside to close, fade-up animation) |
+| `Sparkline.tsx` | `Sparkline` | Inline SVG area sparkline with gradient fill and terminal dot |
+| `BarList.tsx` | `BarList`, `BarItem` | Horizontal proportional bar list with optional count column |
+| `Donut.tsx` | `Donut`, `DonutSegment` | SVG donut chart with hover-swap center label, segment highlight/dim |
+| `RevenueAreaChart.tsx` | `RevenueAreaChart` | Full-width SVG area chart with cubic-spline smoothing, crosshair hover tooltip, Y-axis labels, X-axis tick row |
+| `DataTable.tsx` | `DataTable`, `Column` | Sortable table with custom cell renderer; click-to-sort header chevrons |
+| `StatusDot.tsx` | `StatusDot` | Coloured dot (success/warning/error/info) with white ring for timeline/feed use |
+| `index.ts` | barrel | Re-exports all of the above |
+
+### New Tailwind tokens added for the admin UI kit
+
+- **`font-display`** (`tailwind.config.ts` `theme.extend.fontFamily`) — Poppins alias used for KPI values and chart labels: `font-display font-extrabold`
+- **`text-2xs`** (`tailwind.config.ts` `theme.extend.fontSize`) — `0.6875rem / 0.95rem` line-height; used in badge labels, uppercase section headers, and table headers
+
+### New global CSS utilities (`src/app/globals.css`)
+
+- **`.num`** — `font-variant-numeric: tabular-nums`; apply to all numeric strings in the kit
+- **`.lift`** / **`.dark .lift`** — subtle bottom-weighted box-shadow for cards on hover/active
+- **`.lift-lg`** / **`.dark .lift-lg`** — larger lift variant (used by `Popover`)
+- **`@keyframes adminFadeUp`** / **`.fade-up`** — 0.3s translate-Y(6px)→0 entrance animation (used by `Popover`)

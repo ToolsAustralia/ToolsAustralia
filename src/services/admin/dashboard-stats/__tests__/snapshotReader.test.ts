@@ -8,16 +8,17 @@ import DashboardStatsDailySnapshot, { DASHBOARD_STATS_SNAPSHOT_SOURCE_VERSION } 
 import { readStatsForRange } from "../DashboardStatsSnapshotReader";
 import { aestDayBounds } from "../DashboardStatsSnapshotWriter";
 
-// Additional test dates for attributedRevenue assertions (far-future to avoid collisions)
-const AR_TEST_DATES = ["2099-05-01", "2099-05-02"];
-
-const TEST_DATES = ["2099-04-01", "2099-04-02", "2099-04-03"];
+// Fixed PAST dates (pre-launch, so they never collide with real snapshots and are
+// not skipped by the reader's future-day clamp — future dates have no data by design).
+const TEST_DATES = ["2024-04-01", "2024-04-02", "2024-04-03"];
+// attributedRevenue test dates — also PAST (clamp-safe), distinct from TEST_DATES.
+const AR_TEST_DATES = ["2024-05-01", "2024-05-02"];
 
 async function seedSnapshots() {
   for (const [date, total, membershipPurchase] of [
-    ["2099-04-01", 100, 60],
-    ["2099-04-02", 200, 120],
-    ["2099-04-03", 150, 90],
+    ["2024-04-01", 100, 60],
+    ["2024-04-02", 200, 120],
+    ["2024-04-03", 150, 90],
   ] as const) {
     await DashboardStatsDailySnapshot.create({
       date,
@@ -48,8 +49,8 @@ async function run() {
   await DashboardStatsDailySnapshot.deleteMany({ date: { $in: TEST_DATES } });
   await seedSnapshots();
 
-  const { dayStartUTC: start } = aestDayBounds("2099-04-01");
-  const { dayEndUTC: end } = aestDayBounds("2099-04-03");
+  const { dayStartUTC: start } = aestDayBounds("2024-04-01");
+  const { dayEndUTC: end } = aestDayBounds("2024-04-03");
 
   const result = await readStatsForRange({ rangeStartUTC: start, rangeEndUTC: end });
 
@@ -85,7 +86,7 @@ async function run() {
 
   // Day 1: meta newRevenue=100, renewalRevenue=20, conversions=4, click=70, utm_only=30, inferred_backfill=0
   await DashboardStatsDailySnapshot.create({
-    date: "2099-05-01",
+    date: "2024-05-01",
     tz: "Australia/Sydney",
     revenue: {
       total: 0,
@@ -110,7 +111,7 @@ async function run() {
 
   // Day 2: meta newRevenue=50, renewalRevenue=10, conversions=2, click=50, utm_only=0, inferred_backfill=0
   await DashboardStatsDailySnapshot.create({
-    date: "2099-05-02",
+    date: "2024-05-02",
     tz: "Australia/Sydney",
     revenue: {
       total: 0,
@@ -133,8 +134,8 @@ async function run() {
     sourceVersion: DASHBOARD_STATS_SNAPSHOT_SOURCE_VERSION,
   });
 
-  const { dayStartUTC: arStart } = aestDayBounds("2099-05-01");
-  const { dayEndUTC: arEnd } = aestDayBounds("2099-05-02");
+  const { dayStartUTC: arStart } = aestDayBounds("2024-05-01");
+  const { dayEndUTC: arEnd } = aestDayBounds("2024-05-02");
   const arResult = await readStatsForRange({ rangeStartUTC: arStart, rangeEndUTC: arEnd });
 
   expect("attributedRevenue.meta.newRevenue = 100+50", arResult.attributedRevenue.meta.newRevenue, 150);

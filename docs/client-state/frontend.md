@@ -27,3 +27,11 @@ The `transition-colors duration-200 ease-out` utility was removed from `<body>` 
 - **Per-component derived state** → useState / useReducer
 
 Don't mix. Common mistake: mirroring server-state into Zustand. Don't.
+
+## Admin query type additions (2026-06-02, Overview redesign round 2)
+
+`src/hooks/queries/useAdminQueries.ts` gained:
+- `MembershipByPackageSummary.totalPausedCount: number` — surfaced by the membership-by-package endpoint (a 30-day retention-pause proxy from `CancellationFlowEvent`; see `docs/admin/`). Consumed by the Overview `MembershipCard` "Paused" badge.
+- `ActivityLogItem.type` union extended with `upsell_accepted`, `cancellation_offer_accepted`, `admin_role_update`, `affiliate_payout` (kept in sync with the `/api/admin/activity-log` route's union; the separate `RecentActivity` type for `/api/admin/dashboard/recent-activities` is intentionally NOT extended). `useActivityLogInfinite` carries these to the Overview activity feed.
+
+`src/hooks/queries/admin/useAdminMiniDrawsList.ts` adds **`useTopMiniDraws(limit)`** — active mini draws server-sorted by entries (`?status=active&sortBy=totalEntries&sortOrder=desc&limit=N`), returning `{ _id, name, status, totalEntries, minimumEntries }` for the Overview `TopDrawsCard`.

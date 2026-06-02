@@ -396,6 +396,17 @@
   }
 }
 
+/* Admin overview utilities */
+.num { font-variant-numeric: tabular-nums; }
+
+.lift { box-shadow: 0 1px 0 rgba(0,0,0,0.02), 0 10px 28px -18px rgba(0,0,0,0.22); }
+.dark .lift { box-shadow: 0 1px 0 rgba(255,255,255,0.03), 0 16px 40px -22px rgba(0,0,0,0.8); }
+.lift-lg { box-shadow: 0 2px 4px rgba(0,0,0,0.03), 0 20px 48px -24px rgba(0,0,0,0.28); }
+.dark .lift-lg { box-shadow: 0 1px 0 rgba(255,255,255,0.04), 0 24px 56px -26px rgba(0,0,0,0.85); }
+
+@keyframes adminFadeUp { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+.fade-up { animation: adminFadeUp .3s ease both; }
+
 /* Base theme tokens */
 :root {
   --background: #ffffff;
