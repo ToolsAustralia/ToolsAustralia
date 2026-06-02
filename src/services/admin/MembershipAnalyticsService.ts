@@ -3,6 +3,7 @@ import User from "@/models/User";
 import MembershipDailySnapshot, { type IMembershipDailySnapshot } from "@/models/MembershipDailySnapshot";
 import MembershipRenewalCycle from "@/models/MembershipRenewalCycle";
 import MembershipStatusHistory from "@/models/MembershipStatusHistory";
+import CancellationFlowEvent from "@/models/CancellationFlowEvent";
 import { getPackageById } from "@/data/membershipPackages";
 import {
   ACTIVE_SUBSCRIPTION_STATUSES,
@@ -29,6 +30,15 @@ export interface MembershipByPackageItemDTO {
 export interface MembershipByPackageSummaryDTO {
   totalActiveCount: number;
   totalPastDueCount: number;
+  /**
+   * 30-day-retention-pause proxy: distinct users who accepted a `pause_30d`
+   * retention offer in the last 30 days. There is no DB "paused" flag — true
+   * pause state lives in Stripe `pause_collection` and is not mirrored, so an
+   * exact live pause count would need a Stripe pause_collection DB mirror
+   * (out of scope). The 30-day pause window means a recent acceptance is still
+   * paused, making this a reasonable approximation.
+   */
+  totalPausedCount: number;
   totalActiveRevenue: number;
   totalPastDueRevenue: number;
   /** Legacy field — kept for compatibility with the deprecated per-user snapshot reader. */
@@ -173,7 +183,10 @@ export class MembershipAnalyticsService {
       isActive: true,
     };
 
-    const [activeResults, cancelledResults, pastDueResults] = await Promise.all([
+    // 30-day-retention-pause proxy window (see MembershipByPackageSummaryDTO.totalPausedCount).
+    const pauseWindowStart = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+
+    const [activeResults, cancelledResults, pastDueResults, pausedUserIds] = await Promise.all([
       User.aggregate([
         { $match: { ...baseMatch, ...getActiveSubscriptionFilter(false) } },
         { $group: { _id: "$subscription.packageId", count: { $sum: 1 } } },
@@ -199,7 +212,16 @@ export class MembershipAnalyticsService {
         },
         { $group: { _id: "$subscription.packageId", count: { $sum: 1 } } },
       ]),
+      // Paused proxy: distinct users who accepted a 30-day retention pause within
+      // the last 30 days (those acceptances are still inside the pause window).
+      CancellationFlowEvent.distinct("userId", {
+        offerAccepted: "pause_30d",
+        outcome: "saved",
+        savedAt: { $gte: pauseWindowStart },
+      }),
     ]);
+
+    const totalPausedCount = pausedUserIds.length;
 
     const activeByPackage = Object.fromEntries(activeResults.map((r) => [String(r._id), r.count]));
     const cancelledByPackage = Object.fromEntries(cancelledResults.map((r) => [String(r._id), r.count]));
@@ -237,6 +259,7 @@ export class MembershipAnalyticsService {
       summary: {
         totalActiveCount,
         totalPastDueCount,
+        totalPausedCount,
         totalActiveRevenue: Math.round(totalActiveRevenue * 100) / 100,
         totalPastDueRevenue: Math.round(totalPastDueRevenue * 100) / 100,
       },
@@ -416,6 +439,9 @@ export class MembershipAnalyticsService {
       summary: {
         totalActiveCount,
         totalPastDueCount,
+        // The daily snapshot has no pause source; the 30-day-retention-pause
+        // proxy is only computed on the live read path. Default to 0 here.
+        totalPausedCount: 0,
         totalActiveRevenue: Math.round(totalActiveRevenue * 100) / 100,
         totalPastDueRevenue: Math.round(totalPastDueRevenue * 100) / 100,
       },

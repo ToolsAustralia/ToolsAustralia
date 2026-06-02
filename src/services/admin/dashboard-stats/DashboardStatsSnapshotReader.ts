@@ -62,6 +62,10 @@ export async function readStatsForRange(args: {
   {
     let cursor = startKey;
     while (cursor <= endKey) {
+      // Never enumerate future days — they have no data, so computing them live is
+      // pointless work (and was the source of the Facebook "since cannot be in the
+      // future" error when a range like "Current Draw" runs to a future draw date).
+      if (cursor > todayKey) break;
       dateKeys.push(cursor);
       const { dayEndUTC } = aestDayBounds(cursor);
       cursor = aestKey(dayEndUTC);
@@ -91,6 +95,9 @@ export async function readStatsForRange(args: {
     return refundedLazy;
   }
 
+  // First pass: sum snapshot days (cheap, in-memory) and collect the live days.
+  // Live days are computed concurrently below to avoid sequential DB/HTTP latency.
+  const liveDateKeys: string[] = [];
   for (const dateKey of dateKeys) {
     const isToday = dateKey === todayKey;
     const snap = snapByDate.get(dateKey);
@@ -119,33 +126,84 @@ export async function readStatsForRange(args: {
         adChannels[chanKey] = acc;
       }
     } else {
-      // Live day — compute on the fly
+      // Live day — defer to the bounded-concurrency pool below.
       liveDaysComputed += 1;
       if (!snap && !isToday) missingSnapshotDates.push(dateKey);
+      liveDateKeys.push(dateKey);
+    }
+  }
 
+  if (liveDateKeys.length > 0) {
+    // Load the refund set ONCE before the pool. Do NOT call the lazy loader
+    // concurrently — resolve it here and pass the same Set into each day.
+    const refunded = await getRefunded();
+
+    // Compute one live day's partial. Pure of any shared accumulator — all results
+    // are summed afterwards, so completion order does not affect totals.
+    async function computeLiveDay(dateKey: string): Promise<{
+      revenueTotal: number;
+      buckets: Record<RevenueBucketKey, { revenue: number; purchaseCount: number }>;
+      newSignups: number;
+      cancellations: number;
+      adChannels: Record<string, { spend: number; revenue: number }>;
+    }> {
+      const isToday = dateKey === todayKey;
       const { dayStartUTC, dayEndUTC } = aestDayBounds(dateKey);
       const effectiveDayEnd = isToday ? new Date() : dayEndUTC;
-      const refunded = await getRefunded();
+
       const rev = await aggregateRevenueForDay(dayStartUTC, effectiveDayEnd, refunded);
-      revenueTotal += rev.total;
-      for (const k of REVENUE_BUCKET_KEYS) {
-        buckets[k].revenue += rev.buckets[k].revenue;
-        buckets[k].purchaseCount += rev.buckets[k].purchaseCount;
-      }
       const [signups, cancels] = await Promise.all([
         User.countDocuments({ createdAt: { $gte: dayStartUTC, $lt: effectiveDayEnd }, isActive: true }),
         User.countDocuments({ "subscription.cancelledAt": { $gte: dayStartUTC, $lt: effectiveDayEnd }, isActive: true }),
       ]);
-      newSignupsInRange += signups;
-      cancellationsInRange += cancels;
 
+      const dayBuckets = {} as Record<RevenueBucketKey, { revenue: number; purchaseCount: number }>;
+      for (const k of REVENUE_BUCKET_KEYS) {
+        dayBuckets[k] = { revenue: rev.buckets[k].revenue, purchaseCount: rev.buckets[k].purchaseCount };
+      }
+
+      const dayAdChannels: Record<string, { spend: number; revenue: number }> = {};
       for (const provider of AD_CHANNEL_PROVIDERS) {
         const metrics = await provider.fetchForDay({ dayStartUTC, dayEndUTC: effectiveDayEnd });
         if (!metrics) continue;
-        const acc = adChannels[provider.key] ?? { spend: 0, revenue: 0, roas: 0 };
-        acc.spend += metrics.spend;
-        acc.revenue += metrics.revenue;
-        adChannels[provider.key] = acc;
+        dayAdChannels[provider.key] = { spend: metrics.spend, revenue: metrics.revenue };
+      }
+
+      return {
+        revenueTotal: rev.total,
+        buckets: dayBuckets,
+        newSignups: signups,
+        cancellations: cancels,
+        adChannels: dayAdChannels,
+      };
+    }
+
+    // Bounded concurrency: process the live days in chunks of POOL_SIZE so we cap
+    // simultaneous DB/HTTP work while still avoiding the old day-at-a-time latency.
+    const POOL_SIZE = 8;
+    const dayPartials: Awaited<ReturnType<typeof computeLiveDay>>[] = [];
+    for (let i = 0; i < liveDateKeys.length; i += POOL_SIZE) {
+      const chunk = liveDateKeys.slice(i, i + POOL_SIZE);
+      const results = await Promise.all(chunk.map(computeLiveDay));
+      dayPartials.push(...results);
+    }
+
+    // Reduce the partials into the accumulators. Every operation here is an
+    // addition, so the result is identical regardless of completion order.
+    for (const p of dayPartials) {
+      revenueTotal += p.revenueTotal;
+      for (const k of REVENUE_BUCKET_KEYS) {
+        buckets[k].revenue += p.buckets[k].revenue;
+        buckets[k].purchaseCount += p.buckets[k].purchaseCount;
+      }
+      newSignupsInRange += p.newSignups;
+      cancellationsInRange += p.cancellations;
+      for (const chanKey of Object.keys(p.adChannels)) {
+        const m = p.adChannels[chanKey];
+        const acc = adChannels[chanKey] ?? { spend: 0, revenue: 0, roas: 0 };
+        acc.spend += m.spend;
+        acc.revenue += m.revenue;
+        adChannels[chanKey] = acc;
       }
     }
   }

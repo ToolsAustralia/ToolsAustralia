@@ -1,0 +1,343 @@
+"use client";
+
+import { useRef, useState, type ElementType } from "react";
+import {
+  DollarSign,
+  TrendingUp,
+  BarChart3,
+  Target,
+  Users,
+  UserCheck,
+  UserX,
+  RefreshCw,
+} from "lucide-react";
+import Image from "next/image";
+import { MetricCard, Popover, TrendPill, type Tone } from "@/components/admin/ui";
+import { useMetricsFormatting } from "@/hooks/useMetricsFormatting";
+import { getPackageIcon, type PackageIconData } from "@/utils/images/package-icons";
+import { tierColorByPackageId } from "./tierColors";
+import type { DateRange } from "@/components/admin/DateRangeToggle";
+import type { TrendData } from "@/types/admin/trend-types";
+import type {
+  AdminDashboardStats,
+  MembershipByPackageData,
+  RevenueBreakdownItem,
+} from "@/hooks/queries/useAdminQueries";
+
+/**
+ * Convert the existing `{ value, direction }` TrendData into the signed numeric
+ * percentage the kit's `TrendPill` expects (positive = up, negative = down).
+ * Returns `null` when there is no trend (e.g. all-time), which hides the pill.
+ * Do NOT pre-invert here — pass `invert` to `MetricCard`/`TrendPill` instead.
+ */
+function trendPct(trend: TrendData | undefined): number | null {
+  if (!trend) return null;
+  return trend.direction === "down" ? -trend.value : trend.value;
+}
+
+/** Normalize a revenue breakdown entry (number OR object) like the old code does. */
+function breakdownRevenue(item: RevenueBreakdownItem | undefined): number {
+  if (!item) return 0;
+  if (typeof item === "number") return item;
+  return item.revenue;
+}
+
+const moneyWhole = (n: number) => `$${n.toLocaleString("en-AU")}`;
+
+type BreakdownRow = { id: string; label: string; color: string; value: number; icon?: PackageIconData };
+
+/**
+ * A KPI tile that owns its own popover anchor + open state.
+ * Renders a header (title + value + TrendPill) and a breakdown list.
+ */
+function KpiCard({
+  title,
+  value,
+  sub,
+  icon,
+  tone,
+  trend,
+  invert = false,
+  breakdown,
+  loading = false,
+}: {
+  title: string;
+  value: string;
+  sub?: string;
+  icon: ElementType;
+  tone: Tone;
+  trend?: number | null;
+  invert?: boolean;
+  breakdown: BreakdownRow[];
+  loading?: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const { fmtCompact } = useMetricsFormatting();
+
+  return (
+    <div ref={ref} className="min-w-0">
+      <MetricCard
+        title={title}
+        value={value}
+        sub={sub}
+        icon={icon}
+        tone={tone}
+        trend={trend}
+        invert={invert}
+        loading={loading}
+        onClick={() => setOpen((o) => !o)}
+        active={open}
+      />
+      <Popover open={open} onClose={() => setOpen(false)} anchorRef={ref} width={300} align="end">
+        <div className="p-4">
+          <div className="flex items-center justify-between gap-3 mb-3">
+            <div className="min-w-0">
+              <p className="text-2xs font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400 truncate">
+                {title}
+              </p>
+              <p className="font-display font-extrabold text-xl leading-none text-neutral-900 dark:text-white num mt-1">
+                {value}
+              </p>
+            </div>
+            {trend != null && <TrendPill value={trend} invert={invert} />}
+          </div>
+          <div className="space-y-2 pt-3 border-t border-neutral-100 dark:border-neutral-800">
+            {breakdown.length === 0 ? (
+              <p className="text-2xs text-neutral-400 dark:text-neutral-500">No breakdown available</p>
+            ) : (
+              breakdown.map((row) => (
+                <div key={row.id} className="flex items-center justify-between gap-2">
+                  <span className="flex items-center gap-2 min-w-0">
+                    {row.icon ? (
+                      <span className="w-5 h-5 shrink-0 flex items-center justify-center">
+                        <Image src={row.icon} alt="" className="w-full h-full object-contain" />
+                      </span>
+                    ) : (
+                      <span
+                        className="w-2.5 h-2.5 rounded-full shrink-0"
+                        style={{ background: row.color }}
+                      />
+                    )}
+                    <span className="text-xs font-medium text-neutral-700 dark:text-neutral-300 truncate">
+                      {row.label}
+                    </span>
+                  </span>
+                  <span className="text-xs font-bold text-neutral-900 dark:text-white num shrink-0">
+                    {fmtCompact(row.value)}
+                  </span>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      </Popover>
+    </div>
+  );
+}
+
+export default function KpiGrid({
+  stats,
+  membership,
+  dateRange,
+  statsLoading = false,
+  membershipLoading = false,
+}: {
+  stats: AdminDashboardStats | undefined;
+  membership: MembershipByPackageData | undefined;
+  dateRange: DateRange;
+  statsLoading?: boolean;
+  membershipLoading?: boolean;
+}) {
+  const users = stats?.users;
+  const revenue = stats?.revenue;
+  const facebookAds = stats?.facebookAds;
+  const summary = membership?.summary;
+
+  // Only show skeletons when there is no data yet — a background refetch with
+  // cached data should keep showing the cached values, not flash placeholders.
+  const showStatsSkeleton = statsLoading && !stats;
+  const showMembershipSkeleton = membershipLoading && !membership;
+
+  // ---- Revenue tile (clickable) ----
+  const revenueTitle =
+    dateRange === "today"
+      ? "Today's Revenue"
+      : dateRange === "yesterday"
+        ? "Yesterday's Revenue"
+        : dateRange === "all-time"
+          ? "Total Revenue"
+          : "Revenue";
+
+  const revenueBreakdown: BreakdownRow[] = revenue
+    ? (
+        [
+          { id: "membershipPurchase", label: "Membership New", color: "#f97316", value: breakdownRevenue(revenue.breakdown.membershipPurchase) },
+          { id: "membershipRenewal", label: "Membership Renewal", color: "#eab308", value: breakdownRevenue(revenue.breakdown.membershipRenewal) },
+          { id: "oneTimePurchase", label: "One-Time First", color: "#3b82f6", value: breakdownRevenue(revenue.breakdown.oneTimePurchase) },
+          { id: "additionalOneTimePurchase", label: "One-Time Add'l", color: "#6366f1", value: breakdownRevenue(revenue.breakdown.additionalOneTimePurchase) },
+          { id: "miniDraw", label: "Mini Draws", color: "#a855f7", value: breakdownRevenue(revenue.breakdown.miniDraw) },
+          { id: "upsell", label: "Upsells", color: "#ec4899", value: breakdownRevenue(revenue.breakdown.upsell) },
+        ] as BreakdownRow[]
+      ).sort((a, b) => b.value - a.value)
+    : [];
+
+  // ---- Membership Revenue tile (clickable) ----
+  const membershipSub = summary
+    ? `${(summary.totalActiveCount ?? 0).toLocaleString("en-AU")} active${
+        (summary.totalPastDueCount ?? 0) > 0
+          ? ` · ${(summary.totalPastDueCount ?? 0).toLocaleString("en-AU")} past due`
+          : ""
+      }`
+    : undefined;
+
+  const membershipBreakdown: BreakdownRow[] = (membership?.packages ?? []).map((pkg) => ({
+    id: pkg.packageId,
+    label: pkg.packageName,
+    color: tierColorByPackageId(pkg.packageId),
+    value: pkg.activeRevenue,
+    icon: getPackageIcon(pkg.packageId) ?? undefined,
+  }));
+
+  // ---- Cancellations sub ----
+  const cancellationSub = `$${(users?.cancellationImpact?.estimatedMonthlyRevenue ?? 0).toLocaleString(
+    "en-AU",
+    { minimumFractionDigits: 2, maximumFractionDigits: 2 },
+  )} at risk${dateRange === "all-time" ? " (scheduled)" : ""}`;
+
+  // ---- Renewal Rate (always shown — today's progressive rate of total expected) ----
+  // Prefer renewalProgress (renewed / base for the cycle); fall back to the period
+  // renewal counts so the tile always renders a meaningful "% renewed so far".
+  const rp = users?.renewalProgress;
+  const mr = users?.membershipRenewals;
+  const renewalRate: number | null =
+    rp?.rate != null
+      ? rp.rate
+      : mr && mr.expectedInRange > 0
+        ? (mr.succeededInRange / mr.expectedInRange) * 100
+        : null;
+  const renewalRenewed = rp?.renewed ?? mr?.succeededInRange ?? 0;
+  const renewalBase = rp?.base ?? mr?.expectedInRange ?? 0;
+  const renewalSub =
+    renewalBase > 0
+      ? `${renewalRenewed.toLocaleString("en-AU")} of ${renewalBase.toLocaleString("en-AU")} renewed${
+          rp?.remaining && rp.remaining > 0
+            ? ` · ${rp.remaining.toLocaleString("en-AU")} ${rp.isComplete ? "did not renew" : "expected"}`
+            : ""
+        }`
+      : "No renewals expected this period";
+
+  return (
+    <div className="space-y-5">
+      {/* Revenue group */}
+      <div>
+        <p className="text-2xs font-bold uppercase tracking-wider text-neutral-400 dark:text-neutral-500 mb-2.5">
+          Revenue
+        </p>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <KpiCard
+            title={revenueTitle}
+            value={moneyWhole(revenue?.total ?? 0)}
+            sub="From all sources"
+            icon={DollarSign}
+            tone="emerald"
+            trend={trendPct(revenue?.totalTrend)}
+            breakdown={revenueBreakdown}
+            loading={showStatsSkeleton}
+          />
+          <KpiCard
+            title="Membership Revenue"
+            value={moneyWhole(Math.round(summary?.totalActiveRevenue ?? 0))}
+            sub={membershipSub}
+            icon={TrendingUp}
+            tone="red"
+            breakdown={membershipBreakdown}
+            loading={showMembershipSkeleton}
+          />
+          <MetricCard
+            title="Ad Spend"
+            value={moneyWhole(Math.round(facebookAds?.spend ?? 0))}
+            sub="Facebook Ads spend"
+            icon={BarChart3}
+            tone="blue"
+            trend={trendPct(facebookAds?.spendTrend)}
+            loading={showStatsSkeleton}
+          />
+          <MetricCard
+            title="ROAS"
+            value={`${(facebookAds?.roas ?? 0).toFixed(2)}x`}
+            sub="Return on ad spend"
+            icon={Target}
+            tone="green"
+            trend={trendPct(facebookAds?.roasTrend)}
+            loading={showStatsSkeleton}
+          />
+        </div>
+      </div>
+
+      {/* Users & Performance group */}
+      <div>
+        <p className="text-2xs font-bold uppercase tracking-wider text-neutral-400 dark:text-neutral-500 mb-2.5">
+          Users &amp; Performance
+        </p>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          {/* Total Users ≈ total signups, so all-time shows Total Users; any other
+              range shows that period's signups with total users as subtext. */}
+          {dateRange === "all-time" ? (
+            <MetricCard
+              title="Total Users"
+              value={(users?.total ?? 0).toLocaleString("en-AU")}
+              sub="Active users (all-time)"
+              icon={Users}
+              tone="indigo"
+              loading={showStatsSkeleton}
+            />
+          ) : (
+            <MetricCard
+              title={
+                dateRange === "today"
+                  ? "Signups Today"
+                  : dateRange === "yesterday"
+                    ? "Signups Yesterday"
+                    : "New Signups"
+              }
+              value={(users?.newInRange ?? 0).toLocaleString("en-AU")}
+              sub={`${(users?.total ?? 0).toLocaleString("en-AU")} total users`}
+              icon={UserCheck}
+              tone="blue"
+              trend={trendPct(users?.newInRangeTrend)}
+              loading={showStatsSkeleton}
+            />
+          )}
+          <MetricCard
+            title="Conversion Rate"
+            value={`${(stats?.conversionRate ?? 0).toFixed(1)}%`}
+            sub="Paying customers"
+            icon={Target}
+            tone="violet"
+            trend={trendPct(stats?.conversionRateTrend)}
+            loading={showStatsSkeleton}
+          />
+          <MetricCard
+            title="Cancellations"
+            value={(users?.cancelledMemberships ?? 0).toLocaleString("en-AU")}
+            sub={cancellationSub}
+            icon={UserX}
+            tone="red"
+            trend={trendPct(users?.cancelledMembershipsTrend)}
+            invert
+            loading={showStatsSkeleton}
+          />
+          <MetricCard
+            title="Renewal Rate"
+            value={renewalRate != null ? `${renewalRate.toFixed(1)}%` : "—"}
+            sub={renewalSub}
+            icon={RefreshCw}
+            tone="emerald"
+            loading={showStatsSkeleton}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}

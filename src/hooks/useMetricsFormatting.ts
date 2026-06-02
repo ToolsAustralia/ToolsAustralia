@@ -9,6 +9,7 @@ import {
   formatNumber,
   formatROAS,
   formatPercentageChange,
+  fmtCompact,
 } from "@/utils/metrics/formatters";
 
 export function useMetricsFormatting() {
@@ -19,6 +20,7 @@ export function useMetricsFormatting() {
       formatNumber,
       formatROAS,
       formatPercentageChange,
+      fmtCompact,
     }),
     []
   );

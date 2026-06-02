@@ -85,10 +85,14 @@ export default function ActivityLogManagement() {
               <option value="user_signup">User Signups</option>
               <option value="membership_purchase">Membership Purchases</option>
               <option value="one_time_purchase">One-Time Purchases</option>
+              <option value="upsell_accepted">Upsells Accepted</option>
               <option value="membership_upgrade">Subscription Changes</option>
               <option value="subscription_past_due">Past Due (Failed Renewal)</option>
+              <option value="cancellation_offer_accepted">Cancellation Offers Accepted</option>
               <option value="draw_complete">Draw Completions</option>
               <option value="high_value_order">High-Value Orders</option>
+              <option value="admin_role_update">Staff Updates</option>
+              <option value="affiliate_payout">Affiliate Payouts</option>
             </select>
           </div>
         </div>

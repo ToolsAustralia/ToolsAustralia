@@ -8,13 +8,15 @@ import DashboardStatsDailySnapshot, { DASHBOARD_STATS_SNAPSHOT_SOURCE_VERSION } 
 import { readStatsForRange } from "../DashboardStatsSnapshotReader";
 import { aestDayBounds } from "../DashboardStatsSnapshotWriter";
 
-const TEST_DATES = ["2099-04-01", "2099-04-02", "2099-04-03"];
+// Fixed PAST dates (pre-launch, so they never collide with real snapshots and are
+// not skipped by the reader's future-day clamp — future dates have no data by design).
+const TEST_DATES = ["2024-04-01", "2024-04-02", "2024-04-03"];
 
 async function seedSnapshots() {
   for (const [date, total, membershipPurchase] of [
-    ["2099-04-01", 100, 60],
-    ["2099-04-02", 200, 120],
-    ["2099-04-03", 150, 90],
+    ["2024-04-01", 100, 60],
+    ["2024-04-02", 200, 120],
+    ["2024-04-03", 150, 90],
   ] as const) {
     await DashboardStatsDailySnapshot.create({
       date,
@@ -45,8 +47,8 @@ async function run() {
   await DashboardStatsDailySnapshot.deleteMany({ date: { $in: TEST_DATES } });
   await seedSnapshots();
 
-  const { dayStartUTC: start } = aestDayBounds("2099-04-01");
-  const { dayEndUTC: end } = aestDayBounds("2099-04-03");
+  const { dayStartUTC: start } = aestDayBounds("2024-04-01");
+  const { dayEndUTC: end } = aestDayBounds("2024-04-03");
 
   const result = await readStatsForRange({ rangeStartUTC: start, rangeEndUTC: end });
 

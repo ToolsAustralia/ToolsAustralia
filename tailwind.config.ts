@@ -112,6 +112,7 @@ const config: Config = {
       fontFamily: {
         sans: ["var(--font-inter)", "Inter", "sans-serif"],
         poppins: ["var(--font-poppins)", "Poppins", "sans-serif"],
+        display: ["var(--font-poppins)", "ui-sans-serif", "system-ui", "sans-serif"],
         agency: ["AgencyFB BlackWide", "sans-serif"],
         acumin: ["Acumin Pro Condensed", "sans-serif"],
       },

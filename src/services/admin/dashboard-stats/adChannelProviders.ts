@@ -36,6 +36,10 @@ export const facebookAdChannelProvider: AdChannelProvider = {
     if (!adAccountId || !accessToken) return null;
 
     const dateStr = aestDateString(dayStartUTC);
+    // Facebook insights reject a `since` in the future — this happens when a date
+    // range runs to a future draw date (e.g. "Current Draw" → the 27th). There is
+    // no ad data for future days, so skip them rather than calling the API.
+    if (dateStr > aestDateString(new Date())) return null;
     try {
       const insights = await fetchFacebookInsights(
         adAccountId,
