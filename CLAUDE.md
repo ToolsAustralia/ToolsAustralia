@@ -162,7 +162,7 @@ Admin and protected route gating happens in two places: `src/middleware.ts` (mat
 
 These domains have non-obvious rules documented in `docs/`. Skim the matching doc before changing code in these areas:
 
-- **Billing / Stripe** — `docs/BILLING_ANCHOR_24.md`, `docs/STRIPE_COLLECTION_PAUSE_RECOVERY.md`, `docs/CHARGE_PAST_DUE_CUSTOMERS.md`, `docs/REFUND_REVERSAL.md`, `docs/PAYMENT_ATTRIBUTION.md`, `docs/SUBSCRIPTION_PAYMENT_ELEMENT_MIGRATION.md`. Subscription anchor day, past-due/pause recovery, and refund reversal logic are intricate and have dedicated tests under `src/services/subscription/__tests__/` and `src/utils/payment/__tests__/`.
+- **Billing / Stripe** — `docs/PAST_DUE_REANCHOR.md`, `docs/BILLING_ANCHOR_24.md`, `docs/STRIPE_COLLECTION_PAUSE_RECOVERY.md`, `docs/CHARGE_PAST_DUE_CUSTOMERS.md`, `docs/REFUND_REVERSAL.md`, `docs/PAYMENT_ATTRIBUTION.md`, `docs/SUBSCRIPTION_PAYMENT_ELEMENT_MIGRATION.md`. Subscription anchor day, past-due/pause recovery, and refund reversal logic are intricate and have dedicated tests under `src/services/subscription/__tests__/` and `src/utils/payment/__tests__/`. **Footgun:** any mutation that sets `trial_end` / `billing_cycle_anchor` / `proration_behavior` or swaps items on an *existing* subscription can make Stripe auto-spawn an extra `invoice.payment_succeeded` — classify it in the webhook before granting (guard: `isZeroAmountTrialUpdateInvoice`, test: `npm run test:zero-trial-guard`); idempotency-by-id does **not** protect you (the spawned invoice has its own id). Read the pre-flight checklist in `docs/PAST_DUE_REANCHOR.md` before any such change.
 - **A/B testing** — `docs/AB_TESTING_*.md` (feature, dedup, DB optimization, metrics).
 - **Promo / referrals / affiliates** — `docs/PROMO_BANNER_BEHAVIOUR.md`, `docs/PROMO_PAGE_ANALYTICS.md`, `docs/REFERRAL_SYSTEM.md`, `docs/UTM_ATTRIBUTION.md`. Affiliate commission/recurring backfills have dedicated scripts.
 - **Error reporting** — `docs/ERROR_REPORTING_AND_LOGGING.md`, `docs/ERROR_REPORTING_SYSTEM.md`. There is a real `ErrorReport` Mongo model + admin routes; do not invent a parallel logger.
@@ -716,6 +716,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "scripts/backfill-*.ts",
         "scripts/cleanup-*.ts",
         "scripts/find-*.ts",
+        "scripts/reverse-*.ts",
         "scripts/stripe-*.ts",
         "scripts/verify-*.ts"
       ],
