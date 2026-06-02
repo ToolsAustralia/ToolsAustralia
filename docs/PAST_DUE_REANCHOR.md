@@ -6,6 +6,25 @@ When a `past_due`/`unpaid` membership recovers (any channel), we reanchor the me
 
 > A past-due member has **no** benefits (`isActive=false`); reanchor changes only the next *charge date*, not access.
 
+## ⚠️ Billing-timing footgun — read this BEFORE any anchor / trial / proration change
+
+This whole feature exists because of one non-obvious Stripe behavior that already caused a production double-grant. Internalize the principle before touching any code that mutates subscription billing timing.
+
+**Principle.** *Mutating a Stripe subscription's billing timing can silently spawn an extra invoice — and therefore an extra `invoice.payment_succeeded` your webhook will try to grant on.* Setting `trial_end`, `billing_cycle_anchor`, `proration_behavior`, swapping item price/quantity, or toggling `pause_collection` on an **existing** subscription may cause Stripe to auto-create *and auto-finalize* an invoice (a $0 "Trial period" line, a proration line, or a fresh cycle) that you never explicitly created. The grant path must **classify the invoice's intent — real payment vs. bookkeeping/proration — before granting**, using `billing_reason` + `total` + `amount_paid`, not just "an invoice got paid." **Idempotency-by-id does *not* save you here:** the spawned invoice has its *own* unique id, so an `invoice_<id>` dedup key sees a brand-new, never-processed payment and grants. The only defense is an explicit classifier at the top of the grant handler (today: `isZeroAmountTrialUpdateInvoice`, `src/utils/billing/trial-invoice.ts`) **plus a regression test** that it's honored (`npm run test:zero-trial-guard`).
+
+**Pre-flight checklist — before you set `trial_end` / `billing_cycle_anchor` / `proration_behavior`, swap items, or toggle `pause_collection` on an EXISTING sub:**
+
+1. **New (`.create`) or existing (`.update`)?** `trial_end` on `.create` just defines the first period (no extra invoice). `trial_end` on `.update` **auto-spawns a separate $0 `subscription_update` invoice** that fires `invoice.payment_succeeded`. This asymmetry *is* the footgun.
+2. **Will the mutation spawn an invoice?** `trial_end` → yes ($0). `billing_cycle_anchor:"now"` or any item price/qty change → yes (cycle/proration). `proration_behavior:"create_prorations"` → yes if net ≠ 0. Metadata-only, `default_payment_method`-only, `cancel_at_period_end` toggle, `pause_collection` → **no** new paid invoice.
+3. **What `billing_reason` + `total` will it carry?** Write it down: `subscription_update`/$0 (trial bookkeeping — skip), `subscription_update`/>0 (real proration — grants today), `subscription_cycle`/>0 (real renewal — grants), `subscription_create`/>0 (first charge — grants).
+4. **Will the webhook grant for it?** Trace `handleInvoicePaymentSucceeded` (`src/services/stripe-webhook-handlers/index.ts`). The ONLY billing-timing skip today is `isZeroAmountTrialUpdateInvoice` (`subscription_update` + total 0 + amount_paid 0). Anything else with `total>0` **grants**. If your spawned invoice should NOT grant, the guard does not cover you.
+5. **Does the spawned invoice re-enter the SAME handler?** `reanchorAfterPastDueRecovery` is invoked *from inside* the `invoice.payment_succeeded` recovery path, so its $0 invoice re-enters `handleInvoicePaymentSucceeded`. Confirm your guard runs *before* any grant or recursion.
+6. **Set `proration_behavior` explicitly** — never rely on Stripe's default (`create_prorations`). State `none` or `create_prorations` deliberately and note the resulting total.
+7. **Idempotency-by-id is not enough** (see Principle). You need a *classifier*, not just an `invoice_<id>` dedup key.
+8. **Guard AND test.** A new mutation that can spawn a non-granting invoice needs the classifier extended *and* a regression case (mirror `src/services/stripe-webhook-handlers/__tests__/zero-trial-invoice-guard.test.ts`) asserting the spawned invoice is skipped while real `subscription_cycle` / `subscription_update`>0 still grant.
+
+**Open decision (not the $0 class, flagged during the footgun audit):** the reactivate-with-package-change branch in `src/app/api/stripe/renew-subscription/route.ts:354-373` sets `proration_behavior:"create_prorations"`. A **positive-net** proration there fires `invoice.payment_succeeded` (`subscription_update`, total>0) which the webhook **would grant**, even though the route returns `grantEntryRewardToast:false` (intends no grant). Narrow reachability (canceled-but-in-grace sub + a *different* packageId on reactivate). Decide whether that grant is wanted; if not, gate the webhook for that case. Tracked here so it's a conscious choice, not a surprise.
+
 ## The rule
 
 - New renewal day = the day the recovery payment landed (AEST, from `invoice.status_transitions.paid_at`), clamped: **25/26/27 → 24** (the major-draw period is the 28th–27th, so the 24th gives ≥3 days before a draw).
@@ -96,6 +115,12 @@ It also empirically showed `attempt_count` stays `1` under `pause_collection` �
 - **Stripe Dashboard → Settings → Subscriptions and emails:** ensure **"Send emails about expiring trials" is OFF** — otherwise Stripe emails recovered members about a "trial ending." (The app itself does not handle `customer.subscription.trial_will_end`.)
 - **No UI shows "trialing"/"Trial"** for these members — every member- and admin-facing status renders as "Active" (see *Member-facing status*).
 - The behavior flip is a single commit; commits are the rollback unit.
+
+## Gotcha: Stripe's $0 "Trial period" invoice (do NOT grant benefits for it)
+
+Setting `trial_end` makes Stripe auto-create a **separate $0 invoice** (`billing_reason="subscription_update"`, line "Trial period for X") and mark it paid. That fires a second `invoice.payment_succeeded`. It is **not** a real payment. The webhook **must skip it** — otherwise it double-grants renewal entries (the real renewal is the `subscription_cycle` invoice) and logs a spurious "Subscribed to X" admin activity row. Guarded by `isZeroAmountTrialUpdateInvoice()` (`src/utils/billing/trial-invoice.ts`); the webhook early-returns. This affected every `trial_end` flow (reanchor + the `migrate-anchor-billing-24` migration + join-anchoring) — **audit** via `npm run find:duplicate-trial-entry-grants`, **remediate** via `npm run reverse:duplicate-trial-entry-grants:dry` (dry-run; add `--apply` to write). No double *charge* (the invoice is $0).
+
+The remediation script only auto-reverses **clean** duplicates — ones where the dup's scoped `data.grants.drawGrants` fully account for its `data.entries` (so `draw == realSibling + dup`). For each it: scope-decrements the draw via `removeMajorDrawEntries` (drawId from the ledger), `$inc accumulatedEntries −data.entries`, and SETs `lastMonthAccumulatedEntries` to the **real sibling renewal's `data.entries`** when the dup is the latest cycle. That last step matters because `lastMonthAccumulatedEntries` is an absolute `$set` baseline read back at every future renewal: decrement-by-`lastMonthDelta` is wrong in the concurrent-write case (both invoices computed the same value, so the dup's net effect was 0), whereas setting it to the real renewal's value is correct in every ordering. The `BenefitsReversed` marker is written **first** as an atomic idempotency claim. **Anomalous** dups (`data.entries` > scoped `drawGrants`, e.g. an empty ledger from a swallowed draw credit) and **standalone** `subscription_update` grants are FLAGGED for manual review, never auto-reversed.
 
 ## Related
 

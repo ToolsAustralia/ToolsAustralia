@@ -45,6 +45,7 @@ import {
 } from "@/utils/integrations/klaviyo/klaviyo-events";
 import { handleSubscriptionQueueUpdate } from "@/utils/partner-discounts/partner-discount-queue";
 import { getSubscriptionPeriodEnd } from "@/utils/payment/stripe/subscription-period";
+import { isZeroAmountTrialUpdateInvoice } from "@/utils/billing/trial-invoice";
 import {
   pauseAfterRenewalFailure,
   resumeAfterSuccessfulRenewalPayment,
@@ -3266,6 +3267,19 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
         "payments.data.payment",
       ],
     });
+
+    // ✅ GUARD: Stripe auto-creates a $0 "Trial period" invoice (billing_reason=subscription_update,
+    // total=0) whenever trial_end is set on a subscription (past-due reanchor, the anchor-billing
+    // migration, join-anchoring). It is NOT a real payment — granting benefits for it double-counts
+    // renewal entries (the real renewal is a separate subscription_cycle invoice) and produces a
+    // spurious "Subscribed to X" admin activity row. Skip it entirely. See docs/PAST_DUE_REANCHOR.md.
+    if (isZeroAmountTrialUpdateInvoice(expandedInvoice)) {
+      webhookLog(
+        "info",
+        `Skipping $0 trial-period subscription_update invoice ${invoiceId} (Stripe trial_end bookkeeping; no benefits/activity).`
+      );
+      return;
+    }
 
     // ✅ CRITICAL FIX: ATOMIC PaymentEvent creation to prevent race conditions
     // Create PaymentEvent FIRST using MongoDB unique constraint

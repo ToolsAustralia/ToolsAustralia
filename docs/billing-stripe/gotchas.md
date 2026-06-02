@@ -1,5 +1,17 @@
 # Billing-Stripe — Gotchas
 
+> **Before any change that mutates subscription billing timing** (`trial_end`, `billing_cycle_anchor`, `proration_behavior`, item swap, `pause_collection`) on an EXISTING subscription: Stripe can auto-spawn an extra `invoice.payment_succeeded` your webhook will try to grant on, and **idempotency-by-id will not stop it** (the spawned invoice has its own id). Classify intent before granting. Read the **pre-flight checklist** in `docs/PAST_DUE_REANCHOR.md` ("Billing-timing footgun — read this BEFORE any anchor / trial / proration change"). The only classifier today is `isZeroAmountTrialUpdateInvoice` (`subscription_update`/$0 only).
+
+## Stripe's $0 "Trial period" invoice double-grants entries — guard it
+
+Setting `trial_end` on an **existing** subscription (the past-due reanchor, the `migrate-anchor-billing-24` migration, join-anchoring 25/26/27→24) makes Stripe **auto-create a separate $0 invoice** with `billing_reason="subscription_update"` and a "Trial period for X" line, and mark it **paid** (it's $0). That fires a second `invoice.payment_succeeded`.
+
+`handleInvoicePaymentSucceeded` normalizes `subscription_update` to a renewal for entry math, so it was **granting membership entries again** for this $0 invoice — double-counting the real `subscription_cycle` renewal — and logging a spurious "Subscribed to X Membership Package" admin-activity row (the recent-activities feed labels any non-`subscription_cycle` membership grant as "Subscribed"). 
+
+Guard: `isZeroAmountTrialUpdateInvoice()` (`src/utils/billing/trial-invoice.ts`) — the webhook early-returns for these. It is narrow: a 100%-off renewal is `subscription_cycle` (still grants); a real upgrade proration is `subscription_update` with `total > 0` (still grants).
+
+> **The guard is the SOLE line of defense.** Every idempotency layer (`PaymentEvent {paymentIntentId,eventType}` unique index, `processedPayments`, `ProcessedStripeEvent`) keys on the per-invoice / per-event id, and the $0 trial invoice carries its OWN distinct id + event — so nothing else catches this double-grant if the guard regresses. Two tests defend it: `test:trial-invoice` (the pure predicate) and `test:zero-trial-guard` (webhook-level — proves `handleInvoicePaymentSucceeded` actually honors the guard; the predicate test can't detect a handler that stops calling it). Keep BOTH green. Audit: `npm run find:duplicate-trial-entry-grants`. Remediate already-granted dups: `npm run reverse:duplicate-trial-entry-grants:dry` (dry-run; add `--apply` to write) — reverses only **clean** dups (scoped `removeMajorDrawEntries` + `accumulatedEntries −data.entries` + `lastMonthAccumulatedEntries` SET to the real sibling renewal's value when latest-cycle), writes a `BenefitsReversed` marker first as an atomic idempotency claim, and FLAGS anomalous/standalone grants for manual review. See `docs/PAST_DUE_REANCHOR.md`.
+
 ## Charge past-due — runbook
 
 (Migrated from former `docs/CHARGE_PAST_DUE_CUSTOMERS.md`.)
