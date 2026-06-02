@@ -126,6 +126,23 @@ The cancel service intentionally preserves this field; see the comment at [Cance
 
 **UI exposure (Phase 1, 2026-05-20):** the backend has always accepted *any* `packageId` via `POST /api/stripe/create-subscription-existing-user`, and `calculateResubscribeEntries` correctly preserves `lastMonthAccumulatedEntries` regardless of which tier the member picks on the way back. Until 2026-05-20 the UI restricted cancelled users to a single "Reactivate same tier" CTA; the new `ResubscribeTierPicker` (see [frontend.md → Resubscribe tier picker](./frontend.md#resubscribe-tier-picker-phase-1-2026-05-20)) now exposes the existing backend capability so members can resubscribe to a higher or lower tier and still keep their accumulated-entries carry-over.
 
+### Reactivate button gating is looser than backend reactivate eligibility (known edge)
+
+The "Reactivate" / "Resume" button in `SubscriptionManagementModal` (`CancelResumeRow.tsx`, `SettingsRedesignSubscription.tsx`) renders purely on the DB-derived flag **`isCancelled = !user.subscription.autoRenew && user.subscription.isActive`** ([benefits/route.ts:45](../../src/app/api/subscription/benefits/route.ts#L45)). It does **not** inspect the live Stripe `cancel_at_period_end` / `cancel_at` / 30-day grace window.
+
+In **normal app flows this is correct** — `!autoRenew && isActive` is exactly the *scheduled-cancellation-but-still-in-grace* state, and the button correctly hides for: fully-lapsed (`isActive=false` → resubscribe picker), past-due with auto-renew on (`hasFailed` hides the manage block → "Pay Now"), normal active/trialing (`autoRenew=true` → "Cancel"), and retention-paused (the pause flow never sets `autoRenew`, so it stays `true` → button hidden).
+
+**But because it's a DB-flag heuristic, the affordance is looser than what the backend will honor.** `renew-subscription` only derives `renewalStrategy:"reactivate"` when the *live* Stripe sub has `cancel_at` non-null and is within a 30-day grace window ([renew-subscription/route.ts:160-206](../../src/app/api/stripe/renew-subscription/route.ts#L160)). So any state that reaches `autoRenew=false && isActive=true` by another path shows the button but may **not** perform a free uncancel on click:
+
+| Edge state (`autoRenew=false`, `isActive=true`) | Click consequence |
+|---|---|
+| **Admin sets `autoRenew=false`** via the user-edit route ([admin/users/[id]/route.ts:795-801](../../src/app/api/admin/users/[id]/route.ts#L795)) with no real Stripe cancellation | backend finds no `cancel_at` → falls to `create_new` → **charges a full new membership** (only edge with a real money consequence) |
+| DB/Stripe **drift** or `cancel_at` null / grace elapsed | `create_new` (full charge) |
+| Stale DB vs live **`past_due`** | `retry_payment` → charges the overdue invoice |
+| **No saved payment method** | backend returns `requiresSetupIntent`; the client setup-intent modal is an unimplemented TODO ([index.tsx:640](../../src/components/modals/SubscriptionManagementModal/index.tsx#L640)) → dead-ends |
+
+**Status: accepted/known, not a live production problem** — the in-app paths that set `autoRenew=false` (the Cancel button, `update-auto-renew`, and the Stripe-side cancel webhook) all produce a *genuine* scheduled cancellation that the backend reactivates correctly; the surprise-charge edges require an admin edit or flag drift. If revisited, two minimal fixes: (1) compute `isCancelled` from the live Stripe sub in `benefits/route.ts` (collapses the affordance onto the exact backend condition), or (2) have the backend return a distinct "cannot reactivate — please resubscribe" error instead of silently falling to `create_new`.
+
 ### Cancelled-membership comeback promo
 
 There is a separate flow that targets cancelled members with a comeback promo. See the [promo](../promo/) domain — specifically the migrated `CANCELLED_MEMBERSHIP_COMEBACK_PROMO.md` content (will land in `docs/promo/gotchas.md` when that domain is bootstrapped).

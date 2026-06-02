@@ -354,22 +354,32 @@ export async function POST(request: NextRequest) {
     if (renewalStrategy === "reactivate" && existingSubscription) {
       // console.log(`🔄 [REACTIVATE] Reactivating canceled subscription`);
 
+      // Reactivation is SAME-TIER ONLY: it just clears cancel_at_period_end (no
+      // charge, no proration). Tier changes for a cancelled-in-grace member go
+      // through the normal upgrade (immediate, no proration) / downgrade
+      // (period-end) flows AFTER reactivating — they are intentionally NOT bolted
+      // onto reactivate. The previous `proration_behavior:"create_prorations"`
+      // item-swap here would auto-charge a proration AND make the webhook grant a
+      // full renewal-sized entry batch off the resulting subscription_update
+      // invoice (computed from the OLD package metadata), despite this route
+      // returning grantEntryRewardToast:false. See docs/PAST_DUE_REANCHOR.md
+      // "Billing-timing footgun".
+      if (validatedData.packageId && validatedData.packageId !== user.subscription?.packageId) {
+        return NextResponse.json(
+          {
+            error:
+              "Tier changes aren't available during reactivation. Reactivate your current plan first, then upgrade or downgrade.",
+            code: "REACTIVATE_TIER_CHANGE_NOT_ALLOWED",
+          },
+          { status: 400 }
+        );
+      }
+
       // Reactivate by removing cancel_at_period_end and updating payment method
       // ✅ FIX: Only set cancel_at_period_end: false (don't set cancel_at: null)
       const reactivatedSubscription = await stripe.subscriptions.update(existingSubscription.id, {
         cancel_at_period_end: false,
         default_payment_method: paymentMethod.id,
-        // If user wants to change package, update the items
-        ...(validatedData.packageId &&
-          validatedData.packageId !== user.subscription?.packageId && {
-            items: [
-              {
-                id: existingSubscription.items.data[0].id,
-                price: targetPackage.stripePriceId,
-              },
-            ],
-            proration_behavior: "create_prorations",
-          }),
       });
 
       // console.log(`✅ Subscription reactivated:`, {

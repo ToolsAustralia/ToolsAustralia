@@ -20,6 +20,16 @@ Middleware excludes `/api/**` via the matcher config. If you move a page to be s
 
 Dev mode often bypasses rate limits for testing. Check the env-flag to ensure it's only off in dev. Production shipping a "dev rate limit bypass" = security incident.
 
+## Non-canonical host must redirect, never serve (`connect-src 'self'` cross-origin block)
+
+**The app is single-canonical-host: `toolsaustralia.com.au` (apex).** Everything is wired to the apex — `NEXTAUTH_URL`, `NEXT_PUBLIC_APP_URL`, `NEXT_PUBLIC_API_URL`, Google OAuth callback URIs, the Let's Encrypt cert SANs, and the canonical/OG metadata (`getBaseUrl()`, `app/layout.tsx metadataBase`).
+
+**Footgun:** the client fetch layer prepends `NEXT_PUBLIC_API_URL` to every call — `apiRequest()` in `src/lib/queries.ts` does `fetch(\`${API_BASE_URL}${endpoint}\`)` where `API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || ""`, and `NEXT_PUBLIC_API_URL` is the **absolute apex** (`https://toolsaustralia.com.au/`). So if any *other* hostname (e.g. `www.toolsaustralia.com.au`) is set to **serve** the app, the page shell renders but every data fetch is **cross-origin to the apex** — and `connect-src 'self'` in `csp.ts` (where `'self'` = the host the page loaded on, i.e. `www.`) **refuses it**. Symptom: page loads, then console floods with `Refused to connect ... violates the document's Content Security Policy` for `https://toolsaustralia.com.au/api/*` and the UI shows "Network error – please check your connection". This is **not** a DNS or cert problem — `www.` resolves, has a valid cert, and reaches Vercel fine.
+
+**Rule:** in Vercel → Project → Settings → Domains, every alternate hostname (`www.`, etc.) must be **"Redirect to Another Domain" → `toolsaustralia.com.au`, 308 Permanent** — *not* "Connect to an environment". The redirect happens at the edge before any page renders, so the visitor always lands on the canonical apex and `'self'` matches. _(Applied 2026-06-02: `www.toolsaustralia.com.au` switched from serve → 308 permanent redirect to apex.)_
+
+**Do NOT** "fix" this by widening `connect-src` to list the apex — that just papers over a non-canonical origin and leaves you with split NextAuth sessions (cookies are host-only here; `src/lib/auth.ts` sets no cookie domain) and SEO duplicate-content. If you ever genuinely need to serve the app on multiple origins, the correct (heavier) path is: set `NEXT_PUBLIC_API_URL=""` so fetches are relative/same-origin, **and** add a shared cookie domain `.toolsaustralia.com.au` in `src/lib/auth.ts`, **and** accept the SEO duplicate-content. Not recommended.
+
 ## Migrated from `docs/security-regression-checklist.md`
 
 > _TODO: read root file and merge._
