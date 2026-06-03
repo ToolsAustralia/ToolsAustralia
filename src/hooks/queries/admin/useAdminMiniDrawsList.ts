@@ -57,16 +57,19 @@ type TopListResponse = {
 };
 
 /**
- * Top active mini draws ranked by entries (server-sorted), for the Overview card.
- * Per-draw revenue is not derivable (no priced tickets / no `miniDrawId` on
- * PaymentEvent), so the card shows name / capacity / entries only.
+ * Active mini draws for the Overview "Top mini draws" card. Fetches the full
+ * active pool (the route has no fill-ratio sort key) so the card can rank by
+ * progress (entries ÷ capacity — "closest to drawing") rather than raw entries.
+ * `poolLimit` caps the pool; active draws are few, so 50 covers them. Per-draw
+ * revenue is not derivable (no priced tickets / no `miniDrawId` on PaymentEvent),
+ * so the card shows name / capacity / entries / fill only.
  */
-export function useTopMiniDraws(limit = 5) {
+export function useTopMiniDraws(poolLimit = 50) {
   return useQuery({
-    queryKey: ["admin", "mini-draw", "top", limit],
+    queryKey: ["admin", "mini-draw", "top", "active-pool", poolLimit],
     queryFn: async () => {
       const res = await apiGet<TopListResponse>(
-        `/api/admin/mini-draw/list?status=active&sortBy=totalEntries&sortOrder=desc&limit=${limit}`
+        `/api/admin/mini-draw/list?status=active&sortBy=totalEntries&sortOrder=desc&limit=${poolLimit}`
       );
       return res.data.miniDraws;
     },

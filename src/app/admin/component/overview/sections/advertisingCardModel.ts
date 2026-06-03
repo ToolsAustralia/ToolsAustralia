@@ -99,6 +99,32 @@ export function buildAdvertisingRows(ar: AttributedRevenue | undefined): Adverti
 }
 
 /**
+ * Build the appended "Direct" row from the `direct` bucket (unattributed /
+ * organic payments — no fbclid/ttclid/klaviyo tag). Returns null when there's
+ * nothing to show so the card omits the row entirely. This is deliberately NOT
+ * part of ADVERTISING_ROW_CONFIG: direct revenue is UNattributed, so it must not
+ * inflate the header's "attributed" total or the blended-ROAS denominator. Spend
+ * and ROAS are "—" by nature (no ad channel). `revenue` is acquisition only
+ * (renewals already excluded upstream), matching the other rows' basis.
+ */
+export function buildDirectRow(ar: AttributedRevenue | undefined): AdvertisingRowVM | null {
+  const entry = ar?.["direct"];
+  const revenue = toFinite(entry?.revenue);
+  const conversions = toFinite(entry?.conversions);
+  if (revenue <= 0 && conversions <= 0) return null;
+  return {
+    id: "direct",
+    platform: "Direct",
+    logo: "direct",
+    spend: { kind: "owned" }, // renders "—" — direct has no ad spend
+    revenue,
+    conversions,
+    roas: { kind: "na" }, // renders "—" — ROAS is not applicable to unattributed revenue
+    confidenceTitle: undefined, // direct is unattributed by definition — no click/UTM split to show
+  };
+}
+
+/**
  * Blended ROAS = Σ revenue ÷ Σ ad spend across paid channels that have spend.
  * Returns null when no paid channel has spend (render "—", never 0.00x).
  */

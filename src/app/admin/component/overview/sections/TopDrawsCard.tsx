@@ -13,6 +13,7 @@ interface DrawRow extends Record<string, unknown> {
   entries: number;
   capacity: number;
   fill: number;
+  ratio: number; // uncapped entries ÷ capacity — the rank key (can exceed 1 for over-subscribed draws)
   full: boolean;
 }
 
@@ -23,36 +24,46 @@ const COLUMNS: Column[] = [
 ];
 
 /**
- * Top active mini draws ranked by entries, for the admin Overview.
+ * Top active mini draws ranked by progress (closest to drawing), for the admin Overview.
  *
- * Data is the server-sorted active mini-draw list (`useTopMiniDraws`). Per-draw
- * revenue isn't derivable (entries are free, earned from packages — no priced
- * tickets and no `miniDrawId` on PaymentEvent), so the card shows name / capacity
- * / entries only. "View all" links to the Mini Draws admin page.
+ * Ranked client-side by fill ratio (entries ÷ capacity) — the draws nearest 100%
+ * surface first — because the list route has no fill-ratio sort key. `useTopMiniDraws`
+ * returns the full active pool; this card sorts + takes the top 5. Per-draw revenue
+ * isn't derivable (entries are free, earned from packages — no priced tickets and no
+ * `miniDrawId` on PaymentEvent), so the card shows name / capacity / entries / fill
+ * only. "View all" links to the Mini Draws admin page.
  */
+const TOP_N = 5;
+
 export default function TopDrawsCard() {
   const router = useRouter();
   const { formatNumber } = useMetricsFormatting();
-  const { data, isLoading } = useTopMiniDraws(5);
+  const { data, isLoading } = useTopMiniDraws();
 
   // Clicking a row deep-links to the Mini Draws admin tab with its search box
   // pre-filled by the draw name (MiniDrawManagement reads `?search=`).
   const openDraw = (row: DrawRow) =>
     router.push(`/admin/mini-draws?search=${encodeURIComponent(row.name)}`);
 
-  const rows: DrawRow[] = (data ?? []).map((d) => {
-    const capacity = d.minimumEntries || 0;
-    const entries = d.totalEntries || 0;
-    const fill = capacity > 0 ? Math.min(100, Math.round((entries / capacity) * 100)) : 0;
-    return {
-      id: d._id,
-      name: d.name,
-      entries,
-      capacity,
-      fill,
-      full: capacity > 0 && entries >= capacity,
-    };
-  });
+  const rows: DrawRow[] = (data ?? [])
+    .map((d) => {
+      const capacity = d.minimumEntries || 0;
+      const entries = d.totalEntries || 0;
+      const ratio = capacity > 0 ? entries / capacity : 0;
+      const fill = capacity > 0 ? Math.min(100, Math.round(ratio * 100)) : 0;
+      return {
+        id: d._id,
+        name: d.name,
+        entries,
+        capacity,
+        fill,
+        ratio,
+        full: capacity > 0 && entries >= capacity,
+      };
+    })
+    // Closest to 100% first; entries break ties so a fuller-by-count draw wins at equal ratio.
+    .sort((a, b) => b.ratio - a.ratio || b.entries - a.entries)
+    .slice(0, TOP_N);
 
   const renderCell = (key: string, row: DrawRow) => {
     if (key === "name") {
@@ -94,7 +105,7 @@ export default function TopDrawsCard() {
     <Card className="p-5 h-full">
       <SectionTitle
         title="Top mini draws"
-        subtitle="Active draws by entries"
+        subtitle="Active draws · closest to drawing"
         icon={Trophy}
         right={
           <Link

@@ -1,19 +1,19 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { Clock, DollarSign, TrendingUp, Target, BarChart3 } from "lucide-react";
 import { Card, SectionTitle, DataTable, type Column } from "@/components/admin/ui";
 import { MetricCard } from "@/components/admin/metrics/shared/MetricCard";
 import { useMetricsFormatting } from "@/hooks/useMetricsFormatting";
 import { useHourlyRevenue, type HourlyRevenueBucket } from "@/hooks/queries/admin/useHourlyRevenue";
-import { formatInTimeZone } from "date-fns-tz";
 
 /**
  * Per-platform hour-of-day breakdown for an ad platform tab (TikTok, Snapchat).
  * Server-side attributed revenue + conversions from SHARED-1, merged with ad **spend**
  * from that platform's Marketing API (→ Profit = revenue − spend, ROAS = revenue ÷
  * spend). Where a platform has no spend source yet (e.g. Snapchat, or TikTok before
- * its creds), Spend/Profit/ROAS render "—" (not 0). Owns a default last-30-day range.
+ * its creds), Spend/Profit/ROAS render "—" (not 0). The AEST date window is owned by
+ * the parent tab (TikTok/Snapchat wrappers) and passed in as `startDate`/`endDate`.
  */
 interface Row extends Record<string, unknown> {
   id: number;
@@ -40,24 +40,19 @@ function hourLabel(h: number): string {
   return `${display}:00 ${period}`;
 }
 
-// Last-30-days window as YYYY-MM-DD in AEST — the API buckets these as Australia/Sydney
-// calendar days, so format in that zone (toISOString/UTC would drop the current AEST day each morning).
-function defaultRange(now: Date): { start: string; end: string } {
-  const TZ = "Australia/Sydney";
-  const start = new Date(now.getTime() - 29 * 24 * 60 * 60 * 1000);
-  return { start: formatInTimeZone(start, TZ, "yyyy-MM-dd"), end: formatInTimeZone(now, TZ, "yyyy-MM-dd") };
-}
-
 export default function PlatformHourlyRevenueSection({
   platform,
   platformLabel,
+  startDate,
+  endDate,
 }: {
   platform: "tiktok" | "snapchat";
   platformLabel: string;
+  startDate: string;
+  endDate: string;
 }) {
   const { fmtCompact } = useMetricsFormatting();
-  const [range] = useState(() => defaultRange(new Date()));
-  const { data, isLoading } = useHourlyRevenue({ platform, startDate: range.start, endDate: range.end });
+  const { data, isLoading } = useHourlyRevenue({ platform, startDate, endDate });
 
   const hasSpend = data?.totalSpend != null;
 
@@ -114,8 +109,8 @@ export default function PlatformHourlyRevenueSection({
           title={`${platformLabel} — by hour (server-side)`}
           subtitle={
             hasSpend
-              ? "Attributed revenue + ad spend → profit & ROAS · last 30 days (AEST)"
-              : `Attributed acquisition revenue · last 30 days (AEST). Spend / profit / ROAS arrive when the ${platformLabel} Marketing-API sync ships.`
+              ? "Attributed revenue + ad spend → profit & ROAS · selected range (AEST)"
+              : `Attributed acquisition revenue · selected range (AEST). Spend / profit / ROAS arrive when the ${platformLabel} Marketing-API sync ships.`
           }
           icon={Clock}
         />
