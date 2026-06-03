@@ -22,6 +22,15 @@ The `/api/admin/**` namespace. Per the manifest, this domain is the catch-all fo
 
 > _TODO: read [src/app/api/admin/](../../src/app/api/admin/) and enumerate every sub-route._
 
+## Membership-by-package MRR trend (2026-06-03)
+
+`GET /api/admin/dashboard/membership-by-package` ([route](../../src/app/api/admin/dashboard/membership-by-package/route.ts)) returns the active membership base per tier (live, or a `MembershipDailySnapshot` read when the selected range resolves to a past `asOfDate`). As of 2026-06-03 it also attaches **`summary.totalActiveRevenueTrend`** (a `TrendData`) — the MRR (active recurring revenue) % change vs the **previous comparable period**:
+
+- The comparison window is `trendCalculationService.getComparisonPeriod(startDate, endDate)` — the same period-over-period window the dashboard-stats route uses (for "Today" → all of yesterday).
+- Baseline MRR = `getMembershipByPackageSnapshot(comparisonEnd).summary.totalActiveRevenue`. If that day has **no snapshot** (`snapshotMissing`), the trend is **omitted** (no fabricated baseline from live data).
+- Skipped entirely for `dateRange === "all-time"` (no prior period).
+- Consumed by the Overview MRR KPI tile via `trendPct(summary.totalActiveRevenueTrend)` — see [frontend.md](./frontend.md). The pill direction/colour follow the same fixed `trendPct`/`TrendPill` rules as every other KPI.
+
 ## Charge-past-due history endpoints
 
 All three routes are admin-only (`requireAdmin(session)`). Return shapes are defined in [src/services/admin/chargePastDueHistory.ts](../../src/services/admin/chargePastDueHistory.ts).

@@ -184,6 +184,8 @@ export interface MembershipByPackageSummary {
   totalPausedCount: number;
   totalActiveRevenue: number;
   totalPastDueRevenue: number;
+  /** MRR (totalActiveRevenue) % change vs the previous comparable period. Omitted for all-time / when the baseline day has no snapshot. */
+  totalActiveRevenueTrend?: TrendData;
   snapshotPartial?: boolean;
   /** Set when caller asked for a snapshot date but no snapshot row existed; live data returned instead. */
   snapshotMissing?: boolean;

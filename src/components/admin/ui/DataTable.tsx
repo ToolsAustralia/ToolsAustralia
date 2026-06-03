@@ -5,8 +5,8 @@ import { ChevronUp, ChevronDown } from "lucide-react";
 export type Column = { key: string; label: string; align?: "left" | "right"; sortable?: boolean };
 
 export function DataTable<T extends Record<string, unknown> & { id?: string | number }>({
-  columns, rows, renderCell,
-}: { columns: Column[]; rows: T[]; renderCell?: (key: string, row: T) => ReactNode }) {
+  columns, rows, renderCell, onRowClick,
+}: { columns: Column[]; rows: T[]; renderCell?: (key: string, row: T) => ReactNode; onRowClick?: (row: T) => void }) {
   const [sort, setSort] = useState<{ key: string | null; dir: 1 | -1 }>({ key: null, dir: 1 });
   const sorted = useMemo(() => {
     if (!sort.key) return rows;
@@ -35,7 +35,9 @@ export function DataTable<T extends Record<string, unknown> & { id?: string | nu
         </thead>
         <tbody>
           {sorted.map((row, ri) => (
-            <tr key={row.id ?? ri} className="border-b border-neutral-100 dark:border-neutral-800/60 hover:bg-neutral-50 dark:hover:bg-neutral-800/40 transition-colors">
+            <tr key={row.id ?? ri}
+              onClick={onRowClick ? () => onRowClick(row) : undefined}
+              className={`border-b border-neutral-100 dark:border-neutral-800/60 hover:bg-neutral-50 dark:hover:bg-neutral-800/40 transition-colors ${onRowClick ? "cursor-pointer" : ""}`}>
               {columns.map((c) => (
                 <td key={c.key} className={`py-2.5 px-2 ${c.align === "right" ? "text-right" : "text-left"}`}>
                   {renderCell ? renderCell(c.key, row) : (row[c.key] as ReactNode)}

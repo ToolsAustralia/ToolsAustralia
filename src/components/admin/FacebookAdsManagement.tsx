@@ -30,7 +30,8 @@ import Checkbox from "@/components/modals/ui/Checkbox";
 import Dropdown from "@/components/modals/ui/Dropdown";
 import { useFacebookAdsInsights, useHourlyInsights } from "@/hooks/queries/useFacebookAdsInsights";
 import type { DateRangeOption, InsightLevel, FacebookAdsBreakdownItem } from "@/types/facebook-ads";
-import DateRangeToggle, { DateRange } from "@/components/admin/DateRangeToggle";
+import { DateRange } from "@/components/admin/DateRangeToggle";
+import { DateRangeDropdown } from "@/components/admin/overview/DateRangeDropdown";
 import { AdminMobileLayoutDateRangeShell } from "@/app/admin/component/AdminMobileLayoutDateRangeShell";
 import { useAdminMobileDateToolbarSlot } from "@/hooks/useAdminMobileDateToolbarSlot";
 import { MetricCard } from "@/components/admin/metrics/shared/MetricCard";
@@ -1394,14 +1395,11 @@ export default function FacebookAdsManagement() {
                 {!isLgUp && slotEl
                   ? createPortal(
                       <AdminMobileLayoutDateRangeShell>
-                        <DateRangeToggle
+                        <DateRangeDropdown
                           selectedRange={dateRange}
                           onRangeChange={handleDateRangeChange}
                           onCustomClick={() => setIsCustomDateModalOpen(true)}
-                          collapsed={false}
                           displayDate={displayDate || undefined}
-                          onExpand={() => {}}
-                          className="w-full"
                         />
                       </AdminMobileLayoutDateRangeShell>,
                       slotEl
@@ -1410,27 +1408,22 @@ export default function FacebookAdsManagement() {
                 {!isLgUp && !slotEl ? (
                   <div className="flex-shrink-0 min-w-0 w-full max-w-full">
                     <AdminMobileLayoutDateRangeShell>
-                      <DateRangeToggle
+                      <DateRangeDropdown
                         selectedRange={dateRange}
                         onRangeChange={handleDateRangeChange}
                         onCustomClick={() => setIsCustomDateModalOpen(true)}
-                        collapsed={false}
                         displayDate={displayDate || undefined}
-                        onExpand={() => {}}
-                        className="w-full"
                       />
                     </AdminMobileLayoutDateRangeShell>
                   </div>
                 ) : null}
                 {isLgUp ? (
                   <div className="flex-shrink-0 min-w-0 max-w-full sm:w-auto">
-                    <DateRangeToggle
+                    <DateRangeDropdown
                       selectedRange={dateRange}
                       onRangeChange={handleDateRangeChange}
                       onCustomClick={() => setIsCustomDateModalOpen(true)}
-                      collapsed={false}
                       displayDate={displayDate || undefined}
-                      onExpand={() => {}}
                     />
                   </div>
                 ) : null}

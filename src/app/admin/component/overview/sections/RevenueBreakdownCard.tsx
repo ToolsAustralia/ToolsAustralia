@@ -22,6 +22,13 @@ import type {
  * Pure presentation over the `useAdminDashboardStats` result passed down from
  * `DashboardOverview`. The detail modal is intentionally dropped in the redesign.
  */
+/**
+ * Exact AUD money — full value with thousands separators, no k/M compacting and no
+ * forced `.00` (cents shown only when the value actually has them). Used for the
+ * revenue rows + header total so the dashboard shows the real figure, not `$2.1k`.
+ */
+const moneyExact = (n: number) => `$${n.toLocaleString("en-AU", { maximumFractionDigits: 2 })}`;
+
 function normalize(item: RevenueBreakdownItem | undefined): {
   revenue: number;
   purchaseCount: number;
@@ -46,7 +53,7 @@ export default function RevenueBreakdownCard({
   endDate?: string;
   onUserClick?: (userId: string) => void;
 }) {
-  const { fmtCompact, formatNumber } = useMetricsFormatting();
+  const { formatNumber } = useMetricsFormatting();
 
   // Detail-modal state — clicking a bar row opens the revenue detail modal scoped to
   // that source (legacy `RevenueBreakdownSection` UX). `id` doubles as the RevenueCategory.
@@ -129,7 +136,7 @@ export default function RevenueBreakdownCard({
     <Card className="p-5 h-full min-w-0">
       <SectionTitle
         title="Revenue breakdown"
-        subtitle={showSkeleton ? "Loading…" : `${fmtCompact(total)} across 6 sources`}
+        subtitle={showSkeleton ? "Loading…" : `${moneyExact(total)} across 6 sources`}
         icon={BarChart3}
       />
       {showSkeleton ? (
@@ -147,9 +154,8 @@ export default function RevenueBreakdownCard({
       ) : (
         <BarList
           items={items}
-          fmt={fmtCompact}
+          fmt={moneyExact}
           fmtCount={formatNumber}
-          equalLength
           onItemClick={(id) => {
             setSelectedCategory(id as RevenueCategory);
             setModalOpen(true);

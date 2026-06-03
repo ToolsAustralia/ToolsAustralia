@@ -88,6 +88,7 @@ export default function RevenueChartCard() {
             options={PERIOD_OPTIONS}
             value={period}
             onChange={setPeriod}
+            size={isLgUp ? "md" : "sm"}
           />
         </div>
       </div>
@@ -102,9 +103,10 @@ export default function RevenueChartCard() {
           axisLabel={axisLabel}
           accent="#ee0000"
           valueFmt={fmtCompact}
-          // Mobile: fit the chart to width (minPointPx 0) so drag-to-scrub covers
-          // every point; desktop: allow horizontal scroll for dense series.
-          minPointPx={isLgUp ? 24 : 0}
+          // Both platforms scroll horizontally for dense series (e.g. the 30-point
+          // Days view). Mobile gets a slightly wider per-point so the chart overflows
+          // and is comfortably draggable; tap a point to read its value.
+          minPointPx={isLgUp ? 24 : 30}
         />
       ) : (
         <div className="flex items-center justify-center h-[230px] text-sm text-neutral-400 dark:text-neutral-500">
