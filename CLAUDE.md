@@ -103,6 +103,15 @@ Verbose audits belong in `/plan`, `/review`, and `/debug`. Outside those skills,
 
 Worktrees for this repo live at `<repo-root>/.worktrees/<kebab-branch-name>/`, not under `.claude/worktrees/` or any other location. Use the existing `wt-new.sh` script when present — it handles env file copy and `npm install`. If you're using an EnterWorktree-style tool with a different default, override it.
 
+### 10. Mirror admin API changes to Norm — or flag them
+
+The **internal-norm / OpenClaw** gateway (`docs/internal-norm/`) re-exposes admin data to an external AI by wrapping the **same services** the `/api/admin/**` routes use. So an admin-side change can silently drift the Norm surface. Whenever you **add a read endpoint under `src/app/api/admin/**`**, **change an existing admin route's response shape**, or **change a service that feeds one**:
+
+- If Norm already mirrors that service/domain (check `src/lib/internal-norm/classification.ts` and the route map under `src/app/api/internal/norm/v1/`), you **must** keep it in lockstep in the same task: update the registry entry, the Zod schema (`src/lib/internal-norm/schemas/`), the Norm route, run `npm run build:norm-manifest`, and update `docs/internal-norm/norm-context.md`. A schema↔output mismatch is a **runtime 500** that `tsc` cannot catch — verify with `npm run norm:smoke`. Keep the Norm projection PII-safe (firstName + opaque userId only).
+- If it's a **new** admin read Norm could usefully expose but you're not wiring it now, **flag it to the user explicitly** ("this could be mirrored to Norm — want me to?") rather than silently skipping it.
+
+The `adding-api-route` skill encodes this as step 7. This rule is not hook-enforced — you're expected to apply it on your own; `/review` should also flag an admin read/shape change that left Norm stale.
+
 ## Commands
 
 Dev/build use **Turbopack**. Both `dev` and `build` first run `prebuild`/`predev` which regenerates the upsell image manifest via `scripts/build-upsell-image-manifest.ts` — if you add/change files under the upsell image directories, that script must succeed before the app will start.
