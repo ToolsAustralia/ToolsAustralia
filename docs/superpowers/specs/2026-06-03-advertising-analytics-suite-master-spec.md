@@ -104,19 +104,20 @@ These are the rules that keep A/B/C/D reconciled with each other and with the ex
 - **Flow list:** `GET /api/flows/?filter=equals(status,'live')` — status ∈ `draft`/`manual`/`live`, `trigger_type` filterable; `page[size]` ≤ 50; full definition only via `GET /flows/{id}/?additional-fields[flow]=definition`.
 - **Attributed revenue (the new bit):** `POST /api/campaign-values-reports/` and `POST /api/flow-values-reports/`. JSON:API body — `data.type='campaign-values-report'`, `data.attributes = { statistics: ['conversion_value','conversion_uniques','conversions'], timeframe: {start,end} | {key}, conversion_metric_id: <Placed Order id>, filter?: equals(campaign_id,"…") }`. `conversion_value` = attributed revenue; `conversion_uniques`/`conversions` = conversion counts. One report returns a row per campaign/flow in the timeframe — no per-entity fan-out.
 - **Conversion metric id:** `GET /api/metrics/`, match the "Placed Order" metric (`equals(integration.name,…)` + `name=="Placed Order"`). Resolve once and cache (env var or cached lookup). `conversion_metric_id` is REQUIRED in the values-report body.
-- **Email vs SMS split:** the values-report response carries a `groupings.send_channel` dimension (email/sms/push). **Unverified whether `send_channel` splits `conversion_value` specifically** → fallback is one filtered report per channel, or join `campaign-messages` (which carry channel). The spike resolves this.
+- **Email vs SMS split:** ✅ **VERIFIED (read-only probe, 2026-06-03)** — the default values-report already returns one row per campaign **message**, and each `results[].groupings` natively carries `send_channel` ("email"/"sms"), `campaign_id`, and `campaign_message_id`, alongside `results[].statistics` = `{ conversion_value, conversion_uniques, conversions }`. No `group_by` needed; the channel split is intrinsic to the rows.
 
 **Rate limits (drive the caching design):** the values-report endpoints are heavily throttled — **Campaign Values Report = burst 1/s, steady 2/min, 225/day** (Metric Aggregates 3/s·60/min; Get Metrics 10/s·150/min). This rules out the FB tab's 2-minute auto-refresh for Klaviyo. **Design constraint:** the Klaviyo route caches values-report results server-side (short TTL, ~5–15 min) or persists a daily `KlaviyoInsightsDaily` snapshot (mirroring `MetaAdInsightsDaily`); the tab does NOT auto-refresh reporting data on an interval. The list endpoints (campaigns/flows) are not on the reporting tier and can be fetched more freely.
 
 **Required key scopes:** `campaigns:read`, `flows:read`, `metrics:read`.
 
-**Pre-build verification spike (account-level — cannot be derived from code):**
-- Does the current `KLAVIYO_PRIVATE_API_KEY` carry `campaigns:read` / `flows:read` / `metrics:read`? (the codebase only ever used Profiles/Events/Subscriptions/Lists scopes.)
-- The account "Placed Order" `conversion_metric_id` — store as env var or resolve+cache at runtime.
-- Pin a `revision` that supports `campaign-values-reports` / `flow-values-reports` (reporting docs default `2026-04-15`; the codebase currently pins `2025-10-15`) — confirm the endpoints respond at the pinned revision.
-- Confirm whether `groupings.send_channel` splits `conversion_value`.
+**Pre-build verification spike — ✅ DONE (read-only probe, 2026-06-03):**
+- `KLAVIYO_PRIVATE_API_KEY` (dev key, `pk_…`) **has all three scopes** — `GET /metrics/`, `/campaigns/?filter=…`, `/flows/` all returned `200`.
+- "Placed Order" `conversion_metric_id` = **`TaGfFU`** (integration: `API`), resolves **uniquely** by name → Part C resolves it at runtime via `GET /metrics/` (cached in-memory), no env var, account-agnostic.
+- `POST /api/campaign-values-reports/` **works at the codebase's pinned `2025-10-15`** (and `2026-04-15`) — no revision bump needed.
+- `groupings.send_channel` is native per row (see above).
+- The reporting throttle is real (a 3rd rapid call returned `429`), confirming the cache/snapshot requirement.
 
-**Effort:** M–L (3–5 days incl. the spike). **Risk:** highest-uncertainty piece; mitigated by the caching/snapshot constraint above.
+**Effort:** M–L. **Risk:** de-risked by the spike; remaining work is mechanical (client methods + cache + tab). `flow-values-reports` assumed analogous to `campaign-values-reports` (verify its row shape with one probe during build).
 
 ---
 
