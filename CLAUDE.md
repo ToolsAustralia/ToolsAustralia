@@ -49,20 +49,25 @@ This rule is not hook-enforced. You're expected to apply it on your own.
 
 ### 5. Keep README.md and BUSINESS.md in sync with business-level changes
 
-The per-domain doc-sync hook covers `docs/<domain>/` updates. README.md and BUSINESS.md are the **top-level business status documents** at the repo root and the hook does not enforce them. You **must** update them in the same task when your change flips a fact they assert. Triggers:
+The per-domain doc-sync hook covers `docs/<domain>/` updates. README.md and BUSINESS.md are the **top-level business status documents** at the repo root. You **must** update them in the same task when your change flips a fact they assert. Triggers:
 
 - A membership tier is added, removed, repriced, or its entries / partner-discount % / shop % change.
 - An access rule for a package family changes (e.g. who can see Additional packs, who gets partner access).
 - A "coming soon" item ships (shop, partner-discount API at 1K+ brands, TikTok / Snapchat insights sync, mobile app on Play Store, second monthly major draw).
 - A new "coming soon" item is added to the roadmap.
 - The major draw cadence (27th of month), freeze-period rule, or mini-draw trigger model changes.
-- The anchor-day-24 billing rule, refund-reversal model, or past-due recovery flow changes (see §9 of BUSINESS.md).
-- An ad platform moves from "prepared / shell only" to "live" or vice versa.
+- The prize catalog changes (power-tool/storage combos, cash tier/bonus amounts).
+- The anchor-day-24 billing rule, refund-reversal model, past-due recovery flow, or the $0-trial-invoice guard changes (see §9 of BUSINESS.md).
+- An ad platform moves from "prepared / shell only" to "live" or vice versa, OR a tracking provider gains/loses server-side CAPI or ad-spend sync.
 - The partner-discount tier-visibility model changes (today: 50 / 75 / 100% of a 7-brand catalog).
+- The promo/upsell multiplier model changes (resolution order, default category multipliers, BonusEntryPromo).
+- The subscription state machine changes (states, ghost states, reactivation/resubscribe grace rules, autoRenew).
+- The rewards pause status changes, or the referral/affiliate reward structure changes.
+- The staff access model changes (RBAC permission catalog, roles, staff invite flow, StaffActivity audit log), or an admin tool's guardrails change (e.g. charge-past-due limits).
 
 Both files include a "Coming soon" section — when something ships, **move the line out of "Coming soon" into "Live"** in the same edit, do not leave it in both.
 
-This rule is not hook-enforced. You're expected to apply it on your own. `/review` should also flag it.
+**This rule IS hook-enforced (trigger-based).** The `Stop` hook (`.claude/hooks/doc-sync.mjs`) holds a curated `BUSINESS_TRIGGER_GLOBS` list of business-material source paths; if you edit one of them substantively and touch **neither** README.md nor BUSINESS.md in the same turn, it BLOCKS with `STALE BUSINESS DOCS`. The hook only checks that a root doc was *touched* — it cannot verify the *content* is correct, so you still own getting the wording right (and `/review` should still flag it). If a triggered edit genuinely changed no business-level fact (pure refactor), make a one-line clarifying touch to the relevant BUSINESS.md section to clear the block. When you add a new business-material source file, add its path to `BUSINESS_TRIGGER_GLOBS` in the hook.
 
 ### 6. Verify before claiming — AND before branching on assumed state
 

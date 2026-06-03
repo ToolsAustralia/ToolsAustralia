@@ -7,11 +7,46 @@ import path from "node:path";
 import process from "node:process";
 import { execSync } from "node:child_process";
 import { readManifest, bumpLastVerified } from "./lib/manifest.mjs";
-import { findDomain } from "./lib/match.mjs";
+import { findDomain, matchesAny } from "./lib/match.mjs";
 
 const TRACKER_PATH = ".claude/.touched-files";
 const ROT_DAYS = 90;
 const ROT_CHANGE_THRESHOLD = 5;
+
+// CLAUDE.md rule 5: business-material source changes must keep README.md + BUSINESS.md
+// (the top-level business-status docs) in sync. The per-domain stale check above does NOT
+// cover these root docs, so we enforce them here with a curated trigger list. When a touched
+// source file matches one of these globs and NEITHER root doc was edited in the same turn,
+// the Stop is BLOCKED. These are the files that carry business-level facts a reader of
+// BUSINESS.md/README.md relies on (prices/tiers/entries, draw cadence & gating, prize catalog,
+// billing/anchor/refund rules, partner catalog, promo/upsell multipliers, ad-tracking providers
+// & analytics surfaces, rewards pause, RBAC/staff governance, the coming-soon roadmap).
+const BUSINESS_TRIGGER_GLOBS = [
+  "src/data/membershipPackages.ts",
+  "src/data/upsellPackages.ts",
+  "src/data/miniDrawPackages.ts",
+  "src/data/partnerBrandOffers.ts",
+  "src/data/professions.ts",
+  "src/config/prizes.ts",
+  "src/config/featureFlags.ts",
+  "src/config/rewardsSettings.ts",
+  "src/utils/draws/major-draw-gate-http.ts",
+  "src/utils/draws/major-draw-helpers.ts",
+  "src/utils/billing/**",
+  "src/utils/membership/has-additional-package-access.ts",
+  "src/services/subscription/RetentionPauseService.ts",
+  "src/services/subscription/RetentionDiscountService.ts",
+  "src/services/upsell/UpsellMultiplierResolver.ts",
+  "src/services/admin/PromoMultiplierResolverService.ts",
+  "src/lib/permissions.ts",
+  "src/models/Role.ts",
+  "src/models/StaffActivity.ts",
+  "src/lib/tracking/registry.ts",
+  "src/lib/tracking/providers/**",
+  "src/lib/tiktok.ts",
+  "src/services/facebook-ads-health/**",
+];
+const BUSINESS_DOCS = ["README.md", "BUSINESS.md"];
 
 function readTouched() {
   if (!fs.existsSync(TRACKER_PATH)) return [];
@@ -117,6 +152,7 @@ async function main() {
     if (f.startsWith("docs/")) return false;     // editing docs is not "code change"
     if (f.startsWith(".claude/")) return false;  // hook/skill edits don't need doc updates
     if (f === "CLAUDE.md") return false;         // CLAUDE.md edits track themselves
+    if (f === "BUSINESS.md" || f === "README.md") return false; // top-level business docs track themselves (rule 5 handled by the business-trigger check below)
     return !isTrivialEdit(f);
   });
 
@@ -124,6 +160,12 @@ async function main() {
     clearTouched();
     process.exit(0);
   }
+
+  // Business-doc sync check (CLAUDE.md rule 5). If any substantive edit hit a business-material
+  // source file and neither README.md nor BUSINESS.md was edited this turn, flag it.
+  const businessTriggers = substantive.filter((f) => matchesAny(f, BUSINESS_TRIGGER_GLOBS));
+  const businessDocsChanged = BUSINESS_DOCS.some((d) => changedFilesUnder(d).length > 0);
+  const businessStale = businessTriggers.length > 0 && !businessDocsChanged;
 
   // Group by domain.
   const affected = new Map(); // domain -> string[] of files
@@ -180,6 +222,20 @@ async function main() {
     lines.push("  - bug fix from an incident → docs/<domain>/gotchas.md");
   }
 
+  if (businessStale) {
+    lines.push("");
+    lines.push("STALE BUSINESS DOCS — you edited business-material source but did not update README.md / BUSINESS.md:");
+    for (const f of businessTriggers.slice(0, 8)) lines.push(`  - ${f}`);
+    if (businessTriggers.length > 8) lines.push(`  ... and ${businessTriggers.length - 8} more`);
+    lines.push("");
+    lines.push("These files carry top-level business facts (prices/tiers/entries, draw cadence & gating, prize");
+    lines.push("catalog, billing/anchor/refund rules, partner catalog, promo/upsell multipliers, ad-tracking,");
+    lines.push("rewards pause, RBAC/staff, or the coming-soon roadmap). Per CLAUDE.md rule 5 you MUST update");
+    lines.push("README.md and/or BUSINESS.md in the same task when a change flips a fact they assert.");
+    lines.push("If your edit genuinely changed NO business-level fact (pure refactor / internal-only), make a");
+    lines.push("one-line clarifying touch to the relevant BUSINESS.md section (or note it) so this check passes.");
+  }
+
   // Rot detection — flag fresh domains that haven't been verified in a while.
   const today = todayIso();
   const rotted = [];
@@ -202,7 +258,7 @@ async function main() {
     lines.push("Consider running `/doc-domain <name>` to do a deeper refresh.");
   }
 
-  if (stale.length > 0 || orphans.length > 0) {
+  if (stale.length > 0 || orphans.length > 0 || businessStale) {
     process.stderr.write(
       `BLOCKED: Documentation is out of sync with code changes.\n${lines.join("\n")}\n\n` +
       `After updating the docs, your Stop will be allowed.\n`,
