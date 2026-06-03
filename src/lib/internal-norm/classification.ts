@@ -13,12 +13,20 @@ import {
   NormUpcomingRenewalsSchema,
 } from "./schemas/dashboard";
 import { NormSubmissionsUnviewedCountSchema } from "./schemas/submissions";
-import { NormCancellationFlowAnalyticsSchema } from "./schemas/cancellation-flow";
+import {
+  NormCancellationFlowAnalyticsSchema,
+  NormCancellationUsersByReasonSchema,
+} from "./schemas/cancellation-flow";
 import { NormUpsellMultipliersSchema } from "./schemas/upsell";
 import {
   NormKlaviyoDrawResetPreviewSchema,
   NormKlaviyoDrawResetProgressSchema,
+  NormKlaviyoAnalyticsSchema,
 } from "./schemas/klaviyo";
+import {
+  NormFacebookAdsHealthInsightsSchema,
+  NormFacebookAdsHealthSettingsSchema,
+} from "./schemas/facebook-ads-health";
 import {
   NormChargePastDueDeclineSummarySchema,
   NormChargePastDueManualRetriesListSchema,
@@ -82,6 +90,7 @@ import { NormWinnerDetailSchema } from "./schemas/winners";
 import {
   NormAnalyticsSpendByUrlDetailSchema,
   NormAnalyticsSpendByUrlListSchema,
+  NormHourlyRevenueSchema,
 } from "./schemas/analytics-spend";
 import {
   NormPromoActiveSchema,
@@ -507,8 +516,17 @@ export const NORM_ENDPOINTS = {
     method: "POST",
     summary: "Trigger ad-destination URL sync from Meta",
   },
+  "analytics.hourly-revenue": {
+    tier: "read",
+    requiredPermission: "facebookAds.view",
+    path: "/v1/analytics/hourly-revenue",
+    method: "GET",
+    summary: "Hour-of-day (AEST) revenue, conversions, and ad spend for a date range, merged per platform group (meta/tiktok/snapchat/klaviyo/ad-channels/all)",
+    rateLimit: { perMinute: 10 },
+    responseSchema: NormHourlyRevenueSchema,
+  },
 
-  // ─── Cancellation-flow analytics (roadmap) ───────────────────────────
+  // ─── Cancellation-flow analytics (wired) ─────────────────────────────
   "cancellation-flow-analytics.list": {
     tier: "read",
     requiredPermission: "overview.view",
@@ -516,6 +534,14 @@ export const NORM_ENDPOINTS = {
     method: "GET",
     summary: "Cancellation funnel analytics",
     responseSchema: NormCancellationFlowAnalyticsSchema,
+  },
+  "cancellation-flow-analytics.users-by-reason": {
+    tier: "read",
+    requiredPermission: "overview.view",
+    path: "/v1/cancellation-flow-analytics/users-by-reason",
+    method: "GET",
+    summary: "Per-reason cancellation drill-down rows (PII-safe: opaque userId + firstName only; email/lastName stripped)",
+    responseSchema: NormCancellationUsersByReasonSchema,
   },
 
   // ─── Charge past-due (wired) ──────────────────────────────────────────
@@ -626,6 +652,39 @@ export const NORM_ENDPOINTS = {
     responseSchema: NormFacebookAdsPurchaseAuditSchema,
   },
 
+  // ─── Facebook Ads Health — verdict engine (wired reads; settings/snooze writes roadmap) ─
+  "facebook-ads.health.insights": {
+    tier: "read",
+    requiredPermission: "facebookAds.view",
+    path: "/v1/facebook-ads/health/insights",
+    method: "GET",
+    summary: "Per-campaign/adset/ad health rows with the verdict engine (scale/hold/investigate/cut), daily metrics, last-7d ROAS, and an alert tally",
+    rateLimit: { perMinute: 10 },
+    responseSchema: NormFacebookAdsHealthInsightsSchema,
+  },
+  "facebook-ads.health.settings": {
+    tier: "read",
+    requiredPermission: "facebookAds.view",
+    path: "/v1/facebook-ads/health/settings",
+    method: "GET",
+    summary: "Read the tunable verdict-engine thresholds (breakeven ROAS, target CPA, etc.)",
+    responseSchema: NormFacebookAdsHealthSettingsSchema,
+  },
+  "facebook-ads.health.settings.update": {
+    tier: "write_safe",
+    requiredPermission: "facebookAds.edit",
+    path: "/v1/facebook-ads/health/settings",
+    method: "PUT",
+    summary: "Update the verdict-engine thresholds",
+  },
+  "facebook-ads.health.snooze": {
+    tier: "write_safe",
+    requiredPermission: "facebookAds.edit",
+    path: "/v1/facebook-ads/health/snooze",
+    method: "POST",
+    summary: "Snooze an ad's verdict alert for a number of hours",
+  },
+
   // ─── Health snapshots (roadmap) ───────────────────────────────────────
   "health.dashboard-stats-snapshot": {
     tier: "read",
@@ -691,6 +750,17 @@ export const NORM_ENDPOINTS = {
     method: "GET",
     summary: "Progress of an in-flight Klaviyo draw reset",
     responseSchema: NormKlaviyoDrawResetProgressSchema,
+  },
+
+  // ─── Klaviyo analytics (wired) ───────────────────────────────────────
+  "klaviyo.analytics": {
+    tier: "read",
+    requiredPermission: "facebookAds.view",
+    path: "/v1/klaviyo/analytics",
+    method: "GET",
+    summary: "Klaviyo-attributed campaign & flow revenue/conversions (email/SMS split) + scheduled/live campaigns and flows, for a timeframe",
+    rateLimit: { perMinute: 2 },
+    responseSchema: NormKlaviyoAnalyticsSchema,
   },
 
   // ─── Major draw (roadmap) ─────────────────────────────────────────────

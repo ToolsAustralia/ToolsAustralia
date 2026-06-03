@@ -70,3 +70,29 @@ export const NormCancellationFlowAnalyticsSchema = z.object({
   ),
   otherReasonTexts: z.array(OtherReasonEntrySchema),
 });
+
+/**
+ * PII-safe Norm projection of the admin "users by reason" drill-down. Each row
+ * is one CancellationFlowEvent. The underlying admin row carries
+ * `userEmail` + `userLastName`; both are intentionally stripped here — Norm
+ * user reads expose `firstName` + opaque `userId` ONLY.
+ */
+export const NormCancellationUsersByReasonSchema = z.object({
+  rows: z.array(
+    z.object({
+      eventId: z.string(),
+      userId: z.string().nullable().describe("Opaque user id; never email/PII."),
+      firstName: z
+        .string()
+        .nullable()
+        .describe("First name only — the only user PII Norm may see. email + lastName are intentionally stripped."),
+      startedAt: z.string(),
+      outcome: z.enum(["in_progress", "saved", "cancelled"]),
+      reasonText: z.string().nullable(),
+      // OfferType is a string union in @/models/CancellationFlowEvent, so a plain
+      // nullable string is the correct shape here.
+      offerAccepted: z.string().nullable(),
+    }),
+  ),
+  totalCount: z.number().int().nonnegative(),
+});

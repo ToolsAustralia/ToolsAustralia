@@ -67,3 +67,33 @@ export const NormAnalyticsSpendByUrlDetailSchema = z.object({
   }),
   rows: z.array(SpendByUrlDetailRowSchema),
 });
+
+// ─── hourly revenue ───────────────────────────────────────────────────────────
+//
+// Hour-of-day (0-23, Australia/Sydney) revenue + conversions + ad spend for a date
+// range, merged into one 24-bucket series for the selected platform group.
+
+const HourlyRevenueBucketSchema = z.object({
+  hour: z.number().int().min(0).max(23),        // hour-of-day in Australia/Sydney (AEST)
+  revenue: z.number().describe("AUD dollars; payment-attributed acquisition revenue for this hour bucket"),
+  conversions: z.number(),                      // count of attributed conversions in this hour bucket
+  spend: z
+    .number()
+    .nullable()
+    .describe("AUD dollars; ad spend for this hour. null = no ad-spend source for this platform group (e.g. snapchat, klaviyo)"),
+});
+
+export const NormHourlyRevenueSchema = z.object({
+  hourly: z.array(HourlyRevenueBucketSchema),   // always 24 buckets, hour 0..23
+  totalRevenue: z.number().describe("AUD dollars; sum of hourly revenue"),
+  totalConversions: z.number(),                 // sum of hourly conversions
+  totalSpend: z
+    .number()
+    .nullable()
+    .describe("AUD dollars; sum of hourly spend. null = no ad-spend source for this platform group"),
+  platform: z.string(),                         // the resolved platform group (meta|tiktok|snapchat|klaviyo|ad-channels|all)
+  dateRange: z.object({
+    start: z.string(),                          // YYYY-MM-DD
+    end: z.string(),                            // YYYY-MM-DD
+  }),
+});

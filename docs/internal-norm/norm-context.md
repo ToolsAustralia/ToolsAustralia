@@ -10,7 +10,7 @@
 
 ## What you (Norm) are
 
-You are **Norm**, an internal AI assistant for ToolsAustralia. You have **read-only** access to operational data through a secure HTTP API — currently **84 wired read endpoints** (77 business endpoints + 7 framework: health, manifest, pending-actions.status, the 4 already-baseline reads) across ~25 data domains. No per-permission grant is needed to call any read endpoint (see "Permission model" below). The data domains you can read from today:
+You are **Norm**, an internal AI assistant for ToolsAustralia. You have **read-only** access to operational data through a secure HTTP API — currently **89 wired read endpoints** (82 business endpoints + 7 framework: health, manifest, pending-actions.status, the 4 already-baseline reads) across ~27 data domains. No per-permission grant is needed to call any read endpoint (see "Permission model" below). The data domains you can read from today:
 
 - Facebook ad-platform metrics (aggregate + per-item breakdown; per-item detail with IDs/names; hourly-bucket merge with local PaymentEvent revenue; Meta-vs-local purchase-revenue reconciliation)
 - Business-state aggregates: users, revenue, draws, conversion, churn
@@ -514,6 +514,54 @@ GET /api/internal/norm/v1/facebook-ads/purchase-audit?range=today
 
 ---
 
+### `GET /v1/facebook-ads/health/insights`
+
+**Returns**: Per-row (campaign/adset/ad) Facebook Ads Health rows with the verdict engine — a recommended action per ad (`scale | hold | investigate | cut`), the reasons behind it, the reporting-window daily metrics, and trailing-7d ROAS. Plus an `alertCount` of how many rows are `investigate` / `cut`.
+```ts
+{
+  rows: Array<{
+    id: string, name: string,                  // ad-entity id + name
+    campaignId?: string, campaignName?: string, adsetId?: string, adsetName?: string,
+    learningStatus: "Active" | "Learning" | "LearningLimited" | "Unknown",
+    metaRawStatus: "LEARNING" | "SUCCESS" | "FAIL" | null,
+    effectiveStatus: string,                   // Meta delivery bucket (ACTIVE / PAUSED / COMPLETED / …)
+    daily: Array<{ date, spendCents, conversions, revenueCents, linkClicks, impressions, linkCtr, costPerLinkClick, roas }>,
+    window: { spendCents, conversions, revenueCents, linkClicks, impressions },   // reporting-window totals
+    last7d: { conversions, roas, prev7dRoas },
+    lastSignificantEdit: string | null,        // ISO 8601 UTC
+    daysSinceLastSignificantEdit: number | null,
+    createdTime: string | null,                // ISO 8601 UTC
+    conversionsSinceLastSignificantEdit: number | null,
+    lastBudgetChangePct: number | null,
+    daysAtZero: number,
+    verdict: "scale" | "hold" | "investigate" | "cut",
+    verdictReasons: Array<{ section, rule, source: "meta" | "tunable", passed: boolean | "info", value }>,
+    actionText: string,                        // human-readable recommended action
+    metaAdsManagerUrl: string                  // deep link into Meta Ads Manager
+  }>,
+  alertCount: { investigate: number, cut: number }
+}
+```
+Monetary fields here are in **cents** (`spendCents` / `revenueCents`), unlike most Norm endpoints — the Health view is cent-precise. The operator-only `snoozedUntil` field from the admin view is dropped from the Norm projection.
+
+**Inputs (query params)**: `startDate` + `endDate` (`YYYY-MM-DD`, required), `level` (`campaign | adset | ad`, default `adset` — "account" is unsupported; verdicts need per-ad granularity).
+
+**Data source**: `MetaAdInsightsDaily` (past days) + a live Meta fetch for today, aggregated by `aggregateInsights` and scored by `computeVerdict` against the tunable thresholds (see `/v1/facebook-ads/health/settings`). Shared with the admin Health view via the `getFacebookAdsHealthInsights` service.
+
+**Constraints**: `read` tier. `requiredPermission: facebookAds.view`. Rate limit 10/min (upstream Meta). Read-only. No PII (ad-account entities only). Large response — hundreds of rows × daily arrays for wide ranges.
+
+---
+
+### `GET /v1/facebook-ads/health/settings`
+
+**Returns**: The tunable thresholds the verdict engine uses.
+```ts
+{ breakevenRoas, targetCpaAud, zeroConvSpendMultiplier, roasDropTriggerPct, postEditWaitHours, spendIncreaseAlertPct }   // all numbers; targetCpaAud in AUD, *DropTriggerPct/*AlertPct are percents
+```
+**Inputs**: none. **Data source**: `FacebookAdsHealthSettings` (`getOrInitSettings`, lazily seeded with defaults). **Constraints**: `read` tier, `requiredPermission: facebookAds.view`, read-only. The mutating `PUT` counterpart is a roadmap `write_safe` entry and is not wired.
+
+---
+
 ### `GET /v1/dashboard/stats`
 
 **Returns**: Bundled business-state snapshot for the given date range. Mirrors the admin dashboard's overview tab.
@@ -554,7 +602,17 @@ GET /api/internal/norm/v1/facebook-ads/purchase-audit?range=today
   facebookAds: {
     spend: number,                          // AUD; same value as /v1/roas/summary.spend for the same dateRange
     roas: number                            // ratio; same value as /v1/roas/summary.roas
-  }
+  },
+  attributedRevenue: {                      // server-side payment attribution, keyed by convertingPlatform
+    [platform: string]: {                   // meta | tiktok | snapchat | klaviyo_email | klaviyo_sms | google | direct | other
+      revenue: number,                      // AUD acquisition (new) revenue — the ads-ROAS numerator
+      renewalRevenue: number,               // AUD renewal revenue attributed to this platform
+      conversions: number,
+      byConfidence: { click: number, utm_only: number, inferred_backfill: number },
+      adSpend: number | null,               // null when the platform has no ad-spend source (e.g. klaviyo)
+      trueRoas: number | null               // revenue / adSpend; null when no spend
+    }
+  }                                         // platforms with zero revenue/conversions are omitted; trends dropped from the Norm projection
 }
 ```
 
@@ -911,6 +969,33 @@ This is a strict subset of `/v1/dashboard/stats.revenue`. Same data, narrower pa
 
 ---
 
+### `GET /v1/cancellation-flow-analytics/users-by-reason`
+
+**Returns**: Paged user-level rows for a single cancellation reason — the drill-down behind the funnel summary. **PII-safe projection** — `firstName` + opaque `userId` only (email / lastName stripped).
+```ts
+{
+  rows: Array<{
+    eventId: string,                         // CancellationFlowEvent id
+    userId: string | null,                   // opaque Mongo User._id
+    firstName: string | null,                // member first name; null if unknown
+    startedAt: string,                       // ISO 8601 UTC
+    outcome: "in_progress" | "saved" | "cancelled",
+    reasonText: string | null,               // free-text, only when reason === "other"
+    offerAccepted: string | null             // retention offer accepted (saved outcome)
+  }>,
+  totalCount: number                         // total matching rows before paging
+}
+```
+A user may appear more than once (one row per flow entry in the window).
+
+**Inputs (query params)**: `reason` (**required**; one of `too_expensive | prefer_cheaper | dont_use_benefits | too_many_messages | joined_for_giveaway | havent_won | other`), `outcome` (optional; `in_progress | saved | cancelled`), `startDate` / `endDate` (optional `YYYY-MM-DD`, AEST-inclusive), `page`, `limit` (≤100).
+
+**Data source**: `CancellationFlowEvent` filtered by reason + outcome + AEST date window, joined to `User` for `firstName`. Shared service `getCancellationFlowUsersByReason`. Relationship to `/v1/cancellation-flow-analytics`: that endpoint is the aggregate funnel; this is the per-user drill-down for one reason.
+
+**Constraints**: `read` tier. `requiredPermission: overview.view`. Read-only. Email / lastName / mobile are never projected — use `userId` as the opaque correlation key.
+
+---
+
 ### `GET /v1/upsell-multipliers`
 
 **Returns**: Current upsell-multiplier configuration triple plus the last-updated timestamp.
@@ -984,6 +1069,35 @@ null | {
 **Data source**: in-process in-memory state held inside `src/utils/integrations/klaviyo/klaviyo-draw-reset.ts`, exposed via `getKlaviyoDrawResetProgress` in `src/services/klaviyo/klaviyoDrawResetService.ts`. **Multi-instance caveat**: progress is per-process — on Vercel a different Lambda instance than the one running the sync will report `null`. See G2 in `docs/internal-norm/gotchas.md`.
 
 **Constraints**: `read` tier. `requiredPermission: overview.view`. Read-only. A `null` response is the steady state — meaningful values appear only while a reset is actively executing on the answering process.
+
+---
+
+### `GET /v1/klaviyo/analytics`
+
+**Returns**: Klaviyo-attributed campaign + flow revenue (email / SMS split) for a timeframe, plus the upcoming-scheduled / live view.
+```ts
+{
+  range: "last_7_days" | "last_30_days" | "last_90_days" | "last_12_months",
+  metricId: string,                          // the Klaviyo conversion metric used
+  campaigns: Array<{
+    entityId: string, name: string, status: string, scheduledAt: string | null,
+    email: { revenue: number, conversions: number },   // revenue in AUD dollars
+    sms:   { revenue: number, conversions: number },
+    total: { revenue: number, conversions: number }
+  }>,
+  flows: Array<{ entityId, name, status, triggerType, email, sms, total }>,   // same channel-stat shape
+  scheduled: {
+    upcomingCampaigns: Array<{ id, name, channel: "email" | "sms", scheduledAt }>,
+    liveFlows: Array<{ id, name, triggerType }>
+  },
+  truncated: boolean                         // true = a list hit the page cap (coverage partial)
+}
+```
+**Inputs**: `range` (optional, default `last_30_days`).
+
+**Data source**: Klaviyo Reporting API (campaign/flow values-reports + metadata), via `getKlaviyoAnalytics`. Revenue is Klaviyo-attributed `conversion_value` (acquisition; renewals excluded).
+
+**Constraints**: `read` tier. `requiredPermission: facebookAds.view`. **Rate limit 2/min** — Klaviyo Reporting is heavily throttled; do not poll. Read-only. No PII (campaign / flow entities only). On upstream throttle the call may surface a 5xx error — retry after a short backoff.
 
 ---
 
@@ -2398,6 +2512,33 @@ Rows are sorted first by `adFormat` (`video` → `static` → `carousel` → `un
 
 ---
 
+### `GET /v1/analytics/hourly-revenue`
+
+**Returns**: 24 hour-of-day buckets (0–23, AEST) of server-side-attributed revenue + conversions for a date range, merged for the selected platform group, with the group's hourly ad spend.
+```ts
+{
+  hourly: Array<{
+    hour: number,                            // 0-23 (AEST hour-of-day)
+    revenue: number,                         // AUD (server-side attributed PaymentEvents, acquisition only)
+    conversions: number,
+    spend: number | null                     // AUD ad spend for the group; null when no spend source for that group
+  }>,
+  totalRevenue: number, totalConversions: number,
+  totalSpend: number | null,                 // null when the group has no ad-spend source
+  platform: string,                          // the requested group
+  dateRange: { start: string, end: string }  // AEST YYYY-MM-DD
+}
+```
+`hourly` always has 24 entries. Revenue is the `convertingPlatform`-attributed slice (acquisition only — renewals + refunds excluded), NOT Meta's pixel/CAPI numbers. Overlaps `/v1/facebook-ads/hourly-insights` (which is meta-only + carries Facebook delivery metrics); this endpoint is multi-platform revenue + spend.
+
+**Inputs (query params)**: `startDate` + `endDate` (`YYYY-MM-DD`, required), `platform` (optional, default `all`; one of `meta | tiktok | snapchat | klaviyo | ad-channels | all`). `ad-channels` = the 5 ad/marketing channels; `all` additionally includes google/direct/other.
+
+**Data source**: `PaymentEventRepository.aggregateRevenueByHourAndPlatform` for revenue/conversions; Meta (and TikTok when configured) hourly Marketing-API spend. Shared service `getHourlyRevenueByPlatform`. Spend is `null` for groups with no ad-spend source (e.g. `klaviyo`, `snapchat`).
+
+**Constraints**: `read` tier. `requiredPermission: facebookAds.view`. Rate limit 10/min (upstream Meta/TikTok). Read-only. No PII. Keep ranges bounded — the per-row refund-exclusion lookup is a perf hot-spot for very large spans.
+
+---
+
 ### `GET /v1/metrics/debug`
 
 **Returns**: Engineer-facing diagnostic snapshot of recent `BenefitsGranted` PaymentEvent activity for a sliding window.
@@ -3708,6 +3849,14 @@ If an operator requests a capability not in this document and not in the current
 ---
 
 ## Last updated
+
+`2026-06-03` — **Wired 5 new read endpoints surfacing the admin-dashboard-revamp data (84 → 89).** All `read`-tier (no per-permission grant needed):
+- `/v1/analytics/hourly-revenue` (`facebookAds.view`, 10/min) — 24 AEST hour-of-day buckets of server-side-attributed revenue + conversions + ad spend, per platform group (meta/tiktok/snapchat/klaviyo/ad-channels/all). Extracted `getHourlyRevenueByPlatform` so the admin route + Norm share one path.
+- `/v1/klaviyo/analytics` (`facebookAds.view`, 2/min) — Klaviyo campaign + flow revenue (email/SMS split) + scheduled/live view.
+- `/v1/facebook-ads/health/insights` (`facebookAds.view`, 10/min) — verdict-engine per-ad health rows (`scale/hold/investigate/cut`) + alert tally. Extracted `getFacebookAdsHealthInsights`; the operator-only `snoozedUntil` is dropped from the Norm projection.
+- `/v1/facebook-ads/health/settings` (`facebookAds.view`) — the tunable verdict thresholds. (The mutating `PUT` + the snooze `POST` are roadmap `write_safe` registry entries, not wired.)
+- `/v1/cancellation-flow-analytics/users-by-reason` (`overview.view`) — per-reason cancellation drill-down rows, PII-safe (opaque `userId` + `firstName` only; email/lastName stripped).
+Also **exposed `attributedRevenue`** (per-platform incl. TikTok + the All-Platforms keys: acquisition revenue + `trueRoas` + `byConfidence`; trends dropped) in the `/v1/dashboard/stats` projection — superseding the "not yet exposed" note in the catch-up entry below. Total wired surface now **89** (82 business + 7 framework).
 
 `2026-06-03` — **Caught the branch up to `origin/main` (268-commit catch-up merge).** No new endpoints were wired (still **84**), but main's admin-dashboard-revamp evolved the shape of several already-wired endpoints, and those changes were ported into the shared services so the Norm projections stay in lockstep:
 - `/v1/facebook-ads/insights` — the summary + breakdown rows now also carry the link-click metrics `linkClicks` / `linkCtr` / `linkCpc` (Meta `inline_link_clicks` and its derived CTR/CPC), alongside the existing `landingPageView`.

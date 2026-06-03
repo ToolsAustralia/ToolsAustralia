@@ -44,6 +44,25 @@ export const NormDashboardStatsSchema = z.object({
     spend: z.number(),
     roas: z.number(),
   }),
+  attributedRevenue: z
+    .record(
+      z.string(),
+      z.object({
+        revenue: z.number(), // acquisition (new) revenue, AUD — the ads-ROAS numerator
+        renewalRevenue: z.number(), // renewal revenue attributed to this platform, AUD
+        conversions: z.number(),
+        byConfidence: z.object({
+          click: z.number(),
+          utm_only: z.number(),
+          inferred_backfill: z.number(),
+        }),
+        adSpend: z.number().nullable(), // null when the platform has no ad-spend source
+        trueRoas: z.number().nullable(), // revenue / adSpend; null when no spend
+      }),
+    )
+    .describe(
+      "Per-platform attributed revenue keyed by convertingPlatform (meta, tiktok, snapchat, klaviyo_email, klaviyo_sms, google, direct, other). Acquisition-only revenue is the ROAS numerator; trends are dropped from the Norm projection.",
+    ),
 });
 
 export const NormRevenueBreakdownSchema = z.object({

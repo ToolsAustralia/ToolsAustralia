@@ -1,10 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { requirePermission } from "@/lib/api-auth-permissions";
-import connectDB from "@/lib/mongodb";
-import { aggregateInsights } from "@/services/facebook-ads-health/insightsAggregator";
-import { computeVerdict } from "@/services/facebook-ads-health/verdictEngine";
-import { getOrInitSettings } from "@/services/facebook-ads-health/settingsService";
+import { getFacebookAdsHealthInsights } from "@/services/facebook-ads-health/healthInsights";
 import { loadActiveSnoozes } from "@/services/facebook-ads-health/snoozeService";
 import { parseISO } from "date-fns";
 
@@ -13,6 +10,10 @@ import { parseISO } from "date-fns";
 // levels are supported so the team can switch granularity without leaving the
 // Health view. "Account" level is intentionally NOT supported — verdicts don't
 // make sense for a single aggregated row.
+//
+// Core orchestration (settings + aggregate + verdict + projection + alertCount)
+// lives in `getFacebookAdsHealthInsights` so the admin route and the Norm
+// projection share one path. The per-operator snooze state is layered on here.
 const querySchema = z.object({
   startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
@@ -29,7 +30,6 @@ export async function GET(request: NextRequest) {
   if (guard instanceof NextResponse) return guard;
   const { session } = guard;
 
-  await connectDB();
   const { searchParams } = new URL(request.url);
   const parsed = querySchema.safeParse(Object.fromEntries(searchParams.entries()));
   if (!parsed.success) {
@@ -54,78 +54,20 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  const settings = await getOrInitSettings();
-  const rows = await aggregateInsights({
+  const { rows, alertCount } = await getFacebookAdsHealthInsights({
     adAccountId,
+    accessToken,
     startDate: parseISO(q.startDate),
     endDate: parseISO(q.endDate),
     level: q.level,
-    accessToken,
   });
 
-  // All row-level filtering is now client-side. The route returns the full set
-  // so the client can compute a complete campaign list for any future multiselect.
-  const enriched = rows.map((row) => {
-    const v = computeVerdict(row, settings);
-    return { row, v };
-  });
-
+  // Operator-specific snooze enrichment, layered on the shared service rows.
   const userId = session.user?.id ?? "";
   const snoozes = userId
-    ? await loadActiveSnoozes(userId, enriched.map((e) => e.row.id))
+    ? await loadActiveSnoozes(userId, rows.map((r) => r.id))
     : new Map<string, Date>();
+  const out = rows.map((r) => ({ ...r, snoozedUntil: snoozes.get(r.id) ?? null }));
 
-  // alertCount tallies the full (campaign-filtered) set before any client-side filter is applied.
-  // The client recomputes a filtered alertCount from displayedRows so the banner reflects what's visible.
-  let investigateCount = 0;
-  let cutCount = 0;
-  const out = enriched.map(({ row, v }) => {
-    if (v.verdict === "investigate") investigateCount++;
-    if (v.verdict === "cut") cutCount++;
-    return {
-      id: row.id,
-      name: row.name,
-      campaignId: row.campaignId,
-      campaignName: row.campaignName,
-      adsetId: row.adsetId,
-      adsetName: row.adsetName,
-      learningStatus: row.learningStatusBucket,
-      metaRawStatus: row.learningStatusRaw,
-      effectiveStatus: row.effectiveStatus,
-      daily: row.daily.map((d) => ({
-        date: d.date,
-        spendCents: d.spendCents,
-        conversions: d.conversions,
-        revenueCents: d.revenueCents,
-        linkClicks: d.linkClicks,
-        impressions: d.impressions,
-        linkCtr: d.impressions > 0 ? (d.linkClicks / d.impressions) * 100 : 0,
-        costPerLinkClick: d.linkClicks > 0 ? d.spendCents / d.linkClicks : 0,
-        roas: d.spendCents > 0 ? d.revenueCents / d.spendCents : 0,
-      })),
-      window: row.window,
-      last7d: {
-        conversions: row.last7d.conversions,
-        roas: row.last7d.spendCents > 0 ? row.last7d.revenueCents / row.last7d.spendCents : 0,
-        prev7dRoas: row.last7d.prev7dRoas,
-      },
-      lastSignificantEdit: row.lastSignificantEdit,
-      daysSinceLastSignificantEdit: row.daysSinceLastSignificantEdit,
-      createdTime: row.createdTime,
-      conversionsSinceLastSignificantEdit: row.conversionsSinceLastSignificantEdit,
-      lastBudgetChangePct: row.lastBudgetChangePct,
-      daysAtZero: row.daysAtZeroInWindow,
-      verdict: v.verdict,
-      verdictReasons: v.reasons,
-      actionText: v.actionText,
-      metaAdsManagerUrl: `https://business.facebook.com/adsmanager/manage/adsets?act=${adAccountId.replace(/^act_/, "")}&selected_adset_ids=${row.adsetId ?? row.id}`,
-      snoozedUntil: snoozes.get(row.id) ?? null,
-    };
-  });
-
-  return NextResponse.json({
-    success: true,
-    rows: out,
-    alertCount: { investigate: investigateCount, cut: cutCount },
-  });
+  return NextResponse.json({ success: true, rows: out, alertCount });
 }

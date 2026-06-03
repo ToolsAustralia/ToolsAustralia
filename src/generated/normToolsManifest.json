@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-06-03T12:57:48.469Z",
+  "generatedAt": "2026-06-03T14:05:48.706Z",
   "endpoints": [
     {
       "registryKey": "pending-actions.status",
@@ -164,11 +164,25 @@
       "summary": "Per-ad spend / delivery / conversion breakdown for one or more canonical destination URLs"
     },
     {
+      "registryKey": "analytics.hourly-revenue",
+      "tier": "read",
+      "path": "/v1/analytics/hourly-revenue",
+      "method": "GET",
+      "summary": "Hour-of-day (AEST) revenue, conversions, and ad spend for a date range, merged per platform group (meta/tiktok/snapchat/klaviyo/ad-channels/all)"
+    },
+    {
       "registryKey": "cancellation-flow-analytics.list",
       "tier": "read",
       "path": "/v1/cancellation-flow-analytics",
       "method": "GET",
       "summary": "Cancellation funnel analytics"
+    },
+    {
+      "registryKey": "cancellation-flow-analytics.users-by-reason",
+      "tier": "read",
+      "path": "/v1/cancellation-flow-analytics/users-by-reason",
+      "method": "GET",
+      "summary": "Per-reason cancellation drill-down rows (PII-safe: opaque userId + firstName only; email/lastName stripped)"
     },
     {
       "registryKey": "charge-past-due.decline-summary",
@@ -234,6 +248,20 @@
       "summary": "Reconcile local PaymentEvent (non-renewal) revenue vs Meta Insights purchase revenue"
     },
     {
+      "registryKey": "facebook-ads.health.insights",
+      "tier": "read",
+      "path": "/v1/facebook-ads/health/insights",
+      "method": "GET",
+      "summary": "Per-campaign/adset/ad health rows with the verdict engine (scale/hold/investigate/cut), daily metrics, last-7d ROAS, and an alert tally"
+    },
+    {
+      "registryKey": "facebook-ads.health.settings",
+      "tier": "read",
+      "path": "/v1/facebook-ads/health/settings",
+      "method": "GET",
+      "summary": "Read the tunable verdict-engine thresholds (breakeven ROAS, target CPA, etc.)"
+    },
+    {
       "registryKey": "health.dashboard-stats-snapshot",
       "tier": "read",
       "path": "/v1/health/dashboard-stats-snapshot",
@@ -267,6 +295,13 @@
       "path": "/v1/klaviyo/draw-reset-progress",
       "method": "GET",
       "summary": "Progress of an in-flight Klaviyo draw reset"
+    },
+    {
+      "registryKey": "klaviyo.analytics",
+      "tier": "read",
+      "path": "/v1/klaviyo/analytics",
+      "method": "GET",
+      "summary": "Klaviyo-attributed campaign & flow revenue/conversions (email/SMS split) + scheduled/live campaigns and flows, for a timeframe"
     },
     {
       "registryKey": "major-draw.current-and-last",

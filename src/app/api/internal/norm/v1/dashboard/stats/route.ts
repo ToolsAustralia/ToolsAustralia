@@ -55,6 +55,21 @@ export const GET = withNorm(
       majorDraw: { totalEntries: stats.majorDraw.totalEntries, activeDraws: stats.majorDraw.activeDraws },
       conversionRate: stats.conversionRate,
       facebookAds: { spend: stats.facebookAds.spend, roas: stats.facebookAds.roas },
+      // Per-platform attributed revenue (incl. TikTok + the All-Platforms keys).
+      // Drop the trend objects; serialize optional adSpend/trueRoas to nullable.
+      attributedRevenue: Object.fromEntries(
+        Object.entries(stats.attributedRevenue).map(([platform, v]) => [
+          platform,
+          {
+            revenue: v.revenue,
+            renewalRevenue: v.renewalRevenue,
+            conversions: v.conversions,
+            byConfidence: v.byConfidence,
+            adSpend: v.adSpend ?? null,
+            trueRoas: v.trueRoas ?? null,
+          },
+        ]),
+      ),
     });
   }
 );

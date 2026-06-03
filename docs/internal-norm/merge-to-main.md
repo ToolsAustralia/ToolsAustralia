@@ -10,7 +10,7 @@ How to land `feature/norm-staging` (the whole internal-norm subsystem + OpenClaw
 
 - `src/lib/internal-norm/**` — the `withNorm` wrapper, auth (HMAC), registry (`classification.ts`),
   kill switch, rate limits, audit, and all response Zod schemas.
-- `src/app/api/internal/norm/v1/**` — 84 wired read routes (thin; each delegates to a service).
+- `src/app/api/internal/norm/v1/**` — 89 wired read routes (thin; each delegates to a service).
 - `src/app/api/admin/internal-norm/**` + `src/app/admin/component/internal-norm/**` — the owner's
   Audit / Endpoints / Pending admin tabs (Team → Norm).
 - 4 Mongo models (`NormCallLog`, `NormTriggerReceipt`, `NormPendingAction`, `NormEndpointSettings`),
@@ -72,12 +72,15 @@ are inherited from main and out of scope for the norm work — fix separately if
   affect customer-facing routes. To disable instantly without a deploy: unset `NORM_BEARER_TOKEN`
   (all calls 500/closed) or set `NORM_DISABLED_REGISTRY_KEYS` to the keys to kill.
 
-## Deferred (next session) — agreed scope: expose main's new admin reads through Norm
+## New admin-data reads — DONE (2026-06-03, post-merge)
 
-Not done in the catch-up merge; wire these as new Norm **read** endpoints per the P1 recipe
-(`docs/internal-norm/patterns.md`): `analytics.hourly-revenue`, `facebook-ads.health.insights`,
-`facebook-ads.health.settings` (GET), `klaviyo.analytics`; expose the new `tiktok` + `all`
-attributedRevenue (already computed by `DashboardStatsService` post-merge) in the `dashboard.stats`
-schema; wire `cancellation-flow-analytics.users-by-reason` with an **opaque-userId** projection
-(drop email/lastName/mobile). Write/PUT/POST variants (settings PUT, snooze POST) get roadmap
-registry entries only (no `responseSchema`), matching the current reads-only posture.
+The admin-dashboard-revamp surfaces are now wired through Norm (84 → **89** read endpoints), all
+verified (type-check + build green, ultra multi-agent review with 0 defects, live signed smoke 200
+on each): `analytics.hourly-revenue`, `klaviyo.analytics`, `facebook-ads.health.insights`,
+`facebook-ads.health.settings` (GET), and `cancellation-flow-analytics.users-by-reason` (PII-safe
+opaque-userId projection — email/lastName stripped). The new `tiktok` + All-Platforms
+`attributedRevenue` is now exposed in the `dashboard.stats` projection. `analytics.hourly-revenue`
+and `facebook-ads.health.insights` followed the P3 extract-then-wire pattern (`getHourlyRevenueByPlatform`,
+`getFacebookAdsHealthInsights`). The mutating `facebook-ads.health.settings` PUT and
+`facebook-ads.health.snooze` POST are roadmap `write_safe` registry entries only (no `responseSchema`,
+not in the manifest), matching the reads-only posture.
