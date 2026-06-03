@@ -2,6 +2,61 @@ import MetaAdInsightsDaily from "@/models/MetaAdInsightsDaily";
 import MetaAdDestination from "@/models/MetaAdDestination";
 import LandingPageMetricsDaily from "@/models/LandingPageMetricsDaily";
 
+function centsToAud(cents: number): number {
+  return Math.round(cents) / 100;
+}
+
+export interface SpendByUrlListRow {
+  canonicalUrl: string;
+  spend: number;          // AUD dollars
+  spendCents: number;     // Stripe-style cents
+  impressions: number;
+  clicks: number;
+  conversions: number;
+  revenue: number;        // AUD dollars
+  revenueCents: number;
+  cpc: number;            // AUD per click; 0 when clicks is 0
+  roas: number;           // ratio; 0 when spend is 0
+  adIds: string[];
+}
+
+export interface SpendByUrlListResult {
+  meta: {
+    startDate: string;
+    endDate: string;
+    currency: "AUD";
+    adAccountId: string;
+  };
+  rows: SpendByUrlListRow[];
+}
+
+export interface SpendByUrlDetailRow {
+  adId: string;
+  adName?: string;
+  spend: number;          // AUD dollars
+  spendCents: number;
+  impressions: number;
+  clicks: number;
+  conversions: number;
+  revenue: number;        // AUD dollars
+  revenueCents: number;
+  cpc: number;            // AUD per click
+  roas: number;           // ratio
+  adFormat: "video" | "static" | "carousel" | "unknown";
+}
+
+export interface SpendByUrlDetailResult {
+  meta: {
+    canonicalUrls: string[];
+    canonicalUrl: string;       // @deprecated — first of canonicalUrls; kept for single-URL clients
+    startDate: string;
+    endDate: string;
+    currency: "AUD";
+    adAccountId: string;
+  };
+  rows: SpendByUrlDetailRow[];
+}
+
 function enumerateDatesInclusive(since: string, until: string): string[] {
   const out: string[] = [];
   const a = new Date(since + "T00:00:00.000Z");
@@ -344,5 +399,85 @@ export class SpendByUrlAggregationService {
     until: string
   ): Promise<SpendByUrlDetailAggRow[]> {
     return this.getSpendByUrlDetailForCanonicalUrls(adAccountId, [canonicalUrl], since, until);
+  }
+
+  /**
+   * Aggregated spend-by-url list, formatted for HTTP consumers (cents → AUD,
+   * derived `cpc` and `roas`). Shared by the admin route and the Norm
+   * projection so the two surfaces match by construction.
+   */
+  async getSpendByUrlListFormatted(
+    adAccountId: string,
+    since: string,
+    until: string
+  ): Promise<SpendByUrlListResult> {
+    const rows = await this.getAggregatedSpendByUrl(adAccountId, since, until);
+    return {
+      meta: { startDate: since, endDate: until, currency: "AUD", adAccountId },
+      rows: rows.map((r) => {
+        const spend = centsToAud(r.spendCents);
+        const revenue = centsToAud(r.revenueCents);
+        return {
+          canonicalUrl: r.canonicalUrl,
+          spend,
+          spendCents: r.spendCents,
+          impressions: r.impressions,
+          clicks: r.clicks,
+          conversions: r.conversions,
+          revenue,
+          revenueCents: r.revenueCents,
+          cpc: r.clicks > 0 ? spend / r.clicks : 0,
+          roas: spend > 0 ? revenue / spend : 0,
+          adIds: r.adIds,
+        };
+      }),
+    };
+  }
+
+  /**
+   * Per-ad detail breakdown for one or more canonical URLs, formatted for HTTP
+   * consumers. Shared by admin + Norm.
+   */
+  async getSpendByUrlDetailFormatted(
+    adAccountId: string,
+    canonicalUrls: string[],
+    since: string,
+    until: string
+  ): Promise<SpendByUrlDetailResult> {
+    const uniqueCanonicalUrls = [...new Set(canonicalUrls.map((u) => u.trim()).filter(Boolean))];
+    const rows = await this.getSpendByUrlDetailForCanonicalUrls(
+      adAccountId,
+      uniqueCanonicalUrls,
+      since,
+      until
+    );
+    return {
+      meta: {
+        canonicalUrls: uniqueCanonicalUrls,
+        canonicalUrl: uniqueCanonicalUrls[0] ?? "",
+        startDate: since,
+        endDate: until,
+        currency: "AUD",
+        adAccountId,
+      },
+      rows: rows.map((r) => {
+        const spend = centsToAud(r.spendCents);
+        const revenue = centsToAud(r.revenueCents);
+        return {
+          adId: r.adId,
+          adName: r.adName,
+          spend,
+          spendCents: r.spendCents,
+          impressions: r.impressions,
+          clicks: r.clicks,
+          conversions: r.conversions,
+          revenue,
+          revenueCents: r.revenueCents,
+          cpc: r.clicks > 0 ? spend / r.clicks : 0,
+          roas: spend > 0 ? revenue / spend : 0,
+          adFormat: r.adFormat,
+        };
+      }),
+    };
   }
 }

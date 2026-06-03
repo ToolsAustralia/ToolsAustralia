@@ -24,7 +24,13 @@ export interface RecentActivity {
     | "system_alert"
     | "membership_upgrade"
     | "subscription_past_due";
+  /** Combined "FirstName LastName" string used by the admin UI. */
   user: string;
+  /** First name as a separate field (kept in sync with the service-side
+   * interface in `src/services/admin/dashboardSlices.ts`). PII-safe consumers
+   * prefer this over splitting `user` on whitespace — preserves compound
+   * first names like "Jean Pierre". `null` for System events. */
+  firstName: string | null;
   userId?: string;
   action: string;
   time: string;

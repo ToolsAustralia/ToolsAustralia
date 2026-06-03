@@ -1,10 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requirePermission } from "@/lib/api-auth-permissions";
-import connectDB from "@/lib/mongodb";
-import MiniDraw from "@/models/MiniDraw";
-import Winner, { type IWinner } from "@/models/Winner";
 import { z } from "zod";
-import mongoose from "mongoose";
+import { listMiniDraws } from "@/services/admin/MiniDrawService";
 
 // Validation schema for query parameters
 const listQuerySchema = z.object({
@@ -12,7 +9,9 @@ const listQuerySchema = z.object({
   search: z.string().optional(),
   page: z.string().regex(/^\d+$/).default("1").transform(Number),
   limit: z.string().regex(/^\d+$/).default("20").transform(Number),
-  sortBy: z.enum(["displayOrder", "createdAt", "name", "totalEntries", "minimumEntries"]).default("displayOrder"),
+  sortBy: z
+    .enum(["displayOrder", "createdAt", "name", "totalEntries", "minimumEntries"])
+    .default("displayOrder"),
   sortOrder: z.enum(["asc", "desc"]).default("asc"),
 });
 
@@ -25,103 +24,14 @@ export async function GET(request: NextRequest) {
     const _guard = await requirePermission("miniDraws.view");
     if (_guard instanceof NextResponse) return _guard;
 
-    await connectDB();
-
     const { searchParams } = new URL(request.url);
     const queryParams = Object.fromEntries(searchParams.entries());
 
-    const validatedParams = listQuerySchema.parse(queryParams);
-    const { status, search, page, limit, sortBy, sortOrder } = validatedParams;
+    const validated = listQuerySchema.parse(queryParams);
 
-    // Build filter query
-    const filter: mongoose.FilterQuery<typeof MiniDraw> = {};
+    const data = await listMiniDraws(validated);
 
-    // Status filter
-    if (status) {
-      filter.status = status;
-    }
-
-    // Search filter
-    if (search) {
-      const searchRegex = new RegExp(search, "i");
-      filter.$or = [
-        { name: searchRegex },
-        { description: searchRegex },
-        { "prize.name": searchRegex },
-        { "prize.description": searchRegex },
-      ];
-    }
-
-    // Calculate pagination
-    const skip = (page - 1) * limit;
-
-    // Build sort object
-    const sort: Record<string, 1 | -1> = {};
-    sort[sortBy] = sortOrder === "asc" ? 1 : -1;
-    if (sortBy !== "displayOrder") {
-      sort.displayOrder = 1;
-    }
-
-    // Fetch mini draws with pagination
-    const [miniDrawsRaw, total] = await Promise.all([
-      MiniDraw.find(filter)
-        .select("-entries -winner -__v") // Exclude large arrays for list view
-        .sort(sort)
-        .skip(skip)
-        .limit(limit)
-        .lean(),
-      MiniDraw.countDocuments(filter),
-    ]);
-
-    const miniDraws = await Promise.all(
-      miniDrawsRaw.map(async (draw) => {
-        const entriesRemaining = Math.max((draw.minimumEntries || 0) - (draw.totalEntries || 0), 0);
-        let latestWinner = null;
-
-        if (draw.latestWinnerId) {
-          const winnerDoc = await Winner.findById(
-            draw.latestWinnerId as mongoose.Types.ObjectId
-          ).lean<IWinner | null>();
-          if (winnerDoc) {
-            const winner = winnerDoc as unknown as IWinner & { _id: mongoose.Types.ObjectId };
-            latestWinner = {
-              _id: winner._id.toString(),
-              userId: winner.userId.toString(),
-              entryNumber: winner.entryNumber,
-              selectedDate: winner.selectedDate.toISOString(),
-              imageUrl: winner.imageUrl,
-              drawResultUrl: winner.drawResultUrl,
-              cycle: winner.cycle,
-            };
-          }
-        }
-
-        const drawId = (draw._id as mongoose.Types.ObjectId).toString();
-
-        return {
-          ...draw,
-          _id: drawId,
-          entriesRemaining,
-          cycle: draw.cycle ?? 1,
-          latestWinner,
-        };
-      })
-    );
-
-    const totalPages = Math.ceil(total / limit);
-
-    return NextResponse.json({
-      success: true,
-      data: {
-        miniDraws,
-        pagination: {
-          page,
-          limit,
-          total,
-          totalPages,
-        },
-      },
-    });
+    return NextResponse.json({ success: true, data });
   } catch (error) {
     console.error("❌ Error fetching mini draws:", error);
 

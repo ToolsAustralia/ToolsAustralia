@@ -158,42 +158,17 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     if (guard instanceof NextResponse) return guard;
 
     const { id: experimentId } = await params;
-
-    // Get experiment
-    const experiment = await ExperimentRepository.findById(experimentId);
-    if (!experiment) {
-      return NextResponse.json({ error: "Experiment not found" }, { status: 404 });
-    }
-
-    // Get confidence threshold from experiment or use default
-    const confidenceThreshold = experiment.stoppingRules?.confidenceThreshold || 95;
-
-    // Determine winner automatically
-    const winnerResult = await ExperimentAnalyticsService.determineWinner(
-      experimentId,
-      undefined,
-      confidenceThreshold
-    );
-
-    // Get comparison data
-    const comparison = await ExperimentAnalyticsService.getExperimentComparison(experimentId);
+    const info = await ExperimentAnalyticsService.getExperimentWinnerInfo(experimentId);
 
     return NextResponse.json({
       success: true,
-      data: {
-        winner: winnerResult.winner,
-        reason: winnerResult.reason,
-        significance: winnerResult.significance,
-        comparison,
-        currentWinner: experiment.winnerVariantId
-          ? (experiment.winnerVariantId instanceof mongoose.Types.ObjectId
-              ? experiment.winnerVariantId.toString()
-              : String(experiment.winnerVariantId))
-          : null,
-      },
+      data: info,
     });
   } catch (error) {
     console.error("Error determining winner:", error);
+    if (error instanceof Error && error.message === "experiment_not_found") {
+      return NextResponse.json({ error: "Experiment not found" }, { status: 404 });
+    }
     return NextResponse.json({ error: "Failed to determine winner" }, { status: 500 });
   }
 }

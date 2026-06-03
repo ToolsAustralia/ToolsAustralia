@@ -485,4 +485,50 @@ export class AllowlistService {
 
     return { rows: finalRows, nextCursor, total: rawTotal };
   }
+
+  /**
+   * Read recent AllowlistAction rows (audit feed). Thin wrapper around the
+   * repository's `listRecentActions` that returns plain objects with `_id`
+   * stringified — safe to serialise from a route handler. Order is
+   * `createdAt` descending; `limit` is clamped by the caller.
+   *
+   * Used by:
+   *   - admin route `GET /api/admin/allowlist/actions`
+   *   - Norm route `GET /api/internal/norm/v1/allowlist/actions`
+   */
+  async listActions(args: {
+    limit: number;
+    action: "added" | "skipped" | "removed" | "all";
+  }): Promise<Array<Record<string, unknown>>> {
+    const docs = await this.repo.listRecentActions(args);
+    return docs.map((doc) => {
+      const obj = doc.toObject ? doc.toObject() : (doc as unknown as Record<string, unknown>);
+      return { ...obj, _id: String((obj as { _id: unknown })._id) };
+    });
+  }
+
+  /**
+   * Count of cards currently on the Stripe allowlist — defined as
+   * fingerprints whose most-recent AllowlistAction has `action: "added"`.
+   *
+   * Source-of-truth note: Stripe's `card_fingerprint_allowlist` Radar value
+   * list is the live allowlist; AllowlistAction is our audit log. This count
+   * approximates the live list (drift is bounded by reverse() failures, which
+   * are vanishingly rare in practice).
+   *
+   * Used by:
+   *   - admin route `GET /api/admin/allowlist/stats`
+   *   - Norm route `GET /api/internal/norm/v1/allowlist/stats`
+   */
+  async getStats(): Promise<{ totalActiveAllowlisted: number }> {
+    const result = await AllowlistAction.aggregate<{
+      totalActiveAllowlisted: number;
+    }>([
+      { $sort: { cardFingerprint: 1, createdAt: -1 } },
+      { $group: { _id: "$cardFingerprint", latest: { $first: "$action" } } },
+      { $match: { latest: "added" } },
+      { $count: "totalActiveAllowlisted" },
+    ]);
+    return { totalActiveAllowlisted: result[0]?.totalActiveAllowlisted ?? 0 };
+  }
 }

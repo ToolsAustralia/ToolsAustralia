@@ -37,3 +37,22 @@ export async function getAllUpsellMultipliers(): Promise<{
     additional: config.additional,
   };
 }
+
+/** Full upsell-multiplier config row including the last-updated timestamp. */
+export interface UpsellMultiplierConfigSnapshot {
+  membership: number;
+  oneTime: number;
+  additional: number;
+  updatedAt: Date;
+}
+
+export async function getUpsellMultiplierConfig(): Promise<UpsellMultiplierConfigSnapshot> {
+  await connectDB();
+  const config = await UpsellMultiplierConfig.getOrCreate();
+  return {
+    membership: config.membership,
+    oneTime: config.oneTime,
+    additional: config.additional,
+    updatedAt: config.updatedAt,
+  };
+}

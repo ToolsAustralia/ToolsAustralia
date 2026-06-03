@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireAdminUser } from "@/lib/api-auth";
 import connectDB from "@/lib/mongodb";
-import AllowlistAction from "@/models/AllowlistAction";
+import { getAllowlistService } from "@/services/allowlist";
 
 /**
  * GET /api/admin/allowlist/stats
@@ -22,16 +22,8 @@ export async function GET() {
   await connectDB();
 
   try {
-    const result = await AllowlistAction.aggregate<{
-      totalActiveAllowlisted: number;
-    }>([
-      { $sort: { cardFingerprint: 1, createdAt: -1 } },
-      { $group: { _id: "$cardFingerprint", latest: { $first: "$action" } } },
-      { $match: { latest: "added" } },
-      { $count: "totalActiveAllowlisted" },
-    ]);
-    const total = result[0]?.totalActiveAllowlisted ?? 0;
-    return NextResponse.json({ success: true, totalActiveAllowlisted: total });
+    const { totalActiveAllowlisted } = await getAllowlistService().getStats();
+    return NextResponse.json({ success: true, totalActiveAllowlisted });
   } catch (err) {
     return NextResponse.json(
       {

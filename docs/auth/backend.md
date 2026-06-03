@@ -21,3 +21,37 @@ For admin routes (`/api/admin/**`), the helper `requireAdmin(session)` is the ca
 ## Affiliate auth — separate
 
 Affiliate portal uses [src/lib/affiliate-auth.ts](../../src/lib/affiliate-auth.ts) — distinct from NextAuth. See [affiliate](../affiliate/).
+
+## Norm internal API auth (`src/lib/internal-norm/`)
+
+The `/api/internal/norm/**` surface is consumed by Norm (the in-house agent), not by browser users. It has its own auth/permission stack independent of NextAuth.
+
+| File | Role |
+|---|---|
+| `internal-norm/auth.ts` | Bearer + HMAC signature + replay-nonce verification (`verifyNormRequest`) |
+| `internal-norm/permissions.ts` | Resolves Norm's Mongo `User` → `Role.permissions`; cached 30 s (`hasNormPermission`) |
+| `internal-norm/killSwitch.ts` | Per-endpoint disable flag (env + Mongo) — short-circuits before rate-limit consumption |
+| `internal-norm/rateLimits.ts` | Per-tier + per-endpoint sliding-window limiter |
+| `internal-norm/classification.ts` | Registry of endpoint specs (tier, required permission, schemas) |
+| `internal-norm/audit.ts` | `beginAudit` / `endAudit` write `NormCallLog` rows (TTL 90 d) |
+| `internal-norm/withNorm.ts` | Higher-order route wrapper — orchestrates all of the above |
+| `internal-norm/schemas/manifest.ts` | Zod schema for the published tools manifest (`NormManifestSchema`) |
+| `scripts/build-norm-manifest.ts` | Build-time generator → `src/generated/normToolsManifest.json` |
+
+### `withNorm(options, handler)` ordering
+
+Every Norm route handler is wrapped with `withNorm`. The wrapper runs gates in this exact order, by design:
+
+1. **Auth** — bearer + HMAC signature + timestamp/nonce. Bad auth never touches the DB.
+2. **Permission** — `hasNormPermission(options.requiredPermission)` against Norm's Role. Audited even on rejection so 403s are debuggable.
+3. **Kill switch** — `isEndpointDisabled(registryKey)` allows ops to shut down a single endpoint without redeploy. Runs *after* permission so a forbidden endpoint still 403s rather than masking with 503.
+4. **Rate limit** — `checkNormRateLimit` enforces per-tier and per-endpoint quotas. Last gate before real work, so forbidden requests don't burn quota.
+5. **Audit begin** — `NormCallLog` row is written *before* the handler runs, so a hung/crashed handler still leaves a record.
+6. **Handler** — runs inside try/catch. `ctx.ok(data)` validates against `options.responseSchema` and returns 500 on schema drift rather than serving a malformed payload.
+7. **Audit end** — single `updateOne` by `requestId` patches `responseStatus`, `durationMs`, `responseHash`, `errorCode`. `durationMs` covers auth + permission + handler.
+
+`requestId` is a 32-char hex (UUID without dashes). It appears in every response body (`{ requestId }`) and matches the `NormCallLog.requestId` field, so operators can grep logs end-to-end.
+
+### Tools manifest generator
+
+`scripts/build-norm-manifest.ts` walks `NORM_ENDPOINTS` and emits `src/generated/normToolsManifest.json`, the static payload served from `/api/internal/norm/v1/manifest`. Norm fetches it on startup to discover capabilities. Only entries with a `responseSchema` declared in the registry are published — unwired/roadmap entries (and the framework `health` / `manifest` endpoints, which Norm knows by convention) are filtered out. The generator runs via `npm run build:norm-manifest` and is chained into `prebuild` / `predev` so dev and prod builds always start with a fresh manifest. The JSON file is committed so contributors can see the current shape without running the build.

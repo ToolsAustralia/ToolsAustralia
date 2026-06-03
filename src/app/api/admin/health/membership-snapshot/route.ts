@@ -1,11 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requirePermission } from "@/lib/api-auth-permissions";
-import { formatInTimeZone } from "date-fns-tz";
 import connectDB from "@/lib/mongodb";
-import MembershipDailySnapshot from "@/models/MembershipDailySnapshot";
-
-const TZ = "Australia/Sydney";
-const SUBSCRIPTION_PACKAGE_IDS = ["tradie-subscription", "foreman-subscription", "boss-subscription"] as const;
+import { getMembershipSnapshotHealth } from "@/services/admin/dashboard-stats/snapshotHealth";
 
 export async function GET(_request: NextRequest) {
   const guard = await requirePermission("overview.view");
@@ -13,34 +9,6 @@ export async function GET(_request: NextRequest) {
 
   await connectDB();
 
-  const now = new Date();
-  const checkDates: string[] = [];
-  for (let i = 1; i <= 7; i += 1) {
-    const d = new Date(now);
-    d.setUTCDate(d.getUTCDate() - i);
-    checkDates.push(formatInTimeZone(d, TZ, "yyyy-MM-dd"));
-  }
-
-  const rows = await MembershipDailySnapshot.find({ date: { $in: checkDates } })
-    .select("date packageId")
-    .lean();
-
-  const presentByDate = new Map<string, Set<string>>();
-  for (const r of rows) {
-    if (!presentByDate.has(r.date)) presentByDate.set(r.date, new Set());
-    presentByDate.get(r.date)!.add(r.packageId);
-  }
-
-  const missingDays: Array<{ date: string; missingPackages: string[] }> = [];
-  for (const date of checkDates) {
-    const present = presentByDate.get(date) ?? new Set();
-    const missing = SUBSCRIPTION_PACKAGE_IDS.filter((id) => !present.has(id));
-    if (missing.length > 0) missingDays.push({ date, missingPackages: missing });
-  }
-
-  return NextResponse.json({
-    ok: missingDays.length === 0,
-    checked: checkDates,
-    missingDays,
-  });
+  const result = await getMembershipSnapshotHealth();
+  return NextResponse.json(result);
 }

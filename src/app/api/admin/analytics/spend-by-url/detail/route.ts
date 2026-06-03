@@ -7,10 +7,6 @@ export const dynamic = "force-dynamic";
 
 const aggService = new SpendByUrlAggregationService();
 
-function centsToAud(cents: number): number {
-  return Math.round(cents) / 100;
-}
-
 /**
  * GET /api/admin/analytics/spend-by-url/detail?canonicalUrl=&startDate=&endDate=
  * Per-ad breakdown for one or more canonical landing URLs (repeat canonicalUrl for batch).
@@ -46,49 +42,14 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const rows = await aggService.getSpendByUrlDetailForCanonicalUrls(
+    const result = await aggService.getSpendByUrlDetailFormatted(
       adAccountId,
       uniqueCanonicalUrls,
       startDate,
       endDate
     );
 
-    const currency = "AUD";
-
-    const rowPayload = rows.map((r) => {
-      const spend = centsToAud(r.spendCents);
-      const revenue = centsToAud(r.revenueCents);
-      const cpc = r.clicks > 0 ? spend / r.clicks : 0;
-      const roas = spend > 0 ? revenue / spend : 0;
-      return {
-        adId: r.adId,
-        adName: r.adName,
-        spend,
-        spendCents: r.spendCents,
-        impressions: r.impressions,
-        clicks: r.clicks,
-        conversions: r.conversions,
-        revenue,
-        revenueCents: r.revenueCents,
-        cpc,
-        roas,
-        adFormat: r.adFormat,
-      };
-    });
-
-    return NextResponse.json({
-      success: true,
-      meta: {
-        canonicalUrls: uniqueCanonicalUrls,
-        /** @deprecated Use canonicalUrls; kept for single-URL clients */
-        canonicalUrl: uniqueCanonicalUrls[0],
-        startDate,
-        endDate,
-        currency,
-        adAccountId,
-      },
-      rows: rowPayload,
-    });
+    return NextResponse.json({ success: true, ...result });
   } catch (e) {
     console.error("spend-by-url detail GET:", e);
     return NextResponse.json({ success: false, error: "Failed to load detail" }, { status: 500 });

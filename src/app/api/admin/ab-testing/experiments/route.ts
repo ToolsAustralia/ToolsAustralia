@@ -33,16 +33,14 @@ export async function GET(request: NextRequest) {
     if (guard instanceof NextResponse) return guard;
 
     const { searchParams } = new URL(request.url);
-    const filters = {
+    const result = await ExperimentService.listExperiments({
       status: searchParams.get("status") || undefined,
       search: searchParams.get("search") || undefined,
       page: parseInt(searchParams.get("page") || "1", 10),
       limit: parseInt(searchParams.get("limit") || "25", 10),
       sortBy: searchParams.get("sortBy") || "createdAt",
       sortOrder: (searchParams.get("sortOrder") || "desc") as "asc" | "desc",
-    };
-
-    const result = await ExperimentRepository.findAll(filters);
+    });
 
     return NextResponse.json({
       success: true,

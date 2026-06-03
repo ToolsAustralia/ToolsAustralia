@@ -103,6 +103,15 @@ Verbose audits belong in `/plan`, `/review`, and `/debug`. Outside those skills,
 
 Worktrees for this repo live at `<repo-root>/.worktrees/<kebab-branch-name>/`, not under `.claude/worktrees/` or any other location. Use the existing `wt-new.sh` script when present — it handles env file copy and `npm install`. If you're using an EnterWorktree-style tool with a different default, override it.
 
+### 10. Mirror admin API changes to Norm — or flag them
+
+The **internal-norm / OpenClaw** gateway (`docs/internal-norm/`) re-exposes admin data to an external AI by wrapping the **same services** the `/api/admin/**` routes use. So an admin-side change can silently drift the Norm surface. Whenever you **add a read endpoint under `src/app/api/admin/**`**, **change an existing admin route's response shape**, or **change a service that feeds one**:
+
+- If Norm already mirrors that service/domain (check `src/lib/internal-norm/classification.ts` and the route map under `src/app/api/internal/norm/v1/`), you **must** keep it in lockstep in the same task: update the registry entry, the Zod schema (`src/lib/internal-norm/schemas/`), the Norm route, run `npm run build:norm-manifest`, and update `docs/internal-norm/norm-context.md`. A schema↔output mismatch is a **runtime 500** that `tsc` cannot catch — verify with `npm run norm:smoke`. Keep the Norm projection PII-safe (firstName + opaque userId only).
+- If it's a **new** admin read Norm could usefully expose but you're not wiring it now, **flag it to the user explicitly** ("this could be mirrored to Norm — want me to?") rather than silently skipping it.
+
+The `adding-api-route` skill encodes this as step 7. This rule is not hook-enforced — you're expected to apply it on your own; `/review` should also flag an admin read/shape change that left Norm stale.
+
 ## Commands
 
 Dev/build use **Turbopack**. Both `dev` and `build` first run `prebuild`/`predev` which regenerates the upsell image manifest via `scripts/build-upsell-image-manifest.ts` — if you add/change files under the upsell image directories, that script must succeed before the app will start.
@@ -169,6 +178,7 @@ These domains have non-obvious rules documented in `docs/`. Skim the matching do
 - **Email** — `docs/EMAIL_MODULE.md`, `docs/SENDGRID_TESTING_GUIDE.md`. SendGrid for transactional, Klaviyo for marketing. HTML templates at the repo root (`*-email-template.html`) — keep changes in lockstep with `src/lib/email/`.
 - **Tracking** — `docs/FACEBOOK_TRACKING_IMPLEMENTATION.md`, `docs/GTM_INTEGRATION.md`, Meta CAPI lives in `src/lib/facebook.ts` (test: `npm run test:facebook-capi`).
 - **Timezone/DST** — `TESTING-TIMEZONE-DST.md`. Date-sensitive billing logic uses `date-fns-tz`; there are DST transition test scripts under `scripts/test-dst-transitions.ts`.
+- **Internal Norm / OpenClaw AI** — `docs/internal-norm/` (start at `README.md` → `architecture.md` → `patterns.md`). A secure HTTP gateway at `/api/internal/norm/v1/*` that exposes **read-only** admin data to **Norm**, an external **OpenClaw AI** assistant the owner runs on a Mac mini. Every route is wrapped by `withNorm()` (HMAC auth → permission → kill switch → rate limit → audit → **runtime `responseSchema` validation**). The registry `src/lib/internal-norm/classification.ts` is the source of truth; `npm run build:norm-manifest` regenerates the published manifest. **Lockstep rule:** when `classification.ts`, any `src/lib/internal-norm/schemas/*`, or any `src/app/api/internal/norm/v1/**` route changes, update `docs/internal-norm/norm-context.md` (the brief fed into Norm's context) in the same change. A schema/output mismatch is a **runtime 500**, invisible to `tsc` — verify with `npm run norm:smoke`. Reads bypass the per-permission grant; the PII boundary lives in each endpoint's Zod projection (`firstName` + opaque `userId` only). To land it in production / merge to main, see `docs/internal-norm/merge-to-main.md`.
 
 ### Cursor agents (`.cursor/agents/*.md`)
 
@@ -199,7 +209,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
 ```json
 {
   "version": 1,
-  "lastModified": "2026-05-27",
+  "lastModified": "2026-06-03",
   "domains": {
     "subscription": {
       "docs": "docs/subscription/",
@@ -364,12 +374,13 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/lib/affiliate.ts",
         "src/lib/affiliate-auth.ts",
         "src/utils/affiliate/**",
+        "src/services/affiliate/**",
         "src/app/api/affiliate/**",
         "src/app/(site)/affiliate/**",
         "src/hooks/useAffiliateAuth.ts",
         "src/hooks/useAffiliateLink.ts"
       ],
-      "lastVerified": "2026-05-10"
+      "lastVerified": "2026-05-21"
     },
     "referrals": {
       "docs": "docs/referrals/",
@@ -397,11 +408,13 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
     "upsell": {
       "docs": "docs/upsell/",
       "paths": [
+        "src/services/upsell/**",
         "src/utils/upsell/**",
         "src/app/api/upsell/**",
         "src/app/api/cancellation-upsell/**",
         "src/app/(site)/upsell-success/**",
         "src/components/upload/**",
+        "src/models/UpsellMultiplierConfig.ts",
         "src/generated/upsellImageManifest.ts",
         "scripts/build-upsell-image-manifest.ts"
       ],
@@ -501,6 +514,8 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/utils/meta/**",
         "src/utils/utm/**",
         "src/services/meta/**",
+        "src/services/facebook-ads/**",
+        "src/services/klaviyo/**",
         "src/services/attribution/**",
         "src/types/attribution.ts",
         "src/services/facebook-ads-health/**",
@@ -631,6 +646,28 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/hooks/useConfetti.ts"
       ],
       "lastVerified": "2026-05-27"
+    },
+    "internal-norm": {
+      "docs": "docs/internal-norm/",
+      "paths": [
+        "src/lib/internal-norm/**",
+        "src/app/api/internal/norm/**",
+        "src/app/api/admin/internal-norm/**",
+        "src/app/admin/component/internal-norm/**",
+        "src/services/admin/DashboardStatsService.ts",
+        "src/models/NormCallLog.ts",
+        "src/models/NormTriggerReceipt.ts",
+        "src/models/NormPendingAction.ts",
+        "src/models/NormEndpointSettings.ts",
+        "src/utils/admin/resolveNormDateRange.ts",
+        "src/generated/normToolsManifest.json",
+        "scripts/build-norm-manifest.ts",
+        "scripts/internal-norm-smoke.ts",
+        "scripts/migrations/2026-05-20-create-norm-user-and-role.ts",
+        "eslint/rules/norm-must-import-service.js",
+        "eslint/rules/index.js"
+      ],
+      "lastVerified": "2026-05-21"
     },
     "admin": {
       "docs": "docs/admin/",

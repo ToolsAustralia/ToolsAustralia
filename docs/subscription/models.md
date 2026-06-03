@@ -15,6 +15,7 @@ Top-level subscription-related fields on `IUser`:
 | `savedPaymentMethods` | `Array<{paymentMethodId, isDefault, createdAt, lastUsed?}>` | Stripe payment method IDs only. **Never store card data.** PCI compliance. |
 | `subscription` | embedded | See breakdown below. |
 | `oneTimePackages` | `Array<{...}>` | Cross-cutting with this domain (one-time entry packs). |
+| `serviceAccount` | `boolean?` | True for non-human service accounts (e.g. Norm AI). Filters the user out of admin Settings → Staff. See [auth/roles.md](../auth/roles.md#user-model-additions). |
 
 ### `subscription` subdocument fields
 

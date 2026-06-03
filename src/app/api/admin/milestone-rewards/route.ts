@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
+import type mongoose from "mongoose";
 import connectDB from "@/lib/mongodb";
 import { requirePermission } from "@/lib/api-auth-permissions";
 import { requirePermissionWithAudit } from "@/lib/audit-log";
 import { MilestoneService } from "@/services/milestones";
-import MilestoneIssuance from "@/models/MilestoneIssuance";
 
 const milestoneRewardSchema = z.object({
   name: z.string().min(3).max(120),
@@ -27,72 +27,23 @@ export async function GET() {
 
     await connectDB();
     const rewards = await MilestoneService.listRewards();
-    const rewardIds = rewards.map((reward) => reward._id);
-    const performanceRows = await MilestoneIssuance.aggregate<{
-      _id: string;
-      issuedCount: number;
-      redeemedCount: number;
-      activeCount: number;
-      expiredCount: number;
-      cancelledCount: number;
-      totalEntriesGranted: number;
-    }>([
-      {
-        $match: {
-          milestoneRewardId: { $in: rewardIds },
-        },
-      },
-      {
-        $group: {
-          _id: "$milestoneRewardId",
-          issuedCount: { $sum: 1 },
-          redeemedCount: {
-            $sum: {
-              $cond: [{ $eq: ["$status", "redeemed"] }, 1, 0],
-            },
-          },
-          activeCount: {
-            $sum: {
-              $cond: [{ $eq: ["$status", "active"] }, 1, 0],
-            },
-          },
-          expiredCount: {
-            $sum: {
-              $cond: [{ $eq: ["$status", "expired"] }, 1, 0],
-            },
-          },
-          cancelledCount: {
-            $sum: {
-              $cond: [{ $eq: ["$status", "cancelled"] }, 1, 0],
-            },
-          },
-          totalEntriesGranted: { $sum: "$entriesAmount" },
-        },
-      },
-    ]);
-    const performanceMap = new Map(
-      performanceRows.map((row) => [row._id.toString(), row])
-    );
+    const rewardIds = rewards.map((reward) => reward._id as mongoose.Types.ObjectId);
+    const performanceMap = await MilestoneService.aggregatePerformanceByRewardIds(rewardIds);
 
     return NextResponse.json({
       success: true,
       data: rewards.map((reward) => ({
         ...reward.toObject(),
         id: String(reward._id),
-        performance: (() => {
-          const row = performanceMap.get(String(reward._id));
-          const issuedCount = row?.issuedCount || 0;
-          const redeemedCount = row?.redeemedCount || 0;
-          return {
-            issuedCount,
-            redeemedCount,
-            activeCount: row?.activeCount || 0,
-            expiredCount: row?.expiredCount || 0,
-            cancelledCount: row?.cancelledCount || 0,
-            totalEntriesGranted: row?.totalEntriesGranted || 0,
-            redemptionRate: issuedCount > 0 ? Math.round((redeemedCount / issuedCount) * 100) : 0,
-          };
-        })(),
+        performance: performanceMap.get(String(reward._id)) ?? {
+          issuedCount: 0,
+          redeemedCount: 0,
+          activeCount: 0,
+          expiredCount: 0,
+          cancelledCount: 0,
+          totalEntriesGranted: 0,
+          redemptionRate: 0,
+        },
       })),
     });
   } catch (error) {
