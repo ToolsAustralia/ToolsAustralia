@@ -126,6 +126,48 @@ export function computeTotalAttributedRevenue(ar: AttributedRevenue | undefined)
   return ADVERTISING_ROW_CONFIG.reduce((sum, cfg) => sum + toFinite(ar[cfg.key]?.revenue), 0);
 }
 
+/** Aggregate ("All Platforms") rollup over the 5 advertising channels — SHARED-3, computed client-side. */
+export interface AdvertisingAggregate {
+  totalSpend: number; // Σ adSpend over paid channels that have spend (Meta today)
+  paidAcquisitionRevenue: number; // Σ revenue over the SAME paid-with-spend channels (the ROAS numerator)
+  totalAcquisitionRevenue: number; // Σ revenue over ALL 5 channels (context headline)
+  overallRoas: number | null; // paidAcquisitionRevenue / totalSpend ("—" when no spend)
+  contributionAfterAdSpend: number; // paidAcquisitionRevenue − totalSpend (NOT bare "profit")
+  totalConversions: number; // Σ conversions over all 5 channels
+}
+
+/**
+ * Roll the per-platform attributed revenue into the All-Platforms aggregate.
+ * Ad-effectiveness basis: ROAS + contribution use ONLY paid channels with spend
+ * (mirrors the overview card's blended ROAS so the two reconcile); totals span all
+ * 5 advertising channels. Renewals are already excluded upstream.
+ */
+export function computeAggregate(ar: AttributedRevenue | undefined): AdvertisingAggregate {
+  let totalSpend = 0;
+  let paidAcquisitionRevenue = 0;
+  let totalAcquisitionRevenue = 0;
+  let totalConversions = 0;
+  for (const cfg of ADVERTISING_ROW_CONFIG) {
+    const entry = ar?.[cfg.key];
+    if (!entry) continue;
+    const revenue = toFinite(entry.revenue);
+    totalAcquisitionRevenue += revenue;
+    totalConversions += toFinite(entry.conversions);
+    if (cfg.kind === "paid" && entry.adSpend != null && entry.adSpend > 0) {
+      totalSpend += entry.adSpend;
+      paidAcquisitionRevenue += revenue;
+    }
+  }
+  return {
+    totalSpend,
+    paidAcquisitionRevenue,
+    totalAcquisitionRevenue,
+    overallRoas: totalSpend > 0 ? paidAcquisitionRevenue / totalSpend : null,
+    contributionAfterAdSpend: paidAcquisitionRevenue - totalSpend,
+    totalConversions,
+  };
+}
+
 /**
  * Confidence split as a native-title string, e.g.
  * "88% click-verified · 9% UTM-only · 3% backfilled".

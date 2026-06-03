@@ -4,6 +4,7 @@ import {
   buildAdvertisingRows,
   computeBlendedRoas,
   computeTotalAttributedRevenue,
+  computeAggregate,
   formatConfidenceTitle,
 } from "../advertisingCardModel";
 
@@ -88,6 +89,16 @@ function run() {
     "confidence split rounds to 88/9/3",
   );
   assert.equal(formatConfidenceTitle(undefined), undefined, "no entry → undefined");
+
+  // Aggregate (SHARED-3): paid basis for ROAS/contribution, all-channel for totals.
+  const agg = computeAggregate(ar);
+  assert.equal(agg.totalSpend, 12400, "total spend = meta only (sole paid-with-spend)");
+  assert.equal(agg.paidAcquisitionRevenue, 41200, "paid revenue = meta (tiktok has no spend)");
+  assert.equal(agg.totalAcquisitionRevenue, 41200 + 6100 + 9300, "total acq revenue across channels");
+  assert.ok(agg.overallRoas != null && Math.abs(agg.overallRoas - 41200 / 12400) < 1e-9, "overall ROAS = paid rev/spend");
+  assert.equal(agg.contributionAfterAdSpend, 41200 - 12400, "contribution = paid revenue − spend");
+  assert.equal(agg.totalConversions, 142 + 20 + 31, "total conversions across channels");
+  assert.equal(computeAggregate({ tiktok: ar.tiktok } as unknown as AR).overallRoas, null, "no spend → null overall ROAS");
 
   console.log("advertisingCardModel helper tests passed");
 }

@@ -4,6 +4,7 @@ import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import AdminSidebar from "./AdminSidebar";
 import DashboardOverview from "./overview/DashboardOverview";
+import AllPlatformsManagement from "./AllPlatformsManagement";
 import {
   ADMIN_MOBILE_DATE_TOOLBAR_SLOT_ID,
   adminTabUsesMobileLayoutDateToolbar,
@@ -165,6 +166,7 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
                   {selectedTab === "promos" && "Manage promotional campaigns and entry multipliers"}
                   {selectedTab === "promo-analytics" && "Track visits, signups, and conversions by promotion page"}
                   {selectedTab === "klaviyo" && "Klaviyo campaign & flow revenue, scheduled sends, and hourly"}
+                  {selectedTab === "all-platforms" && "Combined ad effectiveness — spend, revenue, ROAS, and hourly across every platform"}
                   {selectedTab === "cancellation-flow" && "Cancellation-flow funnel, save rate, and retention analytics"}
                   {selectedTab === "AB-testing" && "Manage A/B testing experiments and analyze variant performance"}
                   {selectedTab === "error-reports" && "View and manage error reports from users"}
@@ -241,6 +243,9 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
 
           {/* KLAVIYO TAB */}
           {selectedTab === "klaviyo" && <KlaviyoAnalyticsManagement />}
+
+          {/* ALL-PLATFORMS AGGREGATE TAB */}
+          {selectedTab === "all-platforms" && <AllPlatformsManagement />}
 
           {/* PROMO ANALYTICS TAB */}
           {selectedTab === "promo-analytics" && <PromoAnalyticsManagement />}

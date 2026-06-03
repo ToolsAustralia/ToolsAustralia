@@ -19,6 +19,7 @@ import {
   FileText as FileTextIcon,
   FlaskConical,
   Gift,
+  Layers,
   LayoutDashboard,
   LineChart,
   Mail,
@@ -64,6 +65,7 @@ export const ADMIN_TAB_GROUPS: AdminTabGroup[] = [
     label: "Analytics",
     groupIcon: LineChart,
     tabs: [
+      { id: "all-platforms", label: "All Platforms", icon: Layers, requires: "facebookAds.view" },
       { id: "facebook-ads", label: "Facebook Ads", icon: TrendingUp, requires: "facebookAds.view" },
       { id: "tiktok-ads", label: "TikTok Ads", icon: TrendingUp, requires: "facebookAds.view" },
       { id: "snapchat-ads", label: "Snapchat Ads", icon: TrendingUp, requires: "facebookAds.view" },
