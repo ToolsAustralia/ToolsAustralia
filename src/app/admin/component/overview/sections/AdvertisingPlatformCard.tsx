@@ -7,40 +7,38 @@ import {
   DataTable,
   PlatformLogo,
   type Column,
-  type PlatformLogoName,
 } from "@/components/admin/ui";
 import { useMetricsFormatting } from "@/hooks/useMetricsFormatting";
 import type { AdminDashboardStats } from "@/hooks/queries/useAdminQueries";
+import {
+  buildAdvertisingRows,
+  buildDirectRow,
+  computeBlendedRoas,
+  computeTotalAttributedRevenue,
+  type AdvertisingRowVM,
+} from "./advertisingCardModel";
 
 /**
  * Advertising spend & return by platform for the admin Overview.
  *
- * Facebook Ads is LIVE (`stats.facebookAds.spend` / `.roas`); TikTok, Snapchat
- * (ads) and Klaviyo Email / SMS (marketing — no ad spend) are "Coming soon"
- * placeholder rows. Pure presentation over the `useAdminDashboardStats` result
- * passed down from `DashboardOverview`. The blended ROAS in the header equals the
- * Facebook ROAS (only live platform). The stats payload has no revenue field, so
- * Facebook revenue is derived as `spend * roas`. Rows carry a `comingSoon` flag
- * and numeric placeholders so the `DataTable` row type stays uniform; `renderCell`
- * decides display per-row. Platform logos are inline SVGs (see `PlatformLogos`) —
- * official logo files can be dropped in later to replace them.
+ * Revenue + ROAS are SERVER-SIDE, payment-attributed (stats.attributedRevenue,
+ * keyed by convertingPlatform) — NOT Meta's pixel figures. Ad spend still comes
+ * from the ads API. Three presentation classes (see advertisingCardModel):
+ *   - paid + spend (Meta): spend, revenue, true ROAS.
+ *   - paid, spend not synced (TikTok/Snapchat): revenue + conversions; spend "Awaiting sync", ROAS "Needs spend".
+ *   - owned (Klaviyo Email/SMS): revenue + conversions only; spend/ROAS "—".
+ * Blended ROAS = Σ revenue ÷ Σ spend over paid channels with spend. The dedicated
+ * Facebook Ads tab + ads-health views are intentionally untouched.
  */
-interface AdRow extends Record<string, unknown> {
-  id: string;
-  platform: string;
-  logo: PlatformLogoName;
-  spend: number;
-  revenue: number;
-  roas: number;
-  comingSoon: boolean;
-}
-
 const COLUMNS: Column[] = [
   { key: "platform", label: "Platform", align: "left", sortable: false },
   { key: "spend", label: "Spend", align: "right", sortable: false },
   { key: "revenue", label: "Revenue", align: "right", sortable: false },
   { key: "roas", label: "ROAS", align: "right", sortable: false },
 ];
+
+const MUTED = "text-neutral-300 dark:text-neutral-600";
+const AWAITING = "text-2xs text-amber-600/80 dark:text-amber-500/80 font-medium";
 
 export default function AdvertisingPlatformCard({
   stats,
@@ -49,65 +47,22 @@ export default function AdvertisingPlatformCard({
   stats: AdminDashboardStats | undefined;
   loading?: boolean;
 }) {
-  const { fmtCompact } = useMetricsFormatting();
+  const { formatCurrency } = useMetricsFormatting();
 
   // Only skeleton when there is no data yet — a background refetch keeps the rows.
   const showSkeleton = loading && !stats;
 
-  const fbSpend = stats?.facebookAds?.spend ?? 0;
-  const fbRoas = stats?.facebookAds?.roas ?? 0;
-  // No revenue in the stats payload — derive it. Revenue = spend * ROAS.
-  const fbRevenue = fbSpend > 0 ? fbSpend * fbRoas : 0;
-
-  const rows: AdRow[] = [
-    {
-      id: "facebook",
-      platform: "Facebook Ads",
-      logo: "facebook",
-      spend: fbSpend,
-      revenue: fbRevenue,
-      roas: fbRoas,
-      comingSoon: false,
-    },
-    {
-      id: "tiktok",
-      platform: "TikTok Ads",
-      logo: "tiktok",
-      spend: 0,
-      revenue: 0,
-      roas: 0,
-      comingSoon: true,
-    },
-    {
-      id: "snapchat",
-      platform: "Snapchat Ads",
-      logo: "snapchat",
-      spend: 0,
-      revenue: 0,
-      roas: 0,
-      comingSoon: true,
-    },
-    {
-      id: "klaviyo-email",
-      platform: "Klaviyo Email",
-      logo: "klaviyo",
-      spend: 0,
-      revenue: 0,
-      roas: 0,
-      comingSoon: true,
-    },
-    {
-      id: "klaviyo-sms",
-      platform: "Klaviyo SMS",
-      logo: "klaviyo",
-      spend: 0,
-      revenue: 0,
-      roas: 0,
-      comingSoon: true,
-    },
+  // The 5 attributed channels, then an appended "Direct" (unattributed) row when present.
+  // The Direct row is excluded from the "$… attributed" header total and blended ROAS.
+  const directRow = buildDirectRow(stats?.attributedRevenue);
+  const rows = [
+    ...buildAdvertisingRows(stats?.attributedRevenue),
+    ...(directRow ? [directRow] : []),
   ];
+  const blendedRoas = computeBlendedRoas(stats?.attributedRevenue);
+  const totalRevenue = computeTotalAttributedRevenue(stats?.attributedRevenue);
 
-  const renderCell = (key: string, row: AdRow) => {
+  const renderCell = (key: string, row: AdvertisingRowVM) => {
     if (showSkeleton) {
       if (key === "platform") {
         return (
@@ -132,64 +87,77 @@ export default function AdvertisingPlatformCard({
     }
 
     if (key === "spend") {
-      if (row.comingSoon) {
-        return (
-          <span className="text-2xs text-amber-600/80 dark:text-amber-500/80 font-medium">
-            Coming soon
-          </span>
-        );
+      if (row.spend.kind === "amount") {
+        return <span className="font-semibold num">{formatCurrency(row.spend.value)}</span>;
       }
-      return <span className="font-semibold num">{fmtCompact(row.spend)}</span>;
+      if (row.spend.kind === "awaiting") {
+        return <span className={AWAITING}>Awaiting sync</span>;
+      }
+      return <span className={MUTED}>—</span>; // owned
     }
 
     if (key === "revenue") {
-      if (row.comingSoon) {
-        return <span className="text-neutral-300 dark:text-neutral-600">—</span>;
-      }
       return (
-        <span className="font-semibold num">{fmtCompact(row.revenue)}</span>
+        <div className="flex flex-col items-end leading-tight" title={row.confidenceTitle}>
+          <span className="font-semibold num">{formatCurrency(row.revenue)}</span>
+          <span className="text-2xs text-neutral-400 dark:text-neutral-500 num">
+            {row.conversions.toLocaleString()} new
+          </span>
+        </div>
       );
     }
 
     // roas
-    if (row.comingSoon) {
-      return <span className="text-neutral-300 dark:text-neutral-600">—</span>;
+    if (row.roas.kind === "value") {
+      return (
+        <span
+          className={`num font-semibold ${
+            row.roas.value >= 3
+              ? "text-emerald-600 dark:text-emerald-400"
+              : "text-amber-600 dark:text-amber-500"
+          }`}
+        >
+          {row.roas.value.toFixed(2)}x
+        </span>
+      );
     }
-    return (
-      <span
-        className={`num font-semibold ${
-          row.roas >= 3
-            ? "text-emerald-600 dark:text-emerald-400"
-            : "text-amber-600 dark:text-amber-500"
-        }`}
-      >
-        {row.roas.toFixed(2)}x
-      </span>
-    );
+    if (row.roas.kind === "needsSpend") {
+      return <span className={AWAITING}>Needs spend</span>;
+    }
+    return <span className={MUTED}>—</span>; // na (owned)
   };
 
   return (
     <Card className="p-5 h-full min-w-0">
       <SectionTitle
         title="Advertising"
-        subtitle="Spend & return by platform"
+        subtitle="Attributed revenue & true ROAS by platform"
         icon={TrendingUp}
         right={
           <div className="text-right">
-            <p className="text-2xs text-neutral-400 uppercase tracking-wide">
-              Blended ROAS
-            </p>
+            <p className="text-2xs text-neutral-400 uppercase tracking-wide">Blended ROAS</p>
             {showSkeleton ? (
               <span className="mt-1 inline-block h-5 w-12 rounded bg-neutral-200 dark:bg-neutral-800 animate-pulse" />
             ) : (
-              <p className="font-display font-bold text-lg text-emerald-600 dark:text-emerald-400 num">
-                {fbRoas.toFixed(2)}x
-              </p>
+              <>
+                <p className="font-display font-bold text-lg text-emerald-600 dark:text-emerald-400 num">
+                  {blendedRoas != null ? `${blendedRoas.toFixed(2)}x` : "—"}
+                </p>
+                <p className="text-2xs text-neutral-400 num mt-0.5">
+                  {formatCurrency(totalRevenue)} attributed
+                </p>
+              </>
             )}
           </div>
         }
       />
-      <DataTable<AdRow> columns={COLUMNS} rows={rows} renderCell={renderCell} />
+      <DataTable<AdvertisingRowVM> columns={COLUMNS} rows={rows} renderCell={renderCell} />
+      {directRow && !showSkeleton && (
+        <p className="mt-3 text-2xs text-neutral-400 leading-snug">
+          <strong>Direct</strong> = payments with no ad attribution (no fbclid / ttclid / Klaviyo tag). Not counted in the
+          “attributed” total or blended ROAS.
+        </p>
+      )}
     </Card>
   );
 }

@@ -90,6 +90,8 @@ Updated as each task in the user-roles migration replaces legacy `session.user.r
 | `/api/admin/error-reports/[id]` | PATCH | `errorReports.edit` |
 | `/api/admin/error-reports/bulk-delete` | DELETE | `errorReports.delete` |
 | `/api/admin/error-reports/bulk-delete` | PATCH | `errorReports.edit` |
+| `/api/admin/analytics/hourly-revenue` | GET | `facebookAds.view` |
+| `/api/admin/klaviyo/analytics` | GET | `facebookAds.view` |
 | `/api/admin/facebook-ads/hourly-insights` | GET/POST | `facebookAds.view` |
 | `/api/admin/facebook-ads/insights` | GET | `facebookAds.view` |
 | `/api/admin/facebook-ads/purchase-audit` | GET | `facebookAds.view` |

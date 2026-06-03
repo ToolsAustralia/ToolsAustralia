@@ -15,7 +15,6 @@ const hourlyInsightsQuerySchema = z.object({
   endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), // YYYY-MM-DD format
   filterLevel: z.enum(["campaign", "adset", "ad"]).optional(),
   filterIds: z.string().optional(), // Comma-separated IDs, e.g. "id1,id2,id3"
-  utmSource: z.string().optional(), // e.g. "facebook" — filter PaymentEvent revenue by data.utmSource
 });
 
 /**
@@ -27,13 +26,11 @@ async function parseAndValidate(request: NextRequest) {
     const body = await request.json().catch(() => ({}));
     const filterLevel = ["campaign", "adset", "ad"].includes(body.filterLevel) ? body.filterLevel : undefined;
     const filterIds = Array.isArray(body.filterIds) ? body.filterIds.join(",") : body.filterIds ?? "";
-    const utmSource = typeof body.utmSource === "string" ? body.utmSource : undefined;
     query = {
       startDate: String(body.startDate ?? ""),
       endDate: String(body.endDate ?? ""),
       ...(filterLevel && { filterLevel }),
       ...(filterIds && { filterIds }),
-      ...(utmSource && { utmSource }),
     };
   } else {
     const { searchParams } = new URL(request.url);
@@ -49,12 +46,15 @@ async function parseAndValidate(request: NextRequest) {
  * Fetch hourly ad performance: Facebook (spend, impressions, clicks) + your site (revenue, conversions).
  *
  * - Spend, impressions, clicks: from Facebook Marketing API (advertiser time zone).
- * - Revenue and conversions by hour: from your PaymentEvents (BenefitsGranted, purchases only —
- *   excludes membership renewals) for the selected date range in AEST; includes all traffic.
+ * - Revenue and conversions by hour: server-side payment attribution — the `meta` slice of
+ *   SHARED-1 (PaymentEventRepository.aggregateRevenueByHourAndPlatform), i.e. PaymentEvents whose
+ *   convertingPlatform === "meta" (acquisition only — renewals + refunds excluded), bucketed by
+ *   hour-of-day in AEST. Reconciles with the daily snapshot. (NOT Meta's pixel/CAPI numbers — the
+ *   separate insights table keeps those for comparison.)
  * - Date range is interpreted as calendar days in Australia/Sydney (AEST/AEDT).
  *
- * GET Query Parameters: startDate, endDate, filterLevel?, filterIds? (comma-separated), utmSource? (e.g. facebook)
- * POST Body: { startDate, endDate, filterLevel?, filterIds?: string[], utmSource?: string }
+ * GET Query Parameters: startDate, endDate, filterLevel?, filterIds? (comma-separated)
+ * POST Body: { startDate, endDate, filterLevel?, filterIds?: string[] }
  */
 export async function GET(request: NextRequest) {
   return handleHourlyInsights(request);
@@ -120,8 +120,17 @@ async function handleHourlyInsights(request: NextRequest) {
     const endYear = parseInt(validatedQuery.endDate.slice(0, 4), 10);
     const endMonth = parseInt(validatedQuery.endDate.slice(5, 7), 10);
     const endDay = parseInt(validatedQuery.endDate.slice(8, 10), 10);
-    const endOfRangeAEST = createAESTDateAsUTC(endYear, endMonth, endDay, 23, 59);
-    endOfRangeAEST.setUTCSeconds(59, 999);
+    // EXCLUSIVE next-midnight-AEST (matches the daily snapshot's $lt + SHARED-1). Roll the calendar
+    // day over via a UTC anchor — createAESTDateAsUTC builds from a string and would reject "…-32".
+    const endAnchor = new Date(Date.UTC(endYear, endMonth - 1, endDay, 12, 0, 0));
+    endAnchor.setUTCDate(endAnchor.getUTCDate() + 1);
+    const endOfRangeExclusiveAEST = createAESTDateAsUTC(
+      endAnchor.getUTCFullYear(),
+      endAnchor.getUTCMonth() + 1,
+      endAnchor.getUTCDate(),
+      0,
+      0
+    );
 
     const filterLevel = validatedQuery.filterLevel;
     const filterIds = validatedQuery.filterIds
@@ -166,9 +175,12 @@ async function handleHourlyInsights(request: NextRequest) {
     const paymentEventRepo = new PaymentEventRepository();
     let dbHourlyData;
     try {
-      dbHourlyData = await paymentEventRepo.aggregateRevenueAndCountByHourOfDay(startOfRangeAEST, endOfRangeAEST, {
-        ...(validatedQuery.utmSource && { utmSource: validatedQuery.utmSource }),
-      });
+      // Revenue = server-side meta attribution (SHARED-1), not utm_source. 24 buckets of { hour, revenue, conversions }.
+      const byPlatform = await paymentEventRepo.aggregateRevenueByHourAndPlatform(
+        startOfRangeAEST,
+        endOfRangeExclusiveAEST
+      );
+      dbHourlyData = byPlatform.meta;
     } catch (error) {
       console.error("❌ Error fetching PaymentEvent hourly data:", error);
       return NextResponse.json(

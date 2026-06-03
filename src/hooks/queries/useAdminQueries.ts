@@ -309,9 +309,13 @@ export interface MajorDrawForDateRange {
 export function useAdminDashboardStats(
   dateRange: "today" | "yesterday" | "all-time" | "custom" | "current-draw" | "last-draw" = "today",
   startDate?: string,
-  endDate?: string
+  endDate?: string,
+  options?: { enabled?: boolean }
 ) {
   return useQuery<AdminDashboardStats>({
+    // Caller-gated: draw/custom ranges must wait for resolved dates, else the route
+    // 400s ("startDate and endDate are required …"). Defaults enabled for existing callers.
+    enabled: options?.enabled ?? true,
     queryKey: ["admin", "dashboard", "stats", dateRange, startDate, endDate],
     queryFn: async (): Promise<AdminDashboardStats> => {
       const params = new URLSearchParams({ dateRange });
