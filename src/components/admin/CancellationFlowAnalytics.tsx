@@ -18,7 +18,8 @@ import type { CancellationReason, OfferType } from "@/models/CancellationFlowEve
 import { MetricCard } from "@/components/admin/metrics/shared/MetricCard";
 import ClickableUserDisplay from "@/components/admin/ClickableUserDisplay";
 import CancellationReasonUsersModal from "@/components/admin/CancellationReasonUsersModal";
-import DateRangeToggle, { DateRange } from "@/components/admin/DateRangeToggle";
+import { DateRange } from "@/components/admin/DateRangeToggle";
+import { DateRangeDropdown } from "@/components/admin/overview/DateRangeDropdown";
 import CustomDateRangeModal from "@/components/admin/CustomDateRangeModal";
 import { AdminMobileLayoutDateRangeShell } from "@/app/admin/component/AdminMobileLayoutDateRangeShell";
 import { useAdminMobileDateToolbarSlot } from "@/hooks/useAdminMobileDateToolbarSlot";
@@ -212,17 +213,11 @@ export default function CancellationFlowAnalytics() {
   }, [dateRange, startDate, endDate]);
 
   const dateRangeToggle = (
-    <DateRangeToggle
+    <DateRangeDropdown
       selectedRange={dateRange}
-      onRangeChange={(range) => {
-        if (range === "custom") setIsCustomDateModalOpen(true);
-        else updateDateFilter(range);
-      }}
+      onRangeChange={(range) => updateDateFilter(range)}
       onCustomClick={() => setIsCustomDateModalOpen(true)}
-      collapsed={false}
       displayDate={displayDate || undefined}
-      onExpand={() => {}}
-      className={isLgUp ? undefined : "w-full"}
     />
   );
 

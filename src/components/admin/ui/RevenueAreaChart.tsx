@@ -48,10 +48,10 @@ export function RevenueAreaChart({
     setHover(Math.round(frac * (n - 1)));
   };
   const onMove = (ev: React.MouseEvent) => scrubAt(ev.clientX);
-  // Touch devices have no hover — let the user DRAG horizontally to move the focus
-  // and scan the graph. `touch-action: pan-y` keeps vertical page scroll working
-  // while we capture the horizontal drag. The focus stays put after lifting so the
-  // value remains readable.
+  // Touch devices: a horizontal DRAG scrolls the chart (the parent is
+  // `overflow-x-auto`), and a TAP reads the value at that point. `touch-action:
+  // pan-x pan-y` lets the browser own both scroll axes; we only scrub on the initial
+  // touch (not on move), so dragging scrolls instead of fighting the scrub.
   const onTouch = (ev: React.TouchEvent) => {
     const t = ev.touches[0];
     if (t) scrubAt(t.clientX);
@@ -66,7 +66,7 @@ export function RevenueAreaChart({
       </div>
       <div className="flex-1 min-w-0 overflow-x-auto overflow-y-hidden">
         <div style={{ minWidth }}>
-          <div ref={plotRef} className="relative select-none" style={{ height, touchAction: "pan-y" }} onMouseMove={onMove} onMouseLeave={() => setHover(null)} onTouchStart={onTouch} onTouchMove={onTouch}>
+          <div ref={plotRef} className="relative select-none" style={{ height, touchAction: "pan-x pan-y" }} onMouseMove={onMove} onMouseLeave={() => setHover(null)} onTouchStart={onTouch}>
             <svg width="100%" height="100%" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" className="overflow-visible">
               <defs><linearGradient id={gid} x1="0" y1="0" x2="0" y2="1">
                 <stop offset="0%" stopColor={accent} stopOpacity="0.26" />

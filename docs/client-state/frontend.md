@@ -32,6 +32,7 @@ Don't mix. Common mistake: mirroring server-state into Zustand. Don't.
 
 `src/hooks/queries/useAdminQueries.ts` gained:
 - `MembershipByPackageSummary.totalPausedCount: number` — surfaced by the membership-by-package endpoint (a 30-day retention-pause proxy from `CancellationFlowEvent`; see `docs/admin/`). Consumed by the Overview `MembershipCard` "Paused" badge.
+- `MembershipByPackageSummary.totalActiveRevenueTrend?: TrendData` (added 2026-06-03) — MRR % change vs the previous comparable period, computed server-side from the daily membership snapshot. Consumed by the Overview MRR KPI tile (`trendPct(...)`). Omitted for all-time and when the baseline day has no snapshot; see `docs/admin/api.md`.
 - `ActivityLogItem.type` union extended with `upsell_accepted`, `cancellation_offer_accepted`, `admin_role_update`, `affiliate_payout` (kept in sync with the `/api/admin/activity-log` route's union; the separate `RecentActivity` type for `/api/admin/dashboard/recent-activities` is intentionally NOT extended). `useActivityLogInfinite` carries these to the Overview activity feed.
 
 `src/hooks/queries/admin/useAdminMiniDrawsList.ts` adds **`useTopMiniDraws(limit)`** — active mini draws server-sorted by entries (`?status=active&sortBy=totalEntries&sortOrder=desc&limit=N`), returning `{ _id, name, status, totalEntries, minimumEntries }` for the Overview `TopDrawsCard`.
