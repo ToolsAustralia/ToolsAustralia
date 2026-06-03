@@ -47,6 +47,7 @@
     "test:landing-image-resolver": "tsx src/utils/promo/__tests__/landing-image-resolver.test.ts",
     "test:additional-pack-discount": "tsx src/utils/membership/__tests__/additional-pack-discount.test.ts",
     "test:renewal-progress": "tsx src/utils/admin/__tests__/renewalProgress.test.ts",
+    "test:advertising-card-model": "tsx src/app/admin/component/overview/sections/__tests__/advertisingCardModel.test.ts",
     "migrate:anchor-billing-24": "tsx scripts/migrate-anchor-billing-24.ts",
     "migrate:anchor-billing-24:dry": "tsx scripts/migrate-anchor-billing-24.ts --dry-run",
     "migrate:affiliate-commission-pi-index": "tsx scripts/migrate-affiliate-commission-pi-index.ts",
