@@ -11,7 +11,7 @@ Per CLAUDE.md:
 
 [src/repositories/](../../src/repositories/):
 - `index.ts` — re-exports
-- `PaymentEventRepository.ts` — payment-event queries (used by [billing-stripe](../billing-stripe/))
+- `PaymentEventRepository.ts` — payment-event queries (used by [billing-stripe](../billing-stripe/)). Includes `aggregateRevenueByHourAndPlatform(startUTC, endUTC)` — hour-of-day (0–23, Australia/Sydney) revenue + conversions grouped by `convertingPlatform`, on the **same acquisition basis as the daily snapshot aggregator** (renewals + refunds excluded, null→`direct`, exclusive `$lt`); reconciles bit-for-bit with `attributedRevenue[*].newRevenue` (test: `npm run test:hourly-revenue`). Powers the per-platform + aggregate hourly breakdowns ([admin](../admin/)).
 - `PromoAnalyticsRepository.ts` — promo analytics queries (used by [promo](../promo/))
 - `ab-testing/` — AB-testing repositories (used by [ab-testing](../ab-testing/))
 

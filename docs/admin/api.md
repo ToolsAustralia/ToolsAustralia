@@ -336,6 +336,16 @@ Admin-only (session `role === "admin"`, else `401`). Read-only aggregated analyt
 
 Thin handler — delegates to `getCancellationFlowAnalytics()` in `src/services/admin/cancellationFlowAnalytics.ts`, which fetches `CancellationFlowEvent` (`.lean()`) and hands off to the pure `summarizeCancellationEvents(events, now)` shaper (unit-tested: `npm run test:cancellation-analytics`).
 
+## Hourly revenue (per-platform)
+
+### `GET /api/admin/analytics/hourly-revenue`
+
+Gated by `requirePermission("facebookAds.view")`. Server-side **hour-of-day** (0–23, Australia/Sydney) revenue + conversions for the selected range, from payment-attributed `PaymentEvent`s (acquisition only — renewals + refunds excluded). This is the SHARED-1 data layer behind every per-platform / aggregate hourly breakdown.
+
+Query params: `startDate`, `endDate` (`YYYY-MM-DD`), and `platform` ∈ `meta` | `tiktok` | `snapchat` | `klaviyo` | `all` (default `all`). `klaviyo` merges `klaviyo_email + klaviyo_sms`; `all` sums every channel. The range is interpreted as AEST calendar days — `endDate` maps to an **exclusive** next-midnight-AEST bound (matches the daily snapshot's `$lt`, so the two reconcile).
+
+Thin handler — delegates to `PaymentEventRepository.aggregateRevenueByHourAndPlatform(startUTC, endUTC)` (the platform-group merge lives in the route's `PLATFORM_GROUPS`). Returns `{ success, data: { hourly: { hour, revenue, conversions }[], totalRevenue, totalConversions, platform, dateRange } }`. Reconciliation guaranteed by `npm run test:hourly-revenue`.
+
 **Response (`data`):**
 
 ```jsonc
