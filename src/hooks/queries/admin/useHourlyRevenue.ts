@@ -6,12 +6,16 @@ export interface HourlyRevenueBucket {
   hour: number;
   revenue: number;
   conversions: number;
+  /** Ad spend (dollars) for this hour, or null when the platform group has no spend source (→ render "—"). */
+  spend: number | null;
 }
 
 export interface HourlyRevenueData {
   hourly: HourlyRevenueBucket[];
   totalRevenue: number;
   totalConversions: number;
+  /** Total ad spend over the range, or null when no spend source for the platform group. */
+  totalSpend: number | null;
   platform: HourlyRevenuePlatform;
   dateRange: { start: string; end: string };
 }

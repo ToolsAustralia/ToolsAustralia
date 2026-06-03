@@ -21,14 +21,20 @@ import AdvertisingPlatformCard from "./overview/sections/AdvertisingPlatformCard
 interface HourRow extends Record<string, unknown> {
   id: number;
   label: string;
+  spend: number | null;
   revenue: number;
+  profit: number | null;
+  roas: number | null;
   conversions: number;
 }
 
 const HOUR_COLUMNS: Column[] = [
   { key: "label", label: "Hour (AEST)", align: "left", sortable: false },
+  { key: "spend", label: "Spend", align: "right", sortable: false },
   { key: "revenue", label: "Revenue", align: "right", sortable: false },
-  { key: "conversions", label: "Conversions", align: "right", sortable: false },
+  { key: "profit", label: "Profit", align: "right", sortable: false },
+  { key: "roas", label: "ROAS", align: "right", sortable: false },
+  { key: "conversions", label: "Conv.", align: "right", sortable: false },
 ];
 
 function hourLabel(h: number): string {
@@ -56,8 +62,13 @@ export default function AllPlatformsManagement() {
 
   const hourRows: HourRow[] = useMemo(() => {
     const buckets: HourlyRevenueBucket[] =
-      hourly?.hourly ?? Array.from({ length: 24 }, (_, h) => ({ hour: h, revenue: 0, conversions: 0 }));
-    return buckets.map((b) => ({ id: b.hour, label: hourLabel(b.hour), revenue: b.revenue, conversions: b.conversions }));
+      hourly?.hourly ?? Array.from({ length: 24 }, (_, h) => ({ hour: h, revenue: 0, conversions: 0, spend: null }));
+    return buckets.map((b) => {
+      const spend = b.spend;
+      const profit = spend == null ? null : b.revenue - spend;
+      const roas = spend != null && spend > 0 ? b.revenue / spend : null;
+      return { id: b.hour, label: hourLabel(b.hour), spend, revenue: b.revenue, profit, roas, conversions: b.conversions };
+    });
   }, [hourly]);
 
   const fmtSigned = (n: number) => (n < 0 ? `−${fmtCompact(Math.abs(n))}` : fmtCompact(n));
@@ -99,8 +110,8 @@ export default function AllPlatformsManagement() {
       {/* Overall hour-of-day revenue across all channels */}
       <Card className="p-5">
         <SectionTitle
-          title="All-platforms revenue by hour (server-side)"
-          subtitle="Acquisition revenue across all ad channels · last 30 days (AEST)"
+          title="All-platforms by hour (server-side)"
+          subtitle="Spend · revenue · profit · ROAS across all ad channels · last 30 days (AEST)"
           icon={Clock}
         />
         <DataTable<HourRow>
@@ -108,7 +119,17 @@ export default function AllPlatformsManagement() {
           rows={hourRows}
           renderCell={(key, row) => {
             if (key === "label") return <span className="font-medium">{row.label}</span>;
+            if (key === "spend")
+              return row.spend == null ? <span className="text-neutral-300 dark:text-neutral-600">—</span> : <span className="num">{fmtCompact(row.spend)}</span>;
             if (key === "revenue") return <span className="num font-semibold">{fmtCompact(row.revenue)}</span>;
+            if (key === "profit")
+              return row.profit == null ? <span className="text-neutral-300 dark:text-neutral-600">—</span> : <span className="num">{fmtSigned(row.profit)}</span>;
+            if (key === "roas")
+              return row.roas == null ? (
+                <span className="text-neutral-300 dark:text-neutral-600">—</span>
+              ) : (
+                <span className={`num ${row.roas >= 3 ? "text-emerald-600 dark:text-emerald-400" : "text-amber-600 dark:text-amber-500"}`}>{row.roas.toFixed(2)}x</span>
+              );
             return <span className="num">{row.conversions.toLocaleString()}</span>;
           }}
         />
@@ -117,7 +138,8 @@ export default function AllPlatformsManagement() {
       <p className="text-2xs text-neutral-400 leading-snug">
         Ad-effectiveness view — <strong>renewals excluded</strong>. Overall ROAS &amp; contribution use only paid channels with ad spend
         (Meta today; TikTok/Snapchat join when their spend syncs); revenue totals span all ad channels. Owned channels (Klaviyo) count
-        toward revenue but not ROAS. All-source/total revenue lives on the Overview revenue card.
+        toward revenue but not ROAS. All-source/total revenue lives on the Overview revenue card. The KPI <em>Total Ad Spend</em> is the
+        snapshot/attributed figure; the hourly <em>Spend</em> column is the live ad-API breakdown — they can differ slightly.
       </p>
     </div>
   );

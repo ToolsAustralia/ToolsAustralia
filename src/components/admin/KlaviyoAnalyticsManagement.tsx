@@ -111,7 +111,7 @@ export default function KlaviyoAnalyticsManagement() {
 
   const hourRows: HourRow[] = useMemo(() => {
     const buckets: HourlyRevenueBucket[] =
-      hourly?.hourly ?? Array.from({ length: 24 }, (_, h) => ({ hour: h, revenue: 0, conversions: 0 }));
+      hourly?.hourly ?? Array.from({ length: 24 }, (_, h) => ({ hour: h, revenue: 0, conversions: 0, spend: null }));
     return buckets.map((b) => ({ id: b.hour, label: hourLabel(b.hour), revenue: b.revenue, conversions: b.conversions }));
   }, [hourly]);
 

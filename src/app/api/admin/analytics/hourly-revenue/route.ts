@@ -5,6 +5,8 @@ import connectDB from "@/lib/mongodb";
 import { PaymentEventRepository } from "@/repositories/PaymentEventRepository";
 import { createAESTDateAsUTC } from "@/utils/common/timezone";
 import type { AttributedPlatformKey } from "@/models/DashboardStatsDailySnapshot";
+import { fetchFacebookInsightsHourly } from "@/lib/facebook-marketing";
+import { fetchTikTokHourlySpend } from "@/services/admin/tiktok/tiktokHourlySpend";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -39,6 +41,51 @@ const PLATFORM_GROUPS: Record<string, AttributedPlatformKey[]> = {
   "ad-channels": ["meta", "tiktok", "snapchat", "klaviyo_email", "klaviyo_sms"],
   all: ["meta", "tiktok", "snapchat", "klaviyo_email", "klaviyo_sms", "google", "direct", "other"],
 };
+
+/**
+ * Meta hourly spend (dollars, 24 buckets) — null if not configured / on error.
+ * Hour buckets use the FB ad-account's `advertiser_time_zone` (ASSUMED Australia/Sydney
+ * to align with the AEST revenue buckets; verify the ad-account tz — if it differs, the
+ * spend hours are offset from the revenue hours).
+ */
+async function fetchMetaHourlySpend(startDate: string, endDate: string): Promise<number[] | null> {
+  const adAccountId = process.env.FACEBOOK_AD_ACCOUNT_ID;
+  const accessToken = process.env.FACEBOOK_MARKETING_ACCESS_TOKEN;
+  if (!adAccountId || !accessToken) return null;
+  try {
+    const fb = await fetchFacebookInsightsHourly(adAccountId, accessToken, { since: startDate, until: endDate });
+    return Array.from({ length: 24 }, (_, h) => (fb[h]?.spend ?? 0) / 100); // cents → dollars
+  } catch (e) {
+    console.error("[hourly-revenue] meta spend fetch failed:", e instanceof Error ? e.message : e);
+    return null;
+  }
+}
+
+/**
+ * Hour-of-day ad spend (dollars) for the platform group, summed across the platforms
+ * that have a spend source (Meta now; TikTok when configured). Snapchat + owned
+ * channels (Klaviyo) have no spend source. Returns null when the group has NO spend
+ * source at all (e.g. klaviyo, or tiktok-only before its creds) so the UI renders "—",
+ * not a misleading 0.
+ */
+async function computeGroupHourlySpend(
+  keys: AttributedPlatformKey[],
+  startDate: string,
+  endDate: string
+): Promise<number[] | null> {
+  const sources: number[][] = [];
+  if (keys.includes("meta")) {
+    const meta = await fetchMetaHourlySpend(startDate, endDate);
+    if (meta) sources.push(meta);
+  }
+  if (keys.includes("tiktok")) {
+    const tiktok = await fetchTikTokHourlySpend(startDate, endDate);
+    if (tiktok) sources.push(tiktok);
+  }
+  // Snapchat: no Marketing-API client yet → no spend source.
+  if (sources.length === 0) return null;
+  return Array.from({ length: 24 }, (_, h) => sources.reduce((s, arr) => s + (arr[h] ?? 0), 0));
+}
 
 export async function GET(request: NextRequest) {
   const guard = await requirePermission("facebookAds.view");
@@ -87,6 +134,9 @@ export async function GET(request: NextRequest) {
     const byPlatform = await new PaymentEventRepository().aggregateRevenueByHourAndPlatform(startUTC, endUTC);
     const keys = PLATFORM_GROUPS[q.platform];
 
+    // Ad spend per hour for the group (Meta now, TikTok when configured); null = no spend source → "—".
+    const spendArr = await computeGroupHourlySpend(keys, q.startDate, q.endDate);
+
     // Merge the requested platform group into one 24-bucket series.
     const hourly = Array.from({ length: 24 }, (_, hour) => {
       let revenue = 0;
@@ -95,11 +145,12 @@ export async function GET(request: NextRequest) {
         revenue += byPlatform[k][hour].revenue;
         conversions += byPlatform[k][hour].conversions;
       }
-      return { hour, revenue, conversions };
+      return { hour, revenue, conversions, spend: spendArr ? spendArr[hour] : null };
     });
 
     const totalRevenue = hourly.reduce((s, h) => s + h.revenue, 0);
     const totalConversions = hourly.reduce((s, h) => s + h.conversions, 0);
+    const totalSpend = spendArr ? spendArr.reduce((s, x) => s + x, 0) : null;
 
     return NextResponse.json({
       success: true,
@@ -107,6 +158,7 @@ export async function GET(request: NextRequest) {
         hourly,
         totalRevenue,
         totalConversions,
+        totalSpend,
         platform: q.platform,
         dateRange: { start: q.startDate, end: q.endDate },
       },
