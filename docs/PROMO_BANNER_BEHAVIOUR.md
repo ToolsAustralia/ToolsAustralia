@@ -37,23 +37,24 @@ Order (`resolve-promo-banner-left-visual.ts`):
 3. **Static** under `/images/promoBanner/{Brand}/`:
    - **Brand folder** (`Dewalt`, `Makita`, `Milwaukee`, `Ryobi`) comes from promo theme context: `usePromoThemeStore` **`toolsetSlug`** if it is a toolset landing slug, else the first segment of **`slug`** when that segment is a toolset slug, else **`Milwaukee`**.
    - Draw **today** → `{Brand}/DrawnTonight/drawn-tonight-{2\|3\|5\|10}x.webp`
-   - Scheduled promo **`>= 24h`** to end → `{Brand}/LastChance/last-chance-{m}x.webp`
-   - Scheduled promo **`< 24h`** to end → `{Brand}/EndsTonight/ends-tonight-{m}x.webp`
-   - Otherwise → **LastChance** (same filename pattern under `{Brand}/`)
+   - Within **48h** of freeze → `{Brand}/DrawnTomorrow/drawn-tomorrow-{m}x.webp`
+   - Otherwise (any active/scheduled promo, default) → `{Brand}/SpecialPromo/special-promo-{3\|5\|10}x.webp`
+
+The old **LastChance** / **EndsTonight** families were removed (2026-06); every non-draw state now resolves to **SpecialPromo**. SpecialPromo art reads "SPECIAL PROMO — {N}x ENTRIES ACTIVATED".
 
 **Fallback order** (implemented in `buildStaticPromoBannerPaths`; `PromoBanner` advances the `<img src>` on `onError`):
 
 1. Requested brand path  
 2. **Milwaukee** path (if the requested brand was not already Milwaukee)  
-3. **Legacy** generic path without a brand segment (e.g. `/images/promoBanner/DrawnTonight/...`) if you keep or restore flat folders
+3. **Legacy** generic path without a brand segment (e.g. `/images/promoBanner/DrawnTonight/...`) — DrawnTonight/DrawnTomorrow only; SpecialPromo has no legacy flat layout
 
-Unknown or null multiplier uses **`10`** in the filename so a single `10x` asset keeps working until more tiers exist.
+Multiplier→filename tiers: DrawnTonight/DrawnTomorrow use `bannerMultiplierFileKey` (`2\|3\|5\|10`, unknown→10); SpecialPromo uses `specialPromoMultiplierFileKey` (`3\|5\|10`, and **2/unknown/null → 10**). Keep 2× out of promos since no `special-promo-2x` asset ships.
 
 ---
 
 ## Gold badge text (legacy pipeline)
 
-The visible left column is **image-only**. A small internal **badgeText** `useMemo` may still drive analytics or future use; priority is roughly: gap → no-promo → **DRAWN TONIGHT** if draw is today → variant `badgeText` removed in favour of `leftImageUrl` → scheduled promo defaults (**LAST CHANCE** / **ENDS TONIGHT**) → `resolveBadgeText` fallbacks (10×, alternating default). *Scheduled text strings are replaced by scheduled `imageUrl` for the left column.*
+The visible left column is **image-only**. A small internal **badgeText** `useMemo` may still drive analytics or future use; priority is roughly: gap → no-promo → **DRAWN TONIGHT** if draw is today → variant `badgeText` removed in favour of `leftImageUrl` → `resolveBadgeText` fallbacks (10×, alternating default). *Scheduled text strings are replaced by scheduled `imageUrl` for the left column.*
 
 ---
 
