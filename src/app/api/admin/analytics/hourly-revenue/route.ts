@@ -25,15 +25,18 @@ export const runtime = "nodejs";
 const querySchema = z.object({
   startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-  platform: z.enum(["meta", "tiktok", "snapchat", "klaviyo", "all"]).optional().default("all"),
+  platform: z.enum(["meta", "tiktok", "snapchat", "klaviyo", "ad-channels", "all"]).optional().default("all"),
 });
 
 // Maps the `platform` query value → the convertingPlatform keys to sum (merge rule, stated once).
+// `ad-channels` = the 5 advertising/marketing channels (matches the overview card +
+// All-Platforms aggregate scope); `all` additionally includes google/direct/other.
 const PLATFORM_GROUPS: Record<string, AttributedPlatformKey[]> = {
   meta: ["meta"],
   tiktok: ["tiktok"],
   snapchat: ["snapchat"],
   klaviyo: ["klaviyo_email", "klaviyo_sms"],
+  "ad-channels": ["meta", "tiktok", "snapchat", "klaviyo_email", "klaviyo_sms"],
   all: ["meta", "tiktok", "snapchat", "klaviyo_email", "klaviyo_sms", "google", "direct", "other"],
 };
 

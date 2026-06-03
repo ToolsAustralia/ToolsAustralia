@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 
-export type HourlyRevenuePlatform = "meta" | "tiktok" | "snapchat" | "klaviyo" | "all";
+export type HourlyRevenuePlatform = "meta" | "tiktok" | "snapchat" | "klaviyo" | "ad-channels" | "all";
 
 export interface HourlyRevenueBucket {
   hour: number;
@@ -46,8 +46,9 @@ export function useHourlyRevenue(params: {
     },
     staleTime: 60 * 1000,
     gcTime: 10 * 60 * 1000,
-    refetchOnWindowFocus: true,
-    refetchInterval: 2 * 60 * 1000,
+    // Hour-of-day over a fixed window doesn't need aggressive polling, and the underlying
+    // aggregation (per-row refund $lookup over the range) is heavy — staleTime covers re-entry.
+    refetchOnWindowFocus: false,
     retry: 2,
     retryDelay: (i) => Math.min(1000 * 2 ** i, 30000),
   });

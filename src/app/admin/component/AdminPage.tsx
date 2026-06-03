@@ -168,7 +168,7 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
                   {selectedTab === "klaviyo" && "Klaviyo campaign & flow revenue, scheduled sends, and hourly"}
                   {selectedTab === "all-platforms" && "Combined ad effectiveness — spend, revenue, ROAS, and hourly across every platform"}
                   {selectedTab === "cancellation-flow" && "Cancellation-flow funnel, save rate, and retention analytics"}
-                  {selectedTab === "AB-testing" && "Manage A/B testing experiments and analyze variant performance"}
+                  {selectedTab === "ab-testing" && "Manage A/B testing experiments and analyze variant performance"}
                   {selectedTab === "error-reports" && "View and manage error reports from users"}
                   {selectedTab === "blocked-transactions" && "Stripe issuer-blocked cards — review and allowlist"}
                   {selectedTab === "past-due-history" && "History of bulk and manual past-due charge attempts"}

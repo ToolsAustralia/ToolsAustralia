@@ -47,7 +47,9 @@ export default function AllPlatformsManagement() {
   const { fmtCompact } = useMetricsFormatting();
   const [range] = useState(() => defaultRange(new Date()));
   const { data: stats, isLoading } = useAdminDashboardStats("custom", range.start, range.end);
-  const { data: hourly } = useHourlyRevenue({ platform: "all", startDate: range.start, endDate: range.end });
+  // "ad-channels" (the 5 advertising channels) matches the KPI scope (computeAggregate),
+  // so the hourly table reconciles with the headline — NOT "all" (which adds direct/google/other).
+  const { data: hourly } = useHourlyRevenue({ platform: "ad-channels", startDate: range.start, endDate: range.end });
 
   const agg = useMemo(() => computeAggregate(stats?.attributedRevenue), [stats]);
 
@@ -65,7 +67,7 @@ export default function AllPlatformsManagement() {
         <MetricCard title="Total Ad Spend" value={fmtCompact(agg.totalSpend)} icon={DollarSign} loading={isLoading} />
         <MetricCard
           title="Attributed Revenue"
-          subtitle="acquisition · all channels"
+          subtitle="acquisition · ad channels"
           value={fmtCompact(agg.totalAcquisitionRevenue)}
           icon={TrendingUp}
           color="emerald"
@@ -97,7 +99,7 @@ export default function AllPlatformsManagement() {
       <Card className="p-5">
         <SectionTitle
           title="All-platforms revenue by hour (server-side)"
-          subtitle="Acquisition revenue across every channel · last 30 days (AEST)"
+          subtitle="Acquisition revenue across all ad channels · last 30 days (AEST)"
           icon={Clock}
         />
         <DataTable<HourRow>
