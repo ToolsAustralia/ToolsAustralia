@@ -257,6 +257,10 @@ Twelve flat-file modals were decomposed into the canonical orchestrator-folder p
 
 **Skip list** (modals NOT decomposed — see spec §Inventory): `AdminProductModal`, `AdminPromoLinkModal`, `AdminMonthlyRedeemablesModal`, `AdminBonusEntryPromoModal`, `AdminPromoBannerTextModal`, `MiniDrawEditModal`, `UserSearchModal`, `ParticipantsModal`, `MajorDrawEditModal`, `UpsellManager`, `AdminScheduledPromoCalendarModal`, `PartnerModal`, `AdminScheduledPromoModal`, `AdminMiniDrawModal`, `AdminAlternatingMultiplierModal`, `SubscriptionExplainerModal`, `ConfirmationModal`, plus modals <300 LOC. All anti-signal protected per [component-decomposition-criteria.md](./component-decomposition-criteria.md).
 
+## PromoBanner static left-visual (SpecialPromo, 2026-06)
+
+[`PromoBanner`](../../src/components/sections/promo/PromoBanner.tsx) no longer computes a `scheduledPromoState` (urgent/last-chance) to drive its left image — the `last-chance` / `ends-tonight` static families were retired. It now passes only `drawIsToday` + `within48HoursOfFreeze` + `multiplier` to `resolvePromoBannerLeftVisual`; every non-draw state resolves to `{Brand}/SpecialPromo/special-promo-{3|5|10}x.webp`. See [promo/frontend.md](../promo/frontend.md#static-banner-left-visual-specialpromo-2026-06).
+
 ## Z-index ordering
 
 [src/constants/z-index.ts](../../src/constants/z-index.ts) defines z-index constants. Always reference these — never use raw numbers.

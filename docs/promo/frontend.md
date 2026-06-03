@@ -22,6 +22,16 @@
 
 - [src/stores/usePromoThemeStore.ts](../../src/stores/usePromoThemeStore.ts) — Zustand store for promo-driven theming overrides
 
+## Static banner left-visual (SpecialPromo, 2026-06)
+
+The PromoBanner left image is resolved by [`resolvePromoBannerLeftVisual`](../../src/utils/promo-banner/resolve-promo-banner-left-visual.ts) (Holiday art → variant `leftImageUrl` → scheduled `imageUrl` → static brand art). The static family is now one of three states (`build-static-promo-banner-paths.ts`):
+
+- `drawn-tonight` — draw calendar date is today
+- `drawn-tomorrow` — ≤48h to freeze
+- `special-promo` — **everything else** (any active/scheduled promo + default)
+
+The old `last-chance` / `ends-tonight` families and their `LastChance/` `EndsTonight/` image folders were removed; every non-draw state now uses `{Brand}/SpecialPromo/special-promo-{3|5|10}x.webp` (art reads "SPECIAL PROMO — {N}x ENTRIES ACTIVATED"). SpecialPromo ships only 3×/5×/10× — [`specialPromoMultiplierFileKey`](../../src/utils/promo-banner/banner-multiplier-file-key.ts) maps 2×/unknown/null to 10×, so keep 2× out of promos. Full behaviour: [docs/PROMO_BANNER_BEHAVIOUR.md](../PROMO_BANNER_BEHAVIOUR.md).
+
 ## State conventions
 
 - Banner text reads via TanStack Query (rarely changes)
