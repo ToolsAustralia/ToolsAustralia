@@ -346,6 +346,8 @@ Query params: `startDate`, `endDate` (`YYYY-MM-DD`), and `platform` ∈ `meta` |
 
 Thin handler — delegates to `PaymentEventRepository.aggregateRevenueByHourAndPlatform(startUTC, endUTC)` (the platform-group merge lives in the route's `PLATFORM_GROUPS`). Returns `{ success, data: { hourly: { hour, revenue, conversions }[], totalRevenue, totalConversions, platform, dateRange } }`. Reconciliation guaranteed by `npm run test:hourly-revenue`.
 
+The Facebook Ads tab's hourly breakdown (`GET/POST /api/admin/facebook-ads/hourly-insights`) sources its per-hour **revenue + conversions** from this same aggregator (the `meta` slice) — i.e. server-side `convertingPlatform === "meta"` attribution, **not** `utm_source` and **not** Meta's pixel/CAPI numbers — merged with Facebook Marketing-API hourly **spend**. So its hourly revenue now matches the rest of the dashboard. (The separate Meta-reported insights table is intentionally left as-is for pixel-vs-server comparison.)
+
 **Response (`data`):**
 
 ```jsonc

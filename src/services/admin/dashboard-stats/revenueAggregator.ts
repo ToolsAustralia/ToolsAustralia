@@ -76,7 +76,7 @@ export async function aggregateRevenueForDay(
     };
     const platform = (evTyped.convertingPlatform ?? "direct") as AttributedPlatformKey;
     // Renewal discriminator MUST match the existing hourly-breakdown predicate
-    // (PaymentEventRepository.aggregateRevenueAndCountByHourOfDay $nor): a membership row
+    // (PaymentEventRepository.aggregateRevenueByHourAndPlatform $nor): a membership row
     // whose data.billingReason is "subscription_cycle". data.billingReason is present on
     // EVERY row (incl. pre-feature history), so this is robust where the top-level
     // `isRenewal` field — which defaults false on historical rows — would silently leak
