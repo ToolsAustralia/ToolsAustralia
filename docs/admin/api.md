@@ -348,6 +348,18 @@ Thin handler — delegates to `PaymentEventRepository.aggregateRevenueByHourAndP
 
 The Facebook Ads tab's hourly breakdown (`GET/POST /api/admin/facebook-ads/hourly-insights`) sources its per-hour **revenue + conversions** from this same aggregator (the `meta` slice) — i.e. server-side `convertingPlatform === "meta"` attribution, **not** `utm_source` and **not** Meta's pixel/CAPI numbers — merged with Facebook Marketing-API hourly **spend**. So its hourly revenue now matches the rest of the dashboard. (The separate Meta-reported insights table is intentionally left as-is for pixel-vs-server comparison.)
 
+## Klaviyo analytics
+
+### `GET /api/admin/klaviyo/analytics?range=last_30_days`
+
+Gated by `facebookAds.view`. Returns **Klaviyo-attributed** campaign + flow revenue (email/SMS split via the values-report `send_channel` grouping) plus the "scheduled / about to send" view (upcoming Scheduled campaigns + live Flows). `range` ∈ `last_7_days` | `last_30_days` | `last_90_days` | `last_12_months`.
+
+Thin handler — delegates to `getKlaviyoAnalytics(range, nowMs)` in `src/services/admin/klaviyo/klaviyoReporting.ts` (SHARED-2), which resolves the "Placed Order" conversion metric at runtime (cached), fetches the campaign/flow lists + `campaign-values-reports` / `flow-values-reports`, and folds the rows per entity via the unit-tested pure shaper `foldKlaviyoValues` (`npm run test:klaviyo-fold`). All via the `klaviyo` singleton's `reportingRequest` passthrough (reuses its auth/revision/backoff).
+
+**Throttle-safe caching:** the Klaviyo reporting endpoints are heavily throttled (≈2/min), so the route caches results **in-process (10-min TTL)** and, on a throttle/error, serves the last good snapshot with `stale: true`. The tab must **not** auto-refresh on an interval. Response: `{ success, data: { range, metricId, campaigns[], flows[], scheduled: { upcomingCampaigns[], liveFlows[] }, truncated }, stale, cachedAt }`.
+
+**Attribution note:** this revenue is **Klaviyo's own attribution** (`conversion_value` on Placed Order) — it will NOT equal the server-side `convertingPlatform=klaviyo_email/sms` totals used on the overview card + aggregate tab; the two use different attribution windows. Label both; never sum Klaviyo-attributed into a blended ad total.
+
 **Response (`data`):**
 
 ```jsonc

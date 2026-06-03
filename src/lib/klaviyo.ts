@@ -227,6 +227,33 @@ class KlaviyoClient {
   }
 
   /**
+   * Read-only reporting passthrough for admin analytics callers (the Klaviyo tab).
+   * Wraps makeRequest with the same retry/backoff used everywhere else and returns
+   * parsed JSON. Throws a clear error on a non-OK (non-retryable) response — e.g. a
+   * 403 surfaces a missing key scope. Used by src/services/admin/klaviyo/* for
+   * metrics / campaigns / flows / values-reports (read-only by convention).
+   */
+  async reportingRequest<T = unknown>(
+    endpoint: string,
+    method: "GET" | "POST" = "GET",
+    body?: Record<string, unknown>
+  ): Promise<T> {
+    if (!this.apiKey) throw new Error("Klaviyo API key not configured");
+    const response = await this.retryRequest(
+      () => this.makeRequest(endpoint, method, body),
+      this.MAX_RETRIES,
+      this.BASE_RETRY_DELAY_MS
+    );
+    if (!response.ok) {
+      const err = (await response.json().catch(() => ({}))) as { errors?: Array<{ detail?: string }> };
+      throw new Error(
+        `Klaviyo reporting ${method} ${endpoint} → ${response.status}: ${err?.errors?.[0]?.detail ?? response.statusText}`
+      );
+    }
+    return response.json() as Promise<T>;
+  }
+
+  /**
    * PATCH profile with retry logic for 409 errors
    * Handles concurrent update conflicts with exponential backoff
    * 
