@@ -10,7 +10,7 @@ Tools Australia is a **membership-driven giveaway and rewards platform** for Aus
 
 1. **Buying a one-time tool pack** (Apprentice → VIP).
 2. **Subscribing to a monthly membership** (Tradie / Foreman / Boss).
-3. **Taking an upsell** after any purchase (50–60% off, 2× the base entries).
+3. **Taking an upsell** after any purchase (50–60% off, with a category-specific entries multiplier — membership 10×, one-time/additional 2×, mini 1×; see §5).
 4. **Referring a friend**, **using an affiliate link**, or **participating in promos**.
 
 On top of the giveaway loop, members unlock **tiered partner discounts** (currently 7 partner brands, scaling to 1,000+ once the partner API lands) and — once the shop launches — **shop discounts** (5–20%).
@@ -78,12 +78,12 @@ Source of truth: [docs/draws/](docs/draws/), models `MajorDraw`, `MiniDraw`, `Ti
   - **8:00 PM** — entries freeze. The pool for this cycle is locked. Draw transitions `active → frozen`.
   - **8:30 PM** — the draw is run **live on Facebook**. Draw transitions `frozen → completed`.
   - **12:00 AM (28th)** — the next cycle's draw transitions `queued → active` and new-entry purchases reopen.
-- **One Grand Winner per cycle today.** Adding **2nd-place and 3rd-place winners** is on the roadmap (see §16). The platform's `Winner` model already supports multiple winners per draw — the change is operational, not schema.
+- **One Grand Winner per cycle today.** Adding **2nd-place and 3rd-place winners** is on the roadmap (see §16). The `Winner` model can already store multiple winner rows per draw (no unique `drawId + cycle` constraint), but it has **no** `place`/`rank` field — so ordered 2nd/3rd placement needs a **small schema add** (see §16).
 - The freeze, draw, and activation times are **per-draw fields** on the `MajorDraw` document (`freezeEntriesAt`, `drawDate`, `activationDate`) — they're data-driven, not hardcoded — but the convention above is what every cycle uses.
 - **Purchase blackout window — 8:00 PM (27th) → 12:00 AM (28th), ~4 hours total.** New major-draw entry purchases are blocked across the full window, not just the 30-minute freeze:
   - **30-min freeze (8:00–8:30 PM)** — draw is `frozen`.
   - **3h 30min gap (8:30 PM–12:00 AM)** — previous draw is `completed`, next is still `queued` (no `active` draw exists).
-  The frontend gate is [`useMajorDrawPurchaseGate`](src/hooks/useMajorDrawPurchaseGate.ts) — `gatesClosed = currentMajorDraw?.status !== "active"` — which surfaces [`GateClosedModal`](src/components/modals/GateClosedModal.tsx) ("Gates Are Closed") with the next-draw name and activation date. Wired into `MembershipModal`, `useMiniDrawTrigger`, and the `FloatingCountdownBanner` (which switches to a yellow "GATES CLOSED" theme). Server-side, [`enforceMajorDrawOpenForNewPurchasesOr403`](src/utils/draws/major-draw-gate-http.ts) returns **403 `GATES_CLOSED`** on six purchase endpoints: `/api/upsell/purchase`, `/api/stripe/create-payment-intent`, `/api/stripe/create-subscription[-existing-user]`, `/api/stripe/create-one-time-purchase[-existing-user]`, `/api/stripe/upgrade-subscription-payment`.
+  The frontend gate is [`useMajorDrawPurchaseGate`](src/hooks/useMajorDrawPurchaseGate.ts) — `gatesClosed = currentMajorDraw?.status !== "active"` — which surfaces [`GateClosedModal`](src/components/modals/GateClosedModal.tsx) ("Gates Are Closed") with the next-draw name and activation date. Wired into `MembershipModal`, `useMiniDrawTrigger`, and the `FloatingCountdownBanner` (which switches to a yellow "GATES CLOSED" theme). Server-side, [`enforceMajorDrawOpenForNewPurchasesOr403`](src/utils/draws/major-draw-gate-http.ts) returns **403 `GATES_CLOSED`** on **seven** purchase route handlers: `/api/upsell/purchase`, `/api/stripe/create-payment-intent`, `/api/stripe/create-subscription[-existing-user]`, `/api/stripe/create-one-time-purchase[-existing-user]`, `/api/stripe/upgrade-subscription-payment` (the `[-existing-user]` variants are two separate routes each).
 - **Subscription renewals processed in this 4-hour window route into the NEXT cycle's pool, not the current one.** [`getTargetMajorDraw`](src/utils/draws/major-draw-helpers.ts) has explicit branches for both freeze (`currentDraw.status === "frozen"`) and gap ("No active draw (gap period) — use next queued draw"), so any webhook-driven renewal that lands at 8:14 PM or 10:47 PM on the 27th is allocated to the next draw, not the one being run that night.
 - All package purchases (subscription renewals, one-time, additional, upsell) contribute entries to the current cycle's `MonthlyEntryCampaign`.
 - **Under consideration:** adding a second major draw per month. Not implemented.
@@ -126,19 +126,18 @@ The original 8-tier flat ladder ($1 → $500, all guest-accessible) is deactivat
 
 The current monthly Major Draw prize is **fully customizable by the winner**. After being announced on Facebook Live (§3a), the winner picks **one** of:
 
-**Option A — Power tool kit + workshop storage** (most common). Two independent picks:
+**Option A — Power tool kit + workshop storage + $5,000 cash bonus** (most common). Two independent picks, plus a bundled cash bonus:
 
 1. **Power tool brand** — Milwaukee, DeWalt, Makita, or Ryobi.
 2. **Workshop storage** — one of:
    - Sidchrome SCMT11402 **356-piece** tool kit & lockable roller cabinet.
    - Milwaukee 56" High-Capacity Combination Tool Storage (steel construction, electronic lock).
    - Kincrome CONTOUR® **470-piece** 17-drawer workshop kit (P1823).
+3. **$5,000 cash bonus** — bundled into every combo on top of the tools (each combo's display label, via `getPrizeLabel`, ends in "+ $5,000 Cash" in [src/config/prizes.ts](src/config/prizes.ts); 8 of the 12 combos also carry an explicit "$5000 Cash Bonus" highlight — the four Sidchrome-storage variants do not).
 
-That's a 4 × 3 grid = **12 power-tool × storage combinations**, each rendered as its own `PrizeCatalogEntry` in [src/config/prizes.ts](src/config/prizes.ts) with full specs, hero gallery, and highlight copy.
+That's a 4 × 3 grid = **12 power-tool × storage combinations** (each + $5,000 cash), each rendered as its own `PrizeCatalogEntry` with full specs, hero gallery, and highlight copy.
 
-**Option B — Cash instead of tools.**
-- **$5,000 AUD cash** (standard).
-- **$10,000 AUD cash** (optional upgraded tier).
+**Option B — Cash instead of tools.** A single **$10,000 AUD tax-free cash** prize (`prizeValueLabel: "$10,000 Cash"`) — no equipment, "no tools, no hassle, just $10,000 straight to your bank account." There is **no $5,000 standalone cash tier** and no standard/upgraded distinction; the $5,000 figure only appears as the cash *bonus* bundled into Option A's tool combos.
 
 The cash option lives as the 13th `PrizeCatalogEntry` (`slug: "cash-prize"`).
 
@@ -201,7 +200,7 @@ Source of truth: [src/data/upsellPackages.ts](src/data/upsellPackages.ts), [docs
 After most purchases, the platform offers a single upsell. The pattern across all 22 upsell records:
 
 - **Price**: 50% off the base pack price (60% off for membership upsells).
-- **Entries**: **2× the base pack's entries** (e.g. base Tradie pack 15 entries → upsell grants 30).
+- **Entries**: a **category-specific multiplier** on the base pack's entries — **one-time 2×** and **Additional 2×** (e.g. one-time Tradie pack 15 entries → upsell grants 30), **membership 10×** (Apprentice base 3 → 30, Tradie 15 → 150, Foreman 30 → 300), and **mini fixed 1×**. The membership/one-time/additional multipliers are admin-configurable (defaults 10/2/2 in `UpsellMultiplierConfig`); mini has no admin knob. See §6c.
 - **Partner benefits**: same percentage and days as the base pack.
 - **Display rules**: `maxShowsPerUser`, `cooldownHours`, `showAfterDelay` (typically 2–3s after the success state).
 
@@ -211,7 +210,7 @@ Membership upsells (60% off) include an `accessAfterExpiry` window so the bonus 
 
 ## 6. Promotions & multipliers — how entries get amplified
 
-Separate from the base upsell 2× mechanic. This is the system that lets the business run "double entries this weekend" style promotions.
+Separate from the §5 upsell category-multiplier mechanic. This is the system that lets the business run "double entries this weekend" style promotions.
 
 ### 6a. Two multiplier systems coexist
 
@@ -219,7 +218,7 @@ Separate from the base upsell 2× mechanic. This is the system that lets the bus
   - [`Promo`](src/models/Promo.ts) — admin-toggled, manual on/off.
   - [`ScheduledPromo`](src/models/ScheduledPromo.ts) — date-window auto-activate, site-wide. **Not** user-redeemable; no code typed.
   - [`AlternatingPromoMultiplier`](src/models/AlternatingPromoMultiplier.ts) — a rotating background multiplier that ticks between values.
-- **Upsell category multipliers** — apply to the *bonus pack handed out after a trigger purchase*, configured per category (membership / one-time / additional / mini). See [`UpsellMultiplierResolver`](src/services/upsell/UpsellMultiplierResolver.ts).
+- **Upsell category multipliers** — apply to the *bonus pack handed out after a trigger purchase*. **Three** categories are admin-configurable via [`UpsellMultiplierResolver`](src/services/upsell/UpsellMultiplierResolver.ts): membership / one-time / additional (`UpsellMultiplierConfig` has no `mini` field). **Mini upsells are not resolver-backed** — they use a hard-fixed 1× applied directly in [`upsell-entries-calculator.ts`](src/utils/payment/upsell-entries-calculator.ts) (no admin knob). See §6c.
 
 ### 6b. Resolution order
 
@@ -275,7 +274,7 @@ All LIVE.
 
 ## 8. Rewards, points & redeemables — currently paused
 
-**System-wide paused.** The `rewardsEnabled` feature flag defaults off (see [`src/config/rewardsSettings.ts`](src/config/rewardsSettings.ts)). `/rewards` renders **"Rewards Are Temporarily Paused"**, and all `/api/rewards/*` handlers return **503**. The server **still accrues** `user.rewardsPoints` behind the scenes, ready to be restored when the system reopens. See [`docs/rewards-pause.md`](docs/rewards-pause.md).
+**System-wide paused.** The `rewardsEnabled` feature flag defaults off (see [`src/config/featureFlags.ts`](src/config/featureFlags.ts); the pause copy lives in [`src/config/rewardsSettings.ts`](src/config/rewardsSettings.ts)). `/rewards` renders **"Rewards Are Temporarily Paused"**, and all `/api/rewards/*` handlers return **503**. The server **still accrues** `user.rewardsPoints` behind the scenes, ready to be restored when the system reopens. See [`docs/rewards-pause.md`](docs/rewards-pause.md).
 
 Two parallel concepts coexist under this umbrella:
 
@@ -314,6 +313,7 @@ The non-obvious rule that ties everything together:
 - This means **renewals settle on the 24th**, giving 3+ days to resolve failed payments before the major draw on the **27th**.
 - **Past-due recovery reanchors to the catch-up date.** When a past-due/unpaid subscription recovers (any channel), future renewals are moved to the recovery-payment date (AEST), clamping 25/26/27 → 24. This stops the recovered member from being billed again ~2 weeks later on a stale original anchor. The anchor is therefore **not permanently static** — it reflects the most recent successful payment date (clamped to the draw buffer).
 - Source of truth: `docs/BILLING_ANCHOR_24.md` (join-anchor rule), `docs/PAST_DUE_REANCHOR.md` (past-due reanchor).
+- **$0 trial-invoice double-grant guard.** Any mutation that sets `trial_end` on an *existing* subscription (the 25/26/27→24 join-anchoring above, anchor-billing migrations, or past-due reanchor) makes Stripe auto-spawn a separate **$0 invoice** with `billing_reason: subscription_update` and mark it paid — firing a second `invoice.payment_succeeded`. The webhook detects it via [`isZeroAmountTrialUpdateInvoice`](src/utils/billing/trial-invoice.ts) (`subscription_update` + `total === 0` + `amount_paid === 0`) and **skips it entirely** ([stripe-webhook-handlers](src/services/stripe-webhook-handlers/index.ts)), so it does **not** grant a second set of renewal entries or log a spurious "Subscribed to X" admin-activity row. The match is deliberately narrow — a 100%-off renewal is `subscription_cycle` and a real upgrade proration has `total > 0`, so both still grant. Idempotency-by-id does **not** protect you here (the spawned invoice has its own id). Shipped 2026-06-02; regression-tested via `npm run test:zero-trial-guard`.
 
 ### 9c. Refund handling — ledger reversal
 
@@ -330,7 +330,7 @@ The non-obvious rule that ties everything together:
 ### 9e. Past-due admin charge tool
 
 - Endpoint: `POST /api/admin/invoices/charge-past-due`.
-- Strict guardrails: typing `"CHARGE"` to confirm, per-admin 5-minute rate limit, global 24-hour limit, 24-hour idempotency window per user.
+- Strict guardrails: typing `"CHARGE"` to confirm, a **global 30-minute mutex lock** (`ChargeJobLock` — only one charge run executes at a time across all admins, not a daily throttle), a **30-second per-invoice debounce**, and a **6-hour per-user recent-attempt / idempotency window** (`RECENT_ATTEMPT_WINDOW_HOURS = 6`; tightened from 24h on 2026-05-06 to allow same-day human-driven retries). The separate Force-Charge path adds a budget of 3 attempts per 6 hours. (There is **no** per-admin 5-minute rate limit and **no** global 24-hour limit — those were never implemented.)
 - Only charges DB-confirmed `past_due` users who have a finalized open invoice and a default payment method.
 
 ### 9f. Stripe webhook queue
@@ -341,7 +341,7 @@ The non-obvious rule that ties everything together:
 ### 9g. GST / Australian tax
 
 - **All prices are AUD.** Stripe Tax / `automatic_tax` / `tax_behavior` is **not enabled** anywhere in the codebase.
-- **Subscription and pack prices are treated as GST-inclusive by silence** — there is no GST line on the customer-facing invoice template ([src/components/invoice/InvoiceComponent.tsx](src/components/invoice/InvoiceComponent.tsx)), no `gstInclusive` flag on package data, and no tax code in `src/utils/billing/`.
+- **Subscription and pack prices are treated as GST-inclusive by silence** — the customer-facing invoice template ([src/components/invoice/InvoiceComponent.tsx](src/components/invoice/InvoiceComponent.tsx)) shows a `Tax (GST):` line **hardcoded to $0.00** (no tax is ever computed), there is no `gstInclusive` flag on package data, and no tax code in `src/utils/billing/`.
 - **The shop cart is the one exception**: [src/app/api/cart/summary/route.ts](src/app/api/cart/summary/route.ts) adds **10% GST** explicitly on subtotal (`const tax = subtotal * 0.1`). This only fires on the (currently coming-soon) product cart, not on memberships, packs, upsells, or mini-draw packs.
 - Practical consequence: when the shop launches, product line totals will show an explicit GST component while everything else stays "all-in" pricing.
 
@@ -394,7 +394,7 @@ These are not in the status enum but materially affect what entries / partner ac
 
 - `proration_behavior: "none"`, `billing_cycle_anchor: "now"`, `payment_behavior: "error_if_incomplete"`. See [src/app/api/stripe/upgrade-subscription-payment/route.ts](src/app/api/stripe/upgrade-subscription-payment/route.ts).
 - User pays the **full new-tier price immediately**; renewal date resets to today.
-- **Entries are granted immediately** via `upgradeEntriesGrant` ([UpgradeConfirmModal](src/components/modals/UpgradeConfirmModal/index.tsx)).
+- **Entries are granted immediately on upgrade** — the grant runs **server-side in the Stripe webhook** after the upgrade invoice is paid (the route records `user.subscription.pendingChange` and defers benefit-granting to the webhook). The `upgradeEntriesGrant` figure shown in [UpgradeConfirmModal](src/components/modals/UpgradeConfirmModal/index.tsx) is only the **display amount** (computed client-side via `calculateUpgradeEntries`), not the grant mechanism.
 
 ### 10d. Downgrades — no charge now, takes effect at cycle end
 
@@ -411,9 +411,11 @@ When a renewal fails (Stripe emits `invoice.payment_failed`), `subscription.past
 3. **Update card** — `InlineCardSetup` (SetupIntent) renders only when Stripe returns `requiresDifferentPaymentMethod` or there's no default PM. **Not the default path** — we keep the existing card unless Stripe says otherwise.
 4. **"Pay overdue amount" force-charge** — last resort, when the invoice is no longer payable through the normal flow. Calls `/api/stripe/force-charge-overdue`.
 
-On success, the modal refetches at 3 s and 7 s before closing at 8 s — waiting for the §9f webhook queue worker to settle the state — and shows: *"Your subscription has been reactivated and benefits are live again."*
+On success, the modal refetches at 3 s, then refetches again and closes together at 8 s — waiting for the §9f webhook queue worker to settle the state — and shows: *"Your subscription has been reactivated and benefits are live again."*
 
 This is the **customer-facing** counterpart to §9e's admin past-due tool — the user can self-serve most failed renewals without admin involvement.
+
+> **Note** — this past-due *renewal recovery* (force-charge the existing overdue invoice) is a different code path from the §10i *reactivation* of a `canceled` subscription, even though both surface "reactivated" copy.
 
 ### 10f. Email verification — what it actually gates
 
@@ -438,13 +440,13 @@ After activation, the logged-in user lives at `/my-account/`. This is where memb
 
 **Bottom navigation** (5 tabs, see [`BottomNav`](src/app/(site)/my-account/components/BottomNav.tsx)):
 
-- **Home** (`/my-account`) — landing dashboard (described below).
-- **Profile** — `/my-account/settings` with Profile / Password / Payment-methods / Subscription tabs.
+- **Home** (`/`) — links to the **public site root**, not the dashboard.
+- **Profile** (`/my-account`) — the **landing dashboard** described below (this is the dashboard tab, despite the "Profile" label).
 - **Draws** (`/my-account/draws`) — current & past draws view.
 - **Membership** (`/my-account/membership`) — current package, upgrade/downgrade entry points (§10c/§10d).
 - **Support** (`/my-account/support`) — contact / help.
 
-There is also `/my-account/benefits` covering the partner-discount catalog.
+The Profile / Password / Payment-methods / Subscription tabs live separately at `/my-account/settings` (reached via a `?tab=` query param, **not** a BottomNav tab), and `/my-account/benefits` covers the partner-discount catalog.
 
 **Home dashboard, top to bottom** ([src/app/(site)/my-account/page.tsx](src/app/(site)/my-account/page.tsx)):
 
@@ -458,6 +460,16 @@ There is also `/my-account/benefits` covering the partner-discount catalog.
 
 The ROI story this dashboard tells: *"You've earned N entries this cycle, here's your projected accumulation, the draw is M days away — and here are the partner discounts you can use right now."* Every visit reinforces the value of the subscription.
 
+### 10i. Reactivation & resubscribe — winning back lapsed members
+
+`POST /api/stripe/renew-subscription` ([route](src/app/api/stripe/renew-subscription/route.ts)) is the single entry point for a non-active member coming back. It picks one of three `renewalStrategy` branches off the current Stripe status:
+
+1. **`retry_payment`** — for `past_due` / `unpaid` / `incomplete` subscriptions. Overlaps the §10e `RenewalFailedModal` recovery flow.
+2. **`reactivate`** — for a `canceled` / `cancel_at_period_end` subscription **still within a 30-day grace window past `cancel_at`**. This only clears `cancel_at_period_end` (no charge, no proration, no new entry grant). It is **same-tier only**: requesting a different `packageId` is rejected with **HTTP 400 `REACTIVATE_TIER_CHANGE_NOT_ALLOWED`** ("Reactivate your current plan first, then upgrade or downgrade"). Tier changes deliberately route through the normal §10c/§10d flows *after* reactivating — bolting a tier swap onto reactivate would trigger an auto-proration charge and an incorrect entry grant off the resulting `subscription_update` invoice (see the §9b $0-trial guard for why that matters).
+3. **`create_new`** — the "Welcome back!" resubscribe path for a **fully-expired** member. Builds a brand-new anchored subscription (§9b) and grants entries via the webhook on the paid first invoice.
+
+**Resubscribe tier picker + entry-history carry-over.** When a subscription is `canceled` (or otherwise non-active/non-past-due), the Subscription Management modal replaces the legacy single "Reactivate" CTA with a **tier picker over all packages** (`ResubscribeTierPicker` via `InactiveSubscriptionState` → `ResubscribeEmptyState`) — the member is free to come back on **any** tier, with their previous package highlighted. Entry history survives the cancellation: `User.subscription.lastMonthAccumulatedEntries` persists through the cancel (and the picker surfaces it — "You have N accumulated entries", footer "your entries history is preserved"). On reactivation `lastResubscribedAt` is stamped, which drives a carry-over banner on the success page. This is distinct from the §10 `autoRenew` soft-cancel undo (which re-enables an *unexpired* subscription mid-cycle) — §10i is the win-back surface for a member who **fully churned**, and it's the on-platform half of the §13d comeback funnel.
+
 ---
 
 ## 11. Promo landing pages & paid-traffic surface
@@ -470,6 +482,7 @@ Tools Australia's paid traffic doesn't land on the homepage — it lands on **pr
 - **`PromoBannerText`** ([src/models/PromoBannerText.ts](src/models/PromoBannerText.ts)) — rotating banner copy controlled from the admin UI.
 - **`PromoFAQs`** and `PromoTrustBar` ([src/components/sections/promo/](src/components/sections/promo/)) — conversion-side components that surface objections-handling copy and trust signals.
 - **`PromoAnalyticsVisit`** + `usePromoPageTracking` — visit-level analytics tied to the landing slug, separate from the main funnel events.
+- **Landing-hero A/B variants** — the hero image set is A/B-tested via the first-party A/B framework (§15). The manifest ships `variation1` / `variation2` desktop **and** mobile hero sets (per brand × toolbox, plus the evergreen all-prizes hero), and [`PromoHero`](src/components/sections/promo/PromoHero.tsx) applies a per-slug `variantConfig.hero.imageSrcBySlug` override (each viewport independently optional) so one experiment can run across many toolset/evergreen landing slugs. The "variation 1 vs variation 2" experiment is seeded over 16 slugs (+ cash-prize) via [scripts/seed-variation1-vs-variation2-experiment.ts](scripts/seed-variation1-vs-variation2-experiment.ts) as a draft an admin activates.
 
 ### 11b. How a landing page connects to the rest of the business
 
@@ -480,11 +493,11 @@ Tools Australia's paid traffic doesn't land on the homepage — it lands on **pr
 
 ### 11c. Trust signals on the landing page
 
-The conversion-side trust stack ([src/components/sections/promo/PromoTrustBar.tsx](src/components/sections/promo/PromoTrustBar.tsx)):
+The conversion-side trust stack ([src/components/sections/promo/PromoTrustBar.tsx](src/components/sections/promo/PromoTrustBar.tsx)) renders three items:
 
-- **"Govt-certified draws"** — the [randomdraws.com.au](https://randomdraws.com.au) winner-selection partner (§3a). This is the integrity proof we lean on publicly.
-- **Stripe-secured payments** — payment-card badges.
-- **Real winners** — links to `/winners` and `/draw-results` for verification.
+- **"Winners drawn live"** — "· on Facebook" (the §3a Facebook Live draw).
+- **"Govt-certified draws"** — a cert link out to the [randomdraws.com.au](https://randomdraws.com.au) winner-selection partner (§3a). This is the integrity proof we lean on publicly.
+- **"Drawn every 27th"** — the fixed monthly cadence.
 
 All LIVE.
 
@@ -497,7 +510,7 @@ A real ops concern with admin tooling around it. Authoritative spec: [docs/billi
 ### 12a. The block → allowlist loop
 
 - **What triggers a block.** Stripe Radar / issuer-directed blocks on charge attempts. The Stripe webhook captures these from both `payment_intent.payment_failed` and `charge.failed` events (when `outcome.type === "blocked"`) and **upserts a `BlockedTransaction` row** via `upsertBlockedTransaction()`.
-- **The allowlist.** `AllowlistService.evaluateAndApply()` adds the card fingerprint to Stripe's `card_fingerprint_allowlist` **Radar value list** (Stripe is the source of truth; the Mongo `AllowlistAction` row is an audit log). Subsequent charges to the same card aren't auto-blocked.
+- **The allowlist.** `AllowlistService.apply()` adds the card fingerprint to Stripe's `card_fingerprint_allowlist` **Radar value list** (it internally runs `evaluate()` first, then on an eligible verdict creates the Radar value-list item; Stripe is the source of truth, the Mongo `AllowlistAction` row is an audit log). Subsequent charges to the same card aren't auto-blocked.
 - **Three callers** of the allowlist: the webhook (auto), the admin bulk page (`/api/admin/allowlist/apply`, source `admin_bulk`), and per-row Allowlist / Reverse buttons in `/admin/blocked-transactions`.
 
 ### 12b. Auto-allowlist guardrails
@@ -514,9 +527,11 @@ These rows are flagged for human review in the admin UI instead.
 
 A daily reconciliation cron (`15 3 * * *`, [src/app/api/cron/reconcile-blocked-transactions/route.ts](src/app/api/cron/reconcile-blocked-transactions/route.ts)) scans the last 48h of Stripe-blocked charges and self-heals any missing Mongo rows. It alerts via `console.error` if drift > 5% — so the system catches webhook gaps without manual review.
 
-### 12d. Purchase cooldown
+### 12d. Optimistic-update guard (despite the filename, NOT a fraud control)
 
-A separate, lighter-weight rate limit lives in [src/lib/purchaseCooldown.ts](src/lib/purchaseCooldown.ts). It prevents rapid-fire purchases (and accidental double-charges) at the API layer — first-line defense before Radar even sees the charge.
+[src/lib/purchaseCooldown.ts](src/lib/purchaseCooldown.ts) is misleadingly named — it exports a single **client-side** TanStack Query helper, `freezeRefetchIntervals(qc, userId, ms)`, not a rate limit. During a purchase flow (called from [useMembershipQueries](src/hooks/queries/useMembershipQueries.ts) and [useUpsellQueries](src/hooks/queries/useUpsellQueries.ts)) it briefly sets `refetchInterval: false` on the hot dashboard queries (`majorDraw.current`, `majorDraw.userStats`, `users.account`) so an in-flight background poll can't clobber the optimistic entry-count update, then restores the prior defaults via `setTimeout`. It does **not** run at the API layer, does **not** block rapid-fire purchases or double-charges, and never touches Stripe Radar.
+
+**There is no application-layer purchase rate-limiter** — `src/lib/rate-limiting/` contains only `error-reports.ts`. Double-charge protection comes from Stripe-side idempotency and per-flow guards (e.g. the upsell post-success-window guard), not from this helper.
 
 ---
 
@@ -532,7 +547,7 @@ A separate, lighter-weight rate limit lives in [src/lib/purchaseCooldown.ts](src
 ### 13b. Referrals
 
 - Refer-a-friend flow with `ReferralEvent` model, `lib/referral.ts`, and `ReferFriendModal`.
-- **Reward structure**: when the referred user **makes their first purchase**, the inviter receives **100 entries into the current Major Draw**. The reward is not triggered by signup alone — the qualifying event is the referred user's actual purchase, so the inviter only profits when the platform does.
+- **Reward structure**: when the referred user **makes their first purchase**, **both parties receive 100 entries into the current Major Draw** — 100 to the inviter *and* 100 to the referred user (`REFERRAL_REWARD_ENTRIES = 100`, awarded as both `referrerEntriesAwarded` and `referreeEntriesAwarded`; both lots are added directly to the active major draw, not to an accumulated-entries balance). The reward is not triggered by signup alone — the qualifying event is the referred user's actual purchase, so the inviter only profits when the platform does.
 - See [docs/referrals/](docs/referrals/).
 
 ### 13c. Cancellation / retention flow
@@ -541,18 +556,18 @@ A separate, lighter-weight rate limit lives in [src/lib/purchaseCooldown.ts](src
 - All steps emit `CancellationFlowEvent` for analytics.
 - A maturity cron (`cancellation-retention-maturity`) flips paused subscriptions back to active when the pause window ends; a resume cron resumes early-returners.
 
-**The 30-day retention pause is app-level, NOT Stripe-level.** This is the most-confused mechanic in the system, so to be clear:
+**Both the §9d recovery pause and the §13c retention pause are real Stripe `pause_collection`s — the difference is the `behavior` and a `metadata.pauseReason` tag, not "app vs Stripe."** This is the most-confused mechanic in the system, so to be clear: `applyRetentionPause` ([`RetentionPauseService`](src/services/subscription/RetentionPauseService.ts)) calls `stripe.subscriptions.update` with `pause_collection: { behavior: "void", resumes_at: now + 30d }` and `metadata.pauseReason: "retention"`. The app-side `User.retentionOffersConsumed.pause30d` is only a **one-time "offer consumed" marker** (it gates whether the pause offer can be shown again and serves as the resume cron's candidate filter) — it is **not** where the pause state lives and it does **not** gate entries accrual or partner access.
 
-|                          | §9d Stripe `pause_collection`                    | §13c App-level retention pause                    |
+|                          | §9d Stripe recovery pause                        | §13c Stripe retention pause                       |
 | ------------------------ | ------------------------------------------------ | -------------------------------------------------- |
-| **What it is**           | Stripe stops issuing draft invoices              | Tools Australia respects a 30-day "I want a break" window |
+| **What it is**           | Stripe `pause_collection` (`behavior: keep_as_draft`) | Stripe `pause_collection` (`behavior: void`, `resumes_at: now+30d`) |
 | **Why it exists**        | Recovery from *renewal failure* (involuntary)    | Churn prevention via *opt-in* offer (voluntary)   |
-| **Stored where**         | Stripe Subscription.pause_collection             | `User.retentionOffersConsumed.pause30d` flag       |
+| **Stored where**         | Stripe `Subscription.pause_collection`           | Stripe `Subscription.pause_collection` + `metadata.pauseReason: "retention"` (the `keep_as_draft`/`void` behavior is the discriminator) |
 | **Stripe status during** | unchanged                                        | unchanged                                          |
-| **Entries during pause** | continue (it's recovery, not opt-out)            | suspended for the window                           |
+| **Entries during pause** | continue (it's recovery, not opt-out)            | suspended — `behavior: void` makes Stripe discard renewal invoices, so no paid invoice → no renewal webhook → no entries |
 | **Resumed by**           | successful payment                               | maturity cron at 30 days, OR user-triggered early return |
 
-The two mechanisms can co-exist on the same user and they don't talk to each other — `retentionOffersConsumed.pause30d` is purely an app-side flag that gates entries accrual and partner access, not a Stripe state.
+The two can co-exist on the same user. The `metadata.pauseReason: "retention"` tag is what protects a retention pause from being cleared by the §9d recovery-clear path (`decideClearPause` in `pauseCollectionPolicy.ts` skips when `pauseReason === "retention"`). The `pause30d` flag is purely the "already used this offer" marker, not a Stripe state and not an entries/partner gate.
 
 ### 13d. Cancelled-member comeback funnel
 
@@ -574,18 +589,23 @@ Source of truth: [docs/tracking/](docs/tracking/).
 
 ### 14a. Live
 
-- **Meta / Facebook**: Pixel (client) + CAPI (server-side, `src/lib/facebook.ts`, test `npm run test:facebook-capi`).
+- **Meta / Facebook**: Pixel (client) + CAPI (server-side, `src/lib/facebook.ts`, test `npm run test:facebook-capi`). Identity enrichment (2026-05-25) threads hashed user data (email/name/phone, fbc/fbp) through the CAPI mirror for AddPaymentInfo / InitiateCheckout / CompleteRegistration to lift Event Match Quality.
+- **TikTok**: Pixel (client) **+ Events API CAPI (server-side, `src/lib/tiktok.ts`, v1.3 `event/track`, gated by `TIKTOK_ACCESS_TOKEN`, shared `event_id` dedup with the pixel — shipped 2026-05-22)**.
+- **Snapchat**: client-side Pixel only (with `client_dedup_id` dedup); its CAPI sender is still a stub.
+- **Unified conversions layer** — a single `CanonicalEvent` is dispatched to every platform's browser pixel **and** server-side CAPI through one registry ([`src/lib/tracking/`](src/lib/tracking/)): Meta and TikTok have server-side CAPI parity (Snapchat pixel-only), with shared advanced-matching enrichment and `event_id` browser↔CAPI dedup. Funnel events POST to `/api/tracking/conversion` → `sendConversion()`; per-provider CAPI is independently env-gated. Legacy per-vendor scripts (below) remain.
 - **Google Tag Manager**: `src/lib/gtm.ts`.
 - **Klaviyo**: page tracker, script loader, transactional handoffs (`src/lib/klaviyo.ts`).
 - **UTM persistence**: `src/lib/utm/`.
 
-### 14b. Ad-platform analytics — revenue live, ad-spend sync pending
+### 14b. Ad-platform analytics — server-side revenue live, ad-spend sync partial
 
-- **TikTok / Snapchat tabs now show server-side attributed revenue.** `TikTokAdsManagement.tsx` / `SnapchatAdsManagement.tsx` render an hour-of-day **revenue + conversions** breakdown from `convertingPlatform`-tagged `PaymentEvent`s (`/api/admin/analytics/hourly-revenue`). Still pending is each platform's **ad-spend** sync (TikTok/Snapchat Marketing API) — so spend + ROAS show "awaiting sync" until then. Client-side TikTok/Snapchat pixels fire independently.
+- **TikTok / Snapchat tabs show server-side attributed revenue.** `TikTokAdsManagement.tsx` / `SnapchatAdsManagement.tsx` render an hour-of-day **revenue + conversions** breakdown from `convertingPlatform`-tagged `PaymentEvent`s (`/api/admin/analytics/hourly-revenue`). The client-side pixels fire independently, and **TikTok also fires server-side conversions** via the Events API (§14a).
+- **Ad-spend sync — Meta + TikTok wired, Snapchat pending.** Meta drives true ROAS on the daily snapshot. **TikTok's Marketing-API hourly ad-spend** is also wired (`fetchTikTokHourlySpend` → the hourly Spend/Profit/ROAS columns), rendering as soon as `TIKTOK_ADVERTISER_ID` + `TIKTOK_MARKETING_ACCESS_TOKEN` are set (code is unverified against the live API and falls back to "—" without creds). **Snapchat has no Marketing-API spend client yet** — Snapchat spend/ROAS show "—" until then. The daily-insights *writer* (populating `TikTokAdInsightsDaily` / `SnapchatAdInsightsDaily`) is still Meta-only.
+- **Facebook Ads Health — adset decision engine.** A per-adset rules engine ([`src/services/facebook-ads-health/`](src/services/facebook-ads-health/), admin "Facebook Ads" tab → `FacebookAdsHealthView`) that turns Meta reporting into a daily verdict — **SCALE / HOLD / INVESTIGATE / CUT** — for each adset, applying Meta's documented learning-phase thresholds (≥50 conversions/7d, learning-status buckets, Learning-Limited ≥3 days) against tunable settings (breakeven ROAS, target CPA, ROAS-drop trigger %, post-edit wait hours, zero-conversion spend multiplier). Emits the verdict + reason rows + a concrete action ("raise budget 20%", "pause and reallocate $X", "revert recent edit — do NOT pause"). Backed by routes `/api/admin/facebook-ads/health/{insights,settings,snooze}`, ~9 admin components, an account-level true-ROAS service, per-adset snooze, and 3 regression suites (`test:facebook-ads-health-verdict / -two-window / -missing-data`). The verdict-engine **insights and threshold settings are also mirrored read-only to Norm** (`facebook-ads.health.insights` / `facebook-ads.health.settings` in [`classification.ts`](src/lib/internal-norm/classification.ts)), with settings-update and snooze exposed as `write_safe` Norm tiers. (Not to be confused with the unrelated `/v1/health` gateway-liveness route.)
 - **Klaviyo analytics tab** — campaign/flow revenue (Klaviyo-attributed, email/SMS split) + scheduled sends + server-side Klaviyo hourly, via the read-only Klaviyo Reporting API.
-- **All Platforms tab** + **true-ROAS overview card** — combined ad-effectiveness rollup (true ROAS = server-side attributed revenue ÷ ad spend, contribution, conversions, hourly) across every channel; the overview card shows server-side ROAS instead of Meta's pixel figure.
+- **All Platforms tab** + **true-ROAS overview card** — combined ad-effectiveness rollup (true ROAS = server-side attributed revenue ÷ ad spend, contribution, conversions, hourly) across every channel, with a **Direct (unattributed)** row excluded from blended ROAS; the overview card shows server-side ROAS instead of Meta's pixel figure.
 
-Models for daily insights (`MetaAdInsightsDaily`, `TikTokAdInsightsDaily`, `SnapchatAdInsightsDaily`) all exist, but only Meta is wired to an **ad-spend** sync today.
+Models for daily insights (`MetaAdInsightsDaily`, `TikTokAdInsightsDaily`, `SnapchatAdInsightsDaily`) all exist, but the daily-insights writer is Meta-only; TikTok ad-spend arrives via the live hourly Marketing-API client rather than a daily-snapshot writer.
 
 ### 14c. Klaviyo lifecycle flows
 
@@ -594,6 +614,10 @@ The platform doesn't only ship transactional email through SendGrid — it also 
 - **Past-due profile sync** — `sync:klaviyo-past-due` ([scripts/sync-klaviyo-past-due-profiles.ts](scripts/sync-klaviyo-past-due-profiles.ts), `:dry` variant available) pushes the current `past_due` cohort into a Klaviyo segment so payment-recovery flows target the right people.
 - **Renewal-entries preview** — Klaviyo sees how many entries a user's *next* renewal will grant, via `klaviyo-renewal-entries-preview` ([src/utils/integrations/klaviyo/](src/utils/integrations/klaviyo/), test: `npm run test:klaviyo-renewal-preview`).
 - **Cancellation-flow signals** — `CancellationFlowEvent` rows (see §13c) feed comeback flows targeted at the `cancelled-members` audience used by `PromoLink` (§7b).
+- **Canonical membership-state profile feed** (shipped 2026-05-28) — every server-side profile sync (`ensureUserProfileSynced`, fired by Stripe webhooks, payment/cancellation flows, auth/setup) re-pushes **5 canonical Klaviyo properties**: `membership_status` (active / past_due / canceled / never_subscribed, derived from Stripe state), `entries_purchased`, `giveaways_entered`, `membership_active_duration_months`, `next_renewal_date`. This continuously-updated profile store lets the ads team self-serve segments (e.g. "purchased entries but no membership", "at-risk near renewal") without per-flow engineering. Backfill: `scripts/backfill-klaviyo-membership-properties.ts`.
+- **Abandoned-checkout recovery** (shipped 2026-05-28) — a `Started Checkout` event (`createStartedCheckoutEvent`) fires when a user begins a membership/pack purchase (client-side on payment-submit, and server-side after guest step-1 registration). The Klaviyo email's CTA carries a one-click resume deep link (`?openMembership=1&packageId=<id>`, built by `buildCheckoutResumeUrl`); on return, `useMembershipModalDeepLink` (mounted in `MembershipSection`) **auto-reopens the MembershipModal with that exact tier preselected**. A revenue-recovery funnel, not just tracking.
+- **Viewed-Giveaway retargeting** (shipped 2026-05-28) — a `Viewed Giveaway` event (`createViewedGiveawayEvent`, fired by `PromoViewTracking` on `/promotions/<slug>` pages) carries rich template properties (promo title, prize name, prize image, promo URL) so a Klaviyo-side "viewed promo but didn't enter" flow can retarget paid-traffic visitors who clicked an ad but didn't convert (ties into the §11 surface).
+- **Placed Order** events are tagged with `is_renewal` + `billing_reason`, so renewal revenue is distinguishable from first-purchase revenue in Klaviyo flows/segments.
 - This is the same Klaviyo property store that the **client-side Klaviyo page tracker** (§14a) writes to, so identification stays consistent across server-side syncs and browser events.
 
 **Failed-payment email cadence is entirely Klaviyo-side, not SendGrid.** On `invoice.payment_failed`, [`handleInvoicePaymentFailed`](src/services/stripe-webhook-handlers/index.ts) fires three Klaviyo events: `SubscriptionRenewalFailed`, `PaymentFailed`, and `SubscriptionPaymentFailed`. **No SendGrid template** is sent directly from the webhook (`grep` against `src/lib/email/**` for these names returns zero matches; the HTML preview at `payment-failed-email-template.html` is explicitly the **Klaviyo** template, per the preview component comment). Cadence — day 1 vs day 3 vs day 7 follow-ups — is configured **in Klaviyo flows**, not in code. The in-app §10e `RenewalFailedModal` is the user-side prompt that runs in parallel with whatever the Klaviyo flow is sending.
@@ -603,9 +627,11 @@ The platform doesn't only ship transactional email through SendGrid — it also 
 ## 15. Other major systems
 
 - **A/B testing** — full first-party framework. Services, components, hooks, repositories, models, `/api/ab-testing` routes. See [docs/ab-testing/](docs/ab-testing/).
-- **Email** — SendGrid for transactional, Klaviyo for marketing, root `*-email-template.html` files for templates, preview UI at `/email-preview`, SMS via `src/lib/sms.ts` (Twilio).
-- **Admin dashboard** — user management, payments, draws, promos, error reports, partner applications, Stripe webhook queue, dashboard stats daily snapshots, charge-past-due tool, blocked transactions / allowlist. See [docs/admin/](docs/admin/).
-- **Internal Norm API** — staff-only HTTP namespace at `/api/internal/norm/v1/*` exposing read-only business analytics (ROAS, dashboard stats) to an external AI assistant ("Norm") running on a Mac mini server, governed by the existing role-based permissions system.
+- **Email** — SendGrid for transactional, Klaviyo for marketing, root `*-email-template.html` files for templates (incl. `staff-invite-email-template.html`), preview UI at `/email-preview`, SMS via `src/lib/sms.ts` (Twilio).
+- **Admin dashboard** — user management, payments, draws, promos, error reports, partner applications, Stripe webhook queue, dashboard stats daily snapshots (+ cycle-anchored Renewal Rate KPI), charge-past-due tool, blocked transactions / allowlist, demographic/age + profession-cleanup metrics, plus the **Analytics tab group** (All Platforms, Facebook Ads incl. **Facebook Ads Health** §14b, TikTok Ads, Snapchat Ads, Klaviyo, Page Analytics, Cancellation Flow, A/B Testing). See [docs/admin/](docs/admin/).
+- **Staff roles & permissions (RBAC)** — admin access is no longer an all-or-nothing flag. Each user carries a `userType` of `customer` / `staff` / `admin` plus an optional `roleId` ([src/models/User.ts](src/models/User.ts)). Permissions are a hardcoded catalog of **47 actions across 17 areas** ([`src/lib/permissions.ts`](src/lib/permissions.ts) `AREA_ACTIONS`) — money-moving and irreversible actions (`users.charge`, `users.refund`, `users.cancelSubscription`, `users.delete`, `majorDraw.selectWinner`, `affiliates.processPayout`) are each their own permission, so a role can grant edit access without granting them. Permissions bundle into named roles ([src/models/Role.ts](src/models/Role.ts)); admin is the implicit super-role, while custom staff roles (e.g. an Ads Manager) get a filtered admin panel and are walled off from customer-purchase flows. Routes are gated via `requirePermission()` rather than ad-hoc `role === "admin"` checks. This is the same role-based system the Internal Norm bullet (below) relies on to secure the external-AI gateway. See [docs/auth/roles.md](docs/auth/roles.md).
+- **Staff invite + audit** — owner/admins invite a team member by email + role (`POST /api/admin/staff`, gated by `settings.edit`), which creates an inactive user with a single-use invite token (7-day TTL) and sends a SendGrid invite email; the invitee sets a password at the public `/staff-setup/[token]` page. Deactivation reverts the user to `customer`, clears `roleId`, and forces sign-out — the row is kept for audit, never deleted. Every meaningful staff mutation (and every blocked 403 attempt by a logged-in staffer) is recorded in the **`StaffActivity`** audit log via `requirePermissionWithAudit` (wired into 60+ admin routes incl. force-charge, refund reversal, cancel-subscription, winner selection), snapshotting actor email/role-name + action/method/path/resource/status, with a 180-day TTL. Surfaced behind the `audit.view` permission (incl. a per-user "Staff actions" tab). Distinct from the Stripe allowlist audit (§12a/§12c).
+- **Internal Norm API** — staff-only HTTP namespace at `/api/internal/norm/v1/*` exposing read-only business analytics (ROAS, dashboard stats) to an external AI assistant ("Norm") running on a Mac mini server, governed by the role-based permissions system above.
 - **Error reporting** — first-party `ErrorReport` Mongo model + admin routes. Do not bolt on a parallel logger. See [docs/error-reporting/](docs/error-reporting/).
 - **Security / CSP** — per-request nonce in `src/middleware.ts`, CSP assembled in `src/utils/security/csp.ts`, static fallback in `next.config.ts`. Stripe webhook route has special headers (no COEP). See [docs/security-csp/](docs/security-csp/).
 - **DST / timezone** — billing logic uses `date-fns-tz`; there are DST-transition test scripts under `scripts/test-dst-transitions.ts` and `TESTING-TIMEZONE-DST.md` covers the edge cases.
@@ -618,11 +644,11 @@ The platform doesn't only ship transactional email through SendGrid — it also 
 | --------------------------------------- | -------------------------------------------- | ------------------------------------------------------------------------------ |
 | **Shop**                                | Scaffolded, page renders *Coming Soon*       | Products, Orders, Cart, brand/product pages all built. Shop discount lines per tier already in data, intentionally hidden until launch. |
 | **Partner Discount API @ 1,000+ brands** | Static catalog of 7 today                    | Tier % model already in place; will migrate to DB-backed catalog with admin CRUD + public API. |
-| **TikTok Ads insights sync**            | Admin shell + pixel only                     | Marketing API integration pending.                                             |
-| **Snapchat Ads insights sync**          | Admin shell only                             | Insights pipeline pending.                                                     |
+| **TikTok Ads insights sync**            | Pixel + server-side CAPI live; hourly ad-spend wired but creds-gated | Events API (CAPI) ships via the conversion registry (§14a). Marketing-API hourly ad-spend (`fetchTikTokHourlySpend`) is wired into the Spend/Profit/ROAS columns, awaiting live `TIKTOK_ADVERTISER_ID` + `TIKTOK_MARKETING_ACCESS_TOKEN` and verification. Outstanding: the daily-insights writer for `TikTokAdInsightsDaily`. |
+| **Snapchat Ads insights sync**          | Admin shell + client pixel only              | Conversions API is a stub; no Marketing-API spend client yet — spend/ROAS show "—". Insights pipeline pending. |
 | **Mobile app (Google Play Store)**      | Not started                                  | Planned native **Android** app on the Play Store. **iOS / App Store is not on the roadmap** at this stage. |
 | **Second monthly Major Draw**           | Under consideration                          | Current cadence is one draw per month on the 27th.                             |
-| **2nd- and 3rd-place winners per draw** | Schema ready, operationally pending          | `Winner` model already supports multiple winners per draw. Today every cycle has a single Grand Winner; 2nd and 3rd place will be added without a schema change. |
+| **2nd- and 3rd-place winners per draw** | Multiple-winner storage works; needs a rank field | `Winner` is keyed by `drawId + cycle` with no unique constraint, so multiple winner rows per draw are storable today — but there is **no** `place`/`rank` field, so an ordered 2nd/3rd placement would need a small schema add to distinguish positions. Today every cycle has a single Grand Winner. |
 
 ---
 
@@ -633,7 +659,7 @@ The platform doesn't only ship transactional email through SendGrid — it also 
 - **Pack** — a one-time purchase that grants entries (Apprentice → VIP).
 - **Member** — strictly, a user with an **active subscription** (`userData.subscription.isActive === true`). The term is sometimes used loosely to mean "engaged user" — for Additional-pack eligibility, that loose sense applies (active sub OR current-draw entries).
 - **Additional Pack** — a discounted variant of a one-time pack. Eligible to users with an active subscription **or** entries in the current major draw — see §2c.
-- **Upsell** — a post-purchase offer at 50–60% off granting 2× the base pack's entries.
+- **Upsell** — a post-purchase offer at 50–60% off (50% on one-time/additional/mini, 60% on membership) granting a **category-specific entries multiplier** on the base pack's entries: membership 10×, one-time 2×, additional 2×, mini 1× (the first three admin-configurable; mini fixed). See §5/§6c.
 - **Anchor day** — day 24 of the month, the day subscriptions renew. New joiners on the 25th/26th/27th are anchored to the 24th at signup; recovered past-due members are reanchored to their recovery-payment date (clamped 25/26/27 → 24). See `docs/BILLING_ANCHOR_24.md` and `docs/PAST_DUE_REANCHOR.md`.
 - **Promo multiplier** — the entries-multiplier applied at *purchase time* (Scheduled / Toggle / Alternating). Prioritized, not stacked, within the promo family.
 - **Upsell category multiplier** — the entries-multiplier applied to a *bonus pack* after a trigger purchase. Stacks multiplicatively with the promo multiplier active at the trigger purchase.
@@ -653,7 +679,8 @@ The platform doesn't only ship transactional email through SendGrid — it also 
 - **Mini-draw pack ladder** — the 3-guest + 5-additional-member-only pack structure introduced 2026-05-14 (see §3b).
 - **TicketEntry** — one row = one ticket = one chance in a draw. Hard-keyed to a Mini Draw; Major Draw entries live separately on `MajorDraw.entries[]`. See §3e.
 - **Carry-forward** — subscription entries accumulate month-to-month while active. One-Time pack and Mini Pack entries do **not** carry forward.
-- **`autoRenew` toggle** — soft-cancel shortcut; calls Stripe `cancel_at_period_end: true`. Same effect as the §13c cancel flow; re-enable any time to undo.
+- **`autoRenew` toggle** — soft-cancel shortcut; calls Stripe `cancel_at_period_end: true`. Same effect as the §13c cancel flow; re-enable any time to undo (re-enabling an *unexpired* subscription mid-cycle).
+- **Reactivate / Resubscribe** — `POST /api/stripe/renew-subscription` for a lapsed member (§10i). *Reactivate* uncancels a `canceled` sub still within a 30-day grace window — **same-tier only**, no charge (`REACTIVATE_TIER_CHANGE_NOT_ALLOWED` if a different tier is requested). *Resubscribe* (`create_new`) builds a fresh anchored subscription for a fully-expired member, via a tier picker that preserves accumulated-entries history. Distinct from the `autoRenew` mid-cycle undo and from §10e past-due payment recovery.
 - **Refund policy** — memberships are non-refundable once purchased (Terms §4); no pro-rate refunds; ACL rights preserved (§9h).
 - **`MajorDrawOverview`** — the primary ROI card on the member dashboard: entries this cycle, 3-month accumulation projection, countdown to draw date (§10h).
 - **Partner access %** — the fraction of the partner-brand catalog a tier can see; today 50/75/100% for subscriptions, 25–100% for one-time packs (time-limited).

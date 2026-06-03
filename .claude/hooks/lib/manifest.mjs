@@ -25,7 +25,8 @@ export function readManifest(repoRoot) {
   }
 
   const block = content.slice(startIdx, endIdx);
-  const match = block.match(/```json\n([\s\S]+?)\n```/);
+  // CRLF-tolerant: worktree checkouts on Windows may have \r\n line endings.
+  const match = block.match(/```json\r?\n([\s\S]+?)\r?\n```/);
   if (!match) {
     throw new Error("Domain Manifest block found but no fenced ```json``` content inside.");
   }
