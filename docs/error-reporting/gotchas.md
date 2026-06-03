@@ -44,6 +44,14 @@ This was the root cause of `autoLogStripeError` dropping every report it created
 
 The `httpStatus` field on `ErrorReport` is only set for reports created via `logHttpRejection` (introduced with the `rejectAndLog` helper). Historical error rows have `httpStatus: null`.
 
+## `useErrorHandling` no longer calls `sessionStorage.clear()` on 401 (2026-06-01)
+
+`src/hooks/useErrorHandling.ts` previously called `sessionStorage.clear()` on HTTP 401 responses to wipe any stale session state before redirecting to login. This was removed because `sessionStorage` now holds the durable marketing-attribution cookie `_ta_attr` (90-day first-party UTM + click-ID cookie written at landing). Clearing all of `sessionStorage` on a 401 silently wiped the attribution data that the single-platform payment resolver needs to credit the correct ad platform for the subsequent purchase.
+
+The fix: handle 401 session cleanup through cookie/NextAuth invalidation only — do not call `sessionStorage.clear()`. The `_ta_attr` attribution data should survive a re-login so the user's eventual purchase is correctly attributed to the original ad click.
+
+If you need to reset attribution deliberately (e.g., a test harness), call `sessionStorage.removeItem("_ta_attr")` directly instead of clearing all of sessionStorage.
+
 ## Page URL vs API endpoint
 
 `ErrorReport` stores two locator fields that get conflated in the admin UI when only one is present:

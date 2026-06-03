@@ -16,7 +16,10 @@ import {
 
 import type { CancellationReason, OfferType } from "@/models/CancellationFlowEvent";
 import { MetricCard } from "@/components/admin/metrics/shared/MetricCard";
-import DateRangeToggle, { DateRange } from "@/components/admin/DateRangeToggle";
+import ClickableUserDisplay from "@/components/admin/ClickableUserDisplay";
+import CancellationReasonUsersModal from "@/components/admin/CancellationReasonUsersModal";
+import { DateRange } from "@/components/admin/DateRangeToggle";
+import { DateRangeDropdown } from "@/components/admin/overview/DateRangeDropdown";
 import CustomDateRangeModal from "@/components/admin/CustomDateRangeModal";
 import { AdminMobileLayoutDateRangeShell } from "@/app/admin/component/AdminMobileLayoutDateRangeShell";
 import { useAdminMobileDateToolbarSlot } from "@/hooks/useAdminMobileDateToolbarSlot";
@@ -93,6 +96,7 @@ export default function CancellationFlowAnalytics() {
   const [startDate, setStartDate] = useState<string>("");
   const [endDate, setEndDate] = useState<string>("");
   const [isCustomDateModalOpen, setIsCustomDateModalOpen] = useState(false);
+  const [reasonModalReason, setReasonModalReason] = useState<CancellationReason | null>(null);
 
   const { data: drawDates } = useCurrentAndLastDrawDates();
   const { data: majorDraws = [] } = useMajorDrawsForDateRange();
@@ -209,17 +213,11 @@ export default function CancellationFlowAnalytics() {
   }, [dateRange, startDate, endDate]);
 
   const dateRangeToggle = (
-    <DateRangeToggle
+    <DateRangeDropdown
       selectedRange={dateRange}
-      onRangeChange={(range) => {
-        if (range === "custom") setIsCustomDateModalOpen(true);
-        else updateDateFilter(range);
-      }}
+      onRangeChange={(range) => updateDateFilter(range)}
       onCustomClick={() => setIsCustomDateModalOpen(true)}
-      collapsed={false}
       displayDate={displayDate || undefined}
-      onExpand={() => {}}
-      className={isLgUp ? undefined : "w-full"}
     />
   );
 
@@ -270,6 +268,14 @@ export default function CancellationFlowAnalytics() {
         currentStartDate={startDate}
         currentEndDate={endDate}
         majorDraws={majorDraws}
+      />
+
+      <CancellationReasonUsersModal
+        isOpen={reasonModalReason !== null}
+        onClose={() => setReasonModalReason(null)}
+        reason={reasonModalReason}
+        startDate={startDate || undefined}
+        endDate={endDate || undefined}
       />
 
       {isError && (
@@ -368,12 +374,29 @@ export default function CancellationFlowAnalytics() {
               ) : (
                 CANCELLATION_REASONS.map((reason) => {
                   const row = data.byReason[reason];
+                  const disabled = row.count === 0;
                   return (
                     <tr
                       key={reason}
-                      className="border-t border-gray-100 dark:border-neutral-800 hover:bg-gray-50 dark:hover:bg-neutral-800/60 transition-colors"
+                      onClick={() => {
+                        if (!disabled) setReasonModalReason(reason);
+                      }}
+                      className={`border-t border-gray-100 dark:border-neutral-800 transition-colors ${
+                        disabled
+                          ? "cursor-default"
+                          : "cursor-pointer hover:bg-red-50/60 dark:hover:bg-red-950/20"
+                      }`}
+                      title={disabled ? undefined : "View users with this reason"}
                     >
-                      <td className="p-3 text-gray-900 dark:text-neutral-100">{REASON_LABELS[reason]}</td>
+                      <td className="p-3 text-gray-900 dark:text-neutral-100">
+                        {disabled ? (
+                          REASON_LABELS[reason]
+                        ) : (
+                          <span className="font-medium underline-offset-2 hover:underline">
+                            {REASON_LABELS[reason]}
+                          </span>
+                        )}
+                      </td>
                       <td className="p-3 text-right font-mono tabular-nums text-gray-900 dark:text-white">
                         {row.count}
                       </td>
@@ -421,32 +444,58 @@ export default function CancellationFlowAnalytics() {
                   <th className="text-left p-3 font-semibold text-gray-800 dark:text-neutral-100 w-44">
                     Started
                   </th>
+                  <th className="text-left p-3 font-semibold text-gray-800 dark:text-neutral-100 w-64">
+                    User
+                  </th>
                   <th className="text-left p-3 font-semibold text-gray-800 dark:text-neutral-100">
                     What they wrote
                   </th>
                 </tr>
               </thead>
               <tbody>
-                {data.otherReasonTexts.map((entry, i) => (
-                  <tr
-                    key={`${entry.startedAt}-${i}`}
-                    className="border-t border-gray-100 dark:border-neutral-800 align-top"
-                  >
-                    <td className="p-3">
-                      <span
-                        className={`px-2 py-0.5 rounded text-xs font-medium ${OUTCOME_CHIP[entry.outcome]}`}
-                      >
-                        {entry.outcome === "in_progress" ? "in progress" : entry.outcome}
-                      </span>
-                    </td>
-                    <td className="p-3 text-gray-600 dark:text-neutral-400 font-mono tabular-nums whitespace-nowrap">
-                      {formatInTimeZone(new Date(entry.startedAt), AEST_TIMEZONE, "yyyy-MM-dd HH:mm")}
-                    </td>
-                    <td className="p-3 text-gray-900 dark:text-neutral-100 whitespace-pre-wrap break-words">
-                      {entry.text}
-                    </td>
-                  </tr>
-                ))}
+                {data.otherReasonTexts.map((entry, i) => {
+                  const fullName = [entry.userFirstName, entry.userLastName]
+                    .filter(Boolean)
+                    .join(" ")
+                    .trim();
+                  const displayText = entry.userEmail
+                    ? entry.userEmail
+                    : entry.userId
+                      ? `User ${entry.userId.slice(-6)}`
+                      : "—";
+                  return (
+                    <tr
+                      key={`${entry.startedAt}-${i}`}
+                      className="border-t border-gray-100 dark:border-neutral-800 align-top"
+                    >
+                      <td className="p-3">
+                        <span
+                          className={`px-2 py-0.5 rounded text-xs font-medium ${OUTCOME_CHIP[entry.outcome]}`}
+                        >
+                          {entry.outcome === "in_progress" ? "in progress" : entry.outcome}
+                        </span>
+                      </td>
+                      <td className="p-3 text-gray-600 dark:text-neutral-400 font-mono tabular-nums whitespace-nowrap">
+                        {formatInTimeZone(new Date(entry.startedAt), AEST_TIMEZONE, "yyyy-MM-dd HH:mm")}
+                      </td>
+                      <td className="p-3 whitespace-nowrap">
+                        {entry.userId ? (
+                          <ClickableUserDisplay
+                            displayText={displayText}
+                            userId={entry.userId}
+                            subtext={fullName || undefined}
+                            className="text-sm font-medium text-gray-900 dark:text-neutral-100"
+                          />
+                        ) : (
+                          <span className="text-sm text-gray-500 dark:text-neutral-500">—</span>
+                        )}
+                      </td>
+                      <td className="p-3 text-gray-900 dark:text-neutral-100 whitespace-pre-wrap break-words">
+                        {entry.text}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

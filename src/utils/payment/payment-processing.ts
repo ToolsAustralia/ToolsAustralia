@@ -40,6 +40,9 @@ import {
   setLedgerCampaign,
   setLedgerPromoLink,
 } from "@/utils/payment/ledger-helpers";
+import { classifyIsRenewal } from "@/services/attribution/classifyIsRenewal";
+import { normalizeUtmToPlatform } from "@/services/attribution/normalizePlatform";
+import type { ConvertingPlatform, AttributionConfidence } from "@/types/attribution";
 
 /** Optional membership ledger (Stripe invoice path) — lastMonthDelta for refunds. */
 export type SubscriptionLedgerContext = {
@@ -49,6 +52,18 @@ export type SubscriptionLedgerContext = {
 
 // Global processing lock to prevent concurrent processing of same payment
 const processingLocks = new Map<string, Promise<{ success: boolean; alreadyProcessed: boolean; error?: string }>>();
+
+/**
+ * Lift Facebook ad attribution from sessionAttribution into the top-level indexed fields
+ * on PaymentEvent so ad-level TRUE ROAS aggregation can $group by attributionAdId.
+ */
+function buildAttributionFields(sessionAttribution?: AttributionParams | null) {
+  return {
+    attributionAdId: sessionAttribution?.ad_id ?? null,
+    attributionAdsetId: sessionAttribution?.adset_id ?? null,
+    attributionCampaignId: sessionAttribution?.campaign_id ?? null,
+  };
+}
 
 // Type definitions for better type safety
 type PaymentMetadata = {
@@ -181,7 +196,14 @@ export async function processPaymentBenefits(
   /** Membership re-subscribe — forwarded to Meta CAPI as custom_data.content_category for segmentation. */
   isResubscribe?: boolean,
   /** Membership invoice payments: contribution to lastMonthAccumulatedEntries (refund ledger). */
-  subscriptionLedgerContext?: SubscriptionLedgerContext
+  subscriptionLedgerContext?: SubscriptionLedgerContext,
+  /** Edge-resolved single-platform attribution decision (from Stripe metadata). Null → UTM fallback. */
+  resolvedAttribution?: {
+    platform: ConvertingPlatform;
+    confidence: AttributionConfidence;
+    attributedClickId: string | null;
+    attributedClickTimestamp: number | null;
+  } | null
 ): Promise<{ success: boolean; alreadyProcessed: boolean; error?: string; code?: string }> {
   // ✅ CRITICAL: Validate input parameters
   // console.log(`🔍 processPaymentBenefits called with:`, {
@@ -231,7 +253,8 @@ export async function processPaymentBenefits(
     sessionAttribution,
     affiliateOptions,
     isResubscribe,
-    subscriptionLedgerContext
+    subscriptionLedgerContext,
+    resolvedAttribution
   );
   processingLocks.set(lockKey, processingPromise);
 
@@ -267,7 +290,13 @@ async function processPaymentBenefitsInternal(
   sessionAttribution?: AttributionParams,
   affiliateOptions?: { skipMembershipFirstCommission?: boolean },
   isResubscribe?: boolean,
-  subscriptionLedgerContext?: SubscriptionLedgerContext
+  subscriptionLedgerContext?: SubscriptionLedgerContext,
+  resolvedAttribution?: {
+    platform: ConvertingPlatform;
+    confidence: AttributionConfidence;
+    attributedClickId: string | null;
+    attributedClickTimestamp: number | null;
+  } | null
 ): Promise<{ success: boolean; alreadyProcessed: boolean; error?: string; code?: string }> {
   const maxRetries = 3;
   let retryCount = 0;
@@ -385,6 +414,22 @@ async function processPaymentBenefitsInternal(
           attributionData.promotionSlug = signupAttr.promotionSlug;
         }
 
+        // Single-platform attribution (spec: prefer the edge-resolved decision; otherwise
+        // fall back to a UTM-based resolve from the merged attributionData). Never throws.
+        const isRenewal = classifyIsRenewal({ billingReason, isResubscribe });
+        let convertingPlatform: ConvertingPlatform | null = resolvedAttribution?.platform ?? null;
+        let attributionConfidence: AttributionConfidence | null = resolvedAttribution?.confidence ?? null;
+        const attributedClickId = resolvedAttribution?.attributedClickId ?? null;
+        const attributedClickTimestamp = resolvedAttribution?.attributedClickTimestamp ?? null;
+        if (!convertingPlatform) {
+          const fallback = normalizeUtmToPlatform(
+            typeof attributionData.utmSource === "string" ? attributionData.utmSource : undefined,
+            typeof attributionData.utmMedium === "string" ? attributionData.utmMedium : undefined
+          );
+          convertingPlatform = fallback ?? "direct";
+          attributionConfidence = "utm_only";
+        }
+
         const paymentEventData: Record<string, unknown> = {
           entries: packageData.entries,
           points: packageData.points,
@@ -403,6 +448,10 @@ async function processPaymentBenefitsInternal(
             paymentMetadata?.miniDrawId && { miniDrawId: paymentMetadata.miniDrawId }), // For activity log: "Entered in [mini draw title]"
           ...(Object.keys(attributionData).length > 0 && attributionData),
         };
+
+        // Audit evidence: persist the resolved click signal into the (Mixed) data blob.
+        if (attributedClickId) (paymentEventData as Record<string, unknown>).attributedClickId = attributedClickId;
+        if (attributedClickTimestamp != null) (paymentEventData as Record<string, unknown>).attributedClickTimestamp = attributedClickTimestamp;
 
         // Get user's active experiment assignment (non-blocking - don't fail if this errors)
         // ✅ FIX: Try without slug first (finds all-page experiments or any active experiment)
@@ -431,6 +480,10 @@ async function processPaymentBenefitsInternal(
           data: paymentEventData,
           processedBy,
           timestamp: new Date(),
+          ...buildAttributionFields(sessionAttribution),
+          convertingPlatform,
+          attributionConfidence,
+          isRenewal,
           ...(experimentAssignment && {
             experimentId: experimentAssignment.experimentId,
             variantId: experimentAssignment.variantId,
@@ -1584,7 +1637,7 @@ function trackKlaviyoEvent(
   },
   paymentIntentId: string,
   skipInvoice: boolean = false,
-  _billingReason?: string // ✅ Stripe billing_reason to distinguish renewals from initial subscriptions
+  billingReason?: string // Stripe billing_reason; threaded to Placed Order as is_renewal + billing_reason
 ): void {
   try {
     // console.log(`📊 trackKlaviyoEvent called for user: ${user.email}`);
@@ -1656,6 +1709,11 @@ function trackKlaviyoEvent(
       paymentIntentId,
       entriesGranted: packageData.entries,
       pointsEarned: packageData.points,
+      // Discriminate automated subscription renewals so Klaviyo flow/campaign
+      // ROI reports can filter them out. Same `isRenewal` detection used to
+      // skip Facebook Purchase + Subscription Started above.
+      billingReason,
+      isRenewal: billingReason === "subscription_cycle",
     }).catch((error) => {
       // Log error but don't fail payment processing
       console.error(`❌ Failed to track "Placed Order" event:`, error);

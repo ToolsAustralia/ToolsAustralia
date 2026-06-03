@@ -19,6 +19,8 @@ Users who **join on the 25th, 26th, or 27th** (AEST) are anchored so their subsc
 - Uses **`trial_end` = next 24th** and **`proration_behavior: "none"`** so we do not charge mid-cycle.
 - **We never migrate subscriptions with `cancel_at_period_end === true`.** Those users have already chosen to cancel at their current period end; changing billing or trial could charge them or extend access. We skip them and log `skip_cancel_at_period_end`.
 
+> ⚠️ **Setting `trial_end` on each EXISTING sub makes Stripe auto-spawn a $0 `subscription_update` invoice per migrated subscription.** Unguarded, a backfill double-grants renewal entries to **every** 25/26/27 member at once (the highest-volume form of the bug). The **webhook** guard `isZeroAmountTrialUpdateInvoice` (`src/services/stripe-webhook-handlers/index.ts`), not the script, is what prevents it — the script has no grant-suppression of its own. Read the pre-flight checklist in `docs/PAST_DUE_REANCHOR.md` before running or modifying any `trial_end` backfill.
+
 ### Cancellation date = full period
 
 - **Always** we set the user’s “cancellation date” / `endDate` to Stripe’s **current period end** (from subscription items in Basil API, or subscription-level in legacy).
@@ -46,3 +48,16 @@ npx tsx scripts/migrate-anchor-billing-24.ts --limit=50
 ## Audit
 
 - Migration logs every subscription with `subId`, `customerEmail`, `oldAnchorDay`, `newAnchorDay`, `action` so you can match records in your DB and Stripe dashboard.
+
+## Second anchor-move trigger — past-due reanchor
+
+There are now **two** events that move the billing anchor:
+
+1. **New joiners on 25th/26th/27th** (this doc) — handled at subscription-create time.
+2. **Past-due recovery** — when a `past_due`/`unpaid` subscription recovers, future renewals are reanchored to the recovery-payment date (AEST), clamping 25/26/27 → 24, via `reanchorAfterPastDueRecovery` in `SubscriptionCollectionPauseService`.
+
+See [PAST_DUE_REANCHOR.md](./PAST_DUE_REANCHOR.md) for the full past-due reanchor rule.
+
+## Stripe "Trials" analytics are an anchoring artifact
+
+Anchoring uses Stripe `trial_end`, so Stripe classifies anchored members (25-27 joiners, the migration batch, and past-due reanchors) as **"trials"** — the **Billing → Trials** tab and trial-segmented MRR will show large numbers even though **we never sell a free trial**. This is cosmetic with no functional impact; our DB-based analytics count these members as active subscribers. Do not read Stripe's Trials / MRR-during-trial as a real funnel — use Subscribers/Revenue or the app's own dashboards. See [PAST_DUE_REANCHOR.md](./PAST_DUE_REANCHOR.md).

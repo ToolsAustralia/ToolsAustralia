@@ -127,3 +127,7 @@ Each event is processed in a `try/catch`. Errors are collected in `errors[]` and
 - `processed`: matured events selected this run.
 - `retained` / `churned`: split written this run.
 - `errors`: per-event error messages (non-fatal).
+
+## `/api/cron/sync-meta-ads` (2026-06-02) — Prize-performance Meta sync
+
+Runs `runMetaSpendByUrlSync` over a trailing 7-day window so the admin Prize-performance table stays fresh. Auth: `Authorization: Bearer ${CRON_SECRET}` (standard cron pattern). **DST-correct self-gating:** Vercel cron is UTC and DST-unaware, so the handler over-invokes and gates against the real `Australia/Sydney` wall clock — it runs only when local time is one of `03:00, 06:00, 09:00, 12:00, 15:00, 18:00, 21:00` or `23:59`, returning `200 { skipped: true }` otherwise. `vercel.json` schedules `0 * * * *` (hourly — covers the 3-hourly slots for both AEST UTC+10 and AEDT UTC+11) plus `59 12,13 * * *` (covers the 23:59 slot across both offsets; 23:59 AEDT = 12:59 UTC, 23:59 AEST = 13:59 UTC). A manual "Sync" button on the Prize-performance card hits the same underlying `POST /api/admin/analytics/spend-by-url/sync`.

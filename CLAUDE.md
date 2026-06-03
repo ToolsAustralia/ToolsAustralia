@@ -64,13 +64,23 @@ Both files include a "Coming soon" section — when something ships, **move the 
 
 This rule is not hook-enforced. You're expected to apply it on your own. `/review` should also flag it.
 
-### 6. Verify before claiming
+### 6. Verify before claiming — AND before branching on assumed state
 
 Never state a fact about the code, this codebase's runtime behavior, or a third-party API/service without first checking. "Checking" means a Read, Grep, Bash command, doc lookup, or runtime probe — not recall.
 
 - If you cannot reach high confidence, say "I haven't verified X" explicitly. Do not phrase guesses as facts.
 - After a fix, verify the *end-to-end* behavior, not just the first symptom. The Stripe Basil API issue and the MongoDB index collision were both missed by stopping at the first plausible cause.
 - If the user pushes back on a claim, treat that as a signal to re-verify from scratch, not to defend the original claim.
+
+**Verification applies to IMPLEMENTATION decisions, not just statements.** Before writing any conditional that depends on app state (`if (isAuthenticated)`, `if (newUser)`, `if (step === N)`, `if (existingPlainAccount)`), **trace the actual control flow in the code first**. Do not infer from:
+- Component / function / API endpoint names (e.g. `/api/auth/register` does NOT auto-login the user in this codebase — step-1 success leaves `isAuthenticated: false` and bridges to step-2 via `guestUserData`).
+- "What most apps do" (most apps auto-login on register; this one doesn't).
+- Patterns from earlier in the codebase (different modals / endpoints may have different auth flows).
+- Prior conversation context (your own earlier statements can be wrong).
+
+Before adding tracking events, side effects, or any state-conditional logic to a multi-step flow, **walk through every possible user path** (new vs returning, guest vs authed, normal vs error, switching state mid-flow) and verify the event/effect fires correctly in each. The "happy path works in my one test" is not enough — bugs hide in the path you didn't think to test.
+
+When the user corrects your mental model (e.g. DJ: *"my register in the membershipmodal doesnt auto grant or login the user if he registers in step1"*), treat it as a **high-signal correction**. Re-trace from the code, do not defend the original claim.
 
 This rule is not hook-enforced. You're expected to apply it on your own.
 
@@ -152,7 +162,7 @@ Admin and protected route gating happens in two places: `src/middleware.ts` (mat
 
 These domains have non-obvious rules documented in `docs/`. Skim the matching doc before changing code in these areas:
 
-- **Billing / Stripe** — `docs/BILLING_ANCHOR_24.md`, `docs/STRIPE_COLLECTION_PAUSE_RECOVERY.md`, `docs/CHARGE_PAST_DUE_CUSTOMERS.md`, `docs/REFUND_REVERSAL.md`, `docs/PAYMENT_ATTRIBUTION.md`, `docs/SUBSCRIPTION_PAYMENT_ELEMENT_MIGRATION.md`. Subscription anchor day, past-due/pause recovery, and refund reversal logic are intricate and have dedicated tests under `src/services/subscription/__tests__/` and `src/utils/payment/__tests__/`.
+- **Billing / Stripe** — `docs/PAST_DUE_REANCHOR.md`, `docs/BILLING_ANCHOR_24.md`, `docs/STRIPE_COLLECTION_PAUSE_RECOVERY.md`, `docs/CHARGE_PAST_DUE_CUSTOMERS.md`, `docs/REFUND_REVERSAL.md`, `docs/PAYMENT_ATTRIBUTION.md`, `docs/SUBSCRIPTION_PAYMENT_ELEMENT_MIGRATION.md`. Subscription anchor day, past-due/pause recovery, and refund reversal logic are intricate and have dedicated tests under `src/services/subscription/__tests__/` and `src/utils/payment/__tests__/`. **Footgun:** any mutation that sets `trial_end` / `billing_cycle_anchor` / `proration_behavior` or swaps items on an *existing* subscription can make Stripe auto-spawn an extra `invoice.payment_succeeded` — classify it in the webhook before granting (guard: `isZeroAmountTrialUpdateInvoice`, test: `npm run test:zero-trial-guard`); idempotency-by-id does **not** protect you (the spawned invoice has its own id). Read the pre-flight checklist in `docs/PAST_DUE_REANCHOR.md` before any such change.
 - **A/B testing** — `docs/AB_TESTING_*.md` (feature, dedup, DB optimization, metrics).
 - **Promo / referrals / affiliates** — `docs/PROMO_BANNER_BEHAVIOUR.md`, `docs/PROMO_PAGE_ANALYTICS.md`, `docs/REFERRAL_SYSTEM.md`, `docs/UTM_ATTRIBUTION.md`. Affiliate commission/recurring backfills have dedicated scripts.
 - **Error reporting** — `docs/ERROR_REPORTING_AND_LOGGING.md`, `docs/ERROR_REPORTING_SYSTEM.md`. There is a real `ErrorReport` Mongo model + admin routes; do not invent a parallel logger.
@@ -171,6 +181,7 @@ This repo has nine specialist Cursor subagents (frontend, backend-api, mongo-dat
 - **Mongo connections** — see `docs/MONGODB_CONNECTION_BEST_PRACTICES.md`. Use `src/lib/mongodb.ts`; do not open ad hoc connections in scripts (the `scripts/*.ts` already follow this).
 - **Console output** — production builds strip `console.log`/`info`/`debug`/`warn` (`next.config.ts` `compiler.removeConsole`). Use `console.error` for genuine errors that must survive, or route through `ErrorReport`. **This also applies when debugging staging / Vercel preview deploys** — those are production builds, so any temporary `console.log` you add to diagnose a live issue will be invisible. Use `console.error` for ad-hoc debug logging on staging too.
 - **`mongoose` is `serverExternalPackages`** — don't try to bundle it into client code.
+- **Operational scripts must show progress.** Long-running `scripts/*.ts` (backfills, migrations, syncs, reconciliations) run via `tsx` — **not** the Next build — so `console.log` is **not** stripped there; use it freely. Every such script must emit: (1) an **up-front total count** (so progress has a denominator), (2) a **periodic progress line** with `processed/total (%) · rate/sec · ETA` on an *adaptive cadence* (~20 lines regardless of size, so even a few-hundred-row run visibly moves), and (3) a **final summary**. A script that prints a header then goes silent for minutes reads as "hung" — never ship that. Reference implementations: `scripts/backfill-converting-platform.ts`, `scripts/backfill-klaviyo-membership-properties.ts` (also: `--dry-run` default-safe, append-mode CSV audit log, 3-tier exit codes). The `writing-ops-script` skill enforces the dry-run + audit parts; this bullet adds the progress-logging requirement.
 
 ## Domain Manifest
 
@@ -188,7 +199,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
 ```json
 {
   "version": 1,
-  "lastModified": "2026-05-14",
+  "lastModified": "2026-05-27",
   "domains": {
     "subscription": {
       "docs": "docs/subscription/",
@@ -490,10 +501,15 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/utils/meta/**",
         "src/utils/utm/**",
         "src/services/meta/**",
+        "src/services/attribution/**",
+        "src/types/attribution.ts",
+        "src/services/facebook-ads-health/**",
         "src/models/MetaAdDestination.ts",
         "src/models/MetaAdInsightsDaily.ts",
         "src/models/TikTokAdInsightsDaily.ts",
         "src/models/SnapchatAdInsightsDaily.ts",
+        "src/models/FacebookAdsHealthSnooze.ts",
+        "src/models/FacebookAdsHealthSettings.ts",
         "src/app/layout.tsx",
         "src/app/api/facebook/**",
         "src/app/api/tracking/**",
@@ -591,7 +607,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/app/globals.css",
         "src/app/not-found.tsx"
       ],
-      "lastVerified": "2026-05-15"
+      "lastVerified": "2026-05-27"
     },
     "client-state": {
       "docs": "docs/client-state/",
@@ -614,14 +630,16 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/hooks/usePrefetching.ts",
         "src/hooks/useConfetti.ts"
       ],
-      "lastVerified": "2026-05-20"
+      "lastVerified": "2026-05-27"
     },
     "admin": {
       "docs": "docs/admin/",
       "paths": [
         "src/app/admin/**",
         "src/components/admin/**",
+        "src/components/admin/facebook-ads-health/**",
         "src/app/api/admin/**",
+        "src/app/api/admin/facebook-ads/health/**",
         "src/features/admin/**",
         "src/models/ChargeJobLock.ts",
         "src/models/ChargeJobRun.ts",
@@ -632,11 +650,12 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/services/admin/**",
         "src/services/admin/chargePastDueHistory.ts",
         "src/utils/admin/**",
+        "src/types/admin/**",
         "src/hooks/useAdminMobileDateToolbarSlot.ts",
         "src/models/DashboardStatsDailySnapshot.ts",
         "src/services/admin/dashboard-stats/**"
       ],
-      "lastVerified": "2026-05-20"
+      "lastVerified": "2026-05-27"
     },
     "dashboard-account": {
       "docs": "docs/dashboard-account/",
@@ -689,7 +708,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/utils/validation/**",
         "src/utils/webhook/**",
         "scripts/migrations/**",
-        "scripts/seed-admin-data.ts",
+        "scripts/seed-*.ts",
         "scripts/migrate-*.ts",
         "scripts/fix-*.{ts,mjs,js}",
         "scripts/update-*.ts",
@@ -697,6 +716,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "scripts/backfill-*.ts",
         "scripts/cleanup-*.ts",
         "scripts/find-*.ts",
+        "scripts/reverse-*.ts",
         "scripts/stripe-*.ts",
         "scripts/verify-*.ts"
       ],

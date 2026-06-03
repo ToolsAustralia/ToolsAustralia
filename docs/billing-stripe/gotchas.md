@@ -1,5 +1,25 @@
 # Billing-Stripe — Gotchas
 
+> **Before any change that mutates subscription billing timing** (`trial_end`, `billing_cycle_anchor`, `proration_behavior`, item swap, `pause_collection`) on an EXISTING subscription: Stripe can auto-spawn an extra `invoice.payment_succeeded` your webhook will try to grant on, and **idempotency-by-id will not stop it** (the spawned invoice has its own id). Classify intent before granting. Read the **pre-flight checklist** in `docs/PAST_DUE_REANCHOR.md` ("Billing-timing footgun — read this BEFORE any anchor / trial / proration change"). The only classifier today is `isZeroAmountTrialUpdateInvoice` (`subscription_update`/$0 only).
+
+## Stripe's $0 "Trial period" invoice double-grants entries — guard it
+
+Setting `trial_end` on an **existing** subscription (the past-due reanchor, the `migrate-anchor-billing-24` migration, join-anchoring 25/26/27→24) makes Stripe **auto-create a separate $0 invoice** with `billing_reason="subscription_update"` and a "Trial period for X" line, and mark it **paid** (it's $0). That fires a second `invoice.payment_succeeded`.
+
+`handleInvoicePaymentSucceeded` normalizes `subscription_update` to a renewal for entry math, so it was **granting membership entries again** for this $0 invoice — double-counting the real `subscription_cycle` renewal — and logging a spurious "Subscribed to X Membership Package" admin-activity row (the recent-activities feed labels any non-`subscription_cycle` membership grant as "Subscribed"). 
+
+Guard: `isZeroAmountTrialUpdateInvoice()` (`src/utils/billing/trial-invoice.ts`) — the webhook early-returns for these. It is narrow: a 100%-off renewal is `subscription_cycle` (still grants); a real upgrade proration is `subscription_update` with `total > 0` (still grants).
+
+> **The guard is the SOLE line of defense.** Every idempotency layer (`PaymentEvent {paymentIntentId,eventType}` unique index, `processedPayments`, `ProcessedStripeEvent`) keys on the per-invoice / per-event id, and the $0 trial invoice carries its OWN distinct id + event — so nothing else catches this double-grant if the guard regresses. Two tests defend it: `test:trial-invoice` (the pure predicate) and `test:zero-trial-guard` (webhook-level — proves `handleInvoicePaymentSucceeded` actually honors the guard; the predicate test can't detect a handler that stops calling it). Keep BOTH green. Audit: `npm run find:duplicate-trial-entry-grants`. Remediate already-granted dups: `npm run reverse:duplicate-trial-entry-grants:dry` (dry-run; add `--apply` to write) — reverses only **clean** dups (scoped `removeMajorDrawEntries` + `accumulatedEntries −data.entries` + `lastMonthAccumulatedEntries` SET to the real sibling renewal's value when latest-cycle), writes a `BenefitsReversed` marker first as an atomic idempotency claim, and FLAGS anomalous/standalone grants for manual review. See `docs/PAST_DUE_REANCHOR.md`.
+
+## Reactivation is SAME-TIER ONLY (no proration tier-swap)
+
+`POST /api/stripe/renew-subscription` resolves `renewalStrategy: "reactivate"` for a cancelled-but-in-grace member (`cancel_at_period_end`/`canceled`, within a 30-day window). That branch **only clears `cancel_at_period_end`** — no charge, no proration. It used to do a `proration_behavior:"create_prorations"` item-swap when a *different* `packageId` was sent; that auto-charges a positive proration whose `subscription_update` (`total>0`) invoice the webhook then grants a **full renewal-sized entry batch** for (off the *old* package metadata), even though the route returns `grantEntryRewardToast:false`. Removed. A differing `packageId` on reactivate is now rejected (`REACTIVATE_TIER_CHANGE_NOT_ALLOWED`, 400).
+
+**Model:** a cancelled member changes tier by **reactivating first, then** using the normal flows — **upgrade** (`/api/stripe/upgrade-subscription-payment`: immediate, full new-tier price, `proration_behavior:"none"` + `billing_cycle_anchor:"now"`, staged via `pendingChange`) or **downgrade** (`/api/stripe/downgrade-subscription`: `proration_behavior:"none"` + `billing_cycle_anchor:"unchanged"`, takes effect at period end via `previousSubscription`). The reactivate UI only ever sends the member's *current* `packageId`, so this was latent, not a live production bug. See `docs/PAST_DUE_REANCHOR.md`.
+
+> The Reactivate button's *visibility* is gated on the DB heuristic `!autoRenew && isActive` (not live Stripe `cancel_at_period_end`), so it's looser than backend reactivate eligibility — a known edge (admin-set `autoRenew=false` / flag drift can show it for a non-scheduled-cancellation member and click → `create_new` full charge). See `docs/subscription/gotchas.md` → "Reactivate button gating is looser than backend reactivate eligibility".
+
 ## Charge past-due — runbook
 
 (Migrated from former `docs/CHARGE_PAST_DUE_CUSTOMERS.md`.)
@@ -254,3 +274,48 @@ capture non-thrown early returns via `rejectAndLog` from
 - The entire top-level `catch` block in each route — thrown errors already auto-log via `ErrorLoggingService` / `autoLogPaymentErrorServer`; wrapping those would double-log
 
 **No double-logging risk:** `rejectAndLog` is only on non-thrown paths; the `catch` blocks are untouched.
+
+## A/B-test attribution on subscription invoices is initial-only
+
+In `services/stripe-webhook-handlers/index.ts`, the `invoice.payment_succeeded`
+path used to read `experimentId` / `variantId` from `subscription.metadata` for
+every invoice. Because subscription metadata persists for the lifetime of the
+subscription, every monthly renewal credited the original variant — inflating
+the original experiment's "revenue" indefinitely, even months after it ended.
+
+The fix gates the metadata pickup on
+`expandedInvoice.billing_reason === "subscription_create"` (the initial
+sign-up invoice). Renewals (`subscription_cycle`) and tier changes
+(`subscription_update`) skip the A/B attribution but still grant benefits and
+fire tracking normally. Same gate is applied when falling back to
+`paymentIntent.metadata` in METHOD 2.
+
+If you ever want LTV-by-variant analysis, do it as a separate query joining
+the variant assignment to the user's whole subscription history — don't restore
+the renewal-attribution path.
+
+## `handleInvoicePaymentFailed` stamps `dunning_recovery` for channel-independent reanchor detection
+
+When a `subscription_cycle` invoice fails (the `isRenewal` branch in `handleInvoicePaymentFailed`, `src/services/stripe-webhook-handlers/index.ts`), the handler stamps `metadata.dunning_recovery = '1'` on the Stripe invoice object. This marker persists on the invoice regardless of what happens next — DB status flips, `pause_collection` clears, or the user retries via any channel.
+
+`handleInvoicePaymentSucceeded` reads this marker in `shouldReanchorAfterRecovery` (`src/services/subscription/pauseCollectionPolicy.ts`) as one of the OR-signals for dunning detection. It is the **only** signal that survives the `renew-subscription` retry channel, which pre-flips the DB status to `active` AND clears `pause_collection` before the success webhook fires — making the other two signals (`previousSubscriptionDbStatus ∈ {past_due, unpaid}` and `pauseCollectionPresentAtPayment`) both false at webhook time.
+
+Key facts verified by live Stripe test-mode probe:
+- A single-failure manual recovery under `pause_collection` has `attempt_count === 1` (Stripe does not auto-retry while paused, so the counter never increments). `attempt_count > 1` is therefore a weak/secondary signal only.
+- The `dunning_recovery` marker is set on the invoice at failure time and is not altered by subsequent payment success, subscription update, or pause-resume calls.
+
+See `docs/PAST_DUE_REANCHOR.md` for the full trigger-gate logic and recovery-channel analysis.
+
+## Multi-experiment attribution collision in `create-one-time-purchase`
+
+Both `create-one-time-purchase` and `create-one-time-purchase-existing-user`
+fall back to reading `ta_ab_assignment_<expId>` cookies when no DB assignment
+is found. The cookie loop iterates active experiments and breaks on first
+match — historically with no priority rule, so a site-wide cosmetic experiment
+(e.g. `__membership-theme__`) could claim purchase credit before a real
+page-targeted promo experiment.
+
+Both routes now sort experiments by `attributionRank` (exported from
+`src/utils/ab-testing/get-user-experiment-assignment.ts`): page-targeted beats
+wildcard `*`, and the membership-theme sentinel is excluded outright. Match
+the priority rule there if you ever add another attribution code path.

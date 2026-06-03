@@ -1,5 +1,15 @@
 # Tracking — Gotchas
 
+## Adding a new Klaviyo event? Use the canonical schema, not the legacy helper
+
+New Klaviyo events (added after 2026-05-27) use a **canonical property schema** — `price` as a number (not string), `tier` (not `package_tier`), ISO `*_at` timestamps (not locale strings like `"December 22, 2025"`), and properties omitted entirely when absent (no `""` / `"unknown"` sentinels). See the "Canonical property names — new events only (drift containment)" section of [KLAVIYO_INTEGRATION.md](./KLAVIYO_INTEGRATION.md) for the full table and rationale.
+
+**Two helpers, one rule:**
+- Legacy events in [klaviyo-events.ts](../../src/utils/integrations/klaviyo/klaviyo-events.ts) (Subscription Started, Placed Order, Subscription Renewal Failed, etc.) — keep using `formatPackageDataForKlaviyo`. They are **frozen** because active Klaviyo flows / templates / segments / campaigns reference their exact property names; renaming silently breaks production.
+- NEW events — use `formatCanonicalPackageData`. The snapshot test at `src/utils/integrations/klaviyo/__tests__/canonical-events-shape.test.ts` will fail CI if you drift to legacy aliases. Run via `npm run test:klaviyo-canonical`.
+
+If you find yourself wanting to "clean up" legacy property names, **don't**. Read the no-refactor policy in KLAVIYO_INTEGRATION.md first — refactors require explicit user authorization + ads-team confirmation + a dual-write plan.
+
 ## Pixel double-fire
 
 If the root-layout pixel fires AND a feature component also fires the same event, you get duplicates in Meta / Klaviyo. Convention: root-layout fires the standard PageView; feature components fire conversion events on user action.

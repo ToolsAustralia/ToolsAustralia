@@ -6,6 +6,7 @@ import { ClipboardCheck, Sparkles } from "lucide-react";
 import { usePromoTheme } from "@/stores/usePromoThemeStore";
 import { useThemeStore } from "@/stores/useThemeStore";
 import { getFallbackImagePath, getImageForMode, resolveEvergreenHeroImages } from "@/utils/promo/landing-image-resolver";
+import { usePerSlugHeroOverride } from "@/hooks/ab-testing/usePerSlugHeroOverride";
 
 function getContrastText(hex: string) {
   const clean = hex.replace("#", "");
@@ -27,6 +28,14 @@ export default function DrawResultsHero({ majorCompleted, miniWins, allWinners }
   const themeTextColor = getContrastText(theme.primary);
   const themeMode = useThemeStore((s) => s.theme);
   const [imageError, setImageError] = useState(false);
+  // A/B-aware: when the visitor is bucketed into a variant whose imageSrcBySlug
+  // includes a "cash-prize" entry (the canonical slug for the evergreen
+  // all-prizes hero — see config/promo-landing-slugs.ts LANDING_HERO_MAP), use
+  // the override so this page stays consistent with the bucketed variant.
+  // Returns null today on /draw-results (no VariantAssignmentWrapper on this
+  // route yet). Forward-compatible: once a wrapper is added + assets land, this
+  // activates automatically.
+  const variantOverride = usePerSlugHeroOverride("cash-prize");
 
   const heroImagePaths = useMemo(() => {
     if (imageError) {
@@ -35,10 +44,10 @@ export default function DrawResultsHero({ majorCompleted, miniWins, allWinners }
     }
     const extended = resolveEvergreenHeroImages();
     return {
-      desktop: getImageForMode(extended, themeMode, "desktop"),
-      mobile: getImageForMode(extended, themeMode, "mobile"),
+      desktop: variantOverride?.desktop ?? getImageForMode(extended, themeMode, "desktop"),
+      mobile: variantOverride?.mobile ?? getImageForMode(extended, themeMode, "mobile"),
     };
-  }, [imageError, themeMode]);
+  }, [imageError, themeMode, variantOverride?.desktop, variantOverride?.mobile]);
 
   const stats = [
     { label: "Major draws", value: majorCompleted },

@@ -128,7 +128,8 @@ async function handleHourlyInsights(request: NextRequest) {
       ? validatedQuery.filterIds.split(",").map((id) => id.trim()).filter(Boolean)
       : [];
 
-    console.log(
+    // console.error survives production build's compiler.removeConsole strip (per CLAUDE.md)
+    console.error(
       `📊 [Hourly Insights] ${validatedQuery.startDate} to ${validatedQuery.endDate} (AEST)${filterIds.length ? `, filter: ${filterLevel} [${filterIds.length} ids]` : ""}`
     );
 
@@ -180,12 +181,13 @@ async function handleHourlyInsights(request: NextRequest) {
       );
     }
 
-    // Merge: Facebook (spend, impressions, clicks) + PaymentEvents (revenue, conversions by hour in AEST)
-    // LPV is not available by hour from Meta (off-Meta action metrics unsupported with hourly breakdown)
+    // Merge: Facebook (spend, impressions, clicks, linkClicks, lpv) + PaymentEvents (revenue, conversions by hour in AEST)
     const hourlyInsights: HourlyInsightItem[] = fbHourlyData.map((fbItem, hour) => {
       const spend = fbItem.spend / 100; // cents to dollars
       const impressions = fbItem.impressions;
       const clicks = fbItem.clicks;
+      const linkClicks = fbItem.linkClicks;
+      const lpv = fbItem.lpv;
       const dbItem = dbHourlyData[hour];
       const revenue = dbItem.revenue; // dollars from PaymentEvent.data.price
       const conversions = dbItem.conversions;
@@ -193,6 +195,8 @@ async function handleHourlyInsights(request: NextRequest) {
       const roas = spend > 0 ? revenue / spend : 0;
       const ctr = impressions > 0 ? (clicks / impressions) * 100 : 0;
       const cpc = clicks > 0 ? spend / clicks : 0;
+      const linkCtr = impressions > 0 ? (linkClicks / impressions) * 100 : 0;
+      const linkCpc = linkClicks > 0 ? spend / linkClicks : 0;
       const label = formatHourLabel(hour);
 
       return {
@@ -201,13 +205,16 @@ async function handleHourlyInsights(request: NextRequest) {
         spend,
         impressions,
         clicks,
-        landingPageView: null, // Meta API does not provide LPV with hourly breakdown
+        linkClicks,
+        lpv,
         revenue,
         conversions,
         profit,
         roas,
         ctr,
         cpc,
+        linkCtr,
+        linkCpc,
       };
     });
 
@@ -227,7 +234,7 @@ async function handleHourlyInsights(request: NextRequest) {
       },
     };
 
-    console.log(`✅ [Hourly Insights] ${hourlyInsights.length} hours, PaymentEvents totalConversions=${totalConversions}, totalRevenue=${totalRevenue.toFixed(2)}`);
+    console.error(`✅ [Hourly Insights] ${hourlyInsights.length} hours, PaymentEvents totalConversions=${totalConversions}, totalRevenue=${totalRevenue.toFixed(2)}`);
 
     return NextResponse.json(response);
   } catch (error) {

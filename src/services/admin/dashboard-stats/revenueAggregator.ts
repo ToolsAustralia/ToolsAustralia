@@ -1,10 +1,25 @@
 import PaymentEvent from "@/models/PaymentEvent";
-import type { RevenueBucketKey } from "@/models/DashboardStatsDailySnapshot";
+import type { RevenueBucketKey, AttributedPlatformKey } from "@/models/DashboardStatsDailySnapshot";
+import { ATTRIBUTED_PLATFORM_KEYS } from "@/models/DashboardStatsDailySnapshot";
 import { REVENUE_BUCKET_KEYS, classifyRevenueBucket, emptyBucket } from "./snapshotSchema";
 
 export interface DayRevenueResult {
   total: number;
   buckets: Record<RevenueBucketKey, { revenue: number; purchaseCount: number }>;
+  byPlatform: Record<AttributedPlatformKey, {
+    newRevenue: number;
+    renewalRevenue: number;
+    conversions: number;
+    byConfidence: { click: number; utm_only: number; inferred_backfill: number };
+  }>;
+}
+
+function emptyByPlatform(): DayRevenueResult["byPlatform"] {
+  const out = {} as DayRevenueResult["byPlatform"];
+  for (const p of ATTRIBUTED_PLATFORM_KEYS) {
+    out[p] = { newRevenue: 0, renewalRevenue: 0, conversions: 0, byConfidence: { click: 0, utm_only: 0, inferred_backfill: 0 } };
+  }
+  return out;
 }
 
 function emptyBuckets(): Record<RevenueBucketKey, { revenue: number; purchaseCount: number }> {
@@ -37,12 +52,15 @@ export async function aggregateRevenueForDay(
       packageId: 1,
       data: 1,
       timestamp: 1,
+      convertingPlatform: 1,
+      attributionConfidence: 1,
     }
   )
     .lean()
     .exec();
 
   const buckets = emptyBuckets();
+  const byPlatform = emptyByPlatform();
   let total = 0;
 
   for (const ev of events) {
@@ -50,6 +68,35 @@ export async function aggregateRevenueForDay(
     if (pid && refundedPaymentIntentIds.has(pid)) continue;
 
     const price = (ev as { data?: { price?: number } }).data?.price ?? 0;
+
+    // Platform accumulation: runs for ALL non-refunded rows, regardless of bucket classification.
+    const evTyped = ev as {
+      convertingPlatform?: AttributedPlatformKey | null;
+      attributionConfidence?: "click" | "utm_only" | "inferred_backfill" | null;
+    };
+    const platform = (evTyped.convertingPlatform ?? "direct") as AttributedPlatformKey;
+    // Renewal discriminator MUST match the existing hourly-breakdown predicate
+    // (PaymentEventRepository.aggregateRevenueAndCountByHourOfDay $nor): a membership row
+    // whose data.billingReason is "subscription_cycle". data.billingReason is present on
+    // EVERY row (incl. pre-feature history), so this is robust where the top-level
+    // `isRenewal` field — which defaults false on historical rows — would silently leak
+    // old renewals into acquisition revenue and inflate ROAS.
+    const isRenewal =
+      (ev as { packageType?: string }).packageType === "membership" &&
+      (ev as { data?: { billingReason?: string } }).data?.billingReason === "subscription_cycle";
+    if (isRenewal) {
+      byPlatform[platform].renewalRevenue += price;
+      // renewals are NOT ads revenue: excluded from newRevenue, conversions, byConfidence
+    } else {
+      const conf: "click" | "utm_only" | "inferred_backfill" =
+        evTyped.convertingPlatform == null
+          ? "inferred_backfill"
+          : (evTyped.attributionConfidence ?? "utm_only");
+      byPlatform[platform].newRevenue += price;
+      byPlatform[platform].conversions += 1;
+      byPlatform[platform].byConfidence[conf] += price;
+    }
+
     const bucketKey = classifyRevenueBucket({
       packageType: (ev as { packageType?: string }).packageType,
       packageId: (ev as { packageId?: string }).packageId,
@@ -62,7 +109,7 @@ export async function aggregateRevenueForDay(
     total += price;
   }
 
-  return { total, buckets };
+  return { total, buckets, byPlatform };
 }
 
 /**

@@ -106,6 +106,22 @@ export interface KlaviyoProfileProperties {
   current_draw_subscription_active: boolean; // Subscribed DURING current draw period
   current_draw_one_time_packages: number; // One-time packages purchased DURING current draw
   current_draw_entries: number; // Total entries allocated to current draw
+
+  // Canonical profile properties (added 2026-05-28).
+  // See docs/tracking/KLAVIYO_INTEGRATION.md "Canonical property names" for the full schema.
+  // These coexist with legacy `subscription_status` (which keeps raw Stripe values) —
+  // existing Klaviyo flows / segments / templates wired against the legacy property
+  // continue to work; new work uses these canonical names.
+  /** Coerced membership lifecycle state for segment filters. Profile-only — not an event property. */
+  membership_status?: "active" | "past_due" | "canceled" | "never_subscribed";
+  /** Lifetime entry count across all sources (member + one-time + upsell + mini-draw). */
+  entries_purchased?: number;
+  /** Count of distinct draws (Major + Mini) the user has at least one entry in. */
+  giveaways_entered?: number;
+  /** Months elapsed since subscription start date (date-fns differenceInMonths). null when never subscribed. */
+  membership_active_duration_months?: number | null;
+  /** ISO 8601 string of the next renewal date when an active subscription has auto-renew on. null otherwise. */
+  next_renewal_date?: string | null;
 }
 
 export interface KlaviyoProfile {
@@ -132,7 +148,12 @@ export interface KlaviyoProfile {
  * and spaces, which are required for Klaviyo's revenue schema.
  */
 export interface KlaviyoEventProperties {
-  user_id: string;
+  // user_id is OPTIONAL because canonical events (added 2026-05-28) may fire for
+  // anonymous users — e.g. `Viewed Giveaway` from a never-cookied visitor lands as
+  // anonymous in Klaviyo until they later identify. All legacy events continue to
+  // emit user_id; new canonical events emit it when available and omit it when not
+  // (per the no-sentinel rule in docs/tracking/KLAVIYO_INTEGRATION.md).
+  user_id?: string;
   [key: string]: string | number | boolean | undefined | null | unknown[] | Record<string, unknown>;
 }
 

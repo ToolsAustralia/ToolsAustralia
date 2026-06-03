@@ -106,3 +106,18 @@ All Stripe-mutating calls in this domain use **stable idempotency keys** (per ro
 - Subscription create: derived from `User._id` + package + intent
 
 See [rules.md](./rules.md#idempotency) for the full rule.
+
+## Resolved attribution metadata on Stripe objects
+
+Every create-* route in this domain (create-subscription, create-subscription-existing-user, create-one-time-purchase, create-one-time-purchase-existing-user, create-payment-intent) now stamps resolved attribution onto the Stripe metadata object at request time via `resolveAttributionAtEdge(request)` from [src/services/attribution/resolveAtEdge.ts](../../src/services/attribution/resolveAtEdge.ts).
+
+The resolved metadata (`attr_platform`, `attr_confidence`, and related keys from `buildResolvedAttributionMetadata`) is spread alongside the existing `buildAttributionMetadata(attribution)` call in each route's metadata object. For subscription routes this is the subscription `baseMetadata`; for one-time/payment-intent routes it is the PaymentIntent `metadata`. The function never throws — errors produce a `direct/utm_only` fallback so payment flow is unaffected.
+
+### Reading it back in the webhook → ledger
+
+[stripe-webhook-handlers/index.ts](../../src/services/stripe-webhook-handlers/index.ts) reads the stamped decision back via `extractResolvedPlatformFromMetadata` ([src/utils/tracking/resolved-attribution-metadata.ts](../../src/utils/tracking/resolved-attribution-metadata.ts)) at each of the four `processPaymentBenefits` call sites, immediately after the existing `sessionAttribution` line, and forwards it as the trailing `resolvedAttribution` arg:
+
+- **One-time / upsell / mini-draw** — read from `paymentIntent.metadata`.
+- **Subscription / renewal** (`handleInvoicePaymentSucceeded`) — read from `subscription?.metadata ?? expandedInvoice.metadata`, matching the `sessionAttribution` source order. Because the decision lives on the subscription, every recurring renewal inherits the same converting platform (sticky).
+
+The ledger writer (`processPaymentBenefits`, in the [payment](../payment/backend.md) domain) then persists `convertingPlatform` / `attributionConfidence` / `isRenewal` onto the `BenefitsGranted` row, falling back to a UTM-based resolve only when no edge decision was stamped.

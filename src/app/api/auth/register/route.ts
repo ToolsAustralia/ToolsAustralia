@@ -3,11 +3,13 @@ import connectDB from "@/lib/mongodb";
 import User from "@/models/User";
 import { z } from "zod";
 import { klaviyo } from "@/lib/klaviyo";
-import { createUserRegisteredEvent } from "@/utils/integrations/klaviyo/klaviyo-events";
+import { createUserRegisteredEvent, createStartedCheckoutEvent } from "@/utils/integrations/klaviyo/klaviyo-events";
 import {
   ensureUserProfileSynced,
   createKlaviyoProfileAndSubscribe,
 } from "@/utils/integrations/klaviyo/klaviyo-profile-sync";
+import { buildCheckoutResumeUrl } from "@/utils/integrations/klaviyo/checkout-resume-url";
+import { getPackageById } from "@/data/membershipPackages";
 // TikTok Pixel tracking disabled for now - client-side only
 // import { trackTikTokEvent } from "@/components/TikTokPixel";
 import { sendFacebookEvent, FacebookEvent, getFacebookTestEventCode } from "@/lib/facebook";
@@ -74,6 +76,12 @@ const registerSchema = z.object({
   ad_id: z.string().optional(),
   fbc: z.string().optional(),
   fbp: z.string().optional(),
+  // Optional package context — when present, the server fires a canonical
+  // Klaviyo `Started Checkout` event (step="registered") after profile sync
+  // so the ads team's abandoned-checkout flow can target this user reliably.
+  // Affiliate / Google-OAuth / other non-modal registration paths omit this
+  // and the Started Checkout fire is gracefully skipped.
+  packageId: z.string().optional(),
 });
 
 /**
@@ -85,6 +93,63 @@ const registerSchema = z.object({
 function isPlainAccount(user: IUser | null): boolean {
   if (!user) return false;
   return !user.accumulatedEntries || user.accumulatedEntries === 0;
+}
+
+/**
+ * Fire the canonical Klaviyo `Started Checkout` event for the GUEST registration
+ * funnel — both the new-user path AND the three existing-user re-registration
+ * paths. Called everywhere `User Registered` fires, so the funnel events stay
+ * 1:1 (no orphaned `User Registered` without a matching `Started Checkout`).
+ *
+ * Skips gracefully when:
+ *  - `packageId` is missing (affiliate / Google-OAuth / non-modal paths)
+ *  - the packageId doesn't resolve to a known package
+ *
+ * Always sets `isAuthenticated: false` because this path runs at registration
+ * submit and the user is, by definition, a guest at this moment (MembershipModal
+ * step-1 success does NOT auto-login — see docs/auth/gotchas.md).
+ *
+ * Not gated on consent — this is a committed action (registration submitted),
+ * not browsing behaviour. Klaviyo's marketing-list subscription gates email
+ * sends separately.
+ */
+function fireKlaviyoStartedCheckoutForGuestRegistration(
+  user: IUser,
+  validatedData: { packageId?: string; promotionSlug?: string }
+): void {
+  if (!validatedData.packageId) return;
+  try {
+    const pkg = getPackageById(validatedData.packageId);
+    if (!pkg) return;
+    const baseUrl =
+      process.env.NEXT_PUBLIC_SITE_URL ||
+      process.env.NEXT_PUBLIC_APP_URL ||
+      "https://toolsaustralia.com.au";
+    const checkoutUrl = buildCheckoutResumeUrl({
+      baseUrl,
+      packageId: pkg._id,
+      promoSlug: validatedData.promotionSlug,
+    });
+    const packageType: "membership" | "one-time" =
+      pkg.type === "subscription" ? "membership" : "one-time";
+    klaviyo.trackEventBackground(
+      createStartedCheckoutEvent(user, {
+        packageId: pkg._id,
+        packageName: pkg.name,
+        packageType,
+        tier: pkg.name.toLowerCase(),
+        price: pkg.price,
+        numEntries: pkg.entriesPerMonth ?? pkg.totalEntries,
+        checkoutUrl,
+        promoSlug: validatedData.promotionSlug,
+        step: "registered",
+        isAuthenticated: false,
+      })
+    );
+  } catch (err) {
+    // Non-blocking: never fail registration on a tracking error.
+    console.error(`Failed to fire Klaviyo Started Checkout for ${user.email}:`, err);
+  }
 }
 
 /**
@@ -131,14 +196,16 @@ function getAttributionFromRequest(
 }
 
 /**
- * Build signup attribution from promotion slug and optional attribution for analytics.
+ * Build signup attribution. Persists whenever a valid promo slug OR any attribution
+ * param is present — promotionSlug/promotionPageType are optional (homepage ad-landers
+ * carry UTM but no promo slug, and we must not drop their attribution).
  */
 function buildSignupAttribution(
   promotionSlug?: string,
   attribution?: AttributionParams
 ): {
-  promotionPageType: "evergreen" | "toolset";
-  promotionSlug: string;
+  promotionPageType?: "evergreen" | "toolset";
+  promotionSlug?: string;
   visitedAt: Date;
   utmSource?: string;
   utmMedium?: string;
@@ -149,10 +216,18 @@ function buildSignupAttribution(
   adsetId?: string;
   adId?: string;
 } | undefined {
-  if (!promotionSlug || !isValidPromoSlug(promotionSlug)) return undefined;
+  const hasPromo = !!promotionSlug && isValidPromoSlug(promotionSlug);
+  const hasAttribution = !!(
+    attribution &&
+    (attribution.utm_source || attribution.utm_medium || attribution.utm_campaign ||
+     attribution.campaign_id || attribution.adset_id || attribution.ad_id)
+  );
+  if (!hasPromo && !hasAttribution) return undefined;
   return {
-    promotionPageType: getPageTypeFromSlug(promotionSlug),
-    promotionSlug: promotionSlug.toLowerCase().trim(),
+    ...(hasPromo && {
+      promotionPageType: getPageTypeFromSlug(promotionSlug!),
+      promotionSlug: promotionSlug!.toLowerCase().trim(),
+    }),
     visitedAt: new Date(),
     ...(attribution?.utm_source && { utmSource: attribution.utm_source }),
     ...(attribution?.utm_medium && { utmMedium: attribution.utm_medium }),
@@ -326,6 +401,11 @@ export async function POST(request: NextRequest) {
           // Update Klaviyo profile with brand interest
           ensureUserProfileSynced(existingUser, brandInterest);
 
+          // Started Checkout — fires whenever User Registered fires, so the
+          // funnel events stay 1:1. Covers the "guest re-registers with a
+          // different package after closing the modal" case.
+          fireKlaviyoStartedCheckoutForGuestRegistration(existingUser, validatedData);
+
           // Generate event ID for tracking (use existing user ID)
           const eventID = generateEventID("registration", existingUser._id.toString());
 
@@ -450,6 +530,8 @@ export async function POST(request: NextRequest) {
         ? extractBrandFromSlug(validatedData.promotionSlug)
         : extractBrandFromSlug(null);
       ensureUserProfileSynced(existingUser, brandInterest);
+      // Started Checkout — keep 1:1 with User Registered (see helper JSDoc).
+      fireKlaviyoStartedCheckoutForGuestRegistration(existingUser, validatedData);
       const eventID = generateEventID("registration", existingUser._id.toString());
 
       try {
@@ -538,6 +620,8 @@ export async function POST(request: NextRequest) {
         ? extractBrandFromSlug(validatedData.promotionSlug)
         : extractBrandFromSlug(null);
       ensureUserProfileSynced(existingUser, brandInterest);
+      // Started Checkout — keep 1:1 with User Registered (see helper JSDoc).
+      fireKlaviyoStartedCheckoutForGuestRegistration(existingUser, validatedData);
       const eventID = generateEventID("registration", existingUser._id.toString());
 
       try {
@@ -688,6 +772,12 @@ export async function POST(request: NextRequest) {
       // Log error but don't block registration - Klaviyo failures shouldn't prevent user registration
       console.error(`❌ Background Klaviyo profile creation/subscription failed for ${newUser.email}:`, error);
     });
+
+    // ✅ Canonical "Started Checkout" event (step="registered") — guest funnel.
+    // See `fireKlaviyoStartedCheckoutForGuestRegistration` JSDoc above for why
+    // this is server-side, what gates it, and the three OTHER register paths
+    // that also call it (existing-plain-account re-registration).
+    fireKlaviyoStartedCheckoutForGuestRegistration(newUser, validatedData);
 
     // ✅ NEW: Track pixel registration event (non-blocking)
     // Generate unique event ID for deduplication (needed for response)

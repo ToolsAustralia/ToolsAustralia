@@ -17,8 +17,10 @@ interface TabBarProps {
 }
 
 const TabBar: React.FC<TabBarProps> = ({ sections, activeId, onSelect, brandColors, surface }) => {
+  // Horizontally scrollable on every viewport. lg:pr-14 reserves trailing space so the
+  // absolute modal close button never sits over the last tab in the desktop 2-col layout.
   return (
-    <div className="mb-3 sm:mb-7 -mx-0.5 sm:-mx-2 px-0.5 sm:px-2 overflow-x-auto scrollbar-hide border-b border-neutral-200 dark:border-neutral-800">
+    <div className="mb-3 sm:mb-7 -mx-0.5 sm:-mx-2 px-0.5 sm:px-2 lg:pr-14 overflow-x-auto scrollbar-hide border-b border-neutral-200 dark:border-neutral-800">
       <div className="flex gap-1.5 sm:gap-3 min-w-max pb-3 sm:pb-3.5">
         {sections.map((section) => {
           const isActive = section.id === activeId;

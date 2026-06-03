@@ -193,10 +193,13 @@ export function OrderStatusBadge({ status }: { status?: string | null }) {
 
 export function SubscriptionHistoryStatusBadge({ status }: { status?: string | null }) {
   const raw = status || "—";
+  // `trialing` is a paid, active member (we anchor/reanchor billing via Stripe `trial_end`); never
+  // surface "trialing" in the admin UI — render it as "active" like any other active row.
+  const display = raw === "trialing" ? "active" : raw;
   const isGranted = raw === "BenefitsGranted";
   return (
     <AdminBadge variant={isGranted ? "success" : "warning"} icon={isGranted ? CheckCircle : AlertTriangle}>
-      {raw}
+      {display}
     </AdminBadge>
   );
 }

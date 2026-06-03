@@ -24,6 +24,7 @@ import { getEffectivePromoType } from "@/utils/promo/get-effective-promo-type";
 import { normalizeMembershipPlanId } from "@/utils/membership/member-package-mapping";
 import { getUpsellPackageById } from "@/data/upsellPackages";
 import { processPaymentBenefits, isPaymentProcessed } from "@/utils/payment/payment-processing";
+import { extractResolvedPlatformFromMetadata } from "@/utils/tracking/resolved-attribution-metadata";
 import { calculateSubscriptionEntries } from "@/utils/payment/subscription-entries-calculator";
 import { hasMembershipGrantInCurrentDrawPeriod } from "@/utils/draws/has-membership-grant-this-draw";
 import { createUserFromPaymentMetadata, shouldCreateAccountFromMetadata } from "@/utils/payment/account-manager";
@@ -44,11 +45,13 @@ import {
 } from "@/utils/integrations/klaviyo/klaviyo-events";
 import { handleSubscriptionQueueUpdate } from "@/utils/partner-discounts/partner-discount-queue";
 import { getSubscriptionPeriodEnd } from "@/utils/payment/stripe/subscription-period";
+import { isZeroAmountTrialUpdateInvoice } from "@/utils/billing/trial-invoice";
 import {
   pauseAfterRenewalFailure,
   resumeAfterSuccessfulRenewalPayment,
+  reanchorAfterPastDueRecovery,
 } from "@/services/subscription/SubscriptionCollectionPauseService";
-import { decideClearPause } from "@/services/subscription/pauseCollectionPolicy";
+import { decideClearPause, shouldReanchorAfterRecovery } from "@/services/subscription/pauseCollectionPolicy";
 import { STRIPE_SUBSCRIPTION_METADATA_IS_RESUBSCRIBE } from "@/utils/payment/stripe-subscription-metadata";
 import { trackPixelSubscriptionRenewal } from "@/utils/tracking/pixel-purchase-tracking";
 import { executeBackgroundJob } from "@/utils/webhook/background-jobs";
@@ -982,6 +985,7 @@ async function handleUpsellWebhook(user: { _id: { toString: () => string } }, pa
   }
 
   const sessionAttribution = extractAttributionFromMetadata(paymentIntent.metadata);
+  const resolvedAttribution = extractResolvedPlatformFromMetadata(paymentIntent.metadata);
 
   // Process benefits using event-based system with payment metadata
   const result = await processPaymentBenefits(
@@ -1018,7 +1022,11 @@ async function handleUpsellWebhook(user: { _id: { toString: () => string } }, pa
     },
     requestContext, // Pass request context for improved match quality
     undefined, // billingReason (not applicable for upsell)
-    sessionAttribution
+    sessionAttribution,
+    undefined, // affiliateOptions
+    undefined, // isResubscribe
+    undefined, // subscriptionLedgerContext
+    resolvedAttribution
   );
 
   // ✅ ADD: Log if experiment assignment was passed to processPaymentBenefits
@@ -1152,6 +1160,7 @@ async function handleOneTimeWebhook(user: { _id: { toString: () => string } }, p
   });
 
   const sessionAttribution = extractAttributionFromMetadata(paymentIntent.metadata);
+  const resolvedAttribution = extractResolvedPlatformFromMetadata(paymentIntent.metadata);
 
   const result = await processPaymentBenefits(
     paymentIntent.id,
@@ -1180,7 +1189,11 @@ async function handleOneTimeWebhook(user: { _id: { toString: () => string } }, p
     },
     requestContext, // Pass request context for improved match quality
     undefined, // billingReason (not applicable for one-time)
-    sessionAttribution
+    sessionAttribution,
+    undefined, // affiliateOptions
+    undefined, // isResubscribe
+    undefined, // subscriptionLedgerContext
+    resolvedAttribution
   );
 
   // ✅ ADD: Log if experiment assignment was passed to processPaymentBenefits
@@ -1302,6 +1315,7 @@ async function handleMiniDrawWebhook(user: { _id: { toString: () => string } }, 
   }
 
   const sessionAttribution = extractAttributionFromMetadata(paymentIntent.metadata);
+  const resolvedAttribution = extractResolvedPlatformFromMetadata(paymentIntent.metadata);
 
   // Process benefits using event-based system with payment metadata
   const result = await processPaymentBenefits(
@@ -1332,7 +1346,11 @@ async function handleMiniDrawWebhook(user: { _id: { toString: () => string } }, 
     },
     requestContext, // Pass request context for improved match quality
     undefined, // billingReason (not applicable for mini-draw)
-    sessionAttribution
+    sessionAttribution,
+    undefined, // affiliateOptions
+    undefined, // isResubscribe
+    undefined, // subscriptionLedgerContext
+    resolvedAttribution
   );
 
   // ✅ ADD: Log if experiment assignment was passed to processPaymentBenefits
@@ -1964,6 +1982,8 @@ async function handleSubscriptionUpdated(subscription: Stripe.Subscription) {
 
     // Capture status before any mutations (used below for activation history after save)
     const prevSubStatus = user.subscription?.status;
+    // Capture wasActive before mutations so it is in scope after the if(user.subscription) block
+    const wasActiveBeforeUpdate = user.subscription?.isActive ?? false;
 
     // Update user subscription status based on Stripe subscription
     if (user.subscription) {
@@ -2159,6 +2179,7 @@ async function handleSubscriptionUpdated(subscription: Stripe.Subscription) {
           }
         }
       }
+
     }
 
     // ✅ Mark subscription as modified if we made changes
@@ -2186,6 +2207,18 @@ async function handleSubscriptionUpdated(subscription: Stripe.Subscription) {
       } catch (err) {
         webhookLog("warn", "Failed to append activation history from subscription.updated:", err);
       }
+    }
+
+    // Transition INTO active/trialing (past-due recovery OR a fresh first activation): refresh Klaviyo
+    // so next_renewal_date / past_due_renewal_entries are current. Idempotent upsert; never re-subscribes.
+    // Only fires on transitions INTO active/trialing (wasActiveBeforeUpdate === false), NOT on the fast-path
+    // (wasActive && prevSubStatus === "active") which handles already-active routine updates.
+    if (
+      !wasActiveBeforeUpdate &&
+      (subscription.status === "active" || subscription.status === "trialing")
+    ) {
+      ensureUserProfileSynced(user as IUser);
+      webhookLog("info", `Klaviyo profile sync queued after recovery to ${subscription.status} for ${user.email}`);
     }
 
     // ✅ Verify save for canceled/past_due/unpaid status + Klaviyo profile (past_due renewal entries on profile)
@@ -2608,6 +2641,19 @@ async function handleInvoicePaymentFailed(invoice: Stripe.Invoice) {
           user.subscription.isActive = false;
           if (!wasAlreadyPastDue) {
             user.subscription.pastDueAt = new Date();
+          }
+
+          // Stamp a durable dunning marker on THIS invoice so any later recovery (esp. the
+          // renew-subscription channel, which pre-flips DB status + clears pause before the webhook)
+          // can be detected by the reanchor gate. attempt_count is unreliable under pause_collection.
+          if (invoice.id) {
+            try {
+              await stripe.invoices.update(invoice.id, {
+                metadata: { ...(invoice.metadata ?? {}), dunning_recovery: "1" },
+              });
+            } catch (stampErr) {
+              console.error(`[reanchor] could not stamp dunning_recovery on invoice ${invoice.id}:`, stampErr);
+            }
           }
 
           // ✅ If subscription will be canceled after max retries, set endDate
@@ -3222,6 +3268,19 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
       ],
     });
 
+    // ✅ GUARD: Stripe auto-creates a $0 "Trial period" invoice (billing_reason=subscription_update,
+    // total=0) whenever trial_end is set on a subscription (past-due reanchor, the anchor-billing
+    // migration, join-anchoring). It is NOT a real payment — granting benefits for it double-counts
+    // renewal entries (the real renewal is a separate subscription_cycle invoice) and produces a
+    // spurious "Subscribed to X" admin activity row. Skip it entirely. See docs/PAST_DUE_REANCHOR.md.
+    if (isZeroAmountTrialUpdateInvoice(expandedInvoice)) {
+      webhookLog(
+        "info",
+        `Skipping $0 trial-period subscription_update invoice ${invoiceId} (Stripe trial_end bookkeeping; no benefits/activity).`
+      );
+      return;
+    }
+
     // ✅ CRITICAL FIX: ATOMIC PaymentEvent creation to prevent race conditions
     // Create PaymentEvent FIRST using MongoDB unique constraint
     // If creation fails (duplicate key), another webhook is already processing
@@ -3427,6 +3486,9 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
     // — in those cases a late resume never ran, leaving the subscription in "Collection paused" despite a paid invoice.
     const invoiceAmountPaid = expandedInvoice.amount_paid ?? 0;
     const invoiceIsPaid = expandedInvoice.status === "paid" && invoiceAmountPaid > 0;
+    // Snapshot pause_collection BEFORE resumeAfterSuccessfulRenewalPayment clears it in Stripe,
+    // so the reanchor gate can use it as a dunning signal.
+    const pauseCollectionPresentAtPayment = subscription.pause_collection != null;
     if (invoiceIsPaid) {
       const shouldClearPauseForCollection = decideClearPause({
         billingReason: expandedInvoice.billing_reason ?? undefined,
@@ -3444,6 +3506,39 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
           );
         } catch (earlyResumeErr) {
           webhookLog("warn", `Non-critical: could not resume collection before benefits: ${earlyResumeErr}`);
+        }
+      }
+    }
+
+    // --- Past-due reanchor: move future renewals to the recovery-payment date ---
+    if (invoiceIsPaid && expandedInvoice.id) {
+      const reanchorGate = shouldReanchorAfterRecovery({
+        billingReason: expandedInvoice.billing_reason ?? undefined,
+        invoiceIsPaid,
+        previousSubscriptionDbStatus: previousSubscriptionDbStatus ?? undefined,
+        pauseCollectionPresentAtPayment,
+        invoiceAttemptCount: expandedInvoice.attempt_count ?? undefined,
+        invoiceMetadataDunningRecovery: expandedInvoice.metadata?.dunning_recovery === "1",
+        pauseReason: (subscription.metadata?.pauseReason as string | undefined) ?? undefined,
+        cancelAtPeriodEnd: subscription.cancel_at_period_end === true,
+        autoRenew: user.subscription?.autoRenew,
+        alreadyReanchoredInvoiceId: user.subscription?.lastReanchoredInvoiceId,
+        invoiceId: expandedInvoice.id,
+      });
+      if (reanchorGate) {
+        const recoveryDate = paidAtDateFromStripeInvoice(expandedInvoice) ?? new Date();
+        const reanchorResult = await reanchorAfterPastDueRecovery({
+          subscriptionId: subscription.id,
+          userId: new mongoose.Types.ObjectId(String(user._id)),
+          recoveryDate,
+          invoiceId: expandedInvoice.id,
+          packageId: user.subscription?.packageId ?? undefined,
+        });
+        if (reanchorResult.reanchored) {
+          webhookLog(
+            "info",
+            `Reanchored subscription ${subscription.id} after past-due recovery (invoice ${expandedInvoice.id})`
+          );
         }
       }
     }
@@ -3685,6 +3780,11 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
     let affiliateCode: string | undefined;
     let experimentId: string | undefined;
     let variantId: string | undefined;
+    // A/B-test attribution: only the INITIAL subscription purchase counts toward the experiment.
+    // Renewals (subscription_cycle) and upgrades/downgrades (subscription_update) carry the same
+    // subscription metadata for the lifetime of the subscription — attributing them would inflate
+    // the original variant's revenue every month forever, even after the experiment ended.
+    const isInitialSubscriptionInvoice = expandedInvoice.billing_reason === "subscription_create";
     try {
       const invoiceTyped = expandedInvoice as Stripe.Invoice & {
         payment_intent?: string | Stripe.PaymentIntent;
@@ -3705,15 +3805,30 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
           campaignCode = subscription.metadata.campaignCode;
         }
         // ✅ A/B Testing: Extract experiment assignment from subscription metadata
-        if (subscription.metadata.experimentId && subscription.metadata.variantId) {
+        // Gated on initial-invoice only so renewals don't keep crediting the original variant.
+        if (
+          isInitialSubscriptionInvoice &&
+          subscription.metadata.experimentId &&
+          subscription.metadata.variantId
+        ) {
           experimentId = subscription.metadata.experimentId;
           variantId = subscription.metadata.variantId;
-          webhookLog("info", `✅ Retrieved experiment assignment from subscription metadata:`, { 
-            experimentId, 
+          webhookLog("info", `✅ Retrieved experiment assignment from subscription metadata:`, {
+            experimentId,
             variantId,
             invoiceId: expandedInvoice.id,
             subscriptionId: subscription.id,
           });
+        } else if (
+          !isInitialSubscriptionInvoice &&
+          subscription.metadata.experimentId &&
+          subscription.metadata.variantId
+        ) {
+          webhookLog(
+            "info",
+            `↩️ Skipping A/B attribution for non-initial subscription invoice (billing_reason=${expandedInvoice.billing_reason})`,
+            { invoiceId: expandedInvoice.id, subscriptionId: subscription.id }
+          );
         }
       }
 
@@ -3735,11 +3850,17 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
           campaignCode = paymentIntent.metadata.campaignCode;
         }
         // ✅ A/B Testing: Extract experiment assignment from payment intent metadata (if not in subscription)
-        if (!experimentId && paymentIntent.metadata.experimentId && paymentIntent.metadata.variantId) {
+        // Same initial-invoice gate as METHOD 1.
+        if (
+          !experimentId &&
+          isInitialSubscriptionInvoice &&
+          paymentIntent.metadata.experimentId &&
+          paymentIntent.metadata.variantId
+        ) {
           experimentId = paymentIntent.metadata.experimentId;
           variantId = paymentIntent.metadata.variantId;
-          webhookLog("info", `✅ Retrieved experiment assignment from payment intent metadata:`, { 
-            experimentId, 
+          webhookLog("info", `✅ Retrieved experiment assignment from payment intent metadata:`, {
+            experimentId,
             variantId,
             invoiceId: expandedInvoice.id,
             paymentIntentId: paymentIntent.id,
@@ -3803,6 +3924,12 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
       (subscription?.metadata ? extractAttributionFromMetadata(subscription.metadata) : undefined) ??
       (expandedInvoice.metadata ? extractAttributionFromMetadata(expandedInvoice.metadata) : undefined);
 
+    // Renewals inherit the edge-resolved decision stamped on the subscription (sticky);
+    // fall back to the invoice metadata when the subscription has none.
+    const resolvedAttribution =
+      extractResolvedPlatformFromMetadata(subscription?.metadata) ??
+      extractResolvedPlatformFromMetadata(expandedInvoice.metadata);
+
     const previousLastMonthAccumulated = user.subscription?.lastMonthAccumulatedEntries ?? 0;
     const lastMonthDeltaForLedger = newLastMonthAccumulatedEntries - previousLastMonthAccumulated;
 
@@ -3855,7 +3982,8 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
       {
         lastMonthDelta: lastMonthDeltaForLedger,
         calculationType: entryCalculation.calculationType,
-      }
+      },
+      resolvedAttribution
     );
     webhookLog("info", `Affiliate recurring eligibility`, {
       invoiceId: expandedInvoice.id,

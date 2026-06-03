@@ -8,6 +8,7 @@ import { z } from "zod";
 import { createPaymentIntentConfig } from "@/utils/payment/stripe/payment-intent-config";
 import { buildAttributionMetadata } from "@/utils/tracking/attribution-metadata";
 import { attributionSchema } from "@/utils/tracking/attribution-schema";
+import { resolveAttributionAtEdge } from "@/services/attribution/resolveAtEdge";
 import { enforceMajorDrawOpenForNewPurchasesOr403 } from "@/utils/draws/major-draw-gate-http";
 
 /**
@@ -128,6 +129,8 @@ export async function POST(request: NextRequest) {
     // This ensures that even if the API is called twice (e.g., double-click), only one PaymentIntent is created
     const idempotencyKey = `pi_${validatedData.packageId || "default"}_${userId || "guest"}_${Date.now()}`;
 
+    const { metadata: resolvedAttr } = resolveAttributionAtEdge(request);
+
     // Create PaymentIntent for one-time purchases only
     // This ensures wallet payments show the correct amount
     // ✅ FIX: Only include customer if it exists (authenticated users)
@@ -148,6 +151,7 @@ export async function POST(request: NextRequest) {
         ...(validatedData.packageId && { packageId: validatedData.packageId }),
         ...(validatedData.packageName && { packageName: validatedData.packageName }),
         ...buildAttributionMetadata(validatedData.attribution),
+        ...resolvedAttr,
       },
     });
 

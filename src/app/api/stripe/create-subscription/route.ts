@@ -30,6 +30,7 @@ import { rejectAndLog } from "@/utils/error-reporting/reject-and-log";
 import { createRateLimiter, getClientIdentifier } from "@/utils/security/rateLimiter";
 import { buildAttributionMetadata } from "@/utils/tracking/attribution-metadata";
 import { attributionSchema } from "@/utils/tracking/attribution-schema";
+import { resolveAttributionAtEdge } from "@/services/attribution/resolveAtEdge";
 import { enforceMajorDrawOpenForNewPurchasesOr403 } from "@/utils/draws/major-draw-gate-http";
 
 // Rate limit: 20 create-subscription requests per minute per IP
@@ -465,6 +466,8 @@ export async function POST(request: NextRequest) {
     const hasAnchor = Object.keys(anchorParams).length > 0;
     const next24Date = hasAnchor ? new Date(getNextAnchorTimestamp(new Date()) * 1000) : null;
 
+    const { metadata: resolvedAttr } = resolveAttributionAtEdge(request);
+
     // Traceability: subscriptionRequestId, userId, planId for webhooks and debugging
     const userIdForMetadata = registeredUser?._id?.toString() ?? "new";
     const baseMetadata = {
@@ -487,6 +490,7 @@ export async function POST(request: NextRequest) {
       ...(requestContext.fbp ? { capi_fbp: requestContext.fbp } : {}),
       ...(capiEventSourceUrl ? { capi_event_source_url: capiEventSourceUrl } : {}),
       ...buildAttributionMetadata(validatedData.attribution),
+      ...resolvedAttr,
       ...(typeof anchorMetadata === "object" && anchorMetadata !== null ? anchorMetadata : {}),
     };
 

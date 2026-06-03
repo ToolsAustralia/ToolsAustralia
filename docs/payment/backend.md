@@ -21,6 +21,24 @@ The biggest helper directory in the repo. Each module has one focused responsibi
 | `payment-status.ts` | Status-derivation helpers (paid / failed / pending classification). |
 | `ledger-helpers.ts` | Shared helpers for reading/writing `data.grants`. |
 
+#### Single-platform attribution on `BenefitsGranted`
+
+`processPaymentBenefits()` / `processPaymentBenefitsInternal()` accept a trailing optional
+`resolvedAttribution` arg (`{ platform, confidence, attributedClickId, attributedClickTimestamp } | null`)
+and stamp three top-level fields onto the `BenefitsGranted` `PaymentEvent`:
+
+- `convertingPlatform` (enum | null), `attributionConfidence` (enum | null), `isRenewal` (boolean).
+- **Precedence**: prefer the edge-resolved decision passed in `resolvedAttribution` (stamped into
+  Stripe metadata at the edge and read back in the webhook via
+  `extractResolvedPlatformFromMetadata`). When none is present (legacy / force-charge paths),
+  fall back to `normalizeUtmToPlatform(attributionData.utmSource, utmMedium)`; a present-but-unknown
+  source becomes `"other"`, an absent source becomes `"direct"`, and confidence is `"utm_only"`.
+- `isRenewal` comes from `classifyIsRenewal({ billingReason, isResubscribe })` — true only for a
+  `subscription_cycle` that is not a create / upgrade / resubscribe.
+- Audit evidence (`attributedClickId`, `attributedClickTimestamp`) is written into the Mixed `data`
+  blob only when present. Subscriptions/renewals inherit the decision from `subscription.metadata`
+  (sticky), so the converting platform stays constant across the membership lifetime.
+
 ### Refund reversal
 
 | File | Purpose |

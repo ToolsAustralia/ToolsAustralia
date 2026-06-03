@@ -18,7 +18,8 @@ import { useChargePastDueManualRetries } from "@/hooks/queries/admin/useChargePa
 import { useChargePastDueDeclineSummary } from "@/hooks/queries/admin/useChargePastDueDeclineSummary";
 import { formatDurationMs, isStrandedError } from "@/utils/admin/chargePastDueFormat";
 import { MetricCard } from "@/components/admin/metrics/shared/MetricCard";
-import DateRangeToggle, { type DateRange } from "@/components/admin/DateRangeToggle";
+import { type DateRange } from "@/components/admin/DateRangeToggle";
+import { DateRangeDropdown } from "@/components/admin/overview/DateRangeDropdown";
 import CustomDateRangeModal from "@/components/admin/CustomDateRangeModal";
 import { AdminMobileLayoutDateRangeShell } from "./AdminMobileLayoutDateRangeShell";
 import { useAdminMobileDateToolbarSlot } from "@/hooks/useAdminMobileDateToolbarSlot";
@@ -267,17 +268,11 @@ export default function PastDueChargeHistory() {
   }, [dateRange, startDate, endDate]);
 
   const dateRangeToggle = (
-    <DateRangeToggle
+    <DateRangeDropdown
       selectedRange={dateRange}
-      onRangeChange={(range) => {
-        if (range === "custom") setIsCustomDateModalOpen(true);
-        else updateDateFilter(range);
-      }}
+      onRangeChange={(range) => updateDateFilter(range)}
       onCustomClick={() => setIsCustomDateModalOpen(true)}
-      collapsed={false}
       displayDate={displayDate}
-      onExpand={() => {}}
-      className={isLgUp ? undefined : "w-full"}
     />
   );
 

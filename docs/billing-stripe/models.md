@@ -14,6 +14,11 @@ Key types written:
 
 Idempotency: each row's natural key is `${type}-${paymentIntentId}` (e.g. `BenefitsGranted-invoice_in_xxx`). Webhook retries find the existing row and bail.
 
+Attribution fields (denormalized from Stripe metadata for ad-level aggregation):
+- `attributionAdId: string | null` (indexed) — Facebook ad ID extracted from Stripe metadata
+- `attributionAdsetId: string | null` (indexed) — Facebook ad set ID extracted from Stripe metadata
+- `attributionCampaignId: string | null` (indexed) — Facebook campaign ID extracted from Stripe metadata
+
 > _TODO: pull the full schema (fields, indexes, types) from the source file in a refresh pass._
 
 ## `ProcessedStripeEvent`

@@ -92,6 +92,14 @@ export interface AdminDashboardStats {
     cancellationImpact?: {
       estimatedMonthlyRevenue: number;
     };
+    renewalProgress?: {
+      base: number;
+      renewed: number;
+      rate: number | null;
+      remaining: number;
+      baseAsOf: string | null;
+      isComplete: boolean;
+    };
   };
   revenue: {
     total: number;
@@ -120,6 +128,16 @@ export interface AdminDashboardStats {
     roas: number;
     roasTrend?: TrendData;
   };
+  attributedRevenue?: Record<string, {
+    revenue: number;
+    renewalRevenue: number;
+    conversions: number;
+    byConfidence: { click: number; utm_only: number; inferred_backfill: number };
+    adSpend?: number;
+    trueRoas?: number;
+    revenueTrend?: TrendData;
+    trueRoasTrend?: TrendData;
+  }>;
   dateRange?: {
     start: string;
     end: string;
@@ -162,8 +180,12 @@ export interface MembershipByPackageItem {
 export interface MembershipByPackageSummary {
   totalActiveCount: number;
   totalPastDueCount: number;
+  /** 30-day-retention-pause proxy (distinct users who accepted a `pause_30d` offer in the last 30 days). */
+  totalPausedCount: number;
   totalActiveRevenue: number;
   totalPastDueRevenue: number;
+  /** MRR (totalActiveRevenue) % change vs the previous comparable period. Omitted for all-time / when the baseline day has no snapshot. */
+  totalActiveRevenueTrend?: TrendData;
   snapshotPartial?: boolean;
   /** Set when caller asked for a snapshot date but no snapshot row existed; live data returned instead. */
   snapshotMissing?: boolean;
@@ -363,11 +385,15 @@ export interface ActivityLogItem {
     | "user_signup"
     | "membership_purchase"
     | "one_time_purchase"
+    | "upsell_accepted"
     | "draw_complete"
     | "high_value_order"
     | "system_alert"
     | "membership_upgrade"
-    | "subscription_past_due";
+    | "subscription_past_due"
+    | "cancellation_offer_accepted"
+    | "admin_role_update"
+    | "affiliate_payout";
   user: string;
   userId?: string;
   action: string;
