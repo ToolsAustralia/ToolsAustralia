@@ -86,19 +86,35 @@ async function getAllPages<T>(firstEndpoint: string): Promise<{ items: T[]; trun
   return { items, truncated: Boolean(endpoint) };
 }
 
-// ---- Metric id (resolved once, cached) ----
-let cachedPlacedOrderMetricId: string | null = null;
+// ---- Conversion metric id (resolved once, cached) ----
+let cachedConversionMetricId: string | null = null;
 
-export async function resolvePlacedOrderMetricId(): Promise<string> {
-  if (cachedPlacedOrderMetricId) return cachedPlacedOrderMetricId;
+/**
+ * Resolve the conversion metric id for the campaign/flow values-reports.
+ *
+ * Prefers `KLAVIYO_CONVERSION_METRIC_ID` — set this to the account's custom
+ * **"Marketing Revenue"** metric (= Placed Order WHERE `is_renewal = 0`, i.e.
+ * acquisition revenue, renewals excluded). Custom conversion metrics are NOT
+ * returned by `/api/metrics/`, so they must be supplied by id. Falls back to
+ * resolving the standard "Placed Order" event metric by name (includes renewals).
+ */
+export async function resolveConversionMetricId(): Promise<string> {
+  if (cachedConversionMetricId) return cachedConversionMetricId;
+  const envId = process.env.KLAVIYO_CONVERSION_METRIC_ID?.trim();
+  if (envId) {
+    cachedConversionMetricId = envId;
+    return envId;
+  }
   const { items } = await getAllPages<MetricResource>("/metrics/");
   const matches = items.filter((m) => (m.attributes?.name ?? "").toLowerCase() === "placed order");
   if (matches.length === 0) {
-    throw new Error('Klaviyo: no "Placed Order" metric found (check the account / API key scopes).');
+    throw new Error(
+      'Klaviyo: no conversion metric — set KLAVIYO_CONVERSION_METRIC_ID (the "Marketing Revenue" metric id) or ensure a "Placed Order" metric exists.'
+    );
   }
   // If multiple integrations report "Placed Order", prefer the API integration (the codebase's source), else first.
   const chosen = matches.find((m) => (m.attributes?.integration?.category ?? "").toLowerCase() === "api") ?? matches[0];
-  cachedPlacedOrderMetricId = chosen.id;
+  cachedConversionMetricId = chosen.id;
   return chosen.id;
 }
 
@@ -141,7 +157,7 @@ export async function getKlaviyoAnalytics(
   range: KlaviyoTimeframeKey,
   nowMs: number
 ): Promise<KlaviyoAnalytics> {
-  const metricId = await resolvePlacedOrderMetricId();
+  const metricId = await resolveConversionMetricId();
 
   const [emailCampaigns, smsCampaigns, flowList, campaignValues, flowValues] = await Promise.all([
     listCampaigns("email"),
