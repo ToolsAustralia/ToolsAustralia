@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import type { AdminDashboardStats } from "@/hooks/queries/useAdminQueries";
 import {
   buildAdvertisingRows,
+  buildDirectRow,
   computeBlendedRoas,
   computeTotalAttributedRevenue,
   computeAggregate,
@@ -33,11 +34,18 @@ const ar = {
     conversions: 31,
     byConfidence: { click: 0, utm_only: 9300, inferred_backfill: 0 },
   },
+  direct: {
+    revenue: 5270,
+    renewalRevenue: 800,
+    conversions: 18,
+    byConfidence: { click: 0, utm_only: 0, inferred_backfill: 5270 },
+  },
 } as unknown as AR;
 
 function run() {
   const rows = buildAdvertisingRows(ar);
   assert.equal(rows.length, 5, "always renders 5 rows");
+  assert.ok(!rows.some((r) => r.id === "direct"), "direct is NOT one of the 5 attributed channel rows");
 
   const meta = rows.find((r) => r.id === "facebook")!;
   assert.deepEqual(meta.spend, { kind: "amount", value: 12400 }, "meta spend = ad-API amount");
@@ -75,11 +83,28 @@ function run() {
   // No spend anywhere → null (render as "—").
   assert.equal(computeBlendedRoas({ tiktok: ar.tiktok } as unknown as AR), null, "no spend → null blended");
 
-  // Total attributed revenue sums all displayed rows.
+  // Total attributed revenue sums the 5 channel rows ONLY — direct is excluded.
   assert.equal(
     computeTotalAttributedRevenue(ar),
     41200 + 6100 + 9300,
-    "total attributed revenue across rows",
+    "total attributed revenue excludes direct (unattributed)",
+  );
+
+  // Direct (unattributed) row: present with revenue/conversions, no spend/ROAS.
+  const direct = buildDirectRow(ar)!;
+  assert.ok(direct, "direct row built when direct bucket has revenue");
+  assert.equal(direct.id, "direct");
+  assert.equal(direct.revenue, 5270, "direct revenue from the direct bucket (acquisition only)");
+  assert.equal(direct.conversions, 18);
+  assert.deepEqual(direct.spend, { kind: "owned" }, "direct has no ad spend → renders —");
+  assert.deepEqual(direct.roas, { kind: "na" }, "direct ROAS n/a → renders —");
+  assert.equal(direct.confidenceTitle, undefined, "direct is unattributed → no confidence split");
+  // Omitted / empty direct bucket → no row (card hides it).
+  assert.equal(buildDirectRow({ meta: ar.meta } as unknown as AR), null, "no direct bucket → null");
+  assert.equal(
+    buildDirectRow({ direct: { revenue: 0, renewalRevenue: 0, conversions: 0, byConfidence: { click: 0, utm_only: 0, inferred_backfill: 0 } } } as unknown as AR),
+    null,
+    "zero direct → null (no empty row)",
   );
 
   // Confidence percentages.

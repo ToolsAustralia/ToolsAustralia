@@ -12,6 +12,7 @@ import { useMetricsFormatting } from "@/hooks/useMetricsFormatting";
 import type { AdminDashboardStats } from "@/hooks/queries/useAdminQueries";
 import {
   buildAdvertisingRows,
+  buildDirectRow,
   computeBlendedRoas,
   computeTotalAttributedRevenue,
   type AdvertisingRowVM,
@@ -46,12 +47,18 @@ export default function AdvertisingPlatformCard({
   stats: AdminDashboardStats | undefined;
   loading?: boolean;
 }) {
-  const { fmtCompact } = useMetricsFormatting();
+  const { formatCurrency } = useMetricsFormatting();
 
   // Only skeleton when there is no data yet — a background refetch keeps the rows.
   const showSkeleton = loading && !stats;
 
-  const rows = buildAdvertisingRows(stats?.attributedRevenue);
+  // The 5 attributed channels, then an appended "Direct" (unattributed) row when present.
+  // The Direct row is excluded from the "$… attributed" header total and blended ROAS.
+  const directRow = buildDirectRow(stats?.attributedRevenue);
+  const rows = [
+    ...buildAdvertisingRows(stats?.attributedRevenue),
+    ...(directRow ? [directRow] : []),
+  ];
   const blendedRoas = computeBlendedRoas(stats?.attributedRevenue);
   const totalRevenue = computeTotalAttributedRevenue(stats?.attributedRevenue);
 
@@ -81,7 +88,7 @@ export default function AdvertisingPlatformCard({
 
     if (key === "spend") {
       if (row.spend.kind === "amount") {
-        return <span className="font-semibold num">{fmtCompact(row.spend.value)}</span>;
+        return <span className="font-semibold num">{formatCurrency(row.spend.value)}</span>;
       }
       if (row.spend.kind === "awaiting") {
         return <span className={AWAITING}>Awaiting sync</span>;
@@ -92,7 +99,7 @@ export default function AdvertisingPlatformCard({
     if (key === "revenue") {
       return (
         <div className="flex flex-col items-end leading-tight" title={row.confidenceTitle}>
-          <span className="font-semibold num">{fmtCompact(row.revenue)}</span>
+          <span className="font-semibold num">{formatCurrency(row.revenue)}</span>
           <span className="text-2xs text-neutral-400 dark:text-neutral-500 num">
             {row.conversions.toLocaleString()} new
           </span>
@@ -137,7 +144,7 @@ export default function AdvertisingPlatformCard({
                   {blendedRoas != null ? `${blendedRoas.toFixed(2)}x` : "—"}
                 </p>
                 <p className="text-2xs text-neutral-400 num mt-0.5">
-                  {fmtCompact(totalRevenue)} attributed
+                  {formatCurrency(totalRevenue)} attributed
                 </p>
               </>
             )}
@@ -145,6 +152,12 @@ export default function AdvertisingPlatformCard({
         }
       />
       <DataTable<AdvertisingRowVM> columns={COLUMNS} rows={rows} renderCell={renderCell} />
+      {directRow && !showSkeleton && (
+        <p className="mt-3 text-2xs text-neutral-400 leading-snug">
+          <strong>Direct</strong> = payments with no ad attribution (no fbclid / ttclid / Klaviyo tag). Not counted in the
+          “attributed” total or blended ROAS.
+        </p>
+      )}
     </Card>
   );
 }

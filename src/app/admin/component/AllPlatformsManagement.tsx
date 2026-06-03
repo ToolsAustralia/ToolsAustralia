@@ -1,13 +1,14 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { DollarSign, TrendingUp, Target, BarChart3, Clock } from "lucide-react";
 import { Card, SectionTitle, DataTable, type Column } from "@/components/admin/ui";
 import { MetricCard } from "@/components/admin/metrics/shared/MetricCard";
 import { useMetricsFormatting } from "@/hooks/useMetricsFormatting";
 import { useAdminDashboardStats } from "@/hooks/queries/useAdminQueries";
 import { useHourlyRevenue, type HourlyRevenueBucket } from "@/hooks/queries/admin/useHourlyRevenue";
-import { formatInTimeZone } from "date-fns-tz";
+import { useAdminDateFilter } from "@/hooks/useAdminDateFilter";
+import { AdminDateRangeToolbar } from "@/components/admin/AdminDateRangeToolbar";
 import { computeAggregate } from "./overview/sections/advertisingCardModel";
 import AdvertisingPlatformCard from "./overview/sections/AdvertisingPlatformCard";
 
@@ -43,20 +44,27 @@ function hourLabel(h: number): string {
   return `${display}:00 ${period}`;
 }
 
-// Last-30-days window in AEST (the stats + hourly APIs bucket by Australia/Sydney calendar days).
-function defaultRange(now: Date): { start: string; end: string } {
-  const TZ = "Australia/Sydney";
-  const start = new Date(now.getTime() - 29 * 24 * 60 * 60 * 1000);
-  return { start: formatInTimeZone(start, TZ, "yyyy-MM-dd"), end: formatInTimeZone(now, TZ, "yyyy-MM-dd") };
-}
-
 export default function AllPlatformsManagement() {
   const { fmtCompact } = useMetricsFormatting();
-  const [range] = useState(() => defaultRange(new Date()));
-  const { data: stats, isLoading } = useAdminDashboardStats("custom", range.start, range.end);
+  const df = useAdminDateFilter("today");
+  // Draw presets (current/last) require resolved dates — the stats route 400s on a
+  // draw range with none (e.g. before draw dates load, or when there IS no current/last
+  // draw). Gate the query until ready and skeleton in the meantime, mirroring the
+  // Facebook Ads tab. Non-draw presets carry no dates and resolve server-side, so
+  // they're always ready.
+  const statsReady =
+    (df.dateRange !== "current-draw" && df.dateRange !== "last-draw") ||
+    (!!df.startDate && !!df.endDate);
+  // Pass the preset itself (not a forced "custom") so the stats API self-resolves
+  // today / all-time / draw windows. Both resolve to the same AEST window as the hourly
+  // query, so the KPIs and the hourly table reconcile.
+  const { data: stats, isLoading } = useAdminDashboardStats(df.dateRange, df.startDate, df.endDate, {
+    enabled: statsReady,
+  });
+  const statsLoading = isLoading || !statsReady;
   // "ad-channels" (the 5 advertising channels) matches the KPI scope (computeAggregate),
   // so the hourly table reconciles with the headline — NOT "all" (which adds direct/google/other).
-  const { data: hourly } = useHourlyRevenue({ platform: "ad-channels", startDate: range.start, endDate: range.end });
+  const { data: hourly } = useHourlyRevenue({ platform: "ad-channels", startDate: df.startDate, endDate: df.endDate });
 
   const agg = useMemo(() => computeAggregate(stats?.attributedRevenue), [stats]);
 
@@ -75,15 +83,21 @@ export default function AllPlatformsManagement() {
 
   return (
     <div className="space-y-6">
+      {/* empty:hidden — on mobile the dropdown portals to the header slot, leaving this
+          wrapper childless; without it the empty wrapper would still claim a space-y slot. */}
+      <div className="flex justify-end empty:hidden">
+        <AdminDateRangeToolbar filter={df} />
+      </div>
+
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
-        <MetricCard title="Total Ad Spend" value={fmtCompact(agg.totalSpend)} icon={DollarSign} loading={isLoading} />
+        <MetricCard title="Total Ad Spend" value={fmtCompact(agg.totalSpend)} icon={DollarSign} loading={statsLoading} />
         <MetricCard
           title="Attributed Revenue"
           subtitle="acquisition · ad channels"
           value={fmtCompact(agg.totalAcquisitionRevenue)}
           icon={TrendingUp}
           color="emerald"
-          loading={isLoading}
+          loading={statsLoading}
         />
         <MetricCard
           title="Overall ROAS"
@@ -91,7 +105,7 @@ export default function AllPlatformsManagement() {
           value={agg.overallRoas != null ? `${agg.overallRoas.toFixed(2)}x` : "—"}
           icon={BarChart3}
           color="indigo"
-          loading={isLoading}
+          loading={statsLoading}
         />
         <MetricCard
           title="Contribution"
@@ -99,19 +113,19 @@ export default function AllPlatformsManagement() {
           value={fmtSigned(agg.contributionAfterAdSpend)}
           icon={DollarSign}
           color="purple"
-          loading={isLoading}
+          loading={statsLoading}
         />
-        <MetricCard title="Conversions" value={agg.totalConversions.toLocaleString()} icon={Target} loading={isLoading} />
+        <MetricCard title="Conversions" value={agg.totalConversions.toLocaleString()} icon={Target} loading={statsLoading} />
       </div>
 
       {/* Per-platform breakdown (reused overview card) */}
-      <AdvertisingPlatformCard stats={stats} loading={isLoading} />
+      <AdvertisingPlatformCard stats={stats} loading={statsLoading} />
 
       {/* Overall hour-of-day revenue across all channels */}
       <Card className="p-5">
         <SectionTitle
           title="All-platforms by hour (server-side)"
-          subtitle="Spend · revenue · profit · ROAS across all ad channels · last 30 days (AEST)"
+          subtitle="Spend · revenue · profit · ROAS across all ad channels · selected range (AEST)"
           icon={Clock}
         />
         <DataTable<HourRow>

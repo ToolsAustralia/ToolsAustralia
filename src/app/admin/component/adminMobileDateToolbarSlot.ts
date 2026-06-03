@@ -7,6 +7,9 @@ export const ADMIN_TABS_WITH_MOBILE_LAYOUT_DATE_TOOLBAR = [
   "facebook-ads",
   "promo-analytics",
   "cancellation-flow",
+  "tiktok-ads",
+  "snapchat-ads",
+  "all-platforms",
 ] as const;
 
 export type AdminTabWithMobileLayoutDate = (typeof ADMIN_TABS_WITH_MOBILE_LAYOUT_DATE_TOOLBAR)[number];

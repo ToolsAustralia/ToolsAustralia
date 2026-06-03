@@ -14,7 +14,8 @@ export type PlatformLogoName =
   | "facebook"
   | "tiktok"
   | "snapchat"
-  | "klaviyo";
+  | "klaviyo"
+  | "direct";
 
 const BASE_CLASS = "w-5 h-5 shrink-0 rounded-[5px]";
 
@@ -103,6 +104,26 @@ function KlaviyoLogo({ className }: { className?: string }) {
   );
 }
 
+function DirectLogo({ className }: { className?: string }) {
+  // Neutral globe glyph for unattributed / direct traffic (no brand) — a muted
+  // gray square so it reads as "not an ad channel" beside the brand marks.
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      className={className ?? BASE_CLASS}
+      role="img"
+      aria-label="Direct"
+    >
+      <rect width="24" height="24" rx="6" fill="#6B7280" />
+      <g fill="none" stroke="#FFFFFF" strokeWidth="1.4">
+        <circle cx="12" cy="12" r="5.2" />
+        <ellipse cx="12" cy="12" rx="2.1" ry="5.2" />
+        <line x1="6.8" y1="12" x2="17.2" y2="12" />
+      </g>
+    </svg>
+  );
+}
+
 export function PlatformLogo({
   platform,
   className,
@@ -119,6 +140,8 @@ export function PlatformLogo({
       return <SnapchatLogo className={className} />;
     case "klaviyo":
       return <KlaviyoLogo className={className} />;
+    case "direct":
+      return <DirectLogo className={className} />;
     default:
       return null;
   }
