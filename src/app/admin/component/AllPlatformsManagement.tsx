@@ -7,6 +7,7 @@ import { MetricCard } from "@/components/admin/metrics/shared/MetricCard";
 import { useMetricsFormatting } from "@/hooks/useMetricsFormatting";
 import { useAdminDashboardStats } from "@/hooks/queries/useAdminQueries";
 import { useHourlyRevenue, type HourlyRevenueBucket } from "@/hooks/queries/admin/useHourlyRevenue";
+import { formatInTimeZone } from "date-fns-tz";
 import { computeAggregate } from "./overview/sections/advertisingCardModel";
 import AdvertisingPlatformCard from "./overview/sections/AdvertisingPlatformCard";
 
@@ -36,11 +37,11 @@ function hourLabel(h: number): string {
   return `${display}:00 ${period}`;
 }
 
+// Last-30-days window in AEST (the stats + hourly APIs bucket by Australia/Sydney calendar days).
 function defaultRange(now: Date): { start: string; end: string } {
-  const fmt = (d: Date) => d.toISOString().slice(0, 10);
-  const start = new Date(now);
-  start.setDate(start.getDate() - 29);
-  return { start: fmt(start), end: fmt(now) };
+  const TZ = "Australia/Sydney";
+  const start = new Date(now.getTime() - 29 * 24 * 60 * 60 * 1000);
+  return { start: formatInTimeZone(start, TZ, "yyyy-MM-dd"), end: formatInTimeZone(now, TZ, "yyyy-MM-dd") };
 }
 
 export default function AllPlatformsManagement() {

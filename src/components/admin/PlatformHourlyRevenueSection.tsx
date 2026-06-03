@@ -6,6 +6,7 @@ import { Card, SectionTitle, DataTable, type Column } from "@/components/admin/u
 import { MetricCard } from "@/components/admin/metrics/shared/MetricCard";
 import { useMetricsFormatting } from "@/hooks/useMetricsFormatting";
 import { useHourlyRevenue, type HourlyRevenueBucket } from "@/hooks/queries/admin/useHourlyRevenue";
+import { formatInTimeZone } from "date-fns-tz";
 
 /**
  * Per-platform hour-of-day revenue breakdown for ad platforms that have NO ad-spend
@@ -33,12 +34,12 @@ function hourLabel(h: number): string {
   return `${display}:00 ${period}`;
 }
 
-// Last-30-days window as YYYY-MM-DD (the API re-interprets the dates as AEST calendar days).
+// Last-30-days window as YYYY-MM-DD in AEST — the API buckets these as Australia/Sydney
+// calendar days, so format in that zone (toISOString/UTC would drop the current AEST day each morning).
 function defaultRange(now: Date): { start: string; end: string } {
-  const fmt = (d: Date) => d.toISOString().slice(0, 10);
-  const start = new Date(now);
-  start.setDate(start.getDate() - 29);
-  return { start: fmt(start), end: fmt(now) };
+  const TZ = "Australia/Sydney";
+  const start = new Date(now.getTime() - 29 * 24 * 60 * 60 * 1000);
+  return { start: formatInTimeZone(start, TZ, "yyyy-MM-dd"), end: formatInTimeZone(now, TZ, "yyyy-MM-dd") };
 }
 
 export default function PlatformHourlyRevenueSection({
