@@ -30,6 +30,41 @@ One document per AEST calendar day. Written (upserted) by the dashboard-stats cr
 
 **Distinct user counts** are NOT stored — they are computed live at read time via `computeDistinctUserCounts` because they are not additive across days (the same user buying on two days counts once in a multi-day range). The `revenue.buckets[k].userCount` field in `SnapshotReadResult` is always a live query.
 
+### `attributedRevenue` field (source version 3)
+
+Added alongside `adChannels`. Stores per-platform payment attribution data for the day, split into acquisition revenue (used as the ROAS numerator) and renewal revenue (tracked separately, excluded from ROAS).
+
+| Field | Type | Notes |
+|---|---|---|
+| `attributedRevenue` | `Map<AttributedPlatformKey, IAttributedRevenue>` | Keyed by platform. Absent keys mean zero revenue for that platform. |
+
+**`AttributedPlatformKey` union:**
+
+```
+"meta" | "tiktok" | "snapchat" | "klaviyo_email" | "klaviyo_sms" | "google" | "direct" | "other"
+```
+
+**`IAttributedRevenue` shape:**
+
+```ts
+{
+  newRevenue: number;      // Acquisition revenue only: initial subscriptions, one-time, upsell, mini-draw, upgrades/resubscribes. This is the ROAS numerator.
+  renewalRevenue: number;  // Recurring membership renewals (packageType === "membership" && billingReason === "subscription_cycle"). Tracked separately; EXCLUDED from ROAS.
+  conversions: number;     // Number of attributed payment events contributing to newRevenue
+  byConfidence: {
+    click: number;           // newRevenue where attribution confidence = click
+    utm_only: number;        // newRevenue where attribution confidence = utm_only
+    inferred_backfill: number; // newRevenue where attribution confidence = inferred_backfill
+  };
+}
+```
+
+`byConfidence.click + byConfidence.utm_only + byConfidence.inferred_backfill === newRevenue` (the three tiers partition acquisition revenue only). `conversions` and `byConfidence` cover `newRevenue` rows only; renewal events do not contribute to these counters.
+
+**Renewal discriminator:** A PaymentEvent row is classified as a renewal when `packageType === "membership" && data.billingReason === "subscription_cycle"`. This is the same predicate used by `PaymentEventRepository.aggregateRevenueByHourAndPlatform` (the `$nor` guard). It is used instead of the top-level `isRenewal` field because `data.billingReason` is present on every historical PaymentEvent row, whereas `isRenewal` defaults `false` on rows written before the field was introduced.
+
+**Source version:** `DASHBOARD_STATS_SNAPSHOT_SOURCE_VERSION` is `3`. Snapshots at v1 lack `attributedRevenue` entirely; snapshots at v2 carried the old single-`revenue` shape. Readers guard against absent or old-shape values by treating an absent field as an empty Map.
+
 ## ChargeJobRun
 
 [src/models/ChargeJobRun.ts](../../src/models/ChargeJobRun.ts)

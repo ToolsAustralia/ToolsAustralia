@@ -6,13 +6,13 @@
 // the admin route and Norm projection call the same orchestration and report
 // identical numbers by construction.
 //
-// - Spend / impressions / clicks come from Meta's Marketing API at hourly
-//   granularity (advertiser timezone).
-// - Revenue / conversions come from the local `PaymentEvent` collection
-//   (BenefitsGranted, excludes membership renewals via Mongo aggregation),
-//   bucketed by hour-of-day in AEST.
-// - Landing page views (LPV) are NOT available from Meta at hourly granularity
-//   — `landingPageView` is `null` for every hour by design.
+// - Spend / impressions / clicks / linkClicks / lpv come from Meta's Marketing
+//   API at hourly granularity (advertiser timezone).
+// - Revenue / conversions come from the server-side `meta` attribution slice
+//   (PaymentEventRepository.aggregateRevenueByHourAndPlatform — PaymentEvents
+//   whose convertingPlatform === "meta", acquisition only, renewals + refunds
+//   excluded), bucketed by hour-of-day in AEST. NOT a utm_source filter, and
+//   NOT Meta's pixel/CAPI revenue.
 //
 // Framework-agnostic — no Request / NextResponse types.
 
@@ -32,8 +32,6 @@ export interface HourlyInsightsServiceInput {
   filterLevel?: "campaign" | "adset" | "ad";
   /** When set, restrict the Facebook query to these IDs at `filterLevel`. */
   filterIds?: string[];
-  /** Optional UTM-source filter for the local PaymentEvent half (e.g. `facebook`). */
-  utmSource?: string;
 }
 
 export interface HourlyInsightsServiceResult {
@@ -71,8 +69,17 @@ export class HourlyInsightsService {
     const endYear = parseInt(input.endDate.slice(0, 4), 10);
     const endMonth = parseInt(input.endDate.slice(5, 7), 10);
     const endDay = parseInt(input.endDate.slice(8, 10), 10);
-    const endOfRangeAEST = createAESTDateAsUTC(endYear, endMonth, endDay, 23, 59);
-    endOfRangeAEST.setUTCSeconds(59, 999);
+    // EXCLUSIVE next-midnight-AEST (matches the daily snapshot's $lt + SHARED-1). Roll the calendar
+    // day over via a UTC anchor — createAESTDateAsUTC builds from a string and would reject "…-32".
+    const endAnchor = new Date(Date.UTC(endYear, endMonth - 1, endDay, 12, 0, 0));
+    endAnchor.setUTCDate(endAnchor.getUTCDate() + 1);
+    const endOfRangeExclusiveAEST = createAESTDateAsUTC(
+      endAnchor.getUTCFullYear(),
+      endAnchor.getUTCMonth() + 1,
+      endAnchor.getUTCDate(),
+      0,
+      0
+    );
 
     const filterLevel = input.filterLevel;
     const filterIds = (input.filterIds ?? []).map((s) => s.trim()).filter(Boolean);
@@ -91,20 +98,23 @@ export class HourlyInsightsService {
             until: input.endDate,
           });
 
-    // PaymentEvent half — revenue/conversions per hour-of-day in AEST.
+    // PaymentEvent half — revenue/conversions per hour-of-day in AEST. Revenue is the server-side
+    // `meta` attribution slice (SHARED-1: PaymentEvents whose convertingPlatform === "meta",
+    // acquisition only — renewals + refunds excluded), NOT a utm_source filter and NOT Meta's
+    // pixel/CAPI numbers (the insights table keeps those for comparison).
     const paymentEventRepo = new PaymentEventRepository();
-    const dbHourlyData = await paymentEventRepo.aggregateRevenueAndCountByHourOfDay(
+    const byPlatform = await paymentEventRepo.aggregateRevenueByHourAndPlatform(
       startOfRangeAEST,
-      endOfRangeAEST,
-      {
-        ...(input.utmSource && { utmSource: input.utmSource }),
-      },
+      endOfRangeExclusiveAEST,
     );
+    const dbHourlyData = byPlatform.meta;
 
     const hourly: HourlyInsightItem[] = fbHourlyData.map((fbItem, hour) => {
       const spend = fbItem.spend / 100; // cents → dollars
       const impressions = fbItem.impressions;
       const clicks = fbItem.clicks;
+      const linkClicks = fbItem.linkClicks;
+      const lpv = fbItem.lpv;
       const dbItem = dbHourlyData[hour];
       const revenue = dbItem.revenue; // dollars from PaymentEvent.data.price
       const conversions = dbItem.conversions;
@@ -112,6 +122,8 @@ export class HourlyInsightsService {
       const roas = spend > 0 ? revenue / spend : 0;
       const ctr = impressions > 0 ? (clicks / impressions) * 100 : 0;
       const cpc = clicks > 0 ? spend / clicks : 0;
+      const linkCtr = impressions > 0 ? (linkClicks / impressions) * 100 : 0;
+      const linkCpc = linkClicks > 0 ? spend / linkClicks : 0;
       const label = formatHourLabel(hour);
 
       return {
@@ -120,13 +132,16 @@ export class HourlyInsightsService {
         spend,
         impressions,
         clicks,
-        landingPageView: null, // Meta API does not provide LPV with hourly breakdown
+        linkClicks,
+        lpv,
         revenue,
         conversions,
         profit,
         roas,
         ctr,
         cpc,
+        linkCtr,
+        linkCpc,
       };
     });
 

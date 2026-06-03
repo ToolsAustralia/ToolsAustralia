@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import Image from "next/image";
 import { Package } from "lucide-react";
 import type { PrizeSpecItem } from "@/config/prizes";
 import type { PrizeSpecificationsModalTheme } from "@/utils/prize-brand-colors";
@@ -66,12 +67,27 @@ const SpecCard: React.FC<SpecCardProps> = ({ item, surface, brandIconClass, isDa
     >
       <div className="mb-2 sm:mb-4">
         <div className="flex items-start gap-2.5 sm:gap-3">
-          <div
-            className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg sm:rounded-xl inline-flex items-center justify-center shrink-0 border bg-white dark:bg-neutral-900"
-            style={{ borderColor: surface.cardAccentBorder }}
-          >
-            <Package className={cn("h-4 w-4 sm:h-5 sm:w-5", brandIconClass)} />
-          </div>
+          {item.image ? (
+            <div
+              className="relative w-16 h-16 sm:w-24 sm:h-24 rounded-lg sm:rounded-xl overflow-hidden shrink-0 border bg-white dark:bg-neutral-900"
+              style={{ borderColor: surface.cardAccentBorder }}
+            >
+              <Image
+                src={item.image.src}
+                alt={item.image.alt}
+                fill
+                className="object-contain p-1"
+                sizes="(max-width: 640px) 64px, 96px"
+              />
+            </div>
+          ) : (
+            <div
+              className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg sm:rounded-xl inline-flex items-center justify-center shrink-0 border bg-white dark:bg-neutral-900"
+              style={{ borderColor: surface.cardAccentBorder }}
+            >
+              <Package className={cn("h-4 w-4 sm:h-5 sm:w-5", brandIconClass)} />
+            </div>
+          )}
           <div className="flex-1 min-w-0">
             <h4
               className={cn(

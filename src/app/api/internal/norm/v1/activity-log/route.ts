@@ -10,11 +10,15 @@ const ACTIVITY_TYPES: readonly ActivityLogItemType[] = [
   "user_signup",
   "membership_purchase",
   "one_time_purchase",
+  "upsell_accepted",
   "draw_complete",
   "high_value_order",
   "system_alert",
   "membership_upgrade",
   "subscription_past_due",
+  "cancellation_offer_accepted",
+  "admin_role_update",
+  "affiliate_payout",
 ] as const;
 
 const QuerySchema = z.object({
@@ -45,14 +49,18 @@ export const GET = withNorm(
     // PII-safe projection: firstName comes from the service as a separate field
     // (never split from the combined "user" display string — that breaks compound
     // first names like "Jean Pierre"). lastName/email never enter this response.
+    // `admin_role_update` actions embed the acting staff member's email for the
+    // admin UI — redact it here so no email round-trips through Norm.
     return ctx.ok({
       activities: activities.map((a) => {
+        const action =
+          a.type === "admin_role_update" ? "A staff member was updated" : a.action;
         return {
           id: a.id,
           type: a.type,
           firstName: a.firstName,
           userId: a.userId ?? null,
-          action: a.action,
+          action,
           time: a.time,
           timestamp:
             a.timestamp instanceof Date

@@ -29,7 +29,9 @@
 
 Plus:
 - `scripts/migrations/` — date-prefixed migrations
-- `scripts/seed-admin-data.ts` — dev seed
+- `scripts/seed-*.ts` — dev seeds. Currently:
+  - `scripts/seed-admin-data.ts` — admin user
+  - `scripts/seed-variation1-vs-variation2-experiment.ts` — landing-page variation 1 vs 2 A/B experiment (npm `seed:variation-experiment[:dry]`). Idempotent: populates an empty admin-created draft of the same name in place, or creates a fresh one. See [ab-testing/api.md](../ab-testing/api.md#seed-scripts).
 - `scripts/fix-*.{ts,mjs,js}` → fix:* npm script — one-off corrective scripts; **must** ship with a `:dry` sibling that disables writes
 - `scripts/codemods/` — UI/Tailwind codemod scripts (see [dev-tooling architecture](../dev-tooling/architecture.md))
 
@@ -46,6 +48,26 @@ Plus:
 ### Stripe webhook queue `processedAt` backfill
 
 - [`scripts/backfill-stripe-webhook-queue-processed-at.ts`](../../scripts/backfill-stripe-webhook-queue-processed-at.ts) — one-shot backfill for dead-row TTL anchoring. Matches `{ status: "dead", processedAt: null }` and sets `processedAt = updatedAt` so the 30-day `dead_processedAt_ttl` index can actually expire them. Idempotent (re-runs after completion are no-ops). npm scripts: `backfill:webhook-queue-processed-at` (live), `backfill:webhook-queue-processed-at:dry`. See [billing-stripe/STRIPE_WEBHOOK_QUEUE.md](../billing-stripe/STRIPE_WEBHOOK_QUEUE.md#backfilling-processedat-on-dead-rows) for context.
+
+### Converting-platform attribution backfill
+
+- [`scripts/backfill-converting-platform.ts`](../../scripts/backfill-converting-platform.ts) — backfills `convertingPlatform`, `attributionConfidence`, and `isRenewal` onto **historical** `BenefitsGranted` `PaymentEvent` rows that were written before the single-platform resolver shipped (filter: `{ eventType: "BenefitsGranted", convertingPlatform: null }`). Attribution is derived via `deriveBackfillAttribution` from `data.utmSource`/`data.utmMedium`, the indexed `attribution*` Meta ad-id fields, and `data.billingReason`. All rows written by this script are tagged `attributionConfidence: "inferred_backfill"` so the dashboard can segment them separately from live `click` / `utm_only` resolutions.
+
+  **Idempotency:** the `convertingPlatform: null` filter means re-runs only touch unresolved rows — live-resolved and already-backfilled rows are never overwritten.
+
+  **CLI flags:** `--dry-run` (default-safe — always run first), `--limit=N`, `--batch-size=N`, `--csv-path=<path>` (append-mode audit log), `--no-csv`.
+
+  **Exit codes:** `0` = clean run, `2` = per-row errors (rows skipped; check `grep ',error,'` in the CSV), `3` = outer-fatal (script aborted), `1` = unhandled exception.
+
+  npm scripts: `backfill:converting-platform` (live), `backfill:converting-platform:dry` (dry-run, no writes).
+
+**Post-merge runbook:**
+
+1. `npm run backfill:converting-platform:dry` — inspect console platform tally and the CSV; verify counts look plausible.
+2. `npm run backfill:converting-platform` — live run. Re-runnable; `grep ',error,'` the CSV for any per-row failures and re-run to retry them.
+3. Optionally: `npm run backfill:dashboard-stats-snapshots` to repaint completed-day snapshots with the newly backfilled attribution (the dashboard's live recompute already covers the visible rolling window).
+
+**Note on ROAS exclusion:** the dashboard's renewal-exclusion logic uses `packageType + data.billingReason`, not the `isRenewal` flag — so setting `isRenewal` here has no effect on ROAS figures. The flag is populated for completeness and future use.
 
 ### Refund entry-corruption audit + repair
 

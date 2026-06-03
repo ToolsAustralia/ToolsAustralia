@@ -1,5 +1,15 @@
 # Draws — Gotchas
 
+## Renewal entry-loss under billing spikes (`addToMajorDraw` swallow) + the reconciler
+
+During synchronized renewal billing spikes (anchor-day billing fires dozens of `invoice.paid` webhooks at once), the draw-credit in `addToMajorDraw` ([`payment-processing.ts`](../../src/utils/payment/payment-processing.ts)) could transiently fail and was **silently swallowed**, leaving the renewal's `data.grants.drawGrants` empty and the member missing/short on the active draw — while their `accumulatedEntries`/`lastMonthAccumulatedEntries` updated. It was invisible (0 `ErrorReport`s; `stripewebhookqueue` showed `succeeded`, because the swallow was *below* the queue layer). May 2026: 60 active members under-credited by 25,235 entries.
+
+Two defenses now exist:
+1. **Hardened `addToMajorDraw`** — atomic single-op credit (no full-array reload), `matchedCount` upsert (also kills duplicate rows), and an `ErrorReport` instead of the silent swallow. **No application-level retry** — `$inc`/`$push` aren't idempotent, so an app-retry would double-credit on a lost-ack write; the driver's `retryWrites` covers safe retries and the reconciler covers hard failures. See `docs/payment/gotchas.md`.
+2. **Reconciler** [`reconcileActiveMajorDrawEntries`](../../src/utils/draws/reconcile-major-draw-entries.ts), run by the `reconcile-major-draw-entries` cron (daily 16:30 UTC, after the billing-spike window). **Authoritative basis:** correct draw membership = `data.entries` of the member's LATEST in-window membership `BenefitsGranted` event — **NOT** `subscription.lastMonthAccumulatedEntries`, which drifts ahead of the real grant and false-positives. Heals only when: latest renewal has empty `drawGrants` + sub active + renewal not refunded + draw < grant. Idempotent (re-reads before writing), so it never double-credits. The standalone `scripts/fix-major-draw-renewal-entries.ts` (dry-run by default) is the manual equivalent.
+
+**Known scalability ceiling (future work):** all entries still live in one `MajorDraw.entries[]` array, so an extreme synchronized spike still contends on a single document. The hardening shrinks per-op cost + the failure window and the cron guarantees eventual correctness, but the scalable end-state is to spread the load — drain renewals through `stripewebhookqueue` with bounded concurrency, and/or store entries as separate documents (one per user-per-draw) instead of one big array. Audit health any time with `npx tsx scripts/verify-major-draw-entries.ts --dry-run`.
+
 ## Refund reversal must pass `drawId` to `removeMajorDrawEntries`
 
 [`removeMajorDrawEntries`](../../src/utils/draws/remove-draw-entries.ts) accepts an **optional** `drawId` parameter. **Always pass it** when the caller knows which draw the entries originally went to — the refund ledger does (every `BenefitsGranted` event with `data.grants.drawGrants[].drawId`). Omitting `drawId` falls back to the legacy multi-draw walk: the function will query *every* major draw containing this user and consume `sourceType` entries from the oldest forward until the refund amount is satisfied.
@@ -79,3 +89,11 @@ If you write directly to `TicketEntry` for a mini-draw, also update `User.miniDr
 ## Cron failure
 
 If the daily cron fails, transitions can lag. Monitor: webhooks will still trigger transitions on each call, but if no traffic + no cron, draws can stay in stale states for days. Atlas profiler comments help spot which call site last ran transitions.
+
+## `/api/major-draw` & `/api/mini-draws` embed per-user data — don't public-cache them
+
+Both routes return per-user fields (`userStats` on major-draw, `hasActiveMembership` on mini-draws) derived from the session cookie, alongside the public draw data. They must not be cached as `public` keyed by URL only — a shared/browser cache will serve a guest copy (`userStats: null` → **0 entries**) to a logged-in user, which is exactly the "entries show 0 until reload" bug. Both now route their `Cache-Control` through [`userScopedCacheControl`](../../src/utils/security/cache-control.ts) (`private, no-store` when authenticated; `public …` + `Vary: Cookie` for guests). See [security-csp/rules.md R7](../security-csp/rules.md). Reproduces only on staging/production (dev is `no-store`).
+
+## Mini-draw view-tracking Klaviyo keys are snake_case
+
+[`MiniDrawViewTracking`](../../src/app/(site)/mini-draws/[id]/components/MiniDrawViewTracking.tsx) calls `trackKlaviyoViewContent` with `product_id` / `product_name` — not the camelCase equivalents. The shape is enforced by `KlaviyoEventParams` in [src/hooks/useKlaviyoTracking.ts](../../src/hooks/useKlaviyoTracking.ts). See [docs/tracking/KLAVIYO_INTEGRATION.md](../tracking/KLAVIYO_INTEGRATION.md) for the full property-naming contract.

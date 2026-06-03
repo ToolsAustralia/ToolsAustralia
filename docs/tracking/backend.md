@@ -22,7 +22,15 @@
 
 ## Services
 
-[src/services/meta/](../../src/services/meta/) — Meta-specific service code (likely insights aggregation).
+[src/services/meta/](../../src/services/meta/) — Meta-specific service code:
+
+- **MetaInsightsSyncService** — `syncDateRange()` downloads ad-level daily insights from Meta and bulk-upserts into `MetaAdInsightsDaily`. As of 2026-05-27 it also calls `fetchAdsetMetadata` once per ad-account per sync run and denormalizes `linkClicks`, `adsetBudgetCents`, `campaignObjective`, `learningStatus`, and `lastSignificantEdit` onto each upserted row.
+- **runMetaSpendByUrlSync** — end-to-end orchestrator: insights → ad destinations → landing-page aggregates. Delegates to `MetaInsightsSyncService`, `MetaAdDestinationService`, and `SpendByUrlAggregationService` in sequence.
+- **MetaAdDestinationService** — resolves landing-page URLs for each ad ID via the Graph API creative endpoint.
+
+[src/services/facebook-ads-health/](../../src/services/facebook-ads-health/) — Facebook Ads Health diagnostic services:
+
+- **accountTrueRoasService** (`computeAccountTrueRoas`) — computes account-level TRUE ROAS by comparing local `PaymentEvent` revenue (non-renewal `BenefitsGranted` events) against Meta Insights spend and purchase revenue for a given date range. Returns `localRevenueAud`, `metaSpendAud`, `metaPurchaseRevenueAud`, `metaPurchaseConversions`, `ratioLocalOverMetaSpend` (TRUE ROAS proxy), `ratioMetaOverLocal` (Meta attribution ratio), and an `error` field if Meta was unreachable. Called by `GET /api/admin/facebook-ads/purchase-audit` and available for reuse by future health-insight routes.
 
 [src/services/facebook-ads/FacebookAdsInsightsService.ts](../../src/services/facebook-ads/FacebookAdsInsightsService.ts) — orchestrates Facebook Marketing API insight fetches for the admin dashboard. Resolves AEST date range (today / yesterday / custom), calls `fetchFacebookInsights` (from `src/lib/facebook-marketing.ts`), aggregates per-row metrics into a summary, and converts monetary fields from cents to dollars before returning the response payload for `/api/admin/facebook-ads/insights`. The fetcher is injectable via the constructor for testing — see `__tests__/FacebookAdsInsightsService.test.ts` (npm: `test:facebook-ads-insights-service`).
 
@@ -93,3 +101,43 @@ The pure helper `userDataForRegistration(u)` at `src/utils/tracking/registration
 - `/api/tracking/**` — generic tracking endpoints
 
 > _TODO: read each handler._
+
+## Server-side attribution resolution (`resolveAtEdge`)
+
+[src/services/attribution/resolveAtEdge.ts](../../src/services/attribution/resolveAtEdge.ts) — single-call glue used by every create-* route handler to resolve the converting platform at request time:
+
+```ts
+resolveAttributionAtEdge(request: NextRequest): { decision: ResolveResult; metadata: Record<string, string> }
+```
+
+1. Calls `extractClickIdsFromRequest` → paid click signals from request cookies/headers.
+2. Calls `readAttributionCookieFromRequest` → UTM data from the attribution cookie.
+3. Passes both into `resolveConvertingPlatform` → `ResolveResult`.
+4. Converts to Stripe-safe metadata via `buildResolvedAttributionMetadata`.
+
+**Error contract:** if anything throws, returns `{ platform: "direct", confidence: "utm_only" }` with minimal fallback metadata — never propagates an exception into the payment handler.
+
+**Where it is called:** at the top of each create-* route's `POST` handler (or, for routes that fan out into sub-handler functions, at the point where `request` is in scope in `POST` before delegation). The returned `metadata` is spread into the same Stripe metadata object that already contains `buildAttributionMetadata(...)`. This means every subscription, one-time purchase, upsell, mini-draw, and payment-intent creation stamps resolved attribution.
+
+## Historical backfill derivation (`deriveBackfillAttribution`)
+
+[src/services/attribution/deriveBackfillAttribution.ts](../../src/services/attribution/deriveBackfillAttribution.ts) — pure function used by the PaymentEvent historical backfill to assign a `convertingPlatform` to rows that predate click-ID capture.
+
+```ts
+deriveBackfillAttribution(row: BackfillSourceRow): {
+  convertingPlatform: ConvertingPlatform;
+  attributionConfidence: "inferred_backfill";
+  isRenewal: boolean;
+}
+```
+
+**Signal priority:**
+1. `utmSource` / `utmMedium` — passed through `normalizeUtmToPlatform`; Klaviyo splits by medium (`email` vs `sms`); unknown sources resolve to `"other"`.
+2. `hasMetaAdAttribution` — set when any indexed Meta-shaped ad-id field (attributionAdId / AdsetId / CampaignId) is present on the row; resolves to `"meta"`.
+3. No signal → `"direct"`.
+
+**Confidence is always `"inferred_backfill"`** — these rows predate click-ID capture, so live resolver confidence levels (`click`, `utm_only`) never apply.
+
+**`isRenewal`** is derived via `classifyIsRenewal({ billingReason })` — `true` only for `subscription_cycle` without an upgrade/resubscribe flag.
+
+**Domain/referrer-form `utm_source` (data-driven, 2026-06-01):** `normalizeUtmToPlatform` (shared by the live resolver's utm fallback AND this backfill) maps the domain forms real ad traffic actually carries — notably `facebook.com` (7,303 historical paid-CPC rows) plus `m./l./lm./web./business.facebook.com`, `fb.com`, `instagram.com`/`m.`/`l.`, `ig.com` → `meta`; `tiktok.com`/`www.`/`vm.` → `tiktok`; `snapchat.com` → `snapchat`; `googleadservices.com` → `google`. Without these, Meta acquisition revenue was silently bucketed to `other` and understated ROAS. **Organic `google.com` is intentionally NOT mapped** — it would credit organic search to the reserved paid-Google channel.

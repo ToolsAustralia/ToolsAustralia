@@ -36,4 +36,21 @@ export interface CancellationRevenueMetrics {
   cancelledMembershipRevenueImpact: number;
 }
 
-export interface MembershipAnalyticsBundle extends MembershipRenewalMetrics, CancellationRevenueMetrics {}
+export interface RenewalProgress {
+  /** Denominator: active + past-due members at the period's first day. */
+  base: number;
+  /** Numerator: distinct members whose renewal payment landed in the period. */
+  renewed: number;
+  /** renewed / base as a 0–100 percentage (1 dp); null when base is 0 / no snapshot. */
+  rate: number | null;
+  /** max(0, base − renewed). Labeled "expected" while open, "did not renew" when complete. */
+  remaining: number;
+  /** Snapshot day actually used for the base (YYYY-MM-DD, AEST); null if none found. */
+  baseAsOf: string | null;
+  /** True when the period is closed (last-draw) → remaining means "did not renew". */
+  isComplete: boolean;
+}
+
+export interface MembershipAnalyticsBundle extends MembershipRenewalMetrics, CancellationRevenueMetrics {
+  renewalProgress?: RenewalProgress;
+}

@@ -166,9 +166,35 @@ Wraps a single `InvoiceChargeLog.aggregate` over `status: "failed"` rows in the 
   - `DashboardStatsSnapshotReader.ts` — `readStatsForRange({ rangeStartUTC, rangeEndUTC })` returns `SnapshotReadResult`. Sums snapshot rows for complete AEST days, computes today live (not yet snapshotted), falls back to live for any date missing a snapshot (flagged in `meta.missingSnapshotDates`). ROAS per channel is recomputed from summed totals rather than averaged. `userCount` per bucket is always live (distinct users not additive across days).
   - `distinctUserCounts.ts` — `computeDistinctUserCounts(start, end)` → `Record<RevenueBucketKey, number>`. Single aggregation pipeline: match `BenefitsGranted` events, exclude refunded PIs via `excludeRefundedBenefitsGrantedStages()`, group by `(packageType, packageId, billingReason)` using `$addToSet` on `userId`, then re-union into a Set per bucket to avoid double-counting the same user across multiple tuples in the same bucket.
 
-- `cancellationFlowAnalytics.ts` — read-only cancellation-flow analytics (Task 18). Two exports:
-  - `summarizeCancellationEvents(events, now)` — **pure**, no I/O. Shapes `ICancellationFlowEvent[]` into `CancellationFlowSummary`: `triggered`, `byReason` (per `CANCELLATION_REASONS`, `{ count, sharePct, accepted, cancelled, abandoned }` — outcome split uses the same definitions as the funnel, so abandoned = `outcome "in_progress" && startedAt <= now-1h`), `funnel` (`reachedReason` = total; `reachedOffer` = `offersShown.length > 0 && !pastDue`; `accepted` = `outcome "saved"`; `cancelled` = `outcome "cancelled"`; `abandoned` as above), `saveRate`/`saveRatePct` (`accepted / (accepted+cancelled+abandoned)`, 0-denom guarded), `byOfferAccepted` (per `OFFER_TYPES`, saved-only), `pastDueExcludedFromOfferConversion` (count of past-due events), `retention90` (`{ retained, churned, pending }` over saved events — `retained`/`churned` only when matured i.e. `savedAt <= now-90d` and `retention90` set, else `pending`), `retention90ByOffer` (`Record<OfferType, { retained, churned, pending }>` — the **same** matured/pending boundary as `retention90`, keyed by `offerAccepted`; only saved events with a non-null `offerAccepted` contribute; every `OfferType` key always present/zeroed so per-offer totals reconcile with the overall split — identical cutoff to the §6a maturity cron, no skew), and `otherReasonTexts` (the trimmed free-text content of every `reason === "other"` event with a non-empty `reasonText`, plus that event's `startedAt` and `outcome`; sorted by `startedAt` desc; whitespace-only entries excluded). All `%` divisions guard divide-by-zero (`triggered === 0` → all `sharePct` 0; empty array → save rate 0). Unit-tested: `npm run test:cancellation-analytics`.
-  - `getCancellationFlowAnalytics({ from?, to? })` — DB entry. `await connectDB()`, queries `CancellationFlowEvent` with a **bounded** `startedAt` window (`$gte from` / `$lt to`; defaults to **last 90 days** when neither given — never an unbounded scan), `.lean()`, delegates to the pure shaper with `new Date()`. Service signature still uses UTC `Date` bounds; the `GET /api/admin/cancellation-flow-analytics` route accepts AEST `startDate`/`endDate` (yyyy-MM-dd) from the UI and converts to UTC bounds before calling the service.
+### Per-platform attributed revenue (dashboard-stats)
+
+**`snapshotSchema.ts` — `PLATFORM_TO_AD_CHANNEL_KEY`**
+
+A mapping from `AttributedPlatformKey` (e.g. `"meta"`) to the ad-spend provider key used in `adChannels` (e.g. `"facebook"`). `null` means no spend channel exists for that platform (applies to `"direct"`, `"other"`, `"klaviyo_email"`, `"klaviyo_sms"`, `"google"`, `"tiktok"`, `"snapchat"` until their ad providers are added). Used by the route to join attributed revenue with ad spend for ROAS calculation.
+
+**`revenueAggregator.ts` — `aggregateRevenueForDay`**
+
+In addition to the existing per-bucket totals, the aggregator now returns a `byPlatform` map:
+
+- Iterates refund-excluded `BenefitsGranted` `PaymentEvent` rows for the day.
+- Groups by `PaymentEvent.convertingPlatform`. A `null` platform is folded to `"direct"` with confidence `inferred_backfill`.
+- Platform accumulation runs **above** the `!bucketKey` guard, so events that don't map to a revenue bucket (e.g. unrecognized types) still contribute to per-platform totals — ensuring `byPlatform` revenue reconciles to `revenue.total`.
+- **Renewal discrimination:** Before accumulating into `newRevenue` vs `renewalRevenue`, each row is tested with the predicate `packageType === "membership" && data.billingReason === "subscription_cycle"`. Rows that match are added to `renewalRevenue` and **excluded** from `newRevenue`, `conversions`, and `byConfidence`. Rows that do not match are counted as acquisition and added to `newRevenue`/`conversions`/`byConfidence`.
+
+  This is the same `$nor: [{ packageType: "membership", "data.billingReason": "subscription_cycle" }]` predicate already used by `PaymentEventRepository.aggregateRevenueByHourAndPlatform` (the hourly breakdown). Using `data.billingReason` (present on every PaymentEvent) rather than the top-level `isRenewal` field (defaults `false` on pre-feature rows) ensures the discriminator is robust on all historical data.
+
+- Within each platform, `newRevenue` is partitioned into `byConfidence` tiers (`click`, `utm_only`, `inferred_backfill`). The three tiers sum to the platform's `newRevenue`. Renewal events do not contribute to `byConfidence`.
+
+**`DashboardStatsSnapshotReader.ts`**
+
+When reading across a date range, the reader sums `attributedRevenue` entries additively across completed snapshot days and the live today/missing-day values. The summation accumulates both `newRevenue` and `renewalRevenue` independently (pure per-platform sums). ROAS is **not** recomputed inside the reader — that join happens in the route handler after all totals are available, using only `newRevenue` as the numerator.
+
+The summed `attributedRevenue` map is returned as part of `SnapshotReadResult`.
+
+- `cancellationFlowAnalytics.ts` — read-only cancellation-flow analytics (Task 18). Three exports:
+  - `summarizeCancellationEvents(events, now)` — **pure**, no I/O. Shapes `ICancellationFlowEvent[]` into `CancellationFlowSummary`: `triggered`, `byReason` (per `CANCELLATION_REASONS`, `{ count, sharePct, accepted, cancelled, abandoned }` — outcome split uses the same definitions as the funnel, so abandoned = `outcome "in_progress" && startedAt <= now-1h`), `funnel` (`reachedReason` = total; `reachedOffer` = `offersShown.length > 0 && !pastDue`; `accepted` = `outcome "saved"`; `cancelled` = `outcome "cancelled"`; `abandoned` as above), `saveRate`/`saveRatePct` (`accepted / (accepted+cancelled+abandoned)`, 0-denom guarded), `byOfferAccepted` (per `OFFER_TYPES`, saved-only), `pastDueExcludedFromOfferConversion` (count of past-due events), `retention90` (`{ retained, churned, pending }` over saved events — `retained`/`churned` only when matured i.e. `savedAt <= now-90d` and `retention90` set, else `pending`), `retention90ByOffer` (`Record<OfferType, { retained, churned, pending }>` — the **same** matured/pending boundary as `retention90`, keyed by `offerAccepted`; only saved events with a non-null `offerAccepted` contribute; every `OfferType` key always present/zeroed so per-offer totals reconcile with the overall split — identical cutoff to the §6a maturity cron, no skew), and `otherReasonTexts` (the trimmed free-text content of every `reason === "other"` event with a non-empty `reasonText`, plus that event's `startedAt`, `outcome`, and an optional `userId` passed through from the event — the email/name fields on `OtherReasonEntry` (`userEmail`, `userFirstName`, `userLastName`) are populated by the DB-touching wrapper below, **not** by this pure shaper; sorted by `startedAt` desc; whitespace-only entries excluded). All `%` divisions guard divide-by-zero (`triggered === 0` → all `sharePct` 0; empty array → save rate 0). Unit-tested: `npm run test:cancellation-analytics`.
+  - `getCancellationFlowAnalytics({ from?, to? })` — DB entry. `await connectDB()`, queries `CancellationFlowEvent` with a **bounded** `startedAt` window (`$gte from` / `$lt to`; defaults to **last 90 days** when neither given — never an unbounded scan), `.lean()`, delegates to the pure shaper with `new Date()`. After shaping, **hydrates user details** for `otherReasonTexts` entries via a single batched `User.find({ _id: { $in: [...uniq userIds] } }).select({ email: 1, firstName: 1, lastName: 1 }).lean()` so the admin "Other" table can render a clickable email column without N+1 queries (no lookup when the events array carries no `userId`s). Service signature still uses UTC `Date` bounds; the `GET /api/admin/cancellation-flow-analytics` route accepts AEST `startDate`/`endDate` (yyyy-MM-dd) from the UI and converts to UTC bounds before calling the service.
+  - `getCancellationFlowUsersByReason({ reason, outcome?, from?, to?, page?, limit? })` — paginated user-level rows for a single reason; powers the **Reason × outcome** drill-down modal. `await connectDB()`. Filter is `{ reason, startedAt: { $gte, $lt? }, outcome? }` with the same default-to-last-90-days lower bound as `getCancellationFlowAnalytics` (never an unbounded scan); `outcome` narrowing is optional. Runs `countDocuments` + a paged `find().sort({ startedAt: -1 }).skip(...).limit(...)` in parallel (`Promise.all`). `limit` is clamped to `[1, 100]` (default 20); `page` is clamped to `≥1` (default 1). Hydrates user details with the same batched `User.find({ _id: { $in: [...] } })` pattern. Returns `{ rows: ReasonUserRow[], totalCount }` where each row carries `eventId`, optional user fields, ISO `startedAt`, `outcome`, optional `reasonText` (set only when `reason === "other"` and the trimmed text is non-empty), and `offerAccepted` (the event's accepted offer or `null`). New `ReasonUserRow`, `ReasonUsersResult`, and `CancellationFlowUsersByReasonParams` interfaces are exported.
 
 - `UserAdminQueryService` ([src/services/admin/UserAdminQueryService.ts](../../src/services/admin/UserAdminQueryService.ts)) — admin-facing user list / search / aggregate-export / per-id readers. Extracted from the fat admin user routes (`/api/admin/users`, `/api/admin/users/search`, `/api/admin/users/export`, `/api/admin/users/[id]`, `/api/admin/users/[id]/charge-past-due` GET, `/api/admin/users/[id]/recover-past-due-invoice` GET, `/api/admin/users/[id]/payment-events`) during the Norm wiring so admin + Norm numbers match by construction. Framework-agnostic — no `Request` / `NextResponse` types. Exports:
   - `listAdminUsers(args)` — paginated + filtered list with computed `totalSpent` (refund-net `BenefitsGranted` minus matching `RefundProcessed` by `paymentIntentId`), `majorDrawEntries` (currently-active major draw only), `miniDrawCount` per row + headline counts (`totalUsers`/`activeSubscriptions`/`verifiedUsers`/`conversions`). Computed-field sorting (`totalSpent`/`majorDrawEntries`/`miniDrawCount`) is applied after a full-collection scan; standard fields use Mongo `sort+skip+limit`.
@@ -184,6 +210,32 @@ Wraps a single `InvoiceChargeLog.aggregate` over `status: "failed"` rows in the 
   - `getMembershipByPackageLive()` — live per-package counts.
   - `getMembershipByPackageLiveForSnapshot()` — four-count shape used by snapshot writer cron.
   - `getMembershipByPackageSnapshot(asOfDate)` — point-in-time counts from `MembershipDailySnapshot`; falls back to live data with `snapshotMissing: true` when no row exists.
+  - `getRenewalBaseAsOf(date)` *(private)* — queries `MembershipDailySnapshot` for the period's first day and sums `activeCount + pastDueCount` across all subscription packages. If no snapshot exists for the exact date, it uses the nearest later snapshot (capped at 7 days out). Returns `{ base, snapshotDate, snapshotMissing }`.
+
+### Renewal Rate KPI (2026-05-29, updated 2026-06-02)
+
+`getAnalyticsBundle` now **always** populates `renewalProgress: RenewalProgress` on every call, regardless of the `dateRange` parameter. Previously it was only computed when `dateRange` resolved to `current-draw` or `last-draw`. The computation is performed by the new private method `getCurrentCycleRenewalProgress()`.
+
+**Current-cycle anchoring:** The cycle is always the **current billing cycle** — independent of the selected date range filter. Cycle start = the day after the last completed `MajorDraw.drawDate` (AEST, computed via `aestDayBounds(...).dayEndUTC`); cycle end = now. The `dateRange` parameter no longer controls whether `renewalProgress` is present; it only controls other fields in the bundle (e.g. `membershipRenewals`).
+
+**Definition:**
+
+| Field | Value |
+|---|---|
+| `base` | `getRenewalBaseAsOf(cycleStart)` — `activeCount + pastDueCount` from `MembershipDailySnapshot` at the cycle's first day (nearest-later-day fallback, up to 7 days) |
+| `renewed` | Distinct members with a `MembershipRenewalCycle` row whose `succeededAt` (or `recoveredAt`) falls within the current cycle |
+| `renewalRate` | `renewed / base`, capped at 1.0 (≤ 100%) |
+| `remaining` | `base - renewed` (non-negative) |
+| `remainingLabel` | `"expected"` (cycle still open) |
+| `snapshotMissing` | `true` when no snapshot was found within the 7-day window |
+
+**Type:** `RenewalProgress` in `src/types/admin/membershipAnalytics.ts`. Field on `MembershipAnalyticsBundle` changed from optional to always-present.
+
+**API surface:** `GET /api/admin/dashboard/stats` always exposes `stats.users.renewalProgress` (not draw-gated).
+
+**Validation script:** `npm run find:renewal-rate` (`scripts/find-renewal-rate.ts`). Supports `--last-draw`, `--draw N`, `--coverage`, and the new **`--current-cycle`** mode (oracle that mirrors `getCurrentCycleRenewalProgress` exactly — use this to cross-check the headline KPI card value). See [infrastructure/patterns.md](../infrastructure/patterns.md#p6-read-only-audit-scripts-find--list) for the full mode table.
+
+**Spec:** `docs/superpowers/specs/2026-05-29-renewal-rate-metric-design.md`.
 
 ## Routes
 

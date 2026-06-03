@@ -4,6 +4,7 @@ import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import AdminSidebar from "./AdminSidebar";
 import DashboardOverview from "./overview/DashboardOverview";
+import AllPlatformsManagement from "./AllPlatformsManagement";
 import {
   ADMIN_MOBILE_DATE_TOOLBAR_SLOT_ID,
   adminTabUsesMobileLayoutDateToolbar,
@@ -20,6 +21,7 @@ import AffiliatesManagement from "@/components/admin/AffiliatesManagement";
 import FacebookAdsManagement from "@/components/admin/FacebookAdsManagement";
 import TikTokAdsManagement from "@/components/admin/TikTokAdsManagement";
 import SnapchatAdsManagement from "@/components/admin/SnapchatAdsManagement";
+import KlaviyoAnalyticsManagement from "@/components/admin/KlaviyoAnalyticsManagement";
 import ABTestingManagement from "@/components/admin/ab-testing/ABTestingManagement";
 import ErrorReportsManagement from "@/components/admin/ErrorReportsManagement";
 import BlockedTransactionsManagement from "@/components/admin/BlockedTransactionsManagement";
@@ -139,13 +141,7 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
       {/* Main Content */}
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Top Bar — on mobile overview, bottom border lives on date row so header + filters read as one block */}
-        <div
-          className={`bg-white dark:bg-neutral-900 px-4 lg:px-6 py-3 flex-shrink-0 ${
-            selectedTab === "overview"
-              ? "max-lg:border-b-0 max-lg:shadow-none lg:border-b lg:border-gray-200 dark:lg:border-neutral-800 lg:shadow-sm dark:lg:shadow-none"
-              : "border-b border-gray-200 dark:border-neutral-800 shadow-sm dark:shadow-none"
-          }`}
-        >
+        <div className="bg-white dark:bg-neutral-900 px-4 lg:px-6 py-3 flex-shrink-0 border-b border-gray-200 dark:border-neutral-800 shadow-sm dark:shadow-none">
           <div className="flex items-center justify-between gap-4 w-full">
             <div className="flex items-center gap-3 min-w-0">
               {/* Mobile Menu Button */}
@@ -172,8 +168,10 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
                   {selectedTab === "users" && "User account management and administration"}
                   {selectedTab === "promos" && "Manage promotional campaigns and entry multipliers"}
                   {selectedTab === "promo-analytics" && "Track visits, signups, and conversions by promotion page"}
+                  {selectedTab === "klaviyo" && "Klaviyo campaign & flow revenue, scheduled sends, and hourly"}
+                  {selectedTab === "all-platforms" && "Combined ad effectiveness — spend, revenue, ROAS, and hourly across every platform"}
                   {selectedTab === "cancellation-flow" && "Cancellation-flow funnel, save rate, and retention analytics"}
-                  {selectedTab === "AB-testing" && "Manage A/B testing experiments and analyze variant performance"}
+                  {selectedTab === "ab-testing" && "Manage A/B testing experiments and analyze variant performance"}
                   {selectedTab === "error-reports" && "View and manage error reports from users"}
                   {selectedTab === "blocked-transactions" && "Stripe issuer-blocked cards — review and allowlist"}
                   {selectedTab === "past-due-history" && "History of bulk and manual past-due charge attempts"}
@@ -184,16 +182,15 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
                 </p>
               </div>
             </div>
-            <HeaderThemeToggle className="shrink-0" />
+            <div className="flex items-center gap-2 shrink-0">
+              {/* Mobile: date filter sits inline in the header, beside the theme toggle */}
+              {adminTabUsesMobileLayoutDateToolbar(selectedTab ?? "") && (
+                <div className="lg:hidden" id={ADMIN_MOBILE_DATE_TOOLBAR_SLOT_ID} />
+              )}
+              <HeaderThemeToggle className="shrink-0" />
+            </div>
           </div>
         </div>
-
-        {/* Mobile: shared date toolbar slot under header (overview, Facebook Ads, Promo Analytics) */}
-        {adminTabUsesMobileLayoutDateToolbar(selectedTab ?? "") && (
-          <div className="lg:hidden shrink-0 bg-white dark:bg-neutral-900 border-b border-gray-200 dark:border-neutral-800">
-            <div id={ADMIN_MOBILE_DATE_TOOLBAR_SLOT_ID} />
-          </div>
-        )}
 
         {/* Content Area */}
         <div className="flex-1 overflow-y-auto admin-scrollbar p-4 lg:p-6 bg-gray-50 dark:bg-neutral-950 min-h-0">
@@ -247,6 +244,12 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
 
           {/* SNAPCHAT ADS TAB */}
           {selectedTab === "snapchat-ads" && <SnapchatAdsManagement />}
+
+          {/* KLAVIYO TAB */}
+          {selectedTab === "klaviyo" && <KlaviyoAnalyticsManagement />}
+
+          {/* ALL-PLATFORMS AGGREGATE TAB */}
+          {selectedTab === "all-platforms" && <AllPlatformsManagement />}
 
           {/* PROMO ANALYTICS TAB */}
           {selectedTab === "promo-analytics" && <PromoAnalyticsManagement />}

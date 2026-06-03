@@ -3,8 +3,9 @@
  * Holiday takeover wins whenever the AEST calendar is Apr 3–6 2026 (or dev preview is set).
  * No network calls — returns relative paths or full URLs only.
  *
- * Static filenames: `{base}-{multiplier}x.webp` where multiplier is 2|3|5|10. Missing assets should use 10x
- * until 2x/3x/5x exist in repo; `bannerMultiplierFileKey` maps unknown/null multipliers to 10.
+ * Static families: DrawnTonight / DrawnTomorrow keep `{base}-{2|3|5|10}x.webp`; every other state uses
+ * SpecialPromo `special-promo-{3|5|10}x.webp`. Unknown/null (and 2x) multipliers map to 10x —
+ * see `bannerMultiplierFileKey` / `specialPromoMultiplierFileKey`.
  */
 
 import {
@@ -30,10 +31,6 @@ export interface ResolvePromoBannerLeftVisualParams {
   drawIsToday: boolean;
   /** True when time until freeze is positive and ≤48h (matches PromoBanner freeze countdown window). */
   within48HoursOfFreeze: boolean;
-  /** scheduled promo active and &lt;24h to end (ENDS TONIGHT style). */
-  scheduledPromoUrgent: boolean;
-  /** `source === "scheduled"` with end date from effective-for-banner. */
-  hasScheduledPromo: boolean;
   multiplier: number | null;
   /**
    * Development only: force Holiday-folder slot (`promoHoliday` preview). Production callers omit this.
@@ -62,9 +59,7 @@ function trimUrl(url: string | null | undefined): string | null {
 function resolveStaticFamily(params: ResolvePromoBannerLeftVisualParams): StaticPromoBannerFamily {
   if (params.drawIsToday) return "drawn-tonight";
   if (params.within48HoursOfFreeze) return "drawn-tomorrow";
-  if (params.hasScheduledPromo && params.scheduledPromoUrgent) return "ends-tonight";
-  if (params.hasScheduledPromo) return "last-chance";
-  return "last-chance";
+  return "special-promo";
 }
 
 export function resolvePromoBannerLeftVisual(

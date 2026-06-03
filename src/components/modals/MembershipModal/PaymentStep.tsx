@@ -89,6 +89,7 @@ interface PaymentStepProps {
   onAddNewPaymentMethod: () => Promise<void> | void;
   onCardElementChange: (event: { error?: { message?: string } }) => void;
   onPaymentMethodTypeChange: (type: string | null) => void;
+  onElementReady?: (ready: boolean) => void;
   onCouponCodeChange: (value: string) => void;
   onApplyCoupon: () => void;
   onSubmit: () => void;
@@ -127,6 +128,7 @@ const PaymentStep: React.FC<PaymentStepProps> = ({
   onAddNewPaymentMethod,
   onCardElementChange,
   onPaymentMethodTypeChange,
+  onElementReady,
   onCouponCodeChange,
   onApplyCoupon,
   onSubmit,
@@ -166,6 +168,7 @@ const PaymentStep: React.FC<PaymentStepProps> = ({
           isCreatingPaymentIntent={isCreatingPaymentIntentPending}
           isCreatingSubscription={isCreatingSubscription}
           onPaymentMethodTypeChange={onPaymentMethodTypeChange}
+          onElementReady={onElementReady}
           billingDetails={resolvedBillingDetails}
           amount={amount}
           packageName={packageName}
@@ -195,6 +198,7 @@ const PaymentStep: React.FC<PaymentStepProps> = ({
             isCreatingPaymentIntent={isCreatingPaymentIntentPending}
             isCreatingSubscription={isCreatingSubscription}
             onPaymentMethodTypeChange={onPaymentMethodTypeChange}
+            onElementReady={onElementReady}
             billingDetails={resolvedBillingDetails}
             amount={amount}
             packageName={packageName}

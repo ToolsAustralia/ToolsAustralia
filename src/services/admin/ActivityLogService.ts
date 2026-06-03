@@ -5,6 +5,10 @@ import MajorDraw from "@/models/MajorDraw";
 import MiniDraw from "@/models/MiniDraw";
 import Winner from "@/models/Winner";
 import ReferralEvent from "@/models/ReferralEvent";
+import CancellationFlowEvent from "@/models/CancellationFlowEvent";
+import StaffActivity from "@/models/StaffActivity";
+import AffiliatePayout from "@/models/AffiliatePayout";
+import Affiliate from "@/models/Affiliate";
 
 /**
  * Activity Log — paginated, filterable, searchable feed of admin/site activity.
@@ -22,11 +26,15 @@ export type ActivityLogItemType =
   | "user_signup"
   | "membership_purchase"
   | "one_time_purchase"
+  | "upsell_accepted"
   | "draw_complete"
   | "high_value_order"
   | "system_alert"
   | "membership_upgrade"
-  | "subscription_past_due";
+  | "subscription_past_due"
+  | "cancellation_offer_accepted"
+  | "admin_role_update"
+  | "affiliate_payout";
 
 export type ActivityLogItemStatus = "success" | "info" | "warning" | "error";
 
@@ -248,8 +256,8 @@ export async function getActivityLog(input: ActivityLogInput): Promise<ActivityL
       action = `Purchased ${packageName}`;
       type = "one_time_purchase";
     } else if (payment.packageType === "upsell") {
-      action = `Purchased ${packageName}`;
-      type = "one_time_purchase";
+      action = `Accepted upsell: ${packageName}`;
+      type = "upsell_accepted";
     } else if (payment.packageType === "mini-draw") {
       const miniDrawId = paymentData?.miniDrawId as string | undefined;
       const entries = (paymentData?.entries as number | undefined) ?? 0;
@@ -261,7 +269,9 @@ export async function getActivityLog(input: ActivityLogInput): Promise<ActivityL
       type = "one_time_purchase";
     }
 
-    if (amount >= 300) {
+    // An accepted upsell is more informative than the generic high-value flag,
+    // so let upsell_accepted take precedence over the >= $300 override.
+    if (amount >= 300 && type !== "upsell_accepted") {
       type = "high_value_order";
       action = `High-value purchase: ${action} - $${amount}`;
     }
@@ -425,6 +435,119 @@ export async function getActivityLog(input: ActivityLogInput): Promise<ActivityL
       timestamp: drawTyped.updatedAt,
     });
   });
+
+  // ─── Cancellation-flow acceptances ─────────────────────────────────────────
+  // Members who accepted a retention offer instead of cancelling.
+  const cancellationSaves = await CancellationFlowEvent.find({
+    outcome: "saved",
+    offerAccepted: { $ne: null },
+    savedAt: { $gte: startDate },
+  }).lean();
+
+  if (cancellationSaves.length > 0) {
+    const saveUserIds = [
+      ...new Set(
+        cancellationSaves
+          .map((e) => (e.userId ? (e.userId as mongoose.Types.ObjectId).toString() : null))
+          .filter((id): id is string => Boolean(id))
+      ),
+    ];
+    const saveUsers = await User.find({ _id: { $in: saveUserIds } })
+      .select("firstName lastName")
+      .lean();
+    const saveUserMap = new Map(saveUsers.map((u) => [u._id.toString(), u]));
+
+    const offerActionMap: Record<string, string> = {
+      bonus_entries_100: "Accepted 100 free entries to stay",
+      discount_50_2mo: "Accepted 50% off for 2 months",
+      pause_30d: "Paused membership for 30 days",
+      tier_downgrade: "Downgraded instead of cancelling",
+      unsubscribe_marketing: "Unsubscribed from marketing to stay",
+    };
+
+    cancellationSaves.forEach((evt) => {
+      if (!evt.savedAt || !evt.offerAccepted) return;
+      const userId = evt.userId ? (evt.userId as mongoose.Types.ObjectId).toString() : undefined;
+      const userDoc = userId ? saveUserMap.get(userId) : undefined;
+      const action = offerActionMap[evt.offerAccepted] || `Accepted retention offer: ${evt.offerAccepted}`;
+
+      activities.push({
+        id: `cancel-save-${evt._id}`,
+        type: "cancellation_offer_accepted",
+        user: userDoc ? `${userDoc.firstName} ${userDoc.lastName}` : "Unknown User",
+        firstName: userDoc?.firstName ?? null,
+        userId,
+        action,
+        time: getTimeAgo(evt.savedAt),
+        status: "success",
+        timestamp: evt.savedAt,
+      });
+    });
+  }
+
+  // ─── Admin role updates ────────────────────────────────────────────────────
+  // Staff-member edits made through PATCH /api/admin/staff/*.
+  const staffRoleUpdates = await StaffActivity.find({
+    action: "settings.edit",
+    method: "PATCH",
+    path: { $regex: /^\/api\/admin\/staff\// },
+    status: 200,
+    timestamp: { $gte: startDate },
+  }).lean();
+
+  staffRoleUpdates.forEach((evt) => {
+    activities.push({
+      id: `staff-role-${evt._id}`,
+      type: "admin_role_update",
+      user: evt.actorEmail,
+      firstName: null,
+      action: `${evt.actorEmail} updated a staff member`,
+      time: getTimeAgo(evt.timestamp),
+      status: "info",
+      timestamp: evt.timestamp,
+    });
+  });
+
+  // ─── Affiliate payouts ─────────────────────────────────────────────────────
+  // Committed affiliate payouts (totalAmount stored in cents).
+  const affiliatePayouts = await AffiliatePayout.find({
+    paidAt: { $gte: startDate },
+  }).lean();
+
+  if (affiliatePayouts.length > 0) {
+    const payoutAffiliateIds = [
+      ...new Set(
+        affiliatePayouts
+          .map((p) => (p.affiliateId ? (p.affiliateId as mongoose.Types.ObjectId).toString() : null))
+          .filter((id): id is string => Boolean(id))
+      ),
+    ];
+    const affiliates = await Affiliate.find({ _id: { $in: payoutAffiliateIds } })
+      .select("name")
+      .lean();
+    const affiliateMap = new Map(affiliates.map((a) => [a._id.toString(), a]));
+
+    affiliatePayouts.forEach((payout) => {
+      if (!payout.paidAt) return;
+      const affiliateId = payout.affiliateId
+        ? (payout.affiliateId as mongoose.Types.ObjectId).toString()
+        : undefined;
+      const affiliateDoc = affiliateId ? affiliateMap.get(affiliateId) : undefined;
+      const commissionCount = payout.commissionCount ?? 0;
+
+      activities.push({
+        id: `affiliate-payout-${payout._id}`,
+        type: "affiliate_payout",
+        user: affiliateDoc?.name || "Unknown Affiliate",
+        firstName: null,
+        action: `Affiliate payout: ${commissionCount} commissions paid`,
+        time: getTimeAgo(payout.paidAt),
+        status: "success",
+        amount: (payout.totalAmount ?? 0) / 100,
+        timestamp: payout.paidAt,
+      });
+    });
+  }
 
   // ─── Sort, filter, paginate ────────────────────────────────────────────────
   activities.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());

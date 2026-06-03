@@ -3,6 +3,9 @@ import User from "@/models/User";
 import MembershipDailySnapshot, { type IMembershipDailySnapshot } from "@/models/MembershipDailySnapshot";
 import MembershipRenewalCycle from "@/models/MembershipRenewalCycle";
 import MembershipStatusHistory from "@/models/MembershipStatusHistory";
+import CancellationFlowEvent from "@/models/CancellationFlowEvent";
+import MajorDraw from "@/models/MajorDraw";
+import { aestDayBounds } from "@/services/admin/dashboard-stats/DashboardStatsSnapshotWriter";
 import { getPackageById } from "@/data/membershipPackages";
 import {
   ACTIVE_SUBSCRIPTION_STATUSES,
@@ -12,6 +15,8 @@ import {
 import type { AdminDashboardDateRangeKey, MembershipAsOfMode } from "@/utils/admin/dashboardDateRange";
 import { fetchNetBenefitsGrantedInRange } from "@/utils/payment/payment-event-net-queries";
 import type { MembershipAnalyticsBundle } from "@/types/admin/membershipAnalytics";
+import type { TrendData } from "@/types/admin/trend-types";
+import { summarizeRenewalProgress } from "@/utils/admin/renewalProgress";
 
 export const SUBSCRIPTION_PACKAGE_IDS = ["tradie-subscription", "foreman-subscription", "boss-subscription"] as const;
 
@@ -28,8 +33,19 @@ export interface MembershipByPackageItemDTO {
 export interface MembershipByPackageSummaryDTO {
   totalActiveCount: number;
   totalPastDueCount: number;
+  /**
+   * 30-day-retention-pause proxy: distinct users who accepted a `pause_30d`
+   * retention offer in the last 30 days. There is no DB "paused" flag — true
+   * pause state lives in Stripe `pause_collection` and is not mirrored, so an
+   * exact live pause count would need a Stripe pause_collection DB mirror
+   * (out of scope). The 30-day pause window means a recent acceptance is still
+   * paused, making this a reasonable approximation.
+   */
+  totalPausedCount: number;
   totalActiveRevenue: number;
   totalPastDueRevenue: number;
+  /** MRR (totalActiveRevenue) % change vs the previous comparable period. Omitted for all-time / when the baseline day has no snapshot. */
+  totalActiveRevenueTrend?: TrendData;
   /** Legacy field — kept for compatibility with the deprecated per-user snapshot reader. */
   snapshotPartial?: boolean;
   /** Set when caller asked for a snapshot date but no snapshot row existed; live data returned instead. */
@@ -139,6 +155,11 @@ export class MembershipAnalyticsService {
     }
     cancelledMembershipRevenueImpact = Math.round(cancelledMembershipRevenueImpact * 100) / 100;
 
+    // Renewal Rate headline: always the CURRENT billing cycle, independent of the
+    // selected date range. (The card's per-range "slice" uses the range-scoped
+    // successfulRenewalUserCount / becamePastDueInRange already on this bundle.)
+    const renewalProgress = await this.getCurrentCycleRenewalProgress();
+
     return {
       expectedRenewalsInRange,
       successfulRenewalsInRange,
@@ -147,6 +168,7 @@ export class MembershipAnalyticsService {
       becamePastDueInRange: becamePastDueIds.length,
       cancellationsInRange: cancellationRows.length,
       cancelledMembershipRevenueImpact,
+      renewalProgress,
     };
   }
 
@@ -159,7 +181,10 @@ export class MembershipAnalyticsService {
       isActive: true,
     };
 
-    const [activeResults, cancelledResults, pastDueResults] = await Promise.all([
+    // 30-day-retention-pause proxy window (see MembershipByPackageSummaryDTO.totalPausedCount).
+    const pauseWindowStart = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+
+    const [activeResults, cancelledResults, pastDueResults, pausedUserIds] = await Promise.all([
       User.aggregate([
         { $match: { ...baseMatch, ...getActiveSubscriptionFilter(false) } },
         { $group: { _id: "$subscription.packageId", count: { $sum: 1 } } },
@@ -185,7 +210,16 @@ export class MembershipAnalyticsService {
         },
         { $group: { _id: "$subscription.packageId", count: { $sum: 1 } } },
       ]),
+      // Paused proxy: distinct users who accepted a 30-day retention pause within
+      // the last 30 days (those acceptances are still inside the pause window).
+      CancellationFlowEvent.distinct("userId", {
+        offerAccepted: "pause_30d",
+        outcome: "saved",
+        savedAt: { $gte: pauseWindowStart },
+      }),
     ]);
+
+    const totalPausedCount = pausedUserIds.length;
 
     const activeByPackage = Object.fromEntries(activeResults.map((r) => [String(r._id), r.count]));
     const cancelledByPackage = Object.fromEntries(cancelledResults.map((r) => [String(r._id), r.count]));
@@ -223,6 +257,7 @@ export class MembershipAnalyticsService {
       summary: {
         totalActiveCount,
         totalPastDueCount,
+        totalPausedCount,
         totalActiveRevenue: Math.round(totalActiveRevenue * 100) / 100,
         totalPastDueRevenue: Math.round(totalPastDueRevenue * 100) / 100,
       },
@@ -312,6 +347,78 @@ export class MembershipAnalyticsService {
   }
 
   /**
+   * Current-cycle renewal progress, independent of the dashboard's selected date range.
+   * Cycle = day after the last completed draw closed (AEST) → now. Headline of the
+   * Renewal Rate card. Numerator = distinct members whose renewal payment landed in the
+   * cycle; denominator = active + past-due at cycle start (snapshot). Capped <=100%.
+   */
+  private async getCurrentCycleRenewalProgress(): Promise<ReturnType<typeof summarizeRenewalProgress>> {
+    const lastDraw = await MajorDraw.findOne({ status: "completed" })
+      .sort({ drawDate: -1 })
+      .select("drawDate")
+      .lean<{ drawDate?: Date }>();
+    if (!lastDraw?.drawDate) {
+      return summarizeRenewalProgress({ base: 0, renewed: 0, baseAsOf: null, isComplete: false });
+    }
+    const lastDrawKey = formatInTimeZone(lastDraw.drawDate, "Australia/Sydney", "yyyy-MM-dd");
+    // dayEndUTC of the draw's close day = midnight AEST of the NEXT day = cycle start (DST-safe).
+    const cycleStart = aestDayBounds(lastDrawKey).dayEndUTC;
+    const now = new Date();
+
+    const { base, baseAsOf } = await this.getRenewalBaseAsOf(cycleStart);
+
+    const renewedRows = await MembershipRenewalCycle.find({
+      billingReason: "subscription_cycle",
+      status: { $in: ["succeeded", "recovered"] },
+      succeededAt: { $gte: cycleStart, $lt: now },
+    })
+      .select("userId")
+      .lean<Array<{ userId: { toString(): string } }>>();
+    const renewed = new Set(renewedRows.map((r) => String(r.userId))).size;
+
+    return summarizeRenewalProgress({ base, renewed, baseAsOf, isComplete: false });
+  }
+
+  /**
+   * Renewal base = active + past-due members as of `firstDay` (AEST), from the daily
+   * snapshot. Falls back to the nearest later snapshot day if the exact day has no row.
+   */
+  private async getRenewalBaseAsOf(firstDay: Date): Promise<{ base: number; baseAsOf: string | null }> {
+    const requestedKey = formatInTimeZone(firstDay, "Australia/Sydney", "yyyy-MM-dd");
+    const select = "activeCount pastDueCount";
+    let rows = await MembershipDailySnapshot.find({
+      date: requestedKey,
+      packageId: { $in: [...SUBSCRIPTION_PACKAGE_IDS] },
+    })
+      .select(select)
+      .lean<{ activeCount: number; pastDueCount: number }[]>();
+    let usedKey = requestedKey;
+
+    if (rows.length === 0) {
+      const nearest = await MembershipDailySnapshot.findOne({
+        date: { $gte: requestedKey },
+        packageId: { $in: [...SUBSCRIPTION_PACKAGE_IDS] },
+      })
+        .sort({ date: 1 })
+        .select("date")
+        .lean<{ date?: string }>();
+      if (nearest?.date) {
+        usedKey = nearest.date;
+        rows = await MembershipDailySnapshot.find({
+          date: usedKey,
+          packageId: { $in: [...SUBSCRIPTION_PACKAGE_IDS] },
+        })
+          .select(select)
+          .lean<{ activeCount: number; pastDueCount: number }[]>();
+      }
+    }
+
+    if (rows.length === 0) return { base: 0, baseAsOf: null };
+    const base = rows.reduce((sum, r) => sum + (r.activeCount ?? 0) + (r.pastDueCount ?? 0), 0);
+    return { base, baseAsOf: usedKey };
+  }
+
+  /**
    * Point-in-time membership counts read from MembershipDailySnapshot, with live fallback when no row exists.
    */
   async getMembershipByPackageSnapshot(asOfDate: Date): Promise<MembershipByPackageDataDTO> {
@@ -363,6 +470,9 @@ export class MembershipAnalyticsService {
       summary: {
         totalActiveCount,
         totalPastDueCount,
+        // The daily snapshot has no pause source; the 30-day-retention-pause
+        // proxy is only computed on the live read path. Default to 0 here.
+        totalPausedCount: 0,
         totalActiveRevenue: Math.round(totalActiveRevenue * 100) / 100,
         totalPastDueRevenue: Math.round(totalPastDueRevenue * 100) / 100,
       },

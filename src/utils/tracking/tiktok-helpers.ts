@@ -10,7 +10,10 @@
 //   the SDK's client-side hash matches the server-side hash (dedup-safe).
 
 const TTCLID_COOKIE = "ttclid";
+const TTCLID_TS_COOKIE = "ttclid_ts";
 const TTCLID_MAX_AGE_SECONDS = 7 * 24 * 60 * 60; // TikTok ttclid lifetime
+// Domain+Secure in prod so attribution survives an apex<->www switch (spec §3.7).
+const PROD_COOKIE_SUFFIX = process.env.NODE_ENV === "production" ? "; Domain=.toolsaustralia.com.au; Secure" : "";
 
 function readBrowserCookie(name: string): string | undefined {
   if (typeof document === "undefined") return undefined;
@@ -50,7 +53,8 @@ export function captureTikTokClickId(): string | undefined {
   try {
     const fromUrl = new URLSearchParams(window.location.search).get("ttclid");
     if (fromUrl) {
-      document.cookie = `${TTCLID_COOKIE}=${encodeURIComponent(fromUrl)}; path=/; max-age=${TTCLID_MAX_AGE_SECONDS}; SameSite=Lax`;
+      document.cookie = `${TTCLID_COOKIE}=${encodeURIComponent(fromUrl)}; path=/; max-age=${TTCLID_MAX_AGE_SECONDS}; SameSite=Lax${PROD_COOKIE_SUFFIX}`;
+      document.cookie = `${TTCLID_TS_COOKIE}=${Date.now()}; path=/; max-age=${TTCLID_MAX_AGE_SECONDS}; SameSite=Lax${PROD_COOKIE_SUFFIX}`;
       return fromUrl;
     }
     return readBrowserCookie(TTCLID_COOKIE);
@@ -73,4 +77,12 @@ export function extractTikTokContext(request: {
     // best-effort
   }
   return ctx;
+}
+
+/** Server-side: read the ttclid capture timestamp (epoch ms) from request cookies; null if absent. */
+export function extractTikTokCapturedAt(request: {
+  cookies?: { get: (name: string) => { value: string } | undefined };
+}): number | null {
+  const ts = request.cookies?.get(TTCLID_TS_COOKIE)?.value;
+  return ts && /^\d+$/.test(ts) ? Number(ts) : null;
 }

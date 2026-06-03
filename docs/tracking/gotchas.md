@@ -1,5 +1,15 @@
 # Tracking — Gotchas
 
+## Adding a new Klaviyo event? Use the canonical schema, not the legacy helper
+
+New Klaviyo events (added after 2026-05-27) use a **canonical property schema** — `price` as a number (not string), `tier` (not `package_tier`), ISO `*_at` timestamps (not locale strings like `"December 22, 2025"`), and properties omitted entirely when absent (no `""` / `"unknown"` sentinels). See the "Canonical property names — new events only (drift containment)" section of [KLAVIYO_INTEGRATION.md](./KLAVIYO_INTEGRATION.md) for the full table and rationale.
+
+**Two helpers, one rule:**
+- Legacy events in [klaviyo-events.ts](../../src/utils/integrations/klaviyo/klaviyo-events.ts) (Subscription Started, Placed Order, Subscription Renewal Failed, etc.) — keep using `formatPackageDataForKlaviyo`. They are **frozen** because active Klaviyo flows / templates / segments / campaigns reference their exact property names; renaming silently breaks production.
+- NEW events — use `formatCanonicalPackageData`. The snapshot test at `src/utils/integrations/klaviyo/__tests__/canonical-events-shape.test.ts` will fail CI if you drift to legacy aliases. Run via `npm run test:klaviyo-canonical`.
+
+If you find yourself wanting to "clean up" legacy property names, **don't**. Read the no-refactor policy in KLAVIYO_INTEGRATION.md first — refactors require explicit user authorization + ads-team confirmation + a dual-write plan.
+
 ## Pixel double-fire
 
 If the root-layout pixel fires AND a feature component also fires the same event, you get duplicates in Meta / Klaviyo. Convention: root-layout fires the standard PageView; feature components fire conversion events on user action.
@@ -158,3 +168,7 @@ Meta's CAPI accepts some `user_data` fields **raw** and others as SHA-256 hashes
 ## `db` (birthdate) format is `YYYYMMDD`, not ISO
 
 The `db` parameter must be hashed `YYYYMMDD` digits (e.g. `hashPII("19900615")`), **not** ISO `YYYY-MM-DD`. Use `toYYYYMMDD()` from `facebook-helpers.ts` — it accepts `Date` objects, ISO strings, and pre-formatted 8-digit strings, and returns `null` for unparseable input so the caller can skip the field. Wrong format produces no error but silently drops match quality.
+
+## Funnel CAPI events only carry PII if a caller passes `userData`
+
+`fireFunnelEvent` (and `trackInitiateCheckout` / `trackAddPaymentInfo`) forward an optional `userData: MirrorUserData` **only to the CAPI mirror** ([meta-capi-mirror.ts](../../src/utils/tracking/meta-capi-mirror.ts)) — never to the browser pixel. If no caller passes `userData`, the funnel event reaches CAPI with no identity params beyond what the server route enriches from the session/request (so guest/anonymous funnel events have low EMQ until a caller supplies PII). Empty fields are stripped (`stripEmpty` drops `undefined` / `null` / `""`) so a partially-filled `userData` never clobbers the session enrichment the route layers in.

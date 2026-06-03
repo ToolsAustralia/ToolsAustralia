@@ -1,27 +1,31 @@
 "use client";
 
 import React from "react";
-import { TrendingUp, DollarSign, BarChart3, Target } from "lucide-react";
-import { MetricCard } from "@/components/admin/metrics/shared/MetricCard";
+import PlatformHourlyRevenueSection from "@/components/admin/PlatformHourlyRevenueSection";
+import { useAdminDateFilter } from "@/hooks/useAdminDateFilter";
+import { AdminDateRangeToolbar } from "@/components/admin/AdminDateRangeToolbar";
 
 /**
- * Empty-state shell for TikTok Ads analytics. The TikTok Marketing API insights
- * sync lives in a follow-up spec; until then the metrics show em-dashes and the
- * "Insights sync not yet configured." inline note.
+ * TikTok Ads analytics. Server-side attributed revenue by hour (from SHARED-1,
+ * convertingPlatform === "tiktok"). Ad spend + ROAS arrive when the TikTok
+ * Marketing-API insights sync ships. Owns the AEST date window and passes it
+ * to the shared hourly section.
  */
 export default function TikTokAdsManagement() {
+  const df = useAdminDateFilter("today");
   return (
     <div className="space-y-6">
-      <div className="rounded-xl border-2 border-dashed border-gray-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 p-6 text-center">
-        <p className="text-sm text-gray-500 dark:text-neutral-400">Insights sync not yet configured.</p>
+      {/* empty:hidden — the dropdown portals to the mobile header slot, leaving this
+          wrapper childless on mobile; the variant collapses it so there's no phantom gap. */}
+      <div className="flex justify-end empty:hidden">
+        <AdminDateRangeToolbar filter={df} />
       </div>
-
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <MetricCard title="Ad Spend" value="—" icon={DollarSign} />
-        <MetricCard title="Revenue" value="—" icon={TrendingUp} color="emerald" />
-        <MetricCard title="Conversions" value="—" icon={Target} color="purple" />
-        <MetricCard title="ROAS" value="—" icon={BarChart3} color="indigo" />
-      </div>
+      <PlatformHourlyRevenueSection
+        platform="tiktok"
+        platformLabel="TikTok"
+        startDate={df.startDate}
+        endDate={df.endDate}
+      />
     </div>
   );
 }

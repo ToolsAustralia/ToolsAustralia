@@ -1,26 +1,31 @@
 "use client";
 
 import React from "react";
-import { TrendingUp, DollarSign, BarChart3, Target } from "lucide-react";
-import { MetricCard } from "@/components/admin/metrics/shared/MetricCard";
+import PlatformHourlyRevenueSection from "@/components/admin/PlatformHourlyRevenueSection";
+import { useAdminDateFilter } from "@/hooks/useAdminDateFilter";
+import { AdminDateRangeToolbar } from "@/components/admin/AdminDateRangeToolbar";
 
 /**
- * Empty-state shell for Snapchat Ads analytics.
- * See TikTokAdsManagement comment — same story until Snapchat Marketing API sync ships.
+ * Snapchat Ads analytics. Server-side attributed revenue by hour (from SHARED-1,
+ * convertingPlatform === "snapchat"). Ad spend + ROAS arrive when the Snapchat
+ * Marketing-API insights sync ships. Owns the AEST date window and passes it
+ * to the shared hourly section.
  */
 export default function SnapchatAdsManagement() {
+  const df = useAdminDateFilter("today");
   return (
     <div className="space-y-6">
-      <div className="rounded-xl border-2 border-dashed border-gray-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 p-6 text-center">
-        <p className="text-sm text-gray-500 dark:text-neutral-400">Insights sync not yet configured.</p>
+      {/* empty:hidden — the dropdown portals to the mobile header slot, leaving this
+          wrapper childless on mobile; the variant collapses it so there's no phantom gap. */}
+      <div className="flex justify-end empty:hidden">
+        <AdminDateRangeToolbar filter={df} />
       </div>
-
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <MetricCard title="Ad Spend" value="—" icon={DollarSign} />
-        <MetricCard title="Revenue" value="—" icon={TrendingUp} color="emerald" />
-        <MetricCard title="Conversions" value="—" icon={Target} color="purple" />
-        <MetricCard title="ROAS" value="—" icon={BarChart3} color="indigo" />
-      </div>
+      <PlatformHourlyRevenueSection
+        platform="snapchat"
+        platformLabel="Snapchat"
+        startDate={df.startDate}
+        endDate={df.endDate}
+      />
     </div>
   );
 }

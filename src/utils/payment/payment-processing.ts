@@ -40,6 +40,9 @@ import {
   setLedgerCampaign,
   setLedgerPromoLink,
 } from "@/utils/payment/ledger-helpers";
+import { classifyIsRenewal } from "@/services/attribution/classifyIsRenewal";
+import { normalizeUtmToPlatform } from "@/services/attribution/normalizePlatform";
+import type { ConvertingPlatform, AttributionConfidence } from "@/types/attribution";
 
 /** Optional membership ledger (Stripe invoice path) — lastMonthDelta for refunds. */
 export type SubscriptionLedgerContext = {
@@ -49,6 +52,18 @@ export type SubscriptionLedgerContext = {
 
 // Global processing lock to prevent concurrent processing of same payment
 const processingLocks = new Map<string, Promise<{ success: boolean; alreadyProcessed: boolean; error?: string }>>();
+
+/**
+ * Lift Facebook ad attribution from sessionAttribution into the top-level indexed fields
+ * on PaymentEvent so ad-level TRUE ROAS aggregation can $group by attributionAdId.
+ */
+function buildAttributionFields(sessionAttribution?: AttributionParams | null) {
+  return {
+    attributionAdId: sessionAttribution?.ad_id ?? null,
+    attributionAdsetId: sessionAttribution?.adset_id ?? null,
+    attributionCampaignId: sessionAttribution?.campaign_id ?? null,
+  };
+}
 
 // Type definitions for better type safety
 type PaymentMetadata = {
@@ -181,7 +196,14 @@ export async function processPaymentBenefits(
   /** Membership re-subscribe — forwarded to Meta CAPI as custom_data.content_category for segmentation. */
   isResubscribe?: boolean,
   /** Membership invoice payments: contribution to lastMonthAccumulatedEntries (refund ledger). */
-  subscriptionLedgerContext?: SubscriptionLedgerContext
+  subscriptionLedgerContext?: SubscriptionLedgerContext,
+  /** Edge-resolved single-platform attribution decision (from Stripe metadata). Null → UTM fallback. */
+  resolvedAttribution?: {
+    platform: ConvertingPlatform;
+    confidence: AttributionConfidence;
+    attributedClickId: string | null;
+    attributedClickTimestamp: number | null;
+  } | null
 ): Promise<{ success: boolean; alreadyProcessed: boolean; error?: string; code?: string }> {
   // ✅ CRITICAL: Validate input parameters
   // console.log(`🔍 processPaymentBenefits called with:`, {
@@ -231,7 +253,8 @@ export async function processPaymentBenefits(
     sessionAttribution,
     affiliateOptions,
     isResubscribe,
-    subscriptionLedgerContext
+    subscriptionLedgerContext,
+    resolvedAttribution
   );
   processingLocks.set(lockKey, processingPromise);
 
@@ -267,7 +290,13 @@ async function processPaymentBenefitsInternal(
   sessionAttribution?: AttributionParams,
   affiliateOptions?: { skipMembershipFirstCommission?: boolean },
   isResubscribe?: boolean,
-  subscriptionLedgerContext?: SubscriptionLedgerContext
+  subscriptionLedgerContext?: SubscriptionLedgerContext,
+  resolvedAttribution?: {
+    platform: ConvertingPlatform;
+    confidence: AttributionConfidence;
+    attributedClickId: string | null;
+    attributedClickTimestamp: number | null;
+  } | null
 ): Promise<{ success: boolean; alreadyProcessed: boolean; error?: string; code?: string }> {
   const maxRetries = 3;
   let retryCount = 0;
@@ -385,6 +414,22 @@ async function processPaymentBenefitsInternal(
           attributionData.promotionSlug = signupAttr.promotionSlug;
         }
 
+        // Single-platform attribution (spec: prefer the edge-resolved decision; otherwise
+        // fall back to a UTM-based resolve from the merged attributionData). Never throws.
+        const isRenewal = classifyIsRenewal({ billingReason, isResubscribe });
+        let convertingPlatform: ConvertingPlatform | null = resolvedAttribution?.platform ?? null;
+        let attributionConfidence: AttributionConfidence | null = resolvedAttribution?.confidence ?? null;
+        const attributedClickId = resolvedAttribution?.attributedClickId ?? null;
+        const attributedClickTimestamp = resolvedAttribution?.attributedClickTimestamp ?? null;
+        if (!convertingPlatform) {
+          const fallback = normalizeUtmToPlatform(
+            typeof attributionData.utmSource === "string" ? attributionData.utmSource : undefined,
+            typeof attributionData.utmMedium === "string" ? attributionData.utmMedium : undefined
+          );
+          convertingPlatform = fallback ?? "direct";
+          attributionConfidence = "utm_only";
+        }
+
         const paymentEventData: Record<string, unknown> = {
           entries: packageData.entries,
           points: packageData.points,
@@ -403,6 +448,10 @@ async function processPaymentBenefitsInternal(
             paymentMetadata?.miniDrawId && { miniDrawId: paymentMetadata.miniDrawId }), // For activity log: "Entered in [mini draw title]"
           ...(Object.keys(attributionData).length > 0 && attributionData),
         };
+
+        // Audit evidence: persist the resolved click signal into the (Mixed) data blob.
+        if (attributedClickId) (paymentEventData as Record<string, unknown>).attributedClickId = attributedClickId;
+        if (attributedClickTimestamp != null) (paymentEventData as Record<string, unknown>).attributedClickTimestamp = attributedClickTimestamp;
 
         // Get user's active experiment assignment (non-blocking - don't fail if this errors)
         // ✅ FIX: Try without slug first (finds all-page experiments or any active experiment)
@@ -431,6 +480,10 @@ async function processPaymentBenefitsInternal(
           data: paymentEventData,
           processedBy,
           timestamp: new Date(),
+          ...buildAttributionFields(sessionAttribution),
+          convertingPlatform,
+          attributionConfidence,
+          isRenewal,
           ...(experimentAssignment && {
             experimentId: experimentAssignment.experimentId,
             variantId: experimentAssignment.variantId,
@@ -1584,7 +1637,7 @@ function trackKlaviyoEvent(
   },
   paymentIntentId: string,
   skipInvoice: boolean = false,
-  _billingReason?: string // ✅ Stripe billing_reason to distinguish renewals from initial subscriptions
+  billingReason?: string // Stripe billing_reason; threaded to Placed Order as is_renewal + billing_reason
 ): void {
   try {
     // console.log(`📊 trackKlaviyoEvent called for user: ${user.email}`);
@@ -1656,6 +1709,11 @@ function trackKlaviyoEvent(
       paymentIntentId,
       entriesGranted: packageData.entries,
       pointsEarned: packageData.points,
+      // Discriminate automated subscription renewals so Klaviyo flow/campaign
+      // ROI reports can filter them out. Same `isRenewal` detection used to
+      // skip Facebook Purchase + Subscription Started above.
+      billingReason,
+      isRenewal: billingReason === "subscription_cycle",
     }).catch((error) => {
       // Log error but don't fail payment processing
       console.error(`❌ Failed to track "Placed Order" event:`, error);
@@ -2090,13 +2148,36 @@ async function addToMajorDraw(
     // Add to major draw collection only if package has entries
     if (packageData.entries > 0) {
       const now = new Date();
+      const entriesAmount = packageData.entries;
 
-      // ✅ CRITICAL FIX: Always create separate entries for each payment
-      // This allows multiple membership entries within the same month (e.g., upgrades)
-      // Each payment gets its own entry in the major draw
+      // ✅ RELIABILITY FIX (renewal-spike entry loss):
+      // Previously this did a NON-ATOMIC 3-step write (updateOne + a full ~1MB
+      // findById reload of the whole entries array + updateOne) and the catch
+      // below SWALLOWED any failure with all logging commented out. During
+      // synchronized renewal billing spikes, transient DB failures were silently
+      // dropped → empty drawGrants, members missing from the draw, invisible
+      // (0 ErrorReports, webhook queue showed "succeeded"), and never retried.
+      //
+      // Now: a single atomic op per branch (document-level totalEntries is
+      // $inc'd in the SAME write — no full-array reload), a concurrency-safe
+      // upsert that also prevents duplicate per-user rows, a bounded retry for
+      // transient blips, and a VISIBLE ErrorReport on final failure (the empty
+      // drawGrants left behind lets the reconciliation/cleanup heal the draw
+      // without double-crediting). All of this runs in the async webhook worker
+      // (after()/queue), so it never delays the webhook 200 ack.
+      const incFilter = { _id: majorDraw._id, "entries.userId": user._id };
+      const incUpdate = {
+        $inc: {
+          "entries.$.totalEntries": entriesAmount,
+          [`entries.$.entriesBySource.${sourceType}`]: entriesAmount,
+          totalEntries: entriesAmount,
+        },
+        $set: { "entries.$.lastUpdatedDate": now },
+      };
 
-      // Create new user entry atomically
-      const entriesBySource: Record<string, number> = {
+      // Full per-source shape (all zeros) so downstream readers never hit a
+      // missing key — matches the row shape the previous code created.
+      const freshEntriesBySource: Record<string, number> = {
         membership: 0,
         "one-time-package": 0,
         upsell: 0,
@@ -2104,122 +2185,117 @@ async function addToMajorDraw(
         "bonus-entry-promo": 0,
         "promo-link": 0,
       };
-      entriesBySource[sourceType] = packageData.entries;
+      freshEntriesBySource[sourceType] = entriesAmount;
 
-      const newEntry = {
-        userId: user._id as mongoose.Types.ObjectId,
-        totalEntries: packageData.entries,
-        entriesBySource,
-        firstAddedDate: now,
-        lastUpdatedDate: now,
-      };
+      const creditDrawAtomic = async (): Promise<void> => {
+        const incExisting = await MajorDraw.updateOne(incFilter, incUpdate);
+        if (incExisting.matchedCount > 0) return;
 
-      // ✅ FIXED: Find existing user entry and update it, or create new one if doesn't exist
-      const existingUserEntry = majorDraw.entries.find(
-        (entry: { userId: { toString(): string } }) => entry.userId.toString() === user._id.toString()
-      );
-
-      if (existingUserEntry) {
-        // ✅ Update existing user entry - accumulate entries
-        // const currentTotal = existingUserEntry.totalEntries;
-        // const currentSourceEntries = existingUserEntry.entriesBySource[sourceType] || 0;
-
-        // console.log(`🎯 UPDATING existing user entry: ${currentTotal} → ${currentTotal + packageData.entries} total`);
-        // console.log(
-        //   `🎯 UPDATING ${sourceType} entries: ${currentSourceEntries} → ${currentSourceEntries + packageData.entries}`
-        // );
-
-        await MajorDraw.updateOne(
+        // No row yet → push one, but only if STILL absent (guards two payments
+        // for a brand-new user racing into duplicate rows).
+        const pushNew = await MajorDraw.updateOne(
+          { _id: majorDraw._id, "entries.userId": { $ne: user._id } },
           {
-            _id: majorDraw._id,
-            "entries.userId": user._id,
-          },
-          {
-            $inc: {
-              "entries.$.totalEntries": packageData.entries,
-              [`entries.$.entriesBySource.${sourceType}`]: packageData.entries,
+            $push: {
+              entries: {
+                userId: user._id as mongoose.Types.ObjectId,
+                totalEntries: entriesAmount,
+                entriesBySource: freshEntriesBySource,
+                firstAddedDate: now,
+                lastUpdatedDate: now,
+              },
             },
-            $set: {
-              "entries.$.lastUpdatedDate": now,
-            },
+            $inc: { totalEntries: entriesAmount },
           }
         );
-        // console.log(`🎯 Updated existing entry for user ${user._id} (+${packageData.entries} ${sourceType})`);
-      } else {
-        // ✅ Create new user entry if doesn't exist
-        // console.log(`🎯 CREATING new user entry: ${packageData.entries} ${sourceType}`);
+        if (pushNew.matchedCount > 0) return;
 
-        await MajorDraw.updateOne({ _id: majorDraw._id }, { $push: { entries: newEntry } });
-        // console.log(`🎯 Created new entry for user ${user._id} (+${packageData.entries} ${sourceType})`);
+        // A concurrent op inserted the row between the two ops → increment it.
+        await MajorDraw.updateOne(incFilter, incUpdate);
+      };
+
+      // ⚠️ NO application-level retry here ON PURPOSE. `$inc`/`$push` are not
+      // idempotent, and the MongoDB driver's `retryWrites: true` already retries
+      // each updateOne EXACTLY ONCE on safe (write-not-applied) transient errors.
+      // An extra app-level retry would DOUBLE-credit in the one case that matters
+      // most under load — a write that COMMITS but whose acknowledgement is lost
+      // (timeout-after-commit). So we attempt once; a hard failure is reported and
+      // healed idempotently by the reconcile-major-draw-entries cron (which only
+      // credits the missing delta and can never over-credit).
+      try {
+        await creditDrawAtomic();
+      } catch (creditErr) {
+        // VISIBLE (was silently swallowed). drawGrants stays empty so the
+        // reconciliation cron / `fix:major-draw-renewal-entries` script detects
+        // and heals this idempotently. Fire-and-forget; never throws.
+        const { ErrorLoggingService } = await import("@/services/error-reporting/ErrorLoggingService");
+        await ErrorLoggingService.logError(creditErr, {
+          endpoint: "addToMajorDraw",
+          userId: user._id.toString(),
+          userEmail: user.email,
+          paymentIntentId: benefitsEventId,
+          packageId: packageData.packageId,
+          drawId: String(majorDraw._id),
+          sourceType,
+          entries: entriesAmount,
+          majorDrawRoutingMode,
+        });
+        return;
       }
 
-      // Get updated major draw for total calculation
-      const updatedMajorDraw = await MajorDraw.findById(majorDraw._id);
-      const totalEntries =
-        updatedMajorDraw?.entries.reduce(
-          (sum: number, entry: { totalEntries: number }) => sum + entry.totalEntries,
-          0
-        ) || 0;
-
-      // ✅ CRITICAL: Update totalEntries field since updateOne() bypasses pre-save middleware
-      if (updatedMajorDraw && totalEntries !== updatedMajorDraw.totalEntries) {
-        await MajorDraw.updateOne({ _id: majorDraw._id }, { $set: { totalEntries } });
-      }
-
-      // console.log(`🎯 Major draw entries updated for user ${user._id} (draw total: ${totalEntries})`);
-
-      // ✅ OPTION 1: Single source of truth - no need to update user.majorDrawEntries
-      // All queries now use majordraws.entries directly
-
-      // Track major draw entry in Klaviyo (non-blocking)
+      // Track major draw entry in Klaviyo (non-blocking). Cheap PROJECTED read
+      // for the running total — not the full entries array.
+      const totalDoc = await MajorDraw.findById(majorDraw._id, { totalEntries: 1 }).lean();
       klaviyo.trackEventBackground(
         createMajorDrawEntryAddedEvent(user as never, {
           majorDrawId: String(majorDraw._id),
           majorDrawName: majorDraw.name,
-          entryCount: packageData.entries,
+          entryCount: entriesAmount,
           source: sourceType,
           packageId: packageData.packageId || "unknown",
           packageName: packageData.packageName || "Unknown Package",
-          totalEntriesInDraw: totalEntries,
+          totalEntriesInDraw: (totalDoc as { totalEntries?: number } | null)?.totalEntries ?? 0,
         })
       );
 
+      // Ledger AFTER the credit succeeded. If only this fails, the draw is still
+      // correctly credited and reconciliation won't double-credit (it compares
+      // the live draw value), so log loudly rather than swallow silently.
       if (benefitsEventId) {
         try {
           await pushDrawGrant(benefitsEventId, {
             kind: "major",
             drawId: String(majorDraw._id),
             sourceKey: sourceType,
-            entries: packageData.entries,
+            entries: entriesAmount,
           });
         } catch (ledgerErr) {
-          console.error("pushDrawGrant (major) failed:", ledgerErr);
+          console.error("pushDrawGrant (major) failed after successful credit:", ledgerErr);
         }
       }
-    } else {
-      // console.log(`🎯 No entries to add to major draw (package has 0 entries)`);
     }
   } catch (error) {
-    // console.error(`❌ ERROR in addToMajorDraw:`, error);
-    // Log the error details for debugging
-    if (error instanceof Error) {
-      // console.error(`❌ Error message: ${error.message}`);
-      // console.error(`❌ Error stack: ${error.stack}`);
+    // VISIBLE failure logging. This catch previously swallowed everything with
+    // all logging commented out — that is exactly how renewal entry-loss went
+    // undetected. We still don't rethrow (accumulated entries / points /
+    // subscription state must persist, and the draw is reconcilable from the
+    // empty drawGrants), but the failure is now reported so it can be seen and
+    // healed. Never let error logging itself break payment processing.
+    try {
+      const { ErrorLoggingService } = await import("@/services/error-reporting/ErrorLoggingService");
+      await ErrorLoggingService.logError(error, {
+        endpoint: "addToMajorDraw",
+        userId: user._id?.toString(),
+        userEmail: user.email,
+        paymentIntentId: benefitsEventId,
+        packageId: packageData.packageId,
+        packageType: packageData.packageType,
+        entries: packageData.entries,
+        majorDrawRoutingMode,
+      });
+    } catch {
+      // swallow logging errors only
     }
-
-    // Log context for debugging
-    // console.error(`❌ Error context:`, {
-    //   userId: user._id,
-    //   userEmail: user.email,
-    //   packageType: packageData.packageType,
-    //   packageId: packageData.packageId,
-    //   entries: packageData.entries,
-    //   paymentMetadata,
-    // });
-
-    // Don't throw - allow payment processing to continue
-    // User still gets accumulated entries, points, and subscription benefits
-    // This prevents payment processing from failing completely
   }
 }
 

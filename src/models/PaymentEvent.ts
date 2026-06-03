@@ -27,6 +27,14 @@ export interface IPaymentEvent extends Document {
   // A/B Testing fields (optional)
   experimentId?: string;
   variantId?: string;
+  // Attribution fields (denormalized from Stripe metadata for ad-level aggregation)
+  attributionAdId: string | null;
+  attributionAdsetId: string | null;
+  attributionCampaignId: string | null;
+  // Single-platform attribution (set going forward by the resolver; null for pre-feature rows)
+  convertingPlatform: import("@/types/attribution").ConvertingPlatform | null;
+  attributionConfidence: import("@/types/attribution").AttributionConfidence | null;
+  isRenewal: boolean;
 }
 
 const PaymentEventSchema = new Schema<IPaymentEvent>(
@@ -99,6 +107,36 @@ const PaymentEventSchema = new Schema<IPaymentEvent>(
       type: String,
       required: false,
     },
+    // Attribution fields (denormalized from Stripe metadata for ad-level aggregation)
+    attributionAdId: {
+      type: String,
+      default: null,
+      index: true,
+    },
+    attributionAdsetId: {
+      type: String,
+      default: null,
+      index: true,
+    },
+    attributionCampaignId: {
+      type: String,
+      default: null,
+      index: true,
+    },
+    convertingPlatform: {
+      type: String,
+      enum: ["meta", "tiktok", "snapchat", "klaviyo_email", "klaviyo_sms", "google", "direct", "other"],
+      default: null,
+    },
+    attributionConfidence: {
+      type: String,
+      enum: ["click", "utm_only", "inferred_backfill"],
+      default: null,
+    },
+    isRenewal: {
+      type: Boolean,
+      default: false,
+    },
   },
   {
     timestamps: false, // We use custom timestamp field
@@ -113,6 +151,9 @@ PaymentEventSchema.index({ paymentIntentId: 1, eventType: 1 }, { unique: true })
 // Other indexes for efficient queries
 PaymentEventSchema.index({ userId: 1, timestamp: -1 });
 PaymentEventSchema.index({ packageType: 1, timestamp: -1 });
+// Revenue-by-platform aggregation (dashboard). attributionConfidence is filtered
+// in-memory, NOT part of the index key (low cardinality, poor selectivity).
+PaymentEventSchema.index({ convertingPlatform: 1, timestamp: -1 });
 // A/B Testing analytics index
 PaymentEventSchema.index({ experimentId: 1, variantId: 1 });
 

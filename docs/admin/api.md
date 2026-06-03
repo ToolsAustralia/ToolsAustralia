@@ -14,6 +14,11 @@ The `/api/admin/**` namespace. Per the manifest, this domain is the catch-all fo
 | `/api/admin/error-reports/**` | [error-reporting](../error-reporting/) | Error triage |
 | `/api/admin/contact-submissions/**` | [contact](../contact/) | Submission review |
 | `/api/admin/promo-analytics/**` | [promo](../promo/) | Promo-page analytics: summary, channel-detail, page-detail. All gated by `requirePermission("promos.view")`. The three routes share `resolvePromoAnalyticsRange()` from `src/services/promo-analytics/PromoAnalyticsService.ts` for AEST `today \| yesterday \| custom` date resolution, kept in lockstep with the Norm read mirror under `/api/internal/norm/v1/promo-analytics/**`. |
+| `/api/admin/facebook-ads/purchase-audit` | [tracking](../tracking/) | Local vs Meta revenue reconciliation (TRUE ROAS) |
+| `/api/admin/facebook-ads/health/insights` | [tracking](../tracking/) | Facebook Ads Health view — Mongo-first aggregated campaign/adset/ad insights (past days from `MetaAdInsightsDaily`, today live from Meta) with verdict engine + per-row snooze state. Server filters: `level`, `startDate`, `endDate`, `campaign`. Filters for verdict/learningStatus/minSpend/search are applied client-side in `FacebookAdsHealthView` (useMemo) — they do not appear in the query schema or TanStack queryKey. No account TRUE ROAS card — purchase-audit route handles that diagnostic separately. |
+| `GET /api/admin/facebook-ads/health/settings` | [tracking](../tracking/) | Read health verdict engine settings (requires `facebookAds.view`) |
+| `PUT /api/admin/facebook-ads/health/settings` | [tracking](../tracking/) | Update health verdict engine settings (requires `facebookAds.edit`) |
+| `POST /api/admin/facebook-ads/health/snooze` | [tracking](../tracking/) | Create or update a snooze for an ad (requires `facebookAds.edit`) |
 | _TODO_ | — | Affiliate, draw, other admin routes |
 
 > _TODO: read [src/app/api/admin/](../../src/app/api/admin/) and enumerate every sub-route._
@@ -27,6 +32,15 @@ Permission: `users.view`. Read-only preview of the bulk past-due charge run — 
 The eligibility math lives in `previewChargePastDueInvoices` ([src/services/admin/previewChargePastDueInvoices.ts](../../src/services/admin/previewChargePastDueInvoices.ts)) so the POST run and this GET preview cannot diverge — both call the same per-row filters and the same per-customer scoping helper. The Norm mirror at `GET /api/internal/norm/v1/invoices/charge-past-due` (registry key `invoices.charge-past-due.preview`, `users.view`) calls the same service.
 
 Response: `{ success: true, preview: { eligibleCount, totalInvoices, filterStats, debug, users } }` — `amount` on each user row is in Stripe currency-minor-unit (cents). The POST handler is `trigger_human_approve` in the Norm registry and is not yet wired.
+
+## Membership-by-package MRR trend (2026-06-03)
+
+`GET /api/admin/dashboard/membership-by-package` ([route](../../src/app/api/admin/dashboard/membership-by-package/route.ts)) returns the active membership base per tier (live, or a `MembershipDailySnapshot` read when the selected range resolves to a past `asOfDate`). As of 2026-06-03 it also attaches **`summary.totalActiveRevenueTrend`** (a `TrendData`) — the MRR (active recurring revenue) % change vs the **previous comparable period**:
+
+- The comparison window is `trendCalculationService.getComparisonPeriod(startDate, endDate)` — the same period-over-period window the dashboard-stats route uses (for "Today" → all of yesterday).
+- Baseline MRR = `getMembershipByPackageSnapshot(comparisonEnd).summary.totalActiveRevenue`. If that day has **no snapshot** (`snapshotMissing`), the trend is **omitted** (no fabricated baseline from live data).
+- Skipped entirely for `dateRange === "all-time"` (no prior period).
+- Consumed by the Overview MRR KPI tile via `trendPct(summary.totalActiveRevenueTrend)` — see [frontend.md](./frontend.md). The pill direction/colour follow the same fixed `trendPct`/`TrendPill` rules as every other KPI.
 
 ## Charge-past-due history endpoints
 
@@ -342,6 +356,30 @@ Admin-only (session `role === "admin"`, else `401`). Read-only aggregated analyt
 
 Thin handler — delegates to `getCancellationFlowAnalytics()` in `src/services/admin/cancellationFlowAnalytics.ts`, which fetches `CancellationFlowEvent` (`.lean()`) and hands off to the pure `summarizeCancellationEvents(events, now)` shaper (unit-tested: `npm run test:cancellation-analytics`).
 
+## Hourly revenue (per-platform)
+
+### `GET /api/admin/analytics/hourly-revenue`
+
+Gated by `requirePermission("facebookAds.view")`. Server-side **hour-of-day** (0–23, Australia/Sydney) revenue + conversions for the selected range, from payment-attributed `PaymentEvent`s (acquisition only — renewals + refunds excluded). This is the SHARED-1 data layer behind every per-platform / aggregate hourly breakdown.
+
+Query params: `startDate`, `endDate` (`YYYY-MM-DD`), and `platform` ∈ `meta` | `tiktok` | `snapchat` | `klaviyo` | `ad-channels` | `all` (default `all`). `klaviyo` merges `klaviyo_email + klaviyo_sms`; **`ad-channels`** sums the 5 advertising channels (meta/tiktok/snapchat/klaviyo email+sms) — matches the overview card + All-Platforms aggregate scope; `all` additionally includes `google`/`direct`/`other`. The range is interpreted as AEST calendar days — `endDate` maps to an **exclusive** next-midnight-AEST bound (matches the daily snapshot's `$lt`, so the two reconcile).
+
+Thin handler — delegates to `PaymentEventRepository.aggregateRevenueByHourAndPlatform(startUTC, endUTC)` (the platform-group merge lives in the route's `PLATFORM_GROUPS`) and merges per-hour **ad spend** for the group: **Meta** via `fetchFacebookInsightsHourly` (cents→dollars), **TikTok** via `fetchTikTokHourlySpend` (`src/services/admin/tiktok/tiktokHourlySpend.ts` — returns null until `TIKTOK_ADVERTISER_ID` + `TIKTOK_MARKETING_ACCESS_TOKEN` are set). Snapchat / Klaviyo have no spend source → `spend: null` (UI renders "—", never a misleading 0). Returns `{ success, data: { hourly: { hour, revenue, conversions, spend }[], totalRevenue, totalConversions, totalSpend, platform, dateRange } }`. Spend fetch failures degrade to `spend: null` and never break the revenue response. Reconciliation guaranteed by `npm run test:hourly-revenue`.
+
+The Facebook Ads tab's hourly breakdown (`GET/POST /api/admin/facebook-ads/hourly-insights`) sources its per-hour **revenue + conversions** from this same aggregator (the `meta` slice) — i.e. server-side `convertingPlatform === "meta"` attribution, **not** `utm_source` and **not** Meta's pixel/CAPI numbers — merged with Facebook Marketing-API hourly **spend**. So its hourly revenue now matches the rest of the dashboard. (The separate Meta-reported insights table is intentionally left as-is for pixel-vs-server comparison.)
+
+## Klaviyo analytics
+
+### `GET /api/admin/klaviyo/analytics?range=last_30_days`
+
+Gated by `facebookAds.view`. Returns **Klaviyo-attributed** campaign + flow revenue (email/SMS split via the values-report `send_channel` grouping) plus the "scheduled / about to send" view (upcoming Scheduled campaigns + live Flows). `range` ∈ `last_7_days` | `last_30_days` | `last_90_days` | `last_12_months`.
+
+Thin handler — delegates to `getKlaviyoAnalytics(range, nowMs)` in `src/services/admin/klaviyo/klaviyoReporting.ts` (SHARED-2), which resolves the conversion metric at runtime (cached — `KLAVIYO_CONVERSION_METRIC_ID` for the custom "Marketing Revenue" metric, else "Placed Order"), fetches the campaign/flow lists + `campaign-values-reports` / `flow-values-reports`, and folds the rows per entity via the unit-tested pure shaper `foldKlaviyoValues` (`npm run test:klaviyo-fold`). All via the `klaviyo` singleton's `reportingRequest` passthrough (reuses its auth/revision/backoff).
+
+**Throttle-safe caching:** the Klaviyo reporting endpoints are heavily throttled (≈2/min), so the route caches results **in-process (10-min TTL)** and, on a throttle/error, serves the last good snapshot with `stale: true`. The tab must **not** auto-refresh on an interval. Response: `{ success, data: { range, metricId, campaigns[], flows[], scheduled: { upcomingCampaigns[], liveFlows[] }, truncated }, stale, cachedAt }`.
+
+**Attribution note:** this revenue is **Klaviyo's own attribution** (`conversion_value` on Placed Order) — it will NOT equal the server-side `convertingPlatform=klaviyo_email/sms` totals used on the overview card + aggregate tab; the two use different attribution windows. Label both; never sum Klaviyo-attributed into a blended ad total.
+
 **Response (`data`):**
 
 ```jsonc
@@ -365,9 +403,20 @@ Thin handler — delegates to `getCancellationFlowAnalytics()` in `src/services/
       "...": { "retained": 0, "churned": 0, "pending": 0 }
     },
     // Free-text entries when reason === "other". Sorted by startedAt desc.
-    // Empty/whitespace-only reasonText is filtered out.
+    // Empty/whitespace-only reasonText is filtered out. The user fields
+    // (userId/userEmail/userFirstName/userLastName) are hydrated server-side
+    // for the admin User-column drill-down; absent for legacy events without
+    // a userId.
     "otherReasonTexts": [
-      { "text": "site keeps crashing", "startedAt": "2026-05-18T10:00:00.000Z", "outcome": "in_progress" }
+      {
+        "text": "site keeps crashing",
+        "startedAt": "2026-05-18T10:00:00.000Z",
+        "outcome": "in_progress",
+        "userId": "65f…",
+        "userEmail": "jo@example.com",
+        "userFirstName": "Jo",
+        "userLastName": "Doe"
+      }
     ]
   },
   "meta": { "timestamp": "..." }
@@ -387,6 +436,119 @@ Thin handler — delegates to `getCancellationFlowAnalytics()` in `src/services/
 - `otherReasonTexts` lists every event with `reason === "other"` and a non-empty trimmed `reasonText`, sorted by `startedAt` desc. Each entry carries the trimmed text, ISO `startedAt`, and the event's current `outcome`. Whitespace-only `reasonText` is excluded.
 
 UI: `src/components/admin/CancellationFlowAnalytics.tsx`, mounted as the **Cancellation Flow** tab under the Analytics sidebar group (`selectedTab === "cancellation-flow"` in `AdminPage`). Data hook: `src/hooks/queries/admin/useCancellationFlowAnalytics.ts` (TanStack, queryKey `["admin", "cancellation-flow-analytics", filter]`).
+
+### `GET /api/admin/cancellation-flow-analytics/users-by-reason`
+
+Paginated user-level rows for a single cancellation reason. Powers the **Reason × outcome** drill-down modal (`CancellationReasonUsersModal`). Guarded by `requirePermission("overview.view")` (not the bare `requireAdmin(session)` used by the parent route).
+
+Validates input via Zod (`querySchema`); malformed query → `400`.
+
+**Query params:**
+
+| Param | Type | Notes |
+|---|---|---|
+| `reason` | `CancellationReason` enum | Required. Must be one of `CANCELLATION_REASONS` from `@/models/CancellationFlowEvent`. |
+| `outcome` | `in_progress \| saved \| cancelled` | Optional. Validated against `OUTCOME_VALUES` from the model. |
+| `startDate` | `YYYY-MM-DD` | Optional. AEST-inclusive lower bound on `startedAt` (start of day at Australia/Sydney midnight, converted to UTC). |
+| `endDate` | `YYYY-MM-DD` | Optional. AEST-inclusive upper bound; the route adds `+1 day` (`addDays(to, 1)`) for the exclusive UTC upper bound — same convention as the parent analytics route. |
+| `page` | integer ≥ 1 | Optional. Default 1. |
+| `limit` | integer 1–100 | Optional. Default 20 (the modal's page size). |
+
+**Response (`HTTP 200`):**
+
+```jsonc
+{
+  "data": {
+    "rows": [
+      {
+        "eventId": "65f…",
+        "userId": "65f…",
+        "userEmail": "jo@example.com",
+        "userFirstName": "Jo",
+        "userLastName": "Doe",
+        "startedAt": "2026-05-18T10:00:00.000Z",
+        "outcome": "saved",
+        "offerAccepted": "discount_50_2mo",
+        "reasonText": null
+      }
+    ],
+    "totalCount": 14
+  },
+  "meta": { "timestamp": "…" }
+}
+```
+
+- `reasonText` is only populated when `reason === "other"` and the original `reasonText` is non-empty after trimming; otherwise undefined.
+- `offerAccepted` is the saved event's accepted offer (when present); otherwise `null`.
+- User fields (`userEmail`/`userFirstName`/`userLastName`) are hydrated from the `User` collection by a batched `User.find({ _id: { $in: [...] } })` keyed on the event `userId`s; absent for legacy events with no `userId`.
+
+Response carries `Cache-Control: private, max-age=120`.
+
+Implementation: thin handler → delegates to `getCancellationFlowUsersByReason()` in [src/services/admin/cancellationFlowAnalytics.ts](../../src/services/admin/cancellationFlowAnalytics.ts) (see [backend.md → cancellationFlowAnalytics.ts](./backend.md#services)).
+
+## Dashboard stats — `attributedRevenue` response key
+
+### `GET /api/admin/dashboard/stats` — `attributedRevenue` field
+
+Added as a new top-level key on the stats response alongside the existing `facebookAds` field.
+
+**Shape:**
+
+```ts
+Record<AttributedPlatformKey, {
+  revenue: number;          // Acquisition revenue only (newRevenue) — initial subscriptions, one-time, upsell, mini-draw, upgrades/resubscribes. This is the ROAS numerator.
+  renewalRevenue: number;   // Recurring membership renewals (packageType === "membership" && billingReason === "subscription_cycle"). Tracked separately; EXCLUDED from trueRoas.
+  conversions: number;      // Count of acquisition payment events (newRevenue rows only)
+  byConfidence: {
+    click: number;           // Acquisition revenue attributed via a captured click ID
+    utm_only: number;        // Acquisition revenue attributed via UTM params only
+    inferred_backfill: number; // Acquisition revenue attributed from historical data
+  };
+  // Present only when the platform maps to a spend provider with spend > 0:
+  adSpend?: number;
+  trueRoas?: number;        // newRevenue / adSpend — acquisition revenue only; renewalRevenue is NOT in the numerator
+  // Present only when comparison range data is available:
+  revenueTrend?: number;    // % delta in revenue (acquisition) from prior period
+  trueRoasTrend?: number;   // % delta in trueRoas from prior period
+}>
+```
+
+**Platform key union:** `"meta" | "tiktok" | "snapchat" | "klaviyo_email" | "klaviyo_sms" | "google" | "direct" | "other"`
+
+**Rules:**
+
+- Only platforms with at least one attributed payment event in the range appear in the response object. Platforms with zero revenue (acquisition + renewal) are omitted entirely.
+- `adSpend` and `trueRoas` are present **only** when the platform maps to a spend provider (via `PLATFORM_TO_AD_CHANNEL_KEY` in `snapshotSchema.ts`) **and** the mapped `adChannels[key].spend > 0`. Currently `meta → facebook` is the only live mapping. All other platforms (`direct`, `klaviyo_email`, `klaviyo_sms`, `google`, `tiktok`, `snapchat`, `other`) return `revenue`, `renewalRevenue`, `conversions`, and `byConfidence` only.
+- `trueRoas` is computed from the **summed** acquisition totals for the requested range: `newRevenue / adChannels[mappedKey].spend`. It is **not** averaged across snapshot days. Recurring membership renewals are deliberately excluded so ROAS reflects new-customer acquisition performance.
+- `byConfidence.click + byConfidence.utm_only + byConfidence.inferred_backfill === revenue` (acquisition revenue only; renewals do not contribute to `byConfidence`).
+- `revenueTrend` and `trueRoasTrend` mirror the existing `facebookAds` trends computation — they require a comparison range and are absent when no prior-period data is available.
+
+**UI:** The "Revenue by Platform" section shows `revenue` (acquisition) as "Ad revenue" with a true ROAS figure when available. Renewals are shown as a separate muted line ("+ $X recurring renewals · not in ROAS") so they are visible but clearly excluded from the ROAS calculation.
+
+**Example (meta platform with spend data, direct without):**
+
+```json
+{
+  "attributedRevenue": {
+    "meta": {
+      "revenue": 12500,
+      "renewalRevenue": 4200,
+      "conversions": 42,
+      "byConfidence": { "click": 9000, "utm_only": 2500, "inferred_backfill": 1000 },
+      "adSpend": 3200,
+      "trueRoas": 3.91,
+      "revenueTrend": 12.4,
+      "trueRoasTrend": -2.1
+    },
+    "direct": {
+      "revenue": 4800,
+      "renewalRevenue": 1100,
+      "conversions": 18,
+      "byConfidence": { "click": 0, "utm_only": 0, "inferred_backfill": 4800 }
+    }
+  }
+}
+```
 
 ## Auth
 

@@ -23,7 +23,8 @@ import { formatNumber, formatPercentage } from "@/utils/metrics/formatters";
 import { formatCurrency } from "@/utils/metrics/formatters";
 import { queryKeys } from "@/lib/queryKeys";
 import { getPrizeLabel } from "@/config/prizes";
-import DateRangeToggle, { DateRange } from "@/components/admin/DateRangeToggle";
+import { DateRange } from "@/components/admin/DateRangeToggle";
+import { DateRangeDropdown } from "@/components/admin/overview/DateRangeDropdown";
 import { AdminMobileLayoutDateRangeShell } from "@/app/admin/component/AdminMobileLayoutDateRangeShell";
 import { useAdminMobileDateToolbarSlot } from "@/hooks/useAdminMobileDateToolbarSlot";
 import CustomDateRangeModal from "@/components/admin/CustomDateRangeModal";
@@ -316,20 +317,11 @@ export default function PromoAnalyticsManagement() {
   const _overallPct = data?.totalVisits ? (data.totalConversions / data.totalVisits) * 100 : 0;
 
   const promoDateRangeToggle = (
-    <DateRangeToggle
+    <DateRangeDropdown
       selectedRange={dateRange}
-      onRangeChange={(range) => {
-        if (range === "custom") {
-          setIsCustomDateModalOpen(true);
-        } else {
-          updateDateFilter(range);
-        }
-      }}
+      onRangeChange={(range) => updateDateFilter(range)}
       onCustomClick={() => setIsCustomDateModalOpen(true)}
-      collapsed={false}
       displayDate={displayDate || undefined}
-      onExpand={() => {}}
-      className={isLgUp ? undefined : "w-full"}
     />
   );
 

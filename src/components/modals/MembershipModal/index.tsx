@@ -61,6 +61,8 @@ import { buildPurchaseEvent } from "@/lib/tracking/canonical-event";
 import { useToast } from "@/components/ui/Toast";
 import { trackCompleteRegistration, trackFacebookEvent } from "@/components/FacebookPixel";
 import { usePixelTracking } from "@/hooks/usePixelTracking";
+import { useKlaviyoTracking } from "@/hooks/useKlaviyoTracking";
+import { buildCheckoutResumeUrl } from "@/utils/integrations/klaviyo/checkout-resume-url";
 import { useSetupIntent } from "@/hooks/useSetupIntent";
 import { usePaymentIntent } from "@/hooks/usePaymentIntent";
 import { useResolvedMultiplier } from "@/hooks/queries/usePromoQueries";
@@ -70,6 +72,7 @@ import { useAffiliateLink } from "@/hooks/useAffiliateLink";
 import { usePromoLink } from "@/hooks/usePromoLink";
 import { extractAttributionParams } from "@/utils/tracking/utm-helpers";
 import { getStoredUTMParams } from "@/utils/tracking/utm-storage";
+import { getFBCFromURL, getFBPFromCookie } from "@/utils/tracking/facebook-helpers";
 import { formatWinnerName } from "@/utils/winner-name-formatter";
 import { useUserMajorDrawStats } from "@/hooks/queries/useMajorDrawQueries";
 import { useMajorDrawPurchaseGate } from "@/hooks/useMajorDrawPurchaseGate";
@@ -227,12 +230,19 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
   const [showCardForm, setShowCardForm] = useState(false);
   const [isCreatingSubscription, setIsCreatingSubscription] = useState(false);
   const [paymentMethodTypeFromElement, setPaymentMethodTypeFromElement] = useState<string | null>(null);
+  // Gates the Purchase button on the Stripe PaymentElement's `ready` event.
+  const [isPaymentElementReady, setIsPaymentElementReady] = useState(false);
 
   // Stripe Elements state
   const [setupIntentClientSecret, setSetupIntentClientSecret] = useState<string | null>(null);
   const [paymentIntentClientSecret, setPaymentIntentClientSecret] = useState<string | null>(null);
   const [paymentIntentId, setPaymentIntentId] = useState<string | null>(null);
   const [cardFormError, setCardFormError] = useState<string | null>(null);
+  // Reset readiness whenever the PaymentElement will remount (new client secret
+  // or the card form (re)opens) so the button re-gates until `ready` fires again.
+  useEffect(() => {
+    setIsPaymentElementReady(false);
+  }, [paymentIntentClientSecret, setupIntentClientSecret, showCardForm]);
   const lastPaymentIntentAmountRef = useRef<number | null>(null);
   const isCreatingPaymentIntentRef = useRef<boolean>(false);
   const isCreatingSetupIntentRef = useRef<boolean>(false);
@@ -485,6 +495,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
   const { isAuthenticated, userData, isMember } = useUserContext();
   const { gatesClosed, openGateClosedModal } = useMajorDrawPurchaseGate();
   const { trackInitiateCheckout } = usePixelTracking();
+  const { trackKlaviyoStartedCheckout } = useKlaviyoTracking();
   const { data: userMajorDrawStats } = useUserMajorDrawStats(userData?._id);
   const { savePaymentMethod } = useSavedPaymentMethods();
   const purchaseMembership = usePurchaseMembership();
@@ -934,18 +945,10 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
             err instanceof Error ? err.message : "Failed to create subscription. Please try again.";
 
           if (errCode === "EXISTING_SUBSCRIPTION") {
-            showToast({
-              type: "error",
-              title: "Existing Subscription",
-              message: errMsg,
-              duration: 10000,
-              action: {
-                label: "Manage Subscription",
-                onClick: () => {
-                  router.push("/my-account");
-                },
-              },
-            });
+            // Background pre-warm: do NOT toast here. The purchase-click handler
+            // ("Active Subscription Found") is the single source of this message,
+            // so the user sees exactly one actionable toast.
+            console.warn("[MembershipModal] pre-warm blocked by EXISTING_SUBSCRIPTION (toast deferred to purchase click)");
           } else {
             showToast({
               type: "error",
@@ -1307,22 +1310,40 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
     setRegistrationErrors({});
 
     // Track Meta InitiateCheckout for the new-user signup path BEFORE the network request.
-    // This mirrors the existing fire in handleSubmit (~line 3067) for logged-in users — new-user
-    // signups previously bypassed it. Browser-only (no CAPI counterpart): InitiateCheckout is a
-    // high-intent signal for Meta optimization, not a conversion event.
+    // This mirrors the existing fire in handleSubmit for logged-in users — new-user signups
+    // previously bypassed it. Hybrid Pixel + CAPI (shared event_id); the guest's form PII is
+    // attached as the 3rd arg so the CAPI event carries identity (hashed server-side).
     try {
       if (!initiateCheckoutFiredRef.current && activePlan) {
         initiateCheckoutFiredRef.current = true;
         const packagePrice = activePlan?.price || 0;
-        trackInitiateCheckout({
-          value: packagePrice,
-          currency: "AUD",
-          numItems: 1, // Single membership package
-        });
+        trackInitiateCheckout(
+          {
+            value: packagePrice,
+            currency: "AUD",
+            numItems: 1,
+          },
+          undefined,
+          {
+            email: formData.email,
+            firstName: formData.firstName,
+            lastName: formData.lastName,
+            phone: formData.phone,
+            country: "AU",
+          },
+        );
       }
     } catch {
       // Non-blocking — never fail registration on tracking error
     }
+
+    // NOTE: Klaviyo "Started Checkout" for the guest path is fired SERVER-SIDE
+    // from /api/auth/register (after ensureUserProfileSynced), not here. That
+    // avoids a race where klaviyo.track() on the client would fire before the
+    // onsite cookie is set for a never-cookied guest — see spec §5 "Fire strategy"
+    // and docs/tracking/KLAVIYO_INTEGRATION.md "Canonical property names".
+    // The packageId is passed through the registration POST below so the server
+    // can resolve the package and emit the event with the canonical schema.
 
     // Extract promotion slug from current URL if on promotions page
     // Format: /promotions/[slug] -> extract slug
@@ -1359,6 +1380,15 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
       // Non-blocking
     }
 
+    const fbc = typeof window !== "undefined" ? getFBCFromURL() : undefined;
+    const fbp = typeof window !== "undefined" ? getFBPFromCookie() : undefined;
+
+    // Resolve the selected packageId so the server can fire a canonical Klaviyo
+    // `Started Checkout` (step="registered") event with the right package context.
+    // Omitted gracefully on Google-OAuth / affiliate / other paths that don't
+    // pass through the modal.
+    const selectedPackageId = getPackageId(activePlan, [...subscriptionPackages, ...oneTimePackages]);
+
     try {
       const response = await fetch("/api/auth/register", {
         method: "POST",
@@ -1372,6 +1402,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
           mobile: formData.phone,
           affiliateCode: affiliateCode || undefined,
           promotionSlug: promotionSlug,
+          ...(selectedPackageId ? { packageId: selectedPackageId } : {}),
           ...(attributionParams.utm_source && { utm_source: attributionParams.utm_source }),
           ...(attributionParams.utm_medium && { utm_medium: attributionParams.utm_medium }),
           ...(attributionParams.utm_campaign && { utm_campaign: attributionParams.utm_campaign }),
@@ -1380,6 +1411,8 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
           ...(attributionParams.campaign_id && { campaign_id: attributionParams.campaign_id }),
           ...(attributionParams.adset_id && { adset_id: attributionParams.adset_id }),
           ...(attributionParams.ad_id && { ad_id: attributionParams.ad_id }),
+          ...(fbc && { fbc }),
+          ...(fbp && { fbp }),
         }),
       });
 
@@ -2640,11 +2673,78 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
         initiateCheckoutFiredRef.current = true;
         const packagePrice = activePlan?.price || 0;
 
-        trackInitiateCheckout({
-          value: packagePrice,
-          currency: "AUD",
-          numItems: 1, // Single membership package
-        });
+        trackInitiateCheckout(
+          {
+            value: packagePrice,
+            currency: "AUD",
+            numItems: 1,
+          },
+          undefined,
+          isAuthenticated
+            ? undefined
+            : {
+                email: formData.email,
+                firstName: formData.firstName,
+                lastName: formData.lastName,
+                phone: formData.phone,
+                country: "AU",
+              },
+        );
+
+        // Canonical Klaviyo "Started Checkout" — GUEST-ONLY fallback fire.
+        //
+        // Authed users fire from MembershipSection.handlePlanSelect (the "Enter
+        // Now" click — the true intent moment). They do NOT fire here, to avoid
+        // double-counting.
+        //
+        // Guests primarily fire server-side from /api/auth/register (step-1
+        // submit). This client-side block is the FALLBACK for the edge case
+        // where `guestUserData` persisted across modal close/reopen — modal
+        // jumps directly to step-2, handleRegistration never runs, the server
+        // never gets a chance to fire. The `if (!isAuthenticated)` gate +
+        // `initiateCheckoutFiredRef` together produce one fire across the
+        // whole modal lifecycle.
+        //
+        // See docs/auth/gotchas.md "registration ≠ authenticated session" and
+        // docs/shared-ui/gotchas.md "MembershipModal: Klaviyo Started Checkout
+        // fires from BOTH server-side and client-side paths".
+        if (!isAuthenticated) {
+          try {
+            const resolvedPackageId = getPackageId(activePlan, [...subscriptionPackages, ...oneTimePackages]);
+            if (resolvedPackageId && activePlan) {
+              const isSubscriptionPlan = activePlan.period === "mo";
+              // Extract promo slug from URL (mirrors handleRegistration's local extraction)
+              let resolvedPromoSlug: string | undefined;
+              try {
+                const currentPathname = pathname || (typeof window !== "undefined" ? window.location.pathname : "");
+                const promotionsMatch = currentPathname.match(/^\/promotions\/([^/?#]+)/);
+                if (promotionsMatch && promotionsMatch[1]) {
+                  resolvedPromoSlug = promotionsMatch[1];
+                }
+              } catch {
+                // Non-blocking
+              }
+              const checkoutUrl = buildCheckoutResumeUrl({
+                baseUrl: window.location.origin,
+                packageId: resolvedPackageId,
+                promoSlug: resolvedPromoSlug,
+              });
+              trackKlaviyoStartedCheckout({
+                package_id: resolvedPackageId,
+                package_name: promoEnhancedPlan?.name || activePlan.name,
+                package_type: isSubscriptionPlan ? "membership" : "one-time",
+                tier: (promoEnhancedPlan?.name || activePlan.name).toLowerCase(),
+                price: packagePrice,
+                checkout_url: checkoutUrl,
+                ...(resolvedPromoSlug ? { promo_slug: resolvedPromoSlug } : {}),
+                // Guest reaching payment-submit without ever logging in
+                is_authenticated: false,
+              });
+            }
+          } catch {
+            // Non-blocking — never fail checkout on a tracking error
+          }
+        }
       }
     } catch {
       if (process.env.NODE_ENV === "development") {
@@ -2712,9 +2812,44 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
 
       const isAdditionalPackage = packageId.startsWith("additional-");
       if (isAdditionalPackage && (!isAuthenticated || !hasAdditionalPackageAccess(userData, userMajorDrawStats))) {
-        throw new Error(
-          "This package requires an active subscription or entries in the current draw. Please subscribe to a membership or enter the draw first to access additional packages."
-        );
+        // Phase 8 Option B (2026-05-29) — replace the generic Error throw with
+        // an actionable toast that surfaces the most useful next step instead
+        // of leaving the user staring at a dead-end "Payment Error".
+        //
+        // The common path landing here is now a Klaviyo abandoned-checkout email
+        // opened in a different browser where the original member isn't logged
+        // in: the deep-link auto-opens MembershipModal with an `additional-*`
+        // pack preselected, the user registers fresh (or hits the existing-
+        // account flow), advances to step 2, enters card details, clicks
+        // PURCHASE, and only NOW discovers they can't actually buy this pack.
+        // The previous generic error toast wasted all of that effort.
+        //
+        // Note: /login currently always redirects to /my-account on success
+        // (no callbackUrl support). A future enhancement would add returnTo
+        // plumbing so the user lands back on the modal post-login. For now,
+        // they re-click the email link or navigate back manually.
+        const wantsLogin = !isAuthenticated;
+        showToast({
+          type: "error",
+          title: wantsLogin ? "Log in to continue" : "Membership required",
+          message: wantsLogin
+            ? "This pack is for existing members and entry-holders. Log in to your account if you've purchased before — or subscribe to a membership tier first."
+            : "This pack requires an active membership or entries in the current draw. Subscribe to a membership tier to unlock access.",
+          duration: 12000,
+          action: {
+            label: wantsLogin ? "Log in" : "View memberships",
+            onClick: () => {
+              onClose();
+              router.push(wantsLogin ? "/login" : "/membership");
+            },
+          },
+        });
+        // Clean up purchase-in-progress state so the user can interact with the
+        // toast without the loading overlay blocking them.
+        hideLoading();
+        checkoutSubmitLockRef.current = false;
+        setIsSubmitting(false);
+        return;
       }
 
       if (isAuthenticated && hasAdditionalPackageAccess(userData, userMajorDrawStats)) {
@@ -4323,11 +4458,11 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
       return useSavedPaymentMethod
         ? selectedPaymentMethod !== null
         : showCardForm
-        ? !cardFormError && hasIntentClientSecret
+        ? !cardFormError && hasIntentClientSecret && isPaymentElementReady
         : false;
     } else {
       const registrationComplete = currentStep === 2 && guestUserData !== null;
-      const cardFormReady = !cardFormError && hasIntentClientSecret;
+      const cardFormReady = !cardFormError && hasIntentClientSecret && isPaymentElementReady;
       return Boolean(registrationComplete && cardFormReady);
     }
   };
@@ -4497,6 +4632,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
                 onAddNewPaymentMethod={handleAddNewPaymentMethod}
                 onCardElementChange={handleCardElementChange}
                 onPaymentMethodTypeChange={setPaymentMethodTypeFromElement}
+                onElementReady={setIsPaymentElementReady}
                 onCouponCodeChange={(value) => {
                   setCouponCode(value);
                   setCouponApplied(false);

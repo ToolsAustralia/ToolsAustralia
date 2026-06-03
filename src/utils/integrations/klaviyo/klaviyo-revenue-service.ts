@@ -49,6 +49,19 @@ export async function trackPlacedOrder(
     paymentIntentId: string;
     entriesGranted?: number;
     pointsEarned?: number;
+    /**
+     * Stripe `invoice.billing_reason` when known
+     * (e.g. "subscription_create", "subscription_cycle", "subscription_update", "manual").
+     * Emitted as `billing_reason` on the event for debugging + segmentation.
+     */
+    billingReason?: string;
+    /**
+     * True only when this Placed Order is an automated subscription renewal
+     * (Stripe `billing_reason === "subscription_cycle"`). Emitted as `is_renewal`
+     * on the event so attribution reports can filter renewals out of
+     * "true new revenue" calculations. Defaults to false.
+     */
+    isRenewal?: boolean;
   }
 ): Promise<void> {
   try {
@@ -70,6 +83,8 @@ export async function trackPlacedOrder(
       entriesGranted: orderData.entriesGranted,
       pointsEarned: orderData.pointsEarned,
       paymentIntentId: orderData.paymentIntentId,
+      billingReason: orderData.billingReason,
+      isRenewal: orderData.isRenewal ?? false,
     });
 
     // Track event non-blocking (fire-and-forget)

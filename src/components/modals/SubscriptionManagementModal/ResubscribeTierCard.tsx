@@ -14,7 +14,6 @@ export interface ResubscribeTierCardProps {
   promoMultiplier: number;
   lastMonthAccumulatedEntries: number;
   isPrevious: boolean;
-  theme?: "light" | "dark";
   onSelect: (packageId: string) => void;
 }
 
@@ -23,19 +22,20 @@ const ResubscribeTierCard: React.FC<ResubscribeTierCardProps> = ({
   promoMultiplier,
   lastMonthAccumulatedEntries,
   isPrevious,
-  theme = "dark",
   onSelect,
 }) => {
   const scheme = getMembershipSectionColorScheme(plan.packageId, true);
   const icon = getPackageIcon(plan.packageId);
   const grant = plan.entriesPerMonth * promoMultiplier;
   const nextRenewal = lastMonthAccumulatedEntries + grant + plan.entriesPerMonth;
-  const isLight = theme === "light";
   const promoActive = promoMultiplier > 1;
   const showBundledBadge = promoActive && hasBundledMultiplierAssets(promoMultiplier);
 
   const accent = scheme.accentHex;
-  const bigNumberStyle: React.CSSProperties = isLight
+  // Text contrast follows the package scheme, not a fixed theme: light-background
+  // tiers (ryobi/dewalt/mint) declare `text-black`; dark tiers use white/gold.
+  const onLightBg = scheme.text === "text-black";
+  const bigNumberStyle: React.CSSProperties = onLightBg
     ? { color: "#0A0A0A" }
     : {
         color: "#FFFFFF",
@@ -47,12 +47,12 @@ const ResubscribeTierCard: React.FC<ResubscribeTierCardProps> = ({
       className={cn(
         "relative w-full text-left rounded-3xl overflow-visible p-5",
         "transition-[box-shadow] duration-200",
-        scheme.bgGradient,
       )}
       style={{
-        boxShadow: isLight
-          ? "0 4px 12px rgba(0,0,0,0.08)"
-          : `0 0 24px ${accent}40, 0 4px 12px rgba(0,0,0,0.3)`,
+        // bgGradient is a CSS linear-gradient string — must be applied via style,
+        // not className (a CSS value is not a valid Tailwind class).
+        background: scheme.bgGradient,
+        boxShadow: `0 0 24px ${accent}40, 0 4px 12px rgba(0,0,0,0.3)`,
       }}
     >
       {/* Top row: icon + multiplier badge */}
@@ -80,37 +80,22 @@ const ResubscribeTierCard: React.FC<ResubscribeTierCardProps> = ({
 
       {/* Tier name + price */}
       <div className="flex items-baseline justify-between mb-3">
-        <h3 className={cn("font-bold text-lg", isLight ? "text-gray-900" : "text-white")}>
+        <h3 className={cn("font-bold text-lg", scheme.text)}>
           {plan.name}
           {isPrevious && (
-            <span
-              className={cn(
-                "ml-2 text-xs font-normal",
-                isLight ? "text-gray-500" : "text-white/70",
-              )}
-            >
+            <span className={cn("ml-2 text-xs font-normal", scheme.textMuted)}>
               (previously)
             </span>
           )}
         </h3>
-        <span
-          className={cn(
-            "text-sm font-semibold",
-            isLight ? "text-gray-700" : "text-white/90",
-          )}
-        >
+        <span className={cn("text-sm font-semibold", scheme.textMuted)}>
           ${plan.price}/mo
         </span>
       </div>
 
       {/* Big sign-up grant number */}
       <div className="mb-3">
-        <p
-          className={cn(
-            "text-xs uppercase tracking-wide font-semibold mb-1",
-            isLight ? "text-gray-600" : "text-white/80",
-          )}
-        >
+        <p className={cn("text-xs uppercase tracking-wide font-semibold mb-1", scheme.textMuted)}>
           Sign-up grant
         </p>
         <p className="text-3xl font-black leading-none" style={bigNumberStyle}>
@@ -119,12 +104,7 @@ const ResubscribeTierCard: React.FC<ResubscribeTierCardProps> = ({
       </div>
 
       {/* Per-tier breakdown */}
-      <div
-        className={cn(
-          "text-xs space-y-1",
-          isLight ? "text-gray-700" : "text-white/85",
-        )}
-      >
+      <div className={cn("text-xs space-y-1", scheme.textMuted)}>
         <p>
           Accumulated entries: <strong>{lastMonthAccumulatedEntries.toLocaleString()}</strong>
         </p>

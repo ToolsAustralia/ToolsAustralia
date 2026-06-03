@@ -38,6 +38,15 @@ These are HMAC-signed read/write/trigger endpoints for the Norm service account.
 
 Dashboard routes (`dashboard/stats`, `dashboard/revenue-breakdown`) delegate to `DashboardStatsService.getStats()` and emit a **strict projection** of the admin shape: trends, enhanced metrics, snapshot-missing-for-standing, and other internal-only fields are dropped before `ctx.ok()` validates against `NormDashboardStatsSchema` / `NormRevenueBreakdownSchema`. Date ranges are resolved through `resolveNormDateRange()` so `current-draw` / `last-draw` keys resolve to real MajorDraw dates before being forwarded to the service.
 
+### `POST /api/auth/register` — optional `fbc` / `fbp` (Meta CAPI enrichment — 2026-05-25)
+
+`registerSchema` accepts two optional fields beyond the registration/attribution data:
+
+- `fbc` — Meta Click ID (`_fbc` cookie value, or reconstructed from a landing `fbclid`).
+- `fbp` — Meta browser ID (`_fbp` cookie value).
+
+When present, these are used to enrich the server-side `CompleteRegistration` Conversions API event. In every `CompleteRegistration` block the route now prefers the body value over the cookie: `const fbc = validatedData.fbc ?? ctx.fbc` (and likewise for `fbp`), where `ctx` comes from `extractRequestContext(request)`. Both are optional — omitting them falls back to the `_fbc` / `_fbp` cookies on the request. See [gotchas.md](./gotchas.md) for why the client supplies them.
+
 ## Authorization
 
 All protected handlers must call `getServerSession()` and verify. Middleware excludes `/api` so it does NOT gate these routes.

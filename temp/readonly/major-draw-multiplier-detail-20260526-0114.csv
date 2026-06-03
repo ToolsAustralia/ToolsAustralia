@@ -1,0 +1,3 @@
+email,userId,paymentIntentId,packageType,packageId,packageName,purchaseDateAEST,calcType,staticBase,grantedEntries,appliedMultiplier,gridAtBuy,gridNow,expectedAtBuy,verdict
+cchel88@icloud.com,69ee1ee9d3c34ef2f80e42e0,pi_3TQpuuJ3N9Ka6RJM0Jw5qDRm,one-time,additional-tradie-pack,Additional Tradie Pack,2026-04-28 00:13,,15,15,1,mem=—|ot=—,mem=5|ot=—,3x or 5x (today's grid; got 1x at buy),NO_GRID_AT_PURCHASE
+scottbelo@hotmail.com,69efb6ae5f8857a6c0fd9564,pi_3TQuhKJ3N9Ka6RJM1KDlIq71,one-time,tradie-pack,Tradie Pack,2026-04-28 05:21,,15,15,1,mem=—|ot=—,mem=5|ot=—,3x (today's grid; got 1x at buy),NO_GRID_AT_PURCHASE

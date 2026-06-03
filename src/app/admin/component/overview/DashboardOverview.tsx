@@ -5,15 +5,17 @@ import { createPortal } from "react-dom";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { format } from "date-fns";
 import OverviewToolbar from "./OverviewToolbar";
-import KPIMetricsGrid from "./KPIMetricsGrid";
-import RevenueBreakdownSection from "./RevenueBreakdownSection";
-import MembershipBreakdownSection from "./MembershipBreakdownSection";
-import RenewalsDashboardSection from "./RenewalsDashboardSection";
+import KpiGrid from "./sections/KpiGrid";
+import RevenueChartCard from "./sections/RevenueChartCard";
+import MembershipCard from "./sections/MembershipCard";
+import RevenueBreakdownCard from "./sections/RevenueBreakdownCard";
+import AdvertisingPlatformCard from "./sections/AdvertisingPlatformCard";
+import PrizePerformanceCard from "./sections/PrizePerformanceCard";
+import TopDrawsCard from "./sections/TopDrawsCard";
+import UpcomingRenewalsCard from "./sections/UpcomingRenewalsCard";
+import ActivityCard from "./sections/ActivityCard";
+import QuickActionsCard from "./sections/QuickActionsCard";
 import UsersBreakdownSection from "./UsersBreakdownSection";
-import AdvertisingBreakdownSection from "@/app/admin/component/overview/AdvertisingBreakdownSection";
-import RevenueOverview from "@/components/admin/RevenueOverview";
-import QuickActionsPanel from "./QuickActionsPanel";
-import RecentActivityFeed from "./RecentActivityFeed";
 import CustomDateRangeModal from "@/components/admin/CustomDateRangeModal";
 import { DateRange } from "@/components/admin/DateRangeToggle";
 import {
@@ -22,14 +24,13 @@ import {
   useMajorDrawsForDateRange,
   useMembershipByPackage,
 } from "@/hooks/queries/useAdminQueries";
-import { useAdminUserModal } from "@/contexts/AdminUserModalContext";
 import { useAdminMobileDateToolbarSlot } from "@/hooks/useAdminMobileDateToolbarSlot";
+import { useAdminUserModal } from "@/contexts/AdminUserModalContext";
 
 export default function DashboardOverview() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const pathname = usePathname();
-  const { openUserModal } = useAdminUserModal();
 
   // Date filter state
   const [dateRange, setDateRange] = useState<DateRange>("today");
@@ -38,52 +39,13 @@ export default function DashboardOverview() {
   const [isCustomDateModalOpen, setIsCustomDateModalOpen] = useState(false);
 
   // Section expand/collapse state — mobile starts collapsed; desktop always shows breakdowns via isLgUp || …
-  const [isRevenueBreakdownExpanded, setIsRevenueBreakdownExpanded] = useState(false);
-  const [isMembershipByPackageExpanded, setIsMembershipByPackageExpanded] = useState(false);
-  const [isUpcomingRenewalsExpanded, setIsUpcomingRenewalsExpanded] = useState(false);
-  const [isAdvertisingBreakdownExpanded, setIsAdvertisingBreakdownExpanded] = useState(true);
-  const [isUsersPerformanceExpanded, setIsUsersPerformanceExpanded] = useState(true);
   const [isUsersBreakdownExpanded, setIsUsersBreakdownExpanded] = useState(false);
 
   const { isLgUp, slotEl: mobileToolbarRoot } = useAdminMobileDateToolbarSlot();
 
-  /** Desktop (lg+): always show revenue + membership breakdown; mobile uses stored toggle */
-  const revenueBreakdownShown = isLgUp || isRevenueBreakdownExpanded;
-  const membershipBreakdownShown = isLgUp || isMembershipByPackageExpanded;
-
-  /** Collapsing the Revenue group also collapses Membership + Upcoming Renewals (same chevron) */
-  const collapseRevenueGroup = () => {
-    setIsRevenueBreakdownExpanded(false);
-    setIsMembershipByPackageExpanded(false);
-    setIsUpcomingRenewalsExpanded(false);
-  };
-
-  const handleRevenueExpandToggle = () => {
-    setIsRevenueBreakdownExpanded((prev) => {
-      const next = !prev;
-      if (!next) {
-        setIsMembershipByPackageExpanded(false);
-        setIsUpcomingRenewalsExpanded(false);
-      } else {
-        // Re-expanding the Revenue group should show membership breakdown again
-        setIsMembershipByPackageExpanded(true);
-      }
-      return next;
-    });
-  };
-
-  const handleRevenueBreakdownCardToggle = () => {
-    setIsRevenueBreakdownExpanded((prev) => {
-      const next = !prev;
-      if (!next) {
-        setIsMembershipByPackageExpanded(false);
-        setIsUpcomingRenewalsExpanded(false);
-      } else {
-        setIsMembershipByPackageExpanded(true);
-      }
-      return next;
-    });
-  };
+  // Click-to-open user modal — passed down to the detail modals hosted inside the
+  // Membership and Revenue breakdown cards.
+  const { openUserModal } = useAdminUserModal();
 
   // Sync date filter state with URL params on mount and when URL changes
   useEffect(() => {
@@ -106,7 +68,6 @@ export default function DashboardOverview() {
   const {
     data: dashboardStats,
     isLoading: statsLoading,
-    error: statsError,
     refetch: refetchStats,
   } = useAdminDashboardStats(
     dateRange,
@@ -114,7 +75,7 @@ export default function DashboardOverview() {
     customEndDate ? customEndDate : undefined
   );
 
-  // Fetch membership data for the KPI card
+  // Fetch membership data for the KPI grid + membership donut
   const { data: membershipByPackageData, isLoading: membershipLoading } = useMembershipByPackage(
     dateRange,
     customStartDate ? customStartDate : undefined,
@@ -208,6 +169,32 @@ export default function DashboardOverview() {
     return undefined;
   }, [dateRange, customStartDate, customEndDate, drawDates]);
 
+  // Per-card date tag for the KPI grid — e.g. "Revenue (Today)" / "(Nov 2025 – present)"
+  // / the active draw name. Draw names + the all-time launch month live here (KpiGrid
+  // only receives the resolved string).
+  const kpiRangeLabel = useMemo(() => {
+    switch (dateRange) {
+      case "today":
+        return "Today";
+      case "yesterday":
+        return "Yesterday";
+      case "current-draw":
+        return drawDates?.currentDraw?.name ?? "Current draw";
+      case "last-draw":
+        return drawDates?.lastDraw?.name ?? "Last draw";
+      case "all-time": {
+        const start = dashboardStats?.dateRange?.start;
+        return start ? `${format(new Date(start), "MMM yyyy")} – present` : "All time";
+      }
+      case "custom":
+        return customStartDate && customEndDate
+          ? formatAbbreviatedDate(customStartDate, customEndDate)
+          : "Custom";
+      default:
+        return "";
+    }
+  }, [dateRange, drawDates, dashboardStats, customStartDate, customEndDate]);
+
   const overviewToolbarProps = {
     dateRange,
     onRangeChange: (range: DateRange) => {
@@ -234,85 +221,80 @@ export default function DashboardOverview() {
   const toolbarDesktop = isLgUp ? <OverviewToolbar {...overviewToolbarProps} placement="page" /> : null;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5 md:space-y-6">
       {toolbarMobileInLayout}
       {toolbarMobileUntilPortal}
       {toolbarDesktop}
 
-      {/* KPI Metrics with integrated breakdown sections */}
-      <KPIMetricsGrid
-        dashboardStats={dashboardStats}
-        membershipSummary={membershipByPackageData?.summary}
+      {/* New KPI grid (redesign Phase 2) — replaces the old KPIMetricsGrid */}
+      <KpiGrid
+        stats={dashboardStats}
+        membership={membershipByPackageData}
         dateRange={dateRange}
-        loading={statsLoading}
-        error={statsError}
-        onRevenueClick={handleRevenueBreakdownCardToggle}
-        onMembershipClick={() => setIsMembershipByPackageExpanded(!isMembershipByPackageExpanded)}
+        rangeLabel={kpiRangeLabel}
+        statsLoading={statsLoading}
         membershipLoading={membershipLoading}
-        membershipAsOfMode={membershipByPackageData?.meta?.membershipAsOfMode}
-        membershipAsOf={membershipByPackageData?.meta?.asOf}
-        isRevenueExpanded={isRevenueBreakdownExpanded}
-        onRevenueExpandToggle={handleRevenueExpandToggle}
-        isAdvertisingExpanded={isAdvertisingBreakdownExpanded}
-        onAdvertisingExpandToggle={() => setIsAdvertisingBreakdownExpanded(!isAdvertisingBreakdownExpanded)}
-        isUsersPerformanceExpanded={isUsersPerformanceExpanded}
-        onUsersPerformanceExpandToggle={() => setIsUsersPerformanceExpanded(!isUsersPerformanceExpanded)}
-        revenueBreakdownSection={
-          dashboardStats ? (
-            <RevenueBreakdownSection
-              breakdown={dashboardStats.revenue.breakdown}
-              dateRange={dateRange}
-              customStartDate={customStartDate || undefined}
-              customEndDate={customEndDate || undefined}
-              isExpanded={revenueBreakdownShown}
-              collapsible={!isLgUp}
-              onClose={collapseRevenueGroup}
-              onUserClick={openUserModal}
-            />
-          ) : null
-        }
-        membershipBreakdownSection={
-          <MembershipBreakdownSection
-            isExpanded={membershipBreakdownShown}
-            collapsible={!isLgUp}
-            onClose={() => setIsMembershipByPackageExpanded(false)}
-            onUserClick={openUserModal}
-            membershipByPackageData={membershipByPackageData}
-            membershipByPackageLoading={membershipLoading}
-          />
-        }
-        upcomingRenewalsSection={
-          <RenewalsDashboardSection
-            isExpanded={isUpcomingRenewalsExpanded}
-            onToggleExpand={() => setIsUpcomingRenewalsExpanded(!isUpcomingRenewalsExpanded)}
-            membershipRenewals={dashboardStats?.users.membershipRenewals}
-            statsLoading={statsLoading}
-          />
-        }
-        advertisingBreakdownSection={
-          <AdvertisingBreakdownSection
-            dateRange={dateRange}
-            customStartDate={customStartDate || undefined}
-            customEndDate={customEndDate || undefined}
-            isExpanded={isAdvertisingBreakdownExpanded}
-          />
-        }
       />
 
-      {/* Users Breakdown — sits underneath Users & Performance with age + profession tables */}
+      {/* Revenue breakdown + advertising by platform — same row, above the charts */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-5 md:gap-6">
+        <RevenueBreakdownCard
+          stats={dashboardStats}
+          loading={statsLoading}
+          dateRange={dateRange}
+          startDate={customStartDate || undefined}
+          endDate={customEndDate || undefined}
+          onUserClick={openUserModal}
+        />
+        <AdvertisingPlatformCard stats={dashboardStats} loading={statsLoading} />
+      </div>
+
+      {/* Charts row (redesign Phase 3) — revenue area chart + membership donut */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 md:gap-6">
+        <div className="lg:col-span-2 min-w-0">
+          <RevenueChartCard />
+        </div>
+        <div className="lg:col-span-1 min-w-0">
+          <MembershipCard
+            data={membershipByPackageData}
+            loading={membershipLoading}
+            onUserClick={openUserModal}
+          />
+        </div>
+      </div>
+
+      {/* Prize performance — ad spend & return by prize (redesign Phase 4, row 3b) */}
+      <PrizePerformanceCard
+        dateRange={dateRange}
+        startDate={customStartDate || undefined}
+        endDate={customEndDate || undefined}
+      />
+
+      {/* Row 4 — top draws (placeholder) + upcoming renewals (redesign Phase 5) */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 md:gap-6">
+        <div className="lg:col-span-2 min-w-0">
+          <TopDrawsCard />
+        </div>
+        <div className="lg:col-span-1 min-w-0">
+          <UpcomingRenewalsCard />
+        </div>
+      </div>
+
+      {/* Row 5 — recent activity + quick actions (redesign Phase 5) */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 md:gap-6">
+        <div className="lg:col-span-2 min-w-0">
+          <ActivityCard />
+        </div>
+        <div className="lg:col-span-1 min-w-0">
+          <QuickActionsCard onRefreshStats={() => refetchStats()} />
+        </div>
+      </div>
+
+      {/* Users Breakdown — last content row; age + profession tables (retained until the Users page exists) */}
       <UsersBreakdownSection
         isExpanded={isUsersBreakdownExpanded}
         onToggleExpand={() => setIsUsersBreakdownExpanded(!isUsersBreakdownExpanded)}
       />
-
-      {/* Revenue Overview Chart */}
-      <RevenueOverview />
-
-      {/* Quick Actions */}
-      <QuickActionsPanel onRefreshStats={() => refetchStats()} />
-
-      {/* Recent Activity Feed */}
-      <RecentActivityFeed />
 
       {/* Custom Date Range Modal */}
       <CustomDateRangeModal

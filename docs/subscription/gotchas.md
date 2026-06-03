@@ -2,7 +2,29 @@
 
 Real failure modes, surprising behaviours, and tribal knowledge from incidents. Most of these came from production bugs and have lessons attached.
 
+## UI / modals
+
+### RenewalFailedModal dark mode was half-done (dark bg, dark text)
+
+The "Complete your renewal payment" modal ([RenewalFailedModal](../../src/components/modals/RenewalFailedModal/)) had `dark:bg-*` overrides on the Shell/panels (body went near-black in dark mode) but the **text colours had no `dark:` variants** (`text-neutral-900`, `text-neutral-500`, etc.) and the main Stripe `PaymentElement` used a **hardcoded light** appearance (`colorBackground:#ffffff`, `colorText:#1f2937`). Result in dark mode: dark body + dark labels (and dark Stripe field labels) → invisible; only the white inputs showed (contrast ~1.08). Fix = **complete** dark mode, don't force light:
+- Add `dark:` light-text variants to every label across `Shell`, `PaymentMethodPicker`, `PaymentForm`, `InlineCardSetup`, `AlertBanner`, `ActionButtons`, and the index alert boxes (e.g. `text-neutral-900 dark:text-neutral-100`, `text-neutral-500 dark:text-neutral-400`).
+- Swap the main card form's hardcoded light appearance for the theme-aware `buildMembershipStripeAppearance(isDarkMode)` (already used for the inline card-setup path) so Stripe renders its `night` theme in dark mode.
+- **Derive `isDarkMode` from `useHtmlDarkForUi()` (the actual `.dark` class on `<html>`), NOT `useThemeStore`.** They can disagree — the `<html>` class is set by the bootstrap in `layout.tsx` (incl. a time-based Sydney-night fallback) and by AdminThemeContext, while `useThemeStore.theme` defaults to `"light"`. Wiring the Stripe appearance to the store left the `PaymentElement` rendering its **light** theme (white inputs, invisible labels) inside a dark-classed modal. The HTML around it was already dark via Tailwind `dark:` — only the Stripe iframe was out of sync.
+- Keep the dark backgrounds — the modal is meant to be dark in dark mode. When adding UI here, always pair a text colour with its `dark:` variant.
+
 ## Stripe & invoices
+
+### `list({ status: "trialing" })` leaks `incomplete` subs → false "Existing Subscription" block
+
+**Symptom:** a user who is *not* an active member is permanently blocked from subscribing. The checkout shows two toasts — **"Existing Subscription"** and **"Active Subscription Found"** (both the `EXISTING_SUBSCRIPTION` 409) — and "Manage Subscription" leads nowhere because `/my-account` shows them as unsubscribed.
+
+**Cause:** the resubscribe guard `stripeCustomerHasManageableSubscription` (→ `findRecoverableSubscriptionForCustomer`) used to trust Stripe's `subscriptions.list({ status })` filter. Stripe's `status: "trialing"` filter **also returns subscriptions that merely have a future `trial_end`, even when the object's own `.status` is `incomplete`.** Anchor billing produces exactly this shape for joins on the 25th–27th: `trial_end` set ([anchor-billing.ts](../../src/utils/billing/anchor-billing.ts)) + `payment_behavior: "default_incomplete"` + an unpaid initial `add_invoice_items` charge → the subscription sits at `incomplete` with a future `trial_end`. So an **abandoned checkout** was mis-classified as a live "trialing" membership and blocked all future attempts. Verified live: `retrieve(sub).status === "incomplete"` while `list({status:"trialing"})` returned that same sub.
+
+**Fix:** `findRecoverableSubscriptionForCustomer` now re-validates each returned sub's own `.status` with `isManageableStripeSubscriptionStatus()` before treating it as recoverable — the query filter is advisory only ([SubscriptionReferenceService.ts](../../src/services/subscription/SubscriptionReferenceService.ts)). This fixes both call sites at once: the resubscribe guard *and* the cancel-recovery path (`resolveCancellableStripeSubscription`). Regression test: `npm run test:find-recoverable-subscription`.
+
+**Rule of thumb:** never trust Stripe's `subscriptions.list({ status })` filter as proof of a subscription's status — always check the returned object's `.status` field. The two can disagree for trial + incomplete combinations.
+
+**Now also addressed:** the remaining follow-ups from this fix have since been closed. The new `cancelIncompleteSubscriptionAndVoidInvoice` helper ([cancelIncompleteSubscription.ts](../../src/services/subscription/cancelIncompleteSubscription.ts)) cancels the stale sub and voids its open initial invoice (best-effort, idempotent). Both create-subscription routes call it at-source to retire the user's `pendingStripeSubscriptionId` before creating a new sub, preventing abandoned `incomplete` checkouts from accumulating (see [billing-stripe/gotchas.md](../billing-stripe/gotchas.md#resubscribe-retires-the-stale-pending-incomplete-sub)). The `cleanup-abandoned-incomplete-subscriptions` backfill script (`npm run cleanup:abandoned-incomplete:dry` / `cleanup:abandoned-incomplete`) sweeps any that already exist in Stripe and repairs or clears dead `stripeSubscriptionId` pointers. Finally, the MembershipModal background pre-warm no longer raises an `EXISTING_SUBSCRIPTION` toast — only the single actionable "Active Subscription Found" toast on purchase click remains.
 
 ### Pause-collection orphans
 
@@ -104,6 +126,23 @@ The cancel service intentionally preserves this field; see the comment at [Cance
 
 **UI exposure (Phase 1, 2026-05-20):** the backend has always accepted *any* `packageId` via `POST /api/stripe/create-subscription-existing-user`, and `calculateResubscribeEntries` correctly preserves `lastMonthAccumulatedEntries` regardless of which tier the member picks on the way back. Until 2026-05-20 the UI restricted cancelled users to a single "Reactivate same tier" CTA; the new `ResubscribeTierPicker` (see [frontend.md → Resubscribe tier picker](./frontend.md#resubscribe-tier-picker-phase-1-2026-05-20)) now exposes the existing backend capability so members can resubscribe to a higher or lower tier and still keep their accumulated-entries carry-over.
 
+### Reactivate button gating is looser than backend reactivate eligibility (known edge)
+
+The "Reactivate" / "Resume" button in `SubscriptionManagementModal` (`CancelResumeRow.tsx`, `SettingsRedesignSubscription.tsx`) renders purely on the DB-derived flag **`isCancelled = !user.subscription.autoRenew && user.subscription.isActive`** ([benefits/route.ts:45](../../src/app/api/subscription/benefits/route.ts#L45)). It does **not** inspect the live Stripe `cancel_at_period_end` / `cancel_at` / 30-day grace window.
+
+In **normal app flows this is correct** — `!autoRenew && isActive` is exactly the *scheduled-cancellation-but-still-in-grace* state, and the button correctly hides for: fully-lapsed (`isActive=false` → resubscribe picker), past-due with auto-renew on (`hasFailed` hides the manage block → "Pay Now"), normal active/trialing (`autoRenew=true` → "Cancel"), and retention-paused (the pause flow never sets `autoRenew`, so it stays `true` → button hidden).
+
+**But because it's a DB-flag heuristic, the affordance is looser than what the backend will honor.** `renew-subscription` only derives `renewalStrategy:"reactivate"` when the *live* Stripe sub has `cancel_at` non-null and is within a 30-day grace window ([renew-subscription/route.ts:160-206](../../src/app/api/stripe/renew-subscription/route.ts#L160)). So any state that reaches `autoRenew=false && isActive=true` by another path shows the button but may **not** perform a free uncancel on click:
+
+| Edge state (`autoRenew=false`, `isActive=true`) | Click consequence |
+|---|---|
+| **Admin sets `autoRenew=false`** via the user-edit route ([admin/users/[id]/route.ts:795-801](../../src/app/api/admin/users/[id]/route.ts#L795)) with no real Stripe cancellation | backend finds no `cancel_at` → falls to `create_new` → **charges a full new membership** (only edge with a real money consequence) |
+| DB/Stripe **drift** or `cancel_at` null / grace elapsed | `create_new` (full charge) |
+| Stale DB vs live **`past_due`** | `retry_payment` → charges the overdue invoice |
+| **No saved payment method** | backend returns `requiresSetupIntent`; the client setup-intent modal is an unimplemented TODO ([index.tsx:640](../../src/components/modals/SubscriptionManagementModal/index.tsx#L640)) → dead-ends |
+
+**Status: accepted/known, not a live production problem** — the in-app paths that set `autoRenew=false` (the Cancel button, `update-auto-renew`, and the Stripe-side cancel webhook) all produce a *genuine* scheduled cancellation that the backend reactivates correctly; the surprise-charge edges require an admin edit or flag drift. If revisited, two minimal fixes: (1) compute `isCancelled` from the live Stripe sub in `benefits/route.ts` (collapses the affordance onto the exact backend condition), or (2) have the backend return a distinct "cannot reactivate — please resubscribe" error instead of silently falling to `create_new`.
+
 ### Cancelled-membership comeback promo
 
 There is a separate flow that targets cancelled members with a comeback promo. See the [promo](../promo/) domain — specifically the migrated `CANCELLED_MEMBERSHIP_COMEBACK_PROMO.md` content (will land in `docs/promo/gotchas.md` when that domain is bootstrapped).
@@ -133,6 +172,14 @@ npx tsx scripts/migrate-anchor-billing-24.ts --limit=50
 ```
 
 Logs every subscription with `subId`, `customerEmail`, `oldAnchorDay`, `newAnchorDay`, `action` for cross-referencing in DB and Stripe Dashboard.
+
+### `createAESTDateAsUTC` returns Invalid Date (NaN) on overflow days
+
+`createAESTDateAsUTC` (and related AEST date helpers) return an Invalid Date when given a day that doesn't exist in the target month (e.g. day 31 in a 30-day month). Always **clamp to the last day of the month first** — use `daysInMonthUTC(year, month)` from `src/utils/billing/anchor-billing.ts` — before constructing the date. The past-due reanchor rule does this via `clampReanchorDay`. Failing to clamp will silently produce a `NaN` timestamp that passes through to Stripe as a bad value.
+
+### Stripe does NOT reject a past `trial_end` — it charges immediately
+
+When you call `stripe.subscriptions.update(id, { trial_end: <timestamp> })` and the timestamp is in the past, Stripe **does not return an error** — it ends the trial immediately and charges the customer right away. The past-due reanchor code **future-floors** the computed `trial_end`: if the computed reanchor date is not strictly in the future, the reanchor is aborted non-fatally. Never pass a non-future `trial_end` when the intent is "schedule next renewal", not "charge now".
 
 ## Frontend
 
@@ -165,3 +212,11 @@ The customer-facing Terms & Conditions page lives at [src/app/(site)/terms/page.
 - **Package tiers** (§3) — Mini-draw packs are a **viewer swap**, not a flat list ([getMiniDrawPackagesForViewer](../../src/data/miniDrawPackages.ts)). The split is driven by [`hasAdditionalPackageAccess`](../../src/utils/membership/has-additional-package-access.ts) = *active subscription **OR** any current Major Giveaway entries* — **NOT** membership-exclusive (the `additional-*-pack-mini` records are flagged `isMemberOnly` in data but the access gate was deliberately broadened; the util comment notes they were `previously "member-only"`). So a One-Time Package buyer with current draw entries also sees the Tradie/Foreman/Boss/Power/VIP (Mini Draw) tiers; users with no current draw entries see Mini Pack 1–3. Do not describe these as "member-only/member-exclusive" in the T&C — that would be a false statement. Mini Pack 4–8 were deactivated 2026-05-14. If the active catalog in `src/data/miniDrawPackages.ts` / `membershipPackages.ts` or the access rule changes, update §3/§5/§17.
 
 Open legal item (not a code issue): "non-refundable once purchased" (§4) vs. the Australian Consumer Law savings clause (§11) is a lawyer review item, behaviourally consistent with code (no proration/refund on cancel) but not an enforced rule.
+
+## Past-due reanchor — `attempt_count` is not a reliable dunning signal under `pause_collection`
+
+When a renewal fails, the app sets `pause_collection: { behavior: "keep_as_draft" }` on the subscription. This **blocks Stripe's automatic retry scheduler** — Stripe does not re-attempt the invoice while collection is paused. As a result, a manually recovered invoice (admin charge, user Pay-Now, renew-subscription retry) still has `attempt_count === 1`, even though the member genuinely was past-due.
+
+The reanchor gate (`shouldReanchorAfterRecovery` in `pauseCollectionPolicy.ts`) therefore does **not** rely on `attempt_count > 1` as its primary dunning signal — it is kept only as belt-and-suspenders for the rare no-pause edge. The **primary durable signal** for the `renew-subscription` recovery channel is the `invoice.metadata.dunning_recovery === '1'` marker, stamped on the invoice by `handleInvoicePaymentFailed` at the moment the renewal first fails. This marker survives channel-independently (it is set on the invoice object itself and is not cleared when DB status or `pause_collection` is updated).
+
+See `docs/PAST_DUE_REANCHOR.md` for the full trigger-gate logic and channel analysis.

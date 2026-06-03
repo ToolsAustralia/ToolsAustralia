@@ -33,6 +33,8 @@ export interface IUser extends Document {
     cancelledAt?: Date; // Track when user actually triggered the cancellation (not the endDate which is future)
     /** Set when subscription first enters past_due (failed renewal); used for admin activity log */
     pastDueAt?: Date;
+    /** Stripe invoice id of the last past-due recovery we reanchored for (idempotency marker). */
+    lastReanchoredInvoiceId?: string;
     isActive: boolean;
     autoRenew?: boolean;
     status?: string;
@@ -237,8 +239,8 @@ export interface IUser extends Document {
 
   // Signup attribution (which promotion page led to registration)
   signupAttribution?: {
-    promotionPageType: "evergreen" | "toolset";
-    promotionSlug: string;
+    promotionPageType?: "evergreen" | "toolset";
+    promotionSlug?: string;
     visitedAt: Date;
     anonymousId?: string;
     // UTM snapshot at signup (e.g. klaviyo, facebook for channel attribution)
@@ -474,6 +476,10 @@ const UserSchema = new Schema<IUser>(
       },
       pastDueAt: {
         type: Date,
+        required: false,
+      },
+      lastReanchoredInvoiceId: {
+        type: String,
         required: false,
       },
       isActive: {

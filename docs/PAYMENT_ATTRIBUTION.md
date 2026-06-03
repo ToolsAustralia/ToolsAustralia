@@ -150,6 +150,69 @@ When building `PaymentEvent.data`, the system merges:
 
 ---
 
+---
+
+## Single-Platform Resolution Model (2026-06-01)
+
+The v1 system above captures raw UTM + campaign IDs and writes them to `PaymentEvent.data` but does not collapse them to a single winner. The single-platform resolver adds that final step.
+
+### How it works
+
+At the `create-*` route edge, the resolver (`src/services/attribution/`) reads the durable `_ta_attr` cookie (90-day first-party, written at landing by the client) plus any click IDs in the request body, and assigns exactly **one** `convertingPlatform` and `attributionConfidence` per payment. The resolved values are stamped into Stripe metadata (`attr_platform`, `attr_confidence`, `attr_click_id`, `attr_click_ts`) and then persisted on `PaymentEvent` by the Stripe webhook handler.
+
+For renewals the resolver reads from `subscription.metadata` written at initial purchase — no client-side signal needed on renewal, making attribution sticky for the subscription lifetime.
+
+### New PaymentEvent fields
+
+| Field | Values |
+|---|---|
+| `convertingPlatform` | `meta \| tiktok \| snapchat \| klaviyo_email \| klaviyo_sms \| google \| direct \| other` |
+| `attributionConfidence` | `click \| utm_only \| inferred_backfill` |
+| `isRenewal` | `boolean` |
+
+### Honest limits of this ledger
+
+- **View-through conversions are not tracked.** The ledger counts only click-based conversions: `fbclid` / `_fbc`, `ttclid`, `ScCid`, and Klaviyo-email/SMS UTM signals. A user who saw an ad but did not click will be attributed as `direct`.
+- **Klaviyo-open conversions are not tracked.** Klaviyo's `_kx` parameter is not used for attribution (it cannot be re-read server-side reliably). Klaviyo is attributed only when `utm_source=klaviyo` + `utm_medium=email|sms` are present.
+- **The ledger will deliberately diverge from each platform's dashboard.** Each ad platform uses its own attribution model (view-through, click, post-view windows). This ledger uses click-only with fixed recency windows (Meta/TikTok/Snap 7d, Klaviyo email/SMS 5d). The divergence is by design: the ledger provides a consistent, auditable cross-platform view, not a replica of any single platform's number.
+- **One payment = one platform.** Multi-touch attribution is intentionally excluded. The most-recent click-ID within its recency window wins.
+
+### Relationship to CAPI fan-out
+
+CAPI dispatch to Meta, TikTok, and Snap is **unchanged** — all enabled platforms continue to receive their conversion events. The single-platform ledger is an analytics layer on top of that signal layer; it does not filter what gets sent to the platforms.
+
+---
+
+---
+
+## Backfill (historical rows)
+
+### Phase 1 (live, forward-fill)
+
+The single-platform resolver runs at the `create-*` route edge for every payment from its deploy date onward. New `BenefitsGranted` events are stamped with a live `convertingPlatform` (`click` or `utm_only` confidence) before the Stripe webhook handler persists them — no backfill required for these rows.
+
+### Phase 2 (inferred backfill)
+
+Historical `BenefitsGranted` rows written before the resolver shipped have `convertingPlatform: null`. The script [`scripts/backfill-converting-platform.ts`](../scripts/backfill-converting-platform.ts) fills these in post-hoc using `deriveBackfillAttribution`, which reads:
+
+- `data.utmSource` / `data.utmMedium` — UTM signals already captured on the event.
+- Indexed `attribution*` Meta ad-id fields (`campaignId`, `adsetId`, `adId`) — available on events that carried click IDs at purchase time.
+- `data.billingReason` — to set the `isRenewal` flag.
+
+All rows resolved by this script are tagged `attributionConfidence: "inferred_backfill"`. The dashboard segments by confidence so `inferred_backfill` rows never inflate live `click` / `utm_only` ROAS figures — they appear in a separate breakdown tier.
+
+### Idempotency guarantee
+
+The backfill filter is `{ eventType: "BenefitsGranted", convertingPlatform: null }`. Live-resolved rows (`click` or `utm_only`) and previously backfilled rows (`inferred_backfill`) are never overwritten. Re-running the script after a partial failure is safe and converges.
+
+### Dashboard segmentation
+
+The dashboard's `byConfidence` breakdown surfaces three tiers: `click`, `utm_only`, and `inferred_backfill`. Attribution confidence affects only the analytics layer — ROAS exclusion for renewals continues to use `packageType + data.billingReason`, not the `isRenewal` flag that the backfill sets.
+
+See [`docs/infrastructure/architecture.md` — Converting-platform attribution backfill](./infrastructure/architecture.md#converting-platform-attribution-backfill) for the full runbook, CLI flags, and exit-code reference.
+
+---
+
 ## Related Documentation
 
 - [UTM_ATTRIBUTION.md](./UTM_ATTRIBUTION.md) — UTM capture and storage

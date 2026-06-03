@@ -1,11 +1,14 @@
 "use client";
 
 import React from "react";
-import { CreditCard } from "lucide-react";
+import { CreditCard, Check } from "lucide-react";
 import { type SavedPaymentMethod } from "@/hooks/queries";
 
 interface AcceptDeclineRowProps {
   isProcessing: boolean;
+  /** True once the purchase has succeeded; keeps the CTA disabled through the
+   *  success → auto-close window so the offer cannot be charged a second time. */
+  purchaseComplete: boolean;
   isCheckingPaymentMethod: boolean;
   resolvedChargePm: SavedPaymentMethod | undefined;
   showInlineCardSetup: boolean;
@@ -18,6 +21,7 @@ interface AcceptDeclineRowProps {
 
 const AcceptDeclineRow: React.FC<AcceptDeclineRowProps> = ({
   isProcessing,
+  purchaseComplete,
   isCheckingPaymentMethod,
   resolvedChargePm,
   showInlineCardSetup,
@@ -33,10 +37,15 @@ const AcceptDeclineRow: React.FC<AcceptDeclineRowProps> = ({
         onClick={() => {
           onAccept();
         }}
-        disabled={isProcessing || !resolvedChargePm || isCheckingPaymentMethod}
+        disabled={isProcessing || purchaseComplete || !resolvedChargePm || isCheckingPaymentMethod}
         className="w-full bg-gradient-to-r from-green-600 to-green-700 text-white py-2.5 sm:py-3 px-4 sm:px-6 rounded-xl font-bold text-base sm:text-lg hover:from-green-700 hover:to-green-800 transition-all duration-200 shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed transform hover:scale-[1.02] active:scale-[0.98]"
       >
-        {isProcessing ? (
+        {purchaseComplete ? (
+          <div className="flex items-center justify-center gap-2">
+            <Check className="w-4 h-4 sm:w-5 sm:h-5" />
+            Purchased
+          </div>
+        ) : isProcessing ? (
           <div className="flex items-center justify-center gap-2">
             <div className="w-4 h-4 sm:w-5 sm:h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
             Processing...

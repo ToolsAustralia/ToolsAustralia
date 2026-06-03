@@ -30,6 +30,28 @@ The predicate at [src/utils/payment/stripe/is-stripe-noise-error.ts](../../src/u
 
 **Do not strip these errors from the user-facing flow** — the message is still returned for toast display. Only the auto-log to ErrorReport is skipped.
 
+## Invalid `category` silently drops reports
+
+`category` MUST be one of the model-enum values: `payment | network | api | system | recovery`. Any other string (e.g. `"stripe"`) causes the Mongoose save to throw, which is swallowed by the fire-and-forget wrapper — the report is silently lost with no visible error.
+
+This was the root cause of `autoLogStripeError` dropping every report it created: it passed `category: "stripe"`. Fixed by changing it to `category: "payment"` (see `src/utils/error-reporting/auto-log-error.ts`). Historical rows created before this fix show no `category` value.
+
+## `logHttpRejection` must NOT call `detectCategoryAndSeverity`
+
+`ErrorLoggingService.logHttpRejection` derives severity purely from the HTTP status (via `classifyHttpRejection`). It must never call `detectCategoryAndSeverity`, which classifies by error shape and escalates `payment`-context errors to `critical` — that escalation is wrong for HTTP-level rejections. The severity is intentionally capped at `"high"` (5xx) or `"medium"` (4xx).
+
+## `httpStatus` only populated after this change
+
+The `httpStatus` field on `ErrorReport` is only set for reports created via `logHttpRejection` (introduced with the `rejectAndLog` helper). Historical error rows have `httpStatus: null`.
+
+## `useErrorHandling` no longer calls `sessionStorage.clear()` on 401 (2026-06-01)
+
+`src/hooks/useErrorHandling.ts` previously called `sessionStorage.clear()` on HTTP 401 responses to wipe any stale session state before redirecting to login. This was removed because `sessionStorage` now holds the durable marketing-attribution cookie `_ta_attr` (90-day first-party UTM + click-ID cookie written at landing). Clearing all of `sessionStorage` on a 401 silently wiped the attribution data that the single-platform payment resolver needs to credit the correct ad platform for the subsequent purchase.
+
+The fix: handle 401 session cleanup through cookie/NextAuth invalidation only — do not call `sessionStorage.clear()`. The `_ta_attr` attribution data should survive a re-login so the user's eventual purchase is correctly attributed to the original ad click.
+
+If you need to reset attribution deliberately (e.g., a test harness), call `sessionStorage.removeItem("_ta_attr")` directly instead of clearing all of sessionStorage.
+
 ## Page URL vs API endpoint
 
 `ErrorReport` stores two locator fields that get conflated in the admin UI when only one is present:

@@ -25,8 +25,9 @@ import { categorizeError, isRecoverableError, getRecoveryStrategy } from "@/util
 import { formatPaymentError } from "@/utils/payment/stripe/payment-error-messages";
 import { getStatePreservationInstructions } from "@/utils/payment/stripe/payment-state-preservation";
 import { getReturnUrlForPaymentTypeClient } from "@/utils/payment/stripe/payment-intent-config";
-import { trackConversion } from "@/lib/tracking/dispatch-client";
-import { eventTimeNow } from "@/lib/tracking/canonical-event";
+import { usePixelTracking } from "@/hooks/usePixelTracking";
+import type { MirrorUserData } from "@/utils/tracking/meta-capi-mirror";
+import { paymentNotReadyReason } from "./paymentReadiness";
 
 export interface CardFormSectionRef {
   confirmStripeIntent: () => Promise<{
@@ -62,6 +63,8 @@ export interface CardFormSectionProps {
   amount?: number;
   packageName?: string;
   onPaymentMethodTypeChange?: (type: string | null) => void;
+  /** Fired with the PaymentElement's `ready` state so parents can gate submit. */
+  onElementReady?: (ready: boolean) => void;
 }
 
 const CardFormSection = React.forwardRef<CardFormSectionRef, CardFormSectionProps>(
@@ -75,13 +78,19 @@ const CardFormSection = React.forwardRef<CardFormSectionRef, CardFormSectionProp
       amount,
       packageName,
       onPaymentMethodTypeChange,
+      onElementReady,
     },
     ref
   ) => {
     const stripe = useStripe();
     const elements = useElements();
+    // Ref (not state) holds PaymentElement readiness: nothing here re-renders on
+    // it; the imperative confirmStripeIntent() reads the live value and the parent
+    // is notified via onElementReady so MembershipModal can gate the button.
+    const isElementReadyRef = React.useRef(false);
     const [isStripeLoading, setIsStripeLoading] = useState(true);
     const { showToast } = useToast();
+    const { trackAddPaymentInfo } = usePixelTracking();
     // Tracks whether AddPaymentInfo has fired for this PaymentElement mount.
     // Re-mounts (new clientSecret / amount / packageName key) reset this naturally.
     const addPaymentInfoFiredRef = useRef(false);
@@ -132,6 +141,15 @@ const CardFormSection = React.forwardRef<CardFormSectionRef, CardFormSectionProp
         return () => clearTimeout(timeout);
       }
     }, [stripe, elements, showToast]);
+
+    // Reset readiness on unmount so a remount (via the <Elements>/PaymentElement
+    // `key` change) starts un-ready and the parent re-gates the Purchase button.
+    React.useEffect(() => {
+      return () => {
+        isElementReadyRef.current = false;
+        onElementReady?.(false);
+      };
+    }, [onElementReady]);
 
     // Inject custom CSS for wallet payment method layout (icons and text on same row)
     // Note: Stripe uses shadow DOM, so we inject styles that target the iframe content
@@ -292,6 +310,12 @@ const CardFormSection = React.forwardRef<CardFormSectionRef, CardFormSectionProp
     // Expose confirmStripeIntent via ref – handles PaymentIntent (subscription) and SetupIntent (one-time)
     React.useImperativeHandle(ref, () => ({
       confirmStripeIntent: async () => {
+        const notReady = paymentNotReadyReason({ stripe, elements, isElementReady: isElementReadyRef.current });
+        if (notReady) {
+          return { error: notReady };
+        }
+        // notReady already guarantees stripe/elements are non-null; this explicit
+        // guard restores the control-flow narrowing TypeScript needs below.
         if (!stripe || !elements) {
           return { error: "Stripe not loaded" };
         }
@@ -603,6 +627,10 @@ const CardFormSection = React.forwardRef<CardFormSectionRef, CardFormSectionProp
           <PaymentElement
             key={`payment-element-${clientSecret?.split("_secret_")[0] || "default"}-${amount || 0}-${packageName || "default"}`}
             options={paymentElementOptions}
+            onReady={() => {
+              isElementReadyRef.current = true;
+              onElementReady?.(true);
+            }}
             onChange={(event) => {
               // Handle PaymentElement change events
               // PaymentElement onChange provides completion status
@@ -623,30 +651,43 @@ const CardFormSection = React.forwardRef<CardFormSectionRef, CardFormSectionProp
 
               // When the user has entered valid card details, fire AddPaymentInfo once.
               // Meta uses this event as a high-intent signal for ad optimization.
-              // Synthetic eventId — AddPaymentInfo has no CAPI counterpart so cross-channel
-              // dedup isn't relevant. Use packageName + timestamp so React Strict Mode
-              // double-mounts don't double-count. PaymentMethodSelector receives `amount`
-              // (cents) and `packageName` but no packageId; we derive packageType from
-              // intentType + amount (matches the outer component's derivation).
+              // PaymentMethodSelector receives `amount` (cents) and `packageName` but no
+              // packageId; we derive packageType from intentType + amount (matches the
+              // outer component's derivation). The ref guard keeps React Strict Mode
+              // double-mounts from double-counting.
               if (event.complete && !addPaymentInfoFiredRef.current) {
                 addPaymentInfoFiredRef.current = true;
                 const derivedPackageType =
                   intentType === "payment" && typeof amount === "number" && amount > 0
                     ? "one-time"
                     : "membership";
-                trackConversion({
-                  eventName: "AddPaymentInfo",
-                  eventId: `addpaymentinfo-${packageName ?? "unknown"}-${Date.now()}`,
-                  eventTime: eventTimeNow(),
-                  value: typeof amount === "number" ? amount / 100 : undefined,
-                  currency: typeof amount === "number" ? "AUD" : undefined,
-                  customData: {
-                    contentType: "product",
+
+                // Identity from the billing details the shopper just entered; empty
+                // fields are stripped downstream (stripEmpty in the mirror).
+                const [bdFirst, ...bdRest] = (billingDetails?.name ?? "").trim().split(/\s+/);
+                const apiUserData: MirrorUserData = {
+                  email: billingDetails?.email,
+                  phone: billingDetails?.phone,
+                  firstName: bdFirst || undefined,
+                  lastName: bdRest.length ? bdRest.join(" ") : undefined,
+                  city: billingDetails?.city,
+                  state: billingDetails?.state,
+                  zipCode: billingDetails?.postalCode,
+                  country: billingDetails?.country,
+                };
+
+                // Dual Pixel + CAPI via a shared event_id (fireFunnelEvent), so
+                // AddPaymentInfo gains an EMQ score and dedup coverage.
+                trackAddPaymentInfo(
+                  {
+                    value: typeof amount === "number" ? amount / 100 : undefined,
+                    currency: typeof amount === "number" ? "AUD" : undefined,
                     numItems: 1,
                     packageType: derivedPackageType,
                   },
-                  eventSourceUrl: typeof window !== "undefined" ? window.location.href : undefined,
-                });
+                  undefined,
+                  apiUserData,
+                );
               }
             }}
           />

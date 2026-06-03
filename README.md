@@ -15,8 +15,8 @@ Membership-driven giveaway and rewards platform for Australian tradies. Members 
 - **Mini Draws** — per-product draws with no fixed schedule; they trigger once the configured entry threshold is reached.
 - **Upsells** — post-purchase offers at 50–60% off, granting 2× the base pack's entries; tracked across membership, one-time, additional, and mini-draw categories.
 - **Partner Discounts** — static catalog of **7 partner brands**, gated by membership tier. Higher tiers see more of the catalog (Tradie 50% / Foreman 75% / Boss 100%).
-- **Stripe Billing** — Payment Intents for one-time purchases, Subscriptions with **anchor-day-24 billing** so renewals settle before each major draw.
-- **Refund + Past-Due Recovery** — full-refund ledger reversal, collection-pause-on-failure, admin past-due charge tool with strict rate limits.
+- **Stripe Billing** — Payment Intents for one-time purchases, Subscriptions with **anchor-day-24 billing** so renewals settle before each major draw. New joiners on the 25th/26th/27th are anchored to the 24th; recovered past-due members are reanchored to their recovery-payment date (clamped 25/26/27 → 24).
+- **Refund + Past-Due Recovery** — full-refund ledger reversal, collection-pause-on-failure, past-due reanchor on recovery, admin past-due charge tool with strict rate limits.
 - **Affiliate Program** — commissions and recurring backfills, dedicated portal.
 - **Referrals** — refer-a-friend flow with `ReferralEvent` tracking.
 - **Cancellation / Retention Flow** — pause and discount offers before churn, with analytics.
@@ -30,8 +30,7 @@ Membership-driven giveaway and rewards platform for Australian tradies. Members 
 
 - **Shop** — product/cart/checkout scaffolding is built (models, APIs, CartContext, brand and product pages). The `/shop` landing currently renders a *Coming Soon* page. Shop discount lines in each membership tier are intentionally hidden until launch.
 - **Partner Discount API** — partner catalog is currently the curated list of 7 brands. The next milestone replaces this with a database-driven catalog targeting **1,000+ partner brands**, surfaced through a proper API and admin CRUD. The percentage-access tier model is already in place and will scale 1:1.
-- **TikTok Ads insights sync** — admin shell and pixel client are present; the Marketing API insights sync ships in a follow-up.
-- **Snapchat Ads insights sync** — admin shell is present; insights pipeline ships in a follow-up.
+- **TikTok / Snapchat ad-spend sync** — their admin tabs now show server-side **attributed revenue** (hour-of-day); the remaining piece is each platform's **ad-spend** sync (Marketing API) so spend + ROAS fill in (today they show "awaiting sync"). Meta spend is already live.
 - **Mobile app** — native **Android** app on the **Google Play Store** is planned. iOS / App Store is **not** on the roadmap.
 - **2nd- and 3rd-place winners per Major Draw** — `Winner` schema already supports multiple winners per draw; today each cycle has a single Grand Winner, and adding placings is operational not structural.
 - **Second monthly Major Draw** — under consideration; current cadence stays at one draw per month on the 27th.
@@ -40,7 +39,7 @@ Membership-driven giveaway and rewards platform for Australian tradies. Members 
 
 - Public partner-discount API endpoints (beyond partner applications + the partner-discount queue eligibility check).
 - Shop checkout / fulfilment.
-- TikTok / Snapchat insights cron + admin metrics.
+- TikTok / Snapchat **ad-spend** sync cron (their admin revenue metrics are live; only the spend/ROAS side is pending).
 
 ---
 

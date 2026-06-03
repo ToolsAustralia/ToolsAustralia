@@ -39,6 +39,7 @@ import MiniDrawEditModal, {
   type MiniDrawEditPayload,
 } from "@/components/modals/MiniDrawEditModal";
 import Image from "next/image";
+import { useSearchParams } from "next/navigation";
 import { getBrandMeta, defaultBrandLogo } from "@/utils/brand-utils";
 import BrandLogoCard from "@/components/ui/BrandLogoCard";
 import ConfirmationModal from "@/components/modals/ConfirmationModal";
@@ -84,7 +85,10 @@ export default function MiniDrawManagement() {
   const [editingDraw, setEditingDraw] = useState<MiniDraw | null>(null);
   const [isSavingEdit, setIsSavingEdit] = useState(false);
   const [selectedStatus, setSelectedStatus] = useState<string>("all");
-  const [searchTerm, setSearchTerm] = useState("");
+  // Pre-fill the search box from `?search=` (e.g. deep-link from the Overview
+  // "Top mini draws" card). Read once on mount — the user can edit/clear after.
+  const searchParams = useSearchParams();
+  const [searchTerm, setSearchTerm] = useState(() => searchParams.get("search") ?? "");
   const [isReorderMode, setIsReorderMode] = useState(false);
   const [isOrderDirty, setIsOrderDirty] = useState(false);
   const [isSavingOrder, setIsSavingOrder] = useState(false);

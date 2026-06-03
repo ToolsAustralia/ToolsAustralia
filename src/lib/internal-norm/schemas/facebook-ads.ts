@@ -17,10 +17,13 @@ const FacebookAdsSummarySchema = z.object({
   roas: z.number(),                   // ratio (revenue / spend); 0 when spend is 0
   conversions: z.number(),            // count
   impressions: z.number(),            // count
-  clicks: z.number(),                 // count
+  clicks: z.number(),                 // count (all clicks)
+  linkClicks: z.number(),             // count (inline_link_clicks)
   landingPageView: z.number(),        // count
   ctr: z.number(),                    // percent (clicks/impressions × 100)
   cpc: z.number(),                    // AUD dollars per click
+  linkCtr: z.number(),                // percent (linkClicks/impressions × 100)
+  linkCpc: z.number(),                // AUD dollars per link click
 });
 
 const FacebookAdsBreakdownItemSchema = z.object({
@@ -38,9 +41,12 @@ const FacebookAdsBreakdownItemSchema = z.object({
   conversions: z.number(),
   impressions: z.number(),
   clicks: z.number(),
+  linkClicks: z.number(),             // count (inline_link_clicks)
   landingPageView: z.number(),
   ctr: z.number(),
   cpc: z.number(),
+  linkCtr: z.number(),                // percent (linkClicks/impressions × 100)
+  linkCpc: z.number(),                // AUD dollars per link click
 });
 
 export const NormFacebookAdsInsightsSchema = z.object({
@@ -62,14 +68,17 @@ const HourlyInsightItemSchema = z.object({
   label: z.string(),                  // e.g. "1:00 PM"
   spend: z.number(),                  // AUD dollars (from Facebook)
   impressions: z.number(),            // from Facebook
-  clicks: z.number(),                 // from Facebook
-  landingPageView: z.number().nullable(), // null at hourly granularity (Meta limitation)
-  revenue: z.number(),                // AUD dollars (from PaymentEvent)
-  conversions: z.number(),            // count (from PaymentEvent)
+  clicks: z.number(),                 // from Facebook (Clicks All)
+  linkClicks: z.number(),             // inline_link_clicks (from Facebook)
+  lpv: z.number(),                    // landing_page_view action count (from Meta actions array)
+  revenue: z.number(),                // AUD dollars (server-side meta-attributed PaymentEvents)
+  conversions: z.number(),            // count (server-side meta-attributed PaymentEvents)
   profit: z.number(),                 // revenue − spend
   roas: z.number(),                   // ratio (revenue / spend); 0 when spend is 0
-  ctr: z.number(),                    // percent
+  ctr: z.number(),                    // percent (clicks/impressions × 100)
   cpc: z.number(),                    // AUD dollars per click
+  linkCtr: z.number(),                // percent (linkClicks/impressions × 100)
+  linkCpc: z.number(),                // AUD dollars per link click
 });
 
 export const NormFacebookAdsHourlyInsightsSchema = z.object({

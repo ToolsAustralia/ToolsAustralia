@@ -8,7 +8,6 @@ const QuerySchema = z.object({
   endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   filterLevel: z.enum(["campaign", "adset", "ad"]).optional(),
   filterIds: z.string().optional(), // comma-separated
-  utmSource: z.string().optional(),
 });
 
 export const GET = withNorm(
@@ -34,7 +33,6 @@ export const GET = withNorm(
       endDate: parsed.data.endDate,
       filterLevel: parsed.data.filterLevel,
       filterIds,
-      utmSource: parsed.data.utmSource,
     });
 
     return ctx.ok(result);

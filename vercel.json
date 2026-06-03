@@ -51,6 +51,18 @@
     {
       "path": "/api/cron/cancellation-retention-maturity",
       "schedule": "0 17 * * *"
+    },
+    {
+      "path": "/api/cron/reconcile-major-draw-entries",
+      "schedule": "30 16 * * *"
+    },
+    {
+      "path": "/api/cron/sync-meta-ads",
+      "schedule": "0 * * * *"
+    },
+    {
+      "path": "/api/cron/sync-meta-ads",
+      "schedule": "59 12,13 * * *"
     }
   ],
   "functions": {
@@ -74,7 +86,9 @@
     "src/app/api/cron/milestone-rewards-issuance/route.ts": { "memory": 1024, "maxDuration": 300 },
     "src/app/api/cron/monthly-redeemables-issuance/route.ts": { "memory": 1024, "maxDuration": 300 },
     "src/app/api/cron/sync-meta-spend-by-url/route.ts": { "memory": 1024, "maxDuration": 300 },
+    "src/app/api/cron/sync-meta-ads/route.ts": { "memory": 1024, "maxDuration": 300 },
     "src/app/api/cron/reconcile-blocked-transactions/route.ts": { "memory": 1024, "maxDuration": 300 },
+    "src/app/api/cron/reconcile-major-draw-entries/route.ts": { "memory": 1024, "maxDuration": 300 },
     "src/app/api/cron/dashboard-stats-daily-snapshot/route.ts": { "memory": 1024, "maxDuration": 300 },
     "src/app/api/cron/cancellation-retention-resume/route.ts": { "memory": 1024, "maxDuration": 300 },
     "src/app/api/cron/cancellation-retention-maturity/route.ts": { "memory": 1024, "maxDuration": 300 },
@@ -84,6 +98,7 @@
     "src/app/api/subscription/**/route.ts": { "memory": 512, "maxDuration": 60 },
     "src/app/api/invoice/**/route.ts": { "memory": 512, "maxDuration": 60 },
     "src/app/api/orders/**/route.ts": { "memory": 512, "maxDuration": 60 },
+    "src/app/api/admin/facebook-ads/health/insights/route.ts": { "memory": 512, "maxDuration": 30 },
     "src/app/api/**/route.ts": { "memory": 512, "maxDuration": 10 }
   }
 }

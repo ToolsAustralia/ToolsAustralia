@@ -138,7 +138,7 @@ export default function MembershipByPackageDetailModal({
       </div>
 
       <ModalContent padding="none">
-        <div className="flex-1 overflow-y-auto">
+        <div>
           {error && (
             <div className="p-4 m-4 bg-red-50 dark:bg-red-950/30 border-2 border-red-200 dark:border-red-900/45 rounded-lg flex items-center gap-2">
               <span className="text-red-700 dark:text-red-300 text-sm">Failed to load members.</span>

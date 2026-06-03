@@ -14,11 +14,15 @@ const NormActivityLogTypeSchema = z.enum([
   "user_signup",
   "membership_purchase",
   "one_time_purchase",
+  "upsell_accepted",
   "draw_complete",
   "high_value_order",
   "system_alert",
   "membership_upgrade",
   "subscription_past_due",
+  "cancellation_offer_accepted",
+  "admin_role_update",
+  "affiliate_payout",
 ]);
 
 const NormActivityLogStatusSchema = z.enum(["success", "info", "warning", "error"]);

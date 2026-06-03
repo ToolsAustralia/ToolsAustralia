@@ -148,6 +148,11 @@ const UpsellModal: React.FC<UpsellModalProps> = ({
   // This maintains backward compatibility with the interface
   void onAccept; // Suppress unused parameter warning
   const [isProcessing, setIsProcessing] = useState(false);
+  /** Latches true once a purchase succeeds, so the Purchase button can't be re-tapped
+   *  during the ~3s success window before the modal auto-closes. `isProcessing` is reset
+   *  in `finally` the instant the mutation resolves, so it alone cannot guard this window —
+   *  a second tap would mint a fresh idempotency key and create a second real charge. */
+  const [purchaseComplete, setPurchaseComplete] = useState(false);
   const [invoiceFinalized, setInvoiceFinalized] = useState(false);
   const finalizationTimeoutIdRef = React.useRef<NodeJS.Timeout | null>(null);
   // ✅ FIX: Track if finalization is in progress to prevent race conditions
@@ -608,8 +613,15 @@ const UpsellModal: React.FC<UpsellModalProps> = ({
     };
   }, [isOpen]);
 
+  // Re-enable the Purchase button for each fresh offer presentation. The modal unmounts
+  // on close, so this only matters when the same instance is reused for a back-to-back
+  // upsell (offer changes without an unmount) — without it the post-purchase lock sticks.
+  useEffect(() => {
+    setPurchaseComplete(false);
+  }, [offer.id]);
+
   const runUpsellPurchase = async (explicitPaymentMethodId?: string) => {
-    if (isProcessing || upsellPurchaseLockRef.current) return;
+    if (isProcessing || upsellPurchaseLockRef.current || purchaseComplete) return;
 
     const paymentMethodIdToUse = explicitPaymentMethodId ?? resolvedChargePm?.paymentMethodId;
     if (!paymentMethodIdToUse) {
@@ -662,6 +674,9 @@ const UpsellModal: React.FC<UpsellModalProps> = ({
 
       if (result.success && resolvedPaymentIntentId) {
         hideLoading();
+        // Latch BEFORE the `finally` resets isProcessing/lock, so the button and the
+        // re-entry guard stay closed for the whole success → auto-close window.
+        setPurchaseComplete(true);
         setPaymentIntentId(resolvedPaymentIntentId);
         setShowPaymentProcessing(true);
       } else {
@@ -1004,6 +1019,7 @@ const UpsellModal: React.FC<UpsellModalProps> = ({
           {/* Action Buttons - Stacked Vertically */}
           <AcceptDeclineRow
             isProcessing={isProcessing}
+            purchaseComplete={purchaseComplete}
             isCheckingPaymentMethod={isCheckingPaymentMethod}
             resolvedChargePm={resolvedChargePm}
             showInlineCardSetup={showInlineCardSetup}

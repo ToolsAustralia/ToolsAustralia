@@ -11,12 +11,22 @@ interface RouteParams {
   params: Promise<{ id: string }>;
 }
 
+const stoppingRulesSchema = z
+  .object({
+    minConversions: z.number().int().min(0).optional(),
+    confidenceThreshold: z.number().min(0).max(100).optional(),
+    maxDuration: z.number().int().min(1).optional(),
+    autoEndEnabled: z.boolean().optional(),
+  })
+  .optional();
+
 const updateExperimentSchema = z.object({
   name: z.string().min(1).max(200).optional(),
   status: z.enum(["draft", "active", "paused", "ended"]).optional(),
   slugTargets: z.array(z.string()).min(1).optional(),
   startDate: z.string().datetime().optional().transform((val) => (val ? new Date(val) : undefined)),
   endDate: z.string().datetime().optional().transform((val) => (val ? new Date(val) : undefined)),
+  stoppingRules: stoppingRulesSchema,
 });
 
 /**

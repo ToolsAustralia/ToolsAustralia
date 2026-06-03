@@ -76,6 +76,74 @@ UTM params captured on landing → persisted via `useUTMPersistence` → flow th
 
 > _TODO: read root file and merge full content. Brief: server-side CAPI is canonical; pixel is supplementary._
 
+## Single-platform payment attribution (2026-06-01)
+
+### Send ≠ Count principle
+
+The CAPI fan-out (dispatching a purchase event to Meta, TikTok, Snap simultaneously) is **unchanged**. Every enabled platform still receives its pixel/CAPI event. "Send to all platforms" is the signal layer; "attribute to one platform" is the analytics/ledger layer. These two concepts are deliberately decoupled — do not conflate them.
+
+### Durable first-party attribution cookie `_ta_attr`
+
+On landing, the client writes a `_ta_attr` cookie (JSON) to `sessionStorage` with a **90-day** effective TTL (replacing the old 30-minute sessionStorage-only window). The cookie is SameSite=Lax and first-party. It stores the first detected click ID and the UTM tuple captured at landing:
+
+```json
+{
+  "fbclid": "...",       // or null
+  "ttclid": "...",       // or null
+  "ScCid": "...",        // or null
+  "_fbc": "...",         // Meta-format click reference
+  "utm_source": "...",
+  "utm_medium": "...",
+  "utm_campaign": "...",
+  "captured_at": 1748736000000
+}
+```
+
+The capture registry at `src/lib/tracking/` reads `fbclid` / `_fbc`, `ttclid`, `ScCid` from the landing URL and persists them into `_ta_attr` client-side. Server-side routes read the cookie (and also accept click IDs from the request body for cases where the cookie isn't yet written).
+
+### Click ID capture registry
+
+| Signal | Cookie / param | Platform |
+|---|---|---|
+| `fbclid` URL param → stored as `_fbc` format | `_ta_attr._fbc` | Meta |
+| `ttclid` URL param | `_ta_attr.ttclid` | TikTok |
+| `ScCid` URL param | `_ta_attr.ScCid` | Snapchat |
+| UTM tuple | `_ta_attr.utm_*` | Klaviyo email / SMS (see note) |
+
+Klaviyo attribution is identified via the UTM tuple `utm_source=klaviyo` + `utm_medium=email|sms` — NOT via `_kx` (see [KLAVIYO_INTEGRATION.md](./KLAVIYO_INTEGRATION.md) attribution section).
+
+### Attribution resolver — priority ladder + recency windows
+
+The resolver lives at `src/services/attribution/`. At the `create-*` route edge (subscription creation, one-time purchase, etc.), it reads the cookie / request body and resolves exactly **one** `convertingPlatform` per payment:
+
+**Priority (highest to lowest):**
+1. Paid clicks — click ID present + within recency window: Meta (7d), TikTok (7d), Snapchat (7d)
+2. Klaviyo owned — UTM tuple `utm_source=klaviyo` + `utm_medium=email` (5d window) or `utm_medium=sms` (5d window)
+3. Google — `utm_source=google` (any medium)
+4. Direct — no attribution signals
+5. Other — UTM source present but unrecognised
+
+Recency tiebreak: if two click IDs are present (e.g. a user clicked a TikTok ad then a Meta ad), the **most recent** `captured_at` wins.
+
+`attributionConfidence` is set to:
+- `click` — a click ID (fbclid / ttclid / ScCid) was the winning signal
+- `utm_only` — UTM tuple resolved the platform but no click ID
+- `inferred_backfill` — assigned by a backfill script for historical events without signals
+
+### PaymentEvent ledger fields
+
+Three new fields are stamped on every `PaymentEvent` document by the webhook handler after the resolver runs:
+
+| Field | Values | Set by |
+|---|---|---|
+| `convertingPlatform` | `meta\|tiktok\|snapchat\|klaviyo_email\|klaviyo_sms\|google\|direct\|other` | attribution resolver → Stripe metadata → webhook |
+| `attributionConfidence` | `click\|utm_only\|inferred_backfill` | resolver |
+| `isRenewal` | `boolean` | `billingReason === "subscription_cycle"` |
+
+### Sticky renewals
+
+The resolver stamps the resolved `convertingPlatform`, `attributionConfidence`, and the click ID / timestamp into Stripe subscription metadata (`attr_platform` / `attr_confidence` / `attr_click_id` / `attr_click_ts`) at subscription creation. The webhook handler reads these from `subscription.metadata` for all subsequent renewal invoices, making attribution sticky across the subscription lifetime — no client-side signal is needed on renewal. The first-purchase attribution carries forward automatically.
+
 ## Observability sampling
 
 Speed Insights mounted globally via the [`SpeedInsightsClient`](../../src/components/tracking/SpeedInsightsClient.tsx) Client-Component wrapper, which is itself mounted once from the root layout [`src/app/layout.tsx`](../../src/app/layout.tsx). `sampleRate={0.1}` — beacons 10% of page views. Sufficient for stable Core Web Vitals trends; reduces Vercel Speed Insights data-point billing roughly 10×. A `beforeSend` filter parses each beacon URL and drops any whose pathname starts with `/admin`, so the admin app does not pollute real-user Core Web Vitals percentiles or consume data points (admin perf is not a user-facing concern, and admin traffic is unrepresentative of the public site). Substring matching is deliberately avoided per [Standing Rule R4](../superpowers/plans/2026-05-13-speed-insights-best-practice.md) — query strings, hash fragments, or future public paths containing the literal string `/admin` would otherwise produce false-positive drops. The wrapper file pattern exists per [Standing Rule R7](../superpowers/plans/2026-05-13-speed-insights-best-practice.md): `<SpeedInsights>` is a Client Component, root layout is a Server Component, and React Server Components cannot serialize function props across the boundary — so the `beforeSend` callback has to live inside a `"use client"` file to avoid a runtime error. Vercel Web Analytics (`<Analytics />`) is currently unsampled — see [`docs/superpowers/plans/2026-05-06-vercel-cost-optimization-tier-1.md`](../superpowers/plans/2026-05-06-vercel-cost-optimization-tier-1.md) for follow-up.

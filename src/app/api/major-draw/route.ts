@@ -4,6 +4,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { getCurrentMajorDrawForDisplay } from "@/utils/draws/major-draw-helpers";
 import { getTimeUntilFreeze, getTimeUntilDraw } from "@/utils/common/timezone";
+import { userScopedCacheControl } from "@/utils/security/cache-control";
 
 // Draw status must reflect DB immediately (dev toggler + transitions). Do not cache the route.
 export const dynamic = "force-dynamic";
@@ -146,18 +147,25 @@ export async function GET() {
       : Number.POSITIVE_INFINITY;
     const nearestMs = Math.min(msUntilFreeze, msUntilDraw);
 
+    // Cache-Control value used only for anonymous responses (the authenticated
+    // branch below overrides it). Whether the CDN honours s-maxage on this
+    // force-dynamic route is a Vercel detail; the directive is still sent verbatim.
+    let publicCacheControl: string;
     if (process.env.NODE_ENV === "development") {
-      headers.set("Cache-Control", "no-store, must-revalidate");
+      publicCacheControl = "no-store, must-revalidate";
     } else if (nearestMs <= 60 * 60 * 1000) {
-      // Critical window: no cache to ensure real-time transitions
-      headers.set("Cache-Control", "no-store, must-revalidate");
+      publicCacheControl = "no-store, must-revalidate"; // critical window
     } else if (nearestMs <= 6 * 60 * 60 * 1000) {
-      // Near window: short cache
-      headers.set("Cache-Control", "public, s-maxage=10, max-age=10");
+      publicCacheControl = "public, s-maxage=10, max-age=10"; // near window
     } else {
-      // Normal: existing caching
-      headers.set("Cache-Control", "public, s-maxage=60, stale-while-revalidate=300");
+      publicCacheControl = "public, s-maxage=60, stale-while-revalidate=300"; // normal
     }
+
+    // … but this response embeds per-user `userStats`, so an authenticated request
+    // must never be cached publicly. See docs/security-csp/rules.md.
+    const { cacheControl, vary } = userScopedCacheControl(!!session?.user?.id, publicCacheControl);
+    headers.set("Cache-Control", cacheControl);
+    headers.set("Vary", vary);
 
     return NextResponse.json(response, { headers });
   } catch (error) {

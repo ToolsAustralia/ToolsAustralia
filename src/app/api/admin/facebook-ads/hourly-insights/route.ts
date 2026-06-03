@@ -13,7 +13,6 @@ const hourlyInsightsQuerySchema = z.object({
   endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), // YYYY-MM-DD format
   filterLevel: z.enum(["campaign", "adset", "ad"]).optional(),
   filterIds: z.string().optional(), // Comma-separated IDs, e.g. "id1,id2,id3"
-  utmSource: z.string().optional(), // e.g. "facebook" — filter PaymentEvent revenue by data.utmSource
 });
 
 /**
@@ -25,13 +24,11 @@ async function parseAndValidate(request: NextRequest) {
     const body = await request.json().catch(() => ({}));
     const filterLevel = ["campaign", "adset", "ad"].includes(body.filterLevel) ? body.filterLevel : undefined;
     const filterIds = Array.isArray(body.filterIds) ? body.filterIds.join(",") : body.filterIds ?? "";
-    const utmSource = typeof body.utmSource === "string" ? body.utmSource : undefined;
     query = {
       startDate: String(body.startDate ?? ""),
       endDate: String(body.endDate ?? ""),
       ...(filterLevel && { filterLevel }),
       ...(filterIds && { filterIds }),
-      ...(utmSource && { utmSource }),
     };
   } else {
     const { searchParams } = new URL(request.url);
@@ -85,7 +82,6 @@ async function handleHourlyInsights(request: NextRequest) {
       endDate: validatedQuery.endDate,
       filterLevel: validatedQuery.filterLevel,
       filterIds,
-      utmSource: validatedQuery.utmSource,
     });
 
     const response: HourlyInsightsResponse = {

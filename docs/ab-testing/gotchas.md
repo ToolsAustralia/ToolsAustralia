@@ -18,7 +18,15 @@ Bots can pollute conversion data — implement a "is this a bot?" filter before 
 
 If you change `threshold` mid-experiment, half the assigned users may flip variants. Don't.
 
-## Membership dark-mode experiment
+## Membership dark-mode experiment (winner shipped — light)
+
+The "no theme" arm won, so `MembershipSection` now passes `theme="light"`
+unconditionally and `ElectricPackageCard`'s default theme is `"light"`. The
+hook (`useMembershipThemeExperiment`), API route, and `VariantConfig.membershipTheme`
+field are still in the codebase but no production component reads from them —
+they're dormant and can be reused for future tests, or cleaned up later.
+
+Historical notes (still apply for anyone reviving this pattern):
 
 - Never reuse the `__membership-theme__` sentinel slug for an unrelated
   experiment, and never give the membership dark-mode experiment `slugTargets`
@@ -28,10 +36,31 @@ If you change `threshold` mid-experiment, half the assigned users may flip varia
   This was an accepted product trade-off.
 - Stray `dark:` Tailwind in `MembershipSection` edge UI (e.g. "no packages"
   fallback, promo header) is NOT driven by the `theme` prop and stays
-  schedule-driven even for the treatment variant. Out of scope by design.
+  schedule-driven. Out of scope by design.
 - The hook caches its result in sessionStorage for 5 min under a fixed key
   (`ab_membership_theme_v1`, not experiment-scoped); a server-side experiment
   swap is invisible for up to 5 min. Bump the `_v1` suffix to force-bust.
+
+## Attribution priority for purchase tracking
+
+When a user is in multiple active experiments (e.g. a slug-targeted promo
+experiment AND the site-wide `__membership-theme__`), `getUserActiveExperimentAssignment`
+(and the cookie-fallback loops in `/api/stripe/create-one-time-purchase[-existing-user]`)
+prefer **page-targeted experiments over wildcard `*`** and **completely
+exclude cosmetic site-wide sentinels** like `__membership-theme__` from
+purchase attribution. See `NON_CONVERSION_SENTINEL_SLUGS` in
+`src/utils/ab-testing/get-user-experiment-assignment.ts`. If you ever add a
+new site-wide cosmetic experiment, add its sentinel slug to that set.
+
+## Subscription-renewal attribution
+
+Only the initial subscription invoice (`billing_reason === "subscription_create"`)
+is attributed to the experiment. Renewals (`subscription_cycle`) and
+upgrades/downgrades (`subscription_update`) inherit the same
+`subscription.metadata.experimentId/variantId` for the lifetime of the
+subscription — without this guard, every monthly renewal would credit the
+original variant forever, even after the experiment ended. See the
+`isInitialSubscriptionInvoice` gate in `src/services/stripe-webhook-handlers/index.ts`.
 
 ## Migrated stubs
 
