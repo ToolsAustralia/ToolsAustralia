@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Trophy, ArrowRight } from "lucide-react";
 import { Card, SectionTitle, DataTable, type Column } from "@/components/admin/ui";
 import { useMetricsFormatting } from "@/hooks/useMetricsFormatting";
@@ -17,8 +18,8 @@ interface DrawRow extends Record<string, unknown> {
 
 const COLUMNS: Column[] = [
   { key: "name", label: "Mini Draw", align: "left", sortable: false },
-  { key: "fill", label: "Capacity", align: "right", sortable: false },
   { key: "entries", label: "Entries", align: "right", sortable: false },
+  { key: "status", label: "Status", align: "right", sortable: false },
 ];
 
 /**
@@ -30,8 +31,14 @@ const COLUMNS: Column[] = [
  * / entries only. "View all" links to the Mini Draws admin page.
  */
 export default function TopDrawsCard() {
+  const router = useRouter();
   const { formatNumber } = useMetricsFormatting();
   const { data, isLoading } = useTopMiniDraws(5);
+
+  // Clicking a row deep-links to the Mini Draws admin tab with its search box
+  // pre-filled by the draw name (MiniDrawManagement reads `?search=`).
+  const openDraw = (row: DrawRow) =>
+    router.push(`/admin/mini-draws?search=${encodeURIComponent(row.name)}`);
 
   const rows: DrawRow[] = (data ?? []).map((d) => {
     const capacity = d.minimumEntries || 0;
@@ -52,29 +59,29 @@ export default function TopDrawsCard() {
       return (
         <div className="min-w-0">
           <p className="font-medium text-neutral-800 dark:text-neutral-100 truncate">{row.name}</p>
-          <span
-            className={`text-2xs font-semibold ${
-              row.full
-                ? "text-amber-600 dark:text-amber-500"
-                : "text-emerald-600 dark:text-emerald-400"
-            }`}
-          >
-            {row.full ? "● At capacity — select winner" : "● Open"}
-          </span>
+          <div className="flex items-center gap-2 mt-1">
+            <div className="w-16 h-1.5 rounded-full bg-neutral-100 dark:bg-neutral-800 overflow-hidden">
+              <div
+                className="h-full rounded-full"
+                style={{ width: row.fill + "%", background: row.full ? "#f59e0b" : "#ee0000" }}
+              />
+            </div>
+            <span className="num text-2xs font-bold text-neutral-500 dark:text-neutral-400">{row.fill}%</span>
+          </div>
         </div>
       );
     }
-    if (key === "fill") {
+    if (key === "status") {
       return (
-        <div className="flex items-center gap-2 justify-end">
-          <div className="w-16 h-1.5 rounded-full bg-neutral-100 dark:bg-neutral-800 overflow-hidden hidden sm:block">
-            <div
-              className="h-full rounded-full"
-              style={{ width: row.fill + "%", background: row.full ? "#f59e0b" : "#ee0000" }}
-            />
-          </div>
-          <span className="num font-bold text-neutral-900 dark:text-white w-9 text-right">{row.fill}%</span>
-        </div>
+        <span
+          className={`text-2xs font-semibold whitespace-nowrap ${
+            row.full
+              ? "text-amber-600 dark:text-amber-500"
+              : "text-emerald-600 dark:text-emerald-400"
+          }`}
+        >
+          {row.full ? "● At capacity" : "● Open"}
+        </span>
       );
     }
     // entries
@@ -110,7 +117,7 @@ export default function TopDrawsCard() {
           <p className="text-sm font-semibold text-neutral-500 dark:text-neutral-400">No active mini draws</p>
         </div>
       ) : (
-        <DataTable<DrawRow> columns={COLUMNS} rows={rows} renderCell={renderCell} />
+        <DataTable<DrawRow> columns={COLUMNS} rows={rows} renderCell={renderCell} onRowClick={openDraw} />
       )}
     </Card>
   );

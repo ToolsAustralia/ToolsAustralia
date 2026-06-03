@@ -4,12 +4,14 @@ import { useState } from "react";
 import Image from "next/image";
 import { Crown } from "lucide-react";
 import { Card, SectionTitle, Badge, Donut, type DonutSegment } from "@/components/admin/ui";
-import { useMetricsFormatting } from "@/hooks/useMetricsFormatting";
 import { getPackageById } from "@/data/membershipPackages";
 import { getPackageIcon } from "@/utils/images/package-icons";
 import MembershipByPackageDetailModal from "@/components/modals/MembershipByPackageDetailModal";
 import type { MembershipByPackageData } from "@/hooks/queries/useAdminQueries";
 import { tierColorByPackageId } from "./tierColors";
+
+/** Exact AUD — full value, thousands separators, no k/M compacting, decimals only if present. */
+const moneyExact = (n: number) => `$${n.toLocaleString("en-AU", { maximumFractionDigits: 2 })}`;
 
 /**
  * Active memberships donut + legend for the admin Overview.
@@ -32,8 +34,6 @@ export default function MembershipCard({
   loading?: boolean;
   onUserClick?: (userId: string) => void;
 }) {
-  const { fmtCompact } = useMetricsFormatting();
-
   // Detail-modal state — clicking a donut arc or legend row opens the
   // membership-by-package modal scoped to that tier (legacy `MembershipBreakdownSection` UX).
   const [modalOpen, setModalOpen] = useState(false);
@@ -72,8 +72,8 @@ export default function MembershipCard({
         icon={Crown}
         right={
           pastDue > 0 || paused > 0 ? (
-            <div className="flex items-center gap-1.5">
-              {pastDue > 0 && <Badge tone="danger">{pastDue} past due · {fmtCompact(totalPastDueRevenue)}</Badge>}
+            <div className="flex flex-col items-end gap-1 sm:flex-row sm:items-center sm:gap-1.5">
+              {pastDue > 0 && <Badge tone="danger">{pastDue} past due · {moneyExact(totalPastDueRevenue)}</Badge>}
               {paused > 0 && <Badge tone="warning">{paused} paused</Badge>}
             </div>
           ) : undefined
@@ -144,8 +144,8 @@ export default function MembershipCard({
               <span className="text-sm font-bold text-neutral-900 dark:text-white num shrink-0">
                 {pkg.activeCount.toLocaleString("en-AU")}
               </span>
-              <span className="text-2xs text-neutral-500 dark:text-neutral-400 num w-14 text-right shrink-0">
-                {fmtCompact(pkg.activeRevenue)}
+              <span className="text-2xs text-neutral-500 dark:text-neutral-400 num w-20 text-right shrink-0">
+                {moneyExact(pkg.activeRevenue)}
               </span>
             </button>
           );

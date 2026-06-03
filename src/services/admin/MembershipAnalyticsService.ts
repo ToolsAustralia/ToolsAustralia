@@ -15,6 +15,7 @@ import {
 import type { AdminDashboardDateRangeKey, MembershipAsOfMode } from "@/utils/admin/dashboardDateRange";
 import { fetchNetBenefitsGrantedInRange } from "@/utils/payment/payment-event-net-queries";
 import type { MembershipAnalyticsBundle } from "@/types/admin/membershipAnalytics";
+import type { TrendData } from "@/types/admin/trend-types";
 import { summarizeRenewalProgress } from "@/utils/admin/renewalProgress";
 
 export const SUBSCRIPTION_PACKAGE_IDS = ["tradie-subscription", "foreman-subscription", "boss-subscription"] as const;
@@ -43,6 +44,8 @@ export interface MembershipByPackageSummaryDTO {
   totalPausedCount: number;
   totalActiveRevenue: number;
   totalPastDueRevenue: number;
+  /** MRR (totalActiveRevenue) % change vs the previous comparable period. Omitted for all-time / when the baseline day has no snapshot. */
+  totalActiveRevenueTrend?: TrendData;
   /** Legacy field — kept for compatibility with the deprecated per-user snapshot reader. */
   snapshotPartial?: boolean;
   /** Set when caller asked for a snapshot date but no snapshot row existed; live data returned instead. */

@@ -12,7 +12,7 @@ import { useActivePromoBannerText } from "@/hooks/queries/usePromoBannerTextQuer
 import { useCurrentAlternatingMultipliers } from "@/hooks/queries/useAlternatingMultiplierQueries";
 import { getNextMidnightAEST, convertUTCToAEST } from "@/utils/common/timezone";
 import type { ServerPromo } from "@/utils/database/queries/promo-queries";
-import { resolveCountdownDisplay, formatTimeLeft, MS_24H } from "@/utils/promo-banner/countdown-mode";
+import { resolveCountdownDisplay, formatTimeLeft } from "@/utils/promo-banner/countdown-mode";
 import { resolvePromoBannerLeftVisual } from "@/utils/promo-banner/resolve-promo-banner-left-visual";
 import type { HolidayPromoSlot } from "@/utils/promo-banner/holiday-promo-banner";
 import { readInitialHolidayDevSlotForClient } from "@/utils/promo-banner/holiday-promo-banner";
@@ -487,17 +487,6 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
     return null;
   }, [currentDraw?.drawDate]);
 
-  // Scheduled promo state: badge (e.g. ends-tonight family) + right "PROMO ENDING"/countdown (split-test winner default)
-  // Uses effectiveEntryForCountdown so one-time tab shows same as membership (e.g. 24hr countdown)
-  const scheduledPromoState = useMemo(() => {
-    const hasScheduledPromo = effectiveEntryForCountdown?.source === "scheduled" && effectiveEntryForCountdown?.scheduledEndDate;
-    if (!hasScheduledPromo) return { hasScheduledPromo: false as const, isUrgent: false };
-    const endMs = new Date(effectiveEntryForCountdown!.scheduledEndDate!).getTime();
-    const timeLeftMs = endMs - Date.now();
-    const isUrgent = timeLeftMs > 0 && timeLeftMs <= MS_24H;
-    return { hasScheduledPromo: true, isUrgent };
-  }, [effectiveEntryForCountdown?.source, effectiveEntryForCountdown?.scheduledEndDate]); // eslint-disable-line react-hooks/exhaustive-deps -- effectiveEntryForCountdown object identity unstable; source/scheduledEndDate sufficient
-
   const leftVisual = useMemo(() => {
     const drawStatus = getDrawDateStatus();
     return resolvePromoBannerLeftVisual({
@@ -508,8 +497,6 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
       toolsetSlug,
       drawIsToday: drawStatus === "today",
       within48HoursOfFreeze,
-      scheduledPromoUrgent: scheduledPromoState.hasScheduledPromo && scheduledPromoState.isUrgent,
-      hasScheduledPromo: scheduledPromoState.hasScheduledPromo,
       multiplier,
       holidayDevPreview: process.env.NODE_ENV === "development" ? holidayDevPreview : null,
     });
@@ -520,8 +507,6 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
     slug,
     toolsetSlug,
     within48HoursOfFreeze,
-    scheduledPromoState.hasScheduledPromo,
-    scheduledPromoState.isUrgent,
     multiplier,
     getDrawDateStatus,
     holidayDevPreview,

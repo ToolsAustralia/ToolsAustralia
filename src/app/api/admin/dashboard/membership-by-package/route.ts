@@ -3,6 +3,7 @@ import { requirePermission } from "@/lib/api-auth-permissions";
 import connectDB from "@/lib/mongodb";
 import { parseAdminDashboardDateRange } from "@/utils/admin/dashboardDateRange";
 import { MembershipAnalyticsService } from "@/services/admin/MembershipAnalyticsService";
+import { trendCalculationService } from "@/services/admin/TrendCalculationService";
 
 /**
  * GET /api/admin/dashboard/membership-by-package
@@ -28,13 +29,28 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: parsed.error }, { status: parsed.status });
     }
 
-    const { membershipAsOfMode, asOfDate } = parsed.value;
+    const { startDate, endDate, dateRange, membershipAsOfMode, asOfDate } = parsed.value;
     const service = new MembershipAnalyticsService();
 
     const data =
       membershipAsOfMode === "snapshot" && asOfDate
         ? await service.getMembershipByPackageSnapshot(asOfDate)
         : await service.getMembershipByPackageLive();
+
+    // MRR (active recurring revenue) trend vs the previous comparable period — the
+    // same period-over-period comparison the Overview's other KPI tiles use (for
+    // "today" that's all of yesterday). Skipped for all-time (no prior period) and
+    // when the baseline day has no daily snapshot to read from.
+    if (dateRange !== "all-time") {
+      const { end: comparisonEnd } = trendCalculationService.getComparisonPeriod(startDate, endDate);
+      const baseline = await service.getMembershipByPackageSnapshot(comparisonEnd);
+      if (!baseline.summary.snapshotMissing) {
+        data.summary.totalActiveRevenueTrend = trendCalculationService.calculateTrend(
+          data.summary.totalActiveRevenue,
+          baseline.summary.totalActiveRevenue
+        );
+      }
+    }
 
     return NextResponse.json({
       success: true,

@@ -227,7 +227,7 @@ Collection name forced: `"membershipdailysnapshots"`.
 
 **Writers:** [src/app/api/cron/membership-daily-snapshot/route.ts](../../src/app/api/cron/membership-daily-snapshot/route.ts) (nightly, fires at 14:00 + 15:00 UTC for redundancy).
 
-**Readers:** `MembershipAnalyticsService.getMembershipByPackageSnapshot(asOfDate)`.
+**Readers:** `MembershipAnalyticsService.getMembershipByPackageSnapshot(asOfDate)`. As of 2026-06-03 this same snapshot read also supplies the **MRR trend baseline**: the membership-by-package route reads the snapshot as of the previous comparable period's end and the service's `MembershipByPackageSummaryDTO` now carries an optional `totalActiveRevenueTrend?: TrendData` (the MRR % change). When the baseline day has no snapshot row the read returns live data flagged `snapshotMissing`, and the caller omits the trend rather than comparing against a live baseline. See [docs/admin/api.md](../admin/api.md#membership-by-package-mrr-trend-2026-06-03).
 
 **Locked-in pricing:** `unitPriceCents` is captured at write time. A future package price change writes new snapshots at the new price; existing rows keep the old price. Historical revenue is immutable.
 

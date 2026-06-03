@@ -13,7 +13,6 @@ import {
 } from "lucide-react";
 import Image from "next/image";
 import { MetricCard, Popover, TrendPill, type Tone } from "@/components/admin/ui";
-import { useMetricsFormatting } from "@/hooks/useMetricsFormatting";
 import { getPackageIcon, type PackageIconData } from "@/utils/images/package-icons";
 import { tierColorByPackageId } from "./tierColors";
 import type { DateRange } from "@/components/admin/DateRangeToggle";
@@ -28,11 +27,21 @@ import type {
  * Convert the existing `{ value, direction }` TrendData into the signed numeric
  * percentage the kit's `TrendPill` expects (positive = up, negative = down).
  * Returns `null` when there is no trend (e.g. all-time), which hides the pill.
- * Do NOT pre-invert here — pass `invert` to `MetricCard`/`TrendPill` instead.
+ *
+ * `TrendData.value` from `TrendCalculationService` is ALREADY signed (negative for
+ * a decrease), so we return it verbatim. The previous implementation re-applied the
+ * sign from `direction` (`direction === "down" ? -value : value`), which
+ * double-negated every decrease into a positive — that's why a day with lower
+ * revenue than yesterday rendered as a green ↑. Do NOT re-introduce that.
+ *
+ * When there is no prior-period baseline (`previousValue === 0`, where
+ * `calculateTrend` force-returns +100/up) a "% change" is undefined, so we hide the
+ * pill rather than show a misleading +100% growth.
  */
 function trendPct(trend: TrendData | undefined): number | null {
   if (!trend) return null;
-  return trend.direction === "down" ? -trend.value : trend.value;
+  if (trend.previousValue === 0) return null;
+  return trend.value;
 }
 
 /** Normalize a revenue breakdown entry (number OR object) like the old code does. */
@@ -43,6 +52,8 @@ function breakdownRevenue(item: RevenueBreakdownItem | undefined): number {
 }
 
 const moneyWhole = (n: number) => `$${n.toLocaleString("en-AU")}`;
+/** Exact AUD — full value, thousands separators, no k/M compacting, decimals only if present. */
+const moneyExact = (n: number) => `$${n.toLocaleString("en-AU", { maximumFractionDigits: 2 })}`;
 
 type BreakdownRow = { id: string; label: string; color: string; value: number; icon?: PackageIconData };
 
@@ -73,7 +84,6 @@ function KpiCard({
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
-  const { fmtCompact } = useMetricsFormatting();
 
   return (
     <div ref={ref} className="min-w-0">
@@ -124,7 +134,7 @@ function KpiCard({
                     </span>
                   </span>
                   <span className="text-xs font-bold text-neutral-900 dark:text-white num shrink-0">
-                    {fmtCompact(row.value)}
+                    {moneyExact(row.value)}
                   </span>
                 </div>
               ))
@@ -161,13 +171,13 @@ export default function KpiGrid({
   const showStatsSkeleton = statsLoading && !stats;
   const showMembershipSkeleton = membershipLoading && !membership;
 
-  // Per-card date tag (e.g. " (Today)" / " (Nov 2025 – present)"), appended to the
-  // titles of cards whose value is scoped to the selected date filter. Snapshot tiles
-  // (MRR, all-time Total Users) deliberately omit it.
+  // Date tag (e.g. " (Today)" / " (Nov 2025 – present)") for the selected filter.
+  // Rendered ONCE on each KPI section header ("Revenue (Today)", "Users & Performance
+  // (Today)") rather than on every card, to keep the cards themselves clean.
   const rangeTag = rangeLabel ? ` (${rangeLabel})` : "";
 
   // ---- Revenue tile (clickable) ----
-  const revenueTitle = `Revenue${rangeTag}`;
+  const revenueTitle = "Revenue";
 
   const revenueBreakdown: BreakdownRow[] = revenue
     ? (
@@ -227,7 +237,7 @@ export default function KpiGrid({
       {/* Revenue group */}
       <div>
         <p className="text-2xs font-bold uppercase tracking-wider text-neutral-400 dark:text-neutral-500 mb-2.5">
-          Revenue
+          {`Revenue${rangeTag}`}
         </p>
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
           <KpiCard
@@ -240,17 +250,8 @@ export default function KpiGrid({
             breakdown={revenueBreakdown}
             loading={showStatsSkeleton}
           />
-          <KpiCard
-            title="MRR"
-            value={moneyWhole(Math.round(summary?.totalActiveRevenue ?? 0))}
-            sub={membershipSub}
-            icon={TrendingUp}
-            tone="red"
-            breakdown={membershipBreakdown}
-            loading={showMembershipSkeleton}
-          />
           <MetricCard
-            title={`Ad Spend${rangeTag}`}
+            title="Ad Spend"
             value={moneyWhole(Math.round(facebookAds?.spend ?? 0))}
             sub="Facebook Ads spend"
             icon={BarChart3}
@@ -259,7 +260,7 @@ export default function KpiGrid({
             loading={showStatsSkeleton}
           />
           <MetricCard
-            title={`ROAS${rangeTag}`}
+            title="ROAS"
             value={`${(facebookAds?.roas ?? 0).toFixed(2)}x`}
             sub="Return on ad spend"
             icon={Target}
@@ -267,13 +268,23 @@ export default function KpiGrid({
             trend={trendPct(facebookAds?.roasTrend)}
             loading={showStatsSkeleton}
           />
+          <KpiCard
+            title="MRR"
+            value={moneyWhole(Math.round(summary?.totalActiveRevenue ?? 0))}
+            sub={membershipSub}
+            icon={TrendingUp}
+            tone="red"
+            trend={trendPct(summary?.totalActiveRevenueTrend)}
+            breakdown={membershipBreakdown}
+            loading={showMembershipSkeleton}
+          />
         </div>
       </div>
 
       {/* Users & Performance group */}
       <div>
         <p className="text-2xs font-bold uppercase tracking-wider text-neutral-400 dark:text-neutral-500 mb-2.5">
-          Users &amp; Performance
+          {`Users & Performance${rangeTag}`}
         </p>
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
           {/* Total Users ≈ total signups, so all-time shows Total Users; any other
@@ -289,7 +300,7 @@ export default function KpiGrid({
             />
           ) : (
             <MetricCard
-              title={`New Signups${rangeTag}`}
+              title="New Signups"
               value={(users?.newInRange ?? 0).toLocaleString("en-AU")}
               sub={`${(users?.total ?? 0).toLocaleString("en-AU")} total users`}
               icon={UserCheck}
@@ -299,7 +310,7 @@ export default function KpiGrid({
             />
           )}
           <MetricCard
-            title={`Conversion Rate${rangeTag}`}
+            title="Conversion Rate"
             value={`${(stats?.conversionRate ?? 0).toFixed(1)}%`}
             sub="Paying customers"
             icon={Target}
@@ -308,22 +319,22 @@ export default function KpiGrid({
             loading={showStatsSkeleton}
           />
           <MetricCard
-            title={`Cancellations${rangeTag}`}
+            title="Renewals"
+            value={renewalValue}
+            valueAside={renewalAside}
+            sub={renewalSub}
+            icon={RefreshCw}
+            tone="emerald"
+            loading={showStatsSkeleton}
+          />
+          <MetricCard
+            title="Cancellations"
             value={(users?.cancelledMemberships ?? 0).toLocaleString("en-AU")}
             sub={cancellationSub}
             icon={UserX}
             tone="red"
             trend={trendPct(users?.cancelledMembershipsTrend)}
             invert
-            loading={showStatsSkeleton}
-          />
-          <MetricCard
-            title={`Renewals${rangeTag}`}
-            value={renewalValue}
-            valueAside={renewalAside}
-            sub={renewalSub}
-            icon={RefreshCw}
-            tone="emerald"
             loading={showStatsSkeleton}
           />
         </div>

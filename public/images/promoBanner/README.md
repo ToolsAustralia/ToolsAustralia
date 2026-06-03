@@ -11,16 +11,21 @@ Left-column images when neither A/B **`leftImageUrl`** nor scheduled admin **`im
 | Part | Values |
 |------|--------|
 | **Brand** | `Dewalt`, `Makita`, `Milwaukee`, `Ryobi` (PascalCase folder names) |
-| **State** | `DrawnTonight`, `LastChance`, `EndsTonight` |
-| **stem** | `drawn-tonight`, `last-chance`, `ends-tonight` |
-| **multiplier** | `2`, `3`, `5`, or `10` (unknown/null effective multiplier maps to **10**) |
+| **State** | `DrawnTonight`, `DrawnTomorrow`, `SpecialPromo` |
+| **stem** | `drawn-tonight`, `drawn-tomorrow`, `special-promo` |
+| **multiplier** | DrawnTonight/DrawnTomorrow: `2`/`3`/`5`/`10`; SpecialPromo: `3`/`5`/`10` (unknown/null — and `2` — maps to **10**) |
 
-Example: `Milwaukee/DrawnTonight/drawn-tonight-10x.webp`.
+Example: `Milwaukee/SpecialPromo/special-promo-10x.webp`.
+
+`SpecialPromo` art reads "SPECIAL PROMO — {N}x ENTRIES ACTIVATED" and is the default state whenever the
+draw is not today and the freeze window is more than 48h away. There is no `2x` SpecialPromo asset — keep
+2× out of promos, or it will fall back to the `10x` art.
 
 ## Resolution order (code)
 
-1. Branded path for the theme-derived brand  
-2. Same state + tier under **Milwaukee** (if brand ≠ Milwaukee)  
+1. Branded path for the theme-derived brand
+2. Same state + tier under **Milwaukee** (if brand ≠ Milwaukee)
 3. Optional **legacy** path without a brand folder: `/images/promoBanner/{State}/...`
+   (DrawnTonight/DrawnTomorrow only — SpecialPromo never had a flat layout)
 
 See `docs/PROMO_BANNER_BEHAVIOUR.md`.

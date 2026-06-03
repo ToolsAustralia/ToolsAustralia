@@ -22,7 +22,8 @@ import {
 import Checkbox from "@/components/modals/ui/Checkbox";
 import { MetricCard } from "@/components/admin/metrics/shared/MetricCard";
 import CustomDateRangeModal from "@/components/admin/CustomDateRangeModal";
-import DateRangeToggle, { type DateRange } from "@/components/admin/DateRangeToggle";
+import { type DateRange } from "@/components/admin/DateRangeToggle";
+import { DateRangeDropdown } from "@/components/admin/overview/DateRangeDropdown";
 import { AdminMobileLayoutDateRangeShell } from "@/app/admin/component/AdminMobileLayoutDateRangeShell";
 import { useAdminMobileDateToolbarSlot } from "@/hooks/useAdminMobileDateToolbarSlot";
 import {
@@ -379,17 +380,11 @@ export default function BlockedTransactionsManagement() {
   }, [dateRange, startDate, endDate]);
 
   const dateRangeToggle = (
-    <DateRangeToggle
+    <DateRangeDropdown
       selectedRange={dateRange}
-      onRangeChange={(range) => {
-        if (range === "custom") setIsCustomDateModalOpen(true);
-        else updateDateFilter(range);
-      }}
+      onRangeChange={(range) => updateDateFilter(range)}
       onCustomClick={() => setIsCustomDateModalOpen(true)}
-      collapsed={false}
       displayDate={displayDate}
-      onExpand={() => {}}
-      className={isLgUp ? undefined : "w-full"}
     />
   );
 
