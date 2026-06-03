@@ -579,12 +579,13 @@ Source of truth: [docs/tracking/](docs/tracking/).
 - **Klaviyo**: page tracker, script loader, transactional handoffs (`src/lib/klaviyo.ts`).
 - **UTM persistence**: `src/lib/utm/`.
 
-### 14b. Prepared but not live (admin shells with em-dash metrics)
+### 14b. Ad-platform analytics — revenue live, ad-spend sync pending
 
-- **TikTok Ads insights sync** — `TikTokAdsManagement.tsx` is an empty-state shell. Client-side **TikTok Pixel** (`window.ttq`) may still fire, but the Marketing API insights pipeline is a follow-up.
-- **Snapchat Ads** — `SnapchatAdsManagement.tsx` mirrors the same empty-state shell. No insights pipeline.
+- **TikTok / Snapchat tabs now show server-side attributed revenue.** `TikTokAdsManagement.tsx` / `SnapchatAdsManagement.tsx` render an hour-of-day **revenue + conversions** breakdown from `convertingPlatform`-tagged `PaymentEvent`s (`/api/admin/analytics/hourly-revenue`). Still pending is each platform's **ad-spend** sync (TikTok/Snapchat Marketing API) — so spend + ROAS show "awaiting sync" until then. Client-side TikTok/Snapchat pixels fire independently.
+- **Klaviyo analytics tab** — campaign/flow revenue (Klaviyo-attributed, email/SMS split) + scheduled sends + server-side Klaviyo hourly, via the read-only Klaviyo Reporting API.
+- **All Platforms tab** + **true-ROAS overview card** — combined ad-effectiveness rollup (true ROAS = server-side attributed revenue ÷ ad spend, contribution, conversions, hourly) across every channel; the overview card shows server-side ROAS instead of Meta's pixel figure.
 
-Models for daily insights (`MetaAdInsightsDaily`, `TikTokAdInsightsDaily`, `SnapchatAdInsightsDaily`) all exist, but only Meta is wired to a sync today.
+Models for daily insights (`MetaAdInsightsDaily`, `TikTokAdInsightsDaily`, `SnapchatAdInsightsDaily`) all exist, but only Meta is wired to an **ad-spend** sync today.
 
 ### 14c. Klaviyo lifecycle flows
 

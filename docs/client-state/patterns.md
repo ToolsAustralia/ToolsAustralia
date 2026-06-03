@@ -79,6 +79,12 @@ Read-only admin cancellation-flow analytics. Both hooks live in [`src/hooks/quer
 - `useCancellationFlowAnalytics`: `buildQueryString(filter)` skips absent `startDate`/`endDate`; both map 1:1 to query params on `/api/admin/cancellation-flow-analytics`. The whole `filter` is part of the query key, so changing the range refetches.
 - `useCancellationFlowUsersByReason`: drill-down hook for the "Reason × outcome" table rows (consumed by `CancellationReasonUsersModal`). Filter is `{ reason: CancellationReason, outcome?: "in_progress"|"saved"|"cancelled", startDate?, endDate?, page?, limit? }`; all fields except `reason` are skipped from the URL when absent. Pass `filter = null` (or `options.enabled = false`) to keep the query idle until a row is selected. Returns the same `{ data, isLoading, isError }` shape as the parent hook. Backed by `/api/admin/cancellation-flow-analytics/users-by-reason`.
 
+### Hourly revenue hook (`src/hooks/queries/admin/`)
+
+`useHourlyRevenue({ startDate, endDate, platform })` ([`src/hooks/queries/admin/useHourlyRevenue.ts`](../../src/hooks/queries/admin/useHourlyRevenue.ts)) — `useQuery`, key `["admin", "analytics", "hourly-revenue", platform, startDate, endDate]`, enabled only when both dates are set. `platform` ∈ `meta` | `tiktok` | `snapchat` | `klaviyo` | `ad-channels` | `all`. Fetches the SHARED-1 hour-of-day series from `GET /api/admin/analytics/hourly-revenue` — each bucket is `{ hour, revenue, conversions, spend }` (`spend` null when the group has no spend source), plus a range `totalSpend`. **No aggressive polling** (1 min stale, `refetchOnWindowFocus: false`, no interval) — the underlying refund-`$lookup` aggregation is heavy. Consumed by `PlatformHourlyRevenueSection` (TikTok / Snapchat) and `AllPlatformsManagement`.
+
+`useKlaviyoAnalytics(range)` ([`src/hooks/queries/admin/useKlaviyoAnalytics.ts`](../../src/hooks/queries/admin/useKlaviyoAnalytics.ts)) — `useQuery`, key `["admin", "klaviyo", "analytics", range]`. Fetches Klaviyo-attributed campaign/flow revenue + scheduled view from `GET /api/admin/klaviyo/analytics`. **Throttle-aware**: long `staleTime` (10 min), `refetchOnWindowFocus: false`, **no `refetchInterval`** — the Klaviyo reporting API is ~2/min and the route caches. Returns `{ data, stale, cachedAt }`; consumed by `KlaviyoAnalyticsManagement`.
+
 ## P3. Modal priority coordination
 
 `useModalPriorityStore` exposes a `register / unregister / current` API. Modals register on mount with their priority; only the highest-priority active modal renders.

@@ -61,7 +61,7 @@ Added alongside `adChannels`. Stores per-platform payment attribution data for t
 
 `byConfidence.click + byConfidence.utm_only + byConfidence.inferred_backfill === newRevenue` (the three tiers partition acquisition revenue only). `conversions` and `byConfidence` cover `newRevenue` rows only; renewal events do not contribute to these counters.
 
-**Renewal discriminator:** A PaymentEvent row is classified as a renewal when `packageType === "membership" && data.billingReason === "subscription_cycle"`. This is the same predicate used by `PaymentEventRepository.aggregateRevenueAndCountByHourOfDay` (the `$nor` guard). It is used instead of the top-level `isRenewal` field because `data.billingReason` is present on every historical PaymentEvent row, whereas `isRenewal` defaults `false` on rows written before the field was introduced.
+**Renewal discriminator:** A PaymentEvent row is classified as a renewal when `packageType === "membership" && data.billingReason === "subscription_cycle"`. This is the same predicate used by `PaymentEventRepository.aggregateRevenueByHourAndPlatform` (the `$nor` guard). It is used instead of the top-level `isRenewal` field because `data.billingReason` is present on every historical PaymentEvent row, whereas `isRenewal` defaults `false` on rows written before the field was introduced.
 
 **Source version:** `DASHBOARD_STATS_SNAPSHOT_SOURCE_VERSION` is `3`. Snapshots at v1 lack `attributedRevenue` entirely; snapshots at v2 carried the old single-`revenue` shape. Readers guard against absent or old-shape values by treating an absent field as an empty Map.
 
