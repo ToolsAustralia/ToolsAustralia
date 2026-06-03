@@ -286,6 +286,10 @@ Twelve flat-file modals were decomposed into the canonical orchestrator-folder p
 
 **Updated 2026-05-27**: `RevenueDetailModal` user rows now expose an explicit **View** button instead of a chevron-only "Actions" column. [`UserRow.tsx`](../../src/components/modals/RevenueDetailModal/UserRow.tsx) renders the View button in the last desktop grid column and at the top-right of the mobile card (calling `onUserClick(user.userId)` with `e.stopPropagation()` so it does not toggle row expansion); the expand/collapse-on-row-click affordance is preserved as an inline chevron next to the user name on desktop and a "Show/Hide purchases" hint on mobile. [`TableHeader.tsx`](../../src/components/modals/RevenueDetailModal/TableHeader.tsx) renames the last column header from `Actions` to `View user` to match. `MembershipByPackageDetailModal` had a redundant `<div className="flex-1 overflow-y-auto">` inside `<ModalContent>` removed — `ModalContent` is already a `flex-1 overflow-y-auto` container, and the inner wrapper was producing a double vertical scrollbar in the membership breakdown drill-down. See gotcha in [gotchas.md](./gotchas.md).
 
+## PromoBanner static left-visual (SpecialPromo, 2026-06)
+
+[`PromoBanner`](../../src/components/sections/promo/PromoBanner.tsx) no longer computes a `scheduledPromoState` (urgent/last-chance) to drive its left image — the `last-chance` / `ends-tonight` static families were retired. It now passes only `drawIsToday` + `within48HoursOfFreeze` + `multiplier` to `resolvePromoBannerLeftVisual`; every non-draw state resolves to `{Brand}/SpecialPromo/special-promo-{3|5|10}x.webp`. See [promo/frontend.md](../promo/frontend.md#static-banner-left-visual-specialpromo-2026-06).
+
 ## Z-index ordering
 
 [src/constants/z-index.ts](../../src/constants/z-index.ts) defines z-index constants. Always reference these — never use raw numbers.
