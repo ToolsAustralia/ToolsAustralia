@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { requirePermission } from "@/lib/api-auth-permissions";
-import connectDB from "@/lib/mongodb";
-import MiniDraw from "@/models/MiniDraw";
+import { getMiniDrawFullCapacityCount } from "@/services/admin/MiniDrawService";
 
 /**
  * GET /api/admin/mini-draw/full-capacity-count
@@ -12,14 +11,8 @@ export async function GET() {
     const _guard = await requirePermission("miniDraws.view");
     if (_guard instanceof NextResponse) return _guard;
 
-    await connectDB();
-
-    const count = await MiniDraw.countDocuments({ status: "completed" });
-
-    return NextResponse.json({
-      success: true,
-      data: { count },
-    });
+    const data = await getMiniDrawFullCapacityCount();
+    return NextResponse.json({ success: true, data });
   } catch (error) {
     console.error("Error fetching mini draw full capacity count:", error);
     return NextResponse.json(

@@ -31,9 +31,12 @@ import PromoAnalyticsManagement from "@/components/admin/PromoAnalyticsManagemen
 import CancellationFlowAnalytics from "@/components/admin/CancellationFlowAnalytics";
 import ActivityLogManagement from "./ActivityLogManagement";
 import SettingsTab from "./SettingsTab";
+import AuditLogTab from "./internal-norm/AuditLogTab";
+import EndpointsTab from "./internal-norm/EndpointsTab";
+import PendingActionsTab from "./internal-norm/PendingActionsTab";
 import UnviewedSubmissionsNotification from "@/components/admin/UnviewedSubmissionsNotification";
 import { HeaderThemeToggle } from "@/components/ui/HeaderThemeToggle";
-import { Menu, BarChart3 } from "lucide-react";
+import { Menu, BarChart3, ClipboardList, ListChecks, ScrollText } from "lucide-react";
 
 export default function AdminPage({ user, navigateTo, selectedTab = "overview" }: AdminDashboardProps) {
   const router = useRouter();
@@ -175,6 +178,7 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
                   {selectedTab === "stripe-webhook-queue" && "Async Stripe webhook processing queue — replay failed events"}
                   {selectedTab === "activity-log" && "Complete activity history with filters and search"}
                   {selectedTab === "team" && "Manage staff accounts, roles, and audit logs"}
+                  {selectedTab === "norm" && "Internal AI assistant — audit log, endpoint registry, and pending actions"}
                 </p>
               </div>
             </div>
@@ -259,6 +263,9 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
           {/* TEAM TAB (Staff + Roles + Logs sub-screens) */}
           {selectedTab === "team" && <SettingsTab />}
 
+          {/* NORM TAB (Audit / Pending / Endpoints sub-screens) */}
+          {selectedTab === "norm" && <NormTab />}
+
           {/* Placeholder for other tabs - temporarily disabled since tabs are hidden */}
           {false && (
             <div className="bg-white dark:bg-neutral-900 rounded-xl shadow-lg dark:shadow-none border-2 border-red-100 dark:border-red-900/40 p-6 sm:p-8 text-center">
@@ -282,5 +289,97 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
         <UnviewedSubmissionsNotification onViewSubmissions={() => router.push("/admin/submissions")} />
       )}
     </div>
+  );
+}
+
+type NormSection = "audit" | "pending" | "endpoints";
+
+function NormTab() {
+  const [section, setSection] = useState<NormSection>("audit");
+  const [pendingCount, setPendingCount] = useState<number>(0);
+
+  useEffect(() => {
+    let cancelled = false;
+    const fetchCount = async () => {
+      try {
+        const res = await fetch("/api/admin/internal-norm/pending");
+        if (!res.ok) return;
+        const json = await res.json();
+        if (cancelled) return;
+        setPendingCount(Array.isArray(json?.data) ? json.data.length : 0);
+      } catch {
+        // ignore — badge is non-critical
+      }
+    };
+    void fetchCount();
+    const interval = setInterval(fetchCount, 60000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, []);
+
+  return (
+    <div>
+      <div className="flex gap-1 border-b border-gray-200 dark:border-gray-800 mb-6 -mt-2">
+        <NormTabButton
+          active={section === "audit"}
+          onClick={() => setSection("audit")}
+          icon={<ScrollText className="w-4 h-4" />}
+          label="Audit Log"
+        />
+        <NormTabButton
+          active={section === "pending"}
+          onClick={() => setSection("pending")}
+          icon={<ClipboardList className="w-4 h-4" />}
+          label="Pending Actions"
+          badge={pendingCount > 0 ? (pendingCount > 99 ? "99+" : String(pendingCount)) : undefined}
+        />
+        <NormTabButton
+          active={section === "endpoints"}
+          onClick={() => setSection("endpoints")}
+          icon={<ListChecks className="w-4 h-4" />}
+          label="Endpoints"
+        />
+      </div>
+
+      {section === "audit" && <AuditLogTab />}
+      {section === "pending" && <PendingActionsTab />}
+      {section === "endpoints" && <EndpointsTab />}
+    </div>
+  );
+}
+
+function NormTabButton({
+  active,
+  onClick,
+  icon,
+  label,
+  badge,
+}: {
+  active: boolean;
+  onClick: () => void;
+  icon: React.ReactNode;
+  label: string;
+  badge?: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`flex items-center gap-2 px-5 py-2.5 text-sm font-semibold capitalize transition-colors -mb-px border-b-2 ${
+        active
+          ? "text-[#ee0000] dark:text-[#ff4444] border-[#ee0000] dark:border-[#ff4444]"
+          : "text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 border-transparent"
+      }`}
+    >
+      {icon}
+      {label}
+      {badge && (
+        <span className="min-w-[20px] h-5 px-1.5 flex items-center justify-center rounded-full bg-red-500 text-white text-xs font-bold">
+          {badge}
+        </span>
+      )}
+    </button>
   );
 }

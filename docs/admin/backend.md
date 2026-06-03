@@ -196,6 +196,15 @@ The summed `attributedRevenue` map is returned as part of `SnapshotReadResult`.
   - `getCancellationFlowAnalytics({ from?, to? })` — DB entry. `await connectDB()`, queries `CancellationFlowEvent` with a **bounded** `startedAt` window (`$gte from` / `$lt to`; defaults to **last 90 days** when neither given — never an unbounded scan), `.lean()`, delegates to the pure shaper with `new Date()`. After shaping, **hydrates user details** for `otherReasonTexts` entries via a single batched `User.find({ _id: { $in: [...uniq userIds] } }).select({ email: 1, firstName: 1, lastName: 1 }).lean()` so the admin "Other" table can render a clickable email column without N+1 queries (no lookup when the events array carries no `userId`s). Service signature still uses UTC `Date` bounds; the `GET /api/admin/cancellation-flow-analytics` route accepts AEST `startDate`/`endDate` (yyyy-MM-dd) from the UI and converts to UTC bounds before calling the service.
   - `getCancellationFlowUsersByReason({ reason, outcome?, from?, to?, page?, limit? })` — paginated user-level rows for a single reason; powers the **Reason × outcome** drill-down modal. `await connectDB()`. Filter is `{ reason, startedAt: { $gte, $lt? }, outcome? }` with the same default-to-last-90-days lower bound as `getCancellationFlowAnalytics` (never an unbounded scan); `outcome` narrowing is optional. Runs `countDocuments` + a paged `find().sort({ startedAt: -1 }).skip(...).limit(...)` in parallel (`Promise.all`). `limit` is clamped to `[1, 100]` (default 20); `page` is clamped to `≥1` (default 1). Hydrates user details with the same batched `User.find({ _id: { $in: [...] } })` pattern. Returns `{ rows: ReasonUserRow[], totalCount }` where each row carries `eventId`, optional user fields, ISO `startedAt`, `outcome`, optional `reasonText` (set only when `reason === "other"` and the trimmed text is non-empty), and `offerAccepted` (the event's accepted offer or `null`). New `ReasonUserRow`, `ReasonUsersResult`, and `CancellationFlowUsersByReasonParams` interfaces are exported.
 
+- `UserAdminQueryService` ([src/services/admin/UserAdminQueryService.ts](../../src/services/admin/UserAdminQueryService.ts)) — admin-facing user list / search / aggregate-export / per-id readers. Extracted from the fat admin user routes (`/api/admin/users`, `/api/admin/users/search`, `/api/admin/users/export`, `/api/admin/users/[id]`, `/api/admin/users/[id]/charge-past-due` GET, `/api/admin/users/[id]/recover-past-due-invoice` GET, `/api/admin/users/[id]/payment-events`) during the Norm wiring so admin + Norm numbers match by construction. Framework-agnostic — no `Request` / `NextResponse` types. Exports:
+  - `listAdminUsers(args)` — paginated + filtered list with computed `totalSpent` (refund-net `BenefitsGranted` minus matching `RefundProcessed` by `paymentIntentId`), `majorDrawEntries` (currently-active major draw only), `miniDrawCount` per row + headline counts (`totalUsers`/`activeSubscriptions`/`verifiedUsers`/`conversions`). Computed-field sorting (`totalSpent`/`majorDrawEntries`/`miniDrawCount`) is applied after a full-collection scan; standard fields use Mongo `sort+skip+limit`.
+  - `searchAdminUsers(args)` — fuzzy `q` against `firstName`/`lastName`/`email`/`mobile` or exact `ObjectId`; optional `majorDrawId`/`miniDrawId` scoping that filters by participation and joins per-source entry breakdown.
+  - `aggregateUserExport(args)` — count-only aggregate (`totalCount`/`byState`/`byPackage`/`bySubscriptionStatus`) used by Norm's `/v1/users/export` projection. Honours the same `buildUserFilter` as the admin CSV/Excel export so totals match by construction; supports the `top20MajorDraw` segment.
+  - `getAdminUserDetail(userId)` — single-user detail with a `statistics` block (totals + counts; no orders array, no referrals feed, no Stripe `savedPaymentMethods` lookups).
+  - `previewUserChargePastDue({ userId })` — per-user past-due preview (`{ ok: true, preview: {...} } | { ok: false, status, message }`) using the same eligibility filters as the bulk charge job. Reuses `chargePastDueShared.ts` (`batchFetchCustomers`/`resolveInvoicePaymentMethodId`/`selectCurrentSubscriptionChargeable`) and `chargeOrRecoverPolicy.ts` (`chooseChargeAction` → `willRecover`).
+  - `previewUserRecoverPastDueInvoice({ userId, originalInvoiceId })` — verdict from `checkRecoveryEligibility` (from `recoverStrandedPastDue.ts`) joined with minimal Stripe invoice metadata; the invoice metadata is fetched regardless of verdict so callers can explain ineligibility without revealing customer PII.
+  - `listUserPaymentEvents({ userId, page, limit })` — paged `PaymentEvent.find({userId})` with a `hasRefundProcessed` flag computed by matching `BenefitsGranted` paymentIntentIds against `RefundProcessed` rows under the same `paymentIntentId`; limit capped at 50 (tighter than the standard 100).
+
 - `MembershipAnalyticsService` — renewal, past-due, and cancellation metrics.
   - `getAnalyticsBundle(startDate, endDate, dateRange, options?)` — returns `MembershipAnalyticsBundle`. Accepts optional `{ membershipAsOfMode, asOfDate, precomputedRenewals }`. When `precomputedRenewals: { purchaseCount, userCount }` is passed, skips the full-range `fetchNetBenefitsGrantedInRange` scan and uses the values directly — the dashboard stats route threads `snapshotRead.revenue.buckets.membershipRenewal` through to avoid scanning the entire `paymentevents` collection twice (once inside `DashboardStatsSnapshotReader`, once here). Without it the service falls back to the live scan. The `cancellationsInRange` count is always live (delta query).
   - `getMembershipByPackageLive()` — live per-package counts.
@@ -237,9 +246,10 @@ The summed `attributedRevenue` map is returned as part of `SnapshotReadResult`.
 - Error reports
 - Contact submissions
 - Partner applications
+- **Inbox unread count** (`/api/admin/submissions/unviewed-count`): returns `{ contact, partner, total }` for the admin sidebar badge. Delegates to [`getUnviewedSubmissionsCount`](../../src/services/admin/submissionsCountService.ts) (extracted from the route during the Norm wiring so the same code answers both the admin GET and the Norm tool).
 - Promo management
 - **Upsell multipliers** (`/api/admin/upsell-multipliers`):
-  - `GET /api/admin/upsell-multipliers` — returns the singleton `UpsellMultiplierConfig` document (`{ membership, oneTime, additional }`). Returns defaults `{ membership: 10, oneTime: 2, additional: 2 }` if no document exists yet.
+  - `GET /api/admin/upsell-multipliers` — returns the singleton `UpsellMultiplierConfig` document (`{ membership, oneTime, additional, updatedAt }`). Returns defaults `{ membership: 10, oneTime: 2, additional: 2 }` if no document exists yet. The GET body now delegates to [`getUpsellMultiplierConfig`](../../src/services/upsell/UpsellMultiplierResolver.ts) (shared with the Norm wiring at `/api/internal/norm/v1/upsell-multipliers`).
   - `PUT /api/admin/upsell-multipliers` — upserts the config document. Zod-validated; all three fields required; values must be members of `PROMO_MULTIPLIERS`. Called by `useUpsellMultipliersMutation()` in the admin panel.
 - Affiliate management
 - Draw management
@@ -249,6 +259,19 @@ The summed `attributedRevenue` map is returned as part of `SnapshotReadResult`.
   - `GET /api/admin/health/dashboard-stats-snapshot`: admin-only. Returns expected vs present snapshot counts from site launch through yesterday-AEST (today excluded). Response: `{ expectedCount, presentCount, missingCount, missingDates, latestPresent }`. Use this as the first step of the ops runbook when dashboard stats look stale.
 - User metrics (`/api/admin/metrics/users`)
   - `GET /api/admin/metrics/users`: accepts `startDate`, `endDate`, `groupBy`, `daily`. Also accepts `dateRange` (forwarded to `parseAdminDashboardDateRange` to derive `asOfDate`). When the resolved `asOfDate` is non-null (snapshot mode), `membershipStatus.active/cancelled/pastDue` in the response are sourced from `MembershipDailySnapshot` for that date; `membershipStatus.renewed` remains a live range delta. If no snapshot exists for the date, live values from the User-loop are returned.
+
+### `resolveNormDateRange` utility
+
+[`src/utils/admin/resolveNormDateRange.ts`](../../src/utils/admin/resolveNormDateRange.ts) wraps `parseAdminDashboardDateRange` for the internal Norm API. The admin UI today resolves `current-draw`/`last-draw` client-side and forwards the dates as `custom`; Norm calls server-side without knowing the draw dates, so this utility looks up `MajorDraw` and supplies the dates before delegating:
+
+- `current-draw` → `MajorDraw.findOne({ status: { $in: ["active", "frozen"] } })` sorted by `activationDate desc`.
+- `last-draw` → `MajorDraw.findOne({ status: "completed" })` sorted by `drawDate desc`.
+- Throws `Error("No <range> found in MajorDraw collection")` when no matching draw exists.
+- `today` / `yesterday` / `all-time` / `custom` pass straight through to `parseAdminDashboardDateRange` with no DB call.
+
+The MajorDraw schema uses `activationDate` (start) and `drawDate` (end) — not `startDate`/`endDate`. Status enum is `"queued" | "active" | "frozen" | "completed" | "cancelled"`.
+
+Test: `npm run test:resolve-norm-date-range` (covers today/yesterday/all-time/custom; current-draw degrades cleanly when no active draw exists).
 
 > _TODO: enumerate the exact subdirectories under api/admin/ and document each._
 
@@ -261,3 +284,9 @@ const adminCheck = requireAdmin(session);
 if (adminCheck) return adminCheck; // 401/403
 // ... admin work
 ```
+
+## Cross-domain projection helpers
+
+Some services under `src/services/admin/` expose secondary "projection" methods consumed by the internal-norm read tier so that admin + Norm share one code path:
+
+- `PromoBannerTextService.listBannerTextsProjection()` / `.getActiveBannerTextProjection()` — return banner-text rows in the shared `{id, ..., createdBy: {id, name, email}}` shape with `startDate` / `endDate` AEST-converted at the service boundary. The existing `getAllBannerTexts` / `getActiveBannerText` remain for the admin route's response envelope; the projection wrappers are what `/api/internal/norm/v1/promo/banner-text` and `…/banner-text/active` call.

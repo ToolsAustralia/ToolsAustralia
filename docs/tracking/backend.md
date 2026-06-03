@@ -32,6 +32,8 @@
 
 - **accountTrueRoasService** (`computeAccountTrueRoas`) — computes account-level TRUE ROAS by comparing local `PaymentEvent` revenue (non-renewal `BenefitsGranted` events) against Meta Insights spend and purchase revenue for a given date range. Returns `localRevenueAud`, `metaSpendAud`, `metaPurchaseRevenueAud`, `metaPurchaseConversions`, `ratioLocalOverMetaSpend` (TRUE ROAS proxy), `ratioMetaOverLocal` (Meta attribution ratio), and an `error` field if Meta was unreachable. Called by `GET /api/admin/facebook-ads/purchase-audit` and available for reuse by future health-insight routes.
 
+[src/services/facebook-ads/FacebookAdsInsightsService.ts](../../src/services/facebook-ads/FacebookAdsInsightsService.ts) — orchestrates Facebook Marketing API insight fetches for the admin dashboard. Resolves AEST date range (today / yesterday / custom), calls `fetchFacebookInsights` (from `src/lib/facebook-marketing.ts`), aggregates per-row metrics into a summary, and converts monetary fields from cents to dollars before returning the response payload for `/api/admin/facebook-ads/insights`. The fetcher is injectable via the constructor for testing — see `__tests__/FacebookAdsInsightsService.test.ts` (npm: `test:facebook-ads-insights-service`).
+
 ## Repositories
 
 > _TODO: locate any tracking-specific repositories under `src/repositories/`._
@@ -43,6 +45,15 @@
 - After subscription state changes
 - After cancellation (in `CancelSubscriptionService` step 4 of side effects, non-blocking)
 - After refund (`trackRefundedOrder` + sync, after a 500ms barrier)
+
+## Post-draw profile reset (Klaviyo)
+
+When a new MajorDraw activates, draw-specific user properties on the Klaviyo side need to be reset and recomputed. The orchestration lives in [src/utils/integrations/klaviyo/klaviyo-draw-reset.ts](../../src/utils/integrations/klaviyo/klaviyo-draw-reset.ts) (it predates the services layer and is also called from cron / migrations). Read-side access — for the admin preview UI and for Norm's `klaviyo.draw-reset.*` tools — goes through the thin wrapper [src/services/klaviyo/klaviyoDrawResetService.ts](../../src/services/klaviyo/klaviyoDrawResetService.ts):
+
+- `getKlaviyoDrawResetPreview()` — returns `{ targetDraw, cutoffDate, totalUsers, totalParticipants, skippedUsers, reductionPercentage, sampleUsers }`. Does not perform a sync.
+- `getKlaviyoDrawResetProgress()` — returns the in-memory progress object for an in-flight manual sync, or `null` when none is running. **Per-process**: on Vercel, a different Lambda will see `null` even while a sync is running on another instance.
+
+The actual reset (`resetDrawPropertiesForAllUsers`) is still invoked from the existing trigger flows and is not wrapped by the read-tier service.
 
 ## Marketing preference sync (Klaviyo)
 

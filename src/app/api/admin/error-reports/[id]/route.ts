@@ -12,6 +12,7 @@ import { requirePermissionWithAudit } from "@/lib/audit-log";
 import { z } from "zod";
 import { ErrorReportStatus } from "@/types/error-reporting";
 import mongoose from "mongoose";
+import { getErrorReportById } from "@/services/error-reporting/ErrorReportQueryService";
 
 /**
  * Validation schema for updating an error report
@@ -29,7 +30,7 @@ interface RouteParams {
  * GET /api/admin/error-reports/[id]
  * Get a single error report by ID
  */
-export async function GET(request: NextRequest, { params }: RouteParams) {
+export async function GET(_request: NextRequest, { params }: RouteParams) {
   try {
     const _guard = await requirePermission("errorReports.view");
     if (_guard instanceof NextResponse) return _guard;
@@ -37,56 +38,16 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     await connectDB();
 
     const { id } = await params;
-
-    // Validate ObjectId
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return NextResponse.json({ error: "Invalid report ID" }, { status: 400 });
     }
 
-    // Find error report
-    const report = await ErrorReport.findById(id)
-      .populate("userId", "firstName lastName email")
-      .populate("resolvedBy", "firstName lastName email")
-      .lean();
-
-    if (!report || Array.isArray(report)) {
+    const report = await getErrorReportById(id);
+    if (!report) {
       return NextResponse.json({ error: "Error report not found" }, { status: 404 });
     }
 
-    // Type guard: ensure report is a single document, not an array
-    const reportDoc = report as {
-      _id: { toString(): string } | string;
-      userId?: { _id: { toString(): string } | string; firstName?: string; lastName?: string; email?: string } | string | null;
-      resolvedBy?: { _id: { toString(): string } | string; firstName?: string; lastName?: string; email?: string } | string | null;
-      [key: string]: unknown;
-    };
-
-    return NextResponse.json({
-      report: {
-        ...reportDoc,
-        _id: typeof reportDoc._id === "object" && "toString" in reportDoc._id
-          ? reportDoc._id.toString()
-          : String(reportDoc._id),
-        userId: reportDoc.userId
-          ? typeof reportDoc.userId === "object" && reportDoc.userId !== null && "_id" in reportDoc.userId
-            ? typeof reportDoc.userId._id === "object" && "toString" in reportDoc.userId._id
-              ? reportDoc.userId._id.toString()
-              : String(reportDoc.userId._id)
-            : typeof reportDoc.userId === "string"
-            ? reportDoc.userId
-            : undefined
-          : undefined,
-        resolvedBy: reportDoc.resolvedBy
-          ? typeof reportDoc.resolvedBy === "object" && reportDoc.resolvedBy !== null && "_id" in reportDoc.resolvedBy
-            ? typeof reportDoc.resolvedBy._id === "object" && "toString" in reportDoc.resolvedBy._id
-              ? reportDoc.resolvedBy._id.toString()
-              : String(reportDoc.resolvedBy._id)
-            : typeof reportDoc.resolvedBy === "string"
-            ? reportDoc.resolvedBy
-            : undefined
-          : undefined,
-      },
-    });
+    return NextResponse.json({ report });
   } catch (error) {
     console.error("Error fetching error report:", error);
     return NextResponse.json(

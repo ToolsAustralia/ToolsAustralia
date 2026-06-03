@@ -4,7 +4,6 @@ import { requirePermission } from "@/lib/api-auth-permissions";
 import { requirePermissionWithAudit } from "@/lib/audit-log";
 import ExperimentRepository from "@/repositories/ab-testing/ExperimentRepository";
 import ExperimentService from "@/services/ab-testing/ExperimentService";
-import VariantRepository from "@/repositories/ab-testing/VariantRepository";
 import mongoose from "mongoose";
 import connectDB from "@/lib/mongodb";
 
@@ -40,21 +39,15 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     if (guard instanceof NextResponse) return guard;
 
     const { id } = await params;
-    const experiment = await ExperimentRepository.findById(id);
+    const detail = await ExperimentService.getExperimentDetail(id);
 
-    if (!experiment) {
+    if (!detail) {
       return NextResponse.json({ error: "Experiment not found" }, { status: 404 });
     }
 
-    // Get variants
-    const variants = await VariantRepository.findByExperimentId(id);
-
     return NextResponse.json({
       success: true,
-      data: {
-        experiment,
-        variants,
-      },
+      data: detail,
     });
   } catch (error) {
     console.error("Error fetching experiment:", error);

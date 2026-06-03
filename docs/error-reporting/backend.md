@@ -2,7 +2,10 @@
 
 ## Service
 
-[src/services/error-reporting/](../../src/services/error-reporting/) — capture, classify, write `ErrorReport` rows.
+[src/services/error-reporting/](../../src/services/error-reporting/):
+
+- `ErrorLoggingService.ts` — capture, classify, write `ErrorReport` rows (called from the client `/api/error-reports/` route and server-side autologgers).
+- `ErrorReportQueryService.ts` — read-side queries (`listErrorReports`, `getErrorReportById`) consumed by both `/api/admin/error-reports/*` and the Norm `/v1/error-reports/*` endpoints. Framework-agnostic: takes plain args, returns plain objects, no `Request` / `NextResponse` types — so the admin UI and the Norm projection share one implementation by construction.
 
 ## Helpers
 

@@ -66,7 +66,7 @@ upsellEntries = activePromoMultiplier × upsellCategoryMultiplier × baseEntries
 
 **Factors:**
 - `activePromoMultiplier` — the promo that applied to the **original trigger purchase**, taken from `originalPurchaseContext.promoMultiplier` (recorded at trigger purchase time). Resolves canonically via [PromoMultiplierResolverService](../../src/services/admin/PromoMultiplierResolverService.ts) (Scheduled > Toggle > Alternating > 1×). When no promo applies, the factor is `1×`.
-- `upsellCategoryMultiplier` — admin-configured value from `UpsellMultiplierConfig`, looked up via `getUpsellMultiplier(category)`. Defaults: `membership=10`, `oneTime=2`, `additional=2`. Mini upsells use a fixed `1×` (no admin knob).
+- `upsellCategoryMultiplier` — admin-configured value from `UpsellMultiplierConfig`, looked up via `getUpsellMultiplier(category)`. Defaults: `membership=10`, `oneTime=2`, `additional=2`. Mini upsells use a fixed `1×` (no admin knob). A sibling helper `getUpsellMultiplierConfig()` returns the full row (`{ membership, oneTime, additional, updatedAt }`) and is what the admin GET handler and the Norm `upsell-multipliers.list` tool both call.
 - `baseEntries` — the upsell record's `baseTemplatePackageId` resolved against the static data:
   - membership / one-time / additional → `membershipPackages` (`entriesPerMonth` for subscriptions, `totalEntries` for one-time packs)
   - mini → `miniDrawPackages` (`originalEntries ?? entries`)

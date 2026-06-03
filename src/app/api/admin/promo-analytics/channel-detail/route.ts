@@ -1,11 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requirePermission } from "@/lib/api-auth-permissions";
-import PromoAnalyticsService from "@/services/promo-analytics/PromoAnalyticsService";
-import { getStartOfTodayInAEST, createAESTDateAsUTC } from "@/utils/common/timezone";
-import { formatInTimeZone } from "date-fns-tz";
+import PromoAnalyticsService, {
+  resolvePromoAnalyticsRange,
+} from "@/services/promo-analytics/PromoAnalyticsService";
 import { z } from "zod";
-
-const AEST_TIMEZONE = "Australia/Sydney";
 
 const querySchema = z.object({
   utmSource: z.string().min(1),
@@ -40,32 +38,25 @@ export async function GET(request: NextRequest) {
     }
 
     const { utmSource, startDate, endDate } = parsed.data;
-
-    let rangeStart: Date;
-    let rangeEnd: Date;
-
-    if (startDate && endDate) {
-      const [startY, startM, startD] = startDate.split("-").map(Number);
-      const [endY, endM, endD] = endDate.split("-").map(Number);
-      rangeStart = createAESTDateAsUTC(startY, startM, startD, 0, 0);
-      rangeEnd = createAESTDateAsUTC(endY, endM, endD, 23, 59);
-      rangeEnd.setUTCSeconds(59, 999);
-    } else {
-      const startOfToday = getStartOfTodayInAEST();
-      const now = new Date();
-      const todayYear = parseInt(formatInTimeZone(now, AEST_TIMEZONE, "yyyy"), 10);
-      const todayMonth = parseInt(formatInTimeZone(now, AEST_TIMEZONE, "M"), 10);
-      const todayDay = parseInt(formatInTimeZone(now, AEST_TIMEZONE, "d"), 10);
-      const endOfToday = createAESTDateAsUTC(todayYear, todayMonth, todayDay, 23, 59);
-      endOfToday.setUTCSeconds(59, 999);
-      rangeStart = startOfToday;
-      rangeEnd = endOfToday;
+    const hasCustom = !!(startDate && endDate);
+    let range;
+    try {
+      range = resolvePromoAnalyticsRange({
+        range: hasCustom ? "custom" : "today",
+        startDate,
+        endDate,
+      });
+    } catch (e) {
+      return NextResponse.json(
+        { success: false, error: (e as Error).message },
+        { status: 400 }
+      );
     }
 
     const data = await PromoAnalyticsService.getChannelDetailMetrics(
       utmSource,
-      rangeStart,
-      rangeEnd
+      range.start,
+      range.end
     );
 
     return NextResponse.json({ success: true, data });

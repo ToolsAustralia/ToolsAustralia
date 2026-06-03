@@ -1,0 +1,629 @@
+{
+  "version": 1,
+  "generatedAt": "2026-06-03T14:05:48.706Z",
+  "endpoints": [
+    {
+      "registryKey": "pending-actions.status",
+      "tier": "read",
+      "path": "/v1/pending-actions/:id/status",
+      "method": "GET",
+      "summary": "Norm polls a pending action's resolution status"
+    },
+    {
+      "registryKey": "roas.summary",
+      "tier": "read",
+      "path": "/v1/roas/summary",
+      "method": "GET",
+      "summary": "Headline ad spend, revenue, ROAS, profit for a date range"
+    },
+    {
+      "registryKey": "roas.breakdown",
+      "tier": "read",
+      "path": "/v1/roas/breakdown",
+      "method": "GET",
+      "summary": "Per-campaign/adset/ad ROAS breakdown for a date range"
+    },
+    {
+      "registryKey": "dashboard.stats",
+      "tier": "read",
+      "path": "/v1/dashboard/stats",
+      "method": "GET",
+      "summary": "Headline business stats: revenue, users, members, draws, conversion, ROAS"
+    },
+    {
+      "registryKey": "dashboard.revenue-breakdown",
+      "tier": "read",
+      "path": "/v1/dashboard/revenue-breakdown",
+      "method": "GET",
+      "summary": "Revenue total + per-category breakdown for a date range"
+    },
+    {
+      "registryKey": "dashboard.membership-by-package",
+      "tier": "read",
+      "path": "/v1/dashboard/membership-by-package",
+      "method": "GET",
+      "summary": "Membership counts + revenue grouped by package (live or snapshot)"
+    },
+    {
+      "registryKey": "dashboard.projected-income",
+      "tier": "read",
+      "path": "/v1/dashboard/projected-income",
+      "method": "GET",
+      "summary": "Projected income from active subs, upcoming-27th cohort, and past-due risk"
+    },
+    {
+      "registryKey": "dashboard.recent-activities",
+      "tier": "read",
+      "path": "/v1/dashboard/recent-activities",
+      "method": "GET",
+      "summary": "Paged recent admin/site activity feed (PII-safe: firstName + opaque userId)"
+    },
+    {
+      "registryKey": "dashboard.revenue-details",
+      "tier": "read",
+      "path": "/v1/dashboard/revenue-details",
+      "method": "GET",
+      "summary": "Per-user contribution list for one revenue category over a date range (PII-safe: firstName + opaque userId)"
+    },
+    {
+      "registryKey": "dashboard.upcoming-renewals",
+      "tier": "read",
+      "path": "/v1/dashboard/upcoming-renewals",
+      "method": "GET",
+      "summary": "Paged list of subscriptions due to renew within a selected window (PII-safe: opaque IDs only)"
+    },
+    {
+      "registryKey": "activity-log.list",
+      "tier": "read",
+      "path": "/v1/activity-log",
+      "method": "GET",
+      "summary": "Paged + filterable + searchable admin activity feed over a 90-day window (PII-safe: firstName + opaque userId)"
+    },
+    {
+      "registryKey": "ab-testing.experiments.list",
+      "tier": "read",
+      "path": "/v1/ab-testing/experiments",
+      "method": "GET",
+      "summary": "List A/B experiments (paged, filterable by status / search)"
+    },
+    {
+      "registryKey": "ab-testing.experiment.get",
+      "tier": "read",
+      "path": "/v1/ab-testing/experiments/:id",
+      "method": "GET",
+      "summary": "Get a single A/B experiment with its variant summaries"
+    },
+    {
+      "registryKey": "ab-testing.experiment-analytics",
+      "tier": "read",
+      "path": "/v1/ab-testing/experiments/:id/analytics",
+      "method": "GET",
+      "summary": "Aggregate analytics for an A/B experiment: per-variant metrics, significance, stopping rules, winner"
+    },
+    {
+      "registryKey": "ab-testing.experiment-history",
+      "tier": "read",
+      "path": "/v1/ab-testing/experiments/:id/history",
+      "method": "GET",
+      "summary": "Mutation history (audit log) for an A/B experiment"
+    },
+    {
+      "registryKey": "ab-testing.experiment.winner.get",
+      "tier": "read",
+      "path": "/v1/ab-testing/experiments/:id/winner",
+      "method": "GET",
+      "summary": "Read the auto-determined winner + currently-declared winner for an A/B experiment"
+    },
+    {
+      "registryKey": "affiliate.list",
+      "tier": "read",
+      "path": "/v1/affiliate",
+      "method": "GET",
+      "summary": "List affiliates (PII-safe projection: omits email/phone/bank details)"
+    },
+    {
+      "registryKey": "affiliate.get",
+      "tier": "read",
+      "path": "/v1/affiliate/:id",
+      "method": "GET",
+      "summary": "Get a single affiliate with commissions, payouts, and referred users (PII-safe projection)"
+    },
+    {
+      "registryKey": "allowlist.actions.list",
+      "tier": "read",
+      "path": "/v1/allowlist/actions",
+      "method": "GET",
+      "summary": "List allowlist actions (audit feed)"
+    },
+    {
+      "registryKey": "allowlist.blocked-cards.list",
+      "tier": "read",
+      "path": "/v1/allowlist/blocked-cards",
+      "method": "GET",
+      "summary": "List currently blocked cards"
+    },
+    {
+      "registryKey": "allowlist.stats",
+      "tier": "read",
+      "path": "/v1/allowlist/stats",
+      "method": "GET",
+      "summary": "Allowlist summary stats"
+    },
+    {
+      "registryKey": "analytics.spend-by-url.list",
+      "tier": "read",
+      "path": "/v1/analytics/spend-by-url",
+      "method": "GET",
+      "summary": "Ad spend grouped by destination URL for a date range (materialized daily rows summed per canonical URL)"
+    },
+    {
+      "registryKey": "analytics.spend-by-url.detail",
+      "tier": "read",
+      "path": "/v1/analytics/spend-by-url/detail",
+      "method": "GET",
+      "summary": "Per-ad spend / delivery / conversion breakdown for one or more canonical destination URLs"
+    },
+    {
+      "registryKey": "analytics.hourly-revenue",
+      "tier": "read",
+      "path": "/v1/analytics/hourly-revenue",
+      "method": "GET",
+      "summary": "Hour-of-day (AEST) revenue, conversions, and ad spend for a date range, merged per platform group (meta/tiktok/snapchat/klaviyo/ad-channels/all)"
+    },
+    {
+      "registryKey": "cancellation-flow-analytics.list",
+      "tier": "read",
+      "path": "/v1/cancellation-flow-analytics",
+      "method": "GET",
+      "summary": "Cancellation funnel analytics"
+    },
+    {
+      "registryKey": "cancellation-flow-analytics.users-by-reason",
+      "tier": "read",
+      "path": "/v1/cancellation-flow-analytics/users-by-reason",
+      "method": "GET",
+      "summary": "Per-reason cancellation drill-down rows (PII-safe: opaque userId + firstName only; email/lastName stripped)"
+    },
+    {
+      "registryKey": "charge-past-due.decline-summary",
+      "tier": "read",
+      "path": "/v1/charge-past-due/decline-summary",
+      "method": "GET",
+      "summary": "Summary of recent past-due decline reasons"
+    },
+    {
+      "registryKey": "charge-past-due.manual-retries.list",
+      "tier": "read",
+      "path": "/v1/charge-past-due/manual-retries",
+      "method": "GET",
+      "summary": "List manual past-due retry attempts"
+    },
+    {
+      "registryKey": "charge-past-due.runs.list",
+      "tier": "read",
+      "path": "/v1/charge-past-due/runs",
+      "method": "GET",
+      "summary": "List past-due charge job runs"
+    },
+    {
+      "registryKey": "charge-past-due.run.get",
+      "tier": "read",
+      "path": "/v1/charge-past-due/runs/:runId",
+      "method": "GET",
+      "summary": "Get details for a single past-due charge run"
+    },
+    {
+      "registryKey": "error-reports.list",
+      "tier": "read",
+      "path": "/v1/error-reports",
+      "method": "GET",
+      "summary": "List error reports (paged, filterable) with status/severity rollup counts"
+    },
+    {
+      "registryKey": "error-reports.get",
+      "tier": "read",
+      "path": "/v1/error-reports/:id",
+      "method": "GET",
+      "summary": "Get a single error report by id (PII-redacted projection)"
+    },
+    {
+      "registryKey": "facebook-ads.insights",
+      "tier": "read",
+      "path": "/v1/facebook-ads/insights",
+      "method": "GET",
+      "summary": "Facebook ad insights for a date range: summary + per-item breakdown at the requested level"
+    },
+    {
+      "registryKey": "facebook-ads.hourly-insights.list",
+      "tier": "read",
+      "path": "/v1/facebook-ads/hourly-insights",
+      "method": "GET",
+      "summary": "Hourly Facebook ad insights for an AEST date range, merged with local PaymentEvent revenue"
+    },
+    {
+      "registryKey": "facebook-ads.purchase-audit",
+      "tier": "read",
+      "path": "/v1/facebook-ads/purchase-audit",
+      "method": "GET",
+      "summary": "Reconcile local PaymentEvent (non-renewal) revenue vs Meta Insights purchase revenue"
+    },
+    {
+      "registryKey": "facebook-ads.health.insights",
+      "tier": "read",
+      "path": "/v1/facebook-ads/health/insights",
+      "method": "GET",
+      "summary": "Per-campaign/adset/ad health rows with the verdict engine (scale/hold/investigate/cut), daily metrics, last-7d ROAS, and an alert tally"
+    },
+    {
+      "registryKey": "facebook-ads.health.settings",
+      "tier": "read",
+      "path": "/v1/facebook-ads/health/settings",
+      "method": "GET",
+      "summary": "Read the tunable verdict-engine thresholds (breakeven ROAS, target CPA, etc.)"
+    },
+    {
+      "registryKey": "health.dashboard-stats-snapshot",
+      "tier": "read",
+      "path": "/v1/health/dashboard-stats-snapshot",
+      "method": "GET",
+      "summary": "Dashboard stats daily snapshot health"
+    },
+    {
+      "registryKey": "health.membership-snapshot",
+      "tier": "read",
+      "path": "/v1/health/membership-snapshot",
+      "method": "GET",
+      "summary": "Membership daily snapshot health"
+    },
+    {
+      "registryKey": "invoices.charge-past-due.preview",
+      "tier": "read",
+      "path": "/v1/invoices/charge-past-due",
+      "method": "GET",
+      "summary": "Preview the upcoming past-due charge run"
+    },
+    {
+      "registryKey": "klaviyo.draw-reset.preview",
+      "tier": "read",
+      "path": "/v1/klaviyo/draw-reset-preview",
+      "method": "GET",
+      "summary": "Preview the post-draw Klaviyo profile reset"
+    },
+    {
+      "registryKey": "klaviyo.draw-reset.progress",
+      "tier": "read",
+      "path": "/v1/klaviyo/draw-reset-progress",
+      "method": "GET",
+      "summary": "Progress of an in-flight Klaviyo draw reset"
+    },
+    {
+      "registryKey": "klaviyo.analytics",
+      "tier": "read",
+      "path": "/v1/klaviyo/analytics",
+      "method": "GET",
+      "summary": "Klaviyo-attributed campaign & flow revenue/conversions (email/SMS split) + scheduled/live campaigns and flows, for a timeframe"
+    },
+    {
+      "registryKey": "major-draw.current-and-last",
+      "tier": "read",
+      "path": "/v1/major-draw/current-and-last",
+      "method": "GET",
+      "summary": "Current + most recent major draw with AEST date ranges"
+    },
+    {
+      "registryKey": "major-draw.export",
+      "tier": "read",
+      "path": "/v1/major-draw/export",
+      "method": "GET",
+      "summary": "Aggregate-only major-draw export: eligibility counts + per-state breakdown (no per-user PII)"
+    },
+    {
+      "registryKey": "major-draw.history",
+      "tier": "read",
+      "path": "/v1/major-draw/history",
+      "method": "GET",
+      "summary": "Paged major-draw history with per-draw winner summary and rollup stats"
+    },
+    {
+      "registryKey": "major-draw.participants",
+      "tier": "read",
+      "path": "/v1/major-draw/participants",
+      "method": "GET",
+      "summary": "Paged participants for a major draw (PII-safe projection: omits lastName/email/mobile)"
+    },
+    {
+      "registryKey": "major-draw.scheduled-months",
+      "tier": "read",
+      "path": "/v1/major-draw/scheduled-months",
+      "method": "GET",
+      "summary": "Months with scheduled major draws (for calendar restriction UI)"
+    },
+    {
+      "registryKey": "major-draw.select-winner.preview",
+      "tier": "read",
+      "path": "/v1/major-draw/select-winner",
+      "method": "GET",
+      "summary": "Read the recorded winner for a major draw (if any) — PII-safe projection"
+    },
+    {
+      "registryKey": "major-draw.update.get",
+      "tier": "read",
+      "path": "/v1/major-draw/update",
+      "method": "GET",
+      "summary": "Read editable major-draw fields (name, description, status, dates, prize meta) for the update form"
+    },
+    {
+      "registryKey": "metrics.debug",
+      "tier": "read",
+      "path": "/v1/metrics/debug",
+      "method": "GET",
+      "summary": "Engineer-facing debug snapshot of recent BenefitsGranted PaymentEvents (sample + total count)"
+    },
+    {
+      "registryKey": "metrics.users",
+      "tier": "read",
+      "path": "/v1/metrics/users",
+      "method": "GET",
+      "summary": "Aggregate user metrics for a date range: signup source, profession, state, age, membership, purchase history"
+    },
+    {
+      "registryKey": "metrics.users.major-draw-comparison",
+      "tier": "read",
+      "path": "/v1/metrics/users/major-draw-comparison",
+      "method": "GET",
+      "summary": "Per-draw user/revenue totals + percent comparison between two major draws"
+    },
+    {
+      "registryKey": "milestone-rewards.list",
+      "tier": "read",
+      "path": "/v1/milestone-rewards",
+      "method": "GET",
+      "summary": "List milestone rewards with per-reward issuance performance aggregates"
+    },
+    {
+      "registryKey": "mini-draw.full-capacity-count",
+      "tier": "read",
+      "path": "/v1/mini-draw/full-capacity-count",
+      "method": "GET",
+      "summary": "Count of mini draws at full capacity (status=completed) awaiting winner selection"
+    },
+    {
+      "registryKey": "mini-draw.list",
+      "tier": "read",
+      "path": "/v1/mini-draw/list",
+      "method": "GET",
+      "summary": "Paged list of mini draws with per-row latest-winner join"
+    },
+    {
+      "registryKey": "mini-draw.get",
+      "tier": "read",
+      "path": "/v1/mini-draw/:id",
+      "method": "GET",
+      "summary": "Get a single mini draw detail (no per-participant rows; counts only)"
+    },
+    {
+      "registryKey": "mini-draw.export",
+      "tier": "read",
+      "path": "/v1/mini-draw/:id/export",
+      "method": "GET",
+      "summary": "Aggregate-only mini-draw export: participant counts + per-state breakdown (no per-user PII)"
+    },
+    {
+      "registryKey": "monthly-coupon.campaigns.list",
+      "tier": "read",
+      "path": "/v1/monthly-coupon/campaign",
+      "method": "GET",
+      "summary": "List monthly-coupon campaigns with per-campaign redeemed-count rollup"
+    },
+    {
+      "registryKey": "monthly-coupon.campaign.redemptions",
+      "tier": "read",
+      "path": "/v1/monthly-coupon/campaign/:id/redemptions",
+      "method": "GET",
+      "summary": "Paged redemption ledger for a monthly-coupon campaign (opaque userId; no email/name)"
+    },
+    {
+      "registryKey": "monthly-coupon.target-users.manual",
+      "tier": "read",
+      "path": "/v1/monthly-coupon/target-users/manual",
+      "method": "POST",
+      "summary": "Resolve manually-supplied user IDs for coupon targeting (POST-body read; opaque userId array)"
+    },
+    {
+      "registryKey": "monthly-coupon.target-users.csv",
+      "tier": "read",
+      "path": "/v1/monthly-coupon/target-users/csv",
+      "method": "POST",
+      "summary": "Resolve CSV-supplied user IDs for coupon targeting (POST-body read; opaque userId array + invalid-row report)"
+    },
+    {
+      "registryKey": "monthly-coupon.target-users.filter",
+      "tier": "read",
+      "path": "/v1/monthly-coupon/target-users/filter",
+      "method": "POST",
+      "summary": "Resolve users matching a coupon-targeting filter (POST-body read; paged opaque-id rows or bulk userId list)"
+    },
+    {
+      "registryKey": "monthly-coupon.target-users.dynamic",
+      "tier": "read",
+      "path": "/v1/monthly-coupon/target-users/dynamic",
+      "method": "POST",
+      "summary": "Resolve users via dynamic segment for coupon targeting (POST-body read; opaque userId array)"
+    },
+    {
+      "registryKey": "promo-analytics.summary",
+      "tier": "read",
+      "path": "/v1/promo-analytics",
+      "method": "GET",
+      "summary": "Promo analytics summary: per-page + per-UTM-source visits, signups, conversions, revenue"
+    },
+    {
+      "registryKey": "promo-analytics.channel-detail",
+      "tier": "read",
+      "path": "/v1/promo-analytics/channel-detail",
+      "method": "GET",
+      "summary": "Promo analytics for a single utmSource: pages and campaigns it drove"
+    },
+    {
+      "registryKey": "promo-analytics.page-detail",
+      "tier": "read",
+      "path": "/v1/promo-analytics/page-detail",
+      "method": "GET",
+      "summary": "Promo analytics for a single page: per-UTM-campaign attribution + visits-from"
+    },
+    {
+      "registryKey": "promo.active",
+      "tier": "read",
+      "path": "/v1/promo/active",
+      "method": "GET",
+      "summary": "Currently-active promo"
+    },
+    {
+      "registryKey": "promo.effective",
+      "tier": "read",
+      "path": "/v1/promo/effective",
+      "method": "GET",
+      "summary": "Resolve currently-effective promo for context"
+    },
+    {
+      "registryKey": "promo.history",
+      "tier": "read",
+      "path": "/v1/promo/history",
+      "method": "GET",
+      "summary": "Promo history"
+    },
+    {
+      "registryKey": "promo.alternating-multiplier.list",
+      "tier": "read",
+      "path": "/v1/promo/alternating-multiplier",
+      "method": "GET",
+      "summary": "List alternating-multiplier promos"
+    },
+    {
+      "registryKey": "promo.banner-text.list",
+      "tier": "read",
+      "path": "/v1/promo/banner-text",
+      "method": "GET",
+      "summary": "List promo banner texts"
+    },
+    {
+      "registryKey": "promo.banner-text.active",
+      "tier": "read",
+      "path": "/v1/promo/banner-text/active",
+      "method": "GET",
+      "summary": "Currently-active promo banner text"
+    },
+    {
+      "registryKey": "promo.bonus-entry.list",
+      "tier": "read",
+      "path": "/v1/promo/bonus-entry/list",
+      "method": "GET",
+      "summary": "List bonus-entry promos"
+    },
+    {
+      "registryKey": "promo.bonus-entry.active",
+      "tier": "read",
+      "path": "/v1/promo/bonus-entry/active",
+      "method": "GET",
+      "summary": "Currently-active bonus-entry promo"
+    },
+    {
+      "registryKey": "promo.link.list",
+      "tier": "read",
+      "path": "/v1/promo/link/list",
+      "method": "GET",
+      "summary": "List promo links"
+    },
+    {
+      "registryKey": "promo.scheduled.list",
+      "tier": "read",
+      "path": "/v1/promo/scheduled/list",
+      "method": "GET",
+      "summary": "List scheduled promos"
+    },
+    {
+      "registryKey": "stripe-webhook-queue.list",
+      "tier": "read",
+      "path": "/v1/stripe-webhook-queue",
+      "method": "GET",
+      "summary": "List Stripe webhook queue items"
+    },
+    {
+      "registryKey": "submissions.unviewed-count",
+      "tier": "read",
+      "path": "/v1/submissions/unviewed-count",
+      "method": "GET",
+      "summary": "Count of unviewed contact submissions"
+    },
+    {
+      "registryKey": "upsell-multipliers.list",
+      "tier": "read",
+      "path": "/v1/upsell-multipliers",
+      "method": "GET",
+      "summary": "List upsell multipliers"
+    },
+    {
+      "registryKey": "users.list",
+      "tier": "read",
+      "path": "/v1/users",
+      "method": "GET",
+      "summary": "Paged + filtered users list with per-row computed stats and headline counts (PII-safe: firstName + opaque userId; email/lastName/mobile/address omitted)"
+    },
+    {
+      "registryKey": "users.search",
+      "tier": "read",
+      "path": "/v1/users/search",
+      "method": "GET",
+      "summary": "Fuzzy user search by name / email / mobile / opaque userId — operator must supply the lookup string (PII-safe: firstName + opaque userId on each row)"
+    },
+    {
+      "registryKey": "users.export",
+      "tier": "read",
+      "path": "/v1/users/export",
+      "method": "GET",
+      "summary": "Aggregate-only users export: total + breakdown by state / package / subscription status (admin returns CSV/Excel rows; Norm projection collapses to counts — no per-user PII)"
+    },
+    {
+      "registryKey": "users.get",
+      "tier": "read",
+      "path": "/v1/users/:id",
+      "method": "GET",
+      "summary": "Single-user detail with statistics counts (PII-safe: firstName + state only; email/lastName/mobile/address/savedPaymentMethods/orders array stripped)"
+    },
+    {
+      "registryKey": "users.deletion-summary",
+      "tier": "read",
+      "path": "/v1/users/:id/deletion-summary",
+      "method": "GET",
+      "summary": "Counts-only preview of what would be deleted with a user (entry counts, payment-event count, winner-draw names) — no per-row PII"
+    },
+    {
+      "registryKey": "users.charge-past-due.preview",
+      "tier": "read",
+      "path": "/v1/users/:id/charge-past-due",
+      "method": "GET",
+      "summary": "Preview eligible past-due Stripe invoices for a single user (same eligibility rules as the bulk past-due job; no per-invoice email)"
+    },
+    {
+      "registryKey": "users.recover-past-due-invoice.preview",
+      "tier": "read",
+      "path": "/v1/users/:id/recover-past-due-invoice",
+      "method": "GET",
+      "summary": "Preview Stripe collection-pause invoice recovery for a single user (eligibility verdict + invoice metadata; no email)"
+    },
+    {
+      "registryKey": "users.payment-events.list",
+      "tier": "read",
+      "path": "/v1/users/:id/payment-events",
+      "method": "GET",
+      "summary": "Paged payment events for one user with refund-match flag (route is user-scoped; no PII per row beyond the package metadata)"
+    },
+    {
+      "registryKey": "winners.get",
+      "tier": "read",
+      "path": "/v1/winners/:id",
+      "method": "GET",
+      "summary": "Get a single winner record with the joined draw name (PII-safe projection: firstName + state only)"
+    }
+  ]
+}

@@ -15,6 +15,14 @@
 - **Snapshot mode** (`asOfDate` is set): after the User-loop, standing counts are overridden from `MembershipDailySnapshot` rows for the matching date key (formatted in `Australia/Sydney` tz as `yyyy-MM-dd`). `cancelledCount + scheduledCancelCount` are merged into the `cancelled` bucket. If no snapshot rows exist for the date, the live User-loop values survive (graceful degradation).
 - `membershipStatus.renewed` is always a range-driven delta from `PaymentEvent` (`subscription_cycle` events) — never overridden by snapshot.
 
+### MetricsDebugService
+
+[`getMetricsDebugSnapshot(daysBack = 7)`](../../src/services/metrics/MetricsDebugService.ts) — diagnostic helper extracted from `/api/admin/metrics/debug` when the route was wired through Norm. Returns a count of `BenefitsGranted` `PaymentEvent` rows in the last `daysBack` days plus a 10-row sample. `paymentEvents.totalRevenue` is sample-only (not the full window) — the route uses this for "does data exist?" debugging, not for revenue reporting. `daysBack` is clamped `[1, 365]` server-side.
+
+Consumed by:
+- `GET /api/admin/metrics/debug` (admin diagnostic — engineer-facing)
+- `GET /api/internal/norm/v1/metrics/debug` (Norm engineer-facing diagnostic)
+
 ## Utils
 
 [src/utils/metrics/](../../src/utils/metrics/) — pure helpers.
