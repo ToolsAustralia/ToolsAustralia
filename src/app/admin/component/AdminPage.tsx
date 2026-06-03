@@ -20,6 +20,7 @@ import AffiliatesManagement from "@/components/admin/AffiliatesManagement";
 import FacebookAdsManagement from "@/components/admin/FacebookAdsManagement";
 import TikTokAdsManagement from "@/components/admin/TikTokAdsManagement";
 import SnapchatAdsManagement from "@/components/admin/SnapchatAdsManagement";
+import KlaviyoAnalyticsManagement from "@/components/admin/KlaviyoAnalyticsManagement";
 import ABTestingManagement from "@/components/admin/ab-testing/ABTestingManagement";
 import ErrorReportsManagement from "@/components/admin/ErrorReportsManagement";
 import BlockedTransactionsManagement from "@/components/admin/BlockedTransactionsManagement";
@@ -163,6 +164,7 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
                   {selectedTab === "users" && "User account management and administration"}
                   {selectedTab === "promos" && "Manage promotional campaigns and entry multipliers"}
                   {selectedTab === "promo-analytics" && "Track visits, signups, and conversions by promotion page"}
+                  {selectedTab === "klaviyo" && "Klaviyo campaign & flow revenue, scheduled sends, and hourly"}
                   {selectedTab === "cancellation-flow" && "Cancellation-flow funnel, save rate, and retention analytics"}
                   {selectedTab === "AB-testing" && "Manage A/B testing experiments and analyze variant performance"}
                   {selectedTab === "error-reports" && "View and manage error reports from users"}
@@ -236,6 +238,9 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
 
           {/* SNAPCHAT ADS TAB */}
           {selectedTab === "snapchat-ads" && <SnapchatAdsManagement />}
+
+          {/* KLAVIYO TAB */}
+          {selectedTab === "klaviyo" && <KlaviyoAnalyticsManagement />}
 
           {/* PROMO ANALYTICS TAB */}
           {selectedTab === "promo-analytics" && <PromoAnalyticsManagement />}

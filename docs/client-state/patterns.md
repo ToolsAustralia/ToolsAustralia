@@ -83,6 +83,8 @@ Read-only admin cancellation-flow analytics. Both hooks live in [`src/hooks/quer
 
 `useHourlyRevenue({ startDate, endDate, platform })` ([`src/hooks/queries/admin/useHourlyRevenue.ts`](../../src/hooks/queries/admin/useHourlyRevenue.ts)) — `useQuery`, key `["admin", "analytics", "hourly-revenue", platform, startDate, endDate]`, enabled only when both dates are set. `platform` ∈ `meta` | `tiktok` | `snapchat` | `klaviyo` | `all`. Fetches the SHARED-1 hour-of-day series from `GET /api/admin/analytics/hourly-revenue`; same cadence as the other admin query hooks (1 min stale, refetch on focus + 2 min interval). Consumed by `PlatformHourlyRevenueSection` (TikTok / Snapchat tabs).
 
+`useKlaviyoAnalytics(range)` ([`src/hooks/queries/admin/useKlaviyoAnalytics.ts`](../../src/hooks/queries/admin/useKlaviyoAnalytics.ts)) — `useQuery`, key `["admin", "klaviyo", "analytics", range]`. Fetches Klaviyo-attributed campaign/flow revenue + scheduled view from `GET /api/admin/klaviyo/analytics`. **Throttle-aware**: long `staleTime` (10 min), `refetchOnWindowFocus: false`, **no `refetchInterval`** — the Klaviyo reporting API is ~2/min and the route caches. Returns `{ data, stale, cachedAt }`; consumed by `KlaviyoAnalyticsManagement`.
+
 ## P3. Modal priority coordination
 
 `useModalPriorityStore` exposes a `register / unregister / current` API. Modals register on mount with their priority; only the highest-priority active modal renders.
