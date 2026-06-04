@@ -125,7 +125,7 @@ export default function AdvertisingPlatformCard({
 
     if (key === "platform") {
       return (
-        <div className="flex items-center gap-2 font-medium">
+        <div className="flex items-center gap-2 text-xs sm:text-sm font-medium">
           <PlatformLogo platform={row.logo} />
           {row.platform}
         </div>
@@ -134,7 +134,7 @@ export default function AdvertisingPlatformCard({
 
     if (key === "spend") {
       if (row.spend.kind === "amount") {
-        return <span className="font-semibold num">{formatCurrency(row.spend.value)}</span>;
+        return <span className="text-xs sm:text-sm font-semibold num">{formatCurrency(row.spend.value)}</span>;
       }
       if (row.spend.kind === "awaiting") {
         return <span className={AWAITING}>Awaiting sync</span>;
@@ -145,7 +145,7 @@ export default function AdvertisingPlatformCard({
     if (key === "revenue") {
       return (
         <div className="flex flex-col items-end leading-tight" title={row.confidenceTitle}>
-          <span className="font-semibold num">{formatCurrency(row.revenue)}</span>
+          <span className="text-xs sm:text-sm font-semibold num">{formatCurrency(row.revenue)}</span>
           <span className="text-2xs text-neutral-400 dark:text-neutral-500 num">
             {row.conversions.toLocaleString()} new
           </span>
@@ -157,7 +157,7 @@ export default function AdvertisingPlatformCard({
     if (row.roas.kind === "value") {
       return (
         <span
-          className={`num font-semibold ${
+          className={`num text-xs sm:text-sm font-semibold ${
             row.roas.value >= 3
               ? "text-emerald-600 dark:text-emerald-400"
               : "text-amber-600 dark:text-amber-500"
@@ -187,7 +187,7 @@ export default function AdvertisingPlatformCard({
                 <span className="mt-1 inline-block h-5 w-12 rounded bg-neutral-200 dark:bg-neutral-800 animate-pulse" />
               ) : (
                 <>
-                  <p className="font-display font-bold text-lg text-emerald-600 dark:text-emerald-400 num">
+                  <p className="font-display font-bold text-base sm:text-lg text-emerald-600 dark:text-emerald-400 num">
                     {blendedRoas != null ? `${blendedRoas.toFixed(2)}x` : "—"}
                   </p>
                   <p className="text-2xs text-neutral-400 num mt-0.5">

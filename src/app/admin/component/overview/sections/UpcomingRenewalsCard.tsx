@@ -64,11 +64,11 @@ export default function UpcomingRenewalsCard() {
                   <ClickableUserDisplay
                     displayText={displayName}
                     userId={r.userId ?? null}
-                    className="text-sm font-medium text-neutral-900 dark:text-white truncate block max-w-full"
+                    className="text-xs sm:text-sm font-medium text-neutral-900 dark:text-white truncate block max-w-full"
                   />
                   <p className="text-2xs text-neutral-500 dark:text-neutral-400 num">{r.renewalDateFormatted}</p>
                 </div>
-                <span className="text-sm text-neutral-900 dark:text-white num font-bold shrink-0">
+                <span className="text-xs sm:text-sm text-neutral-900 dark:text-white num font-bold shrink-0">
                   {r.amountFormatted}
                 </span>
               </div>

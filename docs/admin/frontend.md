@@ -530,3 +530,15 @@ Cards:
 ### Shared admin date filter (2026-06-03)
 
 - **`useAdminDateFilter(initial)`** (`src/hooks/useAdminDateFilter.ts`) + **`AdminDateRangeToolbar`** (`src/components/admin/`) — packages the date-preset logic the Facebook Ads tab does inline so the **All-Platforms / TikTok / Snapchat** tabs share **one** source of truth for the AEST math (every preset — today / yesterday / current-draw / last-draw / all-time / custom — resolves to `yyyy-MM-dd` in `Australia/Sydney`; the initial preset resolves synchronously so date-gated queries enable on first paint, draw presets fill in via an effect once `useCurrentAndLastDrawDates` loads). The toolbar renders the shared `DateRangeDropdown` + `CustomDateRangeModal`, portaling into the mobile header slot when the tab is in `ADMIN_TABS_WITH_MOBILE_LAYOUT_DATE_TOOLBAR` (now includes `all-platforms`/`tiktok-ads`/`snapchat-ads`), else inline. Local state only (no URL sync). The **Klaviyo** tab does **not** use this — it has its own keyword selector (above).
+
+## Overview MER card — platform selector + mobile text sizing (2026-06-04)
+
+Presentation-only tweaks to four Overview section cards under `src/app/admin/component/overview/sections/`. No data/hook/route changes.
+
+- **`MerByDrawCard`** — the platform selector (TikTok / Meta / Snapchat) is now the shared admin **`Dropdown`** (`src/components/modals/ui/Dropdown.tsx`, `compact`) instead of the `Segmented` pill toggle, matching the dropdown style used by `UsersManagement` / `ErrorReportsManagement` filters. Same `value={platform}` / `onChange` (cast back to `MerAdPlatform`), same `MER_TOGGLE_OPTIONS`. The `Segmented` import was dropped from this card.
+- **Mobile text shrink** — the four cards' mobile (pre-`sm:`) text now matches the Revenue Breakdown card (titles `text-[15px] sm:text-base` via shared `SectionTitle`; row labels / `$`-values `text-xs` on mobile). Changes are responsive (`text-xs sm:text-sm`, `text-base sm:text-lg`) so desktop sizing is unchanged:
+  - `AdvertisingPlatformCard` — Blended-ROAS value `text-lg` → `text-base sm:text-lg`; platform/spend/revenue/ROAS cells gained `text-xs sm:text-sm`.
+  - `MerByDrawCard` — main table `text-sm` → `text-xs sm:text-sm` (header `th` cells and the expanded breakdown sub-table keep their explicit `text-2xs`/`text-xs`).
+  - `TopDrawsCard` — draw-name + entries cells gained `text-xs sm:text-sm`.
+  - `UpcomingRenewalsCard` — member-name + amount values `text-sm` → `text-xs sm:text-sm`.
+  - The shared `SectionTitle` (in `Card.tsx`), `DataTable`, and the `KpiGrid` Ad-Spend/ROAS tiles were **not** touched.

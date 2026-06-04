@@ -3,7 +3,8 @@
 import { Fragment, useMemo, useState } from "react";
 import { Gauge, ChevronUp, ChevronDown, ChevronRight } from "lucide-react";
 import { formatInTimeZone } from "date-fns-tz";
-import { Card, Segmented, PlatformLogo } from "@/components/admin/ui";
+import { Card, PlatformLogo } from "@/components/admin/ui";
+import Dropdown from "@/components/modals/ui/Dropdown";
 import { useMetricsFormatting } from "@/hooks/useMetricsFormatting";
 import { useMerByDraw } from "@/hooks/queries/useMerByDraw";
 import type { MerAdPlatform, MerDrawRow, MerPlatformBreakdown } from "@/types/admin/mer";
@@ -107,12 +108,14 @@ export default function MerByDrawCard() {
           <span className="hidden sm:inline text-2xs text-neutral-400 uppercase tracking-wide">
             Platform columns
           </span>
-          <Segmented<MerAdPlatform>
-            options={MER_TOGGLE_OPTIONS}
-            value={platform}
-            onChange={setPlatform}
-            size="sm"
-          />
+          <div className="min-w-[120px] sm:min-w-[130px]">
+            <Dropdown
+              options={MER_TOGGLE_OPTIONS}
+              value={platform}
+              onChange={(v) => setPlatform(v as MerAdPlatform)}
+              compact
+            />
+          </div>
         </div>
       </div>
 
@@ -133,7 +136,7 @@ export default function MerByDrawCard() {
         <p className="py-8 text-center text-sm text-neutral-400">No draws to show yet.</p>
       ) : (
         <div className="overflow-x-auto -mx-1">
-          <table className="w-full text-sm">
+          <table className="w-full text-xs sm:text-sm">
             <thead>
               <tr className="border-b border-neutral-200 dark:border-neutral-800">
                 {columns.map((c) => (
