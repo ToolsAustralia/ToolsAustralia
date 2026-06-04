@@ -3,6 +3,7 @@
 import React from "react";
 import { ShieldCheck, Award, Truck } from "lucide-react";
 import UpsellShellTrustBar from "../upsell-shell/TrustBar";
+import { NTP_NUMBER } from "@/constants/legal";
 
 interface TrustBarProps {
   /** Optional brand-tinted Tailwind class (e.g. "text-red-600 dark:text-red-400")
@@ -22,7 +23,7 @@ const TrustBar: React.FC<TrustBarProps> = ({ iconColorClass }) => {
         },
         {
           icon: <Award size={12} className={`max-xs:size-2.5 ${iconCls}`} />,
-          strong: "NTP/16264",
+          strong: NTP_NUMBER,
           secondary: "Govt-certified draw",
         },
         {
