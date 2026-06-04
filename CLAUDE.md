@@ -45,6 +45,8 @@ Concrete defaults this rule overrides:
 
 This rule overrides skills like `brainstorming`, `writing-plans`, and `writing-skills` whose defaults push toward thoroughness — thorough means "covers the real cases," not "speculatively scales."
 
+**Lean is not a licence to under-build.** This rule cuts *speculative* scope — not *real* coverage. "Don't overengineer" must never become an excuse to compromise on correctness, robustness, or the cases the user actually has. If the leanest version would silently drop a real case, leave a known footgun, hard-code something that already varies, or force an obvious near-term rework, that is **under-engineering** — do the smart, complete thing and say in one line why the extra bit earns its place. The bar is: **cover every case that genuinely exists, with the least machinery that covers them well** — not the least machinery, full stop. When the lean path and the correct path diverge, name the trade-off to the user rather than quietly picking "less." Smart-and-complete beats both gold-plating and cutting corners.
+
 This rule is not hook-enforced. You're expected to apply it on your own.
 
 ### 5. Keep README.md and BUSINESS.md in sync with business-level changes
@@ -214,7 +216,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
 ```json
 {
   "version": 1,
-  "lastModified": "2026-06-03",
+  "lastModified": "2026-06-04",
   "domains": {
     "subscription": {
       "docs": "docs/subscription/",
@@ -234,6 +236,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/app/api/subscription/**",
         "src/app/api/memberships/**",
         "src/app/(site)/terms/**",
+        "src/app/(site)/competition-term-majordraw/**",
         "src/components/modals/CancellationFlowModal/**",
         "src/components/modals/RenewalFailedModal/**",
         "src/components/modals/DowngradeConfirmModal/**",
@@ -243,7 +246,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/hooks/useActivePackage.ts",
         "src/hooks/useMembershipModal.ts"
       ],
-      "lastVerified": "2026-05-21"
+      "lastVerified": "2026-06-04"
     },
     "billing-stripe": {
       "docs": "docs/billing-stripe/",
@@ -627,7 +630,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/app/globals.css",
         "src/app/not-found.tsx"
       ],
-      "lastVerified": "2026-05-27"
+      "lastVerified": "2026-06-04"
     },
     "client-state": {
       "docs": "docs/client-state/",
@@ -672,7 +675,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "eslint/rules/norm-must-import-service.js",
         "eslint/rules/index.js"
       ],
-      "lastVerified": "2026-05-21"
+      "lastVerified": "2026-06-04"
     },
     "admin": {
       "docs": "docs/admin/",
@@ -698,7 +701,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/models/DashboardStatsDailySnapshot.ts",
         "src/services/admin/dashboard-stats/**"
       ],
-      "lastVerified": "2026-05-27"
+      "lastVerified": "2026-06-04"
     },
     "dashboard-account": {
       "docs": "docs/dashboard-account/",
@@ -763,7 +766,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "scripts/stripe-*.ts",
         "scripts/verify-*.ts"
       ],
-      "lastVerified": "2026-05-13"
+      "lastVerified": "2026-06-04"
     },
     "dev-tooling": {
       "docs": "docs/dev-tooling/",
@@ -789,7 +792,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/constants/**",
         "src/data/**"
       ],
-      "lastVerified": "2026-04-28"
+      "lastVerified": "2026-06-04"
     }
   }
 }
