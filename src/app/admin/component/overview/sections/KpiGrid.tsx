@@ -232,6 +232,14 @@ export default function KpiGrid({
         ? `Cycle: ${renewalRate.toFixed(1)}%`
         : "No active cycle";
 
+  // ---- New-member return (new-membership revenue ÷ ad spend, shown as %) ----
+  // Reuses the existing snapshot membership-new revenue + Facebook ad spend already on
+  // `stats`. This is a NEW card only — it does NOT modify the Revenue-group Ad Spend /
+  // ROAS cards (those stay untouched per request).
+  const newMembershipRevenue = breakdownRevenue(revenue?.breakdown?.membershipPurchase);
+  const newMemberAdSpend = facebookAds?.spend ?? 0;
+  const newMemberReturnPct = newMemberAdSpend > 0 ? (newMembershipRevenue / newMemberAdSpend) * 100 : null;
+
   return (
     <div className="space-y-5">
       {/* Revenue group */}
@@ -286,7 +294,7 @@ export default function KpiGrid({
         <p className="text-2xs font-bold uppercase tracking-wider text-neutral-400 dark:text-neutral-500 mb-2.5">
           {`Users & Performance${rangeTag}`}
         </p>
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
           {/* Total Users ≈ total signups, so all-time shows Total Users; any other
               range shows that period's signups with total users as subtext. */}
           {dateRange === "all-time" ? (
@@ -335,6 +343,14 @@ export default function KpiGrid({
             tone="red"
             trend={trendPct(users?.cancelledMembershipsTrend)}
             invert
+            loading={showStatsSkeleton}
+          />
+          <MetricCard
+            title="New-Member Return"
+            value={newMemberReturnPct != null ? `${newMemberReturnPct.toFixed(1)}%` : "—"}
+            sub="New membership rev ÷ ad spend"
+            icon={Target}
+            tone="violet"
             loading={showStatsSkeleton}
           />
         </div>
