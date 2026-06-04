@@ -22,7 +22,7 @@ Reference [src/constants/z-index.ts](../../src/constants/z-index.ts), never hard
 
 ## R5. Legal text from constants
 
-[src/constants/legal.ts](../../src/constants/legal.ts) holds legal copy. Don't inline T&C strings in components — keeps legal review tractable.
+[src/constants/legal.ts](../../src/constants/legal.ts) holds legal copy (NSW licence `TP/04720`, NT permit `NTP_NUMBER` — currently `NTP/16867`). Don't inline T&C / licence / permit strings in components — **import the constant** (`NTP_NUMBER`, `NSW_LICENSE`, `MAJOR_GIVEAWAY_NOTIFICATION`, `LEGAL_COMPLIANCE_TEXT`). Hardcoded copies once drifted to two different permit numbers (`NTP/16264` vs `NTP/16579`) showing inconsistently across the app; every display now reads from the single constant so the permit only ever changes in one place.
 
 ## R6. Feature flags are static today
 

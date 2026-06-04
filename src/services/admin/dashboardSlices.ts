@@ -613,6 +613,107 @@ export interface RevenueDetailsData {
   };
 }
 
+/** Result of hydrating sorted net BenefitsGranted events into a paginated per-user contribution list. */
+export interface RevenueUserRowsResult {
+  users: RevenueDetailsUserRow[];
+  totalUsers: number;
+  totalPurchases: number;
+  totalRevenue: number;
+  pagination: {
+    currentPage: number;
+    totalPages: number;
+    totalCount: number;
+    limit: number;
+    hasNextPage: boolean;
+    hasPrevPage: boolean;
+  };
+}
+
+/**
+ * Shared "sorted net events → paginated buyer rows + pagination" step used by BOTH
+ * getRevenueDetails (single category) and getPlatformRevenueBreakdown (per platform).
+ * One definition keeps the two buyer lists — and their PII-safe Norm projections — in
+ * lockstep (a select-fields or row-shape change can't silently drift between them).
+ * `events` must already be filtered + sorted (newest first) by the caller.
+ */
+export async function hydrateRevenueUserRows(
+  events: Array<{
+    _id?: string;
+    userId?: unknown;
+    packageId?: string;
+    packageName?: string;
+    data?: { price?: number; billingReason?: string; [key: string]: unknown };
+    timestamp?: Date;
+  }>,
+  page: number,
+  limit: number,
+): Promise<RevenueUserRowsResult> {
+  const userEventsMap = new Map<string, typeof events>();
+  for (const event of events) {
+    const userId = event.userId?.toString() || "";
+    if (!userId) continue;
+    if (!userEventsMap.has(userId)) userEventsMap.set(userId, []);
+    userEventsMap.get(userId)!.push(event);
+  }
+
+  const userIds = Array.from(userEventsMap.keys());
+  const totalUsers = userIds.length;
+  const totalPurchases = events.length;
+  const totalRevenue = events.reduce((sum, event) => sum + (event.data?.price || 0), 0);
+
+  const startIndex = (page - 1) * limit;
+  const paginatedUserIds = userIds.slice(startIndex, startIndex + limit);
+
+  const users = await User.find({ _id: { $in: paginatedUserIds } })
+    .select("firstName lastName email mobile")
+    .lean();
+
+  const usersData: RevenueDetailsUserRow[] = paginatedUserIds.map((userId) => {
+    const user = users.find((u) => u._id.toString() === userId);
+    const userEvents = userEventsMap.get(userId) || [];
+    const purchases: RevenueDetailsPurchase[] = userEvents.map((event) => ({
+      paymentEventId: event._id?.toString() ?? "",
+      timestamp: event.timestamp instanceof Date ? event.timestamp.toISOString() : "",
+      amount: event.data?.price || 0,
+      packageId: event.packageId,
+      packageName: event.packageName,
+      billingReason: event.data?.billingReason,
+    }));
+    const totalContributed = purchases.reduce((sum, p) => sum + p.amount, 0);
+
+    return {
+      userId,
+      userInfo: user
+        ? {
+            firstName: user.firstName || "",
+            lastName: user.lastName || "",
+            email: user.email || "",
+            mobile: user.mobile || undefined,
+          }
+        : { firstName: "Unknown", lastName: "", email: "", mobile: undefined },
+      purchases,
+      totalContributed,
+      purchaseCount: purchases.length,
+    };
+  });
+
+  const totalPages = Math.ceil(totalUsers / limit);
+  return {
+    users: usersData,
+    totalUsers,
+    totalPurchases,
+    totalRevenue,
+    pagination: {
+      currentPage: page,
+      totalPages,
+      totalCount: totalUsers,
+      limit,
+      hasNextPage: page < totalPages,
+      hasPrevPage: page > 1,
+    },
+  };
+}
+
 /**
  * Returns the per-user contribution list for one revenue category within a date range.
  * Pure orchestration extracted from the admin revenue-details route.
@@ -660,73 +761,13 @@ export async function getRevenueDetails(input: RevenueDetailsInput): Promise<Rev
     (a, b) => new Date(b.timestamp ?? 0).getTime() - new Date(a.timestamp ?? 0).getTime()
   );
 
-  const userEventsMap = new Map<string, typeof paymentEvents>();
-  for (const event of paymentEvents) {
-    const userId = event.userId?.toString() || "";
-    if (!userId) continue;
-    if (!userEventsMap.has(userId)) userEventsMap.set(userId, []);
-    userEventsMap.get(userId)!.push(event);
-  }
+  const { users, totalUsers, totalPurchases, totalRevenue, pagination } = await hydrateRevenueUserRows(
+    paymentEvents,
+    page,
+    limit,
+  );
 
-  const userIds = Array.from(userEventsMap.keys());
-  const totalUsers = userIds.length;
-  const totalPurchases = paymentEvents.length;
-  const totalRevenue = paymentEvents.reduce((sum, event) => sum + (event.data?.price || 0), 0);
-
-  const startIndex = (page - 1) * limit;
-  const endIndex = startIndex + limit;
-  const paginatedUserIds = userIds.slice(startIndex, endIndex);
-
-  const users = await User.find({ _id: { $in: paginatedUserIds } })
-    .select("firstName lastName email mobile")
-    .lean();
-
-  const usersData: RevenueDetailsUserRow[] = paginatedUserIds.map((userId) => {
-    const user = users.find((u) => u._id.toString() === userId);
-    const userEvents = userEventsMap.get(userId) || [];
-    const purchases: RevenueDetailsPurchase[] = userEvents.map((event) => ({
-      paymentEventId: event._id?.toString() ?? "",
-      timestamp: event.timestamp instanceof Date ? event.timestamp.toISOString() : "",
-      amount: event.data?.price || 0,
-      packageId: event.packageId,
-      packageName: event.packageName,
-      billingReason: event.data?.billingReason,
-    }));
-    const totalContributed = purchases.reduce((sum, p) => sum + p.amount, 0);
-
-    return {
-      userId,
-      userInfo: user
-        ? {
-            firstName: user.firstName || "",
-            lastName: user.lastName || "",
-            email: user.email || "",
-            mobile: user.mobile || undefined,
-          }
-        : { firstName: "Unknown", lastName: "", email: "", mobile: undefined },
-      purchases,
-      totalContributed,
-      purchaseCount: purchases.length,
-    };
-  });
-
-  const totalPages = Math.ceil(totalUsers / limit);
-
-  return {
-    category,
-    totalRevenue,
-    totalPurchases,
-    totalUsers,
-    users: usersData,
-    pagination: {
-      currentPage: page,
-      totalPages,
-      totalCount: totalUsers,
-      limit,
-      hasNextPage: page < totalPages,
-      hasPrevPage: page > 1,
-    },
-  };
+  return { category, totalRevenue, totalPurchases, totalUsers, users, pagination };
 }
 
 /**

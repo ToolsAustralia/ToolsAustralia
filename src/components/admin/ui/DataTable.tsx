@@ -1,12 +1,19 @@
 "use client";
-import { useMemo, useState, type ReactNode } from "react";
+import { useMemo, useState, type ReactNode, type MouseEvent } from "react";
 import { ChevronUp, ChevronDown } from "lucide-react";
 
 export type Column = { key: string; label: string; align?: "left" | "right"; sortable?: boolean };
 
 export function DataTable<T extends Record<string, unknown> & { id?: string | number }>({
-  columns, rows, renderCell, onRowClick,
-}: { columns: Column[]; rows: T[]; renderCell?: (key: string, row: T) => ReactNode; onRowClick?: (row: T) => void }) {
+  columns, rows, renderCell, onRowClick, onRowMouseEnter, onRowMouseLeave,
+}: {
+  columns: Column[];
+  rows: T[];
+  renderCell?: (key: string, row: T) => ReactNode;
+  onRowClick?: (row: T) => void;
+  onRowMouseEnter?: (row: T, e: MouseEvent<HTMLTableRowElement>) => void;
+  onRowMouseLeave?: () => void;
+}) {
   const [sort, setSort] = useState<{ key: string | null; dir: 1 | -1 }>({ key: null, dir: 1 });
   const sorted = useMemo(() => {
     if (!sort.key) return rows;
@@ -37,6 +44,8 @@ export function DataTable<T extends Record<string, unknown> & { id?: string | nu
           {sorted.map((row, ri) => (
             <tr key={row.id ?? ri}
               onClick={onRowClick ? () => onRowClick(row) : undefined}
+              onMouseEnter={onRowMouseEnter ? (e) => onRowMouseEnter(row, e) : undefined}
+              onMouseLeave={onRowMouseLeave}
               className={`border-b border-neutral-100 dark:border-neutral-800/60 hover:bg-neutral-50 dark:hover:bg-neutral-800/40 transition-colors ${onRowClick ? "cursor-pointer" : ""}`}>
               {columns.map((c) => (
                 <td key={c.key} className={`py-2.5 px-2 ${c.align === "right" ? "text-right" : "text-left"}`}>

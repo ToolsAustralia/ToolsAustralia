@@ -1,5 +1,6 @@
 import type { AdminDashboardStats } from "@/hooks/queries/useAdminQueries";
 import type { PlatformLogoName } from "@/components/admin/ui";
+import type { AttributedPlatformKey } from "@/models/DashboardStatsDailySnapshot";
 
 /**
  * Pure presentation model for the Overview "Advertising" card.
@@ -28,6 +29,7 @@ export type RoasState =
 /** Extends Record<string, unknown> to satisfy the DataTable generic constraint. */
 export interface AdvertisingRowVM extends Record<string, unknown> {
   id: string;
+  platformKey: AttributedPlatformKey; // convertingPlatform key for drill-down (meta, …, direct)
   platform: string;
   logo: PlatformLogoName;
   spend: SpendState;
@@ -40,7 +42,7 @@ export interface AdvertisingRowVM extends Record<string, unknown> {
 
 interface RowConfig {
   id: string;
-  key: string; // attributedRevenue map key (convertingPlatform)
+  key: AttributedPlatformKey; // attributedRevenue map key (convertingPlatform)
   platform: string;
   logo: PlatformLogoName;
   kind: "paid" | "owned";
@@ -87,6 +89,7 @@ export function buildAdvertisingRows(ar: AttributedRevenue | undefined): Adverti
 
     return {
       id: cfg.id,
+      platformKey: cfg.key,
       platform: cfg.platform,
       logo: cfg.logo,
       spend,
@@ -114,6 +117,7 @@ export function buildDirectRow(ar: AttributedRevenue | undefined): AdvertisingRo
   if (revenue <= 0 && conversions <= 0) return null;
   return {
     id: "direct",
+    platformKey: "direct",
     platform: "Direct",
     logo: "direct",
     spend: { kind: "owned" }, // renders "—" — direct has no ad spend
@@ -207,3 +211,20 @@ export function formatConfidenceTitle(entry: AttributedEntry | undefined): strin
   const pct = (n: number) => Math.round((n / total) * 100);
   return `${pct(click)}% click-verified · ${pct(utm_only)}% UTM-only · ${pct(inferred_backfill)}% backfilled`;
 }
+
+/** Shared label/color/unit per acquisition source category — used by the drill-down bars. */
+export const ACQUISITION_CATEGORY_META: {
+  id: "membership-purchase" | "one-time-purchase" | "additional-one-time" | "mini-draw" | "upsell";
+  label: string;
+  color: string;
+  unit: string;
+}[] = [
+  { id: "membership-purchase", label: "Membership New", color: "#f97316", unit: "subscriptions" },
+  { id: "one-time-purchase", label: "One-Time First", color: "#3b82f6", unit: "purchases" },
+  { id: "additional-one-time", label: "One-Time Add'l", color: "#6366f1", unit: "purchases" },
+  { id: "mini-draw", label: "Mini Draws", color: "#a855f7", unit: "entries" },
+  { id: "upsell", label: "Upsells", color: "#ec4899", unit: "purchases" },
+];
+
+/** Exact AUD money for the drill-down bars (matches RevenueBreakdownCard). */
+export const moneyExact = (n: number) => `$${n.toLocaleString("en-AU", { maximumFractionDigits: 2 })}`;

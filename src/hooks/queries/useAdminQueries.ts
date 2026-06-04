@@ -770,6 +770,79 @@ export function useRevenueDetails(
   });
 }
 
+export interface PlatformByCategoryEntry {
+  category: "membership-purchase" | "one-time-purchase" | "additional-one-time" | "mini-draw" | "upsell";
+  revenue: number;
+  purchaseCount: number;
+  userCount: number;
+}
+
+export interface PlatformRevenueBreakdownData {
+  platform: string;
+  byCategory: PlatformByCategoryEntry[];
+  totalRevenue: number;
+  totalPurchases: number;
+  totalUsers: number;
+  users: RevenueDetailUser[];
+  pagination: {
+    currentPage: number;
+    totalPages: number;
+    totalCount: number;
+    limit: number;
+    hasNextPage: boolean;
+    hasPrevPage: boolean;
+  };
+}
+
+/**
+ * Per-platform acquisition revenue split by source category + paginated buyer list.
+ * `summaryOnly` (hover) returns just the bars and uses a longer staleTime.
+ */
+export function usePlatformRevenueBreakdown(
+  platform: string | null,
+  dateRange: string,
+  startDate: string | undefined,
+  endDate: string | undefined,
+  category: string | undefined,
+  page: number,
+  summaryOnly: boolean,
+  enabled = true,
+) {
+  return useQuery<PlatformRevenueBreakdownData>({
+    queryKey: [
+      "admin",
+      "dashboard",
+      "revenue-details-by-platform",
+      platform,
+      dateRange,
+      startDate,
+      endDate,
+      category ?? "all",
+      page,
+      summaryOnly,
+    ],
+    queryFn: async (): Promise<PlatformRevenueBreakdownData> => {
+      const params = new URLSearchParams({ platform: platform as string, dateRange, page: String(page), limit: "50" });
+      if ((dateRange === "custom" || dateRange === "current-draw" || dateRange === "last-draw") && startDate && endDate) {
+        params.append("startDate", startDate);
+        params.append("endDate", endDate);
+      }
+      if (category) params.append("category", category);
+      if (summaryOnly) params.append("summaryOnly", "true");
+
+      const res = await fetch(`/api/admin/dashboard/revenue-details/by-platform?${params.toString()}`);
+      if (!res.ok) throw new Error(`Failed to fetch platform revenue breakdown: ${res.statusText}`);
+      const result = await res.json();
+      if (!result.success) throw new Error("Failed to fetch platform revenue breakdown");
+      return result.data;
+    },
+    enabled: enabled && !!platform,
+    staleTime: summaryOnly ? 5 * 60 * 1000 : 60 * 1000,
+    gcTime: 5 * 60 * 1000,
+    retry: 1,
+  });
+}
+
 // ========================================
 // USER MANAGEMENT HOOKS
 // ========================================

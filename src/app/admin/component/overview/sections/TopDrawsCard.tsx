@@ -69,7 +69,7 @@ export default function TopDrawsCard() {
     if (key === "name") {
       return (
         <div className="min-w-0">
-          <p className="font-medium text-neutral-800 dark:text-neutral-100 truncate">{row.name}</p>
+          <p className="text-xs sm:text-sm font-medium text-neutral-800 dark:text-neutral-100 truncate">{row.name}</p>
           <div className="flex items-center gap-2 mt-1">
             <div className="w-16 h-1.5 rounded-full bg-neutral-100 dark:bg-neutral-800 overflow-hidden">
               <div
@@ -96,7 +96,7 @@ export default function TopDrawsCard() {
       );
     }
     // entries
-    return <span className="num text-neutral-600 dark:text-neutral-300">{formatNumber(row.entries)}</span>;
+    return <span className="num text-xs sm:text-sm text-neutral-600 dark:text-neutral-300">{formatNumber(row.entries)}</span>;
   };
 
   const showSkeleton = isLoading && !data;

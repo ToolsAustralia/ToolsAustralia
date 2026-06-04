@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { NormDateRangeSchema } from "./common";
+import type { RevenueDetailsUserRow } from "@/services/admin/dashboardSlices";
 
 const RevenueBucketSchema = z.object({
   revenue: z.number(),
@@ -224,6 +225,62 @@ export const NormRevenueDetailsSchema = z.object({
     hasPrevPage: z.boolean(),
   }),
 });
+
+// ─── dashboard.revenue-details.by-platform ───────────────────────────────────
+// Per-platform acquisition revenue split by source category + PII-safe buyer list.
+
+const NormAcquisitionCategorySchema = z.enum([
+  "membership-purchase",
+  "one-time-purchase",
+  "additional-one-time",
+  "mini-draw",
+  "upsell",
+]);
+
+const NormPlatformByCategorySchema = z.object({
+  category: NormAcquisitionCategorySchema,
+  revenue: z.number().describe("AUD; acquisition revenue for this source on this platform"),
+  purchaseCount: z.number().int().nonnegative(),
+  userCount: z.number().int().nonnegative(),
+});
+
+export const NormPlatformRevenueBreakdownSchema = z.object({
+  platform: z
+    .string()
+    .describe("convertingPlatform key (meta, tiktok, snapchat, klaviyo_email, klaviyo_sms, google, direct, other)"),
+  byCategory: z
+    .array(NormPlatformByCategorySchema)
+    .describe("The 5 acquisition source buckets, zero-filled; sums to the platform's acquisition revenue"),
+  totalRevenue: z.number().describe("AUD; list-scoped (filtered category, or all when none)"),
+  totalPurchases: z.number().int().nonnegative(),
+  totalUsers: z.number().int().nonnegative(),
+  users: z.array(NormRevenueDetailsUserRowSchema),
+  pagination: NormRevenueDetailsSchema.shape.pagination,
+});
+
+/**
+ * PII-safe projection of a service RevenueDetailsUserRow for Norm: firstName + opaque
+ * userId only (lastName / email / mobile stripped). Single source of the PII boundary
+ * for BOTH /dashboard/revenue-details and /dashboard/revenue-details/by-platform —
+ * the returned shape satisfies NormRevenueDetailsUserRowSchema. (CLAUDE §10: keep the
+ * PII surface in one place so the two routes cannot drift.)
+ */
+export function toNormRevenueUserRow(u: RevenueDetailsUserRow) {
+  return {
+    userId: u.userId,
+    firstName: u.userInfo.firstName || "Unknown",
+    purchases: u.purchases.map((p) => ({
+      paymentEventId: p.paymentEventId,
+      timestamp: p.timestamp,
+      amount: p.amount,
+      packageId: p.packageId ?? null,
+      packageName: p.packageName ?? null,
+      billingReason: p.billingReason ?? null,
+    })),
+    totalContributed: u.totalContributed,
+    purchaseCount: u.purchaseCount,
+  };
+}
 
 // ─── dashboard.upcoming-renewals ─────────────────────────────────────────────
 // Subscriptions due to renew within the selected window.

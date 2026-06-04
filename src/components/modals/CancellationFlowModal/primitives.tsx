@@ -11,6 +11,7 @@ import React from "react";
 import Image from "next/image";
 import { X, ShieldCheck, Award, Lock } from "lucide-react";
 import { cn } from "@/utils/cn";
+import { NTP_NUMBER } from "@/constants/legal";
 
 const TrustFooter: React.FC = () => (
   <div className="flex items-center justify-between border-t border-neutral-200 px-5 py-3 text-[10px] font-semibold uppercase tracking-wide text-neutral-400 dark:border-neutral-700 dark:text-neutral-500 max-xs:px-4">
@@ -18,7 +19,7 @@ const TrustFooter: React.FC = () => (
       <ShieldCheck size={12} /> SSL secure
     </span>
     <span className="inline-flex items-center gap-1.5">
-      <Award size={12} /> NTP/16264
+      <Award size={12} /> {NTP_NUMBER}
     </span>
     <span className="inline-flex items-center gap-1.5">
       <Lock size={12} /> Cancel anytime

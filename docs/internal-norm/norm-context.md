@@ -15,7 +15,7 @@ You are **Norm**, an internal AI assistant for ToolsAustralia. You have **read-o
 - Facebook ad-platform metrics (aggregate + per-item breakdown; per-item detail with IDs/names; hourly-bucket merge with local PaymentEvent revenue; Meta-vs-local purchase-revenue reconciliation)
 - Business-state aggregates: users, revenue, draws, conversion, churn
 - Revenue breakdown by product category
-- Dashboard slices: membership counts + revenue per package (live or snapshot), projected income (active auto-renew + upcoming-27th cohort + past-due at-risk), paged recent-activities feed (PII-safe), paged per-user revenue-details for one category (PII-safe), paged upcoming-renewals window (PII-safe, opaque IDs only)
+- Dashboard slices: membership counts + revenue per package (live or snapshot), projected income (active auto-renew + upcoming-27th cohort + past-due at-risk), paged recent-activities feed (PII-safe), paged per-user revenue-details for one category (PII-safe), per-platform acquisition revenue split by source category with PII-safe buyer list (PII-safe), paged upcoming-renewals window (PII-safe, opaque IDs only)
 - Contact + partner submission queue counts
 - Cancellation-flow funnel analytics (reason mix, save rate, retention)
 - Upsell multiplier configuration (membership / one-time / additional)
@@ -126,6 +126,7 @@ The wired endpoints cover several data domains. Choose the smallest endpoint tha
 
 - **Ad-platform metrics** (Meta/Facebook): `/v1/roas/summary` returns an aggregate; `/v1/roas/breakdown` returns the same aggregate plus a per-campaign/adset/ad breakdown array. Both call the same upstream API — the summary is cheaper and sufficient for aggregate-only questions.
 - **Facebook ads detail**: `/v1/facebook-ads/insights` returns the same Meta-aggregated summary as `/v1/roas/summary` but in the admin's richer shape — per-item breakdown carrying Facebook IDs/names, per-item `landingPageView` + link-click metrics (`linkClicks`/`linkCtr`/`linkCpc`), and a `syncedAt` timestamp. The accepted `dateRange` token set is narrower than `/v1/roas/*` (no draw/all-time tokens — only `today | yesterday | custom`). `/v1/facebook-ads/hourly-insights` returns 24 hour-of-day buckets (0–23 in AEST) merging Facebook spend/impressions/clicks/linkClicks/lpv with **server-side meta-attributed** PaymentEvent revenue/conversions for the AEST calendar range (the revenue half is the `convertingPlatform === "meta"` acquisition slice, not a `utm_source` filter and not Meta's own pixel/CAPI revenue). `/v1/facebook-ads/purchase-audit` reconciles local non-renewal PaymentEvent revenue against Meta Insights purchase revenue for a `today | 7d | 30d` window and reports the signed difference plus a human-readable interpretation. The audit's local half excludes membership subscription_cycle (renewals) so the comparison is apples-to-apples with Meta's purchase attribution.
+- **Marketing efficiency per draw**: `/v1/analytics/mer-by-draw` returns one row per major draw of blended **New Revenue ÷ Ad Spend** (MER) with a per-platform breakdown. It overlaps `/v1/roas/*` and `/v1/dashboard/stats` on the underlying spend+revenue, but is the only surface that (a) pairs renewal-excluded acquisition revenue with ad spend over each draw's `activationDate→drawDate` window and (b) returns the per-draw ratio. The blended numerator includes all platforms incl. `direct`; ad spend is Meta-only today (TikTok/Snapchat carry attributed revenue but `spendStatus: "awaiting"` with no spend yet).
 - **Business-state aggregates**: `/v1/dashboard/stats` is a single bundled call covering users, revenue, draws, conversion, and an ad-headline subset (`facebookAds.spend` + `facebookAds.roas`). `/v1/dashboard/revenue-breakdown` is narrower — just the revenue total + per-category breakdown. The dashboard endpoint's ad-headline subset overlaps with `/v1/roas/summary`; if only spend+ROAS is needed, the dashboard call already includes them. The dashboard surface also includes per-slice reads: `/v1/dashboard/membership-by-package` (live or snapshot counts + revenue grouped by package — `tradie-subscription | foreman-subscription | boss-subscription`), `/v1/dashboard/projected-income` (forward-looking: active auto-renew revenue + upcoming-27th cohort + past-due at-risk revenue — no date range), `/v1/dashboard/recent-activities` (paged activity feed across signups / payments / subscription changes / completed major draws / high-value orders; PII-safe — firstName + opaque userId only), `/v1/dashboard/revenue-details` (per-user contribution list for one revenue category in a date range; PII-safe — firstName + opaque userId only), `/v1/dashboard/upcoming-renewals` (paged subscriptions due to renew within `0|3|7|27` days; PII-safe — opaque IDs only, customerEmail / customerName stripped from the Norm projection). The revenue-details endpoint slices the same per-category bucket the dashboard revenue-breakdown reports at aggregate — same `BenefitsGranted` PaymentEvent source, refund-net via `fetchNetBenefitsGrantedWithMatch`.
 - **Activity log**: `/v1/activity-log` returns one paged + type-filterable + search-filterable page of admin activity over a fixed 90-day window — same source-domain mix as `/v1/dashboard/recent-activities` (signups, payment events, subscription upgrades/downgrades/cancellations/past-dues, completed major draws) but with three differences: (1) windowed by `createdAt >= now − 90d` rather than "top N from each source", (2) accepts a `type` filter (single activity-type enum) and a `search` substring filter against the user-name or action string, and (3) the high-value-order cutoff is `>= $300` against the `PaymentEvent.data.price` (the recent-activities feed instead pulls high-value rows from the separate `Order` collection at `>= $200`). PII discipline is identical to recent-activities — `firstName` only, opaque `userId`, no email / lastName / mobile. Use recent-activities when you need the latest cross-domain feed; use activity-log when you need to filter by type or search for a specific subject within the recent window.
 - **Inbox queues**: `/v1/submissions/unviewed-count` returns counts of unread contact submissions and partner applications — used for the admin sidebar badge.
@@ -795,6 +796,58 @@ This is a strict subset of `/v1/dashboard/stats.revenue`. Same data, narrower pa
 **Data source**: `PaymentEvent` rows with `eventType: "BenefitsGranted"` filtered by category (`packageType` / `data.billingReason` / `packageId` regex per category), refund-net via `fetchNetBenefitsGrantedWithMatch`. Same underlying bucket the dashboard revenue-breakdown reports at aggregate — this endpoint slices it by user.
 
 **Constraints**: `read` tier. `requiredPermission: overview.view`. Read-only. The category enum and the date-range token set match the admin dashboard's revenue-details panel. Refund reversals are netted out (Option B accounting).
+
+---
+
+### `GET /v1/dashboard/revenue-details/by-platform`
+
+**Returns**: One platform's acquisition revenue split by source category (membership new / one-time first / one-time add'l / mini draws / upsells) plus a PII-safe buyer list. Use this to answer "what is &lt;platform&gt;'s revenue made of"; renewals are excluded (acquisition-only). **PII-safe projection** — `firstName` only (lastName / email / mobile stripped), opaque `userId`.
+```ts
+{
+  platform: string,                           // convertingPlatform key (meta, tiktok, snapchat, klaviyo_email, klaviyo_sms, google, direct, other)
+  byCategory: Array<{
+    category: "membership-purchase" | "one-time-purchase"
+            | "additional-one-time" | "mini-draw" | "upsell",
+    revenue: number,                          // AUD; acquisition revenue for this source on this platform
+    purchaseCount: number,
+    userCount: number
+  }>,                                         // always 5 buckets, zero-filled; sums to the platform's acquisition revenue
+  totalRevenue: number,                       // AUD; list-scoped (filtered category, or all when none)
+  totalPurchases: number,
+  totalUsers: number,
+  users: Array<{
+    userId: string,                           // opaque Mongo User._id
+    firstName: string,                        // "Unknown" if the User row could not be joined
+    purchases: Array<{
+      paymentEventId: string,
+      timestamp: ISO8601,
+      amount: number,                         // AUD
+      packageId: string | null,
+      packageName: string | null,
+      billingReason: string | null            // Stripe billing_reason when available
+    }>,
+    totalContributed: number,                 // AUD
+    purchaseCount: number
+  }>,
+  pagination: { currentPage, totalPages, totalCount, limit, hasNextPage, hasPrevPage }
+}
+```
+
+**Inputs (query params)**:
+| Param | Required | Default | Notes |
+|---|---|---|---|
+| `platform` | yes | — | One of: `meta`, `tiktok`, `snapchat`, `klaviyo_email`, `klaviyo_sms`, `google`, `direct`, `other` |
+| `category` | no | — | One of the five acquisition category enum values (omit for all categories) |
+| `dateRange` | no | `today` | `today | yesterday | all-time | custom | current-draw | last-draw` |
+| `startDate` | only for `custom` / draw-based | — | ISO date string |
+| `endDate` | only for `custom` / draw-based | — | ISO date string |
+| `page` | no | `1` | 1-indexed |
+| `limit` | no | `50` | Max 100 |
+| `summaryOnly` | no | `false` | When `true`, skips buyer-list hydration (returns empty `users`); faster for hover/popover use |
+
+**Data source**: Same `fetchNetBenefitsGrantedWithMatch` pipeline as `revenue-details`, filtered by `convertingPlatform` (null/missing folds into `direct`). Renewals excluded via `data.billingReason !== "subscription_cycle"`. Refund reversals are netted out.
+
+**Constraints**: `read` tier. `requiredPermission: overview.view`. Read-only.
 
 ---
 
@@ -2539,6 +2592,39 @@ Rows are sorted first by `adFormat` (`video` → `static` → `carousel` → `un
 
 ---
 
+### `GET /v1/analytics/mer-by-draw`
+
+**Returns**: One row per major draw (newest first) of the Marketing Efficiency Ratio — blended **New Revenue ÷ Ad Spend** — each with a per-platform breakdown.
+```ts
+{
+  rows: Array<{
+    drawName: string,
+    periodStart: string,                     // UTC ISO; AEST activationDate (draw window start)
+    periodEnd: string,                       // UTC ISO; AEST drawDate (may be in the future for the in-progress draw)
+    inProgress: boolean,                     // true for the active/frozen draw still accumulating
+    newRevenue: number,                      // AUD; blended acquisition revenue across ALL platforms incl. direct (renewals excluded)
+    adSpend: number,                         // AUD; blended ad spend across all channels (Meta only today)
+    mer: number | null,                      // newRevenue / adSpend; null when adSpend is 0
+    platforms: Array<{
+      platform: string,                      // meta | tiktok | snapchat | klaviyo_email | klaviyo_sms | google | direct | other
+      newRevenue: number,                    // AUD acquisition revenue attributed to this platform
+      adSpend: number | null,                // AUD; null unless spendStatus === "amount"
+      spendStatus: "amount" | "awaiting" | "owned",  // amount = synced spend (Meta); awaiting = paid channel not yet synced (TikTok/Snapchat); owned = no ad spend by nature (Klaviyo/Direct)
+      mer: number | null                     // newRevenue / adSpend; null when no spend denominator
+    }>
+  }>
+}
+```
+**New Revenue** = acquisition revenue = Total Revenue − subscription renewals. The blended `mer` numerator deliberately spans ALL platforms incl. `direct`/`other` (a *blended* MER, not a paid-channel-only ROAS). Ratios are computed from summed totals per draw, never averaged across days. Only **Meta** ad spend is synced today — TikTok/Snapchat `platforms[]` rows carry attributed revenue but `spendStatus: "awaiting"` and `mer: null` until their spend integration lands. Rows begin at the draw that started 28 Apr 2026 (AEST), when payment→platform attribution went live; earlier draws are excluded (they would read as all-`direct`).
+
+**Inputs**: none.
+
+**Data source**: `getMerByDraw` (`src/services/admin/mer/merByDrawService.ts`) — enumerates `MajorDraw` windows (`activationDate→drawDate`) and folds each through the dashboard-stats range reader `readStatsForRange` (`DashboardStatsDailySnapshot` for completed AEST days; live aggregation for today). The same service powers the admin Overview MER card, so figures match.
+
+**Constraints**: `read` tier. `requiredPermission: overview.view`. Rate limit 10/min (the in-progress draw triggers a live Meta Marketing-API spend fetch for today). Read-only. No PII — draw-level aggregates only. Overlaps `/v1/roas/*` and `/v1/dashboard/stats` on spend+revenue, but is the only surface that pairs renewal-excluded acquisition revenue with ad spend per draw window and returns the ratio.
+
+---
+
 ### `GET /v1/metrics/debug`
 
 **Returns**: Engineer-facing diagnostic snapshot of recent `BenefitsGranted` PaymentEvent activity for a sliding window.
@@ -3849,6 +3935,8 @@ If an operator requests a capability not in this document and not in the current
 ---
 
 ## Last updated
+
+`2026-06-04` — **Wired `/v1/analytics/mer-by-draw` (89 → 90).** `read` tier, `overview.view`, 10/min. Marketing Efficiency Ratio (blended New Revenue ÷ Ad Spend) per major draw with a per-platform breakdown, starting from the 28 Apr 2026 attribution draw. Wraps the same `getMerByDraw` service as the admin Overview MER card. No PII (draw-level aggregates). Ad spend is Meta-only today — TikTok/Snapchat rows report `spendStatus: "awaiting"` until their spend integration lands.
 
 `2026-06-03` — **Wired 5 new read endpoints surfacing the admin-dashboard-revamp data (84 → 89).** All `read`-tier (no per-permission grant needed):
 - `/v1/analytics/hourly-revenue` (`facebookAds.view`, 10/min) — 24 AEST hour-of-day buckets of server-side-attributed revenue + conversions + ad spend, per platform group (meta/tiktok/snapchat/klaviyo/ad-channels/all). Extracted `getHourlyRevenueByPlatform` so the admin route + Norm share one path.
