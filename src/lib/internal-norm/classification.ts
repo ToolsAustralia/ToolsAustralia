@@ -7,6 +7,7 @@ import {
   NormDashboardStatsSchema,
   NormMembershipByPackageSchema,
   NormProjectedIncomeSchema,
+  NormPlatformRevenueBreakdownSchema,
   NormRecentActivitiesSchema,
   NormRevenueBreakdownSchema,
   NormRevenueDetailsSchema,
@@ -263,6 +264,15 @@ export const NORM_ENDPOINTS = {
     method: "GET",
     summary: "Per-user contribution list for one revenue category over a date range (PII-safe: firstName + opaque userId)",
     responseSchema: NormRevenueDetailsSchema,
+  },
+  "dashboard.revenue-details.by-platform": {
+    tier: "read",
+    requiredPermission: "overview.view",
+    path: "/v1/dashboard/revenue-details/by-platform",
+    method: "GET",
+    summary:
+      "One platform's acquisition revenue split by source category (membership new / one-time / mini-draw / upsell) + PII-safe buyer list (firstName + opaque userId)",
+    responseSchema: NormPlatformRevenueBreakdownSchema,
   },
   "dashboard.upcoming-renewals": {
     tier: "read",

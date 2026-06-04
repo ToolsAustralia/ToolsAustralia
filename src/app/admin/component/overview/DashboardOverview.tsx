@@ -247,7 +247,14 @@ export default function DashboardOverview() {
           endDate={customEndDate || undefined}
           onUserClick={openUserModal}
         />
-        <AdvertisingPlatformCard stats={dashboardStats} loading={statsLoading} />
+        <AdvertisingPlatformCard
+          stats={dashboardStats}
+          loading={statsLoading}
+          dateRange={dateRange}
+          startDate={customStartDate || undefined}
+          endDate={customEndDate || undefined}
+          onUserClick={openUserModal}
+        />
       </div>
 
       {/* Marketing Efficiency Ratio per draw — New Revenue ÷ Ad Spend, with a

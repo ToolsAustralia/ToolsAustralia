@@ -486,6 +486,49 @@ Response carries `Cache-Control: private, max-age=120`.
 
 Implementation: thin handler → delegates to `getCancellationFlowUsersByReason()` in [src/services/admin/cancellationFlowAnalytics.ts](../../src/services/admin/cancellationFlowAnalytics.ts) (see [backend.md → cancellationFlowAnalytics.ts](./backend.md#services)).
 
+## Platform revenue drill-down (2026-06-04)
+
+### `GET /api/admin/dashboard/revenue-details/by-platform`
+
+Permission: `overview.view`. Acquisition revenue for one `convertingPlatform`, split by source category, with a paginated buyer list. `summaryOnly=true` returns only the 5-bucket category summary (used by the hover popover path).
+
+**Query params:**
+
+| Param | Required | Notes |
+|---|---|---|
+| `platform` | yes | One of `meta \| tiktok \| snapchat \| klaviyo_email \| klaviyo_sms \| google \| direct \| other`. `direct` matches `convertingPlatform === "direct"` **or** null/missing. |
+| `category` | no | Filter the buyer list (and `totalRevenue`/`totalPurchases`/`totalUsers`) to one acquisition category: `membership-purchase \| one-time-purchase \| additional-one-time \| mini-draw \| upsell`. `byCategory` bars always span all 5. |
+| `dateRange` | no | `today \| yesterday \| all-time \| custom \| current-draw \| last-draw` (default `today`). Resolved via `resolveRevenueDetailsRange`. |
+| `startDate` / `endDate` | conditional | `YYYY-MM-DD`; required when `dateRange` is `custom`, `current-draw`, or `last-draw`. |
+| `page` | no | Default 1. |
+| `limit` | no | Default 50, capped at 100. |
+| `summaryOnly` | no | `true` → return only `byCategory` bars; skip buyer-list hydration (hover path). |
+
+**Response (`success: true, data`):**
+
+```ts
+{
+  platform: AttributedPlatformKey;
+  byCategory: Array<{
+    category: "membership-purchase" | "one-time-purchase" | "additional-one-time" | "mini-draw" | "upsell";
+    revenue: number;       // AUD; 0-filled when no events
+    purchaseCount: number;
+    userCount: number;     // distinct users (this category only)
+  }>;                      // always 5 entries, stable order
+  totalRevenue: number;    // list-scoped (respects category filter); == platform acquisition total when no filter
+  totalPurchases: number;
+  totalUsers: number;
+  users: RevenueDetailsUserRow[];   // empty when summaryOnly=true
+  pagination: { currentPage, totalPages, totalCount, limit, hasNextPage, hasPrevPage };
+}
+```
+
+**Key invariants:**
+- Renewals are **excluded** (the `$or` query requires `packageType ∈ {one-time, mini-draw, upsell}` OR `packageType=membership AND data.billingReason ≠ subscription_cycle`).
+- Whole-row refund netting via `fetchNetBenefitsGrantedWithMatch` (same helper as `getRevenueDetails`).
+- The `byCategory` bars sum to the platform's acquisition revenue — this reconciles with the Advertising card's snapshot figure for settled date ranges; may differ slightly for the in-progress day (snapshot lag).
+- Norm mirror: `dashboard.revenue-details.by-platform` (PII-safe: `firstName` + opaque `userId`). See `docs/internal-norm/`.
+
 ## Dashboard stats — `attributedRevenue` response key
 
 ### `GET /api/admin/dashboard/stats` — `attributedRevenue` field

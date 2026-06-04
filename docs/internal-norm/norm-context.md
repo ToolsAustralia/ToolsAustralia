@@ -15,7 +15,7 @@ You are **Norm**, an internal AI assistant for ToolsAustralia. You have **read-o
 - Facebook ad-platform metrics (aggregate + per-item breakdown; per-item detail with IDs/names; hourly-bucket merge with local PaymentEvent revenue; Meta-vs-local purchase-revenue reconciliation)
 - Business-state aggregates: users, revenue, draws, conversion, churn
 - Revenue breakdown by product category
-- Dashboard slices: membership counts + revenue per package (live or snapshot), projected income (active auto-renew + upcoming-27th cohort + past-due at-risk), paged recent-activities feed (PII-safe), paged per-user revenue-details for one category (PII-safe), paged upcoming-renewals window (PII-safe, opaque IDs only)
+- Dashboard slices: membership counts + revenue per package (live or snapshot), projected income (active auto-renew + upcoming-27th cohort + past-due at-risk), paged recent-activities feed (PII-safe), paged per-user revenue-details for one category (PII-safe), per-platform acquisition revenue split by source category with PII-safe buyer list (PII-safe), paged upcoming-renewals window (PII-safe, opaque IDs only)
 - Contact + partner submission queue counts
 - Cancellation-flow funnel analytics (reason mix, save rate, retention)
 - Upsell multiplier configuration (membership / one-time / additional)
@@ -796,6 +796,58 @@ This is a strict subset of `/v1/dashboard/stats.revenue`. Same data, narrower pa
 **Data source**: `PaymentEvent` rows with `eventType: "BenefitsGranted"` filtered by category (`packageType` / `data.billingReason` / `packageId` regex per category), refund-net via `fetchNetBenefitsGrantedWithMatch`. Same underlying bucket the dashboard revenue-breakdown reports at aggregate — this endpoint slices it by user.
 
 **Constraints**: `read` tier. `requiredPermission: overview.view`. Read-only. The category enum and the date-range token set match the admin dashboard's revenue-details panel. Refund reversals are netted out (Option B accounting).
+
+---
+
+### `GET /v1/dashboard/revenue-details/by-platform`
+
+**Returns**: One platform's acquisition revenue split by source category (membership new / one-time first / one-time add'l / mini draws / upsells) plus a PII-safe buyer list. Use this to answer "what is &lt;platform&gt;'s revenue made of"; renewals are excluded (acquisition-only). **PII-safe projection** — `firstName` only (lastName / email / mobile stripped), opaque `userId`.
+```ts
+{
+  platform: string,                           // convertingPlatform key (meta, tiktok, snapchat, klaviyo_email, klaviyo_sms, google, direct, other)
+  byCategory: Array<{
+    category: "membership-purchase" | "one-time-purchase"
+            | "additional-one-time" | "mini-draw" | "upsell",
+    revenue: number,                          // AUD; acquisition revenue for this source on this platform
+    purchaseCount: number,
+    userCount: number
+  }>,                                         // always 5 buckets, zero-filled; sums to the platform's acquisition revenue
+  totalRevenue: number,                       // AUD; list-scoped (filtered category, or all when none)
+  totalPurchases: number,
+  totalUsers: number,
+  users: Array<{
+    userId: string,                           // opaque Mongo User._id
+    firstName: string,                        // "Unknown" if the User row could not be joined
+    purchases: Array<{
+      paymentEventId: string,
+      timestamp: ISO8601,
+      amount: number,                         // AUD
+      packageId: string | null,
+      packageName: string | null,
+      billingReason: string | null            // Stripe billing_reason when available
+    }>,
+    totalContributed: number,                 // AUD
+    purchaseCount: number
+  }>,
+  pagination: { currentPage, totalPages, totalCount, limit, hasNextPage, hasPrevPage }
+}
+```
+
+**Inputs (query params)**:
+| Param | Required | Default | Notes |
+|---|---|---|---|
+| `platform` | yes | — | One of: `meta`, `tiktok`, `snapchat`, `klaviyo_email`, `klaviyo_sms`, `google`, `direct`, `other` |
+| `category` | no | — | One of the five acquisition category enum values (omit for all categories) |
+| `dateRange` | no | `today` | `today | yesterday | all-time | custom | current-draw | last-draw` |
+| `startDate` | only for `custom` / draw-based | — | ISO date string |
+| `endDate` | only for `custom` / draw-based | — | ISO date string |
+| `page` | no | `1` | 1-indexed |
+| `limit` | no | `50` | Max 100 |
+| `summaryOnly` | no | `false` | When `true`, skips buyer-list hydration (returns empty `users`); faster for hover/popover use |
+
+**Data source**: Same `fetchNetBenefitsGrantedWithMatch` pipeline as `revenue-details`, filtered by `convertingPlatform` (null/missing folds into `direct`). Renewals excluded via `data.billingReason !== "subscription_cycle"`. Refund reversals are netted out.
+
+**Constraints**: `read` tier. `requiredPermission: overview.view`. Read-only.
 
 ---
 
