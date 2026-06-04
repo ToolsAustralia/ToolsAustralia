@@ -250,6 +250,12 @@ export default function DashboardOverview() {
         <AdvertisingPlatformCard stats={dashboardStats} loading={statsLoading} />
       </div>
 
+      {/* Marketing Efficiency Ratio per draw — New Revenue ÷ Ad Spend, with a
+          per-platform breakdown. Self-contained (own per-draw windows), so it
+          deliberately ignores the page date filter. Sits above the revenue
+          overview + active-memberships (charts) row. */}
+      <MerByDrawCard />
+
       {/* Charts row (redesign Phase 3) — revenue area chart + membership donut */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 md:gap-6">
         <div className="lg:col-span-2 min-w-0">
@@ -263,11 +269,6 @@ export default function DashboardOverview() {
           />
         </div>
       </div>
-
-      {/* Marketing Efficiency Ratio per draw — New Revenue ÷ Ad Spend, with a
-          per-platform breakdown. Self-contained (own per-draw windows), so it
-          deliberately ignores the page date filter. */}
-      <MerByDrawCard />
 
       {/* Prize performance — ad spend & return by prize (redesign Phase 4, row 3b) */}
       <PrizePerformanceCard

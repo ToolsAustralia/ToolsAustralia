@@ -3,12 +3,7 @@
 import { Fragment, useMemo, useState } from "react";
 import { Gauge, ChevronUp, ChevronDown, ChevronRight } from "lucide-react";
 import { formatInTimeZone } from "date-fns-tz";
-import {
-  Card,
-  SectionTitle,
-  Segmented,
-  PlatformLogo,
-} from "@/components/admin/ui";
+import { Card, Segmented, PlatformLogo } from "@/components/admin/ui";
 import { useMetricsFormatting } from "@/hooks/useMetricsFormatting";
 import { useMerByDraw } from "@/hooks/queries/useMerByDraw";
 import type { MerAdPlatform, MerDrawRow, MerPlatformBreakdown } from "@/types/admin/mer";
@@ -91,22 +86,35 @@ export default function MerByDrawCard() {
 
   return (
     <Card className="p-5 min-w-0">
-      <SectionTitle
-        title="Marketing Efficiency (MER)"
-        subtitle="New revenue ÷ ad spend, per draw — renewals excluded"
-        icon={Gauge}
-        right={
-          <div className="flex flex-col items-end gap-1">
-            <span className="text-2xs text-neutral-400 uppercase tracking-wide">Platform columns</span>
-            <Segmented<MerAdPlatform>
-              options={MER_TOGGLE_OPTIONS}
-              value={platform}
-              onChange={setPlatform}
-              size="sm"
-            />
+      {/* Header — stacks on mobile (title over toggle), side-by-side on ≥sm. The
+          shared SectionTitle can't stack its `right` slot, which crushed the title
+          on narrow screens, so this card lays the header out itself. */}
+      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="flex items-start gap-2.5 min-w-0">
+          <div className="shrink-0 w-8 h-8 rounded-lg bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-300 flex items-center justify-center">
+            <Gauge className="w-4 h-4" strokeWidth={2} />
           </div>
-        }
-      />
+          <div className="min-w-0">
+            <h3 className="font-display font-bold text-[15px] sm:text-base text-neutral-900 dark:text-white leading-tight">
+              Marketing Efficiency (MER)
+            </h3>
+            <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-0.5">
+              New revenue ÷ ad spend, per draw — renewals excluded
+            </p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          <span className="hidden sm:inline text-2xs text-neutral-400 uppercase tracking-wide">
+            Platform columns
+          </span>
+          <Segmented<MerAdPlatform>
+            options={MER_TOGGLE_OPTIONS}
+            value={platform}
+            onChange={setPlatform}
+            size="sm"
+          />
+        </div>
+      </div>
 
       {isError ? (
         <p className="py-8 text-center text-sm text-red-600 dark:text-red-500">
@@ -236,13 +244,6 @@ export default function MerByDrawCard() {
           </table>
         </div>
       )}
-
-      <p className="mt-3 text-2xs text-neutral-400 leading-snug">
-        <strong>New Revenue</strong> excludes subscription renewals (acquisition only).{" "}
-        <strong>Ad Spend</strong> currently reflects <strong>Meta</strong> only — TikTok &amp; Snapchat
-        read <span className="text-amber-600/80 dark:text-amber-500/80">Awaiting sync</span> until their
-        spend integration is live, so their MER is “—”. Click a draw to expand its per-platform breakdown.
-      </p>
     </Card>
   );
 }

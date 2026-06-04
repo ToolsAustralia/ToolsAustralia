@@ -57,9 +57,10 @@ MajorDraw (activationDate ≥ cutoff, status active/frozen/completed, sort drawD
 | Card (sortable + click-to-expand + platform toggle) | `src/app/admin/component/overview/sections/MerByDrawCard.tsx` |
 | Test | `src/services/admin/mer/__tests__/computeDrawMer.test.ts` (`npm run test:mer`) |
 
-The card is wired into `DashboardOverview.tsx` after the Advertising/Prize cards. It is
-**self-contained** — it owns its per-draw windows and intentionally ignores the page date
-filter.
+The card is wired into `DashboardOverview.tsx` above the charts row (the "Revenue overview"
+area chart + "Active memberships" donut), directly under the Revenue-breakdown/Advertising
+row. It is **self-contained** — it owns its per-draw windows and intentionally ignores the
+page date filter.
 
 ## UI
 
