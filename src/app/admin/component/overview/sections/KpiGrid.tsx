@@ -232,13 +232,13 @@ export default function KpiGrid({
         ? `Cycle: ${renewalRate.toFixed(1)}%`
         : "No active cycle";
 
-  // ---- New-member return (new-membership revenue ÷ ad spend, shown as %) ----
+  // ---- New-member ROAS (new-membership revenue ÷ ad spend) ----
   // Reuses the existing snapshot membership-new revenue + Facebook ad spend already on
   // `stats`. This is a NEW card only — it does NOT modify the Revenue-group Ad Spend /
   // ROAS cards (those stay untouched per request).
   const newMembershipRevenue = breakdownRevenue(revenue?.breakdown?.membershipPurchase);
   const newMemberAdSpend = facebookAds?.spend ?? 0;
-  const newMemberReturnPct = newMemberAdSpend > 0 ? (newMembershipRevenue / newMemberAdSpend) * 100 : null;
+  const newMemberRoas = newMemberAdSpend > 0 ? newMembershipRevenue / newMemberAdSpend : null;
 
   return (
     <div className="space-y-5">
@@ -327,6 +327,14 @@ export default function KpiGrid({
             loading={showStatsSkeleton}
           />
           <MetricCard
+            title="New-Member ROAS"
+            value={newMemberRoas != null ? `${newMemberRoas.toFixed(2)}x` : "—"}
+            sub="New membership rev ÷ ad spend"
+            icon={TrendingUp}
+            tone="indigo"
+            loading={showStatsSkeleton}
+          />
+          <MetricCard
             title="Renewals"
             value={renewalValue}
             valueAside={renewalAside}
@@ -343,14 +351,6 @@ export default function KpiGrid({
             tone="red"
             trend={trendPct(users?.cancelledMembershipsTrend)}
             invert
-            loading={showStatsSkeleton}
-          />
-          <MetricCard
-            title="New-Member Return"
-            value={newMemberReturnPct != null ? `${newMemberReturnPct.toFixed(1)}%` : "—"}
-            sub="New membership rev ÷ ad spend"
-            icon={Target}
-            tone="violet"
             loading={showStatsSkeleton}
           />
         </div>

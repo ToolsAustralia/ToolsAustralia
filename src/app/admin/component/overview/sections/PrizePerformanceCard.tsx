@@ -53,7 +53,9 @@ const PROMOTION_BRANDS = [
     brand: "Milwaukee",
     slug: "milwaukee",
     logoPath: "/images/brands/name/milwaukeeText.webp",
-    logoScale: "scale-125",
+    // Milwaukee's wordmark sits smaller in its asset than the other brands; nudge it up
+    // a touch so it reads at the same visual size in the table.
+    logoScale: "scale-[1.35]",
   },
   { brand: "Dewalt", slug: "dewalt", logoPath: "/images/brands/name/dewaltText.webp" },
   { brand: "Makita", slug: "makita", logoPath: "/images/brands/name/makitaText.webp" },
@@ -186,7 +188,7 @@ export default function PrizePerformanceCard({
     if (key === "roas") {
       return (
         <span
-          className={`num font-semibold ${
+          className={`num text-xs sm:text-sm font-semibold ${
             row.roas >= 3
               ? "text-emerald-600 dark:text-emerald-400"
               : "text-amber-600 dark:text-amber-500"
@@ -198,15 +200,15 @@ export default function PrizePerformanceCard({
     }
 
     if (key === "spend") {
-      return <span className="num">{fmtCompact(row.spend)}</span>;
+      return <span className="num text-xs sm:text-sm">{fmtCompact(row.spend)}</span>;
     }
 
     if (key === "revenue") {
-      return <span className="num">{fmtCompact(row.revenue)}</span>;
+      return <span className="num text-xs sm:text-sm">{fmtCompact(row.revenue)}</span>;
     }
 
     // conversions
-    return <span className="num">{formatNumber(row.conversions)}</span>;
+    return <span className="num text-xs sm:text-sm">{formatNumber(row.conversions)}</span>;
   };
 
   return (
