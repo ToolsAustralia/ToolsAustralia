@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-06-03T14:05:48.706Z",
+  "generatedAt": "2026-06-04T02:35:15.084Z",
   "endpoints": [
     {
       "registryKey": "pending-actions.status",
@@ -169,6 +169,13 @@
       "path": "/v1/analytics/hourly-revenue",
       "method": "GET",
       "summary": "Hour-of-day (AEST) revenue, conversions, and ad spend for a date range, merged per platform group (meta/tiktok/snapchat/klaviyo/ad-channels/all)"
+    },
+    {
+      "registryKey": "analytics.mer-by-draw",
+      "tier": "read",
+      "path": "/v1/analytics/mer-by-draw",
+      "method": "GET",
+      "summary": "Marketing Efficiency Ratio (New Revenue ÷ Ad Spend) per major draw, with per-platform breakdown. New Revenue excludes subscription renewals; blended numerator spans all platforms incl. direct. One row per draw since attribution went live (28 Apr 2026), newest first."
     },
     {
       "registryKey": "cancellation-flow-analytics.list",
