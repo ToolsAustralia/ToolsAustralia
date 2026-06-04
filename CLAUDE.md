@@ -653,7 +653,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/hooks/usePrefetching.ts",
         "src/hooks/useConfetti.ts"
       ],
-      "lastVerified": "2026-05-27"
+      "lastVerified": "2026-06-04"
     },
     "internal-norm": {
       "docs": "docs/internal-norm/",
