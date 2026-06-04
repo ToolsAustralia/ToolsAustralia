@@ -2,8 +2,9 @@
 
 import { useMemo } from "react";
 import { DollarSign, TrendingUp, Target, BarChart3, Clock } from "lucide-react";
-import { Card, SectionTitle, DataTable, type Column } from "@/components/admin/ui";
+import { Card, SectionTitle } from "@/components/admin/ui";
 import { MetricCard } from "@/components/admin/metrics/shared/MetricCard";
+import { HourlyBreakdownTable } from "@/components/admin/PlatformHourlyRevenueSection";
 import { useMetricsFormatting } from "@/hooks/useMetricsFormatting";
 import { useAdminDashboardStats } from "@/hooks/queries/useAdminQueries";
 import { useHourlyRevenue, type HourlyRevenueBucket } from "@/hooks/queries/admin/useHourlyRevenue";
@@ -19,7 +20,7 @@ import AdvertisingPlatformCard from "./overview/sections/AdvertisingPlatformCard
  * `platform="all"`). Overall ROAS + contribution are on the PAID basis (mirrors the
  * overview card's blended ROAS so they reconcile); totals span all 5 ad channels.
  */
-interface HourRow extends Record<string, unknown> {
+interface HourRow {
   id: number;
   label: string;
   spend: number | null;
@@ -28,15 +29,6 @@ interface HourRow extends Record<string, unknown> {
   roas: number | null;
   conversions: number;
 }
-
-const HOUR_COLUMNS: Column[] = [
-  { key: "label", label: "Hour (AEST)", align: "left", sortable: false },
-  { key: "spend", label: "Spend", align: "right", sortable: false },
-  { key: "revenue", label: "Revenue", align: "right", sortable: false },
-  { key: "profit", label: "Profit", align: "right", sortable: false },
-  { key: "roas", label: "ROAS", align: "right", sortable: false },
-  { key: "conversions", label: "Conv.", align: "right", sortable: false },
-];
 
 function hourLabel(h: number): string {
   const period = h < 12 ? "AM" : "PM";
@@ -128,25 +120,7 @@ export default function AllPlatformsManagement() {
           subtitle="Spend · revenue · profit · ROAS across all ad channels · selected range (AEST)"
           icon={Clock}
         />
-        <DataTable<HourRow>
-          columns={HOUR_COLUMNS}
-          rows={hourRows}
-          renderCell={(key, row) => {
-            if (key === "label") return <span className="font-medium">{row.label}</span>;
-            if (key === "spend")
-              return row.spend == null ? <span className="text-neutral-300 dark:text-neutral-600">—</span> : <span className="num">{fmtCompact(row.spend)}</span>;
-            if (key === "revenue") return <span className="num font-semibold">{fmtCompact(row.revenue)}</span>;
-            if (key === "profit")
-              return row.profit == null ? <span className="text-neutral-300 dark:text-neutral-600">—</span> : <span className="num">{fmtSigned(row.profit)}</span>;
-            if (key === "roas")
-              return row.roas == null ? (
-                <span className="text-neutral-300 dark:text-neutral-600">—</span>
-              ) : (
-                <span className={`num ${row.roas >= 3 ? "text-emerald-600 dark:text-emerald-400" : "text-amber-600 dark:text-amber-500"}`}>{row.roas.toFixed(2)}x</span>
-              );
-            return <span className="num">{row.conversions.toLocaleString()}</span>;
-          }}
-        />
+        <HourlyBreakdownTable rows={hourRows} fmtCompact={fmtCompact} />
       </Card>
 
       <p className="text-2xs text-neutral-400 leading-snug">
