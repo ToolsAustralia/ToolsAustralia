@@ -4,6 +4,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { Facebook, Instagram } from "lucide-react";
 import { DEFAULT_PRIZE_SLUG } from "@/config/prizes";
+import { MAJOR_GIVEAWAY_NOTIFICATION } from "@/constants/legal";
 
 export default function Footer() {
   return (
@@ -35,7 +36,7 @@ export default function Footer() {
                   ABN:54 690 397 061 | ACN: 690 397 061 | License: TP/04720
                 </p>
                 <p className="text-gray-500 text-2xs sm:text-2xs lg:text-[12px]">
-                  Notification Number: NTP/16579 (Major Giveaway)
+                  {MAJOR_GIVEAWAY_NOTIFICATION}
                 </p>
               </div>
             </div>

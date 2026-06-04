@@ -10,6 +10,7 @@ import RevenueChartCard from "./sections/RevenueChartCard";
 import MembershipCard from "./sections/MembershipCard";
 import RevenueBreakdownCard from "./sections/RevenueBreakdownCard";
 import AdvertisingPlatformCard from "./sections/AdvertisingPlatformCard";
+import MerByDrawCard from "./sections/MerByDrawCard";
 import PrizePerformanceCard from "./sections/PrizePerformanceCard";
 import TopDrawsCard from "./sections/TopDrawsCard";
 import UpcomingRenewalsCard from "./sections/UpcomingRenewalsCard";
@@ -246,8 +247,21 @@ export default function DashboardOverview() {
           endDate={customEndDate || undefined}
           onUserClick={openUserModal}
         />
-        <AdvertisingPlatformCard stats={dashboardStats} loading={statsLoading} />
+        <AdvertisingPlatformCard
+          stats={dashboardStats}
+          loading={statsLoading}
+          dateRange={dateRange}
+          startDate={customStartDate || undefined}
+          endDate={customEndDate || undefined}
+          onUserClick={openUserModal}
+        />
       </div>
+
+      {/* Marketing Efficiency Ratio per draw — New Revenue ÷ Ad Spend, with a
+          per-platform breakdown. Self-contained (own per-draw windows), so it
+          deliberately ignores the page date filter. Sits above the revenue
+          overview + active-memberships (charts) row. */}
+      <MerByDrawCard />
 
       {/* Charts row (redesign Phase 3) — revenue area chart + membership donut */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 md:gap-6">

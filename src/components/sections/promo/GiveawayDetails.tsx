@@ -8,6 +8,7 @@ import { useScrollAnimation } from "@/hooks/useScrollAnimation";
 import { SectionContainer } from "@/components/ui";
 import { usePromoTheme } from "@/stores/usePromoThemeStore";
 import { hexToRgbaString } from "@/utils/package-colors/packageColorScheme";
+import { NTP_NUMBER, NSW_LICENSE } from "@/constants/legal";
 
 export default function GiveawayDetails() {
   const theme = usePromoTheme();
@@ -86,7 +87,7 @@ export default function GiveawayDetails() {
       title: "Eligibility",
       description: "Open to all Australian residents 18+ (Excluding SA & ACT)",
     },
-    { icon: IdCard, title: "License Numbers", description: "ABN: 54 690 397 061 | TP/04720 | NTP/16579" },
+    { icon: IdCard, title: "License Numbers", description: `ABN: 54 690 397 061 | ${NSW_LICENSE} | ${NTP_NUMBER}` },
   ];
 
   const cardHoverStyle = {

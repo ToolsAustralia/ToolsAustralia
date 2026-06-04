@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { Mail, MessageSquare, Send, Clock, Zap } from "lucide-react";
 import { Card, SectionTitle, DataTable, type Column } from "@/components/admin/ui";
+import { HourlyBreakdownTable } from "@/components/admin/PlatformHourlyRevenueSection";
 import { useMetricsFormatting } from "@/hooks/useMetricsFormatting";
 import { useKlaviyoAnalytics, type KlaviyoTimeframeKey } from "@/hooks/queries/admin/useKlaviyoAnalytics";
 import { useHourlyRevenue, type HourlyRevenueBucket } from "@/hooks/queries/admin/useHourlyRevenue";
@@ -26,10 +27,13 @@ interface EntityRow extends Record<string, unknown> {
   conversions: number;
 }
 
-interface HourRow extends Record<string, unknown> {
+interface HourRow {
   id: number;
   label: string;
+  spend: number | null;
   revenue: number;
+  profit: number | null;
+  roas: number | null;
   conversions: number;
 }
 
@@ -40,12 +44,6 @@ const ENTITY_COLUMNS: Column[] = [
   { key: "smsRevenue", label: "SMS", align: "right", sortable: false },
   { key: "totalRevenue", label: "Total", align: "right", sortable: false },
   { key: "conversions", label: "Conv.", align: "right", sortable: false },
-];
-
-const HOUR_COLUMNS: Column[] = [
-  { key: "label", label: "Hour (AEST)", align: "left", sortable: false },
-  { key: "revenue", label: "Revenue", align: "right", sortable: false },
-  { key: "conversions", label: "Conversions", align: "right", sortable: false },
 ];
 
 function hourLabel(h: number): string {
@@ -128,10 +126,19 @@ export default function KlaviyoAnalyticsManagement() {
     [a]
   );
 
+  // Klaviyo is an owned channel: no ad spend → spend / profit / ROAS render "—".
   const hourRows: HourRow[] = useMemo(() => {
     const buckets: HourlyRevenueBucket[] =
       hourly?.hourly ?? Array.from({ length: 24 }, (_, h) => ({ hour: h, revenue: 0, conversions: 0, spend: null }));
-    return buckets.map((b) => ({ id: b.hour, label: hourLabel(b.hour), revenue: b.revenue, conversions: b.conversions }));
+    return buckets.map((b) => ({
+      id: b.hour,
+      label: hourLabel(b.hour),
+      spend: null,
+      revenue: b.revenue,
+      profit: null,
+      roas: null,
+      conversions: b.conversions,
+    }));
   }, [hourly]);
 
   const renderEntity = (key: string, row: EntityRow) => {
@@ -249,15 +256,7 @@ export default function KlaviyoAnalyticsManagement() {
           subtitle={`From your payment attribution (convertingPlatform = klaviyo email + sms), ${rangeLabel.toLowerCase()} (AEST)`}
           icon={Clock}
         />
-        <DataTable<HourRow>
-          columns={HOUR_COLUMNS}
-          rows={hourRows}
-          renderCell={(key, row) => {
-            if (key === "label") return <span className="font-medium">{row.label}</span>;
-            if (key === "revenue") return <span className="num font-semibold">{fmtCompact(row.revenue)}</span>;
-            return <span className="num">{row.conversions.toLocaleString()}</span>;
-          }}
-        />
+        <HourlyBreakdownTable rows={hourRows} fmtCompact={fmtCompact} />
       </Card>
 
       <p className="text-2xs text-neutral-400 leading-snug">

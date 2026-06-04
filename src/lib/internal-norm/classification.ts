@@ -7,6 +7,7 @@ import {
   NormDashboardStatsSchema,
   NormMembershipByPackageSchema,
   NormProjectedIncomeSchema,
+  NormPlatformRevenueBreakdownSchema,
   NormRecentActivitiesSchema,
   NormRevenueBreakdownSchema,
   NormRevenueDetailsSchema,
@@ -92,6 +93,7 @@ import {
   NormAnalyticsSpendByUrlListSchema,
   NormHourlyRevenueSchema,
 } from "./schemas/analytics-spend";
+import { NormMerByDrawSchema } from "./schemas/mer";
 import {
   NormPromoActiveSchema,
   NormPromoEffectiveSchema,
@@ -262,6 +264,15 @@ export const NORM_ENDPOINTS = {
     method: "GET",
     summary: "Per-user contribution list for one revenue category over a date range (PII-safe: firstName + opaque userId)",
     responseSchema: NormRevenueDetailsSchema,
+  },
+  "dashboard.revenue-details.by-platform": {
+    tier: "read",
+    requiredPermission: "overview.view",
+    path: "/v1/dashboard/revenue-details/by-platform",
+    method: "GET",
+    summary:
+      "One platform's acquisition revenue split by source category (membership new / one-time / mini-draw / upsell) + PII-safe buyer list (firstName + opaque userId)",
+    responseSchema: NormPlatformRevenueBreakdownSchema,
   },
   "dashboard.upcoming-renewals": {
     tier: "read",
@@ -524,6 +535,15 @@ export const NORM_ENDPOINTS = {
     summary: "Hour-of-day (AEST) revenue, conversions, and ad spend for a date range, merged per platform group (meta/tiktok/snapchat/klaviyo/ad-channels/all)",
     rateLimit: { perMinute: 10 },
     responseSchema: NormHourlyRevenueSchema,
+  },
+  "analytics.mer-by-draw": {
+    tier: "read",
+    requiredPermission: "overview.view",
+    path: "/v1/analytics/mer-by-draw",
+    method: "GET",
+    summary: "Marketing Efficiency Ratio (New Revenue ÷ Ad Spend) per major draw, with per-platform breakdown. New Revenue excludes subscription renewals; blended numerator spans all platforms incl. direct. One row per draw since attribution went live (28 Apr 2026), newest first.",
+    rateLimit: { perMinute: 10 },
+    responseSchema: NormMerByDrawSchema,
   },
 
   // ─── Cancellation-flow analytics (wired) ─────────────────────────────

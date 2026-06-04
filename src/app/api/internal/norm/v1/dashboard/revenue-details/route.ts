@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { withNorm } from "@/lib/internal-norm/withNorm";
-import { NormRevenueDetailsSchema } from "@/lib/internal-norm/schemas/dashboard";
+import { NormRevenueDetailsSchema, toNormRevenueUserRow } from "@/lib/internal-norm/schemas/dashboard";
 import {
   getRevenueDetails,
   resolveRevenueDetailsRange,
@@ -57,21 +57,8 @@ export const GET = withNorm(
       totalRevenue: data.totalRevenue,
       totalPurchases: data.totalPurchases,
       totalUsers: data.totalUsers,
-      // PII-safe projection: firstName only; lastName / email / mobile stripped.
-      users: data.users.map((u) => ({
-        userId: u.userId,
-        firstName: u.userInfo.firstName || "Unknown",
-        purchases: u.purchases.map((p) => ({
-          paymentEventId: p.paymentEventId,
-          timestamp: p.timestamp,
-          amount: p.amount,
-          packageId: p.packageId ?? null,
-          packageName: p.packageName ?? null,
-          billingReason: p.billingReason ?? null,
-        })),
-        totalContributed: u.totalContributed,
-        purchaseCount: u.purchaseCount,
-      })),
+      // PII-safe projection (firstName + opaque userId only) — shared via toNormRevenueUserRow.
+      users: data.users.map(toNormRevenueUserRow),
       pagination: data.pagination,
     });
   },

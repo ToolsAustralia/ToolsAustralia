@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-06-03T14:05:48.706Z",
+  "generatedAt": "2026-06-04T03:08:23.096Z",
   "endpoints": [
     {
       "registryKey": "pending-actions.status",
@@ -64,6 +64,13 @@
       "path": "/v1/dashboard/revenue-details",
       "method": "GET",
       "summary": "Per-user contribution list for one revenue category over a date range (PII-safe: firstName + opaque userId)"
+    },
+    {
+      "registryKey": "dashboard.revenue-details.by-platform",
+      "tier": "read",
+      "path": "/v1/dashboard/revenue-details/by-platform",
+      "method": "GET",
+      "summary": "One platform's acquisition revenue split by source category (membership new / one-time / mini-draw / upsell) + PII-safe buyer list (firstName + opaque userId)"
     },
     {
       "registryKey": "dashboard.upcoming-renewals",
@@ -169,6 +176,13 @@
       "path": "/v1/analytics/hourly-revenue",
       "method": "GET",
       "summary": "Hour-of-day (AEST) revenue, conversions, and ad spend for a date range, merged per platform group (meta/tiktok/snapchat/klaviyo/ad-channels/all)"
+    },
+    {
+      "registryKey": "analytics.mer-by-draw",
+      "tier": "read",
+      "path": "/v1/analytics/mer-by-draw",
+      "method": "GET",
+      "summary": "Marketing Efficiency Ratio (New Revenue ÷ Ad Spend) per major draw, with per-platform breakdown. New Revenue excludes subscription renewals; blended numerator spans all platforms incl. direct. One row per draw since attribution went live (28 Apr 2026), newest first."
     },
     {
       "registryKey": "cancellation-flow-analytics.list",

@@ -188,7 +188,7 @@ The legacy entry path [src/components/sections/WinnerTestimonySection.tsx](../..
 - **`Banner.tsx`** — amber encouragement banner ("Someone's name gets called next draw")
 - **`ActionRow.tsx`** — primary CTAs ("Keep me in the draw" / "Resolve payment" / "No thanks, cancel anyway")
 - **`DowngradeCard.tsx`** — tier-coloured "Switch to X" card (Tradie/Foreman/Boss)
-- **`TrustBar.tsx`** — footer trust cells (SSL secure / NTP/16264 / Cancel anytime)
+- **`TrustBar.tsx`** — footer trust cells (SSL secure / NTP/16867 — sourced from `NTP_NUMBER` in `src/constants/legal.ts` / Cancel anytime)
 - **`hero.module.css`** — composite gradients, scrollbar chrome, and stripe overlay that don't translate to single Tailwind utilities
 
 Layout is an infographic-style three-band frame: dark hero → white lose grid → light slate trust footer. Layout structure stays identical at every viewport size; the `max-xs:` breakpoint shrinks sizes only (no column collapse). Styles migrated from `<style jsx>` to Tailwind + CSS Modules.
