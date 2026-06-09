@@ -54,7 +54,7 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
     ref
   ) => {
     const sizeStyles = {
-      md: "px-3 sm:px-3 lg:px-4 py-2 sm:py-2.5 lg:py-3 text-sm",
+      md: "px-3 sm:px-3 lg:px-4 py-2 sm:py-2.5 lg:py-3 text-base",
       lg: "px-4 py-3 sm:py-3.5 text-base",
     };
 

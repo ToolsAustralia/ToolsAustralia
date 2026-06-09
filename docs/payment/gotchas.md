@@ -89,6 +89,10 @@ The benefits-grant path is wrapped in `PaymentEvent.findOne({ paymentIntentId })
 
 But: between the first call's "find" and "create," a concurrent retry can race. The grant uses `BenefitsGranted-${paymentIntentId}` as a unique-key write — the loser gets `E11000` and bails. That's the safe path. Don't add an artificial delay or transaction; the unique index is enough.
 
+## Stripe PaymentElement input font must be ≥16px (iOS Safari zoom)
+
+_2026-06-09:_ Every PaymentElement input font size in `STRIPE_PAYMENT_ELEMENT_RULES` (`.Input`, `.Input--empty`, `.Input--focus`, `.Input--invalid`, `.InputElement`, and the `cardNumber` / `cardExpiry` / `cardCvc` field rules) plus `variables.fontSizeBase` were raised 14px → 16px in [`buildMembershipStripeAppearance`](../../src/utils/payment/stripe/membership-stripe-appearance.ts) (`minHeight: '44px'` retained). iOS Safari auto-zooms when a focused input's computed font-size is <16px; the app's own CSS cannot reach Stripe's cross-origin iframe, so the Appearance API is the only lever (Stripe's docs recommend ≥16px input font on mobile). Keep these at 16px — dropping below re-introduces the zoom. This builder is shared by PaymentMethodSelector, StripePaymentModal, PaymentMethodsTab, UpsellModal, SpecialPackagesModal, and RenewalFailedModal, so the single change fixes the card-field zoom across all of them.
+
 ## `billingReason` threads through to Klaviyo as `is_renewal` / `billing_reason`
 
 The Stripe `invoice.billing_reason` parameter on `grantBenefits` / `trackKlaviyoEvent` is wired through to the `Placed Order` event in Klaviyo so attribution reports can filter automated renewals out of "true new revenue" calculations. The Klaviyo-side mechanics, custom-metric setup, and the full property naming contract live in [tracking/KLAVIYO_INTEGRATION.md](../tracking/KLAVIYO_INTEGRATION.md) — change the discriminator there, not in `payment-processing.ts`.

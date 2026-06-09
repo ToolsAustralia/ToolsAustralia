@@ -85,7 +85,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   return (
     <html lang="en-AU" className={cn(inter.variable, poppins.variable)} suppressHydrationWarning>
       <head>
-        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+        <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
         {/* Single theme-color updated client-side by ThemeMetaSync; avoids duplicate meta tags */}
         <meta name="theme-color" content="#ffffff" />
         {/* Apply persisted (Zustand persist) theme before React hydrates to prevent light flash */}

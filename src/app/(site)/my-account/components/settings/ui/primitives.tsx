@@ -108,7 +108,7 @@ export const Field = ({ label, htmlFor, locked, hint, error, children }: FieldPr
 
 const inputBase =
   "w-full rounded-xl border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-950 " +
-  "text-neutral-900 dark:text-white px-3.5 py-3 text-sm placeholder-neutral-400 dark:placeholder-neutral-500 " +
+  "text-neutral-900 dark:text-white px-3.5 py-3 text-base placeholder-neutral-400 dark:placeholder-neutral-500 " +
   "focus:outline-none focus:ring-2 focus:ring-red-600/30 focus:border-red-600 transition";
 
 export const SettingsInput = ({ className, ...props }: React.InputHTMLAttributes<HTMLInputElement>) => (

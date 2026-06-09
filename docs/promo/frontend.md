@@ -55,6 +55,10 @@ Promo components use `cn()` from `@/utils/cn` for conditional class composition.
 
 Countdown timers in promo components — `GiveawayCountdownTimer`, `FloatingCountdownBanner`, `FreezePeroidBanner` — are now leaf-isolated via [`<CountdownLeaf>`](../../src/components/ui/CountdownLeaf.tsx) / [`useLeafTimer`](../../src/hooks/useLeafTimer.ts) so the parent promo section / banner host doesn't re-render on every tick. `OtherToolsetsCarousel` pauses its infinite framer-motion loop when offscreen via [`useInViewportAnimation`](../../src/hooks/useInViewportAnimation.ts), and `FloatingPromoBanner` / `FloatingGetEntriesButton` consume the device-tier CSS tokens (`--ta-blur`, `--ta-shadow-card`, `--ta-transition-dur`) so visual cost scales down on mobile / `Save-Data`. Floating elements set `data-floating-widget="true"` so the print stylesheet hides them. The new [`FloatingPromoBannerHost`](../../src/components/banners/FloatingPromoBannerHost.tsx) is mounted once in `providers.tsx` and orchestrates promo banner visibility globally instead of per-page mounting. See [shared-ui/patterns.md](../shared-ui/patterns.md#site-wide-interaction-smoothness--phase-1-2026-05-09) for the helpers.
 
+## FloatingPromoBanner safe-area inset (2026-06-09)
+
+[`FloatingPromoBanner`](../../src/components/banners/FloatingPromoBanner.tsx) is `fixed bottom-0` and now carries `pb-[env(safe-area-inset-bottom)]` on its root so its content clears the iOS home indicator. This became necessary once the app set `viewport-fit=cover` in the viewport meta — that removes the browser's automatic safe-area inset, so any bottom-pinned element must add the padding itself. Keep this class when restyling the banner.
+
 ## PrizeShowcase gallery — Embla migration (Phase 1.5, 2026-05-10)
 
 [`PrizeShowcase`](../../src/components/sections/promo/PrizeShowcase.tsx) main image + thumbs gallery migrated from Swiper (`EffectFade` + `Grid` modules) to Embla (`embla-carousel-react`) with `embla-carousel-fade` and `embla-carousel-class-names` plugins. Two user-reported bugs fixed by the migration:

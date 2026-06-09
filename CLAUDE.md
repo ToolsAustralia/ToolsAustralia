@@ -216,7 +216,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
 ```json
 {
   "version": 1,
-  "lastModified": "2026-06-04",
+  "lastModified": "2026-06-09",
   "domains": {
     "subscription": {
       "docs": "docs/subscription/",
@@ -246,7 +246,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/hooks/useActivePackage.ts",
         "src/hooks/useMembershipModal.ts"
       ],
-      "lastVerified": "2026-06-04"
+      "lastVerified": "2026-06-09"
     },
     "billing-stripe": {
       "docs": "docs/billing-stripe/",
@@ -293,7 +293,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/hooks/use3DSRedirectHandler.ts",
         "src/hooks/useSavedPaymentMethods.ts"
       ],
-      "lastVerified": "2026-05-10"
+      "lastVerified": "2026-06-09"
     },
     "draws": {
       "docs": "docs/draws/",
@@ -371,7 +371,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "scripts/build-landing-image-manifest.ts",
         "scripts/check-landing-hero-assets.mjs"
       ],
-      "lastVerified": "2026-05-14"
+      "lastVerified": "2026-06-09"
     },
     "affiliate": {
       "docs": "docs/affiliate/",
@@ -541,7 +541,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/hooks/useAttribution.ts",
         "src/hooks/useUTMPersistence.ts"
       ],
-      "lastVerified": "2026-05-11"
+      "lastVerified": "2026-06-09"
     },
     "ab-testing": {
       "docs": "docs/ab-testing/",
@@ -630,7 +630,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/app/globals.css",
         "src/app/not-found.tsx"
       ],
-      "lastVerified": "2026-06-04"
+      "lastVerified": "2026-06-09"
     },
     "client-state": {
       "docs": "docs/client-state/",
@@ -711,7 +711,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/hooks/useDashboardEntryDisplay.ts",
         "src/hooks/useDashboardLandingOrchestration.ts"
       ],
-      "lastVerified": "2026-05-21"
+      "lastVerified": "2026-06-09"
     },
     "security-csp": {
       "docs": "docs/security-csp/",
