@@ -204,7 +204,7 @@ const FloatingPromoBanner: React.FC = () => {
           animate={{ y: 0, opacity: 1 }}
           exit={{ y: 100, opacity: 0 }}
           transition={{ duration: 0.3, ease: "easeInOut" }}
-          className="fixed bottom-0 left-0 right-0 z-[40] shadow-2xl border-t-2 border-yellow-300 cursor-pointer select-none"
+          className="fixed bottom-0 left-0 right-0 z-[40] shadow-2xl border-t-2 border-yellow-300 cursor-pointer select-none pb-[env(safe-area-inset-bottom)]"
           style={{
             background: `linear-gradient(135deg, ${theme.primary} 0%, ${theme.primary}cc 25%, ${theme.primary}99 50%, ${theme.primary}99 75%, ${theme.primary} 100%)`,
             boxShadow: `0 -10px 30px ${theme.shadowRgba}, 0 0 20px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.3)`,

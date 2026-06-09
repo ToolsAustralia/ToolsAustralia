@@ -148,10 +148,14 @@ const ModalContainer: React.FC<ModalContainerProps> = ({
     full: "max-w-full",
   };
 
+  // Size modal content with `svh` (stable smallest viewport) rather than `dvh`,
+  // which is throttled and janks/clips as the browser chrome shows/hides on
+  // iOS Safari + Android Chrome (WebKit bug 266835). Tall content scrolls inside
+  // the modal body's own overflow-y-auto region, so it never depends on the unit.
   const heightStyles = {
-    auto: "max-h-[88dvh] max-xs:max-h-[92dvh]",
-    screen: "h-screen-dvh",
-    fixed: fixedHeight || "h-[90dvh]",
+    auto: "max-h-[88svh] max-xs:max-h-[92svh]",
+    screen: "h-screen-svh",
+    fixed: fixedHeight || "h-[90svh]",
   };
 
   const isSheet = presentation === "sheet";
@@ -497,9 +501,10 @@ const ModalContainer: React.FC<ModalContainerProps> = ({
       ? `rounded-t-2xl rounded-b-none sm:rounded-2xl sm:rounded-b-2xl w-full ${sizeStyles[size]}`
       : `rounded-2xl w-full ${sizeStyles[size]}`;
 
-  // Full-bleed below lg = 95dvh (5% top gap, bottom-flush); normal at lg+.
+  // Full-bleed below lg = 95svh (5% top gap, bottom-flush); normal at lg+.
+  // svh (not dvh) so the panel doesn't resize/clip as the mobile chrome toggles.
   const panelHeight = mobileFullBleed
-    ? "h-[95dvh] lg:h-auto lg:max-h-[88dvh]"
+    ? "h-[95svh] lg:h-auto lg:max-h-[88svh]"
     : heightStyles[height];
 
   const modalContent = (

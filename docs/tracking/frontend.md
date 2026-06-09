@@ -44,3 +44,11 @@ Tracking/pixel components use `cn()` from `@/utils/cn` for conditional class com
 ## Print-stylesheet markers (2026-05-09)
 
 Pixel `<Script>` tags are tagged with `data-tracking-pixel="true"` (`GoogleTagManager`, `KlaviyoScriptLoader`, the Contentsquare loader in `app/layout.tsx`). The print stylesheet in [src/app/globals.css](../../src/app/globals.css) hides any `[data-tracking-pixel]` element so they don't leak into printed pages. When wiring a new pixel script, add the same attribute. See [shared-ui/patterns.md](../shared-ui/patterns.md#print-stylesheet) for the full set of print-hidden markers.
+
+## Viewport meta change (2026-06-09)
+
+The `<meta name="viewport">` in [src/app/layout.tsx](../../src/app/layout.tsx) changed from `width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no` to `width=device-width, initial-scale=1, viewport-fit=cover`.
+
+- Dropping `maximum-scale=1.0, user-scalable=no` restores pinch-to-zoom (WCAG 1.4.4 / W3C ACT) and removes an iOS zoom crutch that was already ineffective (iOS ignores it for inputs).
+- Adding `viewport-fit=cover` makes `env(safe-area-inset-*)` non-zero, so notch / home-indicator-safe padding now works (those CSS usages were previously inert).
+- **Caveat:** `viewport-fit=cover` is global and removes the browser's automatic safe-area inset, so every bottom-fixed element now needs its own `env(safe-area-inset-bottom)` padding.
