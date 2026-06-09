@@ -388,6 +388,19 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
     floatTop.set(0);
     floatLeft.set(0);
     floatWidth.set(0);
+    // Going back to the in-flow bar: Framer can leave the fixed-era inline
+    // top/left/width on the node for a frame. With position:relative a stray
+    // `top: <px>` shifts the bar DOWN (gap above it) while its flow slot stays at
+    // top:0 (so the hero below overlaps under it) — the exact misplacement seen on
+    // scroll-to-top. Force the bar geometry directly so it always sits flush; the
+    // static style re-applies the same values on the next commit.
+    const node = bannerRef.current;
+    if (node) {
+      node.style.top = "0px";
+      node.style.left = "auto";
+      node.style.right = "auto";
+      node.style.width = "100vw";
+    }
   }, [isScrolled, floatTop, floatLeft, floatWidth]);
 
   // After switching to fixed, animate top/left/width from measured rect → floating pill (FLIP).
@@ -600,7 +613,42 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
   }, [isScrolled, activePromo, multiplier, isGapPeriod, displayLeftSrc, leftVisual.staticFamily, isHolidayLeftArt]);
 
   if (pathname === "/not-found" || isAnySidebarOpen) return null;
-  if (!isPromoResolved) return null;
+
+  // While promo/draw/variant data resolves, reserve the banner's in-flow height
+  // with a matching skeleton instead of returning null — otherwise the banner pops
+  // in at full height and shoves the whole page down (CLS). Mirrors the bar layout
+  // + the banner's own `bg-white/10 animate-pulse` skeleton idiom so it reads as one
+  // loading state alongside the hero's pulse loader below it.
+  if (!isPromoResolved) {
+    return (
+      <div
+        aria-hidden="true"
+        className="relative z-30 shrink-0 select-none bg-black"
+        style={{
+          width: "100vw",
+          maxWidth: "100vw",
+          marginLeft: "calc(50% - 50vw)",
+          marginRight: "calc(50% - 50vw)",
+          boxShadow: BANNER_SHADOW_REST,
+          borderBottom: `2px solid ${theme.borderRgba}`,
+        }}
+      >
+        <div className="relative flex w-full items-center justify-center px-4 min-h-[4.5rem] sm:min-h-[7rem] lg:min-h-[6.75rem]">
+          {/* White-text Tools Australia logo, gently breathing — reads as a branded
+              loading state on the dark bar. */}
+          <motion.img
+            src="/images/Tools%20Australia%20Logo/White-Text%20Logo.webp"
+            alt=""
+            draggable={false}
+            className="h-9 w-auto object-contain drop-shadow-[0_2px_10px_rgba(0,0,0,0.55)] sm:h-14 lg:h-16"
+            initial={{ opacity: 0.6 }}
+            animate={prefersReducedMotion ? { opacity: 0.9 } : { opacity: [0.55, 1, 0.55], scale: [1, 1.045, 1] }}
+            transition={prefersReducedMotion ? { duration: 0.3 } : { duration: 1.6, repeat: Infinity, ease: "easeInOut" }}
+          />
+        </div>
+      </div>
+    );
+  }
 
   // Keep the banner below the header by default; only float it once scrolled for visibility.
   // Use wrapper to prevent layout shift when banner becomes fixed

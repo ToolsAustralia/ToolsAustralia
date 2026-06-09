@@ -6,6 +6,7 @@ import {
   getMultiplierBannerImagePaths,
   BANNER_DIMENSIONS,
 } from "@/utils/promo/multiplier-banner";
+import { cn } from "@/utils/cn";
 
 export type MultiplierBannerImageProps = {
   multiplier: number;
@@ -43,9 +44,11 @@ export default function MultiplierBannerImage({
   const paths = getMultiplierBannerImagePaths(multiplier, slug, toolsetSlug);
   const pathKey = paths.join("|");
   const [index, setIndex] = useState(0);
+  const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
     setIndex(0);
+    setLoaded(false);
   }, [multiplier, slug, toolsetSlug, pathKey]);
 
   if (paths.length === 0) {
@@ -56,21 +59,49 @@ export default function MultiplierBannerImage({
   const src = paths[safeIndex]!;
 
   return (
-    <Image
-      src={src}
-      alt={alt}
-      width={width}
-      height={height}
-      className={className}
-      priority={priority}
-      sizes={sizes}
-      onError={() => {
-        if (safeIndex < paths.length - 1) {
-          setIndex(safeIndex + 1);
-        } else {
-          onExhausted?.();
-        }
-      }}
-    />
+    <div className={cn("relative", className)}>
+      <Image
+        src={src}
+        alt={alt}
+        width={width}
+        height={height}
+        priority={priority}
+        sizes={sizes}
+        className={cn(
+          "h-auto w-full object-contain transition-opacity duration-500",
+          loaded ? "opacity-100" : "opacity-0",
+        )}
+        onLoad={() => setLoaded(true)}
+        onError={() => {
+          if (safeIndex < paths.length - 1) {
+            setIndex(safeIndex + 1);
+          } else {
+            onExhausted?.();
+          }
+        }}
+      />
+
+      {/* Branded loader while the multiplier art streams in. Sits in the image's
+          reserved box (next/Image keeps the aspect-ratio), so there is no shift. */}
+      {!loaded && (
+        <div
+          className="absolute inset-0 flex flex-col items-center justify-center gap-1.5 overflow-hidden rounded-2xl border border-black/5 bg-gradient-to-br from-neutral-100 to-neutral-200/70 dark:border-white/10 dark:from-neutral-800/50 dark:to-neutral-900/60"
+          aria-label="Loading multiplier"
+          role="status"
+        >
+          <div className="pointer-events-none absolute inset-0 animate-shimmer-horizontal-fast bg-gradient-to-r from-transparent via-white/40 to-transparent dark:via-white/10" />
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/images/Tools%20Australia%20Logo/Social_Media_Profile_Primary-removebg-preview.webp"
+            alt=""
+            draggable={false}
+            className="relative h-8 w-8 animate-pulse object-contain drop-shadow-sm sm:h-11 sm:w-11"
+          />
+          <span className="relative bg-gradient-to-r from-red-600 via-orange-500 to-red-600 bg-clip-text text-[11px] font-black uppercase tracking-[0.14em] text-transparent sm:text-xs">
+            Gearing up your multipliers…
+          </span>
+        </div>
+      )}
+    </div>
   );
 }
