@@ -103,3 +103,11 @@ All className arbitraries should be regex-replaceable by `scripts/codemods/sweep
 - Template literals with hex inside: `` className={`text-[${myColor}]`} `` — codemod-INVISIBLE ❌
 
 Avoid the last form. Prefer either a static class or a CVA variant.
+
+## 9. Mobile-viewport sizing rules (iOS, 2026-06-09)
+
+- **Focusable inputs must be ≥16px (`text-base`) to avoid iOS focus zoom.** iOS Safari auto-zooms a focused input whose computed font-size is <16px (`text-sm` = 14px). Never ship a `<input>`/`<textarea>`/Stripe Element field below `text-base`.
+- **Size modal content with `svh`, not `dvh`.** `dvh` is throttled by WebKit and janks/clips as the mobile browser chrome shows/hides; `svh` (smallest viewport) is stable. The modal body's own `overflow-y-auto` handles overflow.
+- **Fixed-bottom CTAs add the safe-area inset**: `bottom-[calc(env(safe-area-inset-bottom)+1rem)]` so they clear the iOS home indicator (the app sets `viewport-fit=cover`).
+
+See [gotchas.md](./gotchas.md) "Mobile-UX hardening pass" for the per-file fix list and the WebKit bug reference.

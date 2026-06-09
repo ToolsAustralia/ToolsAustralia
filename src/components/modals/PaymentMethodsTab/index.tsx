@@ -23,7 +23,7 @@
  *    this orchestrator.
  */
 
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import Link from "next/link";
 import { AlertCircle, Loader2 } from "lucide-react";
 import { useSavedPaymentMethods, type SavedPaymentMethod } from "@/hooks/useSavedPaymentMethods";
@@ -39,6 +39,8 @@ import { getStripePromise } from "@/lib/stripe-client";
 import { Button } from "../ui";
 import ConfirmationModal from "../ConfirmationModal";
 import { formatDisplayName } from "@/utils/display-name";
+import { useThemeStore } from "@/stores/useThemeStore";
+import { buildMembershipStripeAppearance } from "@/utils/payment/stripe/membership-stripe-appearance";
 
 import SavedMethodRow from "./SavedMethodRow";
 import AddPaymentCTA from "./AddPaymentCTA";
@@ -83,6 +85,10 @@ const PaymentMethodsTab: React.FC<PaymentMethodsTabProps> = ({ user, settingsRed
     savePaymentMethod,
   } = useSavedPaymentMethods();
   const updateSubscriptionPaymentMethod = useUpdateSubscriptionPaymentMethod();
+  // Match the Stripe Element to app theme + 16px inputs (prevents iOS zoom and a
+  // white card box in dark mode) via the shared appearance builder.
+  const isDarkMode = useThemeStore((s) => s.theme === "dark");
+  const stripeAppearance = useMemo(() => buildMembershipStripeAppearance(isDarkMode), [isDarkMode]);
   const [showAddForm, setShowAddForm] = useState(false);
   const [setupIntentClientSecret, setSetupIntentClientSecret] = useState<string | null>(null);
   const [isCreatingSetupIntent, setIsCreatingSetupIntent] = useState(false);
@@ -305,19 +311,11 @@ const PaymentMethodsTab: React.FC<PaymentMethodsTabProps> = ({ user, settingsRed
           </Button>
         </div>
         <Elements
-          key={setupIntentClientSecret || "no-secret"}
+          key={`${setupIntentClientSecret || "no-secret"}-${isDarkMode ? "dark" : "light"}`}
           stripe={stripePromise}
           options={{
             clientSecret: setupIntentClientSecret,
-            appearance: {
-              theme: "stripe",
-              variables: {
-                spacingUnit: "4px",
-                borderRadius: "8px",
-                fontFamily: 'system-ui, "Helvetica Neue", Helvetica, Arial, sans-serif',
-                fontSizeBase: "14px",
-              },
-            },
+            appearance: stripeAppearance,
           }}
         >
           <AddPaymentForm

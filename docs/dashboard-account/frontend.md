@@ -236,3 +236,11 @@ Previously `getActivePackage` returned the one-time pack as the "effective" pack
 [`settings/page.tsx`](../../src/app/(site)/my-account/settings/page.tsx) passes an explicit `onBackClick={() => router.push("/my-account")}` to `DashboardHeader` (alongside the existing `showBackButton` flag). The chevron now always routes to `/my-account` rather than relying on browser-history previous or stepping through the settings index from a sub-tab. The previously-defined `handleBackClick` callback that routed sub-tabs back to the settings index has been removed — `?tab=` deep links still work via `searchParams`, but the back button itself is a single hard route.
 
 This mirrors the user's intent: "clicking the back button should navigate him to /my-account, not in the previous page." Reference spec: `docs/superpowers/specs/2026-05-21-dashboard-tier-picker-polish-design.md` §6.
+
+## Mobile-UX hardening (2026-06-09)
+
+Small frontend-only batch; no backend/hook/service/model change.
+
+- **BottomNav safe-area**: [`components/BottomNav.tsx`](../../src/app/(site)/my-account/components/BottomNav.tsx) `<nav>` gained `pb-[env(safe-area-inset-bottom)]` so the fixed mobile bottom nav clears the iOS home indicator (the app now sets `viewport-fit=cover` globally).
+- **iOS focus-zoom guard**: the `SettingsInput` base (`inputBase` in [`settings/ui/primitives.tsx`](../../src/app/(site)/my-account/components/settings/ui/primitives.tsx)) and the local `PWInput` in [`settings/PasswordTab.tsx`](../../src/app/(site)/my-account/components/settings/PasswordTab.tsx) moved from `text-sm` → `text-base` (16px). iOS Safari auto-zooms on focus of inputs under 16px; 16px disables that. Visual-only on desktop.
+- **Lazy-loaded dashboard modals**: [`page.tsx`](../../src/app/(site)/my-account/page.tsx) now wraps `ReferFriendModal`, `PastDrawsModal`, and `PackageDetailModal` in `dynamic(() => import(...), { ssr: false })`, joining the already-lazy `MembershipModal` — they stay out of the initial dashboard bundle and only mount when opened. `PackageDetailModal`'s exported types (`PackageDetailModalPackageData`, `SubscriptionAccumulationData`) are still pulled in via `import type` so the dynamic import does not drag runtime code.

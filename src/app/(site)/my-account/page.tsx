@@ -22,8 +22,9 @@ import dynamic from "next/dynamic";
 const MembershipModal = dynamic(() => import("@/components/modals/MembershipModal"), {
   ssr: false,
 });
-import ReferFriendModal from "@/components/modals/ReferFriendModal";
-import PastDrawsModal from "@/components/modals/PastDrawsModal";
+// Lazy-loaded: dashboard modals only mount when opened — keep them out of the initial bundle.
+const ReferFriendModal = dynamic(() => import("@/components/modals/ReferFriendModal"), { ssr: false });
+const PastDrawsModal = dynamic(() => import("@/components/modals/PastDrawsModal"), { ssr: false });
 import { hasFailedRenewal } from "@/utils/subscription/subscription-helpers";
 import { hasSeenExplainer } from "@/utils/subscription-explainer-storage";
 import {
@@ -34,10 +35,11 @@ import {
 } from "@/utils/dashboard-landing-session";
 import { useDashboardLandingOrchestration } from "@/hooks/useDashboardLandingOrchestration";
 import { getFallbackRenewalDate } from "@/utils/dates/month-helpers";
-import PackageDetailModal, {
-  type PackageDetailModalPackageData,
-  type SubscriptionAccumulationData,
+import type {
+  PackageDetailModalPackageData,
+  SubscriptionAccumulationData,
 } from "@/components/modals/PackageDetailModal";
+const PackageDetailModal = dynamic(() => import("@/components/modals/PackageDetailModal"), { ssr: false });
 import { useMemberships } from "@/hooks/useMemberships";
 import { useResolvedMultiplier } from "@/hooks/queries/usePromoQueries";
 import RewardsFloatingWidget from "@/components/features/RewardsFloatingWidget";

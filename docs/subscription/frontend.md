@@ -194,10 +194,14 @@ The flag that selects Mode A vs Mode B is `hasMembershipGrantInCurrentDrawPeriod
 
 **Stripe preservation invariants:**
 1. `stripePromise` is a module-scope singleton in `PaymentForm.tsx` — Stripe prohibits re-instantiation.
-2. `<Elements key={clientSecret || "no-secret"}>` re-mount key is required for Stripe correctness.
+2. The `<Elements>` re-mount key is `` `${clientSecret || "no-secret"}-${isDarkMode ? "dark" : "light"}` ``. The clientSecret-based remount (required for Stripe correctness) is preserved; the theme suffix is what forces a fresh mount when the user toggles dark/light so the appearance rebuilds (see the 2026-06-09 note below).
 3. All `useStripe()`, `useElements()`, `stripe.confirmPayment()`, `stripe.confirmCardPayment()` calls are unchanged.
 4. Upgrade API call flow (create upgrade payment → get clientSecret → confirm) is preserved.
 5. `IMMEDIATE_UPGRADE_NO_PI` sentinel for server-side-only upgrades is preserved.
+
+**Stripe Elements appearance (2026-06-09).** The `<Elements options.appearance>` was switched from a hardcoded light, green-accent, 14px object to the shared `buildMembershipStripeAppearance(isDarkMode)` builder (`src/utils/payment/stripe/membership-stripe-appearance.ts`), matching `PaymentMethodSelector`. Effect: card inputs are now **16px** (prevents iOS focus auto-zoom), **dark-mode aware** (no more white card box in dark mode), and use the **brand-red** accent. `isDarkMode` is read from `useThemeStore((s) => s.theme === "dark")` and the appearance is memoised on it. The `<Elements>` key now carries the theme suffix (invariant #2) so a toggle remounts and rebuilds.
+
+> **Caveat — theme source.** This modal sources `isDarkMode` from `useThemeStore`, but the [gotchas.md RenewalFailedModal note](./gotchas.md#renewalfailedmodal-dark-mode-was-half-done-dark-bg-dark-text) warns that `useThemeStore.theme` can disagree with the actual `.dark` class on `<html>` (which `useHtmlDarkForUi()` reads) — the store defaults to `"light"` while the `<html>` class can be dark via the `layout.tsx` bootstrap / Sydney-night fallback / AdminThemeContext. If this modal can mount while those disagree, the Stripe iframe could render light inside a dark-classed shell. _TODO: verify with the team whether `StripePaymentModal` should switch to `useHtmlDarkForUi()` for parity with `RenewalFailedModal`._
 
 **Public props interface (unchanged from original):**
 ```ts

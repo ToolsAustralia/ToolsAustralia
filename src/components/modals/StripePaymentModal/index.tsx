@@ -18,9 +18,11 @@
  *    unchanged from the original.
  */
 
-import React, { useRef, useState } from "react";
+import React, { useMemo, useRef, useState } from "react";
 import { Elements } from "@stripe/react-stripe-js";
 import { useSession } from "next-auth/react";
+import { useThemeStore } from "@/stores/useThemeStore";
+import { buildMembershipStripeAppearance } from "@/utils/payment/stripe/membership-stripe-appearance";
 import { Lock } from "lucide-react";
 import { resolveBillingAddress } from "@/lib/payment/defaultBillingAddress";
 import { getPartnerAccessDurationLabel } from "@/utils/partner-discounts/partner-access-duration";
@@ -112,6 +114,12 @@ const StripePaymentModal: React.FC<StripePaymentModalProps> = ({
   const { data: session } = useSession();
   const stripeBillingAddress = resolveBillingAddress(session?.user);
   const activePaymentIntentRef = useRef<string | null>(null);
+
+  // Match the Stripe Element to the app theme + 16px inputs via the shared
+  // appearance builder (same pattern as PaymentMethodSelector). Avoids a
+  // white card box in dark mode and the off-brand green accent.
+  const isDarkMode = useThemeStore((s) => s.theme === "dark");
+  const stripeAppearance = useMemo(() => buildMembershipStripeAppearance(isDarkMode), [isDarkMode]);
 
   const [showCardForm, setShowCardForm] = useState(false);
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<SavedPaymentMethod | null>(null);
@@ -240,23 +248,12 @@ const StripePaymentModal: React.FC<StripePaymentModalProps> = ({
       {/* Payment forms — Elements only when entering a new card */}
       {showCardForm && clientSecret ? (
         <Elements
-          key={clientSecret || "no-secret"}
+          key={`${clientSecret || "no-secret"}-${isDarkMode ? "dark" : "light"}`}
           stripe={stripePromise}
           options={{
             clientSecret,
             locale: "en",
-            appearance: {
-              theme: "stripe",
-              variables: {
-                colorPrimary: "#059669",
-                colorBackground: "#ffffff",
-                colorText: "#1f2937",
-                colorDanger: "#dc2626",
-                fontFamily: "system-ui, sans-serif",
-                spacingUnit: "4px",
-                borderRadius: "8px",
-              },
-            },
+            appearance: stripeAppearance,
           }}
         >
           <PaymentFormWithElements {...paymentFormProps} />
