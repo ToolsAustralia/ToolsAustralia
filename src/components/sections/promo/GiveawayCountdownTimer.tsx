@@ -92,6 +92,12 @@ export default function GiveawayCountdownTimer({ activeSlug, className = "" }: G
     return null;
   }
 
+  // No scheduled draw date yet → the card would only read "Draw date TBA".
+  // Hide the whole section instead of showing a placeholder date.
+  if (!currentMajorDraw?.drawDate) {
+    return null;
+  }
+
   const accentBorderStyle = { borderColor: lpTheme.borderRgba };
   const cornerAccentClass =
     "pointer-events-none absolute h-6 w-6 border-white/25 sm:h-10 sm:w-10 dark:border-white/15";
