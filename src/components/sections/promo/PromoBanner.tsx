@@ -633,11 +633,18 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
           borderBottom: `2px solid ${theme.borderRgba}`,
         }}
       >
-        <div className="relative flex w-full min-w-0 flex-row items-center justify-between gap-2 py-0 pl-1 pr-2.5 max-[500px]:px-2 sm:gap-3 sm:py-0.5 sm:pl-3 sm:pr-4 md:gap-4 lg:pl-3 lg:pr-7 min-h-[4.5rem] sm:min-h-[7rem] lg:min-h-[6.75rem]">
-          {/* Left art placeholder */}
-          <div className="h-[4.5rem] w-[11rem] max-w-[58%] shrink-0 animate-pulse rounded bg-white/10 sm:h-[7rem] sm:w-[15rem] lg:h-[6.75rem]" />
-          {/* Right countdown tile placeholder */}
-          <div className="h-[2.75rem] w-[7.5rem] shrink-0 animate-pulse rounded-lg bg-white/10 sm:h-[3.75rem] sm:w-[11rem] lg:h-[4rem] lg:w-[13rem]" />
+        <div className="relative flex w-full items-center justify-center px-4 min-h-[4.5rem] sm:min-h-[7rem] lg:min-h-[6.75rem]">
+          {/* White-text Tools Australia logo, gently breathing — reads as a branded
+              loading state on the dark bar. */}
+          <motion.img
+            src="/images/Tools%20Australia%20Logo/White-Text%20Logo.webp"
+            alt=""
+            draggable={false}
+            className="h-9 w-auto object-contain drop-shadow-[0_2px_10px_rgba(0,0,0,0.55)] sm:h-14 lg:h-16"
+            initial={{ opacity: 0.6 }}
+            animate={prefersReducedMotion ? { opacity: 0.9 } : { opacity: [0.55, 1, 0.55], scale: [1, 1.045, 1] }}
+            transition={prefersReducedMotion ? { duration: 0.3 } : { duration: 1.6, repeat: Infinity, ease: "easeInOut" }}
+          />
         </div>
       </div>
     );
