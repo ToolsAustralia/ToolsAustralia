@@ -8,14 +8,12 @@ This feature allows administrators to bulk charge customers with past_due invoic
 
 ### Multi-Layer Protection
 
-1. **Admin-Only Access**: Only users with `role === "admin"` can access this feature
-2. **Per-Admin Rate Limiting**: 1 request per 5 minutes per admin (disabled in development mode for testing)
-3. **Global Rate Limiting**: 1 request per 24 hours globally (prevents Radar/fraud spikes, disabled in development mode)
-4. **Confirmation Required**: Must type "CHARGE" exactly to confirm
-5. **Global Mutex Lock**: Prevents concurrent executions (optional)
-6. **Time-Based Idempotency**: Prevents duplicate charges within 24h, allows future retries
-7. **Stripe Idempotency Keys**: Double safety net using stable keys
-8. **Database Status Verification**: Only charges users marked as `past_due` in MongoDB
+1. **Admin-Only Access**: Only users with the `users.charge` permission can access this feature (via `requirePermissionWithAudit`)
+2. **Confirmation Required**: Must type "CHARGE" exactly to confirm
+3. **Global Mutex Lock**: Prevents concurrent executions — acquired **atomically** via a single `findOneAndUpdate` (unlocked-or-expired predicate + upsert; race loser gets E11000 → 409). This is the **only** concurrency guard: the per-admin (1/5min) and global (1/12h) rate limiters that previously existed were removed in commit `45c759eb` (2026-02-27)
+4. **Time-Based Idempotency**: Prevents duplicate charges within 24h, allows future retries
+5. **Stripe Idempotency Keys**: Double safety net using stable keys
+6. **Database Status Verification**: Only charges users marked as `past_due` in MongoDB
 
 ## Invoice Filtering Logic
 

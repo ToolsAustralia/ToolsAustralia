@@ -97,6 +97,22 @@ async function testRecordFailureSurfaced() {
   assert.deepEqual(out, { recorded: false, reason: "Invalid promotion slug" }, "a recordVisit failure surfaces its reason");
 }
 
+async function testDedupErrorFailsOpen() {
+  const calls = { recordVisit: [] as PromoVisitRecordPayload[] };
+  const deps: PromoVisitDeps = {
+    hasRecentVisit: async () => {
+      throw new Error("MaxTimeMSExpired");
+    },
+    recordVisit: async (payload) => {
+      calls.recordVisit.push(payload);
+      return { success: true };
+    },
+  };
+  const out = await recordPromoVisit(base, deps);
+  assert.deepEqual(out, { recorded: true }, "a dedup read error must fail OPEN and still record the visit");
+  assert.equal(calls.recordVisit.length, 1, "recordVisit must be called despite the dedup error");
+}
+
 async function run() {
   await testDeduplicates();
   await testSkipsDedupWithoutAnonymousId();
@@ -106,6 +122,7 @@ async function run() {
   await testNoUtmCampaignWhenNonePresent();
   await testReferrerPassedThrough();
   await testRecordFailureSurfaced();
+  await testDedupErrorFailsOpen();
   console.log("✅ record-promo-visit: all assertions passed");
 }
 

@@ -69,11 +69,19 @@ export async function recordPromoVisit(
   const normalizedSlug = capture.slug.toLowerCase().trim();
 
   if (capture.anonymousId) {
-    const duplicate = await deps.hasRecentVisit({
-      anonymousId: capture.anonymousId,
-      slug: normalizedSlug,
-      pageType: capture.pageType,
-    });
+    // Dedup is best-effort: fail OPEN on a dedup error (timeout, connection
+    // failure) and record anyway. Worst cost is one duplicate row inside the
+    // 60s window — dropping the visit would defeat the point of this path.
+    let duplicate = false;
+    try {
+      duplicate = await deps.hasRecentVisit({
+        anonymousId: capture.anonymousId,
+        slug: normalizedSlug,
+        pageType: capture.pageType,
+      });
+    } catch (error) {
+      console.error("[record-promo-visit] dedup read failed; recording anyway:", error);
+    }
     if (duplicate) return { recorded: false, reason: "duplicate" };
   }
 

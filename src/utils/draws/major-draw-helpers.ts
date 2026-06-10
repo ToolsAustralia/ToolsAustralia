@@ -175,10 +175,14 @@ export async function getNextQueuedDraw(): Promise<IMajorDraw | null> {
  * polled path, and loading every participant subdocument here was multi-MB of
  * wasted egress. Callers needing a participant count use
  * `getMajorDrawParticipantCount`; per-user entries use `getUserMajorDrawStats`.
+ * The `Omit<IMajorDraw, "entries">` return type encodes the exclusion: at
+ * runtime `entries` is `undefined` on these docs (Mongoose applies no array
+ * default to deselected paths), and saving one would throw in the pre-save
+ * hook — so don't cast it back to a full IMajorDraw.
  */
 export async function getCurrentMajorDrawForDisplay(
   includeQueuedDuringGap: boolean = true
-): Promise<IMajorDraw | null> {
+): Promise<Omit<IMajorDraw, "entries"> | null> {
   // ✅ Transition major draws if needed (before fetching for display)
   // Ensures draw statuses are up-to-date before displaying to users
   // Service is debounced and idempotent, so safe to call here

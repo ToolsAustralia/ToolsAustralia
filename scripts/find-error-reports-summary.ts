@@ -73,11 +73,15 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
+  // Shared connector (repo rule: no ad-hoc mongoose.connect in scripts/) — its
+  // pool sizing, timeouts, and SSL retry come for free; mongoose is still
+  // imported for disconnect().
   const mongoose = await import("mongoose");
+  const connectDB = (await import("../src/lib/mongodb")).default;
   const ErrorReport = (await import("../src/models/ErrorReport")).default;
 
   console.error(`Connecting to MongoDB…`);
-  await mongoose.connect(process.env.MONGODB_URI);
+  await connectDB();
 
   const since = new Date(Date.now() - DAYS * 24 * 60 * 60 * 1000);
 

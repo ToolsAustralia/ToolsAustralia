@@ -3,6 +3,7 @@ import { z } from "zod";
 import AnonymousIdService from "@/services/ab-testing/AnonymousIdService";
 import PromoAnalyticsService from "@/services/promo-analytics/PromoAnalyticsService";
 import PromoAnalyticsVisit from "@/models/PromoAnalyticsVisit";
+import connectDB from "@/lib/mongodb";
 import { recordPromoVisit } from "@/utils/promo-analytics/record-promo-visit";
 
 const promoPageVisitSchema = z.object({
@@ -29,11 +30,14 @@ const promoPageVisitSchema = z.object({
  *   so a stalled connection blew the function `maxDuration` and returned a 504
  *   to the caller (observed in prod). Moving the work to `after()` returns the
  *   response immediately and lets Vercel keep the function alive to finish the
- *   write, so DB latency can no longer 504 the beacon or drop the visit.
- *   We use `after()` (not the floating-promise `executeBackgroundJob` helper)
- *   precisely because `after()` is guaranteed to run to completion on Vercel —
- *   a bare un-awaited promise can be dropped when the instance freezes, which
- *   is the exact high-load moment we need the attribution write to survive.
+ *   write, so DB latency can no longer 504 the beacon, and the visit survives
+ *   anything short of the function's own `maxDuration` (10s here — the
+ *   vercel.json catch-all; after() work is killed at that limit too, it is NOT
+ *   unbounded). We use `after()` (not the floating-promise
+ *   `executeBackgroundJob` helper) because Vercel keeps the function alive for
+ *   `after()` work, while a bare un-awaited promise can be dropped the moment
+ *   the response is sent — the exact high-load moment we need the write to
+ *   survive.
  *
  * @see docs/PROMO_PAGE_ANALYTICS.md
  */
@@ -77,8 +81,13 @@ export async function POST(request: NextRequest) {
           utmCampaign: validatedData.utmCampaign,
         },
         {
-          // Dedup read bounded with maxTimeMS so a slow query can't hold the function open.
+          // connectDB() first: nothing upstream of this read opens the Mongo
+          // connection, and mongoose does NOT auto-connect — on a cold instance a
+          // bare findOne just buffers for 10s and the visit dies silently.
+          // maxTimeMS bounds server-side query execution only (not connection
+          // acquisition — connectDB's own 10s timeouts cover that).
           hasRecentVisit: async ({ anonymousId: aid, slug, pageType }) => {
+            await connectDB();
             const oneMinuteAgo = new Date(Date.now() - 60 * 1000);
             const recent = await PromoAnalyticsVisit.findOne({
               anonymousId: aid,

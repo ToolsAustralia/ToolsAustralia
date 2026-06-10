@@ -701,7 +701,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/models/DashboardStatsDailySnapshot.ts",
         "src/services/admin/dashboard-stats/**"
       ],
-      "lastVerified": "2026-06-04"
+      "lastVerified": "2026-06-10"
     },
     "dashboard-account": {
       "docs": "docs/dashboard-account/",

@@ -267,10 +267,14 @@ export async function POST(request: NextRequest) {
     );
     const rateCheck = registerRateLimiter.check(identifier);
     if (!rateCheck.success) {
+      // `message` is the field MembershipModal renders (result.message || generic
+      // fallback) — without it a rate-limited user sees "Registration failed.
+      // Please try again." and retries immediately instead of waiting.
       return NextResponse.json(
         {
           success: false,
           error: "Too many registration attempts. Please wait a moment before trying again.",
+          message: "Too many registration attempts. Please wait a moment before trying again.",
         },
         { status: 429, headers: { "Retry-After": rateCheck.retryAfterSeconds.toString() } }
       );

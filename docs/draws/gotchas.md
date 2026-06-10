@@ -17,7 +17,7 @@ Two defenses now exist:
 
 The cross-draw **past-draws** path [`getUserAllMajorDrawEntries`](../../src/utils/database/queries/major-draw-queries.ts) (behind `/api/major-draw/user-entries`, used by `useUserMajorDrawEntries`) is now projected the same way — a positional `$` projection + `.lean()` returns only the caller's element from each matched draw, instead of loading every draw's full array.
 
-The single-document **write** contention + 16 MB BSON ceiling above remains the future work. Two helpers still scan full arrays but are **off any live path** and so were intentionally left as-is: `getUserCurrentMajorDrawStats` (no callers) and `getUserTotalAccumulatedEntries` (reached only by the unused `validateMajorDrawConsistency` migration helper). Project them the same way if/when they are wired into a live route.
+The single-document **write** contention + 16 MB BSON ceiling above remains the future work. Four helpers still scan full arrays but are **off any live path** (zero callers verified across `src/`) and so were intentionally left as-is: `getUserCurrentMajorDrawStats`, `getUserTotalAccumulatedEntries` (reached only by the unused `validateMajorDrawConsistency` migration helper), `getUserMajorDrawEntries`, and `userHasMajorDrawEntries`. Project them the same way **before** wiring any of them into a live route. Also note `getCurrentMajorDrawForDisplay` returns `Omit<IMajorDraw, "entries">` — `entries` is genuinely absent at runtime on those docs (no array default is applied to deselected paths), and saving one would throw in the model's pre-save hook.
 
 ## Refund reversal must pass `drawId` to `removeMajorDrawEntries`
 
