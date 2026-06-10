@@ -83,13 +83,32 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 3. Global mutex lock check
-    const lock = await ChargeJobLock.findById("charge-job-lock");
+    // 3. Global mutex lock — acquire ATOMICALLY so two admins racing the
+    //    check-then-acquire window (TOCTOU) can't both proceed. A single
+    //    findOneAndUpdate matches only an unlocked OR expired lock and claims it;
+    //    the race loser fails the upsert with a duplicate _id (E11000) → 409.
     const now = new Date();
-
-    if (lock && lock.isLocked) {
-      // Check if lock has expired
-      if (lock.lockedUntil && new Date(lock.lockedUntil) > now) {
+    const lockedUntil = new Date(now.getTime() + 30 * 60 * 1000); // 30 minutes
+    try {
+      await ChargeJobLock.findOneAndUpdate(
+        {
+          _id: "charge-job-lock",
+          $or: [{ isLocked: { $ne: true } }, { lockedUntil: { $lte: now } }],
+        },
+        {
+          $set: {
+            isLocked: true,
+            lockedUntil,
+            lockedBy: new mongoose.Types.ObjectId(adminId),
+            lockedAt: now,
+          },
+        },
+        { new: true, upsert: true }
+      );
+    } catch (lockErr) {
+      // Duplicate _id ⇒ the lock row exists and is still held (it didn't match
+      // the unlocked-or-expired predicate, so the upsert tried to insert).
+      if ((lockErr as { code?: number })?.code === 11000) {
         await log(409);
         return NextResponse.json(
           {
@@ -98,28 +117,8 @@ export async function POST(request: NextRequest) {
           },
           { status: 409 }
         );
-      } else {
-        // Lock expired, release it
-        lock.isLocked = false;
-        await lock.save();
       }
-    }
-
-    // Acquire lock
-    if (!lock) {
-      await ChargeJobLock.create({
-        _id: "charge-job-lock",
-        isLocked: true,
-        lockedUntil: new Date(Date.now() + 30 * 60 * 1000), // 30 minutes
-        lockedBy: new mongoose.Types.ObjectId(adminId),
-        lockedAt: now,
-      });
-    } else {
-      lock.isLocked = true;
-      lock.lockedUntil = new Date(Date.now() + 30 * 60 * 1000);
-      lock.lockedBy = new mongoose.Types.ObjectId(adminId);
-      lock.lockedAt = now;
-      await lock.save();
+      throw lockErr;
     }
 
     // Orphan sweep: any prior ChargeJobRun stuck in "running" past the lock window

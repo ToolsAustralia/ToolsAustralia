@@ -20,7 +20,11 @@ Current behavior:
 
 If a future workflow needs to adjust a per-source count, extend `majorDrawParticipationSchema` to accept a per-source payload before changing this code.
 
+## Charge-past-due mutex is acquired atomically (no check-then-set race)
 
+The bulk charge endpoint ([`src/app/api/admin/invoices/charge-past-due/route.ts`](../../src/app/api/admin/invoices/charge-past-due/route.ts)) guards against concurrent runs with the single-row `ChargeJobLock`. Acquisition is a **single atomic `findOneAndUpdate`** whose filter matches only an **unlocked or expired** lock (`$or: [{ isLocked: { $ne: true } }, { lockedUntil: { $lte: now } }]`) with `upsert: true`. If the row exists and is still held, the filter misses, the upsert tries to insert a duplicate `_id` → **E11000**, which is caught and returned as `409 Operation in progress`.
+
+Do **not** revert this to the old `findById` → check `isLocked` → `create/save` shape: that is a TOCTOU race where two admins can each read "unlocked" and both acquire. The lock is **released** elsewhere via `ChargeJobLock.findByIdAndUpdate(..., { isLocked: false })` (job finalize, error path, orphan sweep) — those are independent of acquisition and unchanged. **The atomic lock is the ONLY concurrency guard on this endpoint**: the per-admin and global rate limiters that used to sit in front of it were removed in commit `45c759eb` (2026-02-27), so a lock regression here is not belt-and-braces — it is the whole defense. (Permission + the typed `CHARGE` confirmation still gate entry, but neither prevents two concurrent runs.)
 
 ## Middleware vs handler gating
 

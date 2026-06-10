@@ -261,7 +261,8 @@ export async function processMembershipRecurringCommission({
   await connectDB();
 
   if (purchaseAmount <= 0) {
-    console.error(
+    // Expected skip (no commission due on a $0 invoice) — info level, not an error.
+    console.log(
       `[AffiliateCommission] skip recurring: zero_amount`,
       JSON.stringify({ invoiceId, userId, subscriptionId })
     );
@@ -305,12 +306,14 @@ export async function processMembershipRecurringCommission({
     }
   } else {
     if (!user.affiliateReferral?.affiliateId) {
-      console.error(`[AffiliateCommission] skip recurring: no_affiliate`, JSON.stringify({ invoiceId, userId }));
+      // Expected skip — most members were not referred by an affiliate (high volume). Info, not error.
+      console.log(`[AffiliateCommission] skip recurring: no_affiliate`, JSON.stringify({ invoiceId, userId }));
       return null;
     }
     affiliateId = new mongoose.Types.ObjectId(String(user.affiliateReferral.affiliateId));
     if (!user.affiliateReferral.membershipTied) {
-      console.error(
+      // Expected skip — referral exists but isn't membership-tied, so recurring commission doesn't apply. Info, not error.
+      console.log(
         `[AffiliateCommission] skip recurring: not_membership_tied`,
         JSON.stringify({ invoiceId, userId, affiliateId: affiliateId.toString() })
       );

@@ -92,21 +92,25 @@ Two scripts ship for finding and fixing the major-draw entry-row corruption docu
 | `/api/cron/ab-testing-aggregate-metrics` | `0 3 * * *` | Daily — A/B test metrics roll-up |
 | `/api/cron/sync-meta-spend-by-url` | `30 2 * * *` | Daily — Meta ad spend sync |
 | `/api/cron/membership-daily-snapshot` | `0 14 * * *` and `0 15 * * *` | Daily ×2 — writes yesterday's `MembershipDailySnapshot` per package. Idempotent upsert; the second fire is a no-op for redundancy. |
-| `/api/cron/dashboard-stats-daily-snapshot` | `0 14 * * *` and `0 15 * * *` | Daily ×2 — re-upserts a 90-day sliding window of `DashboardStatsDailySnapshot` rows. The second fire heals first-run failures. Idempotent. `maxDuration: 300s`, `memory: 1024MB`. |
-| `/api/cron/cancellation-retention-resume` | `0 16 * * *` | Daily — clears stale `pauseReason="retention"` metadata on Stripe subscriptions whose 30-day retention pause window has elapsed. Primary job is metadata cleanup (prevents future recovery-pause mis-identification by `decideClearPause`); defensively resumes `pause_collection` if Stripe hasn't auto-resumed. Idempotent. `maxDuration: 300s`, `memory: 1024MB`. |
-| `/api/cron/cancellation-retention-maturity` | `0 17 * * *` | Daily — matures saved cancellation-flow events ≥90 days old by setting `CancellationFlowEvent.retention90` to `retained`/`churned` from the member's CURRENT subscription state (mirrors `getActiveSubscriptionFilter`). Read-only on user/subscription (only writes `retention90`). Bounded date-window query, idempotent via `retention90:null` filter. Scheduled one hour after the resume cron to spread load. `maxDuration: 300s`, `memory: 1024MB`. |
+| `/api/cron/dashboard-stats-daily-snapshot` | `0 14 * * *` and `0 15 * * *` | Daily ×2 — re-upserts a 90-day sliding window of `DashboardStatsDailySnapshot` rows. The second fire heals first-run failures. Idempotent. `maxDuration: 300s`. |
+| `/api/cron/cancellation-retention-resume` | `0 16 * * *` | Daily — clears stale `pauseReason="retention"` metadata on Stripe subscriptions whose 30-day retention pause window has elapsed. Primary job is metadata cleanup (prevents future recovery-pause mis-identification by `decideClearPause`); defensively resumes `pause_collection` if Stripe hasn't auto-resumed. Idempotent. `maxDuration: 300s`. |
+| `/api/cron/cancellation-retention-maturity` | `0 17 * * *` | Daily — matures saved cancellation-flow events ≥90 days old by setting `CancellationFlowEvent.retention90` to `retained`/`churned` from the member's CURRENT subscription state (mirrors `getActiveSubscriptionFilter`). Read-only on user/subscription (only writes `retention90`). Bounded date-window query, idempotent via `retention90:null` filter. Scheduled one hour after the resume cron to spread load. `maxDuration: 300s`. |
 
 `Australia/Sydney`-anchored crons fire at 14:00 UTC = 00:00 AEST / 01:00 AEDT, and 15:00 UTC = 01:00 AEST / 02:00 AEDT — both are after Sydney midnight in either DST regime, so they reliably write "yesterday" in local time. See [`docs/subscription/architecture.md`](../subscription/architecture.md) for the full membership-snapshot flow and `scripts/test-membership-snapshot-dst.ts` for the DST verification test.
 
-## Function memory configuration
+## Function compute configuration
 
-[`vercel.json`](../../vercel.json) `functions` block right-sizes memory per route:
+**Memory / CPU is dashboard-controlled, not in `vercel.json`.** Vercel removed the `memory` property from `vercel.json` — setting it there is silently ignored and surfaces a "custom overrides … gets ignored" warning on the Function CPU settings panel. Compute is selected by the **Function CPU** tier in the Vercel project settings: this project runs **Standard (1 vCPU / 2 GB)**, applied to every function. (Performance = 2 vCPU / 4 GB exists but is unnecessary — the workload is I/O-bound on Mongo, not CPU-bound; revisit only if SSR is CPU-starved after the hot-path query fixes.)
 
-- **Default** (`src/app/api/**/route.ts`): `memory: 512MB, maxDuration: 10s` — covers light read-heavy GETs (the majority of the 289 routes).
-- **Heavy I/O** (Stripe webhook, Cloudinary upload, admin exports/participants/sync, dashboard recent-activities, dashboard stats, activity log): `memory: 1024MB, maxDuration: 30–60s`. `/api/admin/dashboard/stats` is listed here because the all-time read fans out across `paymentevents` (snapshot reader + live distinct-user counts), `users` (~10 countDocuments), `majordraws`, plus the membership analytics bundle — the 10s default cap was insufficient.
-- **Crons** (every `/api/cron/*` plus `/api/admin/klaviyo/**`): `memory: 1024MB, maxDuration: 300s`.
+[`vercel.json`](../../vercel.json) `functions` block therefore sets **only `maxDuration`** per route:
 
-Vercel scales CPU with memory, so 512MB is roughly half the CPU of 1024MB — fine for read-heavy GETs but watch Vercel logs for `FUNCTION_INVOCATION_FAILED` / `Allocation failed` after deploy. Bump individual routes to 1024MB if needed.
+- **Default** (`src/app/api/**/route.ts`): `maxDuration: 10s` — covers light read-heavy GETs (the majority of routes). A short cap so a hung request fails fast instead of holding a compute slot + Mongo connection for minutes.
+- **Heavy I/O** (Stripe webhook, Cloudinary upload, admin exports/participants/sync, dashboard recent-activities, dashboard stats, activity log): `maxDuration: 30–60s`. `/api/admin/dashboard/stats` is here because the all-time read fans out across `paymentevents`, `users` (~10 countDocuments), `majordraws`, plus the membership analytics bundle — the 10s default was insufficient.
+- **Crons** (every `/api/cron/*` plus `/api/admin/klaviyo/**`): `maxDuration: 300s`.
+
+The dashboard **Default Max Duration** project setting is **300s** — it applies only to functions *without* an explicit `vercel.json`/code `maxDuration` (chiefly SSR page routes); the per-route values above take precedence over it.
+
+**Region:** Functions run in **`syd1` (Sydney)** only, co-located with the MongoDB Atlas cluster (also AWS Sydney, `ap-southeast-2`, tier **M10**). This keeps every DB round-trip in-region (~1–3 ms). Do **not** add a second function region unless the data layer is also replicated there — multi-region functions against a single-region DB force cross-region (~200 ms) round-trips for any request routed to the far region, which at ~5 DB round-trips per authenticated request is ~1 s of added latency.
 
 **⚠ Pattern ordering matters — first match wins.** Vercel evaluates the `functions` block top-to-bottom and uses the **first matching pattern**. The catch-all `src/app/api/**/route.ts` MUST be the **last** entry in the block, with all specific overrides above it. Putting the catch-all first silently shadows every override and reverts those routes to the default — Stripe webhook → 10s timeout, crons → 10s timeout, etc. (This bit us once already; see commit history.)
 
