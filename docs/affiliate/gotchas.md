@@ -1,5 +1,9 @@
 # Affiliate — Gotchas
 
+## Recurring-commission "skip" logs are info, not error
+
+`processMembershipRecurringCommission` (`src/utils/affiliate/commission-processing.ts`) logs its skip paths. The **expected** skips — `zero_amount`, `no_affiliate` (most members aren't referred — high volume), `not_membership_tied` — use `console.log` (info), because in prod only `console.error` survives and these would otherwise flood the production error log with normal business-as-usual. The two genuine anomalies — `no_user` (invoice references a missing user) and `record_failed` (`recordAffiliateCommission` returned falsy) — stay `console.error`. Don't "promote" the expected skips back to error.
+
 ## First-touch attribution is sticky
 
 Once a user is attributed to an affiliate at signup, they stay attributed. A later visit through a different affiliate's link doesn't override. Some affiliates may not understand this — document for partner support.

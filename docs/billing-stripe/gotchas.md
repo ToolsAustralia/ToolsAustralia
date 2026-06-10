@@ -1,5 +1,9 @@
 # Billing-Stripe — Gotchas
 
+## Expected payment-decline logs are `warn`, not `error`
+
+`handlePaymentIntentFailed` ("Payment failed: …") and `handleInvoicePaymentFailed` ("Invoice payment failed: …") log the **receipt** of a decline event at `webhookLog("warn", …)`, not `"error"`. In prod, `webhookLog` only emits `level: "error"` (others early-return at `src/services/stripe-webhook-handlers/index.ts:90`), so these expected business events (customer card declines / renewal failures — high volume) stay out of the production error log, where they were drowning real handler exceptions. Genuine exceptions while *handling* a failure (the `catch` blocks — "Error handling invoice payment failed", "Error retrieving subscription") remain `error`. Don't downgrade those.
+
 > **Before any change that mutates subscription billing timing** (`trial_end`, `billing_cycle_anchor`, `proration_behavior`, item swap, `pause_collection`) on an EXISTING subscription: Stripe can auto-spawn an extra `invoice.payment_succeeded` your webhook will try to grant on, and **idempotency-by-id will not stop it** (the spawned invoice has its own id). Classify intent before granting. Read the **pre-flight checklist** in `docs/PAST_DUE_REANCHOR.md` ("Billing-timing footgun — read this BEFORE any anchor / trial / proration change"). The only classifier today is `isZeroAmountTrialUpdateInvoice` (`subscription_update`/$0 only).
 
 ## Stripe's $0 "Trial period" invoice double-grants entries — guard it

@@ -1,5 +1,9 @@
 # Infrastructure — Gotchas
 
+## Summarizing the ErrorReport store from the CLI
+
+`npm run find:error-reports [-- --days=N --top=N --samples=N]` (`scripts/find-error-reports-summary.ts`) prints a read-only, severity-ranked summary of the in-app `ErrorReport` collection (the durable 90-day error log behind the admin dashboard) — counts by severity / category / status / API endpoint / route, a per-day trend, and the most recent samples. Pass `-- --contains="<substr>"` to switch to **drill-down mode**: full detail (browser / OS / HTTP status / page / stack-head) for every report whose `errorMessage` matches — useful for root-causing one specific error. Read-only (aggregations + `.find().lean()`), safe against prod. Caveat: the store **auto-logs expected payment events** (card declines, existing-subscription 409s) — now at `medium`, not `critical` — so a high `medium` count is mostly normal churn, not bugs. Read the samples, not just the severity counts.
+
 ## Cloudinary signing with wrong params
 
 Signing must include all params being sent (or use unsigned with strict allowlist). Mismatched params → upload fails with a 401 from Cloudinary.

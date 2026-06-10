@@ -137,8 +137,65 @@ function extractErrorCode(error: unknown): string | undefined {
   }
   
   if (typeof err.code === "string") return err.code;
-  
+
   return undefined;
+}
+
+/**
+ * Stripe card-error `code` values that represent an EXPECTED, user-side card
+ * decline (the issuer said no) rather than a payment-system failure.
+ */
+const EXPECTED_DECLINE_ERROR_CODES = new Set<string>([
+  "card_declined",
+  "insufficient_funds",
+  "expired_card",
+  "incorrect_cvc",
+  "invalid_cvc",
+  "incorrect_number",
+  "invalid_number",
+  "incorrect_zip",
+  "invalid_expiry_month",
+  "invalid_expiry_year",
+  "processing_error",
+  "generic_decline",
+  "authentication_required",
+  "card_decline_rate_limit_exceeded",
+]);
+
+/** Message phrasings that indicate an expected card decline (used when no structured code is present). */
+const EXPECTED_DECLINE_MESSAGE_HINTS = [
+  "declined",
+  "insufficient funds",
+  "card has expired",
+  "expired card",
+  "security code is incorrect",
+  "incorrect card number",
+  "card number is incorrect",
+  "do not honor",
+  "lost card",
+  "stolen card",
+  "pickup card",
+  "try a different card",
+];
+
+/**
+ * True when a payment error is an expected, user-side card decline (NOT a system failure).
+ *
+ * A non-empty Stripe `decline_code` only ever exists on an issuer decline, so it's the
+ * strongest signal; falls back to known card-error `code`s, then to message phrasing.
+ * Declines are routine, high-volume, and not engineering-actionable (the user needs a
+ * different card, not a bug fix) — so callers downgrade them out of "critical".
+ */
+export function isExpectedPaymentDecline(opts: {
+  errorCode?: string;
+  declineCode?: string;
+  message?: string;
+}): boolean {
+  if (opts.declineCode && opts.declineCode.trim().length > 0) return true;
+  const code = (opts.errorCode ?? "").toLowerCase().trim();
+  if (code && EXPECTED_DECLINE_ERROR_CODES.has(code)) return true;
+  const msg = (opts.message ?? "").toLowerCase();
+  return msg.length > 0 && EXPECTED_DECLINE_MESSAGE_HINTS.some((h) => msg.includes(h));
 }
 
 /**
@@ -161,11 +218,21 @@ export function classifyErrorSeverity(
   const errorMessage = extractErrorMessage(error).toLowerCase();
   const errorCode = extractErrorCode(error)?.toLowerCase() || "";
 
-  // Critical severity: Payment failures, data loss, security issues
+  // Payment errors: critical by default (direct revenue impact) — EXCEPT expected
+  // card declines (insufficient funds, expired card, etc.), which are routine
+  // user-side events, not system failures. Those are "medium" so they stop
+  // drowning genuine payment-system failures (Stripe load failure, API errors) in
+  // the "critical" bucket. Mirrors the named-4xx capture policy (classifyHttpRejection).
   if (category === "payment") {
+    if (isExpectedPaymentDecline({ errorCode, message: errorMessage })) {
+      return {
+        severity: "medium",
+        reason: "Expected card decline (user-side) — not a payment-system failure",
+      };
+    }
     return {
       severity: "critical",
-      reason: "Payment errors directly impact revenue and user experience",
+      reason: "Payment system errors directly impact revenue and user experience",
     };
   }
 

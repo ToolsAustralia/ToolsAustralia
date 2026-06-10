@@ -1,5 +1,9 @@
 # Tracking — Gotchas
 
+## Tracking beacons must not block the response (promo-page-visit 504s)
+
+`POST /api/tracking/promo-page-visit` records the visit inside `after()` (Next 15), not on the request's critical path. It previously `await`ed a dedup `findOne` + `recordVisit` inline; under ad-burst traffic, fresh serverless instances racing for Mongo connections (small pool + Atlas new-connection rate limit) stalled long enough to blow the function `maxDuration` → **504** on the beacon (observed in prod, ~4/day). `after()` returns the response immediately and is guaranteed to run to completion on Vercel — unlike the floating-promise `executeBackgroundJob` helper (`src/utils/webhook/background-jobs.ts`), which can be dropped when the instance freezes, exactly the high-load moment we need the attribution write to survive. The dedup read is also bounded with `.maxTimeMS(5000)`. Any tracking write on a high-traffic path should follow this pattern.
+
 ## Adding a new Klaviyo event? Use the canonical schema, not the legacy helper
 
 New Klaviyo events (added after 2026-05-27) use a **canonical property schema** — `price` as a number (not string), `tier` (not `package_tier`), ISO `*_at` timestamps (not locale strings like `"December 22, 2025"`), and properties omitted entirely when absent (no `""` / `"unknown"` sentinels). See the "Canonical property names — new events only (drift containment)" section of [KLAVIYO_INTEGRATION.md](./KLAVIYO_INTEGRATION.md) for the full table and rationale.

@@ -1388,7 +1388,9 @@ async function handlePaymentFailure(paymentIntent: Stripe.PaymentIntent) {
       return;
     }
     
-    webhookLog("error", `Payment failed: ${paymentIntent.id}`);
+    // Expected business event (a customer card declined) — warn, not error, so it
+    // doesn't drown real handler exceptions in the production error log.
+    webhookLog("warn", `Payment failed: ${paymentIntent.id}`);
 
     // Find user by customer ID first to check subscription status
     let user;
@@ -2542,7 +2544,10 @@ async function handleSubscriptionDeleted(subscription: Stripe.Subscription) {
  */
 async function handleInvoicePaymentFailed(invoice: Stripe.Invoice) {
   try {
-    webhookLog("error", `Invoice payment failed: ${invoice.id}`);
+    // Expected business event (subscription renewal / invoice decline — the canonical
+    // payment-failure event) — warn, not error. Genuine exceptions while handling it
+    // are still logged at error level in the catch block below.
+    webhookLog("warn", `Invoice payment failed: ${invoice.id}`);
 
     // Find user by customer ID
     let user;
