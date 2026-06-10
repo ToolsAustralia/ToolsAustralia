@@ -1,5 +1,13 @@
 # Error Reporting — Gotchas
 
+## Expected card declines are `medium`, not `critical`
+
+`classifyErrorSeverity` used to map **every** `payment`-category error to `critical`, and `autoLogPaymentError` / `autoLogPaymentErrorServer` hard-coded `severity: "critical"`. Result: routine customer card declines (insufficient funds, expired card, etc.) flooded the store as `critical` — ~63% of all reports — burying the genuine payment-system failures. Now a shared `isExpectedPaymentDecline()` (in `error-severity-classifier.ts`) detects declines (non-empty Stripe `decline_code`, a known card-error `code`, or decline message phrasing) and those are logged at **`medium`**; only genuine payment-system failures (Stripe Elements failed to load, API/network errors, unexpected exceptions) stay `critical`. All three sites use the one helper — keep them in sync. The named-4xx business rejections (e.g. `EXISTING_SUBSCRIPTION` 409) are **deliberately** captured at `medium` by `classifyHttpRejection` (a real signal, not noise) — don't suppress them. Regression test: `npm run test:payment-decline-severity`.
+
+## Severity ≠ urgency in the store totals
+
+The auto-logger captures expected business events too (card declines at `medium`, `EXISTING_SUBSCRIPTION` 409s at `medium`). So a high `medium` count is mostly normal churn, not bugs — read the samples / `route` / `errorName`, not just the severity tallies. CLI: `npm run find:error-reports` (and `-- --contains="<msg>"` to drill into one error's browser/OS/stack).
+
 ## Production console-stripping
 
 `next.config.ts` `compiler.removeConsole` strips `console.log/info/debug/warn` in production builds. `console.error` survives. Anything else MUST use `ErrorReport`.

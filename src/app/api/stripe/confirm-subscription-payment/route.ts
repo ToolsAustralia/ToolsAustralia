@@ -341,10 +341,6 @@ export async function POST(request: NextRequest) {
             }
           }
 
-          // #region agent log
-          fetch('http://127.0.0.1:7242/ingest/6d8a8556-1519-4b01-80e9-11ea61ccfeea',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'confirm-subscription-payment.ts:283',message:'BEFORE paying invoice',data:{invoiceId:latestInvoice?.id,paymentMethodId:defaultPaymentMethod,customerId:customer.id,subscriptionId:subscription.id,subscriptionStatus:subscription.status},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'I'})}).catch(()=>{});
-          // #endregion
-          
           // Pay the invoice directly - this will create a PaymentIntent and trigger webhook
           // ✅ CRITICAL: Use provided paymentMethodId if available (from new SetupIntent), otherwise use defaultPaymentMethod
           // This ensures new payment methods are used instead of old failed ones
@@ -359,19 +355,11 @@ export async function POST(request: NextRequest) {
             paidInvoice = await stripe.invoices.pay(latestInvoice?.id || "", {
               payment_method: paymentMethodToUse,
             });
-            
-            // #region agent log
-            const paidInvoiceWithPaymentIntent = paidInvoice as { payment_intent?: string | { id: string } };
-            fetch('http://127.0.0.1:7242/ingest/6d8a8556-1519-4b01-80e9-11ea61ccfeea',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'confirm-subscription-payment.ts:290',message:'Invoice paid successfully',data:{invoiceId:paidInvoice.id,invoiceStatus:paidInvoice.status,hasPaymentIntent:!!paidInvoiceWithPaymentIntent.payment_intent},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'I'})}).catch(()=>{});
-            // #endregion
           } catch (payError) {
-            // #region agent log
             const errorMessage = payError instanceof Error ? payError.message : String(payError);
             const errorCode = payError && typeof payError === "object" && "code" in payError ? String(payError.code) : undefined;
             const errorType = payError && typeof payError === "object" && "type" in payError ? String(payError.type) : undefined;
             const declineCode = payError && typeof payError === "object" && "decline_code" in payError ? String(payError.decline_code) : undefined;
-            fetch('http://127.0.0.1:7242/ingest/6d8a8556-1519-4b01-80e9-11ea61ccfeea',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'confirm-subscription-payment.ts:295',message:'Invoice payment FAILED',data:{invoiceId:latestInvoice?.id,paymentMethodId:defaultPaymentMethod,customerId:customer.id,subscriptionId:subscription.id,errorMessage,errorCode,errorType,declineCode,errorStringified:JSON.stringify(payError)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'I'})}).catch(()=>{});
-            // #endregion
             
             console.error("❌ Failed to pay invoice:", payError);
             console.error("❌ Invoice payment error details (VERCEL LOGS):", {

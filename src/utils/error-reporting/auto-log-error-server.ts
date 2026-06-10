@@ -23,6 +23,7 @@ function hashIPAddress(ip: string): string {
 import ErrorReport from "@/models/ErrorReport";
 import { generateCategoryAwareDeduplicationHash } from "./deduplication";
 import { ErrorContext } from "@/types/error-reporting";
+import { isExpectedPaymentDecline } from "./error-severity-classifier";
 import crypto from "crypto";
 
 /**
@@ -268,9 +269,19 @@ export async function autoLogPaymentErrorServer(
     enhancedError.stack = error.stack;
   }
 
+  // Expected card declines are routine user-side events, not system failures — log them
+  // at "medium" so genuine payment-system failures stay distinguishable in "critical".
+  const severity = isExpectedPaymentDecline({
+    errorCode: paymentDetails.errorCode,
+    declineCode: paymentDetails.declineCode,
+    message: errorMessage,
+  })
+    ? "medium"
+    : "critical";
+
   await autoLogErrorServer(enhancedError, request, {
     category: "payment", // ✅ NEW: Explicitly set category
-    severity: "critical", // ✅ NEW: Explicitly set severity
+    severity, // expected declines → "medium"; genuine payment-system failures → "critical"
     paymentIntentId: paymentDetails.paymentIntentId,
     customerId: paymentDetails.customerId,
     amount: paymentDetails.amount,

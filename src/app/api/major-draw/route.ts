@@ -3,6 +3,7 @@ import connectDB from "@/lib/mongodb";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { getCurrentMajorDrawForDisplay } from "@/utils/draws/major-draw-helpers";
+import { getMajorDrawParticipantCount } from "@/utils/database/queries/major-draw-queries";
 import { getTimeUntilFreeze, getTimeUntilDraw } from "@/utils/common/timezone";
 import { userScopedCacheControl } from "@/utils/security/cache-control";
 
@@ -32,18 +33,6 @@ interface MajorDrawDocument {
     selectedBy?: string;
     selectionMethod?: "manual" | "government-app";
   };
-  entries: Array<{
-    userId: { toString: () => string };
-    totalEntries: number;
-    entriesBySource: {
-      membership?: number;
-      "one-time-package"?: number;
-      upsell?: number;
-      "mini-draw"?: number;
-    };
-    firstAddedDate: Date;
-    lastUpdatedDate: Date;
-  }>;
   totalEntries: number;
   createdAt: Date;
   updatedAt: Date;
@@ -98,8 +87,10 @@ export async function GET() {
     const timeUntilFreeze = majorDraw.freezeEntriesAt ? getTimeUntilFreeze(majorDraw.freezeEntriesAt) : undefined;
     const timeUntilDraw = majorDraw.drawDate ? getTimeUntilDraw(majorDraw.drawDate) : undefined;
 
-    // Calculate total participants (number of unique users with entries)
-    const totalParticipants = majorDraw.entries?.length || 0;
+    // Calculate total participants (number of unique users with entries).
+    // Computed via a server-side $size so the unbounded entries[] array is
+    // never loaded into this hot, frequently-polled handler.
+    const totalParticipants = await getMajorDrawParticipantCount(majorDraw._id);
 
     const response = {
       success: true,

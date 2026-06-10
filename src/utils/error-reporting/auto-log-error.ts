@@ -15,6 +15,7 @@
 
 import { ErrorContext } from "@/types/error-reporting";
 import { collectErrorContext, type CollectErrorContextRequest } from "./collect-error-context";
+import { isExpectedPaymentDecline } from "./error-severity-classifier";
 
 /**
  * Automatically log an error to the database
@@ -202,9 +203,20 @@ export async function autoLogPaymentError(
     enhancedError.stack = error.stack;
   }
 
+  // Expected card declines (insufficient funds, expired card, etc.) are routine user-side
+  // events, not system failures — log them at "medium" so they stop drowning the genuine
+  // payment-system failures (Stripe load failure, API errors) in the "critical" bucket.
+  const severity = isExpectedPaymentDecline({
+    errorCode: paymentDetails.errorCode,
+    declineCode: paymentDetails.declineCode,
+    message: errorMessage,
+  })
+    ? "medium"
+    : "critical";
+
   await autoLogError(enhancedError, {
     category: "payment",
-    severity: "critical",
+    severity,
     paymentIntentId: paymentDetails.paymentIntentId,
     customerId: paymentDetails.customerId,
     amount: paymentDetails.amount,
