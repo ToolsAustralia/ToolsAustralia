@@ -1,5 +1,9 @@
 # Infrastructure — Testing
 
+## Pure unit tests are `tsx` scripts wired as `test:<scope>`
+
+There is no jest/vitest — each test is a standalone `tsx` script under `src/**/__tests__/*.test.ts` that throws on failure, registered as a `test:<scope>` entry in `package.json` (without the entry it's undiscoverable). Keep tests pure (no live DB/Stripe/network) by injecting side effects: e.g. `npm run test:promo-visit` exercises `recordPromoVisit` with stubbed `hasRecentVisit`/`recordVisit` deps. See `.claude/skills/writing-tsx-test`.
+
 ## Health check
 
 ```bash

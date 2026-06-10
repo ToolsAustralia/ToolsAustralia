@@ -3,8 +3,7 @@ import { z } from "zod";
 import AnonymousIdService from "@/services/ab-testing/AnonymousIdService";
 import PromoAnalyticsService from "@/services/promo-analytics/PromoAnalyticsService";
 import PromoAnalyticsVisit from "@/models/PromoAnalyticsVisit";
-import { extractAttributionParams } from "@/utils/tracking/utm-helpers";
-import { parseReferrer } from "@/utils/tracking/referrer-helpers";
+import { recordPromoVisit } from "@/utils/promo-analytics/record-promo-visit";
 
 const promoPageVisitSchema = z.object({
   pageType: z.enum(["evergreen", "toolset"]),
@@ -60,47 +59,43 @@ export async function POST(request: NextRequest) {
   const url =
     request.headers.get("x-forwarded-url") || request.headers.get("referer") || request.url || "";
 
-  // Record the visit off the response path so DB latency can't 504 the beacon.
+  // Record the visit off the response path so DB latency can't 504 the beacon. The
+  // orchestration (dedup -> attribution -> persist) lives in recordPromoVisit, which is
+  // unit-testable because its side effects are injected here as deps.
   after(async () => {
     try {
-      // Deduplication: prevent duplicate visits within 1 minute (handles refresh).
-      // Bounded with maxTimeMS so a slow read can't hold the function open to maxDuration.
-      if (anonymousId) {
-        const oneMinuteAgo = new Date(Date.now() - 60 * 1000);
-        const recentVisit = await PromoAnalyticsVisit.findOne({
-          anonymousId,
-          slug: validatedData.slug.toLowerCase().trim(),
+      const outcome = await recordPromoVisit(
+        {
           pageType: validatedData.pageType,
-          timestamp: { $gte: oneMinuteAgo },
-        })
-          .maxTimeMS(5000)
-          .lean();
+          slug: validatedData.slug,
+          referrerSlug: validatedData.referrerSlug,
+          anonymousId,
+          referrerHeader,
+          url,
+          utmSource: validatedData.utmSource,
+          utmMedium: validatedData.utmMedium,
+          utmCampaign: validatedData.utmCampaign,
+        },
+        {
+          // Dedup read bounded with maxTimeMS so a slow query can't hold the function open.
+          hasRecentVisit: async ({ anonymousId: aid, slug, pageType }) => {
+            const oneMinuteAgo = new Date(Date.now() - 60 * 1000);
+            const recent = await PromoAnalyticsVisit.findOne({
+              anonymousId: aid,
+              slug,
+              pageType,
+              timestamp: { $gte: oneMinuteAgo },
+            })
+              .maxTimeMS(5000)
+              .lean();
+            return !!recent;
+          },
+          recordVisit: (payload) => PromoAnalyticsService.recordVisit(payload),
+        }
+      );
 
-        if (recentVisit) return; // duplicate within the window — already tracked
-      }
-
-      const referrerInfo = parseReferrer(referrerHeader);
-      const attribution = extractAttributionParams(url);
-
-      // Prefer utm_* from URL; fallback to campaign_id for Facebook ads when utm_campaign is missing
-      const utmCampaign =
-        validatedData.utmCampaign ??
-        attribution.utm_campaign ??
-        (attribution.campaign_id ? `fb_${attribution.campaign_id}` : undefined);
-
-      const result = await PromoAnalyticsService.recordVisit({
-        pageType: validatedData.pageType,
-        slug: validatedData.slug,
-        referrerSlug: validatedData.referrerSlug,
-        anonymousId,
-        referrer: referrerInfo.referrer || undefined,
-        utmSource: validatedData.utmSource ?? attribution.utm_source,
-        utmMedium: validatedData.utmMedium ?? attribution.utm_medium,
-        utmCampaign,
-      });
-
-      if (!result.success) {
-        console.error("[promo-page-visit] recordVisit failed:", result.error ?? "unknown");
+      if (!outcome.recorded && outcome.reason !== "duplicate") {
+        console.error("[promo-page-visit] recordVisit failed:", outcome.reason);
       }
     } catch (error) {
       console.error("[promo-page-visit] deferred tracking error:", error);
