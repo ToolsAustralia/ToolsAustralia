@@ -169,6 +169,12 @@ export async function getNextQueuedDraw(): Promise<IMajorDraw | null> {
  *
  * @param includeQueuedDuringGap - If true, returns queued draw during gap period
  * @returns Current active major draw or null
+ *
+ * NOTE: This intentionally excludes the unbounded `entries[]` array via
+ * `.select("-entries")` — it is a display/metadata read on a hot, frequently
+ * polled path, and loading every participant subdocument here was multi-MB of
+ * wasted egress. Callers needing a participant count use
+ * `getMajorDrawParticipantCount`; per-user entries use `getUserMajorDrawStats`.
  */
 export async function getCurrentMajorDrawForDisplay(
   includeQueuedDuringGap: boolean = true
@@ -193,7 +199,9 @@ export async function getCurrentMajorDrawForDisplay(
   let draw = await MajorDraw.findOne({
     status: { $in: ["active", "frozen"] },
     activationDate: { $lte: now }, // Only show if activation time has passed
-  }).sort({ activationDate: -1 });
+  })
+    .select("-entries")
+    .sort({ activationDate: -1 });
 
   // Step 2: If no active/frozen draw found, check for queued draw first (gap state priority)
   // During gap state, prioritize showing the next queued draw instead of completed draw
@@ -202,7 +210,9 @@ export async function getCurrentMajorDrawForDisplay(
     const queuedDraw = await MajorDraw.findOne({
       status: "queued",
       activationDate: { $gt: now }, // Future activation
-    }).sort({ activationDate: 1 }); // Next queued draw
+    })
+      .select("-entries")
+      .sort({ activationDate: 1 }); // Next queued draw
 
     if (queuedDraw) {
       // console.log(`✅ Found queued draw for display during gap: ${queuedDraw.name}`);
@@ -216,7 +226,9 @@ export async function getCurrentMajorDrawForDisplay(
     // console.log("🔍 No queued draw found, checking for latest completed draw...");
     draw = await MajorDraw.findOne({
       status: "completed",
-    }).sort({ drawDate: -1 }); // Most recent completed draw
+    })
+      .select("-entries")
+      .sort({ drawDate: -1 }); // Most recent completed draw
 
     if (draw) {
       // console.log(`✅ Found completed draw for display: ${draw.name}`);

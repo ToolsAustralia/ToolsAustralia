@@ -323,7 +323,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/hooks/useMiniDrawTrigger.ts",
         "src/hooks/usePastDrawsData.ts"
       ],
-      "lastVerified": "2026-05-10"
+      "lastVerified": "2026-06-10"
     },
     "rewards-redeemables": {
       "docs": "docs/rewards-redeemables/",
@@ -733,7 +733,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/repositories/PaymentEventRepository.ts",
         "src/repositories/PromoAnalyticsRepository.ts"
       ],
-      "lastVerified": "2026-04-28"
+      "lastVerified": "2026-06-10"
     },
     "infrastructure": {
       "docs": "docs/infrastructure/",

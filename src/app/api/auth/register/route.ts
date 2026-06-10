@@ -27,6 +27,7 @@ import { isValidPromoSlug, getPageTypeFromSlug } from "@/utils/promo-analytics/v
 import { IUser } from "@/models/User";
 import type { AttributionParams } from "@/types/tracking";
 import { stripe } from "@/lib/stripe";
+import { createRateLimiter, getClientIdentifier } from "@/utils/security/rateLimiter";
 
 /**
  * Normalize Australian mobile number to +61 format
@@ -240,12 +241,41 @@ function buildSignupAttribution(
   };
 }
 
+// Abuse guard: each registration triggers a Stripe customer create + a Facebook
+// CAPI call + multiple Mongo writes, all awaited on the request path — so an
+// unthrottled scripted loop can burn the small per-instance pool and spawn junk
+// accounts + Stripe customers. This per-instance limiter cuts off a naive
+// single-IP flood. The limit is intentionally more lenient than login's 5/min:
+// registration is funnel-rate, and ad spikes can route many legitimate signups
+// through one carrier-NAT / shared egress IP, so we avoid false-positives while
+// still stopping obvious abuse. (Per-instance only — not a WAF substitute for a
+// distributed attack; tune `maxRequests` if real traffic ever approaches it.)
+const registerRateLimiter = createRateLimiter("auth-register", {
+  windowMs: 60 * 1000, // 1 minute window
+  maxRequests: 20, // 20 registrations per minute per IP
+});
+
 /**
  * POST /api/auth/register
  * Register a new user account or update existing plain account
  */
 export async function POST(request: NextRequest) {
   try {
+    const identifier = getClientIdentifier(
+      request.headers.get("x-real-ip"),
+      request.headers.get("x-forwarded-for")
+    );
+    const rateCheck = registerRateLimiter.check(identifier);
+    if (!rateCheck.success) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Too many registration attempts. Please wait a moment before trying again.",
+        },
+        { status: 429, headers: { "Retry-After": rateCheck.retryAfterSeconds.toString() } }
+      );
+    }
+
     await connectDB();
 
     const body = await request.json();

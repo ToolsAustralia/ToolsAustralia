@@ -79,13 +79,34 @@ export async function getUserMajorDrawEntries(userId: string, majorDrawId: strin
 }
 
 /**
- * Get user's stats for a specific major draw
+ * Shape returned by the projected entry query below — only the caller's single
+ * entry subdocument (entries[0]), never the whole entries[] array.
+ */
+type ProjectedUserEntryDraw = {
+  _id: mongoose.Types.ObjectId;
+  entries?: Array<{
+    userId: mongoose.Types.ObjectId;
+    totalEntries: number;
+    entriesBySource: Record<string, number | undefined>;
+    firstAddedDate: Date;
+    lastUpdatedDate: Date;
+  }>;
+};
+
+/**
+ * Get user's stats for a specific major draw.
+ *
+ * Loads ONLY the caller's entry subdocument via a positional `$elemMatch`
+ * projection + `.lean()`, instead of pulling the entire (unbounded) `entries[]`
+ * array and scanning it in JS. `entries[]` grows one element per participating
+ * user across a month-long shared draw, so on this hot, frequently-polled path
+ * the old full-document load meant multi-MB of egress + Mongoose hydration per
+ * request that got monotonically worse as the draw filled. The
+ * `{'entries.userId': 1}` index (MajorDraw.ts) backs the match.
  */
 export async function getUserMajorDrawStats(userId: string, majorDrawId: string): Promise<UserMajorDrawStats> {
   try {
-    const majorDraw = await MajorDraw.findById(majorDrawId);
-
-    if (!majorDraw) {
+    if (!mongoose.Types.ObjectId.isValid(userId)) {
       return {
         totalEntries: 0,
         membershipEntries: 0,
@@ -96,17 +117,13 @@ export async function getUserMajorDrawStats(userId: string, majorDrawId: string)
       };
     }
 
-    // console.log(
-    //   `🔍 getUserMajorDrawStats - Using draw: ${majorDraw.name} (${majorDraw.status}) - ID: ${majorDraw._id}`
-    // );
+    const majorDraw = await MajorDraw.findById(majorDrawId, {
+      entries: { $elemMatch: { userId: new mongoose.Types.ObjectId(userId) } },
+    }).lean<ProjectedUserEntryDraw | null>();
 
-    // Get user's entry from the specified draw
-    const userEntry = majorDraw.entries.find(
-      (entry: { userId: { toString(): string } }) => entry.userId.toString() === userId
-    );
+    const userEntry = majorDraw?.entries?.[0];
 
     if (!userEntry) {
-      // console.log(`🔍 getUserMajorDrawStats - No user entry found in draw: ${majorDraw.name}`);
       return {
         totalEntries: 0,
         membershipEntries: 0,
@@ -116,8 +133,6 @@ export async function getUserMajorDrawStats(userId: string, majorDrawId: string)
         entriesByPackage: [],
       };
     }
-
-    // console.log(`🔍 getUserMajorDrawStats - User entry found: ${userEntry.totalEntries} total entries`);
 
     // Calculate stats from aggregated entry data
     const totalEntries = userEntry.totalEntries;
@@ -165,6 +180,33 @@ export async function getUserMajorDrawStats(userId: string, majorDrawId: string)
       totalDrawsEntered: 0,
       entriesByPackage: [],
     };
+  }
+}
+
+/**
+ * Count unique participants (entries[].length) for a draw WITHOUT loading the
+ * unbounded entries[] array. A server-side `$size` returns only an integer, so
+ * the participant array never crosses the wire — replaces the old
+ * `majorDraw.entries.length` read on the hot /api/major-draw display path.
+ */
+export async function getMajorDrawParticipantCount(
+  majorDrawId: string | { toString(): string }
+): Promise<number> {
+  try {
+    const id = typeof majorDrawId === "string" ? majorDrawId : majorDrawId.toString();
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return 0;
+    }
+
+    const result = await MajorDraw.aggregate<{ count: number }>([
+      { $match: { _id: new mongoose.Types.ObjectId(id) } },
+      { $project: { count: { $size: { $ifNull: ["$entries", []] } } } },
+    ]);
+
+    return result[0]?.count ?? 0;
+  } catch (error) {
+    console.error(`❌ Error getting major draw participant count:`, error);
+    return 0;
   }
 }
 
@@ -269,40 +311,57 @@ export async function getUserCurrentMajorDrawStats(userId: string): Promise<User
 }
 
 /**
- * Get all major draw entries for a user across all draws
+ * Get all major draw entries for a user across all draws.
+ *
+ * Projects ONLY the caller's matched entry from each draw (positional `$`) +
+ * `.lean()`, instead of loading every matched draw's full `entries[]` array and
+ * scanning it in JS. The `{'entries.userId': 1}` index selects the draws and the
+ * positional operator returns just the user's element per draw — so a user who
+ * has entered N draws transfers N small subdocs, not N full participant arrays.
+ * See docs/draws/gotchas.md → "Read-path amplification".
  */
 export async function getUserAllMajorDrawEntries(userId: string): Promise<UserMajorDrawEntry[]> {
   try {
-    // Find all major draws where user has entries
-    const majorDraws = await MajorDraw.find({
-      "entries.userId": new mongoose.Types.ObjectId(userId),
-    }).sort({ createdAt: -1 });
+    if (!mongoose.Types.ObjectId.isValid(userId)) {
+      return [];
+    }
+
+    const majorDraws = await MajorDraw.find(
+      { "entries.userId": new mongoose.Types.ObjectId(userId) },
+      { "entries.$": 1, name: 1, status: 1 }
+    )
+      .sort({ createdAt: -1 })
+      .lean<
+        Array<{
+          _id: mongoose.Types.ObjectId;
+          name: string;
+          status: string;
+          entries?: Array<{ entriesBySource: Record<string, number | undefined>; firstAddedDate: Date }>;
+        }>
+      >();
 
     const allEntries: UserMajorDrawEntry[] = [];
 
     majorDraws.forEach((majorDraw) => {
-      const userEntry = majorDraw.entries.find(
-        (entry: { userId: { toString(): string } }) => entry.userId.toString() === userId
-      );
+      const userEntry = majorDraw.entries?.[0];
+      if (!userEntry) return;
 
-      if (userEntry) {
-        // Convert aggregated data back to individual entries format
-        Object.entries(userEntry.entriesBySource).forEach(([source, count]) => {
-          const entryCount = count as number | undefined;
-          if (entryCount && entryCount > 0) {
-            allEntries.push({
-              majorDrawId: majorDraw._id.toString(),
-              majorDrawName: majorDraw.name,
-              entryCount: entryCount,
-              source: source as "membership" | "one-time-package" | "upsell" | "mini-draw",
-              packageId: source,
-              packageName: `${source.charAt(0).toUpperCase() + source.slice(1)} Entries`,
-              addedDate: userEntry.firstAddedDate,
-              drawStatus: majorDraw.status,
-            });
-          }
-        });
-      }
+      // Convert aggregated data back to individual entries format
+      Object.entries(userEntry.entriesBySource).forEach(([source, count]) => {
+        const entryCount = count as number | undefined;
+        if (entryCount && entryCount > 0) {
+          allEntries.push({
+            majorDrawId: majorDraw._id.toString(),
+            majorDrawName: majorDraw.name,
+            entryCount: entryCount,
+            source: source as "membership" | "one-time-package" | "upsell" | "mini-draw",
+            packageId: source,
+            packageName: `${source.charAt(0).toUpperCase() + source.slice(1)} Entries`,
+            addedDate: userEntry.firstAddedDate,
+            drawStatus: majorDraw.status as UserMajorDrawEntry["drawStatus"],
+          });
+        }
+      });
     });
 
     return allEntries;
