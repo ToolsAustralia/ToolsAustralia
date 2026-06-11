@@ -6,7 +6,7 @@
 |---|---|---|
 | _TODO_ | `/api/major-draw/**` | Major-draw read & entry-related routes |
 | _TODO_ | `/api/mini-draw/**` | Mini-draw routes (parallel with major) |
-| GET | `/api/winners/all` | Public winners feed (major + mini, optional `?drawType=` filter, `?limit=` default 20). Edge-cached 5min via `Cache-Control: public, s-maxage=300, stale-while-revalidate=600` and `revalidate = 300` segment config. DB queries are pre-`.limit()`ed so cache misses still bound payload size. |
+| GET | `/api/winners/all` | Public winners feed (major + mini, optional `?drawType=` filter, `?limit=` default 20). Edge-cached 5min via `Cache-Control: public, s-maxage=300, stale-while-revalidate=600` and `revalidate = 300` segment config. DB queries are pre-`.limit()`ed so cache misses still bound payload size. The major+mini merge lives in the shared loader [`getAllWinners()`](../../src/utils/draws/get-all-winners.ts) (the route is a thin wrapper); the `/draw-results` page calls the same loader for SSR. |
 | GET | `/api/winners/major-draws` | Major-draw winners only (already DB-limited; no edge cache). |
 | GET | `/api/winners/latest` | Latest winner (cached `revalidate=60`). |
 

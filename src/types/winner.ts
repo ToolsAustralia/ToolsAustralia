@@ -26,6 +26,8 @@ export interface WinnerSummary {
   // Selected prize text for major draws (optional, only for major draw winners)
   // Free-form text field to allow flexibility as prize values change
   selectedPrize?: string;
-  /** External verification / live draw link (e.g. randomdraws.com.au) */
+  /** External verification / result link (e.g. randomdraws.com.au) — public "View result" / "Verify". */
   drawResultUrl?: string;
+  /** Facebook live-draw / announcement video link — public "Watch the draw". (Major draws only.) */
+  watchUrl?: string;
 }

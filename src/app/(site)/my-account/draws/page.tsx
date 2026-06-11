@@ -17,7 +17,7 @@ const MembershipModal = dynamic(() => import("@/components/modals/MembershipModa
 import MembershipSection from "@/components/sections/MembershipSection";
 import PrizeShowcase from "@/components/sections/promo/PrizeShowcase";
 import LatestWinnerHero from "@/components/sections/LatestWinnerHero";
-import WinnerTestimonySection from "@/components/sections/WinnerTestimonySection";
+import WinnersTestimony from "../../winners/components/WinnersTestimony";
 import { useMiniDraws } from "@/hooks/queries/useMiniDrawQueries";
 import { DEFAULT_PRIZE_SLUG } from "@/config/prizes";
 import { CheckCircle, Sparkles, Trophy, ChevronRight, Ticket } from "lucide-react";
@@ -356,7 +356,7 @@ export default function DrawsPage() {
         <LatestWinnerHero className="mb-6 sm:mb-8 max-w-7xl mx-auto px-4 sm:px-6 pt-6 sm:pt-8 pb-6 sm:pb-8 space-y-6 sm:space-y-8" />
 
         {!winnersLoading && winners.length > 0 && (
-          <WinnerTestimonySection winners={winners} className="mb-6 sm:mb-8" />
+          <WinnersTestimony winners={winners} />
         )}
       </div>
 

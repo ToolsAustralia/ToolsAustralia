@@ -45,3 +45,24 @@ Both are lazy (`enabled` bound to `activeEditTab === "activity"`) and cached
 for 5 minutes. The payload sent to the existing
 `/api/admin/users/[id]` route is unchanged — `drawId` / `miniDrawId` are
 still ObjectId strings.
+
+### Prize-image cleanup on draw save (2026-06-11)
+
+When a major draw is saved via `PUT /api/admin/major-draw/update` ([route](../../src/app/api/admin/major-draw/update/route.ts)) and `prize.images` is part of the update, the route fires a **best-effort** cleanup: [`deleteRemovedPrizeImages(oldImages, newImages)`](../../src/utils/draws/delete-removed-prize-images.ts) (draws domain) permanently deletes the Cloudinary assets for any image dropped from the prize, reclaiming storage.
+
+Safety guards:
+- An image is **never** deleted if it's still referenced by a `Winner` record (its `prizeSnapshot.images` or `imageUrl`), so historical winner artwork can't be 404'd.
+- The helper swallows its own errors and never throws, so a Cloudinary hiccup can't block (or fail) the admin save. Deletion uses [`deleteCloudinaryImageByUrl`](../../src/lib/cloudinary.ts) (see [infrastructure/backend.md](../infrastructure/backend.md#upload--images)).
+
+### Edit Draw links (2026-06-11)
+
+The [`MajorDrawEditModal`](../../src/components/modals/MajorDrawEditModal.tsx) has a **Draw Links** section with two optional fields, persisted on the `MajorDraw` model:
+
+- **View Results Link** → `resultUrl` (the randomdraws verification page).
+- **Watch Draw Link** → `watchUrl` (the Facebook live-draw / announcement video).
+
+Wiring (full chain): the [history route](../../src/app/api/admin/major-draw/history/route.ts) returns both fields per draw → `DrawResults.tsx` `convertToMajorDrawData` pre-fills them into the modal (so re-saving never clobbers an existing link with an empty string) → [`PUT /api/admin/major-draw/update`](../../src/app/api/admin/major-draw/update/route.ts) validates (`z.string().trim().max(2000)`, empty string clears) and `$set`s them.
+
+**Locked-draw exception:** both fields are in the route's `allowedFields` allowlist and the modal leaves them enabled even when `configurationLocked` is true — these links are normally added *after* a draw completes (and locks).
+
+Public surfacing of these two fields is documented in [draws/frontend.md](../draws/frontend.md#draw-level-result--watch-links-2026-06-11). (These draw-level reads are **not** mirrored to Norm; could be added if useful.)

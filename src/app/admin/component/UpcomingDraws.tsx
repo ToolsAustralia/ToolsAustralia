@@ -26,6 +26,8 @@ interface MajorDrawData {
   _id: string;
   name: string;
   description: string;
+  resultUrl?: string;
+  watchUrl?: string;
   prize: {
     name: string;
     description: string;
@@ -52,6 +54,8 @@ interface UpcomingDraw {
   _id: string;
   name: string;
   description: string;
+  resultUrl?: string;
+  watchUrl?: string;
   status: "queued" | "active" | "frozen" | "completed" | "cancelled";
   startDate: Date;
   endDate: Date;
@@ -297,6 +301,8 @@ export default function UpcomingDraws() {
       _id: draw._id,
       name: draw.name,
       description: draw.description,
+      resultUrl: draw.resultUrl ?? "",
+      watchUrl: draw.watchUrl ?? "",
       prize: draw.prize,
       drawDate: draw.drawDate instanceof Date ? draw.drawDate.toISOString() : draw.drawDate,
       activationDate: draw.activationDate instanceof Date ? draw.activationDate.toISOString() : draw.activationDate,

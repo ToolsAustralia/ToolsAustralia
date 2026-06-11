@@ -1,6 +1,10 @@
 import type { Metadata } from "next";
 import { Inter, Poppins } from "next/font/google";
 import "./globals.css";
+// Shared ".ta-results" design system (draw-results / winners). All selectors are
+// scoped under .ta-results, so importing globally is safe and lets portable
+// sections (e.g. the winners testimony) render correctly on any page.
+import "./(site)/draw-results/draw-results.css";
 import { Providers } from "./providers";
 import { OrganizationJsonLd, WebSiteJsonLd } from "@/components/seo/StructuredData";
 import ConversionPixels from "@/components/tracking/ConversionPixels";
