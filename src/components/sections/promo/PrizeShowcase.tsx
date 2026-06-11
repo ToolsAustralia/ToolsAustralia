@@ -847,6 +847,10 @@ export default function PrizeShowcase({
   // that path so the carousel slide stays consistent with the PromoHero variant.
   const landingImagePaths = activeSlug ? getLandingHeroImagePaths(activeSlug) : null;
   const enhancedGallery = ((): EnhancedGalleryItem[] => {
+    // On /promotions/* the PromoHero above already renders the landing hero, so
+    // don't repeat it as the gallery's first slide (evergreen home/my-account
+    // have no hero above and still get it injected).
+    if (isPromotionsPage) return activePrize.gallery;
     if (!landingImagePaths && !variantHeroOverride?.mobile) return activePrize.gallery;
 
     // First slide uses the mobile landing art everywhere (desktop + mobile) per

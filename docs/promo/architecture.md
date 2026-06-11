@@ -27,7 +27,9 @@
 
 [`landing-image-resolver.ts`](../../src/utils/promo/landing-image-resolver.ts) builds URLs for promo-landing heroes under `public/images/background/promo/landing/{brand}/`. Filename grammar: `{brand}-{milTB|sidTB|kinTB}{-dark}?{-mobile}?{-final-hours|-drawn-tomorrow|-drawn-tonight}?.webp`.
 
-Not every variant ships. To avoid 404s when one mode is missing (currently: `{brand}-sidTB.webp` / `{brand}-sidTB-mobile.webp` light bases for all four brands), the resolver consults a build-time manifest at [`src/generated/landingImageManifest.ts`](../../src/generated/landingImageManifest.ts) — emitted by [`scripts/build-landing-image-manifest.ts`](../../scripts/build-landing-image-manifest.ts) during `prebuild`/`predev`.
+Not every variant ships, so the resolver consults a build-time manifest at [`src/generated/landingImageManifest.ts`](../../src/generated/landingImageManifest.ts) — emitted by [`scripts/build-landing-image-manifest.ts`](../../scripts/build-landing-image-manifest.ts) during `prebuild`/`predev` — to avoid 404s when one mode is missing and fall back to the opposite mode.
+
+**2026-06-12 — winning A/B hero promoted to default.** The promo-hero A/B test concluded with **variation 2** winning, so its art replaced the per-brand defaults under `landing/{brand}/` and `landing/all-prizes/`. Variation 2 ships a single image per `{brand}-{toolbox}` viewport with **no separate dark art** — the copy populated the `-dark` / `-dark-mobile` filenames with the same image, so light and dark now render identically. The `landing/variation{1,2}-{desktop,mobile}/` source folders were then emptied (kept on disk via a `.gitkeep`) so they're ready to stage the next A/B hero test. This also added the previously-missing `{brand}-sidTB.webp` / `{brand}-sidTB-mobile.webp` light bases for all four brands, so light `sidTB` no longer falls back to the dark file. Regenerate the manifest (below) after any such asset swap.
 
 Resolution order inside [`resolveLandingHeroImage`](../../src/utils/promo/landing-image-resolver.ts):
 
@@ -44,6 +46,19 @@ npm run build:landing-manifest
 ```
 
 Regression test: `npm run test:landing-image-resolver`.
+
+## Landing hero video (2026-06-12)
+
+[`landing-video-resolver.ts`](../../src/utils/promo/landing-video-resolver.ts) is the **video twin** of the image resolver: a prize slug maps to one hero clip per viewport under `public/videos/landing/{brand}/`, named exactly like its `.webp` hero — `{brand}-{milTB|sidTB|kinTB}{-mobile}.{webm,mp4}`. `getLandingHeroVideoPaths(slug)` returns `{ desktop, mobile }`, each carrying a `webm` + `mp4` URL, or **`null`** when `slugToBrandKey` is null (`cash-prize`, evergreen `all-prizes`) so the caller keeps the image hero.
+
+Deliberately **simpler than the image resolver — no manifest, no build step, no light/dark fallback**:
+- The A/B-won hero ships **one clip for both themes** (light === dark), so there's no opposite-mode swap to resolve.
+- Every brand × toolbox combo has a clip on disk, so existence is deterministic from the slug — no manifest lookup needed.
+- Per-browser codec selection is the browser's job via `<source>` order (WebM first, MP4 fallback); a missing/!-decodable WebM falls through to the MP4 automatically.
+
+Assets: each `.mp4` (H.264, no audio, 5 s loop — desktop 2560×1044, mobile 1080×1164) has a VP9 `.webm` sibling (~50–65 % smaller) generated with `ffmpeg -c:v libvpx-vp9 -b:v 0 -crf 33 -an`. Re-run that per file when new clips are dropped in; the `videos-desktop/` / `videos-mobile/` staging folders (`.gitkeep`-kept) hold raw numbered drops before they're identified and renamed into the brand folders.
+
+Consumed by [`PromoHero`](../../src/components/sections/promo/PromoHero.tsx) via [`LandingHeroVideo`](../../src/components/sections/promo/LandingHeroVideo.tsx) — see [docs/shared-ui/frontend.md](../shared-ui/frontend.md) for the poster / gating behaviour.
 
 ## Banner behaviour
 

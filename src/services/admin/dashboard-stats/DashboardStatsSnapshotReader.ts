@@ -193,9 +193,11 @@ export async function readStatsForRange(args: {
 
       const dayAdChannels: Record<string, { spend: number; revenue: number }> = {};
       for (const provider of AD_CHANNEL_PROVIDERS) {
-        const metrics = await provider.fetchForDay({ dayStartUTC, dayEndUTC: effectiveDayEnd });
-        if (!metrics) continue;
-        dayAdChannels[provider.key] = { spend: metrics.spend, revenue: metrics.revenue };
+        const result = await provider.fetchForDay({ dayStartUTC, dayEndUTC: effectiveDayEnd });
+        // A live read is transient (never persisted), so "empty" and "error"
+        // both just mean "no facebook for this day" — only "ok" contributes.
+        if (result.status !== "ok") continue;
+        dayAdChannels[provider.key] = { spend: result.metrics.spend, revenue: result.metrics.revenue };
       }
 
       return {
