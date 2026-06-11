@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useCurrentMajorDraw } from "@/hooks/queries/useMajorDrawQueries";
 import { usePromoByType, useResolvedMultiplier } from "@/hooks/queries/usePromoQueries";
 import { useScrollAnimation } from "@/hooks/useScrollAnimation";
@@ -15,6 +15,10 @@ import { usePromoTheme, usePromoThemeStore } from "@/stores/usePromoThemeStore";
 import { getLandingHeroImagePaths } from "@/config/promo-landing-slugs";
 import { useThemeStore } from "@/stores/useThemeStore";
 import { getImageForMode, getFallbackImagePath } from "@/utils/promo/landing-image-resolver";
+import { getLandingHeroVideoPaths } from "@/utils/promo/landing-video-resolver";
+import LandingHeroVideo from "./LandingHeroVideo";
+import { useDeviceProfile } from "@/hooks/useDeviceProfile";
+import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { cn } from "@/utils/cn";
 
 /**
@@ -60,6 +64,12 @@ export default function PromoHero({
 
   const themeMode = useThemeStore((s) => s.theme);
   const [imageError, setImageError] = useState(false);
+
+  // Hero video gating (all hooks must run before the isLoading early return).
+  const { flags } = useDeviceProfile();
+  const isLgUp = useMediaQuery("(min-width: 1024px)");
+  const [isMounted, setIsMounted] = useState(false);
+  useEffect(() => setIsMounted(true), []);
 
   const storeSlug = usePromoThemeStore((s) => s.slug);
   const effectiveSlug = storeSlug ?? prizeSlug ?? null;
@@ -109,6 +119,15 @@ export default function PromoHero({
     };
   })();
 
+  // Hero video: only for brand slugs (cash / evergreen return null → image hero).
+  // The .webp hero stays the LCP element / poster; the clip fades in over it and
+  // is suppressed for reduced-motion / Save-Data users. A per-slug A/B image
+  // override also wins — when the variant pins a custom still, skip the video.
+  const heroVideoPaths =
+    effectiveSlug && !perSlugVariantImage ? getLandingHeroVideoPaths(effectiveSlug) : null;
+  const allowVideo =
+    isMounted && !imageError && !flags.saveData && !flags.reducedMotion && heroVideoPaths != null;
+
   const ctaText = variantConfig?.hero?.ctaText || "ENTER NOW";
   const ctaStyle = variantConfig?.hero?.ctaStyle;
   const theme = usePromoTheme();
@@ -149,6 +168,9 @@ export default function PromoHero({
             sizes="100vw"
             onError={() => setImageError(true)}
           />
+          {allowVideo && !isLgUp && heroVideoPaths && (
+            <LandingHeroVideo sources={heroVideoPaths.mobile} poster={heroImagePaths.mobile} />
+          )}
         </div>
         <div className="absolute inset-0 hidden bg-white dark:bg-neutral-950 lg:block">
           <Image
@@ -160,6 +182,9 @@ export default function PromoHero({
             className="object-contain object-top"
             onError={() => setImageError(true)}
           />
+          {allowVideo && isLgUp && heroVideoPaths && (
+            <LandingHeroVideo sources={heroVideoPaths.desktop} poster={heroImagePaths.desktop} />
+          )}
         </div>
       </div>
 

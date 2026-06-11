@@ -12,13 +12,30 @@ export interface AdChannelMetrics {
 }
 
 /**
+ * Outcome of a one-day ad-channel fetch. The distinction between "empty" and
+ * "error" is load-bearing for the snapshot writer:
+ *   - "ok"    → real metrics; write them.
+ *   - "empty" → legitimately no data (future day, or zero spend with no insights
+ *               row); write the channel as absent ($0).
+ *   - "error" → the fetch FAILED (expired/invalid token, missing config, network,
+ *               API error). The writer must PRESERVE the prior stored value rather
+ *               than wipe it. A dead token must never silently zero out correct
+ *               history — that is what caused the 2026-06-11 ad-spend wipe
+ *               (see docs/tracking/gotchas.md).
+ */
+export type AdChannelFetchResult =
+  | { status: "ok"; metrics: AdChannelMetrics }
+  | { status: "empty" }
+  | { status: "error" };
+
+/**
  * An ad-channel provider knows how to fetch one day's metrics for one channel.
  * Add a new channel (TikTok, Snapchat, Google Ads) by appending one provider —
  * no schema change required; the snapshot stores adChannels as a Map.
  */
 export interface AdChannelProvider {
   key: string; // becomes the Map key in the snapshot
-  fetchForDay(args: { dayStartUTC: Date; dayEndUTC: Date }): Promise<AdChannelMetrics | null>;
+  fetchForDay(args: { dayStartUTC: Date; dayEndUTC: Date }): Promise<AdChannelFetchResult>;
 }
 
 function aestDateString(d: Date): string {
@@ -33,13 +50,20 @@ export const facebookAdChannelProvider: AdChannelProvider = {
   async fetchForDay({ dayStartUTC }) {
     const adAccountId = process.env.FACEBOOK_AD_ACCOUNT_ID;
     const accessToken = process.env.FACEBOOK_MARKETING_ACCESS_TOKEN;
-    if (!adAccountId || !accessToken) return null;
+    // Missing config counts as an ERROR (preserve), not "empty": an accidentally
+    // unset token in one environment must not wipe stored spend.
+    if (!adAccountId || !accessToken) {
+      console.error(
+        "[adChannel:facebook] FACEBOOK_AD_ACCOUNT_ID or FACEBOOK_MARKETING_ACCESS_TOKEN not set — preserving any prior snapshot value"
+      );
+      return { status: "error" };
+    }
 
     const dateStr = aestDateString(dayStartUTC);
-    // Facebook insights reject a `since` in the future — this happens when a date
-    // range runs to a future draw date (e.g. "Current Draw" → the 27th). There is
-    // no ad data for future days, so skip them rather than calling the API.
-    if (dateStr > aestDateString(new Date())) return null;
+    // Facebook rejects a `since` in the future — this happens when a date range
+    // runs to a future draw date (e.g. "Current Draw" → the 27th). There is no ad
+    // data for future days, so this is genuinely "empty" (write nothing), not an error.
+    if (dateStr > aestDateString(new Date())) return { status: "empty" };
     try {
       const insights = await fetchFacebookInsights(
         adAccountId,
@@ -47,18 +71,26 @@ export const facebookAdChannelProvider: AdChannelProvider = {
         { since: dateStr, until: dateStr },
         "account"
       );
-      if (!insights || insights.length === 0) return null;
+      if (!insights || insights.length === 0) return { status: "empty" };
       const m = insights[0].metrics;
       return {
-        spend: m.spend / 100, // metrics.spend is in cents; convert to dollars
-        revenue: m.revenue / 100, // metrics.revenue is in cents; convert to dollars
-        roas: m.roas,
-        impressions: typeof m.impressions === "number" ? m.impressions : undefined,
-        clicks: typeof m.clicks === "number" ? m.clicks : undefined,
+        status: "ok",
+        metrics: {
+          spend: m.spend / 100, // metrics.spend is in cents; convert to dollars
+          revenue: m.revenue / 100, // metrics.revenue is in cents; convert to dollars
+          roas: m.roas,
+          impressions: typeof m.impressions === "number" ? m.impressions : undefined,
+          clicks: typeof m.clicks === "number" ? m.clicks : undefined,
+        },
       };
     } catch (err) {
-      console.error(`[adChannel:facebook] fetch failed for ${dateStr}:`, err);
-      return null;
+      // Fetch FAILED (expired token, network, API error). Do NOT let this wipe
+      // history — signal the writer to preserve the prior stored value.
+      console.error(
+        `[adChannel:facebook] fetch FAILED for ${dateStr} — preserving prior snapshot value:`,
+        err
+      );
+      return { status: "error" };
     }
   },
 };
@@ -68,3 +100,38 @@ export const facebookAdChannelProvider: AdChannelProvider = {
  * Snapshots will start capturing the new channel on the next cron run.
  */
 export const AD_CHANNEL_PROVIDERS: AdChannelProvider[] = [facebookAdChannelProvider];
+
+/**
+ * Merge freshly-fetched per-channel results with the prior snapshot's stored
+ * ad-channels, preserving prior values when a fetch ERRORED so an expired token
+ * can never wipe correct history. Pure — unit-tested in
+ * `__tests__/mergeAdChannels.test.ts`.
+ *
+ * - status "ok"    → write the new metrics
+ * - status "empty" → omit the channel (renders as $0 / absent)
+ * - status "error" → keep the prior stored value if present; otherwise omit
+ *                    (a first write with no prior simply has no value to keep)
+ */
+export function mergeAdChannels(
+  fetched: Array<{ key: string; result: AdChannelFetchResult }>,
+  prior: Record<string, AdChannelMetrics> | null | undefined
+): { channels: Map<string, AdChannelMetrics>; preserved: string[]; lost: string[] } {
+  const channels = new Map<string, AdChannelMetrics>();
+  const preserved: string[] = [];
+  const lost: string[] = [];
+  for (const { key, result } of fetched) {
+    if (result.status === "ok") {
+      channels.set(key, result.metrics);
+    } else if (result.status === "error") {
+      const priorVal = prior?.[key];
+      if (priorVal) {
+        channels.set(key, priorVal);
+        preserved.push(key);
+      } else {
+        lost.push(key);
+      }
+    }
+    // status "empty" → intentionally omit (absent renders as $0)
+  }
+  return { channels, preserved, lost };
+}

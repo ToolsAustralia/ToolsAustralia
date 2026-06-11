@@ -4,6 +4,21 @@
 
 `SubscriptionHistoryStatusBadge` ([`AdminBadge.tsx`](../../src/components/admin/ui/AdminBadge.tsx)) renders a membership-history row's `status` raw, so a `trialing` row would literally show "trialing". We never sell a real free trial — `trialing` only ever means a paid, **active** member whose billing date was anchored/reanchored via Stripe `trial_end` (join-25-27→24 and the past-due reanchor). The badge maps `trialing → "active"`; the current-state badge (`renderSubscriptionStateBadge`) already shows "Active" via `isActive`. Do not render the raw `trialing` string anywhere admin-facing. See `docs/PAST_DUE_REANCHOR.md`.
 
+## Ad-spend snapshots: a failed Facebook fetch PRESERVES the prior value (never wipes)
+
+The dashboard ad-spend / ROAS / CAC numbers come from `DashboardStatsDailySnapshot` rows written by [`DashboardStatsSnapshotWriter`](../../src/services/admin/dashboard-stats/DashboardStatsSnapshotWriter.ts) (daily cron + backfill). Each day's Facebook spend is fetched live via [`facebookAdChannelProvider`](../../src/services/admin/dashboard-stats/adChannelProviders.ts).
+
+**Why it matters:** the snapshot cron rewrites a **90-day sliding window** every run ([`SLIDING_WINDOW_DAYS = 90`](../../src/app/api/cron/dashboard-stats-daily-snapshot/route.ts), at 14:00 & 15:00 UTC). Before this guard, the writer did `if (metrics) adChannelsMap.set(...)` then `$set` the **whole** `adChannels` map — so a failed fetch omitted Facebook and the `$set` wiped it. On **2026-06-11** the marketing token expired ~26 min before the 15:00 UTC run; that single run silently zeroed Facebook spend for the entire trailing 90 days (~$283k). See [tracking/gotchas.md](../tracking/gotchas.md) for the token side and the backfill repair.
+
+**The guard (do not regress it):** `fetchForDay` returns a discriminated `AdChannelFetchResult`:
+- `ok` → write the metrics,
+- `empty` → legitimately no data (future day / zero spend) → write the channel as absent ($0),
+- `error` → fetch FAILED (expired/invalid token, missing config, API/network error).
+
+On any `error`, the writer loads the prior snapshot and calls the pure [`mergeAdChannels`](../../src/services/admin/dashboard-stats/adChannelProviders.ts) helper, which **preserves the prior stored value** instead of overwriting with nothing (and logs a loud `console.error`). So an expired token can never again wipe correct history — worst case a day's spend goes *stale*, not *zero*. Regression test: `npm run test:merge-ad-channels`.
+
+When adding a new ad channel, return `error` (not `empty`) for any fetch failure or missing-config path, or you reintroduce the wipe. The live reader ([`DashboardStatsSnapshotReader`](../../src/services/admin/dashboard-stats/DashboardStatsSnapshotReader.ts)) treats `empty` and `error` identically (skip) because a live read is transient and has no prior to preserve.
+
 ## ClickableUserDisplay needs a dark-aware base text colour
 
 [`ClickableUserDisplay`](../../src/components/admin/ClickableUserDisplay.tsx) (the clickable user name/email used across admin tables that opens the User Detail modal) treats a caller-supplied `className` as the **entire** typography token set (so a default `text-sm` isn't merged and Tailwind doesn't pick the wrong size winner). The side effect: callers passing a *size-only* className (e.g. `text-2xs sm:text-xs`) — or a light-only colour like `text-gray-900` — left the text with no `dark:` variant → **black text on the dark admin background**. Fix: the component now applies a `baseTextColor = "text-gray-900 dark:text-gray-100"` in the `cn()` base of both the button and span branches, and the subtext uses `text-gray-500 dark:text-gray-400`. `cn` is `twMerge`-based, so an explicit caller colour still wins for the same variant while the `dark:` fallback is preserved. When adding any always-on text colour, pair it with its `dark:` variant.

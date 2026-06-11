@@ -10,7 +10,12 @@ import { createAESTDateAsUTC } from "@/utils/common/timezone";
 import { formatInTimeZone } from "date-fns-tz";
 import { aggregateRevenueForDay, loadRefundedPaymentIntentIds } from "./revenueAggregator";
 import { REVENUE_BUCKET_KEYS } from "./snapshotSchema";
-import { AD_CHANNEL_PROVIDERS } from "./adChannelProviders";
+import {
+  AD_CHANNEL_PROVIDERS,
+  mergeAdChannels,
+  type AdChannelFetchResult,
+  type AdChannelMetrics,
+} from "./adChannelProviders";
 
 const AEST_TIMEZONE = "Australia/Sydney";
 
@@ -84,11 +89,37 @@ export async function writeSnapshotForDate(
       }),
     ]);
 
-    // Ad channels (provider registry — easy to extend)
-    const adChannelsMap = new Map<string, IRevenueBucket | object>();
+    // Ad channels (provider registry — easy to extend). A fetch ERROR (e.g. an
+    // expired marketing token) must NOT wipe previously-correct spend: when any
+    // channel errors we load the prior snapshot and preserve its stored value
+    // rather than overwriting with nothing. This is the guard against the
+    // 2026-06-11 incident where a dead token + the 90-day sliding-window cron
+    // silently zeroed 90 days of ad spend. See docs/admin/gotchas.md.
+    const fetched: Array<{ key: string; result: AdChannelFetchResult }> = [];
     for (const provider of AD_CHANNEL_PROVIDERS) {
-      const metrics = await provider.fetchForDay({ dayStartUTC, dayEndUTC });
-      if (metrics) adChannelsMap.set(provider.key, metrics);
+      fetched.push({
+        key: provider.key,
+        result: await provider.fetchForDay({ dayStartUTC, dayEndUTC }),
+      });
+    }
+    let priorAdChannels: Record<string, AdChannelMetrics> | undefined;
+    if (fetched.some((f) => f.result.status === "error")) {
+      const existing = await DashboardStatsDailySnapshot.findOne({ date: dateKey })
+        .select("adChannels")
+        .lean();
+      priorAdChannels =
+        (existing?.adChannels as Record<string, AdChannelMetrics> | undefined) ?? undefined;
+    }
+    const { channels: adChannelsMap, preserved, lost } = mergeAdChannels(fetched, priorAdChannels);
+    for (const key of preserved) {
+      console.error(
+        `[snapshot-writer] ${dateKey} ${key}: live fetch failed — PRESERVED prior stored value`
+      );
+    }
+    for (const key of lost) {
+      console.error(
+        `[snapshot-writer] ${dateKey} ${key}: live fetch failed and no prior value to preserve (channel left absent)`
+      );
     }
 
     // Attributed revenue by platform
