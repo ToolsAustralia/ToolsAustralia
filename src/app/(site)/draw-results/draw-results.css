@@ -1,0 +1,559 @@
+/*
+ * Draw Results & Winners — page-scoped design system.
+ *
+ * A faithful port of the Claude Design "Draw Results & Winners" mockup, scoped
+ * entirely under `.ta-results` so it never leaks into the rest of the site.
+ *
+ * Theme: light tokens are the default; the dark token set activates under the
+ * site's existing `.dark` class (Tailwind `darkMode: "class"`, applied to
+ * <html> by ThemeContext). The page therefore follows the global theme.
+ *
+ * Accent is Tools Australia brand red (#ee0000), NOT the mockup's teal.
+ * Fonts (--font-archivo / --font-space-mono) are injected per-route by
+ * next/font in page.tsx; body text inherits Inter (--font-inter).
+ */
+
+.ta-results {
+  /* Brand accent (theme-independent) */
+  --accent: #ee0000;
+  --accent-2: #b80000;
+  --on-accent: #ffffff;
+  --hot: #ff3b3b;
+
+  /* ---- Light tokens (default) ---- */
+  --bg: #f4f3f1;
+  --surface: #ffffff;
+  --panel: #ffffff;
+  --panel-2: #f6f5f3;
+  --line: #e6e6ea;
+  --line-2: #d8d8de;
+  --ink: #101012;
+  --ink-2: #44444d;
+  --ink-3: #76767f;
+  --plinth-a: #fafafa;
+  --plinth-b: #efeeec;
+  --shadow: 0 2px 6px rgba(16, 16, 18, 0.05), 0 22px 48px -22px rgba(16, 16, 18, 0.22);
+  --maxw: 1240px;
+
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-inter), "Inter", system-ui, sans-serif;
+}
+
+.dark .ta-results {
+  /* ---- Dark tokens ---- */
+  --bg: #0a0a0c;
+  --surface: #141417;
+  --panel: #1b1b1f;
+  --panel-2: #232328;
+  --line: #2a2a31;
+  --line-2: #38383f;
+  --ink: #ffffff;
+  --ink-2: #b6b6c0;
+  --ink-3: #7c7c87;
+  --plinth-a: #202026;
+  --plinth-b: #161619;
+  --shadow: 0 2px 6px rgba(0, 0, 0, 0.45), 0 22px 48px -20px rgba(0, 0, 0, 0.75);
+}
+
+.ta-results * {
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+.ta-results ::selection {
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
+/* Layout container — matches the mockup's 1240px measure. */
+.ta-results .lp-container {
+  width: 100%;
+  max-width: var(--maxw);
+  margin: 0 auto;
+  padding-left: 20px;
+  padding-right: 20px;
+}
+@media (min-width: 768px) {
+  .ta-results .lp-container {
+    padding-left: 32px;
+    padding-right: 32px;
+  }
+}
+
+/* Typography */
+.ta-results .lp-display {
+  font-family: var(--font-archivo), "Archivo", system-ui, sans-serif;
+  font-weight: 900;
+  letter-spacing: -0.02em;
+  line-height: 0.92 !important;
+  text-transform: uppercase;
+}
+.ta-results .lp-italic {
+  font-style: italic;
+}
+.ta-results .lp-num {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+}
+/* editorial serif for winner testimony quotes */
+.ta-results .winners-serif {
+  font-family: var(--font-newsreader), Georgia, "Times New Roman", serif;
+}
+.ta-results .font-mono {
+  font-family: var(--font-space-mono), ui-monospace, monospace;
+}
+
+.ta-results .lp-kicker {
+  font-family: var(--font-space-mono), ui-monospace, monospace;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--accent);
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+}
+.ta-results .lp-kicker::before {
+  content: "";
+  width: 20px;
+  height: 2px;
+  background: var(--accent);
+}
+.ta-results .lp-kicker.justify-center {
+  justify-content: center;
+}
+
+/* Buttons */
+.ta-results .lp-btn {
+  position: relative;
+  overflow: hidden;
+  font-family: var(--font-archivo), "Archivo", system-ui, sans-serif;
+  font-weight: 900;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  cursor: pointer;
+  border: 0;
+  white-space: nowrap;
+  border-radius: 14px;
+  transition: transform 0.15s ease, box-shadow 0.2s ease, filter 0.2s ease;
+}
+.ta-results .lp-btn:hover {
+  transform: translateY(-2px);
+}
+.ta-results .lp-btn:active {
+  transform: translateY(0);
+}
+.ta-results .lp-btn-accent {
+  background: var(--accent);
+  color: var(--on-accent);
+  box-shadow: 0 10px 30px -8px color-mix(in srgb, var(--accent) 65%, transparent);
+}
+.ta-results .lp-btn-accent:hover {
+  box-shadow: 0 16px 40px -8px color-mix(in srgb, var(--accent) 75%, transparent);
+  filter: brightness(1.06);
+}
+.ta-results .lp-btn-ghost {
+  background: transparent;
+  color: var(--ink);
+  border: 1.5px solid var(--line-2);
+}
+.ta-results .lp-btn-ghost:hover {
+  border-color: var(--ink);
+}
+.ta-results .lp-btn-md {
+  font-size: 13px;
+  padding: 12px 20px;
+}
+.ta-results .lp-btn-lg {
+  font-size: 16px;
+  padding: 18px 30px;
+}
+.ta-results .lp-btn-xl {
+  font-size: clamp(18px, 2.6vw, 26px);
+  padding: 20px 40px;
+  border-radius: 16px;
+}
+/* Secondary "Watch live on Facebook" button — deliberately smaller than the
+   primary entries CTA, especially on mobile where its longer label would
+   otherwise read as the bigger button. Bumps up to a comfortable size on sm+. */
+.ta-results .lp-btn-fb {
+  font-size: 12.5px;
+  padding: 10px 16px;
+}
+@media (min-width: 640px) {
+  .ta-results .lp-btn-fb {
+    font-size: 15px;
+    padding: 15px 26px;
+  }
+}
+.ta-results .lp-shine::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: -120%;
+  width: 60%;
+  height: 100%;
+  background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.45), transparent);
+  transform: skewX(-18deg);
+}
+.ta-results .lp-shine:hover::after {
+  animation: ta-sweep 0.85s ease;
+}
+@keyframes ta-sweep {
+  to {
+    left: 140%;
+  }
+}
+
+/* Keyboard focus ring. globals.css removes outlines globally with !important,
+ * so this scoped override must also use !important to restore a visible ring.
+ * Accent red reads on both the light/dark surfaces and the dark CTA finale. */
+.ta-results a:focus-visible,
+.ta-results button:focus-visible,
+.ta-results input:focus-visible {
+  outline: 2px solid var(--accent) !important;
+  outline-offset: 2px !important;
+  border-radius: 12px;
+}
+/* search input gets an accent border on focus (subtler than the ring) */
+.ta-results input:focus {
+  border-color: var(--accent) !important;
+}
+
+/* Cards */
+.ta-results .lp-card {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 18px;
+}
+.ta-results .lp-lift {
+  transition: transform 0.22s cubic-bezier(0.2, 0.7, 0.2, 1), box-shadow 0.22s, border-color 0.22s;
+}
+.ta-results .lp-lift:hover {
+  transform: translateY(-6px);
+  box-shadow: var(--shadow);
+  border-color: var(--line-2);
+}
+
+/* Reveal / stagger entrance — only animates when motion is allowed.
+ * Transform-only (no opacity) so content is never invisible before JS runs. */
+.ta-results .reveal {
+  transition: transform 0.6s cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+.ta-results .lp-stagger > * {
+  transition: transform 0.6s cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .ta-results .reveal:not(.in) {
+    transform: translateY(22px);
+  }
+  .ta-results .lp-stagger:not(.in) > * {
+    transform: translateY(24px);
+  }
+  .ta-results .lp-stagger.in > *:nth-child(1) { transition-delay: 0.05s; }
+  .ta-results .lp-stagger.in > *:nth-child(2) { transition-delay: 0.1s; }
+  .ta-results .lp-stagger.in > *:nth-child(3) { transition-delay: 0.15s; }
+  .ta-results .lp-stagger.in > *:nth-child(4) { transition-delay: 0.2s; }
+  .ta-results .lp-stagger.in > *:nth-child(5) { transition-delay: 0.25s; }
+  .ta-results .lp-stagger.in > *:nth-child(6) { transition-delay: 0.3s; }
+  .ta-results .lp-stagger.in > *:nth-child(7) { transition-delay: 0.35s; }
+  .ta-results .lp-stagger.in > *:nth-child(8) { transition-delay: 0.4s; }
+}
+.ta-results .reveal.in,
+.ta-results .lp-stagger.in > * {
+  transform: none;
+}
+
+/* Animated "Latest draw" badge shimmer */
+.ta-results .lp-badge {
+  position: relative;
+  overflow: hidden;
+}
+.ta-results .lp-badge::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: -130%;
+  width: 55%;
+  height: 100%;
+  background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.65), transparent);
+  transform: skewX(-18deg);
+  animation: ta-badge-sweep 3s ease-in-out infinite;
+}
+@keyframes ta-badge-sweep {
+  0% { left: -130%; }
+  55%, 100% { left: 160%; }
+}
+
+/* ── "How a winner is chosen" — sci-fi sequential activation ──────────────
+ * A glowing electrode traces each step's ring and travels the connector rail;
+ * once a step is traced it locks in (glowing ring + bordered definition).
+ * Base state = fully activated, so reduced-motion / no-JS shows the end state. */
+.ta-results .ta-step-badge {
+  position: relative;
+  border-radius: 999px;
+  background: var(--surface);
+  /* 6px surface ring masks the rail behind; accent glow = "locked" */
+  box-shadow: 0 0 0 6px var(--surface), 0 0 9px 1px color-mix(in srgb, var(--accent) 42%, transparent);
+}
+.ta-results .ta-step-ring {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  transform: rotate(180deg); /* trace starts at the left, where the rail connects */
+}
+.ta-results .ta-step-ring-track {
+  fill: none;
+  stroke: var(--line-2);
+  stroke-width: 3;
+}
+.ta-results .ta-step-ring-fill {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-dasharray: 100;
+  stroke-dashoffset: 0;
+}
+.ta-results .ta-step-num {
+  position: relative;
+  z-index: 2;
+  color: var(--accent);
+}
+.ta-results .ta-step-icon {
+  color: var(--accent);
+}
+.ta-results .ta-step-dot {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  z-index: 2;
+  width: 7px;
+  height: 7px;
+  margin: -3.5px;
+  border-radius: 999px;
+  background: var(--accent);
+  box-shadow: 0 0 10px 2px var(--accent);
+  opacity: 0; /* only visible while tracing */
+}
+.ta-results .ta-step-def {
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 10px 12px;
+  background: color-mix(in srgb, var(--accent) 5%, transparent);
+}
+.ta-results .ta-step-line {
+  background: var(--line-2);
+}
+.ta-results .ta-step-line-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 100%;
+  height: 100%;
+  background: var(--accent);
+  box-shadow: 0 0 8px var(--accent);
+}
+/* glowing electrode head pinned to the leading edge of the rail fill — it leads,
+ * the line trails behind it (the head is the source of the colour) */
+.ta-results .ta-step-line-head {
+  position: absolute;
+  right: -2px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: var(--accent);
+  box-shadow: 0 0 12px 3px var(--accent), 0 0 4px 1px rgba(255, 255, 255, 0.9);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  /* resting (pre-activation) state — everything dormant */
+  .ta-results .ta-step-badge {
+    box-shadow: 0 0 0 6px var(--surface);
+  }
+  .ta-results .ta-step-ring-fill {
+    stroke-dashoffset: 100;
+  }
+  .ta-results .ta-step-num,
+  .ta-results .ta-step-icon {
+    color: var(--ink-3);
+  }
+  .ta-results .ta-step-def {
+    border-color: transparent;
+    background: transparent;
+  }
+  .ta-results .ta-step-line-fill {
+    width: 0;
+  }
+
+  /* Base / mobile (no rail): rings activate in a tight sequence. */
+  .ta-results .ta-stage.in .ta-step-ring-fill {
+    /* linear so the dot stays exactly at the fill's leading edge (leads it) */
+    animation: ta-ring-draw 1s linear forwards;
+    animation-delay: calc(var(--step) * 1.1s);
+  }
+  .ta-results .ta-stage.in .ta-step-dot {
+    animation: ta-dot-trace 1s linear;
+    animation-delay: calc(var(--step) * 1.1s);
+  }
+  .ta-results .ta-stage.in .ta-step-num,
+  .ta-results .ta-stage.in .ta-step-icon {
+    animation: ta-step-colorize 0.4s ease forwards;
+    animation-delay: calc(var(--step) * 1.1s + 0.85s);
+  }
+  .ta-results .ta-stage.in .ta-step-badge {
+    animation: ta-step-lock 0.6s ease forwards;
+    animation-delay: calc(var(--step) * 1.1s + 0.85s);
+  }
+  .ta-results .ta-stage.in .ta-step-def {
+    animation: ta-def-lock 0.5s ease forwards;
+    animation-delay: calc(var(--step) * 1.1s + 0.9s);
+  }
+}
+
+/* Desktop: the electrode travels the rail; each ring activates only as the head
+ * arrives at it (ring traces stay in lockstep with the rail fill). */
+@media (min-width: 1024px) and (prefers-reduced-motion: no-preference) {
+  .ta-results .ta-stage.in .ta-step-line-fill {
+    animation: ta-line-travel 6.7s linear forwards;
+  }
+  .ta-results .ta-stage.in .ta-step-ring-fill {
+    animation-delay: calc(var(--step) * 1.9s);
+  }
+  .ta-results .ta-stage.in .ta-step-dot {
+    animation-delay: calc(var(--step) * 1.9s);
+  }
+  .ta-results .ta-stage.in .ta-step-num,
+  .ta-results .ta-stage.in .ta-step-icon {
+    animation-delay: calc(var(--step) * 1.9s + 1s);
+  }
+  .ta-results .ta-stage.in .ta-step-badge {
+    animation-delay: calc(var(--step) * 1.9s + 1s);
+  }
+  .ta-results .ta-stage.in .ta-step-def {
+    animation-delay: calc(var(--step) * 1.9s + 1.05s);
+  }
+}
+
+@keyframes ta-ring-draw {
+  from { stroke-dashoffset: 100; }
+  to { stroke-dashoffset: 0; }
+}
+@keyframes ta-step-colorize {
+  from { color: var(--ink-3); }
+  to { color: var(--accent); }
+}
+@keyframes ta-dot-trace {
+  /* starts at the left (9 o'clock, where the rail connects) and leads the
+   * trace one full clockwise turn */
+  0% { opacity: 1; transform: rotate(-90deg) translateY(-26px); }
+  85% { opacity: 1; }
+  100% { opacity: 0; transform: rotate(270deg) translateY(-26px); }
+}
+/* Stepped over 6.7s: the rail holds at each badge (33%/67%) while that badge's
+ * ring traces, then travels on — so the head reaches a badge exactly when its
+ * ring starts. (Badge centres sit at 0/33.3/66.7/100% of the rail.) */
+@keyframes ta-line-travel {
+  0%, 14.9% { width: 0%; }
+  28.4% { width: 33.33%; }
+  43.3% { width: 33.33%; }
+  56.7% { width: 66.67%; }
+  71.6% { width: 66.67%; }
+  85.1%, 100% { width: 100%; }
+}
+@keyframes ta-step-lock {
+  0% { box-shadow: 0 0 0 6px var(--surface); }
+  45% { box-shadow: 0 0 0 6px var(--surface), 0 0 16px 4px color-mix(in srgb, var(--accent) 70%, transparent); }
+  100% { box-shadow: 0 0 0 6px var(--surface), 0 0 9px 1px color-mix(in srgb, var(--accent) 42%, transparent); }
+}
+@keyframes ta-def-lock {
+  to {
+    border-color: var(--line);
+    background: color-mix(in srgb, var(--accent) 5%, transparent);
+  }
+}
+
+
+/* Fading edge on the horizontal winner rail */
+.ta-results .lp-fadeedge {
+  position: absolute;
+  top: 0;
+  bottom: 10px;
+  width: 56px;
+  pointer-events: none;
+  z-index: 5;
+}
+
+/* Live pulsing dot */
+.ta-results .lp-livedot {
+  width: 9px;
+  height: 9px;
+  border-radius: 999px;
+  background: var(--hot);
+  animation: ta-pulse 1.6s infinite;
+}
+@keyframes ta-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--hot) 60%, transparent); }
+  50% { box-shadow: 0 0 0 6px transparent; }
+}
+
+/* Soft accent glow */
+.ta-results .lp-glow {
+  position: absolute;
+  border-radius: 999px;
+  filter: blur(70px);
+  opacity: 0.5;
+  pointer-events: none;
+  background: var(--accent);
+}
+
+/* Hidden scrollbar utility (winner rail) */
+.ta-results .lp-noscroll::-webkit-scrollbar {
+  display: none;
+}
+.ta-results .lp-noscroll {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* Hero background — the all-prizes photo behind a strong theme-aware scrim so
+ * the headline/metrics stay readable in BOTH light and dark mode. The scrim is
+ * baked into the same background-image stack as a flat colour wash. */
+.ta-results .ta-hero-bg {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background-image: linear-gradient(rgba(245, 244, 242, 0.96), rgba(245, 244, 242, 0.96)),
+    url("/images/background/promo/landing/all-prizes/all-prizes-mobile.webp");
+  background-size: cover;
+  background-position: center;
+}
+.dark .ta-results .ta-hero-bg {
+  background-image: linear-gradient(rgba(8, 8, 10, 0.96), rgba(8, 8, 10, 0.96)),
+    url("/images/background/promo/landing/all-prizes/all-prizes-mobile.webp");
+}
+@media (min-width: 768px) {
+  .ta-results .ta-hero-bg {
+    background-image: linear-gradient(rgba(245, 244, 242, 0.96), rgba(245, 244, 242, 0.96)),
+      url("/images/background/promo/landing/all-prizes/all-prizes.webp");
+  }
+  .dark .ta-results .ta-hero-bg {
+    background-image: linear-gradient(rgba(8, 8, 10, 0.96), rgba(8, 8, 10, 0.96)),
+      url("/images/background/promo/landing/all-prizes/all-prizes.webp");
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ta-results .lp-badge::after,
+  .ta-results .lp-livedot {
+    animation: none;
+  }
+}

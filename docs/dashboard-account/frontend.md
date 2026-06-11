@@ -6,7 +6,7 @@
 - Profile view / edit
 - Subscription management (cancel, upgrade, downgrade)
 - Payment methods (list, add, set default, remove)
-- Draws history / current entries
+- Draws history / current entries — the draws tab ([src/app/(site)/my-account/draws/page.tsx](../../src/app/(site)/my-account/draws/page.tsx)) renders the shared, page-portable `WinnersTestimony` "Hear from our winners" section (draws domain — see [docs/draws/frontend.md](../draws/frontend.md#winner-testimony-display--winnerstestimony-the-one-hear-from-our-winners-section-2026-06-11)), replacing the removed `WinnerTestimonySection`.
 - Rewards / redeemables wallet
 - Metrics / activity
 

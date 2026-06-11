@@ -5,6 +5,7 @@ import connectDB from "@/lib/mongodb";
 import MajorDraw from "@/models/MajorDraw";
 import { z } from "zod";
 import { normalizeActivationDateToMidnight } from "@/utils/common/timezone";
+import { deleteRemovedPrizeImages } from "@/utils/draws/delete-removed-prize-images";
 
 // Validation schema for major draw updates
 const majorDrawUpdateSchema = z.object({
@@ -15,6 +16,9 @@ const majorDrawUpdateSchema = z.object({
   endDate: z.string().datetime().optional(),
   drawDate: z.string().datetime().optional(),
   activationDate: z.string().datetime().optional(),
+  // Draw-level links (added post-draw). Empty string clears the link.
+  resultUrl: z.string().trim().max(2000, "Result URL too long").optional(),
+  watchUrl: z.string().trim().max(2000, "Watch URL too long").optional(),
   prize: z
     .object({
       name: z.string().min(1, "Prize name is required").optional(),
@@ -68,6 +72,10 @@ export async function PUT(request: NextRequest) {
         "endDate",
         "drawDate",
         "activationDate",
+        // Result / watch links are normally filled AFTER a draw completes (and is
+        // therefore configuration-locked) — they must stay editable when locked.
+        "resultUrl",
+        "watchUrl",
       ];
       const hasRestrictedFields = Object.keys(validatedData).some((key) => !allowedFields.includes(key));
 
@@ -90,6 +98,8 @@ export async function PUT(request: NextRequest) {
     if (validatedData.endDate !== undefined) updateData.endDate = validatedData.endDate;
     if (validatedData.drawDate !== undefined) updateData.drawDate = validatedData.drawDate;
     if (validatedData.activationDate !== undefined) updateData.activationDate = validatedData.activationDate;
+    if (validatedData.resultUrl !== undefined) updateData.resultUrl = validatedData.resultUrl;
+    if (validatedData.watchUrl !== undefined) updateData.watchUrl = validatedData.watchUrl;
 
     // Convert date strings to Date objects
     if (updateData.drawDate) {
@@ -150,6 +160,13 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: "Failed to update major draw" }, { status: 500 });
     }
 
+    // Best-effort: reclaim Cloudinary storage for any prize images removed in
+    // this edit (skips images still referenced by a winner snapshot). Never
+    // blocks the save — `deleteRemovedPrizeImages` swallows its own errors.
+    if (validatedData.prize?.images !== undefined) {
+      await deleteRemovedPrizeImages((majorDraw.prize?.images ?? []) as string[], validatedData.prize.images);
+    }
+
     await log(200);
     return NextResponse.json({
       success: true,
@@ -158,6 +175,8 @@ export async function PUT(request: NextRequest) {
           _id: updatedMajorDraw._id,
           name: updatedMajorDraw.name,
           description: updatedMajorDraw.description,
+          resultUrl: updatedMajorDraw.resultUrl,
+          watchUrl: updatedMajorDraw.watchUrl,
           status: updatedMajorDraw.status,
           drawDate: updatedMajorDraw.drawDate,
           activationDate: updatedMajorDraw.activationDate,
@@ -213,6 +232,8 @@ export async function GET(request: NextRequest) {
           _id: majorDraw._id,
           name: majorDraw.name,
           description: majorDraw.description,
+          resultUrl: majorDraw.resultUrl,
+          watchUrl: majorDraw.watchUrl,
           status: majorDraw.status,
           drawDate: majorDraw.drawDate,
           activationDate: majorDraw.activationDate,

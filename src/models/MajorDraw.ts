@@ -3,6 +3,10 @@ import mongoose, { Document, Schema } from "mongoose";
 export interface IMajorDraw extends Document {
   name: string;
   description: string;
+  /** External verification / result link for this draw (e.g. randomdraws.com.au). Shown publicly as "View result" / "Verify". */
+  resultUrl?: string;
+  /** Facebook live-draw / announcement video link. Shown publicly as "Watch the draw". */
+  watchUrl?: string;
   /**
    * @deprecated Prize presentation is now handled via static frontend configs.
    * The field remains optional for legacy records and admin history views.
@@ -75,6 +79,18 @@ const MajorDrawSchema = new Schema<IMajorDraw>(
       required: [true, "Major draw description is required"],
       trim: true,
       maxlength: [2000, "Description cannot be more than 2000 characters"],
+    },
+    // External verification / result link (randomdraws.com.au) — public "View result" / "Verify".
+    resultUrl: {
+      type: String,
+      trim: true,
+      maxlength: [2000, "Result URL cannot be more than 2000 characters"],
+    },
+    // Facebook live-draw / announcement video link — public "Watch the draw".
+    watchUrl: {
+      type: String,
+      trim: true,
+      maxlength: [2000, "Watch URL cannot be more than 2000 characters"],
     },
     prize: {
       name: {

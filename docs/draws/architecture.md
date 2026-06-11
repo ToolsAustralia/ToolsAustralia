@@ -79,7 +79,7 @@ Purchase cooldown: [src/lib/purchaseCooldown.ts](../../src/lib/purchaseCooldown.
 
 ## Public results pages
 
-- `/draw-results/` — past major draws
+- `/draw-results/` — Draw Results & Winners (redesigned 2026-06-10): hero + register (all/major/mini) + wall + how-chosen + CTA; SSRs the unified winners feed via `getAllWinners()`. See [frontend.md](./frontend.md#draw-results--winners-page-redesigned-2026-06-10).
 - `/winners/` — winner gallery
 - `/major-draw/` — current major draw + countdown
 - `/mini-draws/[id]/` — a specific mini draw + countdown

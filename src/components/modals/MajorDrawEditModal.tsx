@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { Edit, Save, AlertCircle, Calendar, DollarSign, Package } from "lucide-react";
+import { Edit, Save, AlertCircle, Calendar, DollarSign, Package, Link2 } from "lucide-react";
 import {
   ModalContainer,
   ModalHeader,
@@ -19,6 +19,8 @@ interface MajorDrawData {
   _id: string;
   name: string;
   description: string;
+  resultUrl?: string;
+  watchUrl?: string;
   prize: {
     name: string;
     description: string;
@@ -68,6 +70,8 @@ export default function MajorDrawEditModal({
     setFormData({
       name: majorDraw.name,
       description: majorDraw.description,
+      resultUrl: majorDraw.resultUrl || "",
+      watchUrl: majorDraw.watchUrl || "",
       prize: {
         name: majorDraw.prize.name,
         description: majorDraw.prize.description,
@@ -504,6 +508,36 @@ export default function MajorDrawEditModal({
                     </ul>
                   </div>
                 </div>
+              </div>
+            </div>
+
+            {/* Draw Links — shown publicly once filled. Editable even when the
+                draw is configuration-locked, since these are added post-draw. */}
+            <div className="bg-green-50 p-4 rounded-lg">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-neutral-100 mb-1 flex items-center gap-2">
+                <Link2 className="w-5 h-5" />
+                Draw Links
+              </h3>
+              <p className="text-sm text-gray-600 dark:text-neutral-400 mb-4">
+                Optional. Shown on the public draw-results &amp; winners pages once a winner is published.
+              </p>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <Input
+                  label="View Results Link (randomdraws)"
+                  type="url"
+                  value={formData.resultUrl || ""}
+                  onChange={(e) => handleInputChange("resultUrl", e.target.value)}
+                  placeholder="https://www.randomdraws.com.au/..."
+                />
+
+                <Input
+                  label="Watch Draw Link (Facebook)"
+                  type="url"
+                  value={formData.watchUrl || ""}
+                  onChange={(e) => handleInputChange("watchUrl", e.target.value)}
+                  placeholder="https://www.facebook.com/..."
+                />
               </div>
             </div>
 

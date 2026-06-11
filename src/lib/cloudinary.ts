@@ -103,4 +103,50 @@ export async function uploadMultipleImages(
   return Promise.all(uploadPromises);
 }
 
+/**
+ * Derives a Cloudinary `public_id` from a stored secure URL. We only persist
+ * URLs (not public_ids), so deletion has to reverse-engineer the id.
+ * Handles optional transformation segments + the `v<version>/` prefix, e.g.
+ * `https://res.cloudinary.com/<cloud>/image/upload/v1700000000/major-draws/abc.webp`
+ * → `major-draws/abc`. Returns null for non-Cloudinary / unparseable URLs.
+ */
+export function cloudinaryPublicIdFromUrl(url: string): string | null {
+  try {
+    const u = new URL(url);
+    if (!u.hostname.includes("res.cloudinary.com")) return null;
+    const marker = "/upload/";
+    const idx = u.pathname.indexOf(marker);
+    if (idx === -1) return null;
+    const segs = u.pathname
+      .slice(idx + marker.length)
+      .split("/")
+      .filter(Boolean);
+    // Everything after the `v<digits>` version segment is the public_id path
+    // (folder + name). If there's no version segment, fall back to the whole tail.
+    const vIdx = segs.findIndex((s) => /^v\d+$/.test(s));
+    const idSegs = vIdx >= 0 ? segs.slice(vIdx + 1) : segs;
+    if (idSegs.length === 0) return null;
+    return idSegs.join("/").replace(/\.[a-z0-9]+$/i, "") || null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Permanently deletes a Cloudinary image given its stored URL. Best-effort:
+ * returns true on success (or "not found"), false on any failure — never throws.
+ */
+export async function deleteCloudinaryImageByUrl(url: string): Promise<boolean> {
+  const publicId = cloudinaryPublicIdFromUrl(url);
+  if (!publicId) return false;
+  try {
+    configureCloudinary();
+    const result = (await cloudinary.uploader.destroy(publicId)) as { result?: string };
+    return result?.result === "ok" || result?.result === "not found";
+  } catch (error) {
+    console.error(`Cloudinary delete failed for ${publicId}:`, error);
+    return false;
+  }
+}
+
 export default cloudinary;

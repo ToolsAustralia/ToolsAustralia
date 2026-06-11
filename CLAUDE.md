@@ -216,7 +216,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
 ```json
 {
   "version": 1,
-  "lastModified": "2026-06-10",
+  "lastModified": "2026-06-11",
   "domains": {
     "subscription": {
       "docs": "docs/subscription/",
@@ -314,16 +314,18 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/app/(site)/mini-draw-success/**",
         "src/app/(site)/draw-results/**",
         "src/app/(site)/winners/**",
+        "src/app/(site)/components/WinnerTestimoniesClient.tsx",
         "src/utils/giveaway-eligibility.ts",
         "src/utils/winner-name-formatter.ts",
         "src/utils/winners.ts",
+        "src/types/winner.ts",
         "src/lib/purchaseCooldown.ts",
         "src/hooks/useMajorDrawEntryCta.ts",
         "src/hooks/useMajorDrawPurchaseGate.ts",
         "src/hooks/useMiniDrawTrigger.ts",
         "src/hooks/usePastDrawsData.ts"
       ],
-      "lastVerified": "2026-06-10"
+      "lastVerified": "2026-06-11"
     },
     "rewards-redeemables": {
       "docs": "docs/rewards-redeemables/",
