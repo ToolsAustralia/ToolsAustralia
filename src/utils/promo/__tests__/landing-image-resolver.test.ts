@@ -7,28 +7,30 @@ import {
 import { LANDING_IMAGE_MANIFEST } from "@/generated/landingImageManifest";
 
 /**
- * Light sidTB base files are NOT shipped for any brand. The resolver must
- * substitute the dark variant rather than returning a 404 URL.
+ * Light sidTB base files NOW ship for every brand (2026-06-12 — the winning A/B
+ * hero, variation 2, replaced the per-brand defaults and added the previously
+ * missing `{brand}-sidTB.webp` / `{brand}-sidTB-mobile.webp` light bases). The
+ * resolver must return the light base directly — no dark fallback.
  */
-function testLightSidTbFallsBackToDark() {
+function testLightSidTbReturnsLightBase() {
   for (const brand of ["ryobi", "milwaukee", "dewalt", "makita"] as const) {
     const desktop = resolveLandingHeroImage(brand, "light", "desktop", "sidTB", null);
     const mobile = resolveLandingHeroImage(brand, "light", "mobile", "sidTB", null);
     assert.ok(
-      desktop.includes("-dark"),
-      `${brand} light desktop sidTB (no urgency) should fall back to dark, got ${desktop}`
+      !desktop.includes("-dark"),
+      `${brand} light desktop sidTB (no urgency) should return light base, got ${desktop}`
     );
     assert.ok(
-      mobile.includes("-dark"),
-      `${brand} light mobile sidTB (no urgency) should fall back to dark, got ${mobile}`
+      !mobile.includes("-dark"),
+      `${brand} light mobile sidTB (no urgency) should return light base, got ${mobile}`
     );
     assert.ok(
       LANDING_IMAGE_MANIFEST.has(desktop),
-      `fallback ${desktop} must exist in manifest`
+      `light base ${desktop} must exist in manifest`
     );
     assert.ok(
       LANDING_IMAGE_MANIFEST.has(mobile),
-      `fallback ${mobile} must exist in manifest`
+      `light base ${mobile} must exist in manifest`
     );
   }
 }
@@ -112,7 +114,7 @@ function testEvergreenAllVariantsExist() {
 }
 
 function run() {
-  testLightSidTbFallsBackToDark();
+  testLightSidTbReturnsLightBase();
   testExistingComboReturnsAsIs();
   testDarkComboReturnsAsIs();
   testKinTbUrgencyCollapsesToBase();
