@@ -64,6 +64,7 @@
     "test:advertising-card-model": "tsx src/app/admin/component/overview/sections/__tests__/advertisingCardModel.test.ts",
     "test:platform-revenue-breakdown": "tsx src/services/admin/__tests__/platformRevenueBreakdown.test.ts",
     "test:hourly-revenue": "tsx src/services/admin/dashboard-stats/__tests__/hourly-revenue-reconciliation.test.ts",
+    "test:merge-ad-channels": "tsx src/services/admin/dashboard-stats/__tests__/mergeAdChannels.test.ts",
     "test:klaviyo-fold": "tsx src/services/admin/klaviyo/__tests__/foldKlaviyoValues.test.ts",
     "test:mer": "tsx src/services/admin/mer/__tests__/computeDrawMer.test.ts",
     "migrate:anchor-billing-24": "tsx scripts/migrate-anchor-billing-24.ts",
