@@ -35,6 +35,8 @@ type MajorDrawData = {
   _id: string;
   name: string;
   description: string;
+  resultUrl?: string;
+  watchUrl?: string;
   prize: {
     name: string;
     description: string;
@@ -56,6 +58,8 @@ interface DrawResult {
   _id: string;
   name: string;
   description: string;
+  resultUrl?: string;
+  watchUrl?: string;
   status: "queued" | "active" | "frozen" | "completed" | "cancelled";
   startDate: Date;
   endDate: Date;
@@ -479,6 +483,8 @@ export default function DrawResults() {
       _id: draw._id,
       name: draw.name,
       description: draw.description,
+      resultUrl: draw.resultUrl ?? "",
+      watchUrl: draw.watchUrl ?? "",
       prize: {
         name: draw.prize.name,
         description: draw.prize.description,

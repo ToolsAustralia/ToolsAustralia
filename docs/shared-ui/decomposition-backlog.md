@@ -278,9 +278,6 @@ _(none)_
 - [src/components/sections/promo/PromotionsAccountButton.tsx](../../src/components/sections/promo/PromotionsAccountButton.tsx) — **score 2** — 159 LOC
   - signals: ternary-explosion (4 JSX ternaries); multiple-concerns (3 concern buckets: hooks, services, components)
 
-- [src/components/sections/winner-testimony/WinnerTestimonySection.tsx](../../src/components/sections/winner-testimony/WinnerTestimonySection.tsx) — **score 2** — 328 LOC
-  - signals: ternary-explosion (7 JSX ternaries); multiple-concerns (3 concern buckets: hooks, services, components)
-
 - [src/components/ui/BirthdatePicker.tsx](../../src/components/ui/BirthdatePicker.tsx) — **score 2** — 403 LOC
   - signals: ternary-explosion (15 JSX ternaries); many-arbitraries (24 arbitrary-value classNames); long-className (longest className=596 chars)
 
@@ -551,12 +548,6 @@ _(none)_
 
 - [src/components/sections/promo/PromoFAQs.tsx](../../src/components/sections/promo/PromoFAQs.tsx) — **score 1** — 77 LOC
   - signals: ternary-explosion (6 JSX ternaries)
-
-- [src/components/sections/winner-testimony/WinnerCinematicHero.tsx](../../src/components/sections/winner-testimony/WinnerCinematicHero.tsx) — **score 1** — 131 LOC
-  - signals: many-arbitraries (33 arbitrary-value classNames); long-className (longest className=356 chars)
-
-- [src/components/sections/winner-testimony/WinnerStoryModal.tsx](../../src/components/sections/winner-testimony/WinnerStoryModal.tsx) — **score 1** — 112 LOC
-  - signals: multiple-concerns (3 concern buckets: hooks, services, components)
 
 - [src/components/seo/StructuredData.tsx](../../src/components/seo/StructuredData.tsx) — **score 1** — 288 LOC
   - signals: ternary-explosion (10 JSX ternaries)

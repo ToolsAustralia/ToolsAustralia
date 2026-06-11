@@ -102,7 +102,7 @@ export default function GiveawayDetails() {
       className="relative overflow-hidden bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 py-12 sm:py-16 lg:py-20"
       style={cardHoverStyle}
     >
-      {/* Same atmospheric layers as Hear From Our Winners (WinnerTestimonySection) */}
+      {/* Same atmospheric layers as Hear From Our Winners (WinnersTestimony) */}
       <div
         className="pointer-events-none absolute inset-0"
         style={{

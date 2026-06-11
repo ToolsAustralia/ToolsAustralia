@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import WinnerTestimonySection from "@/components/sections/WinnerTestimonySection";
+import WinnersTestimony from "../winners/components/WinnersTestimony";
 import type { WinnerCardData } from "@/components/cards/WinnerCard";
 
 /**
@@ -36,6 +36,6 @@ export default function WinnerTestimoniesClient() {
     return null;
   }
 
-  return <WinnerTestimonySection winners={winners} />;
+  return <WinnersTestimony winners={winners} />;
 }
 

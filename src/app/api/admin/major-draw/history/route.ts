@@ -41,6 +41,8 @@ type MajorDrawLean = {
   _id: Types.ObjectId | string;
   name: string;
   description: string;
+  resultUrl?: string;
+  watchUrl?: string;
   status: "queued" | "active" | "frozen" | "completed" | "cancelled";
   startDate: Date;
   endDate: Date;
@@ -67,6 +69,8 @@ type ProcessedDraw = {
   _id: string;
   name: string;
   description: string;
+  resultUrl?: string;
+  watchUrl?: string;
   status: "queued" | "active" | "frozen" | "completed" | "cancelled";
   startDate: Date;
   endDate: Date;
@@ -246,6 +250,8 @@ export async function GET(request: NextRequest) {
         _id: drawId,
         name: drawDoc.name,
         description: drawDoc.description,
+        resultUrl: drawDoc.resultUrl,
+        watchUrl: drawDoc.watchUrl,
         status: drawDoc.status,
         startDate: drawDoc.startDate,
         endDate: drawDoc.endDate,

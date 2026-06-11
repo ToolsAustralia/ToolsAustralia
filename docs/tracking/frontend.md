@@ -45,6 +45,10 @@ Tracking/pixel components use `cn()` from `@/utils/cn` for conditional class com
 
 Pixel `<Script>` tags are tagged with `data-tracking-pixel="true"` (`GoogleTagManager`, `KlaviyoScriptLoader`, the Contentsquare loader in `app/layout.tsx`). The print stylesheet in [src/app/globals.css](../../src/app/globals.css) hides any `[data-tracking-pixel]` element so they don't leak into printed pages. When wiring a new pixel script, add the same attribute. See [shared-ui/patterns.md](../shared-ui/patterns.md#print-stylesheet) for the full set of print-hidden markers.
 
+## Global `.ta-results` stylesheet import (2026-06-11)
+
+[src/app/layout.tsx](../../src/app/layout.tsx) now imports `./(site)/draw-results/draw-results.css` globally (alongside `globals.css`). Every selector in that file is scoped under `.ta-results`, so the global import is inert on pages that don't use the class — it exists so the portable `WinnersTestimony` "Hear from our winners" section (draws domain) renders correctly on any host page (homepage, promotions, my-account). No tracking behavior is affected; noted here only because `layout.tsx` is a tracking-domain file.
+
 ## Viewport meta change (2026-06-09)
 
 The `<meta name="viewport">` in [src/app/layout.tsx](../../src/app/layout.tsx) changed from `width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no` to `width=device-width, initial-scale=1, viewport-fit=cover`.
