@@ -13,7 +13,11 @@ export interface ChartData {
   date: string; // Date label (e.g., "Jan 15", "2024", "Jan")
   dateKey: string; // ISO date string for filtering (e.g., "2025-01-15T00:00:00.000Z")
   oneTime: number; // One-time packages (excluding mini-draw)
-  memberships: number; // Subscription packages
+  memberships: number; // Subscription packages (first purchases + renewals)
+  // Renewal subset of `memberships` (data.billingReason === "subscription_cycle").
+  // Lets the Overview chart subtract recurring revenue client-side ("Exclude renewals")
+  // without a refetch. Omitted (undefined) on points with no renewal revenue.
+  membershipRenewals?: number;
   miniDraw: number; // Mini-draw packages
   total: number;
 }
@@ -177,6 +181,9 @@ export async function GET(request: NextRequest) {
         // Categorize revenue by package type
         if (event.packageType === "membership") {
           periodData.memberships += price;
+          if (event.data?.billingReason === "subscription_cycle") {
+            periodData.membershipRenewals = (periodData.membershipRenewals ?? 0) + price;
+          }
         } else if (event.packageType === "mini-draw") {
           periodData.miniDraw += price;
         } else {
@@ -249,6 +256,9 @@ export async function GET(request: NextRequest) {
       // Categorize revenue by package type
       if (event.packageType === "membership") {
         periodData.memberships += price;
+        if (event.data?.billingReason === "subscription_cycle") {
+          periodData.membershipRenewals = (periodData.membershipRenewals ?? 0) + price;
+        }
       } else if (event.packageType === "mini-draw") {
         periodData.miniDraw += price;
       } else {
@@ -371,6 +381,7 @@ export async function GET(request: NextRequest) {
     const totalRevenue = chartData.reduce((sum, d) => sum + d.total, 0);
     const oneTimeTotal = chartData.reduce((sum, d) => sum + d.oneTime, 0);
     const membershipsTotal = chartData.reduce((sum, d) => sum + d.memberships, 0);
+    const membershipRenewalsTotal = chartData.reduce((sum, d) => sum + (d.membershipRenewals ?? 0), 0);
     const miniDrawTotal = chartData.reduce((sum, d) => sum + d.miniDraw, 0);
 
     // Calculate growth (compare last period to previous period)
@@ -388,6 +399,7 @@ export async function GET(request: NextRequest) {
           total: totalRevenue,
           oneTime: oneTimeTotal,
           memberships: membershipsTotal,
+          membershipRenewals: membershipRenewalsTotal,
           miniDraw: miniDrawTotal,
         },
         growthRate,

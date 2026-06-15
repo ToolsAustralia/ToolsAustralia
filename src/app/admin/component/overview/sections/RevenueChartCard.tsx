@@ -1,8 +1,8 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { LineChart, ArrowUp, ArrowDown } from "lucide-react";
-import { Card, Badge, Segmented, RevenueAreaChart } from "@/components/admin/ui";
+import { LineChart } from "lucide-react";
+import { Card, Segmented, RevenueAreaChart } from "@/components/admin/ui";
 import { useRevenueBreakdown, type ChartData } from "@/hooks/queries/useAdminQueries";
 import { useMetricsFormatting } from "@/hooks/useMetricsFormatting";
 import { useIsLgUp } from "@/hooks/useIsLgUp";
@@ -36,12 +36,21 @@ export default function RevenueChartCard() {
   const { fmtCompact } = useMetricsFormatting();
   const isLgUp = useIsLgUp();
   const [period, setPeriod] = useState<Period>("days");
+  // Toggle: subtract membership-renewal (recurring) revenue so the operator can
+  // see "new" revenue — e.g. a day spiking on renewals drops to its real new-sales
+  // figure. Subtracted client-side from each point's `total` (no refetch).
+  const [excludeRenewals, setExcludeRenewals] = useState(false);
 
   const { data, isLoading } = useRevenueBreakdown(period);
 
   const points: ChartData[] = useMemo(() => data?.chartData ?? [], [data?.chartData]);
-  const series = useMemo(() => points.map((p) => p.total), [points]);
+  const series = useMemo(
+    () => points.map((p) => (excludeRenewals ? p.total - (p.membershipRenewals ?? 0) : p.total)),
+    [points, excludeRenewals],
+  );
   const pointLabels = useMemo(() => points.map((p) => p.date), [points]);
+  // Only offer the toggle when there's actually renewal revenue in this window.
+  const hasRenewals = useMemo(() => points.some((p) => (p.membershipRenewals ?? 0) > 0), [points]);
 
   // Sample up to ~8 evenly-spaced date labels for the x-axis ticks.
   const ticks = useMemo(() => {
@@ -52,8 +61,6 @@ export default function RevenueChartCard() {
   }, [points]);
 
   const axisLabel = AXIS_LABEL[period];
-  const trackingUp =
-    series.length > 0 ? series[series.length - 1] >= series[0] : true;
   const hasSeries = series.length >= 2;
 
   return (
@@ -69,20 +76,24 @@ export default function RevenueChartCard() {
               Revenue overview
             </h3>
             <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-0.5">
-              Hover the line for exact figures
+              {excludeRenewals ? "Excluding membership renewals · hover for figures" : "Hover the line for exact figures"}
             </p>
           </div>
         </div>
-        <div className="flex items-center justify-between sm:justify-end gap-2 shrink-0">
-          {!isLoading && hasSeries && (
-            <Badge tone={trackingUp ? "success" : "danger"}>
-              {trackingUp ? (
-                <ArrowUp className="w-3 h-3" strokeWidth={2.5} />
-              ) : (
-                <ArrowDown className="w-3 h-3" strokeWidth={2.5} />
-              )}
-              {trackingUp ? "Tracking up" : "Tracking down"}
-            </Badge>
+        <div className="flex items-center justify-between sm:justify-end gap-3 shrink-0">
+          {!isLoading && hasRenewals && (
+            <label
+              className="flex items-center gap-1.5 cursor-pointer select-none text-xs font-medium text-neutral-600 dark:text-neutral-300 whitespace-nowrap"
+              title="Subtract membership renewal (recurring) revenue from the chart"
+            >
+              <input
+                type="checkbox"
+                checked={excludeRenewals}
+                onChange={(e) => setExcludeRenewals(e.target.checked)}
+                className="h-3.5 w-3.5 cursor-pointer accent-[#ee0000]"
+              />
+              Exclude renewals
+            </label>
           )}
           <Segmented
             options={PERIOD_OPTIONS}
