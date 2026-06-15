@@ -28,6 +28,7 @@
 
 import { config } from "dotenv";
 import path from "node:path";
+import { connectOpsDb } from "./connect-ops-db";
 
 config({ path: path.resolve(process.cwd(), ".env.local") });
 
@@ -60,16 +61,11 @@ const VIDEO_CONFIG = { hero: { disableVideo: false } }; // control: video plays
 const STATIC_CONFIG = { hero: { disableVideo: true } }; // treatment: still only
 
 async function main(): Promise<void> {
-  if (!process.env.MONGODB_URI) {
-    console.error("❌ MONGODB_URI not set in .env.local");
-    process.exit(1);
-  }
+  await connectOpsDb(`Seed static-vs-video hero — ${DRY_RUN ? "DRY-RUN" : "APPLY"}`);
 
-  const connectDB = (await import("../src/lib/mongodb")).default;
   const { default: Experiment } = await import("../src/models/ab-testing/Experiment");
   const { default: Variant } = await import("../src/models/ab-testing/Variant");
   const { default: User } = await import("../src/models/User");
-  await connectDB();
 
   const variants = [
     { name: "Video", trafficPercentage: 50, isControl: true, config: VIDEO_CONFIG },

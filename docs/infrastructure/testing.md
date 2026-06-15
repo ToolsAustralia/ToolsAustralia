@@ -24,6 +24,19 @@ curl -H "x-cron-secret: $CRON_SECRET" http://localhost:3000/api/cron/major-draw-
 npm run migrate:<name>:dry
 ```
 
+### Targeting production from ops scripts (`--prod`)
+
+The A/B / affiliate ops scripts (`migrate-dedupe-variant-assignments`,
+`reconcile-affiliate-commissions`, `seed-static-vs-video-hero-experiment`) share
+[`scripts/connect-ops-db.ts`](../../scripts/connect-ops-db.ts). By default they
+connect to your local/dev `MONGODB_URI`. Pass **`--prod`** (or use the `:prod`
+npm variants) to connect to **`PROD_MONGODB_URI`** instead — the helper forces the
+`Production` database (the prod Atlas string has no `/db` path, so a bare connect
+would silently hit an empty `test` DB) and rewrites `MONGODB_URI` up-front so
+services that call `connectDB()` internally (e.g. `recordAffiliateCommission`) use
+prod uniformly. Every run prints `PROD|local · db="…" @ host`; a prod run adds a
+"Targeting PRODUCTION" warning. **Always dry-run against prod first.**
+
 ### A/B sticky-assignment dedupe (run before deploying the unique index)
 
 `scripts/migrate-dedupe-variant-assignments.ts` collapses duplicate
@@ -34,8 +47,10 @@ can build, then builds them. **Dry-run by default**; flags split-brain groups
 `VariantAssignment` model change, or the prod index build silently fails.
 
 ```bash
-npm run migrate:dedupe-variant-assignments:dry   # report only, no writes
-npm run migrate:dedupe-variant-assignments       # delete dups + build unique indexes
+npm run migrate:dedupe-variant-assignments:dry        # dev: report only, no writes
+npm run migrate:dedupe-variant-assignments            # dev: delete dups + build unique indexes
+npm run migrate:dedupe-variant-assignments:prod:dry   # PROD: report only
+npm run migrate:dedupe-variant-assignments:prod       # PROD: delete dups + build indexes
 ```
 
 ### A/B seed: static-image-vs-video hero experiment
@@ -46,8 +61,10 @@ npm run migrate:dedupe-variant-assignments       # delete dups + build unique in
 admin → A/B Testing.
 
 ```bash
-npm run seed:static-vs-video-hero:dry   # preview, no writes
-npm run seed:static-vs-video-hero       # create the draft experiment
+npm run seed:static-vs-video-hero:dry        # dev: preview, no writes
+npm run seed:static-vs-video-hero            # dev: create the draft experiment
+npm run seed:static-vs-video-hero:prod:dry   # PROD: preview
+npm run seed:static-vs-video-hero:prod       # PROD: create the draft experiment
 ```
 
 ### Affiliate commission reconciliation (safety net)
@@ -62,8 +79,10 @@ the durable `PaymentEvent` ledger, reports the gaps (+ a CSV audit in
 default; review the CSV before applying.**
 
 ```bash
-npm run reconcile:affiliate-commissions:dry   # audit + CSV, no writes (exit 2 if gaps found)
-npm run reconcile:affiliate-commissions       # create the missing commissions
+npm run reconcile:affiliate-commissions:dry        # dev: audit + CSV, no writes (exit 2 if gaps)
+npm run reconcile:affiliate-commissions            # dev: create the missing commissions
+npm run reconcile:affiliate-commissions:prod:dry   # PROD: audit + CSV, no writes
+npm run reconcile:affiliate-commissions:prod       # PROD: create the missing commissions
 ```
 
 ## npm test scripts

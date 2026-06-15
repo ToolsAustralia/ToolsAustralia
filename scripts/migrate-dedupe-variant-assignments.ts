@@ -21,6 +21,7 @@
 
 import { config } from "dotenv";
 import path from "node:path";
+import { connectOpsDb } from "./connect-ops-db";
 
 config({ path: path.resolve(process.cwd(), ".env.local") });
 
@@ -35,23 +36,8 @@ interface DupGroup {
 }
 
 async function main(): Promise<void> {
-  if (!process.env.MONGODB_URI) {
-    console.error("❌ MONGODB_URI not set in .env.local");
-    process.exit(1);
-  }
-
-  const mongooseMod = (await import("mongoose")).default;
-  const connectDB = (await import("../src/lib/mongodb")).default;
+  await connectOpsDb(`Dedupe VariantAssignment — ${DRY_RUN ? "DRY-RUN (no writes)" : "APPLY (live)"}`);
   const { default: VariantAssignment } = await import("../src/models/ab-testing/VariantAssignment");
-  await connectDB();
-
-  const dbName = mongooseMod.connection?.db?.databaseName ?? "(unknown)";
-  const uri = process.env.MONGODB_URI || "";
-  const at = uri.indexOf("@");
-  const host = at >= 0 ? uri.slice(at + 1).split("/")[0] : "(host?)";
-  console.log(
-    `🔧 Dedupe VariantAssignment — ${DRY_RUN ? "DRY-RUN (no writes)" : "APPLY (live)"} · db="${dbName}" @ ${host}`
-  );
 
   const keyDefs: Array<{ label: string; field: "userId" | "anonymousId" }> = [
     { label: "(experimentId, userId)", field: "userId" },
