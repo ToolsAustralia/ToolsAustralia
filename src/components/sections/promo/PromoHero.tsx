@@ -124,7 +124,9 @@ export default function PromoHero({
   // is suppressed for reduced-motion / Save-Data users. A per-slug A/B image
   // override also wins — when the variant pins a custom still, skip the video.
   const heroVideoPaths =
-    effectiveSlug && !perSlugVariantImage ? getLandingHeroVideoPaths(effectiveSlug) : null;
+    effectiveSlug && !perSlugVariantImage && !variantConfig?.hero?.disableVideo
+      ? getLandingHeroVideoPaths(effectiveSlug)
+      : null;
   const allowVideo =
     isMounted && !imageError && !flags.saveData && !flags.reducedMotion && heroVideoPaths != null;
 

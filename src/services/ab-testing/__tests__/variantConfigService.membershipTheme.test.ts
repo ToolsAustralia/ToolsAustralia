@@ -23,7 +23,22 @@ function run() {
     "error message mentions forceLight",
   );
 
-  console.log("variantConfigService.membershipTheme: all assertions passed");
+  // hero.disableVideo (static-image-vs-video experiment)
+  assert.equal(def.hero?.disableVideo, false, "default hero.disableVideo is false");
+  const staticArm = VariantConfigService.mergeVariantConfig(def, { hero: { disableVideo: true } });
+  assert.equal(staticArm.hero?.disableVideo, true, "merged hero.disableVideo is true (static arm)");
+  const videoArm = VariantConfigService.mergeVariantConfig(def, {});
+  assert.equal(videoArm.hero?.disableVideo, false, "control keeps disableVideo false (video arm)");
+  const okVideo = VariantConfigService.validateVariantConfig({ hero: { disableVideo: true } });
+  assert.equal(okVideo.valid, true, `valid disableVideo should pass: ${okVideo.errors.join(", ")}`);
+  const badVideo = VariantConfigService.validateVariantConfig({ hero: { disableVideo: "yes" } });
+  assert.equal(badVideo.valid, false, "non-boolean disableVideo should fail validation");
+  assert.ok(
+    badVideo.errors.some((e) => e.includes("disableVideo")),
+    "error message mentions disableVideo",
+  );
+
+  console.log("variantConfigService.membershipTheme + disableVideo: all assertions passed");
 }
 
 run();

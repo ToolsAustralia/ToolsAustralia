@@ -46,7 +46,8 @@ export interface ChartData {
   date: string; // Date label (e.g., "Jan 15", "2024", "Jan")
   dateKey: string; // ISO date string for filtering (e.g., "2025-01-15T00:00:00.000Z")
   oneTime: number; // One-time packages (excluding mini-draw)
-  memberships: number; // Subscription packages
+  memberships: number; // Subscription packages (first purchases + renewals)
+  membershipRenewals?: number; // Renewal subset of `memberships` (subtract to exclude recurring)
   miniDraw: number; // Mini-draw packages
   total: number;
 }
@@ -57,6 +58,7 @@ export interface RevenueBreakdownResponse {
     total: number;
     oneTime: number;
     memberships: number;
+    membershipRenewals?: number;
     miniDraw: number;
   };
   growthRate: number;

@@ -52,6 +52,8 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
         significance: summary.significance,
         stoppingRules: summary.stoppingRules,
         winner: summary.winner,
+        // NEW user-level, Bayesian, conversion-window measurement (additive).
+        bayesian: summary.bayesian,
       },
     });
   } catch (error) {

@@ -1,87 +1,110 @@
 /**
  * Affiliate Commission Reversal Utility
  *
- * Reverses affiliate commissions when payments are refunded.
- * Handles edge cases like already paid out commissions.
+ * Reverses affiliate commissions when a payment is refunded — across EVERY
+ * commission type. The previous version matched only `stripePaymentIntentId`,
+ * so `membership-recurring` rows (which store `stripeInvoiceId` only, no PI)
+ * could never be reversed — a refunded renewal kept paying the affiliate
+ * (confirmed live in prod). It also missed `membership-first` rows, whose PI is
+ * stored normalized as `invoice_in_…` while the refund passes a raw `pi_…`.
+ *
+ * Storage conventions matched here (see `affiliate-attribution.ts`):
+ *  - one-time / upsell / mini-draw → `stripePaymentIntentId = pi_…` (raw)
+ *  - membership-first              → `stripePaymentIntentId = invoice_in_…`
+ *  - membership-recurring          → `stripeInvoiceId = in_…`
  */
 
 import connectDB from "@/lib/mongodb";
 import Affiliate from "@/models/Affiliate";
 import AffiliateCommission from "@/models/AffiliateCommission";
+import {
+  normalizeStripePaymentIntentKeyForCommission,
+  stripeInvoiceIdLookupVariants,
+} from "./affiliate-attribution";
 import mongoose from "mongoose";
 
 /**
- * Reverse affiliate commissions linked to a refunded payment
+ * PURE: from a refund's payment-intent id and/or invoice id, build the candidate
+ * id sets to match every commission storage convention. Unit-tested.
+ */
+export function buildCommissionReversalIds(
+  paymentIntentId?: string,
+  invoiceId?: string
+): { piCandidates: string[]; invoiceCandidates: string[] } {
+  const piSet = new Set<string>();
+  const pi = paymentIntentId?.trim();
+  if (pi) {
+    piSet.add(pi); // raw pi_… (one-time / upsell / mini-draw)
+    piSet.add(normalizeStripePaymentIntentKeyForCommission(pi)); // in_… → invoice_in_…
+  }
+
+  const invoiceCandidates = invoiceId ? stripeInvoiceIdLookupVariants(invoiceId) : [];
+  // membership-first stores the invoice as stripePaymentIntentId = invoice_in_…
+  for (const v of invoiceCandidates) {
+    piSet.add(v.startsWith("invoice_") ? v : `invoice_${v}`);
+  }
+
+  return { piCandidates: [...piSet], invoiceCandidates };
+}
+
+/**
+ * Reverse affiliate commissions linked to a refunded payment.
  *
- * @param paymentIntentId - Stripe payment intent ID that was refunded
- * @param userId - User ID (optional, for additional filtering)
- * @returns Reversal result with details
+ * @param paymentIntentId - the refunded Stripe PaymentIntent id (raw pi_… or in_…)
+ * @param userId - optional referred-user filter
+ * @param invoiceId - the Stripe invoice id (in_…) for subscription refunds — REQUIRED
+ *                    to reach membership-first / membership-recurring rows.
  */
 export async function reverseAffiliateCommissions(
   paymentIntentId: string,
-  userId?: string
+  userId?: string,
+  invoiceId?: string
 ): Promise<{ success: boolean; reversed: number; alreadyPaid: number; error?: string }> {
-  // console.log(`🔄 reverseAffiliateCommissions called:`, {
-  //   paymentIntentId,
-  //   userId,
-  // });
-
   try {
     await connectDB();
 
-    // Find all commissions linked to this payment intent
-    const query: {
-      stripePaymentIntentId: string;
-      referredUserId?: mongoose.Types.ObjectId;
-    } = {
-      stripePaymentIntentId: paymentIntentId,
-    };
+    const { piCandidates, invoiceCandidates } = buildCommissionReversalIds(paymentIntentId, invoiceId);
 
-    if (userId) {
-      query.referredUserId = new mongoose.Types.ObjectId(userId);
+    const or: Record<string, unknown>[] = [];
+    if (piCandidates.length) or.push({ stripePaymentIntentId: { $in: piCandidates } });
+    if (invoiceCandidates.length) or.push({ stripeInvoiceId: { $in: invoiceCandidates } });
+    if (or.length === 0) {
+      return { success: true, reversed: 0, alreadyPaid: 0 };
     }
+
+    const query: Record<string, unknown> = { $or: or };
+    if (userId) query.referredUserId = new mongoose.Types.ObjectId(userId);
 
     const commissions = await AffiliateCommission.find(query);
-
     if (commissions.length === 0) {
-      // console.log(`⚠️ No affiliate commissions found for payment intent: ${paymentIntentId}`);
-      return {
-        success: true,
-        reversed: 0,
-        alreadyPaid: 0,
-      };
+      return { success: true, reversed: 0, alreadyPaid: 0 };
     }
-
-    // console.log(`📋 Found ${commissions.length} commission(s) to reverse`);
 
     let reversedCount = 0;
     let alreadyPaidCount = 0;
 
-    // Process each commission
     for (const commission of commissions) {
-      // Check if commission was already paid out
       if (commission.status === "paid") {
-        // console.warn(`⚠️ Commission ${commission._id} was already paid out - cannot reverse automatically`);
-        // console.warn(
-        //   `   Amount: $${(commission.commissionAmount / 100).toFixed(2)}, Payout ID: ${commission.payoutId}`
-        // );
+        // Already paid out — requires manual clawback. console.error survives the
+        // prod console-strip so ops actually see it (and /review can flag it).
+        console.error("⚠️ Affiliate commission already PAID on a refunded payment — manual clawback needed:", {
+          commissionId: commission._id?.toString(),
+          affiliateId: commission.affiliateId?.toString(),
+          commissionType: commission.commissionType,
+          amountDollars: (commission.commissionAmount / 100).toFixed(2),
+          payoutId: commission.payoutId?.toString(),
+          stripePaymentIntentId: commission.stripePaymentIntentId,
+          stripeInvoiceId: commission.stripeInvoiceId,
+        });
         alreadyPaidCount++;
-        continue; // Skip paid commissions - they require manual intervention
-      }
-
-      // Check if commission was already cancelled
-      if (commission.status === "cancelled") {
-        // console.log(`✅ Commission ${commission._id} already cancelled - skipping`);
         continue;
       }
 
-      // Mark commission as cancelled
+      if (commission.status === "cancelled") continue;
+
       commission.status = "cancelled";
       await commission.save();
 
-      // console.log(`✅ Reversed commission ${commission._id} (${commission.commissionType})`);
-
-      // Update affiliate totals (subtract from totals)
       await Affiliate.findByIdAndUpdate(commission.affiliateId, {
         $inc: {
           totalSales: -commission.purchaseAmount,
@@ -89,24 +112,10 @@ export async function reverseAffiliateCommissions(
         },
       });
 
-      // console.log(`✅ Updated affiliate totals (subtracted $${(commission.commissionAmount / 100).toFixed(2)})`);
-
       reversedCount++;
     }
 
-    // Log warning if any commissions were already paid
-    if (alreadyPaidCount > 0) {
-      // console.warn(`⚠️ ${alreadyPaidCount} commission(s) were already paid out and require manual reversal`);
-      // console.warn(`   Please review and manually adjust affiliate payouts if needed`);
-    }
-
-    // console.log(`✅ Commission reversal complete: ${reversedCount} reversed, ${alreadyPaidCount} already paid`);
-
-    return {
-      success: true,
-      reversed: reversedCount,
-      alreadyPaid: alreadyPaidCount,
-    };
+    return { success: true, reversed: reversedCount, alreadyPaid: alreadyPaidCount };
   } catch (error) {
     console.error(`❌ ERROR in reverseAffiliateCommissions:`, error);
     return {
