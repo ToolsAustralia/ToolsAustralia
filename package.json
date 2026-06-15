@@ -2,6 +2,9 @@
   "name": "tools-australia",
   "version": "0.1.0",
   "private": true,
+  "engines": {
+    "node": "22.x"
+  },
   "scripts": {
     "dev": "next dev --turbopack",
     "build": "next build --turbopack",
@@ -45,6 +48,8 @@
     "test:resolve-norm-date-range": "tsx src/utils/admin/__tests__/resolveNormDateRange.test.ts",
     "test:reanchor-gate": "tsx src/services/subscription/__tests__/reanchor-gate.test.ts",
     "test:trial-invoice": "tsx src/utils/billing/__tests__/trial-invoice.test.ts",
+    "test:subscription-period": "tsx src/utils/payment/stripe/__tests__/subscription-period.test.ts",
+    "test:outbound-fetch": "tsx src/lib/http/__tests__/outbound.test.ts",
     "test:zero-trial-guard": "tsx src/services/stripe-webhook-handlers/__tests__/zero-trial-invoice-guard.test.ts",
     "test:electric-scheme": "tsx src/utils/package-colors/__tests__/electricPackageScheme.test.ts",
     "test:variant-config-membership-theme": "tsx src/services/ab-testing/__tests__/variantConfigService.membershipTheme.test.ts",
@@ -314,6 +319,7 @@
     "tailwind-merge": "^3.5.0",
     "tsx": "^4.20.5",
     "twilio": "^5.9.0",
+    "undici": "^6.27.0",
     "zod": "^4.1.8",
     "zustand": "^5.0.8"
   },

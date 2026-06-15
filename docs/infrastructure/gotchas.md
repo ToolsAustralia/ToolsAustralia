@@ -1,5 +1,25 @@
 # Infrastructure — Gotchas
 
+## Outbound third-party `fetch` must go through `lib/http/outbound.ts` (undici keep-alive race)
+
+**Incident (June 2026):** Klaviyo (`a.klaviyo.com`) and Meta CAPI (`graph.facebook.com`) calls failed in prod with a flood of opaque `TypeError: fetch failed` (and some 30s timeouts), across many endpoints, while Stripe and MongoDB on the same deployment kept working. Root cause: Node's **global `fetch` (undici)** pools HTTP/1.1 keep-alive sockets. On Vercel the function is **frozen between invocations**; a remote closes an idle socket during the freeze, and on thaw undici writes the next request onto the dead socket → `error.cause.code = UND_ERR_SOCKET` ("other side closed") / `ECONNRESET`. Stripe/Mongo are immune because they use their own keep-alive agents / pooled drivers with dead-socket detection — only raw `fetch` was exposed. `keepAliveMaxTimeout` defaults to **600s** in undici, so a socket can be reused long after the freeze.
+
+**The fix** lives in [`src/lib/http/outbound.ts`](../../src/lib/http/outbound.ts) (defense in depth):
+- `outboundAgent` — an undici `Agent` with `keepAliveTimeout: 4s`, `keepAliveMaxTimeout: 10s`, `connect.timeout: 10s`. Shrinks the socket-reuse window. Installed `undici` as a direct dep, pinned to match Node's bundled major (Node 22 → undici 6.x).
+- `outboundFetch(url, init)` — **global** `fetch` routed through `outboundAgent` via the per-request `dispatcher` option (NOT `setGlobalDispatcher` — scoped so latency-sensitive internal fetches keep undici's defaults and this change can't regress them). Uses global `fetch` on purpose so the result is a global `Response` and `instanceof Response` checks keep working.
+- `resilientFetch(url, init, opts)` — `outboundFetch` + per-attempt `AbortController` timeout + bounded retry (network/socket errors, aborts, 429/5xx; never 4xx). A fresh socket on retry almost always succeeds. Tuning alone can't fully close the freeze race ([nodejs/node#47130](https://github.com/nodejs/node/issues/47130)) — the retry is the load-bearing half.
+- `describeFetchError(error)` — surfaces `error.cause.code`/`message` (undici hides the real reason). **Always log this** for outbound failures, or the next incident is again an opaque "fetch failed". `UND_ERR_SOCKET`/`ECONNRESET` → keep-alive race; `EAI_AGAIN` → DNS; `UND_ERR_CONNECT_TIMEOUT` → connect stall.
+
+**Rule:** new server-side calls to a third-party HTTP API SHOULD use `outboundFetch` (or `resilientFetch`), never bare global `fetch`. The Klaviyo client (which has its own retry loop) uses `outboundFetch` + `describeFetchError`; the Meta CAPI senders use `resilientFetch`.
+
+## Pin the Node version — a silent Vercel default bump is git-invisible
+
+`package.json` now declares `"engines": { "node": "22.x" }`. Before this, no `engines`/`.nvmrc`/`.node-version` existed, so Vercel chose the Node default; a silent platform Node bump is the one onset vector for transport regressions (like the undici incident above) that leaves **no trace in git**. Keep this pinned and bump it deliberately.
+
+## Read-only audit: Basil downgrade `current_period_end` corruption
+
+`npx tsx scripts/audit-downgrade-period-end.ts [--prod]` ([script](../../scripts/audit-downgrade-period-end.ts)) is a **read-only** audit (no writes) of `subscription.previousSubscription.endDate` corruption caused by the Stripe Basil `current_period_end` bug (see [billing-stripe/gotchas.md](../billing-stripe/gotchas.md)). It classifies each downgrade record as `FALLBACK_SIGNATURE` (~30-day shape), `HARMFUL_EXPIRED` (endDate before downgradeDate → benefits wrongly expired), or `ACTIVE`, and writes a CSV to `temp/readonly/`. Connects via `connectOpsDb` (`--prod` → `PROD_MONGODB_URI` + `Production` db). First prod run (June 2026): 21/21 downgrades corrupted, 10 users materially under-served — the past windows can't be un-expired by rewriting a date, so remediation is a business decision (goodwill), not a data patch.
+
 ## Summarizing the ErrorReport store from the CLI
 
 `npm run find:error-reports [-- --days=N --top=N --samples=N]` (`scripts/find-error-reports-summary.ts`) prints a read-only, severity-ranked summary of the in-app `ErrorReport` collection (the durable 90-day error log behind the admin dashboard) — counts by severity / category / status / API endpoint / route, a per-day trend, and the most recent samples. Pass `-- --contains="<substr>"` to switch to **drill-down mode**: full detail (browser / OS / HTTP status / page / stack-head) for every report whose `errorMessage` matches — useful for root-causing one specific error. Read-only (aggregations + `.find().lean()`), safe against prod; connects via the shared `connectDB` (`src/lib/mongodb.ts`) per the no-ad-hoc-connections rule. Caveat: the store **auto-logs expected payment events** (card declines, existing-subscription 409s) — now at `medium`, not `critical` — so a high `medium` count is mostly normal churn, not bugs. Read the samples, not just the severity counts.

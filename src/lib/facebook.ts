@@ -1,5 +1,6 @@
 import crypto from "crypto";
 import { getPixelEnv, isProductionPixelEnv } from "./facebook-env";
+import { resilientFetch, describeFetchError } from "@/lib/http/outbound";
 
 /**
  * Facebook Pixel + Conversions API integration.
@@ -304,11 +305,15 @@ export async function sendFacebookPurchaseEventDev(event: FacebookEvent): Promis
       console.log("[Facebook CAPI Dev] Sending payload:", JSON.stringify(requestBody, null, 2));
     }
 
-    const response = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(requestBody),
-    });
+    const response = await resilientFetch(
+      url,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(requestBody),
+      },
+      { label: "Facebook CAPI", timeoutMs: 5_000, retries: 2 }
+    );
 
     const responseText = await response.text();
 
@@ -331,7 +336,8 @@ export async function sendFacebookPurchaseEventDev(event: FacebookEvent): Promis
 
     return true;
   } catch (err) {
-    console.error("[Facebook CAPI] Network/parse error:", err instanceof Error ? err.message : String(err));
+    const { message, code, causeMessage } = describeFetchError(err);
+    console.error("[Facebook CAPI] Network/parse error:", { message, cause: code, causeMessage });
     return false;
   }
 }
@@ -428,13 +434,17 @@ export async function sendFacebookEvent(event: FacebookEvent, testEventCode?: st
       });
     }
 
-    const response = await fetch(`https://graph.facebook.com/${FB_GRAPH_API_VERSION}/${pixelId}/events`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
+    const response = await resilientFetch(
+      `https://graph.facebook.com/${FB_GRAPH_API_VERSION}/${pixelId}/events`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(requestBody),
       },
-      body: JSON.stringify(requestBody),
-    });
+      { label: "Facebook CAPI", timeoutMs: 5_000, retries: 2 }
+    );
 
     if (!response.ok) {
       const errorText = await response.text();
@@ -520,8 +530,11 @@ export async function sendFacebookEvent(event: FacebookEvent, testEventCode?: st
 
     return true;
   } catch (error) {
+    const { message, code, causeMessage } = describeFetchError(error);
     console.error("❌ Error sending Facebook event:", {
-      error: error instanceof Error ? error.message : String(error),
+      error: message,
+      cause: code,
+      causeMessage,
       event_name: event.event_name,
       event_id: event.event_id,
     });
