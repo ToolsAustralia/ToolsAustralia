@@ -41,6 +41,10 @@
       "schedule": "15 3 * * *"
     },
     {
+      "path": "/api/cron/reconcile-affiliate-commissions",
+      "schedule": "45 3 * * *"
+    },
+    {
       "path": "/api/cron/process-stripe-webhook-queue",
       "schedule": "* * * * *"
     },
@@ -88,6 +92,7 @@
     "src/app/api/cron/sync-meta-spend-by-url/route.ts": { "maxDuration": 300 },
     "src/app/api/cron/sync-meta-ads/route.ts": { "maxDuration": 300 },
     "src/app/api/cron/reconcile-blocked-transactions/route.ts": { "maxDuration": 300 },
+    "src/app/api/cron/reconcile-affiliate-commissions/route.ts": { "maxDuration": 300 },
     "src/app/api/cron/reconcile-major-draw-entries/route.ts": { "maxDuration": 300 },
     "src/app/api/cron/dashboard-stats-daily-snapshot/route.ts": { "maxDuration": 300 },
     "src/app/api/cron/cancellation-retention-resume/route.ts": { "maxDuration": 300 },
