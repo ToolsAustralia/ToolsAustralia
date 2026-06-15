@@ -4,6 +4,9 @@ import VariantRepository from "@/repositories/ab-testing/VariantRepository";
 import { calculateStatisticalSignificance, determineWinner } from "@/utils/ab-testing/statistical-tests";
 import Experiment from "@/models/ab-testing/Experiment";
 import ExperimentRepository from "@/repositories/ab-testing/ExperimentRepository";
+import ExperimentMetricsService from "@/services/ab-testing/ExperimentMetricsService";
+import { bayesianStatsEngine } from "@/utils/ab-testing/bayesian-test";
+import type { RevenueCap } from "@/utils/ab-testing/experiment-metrics-core";
 import mongoose from "mongoose";
 
 interface DateRange {
@@ -423,12 +426,23 @@ export class ExperimentAnalyticsService {
     const confidenceThreshold = experiment.stoppingRules?.confidenceThreshold || 95;
     const winner = await this.determineWinner(experimentId, dateRange, confidenceThreshold);
 
+    // NEW measurement model (additive — the legacy fields above stay for now so
+    // nothing breaks mid-migration). Defensive: a failure here must never 500 the
+    // analytics route, so it degrades to `bayesian: null`.
+    let bayesian: Awaited<ReturnType<ExperimentAnalyticsService["getBayesianExperimentSummary"]>> | null = null;
+    try {
+      bayesian = await this.getBayesianExperimentSummary(experimentId, { exposureRange: dateRange });
+    } catch (e) {
+      console.error("getBayesianExperimentSummary failed (non-fatal):", e);
+    }
+
     return {
       kind: "experiment" as const,
       comparison,
       significance,
       stoppingRules,
       winner,
+      bayesian,
     };
   }
 
@@ -462,6 +476,73 @@ export class ExperimentAnalyticsService {
       significance: winnerResult.significance,
       comparison,
       currentWinner,
+    };
+  }
+
+  /**
+   * NEW measurement model (2026-06 redesign) — the user-level, durable,
+   * peeking-safe summary that supersedes the event-count methods above.
+   *
+   * Pipeline: `ExperimentMetricsService` (user-level conversion + revenue from
+   * the durable assignment/PaymentEvent tables, within the conversion window)
+   * → `bayesianStatsEngine` (chance-to-win). The dashboard + Norm switch to this
+   * in Phase 4; the legacy methods remain until that wiring lands so nothing
+   * breaks mid-migration.
+   */
+  async getBayesianExperimentSummary(
+    experimentId: string,
+    opts: {
+      exposureRange?: DateRange;
+      conversionWindowDays?: number;
+      revenueCap?: RevenueCap;
+      winThreshold?: number;
+      minConvertersPerArm?: number;
+    } = {}
+  ) {
+    const metrics = await ExperimentMetricsService.getExperimentMetrics(experimentId, {
+      exposureRange: opts.exposureRange,
+      conversionWindowDays: opts.conversionWindowDays,
+      revenueCap: opts.revenueCap,
+    });
+
+    const stats = bayesianStatsEngine.evaluate(
+      metrics.variants.map((v) => ({
+        variantId: v.variantId,
+        isControl: v.isControl,
+        exposed: v.exposedUsers,
+        converters: v.converters,
+      })),
+      { winThreshold: opts.winThreshold, minConvertersPerArm: opts.minConvertersPerArm }
+    );
+
+    const statByVariant = new Map(stats.variants.map((s) => [s.variantId, s]));
+
+    return {
+      windowDays: metrics.windowDays,
+      appliedCapDollars: metrics.appliedCapDollars,
+      engine: stats.engine,
+      controlVariantId: stats.controlVariantId,
+      recommendation: stats.recommendation,
+      recommendedVariantId: stats.recommendedVariantId,
+      minSampleMet: stats.minSampleMet,
+      winThreshold: stats.winThreshold,
+      variants: metrics.variants.map((m) => {
+        const s = statByVariant.get(m.variantId);
+        return {
+          variantId: m.variantId,
+          variantName: m.variantName,
+          isControl: m.isControl,
+          exposedUsers: m.exposedUsers,
+          converters: m.converters,
+          conversionRate: s?.conversionRate ?? m.conversionRate,
+          chanceToBeatControl: s?.chanceToBeatControl ?? null,
+          credibleInterval: s?.credibleInterval ?? { lower: 0, upper: 0 },
+          relativeLift: s?.relativeLift ?? null,
+          firstPurchaseRevenue: m.firstPurchaseRevenue,
+          revenuePerUser: m.revenuePerUser,
+          recurringRevenue: m.recurringRevenue,
+        };
+      }),
     };
   }
 }

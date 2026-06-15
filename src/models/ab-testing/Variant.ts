@@ -58,6 +58,15 @@ export interface VariantConfig {
       backgroundColor?: string;
       textColor?: string;
     };
+    /**
+     * A/B test: when true, the promo hero renders the STATIC landing still and
+     * suppresses the brand hero video (for "static image vs video" experiments).
+     * The still falls through to the theme-aware default resolver, so the only
+     * difference vs the video arm is motion. Default false (video plays where
+     * assets exist and reduced-motion/Save-Data allow). Independent of
+     * `imageSrcBySlug` (which also suppresses video, but by pinning a custom still).
+     */
+    disableVideo?: boolean;
   };
   banner?: {
     /** Override promo banner left image (full URL, e.g. Cloudinary) */

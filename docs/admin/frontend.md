@@ -7,6 +7,17 @@
 - `src/app/admin/[tab]/` — tabbed feature views
 - `src/app/admin/component/` — likely subroute for component-driven views
 
+## A/B testing results dashboard — user-level Bayesian card (2026-06-12)
+
+[`ExperimentResultsDashboard`](../../src/components/admin/ab-testing/ExperimentResultsDashboard.tsx)
+now renders a **user-level result card** at the top, fed by the additive
+`bayesian` field on `GET /api/admin/ab-testing/experiments/[id]/analytics`: per-variant
+exposed users, converters, conversion rate, **chance-to-beat-control**, 95%
+credible interval, capped **first-purchase** revenue/user and a **separate
+recurring** column, plus a ship/keep **recommendation** badge. The legacy
+chi-square "Statistical Significance" section is kept below during migration and
+is slated for removal. See `docs/ab-testing/backend.md` "Statistics engine v2".
+
 ## Components
 
 [src/components/admin/](../../src/components/admin/):

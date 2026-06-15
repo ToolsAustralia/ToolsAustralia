@@ -24,6 +24,48 @@ curl -H "x-cron-secret: $CRON_SECRET" http://localhost:3000/api/cron/major-draw-
 npm run migrate:<name>:dry
 ```
 
+### A/B sticky-assignment dedupe (run before deploying the unique index)
+
+`scripts/migrate-dedupe-variant-assignments.ts` collapses duplicate
+`VariantAssignment` rows (same identity per experiment → keep earliest, delete
+rest) so the new `uniq_experiment_user` / `uniq_experiment_anon` unique indexes
+can build, then builds them. **Dry-run by default**; flags split-brain groups
+(same identity bucketed into >1 variant). Must run **before** deploying the
+`VariantAssignment` model change, or the prod index build silently fails.
+
+```bash
+npm run migrate:dedupe-variant-assignments:dry   # report only, no writes
+npm run migrate:dedupe-variant-assignments       # delete dups + build unique indexes
+```
+
+### A/B seed: static-image-vs-video hero experiment
+
+`scripts/seed-static-vs-video-hero-experiment.ts` creates a **draft** experiment
++ two 50/50 variants (`Video` control / `Static image` treatment via
+`hero.disableVideo`) across the 16 brand landing slugs. Idempotent; activate in
+admin → A/B Testing.
+
+```bash
+npm run seed:static-vs-video-hero:dry   # preview, no writes
+npm run seed:static-vs-video-hero       # create the draft experiment
+```
+
+### Affiliate commission reconciliation (safety net)
+
+`scripts/reconcile-affiliate-commissions.ts` is the durable backstop for the
+fire-and-forget commission dispatch: it reconciles **every** commission type
+(one-time / upsell / mini-draw / membership-first / membership-recurring) from
+the durable `PaymentEvent` ledger, reports the gaps (+ a CSV audit in
+`temp/readonly/`) and over-paid commissions on refunded payments, and — with
+`--apply` — backfills the missing rows idempotently via `recordAffiliateCommission`
+(correct per-affiliate rate, `$inc` only on genuine insert). **Read-only by
+default; review the CSV before applying.**
+
+```bash
+npm run reconcile:affiliate-commissions:dry   # audit + CSV, no writes (exit 2 if gaps found)
+npm run reconcile:affiliate-commissions       # create the missing commissions
+```
+
 ## npm test scripts
 
 New test scripts added to `package.json` follow the `test:<scope>` convention and can be run independently:
@@ -119,6 +161,23 @@ The Klaviyo membership-properties backfill is idempotent (upserts by email) — 
 - `npm run test:variant-config-membership-theme` — standalone `tsx` unit test
   for `VariantConfig.membershipTheme.forceLight` default/merge/validation
   (A/B membership dark-mode test).
+- `npm run test:experiment-metrics` — pure unit test for the A/B measurement
+  core (`src/utils/ab-testing/experiment-metrics-core.ts`): user-level conversion
+  + revenue, 14-day conversion window, renewal-as-separate-line, partial/full
+  refund netting, per-user winsorization, and attribution by the user's *assigned*
+  variant (not the payment's stamped one). No DB/env needed. See
+  `docs/ab-testing/backend.md` "Measurement core v2".
+- `npm run test:bayesian` — pure unit test for the Bayesian chance-to-win engine
+  (`src/utils/ab-testing/bayesian-test.ts`): Beta-Binomial posteriors, deterministic
+  numerical `P(variant>control)`, `isControl` baseline, 3+ variant handling,
+  min-sample noise gate, and ship/keep recommendations. No DB/env needed. See
+  `docs/ab-testing/backend.md` "Statistics engine v2".
+- `npm run test:affiliate-reversal` — pure unit test for `buildCommissionReversalIds`
+  (`src/utils/affiliate/reverse-commission.ts`): proves a refund's (paymentIntentId,
+  invoiceId) matches every commission storage form — raw `pi_…` (one-time/upsell/
+  mini-draw), normalized `invoice_in_…` (membership-first), and `stripeInvoiceId`
+  (membership-recurring). Guards the fix for the refunded-renewal commission leak.
+  No DB/env needed. See `docs/affiliate/gotchas.md`.
 
 ## Dashboard stats snapshot scripts
 

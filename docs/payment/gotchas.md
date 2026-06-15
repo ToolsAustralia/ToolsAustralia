@@ -16,6 +16,16 @@ Rules for this block:
 
 For the legacy fallback path (originalEvent has no `grants.drawGrants` — pre-ledger event), `removeMajorDrawEntries` is intentionally called without a `drawId` because none is available. The function logs `[refund-reversal] no drawGrants ledger — falling back to legacy walk` so these cases are visible during local `stripe listen` debugging.
 
+## Refund reversal must pass `invoiceId` to the affiliate reversal
+
+`processRefundReversal` resolves both the real `paymentIntentId` and (for
+subscription refunds) the `invoiceId`, and now passes **both** to
+`reverseAffiliateCommissions`. This is required because affiliate commissions
+store their payment link differently per type (`membership-recurring` by
+`stripeInvoiceId`, `membership-first` by a normalized `invoice_in_…` PI). Without
+the `invoiceId`, refunded renewals never reversed and the affiliate kept the
+commission. See [affiliate/gotchas.md](../affiliate/gotchas.md#refund-reversal-must-match-all-commission-storage-forms-fixed-2026-06).
+
 ## Local debugging with `stripe listen`
 
 When you run `stripe listen --forward-to http://localhost:3000/api/stripe/webhook` and a refund fires, every step of the reversal emits a structured `[refund-reversal] …` log line through `console.log`. Production builds strip those (per `next.config.ts` `compiler.removeConsole`), so they're dev-only. The legacy-walk warning is emitted via `console.error` and survives in production too — treat it as an alert.

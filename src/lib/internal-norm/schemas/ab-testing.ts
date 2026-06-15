@@ -182,12 +182,49 @@ const WinnerDeterminationSchema = z.object({
   significance: SignificanceSchema.nullable(),
 });
 
+// ─── Bayesian / user-level summary (2026-06 measurement redesign) ────────────
+// User-level conversion + revenue from the durable assignment + PaymentEvent
+// tables, within the conversion window, scored by the Bayesian chance-to-win
+// engine. PII-safe (variantId/variantName only). Revenue in DOLLARS (the new
+// model nets refunds + caps per user, so it is not the legacy cents figure).
+
+const BayesianVariantSchema = z.object({
+  variantId: z.string().describe("Mongo Variant._id"),
+  variantName: z.string(),
+  isControl: z.boolean(),
+  exposedUsers: z.number().int().nonnegative().describe("Distinct exposed users (denominator), from the assignment table"),
+  converters: z.number().int().nonnegative().describe("Distinct users with a first purchase in the conversion window"),
+  conversionRate: z.number().describe("Posterior mean conversion rate, 0-1 fraction"),
+  chanceToBeatControl: z.number().nullable().describe("P(variant rate > control rate), 0-1; null for the control"),
+  credibleInterval: z.object({ lower: z.number(), upper: z.number() }).describe("95% credible interval on the conversion rate (0-1)"),
+  relativeLift: z.number().nullable().describe("Relative lift of the posterior mean vs control; null for the control"),
+  firstPurchaseRevenue: z.number().describe("Capped, refund-netted first-purchase revenue in DOLLARS"),
+  revenuePerUser: z.number().describe("First-purchase revenue per exposed user, DOLLARS"),
+  recurringRevenue: z.number().describe("Downstream renewal revenue (separate line), DOLLARS"),
+});
+
+const BayesianSummarySchema = z
+  .object({
+    engine: z.string().describe("Stats engine id, e.g. bayesian-beta-binomial"),
+    windowDays: z.number().int().positive().describe("Conversion window after first exposure"),
+    appliedCapDollars: z.number().nullable().describe("Per-user revenue cap actually applied, DOLLARS; null when none"),
+    controlVariantId: z.string().nullable(),
+    recommendation: z.enum(["ship_variant", "keep_control", "keep_running", "inconclusive"]),
+    recommendedVariantId: z.string().nullable(),
+    minSampleMet: z.boolean().describe("True once every arm has enough converters for a call"),
+    winThreshold: z.number().describe("Chance-to-win threshold used for the recommendation, 0-1"),
+    variants: z.array(BayesianVariantSchema),
+  })
+  .nullable()
+  .describe("User-level, peeking-safe measurement; null if it could not be computed");
+
 const AnalyticsExperimentShapeSchema = z.object({
   kind: z.literal("experiment"),
   comparison: ComparisonSchema,
   significance: SignificanceSchema,
   stoppingRules: StoppingRulesEvaluationSchema,
   winner: WinnerDeterminationSchema,
+  bayesian: BayesianSummarySchema.optional(),
 });
 
 const AnalyticsVariantShapeSchema = z.object({

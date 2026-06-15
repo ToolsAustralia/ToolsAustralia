@@ -129,38 +129,58 @@ export class VariantAssignmentRepository {
   }
 
   /**
-   * Merge anonymous assignment to user ID (for user login)
+   * Merge anonymous assignment(s) to a user ID on login.
+   *
+   * Must respect the (experimentId, userId) unique index: if the user ALREADY
+   * has an assignment for an experiment that the anonymous row also covers, we
+   * cannot convert the anon row (it would duplicate the identity in that
+   * experiment — a unique-index violation). In that case the existing user
+   * assignment is authoritative and the anonymous duplicate is deleted. This
+   * also resolves finding M5 (one human counted as two exposed users): after the
+   * merge there is exactly one row per (experiment, user).
    */
   async mergeAnonymousToUser(
     anonymousId: string,
     userId: string,
     experimentId?: string
-  ): Promise<{ updated: number }> {
+  ): Promise<{ updated: number; deletedConflicts: number }> {
     await connectDB();
 
+    const userObjectId = new mongoose.Types.ObjectId(userId);
     const query: Record<string, unknown> = {
       anonymousId,
-      userId: { $exists: false }, // Only merge assignments that don't already have a userId
+      userId: { $exists: false }, // only un-merged anon rows
     };
-
     if (experimentId) {
       query.experimentId = new mongoose.Types.ObjectId(experimentId);
     }
 
-    const result = await VariantAssignment.updateMany(
-      query,
-      {
-        $set: {
-          userId: new mongoose.Types.ObjectId(userId),
-          mergedAt: new Date(),
-        },
-        $unset: {
-          anonymousId: "",
-        },
-      }
-    ).exec();
+    const anonRows = await VariantAssignment.find(query).select("_id experimentId").exec();
 
-    return { updated: result.modifiedCount };
+    let updated = 0;
+    let deletedConflicts = 0;
+    for (const row of anonRows) {
+      const existingUserAssignment = await VariantAssignment.findOne({
+        experimentId: row.experimentId,
+        userId: userObjectId,
+      })
+        .select("_id")
+        .lean();
+
+      if (existingUserAssignment) {
+        // User already bucketed in this experiment — the user row wins; drop the anon dup.
+        await VariantAssignment.deleteOne({ _id: row._id }).exec();
+        deletedConflicts++;
+      } else {
+        await VariantAssignment.updateOne(
+          { _id: row._id },
+          { $set: { userId: userObjectId, mergedAt: new Date() }, $unset: { anonymousId: "" } }
+        ).exec();
+        updated++;
+      }
+    }
+
+    return { updated, deletedConflicts };
   }
 }
 

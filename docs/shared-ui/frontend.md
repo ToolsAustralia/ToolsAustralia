@@ -106,6 +106,19 @@ Outside that 72h window, or once `now ≥ drawDate + 12h` (cycle has flipped to 
 
 Evergreen surfaces (home, my-account) have **no** hero above the showcase, so they still get the landing art injected as slide one — the early return is gated on `isPromotionsPage` only. New light-variant `sidTB` toolset images (`{brand}-sidTB.webp` / `-sidTB-mobile.webp` for dewalt/makita/milwaukee/ryobi) were added to the [landing image manifest](../../src/generated/landingImageManifest.ts) in the same change so the dark/light hero pairs are complete.
 
+### PromoHero — hero video gating + A/B `disableVideo` (2026-06-12)
+
+[`PromoHero`](../../src/components/sections/promo/PromoHero.tsx) plays the brand
+hero clip (`getLandingHeroVideoPaths`) over the still poster for brand slugs,
+suppressing it for reduced-motion / Save-Data users and when a variant pins a
+per-slug image. It now ALSO suppresses the video when the assigned variant sets
+`hero.disableVideo = true` (the gate is `!perSlugVariantImage && !variantConfig?.hero?.disableVideo`).
+This powers the **"static image vs video"** A/B test: the control variant leaves
+`disableVideo` false (video plays) and the treatment sets it true (the
+theme-aware still renders, no video) — identical creative, motion the only
+difference. Seed it with `npm run seed:static-vs-video-hero:dry` (then live). The
+flag is declared on `VariantConfig.hero` and validated by `VariantConfigService`.
+
 ### Hear From Our Winners — moved to `WinnersTestimony` (2026-06-11)
 
 The old `src/components/sections/winner-testimony/` folder and its `src/components/sections/WinnerTestimonySection.tsx` re-export have been **removed**. The "Hear from our winners" section is now a single page-scoped component, [`WinnersTestimony`](../../src/app/(site)/winners/components/WinnersTestimony.tsx), built in the shared `.ta-results` design system (see [docs/draws/frontend.md](../draws/frontend.md)). It self-loads its fonts and the shared stylesheet is imported globally in [src/app/layout.tsx](../../src/app/layout.tsx), so it renders identically on any host page.
