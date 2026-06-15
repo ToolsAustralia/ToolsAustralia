@@ -432,9 +432,11 @@ export async function processRefundReversal(
       throw pdErr;
     }
 
-    // Reverse affiliate commissions (non-blocking)
+    // Reverse affiliate commissions (non-blocking). Pass invoiceId so subscription
+    // refunds can reach membership-first (PI stored as invoice_in_…) and
+    // membership-recurring (stored by stripeInvoiceId) rows, not just raw-PI rows.
     try {
-      await reverseAffiliateCommissions(paymentIntentId, userId);
+      await reverseAffiliateCommissions(paymentIntentId, userId, invoiceId);
     } catch (commissionError) {
       // Non-blocking - log but don't fail refund processing
       console.error("❌ Affiliate commission reversal error (non-blocking):", commissionError);

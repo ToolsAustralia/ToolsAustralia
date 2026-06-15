@@ -4,6 +4,15 @@ This domain IS frontend (no backend surface).
 
 See [architecture.md](./architecture.md) for the full layout: TanStack Query, Zustand stores, Contexts, generic hooks.
 
+## `useRevenueBreakdown` — `ChartData.membershipRenewals` (2026-06-15)
+
+[`useAdminQueries.ts`](../../src/hooks/queries/useAdminQueries.ts) `ChartData` (and
+`RevenueBreakdownResponse.totals`) gained an optional `membershipRenewals` — the
+renewal subset of `memberships` per point. The Overview revenue chart subtracts it
+client-side for its "Exclude renewals" toggle (`total − membershipRenewals`), so
+the recurring-vs-new split needs no separate request. See
+[admin/frontend.md](../admin/frontend.md).
+
 ## Root providers (2026-05-09)
 
 [`src/app/providers.tsx`](../../src/app/providers.tsx) is the single root client tree. It composes (in order): `ErrorBoundary` → `ThemeProvider` → `SessionProvider` → `QueryClientProvider` → `ApiErrorBoundary` → `UserProvider` → `SidebarProvider` → `CartProvider` → `LoadingProvider` → `ToastProvider` → `MotionConfig`. Inside `MotionConfig` it mounts:

@@ -76,9 +76,23 @@ VariantAssignmentSchema.pre("save", function (next) {
 // Note: experimentId_1 removed - redundant with compound indexes experimentId_1_userId_1, etc.
 VariantAssignmentSchema.index({ userId: 1 });
 VariantAssignmentSchema.index({ anonymousId: 1 });
-VariantAssignmentSchema.index({ experimentId: 1, userId: 1 });
-VariantAssignmentSchema.index({ experimentId: 1, anonymousId: 1 });
 VariantAssignmentSchema.index({ experimentId: 1, variantId: 1 });
+
+// ✅ Sticky integrity: exactly ONE assignment per identity per experiment.
+// Without these, concurrent first-loads could create two rows for the same
+// identity in different variants ("split-brain"), corrupting every per-variant
+// metric. Partial filters keep anon-only rows (no userId) and user-only rows
+// (no anonymousId) from colliding on a null key.
+// NOTE: building these in prod requires de-duplicating existing rows first —
+// run `npm run migrate:dedupe-variant-assignments:dry` then the live variant.
+VariantAssignmentSchema.index(
+  { experimentId: 1, userId: 1 },
+  { unique: true, partialFilterExpression: { userId: { $exists: true } }, name: "uniq_experiment_user" }
+);
+VariantAssignmentSchema.index(
+  { experimentId: 1, anonymousId: 1 },
+  { unique: true, partialFilterExpression: { anonymousId: { $exists: true } }, name: "uniq_experiment_anon" }
+);
 
 // TTL index for cleanup of stale assignments (180 days)
 VariantAssignmentSchema.index({ lastSeenAt: 1 }, { expireAfterSeconds: 15552000 }); // 180 days in seconds

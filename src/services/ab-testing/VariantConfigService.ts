@@ -12,6 +12,7 @@ export class VariantConfigService {
     return {
       hero: {
         // Defaults: use existing component logic
+        disableVideo: false,
       },
       banner: {
         // Defaults: use existing component logic
@@ -116,6 +117,9 @@ export class VariantConfigService {
         }
         if (hero.ctaText && typeof hero.ctaText !== "string") {
           errors.push("Hero ctaText must be a string");
+        }
+        if (hero.disableVideo !== undefined && typeof hero.disableVideo !== "boolean") {
+          errors.push("Hero disableVideo must be a boolean");
         }
         if (hero.imageSrcBySlug !== undefined) {
           if (typeof hero.imageSrcBySlug !== "object" || Array.isArray(hero.imageSrcBySlug) || hero.imageSrcBySlug === null) {

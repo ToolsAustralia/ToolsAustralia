@@ -37,6 +37,33 @@ interface VariantMetrics {
   };
 }
 
+// ── New user-level, Bayesian measurement (2026-06 redesign) ──────────────────
+interface BayesianVariant {
+  variantId: string;
+  variantName: string;
+  isControl: boolean;
+  exposedUsers: number;
+  converters: number;
+  conversionRate: number; // 0-1 posterior mean
+  chanceToBeatControl: number | null; // 0-1; null for control
+  credibleInterval: { lower: number; upper: number }; // 0-1
+  relativeLift: number | null;
+  firstPurchaseRevenue: number; // dollars (net, capped)
+  revenuePerUser: number; // dollars
+  recurringRevenue: number; // dollars (separate line)
+}
+interface BayesianSummary {
+  engine: string;
+  windowDays: number;
+  appliedCapDollars: number | null;
+  controlVariantId: string | null;
+  recommendation: "ship_variant" | "keep_control" | "keep_running" | "inconclusive";
+  recommendedVariantId: string | null;
+  minSampleMet: boolean;
+  winThreshold: number;
+  variants: BayesianVariant[];
+}
+
 interface ExperimentResults {
   comparison: {
     variants: VariantMetrics[];
@@ -50,7 +77,18 @@ interface ExperimentResults {
     reason: string;
     significance: StatisticalResults;
   };
+  bayesian?: BayesianSummary | null;
 }
+
+const RECOMMENDATION_META: Record<
+  BayesianSummary["recommendation"],
+  { label: string; cls: string }
+> = {
+  ship_variant: { label: "Ship the winner", cls: "bg-green-100 text-green-800" },
+  keep_control: { label: "Keep control", cls: "bg-blue-100 text-blue-800" },
+  keep_running: { label: "Keep running — gathering data", cls: "bg-yellow-100 text-yellow-800" },
+  inconclusive: { label: "Inconclusive", cls: "bg-gray-100 text-gray-700" },
+};
 
 /**
  * Experiment Results Dashboard
@@ -103,8 +141,10 @@ export default function ExperimentResultsDashboard({ experimentId }: ExperimentR
     );
   }
 
-  const { comparison, significance, winner: winnerFromAnalytics } = analyticsData || {};
+  const { comparison, significance, winner: winnerFromAnalytics, bayesian } = analyticsData || {};
   const winner = winnerFromAnalytics || winnerData?.data;
+  const recommendedName =
+    bayesian?.variants.find((v) => v.variantId === bayesian.recommendedVariantId)?.variantName ?? null;
 
   // Prepare chart data
   // ✅ FIX: Use variant names instead of "Variant 1", "Variant 2"
@@ -129,6 +169,89 @@ export default function ExperimentResultsDashboard({ experimentId }: ExperimentR
 
   return (
     <div className="space-y-6">
+      {/* ── User-level Bayesian result (2026-06 measurement redesign) ── */}
+      {bayesian && (
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+          <div className="flex items-center justify-between mb-1">
+            <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+              <Award className="w-5 h-5 text-blue-600" />
+              Result — user-level · Bayesian
+            </h3>
+            <span className={cn("px-3 py-1 rounded-full text-sm font-medium", RECOMMENDATION_META[bayesian.recommendation].cls)}>
+              {bayesian.recommendation === "ship_variant" && recommendedName
+                ? `Ship: ${recommendedName}`
+                : RECOMMENDATION_META[bayesian.recommendation].label}
+            </span>
+          </div>
+          <p className="text-xs text-gray-500 mb-4">
+            Conversion = first purchase within {bayesian.windowDays} days of exposure · denominator = exposed users
+            (assignment table) · renewals shown separately ·{" "}
+            {bayesian.minSampleMet ? "min sample met" : "below min sample — not a call yet"}
+          </p>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left text-gray-500 border-b border-gray-200">
+                  <th className="py-2 pr-3 font-medium">Variant</th>
+                  <th className="py-2 px-3 font-medium text-right">Exposed</th>
+                  <th className="py-2 px-3 font-medium text-right">Conv.</th>
+                  <th className="py-2 px-3 font-medium text-right">Conv. rate</th>
+                  <th className="py-2 px-3 font-medium text-right">Chance to win</th>
+                  <th className="py-2 px-3 font-medium text-right">95% CI</th>
+                  <th className="py-2 px-3 font-medium text-right">1st-buy $/user</th>
+                  <th className="py-2 pl-3 font-medium text-right">Recurring $</th>
+                </tr>
+              </thead>
+              <tbody>
+                {bayesian.variants.map((v) => (
+                  <tr key={v.variantId} className="border-b border-gray-100">
+                    <td className="py-2 pr-3">
+                      <span className="font-medium text-gray-900">{v.variantName}</span>
+                      {v.isControl && <span className="ml-2 text-xs text-gray-500">(control)</span>}
+                    </td>
+                    <td className="py-2 px-3 text-right">{v.exposedUsers.toLocaleString()}</td>
+                    <td className="py-2 px-3 text-right">{v.converters.toLocaleString()}</td>
+                    <td className="py-2 px-3 text-right">{(v.conversionRate * 100).toFixed(2)}%</td>
+                    <td className="py-2 px-3 text-right">
+                      {v.chanceToBeatControl == null ? (
+                        <span className="text-gray-400">—</span>
+                      ) : (
+                        <span
+                          className={cn(
+                            "font-medium",
+                            v.chanceToBeatControl >= bayesian.winThreshold
+                              ? "text-green-600"
+                              : v.chanceToBeatControl <= 1 - bayesian.winThreshold
+                                ? "text-red-600"
+                                : "text-gray-900",
+                          )}
+                        >
+                          {(v.chanceToBeatControl * 100).toFixed(1)}%
+                        </span>
+                      )}
+                    </td>
+                    <td className="py-2 px-3 text-right text-gray-600">
+                      {(v.credibleInterval.lower * 100).toFixed(1)}–{(v.credibleInterval.upper * 100).toFixed(1)}%
+                    </td>
+                    <td className="py-2 px-3 text-right">${v.revenuePerUser.toFixed(2)}</td>
+                    <td className="py-2 pl-3 text-right text-gray-600">
+                      ${v.recurringRevenue.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <p className="text-xs text-gray-400 mt-3">
+            Engine: {bayesian.engine} · win threshold {(bayesian.winThreshold * 100).toFixed(0)}%
+            {bayesian.appliedCapDollars != null
+              ? ` · per-user revenue capped at $${bayesian.appliedCapDollars.toFixed(0)}`
+              : ""}
+            . The legacy chi-square section below is being retired.
+          </p>
+        </div>
+      )}
+
       {/* Statistical Significance Card */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
         <div className="flex items-center justify-between mb-4">

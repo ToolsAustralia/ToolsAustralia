@@ -7,6 +7,35 @@
 - `src/app/admin/[tab]/` — tabbed feature views
 - `src/app/admin/component/` — likely subroute for component-driven views
 
+## A/B testing results dashboard — user-level Bayesian card (2026-06-12)
+
+[`ExperimentResultsDashboard`](../../src/components/admin/ab-testing/ExperimentResultsDashboard.tsx)
+now renders a **user-level result card** at the top, fed by the additive
+`bayesian` field on `GET /api/admin/ab-testing/experiments/[id]/analytics`: per-variant
+exposed users, converters, conversion rate, **chance-to-beat-control**, 95%
+credible interval, capped **first-purchase** revenue/user and a **separate
+recurring** column, plus a ship/keep **recommendation** badge. The legacy
+chi-square "Statistical Significance" section is kept below during migration and
+is slated for removal. See `docs/ab-testing/backend.md` "Statistics engine v2".
+
+## Revenue overview — "Exclude renewals" toggle (2026-06-15)
+
+The Overview [`RevenueChartCard`](../../src/app/admin/component/overview/sections/RevenueChartCard.tsx)
+replaced the "Tracking up / down" badge with an **Exclude renewals** checkbox.
+When checked, each point's series value becomes `total − membershipRenewals`, so
+recurring (membership renewal) revenue is removed and the chart shows new revenue
+only — e.g. a day spiking at $33.3k that is mostly renewals drops to its real
+new-sales figure. The subtraction is **client-side** (no refetch) and the chart
+y-axis auto-rescales; the toggle only appears when the window actually contains
+renewal revenue.
+
+Data side: [`GET /api/admin/dashboard/revenue-breakdown`](../../src/app/api/admin/dashboard/revenue-breakdown/route.ts)
+now returns a per-point `membershipRenewals` (the renewal subset of `memberships`,
+i.e. `data.billingReason === "subscription_cycle"` — the same discriminator the
+KPI revenue breakdown uses) plus a `totals.membershipRenewals`. This is the admin
+time-series endpoint only; the Norm `dashboard.revenue-breakdown` endpoint is a
+separate single-period shape and is unaffected.
+
 ## Components
 
 [src/components/admin/](../../src/components/admin/):

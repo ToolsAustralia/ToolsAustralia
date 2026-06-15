@@ -54,13 +54,28 @@ new site-wide cosmetic experiment, add its sentinel slug to that set.
 
 ## Subscription-renewal attribution
 
-Only the initial subscription invoice (`billing_reason === "subscription_create"`)
-is attributed to the experiment. Renewals (`subscription_cycle`) and
-upgrades/downgrades (`subscription_update`) inherit the same
-`subscription.metadata.experimentId/variantId` for the lifetime of the
-subscription — without this guard, every monthly renewal would credit the
-original variant forever, even after the experiment ended. See the
-`isInitialSubscriptionInvoice` gate in `src/services/stripe-webhook-handlers/index.ts`.
+The legacy guard (`isInitialSubscriptionInvoice` in
+`src/services/stripe-webhook-handlers/index.ts`) tried to keep renewals
+(`subscription_cycle`) from crediting the experiment by gating what gets stamped
+onto the PaymentEvent. **The 2026-06 measurement redesign no longer relies on
+that stamping.** `ExperimentMetricsService` / `experiment-metrics-core` separate
+first-purchase from recurring revenue at READ time using the durable
+`PaymentEvent.isRenewal` flag **and** the 14-day conversion window — so a renewal
+can never be counted as a conversion or as first-purchase revenue regardless of
+how (or whether) it was stamped. Renewals surface only as a separate
+`recurringRevenue` line. This makes renewal separation robust even if a renewal
+inherits the subscription's `experimentId/variantId`.
+
+## Engagement rollup is diagnostics-only + self-healing (v2)
+
+`/api/cron/ab-testing-aggregate-metrics` no longer feeds conversion/revenue
+(those come live from durable tables). It rolls **page_view/click volume** into
+`ExperimentDailyMetrics` for engagement history only, and now:
+(1) is **auth-gated** by `CRON_SECRET`; (2) **self-heals** by re-aggregating the
+last 7 days every run with idempotent `$set` upserts (a missed/failed day is
+repaired on the next run, well inside the 30-day event TTL); (3) **excludes admin
+preview** events (`metadata.isPreview`). Unique visitors are NOT taken from this
+rollup — they come from the durable assignment table.
 
 ## Migrated stubs
 
