@@ -93,6 +93,27 @@ npm run reconcile:affiliate-commissions:prod       # PROD: create the missing co
 # add e.g. -- --since-days=35 to bound the scan to a trailing window
 ```
 
+### Affiliate commission dedup-index migration (sparse → partial)
+
+`scripts/migrate-affiliate-commission-pi-index.ts` drops the **legacy `sparse`
+unique** dedup indexes on `affiliatecommissions` and lets `syncIndexes()` rebuild
+them as **partial** unique indexes from the schema. Required because a *compound*
+`sparse` index still indexes a row when **any** key is present (and `affiliateId`
+always is), so rows missing the optional id were indexed with that id as `null` and
+collided — capping a referred user at **one** such commission. Two indexes were
+affected: the PI key (`stripePaymentIntentId`, fixed 2026-01) and the invoice key
+(`stripeInvoiceId`, fixed 2026-06 — this had been silently blocking the reconcile
+backfill from creating a user's 2nd+ one-time/upsell/mini-draw commission with
+`dup key { stripeInvoiceId: null }`). See [docs/affiliate/models.md](../affiliate/models.md).
+Run this **before** the reconcile backfill on a DB that still has the legacy index.
+
+```bash
+npm run migrate:affiliate-commission-pi-index:dry        # dev: report, no drops
+npm run migrate:affiliate-commission-pi-index            # dev: drop legacy + rebuild partial
+npm run migrate:affiliate-commission-pi-index:dry -- --prod   # PROD: report
+npm run migrate:affiliate-commission-pi-index -- --prod       # PROD: drop legacy + rebuild partial
+```
+
 ## npm test scripts
 
 New test scripts added to `package.json` follow the `test:<scope>` convention and can be run independently:
