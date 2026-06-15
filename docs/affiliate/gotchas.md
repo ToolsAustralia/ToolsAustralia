@@ -39,18 +39,52 @@ refunds (`RefundPartial`) short-circuit before the reversal and never touch
 commissions. That needs a policy decision (reduce `commissionAmount`
 proportionally vs cancel above a threshold) before building.
 
-## Refund propagation to payouts
+## Commission reliability — reconciliation safety net (2026-06-15)
 
-If a refund happens AFTER the commission has been included in a payout, the
-reversal can't simply remove it from the payout (already paid). Already-`paid`
-rows are **left intact and logged via `console.error`** (survives the prod
-console-strip) so ops can do a manual clawback — the reversal does not silently
-swallow them. A future enhancement is the automatic next-payout clawback:
-1. Mark commission as reversed.
-2. Open a "clawback" entry on the next payout.
-3. Net out across cycles.
+The webhook commission dispatch is **fire-and-forget** (a commission error must
+never fail a payment/benefit-grant — `payment-processing.ts` wraps it in a
+non-blocking `try/catch`). So a transient failure can silently drop a commission.
+This is fixed the way the repo fixes the same class of problem elsewhere
+(`reconcile-major-draw-entries`, `reconcile-blocked-transactions`): **at-least-once
+inline + idempotent + a reconciliation backstop**.
 
-> _TODO: verify automatic clawback in `payout-processing.ts`; today it's a logged manual step._
+- **Core:** [`reconcileAffiliateCommissions()`](../../src/utils/affiliate/reconcile-commissions.ts)
+  re-derives the commission ledger from the durable `PaymentEvent` source of truth
+  over an optional trailing window and idempotently backfills any **owed** missing
+  commission (via `recordAffiliateCommission`). Window-bounded → O(recent), not
+  O(all-time) (a full sweep scans ~25k payments; the cron's 35-day window is tiny).
+- **Cron:** [`/api/cron/reconcile-affiliate-commissions`](../../src/app/api/cron/reconcile-affiliate-commissions/route.ts)
+  (daily, auth-gated, 35-day window, `apply: true`) — self-healing, no manual step.
+- **CLI:** `npm run reconcile:affiliate-commissions[:prod][:dry]` (+ `--since-days=N`)
+  uses the same core; writes a CSV audit.
+- **Over-paid** commissions (active on a refunded payment) are **DETECTED and
+  flagged** (cron `console.error`s them) but **never auto-clawed-back** — see below.
+
+## Refund clawback after payout — RESEARCHED DESIGN, DEFERRED (pending client refund-policy)
+
+When a referred user's purchase is refunded **after** the commission was already
+paid out, the standard fix (Rewardful, track360, Post Affiliate Pro, tinyaffiliate)
+is a **three-layer** model. We've researched it and scoped the build; it is
+**deferred until the client confirms the refund/hold window**:
+
+1. **Hold / maturation period (the real fix, highest leverage).** Don't pay a
+   commission until the refund window has passed (industry default **30 days**,
+   matched to the refund policy) — eliminates ~60–80% of clawbacks because the
+   refund cancels a still-`pending` row. **Today `processAffiliatePayout` pays ALL
+   `pending` immediately (no hold)** — this is why over-payments happen. Build:
+   filter payout-eligible commissions to `earnedAt <= now − holdDays`.
+2. **Pre-payout refund:** full → cancel (already done); **partial → proportional
+   recalc** (not yet built — `RefundPartial` currently ignored).
+3. **Post-payout refund:** record a **negative clawback adjustment that nets
+   against future payouts** (carry-forward negative balance; never bill the
+   affiliate; absorb if never recouped). Decided representation: a dedicated
+   **`AffiliateAdjustment`** ledger (signed entries) that `processAffiliatePayout`
+   nets in (payout `totalAmount` stays `min:0`; the negative carries on the
+   balance). Plus reversal **reason codes** for audit.
+
+Until this lands, over-paid rows are **logged for manual clawback** (the reversal
+fix already prevents *unpaid* refunded renewals from staying payable). Open
+decision blocking the build: **hold-period length** (client's refund policy).
 
 ## Backfill scripts
 
