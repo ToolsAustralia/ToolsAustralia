@@ -633,7 +633,7 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
           borderBottom: `2px solid ${theme.borderRgba}`,
         }}
       >
-        <div className="relative flex w-full items-center justify-center px-4 min-h-[4.5rem] sm:min-h-[7rem] lg:min-h-[6.75rem]">
+        <div className="relative flex w-full items-center justify-center px-4 min-h-[5rem] sm:min-h-[8rem] lg:min-h-[8.25rem]">
           {/* White-text Tools Australia logo, gently breathing — reads as a branded
               loading state on the dark bar. */}
           <motion.img
@@ -751,8 +751,8 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
           <div
             className={`relative z-10 w-full overflow-visible ${
               isScrolled
-                ? "min-h-[4rem] sm:min-h-[6.25rem] lg:min-h-[6.25rem] max-[360px]:py-0.5"
-                : "min-h-[4.5rem] sm:min-h-[7rem] lg:min-h-[6.75rem]"
+                ? "min-h-[4.25rem] sm:min-h-[7rem] lg:min-h-[7rem] max-[360px]:py-0.5"
+                : "min-h-[5rem] sm:min-h-[8rem] lg:min-h-[8.25rem]"
             }`}
           >
             <div
@@ -760,8 +760,8 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
                 showPromoCountdownStrip ? "justify-between gap-2 sm:gap-3 md:gap-4" : "justify-start"
               } ${
                 isScrolled
-                  ? "min-h-[3.75rem] sm:min-h-[6.25rem] lg:min-h-[6.25rem]"
-                  : "min-h-[4rem] sm:min-h-[6.5rem] lg:min-h-[6.75rem]"
+                  ? "min-h-[4.25rem] sm:min-h-[7rem] lg:min-h-[7rem]"
+                  : "min-h-[5rem] sm:min-h-[8rem] lg:min-h-[8.25rem]"
               }`}
             >
               {/* Left art: intrinsic width, capped — middle stays empty (same logic as desktop space-between) */}
@@ -797,18 +797,18 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
                           : isDrawnTomorrowLeftArt
                             ? isScrolled
                               ? showPromoCountdownStrip
-                                ? "h-[2.375rem] sm:h-[3.875rem] lg:h-[3.875rem] max-lg:max-w-full lg:max-w-[min(92vw,310px)] max-[360px]:h-[2.125rem]"
-                                : "h-[2.375rem] sm:h-[3.875rem] lg:h-[3.875rem] max-w-[min(92vw,295px)] sm:max-w-[min(94vw,315px)] max-[360px]:h-[2.125rem] max-[360px]:max-w-[min(88vw,200px)]"
+                                ? "h-[4.25rem] sm:h-[7rem] lg:h-[7rem] max-lg:max-w-full lg:max-w-[min(94vw,640px)] max-[360px]:h-[3.75rem]"
+                                : "h-[4.25rem] sm:h-[7rem] lg:h-[7rem] max-w-[min(94vw,620px)] sm:max-w-[min(95vw,640px)] max-[360px]:h-[3.75rem] max-[360px]:max-w-[min(90vw,360px)]"
                               : showPromoCountdownStrip
-                                ? "h-[3.125rem] sm:h-[4.875rem] lg:h-[4.75rem] max-lg:max-w-full lg:max-w-[min(95vw,400px)]"
-                                : "h-[3.125rem] sm:h-[4.875rem] lg:h-[4.75rem] max-w-[min(95vw,400px)]"
+                                ? "h-[5rem] sm:h-[8rem] lg:h-[8.25rem] max-lg:max-w-full lg:max-w-[min(96vw,720px)]"
+                                : "h-[5rem] sm:h-[8rem] lg:h-[8.25rem] max-w-[min(96vw,720px)]"
                             : isScrolled
                               ? showPromoCountdownStrip
-                                ? "h-[4rem] sm:h-[6.25rem] lg:h-[6.25rem] max-lg:max-w-full lg:max-w-[min(92vw,520px)] max-[360px]:h-[3.5rem]"
-                                : "h-[4rem] sm:h-[6.25rem] lg:h-[6.25rem] max-w-[min(92vw,500px)] sm:max-w-[min(94vw,520px)] max-[360px]:h-[3.5rem] max-[360px]:max-w-[min(88vw,340px)]"
+                                ? "h-[4.25rem] sm:h-[7rem] lg:h-[7rem] max-lg:max-w-full lg:max-w-[min(94vw,640px)] max-[360px]:h-[3.75rem]"
+                                : "h-[4.25rem] sm:h-[7rem] lg:h-[7rem] max-w-[min(94vw,620px)] sm:max-w-[min(95vw,640px)] max-[360px]:h-[3.75rem] max-[360px]:max-w-[min(90vw,360px)]"
                               : showPromoCountdownStrip
-                                ? "h-[4.5rem] sm:h-[7rem] lg:h-[6.75rem] max-lg:max-w-full lg:max-w-[min(95vw,580px)]"
-                                : "h-[4.5rem] sm:h-[7rem] lg:h-[6.75rem] max-w-[min(95vw,580px)]"
+                                ? "h-[5rem] sm:h-[8rem] lg:h-[8.25rem] max-lg:max-w-full lg:max-w-[min(96vw,720px)]"
+                                : "h-[5rem] sm:h-[8rem] lg:h-[8.25rem] max-w-[min(96vw,720px)]"
                       }`}
                       onError={handleLeftImageError}
                       priority
@@ -821,13 +821,13 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
                         ? isHolidayLeftArt
                           ? "h-[4.75rem] sm:h-[7.5rem] lg:h-[7.5rem] w-[11.5rem] sm:w-[16rem]"
                           : isDrawnTomorrowLeftArt
-                            ? "h-[2.375rem] sm:h-[3.875rem] lg:h-[3.875rem] w-[6.25rem] sm:w-[9.25rem]"
-                            : "h-[4rem] sm:h-[6.25rem] lg:h-[6.25rem] w-[10rem] sm:w-[14rem]"
+                            ? "h-[4.25rem] sm:h-[7rem] lg:h-[7rem] w-[11rem] sm:w-[15rem]"
+                            : "h-[4.25rem] sm:h-[7rem] lg:h-[7rem] w-[11rem] sm:w-[15rem]"
                         : isHolidayLeftArt
                           ? "h-[5.25rem] sm:h-[8rem] lg:h-[7.75rem] w-[12.5rem] sm:w-[17rem]"
                           : isDrawnTomorrowLeftArt
-                            ? "h-[3.125rem] sm:h-[4.875rem] lg:h-[4.75rem] w-[7.75rem] sm:w-[11rem]"
-                            : "h-[4.5rem] sm:h-[7rem] lg:h-[6.75rem] w-[11rem] sm:w-[15rem]"
+                            ? "h-[5rem] sm:h-[8rem] lg:h-[8.25rem] w-[12rem] sm:w-[16rem]"
+                            : "h-[5rem] sm:h-[8rem] lg:h-[8.25rem] w-[12rem] sm:w-[16rem]"
                     } shrink-0 rounded bg-white/10 animate-pulse max-lg:w-full max-lg:max-w-full`}
                     aria-hidden="true"
                   />
