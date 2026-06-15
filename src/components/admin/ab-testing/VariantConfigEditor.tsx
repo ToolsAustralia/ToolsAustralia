@@ -292,6 +292,25 @@ export default function VariantConfigEditor({ variant, experimentId: _experiment
               })
             }
           />
+
+          {/* Static-image-vs-video A/B: this variant suppresses the brand hero
+              video and shows the still only. Leave OFF for the video arm. */}
+          <Checkbox
+            id="heroDisableVideo"
+            name="heroDisableVideo"
+            checked={formData.config.hero?.disableVideo ?? false}
+            onChange={(e) =>
+              setFormData({
+                ...formData,
+                config: {
+                  ...formData.config,
+                  hero: { ...formData.config.hero, disableVideo: e.target.checked },
+                },
+              })
+            }
+            label="Static hero image only (disable hero video)"
+            description="A/B test (static image vs video): when ON, this variant hides the brand hero video and renders the still image only. Leave OFF for the video variant. Note: the brand hero video only exists for brand prize slugs (dewalt, makita, …) — on slugs with no video this has no visible effect."
+          />
         </div>
       </FormSection>
 
