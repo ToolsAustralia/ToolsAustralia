@@ -36,6 +36,18 @@ KPI revenue breakdown uses) plus a `totals.membershipRenewals`. This is the admi
 time-series endpoint only; the Norm `dashboard.revenue-breakdown` endpoint is a
 separate single-period shape and is unaffected.
 
+## A/B VariantConfigEditor — "Static hero image only (disable hero video)" (2026-06-15)
+
+[`VariantConfigEditor`](../../src/components/admin/ab-testing/VariantConfigEditor.tsx)
+gained a Hero-section checkbox bound to `config.hero.disableVideo`. This is the
+admin control for the **static-image-vs-video** experiment: ON = the variant
+suppresses the brand hero video and shows the still only (PromoHero gates on
+`!variantConfig.hero.disableVideo`); OFF = video plays. Without this control the
+flag was only settable via `seed:static-vs-video-hero`. The brand hero video only
+exists for brand prize slugs, so the toggle is a no-op on slugs with no video.
+Note admins are excluded from assignment, so to see a variant either browse as a
+non-admin or use admin **Preview**.
+
 ## Components
 
 [src/components/admin/](../../src/components/admin/):
