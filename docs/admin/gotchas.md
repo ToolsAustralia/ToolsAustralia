@@ -76,6 +76,21 @@ If admin UI shows raw Stripe responses, card data leaks into screenshots / share
 
 `payOpenInvoiceAsPastDueAdmin` in `chargePastDueShared.ts` implements this pattern. Any new code that calls `stripe.invoices.pay()` should follow the same pattern or delegate through that function.
 
+## Subscription draft invoices CANNOT be deleted — finalize→void instead
+
+`stripe.invoices.del(id)` throws `StripeInvalidRequestError: You can't delete invoices created by subscriptions` (HTTP 400) for any draft invoice that belongs to a subscription. Only standalone (non-subscription) drafts are deletable. The stranded-recovery superseded-draft cleanup (`recoverStrandedBulk.ts` step 4) originally called `invoices.del()` and every call failed in prod (the drafts it targets are always subscription drafts).
+
+**The Stripe-supported disposal of a subscription draft is finalize → void** (a draft can't be voided directly — `voidInvoice` requires `open`/`uncollectible`). Recovery now does, per superseded draft:
+
+```ts
+await stripe.invoices.finalizeInvoice(draftId, { auto_advance: false }, { idempotencyKey });
+await stripe.invoices.voidInvoice(draftId, undefined, { idempotencyKey });
+```
+
+`auto_advance: false` is critical — it guarantees Stripe never attempts a charge between finalize and void. (Held `pause_collection[behavior]=keep_as_draft` invoices already carry `auto_advance:false`; we set it explicitly anyway.) Voiding writes off the superseded cycle, exactly like voiding a stale open.
+
+**Impact of the old bug was cosmetic, not a double-charge:** the `del` calls were best-effort (caught + logged), so recovery still finalized + paid the current draft. The superseded drafts just lingered as drafts — and because they keep `auto_advance:false` and unsetting `pause_collection` "only affects future invoices," they never auto-charge. Any drafts left behind by a pre-fix run are harmless clutter; a future recovery run on that member voids them.
+
 ## Stripe API 2025-04-01+ period field migration
 
 `current_period_start` and `current_period_end` were removed from the Subscription root in Stripe API version `2025-04-01` (Basil). They now live on each `subscription.items.data[*]` instead.

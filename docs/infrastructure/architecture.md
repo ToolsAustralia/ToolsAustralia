@@ -80,6 +80,24 @@ Two scripts ship for finding and fixing the major-draw entry-row corruption docu
 
 **Codemod sweep convention:** Codemod scripts under `scripts/codemods/` default to dry-run (no args = preview only); pass `--apply` to write. The `:dry` npm variant is the preview; the bare sweep:* variant applies. Always run dry first, verify the plan, then apply.
 
+### Klaviyo profile resync (post-outage)
+
+- [`scripts/sync-klaviyo-profiles.ts`](../../scripts/sync-klaviyo-profiles.ts) — throttled, dry-run-first re-sync of user profiles to Klaviyo after the June 2026 "fetch failed" outage left some profiles stale. Runs **locally** as a long-lived `tsx` process (no Vercel freeze/thaw, so the undici keep-alive race doesn't apply) against the already-fixed Klaviyo client; safe to run before the Vercel deploy. **No npm script** — invoke directly: `npx tsx scripts/sync-klaviyo-profiles.ts`.
+  - **Dry-run is the default** (prints a sample of emails, no writes). Pass `--apply` to perform real Klaviyo writes against the **production** Klaviyo account (key from `.env.local`).
+  - **Flags:** `--prod` (connect to `PROD_MONGODB_URI` Production db via `connectOpsDb`), `--apply` (live writes), `--members-only` (only users with a subscription document), `--limit N` (cap result set for testing).
+  - **Throttle:** wraps `syncMultipleUserProfilesToKlaviyo()` (already throttled at 8 concurrent / 700ms pause per batch) in chunks of 80 to emit a progress line per chunk — does **not** re-implement the throttle. Per-user errors are swallowed internally and surface as `console.error` lines; the final summary counts "processed" (attempted), not "succeeded".
+  - **Run off-peak.** Klaviyo's Profiles rate limit is per-account and shared with live registration upserts; a whole-DB sweep takes time even at ~5–10 req/s — run overnight when traffic is low.
+  - Distinct from [`scripts/sync-klaviyo-past-due-profiles.ts`](../../scripts/sync-klaviyo-past-due-profiles.ts) (npm `sync:klaviyo-past-due[:dry]`), which targets only past-due subscribers.
+
+### Klaviyo bulk-import resync (fast path)
+
+- [`scripts/sync-klaviyo-profiles-bulk.ts`](../../scripts/sync-klaviyo-profiles-bulk.ts) — the **fast path** for the same post-outage backfill, using Klaviyo's async **Bulk Import** endpoint (`POST /profile-bulk-import-jobs/`) instead of the per-profile Profiles API. One job upserts up to 10,000 profiles; this script chunks to **≤2,000 profiles/job** (via [`chunkProfilesForBulkImport`](../../src/utils/integrations/klaviyo/bulk-import.ts), size-capped at 2,000 count / 4.5MB / 100KB-per-profile) for payload safety. Like the per-profile script it runs **locally** as a long-lived `tsx` process against the already-fixed Klaviyo client. **No npm script** — invoke directly: `npx tsx scripts/sync-klaviyo-profiles-bulk.ts`.
+  - **Data-only upsert.** Never changes list membership/consent (no list relationship) — only profile attributes/properties. Safe for users who have unsubscribed.
+  - **Dry-run is the default** (builds up to 5 sample profiles, shows how they chunk and the projected job count; no writes). Pass `--apply` to create real Klaviyo jobs against the **production** Klaviyo account (key from `.env.local`).
+  - **Flags:** `--prod` (connect to `PROD_MONGODB_URI` Production db via `connectOpsDb`), `--apply` (create live jobs), `--members-only` (only users with a subscription document), `--limit N` (cap the result set).
+  - **Streaming + bounded memory.** Streams users with a Mongo cursor and flushes in pages of 2,000 (build → chunk → POST job(s) → poll each to completion → report → clear), so memory stays bounded regardless of DB size. The target draw + cutoff are computed **once** up front and passed to every `userToKlaviyoProfile` call (no per-user draw lookup). Each created job is polled to `complete`/`error` (≈3-minute ceiling) and its per-profile import errors are reported.
+  - **When to use which:** prefer **bulk** for large whole-DB sweeps — far fewer API calls (≈1 request per 2,000 profiles vs 2 per profile). Prefer the **per-profile** script ([`scripts/sync-klaviyo-profiles.ts`](../../scripts/sync-klaviyo-profiles.ts)) for small/targeted re-syncs. **Both are data-only** (neither changes list membership/consent).
+
 ## Vercel cron schedules
 
 [`vercel.json`](../../vercel.json) lists the registered cron paths and schedules. Times are UTC.
