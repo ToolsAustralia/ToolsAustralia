@@ -278,6 +278,14 @@ export async function addToPartnerDiscountQueue(
     user.partnerDiscountQueue = [];
   }
 
+  // Reconcile the queue against the current time BEFORE deciding where this purchase lands.
+  // A row whose window has already elapsed can still read status:"active" if nothing has
+  // swept it since (the daily cron lagged, or the member hasn't opened the rewards page).
+  // Without this sweep, a fresh same-tier purchase would wrongly queue behind that
+  // already-expired "zombie" instead of activating now — exactly the bug where a 2-day pack
+  // sat "upcoming" for weeks. Sweeping first makes the activate-vs-queue decision time-accurate.
+  await processPartnerDiscountQueue(user);
+
   // Create the queue item with 12-month expiry
   const purchaseDate = new Date();
   const expiryDate = new Date(purchaseDate);
@@ -299,9 +307,16 @@ export async function addToPartnerDiscountQueue(
   // Check if user has active subscription
   const hasActiveSubscription = user.subscription?.isActive;
 
-  // Check if there's already an active partner discount period (non-membership)
+  // Check if there's already a GENUINELY active partner discount period (non-membership).
+  // Require endDate in the future: an "active" row whose window has elapsed is a zombie and
+  // must not block this purchase from activating (defense-in-depth alongside the sweep above).
+  const nowForActiveCheck = new Date();
   const activeQueueItem = user.partnerDiscountQueue.find(
-    (item) => item.status === "active" && item.packageType !== "membership"
+    (item) =>
+      item.status === "active" &&
+      item.packageType !== "membership" &&
+      item.endDate !== undefined &&
+      new Date(item.endDate) > nowForActiveCheck
   );
 
   // Determine queue position and status
@@ -880,4 +895,32 @@ export function getQueueSummary(user: IUser) {
         (item) => item.status === "queued" && item.packageType !== "membership"
       ).length || 0,
   };
+}
+
+/**
+ * Read-only reconciled partner-discount summary for admin / display surfaces.
+ *
+ * Returns {@link getQueueSummary} computed against an in-memory CLONE that has first been swept
+ * by {@link processPartnerDiscountQueue} — so the active/queued view reflects the user's REAL
+ * current entitlement, not the possibly-stale stored `status` (a finished window the daily cron
+ * or the member's own queue GET hasn't swept yet would otherwise still read "active"; a due item
+ * would still read "queued"). This is the read side of the reconcile-then-read rule.
+ *
+ * It deliberately does **NOT** persist: admin/display reads stay side-effect-free. The canonical
+ * persisted sweep happens via the daily cron (`/api/cron/process-partner-discount-queues`) and the
+ * member's own `GET /api/partner-discount/queue`. The sweep runs purely in memory (no DB I/O), so
+ * this is cheap to call on a read path.
+ */
+export async function getReconciledPartnerDiscountSummary(
+  user: IUser
+): Promise<ReturnType<typeof getQueueSummary>> {
+  // Shallow-copy each queue row so the sweep's mutations never touch the caller's document.
+  // `subscription` is only read by the sweep, so sharing it by reference is safe.
+  const clone = {
+    subscription: user.subscription,
+    partnerDiscountQueue: (user.partnerDiscountQueue ?? []).map((item) => ({ ...item })),
+  } as unknown as IUser;
+
+  await processPartnerDiscountQueue(clone);
+  return getQueueSummary(clone);
 }

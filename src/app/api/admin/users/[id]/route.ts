@@ -11,6 +11,7 @@ import { REFERRAL_CONSTANTS } from "@/lib/referral";
 import mongoose from "mongoose";
 import { getPackageById } from "@/data/membershipPackages";
 import { getMiniDrawPackageById } from "@/data/miniDrawPackages";
+import { getReconciledPartnerDiscountSummary } from "@/utils/partner-discounts/partner-discount-queue";
 import { adminUserUpdateSchema } from "@/utils/validation/admin-user-update";
 import type { AdminUserUpdatePayload } from "@/types/admin";
 import { rewardsEnabled } from "@/config/featureFlags";
@@ -501,6 +502,33 @@ async function buildAdminUserProfile(userId: string) {
   const activePartnerDiscount = user.partnerDiscountQueue?.find((discount) => discount.status === "active");
   const queuedPartnerDiscounts = user.partnerDiscountQueue?.filter((discount) => discount.status === "queued") || [];
 
+  // Reconciled, read-only partner-discount summary (active period + queued/upcoming + totals).
+  // Reconciled in-memory so admins see the user's TRUE current entitlement (not the possibly-stale
+  // stored status); never persisted — this GET stays side-effect-free. See partner-discount-queue.ts.
+  const pdSummaryRaw = await getReconciledPartnerDiscountSummary(user as unknown as IUser);
+  const partnerDiscountSummary = {
+    active: {
+      isActive: pdSummaryRaw.activePeriod.isActive,
+      source: pdSummaryRaw.activePeriod.source,
+      packageName: pdSummaryRaw.activePeriod.packageName,
+      endsAt: pdSummaryRaw.activePeriod.endsAt ? new Date(pdSummaryRaw.activePeriod.endsAt).toISOString() : null,
+      daysRemaining: pdSummaryRaw.activePeriod.daysRemaining,
+      hoursRemaining: pdSummaryRaw.activePeriod.hoursRemaining,
+      isRecurring: pdSummaryRaw.activePeriod.source === "membership",
+    },
+    queued: pdSummaryRaw.queuedItems.map((q) => ({
+      packageName: q.packageName,
+      packageType: q.packageType,
+      daysOfAccess: q.daysOfAccess,
+      hoursOfAccess: q.hoursOfAccess,
+      purchaseDate: new Date(q.purchaseDate).toISOString(),
+      queuePosition: q.queuePosition,
+      expiryDate: new Date(q.expiryDate).toISOString(),
+    })),
+    totalQueuedDays: pdSummaryRaw.totalQueuedDays,
+    totalQueuedItems: pdSummaryRaw.totalQueuedItems,
+  };
+
   const redemptionHistory = user.redemptionHistory || [];
 
   const daysSinceLastLogin = user.lastLogin
@@ -632,6 +660,7 @@ async function buildAdminUserProfile(userId: string) {
     partnerDiscountQueue: user.partnerDiscountQueue || [],
     activePartnerDiscount,
     queuedPartnerDiscounts,
+    partnerDiscountSummary,
     upsellPurchases: user.upsellPurchases || [],
     upsellHistory,
     upsellStats: user.upsellStats || null,

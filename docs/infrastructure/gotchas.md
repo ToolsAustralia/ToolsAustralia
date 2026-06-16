@@ -28,6 +28,14 @@
 
 Signing must include all params being sent (or use unsigned with strict allowlist). Mismatched params → upload fails with a 401 from Cloudinary.
 
+## Vercel Cron triggers GET — a POST-only cron silently never runs
+
+**Vercel Cron invokes a cron path with a `GET` request.** A route whose real work lives only in `POST` (with `GET` as a health-check stub) is therefore **never executed by the scheduler** — it looks wired up in `vercel.json` but does nothing on schedule.
+
+**Incident (June 2026):** `/api/cron/process-partner-discount-queues` had its sweep in `POST` and a no-op health-check `GET`. The daily job never ran, so partner-discount queues only advanced when a member opened the rewards page (`GET /api/partner-discount/queue`) — which let a finished one-time window sit unswept for weeks and mis-queue later purchases (see [partner/gotchas.md](../partner/gotchas.md)). Fixed by moving the processing into `GET` (auth'd via `isAuthorized` / `CRON_SECRET`) with `POST` kept as a manual alias — mirroring the working `reconcile-affiliate-commissions` cron.
+
+**Rule:** the cron's real work goes in the **`GET`** handler. The canonical, correct pattern is the GET-only crons (`process-stripe-webhook-queue`, `major-draw-transition`, `reconcile-affiliate-commissions`, …). ⚠️ Still POST-only as of this writing and likely affected the same way: `milestone-rewards-issuance` and `monthly-redeemables-issuance` — audit before relying on their schedules.
+
 ## Cron auth bypass
 
 If you forget the shared-secret check, anyone can hit `/api/cron/foo` and trigger jobs. Watch out — this has happened in other codebases.

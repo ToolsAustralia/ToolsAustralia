@@ -3163,6 +3163,126 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                     </div>
                   </div>
                 )}
+
+                {/* Partner Discount Access (read-only, reconciled current entitlement) */}
+                {!isEditing("purchases") &&
+                  user.partnerDiscountSummary &&
+                  (user.partnerDiscountSummary.active.isActive ||
+                    user.partnerDiscountSummary.queued.length > 0) && (
+                    <div className="bg-gradient-to-br from-gray-50 to-white dark:from-neutral-900 dark:to-neutral-950 rounded-xl border-2 border-slate-200/50 dark:border-neutral-700 shadow-lg dark:shadow-none p-3 sm:p-4 lg:p-6">
+                      <div className="flex flex-wrap items-end justify-between gap-2 mb-2 sm:mb-3 lg:mb-4">
+                        <h3 className="text-base sm:text-lg font-semibold text-gray-900">Partner Discount Access</h3>
+                        {user.partnerDiscountSummary.totalQueuedItems > 0 && (
+                          <p className="text-xs text-gray-500">
+                            {user.partnerDiscountSummary.totalQueuedItems} queued ·{" "}
+                            {user.partnerDiscountSummary.totalQueuedDays} days total
+                          </p>
+                        )}
+                      </div>
+
+                      {/* Currently active period */}
+                      {user.partnerDiscountSummary.active.isActive ? (
+                        <div className="flex items-center justify-between gap-2 sm:gap-3 p-2 sm:p-3 bg-emerald-50 dark:bg-emerald-950/30 rounded-lg border border-emerald-200 dark:border-emerald-800">
+                          <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
+                            <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center flex-shrink-0 bg-emerald-100 border border-emerald-300">
+                              <Clock className="w-4 h-4 sm:w-5 sm:h-5 text-emerald-700" />
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <p className="font-medium text-xs sm:text-sm text-gray-900">
+                                {user.partnerDiscountSummary.active.packageName || "Active partner discount"}
+                                {user.partnerDiscountSummary.active.source && (
+                                  <span className="ml-1.5 text-2xs sm:text-xs font-normal uppercase tracking-wide text-emerald-700">
+                                    {user.partnerDiscountSummary.active.source}
+                                  </span>
+                                )}
+                              </p>
+                              <p className="text-2xs sm:text-xs text-gray-600 dark:text-neutral-400 mt-0.5">
+                                {user.partnerDiscountSummary.active.isRecurring
+                                  ? `Recurring · while membership active${
+                                      user.partnerDiscountSummary.active.endsAt
+                                        ? ` (renews ${formatDate(user.partnerDiscountSummary.active.endsAt)})`
+                                        : ""
+                                    }`
+                                  : user.partnerDiscountSummary.active.endsAt
+                                  ? `Ends ${formatDate(user.partnerDiscountSummary.active.endsAt)}`
+                                  : "Active"}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="text-right flex-shrink-0">
+                            <p className="font-semibold text-2xs sm:text-xs lg:text-sm text-emerald-700">
+                              {user.partnerDiscountSummary.active.isRecurring
+                                ? "Active"
+                                : user.partnerDiscountSummary.active.daysRemaining >= 1
+                                ? `${user.partnerDiscountSummary.active.daysRemaining} day${
+                                    user.partnerDiscountSummary.active.daysRemaining === 1 ? "" : "s"
+                                  } left`
+                                : `${user.partnerDiscountSummary.active.hoursRemaining} hour${
+                                    user.partnerDiscountSummary.active.hoursRemaining === 1 ? "" : "s"
+                                  } left`}
+                            </p>
+                            <div className="mt-0.5 flex justify-end">
+                              <ActiveOrInactiveBadge active activeLabel="Active" inactiveLabel="Expired" />
+                            </div>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="p-2 sm:p-3 bg-white dark:bg-neutral-900 rounded-lg border border-gray-200 dark:border-neutral-700">
+                          <p className="text-xs sm:text-sm text-gray-600 dark:text-neutral-400">
+                            No active partner discount period.
+                          </p>
+                        </div>
+                      )}
+
+                      {/* Queued / upcoming periods (activate automatically when the active period ends) */}
+                      {user.partnerDiscountSummary.queued.length > 0 && (
+                        <div className="mt-2 sm:mt-3">
+                          <p className="text-2xs sm:text-xs font-semibold uppercase tracking-wide text-gray-500 mb-1.5">
+                            Upcoming (queued)
+                          </p>
+                          <div className="space-y-2 sm:space-y-3">
+                            {user.partnerDiscountSummary.queued.map((q, index) => (
+                              <div
+                                key={`pd-queued-${q.queuePosition}-${index}`}
+                                className="flex items-center justify-between gap-2 sm:gap-3 p-2 sm:p-3 bg-white dark:bg-neutral-900 rounded-lg border border-gray-200 dark:border-neutral-700 hover:shadow-sm transition-shadow"
+                              >
+                                <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
+                                  <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center flex-shrink-0 bg-sky-50 border border-sky-200">
+                                    <Gift className="w-4 h-4 sm:w-5 sm:h-5 text-sky-700" />
+                                  </div>
+                                  <div className="min-w-0 flex-1">
+                                    <p className="font-medium text-xs sm:text-sm text-gray-900">
+                                      {q.packageName}
+                                      <span className="ml-1.5 text-2xs sm:text-xs font-normal text-gray-400">
+                                        #{q.queuePosition}
+                                      </span>
+                                    </p>
+                                    <p className="text-2xs sm:text-xs text-gray-600 dark:text-neutral-400 mt-0.5">
+                                      Purchased {formatDate(q.purchaseDate)} · use by {formatDate(q.expiryDate)}
+                                    </p>
+                                  </div>
+                                </div>
+                                <div className="text-right flex-shrink-0">
+                                  <p className="font-semibold text-2xs sm:text-xs lg:text-sm text-gray-900">
+                                    {q.daysOfAccess >= 1
+                                      ? `${q.daysOfAccess} day${q.daysOfAccess === 1 ? "" : "s"}`
+                                      : `${q.hoursOfAccess} hour${q.hoursOfAccess === 1 ? "" : "s"}`}
+                                  </p>
+                                  <p className="text-3xs sm:text-2xs lg:text-xs text-gray-500 mt-0.5">access</p>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      <p className="mt-2 sm:mt-3 text-3xs sm:text-2xs text-gray-400">
+                        Reflects current entitlement (reconciled). Queued periods activate automatically when the
+                        active period ends.
+                      </p>
+                    </div>
+                  )}
+
                 <div className="bg-gradient-to-br from-gray-50 to-white dark:from-neutral-900 dark:to-neutral-950 rounded-xl border-2 border-slate-200/50 dark:border-neutral-700 shadow-lg dark:shadow-none p-2 sm:p-4 lg:p-6">
                   {isEditing("activity") ? (
                     <form
