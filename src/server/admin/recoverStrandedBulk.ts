@@ -303,7 +303,9 @@ export async function runStrandedRecovery(
         failed++;
         rows.push({ invoiceId: row.currentDraftId ?? "", customerId: row.customerId, userId: row.userId, userEmail: row.email, status: "failed", error: memberErr instanceof Error ? memberErr.message : String(memberErr), amount: row.amountCents, subscriptionId: row.subscriptionId });
       }
-      await new Promise((r) => setTimeout(r, 300)); // gentle rate-limit between members
+      // No inter-member sleep: the loop is fully serial (never >1 in-flight Stripe call), so
+      // peak rate is ~3-5 req/s — far under Stripe's ~100 req/s live limit. A sleep here only
+      // burned wall-clock against the 300s function cap.
     }
 
     // Aggregate authoritative totals (typed skip breakdown) from the per-member rows (M-1).

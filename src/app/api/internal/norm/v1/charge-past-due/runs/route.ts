@@ -49,6 +49,7 @@ export const GET = withNorm(
         adminId: r.adminId,
         adminName: r.adminName,
         status: r.status,
+        kind: r.kind,
         totals: r.totals,
       })),
     });

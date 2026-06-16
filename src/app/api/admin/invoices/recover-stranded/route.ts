@@ -8,8 +8,15 @@ import { previewStrandedRecovery, runStrandedRecovery } from "@/server/admin/rec
 export const maxDuration = 300;
 export const dynamic = "force-dynamic";
 
-const DEFAULT_LIMIT = 25;
-const MAX_LIMIT = 100;
+// Each recoverable member makes ~5-7 SERIAL Stripe round-trips (void stale opens,
+// finalize+void superseded drafts, finalize current draft, retrieve customer, pay, retrieve
+// PI), so the whole run must fit Vercel's 300s cap. At a worst case of ~5s/member, 30 members
+// ≈ 150s — comfortably inside the budget. Larger batches timed out (the process is killed,
+// the run is left "running", and the lock self-releases only after its 30-min TTL). The run is
+// idempotent (a paid draft drops from the next scan), so drain larger backlogs in 30-member
+// batches by re-clicking Recover.
+const DEFAULT_LIMIT = 20;
+const MAX_LIMIT = 30;
 
 /** GET — read-only worklist + totals (no Stripe writes). */
 export async function GET(request: NextRequest) {

@@ -441,6 +441,9 @@ export default function PastDueChargeHistory() {
                     <th className="bg-gray-50 px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500 dark:bg-neutral-800 dark:text-neutral-400">
                       Admin
                     </th>
+                    <th className="bg-gray-50 px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500 dark:bg-neutral-800 dark:text-neutral-400">
+                      Type
+                    </th>
                     <th className="bg-gray-50 px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-gray-500 dark:bg-neutral-800 dark:text-neutral-400">
                       Attempts
                     </th>
@@ -467,6 +470,17 @@ export default function PastDueChargeHistory() {
                       </td>
                       <td className="px-4 py-3 text-sm text-gray-700 dark:text-neutral-300">
                         {r.adminName}
+                      </td>
+                      <td className="px-4 py-3">
+                        {r.kind === "recover" ? (
+                          <span className="inline-flex items-center rounded-full bg-violet-100 px-2 py-0.5 text-xs font-medium text-violet-700 dark:bg-violet-900/40 dark:text-violet-300">
+                            Recovery
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600 dark:bg-neutral-700 dark:text-neutral-300">
+                            Charge
+                          </span>
+                        )}
                       </td>
                       <td className="px-4 py-3">
                         <AttemptsBreakdown

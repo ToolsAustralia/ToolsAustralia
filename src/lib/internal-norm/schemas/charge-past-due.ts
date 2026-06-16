@@ -30,6 +30,9 @@ const ChargeRunRowSchema = z.object({
   adminId: z.string(),
   adminName: z.string(),
   status: ChargeRunStatusSchema,
+  kind: z
+    .enum(["charge", "recover"])
+    .describe("charge = past-due bulk charge; recover = stranded-invoice recovery (void/finalize→pay)"),
   totals: ChargeRunTotalsSchema,
 });
 

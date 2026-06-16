@@ -1195,6 +1195,7 @@ When `totalFailed` is `0`, `topCodes` is an empty array. Percentages are rounded
     adminId: string,
     adminName: string,                       // "First Last" (or email/(unknown admin) fallback)
     status: "running" | "completed" | "failed" | "aborted",
+    kind: "charge" | "recover",              // "recover" = stranded-invoice recovery run (now listed alongside charges)
     totals: {
       eligibleCount: number,                 // past-due invoices considered
       attempted: number,                     // actually charged
@@ -1226,7 +1227,7 @@ When `totalFailed` is `0`, `topCodes` is an empty array. Percentages are rounded
 
 **Data source**: `ChargeJobRun` Mongo collection plus a `User` lookup for admin display names. Orchestrated by `listChargeRuns` in `src/services/admin/chargePastDueHistory.ts`.
 
-**Constraints**: `read` tier. `requiredPermission: users.view`. Read-only. `revenueCents` is in Stripe currency-minor-unit (cents); divide by 100 for AUD dollars.
+**Constraints**: `read` tier. `requiredPermission: users.view`. Read-only. `revenueCents` is in Stripe currency-minor-unit (cents); divide by 100 for AUD dollars. This list includes BOTH normal charge runs and **stranded-invoice recovery runs** (`kind: "recover"` — void stale opens + finalize→pay the current draft); a recover run's `totals` use the same shape (`succeeded` = members recovered, `revenueCents` = amount collected), so they fold into the same charge-performance view.
 
 ---
 
@@ -1243,6 +1244,7 @@ When `totalFailed` is `0`, `topCodes` is an empty array. Percentages are rounded
     adminId: string,
     adminName: string,
     status: "running" | "completed" | "failed" | "aborted",
+    kind: "charge" | "recover",
     totals: { ...same shape as runs.list }
   },
   rows: Array<{

@@ -17,6 +17,8 @@ export interface ListedRunDTO {
   adminId: string;
   adminName: string;
   status: ChargeJobRunStatus;
+  /** "charge" = past-due bulk charge; "recover" = stranded-invoice recovery. Legacy runs ⇒ "charge". */
+  kind: IChargeJobRun["kind"];
   totals: IChargeJobRun["totals"];
 }
 
