@@ -98,7 +98,7 @@ export default function RecoverStrandedPanel() {
   const [preview, setPreview] = useState<StrandedPreviewData | null>(null);
   const [runResult, setRunResult] = useState<StrandedRunResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [limit, setLimit] = useState(25);
+  const [limit, setLimit] = useState(20);
   const [confirmation, setConfirmation] = useState("");
 
   // ── Preview ──────────────────────────────────────────────────────────────────
@@ -145,7 +145,27 @@ export default function RecoverStrandedPanel() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ confirmation: "RECOVER", limit }),
       });
-      const data: StrandedRunResponse = await res.json();
+
+      // The run can take a while; if Vercel times it out (or a proxy returns a non-JSON error
+      // page) a bare res.json() would throw "Unexpected token". Read the body as text and parse
+      // defensively so a timeout surfaces a real message and the status branches still work.
+      const rawBody = await res.text();
+      let data: StrandedRunResponse | null = null;
+      try {
+        data = rawBody ? (JSON.parse(rawBody) as StrandedRunResponse) : null;
+      } catch {
+        data = null;
+      }
+
+      if (!data) {
+        setError(
+          res.ok
+            ? `Unexpected (non-JSON) response from the server (status ${res.status}).`
+            : "The recovery run took too long and timed out — some members may have been recovered in the background. Wait ~30s, click Preview to see who's left, then run a smaller batch (≤30 at a time)."
+        );
+        setPanelState("error");
+        return;
+      }
 
       if (res.status === 409) {
         setError(data.message ?? data.error ?? "A recover run is already in progress. Try again shortly.");
@@ -181,7 +201,7 @@ export default function RecoverStrandedPanel() {
     setRunResult(null);
     setError(null);
     setConfirmation("");
-    setLimit(25);
+    setLimit(20);
   };
 
   // ── Render ────────────────────────────────────────────────────────────────────
@@ -358,15 +378,15 @@ export default function RecoverStrandedPanel() {
                   <input
                     type="number"
                     min={1}
-                    max={100}
+                    max={30}
                     value={limit}
                     onChange={(e) => {
-                      const v = Math.min(100, Math.max(1, parseInt(e.target.value, 10) || 1));
+                      const v = Math.min(30, Math.max(1, parseInt(e.target.value, 10) || 1));
                       setLimit(v);
                     }}
                     className="w-24 rounded-md border border-red-300 dark:border-red-800 bg-white dark:bg-neutral-900 px-2 py-1 text-sm text-gray-900 dark:text-neutral-100 focus:outline-none focus:ring-2 focus:ring-red-500"
                   />
-                  <span className="text-xs text-red-600 dark:text-red-400">(max 100)</span>
+                  <span className="text-xs text-red-600 dark:text-red-400">(max 30 per run — re-run to drain more)</span>
                 </div>
 
                 {/* Confirmation input */}
