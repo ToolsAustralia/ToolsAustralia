@@ -66,19 +66,27 @@ function toEntry(profile: KlaviyoProfile, email: string): BulkImportProfileEntry
  * whose own JSON exceeds the per-profile cap (returns them in `oversized`). Profiles without a
  * non-empty email are dropped (email is the required identifier) and counted in `skippedNoEmail`.
  *
+ * Returns chunks of the ORIGINAL `KlaviyoProfile`s — each chunk is ready to pass straight to
+ * `klaviyo.bulkImportProfiles(profiles)` (which re-maps to entries internally via
+ * `cleanProperties`). The byte budget is measured on the MAPPED `toEntry(profile, email)` output
+ * (`Buffer.byteLength(JSON.stringify(entry))`), which is a conservative over-estimate of the
+ * client's actual `cleanProperties` payload — so a chunk that fits this budget is guaranteed to
+ * fit Klaviyo's real 5MB limit. We split on the entry size but emit the source profile so callers
+ * compose with the client without re-deriving entries.
+ *
  * Defaults keep a safety margin under Klaviyo's hard limits (10,000 profiles / 5MB / 100KB
  * per profile): `maxCount = 2000`, `maxBytes = 4_500_000`, `maxPerProfileBytes = 100_000`.
  */
 export function chunkProfilesForBulkImport(
   profiles: KlaviyoProfile[],
   opts?: { maxCount?: number; maxBytes?: number; maxPerProfileBytes?: number }
-): { chunks: BulkImportProfileEntry[][]; skippedNoEmail: number; oversized: number } {
+): { chunks: KlaviyoProfile[][]; skippedNoEmail: number; oversized: number } {
   const maxCount = opts?.maxCount ?? 2000;
   const maxBytes = opts?.maxBytes ?? 4_500_000;
   const maxPerProfileBytes = opts?.maxPerProfileBytes ?? 100_000;
 
-  const chunks: BulkImportProfileEntry[][] = [];
-  let current: BulkImportProfileEntry[] = [];
+  const chunks: KlaviyoProfile[][] = [];
+  let current: KlaviyoProfile[] = [];
   let currentBytes = 0;
   let skippedNoEmail = 0;
   let oversized = 0;
@@ -90,6 +98,9 @@ export function chunkProfilesForBulkImport(
       continue;
     }
 
+    // Size the chunk on the mapped entry (conservative over-estimate vs the client's
+    // cleanProperties payload), but push the original profile so the chunk composes
+    // directly with klaviyo.bulkImportProfiles.
     const entry = toEntry(profile, email);
     const entryBytes = Buffer.byteLength(JSON.stringify(entry));
 
@@ -106,7 +117,7 @@ export function chunkProfilesForBulkImport(
       currentBytes = 0;
     }
 
-    current.push(entry);
+    current.push(profile);
     currentBytes += entryBytes;
   }
 

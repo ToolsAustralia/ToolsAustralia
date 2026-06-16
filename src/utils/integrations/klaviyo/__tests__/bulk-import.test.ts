@@ -57,11 +57,10 @@ function testChunkSplitsByMaxCount() {
   );
   assert.equal(skippedNoEmail, 0);
   assert.equal(oversized, 0);
-  // Every entry is a well-formed profile resource.
+  // Each chunk now holds the ORIGINAL KlaviyoProfiles (ready for klaviyo.bulkImportProfiles).
   for (const chunk of chunks) {
-    for (const entry of chunk) {
-      assert.equal(entry.type, "profile");
-      assert.equal(typeof entry.attributes.email, "string");
+    for (const profile of chunk) {
+      assert.equal(typeof profile.email, "string");
     }
   }
 }
@@ -99,12 +98,43 @@ function testCountsOversizedProfiles() {
   assert.equal(total, 1, "only the small profile fits");
   assert.equal(oversized, 1, "the huge profile is counted as oversized");
   assert.equal(skippedNoEmail, 0);
-  assert.equal(chunks[0][0].attributes.email, "small@example.com");
+  assert.equal(chunks[0][0].email, "small@example.com");
+}
+
+function testSplitsByMaxBytes() {
+  // Each profile carries ~1KB of properties and individually fits under
+  // maxPerProfileBytes, but two together exceed maxBytes → a new chunk starts.
+  const heavyProperties: Record<string, unknown> = { blob: "x".repeat(1000) };
+  const profiles: KlaviyoProfile[] = Array.from({ length: 3 }, (_, i) => ({
+    email: `heavy${i}@example.com`,
+    properties: heavyProperties,
+  }));
+
+  const { chunks, skippedNoEmail, oversized } = chunkProfilesForBulkImport(profiles, {
+    // Generous count cap (so the split is driven by bytes, not count) but a tight
+    // byte budget that fits roughly one profile per chunk.
+    maxCount: 100,
+    maxBytes: 1500,
+    maxPerProfileBytes: 100_000,
+  });
+
+  // Byte budget forces one profile per chunk → 3 chunks.
+  assert.equal(chunks.length, 3, "3 byte-heavy profiles at maxBytes≈1 each → 3 chunks");
+  assert.deepEqual(
+    chunks.map((c) => c.length),
+    [1, 1, 1],
+    "byte budget splits into single-profile chunks"
+  );
+  const total = chunks.reduce((sum, c) => sum + c.length, 0);
+  assert.equal(total, 3, "no profile dropped — all fit under the per-profile cap");
+  assert.equal(skippedNoEmail, 0);
+  assert.equal(oversized, 0);
 }
 
 function run() {
   testBuildPayloadShapeAndNoRelationships();
   testChunkSplitsByMaxCount();
+  testSplitsByMaxBytes();
   testDropsProfilesWithoutEmail();
   testCountsOversizedProfiles();
   console.error("bulk-import tests passed");
