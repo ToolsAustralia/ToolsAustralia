@@ -11,7 +11,7 @@
  * @version 1.0.0
  */
 
-import { hashData } from "@/lib/facebook";
+import { hashData } from "@/lib/facebook-hash";
 
 /**
  * Cookie storing the click-capture timestamp for the current fbclid.
