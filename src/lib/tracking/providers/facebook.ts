@@ -8,10 +8,13 @@
 import type { CanonicalEvent, ConversionProvider, RequestContext } from "../types";
 import { hashPII } from "../canonical-event";
 import { getAllowedHostnames } from "../hostname-gate";
-import {
-  sendFacebookEvent,
-  type FacebookEvent,
-} from "@/lib/facebook";
+// `FacebookEvent` is a type (erased at build). `sendFacebookEvent` is the SERVER CAPI sender and
+// transitively imports undici (node:net), so it must NOT be a *static* import here: this module is
+// isomorphic (also bundled into the browser via the tracking registry / usePixelTracking), and a
+// static import pulls undici into the EAGER client bundle, crashing every page at load with
+// "Cannot find module 'node:net'". It is lazy-imported inside capiSend() (a server-only call path)
+// so the undici chunk is never evaluated in the browser. See docs/tracking/gotchas.md.
+import type { FacebookEvent } from "@/lib/facebook";
 import { toYYYYMMDD } from "@/utils/tracking/facebook-helpers";
 import { shouldTrackRoute, EXCLUDED_TRACKING_PREFIXES } from "@/utils/tracking/should-track-route";
 
@@ -186,6 +189,10 @@ async function capiSend(event: CanonicalEvent, ctx: RequestContext): Promise<boo
     ...(actionSource === "website" && resolvedEventSourceUrl && { event_source_url: resolvedEventSourceUrl }),
   };
 
+  // Lazy-load the server-only CAPI sender so undici (node:net) stays OUT of the eager client
+  // bundle. capiSend only ever runs server-side, so this dynamic import is never evaluated in the
+  // browser; on the server it resolves normally on first call.
+  const { sendFacebookEvent } = await import("@/lib/facebook");
   return sendFacebookEvent(fbEvent);
 }
 

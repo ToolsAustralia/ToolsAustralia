@@ -10,13 +10,19 @@ Tracking-specific notes:
 - The `attempts: 2` in the old logs was the **non-fatal profile-search GET** (idempotency / `findProfileByEmail`, which pass `maxRetries: 2`), swallowed by the caller — its log prominence overstated impact. Real writes use `MAX_RETRIES = 5`.
 - When adding a new third-party tracking call, use `outboundFetch`/`resilientFetch`, never bare `fetch`.
 
-## Client components must NEVER import `@/lib/facebook` — it pulls undici → `node:net` into the browser bundle
+## Isomorphic tracking modules must NEVER *eagerly* import undici/server-only code (it crashes the browser bundle)
 
-**Incident (June 2026, prod outage):** after the outbound-fetch change shipped (PR #617), **every page** crashed at load with `Uncaught Error: Cannot find module 'node:net'` (Turbopack). Chain: `@/lib/facebook` imports the server-only `@/lib/http/outbound` (undici → `node:net`); the **client** tracking helper [`@/utils/tracking/facebook-helpers`](../../src/utils/tracking/facebook-helpers.ts) imported `hashData` from `@/lib/facebook`; so two **global client components** — `ConversionPixels` (via `@/utils/tracking/click-capture`) and `MembershipModal` — transitively bundled undici into the browser. `node:net` cannot be polyfilled client-side, so the chunk throws at load. A passing `next build` does NOT catch it (the error is a Turbopack *runtime* resolution failure in the browser).
+**Incident (June 2026, prod outage):** after the outbound-fetch change shipped (PR #617), **every page** crashed at load with `Uncaught Error: Cannot find module 'node:net'` (Turbopack). `@/lib/facebook` imports the server-only `@/lib/http/outbound` (undici → `node:net`).
 
-**Fix:** `hashData` now lives in [`src/lib/facebook-hash.ts`](../../src/lib/facebook-hash.ts) (crypto-only, zero network deps). `facebook-helpers` imports it from there; `@/lib/facebook` re-exports it for server callers. No client component reaches `@/lib/facebook → outbound → undici` anymore.
+**Root cause (found via a deterministic import-graph trace — `temp/readonly/trace-client-undici.mjs`):** all **76** client components that crashed funneled through ONE chokepoint — the **isomorphic** provider [`src/lib/tracking/providers/facebook.ts`](../../src/lib/tracking/providers/facebook.ts), reached from the browser via the tracking registry → `usePixelTracking`. It did a **static** `import { sendFacebookEvent } from "@/lib/facebook"`. `sendFacebookEvent` is only called in `capiSend()` (server-only), but the static import dragged undici into the **eager** client bundle, which evaluates on load → crash. (A passing `next build` does NOT catch it — Turbopack stubs `node:net` and it throws only at *runtime* when the eager chunk evaluates.) A secondary path — the client helper `facebook-helpers.ts` importing `hashData` from `@/lib/facebook` — was also cut.
 
-**Rule:** client components / browser-reachable tracking utils may import ONLY client-safe helpers (cookie/URL readers, `hashData`) — **never** `@/lib/facebook`, `@/lib/klaviyo`, `@/lib/facebook-marketing`, or `@/lib/http/outbound` (all server-only; all reach undici / Node built-ins). Recommended guardrail: add `import "server-only"` to `outbound.ts` so any future client leak fails the build instead of crashing prod.
+**Fix (the proven isomorphic pattern):**
+- `providers/facebook.ts`: `import type { FacebookEvent }` (erased) + **lazy** `const { sendFacebookEvent } = await import("@/lib/facebook")` inside `capiSend()`. undici now lives in a lazy chunk that is **never evaluated in the browser** (capiSend only runs server-side).
+- `hashData` extracted to [`src/lib/facebook-hash.ts`](../../src/lib/facebook-hash.ts) (crypto-only); `facebook-helpers` imports it from there.
+
+**Rule:** an **isomorphic** module (no `"use client"`, bundled into both server and browser — e.g. the tracking providers/registry) may *reference* server-only code (undici, `@/lib/facebook` CAPI senders, `@/lib/klaviyo`, `@/lib/http/outbound`) **only via `import type` or a lazy `await import()` on a server-only call path** — NEVER a static value import, which pulls it into the eager client bundle.
+
+**Guardrail:** `temp/readonly/trace-client-undici.mjs` statically traces every `"use client"` module's **eager** (static, non-type) import graph and reports any that reach `outbound.ts`. It must print "0" — wire it into CI/lint. (We did NOT use `import "server-only"` on `outbound.ts`: it's too blunt — it forbids the module from the client bundle *entirely*, including legitimate lazy chunks, so it breaks valid isomorphic modules. The eager-only tracer is the correct check for this codebase's isomorphic tracking design.)
 
 ## Bulk Klaviyo profile sync must be throttled (per-account rate limits)
 

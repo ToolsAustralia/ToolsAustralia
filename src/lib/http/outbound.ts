@@ -35,12 +35,6 @@
  * @module lib/http/outbound
  */
 
-// Build-time guard: this module is server-only — it imports undici, which needs `node:net` and
-// CANNOT be bundled for the browser. If any Client Component imports it (directly or transitively),
-// the build now FAILS here with a clear message instead of silently shipping a runtime crash to
-// production (exactly the June 2026 `Cannot find module 'node:net'` outage). Next.js vendors
-// `server-only`, so this adds no dependency. See docs/tracking/gotchas.md.
-import "server-only";
 import { Agent } from "undici";
 
 /**
