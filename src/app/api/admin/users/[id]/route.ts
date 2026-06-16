@@ -521,9 +521,11 @@ async function buildAdminUserProfile(userId: string) {
       packageType: q.packageType,
       daysOfAccess: q.daysOfAccess,
       hoursOfAccess: q.hoursOfAccess,
-      purchaseDate: new Date(q.purchaseDate).toISOString(),
+      // Null-guard like every other date field in this function: a legacy / raw-inserted queue row
+      // missing these (despite the schema marking them required) must degrade gracefully, never 500 the GET.
+      purchaseDate: q.purchaseDate ? new Date(q.purchaseDate).toISOString() : null,
       queuePosition: q.queuePosition,
-      expiryDate: new Date(q.expiryDate).toISOString(),
+      expiryDate: q.expiryDate ? new Date(q.expiryDate).toISOString() : null,
     })),
     totalQueuedDays: pdSummaryRaw.totalQueuedDays,
     totalQueuedItems: pdSummaryRaw.totalQueuedItems,

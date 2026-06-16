@@ -110,12 +110,66 @@ async function testReconciledSummaryReflectsSweepWithoutMutating() {
   assert.equal(b.status, "queued", "original queued row unchanged");
 }
 
+/**
+ * The reconciled summary shares `subscription` by reference with the caller's user — prove the
+ * sweep never mutates it (nor the caller's queue) on the subscription-active path.
+ */
+async function testReconciledSummaryDoesNotMutateSubscriptionOrQueue() {
+  const user = {
+    subscription: {
+      isActive: true,
+      packageId: "foreman-subscription",
+      startDate: new Date(Date.now() - 10 * DAY),
+      endDate: new Date(Date.now() + 20 * DAY),
+    },
+    partnerDiscountQueue: [],
+  } as unknown as IUser;
+
+  // A one-time pack while subscribed queues behind the membership floor.
+  await addToPartnerDiscountQueue(user, { ...TRADIE, stripePaymentIntentId: "pi_sub_ot" });
+  const subSnapshot = JSON.parse(JSON.stringify(user.subscription));
+  const queueStatusesBefore = user.partnerDiscountQueue!.map((i) => i.status);
+
+  const summary = await getReconciledPartnerDiscountSummary(user);
+  assert.equal(summary.activePeriod.isActive, true, "active subscriber has partner access in the reconciled summary");
+
+  assert.deepEqual(
+    JSON.parse(JSON.stringify(user.subscription)),
+    subSnapshot,
+    "getReconciledPartnerDiscountSummary must not mutate the caller's subscription (shared by reference)"
+  );
+  assert.deepEqual(
+    user.partnerDiscountQueue!.map((i) => i.status),
+    queueStatusesBefore,
+    "getReconciledPartnerDiscountSummary must not mutate the caller's queue"
+  );
+}
+
+/** A queued item missing its dates must not throw when summarised (degrades, never crashes). */
+async function testReconciledSummaryToleratesMissingDates() {
+  const user = makeUser();
+  const item = await addToPartnerDiscountQueue(user, { ...TRADIE, stripePaymentIntentId: "pi_a" });
+  // Make it genuinely active then queue a second; then corrupt the queued one's dates.
+  const queued = await addToPartnerDiscountQueue(user, { ...TRADIE, stripePaymentIntentId: "pi_b" });
+  assert.equal(queued.status, "queued", "setup: second pack queued");
+  // Simulate a legacy/raw row missing expiryDate/purchaseDate.
+  delete (queued as { expiryDate?: Date }).expiryDate;
+  delete (queued as { purchaseDate?: Date }).purchaseDate;
+  void item;
+
+  // Must not throw.
+  const summary = await getReconciledPartnerDiscountSummary(user);
+  assert.ok(summary, "summary computed without throwing on a row missing dates");
+}
+
 async function run() {
   await testFreshPurchaseActivatesOverElapsedZombie();
   await testSecondPackQueuesBehindGenuineActive();
   await testHigherTierPreemptsGenuineActiveLower();
   await testSweepExpiresElapsedActive();
   await testReconciledSummaryReflectsSweepWithoutMutating();
+  await testReconciledSummaryDoesNotMutateSubscriptionOrQueue();
+  await testReconciledSummaryToleratesMissingDates();
   console.log("Partner discount queue tests passed");
 }
 

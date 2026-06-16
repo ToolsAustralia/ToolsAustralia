@@ -297,9 +297,9 @@ export interface AdminUserDetail {
       packageType: "membership" | "one-time" | "mini-draw" | "upsell";
       daysOfAccess: number;
       hoursOfAccess: number;
-      purchaseDate: string;
+      purchaseDate: string | null;
       queuePosition: number;
-      expiryDate: string;
+      expiryDate: string | null;
     }>;
     totalQueuedDays: number;
     totalQueuedItems: number;

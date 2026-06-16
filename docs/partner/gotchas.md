@@ -28,6 +28,12 @@ UI must not show a day count for a subscription tier. Use `getPartnerAccessDurat
 
 Severity note: the bug **defers** paid access, it does not destroy or over-grant it (a stale row with a past `endDate` grants nothing — `calculateActivePartnerDiscountPeriod` checks `endDate > now`). Customers keep their paid window (12-month use-by); it just activated later than expected. So existing affected users should be **left to run their deferred window**, not have it expired — that would punish them for our bug.
 
+## Subscriber's membership queue row goes "expired" on renewal — cosmetic, access stays correct
+
+The membership queue row's `endDate` is set only by `handleSubscriptionQueueUpdate(user, "start")` (subscription **creation**), not on renewal. After a renewal the row carries a stale past `endDate`, so the next `processPartnerDiscountQueue` sweep (Step 2) flips it to `expired`, and `reconcilePartnerDiscountSubscriptionVsQueue` then skips re-activating expired membership rows (`if (m.status === "expired") continue;`) — so it stays expired in the persisted queue.
+
+This is **cosmetic and does not affect access.** Subscriber partner access is derived from `user.subscription.isActive` directly (`calculateActivePartnerDiscountPeriod`, `hasActivePartnerDiscountAccess`, the admin `partnerDiscountSummary`, and the planned IGodirect SSO gate) — never from the membership queue row's `status` — and the row is excluded from `getQueueSummary().queuedItems` either way. The 2026-06-16 reconcile-on-purchase + now-working daily cron make this divergence surface in persisted data sooner, but it remains harmless. **Footgun:** any FUTURE code must derive subscriber entitlement from `subscription.isActive`, not from a membership queue row's `status`.
+
 ## Sample data
 
 `src/data/samplePartnerDiscounts.ts` is FIXTURE data for dev. Don't ship it as a fallback in production paths.

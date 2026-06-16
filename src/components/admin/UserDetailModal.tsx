@@ -3258,7 +3258,8 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                                       </span>
                                     </p>
                                     <p className="text-2xs sm:text-xs text-gray-600 dark:text-neutral-400 mt-0.5">
-                                      Purchased {formatDate(q.purchaseDate)} · use by {formatDate(q.expiryDate)}
+                                      Purchased {q.purchaseDate ? formatDate(q.purchaseDate) : "—"} · use by{" "}
+                                      {q.expiryDate ? formatDate(q.expiryDate) : "—"}
                                     </p>
                                   </div>
                                 </div>
