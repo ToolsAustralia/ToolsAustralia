@@ -120,6 +120,12 @@ export interface RunStrandedRecoveryResult {
 
 const RECOVER_LOCK_ID = "charge-job-lock"; // SAME lock as bulk charge — they must not overlap.
 
+/** Injectable side-effecting deps — defaults to the real ones; overridden in tests. */
+export interface RunStrandedRecoveryDeps {
+  scan?: () => Promise<StrandedPreviewRow[]>;
+  pay?: typeof payOpenInvoiceAsPastDueAdmin;
+}
+
 /** Best-effort audit row for a destructive recovery step (void/delete/finalize). Never throws. */
 async function logRecoveryStep(p: {
   invoiceId: string;
@@ -155,12 +161,17 @@ async function logRecoveryStep(p: {
  * safety: a paid draft is no longer a draft, so a recovered member is gone from the
  * next scan; the pay uses Stripe idempotency `admin-charge-${draftId}`.
  */
-export async function runStrandedRecovery(params: {
-  adminId: string;
-  limit: number;
-  userIds?: string[];
-}): Promise<RunStrandedRecoveryResult> {
+export async function runStrandedRecovery(
+  params: {
+    adminId: string;
+    limit: number;
+    userIds?: string[];
+  },
+  deps: RunStrandedRecoveryDeps = {}
+): Promise<RunStrandedRecoveryResult> {
   const { adminId, limit } = params;
+  const scan = deps.scan ?? scanStrandedMembers;
+  const pay = deps.pay ?? payOpenInvoiceAsPastDueAdmin;
   const adminObjId = new mongoose.Types.ObjectId(adminId);
 
   // 1. Acquire the global mutex atomically (same pattern + same lock as charge-past-due).
@@ -192,7 +203,7 @@ export async function runStrandedRecovery(params: {
     const runId = chargeRunId; // non-null binding for use below
 
     // 2. Re-scan LIVE (authoritative; never trust a stale preview before charging).
-    let worklist = (await scanStrandedMembers()).filter((r) => r.classification === "RECOVERABLE");
+    let worklist = (await scan()).filter((r) => r.classification === "RECOVERABLE");
     const seen = new Set<string>();
     worklist = worklist.filter((r) => (seen.has(r.userId) ? false : (seen.add(r.userId), true)));
     if (params.userIds?.length) worklist = worklist.filter((r) => params.userIds!.includes(r.userId));
@@ -252,7 +263,7 @@ export async function runStrandedRecovery(params: {
         //    (another run / the normal charger) doesn't gate this deliberate admin recovery.
         //    Double-charge safety rests on the paid != draft structural guard + Stripe
         //    idempotency (admin-charge-${finalizedId}), NOT on this lock.
-        const payRow = await payOpenInvoiceAsPastDueAdmin({
+        const payRow = await pay({
           invoice: finalized,
           paymentMethodId,
           customerId: row.customerId,
