@@ -21,6 +21,10 @@ import type {
   TrackEventOptions,
 } from "@/types/klaviyo";
 import { outboundFetch, describeFetchError } from "@/lib/http/outbound";
+import {
+  buildBulkImportPayload,
+  type BulkImportProfileEntry,
+} from "@/utils/integrations/klaviyo/bulk-import";
 
 // ============================================================
 // CONFIGURATION
@@ -257,6 +261,155 @@ class KlaviyoClient {
       );
     }
     return response.json() as Promise<T>;
+  }
+
+  /**
+   * Bulk-import (upsert by email) up to 10,000 profiles in ONE async job — the fast path for
+   * large profile-DATA resyncs (~1 request per 10k vs 2 per profile). Does NOT change list
+   * membership/consent (no list relationship). Returns the async job id to poll.
+   * Caller must keep each batch under Klaviyo's 5MB payload limit (see chunkProfilesForBulkImport).
+   *
+   * @param profiles - Up to 10,000 profiles; entries without a non-empty email are skipped.
+   * @returns success + the async job id (poll with getBulkImportJobStatus / getBulkImportErrors)
+   * @see https://developers.klaviyo.com/en/reference/spawn_bulk_profile_import_job
+   */
+  async bulkImportProfiles(
+    profiles: KlaviyoProfile[]
+  ): Promise<{ success: boolean; jobId?: string; error?: string }> {
+    if (!this.isConfigured()) {
+      return { success: false, error: "Klaviyo not configured" };
+    }
+
+    if (!Array.isArray(profiles) || profiles.length === 0) {
+      return { success: false, error: "No profiles provided for bulk import" };
+    }
+
+    if (profiles.length > 10000) {
+      return {
+        success: false,
+        error: `Bulk import accepts at most 10,000 profiles per job (received ${profiles.length}). Chunk with chunkProfilesForBulkImport.`,
+      };
+    }
+
+    try {
+      // Map to JSON:API profile entries, dropping any without a real email (the required identifier).
+      const entries: BulkImportProfileEntry[] = profiles
+        .filter((p) => typeof p.email === "string" && p.email.trim() !== "")
+        .map((p) => {
+          const attributes: BulkImportProfileEntry["attributes"] = {
+            email: p.email,
+            properties: this.cleanProperties(p.properties),
+          };
+          if (p.first_name !== undefined) attributes.first_name = p.first_name;
+          if (p.last_name !== undefined) attributes.last_name = p.last_name;
+          if (p.phone_number !== undefined) attributes.phone_number = p.phone_number;
+          return { type: "profile", attributes };
+        });
+
+      if (entries.length === 0) {
+        return { success: false, error: "No profiles with a valid email to import" };
+      }
+
+      const payload = buildBulkImportPayload(entries);
+
+      const response = await this.retryRequest(
+        () => this.makeRequest("/profile-bulk-import-jobs/", "POST", payload),
+        this.MAX_RETRIES,
+        this.BASE_RETRY_DELAY_MS
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        const errorMessage = errorData.errors?.[0]?.detail || `HTTP ${response.status}: ${response.statusText}`;
+        throw new Error(`Klaviyo bulk import error: ${errorMessage}`);
+      }
+
+      const data = await response.json().catch(() => ({}));
+      const jobId = data.data?.id;
+
+      if (this.mode === "development") {
+        console.log("✅ Klaviyo bulk-import job created:", { jobId, count: entries.length });
+      }
+
+      return { success: true, jobId };
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "Unknown error";
+      console.error("❌ Failed to create Klaviyo bulk-import job:", errorMessage);
+      return { success: false, error: errorMessage };
+    }
+  }
+
+  /** Poll a bulk-import job's status (queued | processing | complete | …). */
+  async getBulkImportJobStatus(
+    jobId: string
+  ): Promise<{ success: boolean; status?: string; error?: string }> {
+    if (!this.isConfigured()) {
+      return { success: false, error: "Klaviyo not configured" };
+    }
+
+    if (!jobId || jobId.trim() === "") {
+      return { success: false, error: "Job ID is required" };
+    }
+
+    try {
+      const response = await this.retryRequest(
+        () =>
+          this.makeRequest(
+            `/profile-bulk-import-jobs/${jobId}/?fields[profile-bulk-import-job]=status`,
+            "GET"
+          ),
+        this.MAX_RETRIES,
+        this.BASE_RETRY_DELAY_MS
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        const errorMessage = errorData.errors?.[0]?.detail || `HTTP ${response.status}: ${response.statusText}`;
+        throw new Error(`Klaviyo bulk import status error: ${errorMessage}`);
+      }
+
+      const data = await response.json().catch(() => ({}));
+      return { success: true, status: data.data?.attributes?.status };
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "Unknown error";
+      console.error(`❌ Failed to fetch Klaviyo bulk-import job status for ${jobId}:`, errorMessage);
+      return { success: false, error: errorMessage };
+    }
+  }
+
+  /** Fetch a completed bulk-import job's per-profile import errors (empty array = clean). */
+  async getBulkImportErrors(
+    jobId: string
+  ): Promise<{ success: boolean; errors: unknown[]; error?: string }> {
+    if (!this.isConfigured()) {
+      return { success: false, errors: [], error: "Klaviyo not configured" };
+    }
+
+    if (!jobId || jobId.trim() === "") {
+      return { success: false, errors: [], error: "Job ID is required" };
+    }
+
+    try {
+      const response = await this.retryRequest(
+        () => this.makeRequest(`/profile-bulk-import-jobs/${jobId}/import-errors/`, "GET"),
+        this.MAX_RETRIES,
+        this.BASE_RETRY_DELAY_MS
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        const errorMessage = errorData.errors?.[0]?.detail || `HTTP ${response.status}: ${response.statusText}`;
+        throw new Error(`Klaviyo bulk import errors fetch error: ${errorMessage}`);
+      }
+
+      const data = await response.json().catch(() => ({}));
+      const errors = Array.isArray(data.data) ? data.data : [];
+      return { success: true, errors };
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "Unknown error";
+      console.error(`❌ Failed to fetch Klaviyo bulk-import errors for ${jobId}:`, errorMessage);
+      return { success: false, errors: [], error: errorMessage };
+    }
   }
 
   /**
