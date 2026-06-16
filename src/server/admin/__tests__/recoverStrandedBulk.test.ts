@@ -48,9 +48,9 @@ async function main() {
     installMocks();
     const payCalls: any[] = [];
     const res = await runStrandedRecovery({ adminId: ADMIN, limit: 25 }, { scan: async () => [row()] as any, pay: okPay(payCalls) as any });
-    assert.deepEqual(argsOf("void").sort(), ["in_feb", "in_mar"], "voided both stale opens");
-    assert.deepEqual(argsOf("del"), ["in_draft_old"], "deleted superseded draft");
-    assert.deepEqual(argsOf("finalize"), ["in_draft_cur"], "finalized ONLY the current draft");
+    assert.deepEqual(argsOf("void").sort(), ["in_draft_old", "in_feb", "in_mar"], "voided both stale opens + the superseded draft");
+    assert.deepEqual(argsOf("del"), [], "never deletes — subscription drafts can't be deleted");
+    assert.deepEqual(argsOf("finalize").sort(), ["in_draft_cur", "in_draft_old"], "finalized the superseded draft (to void it) + the current draft");
     assert.equal(payCalls.length, 1, "paid exactly once");
     assert.equal(payCalls[0].invoice.id, "in_draft_cur", "paid the finalized current draft");
     assert.equal(payCalls[0].bypassRecentAttemptLock, true, "pay bypasses recent-attempt lock");
@@ -59,9 +59,10 @@ async function main() {
     assert.ok(calls.some((c) => c.m === "lock.release"), "lock released");
     const created = calls.find((c) => c.m === "run.create");
     assert.equal(created?.a[0].kind, "recover", "ChargeJobRun kind=recover");
-    // audit rows written for void/delete/finalize
+    // audit rows written for void + finalize steps (no delete — subscription drafts can't be deleted)
     const steps = calls.filter((c) => c.m === "log.create").map((c) => c.a[0].result?.recovery?.step);
-    assert.ok(steps.includes("void") && steps.includes("delete") && steps.includes("finalize"), "audit rows for each step");
+    assert.ok(steps.includes("void") && steps.includes("finalize"), "audit rows for void + finalize steps");
+    assert.ok(!steps.includes("delete"), "no delete audit step");
     console.log("✓ happyPath");
   }
 
@@ -91,7 +92,7 @@ async function main() {
     installMocks({ finalizeThrows: new Set(["in_draft_cur"]) });
     const payCalls: any[] = [];
     const res = await runStrandedRecovery({ adminId: ADMIN, limit: 25 }, { scan: async () => [row()] as any, pay: okPay(payCalls) as any });
-    assert.deepEqual(argsOf("void").sort(), ["in_feb", "in_mar"], "voids still happened");
+    assert.deepEqual(argsOf("void").sort(), ["in_draft_old", "in_feb", "in_mar"], "voids still happened (stale opens + superseded draft)");
     assert.equal(payCalls.length, 0, "no pay when finalize throws (no charge)");
     assert.equal(res.failed, 1); assert.equal(res.succeeded, 0); assert.equal(res.revenueCents, 0);
     assert.ok(calls.some((c) => c.m === "lock.release"), "lock still released on member failure");

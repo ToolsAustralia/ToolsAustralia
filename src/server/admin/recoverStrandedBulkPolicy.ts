@@ -17,7 +17,7 @@ export interface MemberRecoveryPlan {
   currentDraft: Stripe.Invoice | null;
   /** Open-but-exhausted cycle invoices to void (write off missed months). */
   staleOpens: Stripe.Invoice[];
-  /** Older held drafts to delete (never paid). */
+  /** Older held drafts to void (never paid; subscription drafts can't be deleted, so finalize→void). */
   supersededDrafts: Stripe.Invoice[];
 }
 
