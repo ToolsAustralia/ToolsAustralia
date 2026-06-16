@@ -159,6 +159,11 @@ export function buildRunsFilter(input: RunsFilterInput): FilterQuery<IChargeJobR
   if (input.status && VALID_RUN_STATUSES.has(input.status)) {
     f.status = input.status;
   }
+  // Exclude stranded-recovery runs (kind: "recover") from the charge-performance list —
+  // they're surfaced in the Recover Stranded panel and carry different totals semantics
+  // (one cycle per recovered member after void/delete). `$ne` keeps legacy runs that
+  // predate the `kind` field (kind missing ⇒ treated as a normal charge run).
+  f.kind = { $ne: "recover" };
   return f;
 }
 

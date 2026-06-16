@@ -7,11 +7,7 @@ import User from "@/models/User";
 import { getPackageById } from "@/data/membershipPackages";
 import Stripe from "stripe";
 import { extractRequestContext } from "@/utils/tracking/facebook-helpers";
-
-// Extended Stripe subscription interface to include current_period_end
-interface StripeSubscriptionWithPeriodEnd extends Stripe.Subscription {
-  current_period_end: number;
-}
+import { getSubscriptionPeriodEnd } from "@/utils/payment/stripe/subscription-period";
 
 export async function POST(request: NextRequest) {
   try {
@@ -107,17 +103,23 @@ export async function POST(request: NextRequest) {
     // );
 
     // Get current subscription from Stripe
-    const subscription = (await stripe.subscriptions.retrieve(
-      user.stripeSubscriptionId
-    )) as unknown as StripeSubscriptionWithPeriodEnd;
+    const subscription = await stripe.subscriptions.retrieve(user.stripeSubscriptionId);
 
-    // Validate subscription has current_period_end or calculate fallback
+    // Resolve the current period end. Under the Stripe Basil API (2025-08-27.basil)
+    // `current_period_end` lives on each subscription ITEM, not the subscription root —
+    // `getSubscriptionPeriodEnd` reads it correctly (and still supports legacy shapes).
+    // This date is the benefit-preservation window persisted below, so getting it wrong
+    // mis-dates how long the user keeps their old (higher) package benefits.
     let currentPeriodEnd: number;
-    if (subscription.current_period_end) {
-      currentPeriodEnd = subscription.current_period_end;
+    const resolvedPeriodEnd = getSubscriptionPeriodEnd(subscription);
+    if (typeof resolvedPeriodEnd === "number") {
+      currentPeriodEnd = resolvedPeriodEnd;
       // console.log(`📅 Current subscription period ends: ${new Date(currentPeriodEnd * 1000).toISOString()}`);
     } else {
-      console.error(`❌ Invalid current_period_end from Stripe:`, subscription.current_period_end);
+      console.error(
+        `❌ Could not resolve current_period_end from Stripe subscription (no root or item-level value)`,
+        { subscriptionId: user.stripeSubscriptionId }
+      );
       // console.log(`🔧 FALLBACK: Calculating period end from subscription start date`);
 
       // Calculate fallback: subscription start date + 30 days

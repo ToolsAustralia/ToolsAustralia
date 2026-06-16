@@ -17,6 +17,9 @@
 # backfill audit logs (one-off ops scripts write CSV audit trails to cwd)
 backfill-*.csv
 
+# scratch / read-only probe scripts + ops CSV audit output (may contain PII) — never commit/build
+/temp
+
 # next.js
 /.next/
 /out/

@@ -36,6 +36,28 @@ KPI revenue breakdown uses) plus a `totals.membershipRenewals`. This is the admi
 time-series endpoint only; the Norm `dashboard.revenue-breakdown` endpoint is a
 separate single-period shape and is unaffected.
 
+## UserDetailModal — Partner Discount Access section (2026-06-16)
+
+The Activity tab of [`UserDetailModal`](../../src/components/admin/UserDetailModal.tsx) now shows a
+**Partner Discount Access** card (between Mini Draw Packages and Draw Participation): the currently
+active period (source, package, time remaining, end/renew date — recurring for memberships) plus the
+**queued/upcoming** periods (duration, queue position, purchase + 12-month use-by dates) and totals.
+
+**Source of truth is server-side and reconciled.** The card renders a new
+`partnerDiscountSummary` field on `AdminUserDetail` — there is **no access logic in the JSX**.
+[`buildAdminUserProfile`](../../src/app/api/admin/users/[id]/route.ts) computes it via
+`getReconciledPartnerDiscountSummary(user)` ([partner-discount-queue.ts](../../src/utils/partner-discounts/partner-discount-queue.ts)),
+which sweeps an in-memory **clone** (expire elapsed, activate due, reconcile tiers) so the admin sees
+the user's **true current entitlement** — not the possibly-stale stored queue `status`. This is the
+read side of the *reconcile-then-read* rule (see [partner/gotchas.md](../partner/gotchas.md)); the GET
+stays side-effect-free (the clone is never persisted — the canonical sweep is the cron + the member's
+own `/api/partner-discount/queue`). The raw `partnerDiscountQueue` is still in the payload for full
+history, but the card uses the reconciled summary.
+
+> Not yet mirrored to Norm: `partnerDiscountSummary` is on the admin `buildAdminUserProfile` shape,
+> which Norm's `users.get` does not consume (Norm uses a separate projection). It could be exposed to
+> Norm (counts + dates are PII-safe) — flagged, not wired.
+
 ## A/B VariantConfigEditor — "Static hero image only (disable hero video)" (2026-06-15)
 
 [`VariantConfigEditor`](../../src/components/admin/ab-testing/VariantConfigEditor.tsx)

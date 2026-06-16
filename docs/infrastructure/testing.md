@@ -69,20 +69,49 @@ npm run seed:static-vs-video-hero:prod       # PROD: create the draft experiment
 
 ### Affiliate commission reconciliation (safety net)
 
-`scripts/reconcile-affiliate-commissions.ts` is the durable backstop for the
-fire-and-forget commission dispatch: it reconciles **every** commission type
-(one-time / upsell / mini-draw / membership-first / membership-recurring) from
-the durable `PaymentEvent` ledger, reports the gaps (+ a CSV audit in
-`temp/readonly/`) and over-paid commissions on refunded payments, and — with
-`--apply` — backfills the missing rows idempotently via `recordAffiliateCommission`
-(correct per-affiliate rate, `$inc` only on genuine insert). **Read-only by
-default; review the CSV before applying.**
+The shared core [`reconcileAffiliateCommissions()`](../../src/utils/affiliate/reconcile-commissions.ts)
+is the durable backstop for the fire-and-forget commission dispatch: it reconciles
+**every** commission type (one-time / upsell / mini-draw / membership-first /
+membership-recurring) from the durable `PaymentEvent` ledger, reports gaps + over-paid
+commissions on refunded payments, and (with `apply`) backfills the missing rows
+idempotently via `recordAffiliateCommission` (correct per-affiliate rate, `$inc` only
+on a real insert). It runs two ways from the **same core**:
+
+- **Daily cron** [`/api/cron/reconcile-affiliate-commissions`](../../src/app/api/cron/reconcile-affiliate-commissions/route.ts)
+  (auth-gated, **35-day trailing window**, auto-backfill) — self-healing, no manual
+  step. Over-paid rows are flagged via `console.error` for manual review (clawback is
+  a separate deferred workstream — see `docs/affiliate/gotchas.md`).
+- **CLI** `scripts/reconcile-affiliate-commissions.ts` — read-only by default, writes a
+  CSV audit to `temp/readonly/`; `--since-days=N` bounds the scan (default = full sweep).
+  **Review the CSV before applying.**
 
 ```bash
 npm run reconcile:affiliate-commissions:dry        # dev: audit + CSV, no writes (exit 2 if gaps)
 npm run reconcile:affiliate-commissions            # dev: create the missing commissions
 npm run reconcile:affiliate-commissions:prod:dry   # PROD: audit + CSV, no writes
 npm run reconcile:affiliate-commissions:prod       # PROD: create the missing commissions
+# add e.g. -- --since-days=35 to bound the scan to a trailing window
+```
+
+### Affiliate commission dedup-index migration (sparse → partial)
+
+`scripts/migrate-affiliate-commission-pi-index.ts` drops the **legacy `sparse`
+unique** dedup indexes on `affiliatecommissions` and lets `syncIndexes()` rebuild
+them as **partial** unique indexes from the schema. Required because a *compound*
+`sparse` index still indexes a row when **any** key is present (and `affiliateId`
+always is), so rows missing the optional id were indexed with that id as `null` and
+collided — capping a referred user at **one** such commission. Two indexes were
+affected: the PI key (`stripePaymentIntentId`, fixed 2026-01) and the invoice key
+(`stripeInvoiceId`, fixed 2026-06 — this had been silently blocking the reconcile
+backfill from creating a user's 2nd+ one-time/upsell/mini-draw commission with
+`dup key { stripeInvoiceId: null }`). See [docs/affiliate/models.md](../affiliate/models.md).
+Run this **before** the reconcile backfill on a DB that still has the legacy index.
+
+```bash
+npm run migrate:affiliate-commission-pi-index:dry        # dev: report, no drops
+npm run migrate:affiliate-commission-pi-index            # dev: drop legacy + rebuild partial
+npm run migrate:affiliate-commission-pi-index:dry -- --prod   # PROD: report
+npm run migrate:affiliate-commission-pi-index -- --prod       # PROD: drop legacy + rebuild partial
 ```
 
 ## npm test scripts

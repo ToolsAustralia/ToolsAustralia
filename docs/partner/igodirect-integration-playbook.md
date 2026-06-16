@@ -1,0 +1,289 @@
+# IGodirect Integration — Living Playbook & Open-Questions Tracker
+
+**Purpose:** the working doc to update *during and after* the IGodirect meetings. It holds the two possible
+flows, what's on our end vs theirs, how it affects each purchase type, and a tracker of everything still unclarified.
+
+**Companion doc:** background / who-they-are / negotiation brief → [igodirect-integration-prep.md](./igodirect-integration-prep.md).
+
+> **Status:** 🟡 DISCOVERY. IGodirect showed a **hosted white-label portal** (test site `toolsau.myrewards.com.au`) and want **SSO auto-login**.
+> Whether they also expose a **headless offer API** (so we render offers in our own site) is **NOT yet confirmed** — that single answer decides the whole architecture.
+
+---
+
+## 0. The decision that drives everything
+
+| | **Option A — Hosted portal + SSO** *(what they demoed)* | **Option B — API feed** *(render on our site)* |
+|---|---|---|
+| Where members browse offers | On IGodirect's portal (a separate site) | On our own rewards page |
+| Brand / domain | Their portal, ideally on a subdomain of ours (CNAME) | 100% our site |
+| Who enforces the access **duration** | **Them** (we can only gate entry) | **Us** (offers only render while access is active) |
+| Build effort for us | Low (SSO + a button) | Medium (API client + cache + sync + render) |
+| Data we keep | Less (they own redemption + behaviour) | More (we see browsing on our side) |
+| Confirmed available? | ✅ Yes (they built it) | ❓ **Unconfirmed — must ask** |
+
+**Our preference:** Option B (or a hybrid: browse via feed on our site, final redeem via their link), because it keeps the brand
+*and* puts duration enforcement back on our end. **Fallback:** Option A on a CNAME subdomain. → see Q1.
+
+---
+
+## 1. The two flows, step by step
+
+### Flow A — Hosted portal + SSO
+```
+Member buys (any of 5 ways)
+   → Stripe webhook grants partner-discount access with its duration   [OUR END — already built]
+   → Member visits our site; we check hasActivePartnerDiscountAccess()  [OUR END — already built]
+        • active   → show "Go to Member Perks" button
+        • inactive → show "unlock with a purchase" CTA
+   → Click button → /api/perks/sso  [OUR END — to build]
+        • re-check access is active
+        • mint a short-lived signed token (memberId + tier + expiry + jti)
+        • redirect/POST to IGodirect's SSO endpoint
+   → IGodirect logs the member in and shows the catalogue            [THEIR END]
+   → Member redeems (gift card / cashback / code)                    [THEIR END]
+```
+**The gap:** once inside, *their* session controls how long the member stays. We can only stop **re-entry**, not an
+already-open session — unless they honour the expiry we send and/or accept a revoke call. → see Q7, Q8.
+
+### Flow B — API feed (render on our site)
+```
+Daily: our cron calls IGodirect API → store/refresh offers in our DB   [OUR END — to build]
+Member visits our rewards page
+   → we check hasActivePartnerDiscountAccess()                         [OUR END — already built]
+        • active   → render offers from our cached catalogue (gated by tier if we choose)
+        • inactive → hide offers / show unlock CTA
+   → Member clicks "Redeem" on an offer
+        • redeem link likely points to IGodirect to complete           [THEIR END — confirm]
+```
+**Why it's cleaner for durations:** the offers live in *our* page, gated by *our* access check on every load. An expired
+member simply doesn't see them. No dependence on IGodirect ending a session.
+
+---
+
+## 2. How it affects each purchase type (durations)
+
+**Nothing about granting changes.** Every purchase still grants access with the same duration via `grantBenefits()` →
+`addToPartnerDiscountQueue()`. What changes is only *where* that access is "spent."
+
+**The rule, uniform across all packages below:**
+
+| | Effect under Portal (A) | Effect under API feed (B) |
+|---|---|---|
+| **Recurring (subscriptions)** | "Go to Perks" button shows while subscribed; on cancel → needs revoke (Q8) | Offers render while subscribed; auto-hide on cancel |
+| **Fixed window (everything else)** | Button active for the window; **portal must expire it** (Q7) | Offers render for the window, then auto-hide — *we* enforce it |
+
+Now the concrete packages and their durations (verified from `src/data/`). "Partner %" = how much of the catalogue the
+tier sees today (`getPartnerCatalogAccessPercentForPlanId`).
+
+### A. Subscriptions — RECURRING (access lasts while subscribed; `discountDays = 0`, governed by `subscription.endDate`)
+| Package | id | Price | Partner % | Duration |
+|---|---|---|---|---|
+| Tradie | `tradie-subscription` | $20/mo | 50% | Recurring (while active) |
+| Foreman | `foreman-subscription` | $40/mo | 75% | Recurring (while active) |
+| Boss | `boss-subscription` | $80/mo | 100% | Recurring (while active) |
+
+### B. One-time packs (non-members) — FIXED window
+| Package | id | Price | Partner % | Duration |
+|---|---|---|---|---|
+| Apprentice Pack | `apprentice-pack` | $25 | 25% | **1 day** |
+| Tradie Pack | `tradie-pack` | $50 | 40% | 2 days |
+| Foreman Pack | `foreman-pack` | $100 | 55% | 4 days |
+| Boss Pack | `boss-pack` | $250 | 70% | 10 days |
+| Power Pack | `power-pack` | $500 | 85% | 20 days |
+| VIP Pack | `vip-pack` | $1,000 | 100% | **30 days** |
+
+### C. Additional packs (members only) — FIXED window
+| Package | id | Price | Partner % | Duration |
+|---|---|---|---|---|
+| Additional Tradie Pack | `additional-tradie-pack` | $25 | 40% | 2 days |
+| Additional Foreman Pack | `additional-foreman-pack` | $50 | 55% | 4 days |
+| Additional Boss Pack | `additional-boss-pack` | $125 | 70% | 10 days |
+| Additional Power Pack | `additional-power-pack` | $250 | 85% | 20 days |
+| Additional VIP Pack | `additional-vip-pack` | $500 | 100% | 30 days |
+| ~~Additional Apprentice Pack~~ | `additional-apprentice-pack` | $25 | 25% | 1 day — *currently inactive* |
+
+### D. Mini-draw packs — FIXED window (note the very short ones)
+**Non-member (active):**
+| Package | id | Price | Partner % | Duration |
+|---|---|---|---|---|
+| Mini Pack 1 | `mini-pack-1` | $1 | 5% | **1 hour** ⚠️ |
+| Mini Pack 2 | `mini-pack-2` | $5 | 10% | 6 hours |
+| Mini Pack 3 | `mini-pack-3` | $10 | 15% | 12 hours |
+
+**Member-only, mini-scoped (active):**
+| Package | id | Price | Partner % | Duration |
+|---|---|---|---|---|
+| Tradie Pack (mini) | `additional-tradie-pack-mini` | $25 | 40% | 2 days |
+| Foreman Pack (mini) | `additional-foreman-pack-mini` | $50 | 55% | 4 days |
+| Boss Pack (mini) | `additional-boss-pack-mini` | $125 | 70% | 10 days |
+| Power Pack (mini) | `additional-power-pack-mini` | $250 | 85% | 20 days |
+| VIP Pack (mini) | `additional-vip-pack-mini` | $500 | 100% | 30 days |
+
+*(Legacy `mini-pack-4`…`mini-pack-8` are deactivated — replaced by the member-only mini packs above. Kept only so old orders resolve.)*
+
+### E. Upsells — FIXED window, mirror the base pack's tier (shown after a purchase, ~50–60% off)
+Upsells don't introduce new durations — each mirrors the tier/duration of the pack it's based on, and **stacks** onto existing access. Notable ones:
+| Upsell | Shown after | Mirrors | Partner % | Duration |
+|---|---|---|---|---|
+| `membership-upsell-tradie` (Apprentice Pack) | Tradie sub purchase | apprentice-pack | 25% | 1 day |
+| `membership-upsell-foreman` (Tradie Pack) | Foreman sub purchase | tradie-pack | 40% | 2 days |
+| `membership-upsell-boss` (Foreman Pack) | Boss sub purchase | foreman-pack | 55% | 4 days |
+| `onetime-upsell-*` (6) | One-time pack purchase | matching one-time pack | 25–100% | 1–30 days |
+| `additional-upsell-*` (5) | Additional pack purchase | matching additional pack | 40–100% | 2–30 days |
+| `mini-upsell-*` (8) | Mini-draw purchase | matching mini pack | 5–100% | 1 hour – 30 days |
+
+> 💡 **Key insight for IGodirect:** access durations span **1 hour → 30 days → recurring/lifetime-of-subscription**.
+> That whole range needs handling. The **1-hour Mini Pack** is the stress case: under their hosted portal it's only
+> enforceable if they honour the expiry we send (→ Q7). The 1-hour window made sense for "see codes on our page for an
+> hour"; for a hosted cashback/gift-card portal it's awkward — decide whether to set a **minimum window** (e.g. 24h)
+> for the IGodirect era (→ Q9), or lean toward the **API-feed model** where we enforce the window ourselves.
+
+---
+
+## 3. What's on OUR end vs THEIR end
+
+| Responsibility | Our end | Their end |
+|---|---|---|
+| Grant access on purchase (5 paths) | ✅ Built | — |
+| Decide "does this member have access right now?" | ✅ Built (`hasActivePartnerDiscountAccess`) | — |
+| Show/hide the button or offers | ✅ (small build) | — |
+| Mint the SSO token / append member id | ✅ (to build) | — |
+| Call "revoke" when member cancels/refunds | ✅ trigger (to build) | Must expose the API |
+| **End the session when the window passes** | ❌ can't (Portal) / ✅ (API feed) | ✅ (Portal) — *if they honour expiry* |
+| Host the offer catalogue + redemption | — | ✅ |
+| Cashback/gift-card settlement | — | ✅ (they're the card issuer) |
+
+**One-line takeaway:** *We own the door; they own the room.* Under Option A, enforcing the duration **inside the room**
+depends on them. Under Option B, the offers are in our room, so we enforce it ourselves.
+
+---
+
+## 4. Data we'd send to match a member (keep minimal)
+
+All of this already exists in our system — we don't need to compute anything new:
+
+| Field they may want | Our source | Send it? |
+|---|---|---|
+| Stable member id (opaque) | `User._id` (string) | ✅ Preferred key |
+| Email | `User.email` | Only if required (it's PII) |
+| First name | `User.firstName` | For display |
+| Tier / plan | `getPartnerCatalogAccessPercentForPlanId()` or the package tier | If they support tiered offers (Q6) |
+| Status (active?) | `hasActivePartnerDiscountAccess(user)` | ✅ |
+| Access expiry | `calculateActivePartnerDiscountPeriod(user).endsAt` | ✅ (drives token expiry) |
+
+**Privacy:** they're a regulated finance company. Push to send **opaque id + tier + expiry only**, get a **data-processing
+agreement**, and confirm **AU data hosting**. → Q11.
+
+---
+
+## 5. Codebase touch-points (verified)
+
+**Reuse as-is (the access engine — do NOT rebuild):**
+- Grant on purchase → `grantBenefits()` at `src/utils/payment/payment-processing.ts:1029`, which calls
+  `handleOneTimePackage` (→ `addToPartnerDiscountQueue`, :1812), `handleSubscriptionQueueUpdate` (:1893),
+  `handleUpsellPackage` (→ :1962), `handleMiniDrawPackage` (→ :2044). All 5 paths converge here, in the Stripe webhook.
+- Access state → `src/utils/partner-discounts/partner-discount-queue.ts` (`calculateActivePartnerDiscountPeriod`,
+  `processPartnerDiscountQueue`, `cancelQueueItem` for refunds).
+- Access checks → `src/utils/membership/benefit-resolution.ts` (`hasActivePartnerDiscountAccess`, `getPartnerDiscountAccessInfo`).
+- Tier % → `src/utils/partner-discounts/partner-catalog-visibility.ts`.
+- Frontend already knows access state → `GET /api/partner-discount/queue` returns
+  `data.activePeriod {isActive, source, endsAt, daysRemaining, hoursRemaining}` + `summary.hasActiveAccess`.
+  Hook: `usePartnerDiscountQueue`.
+
+**SSO token — accurate constraint:** `src/lib/jwt.ts` `signJWT()` exists but is **hardcoded to 30-day expiry** and a
+**fixed payload** (`sub, email, firstName, lastName, role`). It does **not** accept custom claims, a short TTL, or a `jti`.
+→ For SSO, add a small dedicated signer (e.g. `signPerksSsoToken({ memberId, tier, expiry, jti }, ttl)`) using the same
+`jsonwebtoken` + `NEXTAUTH_SECRET`, **or** a shared secret IGodirect provides. Mint **server-side only**.
+
+**To build (depending on option):**
+- **Option A:** `POST /api/perks/sso` (gate → mint token → redirect); a "Go to Perks" button gated by `hasActiveAccess`;
+  a revoke call wired into membership-cancel (`handleSubscriptionQueueUpdate(..,"end")`) and refund (`cancelQueueItem`).
+- **Option B:** `src/lib/igodirect.ts` (API client), `src/models/IGodirectOffer.ts` (cached catalogue),
+  `src/app/api/cron/sync-igodirect-offers/route.ts` + `scripts/sync-igodirect-offers.ts` (daily sync), render in the rewards page.
+
+**Security/CSP:** if anything of theirs loads in our page or the browser calls their domain, update **both**
+`src/utils/security/csp.ts` and `next.config.ts` (`connect-src` for API, `frame-src` for embeds, `img-src` +
+`images.remotePatterns` for offer logos). Prefer **server-side** API calls (no CSP change for the fetch).
+
+---
+
+## 6. OPEN QUESTIONS & CLARIFICATIONS TRACKER
+
+Update the **Answer / Status** column as IGodirect responds. 🔴 Open · 🟡 Partial · 🟢 Answered.
+
+### Delivery model
+| # | Question | Why it matters | Answer / Status |
+|---|---|---|---|
+| Q1 | Can we get a **headless offer/brand API** to render in our own app, or is the **hosted portal** the only path? | Decides Option A vs B (and who enforces durations) | 🔴 |
+| Q2 | Is there a **sandbox + test credentials + sample feed**? | Can't build/verify without it | 🔴 |
+| Q3 | For each offer, what fields are returned (title, brand, image, % off, **redeem link**, expiry, category)? | Shapes our DB model + UI | 🔴 |
+
+### SSO & auth
+| # | Question | Why it matters | Answer / Status |
+|---|---|---|---|
+| Q4 | SSO method — **HMAC JWT (HS256)**, SAML, or OIDC? | JWT = easiest for us; SAML = heavier | 🟡 they want SSO; method TBC |
+| Q5 | Exact **SSO endpoint URL**, and is the token sent via **POST body** (not URL)? | Avoid PII in logs/URLs | 🔴 |
+| Q6 | Can the token carry a **tier** so higher members see better deals, or is it all-or-nothing access? | Decides if our tier model maps over | 🔴 |
+
+### Durations & enforcement *(the critical set)*
+| # | Question | Why it matters | Answer / Status |
+|---|---|---|---|
+| Q7 | Will you **enforce an expiry timestamp** we send, so the member's portal access ends when their window does? | Without it, fixed durations aren't enforced in the portal | 🔴 |
+| Q8 | Do you provide a **revoke / de-provision webhook or API** for cancellations & refunds? | How access gets pulled early | 🔴 |
+| Q9 | How long does a **portal session/cookie** last after SSO? Can you support **sub-day** windows? | 1-hour mini-pack vs long session | 🔴 |
+
+### Domain & hosting
+| # | Question | Why it matters | Answer / Status |
+|---|---|---|---|
+| Q10 | If portal: can it run on **our subdomain** (e.g. `perks.toolsaustralia.com.au`) via CNAME, and do you **auto-provision + renew SSL**? | Brand + no cert warnings | 🔴 (subdomain proposed: `perks.` — avoid `rewards.`, clashes with our `/rewards` page) |
+
+### Data, privacy & commercial
+| # | Question | Why it matters | Answer / Status |
+|---|---|---|---|
+| Q11 | What **member fields** do you require? Can we send **opaque id + tier + expiry only**? **DPA** + **AU data hosting**? | Minimise PII exposure to a finance co. | 🔴 |
+| Q12 | How is **redemption** completed (code / click-through / gift card / Visa wallet) and who owns that transaction/liability? | Esp. if members hold stored balances (KYC/AML) | 🟡 catalogue shows cashback + eGift; details TBC |
+| Q13 | Commercial model — setup, per-member, per-redemption, rev-share? Min term? Exclusivity? What happens to data on exit? | Contract basics | 🔴 |
+| Q14 | Do we get **usage/redemption data back** (webhook / reporting API / CSV)? | Feeds our own analytics; without it we're blind | 🔴 |
+| Q15 | Exact **brand count for our tier**, how many **AU-local**, and **offer-feed refresh frequency**? | "1000+" floor vs marketing | 🔴 |
+
+---
+
+## 7. Decision log
+*(record what gets settled, with date)*
+
+| Date | Decision | Notes |
+|---|---|---|
+| 2026-06-16 | Confirmed IGodirect = iGoDirect Group "My Rewards Plus"; they demoed hosted portal + want SSO | Test site `toolsau.myrewards.com.au` |
+| | Delivery model chosen (A / B / hybrid) | depends on Q1 |
+| | Subdomain name | proposed `perks.toolsaustralia.com.au` |
+| | Duration enforcement approach | depends on Q7/Q8/Q9 |
+
+---
+
+## 8. Access gating & queue staleness — the SSO trap (verified, must-read)
+
+**The system is lazily evaluated.** A queue row's `status` is only correct *as of the last sweep* (`processPartnerDiscountQueue`). `hasActivePartnerDiscountAccess()` / `calculateActivePartnerDiscountPeriod()` are **pure reads** — they report already-active rows; they do **not** promote a due queued item. The rewards page gets away with this because `GET /api/partner-discount/queue` sweeps on every visit.
+
+**The trap:** SSO is a NEW read path. If the gate bare-reads access, it inherits all the staleness.
+
+**Verified data (read-only audit, 2026-06-16 — `temp/readonly/partner-queue-access-audit.ts`):** of 8,291 users with a queue, **190 are "stuck"** — no active access right now, but a sweep would activate a pack they already paid for. A **bare-read** SSO gate would **wrongly deny all 190** (and the count grows until the cron fix is deployed). Subscribers (4,645) are unaffected (the sub short-circuits the check).
+
+### The rule
+> **Every access decision must reconcile-then-read, never bare-read.**
+> Load user → `await processPartnerDiscountQueue(user)` → `if (changed) await user.save()` → THEN `hasActivePartnerDiscountAccess(user)` / `getPartnerDiscountAccessInfo(user)` for status + tier + expiry → THEN mint the SSO token.
+
+This applies to: the SSO endpoint (`/api/perks/sso`), the "Go to Perks" button visibility, and the tier we pass to IGodirect. Reuse the existing reconcile path — do not reimplement the check.
+
+**Important:** do **NOT** expire stuck queued packs. They are access the member *paid for* and is owed (the bug only ever *defers* access, never over-grants). Expiring them would deny paid access. The fix is to *activate* them (sweep), not remove them.
+
+### Pre-launch checklist (do before SSO goes live)
+1. **Deploy the cron fix** (Bug B) so the daily sweep actually runs — keeps the stuck population near zero going forward.
+2. **One-off sweep backfill** across all users (idempotent — same as the cron, runnable today without waiting for deploy since the sweep logic itself was always correct) so the 190 are activated before launch. Dry-run first.
+3. **Build the SSO gate as reconcile-then-read** (the rule above).
+4. The daily cron still leaves an **intra-day window** (a pack becomes due at noon, cron runs 15:00 UTC) — which is exactly why the gate must sweep at point-of-use, not rely on the cron alone.
+
+### Edge cases to handle (so we don't get bitten)
+- **Past-due subscriptions:** `hasActivePartnerDiscountAccess` returns true while `subscription.isActive`. Past-due subscribers stay "active" in grace (intentional — see [gotchas.md](./gotchas.md)). Decide: should a member whose payment is failing still get IGodirect portal access during grace? And when they finally lapse, access must be revoked in IGodirect's portal (ties to Q8 de-provision).
+- **Tier passed to IGodirect:** resolve it from the *reconciled* active period (`resolvePartnerCatalogPlanId` / `getPartnerDiscountAccessInfo`), never stale state.
+- **Expiry inside the portal:** the gate only controls *entry*; once inside, the window is enforced by IGodirect (Q7) or a revoke call (Q8). A reconcile-then-read entry gate does not solve the "session outlives the window" problem — that's still §1's open question.
+- **Brand-new / no-purchase users:** empty queue, no sub → correctly denied → show an "unlock with a purchase" CTA, not an error.

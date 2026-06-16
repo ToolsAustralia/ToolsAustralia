@@ -151,10 +151,21 @@ AffiliateCommissionSchema.index(
     },
   }
 );
-// Prevent duplicate recurring commissions
+// Prevent duplicate recurring commissions (invoice-keyed rows only).
+// IMPORTANT: must be PARTIAL, not sparse. A compound `sparse` index still indexes a
+// document when ANY key is present — and affiliateId is always present — so every
+// PI-based commission (no stripeInvoiceId → null) collided on
+// (affiliateId, referredUserId, null, commissionType), meaning a referred user could
+// only ever have ONE one-time / upsell / mini-draw commission. The partial filter
+// indexes only rows that actually carry a string stripeInvoiceId (membership-recurring),
+// matching the PI index above. (Mirror of the 2026-01 fix to the PI index.)
 AffiliateCommissionSchema.index(
   { affiliateId: 1, referredUserId: 1, stripeInvoiceId: 1, commissionType: 1 },
-  { unique: true, sparse: true }
+  {
+    unique: true,
+    name: "uniq_affiliate_referred_invoice_commission_partial",
+    partialFilterExpression: { stripeInvoiceId: { $exists: true, $type: "string" } },
+  }
 );
 
 // Clear any cached model to ensure schema changes take effect

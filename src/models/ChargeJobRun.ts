@@ -22,6 +22,7 @@ export interface ChargeJobRunTotals {
 
 export interface IChargeJobRun extends Document {
   adminId: mongoose.Types.ObjectId;
+  kind: "charge" | "recover";
   startedAt: Date;
   finishedAt: Date | null;
   status: ChargeJobRunStatus;
@@ -56,6 +57,7 @@ const TotalsSchema = new Schema<ChargeJobRunTotals>(
 const ChargeJobRunSchema = new Schema<IChargeJobRun>(
   {
     adminId: { type: Schema.Types.ObjectId, ref: "User", required: true, index: true },
+    kind: { type: String, enum: ["charge", "recover"], required: true, default: "charge", index: true },
     startedAt: { type: Date, required: true, default: Date.now },
     finishedAt: { type: Date, default: null },
     status: {

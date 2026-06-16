@@ -12,6 +12,9 @@ import {
   InsightLevel,
   InsightBreakdown,
 } from "@/types/facebook-ads";
+// Route Graph API insights reads through the tuned outbound dispatcher (undici keep-alive
+// race fix — see src/lib/http/outbound.ts). These cron-driven reads keep their own retry.
+import { outboundFetch } from "@/lib/http/outbound";
 
 /**
  * Facebook API error response structure
@@ -62,7 +65,7 @@ async function fetchInsightsPageResilient(
 ): Promise<Response> {
   let lastMessage = "";
   for (let attempt = 0; attempt < INSIGHTS_PAGE_MAX_RETRIES; attempt++) {
-    const response = await fetch(url, {
+    const response = await outboundFetch(url, {
       method: "GET",
       headers: { "Content-Type": "application/json" },
     });
@@ -164,7 +167,7 @@ export async function fetchFacebookInsights(
 
     // Paginate through all results so summary totals match across Campaign/Ad Set/Ad levels
     while (nextUrl) {
-      const response = await fetch(nextUrl, {
+      const response = await outboundFetch(nextUrl, {
         method: "GET",
         headers: {
           "Content-Type": "application/json",
@@ -495,7 +498,7 @@ export async function fetchFacebookInsightsHourly(
   const url = `${baseUrl}?${params.toString()}`;
 
   try {
-    const response = await fetch(url, {
+    const response = await outboundFetch(url, {
       method: "GET",
       headers: {
         "Content-Type": "application/json",
@@ -617,7 +620,7 @@ async function fetchHourlyInsightsForEntity(
     use_unified_attribution_setting: "true",
   });
 
-  const response = await fetch(`${baseUrl}?${params.toString()}`, {
+  const response = await outboundFetch(`${baseUrl}?${params.toString()}`, {
     method: "GET",
     headers: { "Content-Type": "application/json" },
   });

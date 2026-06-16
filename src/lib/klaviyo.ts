@@ -20,6 +20,7 @@ import type {
   KlaviyoEventResponse,
   TrackEventOptions,
 } from "@/types/klaviyo";
+import { outboundFetch, describeFetchError } from "@/lib/http/outbound";
 
 // ============================================================
 // CONFIGURATION
@@ -182,7 +183,7 @@ class KlaviyoClient {
     const timeoutId = setTimeout(() => controller.abort(), this.REQUEST_TIMEOUT_MS);
 
     try {
-      const response = await fetch(url, {
+      const response = await outboundFetch(url, {
         method,
         headers: {
           Authorization: `Klaviyo-API-Key ${this.apiKey}`,
@@ -218,7 +219,12 @@ class KlaviyoClient {
         error instanceof Error &&
         (error.message.includes("fetch failed") || error.message.includes("ECONNREFUSED"))
       ) {
-        throw new Error(`Klaviyo API network error: ${error.message}`);
+        // Surface undici's hidden `error.cause.code` (e.g. UND_ERR_SOCKET "other side
+        // closed" = keep-alive race, EAI_AGAIN = DNS) so the failure is diagnosable
+        // instead of an opaque "fetch failed". See lib/http/outbound.ts.
+        const { code, causeMessage } = describeFetchError(error);
+        const causeSuffix = code ? ` (cause: ${code}${causeMessage ? ` - ${causeMessage}` : ""})` : "";
+        throw new Error(`Klaviyo API network error: ${error.message}${causeSuffix}`);
       }
 
       // Re-throw other errors (including our own Error objects)
@@ -858,7 +864,7 @@ class KlaviyoClient {
       // ✅ FIX: Use retryRequest wrapper for automatic retry on 502/504/5xx errors
       const response = await this.retryRequest(
         () =>
-          fetch(url, {
+          outboundFetch(url, {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
@@ -893,7 +899,7 @@ class KlaviyoClient {
         try {
           const listResponse = await this.retryRequest(
             () =>
-              fetch(listUrl, {
+              outboundFetch(listUrl, {
                 method: "POST",
                 headers: {
                   "Content-Type": "application/json",
@@ -1045,7 +1051,7 @@ class KlaviyoClient {
       // ✅ FIX: Use retryRequest wrapper for automatic retry on 502/504/5xx errors
       const response = await this.retryRequest(
         () =>
-          fetch(url, {
+          outboundFetch(url, {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
@@ -1099,7 +1105,7 @@ class KlaviyoClient {
         try {
           const listResponse = await this.retryRequest(
             () =>
-              fetch(listUrl, {
+              outboundFetch(listUrl, {
                 method: "POST",
                 headers: {
                   "Content-Type": "application/json",
@@ -1208,7 +1214,7 @@ class KlaviyoClient {
 
       const response = await this.retryRequest(
         () =>
-          fetch(url, {
+          outboundFetch(url, {
             method: "POST",
             headers: {
               "Content-Type": "application/vnd.api+json",
@@ -1296,7 +1302,7 @@ class KlaviyoClient {
 
       const response = await this.retryRequest(
         () =>
-          fetch(url, {
+          outboundFetch(url, {
             method: "POST",
             headers: {
               "Content-Type": "application/vnd.api+json",
@@ -1368,7 +1374,7 @@ class KlaviyoClient {
 
         const emailResponse = await this.retryRequest(
           () =>
-            fetch(emailListUrl, {
+            outboundFetch(emailListUrl, {
               method: "DELETE",
               headers: {
                 "Content-Type": "application/json",
@@ -1414,7 +1420,7 @@ class KlaviyoClient {
 
         const smsResponse = await this.retryRequest(
           () =>
-            fetch(smsListUrl, {
+            outboundFetch(smsListUrl, {
               method: "DELETE",
               headers: {
                 "Content-Type": "application/json",
@@ -1516,7 +1522,7 @@ class KlaviyoClient {
 
       const response = await this.retryRequest(
         () =>
-          fetch(url, {
+          outboundFetch(url, {
             method: "POST",
             headers: {
               "Content-Type": "application/json",

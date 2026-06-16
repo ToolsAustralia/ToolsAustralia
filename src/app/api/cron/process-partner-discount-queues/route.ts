@@ -1,166 +1,162 @@
 /**
  * Partner Discount Queue Processing Cron Job
  *
- * This endpoint should be called periodically (daily) to:
- * 1. Process all users' partner discount queues
- * 2. Expire finished periods
- * 3. Activate next queued items
- * 4. Clean up old expired items
+ * Runs daily (0 15 * * *) to sweep every user's partner-discount queue:
+ *  1. expire finished periods, 2. activate the next queued item,
+ *  3. reconcile membership vs one-time tiers, 4. prune old expired rows.
  *
- * Cron Schedule: Daily at 3:00 PM UTC (0 15 * * *)
+ * ⚠️ IMPORTANT: Vercel Cron triggers this path with a **GET** request, so the processing
+ * MUST live in GET. This route previously did all its work in POST with GET as a no-op
+ * health check — meaning the scheduled cron never actually processed anything, and queues
+ * only advanced when a member opened the rewards page (GET /api/partner-discount/queue).
+ * That is what let a finished one-time window sit unswept for weeks. POST is kept as a
+ * manual-trigger alias. Pattern mirrors src/app/api/cron/reconcile-affiliate-commissions.
  *
- * Security:
- * - Should be protected by Vercel Cron secret or API key
- * - Only accessible via POST with correct authorization
- *
- * @author Senior Full-Stack Developer
- * @version 1.0.0
+ * @version 2.0.0
  */
 
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import connectDB from "@/lib/mongodb";
 import User, { IUser } from "@/models/User";
 import { processPartnerDiscountQueue } from "@/utils/partner-discounts/partner-discount-queue";
 import { waitForPoolCapacity } from "@/utils/database/connection-health";
 
-export const dynamic = 'force-dynamic';
-export const runtime = 'nodejs';
+export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
 
-/**
- * POST /api/cron/process-partner-discount-queues
- *
- * Process all users' partner discount queues
- *
- * Authorization:
- * - Protected by Vercel's internal infrastructure (no external access)
- * - CRON_SECRET kept for manual testing purposes only
- */
-export async function POST() {
-  try {
-    // Vercel cron jobs are automatically protected by Vercel's infrastructure
-    // No additional authentication needed as they can only be called internally
+/** Vercel attaches `Authorization: Bearer ${CRON_SECRET}` to cron requests when the env var
+ *  is set. Allow when unset (local dev), matching sibling crons (reconcile-affiliate-commissions). */
+function isAuthorized(request: NextRequest): boolean {
+  const cronSecret = process.env.CRON_SECRET;
+  if (!cronSecret) return true;
+  return request.headers.get("authorization") === `Bearer ${cronSecret}`;
+}
 
-    // console.log("🕐 Starting partner discount queue processing cron job...");
-    const startTime = Date.now();
+interface QueueProcessingSummary {
+  processedCount: number;
+  changedCount: number;
+  errorCount: number;
+  duration: string;
+  errors?: { userId: string; email: string; error: string }[];
+}
 
-    await connectDB();
+/** Sweep all users that have a non-empty partner discount queue. */
+async function processAllPartnerDiscountQueues(): Promise<QueueProcessingSummary> {
+  const startTime = Date.now();
 
-    // ✅ OPTIMIZATION: Wait for pool capacity before starting bulk operation
-    const hasCapacity = await waitForPoolCapacity(80, 10000);
-    if (!hasCapacity) {
-      console.warn("⚠️ Connection pool still near capacity after wait, proceeding anyway");
-    }
+  await connectDB();
 
-    // ✅ OPTIMIZATION: Process in smaller batches for better performance
-    const BATCH_SIZE = 200; // Reduced from 1000 to reduce connection pressure
-    let skip = 0;
-    let hasMore = true;
-    const allUsers: IUser[] = [];
-
-    // Fetch users in batches
-    // Note: Not using .lean() because we need to call .save() on documents
-    while (hasMore) {
-      const batch = await User.find({
-        partnerDiscountQueue: { $exists: true, $ne: [] },
-      })
-        .skip(skip)
-        .limit(BATCH_SIZE);
-
-      if (batch.length === 0) {
-        hasMore = false;
-        break;
-      }
-
-      allUsers.push(...batch);
-      skip += BATCH_SIZE;
-
-      if (batch.length < BATCH_SIZE) {
-        hasMore = false;
-      }
-      
-      // Small delay between batches to reduce connection pressure
-      if (hasMore) {
-        await new Promise(resolve => setTimeout(resolve, 100));
-      }
-    }
-
-    const users = allUsers;
-
-    // console.log(`📊 Found ${users.length} users with partner discount queues`);
-
-    let processedCount = 0;
-    let changedCount = 0;
-    let errorCount = 0;
-    const errors: { userId: string; email: string; error: string }[] = [];
-
-    // Process each user's queue
-    for (const user of users) {
-      try {
-        const queueChanged = await processPartnerDiscountQueue(user);
-
-        if (queueChanged) {
-          await user.save();
-          changedCount++;
-          // console.log(`✅ Queue processed and saved for user: ${user.email}`);
-        }
-
-        processedCount++;
-      } catch (error) {
-        errorCount++;
-        const errorMessage = error instanceof Error ? error.message : "Unknown error";
-        errors.push({
-          userId: user._id.toString(),
-          email: user.email,
-          error: errorMessage,
-        });
-        console.error(`❌ Error processing queue for user ${user.email}:`, error);
-      }
-    }
-
-    const duration = Date.now() - startTime;
-
-    // console.log(`✅ Cron job completed in ${duration}ms`);
-    // console.log(`📊 Processed: ${processedCount} users`);
-    // console.log(`📊 Changed: ${changedCount} users`);
-    // console.log(`📊 Errors: ${errorCount} users`);
-
-    return NextResponse.json({
-      success: true,
-      data: {
-        processedCount,
-        changedCount,
-        errorCount,
-        duration: `${duration}ms`,
-        errors: errors.length > 0 ? errors.slice(0, 10) : undefined, // Return max 10 errors
-      },
-      message: `Processed ${processedCount} users in ${duration}ms. ${changedCount} queues updated.`,
-    });
-  } catch (error) {
-    console.error("❌ Cron job failed:", error);
-    return NextResponse.json(
-      {
-        success: false,
-        error: "Cron job failed",
-        message: error instanceof Error ? error.message : "Unknown error",
-      },
-      { status: 500 }
-    );
+  // Wait for pool capacity before starting the bulk operation.
+  const hasCapacity = await waitForPoolCapacity(80, 10000);
+  if (!hasCapacity) {
+    console.warn("⚠️ Connection pool still near capacity after wait, proceeding anyway");
   }
+
+  // Fetch users in batches (not .lean() — we need to call .save() on documents).
+  const BATCH_SIZE = 200;
+  let skip = 0;
+  let hasMore = true;
+  const allUsers: IUser[] = [];
+
+  while (hasMore) {
+    const batch = await User.find({
+      partnerDiscountQueue: { $exists: true, $ne: [] },
+    })
+      .skip(skip)
+      .limit(BATCH_SIZE);
+
+    if (batch.length === 0) break;
+
+    allUsers.push(...batch);
+    skip += BATCH_SIZE;
+
+    if (batch.length < BATCH_SIZE) hasMore = false;
+
+    // Small delay between batches to reduce connection pressure.
+    if (hasMore) {
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+  }
+
+  let processedCount = 0;
+  let changedCount = 0;
+  let errorCount = 0;
+  const errors: { userId: string; email: string; error: string }[] = [];
+
+  for (const user of allUsers) {
+    try {
+      const queueChanged = await processPartnerDiscountQueue(user);
+      if (queueChanged) {
+        await user.save();
+        changedCount++;
+      }
+      processedCount++;
+    } catch (error) {
+      errorCount++;
+      errors.push({
+        userId: user._id.toString(),
+        email: user.email,
+        error: error instanceof Error ? error.message : "Unknown error",
+      });
+      console.error(`❌ Error processing partner discount queue for user ${user.email}:`, error);
+    }
+  }
+
+  return {
+    processedCount,
+    changedCount,
+    errorCount,
+    duration: `${Date.now() - startTime}ms`,
+    errors: errors.length > 0 ? errors.slice(0, 10) : undefined,
+  };
+}
+
+function summaryResponse(data: QueueProcessingSummary) {
+  return NextResponse.json({
+    success: true,
+    data,
+    message: `Processed ${data.processedCount} users in ${data.duration}. ${data.changedCount} queues updated.`,
+  });
+}
+
+function failureResponse(error: unknown) {
+  console.error("❌ Partner discount queue cron failed:", error);
+  return NextResponse.json(
+    {
+      success: false,
+      error: "Cron job failed",
+      message: error instanceof Error ? error.message : "Unknown error",
+    },
+    { status: 500 }
+  );
 }
 
 /**
  * GET /api/cron/process-partner-discount-queues
- *
- * Health check endpoint to verify cron job is accessible
+ * The entry point Vercel Cron actually invokes (daily at 3:00 PM UTC).
  */
-export async function GET() {
-  return NextResponse.json({
-    service: "Partner Discount Queue Processing Cron",
-    status: "healthy",
-    message: "Use POST method to trigger processing",
-    schedule: "Daily at 3:00 PM UTC (0 15 * * *)",
-    requiredHeaders: {
-      authorization: "Bearer <CRON_SECRET>",
-    },
-  });
+export async function GET(request: NextRequest) {
+  if (!isAuthorized(request)) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  try {
+    return summaryResponse(await processAllPartnerDiscountQueues());
+  } catch (error) {
+    return failureResponse(error);
+  }
+}
+
+/**
+ * POST /api/cron/process-partner-discount-queues
+ * Manual-trigger alias (ops/testing) — runs the same sweep as the GET cron entry.
+ */
+export async function POST(request: NextRequest) {
+  if (!isAuthorized(request)) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  try {
+    return summaryResponse(await processAllPartnerDiscountQueues());
+  } catch (error) {
+    return failureResponse(error);
+  }
 }

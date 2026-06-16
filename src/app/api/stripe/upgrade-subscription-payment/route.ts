@@ -9,12 +9,10 @@ import { authOptions } from "@/lib/auth";
 import Stripe from "stripe";
 import { enforceMajorDrawOpenForNewPurchasesOr403 } from "@/utils/draws/major-draw-gate-http";
 import { extractRequestContext } from "@/utils/tracking/facebook-helpers";
-
-// Extended Stripe subscription interface with period fields
-interface StripeSubscriptionWithPeriods extends Stripe.Subscription {
-  current_period_start: number;
-  current_period_end: number;
-}
+import {
+  getSubscriptionPeriodStart,
+  getSubscriptionPeriodEnd,
+} from "@/utils/payment/stripe/subscription-period";
 
 const upgradeSubscriptionPaymentSchema = z.object({
   newPackageId: z.string().min(1, "New package ID is required"),
@@ -172,14 +170,17 @@ export async function POST(request: NextRequest) {
 
     // ✅ STRIPE BEST PRACTICE: Retrieve current subscription to get item ID
     // console.log(`📊 Retrieving current subscription: ${user.stripeSubscriptionId}`);
-    const currentSubscription = (await stripe.subscriptions.retrieve(
-      user.stripeSubscriptionId
-    )) as unknown as StripeSubscriptionWithPeriods;
+    const currentSubscription = await stripe.subscriptions.retrieve(user.stripeSubscriptionId);
 
     if (!currentSubscription.items.data || currentSubscription.items.data.length === 0) {
       console.error(`❌ No subscription items found`);
       return NextResponse.json({ error: "Invalid subscription configuration" }, { status: 500 });
     }
+
+    // Basil API (2025-08-27.basil): current_period_start/end live on subscription ITEMS,
+    // not the subscription root. Resolve once via the helper (supports legacy + Basil shapes).
+    const currentSubPeriodStart = getSubscriptionPeriodStart(currentSubscription);
+    const currentSubPeriodEnd = getSubscriptionPeriodEnd(currentSubscription);
 
     const currentSubscriptionItem = currentSubscription.items.data[0];
     // console.log(`📦 Current subscription item:`, {
@@ -227,8 +228,8 @@ export async function POST(request: NextRequest) {
         upgradeFromName: currentPackage.name,
         upgradeDate: new Date().toISOString(),
         upgradeType: "no_proration", // Track that this used NO proration
-        originalBillingDate: currentSubscription.current_period_start
-          ? new Date(currentSubscription.current_period_start * 1000).toISOString()
+        originalBillingDate: currentSubPeriodStart
+          ? new Date(currentSubPeriodStart * 1000).toISOString()
           : new Date().toISOString(),
       },
     });
@@ -354,8 +355,9 @@ export async function POST(request: NextRequest) {
 
       // console.log(`📝 Upgrade marked for webhook processing (immediate activation)`);
 
-      // Cast for period fields
-      const subscriptionWithPeriods = updatedSubscription as unknown as StripeSubscriptionWithPeriods;
+      // Basil API: period fields live on subscription items, not the root.
+      const updatedPeriodStart = getSubscriptionPeriodStart(updatedSubscription);
+      const updatedPeriodEnd = getSubscriptionPeriodEnd(updatedSubscription);
 
       return NextResponse.json({
         success: true,
@@ -373,8 +375,12 @@ export async function POST(request: NextRequest) {
             toPackage: { id: newPackage._id, name: newPackage.name, price: newPackage.price },
             prorationAmount: prorationAmount / 100,
             billingInfo: {
-              currentBillingDate: new Date(subscriptionWithPeriods.current_period_start * 1000).toLocaleDateString(),
-              nextBillingDate: new Date(subscriptionWithPeriods.current_period_end * 1000).toLocaleDateString(),
+              currentBillingDate: new Date(
+                (updatedPeriodStart ?? Math.floor(Date.now() / 1000)) * 1000
+              ).toLocaleDateString(),
+              nextBillingDate: new Date(
+                (updatedPeriodEnd ?? Math.floor(Date.now() / 1000)) * 1000
+              ).toLocaleDateString(),
               nextBillingAmount: newPackage.price,
               billingDateStays: true,
             },
@@ -523,8 +529,12 @@ export async function POST(request: NextRequest) {
           prorationAmount: prorationAmount / 100,
           prorationDetails: `Prorated charge for remaining billing period`,
           billingInfo: {
-            currentBillingDate: new Date(currentSubscription.current_period_start * 1000).toLocaleDateString(),
-            nextBillingDate: new Date(currentSubscription.current_period_end * 1000).toLocaleDateString(),
+            currentBillingDate: new Date(
+              (currentSubPeriodStart ?? Math.floor(Date.now() / 1000)) * 1000
+            ).toLocaleDateString(),
+            nextBillingDate: new Date(
+              (currentSubPeriodEnd ?? Math.floor(Date.now() / 1000)) * 1000
+            ).toLocaleDateString(),
             nextBillingAmount: newPackage.price,
             billingDateStays: true,
           },
