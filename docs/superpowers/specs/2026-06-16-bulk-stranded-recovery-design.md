@@ -37,10 +37,12 @@ The 376 are repeated every run (runs show 3–25 successes, ~570 failures consis
 
 Two facts the current bulk charger doesn't handle:
 
-1. **Multiple stale OPEN cycle invoices** accumulated before `pause_collection: keep_as_draft` took over. Stripe refuses `invoices.pay()` on these superseded open invoices → "no longer be paid." (There are **0 `uncollectible`** invoices account-wide — so the May-2026 stranded-recovery flow, whose eligibility only accepts `uncollectible`/`void` originals, does **not** match this population.)
+1. **Multiple stale OPEN cycle invoices** accumulated before `pause_collection: keep_as_draft` took over. Stripe refuses `invoices.pay()` on these superseded open invoices → "no longer be paid." (There are **0 `uncollectible`** invoices account-wide — these are `open`-but-exhausted, `attempt_count ≥ 1` with `next_payment_attempt: null`.)
 2. The **current cycle is a held DRAFT** that the bulk charger never finalizes/pays (it lists `status: "open"` only).
 
 So a stranded member = past_due + ≥1 held draft (current cycle) blocked behind stale open invoices. The fix is to **void the stale opens and finalize+pay the current held draft** — one cycle.
+
+**The existing per-user recovery already classifies these correctly:** `isOriginalInvoiceEligibleForRecovery` ([recoverStrandedPastDuePolicy.ts:55-70](../../../src/server/admin/recoverStrandedPastDuePolicy.ts#L55-L70)) treats an `open` invoice with `attempt_count ≥ 1 && next_payment_attempt == null` as recoverable. What it does **not** do: void the open original (it only voids `uncollectible`), nor handle **multiple** stale opens per member. Since a lingering unpaid open invoice keeps the Stripe subscription `past_due`, the bulk orchestrator must **void ALL stale opens** for the member (this is also the "write off missed months" mechanism) before/around finalizing+paying the current draft — otherwise the member doesn't flip to `active`.
 
 ## Goal
 
@@ -91,6 +93,19 @@ Read-only. Source of truth is live Stripe, seeded by the past_due cohort:
 - **Audit** — full `InvoiceChargeLog` trail by `chargeRunId` and `result.recovery.step`; `ChargeJobRun` summary row.
 - **Never mint manual invoices** — only finalize Stripe-created `subscription_cycle` drafts (manual invoices have `billing_reason: "manual"` and silently skip the renewal webhook pipeline). Members with no held draft are skipped, not invented.
 
+## Double-charge prevention (the load-bearing requirement)
+
+A member must never be charged twice for the same cycle. Layered guards, verified against the existing code:
+
+1. **A paid draft is no longer a draft (primary, structural).** The detector includes a member only if they have an **unpaid held draft** for the current cycle (`pickHeldDraftForRecovery` filters `status === "draft"`). After recovery pays it, it becomes `paid` → the member **drops out of the worklist on every subsequent run**. The same cycle physically cannot be re-selected. This is the strongest guard and holds even across runs days apart.
+2. **Stripe idempotency key on `invoices.pay`** = `admin-charge-${finalizedDraftId}` (stable, 24h). Rapid re-submits / same-run retries return Stripe's cached first response — no second charge. `finalizeInvoice` and `voidInvoice` are likewise idempotency-keyed (`recover-finalize-*`, `recover-void-*`).
+3. **`already paid` catch** in `payOpenInvoiceAsPastDueAdmin` → writes a `skipped` row, never re-charges.
+4. **Exactly one draft paid per member per call** — `pickHeldDraftForRecovery` returns a single draft (the newest matching the current cycle); superseded drafts are deleted (`invoices.del`), not paid.
+5. **`ChargeJobLock`** serializes bulk operations (no recovery-vs-charge or recovery-vs-recovery overlap). The **worklist is deduped by `userId`/`subscriptionId`**. **Cap 25** bounds blast radius.
+6. **Live re-verify inside the loop** — re-fetch the member + draft right before charging; if status flipped to `active` or the draft is gone/paid, skip.
+
+Note: the recovery deliberately passes `bypassRecentRecoveryLock: true` to the pay primitive (it must — otherwise the recovery's own freshly-written void/finalize `InvoiceChargeLog` rows would trip the per-invoice recent-attempt lock and skip the pay). Double-charge safety therefore rests on guards 1–5 above, **not** on that per-attempt lock.
+
 ## Architecture
 
 ### New
@@ -100,7 +115,7 @@ Read-only. Source of truth is live Stripe, seeded by the past_due cohort:
 - `src/server/admin/__tests__/recoverStrandedBulkPolicy.test.ts` — `tsx` test of the classifier (the jessendan0 invoice shape, no-draft, not-stranded, multi-open). `npm run test:recover-stranded-bulk`.
 
 ### Extended (small, surgical)
-- `recoverStrandedPastDue.ts` — generalize the recovery to accept **`open`-stale** originals (today it only voids `uncollectible`). Either extend `checkRecoveryEligibility` / `recoverStrandedPastDueInvoice` to handle a list of stale-open invoices, or have the bulk orchestrator perform the void/delete itself and call only the finalize+pay tail. Prefer the latter (keeps the per-user manual flow untouched, lower regression risk).
+- The bulk orchestrator owns the **multi-invoice cleanup** the per-user helper doesn't: void ALL stale open cycle invoices for the member (`recover-void-${id}` keys) + delete superseded drafts, then finalize+pay the current draft via `payOpenInvoiceAsPastDueAdmin`. The existing `recoverStrandedPastDueInvoice` (single original, voids only `uncollectible`) is **left untouched** — the manual per-user flow keeps working. Reuse its building blocks (`pickHeldDraftForRecovery`, `buildRecovery*IdempotencyKey`, the finalize+pay tail), not the single-original entry point.
 - `payOpenInvoiceAsPastDueAdmin` already accepts `chargeRunId` — thread it.
 
 ### Reused (no change)
@@ -121,6 +136,6 @@ A "Recover Stranded" panel on the existing charge-past-due admin page: **Preview
 No feature flag — admin gating + typed confirmation + per-run cap + 24h per-invoice lock provide the rollout control.
 
 ## Open questions
-1. Extend `recoverStrandedPastDueInvoice` to handle open-stale originals, or keep that helper for the uncollectible/void case and put the void/delete logic in the bulk orchestrator? (Leaning: orchestrator owns void/delete + reuse only the finalize+pay tail.)
-2. UI now or endpoint-first (drive preview/execute via the API while the panel is built)?
-3. `ChargeJobRun` — add a `kind: "charge" | "recover"` discriminator, or a separate `RecoveryJobRun`? (Leaning: discriminator on the existing model.)
+1. ~~Extend the per-user helper or have the orchestrator own void/delete?~~ **Resolved:** existing eligibility already classifies open-exhausted; the orchestrator owns the multi-invoice void/delete + finalize/pay, reusing the helper's building blocks. The single-original `recoverStrandedPastDueInvoice` is untouched.
+2. UI now or endpoint-first (drive preview/execute via the API while the panel is built)? **Leaning: endpoint-first.**
+3. `ChargeJobRun` — add a `kind: "charge" | "recover"` discriminator, or a separate `RecoveryJobRun`? **Leaning: discriminator on the existing model.**
