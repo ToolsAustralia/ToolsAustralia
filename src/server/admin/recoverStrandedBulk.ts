@@ -156,8 +156,9 @@ async function logRecoveryStep(p: {
 }
 
 /**
- * Recover up to `limit` stranded members. Destructive: voids stale opens, deletes
- * superseded drafts, finalizes + pays the current draft (one cycle). Double-charge
+ * Recover up to `limit` stranded members. Destructive: voids stale opens, voids
+ * superseded drafts (finalize→void; subscription drafts can't be deleted), finalizes +
+ * pays the current draft (one cycle). Double-charge
  * safety: a paid draft is no longer a draft, so a recovered member is gone from the
  * next scan; the pay uses Stripe idempotency `admin-charge-${draftId}`.
  */
@@ -226,13 +227,33 @@ export async function runStrandedRecovery(
             }
           }
         }
-        // 4. Delete superseded drafts (best-effort). Audit each.
+        // 4. Dispose of superseded held drafts (best-effort). Subscription-created drafts CANNOT be
+        //    deleted (Stripe 400 "You can't delete invoices created by subscriptions"); the only
+        //    supported disposal is finalize → void. We finalize with auto_advance:false so Stripe
+        //    never auto-attempts payment between finalize and void (held keep_as_draft invoices
+        //    already carry auto_advance:false; we set it explicitly to be safe). Voiding writes off
+        //    the superseded cycle, exactly like voiding a stale open. A failure here never blocks
+        //    paying the current draft.
         for (const draftId of row.supersededDraftIds) {
           try {
-            await stripe.invoices.del(draftId);
-            await logRecoveryStep({ invoiceId: draftId, customerId: row.customerId, userId: row.userId, adminId, amount: row.amountCents, chargeRunId: runId, step: "delete", message: "Deleted superseded held draft" });
+            try {
+              await stripe.invoices.finalizeInvoice(
+                draftId,
+                { auto_advance: false },
+                { idempotencyKey: buildRecoveryFinalizeIdempotencyKey(draftId) }
+              );
+            } catch (finErr) {
+              // Already finalized/open/void from a prior run → fall through to the void attempt.
+              if (!(finErr instanceof Stripe.errors.StripeError)) throw finErr;
+            }
+            await stripe.invoices.voidInvoice(draftId, undefined, { idempotencyKey: buildRecoveryVoidIdempotencyKey(draftId) });
+            await logRecoveryStep({ invoiceId: draftId, customerId: row.customerId, userId: row.userId, adminId, amount: row.amountCents, chargeRunId: runId, step: "void", message: "Voided superseded held draft (finalize→void; subscription drafts can't be deleted)" });
           } catch (e) {
-            console.error(`[recover-stranded] del draft ${draftId} failed:`, e);
+            if (e instanceof Stripe.errors.StripeError && /already.*void|no longer/i.test(e.message)) {
+              await logRecoveryStep({ invoiceId: draftId, customerId: row.customerId, userId: row.userId, adminId, amount: row.amountCents, chargeRunId: runId, step: "void", message: "Superseded draft already void; skipped" });
+            } else {
+              console.error(`[recover-stranded] dispose superseded draft ${draftId} failed:`, e);
+            }
           }
         }
         // 5. Finalize the current draft → open.
