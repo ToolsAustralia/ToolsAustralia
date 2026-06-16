@@ -31,6 +31,7 @@ import { getWebsiteLaunchDateUTC } from "@/utils/common/timezone";
 import PastDueChargeHistoryDrawer from "./PastDueChargeHistoryDrawer";
 import RecoverInvoiceModal from "@/components/admin/RecoverInvoiceModal";
 import BulkRecoverInvoicesModal, { type BulkRecoverItem } from "@/components/admin/BulkRecoverInvoicesModal";
+import RecoverStrandedPanel from "@/components/admin/RecoverStrandedPanel";
 import ClickableUserDisplay from "@/components/admin/ClickableUserDisplay";
 import AttemptsBreakdown from "@/components/admin/AttemptsBreakdown";
 import {
@@ -397,6 +398,9 @@ export default function PastDueChargeHistory() {
           Failed to load charge history. Try refreshing or adjusting the date range.
         </div>
       )}
+
+      {/* Stranded-invoice bulk recovery */}
+      <RecoverStrandedPanel />
 
       {/* Bulk Runs */}
       <div className="bg-white dark:bg-neutral-900 rounded-xl shadow-sm border border-gray-200 dark:border-neutral-800 overflow-hidden">
