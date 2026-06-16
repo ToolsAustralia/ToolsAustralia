@@ -3,6 +3,12 @@ import connectDB from "@/lib/mongodb";
 import User, { IUser } from "@/models/User";
 import { syncMultipleUserProfilesToKlaviyo } from "@/utils/integrations/klaviyo/klaviyo-profile-sync";
 
+// The bulk sync is now rate-limit throttled (8 concurrent / 700ms batch), so it runs longer.
+// Give it headroom. NOTE: this still only fits a few-hundred-user set within the limit — a
+// whole-DB sweep (thousands) must run as an ops script, not this route.
+export const maxDuration = 300;
+export const dynamic = "force-dynamic";
+
 /**
  * POST /api/admin/sync-klaviyo-profiles
  * Admin endpoint to sync all user profiles to Klaviyo
