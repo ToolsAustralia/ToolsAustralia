@@ -159,11 +159,11 @@ export function buildRunsFilter(input: RunsFilterInput): FilterQuery<IChargeJobR
   if (input.status && VALID_RUN_STATUSES.has(input.status)) {
     f.status = input.status;
   }
-  // Exclude stranded-recovery runs (kind: "recover") from the charge-performance list —
-  // they're surfaced in the Recover Stranded panel and carry different totals semantics
-  // (one cycle per recovered member after void/delete). `$ne` keeps legacy runs that
-  // predate the `kind` field (kind missing ⇒ treated as a normal charge run).
-  f.kind = { $ne: "recover" };
+  // Both normal charge runs AND stranded-recovery runs (kind: "recover") are bulk runs and
+  // are listed together — a recover run's totals share the same shape (succeeded = members
+  // recovered, revenueCents = amount collected), so they fold into the same charge-performance
+  // view. Each row carries `kind` so the UI can badge Recovery vs Charge. (Legacy runs that
+  // predate the `kind` field have no kind and surface as normal charges.)
   return f;
 }
 
@@ -208,6 +208,8 @@ export interface ListedRun {
   adminId: string;
   adminName: string;
   status: ChargeJobRunStatus;
+  /** "charge" = past-due bulk charge; "recover" = stranded-invoice recovery. Legacy runs ⇒ "charge". */
+  kind: IChargeJobRun["kind"];
   totals: IChargeJobRun["totals"];
 }
 
@@ -238,6 +240,7 @@ export async function listChargeRuns(
       adminId: String(r.adminId),
       adminName: adminLabel(adminMap.get(String(r.adminId)) as AdminLookupRow | undefined),
       status: r.status,
+      kind: r.kind ?? "charge",
       totals: r.totals,
     })),
     total,
@@ -299,6 +302,7 @@ export async function getChargeRunDetail(runId: string): Promise<RunDetail | nul
       adminId: String(run.adminId),
       adminName: adminLabel(admin as AdminLookupRow | null),
       status: run.status,
+      kind: run.kind ?? "charge",
       totals: run.totals,
     },
     rows: logRows.map((r) => ({

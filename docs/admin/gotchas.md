@@ -101,6 +101,10 @@ The fix reads from `subscription.items.data[0]` first (new API) and falls back t
 
 For a shared helper that abstracts this, see `src/utils/payment/stripe/subscription-period.ts` (`getSubscriptionPeriodEnd`).
 
+## Past-Due Charge History lists BOTH charge and recovery runs
+
+The "Bulk Runs" table (and its summary succeeded-count + revenue) shows ALL `ChargeJobRun`s — both normal past-due **charge** runs (`kind: "charge"`) and stranded-invoice **recovery** runs (`kind: "recover"`). They used to be split (recovery hidden, surfaced only in the Recover Stranded panel), but a recovery run IS a bulk run: its `totals` share the same shape (`succeeded` = members recovered, `revenueCents` = amount collected), so they fold into one charge-performance view. Each row carries `kind` and the table badges **Recovery** vs **Charge**; `buildRunsFilter` ([`chargePastDueHistory.ts`](../../src/services/admin/chargePastDueHistory.ts)) no longer excludes `kind: "recover"`. **Lockstep:** the Norm mirror (`/v1/charge-past-due/runs[/{runId}]`) also exposes `kind` — keep the Zod schema (`src/lib/internal-norm/schemas/charge-past-due.ts`), the routes, the rebuilt manifest, and `docs/internal-norm/norm-context.md` in sync (a missing field is a runtime 500).
+
 ## AEST date filters: `endDate` is **exclusive**, not inclusive
 
 The past-due charge history endpoints (`/api/admin/charge-past-due/runs`, `/api/admin/charge-past-due/manual-retries`) interpret `YYYY-MM-DD` query strings as **Australia/Sydney calendar days**, not UTC dates. The two helpers in [`src/services/admin/chargePastDueHistory.ts`](../../src/services/admin/chargePastDueHistory.ts) drive this:

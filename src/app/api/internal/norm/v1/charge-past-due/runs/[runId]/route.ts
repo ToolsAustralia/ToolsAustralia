@@ -25,6 +25,7 @@ export const GET = withNorm(
         adminId: detail.run.adminId,
         adminName: detail.run.adminName,
         status: detail.run.status,
+        kind: detail.run.kind,
         totals: detail.run.totals,
       },
       rows: detail.rows.map((r) => ({
