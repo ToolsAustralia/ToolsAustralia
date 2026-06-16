@@ -12,6 +12,7 @@ The `/api/admin/**` namespace. Per the manifest, this domain is the catch-all fo
 | `/api/admin/invoices/charge-past-due` | [billing-stripe](../billing-stripe/) | Bulk past-due retry |
 | `/api/admin/invoices/recover-past-due` | admin | Bulk stranded-invoice recovery (per-invoice, max 10) |
 | `/api/admin/invoices/recover-stranded` | admin | Bulk stranded-invoice recovery via scan + preview (GET preview / POST run) |
+| `/api/admin/sync-klaviyo-profiles` | [tracking](../tracking/) | POST: throttled bulk Klaviyo profile sync. Now gated by `users.edit` (was unauthenticated). `maxDuration=300`; whole-DB sweeps belong in an ops script. |
 | `/api/admin/error-reports/**` | [error-reporting](../error-reporting/) | Error triage |
 | `/api/admin/contact-submissions/**` | [contact](../contact/) | Submission review |
 | `/api/admin/promo-analytics/**` | [promo](../promo/) | Promo-page analytics: summary, channel-detail, page-detail. All gated by `requirePermission("promos.view")`. The three routes share `resolvePromoAnalyticsRange()` from `src/services/promo-analytics/PromoAnalyticsService.ts` for AEST `today \| yesterday \| custom` date resolution, kept in lockstep with the Norm read mirror under `/api/internal/norm/v1/promo-analytics/**`. |

@@ -18,7 +18,7 @@ Tracking-specific notes:
 - **Run off-peak** — the per-account quota is shared with live registration upserts (`createKlaviyoProfileAndSubscribe`) and the draw-reset sweep.
 - **The HTTP route ([`/api/admin/sync-klaviyo-profiles`](../../src/app/api/admin/sync-klaviyo-profiles/route.ts)) `await`s the whole throttled sync** — fine for a few-hundred-user set (it has `maxDuration = 300`), but a **whole-DB sweep (thousands) will exceed the serverless limit**; run that as an ops script instead, or use Klaviyo's **Bulk Import Profiles** endpoint (10k profiles/request, upsert) — a worthwhile follow-up.
 - **Keep the search a plain email filter.** If anyone adds `additional-fields[profile]=predictive_analytics` to the profile search, the Get-Profiles bucket collapses to 10/s·150/min and this cap would massively overshoot.
-- ⚠️ That admin route is **still unauthenticated** (`// TODO: Add admin authentication check`) — an open mass-write endpoint; gate it with `requirePermissionWithAudit` before relying on it.
+- That admin route is now gated by `requirePermissionWithAudit("users.edit")` (was previously an open, unauthenticated mass-write endpoint — fixed June 2026).
 
 ## Tracking beacons must not block the response (promo-page-visit 504s)
 
