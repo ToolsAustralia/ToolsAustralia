@@ -5,14 +5,7 @@ import { stripe } from "@/lib/stripe";
 import { z } from "zod";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-
-// Extended Stripe subscription interface to include current_period_end
-interface StripeSubscriptionWithPeriodEnd {
-  id: string;
-  status: string;
-  current_period_end: number;
-  cancel_at_period_end: boolean;
-}
+import { getSubscriptionPeriodEnd } from "@/utils/payment/stripe/subscription-period";
 
 const updateAutoRenewSchema = z.object({
   autoRenew: z.boolean(),
@@ -94,9 +87,9 @@ export async function PATCH(request: NextRequest) {
         autoRenew: validatedData.autoRenew,
         cancelAtPeriodEnd: updatedSubscription.cancel_at_period_end,
         currentPeriodEnd: (() => {
-          const periodEndTimestamp = (updatedSubscription as unknown as StripeSubscriptionWithPeriodEnd)
-            .current_period_end;
-          if (periodEndTimestamp && typeof periodEndTimestamp === "number") {
+          // Basil API: current_period_end lives on subscription items, not the root.
+          const periodEndTimestamp = getSubscriptionPeriodEnd(updatedSubscription);
+          if (typeof periodEndTimestamp === "number") {
             return new Date(periodEndTimestamp * 1000).toISOString();
           }
           return new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();

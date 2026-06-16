@@ -223,19 +223,42 @@ export function syncUserProfileToKlaviyoBackground(
 }
 
 /**
- * Sync multiple users' profiles to Klaviyo
- * Useful for bulk operations or data migration
+ * Throttle for the bulk profile sweep.
+ *
+ * Each `syncUserProfileToKlaviyo` hits the Klaviyo Profiles API ~twice — one
+ * **Get Profiles** search (by email) + one **Create** or **Update** profile. Klaviyo's
+ * rate limits are PER-ACCOUNT and PER-ENDPOINT: 75/s burst, ~700/min steady on each
+ * profile endpoint (https://developers.klaviyo.com/en/reference/get_profiles). The
+ * Get-Profiles search is the binding bucket (every user hits it once → ~700/min ≈ 11.6/s),
+ * while create/update split across two separate buckets.
+ *
+ * Firing all users at once (the previous behaviour) blew past this — 429s + the undici
+ * keep-alive socket pressure that caused the June 2026 "fetch failed" incident
+ * (see lib/http/outbound.ts). Processing **8 concurrently with a 700ms pause** holds the
+ * Get-Profiles rate around ~5–10/s — comfortably under the steady limit, ~2× faster than a
+ * 5-at-a-time/2s baseline, and gentle on the socket pool. The Klaviyo client already backs
+ * off on 429 via `Retry-After`, so a brief overshoot self-corrects.
+ *
+ * ⚠️ Run large sweeps OFF-PEAK — the per-account quota is shared with live registration
+ * upserts. For a very large (whole-DB) sweep, prefer an ops script over an HTTP route
+ * (a throttled sweep of thousands of users will exceed any serverless function limit), or
+ * Klaviyo's Bulk Import Profiles endpoint (10k profiles/request, upsert).
+ */
+const CONCURRENT_SYNC_LIMIT = 8;
+const BATCH_DELAY_MS = 700;
+
+/**
+ * Sync multiple users' profiles to Klaviyo, throttled to stay under Klaviyo's rate limits.
+ * Useful for bulk operations or data migration. Each user's sync is best-effort
+ * (`syncUserProfileToKlaviyo` swallows its own errors), so one failure never aborts the sweep.
  */
 export async function syncMultipleUserProfilesToKlaviyo(users: IUser[]): Promise<void> {
-  // console.log(`📊 Starting bulk Klaviyo profile sync for ${users.length} users`);
-
-  const syncPromises = users.map((user) => syncUserProfileToKlaviyo(user));
-
-  try {
-    await Promise.allSettled(syncPromises);
-    // console.log(`✅ Bulk Klaviyo profile sync completed for ${users.length} users`);
-  } catch (error) {
-    console.error(`❌ Bulk Klaviyo profile sync failed:`, error);
+  for (let i = 0; i < users.length; i += CONCURRENT_SYNC_LIMIT) {
+    const batch = users.slice(i, i + CONCURRENT_SYNC_LIMIT);
+    await Promise.allSettled(batch.map((user) => syncUserProfileToKlaviyo(user)));
+    if (i + CONCURRENT_SYNC_LIMIT < users.length) {
+      await new Promise((resolve) => setTimeout(resolve, BATCH_DELAY_MS));
+    }
   }
 }
 

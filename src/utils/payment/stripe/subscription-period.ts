@@ -12,8 +12,14 @@
 
 import type Stripe from "stripe";
 
-type SubscriptionWithLegacyPeriod = Stripe.Subscription & { current_period_end?: number };
-type SubscriptionItemWithPeriod = Stripe.SubscriptionItem & { current_period_end?: number };
+type SubscriptionWithLegacyPeriod = Stripe.Subscription & {
+  current_period_end?: number;
+  current_period_start?: number;
+};
+type SubscriptionItemWithPeriod = Stripe.SubscriptionItem & {
+  current_period_end?: number;
+  current_period_start?: number;
+};
 
 /**
  * Returns the Unix timestamp (seconds) for the end of the current billing period.
@@ -33,4 +39,27 @@ export function getSubscriptionPeriodEnd(sub: Stripe.Subscription): number | und
     if (typeof end === "number") minEnd = minEnd === undefined ? end : Math.min(minEnd, end);
   }
   return minEnd;
+}
+
+/**
+ * Returns the Unix timestamp (seconds) for the start of the current billing period.
+ * Works with both legacy (subscription.current_period_start) and Basil (items[].current_period_start).
+ *
+ * Mirrors {@link getSubscriptionPeriodEnd}. Returns the EARLIEST start across items so the
+ * value lines up with the (earliest) period end for a coherent "current period" window.
+ *
+ * @param sub - Stripe subscription (from retrieve, update, or list; list may need expand for items)
+ * @returns Period start timestamp in seconds, or undefined if not available
+ */
+export function getSubscriptionPeriodStart(sub: Stripe.Subscription): number | undefined {
+  const legacy = (sub as SubscriptionWithLegacyPeriod).current_period_start;
+  if (typeof legacy === "number") return legacy;
+  const items = sub.items?.data;
+  if (!items?.length) return undefined;
+  let minStart: number | undefined;
+  for (const item of items) {
+    const start = (item as SubscriptionItemWithPeriod).current_period_start;
+    if (typeof start === "number") minStart = minStart === undefined ? start : Math.min(minStart, start);
+  }
+  return minStart;
 }

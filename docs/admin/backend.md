@@ -78,6 +78,49 @@ Each step is naturally idempotent. If a step fails mid-sequence, the customer is
 - Finalize fails → original voided, draft exists (admin retries; draft is still there)
 - Pay fails → original voided, fresh `open` invoice (admin uses existing per-user retry)
 
+## Bulk stranded-invoice recovery
+
+### What "stranded" means
+
+A member is stranded when the daily bulk charger (`/api/admin/invoices/charge-past-due`) consistently fails with Stripe's "this invoice can no longer be paid." This happens when Stripe has exhausted its automatic retries on their open cycle invoice — leaving it in an uncollectible or terminal-open state — while simultaneously holding a DRAFT invoice for the current billing cycle that was never finalized (because `pause_collection: keep_as_draft` kept it held). The standard charger only knows how to call `stripe.invoices.pay()` on open invoices, so it can never unstick these members.
+
+### Recovery sequence
+
+The orchestrator ([`src/server/admin/recoverStrandedBulk.ts`](../../src/server/admin/recoverStrandedBulk.ts)) runs the following per-member sequence:
+
+1. **Void** all stale `open` invoices on the subscription (those Stripe exhausted retries on).
+2. **Delete** superseded held `draft` invoices — drafts for earlier missed cycles that are no longer the current cycle.
+3. **Finalize** the current cycle's held `draft` — the one invoice Stripe created for the billing period the member should now pay for.
+4. **Pay** the freshly-finalized invoice via `payOpenInvoiceAsPastDueAdmin` ([`chargePastDueShared.ts`](../../src/server/admin/chargePastDueShared.ts)), which writes an `InvoiceChargeLog` row and triggers the full renewal pipeline on success.
+
+The classifier ([`src/server/admin/recoverStrandedBulkPolicy.ts`](../../src/server/admin/recoverStrandedBulkPolicy.ts)) pre-screens each candidate via `classifyMemberForRecovery`, returning one of:
+
+- **`RECOVERABLE`** — stale open invoices present, current held draft found, eligible to run the sequence.
+- **`BLOCKED_NO_DRAFT`** — stale invoices present but no current held draft exists; surfaced in the preview and excluded from the run (cannot recover without a draft to finalize).
+- **`NOT_STRANDED`** — member does not match the stranded pattern; excluded silently.
+
+### Current-cycle-only write-off
+
+Only the current billing cycle's held draft is finalized and charged. Any months the member was past-due while on `pause_collection` are written off — those drafts are deleted rather than finalized. This is deliberate: charging for missed months would surprise members and is not recoverable via this flow. The member got no benefits during the past-due period, so writing off the arrears is the correct outcome.
+
+### Safety model
+
+- **Preview-first:** `previewStrandedRecovery` (from `recoverStrandedBulk.ts`) returns the full candidate list including `RECOVERABLE` / `BLOCKED_NO_DRAFT` breakdown and estimated revenue before any writes are made.
+- **Typed confirmation:** the POST body must include `confirmation: "RECOVER"` — any other value returns HTTP 400.
+- **Per-run cap:** default 25 members per run, hard max 100. Prevents runaway server-timeout or rate-limit issues.
+- **Shared `ChargeJobLock`:** the bulk stranded-recovery run acquires the same global `ChargeJobLock` used by the normal bulk past-due charger. The two jobs cannot overlap.
+- **Run recorded:** each run creates a `ChargeJobRun(kind: "recover")` document. Each step per member writes an `InvoiceChargeLog` row tagged `result.recovery.step`.
+- **`userIds` scoping:** callers may pass a `userIds` array to restrict the run to a specific subset (e.g. the `RECOVERABLE` members from a prior preview). The worklist deduplicates by `userId` before processing.
+
+### Structural double-charge guarantee
+
+A recovered member cannot be double-charged by a subsequent recovery or bulk-charge run because:
+
+1. **Paid draft drops out of the scan:** once the held draft is finalized and paid it is no longer a `draft`, so it will never appear as a candidate in the next `previewStrandedRecovery` or `classifyMemberForRecovery` scan.
+2. **Stripe idempotency key:** the pay step uses `admin-charge-${draftId}`, so a duplicate call to `stripe.invoices.pay()` on the same invoice returns Stripe's cached first response.
+3. **Worklist dedup by `userId`:** within a single run, duplicates are removed before processing begins.
+4. **"Already paid" skip:** `payOpenInvoiceAsPastDueAdmin` re-checks invoice status before charging and skips with `skipReason: "already_paid"` if it was settled between preview and execution.
+
 ## Force Charge for stuck-paused subscriptions
 
 When `pause_collection: keep_as_draft` was applied (or the user has cancelled-and-resubscribed leaving orphan invoices), the user's current subscription may have no chargeable open invoice — only held drafts. Force Charge finalizes such a draft (or pays an existing open invoice) on the current subscription.

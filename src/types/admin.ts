@@ -276,6 +276,34 @@ export interface AdminUserDetail {
   }>;
   activePartnerDiscount?: Record<string, unknown>;
   queuedPartnerDiscounts: Array<Record<string, unknown>>;
+  /**
+   * Reconciled, read-only partner-discount access summary (active period + queued/upcoming + totals).
+   * Computed server-side against a swept in-memory clone, so it reflects the user's TRUE current
+   * entitlement rather than the possibly-stale stored queue status. Optional for back-compat with
+   * any cached payload predating this field.
+   */
+  partnerDiscountSummary?: {
+    active: {
+      isActive: boolean;
+      source: "membership" | "one-time" | "mini-draw" | "upsell" | null;
+      packageName: string | null;
+      endsAt: string | null;
+      daysRemaining: number;
+      hoursRemaining: number;
+      isRecurring: boolean;
+    };
+    queued: Array<{
+      packageName: string;
+      packageType: "membership" | "one-time" | "mini-draw" | "upsell";
+      daysOfAccess: number;
+      hoursOfAccess: number;
+      purchaseDate: string | null;
+      queuePosition: number;
+      expiryDate: string | null;
+    }>;
+    totalQueuedDays: number;
+    totalQueuedItems: number;
+  };
 
   // Saved payment methods preview
   savedPaymentMethods?: Array<{

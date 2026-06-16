@@ -10,7 +10,9 @@ The `/api/admin/**` namespace. Per the manifest, this domain is the catch-all fo
 | `/api/admin/users/[id]/charge-past-due` | [billing-stripe](../billing-stripe/) | Single past-due retry |
 | `/api/admin/users/[id]/payment-events/[eventId]/reverse` | [billing-stripe](../billing-stripe/) | Refund replay |
 | `/api/admin/invoices/charge-past-due` | [billing-stripe](../billing-stripe/) | Bulk past-due retry |
-| `/api/admin/invoices/recover-past-due` | admin | Bulk stranded-invoice recovery |
+| `/api/admin/invoices/recover-past-due` | admin | Bulk stranded-invoice recovery (per-invoice, max 10) |
+| `/api/admin/invoices/recover-stranded` | admin | Bulk stranded-invoice recovery via scan + preview (GET preview / POST run) |
+| `/api/admin/sync-klaviyo-profiles` | [tracking](../tracking/) | POST: throttled bulk Klaviyo profile sync. Now gated by `users.edit` (was unauthenticated). `maxDuration=300`; whole-DB sweeps belong in an ops script. |
 | `/api/admin/error-reports/**` | [error-reporting](../error-reporting/) | Error triage |
 | `/api/admin/contact-submissions/**` | [contact](../contact/) | Submission review |
 | `/api/admin/promo-analytics/**` | [promo](../promo/) | Promo-page analytics: summary, channel-detail, page-detail. All gated by `requirePermission("promos.view")`. The three routes share `resolvePromoAnalyticsRange()` from `src/services/promo-analytics/PromoAnalyticsService.ts` for AEST `today \| yesterday \| custom` date resolution, kept in lockstep with the Norm read mirror under `/api/internal/norm/v1/promo-analytics/**`. |
@@ -254,6 +256,113 @@ Each item is processed with `recoverStrandedPastDueInvoice`, which has its own 2
 **Lock semantics:** Manual admin paths bypass the 6h recent-recovery budget (each item's inner call passes `bypassRecentRecoveryLock: true`). The 30s spam debounce still applies.
 
 **Callers:** Manual-retries table on `PastDueChargeHistory` page AND the per-invoice attempts table inside `PastDueChargeHistoryDrawer` (added Phase 3 of the auto-recovery work).
+
+## Bulk stranded-invoice recovery (scan-based)
+
+### `GET /api/admin/invoices/recover-stranded`
+
+Permission: `users.view`. Read-only preview — scans past-due members, classifies each via `classifyMemberForRecovery`, and returns the full candidate breakdown without making any Stripe writes or DB writes. Use this before running the POST to understand scope and estimated revenue.
+
+**Response:**
+
+```json
+{
+  "success": true,
+  "preview": {
+    "recoverable": [
+      {
+        "userId": "...",
+        "email": "user@example.com",
+        "customerId": "cus_...",
+        "subscriptionId": "sub_...",
+        "classification": "RECOVERABLE",
+        "currentDraftId": "in_draft...",
+        "staleOpenIds": ["in_stale1...", "in_stale2..."],
+        "supersededDraftIds": ["in_old_draft..."],
+        "amountCents": 4000
+      }
+    ],
+    "blockedNoDraft": [
+      {
+        "userId": "...",
+        "email": "user@example.com",
+        "customerId": "cus_...",
+        "subscriptionId": "sub_...",
+        "classification": "BLOCKED_NO_DRAFT",
+        "currentDraftId": null,
+        "staleOpenIds": ["in_stale..."],
+        "supersededDraftIds": [],
+        "amountCents": 0
+      }
+    ],
+    "totals": {
+      "recoverable": 12,
+      "blockedNoDraft": 3,
+      "scanned": 15,
+      "recoverableRevenueCents": 48000
+    }
+  }
+}
+```
+
+Each `Row` shape: `{ userId, email, customerId, subscriptionId, classification, currentDraftId, staleOpenIds[], supersededDraftIds[], amountCents }`.
+
+`blockedNoDraft` members have stale open invoices but no current held draft to finalize. They are surfaced in the preview so admins are aware but are not actioned by the POST.
+
+---
+
+### `POST /api/admin/invoices/recover-stranded`
+
+Permission: `users.charge`. Runs the bulk stranded-invoice recovery: voids stale open invoices, deletes superseded drafts, finalizes the current held draft, and pays via `payOpenInvoiceAsPastDueAdmin`. Records a `ChargeJobRun(kind: "recover")` and per-step `InvoiceChargeLog` rows tagged `result.recovery.step`.
+
+**Body:**
+
+```json
+{
+  "confirmation": "RECOVER",
+  "limit": 25,
+  "userIds": ["...", "..."]
+}
+```
+
+| Field | Required | Notes |
+|---|---|---|
+| `confirmation` | yes | Must be the literal string `"RECOVER"`. Any other value → `400`. |
+| `limit` | no | Max members to attempt. Default 25, max 100. |
+| `userIds` | no | If provided, restricts the run to this subset of user IDs (e.g. the `recoverable` list from a prior preview). Deduplicated before processing. |
+
+**Success response (`HTTP 200`):**
+
+```json
+{
+  "success": true,
+  "chargeRunId": "...",
+  "attempted": 12,
+  "succeeded": 10,
+  "failed": 1,
+  "skipped": 1,
+  "revenueCents": 40000,
+  "rows": [
+    {
+      "userId": "...",
+      "status": "success",
+      "amount": 4000,
+      "newInvoiceId": "in_..."
+    }
+  ]
+}
+```
+
+**Error responses:**
+
+| HTTP | Condition |
+|---|---|
+| `400` | `confirmation !== "RECOVER"` or body fails Zod validation |
+| `409` | The shared `ChargeJobLock` is held by a concurrent bulk-charge or bulk-recover run |
+
+**Safety:** Shares the global `ChargeJobLock` with the normal bulk past-due charger — the two jobs cannot overlap. Structural double-charge prevention is described in [backend.md → Bulk stranded-invoice recovery](./backend.md#bulk-stranded-invoice-recovery). This is an admin-write endpoint; the internal Norm gateway does NOT mirror it (read-only Norm boundary).
+
+---
 
 ## Force Charge endpoints
 
