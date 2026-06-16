@@ -530,7 +530,11 @@ class KlaviyoClient {
   private async retryRequest<T>(
     fn: () => Promise<T>,
     maxRetries: number = this.MAX_RETRIES,
-    baseDelay: number = this.BASE_RETRY_DELAY_MS
+    baseDelay: number = this.BASE_RETRY_DELAY_MS,
+    // `label` names the operation in the exhaustion log; `critical: false` marks a call
+    // the caller RECOVERS from (e.g. the upsert idempotency pre-check) so it logs as
+    // non-fatal instead of a scary "failed" — it must not be read as a lost profile/event.
+    context?: { label?: string; critical?: boolean }
   ): Promise<T> {
     let lastError: Error | null = null;
 
@@ -579,6 +583,8 @@ class KlaviyoClient {
           // ✅ ENHANCED: Log detailed error information for debugging
           const errorDetails = {
             attempts: maxRetries,
+            label: context?.label ?? "request",
+            critical: context?.critical !== false,
             errorMessage: lastError.message,
             errorType: lastError.constructor.name,
             isTimeout: lastError.message.toLowerCase().includes("timeout"),
@@ -587,7 +593,18 @@ class KlaviyoClient {
             isRateLimit: errorMessage.includes("429") || errorMessage.includes("throttled"),
             timestamp: new Date().toISOString(),
           };
-          console.error(`❌ Klaviyo request failed after ${maxRetries} attempts:`, lastError.message, errorDetails);
+          const label = context?.label ?? "request";
+          if (context?.critical === false) {
+            // Caller recovers from this (e.g. upsert falls back to create/update on a failed
+            // pre-check) — log non-fatal so it isn't mistaken for a lost profile/event.
+            console.error(
+              `⚠️ Klaviyo ${label} failed after ${maxRetries} attempts (non-fatal — caller recovers):`,
+              lastError.message,
+              errorDetails
+            );
+          } else {
+            console.error(`❌ Klaviyo ${label} failed after ${maxRetries} attempts:`, lastError.message, errorDetails);
+          }
           throw lastError;
         }
 
@@ -703,7 +720,8 @@ class KlaviyoClient {
           this.retryRequest(
             () => this.makeRequest(`/profiles/?filter=equals(email,"${profile.email}")`, "GET"),
             2, // Fewer retries for idempotency check (non-critical)
-            1000 // Shorter delay for idempotency check
+            1000, // Shorter delay for idempotency check
+            { label: "profile idempotency pre-check", critical: false }
           ),
           new Promise<never>((_, reject) => 
             setTimeout(() => reject(new Error("Idempotency check timeout")), 10000) // 10 second timeout for idempotency check
@@ -809,7 +827,8 @@ class KlaviyoClient {
         response = await this.retryRequest(
           () => this.makeRequest("/profiles/", "POST", payload),
           this.MAX_RETRIES,
-          this.BASE_RETRY_DELAY_MS
+          this.BASE_RETRY_DELAY_MS,
+          { label: "profile create" }
         );
       }
 
