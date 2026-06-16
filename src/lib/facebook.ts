@@ -1,4 +1,4 @@
-import crypto from "crypto";
+import { hashData } from "./facebook-hash";
 import { getPixelEnv, isProductionPixelEnv } from "./facebook-env";
 import { resilientFetch, describeFetchError } from "@/lib/http/outbound";
 
@@ -96,10 +96,11 @@ export function getFacebookTestEventCode(): string | undefined {
   return process.env.FACEBOOK_TEST_EVENT_CODE || undefined;
 }
 
-/** SHA256 hash for PII - Meta requires lowercase, trimmed input before hashing */
-export function hashData(data: string): string {
-  return crypto.createHash("sha256").update(data.toLowerCase().trim()).digest("hex");
-}
+// `hashData` now lives in ./facebook-hash (crypto-only, no undici/network deps) and is re-exported
+// here so existing `import { hashData } from "@/lib/facebook"` callers keep working. Client-side
+// tracking helpers import it from ./facebook-hash directly, which is what keeps undici (node:net)
+// out of the browser bundle — see facebook-hash.ts for the full incident note.
+export { hashData };
 
 /** Remove undefined, null, and invalid values from object (recursive for nested) */
 export function removeUndefinedAndInvalidFields<T extends Record<string, unknown>>(obj: T): Partial<T> {
