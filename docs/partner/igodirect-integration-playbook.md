@@ -211,6 +211,8 @@ agreement**, and confirm **AU data hosting**. → Q11.
 
 Update the **Answer / Status** column as IGodirect responds. 🔴 Open · 🟡 Partial · 🟢 Answered.
 
+> **2026-06-16 — IGodirect SSO docs received** (`atwork.com.au/document`): **Q4/Q5/Q6 answered** (JWT HS256, `/generatetoken`, `member_level` tiers), **Q1/Q2 partially answered** (a BASIC-auth Product API + `test.myrewards.com.au` sandbox exist), and **Q7/Q8 sharpened** (60-min token TTL, but **no revoke/logout/webhook is documented** — the duration-enforcement gap is now confirmed). Full detail in **§9** below.
+
 ### Delivery model
 | # | Question | Why it matters | Answer / Status |
 |---|---|---|---|
@@ -287,3 +289,46 @@ This applies to: the SSO endpoint (`/api/perks/sso`), the "Go to Perks" button v
 - **Tier passed to IGodirect:** resolve it from the *reconciled* active period (`resolvePartnerCatalogPlanId` / `getPartnerDiscountAccessInfo`), never stale state.
 - **Expiry inside the portal:** the gate only controls *entry*; once inside, the window is enforced by IGodirect (Q7) or a revoke call (Q8). A reconcile-then-read entry gate does not solve the "session outlives the window" problem — that's still §1's open question.
 - **Brand-new / no-purchase users:** empty queue, no sub → correctly denied → show an "unlock with a purchase" CTA, not an error.
+
+---
+
+## 9. Confirmed SSO spec — from IGodirect / MyRewards docs (`atwork.com.au/document`, fetched 2026-06-16)
+
+This confirms the predicted model and resolves several open questions. It also confirms the integration is **MyRewards** (`*.myrewards.com.au`) — the platform behind the `toolsau.myrewards.com.au` demo.
+
+### Mechanics — use the **signed JWT** path (NOT the plaintext form/GET methods)
+- **Method:** JWT signed with **HS256 (HMAC-SHA256)** using a **per-client shared secret** they issue. ✅ exactly the tooling we already have (`jsonwebtoken` + a secret).
+- **Token TTL: 60 minutes.**
+- **Two-step flow:**
+  1. We sign a JWT of the member payload (below) and **POST** `{ "data": "<jwt>" }` to `https://<env>.myrewards.com.au/generatetoken`. Response: `{ message, token, response, response_code }` with `"User found"` / `"New user created"` / `"User level upgraded"` — it **auto-provisions** on first hit.
+  2. Log the member in via the returned token (`GET /verifytoken/{token}` → **302** redirect into the portal).
+- **Env / sandbox:** `test.myrewards.com.au` (tenant subdomains like `testwyndham.myrewards.com.au`). We register a `domain_url` and they issue a `domain_code` + `client_id`.
+- **SAML** is offered as an alternative (heavier) — JWT HS256 is the right choice for us.
+
+### JWT payload — required vs optional, and our mapping
+| Field | Req? | Maps to (our side) |
+|---|---|---|
+| `member_id` (alphanumeric) | ✅ | **our opaque `User._id`** (NOT name-based — see security note) |
+| `domain_url` | ✅ | the registered portal domain |
+| `domain_code` | ✅ | the code they issue us |
+| `client_id` (numeric) | ✅ | the id they issue us |
+| `member_level` (e.g. bronze/silver/gold) | optional | **our tier mapped** to their level enum |
+| `email` | optional | `User.email` (send only if required) |
+| `firstname` / `lastname` | optional | `User.firstName` / `lastName` |
+| `client_displayname` | optional | display label |
+
+### What this ANSWERS
+- **Q4 (SSO method):** ✅ JWT HS256 + shared secret. Add a **dedicated signer** (their `IGODIRECT_SSO_SECRET` + their claims + their 60-min TTL) — do **not** reuse `signJWT` (wrong secret/claims/TTL).
+- **Q5 (endpoint/method):** ✅ POST `/generatetoken` with `{data: jwt}`; verify via `/verifytoken/{token}`.
+- **Q6 (tier):** ✅ `member_level` carries a tier and their system can auto-upgrade level from the JWT. We must **agree a mapping**: our Tradie/Foreman/Boss + one-time ladder → their level enum.
+- **Q1/Q2 (API + sandbox):** ✅ partial — a **Product API** exists (BASIC auth, `https://api.myrewards.com.au/app/api/v1/products`); that's the headless **offer feed** for the API-feed / hybrid option. Sandbox = `test.myrewards.com.au`.
+
+### What's STILL OPEN / RISKS (raise with them)
+- **🔴 No revoke / logout / de-provision / webhook is documented.** The 60-min token only gates *entry*; once auto-logged-in, nothing documented ends the portal session when our fixed window (a 2-day pack) or a cancelled membership expires. **Confirm whether an undocumented revoke/expiry exists.** If not, we enforce by *only minting a token while access is active* + short re-auth, and accept a session can outlive the exact window. (Confirms the §1/§3 "door vs room" gap.)
+- **🔴 SECURITY — do not use the plaintext login paths.** The docs also show a `member_auto_login` form-POST and a `?r=<base64>` GET carrying `username/email/...` **unsigned** (base64 ≠ signature) — forgeable. **Use only the signed `/generatetoken` JWT path.**
+- **🟡 member_id:** their example uses a human id ("firstNameLastName"). Use our **opaque `User._id`** (stable, non-PII) — confirm they accept an opaque id as the stable key.
+- **🟡 Domain (Q10):** docs show tenant subdomains on **their** domain (`*.myrewards.com.au`). A CNAME to our domain (`perks.toolsaustralia.com.au`) isn't addressed — still ask.
+- **🟡 No documented clock-skew, nonce/CSRF, rate limits, or IP allowlist.** With a 60-min TTL and no nonce, a leaked token is replayable for an hour — mint at click-time, HTTPS only, never log it.
+
+### Build implication (when we wire it)
+A thin server route (e.g. `POST /api/perks/sso`) that: reconcile-then-read access (§8) → if active, sign the MyRewards JWT (their secret + `member_id`=opaque `User._id` + mapped `member_level` + `domain_*`/`client_id`) → POST to `/generatetoken` → redirect the member to the returned login token. Env: `IGODIRECT_SSO_SECRET`, `IGODIRECT_DOMAIN_CODE`, `IGODIRECT_CLIENT_ID`, `IGODIRECT_DOMAIN_URL` (+ `IGODIRECT_PRODUCT_API_*` if we also pull the offer feed).

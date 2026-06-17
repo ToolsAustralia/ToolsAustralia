@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
-import { VariantConfig } from "@/models/ab-testing/Variant";
+import type { VariantConfig } from "@/models/ab-testing/Variant";
 
 interface VariantConfigResult {
   heroConfig: VariantConfig["hero"] | null;

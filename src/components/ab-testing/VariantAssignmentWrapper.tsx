@@ -3,7 +3,7 @@
 import { ReactNode } from "react";
 import { useVariantAssignment } from "@/hooks/ab-testing/useVariantAssignment";
 import { VariantProvider } from "./VariantProvider";
-import { VariantConfig } from "@/models/ab-testing/Variant";
+import type { VariantConfig } from "@/models/ab-testing/Variant";
 
 interface VariantAssignmentWrapperProps {
   experimentId: string | null;

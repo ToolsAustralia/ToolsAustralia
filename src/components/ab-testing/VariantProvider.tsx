@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, useContext, ReactNode } from "react";
-import { VariantConfig } from "@/models/ab-testing/Variant";
+import type { VariantConfig } from "@/models/ab-testing/Variant";
 
 interface VariantContextType {
   experimentId: string | null;

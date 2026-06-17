@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { usePathname } from "next/navigation";
-import { VariantConfig } from "@/models/ab-testing/Variant";
+import type { VariantConfig } from "@/models/ab-testing/Variant";
 
 interface VariantAssignmentResult {
   variantId: string | null;
