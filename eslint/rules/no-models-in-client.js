@@ -45,20 +45,42 @@ module.exports = {
       if (what) context.report({ node, messageId: "serverOnly", data: { what } });
     }
 
+    // Type-only imports/exports are ERASED at build — they never bundle the data layer, so they are
+    // safe in client code and must NOT be flagged. Covers `import type { X }` (declaration-level) and
+    // `import { type X }` (every named specifier inline-typed). A bare side-effect import (`import "x"`,
+    // no specifiers) is NOT type-only — it runs the module — so it stays flagged.
+    function isTypeOnlyImport(node) {
+      if (node.importKind === "type") return true;
+      return (
+        Array.isArray(node.specifiers) &&
+        node.specifiers.length > 0 &&
+        node.specifiers.every((s) => s.type === "ImportSpecifier" && s.importKind === "type")
+      );
+    }
+    function isTypeOnlyExport(node) {
+      if (node.exportKind === "type") return true;
+      return (
+        Array.isArray(node.specifiers) &&
+        node.specifiers.length > 0 &&
+        node.specifiers.every((s) => s.type === "ExportSpecifier" && s.exportKind === "type")
+      );
+    }
+
     return {
       ImportDeclaration(node) {
+        if (isTypeOnlyImport(node)) return; // `import type {…}` / all-inline-`type` → erased, safe
         check(node, node.source && node.source.value);
       },
-      // Dynamic import("@/models/..."): this is exactly the "runtime import" class of bug.
+      // Dynamic import("@/models/..."): a real RUNTIME import (cannot be type-only) — always flag.
       ImportExpression(node) {
         if (node.source && node.source.type === "Literal") check(node, node.source.value);
       },
-      // Re-exports: export { X } from "@/models/..." / export * from "@/models/...".
+      // Re-exports: export { X } from "@/models/..." / export * from "@/models/..." — skip `export type`.
       ExportNamedDeclaration(node) {
-        if (node.source) check(node, node.source.value);
+        if (node.source && !isTypeOnlyExport(node)) check(node, node.source.value);
       },
       ExportAllDeclaration(node) {
-        if (node.source) check(node, node.source.value);
+        if (node.source && node.exportKind !== "type") check(node, node.source.value);
       },
     };
   },
