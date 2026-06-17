@@ -1,8 +1,8 @@
 # Email — Gotchas
 
-## Templates at repo root, not under src/
+## Templates live under `email-templates/`, not `src/`
 
-CLAUDE.md flags this — templates live at the repo ROOT (`*-email-template.html`). Easy to miss when scanning `src/`. Always check the root for email-related changes.
+SendGrid source templates are in `email-templates/sendgrid/*.html`; Klaviyo platform exports (read-only snapshots) are in `email-templates/klaviyo/`. Easy to miss when scanning `src/`. The staff-invite email is the one **runtime-loaded** template — `src/lib/email/staff-invite.ts` reads `email-templates/sendgrid/staff-invite-email-template.html` via `process.cwd()`; if you move it again, update that path (and verify Next still file-traces it into the serverless bundle).
 
 ## Preview ≠ production render
 

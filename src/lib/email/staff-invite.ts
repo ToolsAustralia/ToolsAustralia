@@ -14,7 +14,7 @@ export interface StaffInviteEmailParams {
   expiresIn?: string;
 }
 
-const TEMPLATE_PATH = path.join(process.cwd(), "staff-invite-email-template.html");
+const TEMPLATE_PATH = path.join(process.cwd(), "email-templates", "sendgrid", "staff-invite-email-template.html");
 
 let cachedTemplate: string | null = null;
 async function loadTemplate(): Promise<string> {
