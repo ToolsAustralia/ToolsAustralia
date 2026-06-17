@@ -8,6 +8,7 @@ const __dirname = dirname(__filename);
 const require = createRequire(import.meta.url);
 
 const internalNormPlugin = require("./eslint/rules/index.js");
+const noModelsInClient = require("./eslint/rules/no-models-in-client.js");
 
 const compat = new FlatCompat({
   baseDirectory: __dirname,
@@ -21,11 +22,14 @@ const eslintConfig = [
   {
     plugins: {
       "internal-norm": internalNormPlugin,
+      "local": { rules: { "no-models-in-client": noModelsInClient } },
     },
     rules: {
       // Allow unused vars/args prefixed with _ for intentional placeholders (API signatures, props)
       "@typescript-eslint/no-unused-vars": ["warn", { "argsIgnorePattern": "^_", "varsIgnorePattern": "^_" }],
       "internal-norm/norm-must-import-service": "error",
+      // Server-only Mongoose imports must never land in a "use client" component (runtime crash / bundle bloat).
+      "local/no-models-in-client": "error",
     },
   },
   {

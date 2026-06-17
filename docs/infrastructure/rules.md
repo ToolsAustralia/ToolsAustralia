@@ -27,3 +27,11 @@ Already covered in [mongodb R3](../mongodb/rules.md#r3-migrations-are-idempotent
 ## R7. Dry-run before live for ops scripts
 
 `migrate:`, `backfill:`, `sync:`, `stripe:`, `find:` scripts almost all support `--dry-run`. Always run dry first.
+
+## R8. No server-only imports in client components (lint-enforced)
+
+A `"use client"` component must never import a Mongoose model (`@/models/**`), the `mongoose` package, or the Mongo connection helper (`@/lib/mongodb`). These are server-only — `mongoose` is a `serverExternalPackage`, so importing one into client code crashes at runtime or bundles the data layer into the client. Fetch data in a server component / route handler / service and pass plain serializable data down.
+
+Enforced by the `local/no-models-in-client` ESLint rule (`eslint/rules/no-models-in-client.js`, severity `error`), wired in `eslint.config.mjs`. It also fires on dynamic `import()` and `export … from` re-exports.
+
+Companion: the `.claude/hooks/typecheck-gate.mjs` Stop hook runs `tsc --noEmit` + ESLint on the `.ts/.tsx` files a session edited and blocks the stop on errors **in those files** (scoped to the session's own edits via `.claude/.touched-files`, so pre-existing or other-session errors never false-block). Whole-program coverage still runs in `/ship`, `/review`, and CI.
