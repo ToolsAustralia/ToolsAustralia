@@ -543,7 +543,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/hooks/useAttribution.ts",
         "src/hooks/useUTMPersistence.ts"
       ],
-      "lastVerified": "2026-06-15"
+      "lastVerified": "2026-06-16"
     },
     "ab-testing": {
       "docs": "docs/ab-testing/",
@@ -746,6 +746,8 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "package-lock.json",
         "vercel.json",
         "tsconfig.json",
+        "eslint.config.mjs",
+        "eslint/rules/no-models-in-client.js",
         ".gitignore",
         ".env.example",
         "src/app/api/health/**",

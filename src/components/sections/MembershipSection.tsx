@@ -27,7 +27,7 @@ import {
 } from "@/utils/membership/member-package-mapping";
 import { hasBlockingSubscription } from "@/utils/subscription/subscription-helpers";
 import PackageInclusionsExpanded from "@/components/modals/PackageInclusionsSlideUp";
-import { VariantConfig } from "@/models/ab-testing/Variant";
+import type { VariantConfig } from "@/models/ab-testing/Variant";
 import { useVariantContext } from "@/components/ab-testing/VariantProvider";
 import {
   getMembershipSectionColorScheme,

@@ -84,6 +84,16 @@
         "hooks": [
           {
             "type": "command",
+            "command": "node .claude/hooks/typecheck-gate.mjs",
+            "timeout": 180,
+            "statusMessage": "Type-check + lint gate"
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
             "command": "node .claude/hooks/doc-sync.mjs"
           }
         ]
