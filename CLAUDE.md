@@ -182,7 +182,7 @@ These domains have non-obvious rules documented in `docs/`. Skim the matching do
 - **A/B testing** — `docs/AB_TESTING_*.md` (feature, dedup, DB optimization, metrics).
 - **Promo / referrals / affiliates** — `docs/PROMO_BANNER_BEHAVIOUR.md`, `docs/PROMO_PAGE_ANALYTICS.md`, `docs/REFERRAL_SYSTEM.md`, `docs/UTM_ATTRIBUTION.md`. Affiliate commission/recurring backfills have dedicated scripts.
 - **Error reporting** — `docs/ERROR_REPORTING_AND_LOGGING.md`, `docs/ERROR_REPORTING_SYSTEM.md`. There is a real `ErrorReport` Mongo model + admin routes; do not invent a parallel logger.
-- **Email** — `docs/EMAIL_MODULE.md`, `docs/SENDGRID_TESTING_GUIDE.md`. SendGrid for transactional, Klaviyo for marketing. HTML templates at the repo root (`*-email-template.html`) — keep changes in lockstep with `src/lib/email/`.
+- **Email** — `docs/EMAIL_MODULE.md`, `docs/SENDGRID_TESTING_GUIDE.md`. SendGrid for transactional, Klaviyo for marketing. HTML templates live under `email-templates/sendgrid/`, with Klaviyo platform exports (snapshots) under `email-templates/klaviyo/` — keep changes in lockstep with `src/lib/email/`.
 - **Tracking** — `docs/FACEBOOK_TRACKING_IMPLEMENTATION.md`, `docs/GTM_INTEGRATION.md`, Meta CAPI lives in `src/lib/facebook.ts` (test: `npm run test:facebook-capi`).
 - **Timezone/DST** — `TESTING-TIMEZONE-DST.md`. Date-sensitive billing logic uses `date-fns-tz`; there are DST transition test scripts under `scripts/test-dst-transitions.ts`.
 - **Internal Norm / OpenClaw AI** — `docs/internal-norm/` (start at `README.md` → `architecture.md` → `patterns.md`). A secure HTTP gateway at `/api/internal/norm/v1/*` that exposes **read-only** admin data to **Norm**, an external **OpenClaw AI** assistant the owner runs on a Mac mini. Every route is wrapped by `withNorm()` (HMAC auth → permission → kill switch → rate limit → audit → **runtime `responseSchema` validation**). The registry `src/lib/internal-norm/classification.ts` is the source of truth; `npm run build:norm-manifest` regenerates the published manifest. **Lockstep rule:** when `classification.ts`, any `src/lib/internal-norm/schemas/*`, or any `src/app/api/internal/norm/v1/**` route changes, update `docs/internal-norm/norm-context.md` (the brief fed into Norm's context) in the same change. A schema/output mismatch is a **runtime 500**, invisible to `tsc` — verify with `npm run norm:smoke`. Reads bypass the per-permission grant; the PII boundary lives in each endpoint's Zod projection (`firstName` + opaque `userId` only). To land it in production / merge to main, see `docs/internal-norm/merge-to-main.md`.
@@ -216,7 +216,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
 ```json
 {
   "version": 1,
-  "lastModified": "2026-06-16",
+  "lastModified": "2026-06-17",
   "domains": {
     "subscription": {
       "docs": "docs/subscription/",
@@ -495,9 +495,9 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/app/api/newsletter/**",
         "src/app/email-preview/**",
         "src/components/email-preview/**",
-        "*-email-template.html"
+        "email-templates/**"
       ],
-      "lastVerified": "2026-05-20"
+      "lastVerified": "2026-06-17"
     },
     "tracking": {
       "docs": "docs/tracking/",

@@ -1,0 +1,226 @@
+<html>
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width" name="viewport"/>
+<style>body, table, td, p {
+    margin: 0;
+    padding: 0
+    }
+body {
+    background-color: #f2f3f5;
+    font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+    color: #333;
+    line-height: 1.6
+    }
+.wrapper {
+    width: 100%;
+    background-color: #f2f3f5;
+    padding: 40px 10px
+    }
+.card {
+    max-width: 640px;
+    width: 100%;
+    margin: 0 auto;
+    background-color: #fff;
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
+    border: 1px solid #e5e5e5
+    }
+.header {
+    background-color: #d40000;
+    color: #fff;
+    text-align: center;
+    padding: 30px 20px
+    }
+.header h1 {
+    font-size: 26px;
+    font-weight: bold;
+    margin-bottom: 4px
+    }
+.header p {
+    font-size: 14px;
+    margin: 0;
+    opacity: 0.9
+    }
+.content {
+    padding: 30px
+    }
+.section {
+    margin-bottom: 24px
+    }
+.section strong {
+    display: inline-block;
+    min-width: 140px;
+    color: #111
+    }
+.divider {
+    border-top: 1px solid #e6e6e6;
+    margin: 24px 0
+    }
+.info-box {
+    background-color: #fafafa;
+    border: 1px solid #e6e6e6;
+    border-radius: 8px;
+    padding: 14px 16px;
+    font-size: 14px
+    }
+.invoice-summary {
+    border-collapse: collapse;
+    width: 100%;
+    margin-top: 10px
+    }
+.invoice-summary th {
+    text-align: left;
+    padding: 10px;
+    background-color: #f8f8f8;
+    border-bottom: 1px solid #ddd;
+    font-size: 14px;
+    color: #333
+    }
+.invoice-summary td {
+    padding: 10px;
+    border-bottom: 1px solid #eee;
+    font-size: 14px;
+    color: #555
+    }
+.invoice-summary tfoot td {
+    font-weight: bold;
+    color: #111
+    }
+.footer {
+    text-align: center;
+    font-size: 12px;
+    color: #777;
+    background-color: #fafafa;
+    padding: 20px;
+    border-top: 1px solid #e0e0e0
+    }
+.footer a {
+    color: #888;
+    text-decoration: none
+    }
+@media only screen and (max-width: 600px) {
+    .content {
+        padding: 20px
+        }
+    .header h1 {
+        font-size: 22px
+        }
+    .section strong {
+        display: block;
+        margin-bottom: 3px
+        }
+    .card {
+        border-radius: 0
+        }
+    }</style></head>
+<body>
+<div class="wrapper">
+<div class="card"> <!-- HEADER -->
+<div class="header">
+<h1>
+            Tools Australia
+          </h1>
+<p>
+            Invoice #: {{ event.invoice_number }}
+          </p>
+</div>
+<!-- MAIN CONTENT -->
+<div class="content"> <!-- Date -->
+<div class="section"> <strong>Date:</strong> {{ event.invoice_date }}
+          </div>
+<!-- Bill To -->
+<div class="divider"></div>
+<div class="section"> <strong>Bill To:</strong>
+<div class="info-box">
+              {{ person.first_name }} {{ person.last_name }}<br/>
+              {{ person.email }}<br/>
+              {% if person.phone_number %}
+                {{ person.phone_number }}
+              {% endif %}
+            </div>
+</div>
+<!-- Items -->
+<div class="divider"></div>
+<div class="section"> <strong>Order Summary:</strong>
+<table class="invoice-summary">
+<thead>
+<tr>
+<th>
+                    Item
+                  </th>
+<th>
+                    Type
+                  </th>
+<th align="right">
+                    Price
+                  </th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+                    {{ event.package_name }}
+                  </td>
+<td>
+                    {{ event.package_type }}
+                  </td>
+<td align="right">
+                    ${{ event.total_amount }}
+                  </td>
+</tr>
+</tbody>
+<tfoot>
+<tr>
+<td align="right" colspan="2">
+                    Total
+                  </td>
+<td align="right">
+                    ${{ event.total_amount }}
+                  </td>
+</tr>
+</tfoot>
+</table>
+</div>
+<!-- Entries Gained -->
+          {% if event.entries_gained %}
+          <div class="divider"></div>
+<div class="section"> <strong>Free Entries Gained:</strong>
+<div class="info-box" style="background:#fff4f4; border:1px solid #f5bebe; color:#d40000; font-size:18px; text-align:center; font-weight:bold;">
+              🎟️ {{ event.entries_gained }} Free Entries Earned!
+            </div>
+<p style="font-size:12px; color:#777; margin-top:8px; text-align:center;">
+              Free entries have been automatically added to your Major Draw account.
+            </p>
+</div>
+          {% endif %}
+<!-- Payment -->
+<div class="divider"></div>
+<div class="section"> <strong>Payment Status:</strong><br/>
+            {% if event.payment_status == "paid" %}
+            <span style="color:green; font-weight:bold;">✅ Paid</span>
+            {% else %}
+            <span style="color:#cc0000; font-weight:bold;">⏳ Pending</span>
+            {% endif %}
+            <div style="font-size: 12px; color: #666; margin-top: 8px;">
+              Transaction ID: {{ event.payment_intent_id }}
+            </div>
+</div>
+</div>
+<!-- FOOTER -->
+<div class="footer">
+<p>
+            Thank you for your purchase!
+          </p>
+<p>
+            For inquiries, contact
+            <strong>support@toolsaustralia.com.au</strong>
+</p>
+<br/>
+<a href="{% unsubscribe %}">Unsubscribe</a>
+</div>
+</div>
+</div>
+</body>
+</html>

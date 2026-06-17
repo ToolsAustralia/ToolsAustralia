@@ -1,0 +1,346 @@
+<html>
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width" name="viewport"/>
+<style>.payment-details tbody tr:last-child td {border-bottom:none}
+.cta-button:hover {background:linear-gradient(135deg, #b91c1c 0%, #991b1b 100%);box-shadow:0 6px 16px rgba(220, 38, 38, 0.4);transform:translatey(-2px)}
+.cta-button-secondary:hover {background:linear-gradient(135deg, #b91c1c 0%, #991b1b 100%);box-shadow:0 6px 16px rgba(220, 38, 38, 0.4)}
+.footer a:hover {color:#374151}</style><style>body, table, td, p {
+    margin: 0;
+    padding: 0
+    }
+body {
+    background-color: #f2f3f5;
+    font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+    color: #333;
+    line-height: 1.6
+    }
+.wrapper {
+    width: 100%;
+    background-color: #f2f3f5;
+    padding: 40px 10px
+    }
+.card {
+    max-width: 640px;
+    width: 100%;
+    margin: 0 auto;
+    background-color: #fff;
+    border-radius: 16px;
+    overflow: hidden;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1), 0 4px 6px rgba(0, 0, 0, 0.05);
+    border: 1px solid #e5e7eb
+    }
+.header {
+    background: linear-gradient(135deg, #0f172a 0%, #111827 30%, #1f2937 60%, #0b1220 100%);
+    color: #fff;
+    text-align: center;
+    padding: 40px 20px 30px;
+    position: relative;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), inset 0 -1px 0 rgba(0, 0, 0, 0.5)
+    }
+.header-logo {
+    max-width: 160px;
+    height: auto;
+    margin: 0 auto 8px
+    }
+.header h1 {
+    font-size: 26px;
+    font-weight: bold;
+    margin-bottom: 4px;
+    color: #fff
+    }
+.header p {
+    font-size: 14px;
+    margin: 0;
+    opacity: 0.9;
+    color: #fff
+    }
+.content {
+    padding: 30px
+    }
+.section {
+    margin-bottom: 24px
+    }
+.section strong {
+    display: inline-block;
+    min-width: 140px;
+    color: #111;
+    font-weight: 700;
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px
+    }
+.divider {
+    border-top: 1px solid #e6e6e6;
+    margin: 24px 0
+    }
+.failure-alert {
+    background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%);
+    border: 2px solid #dc2626;
+    border-radius: 12px;
+    padding: 24px 20px;
+    margin: 24px 0;
+    text-align: center;
+    box-shadow: 0 4px 12px rgba(220, 38, 38, 0.15)
+    }
+.failure-icon {
+    font-size: 48px;
+    margin-bottom: 12px
+    }
+.failure-title {
+    font-size: 20px;
+    font-weight: 700;
+    color: #dc2626;
+    margin-bottom: 8px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px
+    }
+.failure-reason {
+    font-size: 16px;
+    font-weight: 600;
+    color: #991b1b;
+    margin: 12px 0
+    }
+.failure-amount {
+    font-size: 24px;
+    font-weight: 800;
+    color: #dc2626;
+    margin: 8px 0
+    }
+.opening-message {
+    font-size: 16px;
+    color: #4b5563;
+    line-height: 1.7;
+    margin-bottom: 20px
+    }
+.payment-details {
+    border-collapse: collapse;
+    width: 100%;
+    margin-top: 16px;
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+    border: 1px solid #e5e7eb
+    }
+.payment-details th {
+    padding: 12px 14px;
+    background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+    border-bottom: 2px solid #e5e7eb;
+    font-size: 12px;
+    color: #1f2937;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    text-align: left;
+    width: 40%
+    }
+.payment-details td {
+    padding: 12px 14px;
+    border-bottom: 1px solid #f3f4f6;
+    font-size: 13px;
+    color: #4b5563;
+    background-color: #fff;
+    word-break: break-word
+    }
+.payment-id {
+    font-family: monospace;
+    font-size: 11px;
+    color: #64748b
+    }
+.cta-button {
+    display: inline-block;
+    background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
+    color: #fff;
+    text-decoration: none;
+    font-weight: 700;
+    font-size: 16px;
+    padding: 16px 32px;
+    border-radius: 8px;
+    text-align: center;
+    margin: 12px 8px;
+    box-shadow: 0 4px 12px rgba(220, 38, 38, 0.3);
+    transition: all 0.3s ease;
+    text-transform: uppercase;
+    letter-spacing: 0.5px
+    }
+.cta-button-secondary {
+    background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
+    box-shadow: 0 4px 12px rgba(220, 38, 38, 0.3)
+    }
+.cta-container {
+    text-align: center;
+    margin: 32px 0
+    }
+.reassurance-box {
+    background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
+    border: 2px solid #22c55e;
+    border-radius: 10px;
+    padding: 20px;
+    text-align: center;
+    margin: 24px 0
+    }
+.reassurance-text {
+    font-size: 14px;
+    color: #166534;
+    line-height: 1.6
+    }
+.footer {
+    text-align: center;
+    font-size: 12px;
+    color: #6b7280;
+    background-color: #f9fafb;
+    padding: 24px 20px;
+    border-top: 2px solid #e5e7eb
+    }
+.footer a {
+    color: #6b7280;
+    text-decoration: none;
+    transition: color 0.2s
+    }
+.support-email {
+    font-weight: 700;
+    color: #1f2937
+    }
+@media only screen and (max-width: 600px) {
+    .content {
+        padding: 20px
+        }
+    .header h1 {
+        font-size: 22px
+        }
+    .section strong {
+        display: block;
+        margin-bottom: 8px;
+        min-width: auto
+        }
+    .card {
+        border-radius: 0
+        }
+    .failure-amount {
+        font-size: 20px
+        }
+    .cta-button {
+        display: block;
+        margin: 8px 0;
+        padding: 14px 24px;
+        font-size: 14px
+        }
+    .payment-details {
+        font-size: 11px
+        }
+    .payment-details th, .payment-details td {
+        padding: 10px 8px
+        }
+    }</style></head>
+<body>
+<div class="wrapper">
+<div class="card"> <!-- HEADER -->
+<div class="header">
+<img alt="Tools Australia Logo" class="header-logo" src="https://toolsaustralia.com.au/images/Tools%20Australia%20Logo/White-Text%20Logo.png"/>
+<h1>
+            Membership Payment Failed
+          </h1>
+<p>
+            We couldn't process your membership payment
+          </p>
+</div>
+<!-- MAIN CONTENT -->
+<div class="content"> <!-- Professional Opening -->
+<div class="opening-message">
+            Dear {{ person.first_name }},
+            <br/><br/>
+            Thank you for your interest in joining Tools Australia! Unfortunately, we were unable to process your membership payment. Your payment method was declined, and no charges have been applied to your account.
+            <br/><br/>
+            This may have happened if your card has insufficient funds, if the card details were incorrect, or if your bank declined the transaction. Please ensure your card has sufficient balance and try again.
+          </div>
+<!-- Failure Alert Box -->
+<div class="failure-alert">
+<div class="failure-icon">
+              ⚠️
+            </div>
+<div class="failure-title">
+              Membership Payment Failed
+            </div>
+<div class="failure-reason" style="margin-top: 16px; margin-bottom: 16px;">
+              {{ event.failure_reason }}
+            </div>
+<div style="font-size: 14px; color: #991b1b; margin-top: 12px; opacity: 0.9; padding-top: 12px; border-top: 1px solid rgba(220, 38, 38, 0.2);"> <strong>Transaction Amount:</strong> <span class="failure-amount">A${{ event.price }}</span>
+</div>
+            {% if event.package_name %}
+            <div style="font-size: 13px; color: #991b1b; margin-top: 8px; opacity: 0.8;"> <strong>Package:</strong> {{ event.package_name }}
+            </div>
+            {% endif %}
+            {% if event.failure_message %}
+            <div style="font-size: 11px; color: #991b1b; margin-top: 8px; opacity: 0.7; font-family: monospace;">
+              Error: {{ event.failure_message }}
+            </div>
+            {% elif event.failure_code %}
+            <div style="font-size: 11px; color: #991b1b; margin-top: 8px; opacity: 0.7; font-family: monospace;">
+              Error Code: {{ event.failure_code }}
+            </div>
+            {% endif %}
+          </div>
+<div class="divider"></div>
+<!-- Payment Details Table -->
+<div class="section"> <strong>Payment Details:</strong>
+<table class="payment-details">
+<tbody>
+                {% if event.package_name %}
+                <tr>
+<th>
+                    Package
+                  </th>
+<td>
+                    {{ event.package_name }}
+                  </td>
+</tr>
+                {% endif %}
+                <tr>
+<th>
+                    Amount
+                  </th>
+<td>
+<strong style="color: #dc2626;">A${{ event.price }}</strong>
+</td>
+</tr>
+                {% if event.payment_intent_id %}
+                <tr>
+<th>
+                    Payment ID
+                  </th>
+<td class="payment-id">
+                    {{ event.payment_intent_id }}
+                  </td>
+</tr>
+                {% endif %}
+                <tr>
+<th>
+                    Status
+                  </th>
+<td>
+                    Membership Not Activated
+                  </td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="divider"></div>
+<!-- CTA Buttons -->
+<div class="cta-container"> <a class="cta-button" href="https://toolsaustralia.com.au/promotions/milwaukee-sidchrome">
+              Get My Free Entries Now
+            </a>
+</div>
+</div>
+<!-- FOOTER -->
+<div class="footer">
+<p>
+            Need help? Contact us at
+            <span class="support-email">support@toolsaustralia.com.au</span>
+</p>
+<br/>
+<a href="{% unsubscribe %}">Unsubscribe</a>
+</div>
+</div>
+</div>
+</body>
+</html>

@@ -80,7 +80,7 @@ const EmailPreviewLayout: React.FC = () => {
             <strong>SendGrid</strong> rows render HTML from{" "}
             <code className="rounded bg-gray-100 px-1 dark:bg-neutral-800">src/lib/email/templates.ts</code>.{" "}
             <strong>Klaviyo</strong> tabs mirror the dev previews; the <strong>source of truth for pasting into Klaviyo</strong> is the
-            hardened HTML at the repo root:{" "}
+            hardened HTML in <code className="rounded bg-gray-100 px-1 dark:bg-neutral-800">email-templates/sendgrid/</code>:{" "}
             <code className="rounded bg-gray-100 px-1 dark:bg-neutral-800">invoice-email-template.html</code>,{" "}
             <code className="rounded bg-gray-100 px-1 dark:bg-neutral-800">subscription-renewal-email-template.html</code>,{" "}
             <code className="rounded bg-gray-100 px-1 dark:bg-neutral-800">subscription-payment-failed-email-template.html</code>{" "}
