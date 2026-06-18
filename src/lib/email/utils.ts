@@ -142,31 +142,34 @@ export function checkEmailRateLimit(email: string): EmailRateLimitResult {
 // Form submission rate limiting (contact / partner forms)
 // ---------------------------------------------------------------------------
 
-const formSubmissionRateLimitStore = new Map<string, { lastSubmissionTime: number }>();
+const formSubmissionRateLimitStore = new Map<string, number[]>();
 const FORM_SUBMISSION_RATE_LIMIT_WINDOW = 5 * 60 * 1000; // 5 minutes
+const FORM_SUBMISSION_RATE_LIMIT_MAX = 3; // max submissions per window per identifier
 
+/**
+ * Allow up to FORM_SUBMISSION_RATE_LIMIT_MAX submissions per identifier within a
+ * rolling FORM_SUBMISSION_RATE_LIMIT_WINDOW (currently 3 per 5 minutes) so a single
+ * user can't flood the support inbox. Identifier is typically `email_IP`.
+ */
 export function checkFormSubmissionRateLimit(
   identifier: string
 ): { allowed: boolean; retryAfter?: number } {
   const now = Date.now();
   const key = `form_submission_${identifier}`;
-  const current = formSubmissionRateLimitStore.get(key);
+  // Keep only timestamps still inside the window.
+  const timestamps = (formSubmissionRateLimitStore.get(key) || []).filter(
+    (t) => now - t < FORM_SUBMISSION_RATE_LIMIT_WINDOW
+  );
 
-  if (!current) {
-    formSubmissionRateLimitStore.set(key, { lastSubmissionTime: now });
-    return { allowed: true };
-  }
-
-  const elapsed = now - current.lastSubmissionTime;
-
-  if (elapsed < FORM_SUBMISSION_RATE_LIMIT_WINDOW) {
-    const retryAfter = Math.ceil(
-      (FORM_SUBMISSION_RATE_LIMIT_WINDOW - elapsed) / 1000
-    );
+  if (timestamps.length >= FORM_SUBMISSION_RATE_LIMIT_MAX) {
+    const oldest = timestamps[0];
+    const retryAfter = Math.ceil((FORM_SUBMISSION_RATE_LIMIT_WINDOW - (now - oldest)) / 1000);
+    formSubmissionRateLimitStore.set(key, timestamps);
     return { allowed: false, retryAfter };
   }
 
-  formSubmissionRateLimitStore.set(key, { lastSubmissionTime: now });
+  timestamps.push(now);
+  formSubmissionRateLimitStore.set(key, timestamps);
   return { allowed: true };
 }
 

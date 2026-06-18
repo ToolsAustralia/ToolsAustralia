@@ -6,6 +6,7 @@ import Winner from "@/models/Winner";
 import { requirePermissionWithAudit } from "@/lib/audit-log";
 import { klaviyo } from "@/lib/klaviyo";
 import { createMajorDrawWonEvent } from "@/utils/integrations/klaviyo/klaviyo-events";
+import { emailService } from "@/lib/email/";
 import mongoose, { Types } from "mongoose";
 
 /**
@@ -139,6 +140,24 @@ export async function POST(request: NextRequest) {
             totalEntries: majorDraw.totalEntries,
           })
         );
+
+        // Send winner notification email to the winning member only (best-effort)
+        if (winner.email) {
+          try {
+            const baseUrl = (
+              process.env.NEXT_PUBLIC_APP_URL ||
+              process.env.NEXTAUTH_URL ||
+              "https://toolsaustralia.com.au"
+            ).replace(/\/$/, "");
+            await emailService.sendWinnerEmail(winner.email, {
+              firstName: winner.firstName || "mate",
+              prizeName: majorDraw.prize?.name || majorDraw.name || "your prize",
+              winnersUrl: `${baseUrl}/winners`,
+            });
+          } catch (emailError) {
+            console.error("Failed to send winner email:", emailError);
+          }
+        }
       }
 
       return NextResponse.json({

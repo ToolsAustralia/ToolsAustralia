@@ -1,16 +1,18 @@
 # Staff invite email
 
-`src/lib/email/staff-invite.ts` reads `staff-invite-email-template.html` (repo root) and sends it via the existing `SendGridClient` singleton, using the `EmailCategory.TRANSACTIONAL` sender identity.
+`src/lib/email/staff-invite.ts` builds the invite HTML from `createStaffInviteEmailTemplate()` in `src/lib/email/templates.ts` (shared `components.ts` design system) and sends it via the `SendGridClient` singleton, using the `EmailCategory.TRANSACTIONAL` sender identity.
 
-## Placeholders
+**Code-as-source (June 2026).** This email used to be a standalone HTML file at `email-templates/sendgrid/staff-invite-email-template.html`, loaded from disk at runtime via `process.cwd()`. That folder is gone — staff-invite is now rendered from code like every other SendGrid email, so it inherits header/footer/design-system changes automatically and no longer depends on Next file-tracing the HTML into the serverless bundle.
 
-| Placeholder | Filled by |
+## Parameters (`createStaffInviteEmailTemplate` / `sendStaffInviteEmail`)
+
+| Param | Filled by |
 |---|---|
-| `{{INVITEE_NAME}}` | Invitee's first name (HTML-escaped) |
-| `{{ROLE_NAME}}` | The Role they were invited into (HTML-escaped) |
-| `{{INVITE_LINK}}` | `${NEXTAUTH_URL}/staff-setup/<inviteToken>` (raw, not escaped — must be a valid URL) |
-| `{{INVITER_NAME}}` | Full name of the admin who created the invite (HTML-escaped) |
-| `{{EXPIRES_IN}}` | Human-readable duration, defaults to `"7 days"` |
+| `inviteeName` | Invitee's first name (HTML-escaped in the template) |
+| `roleName` | The Role they were invited into (HTML-escaped) |
+| `inviteLink` | `${NEXTAUTH_URL}/staff-setup/<inviteToken>` (raw, not escaped — must be a valid URL) |
+| `inviterName` | Full name of the admin who created the invite (HTML-escaped) |
+| `expiresIn` | Human-readable duration, defaults to `"7 days"` |
 
 ## Usage
 
@@ -30,4 +32,4 @@ The function returns `EmailResult` — caller can ignore the result for a fire-a
 
 The invite link points at `/staff-setup/<inviteToken>` on whichever host `NEXTAUTH_URL` resolves to. Tokens expire after 7 days (configured in `src/app/api/admin/staff/route.ts`).
 
-The HTML template uses the brand red gradient (`#ee0000` → `#ff4444`) and matches the card-style layout of the existing transactional templates (`renewal-failed-email-template.html`, `subscription-payment-failed-email-template.html`). Inline styles are duplicated alongside the `<style>` block for Gmail / Outlook compatibility.
+Preview it live (sample data) at `/email-preview` → **Staff invite**; `StaffInvitePreview` renders from the same `createStaffInviteEmailTemplate()` the sender uses, so the preview can't drift from production.

@@ -14,6 +14,7 @@ import connectDB from "@/lib/mongodb";
 import MajorDraw from "@/models/MajorDraw";
 import User from "@/models/User";
 import Winner from "@/models/Winner";
+import { emailService } from "@/lib/email/";
 import mongoose, { Types } from "mongoose";
 import { z } from "zod";
 
@@ -228,6 +229,24 @@ export async function POST(request: NextRequest) {
       await majorDraw.save({ session: trx });
 
       await trx.commitTransaction();
+
+      // Send winner notification email to the winning member only (best-effort, first selection)
+      if (winnerUser.email) {
+        try {
+          const baseUrl = (
+            process.env.NEXT_PUBLIC_APP_URL ||
+            process.env.NEXTAUTH_URL ||
+            "https://toolsaustralia.com.au"
+          ).replace(/\/$/, "");
+          await emailService.sendWinnerEmail(winnerUser.email, {
+            firstName: winnerUser.firstName || "mate",
+            prizeName,
+            winnersUrl: `${baseUrl}/winners`,
+          });
+        } catch (emailError) {
+          console.error("Failed to send winner email:", emailError);
+        }
+      }
 
       await log(200);
       return NextResponse.json(

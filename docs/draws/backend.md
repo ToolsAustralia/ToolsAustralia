@@ -67,6 +67,10 @@ All ops use `updateMany` with `maxTimeMS: 5000` and idempotent filters.
 
 When a payment is refunded, [src/utils/draws/remove-draw-entries.ts](../../src/utils/draws/remove-draw-entries.ts) is called by the [payment](../payment/) reverser orchestration to undo `TicketEntry` rows written by the original grant. See [billing-stripe ledger symmetry](../billing-stripe/rules.md#ledger-symmetry).
 
+## Winner notification email
+
+`POST /api/major-draw/select-winner` (weighted random selection) sends a **SendGrid winner email to the winning member only** after the Winner doc is committed, alongside the existing Klaviyo `Major Draw Won` event. It calls `emailService.sendWinnerEmail(winner.email, { firstName, prizeName, winnersUrl })` (`prizeName` from `majorDraw.prize?.name`/draw name; the gold CTA is "See the Winners' Hall of Fame" → `winnersUrl` = `/winners`). Best-effort: wrapped in try/catch so a mail failure never fails the selection. The admin "record gov-app winner" path does the same — see [admin/backend.md](../admin/backend.md). Template + sender live in [email](../email/architecture.md).
+
 ## Resolved attribution metadata (mini-draw purchase)
 
 [src/app/api/mini-draw/purchase/route.ts](../../src/app/api/mini-draw/purchase/route.ts) resolves attribution at the top of `POST` via `resolveAttributionAtEdge(request)` (from [src/services/attribution/resolveAtEdge.ts](../../src/services/attribution/resolveAtEdge.ts)) and passes the resulting `metadata` into both `handleOneClickPurchase` and `handlePaymentIntentCreation` as `resolvedAttrMetadata`. Each sub-handler spreads `...(resolvedAttrMetadata ?? {})` into its PaymentIntent metadata object alongside `buildAttributionMetadata(attribution)`. This ensures all mini-draw PaymentIntents carry resolved attribution regardless of payment path.

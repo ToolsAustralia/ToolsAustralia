@@ -1,0 +1,120 @@
+<!--
+  NOT WIRED — prepared for future use. No Klaviyo event or cron currently triggers this template.
+  Merge fields: {{ person.first_name }}, {{ person.current_draw_entries }}, {{ person.current_draw_name }}, {% unsubscribe %}.
+
+  Tools Australia — Draw reminder ("The 27th is coming")
+  Email-client-safe: table layout, all-inline styles, mobile @600px, light dark-mode, Outlook VML buttons.
+-->
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <meta http-equiv="X-UA-Compatible" content="IE=edge"/>
+  <meta name="color-scheme" content="light dark"/>
+  <meta name="supported-color-schemes" content="light dark"/>
+  <title>The 27th is coming</title>
+  <!--[if mso]><style type="text/css">body,table,td,a,p,h1,h2{font-family:Arial,Helvetica,sans-serif !important;}</style><![endif]-->
+  <!--[if !mso]><!--><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Poppins:wght@600;700;800;900&display=swap" rel="stylesheet"><!--<![endif]-->
+
+  <style>
+    body,table,td,p,a,h1,h2{margin:0;padding:0;}
+    img{border:0;line-height:100%;outline:none;text-decoration:none;-ms-interpolation-mode:bicubic;}
+    a{text-decoration:none;}
+    body{width:100%!important;-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%;}
+    .num{font-variant-numeric:tabular-nums;}
+    @media only screen and (max-width:600px){
+      .container{width:100%!important;}
+      .px{padding-left:22px!important;padding-right:22px!important;}
+      .py{padding-top:30px!important;padding-bottom:32px!important;}
+      .h1{font-size:29px!important;line-height:1.1!important;}
+      .big{font-size:62px!important;}
+      .won{font-size:62px!important;}
+      .btn{width:100%!important;}
+      .btn a{display:block!important;}
+    }
+    @media (prefers-color-scheme: dark){
+      .page{background-color:#0a0a0a!important;}
+      .card{background-color:#171717!important;border-color:#2e2e2e!important;}
+      .t-dark{color:#f5f5f5!important;}
+      .t-mut{color:#a3a3a3!important;}
+      .surface2{background-color:#0f0f0f!important;border-color:#404040!important;}
+      .footer{background-color:#0a0a0a!important;border-color:#2e2e2e!important;}
+      .tableh{background-color:#0f0f0f!important;}
+      .tabler{background-color:#171717!important;}
+      .tabler-b{border-color:#262626!important;}
+      .hairline{background-color:#2e2e2e!important;}
+    }
+  </style>
+</head>
+<body class="page" style="margin:0;padding:0;background-color:#f9fafb;font-family:'Inter','Helvetica Neue',Arial,sans-serif;">
+  <div style="display:none;max-height:0;overflow:hidden;opacity:0;mso-hide:all;font-size:1px;line-height:1px;color:#f9fafb;">You've got {{ person.current_draw_entries }} free entries in {{ person.current_draw_name }} — grab more before the 27th.&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;</div>
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="page" style="background-color:#f9fafb;">
+    <tr><td align="center" style="padding:32px 12px;">
+      <table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" class="container card" style="width:600px;max-width:600px;background-color:#ffffff;border:1px solid #e5e7eb;border-radius:16px;overflow:hidden;box-shadow:0 10px 34px rgba(15,23,42,0.10);">
+
+        <tr>
+          <td style="background:#0f172a;background:linear-gradient(135deg,#0f172a 0%,#111827 30%,#1f2937 60%,#0b1220 100%);text-align:center;padding:36px 24px 26px;">
+            <img src="https://toolsaustralia.com.au/images/Tools%20Australia%20Logo/White-Text%20Logo.webp" width="150" alt="Tools Australia — Australia's biggest monthly tool giveaway" style="display:block;margin:0 auto 14px;max-width:150px;width:150px;height:auto;border:0;"/>
+            <p style="margin:0;font-family:'SFMono-Regular',ui-monospace,Consolas,'Courier New',monospace;font-size:10px;font-weight:600;letter-spacing:3px;text-transform:uppercase;color:#94a3b8;">Australia's Biggest Monthly Tool Giveaway</p>
+          </td>
+        </tr>
+        <tr><td style="height:4px;background-color:#ee0000;line-height:4px;font-size:0;">&nbsp;</td></tr>
+        <tr><td style="height:6px;background-color:#0b1220;background-image:repeating-linear-gradient(135deg,#1f2937 0,#1f2937 7px,#0b1220 7px,#0b1220 14px);line-height:6px;font-size:0;">&nbsp;</td></tr>
+        <tr><td class="px py" style="padding:40px 36px 36px;">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tbody>
+<tr><td align="center"><table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" style="margin:0 auto;"><tr><td style="vertical-align:middle;padding-right:8px;"><div style="width:7px;height:7px;background-color:#dc2626;transform:rotate(45deg);"></div></td><td style="vertical-align:middle;"><span style="font-family:'SFMono-Regular',ui-monospace,Consolas,'Courier New',monospace;font-size:11px;font-weight:600;letter-spacing:2.5px;text-transform:uppercase;color:#dc2626;">Drawn live on the 27th</span></td></tr></table></td></tr>
+<tr><td style="height:16px;line-height:16px;font-size:0;">&nbsp;</td></tr>
+<tr><td align="center"><h1 class="h1 t-dark" style="margin:0;font-family:'Poppins','Helvetica Neue',Arial,sans-serif;font-size:33px;font-weight:800;line-height:1.1;color:#111827;text-align:center;letter-spacing:-0.6px;">The 27th is coming,<br/>{{ person.first_name }}</h1></td></tr>
+<tr><td style="height:16px;line-height:16px;font-size:0;">&nbsp;</td></tr>
+<tr><td align="center"><p class="t-mut" style="margin:0;font-family:'Inter','Helvetica Neue',Arial,sans-serif;font-size:16px;line-height:1.65;color:#475569;text-align:center;">{{ person.current_draw_name }} locks at 8:00pm AEST on the 27th and is drawn live on Facebook at 8:30pm. Here's where you stand — more free entries, better odds.</p></td></tr>
+<tr><td style="height:26px;line-height:26px;font-size:0;">&nbsp;</td></tr>
+<tr><td>
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:4px 0;">
+              <tr><td style="background:#0f172a;background:linear-gradient(135deg,#111827 0%,#0b1220 100%);border:1px solid #1f2937;border-radius:14px;padding:28px 24px;text-align:center;">
+                <p style="margin:0 0 12px;font-family:'SFMono-Regular',ui-monospace,Consolas,'Courier New',monospace;font-size:11px;font-weight:600;letter-spacing:2px;text-transform:uppercase;color:#fca5a5;">Your free entries so far</p>
+                <p class="big num" style="margin:0;font-family:'Poppins','Helvetica Neue',Arial,sans-serif;font-size:64px;font-weight:800;line-height:0.9;color:#ff4040;letter-spacing:-1px;">{{ person.current_draw_entries }}</p>
+                <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" style="margin:16px auto 0;"><tr><td style="width:44px;height:3px;background-color:#ff4040;line-height:3px;font-size:0;border-radius:2px;">&nbsp;</td></tr></table>
+                <p style="margin:14px 0 0;font-family:'Inter','Helvetica Neue',Arial,sans-serif;font-size:13px;line-height:1.55;color:#94a3b8;">Every free entry is another shot at the prize.</p>
+              </td></tr>
+            </table></td></tr>
+<tr><td style="height:26px;line-height:26px;font-size:0;">&nbsp;</td></tr>
+<tr><td align="center">
+            <table role="presentation" class="btn" cellpadding="0" cellspacing="0" border="0" align="center" style="margin:4px auto 0;">
+              <tr><td align="center" bgcolor="#dc2626" style="border-radius:8px;background:linear-gradient(135deg,#dc2626 0%,#b91c1c 100%);box-shadow:0 6px 16px rgba(220,38,38,0.32);">
+                <!--[if mso]><v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word" href="https://toolsaustralia.com.au/major-draw" style="height:52px;v-text-anchor:middle;width:300px;" arcsize="16%" stroke="f" fillcolor="#dc2626"><w:anchorlock/><center style="color:#ffffff;font-family:Arial,sans-serif;font-size:16px;font-weight:bold;">Get More Free Entries<![endif]-->
+                <a href="https://toolsaustralia.com.au/major-draw" style="display:inline-block;padding:16px 44px;font-family:'Poppins','Helvetica Neue',Arial,sans-serif;font-size:16px;font-weight:700;color:#ffffff;text-decoration:none;border-radius:8px;letter-spacing:0.3px;mso-hide:all;">Get More Free Entries&nbsp;&nbsp;&rarr;</a>
+                <!--[if mso]></center></v:roundrect><![endif]-->
+              </td></tr>
+            </table></td></tr>
+<tr><td style="height:26px;line-height:26px;font-size:0;">&nbsp;</td></tr>
+<tr><td>
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
+              <td class="hairline" style="height:1px;background-color:#e5e7eb;line-height:1px;font-size:0;">&nbsp;</td>
+              <td style="width:12px;padding:0 10px;"><div style="width:7px;height:7px;background-color:#ee0000;transform:rotate(45deg);margin:0 auto;"></div></td>
+              <td class="hairline" style="height:1px;background-color:#e5e7eb;line-height:1px;font-size:0;">&nbsp;</td>
+            </tr></table></td></tr>
+<tr><td style="height:18px;line-height:18px;font-size:0;">&nbsp;</td></tr>
+<tr><td align="center" style="padding-top:2px;"><p style="margin:0;font-family:'Inter','Helvetica Neue',Arial,sans-serif;font-size:13.5px;line-height:1.6;color:#6b7280;" class="t-mut">This month's prize: a Milwaukee, DeWalt, Makita or Ryobi power-tool + storage combo with $5,000 cash — or $10,000 tax-free cash.</p></td></tr>
+          </tbody></table>
+        </td></tr>
+
+        <tr><td style="height:5px;background-color:#e5e7eb;background-image:repeating-linear-gradient(135deg,#e5e7eb 0,#e5e7eb 7px,#f9fafb 7px,#f9fafb 14px);line-height:5px;font-size:0;" class="hairline">&nbsp;</td></tr>
+        <tr>
+          <td class="footer px" style="background-color:#f9fafb;border-top:1px solid #e5e7eb;padding:30px 32px 34px;text-align:center;font-family:'Inter','Helvetica Neue',Arial,sans-serif;">
+            <p style="margin:0 0 6px;font-family:'Poppins','Helvetica Neue',Arial,sans-serif;font-size:13px;font-weight:800;letter-spacing:0.4px;color:#111827;text-transform:uppercase;" class="t-dark">Tools Australia</p>
+            <p style="margin:0 0 16px;font-size:12px;line-height:1.6;color:#6b7280;" class="t-mut">Need a hand? <a href="mailto:support@toolsaustralia.com.au" style="color:#dc2626;font-weight:600;text-decoration:none;">support@toolsaustralia.com.au</a></p>
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" style="margin:0 auto 18px;"><tr>
+              <td style="padding:0 5px;"><a href="https://www.facebook.com/toolsaust" target="_blank" rel="noopener" style="display:inline-block;width:36px;height:36px;background-color:#111827;border-radius:50%;"><img src="https://toolsaustralia.com.au/images/social/facebook.png" width="20" height="20" alt="Facebook" style="display:block;margin:8px auto;width:20px;height:20px;border:0;"/></a></td>
+              <td style="padding:0 5px;"><a href="https://instagram.com/toolsaustralia" target="_blank" rel="noopener" style="display:inline-block;width:36px;height:36px;background-color:#111827;border-radius:50%;"><img src="https://toolsaustralia.com.au/images/social/instagram.png" width="20" height="20" alt="Instagram" style="display:block;margin:8px auto;width:20px;height:20px;border:0;"/></a></td>
+              <td style="padding:0 5px;"><a href="https://www.tiktok.com/@toolsaustralia" target="_blank" rel="noopener" style="display:inline-block;width:36px;height:36px;background-color:#111827;border-radius:50%;"><img src="https://toolsaustralia.com.au/images/social/tiktok.png" width="20" height="20" alt="TikTok" style="display:block;margin:8px auto;width:20px;height:20px;border:0;"/></a></td>
+            </tr></table>
+            <p style="margin:0 0 10px;font-size:11px;line-height:1.6;color:#9ca3af;" class="t-mut"><a href="{% unsubscribe %}" style="color:#9ca3af;text-decoration:underline;">Unsubscribe</a></p>
+            <p style="margin:0;font-family:'SFMono-Regular',ui-monospace,Consolas,'Courier New',monospace;font-size:10.5px;line-height:1.7;letter-spacing:0.3px;color:#9ca3af;" class="t-mut">DRAWN LIVE ON FACEBOOK · 27TH MONTHLY · VERIFIED BY <a href="https://randomdraws.com.au" style="color:#9ca3af;text-decoration:underline;">RANDOMDRAWS.COM.AU</a></p>
+          </td>
+        </tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>

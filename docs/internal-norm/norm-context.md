@@ -3588,13 +3588,14 @@ PII not exposed: the `changedBy` row on the underlying document includes `firstN
       startDate: ISO8601,
       endDate: ISO8601 | null,
       status: string | null,                     // active | trialing | past_due | incomplete | cancelled
-      autoRenew: boolean | null
+      autoRenew: boolean | null,
+      lastMonthAccumulatedEntries: number | null  // membership carry-forward entries that roll into the next draw on renewal; preserved through cancellation for resubscribe
     } | null,
     totalSpent: number,                          // AUD dollars; refund-net lifetime spend
     majorDrawEntries: number,                    // entries in the currently-active major draw only
     miniDrawCount: number,
     rewardsPoints: number,
-    accumulatedEntries: number
+    accumulatedEntries: number                   // LIFETIME total entries ever received — NOT the renewal carry-forward (use subscription.lastMonthAccumulatedEntries for win-back math)
   }>,
   stats: {
     totalUsers: number,                          // all isActive=true users
@@ -3716,7 +3717,7 @@ PII not exposed: same uniform user-domain PII discipline — `email`, `lastName`
   createdAt: ISO8601,
   updatedAt: ISO8601,
   lastLogin: ISO8601 | null,
-  subscription: { packageId, packageName, isActive, startDate, endDate, status, autoRenew } | null,
+  subscription: { packageId, packageName, isActive, startDate, endDate, status, autoRenew, lastMonthAccumulatedEntries } | null,  // lastMonthAccumulatedEntries = membership carry-forward entries that roll into the next draw on renewal; preserved through cancellation for resubscribe
   statistics: {
     totalSpent: number,                          // AUD dollars; refund-net
     totalOrders: number,                         // count of Order rows
@@ -3727,7 +3728,7 @@ PII not exposed: same uniform user-domain PII discipline — `email`, `lastName`
     paymentEventsTotal: number
   },
   rewardsPoints: number,
-  accumulatedEntries: number
+  accumulatedEntries: number                     // LIFETIME total entries ever received — NOT the renewal carry-forward. For membership win-back replies use subscription.lastMonthAccumulatedEntries (the balance that rolls into the next draw on renewal).
 }
 ```
 PII not exposed: same uniform user-domain discipline — `email`, `lastName`, `mobile`, `address` stripped. The admin route additionally loads full `Order` rows, referral history, and Stripe-side saved payment methods — those are NOT in the Norm projection (`totalOrders`/`totalOrderValue` are counts/sums only; the orders array, referrals feed, and savedPaymentMethods Stripe lookups are stripped to keep the call light and PII-free).
