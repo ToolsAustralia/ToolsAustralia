@@ -328,6 +328,10 @@ Test: `npm run test:resolve-norm-date-range` (covers today/yesterday/all-time/cu
 
 > _TODO: enumerate the exact subdirectories under api/admin/ and document each._
 
+## Winner notification email (admin select-winner)
+
+`POST /api/admin/major-draw/select-winner` (the "record the winner selected via the government app" path) sends a **SendGrid winner email to the winning member only** after a Winner doc is first created — i.e. only in the new-selection branch, **not** when an existing winner is updated (re-uploading an image / editing testimony must not re-email). It calls `emailService.sendWinnerEmail(winnerUser.email, { firstName, prizeName, winnersUrl })`, best-effort (try/catch); the gold CTA is "See the Winners' Hall of Fame" → `winnersUrl` = `/winners`. The public weighted-random path mirrors this — see [draws/backend.md](../draws/backend.md). Template/sender: [email](../email/architecture.md).
+
 ## Auth pattern
 
 Every handler:

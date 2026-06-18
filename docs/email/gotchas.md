@@ -2,7 +2,11 @@
 
 ## Templates live under `email-templates/`, not `src/`
 
-SendGrid source templates are in `email-templates/sendgrid/*.html`; Klaviyo platform exports (read-only snapshots) are in `email-templates/klaviyo/`. Easy to miss when scanning `src/`. The staff-invite email is the one **runtime-loaded** template — `src/lib/email/staff-invite.ts` reads `email-templates/sendgrid/staff-invite-email-template.html` via `process.cwd()`; if you move it again, update that path (and verify Next still file-traces it into the serverless bundle).
+Two subfolders: `email-templates/klaviyo/` = the **paste-ready Klaviyo** custom-HTML templates (invoice, subscription-renewal, renewal-failed, subscription-payment-failed, draw-reminder); `email-templates/klaviyo-exports/` = **read-only export snapshots** (reference only). Easy to miss when scanning `src/`. There are **no SendGrid HTML files** — every SendGrid email (incl. staff-invite, migrated to code June 2026) is code-as-source in `src/lib/email/templates.ts` + `components.ts`. Nothing is runtime-loaded from disk anymore, so there's no `process.cwd()` / file-tracing footgun.
+
+## One support line, in the footer only
+
+`support@toolsaustralia.com.au` belongs in the **footer** (rendered by `components.ts` for SendGrid, duplicated in each Klaviyo file's footer). Do **not** add a secondary "Need a hand? / Questions about this order? / just keeping you in the loop" support line in the email **body** — it duplicates the footer. Those body lines were removed from the invoice, renewal, renewal-failed, and signup-payment-failed templates June 2026.
 
 ## Preview ≠ production render
 

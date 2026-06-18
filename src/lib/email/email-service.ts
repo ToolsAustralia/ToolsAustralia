@@ -22,6 +22,8 @@ import {
   createLoginCodeEmailTemplate,
   createAdminReplyEmailTemplate,
   createMiniDrawFullCapacityTemplate,
+  createWinnerEmailTemplate,
+  createReferralRewardEmailTemplate,
 } from './templates';
 import { getMiniDrawNotificationRecipients } from './mini-draw-notification-config';
 import { EmailCategory, getSenderIdentity, getContactEmail } from './sender-identities';
@@ -64,7 +66,7 @@ class EmailService {
     return this.client.sendEmail({
       to,
       from: { email: sender.fromEmail, name: sender.fromName },
-      subject: 'Verify Your Email - Tools Australia',
+      subject: `${payload.verificationCode} is your Tools Australia verification code`,
       html: htmlContent,
       text: textContent,
       replyTo: sender.replyTo,
@@ -193,7 +195,7 @@ class EmailService {
     return this.client.sendEmail({
       to,
       from: { email: sender.fromEmail, name: sender.fromName },
-      subject: 'Your Sign-In Code - Tools Australia',
+      subject: `${payload.loginCode} is your Tools Australia sign-in code`,
       html: htmlContent,
       text: textContent,
       replyTo: sender.replyTo,
@@ -275,6 +277,64 @@ class EmailService {
       to: recipients,
       from: { email: sender.fromEmail, name: sender.fromName },
       subject: `[Tools Australia] Mini Draw 100% - ${payload.miniDrawName} ready for winner`,
+      html: htmlContent,
+      text: textContent,
+      replyTo: sender.replyTo,
+    });
+  }
+
+  /**
+   * Send a major-draw winner notification to the winning member only.
+   * Sender: TRANSACTIONAL. Called when an admin selects the winner.
+   */
+  public async sendWinnerEmail(
+    to: string,
+    payload: { firstName: string; prizeName: string; winnersUrl: string }
+  ): Promise<EmailResult> {
+    this.ensureInitialized();
+
+    const sender = getSenderIdentity(EmailCategory.TRANSACTIONAL);
+    const htmlContent = createWinnerEmailTemplate(
+      payload.firstName || 'mate',
+      payload.prizeName,
+      payload.winnersUrl
+    );
+    const textContent = `Congratulations ${payload.firstName || 'mate'}!\n\nYou won ${payload.prizeName} in the Tools Australia major draw — drawn live on Facebook and verified by randomdraws.com.au. Our team will be in touch to verify your win and arrange your prize.\n\nSee the winners' hall of fame: ${payload.winnersUrl}`;
+
+    return this.client.sendEmail({
+      to,
+      from: { email: sender.fromEmail, name: sender.fromName },
+      subject: 'You won the Tools Australia major draw!',
+      html: htmlContent,
+      text: textContent,
+      replyTo: sender.replyTo,
+    });
+  }
+
+  /**
+   * Send a referral reward notification. Call once per party (referrer + referred friend),
+   * each with their own `recipientName` / `friendName`.
+   * Sender: TRANSACTIONAL.
+   */
+  public async sendReferralRewardEmail(
+    to: string,
+    payload: { recipientName: string; friendName: string; entriesEarned: number; ctaUrl: string }
+  ): Promise<EmailResult> {
+    this.ensureInitialized();
+
+    const sender = getSenderIdentity(EmailCategory.TRANSACTIONAL);
+    const htmlContent = createReferralRewardEmailTemplate(
+      payload.recipientName || 'mate',
+      payload.friendName || 'your mate',
+      payload.entriesEarned,
+      payload.ctaUrl
+    );
+    const textContent = `Nice one ${payload.recipientName || 'mate'}!\n\n${payload.friendName || 'Your mate'} signed up with your referral and you both earned ${payload.entriesEarned} free entries into the current major draw.\n\nView your entries: ${payload.ctaUrl}`;
+
+    return this.client.sendEmail({
+      to,
+      from: { email: sender.fromEmail, name: sender.fromName },
+      subject: `You scored ${payload.entriesEarned} free entries — Tools Australia`,
       html: htmlContent,
       text: textContent,
       replyTo: sender.replyTo,

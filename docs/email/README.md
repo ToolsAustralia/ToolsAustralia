@@ -11,6 +11,7 @@ Transactional email via SendGrid; HTML templates at repo root; SMS via separate 
 - [rules.md](./rules.md) — provider split (SendGrid transactional, Klaviyo marketing)
 - [patterns.md](./patterns.md) — template lockstep with code
 - [gotchas.md](./gotchas.md) — preview workflow, root template files
+- [cross-client-rendering.md](./cross-client-rendering.md) — build reference for cross-client/dark-mode-safe HTML email (Gmail/Outlook/Apple/Yahoo); use when authoring or hardening templates
 - [models.md](./models.md) — _N/A — emails aren't persisted; uses User for recipients_
 - [testing.md](./testing.md) — `docs/SENDGRID_TESTING_GUIDE.md`
 - [staff-invite.md](./staff-invite.md) — staff invite template + `sendStaffInviteEmail` helper

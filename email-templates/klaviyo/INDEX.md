@@ -1,23 +1,21 @@
-# Klaviyo template exports
+# Klaviyo paste-ready templates
 
-**Snapshots only — Klaviyo is the source of truth.** Pulled via the Templates API (`KLAVIYO_PRIVATE_API_KEY`). `SYSTEM_DRAGGABLE` exports are rendered HTML and cannot be cleanly re-imported as drag-and-drop; edit those in the Klaviyo editor. `CODE` templates can be edited and PATCHed back.
+Custom-HTML (CODE) templates to paste into the matching Klaviyo flow email. Edit here, then paste into Klaviyo. After pasting, **Klaviyo is the live source** (these files are the hardened, version-controlled copy).
 
-Re-export by fetching `GET https://a.klaviyo.com/api/templates/` with `Authorization: Klaviyo-API-Key $KLAVIYO_PRIVATE_API_KEY` and `revision: 2025-10-15`, writing each `data[].attributes.html` to a file here.
+**Before pasting:** every `{{ event.* }}` / `{{ person.* }}` must match the flow's **trigger-metric** event properties (event vars) or the **profile** (person vars), or it renders blank. Verify against the live account — see `docs/email/architecture.md` → "Klaviyo merge-field verification".
 
-| Template | id | editor_type | file |
-|---|---|---|---|
-| Best Tradie Setup | Email 1 | `UwjBG9` | SYSTEM_DRAGGABLE | [Best-Tradie-Setup-Email-1__UwjBG9.html](Best-Tradie-Setup-Email-1__UwjBG9.html) |
-| Best Tradie Setup | Email 2 | `V4X9TM` | SYSTEM_DRAGGABLE | [Best-Tradie-Setup-Email-2__V4X9TM.html](Best-Tradie-Setup-Email-2__V4X9TM.html) |
-| Best Tradie Setup | Email 3 | `WUWxEq` | SYSTEM_DRAGGABLE | [Best-Tradie-Setup-Email-3__WUWxEq.html](Best-Tradie-Setup-Email-3__WUWxEq.html) |
-| don't stop | `TBiqth` | SYSTEM_DRAGGABLE | [don-t-stop__TBiqth.html](don-t-stop__TBiqth.html) |
-| Draw 3 | `YcS9sG` | SYSTEM_DRAGGABLE | [Draw-3__YcS9sG.html](Draw-3__YcS9sG.html) |
-| Invoice Email | `WbYUUq` | SYSTEM_DRAGGABLE | [Invoice-Email__WbYUUq.html](Invoice-Email__WbYUUq.html) |
-| Invoice Email | `YcSzpr` | SYSTEM_DRAGGABLE | [Invoice-Email__YcSzpr.html](Invoice-Email__YcSzpr.html) |
-| Invoice Email Final | `Yaa584` | CODE | [Invoice-Email-Final__Yaa584.html](Invoice-Email-Final__Yaa584.html) |
-| INVOICE TEMPLATE | `Utncuw` | CODE | [INVOICE-TEMPLATE__Utncuw.html](INVOICE-TEMPLATE__Utncuw.html) |
-| Makita | `SezXHS` | SYSTEM_DRAGGABLE | [Makita__SezXHS.html](Makita__SezXHS.html) |
-| Membership Payment Failed | `TD99aC` | CODE | [Membership-Payment-Failed__TD99aC.html](Membership-Payment-Failed__TD99aC.html) |
-| wel2 | `XCmfVb` | SYSTEM_DRAGGABLE | [wel2__XCmfVb.html](wel2__XCmfVb.html) |
-| Welcome | `XjbSdR` | SYSTEM_DRAGGABLE | [Welcome__XjbSdR.html](Welcome__XjbSdR.html) |
-| Welcome-Pre Reg | `WmmUCE` | SYSTEM_DRAGGABLE | [Welcome-Pre-Reg__WmmUCE.html](Welcome-Pre-Reg__WmmUCE.html) |
-| win | `SreNh4` | SYSTEM_DRAGGABLE | [win__SreNh4.html](win__SreNh4.html) |
+| File | Klaviyo flow | Trigger metric | Live template id | Editor |
+|---|---|---|---|---|
+| `invoice-email-template.html` | Invoice | Invoice Generated | `UeybxA` | **CODE** — paste directly |
+| `subscription-renewal-email-template.html` | Membership Renewal | Subscription Renewed | `TLyiRY` | **CODE** — paste directly |
+| `renewal-failed-email-template.html` | Failed Membership Renewal | Subscription Renewal Failed | _check in UI_ | _check in UI_ |
+| `subscription-payment-failed-email-template.html` | Failed Membership Purchase | Subscription Payment Failed | _check in UI_ | _check in UI_ |
+| `draw-reminder-email-template.html` | **NOT WIRED** (future) | — | — | — |
+
+## How to paste
+
+1. Open the flow → its email → check the editor type.
+2. **CODE / Custom HTML** → replace the HTML with this file's contents.
+3. **Drag-and-drop (`SYSTEM_DRAGGABLE`)** → you can't paste raw HTML; switch the message to a new **Custom HTML** template first, then paste.
+
+> Note: the **winner** email is now sent via **SendGrid** (on winner selection), not Klaviyo — there's no Klaviyo winner template here. If a Klaviyo flow still triggers on `Major Draw Won`, disable it to avoid double-sending.
