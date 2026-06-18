@@ -62,6 +62,7 @@ export interface UserListRow {
     startDate: Date;
     endDate?: Date;
     status?: string;
+    lastMonthAccumulatedEntries?: number | null;
   } | null;
   totalSpent: number;
   majorDrawEntries: number;
@@ -223,6 +224,7 @@ export async function listAdminUsers(args: ListUsersArgs): Promise<ListUsersResu
         startDate: Date;
         endDate?: Date;
         status?: string;
+        lastMonthAccumulatedEntries?: number;
       };
       miniDrawParticipation?: Array<{ isActive?: boolean }>;
       rewardsPoints?: number;
@@ -263,6 +265,7 @@ export async function listAdminUsers(args: ListUsersArgs): Promise<ListUsersResu
               startDate: u.subscription.startDate,
               endDate: u.subscription.endDate,
               status: u.subscription.status,
+              lastMonthAccumulatedEntries: u.subscription.lastMonthAccumulatedEntries ?? null,
             }
           : null,
       totalSpent,
@@ -679,6 +682,7 @@ export interface AdminUserDetailResult {
     endDate?: Date;
     status?: string;
     autoRenew?: boolean;
+    lastMonthAccumulatedEntries?: number | null;
   } | null;
   totalSpent: number;
   totalOrders: number;
@@ -787,6 +791,7 @@ export async function getAdminUserDetail(userId: string): Promise<AdminUserDetai
           endDate: user.subscription.endDate,
           status: user.subscription.status,
           autoRenew: user.subscription.autoRenew,
+          lastMonthAccumulatedEntries: user.subscription.lastMonthAccumulatedEntries ?? null,
         }
       : null,
     totalSpent,
