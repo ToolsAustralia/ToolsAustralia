@@ -22,7 +22,9 @@ import {
   UserPlus,
   UserMinus,
   Search,
+  Key,
 } from "lucide-react";
+import { Z_INDEX } from "@/constants/z-index";
 import { useAdminUserModal } from "@/contexts/AdminUserModalContext";
 import ClickableUserDisplay from "./ClickableUserDisplay";
 import { formatDisplayName } from "@/utils/display-name";
@@ -153,6 +155,10 @@ export default function AffiliateDetailModal({
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [showAdminPasswordModal, setShowAdminPasswordModal] = useState(false);
+  const [adminNewPassword, setAdminNewPassword] = useState("");
+  const [isSettingPassword, setIsSettingPassword] = useState(false);
+  const [passwordError, setPasswordError] = useState<string | null>(null);
   const [editForm, setEditForm] = useState({
     name: "",
     email: "",
@@ -243,6 +249,9 @@ export default function AffiliateDetailModal({
     setBackfillChecked(false);
     setAffiliatedError(null);
     setAttachSuccess(null);
+    setShowAdminPasswordModal(false);
+    setAdminNewPassword("");
+    setPasswordError(null);
   }, [isOpen, affiliateId]);
 
   useEffect(() => {
@@ -492,6 +501,35 @@ export default function AffiliateDetailModal({
       console.error(err);
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handleAdminSetPassword = async () => {
+    if (adminNewPassword.trim().length < 6) {
+      setPasswordError("New password must be at least 6 characters.");
+      return;
+    }
+    setIsSettingPassword(true);
+    setPasswordError(null);
+    try {
+      const response = await fetch(`/api/admin/affiliate/${affiliateId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password: adminNewPassword.trim() }),
+      });
+      const result = await response.json();
+      if (result.success) {
+        setAdminNewPassword("");
+        setShowAdminPasswordModal(false);
+        onUpdate();
+      } else {
+        setPasswordError(result.error || "Failed to update password");
+      }
+    } catch (err) {
+      console.error("Admin set affiliate password failed:", err);
+      setPasswordError("Failed to update password");
+    } finally {
+      setIsSettingPassword(false);
     }
   };
 
@@ -1536,6 +1574,22 @@ export default function AffiliateDetailModal({
                       Edit
                     </Button>
                   )}
+                  {canEditAffiliate && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setPasswordError(null);
+                        setAdminNewPassword("");
+                        setShowAdminPasswordModal(true);
+                      }}
+                      icon={Key}
+                      className="min-h-[44px] sm:min-h-[40px]"
+                    >
+                      Set Password
+                    </Button>
+                  )}
                   {canDeleteAffiliate && (
                     <Button
                       type="button"
@@ -1577,6 +1631,60 @@ export default function AffiliateDetailModal({
                   </Button>
                 </>
               )}
+            </div>
+          </div>
+        )}
+
+        {showAdminPasswordModal && (
+          <div
+            className="fixed inset-0 bg-black/50 flex items-center justify-center p-4"
+            style={{ zIndex: Z_INDEX.MODAL_NESTED_SECONDARY }}
+          >
+            <div className="bg-white dark:bg-neutral-900 rounded-2xl shadow-2xl dark:shadow-none max-w-md w-full p-6 animate-fade-in border border-gray-200 dark:border-neutral-700">
+              <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">Set New Password</h3>
+              <p className="text-gray-600 dark:text-neutral-400 mb-6">
+                Set a new password for this affiliate. Minimum 6 characters; no email is sent. They use it to sign in at
+                the affiliate portal.
+              </p>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-neutral-200 mb-1">
+                    New password
+                  </label>
+                  <input
+                    type="password"
+                    autoComplete="new-password"
+                    className="w-full rounded-lg border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 px-3 py-2 text-sm text-gray-900 dark:text-neutral-100 focus:border-yellow-500 focus:outline-none"
+                    value={adminNewPassword}
+                    onChange={(e) => {
+                      setAdminNewPassword(e.target.value);
+                      if (passwordError) setPasswordError(null);
+                    }}
+                    placeholder="Enter new password"
+                  />
+                  {passwordError && <p className="text-xs text-red-600 mt-1">{passwordError}</p>}
+                </div>
+              </div>
+
+              <div className="mt-6 flex items-center justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => setShowAdminPasswordModal(false)}
+                  disabled={isSettingPassword}
+                  className="px-4 py-2 rounded-lg border border-gray-300 dark:border-neutral-600 text-sm font-semibold text-gray-700 dark:text-neutral-200 hover:bg-gray-50 dark:hover:bg-neutral-800 disabled:opacity-60"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={isSettingPassword}
+                  onClick={handleAdminSetPassword}
+                  className="px-4 py-2 rounded-lg bg-gradient-to-r from-yellow-500 to-yellow-400 text-sm font-semibold text-white shadow-sm hover:from-yellow-600 hover:to-yellow-500 disabled:opacity-60 disabled:cursor-not-allowed"
+                >
+                  {isSettingPassword ? "Saving..." : "Save Password"}
+                </button>
+              </div>
             </div>
           </div>
         )}
