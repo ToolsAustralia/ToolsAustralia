@@ -44,7 +44,13 @@ export async function signJWT(payload: JWTPayload): Promise<string> {
         payload,
         JWT_SECRET,
         {
-          expiresIn: "30d", // Token expires in 30 days
+          // These tokens are short-lived BRIDGE credentials: they are minted by
+          // /api/auth/auto-login and /api/auth/verify-login-code and consumed
+          // within seconds by the NextAuth `auto-login` provider to establish the
+          // real (30-day) session. They are never used as a long-lived credential,
+          // so a short lifetime shrinks the misuse window with no UX cost.
+          expiresIn: "15m",
+          algorithm: "HS256",
           issuer: "tools-australia",
           audience: "tools-australia-users",
         },
@@ -61,6 +67,33 @@ export async function signJWT(payload: JWTPayload): Promise<string> {
     console.error("Failed to sign JWT:", error);
     throw new Error("JWT signing failed");
   }
+}
+
+/**
+ * Mint a short-lived auto-login BRIDGE token for a user.
+ *
+ * SECURITY: only ever call this as the result of a SERVER-VERIFIED action —
+ * `/api/auth/auto-login` (after it verifies the caller's Stripe PaymentIntent
+ * belongs to the user) or `/api/auth/verify-email` (after a verified email code).
+ * Never mint from unauthenticated `{ userId, email }` input — that was the
+ * `/api/auth/auto-login` account-takeover hole (a non-secret id + email is not
+ * proof of identity). The token is consumed within seconds by the NextAuth
+ * `auto-login` provider to establish the session.
+ */
+export async function signAutoLoginToken(user: {
+  _id: { toString(): string } | string;
+  email: string;
+  firstName: string;
+  lastName: string;
+  role: string;
+}): Promise<string> {
+  return signJWT({
+    sub: typeof user._id === "string" ? user._id : user._id.toString(),
+    email: user.email,
+    firstName: user.firstName,
+    lastName: user.lastName,
+    role: user.role,
+  });
 }
 
 /**
@@ -82,6 +115,7 @@ export async function verifyJWT(token: string): Promise<JWTPayload> {
         token,
         JWT_SECRET,
         {
+          algorithms: ["HS256"], // Pin the algorithm: never accept a token signed with any other alg.
           issuer: "tools-australia",
           audience: "tools-australia-users",
         },

@@ -1,5 +1,9 @@
 # Draws — Gotchas
 
+## Mini-draw entries auth = NextAuth session, not a bearer token (2026-06-19)
+
+`/api/mini-draws/entries` (GET/POST/PUT) used a private `getUserFromToken` that read `Authorization: Bearer <token>`. It now authorizes via `requireAuthenticatedUserDoc()` (NextAuth `getServerSession`, in [api-auth.ts](../../src/lib/api-auth.ts)), and the mutating POST/PUT call `requireSameOrigin(request)` for CSRF. Clients send no `Authorization` header — the session cookie is auto-attached. Part of the JWT/auth remediation; see [docs/auth/jwt-auth-remediation-spec.md](../auth/jwt-auth-remediation-spec.md).
+
 ## Renewal entry-loss under billing spikes (`addToMajorDraw` swallow) + the reconciler
 
 During synchronized renewal billing spikes (anchor-day billing fires dozens of `invoice.paid` webhooks at once), the draw-credit in `addToMajorDraw` ([`payment-processing.ts`](../../src/utils/payment/payment-processing.ts)) could transiently fail and was **silently swallowed**, leaving the renewal's `data.grants.drawGrants` empty and the member missing/short on the active draw — while their `accumulatedEntries`/`lastMonthAccumulatedEntries` updated. It was invisible (0 `ErrorReport`s; `stripewebhookqueue` showed `succeeded`, because the swallow was *below* the queue layer). May 2026: 60 active members under-credited by 25,235 entries.

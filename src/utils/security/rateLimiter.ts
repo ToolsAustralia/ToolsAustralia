@@ -70,6 +70,72 @@ export const createRateLimiter = (bucketKey: string, options: RateLimiterOptions
   };
 };
 
+type DistributedRateLimiter = {
+  check: (identifier: string) => Promise<RateLimiterResult>;
+};
+
+/**
+ * Mongo-backed rate limiter, shared across all serverless instances.
+ *
+ * The in-memory `createRateLimiter` above keeps its counters in per-instance
+ * `globalThis` memory, so on Vercel an attacker can dodge the limit by hitting
+ * different lambda instances. Use this variant for brute-force-sensitive auth
+ * endpoints (login / OTP verify / auto-login). It **fails open**: if the store is
+ * unreachable, it allows the request rather than locking everyone out.
+ *
+ * The model + connection are imported lazily so this module stays free of a
+ * top-level Mongoose dependency.
+ */
+export const createDistributedRateLimiter = (
+  bucketKey: string,
+  options: RateLimiterOptions
+): DistributedRateLimiter => {
+  return {
+    check: async (identifier: string): Promise<RateLimiterResult> => {
+      const key = `${bucketKey}:${identifier}`;
+      const now = Date.now();
+      try {
+        const [{ default: connectDB }, { default: RateLimit }] = await Promise.all([
+          import("@/lib/mongodb"),
+          import("@/models/RateLimit"),
+        ]);
+        await connectDB();
+
+        // Atomically increment within a still-live window.
+        const updated = await RateLimit.findOneAndUpdate(
+          { _id: key, resetAt: { $gt: new Date(now) } },
+          { $inc: { count: 1 } },
+          { new: true }
+        ).lean();
+
+        if (updated) {
+          if (updated.count > options.maxRequests) {
+            const retryAfterSeconds = Math.ceil((new Date(updated.resetAt).getTime() - now) / 1000);
+            return { success: false, remaining: 0, retryAfterSeconds: Math.max(retryAfterSeconds, 1) };
+          }
+          return {
+            success: true,
+            remaining: Math.max(options.maxRequests - updated.count, 0),
+            retryAfterSeconds: 0,
+          };
+        }
+
+        // No live window (new or expired) — start a fresh one.
+        await RateLimit.updateOne(
+          { _id: key },
+          { $set: { count: 1, resetAt: new Date(now + options.windowMs) } },
+          { upsert: true }
+        );
+        return { success: true, remaining: options.maxRequests - 1, retryAfterSeconds: 0 };
+      } catch (err) {
+        // Fail OPEN: never block legitimate auth because the limiter store hiccuped.
+        console.error("Distributed rate limiter error (failing open):", err);
+        return { success: true, remaining: options.maxRequests, retryAfterSeconds: 0 };
+      }
+    },
+  };
+};
+
 /**
  * Convenience helper: use the user's IP if available, otherwise fall back to a header fingerprint.
  */

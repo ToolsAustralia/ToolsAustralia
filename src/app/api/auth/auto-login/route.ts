@@ -2,55 +2,87 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import connectDB from "@/lib/mongodb";
 import User from "@/models/User";
-import { signJWT } from "../../../../lib/jwt";
+import { stripe } from "@/lib/stripe";
+import { signAutoLoginToken } from "@/lib/jwt";
+import { requireSameOrigin } from "@/utils/security/requireSameOrigin";
+import { createDistributedRateLimiter, getClientIdentifier } from "@/utils/security/rateLimiter";
 
 const autoLoginSchema = z.object({
   userId: z.string().min(1, "User ID is required"),
   email: z.string().email("Invalid email address"),
+  // Proof of a completed payment. Required: identity must NOT be taken on trust
+  // from {userId,email} alone (both are non-secret). See the security note below.
+  paymentIntentId: z.string().min(1, "paymentIntentId is required"),
+});
+
+const autoLoginRateLimiter = createDistributedRateLimiter("auth-auto-login", {
+  windowMs: 5 * 60 * 1000,
+  maxRequests: 10,
 });
 
 /**
  * POST /api/auth/auto-login
- * Create a session for passwordless users after successful payment
+ * Establish a session for a user immediately after a server-verifiable payment.
+ *
+ * SECURITY: this route previously minted a 30-day session from `{userId, email}`
+ * plus the user merely having a `stripeCustomerId` — both non-secret, so anyone
+ * who knew a past customer's email + ObjectId could take over their account. It
+ * now requires a Stripe `paymentIntentId` that belongs to this user's Stripe
+ * customer: proof the caller actually completed the payment (an attacker cannot
+ * obtain a victim's PaymentIntent id). The email-verification login flow no longer
+ * uses this route — it receives its bridge token from `/api/auth/verify-email`.
  */
 export async function POST(request: NextRequest) {
   try {
-    console.log("🔐 Auto-login request received");
+    const csrf = requireSameOrigin(request);
+    if (csrf) return csrf;
 
-    // Parse and validate request body
+    const identifier = getClientIdentifier(
+      request.headers.get("x-real-ip"),
+      request.headers.get("x-forwarded-for")
+    );
+    const rateCheck = await autoLoginRateLimiter.check(identifier);
+    if (!rateCheck.success) {
+      return NextResponse.json(
+        { success: false, error: "Too many attempts. Please wait a moment and try again." },
+        { status: 429, headers: { "Retry-After": rateCheck.retryAfterSeconds.toString() } }
+      );
+    }
+
     const body = await request.json();
-    const validatedData = autoLoginSchema.parse(body);
+    const { userId, email, paymentIntentId } = autoLoginSchema.parse(body);
 
-    console.log("✅ Request validation successful");
-
-    // Connect to database
     await connectDB();
 
-    // Find user by ID and email
-    const user = await User.findById(validatedData.userId);
-    if (!user || user.email !== validatedData.email) {
+    const user = await User.findById(userId);
+    if (!user || user.email !== email) {
       return NextResponse.json(
-        {
-          success: false,
-          error: "User not found or email mismatch",
-        },
+        { success: false, error: "User not found or email mismatch" },
         { status: 404 }
       );
     }
 
-    // Check if user has an active membership OR has ever purchased packages (even if still processing via webhooks)
-    const hasActiveSubscription = user.subscription?.isActive;
-    const hasActiveOneTimePackages = user.oneTimePackages?.some((pkg: { isActive: boolean }) => pkg.isActive);
-    const hasAnyOneTimePackages = user.oneTimePackages && user.oneTimePackages.length > 0;
-    const hasStripeCustomerId = user.stripeCustomerId; // Indicates they made a successful payment
-
-    // Allow auto-login if: active subscription OR active one-time packages OR any packages in database OR has Stripe customer ID (meaning they completed payment)
-    if (!hasActiveSubscription && !hasActiveOneTimePackages && !hasAnyOneTimePackages && !hasStripeCustomerId) {
+    // Proof of possession: the PaymentIntent must belong to this user's Stripe
+    // customer. Knowing the (non-secret) userId + email is not enough.
+    if (!user.stripeCustomerId) {
       return NextResponse.json(
-        {
-          success: false,
-          error: "No active membership found",
-        },
+        { success: false, error: "No payment on file for this user" },
+        { status: 403 }
+      );
+    }
+
+    let paymentIntent;
+    try {
+      paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
+    } catch {
+      return NextResponse.json({ success: false, error: "Invalid payment reference" }, { status: 403 });
+    }
+
+    const piCustomerId =
+      typeof paymentIntent.customer === "string" ? paymentIntent.customer : paymentIntent.customer?.id;
+    if (!piCustomerId || piCustomerId !== user.stripeCustomerId) {
+      return NextResponse.json(
+        { success: false, error: "Payment does not belong to this user" },
         { status: 403 }
       );
     }
@@ -59,27 +91,16 @@ export async function POST(request: NextRequest) {
     user.lastLogin = new Date();
     await user.save();
 
-    // ✅ NEW: Update Klaviyo profile with latest login data
+    // Keep Klaviyo profile fresh (non-critical)
     try {
       const { ensureUserProfileSynced } = await import("@/utils/integrations/klaviyo/klaviyo-profile-sync");
-      console.log(`📊 Updating Klaviyo profile after auto-login`);
       ensureUserProfileSynced(user);
     } catch (klaviyoError) {
       console.error("Klaviyo import/update error (non-critical):", klaviyoError);
     }
 
-    // Create JWT token for the user
-    const token = await signJWT({
-      sub: user._id.toString(),
-      email: user.email,
-      firstName: user.firstName,
-      lastName: user.lastName,
-      role: user.role,
-    });
+    const token = await signAutoLoginToken(user);
 
-    console.log(`✅ Auto-login successful for user: ${user.email}`);
-
-    // Return success with token
     return NextResponse.json({
       success: true,
       message: "Auto-login successful",
@@ -91,8 +112,12 @@ export async function POST(request: NextRequest) {
         lastName: user.lastName,
         role: user.role,
         isMobileVerified: user.isMobileVerified,
-        hasActiveMembership:
-          hasActiveSubscription || hasActiveOneTimePackages || hasAnyOneTimePackages || hasStripeCustomerId,
+        hasActiveMembership: Boolean(
+          user.subscription?.isActive ||
+            user.oneTimePackages?.some((pkg: { isActive: boolean }) => pkg.isActive) ||
+            (user.oneTimePackages && user.oneTimePackages.length > 0) ||
+            user.stripeCustomerId
+        ),
       },
     });
   } catch (error) {
@@ -100,21 +125,11 @@ export async function POST(request: NextRequest) {
 
     if (error instanceof z.ZodError) {
       return NextResponse.json(
-        {
-          success: false,
-          error: "Invalid request data",
-          details: error.issues,
-        },
+        { success: false, error: "Invalid request data", details: error.issues },
         { status: 400 }
       );
     }
 
-    return NextResponse.json(
-      {
-        success: false,
-        error: "Internal server error",
-      },
-      { status: 500 }
-    );
+    return NextResponse.json({ success: false, error: "Internal server error" }, { status: 500 });
   }
 }

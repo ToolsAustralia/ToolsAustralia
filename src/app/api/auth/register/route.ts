@@ -27,7 +27,7 @@ import { isValidPromoSlug, getPageTypeFromSlug } from "@/utils/promo-analytics/v
 import { IUser } from "@/models/User";
 import type { AttributionParams } from "@/types/tracking";
 import { stripe } from "@/lib/stripe";
-import { createRateLimiter, getClientIdentifier } from "@/utils/security/rateLimiter";
+import { createDistributedRateLimiter, getClientIdentifier } from "@/utils/security/rateLimiter";
 
 /**
  * Normalize Australian mobile number to +61 format
@@ -248,9 +248,9 @@ function buildSignupAttribution(
 // single-IP flood. The limit is intentionally more lenient than login's 5/min:
 // registration is funnel-rate, and ad spikes can route many legitimate signups
 // through one carrier-NAT / shared egress IP, so we avoid false-positives while
-// still stopping obvious abuse. (Per-instance only — not a WAF substitute for a
-// distributed attack; tune `maxRequests` if real traffic ever approaches it.)
-const registerRateLimiter = createRateLimiter("auth-register", {
+// still stopping obvious abuse. (Shared Mongo-backed store, so the limit holds
+// across serverless instances; tune `maxRequests` if real traffic approaches it.)
+const registerRateLimiter = createDistributedRateLimiter("auth-register", {
   windowMs: 60 * 1000, // 1 minute window
   maxRequests: 20, // 20 registrations per minute per IP
 });
@@ -265,7 +265,7 @@ export async function POST(request: NextRequest) {
       request.headers.get("x-real-ip"),
       request.headers.get("x-forwarded-for")
     );
-    const rateCheck = registerRateLimiter.check(identifier);
+    const rateCheck = await registerRateLimiter.check(identifier);
     if (!rateCheck.success) {
       // `message` is the field MembershipModal renders (result.message || generic
       // fallback) — without it a rate-limited user sees "Registration failed.

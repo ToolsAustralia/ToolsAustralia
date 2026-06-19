@@ -1,10 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import connectDB from "@/lib/mongodb";
-import User from "@/models/User";
 import MiniDraw from "@/models/MiniDraw";
 import { z } from "zod";
-import { verify } from "jsonwebtoken";
-import { JwtPayload } from "jsonwebtoken";
+import { requireAuthenticatedUserDoc } from "@/lib/api-auth";
+import { requireSameOrigin } from "@/utils/security/requireSameOrigin";
 
 // Validation schemas
 const purchaseTicketsSchema = z.object({
@@ -18,29 +17,13 @@ const useFreeEntriesSchema = z.object({
   quantity: z.number().int().min(1),
 });
 
-// Helper function to get user from token
-async function getUserFromToken(request: NextRequest) {
-  const authHeader = request.headers.get("authorization");
-  if (!authHeader || !authHeader.startsWith("Bearer ")) {
-    throw new Error("No token provided");
-  }
-
-  const token = authHeader.substring(7);
-  const decoded = verify(token, process.env.NEXTAUTH_SECRET!) as JwtPayload;
-  const user = await User.findById(decoded.userId);
-
-  if (!user) {
-    throw new Error("User not found");
-  }
-
-  return user;
-}
-
 // GET - Get user's available entries and mini draw info
 export async function GET(request: NextRequest) {
   try {
     await connectDB();
-    const user = await getUserFromToken(request);
+    const auth = await requireAuthenticatedUserDoc();
+    if ("errorResponse" in auth) return auth.errorResponse;
+    const { user } = auth;
     const { searchParams } = new URL(request.url);
     const miniDrawId = searchParams.get("miniDrawId");
 
@@ -89,8 +72,12 @@ export async function GET(request: NextRequest) {
 // POST - Purchase tickets or use free entries
 export async function POST(request: NextRequest) {
   try {
+    const csrf = requireSameOrigin(request);
+    if (csrf) return csrf;
     await connectDB();
-    const user = await getUserFromToken(request);
+    const auth = await requireAuthenticatedUserDoc();
+    if ("errorResponse" in auth) return auth.errorResponse;
+    const { user } = auth;
     const body = await request.json();
     const validatedData = purchaseTicketsSchema.parse(body);
 
@@ -183,8 +170,12 @@ export async function POST(request: NextRequest) {
 // PUT - Use free entries only
 export async function PUT(request: NextRequest) {
   try {
+    const csrf = requireSameOrigin(request);
+    if (csrf) return csrf;
     await connectDB();
-    const user = await getUserFromToken(request);
+    const auth = await requireAuthenticatedUserDoc();
+    if ("errorResponse" in auth) return auth.errorResponse;
+    const { user } = auth;
     const body = await request.json();
     const validatedData = useFreeEntriesSchema.parse(body);
 

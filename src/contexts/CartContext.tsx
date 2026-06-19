@@ -161,11 +161,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
       setIsLoading(true);
       setError(null);
 
-      const response = await fetch("/api/cart", {
-        headers: {
-          Authorization: `Bearer ${session?.user?.id}`,
-        },
-      });
+      const response = await fetch("/api/cart");
 
       if (!response.ok) throw new Error("Failed to load cart");
 
@@ -186,7 +182,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
     } finally {
       setIsLoading(false);
     }
-  }, [userId, session?.user?.id]);
+  }, [userId]);
 
   // Process pending operations
   const processPendingOperations = useCallback(async () => {
@@ -211,7 +207,6 @@ export function CartProvider({ children }: { children: ReactNode }) {
                 method: "POST",
                 headers: {
                   "Content-Type": "application/json",
-                  Authorization: `Bearer ${session?.user?.id}`,
                 },
                 body: JSON.stringify(operation.data),
               });
@@ -222,29 +217,26 @@ export function CartProvider({ children }: { children: ReactNode }) {
                 method: "PUT",
                 headers: {
                   "Content-Type": "application/json",
-                  Authorization: `Bearer ${session?.user?.id}`,
                 },
                 body: JSON.stringify(operation.data),
               });
               break;
 
             case "remove":
-              response = await fetch("/api/cart/remove", {
+              response = await fetch("/api/cart", {
                 method: "DELETE",
                 headers: {
                   "Content-Type": "application/json",
-                  Authorization: `Bearer ${session?.user?.id}`,
                 },
                 body: JSON.stringify(operation.data),
               });
               break;
 
             case "clear":
-              response = await fetch("/api/cart", {
+              // Whole-cart clear has its own route; DELETE /api/cart removes a
+              // single item and requires a JSON body, so it cannot clear.
+              response = await fetch("/api/cart/clear", {
                 method: "DELETE",
-                headers: {
-                  Authorization: `Bearer ${session?.user?.id}`,
-                },
               });
               break;
 
@@ -310,7 +302,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
     } finally {
       setIsLoading(false);
     }
-  }, [cartState.pendingOperations, userId, session?.user?.id]);
+  }, [cartState.pendingOperations, userId]);
 
   // Debounced sync function
   const debouncedSync = useCallback(() => {

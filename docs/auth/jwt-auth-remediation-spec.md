@@ -6,6 +6,20 @@
 
 ---
 
+## Implementation status — 2026-06-19 (branch `feature/jwt-auth-remediation`)
+
+An independent re-audit against the working tree **confirmed all 14 findings** and corrected two things: the missing-`algorithms` allowlist is hardening-only (no asymmetric-key path exists; HS256 + a string/symmetric secret rejects `alg:none`), **not** the headline; and it surfaced a **new HIGH** the original audit missed:
+
+- **A0 · [HIGH] `/api/auth/auto-login` account takeover.** The route mints a full 30-day bridge token (→ NextAuth session) from `{userId, email}` + the user merely having a `stripeCustomerId` ([auto-login/route.ts:30-78](../../src/app/api/auth/auto-login/route.ts#L30-L78)). Both inputs are non-secret, and there is no proof-of-possession / rate-limit / Origin check, so a server-side attacker who knows a past customer's email + ObjectId can obtain a session as them. Consumed via `signIn("auto-login")` (MembershipModal/LoginModal). **Fix is non-trivial:** free/trial/$0 membership flows carry no `paymentIntentId`, and the email-verification login path (`/api/auth/verify-email` → auto-login) carries none either — so "require a verified PaymentIntent" alone would break legitimate signup→login. Needs a proof design (single-use grant issued by the upstream verified action, or retire the standalone endpoint and have each verified action mint the token inline). **FIXED (2026-06-19):** the endpoint now requires a Stripe `paymentIntentId` whose customer matches the user's `stripeCustomerId` (proof of possession an attacker can't forge), and the email-verification flow takes its bridge token from `/api/auth/verify-email` instead of calling this route. Relies on the (verified) assumption that all auto-login membership purchases carry a PaymentIntent — no `$0`/free membership signups.
+
+**Landed (safe — no NextAuth session invalidated, no flow broken):** A1, A2 (+ a third op-queue bug: "clear" hit `DELETE /api/cart` with no body), C1, B3, plus jwt.ts bridge-token lifetime 30d→15m, affiliate fail-fast secret (B1, secret unchanged so existing tokens still verify) + alg pin + `isActive` revocation + CSRF, middleware D4/D5, and OTP IP rate-limit + constant-time compare on `verify-login-code`.
+
+**Now also implemented (2026-06-19, owner approved):** A0 (PaymentIntent proof-of-possession); affiliate dedicated `AFFILIATE_JWT_SECRET` + enforced `iss`/`aud` + `__Host-` cookie (accepted one-time affiliate re-login — see [SECRET_ROTATION.md](./SECRET_ROTATION.md)); dead `/api/auth/login` deleted (C2/D1); Mongo-backed `createDistributedRateLimiter` on the auth brute-force endpoints (`nextauth-credentials`, `auth-register`, `auth-verify-login-code`, `auth-auto-login`).
+
+**Remaining:** `next build` + a **staging smoke-test** of the payment→auto-login and affiliate re-login paths (cannot be exercised without a live Stripe checkout), and an env step: set `AFFILIATE_JWT_SECRET` on each deploy target to activate full affiliate key separation.
+
+**Deferred by design (not built):** zero-downtime secret-rotation machinery (`kid` + dual-secret grace) — see SECRET_ROTATION.md for why; and converting the 10+ existing in-memory rate-limiter callers (Norm/Stripe/promo/error-reports) to the distributed store (out of scope; only the auth surface needed it).
+
 ## How to read this spec
 
 Every finding below uses the same seven-part structure:

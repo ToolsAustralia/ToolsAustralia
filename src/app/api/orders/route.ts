@@ -1,11 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import connectDB from "@/lib/mongodb";
-import User from "@/models/User";
 import Product from "@/models/Product";
 import Order from "@/models/Order";
 import { z } from "zod";
-import { verify } from "jsonwebtoken";
-import { JWTPayload } from "@/types/api";
+import { requireAuthenticatedUserDoc } from "@/lib/api-auth";
+import { requireSameOrigin } from "@/utils/security/requireSameOrigin";
 
 const createOrderSchema = z.object({
   products: z
@@ -26,28 +25,12 @@ const createOrderSchema = z.object({
   paymentIntentId: z.string().min(1),
 });
 
-// Helper function to get user from token
-async function getUserFromToken(request: NextRequest) {
-  const authHeader = request.headers.get("authorization");
-  if (!authHeader || !authHeader.startsWith("Bearer ")) {
-    throw new Error("No token provided");
-  }
-
-  const token = authHeader.substring(7);
-  const decoded = verify(token, process.env.NEXTAUTH_SECRET!) as JWTPayload;
-  const user = await User.findById(decoded.userId);
-
-  if (!user) {
-    throw new Error("User not found");
-  }
-
-  return user;
-}
-
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
     await connectDB();
-    const user = await getUserFromToken(request);
+    const auth = await requireAuthenticatedUserDoc();
+    if ("errorResponse" in auth) return auth.errorResponse;
+    const { user } = auth;
 
     const orders = await Order.find({ user: user._id }).populate("products.productId").sort({ createdAt: -1 }).lean();
 
@@ -60,8 +43,12 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    const csrf = requireSameOrigin(request);
+    if (csrf) return csrf;
     await connectDB();
-    const user = await getUserFromToken(request);
+    const auth = await requireAuthenticatedUserDoc();
+    if ("errorResponse" in auth) return auth.errorResponse;
+    const { user } = auth;
 
     const body = await request.json();
     const validatedData = createOrderSchema.parse(body);

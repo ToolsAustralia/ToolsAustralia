@@ -1,7 +1,15 @@
 import { withAuth } from "next-auth/middleware";
 import { NextResponse } from "next/server";
+import type { JWT } from "next-auth/jwt";
 import { generateNonce } from "@/utils/security/nonce";
 import { buildSecurityHeaders } from "@/utils/security/csp";
+
+// Internal users = staff/admin userType, or the legacy role:"admin" bridge
+// (kept until the Phase-5 migration drops the legacy field). Single definition so
+// the entry gate (`authorized`) and the redirect (`middleware`) can never drift.
+function isInternalUser(token: JWT | null): boolean {
+  return token?.userType === "staff" || token?.userType === "admin" || token?.role === "admin";
+}
 
 export default withAuth(
   function middleware(req) {
@@ -17,8 +25,10 @@ export default withAuth(
     const protectedRoutes = ["/rewards", "/my-account"];
     const isProtectedRoute = protectedRoutes.some((route) => pathname.startsWith(route));
 
-    // Admin-only routes (UI + API namespaces)
-    const adminRoutes = ["/admin", "/api/admin"];
+    // Admin-only PAGE routes. (/api/admin is intentionally NOT listed: middleware
+    // never runs for /api/** — the matcher excludes it — so /api/admin
+    // authorization lives in the route handlers, not here.)
+    const adminRoutes = ["/admin"];
     const isAdminRoute = adminRoutes.some((route) => pathname.startsWith(route));
 
     // Staff route block-list: staff accounts are not customer accounts.
@@ -62,15 +72,7 @@ export default withAuth(
     }
 
     // Check admin access for admin routes.
-    // Internal users = userType "staff" (custom role) or "admin" (super-role).
-    // Legacy bridge: pre-migration users with role:"admin" still pass through
-    // until Phase 5 drops the legacy field.
-    const isInternalUser =
-      token?.userType === "staff" ||
-      token?.userType === "admin" ||
-      token?.role === "admin";
-
-    if (isAdminRoute && (!token || !isInternalUser)) {
+    if (isAdminRoute && (!token || !isInternalUser(token))) {
       const response = NextResponse.redirect(new URL("/", req.url));
       // Apply security headers to redirect response
       if (isProduction && nonce) {
@@ -131,18 +133,13 @@ export default withAuth(
           return !!token && !!token.sub;
         }
 
-        // For admin routes, require admin role
-        const adminRoutes = ["/admin", "/api/admin"];
+        // For admin PAGE routes, require an internal user. (/api/admin is gated by
+        // per-handler checks, not here — middleware never runs for /api/**.)
+        const adminRoutes = ["/admin"];
         const isAdminRoute = adminRoutes.some((route) => pathname.startsWith(route));
 
         if (isAdminRoute) {
-          // Admin routes require a valid subject AND an internal userType
-          // (staff or admin) OR the legacy admin role for the migration window.
-          const isInternalUser =
-            token?.userType === "staff" ||
-            token?.userType === "admin" ||
-            token?.role === "admin";
-          return !!token?.sub && isInternalUser;
+          return !!token?.sub && isInternalUser(token);
         }
 
         return true;
