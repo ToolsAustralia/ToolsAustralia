@@ -27,6 +27,14 @@ const UserSubscriptionSchema = z.object({
   endDate: z.string().nullable().describe("ISO 8601 UTC; null when subscription has no scheduled end"),
   status: z.string().nullable().describe("Stripe-style status: active | trialing | past_due | incomplete | cancelled"),
   autoRenew: z.boolean().nullable().describe("Whether the subscription will auto-renew on its anchor day"),
+  lastMonthAccumulatedEntries: z
+    .number()
+    .int()
+    .nonnegative()
+    .nullable()
+    .describe(
+      "Membership accumulated entries carried forward into the next draw on renewal; preserved through cancellation for resubscribe. Distinct from top-level accumulatedEntries (lifetime total).",
+    ),
 });
 
 const UserListRowSchema = z.object({
@@ -195,6 +203,14 @@ export const NormUsersGetSchema = z.object({
       endDate: z.string().nullable(),
       status: z.string().nullable(),
       autoRenew: z.boolean().nullable(),
+      lastMonthAccumulatedEntries: z
+        .number()
+        .int()
+        .nonnegative()
+        .nullable()
+        .describe(
+          "Membership accumulated entries carried forward into the next draw on renewal; preserved through cancellation for resubscribe. Distinct from top-level accumulatedEntries (lifetime total).",
+        ),
     })
     .nullable(),
   statistics: z.object({

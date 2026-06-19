@@ -1,8 +1,12 @@
 # Email — Gotchas
 
-## Templates at repo root, not under src/
+## Templates live under `email-templates/`, not `src/`
 
-CLAUDE.md flags this — templates live at the repo ROOT (`*-email-template.html`). Easy to miss when scanning `src/`. Always check the root for email-related changes.
+Two subfolders: `email-templates/klaviyo/` = the **paste-ready Klaviyo** custom-HTML templates (invoice, subscription-renewal, renewal-failed, subscription-payment-failed, draw-reminder); `email-templates/klaviyo-exports/` = **read-only export snapshots** (reference only). Easy to miss when scanning `src/`. There are **no SendGrid HTML files** — every SendGrid email (incl. staff-invite, migrated to code June 2026) is code-as-source in `src/lib/email/templates.ts` + `components.ts`. Nothing is runtime-loaded from disk anymore, so there's no `process.cwd()` / file-tracing footgun.
+
+## One support line, in the footer only
+
+`support@toolsaustralia.com.au` belongs in the **footer** (rendered by `components.ts` for SendGrid, duplicated in each Klaviyo file's footer). Do **not** add a secondary "Need a hand? / Questions about this order? / just keeping you in the loop" support line in the email **body** — it duplicates the footer. Those body lines were removed from the invoice, renewal, renewal-failed, and signup-payment-failed templates June 2026.
 
 ## Preview ≠ production render
 

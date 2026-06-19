@@ -19,3 +19,7 @@ Klaviyo / SendGrid suppression lists are checked at send time. Don't bypass even
 ## R5. Test emails go to a sandbox account
 
 Use the dedicated test email address documented in `docs/SENDGRID_TESTING_GUIDE.md` for test sends. Don't send to real users from dev.
+
+## R6. Customer-facing entry copy says "free entries"
+
+Per spec D9 (`docs/superpowers/specs/2026-05-14-upsell-remap-and-multiplier-design.md`): every **customer-facing** entry count/reward in emails reads "free entries" regardless of source — never bare "entries"/"Entries". Applies to SendGrid templates and Klaviyo templates alike. Exceptions: CSS class names (`.entries-box`), HTML comments, merge-variable names (`{{ event.entries_gained }}`), and **internal/admin** emails showing raw draw totals (e.g. the "select a winner" notice in `src/lib/email/templates.ts`, which shows `totalEntries / minimumEntries`) — those stay "Entries".

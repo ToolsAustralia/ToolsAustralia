@@ -1,0 +1,176 @@
+<!--
+  Tools Australia — Membership signup payment failed (FIRST-TIME / alert variant).
+  Klaviyo: paste into custom HTML (or upload). Inline styles + <head> CSS for Gmail/Outlook.
+  Merge fields (Klaviyo Liquid):
+    {{ person.first_name }}          — greeting name
+    {{ event.failure_reason }}       — human-readable failure reason
+    {{ event.price }}               — amount (rendered as A${{ event.price }})
+    {{ event.package_name }}         — membership package (conditional)
+    {{ event.failure_message }}      — error message (conditional, takes precedence)
+    {{ event.failure_code }}         — error code (conditional fallback)
+    {{ event.payment_intent_id }}    — Stripe payment intent id (conditional)
+    {% unsubscribe %}                — Klaviyo unsubscribe href
+  Email-client-safe: table layout, all-inline styles, mobile @600px, light dark-mode, Outlook VML button.
+-->
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <meta http-equiv="X-UA-Compatible" content="IE=edge"/>
+  <meta name="color-scheme" content="light dark"/>
+  <meta name="supported-color-schemes" content="light dark"/>
+  <title>Membership payment failed</title>
+  <!--[if mso]><style type="text/css">body,table,td,a,p,h1,h2{font-family:Arial,Helvetica,sans-serif !important;}</style><![endif]-->
+  <!--[if !mso]><!--><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Poppins:wght@600;700;800;900&display=swap" rel="stylesheet"><!--<![endif]-->
+
+  <style>
+    body,table,td,p,a,h1,h2{margin:0;padding:0;}
+    img{border:0;line-height:100%;outline:none;text-decoration:none;-ms-interpolation-mode:bicubic;}
+    a{text-decoration:none;}
+    body{width:100%!important;-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%;}
+    .num{font-variant-numeric:tabular-nums;}
+    @media only screen and (max-width:600px){
+      .container{width:100%!important;}
+      .px{padding-left:22px!important;padding-right:22px!important;}
+      .py{padding-top:30px!important;padding-bottom:32px!important;}
+      .h1{font-size:29px!important;line-height:1.1!important;}
+      .btn{width:100%!important;}
+      .btn a{display:block!important;}
+      .dt-th{display:block!important;width:100%!important;box-sizing:border-box!important;border-bottom:none!important;padding-bottom:4px!important;}
+      .dt-td{display:block!important;width:100%!important;box-sizing:border-box!important;padding-top:0!important;}
+    }
+    @media (prefers-color-scheme: dark){
+      .page{background-color:#0a0a0a!important;}
+      .card{background-color:#171717!important;border-color:#2e2e2e!important;}
+      .t-dark{color:#f5f5f5!important;}
+      .t-mut{color:#a3a3a3!important;}
+      .surface2{background-color:#241616!important;border-color:#7f1d1d!important;}
+      .footer{background-color:#0a0a0a!important;border-color:#2e2e2e!important;}
+      .tableh{background-color:#0f0f0f!important;color:#e5e5e5!important;}
+      .tabler{background-color:#171717!important;}
+      .tabler-b{border-color:#262626!important;}
+      .hairline{background-color:#2e2e2e!important;}
+    }
+  </style>
+</head>
+<body class="page" style="margin:0;padding:0;background-color:#f9fafb;font-family:'Inter','Helvetica Neue',Arial,sans-serif;">
+  <div style="display:none;max-height:0;overflow:hidden;opacity:0;mso-hide:all;font-size:1px;line-height:1px;color:#f9fafb;">Your signup payment didn't go through — try again to join, or explore free entry options.&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;</div>
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="page" style="background-color:#f9fafb;">
+    <tr><td align="center" style="padding:32px 12px;">
+      <table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" class="container card" style="width:600px;max-width:600px;background-color:#ffffff;border:1px solid #e5e7eb;border-radius:16px;overflow:hidden;box-shadow:0 10px 34px rgba(15,23,42,0.10);">
+
+        <!-- HEADER -->
+        <tr>
+          <td style="background:#0f172a;background:linear-gradient(135deg,#0f172a 0%,#111827 30%,#1f2937 60%,#0b1220 100%);text-align:center;padding:36px 24px 26px;">
+            <img src="https://toolsaustralia.com.au/images/Tools%20Australia%20Logo/White-Text%20Logo.webp" width="150" alt="Tools Australia — Australia's biggest monthly tool giveaway" style="display:block;margin:0 auto 14px;max-width:150px;width:150px;height:auto;border:0;"/>
+            <p style="margin:0;font-family:'SFMono-Regular',ui-monospace,Consolas,'Courier New',monospace;font-size:10px;font-weight:600;letter-spacing:3px;text-transform:uppercase;color:#94a3b8;">Australia's Biggest Monthly Tool Giveaway</p>
+          </td>
+        </tr>
+        <tr><td style="height:4px;background-color:#ee0000;line-height:4px;font-size:0;">&nbsp;</td></tr>
+        <tr><td style="height:6px;background-color:#0b1220;background-image:repeating-linear-gradient(135deg,#1f2937 0,#1f2937 7px,#0b1220 7px,#0b1220 14px);line-height:6px;font-size:0;">&nbsp;</td></tr>
+
+        <!-- BODY -->
+        <tr><td class="px py" style="padding:40px 36px 36px;">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tbody>
+
+            <!-- Eyebrow -->
+            <tr><td align="center"><table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" style="margin:0 auto;"><tr><td style="vertical-align:middle;padding-right:8px;"><div style="width:7px;height:7px;background-color:#dc2626;transform:rotate(45deg);"></div></td><td style="vertical-align:middle;"><span style="font-family:'SFMono-Regular',ui-monospace,Consolas,'Courier New',monospace;font-size:11px;font-weight:600;letter-spacing:2.5px;text-transform:uppercase;color:#dc2626;">Almost there</span></td></tr></table></td></tr>
+            <tr><td style="height:16px;line-height:16px;font-size:0;">&nbsp;</td></tr>
+
+            <!-- Headline -->
+            <tr><td align="center"><h1 class="h1 t-dark" style="margin:0;font-family:'Poppins','Helvetica Neue',Arial,sans-serif;font-size:33px;font-weight:800;line-height:1.1;color:#111827;text-align:center;letter-spacing:-0.6px;">Your payment<br/>didn't go through</h1></td></tr>
+            <tr><td style="height:16px;line-height:16px;font-size:0;">&nbsp;</td></tr>
+
+            <!-- Intro -->
+            <tr><td align="center"><p class="t-mut" style="margin:0;font-family:'Inter','Helvetica Neue',Arial,sans-serif;font-size:16px;line-height:1.65;color:#475569;text-align:center;">Hi {{ person.first_name }}, your card got knocked back so your membership isn't active yet — and no charge was applied. Give it another crack below.</p></td></tr>
+            <tr><td style="height:26px;line-height:26px;font-size:0;">&nbsp;</td></tr>
+
+            <!-- Red alert block -->
+            <tr><td>
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:4px 0;">
+                <tr><td class="surface2" style="background-color:#fef2f2;border:1px solid #fecaca;border-left:4px solid #dc2626;border-radius:12px;padding:20px 20px 20px 18px;">
+                  <table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>
+                    <td style="vertical-align:top;padding-right:13px;"><span style="display:inline-block;width:28px;height:28px;border-radius:50%;background-color:#dc2626;color:#ffffff;font-family:'Poppins','Helvetica Neue',Arial,sans-serif;font-size:17px;font-weight:800;line-height:28px;text-align:center;">!</span></td>
+                    <td style="vertical-align:top;">
+                      <p style="margin:0 0 4px;font-family:'Poppins','Helvetica Neue',Arial,sans-serif;font-size:15px;font-weight:700;color:#b91c1c;">Payment of A${{ event.price }} was declined</p>
+                      <p style="margin:0;font-family:'Inter','Helvetica Neue',Arial,sans-serif;font-size:14px;line-height:1.55;color:#7f1d1d;" class="t-mut">Reason: {{ event.failure_reason }}. Try again with the same or a different card — it only takes a sec.</p>
+                    </td>
+                  </tr></table>
+                </td></tr>
+              </table></td></tr>
+            <tr><td style="height:26px;line-height:26px;font-size:0;">&nbsp;</td></tr>
+
+            <!-- Payment details table -->
+            <tr><td>
+              <p style="margin:0 0 12px;font-family:'SFMono-Regular',ui-monospace,Consolas,'Courier New',monospace;font-size:11px;font-weight:600;letter-spacing:1.5px;text-transform:uppercase;color:#6b7280;" class="t-mut">Payment details</p>
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:separate;width:100%;border:1px solid #e5e7eb;border-radius:10px;overflow:hidden;">
+                {% if event.package_name %}
+                <tr>
+                  <td class="dt-th tableh tabler-b" style="padding:12px 14px;background-color:#f8fafc;border-bottom:1px solid #eef2f6;font-family:'SFMono-Regular',ui-monospace,Consolas,'Courier New',monospace;font-size:11px;color:#1f2937;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;text-align:left;width:40%;">Package</td>
+                  <td class="dt-td tabler tabler-b t-dark" style="padding:12px 14px;border-bottom:1px solid #f3f4f6;font-family:'Inter','Helvetica Neue',Arial,sans-serif;font-size:13px;color:#374151;background-color:#ffffff;word-break:break-word;">{{ event.package_name }}</td>
+                </tr>
+                {% endif %}
+                <tr>
+                  <td class="dt-th tableh tabler-b" style="padding:12px 14px;background-color:#f8fafc;border-bottom:1px solid #eef2f6;font-family:'SFMono-Regular',ui-monospace,Consolas,'Courier New',monospace;font-size:11px;color:#1f2937;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;text-align:left;width:40%;">Amount</td>
+                  <td class="dt-td tabler tabler-b" style="padding:12px 14px;border-bottom:1px solid #f3f4f6;font-family:'Inter','Helvetica Neue',Arial,sans-serif;font-size:13px;background-color:#ffffff;word-break:break-word;"><strong style="color:#dc2626;font-weight:700;">A${{ event.price }}</strong></td>
+                </tr>
+                {% if event.failure_message %}
+                <tr>
+                  <td class="dt-th tableh tabler-b" style="padding:12px 14px;background-color:#f8fafc;border-bottom:1px solid #eef2f6;font-family:'SFMono-Regular',ui-monospace,Consolas,'Courier New',monospace;font-size:11px;color:#1f2937;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;text-align:left;width:40%;">Error</td>
+                  <td class="dt-td tabler tabler-b t-mut" style="padding:12px 14px;border-bottom:1px solid #f3f4f6;font-family:'SFMono-Regular',ui-monospace,Consolas,'Courier New',monospace;font-size:11px;color:#64748b;background-color:#ffffff;word-break:break-word;">{{ event.failure_message }}</td>
+                </tr>
+                {% elif event.failure_code %}
+                <tr>
+                  <td class="dt-th tableh tabler-b" style="padding:12px 14px;background-color:#f8fafc;border-bottom:1px solid #eef2f6;font-family:'SFMono-Regular',ui-monospace,Consolas,'Courier New',monospace;font-size:11px;color:#1f2937;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;text-align:left;width:40%;">Error Code</td>
+                  <td class="dt-td tabler tabler-b t-mut" style="padding:12px 14px;border-bottom:1px solid #f3f4f6;font-family:'SFMono-Regular',ui-monospace,Consolas,'Courier New',monospace;font-size:11px;color:#64748b;background-color:#ffffff;word-break:break-word;">{{ event.failure_code }}</td>
+                </tr>
+                {% endif %}
+                {% if event.payment_intent_id %}
+                <tr>
+                  <td class="dt-th tableh tabler-b" style="padding:12px 14px;background-color:#f8fafc;border-bottom:1px solid #eef2f6;font-family:'SFMono-Regular',ui-monospace,Consolas,'Courier New',monospace;font-size:11px;color:#1f2937;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;text-align:left;width:40%;">Payment ID</td>
+                  <td class="dt-td tabler tabler-b t-mut" style="padding:12px 14px;border-bottom:1px solid #f3f4f6;font-family:'SFMono-Regular',ui-monospace,Consolas,'Courier New',monospace;font-size:11px;color:#64748b;background-color:#ffffff;word-break:break-all;">{{ event.payment_intent_id }}</td>
+                </tr>
+                {% endif %}
+                <tr>
+                  <td class="dt-th tableh" style="padding:12px 14px;background-color:#f8fafc;font-family:'SFMono-Regular',ui-monospace,Consolas,'Courier New',monospace;font-size:11px;color:#1f2937;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;text-align:left;width:40%;">Status</td>
+                  <td class="dt-td tabler t-mut" style="padding:12px 14px;font-family:'Inter','Helvetica Neue',Arial,sans-serif;font-size:13px;color:#b91c1c;background-color:#ffffff;font-weight:600;">Membership not activated</td>
+                </tr>
+              </table></td></tr>
+            <tr><td style="height:28px;line-height:28px;font-size:0;">&nbsp;</td></tr>
+
+            <!-- Primary CTA (bulletproof VML) -->
+            <tr><td align="center">
+              <table role="presentation" class="btn" cellpadding="0" cellspacing="0" border="0" align="center" style="margin:4px auto 0;">
+                <tr><td align="center" bgcolor="#dc2626" style="border-radius:8px;background:linear-gradient(135deg,#dc2626 0%,#b91c1c 100%);box-shadow:0 6px 16px rgba(220,38,38,0.32);">
+                  <!--[if mso]><v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word" href="https://toolsaustralia.com.au/" style="height:52px;v-text-anchor:middle;width:320px;" arcsize="16%" stroke="f" fillcolor="#dc2626"><w:anchorlock/><center style="color:#ffffff;font-family:Arial,sans-serif;font-size:16px;font-weight:bold;">Complete Signup<![endif]-->
+                  <a href="https://toolsaustralia.com.au/" style="display:inline-block;padding:16px 44px;font-family:'Poppins','Helvetica Neue',Arial,sans-serif;font-size:16px;font-weight:700;color:#ffffff;text-decoration:none;border-radius:8px;letter-spacing:0.3px;mso-hide:all;">Complete Signup&nbsp;&nbsp;&rarr;</a>
+                  <!--[if mso]></center></v:roundrect><![endif]-->
+                </td></tr>
+              </table></td></tr>
+
+          </tbody></table>
+        </td></tr>
+
+        <!-- Hazard hairline -->
+        <tr><td style="height:5px;background-color:#e5e7eb;background-image:repeating-linear-gradient(135deg,#e5e7eb 0,#e5e7eb 7px,#f9fafb 7px,#f9fafb 14px);line-height:5px;font-size:0;" class="hairline">&nbsp;</td></tr>
+
+        <!-- FOOTER -->
+        <tr>
+          <td class="footer px" style="background-color:#f9fafb;border-top:1px solid #e5e7eb;padding:30px 32px 34px;text-align:center;font-family:'Inter','Helvetica Neue',Arial,sans-serif;">
+            <p style="margin:0 0 6px;font-family:'Poppins','Helvetica Neue',Arial,sans-serif;font-size:13px;font-weight:800;letter-spacing:0.4px;color:#111827;text-transform:uppercase;" class="t-dark">Tools Australia</p>
+            <p style="margin:0 0 16px;font-size:12px;line-height:1.6;color:#6b7280;" class="t-mut">Need a hand? <a href="mailto:support@toolsaustralia.com.au" style="color:#dc2626;font-weight:600;text-decoration:none;">support@toolsaustralia.com.au</a></p>
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" style="margin:0 auto 18px;"><tr>
+              <td style="padding:0 5px;"><a href="https://www.facebook.com/toolsaust" target="_blank" rel="noopener" style="display:inline-block;width:36px;height:36px;background-color:#111827;border-radius:50%;"><img src="https://toolsaustralia.com.au/images/social/facebook.png" width="20" height="20" alt="Facebook" style="display:block;margin:8px auto;width:20px;height:20px;border:0;"/></a></td>
+              <td style="padding:0 5px;"><a href="https://instagram.com/toolsaustralia" target="_blank" rel="noopener" style="display:inline-block;width:36px;height:36px;background-color:#111827;border-radius:50%;"><img src="https://toolsaustralia.com.au/images/social/instagram.png" width="20" height="20" alt="Instagram" style="display:block;margin:8px auto;width:20px;height:20px;border:0;"/></a></td>
+              <td style="padding:0 5px;"><a href="https://www.tiktok.com/@toolsaustralia" target="_blank" rel="noopener" style="display:inline-block;width:36px;height:36px;background-color:#111827;border-radius:50%;"><img src="https://toolsaustralia.com.au/images/social/tiktok.png" width="20" height="20" alt="TikTok" style="display:block;margin:8px auto;width:20px;height:20px;border:0;"/></a></td>
+            </tr></table>
+            <p style="margin:0 0 10px;font-size:11px;line-height:1.6;color:#9ca3af;" class="t-mut"><a href="{% unsubscribe %}" style="color:#9ca3af;text-decoration:underline;">Unsubscribe</a></p>
+            <p style="margin:0;font-family:'SFMono-Regular',ui-monospace,Consolas,'Courier New',monospace;font-size:10.5px;line-height:1.7;letter-spacing:0.3px;color:#9ca3af;" class="t-mut">DRAWN LIVE ON FACEBOOK · 27TH MONTHLY · VERIFIED BY <a href="https://randomdraws.com.au" style="color:#9ca3af;text-decoration:underline;">RANDOMDRAWS.COM.AU</a></p>
+          </td>
+        </tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>

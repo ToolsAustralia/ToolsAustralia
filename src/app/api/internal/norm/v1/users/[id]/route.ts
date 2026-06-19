@@ -50,6 +50,7 @@ export const GET = withNorm(
               : null,
             status: detail.subscription.status ?? null,
             autoRenew: detail.subscription.autoRenew ?? null,
+            lastMonthAccumulatedEntries: detail.subscription.lastMonthAccumulatedEntries ?? null,
           }
         : null,
       statistics: {

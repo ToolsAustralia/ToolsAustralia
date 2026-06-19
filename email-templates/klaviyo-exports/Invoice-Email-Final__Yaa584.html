@@ -1,0 +1,123 @@
+<html>
+<head>
+<style>body, table, td, p {
+    margin: 0;
+    padding: 0
+    }
+body {
+    background-color: #f4f4f4;
+    font-family: Arial, sans-serif;
+    color: #222
+    }
+.wrapper {
+    width: 100%;
+    background-color: #f4f4f4;
+    padding: 20px 0
+    }
+.card {
+    max-width: 600px;
+    width: 100%;
+    margin: 0 auto;
+    background-color: #fff;
+    border: 1px solid #e6e6e6;
+    border-radius: 6px;
+    overflow: hidden
+    }
+.header {
+    background-color: #e00;
+    color: #fff;
+    text-align: center;
+    padding: 20px 10px
+    }
+.header h1 {
+    font-size: 22px;
+    margin-bottom: 5px
+    }
+.content {
+    padding: 20px
+    }
+.section {
+    margin-bottom: 16px
+    }
+.section strong {
+    display: inline-block;
+    min-width: 100px;
+    color: #111
+    }
+.divider {
+    border-top: 1px solid #e6e6e6;
+    margin: 16px 0
+    }
+.footer {
+    text-align: center;
+    font-size: 12px;
+    color: #777;
+    background-color: #f8f8f8;
+    padding: 12px 20px;
+    border-top: 1px solid #e0e0e0
+    }
+@media only screen and (max-width: 600px) {
+    .content {
+        padding: 15px
+        }
+    .section strong {
+        display: block;
+        margin-bottom: 3px
+        }
+    .header h1 {
+        font-size: 20px
+        }
+    .card {
+        border-radius: 0
+        }
+    }</style></head>
+<body>
+<div class="wrapper">
+<div class="card">
+<div class="header">
+<h1>
+            Tools Australia
+          </h1>
+<p>
+            Invoice #: {{ event.invoice_number }}
+          </p>
+</div>
+<div class="content">
+<div class="section"> <strong>Date:</strong> {{ event.invoice_date }}
+          </div>
+<div class="divider"></div>
+<div class="section"> <strong>Bill To:</strong><br/>
+            {{ person.first_name }} {{ person.last_name }}<br/>
+            {{ person.email }}<br/>
+            {% if person.phone_number %}
+          {{ person.phone_number }}
+        {% endif %}
+          </div>
+<div class="divider"></div>
+<div class="section"> <strong>Item:</strong> {{ event.package_name }}<br/>
+<strong>Price:</strong> ${{ event.total_amount }}
+          </div>
+<div class="divider"></div>
+<div class="section"> <strong>Payment Status:</strong>
+            {% if event.payment_status == "paid" %}
+            <span style="color:green;">Paid ✅</span>
+            {% else %}
+            <span style="color:#cc0000;">Pending ⏳</span>
+            {% endif %}
+            <div style="font-size: 12px; color: #666; margin-top: 6px;">
+              Transaction ID: {{ event.payment_intent_id }}
+            </div>
+</div>
+</div>
+<div class="footer">
+          Thank you for your purchase!<br/>
+          For inquiries, contact
+          <strong>support@toolsaustralia.com.au</strong><br/><br/>
+<a href="{% unsubscribe %}" style="font-size:12px; color:#777; text-decoration:none;">
+    Unsubscribe
+  </a>
+</div>
+</div>
+</div>
+</body>
+</html>

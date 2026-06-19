@@ -2,6 +2,7 @@ import mongoose from "mongoose";
 import User from "@/models/User";
 import ReferralEvent, { IReferralEvent } from "@/models/ReferralEvent";
 import MajorDraw from "@/models/MajorDraw";
+import { emailService } from "@/lib/email/";
 
 const REFERRAL_CODE_LENGTH = 8;
 const REFERRAL_REWARD_ENTRIES = 100;
@@ -280,7 +281,14 @@ export async function completeReferralConversion(inviteeUserId: string) {
   console.log(`🔄 Processing ${pendingEvents.length} pending referral event(s) for user ${inviteeUserId}`);
 
   const session = await mongoose.startSession();
-  const completedEvents: Array<{ referrerId: string; inviteeId: string }> = [];
+  const completedEvents: Array<{
+    referrerId: string;
+    inviteeId: string;
+    referrerEmail?: string;
+    referrerFirstName?: string;
+    inviteeEmail?: string;
+    inviteeFirstName?: string;
+  }> = [];
 
   try {
     await session.withTransaction(async () => {
@@ -322,6 +330,10 @@ export async function completeReferralConversion(inviteeUserId: string) {
         completedEvents.push({
           referrerId: referrer._id.toString(),
           inviteeId: inviteeObjectId.toString(),
+          referrerEmail: referrer.email,
+          referrerFirstName: referrer.firstName,
+          inviteeEmail: invitee.email,
+          inviteeFirstName: invitee.firstName,
         });
       }
     });
@@ -331,6 +343,41 @@ export async function completeReferralConversion(inviteeUserId: string) {
 
   if (completedEvents.length > 0) {
     console.log(`🎉 Successfully completed ${completedEvents.length} referral conversion(s) for user ${inviteeUserId}`);
+
+    // Notify BOTH parties (referrer + referred friend) — best-effort, never blocks the conversion.
+    const baseUrl = (
+      process.env.NEXT_PUBLIC_APP_URL ||
+      process.env.NEXTAUTH_URL ||
+      "https://toolsaustralia.com.au"
+    ).replace(/\/$/, "");
+    const ctaUrl = `${baseUrl}/my-account`;
+
+    for (const ev of completedEvents) {
+      if (ev.referrerEmail) {
+        try {
+          await emailService.sendReferralRewardEmail(ev.referrerEmail, {
+            recipientName: ev.referrerFirstName || "mate",
+            friendName: ev.inviteeFirstName || "your mate",
+            entriesEarned: REFERRAL_REWARD_ENTRIES,
+            ctaUrl,
+          });
+        } catch (err) {
+          console.error("Failed to send referral reward email to referrer:", err);
+        }
+      }
+      if (ev.inviteeEmail) {
+        try {
+          await emailService.sendReferralRewardEmail(ev.inviteeEmail, {
+            recipientName: ev.inviteeFirstName || "mate",
+            friendName: ev.referrerFirstName || "your mate",
+            entriesEarned: REFERRAL_REWARD_ENTRIES,
+            ctaUrl,
+          });
+        } catch (err) {
+          console.error("Failed to send referral reward email to invitee:", err);
+        }
+      }
+    }
   }
 
   return { completed: completedEvents.length };
