@@ -70,23 +70,19 @@ export async function apiRequest<T = unknown>(endpoint: string, options: Request
 
     const session = await getCachedSession();
 
-    // Prepare headers
+    // Prepare headers.
+    //
+    // Authentication is carried by the NextAuth session cookie, which the
+    // browser sends automatically on same-origin requests. We deliberately do
+    // NOT attach an `Authorization: Bearer <user id>` header: the raw user id is
+    // not a credential, and the routes that used to accept it (cart/orders/
+    // mini-draws) now authorize via `getServerSession`.
 
     const headers: HeadersInit = {
       "Content-Type": "application/json",
 
       ...options.headers,
     };
-
-    // Add authorization header if session exists
-
-    if (session?.user?.id) {
-      // Use user ID directly for client-side authentication
-
-      // JWT signing is server-side only
-
-      (headers as Record<string, string>).Authorization = `Bearer ${session.user.id}`;
-    }
 
     // Make the request
 
@@ -296,8 +292,12 @@ export async function apiPut<T = unknown>(endpoint: string, data?: unknown): Pro
 
 // DELETE request helper
 
-export async function apiDelete<T = unknown>(endpoint: string): Promise<T> {
-  return apiRequest<T>(endpoint, { method: "DELETE" });
+export async function apiDelete<T = unknown>(endpoint: string, data?: unknown): Promise<T> {
+  return apiRequest<T>(endpoint, {
+    method: "DELETE",
+
+    body: data ? JSON.stringify(data) : undefined,
+  });
 }
 
 // PATCH request helper

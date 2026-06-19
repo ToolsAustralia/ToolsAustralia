@@ -1,5 +1,5 @@
 import { cookies } from "next/headers";
-import { verifyAffiliateToken } from "@/lib/affiliate-auth";
+import { verifyAffiliateToken, AFFILIATE_COOKIE_NAME } from "@/lib/affiliate-auth";
 
 /**
  * Get current affiliate session from cookie
@@ -8,7 +8,7 @@ import { verifyAffiliateToken } from "@/lib/affiliate-auth";
 export async function getAffiliateSession() {
   try {
     const cookieStore = await cookies();
-    const token = cookieStore.get("affiliate_token")?.value;
+    const token = cookieStore.get(AFFILIATE_COOKIE_NAME)?.value;
 
     if (!token) {
       return null;

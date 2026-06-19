@@ -1,5 +1,13 @@
 # Cart-Shop-Products — Gotchas
 
+## Cart auth is the NextAuth session cookie, not a bearer token (2026-06-19)
+
+The cart/orders/mini-draws routes used to read `Authorization: Bearer <token>` and resolve the user from it. They now authorize via `requireAuthenticatedUserDoc()` (NextAuth `getServerSession`) — the browser sends the session cookie automatically, so **client cart calls send no `Authorization` header**. Concrete consequences:
+
+- The old per-route `getUserFromToken` helpers are **gone**. On any verify failure they fell back to `User.findById(token)` — i.e. they accepted a raw 24-hex ObjectId as a "token", and the live client (`CartContext`, `lib/queries.ts`) was actually sending `session.user.id` as that bearer. That was an authentication bypass; do not reintroduce a bearer path here.
+- Mutating cart routes (POST/PUT/DELETE) now call `requireSameOrigin(request)` for CSRF protection (cookie auth is auto-attached, so it needs an origin check).
+- **Two latent endpoint bugs fixed in the op queue** ([CartContext](../../src/contexts/CartContext.tsx)): single-item "remove" hit a non-existent `/api/cart/remove` (now `DELETE /api/cart` with a body), and "clear" hit `DELETE /api/cart` with no body (500) instead of the dedicated `DELETE /api/cart/clear`. `useCartQueries.useRemoveFromCart` was likewise pointed at the real `DELETE /api/cart`.
+
 ## Cart desync between devices
 
 Cart is localStorage per-browser. Multi-device users see different carts. Acceptable — sync is more trouble than it's worth at current scale.

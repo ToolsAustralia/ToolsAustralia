@@ -2362,6 +2362,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
           body: JSON.stringify({
             userId: data.user.id,
             email: data.user.email,
+            paymentIntentId: effectivePaymentIntentId,
           }),
         });
 
@@ -3871,6 +3872,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
                   body: JSON.stringify({
                     userId: userId,
                     email: userEmail,
+                    paymentIntentId: oneTimeData?.paymentIntentId || result.data?.paymentIntentId,
                   }),
                 });
 
@@ -3979,6 +3981,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
                   body: JSON.stringify({
                     userId: oneTimeData.user.id,
                     email: oneTimeData.user.email,
+                    paymentIntentId: oneTimeData?.paymentIntentId || result.data?.paymentIntentId,
                   }),
                 });
 
