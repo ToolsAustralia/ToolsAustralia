@@ -407,6 +407,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
       "docs": "docs/partner/",
       "paths": [
         "src/utils/partner-discounts/**",
+        "src/lib/partner-discount-sso.ts",
         "src/models/PartnerApplication.ts",
         "src/models/PartnerDiscount.ts",
         "src/app/api/partner-applications/**",
@@ -778,7 +779,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "scripts/reconcile-*.ts",
         "scripts/connect-ops-db.ts"
       ],
-      "lastVerified": "2026-06-19"
+      "lastVerified": "2026-06-22"
     },
     "dev-tooling": {
       "docs": "docs/dev-tooling/",

@@ -18,3 +18,11 @@ Cross-cutting infra: health checks, cron, upload, Cloudinary, environment, Zod h
 
 - `src/docs/ENVIRONMENT_SETUP.md`
 - Operational script docs scattered across root
+
+## Third-party env — iGoDirect / MyRewards SSO (added 2026-06-22)
+
+See [.env.example](../../.env.example):
+- `IGODIRECT_SSO_SECRET` — **secret**; signs the MyRewards SSO JWT. `.env.local` / Vercel only — never commit a real value.
+- `IGODIRECT_CLIENT_ID` (`2412`), `IGODIRECT_DOMAIN_CODE` (`ToolsAustralia`), `IGODIRECT_DOMAIN_URL` (`myrewards.toolsaustralia.com.au`) — non-secret tenant identifiers.
+
+Connectivity probe: `npm run test:igodirect-sso` (see [dev-tooling/testing.md](../dev-tooling/testing.md)).
