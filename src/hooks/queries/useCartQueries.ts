@@ -395,7 +395,9 @@ export const useRemoveFromCart = (userId: string | undefined) => {
 
   return useMutation({
     mutationFn: async (productId: string) => {
-      const response = await apiDelete<CartResponse>(`/api/cart/remove/${productId}`);
+      // DELETE /api/cart is the real handler (there is no /api/cart/remove route);
+      // it expects the item descriptor in the body.
+      const response = await apiDelete<CartResponse>(`/api/cart`, { type: "product", productId });
       return response;
     },
     onMutate: async (productId) => {

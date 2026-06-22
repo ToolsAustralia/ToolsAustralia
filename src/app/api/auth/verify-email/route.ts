@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import connectDB from "@/lib/mongodb";
 import User from "@/models/User";
+import { signAutoLoginToken } from "@/lib/jwt";
 
 const verifyEmailSchema = z.object({
   email: z.string().email("Invalid email address"),
@@ -142,10 +143,24 @@ export async function POST(request: NextRequest) {
 
     // console.log(`Email verification successful for user: ${user.email}`);
 
+    // Mint a short-lived auto-login BRIDGE token here, off the just-verified email
+    // code, so the client establishes a session from THIS verified action instead
+    // of calling an unauthenticated /api/auth/auto-login with only {userId,email}.
+    // Gate on the same membership condition the old endpoint used; a verified user
+    // with no membership gets no token and the client falls back to the password step.
+    const hasMembership = Boolean(
+      user.subscription?.isActive ||
+        user.oneTimePackages?.some((pkg: { isActive: boolean }) => pkg.isActive) ||
+        (user.oneTimePackages && user.oneTimePackages.length > 0) ||
+        user.stripeCustomerId
+    );
+    const autoLoginToken = hasMembership ? await signAutoLoginToken(user) : undefined;
+
     // Return success response with user data
     return NextResponse.json({
       success: true,
       message: "Email verified successfully",
+      token: autoLoginToken,
       user: {
         id: user._id,
         email: user.email,

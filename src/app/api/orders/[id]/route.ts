@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import connectDB from "@/lib/mongodb";
 import Order from "@/models/Order";
 import { z } from "zod";
-import { verify } from "jsonwebtoken";
-import { JWTPayload } from "@/types/api";
+import { requireAuthenticatedUser } from "@/lib/api-auth";
+import { requireSameOrigin } from "@/utils/security/requireSameOrigin";
 
 const paramsSchema = z.object({
   id: z.string().min(1),
@@ -15,24 +15,14 @@ const updateOrderSchema = z.object({
   notes: z.string().optional(),
 });
 
-// Helper function to get user from token
-async function getUserFromToken(request: NextRequest) {
-  const authHeader = request.headers.get("authorization");
-  if (!authHeader || !authHeader.startsWith("Bearer ")) {
-    throw new Error("No token provided");
-  }
-
-  const token = authHeader.substring(7);
-  const decoded = verify(token, process.env.NEXTAUTH_SECRET!) as JWTPayload;
-  return decoded.userId;
-}
-
-export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     await connectDB();
 
     const { id } = paramsSchema.parse(await params);
-    const userId = await getUserFromToken(request);
+    const auth = await requireAuthenticatedUser();
+    if ("errorResponse" in auth) return auth.errorResponse;
+    const userId = auth.session.user.id;
 
     const order = await Order.findOne({ _id: id, user: userId }).populate("products.productId").lean();
 
@@ -49,10 +39,14 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
 export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
+    const csrf = requireSameOrigin(request);
+    if (csrf) return csrf;
     await connectDB();
 
     const { id } = paramsSchema.parse(await params);
-    const userId = await getUserFromToken(request);
+    const auth = await requireAuthenticatedUser();
+    if ("errorResponse" in auth) return auth.errorResponse;
+    const userId = auth.session.user.id;
     const body = await request.json();
     const validatedData = updateOrderSchema.parse(body);
 

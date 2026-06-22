@@ -1,5 +1,23 @@
 # Security & CSP — Gotchas
 
+## `requireSameOrigin` is the CSRF guard for cookie-authed mutations (2026-06-19)
+
+[utils/security/requireSameOrigin.ts](../../src/utils/security/requireSameOrigin.ts) — call `requireSameOrigin(request)` at the top of any state-changing route that authenticates from a cookie (cart/orders/mini-draws, affiliate `bank-details`/`update-account`). It returns a 403 `NextResponse` when the request's `Origin` is cross-site, else `null`.
+
+- It treats a request as same-origin when `Origin === request.nextUrl.origin`, so it works on production, Vercel **preview deploys**, and localhost without an env-specific list (the static `allowedOrigins` is just an extra escape hatch). A naive static-allowlist-only check would 403 legitimate requests on preview URLs.
+- Requests with **no** `Origin` header are allowed: same-origin GETs and server-to-server callers omit it, and the `sameSite=lax` session cookie already blocks the cross-site POST case. This is the same pattern the `/api/auth/login` origin check uses.
+
+## Middleware never runs for `/api/**` — `/api/admin` is gated in handlers (2026-06-19)
+
+The matcher's negative lookahead excludes `api`, so middleware does not run for any API route. The dead `"/api/admin"` entries were removed from the `adminRoutes` arrays in [middleware.ts](../../src/middleware.ts) (it implied coverage that never existed), and the duplicated `isInternalUser` predicate was hoisted to one module-level helper so the entry gate (`authorized`) and the redirect (`middleware`) can't drift. `/api/admin/**` authorization lives entirely in the per-handler `requireAdminUser`/`requirePermission` checks.
+
+## Two rate limiters: in-memory (default) vs Mongo-backed (auth) (2026-06-19)
+
+[utils/security/rateLimiter.ts](../../src/utils/security/rateLimiter.ts) exports two:
+
+- `createRateLimiter` — **per-instance, in-memory** (`globalThis`). Fine for soft limits; used by Norm, error-reports, Stripe create endpoints, promo. **Not** serverless-safe: an attacker spreading requests across Vercel lambda instances dodges it.
+- `createDistributedRateLimiter` — **shared, Mongo-backed** (the `RateLimit` model, TTL-expiring windows). Used by the brute-force-sensitive auth endpoints (`nextauth-credentials`, `auth-register`, `auth-verify-login-code`, `auth-auto-login`). Its `check` is **async** (the others are sync) and it **fails open** — a DB hiccup allows the request rather than locking everyone out. Don't convert the 10+ existing sync callers wholesale; add `await` only where you switch a given endpoint to the distributed variant.
+
 ## Stripe webhook COEP
 
 If you accidentally apply COEP to `/api/stripe/webhook`, server-to-server POSTs from Stripe break. CSP for that route is intentionally relaxed.

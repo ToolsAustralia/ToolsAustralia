@@ -1,5 +1,17 @@
 # Affiliate — Gotchas
 
+## Affiliate token hardening — 2026-06-19
+
+[affiliate-auth.ts](../../src/lib/affiliate-auth.ts) signs/verifies the affiliate cookie with `jose` (HS256). All of the following landed:
+
+- **No more fail-open secret.** Was `process.env.NEXTAUTH_SECRET || "fallback-secret-key"` (a source-visible key anyone could forge with). Now **fails fast** if no secret is set.
+- **Dedicated secret + crypto domain separation.** The secret is now `AFFILIATE_JWT_SECRET || NEXTAUTH_SECRET`, and tokens carry issuer `tools-australia` + audience `tools-australia-affiliates`, **enforced on verify** along with the `HS256` algorithm pin. A member/NextAuth token can no longer satisfy an affiliate check, and the two key spaces rotate independently. See [SECRET_ROTATION.md](./SECRET_ROTATION.md).
+- **`__Host-` cookie in production.** The cookie name is centralized in `AFFILIATE_COOKIE_NAME` — `__Host-affiliate_token` in prod (requires Secure + Path=/ + no Domain, which the login route sets) and the plain `affiliate_token` in dev (http localhost can't set Secure cookies). Read in `get-affiliate-session.ts`, written in `affiliate/login`, cleared (both names) in `affiliate/logout`. **Never hard-code the cookie name** — import the constant.
+- **Revocation on every verify.** `verifyAffiliateToken` reloads the `Affiliate` and returns `null` if missing/`isActive === false` — deactivation takes effect immediately.
+- **CSRF** (`requireSameOrigin`) on `login` (POST), `bank-details` (PUT, bank PII) and `update-account` (PUT).
+
+**One-time migration cost (expected):** the deploy that enforced the affiliate issuer/audience (and/or sets `AFFILIATE_JWT_SECRET`) invalidates every already-issued `affiliate_token` — affiliates simply log in once more. This was the chosen, accepted trade-off (cleaner than a dual-secret grace window).
+
 ## Recurring-commission "skip" logs are info, not error
 
 `processMembershipRecurringCommission` (`src/utils/affiliate/commission-processing.ts`) logs its skip paths. The **expected** skips — `zero_amount`, `no_affiliate` (most members aren't referred — high volume), `not_membership_tied` — use `console.log` (info), because in prod only `console.error` survives and these would otherwise flood the production error log with normal business-as-usual. The two genuine anomalies — `no_user` (invoice references a missing user) and `record_failed` (`recordAffiliateCommission` returned falsy) — stay `console.error`. Don't "promote" the expected skips back to error.

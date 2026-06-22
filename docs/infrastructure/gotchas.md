@@ -1,5 +1,13 @@
 # Infrastructure — Gotchas
 
+## `AFFILIATE_JWT_SECRET` — optional, but setting it forces a one-time affiliate re-login (2026-06-19)
+
+New optional env var (documented in `.env.example`). It is the dedicated signing secret for the affiliate portal's `affiliate_token`, separating it from the member/NextAuth key space (`NEXTAUTH_SECRET`).
+
+- **Unset:** affiliate auth falls back to `NEXTAUTH_SECRET`, so the app works without it (no key separation yet).
+- **Set it (recommended for prod):** affiliate tokens are signed/verified with a key distinct from members. Because existing `affiliate_token`s were signed with the old key (and carry no audience), **setting or rotating this invalidates all current affiliate sessions — affiliates log in once more.** This is the accepted, intended migration cost. Generate with `openssl rand -hex 32`; set on every deploy target (Vercel Production + Preview).
+- Full runbook: [docs/auth/SECRET_ROTATION.md](../auth/SECRET_ROTATION.md).
+
 ## Outbound third-party `fetch` must go through `lib/http/outbound.ts` (undici keep-alive race)
 
 **Incident (June 2026):** Klaviyo (`a.klaviyo.com`) and Meta CAPI (`graph.facebook.com`) calls failed in prod with a flood of opaque `TypeError: fetch failed` (and some 30s timeouts), across many endpoints, while Stripe and MongoDB on the same deployment kept working. Root cause: Node's **global `fetch` (undici)** pools HTTP/1.1 keep-alive sockets. On Vercel the function is **frozen between invocations**; a remote closes an idle socket during the freeze, and on thaw undici writes the next request onto the dead socket → `error.cause.code = UND_ERR_SOCKET` ("other side closed") / `ECONNRESET`. Stripe/Mongo are immune because they use their own keep-alive agents / pooled drivers with dead-socket detection — only raw `fetch` was exposed. `keepAliveMaxTimeout` defaults to **600s** in undici, so a socket can be reused long after the freeze.

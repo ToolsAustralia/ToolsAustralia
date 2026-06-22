@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
+import { timingSafeEqual } from "crypto";
 import connectDB from "@/lib/mongodb";
 import User from "@/models/User";
 import { signJWT } from "@/lib/jwt";
+import { createDistributedRateLimiter, getClientIdentifier } from "@/utils/security/rateLimiter";
 
 const verifyLoginCodeSchema = z.object({
   email: z.string().email("Invalid email address"),
@@ -10,6 +12,21 @@ const verifyLoginCodeSchema = z.object({
 });
 
 const MAX_ATTEMPTS = 5;
+
+// Per-IP limit so an attacker cannot reset the per-user attempt counter by
+// requesting a fresh code and brute-forcing across many codes.
+const verifyLoginCodeRateLimiter = createDistributedRateLimiter("auth-verify-login-code", {
+  windowMs: 5 * 60 * 1000, // 5 minute window
+  maxRequests: 10,
+});
+
+// Constant-time comparison so a wrong code leaks nothing via response timing.
+function codeMatches(stored: string, provided: string): boolean {
+  const a = Buffer.from(stored);
+  const b = Buffer.from(provided);
+  if (a.length !== b.length) return false;
+  return timingSafeEqual(a, b);
+}
 
 /**
  * POST /api/auth/verify-login-code
@@ -19,6 +36,18 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     const validatedData = verifyLoginCodeSchema.parse(body);
+
+    const identifier = getClientIdentifier(
+      request.headers.get("x-real-ip"),
+      request.headers.get("x-forwarded-for")
+    );
+    const rateCheck = await verifyLoginCodeRateLimiter.check(identifier);
+    if (!rateCheck.success) {
+      return NextResponse.json(
+        { success: false, error: "Too many attempts. Please wait a moment and try again." },
+        { status: 429, headers: { "Retry-After": rateCheck.retryAfterSeconds.toString() } }
+      );
+    }
 
     await connectDB();
 
@@ -62,7 +91,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const codeMatch = user.loginCode === validatedData.loginCode.toUpperCase();
+    const codeMatch = codeMatches(user.loginCode, validatedData.loginCode.toUpperCase());
     if (!codeMatch) {
       user.loginCodeAttempts = attempts + 1;
       await user.save();

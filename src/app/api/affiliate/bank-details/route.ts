@@ -3,6 +3,7 @@ import { z } from "zod";
 import connectDB from "@/lib/mongodb";
 import Affiliate from "@/models/Affiliate";
 import { getAffiliateSession } from "@/utils/affiliate/get-affiliate-session";
+import { requireSameOrigin } from "@/utils/security/requireSameOrigin";
 
 const bankDetailsSchema = z.object({
   accountName: z.string().optional(),
@@ -18,6 +19,9 @@ const bankDetailsSchema = z.object({
  */
 export async function PUT(request: NextRequest) {
   try {
+    const csrf = requireSameOrigin(request);
+    if (csrf) return csrf;
+
     // Verify affiliate authentication
     const session = await getAffiliateSession();
     if (!session) {

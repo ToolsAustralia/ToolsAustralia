@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { authenticateAffiliate, createAffiliateToken } from "@/lib/affiliate-auth";
+import { authenticateAffiliate, createAffiliateToken, AFFILIATE_COOKIE_NAME } from "@/lib/affiliate-auth";
+import { requireSameOrigin } from "@/utils/security/requireSameOrigin";
 
 const loginSchema = z.object({
   username: z.string().min(1, "Username is required"),
@@ -13,6 +14,9 @@ const loginSchema = z.object({
  */
 export async function POST(request: NextRequest) {
   try {
+    const csrf = requireSameOrigin(request);
+    if (csrf) return csrf;
+
     const body = await request.json();
     const validatedData = loginSchema.parse(body);
 
@@ -39,8 +43,10 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    // Set HTTP-only cookie
-    response.cookies.set("affiliate_token", token, {
+    // Set HTTP-only cookie. The cookie NAME carries the `__Host-` prefix in
+    // production (see AFFILIATE_COOKIE_NAME), which requires Secure + Path=/ + no
+    // Domain — all set here.
+    response.cookies.set(AFFILIATE_COOKIE_NAME, token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "lax",

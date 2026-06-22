@@ -1,7 +1,7 @@
 import NextAuth from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { NextRequest } from "next/server";
-import { createRateLimiter, getClientIdentifier } from "@/utils/security/rateLimiter";
+import { createDistributedRateLimiter, getClientIdentifier } from "@/utils/security/rateLimiter";
 
 /**
  * Rate limiter for NextAuth credentials sign-in attempts.
@@ -10,7 +10,7 @@ import { createRateLimiter, getClientIdentifier } from "@/utils/security/rateLim
  * - 60 second window
  * - Separate bucket from custom login endpoint
  */
-const nextAuthRateLimiter = createRateLimiter("nextauth-credentials", {
+const nextAuthRateLimiter = createDistributedRateLimiter("nextauth-credentials", {
   windowMs: 60 * 1000, // 1 minute window
   maxRequests: 5, // 5 attempts per minute per IP
 });
@@ -43,7 +43,7 @@ export async function POST(req: NextRequest, context: { params: Promise<{ nextau
       const identifier = getClientIdentifier(req.headers.get("x-real-ip"), req.headers.get("x-forwarded-for"));
 
       // Check rate limit
-      const rateCheck = nextAuthRateLimiter.check(identifier);
+      const rateCheck = await nextAuthRateLimiter.check(identifier);
 
       if (!rateCheck.success) {
         // Return 429 Too Many Requests with Retry-After header

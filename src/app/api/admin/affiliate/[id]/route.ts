@@ -125,7 +125,11 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       affiliate.username = body.username.toLowerCase().trim();
     }
     if (body.password !== undefined && body.password.trim().length > 0) {
-      // Hash new password if provided
+      // Hash new password if provided (enforce a minimum length server-side —
+      // client validation is bypassable).
+      if (body.password.trim().length < 6) {
+        return NextResponse.json({ error: "Password must be at least 6 characters" }, { status: 400 });
+      }
       const bcrypt = await import("bcryptjs");
       affiliate.password = await bcrypt.hash(body.password.trim(), 12);
     }

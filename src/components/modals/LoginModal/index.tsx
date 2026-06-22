@@ -288,25 +288,14 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, email }) => {
       const data = await response.json();
 
       if (data.success && data.user) {
-        // Email verified - now authenticate the user using auto-login API
+        // Email verified. /api/auth/verify-email mints the short-lived auto-login
+        // bridge token off the just-verified code (when the user has membership),
+        // so we sign in directly with it — no separate unauthenticated call.
         try {
-          const autoLoginResponse = await fetch("/api/auth/auto-login", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              userId: data.user.id,
-              email: data.user.email,
-            }),
-          });
-
-          const autoLoginData = await autoLoginResponse.json();
-
-          if (autoLoginResponse.ok && autoLoginData.token) {
-            // Use auto-login to create NextAuth session
+          if (data.token) {
+            // Use the bridge token to create the NextAuth session
             const autoLoginResult = await signIn("auto-login", {
-              token: autoLoginData.token,
+              token: data.token,
               redirect: false,
             });
 

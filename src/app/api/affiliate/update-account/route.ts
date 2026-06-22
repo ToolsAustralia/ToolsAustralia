@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { getAffiliateSession } from "@/utils/affiliate/get-affiliate-session";
+import { requireSameOrigin } from "@/utils/security/requireSameOrigin";
 import connectDB from "@/lib/mongodb";
 import Affiliate from "@/models/Affiliate";
 import bcrypt from "bcryptjs";
@@ -18,6 +19,9 @@ const updateAccountSchema = z.object({
  */
 export async function PUT(request: NextRequest) {
   try {
+    const csrf = requireSameOrigin(request);
+    if (csrf) return csrf;
+
     // Verify affiliate authentication
     const session = await getAffiliateSession();
     if (!session) {
