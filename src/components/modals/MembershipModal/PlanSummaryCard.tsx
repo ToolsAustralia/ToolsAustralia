@@ -20,6 +20,10 @@ import { getPackageDisplayName } from "@/utils/membership/getDisplayName";
 import { getAdditionalPackDiscount } from "@/utils/membership/additional-pack-discount";
 import { convertToAPIPlan } from "@/utils/membership/membership-adapters";
 import { getPackageById } from "@/data/membershipPackages";
+import {
+  getPartnerDiscountBenefitTextForPackageId,
+  getPartnerCatalogAccessPercentForMembershipPackageId,
+} from "@/utils/partner-discounts/partner-catalog-visibility";
 import { type MembershipPlan as ApiMembershipPlan } from "@/hooks/useMemberships";
 
 interface PlanSummaryCardProps {
@@ -104,6 +108,15 @@ const PlanSummaryCard: React.FC<PlanSummaryCardProps> = ({
               selectedEntriesCount = staticPkg.totalEntries;
             }
           }
+          // First benefit row is the partner-discount access %, not the entries.
+          // `promoEnhancedPlan.features[0]` is the entries line (and the promo
+          // enhancement rewrites it to "N Free Entries (KX PROMO!)"), so reusing
+          // it duplicated the entries shown directly below. Show the partner line
+          // here instead; fall back to the feature/subtitle only when the package
+          // grants no partner access (helper returns null).
+          const partnerBenefitLine = getPartnerDiscountBenefitTextForPackageId(selectedCatalogId)
+            ? `${getPartnerCatalogAccessPercentForMembershipPackageId(selectedCatalogId)}% access to partner discount offers`
+            : null;
           return (
             <>
               <h3
@@ -142,9 +155,11 @@ const PlanSummaryCard: React.FC<PlanSummaryCardProps> = ({
                       className={cn("text-xs sm:text-sm leading-tight", !isPackageCard ? "text-gray-600 dark:text-neutral-400" : "")}
                       style={isPackageCard ? electricWhiteStyle : undefined}
                     >
-                      {promoEnhancedPlan?.features && promoEnhancedPlan.features.length > 0
-                        ? promoEnhancedPlan.features[0].text
-                        : promoEnhancedPlan?.subtitle || "No package selected"}
+                      {partnerBenefitLine
+                        ? partnerBenefitLine
+                        : promoEnhancedPlan?.features && promoEnhancedPlan.features.length > 0
+                          ? promoEnhancedPlan.features[0].text
+                          : promoEnhancedPlan?.subtitle || "No package selected"}
                     </p>
                     {selectedEntriesCount > 0 ? (
                       <p

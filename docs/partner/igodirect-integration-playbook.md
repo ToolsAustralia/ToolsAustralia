@@ -332,3 +332,17 @@ This confirms the predicted model and resolves several open questions. It also c
 
 ### Build implication (when we wire it)
 A thin server route (e.g. `POST /api/perks/sso`) that: reconcile-then-read access (§8) → if active, sign the MyRewards JWT (their secret + `member_id`=opaque `User._id` + mapped `member_level` + `domain_*`/`client_id`) → POST to `/generatetoken` → redirect the member to the returned login token. Env: `IGODIRECT_SSO_SECRET`, `IGODIRECT_DOMAIN_CODE`, `IGODIRECT_CLIENT_ID`, `IGODIRECT_DOMAIN_URL` (+ `IGODIRECT_PRODUCT_API_*` if we also pull the offer feed).
+
+---
+
+## ✅ Connectivity VERIFIED (2026-06-22) — production tenant, signed-JWT path
+
+First live round-trip succeeded against the **production** tenant (`client_id 2412`, CNAME `myrewards.toolsaustralia.com.au` — so the **Q10 CNAME question is answered: they host us on our own subdomain**, not `*.myrewards.com.au`). Proven by `npm run test:igodirect-sso` ([scripts/test-igodirect-sso.ts](../../scripts/test-igodirect-sso.ts)), which uses iGoDirect's **own emailed sample identity** (`member_id: tools_reward_user`) so **no new permanent record was created** (`/generatetoken` returned "User found").
+
+- **Secret correct** — HMAC over their emailed sample token reproduces their signature byte-for-byte. Their signing input *keeps* the payload base64 padding, BUT…
+- **Our standard token is accepted** — the production signer [`signPartnerDiscountSsoToken`](../../src/lib/partner-discount-sso.ts) mints a plain `jose` HS256 JWT (base64url, **no padding**) and `/generatetoken` returned `200 {"response":"User found"}`. **No padded-encoding workaround is needed.**
+- **Round-trip reachable** — `/verifytoken/{token}` returned `302` → `…/users/…/new_benefits` (logs the member into the portal).
+
+**Naming (per masterplan §4):** the route/signer use the **`partner-discount`** vocabulary — `src/lib/partner-discount-sso.ts` / `signPartnerDiscountSsoToken`, eventual route `POST /api/partner-discount/sso`. The older "perks" name used earlier in this doc is **dropped**.
+
+**Scope so far:** signer + connectivity probe ONLY. `member_level` is intentionally omitted (optional; tier-mapping deferred — slots in as a one-liner once iGoDirect confirms encoding). **Nothing is wired to a live user-facing route.** Still open (unchanged): the 🔴 revoke/deactivate + portal-session-lifetime risk — must be resolved before this gates real members.

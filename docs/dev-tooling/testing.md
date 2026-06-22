@@ -67,3 +67,7 @@ Flags: `--limit=N` (optional cap), `--live`, `--admin-email=` (required when `--
 
 - Set `NODE_ENV=production` locally → all dev routes must 404
 - Run a fix script twice → second run must skip
+
+## iGoDirect / MyRewards SSO connectivity probe
+
+`npm run test:igodirect-sso` ([scripts/test-igodirect-sso.ts](../../scripts/test-igodirect-sso.ts)) — proves we can mint a valid MyRewards SSO token and round-trip it. **Production-safe:** it only ever sends iGoDirect's own emailed sample identity (`member_id: tools_reward_user`), which already exists on their side, so `/generatetoken` returns "User found" and creates no new permanent record. Steps: (1) offline secret proof (recomputes the HMAC over their sample token — no network); (2) mint with the production signer + POST `/generatetoken`; (3) replica-encoding retry only if the standard token is rejected; (4) read-only `/verifytoken` 302 check. `--no-network` runs only the offline proof. Needs `IGODIRECT_SSO_SECRET` in `.env.local`.
