@@ -5,7 +5,10 @@
 Both modals establish a NextAuth session via `signIn("auto-login", { token })`. Following the auto-login account-takeover fix:
 
 - **MembershipModal** (3 post-payment call sites) now sends `paymentIntentId` in the `/api/auth/auto-login` body — the endpoint verifies that PaymentIntent belongs to the user's Stripe customer before issuing a token. If you add a new auto-login call site, you **must** pass a real `paymentIntentId` or it returns 403.
+- **Subscription PI fallback (the "paid but not redirected" fix, 2026-06-19):** `confirm-subscription-payment`'s auto-login response omits `paymentIntentId`, so the subscription call site's `effectivePaymentIntentId` can be empty if the PI-id state wasn't captured. The auto-login body therefore falls back to the **invoice PaymentIntent derived from `paymentIntentClientSecret`** (`split("_secret_")[0]`) when the id is otherwise missing. It only engages when the id is empty (the failing case), so it never changes a flow that already works. Without it, the user gets "Account Created!" but is not logged in or redirected.
 - **LoginModal** (email-verification path) no longer calls `/api/auth/auto-login`. `/api/auth/verify-email` now returns a `token` (minted off the just-verified code, when the user has membership) and the modal signs in with `data.token` directly. The `else` branches (no token) fall back to the password prompt — keep that behaviour.
+
+**Known gap (pre-existing):** a **new** user buying a **one-time** package is created asynchronously by a Stripe webhook, so `create-one-time-purchase` returns no `user`/`autoLogin` → that flow never attempts auto-login (the buyer isn't auto-redirected). Not addressed by the above.
 
 See [docs/auth/jwt-auth-remediation-spec.md](../auth/jwt-auth-remediation-spec.md) (A0).
 
