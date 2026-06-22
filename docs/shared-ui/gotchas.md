@@ -1,5 +1,9 @@
 # Shared UI — Gotchas
 
+## Selected Package card: first row is partner-discount access, NOT `features[0]` (2026-06-22)
+
+`PlanSummaryCard` ("Selected Package" summary) renders two benefit rows. The first row must show the **partner-discount access %**; the second shows the entries. It previously rendered `promoEnhancedPlan.features[0].text` as row 1 — but `features[0]` is the **entries** line for these packages (and the promo enhancement in `useMajorDrawEntryCta.ts` rewrites it to `"N Free Entries (KX PROMO!)"`), so the card showed **entries twice** and never showed the partner line. Fix: row 1 now derives the partner line from `getPartnerDiscountBenefitTextForPackageId(selectedCatalogId)` (null = package grants no partner access → fall back to `features[0]`/subtitle) with the subscription-aware percent from `getPartnerCatalogAccessPercentForMembershipPackageId` (so a subscription Tradie reads 50%, not the one-time 40%). Don't reintroduce `features[0]` as the first row here.
+
 ## Auto-login in MembershipModal / LoginModal needs proof (2026-06-19)
 
 Both modals establish a NextAuth session via `signIn("auto-login", { token })`. Following the auto-login account-takeover fix:
