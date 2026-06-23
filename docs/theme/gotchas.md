@@ -1,8 +1,13 @@
 # Theme — Gotchas
 
-## DST + auto schedule
+## Legacy auto-dark must resolve to light
 
-Auto-theme switches at clock times in Sydney. DST transitions can cause "missing hour" or "duplicate hour" — verify the schedule helper handles this.
+The removed v0 time-based switcher wrote `theme: "dark"` into `ta-theme` for **any** visitor who
+loaded the site at night without manually toggling (those carry `userManualOverride === false`).
+After the switch to "light default, manual only," those users must come back as **light**, not dark.
+Three places enforce this with the same predicate — keep them in lockstep if you touch one:
+the inline script in `layout.tsx`, the store `persist` `migrate`, and `readThemeFromPersistStorage()`.
+A genuinely user-chosen dark (`userManualOverride !== false`, or new writes with no override field) stays dark.
 
 ## Promo theme stickiness
 
@@ -14,4 +19,6 @@ Admin theme is independent. If you change member theme tokens, admin won't pick 
 
 ## SSR mismatch
 
-If theme cookie says "dark" but client localStorage says "light," there's a brief mismatch. Bootstrap script preserves the cookie's choice; localStorage is updated on first user toggle.
+Theme is `localStorage`-only (no cookie), so the server always renders light. The inline bootstrap
+script applies `dark` before paint for a user-chosen dark, so there's no visible flash; `<html>` has
+`suppressHydrationWarning` to absorb the server-light vs client-dark attribute difference.

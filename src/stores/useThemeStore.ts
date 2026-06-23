@@ -2,7 +2,6 @@
 
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import { getScheduledThemeForSydney } from "@/utils/themeSchedule";
 
 type Theme = "light" | "dark";
 
@@ -10,51 +9,35 @@ interface ThemeStore {
   theme: Theme;
   setTheme: (theme: Theme) => void;
   toggleTheme: () => void;
-  /** Re-enable time-based theme (Sydney 6pm–6am dark) and apply the current slot immediately */
-  restoreAutoTheme: () => void;
-  /** Enable automatic theme switching based on time of day (6 PM AEST = dark, 6 AM AEST = light) */
-  autoThemeEnabled: boolean;
-  setAutoThemeEnabled: (enabled: boolean) => void;
-  /** Track if user manually overrode the theme (disables auto-theme until re-enabled) */
-  userManualOverride: boolean;
-  setUserManualOverride: (override: boolean) => void;
-  /** When the user last toggled manually; used to detect Sydney schedule boundary crossings */
-  overrideTimestamp: number | null;
-  setOverrideTimestamp: (ts: number | null) => void;
 }
 
+/**
+ * App theme store. Light is the hard default — the theme only ever changes when the
+ * user taps the light/dark toggle. There is no time-of-day / system-preference auto mode.
+ */
 export const useThemeStore = create<ThemeStore>()(
   persist(
     (set) => ({
       theme: "light",
       setTheme: (theme) => set({ theme }),
       toggleTheme: () =>
-        set((state) => ({
-          theme: state.theme === "light" ? "dark" : "light",
-          // When user manually toggles, disable auto-theme
-          userManualOverride: true,
-          overrideTimestamp: Date.now(),
-        })),
-      restoreAutoTheme: () =>
-        set({
-          userManualOverride: false,
-          autoThemeEnabled: true,
-          theme: getScheduledThemeForSydney(),
-          overrideTimestamp: null,
-        }),
-      autoThemeEnabled: true,
-      setAutoThemeEnabled: (enabled) => set({ autoThemeEnabled: enabled }),
-      userManualOverride: false,
-      setUserManualOverride: (override) =>
-        set((s) => ({
-          userManualOverride: override,
-          ...(override ? {} : { overrideTimestamp: null as number | null }),
-        })),
-      overrideTimestamp: null,
-      setOverrideTimestamp: (ts) => set({ overrideTimestamp: ts }),
+        set((state) => ({ theme: state.theme === "light" ? "dark" : "light" })),
     }),
     {
       name: "ta-theme",
+      version: 1,
+      // v0 ran a time-based auto-switcher that wrote `theme: "dark"` for users who never
+      // chose it (those have `userManualOverride === false`). Honour dark only when the
+      // user actually toggled it; otherwise fall back to the light default.
+      migrate: (persisted) => {
+        const prev = (persisted ?? {}) as {
+          theme?: unknown;
+          userManualOverride?: unknown;
+        };
+        const userChoseDark =
+          prev.theme === "dark" && prev.userManualOverride !== false;
+        return { theme: userChoseDark ? "dark" : "light" } as Partial<ThemeStore>;
+      },
     }
   )
 );
