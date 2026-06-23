@@ -50,14 +50,6 @@ const SLIDE_GAP = 20;
 
 const ALL_TOOLSETS = ["ryobi", "milwaukee", "dewalt", "makita"] as const;
 
-/** Per-brand wordmark scale to compensate for differing intrinsic aspect ratios in the source images. */
-const WORDMARK_SCALE: Record<ToolsetLandingSlug, number> = {
-  ryobi: 1,
-  dewalt: 1,
-  milwaukee: 1.3,
-  makita: 0.8,
-};
-
 export function OtherToolsetsCarousel({
   referrerSlug,
   currentToolsetSlug,
@@ -159,9 +151,9 @@ export function OtherToolsetsCarousel({
                 src={wordmarkSrc}
                 alt={formatToolsetLabel(slug)}
                 fill
+                unoptimized
                 className="object-contain"
                 sizes="(max-width: 640px) 140px, 180px"
-                style={{ transform: `scale(${WORDMARK_SCALE[slug] ?? 1})`, transformOrigin: "center" }}
               />
             </div>
           )}

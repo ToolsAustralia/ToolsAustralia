@@ -20,6 +20,7 @@ export const TOOLSET_LANDING_SLUGS = [
   "milwaukee",
   "dewalt",
   "makita",
+  "hikoki",
 ] as const;
 
 export type ToolsetLandingSlug = (typeof TOOLSET_LANDING_SLUGS)[number];
@@ -30,6 +31,7 @@ const TOOLSET_TO_PRIZE_SLUGS: Record<ToolsetLandingSlug, [PrizeSlug, PrizeSlug, 
   milwaukee: ["milwaukee-sidchrome", "milwaukee-kincrome", "milwaukee-milwaukee"],
   dewalt: ["dewalt-sidchrome", "dewalt-kincrome", "dewalt-milwaukee"],
   makita: ["makita-sidchrome", "makita-kincrome", "makita-milwaukee"],
+  hikoki: ["hikoki-sidchrome", "hikoki-kincrome", "hikoki-milwaukee"],
 };
 
 /**
@@ -56,6 +58,10 @@ const LANDING_HERO_MAP: Partial<Record<PrizeSlug, ExtendedPromoImagePaths>> = {
   // Makita prizes
   "makita-sidchrome": resolveLandingHeroImages("makita", "sidTB"),
   "makita-milwaukee": resolveLandingHeroImages("makita", "milTB"),
+
+  // HiKOKI prizes (landing art shipped 2026-06-23)
+  "hikoki-sidchrome": resolveLandingHeroImages("hikoki", "sidTB"),
+  "hikoki-milwaukee": resolveLandingHeroImages("hikoki", "milTB"),
 };
 
 export function isToolsetLandingSlug(slug: string): slug is ToolsetLandingSlug {

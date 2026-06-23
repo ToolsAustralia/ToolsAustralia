@@ -1,5 +1,44 @@
 # Shared UI — Frontend
 
+## hikoki-green badge fix + prize combo-render normalisation (2026-06-22)
+
+Two follow-ups after the HiKOKI launch:
+- **Badge resolved red instead of green.** `getPackageColorScheme` runs its key through
+  `toColorKey`, which maps color keys to themselves via the `PLAN_ID_TO_COLOR_KEY` *identity
+  block* — `hikoki-green` was missing there, so `toColorKey("hikoki-green")` fell through to the
+  `milwaukee-red` default and the HiKOKI toolset label badge rendered red. Fixed by adding
+  `"hikoki-green": "hikoki-green"` to that block. **When adding a new `COLOR_KEYS` value, add its
+  identity entry to `PLAN_ID_TO_COLOR_KEY` too**, not just the `Record<COLOR_KEYS>` tables.
+- **Prize combo cards displayed at inconsistent zoom.** `PrizeShowcase`'s
+  `getPrizeGalleryImageLayout` now intercepts the new combo renders
+  (`<toolset>-<toolbox>.webp`) with a uniform layout (`object-contain`, no per-image scale)
+  *before* the legacy `*-set` rule that was zooming dewalt/milwaukee combos to `scale-150`. The
+  15 combo source images were also normalised to a single **1600×1200 (4:3)** canvas with the
+  subject trimmed, scaled to a common inner frame, and **bottom-anchored + centred**, so every
+  prize card shows the setup at the same size without cut-off.
+
+## `hikoki-green` brand color key added (2026-06-22)
+
+The shared color system gained a `hikoki-green` key (HiKOKI brand green `#007749`) for the
+new HiKOKI toolset. In `packageColorScheme.ts` it's added to the `COLOR_KEYS` union and every
+`Record<COLOR_KEYS, …>` table (`BRAND_GRADIENTS`, `MEMBERSHIP_SECTION_GRADIENTS`,
+`LANDING_PAGE_BRAND`, `SCHEMES`, `COLOR_KEY_TO_BRAND_GRADIENT`), plus `slugToPromoTierPlanId`
+(hikoki* → hikoki-green) and the `getPackageGlowColor` switch — the `SCHEMES["hikoki-green"]`
+entry mirrors `makita-teal` (white text on the dark brand colour) with green substitutions.
+`prize-brand-colors.ts` gained `POWER_SPEC_CHROME["hikoki-green"]` (emerald tints), a `hikoki`
+case in `getPrizeSpecificationsModalHeaderSolidFill` (`#007749`), and `hikoki-*` cases in
+`getPrizeBrandColors` / `getBrandGlowClass` (`glow-hikoki`). `globals.css` adds `.glow-hikoki`
+and `animate-border-glow-hikoki`. **Pattern when adding a brand:** mirror an existing key of
+the same polarity — light-text-on-bright (ryobi) vs white-text-on-dark (makita/hikoki).
+
+## MajorDrawSection — brand watermark now SVG (2026-06-22)
+
+The Ryobi case of `getBrandLogoPath` now returns `/images/brands/name/ryobiText.svg` (the
+brand-name wordmark webps were deleted in the SVG takeover — see `docs/promo/frontend.md`);
+the watermark `<Image>`s use `unoptimized` so the SVG serves as-is. The milwaukee / dewalt /
+makita cases are unchanged — they use the separate `/images/brands/*.webp` assets, not the
+`brands/name/` wordmarks.
+
 ## Component categories
 
 See [architecture.md](./architecture.md#categories) for the full inventory.
@@ -201,7 +240,7 @@ All previous call sites now render `WinnersTestimony` directly: the homepage + p
 - **`Banner.tsx`** — amber encouragement banner ("Someone's name gets called next draw")
 - **`ActionRow.tsx`** — primary CTAs ("Keep me in the draw" / "Resolve payment" / "No thanks, cancel anyway")
 - **`DowngradeCard.tsx`** — tier-coloured "Switch to X" card (Tradie/Foreman/Boss)
-- **`TrustBar.tsx`** — footer trust cells (SSL secure / NTP/16867 — sourced from `NTP_NUMBER` in `src/constants/legal.ts` / Cancel anytime)
+- **`TrustBar.tsx`** — footer trust cells (SSL secure / NTP/17192 — sourced from `NTP_NUMBER` in `src/constants/legal.ts` / Cancel anytime)
 - **`hero.module.css`** — composite gradients, scrollbar chrome, and stripe overlay that don't translate to single Tailwind utilities
 
 Layout is an infographic-style three-band frame: dark hero → white lose grid → light slate trust footer. Layout structure stays identical at every viewport size; the `max-xs:` breakpoint shrinks sizes only (no column collapse). Styles migrated from `<style jsx>` to Tailwind + CSS Modules.

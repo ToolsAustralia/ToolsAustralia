@@ -14,14 +14,20 @@ export const POWERSET_IMAGES: Record<string, string> = {
   dewalt: "/images/majordraws/dewalt-set/DEWALT.webp",
   makita: "/images/majordraws/makita-set/MAKITA.webp",
   ryobi: "/images/majordraws/ryobi-set/RYOBI.webp",
+  hikoki: "/images/majordraws/hikoki-set/HIKOKI.webp",
 };
 
-/** Brand name logo images - overlay on power toolset images */
+/** Brand name logo images - overlay on power toolset images.
+ *  Brand-colour SVG wordmarks (crisp at any size), each viewBox tightened to the artwork
+ *  so they centre and scale like the webps they replaced. Rendered via `<Image unoptimized>`
+ *  so Next serves the SVG as-is. The HiKOKI entry is ready for when its toolset prize is
+ *  wired (kit art + spec content pending). */
 export const POWERSET_BRAND_TEXT: Record<string, string> = {
-  milwaukee: "/images/brands/name/milwaukeeText.webp",
-  dewalt: "/images/brands/name/dewaltText.webp",
-  makita: "/images/brands/name/makitaText.webp",
-  ryobi: "/images/brands/name/ryobiText.webp",
+  milwaukee: "/images/brands/name/milwaukeeText.svg",
+  dewalt: "/images/brands/name/dewaltText.svg",
+  makita: "/images/brands/name/makitaText.svg",
+  ryobi: "/images/brands/name/ryobiText.svg",
+  hikoki: "/images/brands/name/hikokiText.svg",
 };
 
 /** Toolset display labels - descriptive kit + storage-system format for carousel badges (all caps).
@@ -34,6 +40,7 @@ export const POWERSET_LABELS: Record<string, string> = {
   dewalt: "DEWALT 14PC KIT AND TOUGHSYSTEM STORAGE",
   milwaukee: "MILWAUKEE 13PC KIT AND 8PC PACKOUT SYSTEM",
   ryobi: "RYOBI 19PC KIT AND LINK STORAGE",
+  hikoki: "HIKOKI 15PC KIT AND MULTI CRUISER STORAGE",
 };
 
 /** Toolbox display labels - shown as bottom overlay (all caps to match the toolset badges) */
@@ -47,7 +54,7 @@ export const TOOLBOX_LABELS: Record<string, string> = {
 export type ToolboxType = "sidchrome" | "milwaukee" | "kincrome" | "cash";
 
 /** Power toolset brand keys */
-export type ToolsetType = "milwaukee" | "dewalt" | "makita" | "ryobi";
+export type ToolsetType = "milwaukee" | "dewalt" | "makita" | "ryobi" | "hikoki";
 
 /**
  * Both toolboxes share one frame size so columns align and labels sit on one row (see ToolboxSelector layout).

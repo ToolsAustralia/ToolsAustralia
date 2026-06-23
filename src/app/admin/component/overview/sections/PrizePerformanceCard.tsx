@@ -32,7 +32,6 @@ interface PrizeRow extends Record<string, unknown> {
   id: string;
   brand: string;
   logoPath: string;
-  logoScale?: string;
   spend: number;
   revenue: number;
   conversions: number;
@@ -48,17 +47,10 @@ const COLUMNS: Column[] = [
 ];
 
 const PROMOTION_BRANDS = [
-  { brand: "Ryobi", slug: "ryobi", logoPath: "/images/brands/name/ryobiText.webp" },
-  {
-    brand: "Milwaukee",
-    slug: "milwaukee",
-    logoPath: "/images/brands/name/milwaukeeText.webp",
-    // Milwaukee's wordmark sits smaller in its asset than the other brands; nudge it up
-    // a touch so it reads at the same visual size in the table.
-    logoScale: "scale-[1.35]",
-  },
-  { brand: "Dewalt", slug: "dewalt", logoPath: "/images/brands/name/dewaltText.webp" },
-  { brand: "Makita", slug: "makita", logoPath: "/images/brands/name/makitaText.webp" },
+  { brand: "Ryobi", slug: "ryobi", logoPath: "/images/brands/name/ryobiText.svg" },
+  { brand: "Milwaukee", slug: "milwaukee", logoPath: "/images/brands/name/milwaukeeText.svg" },
+  { brand: "Dewalt", slug: "dewalt", logoPath: "/images/brands/name/dewaltText.svg" },
+  { brand: "Makita", slug: "makita", logoPath: "/images/brands/name/makitaText.svg" },
 ] as const;
 
 export default function PrizePerformanceCard({
@@ -156,7 +148,6 @@ export default function PrizePerformanceCard({
         id: promo.slug,
         brand: promo.brand,
         logoPath: promo.logoPath,
-        logoScale: "logoScale" in promo ? promo.logoScale : undefined,
         spend,
         revenue,
         conversions,
@@ -177,7 +168,8 @@ export default function PrizePerformanceCard({
               alt={row.brand}
               width={96}
               height={48}
-              className={cn("object-contain object-left max-h-7", row.logoScale ?? "")}
+              unoptimized
+              className="object-contain object-left max-h-7"
               sizes="96px"
             />
           </span>

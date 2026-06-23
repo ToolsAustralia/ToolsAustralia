@@ -1,5 +1,69 @@
 # Promo — Frontend
 
+## Landing page — new design assets, full replace (2026-06-23)
+
+The promo landing hero **images + videos were fully replaced** with the new
+"WIN A … TOOLBOX … $10,000 CASH" design (one version — the desktop variant whose design
+matches the mobile set). Each of the 15 combos (5 brands × `milTB`/`sidTB`/`kinTB`) has a
+desktop + mobile static (`.webp`) under `images/background/promo/landing/{brand}/` and a
+desktop + mobile clip (`.mp4`) under `videos/landing/{brand}/`. **HiKOKI is now a full
+landing brand** (its art shipped; the `getLandingHeroImagePaths` `hikoki` null-guard was
+removed and `hikoki-*` added to `LANDING_HERO_MAP`). Notes:
+- **No dark variants** — the new design has none, so the old `-dark`/`-dark-mobile` webps were
+  deleted and `resolveLandingHeroImage` falls back to the light file (existing behaviour).
+- **No webm** — only `.mp4` shipped; old `.webm` were removed, so `LandingHeroVideo`'s
+  `<source type="video/webm">` 404s and the browser uses the mp4 source.
+- Source PNG statics were converted to webp (format only); manifest regenerated via
+  `build:landing-manifest` (32 entries = 30 combos + all-prizes).
+
+## Power toolset carousel — 5-up on desktop (2026-06-22)
+
+With 5 toolset brands, `PowerToolsetCarousel` shows **2 neighbours each side + the active
+centre** (a full 5-up) on `sm+`: new `leftNeighbor2` / `rightNeighbor2` (computed only when
+`n >= 5`, since at n≤4 the `i±2` indices duplicate) are rendered in `hidden sm:block` wrappers.
+Mobile stays 3-up to avoid overflow.
+
+## Prize combo-render display normalised (2026-06-22)
+
+The 15 "toolset + toolbox" prize card renders (`<toolset>-<toolbox>.webp`, e.g.
+`dewalt-sidchrome.webp`) were normalised to a uniform **1600×1200 (4:3)** canvas — subject
+trimmed, scaled to a common inner frame, bottom-anchored + centred — so every prize card in
+`PrizeShowcase` displays at the same size without cut-off. `getPrizeGalleryImageLayout`
+intercepts these combos with a uniform `object-contain` layout (no per-image scale), fixing the
+prior inconsistency where dewalt/milwaukee combos were zoomed (`scale-150`) and the rest weren't.
+See [shared-ui/frontend.md](../shared-ui/frontend.md) for the layout-function + badge details.
+
+## Brand wordmark logos — SVG takeover + uniform sizing (2026-06-22)
+
+`POWERSET_BRAND_TEXT` (`prize-selection/constants.ts`) now serves **SVG** wordmarks from
+`public/images/brands/name/*.svg` for milwaukee / dewalt / makita / ryobi / hikoki (HiKOKI
+is now the 5th selectable toolset — see below); the old `*.webp` wordmarks were
+deleted. Each SVG is normalised to a uniform `700×200` viewBox with the artwork centred and
+Milwaukee optically up-scaled (×1.4 — its lightning bolt makes the script read small), so
+every brand renders at **equal visual size** in any container. Because equal sizing is now
+baked into the assets, the former per-brand scale hacks were removed: makita's smaller
+container in `PowerToolsetCarousel` / `StaticToolsetHighlight`, the milwaukee side-badge
+scale, and `OtherToolsetsCarousel`'s `WORDMARK_SCALE` map. Wordmarks render via
+`<Image unoptimized>` (Next serves the SVG as-is; no `dangerouslyAllowSVG` config change).
+`PrizeShowcase`'s dead-code `_getBrandLogoPath` ryobi path was updated to `.svg` for tidiness.
+
+## HiKOKI — 5th power toolset (2026-06-22)
+
+HiKOKI is now a fifth selectable toolset alongside milwaukee / dewalt / makita / ryobi in
+`prize-selection/constants.ts`: `ToolsetType` includes `"hikoki"`, `POWERSET_LABELS.hikoki`
+is `"HIKOKI 15PC KIT AND MULTI CRUISER STORAGE"`, and `getToolsetColorKey` (in both
+`PowerToolsetCarousel.tsx` and `StaticToolsetHighlight.tsx`) maps `hikoki → "hikoki-green"`.
+Like the other toolsets it pairs with the **3 toolboxes** (Sidchrome / Milwaukee / Kincrome);
+its included **Multi Cruiser is HiKOKI's storage system** (analogous to Makita MAKTRAK / Ryobi
+LINK), **not** a 4th toolbox.
+
+`POWERSET_IMAGES.hikoki` now points at the real composite hero
+[`hikoki-set/HIKOKI.webp`](../../public/images/majordraws/hikoki-set/HIKOKI.webp) (transparent
+HiKOKI toolset render, converted from the supplied PNG). One asset is still a placeholder:
+- `/promotions/hikoki` ([`src/app/promotions/hikoki/page.tsx`](../../src/app/promotions/hikoki/page.tsx))
+  renders via the shared `<ToolsetLandingPage toolsetSlug="hikoki" />` like the other brand
+  pages, but currently **falls back to the standard promo hero** — no bespoke landing art yet.
+
 ## Components
 
 - [src/components/promo/](../../src/components/promo/) — promo display components
@@ -15,7 +79,7 @@
 [`PromoViewTracking.tsx`](../../src/app/promotions/_components/PromoViewTracking.tsx) is a zero-render client component that fires the canonical Klaviyo `Viewed Giveaway` event once per route change. It is mounted in two places to cover every `/promotions/*` route with a single client-side fire:
 
 - [`src/app/promotions/[slug]/page.tsx`](../../src/app/promotions/[slug]/page.tsx) — covers all dynamic-slug promo pages.
-- [`src/app/promotions/_components/ToolsetLandingPage.tsx`](../../src/app/promotions/_components/ToolsetLandingPage.tsx) — covers the four brand pages (`/promotions/dewalt`, `/makita`, `/milwaukee`, `/ryobi`) which all render through this shared component.
+- [`src/app/promotions/_components/ToolsetLandingPage.tsx`](../../src/app/promotions/_components/ToolsetLandingPage.tsx) — covers the five brand pages (`/promotions/dewalt`, `/makita`, `/milwaukee`, `/ryobi`, `/hikoki`) which all render through this shared component.
 
 Both mounts pass the resolved `prize` from [src/config/prizes.ts](../../src/config/prizes.ts) — `title` prefers `prize.heroHeading` falling back to `prize.label`, `prizeName` is `prize.label`, `prizeImageUrl` is `prize.gallery?.[0]?.src` (omitted when absent, per the canonical no-sentinel rule). Mirrors the established pattern in [`MiniDrawViewTracking.tsx`](../../src/app/(site)/mini-draws/[id]/components/MiniDrawViewTracking.tsx) and [`ProductViewTracking.tsx`](../../src/app/(site)/shop/[slug]/components/ProductViewTracking.tsx). The event coexists with the existing `Viewed Page` (`PageType: "promotion"`) — does not replace it. Schema + snapshot test live under [docs/tracking/](../tracking/KLAVIYO_INTEGRATION.md).
 

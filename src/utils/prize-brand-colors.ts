@@ -313,6 +313,29 @@ const POWER_SPEC_CHROME: Record<
       tabBadgeInactiveClass: "bg-lime-950/45 text-lime-50 border border-lime-500/40",
     },
   },
+  "hikoki-green": {
+    light: {
+      cardClass: "border-2 border-emerald-400/75 bg-white shadow-sm shadow-emerald-950/15",
+      cardHoverClass: "hover:border-emerald-500 hover:shadow-emerald-900/20",
+      canvasFootHex: "#ecfdf5",
+      summaryAlpha: 0.17,
+      tabFillAlpha: 0.24,
+      tabBorderAlpha: 0.45,
+      dotClass: "bg-emerald-600",
+      tabBadgeInactiveClass: "bg-emerald-100 text-emerald-950 border border-emerald-400/90",
+    },
+    dark: {
+      cardClass: "border-2 border-emerald-400/42 bg-[rgb(6,28,20)]/97",
+      cardHoverClass: "hover:border-emerald-300/65",
+      canvasTopAlpha: 0.32,
+      canvasMidAlpha: 0.16,
+      summaryAlpha: 0.24,
+      tabFillAlpha: 0.24,
+      tabBorderAlpha: 0.55,
+      dotClass: "bg-emerald-400",
+      tabBadgeInactiveClass: "bg-emerald-950/55 text-emerald-50 border border-emerald-500/45",
+    },
+  },
 };
 
 function getPowerSpecChrome(colorKey: string) {
@@ -331,6 +354,7 @@ export function getPrizeSpecificationsModalHeaderSolidFill(slug: PrizeSlug | und
   if (k === "makita") return "#00c2ed";
   if (k === "dewalt") return "#FDB813";
   if (k === "ryobi") return "#e0ff00";
+  if (k === "hikoki") return "#007749";
   return "#ee0000";
 }
 
@@ -472,6 +496,9 @@ export function getPrizeBrandColors(slug: PrizeSlug, isDark = false): PrizeBrand
     case "ryobi-sidchrome":
     case "ryobi-milwaukee":
     case "ryobi-kincrome":
+    case "hikoki-sidchrome":
+    case "hikoki-milwaukee":
+    case "hikoki-kincrome":
       return buildBrandColorsFromTheme(slug, isDark);
     case "cash-prize":
       return {
@@ -543,6 +570,10 @@ export function getBrandGlowClass(slug: PrizeSlug): string {
     case "ryobi-milwaukee":
     case "ryobi-kincrome":
       return "glow-ryobi";
+    case "hikoki-sidchrome":
+    case "hikoki-milwaukee":
+    case "hikoki-kincrome":
+      return "glow-hikoki";
     case "cash-prize":
       return "glow-green";
     default:

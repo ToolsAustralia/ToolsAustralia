@@ -21,6 +21,7 @@ const getToolsetColorKey = (toolset: string) => {
   if (toolset === "dewalt") return "dewalt-yellow";
   if (toolset === "makita") return "makita-teal";
   if (toolset === "ryobi") return "ryobi-green";
+  if (toolset === "hikoki") return "hikoki-green";
   return "milwaukee-red";
 };
 
@@ -48,18 +49,15 @@ export function StaticToolsetHighlight({
           initial={{ opacity: 0, y: -4 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.2 }}
-          className={`relative ${
-            toolset === "makita"
-              ? "h-5 w-24 sm:h-6 sm:w-28 lg:h-7 lg:w-32"
-              : "h-8 w-40 sm:h-10 sm:w-52 lg:h-12 lg:w-60"
-          }`}
+          className="relative h-8 w-40 sm:h-10 sm:w-52 lg:h-12 lg:w-60"
         >
           <Image
             src={brandTextSrc}
             alt={toolset}
             fill
+            unoptimized
             className="object-contain"
-            sizes={toolset === "makita" ? "(max-width: 640px) 96px, (max-width: 1024px) 112px, 128px" : "(max-width: 640px) 160px, (max-width: 1024px) 208px, 240px"}
+            sizes="(max-width: 640px) 160px, (max-width: 1024px) 208px, 240px"
           />
         </motion.div>
       )}

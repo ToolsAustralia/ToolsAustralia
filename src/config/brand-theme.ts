@@ -7,7 +7,7 @@
  * @module brand-theme
  */
 
-export type BrandKey = "dewalt" | "makita" | "milwaukee" | "ryobi";
+export type BrandKey = "dewalt" | "makita" | "milwaukee" | "ryobi" | "hikoki";
 
 /**
  * Brand theme with primary colors and light/dark mode variants
@@ -111,6 +111,25 @@ export const BRAND_THEMES: Record<BrandKey, BrandTheme> = {
     gradient: "linear-gradient(135deg, #e0ff00 0%, #f2ff4d 45%, #c8eb00 100%)",
     textColor: "black",
   },
+  hikoki: {
+    /** Official HiKOKI brand green (#007749, "Fun Green" / Pantone 3415 C) — green replaced
+     *  Hitachi's old red identity in the 2018 rebrand. White text on the dark green. */
+    primary: "#007749",
+    secondary: "#009a63",
+    accent: "#3cc88a",
+    light: {
+      primary: "#007749",
+      secondary: "#009a63",
+      accent: "#5fd6a3",
+    },
+    dark: {
+      primary: "#00543a",
+      secondary: "#007749",
+      accent: "#009a63",
+    },
+    gradient: "linear-gradient(135deg, #007749 0%, #009a63 50%, #007749 100%)",
+    textColor: "white",
+  },
 };
 
 /**
@@ -147,13 +166,15 @@ export function slugToBrandKey(slug: string): BrandKey | null {
   if (lower.startsWith("makita")) return "makita";
   if (lower.startsWith("milwaukee")) return "milwaukee";
   if (lower.startsWith("ryobi")) return "ryobi";
-  
+  if (lower.startsWith("hikoki")) return "hikoki";
+
   // Fallback to checking if brand appears anywhere in slug
   if (lower.includes("dewalt")) return "dewalt";
   if (lower.includes("makita")) return "makita";
   if (lower.includes("milwaukee")) return "milwaukee";
   if (lower.includes("ryobi")) return "ryobi";
-  
+  if (lower.includes("hikoki")) return "hikoki";
+
   return null;
 }
 
@@ -171,7 +192,7 @@ export function isValidBrandSlug(slug: string): boolean {
  * @returns Array of brand keys
  */
 export function getAllBrandKeys(): BrandKey[] {
-  return ["dewalt", "makita", "milwaukee", "ryobi"];
+  return ["dewalt", "makita", "milwaukee", "ryobi", "hikoki"];
 }
 
 function hexToRgbTuple(hex: string): [number, number, number] {

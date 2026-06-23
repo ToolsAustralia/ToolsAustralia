@@ -117,6 +117,11 @@ export function PowerToolsetCarousel({
       rightNeighbor = prizes[(activeIndex + 1) % n] ?? null;
     }
   }
+  // Second neighbours each side — only when there are 5+ toolsets (at n<=4 the i±2 indices
+  // collide/duplicate). Shown on sm+ so the carousel fills out to a 5-up (2 | active | 2) on
+  // desktop now there are 5 brands; mobile stays 3-up to avoid overflow.
+  const leftNeighbor2 = activePrize && n >= 5 ? (prizes[(activeIndex - 2 + n) % n] ?? null) : null;
+  const rightNeighbor2 = activePrize && n >= 5 ? (prizes[(activeIndex + 2) % n] ?? null) : null;
 
   const activeToolset = activePrize ? getToolsetFromSlug(activePrize.slug) : null;
   const activeImgSrc = activeToolset ? POWERSET_IMAGES[activeToolset] : null;
@@ -128,6 +133,7 @@ export function PowerToolsetCarousel({
     if (toolset === "dewalt") return "dewalt-yellow";
     if (toolset === "makita") return "makita-teal";
     if (toolset === "ryobi") return "ryobi-green";
+    if (toolset === "hikoki") return "hikoki-green";
     return "milwaukee-red";
   };
 
@@ -264,14 +270,13 @@ export function PowerToolsetCarousel({
       >
         {brandLogo && (
             <div
-              className={`absolute -top-2 sm:-top-3 left-1/2 -translate-x-1/2 z-20 h-5 w-16 sm:h-6 sm:w-20 lg:h-7 lg:w-24 pointer-events-none max-sm:-top-1 ${
-                toolset === "milwaukee" ? "max-sm:scale-90 sm:scale-125" : "max-sm:scale-75"
-              }`}
+              className="absolute top-1 left-1/2 -translate-x-1/2 z-20 h-5 w-16 sm:h-6 sm:w-20 lg:h-7 lg:w-24 pointer-events-none"
             >
             <Image
               src={brandLogo}
               alt={toolset ?? ""}
               fill
+              unoptimized
               className="object-contain"
               sizes="64px"
             />
@@ -325,18 +330,15 @@ export function PowerToolsetCarousel({
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 4 }}
             transition={{ duration: 0.2 }}
-            className={`relative ${
-              activeToolset === "makita"
-                ? "h-5 w-24 sm:h-6 sm:w-28 lg:h-7 lg:w-32"
-                : "h-8 w-40 sm:h-10 sm:w-52 lg:h-12 lg:w-60"
-            }`}
+            className="relative h-8 w-40 sm:h-10 sm:w-52 lg:h-12 lg:w-60"
           >
             <Image
               src={POWERSET_BRAND_TEXT[activeToolset]}
               alt={activeToolset}
               fill
+              unoptimized
               className="object-contain"
-              sizes={activeToolset === "makita" ? "(max-width: 640px) 96px, (max-width: 1024px) 112px, 128px" : "(max-width: 640px) 160px, (max-width: 1024px) 208px, 240px"}
+              sizes="(max-width: 640px) 160px, (max-width: 1024px) 208px, 240px"
             />
           </motion.div>
         </AnimatePresence>
@@ -406,10 +408,13 @@ export function PowerToolsetCarousel({
                 className={cn("mx-auto flex w-full min-w-0 max-w-6xl items-center justify-center gap-1 pt-0 sm:gap-2 md:gap-4 lg:gap-6", showStepButtons ? "sm:px-10" : "px-1 sm:px-2")}
               >
                 <div
-                  className={`flex min-h-0 min-w-0 flex-1 items-center justify-end self-center ${
+                  className={`flex min-h-0 min-w-0 flex-1 items-center justify-end gap-1 self-center sm:gap-2 md:gap-4 lg:gap-6 ${
                     leftNeighbor ? "overflow-visible" : "justify-end"
                   } ${SCROLL_NO_BAR}`}
                 >
+                  {leftNeighbor2 && (
+                    <div className="hidden shrink-0 sm:block">{renderSideImage(leftNeighbor2, 1, true, "selectedRail")}</div>
+                  )}
                   {leftNeighbor ? (
                     renderSideImage(leftNeighbor, 0, true, "selectedRail")
                   ) : (
@@ -426,7 +431,7 @@ export function PowerToolsetCarousel({
                 )}
 
                 <div
-                  className={`flex min-h-0 min-w-0 flex-1 items-center justify-start self-center ${
+                  className={`flex min-h-0 min-w-0 flex-1 items-center justify-start gap-1 self-center sm:gap-2 md:gap-4 lg:gap-6 ${
                     rightNeighbor ? "overflow-visible" : "justify-start"
                   } ${SCROLL_NO_BAR}`}
                 >
@@ -437,6 +442,9 @@ export function PowerToolsetCarousel({
                       className="h-32 w-20 min-w-[4.5rem] min-[400px]:w-24 min-[400px]:min-w-[5.5rem] shrink-0 sm:min-w-[6rem] sm:w-24"
                       aria-hidden
                     />
+                  )}
+                  {rightNeighbor2 && (
+                    <div className="hidden shrink-0 sm:block">{renderSideImage(rightNeighbor2, 1, false, "selectedRail")}</div>
                   )}
                 </div>
               </div>

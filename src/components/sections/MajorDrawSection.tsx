@@ -569,7 +569,7 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
       case "ryobi-sidchrome":
       case "ryobi-milwaukee":
       case "ryobi-kincrome":
-        return "/images/brands/name/ryobiText.webp";
+        return "/images/brands/name/ryobiText.svg";
       case "cash-prize":
         return null;
       default:
@@ -840,6 +840,7 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
                             src={brandLogoPath}
                             alt=""
                             fill
+                            unoptimized
                             className="object-contain opacity-20"
                             sizes="(max-width: 640px) 100px, 150px"
                           />
@@ -931,6 +932,7 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
                             src={brandLogoPath}
                             alt=""
                             fill
+                            unoptimized
                             className="object-contain opacity-20"
                             sizes="(max-width: 640px) 100px, 150px"
                           />
