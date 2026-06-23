@@ -5,11 +5,10 @@ import { Sun, Moon } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { useThemeStore } from "@/stores/useThemeStore";
 import { useUserContext } from "@/contexts/UserContext";
-import { useThemeToggleWithHold } from "@/hooks/useThemeToggleWithHold";
 
 /**
  * Round light/dark control (sun/moon). Used on promotions: guest FAB and can be composed elsewhere.
- * Hold ~0.5s to turn time-based theme (Sydney) back on after a manual toggle.
+ * Tap to switch between light and dark; the choice is remembered.
  */
 export function ThemeToggleButton({
   className,
@@ -18,19 +17,14 @@ export function ThemeToggleButton({
   className?: string;
   style?: CSSProperties;
 }) {
-  const { theme } = useThemeStore();
-  const hold = useThemeToggleWithHold();
+  const { theme, toggleTheme } = useThemeStore();
 
   return (
     <button
       type="button"
-      onClick={hold.onClick}
-      onPointerDown={hold.onPointerDown}
-      onPointerUp={hold.onPointerUp}
-      onPointerCancel={hold.onPointerCancel}
-      onPointerLeave={hold.onPointerLeave}
-      title="Tap: light / dark · Hold: match time of day (Sydney)"
-      aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} mode. Hold to restore automatic theme by time of day.`}
+      onClick={toggleTheme}
+      title="Switch between light and dark mode"
+      aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} mode.`}
       style={style}
       className={
         className ??

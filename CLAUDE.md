@@ -591,11 +591,8 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
       "paths": [
         "src/components/theme/**",
         "src/hooks/useTheme.ts",
-        "src/hooks/useAutoTheme.ts",
-        "src/hooks/useThemeToggleWithHold.ts",
         "src/hooks/useHtmlDarkForUi.ts",
         "src/utils/themeBootstrap.ts",
-        "src/utils/themeSchedule.ts",
         "src/contexts/ThemeContext.tsx",
         "src/contexts/AdminThemeContext.tsx",
         "src/stores/useThemeStore.ts",
