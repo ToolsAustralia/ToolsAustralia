@@ -2362,7 +2362,18 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
           body: JSON.stringify({
             userId: data.user.id,
             email: data.user.email,
-            paymentIntentId: effectivePaymentIntentId,
+            // Subscription confirm responses omit the PaymentIntent id, so
+            // effectivePaymentIntentId can be empty when the PI-id state wasn't
+            // captured. Fall back to the invoice PaymentIntent derived from the
+            // client secret we already hold — otherwise auto-login can't prove
+            // payment and the user lands on "Account Created!" without being
+            // logged in or redirected. Only engages when the id is otherwise
+            // missing, so it never changes a flow that already works.
+            paymentIntentId:
+              effectivePaymentIntentId ||
+              (paymentIntentClientSecret?.includes("_secret_")
+                ? paymentIntentClientSecret.split("_secret_")[0]
+                : undefined),
           }),
         });
 

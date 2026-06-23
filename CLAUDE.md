@@ -278,7 +278,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/hooks/queries/admin/useAllowlistStats.ts",
         "src/utils/billing/declineCodeLabels.ts"
       ],
-      "lastVerified": "2026-06-15"
+      "lastVerified": "2026-06-22"
     },
     "payment": {
       "docs": "docs/payment/",
@@ -407,6 +407,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
       "docs": "docs/partner/",
       "paths": [
         "src/utils/partner-discounts/**",
+        "src/lib/partner-discount-sso.ts",
         "src/models/PartnerApplication.ts",
         "src/models/PartnerDiscount.ts",
         "src/app/api/partner-applications/**",
@@ -590,11 +591,8 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
       "paths": [
         "src/components/theme/**",
         "src/hooks/useTheme.ts",
-        "src/hooks/useAutoTheme.ts",
-        "src/hooks/useThemeToggleWithHold.ts",
         "src/hooks/useHtmlDarkForUi.ts",
         "src/utils/themeBootstrap.ts",
-        "src/utils/themeSchedule.ts",
         "src/contexts/ThemeContext.tsx",
         "src/contexts/AdminThemeContext.tsx",
         "src/stores/useThemeStore.ts",
@@ -778,7 +776,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "scripts/reconcile-*.ts",
         "scripts/connect-ops-db.ts"
       ],
-      "lastVerified": "2026-06-19"
+      "lastVerified": "2026-06-22"
     },
     "dev-tooling": {
       "docs": "docs/dev-tooling/",

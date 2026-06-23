@@ -113,13 +113,6 @@ export async function POST(request: NextRequest) {
 
     console.log(`🛒 Creating one-time purchase for: ${validatedData.userEmail}`);
 
-    // Check if user already exists
-    const existingUser = await User.findOne({ email: validatedData.userEmail });
-    if (existingUser) {
-      console.log(`👤 User already exists, proceeding with purchase: ${existingUser._id}`);
-      // User already exists (registered in step 1), proceed with purchase
-    }
-
     // Get the package (check both regular membership packages and mini draw packages)
     membershipPackage = getPackageById(validatedData.packageId);
     let isMiniDrawPackage = false;
@@ -689,7 +682,13 @@ export async function POST(request: NextRequest) {
 
     let user;
 
-    if (existingUser) {
+    // Gate on the lowercased lookup (`registeredUser`). Emails are stored
+    // lowercase (User schema `lowercase: true`), so a case-sensitive match would
+    // miss a registered user who typed their email with any uppercase — wrongly
+    // deferring account creation to the webhook and leaving them logged out after
+    // a successful payment (and risking a duplicate account). `registeredUser`
+    // matches in every case the old case-sensitive lookup did, plus those cases.
+    if (registeredUser) {
       // User already exists (registered in step 1)
       // ✅ FIX: Only update Stripe customer ID, DON'T save payment method yet
       // Payment method will be saved by webhook after payment succeeds
@@ -698,7 +697,7 @@ export async function POST(request: NextRequest) {
       // Update existing user with Stripe customer ID ONLY
       // Payment method will be saved by webhook after successful payment
       user = await User.findByIdAndUpdate(
-        registeredUser!._id,
+        registeredUser._id,
         {
           $set: {
             stripeCustomerId: customer.id,

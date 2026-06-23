@@ -1,11 +1,18 @@
 # Shared UI — Gotchas
 
+## Selected Package card: first row is partner-discount access, NOT `features[0]` (2026-06-22)
+
+`PlanSummaryCard` ("Selected Package" summary) renders two benefit rows. The first row must show the **partner-discount access %**; the second shows the entries. It previously rendered `promoEnhancedPlan.features[0].text` as row 1 — but `features[0]` is the **entries** line for these packages (and the promo enhancement in `useMajorDrawEntryCta.ts` rewrites it to `"N Free Entries (KX PROMO!)"`), so the card showed **entries twice** and never showed the partner line. Fix: row 1 now derives the partner line from `getPartnerDiscountBenefitTextForPackageId(selectedCatalogId)` (null = package grants no partner access → fall back to `features[0]`/subtitle) with the subscription-aware percent from `getPartnerCatalogAccessPercentForMembershipPackageId` (so a subscription Tradie reads 50%, not the one-time 40%). Don't reintroduce `features[0]` as the first row here.
+
 ## Auto-login in MembershipModal / LoginModal needs proof (2026-06-19)
 
 Both modals establish a NextAuth session via `signIn("auto-login", { token })`. Following the auto-login account-takeover fix:
 
 - **MembershipModal** (3 post-payment call sites) now sends `paymentIntentId` in the `/api/auth/auto-login` body — the endpoint verifies that PaymentIntent belongs to the user's Stripe customer before issuing a token. If you add a new auto-login call site, you **must** pass a real `paymentIntentId` or it returns 403.
+- **Subscription PI fallback (the "paid but not redirected" fix, 2026-06-19):** `confirm-subscription-payment`'s auto-login response omits `paymentIntentId`, so the subscription call site's `effectivePaymentIntentId` can be empty if the PI-id state wasn't captured. The auto-login body therefore falls back to the **invoice PaymentIntent derived from `paymentIntentClientSecret`** (`split("_secret_")[0]`) when the id is otherwise missing. It only engages when the id is empty (the failing case), so it never changes a flow that already works. Without it, the user gets "Account Created!" but is not logged in or redirected.
 - **LoginModal** (email-verification path) no longer calls `/api/auth/auto-login`. `/api/auth/verify-email` now returns a `token` (minted off the just-verified code, when the user has membership) and the modal signs in with `data.token` directly. The `else` branches (no token) fall back to the password prompt — keep that behaviour.
+
+**Known gap (pre-existing):** a **new** user buying a **one-time** package is created asynchronously by a Stripe webhook, so `create-one-time-purchase` returns no `user`/`autoLogin` → that flow never attempts auto-login (the buyer isn't auto-redirected). Not addressed by the above.
 
 See [docs/auth/jwt-auth-remediation-spec.md](../auth/jwt-auth-remediation-spec.md) (A0).
 
@@ -68,7 +75,11 @@ Multiple modals open simultaneously is a UX hazard. The modal primitive in `comp
 
 ## SSR + theme flash
 
-Theme bootstrap (in [theme](../theme/)) runs pre-React. If a shared-ui component references `theme` via context before bootstrap completes, you can see a flash.
+Theme bootstrap (in [theme](../theme/)) runs pre-React. If a shared-ui component references `theme` via context before bootstrap completes, you can see a flash. **Light is the hard default** — the bootstrap only applies `dark` for a genuinely user-chosen dark, so a component that defaults to light renders correctly first.
+
+## Theme toggle buttons are tap-only
+
+`ThemeToggle.tsx` (`ThemeToggleButton`) and `HeaderThemeToggle.tsx` switch light/dark on a plain tap and persist the choice. The old hold-to-restore time-based (Sydney) auto mode was removed — there is no time-of-day / system-preference auto theme anymore (see [theme/rules.md](../theme/rules.md)). Don't reintroduce the `onPointer*`/hold handlers on these buttons.
 
 ## Dark mode coverage gaps
 
