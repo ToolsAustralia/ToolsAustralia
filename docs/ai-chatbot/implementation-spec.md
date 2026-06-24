@@ -562,6 +562,47 @@ The panel header says "AI Support Assistant" with "Tools Australia" sub-label. T
 
 All 4 pass.
 
+### As-built: observability + offline golden-set eval (Task 1.10)
+
+Adds the final Phase 1 observability pieces: ErrorReport routing for genuine failures, and an offline answer-quality eval harness.
+
+#### ErrorReport routing in ChatService (`src/services/support-chat/ChatService.ts`)
+
+Two genuine-failure catch blocks (model-SETUP error and stream-START error) now call `ErrorLoggingService.logSystemError()` in addition to the existing `console.error`. Wrapped in try/catch and awaited before returning so the error reporter is best-effort and can never block or surface to the user. Normal outcomes (captcha_required / rate-limited / over-budget canned fallback) are not routed — they are not errors.
+
+Import added: `import { ErrorLoggingService } from "@/services/error-reporting/ErrorLoggingService";`
+
+Context passed: `{ component: "ChatService", action: "model-setup" | "stream-start", endpoint: "/api/chat" }` with `{ isServerSide: true, request: ctx.req }`.
+
+#### Observability confirmed (no new telemetry added)
+
+- **ChatAuditLog**: per-conversation metrics (deflected/escalated/tokens/modelTier/durationMs/status) are emitted by `ctx.writeAudit(200)` at the end of every successful path. Implemented in `src/lib/support-chat/audit.ts` + `src/lib/support-chat/withChatbot.ts`. ErrorReport rows link genuine failures.
+- **Vercel Speed Insights**: mounted app-wide in `src/app/layout.tsx` via `src/components/tracking/SpeedInsightsClient.tsx`. Covers `/api/chat` latency and error-rate percentiles automatically — no additional instrumentation needed.
+
+#### `scripts/eval-chat-goldenset.ts` + `npm run eval:chat`
+
+Offline answer-quality eval. Grader: `claude-opus-4-8` via the Anthropic Batch API (50% discount, no streaming required). Grading SDK: `@anthropic-ai/sdk` (devDependency, not bundled into the app).
+
+**Golden set** (27 questions): covers draw date/time/freeze/organiser, all three membership tiers ($20/15 entries, $40/40 entries, $80/100 entries), renewal day-24, refund non-refundable, payment failure, payment methods, ACT/SA exclusion, age eligibility, all three partner catalog tiers (50%/75%/100%), referral 100 entries, entries carry-forward, mini draws, one-time packs, prize options ($10k cash or tool brand + $5k), and three escalation cases (cancel request, refund request, off-topic). All facts sourced from `getFaqEntries()` + `BUSINESS.md`; no prices or dates invented.
+
+**Answer generation** (step 1): runs `tryDeflect()` per question — if answered, uses the canned answer (no LLM cost); otherwise calls `getChatModel('primary')` + `generateText()` with the real system prompt and knowledge pack (`maxOutputTokens: 300`). No Mongo needed.
+
+**Batch grading** (step 2): builds one `MessageBatchRequest` per (question, answer, expectedFacts, shouldDeflect, shouldEscalate); submits as ONE batch; polls with adaptive backoff (5s initial, 30s cap) until terminal; retrieves results; parses strict JSON `{ pass, missingFacts[], hallucinations[], notes }`.
+
+**Report** (step 3): per-question PASS/FAIL with failure detail; overall pass rate; exit 0 ≥80%, exit 1 <80%, exit 2 on setup error. Progress output: count up-front, per-question status line, final summary.
+
+**Injectable deps** (`EvalDeps`): `tryDeflectFn`, `getKnowledgePackFn`, `buildSystemPromptFn`, `getChatModelFn`, `generateTextFn`, `gradeBatchFn`. Swap all for stubs to verify tally logic and report format without a real API call.
+
+**`--limit N` / `EVAL_LIMIT=N`**: run on a subset for cheap verification (e.g. `npm run eval:chat -- --limit 3`).
+
+**Cost estimate (full 27-question run):** answer-gen ~$0.002 (Haiku, ~25 deflects, ~2 LLM at 300 tokens each); grading ~$0.003 (Opus Batch at 50% discount, 27 × ~200 input tokens + 50 output tokens). Total < $0.01 per full eval run.
+
+#### `docs/ai-chatbot/runbook.md` (created)
+
+Short actionable playbook: bot wrong (fix canonical data → redeploy; eval catches regressions); bot down (kill switch, Vercel logs, ErrorReport, route maxDuration, Anthropic status); abuse/cost spike (instant kill `CHAT_KILL_SWITCH=true`, lower `CHAT_DAILY_TOKEN_BUDGET_USD`, Anthropic Console spend cap, hCaptcha gate); budget tripped (canned fallback, how to raise/reset); where to look (ChatAuditLog queries, ErrorReport admin filter, Speed Insights, Vercel Function Logs). References exact env vars + model IDs.
+
+---
+
 ### Phase 2 — Atlas Vector Search RAG (when the pack outgrows the cache sweet-spot)
 
 - Chunk prose (BUSINESS.md, Terms) by section; keep structured facts (prices/entries/partner tiers) as **discrete fact records pulled from the TS** (never paraphrased).

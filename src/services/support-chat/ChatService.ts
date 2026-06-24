@@ -80,6 +80,7 @@ import {
   type EscalationContact,
 } from "@/services/support-chat/escalation";
 import { verifyHcaptcha as realVerifyHcaptcha } from "@/lib/support-chat/captcha";
+import { ErrorLoggingService } from "@/services/error-reporting/ErrorLoggingService";
 
 // ─── Public input / dep types ─────────────────────────────────────────────────
 
@@ -599,6 +600,16 @@ export const chatService = {
     } catch (err) {
       // Hard setup error (e.g. missing knowledge pack / model env) → graceful canned reply.
       console.error("[ChatService] model setup failed", err);
+      // Best-effort ErrorReport — never allowed to surface or block the response.
+      try {
+        await ErrorLoggingService.logSystemError(err, {
+          component: "ChatService",
+          action: "model-setup",
+          endpoint: "/api/chat",
+        }, { isServerSide: true, request: ctx.req });
+      } catch {
+        // Intentionally swallowed — error reporting must not break the user response.
+      }
       ctx.audit.deflected = false;
       return cannedTextResponse(MODEL_ERROR_FALLBACK_TEXT, async () => {
         await ctx.writeAudit(200);
@@ -725,6 +736,16 @@ export const chatService = {
     } catch (err) {
       // Streaming failed to start (e.g. immediate auth error) → graceful canned reply.
       console.error("[ChatService] stream failed", err);
+      // Best-effort ErrorReport — never allowed to surface or block the response.
+      try {
+        await ErrorLoggingService.logSystemError(err, {
+          component: "ChatService",
+          action: "stream-start",
+          endpoint: "/api/chat",
+        }, { isServerSide: true, request: ctx.req });
+      } catch {
+        // Intentionally swallowed — error reporting must not break the user response.
+      }
       return cannedTextResponse(MODEL_ERROR_FALLBACK_TEXT, async () => {
         await ctx.writeAudit(200);
       });

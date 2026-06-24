@@ -97,6 +97,7 @@
     "test:chat-guest-gate": "tsx src/services/support-chat/__tests__/guest-gate.test.ts",
     "test:chat-storage": "tsx src/components/support-chat/__tests__/chat-storage.test.ts",
     "smoke:chat-service": "tsx scripts/smoke-chat-service.ts",
+    "eval:chat": "tsx scripts/eval-chat-goldenset.ts",
     "migrate:anchor-billing-24": "tsx scripts/migrate-anchor-billing-24.ts",
     "migrate:anchor-billing-24:dry": "tsx scripts/migrate-anchor-billing-24.ts --dry-run",
     "migrate:affiliate-commission-pi-index": "tsx scripts/migrate-affiliate-commission-pi-index.ts",
@@ -346,6 +347,7 @@
     "zustand": "^5.0.8"
   },
   "devDependencies": {
+    "@anthropic-ai/sdk": "^0.105.0",
     "@eslint/eslintrc": "^3",
     "@tailwindcss/postcss": "^4",
     "@tanstack/react-query-devtools": "^5.90.2",
