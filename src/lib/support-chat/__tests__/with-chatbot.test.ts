@@ -115,6 +115,7 @@ async function testRateLimit429() {
   check("audit row written", calls.length === 1);
   checkDeep("audit.status is 429", calls[0]?.status, 429);
   checkDeep("audit.deflected is false", calls[0]?.deflected, false);
+  checkDeep("audit.escalated is false", calls[0]?.escalated, false);
   checkDeep("audit.actorKind is anonymous", calls[0]?.actorKind, "anonymous");
 }
 
@@ -144,6 +145,7 @@ async function testKillSwitch503() {
 
   check("audit row written for 503", calls.length === 1);
   checkDeep("audit.status is 503", calls[0]?.status, 503);
+  checkDeep("audit.escalated is false (503 early exit)", calls[0]?.escalated, false);
   checkDeep("audit.actorKind is member (kill-switch with member session)", calls[0]?.actorKind, "member");
 
   // daily_budget variant

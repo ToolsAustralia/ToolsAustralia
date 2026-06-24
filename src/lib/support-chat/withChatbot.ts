@@ -38,25 +38,27 @@ import { randomUUID } from "node:crypto";
 import type { ChatActor } from "@/lib/support-chat/types";
 import { hashIp, writeChatAudit } from "@/lib/support-chat/audit";
 import type { ChatAuditMeta } from "@/lib/support-chat/audit";
+import {
+  createDistributedRateLimiter,
+  getClientIdentifier,
+} from "@/utils/security/rateLimiter";
+
+// Static import is safe: rateLimiter.ts has no top-level Mongoose import — its
+// Mongo access is lazy (await import inside check()), and getClientIdentifier is
+// a pure function. So importing this module here does NOT load Mongoose at init.
 
 // ─── Rate-limit defaults (singleton per process — created once) ───────────────
 
 type RlResult = { success: boolean; remaining: number; retryAfterSeconds: number };
 type RateLimiter = { check: (id: string) => Promise<RlResult> };
 
-// Lazy singletons so we import the distributed limiter only in production
-// (the test injects stubs and never triggers these).
+// Lazy singletons so the limiters are constructed once per process (the test
+// injects stubs via deps and never triggers these getters).
 let _anonLimiter: RateLimiter | null = null;
 let _memberLimiter: RateLimiter | null = null;
 
 function getAnonLimiter(): RateLimiter {
   if (!_anonLimiter) {
-    // Dynamic require at runtime — module is server-only (Mongoose) and must not
-    // load during test module init (tests inject stubs via deps).
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { createDistributedRateLimiter } = require("@/utils/security/rateLimiter") as {
-      createDistributedRateLimiter: (key: string, opts: { maxRequests: number; windowMs: number }) => RateLimiter;
-    };
     _anonLimiter = createDistributedRateLimiter("chat:anon", {
       maxRequests: 15,
       windowMs: 60_000,
@@ -67,10 +69,6 @@ function getAnonLimiter(): RateLimiter {
 
 function getMemberLimiter(): RateLimiter {
   if (!_memberLimiter) {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { createDistributedRateLimiter } = require("@/utils/security/rateLimiter") as {
-      createDistributedRateLimiter: (key: string, opts: { maxRequests: number; windowMs: number }) => RateLimiter;
-    };
     _memberLimiter = createDistributedRateLimiter("chat:member", {
       maxRequests: 40,
       windowMs: 60_000,
@@ -174,10 +172,15 @@ export function withChatbot(
     // Always derived server-side. Never trust client-supplied identity.
 
     let actor: ChatActor;
-    let rawIp: string;
-
     const getSession = deps.getSession ?? defaultGetSession;
     const session = await getSession(req);
+
+    // Derive the client IP server-side via the canonical helper (same one the
+    // rate limiter uses elsewhere) so there's a single source of truth.
+    const rawIp = getClientIdentifier(
+      req.headers.get("x-real-ip"),
+      req.headers.get("x-forwarded-for")
+    );
 
     if (session?.user?.id) {
       actor = {
@@ -186,9 +189,7 @@ export function withChatbot(
         firstName: session.user.firstName ?? "",
       };
       // For members the ipHash is still computed so the audit row always has it.
-      rawIp = extractIp(req);
     } else {
-      rawIp = extractIp(req);
       actor = { kind: "anonymous", ipKey: rawIp };
     }
 
@@ -327,15 +328,6 @@ export function withChatbot(
 }
 
 // ─── Private helpers ──────────────────────────────────────────────────────────
-
-function extractIp(req: Request): string {
-  const realIp = req.headers.get("x-real-ip");
-  const forwardedFor = req.headers.get("x-forwarded-for");
-  // Mirror getClientIdentifier from rateLimiter.ts
-  if (realIp) return realIp;
-  if (forwardedFor) return forwardedFor.split(",")[0]?.trim() ?? "unknown";
-  return "unknown";
-}
 
 async function defaultGetSession(_req: Request): Promise<Session | null> {
   // Dynamic import keeps next-auth out of the module top-level.

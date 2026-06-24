@@ -335,7 +335,7 @@ Pure `redactPII(text: string): string`. Masks emails, Australian phone numbers (
 
 **Pipeline order:** `identify → rate-limit → kill-switch/budget → handler → audit`
 
-**Identify:** session cookie via `getServerSession(authOptions)`. If `session.user.id` present → `{ kind:'member', userId, firstName }`. Otherwise → `{ kind:'anonymous', ipKey: <server-derived IP> }`. Identity never trusted from client.
+**Identify:** session cookie via `getServerSession(authOptions)`. If `session.user.id` present → `{ kind:'member', userId, firstName }`. Otherwise → `{ kind:'anonymous', ipKey }`. The IP is derived server-side by reusing the canonical `getClientIdentifier(x-real-ip, x-forwarded-for)` from `rateLimiter.ts` (single source of truth — no private extraction helper). Identity never trusted from client.
 
 **Rate-limit:** Two Mongo-backed `createDistributedRateLimiter` instances (lazy singletons):
 - Anonymous: **15 req/min** (bucket key `chat:anon`) — tight; anon guests are FAQ-only per Task 1.8.
