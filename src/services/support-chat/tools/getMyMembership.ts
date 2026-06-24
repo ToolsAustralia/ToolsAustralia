@@ -31,6 +31,7 @@ const responseSchema = z
         newPackageName: z.string(),
         effectiveDate: z.string(),
       })
+      .strict()
       .nullable(),
   })
   .strict();

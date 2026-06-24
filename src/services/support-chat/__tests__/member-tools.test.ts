@@ -244,6 +244,29 @@ async function testGetMyMembership() {
     } else {
       pass("responseSchema.strict() rejects extra PII field (email)");
     }
+
+    // (c2) NESTED leak path — top-level .strict() does NOT make nested objects
+    // strict in Zod. Prove the nested pendingChange object also fail-closes:
+    // an extra field on pendingChange must throw, not silently pass through.
+    let nestedThrew = false;
+    try {
+      def.responseSchema.parse({
+        ...validShape,
+        isPendingChange: true,
+        pendingChange: {
+          newPackageName: "Foreman",
+          effectiveDate: "2026-07-01T00:00:00.000Z",
+          leakedField: "should-be-rejected",
+        },
+      });
+    } catch {
+      nestedThrew = true;
+    }
+    if (!nestedThrew) {
+      fail("nested pendingChange extra field → ZodError", "did not throw");
+    } else {
+      pass("responseSchema rejects extra field on nested pendingChange (.strict())");
+    }
   }
 }
 
