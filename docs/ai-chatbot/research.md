@@ -1,5 +1,7 @@
 # AI Support Chatbot — Deep Research
 
+> **Status note:** This document analyses a member-aware design including Amazon Bedrock onshore residency for member PII. That path was ultimately **DROPPED** — the shipped bot is FAQ-only with no member/account/admin data access. This document is retained as **historical research and rationale only**.
+
 > Companion to [README.md](README.md). This is the evidence behind the recommendations. Every business fact is cited to a file in this repo; every pricing/availability fact is cited to a primary source and was adversarially re-verified. Where a claim is medium/low confidence it says so.
 
 **Contents**

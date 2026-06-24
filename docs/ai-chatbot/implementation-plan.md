@@ -1,5 +1,7 @@
 # AI Support Chatbot — Implementation Plan
 
+> **STATUS:** Phase 1 shipped (FAQ-only Cobber bot). Phase 2 (Amazon Bedrock + per-user member tools + data residency) was **DROPPED** and is not being pursued. Phases 3/4 reference the dropped member features and are likewise not being pursued as written.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: use `superpowers:subagent-driven-development` (recommended) or `superpowers:executing-plans` to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 >
 > Companion to [implementation-spec.md](implementation-spec.md) (architecture), [alternatives-and-cost-control.md](alternatives-and-cost-control.md) (cost/abuse), and [research.md](research.md) (evidence). This is the **definitive, scalable build plan** — Phase 0 and Phase 1 are detailed to task level and execution-ready; Phases 2–4 are task-outlined and **expanded just-in-time** at the start of each phase, grounded in the code that exists by then (writing exact Phase-4 code before Phase 1 exists would be guesswork, not rigor).
@@ -19,8 +21,8 @@ Every task implicitly includes these (copied from the spec, repo CLAUDE.md, and 
 - **Two cost ceilings, always on before guests can reach the bot:** (A) provider monthly spend cap (first-party Anthropic Console, Phase 1); (B) app-level **daily token budget + kill-switch**, Mongo-backed, **fail-closed**. Plus hard `max_tokens` (~300) and per-IP/session rate limits.
 - **Deflection-first:** no-LLM layers (decision-tree, FAQ search, answer cache) run before any model call; the LLM is the fallback, not the default.
 - **Guest gating:** anonymous visitors get the no-LLM FAQ search only; the generative bot requires sign-in/email **and** an hCaptcha challenge before a guest's first generative turn. Don't add a second CAPTCHA vendor.
-- **Least privilege (structural):** **no write/mutation tools exist**; every per-user tool resolves identity from the **NextAuth session `userId` server-side only** (never a model-supplied id/email); every tool output is **Zod-projected** to `firstName` + opaque `userId` (mirror Norm) before it reaches the model.
-- **Residency:** Phase 1 = first-party Anthropic API (zero PII, keeps the provider spend cap). Phase 2 (member PII) = **Amazon Bedrock `ap-southeast-2` (Sydney)** for onshore inference (decision confirmed). ⚠️ Verify Haiku 4.5 in Bedrock Sydney; fall back to Sonnet 4.6 (confirmed in-region) if absent.
+- **Least privilege (structural):** **no write/mutation tools exist**; every per-user tool resolves identity from the **NextAuth session `userId` server-side only** (never a model-supplied id/email); every tool output is **Zod-projected** before it reaches the model. **As built: no per-user account tools exist (FAQ-only).**
+- ~~**Residency:** Phase 1 = first-party Anthropic API (zero PII, keeps the provider spend cap). Phase 2 (member PII) = **Amazon Bedrock `ap-southeast-2` (Sydney)** for onshore inference (decision confirmed). ⚠️ Verify Haiku 4.5 in Bedrock Sydney; fall back to Sonnet 4.6 (confirmed in-region) if absent.~~ **DROPPED** — Phase 2 / Bedrock not implemented. As built: first-party Anthropic API only (Phase-1 FAQ-only posture).
 - **Model:** cheapest capable model on the tail — Claude Haiku 4.5 (default; keeps Anthropic hard cap) or Gemini 2.5 Flash-Lite (cost option). Sonnet 4.6 only on rare hard escalation; Opus 4.8 offline eval only.
 - **Knowledge:** generated at build from `BUSINESS.md`, Terms (`src/app/(site)/terms/page.tsx`), and `src/data/{membershipPackages,upsellPackages,miniDrawPackages,partnerBrandOffers}.ts` + `src/config/prizes.ts`. **Do NOT use `src/data/faqs.ts`** until rewritten (it's stale e-commerce boilerplate).
 - **Never invent** prices, entry counts, draw dates (27th, 8:30 PM AEST/AEDT), or winner outcomes; state that **randomdraws.com.au picks winners, not the platform**; on low confidence or billing/refund/winner/legal topics, **escalate to a human**.
@@ -227,11 +229,13 @@ The cost is bounded and trivial, so the real question is **volume**: build only 
 
 ---
 
-## Phase 2 — Member-aware read-only tools (Bedrock Sydney) ✅ *the headline value*
+## Phase 2 — Member-aware read-only tools (Bedrock Sydney) — DROPPED
 
-**Milestone:** logged-in members get accurate answers about **their own** tier/entries/billing/draw allocation via read-only, session-scoped tools, with member-PII inference running **onshore in Bedrock Sydney** and full compliance controls.
+> **DROPPED** — this entire phase was removed from the codebase per owner decision. The bot is FAQ-only with no member account data access. The outline below is retained as historical context only.
 
-**Task outline** (expand to task level at phase start, grounded in the then-current `User`/membership services):
+**Milestone (not implemented):** logged-in members get accurate answers about **their own** tier/entries/billing/draw allocation via read-only, session-scoped tools, with member-PII inference running **onshore in Bedrock Sydney** and full compliance controls.
+
+**Task outline (historical — not implemented):**
 
 - **2.1 Bedrock provider branch:** add `@ai-sdk/amazon-bedrock`; extend `provider.ts` so member-PII calls use Bedrock `ap-southeast-2`. Verify Haiku 4.5 in-region (else Sonnet 4.6). Tests: provider returns a Bedrock model for member context. Docs: residency note in `docs/ai-chatbot/`.
 - **2.2 Tool registry (Norm-style):** `src/services/support-chat/tools/registry.ts` — declares each tool with a Zod **response** schema (egress projection); a generated manifest of "wired" tools. Tests: a tool with no responseSchema is not callable.
@@ -239,7 +243,7 @@ The cost is bounded and trivial, so the real question is **volume**: build only 
 - **2.4 Wire tools into `ChatService`** via the AI SDK `tools` option; the model calls them; results stream back. Tests: a member "what's my next bill" triggers exactly the billing tool, scoped to that user.
 - **2.5 Compliance:** complete the **PIA**; update the **privacy policy** (AI use, Bedrock Sydney, what PII the bot accesses, informational-only); confirm the sign-out clear covers member threads; add a "delete my chat history" affordance.
 
-**Phase 2 done when:** a member gets correct, scoped, onshore answers about their own account; no tool accepts an identifier; PIA + policy shipped; tests + eval pass.
+**Phase 2 done when (not applicable — DROPPED):** a member gets correct, scoped, onshore answers about their own account; no tool accepts an identifier; PIA + policy shipped; tests + eval pass.
 
 ---
 

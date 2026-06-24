@@ -1,6 +1,6 @@
 # AI Support Chatbot — Implementation Specification
 
-> **PHASE 2 REMOVED (2026-06-24):** Member account tools (getMyMembership, getMyEntries, getMyBillingStatus, getDrawStatus, getPartnerVisibility) and Amazon Bedrock integration have been removed per owner decision. The bot is **FAQ-only** with no account/admin/aggregate data access. All inference runs via the first-party Anthropic API. Sections 6 (per-user tools) and 10 (provider/data residency) below describe the original design and are retained for historical reference only — they no longer reflect the codebase.
+> **STATUS (as-built):** The shipped bot is FAQ-only (assistant name: Cobber). Phase 2 — member account tools + Amazon Bedrock onshore residency — was **DROPPED** and removed from the codebase. Sections below describing member tools / Bedrock / data-residency are retained only as **historical design context** and are **NOT implemented**.
 
 > **Naming (2026-06-24):** The customer-facing support assistant is named **Cobber** (a friendly Australian word for "mate"). This is distinct from the internal admin AI gateway named **Norm** (`docs/internal-norm/`).
 
@@ -607,9 +607,11 @@ Short actionable playbook: bot wrong (fix canonical data → redeploy; eval catc
 
 ### As-built: data-scope + assistant-purpose hardening
 
+> **Note on member-tool references below:** `getDrawStatus` and `getMyEntries` were Phase-2 member tools that have since been **DROPPED**. The system-prompt hardening (no-aggregate rule + narrow-purpose rule) **remains in the shipped bot** as defence-in-depth.
+
 Two targeted changes to tighten what the bot can see and do.
 
-#### `getDrawStatus` — aggregate entry total removed
+#### `getDrawStatus` — aggregate entry total removed (HISTORICAL — tool was subsequently DROPPED)
 
 `src/services/support-chat/tools/getDrawStatus.ts`: `totalEntries` has been removed from the `responseSchema`, the normal-draw return, and the no-draw return. The tool now returns only `name`, `status`, `drawDate`, `freezeEntriesAt`, and `activationDate`. The Zod schema is `.strict()`, so any attempt to pass `totalEntries` through the response is rejected at parse time — the aggregate count is structurally inaccessible to the model.
 
@@ -641,6 +643,8 @@ The prior "never answer out-of-scope questions" bullet was replaced by the narro
 ---
 
 ## <a id="6-tools"></a>6. Read-only per-user tools
+
+> **DROPPED** — removed from codebase; see status banner above. This entire section is retained as **historical design context only**. The shipped bot has no member account tools.
 
 A small registry (mirroring `classification.ts`) of **read-only**, **session-scoped** tools. Each reuses an existing service and projects output through a Zod schema capped to a tight PII boundary.
 
@@ -710,11 +714,13 @@ Reinforce the task instruction **after** user input (sandwich), and reject overs
 
 ## <a id="10-provider"></a>10. Provider / model abstraction & data residency
 
+> **Phase 2 / Bedrock content DROPPED** — see status banner above. The as-built bot uses only the first-party Anthropic API (no Bedrock, no data-residency switching). The Phase-2 residency bullet below is retained as historical context only.
+
 - **Provider adapter** (`src/lib/support-chat/provider.ts`) wraps the Claude call so the service is provider-agnostic and the **fallback chain** lives in one place: **Haiku 4.5 → Sonnet 4.6** on `refusal` / `overloaded_error` (529) / repeated 429. Always check `stop_reason` before reading content (Claude 4+ can return `stop_reason: "refusal"` on a 200).
 - **Two-tier routing:** a cheap triage classification (Haiku) decides FAQ vs complex; low-confidence escalates to Sonnet. Opus is **offline eval only** (Batch API, 50% off) — never in the request path.
-- **Data residency (corrected — see [research.md §8](research.md#8-security)):**
-  - **Phase 1 (logged-out, zero-PII FAQ bot):** the **first-party Anthropic API** is fine (no member PII leaves; fastest compliant launch).
-  - **Phase 2 (authenticated per-user tools):** to keep inference onshore under APP 8, target **Amazon Bedrock `ap-southeast-2` (Sydney)** with in-region Claude model IDs. The first-party API has **no AU geo**, and Vertex has **no Claude in `australia-southeast1`** — Bedrock Sydney is the only onshore path. ⚠️ **Verify Haiku 4.5 in `ap-southeast-2`** before relying on it as the triage tier (fallback: Sonnet-only on Bedrock Sydney; confirm the exact Bedrock client and model IDs at build time). Alternatively, obtain **APP-8 informed consent** if a business decision accepts offshore processing.
+- **Data residency (historical context only):**
+  - **Phase 1 (logged-out, zero-PII FAQ bot) — AS BUILT:** the **first-party Anthropic API** is used (no member PII leaves; this is the only phase implemented).
+  - **Phase 2 (authenticated per-user tools) — DROPPED:** to keep inference onshore under APP 8, the plan was to target **Amazon Bedrock `ap-southeast-2` (Sydney)** with in-region Claude model IDs. This phase was not implemented.
 
 ---
 
@@ -764,6 +770,8 @@ Support traffic is power-law ("the same ~200 questions ~80% of the time"), so la
 - Smoke: `scripts/smoke-chat-provider.ts` — one real `generateText` call to `claude-haiku-4-5` (maxOutputTokens: 5). Result: `SMOKE OK: ok`. Run: `npm run smoke:chat-provider`.
 
 ### As-built: Bedrock provider branch + member-PII residency gate (Task 2.1)
+
+> **DROPPED** — removed from codebase; see status banner above. The following is retained as historical design context only.
 
 `src/lib/support-chat/provider.ts` — extended (no callers changed).
 
@@ -844,6 +852,8 @@ The `anthropic` branch is unchanged when `CHAT_PROVIDER` is not `'bedrock'`.
 
 ### As-built: member tools wired into ChatService (Task 2.4)
 
+> **DROPPED** — removed from codebase; see status banner above. The following is retained as historical design context only.
+
 The five member-account tools are now live in `ChatService.ts` behind the `member && memberToolsEnabled()` residency gate. On the default Anthropic provider the tools are dormant — member PII never reaches the offshore API. They activate only when `CHAT_PROVIDER=bedrock` (onshore Sydney) is set.
 
 #### Residency gate (`member && memberToolsEnabled()`)
@@ -910,6 +920,8 @@ All 8 test cases (`npm run test:chat-service`) pass.
 ---
 
 ### As-built: Tool registry + read-only member tools (Task 2.2/2.3)
+
+> **DROPPED** — removed from codebase; see status banner above. The following is retained as historical design context only.
 
 Five session-scoped read-only tools wired into a Norm-style registry. Wired into ChatService in Task 2.4 (above).
 
@@ -1056,7 +1068,7 @@ Two exported functions added to `src/lib/support-chat/chatStorage.ts`:
 Phase-1 posture:
 - **Chat data stored in Australia** — MongoDB is hosted in Sydney (`ap-southeast-2`). `ChatConversation` and `ChatMessage` documents never leave the Australian cluster.
 - **AI inference processed overseas** — Phase-1 uses the first-party Anthropic API (no AU geo). User messages leave Australia for inference. No member PII is included (guest-only FAQ mode); only the message text and general knowledge pack are sent.
-- **Phase-2 change** — when `CHAT_PROVIDER=bedrock` is enabled, member-tool inference moves to Bedrock `ap-southeast-2` (Sydney). The privacy-policy-changes.md draft tracks this distinction.
+- ~~**Phase-2 change** — when `CHAT_PROVIDER=bedrock` is enabled, member-tool inference moves to Bedrock `ap-southeast-2` (Sydney).~~ **DROPPED** (Phase 2 not implemented; `CHAT_PROVIDER` / Bedrock env vars are not in use).
 
 #### Tests
 
@@ -1071,7 +1083,9 @@ The widget notice is UI-only (no unit test); it is preview-verified by the owner
 
 ---
 
-### As-built: delete-history + compliance drafts (Task 2.5)
+### As-built: delete-history + privacy disclosure (Task 2.5)
+
+> **Partial retention:** The **delete-my-chat-history** endpoint and the **FAQ bot privacy disclosure** implemented here remain live (they concern chat transcripts only, not member account data). The **Privacy Impact Assessment (`pia.md`)** was **DROPPED** along with Phase 2 — `pia.md` was removed from the codebase when Phase 2 was dropped; any references to it below are historical only. The proposed privacy policy wording in `docs/ai-chatbot/privacy-policy-changes.md` has been updated to reflect the FAQ-only posture.
 
 Member self-service chat history deletion, plus the Privacy Impact Assessment and proposed privacy policy wording required before the member-tool path goes live.
 
@@ -1080,8 +1094,8 @@ Member self-service chat history deletion, plus the Privacy Impact Assessment an
 - `src/services/support-chat/deleteMemberChatHistory.ts` — `deleteMemberChatHistory(userId, deps?)` service. Finds all `ChatConversation` `_id`s for the given `userId`, deletes matching `ChatMessage` docs, then deletes those conversations (scoped by both `_id` and `userId` for belt-and-suspenders safety). Injectable `deps` so the tsx test runs with no Mongo. Identity comes from the caller (the route, which takes it from the session) — never from client-supplied data.
 - `src/app/api/chat/history/route.ts` — thin `DELETE` handler. Authorises with `requireAuthenticatedUser()`, delegates to `deleteMemberChatHistory(session.user.id)`, returns `{ success: true, conversationsDeleted, messagesDeleted }`. `runtime='nodejs'`, `dynamic='force-dynamic'`.
 - `src/services/support-chat/__tests__/delete-history.test.ts` — 23 assertions, zero Mongo (all deps injected). Tests: user with no conversations does nothing destructive; user with conversations — correct delete order (messages before conversations), correct counts returned; filter scoped to userId (no wildcard); parallel calls for different users are isolated; return shape is correct. Run: `npm run test:chat-delete-history`. **All 23 pass.**
-- `docs/ai-chatbot/pia.md` — Privacy Impact Assessment DRAFT (requires qualified privacy professional review before go-live). Covers: scope, personal information accessed (5 tool projections, excluded fields), data flows (guest vs member path), cross-border / APP 8 (member-PII inference stays onshore via Bedrock Sydney; residency gate makes member tools physically unavailable on the offshore provider), controls (identity from session, Zod egress fail-closed, PII-redacted persistence, hashed IP audit, daily budget, kill switch, hCaptcha, no write tools), retention (90d TTL + self-service delete), risks → mitigations → residual risk table, open items (legal review, Bedrock APP-8 confirmation, Haiku 4.5 in-region verification, privacy policy update, sign-off).
-- `docs/ai-chatbot/privacy-policy-changes.md` — proposed privacy policy wording to apply to `src/app/(site)/privacy/page.tsx` AT GO-LIVE after legal sign-off. Covers: AI disclosure, what data is read (membership/entries/billing/draw/partner visibility — own data only), what is excluded (email/phone/address/card/Stripe IDs), where member data is processed (Bedrock ap-southeast-2 Sydney), chat retention (90d TTL), how to delete chat history (the new endpoint), no data sale. Headed "PROPOSED — apply after legal sign-off; do not publish while bot is dormant". Live `privacy/page.tsx` NOT edited.
+- ~~`docs/ai-chatbot/pia.md`~~ — **DROPPED** (removed from codebase along with Phase 2). The Privacy Impact Assessment was a draft covering member-PII tools and Bedrock residency. It is no longer present; any link to `pia.md` in this document is a dangling reference.
+- `docs/ai-chatbot/privacy-policy-changes.md` — proposed privacy policy wording to apply to `src/app/(site)/privacy/page.tsx` after legal sign-off. Updated to cover the **FAQ-only** bot posture: AI disclosure, no member account data access, overseas inference processing, chat retention (90d TTL), how to delete chat history (the new endpoint), no data sale. Headed "PROPOSED — apply after legal sign-off". Live `privacy/page.tsx` NOT edited.
 
 #### Files modified
 
@@ -1105,5 +1119,5 @@ Member self-service chat history deletion, plus the Privacy Impact Assessment an
 - Knowledge pack generated from canonical sources at build; `src/data/faqs.ts` **not** used until rewritten.
 - `vercel.json` chat-route `maxDuration` set; `docs/infrastructure/` updated.
 - Escalation writes a `ContactSubmission` + SendGrid alert; failures land in `ErrorReport`.
-- Sign-out clears client chat history; privacy policy updated; (Phase 2) PIA complete and residency decision recorded.
+- Sign-out clears client chat history; privacy policy updated; ~~(Phase 2) PIA complete and residency decision recorded~~ — **DROPPED** (Phase 2 not implemented; `pia.md` removed from codebase).
 - Offline eval golden-set graded by Opus 4.8 before each release.

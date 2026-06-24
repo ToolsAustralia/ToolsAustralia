@@ -1,5 +1,7 @@
 # AI Support Chatbot — Cost Control, Cheaper Alternatives & the Worth-It Verdict
 
+> **Status note:** This document analyses a member-aware design including Amazon Bedrock onshore residency for member PII. That path was ultimately **DROPPED** — the shipped bot is FAQ-only with no member/account/admin data access. This document is retained as **historical research and rationale only**.
+
 > Added in response to a direct owner concern: *"I don't want my billing to spike to $1,000/month — it's just support. If high cost is inevitable, it isn't worth integrating."* This document answers that head-on, **does not assume the existing stack must be reused**, logs every option and real-world example we found, and gives a plain worth-it / don't-build verdict. All pricing was adversarially **verified** against primary sources; AUD at FX **1 USD = 1.53 AUD**. Read alongside [research.md](research.md) and [cost-model.md](cost-model.md).
 
 ---

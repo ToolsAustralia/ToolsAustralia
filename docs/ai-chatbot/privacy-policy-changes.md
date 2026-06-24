@@ -1,5 +1,7 @@
 # Proposed Privacy Policy Changes — AI Support Chatbot
 
+> **Scope:** This document covers the **shipped FAQ-only bot (Cobber)** only. Phase 2 (member account tools + Amazon Bedrock onshore residency) was **DROPPED** and is not reflected here. No member/account/admin data is accessed by the bot.
+
 > **DRAFT — have a qualified privacy professional review before publishing.**
 > The wording below must be reviewed and approved before insertion into the live privacy page (`src/app/(site)/privacy/page.tsx`). The live privacy page must NOT be edited until that approval is obtained.
 
