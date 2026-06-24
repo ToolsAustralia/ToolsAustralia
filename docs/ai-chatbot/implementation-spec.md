@@ -243,6 +243,19 @@ A build step generates a single curated, citation-tagged knowledge string from t
 - Mark the pack with `cache_control` so it bills at **0.1× on reads**. Keep it stable between deploys (any byte change invalidates the cache).
 - Use the **Citations API** so policy answers ground to a source span.
 
+### As-built: knowledge pack generator (Task 1.3)
+
+`scripts/build-chat-knowledge-pack.ts` — shipped and wired into `prebuild`/`predev`.
+
+- **Structured facts are DERIVED, not hardcoded.** The generator imports the canonical data via `@/` aliases and reads the live values: subscription tiers / one-time packs / additional packs from `@/data/membershipPackages` (price, entries, and partner-% parsed from each package's feature lines), the mini-pack ladder from `@/data/miniDrawPackages`, partner brand names + offers from `@/data/partnerBrandOffers`, prize combinations from `@/config/prizes` (`PRIZE_CATALOG` slugs → `getPrizeLabel`), and the real customer-facing Q&As from `@/data/faqs` (`getFaqEntries()` — not re-typed). There are **no hardcoded price/entry/brand numbers** for anything that exists in those files, so a reprice in a data file propagates to the bot on the next build with zero drift.
+- **Env loaded up-front.** The generator (and the test) call `dotenv` on `.env.local` before importing the data files, because those files read Stripe price IDs from env at module load (matches the `scripts/backfill-*.ts` pattern). On Vercel the build env is already present.
+- **Curated prose** that genuinely isn't in importable data (8:00 PM freeze / 8:30 PM live draw times, randomdraws.com.au winner selection, ACT/SA exclusion, anchor-day-24, non-refundable policy, referral 100 entries) lives in one `[major-draw]` section, each line tagged `[from BUSINESS.md]`. Most of these facts are also carried by the imported FAQ entries.
+- **Emits** `src/generated/chatKnowledgePack.ts` exporting `CHAT_KNOWLEDGE_PACK: string` and `CHAT_KNOWLEDGE_SOURCES: { id: string; title: string }[]`. 7 sections (membership-tiers, one-time-packs, mini-draws, major-draw, partner-discounts, prizes, faq), ~3,294 tokens (~13,175 chars). Sections are tagged `[section-id]` for citation.
+- **Stable import surface:** `src/lib/support-chat/knowledge/pack.ts` statically imports the generated constants (house convention for generated files) and exposes `getKnowledgePack(): { text, sources }`, with a runtime guard that throws a clear "run build:chat-knowledge-pack" error if the pack is missing/empty.
+- **Scripts:** `build:chat-knowledge-pack` added; `prebuild` and `predev` chain it after the existing manifests.
+- **Test:** `src/lib/support-chat/__tests__/knowledge-pack.test.ts` (`npm run test:chat-knowledge`) — asserts canonical facts ("27th", "randomdraws", "non-refundable", ACT/SA, partner brand), size bounds (> 1500 chars, approx tokens < 12,000), and sources catalog shape. **Crucially it ties the pack to the source data:** it imports `membershipPackages` + `PARTNER_BRAND_OFFERS` and asserts every *active* tier's real `$price/month` + entries, every active one-time pack's real price, and every partner-brand name appear in the generated text — so a future reprice that wasn't regenerated fails the test. All assertions pass.
+- `src/generated/chatKnowledgePack.ts` is **not** gitignored (matches `upsellImageManifest.ts` convention — committed to the repo).
+
 ### Phase 2 — Atlas Vector Search RAG (when the pack outgrows the cache sweet-spot)
 
 - Chunk prose (BUSINESS.md, Terms) by section; keep structured facts (prices/entries/partner tiers) as **discrete fact records pulled from the TS** (never paraphrased).
