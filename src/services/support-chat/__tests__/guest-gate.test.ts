@@ -145,6 +145,7 @@ async function testAnonNoToken() {
   const { ctx } = makeCtx({ kind: "anonymous", ipKey: "1.2.3.4" });
   const { port, markHumanVerifiedCalls } = makePersistStub();
   let streamCalled = false;
+  let verifyCalled = false;
 
   const deps: ChatServiceDeps = {
     tryDeflect: async () => ({ answered: false }),
@@ -159,9 +160,11 @@ async function testAnonNoToken() {
     persist: port,
     escalateToHuman: async () => ({ submissionId: "x" }),
     getModel: () => ({ modelId: "claude-haiku-4-5" }) as never,
-    // No token provided → verifyHcaptcha would only be called if a token was given.
-    // In this test, hcaptchaToken is absent so we don't even call verifyHcaptcha.
-    verifyHcaptcha: async () => false,
+    // No token provided → verifyHcaptcha must NOT be called (empty token short-circuits).
+    verifyHcaptcha: async () => {
+      verifyCalled = true;
+      return false;
+    },
   };
 
   const res = await chatService.respond(
@@ -186,12 +189,16 @@ async function testAnonNoToken() {
     fail("model NOT called", "streamFn was invoked");
     return;
   }
+  if (verifyCalled) {
+    fail("verifyHcaptcha NOT called on no-token path", "was called (empty token should short-circuit)");
+    return;
+  }
   if (markHumanVerifiedCalls.length > 0) {
     fail("markHumanVerified NOT called", `called ${markHumanVerifiedCalls.length} times`);
     return;
   }
 
-  pass("anonymous + no token → 401 captcha_required, model not called");
+  pass("anonymous + no token → 401 captcha_required, model + verifier not called");
 }
 
 // ─── Gate case 2: anonymous + miss + INVALID token → 401 ─────────────────────
@@ -333,7 +340,11 @@ async function testAnonAlreadyVerified() {
       ctx,
       messages: [userMessage("Follow-up question about pricing")],
       conversationId: "conv_already_verified",
-      // No hcaptchaToken — relying on already-verified conversation
+      // A resumed widget MAY re-send a token every turn. Pass one here to prove
+      // the freshlyVerified fix: an already-verified conv must NOT re-stamp even
+      // when a token is present (the old `input.hcaptchaToken` proxy would have
+      // fired a redundant Mongo write here).
+      hcaptchaToken: "client-resent-token",
     },
     deps
   );
@@ -353,9 +364,10 @@ async function testAnonAlreadyVerified() {
     fail("verifyHcaptcha NOT called (already verified)", "was called");
     return;
   }
-  // markHumanVerified should NOT be called (no token presented)
+  // markHumanVerified must NOT be called — the conversation was already verified,
+  // so even with a re-sent token this turn is not a FRESH verification.
   if (markHumanVerifiedCalls.length > 0) {
-    fail("markHumanVerified NOT called (no fresh token)", `called ${markHumanVerifiedCalls.length} times`);
+    fail("markHumanVerified NOT called (not freshly verified)", `called ${markHumanVerifiedCalls.length} times`);
     return;
   }
   if (!writeAuditCalls.includes(200)) {
@@ -363,7 +375,7 @@ async function testAnonAlreadyVerified() {
     return;
   }
 
-  pass("anonymous + already-verified conv → model called, verifyHcaptcha NOT called, writeAudit(200)");
+  pass("anonymous + already-verified conv (+ re-sent token) → model called, verifyHcaptcha NOT called, no re-stamp, writeAudit(200)");
 }
 
 // ─── Gate case 5: anonymous + deflection ANSWERED → NO captcha ───────────────

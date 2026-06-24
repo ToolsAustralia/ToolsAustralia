@@ -537,6 +537,12 @@ export const chatService = {
     // returned above on a hit, so we know deflection MISSED here). Members are
     // never challenged. Fail-closed: no token or a bad token → 401 JSON (NOT a
     // stream). The Task 1.9 widget detects captcha_required and shows the widget.
+    //
+    // `freshlyVerified` is hoisted so the step-3 stamp site can distinguish
+    // "this turn passed a brand-new challenge" (stamp humanVerifiedAt) from
+    // "the conversation was already verified" (do NOT re-stamp) — even though
+    // the resumed client may also send a token on every turn.
+    let freshlyVerified = false;
     if (ctx.actor.kind === "anonymous") {
       // Check whether the resumed conversation is already human-verified.
       let alreadyVerified = false;
@@ -545,7 +551,8 @@ export const chatService = {
           input.conversationId,
           ctx.ipHash
         );
-        // null means "not found / not owned" — treat as unverified.
+        // A `null` return (conversation not found / not owned by this ipHash) is
+        // treated identically to `false` → a fresh challenge is required.
         alreadyVerified = verified === true;
       }
 
@@ -568,7 +575,9 @@ export const chatService = {
             }
           );
         }
-        // Token valid — will stamp humanVerifiedAt after conversationId is known (step 3).
+        // Token valid AND this was a fresh verification (not an already-verified
+        // resume) → stamp humanVerifiedAt after conversationId is known (step 3).
+        freshlyVerified = true;
       }
     }
 
@@ -594,9 +603,10 @@ export const chatService = {
       userAgent,
     });
 
-    // If the anonymous gate was satisfied with a FRESH token (not already-verified),
-    // stamp humanVerifiedAt now so subsequent turns in this conversation are free.
-    if (ctx.actor.kind === "anonymous" && input.hcaptchaToken) {
+    // Stamp humanVerifiedAt ONLY when this turn passed a fresh challenge — not
+    // when the conversation was already verified (even if the client re-sent a
+    // token). This avoids a redundant Mongo write on every resumed turn.
+    if (ctx.actor.kind === "anonymous" && freshlyVerified) {
       // Best-effort — failure must not block the response.
       try {
         await persist.markHumanVerified(conversationId);

@@ -453,7 +453,7 @@ Added to `IChatConversation` interface and the Mongoose schema (optional `Date`,
 
 1. If a `conversationId` was supplied and `persist.isAnonConversationVerified(conversationId, ipHash)` returns `true` → **proceed to LLM** (no token required).
 2. Otherwise: require a fresh `hcaptchaToken`. If absent OR `verifyHcaptcha` returns `false` → return **401 JSON** `{ success: false, error: "captcha_required", code: "captcha_required" }` (not a stream; the Task 1.9 widget intercepts this code and shows the hCaptcha + sign-in prompt). Do NOT create a conversation, do NOT call the model, do NOT write an audit 200.
-3. If the token verifies → proceed to LLM; after `ensureConversation`, call `persist.markHumanVerified(conversationId)` (best-effort, non-blocking on error).
+3. If the token verifies → proceed to LLM; after `ensureConversation`, call `persist.markHumanVerified(conversationId)` (best-effort, non-blocking on error). The stamp is gated on a hoisted **`freshlyVerified`** boolean (set true ONLY on the branch that passed a brand-new challenge — i.e. `!alreadyVerified` AND `verifyHcaptcha` returned true), **not** on the mere presence of `input.hcaptchaToken`. So an already-verified resumed conversation does NOT re-stamp `humanVerifiedAt` even when the 1.9 widget re-sends a token each turn — avoiding a redundant Mongo write.
 
 #### `PersistPort` additions
 
