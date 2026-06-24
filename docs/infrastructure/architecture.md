@@ -35,6 +35,18 @@ Plus:
 - `scripts/fix-*.{ts,mjs,js}` → fix:* npm script — one-off corrective scripts; **must** ship with a `:dry` sibling that disables writes
 - `scripts/codemods/` — UI/Tailwind codemod scripts (see [dev-tooling architecture](../dev-tooling/architecture.md))
 
+### Asset-conversion scripts (`convert:*`)
+
+One-shot build-asset converters that turn numbered design exports into the brand-named, web-optimized files the app ships. Each removes its source(s) after a successful run. The first three are **sharp-based** (the `sharp` dependency, pure-JS/native, no external binary):
+
+- `convert:upsell-webp` → `scripts/convert-upsells-to-webp.ts`
+- `convert:multiplier-banners-webp` → `scripts/convert-multiplier-banners-to-webp.ts`
+- `convert:promo-landing-webp` → `scripts/convert-promo-landing-to-webp.ts`
+- `convert:drawn-tonight-tomorrow-webp` → `scripts/convert-drawn-tonight-tomorrow-to-webp.ts` (sharp) — converts the numbered "drawn tonight/tomorrow" landing-hero PNG exports to brand-named WebP stills and converts the shared `bg-desktop`/`bg-mobile` hero-stage background; removes the PNG sources.
+- `convert:drawn-tonight-tomorrow-videos` → `scripts/convert-drawn-tonight-tomorrow-videos.ts` (**ffmpeg-based**) — remuxes the numbered drawn-hero MP4 exports into brand-named files (audio stripped, `faststart`) and encodes matching VP9 WebM; removes the numbered source folder.
+
+> **External-tool dependency:** the WebP/PNG converters above only need the `sharp` npm dependency, but `convert:drawn-tonight-tomorrow-videos` shells out to **`ffmpeg`, which must be on `PATH`** — it is an external binary, not an npm package, so it is **not** installed by `npm install`. The script fails immediately if ffmpeg is absent. This is the only asset-conversion script with an external-binary prerequisite.
+
 ### Dashboard stats snapshot backfill + drift check
 
 - [`scripts/backfill-dashboard-stats-snapshots.ts`](../../scripts/backfill-dashboard-stats-snapshots.ts) — idempotent backfill. Upserts `DashboardStatsDailySnapshot` rows for a date range. Supports `--dry-run`, `--start-date=YYYY-MM-DD`, `--end-date=YYYY-MM-DD`. Defaults: site launch (2025-11-27) → yesterday-AEST. npm scripts: `backfill:dashboard-stats-snapshots` (live), `backfill:dashboard-stats-snapshots:dry`.
