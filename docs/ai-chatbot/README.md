@@ -66,7 +66,7 @@ These four items were corrected against primary sources after the first research
 | [alternatives-and-cost-control.md](alternatives-and-cost-control.md) | **The cost answer.** Hard spend caps, guest-abuse control, cheapest models + free tiers, no-LLM/low-LLM designs, flat-rate vendors, how real sites do it, and the worth-it / don't-build verdict. |
 | [cost-model.md](cost-model.md) | AUD cost tables at 500/2k/10k conversations + break-even (full-bot **upper-bound** scenario; the alternatives doc has the cheaper, realistic, hard-capped numbers). |
 | [implementation-spec.md](implementation-spec.md) | The technical spec grounded in your stack: routes, Mongo schemas, the `withChatbot()` wrapper, read-only tools, the widget, and the guardrail requirements. |
-| [implementation-plan.md](implementation-plan.md) | The phased rollout — each phase ships a usable win, lean-but-complete. |
+| [implementation-plan.md](implementation-plan.md) | **The execution-ready build plan.** Target file structure, global constraints, Phase 0/1 detailed to task level (TDD, tests, commits), Phases 2–4 outlined, plus testing/observability/docs/scaling/maintenance. Decisions locked: Bedrock Sydney (member PII), Vercel AI SDK (engine), phased FAQ-first. |
 
 ---
 
