@@ -35,7 +35,7 @@ When a signed-in member sends a message that the deflection layer cannot answer,
 | `getMyMembership` | Tier name, package ID (opaque slug), entries per month, active/inactive flag, subscription source, expiry date (ISO), pending-change flag, pending change's new package name + effective date | Email, phone, address, Stripe customer ID, Stripe subscription ID, saved payment methods, last name |
 | `getMyEntries` | Current draw name, total entries, membership entry count, one-time entry count, per-package breakdown (`packageName`, `entryCount`, `source`) | Package IDs, user ID, timestamps |
 | `getMyBillingStatus` | Subscription status string, `isActive` flag, `autoRenew` flag, next billing date (ISO), `isCancelled` flag | Stripe IDs, card data, last four digits, payment method details, billing amounts |
-| `getDrawStatus` | Draw name, status, draw date (ISO), freeze-entries-at date (ISO), activation date (ISO), total public entry count | Per-user entry data, user identifiers |
+| `getDrawStatus` | Draw name, status, draw date (ISO), freeze-entries-at date (ISO), activation date (ISO) | Per-user entry data, user identifiers, aggregate entry count (platform-wide totals are never projected) |
 | `getPartnerVisibility` | Access percentage, list of visible brand names and discount percentages | Brand IDs, logo URLs, business link URLs, user identifier |
 
 **What is NEVER projected to the model:**

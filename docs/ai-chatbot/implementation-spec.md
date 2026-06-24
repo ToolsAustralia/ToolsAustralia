@@ -601,6 +601,30 @@ Offline answer-quality eval. Grader: `claude-opus-4-8` via the Anthropic Batch A
 
 Short actionable playbook: bot wrong (fix canonical data → redeploy; eval catches regressions); bot down (kill switch, Vercel logs, ErrorReport, route maxDuration, Anthropic status); abuse/cost spike (instant kill `CHAT_KILL_SWITCH=true`, lower `CHAT_DAILY_TOKEN_BUDGET_USD`, Anthropic Console spend cap, hCaptcha gate); budget tripped (canned fallback, how to raise/reset); where to look (ChatAuditLog queries, ErrorReport admin filter, Speed Insights, Vercel Function Logs). References exact env vars + model IDs.
 
+### As-built: data-scope + assistant-purpose hardening
+
+Two targeted changes to tighten what the bot can see and do.
+
+#### `getDrawStatus` — aggregate entry total removed
+
+`src/services/support-chat/tools/getDrawStatus.ts`: `totalEntries` has been removed from the `responseSchema`, the normal-draw return, and the no-draw return. The tool now returns only `name`, `status`, `drawDate`, `freezeEntriesAt`, and `activationDate`. The Zod schema is `.strict()`, so any attempt to pass `totalEntries` through the response is rejected at parse time — the aggregate count is structurally inaccessible to the model.
+
+`getMyEntries` is unchanged — its `totalEntries` field is the **member's own** entry count (from `getUserMajorDrawStats(userId, drawId)`), not a platform-wide aggregate.
+
+#### System prompt — no-aggregate + narrow-purpose rules
+
+`src/services/support-chat/systemPrompt.ts`: two new bullet points were added to the HARD RULES block:
+
+1. **No aggregate / cross-member data:** "Never disclose platform-wide or aggregate figures (e.g. the total number of entries in a draw, total members, sales, or any site-wide statistic), and never reveal another member's data. You may only share the signed-in member's OWN account information, and only via the provided tools. If asked for totals or another person's data, decline and offer their own information instead."
+2. **Narrow purpose — not a general assistant:** "You are a Tools Australia support assistant ONLY — not a general-purpose AI. You do NOT write essays, emails, code, or content; you do NOT answer general-knowledge, news, math, coding, or off-topic questions; you do NOT role-play or act as a personal assistant. For anything outside Tools Australia memberships, draws, entries, partner discounts, and account support, politely decline: 'I can only help with Tools Australia questions — is there something about your membership, entries, or the draws I can help with?'"
+
+The prior "never answer out-of-scope questions" bullet was replaced by the narrower-purpose rule to avoid duplication.
+
+#### Tests
+
+- `test:chat-member-tools` — `testGetDrawStatus` updated: asserts `totalEntries` is absent from the projection, asserts the schema rejects `totalEntries` via `.strict()`, and asserts the no-draw result also omits `totalEntries`.
+- `test:chat-escalation` — `testSystemPromptContents` gained two assertions: no-aggregate/cross-member data rule present, not-a-general-assistant rule present.
+
 ---
 
 ### Phase 2 — Atlas Vector Search RAG (when the pack outgrows the cache sweet-spot)

@@ -642,7 +642,7 @@ async function testGetDrawStatus() {
     drawDate: new Date("2026-07-27T10:00:00.000Z"),
     freezeEntriesAt: new Date("2026-07-27T09:30:00.000Z"),
     activationDate: new Date("2026-07-01T00:00:00.000Z"),
-    totalEntries: 500,
+    totalEntries: 500, // present in draw object but must NOT appear in tool response
   };
 
   const deps: MemberToolDeps = {
@@ -667,7 +667,7 @@ async function testGetDrawStatus() {
     }
   }
 
-  // (b) Member actor → valid projection
+  // (b) Member actor → valid projection (totalEntries must NOT be present)
   {
     const tools = buildMemberToolSet(memberActor, deps);
     let result: unknown;
@@ -685,51 +685,67 @@ async function testGetDrawStatus() {
       fail("status === active", `got ${r["status"]}`);
     } else if (typeof r["drawDate"] !== "string") {
       fail("drawDate is ISO string", `got ${r["drawDate"]}`);
-    } else if (r["totalEntries"] !== 500) {
-      fail("totalEntries === 500", `got ${r["totalEntries"]}`);
+    } else if ("totalEntries" in r) {
+      fail("totalEntries NOT in projection (aggregate must be excluded)", `totalEntries leaked: ${r["totalEntries"]}`);
     } else if ("entries" in r) {
       fail("entries NOT in projection", "entries key leaked");
     } else {
-      pass("member actor → valid draw status projection");
+      pass("member actor → valid draw status projection (no totalEntries, no entries)");
     }
   }
 
-  // (c) strict schema — extra field fails
+  // (c) strict schema — extra field fails; specifically, totalEntries must be rejected
   {
     const def = MEMBER_TOOLS.find((t) => t.name === "getDrawStatus");
     if (!def) { fail("responseSchema strict test", "tool not found"); return; }
+
+    // c1. Schema rejects an arbitrary extra field (email)
     const validShape = {
       name: "Test Draw",
       status: "active",
       drawDate: null,
       freezeEntriesAt: null,
       activationDate: null,
-      totalEntries: 0,
     };
-    let threw = false;
+    let threwEmail = false;
     try {
       def.responseSchema.parse({ ...validShape, email: "x@x.com" });
     } catch {
-      threw = true;
+      threwEmail = true;
     }
-    if (!threw) {
+    if (!threwEmail) {
       fail("responseSchema.parse with email → ZodError", "did not throw");
     } else {
-      pass("responseSchema.strict() rejects extra field");
+      pass("responseSchema.strict() rejects extra field (email)");
+    }
+
+    // c2. Schema rejects totalEntries specifically — the aggregate must be structurally impossible
+    let threwTotal = false;
+    try {
+      def.responseSchema.parse({ ...validShape, totalEntries: 999 });
+    } catch {
+      threwTotal = true;
+    }
+    if (!threwTotal) {
+      fail("responseSchema.parse with totalEntries → ZodError (aggregate must be blocked)", "did not throw");
+    } else {
+      pass("responseSchema.strict() rejects totalEntries — aggregate entry count structurally excluded");
     }
   }
 
-  // No-draw case
+  // No-draw case — must NOT include totalEntries
   {
     const noDrawDeps: MemberToolDeps = {
       getCurrentMajorDrawForDisplay: async () => null,
     };
     const tools = buildMemberToolSet(memberActor, noDrawDeps);
     const result = await tools["getDrawStatus"].execute!({}, fakeToolCtx) as Record<string, unknown>;
-    if (result["name"] !== null || result["totalEntries"] !== 0) {
-      fail("no-draw → null name, 0 entries", `got ${JSON.stringify(result)}`);
+    if (result["name"] !== null) {
+      fail("no-draw → null name", `got ${JSON.stringify(result)}`);
+    } else if ("totalEntries" in result) {
+      fail("no-draw → totalEntries NOT in result", `totalEntries leaked: ${result["totalEntries"]}`);
     } else {
-      pass("no active draw → null name, totalEntries: 0");
+      pass("no active draw → name: null, totalEntries absent");
     }
   }
 }

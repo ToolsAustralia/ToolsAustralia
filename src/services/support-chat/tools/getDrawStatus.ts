@@ -2,8 +2,9 @@
  * getDrawStatus — read-only tool (piiScoped: false — no member auth required).
  *
  * Returns public-facing information about the current major draw:
- * name, status, dates, and aggregate entry count. The `entries[]` array is
- * never accessed — getCurrentMajorDrawForDisplay() already omits it
+ * name, status, and dates only. The `entries[]` array and aggregate entry
+ * count are intentionally excluded — never expose platform-wide totals.
+ * getCurrentMajorDrawForDisplay() already omits entries[]
  * (return type: Omit<IMajorDraw, 'entries'>).
  *
  * Services used (injected via MemberToolDeps for testability):
@@ -23,7 +24,6 @@ const responseSchema = z
     drawDate: z.string().nullable(),
     freezeEntriesAt: z.string().nullable(),
     activationDate: z.string().nullable(),
-    totalEntries: z.number(),
   })
   .strict();
 
@@ -46,11 +46,11 @@ async function handler(_ctx: MemberToolCtx, deps?: MemberToolDeps): Promise<unkn
       drawDate: null,
       freezeEntriesAt: null,
       activationDate: null,
-      totalEntries: 0,
     };
   }
 
-  // Safe fields only — entries[] is already omitted by the return type
+  // Safe fields only — entries[] and totalEntries are intentionally excluded
+  // (aggregate platform-wide counts must never be exposed via the chatbot)
   return {
     name: draw.name ?? null,
     status: draw.status ?? null,
@@ -61,7 +61,6 @@ async function handler(_ctx: MemberToolCtx, deps?: MemberToolDeps): Promise<unkn
     activationDate: draw.activationDate
       ? new Date(draw.activationDate).toISOString()
       : null,
-    totalEntries: draw.totalEntries ?? 0,
   };
 }
 
@@ -70,7 +69,7 @@ async function handler(_ctx: MemberToolCtx, deps?: MemberToolDeps): Promise<unkn
 export const getDrawStatusTool = defineMemberTool({
   name: "getDrawStatus",
   description:
-    "Return public information about the current active major draw: name, status, draw date, freeze time, activation date, and total entry count. Does not require member authentication.",
+    "Return public information about the current active major draw: name, status, draw date, freeze time, and activation date. Does not require member authentication. Never returns aggregate entry counts.",
   inputSchema: emptyInput,
   responseSchema,
   piiScoped: false, // Public data — anonymous actors may call this

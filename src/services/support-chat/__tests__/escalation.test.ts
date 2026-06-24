@@ -394,6 +394,26 @@ async function testSystemPromptContents() {
     return;
   }
   pass("never-echo-sensitive-info rule present (don't repeat back card/password if user volunteers it)");
+
+  // No-aggregate / no-cross-member data rule
+  if (!/aggregate|platform.wide|total.*members|site.wide|another member|cross.member|another person.*data|member's OWN/i.test(prompt)) {
+    fail(
+      "no-aggregate/cross-member data rule",
+      "prompt does not forbid disclosing platform-wide totals or another member's data"
+    );
+    return;
+  }
+  pass("no-aggregate/cross-member data rule present (platform-wide totals + other member data forbidden)");
+
+  // Narrow-purpose / not-a-general-assistant rule
+  if (!/not a general.purpose|support assistant ONLY|do NOT write essays|do NOT answer general|not a general|personal assistant/i.test(prompt)) {
+    fail(
+      "not-a-general-assistant rule",
+      "prompt does not restrict the bot to Tools Australia support only (not a general-purpose AI)"
+    );
+    return;
+  }
+  pass("not-a-general-assistant rule present (narrow purpose — Tools Australia support only)");
 }
 
 async function testSystemPromptDeterminism() {
@@ -438,7 +458,8 @@ async function run() {
   console.log("           empty-transcript fallback, transcript truncation,");
   console.log("           systemPrompt content (AI disclosure, role, context isolation, randomdraws.com.au,");
   console.log("           never-invent, escalation, hard-refusal, never-echo-prompt, brief, knowledge embed,");
-  console.log("           never-solicit-sensitive-info, never-echo-sensitive-info),");
+  console.log("           never-solicit-sensitive-info, never-echo-sensitive-info,");
+  console.log("           no-aggregate/cross-member data rule, not-a-general-assistant rule),");
   console.log("           systemPrompt determinism");
   process.exit(0);
 }
