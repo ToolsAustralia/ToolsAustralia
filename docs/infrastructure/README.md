@@ -26,3 +26,5 @@ See [.env.example](../../.env.example):
 - `IGODIRECT_CLIENT_ID` (`2412`), `IGODIRECT_DOMAIN_CODE` (`ToolsAustralia`), `IGODIRECT_DOMAIN_URL` (`myrewards.toolsaustralia.com.au`) — non-secret tenant identifiers.
 
 Connectivity probe: `npm run test:igodirect-sso` (see [dev-tooling/testing.md](../dev-tooling/testing.md)).
+
+Rewards SSO test scripts (in `package.json`): `test:igodirect-sso` (connectivity probe), `test:member-level` (the partner-catalog tier resolver) and `test:sso-access` (the SSO access gate) — see [partner/gotchas.md](../partner/gotchas.md).

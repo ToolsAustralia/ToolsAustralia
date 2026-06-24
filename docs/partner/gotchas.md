@@ -37,3 +37,7 @@ This is **cosmetic and does not affect access.** Subscriber partner access is de
 ## Sample data
 
 `src/data/samplePartnerDiscounts.ts` is FIXTURE data for dev. Don't ship it as a fallback in production paths.
+
+## Server-side partner-catalog tiering: hydrate the doc, fail closed (2026-06-24)
+
+`resolvePartnerCatalogPlanId` (partner-catalog-visibility.ts) reads `user.subscriptionPackageData` and `user.enrichedOneTimePackages` — fields that **do not exist on the stored Mongoose `IUser`**; they're constructed only inside `GET /api/users/[id]`. A server path (the MyRewards SSO/offers flow) that hands a raw or merely queue-reconciled doc straight to the resolver **mis-tiers a paying subscriber** (the fields are `undefined` → it falls through to `null`). Use [`buildPartnerCatalogContext` / `resolveMemberLevel`](../../src/utils/partner-discounts/member-level.ts), which hydrates via `getEffectiveBenefits` (downgrade-preservation aware — **never** the raw `subscription.packageId`, which is wrong during a downgrade window) and is **fail-closed**: an unresolved plan → `null`, never the `getPartnerCatalogAccessPercentForPlanId` 100-default. Test: `npm run test:member-level`. Background: [docs/auth/igodirect-sso-implementation-plan.md](../auth/igodirect-sso-implementation-plan.md) §3 (N1).
