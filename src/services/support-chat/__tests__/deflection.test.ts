@@ -21,7 +21,9 @@ import path from "node:path";
 config({ path: path.resolve(process.cwd(), ".env.local") });
 
 import { tryDeflect } from "../deflection/index";
+import { matchIntent } from "../deflection/decisionTree";
 import { getFaqEntries } from "@/data/faqs";
+import { membershipPackages } from "@/data/membershipPackages";
 
 // ─── Helper ──────────────────────────────────────────────────────────────────
 
@@ -95,10 +97,25 @@ async function testPricing() {
     return;
   }
 
-  const hasPrice = result.answer.includes("$20") || result.answer.includes("$40") || result.answer.includes("$80");
-  if (!hasPrice) {
-    fail("answer contains canonical price", `answer: ${result.answer.slice(0, 120)}`);
+  // Source-tied price assertion (same style as knowledge-pack.test.ts): the
+  // returned answer must contain EVERY active subscription tier's real
+  // `$<price>/month`, read live from @/data/membershipPackages. Hardcoding
+  // $20/$40/$80 would mask the very repricing drift the deflection layer exists
+  // to prevent — if a tier is repriced in the data file but the FAQ copy was not
+  // updated, this fails.
+  const activeSubs = membershipPackages.filter((p) => p.type === "subscription" && p.isActive);
+  if (activeSubs.length === 0) {
+    fail("active subscription tiers in source data", "expected at least one active subscription tier");
     return;
+  }
+  for (const tier of activeSubs) {
+    if (!result.answer.includes(`$${tier.price}/month`)) {
+      fail(
+        `answer includes active tier "${tier.name}" real price $${tier.price}/month`,
+        `answer: ${result.answer.slice(0, 160)}`
+      );
+      return;
+    }
   }
 
   const faqEntries = getFaqEntries();
@@ -108,7 +125,10 @@ async function testPricing() {
     return;
   }
 
-  pass(`"how much does a membership cost" → answered:true, grounded to FAQ id=${matchedFaq.id}`);
+  pass(
+    `"how much does a membership cost" → answered:true, grounded to FAQ id=${matchedFaq.id}, ` +
+      `all ${activeSubs.length} active tier prices present (source-tied)`
+  );
 }
 
 async function testRefund() {
@@ -155,10 +175,15 @@ async function testEligibility() {
     return;
   }
 
-  const hasEligibility =
-    result.answer.includes("ACT") || result.answer.includes("18") || result.answer.includes("Australian");
-  if (!hasEligibility) {
-    fail("answer mentions eligibility facts", `answer: ${result.answer.slice(0, 120)}`);
+  // Assert the canonical, load-bearing eligibility fact: the excluded states.
+  // "Australian" is incidental phrasing; the permit-restricted exclusions
+  // (ACT AND South Australia) are the fact a member actually relies on.
+  if (!result.answer.includes("ACT")) {
+    fail("answer mentions excluded ACT", `answer: ${result.answer.slice(0, 160)}`);
+    return;
+  }
+  if (!result.answer.includes("South Australia")) {
+    fail("answer mentions excluded South Australia", `answer: ${result.answer.slice(0, 160)}`);
     return;
   }
 
@@ -169,7 +194,10 @@ async function testEligibility() {
     return;
   }
 
-  pass(`"who can enter the competition" → answered:true, grounded to FAQ id=${matchedFaq.id}`);
+  pass(
+    `"who can enter the competition" → answered:true, grounded to FAQ id=${matchedFaq.id}, ` +
+      `mentions excluded ACT + South Australia`
+  );
 }
 
 async function testOffTopicWeather() {
@@ -202,6 +230,49 @@ async function testOffTopicCapital() {
   pass('"what is the capital of France" → answered:false');
 }
 
+async function testLayer2Coverage() {
+  console.log("\nLayer-2 coverage (faqSearch/retrieve.ts via a paraphrase)");
+
+  // This paraphrase deliberately contains NO decision-tree (Layer-1) signal
+  // phrase — verified empirically — so it can only deflect via Layer-2 cosine
+  // FAQ search (retrieve.ts). The previous four answered:true cases all matched
+  // Layer-1 verbatim, leaving retrieve.ts's scoring with zero coverage through
+  // the public path. This case exercises it: it routes through Layer-2 to the
+  // refund FAQ (id=12, score ≈ 0.52, well above the 0.15 threshold).
+  const paraphrase = "are membership fees returnable to me";
+
+  // 1. Layer-1 must MISS (proves the case isn't secretly a decision-tree hit).
+  const intent = matchIntent(paraphrase);
+  if (intent.matched !== false) {
+    fail(
+      "Layer-1 misses the paraphrase",
+      `matchIntent matched=${intent.matched}${intent.matched ? ` id=${intent.faqId}` : ""} — pick a paraphrase with no Layer-1 signal`
+    );
+    return;
+  }
+
+  // 2. tryDeflect must still answer (proves Layer-2 catches it).
+  const result = await tryDeflect(paraphrase);
+  if (result.answered !== true) {
+    fail("Layer-2 catches the paraphrase", `tryDeflect answered=${result.answered} (expected true)`);
+    return;
+  }
+  if (typeof result.answer !== "string" || result.answer.length === 0) {
+    fail("non-empty Layer-2 answer", "answer is missing or empty");
+    return;
+  }
+
+  // 3. No-drift: the Layer-2 answer must equal a real FAQ entry's answer.
+  const faqEntries = getFaqEntries();
+  const matchedFaq = faqEntries.find((e) => e.answer === result.answer);
+  if (!matchedFaq) {
+    fail("Layer-2 answer grounded to FAQ entry", "answer text does not match any FAQ entry (possible drift)");
+    return;
+  }
+
+  pass(`"${paraphrase}" → Layer-1 miss, Layer-2 catch → answered:true, grounded to FAQ id=${matchedFaq.id}`);
+}
+
 async function testDeterminism() {
   console.log("\ndeterminism (no non-deterministic LLM)");
 
@@ -229,6 +300,7 @@ async function run() {
   await testEligibility();
   await testOffTopicWeather();
   await testOffTopicCapital();
+  await testLayer2Coverage();
   await testDeterminism();
 
   console.log(`\n${"─".repeat(60)}`);
@@ -240,7 +312,7 @@ async function run() {
 
   console.log("PASS — deflection test");
   console.log(`  FAQ entries available : ${getFaqEntries().length}`);
-  console.log("  Covered: draw date, pricing, refund, eligibility, off-topic×2, determinism");
+  console.log("  Covered: draw date, pricing (source-tied), refund, eligibility (excluded states), off-topic×2, Layer-2 coverage, determinism");
   process.exit(0);
 }
 

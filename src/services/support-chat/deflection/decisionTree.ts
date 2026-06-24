@@ -279,15 +279,22 @@ function normalise(q: string): string {
  * never stored in this file.
  */
 export function matchIntent(question: string): DecisionTreeResult {
-  const norm = normalise(question);
+  // Pad with single spaces so substring checks are word-boundary aware:
+  // `" plans "` will NOT fire on "plans for the future" being a longer word, and
+  // `" visa "` will NOT fire on "revisable". `normalise` already collapses runs
+  // of whitespace to a single space, so a leading/trailing pad is sufficient to
+  // anchor every token's boundaries. Multi-word phrase signals (e.g.
+  // "when is the draw") and the bare price signals ($20/$40/$80) still match
+  // because each is itself space-delimited after normalisation.
+  const norm = ` ${normalise(question)} `;
 
   for (const rule of INTENT_RULES) {
-    // Check excludes first.
-    const excluded = rule.excludes?.some((ex) => norm.includes(ex)) ?? false;
+    // Check excludes first (word-boundary aware, same padding rationale).
+    const excluded = rule.excludes?.some((ex) => norm.includes(` ${ex} `)) ?? false;
     if (excluded) continue;
 
-    // Check if any signal phrase appears in the normalised question.
-    const signalled = rule.signals.some((sig) => norm.includes(sig));
+    // Check if any signal phrase appears as whole word(s) in the question.
+    const signalled = rule.signals.some((sig) => norm.includes(` ${sig} `));
     if (signalled) {
       return { matched: true, faqId: rule.faqId };
     }
