@@ -146,6 +146,41 @@ function resolveInvoiceSubscriptionId(invoice: Stripe.Invoice): string | undefin
   return undefined;
 }
 
+/**
+ * On `invoice.created` for a subscription RENEWAL (`billing_reason === "subscription_cycle"`),
+ * stamp the draft invoice's description as "<Package> Renewal" BEFORE Stripe finalizes and
+ * attempts payment. The auto-spawned PaymentIntent + Charge inherit it, so BOTH successful AND
+ * FAILED renewals read "<Package> Renewal" in the Stripe payments list — not the bare join-time
+ * subscription description ("Tradie" / "Boss" / "Foreman").
+ *
+ * Strictly gated to `subscription_cycle` so it never touches the join charge
+ * (`subscription_create`), upgrade/downgrade invoices (`subscription_update`), or the
+ * $0 trial-update invoice. Non-blocking: a failure here must never fail the webhook — the
+ * description is cosmetic, and the success-path relabel in handleInvoicePaymentSucceeded
+ * remains as a belt-and-suspenders fallback for the succeeded case.
+ */
+async function handleInvoiceCreated(invoice: Stripe.Invoice): Promise<void> {
+  if (invoice.billing_reason !== "subscription_cycle" || !invoice.id) return;
+
+  try {
+    const subscriptionId = resolveInvoiceSubscriptionId(invoice);
+    let packageName = "Subscription";
+    if (subscriptionId) {
+      const subscription = await stripe.subscriptions.retrieve(subscriptionId);
+      packageName = subscription.metadata?.packageName || "Subscription";
+    }
+    const renewalDescription = `${packageName} Renewal`;
+
+    // Idempotent across webhook redeliveries — only write when it differs.
+    if (invoice.description !== renewalDescription) {
+      await stripe.invoices.update(invoice.id, { description: renewalDescription });
+      webhookLog("info", `Stamped renewal description "${renewalDescription}" on draft invoice ${invoice.id}`);
+    }
+  } catch (err) {
+    webhookLog("error", `Failed to stamp renewal description on invoice ${invoice.id}: ${err}`);
+  }
+}
+
 // ✅ WEBHOOK-FIRST: Use PaymentEvent-only idempotency (no additional infrastructure needed)
 /**
  * Check if a payment has already been processed using PaymentEvent table
@@ -5170,6 +5205,11 @@ export async function dispatchStripeEvent(event: Stripe.Event): Promise<{ should
       shouldMarkAsProcessed = true;
       break;
 
+    case "invoice.created":
+      // Label renewal invoices "<Package> Renewal" while still a draft so the
+      // spawned PI/Charge inherit it for BOTH success and failure.
+      await handleInvoiceCreated(event.data.object);
+      break;
     case "invoice.finalized":
       webhookLog("info", `Invoice finalized: ${event.data.object.id} - waiting for payment confirmation`);
       break;

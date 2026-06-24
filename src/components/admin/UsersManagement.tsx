@@ -961,25 +961,9 @@ export default function UsersManagement() {
       <ChargePastDueModal
         isOpen={isChargeModalOpen}
         onClose={() => setIsChargeModalOpen(false)}
-        onConfirm={async () => {
-          const response = await fetch("/api/admin/invoices/charge-past-due", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({ confirmation: "CHARGE" }),
-          });
-
-          const data = await response.json();
-
-          if (!response.ok) {
-            throw new Error(data.message || data.error || "Failed to charge invoices");
-          }
-
-          // Refresh user list
+        onCompleted={() => {
+          // Refresh the user list once the chunked run finishes.
           refetch();
-
-          return data;
         }}
       />
 

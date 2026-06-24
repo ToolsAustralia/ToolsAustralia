@@ -69,25 +69,38 @@ Added alongside `adChannels`. Stores per-platform payment attribution data for t
 
 [src/models/ChargeJobRun.ts](../../src/models/ChargeJobRun.ts)
 
-One document per bulk past-due charge run. Created at the start of `POST /api/admin/invoices/charge-past-due` and updated when the run finishes.
+One document per bulk past-due charge run. Created by the `start` action of `POST /api/admin/invoices/charge-past-due` (see [api.md](./api.md#post-apiadmininvoicescharge-past-due--chunked-charge-job)) and updated as each `chunk` drains the worklist; finalized when the worklist is empty or the admin stops.
 
-**Lifecycle states:** `running` → `completed` | `failed` | `aborted`. An orphan sweep sets any `running` document older than 35 minutes to `aborted` on the next bulk-run start.
+**Lifecycle states:** `running` → `completed` | `failed` | `aborted`. An orphan sweep (`sweepOrphanRuns` in [`chargePastDueJob.ts`](../../src/server/admin/chargePastDueJob.ts)) sets any `running` document older than 35 minutes to `aborted` on the next bulk-run start, **recomputing its real totals from `InvoiceChargeLog` rows first** so a crashed run no longer reports 0/0/0.
 
-**Totals shape:**
+**Totals shape** (`ChargeJobRunTotals`, recomputed from `InvoiceChargeLog` rows each chunk — not from in-memory counters):
 
 ```ts
 {
+  eligibleCount: number;     // size of the snapshotted worklist
   attempted: number;
   succeeded: number;
   failed: number;
-  skipped: number;           // total skipped
-  skippedBreakdown: {
+  revenueCents: number;      // amount collected (succeeded rows)
+  skipped: {
+    total: number;
     recentlyAttempted: number;
-    alreadyPaid: number;
     noLongerPastDue: number; // late re-check: status flipped mid-run
+    alreadyPaid: number;
+    missingPaymentMethod: number;
     other: number;
   };
 }
 ```
 
 **Cross-reference:** every `InvoiceChargeLog` row produced by a bulk run carries `chargeRunId: ObjectId` pointing back to the `ChargeJobRun` document. Per-user manual retries write `chargeRunId: null`. See [billing-stripe/gotchas.md](../billing-stripe/gotchas.md#charge-past-due--runbook) for the full audit trail.
+
+## ChargeJobWorklist
+
+[src/models/ChargeJobWorklist.ts](../../src/models/ChargeJobWorklist.ts)
+
+One document per `ChargeJobRun`, snapshotting the eligible invoices for a chunked bulk charge run **once** at kickoff so the cron-free worker never re-lists every open Stripe invoice per chunk. Collection name: `chargejobworklists`. `runId` is `unique`; auto-expires **7 days** after creation (TTL on `createdAt`).
+
+**Shape:** `{ runId, items: ChargeWorklistItem[], createdAt }` where each item is `{ invoiceId, customerId, userId, amount }` (`amount` is Stripe minor-units at snapshot time — display/estimate only; the live charge re-reads `amount_remaining`).
+
+The worklist is the **candidate set only**, not a "safe to charge" assertion — each chunk re-verifies eligibility live via `payOpenInvoiceAsPastDueAdmin`'s own guards. Resumability/progress is derived from which worklist invoices already have an `InvoiceChargeLog` row for the run, so a killed chunk resumes from the unlogged remainder.

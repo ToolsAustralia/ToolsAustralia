@@ -35,6 +35,18 @@ The eligibility math lives in `previewChargePastDueInvoices` ([src/services/admi
 
 Response: `{ success: true, preview: { eligibleCount, totalInvoices, filterStats, debug, users } }` — `amount` on each user row is in Stripe currency-minor-unit (cents). The POST handler is `trigger_human_approve` in the Norm registry and is not yet wired.
 
+### `POST /api/admin/invoices/charge-past-due` — chunked charge job
+
+Permission: `users.charge`. The bulk charge is split across many short requests so it never hits Vercel's 300s cap (the legacy single-shot loop did all ~800 charges in one request). The client drives a `start → chunk → chunk … → done` loop. Body carries an `action`:
+
+| `action` | Body | Effect | Returns |
+|---|---|---|---|
+| `"start"` (default) | `{ confirmation: "CHARGE" }` | Acquires the `ChargeJobLock`, sweeps orphans, snapshots the eligible worklist (one Stripe list pass, **no charging**), creates the `ChargeJobRun` + `ChargeJobWorklist`. Wrong/missing confirmation → `400`; lock held → `409`. | `{ success, runId, total, done }` |
+| `"chunk"` | `{ runId, chunkSize? }` | Charges the next batch of worklist invoices (default 30, max 60), renews the lock, recomputes live totals; finalizes + releases the lock when drained. Missing `runId` → `400`. | `{ success, runId, total, processed, processedThisChunk, done, totals }` |
+| `"abort"` | `{ runId }` | Admin stop / modal close: recomputes totals from logs, marks the run `aborted`, releases the lock. | `{ success, runId, total, processed, done: true, totals }` |
+
+`totals` is the `ChargeJobRunTotals` shape (see [models.md](./models.md#chargejobrun)). Delegates to [`chargePastDueJob.ts`](../../src/server/admin/chargePastDueJob.ts) (`startChargePastDueJob` / `processChargePastDueChunk` / `abortChargePastDueJob`); see [backend.md](./backend.md#server-only-code).
+
 ## Membership-by-package MRR trend (2026-06-03)
 
 `GET /api/admin/dashboard/membership-by-package` ([route](../../src/app/api/admin/dashboard/membership-by-package/route.ts)) returns the active membership base per tier (live, or a `MembershipDailySnapshot` read when the selected range resolves to a past `asOfDate`). As of 2026-06-03 it also attaches **`summary.totalActiveRevenueTrend`** (a `TrendData`) — the MRR (active recurring revenue) % change vs the **previous comparable period**:
