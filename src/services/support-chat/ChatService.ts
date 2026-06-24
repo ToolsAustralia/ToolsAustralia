@@ -354,8 +354,12 @@ const defaultPersist: PersistPort = {
  * Builds the `request_human` tool for one request. Least privilege: the model
  * may only supply a non-PII `reason`. Identity (ctx.actor) and contact details
  * (input.contact, from the request body) are captured server-side in this closure.
+ *
+ * Exported so the test can exercise the tool's `.execute()` directly (the two
+ * branches: no-email files nothing; with-email escalates with the server-side
+ * actor + request contact, never a model-supplied value).
  */
-function buildRequestHumanTool(opts: {
+export function buildRequestHumanTool(opts: {
   actor: ChatActor;
   contact: ChatContact | undefined;
   conversationId: string;
@@ -526,38 +530,64 @@ export const chatService = {
         stopWhen: stepCountIs(MAX_STEPS),
         tools: { request_human: requestHuman },
         onFinish: async ({ text, usage }) => {
+          // Fault-tolerant ordering: onFinish fires async AFTER respond() returns,
+          // so the outer try/catch does NOT cover it. The answer has already
+          // streamed and consumed real tokens by now — so cost-recording and the
+          // mandatory audit row must NOT be starvable by a transient persistence
+          // error. Therefore:
+          //   1. compute counts up front,
+          //   2. recordUsage FIRST (best-effort/never-throws — so the daily budget
+          //      is incremented regardless of whether persistence later fails),
+          //   3. wrap each persist call in its own try/catch,
+          //   4. set ctx.audit + writeAudit(200) in finally so the audit row is
+          //      always written.
           const tokensIn = usage.inputTokens ?? 0;
           const tokensOut = usage.outputTokens ?? 0;
           const modelId = modelIdOf(model);
 
-          // Persist the assistant message (redacted) — only if non-empty (a
-          // tool-only turn may produce no assistant text).
-          const assistantText = (text ?? "").trim();
-          if (assistantText.length > 0) {
-            await persist.addMessage({
-              conversationId,
-              role: "assistant",
-              content: redactPII(assistantText),
-              ...(escalated
-                ? { toolCalls: [{ name: "request_human", ok: true }] }
-                : {}),
-            });
-          }
-
+          // 2. Record cost first — this guarantees the budget reflects the spend
+          // even if every persist call below throws.
           await recordUsage(modelId, tokensIn, tokensOut);
-          await persist.recordConversationUsage(
-            conversationId,
-            modelId,
-            tokensIn,
-            tokensOut
-          );
 
-          ctx.audit.modelTier = modelId;
-          ctx.audit.tokensIn = tokensIn;
-          ctx.audit.tokensOut = tokensOut;
-          ctx.audit.deflected = false;
+          try {
+            // 3a. Persist the assistant message (redacted) — only if non-empty (a
+            // tool-only turn may produce no assistant text).
+            const assistantText = (text ?? "").trim();
+            if (assistantText.length > 0) {
+              try {
+                await persist.addMessage({
+                  conversationId,
+                  role: "assistant",
+                  content: redactPII(assistantText),
+                  ...(escalated
+                    ? { toolCalls: [{ name: "request_human", ok: true }] }
+                    : {}),
+                });
+              } catch (e) {
+                console.error("[ChatService] onFinish persist failed", e);
+              }
+            }
 
-          await ctx.writeAudit(200);
+            // 3b. Update the conversation's token/modelTier rollup.
+            try {
+              await persist.recordConversationUsage(
+                conversationId,
+                modelId,
+                tokensIn,
+                tokensOut
+              );
+            } catch (e) {
+              console.error("[ChatService] onFinish persist failed", e);
+            }
+          } finally {
+            // 4. Audit ALWAYS — even if both persist calls threw.
+            ctx.audit.modelTier = modelId;
+            ctx.audit.tokensIn = tokensIn;
+            ctx.audit.tokensOut = tokensOut;
+            ctx.audit.deflected = false;
+
+            await ctx.writeAudit(200);
+          }
         },
       });
 

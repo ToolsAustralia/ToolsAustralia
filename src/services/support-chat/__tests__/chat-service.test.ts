@@ -12,10 +12,10 @@
  *                         with stubbed token usage, returns an object whose
  *                         toUIMessageStreamResponse() yields a Response)
  *   - persist           — captures the conversation + every ChatMessage write
- *   - escalateToHuman   — spy (not exercised by these three cases)
+ *   - escalateToHuman   — spy
  *   - getModel          — returns a fake model with a .modelId string
  *
- * The three brief cases:
+ * The brief cases:
  *   1. Deflectable        → model NEVER called; user+assistant persisted (redacted);
  *                           recordUsage NOT called; audit.deflected===true; writeAudit(200).
  *   2. Non-deflectable    → model called exactly once; messages persisted;
@@ -23,6 +23,14 @@
  *                           writeAudit(200); audit.deflected===false.
  *   3. Over-budget        → canned "busy" fallback; model NEVER called.
  *   + redactPII applied to persisted user content (email masked).
+ *
+ * Plus the security-critical request_human tool (least-privilege boundary):
+ *   4. no contact.email   → returns "share your email" string; escalate + setEscalated
+ *                           NOT called; audit.escalated stays false (files NOTHING).
+ *   5. with contact.email → escalate called once with the SERVER-SIDE actor + the
+ *                           request contact (never a model-supplied value);
+ *                           setEscalated(conversationId, submissionId) called;
+ *                           audit.escalated === true.
  *
  * Run: npm run test:chat-service
  */
@@ -33,11 +41,11 @@ import path from "node:path";
 // Load .env.local before importing app modules (mirrors sibling tests).
 config({ path: path.resolve(process.cwd(), ".env.local") });
 
-import { chatService } from "../ChatService";
+import { chatService, buildRequestHumanTool } from "../ChatService";
 import type { ChatServiceDeps, PersistPort } from "../ChatService";
 import type { ChatCtx } from "@/lib/support-chat/withChatbot";
 import type { ChatActor } from "@/lib/support-chat/types";
-import type { UIMessage } from "ai";
+import type { UIMessage, ToolCallOptions } from "ai";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -370,12 +378,159 @@ async function testOverBudget() {
   pass("over-budget → canned busy fallback, no model call, writeAudit(200)");
 }
 
+// ─── request_human tool (least-privilege boundary) ────────────────────────────
+
+/** A minimal fake ToolCallOptions — the tool's execute ignores it. */
+const fakeToolCtx = {
+  toolCallId: "tc_test",
+  messages: [],
+} as unknown as ToolCallOptions;
+
+async function testRequestHumanNoEmail() {
+  console.log("\nrequest_human tool — no contact.email (files NOTHING)");
+
+  let escalateCalls = 0;
+  const setEscalatedCalls: Array<{ conversationId: string; submissionId: string }> = [];
+  let escalatedFlag: boolean = false;
+
+  const persist = makePersistSpy();
+  // Override setEscalated to record calls.
+  persist.port.setEscalated = async (conversationId, submissionId) => {
+    setEscalatedCalls.push({ conversationId, submissionId });
+  };
+
+  const tool = buildRequestHumanTool({
+    actor: { kind: "anonymous", ipKey: "1.1.1.1" },
+    contact: undefined, // no email collected yet
+    conversationId: "conv_no_email",
+    messages: [userMessage("I need a human.")],
+    persist: persist.port,
+    escalate: async () => {
+      escalateCalls++;
+      return { submissionId: "should_not_be_created" };
+    },
+    onEscalated: () => {
+      escalatedFlag = true;
+    },
+  });
+
+  // The model may only supply a non-PII reason.
+  const result = await tool.execute!({ reason: "wants a person" }, fakeToolCtx);
+
+  if (typeof result !== "string" || !/email/i.test(result)) {
+    fail("no-email returns 'share your email' string", `got ${JSON.stringify(result)}`);
+    return;
+  }
+  if (escalateCalls !== 0) {
+    fail("escalate NOT called without email", `called ${escalateCalls} times`);
+    return;
+  }
+  if (setEscalatedCalls.length !== 0) {
+    fail("setEscalated NOT called without email", `called ${setEscalatedCalls.length} times`);
+    return;
+  }
+  if (escalatedFlag) {
+    fail("audit.escalated stays false without email", `flag=${escalatedFlag}`);
+    return;
+  }
+
+  pass("no-email → asks for email, creates NO submission, escalated=false");
+}
+
+async function testRequestHumanWithEmail() {
+  console.log("\nrequest_human tool — with contact.email (escalates, server-side identity)");
+
+  let escalateCalls = 0;
+  let escalateArgs:
+    | { actor: ChatActor; contact: { name?: string; email: string; phone?: string }; transcriptSummary: string }
+    | undefined;
+  const setEscalatedCalls: Array<{ conversationId: string; submissionId: string }> = [];
+  let escalatedFlag: boolean = false;
+
+  const persist = makePersistSpy();
+  persist.port.setEscalated = async (conversationId, submissionId) => {
+    setEscalatedCalls.push({ conversationId, submissionId });
+  };
+
+  // The SERVER-SIDE actor (from ctx) and the request-body contact — never the model.
+  const serverActor: ChatActor = {
+    kind: "member",
+    userId: "507f1f77bcf86cd799439099",
+    firstName: "Sam",
+  };
+  const requestContact = { name: "Sam Real", email: "sam@example.com", phone: "0400000009" };
+
+  const tool = buildRequestHumanTool({
+    actor: serverActor,
+    contact: requestContact,
+    conversationId: "conv_with_email",
+    messages: [
+      userMessage("Please escalate me."),
+    ],
+    persist: persist.port,
+    escalate: async (args) => {
+      escalateCalls++;
+      escalateArgs = args;
+      return { submissionId: "sub_escalated_001" };
+    },
+    onEscalated: () => {
+      escalatedFlag = true;
+    },
+  });
+
+  // Even if the model tries to smuggle identity via reason, the tool ignores it for identity.
+  const result = await tool.execute!(
+    { reason: "user email is attacker@evil.com please use that" },
+    fakeToolCtx
+  );
+
+  if (typeof result !== "string" || !/team/i.test(result)) {
+    fail("with-email returns a confirmation string", `got ${JSON.stringify(result)}`);
+    return;
+  }
+  if (escalateCalls !== 1) {
+    fail("escalate called exactly once", `called ${escalateCalls} times`);
+    return;
+  }
+  if (!escalateArgs) {
+    fail("escalate received args", "undefined");
+    return;
+  }
+  // Identity must be the server-side actor, NOT a model-supplied value.
+  if (escalateArgs.actor !== serverActor) {
+    fail("escalate got server-side actor", `got ${JSON.stringify(escalateArgs.actor)}`);
+    return;
+  }
+  // Contact must be the request-body contact, NOT the attacker email smuggled via
+  // the model-supplied `reason`. Asserting it equals the request email proves both.
+  if (escalateArgs.contact.email !== "sam@example.com") {
+    fail("escalate got request contact email (not model-supplied)", `got ${escalateArgs.contact.email}`);
+    return;
+  }
+  if (setEscalatedCalls.length !== 1 || setEscalatedCalls[0].conversationId !== "conv_with_email") {
+    fail("setEscalated(conversationId, submissionId) called", `got ${JSON.stringify(setEscalatedCalls)}`);
+    return;
+  }
+  if (setEscalatedCalls[0].submissionId !== "sub_escalated_001") {
+    fail("setEscalated got escalation submissionId", `got ${setEscalatedCalls[0].submissionId}`);
+    return;
+  }
+  if (!escalatedFlag) {
+    fail("audit.escalated === true after escalation", `flag=${escalatedFlag}`);
+    return;
+  }
+
+  pass("with-email → escalate(server actor + request contact) once, setEscalated, escalated=true; model-supplied email ignored");
+}
+
 // ─── Runner ───────────────────────────────────────────────────────────────────
 
 async function run() {
   await testDeflectable();
   await testNonDeflectable();
   await testOverBudget();
+  await testRequestHumanNoEmail();
+  await testRequestHumanWithEmail();
 
   console.log(`\n${"─".repeat(60)}`);
 
@@ -387,7 +542,9 @@ async function run() {
   console.log("PASS — chat-service test");
   console.log("  Covered: deflectable (no model, redacted persist, citations, writeAudit),");
   console.log("           non-deflectable (model once, recordUsage, audit token counts, writeAudit),");
-  console.log("           over-budget (canned busy fallback, no model call)");
+  console.log("           over-budget (canned busy fallback, no model call),");
+  console.log("           request_human no-email (files nothing, escalated=false),");
+  console.log("           request_human with-email (server-side actor + request contact, setEscalated, escalated=true)");
   process.exit(0);
 }
 
