@@ -1,6 +1,19 @@
 # Config & Data — Testing
 
-> _TODO: any tests that snapshot config / verify data shapes._
+## Automated tests
+
+### `src/data/__tests__/faqs.test.ts` — `npm run test:chat-faqs`
+
+Regression suite for `src/data/faqs.ts`. Added 2026-06-24 when the FAQ content was rewritten from stale e-commerce boilerplate (PayPal, international shipping, 3-5 business day shipping) to the real membership/giveaway domain.
+
+Asserts:
+- `getFaqEntries()` returns a non-empty array of well-formed entries with valid `id`, `question`, `answer`, and `category` fields.
+- The combined FAQ text **contains** canonical facts: draw date ("27th"), Tradie tier price ("$20"), non-refundable policy, and the certified draw service ("randomdraws.com.au").
+- The combined FAQ text **does not contain** stale phrases: "paypal", "international shipping", "3-5 business day", "3-5 business days".
+
+### `src/data/__tests__/miniDrawPackages.test.ts` — (no npm script yet — run directly)
+
+Validates the mini-draw pack ladder shapes and the guest vs member viewer split.
 
 ## Manual smoke
 

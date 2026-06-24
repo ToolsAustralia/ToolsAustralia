@@ -16,58 +16,134 @@ export const faqCategories: FaqEntry["category"][] = ["ALL QUESTIONS", "SHOPPING
 export function getFaqEntries(): FaqEntry[] {
   const isRewardsFeatureEnabled = rewardsEnabled();
   const rewardsAnswer = isRewardsFeatureEnabled
-    ? "You earn points for every purchase made on our platform. Points can be redeemed for discounts on future purchases or exclusive member benefits. The more you shop, the more points you earn!"
+    ? "You earn rewards points for activity on the platform. Points can be redeemed for benefits like bonus entries or other member perks. We will notify members as soon as redemptions are available."
     : `${rewardsDisabledMessage()} We will notify members as soon as redemptions resume.`;
 
   return [
+    // ── SHOPPING / HOW IT WORKS ──────────────────────────────────────────────
     {
       id: "1",
-      question: "How do I place an order?",
+      question: "What is Tools Australia?",
       answer:
-        "Placing an order is simple! Browse our products, add items to your cart, and proceed to checkout. You'll need to create an account or sign in, enter your shipping information, select a payment method, and confirm your order. You'll receive an email confirmation once your order is placed.",
+        "Tools Australia is a membership-driven monthly tool giveaway platform built for Australian tradies — electricians, plumbers, carpenters, builders, mechanics, and more. You earn entries into our Major Draw by subscribing to a membership or purchasing one-time tool packs. More entries means better odds of winning.",
       category: "SHOPPING",
     },
     {
       id: "2",
-      question: "What payment methods do you accept?",
+      question: "When is the Major Draw and how does it work?",
       answer:
-        "We accept all major credit cards (Visa, MasterCard, American Express), PayPal, Apple Pay, Google Pay, and bank transfers. All payments are processed securely through our encrypted payment system.",
-      category: "PAYMENTS",
+        "The Major Draw runs on the 27th of every month. Entries freeze at 8:00 PM AEST/AEDT, and the draw goes live on Facebook at 8:30 PM. New entry purchases are blocked from 8:00 PM on the 27th until midnight (the start of the 28th). The winner is selected by a government-certified independent random-draw service — randomdraws.com.au — not by Tools Australia. The verification link is published on our Draw Results page after each draw.",
+      category: "SHOPPING",
     },
     {
       id: "3",
-      question: "How long does shipping take?",
+      question: "What can I win?",
       answer:
-        "Standard shipping takes 3-5 business days within Australia. Express shipping is available for 1-2 business days. International shipping takes 7-14 business days depending on the destination.",
+        "Each month's Grand Winner can customise their prize. They choose either: (A) a power tool brand (Milwaukee, DeWalt, Makita, or Ryobi) plus their choice of professional workshop storage, bundled with a $5,000 cash bonus; or (B) a single $10,000 AUD cash prize instead of tools — no hassle, just cash straight to their bank account.",
       category: "SHOPPING",
     },
     {
       id: "4",
-      question: "Can I modify or cancel my order?",
+      question: "What are my membership options and how many entries do I get?",
       answer:
-        "You can modify or cancel your order within 1 hour of placing it. After that, the order will be processed and cannot be changed. Please contact our customer service team immediately if you need assistance.",
+        "We have three monthly subscription tiers (all prices in AUD): Tradie at $20/month gives you 15 entries per month; Foreman at $40/month gives you 40 entries; Boss at $80/month gives you 100 entries. Higher tiers also unlock a larger slice of our partner-discount catalog. Subscription entries accumulate and carry forward each month while your membership stays active.",
       category: "SHOPPING",
     },
     {
       id: "5",
-      question: "Do you offer international shipping?",
+      question: "Can I buy entries without a subscription?",
       answer:
-        "Yes, we ship to most countries worldwide. Shipping costs and delivery times vary by destination. You can check shipping options and costs during checkout.",
+        "Yes. One-time tool packs let you enter the Major Draw without a monthly commitment. Packs range from Apprentice ($25, 3 entries) up to VIP ($1,000, 1,500 entries). If you already have an active subscription or entries in the current draw, you also unlock discounted Additional packs — same entries at roughly half the price. One-time and Additional pack entries are valid for the current cycle only and do not carry forward.",
       category: "SHOPPING",
     },
     {
       id: "6",
+      question: "What are Mini Draws?",
+      answer:
+        "Mini Draws are smaller, product-specific giveaways that run separately from the Major Draw. They have no fixed schedule — each one triggers when its entry threshold is reached. Buying a Mini Draw pack enters you into that specific Mini Draw only; it gives you zero Major Draw entries. Mini Draw entries and Major Draw entries are completely separate pools.",
+      category: "SHOPPING",
+    },
+    {
+      id: "7",
+      question: "Do my entries carry forward if I cancel my subscription?",
+      answer:
+        "If you cancel mid-cycle, the entries you have already earned this cycle remain valid — they stay in the draw pool for the current month's draw on the 27th. Subscription entries stop accumulating from the next renewal cycle. One-time pack entries are always scoped to the cycle they were purchased in and do not carry forward regardless of subscription status.",
+      category: "SHOPPING",
+    },
+    {
+      id: "8",
+      question: "How do I get more entries?",
+      answer:
+        "You can boost your chances in several ways: subscribe to a higher membership tier; buy one-time, Additional, or Mini Draw packs; take a post-purchase upsell offer (heavily discounted bonus entries offered right after checkout); refer a friend (both you and your friend receive 100 bonus entries when they make their first purchase); or keep an eye out for promo codes and special campaigns.",
+      category: "SHOPPING",
+    },
+    {
+      id: "9",
+      question: "Who is eligible to enter?",
+      answer:
+        "You must be 18 years or older and a legal Australian resident to enter. Please note that the competition currently excludes residents of the ACT and South Australia due to permit restrictions in those territories.",
+      category: "SHOPPING",
+    },
+
+    // ── PAYMENTS ─────────────────────────────────────────────────────────────
+    {
+      id: "10",
+      question: "What payment methods do you accept?",
+      answer:
+        "We accept all major credit and debit cards (Visa, Mastercard, American Express) processed securely through Stripe. All prices are in Australian dollars (AUD). Card payments are the only payment method currently supported.",
+      category: "PAYMENTS",
+    },
+    {
+      id: "11",
+      question: "When does my subscription renew?",
+      answer:
+        "Subscriptions renew on the 24th of each month. This timing is intentional — it ensures your renewal payment settles at least three days before the 27th Major Draw, so your entries are confirmed and counted for that month's draw.",
+      category: "PAYMENTS",
+    },
+    {
+      id: "12",
+      question: "Are membership fees refundable?",
+      answer:
+        "Membership fees are non-refundable once purchased. If you cancel mid-cycle, you will not receive a refund for the unused portion of your subscription period — however, your entries for that cycle remain valid and you keep access to your member benefits until the cycle ends. Your rights under Australian Consumer Law are always preserved.",
+      category: "PAYMENTS",
+    },
+    {
+      id: "13",
+      question: "What happens if my renewal payment fails?",
+      answer:
+        "If a renewal payment fails, your subscription moves to a past-due state. You will receive an email prompt and can retry the payment directly from your account dashboard. We will attempt to recover the payment — if it succeeds, your benefits and entries are reinstated immediately. You can also update your card details from your account settings at any time.",
+      category: "PAYMENTS",
+    },
+
+    // ── REWARDS ──────────────────────────────────────────────────────────────
+    {
+      id: "14",
       question: "How do rewards points work?",
       answer: rewardsAnswer,
       category: "REWARDS",
     },
     {
-      id: "7",
-      question: "What are the benefits of becoming a partner?",
+      id: "15",
+      question: "Is the online shop available?",
       answer:
-        "Our partners enjoy exclusive access to bulk pricing, priority customer support, dedicated account management, and co-marketing opportunities. Contact our partnership team to learn more.",
+        "Our member shop is coming soon. When it launches, subscription members will receive a shop discount — Tradie 5%, Foreman 10%, Boss 20%. We will announce the launch date to all members.",
+      category: "REWARDS",
+    },
+
+    // ── PARTNERSHIPS ─────────────────────────────────────────────────────────
+    {
+      id: "16",
+      question: "What partner discounts do members get?",
+      answer:
+        "Active subscribers unlock exclusive discounts with our partner brands — real savings on tools, equipment, and trade services. How much of the catalog you can see depends on your tier: Tradie members unlock 50% of the catalog, Foreman 75%, and Boss 100%. One-time pack buyers receive a time-limited window of partner access based on the pack they purchased. To redeem a partner discount, simply mention Tools Australia when dealing with the partner brand — there is no code to enter.",
+      category: "PARTNERSHIPS",
+    },
+    {
+      id: "17",
+      question: "How do I become a partner brand?",
+      answer:
+        "If you run a trade-focused business and would like to offer your products or services to our member community, you can apply via our partner page. Our team reviews every application and will reach out to discuss the arrangement.",
       category: "PARTNERSHIPS",
     },
   ];
 }
-
