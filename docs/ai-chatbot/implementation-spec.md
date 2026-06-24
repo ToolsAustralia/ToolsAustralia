@@ -256,6 +256,25 @@ A build step generates a single curated, citation-tagged knowledge string from t
 - **Test:** `src/lib/support-chat/__tests__/knowledge-pack.test.ts` (`npm run test:chat-knowledge`) — asserts canonical facts ("27th", "randomdraws", "non-refundable", ACT/SA, partner brand), size bounds (> 1500 chars, approx tokens < 12,000), and sources catalog shape. **Crucially it ties the pack to the source data:** it imports `membershipPackages` + `PARTNER_BRAND_OFFERS` and asserts every *active* tier's real `$price/month` + entries, every active one-time pack's real price, and every partner-brand name appear in the generated text — so a future reprice that wasn't regenerated fails the test. All assertions pass.
 - `src/generated/chatKnowledgePack.ts` is **not** gitignored (matches `upsellImageManifest.ts` convention — committed to the repo).
 
+### As-built: deflection (Task 1.4)
+
+The no-LLM front door. `ChatService` (Task 1.7) will call `tryDeflect(question)` BEFORE any model call; if deflection answers, zero LLM tokens are spent.
+
+**Files created:**
+
+- `src/services/support-chat/deflection/index.ts` — public API, exports `tryDeflect(question: string): Promise<DeflectionResult>`. Orchestrates the two layers in order.
+- `src/services/support-chat/deflection/decisionTree.ts` — Layer 1: high-precision intent matching for the ~15 highest-volume support intents (draw timing, pricing, refund, eligibility, etc.) via lightweight phrase rules. Resolves to a specific FAQ `id`; the answer text is fetched from `getFaqEntries()` at call time — never re-typed. First matching rule wins.
+- `src/services/support-chat/deflection/faqSearch.ts` — Layer 2: broader keyword/cosine FAQ search. Calls `retrieve.ts` and accepts the best result if `score ≥ 0.15` (empirically chosen: off-topic questions score ≤ 0.05, genuine matches score ≥ 0.25). Below threshold → `answered: false`.
+- `src/lib/support-chat/knowledge/retrieve.ts` — lib primitive with a stable interface `searchFaqs(query: string): RankedFaq[]`. Phase 1: pure offline TF-cosine over `getFaqEntries()` — no network, no DB, no embedding API. Phase 3 will replace the internals with Atlas `$vectorSearch` without changing callers. Scores question text × 0.7 + answer text × 0.3.
+
+**No-drift / single source of truth:** `decisionTree.ts` stores only FAQ `id` strings; `faqSearch.ts` returns `entry.answer` verbatim. No answer copy is stored in the deflection layer. Updating `src/data/faqs.ts` automatically propagates to deflection answers with zero drift.
+
+**Actor-independence:** `tryDeflect` takes `question: string` only (no actor). Phase 1 FAQ deflection is actor-independent — anonymous-vs-member gating is a Task 1.8 concern in `withChatbot`. The function is declared `async` (`Promise<DeflectionResult>`) so Phase 3 can add an async Atlas call without changing callers.
+
+**Return shape:** `DeflectionResult = { answered: boolean; answer?: string; sources?: { id: string; title: string }[] }`. On a match, `sources` references the matched FAQ entry: `{ id: entry.id, title: entry.question }` (mirrors the knowledge-pack sources shape).
+
+**Test:** `src/services/support-chat/__tests__/deflection.test.ts` (`npm run test:chat-deflection`) — 7 assertions: draw date (answered:true, mentions "27th", answer exactly equals a `getFaqEntries()` entry's `.answer`), pricing, refund, eligibility, two off-topic questions (answered:false), and determinism. All pass. The test proves no network is involved and no copy drift exists.
+
 ### Phase 2 — Atlas Vector Search RAG (when the pack outgrows the cache sweet-spot)
 
 - Chunk prose (BUSINESS.md, Terms) by section; keep structured facts (prices/entries/partner tiers) as **discrete fact records pulled from the TS** (never paraphrased).
