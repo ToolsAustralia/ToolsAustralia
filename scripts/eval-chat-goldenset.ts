@@ -95,7 +95,7 @@ export interface EvalDeps {
   getChatModelFn?: typeof getChatModel;
   generateTextFn?: typeof generateText;
   /** Inject a stub to skip real Batch API call. Returns pre-parsed grades. */
-  gradeBatchFn?: (items: Array<{ id: string; question: string; answer: string; expectedFacts: string[]; shouldDeflect?: boolean; shouldEscalate?: boolean }>) => Promise<GradeResult[]>;
+  gradeBatchFn?: (items: Array<{ id: string; question: string; answer: string; expectedFacts: string[]; shouldDeflect?: boolean; shouldEscalate?: boolean }>, knowledgePackText: string) => Promise<GradeResult[]>;
 }
 
 // ─── Golden Set ────────────────────────────────────────────────────────────────
@@ -296,7 +296,8 @@ function buildGraderPrompt(
   answer: string,
   expectedFacts: string[],
   shouldDeflect: boolean | undefined,
-  shouldEscalate: boolean | undefined
+  shouldEscalate: boolean | undefined,
+  knowledgePackText: string
 ): string {
   const factsSection =
     expectedFacts.length > 0
@@ -307,30 +308,13 @@ function buildGraderPrompt(
     ? "\nThis question REQUIRES escalation or a refusal to act — the answer should NOT attempt to process a cancellation/refund or answer off-topic questions. It should offer to connect the user with support."
     : "";
 
-  // Known canonical facts for Tools Australia (the full ground truth for hallucination detection).
-  // This is sourced directly from getFaqEntries() and BUSINESS.md — the single source of truth.
+  // Ground truth for hallucination detection is the SAME knowledge pack the bot
+  // answers from (getKnowledgePack().text). Both derive from the single canonical
+  // source (build:chat-knowledge-pack), so a reprice/date change propagates to the
+  // grader automatically — no hand-maintained fact list to drift out of sync.
   const canonicalFacts = `
-CANONICAL TOOLS AUSTRALIA FACTS (the complete allowed fact set — do NOT flag these as hallucinations):
-- Tools Australia is a membership-driven monthly tool giveaway platform for Australian tradies.
-- Major Draw: runs on the 27th of every month. Entries freeze at 8:00 PM AEST/AEDT. The draw goes live on Facebook at 8:30 PM. New entry purchases are blocked from 8:00 PM on the 27th until midnight (start of the 28th).
-- Winner selected by randomdraws.com.au — a government-certified independent Australian random-draw service — NOT by Tools Australia. The verification link is published on the Draw Results page after each draw.
-- Prize options: (A) power tool brand (Milwaukee, DeWalt, Makita, or Ryobi) + professional workshop storage + $5,000 AUD cash bonus; or (B) $10,000 AUD cash prize.
-- Membership tiers (AUD/month): Tradie $20 = 15 entries; Foreman $40 = 40 entries; Boss $80 = 100 entries.
-- Subscription entries accumulate and carry forward each month while membership stays active.
-- Subscriptions renew on the 24th of each month (to ensure entries settle before the 27th draw).
-- Membership fees are non-refundable once purchased. Entries from the current cycle remain valid after cancellation.
-- Payment methods: Visa, Mastercard, American Express via Stripe (AUD only).
-- Past-due: subscription moves to past-due state; email prompt sent; retry from account dashboard; card can be updated any time.
-- Eligibility: 18+ and legal Australian resident. ACT and South Australia residents are excluded due to permit restrictions.
-- Partner discounts by tier: Tradie = 50% of catalog; Foreman = 75%; Boss = 100%. Redeem by mentioning Tools Australia — no code needed.
-- Referral: both referrer and referred friend receive 100 bonus entries when the friend makes their first purchase.
-- One-time packs: Apprentice $25 (3 entries) up to VIP $1,000 (1,500 entries). Valid for current cycle only.
-- Additional packs: discounted packs for existing subscribers/entry holders — roughly half price, same entries. Current cycle only.
-- Mini Draws: product-specific giveaways, separate pool from Major Draw. Trigger when entry threshold is reached. No fixed schedule.
-- Upsell offers: heavily discounted bonus entries offered right after checkout.
-- Rewards points: earn for activity; redemption coming soon.
-- Shop: coming soon. Tradie 5%, Foreman 10%, Boss 20% shop discount when it launches.
-- Bot cannot process cancellations, refunds, upgrades, or account actions — must escalate to human support.
+CANONICAL TOOLS AUSTRALIA FACTS (the complete allowed fact set — do NOT flag anything stated here as a hallucination):
+${knowledgePackText}
 `;
 
   return `You are grading an AI support chatbot answer for Tools Australia.
@@ -365,7 +349,8 @@ async function gradeBatch(
     expectedFacts: string[];
     shouldDeflect?: boolean;
     shouldEscalate?: boolean;
-  }>
+  }>,
+  knowledgePackText: string
 ): Promise<GradeResult[]> {
   const client = new Anthropic();
 
@@ -380,7 +365,8 @@ async function gradeBatch(
           item.answer,
           item.expectedFacts,
           item.shouldDeflect,
-          item.shouldEscalate
+          item.shouldEscalate,
+          knowledgePackText
         ),
       },
     ],
@@ -455,20 +441,36 @@ async function gradeBatch(
 // ─── Main ──────────────────────────────────────────────────────────────────────
 
 async function run(deps: EvalDeps = {}): Promise<void> {
-  // Parse --limit N arg.
-  let limitArg: number | undefined;
+  // Parse the limit from --limit N or EVAL_LIMIT (the CLI arg wins).
+  let rawLimit: string | undefined;
   try {
     const { values } = parseArgs({
       args: process.argv.slice(2),
       options: { limit: { type: "string", short: "l" } },
       strict: false,
     });
-    if (values.limit) limitArg = parseInt(String(values.limit), 10);
+    if (values.limit) rawLimit = String(values.limit);
   } catch {
-    // parseArgs not available or failed — continue without limit.
+    // parseArgs not available or failed — fall back to env below.
+  }
+  if (rawLimit === undefined && process.env.EVAL_LIMIT) {
+    rawLimit = process.env.EVAL_LIMIT;
   }
 
-  const limit = limitArg ?? (process.env.EVAL_LIMIT ? parseInt(process.env.EVAL_LIMIT, 10) : undefined);
+  // Guard a non-numeric / invalid limit. A bare parseInt would yield NaN →
+  // slice(0, NaN) → [] → "100% of 0 passed" → a dangerous silent CI pass.
+  let limit: number | undefined;
+  if (rawLimit !== undefined) {
+    const parsed = Number(rawLimit);
+    if (!Number.isInteger(parsed) || parsed < 1) {
+      console.error(
+        `eval:chat ERROR: invalid limit "${rawLimit}" — must be an integer >= 1.`
+      );
+      process.exit(2);
+    }
+    limit = parsed;
+  }
+
   const items = limit !== undefined ? GOLDEN_SET.slice(0, limit) : GOLDEN_SET;
 
   const resolvedDeps: Required<Omit<EvalDeps, "gradeBatchFn">> = {
@@ -517,7 +519,10 @@ async function run(deps: EvalDeps = {}): Promise<void> {
     shouldEscalate: item.shouldEscalate,
   }));
 
-  const grades = await resolvedGradeBatch(gradeInputs);
+  // Ground truth for hallucination detection = the SAME knowledge pack the bot
+  // answers from (single canonical source → no drift on a reprice/date change).
+  const knowledgePackText = resolvedDeps.getKnowledgePackFn().text;
+  const grades = await resolvedGradeBatch(gradeInputs, knowledgePackText);
 
   // ── Step 3: Report ────────────────────────────────────────────────────────
   console.log("\n[3/3] Results\n");
