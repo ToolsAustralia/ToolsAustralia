@@ -814,6 +814,99 @@ The `anthropic` branch is unchanged when `CHAT_PROVIDER` is not `'bedrock'`.
 
 ---
 
+### As-built: Tool registry + read-only member tools (Task 2.2/2.3)
+
+Five session-scoped read-only tools wired into a Norm-style registry. NOT yet wired into ChatService (that is Task 2.4).
+
+#### Files created
+
+- `src/services/support-chat/tools/registry.ts` — exports `ToolDenied`, `defineMemberTool`, `MEMBER_TOOLS`, `buildMemberToolSet`, `MemberToolDeps`, `emptyInput`.
+- `src/services/support-chat/tools/getMyMembership.ts` — registers `getMyMembership`.
+- `src/services/support-chat/tools/getMyEntries.ts` — registers `getMyEntries`.
+- `src/services/support-chat/tools/getMyBillingStatus.ts` — registers `getMyBillingStatus`.
+- `src/services/support-chat/tools/getDrawStatus.ts` — registers `getDrawStatus`.
+- `src/services/support-chat/tools/getPartnerVisibility.ts` — registers `getPartnerVisibility`.
+- `src/services/support-chat/__tests__/member-tools.test.ts` — test suite (`npm run test:chat-member-tools`).
+
+#### Security invariants enforced (I-1 through I-4)
+
+**I-1 — Identity from session only.** Every tool receives `ctx: { actor: ChatActor }` where `actor` comes from the server-side session (set by `withChatbot` from the NextAuth session cookie). No tool takes a `userId`, email, or any identifier as model input. All `inputSchema`s are `z.object({})` (empty). A model-supplied identifier is structurally impossible.
+
+**I-2 — Egress-projected, fail-closed.** Each tool declares a Zod `responseSchema` using `.strict()`. The registry's `buildMemberToolSet` wrapper calls `responseSchema.parse(result)` before returning to the model — an extra field throws a `ZodError` (fail-closed). Fields that must never reach the model (`email`, `stripeCustomerId`, `stripeSubscriptionId`, `savedPaymentMethods`, `lastName`, card data) are simply absent from every schema definition.
+
+**I-3 — Reuse existing services, no new DB logic.** All five tools delegate to existing production utilities:
+- `getMyMembership` → `getCurrentUserBenefits` + `getActivePackage`
+- `getMyEntries` → `getCurrentMajorDrawForDisplay` + `getUserMajorDrawStats`
+- `getMyBillingStatus` → direct `User.subscription` field projection (no new query)
+- `getDrawStatus` → `getCurrentMajorDrawForDisplay` (note: `entries[]` never accessed — return type is `Omit<IMajorDraw, 'entries'>`)
+- `getPartnerVisibility` → `resolvePartnerCatalogPlanId` + `getPartnerCatalogAccessPercentForPlanId` + `getPartnerCatalogVisibleSliceLength` + `PARTNER_BRAND_OFFERS`
+
+**I-4 — responseSchema required at compile time.** `defineMemberTool<TInput, TResponse>({ ..., responseSchema })` — `responseSchema` is a required field in the `MemberToolDef` interface. Omitting it is a TypeScript compile error.
+
+#### The `piiScoped` flag
+
+Each tool definition carries `piiScoped?: boolean` (default `true`). The registry wrapper checks `if (piiScoped !== false && actor.kind !== 'member') throw new ToolDenied('login_required')` before calling the handler or any service. This means:
+
+- `piiScoped: true` (default) — anonymous actors receive `ToolDenied('login_required')` before any service is called.
+- `piiScoped: false` — anonymous actors may call the tool (used for `getDrawStatus`, which exposes only public draw data and involves no PII).
+
+The flag is about PII risk, not about capability control. Even `piiScoped: false` tools have Zod-projected response schemas.
+
+#### `MemberToolDeps` injectable pattern
+
+```typescript
+export interface MemberToolDeps {
+  findUserById?: (id: string) => Promise<IUser | null>;
+  getCurrentUserBenefits?: (user: IUser) => ReturnType<typeof getCurrentUserBenefitsOrig>;
+  getActivePackage?: (user: IUser) => ReturnType<typeof getActivePackageOrig>;
+  getCurrentMajorDrawForDisplay?: () => ReturnType<typeof getCurrentMajorDrawForDisplayOrig>;
+  getUserMajorDrawStats?: (userId: string, drawId: string) => ReturnType<typeof getUserMajorDrawStatsOrig>;
+  resolvePartnerCatalogPlanId?: (user: IUser) => ReturnType<typeof resolvePartnerCatalogPlanIdOrig>;
+  getPartnerCatalogAccessPercentForPlanId?: (planId: string) => number;
+  getPartnerCatalogVisibleSliceLength?: (total: number, planId: string | null) => number;
+  partnerBrandOffers?: typeof PARTNER_BRAND_OFFERS;
+}
+```
+
+Each tool handler checks `deps?.service ?? realService` so tests inject stubs and run with zero Mongo, zero external calls. Real services are imported lazily (dynamic `import()`), so stub injection never loads the real modules.
+
+#### Tool projections (strict schemas — PII absent)
+
+| Tool | `piiScoped` | Projection fields |
+|---|---|---|
+| `getMyMembership` | `true` | `tier`, `packageId`, `entriesPerMonth`, `isActive`, `source`, `expiresAt` (ISO), `isPendingChange`, `pendingChange.{newPackageName, effectiveDate}` |
+| `getMyEntries` | `true` | `drawName`, `totalEntries`, `membershipEntries`, `oneTimeEntries`, `entriesByPackage[].{packageName, entryCount, source}` (packageId omitted) |
+| `getMyBillingStatus` | `true` | `subscriptionStatus`, `isActive`, `autoRenew`, `nextBillingDate` (ISO), `isCancelled` |
+| `getDrawStatus` | `false` | `name`, `status`, `drawDate` (ISO), `freezeEntriesAt` (ISO), `activationDate` (ISO), `totalEntries` |
+| `getPartnerVisibility` | `true` | `accessPercent`, `visibleBrands[].{name, discount}` (id/logo/gradient/businessLink omitted) |
+
+`stripeCustomerId`, `stripeSubscriptionId`, `savedPaymentMethods`, `email`, `lastName`, `password`, and all card data are structurally absent from every schema.
+
+#### `buildMemberToolSet` API
+
+```typescript
+buildMemberToolSet(
+  actorOrCtx: ChatActor | { actor: ChatActor },
+  deps?: MemberToolDeps
+): ToolSet
+```
+
+Accepts either a bare `ChatActor` or an object with `.actor` to match how `ChatService` builds its context (`{ actor: ctx.actor, ... }`). Returns an AI SDK `ToolSet` ready to pass to `streamText({ tools })`.
+
+#### Test: `src/services/support-chat/__tests__/member-tools.test.ts` (`npm run test:chat-member-tools`)
+
+Zero Mongo, zero Anthropic, zero network — all services injected via `MemberToolDeps` stubs.
+
+For each of the 5 tools:
+- **(a) Auth gate** — anonymous actor throws `ToolDenied('login_required')` AND the service stub is never called; for `getDrawStatus` (piiScoped: false), anonymous actor does NOT throw.
+- **(b) Projection** — member actor returns the expected shape with the correct field values.
+- **(c) Strict schema** — `responseSchema.parse({ ...validShape, email: 'x@x.com' })` throws `ZodError`.
+- **(d) Identity flow** — handler calls the user-lookup stub with `ctx.actor.userId` exactly (not a model-supplied id).
+
+Additional cases: no-draw path for `getMyEntries` and `getDrawStatus` → zero counts / null name; `getPartnerVisibility` shows correct slice percentage and omits logo/link/id from each brand.
+
+---
+
 ## <a id="12-dod"></a>12. Definition of done (per phase)
 
 - Lint + type-check clean; route follows the thin-handler + inline-Zod + `{ success, error }` shape.
