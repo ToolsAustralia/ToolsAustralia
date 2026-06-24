@@ -116,27 +116,38 @@ export function useSupportChat(): SupportChatState {
   // ── useChat (v6) ──────────────────────────────────────────────────────────
   // transport is created once (useMemo with empty deps).
   // body is a function so it reads the latest refs on each send.
+  //
+  // The hCaptcha token is consumed one-shot: the body reads it AND nulls it in the
+  // same evaluation. This is the only race-free place to clear it — the v6 transport
+  // resolves `body` synchronously inside sendMessages() (await resolve(this.body) →
+  // value()), several await-boundaries after the caller's sendMessage() returns, so
+  // clearing the ref in onCaptchaVerify right after sendMessage() could null it
+  // BEFORE the body reads it. Clearing inside the body guarantees the token rides
+  // exactly the one request it was minted for and never leaks into later turns.
   const transport = useMemo(
     () =>
       new DefaultChatTransport({
         api: "/api/chat",
         fetch: customFetch,
-        body: () => ({
-          ...(conversationIdRef.current
-            ? { conversationId: conversationIdRef.current }
-            : {}),
-          ...(pendingTokenRef.current
-            ? { hcaptchaToken: pendingTokenRef.current }
-            : {}),
-        }),
+        body: () => {
+          const token = pendingTokenRef.current;
+          pendingTokenRef.current = null;
+          return {
+            ...(conversationIdRef.current
+              ? { conversationId: conversationIdRef.current }
+              : {}),
+            ...(token ? { hcaptchaToken: token } : {}),
+          };
+        },
       }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [] // transport created once; body fn reads refs, customFetch is stable
   );
 
-  const { messages, status, error, sendMessage, stop, clearError } = useChat({
-    transport,
-  });
+  const { messages, status, error, sendMessage, setMessages, stop, clearError } =
+    useChat({
+      transport,
+    });
 
   // ── Send helpers ───────────────────────────────────────────────────────────
   const sendUserMessage = useCallback(
@@ -156,11 +167,24 @@ export function useSupportChat(): SupportChatState {
     (token: string) => {
       const pending = pendingMessageRef.current;
       if (!pending) return;
+      // Stage the single-use token; the transport `body` reads + nulls it on send.
       pendingTokenRef.current = token;
       setCaptchaRequired(false);
+
+      // v6 RETAINS the optimistic user message on a fetch error (verified against
+      // ai@6.0.209 AbstractChat.makeRequest: the catch sets status='error' but
+      // never pops the message). The original sendMessage({text}) already appended
+      // the question, so we drop that trailing failed user message before re-sending
+      // to avoid a duplicate. Guard so we only ever drop a trailing user message.
+      setMessages((prev) =>
+        prev.length > 0 && prev[prev.length - 1]?.role === "user"
+          ? prev.slice(0, -1)
+          : prev
+      );
+
       void sendMessage({ text: pending });
     },
-    [sendMessage]
+    [sendMessage, setMessages]
   );
 
   return {

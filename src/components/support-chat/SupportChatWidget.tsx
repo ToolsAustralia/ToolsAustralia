@@ -268,7 +268,11 @@ export default function SupportChatWidget() {
             {/* hCaptcha gate */}
             {captchaRequired && (
               <div className="bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 rounded-xl px-3 py-3 text-xs text-amber-800 dark:text-amber-200">
-                {captchaSitekey ? (
+                {/* Defense-in-depth: never render the captcha for a member. The
+                    server never 401s an authenticated session, so this branch only
+                    fires for anonymous guests — but the !isAuthenticated guard means
+                    a member never sees a captcha even if the state machine misfires. */}
+                {captchaSitekey && !isAuthenticated ? (
                   <>
                     <p className="mb-2 font-medium">Quick verification needed</p>
                     <HCaptcha
@@ -280,15 +284,13 @@ export default function SupportChatWidget() {
                         onCaptchaVerify(token);
                       }}
                     />
-                    {!isAuthenticated && (
-                      <p className="mt-1.5 text-amber-600 dark:text-amber-400">
-                        Or{" "}
-                        <a href="/login" className="underline">
-                          sign in
-                        </a>{" "}
-                        for a faster experience.
-                      </p>
-                    )}
+                    <p className="mt-1.5 text-amber-600 dark:text-amber-400">
+                      Or{" "}
+                      <a href="/login" className="underline">
+                        sign in
+                      </a>{" "}
+                      for a faster experience.
+                    </p>
                   </>
                 ) : (
                   <p>

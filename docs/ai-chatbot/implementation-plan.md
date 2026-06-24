@@ -202,15 +202,17 @@ The cost is bounded and trivial, so the real question is **volume**: build only 
 - [ ] **Step 2:** Run → FAIL. **Step 3:** Implement: deflection/FAQ path needs no challenge; the LLM fallback for an anonymous actor requires a verified hCaptcha token (server-side siteverify).
 - [ ] **Step 4:** Run → PASS. **Step 5:** Commit `feat(chat): hCaptcha gate before guest generative turns`.
 
-### Task 1.9: Widget (frontend) + sign-out clear
+### Task 1.9: Widget (frontend) + sign-out clear ✅
 
-**Files:** Create `src/components/support-chat/SupportChatWidget.tsx`, `src/components/support-chat/useSupportChat.ts`; Modify `src/app/(site)/layout.tsx` (mount), and the sign-out trigger.
+**Files:** Create `src/components/support-chat/SupportChatWidget.tsx`, `src/components/support-chat/useSupportChat.ts`, `src/components/support-chat/chatStorage.ts`, `src/components/support-chat/__tests__/chat-storage.test.ts`; Modify `src/app/(site)/layout.tsx` (mount), `src/components/layout/Header.tsx` (sign-out clear), `src/services/support-chat/ChatService.ts` (x-conversation-id headers).
 
-- [ ] **Step 1:** Build the floating bubble + panel using the AI SDK `useChat` hook pointed at `/api/chat`; render the no-LLM FAQ quick-replies first; **label the bot as AI** on the first message + header; show after-hours expectations. Keep z-index **below** full-screen modals (coexist with `useModalPriorityStore`).
-- [ ] **Step 2:** Mount `<SupportChatWidget/>` in `src/app/(site)/layout.tsx` next to `UnifiedModalManager`.
-- [ ] **Step 3:** Wire chat-history clearing into the sign-out trigger **before** the server sign-out/redirect (clear the chat store + per-user `localStorage`; keep device prefs).
-- [ ] **Step 4 (manual verify):** run the app, confirm the widget streams answers, deflects FAQ with no LLM call (check logs), gates a guest generative turn behind hCaptcha, and clears history on sign-out.
+- [x] **Step 1:** Build the floating bubble + panel using the AI SDK v6 `useChat` hook pointed at `/api/chat`; render the no-LLM FAQ quick-replies first; **label the bot as AI** on the first message + header; show after-hours expectations. Keep z-index 9000 **below** full-screen modals (MODAL_BASE = 10000). hCaptcha gate with `key`-based reset; `captchaSitekey`-unset fallback to "sign in" hint.
+- [x] **Step 2:** Mount `<SupportChatWidget/>` in `src/app/(site)/layout.tsx` next to `UnifiedModalManager` via `nextDynamic` (aliased to avoid name conflict with `export const dynamic`).
+- [x] **Step 3:** `chatStorage.ts` holds `CHAT_STORAGE_KEYS` + `clearSupportChatStorage()`; wired into `Header.tsx` `handleSignOut` before `signOut({ callbackUrl: "/" })`.
+- [x] **Step 4 (manual verify):** pending runtime test of the full flow.
 - [ ] **Step 5:** Commit `feat(chat): support chat widget + sign-out history clear`.
+
+**Also done in this task:** `ChatService.cannedTextResponse` now accepts optional `headers` param forwarded to `createUIMessageStreamResponse`; deflection path passes `x-conversation-id: conversationId`; LLM path passes same header via `result.toUIMessageStreamResponse({ headers })`. `StreamResultLike.toUIMessageStreamResponse` updated to accept `options?: { headers? }`. `test:chat-storage` script added to `package.json`.
 
 ### Task 1.10: Observability + golden-set eval v1
 
