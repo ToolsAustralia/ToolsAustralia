@@ -293,6 +293,17 @@ async function testAssertWithinBudget() {
       { ok: false, reason: "daily_budget" }
     );
 
+    // NaN guard: non-numeric budget env var falls back to $5 default
+    setEnv({ CHAT_KILL_SWITCH: undefined, CHAT_DAILY_TOKEN_BUDGET_USD: "abc" });
+    const rNaN = await assertWithinBudget({
+      readSpendUsd: async () => 5.01, // over the default $5 fallback
+    });
+    expect(
+      "CHAT_DAILY_TOKEN_BUDGET_USD=abc → falls back to $5 default → over budget → daily_budget",
+      rNaN,
+      { ok: false, reason: "daily_budget" }
+    );
+
     // now() injection: ensure utcDayKey is called with the injected time
     // (we can't inspect the dayKey passed to readSpendUsd without a spy, but
     // we can confirm the gate still runs correctly with a custom now)

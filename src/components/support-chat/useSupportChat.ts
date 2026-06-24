@@ -27,7 +27,7 @@ import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport } from "ai";
 import type { UIMessage } from "ai";
 import { useUserContext } from "@/contexts/UserContext";
-import { CHAT_STORAGE_KEYS } from "./chatStorage";
+import { CHAT_STORAGE_KEYS } from "@/lib/support-chat/chatStorage";
 
 export interface SupportChatState {
   messages: UIMessage[];

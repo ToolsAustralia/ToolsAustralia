@@ -25,6 +25,7 @@ import React, {
 } from "react";
 import dynamic from "next/dynamic";
 import type { UIMessage } from "ai";
+import { Z_INDEX } from "@/constants/z-index";
 import { useSupportChat } from "./useSupportChat";
 
 const HCaptcha = dynamic(() => import("@hcaptcha/react-hcaptcha"), {
@@ -134,7 +135,7 @@ export default function SupportChatWidget() {
         onClick={() => setOpen((v) => !v)}
         aria-label={open ? "Close chat" : "Open AI support chat"}
         className="fixed bottom-5 right-5 w-14 h-14 rounded-full bg-orange-500 hover:bg-orange-600 text-white shadow-lg flex items-center justify-center transition-all duration-200 hover:scale-105 focus:outline-none focus:ring-2 focus:ring-orange-400 focus:ring-offset-2"
-        style={{ zIndex: 9000 }}
+        style={{ zIndex: Z_INDEX.MODAL_BASE - 1000 }}
       >
         {open ? (
           <svg
@@ -173,7 +174,7 @@ export default function SupportChatWidget() {
       {open && (
         <div
           className="fixed bottom-24 right-5 w-[22rem] max-w-[calc(100vw-2.5rem)] bg-white dark:bg-neutral-900 rounded-2xl shadow-2xl flex flex-col border border-gray-200 dark:border-neutral-700 overflow-hidden"
-          style={{ zIndex: 9000, height: "min(560px, calc(100svh - 8rem))" }}
+          style={{ zIndex: Z_INDEX.MODAL_BASE - 1000, height: "min(560px, calc(100svh - 8rem))" }}
         >
           {/* Header */}
           <div className="flex items-center gap-2 px-4 py-3 bg-orange-500 text-white shrink-0">

@@ -65,7 +65,7 @@ Go to Vercel Dashboard → Project → Deployments → select the active deploym
 - `[ChatService] stream failed` — transient Anthropic API error or network issue.
 
 ### 3c. Route `maxDuration`
-`vercel.json` sets `"src/app/api/chat/route.ts": { "maxDuration": 60 }`. If streaming responses are being cut off at 10s, verify this rule is listed **before** the catch-all `src/app/api/**/route.ts: { "maxDuration": 10 }` entry.
+`vercel.json` sets `"src/app/api/chat/route.ts": { "maxDuration": 60 }`. If streaming responses are being cut off at 10s, verify this rule is more specific than the catch-all `src/app/api/**/route.ts: { "maxDuration": 10 }` entry. Vercel applies the most-specific glob match regardless of declaration order, so the chat-specific rule wins as long as the path is more precise.
 
 ### 3d. ErrorReport admin panel
 Admin → Error Reports. Filter by `component: ChatService`. Both genuine-failure catch blocks (`model-setup`, `stream-start`) write to ErrorReport, so errors that recur appear there with frequency counts.
@@ -116,6 +116,8 @@ Anonymous guests must pass hCaptcha before reaching the LLM. If `HCAPTCHA_SECRET
 This is the canned `BUSY_FALLBACK_TEXT` response. It means `assertWithinBudget()` (from `src/lib/support-chat/costGuard.ts`) returned `{ ok: false }`.
 
 **What's still working:** FAQ deflection still answers common questions (no model cost). Escalation (leaving a message) still works. Only the LLM generative path is gated.
+
+Note: both `CHAT_KILL_SWITCH=true` and a tripped daily budget also take FAQ deflection offline — `withChatbot` gates before deflection runs.
 
 **To raise the budget (same day):**
 ```bash

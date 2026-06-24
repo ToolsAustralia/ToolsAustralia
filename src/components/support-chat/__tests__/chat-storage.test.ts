@@ -5,7 +5,7 @@
  * Uses an in-memory localStorage stub — no jsdom needed.
  */
 
-import { clearSupportChatStorage, CHAT_STORAGE_KEYS } from "../chatStorage";
+import { clearSupportChatStorage, CHAT_STORAGE_KEYS } from "../../../lib/support-chat/chatStorage";
 
 // ── localStorage stub ────────────────────────────────────────────────────────
 const store: Record<string, string> = {};

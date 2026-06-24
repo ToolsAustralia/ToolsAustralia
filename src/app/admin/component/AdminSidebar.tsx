@@ -15,6 +15,7 @@ import {
   Shield,
   X,
 } from "lucide-react";
+import { clearSupportChatStorage } from "@/lib/support-chat/chatStorage";
 import { ADMIN_TAB_GROUPS } from "./adminTabs";
 
 const ADMIN_CIRCULAR_LOGO = "/images/Tools Australia Logo/Social Media Profile_Black Background.webp";
@@ -166,6 +167,7 @@ export default function AdminSidebar({
     // Clear localStorage when signing out
     localStorage.removeItem("wasAuthenticated");
     localStorage.removeItem("topBarHidden");
+    clearSupportChatStorage();
     // Sign out and redirect to home page
     signOut({ callbackUrl: "/" });
   };

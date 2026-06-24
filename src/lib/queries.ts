@@ -20,6 +20,7 @@
 
 import { getSession, signOut } from "next-auth/react";
 import type { Session } from "next-auth";
+import { clearSupportChatStorage } from "@/lib/support-chat/chatStorage";
 import { ErrorContext } from "@/types/error-reporting";
 import { collectErrorContext } from "@/utils/error-reporting/collect-error-context";
 
@@ -156,6 +157,7 @@ export async function apiRequest<T = unknown>(endpoint: string, options: Request
 
           // Using void ensures we do not block error propagation.
 
+          clearSupportChatStorage();
           void signOut();
         } catch (signOutError) {
           // If signOut fails for any reason, log it but still surface the original error.

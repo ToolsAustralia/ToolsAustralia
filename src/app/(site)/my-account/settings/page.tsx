@@ -26,6 +26,7 @@ import SettingsSidebar, { SETTINGS_TABS, VALID_TAB_IDS, type SettingsSection } f
 const MembershipModal = dynamic(() => import("@/components/modals/MembershipModal"), {
   ssr: false,
 });
+import { clearSupportChatStorage } from "@/lib/support-chat/chatStorage";
 import DashboardHeader from "../components/DashboardHeader";
 import ProfileTab from "../components/settings/ProfileTab";
 import PasswordTab from "../components/settings/PasswordTab";
@@ -118,6 +119,7 @@ export default function SettingsPage() {
   const handleSignOut = useCallback(() => {
     localStorage.removeItem("wasAuthenticated");
     localStorage.removeItem("topBarHidden");
+    clearSupportChatStorage();
     signOut({ callbackUrl: "/" });
   }, []);
 

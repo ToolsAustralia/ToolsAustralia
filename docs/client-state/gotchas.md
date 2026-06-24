@@ -1,5 +1,9 @@
 # Client State — Gotchas
 
+## Forced sign-out in `apiRequest` now clears support-chat client storage (2026-06-24)
+
+`lib/queries.ts` `shouldForceLogout` path now calls `clearSupportChatStorage()` immediately before `signOut()` per the org rule: per-user localStorage must be wiped at auth-error sign-out to prevent chat `conversationId` from leaking to the next user on a shared device. `clearSupportChatStorage()` is SSR-safe (guards `typeof window === "undefined"` internally).
+
 ## `apiRequest` no longer sends an `Authorization` header (2026-06-19)
 
 [lib/queries.ts](../../src/lib/queries.ts) (the shared React Query fetch wrapper) used to attach `Authorization: Bearer ${session.user.id}` to every authenticated request. That raw user id is **not a credential** — it was only ever "accepted" by the old cart/orders bearer routes, which have been migrated to NextAuth `getServerSession`. The header was removed: authentication is now carried solely by the NextAuth session cookie (auto-attached on same-origin requests). `apiDelete` also gained an optional `data` body argument (for `DELETE /api/cart`). Do not reintroduce a bearer header here.

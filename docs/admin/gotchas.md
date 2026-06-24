@@ -1,5 +1,9 @@
 # Admin — Gotchas
 
+## Admin sign-out must clear support-chat client storage (2026-06-24)
+
+`AdminSidebar.tsx` `handleSignOut` now calls `clearSupportChatStorage()` before `signOut()` per the org rule: per-user localStorage must be wiped at sign-out to prevent chat `conversationId` from leaking to the next user on a shared device.
+
 ## Affiliate "Set Password" reuses the existing PUT route (2026-06-19)
 
 The affiliate detail modal ([`AffiliateDetailModal.tsx`](../../src/components/admin/AffiliateDetailModal.tsx)) has a dedicated **Set Password** footer button + nested modal, mirroring the user modal's "Set Password" (`UserDetailModal`). It does **not** add a new endpoint — it `PUT`s `{ password }` to the existing `PUT /api/admin/affiliate/[id]` (the edit form's Password field uses the same route). Both are gated by `affiliates.edit`. A 6-char minimum is enforced **server-side** in the route (client validation is bypassable). The affiliate is not emailed — this is the direct-set analog of the user `admin_set_password` action (affiliates have no reset-email flow; they sign in with username + password at the portal).

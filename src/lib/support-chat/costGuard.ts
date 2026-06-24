@@ -111,9 +111,8 @@ export async function assertWithinBudget(
   try {
     const killSwitch =
       (process.env.CHAT_KILL_SWITCH ?? "").toLowerCase() === "true";
-    const budgetUsd = parseFloat(
-      process.env.CHAT_DAILY_TOKEN_BUDGET_USD ?? "5"
-    );
+    const parsed = parseFloat(process.env.CHAT_DAILY_TOKEN_BUDGET_USD ?? "5");
+    const budgetUsd = Number.isFinite(parsed) ? parsed : 5;
 
     const now = deps.now ? deps.now() : new Date();
     const dayKey = utcDayKey(now);
