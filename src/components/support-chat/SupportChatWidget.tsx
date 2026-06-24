@@ -33,6 +33,7 @@ import {
   hasAcknowledgedDisclosure,
   acknowledgeDisclosure,
 } from "@/lib/support-chat/chatStorage";
+import ChatMarkdown from "./ChatMarkdown";
 
 const HCaptcha = dynamic(() => import("@hcaptcha/react-hcaptcha"), {
   ssr: false,
@@ -124,7 +125,7 @@ function MessageBubble({ msg }: { msg: UIMessage }) {
             : "bg-white dark:bg-neutral-800 text-gray-900 dark:text-gray-100 border border-gray-200 dark:border-neutral-700 rounded-bl-sm"
         }`}
       >
-        {text}
+        {isUser ? text : <ChatMarkdown>{text}</ChatMarkdown>}
       </div>
     </div>
   );

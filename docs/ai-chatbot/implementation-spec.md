@@ -652,6 +652,20 @@ The free-text input is disabled (`opacity-50`, `cursor-not-allowed`, placeholder
 
 All 7 cases pass (`npm run test:chat-service`).
 
+### As-built: markdown rendering in Cobber messages + /faq page (2026-06-25)
+
+Assistant messages from Cobber and FAQ answers on the `/faq` page are rendered through `ChatMarkdown` (`src/components/support-chat/ChatMarkdown.tsx`), a thin `"use client"` wrapper around `react-markdown`.
+
+- **Allowed elements:** `p`, `strong`, `em`, `ul`, `ol`, `li`, `a` — no raw HTML passthrough (`unwrapDisallowed`).
+- **Link behaviour:**
+  - Internal links (`href` starts with `/`): plain `<a>` — navigates in the same tab.
+  - External links (`href` starts with `http`): `target="_blank" rel="noopener noreferrer"` — opens a new tab.
+  - Both use `underline text-[#ee0000]` (brand red) for consistent visual treatment in light and dark contexts.
+- **Color inheritance:** body text inherits the parent's text color, so the component works inside the dark chat bubble (`text-gray-900 dark:text-gray-100`) and the dark FAQ accordion (`text-gray-300`) without any additional styling.
+- **FAQ wiring:** `FAQSection` (`src/components/ui/FAQSection.tsx`) now maps each FAQ answer through `<ChatMarkdown>` when building `MetallicAccordionItem.content`. Because `MetallicAccordion.content` already accepts `string | React.ReactNode`, the accordion is unchanged. Plain-text answers that contain no markdown render identically to before.
+- **Chat wiring:** `MessageBubble` in `SupportChatWidget.tsx` renders assistant messages through `<ChatMarkdown>`. User messages stay plain text.
+- **Dep added:** `react-markdown` (prod dependency).
+
 ### As-built: data-scope + assistant-purpose hardening
 
 > **Note on member-tool references below:** `getDrawStatus` and `getMyEntries` were Phase-2 member tools that have since been **DROPPED**. The system-prompt hardening (no-aggregate rule + narrow-purpose rule) **remains in the shipped bot** as defence-in-depth.

@@ -31,7 +31,7 @@ Connectivity probe: `npm run test:igodirect-sso` (see [dev-tooling/testing.md](.
 
 Foundations for the `support-chat` domain (see [docs/ai-chatbot/](../ai-chatbot/)). This is a **FAQ-only** bot — member account tools and Bedrock were removed per owner decision (2026-06-24).
 
-- **Deps:** `ai` (Vercel AI SDK core), `@ai-sdk/anthropic`, `@ai-sdk/react`.
+- **Deps:** `ai` (Vercel AI SDK core), `@ai-sdk/anthropic`, `@ai-sdk/react`, `react-markdown` (renders markdown links in Cobber assistant messages and /faq answers — see `src/components/support-chat/ChatMarkdown.tsx`).
 - **`vercel.json`:** `"src/app/api/chat/route.ts": { "maxDuration": 60 }` is listed **before** the `src/app/api/**/route.ts` 10s catch-all so streaming chat responses aren't truncated at 10s.
 - **Env** (see [.env.example](../../.env.example)):
   - `ANTHROPIC_API_KEY` — first-party API key; set a low monthly **spend limit** in the Anthropic Console as the provider hard cap.
