@@ -222,7 +222,7 @@ async function testWithModelFallback() {
 
   // 1. Happy path: fn succeeds on primary → result returned, escalation not called
   {
-    let calledWith: Array<{ modelId: string; tier: string }> = [];
+    const calledWith: Array<{ modelId: string; tier: string }> = [];
     const result = await withModelFallback(
       async (model, tier) => {
         calledWith.push({ modelId: (model as { modelId: string }).modelId, tier });
@@ -237,7 +237,7 @@ async function testWithModelFallback() {
 
   // 2. Fallback-eligible error on primary → retried on escalation
   {
-    let calledWith: Array<{ modelId: string; tier: string }> = [];
+    const calledWith: Array<{ modelId: string; tier: string }> = [];
     const err429 = makeApiCallError(429, "rate limit");
 
     const result = await withModelFallback(

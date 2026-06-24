@@ -15,7 +15,7 @@
  *   a `CHAT_PROVIDER=bedrock` env flag and the interface stays identical.
  */
 
-import { anthropic, createAnthropic } from "@ai-sdk/anthropic";
+import { anthropic } from "@ai-sdk/anthropic";
 import { APICallError } from "@ai-sdk/provider";
 import type { LanguageModel } from "ai";
 
