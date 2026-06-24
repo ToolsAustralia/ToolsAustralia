@@ -20,6 +20,7 @@ import React, {
   useRef,
   useEffect,
   useState,
+  useCallback,
   type FormEvent,
   type KeyboardEvent,
 } from "react";
@@ -84,6 +85,7 @@ export default function SupportChatWidget() {
     onCaptchaVerify,
     stop,
     clearError,
+    resetConversation,
   } = useSupportChat();
 
   const [open, setOpen] = useState(false);
@@ -92,6 +94,7 @@ export default function SupportChatWidget() {
   const inputRef = useRef<HTMLTextAreaElement>(null);
   // Increment to force-reset the HCaptcha widget after a successful verification
   const [captchaKey, setCaptchaKey] = useState(0);
+  const [deleteState, setDeleteState] = useState<"idle" | "confirming" | "deleting">("idle");
 
   // Auto-scroll to bottom when messages change
   useEffect(() => {
@@ -124,6 +127,27 @@ export default function SupportChatWidget() {
     if (status === "submitted" || status === "streaming") return;
     void sendUserMessage(text);
   };
+
+  // ── Delete my chat history (authenticated members only) ──────────────────
+  const handleDeleteHistory = useCallback(async () => {
+    if (deleteState === "confirming") {
+      setDeleteState("deleting");
+      try {
+        const res = await fetch("/api/chat/history", { method: "DELETE" });
+        if (!res.ok) {
+          console.error("[SupportChatWidget] delete history failed", res.status);
+        } else {
+          resetConversation();
+        }
+      } catch (err) {
+        console.error("[SupportChatWidget] delete history error", err);
+      } finally {
+        setDeleteState("idle");
+      }
+    } else {
+      setDeleteState("confirming");
+    }
+  }, [deleteState, resetConversation]);
 
   const isStreaming = status === "submitted" || status === "streaming";
   const showIntro = hasOpened && messages.length === 0;
@@ -388,6 +412,24 @@ export default function SupportChatWidget() {
               )}
             </div>
           </form>
+
+          {/* Delete history — authenticated members only */}
+          {isAuthenticated && (
+            <div className="px-3 pb-2 shrink-0 flex justify-end">
+              <button
+                type="button"
+                onClick={() => void handleDeleteHistory()}
+                disabled={deleteState === "deleting" || isStreaming}
+                className="text-[11px] text-gray-400 dark:text-gray-500 hover:text-red-500 dark:hover:text-red-400 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              >
+                {deleteState === "confirming"
+                  ? "Tap again to confirm delete"
+                  : deleteState === "deleting"
+                  ? "Deleting…"
+                  : "Delete my chat history"}
+              </button>
+            </div>
+          )}
         </div>
       )}
     </>

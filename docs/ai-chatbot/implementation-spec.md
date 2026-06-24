@@ -974,6 +974,32 @@ Additional cases: no-draw path for `getMyEntries` and `getDrawStatus` → zero c
 
 ---
 
+### As-built: delete-history + compliance drafts (Task 2.5)
+
+Member self-service chat history deletion, plus the Privacy Impact Assessment and proposed privacy policy wording required before the member-tool path goes live.
+
+#### Files created
+
+- `src/services/support-chat/deleteMemberChatHistory.ts` — `deleteMemberChatHistory(userId, deps?)` service. Finds all `ChatConversation` `_id`s for the given `userId`, deletes matching `ChatMessage` docs, then deletes those conversations (scoped by both `_id` and `userId` for belt-and-suspenders safety). Injectable `deps` so the tsx test runs with no Mongo. Identity comes from the caller (the route, which takes it from the session) — never from client-supplied data.
+- `src/app/api/chat/history/route.ts` — thin `DELETE` handler. Authorises with `requireAuthenticatedUser()`, delegates to `deleteMemberChatHistory(session.user.id)`, returns `{ success: true, conversationsDeleted, messagesDeleted }`. `runtime='nodejs'`, `dynamic='force-dynamic'`.
+- `src/services/support-chat/__tests__/delete-history.test.ts` — 23 assertions, zero Mongo (all deps injected). Tests: user with no conversations does nothing destructive; user with conversations — correct delete order (messages before conversations), correct counts returned; filter scoped to userId (no wildcard); parallel calls for different users are isolated; return shape is correct. Run: `npm run test:chat-delete-history`. **All 23 pass.**
+- `docs/ai-chatbot/pia.md` — Privacy Impact Assessment DRAFT (requires qualified privacy professional review before go-live). Covers: scope, personal information accessed (5 tool projections, excluded fields), data flows (guest vs member path), cross-border / APP 8 (member-PII inference stays onshore via Bedrock Sydney; residency gate makes member tools physically unavailable on the offshore provider), controls (identity from session, Zod egress fail-closed, PII-redacted persistence, hashed IP audit, daily budget, kill switch, hCaptcha, no write tools), retention (90d TTL + self-service delete), risks → mitigations → residual risk table, open items (legal review, Bedrock APP-8 confirmation, Haiku 4.5 in-region verification, privacy policy update, sign-off).
+- `docs/ai-chatbot/privacy-policy-changes.md` — proposed privacy policy wording to apply to `src/app/(site)/privacy/page.tsx` AT GO-LIVE after legal sign-off. Covers: AI disclosure, what data is read (membership/entries/billing/draw/partner visibility — own data only), what is excluded (email/phone/address/card/Stripe IDs), where member data is processed (Bedrock ap-southeast-2 Sydney), chat retention (90d TTL), how to delete chat history (the new endpoint), no data sale. Headed "PROPOSED — apply after legal sign-off; do not publish while bot is dormant". Live `privacy/page.tsx` NOT edited.
+
+#### Files modified
+
+- `src/components/support-chat/useSupportChat.ts` — added `resetConversation()` to `SupportChatState` interface and implementation. Clears `messages`, `conversationId` state + ref, calls `clearSupportChatStorage()`, resets `captchaRequired` + pending refs. Also imports `clearSupportChatStorage` from `@/lib/support-chat/chatStorage`.
+- `src/components/support-chat/SupportChatWidget.tsx` — added `resetConversation` destructure from hook; `deleteState` local state (`'idle' | 'confirming' | 'deleting'`); `handleDeleteHistory` callback (two-tap confirm-then-delete: first click → `'confirming'`, second click → `DELETE /api/chat/history` + `resetConversation()` on success); "Delete my chat history" button rendered below the input form, only when `isAuthenticated`. Shows "Tap again to confirm delete" on first click, "Deleting…" during fetch. Disabled while streaming.
+- `package.json` — added `"test:chat-delete-history"` script.
+
+#### Security properties preserved
+
+- Identity from session only — `deleteMemberChatHistory` receives `userId` from `session.user.id` (NextAuth session cookie), never from any client-supplied value.
+- Scoped by userId with belt-and-suspenders — `deleteConversations` filters by both `_id` (from the prior `findConversationIds` which was already userId-scoped) AND `userId` — so a race condition or id collision cannot delete another user's conversation.
+- Thin route — all logic in the service.
+
+---
+
 ## <a id="12-dod"></a>12. Definition of done (per phase)
 
 - Lint + type-check clean; route follows the thin-handler + inline-Zod + `{ success, error }` shape.

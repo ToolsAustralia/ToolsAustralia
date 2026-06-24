@@ -27,7 +27,7 @@ import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport } from "ai";
 import type { UIMessage } from "ai";
 import { useUserContext } from "@/contexts/UserContext";
-import { CHAT_STORAGE_KEYS } from "@/lib/support-chat/chatStorage";
+import { CHAT_STORAGE_KEYS, clearSupportChatStorage } from "@/lib/support-chat/chatStorage";
 
 export interface SupportChatState {
   messages: UIMessage[];
@@ -42,6 +42,8 @@ export interface SupportChatState {
   onCaptchaVerify: (token: string) => void;
   stop: () => void;
   clearError: () => void;
+  /** Clears the local message list and conversationId (call after server-side history delete). */
+  resetConversation: () => void;
 }
 
 export function useSupportChat(): SupportChatState {
@@ -187,6 +189,17 @@ export function useSupportChat(): SupportChatState {
     [sendMessage, setMessages]
   );
 
+  // ── Reset conversation (called after server-side history delete) ───────────
+  const resetConversation = useCallback(() => {
+    setMessages([]);
+    setConversationId(null);
+    conversationIdRef.current = null;
+    clearSupportChatStorage();
+    setCaptchaRequired(false);
+    pendingMessageRef.current = null;
+    pendingTokenRef.current = null;
+  }, [setMessages]);
+
   return {
     messages,
     status,
@@ -200,5 +213,6 @@ export function useSupportChat(): SupportChatState {
     onCaptchaVerify,
     stop,
     clearError,
+    resetConversation,
   };
 }
