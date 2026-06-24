@@ -66,6 +66,12 @@ export function useChargePastDueRuns(filter: RunsFilter): UseChargePastDueRunsRe
       const loaded = allPages.reduce((sum, p) => sum + p.runs.length, 0);
       return loaded < lastPage.total ? loaded : undefined;
     },
+    // Live-refresh the list while any run is still in progress (chunked runs update
+    // their totals after each chunk), then stop polling once all are finalized.
+    refetchInterval: (query) =>
+      query.state.data?.pages.some((p) => p.runs.some((r) => r.status === "running"))
+        ? 5000
+        : false,
   });
 
   const runs = useMemo(

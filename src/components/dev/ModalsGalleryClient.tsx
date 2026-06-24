@@ -1192,7 +1192,7 @@ export default function ModalsGalleryClient() {
         packageName="Tradie"
       />
 
-      <ChargePastDueModal isOpen={isOpen("admin-charge-past-due")} onClose={close} onConfirm={MOCK_CHARGE_RESPONSE} />
+      <ChargePastDueModal isOpen={isOpen("admin-charge-past-due")} onClose={close} />
       <ChargePastDueUserModal
         isOpen={isOpen("admin-charge-past-due-user")}
         onClose={close}

@@ -29,5 +29,9 @@ export function useChargePastDueRunDetail(runId: string | null) {
       if (!res.ok) throw new Error(`Failed to load run (${res.status})`);
       return res.json();
     },
+    // Live progress: a chunked run updates totals after each chunk, so poll while
+    // it is still running and stop once it finalizes.
+    refetchInterval: (query) =>
+      query.state.data?.run?.status === "running" ? 3000 : false,
   });
 }
