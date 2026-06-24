@@ -976,6 +976,73 @@ Additional cases: no-draw path for `getMyEntries` and `getDrawStatus` → zero c
 
 ---
 
+### As-built: Phase-1 AI privacy disclosure + PII hygiene
+
+Four additions that satisfy the Privacy Act disclosure obligation for the Phase-1 guest support assistant (overseas AI processing, no member-PII tools yet) without shipping a site-wide popup.
+
+#### 1. First-run in-widget disclosure notice
+
+A `DisclosureNotice` card is shown **inside the chat panel** the very first time a user opens it, replacing the normal chat UI until they acknowledge it. The card contains:
+
+- "You're chatting with an AI assistant — not a person."
+- "Your messages may be processed by a third-party AI provider, which may be located overseas."
+- "Please don't share sensitive details like full card numbers or passwords — you won't need to."
+- "Chats are stored securely in Australia and automatically deleted after 90 days. Signed-in members can delete their history anytime."
+- A link to `/privacy`.
+- A "Got it — start chatting" button.
+
+Acknowledgement is persisted to a **device-level** localStorage key (`ta_support_chat_disclosure_ack = "1"`). This key is intentionally NOT in `CHAT_STORAGE_KEYS` and NOT cleared by `clearSupportChatStorage()`. It is a generic AI notice — analogous to a cookie-consent acknowledgement — and clearing it on sign-out would re-nag every user on a shared device, which is the wrong UX and wrong privacy posture. The distinction is: `CHAT_STORAGE_KEYS` holds per-user conversation data (clear on sign-out to prevent leakage); `DISCLOSURE_ACK_KEY` is a device pref (keep across sessions).
+
+The notice state is lazily initialised from localStorage on first panel open (SSR-safe: defaults to `null` until the client checks). While the notice is shown, the quick-reply buttons, textarea, send button, and delete-history button are all hidden (CSS `hidden` class, not conditional rendering, to avoid layout shift on the next open).
+
+Implementation: `DisclosureNotice` component + `disclosureAcked` state + `handleAcknowledge` callback in `SupportChatWidget.tsx`.
+
+#### 2. Persistent PII micro-hint in the input area
+
+A one-line helper text rendered **above the textarea** in the input form (always visible during normal chatting, after disclosure is acknowledged):
+
+> "Don't share card numbers, passwords, or other sensitive details."
+
+Styled at `10px` in muted gray. Not a modal, not a banner — a persistent unobtrusive reminder.
+
+#### 3. System-prompt PII hard rules
+
+Two new bullet points added to the **HARD RULES — YOU MUST NEVER** section of `buildSystemPrompt` (`src/services/support-chat/systemPrompt.ts`):
+
+- **Never solicit**: do NOT ask for full card numbers, CVV/CVC codes, passwords, one-time codes (OTPs), bank account details, or any login credentials.
+- **Never echo**: if the user volunteers sensitive info, do NOT repeat or echo it back; briefly note they don't need to share that and continue helping.
+
+The prompt remains deterministic and byte-stable (no runtime input changes the wording).
+
+#### 4. Device-level ack helpers in `chatStorage.ts`
+
+Two exported functions added to `src/lib/support-chat/chatStorage.ts`:
+
+- `hasAcknowledgedDisclosure(): boolean` — reads `ta_support_chat_disclosure_ack` from localStorage; returns `false` in non-browser environments.
+- `acknowledgeDisclosure(): void` — writes `"1"` to the same key; swallows storage errors with `console.error`.
+
+`DISCLOSURE_ACK_KEY` is a named constant documenting why it is NOT in `CHAT_STORAGE_KEYS`.
+
+#### Sydney storage / overseas processing distinction
+
+Phase-1 posture:
+- **Chat data stored in Australia** — MongoDB is hosted in Sydney (`ap-southeast-2`). `ChatConversation` and `ChatMessage` documents never leave the Australian cluster.
+- **AI inference processed overseas** — Phase-1 uses the first-party Anthropic API (no AU geo). User messages leave Australia for inference. No member PII is included (guest-only FAQ mode); only the message text and general knowledge pack are sent.
+- **Phase-2 change** — when `CHAT_PROVIDER=bedrock` is enabled, member-tool inference moves to Bedrock `ap-southeast-2` (Sydney). The privacy-policy-changes.md draft tracks this distinction.
+
+#### Tests
+
+The two new system-prompt PII rules are asserted in `src/services/support-chat/__tests__/escalation.test.ts`:
+
+- `never-solicit-sensitive-info rule present` — regex: `/never solicit|do not ask for|must not ask|never ask.*card|never ask.*password/i`
+- `never-echo-sensitive-info rule present` — regex: `/do not repeat|do not echo|never repeat|never echo|do NOT repeat|do NOT echo/i`
+
+`npm run test:chat-escalation` → 17 assertions, all pass.
+
+The widget notice is UI-only (no unit test); it is preview-verified by the owner. The `hasAcknowledgedDisclosure` / `acknowledgeDisclosure` helpers are pure localStorage wrappers and do not require a separate test beyond the existing `test:chat-storage` coverage model.
+
+---
+
 ### As-built: delete-history + compliance drafts (Task 2.5)
 
 Member self-service chat history deletion, plus the Privacy Impact Assessment and proposed privacy policy wording required before the member-tool path goes live.

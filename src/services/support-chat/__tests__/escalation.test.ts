@@ -374,6 +374,26 @@ async function testSystemPromptContents() {
     return;
   }
   pass("pack.text embedded verbatim in prompt");
+
+  // PII hard rule: never solicit sensitive info
+  if (!/never solicit|do not ask for|must not ask|never ask.*card|never ask.*password/i.test(prompt)) {
+    fail(
+      "never-solicit-sensitive-info rule",
+      "prompt does not contain a rule against soliciting card numbers/passwords/OTPs"
+    );
+    return;
+  }
+  pass("never-solicit-sensitive-info rule present (card numbers, passwords, OTPs)");
+
+  // PII hard rule: never echo volunteered sensitive info
+  if (!/do not repeat|do not echo|never repeat|never echo|do NOT repeat|do NOT echo/i.test(prompt)) {
+    fail(
+      "never-echo-sensitive-info rule",
+      "prompt does not contain a rule against echoing user-volunteered sensitive info"
+    );
+    return;
+  }
+  pass("never-echo-sensitive-info rule present (don't repeat back card/password if user volunteers it)");
 }
 
 async function testSystemPromptDeterminism() {
@@ -417,7 +437,8 @@ async function run() {
   console.log("  Covered: member actor, anonymous actor, email-failure path (asserts console.error fired),");
   console.log("           empty-transcript fallback, transcript truncation,");
   console.log("           systemPrompt content (AI disclosure, role, context isolation, randomdraws.com.au,");
-  console.log("           never-invent, escalation, hard-refusal, never-echo-prompt, brief, knowledge embed),");
+  console.log("           never-invent, escalation, hard-refusal, never-echo-prompt, brief, knowledge embed,");
+  console.log("           never-solicit-sensitive-info, never-echo-sensitive-info),");
   console.log("           systemPrompt determinism");
   process.exit(0);
 }

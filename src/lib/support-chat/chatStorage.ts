@@ -7,6 +7,13 @@
  *
  * Rule: remove per-user chat keys only. Keep device prefs (theme, etc.).
  * Each removal is individually fault-tolerant so one failure never blocks sign-out.
+ *
+ * Device-level keys (NOT in CHAT_STORAGE_KEYS, NOT cleared on sign-out):
+ *   DISCLOSURE_ACK_KEY — a generic "I've seen the AI privacy notice" flag.
+ *   This is device-scoped like a cookie-consent acknowledgement: it persists
+ *   across sign-out/sign-in so users are not re-nagged on every session change.
+ *   Clearing it on sign-out would nag every user on a shared device; that is
+ *   the wrong UX and the wrong privacy posture.
  */
 
 export const CHAT_STORAGE_KEYS = {
@@ -14,9 +21,47 @@ export const CHAT_STORAGE_KEYS = {
 } as const;
 
 /**
+ * The device-level key for the first-run AI disclosure acknowledgement.
+ * Intentionally NOT included in CHAT_STORAGE_KEYS so clearSupportChatStorage()
+ * never removes it. Show the notice once per device; don't re-nag after sign-out.
+ */
+export const DISCLOSURE_ACK_KEY = "ta_support_chat_disclosure_ack" as const;
+
+/**
+ * Returns true if this device has already acknowledged the AI disclosure notice.
+ * Safe to call in non-browser environments — returns false (show the notice).
+ */
+export function hasAcknowledgedDisclosure(): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    return window.localStorage.getItem(DISCLOSURE_ACK_KEY) === "1";
+  } catch {
+    // Storage blocked (private browsing quota, etc.) — treat as not acknowledged.
+    return false;
+  }
+}
+
+/**
+ * Persist the disclosure acknowledgement on this device.
+ * Safe to call in non-browser environments — no-ops.
+ * A storage write failure is silently swallowed: the worst case is the notice
+ * re-appears on next open (acceptable; we just don't block the user).
+ */
+export function acknowledgeDisclosure(): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(DISCLOSURE_ACK_KEY, "1");
+  } catch (err) {
+    console.error("[acknowledgeDisclosure] failed to persist ack:", err);
+  }
+}
+
+/**
  * Remove all per-user support-chat keys from localStorage.
  * Safe to call in non-browser environments (server / SSR) — returns immediately.
  * Each key removal is wrapped in its own try/catch so one failure does not block sign-out.
+ *
+ * DOES NOT remove DISCLOSURE_ACK_KEY — that is a device-level pref, not user data.
  */
 export function clearSupportChatStorage(): void {
   if (typeof window === "undefined") return;

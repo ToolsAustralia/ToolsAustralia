@@ -28,10 +28,69 @@ import dynamic from "next/dynamic";
 import type { UIMessage } from "ai";
 import { Z_INDEX } from "@/constants/z-index";
 import { useSupportChat } from "./useSupportChat";
+import {
+  hasAcknowledgedDisclosure,
+  acknowledgeDisclosure,
+} from "@/lib/support-chat/chatStorage";
 
 const HCaptcha = dynamic(() => import("@hcaptcha/react-hcaptcha"), {
   ssr: false,
 });
+
+// ── First-run privacy disclosure notice ──────────────────────────────────────
+// Shown once per device (device-level localStorage key: ta_support_chat_disclosure_ack).
+// NOT a site-wide cookie banner — appears only inside the chat panel on first open.
+// Acknowledgement is device-level: sign-out does NOT clear it (by design — it is a
+// generic AI notice, not per-user data; see chatStorage.ts for rationale).
+function DisclosureNotice({ onAcknowledge }: { onAcknowledge: () => void }) {
+  return (
+    <div className="flex-1 flex items-center justify-center px-4 py-4">
+      <div className="rounded-2xl border border-orange-200 dark:border-orange-800 bg-orange-50 dark:bg-orange-950/40 p-4 text-sm text-gray-800 dark:text-gray-200 space-y-3">
+        <p className="font-semibold text-orange-700 dark:text-orange-300">
+          Before you start — a quick note
+        </p>
+        <ul className="space-y-2 text-xs leading-relaxed list-disc list-inside marker:text-orange-400">
+          <li>
+            You&apos;re chatting with an <strong>AI assistant</strong> — not a
+            person.
+          </li>
+          <li>
+            Your messages may be processed by a third-party AI provider, which
+            may be <strong>located overseas</strong>.
+          </li>
+          <li>
+            Please <strong>don&apos;t share</strong> sensitive details like full
+            card numbers or passwords — you won&apos;t need to.
+          </li>
+          <li>
+            Chats are stored <strong>securely in Australia</strong> and
+            automatically deleted after <strong>90 days</strong>. Signed-in
+            members can delete their history anytime.
+          </li>
+        </ul>
+        <p className="text-xs text-gray-500 dark:text-gray-400">
+          Read our{" "}
+          <a
+            href="/privacy"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="underline text-orange-600 dark:text-orange-400 hover:text-orange-700 dark:hover:text-orange-300"
+          >
+            privacy policy
+          </a>{" "}
+          for more information.
+        </p>
+        <button
+          type="button"
+          onClick={onAcknowledge}
+          className="w-full mt-1 rounded-xl bg-orange-500 hover:bg-orange-600 text-white text-sm font-medium py-2 px-4 transition-colors focus:outline-none focus:ring-2 focus:ring-orange-400 focus:ring-offset-2"
+        >
+          Got it — start chatting
+        </button>
+      </div>
+    </div>
+  );
+}
 
 // ── Quick-reply questions (matched to FAQ deflection entries) ────────────────
 const QUICK_REPLIES = [
@@ -95,19 +154,27 @@ export default function SupportChatWidget() {
   // Increment to force-reset the HCaptcha widget after a successful verification
   const [captchaKey, setCaptchaKey] = useState(0);
   const [deleteState, setDeleteState] = useState<"idle" | "confirming" | "deleting">("idle");
+  // First-run disclosure: initialise lazily from localStorage (device-level key).
+  // `null` means "not yet checked" (SSR-safe); checked on first panel open.
+  const [disclosureAcked, setDisclosureAcked] = useState<boolean | null>(null);
 
   // Auto-scroll to bottom when messages change
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, captchaRequired]);
 
-  // Focus input when panel opens
+  // Focus input when panel opens; also check the device-level disclosure ack on first open.
   useEffect(() => {
     if (open) {
       setHasOpened(true);
+      // Check localStorage once (client-only; hasAcknowledgedDisclosure() is SSR-safe).
+      if (disclosureAcked === null) {
+        setDisclosureAcked(hasAcknowledgedDisclosure());
+      }
       const t = setTimeout(() => inputRef.current?.focus(), 100);
       return () => clearTimeout(t);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
   const handleSubmit = async (e?: FormEvent) => {
@@ -127,6 +194,14 @@ export default function SupportChatWidget() {
     if (status === "submitted" || status === "streaming") return;
     void sendUserMessage(text);
   };
+
+  // ── First-run disclosure acknowledgement ─────────────────────────────────
+  const handleAcknowledge = useCallback(() => {
+    acknowledgeDisclosure();
+    setDisclosureAcked(true);
+    // Focus the input after acknowledging
+    setTimeout(() => inputRef.current?.focus(), 100);
+  }, []);
 
   // ── Delete my chat history (authenticated members only) ──────────────────
   const handleDeleteHistory = useCallback(async () => {
@@ -235,8 +310,13 @@ export default function SupportChatWidget() {
             </button>
           </div>
 
-          {/* Messages */}
-          <div className="flex-1 overflow-y-auto px-3 py-3 space-y-1">
+          {/* First-run privacy disclosure notice (shown before anything else, once per device) */}
+          {disclosureAcked === false && (
+            <DisclosureNotice onAcknowledge={handleAcknowledge} />
+          )}
+
+          {/* Messages — hidden until disclosure is acknowledged */}
+          <div className={`flex-1 overflow-y-auto px-3 py-3 space-y-1 ${disclosureAcked === false ? "hidden" : ""}`}>
             {/* Intro / AI disclosure */}
             {showIntro && (
               <div className="flex justify-start mb-2">
@@ -332,8 +412,8 @@ export default function SupportChatWidget() {
             <div ref={messagesEndRef} />
           </div>
 
-          {/* Quick replies — shown only before any messages */}
-          {messages.length === 0 && !captchaRequired && (
+          {/* Quick replies — shown only before any messages and after disclosure acked */}
+          {disclosureAcked !== false && messages.length === 0 && !captchaRequired && (
             <div className="px-3 pb-2 shrink-0">
               <p className="text-xs text-gray-500 dark:text-gray-400 mb-1.5">
                 Quick questions:
@@ -353,11 +433,16 @@ export default function SupportChatWidget() {
             </div>
           )}
 
-          {/* Input area */}
+          {/* Input area — hidden until disclosure acknowledged */}
           <form
             onSubmit={(e) => void handleSubmit(e)}
-            className="px-3 pb-3 pt-2 shrink-0 border-t border-gray-100 dark:border-neutral-800"
+            className={`px-3 pb-3 pt-2 shrink-0 border-t border-gray-100 dark:border-neutral-800 ${disclosureAcked === false ? "hidden" : ""}`}
           >
+            {/* Persistent PII micro-hint — always visible above the input */}
+            <p className="text-[10px] text-gray-400 dark:text-gray-500 mb-1.5 leading-snug">
+              Don&apos;t share card numbers, passwords, or other sensitive
+              details.
+            </p>
             <div className="flex gap-2 items-end">
               <textarea
                 ref={inputRef}
@@ -413,8 +498,8 @@ export default function SupportChatWidget() {
             </div>
           </form>
 
-          {/* Delete history — authenticated members only */}
-          {isAuthenticated && (
+          {/* Delete history — authenticated members only, after disclosure acked */}
+          {isAuthenticated && disclosureAcked !== false && (
             <div className="px-3 pb-2 shrink-0 flex justify-end">
               <button
                 type="button"
