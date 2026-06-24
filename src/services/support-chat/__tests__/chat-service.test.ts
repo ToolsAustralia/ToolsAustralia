@@ -120,6 +120,10 @@ function makePersistSpy(): {
       usageUpdates.push({ modelId, input, output });
       void conversationId;
     },
+    // hCaptcha gate support (Task 1.8): default stubs — tests that don't exercise
+    // the gate need these to satisfy the interface.
+    isAnonConversationVerified: async () => false,
+    markHumanVerified: async () => {},
   };
 
   return { port, conversation, messages, statusUpdates, usageUpdates };
@@ -267,10 +271,18 @@ async function testNonDeflectable() {
     persist: persist.port,
     escalateToHuman: async () => ({ submissionId: "x" }),
     getModel: () => ({ modelId: "claude-haiku-4-5" }) as never,
+    // Task 1.8: anonymous actors need the hCaptcha gate to pass for the LLM path.
+    // Inject a stub that always succeeds so this test verifies existing behavior
+    // (the gate itself is exercised in guest-gate.test.ts).
+    verifyHcaptcha: async () => true,
   };
 
   const res = await chatService.respond(
-    { ctx, messages: [userMessage("When is the next major draw and how do entries work?")] },
+    {
+      ctx,
+      messages: [userMessage("When is the next major draw and how do entries work?")],
+      hcaptchaToken: "stub-valid-token",
+    },
     deps
   );
 

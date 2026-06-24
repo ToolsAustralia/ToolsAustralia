@@ -94,6 +94,7 @@
     "test:chat-escalation": "tsx src/services/support-chat/__tests__/escalation.test.ts",
     "test:chat-withchatbot": "tsx src/lib/support-chat/__tests__/with-chatbot.test.ts",
     "test:chat-service": "tsx src/services/support-chat/__tests__/chat-service.test.ts",
+    "test:chat-guest-gate": "tsx src/services/support-chat/__tests__/guest-gate.test.ts",
     "smoke:chat-service": "tsx scripts/smoke-chat-service.ts",
     "migrate:anchor-billing-24": "tsx scripts/migrate-anchor-billing-24.ts",
     "migrate:anchor-billing-24:dry": "tsx scripts/migrate-anchor-billing-24.ts --dry-run",

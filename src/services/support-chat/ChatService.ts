@@ -79,6 +79,7 @@ import {
   escalateToHuman as realEscalateToHuman,
   type EscalationContact,
 } from "@/services/support-chat/escalation";
+import { verifyHcaptcha as realVerifyHcaptcha } from "@/lib/support-chat/captcha";
 
 // ─── Public input / dep types ─────────────────────────────────────────────────
 
@@ -95,6 +96,13 @@ export interface ChatRespondInput {
   conversationId?: string;
   /** Widget-collected contact details (request body) — never from the model. */
   contact?: ChatContact;
+  /**
+   * hCaptcha client token for the guest generative gate (Task 1.8).
+   * Only required for anonymous actors hitting the LLM path for the first time
+   * (or the first time on a new conversation). Members never need this.
+   * Single-use + short-lived — do NOT cache or replay.
+   */
+  hcaptchaToken?: string;
 }
 
 /** A persisted ChatMessage write (content is already redacted by the caller). */
@@ -129,6 +137,23 @@ export interface PersistPort {
     inputTokens: number,
     outputTokens: number
   ) => Promise<void>;
+  /**
+   * Check whether an existing anonymous conversation has already passed the
+   * hCaptcha gate (humanVerifiedAt is set). Returns:
+   *   - `true`  — verified (skip the challenge for this turn).
+   *   - `false` — not verified.
+   *   - `null`  — conversationId was not found or not owned by this ipHash.
+   *               Treat as "not verified" — require a fresh token.
+   */
+  isAnonConversationVerified: (
+    conversationId: string,
+    ipHash: string
+  ) => Promise<boolean | null>;
+  /**
+   * Stamp `humanVerifiedAt = now()` on an anonymous conversation after a
+   * successful hCaptcha verification. Idempotent (a second call is harmless).
+   */
+  markHumanVerified: (conversationId: string) => Promise<void>;
 }
 
 /**
@@ -163,6 +188,11 @@ export interface ChatServiceDeps {
   escalateToHuman?: typeof realEscalateToHuman;
   /** Defaults to getChatModel('primary'). */
   getModel?: () => LanguageModel;
+  /**
+   * Defaults to the real verifyHcaptcha (src/lib/support-chat/captcha.ts).
+   * Inject a stub in tests to avoid real network calls.
+   */
+  verifyHcaptcha?: typeof realVerifyHcaptcha;
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -346,6 +376,33 @@ const defaultPersist: PersistPort = {
       }
     );
   },
+
+  isAnonConversationVerified: async (conversationId, ipHash) => {
+    const { default: connectDB } = await import("@/lib/mongodb");
+    const { isValidObjectId } = await import("mongoose");
+    const { default: ChatConversation } = await import(
+      "@/models/ChatConversation"
+    );
+    await connectDB();
+    if (!isValidObjectId(conversationId)) return null;
+    const doc = await ChatConversation.findOne({ _id: conversationId, anonId: ipHash })
+      .select("humanVerifiedAt")
+      .lean();
+    if (!doc) return null;
+    return !!(doc as { humanVerifiedAt?: Date }).humanVerifiedAt;
+  },
+
+  markHumanVerified: async (conversationId) => {
+    const { default: connectDB } = await import("@/lib/mongodb");
+    const { default: ChatConversation } = await import(
+      "@/models/ChatConversation"
+    );
+    await connectDB();
+    await ChatConversation.updateOne(
+      { _id: conversationId },
+      { $set: { humanVerifiedAt: new Date() } }
+    );
+  },
 };
 
 // ─── The request_human tool ───────────────────────────────────────────────────
@@ -429,6 +486,7 @@ export const chatService = {
     const persist = deps.persist ?? defaultPersist;
     const escalate = deps.escalateToHuman ?? realEscalateToHuman;
     const getModel = deps.getModel ?? (() => getChatModel("primary"));
+    const verifyHcaptchaFn = deps.verifyHcaptcha ?? realVerifyHcaptcha;
 
     const userText = latestUserText(messages);
     const userAgent = ctx.req.headers.get("user-agent") ?? undefined;
@@ -474,6 +532,46 @@ export const chatService = {
       });
     }
 
+    // ── 2b. Guest hCaptcha gate ────────────────────────────────────────────────
+    // Gate applies ONLY to anonymous actors on the LLM path (deflection already
+    // returned above on a hit, so we know deflection MISSED here). Members are
+    // never challenged. Fail-closed: no token or a bad token → 401 JSON (NOT a
+    // stream). The Task 1.9 widget detects captcha_required and shows the widget.
+    if (ctx.actor.kind === "anonymous") {
+      // Check whether the resumed conversation is already human-verified.
+      let alreadyVerified = false;
+      if (input.conversationId) {
+        const verified = await persist.isAnonConversationVerified(
+          input.conversationId,
+          ctx.ipHash
+        );
+        // null means "not found / not owned" — treat as unverified.
+        alreadyVerified = verified === true;
+      }
+
+      if (!alreadyVerified) {
+        // Fresh challenge required.
+        const token = input.hcaptchaToken ?? "";
+        const ok = token ? await verifyHcaptchaFn(token) : false;
+        if (!ok) {
+          // Do NOT create a conversation, do NOT call the model, do NOT audit 200.
+          // Return a plain JSON 401 (not a stream — the widget intercepts this).
+          return new Response(
+            JSON.stringify({
+              success: false,
+              error: "captcha_required",
+              code: "captcha_required",
+            }),
+            {
+              status: 401,
+              headers: { "Content-Type": "application/json" },
+            }
+          );
+        }
+        // Token valid — will stamp humanVerifiedAt after conversationId is known (step 3).
+      }
+    }
+
     // ── 3. LLM path ───────────────────────────────────────────────────────────
     let model: LanguageModel;
     let system: string;
@@ -495,6 +593,17 @@ export const chatService = {
       ipHash: ctx.ipHash,
       userAgent,
     });
+
+    // If the anonymous gate was satisfied with a FRESH token (not already-verified),
+    // stamp humanVerifiedAt now so subsequent turns in this conversation are free.
+    if (ctx.actor.kind === "anonymous" && input.hcaptchaToken) {
+      // Best-effort — failure must not block the response.
+      try {
+        await persist.markHumanVerified(conversationId);
+      } catch (err) {
+        console.error("[ChatService] markHumanVerified failed", err);
+      }
+    }
 
     // Persist the user message before streaming (so it survives a mid-stream drop).
     await persist.addMessage({

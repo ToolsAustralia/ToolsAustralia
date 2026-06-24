@@ -24,6 +24,14 @@ export interface IChatConversation extends Document {
   tokenUsage: IChatTokenUsage;
   ipHash?: string;
   userAgent?: string;
+  /**
+   * Set when an anonymous conversation has passed the hCaptcha challenge once.
+   * Subsequent generative turns in the SAME conversation skip the challenge
+   * (hCaptcha tokens are single-use + short-lived, so per-turn challenges would
+   * be terrible UX). No new index needed — it's checked only on resumed anon
+   * convos, which are looked up by _id + anonId.
+   */
+  humanVerifiedAt?: Date;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -76,6 +84,9 @@ const ChatConversationSchema = new Schema<IChatConversation>(
       type: String,
       trim: true,
       maxlength: [500, 'userAgent cannot be more than 500 characters'],
+    },
+    humanVerifiedAt: {
+      type: Date,
     },
   },
   { timestamps: true }

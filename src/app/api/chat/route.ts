@@ -67,6 +67,12 @@ const ChatRequestSchema = z
     messages: z.array(MessageSchema).min(1),
     conversationId: z.string().max(64).optional(),
     contact: ContactSchema.optional(),
+    /**
+     * hCaptcha client token (guest generative gate — Task 1.8).
+     * Required for anonymous first-time LLM turns; absent for members and
+     * resumed already-verified conversations. The service validates/verifies it.
+     */
+    hcaptchaToken: z.string().max(5000).optional(),
   })
   .refine((body) => lastUserTextLength(body.messages) <= MAX_INPUT_CHARS, {
     message: `Message exceeds the ${MAX_INPUT_CHARS}-character limit`,
@@ -80,5 +86,6 @@ export const POST = withChatbot(async (ctx) => {
     messages: body.messages as unknown as UIMessage[],
     conversationId: body.conversationId,
     contact: body.contact,
+    hcaptchaToken: body.hcaptchaToken,
   });
 });

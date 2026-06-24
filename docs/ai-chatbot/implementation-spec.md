@@ -418,6 +418,80 @@ The orchestration engine that ties deflection, the cost guard, the provider, the
 
 **End-to-end smoke:** `scripts/smoke-chat-service.ts` (`npm run smoke:chat-service`) — runs the **real** engine for a deflectable question (asserts no model call, instant canned answer, `writeAudit(200)`) and a non-deflectable question (asserts a real streamed Anthropic answer, a persisted `ChatConversation` + messages, and a `ChatDailyBudget` token increment). Writes a small amount of real data to the dev DB (TTL-purged in 90 days). Manual connectivity check, not CI.
 
+### As-built: guest hCaptcha gate (Task 1.8)
+
+Protects the LLM path from anonymous abuse while preserving FAQ deflection for everyone and keeping members unchallenged.
+
+#### Correction: hCaptcha was NOT previously wired server-side
+
+The task brief said "reuse the existing siteverify pattern." In fact, hCaptcha had **no** server-side wiring in this repo — only a CSP allowlist for the client-side domains (`https://api.hcaptcha.com`, `js.hcaptcha.com`, etc.) in `src/utils/security/csp.ts`. The verifier was built from scratch. **`csp.ts` was NOT changed** — the CSP already permitted the hCaptcha domains.
+
+#### Gate placement: inside `ChatService.respond`, after deflection miss, anonymous-only
+
+The gate sits between the budget re-check (step 2) and the LLM call (step 3) in `ChatService.respond`. This is deliberate:
+
+- **FAQ deflection must be allowed WITHOUT any challenge** — the gate is never reached if `tryDeflect` answers (step 1 already returned).
+- **Only ChatService knows if deflection missed** — placing the gate in `withChatbot` would have forced a challenge even on deflectable questions.
+- **Members are never challenged** — the gate is guarded by `ctx.actor.kind === 'anonymous'`.
+
+#### `src/lib/support-chat/captcha.ts` — the fail-closed verifier
+
+`verifyHcaptcha(token, remoteIp?, deps?)`:
+- POSTs to `https://api.hcaptcha.com/siteverify` form-encoded (`application/x-www-form-urlencoded`) with `secret=HCAPTCHA_SECRET`, `response=token`, and `remoteip` if provided. Returns `json.success === true`.
+- **Fail-closed in every error case:**
+  - `HCAPTCHA_SECRET` unset → `false` (no secret, can't verify).
+  - Empty/whitespace token → `false` (no challenge presented; does NOT call fetch).
+  - Fetch/parse throws → `false` + `console.error` (never `console.log`; prod strips log/warn but not error).
+  - `{success:false}` from hCaptcha → `false`.
+- `fetchFn` injectable for tests; no real network call in CI.
+
+#### `humanVerifiedAt?: Date` on `ChatConversation`
+
+Added to `IChatConversation` interface and the Mongoose schema (optional `Date`, no default, no new index). Set once after a successful fresh verification; subsequent generative turns in the SAME anonymous conversation skip the challenge. (hCaptcha tokens are single-use + short-lived — per-turn challenges would be terrible UX.)
+
+#### Gate logic (anonymous + deflection miss only)
+
+1. If a `conversationId` was supplied and `persist.isAnonConversationVerified(conversationId, ipHash)` returns `true` → **proceed to LLM** (no token required).
+2. Otherwise: require a fresh `hcaptchaToken`. If absent OR `verifyHcaptcha` returns `false` → return **401 JSON** `{ success: false, error: "captcha_required", code: "captcha_required" }` (not a stream; the Task 1.9 widget intercepts this code and shows the hCaptcha + sign-in prompt). Do NOT create a conversation, do NOT call the model, do NOT write an audit 200.
+3. If the token verifies → proceed to LLM; after `ensureConversation`, call `persist.markHumanVerified(conversationId)` (best-effort, non-blocking on error).
+
+#### `PersistPort` additions
+
+Two new methods added to the interface and the default Mongo implementation (lazy import, same pattern as existing methods):
+- `isAnonConversationVerified(conversationId, ipHash): Promise<boolean | null>` — `true` = verified; `false` = not; `null` = not found / not owned.
+- `markHumanVerified(conversationId): Promise<void>` — stamps `humanVerifiedAt = new Date()` (idempotent `$set`).
+
+#### Route change
+
+`ChatRequestSchema` in `src/app/api/chat/route.ts` gained `hcaptchaToken: z.string().max(5000).optional()`, passed through to `chatService.respond`. Route stays thin.
+
+#### Env vars
+
+See `.env.example`:
+- `HCAPTCHA_SECRET` — server secret for siteverify. **Fail-closed if unset**: anonymous guests cannot use the generative bot (FAQ deflection + authenticated members unaffected).
+- `NEXT_PUBLIC_HCAPTCHA_SITEKEY` — public sitekey for the Task 1.9 client widget.
+
+#### Test: `src/services/support-chat/__tests__/guest-gate.test.ts` (`npm run test:chat-guest-gate`)
+
+11 cases, all stubbed (zero Mongo, zero Anthropic, zero real hCaptcha network):
+
+**Gate cases (ChatService.respond):**
+1. anon + miss + no token → 401 `captcha_required`; model NOT called; no conversation created.
+2. anon + miss + invalid token (stub → false) → 401 `captcha_required`; model NOT called.
+3. anon + miss + valid token (stub → true) → model called once; `markHumanVerified` called.
+4. anon + miss + already-verified conv (stub → true) + no token → model called (no challenge); `verifyHcaptcha` NOT called.
+5. anon + deflection ANSWERED (FAQ) → canned answer returned; `verifyHcaptcha` NOT called; `writeAudit(200)`.
+6. member + miss → model called; `verifyHcaptcha` NOT called; `writeAudit(200)`.
+
+**`verifyHcaptcha` unit cases:**
+7. Empty token → `false`; fetch NOT called.
+8. Missing `HCAPTCHA_SECRET` → `false`; fetch NOT called.
+9. Stub fetch `{success:true}` → `true`.
+10. Stub fetch `{success:false}` → `false`.
+11. Throwing fetch → `false` (fail-closed).
+
+All 11 pass. The existing `test:chat-service` suite (5 cases) updated to add `verifyHcaptcha` stub and `hcaptchaToken` for the anonymous LLM case, and to satisfy the expanded `PersistPort` interface — all 5 still pass.
+
 ### Phase 2 — Atlas Vector Search RAG (when the pack outgrows the cache sweet-spot)
 
 - Chunk prose (BUSINESS.md, Terms) by section; keep structured facts (prices/entries/partner tiers) as **discrete fact records pulled from the TS** (never paraphrased).
