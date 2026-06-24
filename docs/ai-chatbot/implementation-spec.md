@@ -506,7 +506,7 @@ The floating chat bubble + panel, the `useSupportChat` hook, the `chatStorage` u
 
 - `src/components/support-chat/chatStorage.ts` — `CHAT_STORAGE_KEYS` constant (`ta_support_chat_conversation_id`) and `clearSupportChatStorage()`. SSR-safe (`typeof window === 'undefined'` guard). Each `localStorage.removeItem` call is individually wrapped in `try/catch` so one storage failure never blocks sign-out.
 - `src/components/support-chat/useSupportChat.ts` — AI SDK v6 `useChat` wrapper hook. Owns conversationId threading, hCaptcha gate state, and text input.
-- `src/components/support-chat/SupportChatWidget.tsx` — floating bubble (bottom-right) + slide-up panel. Client component (`"use client"`).
+- `src/components/support-chat/SupportChatWidget.tsx` — floating bubble (bottom-right) + slide-up panel. Client component (`"use client"`). Uses the Cobber avatar (`/images/icons/cobber.png`) on both the floating bubble (closed state) and the panel header via `next/image`.
 - `src/components/support-chat/__tests__/chat-storage.test.ts` — storage-clear unit tests (4 assertions: removes chat keys, preserves device-pref keys, idempotent, fault-tolerant). `npm run test:chat-storage` → all pass.
 
 #### Files modified
