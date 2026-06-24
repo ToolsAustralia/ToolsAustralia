@@ -2,6 +2,8 @@
 
 > **PHASE 2 REMOVED (2026-06-24):** Member account tools (getMyMembership, getMyEntries, getMyBillingStatus, getDrawStatus, getPartnerVisibility) and Amazon Bedrock integration have been removed per owner decision. The bot is **FAQ-only** with no account/admin/aggregate data access. All inference runs via the first-party Anthropic API. Sections 6 (per-user tools) and 10 (provider/data residency) below describe the original design and are retained for historical reference only — they no longer reflect the codebase.
 
+> **Naming (2026-06-24):** The customer-facing support assistant is named **Cobber** (a friendly Australian word for "mate"). This is distinct from the internal admin AI gateway named **Norm** (`docs/internal-norm/`).
+
 > Companion to [research.md](research.md) and [README.md](README.md). This is the technical spec, grounded in the Tools Australia stack and conventions (Next.js 15 App Router, MongoDB/Mongoose, NextAuth, Zod, strict `app → services → repositories/lib → models` layering). Code blocks are **illustrative sketches**, not final code — they show shape and placement, not a finished implementation. File paths follow the repo's existing conventions.
 
 **Contents**

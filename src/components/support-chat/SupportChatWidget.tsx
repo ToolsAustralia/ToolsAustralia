@@ -282,10 +282,10 @@ export default function SupportChatWidget() {
             </div>
             <div className="flex-1 min-w-0">
               <p className="font-semibold text-sm leading-tight">
-                AI Support Assistant
+                Cobber
               </p>
               <p className="text-xs text-orange-100 leading-tight">
-                Tools Australia
+                AI assistant · Tools Australia
               </p>
             </div>
             <button
@@ -322,11 +322,12 @@ export default function SupportChatWidget() {
               <div className="flex justify-start mb-2">
                 <div className="max-w-[85%] rounded-2xl rounded-bl-sm px-3 py-2 text-sm leading-relaxed bg-white dark:bg-neutral-800 text-gray-900 dark:text-gray-100 border border-gray-200 dark:border-neutral-700">
                   <p className="font-semibold text-orange-600 dark:text-orange-400 mb-1">
-                    AI Support Assistant
+                    Cobber · AI assistant
                   </p>
                   <p>
-                    Hi! I&apos;m an AI assistant for Tools Australia. I can
-                    help with draw dates, membership, entries, and more.
+                    G&apos;day, I&apos;m Cobber — your Tools Australia support
+                    assistant. I&apos;m an AI, here to help with memberships,
+                    draws, entries, and general support.
                   </p>
                   <p className="text-xs text-gray-500 dark:text-gray-400 mt-1.5">
                     For complex issues I&apos;ll connect you to our team, who

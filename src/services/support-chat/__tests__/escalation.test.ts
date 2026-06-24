@@ -312,12 +312,19 @@ async function testSystemPromptContents() {
   }
   pass("AI disclosure present");
 
-  // Role/scope
-  if (!prompt.includes("Tools Australia")) {
-    fail("role mentions Tools Australia", "not found");
+  // Bot name
+  if (!prompt.includes("Cobber")) {
+    fail("prompt contains bot name 'Cobber'", "not found");
     return;
   }
-  pass("role/scope: mentions 'Tools Australia'");
+  pass("bot name 'Cobber' present");
+
+  // Role/scope
+  if (!prompt.includes("Tools Australia support assistant")) {
+    fail("role mentions 'Tools Australia support assistant'", "not found");
+    return;
+  }
+  pass("role/scope: mentions 'Tools Australia support assistant'");
 
   // Context isolation
   if (!/treat.*input.*data|instructions.*data|user input.*not.*instructions/i.test(prompt)) {
