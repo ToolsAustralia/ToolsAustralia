@@ -803,6 +803,24 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/data/**"
       ],
       "lastVerified": "2026-06-04"
+    },
+    "support-chat": {
+      "docs": "docs/ai-chatbot/",
+      "paths": [
+        "src/app/api/chat/**",
+        "src/services/support-chat/**",
+        "src/lib/support-chat/**",
+        "src/components/support-chat/**",
+        "src/models/ChatConversation.ts",
+        "src/models/ChatMessage.ts",
+        "src/models/ChatDailyBudget.ts",
+        "src/models/ChatAuditLog.ts",
+        "src/generated/chatKnowledgePack.ts",
+        "scripts/build-chat-knowledge-pack.ts",
+        "scripts/embed-chat-knowledge.ts",
+        "scripts/eval-chat-goldenset.ts"
+      ],
+      "lastVerified": "2026-06-24"
     }
   }
 }

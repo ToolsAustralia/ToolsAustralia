@@ -158,6 +158,70 @@ Two new user-scoped collections, following `ContactSubmission`/`ErrorReport` con
 
 **Retention & privacy:** TTL (~30–90 days, documented in the privacy policy), PII redaction before persist (mirror Norm's hashing discipline), and a "delete my chat history" affordance.
 
+### As-built data models (Phase 0.3)
+
+Four Mongoose models created under `src/models/`, following the `ContactSubmission`/`ErrorReport` conventions exactly (`models.X || model<...>('X', schema)` re-registration guard, `{ timestamps: true }`, named TTL indexes, `{ _id: false }` subdocuments).
+
+#### `ChatConversation` (`src/models/ChatConversation.ts`)
+
+| Field | Type | Notes |
+|---|---|---|
+| `userId` | `ObjectId` (ref User, optional) | null for anonymous; set server-side from session only |
+| `anonId` | `string?` | hashed IP/session key for anonymous threads |
+| `status` | `'open' \| 'escalated' \| 'closed'` | default `'open'` |
+| `escalatedSubmissionId` | `ObjectId?` (ref ContactSubmission) | set when escalated to a human |
+| `modelTier` | `string[]` | e.g. `['haiku','sonnet']`, default `[]` |
+| `tokenUsage` | `{ input, output, cacheRead, cacheWrite: number }` | all default 0 |
+| `ipHash` | `string?` | hashed, max 64 chars |
+| `userAgent` | `string?` | max 500 chars |
+| `createdAt`, `updatedAt` | auto | via `timestamps: true` |
+
+Indexes: `userId`, `status`, **TTL on `updatedAt` — 90 days** (`chat_conversations_ttl`).
+
+#### `ChatMessage` (`src/models/ChatMessage.ts`)
+
+| Field | Type | Notes |
+|---|---|---|
+| `conversationId` | `ObjectId` (ref ChatConversation, required, indexed) | |
+| `role` | `'user' \| 'assistant' \| 'tool'` (required) | |
+| `content` | `string` (required) | PII redacted by service layer before persist |
+| `citations` | `{ docId: string, span?: string }[]?` | grounding provenance |
+| `toolCalls` | `{ name: string, ok: boolean, durationMs?: number }[]?` | names + outcomes only, never raw args |
+| `createdAt`, `updatedAt` | auto | |
+
+Indexes: `conversationId` (query index), **TTL on `createdAt` — 90 days** (`chat_messages_ttl`).
+
+#### `ChatDailyBudget` (`src/models/ChatDailyBudget.ts`)
+
+| Field | Type | Notes |
+|---|---|---|
+| `dayKey` | `string` (unique, required) | UTC date string e.g. `'2026-06-24'`; unique index |
+| `spentUsd` | `number` | default 0; atomically incremented via `$inc` |
+| `tokensIn` | `number` | default 0 |
+| `tokensOut` | `number` | default 0 |
+| `createdAt`, `updatedAt` | auto | |
+
+Indexes: unique on `dayKey` (schema-level), **TTL on `createdAt` — 35 days** (`chat_daily_budget_ttl`).
+
+#### `ChatAuditLog` (`src/models/ChatAuditLog.ts`)
+
+| Field | Type | Notes |
+|---|---|---|
+| `requestId` | `string` (required, indexed) | |
+| `conversationId` | `ObjectId?` | |
+| `actorKind` | `'member' \| 'anonymous'` (required) | |
+| `modelTier` | `string?` | |
+| `tokensIn` | `number?` | |
+| `tokensOut` | `number?` | |
+| `deflected` | `boolean` (required) | true if answered with no LLM call |
+| `escalated` | `boolean` | default false |
+| `status` | `number` (required) | HTTP-ish status code |
+| `durationMs` | `number?` | |
+| `ipHash` | `string?` | max 64 chars; hashed, never raw |
+| `createdAt`, `updatedAt` | auto | |
+
+Indexes: `requestId` (query index), **TTL on `createdAt` — 90 days** (`chat_audit_log_ttl`).
+
 ---
 
 ## <a id="5-knowledge"></a>5. Knowledge grounding pipeline
