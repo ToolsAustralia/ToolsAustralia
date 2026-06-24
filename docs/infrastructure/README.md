@@ -26,3 +26,11 @@ See [.env.example](../../.env.example):
 - `IGODIRECT_CLIENT_ID` (`2412`), `IGODIRECT_DOMAIN_CODE` (`ToolsAustralia`), `IGODIRECT_DOMAIN_URL` (`myrewards.toolsaustralia.com.au`) — non-secret tenant identifiers.
 
 Connectivity probe: `npm run test:igodirect-sso` (see [dev-tooling/testing.md](../dev-tooling/testing.md)).
+
+## AI support chatbot infra (added 2026-06-24)
+
+Foundations for the `support-chat` domain (see [docs/ai-chatbot/](../ai-chatbot/)):
+
+- **Deps:** `ai` (Vercel AI SDK core), `@ai-sdk/anthropic`, `@ai-sdk/react`. Phase 2 adds `@ai-sdk/amazon-bedrock` (onshore member-PII inference); Phase 3 may add an embeddings provider for Atlas Vector Search.
+- **`vercel.json`:** `"src/app/api/chat/route.ts": { "maxDuration": 60 }` is listed **before** the `src/app/api/**/route.ts` 10s catch-all so streaming chat responses aren't truncated at 10s.
+- **Env** (see [.env.example](../../.env.example)): `ANTHROPIC_API_KEY` (Phase 1, first-party — set a low monthly **spend limit** in the Anthropic Console as the provider hard cap), `CHAT_MODEL_PRIMARY`/`CHAT_MODEL_ESCALATION`, `CHAT_DAILY_TOKEN_BUDGET_USD` (app-level daily cost ceiling, fail-closed), `CHAT_KILL_SWITCH`.
