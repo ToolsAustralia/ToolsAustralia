@@ -910,6 +910,8 @@ Five session-scoped read-only tools wired into a Norm-style registry. Wired into
 
 **I-4 — responseSchema required at compile time.** `defineMemberTool<TInput, TResponse>({ ..., responseSchema })` — `responseSchema` is a required field in the `MemberToolDef` interface. Omitting it is a TypeScript compile error.
 
+**I-5 — Execution errors swallowed to a generic sentinel (Phase 2 final review fix).** `buildMemberToolSet` wraps the entire `execute` body in a try/catch. On ANY throw — `ToolDenied`, `ZodError` from a projection miss, or a handler error — the real error is `console.error`-ed server-side for ops visibility and `{ error: "unavailable" }` is returned to the model. No internal error message, ZodError field text, or field value can reach the model. The success path is unchanged: `responseSchema.parse(result)` still runs inside the try, so a real projection bug is caught and logged.
+
 #### The `piiScoped` flag
 
 Each tool definition carries `piiScoped?: boolean` (default `true`). The registry wrapper checks `if (piiScoped !== false && actor.kind !== 'member') throw new ToolDenied('login_required')` before calling the handler or any service. This means:

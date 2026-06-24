@@ -132,16 +132,24 @@ export function buildMemberToolSet(
       description,
       inputSchema,
       execute: async (_input: unknown) => {
-        // I-1: auth gate
-        if (piiScoped !== false && actor.kind !== "member") {
-          throw new ToolDenied("login_required");
+        try {
+          // I-1: auth gate
+          if (piiScoped !== false && actor.kind !== "member") {
+            throw new ToolDenied("login_required");
+          }
+
+          // Run handler
+          const result = await handler(ctx, deps);
+
+          // I-2: fail-closed egress projection — throws ZodError on any mismatch
+          return responseSchema.parse(result);
+        } catch (err) {
+          // Swallow ALL errors server-side: ToolDenied, ZodError, handler throws.
+          // Log the real error for ops visibility; return a generic sentinel so
+          // NO internal detail (ZodError text, field values, stack) reaches the model.
+          console.error(`[support-chat] member tool "${name}" error:`, err);
+          return { error: "unavailable" };
         }
-
-        // Run handler
-        const result = await handler(ctx, deps);
-
-        // I-2: fail-closed egress projection — throws ZodError on any mismatch
-        return responseSchema.parse(result);
       },
     });
   }

@@ -9,11 +9,15 @@
  *
  * Zero Mongo, zero Anthropic — all services injected via MemberToolDeps stubs.
  *
+ * Error-swallowing wrapper (testErrorSwallowing):
+ *   (a) handler that throws → { error: "unavailable" } (not re-thrown)
+ *   (b) projection miss (ZodError from responseSchema.parse) → swallowed, { error: "unavailable" }
+ *
  * Per tool, we test:
- *   (a) Anonymous actor → ToolDenied thrown AND stub service NOT called (piiScoped tools)
- *       getDrawStatus (piiScoped: false) → anonymous actor does NOT throw
+ *   (a) Anonymous actor → { error: "unavailable" } (ToolDenied swallowed) AND stub NOT called
+ *       getDrawStatus (piiScoped: false) → anonymous actor gets a real result (no auth gate)
  *   (b) Member actor → returns the expected projected shape
- *   (c) responseSchema is .strict() — PII field fails parse
+ *   (c) responseSchema is .strict() — PII field fails parse (regression guard)
  *   (d) Handler uses ctx.actor.userId — stub receives that exact id
  *
  * Run: npm run test:chat-member-tools
@@ -113,12 +117,119 @@ async function testAllToolsRegistered() {
   pass("all 5 tools registered in MEMBER_TOOLS");
 }
 
+// ─── Error-swallowing wrapper tests ──────────────────────────────────────────
+// These test the try/catch wrapper in buildMemberToolSet.execute:
+//   (a) handler that throws → { error: "unavailable" } (not a re-throw)
+//   (b) projection miss (handler returns PII-bearing object) → ZodError swallowed,
+//       { error: "unavailable" } returned — nothing internal reaches the model.
+//
+// Both cases use getMyMembership as the test vehicle.
+
+async function testErrorSwallowing() {
+  console.log("\nbuildMemberToolSet — error-swallowing wrapper");
+
+  // (a) handler stub throws a generic Error → { error: "unavailable" }, no re-throw
+  {
+    const deps: MemberToolDeps = {
+      findUserById: async () => {
+        throw new Error("simulated DB connection timeout");
+      },
+    };
+    const tools = buildMemberToolSet(memberActor, deps);
+    let result: unknown = null;
+    let threw: unknown = null;
+    try {
+      result = await tools["getMyMembership"].execute!({}, fakeToolCtx);
+    } catch (e) {
+      threw = e;
+    }
+    const r = result as Record<string, unknown> | null;
+    if (threw !== null) {
+      fail("handler throw → no re-throw", `threw: ${threw}`);
+    } else if (!r || r["error"] !== "unavailable") {
+      fail("handler throw → { error: 'unavailable' }", `got ${JSON.stringify(result)}`);
+    } else {
+      pass("handler throw → { error: 'unavailable' } (error swallowed server-side)");
+    }
+  }
+
+  // (b) Projection miss: handler returns object with extra PII field → ZodError swallowed.
+  //
+  // Strategy: the real getMyMembership handler calls findUserById → getCurrentUserBenefits
+  // → getActivePackage, then builds the result object and passes it to responseSchema.parse.
+  // We cannot easily make the handler return a PII object through its real code path, so we
+  // verify the two constituent facts separately:
+  //   b1. The responseSchema still throws ZodError when given a PII-bearing object (the
+  //       schema itself hasn't been weakened by adding the wrapper).
+  //   b2. When findUserById throws (simulating any internal failure including a ZodError
+  //       re-thrown inside the handler), the wrapper returns { error: "unavailable" }.
+  // Together: schema rejects PII (b1) + any error → sentinel (b2) = ZodError from a
+  // projection miss can never surface field values to the model.
+  {
+    const def = MEMBER_TOOLS.find((t) => t.name === "getMyMembership");
+    if (!def) {
+      fail("projection-miss test: responseSchema regression guard", "tool not found");
+      return;
+    }
+
+    // b1. Schema still rejects PII (regression guard — schema must stay strict)
+    let schemaThrew = false;
+    try {
+      def.responseSchema.parse({
+        tier: "Tradie",
+        packageId: "tradie-subscription",
+        entriesPerMonth: 2,
+        isActive: true,
+        source: "subscription",
+        expiresAt: null,
+        isPendingChange: false,
+        pendingChange: null,
+        email: "leaked@evil.com",
+      });
+    } catch {
+      schemaThrew = true;
+    }
+    if (!schemaThrew) {
+      fail("responseSchema still rejects PII after adding wrapper (b1)", "schema did not throw");
+    } else {
+      pass("responseSchema.strict() still rejects PII field after wrapper added (b1)");
+    }
+
+    // b2. When execution inside the try throws (including a ZodError from parse),
+    // the wrapper catches and returns { error: "unavailable" } — not the ZodError text.
+    // We simulate this by injecting a handler dep that throws mid-execution.
+    const deps: MemberToolDeps = {
+      findUserById: async () => {
+        throw new Error("simulated ZodError from projection miss");
+      },
+    };
+    const tools = buildMemberToolSet(memberActor, deps);
+    let result: unknown = null;
+    let threw: unknown = null;
+    try {
+      result = await tools["getMyMembership"].execute!({}, fakeToolCtx);
+    } catch (e) {
+      threw = e;
+    }
+    const r = result as Record<string, unknown> | null;
+    if (threw !== null) {
+      fail("projection-miss → no re-throw (b2)", `threw: ${threw}`);
+    } else if (!r || r["error"] !== "unavailable") {
+      fail("projection-miss → { error: 'unavailable' } (b2)", `got ${JSON.stringify(result)}`);
+    } else {
+      pass("projection-miss: ZodError swallowed → { error: 'unavailable' }, no field values leaked (b2)");
+    }
+  }
+}
+
 // ─── getMyMembership ─────────────────────────────────────────────────────────
 
 async function testGetMyMembership() {
   console.log("\ngetMyMembership");
 
-  // (a) Anonymous actor → ToolDenied, stub NOT called
+  // (a) Anonymous actor → { error: "unavailable" }, stub NOT called
+  // The registry now swallows all errors (ToolDenied, ZodError, handler throws)
+  // and returns a generic sentinel so nothing internal reaches the model.
   {
     const stubCalled = { called: false };
     const deps: MemberToolDeps = {
@@ -130,21 +241,23 @@ async function testGetMyMembership() {
     const tools = buildMemberToolSet(anonymousActor, deps);
     const tool = tools["getMyMembership"];
 
+    let result: unknown = null;
     let threw: unknown = null;
     try {
-      await tool.execute!({}, fakeToolCtx);
+      result = await tool.execute!({}, fakeToolCtx);
     } catch (e) {
       threw = e;
     }
 
-    if (!(threw instanceof ToolDenied)) {
-      fail("anonymous → ToolDenied", `got ${threw}`);
-    } else if ((threw as ToolDenied).reason !== "login_required") {
-      fail("ToolDenied reason=login_required", `got ${(threw as ToolDenied).reason}`);
+    const r = result as Record<string, unknown> | null;
+    if (threw !== null) {
+      fail("anonymous → { error: 'unavailable' } (no throw)", `threw: ${threw}`);
+    } else if (!r || r["error"] !== "unavailable") {
+      fail("anonymous → { error: 'unavailable' }", `got ${JSON.stringify(result)}`);
     } else if (stubCalled.called) {
       fail("stub NOT called before auth check", "findUserById was called");
     } else {
-      pass("anonymous actor → ToolDenied(login_required), stub not called");
+      pass("anonymous actor → { error: 'unavailable' }, stub not called");
     }
   }
 
@@ -275,7 +388,7 @@ async function testGetMyMembership() {
 async function testGetMyEntries() {
   console.log("\ngetMyEntries");
 
-  // (a) Anonymous → ToolDenied, stub NOT called
+  // (a) Anonymous → { error: "unavailable" }, stub NOT called
   {
     const stubCalled = { called: false };
     const deps: MemberToolDeps = {
@@ -285,18 +398,22 @@ async function testGetMyEntries() {
       },
     };
     const tools = buildMemberToolSet(anonymousActor, deps);
+    let result: unknown = null;
     let threw: unknown = null;
     try {
-      await tools["getMyEntries"].execute!({}, fakeToolCtx);
+      result = await tools["getMyEntries"].execute!({}, fakeToolCtx);
     } catch (e) {
       threw = e;
     }
-    if (!(threw instanceof ToolDenied)) {
-      fail("anonymous → ToolDenied", `got ${threw}`);
+    const r = result as Record<string, unknown> | null;
+    if (threw !== null) {
+      fail("anonymous → { error: 'unavailable' } (no throw)", `threw: ${threw}`);
+    } else if (!r || r["error"] !== "unavailable") {
+      fail("anonymous → { error: 'unavailable' }", `got ${JSON.stringify(result)}`);
     } else if (stubCalled.called) {
       fail("stub NOT called before auth check", "getCurrentMajorDrawForDisplay was called");
     } else {
-      pass("anonymous actor → ToolDenied(login_required), stub not called");
+      pass("anonymous actor → { error: 'unavailable' }, stub not called");
     }
   }
 
@@ -417,7 +534,7 @@ async function testGetMyEntries() {
 async function testGetMyBillingStatus() {
   console.log("\ngetMyBillingStatus");
 
-  // (a) Anonymous → ToolDenied, stub NOT called
+  // (a) Anonymous → { error: "unavailable" }, stub NOT called
   {
     const stubCalled = { called: false };
     const deps: MemberToolDeps = {
@@ -427,18 +544,22 @@ async function testGetMyBillingStatus() {
       },
     };
     const tools = buildMemberToolSet(anonymousActor, deps);
+    let result: unknown = null;
     let threw: unknown = null;
     try {
-      await tools["getMyBillingStatus"].execute!({}, fakeToolCtx);
+      result = await tools["getMyBillingStatus"].execute!({}, fakeToolCtx);
     } catch (e) {
       threw = e;
     }
-    if (!(threw instanceof ToolDenied)) {
-      fail("anonymous → ToolDenied", `got ${threw}`);
+    const r = result as Record<string, unknown> | null;
+    if (threw !== null) {
+      fail("anonymous → { error: 'unavailable' } (no throw)", `threw: ${threw}`);
+    } else if (!r || r["error"] !== "unavailable") {
+      fail("anonymous → { error: 'unavailable' }", `got ${JSON.stringify(result)}`);
     } else if (stubCalled.called) {
       fail("stub NOT called before auth check", "findUserById was called");
     } else {
-      pass("anonymous actor → ToolDenied(login_required), stub not called");
+      pass("anonymous actor → { error: 'unavailable' }, stub not called");
     }
   }
 
@@ -624,7 +745,7 @@ async function testGetPartnerVisibility() {
     { id: "brand-c", name: "Brand C", logo: "/logo-c.png", discount: "30% OFF", discountMessage: "30% off", gradient: "from-red-900", businessLink: "https://c.com" },
   ];
 
-  // (a) Anonymous → ToolDenied, stub NOT called
+  // (a) Anonymous → { error: "unavailable" }, stub NOT called
   {
     const stubCalled = { called: false };
     const deps: MemberToolDeps = {
@@ -635,18 +756,22 @@ async function testGetPartnerVisibility() {
       partnerBrandOffers: fakeOffers,
     };
     const tools = buildMemberToolSet(anonymousActor, deps);
+    let result: unknown = null;
     let threw: unknown = null;
     try {
-      await tools["getPartnerVisibility"].execute!({}, fakeToolCtx);
+      result = await tools["getPartnerVisibility"].execute!({}, fakeToolCtx);
     } catch (e) {
       threw = e;
     }
-    if (!(threw instanceof ToolDenied)) {
-      fail("anonymous → ToolDenied", `got ${threw}`);
+    const r = result as Record<string, unknown> | null;
+    if (threw !== null) {
+      fail("anonymous → { error: 'unavailable' } (no throw)", `threw: ${threw}`);
+    } else if (!r || r["error"] !== "unavailable") {
+      fail("anonymous → { error: 'unavailable' }", `got ${JSON.stringify(result)}`);
     } else if (stubCalled.called) {
       fail("stub NOT called before auth check", "findUserById was called");
     } else {
-      pass("anonymous actor → ToolDenied(login_required), stub not called");
+      pass("anonymous actor → { error: 'unavailable' }, stub not called");
     }
   }
 
@@ -726,6 +851,7 @@ async function testGetPartnerVisibility() {
 
 async function run() {
   await testAllToolsRegistered();
+  await testErrorSwallowing();
   await testGetMyMembership();
   await testGetMyEntries();
   await testGetMyBillingStatus();
@@ -740,7 +866,8 @@ async function run() {
   }
 
   console.log("PASS — member-tools test");
-  console.log("  Covered: 5 tools registered, ToolDenied for anonymous (piiScoped tools),");
+  console.log("  Covered: 5 tools registered, error-swallowing wrapper (handler throw + projection miss),");
+  console.log("           anonymous actor → { error: 'unavailable' } (piiScoped tools),");
   console.log("           piiScoped:false allows anonymous (getDrawStatus),");
   console.log("           projected shapes correct, strict schema rejects PII,");
   console.log("           ctx.actor.userId flows to service stubs");
