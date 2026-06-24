@@ -414,12 +414,18 @@ const ImageUpload: React.FC<ImageUploadProps> = ({
                 </div>
               )}
 
-              {/* Remove button */}
+              {/* Remove button — z-20 keeps it above the full-card replacement input below,
+                  so clicking the X deletes the image instead of opening the replace dialog. */}
               {!disabled && (
                 <button
                   type="button"
-                  onClick={() => removeImage(index)}
-                  className="absolute top-2 right-2 bg-red-600 text-white p-1.5 rounded-full hover:bg-red-700 transition-colors opacity-0 group-hover:opacity-100"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    removeImage(index);
+                  }}
+                  aria-label={`Remove image ${index + 1}`}
+                  className="absolute top-2 right-2 z-20 bg-red-600 text-white p-1.5 rounded-full hover:bg-red-700 transition-colors opacity-0 group-hover:opacity-100"
                 >
                   <X className="w-3 h-3" />
                 </button>

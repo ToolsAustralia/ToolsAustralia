@@ -371,9 +371,11 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/hooks/usePromoWelcomeModal.ts",
         "src/generated/landingImageManifest.ts",
         "scripts/build-landing-image-manifest.ts",
-        "scripts/check-landing-hero-assets.mjs"
+        "scripts/check-landing-hero-assets.mjs",
+        "scripts/convert-drawn-tonight-tomorrow-to-webp.ts",
+        "scripts/convert-drawn-tonight-tomorrow-videos.ts"
       ],
-      "lastVerified": "2026-06-11"
+      "lastVerified": "2026-06-24"
     },
     "affiliate": {
       "docs": "docs/affiliate/",
@@ -631,7 +633,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/app/globals.css",
         "src/app/not-found.tsx"
       ],
-      "lastVerified": "2026-06-22"
+      "lastVerified": "2026-06-24"
     },
     "client-state": {
       "docs": "docs/client-state/",
