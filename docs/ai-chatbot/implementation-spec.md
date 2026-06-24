@@ -365,6 +365,18 @@ Support traffic is power-law ("the same ~200 questions ~80% of the time"), so la
 - Require a **CAPTCHA before a guest's first generative turn** — reuse the **hCaptcha already loaded on the site** (verify token server-side before any model call), or free Cloudflare Turnstile. Don't load two CAPTCHA vendors.
 - Stricter per-IP/per-session rate limits for anonymous than authenticated users.
 
+### As-built: cost guard (Task 1.1)
+
+`src/lib/support-chat/costGuard.ts` — shipped and tested.
+
+- **`estimateCostUsd(model, tokensIn, tokensOut)`** — price table for Haiku 4.5 ($1/$5), Sonnet 4.6 ($3/$15), Opus 4.8 ($5/$25) USD/1M tokens. Unknown model falls back to Opus rates (fail-expensive).
+- **`evaluateBudget({ killSwitch, spentUsd, budgetUsd })`** — pure synchronous decision; kill-switch takes priority over budget check.
+- **`assertWithinBudget(deps?)`** — DB-backed gate; reads `CHAT_KILL_SWITCH` and `CHAT_DAILY_TOKEN_BUDGET_USD` (default $5) from env, reads today's `spentUsd` from `ChatDailyBudget`, returns `{ ok, reason? }`. **Fail-closed**: any error returns `{ ok: false, reason: 'error' }`.
+- **`recordUsage(model, tokensIn, tokensOut, deps?)`** — best-effort atomic `$inc` upsert on `ChatDailyBudget`. Swallows all errors (never throws, logs via `console.error`).
+- **`utcDayKey(d?)`** — returns UTC 'YYYY-MM-DD' string for a given date.
+- All four functions accept injected deps (`readSpendUsd`, `incrementSpend`, `now`) for unit testing without a live DB.
+- Test: `src/lib/support-chat/__tests__/cost-guard.test.ts` (37 assertions; all pass). Run: `npm run test:chat-cost-guard`.
+
 ## <a id="11-config"></a>11. Config, env & manifest registration
 
 - **Env:** Claude/Bedrock credentials + region, model IDs per tier, daily token budget, rate-limit windows, kill-switch flag, `CONTACT_RECIPIENT` (existing). Add to `.env.example` (`docs/infrastructure/`).

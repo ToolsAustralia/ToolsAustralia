@@ -35,6 +35,7 @@
     "analyze:modals": "tsx scripts/analyze-modal-reachability.ts",
     "test": "tsx src/utils/billing/__tests__/anchor-billing.test.ts",
     "test:anchor-billing": "tsx src/utils/billing/__tests__/anchor-billing.test.ts",
+    "test:chat-cost-guard": "tsx src/lib/support-chat/__tests__/cost-guard.test.ts",
     "test:chat-faqs": "tsx src/data/__tests__/faqs.test.ts",
     "test:norm-user-service-account": "tsx src/models/__tests__/User.serviceAccount.test.ts",
     "test:norm-call-log": "tsx src/models/__tests__/NormCallLog.test.ts",
