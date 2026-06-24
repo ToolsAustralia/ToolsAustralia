@@ -96,7 +96,6 @@
     "test:chat-service": "tsx src/services/support-chat/__tests__/chat-service.test.ts",
     "test:chat-guest-gate": "tsx src/services/support-chat/__tests__/guest-gate.test.ts",
     "test:chat-storage": "tsx src/components/support-chat/__tests__/chat-storage.test.ts",
-    "test:chat-member-tools": "tsx src/services/support-chat/__tests__/member-tools.test.ts",
     "test:chat-delete-history": "tsx src/services/support-chat/__tests__/delete-history.test.ts",
     "smoke:chat-service": "tsx scripts/smoke-chat-service.ts",
     "eval:chat": "tsx scripts/eval-chat-goldenset.ts",
@@ -286,7 +285,6 @@
     "test:derive-backfill-attribution": "tsx src/services/attribution/__tests__/deriveBackfillAttribution.test.ts"
   },
   "dependencies": {
-    "@ai-sdk/amazon-bedrock": "^4.0.121",
     "@ai-sdk/anthropic": "^3.0.85",
     "@ai-sdk/react": "^3.0.211",
     "@auth/mongodb-adapter": "^3.10.0",
