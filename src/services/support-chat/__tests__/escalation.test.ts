@@ -165,23 +165,36 @@ async function testEmailFailurePath() {
     firstName: "Bob",
   };
 
-  const result = await escalateToHuman(
-    {
-      actor,
-      contact: { name: "Bob Smith", email: "bob@example.com", phone: "0422333444" },
-      transcriptSummary: "User needed escalation but email will fail.",
-    },
-    {
-      createSubmission: async () => {
-        submissionCreated = true;
-        return { submissionId: "sub_fail_001", submittedAt: new Date().toISOString() };
+  // Capture console.error — the spec requires console.error (not the prod-stripped
+  // console.log) to fire on email failure so the alert survives a production build.
+  const originalConsoleError = console.error;
+  const errorCalls: unknown[][] = [];
+  console.error = (...args: unknown[]) => {
+    errorCalls.push(args);
+  };
+
+  let result: { submissionId: string };
+  try {
+    result = await escalateToHuman(
+      {
+        actor,
+        contact: { name: "Bob Smith", email: "bob@example.com", phone: "0422333444" },
+        transcriptSummary: "User needed escalation but email will fail.",
       },
-      sendEmail: async () => {
-        // Simulate email failure
-        return { success: false, error: "SMTP timeout" };
-      },
-    }
-  );
+      {
+        createSubmission: async () => {
+          submissionCreated = true;
+          return { submissionId: "sub_fail_001", submittedAt: new Date().toISOString() };
+        },
+        sendEmail: async () => {
+          // Simulate email failure
+          return { success: false, error: "SMTP timeout" };
+        },
+      }
+    );
+  } finally {
+    console.error = originalConsoleError;
+  }
 
   // Submission MUST have been created even though email failed
   if (!submissionCreated) {
@@ -195,7 +208,53 @@ async function testEmailFailurePath() {
     return;
   }
 
-  pass(`email failure path → submission still created, submissionId=${result.submissionId} returned`);
+  // console.error MUST have fired (spec: alert must survive a prod build)
+  if (errorCalls.length < 1) {
+    fail("console.error fired on email failure", `console.error called ${errorCalls.length} times`);
+    return;
+  }
+
+  pass(
+    `email failure path → submission still created, submissionId=${result.submissionId} returned, ` +
+      `console.error fired (${errorCalls.length}×)`
+  );
+}
+
+async function testEmptyTranscript() {
+  console.log("\nescalateToHuman — empty transcriptSummary fallback");
+
+  let capturedMessage = "";
+
+  const actor: ChatActor = { kind: "member", userId: "u_empty", firstName: "Empty" };
+
+  // An empty/whitespace summary would yield message="" and a Mongoose ValidationError
+  // (ContactSubmission.message is required) without the fallback guard. The escalation
+  // must still succeed and produce a non-empty message.
+  const result = await escalateToHuman(
+    {
+      actor,
+      contact: { email: "empty@example.com", phone: "0400999888" },
+      transcriptSummary: "   ", // whitespace only
+    },
+    {
+      createSubmission: async (fields) => {
+        capturedMessage = (fields.message as string) ?? "";
+        return { submissionId: "sub_empty_001", submittedAt: new Date().toISOString() };
+      },
+      sendEmail: async () => ({ success: true }),
+    }
+  );
+
+  if (!result.submissionId) {
+    fail("submissionId returned for empty transcript", `got ${JSON.stringify(result)}`);
+    return;
+  }
+  if (typeof capturedMessage !== "string" || capturedMessage.trim().length === 0) {
+    fail("message is non-empty for empty transcript", `got "${capturedMessage}"`);
+    return;
+  }
+
+  pass(`empty transcript → submissionId=${result.submissionId}, message="${capturedMessage}" (non-empty)`);
 }
 
 async function testTranscriptTruncation() {
@@ -342,6 +401,7 @@ async function run() {
   await testMemberActor();
   await testAnonymousActor();
   await testEmailFailurePath();
+  await testEmptyTranscript();
   await testTranscriptTruncation();
   await testSystemPromptContents();
   await testSystemPromptDeterminism();
@@ -354,7 +414,8 @@ async function run() {
   }
 
   console.log("PASS — escalation/systemPrompt test");
-  console.log("  Covered: member actor, anonymous actor, email-failure path, transcript truncation,");
+  console.log("  Covered: member actor, anonymous actor, email-failure path (asserts console.error fired),");
+  console.log("           empty-transcript fallback, transcript truncation,");
   console.log("           systemPrompt content (AI disclosure, role, context isolation, randomdraws.com.au,");
   console.log("           never-invent, escalation, hard-refusal, never-echo-prompt, brief, knowledge embed),");
   console.log("           systemPrompt determinism");

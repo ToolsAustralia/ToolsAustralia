@@ -290,7 +290,7 @@ escalateToHuman(
 - **`priority: 'high'`**: an explicit human request from within the chat is higher-urgency than a cold contact form.
 - **`status: 'new'`**: default — the submission enters the admin queue in its normal initial state.
 - **subject**: `"Support chat escalation (member)"` or `"Support chat escalation (anonymous)"` — uses `actor.kind` so staff see the origin at a glance.
-- **Transcript truncated** to ≤2000 chars (the `ContactSubmission.message` maxlength).
+- **Transcript truncated** to ≤2000 chars (the `ContactSubmission.message` maxlength). An empty/whitespace `transcriptSummary` falls back to `"No transcript available."` — `ContactSubmission.message` is `required`, so an empty string would otherwise throw a Mongoose ValidationError and reject the escalation.
 - **ChatConversation not touched**: linking `escalatedSubmissionId` and setting `status:'escalated'` on the conversation is `ChatService`'s job (Task 1.7). This function stays single-purpose.
 - **Dependency injection**: accepts optional `deps` (`createSubmission`, `sendEmail`) so tests run with zero Mongo/SendGrid. Default deps use dynamic imports (`await import("@/lib/mongodb")` etc.) so stubs never cause those modules to load. Pattern mirrors `costGuard.ts`.
 

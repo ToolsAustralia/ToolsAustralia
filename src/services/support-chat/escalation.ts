@@ -128,7 +128,9 @@ async function _defaultCreateSubmission(fields: SubmissionFields): Promise<Submi
 
   return {
     submissionId: String(doc._id),
-    submittedAt: (doc.submittedAt as Date).toISOString(),
+    // submittedAt is already in scope on `fields` — no need to re-read+cast from the
+    // saved doc (we set it explicitly above, so it's identical and already a Date).
+    submittedAt: fields.submittedAt.toISOString(),
   };
 }
 
@@ -187,8 +189,11 @@ export async function escalateToHuman(
   // Subject uses actor.kind so staff see "member" vs "anonymous" at a glance.
   const subject = `Support chat escalation (${actor.kind})`;
 
-  // Truncate to ContactSubmission.message maxlength (2000 chars).
-  const message = transcriptSummary.slice(0, 2000);
+  // Truncate to ContactSubmission.message maxlength (2000 chars). Guard against an
+  // empty/whitespace summary — ContactSubmission.message is `required`, so an empty
+  // string would throw a Mongoose ValidationError on save() and reject the escalation.
+  // Task 1.7 can realistically pass an empty summary, so fall back to a placeholder.
+  const message = (transcriptSummary.trim() || "No transcript available.").slice(0, 2000);
 
   const submittedAt = new Date();
 
