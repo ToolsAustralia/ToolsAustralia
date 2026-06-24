@@ -223,6 +223,33 @@ function buildDrawMechanicsSection(): string {
 - **Rewards** points are temporarily paused; the **member shop** is coming soon.`;
 }
 
+function buildKeyPagesSection(): string {
+  // Curated list of canonical internal paths the bot may link to.
+  // Keep in sync with the site's real routes.
+  const pages = [
+    { label: "My Account (dashboard)",           path: "/my-account" },
+    { label: "Settings → Subscription tab",       path: "/my-account/settings?tab=subscription" },
+    { label: "FAQ page",                          path: "/faq" },
+    { label: "Draw Results",                      path: "/draw-results" },
+    { label: "Winners",                           path: "/winners" },
+    { label: "Contact / support",                 path: "/contact" },
+    { label: "Partner discounts",                 path: "/partner" },
+    { label: "Terms and conditions",              path: "/terms" },
+    { label: "Major Draw",                        path: "/major-draw" },
+    { label: "Mini Draws",                        path: "/mini-draws" },
+  ];
+
+  const list = pages.map((p) => `- **${p.label}:** \`${p.path}\``).join("\n");
+
+  return `## [key-pages] Key Pages — Canonical Internal Links
+
+Use these paths when directing members to a page. Only use paths from this list — do not invent paths.
+
+${list}
+
+**Usage:** when referencing a page in a response, link it with markdown: e.g. \`[My Account](/my-account)\`, \`[Settings → Subscription tab](/my-account/settings?tab=subscription)\`, \`[contact us](/contact)\`.`;
+}
+
 function buildFaqSection(): string {
   // Use the REAL FAQ entries — do not re-type them.
   const entries = getFaqEntries()
@@ -252,6 +279,7 @@ async function main() {
     { id: "major-draw",        title: "Major Draw",                 content: buildDrawMechanicsSection()    },
     { id: "partner-discounts", title: "Partner Discounts",          content: buildPartnerDiscountsSection() },
     { id: "prizes",            title: "Prize Options",              content: buildPrizesSection()           },
+    { id: "key-pages",         title: "Key Pages",                  content: buildKeyPagesSection()         },
     { id: "faq",               title: "Frequently Asked Questions", content: buildFaqSection()              },
   ];
 

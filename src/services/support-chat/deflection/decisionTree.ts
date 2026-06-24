@@ -130,16 +130,108 @@ const INTENT_RULES: IntentRule[] = [
       "how do mini draws work",
     ],
   },
-  // ── Refund policy ────────────────────────────────────────────────────────
+  // ── Cancel membership / stop auto-renewal (self-service) ─────────────────
+  // NOTE: must appear BEFORE the "entries after cancellation" rule (faqId:7)
+  // because these signals are more specific and should resolve to the how-to
+  // cancel FAQ (id 18) rather than the entries-carry-forward FAQ (id 7).
+  {
+    faqId: "18",
+    signals: [
+      "how do i cancel",
+      "how to cancel",
+      "cancel my membership",
+      "cancel membership",
+      "cancel my subscription",
+      "cancel subscription",
+      "stop auto renewal",
+      "stop auto-renewal",
+      "stop autorenew",
+      "stop auto renew",
+      "turn off auto renewal",
+      "turn off auto-renewal",
+      "disable auto renewal",
+      "disable auto-renewal",
+      "unsubscribe",
+      "how do i stop being charged",
+      "stop being charged",
+      "dont want to renew",
+      "don t want to renew",
+      "stop my membership",
+      "end my membership",
+      "end my subscription",
+    ],
+    // Exclude "entries if i cancel" — those should fall to faqId:7 further down
+    excludes: ["entries if i cancel", "entries after cancel", "keep my entries", "entries carry"],
+  },
+  // ── Refund / money back (policy + escalation) ────────────────────────────
+  // faqId 19 = the refund FAQ with ACL note + escalation path.
+  // We re-map the core refund signals here; faqId:12 (the pure policy entry)
+  // remains in the existing rule below for policy-only queries.
+  {
+    faqId: "19",
+    signals: [
+      "can i get a refund",
+      "want a refund",
+      "request a refund",
+      "asking for a refund",
+      "give me a refund",
+      "i want my money back",
+      "get my money back",
+      "cancel and refund",
+    ],
+  },
+  // ── Refund policy (informational) ────────────────────────────────────────
   {
     faqId: "12",
     signals: [
       "refund",
-      "get my money back",
-      "cancel and refund",
       "non-refundable",
       "money back",
       "refundable",
+    ],
+    // Exclude signals already captured by the targeted refund-escalation rule above
+    excludes: ["can i get a refund", "want a refund", "request a refund", "give me a refund", "i want my money back", "get my money back"],
+  },
+  // ── Unexpected / unauthorised charge ──────────────────────────────────────
+  {
+    faqId: "21",
+    signals: [
+      "charged without my consent",
+      "charged without consent",
+      "didn t authorise",
+      "didnt authorise",
+      "did not authorise",
+      "didn t authorize",
+      "didnt authorize",
+      "did not authorize",
+      "unauthorised charge",
+      "unauthorized charge",
+      "unexpected charge",
+      "unexpected renewal",
+      "surprise charge",
+      "why was i charged",
+      "why did you charge me",
+      "i didn t agree",
+      "i didn t approve",
+    ],
+  },
+  // ── Delete account / data ─────────────────────────────────────────────────
+  {
+    faqId: "20",
+    signals: [
+      "delete my account",
+      "delete account",
+      "close my account",
+      "close account",
+      "remove my account",
+      "remove account",
+      "delete my data",
+      "delete my personal data",
+      "right to erasure",
+      "gdpr delete",
+      "erase my data",
+      "remove my data",
+      "how do i delete",
     ],
   },
   // ── Subscription renewal date ─────────────────────────────────────────────
@@ -223,15 +315,17 @@ const INTENT_RULES: IntentRule[] = [
     ],
   },
   // ── Entries after cancellation ────────────────────────────────────────────
+  // Narrowed to entries-carry-forward signals only; pure cancel-intent signals
+  // are handled above by the faqId:18 rule which appears earlier and takes priority.
   {
     faqId: "7",
     signals: [
       "entries carry forward",
       "keep my entries",
       "entries if i cancel",
-      "cancel my subscription",
       "what happens if i cancel",
       "entries after cancel",
+      "what happens to my entries",
     ],
   },
   // ── Payment methods ───────────────────────────────────────────────────────

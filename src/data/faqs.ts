@@ -5,6 +5,7 @@ export interface FaqEntry {
   id: string;
   question: string;
   answer: string;
+  /** Markdown is supported — links render in both the widget and the /faq page via ChatMarkdown. */
   category: "ALL QUESTIONS" | "SHOPPING" | "PAYMENTS" | "REWARDS" | "PARTNERSHIPS";
 }
 
@@ -32,7 +33,7 @@ export function getFaqEntries(): FaqEntry[] {
       id: "2",
       question: "When is the Major Draw and how does it work?",
       answer:
-        "The Major Draw runs on the 27th of every month. Entries freeze at 8:00 PM AEST/AEDT, and the draw goes live on Facebook at 8:30 PM. New entry purchases are blocked from 8:00 PM on the 27th until midnight (the start of the 28th). The winner is selected by a government-certified independent random-draw service — randomdraws.com.au — not by Tools Australia. The verification link is published on our Draw Results page after each draw.",
+        "The Major Draw runs on the 27th of every month. Entries freeze at 8:00 PM AEST/AEDT, and the draw goes live on Facebook at 8:30 PM. New entry purchases are blocked from 8:00 PM on the 27th until midnight (the start of the 28th). The winner is selected by a government-certified independent random-draw service — randomdraws.com.au — not by Tools Australia. The verification link is published on our [Draw Results](/draw-results) page after each draw.",
       category: "SHOPPING",
     },
     {
@@ -81,7 +82,7 @@ export function getFaqEntries(): FaqEntry[] {
       id: "9",
       question: "Who is eligible to enter?",
       answer:
-        "You must be 18 years or older and a legal Australian resident to enter. Please note that the competition currently excludes residents of the ACT and South Australia due to permit restrictions in those territories.",
+        "You must be 18 years or older and a legal Australian resident to enter. Please note that the competition currently excludes residents of the ACT and South Australia due to permit restrictions in those territories. If you believe you were charged while ineligible, please [contact us](/contact) and our team will look into it.",
       category: "SHOPPING",
     },
 
@@ -135,7 +136,7 @@ export function getFaqEntries(): FaqEntry[] {
       id: "16",
       question: "What partner discounts do members get?",
       answer:
-        "Active subscribers unlock exclusive discounts with our partner brands — real savings on tools, equipment, and trade services. How much of the catalog you can see depends on your tier: Tradie members unlock 50% of the catalog, Foreman 75%, and Boss 100%. One-time pack buyers receive a time-limited window of partner access based on the pack they purchased. To redeem a partner discount, simply mention Tools Australia when dealing with the partner brand — there is no code to enter.",
+        "Active subscribers unlock exclusive discounts with our partner brands — real savings on tools, equipment, and trade services. How much of the catalog you can see depends on your tier: Tradie members unlock 50% of the catalog, Foreman 75%, and Boss 100%. One-time pack buyers receive a time-limited window of partner access based on the pack they purchased. To redeem a partner discount, simply mention Tools Australia when dealing with the partner brand — there is no code to enter. Browse the full list on the [Partner discounts](/partner) page.",
       category: "PARTNERSHIPS",
     },
     {
@@ -144,6 +145,36 @@ export function getFaqEntries(): FaqEntry[] {
       answer:
         "If you run a trade-focused business and would like to offer your products or services to our member community, you can apply via our partner page. Our team reviews every application and will reach out to discuss the arrangement.",
       category: "PARTNERSHIPS",
+    },
+
+    // ── ACCOUNT / MEMBERSHIP MANAGEMENT ──────────────────────────────────────
+    {
+      id: "18",
+      question: "How do I cancel my membership or stop auto-renewal?",
+      answer:
+        "You can cancel or turn off auto-renewal yourself at any time from [My Account](/my-account) — sign in, go to **Settings → Subscription** tab, and use the cancellation option there. Entries already earned in the current cycle stay valid and remain in the draw pool. Membership fees are non-refundable once charged, but your Australian Consumer Law rights are always preserved. If you have trouble accessing the Subscription tab, [contact us](/contact) and our support team will help.",
+      category: "PAYMENTS",
+    },
+    {
+      id: "19",
+      question: "Can I get a refund on my membership?",
+      answer:
+        "Membership fees are non-refundable once charged — this is our standard policy as access and entries are granted immediately on payment. Your rights under Australian Consumer Law are always preserved. If you believe you were charged in error or have a billing concern, [contact us](/contact) and our support team will review your case.",
+      category: "PAYMENTS",
+    },
+    {
+      id: "20",
+      question: "How do I delete my account or my data?",
+      answer:
+        "To close your account or request deletion of your personal data, please [contact us](/contact) — our support team will arrange it. Before closing, you may want to cancel your subscription first from [My Account](/my-account) → Settings → Subscription tab. You can also clear your chat history with the delete option inside the chat widget.",
+      category: "PAYMENTS",
+    },
+    {
+      id: "21",
+      question: "I was charged unexpectedly — I didn't authorise a renewal",
+      answer:
+        "Subscriptions renew automatically on the 24th of each month so your entries are confirmed before the 27th draw — this is explained in our terms at sign-up. You can turn off auto-renewal at any time from [My Account](/my-account) → Settings → Subscription tab. If you believe a specific charge was made in error or without your consent, please [contact us](/contact) and our team will look into it.",
+      category: "PAYMENTS",
     },
   ];
 }

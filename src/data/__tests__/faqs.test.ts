@@ -34,7 +34,66 @@ function main() {
     );
   }
 
-  console.log("✅ faqs.test.ts passed —", entries.length, "entries, all checks green");
+  // 4. Cancellation self-service entry (id 18) must exist with correct content.
+  const cancelEntry = entries.find((e) => e.id === "18");
+  assert.ok(cancelEntry !== undefined, "FAQ entry id=18 (cancel/stop auto-renewal) must exist");
+  const cancelLower = cancelEntry!.answer.toLowerCase();
+  assert.ok(
+    cancelLower.includes("/my-account"),
+    "Cancel FAQ (id 18) must include the /my-account link"
+  );
+  assert.ok(
+    cancelLower.includes("subscription") && (cancelLower.includes("tab") || cancelLower.includes("settings")),
+    "Cancel FAQ (id 18) must reference the Subscription tab/settings path"
+  );
+  assert.ok(
+    cancelLower.includes("non-refundable"),
+    "Cancel FAQ (id 18) must mention non-refundable policy"
+  );
+  assert.ok(
+    cancelLower.includes("australian consumer law"),
+    "Cancel FAQ (id 18) must mention Australian Consumer Law rights"
+  );
+
+  // 5. Refund entry (id 19) must exist.
+  const refundEntry = entries.find((e) => e.id === "19");
+  assert.ok(refundEntry !== undefined, "FAQ entry id=19 (refund policy + escalation) must exist");
+  const refundLower = refundEntry!.answer.toLowerCase();
+  assert.ok(refundLower.includes("non-refundable"), "Refund FAQ (id 19) must mention non-refundable");
+  assert.ok(
+    refundLower.includes("australian consumer law"),
+    "Refund FAQ (id 19) must mention Australian Consumer Law"
+  );
+  assert.ok(
+    refundEntry!.answer.includes("/contact"),
+    "Refund FAQ (id 19) must include the /contact link"
+  );
+
+  // 6. Delete-account entry (id 20) must exist.
+  const deleteEntry = entries.find((e) => e.id === "20");
+  assert.ok(deleteEntry !== undefined, "FAQ entry id=20 (delete account) must exist");
+  assert.ok(
+    deleteEntry!.answer.includes("/contact"),
+    "Delete-account FAQ (id 20) must include the /contact link"
+  );
+  assert.ok(
+    deleteEntry!.answer.includes("/my-account"),
+    "Delete-account FAQ (id 20) must include the /my-account link"
+  );
+
+  // 7. Unexpected-charge entry (id 21) must exist.
+  const chargeEntry = entries.find((e) => e.id === "21");
+  assert.ok(chargeEntry !== undefined, "FAQ entry id=21 (unexpected charge) must exist");
+  assert.ok(
+    chargeEntry!.answer.includes("/my-account"),
+    "Unexpected-charge FAQ (id 21) must include /my-account link"
+  );
+  assert.ok(
+    chargeEntry!.answer.toLowerCase().includes("24th"),
+    "Unexpected-charge FAQ (id 21) must explain the 24th renewal date"
+  );
+
+  console.log("PASS — faqs.test.ts passed —", entries.length, "entries, all checks green");
 }
 
 main();

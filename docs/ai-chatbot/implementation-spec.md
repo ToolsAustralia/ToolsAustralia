@@ -4,6 +4,51 @@
 
 > **Naming (2026-06-24):** The customer-facing support assistant is named **Cobber** (a friendly Australian word for "mate"). This is distinct from the internal admin AI gateway named **Norm** (`docs/internal-norm/`).
 
+> **Knowledge enrichment (2026-06-25):** Added premeditated answers for the top 4 support-inbox question categories. See §8 notes below.
+
+---
+
+### As-built notes — §8 Guardrails & system prompt (2026-06-25)
+
+**Premeditated answers for top support questions (Phase 1.4)**
+
+Four new FAQ entries were added to `src/data/faqs.ts` covering the real top-volume inbox questions (in priority order):
+
+| FAQ id | Topic | Self-service path |
+|--------|-------|-------------------|
+| 18 | Cancel / stop auto-renewal | [My Account](/my-account) → Settings → **Subscription** tab |
+| 19 | Refund policy + escalation | Non-refundable policy + ACL rights + `/contact` escalation |
+| 20 | Delete account / data | `/contact` support request; cancel first via Subscription tab |
+| 21 | Unexpected / unauthorised charge | Explains 24th renewal; `/my-account` to turn off; `/contact` for disputes |
+
+Markdown links render in both the widget (via `ChatMarkdown`) and the `/faq` page. Existing entries for Draw Results, Partner discounts, and Eligibility also received inline markdown links.
+
+**Deflection layer (decisionTree.ts) — new intents:**
+
+- `cancel*`, `stop auto-renewal*`, `unsubscribe` → FAQ id 18 (self-service cancel)
+- `can I get a refund`, `want a refund`, `money back` → FAQ id 19 (refund + escalation)
+- `delete my account`, `close account`, `delete my data` → FAQ id 20
+- `charged without consent`, `didn't authorise`, `unexpected charge` → FAQ id 21
+
+All map to grounded FAQ entries (zero LLM cost). The "entries after cancellation" rule (id 7) was narrowed so it no longer collides with the new cancel-intent rule.
+
+**Knowledge pack — Key Pages section (key-pages):**
+
+A curated `[key-pages]` section was added to `scripts/build-chat-knowledge-pack.ts` listing canonical internal paths (My Account, Settings → Subscription tab, FAQ, Draw Results, Winners, Contact, Partner discounts, Terms, Major Draw, Mini Draws). The bot's system prompt instructs it to use only these paths when linking pages.
+
+**System prompt — cancellation handling rule:**
+
+`systemPrompt.ts` now directs Cobber to:
+1. For **how to cancel / stop auto-renewal**: give the self-service path (`[My Account](/my-account)` → Settings → Subscription tab) **first**, then offer human escalation if the member can't access it.
+2. For **disputed charges / specific refund requests**: explain the auto-renewal policy (24th billing), then escalate to a human. Never promise a refund outcome.
+3. When referencing any page: use markdown links with only the paths listed in `[key-pages]`.
+
+**Tests (all pass):**
+
+- `test:chat-faqs` — asserts ids 18–21 exist with correct self-service paths, `/my-account` links, "non-refundable", ACL mention.
+- `test:chat-deflection` — asserts "how do I cancel my membership" deflects (`answered:true`) to id 18 with `/my-account` link, no LLM; also tests stop-auto-renewal, unexpected charge, delete account phrasings.
+- `test:chat-knowledge` — asserts `key-pages` section id present; `/my-account`, `/draw-results`, `/contact`, `/faq`, `/winners`, `/partner` all appear in pack text.
+
 > Companion to [research.md](research.md) and [README.md](README.md). This is the technical spec, grounded in the Tools Australia stack and conventions (Next.js 15 App Router, MongoDB/Mongoose, NextAuth, Zod, strict `app → services → repositories/lib → models` layering). Code blocks are **illustrative sketches**, not final code — they show shape and placement, not a finished implementation. File paths follow the repo's existing conventions.
 
 **Contents**

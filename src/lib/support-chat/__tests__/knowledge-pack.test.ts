@@ -135,11 +135,19 @@ for (const src of sources) {
 }
 
 // Known section ids that must be present
-const expectedIds = ["membership-tiers", "one-time-packs", "major-draw", "partner-discounts", "prizes", "faq"];
+const expectedIds = ["membership-tiers", "one-time-packs", "major-draw", "partner-discounts", "prizes", "key-pages", "faq"];
 for (const id of expectedIds) {
   const found = sources.some((s) => s.id === id);
   assert.ok(found, `sources must contain section id "${id}"`);
 }
+
+// Key-pages section must contain the canonical internal links
+assert.ok(text.includes("/my-account"), "key-pages section must include /my-account path");
+assert.ok(text.includes("/draw-results"), "key-pages section must include /draw-results path");
+assert.ok(text.includes("/contact"), "key-pages section must include /contact path");
+assert.ok(text.includes("/faq"), "key-pages section must include /faq path");
+assert.ok(text.includes("/winners"), "key-pages section must include /winners path");
+assert.ok(text.includes("/partner"), "key-pages section must include /partner path");
 
 // ─── Summary ──────────────────────────────────────────────────────────────────
 

@@ -273,6 +273,120 @@ async function testLayer2Coverage() {
   pass(`"${paraphrase}" → Layer-1 miss, Layer-2 catch → answered:true, grounded to FAQ id=${matchedFaq.id}`);
 }
 
+async function testCancellationSelfService() {
+  console.log("\ncancellation self-service intent");
+
+  const result = await tryDeflect("how do I cancel my membership");
+
+  if (result.answered !== true) {
+    fail("answered:true", `got answered=${result.answered}`);
+    return;
+  }
+  if (typeof result.answer !== "string" || result.answer.length === 0) {
+    fail("non-empty answer", "answer is missing or empty");
+    return;
+  }
+
+  // Must contain the /my-account link (self-service path).
+  if (!result.answer.includes("/my-account")) {
+    fail("answer includes /my-account link", `answer: ${result.answer.slice(0, 160)}`);
+    return;
+  }
+
+  // Must NOT have required an LLM call — this is a free deflection.
+  // Verified by the answered:true result from tryDeflect (which only returns true
+  // for grounded deflections, never for LLM responses).
+
+  // No-drift: returned answer must exactly equal a getFaqEntries() entry's .answer
+  const faqEntries = getFaqEntries();
+  const matchedFaq = faqEntries.find((e) => e.answer === result.answer);
+  if (!matchedFaq) {
+    fail(
+      "answer grounded to FAQ entry",
+      "answer text does not exactly match any getFaqEntries() .answer (possible drift)"
+    );
+    return;
+  }
+
+  if (matchedFaq.id !== "18") {
+    fail("answer is from cancellation FAQ (id=18)", `matched id=${matchedFaq.id} instead`);
+    return;
+  }
+
+  pass(
+    `"how do I cancel my membership" → answered:true (no LLM), grounded to FAQ id=${matchedFaq.id}, /my-account link present`
+  );
+}
+
+async function testStopAutoRenewal() {
+  console.log("\nstop auto-renewal phrasing");
+
+  const result = await tryDeflect("how do I stop auto renewal");
+
+  if (result.answered !== true) {
+    fail("answered:true", `got answered=${result.answered}`);
+    return;
+  }
+
+  const faqEntries = getFaqEntries();
+  const matchedFaq = faqEntries.find((e) => e.answer === result.answer);
+  if (!matchedFaq || matchedFaq.id !== "18") {
+    fail(
+      "maps to cancel FAQ (id=18)",
+      matchedFaq ? `got id=${matchedFaq.id}` : "no FAQ match"
+    );
+    return;
+  }
+
+  pass(`"how do I stop auto renewal" → answered:true, grounded to FAQ id=18`);
+}
+
+async function testUnexpectedCharge() {
+  console.log("\nunexpected/unauthorised charge intent");
+
+  const result = await tryDeflect("I didn't authorise this charge");
+
+  if (result.answered !== true) {
+    fail("answered:true", `got answered=${result.answered}`);
+    return;
+  }
+
+  const faqEntries = getFaqEntries();
+  const matchedFaq = faqEntries.find((e) => e.answer === result.answer);
+  if (!matchedFaq || matchedFaq.id !== "21") {
+    fail(
+      "maps to unexpected-charge FAQ (id=21)",
+      matchedFaq ? `got id=${matchedFaq.id}` : "no FAQ match"
+    );
+    return;
+  }
+
+  pass(`"I didn't authorise this charge" → answered:true, grounded to FAQ id=21`);
+}
+
+async function testDeleteAccount() {
+  console.log("\ndelete account intent");
+
+  const result = await tryDeflect("how do I delete my account");
+
+  if (result.answered !== true) {
+    fail("answered:true", `got answered=${result.answered}`);
+    return;
+  }
+
+  const faqEntries = getFaqEntries();
+  const matchedFaq = faqEntries.find((e) => e.answer === result.answer);
+  if (!matchedFaq || matchedFaq.id !== "20") {
+    fail(
+      "maps to delete-account FAQ (id=20)",
+      matchedFaq ? `got id=${matchedFaq.id}` : "no FAQ match"
+    );
+    return;
+  }
+
+  pass(`"how do I delete my account" → answered:true, grounded to FAQ id=20`);
+}
+
 async function testDeterminism() {
   console.log("\ndeterminism (no non-deterministic LLM)");
 
@@ -301,6 +415,10 @@ async function run() {
   await testOffTopicWeather();
   await testOffTopicCapital();
   await testLayer2Coverage();
+  await testCancellationSelfService();
+  await testStopAutoRenewal();
+  await testUnexpectedCharge();
+  await testDeleteAccount();
   await testDeterminism();
 
   console.log(`\n${"─".repeat(60)}`);
@@ -312,7 +430,7 @@ async function run() {
 
   console.log("PASS — deflection test");
   console.log(`  FAQ entries available : ${getFaqEntries().length}`);
-  console.log("  Covered: draw date, pricing (source-tied), refund, eligibility (excluded states), off-topic×2, Layer-2 coverage, determinism");
+  console.log("  Covered: draw date, pricing (source-tied), refund, eligibility (excluded states), off-topic×2, Layer-2 coverage, cancel self-service, stop auto-renewal, unexpected charge, delete account, determinism");
   process.exit(0);
 }
 
