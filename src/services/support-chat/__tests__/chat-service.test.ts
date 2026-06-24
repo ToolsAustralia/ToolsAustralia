@@ -390,6 +390,148 @@ async function testOverBudget() {
   pass("over-budget → canned busy fallback, no model call, writeAudit(200)");
 }
 
+// ─── Test 4a: generative rate limit — limit exceeded ─────────────────────────
+
+async function testGenRateLimitExceeded() {
+  console.log("\nchatService.respond — generative rate limit exceeded (429 rate_limited)");
+
+  const { ctx, writeAuditCalls } = makeCtx({
+    kind: "member",
+    userId: "507f1f77bcf86cd799439022",
+    firstName: "RateLimitedUser",
+  });
+  const persist = makePersistSpy();
+
+  let modelCalled = false;
+
+  const deps: ChatServiceDeps = {
+    tryDeflect: async () => ({ answered: false }),
+    assertWithinBudget: async () => ({ ok: true }),
+    recordUsage: async () => {},
+    streamFn: () => {
+      modelCalled = true;
+      return {
+        toUIMessageStreamResponse: () => new Response("should-not-run", { status: 200 }),
+      };
+    },
+    persist: persist.port,
+    escalateToHuman: async () => ({ submissionId: "x" }),
+    getModel: () => ({ modelId: "claude-haiku-4-5" }) as never,
+    verifyHcaptcha: async () => true,
+    // Stub the generative limiter to report "limit exceeded"
+    checkGenerativeLimit: async () => ({ success: false, retryAfterSeconds: 120 }),
+  };
+
+  const res = await chatService.respond(
+    { ctx, messages: [userMessage("What is the airspeed velocity of an unladen swallow?")] },
+    deps
+  );
+
+  // Must NOT have called the model
+  if (modelCalled) {
+    fail("model NOT called when gen rate limit exceeded", "streamFn was invoked");
+    return;
+  }
+
+  // Must return 429
+  if (res.status !== 429) {
+    fail("response status === 429", `got ${res.status}`);
+    return;
+  }
+
+  // Body must be JSON with code: "rate_limited"
+  const body = (await res.json()) as Record<string, unknown>;
+  if (body.code !== "rate_limited") {
+    fail("body.code === 'rate_limited'", `got ${JSON.stringify(body)}`);
+    return;
+  }
+  if (body.retryAfterSeconds !== 120) {
+    fail("body.retryAfterSeconds === 120", `got ${body.retryAfterSeconds}`);
+    return;
+  }
+
+  // Must NOT have written audit(200) — 429 is an early exit
+  if (writeAuditCalls.includes(200)) {
+    fail("writeAudit(200) NOT called on 429 early exit", `writeAuditCalls=${JSON.stringify(writeAuditCalls)}`);
+    return;
+  }
+
+  // No conversation must have been created
+  if (persist.conversation.created) {
+    fail("no conversation created on 429 early exit", "ensureConversation was called");
+    return;
+  }
+
+  pass("gen rate limit exceeded → 429 rate_limited, model NOT called, no conversation, no audit(200)");
+}
+
+// ─── Test 4b: generative rate limit — limit OK ────────────────────────────────
+
+async function testGenRateLimitOk() {
+  console.log("\nchatService.respond — generative rate limit OK (model called normally)");
+
+  const { ctx, writeAuditCalls } = makeCtx({
+    kind: "member",
+    userId: "507f1f77bcf86cd799439033",
+    firstName: "UnderLimitUser",
+  });
+  const persist = makePersistSpy();
+
+  let modelCalled = false;
+
+  const deps: ChatServiceDeps = {
+    tryDeflect: async () => ({ answered: false }),
+    assertWithinBudget: async () => ({ ok: true }),
+    recordUsage: async () => {},
+    streamFn: (args) => {
+      modelCalled = true;
+      void Promise.resolve().then(() =>
+        args.onFinish?.({
+          text: "Normal LLM answer.",
+          usage: { inputTokens: 10, outputTokens: 5 },
+        })
+      );
+      return {
+        toUIMessageStreamResponse: () => new Response("Normal LLM answer.", { status: 200 }),
+      };
+    },
+    persist: persist.port,
+    escalateToHuman: async () => ({ submissionId: "x" }),
+    getModel: () => ({ modelId: "claude-haiku-4-5" }) as never,
+    verifyHcaptcha: async () => true,
+    // Stub the generative limiter to report "success"
+    checkGenerativeLimit: async () => ({ success: true, retryAfterSeconds: 0 }),
+  };
+
+  const res = await chatService.respond(
+    { ctx, messages: [userMessage("Tell me something not in the FAQ.")] },
+    deps
+  );
+
+  await res.text();
+  await new Promise((r) => setTimeout(r, 0));
+
+  // Must have called the model
+  if (!modelCalled) {
+    fail("model called when gen rate limit OK", "streamFn was NOT invoked");
+    return;
+  }
+
+  // Must return 200 (stream)
+  if (res.status !== 200) {
+    fail("response status === 200", `got ${res.status}`);
+    return;
+  }
+
+  // writeAudit(200) must have been called (via onFinish)
+  if (!writeAuditCalls.includes(200)) {
+    fail("writeAudit(200) called on normal LLM path", `got ${JSON.stringify(writeAuditCalls)}`);
+    return;
+  }
+
+  pass("gen rate limit OK → model called once, 200 response, writeAudit(200)");
+}
+
 // ─── request_human tool (least-privilege boundary) ────────────────────────────
 
 /** A minimal fake ToolCallOptions — the tool's execute ignores it. */
@@ -541,6 +683,8 @@ async function run() {
   await testDeflectable();
   await testNonDeflectable();
   await testOverBudget();
+  await testGenRateLimitExceeded();
+  await testGenRateLimitOk();
   await testRequestHumanNoEmail();
   await testRequestHumanWithEmail();
 
@@ -555,6 +699,8 @@ async function run() {
   console.log("  Covered: deflectable (no model, redacted persist, citations, writeAudit),");
   console.log("           non-deflectable (model once, recordUsage, audit token counts, writeAudit),");
   console.log("           over-budget (canned busy fallback, no model call),");
+  console.log("           gen-rate-limit exceeded (429 rate_limited, model NOT called, no audit(200)),");
+  console.log("           gen-rate-limit OK (model called, 200, writeAudit(200)),");
   console.log("           request_human no-email (files nothing, escalated=false),");
   console.log("           request_human with-email (server-side actor + request contact, setEscalated, escalated=true)");
   process.exit(0);

@@ -29,6 +29,11 @@ import type { UIMessage } from "ai";
 import { useUserContext } from "@/contexts/UserContext";
 import { CHAT_STORAGE_KEYS, clearSupportChatStorage } from "@/lib/support-chat/chatStorage";
 
+export interface RateLimitedState {
+  /** How many seconds until the per-user LLM cap resets (from the 429 response). */
+  retryAfterSeconds: number;
+}
+
 export interface SupportChatState {
   messages: UIMessage[];
   status: "submitted" | "streaming" | "ready" | "error";
@@ -36,6 +41,12 @@ export interface SupportChatState {
   captchaRequired: boolean;
   captchaSitekey: string;
   isAuthenticated: boolean;
+  /** Set when the server returns 429 rate_limited. Quick-reply FAQ answers still work. */
+  rateLimited: RateLimitedState | null;
+  /** Minutes (rounded up) until the per-user LLM cap resets. null when not rate-limited. */
+  rateLimitMinutesLeft: number | null;
+  /** Clears the rateLimited state (e.g. when the widget receives a successful non-429 response). */
+  clearRateLimit: () => void;
   input: string;
   setInput: (v: string) => void;
   sendUserMessage: (text: string) => Promise<void>;
@@ -67,6 +78,12 @@ export function useSupportChat(): SupportChatState {
   const [captchaRequired, setCaptchaRequired] = useState(false);
   const pendingMessageRef = useRef<string | null>(null);
   const pendingTokenRef = useRef<string | null>(null);
+
+  // ── Generative rate-limit state ────────────────────────────────────────────
+  // Set when the server returns 429 { code: "rate_limited" }. Quick-reply FAQ
+  // answers bypass this limit (they return a 200 stream via deflection).
+  const [rateLimited, setRateLimited] = useState<RateLimitedState | null>(null);
+  const clearRateLimit = useCallback(() => setRateLimited(null), []);
 
   // ── free-form text input ───────────────────────────────────────────────────
   const [input, setInput] = useState("");
@@ -102,6 +119,29 @@ export function useSupportChat(): SupportChatState {
           // JSON parse failed — fall through to normal error handling
         }
         return resp;
+      }
+
+      // Handle 429 rate_limited (plain JSON, not a stream).
+      // Quick-reply FAQ answers are NEVER rate-limited (they return 200 via deflection).
+      if (resp.status === 429) {
+        try {
+          const clone = resp.clone();
+          const json = (await clone.json()) as Record<string, unknown>;
+          if (json?.code === "rate_limited") {
+            const retryAfterSeconds =
+              typeof json.retryAfterSeconds === "number" ? json.retryAfterSeconds : 300;
+            setRateLimited({ retryAfterSeconds });
+          }
+        } catch {
+          // JSON parse failed — fall through to normal error handling
+        }
+        return resp;
+      }
+
+      // On success (2xx), clear any stale rate-limit state so the widget
+      // returns to normal once the window has reset and a new message goes through.
+      if (resp.ok) {
+        setRateLimited(null);
       }
 
       // On success, read and persist the conversationId header
@@ -196,9 +236,15 @@ export function useSupportChat(): SupportChatState {
     conversationIdRef.current = null;
     clearSupportChatStorage();
     setCaptchaRequired(false);
+    setRateLimited(null);
     pendingMessageRef.current = null;
     pendingTokenRef.current = null;
   }, [setMessages]);
+
+  // ── Derived: minutes until generative limit resets ─────────────────────────
+  const rateLimitMinutesLeft: number | null = rateLimited
+    ? Math.max(1, Math.ceil(rateLimited.retryAfterSeconds / 60))
+    : null;
 
   return {
     messages,
@@ -207,6 +253,9 @@ export function useSupportChat(): SupportChatState {
     captchaRequired,
     captchaSitekey,
     isAuthenticated,
+    rateLimited,
+    rateLimitMinutesLeft,
+    clearRateLimit,
     input,
     setInput,
     sendUserMessage,

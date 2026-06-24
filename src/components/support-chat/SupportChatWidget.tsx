@@ -139,6 +139,8 @@ export default function SupportChatWidget() {
     captchaRequired,
     captchaSitekey,
     isAuthenticated,
+    rateLimited,
+    rateLimitMinutesLeft,
     input,
     setInput,
     sendUserMessage,
@@ -227,6 +229,7 @@ export default function SupportChatWidget() {
 
   const isStreaming = status === "submitted" || status === "streaming";
   const showIntro = hasOpened && messages.length === 0;
+  const isRateLimited = rateLimited !== null;
 
   return (
     <>
@@ -373,6 +376,29 @@ export default function SupportChatWidget() {
               </div>
             )}
 
+            {/* Generative rate-limit notice — quick-replies still work (FAQ deflection is free) */}
+            {isRateLimited && !captchaRequired && (
+              <div className="bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 rounded-xl px-3 py-3 text-xs text-amber-800 dark:text-amber-200">
+                <p className="font-medium mb-1">
+                  You&apos;ve reached the chat limit for now
+                  {rateLimitMinutesLeft !== null ? ` (resets in ~${rateLimitMinutesLeft} min)` : ""}.
+                </p>
+                <p>Meanwhile, tap a question below for an instant answer:</p>
+                <div className="flex flex-wrap gap-1.5 mt-2">
+                  {QUICK_REPLIES.map((q) => (
+                    <button
+                      key={q}
+                      onClick={() => handleQuickReply(q)}
+                      disabled={isStreaming}
+                      className="text-xs px-2.5 py-1 rounded-full border border-amber-400 dark:border-amber-600 text-amber-800 dark:text-amber-200 bg-amber-100 dark:bg-amber-900/40 hover:bg-amber-200 dark:hover:bg-amber-800/40 transition-colors disabled:opacity-50"
+                    >
+                      {q}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* hCaptcha gate */}
             {captchaRequired && (
               <div className="bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 rounded-xl px-3 py-3 text-xs text-amber-800 dark:text-amber-200">
@@ -452,9 +478,10 @@ export default function SupportChatWidget() {
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={handleKeyDown}
-                placeholder="Type a message…"
+                placeholder={isRateLimited ? "Tap a quick question above to continue…" : "Type a message…"}
+                disabled={isRateLimited}
                 rows={1}
-                className="flex-1 resize-none text-sm bg-gray-50 dark:bg-neutral-800 border border-gray-200 dark:border-neutral-700 rounded-xl px-3 py-2 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-orange-400 dark:focus:ring-orange-500 max-h-24 overflow-auto"
+                className={`flex-1 resize-none text-sm bg-gray-50 dark:bg-neutral-800 border border-gray-200 dark:border-neutral-700 rounded-xl px-3 py-2 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-orange-400 dark:focus:ring-orange-500 max-h-24 overflow-auto${isRateLimited ? " opacity-50 cursor-not-allowed" : ""}`}
                 style={{ lineHeight: "1.5" }}
               />
               {/* Stop button — shown while streaming */}
@@ -478,7 +505,7 @@ export default function SupportChatWidget() {
                 /* Send button */
                 <button
                   type="submit"
-                  disabled={!input.trim()}
+                  disabled={!input.trim() || isRateLimited}
                   aria-label="Send message"
                   className="shrink-0 w-9 h-9 rounded-xl bg-orange-500 hover:bg-orange-600 disabled:opacity-40 disabled:cursor-not-allowed text-white flex items-center justify-center transition-colors"
                 >

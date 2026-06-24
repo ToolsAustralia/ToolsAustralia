@@ -81,6 +81,35 @@ import {
 } from "@/services/support-chat/escalation";
 import { verifyHcaptcha as realVerifyHcaptcha } from "@/lib/support-chat/captcha";
 import { ErrorLoggingService } from "@/services/error-reporting/ErrorLoggingService";
+import { createDistributedRateLimiter } from "@/utils/security/rateLimiter";
+
+// ─── Generative rate-limit config (env-overridable, read once at module load) ──
+//
+// Per-user cap on LLM-backed answers. FAQ deflection answers NEVER count against
+// this limit (they return before the generative gate is reached).
+//
+// Limiter fails OPEN (Mongo hiccup → allows). The daily budget (fail-closed) and
+// the coarse withChatbot rate limiter are the cost backstops.
+//
+// Env vars (see .env.example):
+//   CHAT_GENERATIVE_LIMIT_MAX            — integer; default 5
+//   CHAT_GENERATIVE_LIMIT_WINDOW_SECONDS — integer (seconds); default 300 (5 min)
+
+const _genMax = Number(process.env.CHAT_GENERATIVE_LIMIT_MAX);
+const _genWindowSec = Number(process.env.CHAT_GENERATIVE_LIMIT_WINDOW_SECONDS);
+
+const GEN_MAX: number = Number.isFinite(_genMax) && _genMax > 0 ? _genMax : 5;
+const GEN_WINDOW_MS: number =
+  Number.isFinite(_genWindowSec) && _genWindowSec > 0 ? _genWindowSec * 1000 : 300_000;
+
+/**
+ * Module-level singleton so the distributed limiter's state (Mongo bucket) is
+ * reused across requests on the same instance, not re-created per request.
+ */
+const generativeLimiter = createDistributedRateLimiter("chat:gen", {
+  maxRequests: GEN_MAX,
+  windowMs: GEN_WINDOW_MS,
+});
 
 // ─── Public input / dep types ─────────────────────────────────────────────────
 
@@ -194,6 +223,14 @@ export interface ChatServiceDeps {
    * Inject a stub in tests to avoid real network calls.
    */
   verifyHcaptcha?: typeof realVerifyHcaptcha;
+  /**
+   * Generative rate-limit check. Defaults to the module-level `generativeLimiter`.
+   * Inject a stub in tests to force success or failure without Mongo.
+   * Key is userId (member) or ipKey (anonymous) — server-side; never a client value.
+   */
+  checkGenerativeLimit?: (
+    key: string
+  ) => Promise<{ success: boolean; retryAfterSeconds: number }>;
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -494,6 +531,9 @@ export const chatService = {
     const escalate = deps.escalateToHuman ?? realEscalateToHuman;
     const getModel = deps.getModel ?? (() => getChatModel("primary"));
     const verifyHcaptchaFn = deps.verifyHcaptcha ?? realVerifyHcaptcha;
+    const checkGenerativeLimit =
+      deps.checkGenerativeLimit ??
+      ((key: string) => generativeLimiter.check(key));
 
     const userText = latestUserText(messages);
     const userAgent = ctx.req.headers.get("user-agent") ?? undefined;
@@ -590,6 +630,33 @@ export const chatService = {
         // resume) → stamp humanVerifiedAt after conversationId is known (step 3).
         freshlyVerified = true;
       }
+    }
+
+    // ── 2c. Generative (LLM) rate-limit ──────────────────────────────────────
+    // Cap expensive LLM-backed answers per user. FAQ deflection answers already
+    // returned above (step 1) and are NEVER counted here — only genuine LLM turns
+    // reach this point. Limiter fails open (Mongo hiccup allows). The daily budget
+    // (fail-closed) is the real cost backstop.
+    // Key: userId for members (stable, per-account); ipKey for anonymous (per-IP).
+    const genLimitKey =
+      ctx.actor.kind === "member" ? ctx.actor.userId : ctx.actor.ipKey;
+    const genLimitResult = await checkGenerativeLimit(genLimitKey);
+    if (!genLimitResult.success) {
+      // Return plain JSON 429 (not a stream) — the client intercepts this by
+      // code, same pattern as the 401 captcha_required path.
+      // Do NOT create a conversation, do NOT call the model, do NOT writeAudit(200).
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: "rate_limited",
+          code: "rate_limited",
+          retryAfterSeconds: genLimitResult.retryAfterSeconds,
+        }),
+        {
+          status: 429,
+          headers: { "Content-Type": "application/json" },
+        }
+      );
     }
 
     // ── 3. LLM path ───────────────────────────────────────────────────────────

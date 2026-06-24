@@ -605,6 +605,53 @@ Offline answer-quality eval. Grader: `claude-opus-4-8` via the Anthropic Batch A
 
 Short actionable playbook: bot wrong (fix canonical data → redeploy; eval catches regressions); bot down (kill switch, Vercel logs, ErrorReport, route maxDuration, Anthropic status); abuse/cost spike (instant kill `CHAT_KILL_SWITCH=true`, lower `CHAT_DAILY_TOKEN_BUDGET_USD`, Anthropic Console spend cap, hCaptcha gate); budget tripped (canned fallback, how to raise/reset); where to look (ChatAuditLog queries, ErrorReport admin filter, Speed Insights, Vercel Function Logs). References exact env vars + model IDs.
 
+### As-built: per-user LLM rate limit + FAQ-browse fallback (2026-06-25)
+
+Caps expensive LLM-backed answers per user while keeping FAQ deflection always free.
+
+#### Server: `ChatService.ts` — generative (LLM) rate limit
+
+A `createDistributedRateLimiter("chat:gen", { maxRequests: GEN_MAX, windowMs: GEN_WINDOW_MS })` singleton is created at module level. `GEN_MAX` and `GEN_WINDOW_MS` are read once from env (guarded with `Number.isFinite`), defaulting to 5 answers / 300 s (5 minutes).
+
+**Placement:** the check runs at step 2c — after deflection (step 1, already returned free), after the budget re-check (step 2), after the anonymous hCaptcha gate (step 2b), and **before** any model call or conversation creation. FAQ deflection turns always return at step 1 and are **never** counted.
+
+**Key:** `userId` for authenticated members; `ipKey` for anonymous actors. Both are server-derived (`ctx.actor`) — never a client-supplied value.
+
+**On limit exceeded:** returns a plain JSON **429** `{ success: false, error: "rate_limited", code: "rate_limited", retryAfterSeconds: N }` — not a stream. Same shape/pattern as the 401 `captcha_required` path. No conversation is created, the model is not called, and `writeAudit(200)` is not called.
+
+**Fails open:** a Mongo hiccup allows the request. The daily budget (fail-closed) and the coarse `withChatbot` rate limiter are the backstops. This is deliberate and documented.
+
+**Injectable for tests:** `ChatServiceDeps` gained `checkGenerativeLimit?: (key: string) => Promise<{ success: boolean; retryAfterSeconds: number }>`, defaulting to the real limiter. Tests inject stubs — no Mongo needed.
+
+#### Env vars (see `.env.example`)
+
+- `CHAT_GENERATIVE_LIMIT_MAX` — integer; default `5`.
+- `CHAT_GENERATIVE_LIMIT_WINDOW_SECONDS` — integer (seconds); default `300`.
+
+#### Client: `useSupportChat.ts` — `rateLimited` state
+
+`customFetch` now intercepts **429** in addition to 401:
+- Parses the JSON body; on `code === "rate_limited"` sets `rateLimited: { retryAfterSeconds }`.
+- On any `2xx` success, clears `rateLimited` (auto-recovery when the window resets and a new message goes through).
+- `rateLimitMinutesLeft` is a derived value: `Math.ceil(retryAfterSeconds / 60)`, min 1, null when not rate-limited.
+- `clearRateLimit()` exposed for programmatic reset (e.g. conversation reset).
+- `resetConversation()` also clears `rateLimited`.
+
+#### Client: `SupportChatWidget.tsx` — FAQ-browse fallback
+
+When `rateLimited !== null`, the widget shows a notice inside the messages area: _"You've reached the chat limit for now (resets in ~N min). Meanwhile, tap a question below for an instant answer:"_ with the full `QUICK_REPLIES` set rendered as tappable buttons (amber-accented, matching the captcha-gate style). Clicking them calls `sendUserMessage()` — which hits the deflection path on the server and returns a free FAQ answer, never counting against the LLM limit.
+
+The free-text input is disabled (`opacity-50`, `cursor-not-allowed`, placeholder updated to "Tap a quick question above to continue…") while rate-limited. The send button is also disabled. Quick-replies remain fully clickable.
+
+#### Tests
+
+`src/services/support-chat/__tests__/chat-service.test.ts` gained two cases:
+
+- **`testGenRateLimitExceeded`** — stub `checkGenerativeLimit → { success: false, retryAfterSeconds: 120 }`, non-deflectable member turn. Asserts: `res.status === 429`, `body.code === "rate_limited"`, `body.retryAfterSeconds === 120`, model stub **not** called, `ensureConversation` **not** called, `writeAudit(200)` **not** called.
+- **`testGenRateLimitOk`** — stub `checkGenerativeLimit → { success: true, retryAfterSeconds: 0 }`, non-deflectable member turn. Asserts: `res.status === 200`, model stub called once, `writeAudit(200)` called.
+
+All 7 cases pass (`npm run test:chat-service`).
+
 ### As-built: data-scope + assistant-purpose hardening
 
 > **Note on member-tool references below:** `getDrawStatus` and `getMyEntries` were Phase-2 member tools that have since been **DROPPED**. The system-prompt hardening (no-aggregate rule + narrow-purpose rule) **remains in the shipped bot** as defence-in-depth.
