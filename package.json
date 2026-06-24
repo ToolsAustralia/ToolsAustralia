@@ -92,6 +92,7 @@
     "test:chat-knowledge": "tsx src/lib/support-chat/__tests__/knowledge-pack.test.ts",
     "test:chat-deflection": "tsx src/services/support-chat/__tests__/deflection.test.ts",
     "test:chat-escalation": "tsx src/services/support-chat/__tests__/escalation.test.ts",
+    "test:chat-withchatbot": "tsx src/lib/support-chat/__tests__/with-chatbot.test.ts",
     "migrate:anchor-billing-24": "tsx scripts/migrate-anchor-billing-24.ts",
     "migrate:anchor-billing-24:dry": "tsx scripts/migrate-anchor-billing-24.ts --dry-run",
     "migrate:affiliate-commission-pi-index": "tsx scripts/migrate-affiliate-commission-pi-index.ts",

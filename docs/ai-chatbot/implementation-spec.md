@@ -318,6 +318,53 @@ Run: `npm run test:chat-escalation`
 
 All 15 individual assertions pass.
 
+### As-built: `withChatbot()` wrapper (Task 1.6)
+
+Three files under `src/lib/support-chat/`:
+
+#### `redact.ts`
+
+Pure `redactPII(text: string): string`. Masks emails, Australian phone numbers (local `04xx xxx xxx`, landline `(0x) xxxx xxxx`, international `+61 ...`), and credit/debit card–like digit runs (grouped 4-4-4-4 and plain 13–19-digit runs). Conservative: false positives are acceptable; false negatives are not. No I/O. Called by `ChatService` (Task 1.7) before persisting `ChatMessage.content`.
+
+#### `audit.ts`
+
+- **`hashIp(ip: string): string`** — sha256 hex (mirrors `src/lib/internal-norm/audit.ts`).
+- **`writeChatAudit(meta: ChatAuditMeta): Promise<void>`** — best-effort `ChatAuditLog.create()`; uses dynamic imports so Mongoose never loads at module-init time; catches all errors and logs via `console.error` (never throws). `ChatAuditMeta` fields: `requestId`, `actorKind`, `status`, `deflected`, `escalated?`, `ipHash?`, `conversationId?`, `modelTier?`, `tokensIn?`, `tokensOut?`, `durationMs?`.
+
+#### `withChatbot.ts`
+
+**Pipeline order:** `identify → rate-limit → kill-switch/budget → handler → audit`
+
+**Identify:** session cookie via `getServerSession(authOptions)`. If `session.user.id` present → `{ kind:'member', userId, firstName }`. Otherwise → `{ kind:'anonymous', ipKey: <server-derived IP> }`. Identity never trusted from client.
+
+**Rate-limit:** Two Mongo-backed `createDistributedRateLimiter` instances (lazy singletons):
+- Anonymous: **15 req/min** (bucket key `chat:anon`) — tight; anon guests are FAQ-only per Task 1.8.
+- Member: **40 req/min** (bucket key `chat:member`) — more headroom for authenticated users.
+- Both **fail open** (store hiccup allows the request). The fail-closed `assertWithinBudget` is the real cost backstop.
+- On `!success` → **429** with `Retry-After` header + `{ success:false, code:'rate_limited', retryAfterSeconds }` body. Audit row written immediately.
+
+**Kill-switch + daily budget:** `assertWithinBudget()` (from `costGuard.ts`) covers both the `CHAT_KILL_SWITCH` env flag and the Mongo daily spend ceiling. Fails **closed**: any error → `{ ok:false }`. On `!ok` → **503** with `{ success:false, error:'chat_unavailable', code: reason }`. Audit row written immediately.
+
+**Audit-timing decision (streaming constraint):** The chat response is a `ReadableStream`; `clone().text()` would consume it (unlike `withNorm`). Therefore:
+- **Early exits** (429, 503) self-audit synchronously — status is known before returning.
+- **Success path:** `withChatbot` does NOT auto-write the audit. Instead it provides `ctx.audit` (mutable accumulator) and `ctx.writeAudit(status: number)`. `ChatService` (Task 1.7) fills in `deflected`, `escalated`, `modelTier`, `tokensIn`, `tokensOut`, `conversationId` and calls `ctx.writeAudit(200)` at stream end.
+- **Synchronous handler throw:** caught by `withChatbot`. `ZodError` → **400** (`validation_error`); all others → **500** (`internal_error`). Audit row written with the appropriate status.
+
+**`ChatCtx`:** `{ actor: ChatActor, req, requestId, ipHash, audit: ChatAuditAccumulator, writeAudit(status) }`.
+
+**Dependency injection:** `withChatbot(handler, deps?)` accepts `{ getSession, anonLimiter, memberLimiter, assertBudget, writeAudit }` — all optional. Tests pass stubs; production uses the real imports via lazy dynamic `require`/`import`. Pattern mirrors `costGuard.ts`.
+
+**Test:** `src/lib/support-chat/__tests__/with-chatbot.test.ts` (`npm run test:chat-withchatbot`) — 50 assertions, all stubbed (no Mongo/NextAuth):
+1. Rate-limit 429 path — status, body, `Retry-After` header, audit row written with status 429 + `deflected:false` + correct `actorKind`.
+2. Kill-switch 503 and daily-budget 503 paths — status, body, audit row.
+3. Anonymous actor — `kind:'anonymous'`, `anonLimiter` consulted, `memberLimiter` not touched, rate-limit key = `ipKey`.
+4. Member actor — `kind:'member'`, `userId`+`firstName` from session, `memberLimiter` consulted, rate-limit key = `userId`.
+5. `ipHash` is 64-char hex, not the raw IP.
+6. `ZodError` from handler → 400 + audit row with status 400.
+7. Non-Zod throw → 500 + audit row with status 500.
+8. Success path — `ctx.writeAudit(200)` called by handler; `ctx.audit` accumulator round-trips deflected/modelTier/tokensIn/tokensOut.
+9. `redactPII` — email, AU mobile phone, international phone, grouped card, plain-digit card all masked; benign text unchanged; multiple items in one string.
+
 ### As-built: deflection (Task 1.4)
 
 The no-LLM front door. `ChatService` (Task 1.7) will call `tryDeflect(question)` BEFORE any model call; if deflection answers, zero LLM tokens are spent.
