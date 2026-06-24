@@ -1,5 +1,9 @@
 # Shared UI — Frontend
 
+## FAQ answers render markdown (2026-06-25)
+
+`FAQSection` (`src/components/ui/FAQSection.tsx`) renders each FAQ `answer` through `<ChatMarkdown>` (`src/components/support-chat/ChatMarkdown.tsx`) so markdown links in `src/data/faqs.ts` answers become clickable — internal links (`/...`) navigate in-app, external (`http...`) open in a new tab. Plain-text answers render unchanged. The same renderer powers the Cobber support chat widget, so the FAQ page and the bot stay visually consistent.
+
 ## Component categories
 
 See [architecture.md](./architecture.md#categories) for the full inventory.
