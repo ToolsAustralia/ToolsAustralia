@@ -5,6 +5,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
 import { signOut } from "next-auth/react";
+import { clearSupportChatStorage } from "@/components/support-chat/chatStorage";
 import { useSidebar } from "@/contexts/SidebarContext";
 import { useUserContext } from "@/contexts/UserContext";
 import { useModalPriorityStore } from "@/stores/useModalPriorityStore";
@@ -444,6 +445,7 @@ export default function Header({ isFixed = true }: HeaderProps) {
     localStorage.removeItem("topBarHidden");
     // setWasAuthenticated(null);
     setIsTopBarHidden(false);
+    clearSupportChatStorage();
     signOut({ callbackUrl: "/" });
   };
 

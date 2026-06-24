@@ -410,7 +410,9 @@ The orchestration engine that ties deflection, the cost guard, the provider, the
 
 **v6 API specifics verified against `ai@6.0.209`:** `streamText`/`generateText`'s `onFinish` carries `usage.inputTokens` / `usage.outputTokens` (both `number | undefined`) — **not** `promptTokens`/`completionTokens`. `convertToModelMessages` is **async** (`Promise<ModelMessage[]>`) and must be awaited. The `UIMessageStreamWriter.write(part)` accepts `text-start`/`text-delta`/`text-end` chunk objects. `LanguageModel` is a union (`string | LanguageModelV2 | …`), so `.modelId` is read via a `typeof model === 'string' ? model : model.modelId` narrowing.
 
-**Dependency injection:** `respond(input, deps?)` accepts `{ tryDeflect, assertWithinBudget, recordUsage, streamFn, persist, escalateToHuman, getModel }` — all optional, defaulting to the real imports. `streamFn` is a thin adapter over `streamText` matching a `StreamArgs → { toUIMessageStreamResponse() }` shape; `persist` is a `PersistPort` (`ensureConversation` / `addMessage` / `setEscalated` / `recordConversationUsage`) whose default implementation lazily imports Mongo + the chat models. The test injects stubs for all of these (zero Mongo, zero Anthropic).
+**Dependency injection:** `respond(input, deps?)` accepts `{ tryDeflect, assertWithinBudget, recordUsage, streamFn, persist, escalateToHuman, getModel }` — all optional, defaulting to the real imports. `streamFn` is a thin adapter over `streamText` matching a `StreamArgs → { toUIMessageStreamResponse(options?) }` shape (updated in Task 1.9 to accept `options?: { headers?: Record<string, string> }`); `persist` is a `PersistPort` (`ensureConversation` / `addMessage` / `setEscalated` / `recordConversationUsage`) whose default implementation lazily imports Mongo + the chat models. The test injects stubs for all of these (zero Mongo, zero Anthropic).
+
+**`x-conversation-id` response header (Task 1.9 addition):** the deflection path and the LLM path now include a `x-conversation-id: <conversationId>` response header so the client widget can persist and thread the conversationId across turns. The header is passed through `UIMessageStreamResponseInit.headers` (which extends `ResponseInit`), so `createUIMessageStreamResponse({ stream, headers: { 'x-conversation-id': conversationId } })` and `result.toUIMessageStreamResponse({ headers: { 'x-conversation-id': conversationId } })`. The budget-fail and model-error canned paths do not emit this header (no conversation exists in those paths).
 
 **Route (`src/app/api/chat/route.ts`):** `runtime='nodejs'`, `dynamic='force-dynamic'`. Thin per house rule — `ChatRequestSchema.parse(await ctx.req.json())` then delegate to `chatService.respond`. `ChatRequestSchema` (Zod): `messages` non-empty array (loose `passthrough` shape — `convertToModelMessages` handles the real `UIMessage` shape), a `.refine` enforcing the **last user message's combined text ≤ 2000 chars** (hard input cap), `conversationId?` (≤64), `contact?` `{ name?, email (valid email), phone? }`. A thrown `ZodError` becomes a **400** via `withChatbot`. `vercel.json` already carries `"src/app/api/chat/route.ts": { "maxDuration": 60 }` (Task 0.1) — unchanged.
 
@@ -491,6 +493,70 @@ See `.env.example`:
 11. Throwing fetch → `false` (fail-closed).
 
 All 11 pass. The existing `test:chat-service` suite (5 cases) updated to add `verifyHcaptcha` stub and `hcaptchaToken` for the anonymous LLM case, and to satisfy the expanded `PersistPort` interface — all 5 still pass.
+
+### As-built: chat widget + sign-out history clear (Task 1.9)
+
+The floating chat bubble + panel, the `useSupportChat` hook, the `chatStorage` util, and the sign-out clear wired into `Header.handleSignOut`.
+
+#### Files created
+
+- `src/components/support-chat/chatStorage.ts` — `CHAT_STORAGE_KEYS` constant (`ta_support_chat_conversation_id`) and `clearSupportChatStorage()`. SSR-safe (`typeof window === 'undefined'` guard). Each `localStorage.removeItem` call is individually wrapped in `try/catch` so one storage failure never blocks sign-out.
+- `src/components/support-chat/useSupportChat.ts` — AI SDK v6 `useChat` wrapper hook. Owns conversationId threading, hCaptcha gate state, and text input.
+- `src/components/support-chat/SupportChatWidget.tsx` — floating bubble (bottom-right) + slide-up panel. Client component (`"use client"`).
+- `src/components/support-chat/__tests__/chat-storage.test.ts` — storage-clear unit tests (4 assertions: removes chat keys, preserves device-pref keys, idempotent, fault-tolerant). `npm run test:chat-storage` → all pass.
+
+#### Files modified
+
+- `src/services/support-chat/ChatService.ts` — `cannedTextResponse` accepts optional `headers?`; deflection and LLM success paths emit `x-conversation-id` header (see Task 1.7 note above); `StreamResultLike.toUIMessageStreamResponse` updated to accept `options?: { headers?: Record<string, string> }`.
+- `src/app/(site)/layout.tsx` — mounts `<SupportChatWidget />` (dynamic import, `ssr: false`) after `<UnifiedModalManager />`.
+- `src/components/layout/Header.tsx` — `handleSignOut` calls `clearSupportChatStorage()` before `signOut({ callbackUrl: '/' })`.
+- `package.json` — added `"test:chat-storage"` script.
+
+#### `useSupportChat` — v6 `useChat` API details (verified against `@ai-sdk/react@3` / `ai@6.0.209`)
+
+- **Transport:** `new DefaultChatTransport({ api, fetch, body })` from `'ai'`. Created once via `useMemo` (empty deps) so the SDK instance is stable across renders.
+- **`body` as function:** `body: () => ({ conversationId, hcaptchaToken })` — reads refs on each send so the latest values are included without recreating the transport.
+- **`sendMessage({ text })`:** the v6 send API (not `handleSubmit`). `ChatRequestOptions.body` per-send merges with the transport body; we instead use the transport `body` function for all extra fields.
+- **`status`:** `'submitted' | 'streaming' | 'ready' | 'error'` — widget shows a typing indicator and stop button during `submitted`/`streaming`.
+- **`clearError()`:** resets `status` from `'error'` to `'ready'` without a re-send.
+
+#### conversationId threading
+
+The custom `fetch` wrapper (passed to `DefaultChatTransport`) intercepts the `x-conversation-id` response header on every successful turn and persists it to `localStorage` under `ta_support_chat_conversation_id`. The `body` function reads `conversationIdRef` (a ref kept in sync with the state) so each subsequent request includes the id without recreating the transport.
+
+On widget mount, the hook reads the persisted id from `localStorage` so a page reload resumes the same server-side conversation (re-using the `humanVerifiedAt` stamp for anonymous guests — no re-challenge needed).
+
+#### hCaptcha flow chosen
+
+**Intercept-and-retry (reactive):** the hook detects a 401 `captcha_required` response via the custom fetch wrapper, sets `captchaRequired=true` and retains the pending message text in `pendingMessageRef`. The widget renders `<HCaptcha>` (dynamic import, `ssr:false`). On `onVerify`, the hook sets `pendingTokenRef.current = token` and immediately re-sends the pending message; the transport `body` function includes the token on that turn. After a successful response the conversation is server-stamped (`humanVerifiedAt`), so later turns carrying the same `conversationId` are not re-challenged.
+
+If `NEXT_PUBLIC_HCAPTCHA_SITEKEY` is unset, `captchaSitekey` is `""` and the widget shows a "sign in to chat" link instead of an inoperative captcha widget. Members (`isAuthenticated === true`) never see the captcha UI — the server never returns 401 for authenticated sessions.
+
+#### z-index — below full-screen modals
+
+`Z_INDEX.MODAL_BASE = 10000` (from `src/constants/z-index.ts`). Widget bubble and panel use `style={{ zIndex: 9000 }}` so all modals (upsell, renewal, login, partner, etc.) overlay it. The widget is NOT registered in `useModalPriorityStore` — it is a persistent floating element, not a queued modal.
+
+#### AI labelling
+
+The panel header says "AI Support Assistant" with "Tools Australia" sub-label. The intro message (shown before any turn) includes: "Hi! I'm an AI assistant for Tools Australia." and a one-line after-hours note: "For complex issues I'll connect you to our team, who reply within one business day."
+
+#### Quick replies
+
+5 buttons shown before the first user message (no LLM cost — deflects server-side): "When is the Major Draw?", "What are the membership prices?", "How do I get more entries?", "What can I win?", "Refund policy". Defined as a local `QUICK_REPLIES` constant (not imported from `faqs.ts` which pulls in server-side config imports).
+
+#### Sign-out clear
+
+`clearSupportChatStorage()` is called in `Header.handleSignOut` **before** `signOut({ callbackUrl: '/' })`. This clears `ta_support_chat_conversation_id` from `localStorage`. Device-pref keys (`theme`, `topBarHidden`, etc.) are untouched — the function only removes keys defined in `CHAT_STORAGE_KEYS`. This prevents a prior user's conversationId (with its `humanVerifiedAt` stamp) from being reused by the next person on a shared device.
+
+#### Test: `src/components/support-chat/__tests__/chat-storage.test.ts` (`npm run test:chat-storage`)
+
+4 assertions (in-memory localStorage stub, no jsdom):
+1. All `CHAT_STORAGE_KEYS` values are removed after `clearSupportChatStorage()`.
+2. `theme` and `topBarHidden` device-pref keys are preserved.
+3. Second call is idempotent (no throw when keys are already absent).
+4. Fault-tolerant: a `removeItem` that throws does not propagate (the error is `console.error`-logged; sign-out continues).
+
+All 4 pass.
 
 ### Phase 2 — Atlas Vector Search RAG (when the pack outgrows the cache sweet-spot)
 

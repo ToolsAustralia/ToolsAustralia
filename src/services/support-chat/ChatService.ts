@@ -175,7 +175,7 @@ export interface StreamArgs {
 }
 
 export interface StreamResultLike {
-  toUIMessageStreamResponse: () => Response;
+  toUIMessageStreamResponse: (options?: { headers?: Record<string, string> }) => Response;
 }
 
 export interface ChatServiceDeps {
@@ -253,7 +253,11 @@ function buildTranscriptSummary(messages: UIMessage[]): string {
  * UI-message-stream protocol (so the widget renders it like any model reply).
  * Calls `onComplete` once the stream finishes (used for writeAudit).
  */
-function cannedTextResponse(text: string, onComplete: () => Promise<void>): Response {
+function cannedTextResponse(
+  text: string,
+  onComplete: () => Promise<void>,
+  headers?: Record<string, string>
+): Response {
   const id = "canned";
   const stream = createUIMessageStream({
     execute: ({ writer }) => {
@@ -265,7 +269,7 @@ function cannedTextResponse(text: string, onComplete: () => Promise<void>): Resp
       await onComplete();
     },
   });
-  return createUIMessageStreamResponse({ stream });
+  return createUIMessageStreamResponse({ stream, ...(headers ? { headers } : {}) });
 }
 
 // ─── Default (real) streamFn adapter ──────────────────────────────────────────
@@ -294,7 +298,8 @@ function defaultStreamFn(args: StreamArgs): StreamResultLike {
     },
   });
   return {
-    toUIMessageStreamResponse: () => result.toUIMessageStreamResponse(),
+    toUIMessageStreamResponse: (options?: { headers?: Record<string, string> }) =>
+      result.toUIMessageStreamResponse(options),
   };
 }
 
@@ -518,9 +523,13 @@ export const chatService = {
       ctx.audit.deflected = true;
       ctx.audit.conversationId = conversationId;
 
-      return cannedTextResponse(deflection.answer, async () => {
-        await ctx.writeAudit(200);
-      });
+      return cannedTextResponse(
+        deflection.answer,
+        async () => {
+          await ctx.writeAudit(200);
+        },
+        { "x-conversation-id": conversationId }
+      );
     }
 
     // ── 2. Budget re-check (defense-in-depth) ─────────────────────────────────
@@ -710,7 +719,9 @@ export const chatService = {
         },
       });
 
-      return result.toUIMessageStreamResponse();
+      return result.toUIMessageStreamResponse({
+        headers: { "x-conversation-id": conversationId },
+      });
     } catch (err) {
       // Streaming failed to start (e.g. immediate auth error) → graceful canned reply.
       console.error("[ChatService] stream failed", err);
