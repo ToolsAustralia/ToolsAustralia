@@ -27,7 +27,7 @@ const responseSchema = z
         packageName: z.string(),
         entryCount: z.number(),
         source: z.string(),
-      })
+      }).strict()
     ),
   })
   .strict();

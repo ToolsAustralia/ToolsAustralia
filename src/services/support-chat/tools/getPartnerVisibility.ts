@@ -26,7 +26,7 @@ const responseSchema = z
       z.object({
         name: z.string(),
         discount: z.string(),
-      })
+      }).strict()
     ),
   })
   .strict();
