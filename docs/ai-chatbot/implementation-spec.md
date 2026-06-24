@@ -814,9 +814,76 @@ The `anthropic` branch is unchanged when `CHAT_PROVIDER` is not `'bedrock'`.
 
 ---
 
+### As-built: member tools wired into ChatService (Task 2.4)
+
+The five member-account tools are now live in `ChatService.ts` behind the `member && memberToolsEnabled()` residency gate. On the default Anthropic provider the tools are dormant — member PII never reaches the offshore API. They activate only when `CHAT_PROVIDER=bedrock` (onshore Sydney) is set.
+
+#### Residency gate (`member && memberToolsEnabled()`)
+
+Computed once per request in the LLM path:
+
+```ts
+const memberToolsActive = ctx.actor.kind === 'member' && memberToolsEnabledFn();
+```
+
+- **Both conditions must be true.** An anonymous actor with `memberToolsEnabled()===true` gets no member tools (only `request_human`). A member on the Anthropic provider (`memberToolsEnabled()===false`) also gets no member tools.
+- On the default `CHAT_PROVIDER=anthropic`, `memberToolsEnabled()` returns `false` — member tools are structurally absent from the AI SDK tool set, so member PII is never offered to the offshore model regardless of actor kind.
+
+#### Tool set construction
+
+```ts
+const tools: ToolSet = {
+  request_human: requestHuman,
+  ...(memberToolsActive ? buildMemberToolSet(ctx.actor, deps?.memberToolDeps) : {}),
+};
+```
+
+The tool module files (`getMyMembership`, `getMyEntries`, `getMyBillingStatus`, `getDrawStatus`, `getPartnerVisibility`) are imported at the top of `ChatService.ts` as side-effect imports so `defineMemberTool()` runs at module load and the registry is populated before any request arrives:
+
+```ts
+import "@/services/support-chat/tools/getMyMembership";
+import "@/services/support-chat/tools/getMyEntries";
+// … (all 5)
+```
+
+#### System-prompt guidance (member-tools active only)
+
+When `memberToolsActive` is true, a short guidance block is **appended** to the base system prompt (the base prompt from `buildSystemPrompt` is unchanged):
+
+> You have read-only tools to look up THIS member's own account data (membership, entries, billing status, draw status, partner visibility). Use them for any account-specific question — do NOT guess or invent the member's data. These tools return only the member's OWN data.
+
+This is 4 lines appended in `ChatService.ts`. `systemPrompt.ts` is not modified.
+
+#### Raised step bound for multi-tool turns
+
+```ts
+const MAX_STEPS_WITH_MEMBER_TOOLS = 5; // allows tool call(s) + final answer
+const MAX_STEPS = 3;                   // unchanged for request_human-only turns
+
+stopWhen: stepCountIs(memberToolsActive ? MAX_STEPS_WITH_MEMBER_TOOLS : MAX_STEPS)
+```
+
+#### Injectable deps (for tests)
+
+Three new fields added to `ChatServiceDeps`:
+- `memberToolsEnabled?: () => boolean` — inject `() => true` to drive the Bedrock branch without `CHAT_PROVIDER=bedrock`.
+- `buildMemberToolSet?: typeof realBuildMemberToolSet` — inject a stub returning a fake `ToolSet` to verify shape without real services.
+- `memberToolDeps?: MemberToolDeps` — passed through to `buildMemberToolSet` for per-handler service stubs.
+
+#### Tests (`src/services/support-chat/__tests__/chat-service.test.ts`)
+
+Three new cases (all deps-injected, zero Mongo/LLM):
+1. **member + `memberToolsEnabled=true`** → tools contain all 5 member tool names AND `request_human`.
+2. **member + `memberToolsEnabled=false`** → tools contain ONLY `request_human`; member tools absent (proves residency gate blocks member PII on the Anthropic provider).
+3. **anonymous + `memberToolsEnabled=true`** → tools contain ONLY `request_human`; actor kind check prevents member tools even when provider is "bedrock".
+
+All 8 test cases (`npm run test:chat-service`) pass.
+
+---
+
 ### As-built: Tool registry + read-only member tools (Task 2.2/2.3)
 
-Five session-scoped read-only tools wired into a Norm-style registry. NOT yet wired into ChatService (that is Task 2.4).
+Five session-scoped read-only tools wired into a Norm-style registry. Wired into ChatService in Task 2.4 (above).
 
 #### Files created
 

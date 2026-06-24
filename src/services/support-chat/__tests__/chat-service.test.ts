@@ -535,6 +535,249 @@ async function testRequestHumanWithEmail() {
   pass("with-email → escalate(server actor + request contact) once, setEscalated, escalated=true; model-supplied email ignored");
 }
 
+// ─── Member tools gate tests (Task 2.4) ──────────────────────────────────────
+
+/** Capture the `tools` object passed to the last streamFn call. */
+interface CapturedStreamArgs {
+  tools?: Record<string, unknown>;
+}
+
+/**
+ * Build a streamFn stub that captures the tools argument and writes it to
+ * `captured.tools`. Fires onFinish asynchronously so existing assertions work.
+ */
+function makeCapturingStreamFn(
+  captured: CapturedStreamArgs
+): ChatServiceDeps["streamFn"] {
+  return (args) => {
+    captured.tools = args.tools as Record<string, unknown>;
+    void Promise.resolve().then(() =>
+      args.onFinish?.({
+        text: "Stub answer.",
+        usage: { inputTokens: 10, outputTokens: 5 },
+      })
+    );
+    return {
+      toUIMessageStreamResponse: () => new Response("ok", { status: 200 }),
+    };
+  };
+}
+
+async function testMemberToolsActiveWhenMemberAndBedrockEnabled() {
+  console.log(
+    "\nmember tools gate — member actor + memberToolsEnabled=true → 5 member tools + request_human"
+  );
+
+  const { ctx } = makeCtx({
+    kind: "member",
+    userId: "507f1f77bcf86cd799439011",
+    firstName: "Alice",
+  });
+  const persist = makePersistSpy();
+  const captured: CapturedStreamArgs = {};
+
+  // 5 stub tools returned by buildMemberToolSet
+  const fakeToolSet = {
+    getMyMembership: {},
+    getMyEntries: {},
+    getMyBillingStatus: {},
+    getDrawStatus: {},
+    getPartnerVisibility: {},
+  };
+
+  const deps: ChatServiceDeps = {
+    tryDeflect: async () => ({ answered: false }),
+    assertWithinBudget: async () => ({ ok: true }),
+    recordUsage: async () => {},
+    streamFn: makeCapturingStreamFn(captured),
+    persist: persist.port,
+    escalateToHuman: async () => ({ submissionId: "x" }),
+    getModel: () => ({ modelId: "stub-model" }) as never,
+    verifyHcaptcha: async () => true,
+    // Gate: provider is "bedrock" equivalent → enabled
+    memberToolsEnabled: () => true,
+    // Inject a stub buildMemberToolSet so no real services are needed
+    buildMemberToolSet: () => fakeToolSet as never,
+  };
+
+  const res = await chatService.respond(
+    {
+      ctx,
+      messages: [userMessage("What is my membership tier?")],
+    },
+    deps
+  );
+  await res.text();
+  await new Promise((r) => setTimeout(r, 0));
+
+  const toolNames = Object.keys(captured.tools ?? {});
+  const memberToolNames = [
+    "getMyMembership",
+    "getMyEntries",
+    "getMyBillingStatus",
+    "getDrawStatus",
+    "getPartnerVisibility",
+  ];
+
+  let ok = true;
+
+  if (!toolNames.includes("request_human")) {
+    fail("member+bedrock → request_human in tools", `tools: ${toolNames.join(",")}`);
+    ok = false;
+  }
+  for (const name of memberToolNames) {
+    if (!toolNames.includes(name)) {
+      fail(`member+bedrock → ${name} in tools`, `tools: ${toolNames.join(",")}`);
+      ok = false;
+    }
+  }
+  if (ok) {
+    pass(
+      "member+bedrock → tools contain request_human + all 5 member tools"
+    );
+  }
+}
+
+async function testMemberToolsAbsentWhenBedrockDisabled() {
+  console.log(
+    "\nmember tools gate — member actor + memberToolsEnabled=false → ONLY request_human (residency gate blocks PII)"
+  );
+
+  const { ctx } = makeCtx({
+    kind: "member",
+    userId: "507f1f77bcf86cd799439022",
+    firstName: "Bob",
+  });
+  const persist = makePersistSpy();
+  const captured: CapturedStreamArgs = {};
+
+  const deps: ChatServiceDeps = {
+    tryDeflect: async () => ({ answered: false }),
+    assertWithinBudget: async () => ({ ok: true }),
+    recordUsage: async () => {},
+    streamFn: makeCapturingStreamFn(captured),
+    persist: persist.port,
+    escalateToHuman: async () => ({ submissionId: "x" }),
+    getModel: () => ({ modelId: "stub-model" }) as never,
+    verifyHcaptcha: async () => true,
+    // Gate: default Anthropic provider → disabled
+    memberToolsEnabled: () => false,
+    buildMemberToolSet: () => {
+      // Should never be called when the gate is false.
+      fail("buildMemberToolSet NOT called when gate is false", "was called");
+      return {} as never;
+    },
+  };
+
+  const res = await chatService.respond(
+    {
+      ctx,
+      messages: [userMessage("What is my membership tier?")],
+    },
+    deps
+  );
+  await res.text();
+  await new Promise((r) => setTimeout(r, 0));
+
+  const toolNames = Object.keys(captured.tools ?? {});
+
+  if (!toolNames.includes("request_human")) {
+    fail("member+anthropic → request_human in tools", `tools: ${toolNames.join(",")}`);
+    return;
+  }
+  const memberToolNames = [
+    "getMyMembership",
+    "getMyEntries",
+    "getMyBillingStatus",
+    "getDrawStatus",
+    "getPartnerVisibility",
+  ];
+  const leaked = memberToolNames.filter((n) => toolNames.includes(n));
+  if (leaked.length > 0) {
+    fail(
+      "member+anthropic → NO member tools (residency gate)",
+      `leaked: ${leaked.join(",")}`
+    );
+    return;
+  }
+  if (toolNames.length !== 1 || toolNames[0] !== "request_human") {
+    fail(
+      "member+anthropic → ONLY request_human",
+      `tools: ${toolNames.join(",")}`
+    );
+    return;
+  }
+  pass(
+    "member+anthropic → ONLY request_human; member tools absent (residency gate enforced)"
+  );
+}
+
+async function testMemberToolsAbsentForAnonymousActor() {
+  console.log(
+    "\nmember tools gate — anonymous actor + memberToolsEnabled=true → ONLY request_human (actor kind check)"
+  );
+
+  const { ctx } = makeCtx({ kind: "anonymous", ipKey: "5.5.5.5" });
+  const persist = makePersistSpy();
+  // Satisfy the hCaptcha gate (anonymous actors need a valid token to reach LLM)
+  persist.port.isAnonConversationVerified = async () => false;
+  const captured: CapturedStreamArgs = {};
+
+  const deps: ChatServiceDeps = {
+    tryDeflect: async () => ({ answered: false }),
+    assertWithinBudget: async () => ({ ok: true }),
+    recordUsage: async () => {},
+    streamFn: makeCapturingStreamFn(captured),
+    persist: persist.port,
+    escalateToHuman: async () => ({ submissionId: "x" }),
+    getModel: () => ({ modelId: "stub-model" }) as never,
+    verifyHcaptcha: async () => true,
+    // Even though the provider says "enabled", the anonymous actor must block.
+    memberToolsEnabled: () => true,
+    buildMemberToolSet: () => {
+      // Must never be called for anonymous actor.
+      fail("buildMemberToolSet NOT called for anonymous actor", "was called");
+      return {} as never;
+    },
+  };
+
+  const res = await chatService.respond(
+    {
+      ctx,
+      messages: [userMessage("Tell me about major draws.")],
+      hcaptchaToken: "stub-valid-token",
+    },
+    deps
+  );
+  await res.text();
+  await new Promise((r) => setTimeout(r, 0));
+
+  const toolNames = Object.keys(captured.tools ?? {});
+
+  if (!toolNames.includes("request_human")) {
+    fail("anon+enabled → request_human in tools", `tools: ${toolNames.join(",")}`);
+    return;
+  }
+  const memberToolNames = [
+    "getMyMembership",
+    "getMyEntries",
+    "getMyBillingStatus",
+    "getDrawStatus",
+    "getPartnerVisibility",
+  ];
+  const leaked = memberToolNames.filter((n) => toolNames.includes(n));
+  if (leaked.length > 0) {
+    fail(
+      "anon+enabled → NO member tools (actor kind check)",
+      `leaked: ${leaked.join(",")}`
+    );
+    return;
+  }
+  pass(
+    "anon actor + memberToolsEnabled=true → ONLY request_human; actor kind check prevents member tools"
+  );
+}
+
 // ─── Runner ───────────────────────────────────────────────────────────────────
 
 async function run() {
@@ -543,6 +786,9 @@ async function run() {
   await testOverBudget();
   await testRequestHumanNoEmail();
   await testRequestHumanWithEmail();
+  await testMemberToolsActiveWhenMemberAndBedrockEnabled();
+  await testMemberToolsAbsentWhenBedrockDisabled();
+  await testMemberToolsAbsentForAnonymousActor();
 
   console.log(`\n${"─".repeat(60)}`);
 
@@ -556,7 +802,10 @@ async function run() {
   console.log("           non-deflectable (model once, recordUsage, audit token counts, writeAudit),");
   console.log("           over-budget (canned busy fallback, no model call),");
   console.log("           request_human no-email (files nothing, escalated=false),");
-  console.log("           request_human with-email (server-side actor + request contact, setEscalated, escalated=true)");
+  console.log("           request_human with-email (server-side actor + request contact, setEscalated, escalated=true),");
+  console.log("           member+bedrock → 5 member tools + request_human in tool set,");
+  console.log("           member+anthropic → ONLY request_human (residency gate blocks member PII),");
+  console.log("           anon+enabled → ONLY request_human (actor kind check gates member tools)");
   process.exit(0);
 }
 

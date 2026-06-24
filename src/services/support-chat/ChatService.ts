@@ -72,7 +72,7 @@ import {
   assertWithinBudget as realAssertWithinBudget,
   recordUsage as realRecordUsage,
 } from "@/lib/support-chat/costGuard";
-import { getChatModel } from "@/lib/support-chat/provider";
+import { getChatModel, memberToolsEnabled as realMemberToolsEnabled } from "@/lib/support-chat/provider";
 import { getKnowledgePack } from "@/lib/support-chat/knowledge/pack";
 import { buildSystemPrompt } from "@/services/support-chat/systemPrompt";
 import {
@@ -81,6 +81,17 @@ import {
 } from "@/services/support-chat/escalation";
 import { verifyHcaptcha as realVerifyHcaptcha } from "@/lib/support-chat/captcha";
 import { ErrorLoggingService } from "@/services/error-reporting/ErrorLoggingService";
+import {
+  buildMemberToolSet as realBuildMemberToolSet,
+  type MemberToolDeps,
+} from "@/services/support-chat/tools/registry";
+
+// Side-effect imports so defineMemberTool() runs and registers all 5 tools.
+import "@/services/support-chat/tools/getMyMembership";
+import "@/services/support-chat/tools/getMyEntries";
+import "@/services/support-chat/tools/getMyBillingStatus";
+import "@/services/support-chat/tools/getDrawStatus";
+import "@/services/support-chat/tools/getPartnerVisibility";
 
 // ─── Public input / dep types ─────────────────────────────────────────────────
 
@@ -194,12 +205,36 @@ export interface ChatServiceDeps {
    * Inject a stub in tests to avoid real network calls.
    */
   verifyHcaptcha?: typeof realVerifyHcaptcha;
+  /**
+   * Residency gate: returns true only when the active provider is Amazon
+   * Bedrock (onshore). Defaults to the real memberToolsEnabled().
+   * Inject `() => true` in tests to exercise the member tool path without
+   * needing CHAT_PROVIDER=bedrock in the test environment.
+   */
+  memberToolsEnabled?: () => boolean;
+  /**
+   * Member tool set builder. Defaults to the real buildMemberToolSet.
+   * Inject a stub in tests to verify the tool-set shape.
+   */
+  buildMemberToolSet?: typeof realBuildMemberToolSet;
+  /**
+   * Injectable dependencies passed through to buildMemberToolSet for the
+   * five member-account tools. Only used when member tools are active.
+   */
+  memberToolDeps?: MemberToolDeps;
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const MAX_OUTPUT_TOKENS = 300;
+/** Default step limit for standard turns (request_human only). */
 const MAX_STEPS = 3;
+/**
+ * Higher step limit used when member tools are active: allows the model to
+ * call one or two account tools then generate its final answer in a single
+ * streaming turn without hitting the stop-when limit prematurely.
+ */
+const MAX_STEPS_WITH_MEMBER_TOOLS = 5;
 const MAX_TRANSCRIPT_SUMMARY_CHARS = 2000;
 
 const BUSY_FALLBACK_TEXT =
@@ -493,6 +528,8 @@ export const chatService = {
     const escalate = deps.escalateToHuman ?? realEscalateToHuman;
     const getModel = deps.getModel ?? (() => getChatModel("primary"));
     const verifyHcaptchaFn = deps.verifyHcaptcha ?? realVerifyHcaptcha;
+    const memberToolsEnabledFn = deps.memberToolsEnabled ?? realMemberToolsEnabled;
+    const buildMemberToolSetFn = deps.buildMemberToolSet ?? realBuildMemberToolSet;
 
     const userText = latestUserText(messages);
     const userAgent = ctx.req.headers.get("user-agent") ?? undefined;
@@ -592,11 +629,26 @@ export const chatService = {
     }
 
     // ── 3. LLM path ───────────────────────────────────────────────────────────
+    // Residency gate: member tools are ONLY active when (a) the actor is a
+    // member AND (b) the provider is Amazon Bedrock (onshore). On the default
+    // Anthropic provider this is always false so member PII never leaves AU.
+    const memberToolsActive =
+      ctx.actor.kind === "member" && memberToolsEnabledFn();
+
     let model: LanguageModel;
     let system: string;
     try {
       model = getModel();
       system = buildSystemPrompt(getKnowledgePack());
+      if (memberToolsActive) {
+        // Append member-tool guidance after the base prompt so the model knows
+        // it has real account data available and must use it rather than guess.
+        system +=
+          "\n\nYou have read-only tools to look up THIS member's own account data " +
+          "(membership, entries, billing status, draw status, partner visibility). " +
+          "Use them for any account-specific question — do NOT guess or invent the " +
+          "member's data. These tools return only the member's OWN data.";
+      }
     } catch (err) {
       // Hard setup error (e.g. missing knowledge pack / model env) → graceful canned reply.
       console.error("[ChatService] model setup failed", err);
@@ -661,13 +713,21 @@ export const chatService = {
 
     try {
       const modelMessages = await convertToModelMessages(messages);
+      const tools: ToolSet = {
+        request_human: requestHuman,
+        ...(memberToolsActive
+          ? buildMemberToolSetFn(ctx.actor, deps?.memberToolDeps)
+          : {}),
+      };
       const result = streamFn({
         model,
         system,
         messages: modelMessages,
         maxOutputTokens: MAX_OUTPUT_TOKENS,
-        stopWhen: stepCountIs(MAX_STEPS),
-        tools: { request_human: requestHuman },
+        stopWhen: stepCountIs(
+          memberToolsActive ? MAX_STEPS_WITH_MEMBER_TOOLS : MAX_STEPS
+        ),
+        tools,
         onFinish: async ({ text, usage }) => {
           // Fault-tolerant ordering: onFinish fires async AFTER respond() returns,
           // so the outer try/catch does NOT cover it. The answer has already
