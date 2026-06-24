@@ -284,6 +284,7 @@
     "test:derive-backfill-attribution": "tsx src/services/attribution/__tests__/deriveBackfillAttribution.test.ts"
   },
   "dependencies": {
+    "@ai-sdk/amazon-bedrock": "^4.0.121",
     "@ai-sdk/anthropic": "^3.0.85",
     "@ai-sdk/react": "^3.0.211",
     "@auth/mongodb-adapter": "^3.10.0",

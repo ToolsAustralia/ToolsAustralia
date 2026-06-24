@@ -31,10 +31,13 @@ Connectivity probe: `npm run test:igodirect-sso` (see [dev-tooling/testing.md](.
 
 Foundations for the `support-chat` domain (see [docs/ai-chatbot/](../ai-chatbot/)):
 
-- **Deps:** `ai` (Vercel AI SDK core), `@ai-sdk/anthropic`, `@ai-sdk/react`. Phase 2 adds `@ai-sdk/amazon-bedrock` (onshore member-PII inference); Phase 3 may add an embeddings provider for Atlas Vector Search.
+- **Deps:** `ai` (Vercel AI SDK core), `@ai-sdk/anthropic`, `@ai-sdk/react`, `@ai-sdk/amazon-bedrock` (Phase 2 onshore member-PII inference, ap-southeast-2 Sydney). Phase 3 may add an embeddings provider for Atlas Vector Search.
 - **`vercel.json`:** `"src/app/api/chat/route.ts": { "maxDuration": 60 }` is listed **before** the `src/app/api/**/route.ts` 10s catch-all so streaming chat responses aren't truncated at 10s.
 - **Env** (see [.env.example](../../.env.example)):
   - `ANTHROPIC_API_KEY` (Phase 1, first-party — set a low monthly **spend limit** in the Anthropic Console as the provider hard cap), `CHAT_MODEL_PRIMARY`/`CHAT_MODEL_ESCALATION`, `CHAT_DAILY_TOKEN_BUDGET_USD` (app-level daily cost ceiling, fail-closed), `CHAT_KILL_SWITCH`.
+  - `CHAT_PROVIDER` (Phase 2) — `anthropic` (default) or `bedrock`. Set to `bedrock` only after PIA + confirming in-region Bedrock model availability. Member-PII tools stay dormant while `anthropic`.
+  - `CHAT_BEDROCK_MODEL_PRIMARY`, `CHAT_BEDROCK_MODEL_ESCALATION` (Phase 2, Bedrock only) — in-region inference-profile IDs for `ap-southeast-2` (Sydney). No defaults; must be set before `CHAT_PROVIDER=bedrock` goes live. Haiku 4.5 availability in `ap-southeast-2` is unverified; Sonnet 4.6 is the confirmed in-region fallback.
+  - `AWS_REGION=ap-southeast-2`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` (Phase 2, Bedrock only) — standard AWS credential chain, read automatically by `@ai-sdk/amazon-bedrock`.
   - `HCAPTCHA_SECRET` — server secret for `POST https://api.hcaptcha.com/siteverify` (guest generative gate, Task 1.8). **Fail-closed if unset**: anonymous guests cannot use the generative bot (FAQ deflection + authenticated members still work). Get from https://dashboard.hcaptcha.com/.
   - `NEXT_PUBLIC_HCAPTCHA_SITEKEY` — public sitekey for the client-side hCaptcha widget (Task 1.9). Non-secret; safe to expose to the browser.
 - **Deps (Task 1.9 addition):** `@hcaptcha/react-hcaptcha` — React wrapper for the hCaptcha challenge widget, rendered in `SupportChatWidget` for anonymous guests on the generative path. Dynamic-imported (`ssr: false`) so it never runs server-side.

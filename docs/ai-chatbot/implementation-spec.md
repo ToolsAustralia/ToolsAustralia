@@ -731,9 +731,50 @@ Support traffic is power-law ("the same ~200 questions ~80% of the time"), so la
 
 - **`getChatModel(tier)`** — returns an AI SDK `LanguageModel` via `@ai-sdk/anthropic`. Reads `CHAT_MODEL_PRIMARY` (default `claude-haiku-4-5`) and `CHAT_MODEL_ESCALATION` (default `claude-sonnet-4-6`) from env. Uses the global `anthropic()` instance which reads `ANTHROPIC_API_KEY` from env automatically.
 - **`isFallbackEligibleError(err)`** — classifies an error as fallback-eligible (429, 529, or `overloaded`/`refusal` message) or not (400/401/403/other non-transient). Exported for unit testing. Non-eligible errors are re-thrown immediately (no pointless retry).
-- **`withModelFallback(fn, opts?)`** — calls `fn(primary)` and, on a fallback-eligible error, retries once with `fn(escalation)`. Accepts an optional `getModel` dep for injection (tests use stubs — no API key needed). Phase 2 Amazon Bedrock branch can be wired here behind a `CHAT_PROVIDER=bedrock` env flag; the interface is unchanged.
+- **`withModelFallback(fn, opts?)`** — calls `fn(primary)` and, on a fallback-eligible error, retries once with `fn(escalation)`. Accepts an optional `getModel` dep for injection (tests use stubs — no API key needed).
 - Test: `src/lib/support-chat/__tests__/provider.test.ts` (30 assertions; all pass). Run: `npm run test:chat-provider`.
 - Smoke: `scripts/smoke-chat-provider.ts` — one real `generateText` call to `claude-haiku-4-5` (maxOutputTokens: 5). Result: `SMOKE OK: ok`. Run: `npm run smoke:chat-provider`.
+
+### As-built: Bedrock provider branch + member-PII residency gate (Task 2.1)
+
+`src/lib/support-chat/provider.ts` — extended (no callers changed).
+
+#### `getChatProvider(): 'anthropic' | 'bedrock'`
+
+Reads `CHAT_PROVIDER` from env. Any value other than `'bedrock'` (including unset) returns `'anthropic'`. This is the sole source of truth for the active provider throughout the feature.
+
+#### `memberToolsEnabled(): boolean`
+
+Returns `getChatProvider() === 'bedrock'`. This is the **residency safety gate**: member-PII tools (Phase 2) MUST check this before executing. When `false` (i.e. `CHAT_PROVIDER` is not `'bedrock'`), member tools must refuse — member PII must never reach the offshore first-party Anthropic API. The gate becomes `true` only after the owner sets `CHAT_PROVIDER=bedrock` + valid AWS credentials + in-region Bedrock model IDs, which should only happen after completing a Privacy Impact Assessment (PIA).
+
+#### `getChatModel(tier, deps?)` — extended with Bedrock branch
+
+When `CHAT_PROVIDER=bedrock`, returns a Bedrock `LanguageModel` via `@ai-sdk/amazon-bedrock`. Model IDs are read from:
+- `CHAT_BEDROCK_MODEL_PRIMARY` (no default — must be set by owner)
+- `CHAT_BEDROCK_MODEL_ESCALATION` (no default — must be set by owner)
+
+These must be set to **in-region inference-profile IDs for `ap-southeast-2` (Sydney)**. Example format: `"apac.anthropic.claude-sonnet-4-6-..."` (APAC cross-region inference profile). AWS credentials (`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION`) are read from env automatically by `@ai-sdk/amazon-bedrock` via the standard AWS credential chain — no custom AWS client is added.
+
+**Unverified-Haiku-4.5 caveat:** Haiku 4.5 availability in `ap-southeast-2` was unverified at time of writing. If unavailable, use Sonnet 4.6 as the confirmed in-region fallback (set both `CHAT_BEDROCK_MODEL_PRIMARY` and `CHAT_BEDROCK_MODEL_ESCALATION` to the Sonnet 4.6 in-region inference profile ID).
+
+If a Bedrock model env var is missing, `getChatModel` throws a clear error naming the missing var — this prevents silent failure at request time.
+
+The `anthropic` branch is unchanged when `CHAT_PROVIDER` is not `'bedrock'`.
+
+**Dep (`@ai-sdk/amazon-bedrock`):** added to `package.json` dependencies (version aligned with existing `@ai-sdk/*` packages).
+
+#### Injection / testability
+
+`getChatModel(tier, deps?)` accepts an optional `{ anthropic?, bedrock? }` factory argument. Tests pass stubs that return fake `LanguageModel` objects with no real API/AWS calls. The existing `withModelFallback(fn, opts?)` `getModel` injection is unchanged.
+
+#### Tests (added to `src/lib/support-chat/__tests__/provider.test.ts`)
+
+46 assertions total (up from 30); all pass. New cases cover:
+- `getChatProvider()`: defaults to `'anthropic'`, respects `'bedrock'`, falls back on garbage values.
+- `memberToolsEnabled()`: `true` only for `'bedrock'`; `false` for unset/`'anthropic'`/garbage.
+- `getChatModel` with `CHAT_PROVIDER=bedrock`: calls the injected bedrock factory with the correct model IDs; does NOT call the anthropic factory; throws a clear error when a Bedrock model env var is missing.
+- `getChatModel` with `CHAT_PROVIDER=anthropic`: uses the injected anthropic factory with the correct model IDs; Bedrock factory not called.
+- All env mutations are saved and restored so cases don't bleed.
 
 ### As-built: cost guard (Task 1.1)
 

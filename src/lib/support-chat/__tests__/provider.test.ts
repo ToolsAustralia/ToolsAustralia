@@ -12,7 +12,9 @@ import assert from "node:assert/strict";
 
 import {
   getChatModel,
+  getChatProvider,
   isFallbackEligibleError,
+  memberToolsEnabled,
   withModelFallback,
 } from "../provider";
 import { APICallError } from "@ai-sdk/provider";
@@ -82,30 +84,93 @@ function makeApiCallError(statusCode: number, message: string): APICallError {
   });
 }
 
+// ─── getChatProvider ──────────────────────────────────────────────────────────
+
+function testGetChatProvider() {
+  console.log("\ngetChatProvider");
+
+  const saved = process.env.CHAT_PROVIDER;
+
+  try {
+    // Unset → defaults to 'anthropic'
+    setEnv({ CHAT_PROVIDER: undefined });
+    expect("unset CHAT_PROVIDER → 'anthropic'", getChatProvider(), "anthropic");
+
+    // Explicit 'anthropic'
+    setEnv({ CHAT_PROVIDER: "anthropic" });
+    expect("CHAT_PROVIDER=anthropic → 'anthropic'", getChatProvider(), "anthropic");
+
+    // Garbage value → 'anthropic'
+    setEnv({ CHAT_PROVIDER: "openai" });
+    expect("CHAT_PROVIDER=openai (garbage) → 'anthropic'", getChatProvider(), "anthropic");
+
+    // Exact 'bedrock'
+    setEnv({ CHAT_PROVIDER: "bedrock" });
+    expect("CHAT_PROVIDER=bedrock → 'bedrock'", getChatProvider(), "bedrock");
+  } finally {
+    setEnv({ CHAT_PROVIDER: saved });
+  }
+}
+
+// ─── memberToolsEnabled ───────────────────────────────────────────────────────
+
+function testMemberToolsEnabled() {
+  console.log("\nmemberToolsEnabled");
+
+  const saved = process.env.CHAT_PROVIDER;
+
+  try {
+    setEnv({ CHAT_PROVIDER: undefined });
+    expectFalse("unset CHAT_PROVIDER → memberToolsEnabled() false", memberToolsEnabled());
+
+    setEnv({ CHAT_PROVIDER: "anthropic" });
+    expectFalse("CHAT_PROVIDER=anthropic → memberToolsEnabled() false", memberToolsEnabled());
+
+    setEnv({ CHAT_PROVIDER: "garbage" });
+    expectFalse("CHAT_PROVIDER=garbage → memberToolsEnabled() false", memberToolsEnabled());
+
+    setEnv({ CHAT_PROVIDER: "bedrock" });
+    expectTrue("CHAT_PROVIDER=bedrock → memberToolsEnabled() true", memberToolsEnabled());
+  } finally {
+    setEnv({ CHAT_PROVIDER: saved });
+  }
+}
+
 // ─── getChatModel ─────────────────────────────────────────────────────────────
 
 function testGetChatModel() {
-  console.log("\ngetChatModel");
+  console.log("\ngetChatModel — anthropic provider (default)");
 
   const savedPrimary = process.env.CHAT_MODEL_PRIMARY;
   const savedEscalation = process.env.CHAT_MODEL_ESCALATION;
+  const savedProvider = process.env.CHAT_PROVIDER;
 
   try {
-    // Default IDs when env vars are unset
+    // Ensure we are on the anthropic provider
     setEnv({
+      CHAT_PROVIDER: undefined,
       CHAT_MODEL_PRIMARY: undefined,
       CHAT_MODEL_ESCALATION: undefined,
     });
 
-    const primaryDefault = getChatModel("primary");
-    const escalationDefault = getChatModel("escalation");
+    // Inject a stub anthropic factory — no real API key needed.
+    const calledWith: string[] = [];
+    const stubAnthropic = (id: string): LanguageModel => {
+      calledWith.push(id);
+      return makeStubModel(id);
+    };
 
-    // @ai-sdk/anthropic exposes modelId on the returned object
+    const primaryDefault = getChatModel("primary", { anthropic: stubAnthropic });
+    const escalationDefault = getChatModel("escalation", { anthropic: stubAnthropic });
+
     const primaryId = (primaryDefault as { modelId?: string }).modelId;
     const escalationId = (escalationDefault as { modelId?: string }).modelId;
 
     expect("default primary modelId is claude-haiku-4-5", primaryId, "claude-haiku-4-5");
     expect("default escalation modelId is claude-sonnet-4-6", escalationId, "claude-sonnet-4-6");
+    expect("anthropic stub called twice", calledWith.length, 2);
+    expect("anthropic stub first call: primary", calledWith[0], "claude-haiku-4-5");
+    expect("anthropic stub second call: escalation", calledWith[1], "claude-sonnet-4-6");
 
     // Custom model IDs via env
     setEnv({
@@ -113,26 +178,109 @@ function testGetChatModel() {
       CHAT_MODEL_ESCALATION: "claude-sonnet-4-6",
     });
 
-    const primaryCustom = getChatModel("primary");
-    const escalationCustom = getChatModel("escalation");
+    const calledWith2: string[] = [];
+    const stubAnthropic2 = (id: string): LanguageModel => {
+      calledWith2.push(id);
+      return makeStubModel(id);
+    };
 
-    const primaryCustomId = (primaryCustom as { modelId?: string }).modelId;
-    const escalationCustomId = (escalationCustom as { modelId?: string }).modelId;
+    getChatModel("primary", { anthropic: stubAnthropic2 });
+    getChatModel("escalation", { anthropic: stubAnthropic2 });
 
     expect(
       "custom CHAT_MODEL_PRIMARY is respected",
-      primaryCustomId,
+      calledWith2[0],
       "claude-haiku-4-5-20251001"
     );
     expect(
       "custom CHAT_MODEL_ESCALATION is respected",
-      escalationCustomId,
+      calledWith2[1],
       "claude-sonnet-4-6"
     );
   } finally {
     setEnv({
+      CHAT_PROVIDER: savedProvider,
       CHAT_MODEL_PRIMARY: savedPrimary,
       CHAT_MODEL_ESCALATION: savedEscalation,
+    });
+  }
+}
+
+function testGetChatModelBedrock() {
+  console.log("\ngetChatModel — bedrock provider");
+
+  const savedProvider = process.env.CHAT_PROVIDER;
+  const savedBedrockPrimary = process.env.CHAT_BEDROCK_MODEL_PRIMARY;
+  const savedBedrockEscalation = process.env.CHAT_BEDROCK_MODEL_ESCALATION;
+
+  try {
+    setEnv({
+      CHAT_PROVIDER: "bedrock",
+      CHAT_BEDROCK_MODEL_PRIMARY: "apac.anthropic.claude-haiku-4-5-v1:0",
+      CHAT_BEDROCK_MODEL_ESCALATION: "apac.anthropic.claude-sonnet-4-6-v1:0",
+    });
+
+    const bedrockCalls: string[] = [];
+    const stubBedrock = (id: string): LanguageModel => {
+      bedrockCalls.push(id);
+      return makeStubModel(id);
+    };
+
+    const primary = getChatModel("primary", { bedrock: stubBedrock });
+    const escalation = getChatModel("escalation", { bedrock: stubBedrock });
+
+    const primaryId = (primary as { modelId?: string }).modelId;
+    const escalationId = (escalation as { modelId?: string }).modelId;
+
+    expect(
+      "bedrock primary uses CHAT_BEDROCK_MODEL_PRIMARY",
+      primaryId,
+      "apac.anthropic.claude-haiku-4-5-v1:0"
+    );
+    expect(
+      "bedrock escalation uses CHAT_BEDROCK_MODEL_ESCALATION",
+      escalationId,
+      "apac.anthropic.claude-sonnet-4-6-v1:0"
+    );
+    expect("bedrock factory called for primary", bedrockCalls[0], "apac.anthropic.claude-haiku-4-5-v1:0");
+    expect(
+      "bedrock factory called for escalation",
+      bedrockCalls[1],
+      "apac.anthropic.claude-sonnet-4-6-v1:0"
+    );
+
+    // bedrock path must NOT call the anthropic factory
+    const anthropicCalls: string[] = [];
+    const stubAnthropic = (id: string): LanguageModel => {
+      anthropicCalls.push(id);
+      return makeStubModel(id);
+    };
+
+    getChatModel("primary", { bedrock: stubBedrock, anthropic: stubAnthropic });
+    expect(
+      "bedrock path does NOT call the anthropic factory",
+      anthropicCalls.length,
+      0
+    );
+
+    // Missing model env var → throws clear message
+    setEnv({ CHAT_BEDROCK_MODEL_PRIMARY: undefined });
+    let threw = false;
+    try {
+      getChatModel("primary", { bedrock: stubBedrock });
+    } catch (e) {
+      threw = true;
+      expectTrue(
+        "missing CHAT_BEDROCK_MODEL_PRIMARY error mentions the var name",
+        e instanceof Error && e.message.includes("CHAT_BEDROCK_MODEL_PRIMARY")
+      );
+    }
+    expectTrue("missing CHAT_BEDROCK_MODEL_PRIMARY throws", threw);
+  } finally {
+    setEnv({
+      CHAT_PROVIDER: savedProvider,
+      CHAT_BEDROCK_MODEL_PRIMARY: savedBedrockPrimary,
+      CHAT_BEDROCK_MODEL_ESCALATION: savedBedrockEscalation,
     });
   }
 }
@@ -350,7 +498,10 @@ async function testWithModelFallback() {
 // ─── runner ───────────────────────────────────────────────────────────────────
 
 async function run() {
+  testGetChatProvider();
+  testMemberToolsEnabled();
   testGetChatModel();
+  testGetChatModelBedrock();
   testIsFallbackEligibleError();
   await testWithModelFallback();
 
