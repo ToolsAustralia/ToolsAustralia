@@ -365,6 +365,16 @@ Support traffic is power-law ("the same ~200 questions ~80% of the time"), so la
 - Require a **CAPTCHA before a guest's first generative turn** — reuse the **hCaptcha already loaded on the site** (verify token server-side before any model call), or free Cloudflare Turnstile. Don't load two CAPTCHA vendors.
 - Stricter per-IP/per-session rate limits for anonymous than authenticated users.
 
+### As-built: provider + fallback (Task 1.2)
+
+`src/lib/support-chat/provider.ts` — shipped and tested.
+
+- **`getChatModel(tier)`** — returns an AI SDK `LanguageModel` via `@ai-sdk/anthropic`. Reads `CHAT_MODEL_PRIMARY` (default `claude-haiku-4-5`) and `CHAT_MODEL_ESCALATION` (default `claude-sonnet-4-6`) from env. Uses the global `anthropic()` instance which reads `ANTHROPIC_API_KEY` from env automatically.
+- **`isFallbackEligibleError(err)`** — classifies an error as fallback-eligible (429, 529, or `overloaded`/`refusal` message) or not (400/401/403/other non-transient). Exported for unit testing. Non-eligible errors are re-thrown immediately (no pointless retry).
+- **`withModelFallback(fn, opts?)`** — calls `fn(primary)` and, on a fallback-eligible error, retries once with `fn(escalation)`. Accepts an optional `getModel` dep for injection (tests use stubs — no API key needed). Phase 2 Amazon Bedrock branch can be wired here behind a `CHAT_PROVIDER=bedrock` env flag; the interface is unchanged.
+- Test: `src/lib/support-chat/__tests__/provider.test.ts` (30 assertions; all pass). Run: `npm run test:chat-provider`.
+- Smoke: `scripts/smoke-chat-provider.ts` — one real `generateText` call to `claude-haiku-4-5` (maxOutputTokens: 5). Result: `SMOKE OK: ok`. Run: `npm run smoke:chat-provider`.
+
 ### As-built: cost guard (Task 1.1)
 
 `src/lib/support-chat/costGuard.ts` — shipped and tested.
