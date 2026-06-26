@@ -4,6 +4,21 @@ Hard-won lessons. Read before touching the widget mount, the route runtime, or t
 
 ---
 
+## Provider API keys load LAZILY — a missing key fails MID-STREAM, not at construction. Preflight it.
+
+**The trap (2026-06-26):** the AI SDK provider clients (`anthropic()` / `google()`) do **not** read their API key when you build the model — they read it lazily, at request time, when the model resolves its request headers. With `ai@6`'s `streamText` being fire-and-forget (it returns a streaming `Response` immediately, retries internally, and surfaces failures on the stream), a **missing/invalid key surfaces AFTER the 200 response has already started streaming**. Consequences if unguarded:
+- The user sees a **broken/empty assistant turn** (the error arrives as a stream `error` part), not a graceful message.
+- It is **NOT caught** by ChatService's model-setup `try/catch` (that only wraps construction, which didn't throw).
+- It does **NOT** fall back to the other provider (`withModelFallback` isn't on the streaming path, and an auth error isn't fallback-eligible anyway).
+
+So toggling the live provider to Gemini (Admin → Chatbot Cost) **before** setting `GOOGLE_GENERATIVE_AI_API_KEY` would silently break every non-deflected chat.
+
+**The fix (not a bandaid):** `getChatModel()` now calls `assertProviderApiKey(provider)` **before** building the real client — failing FAST and synchronously at construction, where ChatService's model-setup `try/catch` catches it and returns the graceful canned "having trouble, let me connect you" reply **+** logs an `ErrorReport` (observable). The check is **skipped when a stub factory is injected** (`deps.google`/`deps.anthropic`), so unit tests still need no key. Regression-tested in `provider.test.ts` (`testMissingApiKeyPreflight`). Net: a mis-toggle degrades gracefully and is visible in error reporting instead of silently failing.
+
+**Rule:** any new provider must (a) be added to `PROVIDER_API_KEY_ENV` in `provider.ts` so its key is preflighted, and (b) NOT rely on the lazy key throw to surface — that throw is too late to handle. If you add a non-streaming model call path, remember the streaming path can't un-send a started response.
+
+---
+
 ## AI SDK provider packages must match the `ai` core's `@ai-sdk/provider` major
 
 **Incident (2026-06-26):** Adding Gemini via `@ai-sdk/google@4.0.0` type-checked and built green but would have **thrown at runtime** the moment the model was used. Root cause: `ai@6` (core) and `@ai-sdk/anthropic@3` both depend on **`@ai-sdk/provider@3`** (the LanguageModel "v3" spec), but `@ai-sdk/google@4` depends on **`@ai-sdk/provider@4`** — a different, newer spec. `ai@6`'s `streamText` can only drive a v3-spec model. An `as unknown as (id) => LanguageModel` cast silenced the TS error but did NOT fix the runtime incompatibility. Fixed by pinning `@ai-sdk/google@3` (3.0.84 → `@ai-sdk/provider@3.0.11`, matches the core's 3.0.10) and removing the cast.

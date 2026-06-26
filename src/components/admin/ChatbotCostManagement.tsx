@@ -87,7 +87,7 @@ function DonutBreakdown({
   footer?: React.ReactNode;
 }) {
   return (
-    <Card>
+    <Card className="p-4">
       <p className="text-xs font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400 mb-4">
         {title}
       </p>
@@ -391,7 +391,7 @@ export default function ChatbotCostManagement() {
 
       {/* No data state */}
       {!isLoading && !hasData && (
-        <Card>
+        <Card className="p-4">
           <div className="flex flex-col items-center justify-center py-16 text-center gap-3">
             <Zap className="w-8 h-8 text-neutral-300 dark:text-neutral-600" />
             <p className="text-sm font-medium text-neutral-500 dark:text-neutral-400">
@@ -424,7 +424,7 @@ export default function ChatbotCostManagement() {
           />
 
           {/* Daily cost chart */}
-          <Card>
+          <Card className="p-4">
             <p className="text-xs font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400 mb-4">
               Daily spend (USD) — last {days} days
             </p>

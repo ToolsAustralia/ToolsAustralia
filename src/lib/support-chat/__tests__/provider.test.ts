@@ -12,6 +12,7 @@ import assert from "node:assert/strict";
 
 import {
   getChatModel,
+  assertProviderApiKey,
   isFallbackEligibleError,
   withModelFallback,
 } from "../provider";
@@ -237,6 +238,96 @@ function testGetChatModelGoogle() {
   }
 }
 
+// ─── assertProviderApiKey / missing-key preflight ────────────────────────────
+
+function testMissingApiKeyPreflight() {
+  console.log("\nmissing API-key preflight");
+
+  const savedAnthropic = process.env.ANTHROPIC_API_KEY;
+  const savedGoogle = process.env.GOOGLE_GENERATIVE_AI_API_KEY;
+
+  try {
+    // ── Keys absent ──────────────────────────────────────────────────────────
+    setEnv({ ANTHROPIC_API_KEY: undefined, GOOGLE_GENERATIVE_AI_API_KEY: undefined });
+
+    // assertProviderApiKey throws with the env-var name for each provider.
+    let anthropicThrew = false;
+    let anthropicMsg = "";
+    try {
+      assertProviderApiKey("anthropic");
+    } catch (e) {
+      anthropicThrew = true;
+      anthropicMsg = (e as Error).message;
+    }
+    expectTrue("assertProviderApiKey('anthropic') throws when key absent", anthropicThrew);
+    expectTrue(
+      "anthropic error names ANTHROPIC_API_KEY",
+      anthropicMsg.includes("ANTHROPIC_API_KEY")
+    );
+
+    let googleThrew = false;
+    let googleMsg = "";
+    try {
+      assertProviderApiKey("google");
+    } catch (e) {
+      googleThrew = true;
+      googleMsg = (e as Error).message;
+    }
+    expectTrue("assertProviderApiKey('google') throws when key absent", googleThrew);
+    expectTrue(
+      "google error names GOOGLE_GENERATIVE_AI_API_KEY",
+      googleMsg.includes("GOOGLE_GENERATIVE_AI_API_KEY")
+    );
+
+    // getChatModel with the REAL client (no stub) + missing key → throws fast.
+    let realGoogleThrew = false;
+    try {
+      getChatModel("primary", "google");
+    } catch {
+      realGoogleThrew = true;
+    }
+    expectTrue(
+      "getChatModel('primary','google') throws when GOOGLE key absent (real client)",
+      realGoogleThrew
+    );
+
+    let realAnthropicThrew = false;
+    try {
+      getChatModel("primary", "anthropic");
+    } catch {
+      realAnthropicThrew = true;
+    }
+    expectTrue(
+      "getChatModel('primary','anthropic') throws when ANTHROPIC key absent (real client)",
+      realAnthropicThrew
+    );
+
+    // BUT a stub factory bypasses the key check — no key needed for tests.
+    let stubThrew = false;
+    try {
+      getChatModel("primary", "google", { google: (id) => makeStubModel(id) });
+    } catch {
+      stubThrew = true;
+    }
+    expectFalse("injected stub bypasses the key check (no throw)", stubThrew);
+
+    // ── Key present → assert passes ──────────────────────────────────────────
+    setEnv({ GOOGLE_GENERATIVE_AI_API_KEY: "test-key-not-real" });
+    let presentThrew = false;
+    try {
+      assertProviderApiKey("google");
+    } catch {
+      presentThrew = true;
+    }
+    expectFalse("assertProviderApiKey('google') passes when key present", presentThrew);
+  } finally {
+    setEnv({
+      ANTHROPIC_API_KEY: savedAnthropic,
+      GOOGLE_GENERATIVE_AI_API_KEY: savedGoogle,
+    });
+  }
+}
+
 // ─── isFallbackEligibleError ──────────────────────────────────────────────────
 
 function testIsFallbackEligibleError() {
@@ -452,6 +543,7 @@ async function testWithModelFallback() {
 async function run() {
   testGetChatModel();
   testGetChatModelGoogle();
+  testMissingApiKeyPreflight();
   testIsFallbackEligibleError();
   await testWithModelFallback();
 

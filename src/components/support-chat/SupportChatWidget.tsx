@@ -132,7 +132,18 @@ function MessageBubble({ msg }: { msg: UIMessage }) {
 }
 
 // ── Main widget component ─────────────────────────────────────────────────────
-export default function SupportChatWidget() {
+interface SupportChatWidgetProps {
+  /**
+   * Which screen corner the floating bubble + panel dock to. Default "right".
+   * Set to "left" where the bottom-right corner is already taken (e.g. the
+   * promotions pages, where the guest theme toggle + account FAB live there).
+   */
+  side?: "left" | "right";
+}
+
+export default function SupportChatWidget({ side = "right" }: SupportChatWidgetProps) {
+  // Horizontal dock — same inset on either side so the bubble/panel line up.
+  const sideClass = side === "left" ? "left-5" : "right-5";
   const {
     messages,
     status,
@@ -238,7 +249,7 @@ export default function SupportChatWidget() {
       <button
         onClick={() => setOpen((v) => !v)}
         aria-label={open ? "Close chat" : "Open AI support chat"}
-        className="fixed bottom-5 right-5 w-14 h-14 rounded-full bg-orange-500 hover:bg-orange-600 text-white shadow-lg flex items-center justify-center transition-all duration-200 hover:scale-105 focus:outline-none focus:ring-2 focus:ring-orange-400 focus:ring-offset-2"
+        className={`fixed bottom-5 ${sideClass} w-14 h-14 rounded-full bg-orange-500 hover:bg-orange-600 text-white shadow-lg flex items-center justify-center transition-all duration-200 hover:scale-105 focus:outline-none focus:ring-2 focus:ring-orange-400 focus:ring-offset-2`}
         style={{ zIndex: Z_INDEX.MODAL_BASE - 1000 }}
       >
         {open ? (
@@ -272,7 +283,7 @@ export default function SupportChatWidget() {
       {/* Panel */}
       {open && (
         <div
-          className="fixed bottom-24 right-5 w-[22rem] max-w-[calc(100vw-2.5rem)] bg-white dark:bg-neutral-900 rounded-2xl shadow-2xl flex flex-col border border-gray-200 dark:border-neutral-700 overflow-hidden"
+          className={`fixed bottom-24 ${sideClass} w-[22rem] max-w-[calc(100vw-2.5rem)] bg-white dark:bg-neutral-900 rounded-2xl shadow-2xl flex flex-col border border-gray-200 dark:border-neutral-700 overflow-hidden`}
           style={{ zIndex: Z_INDEX.MODAL_BASE - 1000, height: "min(560px, calc(100svh - 8rem))" }}
         >
           {/* Header */}

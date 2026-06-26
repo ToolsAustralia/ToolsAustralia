@@ -16,6 +16,15 @@ const SupportChatWidget = nextDynamic(
   { ssr: false }
 );
 
-export default function SupportChatWidgetMount() {
-  return <SupportChatWidget />;
+/**
+ * @param side which corner the bubble docks to. Default "right" (the site-wide
+ *   placement). Pass "left" where the bottom-right corner is already occupied —
+ *   e.g. the promotions layout (guest theme toggle + account FAB live there).
+ */
+export default function SupportChatWidgetMount({
+  side = "right",
+}: {
+  side?: "left" | "right";
+}) {
+  return <SupportChatWidget side={side} />;
 }

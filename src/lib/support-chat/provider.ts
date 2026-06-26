@@ -46,6 +46,44 @@ export interface ChatModelDeps {
  */
 export type GetModelFn = (tier: "primary" | "escalation") => LanguageModel;
 
+// ─── API-key preflight ───────────────────────────────────────────────────────
+
+/** Env var that holds each provider's API key. */
+const PROVIDER_API_KEY_ENV: Record<"anthropic" | "google", string> = {
+  anthropic: "ANTHROPIC_API_KEY",
+  google: "GOOGLE_GENERATIVE_AI_API_KEY",
+};
+
+/**
+ * Throws (synchronously) if the API key for `provider` is absent from the env.
+ *
+ * WHY THIS EXISTS: the AI SDK provider clients (`anthropic()` / `google()`) read
+ * their key LAZILY — at request time, not at model construction. So a missing key
+ * does NOT surface when the model is built; it surfaces mid-stream, AFTER the HTTP
+ * response has already started streaming, where it cannot be turned into a graceful
+ * reply (the user just sees a broken/empty turn, and it does NOT fall back to the
+ * other provider). By failing fast HERE — at construction, inside ChatService's
+ * model-setup try/catch — the error is caught and converted to the canned
+ * "having trouble, let me connect you" reply + an ErrorReport, so a mis-toggle
+ * (e.g. switching the live provider to Gemini before setting its key) degrades
+ * gracefully and is observable instead of silently breaking every chat.
+ *
+ * Only enforced for the REAL provider clients. Callers that inject a stub factory
+ * (unit tests) bypass this — a stub needs no key.
+ *
+ * Exported for unit testing.
+ */
+export function assertProviderApiKey(provider: "anthropic" | "google"): void {
+  const envVar = PROVIDER_API_KEY_ENV[provider];
+  if (!process.env[envVar]) {
+    throw new Error(
+      `${envVar} is not set — cannot use the "${provider}" chat provider. ` +
+        `Set ${envVar} in the environment, or switch the active provider in ` +
+        `Admin → Chatbot Cost.`
+    );
+  }
+}
+
 // ─── getChatModel ────────────────────────────────────────────────────────────
 
 /**
@@ -71,6 +109,8 @@ export function getChatModel(
       tier === "primary"
         ? (process.env.CHAT_GOOGLE_MODEL_PRIMARY ?? DEFAULT_GOOGLE_PRIMARY)
         : (process.env.CHAT_GOOGLE_MODEL_ESCALATION ?? DEFAULT_GOOGLE_ESCALATION);
+    // Preflight the key only when using the real client (a stub needs none).
+    if (!deps?.google) assertProviderApiKey("google");
     const googleFn = deps?.google ?? google;
     return googleFn(modelId);
   }
@@ -81,6 +121,8 @@ export function getChatModel(
       ? (process.env.CHAT_MODEL_PRIMARY ?? DEFAULT_PRIMARY_MODEL)
       : (process.env.CHAT_MODEL_ESCALATION ?? DEFAULT_ESCALATION_MODEL);
 
+  // Preflight the key only when using the real client (a stub needs none).
+  if (!deps?.anthropic) assertProviderApiKey("anthropic");
   const anthropicFn = deps?.anthropic ?? anthropic;
   return anthropicFn(modelId);
 }
