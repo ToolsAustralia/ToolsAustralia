@@ -16,5 +16,5 @@ Flow: `requireSameOrigin` → distributed rate-limit (`partner-discount-sso`, fa
 Statuses: 401 unauth · 403 no-access / cross-origin · 429 rate · 502 vendor unavailable · 500.
 
 - **`member_level` is intentionally NOT sent yet** — gated on iGoDirect's encoding answer (implementation-plan §5a); the resolved tier is still recorded in the issuance log. One documented line at the `generatePortalSso` call flips it on.
-- **PII boundary:** only the opaque `member_id` is sent — email/name omitted until a deletion path/DPA is confirmed.
+- **PII (owner-approved 2026-06-24):** sends `firstname` / `lastname` / `email` (so the member's portal profile pre-fills) plus the opaque `member_id`. Mobile is not in MyRewards' SSO payload. This makes a **member-deletion / anonymisation API + DPA** a firm vendor ask (implementation-plan §5 #7).
 - **Not released to members** until the deprovisioning/re-sync question is resolved (button stays unwired). **Not** an admin route → no Norm mirror.

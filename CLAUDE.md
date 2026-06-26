@@ -415,7 +415,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/app/api/partner-discount/**",
         "src/app/(site)/partner/**"
       ],
-      "lastVerified": "2026-06-16"
+      "lastVerified": "2026-06-24"
     },
     "upsell": {
       "docs": "docs/upsell/",
@@ -658,7 +658,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/hooks/usePrefetching.ts",
         "src/hooks/useConfetti.ts"
       ],
-      "lastVerified": "2026-06-19"
+      "lastVerified": "2026-06-24"
     },
     "internal-norm": {
       "docs": "docs/internal-norm/",

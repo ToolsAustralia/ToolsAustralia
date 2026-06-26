@@ -77,7 +77,7 @@ Both halves consume the **same** reconcile-then-read gate. Nothing built so far 
 
 ### PII / privacy
 
-Keep `email`/`firstname`/`lastname` **OFF by default** in the token (the signer already sends them only-if-present). MyRewards auto-creates a permanent account with **no documented delete** → **execute a DPA with a deletion clause before sending any PII**; otherwise send `member_id` + `member_level` only.
+**Now SENT (owner-approved 2026-06-24):** `firstname` / `lastname` / `email` are included so the member's portal profile pre-fills (mobile is NOT in MyRewards' SSO payload, so it cannot be sent). `member_id` remains the opaque stable key. Because MyRewards auto-creates a permanent account with **no documented delete**, sending this PII makes a **member-deletion / anonymisation ask + DPA a FIRM requirement** (now a live query to iGoDirect — see §5 #7), not optional.
 
 ---
 
@@ -112,7 +112,7 @@ The public docs **contradict or do not confirm** several load-bearing facts. Tre
 | 4 | **HS256** specifically | ⚠️ docs say "HMAC" only — HS256 not stated (signer pins HS256) | confirm pin won't break |
 | 5 | `/verifytoken` **single-use**? + post-verify **session lifetime** | ❓ not findable | replay defense (N7), access-leak severity |
 | 6 | **Deprovisioning / deactivate API** (Q8) | ❓ none documented | the access-leak gap — resolve or **explicitly accept** "cancelled member retains portal access up to TTL" before launch |
-| 7 | **DPA + deletion clause** before any PII | — | sending `email`/name |
+| 7 | **Member deletion / anonymisation API + DPA** — *now FIRM: we send `firstname`/`lastname`/`email`.* Is there an API or process to **delete or anonymise a member** on a privacy / right-to-erasure request? (Their JWT method auto-creates a permanent account with no documented delete.) | ❓ none documented | privacy compliance for the PII we now send |
 
 > The SSO **entry** half (tasks 1–5, 8-CTA) is buildable + unit-testable **now** with mocks. The **offer-feed** half is blocked on #1/#2. Build SSO first; gate the offer-feed behind the answers.
 

@@ -34,3 +34,7 @@ setTimeout(() => doSomething(items), 1000);
 // Right — read fresh state
 setTimeout(() => doSomething(useStore.getState().items), 1000);
 ```
+
+## A feature-gate 403 must NOT use `apiPost` (it force-signs-out) (2026-06-24)
+
+`apiRequest`/`apiPost` in [src/lib/queries.ts](../../src/lib/queries.ts) treat **any 401/403** as an invalid session and call `signOut()`. That's correct for auth failures, but **wrong for a feature-gating 403** — a logged-in member who simply lacks a feature should see an error, not be logged out of the whole site. [`usePartnerDiscountSso`](../../src/hooks/queries/usePartnerDiscountSso.ts) deliberately uses a **raw `fetch`** for exactly this reason: its route returns `403` for "no active partner-discount access". If you add a hook whose route 403s as a feature gate (not an auth check), do the same — don't route it through `apiPost`.

@@ -48,8 +48,10 @@ export interface PortalSsoResult {
 /**
  * Mint a MyRewards SSO hand-off for `user`.
  *
- * PII boundary (§3): we send ONLY the opaque `member_id` — email/firstname/lastname are
- * intentionally omitted until a deletion path / DPA is confirmed with the vendor.
+ * PII (owner-approved 2026-06-24): sends `firstname` / `lastname` / `email` so the member's
+ * portal profile pre-fills; `member_id` is the opaque stable key. Mobile is NOT part of
+ * MyRewards' SSO payload, so it cannot be sent here. MyRewards documents no member-delete —
+ * keep pushing iGoDirect for a DPA / deletion clause (open meeting question).
  *
  * `memberLevel` is intentionally OPTIONAL and OMITTED by the SSO route today — see the
  * route's call site. To enable it once iGoDirect confirms the encoding (§5a), pass the
@@ -60,6 +62,9 @@ export async function generatePortalSso(params: { user: IUser; memberLevel?: str
 
   const token = await signPartnerDiscountSsoToken({
     memberId: String(params.user._id),
+    firstname: params.user.firstName,
+    lastname: params.user.lastName,
+    email: params.user.email,
     memberLevel: params.memberLevel,
     domainUrl,
     domainCode,
