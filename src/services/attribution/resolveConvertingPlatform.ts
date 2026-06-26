@@ -3,13 +3,13 @@
 // A click with capturedAt === null cannot win as a "click" (we can't trust its recency;
 // guards the fbc Date.now() fallback) — it degrades to the utm fallback.
 import type { ConvertingPlatform, ResolveInput, ResolveResult } from "@/types/attribution";
-import { windowDaysFor } from "./platformPriority";
+import { windowDaysFor, isOwnedChannel } from "./platformPriority";
 import { normalizeUtmToPlatform } from "./normalizePlatform";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 export function resolveConvertingPlatform(input: ResolveInput): ResolveResult {
-  const { clicks, utm, utmCapturedAt, now } = input;
+  const { clicks, utm, utmCapturedAt, lastTouchUtm, lastTouchUtmCapturedAt, now } = input;
 
   const observedTouches: ResolveResult["observedTouches"] = [];
 
@@ -42,7 +42,30 @@ export function resolveConvertingPlatform(input: ResolveInput): ResolveResult {
     };
   }
 
-  // Fallback: normalized utm_source (+ medium). Tier-2 owned channels resolve here too,
+  // Owned-channel LAST touch (tier 2 — Klaviyo email/SMS). Ranks below paid clicks but ABOVE the
+  // first-touch fallback: a Klaviyo recipient is a returning user whose first touch is some earlier
+  // source, so the durable first-touch cookie would otherwise bury the conversion in `direct`/that
+  // earlier source. Honors the channel's own window against the last-touch capturedAt.
+  const lastPlatform = normalizeUtmToPlatform(lastTouchUtm?.utm_source, lastTouchUtm?.utm_medium);
+  if (isOwnedChannel(lastPlatform)) {
+    const windowDays = windowDaysFor(lastPlatform!);
+    const withinWindow =
+      windowDays == null ||
+      lastTouchUtmCapturedAt == null ||
+      (now - lastTouchUtmCapturedAt <= windowDays * DAY_MS && now - lastTouchUtmCapturedAt >= 0);
+    if (withinWindow) {
+      return {
+        platform: lastPlatform!,
+        confidence: "utm_only",
+        attributedClickId: null,
+        attributedClickTimestamp: lastTouchUtmCapturedAt ?? null,
+        windowDays: windowDays ?? null,
+        observedTouches,
+      };
+    }
+  }
+
+  // Fallback: normalized FIRST-touch utm_source (+ medium). Tier-2 owned channels resolve here too,
   // honoring their window against utmCapturedAt.
   const utmPlatform = normalizeUtmToPlatform(utm?.utm_source, utm?.utm_medium);
   if (utmPlatform && utmPlatform !== "other") {
