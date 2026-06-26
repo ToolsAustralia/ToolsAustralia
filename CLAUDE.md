@@ -71,6 +71,21 @@ Both files include a "Coming soon" section — when something ships, **move the 
 
 **This rule IS hook-enforced (trigger-based).** The `Stop` hook (`.claude/hooks/doc-sync.mjs`) holds a curated `BUSINESS_TRIGGER_GLOBS` list of business-material source paths; if you edit one of them substantively and touch **neither** README.md nor BUSINESS.md in the same turn, it BLOCKS with `STALE BUSINESS DOCS`. The hook only checks that a root doc was *touched* — it cannot verify the *content* is correct, so you still own getting the wording right (and `/review` should still flag it). If a triggered edit genuinely changed no business-level fact (pure refactor), make a one-line clarifying touch to the relevant BUSINESS.md section to clear the block. When you add a new business-material source file, add its path to `BUSINESS_TRIGGER_GLOBS` in the hook.
 
+### 5b. Keep CUSTOMER.md in sync with customer-level changes
+
+`CUSTOMER.md` is the top-level **customer-context** document — the customer-side companion to BUSINESS.md. Where BUSINESS.md documents the business mechanics (packages, pricing, draw cadence, billing rules), CUSTOMER.md documents the **customer**: who they are (guest vs member), the data/fields held about them (the `User` model), their lifecycle states, and their journey/flows. You **must** update it in the same task when your change flips a fact it asserts. Triggers:
+
+- A field is added/removed/changed on the customer data model (`src/models/User.ts`) or what's derived from it (`UserContext`).
+- A subscription/membership **lifecycle state** or transition changes (active / trialing / past_due / paused / cancelled / expired, the two ghost states, reactivation / resubscribe).
+- An **account-creation or auth** flow changes (registration steps, the guest→member `guestUserData` bridge, Google OAuth, email verification, password reset, login).
+- The **membership journey** changes (purchase, upgrade, downgrade, the cancellation/retention flow + its offers, auto-renew, the renewal-date / anchor-24 rule).
+- How a customer **earns or holds entries**, or **draw eligibility** (18+, SA/ACT exclusion), changes.
+- A **perk** changes (partner-discount tier visibility, referral rewards, affiliate enrolment, rewards / redeemables).
+- What **customer data is captured or sent to third parties** changes (UTM/attribution, Klaviyo profile properties, Meta / CAPI events).
+- The **account surface** (`/my-account`), the customer **PII footprint**, retention, or data-rights (delete account / chat history; sign-out client-storage clearing) changes.
+
+**This rule IS hook-enforced (trigger-based).** The `Stop` hook (`.claude/hooks/doc-sync.mjs`) holds a curated `CUSTOMER_TRIGGER_GLOBS` list of customer-material source paths; if you edit one of them substantively and do **not** touch CUSTOMER.md in the same turn, it BLOCKS with `STALE CUSTOMER DOC`. The hook only checks that CUSTOMER.md was *touched* — it cannot verify the content is correct, so you still own getting the wording right. If a triggered edit genuinely changed no customer-level fact (pure refactor), make a one-line clarifying touch to CUSTOMER.md to clear the block. When you add a new customer-material source file, add its path to `CUSTOMER_TRIGGER_GLOBS` in the hook.
+
 ### 6. Verify before claiming — AND before branching on assumed state
 
 Never state a fact about the code, this codebase's runtime behavior, or a third-party API/service without first checking. "Checking" means a Read, Grep, Bash command, doc lookup, or runtime probe — not recall.
