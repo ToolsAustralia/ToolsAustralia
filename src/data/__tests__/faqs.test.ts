@@ -93,8 +93,8 @@ function main() {
     "Unexpected-charge FAQ (id 21) must explain renewal happens on the member's own billing date (NOT a blanket 'the 24th of each month' — only 25th–27th joiners are anchored to the 24th)"
   );
 
-  // 8. Total entry count must be 27 after the June 2026 additions.
-  assert.strictEqual(entries.length, 27, `Expected 27 FAQ entries, got ${entries.length}`);
+  // 8. Total entry count must be 38 after the membership/account-aware additions.
+  assert.strictEqual(entries.length, 38, `Expected 38 FAQ entries, got ${entries.length}`);
 
   // 9. Upgrade entry (id 22) must exist and link to /my-account.
   const upgradeEntry = entries.find((e) => e.id === "22");
@@ -110,6 +110,50 @@ function main() {
   assert.ok(
     downgradeEntry!.answer.includes("[My Account](/my-account)"),
     "Downgrade FAQ (id 23) must include [My Account](/my-account) link"
+  );
+
+  // 11. Membership terminology: customer-facing copy says "Membership entries"
+  // (not "Subscription entries"). The literal "Settings → Subscription" tab name
+  // is intentionally preserved, so we don't assert absence of the word "subscription".
+  assert.ok(
+    combinedText.includes("Membership entries"),
+    'FAQs must use "Membership entries" (not "Subscription entries") in customer-facing copy'
+  );
+  assert.ok(
+    !lowerText.includes("subscription entries"),
+    'FAQs must NOT say "subscription entries" — use "membership entries"'
+  );
+
+  // 12. Join / how-membership-works entry (id 28) must exist and link to /membership.
+  const joinEntry = entries.find((e) => e.id === "28");
+  assert.ok(joinEntry !== undefined, "FAQ entry id=28 (become a member / how membership works) must exist");
+  assert.ok(
+    joinEntry!.answer.includes("/membership"),
+    "Join FAQ (id 28) must link to the /membership page"
+  );
+
+  // 13. Account-aware entries (id 29 entries, id 30 tier) route to My Account and
+  // must NOT recite account data — they point the user to their dashboard.
+  const myEntries = entries.find((e) => e.id === "29");
+  assert.ok(myEntries !== undefined, "FAQ entry id=29 (where are my entries) must exist");
+  assert.ok(
+    myEntries!.answer.includes("/my-account"),
+    "My-entries FAQ (id 29) must direct the user to /my-account"
+  );
+  const myTier = entries.find((e) => e.id === "30");
+  assert.ok(myTier !== undefined, "FAQ entry id=30 (what tier am I on) must exist");
+  assert.ok(
+    myTier!.answer.includes("/my-account"),
+    "My-tier FAQ (id 30) must direct the user to /my-account"
+  );
+
+  // 14. Did-I-win / results entry (id 31) must exist and link to /draw-results
+  // (a result query must NOT be answered with the prize catalog).
+  const didIWin = entries.find((e) => e.id === "31");
+  assert.ok(didIWin !== undefined, "FAQ entry id=31 (did I win / draw results) must exist");
+  assert.ok(
+    didIWin!.answer.includes("/draw-results"),
+    "Did-I-win FAQ (id 31) must link to /draw-results"
   );
 
   console.log("PASS — faqs.test.ts passed —", entries.length, "entries, all checks green");

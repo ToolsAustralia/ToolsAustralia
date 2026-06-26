@@ -4,6 +4,29 @@ Hard-won lessons. Read before touching the widget mount, the route runtime, or t
 
 ---
 
+## Deflection must be HIGH-PRECISION — a low-confidence "nearest FAQ" is confidently-wrong (2026-06-27)
+
+**Incident:** an owner stress-test found Cobber giving confidently-wrong canned answers — "how to become a member" → the *partner-brand* application; "how membership works" → the *refund* policy; "where can I see my entries" → "get **more** entries"; "did I win" → the prize *catalog*; "what tier am I on" → the *downgrade* explainer. A scripted audit measured a **45% mis-route rate** over 20 realistic questions.
+
+**Root cause (two parts):**
+1. **Layer-2 scored with raw term-frequency cosine — no IDF** (despite the "TF-IDF-inspired" comment). Ubiquitous domain words ("entries", "membership", "tier") counted as much as rare ones, so a query sharing ONE common word with an off-topic entry scored high (0.55–0.70) and was served verbatim. The 0.15 floor was a noise floor, not a correctness gate.
+2. **No FAQ entry existed for whole intents** (join / how-membership-works / "my" account questions), so the matcher returned the nearest *wrong* topic instead of abstaining.
+
+**The fix (root, not bandaid):**
+- **Scorer → TF-IDF cosine** ([retrieve.ts](../../src/lib/support-chat/knowledge/retrieve.ts): `buildIdf` + `tfidf`). Common words are down-weighted; discriminating words win. Scores stay in [0,1].
+- **Abstain gate** ([faqSearch.ts](../../src/services/support-chat/deflection/faqSearch.ts)): `MIN_CONFIDENCE` 0.15 → **0.18**, **plus a top1-vs-top2 `MIN_MARGIN` (0.05)** — two near-tied candidates above the floor mean the query is ambiguous, so abstain to the grounded LLM rather than serve a coin-flip. Deflection is deliberately high-precision: a missed deflection costs one cheap (grounded) LLM call; a wrong deflection has no model in the loop.
+- **Account-aware Layer-1 interception** ([decisionTree.ts](../../src/services/support-chat/deflection/decisionTree.ts)): new intent rules placed FIRST so "did I win", "where are my entries", "what tier am I on", "talk to a human", "charged twice", etc. route deterministically — and the lexical scorer can't pull them to the wrong topic. Over-broad signals tightened (`prize`, `why was I charged`).
+- **New FAQ entries** ([faqs.ts](../../src/data/faqs.ts), now 38): join/how-membership-works (28, links `/membership`), account-aware **navigation-only** entries (29 entries, 30 tier, 37 update details — they recite NO data), did-I-win/results (31, links `/draw-results`), login help (32), signed-up-not-member (33), card-safety (34), data-retention (35), GST (36), talk-to-human (38).
+- **Account self-service map in the system prompt** ([systemPrompt.ts](../../src/services/support-chat/systemPrompt.ts)) so the LLM long-tail answers "my X" with the exact My-Account location, never a value.
+
+**Why FAQ entries (not hand-copied doc prose):** `faqs.ts` is the single source feeding the /faq page, the deflection matcher, AND the knowledge pack. Adding knowledge there enriches all three with no drift. Hand-copying CUSTOMER.md/BUSINESS.md prose into the pack builder would drift the moment those docs change.
+
+**Regression-locked:** every previously-wrong route is asserted in [deflection.test.ts](../../src/services/support-chat/__tests__/deflection.test.ts) `testRegressionRoutes` (19 routes incl. the critical non-regressions "what can I win" → 3, "get more entries" → 8). **Phase-3 follow-up:** calibrate the threshold/margin against the full golden set via `npm run eval:chat` instead of the hand-picked 0.18/0.05.
+
+**Live promo:** Cobber now learns the current public promo per request via [currentPromo.ts](../../src/services/support-chat/currentPromo.ts) → `PromoMultiplierResolverService.getEffectiveForBanner()` (same source the banners use; never surfaces unannounced future promos), injected into the prompt by `buildSystemPrompt(pack, { currentPromo })`. Fail-safe to null (a promo lookup must never break a chat). Resolved only on the real-model path so the unit test stays Mongo-free.
+
+---
+
 ## Provider API keys load LAZILY — a missing key fails MID-STREAM, not at construction. Preflight it.
 
 **The trap (2026-06-26):** the AI SDK provider clients (`anthropic()` / `google()`) do **not** read their API key when you build the model — they read it lazily, at request time, when the model resolves its request headers. With `ai@6`'s `streamText` being fire-and-forget (it returns a streaming `Response` immediately, retries internally, and surfaces failures on the stream), a **missing/invalid key surfaces AFTER the 200 response has already started streaming**. Consequences if unguarded:

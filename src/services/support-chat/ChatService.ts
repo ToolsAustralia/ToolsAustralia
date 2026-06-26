@@ -74,6 +74,7 @@ import {
 } from "@/lib/support-chat/costGuard";
 import { getChatModel } from "@/lib/support-chat/provider";
 import { getActiveChatProvider as realGetActiveChatProvider } from "@/lib/support-chat/chatSettings";
+import { getCurrentPromoBlurb } from "@/services/support-chat/currentPromo";
 import { getKnowledgePack } from "@/lib/support-chat/knowledge/pack";
 import { buildSystemPrompt } from "@/services/support-chat/systemPrompt";
 import {
@@ -224,6 +225,13 @@ export interface ChatServiceDeps {
    * from chatSettings.ts. Only used when getModel is not provided.
    */
   getActiveChatProvider?: () => Promise<"anthropic" | "google">;
+  /**
+   * Resolves the current public promo blurb for the system prompt. Defaults to
+   * getCurrentPromoBlurb (reuses the banner resolver). Fail-safe to null. Only
+   * consulted on the real-model path (skipped when getModel is injected), so the
+   * unit test stays Mongo-free without stubbing it.
+   */
+  getCurrentPromo?: () => Promise<string | null>;
   /**
    * Defaults to the real verifyHcaptcha (src/lib/support-chat/captcha.ts).
    * Inject a stub in tests to avoid real network calls.
@@ -668,14 +676,21 @@ export const chatService = {
     let model: LanguageModel;
     let system: string;
     try {
+      // Current public promo for the prompt — resolved only on the real-model path
+      // (the injected-getModel test path leaves it null, keeping tests Mongo-free).
+      let currentPromo: string | null = null;
       if (deps.getModel) {
         model = deps.getModel();
       } else {
         const resolveProvider = deps.getActiveChatProvider ?? realGetActiveChatProvider;
         const provider = await resolveProvider();
         model = getChatModel("primary", provider);
+        const resolvePromo = deps.getCurrentPromo ?? getCurrentPromoBlurb;
+        currentPromo = await resolvePromo();
       }
-      system = buildSystemPrompt(getKnowledgePack());
+      system = buildSystemPrompt(getKnowledgePack(), {
+        currentPromo: currentPromo ?? undefined,
+      });
     } catch (err) {
       // Hard setup error (e.g. missing knowledge pack / model env) → graceful canned reply.
       console.error("[ChatService] model setup failed", err);

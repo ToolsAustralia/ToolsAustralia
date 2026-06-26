@@ -8,18 +8,18 @@
  * returns the best match if its score meets the confidence threshold.
  *
  * Confidence threshold rationale:
- *   - Cosine similarity over term-frequencies.
- *   - In empirical testing on the 17-entry Tools Australia FAQ corpus, genuine
- *     matches (e.g. "pricing" → tiers question) score ≥ 0.25, while off-topic
- *     questions (weather, geography, cooking) score < 0.10.
- *   - 0.15 was chosen as the threshold: it is well above the observed off-topic
- *     noise floor (≤ 0.05 for unrelated questions), and low enough to catch
- *     paraphrased FAQ questions that share only 1-2 content words with the
- *     entry's question text.
- *   - The decision-tree already handles the ≥ 0.40 "obvious" cases, so this
- *     layer only needs to be correct in the 0.15–0.40 zone.
- *   - If a Phase 3 vector backend replaces retrieve.ts, the threshold value
- *     should be re-tuned against the embedding similarity distribution.
+ *   - TF-IDF cosine similarity (retrieve.ts), so ubiquitous words ("entries",
+ *     "membership") are down-weighted and don't pull a query to the wrong entry.
+ *   - High-precision by design: a missed deflection costs one cheap, grounded LLM
+ *     call; a WRONG deflection is a confidently-wrong canned answer with no model
+ *     in the loop. So we prefer to abstain when unsure.
+ *   - MIN_CONFIDENCE is the floor; MIN_MARGIN abstains when the top two candidates
+ *     both clear the floor and are near-tied (ambiguous topic). The decision-tree
+ *     (Layer-1) owns the obvious intents, so this layer covers the fuzzy tail.
+ *   - These values (0.18 / 0.05) were set against the regression routes in
+ *     deflection.test.ts; calibrate them on the full golden set via
+ *     `npm run eval:chat` (Phase-3 follow-up), and re-tune if a vector backend
+ *     replaces retrieve.ts.
  */
 
 import { searchFaqs } from "@/lib/support-chat/knowledge/retrieve";
@@ -27,11 +27,24 @@ import { searchFaqs } from "@/lib/support-chat/knowledge/retrieve";
 // ─── Config ───────────────────────────────────────────────────────────────────
 
 /**
- * Minimum cosine similarity score for a FAQ match to be accepted.
- * Below this threshold → `answered: false` (falls through to LLM).
- * See module docstring for derivation.
+ * Minimum TF-IDF cosine score for a FAQ match to be accepted.
+ * Below this → `answered: false` (falls through to the grounded LLM).
+ *
+ * Deflection is intentionally HIGH-precision: a missed deflection just costs one
+ * cheap LLM call (and the LLM is itself grounded on the knowledge pack), whereas
+ * a wrong deflection is a confidently-wrong canned answer with no model in the
+ * loop to catch it. So we prefer to abstain when unsure. (Full golden-set
+ * calibration of this bar is the Phase-3 follow-up; `npm run eval:chat`.)
  */
-const MIN_CONFIDENCE = 0.15;
+const MIN_CONFIDENCE = 0.18;
+
+/**
+ * Minimum lead the top match must have over the runner-up when BOTH clear the
+ * floor. Two near-tied candidates mean the query is ambiguous between topics —
+ * returning either verbatim would be a coin-flip, so we abstain and let the
+ * grounded LLM disambiguate instead of guessing.
+ */
+const MIN_MARGIN = 0.05;
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -58,6 +71,14 @@ export function searchFaqLayer(query: string): FaqSearchResult {
 
   const best = ranked[0];
   if (best.score < MIN_CONFIDENCE) return { answered: false };
+
+  // Ambiguity guard: if the runner-up also clears the floor and is within
+  // MIN_MARGIN of the top, the query doesn't clearly belong to one FAQ — abstain
+  // and let the grounded LLM decide rather than serve a coin-flip canned answer.
+  const second = ranked[1];
+  if (second && second.score >= MIN_CONFIDENCE && best.score - second.score < MIN_MARGIN) {
+    return { answered: false };
+  }
 
   return {
     answered: true,

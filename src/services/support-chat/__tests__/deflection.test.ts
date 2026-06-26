@@ -481,6 +481,67 @@ async function testPauseMembership() {
   );
 }
 
+// ─── Regression routes (the 2026-06 answer-quality fix) ──────────────────────
+// Each question previously deflected to a WRONG canned answer (cosine matched the
+// nearest-of-N FAQ by word overlap). These assert the correct route now. Source:
+// the support-quality audit stress-test (45% mis-route rate before this fix).
+
+/** Assert tryDeflect routes `question` to FAQ `expectedId` (grounded, no drift). */
+async function expectRoute(question: string, expectedId: string): Promise<void> {
+  const result = await tryDeflect(question);
+  if (result.answered !== true) {
+    fail(`"${question}" → id ${expectedId}`, `answered=${result.answered} (expected a deflection)`);
+    return;
+  }
+  const matchedFaq = getFaqEntries().find((e) => e.answer === result.answer);
+  if (!matchedFaq) {
+    fail(`"${question}" grounded`, "answer matches no FAQ entry (drift)");
+    return;
+  }
+  if (matchedFaq.id !== expectedId) {
+    fail(`"${question}" → id ${expectedId}`, `routed to id=${matchedFaq.id} instead`);
+    return;
+  }
+  pass(`"${question}" → id=${expectedId}`);
+}
+
+async function testRegressionRoutes() {
+  console.log("\nregression routes (previously confidently-wrong)");
+
+  // Joining / how-membership-works (was → partner id17 / refund id19)
+  await expectRoute("how to become a member", "28");
+  await expectRoute("how does membership work", "28");
+  await expectRoute("how do i join", "28");
+
+  // Account-aware: my entries / my tier (was → get-more-entries id8 / downgrade id23)
+  await expectRoute("where can i see my entries", "29");
+  await expectRoute("how many entries do i have", "29");
+  await expectRoute("what tier am i on", "30");
+
+  // Result / fulfilment / dispute → results or human (was → prize catalog id3 / id21)
+  await expectRoute("did i win", "31");
+  await expectRoute("how do i check the draw results", "31");
+  await expectRoute("where is my prize", "38");
+  await expectRoute("why was i charged twice", "38");
+  await expectRoute("how do i talk to a human", "38");
+
+  // Renewal DATE (was → renewal-payment-FAILED id13)
+  await expectRoute("when is my renewal", "11");
+
+  // New knowledge gaps now covered
+  await expectRoute("i forgot my password", "32");
+  await expectRoute("i signed up but i'm not a member", "33");
+  await expectRoute("is my card safe", "34");
+  await expectRoute("do prices include gst", "36");
+  await expectRoute("how do i update my card", "37");
+
+  // CRITICAL non-regressions — these must NOT have moved:
+  await expectRoute("what can i win", "3"); // prize catalog still answers prize questions
+  await expectRoute("how do i get more entries", "8"); // not the account-aware id29
+  await expectRoute("how do i sign up for a one-time pack", "5"); // id28 "sign up" must not swallow the pack flow
+  await expectRoute("how much to join", "4"); // pricing, not the join overview id28
+}
+
 // ─── Runner ───────────────────────────────────────────────────────────────────
 
 async function run() {
@@ -498,6 +559,7 @@ async function run() {
   await testDeterminism();
   await testUpgradeMembership();
   await testPauseMembership();
+  await testRegressionRoutes();
 
   console.log(`\n${"─".repeat(60)}`);
 

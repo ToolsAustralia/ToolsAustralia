@@ -48,6 +48,238 @@ interface IntentRule {
 }
 
 const INTENT_RULES: IntentRule[] = [
+  // ══ Account-specific, result, and escalation intents ════════════════════════
+  // Placed FIRST so a precise account/result/escalation phrase wins over the broad
+  // topic rules below — e.g. "did i win" must beat the "prize" catalog rule (id3),
+  // and "where are my entries" must beat "get more entries" (id8). Account-aware
+  // entries (29/30/31/37) route the user to My Account; they never recite data.
+
+  // Did I win / draw results — MUST precede prizes (id3)
+  {
+    faqId: "31",
+    signals: [
+      "did i win",
+      "have i won",
+      "did we win",
+      "was i the winner",
+      "am i the winner",
+      "draw result",
+      "draw results",
+      "results of the draw",
+      "who won",
+      "winner announced",
+      "check the result",
+      "check if i won",
+      "where are the results",
+      "see the results",
+    ],
+  },
+  // Talk to a human / prize fulfilment / duplicate charge — escalation routes.
+  // MUST precede prizes (id3, prize-fulfilment) and unexpected-charge (id21, dup charge).
+  {
+    faqId: "38",
+    signals: [
+      "talk to a human",
+      "speak to a human",
+      "talk to a person",
+      "speak to a person",
+      "real person",
+      "talk to someone",
+      "speak to someone",
+      "human support",
+      "live agent",
+      "customer service",
+      "contact support",
+      "talk to support",
+      "speak to support",
+      "human agent",
+      // prize fulfilment — a winner chasing their prize needs a human, not the catalog
+      "where is my prize",
+      "where s my prize",
+      "claim my prize",
+      "collect my prize",
+      "receive my prize",
+      "when do i get my prize",
+      // duplicate / double charge — a billing dispute needs a human, not the auto-renew explainer
+      "charged twice",
+      "charged me twice",
+      "double charged",
+      "charged double",
+      "two charges",
+      "duplicate charge",
+      "charged again",
+    ],
+  },
+  // Where can I see my entries / how many do I have — account lookup (precede id8/id7)
+  {
+    faqId: "29",
+    signals: [
+      "where can i see my entries",
+      "where are my entries",
+      "where do i see my entries",
+      "see my entries",
+      "view my entries",
+      "check my entries",
+      "how many entries do i have",
+      "how many entries do i",
+      "my entry count",
+      "my current entries",
+      "number of entries i have",
+    ],
+    excludes: ["more", "carry", "buy", "cancel"],
+  },
+  // What tier / plan am I on — account lookup (precede pricing id4 + up/downgrade)
+  {
+    faqId: "30",
+    signals: [
+      "what tier am i on",
+      "what tier am i",
+      "which tier am i",
+      "what is my tier",
+      "my membership tier",
+      "my current tier",
+      "what plan am i on",
+      "which plan am i on",
+      "what is my plan",
+    ],
+    excludes: ["upgrade", "downgrade", "higher", "lower", "change"],
+  },
+  // Signed up but not a member / no entries / shows as guest
+  {
+    faqId: "33",
+    signals: [
+      "signed up but",
+      "registered but",
+      "i registered but",
+      "not a member",
+      "i m not a member",
+      "im not a member",
+      "am i a member",
+      "why am i a guest",
+      "still a guest",
+      "says guest",
+      "shows as guest",
+      "shows me as guest",
+      "paid but no membership",
+      "no membership but",
+      "joined but no entries",
+      "i have no entries",
+      "have no entries",
+    ],
+  },
+  // Login help / password / google sign-in
+  {
+    faqId: "32",
+    signals: [
+      "how do i log in",
+      "how do i login",
+      "how to log in",
+      "how do i sign in",
+      "can t log in",
+      "cant log in",
+      "can t sign in",
+      "cannot log in",
+      "cannot sign in",
+      "forgot my password",
+      "forgot password",
+      "reset my password",
+      "reset password",
+      "password doesn t work",
+      "password not working",
+      "sign in with google",
+      "log in with google",
+      "google sign in",
+    ],
+  },
+  // Update card / payment method / account details — account self-service
+  {
+    faqId: "37",
+    signals: [
+      "update my card",
+      "change my card",
+      "update my payment method",
+      "change my payment method",
+      "update my payment",
+      "change my payment",
+      "update my card details",
+      "change my card details",
+      "update my details",
+      "update my email",
+      "change my email",
+      "update my profile",
+      "change my profile",
+      "update my state",
+    ],
+    excludes: ["safe", "secure", "stored"],
+  },
+  // Is my payment / card safe
+  {
+    faqId: "34",
+    signals: [
+      "is my card safe",
+      "is my payment safe",
+      "card data safe",
+      "card details safe",
+      "is my card information safe",
+      "is my payment information safe",
+      "do you store my card",
+      "store my card",
+      "is it safe to pay",
+      "is my data secure",
+      "is my payment secure",
+    ],
+  },
+  // Data retention / privacy (delete-my-data stays on id20)
+  {
+    faqId: "35",
+    signals: [
+      "how long do you keep",
+      "how long do you store",
+      "data retention",
+      "how long is my data kept",
+      "retention period",
+      "how long do you hold",
+    ],
+    excludes: ["delete"],
+  },
+  // GST / tax invoice
+  {
+    faqId: "36",
+    signals: [
+      "gst",
+      "include gst",
+      "gst included",
+      "is gst included",
+      "tax invoice",
+      "do prices include tax",
+      "prices include gst",
+      "gst on my",
+    ],
+  },
+  // Become a member / how membership works (join). "how much to join" stays on id4 (pricing).
+  {
+    faqId: "28",
+    signals: [
+      "become a member",
+      "how to become a member",
+      "how do i become a member",
+      "how do i join",
+      "how to join",
+      "how do i sign up",
+      "how to sign up",
+      "sign up",
+      "signup",
+      "create an account",
+      "how does membership work",
+      "how membership works",
+      "how do memberships work",
+      "how does the membership work",
+      "what is membership",
+    ],
+    // Keep "sign up" out of the one-time-pack flow (id5) and email-list signups.
+    excludes: ["partner", "one-time", "one time", "pack", "email", "newsletter", "mailing"],
+  },
+
   // ── Draw timing ────────────────────────────────────────────────────────────
   {
     faqId: "2",
@@ -77,6 +309,8 @@ const INTENT_RULES: IntentRule[] = [
       "prize worth",
       "how much can i win",
     ],
+    // Win-check + prize-fulfilment go to id31/id38 (handled above); never the catalog.
+    excludes: ["did i win", "have i won", "where is my prize", "where s my prize", "claim my prize"],
   },
   // ── Membership pricing / tiers ────────────────────────────────────────────
   {
@@ -214,6 +448,9 @@ const INTENT_RULES: IntentRule[] = [
       "i didn t agree",
       "i didn t approve",
     ],
+    // A duplicate/double charge is a billing dispute → escalate (id38, handled above),
+    // not the auto-renewal-date explainer.
+    excludes: ["twice", "double", "duplicate", "two charges", "charged again"],
   },
   // ── Delete account / data ─────────────────────────────────────────────────
   {
@@ -239,12 +476,21 @@ const INTENT_RULES: IntentRule[] = [
     faqId: "11",
     signals: [
       "when does my subscription renew",
+      "when does my membership renew",
+      "when is my renewal",
+      "when is my next renewal",
+      "when do i renew",
+      "next renewal",
       "renewal date",
       "when will i be charged",
+      "when am i charged",
       "billing date",
       "charged on the 24th",
       "renew on the 24th",
     ],
+    // "renewal payment failed/declined" belongs to id13 (handled later); a bare
+    // renewal-date question must not be shadowed by it.
+    excludes: ["failed", "declined", "fail", "past due"],
   },
   // ── Failed payment ───────────────────────────────────────────────────────
   {
