@@ -13,6 +13,15 @@ import { LANDING_IMAGE_MANIFEST } from "@/generated/landingImageManifest";
 
 const LANDING_IMAGE_BASE = "/images/background/promo/landing";
 
+/**
+ * Shared hero "stage" background (the empty set the brand heroes are composited onto).
+ * Rendered in place of the gray skeleton while the hero data loads, so the load-in is seamless.
+ */
+export const LANDING_HERO_BACKGROUND = {
+  desktop: `${LANDING_IMAGE_BASE}/background/bg-desktop.webp`,
+  mobile: `${LANDING_IMAGE_BASE}/background/bg-mobile.webp`,
+} as const;
+
 /** Build the deterministic URL for a brand variant — no existence check. */
 function buildLandingUrl(
   brand: BrandKey,
@@ -40,8 +49,9 @@ export type LandingHeroToolboxSuffix = "milTB" | "sidTB" | "kinTB";
  *
  * Evergreen (all-prizes): no separate dark filenames — dark mode uses the same file as light.
  *
- * Kincrome (`kinTB`): dedicated toolbox art for all viewports. Urgency tiers reuse the same base
- * kinTB assets (no `-final-hours` / `-drawn-*` kinTB files).
+ * Kincrome (`kinTB`): dedicated toolbox art for all viewports. It ships `-drawn-tomorrow` /
+ * `-drawn-tonight` countdown art like the other toolboxes, but no `-final-hours` tier — so a
+ * `final-hours` kinTB request reuses the base kinTB asset.
  */
 
 /**
@@ -64,11 +74,6 @@ export function resolveLandingHeroImage(
   toolboxSuffix: LandingHeroToolboxSuffix = "milTB",
   urgency: LandingHeroUrgency | null = null
 ): string {
-  /** Kincrome heroes only ship base assets; urgency tiers reuse the same files. */
-  if (toolboxSuffix === "kinTB" && urgency != null) {
-    return resolveLandingHeroImage(brand, mode, viewport, "kinTB", null);
-  }
-
   const desired = buildLandingUrl(brand, mode, viewport, toolboxSuffix, urgency);
   if (LANDING_IMAGE_MANIFEST.has(desired)) return desired;
 
@@ -76,7 +81,14 @@ export function resolveLandingHeroImage(
   const opposite = buildLandingUrl(brand, oppositeMode, viewport, toolboxSuffix, urgency);
   if (LANDING_IMAGE_MANIFEST.has(opposite)) return opposite;
 
-  /** Neither mode shipped — return the desired URL anyway so the failure is visible. */
+  /**
+   * The requested countdown tier isn't shipped for this toolbox in either mode (e.g. no
+   * `final-hours` art ships for any landing toolbox; only `-drawn-tomorrow` / `-drawn-tonight`
+   * do). Drop the tier and resolve the base hero rather than returning a broken URL.
+   */
+  if (urgency != null) return resolveLandingHeroImage(brand, mode, viewport, toolboxSuffix, null);
+
+  /** Neither mode shipped for the base — return the desired URL anyway so the failure is visible. */
   return desired;
 }
 
@@ -121,9 +133,12 @@ export function resolveEvergreenHeroImage(
   urgency: LandingHeroUrgency | null = null
 ): string {
   const mobileSuffix = viewport === "mobile" ? "-mobile" : "";
-  const urgencySuffix = urgency ? `-${urgency}` : "";
+  const base = `${LANDING_IMAGE_BASE}/all-prizes/all-prizes${mobileSuffix}.webp`;
+  if (!urgency) return base;
 
-  return `${LANDING_IMAGE_BASE}/all-prizes/all-prizes${mobileSuffix}${urgencySuffix}.webp`;
+  /** Evergreen ships no countdown art — fall back to the base collage if the tier asset is absent. */
+  const withUrgency = `${LANDING_IMAGE_BASE}/all-prizes/all-prizes${mobileSuffix}-${urgency}.webp`;
+  return LANDING_IMAGE_MANIFEST.has(withUrgency) ? withUrgency : base;
 }
 
 /**

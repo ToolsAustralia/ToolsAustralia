@@ -92,11 +92,13 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
         {/* Single theme-color updated client-side by ThemeMetaSync; avoids duplicate meta tags */}
         <meta name="theme-color" content="#ffffff" />
-        {/* Apply persisted (Zustand persist) theme before React hydrates to prevent light flash */}
+        {/* Light is the default. Apply dark before React hydrates only when the user chose it
+            (persisted `ta-theme`), so a dark-mode user never flashes light. Legacy v0 auto-dark
+            (userManualOverride === false) is ignored — it resolves to the light default. */}
         <script
           nonce={nonce}
           dangerouslySetInnerHTML={{
-            __html: `(function(){try{function h(){var p=new Intl.DateTimeFormat("en-AU",{timeZone:"Australia/Sydney",hour:"numeric",hourCycle:"h23"}).formatToParts(new Date());for(var i=0;i<p.length;i++)if(p[i].type==="hour")return parseInt(p[i].value,10);return 12}function n(x){return x>=18||x<6}var r=localStorage.getItem("ta-theme");var t=null;if(r){var p=JSON.parse(r);t=p&&p.state&&p.state.theme}var d=t==="dark"||(!r&&n(h()));if(d){document.documentElement.classList.add("dark");var m=document.querySelector('meta[name="theme-color"]');if(m)m.setAttribute("content","#0a0a0a");document.documentElement.style.colorScheme="dark"}}catch(e){}})();`,
+            __html: `(function(){try{var r=localStorage.getItem("ta-theme");var t=null,o;if(r){var p=JSON.parse(r);if(p&&p.state){t=p.state.theme;o=p.state.userManualOverride}}if(t==="dark"&&o!==false){document.documentElement.classList.add("dark");var m=document.querySelector('meta[name="theme-color"]');if(m)m.setAttribute("content","#0a0a0a");document.documentElement.style.colorScheme="dark"}}catch(e){}})();`,
           }}
         />
         {/* Set data-tier on <html> before paint so CSS tokens (--ta-blur etc.) match the device on first frame.

@@ -75,7 +75,11 @@ Multiple modals open simultaneously is a UX hazard. The modal primitive in `comp
 
 ## SSR + theme flash
 
-Theme bootstrap (in [theme](../theme/)) runs pre-React. If a shared-ui component references `theme` via context before bootstrap completes, you can see a flash.
+Theme bootstrap (in [theme](../theme/)) runs pre-React. If a shared-ui component references `theme` via context before bootstrap completes, you can see a flash. **Light is the hard default** — the bootstrap only applies `dark` for a genuinely user-chosen dark, so a component that defaults to light renders correctly first.
+
+## Theme toggle buttons are tap-only
+
+`ThemeToggle.tsx` (`ThemeToggleButton`) and `HeaderThemeToggle.tsx` switch light/dark on a plain tap and persist the choice. The old hold-to-restore time-based (Sydney) auto mode was removed — there is no time-of-day / system-preference auto theme anymore (see [theme/rules.md](../theme/rules.md)). Don't reintroduce the `onPointer*`/hold handlers on these buttons.
 
 ## Dark mode coverage gaps
 
@@ -133,6 +137,10 @@ The MembershipModal auto-creates a subscription on open (background pre-warm) so
 ## `ModalContent` is already `flex-1 overflow-y-auto` — don't wrap it again (2026-05-27)
 
 `<ModalContent>` (in `src/components/modals/ui/`) is itself a `flex-1 overflow-y-auto` container — wrapping its children in another `<div className="flex-1 overflow-y-auto">` produces **two stacked scrollable regions and a double vertical scrollbar**. This bit [`MembershipByPackageDetailModal.tsx`](../../src/components/modals/MembershipByPackageDetailModal.tsx) in the membership breakdown drill-down: the inner wrapper was removed and the immediate child of `<ModalContent padding="none">` is now a plain `<div>` that fills naturally. When porting a modal body, drop any outer `flex-1`/`overflow-y-auto` wrapper and let `ModalContent` own the scroll.
+
+## ImageUpload preview card: the remove (X) button needs `z-20` above the full-card replacement input (2026-06-24)
+
+[`ImageUpload`](../../src/components/modals/ui/ImageUpload.tsx) — the shared modal image uploader (used by `MajorDrawEditModal` and others) — renders, inside each preview card, a full-card hidden `<input type="file" className="absolute inset-0 …">` for drag/click-to-replace **after** the remove (X) button in DOM order. With equal (auto) z-index the later-painted input won hit-testing and overlaid the X button, so clicking X opened the **replace** file-dialog instead of deleting the image (reported in the admin "Edit Major Draw" modal). Fix: the X button now carries `z-20` (above the replacement input) plus `onClick` `e.preventDefault()`/`e.stopPropagation()` and an `aria-label`, so clicking X calls `removeImage(index)` (delete) while the rest of the card still triggers replace. **Rule:** when an interactive control sits over a full-card `absolute inset-0` input, the control must win z-order — DOM order alone won't save it.
 
 ## MembershipModal register POST: client-computed `fbc`/`fbp` for server CAPI Click ID
 

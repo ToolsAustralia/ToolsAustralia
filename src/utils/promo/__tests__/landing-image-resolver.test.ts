@@ -46,11 +46,11 @@ function testExistingComboReturnsAsIs() {
     assert.ok(!url.includes("-dark"), `${brand} milTB light should NOT swap to dark, got ${url}`);
     assert.ok(LANDING_IMAGE_MANIFEST.has(url), `${url} must exist in manifest`);
   }
-  // sidTB final-hours light desktop IS shipped
+  // No landing toolbox ships final-hours art — the tier collapses to the base hero.
   for (const brand of ["ryobi", "milwaukee", "dewalt", "makita"] as const) {
     const url = resolveLandingHeroImage(brand, "light", "desktop", "sidTB", "final-hours");
-    assert.ok(!url.includes("-dark"), `${brand} sidTB light final-hours should NOT swap, got ${url}`);
-    assert.ok(LANDING_IMAGE_MANIFEST.has(url));
+    assert.ok(!url.includes("final-hours"), `${brand} sidTB final-hours should collapse to base, got ${url}`);
+    assert.ok(LANDING_IMAGE_MANIFEST.has(url), `${url} must exist in manifest`);
   }
 }
 
@@ -66,15 +66,19 @@ function testDarkComboReturnsAsIs() {
 }
 
 /**
- * Kincrome ships only base assets — urgency tiers must collapse to base.
+ * Kincrome now ships -drawn-tomorrow / -drawn-tonight art (resolves with the suffix), but no
+ * -final-hours tier (collapses to the base kinTB hero).
  */
-function testKinTbUrgencyCollapsesToBase() {
+function testKinTbDrawnTiersResolveAndFinalHoursCollapses() {
   for (const brand of ["ryobi", "milwaukee", "dewalt", "makita"] as const) {
-    for (const urgency of ["final-hours", "drawn-tomorrow", "drawn-tonight"] as const) {
+    for (const urgency of ["drawn-tomorrow", "drawn-tonight"] as const) {
       const url = resolveLandingHeroImage(brand, "light", "desktop", "kinTB", urgency);
-      assert.ok(!url.includes(urgency), `${brand} kinTB ${urgency} should collapse, got ${url}`);
-      assert.ok(LANDING_IMAGE_MANIFEST.has(url));
+      assert.ok(url.includes(urgency), `${brand} kinTB ${urgency} should resolve to real art, got ${url}`);
+      assert.ok(LANDING_IMAGE_MANIFEST.has(url), `${url} must exist in manifest`);
     }
+    const fh = resolveLandingHeroImage(brand, "light", "desktop", "kinTB", "final-hours");
+    assert.ok(!fh.includes("final-hours"), `${brand} kinTB final-hours should collapse, got ${fh}`);
+    assert.ok(LANDING_IMAGE_MANIFEST.has(fh), `${fh} must exist in manifest`);
   }
 }
 
@@ -117,7 +121,7 @@ function run() {
   testLightSidTbReturnsLightBase();
   testExistingComboReturnsAsIs();
   testDarkComboReturnsAsIs();
-  testKinTbUrgencyCollapsesToBase();
+  testKinTbDrawnTiersResolveAndFinalHoursCollapses();
   testAllVariantsExistInManifest();
   testEvergreenAllVariantsExist();
   console.log("landing-image-resolver tests passed");

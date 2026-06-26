@@ -2,7 +2,6 @@
 
 import React, { createContext, useContext, useEffect, useLayoutEffect, useRef, ReactNode } from "react";
 import { useThemeStore } from "@/stores/useThemeStore";
-import { useAutoTheme } from "@/hooks/useAutoTheme";
 import { readThemeFromPersistStorage } from "@/utils/themeBootstrap";
 
 type Theme = "light" | "dark";
@@ -11,7 +10,6 @@ interface ThemeContextType {
   theme: Theme;
   setTheme: (theme: Theme) => void;
   toggleTheme: () => void;
-  restoreAutoTheme: () => void;
 }
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
@@ -21,11 +19,10 @@ interface ThemeProviderProps {
 }
 
 export const ThemeProvider: React.FC<ThemeProviderProps> = ({ children }) => {
-  const { theme, setTheme, toggleTheme, restoreAutoTheme } = useThemeStore();
+  const { theme, setTheme, toggleTheme } = useThemeStore();
   const bootstrapped = useRef(false);
 
-  // Enable auto-theme switching based on time of day (6 PM AEST = dark, 6 AM AEST = light)
-  useAutoTheme();
+  // Light is the default; the theme only changes when the user toggles it. No time-based auto mode.
 
   // Align Zustand with inline head script + localStorage before paint (avoids stripping `dark` on first client render)
   useLayoutEffect(() => {
@@ -61,7 +58,7 @@ export const ThemeProvider: React.FC<ThemeProviderProps> = ({ children }) => {
   }, [theme]);
 
   return (
-    <ThemeContext.Provider value={{ theme, setTheme, toggleTheme, restoreAutoTheme }}>
+    <ThemeContext.Provider value={{ theme, setTheme, toggleTheme }}>
       {children}
     </ThemeContext.Provider>
   );

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { AlertTriangle, XCircle, CheckCircle, X, Loader2 } from "lucide-react";
 import { Button } from "../modals/ui";
 import { ChargeJobResultStatusBadge } from "@/components/admin/ui/AdminBadge";
@@ -8,7 +8,8 @@ import { ChargeJobResultStatusBadge } from "@/components/admin/ui/AdminBadge";
 export interface ChargePastDueModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onConfirm: () => Promise<ChargeResponse>;
+  /** Called once a run finishes (or is stopped) so the caller can refresh the user list. */
+  onCompleted?: () => void;
 }
 
 type ModalState = "idle" | "loading" | "preview" | "processing" | "completed" | "error";
@@ -24,18 +25,12 @@ interface ChargeResult {
   skipReason?: string;
 }
 
-interface ChargeResponse {
-  success: boolean;
-  summary: {
-    totalInvoices: number;
-    processed: number;
-    succeeded: number;
-    failed: number;
-    skipped: number;
-  };
-  results: ChargeResult[];
-  error?: string;
-  message?: string;
+interface ChargeSummary {
+  totalInvoices: number;
+  processed: number;
+  succeeded: number;
+  failed: number;
+  skipped: number;
 }
 
 interface PreviewUser {
@@ -72,18 +67,62 @@ interface PreviewResponse {
   message?: string;
 }
 
-const ChargePastDueModal: React.FC<ChargePastDueModalProps> = ({ isOpen, onClose, onConfirm }) => {
+interface RunTotals {
+  eligibleCount: number;
+  attempted: number;
+  succeeded: number;
+  failed: number;
+  skipped: { total: number };
+  revenueCents: number;
+}
+
+interface ChunkResponse {
+  success: boolean;
+  runId: string;
+  total: number;
+  processed: number;
+  processedThisChunk: number;
+  done: boolean;
+  totals: RunTotals;
+  error?: string;
+  message?: string;
+}
+
+interface StartResponse {
+  success: boolean;
+  runId: string;
+  total: number;
+  done: boolean;
+  error?: string;
+  message?: string;
+}
+
+interface LiveProgress {
+  processed: number;
+  total: number;
+  succeeded: number;
+  failed: number;
+  skipped: number;
+  revenueCents: number;
+}
+
+const ENDPOINT = "/api/admin/invoices/charge-past-due";
+
+const ChargePastDueModal: React.FC<ChargePastDueModalProps> = ({ isOpen, onClose, onCompleted }) => {
   const [confirmation, setConfirmation] = useState("");
   const [state, setState] = useState<ModalState>("idle");
-  const [results, setResults] = useState<ChargeResponse | null>(null);
+  const [results, setResults] = useState<{ summary: ChargeSummary; results: ChargeResult[] } | null>(null);
   const [preview, setPreview] = useState<PreviewResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [progress, setProgress] = useState<LiveProgress | null>(null);
   const [statusFilter, setStatusFilter] = useState<"all" | "success" | "failed" | "skipped">("all");
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 20;
 
+  const runIdRef = useRef<string | null>(null);
+  const stoppedRef = useRef(false);
+
   // Fetch preview when modal opens
-  // Omit state: we only want to fetch when modal opens, not on every state transition
   useEffect(() => {
     if (isOpen && state === "idle") {
       fetchPreview();
@@ -94,7 +133,7 @@ const ChargePastDueModal: React.FC<ChargePastDueModalProps> = ({ isOpen, onClose
     setState("loading");
     setError(null);
     try {
-      const response = await fetch("/api/admin/invoices/charge-past-due");
+      const response = await fetch(ENDPOINT);
       const data: PreviewResponse = await response.json();
       if (data.success) {
         setPreview(data);
@@ -109,16 +148,56 @@ const ChargePastDueModal: React.FC<ChargePastDueModalProps> = ({ isOpen, onClose
     }
   };
 
-  const handleClose = () => {
-    if (state === "processing") return; // Prevent closing during processing
-    setConfirmation("");
-    setState("idle");
-    setResults(null);
-    setPreview(null);
-    setError(null);
-    setStatusFilter("all");
-    setCurrentPage(1);
-    onClose();
+  const post = async (body: Record<string, unknown>) => {
+    const res = await fetch(ENDPOINT, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      throw new Error(data.message || data.error || `Request failed (${res.status})`);
+    }
+    return data;
+  };
+
+  /** After a run finishes/stops, pull the per-invoice rows + totals for the results table. */
+  const loadRunResults = async (runId: string) => {
+    try {
+      const res = await fetch(`/api/admin/charge-past-due/runs/${runId}`);
+      if (!res.ok) return;
+      const detail = await res.json();
+      const totals: RunTotals = detail.run?.totals;
+      const rows: Array<{
+        invoiceId: string;
+        userEmail: string;
+        status: "success" | "failed" | "skipped";
+        amount: number;
+        errorMessage?: string;
+        declineCode?: string;
+        errorCode?: string;
+      }> = detail.rows ?? [];
+      setResults({
+        summary: {
+          totalInvoices: totals?.eligibleCount ?? rows.length,
+          processed: totals?.attempted ?? 0,
+          succeeded: totals?.succeeded ?? 0,
+          failed: totals?.failed ?? 0,
+          skipped: totals?.skipped?.total ?? 0,
+        },
+        results: rows.map((r) => ({
+          invoiceId: r.invoiceId,
+          customerId: "",
+          userEmail: r.userEmail,
+          status: r.status,
+          amount: r.amount,
+          error: r.status === "failed" ? r.declineCode || r.errorCode || r.errorMessage : undefined,
+          skipReason: r.status === "skipped" ? r.errorMessage : undefined,
+        })),
+      });
+    } catch {
+      /* non-fatal — summary still shows from progress */
+    }
   };
 
   const handleConfirm = async () => {
@@ -126,29 +205,101 @@ const ChargePastDueModal: React.FC<ChargePastDueModalProps> = ({ isOpen, onClose
 
     setState("processing");
     setError(null);
+    stoppedRef.current = false;
+    runIdRef.current = null;
+    setProgress({
+      processed: 0,
+      total: preview?.preview.eligibleCount ?? 0,
+      succeeded: 0,
+      failed: 0,
+      skipped: 0,
+      revenueCents: 0,
+    });
 
     try {
-      const response = await onConfirm();
-      setResults(response);
+      const start: StartResponse = await post({ action: "start", confirmation: "CHARGE" });
+      runIdRef.current = start.runId;
+      setProgress((p) => (p ? { ...p, total: start.total } : p));
+
+      let done = start.done;
+      let lastProcessed = -1;
+      let stalls = 0;
+      while (!done && !stoppedRef.current) {
+        const chunk: ChunkResponse = await post({ action: "chunk", runId: start.runId });
+        setProgress({
+          processed: chunk.processed,
+          total: chunk.total,
+          succeeded: chunk.totals.succeeded,
+          failed: chunk.totals.failed,
+          skipped: chunk.totals.skipped.total,
+          revenueCents: chunk.totals.revenueCents,
+        });
+        done = chunk.done;
+        // Defense-in-depth: if progress stops advancing across two chunks, stop
+        // rather than loop forever (the engine guarantees every item writes a row,
+        // so this should never trigger — but a regression must not hang the UI).
+        if (!done) {
+          if (chunk.processed <= lastProcessed) {
+            if (++stalls >= 2) {
+              await post({ action: "abort", runId: start.runId }).catch(() => undefined);
+              break;
+            }
+          } else {
+            stalls = 0;
+          }
+          lastProcessed = chunk.processed;
+        }
+      }
+
+      // If the admin stopped early, finalize + release the lock so a re-run can start now.
+      if (!done && stoppedRef.current) {
+        await post({ action: "abort", runId: start.runId }).catch(() => undefined);
+      }
+
+      await loadRunResults(start.runId);
       setState("completed");
+      onCompleted?.();
     } catch (err) {
-      setState("error");
       setError(err instanceof Error ? err.message : "An error occurred");
+      // Best-effort: release the lock so the run isn't stuck holding it.
+      if (runIdRef.current) await post({ action: "abort", runId: runIdRef.current }).catch(() => undefined);
+      setState("error");
     }
+  };
+
+  const handleStop = () => {
+    stoppedRef.current = true;
+  };
+
+  const handleClose = () => {
+    if (state === "processing") {
+      // Stop the loop; the abort fires inside the loop's finally path.
+      stoppedRef.current = true;
+      return;
+    }
+    setConfirmation("");
+    setState("idle");
+    setResults(null);
+    setPreview(null);
+    setError(null);
+    setProgress(null);
+    setStatusFilter("all");
+    setCurrentPage(1);
+    runIdRef.current = null;
+    onClose();
   };
 
   if (!isOpen) return null;
 
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat("en-AU", {
-      style: "currency",
-      currency: "AUD",
-    }).format(amount / 100); // Convert cents to dollars
-  };
+  const formatCurrency = (amount: number) =>
+    new Intl.NumberFormat("en-AU", { style: "currency", currency: "AUD" }).format(amount / 100);
+
+  const pct =
+    progress && progress.total > 0 ? Math.min(100, Math.round((progress.processed / progress.total) * 100)) : 0;
 
   return (
     <div className="fixed inset-0 z-[150] flex items-center justify-center p-2 sm:p-4">
-      <div className="absolute inset-0 bg-black/50" onClick={handleClose} />
+      <div className="absolute inset-0 bg-black/50" onClick={state === "processing" ? undefined : handleClose} />
       <div className="relative bg-white dark:bg-neutral-900 dark:border dark:border-neutral-800 rounded-lg sm:rounded-xl shadow-2xl w-full max-w-2xl mx-auto max-h-[90dvh] overflow-y-auto flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between p-4 sm:p-6 border-b border-gray-200 dark:border-neutral-700">
@@ -183,8 +334,9 @@ const ChargePastDueModal: React.FC<ChargePastDueModalProps> = ({ isOpen, onClose
                   <div>
                     <h4 className="font-semibold text-yellow-800 dark:text-yellow-200 mb-1">Warning: Real Charges</h4>
                     <p className="text-sm text-yellow-700 dark:text-yellow-300">
-                      This will attempt real charges on customer cards. Use with caution. This operation can only be
-                      performed once per 24 hours globally.
+                      This will attempt real charges on customer cards. The run is processed in batches and shows
+                      live progress — keep this window open until it finishes. Already-charged members are never
+                      double-charged (6-hour guard).
                     </p>
                   </div>
                 </div>
@@ -293,12 +445,45 @@ const ChargePastDueModal: React.FC<ChargePastDueModalProps> = ({ isOpen, onClose
             </>
           )}
 
+          {state === "processing" && progress && (
+            <div className="space-y-5 py-2">
+              <div className="flex items-center gap-3">
+                <Loader2 className="w-5 h-5 animate-spin text-red-600 dark:text-red-500" />
+                <p className="text-sm font-medium text-gray-800 dark:text-neutral-100">
+                  Charging in batches… {progress.processed} of {progress.total}
+                </p>
+              </div>
 
-          {state === "processing" && (
-            <div className="flex flex-col items-center justify-center py-8 space-y-4">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red-600 dark:border-red-500"></div>
-              <p className="text-gray-600 dark:text-neutral-400">Processing charges...</p>
-              <p className="text-xs text-gray-500 dark:text-neutral-500">This may take a few moments</p>
+              {/* Progress bar */}
+              <div className="w-full bg-gray-200 dark:bg-neutral-800 rounded-full h-3 overflow-hidden">
+                <div
+                  className="bg-red-600 dark:bg-red-500 h-3 rounded-full transition-all duration-300"
+                  style={{ width: `${pct}%` }}
+                />
+              </div>
+
+              {/* Live counts */}
+              <div className="grid grid-cols-3 gap-3 text-center">
+                <div className="rounded-lg p-3 bg-green-50 dark:bg-green-950/20">
+                  <div className="text-xs text-green-600 dark:text-green-400">Succeeded</div>
+                  <div className="text-lg font-bold text-green-700 dark:text-green-300">{progress.succeeded}</div>
+                </div>
+                <div className="rounded-lg p-3 bg-red-50 dark:bg-red-950/20">
+                  <div className="text-xs text-red-600 dark:text-red-400">Failed</div>
+                  <div className="text-lg font-bold text-red-700 dark:text-red-300">{progress.failed}</div>
+                </div>
+                <div className="rounded-lg p-3 bg-yellow-50 dark:bg-yellow-950/20">
+                  <div className="text-xs text-yellow-600 dark:text-yellow-400">Skipped</div>
+                  <div className="text-lg font-bold text-yellow-700 dark:text-yellow-300">{progress.skipped}</div>
+                </div>
+              </div>
+
+              <p className="text-center text-sm text-gray-600 dark:text-neutral-400">
+                Collected so far: <span className="font-semibold">{formatCurrency(progress.revenueCents)}</span>
+              </p>
+              <p className="text-center text-xs text-gray-500 dark:text-neutral-500">
+                Keep this window open. You can stop anytime — already-charged members won&apos;t be charged again.
+              </p>
             </div>
           )}
 
@@ -324,7 +509,7 @@ const ChargePastDueModal: React.FC<ChargePastDueModalProps> = ({ isOpen, onClose
                     setCurrentPage(1);
                   }}
                 >
-                  <div className="text-xs text-gray-600 dark:text-neutral-400">Total Found</div>
+                  <div className="text-xs text-gray-600 dark:text-neutral-400">Eligible</div>
                   <div className="text-lg font-bold text-gray-900 dark:text-neutral-100">{results.summary.totalInvoices}</div>
                 </div>
                 <div
@@ -373,12 +558,9 @@ const ChargePastDueModal: React.FC<ChargePastDueModalProps> = ({ isOpen, onClose
 
               {/* Results table with filtering and pagination */}
               {results.results.length > 0 && (() => {
-                // Filter results by status
                 const filteredResults = results.results.filter(
                   (result) => statusFilter === "all" || result.status === statusFilter
                 );
-
-                // Calculate pagination
                 const totalPages = Math.ceil(filteredResults.length / itemsPerPage);
                 const startIndex = (currentPage - 1) * itemsPerPage;
                 const endIndex = startIndex + itemsPerPage;
@@ -445,7 +627,6 @@ const ChargePastDueModal: React.FC<ChargePastDueModalProps> = ({ isOpen, onClose
                         </tbody>
                       </table>
                     </div>
-                    {/* Pagination */}
                     {totalPages > 1 && (
                       <div className="bg-gray-50/90 dark:bg-neutral-950/80 px-4 py-2 border-t border-gray-200 dark:border-neutral-800 flex items-center justify-between">
                         <div className="text-xs text-gray-600 dark:text-neutral-300">
@@ -493,9 +674,20 @@ const ChargePastDueModal: React.FC<ChargePastDueModalProps> = ({ isOpen, onClose
 
         {/* Actions */}
         <div className="flex gap-2 sm:gap-3 p-4 sm:p-6 pt-0 border-t border-gray-200 dark:border-neutral-800 bg-gray-50/80 dark:bg-neutral-950/80">
-          <Button onClick={handleClose} variant="secondary" className="flex-1" disabled={state === "processing"}>
-            {state === "completed" ? "Close" : "Cancel"}
-          </Button>
+          {state === "processing" ? (
+            <Button
+              onClick={handleStop}
+              variant="secondary"
+              className="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-800 dark:bg-neutral-700 dark:hover:bg-neutral-600 dark:text-gray-100"
+              disabled={stoppedRef.current}
+            >
+              {stoppedRef.current ? "Stopping…" : "Stop"}
+            </Button>
+          ) : (
+            <Button onClick={handleClose} variant="secondary" className="flex-1">
+              {state === "completed" ? "Close" : "Cancel"}
+            </Button>
+          )}
           {state === "preview" && (
             <Button
               onClick={handleConfirm}

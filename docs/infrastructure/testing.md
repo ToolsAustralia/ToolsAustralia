@@ -140,6 +140,7 @@ npm run test:trial-invoice           # isZeroAmountTrialUpdateInvoice guard: ski
 npm run test:zero-trial-guard        # webhook-LEVEL regression: handleInvoicePaymentSucceeded HONORS the guard. Mocks stripe.invoices.retrieve, spies on User.findOne (the guard returns before the user lookup). Asserts the $0 subscription_update invoice short-circuits (User.findOne NOT reached, no BenefitsGranted row) while a real subscription_cycle renewal AND a paid (>0) subscription_update upgrade both proceed. Catches a regression where the guard is removed/widened/bypassed — which the predicate unit test alone cannot. Needs MONGODB_URI (the handler connectDB()s before the user lookup).
 npm run test:mer                     # pure computeDrawMerRow: blended New Revenue = Σ newRevenue across ALL platforms incl. direct; blended Ad Spend = Σ ad-channel spend; MER = revenue/spend (null when no spend); Meta→amount+MER, TikTok→awaiting+null MER (the spend gap), Klaviyo/Direct→owned; NaN/missing coerce to 0. No env needed. See docs/admin/mer-table.md.
 npm run test:platform-revenue-breakdown # covers the per-platform acquisition-revenue-by-category breakdown service (src/services/admin/__tests__/platformRevenueBreakdown.test.ts) backing /api/admin/dashboard/revenue-details/by-platform (the per-platform drill-down hover/expand).
+npm run test:landing-draw-day-urgency # pure unit test for the landing draw-day urgency resolver (src/utils/promo/__tests__/landing-draw-day-urgency.test.ts). No DB/env needed.
 ```
 
 ## QA seed: past-due member for reanchor recovery testing

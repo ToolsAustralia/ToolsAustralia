@@ -21,7 +21,11 @@ import { getCurrentMajorDrawServer } from "@/utils/database/queries/major-draw-s
 import ExperimentService from "@/services/ab-testing/ExperimentService";
 import { VariantAssignmentWrapper } from "@/components/ab-testing/VariantAssignmentWrapper";
 import { getServerVariantAssignment } from "@/utils/ab-testing/get-server-variant-assignment";
-import { getMajorDrawHeroUrgencyFromMajorDraw, getPromoImagePaths } from "@/utils/promo/promo-hero-images";
+import {
+  getLandingHeroUrgencyFromDrawDay,
+  getMajorDrawHeroUrgencyFromMajorDraw,
+  getPromoImagePaths,
+} from "@/utils/promo/promo-hero-images";
 import type { PromoImagePaths } from "@/utils/promo/promo-hero-types";
 import mongoose from "mongoose";
 
@@ -78,11 +82,14 @@ export default async function ToolsetLandingPage({ toolsetSlug }: ToolsetLanding
   const membershipPromo = effectivePromos.find((p) => p.type === "membership-packages") || null;
   const oneTimePromo = effectivePromos.find((p) => p.type === "one-time-packages") || null;
 
-  const landingUrgency = getMajorDrawHeroUrgencyFromMajorDraw(majorDraw);
-  const landingHero = getLandingHeroImagePaths(defaultPrizeSlug);
+  // Brand landing heroes swap on the AEST calendar-day tier (drawn-tomorrow / drawn-tonight);
+  // the standard mar-* hero keeps its rolling-window tier for non-brand pages.
+  const landingDrawDayUrgency = getLandingHeroUrgencyFromDrawDay(majorDraw);
+  const standardUrgency = getMajorDrawHeroUrgencyFromMajorDraw(majorDraw);
+  const landingHero = getLandingHeroImagePaths(defaultPrizeSlug, landingDrawDayUrgency);
   const standardHero = getPromoImagePaths({
     multiplier: membershipPromo?.multiplier ?? null,
-    majorDrawUrgency: landingUrgency,
+    majorDrawUrgency: standardUrgency,
   });
   const heroImagePaths: PromoImagePaths = landingHero ?? standardHero;
 
