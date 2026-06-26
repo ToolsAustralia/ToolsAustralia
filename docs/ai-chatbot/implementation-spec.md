@@ -8,6 +8,8 @@
 
 > **Anchor-24 accuracy fix (2026-06-25):** Corrected the renewal-date framing across the FAQ (`faqs.ts` 11/21), the knowledge-pack generator, and the system prompt. Subscriptions renew on the **member's own monthly billing date**; only **25th–27th joiners are anchored to the 24th** (per `docs/BILLING_ANCHOR_24.md`) — the prior blanket "renews on the 24th of each month" was inaccurate. Members are pointed to My Account → Settings → Subscription for their exact date.
 
+> **FAQ gap-fill (2026-06-26):** Added 6 new FAQ entries (ids 22–27) covering upgrade, downgrade, reactivate, pause, post-purchase setup, and entry promotions. Enhanced id 13 (failed payment) with an in-app retry tip. Added 5 new deflection intents in `decisionTree.ts` (upgrade → 22, downgrade → 23, restart/reactivate → 24, pause → 25, promo/double-entries → 27). Added a `[major-draw]` knowledge-pack bullet explaining why the 24th anchor exists. Tests updated: `test:chat-faqs` asserts 27 entries and ids 22/23 link to `/my-account`; `test:chat-deflection` adds upgrade and pause intent assertions (14 passing cases total).
+
 ---
 
 ### As-built notes — §8 Guardrails & system prompt (2026-06-25)
@@ -34,6 +36,18 @@ Markdown links render in both the widget (via `ChatMarkdown`) and the `/faq` pag
 
 All map to grounded FAQ entries (zero LLM cost). The "entries after cancellation" rule (id 7) was narrowed so it no longer collides with the new cancel-intent rule.
 
+**Deflection layer (decisionTree.ts) — additional intents (2026-06-26):**
+
+- `upgrade my membership`, `upgrade my plan`, `move to a higher tier` → FAQ id 22
+- `downgrade my membership`, `move to a lower tier`, `cheaper plan` → FAQ id 23
+- `restart my membership`, `reactivate*`, `resubscribe`, `rejoin` → FAQ id 24
+- `pause my membership`, `pause my subscription`, `can i pause` → FAQ id 25
+- `entry promotions`, `double entries`, `entry multiplier`, `bonus entry deals` → FAQ id 27
+
+**Knowledge pack — `[major-draw]` section addition (2026-06-26):**
+
+A bullet was added to the `[major-draw]` curated section in `scripts/build-chat-knowledge-pack.ts` explaining the 24th anchor rationale: renewing on the 24th leaves a few days to fix a failed payment before the 27th draw. Tagged `[from BUSINESS.md]`.
+
 **Knowledge pack — Key Pages section (key-pages):**
 
 A curated `[key-pages]` section was added to `scripts/build-chat-knowledge-pack.ts` listing canonical internal paths (My Account, Settings → Subscription tab, FAQ, Draw Results, Winners, Contact, Partner discounts, Terms, Major Draw, Mini Draws). The bot's system prompt instructs it to use only these paths when linking pages.
@@ -47,8 +61,8 @@ A curated `[key-pages]` section was added to `scripts/build-chat-knowledge-pack.
 
 **Tests (all pass):**
 
-- `test:chat-faqs` — asserts ids 18–21 exist with correct self-service paths, `/my-account` links, "non-refundable", ACL mention.
-- `test:chat-deflection` — asserts "how do I cancel my membership" deflects (`answered:true`) to id 18 with `/my-account` link, no LLM; also tests stop-auto-renewal, unexpected charge, delete account phrasings.
+- `test:chat-faqs` — asserts 27 entries (was 21), ids 22/23 exist with `/my-account` links, plus existing assertions for ids 18–21.
+- `test:chat-deflection` — 14 passing cases: draw date, pricing (source-tied), refund, eligibility (excluded states), off-topic×2, Layer-2 coverage, cancel self-service, stop auto-renewal, unexpected charge, delete account, determinism, **upgrade membership** (→ id 22, no LLM), **pause membership** (→ id 25, no LLM).
 - `test:chat-knowledge` — asserts `key-pages` section id present; `/my-account`, `/draw-results`, `/contact`, `/faq`, `/winners`, `/partner` all appear in pack text.
 
 > Companion to [research.md](research.md) and [README.md](README.md). This is the technical spec, grounded in the Tools Australia stack and conventions (Next.js 15 App Router, MongoDB/Mongoose, NextAuth, Zod, strict `app → services → repositories/lib → models` layering). Code blocks are **illustrative sketches**, not final code — they show shape and placement, not a finished implementation. File paths follow the repo's existing conventions.

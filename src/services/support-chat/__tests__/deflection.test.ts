@@ -405,6 +405,82 @@ async function testDeterminism() {
   pass("repeated calls produce identical results (no LLM randomness)");
 }
 
+async function testUpgradeMembership() {
+  console.log("\nupgrade membership intent");
+
+  const result = await tryDeflect("how do I upgrade my membership");
+
+  if (result.answered !== true) {
+    fail("answered:true", `got answered=${result.answered}`);
+    return;
+  }
+  if (typeof result.answer !== "string" || result.answer.length === 0) {
+    fail("non-empty answer", "answer is missing or empty");
+    return;
+  }
+
+  // Must contain /my-account link (self-service path).
+  if (!result.answer.includes("/my-account")) {
+    fail("answer includes /my-account link", `answer: ${result.answer.slice(0, 160)}`);
+    return;
+  }
+
+  // No-drift: returned answer must exactly equal a getFaqEntries() entry's .answer
+  const faqEntries = getFaqEntries();
+  const matchedFaq = faqEntries.find((e) => e.answer === result.answer);
+  if (!matchedFaq) {
+    fail(
+      "answer grounded to FAQ entry",
+      "answer text does not exactly match any getFaqEntries() .answer (possible drift)"
+    );
+    return;
+  }
+
+  if (matchedFaq.id !== "22") {
+    fail("answer is from upgrade FAQ (id=22)", `matched id=${matchedFaq.id} instead`);
+    return;
+  }
+
+  pass(
+    `"how do I upgrade my membership" → answered:true (no LLM), grounded to FAQ id=${matchedFaq.id}, /my-account link present`
+  );
+}
+
+async function testPauseMembership() {
+  console.log("\npause membership intent");
+
+  const result = await tryDeflect("can I pause my membership");
+
+  if (result.answered !== true) {
+    fail("answered:true", `got answered=${result.answered}`);
+    return;
+  }
+  if (typeof result.answer !== "string" || result.answer.length === 0) {
+    fail("non-empty answer", "answer is missing or empty");
+    return;
+  }
+
+  // No-drift: returned answer must exactly equal a getFaqEntries() entry's .answer
+  const faqEntries = getFaqEntries();
+  const matchedFaq = faqEntries.find((e) => e.answer === result.answer);
+  if (!matchedFaq) {
+    fail(
+      "answer grounded to FAQ entry",
+      "answer text does not exactly match any getFaqEntries() .answer (possible drift)"
+    );
+    return;
+  }
+
+  if (matchedFaq.id !== "25") {
+    fail("answer is from pause FAQ (id=25)", `matched id=${matchedFaq.id} instead`);
+    return;
+  }
+
+  pass(
+    `"can I pause my membership" → answered:true (no LLM), grounded to FAQ id=${matchedFaq.id}`
+  );
+}
+
 // ─── Runner ───────────────────────────────────────────────────────────────────
 
 async function run() {
@@ -420,6 +496,8 @@ async function run() {
   await testUnexpectedCharge();
   await testDeleteAccount();
   await testDeterminism();
+  await testUpgradeMembership();
+  await testPauseMembership();
 
   console.log(`\n${"─".repeat(60)}`);
 
@@ -430,7 +508,7 @@ async function run() {
 
   console.log("PASS — deflection test");
   console.log(`  FAQ entries available : ${getFaqEntries().length}`);
-  console.log("  Covered: draw date, pricing (source-tied), refund, eligibility (excluded states), off-topic×2, Layer-2 coverage, cancel self-service, stop auto-renewal, unexpected charge, delete account, determinism");
+  console.log("  Covered: draw date, pricing (source-tied), refund, eligibility (excluded states), off-topic×2, Layer-2 coverage, cancel self-service, stop auto-renewal, unexpected charge, delete account, determinism, upgrade membership, pause membership");
   process.exit(0);
 }
 

@@ -112,7 +112,7 @@ export function getFaqEntries(): FaqEntry[] {
       id: "13",
       question: "What happens if my renewal payment fails?",
       answer:
-        "If a renewal payment fails, your subscription moves to a past-due state. You will receive an email prompt and can retry the payment directly from your account dashboard. We will attempt to recover the payment — if it succeeds, your benefits and entries are reinstated immediately. You can also update your card details from your account settings at any time.",
+        "If a renewal payment fails, your subscription moves to a past-due state. You will receive an email prompt and can retry the payment directly from your account dashboard. We will attempt to recover the payment — if it succeeds, your benefits and entries are reinstated immediately. You can also update your card details from your account settings at any time. The fastest fix is the in-app retry on your existing card from your dashboard — most failures are temporary.",
       category: "PAYMENTS",
     },
 
@@ -175,6 +175,52 @@ export function getFaqEntries(): FaqEntry[] {
       answer:
         "Subscriptions renew automatically each month on your own billing date (the day you subscribed) — you can see your exact next billing date in [My Account](/my-account) → Settings → Subscription. If you joined late in the month (the 25th–27th), that date is anchored to the 24th so your entries are confirmed before the 27th draw. You can turn off auto-renewal there at any time. If you believe a specific charge was made in error or without your consent, please [contact us](/contact) and our team will look into it.",
       category: "PAYMENTS",
+    },
+
+    // ── UPGRADE / DOWNGRADE / REACTIVATE / PAUSE ──────────────────────────────
+    {
+      id: "22",
+      question: "What happens when I upgrade my membership?",
+      answer:
+        "Upgrading takes effect straight away. You pay the new tier's full monthly price immediately, your billing cycle resets to today, and the extra monthly entries are added to the current draw right away. You can upgrade from [My Account](/my-account) → Settings → Subscription. (Upgrades aren't available while a payment is past due — resolve that first.)",
+      category: "PAYMENTS",
+    },
+    {
+      id: "23",
+      question: "What happens when I downgrade to a lower tier?",
+      answer:
+        "Downgrading costs nothing now and takes effect at the end of your current cycle. You keep your current tier's benefits and entries until then, and the lower tier (with its entries and partner access) begins on your next renewal. You'll see the exact switch-over date when you confirm in [My Account](/my-account) → Settings → Subscription.",
+      category: "PAYMENTS",
+    },
+    {
+      id: "24",
+      question: "I cancelled — how do I restart my membership?",
+      answer:
+        "Welcome back! If you cancelled recently, you can reactivate your existing plan with no new charge. If your membership has fully ended, you can resubscribe on any tier you like. Either way your entry history is preserved. Just head to [My Account](/my-account) → Settings → Subscription to restart.",
+      category: "PAYMENTS",
+    },
+    {
+      id: "25",
+      question: "Can I pause my membership instead of cancelling?",
+      answer:
+        "When you start the cancellation flow in [My Account](/my-account) → Settings → Subscription, you may be offered alternatives to leaving — such as pausing for a short period or a limited-time discount on your next couple of months. These offers appear during the cancellation steps. If you don't see an option you need, [contact us](/contact) and our team will help.",
+      category: "PAYMENTS",
+    },
+
+    // ── SHOPPING / ONBOARDING ────────────────────────────────────────────────
+    {
+      id: "26",
+      question: "What's the setup step after my first purchase?",
+      answer:
+        "After your first purchase we ask for a couple of quick details — your trade and your Australian state — and offer to verify your email. Your state matters because it determines draw eligibility (residents of the ACT and SA are currently excluded). That's the only setup step, and you can update these anytime in [My Account](/my-account).",
+      category: "SHOPPING",
+    },
+    {
+      id: "27",
+      question: "Do you run entry promotions or bonus-entry deals?",
+      answer:
+        "Yes. From time to time we run entry-multiplier promotions (like double-entry weekends) that boost the entries on your purchase automatically, and some promos add a fixed number of bonus entries on top. You can also enter referral, promo, or campaign codes at checkout — these add bonus entries, they don't change the price. Keep an eye on our emails and promo pages for current offers.",
+      category: "SHOPPING",
     },
   ];
 }

@@ -93,6 +93,25 @@ function main() {
     "Unexpected-charge FAQ (id 21) must explain renewal happens on the member's own billing date (NOT a blanket 'the 24th of each month' — only 25th–27th joiners are anchored to the 24th)"
   );
 
+  // 8. Total entry count must be 27 after the June 2026 additions.
+  assert.strictEqual(entries.length, 27, `Expected 27 FAQ entries, got ${entries.length}`);
+
+  // 9. Upgrade entry (id 22) must exist and link to /my-account.
+  const upgradeEntry = entries.find((e) => e.id === "22");
+  assert.ok(upgradeEntry !== undefined, "FAQ entry id=22 (upgrade membership) must exist");
+  assert.ok(
+    upgradeEntry!.answer.includes("[My Account](/my-account)"),
+    "Upgrade FAQ (id 22) must include [My Account](/my-account) link"
+  );
+
+  // 10. Downgrade entry (id 23) must exist and link to /my-account.
+  const downgradeEntry = entries.find((e) => e.id === "23");
+  assert.ok(downgradeEntry !== undefined, "FAQ entry id=23 (downgrade membership) must exist");
+  assert.ok(
+    downgradeEntry!.answer.includes("[My Account](/my-account)"),
+    "Downgrade FAQ (id 23) must include [My Account](/my-account) link"
+  );
+
   console.log("PASS — faqs.test.ts passed —", entries.length, "entries, all checks green");
 }
 

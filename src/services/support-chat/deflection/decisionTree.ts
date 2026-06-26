@@ -354,6 +354,84 @@ const INTENT_RULES: IntentRule[] = [
       "redeem points",
     ],
   },
+  // ── Upgrade membership ────────────────────────────────────────────────────
+  {
+    faqId: "22",
+    signals: [
+      "upgrade my membership",
+      "upgrade my plan",
+      "upgrade my subscription",
+      "move to a higher tier",
+      "switch to a higher tier",
+      "how do i upgrade",
+      "how to upgrade",
+    ],
+  },
+  // ── Downgrade membership ──────────────────────────────────────────────────
+  {
+    faqId: "23",
+    signals: [
+      "downgrade my membership",
+      "downgrade my plan",
+      "downgrade my subscription",
+      "move to a lower tier",
+      "switch to a lower tier",
+      "cheaper plan",
+      "cheaper membership",
+      "how do i downgrade",
+      "how to downgrade",
+    ],
+  },
+  // ── Restart / reactivate / resubscribe ───────────────────────────────────
+  // NOTE: must appear AFTER cancel rule (faqId:18) so "restart" does not conflict.
+  {
+    faqId: "24",
+    signals: [
+      "restart my membership",
+      "restart my subscription",
+      "reactivate my membership",
+      "reactivate my subscription",
+      "resubscribe",
+      "come back to tools australia",
+      "rejoin tools australia",
+      "how do i rejoin",
+      "how do i come back",
+      "how to reactivate",
+    ],
+  },
+  // ── Pause membership ──────────────────────────────────────────────────────
+  {
+    faqId: "25",
+    signals: [
+      "pause my membership",
+      "pause my subscription",
+      "can i pause",
+      "pause instead of cancel",
+      "pause membership",
+      "pause subscription",
+    ],
+  },
+  // ── Entry promotions / bonus entries / double entries ─────────────────────
+  // NOTE: "bonus entries" also appears in faqId:8 (how to get more entries).
+  // These signals are more specific (promotions context) and appear later, so
+  // the faqId:8 rule (which uses "bonus entries") takes priority for generic
+  // "how do I get bonus entries" questions. The promo signals here fire only
+  // when the question is specifically about promotions/deals/double-entry events.
+  {
+    faqId: "27",
+    signals: [
+      "entry promotions",
+      "entry promotion",
+      "double entries",
+      "double entry weekend",
+      "entry multiplier",
+      "bonus entry deals",
+      "bonus-entry deals",
+      "do you run promotions",
+      "run entry promotions",
+      "promo deals",
+    ],
+  },
 ];
 
 // ─── Normaliser ───────────────────────────────────────────────────────────────
