@@ -1,5 +1,9 @@
 # Infrastructure — Gotchas
 
+## Next dev indicator position is `top-left` (dev-only) (2026-06-26)
+
+`next.config.ts` sets `devIndicators: { position: "top-left" }` so Next's dev build/route indicator (the "N" pill) doesn't overlap the bottom floating widgets (the Cobber support bubble — bottom-left on promotions, bottom-right elsewhere — plus the promotions theme toggle + account FAB). Next only supports the **4 corners** (`bottom-left`/`bottom-right`/`top-left`/`top-right`) — there is **no mid-height option**, and its drag-to-move snaps to the nearest corner too. Set `devIndicators: false` to hide it. It is **never rendered in production**.
+
 ## `AFFILIATE_JWT_SECRET` — optional, but setting it forces a one-time affiliate re-login (2026-06-19)
 
 New optional env var (documented in `.env.example`). It is the dedicated signing secret for the affiliate portal's `affiliate_token`, separating it from the member/NextAuth key space (`NEXTAUTH_SECRET`).

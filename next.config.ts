@@ -34,6 +34,15 @@ const nextConfig: NextConfig = {
   // External packages for server components
   serverExternalPackages: ["mongoose"],
 
+  // Dev-only build/route indicator (the "N" pill). Moved to top-left so it no
+  // longer overlaps the bottom floating widgets (Cobber support bubble, the
+  // promotions guest theme toggle + account FAB). Next only supports the 4
+  // corners — there is no mid-height option — and this indicator never renders
+  // in production. Set to `false` to hide it entirely.
+  devIndicators: {
+    position: "top-left",
+  },
+
   // Handle environment variables properly
   env: {
     CUSTOM_KEY: process.env.CUSTOM_KEY,
