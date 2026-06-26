@@ -92,6 +92,7 @@
     "test:chat-knowledge": "tsx src/lib/support-chat/__tests__/knowledge-pack.test.ts",
     "test:chat-deflection": "tsx src/services/support-chat/__tests__/deflection.test.ts",
     "test:chat-escalation": "tsx src/services/support-chat/__tests__/escalation.test.ts",
+    "test:chat-admin-usage": "tsx src/services/admin/__tests__/chatbot-cost-analytics.test.ts",
     "test:chat-withchatbot": "tsx src/lib/support-chat/__tests__/with-chatbot.test.ts",
     "test:chat-service": "tsx src/services/support-chat/__tests__/chat-service.test.ts",
     "test:chat-guest-gate": "tsx src/services/support-chat/__tests__/guest-gate.test.ts",

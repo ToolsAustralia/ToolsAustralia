@@ -518,6 +518,32 @@ Endpoints + aggregation rules: [api.md](./api.md#cancellation-flow-analytics).
 
 **Client-safe constant copies.** `CancellationFlowAnalytics.tsx` declares its own module-local `CANCELLATION_REASONS` and `OFFER_TYPES` constants (identical values and order to the model) instead of importing them from `@/models/CancellationFlowEvent`. That module is a Mongoose model file — runtime-evaluating it in a client component crashes (`mongoose` is `serverExternalPackages`, so `models.CancellationFlowEvent` is undefined in the browser). The type-only imports (`import type { CancellationReason, OfferType }`) remain safe because types are fully erased at build time. Keep the local constants in sync by hand whenever the model's `CANCELLATION_REASONS` or `OFFER_TYPES` arrays change. This is the same pattern used elsewhere on this branch for the same class of crash.
 
+## Chatbot Cost & Usage (2026-06-26)
+
+[src/components/admin/ChatbotCostManagement.tsx](../../src/components/admin/ChatbotCostManagement.tsx) is a **read-only** panel mounted as the `chatbot-cost` tab in the Analytics sidebar group (rendered by `AdminPage` on `selectedTab === "chatbot-cost"`). Gated by `overview.view`. No mutations, no external chart library.
+
+**Headline KPI: Deflection rate** — the share of requests answered free (via FAQ deflection) with no LLM/AI spend. Higher = lower cost.
+
+**Range switcher.** A `Segmented` control lets the admin pick 7 / 30 / 90 days. State is local (`useState`) — no URL sync needed for a cost dashboard.
+
+**Metric cards (top row):** Cost today (USD) · Cost 30-day · **Deflection rate %** (highlighted emerald) · Escalations · Total tokens (in + out).
+
+**Daily cost area chart.** `RevenueAreaChart` over the `daily` array from the API (ascending, filled in for zero-spend days). Amber accent to match a "money" visual language.
+
+**Request type breakdown (BarList).** Deflected (FAQ / free) vs LLM calls (paid). Shows absolute counts.
+
+**Actor breakdown (BarList).** Members vs anonymous requesters.
+
+**Empty state.** When `usage.totalRequests === 0` a friendly card renders: "No chatbot activity recorded yet."
+
+**Data hook:** `useChatbotCostAnalytics(days)` — TanStack `useQuery`, inline queryKey `["admin", "chatbot-cost", days]`, fetches `/api/admin/chatbot-cost?days=${days}`.
+
+**Service:** `src/services/admin/chatbotCostAnalytics.ts`. Pure shaper `summarizeAuditRows` (no Mongo) is tested separately via `npm run test:chat-admin-usage`. The DB entry point `getChatbotCostAnalytics({ days })` queries `ChatDailyBudget` for cost rows and `ChatAuditLog` for request audit rows, filling zero-day gaps in the daily array.
+
+**Client-safe constant note.** `ChatbotCostManagement.tsx` does not import from `@/models/ChatAuditLog`; the `actorKind` literal tuple is re-declared locally with a "keep in sync" comment — same pattern as `CancellationFlowAnalytics.tsx`.
+
+Endpoint: `GET /api/admin/chatbot-cost` — see [api.md](./api.md).
+
 ## Facebook Ads Management — Health view tab (Task 29, 2026-05-27)
 
 `FacebookAdsManagement` (`src/components/admin/FacebookAdsManagement.tsx`) now supports a third `viewMode` value: `"health"`.
