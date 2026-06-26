@@ -6,6 +6,8 @@
 
 > **Knowledge enrichment (2026-06-25):** Added premeditated answers for the top 4 support-inbox question categories. See §8 notes below.
 
+> **Anchor-24 accuracy fix (2026-06-25):** Corrected the renewal-date framing across the FAQ (`faqs.ts` 11/21), the knowledge-pack generator, and the system prompt. Subscriptions renew on the **member's own monthly billing date**; only **25th–27th joiners are anchored to the 24th** (per `docs/BILLING_ANCHOR_24.md`) — the prior blanket "renews on the 24th of each month" was inaccurate. Members are pointed to My Account → Settings → Subscription for their exact date.
+
 ---
 
 ### As-built notes — §8 Guardrails & system prompt (2026-06-25)

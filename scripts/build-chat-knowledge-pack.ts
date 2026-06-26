@@ -84,7 +84,7 @@ Partner access is **lifecycle-gated** — active for the full duration of an act
 |---|---|---|---|---|
 ${rows}
 
-Subscriptions renew on the **24th of each month** — three or more days before the 27th Major Draw — so renewal payments settle before entries are counted. [from BUSINESS.md]`;
+Most subscriptions renew **monthly on the member's own billing date** (the day of the month they first subscribed). **Members who join on the 25th, 26th, or 27th are anchored to renew on the 24th** so their payment settles 3+ days before the 27th Major Draw. (A past-due subscription that later recovers is also reanchored, clamped to the 24th.) Members can see their exact next billing date in My Account → Settings → Subscription. [from BUSINESS.md]`;
 }
 
 function buildOneTimePacksSection(): string {

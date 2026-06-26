@@ -89,8 +89,8 @@ function main() {
     "Unexpected-charge FAQ (id 21) must include /my-account link"
   );
   assert.ok(
-    chargeEntry!.answer.toLowerCase().includes("24th"),
-    "Unexpected-charge FAQ (id 21) must explain the 24th renewal date"
+    chargeEntry!.answer.toLowerCase().includes("billing date"),
+    "Unexpected-charge FAQ (id 21) must explain renewal happens on the member's own billing date (NOT a blanket 'the 24th of each month' — only 25th–27th joiners are anchored to the 24th)"
   );
 
   console.log("PASS — faqs.test.ts passed —", entries.length, "entries, all checks green");

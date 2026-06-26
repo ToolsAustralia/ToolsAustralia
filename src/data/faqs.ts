@@ -98,7 +98,7 @@ export function getFaqEntries(): FaqEntry[] {
       id: "11",
       question: "When does my subscription renew?",
       answer:
-        "Subscriptions renew on the 24th of each month. This timing is intentional — it ensures your renewal payment settles at least three days before the 27th Major Draw, so your entries are confirmed and counted for that month's draw.",
+        "Your subscription renews monthly on your own billing date — the day of the month you first subscribed. The one exception: if you join late in the month (the 25th, 26th, or 27th), your renewal is anchored to the 24th instead, so your payment settles a few days before the 27th Major Draw and your entries are confirmed in time. You can always see your exact next billing date in [My Account](/my-account) → Settings → Subscription.",
       category: "PAYMENTS",
     },
     {
@@ -173,7 +173,7 @@ export function getFaqEntries(): FaqEntry[] {
       id: "21",
       question: "I was charged unexpectedly — I didn't authorise a renewal",
       answer:
-        "Subscriptions renew automatically on the 24th of each month so your entries are confirmed before the 27th draw — this is explained in our terms at sign-up. You can turn off auto-renewal at any time from [My Account](/my-account) → Settings → Subscription tab. If you believe a specific charge was made in error or without your consent, please [contact us](/contact) and our team will look into it.",
+        "Subscriptions renew automatically each month on your own billing date (the day you subscribed) — you can see your exact next billing date in [My Account](/my-account) → Settings → Subscription. If you joined late in the month (the 25th–27th), that date is anchored to the 24th so your entries are confirmed before the 27th draw. You can turn off auto-renewal there at any time. If you believe a specific charge was made in error or without your consent, please [contact us](/contact) and our team will look into it.",
       category: "PAYMENTS",
     },
   ];
