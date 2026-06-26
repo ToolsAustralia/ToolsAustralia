@@ -104,6 +104,36 @@ function testEstimateCostUsd() {
     estimateCostUsd("claude-haiku-4-5", 500_000, 0),
     0.5
   );
+
+  // ── Gemini prices ──────────────────────────────────────────────────────────
+
+  // gemini-2.5-flash-lite: 1M input × $0.10/M = $0.10
+  expect(
+    "gemini-2.5-flash-lite 1M input, 0 output → $0.10",
+    estimateCostUsd("gemini-2.5-flash-lite", 1_000_000, 0),
+    0.10
+  );
+
+  // gemini-2.5-flash-lite: 0 input + 1M output × $0.40/M = $0.40
+  expect(
+    "gemini-2.5-flash-lite 0 input, 1M output → $0.40",
+    estimateCostUsd("gemini-2.5-flash-lite", 0, 1_000_000),
+    0.40
+  );
+
+  // gemini-2.5-flash: 1M input × $0.30/M = $0.30
+  expect(
+    "gemini-2.5-flash 1M input, 0 output → $0.30",
+    estimateCostUsd("gemini-2.5-flash", 1_000_000, 0),
+    0.30
+  );
+
+  // gemini-2.5-flash: 0 input + 1M output × $2.50/M = $2.50
+  expect(
+    "gemini-2.5-flash 0 input, 1M output → $2.50",
+    estimateCostUsd("gemini-2.5-flash", 0, 1_000_000),
+    2.50
+  );
 }
 
 // ─── evaluateBudget ──────────────────────────────────────────────────────────

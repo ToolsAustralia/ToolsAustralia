@@ -8,6 +8,8 @@
 
 > **Anchor-24 accuracy fix (2026-06-25):** Corrected the renewal-date framing across the FAQ (`faqs.ts` 11/21), the knowledge-pack generator, and the system prompt. Subscriptions renew on the **member's own monthly billing date**; only **25th–27th joiners are anchored to the 24th** (per `docs/BILLING_ANCHOR_24.md`) — the prior blanket "renews on the 24th of each month" was inaccurate. Members are pointed to My Account → Settings → Subscription for their exact date.
 
+> **Gemini provider integration (2026-06-26):** Added Google Gemini as a switchable backend provider alongside Anthropic. See §Gemini provider below.
+
 > **FAQ gap-fill (2026-06-26):** Added 6 new FAQ entries (ids 22–27) covering upgrade, downgrade, reactivate, pause, post-purchase setup, and entry promotions. Enhanced id 13 (failed payment) with an in-app retry tip. Added 5 new deflection intents in `decisionTree.ts` (upgrade → 22, downgrade → 23, restart/reactivate → 24, pause → 25, promo/double-entries → 27). Added a `[major-draw]` knowledge-pack bullet explaining why the 24th anchor exists. Tests updated: `test:chat-faqs` asserts 27 entries and ids 22/23 link to `/my-account`; `test:chat-deflection` adds upgrade and pause intent assertions (14 passing cases total).
 
 ---
@@ -64,6 +66,61 @@ A curated `[key-pages]` section was added to `scripts/build-chat-knowledge-pack.
 - `test:chat-faqs` — asserts 27 entries (was 21), ids 22/23 exist with `/my-account` links, plus existing assertions for ids 18–21.
 - `test:chat-deflection` — 14 passing cases: draw date, pricing (source-tied), refund, eligibility (excluded states), off-topic×2, Layer-2 coverage, cancel self-service, stop auto-renewal, unexpected charge, delete account, determinism, **upgrade membership** (→ id 22, no LLM), **pause membership** (→ id 25, no LLM).
 - `test:chat-knowledge` — asserts `key-pages` section id present; `/my-account`, `/draw-results`, `/contact`, `/faq`, `/winners`, `/partner` all appear in pack text.
+
+---
+
+### Gemini provider integration (2026-06-26)
+
+Cobber now supports Google Gemini as a switchable backend alongside Anthropic. The active provider is stored in a `ChatSettings` MongoDB collection (singleton doc, `key: "chat"`) and read at request time, fail-safe (defaults to `"anthropic"` on any error so the bot never breaks).
+
+**New model — `ChatSettings`** (`src/models/ChatSettings.ts`):
+- Schema: `{ key: String (unique, default "chat"), activeProvider: enum ["anthropic","google"] }` + timestamps.
+- Singleton doc approach (one row, not per-user). Upsert-safe.
+
+**New accessor — `chatSettings.ts`** (`src/lib/support-chat/chatSettings.ts`):
+- `getActiveChatProvider(deps?)` — reads the singleton doc via lazy dynamic import (no Mongoose at module load). Fail-safe: any error returns `"anthropic"`.
+- `setActiveChatProvider(provider, deps?)` — upserts the singleton doc.
+- Both functions accept optional `deps` for test injection (no real Mongo required in tests).
+
+**Updated `provider.ts`** — `getChatModel(tier, provider?, deps?)`:
+- New 3rd-arg `provider: "anthropic" | "google"` defaults to `"anthropic"` (backward compat).
+- Google branch: reads `CHAT_GOOGLE_MODEL_PRIMARY` / `CHAT_GOOGLE_MODEL_ESCALATION` (defaults: `gemini-2.5-flash-lite` / `gemini-2.5-flash`), calls `google(modelId)` from `@ai-sdk/google`.
+- Anthropic branch unchanged.
+- `ChatModelDeps` gains `google?: (modelId: string) => LanguageModel` for test injection.
+
+**Google model IDs and pricing:**
+
+| Model | Default env | Input $/M | Output $/M |
+|---|---|---|---|
+| `gemini-2.5-flash-lite` | `CHAT_GOOGLE_MODEL_PRIMARY` | $0.10 | $0.40 |
+| `gemini-2.5-flash` | `CHAT_GOOGLE_MODEL_ESCALATION` | $0.30 | $2.50 |
+
+Prices are added to `costGuard.ts` `MODEL_PRICES` table.
+
+**Updated `ChatService.ts`** — provider resolution at request time:
+- New `ChatServiceDeps.getActiveChatProvider?: () => Promise<"anthropic" | "google">` for test injection.
+- When `deps.getModel` is not provided (normal prod path), the service resolves the provider via `getActiveChatProvider()`, then builds the model with `getChatModel("primary", provider)`.
+- When `deps.getModel` is provided (tests), it's used directly as before (backward compat).
+
+**Updated `chatbotCostAnalytics.ts`**:
+- `readChatbotConfig()` is now async; calls `getActiveChatProvider()` to pick the model name.
+- `ChatbotConfig` now includes `activeProvider: "anthropic" | "google"`.
+- The `config.model` field reflects the actual active provider's primary model.
+
+**Admin route** — `GET/PATCH /api/admin/chatbot-settings`:
+- Auth: `overview.view` permission.
+- `GET` → returns `{ data: { activeProvider }, meta: { timestamp } }`.
+- `PATCH { activeProvider: "anthropic" | "google" }` → updates the DB setting, reads it back.
+- See `docs/admin/api.md` for full spec.
+
+**Data residency note:** Gemini inference runs on Google US infrastructure. The Cobber bot is FAQ-only (no PII in messages — the system prompt bans member data; PII is stripped via `redactPII` before persistence). Using Google Gemini for this zero-PII FAQ bot is consistent with the data-residency posture already used for AWS (Anthropic's underlying infrastructure).
+
+**Env vars required for Gemini:**
+- `GOOGLE_GENERATIVE_AI_API_KEY` — read automatically by `@ai-sdk/google`.
+- `CHAT_GOOGLE_MODEL_PRIMARY` (default `gemini-2.5-flash-lite`).
+- `CHAT_GOOGLE_MODEL_ESCALATION` (default `gemini-2.5-flash`).
+
+**Tests:** `test:chat-settings` (6 assertions, all deps-injected), `test:chat-provider` (updated: existing anthropic tests now use 3-arg form; new google group with 3 cases), `test:chat-cost-guard` (4 new Gemini price assertions), `test:chat-service` (1 new google provider path test).
 
 > Companion to [research.md](research.md) and [README.md](README.md). This is the technical spec, grounded in the Tools Australia stack and conventions (Next.js 15 App Router, MongoDB/Mongoose, NextAuth, Zod, strict `app → services → repositories/lib → models` layering). Code blocks are **illustrative sketches**, not final code — they show shape and placement, not a finished implementation. File paths follow the repo's existing conventions.
 

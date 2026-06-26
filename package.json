@@ -40,6 +40,7 @@
     "test:anchor-billing": "tsx src/utils/billing/__tests__/anchor-billing.test.ts",
     "test:chat-cost-guard": "tsx src/lib/support-chat/__tests__/cost-guard.test.ts",
     "test:chat-provider": "tsx src/lib/support-chat/__tests__/provider.test.ts",
+    "test:chat-settings": "tsx src/lib/support-chat/__tests__/chat-settings.test.ts",
     "smoke:chat-provider": "tsx scripts/smoke-chat-provider.ts",
     "test:chat-faqs": "tsx src/data/__tests__/faqs.test.ts",
     "test:norm-user-service-account": "tsx src/models/__tests__/User.serviceAccount.test.ts",
@@ -296,6 +297,7 @@
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^3.0.85",
+    "@ai-sdk/google": "^4.0.0",
     "@ai-sdk/react": "^3.0.211",
     "@auth/mongodb-adapter": "^3.10.0",
     "@dnd-kit/core": "^6.3.1",

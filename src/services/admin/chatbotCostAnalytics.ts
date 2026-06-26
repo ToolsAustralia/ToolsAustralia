@@ -2,6 +2,7 @@ import connectDB from "@/lib/mongodb";
 import ChatDailyBudget from "@/models/ChatDailyBudget";
 import ChatAuditLog from "@/models/ChatAuditLog";
 import { utcDayKey } from "@/lib/support-chat/costGuard";
+import { getActiveChatProvider } from "@/lib/support-chat/chatSettings";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -36,6 +37,7 @@ export interface ChatbotUsageSummary {
 
 export interface ChatbotConfig {
   model: string;
+  activeProvider: "anthropic" | "google";
   dailyBudgetUsd: number;
   killSwitch: boolean;
   generativeLimitMax: number;
@@ -133,11 +135,17 @@ function buildDayRange(days: number): string[] {
 // Config reader (server-side env vars)
 // ---------------------------------------------------------------------------
 
-function readChatbotConfig(): ChatbotConfig {
+async function readChatbotConfig(): Promise<ChatbotConfig> {
   const rawBudget = parseFloat(process.env.CHAT_DAILY_TOKEN_BUDGET_USD ?? "5");
   const dailyBudgetUsd = Number.isFinite(rawBudget) ? rawBudget : 5;
+  const activeProvider = await getActiveChatProvider();
+  const model =
+    activeProvider === "google"
+      ? (process.env.CHAT_GOOGLE_MODEL_PRIMARY ?? "gemini-2.5-flash-lite")
+      : (process.env.CHAT_MODEL_PRIMARY ?? "claude-haiku-4-5");
   return {
-    model: process.env.CHAT_MODEL_PRIMARY ?? "claude-haiku-4-5",
+    model,
+    activeProvider,
     dailyBudgetUsd,
     killSwitch: process.env.CHAT_KILL_SWITCH === "true",
     generativeLimitMax: Number(process.env.CHAT_GENERATIVE_LIMIT_MAX) || 5,
@@ -238,7 +246,7 @@ export async function getChatbotCostAnalytics({
     }))
   );
 
-  const config = readChatbotConfig();
+  const config = await readChatbotConfig();
 
   return { rangeDays: days, cost, daily, usage, config };
 }

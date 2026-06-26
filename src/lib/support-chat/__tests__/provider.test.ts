@@ -103,8 +103,8 @@ function testGetChatModel() {
       return makeStubModel(id);
     };
 
-    const primaryDefault = getChatModel("primary", { anthropic: stubAnthropic });
-    const escalationDefault = getChatModel("escalation", { anthropic: stubAnthropic });
+    const primaryDefault = getChatModel("primary", "anthropic", { anthropic: stubAnthropic });
+    const escalationDefault = getChatModel("escalation", "anthropic", { anthropic: stubAnthropic });
 
     const primaryId = (primaryDefault as { modelId?: string }).modelId;
     const escalationId = (escalationDefault as { modelId?: string }).modelId;
@@ -127,8 +127,8 @@ function testGetChatModel() {
       return makeStubModel(id);
     };
 
-    getChatModel("primary", { anthropic: stubAnthropic2 });
-    getChatModel("escalation", { anthropic: stubAnthropic2 });
+    getChatModel("primary", "anthropic", { anthropic: stubAnthropic2 });
+    getChatModel("escalation", "anthropic", { anthropic: stubAnthropic2 });
 
     expect(
       "custom CHAT_MODEL_PRIMARY is respected",
@@ -140,10 +140,99 @@ function testGetChatModel() {
       calledWith2[1],
       "claude-sonnet-4-6"
     );
+
+    // Default provider (omit provider arg) → anthropic
+    // Test the getChatModel("primary") 1-arg form by using deps only (no provider).
+    // Since the real anthropic() requires an API key, we can't call the 1-arg form
+    // without injection — instead verify the 3-arg form with "anthropic" explicitly.
+    setEnv({
+      CHAT_MODEL_PRIMARY: undefined,
+      CHAT_MODEL_ESCALATION: undefined,
+    });
+    const calledWith3: string[] = [];
+    const stubAnthropic3 = (id: string): LanguageModel => {
+      calledWith3.push(id);
+      return makeStubModel(id);
+    };
+    getChatModel("primary", "anthropic", { anthropic: stubAnthropic3 });
+    expect(
+      "getChatModel('primary', 'anthropic') defaults to claude-haiku-4-5",
+      calledWith3[0],
+      "claude-haiku-4-5"
+    );
   } finally {
     setEnv({
       CHAT_MODEL_PRIMARY: savedPrimary,
       CHAT_MODEL_ESCALATION: savedEscalation,
+    });
+  }
+}
+
+// ─── getChatModel — google provider ──────────────────────────────────────────
+
+function testGetChatModelGoogle() {
+  console.log("\ngetChatModel — google provider");
+
+  const savedGooglePrimary = process.env.CHAT_GOOGLE_MODEL_PRIMARY;
+  const savedGoogleEscalation = process.env.CHAT_GOOGLE_MODEL_ESCALATION;
+
+  try {
+    setEnv({
+      CHAT_GOOGLE_MODEL_PRIMARY: undefined,
+      CHAT_GOOGLE_MODEL_ESCALATION: undefined,
+    });
+
+    const calledWith: string[] = [];
+    const stubGoogle = (id: string): LanguageModel => {
+      calledWith.push(id);
+      return makeStubModel(id);
+    };
+
+    // 1. primary → gemini-2.5-flash-lite
+    const primaryModel = getChatModel("primary", "google", { google: stubGoogle });
+    const primaryId = (primaryModel as { modelId?: string }).modelId;
+    expect(
+      "google primary → gemini-2.5-flash-lite",
+      primaryId,
+      "gemini-2.5-flash-lite"
+    );
+    expect(
+      "google stub called with gemini-2.5-flash-lite",
+      calledWith[0],
+      "gemini-2.5-flash-lite"
+    );
+
+    // 2. escalation → gemini-2.5-flash
+    const escalationModel = getChatModel("escalation", "google", { google: stubGoogle });
+    const escalationId = (escalationModel as { modelId?: string }).modelId;
+    expect(
+      "google escalation → gemini-2.5-flash",
+      escalationId,
+      "gemini-2.5-flash"
+    );
+    expect(
+      "google stub called with gemini-2.5-flash",
+      calledWith[1],
+      "gemini-2.5-flash"
+    );
+
+    // 3. Custom env var CHAT_GOOGLE_MODEL_PRIMARY
+    setEnv({ CHAT_GOOGLE_MODEL_PRIMARY: "custom-gemini" });
+    const calledWith2: string[] = [];
+    const stubGoogle2 = (id: string): LanguageModel => {
+      calledWith2.push(id);
+      return makeStubModel(id);
+    };
+    getChatModel("primary", "google", { google: stubGoogle2 });
+    expect(
+      "custom CHAT_GOOGLE_MODEL_PRIMARY is respected",
+      calledWith2[0],
+      "custom-gemini"
+    );
+  } finally {
+    setEnv({
+      CHAT_GOOGLE_MODEL_PRIMARY: savedGooglePrimary,
+      CHAT_GOOGLE_MODEL_ESCALATION: savedGoogleEscalation,
     });
   }
 }
@@ -362,6 +451,7 @@ async function testWithModelFallback() {
 
 async function run() {
   testGetChatModel();
+  testGetChatModelGoogle();
   testIsFallbackEligibleError();
   await testWithModelFallback();
 

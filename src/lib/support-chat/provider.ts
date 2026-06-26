@@ -8,29 +8,36 @@
  *
  * This bot is FAQ-only (Phase 1). Member account tools and Amazon Bedrock
  * integration have been removed per owner decision. All inference runs via
- * the first-party Anthropic API using CHAT_MODEL_PRIMARY / CHAT_MODEL_ESCALATION.
+ * the first-party Anthropic API or Google Gemini API, controlled by the
+ * activeProvider setting in the ChatSettings collection.
  */
 
 import { anthropic } from "@ai-sdk/anthropic";
+import { google } from "@ai-sdk/google";
 import { APICallError } from "@ai-sdk/provider";
 import type { LanguageModel } from "ai";
 
-// ─── Model ID defaults (Anthropic first-party) ────────────────────────────────
+// ─── Model ID defaults ────────────────────────────────────────────────────────
 
 const DEFAULT_PRIMARY_MODEL = "claude-haiku-4-5";
 const DEFAULT_ESCALATION_MODEL = "claude-sonnet-4-6";
+
+const DEFAULT_GOOGLE_PRIMARY = "gemini-2.5-flash-lite";
+const DEFAULT_GOOGLE_ESCALATION = "gemini-2.5-flash";
 
 // ─── Provider deps (injectable for tests) ────────────────────────────────────
 
 /**
  * Injectable factories for getChatModel.
  * Tests inject stubs that return fake LanguageModels with no real API calls.
- * Production uses the module-level `anthropic` instance which reads credentials
- * from env automatically.
+ * Production uses the module-level `anthropic` / `google` instances which
+ * read credentials from env automatically.
  */
 export interface ChatModelDeps {
   /** Factory for the first-party Anthropic provider. Defaults to `anthropic`. */
   anthropic?: (modelId: string) => LanguageModel;
+  /** Factory for the Google Gemini provider. Defaults to `google`. */
+  google?: (modelId: string) => LanguageModel;
 }
 
 /**
@@ -42,19 +49,33 @@ export type GetModelFn = (tier: "primary" | "escalation") => LanguageModel;
 // ─── getChatModel ────────────────────────────────────────────────────────────
 
 /**
- * Returns an AI SDK LanguageModel for the given tier.
+ * Returns an AI SDK LanguageModel for the given tier and provider.
  *
- * Model IDs from CHAT_MODEL_PRIMARY (default: claude-haiku-4-5)
+ * Anthropic model IDs from CHAT_MODEL_PRIMARY (default: claude-haiku-4-5)
  * and CHAT_MODEL_ESCALATION (default: claude-sonnet-4-6).
- * Reads ANTHROPIC_API_KEY from env automatically.
  *
- * @param tier  'primary' for the cheap triage model; 'escalation' for hard cases.
- * @param deps  Optional factory overrides for unit tests (no real API calls).
+ * Google model IDs from CHAT_GOOGLE_MODEL_PRIMARY (default: gemini-2.5-flash-lite)
+ * and CHAT_GOOGLE_MODEL_ESCALATION (default: gemini-2.5-flash).
+ *
+ * @param tier      'primary' for the cheap triage model; 'escalation' for hard cases.
+ * @param provider  'anthropic' (default) or 'google'.
+ * @param deps      Optional factory overrides for unit tests (no real API calls).
  */
 export function getChatModel(
   tier: "primary" | "escalation",
+  provider: "anthropic" | "google" = "anthropic",
   deps?: ChatModelDeps
 ): LanguageModel {
+  if (provider === "google") {
+    const modelId =
+      tier === "primary"
+        ? (process.env.CHAT_GOOGLE_MODEL_PRIMARY ?? DEFAULT_GOOGLE_PRIMARY)
+        : (process.env.CHAT_GOOGLE_MODEL_ESCALATION ?? DEFAULT_GOOGLE_ESCALATION);
+    const googleFn = deps?.google ?? (google as unknown as (modelId: string) => LanguageModel);
+    return googleFn(modelId);
+  }
+
+  // anthropic (default)
   const modelId =
     tier === "primary"
       ? (process.env.CHAT_MODEL_PRIMARY ?? DEFAULT_PRIMARY_MODEL)

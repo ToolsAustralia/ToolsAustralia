@@ -73,6 +73,7 @@ import {
   recordUsage as realRecordUsage,
 } from "@/lib/support-chat/costGuard";
 import { getChatModel } from "@/lib/support-chat/provider";
+import { getActiveChatProvider as realGetActiveChatProvider } from "@/lib/support-chat/chatSettings";
 import { getKnowledgePack } from "@/lib/support-chat/knowledge/pack";
 import { buildSystemPrompt } from "@/services/support-chat/systemPrompt";
 import {
@@ -216,8 +217,13 @@ export interface ChatServiceDeps {
   streamFn?: (args: StreamArgs) => StreamResultLike;
   persist?: PersistPort;
   escalateToHuman?: typeof realEscalateToHuman;
-  /** Defaults to getChatModel('primary'). */
+  /** Defaults to getChatModel('primary'). When provided, takes precedence over getActiveChatProvider. */
   getModel?: () => LanguageModel;
+  /**
+   * Resolves the active chat provider from the DB. Defaults to getActiveChatProvider
+   * from chatSettings.ts. Only used when getModel is not provided.
+   */
+  getActiveChatProvider?: () => Promise<"anthropic" | "google">;
   /**
    * Defaults to the real verifyHcaptcha (src/lib/support-chat/captcha.ts).
    * Inject a stub in tests to avoid real network calls.
@@ -529,7 +535,6 @@ export const chatService = {
     const streamFn = deps.streamFn ?? defaultStreamFn;
     const persist = deps.persist ?? defaultPersist;
     const escalate = deps.escalateToHuman ?? realEscalateToHuman;
-    const getModel = deps.getModel ?? (() => getChatModel("primary"));
     const verifyHcaptchaFn = deps.verifyHcaptcha ?? realVerifyHcaptcha;
     const checkGenerativeLimit =
       deps.checkGenerativeLimit ??
@@ -663,7 +668,13 @@ export const chatService = {
     let model: LanguageModel;
     let system: string;
     try {
-      model = getModel();
+      if (deps.getModel) {
+        model = deps.getModel();
+      } else {
+        const resolveProvider = deps.getActiveChatProvider ?? realGetActiveChatProvider;
+        const provider = await resolveProvider();
+        model = getChatModel("primary", provider);
+      }
       system = buildSystemPrompt(getKnowledgePack());
     } catch (err) {
       // Hard setup error (e.g. missing knowledge pack / model env) → graceful canned reply.

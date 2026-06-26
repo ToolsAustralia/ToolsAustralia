@@ -834,12 +834,14 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/models/ChatMessage.ts",
         "src/models/ChatDailyBudget.ts",
         "src/models/ChatAuditLog.ts",
+        "src/models/ChatSettings.ts",
+        "src/app/api/admin/chatbot-settings/**",
         "src/generated/chatKnowledgePack.ts",
         "scripts/build-chat-knowledge-pack.ts",
         "scripts/embed-chat-knowledge.ts",
         "scripts/eval-chat-goldenset.ts"
       ],
-      "lastVerified": "2026-06-24"
+      "lastVerified": "2026-06-26"
     }
   }
 }
