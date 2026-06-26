@@ -71,7 +71,7 @@ export function getChatModel(
       tier === "primary"
         ? (process.env.CHAT_GOOGLE_MODEL_PRIMARY ?? DEFAULT_GOOGLE_PRIMARY)
         : (process.env.CHAT_GOOGLE_MODEL_ESCALATION ?? DEFAULT_GOOGLE_ESCALATION);
-    const googleFn = deps?.google ?? (google as unknown as (modelId: string) => LanguageModel);
+    const googleFn = deps?.google ?? google;
     return googleFn(modelId);
   }
 

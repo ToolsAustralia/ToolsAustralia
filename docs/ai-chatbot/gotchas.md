@@ -4,6 +4,16 @@ Hard-won lessons. Read before touching the widget mount, the route runtime, or t
 
 ---
 
+## AI SDK provider packages must match the `ai` core's `@ai-sdk/provider` major
+
+**Incident (2026-06-26):** Adding Gemini via `@ai-sdk/google@4.0.0` type-checked and built green but would have **thrown at runtime** the moment the model was used. Root cause: `ai@6` (core) and `@ai-sdk/anthropic@3` both depend on **`@ai-sdk/provider@3`** (the LanguageModel "v3" spec), but `@ai-sdk/google@4` depends on **`@ai-sdk/provider@4`** — a different, newer spec. `ai@6`'s `streamText` can only drive a v3-spec model. An `as unknown as (id) => LanguageModel` cast silenced the TS error but did NOT fix the runtime incompatibility. Fixed by pinning `@ai-sdk/google@3` (3.0.84 → `@ai-sdk/provider@3.0.11`, matches the core's 3.0.10) and removing the cast.
+
+**Rule:** every `@ai-sdk/<provider>` package MUST be on the **same major as the `ai` core's `@ai-sdk/provider` peer**. Today that's v3 — so `@ai-sdk/anthropic@3` AND `@ai-sdk/google@3` (NOT 4). Verify: compare `require("@ai-sdk/<pkg>/package.json").dependencies["@ai-sdk/provider"]` for each provider against the `ai` core's installed `@ai-sdk/provider` — they must share a major.
+
+**Red flag:** if you reach for `as unknown as …` / `as any` to make a provider model assign to `LanguageModel`, STOP — that's a version mismatch, not a type quirk. Align the version; a clean assignment (no cast) is the proof the spec matches. `tsc`/build passing *with* a cast does NOT prove the model works at runtime.
+
+---
+
 ## 1. `next/dynamic({ ssr: false })` is forbidden in a Server Component — it breaks `next build` (not `tsc`)
 
 **Incident (2026-06-25):** The Vercel build failed with:

@@ -47,7 +47,7 @@ Foundations for the `support-chat` domain (see [docs/ai-chatbot/](../ai-chatbot/
   - `CHAT_GENERATIVE_LIMIT_WINDOW_SECONDS` — integer (seconds); sliding window for the per-user LLM cap (default `300` = 5 minutes).
 - **Deps (Task 1.9 addition):** `@hcaptcha/react-hcaptcha` — React wrapper for the hCaptcha challenge widget, rendered in `SupportChatWidget` for anonymous guests on the generative path. Dynamic-imported (`ssr: false`) so it never runs server-side.
 - **Deps (Task 1.10 addition):** `@anthropic-ai/sdk` (devDependency only — used by `eval-chat-goldenset.ts` for the Batch API grader; never bundled into the app). The Vercel AI SDK (`@ai-sdk/anthropic`) does not expose the Batch API surface, so the raw SDK is used for offline eval only.
-- **Deps (Gemini provider addition):** `@ai-sdk/google` (`4.0.0`) — Vercel AI SDK adapter for Google Gemini. Reads `GOOGLE_GENERATIVE_AI_API_KEY` from env automatically. Used in `provider.ts` alongside `@ai-sdk/anthropic`.
+- **Deps (Gemini provider addition):** `@ai-sdk/google` (`^3` — pinned to the same generation as `@ai-sdk/anthropic@3` / the `ai@6` core's `@ai-sdk/provider@3`; **NOT v4**, whose `@ai-sdk/provider@4` model spec the core can't drive — see [ai-chatbot/gotchas.md](../ai-chatbot/gotchas.md)). Vercel AI SDK adapter for Google Gemini. Reads `GOOGLE_GENERATIVE_AI_API_KEY` from env automatically. Used in `provider.ts` alongside `@ai-sdk/anthropic`.
 - **Env (Gemini — added 2026-06-26):**
   - `GOOGLE_GENERATIVE_AI_API_KEY` — required when activeProvider is `"google"`. Read automatically by `@ai-sdk/google`. Set a spend limit in Google AI Studio.
   - `CHAT_GOOGLE_MODEL_PRIMARY` — Gemini model for the primary tier (default `gemini-2.5-flash-lite`).
