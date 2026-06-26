@@ -526,7 +526,7 @@ Endpoints + aggregation rules: [api.md](./api.md#cancellation-flow-analytics).
 
 **Client-safe constant copies.** `CancellationFlowAnalytics.tsx` declares its own module-local `CANCELLATION_REASONS` and `OFFER_TYPES` constants (identical values and order to the model) instead of importing them from `@/models/CancellationFlowEvent`. That module is a Mongoose model file — runtime-evaluating it in a client component crashes (`mongoose` is `serverExternalPackages`, so `models.CancellationFlowEvent` is undefined in the browser). The type-only imports (`import type { CancellationReason, OfferType }`) remain safe because types are fully erased at build time. Keep the local constants in sync by hand whenever the model's `CANCELLATION_REASONS` or `OFFER_TYPES` arrays change. This is the same pattern used elsewhere on this branch for the same class of crash.
 
-## Chatbot Cost & Usage (2026-06-26)
+## Chatbot Cost & Usage (2026-06-26, updated)
 
 [src/components/admin/ChatbotCostManagement.tsx](../../src/components/admin/ChatbotCostManagement.tsx) is a **read-only** panel mounted as the `chatbot-cost` tab in the Analytics sidebar group (rendered by `AdminPage` on `selectedTab === "chatbot-cost"`). Gated by `overview.view`. No mutations, no external chart library.
 
@@ -534,19 +534,27 @@ Endpoints + aggregation rules: [api.md](./api.md#cancellation-flow-analytics).
 
 **Range switcher.** A `Segmented` control lets the admin pick 7 / 30 / 90 days. State is local (`useState`) — no URL sync needed for a cost dashboard.
 
+**Budget status panel (prominent, below range switcher).** A `Card` showing today's spend vs the configured daily cap — `fmtUsd(todayUsd) / fmtUsd(dailyBudgetUsd)` — with a horizontal `ProgressBar` (green < 50%, amber 50–80%, red > 80%), percent-used label, and a projected monthly spend line (`last7Usd / 7 * 30` when 7+ days of data, else `last30Usd`). If `config.killSwitch` is `true`, a red `ShieldOff` badge reads "KILL SWITCH ON — generative bot disabled". If loading, the bar renders at 0%.
+
 **Metric cards (top row):** Cost today (USD) · Cost 30-day · **Deflection rate %** (highlighted emerald) · Escalations · Total tokens (in + out).
+
+**Saved by deflection MetricCard (below metric cards, inside `hasData` block).** Shows `~fmtUsd(estSaved)` where `estSaved = deflectedCount × (last30Usd / llmCount)`. If `llmCount === 0`, shows `$0.00`. Subtitle: "est. vs answering everything with AI (last 30 days)". This is an estimate — the label includes `~`.
 
 **Daily cost area chart.** `RevenueAreaChart` over the `daily` array from the API (ascending, filled in for zero-spend days). Amber accent to match a "money" visual language.
 
-**Request type breakdown (BarList).** Deflected (FAQ / free) vs LLM calls (paid). Shows absolute counts.
+**Request type breakdown (BarList).** Deflected (FAQ / free) vs LLM calls (paid). Footer now shows: total requests · conversations count (distinct `conversationId`s, if > 0) · avg response. A second footer line shows: Cost / AI answer · Cost / conversation (both guarded, only shown if denominator > 0).
 
-**Actor breakdown (BarList).** Members vs anonymous requesters.
+**Actor breakdown (BarList).** Members vs anonymous requesters. Footer now shows: Members X% · Anonymous Y% of requests (replacing the previous "LLM cost last X/30 days" footer which was actor-irrelevant).
+
+**Config strip (small/muted, bottom of `hasData` block).** A `Settings`-icon row showing: `Model: {config.model} · Daily budget: {fmtUsd(dailyBudgetUsd)} · Limit: {generativeLimitMax} AI answers / {generativeLimitWindowSeconds/60} min per user`. Uses `bg-neutral-50 dark:bg-neutral-800/50` with a border.
+
+**ProgressBar component.** `src/components/admin/ui/ProgressBar.tsx` — a minimal `h-2` horizontal bar, colour driven by `pct` (0–100, clamped), exported from the barrel. Not a chart-library component.
 
 **Empty state.** When `usage.totalRequests === 0` a friendly card renders: "No chatbot activity recorded yet."
 
-**Data hook:** `useChatbotCostAnalytics(days)` — TanStack `useQuery`, inline queryKey `["admin", "chatbot-cost", days]`, fetches `/api/admin/chatbot-cost?days=${days}`.
+**Data hook:** `useChatbotCostAnalytics(days)` — TanStack `useQuery`, inline queryKey `["admin", "chatbot-cost", days]`, fetches `/api/admin/chatbot-cost?days=${days}`. The returned `ChatbotCostData` now includes `config` and `usage.conversationsCount`.
 
-**Service:** `src/services/admin/chatbotCostAnalytics.ts`. Pure shaper `summarizeAuditRows` (no Mongo) is tested separately via `npm run test:chat-admin-usage`. The DB entry point `getChatbotCostAnalytics({ days })` queries `ChatDailyBudget` for cost rows and `ChatAuditLog` for request audit rows, filling zero-day gaps in the daily array.
+**Service:** `src/services/admin/chatbotCostAnalytics.ts`. Pure shaper `summarizeAuditRows` (no Mongo) is tested separately via `npm run test:chat-admin-usage`. The DB entry point `getChatbotCostAnalytics({ days })` queries `ChatDailyBudget` for cost rows and `ChatAuditLog` for request audit rows (now including `conversationId` in the `.select()` projection), fills zero-day gaps in the daily array, and reads `config` from env vars server-side.
 
 **Client-safe constant note.** `ChatbotCostManagement.tsx` does not import from `@/models/ChatAuditLog`; the `actorKind` literal tuple is re-declared locally with a "keep in sync" comment — same pattern as `CancellationFlowAnalytics.tsx`.
 

@@ -124,4 +124,24 @@ function row(partial: Partial<AuditRow>): AuditRow {
   console.log("✓ avgDurationMs ignores null/undefined/0");
 }
 
+// 8. conversationsCount — distinct non-null conversationIds
+{
+  const rows: AuditRow[] = [
+    row({ conversationId: "a" }),
+    row({ conversationId: "a" }),  // duplicate → should not count twice
+    row({ conversationId: "b" }),
+    row({ conversationId: null }),  // null → excluded
+  ];
+  const result = summarizeAuditRows(rows);
+  assert.equal(result.conversationsCount, 2, `conversationsCount: expected 2 got ${result.conversationsCount}`);
+  console.log("✓ conversationsCount — distinct non-null IDs (a,a,b,null → 2)");
+}
+
+// 9. conversationsCount is 0 for empty rows
+{
+  const result = summarizeAuditRows([]);
+  assert.equal(result.conversationsCount, 0, "empty: conversationsCount should be 0");
+  console.log("✓ conversationsCount 0 on empty rows");
+}
+
 console.log("\nAll tests passed.");

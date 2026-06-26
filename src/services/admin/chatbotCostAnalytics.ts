@@ -31,6 +31,15 @@ export interface ChatbotUsageSummary {
   memberCount: number;
   anonymousCount: number;
   avgDurationMs: number;
+  conversationsCount: number;
+}
+
+export interface ChatbotConfig {
+  model: string;
+  dailyBudgetUsd: number;
+  killSwitch: boolean;
+  generativeLimitMax: number;
+  generativeLimitWindowSeconds: number;
 }
 
 export interface ChatbotCostData {
@@ -38,6 +47,7 @@ export interface ChatbotCostData {
   cost: ChatbotCostSummary;
   daily: ChatbotDailyRow[];
   usage: ChatbotUsageSummary;
+  config: ChatbotConfig;
 }
 
 // ---------------------------------------------------------------------------
@@ -49,12 +59,14 @@ export interface AuditRow {
   deflected: boolean;
   escalated: boolean;
   durationMs?: number | null;
+  conversationId?: string | null;
 }
 
 /**
  * Summarises raw ChatAuditLog rows into a ChatbotUsageSummary.
  * Deflection rate = (deflectedCount / totalRequests) * 100, rounded to 1 dp.
  * Guard: 0 rows → 0% (no divide-by-zero).
+ * conversationsCount = distinct non-null conversationId values.
  */
 export function summarizeAuditRows(rows: AuditRow[]): ChatbotUsageSummary {
   const totalRequests = rows.length;
@@ -64,6 +76,7 @@ export function summarizeAuditRows(rows: AuditRow[]): ChatbotUsageSummary {
   let anonymousCount = 0;
   let durationTotal = 0;
   let durationCount = 0;
+  const conversationIdSet = new Set<string>();
 
   for (const row of rows) {
     if (row.deflected) deflectedCount += 1;
@@ -73,6 +86,9 @@ export function summarizeAuditRows(rows: AuditRow[]): ChatbotUsageSummary {
     if (row.durationMs != null && row.durationMs > 0) {
       durationTotal += row.durationMs;
       durationCount += 1;
+    }
+    if (row.conversationId != null) {
+      conversationIdSet.add(row.conversationId);
     }
   }
 
@@ -93,6 +109,7 @@ export function summarizeAuditRows(rows: AuditRow[]): ChatbotUsageSummary {
     memberCount,
     anonymousCount,
     avgDurationMs,
+    conversationsCount: conversationIdSet.size,
   };
 }
 
@@ -110,6 +127,23 @@ function buildDayRange(days: number): string[] {
     result.push(utcDayKey(d));
   }
   return result;
+}
+
+// ---------------------------------------------------------------------------
+// Config reader (server-side env vars)
+// ---------------------------------------------------------------------------
+
+function readChatbotConfig(): ChatbotConfig {
+  const rawBudget = parseFloat(process.env.CHAT_DAILY_TOKEN_BUDGET_USD ?? "5");
+  const dailyBudgetUsd = Number.isFinite(rawBudget) ? rawBudget : 5;
+  return {
+    model: process.env.CHAT_MODEL_PRIMARY ?? "claude-haiku-4-5",
+    dailyBudgetUsd,
+    killSwitch: process.env.CHAT_KILL_SWITCH === "true",
+    generativeLimitMax: Number(process.env.CHAT_GENERATIVE_LIMIT_MAX) || 5,
+    generativeLimitWindowSeconds:
+      Number(process.env.CHAT_GENERATIVE_LIMIT_WINDOW_SECONDS) || 300,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -184,7 +218,13 @@ export async function getChatbotCostAnalytics({
   // ── Audit rows ───────────────────────────────────────────────────────────
   const since = new Date(`${oldestDayKey}T00:00:00.000Z`);
   const auditRows = await ChatAuditLog.find({ createdAt: { $gte: since } })
-    .select({ actorKind: 1, deflected: 1, escalated: 1, durationMs: 1 })
+    .select({
+      actorKind: 1,
+      deflected: 1,
+      escalated: 1,
+      durationMs: 1,
+      conversationId: 1,
+    })
     .lean()
     .exec();
 
@@ -194,8 +234,11 @@ export async function getChatbotCostAnalytics({
       deflected: r.deflected,
       escalated: r.escalated,
       durationMs: r.durationMs,
+      conversationId: r.conversationId ? String(r.conversationId) : null,
     }))
   );
 
-  return { rangeDays: days, cost, daily, usage };
+  const config = readChatbotConfig();
+
+  return { rangeDays: days, cost, daily, usage, config };
 }
