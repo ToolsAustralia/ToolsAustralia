@@ -1,3 +1,4 @@
+import connectDB from "@/lib/mongodb";
 import ChatDailyBudget from "@/models/ChatDailyBudget";
 import ChatAuditLog from "@/models/ChatAuditLog";
 import { utcDayKey } from "@/lib/support-chat/costGuard";
@@ -118,15 +119,16 @@ function buildDayRange(days: number): string[] {
 /**
  * Fetches chatbot cost & usage analytics for the requested window.
  * Delegates pure computation to {@link summarizeAuditRows}.
- * Does NOT call connectDB — callers (route handlers) already ensure a
- * connection is established before this function is invoked (Mongoose
- * handles implicit connection reuse for serverless).
+ * Calls connectDB() so it is safe on a cold serverless instance (the cached
+ * connection makes this a no-op when one already exists).
  */
 export async function getChatbotCostAnalytics({
   days,
 }: {
   days: number;
 }): Promise<ChatbotCostData> {
+  await connectDB();
+
   const today = utcDayKey();
   const dayRange = buildDayRange(days);
   const oldestDayKey = dayRange[0];
