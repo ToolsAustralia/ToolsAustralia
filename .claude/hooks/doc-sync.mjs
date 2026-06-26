@@ -60,7 +60,7 @@ const CUSTOMER_TRIGGER_GLOBS = [
   "src/contexts/UserContext.tsx",
   "src/models/MembershipStatusHistory.ts",
   "src/models/ReferralEvent.ts",
-  "src/services/subscription/**",
+  "src/services/subscription/CancelSubscriptionService.ts",
   "src/components/auth/**",
   "src/app/api/auth/**",
   "src/lib/auth.ts",
