@@ -528,7 +528,7 @@ Endpoints + aggregation rules: [api.md](./api.md#cancellation-flow-analytics).
 
 ## Chatbot Cost & Usage (2026-06-26, updated)
 
-[src/components/admin/ChatbotCostManagement.tsx](../../src/components/admin/ChatbotCostManagement.tsx) is a **read-only** panel mounted as the `chatbot-cost` tab in the Analytics sidebar group (rendered by `AdminPage` on `selectedTab === "chatbot-cost"`). Gated by `overview.view`. No mutations, no external chart library.
+[src/components/admin/ChatbotCostManagement.tsx](../../src/components/admin/ChatbotCostManagement.tsx) is the `chatbot-cost` tab in the Analytics sidebar group (rendered by `AdminPage` on `selectedTab === "chatbot-cost"`). Gated by `overview.view`. Almost entirely read-only **except** the AI model provider toggle (one `PATCH` mutation — see below). No external chart library.
 
 **Headline KPI: Deflection rate** — the share of requests answered free (via FAQ deflection) with no LLM/AI spend. Higher = lower cost.
 
@@ -536,23 +536,25 @@ Endpoints + aggregation rules: [api.md](./api.md#cancellation-flow-analytics).
 
 **Budget status panel (prominent, below range switcher).** A `Card` showing today's spend vs the configured daily cap — `fmtUsd(todayUsd) / fmtUsd(dailyBudgetUsd)` — with a horizontal `ProgressBar` (green < 50%, amber 50–80%, red > 80%), percent-used label, and a projected monthly spend line (`last7Usd / 7 * 30` when 7+ days of data, else `last30Usd`). If `config.killSwitch` is `true`, a red `ShieldOff` badge reads "KILL SWITCH ON — generative bot disabled". If loading, the bar renders at 0%.
 
+**AI model provider toggle (the one interactive control, below the budget panel — always visible, even with zero traffic).** A `Card` with a `Bot`-icon header and a `Segmented` (size `sm`) switching Cobber's live LLM provider between **Claude Haiku** (`anthropic`) and **Gemini Flash-Lite** (`google`). Shows the current resolved `config.model` inline. Wired to `useSetChatProvider()` (`src/hooks/queries/admin/useChatbotSettings.ts`) — a TanStack mutation that `PATCH`es `/api/admin/chatbot-settings` and invalidates `["admin", "chatbot-cost"]` so the model name refetches. **Optimistic display:** `displayedProvider` shows `setProvider.variables` (the target) while `isPending`, reconciling to server truth on refetch; on error it auto-reverts (pending clears → falls back to `config.activeProvider`) and an inline red message shows. The `Segmented` is wrapped in a `pointer-events-none opacity-60` div while pending/loading (it has no `disabled` prop). The switch is DB-backed (`ChatSettings` singleton) and takes effect server-side on the next chat request. Deflected FAQ answers are free on either provider.
+
 **Metric cards (top row):** Cost today (USD) · Cost 30-day · **Deflection rate %** (highlighted emerald) · Escalations · Total tokens (in + out).
 
 **Saved by deflection MetricCard (below metric cards, inside `hasData` block).** Shows `~fmtUsd(estSaved)` where `estSaved = deflectedCount × (last30Usd / llmCount)`. If `llmCount === 0`, shows `$0.00`. Subtitle: "est. vs answering everything with AI (last 30 days)". This is an estimate — the label includes `~`.
 
 **Daily cost area chart.** `RevenueAreaChart` over the `daily` array from the API (ascending, filled in for zero-spend days). Amber accent to match a "money" visual language.
 
-**Request type breakdown (BarList).** Deflected (FAQ / free) vs LLM calls (paid). Footer now shows: total requests · conversations count (distinct `conversationId`s, if > 0) · avg response. A second footer line shows: Cost / AI answer · Cost / conversation (both guarded, only shown if denominator > 0).
+**Breakdowns (donuts).** Both breakdowns use a local `DonutBreakdown` helper (donut on the left via the shared `Donut` from `@/components/admin/ui`, a labelled legend with count + % on the right) — replaced the previous horizontal `BarList`s for a clearer share-of-total read. Donut center label = total requests; segments carry `count` for the hover readout.
+- **Request type breakdown.** Deflected (FAQ / free, green) vs LLM calls (paid, orange). Footer: total requests · conversations count (distinct `conversationId`s, if > 0) · avg response; second line: Cost / AI answer · Cost / conversation (both guarded, only shown if denominator > 0).
+- **Actor breakdown.** Members (indigo) vs anonymous (slate) requesters. No footer — the legend already shows each share's % (dropped the old redundant "Members X% · Anonymous Y%" line and its now-unused `memberPct`/`anonPct` derivations).
 
-**Actor breakdown (BarList).** Members vs anonymous requesters. Footer now shows: Members X% · Anonymous Y% of requests (replacing the previous "LLM cost last X/30 days" footer which was actor-irrelevant).
-
-**Config strip (small/muted, bottom of `hasData` block).** A `Settings`-icon row showing: `Model: {config.model} · Daily budget: {fmtUsd(dailyBudgetUsd)} · Limit: {generativeLimitMax} AI answers / {generativeLimitWindowSeconds/60} min per user`. Uses `bg-neutral-50 dark:bg-neutral-800/50` with a border.
+**Config strip (small/muted, bottom of `hasData` block).** A `Settings`-icon row showing: `Daily budget: {fmtUsd(dailyBudgetUsd)} · Limit: {generativeLimitMax} AI answers / {generativeLimitWindowSeconds/60} min per user`. The model name is no longer here — it moved to the AI model provider toggle card above. Uses `bg-neutral-50 dark:bg-neutral-800/50` with a border.
 
 **ProgressBar component.** `src/components/admin/ui/ProgressBar.tsx` — a minimal `h-2` horizontal bar, colour driven by `pct` (0–100, clamped), exported from the barrel. Not a chart-library component.
 
 **Empty state.** When `usage.totalRequests === 0` a friendly card renders: "No chatbot activity recorded yet."
 
-**Data hook:** `useChatbotCostAnalytics(days)` — TanStack `useQuery`, inline queryKey `["admin", "chatbot-cost", days]`, fetches `/api/admin/chatbot-cost?days=${days}`. The returned `ChatbotCostData` now includes `config` and `usage.conversationsCount`.
+**Data hooks:** `useChatbotCostAnalytics(days)` — TanStack `useQuery`, inline queryKey `["admin", "chatbot-cost", days]`, fetches `/api/admin/chatbot-cost?days=${days}`. The returned `ChatbotCostData` includes `config` (incl. `config.activeProvider`) and `usage.conversationsCount`. `useSetChatProvider()` — TanStack `useMutation` (`src/hooks/queries/admin/useChatbotSettings.ts`), `PATCH`es `/api/admin/chatbot-settings` then invalidates `["admin", "chatbot-cost"]` (partial-prefix match reconciles every range cache).
 
 **Service:** `src/services/admin/chatbotCostAnalytics.ts`. Pure shaper `summarizeAuditRows` (no Mongo) is tested separately via `npm run test:chat-admin-usage`. The DB entry point `getChatbotCostAnalytics({ days })` queries `ChatDailyBudget` for cost rows and `ChatAuditLog` for request audit rows (now including `conversationId` in the `.select()` projection), fills zero-day gaps in the daily array, and reads `config` from env vars server-side.
 

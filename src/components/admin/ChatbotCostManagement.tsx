@@ -10,16 +10,22 @@ import {
   TrendingDown,
   Settings,
   ShieldOff,
+  Bot,
 } from "lucide-react";
 import {
   Card,
   Segmented,
-  BarList,
+  Donut,
+  type DonutSegment,
   RevenueAreaChart,
   ProgressBar,
 } from "@/components/admin/ui";
 import { MetricCard } from "@/components/admin/metrics/shared/MetricCard";
 import { useChatbotCostAnalytics } from "@/hooks/queries/admin/useChatbotCostAnalytics";
+import {
+  useSetChatProvider,
+  type ChatProvider,
+} from "@/hooks/queries/admin/useChatbotSettings";
 
 // actorKind values — NOT imported from @/models/ChatAuditLog: that module is a
 // Mongoose model and runtime-evaluating it in a client component crashes
@@ -58,9 +64,72 @@ function fmtMs(n: number): string {
   return n + "ms";
 }
 
+// Provider toggle labels — kept here (presentation only); the canonical model IDs
+// live in src/lib/support-chat/provider.ts.
+const PROVIDER_OPTIONS: { value: ChatProvider; label: string }[] = [
+  { value: "anthropic", label: "Claude Haiku" },
+  { value: "google", label: "Gemini Flash-Lite" },
+];
+
+/**
+ * A breakdown card: donut on the left, a labelled legend (count + %) on the right.
+ * Replaces the old horizontal BarList — same data, clearer share-of-total read.
+ */
+function DonutBreakdown({
+  title,
+  segments,
+  total,
+  footer,
+}: {
+  title: string;
+  segments: DonutSegment[];
+  total: number;
+  footer?: React.ReactNode;
+}) {
+  return (
+    <Card>
+      <p className="text-xs font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400 mb-4">
+        {title}
+      </p>
+      <div className="flex items-center gap-5">
+        <Donut
+          segments={segments}
+          size={148}
+          centerLabel={total.toLocaleString("en-AU")}
+          centerSub="requests"
+        />
+        <ul className="flex-1 min-w-0 space-y-2.5">
+          {segments.map((s) => {
+            const pct = total > 0 ? Math.round((s.value / total) * 100) : 0;
+            return (
+              <li key={s.id} className="flex items-center gap-2 text-sm">
+                <span
+                  className="w-2.5 h-2.5 rounded-full shrink-0"
+                  style={{ backgroundColor: s.color }}
+                />
+                <span className="text-neutral-600 dark:text-neutral-300 truncate">
+                  {s.label}
+                </span>
+                <span className="ml-auto tabular-nums font-semibold text-neutral-800 dark:text-neutral-100">
+                  {s.value.toLocaleString("en-AU")}
+                </span>
+                <span className="tabular-nums text-xs text-neutral-400 dark:text-neutral-500 w-9 text-right">
+                  {pct}%
+                </span>
+              </li>
+            );
+          })}
+        </ul>
+      </div>
+      {footer && <div className="mt-4">{footer}</div>}
+    </Card>
+  );
+}
+
 export default function ChatbotCostManagement() {
   const [days, setDays] = useState<RangeDays>(30);
   const { data, isLoading, isError } = useChatbotCostAnalytics(days);
+  const setProvider = useSetChatProvider();
 
   if (isError) {
     return (
@@ -78,8 +147,8 @@ export default function ChatbotCostManagement() {
   // x-axis tick labels — MM-DD format, one per day
   const allTicks = data?.daily.map((r) => r.dayKey.slice(5)) ?? [];
 
-  // Breakdown BarList — deflected vs LLM
-  const trafficItems = data
+  // Breakdown donut segments — deflected (free) vs LLM (paid)
+  const trafficSegments: DonutSegment[] = data
     ? [
         {
           id: "deflected",
@@ -87,7 +156,6 @@ export default function ChatbotCostManagement() {
           value: data.usage.deflectedCount,
           color: "#22c55e",
           count: data.usage.deflectedCount,
-          unit: "req",
         },
         {
           id: "llm",
@@ -95,13 +163,12 @@ export default function ChatbotCostManagement() {
           value: data.usage.llmCount,
           color: "#f97316",
           count: data.usage.llmCount,
-          unit: "req",
         },
       ]
     : [];
 
-  // Actor breakdown
-  const actorItems = data
+  // Actor breakdown segments
+  const actorSegments: DonutSegment[] = data
     ? [
         {
           id: "member",
@@ -109,7 +176,6 @@ export default function ChatbotCostManagement() {
           value: data.usage.memberCount,
           color: "#6366f1",
           count: data.usage.memberCount,
-          unit: "req",
         },
         {
           id: "anonymous",
@@ -117,7 +183,6 @@ export default function ChatbotCostManagement() {
           value: data.usage.anonymousCount,
           color: "#94a3b8",
           count: data.usage.anonymousCount,
-          unit: "req",
         },
       ]
     : [];
@@ -127,6 +192,14 @@ export default function ChatbotCostManagement() {
   const config = data?.config;
   const cost = data?.cost;
   const usage = data?.usage;
+
+  // Active provider — show the value we're switching TO while the PATCH is in
+  // flight (optimistic), otherwise the server truth from config.
+  const activeProvider: ChatProvider = config?.activeProvider ?? "anthropic";
+  const displayedProvider: ChatProvider =
+    setProvider.isPending && setProvider.variables
+      ? setProvider.variables
+      : activeProvider;
 
   // Budget status
   const budgetPct =
@@ -155,14 +228,6 @@ export default function ChatbotCostManagement() {
   const conversationsCount = usage?.conversationsCount ?? 0;
   const costPerConversation =
     conversationsCount > 0 ? last30Usd / conversationsCount : 0;
-
-  // Actor pct for footer
-  const totalRequests = usage?.totalRequests ?? 0;
-  const memberPct =
-    totalRequests > 0
-      ? Math.round(((usage?.memberCount ?? 0) / totalRequests) * 100)
-      : 0;
-  const anonPct = totalRequests > 0 ? 100 - memberPct : 0;
 
   return (
     <div className="space-y-6 p-1">
@@ -212,6 +277,60 @@ export default function ChatbotCostManagement() {
               {fmtUsd(projectedMonthlyUsd)}
             </span>
             /mo at current rate
+          </p>
+        )}
+      </Card>
+
+      {/* ── AI model provider toggle ─────────────────────────────────────────── */}
+      <Card className="p-4">
+        <div className="flex items-center justify-between gap-4 flex-wrap">
+          <div className="min-w-0">
+            <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">
+              <Bot className="w-3.5 h-3.5 shrink-0" />
+              AI model provider
+            </p>
+            <p className="mt-1 text-xs text-neutral-400 dark:text-neutral-500">
+              Switches the live model for new chats. Deflected FAQ answers stay
+              free on either provider.
+              {config && (
+                <>
+                  {" "}
+                  Current model:{" "}
+                  <span className="font-medium text-neutral-600 dark:text-neutral-300">
+                    {config.model}
+                  </span>
+                  .
+                </>
+              )}
+            </p>
+          </div>
+          <div className="flex items-center gap-2.5">
+            {setProvider.isPending && (
+              <span className="text-xs text-neutral-400 dark:text-neutral-500">
+                Switching…
+              </span>
+            )}
+            <div
+              className={
+                setProvider.isPending || isLoading
+                  ? "pointer-events-none opacity-60"
+                  : ""
+              }
+            >
+              <Segmented<ChatProvider>
+                options={PROVIDER_OPTIONS}
+                value={displayedProvider}
+                onChange={(v) => {
+                  if (v !== activeProvider) setProvider.mutate(v);
+                }}
+                size="sm"
+              />
+            </div>
+          </div>
+        </div>
+        {setProvider.isError && (
+          <p className="mt-2 text-xs text-red-600 dark:text-red-400">
+            Couldn’t switch provider. Please try again.
           </p>
         )}
       </Card>
@@ -321,70 +440,55 @@ export default function ChatbotCostManagement() {
 
           {/* Breakdowns row */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <Card>
-              <p className="text-xs font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400 mb-4">
-                Request type breakdown
-              </p>
-              <BarList
-                items={trafficItems}
-                fmt={(v) => v.toLocaleString("en-AU")}
-              />
-              <p className="mt-4 text-xs text-neutral-400 dark:text-neutral-500">
-                Total:{" "}
-                <span className="font-semibold text-neutral-700 dark:text-neutral-200">
-                  {data.usage.totalRequests.toLocaleString("en-AU")} requests
-                </span>
-                {conversationsCount > 0 && (
-                  <>
-                    &ensp;·&ensp;
+            <DonutBreakdown
+              title="Request type breakdown"
+              segments={trafficSegments}
+              total={data.usage.totalRequests}
+              footer={
+                <>
+                  <p className="text-xs text-neutral-400 dark:text-neutral-500">
+                    Total:{" "}
                     <span className="font-semibold text-neutral-700 dark:text-neutral-200">
-                      {conversationsCount.toLocaleString("en-AU")}
-                    </span>{" "}
-                    conversations
-                  </>
-                )}
-                &ensp;·&ensp;avg response{" "}
-                <span className="font-semibold text-neutral-700 dark:text-neutral-200">
-                  {fmtMs(data.usage.avgDurationMs)}
-                </span>
-              </p>
-              {/* Unit economics footer */}
-              <p className="mt-1 text-xs text-neutral-400 dark:text-neutral-500">
-                Cost / AI answer:{" "}
-                <span className="font-semibold text-neutral-700 dark:text-neutral-200">
-                  {llmCount > 0 ? fmtUsd(avgCostPerLlmAnswer) : "—"}
-                </span>
-                {conversationsCount > 0 && (
-                  <>
-                    &ensp;·&ensp;Cost / conversation:{" "}
-                    <span className="font-semibold text-neutral-700 dark:text-neutral-200">
-                      {fmtUsd(costPerConversation)}
+                      {data.usage.totalRequests.toLocaleString("en-AU")} requests
                     </span>
-                  </>
-                )}
-              </p>
-            </Card>
+                    {conversationsCount > 0 && (
+                      <>
+                        &ensp;·&ensp;
+                        <span className="font-semibold text-neutral-700 dark:text-neutral-200">
+                          {conversationsCount.toLocaleString("en-AU")}
+                        </span>{" "}
+                        conversations
+                      </>
+                    )}
+                    &ensp;·&ensp;avg response{" "}
+                    <span className="font-semibold text-neutral-700 dark:text-neutral-200">
+                      {fmtMs(data.usage.avgDurationMs)}
+                    </span>
+                  </p>
+                  {/* Unit economics */}
+                  <p className="mt-1 text-xs text-neutral-400 dark:text-neutral-500">
+                    Cost / AI answer:{" "}
+                    <span className="font-semibold text-neutral-700 dark:text-neutral-200">
+                      {llmCount > 0 ? fmtUsd(avgCostPerLlmAnswer) : "—"}
+                    </span>
+                    {conversationsCount > 0 && (
+                      <>
+                        &ensp;·&ensp;Cost / conversation:{" "}
+                        <span className="font-semibold text-neutral-700 dark:text-neutral-200">
+                          {fmtUsd(costPerConversation)}
+                        </span>
+                      </>
+                    )}
+                  </p>
+                </>
+              }
+            />
 
-            <Card>
-              <p className="text-xs font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400 mb-4">
-                Actor breakdown
-              </p>
-              <BarList
-                items={actorItems}
-                fmt={(v) => v.toLocaleString("en-AU")}
-              />
-              <p className="mt-4 text-xs text-neutral-400 dark:text-neutral-500">
-                Members:{" "}
-                <span className="font-semibold text-neutral-700 dark:text-neutral-200">
-                  {memberPct}%
-                </span>
-                &ensp;·&ensp;Anonymous:{" "}
-                <span className="font-semibold text-neutral-700 dark:text-neutral-200">
-                  {anonPct}%
-                </span>{" "}
-                of requests
-              </p>
-            </Card>
+            <DonutBreakdown
+              title="Actor breakdown"
+              segments={actorSegments}
+              total={data.usage.totalRequests}
+            />
           </div>
 
           {/* ── Config strip ──────────────────────────────────────────────────── */}
@@ -392,11 +496,7 @@ export default function ChatbotCostManagement() {
             <div className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-neutral-50 dark:bg-neutral-800/50 border border-neutral-200 dark:border-neutral-800">
               <Settings className="w-3.5 h-3.5 shrink-0 text-neutral-400 dark:text-neutral-500" />
               <p className="text-xs text-neutral-400 dark:text-neutral-500 truncate">
-                Model:{" "}
-                <span className="font-medium text-neutral-600 dark:text-neutral-300">
-                  {config.model}
-                </span>
-                &ensp;·&ensp;Daily budget:{" "}
+                Daily budget:{" "}
                 <span className="font-medium text-neutral-600 dark:text-neutral-300">
                   {fmtUsd(config.dailyBudgetUsd)}
                 </span>
