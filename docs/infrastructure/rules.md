@@ -26,7 +26,9 @@ Already covered in [mongodb R3](../mongodb/rules.md#r3-migrations-are-idempotent
 
 ## R7. Dry-run before live for ops scripts
 
-`migrate:`, `backfill:`, `sync:`, `stripe:`, `find:` scripts almost all support `--dry-run`. Always run dry first.
+`migrate:`, `backfill:`, `sync:`, `stripe:`, `find:`, `fix:` scripts almost all support `--dry-run`. Always run dry first.
+
+`fix:stuck-charge-jobs` (`scripts/fix-stuck-charge-jobs.ts`, added 2026-06-24) finalizes orphaned `running` `ChargeJobRun` docs — it recomputes their real totals from `InvoiceChargeLog`, marks them `aborted`, and releases an expired global charge lock. Variants: `fix:stuck-charge-jobs[:dry]` (local) and `fix:stuck-charge-jobs:prod[:dry]` (loads `MONGODB_URI` from `.env.production`). Always run the `:dry` variant first.
 
 ## R8. No server-only imports in client components (lint-enforced)
 

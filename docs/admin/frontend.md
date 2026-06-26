@@ -74,7 +74,7 @@ non-admin or use admin **Preview**.
 
 [src/components/admin/](../../src/components/admin/):
 - `UserDetailModal.tsx` — user detail / edit (Subscription tab is here, with Cancel button)
-- `ChargePastDueModal.tsx` — bulk past-due retry
+- `ChargePastDueModal.tsx` — bulk past-due retry. **Self-drives the chunked job loop:** on confirm (`CHARGE`) it POSTs `{ action: "start" }`, then loops `{ action: "chunk", runId }` until `done`, rendering a **live progress bar** (processed / total) with succeeded / failed / skipped counts and collected revenue. A **Stop** button (and closing the modal mid-run) flips a `stoppedRef` that breaks the loop and fires `{ action: "abort" }` so the lock is released. The completed view is fed by `loadRunResults(runId)` → `GET /api/admin/charge-past-due/runs/[runId]` (run totals + per-invoice rows). Prop is now **`onCompleted?`** (was `onConfirm`) — called once the run finishes or stops so the parent ([`UsersManagement.tsx`](../../src/components/admin/UsersManagement.tsx)) can refresh the user list. See [api.md](./api.md#post-apiadmininvoicescharge-past-due--chunked-charge-job).
 - `BlockedTransactionsManagement.tsx` — blocked-card / Stripe allowlist admin UI. Mongo-backed: reads via `useBlockedCards(filter)` (cursor-paginated against the persisted `BlockedTransaction` collection). Hook returns `{ rows, total, hasMore, isLoading, isFetching, isFetchingNextPage, fetchNextPage, refetch, error }`. The table card shows a "Showing X of Y" counter and a "Load more" button at the bottom. Query errors surface in an amber banner above the filters card. Eligibility badges: auto-eligible / already-allowlisted / fraud-signal / permanent-issue / not-member. The "Allowlist with override" button bypasses every filter (records `manual_admin_override`). The dataset uses the narrower `outcome.type === "blocked"` filter (matches Stripe Dashboard's "Blocked" pill). Service contract: [billing-stripe/architecture.md](../billing-stripe/architecture.md#service-inventory--allowlistservice).
   - **Filters (2026-05-07)**: date range matches `/admin/past-due-history` exactly — `DateRangeToggle` chips (Today / Yesterday / Current Draw / Last Draw / All Time / Custom) with `useAdminMobileDateToolbarSlot()` portaling on mobile, draw-aware presets via `useCurrentAndLastDrawDates()`, custom range via `CustomDateRangeModal` with `useMajorDrawsForDateRange()` highlighting. Plus an **email substring search** (debounced 300ms, server-side regex), an **eligibility multi-select** (auto-eligible / already-allowlisted / fraud-signal / permanent-issue / skipped — not member), and a **decline-code multi-select** grouped by Recoverable / Fraud signals / Permanent issues / Other (options from [src/utils/billing/declineCodeLabels.ts](../../src/utils/billing/declineCodeLabels.ts)).
   - **Metric cards**: Total blocked (current filters) · Auto-eligible · Skipped — filter · **Total on allowlist** (all-time, all active fingerprints, driven by `useAllowlistStats()` against `GET /api/admin/allowlist/stats`).
@@ -323,8 +323,8 @@ Three TanStack Query hooks under `src/hooks/queries/admin/`:
 
 | Hook | Endpoint | Shape |
 |---|---|---|
-| `useChargePastDueRuns(filter)` | `GET /api/admin/charge-past-due/runs` | `useInfiniteQuery` — offset paging, page size 50. Returns `{ runs, total, hasMore, isLoading, isFetching, isFetchingNextPage, isError, fetchNextPage }`. |
-| `useChargePastDueRunDetail(runId)` | `GET /api/admin/charge-past-due/runs/[runId]` | `useQuery` — single run + all its `InvoiceChargeLog` rows. |
+| `useChargePastDueRuns(filter)` | `GET /api/admin/charge-past-due/runs` | `useInfiniteQuery` — offset paging, page size 50. Returns `{ runs, total, hasMore, isLoading, isFetching, isFetchingNextPage, isError, fetchNextPage }`. **Polls while any loaded run is `running`** so the history view shows live progress. |
+| `useChargePastDueRunDetail(runId)` | `GET /api/admin/charge-past-due/runs/[runId]` | `useQuery` — single run + all its `InvoiceChargeLog` rows. **Polls while the run is `running`** (live chunk progress). |
 | `useChargePastDueManualRetries(filter)` | `GET /api/admin/charge-past-due/manual-retries` | `useInfiniteQuery` — offset paging, page size 50. Returns `{ rows, total, hasMore, isLoading, isFetching, isFetchingNextPage, isError, fetchNextPage }`. |
 
 All three are admin-only. Query keys are prefixed `["admin", "charge-past-due", ...]`. The two `useInfiniteQuery` hooks key on the full `filter` object so changing date range (or any other filter field) resets paging from offset 0. `getNextPageParam` returns `loaded < total ? loaded : undefined`. The Bulk Runs and Manual Retries cards each render a "Load more" button at the bottom (matching `BlockedTransactionsManagement`'s pattern); the table header shows `Showing X of Y`. Summary `MetricCard`s aggregate across **loaded** pages only — clicking "Load more" updates them.
@@ -417,6 +417,14 @@ The modal is intentionally narrower than `ChargePastDueUserModal` — by the tim
 - `strandedRows` memo — filters `retriesQuery.rows` to those that pass `isStrandedError()` and have a `userId`.
 - `selectedItems` memo — maps `strandedRows` entries whose key is in `selectedRows` to `BulkRecoverItem[]`.
 - Checkboxes only render for stranded rows; all other rows have an empty cell.
+
+### Recover Stranded panel
+
+[`RecoverStrandedPanel.tsx`](../../src/components/admin/RecoverStrandedPanel.tsx) is the scan-based bulk recovery surface (Preview → Recover). After **Preview Stranded** (`GET /api/admin/invoices/recover-stranded`) it renders summary cards (Scanned / Recoverable / Blocked (no draft) / Revenue at stake) and a recoverable-members table.
+
+- **Auto-loop recovery (no re-clicking):** the **Recover all N** action (gated by typing `RECOVER`) drains the entire recoverable set automatically. It POSTs `{ confirmation: "RECOVER", limit: 30 }` repeatedly — the server is idempotent (a recovered member drops from the next live scan), so it loops until a batch attempts nothing, the admin stops, or the `MAX_ITERATIONS = 60` safety ceiling is hit. A **live progress bar** + Stop button render while running; the per-batch responses are accumulated into one `runResult` summary. The old per-run `limit` input was **removed**. (Server still clamps each batch to `MAX_LIMIT = 30` — see [backend.md](./backend.md#safety-model).)
+- **Clickable summary cards → inspector popup:** the **Recoverable** and **Blocked (no draft)** cards are now buttons (when non-empty) that open `StrandedMembersInspector` — a popup listing those members (email, subscription, amount, and stale-opens-to-void for recoverable / classification for blocked) with a **Copy emails** button.
+- Defensive response parsing (`res.text()` → `JSON.parse` in try/catch) so a Vercel timeout shows a real message, not a parser error — see [gotchas.md](./gotchas.md#recover-stranded-runs-in-30-member-batches-vercel-300s-cap).
 
 ### Light/dark mode parity
 

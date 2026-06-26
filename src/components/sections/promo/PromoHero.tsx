@@ -10,15 +10,17 @@ import type { ServerPromo } from "@/utils/database/queries/promo-queries";
 import type { ServerMajorDraw } from "@/utils/database/queries/major-draw-server-queries";
 import { useVariantContext } from "@/components/ab-testing/VariantProvider";
 import { useExperimentTracking } from "@/hooks/ab-testing/useExperimentTracking";
-import { getMajorDrawHeroUrgencyFromMajorDraw, getPromoImagePaths } from "@/utils/promo/promo-hero-images";
+import {
+  getLandingHeroUrgencyFromDrawDay,
+  getMajorDrawHeroUrgencyFromMajorDraw,
+  getPromoImagePaths,
+} from "@/utils/promo/promo-hero-images";
 import { usePromoTheme, usePromoThemeStore } from "@/stores/usePromoThemeStore";
 import { getLandingHeroImagePaths } from "@/config/promo-landing-slugs";
 import { useThemeStore } from "@/stores/useThemeStore";
-import { getImageForMode, getFallbackImagePath } from "@/utils/promo/landing-image-resolver";
+import { getImageForMode, getFallbackImagePath, LANDING_HERO_BACKGROUND } from "@/utils/promo/landing-image-resolver";
 import { getLandingHeroVideoPaths } from "@/utils/promo/landing-video-resolver";
 import LandingHeroVideo from "./LandingHeroVideo";
-import { useDeviceProfile } from "@/hooks/useDeviceProfile";
-import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { cn } from "@/utils/cn";
 
 /**
@@ -64,19 +66,17 @@ export default function PromoHero({
 
   const themeMode = useThemeStore((s) => s.theme);
   const [imageError, setImageError] = useState(false);
-
-  // Hero video gating (all hooks must run before the isLoading early return).
-  const { flags } = useDeviceProfile();
-  const isLgUp = useMediaQuery("(min-width: 1024px)");
-  const [isMounted, setIsMounted] = useState(false);
-  useEffect(() => setIsMounted(true), []);
+  /** Set if the hero clip's sources all fail — fall back to the still hero. */
+  const [videoFailed, setVideoFailed] = useState(false);
 
   const storeSlug = usePromoThemeStore((s) => s.slug);
   const effectiveSlug = storeSlug ?? prizeSlug ?? null;
   const majorDrawUrgency = getMajorDrawHeroUrgencyFromMajorDraw(majorDraw);
+  /** Calendar-day (AEST) tier — swaps the brand hero to its drawn-tomorrow / drawn-tonight art. */
+  const landingDrawDayUrgency = getLandingHeroUrgencyFromDrawDay(majorDraw);
 
   const landingHeroPaths = effectiveSlug
-    ? getLandingHeroImagePaths(effectiveSlug)
+    ? getLandingHeroImagePaths(effectiveSlug, landingDrawDayUrgency)
     : null;
 
   /** A/B-test per-slug override: one variant can carry a map of slug → { desktop?, mobile? }
@@ -119,16 +119,25 @@ export default function PromoHero({
     };
   })();
 
-  // Hero video: only for brand slugs (cash / evergreen return null → image hero).
-  // The .webp hero stays the LCP element / poster; the clip fades in over it and
-  // is suppressed for reduced-motion / Save-Data users. A per-slug A/B image
-  // override also wins — when the variant pins a custom still, skip the video.
+  // Hero video: only for brand slugs (cash / evergreen return null → still hero). A per-slug
+  // A/B image override or `disableVideo` also opts out. On the drawn-tomorrow / drawn-tonight
+  // tier the resolver returns the animated badge clip.
   const heroVideoPaths =
     effectiveSlug && !perSlugVariantImage && !variantConfig?.hero?.disableVideo
-      ? getLandingHeroVideoPaths(effectiveSlug)
+      ? getLandingHeroVideoPaths(effectiveSlug, landingDrawDayUrgency)
       : null;
-  const allowVideo =
-    isMounted && !imageError && !flags.saveData && !flags.reducedMotion && heroVideoPaths != null;
+
+  // Video-first: the clip is the PRIMARY hero from first paint (the still never flashes in
+  // front of it). The still renders only when there is no clip, the clip failed to load
+  // (`videoFailed`), or the user prefers reduced motion (handled purely in CSS via
+  // `motion-reduce:` — no JS gate, so no SSR→client swap). See useDeviceProfile: reduced-motion
+  // is CSS-driven by convention.
+  const showVideo = heroVideoPaths != null && !videoFailed;
+
+  // A failed clip only disqualifies THAT clip — give a fresh attempt when the slug/tier
+  // (and thus the clip URL) changes. Keyed on the primitives that determine the clip, not the
+  // recomputed `heroVideoPaths` object (new ref every render → would reset-loop).
+  useEffect(() => setVideoFailed(false), [effectiveSlug, landingDrawDayUrgency]);
 
   const ctaText = variantConfig?.hero?.ctaText || "ENTER NOW";
   const ctaStyle = variantConfig?.hero?.ctaStyle;
@@ -140,13 +149,37 @@ export default function PromoHero({
   if (isLoading) {
     return (
       <section className="relative flex flex-col items-center overflow-visible pt-20 sm:pt-40 aspect-[1080/1164] min-h-[clamp(380px,228px+38vw,520px)] lg:aspect-[2560/1044] lg:min-h-0">
+        {/* Hero "stage" background stands in for the skeleton so the load-in is seamless. */}
         <div
-          className={cn("main-banner-image absolute inset-0 z-0 bg-gradient-to-br from-gray-200 to-gray-300 animate-pulse", !PROMO_HERO_ELLIPSE_CLIP_ENABLED ? "promo-hero-banner--flat" : "")}
-        />
+          className={cn("main-banner-image absolute inset-0 z-0", !PROMO_HERO_ELLIPSE_CLIP_ENABLED ? "promo-hero-banner--flat" : "")}
+        >
+          <div className="lg:hidden absolute inset-0 bg-white dark:bg-neutral-950">
+            <Image
+              src={LANDING_HERO_BACKGROUND.mobile}
+              alt=""
+              aria-hidden
+              fill
+              priority
+              sizes="100vw"
+              className="object-contain object-top"
+            />
+          </div>
+          <div className="absolute inset-0 hidden bg-white dark:bg-neutral-950 lg:block">
+            <Image
+              src={LANDING_HERO_BACKGROUND.desktop}
+              alt=""
+              aria-hidden
+              fill
+              priority
+              sizes="100vw"
+              className="object-contain object-top"
+            />
+          </div>
+        </div>
         {/* In-flow reserve: same height as loaded CTA band so layout below doesn’t jump */}
         <div className="relative z-0 mt-auto w-full shrink-0 max-sm:h-14 sm:h-16" aria-hidden />
         <div className="pointer-events-none absolute inset-x-0 bottom-0 z-30 flex justify-center pb-1 sm:pb-2">
-          <div className="pointer-events-auto h-12 w-32 rounded-full bg-gray-400 animate-pulse sm:h-16 sm:w-48" />
+          <div className="pointer-events-auto h-12 w-32 rounded-full bg-gray-400/70 animate-pulse sm:h-16 sm:w-48" />
         </div>
       </section>
     );
@@ -160,32 +193,63 @@ export default function PromoHero({
       <div
         className={cn("main-banner-image absolute inset-0 z-0", !PROMO_HERO_ELLIPSE_CLIP_ENABLED ? "promo-hero-banner--flat" : "")}
       >
+        {/* Video-first: the clip is the primary hero and plays from its first frame, so the
+            still never flashes in front of it. The still shows only when there is no clip / the
+            clip failed (`!showVideo`), or — purely in CSS — for reduced-motion users. */}
         <div className="lg:hidden absolute inset-0 bg-white dark:bg-neutral-950">
-          <Image
-            src={heroImagePaths.mobile}
-            alt={`Promo Hero - ${resolvedMultiplier}x Entries Active`}
-            fill
-            priority
-            className="object-contain object-top"
-            sizes="100vw"
-            onError={() => setImageError(true)}
-          />
-          {allowVideo && !isLgUp && heroVideoPaths && (
-            <LandingHeroVideo sources={heroVideoPaths.mobile} poster={heroImagePaths.mobile} />
+          {showVideo && heroVideoPaths ? (
+            <>
+              <LandingHeroVideo
+                sources={heroVideoPaths.mobile}
+                className="motion-reduce:hidden"
+                onUnavailable={() => setVideoFailed(true)}
+              />
+              <Image
+                src={heroImagePaths.mobile}
+                alt={`Promo Hero - ${resolvedMultiplier}x Entries Active`}
+                fill
+                sizes="100vw"
+                className="hidden object-contain object-top motion-reduce:block"
+              />
+            </>
+          ) : (
+            <Image
+              src={heroImagePaths.mobile}
+              alt={`Promo Hero - ${resolvedMultiplier}x Entries Active`}
+              fill
+              priority
+              className="object-contain object-top"
+              sizes="100vw"
+              onError={() => setImageError(true)}
+            />
           )}
         </div>
         <div className="absolute inset-0 hidden bg-white dark:bg-neutral-950 lg:block">
-          <Image
-            src={heroImagePaths.desktop}
-            alt={`Promo Hero - ${resolvedMultiplier}x Entries Active`}
-            fill
-            priority
-            sizes="100vw"
-            className="object-contain object-top"
-            onError={() => setImageError(true)}
-          />
-          {allowVideo && isLgUp && heroVideoPaths && (
-            <LandingHeroVideo sources={heroVideoPaths.desktop} poster={heroImagePaths.desktop} />
+          {showVideo && heroVideoPaths ? (
+            <>
+              <LandingHeroVideo
+                sources={heroVideoPaths.desktop}
+                className="motion-reduce:hidden"
+                onUnavailable={() => setVideoFailed(true)}
+              />
+              <Image
+                src={heroImagePaths.desktop}
+                alt={`Promo Hero - ${resolvedMultiplier}x Entries Active`}
+                fill
+                sizes="100vw"
+                className="hidden object-contain object-top motion-reduce:block"
+              />
+            </>
+          ) : (
+            <Image
+              src={heroImagePaths.desktop}
+              alt={`Promo Hero - ${resolvedMultiplier}x Entries Active`}
+              fill
+              priority
+              sizes="100vw"
+              className="object-contain object-top"
+              onError={() => setImageError(true)}
+            />
           )}
         </div>
       </div>

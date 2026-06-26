@@ -214,6 +214,9 @@ export {
   type PayFailedInvoiceFailureCode,
 } from "./useSubscriptionQueries";
 
+// Partner discount hooks
+export { usePartnerDiscountSso } from "./usePartnerDiscountSso";
+
 // Query keys and utilities
 export { queryKeys } from "@/lib/queryKeys";
 

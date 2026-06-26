@@ -24,3 +24,7 @@ Partner components use `cn()` from `@/utils/cn` for conditional class compositio
 ## Site-smoothness Phase 4 cleanup (2026-05-10)
 
 `PartnerHero.tsx` previously included `import "swiper/css"` even though the file no longer used Swiper. Phase 4 of the site-smoothness plan dropped the `swiper` package and removed this orphan import; the visual layout is unchanged. No other partner components reference Swiper.
+
+## usePartnerDiscountSso — open the rewards portal (2026-06-24)
+
+[`src/hooks/queries/usePartnerDiscountSso.ts`](../../src/hooks/queries/usePartnerDiscountSso.ts) — the client glue for the MyRewards SSO hand-off. A "Open Partner Portal" button calls `mutate()`; the hook POSTs `/api/partner-discount/sso`, and on success navigates the browser to the returned `/verifytoken` URL. Reads `isPending` (spinner) and `error` (e.g. "No active partner-discount access" on a 403). Uses a raw `fetch` on purpose so the feature-gate 403 doesn't force a logout (see [client-state/gotchas.md](../client-state/gotchas.md)). The visual button itself is part of the new rewards UI (not yet built); this hook is the swappable data layer.

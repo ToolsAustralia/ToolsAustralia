@@ -28,6 +28,7 @@ Stripe → POST /api/stripe/webhook
         ├── customer.subscription.deleted       → fire cancellation analytics events (single source!)
         ├── invoice.payment_succeeded           → resumeAfterSuccessfulRenewalPayment, processPaymentBenefits, write PaymentEvent BenefitsGranted; on past_due/unpaid recovery: reanchorAfterPastDueRecovery (trial_end, proration_behavior:'none') + Klaviyo re-push
         ├── invoice.payment_failed              → pauseAfterRenewalFailure, write MembershipStatusHistory past_due
+        ├── invoice.created                     → on subscription_cycle (renewal) only: stamp DRAFT invoice description "<Package> Renewal" before finalize — see note below ⚠️ event NOT yet enabled on endpoint
         ├── invoice.finalized                   → ensure MembershipRenewalCycle row exists
         ├── charge.failed                       → upsert BlockedTransaction (issuer-blocked dual-write; no allowlist apply here)
         ├── charge.refunded                     → processRefundReversal (full) or write RefundPartial (partial)
@@ -42,6 +43,8 @@ Stripe → POST /api/stripe/webhook
 ```
 
 Implementation: [src/app/api/stripe/webhook/route.ts](../../src/app/api/stripe/webhook/route.ts).
+
+> **⚠️ `invoice.created` is dormant until enabled on the endpoint.** The `handleInvoiceCreated` handler ([stripe-webhook-handlers/index.ts](../../src/services/stripe-webhook-handlers/index.ts)) is wired into the switch (dispatch `case "invoice.created"`, right before `invoice.finalized`), but the Stripe webhook endpoint is **not yet subscribed** to the `invoice.created` event in the Stripe Dashboard. The handler does nothing until that event is added to the endpoint's enabled-events list. When enabled, it stamps the DRAFT renewal invoice's `description` as `"<Package> Renewal"` *before* finalize, so the auto-spawned PaymentIntent + Charge inherit it — making **both successful AND failed** renewals read "<Package> Renewal" in the Stripe payments list (failed ones previously showed the bare join-time label, e.g. "Tradie"). See [backend.md — Subscription lifecycle descriptions](./backend.md#subscription-lifecycle-descriptions).
 
 ## Ledger model — `PaymentEvent`
 

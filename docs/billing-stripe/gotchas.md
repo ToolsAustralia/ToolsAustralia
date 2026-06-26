@@ -328,6 +328,14 @@ Key facts verified by live Stripe test-mode probe:
 
 See `docs/PAST_DUE_REANCHOR.md` for the full trigger-gate logic and recovery-channel analysis.
 
+## `handleInvoiceCreated` is dormant until `invoice.created` is enabled on the Stripe endpoint
+
+The renewal draft-stamp handler `handleInvoiceCreated` (`src/services/stripe-webhook-handlers/index.ts`) is wired into the dispatch switch (`case "invoice.created"`, right before `invoice.finalized`), but **the Stripe webhook endpoint is not currently subscribed to the `invoice.created` event** in the Stripe Dashboard. Until that event is added to the endpoint's enabled-events list, the handler never runs and **failed** renewals keep showing the bare join-time label (e.g. `"Tradie"`) in the Stripe payments list; successful renewals are still relabeled by the `handleInvoicePaymentSucceeded` fallback.
+
+To activate: add `invoice.created` to the webhook endpoint's events in the Stripe Dashboard (and to your Stripe CLI `--events` list when testing locally). No code change is needed — the handler is already deployed.
+
+The handler is **non-blocking** by design (a `stripe.invoices.update` failure is logged via `webhookLog`, never thrown — the description is purely cosmetic) and **idempotent** across redeliveries (writes only when the existing description differs). It is **strictly gated to `billing_reason === "subscription_cycle"`**, so even once enabled it never touches the join charge (`subscription_create`), upgrade/downgrade invoices (`subscription_update`), or the $0 trial-update invoice (see the [trial-invoice gotcha](#stripes-0-trial-period-invoice-double-grants-entries--guard-it) above).
+
 ## Multi-experiment attribution collision in `create-one-time-purchase`
 
 Both `create-one-time-purchase` and `create-one-time-purchase-existing-user`
