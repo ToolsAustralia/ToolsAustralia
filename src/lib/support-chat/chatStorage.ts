@@ -16,9 +16,51 @@
  *   the wrong UX and the wrong privacy posture.
  */
 
+import type { UIMessage } from "ai";
+
 export const CHAT_STORAGE_KEYS = {
   CONVERSATION_ID: "ta_support_chat_conversation_id",
+  MESSAGES: "ta_support_chat_messages",
 } as const;
+
+/** Maximum number of messages persisted to localStorage to bound storage size. */
+const MAX_PERSISTED_MESSAGES = 50;
+
+/**
+ * Load persisted chat messages from localStorage.
+ * SSR-safe and parse-error-safe — returns [] if window is unavailable or storage is corrupt.
+ */
+export function loadPersistedMessages(): UIMessage[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = window.localStorage.getItem(CHAT_STORAGE_KEYS.MESSAGES);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) return [];
+    return parsed as UIMessage[];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Persist chat messages to localStorage.
+ * SSR-safe — no-ops if window is unavailable.
+ * Caps storage to the last 50 messages to bound localStorage size.
+ * Write failures are silently swallowed (private browsing quota, etc.).
+ */
+export function savePersistedMessages(messages: UIMessage[]): void {
+  if (typeof window === "undefined") return;
+  try {
+    const capped =
+      messages.length > MAX_PERSISTED_MESSAGES
+        ? messages.slice(-MAX_PERSISTED_MESSAGES)
+        : messages;
+    window.localStorage.setItem(CHAT_STORAGE_KEYS.MESSAGES, JSON.stringify(capped));
+  } catch (err) {
+    console.error("[savePersistedMessages] failed to persist messages:", err);
+  }
+}
 
 /**
  * The device-level key for the first-run AI disclosure acknowledgement.

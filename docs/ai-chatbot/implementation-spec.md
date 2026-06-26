@@ -711,6 +711,52 @@ Assistant messages from Cobber and FAQ answers on the `/faq` page are rendered t
 - **Chat wiring:** `MessageBubble` in `SupportChatWidget.tsx` renders assistant messages through `<ChatMarkdown>`. User messages stay plain text.
 - **Dep added:** `react-markdown` (prod dependency).
 
+### As-built: chat history persistence + client-side link navigation (2026-06-26)
+
+Fixes two compounding bugs that caused the widget to show an empty panel after any page navigation:
+
+1. **Messages were pure in-memory `useChat` state** — only the `conversationId` was persisted, so any remount (page navigation, refresh) showed an empty panel.
+2. **Internal links inside Cobber's answers caused a full-page reload** (plain `<a href>` with no interception), which remounted the widget and lost the in-memory message list.
+
+#### `src/lib/support-chat/chatStorage.ts` — new exports
+
+- **`CHAT_STORAGE_KEYS.MESSAGES`** (`"ta_support_chat_messages"`) added alongside `CONVERSATION_ID`. The key is included in the iterated set, so `clearSupportChatStorage()` removes it at sign-out with no additional code.
+- **`loadPersistedMessages(): UIMessage[]`** — SSR-safe (`typeof window === "undefined"` guard), try/catch-wrapped. Returns `[]` on no-window, missing key, non-array JSON, or any parse error.
+- **`savePersistedMessages(messages: UIMessage[]): void`** — SSR-safe no-op. Caps persisted messages to the **last 50** (`MAX_PERSISTED_MESSAGES = 50`) to bound localStorage size. Write failures are silently swallowed (private browsing quota, etc.) via `console.error`.
+
+#### `src/components/support-chat/useSupportChat.ts` — message persistence
+
+- **Seeding (no clobber race):** `loadPersistedMessages()` is called synchronously on first render into a `useRef` (`initialMessagesRef`). This value is passed to `useChat({ messages: initialMessagesRef.current })` so the SDK's initial message list is populated before the first render — avoids a flash of empty state that a post-mount `setMessages()` would cause.
+- **Hydration guard:** a `hydratedRef` (flipped to `true` in a mount `useEffect`) prevents the persistence `useEffect` from writing `[]` to storage before `useChat` has merged the initial messages on first render.
+- **Persist on change:** `useEffect(() => { if (!hydratedRef.current) return; savePersistedMessages(messages); }, [messages])` — saves the capped message list whenever the live list changes.
+- **`resetConversation()`** already calls `clearSupportChatStorage()`, which now also removes `CHAT_STORAGE_KEYS.MESSAGES` — no additional code needed.
+
+#### `src/components/support-chat/ChatMarkdown.tsx` — client-side link navigation
+
+The `components` map moved from module scope into `useMemo([router])` inside the component so the `a` renderer can access `useRouter()` (from `next/navigation`).
+
+Internal links (`href.startsWith("/")`) now intercept plain left-clicks:
+```tsx
+onClick={(e) => {
+  if (!e.metaKey && !e.ctrlKey && !e.shiftKey && e.button === 0) {
+    e.preventDefault();
+    router.push(href);
+  }
+}}
+```
+Modifier-key combos (Cmd+click, Ctrl+click, middle-click) fall through to the browser's native handling so users can open links in new tabs. External links (`http*`) are unchanged (`target="_blank" rel="noopener noreferrer"`).
+
+#### Tests: `src/components/support-chat/__tests__/chat-storage.test.ts`
+
+Extended from 4 to 10 assertions (all pass, `npm run test:chat-storage`):
+
+5. `savePersistedMessages` → `loadPersistedMessages` round-trips correctly.
+6. 50-message cap enforced: save 60 → load returns last 50 (correct first/last ids verified).
+7. Parse failure returns `[]`.
+8. Empty storage returns `[]`.
+9. Non-array JSON returns `[]`.
+10. `MESSAGES` key is removed by `clearSupportChatStorage()`.
+
 ### As-built: data-scope + assistant-purpose hardening
 
 > **Note on member-tool references below:** `getDrawStatus` and `getMyEntries` were Phase-2 member tools that have since been **DROPPED**. The system-prompt hardening (no-aggregate rule + narrow-purpose rule) **remains in the shipped bot** as defence-in-depth.

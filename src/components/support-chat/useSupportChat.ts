@@ -22,12 +22,17 @@
  *   and the widget shows a "sign in to chat" hint instead of a broken captcha widget.
  */
 
-import { useCallback, useRef, useState, useMemo } from "react";
+import { useCallback, useEffect, useRef, useState, useMemo } from "react";
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport } from "ai";
 import type { UIMessage } from "ai";
 import { useUserContext } from "@/contexts/UserContext";
-import { CHAT_STORAGE_KEYS, clearSupportChatStorage } from "@/lib/support-chat/chatStorage";
+import {
+  CHAT_STORAGE_KEYS,
+  clearSupportChatStorage,
+  loadPersistedMessages,
+  savePersistedMessages,
+} from "@/lib/support-chat/chatStorage";
 
 export interface RateLimitedState {
   /** How many seconds until the per-user LLM cap resets (from the 429 response). */
@@ -186,10 +191,31 @@ export function useSupportChat(): SupportChatState {
     [] // transport created once; body fn reads refs, customFetch is stable
   );
 
+  // ── Message persistence ───────────────────────────────────────────────────
+  // Load persisted messages synchronously on first render so useChat is seeded
+  // with the correct initial state — avoids a visible "flash to empty" that a
+  // post-mount setMessages would cause.
+  const initialMessagesRef = useRef<UIMessage[]>(loadPersistedMessages());
+
   const { messages, status, error, sendMessage, setMessages, stop, clearError } =
     useChat({
       transport,
+      messages: initialMessagesRef.current,
     });
+
+  // Guard ref: once set to true, the persistence effect may safely write.
+  // Without this, the effect could overwrite storage with [] on first render
+  // before useChat has merged the initial messages.
+  const hydratedRef = useRef(false);
+  useEffect(() => {
+    hydratedRef.current = true;
+  }, []);
+
+  // Persist messages to localStorage whenever they change (after hydration).
+  useEffect(() => {
+    if (!hydratedRef.current) return;
+    savePersistedMessages(messages);
+  }, [messages]);
 
   // ── Send helpers ───────────────────────────────────────────────────────────
   const sendUserMessage = useCallback(
