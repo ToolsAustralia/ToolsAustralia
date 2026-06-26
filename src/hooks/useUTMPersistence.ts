@@ -4,7 +4,7 @@ import { useEffect } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
 import { extractAttributionParams } from "@/utils/tracking/utm-helpers";
 import { setStoredUTMParams } from "@/utils/tracking/utm-storage";
-import { writeAttributionCookie } from "@/utils/tracking/attribution-cookie";
+import { writeAttributionCookie, writeLastTouchAttributionCookie } from "@/utils/tracking/attribution-cookie";
 
 /**
  * Persists UTM and attribution parameters to sessionStorage when user lands on any page.
@@ -35,8 +35,9 @@ export function useUTMPersistence() {
       params.adset_id ||
       params.ad_id;
     if (hasAny) {
-      setStoredUTMParams(params);      // legacy session store (transitional)
-      writeAttributionCookie(params);  // durable, login/OAuth-immune, first-touch
+      setStoredUTMParams(params);              // legacy session store (transitional)
+      writeAttributionCookie(params);          // durable, login/OAuth-immune, FIRST-touch (paid)
+      writeLastTouchAttributionCookie(params); // overwriting LAST-touch (owned channels: Klaviyo)
     }
   }, [pathname, searchParams]);
 }

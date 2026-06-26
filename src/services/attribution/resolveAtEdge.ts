@@ -3,7 +3,10 @@
 // Stripe metadata to stamp. Used by every create-* route so resolution lives in ONE place.
 import type { NextRequest } from "next/server";
 import { extractClickIdsFromRequest } from "@/utils/tracking/click-capture";
-import { readAttributionCookieFromRequest } from "@/utils/tracking/attribution-cookie";
+import {
+  readAttributionCookieFromRequest,
+  readLastTouchAttributionCookieFromRequest,
+} from "@/utils/tracking/attribution-cookie";
 import { resolveConvertingPlatform } from "@/services/attribution/resolveConvertingPlatform";
 import { buildResolvedAttributionMetadata } from "@/utils/tracking/resolved-attribution-metadata";
 import type { ResolveResult } from "@/types/attribution";
@@ -15,10 +18,13 @@ export function resolveAttributionAtEdge(request: NextRequest): {
   try {
     const clicks = extractClickIdsFromRequest(request);
     const attr = readAttributionCookieFromRequest(request);
+    const lastAttr = readLastTouchAttributionCookieFromRequest(request);
     const decision = resolveConvertingPlatform({
       clicks,
       utm: attr ? { utm_source: attr.utm_source, utm_medium: attr.utm_medium } : undefined,
       utmCapturedAt: attr?.capturedAt ?? null,
+      lastTouchUtm: lastAttr ? { utm_source: lastAttr.utm_source, utm_medium: lastAttr.utm_medium } : undefined,
+      lastTouchUtmCapturedAt: lastAttr?.capturedAt ?? null,
       now: Date.now(),
     });
     return { decision, metadata: buildResolvedAttributionMetadata(decision) };

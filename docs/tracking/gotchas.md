@@ -1,5 +1,15 @@
 # Tracking — Gotchas
 
+## Owned channels (Klaviyo) MUST resolve last-touch, not first-touch
+
+**Incident (June 2026):** after server-side payment attribution shipped (~Jun 1), Klaviyo conversions cratered in the dashboard — `convertingPlatform=klaviyo_*` ran ~100% of `data.utmSource=klaviyo` Mar–May (backfilled), then dropped to ~55% from Jun 1, the rest leaking to **`direct`**. **Not a Klaviyo config problem** — landings and `data.utmSource=Klaviyo` kept coming at normal volume (Klaviyo's `utm_source=klaviyo` + `utm_medium=email|sms` tagging was fine the whole time).
+
+Root cause: the live resolver read the **first-touch** `_ta_attr` cookie (90-day, never overwritten). Klaviyo email/SMS is a **returning-user** channel, so the recipient's first touch is almost always an earlier acquisition source (or a no-UTM visit → no cookie). The first-touch model therefore never saw the Klaviyo touch → `direct`. The 5-day Klaviyo window measured against the (old) first-touch `capturedAt` made it worse.
+
+Fix: owned channels resolve **last-touch** via the overwriting [`_ta_attr_last`](../../src/utils/tracking/attribution-cookie.ts) cookie, ranked below paid clicks but above the first-touch fallback ([`resolveConvertingPlatform`](../../src/services/attribution/resolveConvertingPlatform.ts), `isOwnedChannel`). Paid attribution is unchanged (real `_fbc`/click signals still win); the only intended shift is that an *untrusted* Meta signal (synthetic `_fbc` with `capturedAt: null`, which already can't win the click tier) now yields to a more recent Klaviyo last-touch — correct last-touch behavior. Tests: `npm run test:converting-platform`, `npm run test:attribution-cookie`. **Lesson:** a single global first-touch model is wrong for owned/re-engagement channels — keep paid first-touch, owned last-touch.
+
+**Residual (pre-existing, not closed by this fix):** the win path is the resolver's `attr_platform` metadata. If resolution ever *throws* (→ `attr_platform` absent), [`payment-processing.ts`](../../src/utils/payment/payment-processing.ts) falls back to the first-touch/signup `utmSource`, which can still bucket a Klaviyo conversion as `direct`. Rare (the resolver is total + try/caught), but it's the one remaining first-touch leak.
+
 ## Klaviyo + Meta CAPI `fetch failed` — route outbound calls through `lib/http/outbound.ts`
 
 **Incident (June 2026):** both the Klaviyo client ([`src/lib/klaviyo.ts`](../../src/lib/klaviyo.ts)) and the Meta CAPI senders ([`src/lib/facebook.ts`](../../src/lib/facebook.ts)) flooded prod logs with opaque `TypeError: fetch failed`. This is an **undici keep-alive socket race** in Vercel's freeze/thaw model, NOT a Klaviyo/Meta config problem — full root cause + fix in [infrastructure/gotchas.md](../infrastructure/gotchas.md) → "Outbound third-party `fetch`…".

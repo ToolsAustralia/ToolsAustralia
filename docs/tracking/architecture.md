@@ -101,6 +101,10 @@ On landing, the client writes a `_ta_attr` cookie (JSON) to `sessionStorage` wit
 
 The capture registry at `src/lib/tracking/` reads `fbclid` / `_fbc`, `ttclid`, `ScCid` from the landing URL and persists them into `_ta_attr` client-side. Server-side routes read the cookie (and also accept click IDs from the request body for cases where the cookie isn't yet written).
 
+#### Last-touch companion cookie `_ta_attr_last`
+
+`_ta_attr` is **first-touch** (never overwritten for 90d) — correct for paid clicks, but wrong for **owned channels** (Klaviyo email/SMS). A Klaviyo recipient is a returning user whose first touch is some earlier acquisition source, so a first-touch-only model silently buries every Klaviyo conversion in `direct` (or that earlier source). [`useUTMPersistence`](../../src/hooks/useUTMPersistence.ts) therefore *also* writes a **`_ta_attr_last`** cookie (7-day TTL) on every UTM landing, **always overwriting** so it reflects the most-recent UTM touch. The resolver reads it for the owned-channel step below. (Regression history: live attribution shipped ~2026-06-01 with first-touch-only resolution; Klaviyo conversions leaked to `direct` until this last-touch cookie was added.)
+
 ### Click ID capture registry
 
 | Signal | Cookie / param | Platform |
@@ -117,11 +121,11 @@ Klaviyo attribution is identified via the UTM tuple `utm_source=klaviyo` + `utm_
 The resolver lives at `src/services/attribution/`. At the `create-*` route edge (subscription creation, one-time purchase, etc.), it reads the cookie / request body and resolves exactly **one** `convertingPlatform` per payment:
 
 **Priority (highest to lowest):**
-1. Paid clicks — click ID present + within recency window: Meta (7d), TikTok (7d), Snapchat (7d)
-2. Klaviyo owned — UTM tuple `utm_source=klaviyo` + `utm_medium=email` (5d window) or `utm_medium=sms` (5d window)
-3. Google — `utm_source=google` (any medium)
-4. Direct — no attribution signals
-5. Other — UTM source present but unrecognised
+1. Paid clicks — click ID present + within recency window: Meta (7d), TikTok (7d), Snapchat (7d). Resolved **first-touch** from `_ta_attr`.
+2. **Klaviyo owned — LAST-touch.** UTM tuple `utm_source=klaviyo` + `utm_medium=email|sms` (5d window) read from the **`_ta_attr_last`** cookie. Ranks below paid clicks but **above** the first-touch UTM fallback, so a returning user who clicks a Klaviyo email is credited to Klaviyo rather than their original first-touch source. Only tier-2 (owned) platforms resolve here; a tier-1 UTM in `_ta_attr_last` is ignored and handled by steps 1 / 3.
+3. First-touch UTM fallback — normalized `_ta_attr.utm_source` (Google `utm_source=google`; Meta domain-forms; or an owned channel that *was* the first touch), honoring its window.
+4. Direct — no attribution signals.
+5. Other — UTM source present but unrecognised.
 
 Recency tiebreak: if two click IDs are present (e.g. a user clicked a TikTok ad then a Meta ad), the **most recent** `captured_at` wins.
 
