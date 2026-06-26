@@ -8,6 +8,19 @@
 
 ---
 
+## 🚦 GO-LIVE GATE — read before merging / releasing
+
+The route `POST /api/partner-discount/sso` is **inert in production by default**: it returns **404** unless the env flag **`PARTNER_DISCOUNT_SSO_ENABLED=true`** is set (it's always enabled in local `development` so the `/dev/rewards-sso` harness works). **So merging this branch to main is safe — the endpoint stays dark in prod until you flip the flag.** This is enforced in code ([route.ts](../../src/app/api/partner-discount/sso/route.ts)), not just documented, so it survives being forgotten.
+
+**To actually go live**, set `PARTNER_DISCOUNT_SSO_ENABLED=true` in Vercel — but ONLY after all of:
+1. The vendor **deprovisioning / re-sync** answer (§5 #6, §5a) — so a cancelled/expired/downgraded member's portal access can actually be cut off.
+2. The **`member_level` encoding** answer (§5 #3, §5a) if/when we send tiers.
+3. The **member-deletion / anonymisation + DPA** confirmation (§5 #7) — we now send name + email.
+
+Do **not** flip the flag before these. Also remove the `/dev/rewards-sso` test harness before merge.
+
+---
+
 ## 0. Audit verdict — SOUND, with corrections
 
 The architecture is the **best fit for this codebase and is scalable** — the audit found **no better-fitting option**. It is **not** destined to become messy **if** the corrections below are applied. The audit caught one real correctness landmine (§3 N1) and one vendor-contract risk (§5) that would have made the feature messy if built blind.

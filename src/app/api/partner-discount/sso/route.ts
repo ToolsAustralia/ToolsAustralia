@@ -24,6 +24,16 @@ const ssoRateLimiter = createDistributedRateLimiter("partner-discount-sso", {
 
 export async function POST(request: NextRequest) {
   try {
+    // 🚦 GO-LIVE GATE — keeps users out of the portal until rewards SSO is cleared to launch.
+    // Inert in production: returns 404 unless PARTNER_DISCOUNT_SSO_ENABLED=true. Flip that env
+    // flag (Vercel) ONLY after the vendor deprovisioning + member_level answers are in — see
+    // docs/auth/igodirect-sso-implementation-plan.md "Go-live gate". Always enabled in local
+    // dev so the /dev/rewards-sso harness works. DEFAULT-SAFE by design: prod stays a 404 even
+    // if everyone forgets — that's the whole point.
+    if (process.env.NODE_ENV !== "development" && process.env.PARTNER_DISCOUNT_SSO_ENABLED !== "true") {
+      return NextResponse.json({ success: false, error: "Not found" }, { status: 404 });
+    }
+
     const csrf = requireSameOrigin(request);
     if (csrf) return csrf;
 

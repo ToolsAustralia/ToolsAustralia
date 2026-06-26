@@ -17,4 +17,4 @@ Statuses: 401 unauth · 403 no-access / cross-origin · 429 rate · 502 vendor u
 
 - **`member_level` is intentionally NOT sent yet** — gated on iGoDirect's encoding answer (implementation-plan §5a); the resolved tier is still recorded in the issuance log. One documented line at the `generatePortalSso` call flips it on.
 - **PII (owner-approved 2026-06-24):** sends `firstname` / `lastname` / `email` (so the member's portal profile pre-fills) plus the opaque `member_id`. Mobile is not in MyRewards' SSO payload. This makes a **member-deletion / anonymisation API + DPA** a firm vendor ask (implementation-plan §5 #7).
-- **Not released to members** until the deprovisioning/re-sync question is resolved (button stays unwired). **Not** an admin route → no Norm mirror.
+- **GO-LIVE GATE (enforced in code):** the route is **inert in production by default** — returns `404` unless `PARTNER_DISCOUNT_SSO_ENABLED=true` (always on in local dev). So merging to main is safe; flip the flag in Vercel only after the vendor deprovisioning + `member_level` + member-deletion/DPA answers (implementation-plan "Go-live gate"). **Not** an admin route → no Norm mirror.

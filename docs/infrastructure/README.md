@@ -24,6 +24,7 @@ Cross-cutting infra: health checks, cron, upload, Cloudinary, environment, Zod h
 See [.env.example](../../.env.example):
 - `IGODIRECT_SSO_SECRET` — **secret**; signs the MyRewards SSO JWT. `.env.local` / Vercel only — never commit a real value.
 - `IGODIRECT_CLIENT_ID` (`2412`), `IGODIRECT_DOMAIN_CODE` (`ToolsAustralia`), `IGODIRECT_DOMAIN_URL` (`myrewards.toolsaustralia.com.au`) — non-secret tenant identifiers.
+- `PARTNER_DISCOUNT_SSO_ENABLED` — **go-live gate**. `POST /api/partner-discount/sso` is inert in prod (404) unless this is exactly `"true"`. Keep UNSET in prod until rewards SSO is cleared to launch (vendor deprovisioning + `member_level` + member-deletion/DPA answers). See [auth/igodirect-sso-implementation-plan.md](../auth/igodirect-sso-implementation-plan.md) "Go-live gate".
 
 Connectivity probe: `npm run test:igodirect-sso` (see [dev-tooling/testing.md](../dev-tooling/testing.md)).
 
