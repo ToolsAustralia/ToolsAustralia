@@ -412,11 +412,12 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/lib/partner-discount-sso.ts",
         "src/models/PartnerApplication.ts",
         "src/models/PartnerDiscount.ts",
+        "src/models/PartnerDiscountSsoIssuance.ts",
         "src/app/api/partner-applications/**",
         "src/app/api/partner-discount/**",
         "src/app/(site)/partner/**"
       ],
-      "lastVerified": "2026-06-16"
+      "lastVerified": "2026-06-24"
     },
     "upsell": {
       "docs": "docs/upsell/",
