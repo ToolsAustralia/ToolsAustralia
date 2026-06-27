@@ -39,16 +39,13 @@ function formatToolsetLabel(slug: ToolsetLandingSlug): string {
 interface OtherToolsetsCarouselProps {
   /** Slug to store as referrer when user navigates (toolset or evergreen prize slug) */
   referrerSlug: string;
-  /** When on toolset page, exclude this from the list; when undefined (evergreen), show all 4 */
+  /** When on a toolset page, exclude this from the list; when undefined (evergreen), show all. */
   currentToolsetSlug?: ToolsetLandingSlug;
   onNavigate?: (targetSlug: ToolsetLandingSlug) => void;
   className?: string;
 }
 
-const SLIDE_WIDTH = 220;
-const SLIDE_GAP = 20;
-
-const ALL_TOOLSETS = ["ryobi", "milwaukee", "dewalt", "makita"] as const;
+const ALL_TOOLSETS = ["ryobi", "milwaukee", "dewalt", "makita", "hikoki"] as const;
 
 export function OtherToolsetsCarousel({
   referrerSlug,
@@ -69,24 +66,13 @@ export function OtherToolsetsCarousel({
 
   const [shuffledToolsets, setShuffledToolsets] = useState<ToolsetLandingSlug[]>(otherToolsets);
   const [isMobile, setIsMobile] = useState(false);
-  const [needsCarousel, setNeedsCarousel] = useState(true);
   const shuffleSeedRef = useRef<number | null>(null);
 
   useEffect(() => {
-    const check = () => {
-      const w = window.innerWidth;
-      setIsMobile(w < 640);
-      if (w >= 1024) {
-        const containerWidth = Math.min(w - 48, 896);
-        const totalSlidesWidth = otherToolsets.length * SLIDE_WIDTH + (otherToolsets.length - 1) * SLIDE_GAP;
-        setNeedsCarousel(totalSlidesWidth > containerWidth);
-      } else {
-        setNeedsCarousel(true);
-      }
-    };
+    const check = () => setIsMobile(window.innerWidth < 640);
     check();
     return addThrottledResize(check);
-  }, [otherToolsets.length]);
+  }, []);
 
   useEffect(() => {
     if (otherToolsets.length === 0) return;
@@ -119,8 +105,11 @@ export function OtherToolsetsCarousel({
 
   const displayToolsets = isMobile ? shuffledToolsets : otherToolsets;
 
+  // Endless loop via embla's own cloning — no manual list duplication (clones live at the wrap
+  // boundary, so the visible row never shows adjacent repeats). `align: start` keeps the desktop
+  // 4-up row left-aligned; on viewports where the slides overflow it scrolls/loops freely.
   const emblaOptions = useMemo(
-    () => ({ loop: true, align: "center" as const, dragFree: true, slidesToScroll: 1 }),
+    () => ({ loop: true, align: "start" as const, dragFree: true, slidesToScroll: 1 }),
     []
   );
   const emblaPlugins = useMemo(() => [], []);
@@ -180,57 +169,41 @@ export function OtherToolsetsCarousel({
           Explore other toolsets
         </h3>
 
-        {!needsCarousel ? (
-          <div className="flex flex-wrap justify-center gap-4 sm:gap-5 w-full max-w-4xl">
-            {displayToolsets.map((slug) => (
-              <div key={slug} className="w-[170px] sm:w-[200px] lg:w-[220px]">
-                {renderCard(slug)}
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className="relative w-full max-w-4xl">
-            <button
-              type="button"
-              onClick={scrollPrev}
-              aria-label="Previous toolsets"
-              className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-2 sm:translate-x-0 z-10 w-12 h-12 sm:w-14 sm:h-14 rounded-full hidden sm:flex items-center justify-center bg-white/90 dark:bg-neutral-800/90 backdrop-blur-sm border-2 border-gray-200 dark:border-neutral-600 shadow-lg hover:shadow-xl hover:scale-105 active:scale-95 transition-all duration-200 group"
-            >
-              <GripVertical className="w-5 h-5 sm:w-6 sm:h-6 -rotate-90 transition-colors group-hover:opacity-100" style={{ color: theme.primary }} />
-            </button>
-            <button
-              type="button"
-              onClick={scrollNext}
-              aria-label="Next toolsets"
-              className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-2 sm:translate-x-0 z-10 w-12 h-12 sm:w-14 sm:h-14 rounded-full hidden sm:flex items-center justify-center bg-white/90 dark:bg-neutral-800/90 backdrop-blur-sm border-2 border-gray-200 dark:border-neutral-600 shadow-lg hover:shadow-xl hover:scale-105 active:scale-95 transition-all duration-200 group"
-            >
-              <GripVertical className="w-5 h-5 sm:w-6 sm:h-6 rotate-90 transition-colors group-hover:opacity-100" style={{ color: theme.primary }} />
-            </button>
+        <div className="relative w-full max-w-4xl">
+          <button
+            type="button"
+            onClick={scrollPrev}
+            aria-label="Previous toolsets"
+            className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-2 sm:translate-x-0 z-10 w-12 h-12 sm:w-14 sm:h-14 rounded-full hidden sm:flex items-center justify-center bg-white/90 dark:bg-neutral-800/90 backdrop-blur-sm border-2 border-gray-200 dark:border-neutral-600 shadow-lg hover:shadow-xl hover:scale-105 active:scale-95 transition-all duration-200 group"
+          >
+            <GripVertical className="w-5 h-5 sm:w-6 sm:h-6 -rotate-90 transition-colors group-hover:opacity-100" style={{ color: theme.primary }} />
+          </button>
+          <button
+            type="button"
+            onClick={scrollNext}
+            aria-label="Next toolsets"
+            className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-2 sm:translate-x-0 z-10 w-12 h-12 sm:w-14 sm:h-14 rounded-full hidden sm:flex items-center justify-center bg-white/90 dark:bg-neutral-800/90 backdrop-blur-sm border-2 border-gray-200 dark:border-neutral-600 shadow-lg hover:shadow-xl hover:scale-105 active:scale-95 transition-all duration-200 group"
+          >
+            <GripVertical className="w-5 h-5 sm:w-6 sm:h-6 rotate-90 transition-colors group-hover:opacity-100" style={{ color: theme.primary }} />
+          </button>
 
-            <div
-              className="w-full min-h-[230px] sm:min-h-[220px] touch-pan-x"
-              ref={emblaRef}
-              style={{ WebkitOverflowScrolling: "touch" }}
-            >
-              <div className="flex items-center gap-3 sm:gap-4 lg:gap-5">
-                {/* Leading gap for seamless loop wrap */}
-                <div className="w-1 sm:w-2 flex-shrink-0" aria-hidden />
-                {/* First set */}
-                {displayToolsets.map((slug) => (
-                  <div key={`first-${slug}`} className="w-[170px] sm:w-[200px] lg:w-[220px] flex-shrink-0 min-w-0">
-                    {renderCard(slug)}
-                  </div>
-                ))}
-                {/* Second set for seamless infinite loop (BrandScroller pattern) */}
-                {displayToolsets.map((slug) => (
-                  <div key={`second-${slug}`} className="w-[170px] sm:w-[200px] lg:w-[220px] flex-shrink-0 min-w-0">
-                    {renderCard(slug)}
-                  </div>
-                ))}
-              </div>
+          <div
+            className="w-full overflow-hidden touch-pan-x"
+            ref={emblaRef}
+            style={{ WebkitOverflowScrolling: "touch" }}
+          >
+            <div className="flex items-stretch gap-4 py-1">
+              {displayToolsets.map((slug) => (
+                <div
+                  key={slug}
+                  className="shrink-0 min-w-0 basis-[62%] sm:basis-[42%] md:basis-[30%] lg:basis-[23%]"
+                >
+                  {renderCard(slug)}
+                </div>
+              ))}
             </div>
           </div>
-        )}
+        </div>
       </div>
     </div>
   );
