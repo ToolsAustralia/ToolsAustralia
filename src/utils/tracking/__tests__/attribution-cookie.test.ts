@@ -2,7 +2,25 @@ import assert from "node:assert/strict";
 import {
   serializeAttributionCookie,
   deserializeAttributionCookie,
+  writeAttributionCookie,
+  writeLastTouchAttributionCookie,
+  readAttributionCookieClient,
+  ATTRIBUTION_COOKIE,
+  LAST_TOUCH_ATTRIBUTION_COOKIE,
 } from "../attribution-cookie";
+
+// Minimal document.cookie mock (single-cookie store) so we can exercise the write semantics.
+const store: Record<string, string> = {};
+(globalThis as unknown as { document: { cookie: string } }).document = {
+  get cookie() {
+    return Object.entries(store).map(([k, v]) => `${k}=${v}`).join("; ");
+  },
+  set cookie(s: string) {
+    const pair = s.split(";")[0];
+    const eq = pair.indexOf("=");
+    store[pair.slice(0, eq).trim()] = pair.slice(eq + 1);
+  },
+};
 
 // round-trips utm fields + capturedAt
 {
@@ -26,6 +44,20 @@ import {
 // drops empty params
 {
   assert.equal(serializeAttributionCookie({}, 1), "");
+}
+
+// FIRST-touch cookie keeps the earliest; LAST-touch cookie overwrites.
+{
+  writeAttributionCookie({ utm_source: "facebook", utm_medium: "cpc" });
+  writeAttributionCookie({ utm_source: "klaviyo", utm_medium: "email" }); // must NOT overwrite
+  assert.equal(readAttributionCookieClient()?.utm_source, "facebook", "first-touch keeps earliest");
+  assert.ok(store[ATTRIBUTION_COOKIE]);
+
+  writeLastTouchAttributionCookie({ utm_source: "facebook", utm_medium: "cpc" });
+  writeLastTouchAttributionCookie({ utm_source: "klaviyo", utm_medium: "email" }); // MUST overwrite
+  const last = deserializeAttributionCookie(store[LAST_TOUCH_ATTRIBUTION_COOKIE]);
+  assert.equal(last?.utm_source, "klaviyo", "last-touch overwrites to most recent");
+  assert.equal(last?.utm_medium, "email");
 }
 
 console.log("attribution-cookie: all assertions passed");

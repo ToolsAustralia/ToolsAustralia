@@ -10,6 +10,14 @@ import type { AttributionParams } from "@/types/tracking";
 export const ATTRIBUTION_COOKIE = "_ta_attr";
 export const ATTRIBUTION_COOKIE_MAX_AGE_SECONDS = 90 * 24 * 60 * 60; // 90d (matches _fbc)
 
+/**
+ * LAST-touch companion to `_ta_attr`. Overwritten on every UTM landing (not first-touch) so the
+ * resolver can credit owned channels (Klaviyo email/SMS) to the most recent touch. 7d max-age
+ * comfortably covers the 5d owned-channel windows; paid attribution still uses the first-touch cookie.
+ */
+export const LAST_TOUCH_ATTRIBUTION_COOKIE = "_ta_attr_last";
+export const LAST_TOUCH_ATTRIBUTION_COOKIE_MAX_AGE_SECONDS = 7 * 24 * 60 * 60; // 7d
+
 export interface StoredAttribution extends AttributionParams {
   capturedAt: number;
 }
@@ -45,10 +53,10 @@ export function deserializeAttributionCookie(raw: string | undefined | null): St
 }
 
 /** Cookie attribute string. Domain+Secure only in production (apex<->www sharing). */
-function attributeSuffix(): string {
+function attributeSuffix(maxAgeSeconds: number): string {
   const isProd = process.env.NODE_ENV === "production";
   const domainSecure = isProd ? "; Domain=.toolsaustralia.com.au; Secure" : "";
-  return `; path=/; max-age=${ATTRIBUTION_COOKIE_MAX_AGE_SECONDS}; SameSite=Lax${domainSecure}`;
+  return `; path=/; max-age=${maxAgeSeconds}; SameSite=Lax${domainSecure}`;
 }
 
 /** CLIENT: write first-touch. Won't overwrite an existing non-expired cookie. */
@@ -57,7 +65,15 @@ export function writeAttributionCookie(params: AttributionParams): void {
   if (readAttributionCookieClient()) return; // first-touch: keep the earliest
   const value = serializeAttributionCookie(params, Date.now());
   if (!value) return;
-  document.cookie = `${ATTRIBUTION_COOKIE}=${value}${attributeSuffix()}`;
+  document.cookie = `${ATTRIBUTION_COOKIE}=${value}${attributeSuffix(ATTRIBUTION_COOKIE_MAX_AGE_SECONDS)}`;
+}
+
+/** CLIENT: write last-touch — ALWAYS overwrite so the most recent owned-channel touch wins. */
+export function writeLastTouchAttributionCookie(params: AttributionParams): void {
+  if (typeof document === "undefined") return;
+  const value = serializeAttributionCookie(params, Date.now());
+  if (!value) return;
+  document.cookie = `${LAST_TOUCH_ATTRIBUTION_COOKIE}=${value}${attributeSuffix(LAST_TOUCH_ATTRIBUTION_COOKIE_MAX_AGE_SECONDS)}`;
 }
 
 /** CLIENT: read + parse. */
@@ -72,9 +88,16 @@ export function readAttributionCookieClient(): StoredAttribution | null {
   return null;
 }
 
-/** SERVER: read from a NextRequest-like cookie store. */
+/** SERVER: read first-touch from a NextRequest-like cookie store. */
 export function readAttributionCookieFromRequest(request: {
   cookies?: { get: (name: string) => { value: string } | undefined };
 }): StoredAttribution | null {
   return deserializeAttributionCookie(request.cookies?.get(ATTRIBUTION_COOKIE)?.value);
+}
+
+/** SERVER: read last-touch from a NextRequest-like cookie store. */
+export function readLastTouchAttributionCookieFromRequest(request: {
+  cookies?: { get: (name: string) => { value: string } | undefined };
+}): StoredAttribution | null {
+  return deserializeAttributionCookie(request.cookies?.get(LAST_TOUCH_ATTRIBUTION_COOKIE)?.value);
 }

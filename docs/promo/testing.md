@@ -1,6 +1,11 @@
 # Promo — Testing
 
-> _TODO: enumerate test files under `src/services/promo/__tests__/` and `src/utils/promo/__tests__/` (if any) and matching `npm run test:*` scripts._
+## Landing hero resolvers (`src/utils/promo/__tests__/`)
+
+| Test file | npm script | Covers |
+|---|---|---|
+| `landing-image-resolver.test.ts` | `npm run test:landing-image-resolver` | kinTB drawn tiers resolve to real art; `final-hours` collapses to base; light↔dark fallback |
+| `landing-draw-day-urgency.test.ts` | `npm run test:landing-draw-day-urgency` | `getLandingHeroUrgencyFromDrawDay` — calendar-day AEST `drawn-tonight` / `drawn-tomorrow` / `null`, DST-safe |
 
 ## Manual smoke
 

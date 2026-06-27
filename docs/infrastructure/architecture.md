@@ -35,6 +35,18 @@ Plus:
 - `scripts/fix-*.{ts,mjs,js}` → fix:* npm script — one-off corrective scripts; **must** ship with a `:dry` sibling that disables writes
 - `scripts/codemods/` — UI/Tailwind codemod scripts (see [dev-tooling architecture](../dev-tooling/architecture.md))
 
+### Asset-conversion scripts (`convert:*`)
+
+One-shot build-asset converters that turn numbered design exports into the brand-named, web-optimized files the app ships. Each removes its source(s) after a successful run. The first three are **sharp-based** (the `sharp` dependency, pure-JS/native, no external binary):
+
+- `convert:upsell-webp` → `scripts/convert-upsells-to-webp.ts`
+- `convert:multiplier-banners-webp` → `scripts/convert-multiplier-banners-to-webp.ts`
+- `convert:promo-landing-webp` → `scripts/convert-promo-landing-to-webp.ts`
+- `convert:drawn-tonight-tomorrow-webp` → `scripts/convert-drawn-tonight-tomorrow-to-webp.ts` (sharp) — converts the numbered "drawn tonight/tomorrow" landing-hero PNG exports to brand-named WebP stills and converts the shared `bg-desktop`/`bg-mobile` hero-stage background; removes the PNG sources.
+- `convert:drawn-tonight-tomorrow-videos` → `scripts/convert-drawn-tonight-tomorrow-videos.ts` (**ffmpeg-based**) — remuxes the numbered drawn-hero MP4 exports into brand-named files (audio stripped, `faststart`) and encodes matching VP9 WebM; removes the numbered source folder.
+
+> **External-tool dependency:** the WebP/PNG converters above only need the `sharp` npm dependency, but `convert:drawn-tonight-tomorrow-videos` shells out to **`ffmpeg`, which must be on `PATH`** — it is an external binary, not an npm package, so it is **not** installed by `npm install`. The script fails immediately if ffmpeg is absent. This is the only asset-conversion script with an external-binary prerequisite.
+
 ### Dashboard stats snapshot backfill + drift check
 
 - [`scripts/backfill-dashboard-stats-snapshots.ts`](../../scripts/backfill-dashboard-stats-snapshots.ts) — idempotent backfill. Upserts `DashboardStatsDailySnapshot` rows for a date range. Supports `--dry-run`, `--start-date=YYYY-MM-DD`, `--end-date=YYYY-MM-DD`. Defaults: site launch (2025-11-27) → yesterday-AEST. npm scripts: `backfill:dashboard-stats-snapshots` (live), `backfill:dashboard-stats-snapshots:dry`.
@@ -58,6 +70,14 @@ Plus:
   **CLI flags:** `--dry-run` (default-safe — always run first), `--limit=N`, `--batch-size=N`, `--csv-path=<path>` (append-mode audit log), `--no-csv`.
 
   **Exit codes:** `0` = clean run, `2` = per-row errors (rows skipped; check `grep ',error,'` in the CSV), `3` = outer-fatal (script aborted), `1` = unhandled exception.
+
+### Klaviyo attribution cycle correction
+
+- [`scripts/backfill-klaviyo-attribution-cycle.ts`](../../scripts/backfill-klaviyo-attribution-cycle.ts) — one-cycle corrective for Klaviyo conversions the **live** resolver mis-bucketed to `direct` before the owned-channel last-touch fix (see [tracking/gotchas.md](../tracking/gotchas.md)). For `BenefitsGranted` rows in the window whose last-touch UTM (`data.utmSource`/`data.utmMedium`) normalizes to `klaviyo_email`/`klaviyo_sms` but whose stored `convertingPlatform` isn't already that channel, it sets `convertingPlatform` to the Klaviyo channel + `attributionConfidence: "utm_only"`. npm scripts: `backfill:klaviyo-cycle` (live), `backfill:klaviyo-cycle:dry`.
+
+  **Model:** default **paid-priority** — rows whose existing attribution was a real paid click (`attributionConfidence: "click"`) are KEPT (a paid ad acquired that user); `--include-paid-overlap` switches to strict last-touch. The dry-run reports both totals so the model can be chosen before the live run.
+
+  **CLI flags:** `--dry-run` (run first), `--prod` (target `.env.production`; omit = local), `--include-paid-overlap`, `--start=YYYY-MM-DD` / `--end=YYYY-MM-DD` (AEST; default 2026-05-28 → 2026-06-28), `--no-csv`. Idempotent (skips rows already on the target channel); every old→new is logged to the CSV for trivial reversal.
 
   npm scripts: `backfill:converting-platform` (live), `backfill:converting-platform:dry` (dry-run, no writes).
 

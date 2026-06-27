@@ -36,6 +36,8 @@ No Stripe, no providers, no real purchase. Mock data sourced from `src/data/memb
 
 When a modal is moved from a monolith `.tsx` file to a folder structure (`/index.tsx`), update the `source` path in the `MODAL_SOURCES` map inside this file.
 
+When a modal's props change, the gallery mount must follow. Note `ChargePastDueModal` (gallery id `admin-charge-past-due`) is now self-driven (it owns its `start → chunk` charge loop) and no longer takes an `onConfirm` prop — the gallery mounts it with just `isOpen`/`onClose` (the optional `onCompleted` is omitted). The separate `ChargePastDueUserModal` is unrelated and still uses `onConfirm`.
+
 ### CancellationFlowHarnessClient
 
 `src/app/dev/cancellation-flow/CancellationFlowHarnessClient.tsx` — design/QA harness for the restyled cancellation-flow modal steps. Returns 404 in production (`process.env.NODE_ENV !== "development"`).

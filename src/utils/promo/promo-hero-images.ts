@@ -15,6 +15,8 @@
  * @module promo-hero-images
  */
 
+import { formatInTimeZone } from "date-fns-tz";
+import { createAESTDateAsUTC } from "@/utils/common/timezone";
 import type {
   PromoImagePaths,
   MajorDrawHeroUrgency,
@@ -22,6 +24,9 @@ import type {
   VariantImageOverride,
   PromoImageResolutionParams,
 } from "./promo-hero-types";
+
+/** Display timezone — draws are scheduled and shown in Australian Eastern time. */
+const AEST_TIMEZONE = "Australia/Sydney";
 
 /**
  * Base path for promo hero images
@@ -223,6 +228,39 @@ export function getMajorDrawHeroUrgencyFromMajorDraw(
   draw: PromoUrgencyDrawLike | null | undefined
 ): MajorDrawHeroUrgency | null {
   return getLandingHeroUrgencyFromMsUntil(getMsUntilPromoUrgencyDeadline(draw));
+}
+
+/** Midnight (00:00) of the AEST calendar day containing `d`, as epoch ms. DST-safe. */
+function aestStartOfDayMs(d: Date): number {
+  const year = parseInt(formatInTimeZone(d, AEST_TIMEZONE, "yyyy"), 10);
+  const month = parseInt(formatInTimeZone(d, AEST_TIMEZONE, "M"), 10);
+  const day = parseInt(formatInTimeZone(d, AEST_TIMEZONE, "d"), 10);
+  return createAESTDateAsUTC(year, month, day, 0, 0).getTime();
+}
+
+/**
+ * Landing-hero urgency keyed to the draw's **AEST calendar day** (not a rolling-hours window).
+ *
+ * For a draw on the 27th at 8:30pm AEST:
+ * - the whole of the 26th (00:00–24:00 AEST)            → `drawn-tomorrow`
+ * - the 27th from 00:00 AEST up to the 8:30pm draw time → `drawn-tonight`
+ * - once the draw time passes, and any earlier day      → `null` (base brand hero)
+ *
+ * Uses `drawDate` only (the announced draw moment), independent of the entry-freeze window.
+ * Returns only `drawn-tomorrow` / `drawn-tonight` — landing art ships no `final-hours` tier.
+ */
+export function getLandingHeroUrgencyFromDrawDay(
+  draw: PromoUrgencyDrawLike | null | undefined,
+  now: Date = new Date()
+): LandingHeroUrgency | null {
+  if (!draw?.drawDate) return null;
+  const drawMs = new Date(draw.drawDate).getTime();
+  if (!Number.isFinite(drawMs)) return null;
+
+  const diffDays = Math.round((aestStartOfDayMs(new Date(drawMs)) - aestStartOfDayMs(now)) / (24 * HOUR_MS));
+  if (diffDays === 0) return now.getTime() < drawMs ? "drawn-tonight" : null;
+  if (diffDays === 1) return "drawn-tomorrow";
+  return null;
 }
 
 /**
