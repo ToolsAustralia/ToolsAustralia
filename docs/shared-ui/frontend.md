@@ -1,5 +1,44 @@
 # Shared UI — Frontend
 
+## hikoki-green badge fix + prize combo-render normalisation (2026-06-22)
+
+Two follow-ups after the HiKOKI launch:
+- **Badge resolved red instead of green.** `getPackageColorScheme` runs its key through
+  `toColorKey`, which maps color keys to themselves via the `PLAN_ID_TO_COLOR_KEY` *identity
+  block* — `hikoki-green` was missing there, so `toColorKey("hikoki-green")` fell through to the
+  `milwaukee-red` default and the HiKOKI toolset label badge rendered red. Fixed by adding
+  `"hikoki-green": "hikoki-green"` to that block. **When adding a new `COLOR_KEYS` value, add its
+  identity entry to `PLAN_ID_TO_COLOR_KEY` too**, not just the `Record<COLOR_KEYS>` tables.
+- **Prize combo cards displayed at inconsistent zoom.** `PrizeShowcase`'s
+  `getPrizeGalleryImageLayout` now intercepts the new combo renders
+  (`<toolset>-<toolbox>.webp`) with a uniform layout (`object-contain`, no per-image scale)
+  *before* the legacy `*-set` rule that was zooming dewalt/milwaukee combos to `scale-150`. The
+  15 combo source images were also normalised to a single **1600×1200 (4:3)** canvas with the
+  subject trimmed, scaled to a common inner frame, and **bottom-anchored + centred**, so every
+  prize card shows the setup at the same size without cut-off.
+
+## `hikoki-green` brand color key added (2026-06-22)
+
+The shared color system gained a `hikoki-green` key (HiKOKI brand green `#007749`) for the
+new HiKOKI toolset. In `packageColorScheme.ts` it's added to the `COLOR_KEYS` union and every
+`Record<COLOR_KEYS, …>` table (`BRAND_GRADIENTS`, `MEMBERSHIP_SECTION_GRADIENTS`,
+`LANDING_PAGE_BRAND`, `SCHEMES`, `COLOR_KEY_TO_BRAND_GRADIENT`), plus `slugToPromoTierPlanId`
+(hikoki* → hikoki-green) and the `getPackageGlowColor` switch — the `SCHEMES["hikoki-green"]`
+entry mirrors `makita-teal` (white text on the dark brand colour) with green substitutions.
+`prize-brand-colors.ts` gained `POWER_SPEC_CHROME["hikoki-green"]` (emerald tints), a `hikoki`
+case in `getPrizeSpecificationsModalHeaderSolidFill` (`#007749`), and `hikoki-*` cases in
+`getPrizeBrandColors` / `getBrandGlowClass` (`glow-hikoki`). `globals.css` adds `.glow-hikoki`
+and `animate-border-glow-hikoki`. **Pattern when adding a brand:** mirror an existing key of
+the same polarity — light-text-on-bright (ryobi) vs white-text-on-dark (makita/hikoki).
+
+## MajorDrawSection — brand watermark now SVG (2026-06-22)
+
+The Ryobi case of `getBrandLogoPath` now returns `/images/brands/name/ryobiText.svg` (the
+brand-name wordmark webps were deleted in the SVG takeover — see `docs/promo/frontend.md`);
+the watermark `<Image>`s use `unoptimized` so the SVG serves as-is. The milwaukee / dewalt /
+makita cases are unchanged — they use the separate `/images/brands/*.webp` assets, not the
+`brands/name/` wordmarks.
+
 ## Component categories
 
 See [architecture.md](./architecture.md#categories) for the full inventory.
@@ -127,6 +166,10 @@ Two related changes to [`PromoHero`](../../src/components/sections/promo/PromoHe
 - **Video-first hero (no static-first flash).** The clip is the **primary** hero, rendered from the **first paint** (server + client) — not gated behind an `isMounted`/`useDeviceProfile` swap. The old gate rendered the still (the finished art) first and swapped to the video after mount, so users saw the full image *then* the clip restart its build-from-blank intro (the reported "full image → snap to animation" bug). Now `showVideo = heroVideoPaths != null && !videoFailed` decides per render, each viewport renders `<LandingHeroVideo>` (opaque, **no `poster`** — the clips open on a blank frame, so the end-state still is never shown up front) and the still only renders when there's **no clip / the clip failed** (`onUnavailable` → `videoFailed`, reset when the slug/tier changes) or — purely in **CSS** via `motion-reduce:` — for reduced-motion users (a sibling `<Image className="hidden … motion-reduce:block">`; the video carries `motion-reduce:hidden`). This drops the `isMounted` / `isLgUp` / `useDeviceProfile` / `useMediaQuery` gating entirely; reduced-motion is CSS-driven (per `useDeviceProfile`'s own convention) so there is no SSR→client swap. Trade-off: the previous JS Save-Data suppression is gone (no reliable CSS signal); reduced-motion is preserved.
 - **Seamless loading skeleton.** The `if (isLoading)` branch no longer renders a gray `bg-gradient-to-br from-gray-200 to-gray-300 animate-pulse` placeholder. It now renders the shared hero **"stage" background** image (`LANDING_HERO_BACKGROUND.mobile` / `.desktop` from [landing-image-resolver](../../src/utils/promo/landing-image-resolver.ts), i.e. `/images/background/promo/landing/background/bg-{mobile,desktop}.webp`) using the **same** `object-contain object-top` layout as the loaded hero — so the load-in is seamless with no gray flash. The CTA pill still shows a `bg-gray-400/70 animate-pulse` placeholder, and the in-flow CTA-band reserve keeps layout below from jumping.
 
+### LandingHeroVideo — mp4-only ordered sources, drawn tier falls back to base (2026-06-27)
+
+[`LandingHeroVideo`](../../src/components/sections/promo/LandingHeroVideo.tsx) is now **mp4-only**: the `webm` `<source>` was removed. The new-design base clips ship only `.mp4` (H.264 plays in every supported browser), so the old `webm` source was a dead URL that 404'd on **every** base hero before the browser fell through to the mp4. [`getLandingHeroVideoPaths`](../../src/utils/promo/landing-video-resolver.ts) now returns `srcs: string[]` (an ordered mp4 list) instead of `{ webm, mp4 }`, and the component renders them in order so the browser plays the first that loads. On the **`drawn-tonight` / `drawn-tomorrow`** tier the drawn clip is first with the **base clip appended as a fallback**, so a brand that ships no drawn art — **HiKOKI** has only base clips — still animates via its base clip instead of dropping to the still (the browser advances to the next `<source>` when the drawn one 404s). Mirrors the image resolver, which already drops a missing drawn still back to the base image. (Supersedes the WebM→MP4 / `loop` details in the 2026-06-12 note below.)
+
 ### Hear From Our Winners — moved to `WinnersTestimony` (2026-06-11)
 
 The old `src/components/sections/winner-testimony/` folder and its `src/components/sections/WinnerTestimonySection.tsx` re-export have been **removed**. The "Hear from our winners" section is now a single page-scoped component, [`WinnersTestimony`](../../src/app/(site)/winners/components/WinnersTestimony.tsx), built in the shared `.ta-results` design system (see [docs/draws/frontend.md](../draws/frontend.md)). It self-loads its fonts and the shared stylesheet is imported globally in [src/app/layout.tsx](../../src/app/layout.tsx), so it renders identically on any host page.
@@ -209,7 +252,7 @@ All previous call sites now render `WinnersTestimony` directly: the homepage + p
 - **`Banner.tsx`** — amber encouragement banner ("Someone's name gets called next draw")
 - **`ActionRow.tsx`** — primary CTAs ("Keep me in the draw" / "Resolve payment" / "No thanks, cancel anyway")
 - **`DowngradeCard.tsx`** — tier-coloured "Switch to X" card (Tradie/Foreman/Boss)
-- **`TrustBar.tsx`** — footer trust cells (SSL secure / NTP/16867 — sourced from `NTP_NUMBER` in `src/constants/legal.ts` / Cancel anytime)
+- **`TrustBar.tsx`** — footer trust cells (SSL secure / NTP/17192 — sourced from `NTP_NUMBER` in `src/constants/legal.ts` / Cancel anytime)
 - **`hero.module.css`** — composite gradients, scrollbar chrome, and stripe overlay that don't translate to single Tailwind utilities
 
 Layout is an infographic-style three-band frame: dark hero → white lose grid → light slate trust footer. Layout structure stays identical at every viewport size; the `max-xs:` breakpoint shrinks sizes only (no column collapse). Styles migrated from `<style jsx>` to Tailwind + CSS Modules.

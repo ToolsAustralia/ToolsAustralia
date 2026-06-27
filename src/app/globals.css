@@ -1340,6 +1340,10 @@
   box-shadow: 0 0 24px rgba(224, 255, 0, 0.72), 0 0 40px rgba(242, 255, 77, 0.28), 0 8px 32px rgba(0, 0, 0, 0.35);
 }
 
+.glow-hikoki {
+  box-shadow: 0 0 20px rgba(0, 119, 73, 0.55), 0 8px 32px rgba(0, 0, 0, 0.4);
+}
+
 .glow-green {
   box-shadow: 0 0 20px rgba(34, 197, 94, 0.6), 0 8px 32px rgba(0, 0, 0, 0.4);
 }
@@ -1636,6 +1640,14 @@
 }
 .animate-border-glow-makita {
   animation: border-glow-makita 2s ease-in-out infinite;
+}
+
+@keyframes border-glow-hikoki {
+  0%, 100% { box-shadow: 0 0 16px rgba(0, 119, 73, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.4); }
+  50% { box-shadow: 0 0 32px rgba(0, 154, 99, 0.75), 0 0 0 1px rgba(255, 255, 255, 0.65); }
+}
+.animate-border-glow-hikoki {
+  animation: border-glow-hikoki 2s ease-in-out infinite;
 }
 
 @keyframes border-glow-dewalt {

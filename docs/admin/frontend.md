@@ -1,5 +1,13 @@
 # Admin — Frontend
 
+## Prize performance card — SVG brand logos (2026-06-22)
+
+`PrizePerformanceCard` `PROMOTION_BRANDS` logos now point at the shared SVG wordmarks
+(`/images/brands/name/*.svg`), rendered with `<Image unoptimized>`. The per-brand
+`logoScale` nudge (and the `logoScale` field on `PrizeRow`) was removed — the wordmark SVGs
+are pre-normalised to a uniform frame, so all brand logos read at equal size in the table
+without compensation. See `docs/promo/frontend.md` for the asset normalisation details.
+
 ## Pages
 
 - `src/app/admin/page.tsx` — entry. Auth guard uses `usePermissions().isStaff` (Task 12, 2026-05-20). The legacy `useEffect` redirect and `session.user?.role !== "admin"` early-return have been removed; the component now checks `isLoading` / `isStaff` directly and calls `router.push("/")` when not staff. The admin layout's server-side guard (Task 14) is the primary gating mechanism; this is belt-and-suspenders for the client render.

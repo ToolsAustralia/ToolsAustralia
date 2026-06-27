@@ -129,26 +129,28 @@ The current monthly Major Draw prize is **fully customizable by the winner**. Af
 
 **Option A — Power tool kit + workshop storage + $5,000 cash bonus** (most common). Two independent picks, plus a bundled cash bonus:
 
-1. **Power tool brand** — Milwaukee, DeWalt, Makita, or Ryobi.
+1. **Power tool brand** — Milwaukee, DeWalt, Makita, Ryobi, or HiKOKI.
 2. **Workshop storage** — one of:
    - Sidchrome SCMT11402 **356-piece** tool kit & lockable roller cabinet.
    - Milwaukee 56" High-Capacity Combination Tool Storage (steel construction, electronic lock).
    - Kincrome CONTOUR® **470-piece** 17-drawer workshop kit (P1823).
-3. **$5,000 cash bonus** — bundled into every combo on top of the tools (each combo's display label, via `getPrizeLabel`, ends in "+ $5,000 Cash" in [src/config/prizes.ts](src/config/prizes.ts); 8 of the 12 combos also carry an explicit "$5000 Cash Bonus" highlight — the four Sidchrome-storage variants do not).
+3. **$5,000 cash bonus** — bundled into every combo on top of the tools (each combo's display label, via `getPrizeLabel`, ends in "+ $5,000 Cash" in [src/config/prizes.ts](src/config/prizes.ts); 8 of the 15 combos also carry an explicit "$5000 Cash Bonus" highlight — the four Sidchrome-storage variants and the three HiKOKI variants do not).
 
-That's a 4 × 3 grid = **12 power-tool × storage combinations** (each + $5,000 cash), each rendered as its own `PrizeCatalogEntry` with full specs, hero gallery, and highlight copy.
+That's a 5 × 3 grid = **15 power-tool × storage combinations** (each + $5,000 cash), each rendered as its own `PrizeCatalogEntry` with full specs, hero gallery, and highlight copy. (HiKOKI is the 5th toolset, added June 2026 — a 15-piece 36V/18V MultiVolt kit: a 13-piece Mega Combo plus framing + finishing nailers, bundled with its own HiKOKI Multi Cruiser 3-piece storage system. Its composite hero render is currently a placeholder pending final art, and its product gallery photos are not yet matched per-tool.)
 
 **Option B — Cash instead of tools.** A single **$10,000 AUD tax-free cash** prize (`prizeValueLabel: "$10,000 Cash"`) — no equipment, "no tools, no hassle, just $10,000 straight to your bank account." There is **no $5,000 standalone cash tier** and no standard/upgraded distinction; the $5,000 figure only appears as the cash *bonus* bundled into Option A's tool combos.
 
-The cash option lives as the 13th `PrizeCatalogEntry` (`slug: "cash-prize"`).
+The cash option lives as the 16th `PrizeCatalogEntry` (`slug: "cash-prize"`).
 
-**Why this is in the doc.** Each promo landing page (§11) pins a specific prize combination as its hero — so the prize catalog isn't only what the winner picks, it's also what the campaign sells. The 4×3 grid + cash means the same monthly draw can be marketed with very different copy (e.g. a Milwaukee-focused landing for Milwaukee fans vs a Sidchrome-storage-focused landing for cabinet-shop tradies) without changing the underlying draw.
+**Why this is in the doc.** Each promo landing page (§11) pins a specific prize combination as its hero — so the prize catalog isn't only what the winner picks, it's also what the campaign sells. The 5×3 grid + cash means the same monthly draw can be marketed with very different copy (e.g. a Milwaukee-focused landing for Milwaukee fans vs a Sidchrome-storage-focused landing for cabinet-shop tradies) without changing the underlying draw.
 
 **Winner contact & claim — partially in code, mostly operational.** When the winner is selected:
 
 - The [`/api/major-draw/select-winner`](src/app/api/major-draw/select-winner/route.ts) route fires a Klaviyo `MajorDrawWon` event (non-blocking) — the actual notification email is a Klaviyo flow, not a SendGrid template owned by this app.
 - The `Winner` model carries a `notified: Boolean` flag (default `false`) but the platform never flips it to `true` automatically.
 - **No claim form, no `claimedAt` field, no shipment-tracking integration in code.** Identity verification, prize-customization pick (Option A power-tool/storage combo vs Option B cash), and physical delivery are **operational** — handled outside the codebase.
+
+> _Asset note (2026-06-22, no catalog change):_ the prize product photos in `prizes.ts` were optimized to webp with descriptive, product-accurate filenames. Each of the 15 tool combos also got a new composite "toolset + toolbox" card render (`{toolset}-set/{toolset}-{toolbox}.webp`, e.g. `milwaukee-sidchrome.webp`), wired into its `cardBackgroundImage` + first gallery image; the old `…Set-…Tb.webp` renders were retired and the HiKOKI hero (`hikoki-set/HIKOKI.webp`) was supplied. The combo + hero renders were normalised to uniform framing (so prize cards/carousel display at consistent size), and the HiKOKI per-tool spec photos were matched into `SPEC_ITEM_IMAGE_BY_NAME`. This is a presentational/asset change only — the prize catalog, combos, cash tiers, and copy are unchanged.
 
 ### 3d. Anchor-day-24 alignment
 

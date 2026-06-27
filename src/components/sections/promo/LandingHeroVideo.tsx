@@ -9,8 +9,10 @@ import type { LandingVideoSources } from "@/utils/promo/landing-video-resolver";
  * still, opaque from mount) and plays from its first frame — the clips open on a blank frame, so
  * passing the end-state still as a `poster` would flash the finished art before the animation;
  * `poster` is therefore optional and normally omitted (the white opening frame matches the
- * container background). If every `<source>` fails it calls `onUnavailable` so the caller can
- * fall back to the still. The caller owns gating (reduced-motion via CSS / viewport).
+ * container background). `sources.srcs` is an ordered MP4 list (a drawn-tier clip falls back to
+ * the base clip); the browser plays the first that loads. If every `<source>` fails it calls
+ * `onUnavailable` so the caller can fall back to the still. The caller owns gating (reduced-motion
+ * via CSS / viewport).
  */
 export default function LandingHeroVideo({
   sources,
@@ -25,7 +27,7 @@ export default function LandingHeroVideo({
 }) {
   return (
     <video
-      key={sources.webm}
+      key={sources.srcs[0]}
       autoPlay
       muted
       playsInline
@@ -39,8 +41,9 @@ export default function LandingHeroVideo({
         className,
       )}
     >
-      <source src={sources.webm} type="video/webm" />
-      <source src={sources.mp4} type="video/mp4" />
+      {sources.srcs.map((src) => (
+        <source key={src} src={src} type="video/mp4" />
+      ))}
     </video>
   );
 }

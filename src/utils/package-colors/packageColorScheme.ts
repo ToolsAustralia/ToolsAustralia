@@ -18,6 +18,7 @@ const COLOR_KEY_TO_BRAND_GRADIENT: Partial<Record<COLOR_KEYS, keyof typeof BRAND
   "makita-teal": "makita",
   "milwaukee-red": "milwaukee",
   "ryobi-green": "ryobi",
+  "hikoki-green": "hikoki",
 };
 
 function brandCanvasGradientFromSlug(slug: string): string | null {
@@ -43,7 +44,8 @@ export type COLOR_KEYS =
   | "boss-red"
   | "black"
   | "mint-green"
-  | "cash-green";
+  | "cash-green"
+  | "hikoki-green";
 
 /** @deprecated Use COLOR_KEYS - kept for backward compatibility */
 export type PROMO_TIER_KEYS = COLOR_KEYS;
@@ -142,6 +144,7 @@ const PLAN_ID_TO_COLOR_KEY: Record<string, COLOR_KEYS> = {
   "makita-teal": "makita-teal",
   "dewalt-yellow": "dewalt-yellow",
   "milwaukee-red": "milwaukee-red",
+  "hikoki-green": "hikoki-green",
   black: "black",
   "mint-green": "mint-green",
   "cash-green": "cash-green",
@@ -204,6 +207,7 @@ const BRAND_GRADIENTS: Record<COLOR_KEYS, { bg: string; primary: string; primary
     primaryDark: "#16a34a",
     accent: "#000000",
   },
+  "hikoki-green": getBrandPackageGradientRow("hikoki"),
 };
 
 // MembershipSection-only: darker edges, thin light center
@@ -257,6 +261,7 @@ const MEMBERSHIP_SECTION_GRADIENTS: Record<COLOR_KEYS, { bgGradient: string; gra
       border: "1px solid rgba(34, 197, 94, 0.9)",
     },
   },
+  "hikoki-green": getBrandMembershipSectionRow("hikoki"),
 };
 
 /**
@@ -290,6 +295,7 @@ export function slugToPromoTierPlanId(slug: string): COLOR_KEYS {
   if (s.startsWith("ryobi")) return "ryobi-green";
   if (s.startsWith("dewalt")) return "dewalt-yellow";
   if (s.startsWith("makita")) return "makita-teal";
+  if (s.startsWith("hikoki")) return "hikoki-green";
   if (s.startsWith("milwaukee")) return "milwaukee-red";
   if (s.includes("tradie")) return "ryobi-green";
   if (s.includes("kincrome") || s.includes("apprentice")) return "kincrome-blue";
@@ -310,6 +316,7 @@ const LANDING_PAGE_BRAND: Record<COLOR_KEYS, { primary: string; primaryLight: st
   black: { primary: "#D4AF37", primaryLight: "#E8C547", primaryDark: "#B8860B" },
   "mint-green": { primary: "#66DD99", primaryLight: "#88E8B3", primaryDark: "#22AA55" },
   "cash-green": { primary: "#22c55e", primaryLight: "#4ade80", primaryDark: "#16a34a" },
+  "hikoki-green": getBrandLandingPrimaryTriple("hikoki"),
 };
 
 // Tools Australia brand red (matches site nav, login, AdminSidebar: #ee0000)
@@ -674,6 +681,7 @@ export function getPackageGlowColor(planIdOrColorKey: string): string {
     case "black": return "from-[#D4AF37]/15 via-[#000000]/8 to-transparent";
     case "mint-green": return "from-[#66DD99]/20 via-[#000000]/8 to-transparent";
     case "cash-green": return "from-[#22c55e]/20 via-[#000000]/8 to-transparent";
+    case "hikoki-green": return "from-[#007749]/22 via-[#000000]/8 to-transparent";
     default: return "from-gray-500/10 via-gray-500/2.5 to-transparent";
   }
 }
@@ -1037,6 +1045,50 @@ const SCHEMES: Record<COLOR_KEYS, PackageColorScheme> = {
     barColorVertical: "bg-gradient-to-t from-[#16a34a] via-[#22c55e] to-[#15803d]",
     barColorLightVertical: "bg-gradient-to-t from-[#22c55e] via-[#4ade80] to-[#16a34a]",
     barGradientCss: "linear-gradient(to top, #16a34a 0%, #22c55e 50%, #15803d 100%)",
+  },
+  // HiKOKI: align with BRAND_THEMES.hikoki (#007749 / #009a63) — white text on green, mirrors makita-teal structure
+  "hikoki-green": {
+    bgGradient: BRAND_GRADIENTS["hikoki-green"].bg,
+    gradient: "from-[#009a63] via-[#007749] to-[#009a63]",
+    text: "text-white",
+    textMuted: "text-white",
+    textOnLight: "text-[#00432a]",
+    featureOnLight: "text-gray-700",
+    priceText: "text-white",
+    priceBadgeBg: "bg-white/15 backdrop-blur-sm",
+    buttonBg: "bg-[#007749] hover:bg-[#009a63] active:scale-[0.98] border border-white/20",
+    buttonShadow: "shadow-[0_2px_8px_rgba(0,0,0,0.2)]",
+    buttonHoverShadow: "hover:shadow-[0_4px_12px_rgba(0,119,73,0.45)]",
+    buttonText: "text-white",
+    glow: "drop-shadow-[0_0_18px_rgba(0,119,73,0.65)]",
+    border: "border-[#009a63]/50",
+    shadow: "shadow-[#009a63]/35",
+    hoverShadow: "hover:shadow-[#009a63]/55",
+    borderGlow: "animate-border-glow-hikoki",
+    badgeStyle: {
+      background: "#007749",
+      boxShadow:
+        "0 0 40px rgba(0, 119, 73, 0.65), 0 0 55px rgba(0, 154, 99, 0.35), 0 4px 20px rgba(0, 84, 58, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.45)",
+      border: "1px solid rgba(255, 255, 255, 0.5)",
+    },
+    enterNowButtonStyle: createPanelStyle({ r: 0, g: 119, b: 73 }),
+    ctaGradientButtonBorder: "border border-white/30",
+    accentHex: BRAND_GRADIENTS["hikoki-green"].primary,
+    entriesText: "text-white",
+    cardBorderOpacity: "CC",
+    packageInclusionTextStyle: {
+      backgroundImage:
+        "linear-gradient(135deg, #009a63 0%, #1fb377 22%, #007749 48%, #3cc88a 72%, #a8f0cf 100%)",
+      WebkitBackgroundClip: "text",
+      backgroundClip: "text",
+      WebkitTextFillColor: "transparent",
+      color: "transparent",
+    },
+    barColor: "bg-gradient-to-r from-[#009a63] via-[#007749] to-[#009a63]",
+    barColorLight: "bg-gradient-to-r from-[#007749] via-[#009a63] to-[#007749]",
+    barColorVertical: "bg-gradient-to-t from-[#009a63] via-[#007749] to-[#009a63]",
+    barColorLightVertical: "bg-gradient-to-t from-[#007749] via-[#009a63] to-[#007749]",
+    barGradientCss: "linear-gradient(to top, #009a63 0%, #007749 45%, #00543a 100%)",
   },
 };
 
