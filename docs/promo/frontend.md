@@ -11,8 +11,14 @@ landing brand** (its art shipped; the `getLandingHeroImagePaths` `hikoki` null-g
 removed and `hikoki-*` added to `LANDING_HERO_MAP`). Notes:
 - **No dark variants** — the new design has none, so the old `-dark`/`-dark-mobile` webps were
   deleted and `resolveLandingHeroImage` falls back to the light file (existing behaviour).
-- **No webm** — only `.mp4` shipped; old `.webm` were removed, so `LandingHeroVideo`'s
-  `<source type="video/webm">` 404s and the browser uses the mp4 source.
+- **mp4-only, drawn tier falls back to base (2026-06-27)** — only `.mp4` ships (H.264 plays in
+  every supported browser), so the `webm` `<source>` was **removed** from `LandingHeroVideo` (no
+  more base-clip 404s). `getLandingHeroVideoPaths` now returns an **ordered mp4 list** (`srcs:
+  string[]`): on the `drawn-tonight` / `drawn-tomorrow` tier the drawn clip is first with the
+  **base clip appended as a fallback**, so a brand that ships no drawn art (**HiKOKI** has only
+  base clips) still animates via its base clip instead of dropping to the still — the browser
+  advances to the next `<source>` natively when the drawn one 404s. This mirrors the image
+  resolver, which already drops a missing drawn still back to the base image.
 - Source PNG statics were converted to webp (format only); manifest regenerated via
   `build:landing-manifest` (32 entries = 30 combos + all-prizes).
 
