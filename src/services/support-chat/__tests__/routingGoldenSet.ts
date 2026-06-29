@@ -72,6 +72,18 @@ export const ROUTING_GOLDEN_SET: RoutingCase[] = [
     note: "audit: was mis-routed → failed-payment id13; must route to renewal date id11",
   },
 
+  // ── Eval-surfaced mis-routes (2026-06-29 fix) ───────────────────────────────
+  {
+    question: "how much is the tradie membership and how many entries do i get",
+    expect: { kind: "deflect", faqId: "4" },
+    note: "eval-surfaced: pricing+entries question must hit pricing id4, not account-aware id29",
+  },
+  {
+    question: "can i enter without a subscription",
+    expect: { kind: "deflect", faqId: "5" },
+    note: "eval-surfaced: one-time packs id5, not eligibility id9",
+  },
+
   // ── Layer-1 regression non-regressions (must NOT move) ─────────────────────
   {
     question: "what can i win",

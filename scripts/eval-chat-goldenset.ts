@@ -405,8 +405,13 @@ async function gradeBatch(
       try {
         // Strip any accidental markdown fences.
         const jsonText = rawText.replace(/^```json?\s*/i, "").replace(/```\s*$/, "").trim();
-        const parsed = JSON.parse(jsonText) as GradeResult;
-        gradeMap.set(result.custom_id, parsed);
+        const parsed = JSON.parse(jsonText) as Partial<GradeResult>;
+        gradeMap.set(result.custom_id, {
+          pass: parsed.pass ?? false,
+          missingFacts: parsed.missingFacts ?? [],
+          hallucinations: parsed.hallucinations ?? [],
+          notes: parsed.notes ?? "",
+        });
       } catch {
         gradeMap.set(result.custom_id, {
           pass: false,
@@ -545,11 +550,13 @@ async function run(deps: EvalDeps = {}): Promise<void> {
     console.log(`${status}  [${src}]  ${r.id}`);
     if (!r.grade.pass) {
       failures.push(r);
-      if (r.grade.missingFacts.length > 0) {
-        console.log(`     missing: ${r.grade.missingFacts.join(", ")}`);
+      const missingFacts = r.grade.missingFacts ?? [];
+      const hallucinations = r.grade.hallucinations ?? [];
+      if (missingFacts.length > 0) {
+        console.log(`     missing: ${missingFacts.join(", ")}`);
       }
-      if (r.grade.hallucinations.length > 0) {
-        console.log(`     hallucinations: ${r.grade.hallucinations.join(", ")}`);
+      if (hallucinations.length > 0) {
+        console.log(`     hallucinations: ${hallucinations.join(", ")}`);
       }
       console.log(`     notes: ${r.grade.notes}`);
     } else {
