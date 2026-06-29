@@ -29,6 +29,20 @@ Hard-won lessons. Read before touching the widget mount, the route runtime, or t
 
 ---
 
+## Deflection thresholds are calibrated, not eyeballed (2026-06-29)
+
+**Chosen values:** `DEFAULT_MIN_CONFIDENCE = 0.46`, `DEFAULT_MIN_MARGIN = 0.04` (in [`faqSearch.ts`](../../src/services/support-chat/deflection/faqSearch.ts)).
+
+**Measured outcome on the 96-case `routingGoldenSet`:** 0 mis-routes, 45 correct deflections.
+
+**How they were produced:** The golden set ([`routingGoldenSet.ts`](../../src/services/support-chat/__tests__/routingGoldenSet.ts)) was assembled by hand (9 audit mis-routes, 10 Layer-1 regressions, 29 L2-paraphrase-deflect, 20 L2-near-miss-abstain, 9 account-aware-deflect, 10 off-topic-abstain, 10 escalation-worthy). A calibration sweep (`npm run calibrate:chat-deflection` → [`scripts/calibrate-chat-deflection.ts`](../../scripts/calibrate-chat-deflection.ts)) grid-searched `minConfidence × minMargin` over the full set, then the Pareto-optimal point (0 mis-routes, highest deflection) was written into `faqSearch.ts`. The routing lock (`npm run test:chat-routing`) asserts mis-route=0 and correct-deflect ≥ 45 on every CI run.
+
+**Re-run trigger:** regenerate the FAQ corpus (edit `src/data/faqs.ts`) OR change the scorer (`src/lib/support-chat/knowledge/retrieve.ts`) ⇒ re-run `npm run calibrate:chat-deflection` (TF-IDF scores shift when the corpus changes), pick the new Pareto-optimal point, update `DEFAULT_MIN_CONFIDENCE` / `DEFAULT_MIN_MARGIN` in `faqSearch.ts`, and update `MIN_CORRECT_DEFLECT` in `routing.test.ts` to match the new correct-deflect count.
+
+**Documented follow-up:** ~17 aspirational paraphrases in the golden set sit below the 0.46 floor (they abstain rather than deflect at these thresholds). A future retrieval upgrade — BM25 or embedding-based nearest-neighbour — could recover them without losing precision. Do not lower the thresholds to capture them; that re-opens the mis-route path. Instead, improve the scorer and re-calibrate.
+
+---
+
 ## Provider API keys load LAZILY — a missing key fails MID-STREAM, not at construction. Preflight it.
 
 **The trap (2026-06-26):** the AI SDK provider clients (`anthropic()` / `google()`) do **not** read their API key when you build the model — they read it lazily, at request time, when the model resolves its request headers. With `ai@6`'s `streamText` being fire-and-forget (it returns a streaming `Response` immediately, retries internally, and surfaces failures on the stream), a **missing/invalid key surfaces AFTER the 200 response has already started streaming**. Consequences if unguarded:
