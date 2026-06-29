@@ -42,6 +42,7 @@
     "test:chat-provider": "tsx src/lib/support-chat/__tests__/provider.test.ts",
     "test:chat-settings": "tsx src/lib/support-chat/__tests__/chat-settings.test.ts",
     "test:chat-promo": "tsx src/services/support-chat/__tests__/currentPromo.test.ts",
+    "test:chat-routing-shape": "tsx src/services/support-chat/__tests__/routing-goldenset-shape.test.ts",
     "smoke:chat-provider": "tsx scripts/smoke-chat-provider.ts",
     "test:chat-faqs": "tsx src/data/__tests__/faqs.test.ts",
     "test:norm-user-service-account": "tsx src/models/__tests__/User.serviceAccount.test.ts",

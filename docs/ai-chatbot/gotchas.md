@@ -23,6 +23,8 @@ Hard-won lessons. Read before touching the widget mount, the route runtime, or t
 
 **Regression-locked:** every previously-wrong route is asserted in [deflection.test.ts](../../src/services/support-chat/__tests__/deflection.test.ts) `testRegressionRoutes` (19 routes incl. the critical non-regressions "what can I win" → 3, "get more entries" → 8). **Phase-3 follow-up:** calibrate the threshold/margin against the full golden set via `npm run eval:chat` instead of the hand-picked 0.18/0.05.
 
+**Labelled routing golden set (Task 2, 2026-06-29):** [routingGoldenSet.ts](../../src/services/support-chat/__tests__/routingGoldenSet.ts) provides 96 hand-labelled cases (9 audit mis-routes, 10 Layer-1 regressions, 29 L2-paraphrase-deflect, 20 L2-near-miss-abstain, 9 account-aware-deflect, 10 off-topic-abstain, 10 escalation-worthy). Well-formedness is enforced by `npm run test:chat-routing-shape`. The later calibration sweep (`scripts/calibrate-chat-deflection.ts`) and routing regression lock (`routing.test.ts`) will consume this set.
+
 **Live promo:** Cobber now learns the current public promo per request via [currentPromo.ts](../../src/services/support-chat/currentPromo.ts) → `PromoMultiplierResolverService.getEffectiveForBanner()` (same source the banners use; never surfaces unannounced future promos), injected into the prompt by `buildSystemPrompt(pack, { currentPromo })`. Fail-safe to null (a promo lookup must never break a chat). Resolved only on the real-model path so the unit test stays Mongo-free.
 
 ---
