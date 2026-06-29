@@ -542,6 +542,37 @@ async function testRegressionRoutes() {
   await expectRoute("how much to join", "4"); // pricing, not the join overview id28
 }
 
+async function testInjectableThresholds() {
+  console.log("\ninjectable thresholds (refactor)");
+
+  // A query that deflects via Layer-2 today ("are membership fees returnable" → id12).
+  const q = "are membership fees returnable to me";
+
+  // With an impossibly high floor, Layer-2 must abstain (proves opts is threaded).
+  const high = await tryDeflect(q, { minConfidence: 0.99 });
+  if (high.answered !== false) {
+    fail('"…returnable" abstains at minConfidence 0.99', `answered=${high.answered}`);
+  } else {
+    pass("high minConfidence forces Layer-2 abstain");
+  }
+
+  // Default call is unchanged (still deflects).
+  const def = await tryDeflect(q);
+  if (def.answered !== true) {
+    fail('"…returnable" still deflects at defaults', `answered=${def.answered}`);
+  } else {
+    pass("default thresholds unchanged (still deflects)");
+  }
+
+  // A Layer-1 intent hit is threshold-independent (opts must NOT affect it).
+  const l1 = await tryDeflect("when is the draw", { minConfidence: 0.99, minMargin: 0.99 });
+  if (l1.answered !== true) {
+    fail("Layer-1 intent ignores thresholds", `answered=${l1.answered}`);
+  } else {
+    pass("Layer-1 intent unaffected by thresholds");
+  }
+}
+
 // ─── Runner ───────────────────────────────────────────────────────────────────
 
 async function run() {
@@ -560,6 +591,7 @@ async function run() {
   await testUpgradeMembership();
   await testPauseMembership();
   await testRegressionRoutes();
+  await testInjectableThresholds();
 
   console.log(`\n${"─".repeat(60)}`);
 

@@ -27,7 +27,7 @@ import { searchFaqs } from "@/lib/support-chat/knowledge/retrieve";
 // ─── Config ───────────────────────────────────────────────────────────────────
 
 /**
- * Minimum TF-IDF cosine score for a FAQ match to be accepted.
+ * Default minimum TF-IDF cosine score for a FAQ match to be accepted.
  * Below this → `answered: false` (falls through to the grounded LLM).
  *
  * Deflection is intentionally HIGH-precision: a missed deflection just costs one
@@ -36,15 +36,18 @@ import { searchFaqs } from "@/lib/support-chat/knowledge/retrieve";
  * loop to catch it. So we prefer to abstain when unsure. (Full golden-set
  * calibration of this bar is the Phase-3 follow-up; `npm run eval:chat`.)
  */
-const MIN_CONFIDENCE = 0.18;
+/** Default Layer-2 accept floor (TF-IDF cosine). Calibrated 2026-06-?? — see
+ *  scripts/calibrate-chat-deflection.ts + routingGoldenSet.ts. */
+export const DEFAULT_MIN_CONFIDENCE = 0.18;
 
 /**
- * Minimum lead the top match must have over the runner-up when BOTH clear the
- * floor. Two near-tied candidates mean the query is ambiguous between topics —
- * returning either verbatim would be a coin-flip, so we abstain and let the
- * grounded LLM disambiguate instead of guessing.
+ * Default minimum lead the top match must have over the runner-up when BOTH
+ * clear the floor. Two near-tied candidates mean the query is ambiguous between
+ * topics — returning either verbatim would be a coin-flip, so we abstain and let
+ * the grounded LLM disambiguate instead of guessing.
  */
-const MIN_MARGIN = 0.05;
+/** Default top1-vs-top2 ambiguity margin. */
+export const DEFAULT_MIN_MARGIN = 0.05;
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -52,31 +55,42 @@ export type FaqSearchResult =
   | { answered: true; answer: string; sources: { id: string; title: string }[] }
   | { answered: false };
 
+export interface FaqSearchOpts {
+  minConfidence?: number;
+  minMargin?: number;
+}
+
 // ─── Public API ───────────────────────────────────────────────────────────────
 
 /**
  * Search the FAQ corpus for an answer to `query`.
  *
  * Returns `{ answered: true, answer, sources }` when the best match score
- * meets MIN_CONFIDENCE. The answer text is taken directly from the matched
+ * meets DEFAULT_MIN_CONFIDENCE. The answer text is taken directly from the matched
  * FAQ entry — never paraphrased — so callers always receive a grounded,
  * approved canned answer.
  *
  * Returns `{ answered: false }` when no match is confident enough.
+ *
+ * `opts` allows callers (e.g. offline calibration scripts) to override the
+ * default thresholds without changing production behaviour.
  */
-export function searchFaqLayer(query: string): FaqSearchResult {
+export function searchFaqLayer(query: string, opts: FaqSearchOpts = {}): FaqSearchResult {
+  const minConfidence = opts.minConfidence ?? DEFAULT_MIN_CONFIDENCE;
+  const minMargin = opts.minMargin ?? DEFAULT_MIN_MARGIN;
+
   const ranked = searchFaqs(query);
 
   if (ranked.length === 0) return { answered: false };
 
   const best = ranked[0];
-  if (best.score < MIN_CONFIDENCE) return { answered: false };
+  if (best.score < minConfidence) return { answered: false };
 
   // Ambiguity guard: if the runner-up also clears the floor and is within
-  // MIN_MARGIN of the top, the query doesn't clearly belong to one FAQ — abstain
+  // minMargin of the top, the query doesn't clearly belong to one FAQ — abstain
   // and let the grounded LLM decide rather than serve a coin-flip canned answer.
   const second = ranked[1];
-  if (second && second.score >= MIN_CONFIDENCE && best.score - second.score < MIN_MARGIN) {
+  if (second && second.score >= minConfidence && best.score - second.score < minMargin) {
     return { answered: false };
   }
 

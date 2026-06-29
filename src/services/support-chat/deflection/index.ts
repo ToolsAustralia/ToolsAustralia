@@ -44,6 +44,11 @@ export interface DeflectionResult {
   sources?: { id: string; title: string }[];
 }
 
+export interface DeflectOpts {
+  minConfidence?: number;
+  minMargin?: number;
+}
+
 // ─── Public API ───────────────────────────────────────────────────────────────
 
 /**
@@ -55,12 +60,19 @@ export interface DeflectionResult {
  * Returns `{ answered: false }` when neither layer is confident enough,
  * signalling the caller (ChatService in Task 1.7) to fall through to the LLM.
  *
+ * `opts` allows callers (e.g. offline calibration scripts) to override the
+ * Layer-2 thresholds. Layer-1 intent matching is threshold-independent and
+ * ignores opts. Production callers omit opts and get the defaults.
+ *
  * This function is declared async (returns Promise) to satisfy the interface
  * contract — the caller treats it as async so Phase 3 can swap retrieve.ts
  * internals for an async Atlas $vectorSearch call without changing this
  * signature.
  */
-export async function tryDeflect(question: string): Promise<DeflectionResult> {
+export async function tryDeflect(
+  question: string,
+  opts: DeflectOpts = {}
+): Promise<DeflectionResult> {
   // ── Layer 1: decision-tree ────────────────────────────────────────────────
   const intentMatch = matchIntent(question);
   if (intentMatch.matched) {
@@ -76,7 +88,7 @@ export async function tryDeflect(question: string): Promise<DeflectionResult> {
   }
 
   // ── Layer 2: FAQ keyword search ───────────────────────────────────────────
-  const searchResult = searchFaqLayer(question);
+  const searchResult = searchFaqLayer(question, opts);
   if (searchResult.answered) {
     return {
       answered: true,
