@@ -108,6 +108,7 @@
     "test:chat-delete-history": "tsx src/services/support-chat/__tests__/delete-history.test.ts",
     "smoke:chat-service": "tsx scripts/smoke-chat-service.ts",
     "eval:chat": "tsx scripts/eval-chat-goldenset.ts",
+    "calibrate:chat-deflection": "tsx scripts/calibrate-chat-deflection.ts",
     "migrate:anchor-billing-24": "tsx scripts/migrate-anchor-billing-24.ts",
     "migrate:anchor-billing-24:dry": "tsx scripts/migrate-anchor-billing-24.ts --dry-run",
     "migrate:affiliate-commission-pi-index": "tsx scripts/migrate-affiliate-commission-pi-index.ts",

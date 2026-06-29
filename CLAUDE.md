@@ -839,7 +839,8 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/generated/chatKnowledgePack.ts",
         "scripts/build-chat-knowledge-pack.ts",
         "scripts/embed-chat-knowledge.ts",
-        "scripts/eval-chat-goldenset.ts"
+        "scripts/eval-chat-goldenset.ts",
+        "scripts/calibrate-chat-deflection.ts"
       ],
       "lastVerified": "2026-06-26"
     }
