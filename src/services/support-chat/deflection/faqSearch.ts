@@ -36,8 +36,6 @@ import { searchFaqs } from "@/lib/support-chat/knowledge/retrieve";
  * loop to catch it. So we prefer to abstain when unsure. (Full golden-set
  * calibration of this bar is the Phase-3 follow-up; `npm run eval:chat`.)
  */
-/** Default Layer-2 accept floor (TF-IDF cosine). Calibrated 2026-06-?? — see
- *  scripts/calibrate-chat-deflection.ts + routingGoldenSet.ts. */
 export const DEFAULT_MIN_CONFIDENCE = 0.18;
 
 /**
@@ -46,7 +44,6 @@ export const DEFAULT_MIN_CONFIDENCE = 0.18;
  * topics — returning either verbatim would be a coin-flip, so we abstain and let
  * the grounded LLM disambiguate instead of guessing.
  */
-/** Default top1-vs-top2 ambiguity margin. */
 export const DEFAULT_MIN_MARGIN = 0.05;
 
 // ─── Types ────────────────────────────────────────────────────────────────────
