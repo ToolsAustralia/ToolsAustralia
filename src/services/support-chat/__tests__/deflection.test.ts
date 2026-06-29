@@ -238,8 +238,9 @@ async function testLayer2Coverage() {
   // FAQ search (retrieve.ts). The previous four answered:true cases all matched
   // Layer-1 verbatim, leaving retrieve.ts's scoring with zero coverage through
   // the public path. This case exercises it: it routes through Layer-2 to the
-  // refund FAQ (id=12, score ≈ 0.52, well above the 0.15 threshold).
-  const paraphrase = "are membership fees returnable to me";
+  // partner-discounts FAQ (id=16, TF-IDF score ≈ 0.73, well above the calibrated
+  // 0.46 threshold — calibrated 2026-06-29 via calibrate:chat-deflection).
+  const paraphrase = "what discounts do members get from partner brands";
 
   // 1. Layer-1 must MISS (proves the case isn't secretly a decision-tree hit).
   const intent = matchIntent(paraphrase);
@@ -545,13 +546,15 @@ async function testRegressionRoutes() {
 async function testInjectableThresholds() {
   console.log("\ninjectable thresholds (refactor)");
 
-  // A query that deflects via Layer-2 today ("are membership fees returnable" → id12).
-  const q = "are membership fees returnable to me";
+  // A query that deflects via Layer-2 at the calibrated defaults
+  // ("what discounts do members get from partner brands" → id16, score ≈ 0.73,
+  // well above the 0.46 floor calibrated 2026-06-29).
+  const q = "what discounts do members get from partner brands";
 
   // With an impossibly high floor, Layer-2 must abstain (proves opts is threaded).
   const high = await tryDeflect(q, { minConfidence: 0.99 });
   if (high.answered !== false) {
-    fail('"…returnable" abstains at minConfidence 0.99', `answered=${high.answered}`);
+    fail('"…partner brands" abstains at minConfidence 0.99', `answered=${high.answered}`);
   } else {
     pass("high minConfidence forces Layer-2 abstain");
   }
@@ -559,7 +562,7 @@ async function testInjectableThresholds() {
   // Default call is unchanged (still deflects).
   const def = await tryDeflect(q);
   if (def.answered !== true) {
-    fail('"…returnable" still deflects at defaults', `answered=${def.answered}`);
+    fail('"…partner brands" still deflects at defaults', `answered=${def.answered}`);
   } else {
     pass("default thresholds unchanged (still deflects)");
   }

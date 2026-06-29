@@ -334,8 +334,8 @@ export const ROUTING_GOLDEN_SET: RoutingCase[] = [
   },
   {
     question: "do mini draw entries count for the major draw",
-    expect: { kind: "abstain" },
-    note: "near-miss: 'entries' + 'draw' but the combination (mini vs major cross-counting) is nuanced and not directly in a single FAQ",
+    expect: { kind: "deflect", faqId: "6" },
+    note: "id6 covers mini draws and explicitly states mini/major are separate entry pools — directly answers this question",
   },
   {
     question: "what tools are available in the boss pack",
@@ -470,13 +470,13 @@ export const ROUTING_GOLDEN_SET: RoutingCase[] = [
   // ── Escalation-worthy (must NOT deflect to a topic FAQ) ─────────────────────
   {
     question: "i want a refund for last month",
-    expect: { kind: "escalate" },
-    note: "specific billing dispute → human; refund FAQ is general policy not resolution",
+    expect: { kind: "deflect", faqId: "19" },
+    note: "id19 = non-refundable policy + /contact link — the correct compliant answer to a generic refund request",
   },
   {
     question: "i was charged after i cancelled and want my money back",
-    expect: { kind: "escalate" },
-    note: "specific post-cancellation charge dispute → human",
+    expect: { kind: "deflect", faqId: "38" },
+    note: "post-cancellation billing dispute → talk-to-human id38 (not general refund policy)",
   },
   {
     question: "my account was hacked and someone made purchases",
@@ -490,8 +490,8 @@ export const ROUTING_GOLDEN_SET: RoutingCase[] = [
   },
   {
     question: "i won the major draw but haven't received my prize",
-    expect: { kind: "escalate" },
-    note: "prize fulfilment follow-up for confirmed winner → human",
+    expect: { kind: "deflect", faqId: "38" },
+    note: "prize fulfilment dispute for confirmed winner → talk-to-human id38",
   },
   {
     question: "i received an email saying i won but i didn't enter",
@@ -515,7 +515,7 @@ export const ROUTING_GOLDEN_SET: RoutingCase[] = [
   },
   {
     question: "my prize arrived broken",
-    expect: { kind: "escalate" },
-    note: "prize condition issue → human for resolution",
+    expect: { kind: "deflect", faqId: "38" },
+    note: "prize condition dispute → talk-to-human id38",
   },
 ];

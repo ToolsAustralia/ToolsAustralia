@@ -33,18 +33,21 @@ import { searchFaqs } from "@/lib/support-chat/knowledge/retrieve";
  * Deflection is intentionally HIGH-precision: a missed deflection just costs one
  * cheap LLM call (and the LLM is itself grounded on the knowledge pack), whereas
  * a wrong deflection is a confidently-wrong canned answer with no model in the
- * loop to catch it. So we prefer to abstain when unsure. (Full golden-set
- * calibration of this bar is the Phase-3 follow-up; `npm run eval:chat`.)
+ * loop to catch it. So we prefer to abstain when unsure.
+ *
+ * calibrated 2026-06-29 (0 mis-routes=0, correctDeflect=45 on routingGoldenSet) — see calibrate:chat-deflection
  */
-export const DEFAULT_MIN_CONFIDENCE = 0.18;
+export const DEFAULT_MIN_CONFIDENCE = 0.46;
 
 /**
  * Default minimum lead the top match must have over the runner-up when BOTH
  * clear the floor. Two near-tied candidates mean the query is ambiguous between
  * topics — returning either verbatim would be a coin-flip, so we abstain and let
  * the grounded LLM disambiguate instead of guessing.
+ *
+ * calibrated 2026-06-29 (0 mis-routes=0, correctDeflect=45 on routingGoldenSet) — see calibrate:chat-deflection
  */
-export const DEFAULT_MIN_MARGIN = 0.05;
+export const DEFAULT_MIN_MARGIN = 0.04;
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 

@@ -66,7 +66,9 @@ const INTENT_RULES: IntentRule[] = [
       "draw result",
       "draw results",
       "results of the draw",
-      "who won",
+      "who won the draw",
+      "who won the major draw",
+      "who won this month",
       "winner announced",
       "check the result",
       "check if i won",
@@ -108,6 +110,20 @@ const INTENT_RULES: IntentRule[] = [
       "two charges",
       "duplicate charge",
       "charged again",
+      // prize fulfilment disputes — confirmed winners chasing / damaged prize need a human
+      "received my prize",
+      "haven t received my prize",
+      "not received my prize",
+      "never received my prize",
+      "prize arrived broken",
+      "prize is broken",
+      "broken prize",
+      "damaged prize",
+      "prize arrived damaged",
+      // post-cancellation billing disputes
+      "charged after i cancelled",
+      "charged after cancelling",
+      "charged me after i cancelled",
     ],
   },
   // Where can I see my entries / how many do I have — account lookup (precede id8/id7)
@@ -227,6 +243,11 @@ const INTENT_RULES: IntentRule[] = [
       "is it safe to pay",
       "is my data secure",
       "is my payment secure",
+      "credit card safe",
+      "credit card info",
+      "card info safe",
+      "card information safe",
+      "is my credit card safe",
     ],
   },
   // Data retention / privacy (delete-my-data stays on id20)
@@ -310,7 +331,9 @@ const INTENT_RULES: IntentRule[] = [
       "how much can i win",
     ],
     // Win-check + prize-fulfilment go to id31/id38 (handled above); never the catalog.
-    excludes: ["did i win", "have i won", "where is my prize", "where s my prize", "claim my prize"],
+    // Belt-and-suspenders: id38 top-block precedence already wins, but these excludes
+    // also prevent the bare "prize" signal from catching complaint-style queries.
+    excludes: ["did i win", "have i won", "where is my prize", "where s my prize", "claim my prize", "broken", "damaged", "received my prize", "arrived broken"],
   },
   // ── Membership pricing / tiers ────────────────────────────────────────────
   {
