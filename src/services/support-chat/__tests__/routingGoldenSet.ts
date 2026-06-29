@@ -364,8 +364,8 @@ export const ROUTING_GOLDEN_SET: RoutingCase[] = [
   },
   {
     question: "what is the minimum age to enter in western australia",
-    expect: { kind: "abstain" },
-    note: "near-miss: 'age' + 'enter' adjacent to id9 but WA-specific minimum age not in FAQ",
+    expect: { kind: "deflect", faqId: "9" },
+    note: "id9 answers the national minimum age (18+); WA has no special rule, so eligibility id9 is the correct answer (Task 2 review)",
   },
 
   // ── Account-aware — must deflect to nav-only entries ────────────────────────
