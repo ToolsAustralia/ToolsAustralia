@@ -94,6 +94,14 @@ function getPrizeGalleryImageLayout(
   const { isLandingImage, thumb } = options ?? {};
   const yMilwaukeeTb = thumb ? "-translate-y-[6%]" : "-translate-y-[5%]";
 
+  // New combo renders ("<toolset>-<toolbox>.webp", e.g. dewalt-sidchrome.webp / hikoki-kincrome.webp)
+  // are pre-normalised to a single 4:3 canvas with the subject bottom-anchored + centred, so render
+  // them identically (object-contain, no per-image scale). Intercept here, before the legacy
+  // brand-`-set` rule below that would otherwise zoom dewalt/milwaukee combos to scale-150.
+  if (/\/(milwaukee|dewalt|makita|ryobi|hikoki)-(sidchrome|milwaukee|kincrome)\.webp$/.test(src)) {
+    return { scaleClass: "", translateClass: "", objectPosition: { objectPosition: "center center" as const } };
+  }
+
   if (isMajorDrawBrandCollectionWebp(src)) {
     return {
       scaleClass: "scale-90",
@@ -267,7 +275,7 @@ const _getBrandLogoPath = (slug: string): string | null => {
       return "/images/brands/Makita-red.webp";
     case "ryobi-sidchrome":
     case "ryobi-milwaukee":
-      return "/images/brands/name/ryobiText.webp";
+      return "/images/brands/name/ryobiText.svg";
     case "cash-prize":
       return null; // No watermark for cash prize
     default:

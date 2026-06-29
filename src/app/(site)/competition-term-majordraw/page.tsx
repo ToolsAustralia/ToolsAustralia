@@ -3,7 +3,7 @@ import { BreadcrumbJsonLd } from "@/components/seo/StructuredData";
 import { getNonce } from "@/utils/security/getNonce";
 import { getCurrentMajorDrawServer } from "@/utils/database/queries/major-draw-server-queries";
 import { getContactEmail } from "@/lib/email/sender-identities";
-import { NTP_NUMBER } from "@/constants/legal";
+import { NTP_NUMBER, NSW_LICENSE } from "@/constants/legal";
 
 export const metadata: Metadata = {
   title: "Major Giveaway Competition Terms | Tools Australia",
@@ -142,7 +142,7 @@ export default async function MajorGiveawayTermsPage() {
               {giveawayTitle}
             </h1>
             <p className="text-gray-300">
-              Authorised under NSW License TP/04720. Notification Number: {NTP_NUMBER}. These terms outline participation rules, prize details, compliance,
+              Authorised under NSW License {NSW_LICENSE}. Notification Number: {NTP_NUMBER}. These terms outline participation rules, prize details, compliance,
               and consumer protections for the Major Giveaway.
             </p>
           </header>

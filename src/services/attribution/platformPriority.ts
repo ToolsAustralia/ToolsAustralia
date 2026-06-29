@@ -25,3 +25,8 @@ export const PLATFORM_PRIORITY: PlatformRule[] = [
 export function windowDaysFor(platform: ConvertingPlatform): number | null {
   return PLATFORM_PRIORITY.find((r) => r.platform === platform)?.windowDays ?? null;
 }
+
+/** Owned channels (tier 2 — Klaviyo email/SMS). These resolve LAST-touch, paid clicks resolve first. */
+export function isOwnedChannel(platform: ConvertingPlatform | null): boolean {
+  return PLATFORM_PRIORITY.find((r) => r.platform === platform)?.tier === 2;
+}

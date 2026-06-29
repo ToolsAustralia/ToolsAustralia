@@ -71,6 +71,14 @@ One-shot build-asset converters that turn numbered design exports into the brand
 
   **Exit codes:** `0` = clean run, `2` = per-row errors (rows skipped; check `grep ',error,'` in the CSV), `3` = outer-fatal (script aborted), `1` = unhandled exception.
 
+### Klaviyo attribution cycle correction
+
+- [`scripts/backfill-klaviyo-attribution-cycle.ts`](../../scripts/backfill-klaviyo-attribution-cycle.ts) — one-cycle corrective for Klaviyo conversions the **live** resolver mis-bucketed to `direct` before the owned-channel last-touch fix (see [tracking/gotchas.md](../tracking/gotchas.md)). For `BenefitsGranted` rows in the window whose last-touch UTM (`data.utmSource`/`data.utmMedium`) normalizes to `klaviyo_email`/`klaviyo_sms` but whose stored `convertingPlatform` isn't already that channel, it sets `convertingPlatform` to the Klaviyo channel + `attributionConfidence: "utm_only"`. npm scripts: `backfill:klaviyo-cycle` (live), `backfill:klaviyo-cycle:dry`.
+
+  **Model:** default **paid-priority** — rows whose existing attribution was a real paid click (`attributionConfidence: "click"`) are KEPT (a paid ad acquired that user); `--include-paid-overlap` switches to strict last-touch. The dry-run reports both totals so the model can be chosen before the live run.
+
+  **CLI flags:** `--dry-run` (run first), `--prod` (target `.env.production`; omit = local), `--include-paid-overlap`, `--start=YYYY-MM-DD` / `--end=YYYY-MM-DD` (AEST; default 2026-05-28 → 2026-06-28), `--no-csv`. Idempotent (skips rows already on the target channel); every old→new is logged to the CSV for trivial reversal.
+
   npm scripts: `backfill:converting-platform` (live), `backfill:converting-platform:dry` (dry-run, no writes).
 
 **Post-merge runbook:**
