@@ -21,7 +21,7 @@ Hard-won lessons. Read before touching the widget mount, the route runtime, or t
 
 **Why FAQ entries (not hand-copied doc prose):** `faqs.ts` is the single source feeding the /faq page, the deflection matcher, AND the knowledge pack. Adding knowledge there enriches all three with no drift. Hand-copying CUSTOMER.md/BUSINESS.md prose into the pack builder would drift the moment those docs change.
 
-**Regression-locked:** every previously-wrong route is asserted in [deflection.test.ts](../../src/services/support-chat/__tests__/deflection.test.ts) `testRegressionRoutes` (21 routes incl. the critical non-regressions "what can I win" → 3, "get more entries" → 8). Thresholds were calibrated on the full golden set via `npm run calibrate:chat-deflection` (2026-06-29): `DEFAULT_MIN_CONFIDENCE=0.46 / DEFAULT_MIN_MARGIN=0.04` → 0 mis-routes, 45 correct deflections on 96 cases.
+**Regression-locked:** every previously-wrong route is asserted in [deflection.test.ts](../../src/services/support-chat/__tests__/deflection.test.ts) `testRegressionRoutes` (21 routes incl. the critical non-regressions "what can I win" → 3, "get more entries" → 8). Thresholds were calibrated on the full golden set via `npm run calibrate:chat-deflection` (2026-06-29): `DEFAULT_MIN_CONFIDENCE=0.46 / DEFAULT_MIN_MARGIN=0.00` → 0 mis-routes, 45 correct deflections on 96 cases.
 
 **Labelled routing golden set (Task 2, 2026-06-29):** [routingGoldenSet.ts](../../src/services/support-chat/__tests__/routingGoldenSet.ts) provides 96 hand-labelled cases (9 audit mis-routes, 10 Layer-1 regressions, 29 L2-paraphrase-deflect, 20 L2-near-miss-abstain, 9 account-aware-deflect, 10 off-topic-abstain, 10 escalation-worthy). Well-formedness is enforced by `npm run test:chat-routing-shape`. The later calibration sweep (`scripts/calibrate-chat-deflection.ts`) and routing regression lock (`routing.test.ts`) will consume this set.
 
@@ -31,7 +31,7 @@ Hard-won lessons. Read before touching the widget mount, the route runtime, or t
 
 ## Deflection thresholds are calibrated, not eyeballed (2026-06-29)
 
-**Chosen values:** `DEFAULT_MIN_CONFIDENCE = 0.46`, `DEFAULT_MIN_MARGIN = 0.04` (in [`faqSearch.ts`](../../src/services/support-chat/deflection/faqSearch.ts)).
+**Chosen values:** `DEFAULT_MIN_CONFIDENCE = 0.46`, `DEFAULT_MIN_MARGIN = 0.00` (in [`faqSearch.ts`](../../src/services/support-chat/deflection/faqSearch.ts)).
 
 **Measured outcome on the 96-case `routingGoldenSet`:** 0 mis-routes, 45 correct deflections.
 

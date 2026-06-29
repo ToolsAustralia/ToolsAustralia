@@ -16,10 +16,10 @@
  *   - MIN_CONFIDENCE is the floor; MIN_MARGIN abstains when the top two candidates
  *     both clear the floor and are near-tied (ambiguous topic). The decision-tree
  *     (Layer-1) owns the obvious intents, so this layer covers the fuzzy tail.
- *   - These values (0.18 / 0.05) were set against the regression routes in
- *     deflection.test.ts; calibrate them on the full golden set via
- *     `npm run eval:chat` (Phase-3 follow-up), and re-tune if a vector backend
- *     replaces retrieve.ts.
+ *   - These values are calibrated against `routingGoldenSet` via
+ *     `npm run calibrate:chat-deflection` (0 mis-routes, correctDeflect=45); re-tune
+ *     if the FAQ corpus or scorer changes. `npm run eval:chat` is the separate
+ *     answer-quality check (LLM-graded, not routing precision).
  */
 
 import { searchFaqs } from "@/lib/support-chat/knowledge/retrieve";
@@ -35,7 +35,7 @@ import { searchFaqs } from "@/lib/support-chat/knowledge/retrieve";
  * a wrong deflection is a confidently-wrong canned answer with no model in the
  * loop to catch it. So we prefer to abstain when unsure.
  *
- * calibrated 2026-06-29 (0 mis-routes=0, correctDeflect=45 on routingGoldenSet) — see calibrate:chat-deflection
+ * calibrated 2026-06-29 (mis-routes=0, correctDeflect=45 on routingGoldenSet) — see calibrate:chat-deflection
  */
 export const DEFAULT_MIN_CONFIDENCE = 0.46;
 
@@ -45,9 +45,9 @@ export const DEFAULT_MIN_CONFIDENCE = 0.46;
  * topics — returning either verbatim would be a coin-flip, so we abstain and let
  * the grounded LLM disambiguate instead of guessing.
  *
- * calibrated 2026-06-29 (0 mis-routes=0, correctDeflect=45 on routingGoldenSet) — see calibrate:chat-deflection
+ * calibrated 2026-06-29 (mis-routes=0, correctDeflect=45 on routingGoldenSet) — see calibrate:chat-deflection
  */
-export const DEFAULT_MIN_MARGIN = 0.04;
+export const DEFAULT_MIN_MARGIN = 0.00;
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 

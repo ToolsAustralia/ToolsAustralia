@@ -23,7 +23,7 @@ import {
   type RoutingCase,
 } from "../src/services/support-chat/__tests__/routingGoldenSet";
 
-const THRESHOLDS = Array.from({ length: 10 }, (_, i) => +(0.12 + i * 0.02).toFixed(2)); // 0.12..0.30
+const THRESHOLDS = Array.from({ length: 21 }, (_, i) => +(0.12 + i * 0.02).toFixed(2)); // 0.12..0.52
 const MARGINS = Array.from({ length: 11 }, (_, i) => +(0.0 + i * 0.01).toFixed(2)); // 0.00..0.10
 
 interface CellResult {
@@ -103,7 +103,7 @@ async function main() {
     console.log(`${t.toFixed(2)}  ${row.join("")}`);
   }
 
-  console.log("\n── Baseline (current 0.18 / 0.05) ──");
+  console.log(`\n── Baseline (current ${DEFAULT_MIN_CONFIDENCE} / ${DEFAULT_MIN_MARGIN}) ──`);
   if (baseline) console.log(`  correctDeflect=${baseline.correctDeflect} misRoute=${baseline.misRoute} missedDeflect=${baseline.missedDeflect} correctAbstain=${baseline.correctAbstain}`);
 
   console.log("\n── RECOMMENDED ──");
