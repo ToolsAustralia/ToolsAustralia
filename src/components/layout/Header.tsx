@@ -631,7 +631,7 @@ export default function Header({ isFixed = true }: HeaderProps) {
               }`}
               aria-current={isActiveLink("/membership") ? "page" : undefined}
             >
-              Membership Package
+              Membership
             </Link>
             {isAuthenticated && isRewardsFeatureEnabled && (
               <Link
@@ -1358,7 +1358,7 @@ export default function Header({ isFixed = true }: HeaderProps) {
                   aria-current={isActiveLink("/membership") ? "page" : undefined}
                 >
                   <Crown className="w-5 h-5" />
-                  Membership Package
+                  Membership
                 </Link>
 
                 {isAuthenticated && isRewardsFeatureEnabled && (

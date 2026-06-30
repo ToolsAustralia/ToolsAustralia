@@ -862,6 +862,46 @@
     }
   }
 
+  /* Membership tier cards — bouncy pop for the big entries number */
+  @keyframes entries-bounce {
+    0% {
+      transform: scale(0.4);
+      opacity: 0;
+    }
+    55% {
+      transform: scale(1.15);
+      opacity: 1;
+    }
+    75% {
+      transform: scale(0.95);
+    }
+    100% {
+      transform: scale(1);
+    }
+  }
+
+  /* Premium VIP access ring — gentle golden breathing pulse */
+  @keyframes ring-pulse {
+    0%,
+    100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.78;
+    }
+  }
+
+  /* Premium VIP card — a single skewed highlight bar sweeps across, then rests off-screen */
+  @keyframes vip-sheen {
+    0% {
+      transform: translateX(-180%) skewX(-18deg);
+    }
+    55%,
+    100% {
+      transform: translateX(320%) skewX(-18deg);
+    }
+  }
+
   /* Pause animation on hover for better UX */
   .marquee-track:hover {
     animation-play-state: paused;
