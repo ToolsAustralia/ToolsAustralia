@@ -216,7 +216,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
 ```json
 {
   "version": 1,
-  "lastModified": "2026-06-29",
+  "lastModified": "2026-06-30",
   "domains": {
     "subscription": {
       "docs": "docs/subscription/",
@@ -293,7 +293,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/hooks/use3DSRedirectHandler.ts",
         "src/hooks/useSavedPaymentMethods.ts"
       ],
-      "lastVerified": "2026-06-15"
+      "lastVerified": "2026-06-30"
     },
     "draws": {
       "docs": "docs/draws/",
@@ -547,7 +547,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/hooks/useAttribution.ts",
         "src/hooks/useUTMPersistence.ts"
       ],
-      "lastVerified": "2026-06-26"
+      "lastVerified": "2026-06-30"
     },
     "ab-testing": {
       "docs": "docs/ab-testing/",
@@ -780,7 +780,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "scripts/reconcile-*.ts",
         "scripts/connect-ops-db.ts"
       ],
-      "lastVerified": "2026-06-29"
+      "lastVerified": "2026-06-30"
     },
     "dev-tooling": {
       "docs": "docs/dev-tooling/",

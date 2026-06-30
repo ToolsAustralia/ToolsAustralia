@@ -41,7 +41,7 @@ import {
   setLedgerPromoLink,
 } from "@/utils/payment/ledger-helpers";
 import { classifyIsRenewal } from "@/services/attribution/classifyIsRenewal";
-import { normalizeUtmToPlatform } from "@/services/attribution/normalizePlatform";
+import { reconcilePersistedAttribution } from "@/services/attribution/reconcilePersistedAttribution";
 import type { ConvertingPlatform, AttributionConfidence } from "@/types/attribution";
 
 /** Optional membership ledger (Stripe invoice path) — lastMonthDelta for refunds. */
@@ -417,18 +417,31 @@ async function processPaymentBenefitsInternal(
         // Single-platform attribution (spec: prefer the edge-resolved decision; otherwise
         // fall back to a UTM-based resolve from the merged attributionData). Never throws.
         const isRenewal = classifyIsRenewal({ billingReason, isResubscribe });
-        let convertingPlatform: ConvertingPlatform | null = resolvedAttribution?.platform ?? null;
-        let attributionConfidence: AttributionConfidence | null = resolvedAttribution?.confidence ?? null;
         const attributedClickId = resolvedAttribution?.attributedClickId ?? null;
         const attributedClickTimestamp = resolvedAttribution?.attributedClickTimestamp ?? null;
-        if (!convertingPlatform) {
-          const fallback = normalizeUtmToPlatform(
-            typeof attributionData.utmSource === "string" ? attributionData.utmSource : undefined,
-            typeof attributionData.utmMedium === "string" ? attributionData.utmMedium : undefined
-          );
-          convertingPlatform = fallback ?? "direct";
-          attributionConfidence = "utm_only";
-        }
+        // Prefer the edge-resolved decision, but recover an owned-channel (Klaviyo)
+        // last-touch that lives in the persisted signup/checkout UTM when the edge
+        // (cookie-only) yielded `direct`/none — otherwise those Klaviyo conversions
+        // leak to `direct` and need the per-cycle backfill. See reconcilePersistedAttribution.
+        //
+        // The recovery is gated by the owned-channel recency window so a months-old
+        // signup touch doesn't get credited for an unrelated later purchase. The touch
+        // time is `now` for a UTM captured at THIS checkout (attributionSource === "session"),
+        // otherwise the user's signup time (`user.createdAt`).
+        const nowMs = Date.now();
+        const userCreatedAtMs = (user as { createdAt?: Date }).createdAt?.getTime() ?? null;
+        const persistedTouchAt = attributionData.attributionSource === "session" ? nowMs : userCreatedAtMs;
+        const { platform: convertingPlatform, confidence: attributionConfidence } =
+          reconcilePersistedAttribution({
+            edgePlatform: resolvedAttribution?.platform ?? null,
+            edgeConfidence: resolvedAttribution?.confidence ?? null,
+            persistedUtmSource:
+              typeof attributionData.utmSource === "string" ? attributionData.utmSource : undefined,
+            persistedUtmMedium:
+              typeof attributionData.utmMedium === "string" ? attributionData.utmMedium : undefined,
+            persistedTouchAt,
+            now: nowMs,
+          });
 
         const paymentEventData: Record<string, unknown> = {
           entries: packageData.entries,
