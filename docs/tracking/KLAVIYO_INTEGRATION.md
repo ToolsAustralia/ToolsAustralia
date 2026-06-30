@@ -27,6 +27,7 @@ Critical: post-purchase events fire from the **server**, not the browser. The br
 |---|---|---|---|
 | `Placed Order` | webhook → `grantBenefits` → `trackPlacedOrder` | `sub_{paymentIntentId}` / `onetime_{packageId}_{paymentIntentId}` / `minidraw_{packageId}_{paymentIntentId}` / `upsell_{packageId}_{paymentIntentId}` | **Deterministic** — no timestamp. Uses Klaviyo's strict revenue schema (`$value`, `Currency`, `Order ID`). |
 | `Refunded Order` | `refund-processing.ts` → `trackRefundedOrder` | Reconstructed from the original payment event — MUST match the Placed Order's `Order ID` exactly | Negative `$value` subtracts from CLV. |
+| `Subscription Renewed` | webhook `invoice.payment_succeeded` (`subscription_cycle`) | `sub_{paymentIntentId}` — `generateOrderId("membership", packageId, paymentIntentId)`, **matches the same invoice's `Placed Order`** | **Carries `$value` for renewal-specific reporting only — DO NOT add to the account revenue/CLV metric.** The all-inclusive `Placed Order` already counts this renewal; mapping this event in too would double-count. See "double-counting" note below. |
 
 ### Lifecycle events — for email flows and segmentation (not revenue)
 
@@ -34,7 +35,7 @@ Critical: post-purchase events fire from the **server**, not the browser. The br
 |---|---|
 | `User Registered` | `register/route.ts` (all 4 registration code paths) |
 | `Subscription Started` | webhook `invoice.payment_succeeded` (first cycle) |
-| `Subscription Renewed` | webhook `invoice.payment_succeeded` (`subscription_cycle`) |
+| `Subscription Renewed` | webhook `invoice.payment_succeeded` (`subscription_cycle`) — **also carries `$value` (renewal-revenue reporting only, NOT for account revenue/CLV — would double-count `Placed Order`)** |
 | `Subscription Cancelled` | `CancelSubscriptionService` |
 | `Subscription Upgraded` | webhook + `/api/stripe/upgrade-subscription-payment` |
 | `Subscription Downgraded` | webhook + `/api/stripe/downgrade-subscription` |
@@ -100,6 +101,10 @@ So for a new membership purchase we fire BOTH:
 - `Subscription Started` (no $value → drives a welcome-email flow, no revenue impact)
 
 Same for upgrades/downgrades/renewals — the lifecycle event is the email trigger, the Placed Order event is the revenue ledger entry.
+
+**Exception — `Subscription Renewed` DOES carry `$value` (added 2026-06):** unlike the other lifecycle events, `createSubscriptionRenewedEvent` ([klaviyo-events.ts](../../src/utils/integrations/klaviyo/klaviyo-events.ts) ~L333) now also emits top-level `$value` + `Currency` + `Order ID` via `buildRevenueProperties`, using the deterministic Order ID `sub_{paymentIntentId}` (`generateOrderId("membership", packageId, paymentIntentId)`) — the **same** Order ID as the `Placed Order` for that invoice. (Before this, it emitted only `price` as a STRING via `formatPackageDataForKlaviyo`, which Klaviyo ignores for revenue, so renewal revenue was invisible on this event.)
+
+**CRITICAL — do NOT map `Subscription Renewed` into the account revenue/CLV metric.** The all-inclusive `Placed Order` event already counts the renewal for total revenue + CLV; adding `Subscription Renewed` too would **double-count** every renewal. This `$value` exists for **renewal-specific reporting / flow value only** (e.g. a renewal-thank-you flow whose attributed value should reflect the renewal). This is complementary to the Klaviyo-side custom conversion metric `Placed Order WHERE is_renewal != true` (the flow/campaign conversion metric — see "Renewal `Placed Order` events carry an `is_renewal` discriminator" below) used to keep marketing attribution free of automated renewals.
 
 ## Renewals — fired to Klaviyo, NOT to Meta
 

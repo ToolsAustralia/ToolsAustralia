@@ -140,4 +140,40 @@ deriveBackfillAttribution(row: BackfillSourceRow): {
 
 **`isRenewal`** is derived via `classifyIsRenewal({ billingReason })` — `true` only for `subscription_cycle` without an upgrade/resubscribe flag.
 
+## Persisted-UTM reconciliation (`reconcilePersistedAttribution`)
+
+[src/services/attribution/reconcilePersistedAttribution.ts](../../src/services/attribution/reconcilePersistedAttribution.ts) — pure function that bridges the edge-resolved decision (cookie-only) with the UTM **persisted on the PaymentEvent / user signup** before the converting platform is stamped on the ledger.
+
+```ts
+reconcilePersistedAttribution(input: {
+  edgePlatform: ConvertingPlatform | null;     // resolveAtEdge result (Stripe `attr_platform`), null when none stamped
+  edgeConfidence: AttributionConfidence | null;
+  persistedUtmSource?: string;                 // merged session → signup utm_source
+  persistedUtmMedium?: string;
+  persistedTouchAt?: number | null;            // epoch ms the owned-channel touch happened (session → now, signup → user.createdAt)
+  now?: number;                                // epoch ms of the conversion; when provided, enforces the owned-channel recency window
+}): { platform: ConvertingPlatform; confidence: AttributionConfidence }
+```
+
+**Problem it fixes:** `resolveAtEdge` only sees the request's `_ta_attr` / `_ta_attr_last` cookies. An **owned-channel** (Klaviyo email/SMS) touch captured at **SIGNUP** and persisted on the user (`User.signupAttribution.utmSource/utmMedium`) is structurally invisible to it — so those conversions were stamped `convertingPlatform="direct"` and leaked. That is the exact leak [`scripts/backfill-klaviyo-attribution-cycle.ts`](../../scripts/backfill-klaviyo-attribution-cycle.ts) kept correcting per-cycle.
+
+**Resolution order:**
+1. **No edge decision at all** (`edgePlatform` null) → fall back to any recognised persisted UTM via `normalizeUtmToPlatform`, else `direct` (preserves the prior no-metadata fallback).
+2. **Edge produced a positive signal** (`!== "direct"`) → trust it.
+3. **Edge `=== "direct"`** → recover a persisted **OWNED-channel** (`klaviyo_email`/`klaviyo_sms`) touch via `normalizeUtmToPlatform` + `isOwnedChannel` — **but only when the touch is within the channel's recency window** (see below). **Paid sources are intentionally NOT recovered** — a real paid click in-window already wins at the edge (tier 1), so an edge `direct` genuinely means "no paid click"; we do not resurrect a stale paid UTM.
+
+**Owned-channel recency window (added 2026-06-30):** the recovered owned touch is only credited when it is recent enough to plausibly have driven the purchase, using `windowDaysFor(platform)` from [`platformPriority.ts`](../../src/services/attribution/platformPriority.ts) — **5 days for Klaviyo email/SMS**, the SAME single source of truth the cookie resolver enforces. Recency is checked against the touch's capture time, which the caller supplies:
+- UTM captured at **this checkout** (`data.attributionSource === "session"`) → `persistedTouchAt = now` (always in-window).
+- UTM carried from **signup** → `persistedTouchAt = user.createdAt`.
+
+Fallbacks: `now` omitted → windowing disabled (legacy / back-compat, always counts); `persistedTouchAt == null` → recency unknown → credited rather than buried; a future touch (`age < 0`, clock skew) → out-of-window → `direct`.
+
+**Why it matters (truthfulness):** a user who signed up via a Klaviyo click months ago, returns with no fresh click, and buys is now correctly `direct` — not Klaviyo. Real prod impact this cycle: the window moved **10 stale-signup rows ($309.99)** from `klaviyo_email` back to `direct`, leaving **3 genuinely-recent Klaviyo conversions ($77.50)**; the earlier non-windowed approach over-credited Klaviyo ~4×.
+
+**Effect:** the LIVE path now matches the backfill's logic, so the per-cycle Klaviyo backfill is **no longer needed going forward** (it remains for correcting already-saved historical rows — see note under "Where it is called"). Tests: `npm run test:reconcile-attribution` ([`reconcilePersistedAttribution.test.ts`](../../src/services/attribution/__tests__/reconcilePersistedAttribution.test.ts)) now covers within / at-boundary / outside-window, session-now, null-touchAt, future-skew, and legacy-no-window.
+
+**Where it is called:** [`payment-processing.ts`](../../src/utils/payment/payment-processing.ts) `processPaymentBenefitsInternal` — it replaced the old `if (!convertingPlatform) normalizeUtmToPlatform(...)` fallback with a `reconcilePersistedAttribution` call fed the edge decision + the persisted signup/checkout UTM (and the `persistedTouchAt` / `now` pair that drives windowing).
+
+**Historical reconcile:** [`scripts/backfill-klaviyo-attribution-cycle.ts`](../../scripts/backfill-klaviyo-attribution-cycle.ts) applies the **same windowed function bidirectionally** to already-saved rows — promoting in-window owned touches to Klaviyo and demoting now-stale ones back to `direct`.
+
 **Domain/referrer-form `utm_source` (data-driven, 2026-06-01):** `normalizeUtmToPlatform` (shared by the live resolver's utm fallback AND this backfill) maps the domain forms real ad traffic actually carries — notably `facebook.com` (7,303 historical paid-CPC rows) plus `m./l./lm./web./business.facebook.com`, `fb.com`, `instagram.com`/`m.`/`l.`, `ig.com` → `meta`; `tiktok.com`/`www.`/`vm.` → `tiktok`; `snapchat.com` → `snapchat`; `googleadservices.com` → `google`. Without these, Meta acquisition revenue was silently bucketed to `other` and understated ROAS. **Organic `google.com` is intentionally NOT mapped** — it would credit organic search to the reserved paid-Google channel.

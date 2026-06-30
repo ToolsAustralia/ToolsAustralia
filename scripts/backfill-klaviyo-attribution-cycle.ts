@@ -1,39 +1,41 @@
 #!/usr/bin/env npx tsx
 /**
- * Re-credit Klaviyo conversions that the live resolver (shipped ~2026-06-01) mis-attributed to
- * `direct` (and a few to a first-touch paid source) during a draw cycle. The live resolver read the
- * FIRST-touch `_ta_attr` cookie; Klaviyo is a returning-user channel, so its conversions leaked.
- * The forward fix (owned-channel last-touch) is code-only and does NOT rewrite already-saved rows —
- * this backfill corrects the historical `convertingPlatform` for one cycle so the dashboard reflects
- * how much actually converted via Klaviyo.
+ * Reconcile the stored `convertingPlatform` of a draw cycle's `BenefitsGranted` PaymentEvents
+ * against the CURRENT live owned-channel (Klaviyo) attribution logic — windowed and BIDIRECTIONAL.
  *
- * What it does: for `BenefitsGranted` PaymentEvents in the window whose LAST-touch UTM
- * (`data.utmSource` + `data.utmMedium`) normalizes to an owned channel (klaviyo_email / klaviyo_sms)
- * but whose stored `convertingPlatform` is NOT already that channel, set `convertingPlatform` to the
- * normalized Klaviyo channel and `attributionConfidence = "utm_only"` (a live last-touch credit).
+ * Why this exists: the cookie-only edge resolver can't see a Klaviyo touch that was captured at
+ * SIGNUP and persisted on the user, so those conversions leaked to `direct`. The live fix
+ * (`reconcilePersistedAttribution`) recovers them — but only when the Klaviyo touch is RECENT
+ * enough to plausibly have driven the purchase (the 5-day owned-channel window). This script
+ * applies the SAME function to already-saved rows so historical data matches live behaviour.
  *
- * Attribution model (matches the deployed fix — see docs/tracking/architecture.md):
- *   - DEFAULT (paid-priority): rows whose existing attribution was a real paid CLICK
- *     (`attributionConfidence === "click"`) are KEPT — a paid ad legitimately acquired that user.
- *   - `--include-paid-overlap` (strict last-touch): also re-credit those click rows to Klaviyo.
- * The dry-run reports BOTH totals regardless, so you can choose before the live run.
+ * Both directions, scoped to rows whose persisted UTM (`data.utmSource`+`data.utmMedium`) is Klaviyo:
+ *   - UP-CREDIT   `direct`/other → `klaviyo_*`  when the signup/checkout Klaviyo touch is WITHIN the
+ *                 5-day window (touch time = `data.attributionSource === "session" ? event time
+ *                 : user.createdAt`).
+ *   - DOWN-CORRECT `klaviyo_*` → `direct`        when the Klaviyo touch is STALE (outside the window) —
+ *                 e.g. a user who joined via Klaviyo months ago and bought again with no recent click.
+ *   - KEEP rows whose attribution was a real paid CLICK (`attributionConfidence === "click"`):
+ *                 a paid ad legitimately won at the edge (paid-priority), so we never touch it.
+ *
+ * The window value comes from the single source of truth (`platformPriority.windowDaysFor`, 5d for
+ * Klaviyo) via the shared `reconcilePersistedAttribution`, so this script can never drift from live.
  *
  * Usage:
- *   npx tsx scripts/backfill-klaviyo-attribution-cycle.ts --prod --dry-run      # report only (prod)
- *   npx tsx scripts/backfill-klaviyo-attribution-cycle.ts --prod               # WRITE (prod)
+ *   npx tsx scripts/backfill-klaviyo-attribution-cycle.ts --prod --dry-run --start=2026-06-28 --end=2026-07-28
+ *   npx tsx scripts/backfill-klaviyo-attribution-cycle.ts --prod            --start=2026-06-28 --end=2026-07-28
  *   npm run backfill:klaviyo-cycle:dry -- --prod
  *   npm run backfill:klaviyo-cycle      -- --prod
  *
  * Options:
- *   --dry-run               compute + log + CSV, write nothing (run this first).
- *   --prod                  target production (.env.production MONGODB_URI). Omit = local .env.local.
- *   --include-paid-overlap  strict last-touch: also re-credit rows whose confidence is "click".
- *   --start=YYYY-MM-DD      cycle start (AEST, inclusive). Default 2026-05-28.
- *   --end=YYYY-MM-DD        cycle end   (AEST, exclusive). Default 2026-06-28.
- *   --no-csv                skip the CSV audit file.
+ *   --dry-run            compute + log + CSV, write nothing (run this first).
+ *   --prod               target production (.env.production MONGODB_URI). Omit = local .env.local.
+ *   --start=YYYY-MM-DD   cycle start (AEST, inclusive). Default 2026-06-28.
+ *   --end=YYYY-MM-DD     cycle end   (AEST, exclusive). Default 2026-07-28.
+ *   --no-csv             skip the CSV audit file.
  *
- * Safety: idempotent (skips rows already credited to the same Klaviyo channel); read-mostly; the CSV
- *   records every old→new so a reversal is trivial. Live runs require --prod and confirmation.
+ * Safety: idempotent (re-running reproduces the same end state); read-mostly; the CSV records every
+ *   old→new so a reversal is trivial. Live runs require --prod and print a PRODUCTION warning.
  * Env: .env.local (local) or .env.production (with --prod) must contain MONGODB_URI.
  *
  * Exit: 0 clean · 2 per-row write errors · 3 fatal.
@@ -48,11 +50,10 @@ config({ path: path.resolve(process.cwd(), ".env.local") });
 if (PROD) config({ path: path.resolve(process.cwd(), ".env.production"), override: true });
 
 const DRY_RUN = process.argv.includes("--dry-run");
-const INCLUDE_PAID_OVERLAP = process.argv.includes("--include-paid-overlap");
 const NO_CSV = process.argv.includes("--no-csv");
 const arg = (k: string) => process.argv.find((a) => a.startsWith(`${k}=`))?.split("=")[1];
-const START_STR = arg("--start") ?? "2026-05-28";
-const END_STR = arg("--end") ?? "2026-06-28";
+const START_STR = arg("--start") ?? "2026-06-28";
+const END_STR = arg("--end") ?? "2026-07-28";
 const CSV_PATH =
   arg("--csv-path") ??
   path.resolve(process.cwd(), `backfill-klaviyo-cycle-${DRY_RUN ? "dry-" : ""}${new Date().toISOString().replace(/[:.]/g, "-")}.csv`);
@@ -72,8 +73,10 @@ function money(dollars: number): string {
 async function main() {
   const { createAESTDateAsUTC } = await import("../src/utils/common/timezone");
   const { normalizeUtmToPlatform } = await import("../src/services/attribution/normalizePlatform");
+  const { reconcilePersistedAttribution } = await import("../src/services/attribution/reconcilePersistedAttribution");
   const connectDB = (await import("../src/lib/mongodb")).default;
   const PaymentEvent = (await import("../src/models/PaymentEvent")).default;
+  const User = (await import("../src/models/User")).default;
   const mongoose = (await import("mongoose")).default;
 
   const [sy, sm, sd] = START_STR.split("-").map(Number);
@@ -86,52 +89,83 @@ async function main() {
   const uri = process.env.MONGODB_URI ?? "";
   const host = uri.includes("@") ? uri.slice(uri.indexOf("@") + 1).split("/")[0] : "(host?)";
   console.log(`🔌 backfill-klaviyo-cycle · ${PROD ? "PROD" : "local"} · db="${dbName}" @ ${host}`);
-  console.log(`   window: ${START_STR} → ${END_STR} (AEST)  |  ${DRY_RUN ? "DRY-RUN (no writes)" : "LIVE WRITES"}  |  model: ${INCLUDE_PAID_OVERLAP ? "strict last-touch" : "paid-priority"}`);
+  console.log(`   window: ${START_STR} → ${END_STR} (AEST)  |  ${DRY_RUN ? "DRY-RUN (no writes)" : "LIVE WRITES"}  |  windowed + bidirectional`);
   if (PROD && !DRY_RUN) console.log("   ⚠️  Writing to PRODUCTION. Ctrl-C now if unintended.");
 
   const rows = await PaymentEvent.find(
     { eventType: "BenefitsGranted", timestamp: { $gte: startUTC, $lt: endUTC } },
-    { paymentIntentId: 1, convertingPlatform: 1, attributionConfidence: 1, packageType: 1, data: 1, timestamp: 1 }
+    { paymentIntentId: 1, userId: 1, convertingPlatform: 1, attributionConfidence: 1, packageType: 1, data: 1, timestamp: 1 }
   )
     .lean()
     .exec();
 
   console.log(`\nScanning ${rows.length} BenefitsGranted events…\n`);
 
+  // Candidate rows: persisted UTM normalises to Klaviyo. Batch-fetch signup time for the window.
+  const candidates = (rows as Array<Record<string, unknown>>).filter((r) => {
+    const d = (r.data ?? {}) as { utmSource?: string; utmMedium?: string };
+    const last = normalizeUtmToPlatform(d.utmSource, d.utmMedium);
+    return last != null && KLAVIYO.has(last);
+  });
+  const userIds = [...new Set(candidates.map((r) => String(r.userId)))];
+  const users = await User.find({ _id: { $in: userIds } }, { createdAt: 1 }).lean().exec();
+  const createdAtMap = new Map(
+    (users as Array<{ _id: unknown; createdAt?: Date }>).map((u) => [
+      String(u._id),
+      u.createdAt ? new Date(u.createdAt).getTime() : null,
+    ])
+  );
+
   type Bucket = { count: number; revenue: number };
   const add = (b: Bucket, price: number) => { b.count += 1; b.revenue += price; };
   const empty = (): Bucket => ({ count: 0, revenue: 0 });
 
-  const currentKlaviyo = empty();          // already convertingPlatform=klaviyo_*
-  const recreditFromDirect = empty();      // leaked → direct/other
-  const recreditFromUtmPaid = empty();     // leaked → meta/google via utm (no real click)
-  const paidOverlapKept = empty();         // klaviyo last-touch BUT real paid click → kept (strict-only delta)
-  const toWrite: Array<{ _id: unknown; from: string; to: string; pid?: string }> = [];
+  const upCredited = empty();        // direct/other → klaviyo_* (fresh touch)
+  const downCorrected = empty();     // klaviyo_* → direct (stale touch)
+  const keptKlaviyo = empty();       // already klaviyo_* AND within window → unchanged
+  const keptPaidClick = empty();     // attributionConfidence === "click" → paid won, skip
+  const toWrite: Array<{ _id: unknown; from: string; to: string; pid?: string; ageDays: number | null }> = [];
 
-  for (const r of rows as Array<Record<string, unknown>>) {
-    const data = (r.data ?? {}) as { utmSource?: string; utmMedium?: string; price?: number; billingReason?: string };
+  for (const r of candidates) {
+    const data = (r.data ?? {}) as { utmSource?: string; utmMedium?: string; price?: number; attributionSource?: string };
     const price = typeof data.price === "number" ? data.price : 0;
     const current = (r.convertingPlatform as string | null) ?? "direct";
-    const last = normalizeUtmToPlatform(data.utmSource, data.utmMedium);
-    if (!last || !KLAVIYO.has(last)) continue; // last-touch wasn't Klaviyo → not ours
-
-    if (KLAVIYO.has(current)) { add(currentKlaviyo, price); continue; } // already correct (idempotent)
-
     const conf = (r.attributionConfidence as string | null) ?? "utm_only";
-    if (conf === "click") {
-      add(paidOverlapKept, price);
-      if (!INCLUDE_PAID_OVERLAP) continue; // paid-priority: a real paid click keeps the credit
+
+    // A real paid click won at the edge (paid-priority). Never override it.
+    if (conf === "click") { add(keptPaidClick, price); continue; }
+
+    const eventMs = new Date(r.timestamp as Date).getTime();
+    const touchAt = data.attributionSource === "session" ? eventMs : (createdAtMap.get(String(r.userId)) ?? null);
+    const ageDays = touchAt == null ? null : (eventMs - touchAt) / 86_400_000;
+
+    // Same function the live path uses. edgePlatform="direct" models "no positive click";
+    // the window then decides klaviyo (fresh) vs direct (stale).
+    const desired = reconcilePersistedAttribution({
+      edgePlatform: "direct",
+      edgeConfidence: "utm_only",
+      persistedUtmSource: data.utmSource,
+      persistedUtmMedium: data.utmMedium,
+      persistedTouchAt: touchAt,
+      now: eventMs,
+    }).platform;
+
+    if (desired === current) {
+      if (KLAVIYO.has(current)) add(keptKlaviyo, price); // already correct, within window
+      continue;
     }
 
-    if (current === "direct" || current === "other") add(recreditFromDirect, price);
-    else add(recreditFromUtmPaid, price);
-    toWrite.push({ _id: r._id, from: `${current}/${conf}`, to: last, pid: r.paymentIntentId as string | undefined });
+    if (KLAVIYO.has(desired)) add(upCredited, price);    // direct → klaviyo
+    else add(downCorrected, price);                      // klaviyo → direct
+    toWrite.push({ _id: r._id, from: `${current}/${conf}`, to: desired, pid: r.paymentIntentId as string | undefined, ageDays });
   }
 
   // CSV audit
   if (!NO_CSV) {
-    const header = "paymentIntentId,from,to,model,dryRun\n";
-    const body = toWrite.map((w) => [w.pid, w.from, w.to, INCLUDE_PAID_OVERLAP ? "strict" : "paid-priority", DRY_RUN].map(csvEscape).join(",")).join("\n");
+    const header = "paymentIntentId,from,to,ageDays,dryRun\n";
+    const body = toWrite
+      .map((w) => [w.pid, w.from, w.to, w.ageDays == null ? "" : w.ageDays.toFixed(2), DRY_RUN].map(csvEscape).join(","))
+      .join("\n");
     fs.writeFileSync(CSV_PATH, header + body + (body ? "\n" : ""));
     console.log(`📄 CSV: ${path.relative(process.cwd(), CSV_PATH)} (${toWrite.length} rows)`);
   }
@@ -156,25 +190,16 @@ async function main() {
   }
 
   // Report
-  const recreditTotal = empty();
-  add2(recreditTotal, recreditFromDirect);
-  add2(recreditTotal, recreditFromUtmPaid);
-  function add2(t: Bucket, b: Bucket) { t.count += b.count; t.revenue += b.revenue; }
-
-  const line = (label: string, b: Bucket) => `  ${label.padEnd(34)} ${String(b.count).padStart(5)}   ${money(b.revenue).padStart(12)}`;
-  console.log(`\n================ Klaviyo attribution — ${START_STR}→${END_STR} ================`);
-  console.log(line("Already credited klaviyo_*", currentKlaviyo));
-  console.log(line("Re-credit ← direct/other", recreditFromDirect));
-  console.log(line("Re-credit ← paid-via-UTM (no click)", recreditFromUtmPaid));
-  console.log("  " + "-".repeat(53));
-  console.log(line("Re-credited this run", { count: written || toWrite.length, revenue: recreditTotal.revenue }));
-  console.log("  " + "=".repeat(53));
-  const ppTotal: Bucket = { count: currentKlaviyo.count + recreditTotal.count, revenue: currentKlaviyo.revenue + recreditTotal.revenue };
-  const strictTotal: Bucket = { count: ppTotal.count + paidOverlapKept.count, revenue: ppTotal.revenue + paidOverlapKept.revenue };
-  console.log(line("TRUE Klaviyo (paid-priority) ✅", ppTotal));
-  console.log(line("  …had a real paid click (kept)", paidOverlapKept));
-  console.log(line("TRUE Klaviyo (strict last-touch)", strictTotal));
-  console.log("=".repeat(70));
+  const line = (label: string, b: Bucket) => `  ${label.padEnd(36)} ${String(b.count).padStart(5)}   ${money(b.revenue).padStart(12)}`;
+  console.log(`\n========== Klaviyo attribution reconcile — ${START_STR}→${END_STR} ==========`);
+  console.log(line("UP-credit  → klaviyo (fresh ≤5d)", upCredited));
+  console.log(line("DOWN-correct → direct (stale >5d)", downCorrected));
+  console.log(line("Kept klaviyo (already, fresh)", keptKlaviyo));
+  console.log(line("Kept paid click (skipped)", keptPaidClick));
+  console.log("  " + "-".repeat(55));
+  const trueKlaviyo: Bucket = { count: upCredited.count + keptKlaviyo.count, revenue: upCredited.revenue + keptKlaviyo.revenue };
+  console.log(line("TRUE Klaviyo (windowed) ✅", trueKlaviyo));
+  console.log("=".repeat(72));
   console.log(DRY_RUN ? "\nDRY-RUN — nothing written. Re-run without --dry-run to apply." : `\nDONE — wrote ${written}, errors ${errors}.`);
 
   await mongoose.disconnect();

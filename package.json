@@ -278,7 +278,8 @@
     "test:normalize-platform": "tsx src/services/attribution/__tests__/normalizePlatform.test.ts",
     "test:classify-renewal": "tsx src/services/attribution/__tests__/classifyIsRenewal.test.ts",
     "test:converting-platform": "tsx src/services/attribution/__tests__/resolveConvertingPlatform.test.ts",
-    "test:derive-backfill-attribution": "tsx src/services/attribution/__tests__/deriveBackfillAttribution.test.ts"
+    "test:derive-backfill-attribution": "tsx src/services/attribution/__tests__/deriveBackfillAttribution.test.ts",
+    "test:reconcile-attribution": "tsx src/services/attribution/__tests__/reconcilePersistedAttribution.test.ts"
   },
   "dependencies": {
     "@auth/mongodb-adapter": "^3.10.0",

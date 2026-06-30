@@ -24,6 +24,7 @@ import {
   formatTimestampForKlaviyo,
 } from "./klaviyo-helpers";
 import { buildRevenueProperties, buildRevenueItem, buildSubscriptionProperties } from "./klaviyo-revenue-schema";
+import { generateOrderId } from "./klaviyo-order-helpers";
 import {
   getPartnerCatalogAccessPercentForPlanId,
   getPartnerDiscountCatalogSummaryForPackageId,
@@ -344,6 +345,20 @@ export function createSubscriptionRenewedEvent(
     entriesGranted?: number; // Entries granted during renewal
   }
 ): KlaviyoEvent {
+  // Top-level $value + Currency + Order ID so renewal revenue is visible to Klaviyo's
+  // revenue surfaces on THIS event (renewal-revenue reporting, renewal-flow value).
+  // formatPackageDataForKlaviyo only emits `price` as a STRING, which Klaviyo ignores
+  // for revenue. Order ID matches the "Placed Order" event for the same invoice
+  // (`sub_{paymentIntentId}`) so the two stay linkable.
+  //
+  // IMPORTANT: the all-inclusive "Placed Order" event already counts this renewal for
+  // total revenue + CLV. Do NOT map "Subscription Renewed" into the account revenue/CLV
+  // metric — it would double-count the renewal. This event is for renewal-specific
+  // reporting/flows only.
+  const renewalOrderId = renewalData.paymentIntentId
+    ? generateOrderId("membership", renewalData.packageId, renewalData.paymentIntentId)
+    : undefined;
+
   return {
     event: "Subscription Renewed",
     customer_properties: getCustomerProperties(user),
@@ -355,6 +370,7 @@ export function createSubscriptionRenewedEvent(
         tier: renewalData.tier,
         price: renewalData.price,
       }),
+      ...(renewalOrderId ? buildRevenueProperties(renewalOrderId, renewalData.price, "AUD") : {}),
       renewal_type: renewalData.renewalType,
       previous_status: renewalData.previousStatus || "active", // Default to "active" for regular renewals
       payment_intent_id: renewalData.paymentIntentId || "",
