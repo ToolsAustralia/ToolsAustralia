@@ -51,7 +51,21 @@ The bulk charge endpoint ([`charge-past-due/route.ts`](../../src/app/api/admin/i
 
 Two consequences worth remembering:
 - **Totals are recomputed from `InvoiceChargeLog` rows every chunk**, never from in-memory counters — so a tab close / crash / orphan-sweep abort still reports the real succeeded/failed/skipped/revenue, not 0/0/0. The orphan sweep (`sweepOrphanRuns`) and the standalone ops script `scripts/fix-stuck-charge-jobs.ts` ([infrastructure](../infrastructure/)) both recompute the same way before marking a stuck `running` run `aborted`.
-- **Progress/resumability is derived from which worklist invoices already have a log row** for the run, so a killed chunk resumes from the unlogged remainder. Double-charge safety still comes entirely from `payOpenInvoiceAsPastDueAdmin` (30s debounce, 6h recent-attempt lock, stable `admin-charge-${invoiceId}` key) — the chunk worker calls that primitive unchanged.
+- **Progress/resumability is derived from which worklist invoices already have a log row** for the run, so a killed chunk resumes from the unlogged remainder. Double-charge safety still comes from `payOpenInvoiceAsPastDueAdmin` (30s debounce, 6h recent-attempt lock) plus the **run-scoped** idempotency key `admin-charge-${invoiceId}-run-${runId}` — stable within a run (a resumed chunk re-touching an invoice dedupes to one charge) but fresh across runs. The chunk worker calls that primitive with the run-scoped key.
+
+## Past-due charge keys MUST vary across runs — Stripe replays a stable key for 24h ($0 incident)
+
+**Incident 2026-06-29:** a bulk charge run reported **668/668 "failed", $0 collected, 54s** — but Stripe showed **no actual charge attempts**. Root cause: the bulk path paid every invoice with a **static** `admin-charge-${invoiceId}` Stripe idempotency key. Stripe **retains an idempotency key for 24h and replays the cached response for any reuse within that window — without re-charging** (response header `idempotent-replayed: true`). The daily run lands <24h after the prior one, so **656/668** invoices replayed the previous run's decline. Confirmed three ways: the `idempotent-replayed: true` header on 656 rows, the invoice `attempt_count` staying at 1, and the success rate correlating exactly with whether the inter-run gap crossed 24h.
+
+The aggravating factor: the DB "recently attempted" skip window is only **6h** (`RECENT_ATTEMPT_WINDOW_HOURS`), while Stripe's idempotency retention is **24h**. In the 6h–24h gap the code's own guard says "go ahead and charge" but Stripe silently replays — producing a misleading `failed` with no real attempt instead of a clean `skipped`.
+
+**Fix (don't regress):** `payOpenInvoiceAsPastDueAdmin` now takes a **required** `idempotencyKey` — there is no stable default to fall into. Each caller scopes the key to its dedupe unit:
+- Bulk daily run → `buildBulkChargeIdempotencyKey(invoiceId, runId)` (fresh each run, stable within a run for resume safety).
+- Per-user "Charge" click → `buildOneOffChargeIdempotencyKey(invoiceId)` — bucketed to a 30s window (`admin-charge-${invoiceId}-once-${floor(now/30s)}`). A deliberate retry 30s+ later is a fresh attempt, but two **concurrent** submits of the same click (double-click / proxy retry) share the bucket so Stripe dedupes them to one charge. This path has **no ChargeJobLock** and the 30s DB debounce is non-atomic, so the bucketed key — not the debounce — is the real concurrent-double-charge guard. (Do **not** revert it to a per-request random token: that loses the concurrent dedupe.)
+- Force Charge → `buildForceChargeIdempotencyKey(invoiceId, triggeredBy, attempt)` (per-attempt).
+- Recovery pay step → `buildAdminChargeIdempotencyKey(newInvoiceId)` — the ONLY place a stable key is correct, because recovery pays a brand-new invoice each time.
+
+Never reach for a bare `admin-charge-${invoiceId}` on a path that re-charges the **same** invoice across runs/clicks. Regression-guarded by `npm run test:past-due-idempotency-keys` (asserts the bulk key differs across runs). See [CHARGE_PAST_DUE_CUSTOMERS.md](../CHARGE_PAST_DUE_CUSTOMERS.md).
 
 ## Middleware vs handler gating
 
