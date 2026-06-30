@@ -493,18 +493,19 @@ export function Carousel3D<T>({
     }
   });
 
-  /* ---- imperative settle (short way), seeded with velocity --------------- */
-  const settle = useCallback(
-    (rawIndex: number, velocity = 0) => {
-      const idx = ((rawIndex % n) + n) % n;
-      const from = targetRef.current;
-      const nextTarget = from + ringDelta(((from % n) + n) % n, idx, n);
-      targetRef.current = nextTarget;
+  /* ---- imperative settle, seeded with velocity --------------------------- */
+  // settleTo animates the ring to an ABSOLUTE, unwrapped target in item-units —
+  // the one place a settle spring starts. The drag-release fling feeds it a
+  // direction-true target so a fast throw is never re-routed the short way
+  // against its own velocity (which is what snapped a fast swipe back a card).
+  const settleTo = useCallback(
+    (target: number, velocity = 0) => {
+      targetRef.current = target;
       stopAnim();
       if (reduceMotion) {
-        rotation.set(nextTarget);
+        rotation.set(target);
       } else {
-        runningAnim.current = animate(rotation, nextTarget, {
+        runningAnim.current = animate(rotation, target, {
           type: "spring",
           stiffness: 150,
           damping: 26, // a touch over-damped → smooth glide, minimal overshoot
@@ -513,9 +514,21 @@ export function Carousel3D<T>({
           restDelta: 0.001,
         });
       }
-      if (isControlled) onActiveIndexChange?.(idx);
+      if (isControlled) onActiveIndexChange?.(((Math.round(target) % n) + n) % n);
     },
     [n, reduceMotion, rotation, isControlled, onActiveIndexChange],
+  );
+
+  // settle(index) — discrete nav (next/prev/goTo/dots/keyboard): snap to a
+  // specific item the SHORT way round from the current target. Direction is
+  // implied by "nearest" here, so the ring wrap is exactly what we want.
+  const settle = useCallback(
+    (rawIndex: number, velocity = 0) => {
+      const idx = ((rawIndex % n) + n) % n;
+      const from = targetRef.current;
+      settleTo(from + ringDelta(((from % n) + n) % n, idx, n), velocity);
+    },
+    [n, settleTo],
   );
 
   // Keep the ring in sync if a controlled parent jumps the index.
@@ -607,19 +620,21 @@ export function Carousel3D<T>({
       }
       const vSteps = -vxPx / pxPerStep; // item-units / sec
       const current = rotation.get();
-      const projected = current + vSteps * 0.18; // momentum projection window
-      // After a FREE drag the live rotation is the source of truth — the pre-drag
-      // `targetRef` is stale. Reconcile it so settle snaps the SHORT way from where
-      // the finger stopped; otherwise a fast/far drag winds the long way backwards
-      // to land on the card, looking like it "rotates back".
-      targetRef.current = current;
-      settle(Math.round(projected), vSteps);
+      // Project the throw forward a short window and snap to the NEAREST item in
+      // an absolute, unwrapped frame — preserving the throw's direction at ANY
+      // swipe speed. We deliberately bypass settle()'s [0,n) index wrap here: for
+      // a fast swipe past the half-ring that wrap re-derives a shortest path
+      // pointing OPPOSITE the velocity, so the spring lurches forward then snaps
+      // back to the previous card. settleTo rides straight to the projected
+      // target, so however hard the user flings, the ring follows and lands.
+      const projected = Math.round(current + vSteps * 0.18); // momentum window
+      settleTo(projected, vSteps);
       // Release the pause shortly after, so a flick coasts before autoplay resumes.
       window.setTimeout(() => {
         if (!dragging.current) setDragActive(false);
       }, 140);
     },
-    [pxPerStep, rotation, settle],
+    [pxPerStep, rotation, settleTo],
   );
 
   /* ---- whole-stage pointer parallax (reduced-motion off) ------------------ */
