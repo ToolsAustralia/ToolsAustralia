@@ -216,7 +216,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
 ```json
 {
   "version": 1,
-  "lastModified": "2026-06-26",
+  "lastModified": "2026-06-29",
   "domains": {
     "subscription": {
       "docs": "docs/subscription/",
@@ -375,7 +375,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "scripts/convert-drawn-tonight-tomorrow-to-webp.ts",
         "scripts/convert-drawn-tonight-tomorrow-videos.ts"
       ],
-      "lastVerified": "2026-06-24"
+      "lastVerified": "2026-06-29"
     },
     "affiliate": {
       "docs": "docs/affiliate/",
@@ -634,7 +634,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/app/globals.css",
         "src/app/not-found.tsx"
       ],
-      "lastVerified": "2026-06-24"
+      "lastVerified": "2026-06-29"
     },
     "client-state": {
       "docs": "docs/client-state/",
@@ -707,7 +707,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/models/DashboardStatsDailySnapshot.ts",
         "src/services/admin/dashboard-stats/**"
       ],
-      "lastVerified": "2026-06-24"
+      "lastVerified": "2026-06-29"
     },
     "dashboard-account": {
       "docs": "docs/dashboard-account/",
@@ -780,7 +780,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "scripts/reconcile-*.ts",
         "scripts/connect-ops-db.ts"
       ],
-      "lastVerified": "2026-06-24"
+      "lastVerified": "2026-06-29"
     },
     "dev-tooling": {
       "docs": "docs/dev-tooling/",

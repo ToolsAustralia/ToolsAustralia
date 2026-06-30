@@ -14,10 +14,13 @@
  *
  * Resumability/double-charge safety comes entirely from the existing per-invoice
  * primitive `payOpenInvoiceAsPastDueAdmin` (30s debounce, 6h recent-attempt lock,
- * late still-past-due re-check, already-paid catch, stable Stripe idempotency key
- * `admin-charge-${invoiceId}`). A killed chunk resumes from the unlogged remainder;
- * re-touching an already-logged invoice is skipped, and Stripe's stable key is the
- * backstop within its 24h retention.
+ * late still-past-due re-check, already-paid catch, plus a RUN-SCOPED Stripe
+ * idempotency key `admin-charge-${invoiceId}-run-${runId}`). A killed chunk resumes
+ * from the unlogged remainder; re-touching an already-logged invoice is skipped, and
+ * the run-scoped key is the in-run backstop. The key is deliberately scoped to the
+ * run (not a bare `admin-charge-${invoiceId}`): Stripe replays a stable key for 24h
+ * without re-charging, so a bare key turned every <24h re-run into a replay of the
+ * prior decline (incident 2026-06-29 — 668 "failed", $0). See docs/CHARGE_PAST_DUE_CUSTOMERS.md.
  */
 
 import mongoose from "mongoose";
@@ -33,6 +36,7 @@ import {
   payOpenInvoiceAsPastDueAdmin,
   resolveInvoicePaymentMethodId,
 } from "@/server/admin/chargePastDueShared";
+import { buildBulkChargeIdempotencyKey } from "@/server/admin/past-due-charge-idempotency";
 import {
   ORPHAN_RUN_THRESHOLD_MS,
   aggregateRunTotals,
@@ -302,6 +306,10 @@ async function chargeWorklistItem(
       user: { _id: item.userId, email: null },
       adminId,
       chargeRunId: runId,
+      // Run-scoped key: stable within this run (a resumed chunk re-touching the same
+      // invoice dedupes to one charge), fresh across runs so the NEXT daily run is a
+      // real retry instead of a 24h Stripe replay of this run's decline.
+      idempotencyKey: buildBulkChargeIdempotencyKey(item.invoiceId, String(runId)),
     });
   } catch (err) {
     await InvoiceChargeLog.create({

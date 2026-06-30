@@ -7,7 +7,7 @@
  * @module landing-image-resolver
  */
 
-import type { BrandKey } from "@/config/brand-theme";
+import { slugToBrandKey, type BrandKey } from "@/config/brand-theme";
 import type { PromoImagePaths, ExtendedPromoImagePaths, LandingHeroUrgency } from "./promo-hero-types";
 import { LANDING_IMAGE_MANIFEST } from "@/generated/landingImageManifest";
 
@@ -21,6 +21,28 @@ export const LANDING_HERO_BACKGROUND = {
   desktop: `${LANDING_IMAGE_BASE}/background/bg-desktop.webp`,
   mobile: `${LANDING_IMAGE_BASE}/background/bg-mobile.webp`,
 } as const;
+
+/**
+ * Brand-aware hero "stage" background for the loader, resolved from the promo slug.
+ * When the slug maps to a brand with a shipped `bg-{brand}-{viewport}.webp`, that brand
+ * background loads in place of the skeleton; otherwise (cash / evergreen / unknown slug,
+ * or a brand whose asset isn't in the manifest) it falls back to the shared
+ * `LANDING_HERO_BACKGROUND`. Each viewport falls back independently so a brand that
+ * ships only one viewport still renders.
+ */
+export function resolveLandingHeroBackground(
+  slug: string | null | undefined
+): { desktop: string; mobile: string } {
+  const brand = slug ? slugToBrandKey(slug) : null;
+  if (!brand) return LANDING_HERO_BACKGROUND;
+
+  const desktop = `${LANDING_IMAGE_BASE}/background/bg-${brand}-desktop.webp`;
+  const mobile = `${LANDING_IMAGE_BASE}/background/bg-${brand}-mobile.webp`;
+  return {
+    desktop: LANDING_IMAGE_MANIFEST.has(desktop) ? desktop : LANDING_HERO_BACKGROUND.desktop,
+    mobile: LANDING_IMAGE_MANIFEST.has(mobile) ? mobile : LANDING_HERO_BACKGROUND.mobile,
+  };
+}
 
 /** Build the deterministic URL for a brand variant — no existence check. */
 function buildLandingUrl(

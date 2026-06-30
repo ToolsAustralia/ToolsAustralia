@@ -3,6 +3,8 @@ import {
   resolveLandingHeroImage,
   resolveLandingHeroImagesWithUrgency,
   resolveEvergreenHeroImage,
+  resolveLandingHeroBackground,
+  LANDING_HERO_BACKGROUND,
 } from "../landing-image-resolver";
 import { LANDING_IMAGE_MANIFEST } from "@/generated/landingImageManifest";
 
@@ -55,13 +57,17 @@ function testExistingComboReturnsAsIs() {
 }
 
 /**
- * Dark variants must round-trip when they exist (sidTB dark base is shipped).
+ * sidTB dark bases no longer ship (2026-06-12 — the variation-2 promotion replaced the
+ * per-brand defaults with light-only sidTB bases; no `*-sidTB-dark.webp` exists in the
+ * manifest for any brand). A dark sidTB request must therefore fall back to the LIGHT
+ * base: the returned URL has no `-dark` and is in the manifest. (Was previously asserting
+ * a `-dark` URL — stale since 2026-06-12, which left `test:landing-image-resolver` red.)
  */
-function testDarkComboReturnsAsIs() {
+function testDarkSidTbFallsBackToLightBase() {
   for (const brand of ["ryobi", "milwaukee", "dewalt", "makita"] as const) {
     const url = resolveLandingHeroImage(brand, "dark", "desktop", "sidTB", null);
-    assert.ok(url.includes("-dark"), `${brand} sidTB dark should return dark URL`);
-    assert.ok(LANDING_IMAGE_MANIFEST.has(url));
+    assert.ok(!url.includes("-dark"), `${brand} sidTB dark should fall back to light base, got ${url}`);
+    assert.ok(LANDING_IMAGE_MANIFEST.has(url), `${url} must exist in manifest`);
   }
 }
 
@@ -117,13 +123,46 @@ function testEvergreenAllVariantsExist() {
   }
 }
 
+/**
+ * Brand-aware loader stage background: a brand slug resolves to its own
+ * bg-{brand}-{viewport}.webp (all five brands ship), and every returned URL is in
+ * the manifest. The brand prefix is what `slugToBrandKey` keys on.
+ */
+function testLoaderBackgroundResolvesPerBrand() {
+  for (const brand of ["dewalt", "makita", "milwaukee", "ryobi", "hikoki"] as const) {
+    const bg = resolveLandingHeroBackground(`${brand}-sidchrome`);
+    assert.ok(bg.desktop.includes(`bg-${brand}-desktop`), `${brand} → brand desktop bg, got ${bg.desktop}`);
+    assert.ok(bg.mobile.includes(`bg-${brand}-mobile`), `${brand} → brand mobile bg, got ${bg.mobile}`);
+    assert.ok(LANDING_IMAGE_MANIFEST.has(bg.desktop), `${bg.desktop} must be in manifest`);
+    assert.ok(LANDING_IMAGE_MANIFEST.has(bg.mobile), `${bg.mobile} must be in manifest`);
+  }
+}
+
+/**
+ * Cash / evergreen / unknown / empty slugs have no brand → fall back to the shared
+ * stage background (so non-brand promo pages keep the generic loader).
+ */
+function testLoaderBackgroundFallsBackForNonBrand() {
+  const nonBrand: Array<string | null | undefined> = [null, undefined, "", "cash-10k", "all-prizes"];
+  for (const slug of nonBrand) {
+    const bg = resolveLandingHeroBackground(slug);
+    assert.deepEqual(
+      bg,
+      { desktop: LANDING_HERO_BACKGROUND.desktop, mobile: LANDING_HERO_BACKGROUND.mobile },
+      `non-brand slug ${String(slug)} should use the shared stage background`
+    );
+  }
+}
+
 function run() {
   testLightSidTbReturnsLightBase();
   testExistingComboReturnsAsIs();
-  testDarkComboReturnsAsIs();
+  testDarkSidTbFallsBackToLightBase();
   testKinTbDrawnTiersResolveAndFinalHoursCollapses();
   testAllVariantsExistInManifest();
   testEvergreenAllVariantsExist();
+  testLoaderBackgroundResolvesPerBrand();
+  testLoaderBackgroundFallsBackForNonBrand();
   console.log("landing-image-resolver tests passed");
 }
 

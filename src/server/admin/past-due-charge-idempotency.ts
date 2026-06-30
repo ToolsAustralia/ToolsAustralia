@@ -30,9 +30,67 @@ export function cutoffForDebounce(now: Date = new Date()): Date {
 }
 
 /**
- * Stripe idempotency key for admin-driven `invoices.pay`. Stable per invoice so a
- * rapid double-submit returns Stripe's cached first response. Used by bulk past-due
- * charger and the regular per-user admin retry — both are 1-per-window paths.
+ * ⚠️ THE 24h IDEMPOTENCY-REPLAY TRAP — read before adding or changing any key below.
+ *
+ * Stripe RETAINS idempotency keys for 24 hours and, for ANY reuse within that
+ * window, REPLAYS the cached response (response header `idempotent-replayed: true`)
+ * WITHOUT re-attempting the charge. So a key that is stable across separate
+ * admin/cron runs silently turns every run after the first (within 24h) into a
+ * replay of the previous outcome: it logs the OLD result (e.g. `card_declined`)
+ * and never actually re-charges the card. Our DB-side "recently attempted" guard
+ * is only ${RECENT_ATTEMPT_WINDOW_HOURS}h (see above), so in the 6h–24h gap the
+ * code DOES proceed to call Stripe — but Stripe replays. Worst case: a "failed"
+ * row with no real charge attempt at all.
+ *
+ * Incident 2026-06-29: the daily bulk run reused `admin-charge-${invoiceId}` and
+ * replayed 656/668 prior declines, collecting $0. See docs/CHARGE_PAST_DUE_CUSTOMERS.md.
+ *
+ * RULE: a key MUST vary whenever you intend a genuinely NEW charge attempt; it may
+ * be stable ONLY across retries that must DEDUPE to a single charge (a resumed bulk
+ * chunk re-touching the same invoice in the SAME run, or paying a freshly-created
+ * recovery invoice once). Pick the builder that matches your dedupe unit:
+ *   - same invoice charged across separate runs  → buildBulkChargeIdempotencyKey
+ *   - same invoice re-charged per admin/user click → buildOneOffChargeIdempotencyKey
+ *   - a brand-new invoice paid once (recovery)     → buildAdminChargeIdempotencyKey
+ */
+
+/**
+ * Bulk chunked charge run. Stable within a run (so a resumed chunk that re-touches
+ * an invoice dedupes to one charge), fresh across runs (so each daily run is a real
+ * retry, not a Stripe replay). `runId` is the ChargeJobRun `_id`.
+ */
+export function buildBulkChargeIdempotencyKey(invoiceId: string, runId: string): string {
+  return `admin-charge-${invoiceId}-run-${runId}`;
+}
+
+/**
+ * One-off admin/user-initiated charge of an EXISTING invoice (the per-user "Charge"
+ * button — a path with NO ChargeJobLock). The key is bucketed to a coarse time window
+ * (`MIN_SECONDS_BETWEEN_ATTEMPTS`, 30s — aligned with the spam debounce), NOT a random
+ * per-request token. This is deliberate and load-bearing:
+ *   - Two TRULY-CONCURRENT submits of the same click (a double-click, or a
+ *     proxy/load-balancer retry of a slow in-flight POST) fall in the same bucket →
+ *     identical key → Stripe collapses them to ONE charge. A random-per-call key would
+ *     give Stripe nothing to dedupe on (the in-process 30s debounce is a non-atomic
+ *     read-then-act and does NOT serialize concurrent requests), risking a double-charge.
+ *   - A deliberate retry 30s+ later lands in a new bucket → fresh key → real attempt,
+ *     so it is NOT a 24h replay. (Within the same 30s the debounce already skips it.)
+ * `nowMs` is injectable for tests; production passes the default `Date.now()`.
+ */
+export function buildOneOffChargeIdempotencyKey(invoiceId: string, nowMs: number = Date.now()): string {
+  const bucket = Math.floor(nowMs / (MIN_SECONDS_BETWEEN_ATTEMPTS * 1000));
+  return `admin-charge-${invoiceId}-once-${bucket}`;
+}
+
+/**
+ * Stable-per-invoice key. ONLY for the recovery flow's pay step, on the held draft it
+ * selects and finalizes per recovery. Stability is safe there — and does NOT hit the
+ * 24h replay trap — because a finalized invoice leaves the draft pool (recovery only
+ * selects `status: draft`), so a later recovery can't re-select and re-pay the same id,
+ * and the 6h recent-recovery lock blocks fast retries. Do NOT use it for a path that
+ * re-charges the SAME existing invoice across runs/clicks (bulk daily / per-user button)
+ * — Stripe would replay it within 24h (see the trap note above); use the bulk/one-off
+ * builders instead.
  */
 export function buildAdminChargeIdempotencyKey(invoiceId: string): string {
   return `admin-charge-${invoiceId}`;

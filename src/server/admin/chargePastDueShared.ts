@@ -8,7 +8,6 @@ import {
   MIN_SECONDS_BETWEEN_ATTEMPTS,
   RECENT_ATTEMPT_WINDOW_HOURS,
   SKIP_REASON_NO_LONGER_PAST_DUE,
-  buildAdminChargeIdempotencyKey,
   cutoffForDebounce,
   cutoffForRecentAttempt,
   shouldSkipForNotPastDue,
@@ -24,7 +23,6 @@ export {
   MIN_SECONDS_BETWEEN_ATTEMPTS,
   RECENT_ATTEMPT_WINDOW_HOURS,
   SKIP_REASON_NO_LONGER_PAST_DUE,
-  buildAdminChargeIdempotencyKey,
   cutoffForDebounce,
   cutoffForRecentAttempt,
   shouldSkipForNotPastDue,
@@ -271,11 +269,17 @@ export async function payOpenInvoiceAsPastDueAdmin(params: {
   adminId: string;
   chargeRunId?: mongoose.Types.ObjectId | null;
   /**
-   * Override the default `admin-charge-${invoiceId}` Stripe idempotency key.
-   * Force Charge paths supply per-attempt keys to allow real retries within
-   * the 6h budget window (otherwise Stripe returns the cached first response).
+   * REQUIRED Stripe idempotency key for the `invoices.pay` call. Each caller MUST
+   * choose the key that matches its dedupe unit — there is deliberately no stable
+   * default, because a key reused across separate runs/clicks is REPLAYED by Stripe
+   * for 24h (header `idempotent-replayed: true`) and never re-charges. Build it with
+   * one of: `buildBulkChargeIdempotencyKey` (run-scoped, bulk daily run),
+   * `buildOneOffChargeIdempotencyKey` (fresh per admin/user click on an existing
+   * invoice), `buildForceChargeIdempotencyKey` (per-attempt Force Charge), or
+   * `buildAdminChargeIdempotencyKey` (stable-per-invoice — recovery's new invoice only).
+   * See the "24h replay trap" note in past-due-charge-idempotency.ts.
    */
-  idempotencyKey?: string;
+  idempotencyKey: string;
   /**
    * Override the default 1-per-window lock check. When provided, the function
    * calls this instead of running its own `findOne` on InvoiceChargeLog.
@@ -462,7 +466,7 @@ export async function payOpenInvoiceAsPastDueAdmin(params: {
         payment_method: paymentMethodId,
         off_session: true,
       },
-      { idempotencyKey: idempotencyKey ?? buildAdminChargeIdempotencyKey(invoiceId) }
+      { idempotencyKey }
     );
     let paidInvoice = paidInvoiceResponse as Stripe.Invoice;
 
