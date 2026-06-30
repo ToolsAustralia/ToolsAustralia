@@ -1,5 +1,16 @@
 # Admin — Frontend
 
+## Prize performance card — brands derived from the source of truth (2026-06-30)
+
+`PrizePerformanceCard` `PROMOTION_BRANDS` is now **derived** from `TOOLSET_LANDING_SLUGS`
+([`src/config/promo-landing-slugs.ts`](../../src/config/promo-landing-slugs.ts)) instead of a
+private hardcoded 4-brand array, so **HiKOKI** (and any future brand) appears automatically once
+it has Meta spend on its `/promotions/<slug>` URL. Display names come from a `BRAND_DISPLAY_NAME`
+map typed `Record<ToolsetLandingSlug, string>` — adding a brand to the source of truth without a
+display name is a **compile error**, not silent drift. The forked array was exactly why HiKOKI was
+missing here while every other surface already had it. Logo path is derived by convention
+(`/images/brands/name/<slug>Text.svg`). Full checklist: config-and-data/patterns.md → "Adding a promotion brand".
+
 ## Prize performance card — SVG brand logos (2026-06-22)
 
 `PrizePerformanceCard` `PROMOTION_BRANDS` logos now point at the shared SVG wordmarks
