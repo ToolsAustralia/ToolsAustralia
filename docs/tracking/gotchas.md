@@ -10,6 +10,19 @@ Fix: owned channels resolve **last-touch** via the overwriting [`_ta_attr_last`]
 
 **SIGNUP-touch leak — closed by [`reconcilePersistedAttribution`](../../src/services/attribution/reconcilePersistedAttribution.ts) (June 2026):** the resolver's `attr_platform` win path is cookie-only, so a Klaviyo email/SMS touch captured at **signup** and persisted on the user (`User.signupAttribution.utmSource/utmMedium`) was invisible to it → stamped `direct`. This is the exact leak the per-cycle `backfill-klaviyo-attribution-cycle` script kept correcting after the fact. Before stamping the ledger, [`payment-processing.ts`](../../src/utils/payment/payment-processing.ts) now calls `reconcilePersistedAttribution`: when the edge result is `direct`/absent it recovers an **owned-channel** platform from the persisted UTM (paid sources are NOT recovered — a real paid click already wins at the edge). **The recovery is gated by the owned-channel recency window** (`windowDaysFor`, 5d for Klaviyo — the same source of truth the cookie resolver uses): a signup-Klaviyo touch only counts if it is within window of the conversion, so a months-old signup click with no fresh touch correctly stays `direct`, not Klaviyo (this cycle it moved 10 stale rows / $309.99 off `klaviyo_email`, leaving 3 recent / $77.50; the non-windowed version over-credited Klaviyo ~4×). The LIVE path now matches the backfill, so that backfill is **no longer needed going forward** (kept only for already-saved historical rows — [`backfill-klaviyo-attribution-cycle.ts`](../../scripts/backfill-klaviyo-attribution-cycle.ts) now applies the same windowed function bidirectionally). See [backend.md → "Persisted-UTM reconciliation"](./backend.md). Tests: `npm run test:reconcile-attribution`.
 
+## Klaviyo brand attribution must derive from the canonical brand set (not a forked list)
+
+[`klaviyo/brand-extraction.ts`](../../src/utils/integrations/klaviyo/brand-extraction.ts)
+`extractBrandFromSlug` turns a promo slug into the brand for the Klaviyo `brandInterest` profile
+property (consumed by `ensureUserProfileSynced`). It used to validate the slug's brand against a
+**hardcoded** `["milwaukee","dewalt","makita","ryobi"]` array — so when **HiKOKI** shipped as a 5th
+toolset, every `hikoki-*` slug failed the check and silently fell back to the default `"milwaukee"`,
+mis-attributing HiKOKI signups/conversions to Milwaukee in Klaviyo segmentation. Fixed (2026-06-30)
+by deriving `validBrands` from `getAllBrandKeys()` ([`src/config/brand-theme.ts`](../../src/config/brand-theme.ts))
+— the same source of truth the rest of the app uses — so new brands stay in lockstep. **Lesson:** the
+brand set lives in `brand-theme.ts` / `promo-landing-slugs.ts`; never re-type it in a consumer. See
+config-and-data/patterns.md → "Adding a promotion brand".
+
 ## Klaviyo + Meta CAPI `fetch failed` — route outbound calls through `lib/http/outbound.ts`
 
 **Incident (June 2026):** both the Klaviyo client ([`src/lib/klaviyo.ts`](../../src/lib/klaviyo.ts)) and the Meta CAPI senders ([`src/lib/facebook.ts`](../../src/lib/facebook.ts)) flooded prod logs with opaque `TypeError: fetch failed`. This is an **undici keep-alive socket race** in Vercel's freeze/thaw model, NOT a Klaviyo/Meta config problem — full root cause + fix in [infrastructure/gotchas.md](../infrastructure/gotchas.md) → "Outbound third-party `fetch`…".
