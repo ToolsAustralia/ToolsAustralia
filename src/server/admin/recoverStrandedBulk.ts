@@ -15,6 +15,7 @@ import {
   type PastDueChargeResultRow,
 } from "./chargePastDueShared";
 import { buildRecoveryVoidIdempotencyKey, buildRecoveryFinalizeIdempotencyKey } from "./recoverStrandedPastDuePolicy";
+import { buildAdminChargeIdempotencyKey } from "./past-due-charge-idempotency";
 import { classifyMemberForRecovery, type MemberRecoveryPlan } from "./recoverStrandedBulkPolicy";
 
 type PastDueUserLean = {
@@ -292,6 +293,10 @@ export async function runStrandedRecovery(
           adminId,
           chargeRunId: runId,
           bypassRecentAttemptLock: true,
+          // Stable key on the freshly-finalized invoice id: it is unique per recovery,
+          // so this never collides across runs; stability only dedupes a retried pay of
+          // this same new invoice. (Not the bare-invoice replay trap — see past-due-charge-idempotency.ts.)
+          idempotencyKey: buildAdminChargeIdempotencyKey(finalized.id ?? row.currentDraftId ?? ""),
         });
         if (payRow.status === "success") {
           succeeded++;

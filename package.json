@@ -200,6 +200,7 @@
     "test:age-grouping": "tsx src/utils/metrics/__tests__/age-grouping.test.ts",
     "test:profession-normalize": "tsx src/utils/metrics/__tests__/profession-normalize.test.ts",
     "test:past-due-admin-charge": "tsx src/server/admin/__tests__/chargePastDueShared.test.ts && tsx src/server/admin/__tests__/chargePastDueSelectionPolicy.test.ts",
+    "test:past-due-idempotency-keys": "tsx src/server/admin/__tests__/pastDueChargeIdempotencyKeys.test.ts",
     "test:charge-lock-rate-limit": "tsx src/server/admin/__tests__/chargeLockRateLimitPolicy.test.ts",
     "test:charge-past-due-post-pay": "tsx src/server/admin/__tests__/chargePastDuePostPayPolicy.test.ts",
     "test:force-charge-policy": "tsx src/server/admin/__tests__/forceChargePastDuePolicy.test.ts",
@@ -278,7 +279,8 @@
     "test:normalize-platform": "tsx src/services/attribution/__tests__/normalizePlatform.test.ts",
     "test:classify-renewal": "tsx src/services/attribution/__tests__/classifyIsRenewal.test.ts",
     "test:converting-platform": "tsx src/services/attribution/__tests__/resolveConvertingPlatform.test.ts",
-    "test:derive-backfill-attribution": "tsx src/services/attribution/__tests__/deriveBackfillAttribution.test.ts"
+    "test:derive-backfill-attribution": "tsx src/services/attribution/__tests__/deriveBackfillAttribution.test.ts",
+    "test:reconcile-attribution": "tsx src/services/attribution/__tests__/reconcilePersistedAttribution.test.ts"
   },
   "dependencies": {
     "@auth/mongodb-adapter": "^3.10.0",

@@ -122,6 +122,7 @@ New test scripts added to `package.json` follow the `test:<scope>` convention an
 
 ```bash
 npm run test:past-due-history       # pure aggregation helpers (no env vars needed)
+npm run test:past-due-idempotency-keys  # Stripe idempotency-key builders: bulk key differs across runs (the 2026-06-29 replay guard); one-off key dedupes concurrent submits within a 30s bucket
 npm run test:merge-ad-channels      # pure ad-channel merge — preserves prior spend on a failed/expired-token fetch (no DB)
 npm run test:cancellation-upsell    # smoke-renders CancellationUpsellModal in 12 prop combos
 npm run test:refer-friend           # smoke-renders ReferFriendModal in 3 open + 1 closed combos
@@ -143,6 +144,7 @@ npm run test:zero-trial-guard        # webhook-LEVEL regression: handleInvoicePa
 npm run test:mer                     # pure computeDrawMerRow: blended New Revenue = Σ newRevenue across ALL platforms incl. direct; blended Ad Spend = Σ ad-channel spend; MER = revenue/spend (null when no spend); Meta→amount+MER, TikTok→awaiting+null MER (the spend gap), Klaviyo/Direct→owned; NaN/missing coerce to 0. No env needed. See docs/admin/mer-table.md.
 npm run test:platform-revenue-breakdown # covers the per-platform acquisition-revenue-by-category breakdown service (src/services/admin/__tests__/platformRevenueBreakdown.test.ts) backing /api/admin/dashboard/revenue-details/by-platform (the per-platform drill-down hover/expand).
 npm run test:landing-draw-day-urgency # pure unit test for the landing draw-day urgency resolver (src/utils/promo/__tests__/landing-draw-day-urgency.test.ts). No DB/env needed.
+npm run test:reconcile-attribution   # pure reconciler (src/services/attribution/__tests__/reconcilePersistedAttribution.test.ts): when the cookie-only edge decision is `direct`/absent, recovers an OWNED-channel (klaviyo_email/sms) platform from the persisted signup UTM so Klaviyo conversions aren't buried in `direct`; paid sources are never resurrected. Locks the live path to the same logic as scripts/backfill-klaviyo-attribution-cycle.ts. No DB/env needed.
 ```
 
 ## QA seed: past-due member for reanchor recovery testing

@@ -2,6 +2,7 @@ import mongoose from "mongoose";
 import type Stripe from "stripe";
 import { chooseChargeAction } from "./chargeOrRecoverPolicy";
 import { payOpenInvoiceAsPastDueAdmin, type PastDueChargeResultRow } from "./chargePastDueShared";
+import { buildOneOffChargeIdempotencyKey } from "./past-due-charge-idempotency";
 import { recoverStrandedPastDueInvoice } from "./recoverStrandedPastDue";
 
 /**
@@ -33,6 +34,12 @@ export async function chargeOrRecover(params: {
       user: params.user,
       adminId: params.adminId,
       bypassRecentAttemptLock: true,
+      // Window-bucketed key (30s): a deliberate retry 30s+ later gets a fresh key (a
+      // stable key would be replayed by Stripe for 24h and never re-charge), while two
+      // concurrent submits of the SAME click share the bucket so Stripe dedupes them to
+      // one charge. This path has no ChargeJobLock and the 30s debounce is non-atomic,
+      // so the key bucket is the real concurrent-double-charge guard. See builder doc.
+      idempotencyKey: buildOneOffChargeIdempotencyKey(params.invoice.id ?? ""),
     });
   }
 
