@@ -596,6 +596,12 @@ export function Carousel3D<T>({
   // True once a press has moved far enough to count as a drag — used to swallow
   // the synthetic click that fires on release so a drag never also "taps" a card.
   const suppressClick = useRef(false);
+  // Pointer capture is taken on the FIRST real drag move (below), NOT on pointer-down.
+  // Capturing on pointer-down retargets the mouseup/`click` to the stage, so a card's
+  // onClick never fires — which broke tap-to-select on the deferred (promo) surface,
+  // where only a tap commits. A pure click never crosses the drag threshold, so it
+  // never captures and its `click` lands on the card as expected.
+  const captured = useRef(false);
 
   // Autoplay: a self-rescheduling timeout keyed on `active`, so the countdown
   // restarts after EVERY settle (auto or manual) — a tap/drag never collides with
@@ -623,7 +629,7 @@ export function Carousel3D<T>({
       dragStartX.current = e.clientX;
       dragStartRotation.current = rotation.get();
       samples.current = [{ t: performance.now(), x: e.clientX }];
-      (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
+      captured.current = false; // capture is deferred to the first real drag move
     },
     [rotation],
   );
@@ -633,7 +639,15 @@ export function Carousel3D<T>({
       if (!dragging.current) return;
       // Drag left (negative dx) advances the ring forward; 1:1 with the finger.
       const dx = e.clientX - dragStartX.current;
-      if (Math.abs(dx) > 6) suppressClick.current = true; // it's a drag, not a tap
+      if (Math.abs(dx) > 6) {
+        suppressClick.current = true; // it's a drag, not a tap
+        if (!captured.current) {
+          // Now it's a real drag: capture so the gesture survives the pointer leaving
+          // the stage. A pure click never reaches here, so its click still hits the card.
+          (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
+          captured.current = true;
+        }
+      }
       rotation.set(dragStartRotation.current - dx / pxPerStep);
       const now = performance.now();
       samples.current.push({ t: now, x: e.clientX });
@@ -648,7 +662,10 @@ export function Carousel3D<T>({
     (e: React.PointerEvent) => {
       if (!dragging.current) return;
       dragging.current = false;
-      (e.currentTarget as HTMLElement).releasePointerCapture?.(e.pointerId);
+      if (captured.current) {
+        (e.currentTarget as HTMLElement).releasePointerCapture?.(e.pointerId);
+        captured.current = false;
+      }
       const s = samples.current;
       let vxPx = 0;
       if (s.length >= 2) {
