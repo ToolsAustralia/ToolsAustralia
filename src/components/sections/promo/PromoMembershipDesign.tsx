@@ -8,9 +8,11 @@ import { useVariantContext } from "@/components/ab-testing/VariantProvider";
 import { useExperimentTracking } from "@/hooks/ab-testing/useExperimentTracking";
 import { useResolvedMultiplier } from "@/hooks/queries/usePromoQueries";
 import { usePromoThemeStore } from "@/stores/usePromoThemeStore";
+import { useOpenMembershipModalListener } from "@/hooks/useOpenMembershipModalListener";
 import { TierCard } from "@/components/sections/membership/MembershipTierChooser";
 import { PackCard } from "@/components/sections/membership/MembershipOneTimePacks";
 import { TIER_HEX } from "@/utils/membership/tier-visuals";
+import { hasMultiplierBanner } from "@/utils/promo/multiplier-banner";
 import MultiplierBannerImage from "@/components/ui/MultiplierBannerImage";
 import PromoMultiplierBadge from "@/components/ui/PromoMultiplierBadge";
 import type { PromoMultiplier } from "@/types/promo-multiplier";
@@ -83,6 +85,11 @@ export default function PromoMembershipDesign() {
     },
   };
 
+  // The hero / countdown "Enter Now" CTAs open the membership flow by dispatching the global
+  // `openMembershipModal` event; the section on the page must listen for it. This one line is the
+  // whole contract (gating is applied inside the hook) — without it the hero button silently no-ops.
+  useOpenMembershipModalListener((plan) => cta.membershipModal.openModal(plan));
+
   const promoThemeSlug = usePromoThemeStore((s) => s.slug);
   const promoToolsetSlug = usePromoThemeStore((s) => s.toolsetSlug);
   const membershipMult = useResolvedMultiplier("membership-packages", "display");
@@ -93,6 +100,9 @@ export default function PromoMembershipDesign() {
   const isMembershipTab = cta.activeTab === "membership";
   const headerMult = (isMembershipTab ? membershipMult : oneTimeMult) ?? 0;
   const showHeader = headerMult > 1;
+  // Only render the image component when banner art exists for this multiplier AND it hasn't failed;
+  // otherwise fall back to the text badge (matches MembershipSection — never leaves a blank/hanging box).
+  const showBannerImage = showHeader && hasMultiplierBanner(headerMult) && !bannerFailed;
 
   const tierPlans = cta.membershipPlans ?? [];
   const oneTimePlans = cta.oneTimePlans ?? [];
@@ -105,7 +115,7 @@ export default function PromoMembershipDesign() {
         {/* Entries-multiplier header */}
         {showHeader && (
           <div className="mb-4 flex justify-center">
-            {!bannerFailed ? (
+            {showBannerImage ? (
               <MultiplierBannerImage
                 multiplier={headerMult}
                 slug={promoThemeSlug}
