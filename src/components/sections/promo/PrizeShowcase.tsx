@@ -63,99 +63,27 @@ type GallerySlideImage = { src: string; alt?: string; mobileSrc?: string };
 /** Catalog `PrizeMedia` plus optional landing flag (first slide may be injected). */
 type EnhancedGalleryItem = PrizeMedia & { isLandingImage?: boolean };
 
-/** DEWALT / MAKITA / MILWAUKEE / RYOBI collection hero webps — match `config/prizes` gallery paths. */
-function isMajorDrawBrandCollectionWebp(srcLower: string): boolean {
-  return /\/(dewalt|makita|milwaukee|ryobi)\.webp$/.test(srcLower);
-}
-
-/** Pre-composed toolbox + toolset hero art (first gallery slides) — scaled down in frame vs raw product heroes. */
-function isMajorDrawToolboxCompositeHero(srcLower: string): boolean {
-  return (
-    srcLower.includes("makitaset-milwaukeetb.webp") ||
-    srcLower.includes("makitaset-sidchrometb.webp") ||
-    srcLower.includes("dewaltset-milwaukeetb.webp") ||
-    srcLower.includes("dewaltset-sidchrometb.webp") ||
-    srcLower.includes("milwaukeeset-milwaukeetb.webp") ||
-    srcLower.includes("milwaukeeset-sidchrome.webp")
-  );
-}
-
 type GalleryLayoutResult = {
   scaleClass: string;
   translateClass: string;
   objectPosition?: CSSProperties;
 };
 
+/**
+ * Every prize gallery image now renders the RYOBI way — plain `object-contain`, dead
+ * centre, no per-brand zoom/shift. The combo renders, collection heroes and product
+ * shots are all pre-framed for this, so portrait AND landscape scale cleanly and
+ * consistently across every brand. (Previously each brand's collection hero got a
+ * `scale-90`/translate and some legacy heroes got `scale-125/150`; that per-brand
+ * scaling — which actually *shrank* them, adding whitespace — is what made the
+ * non-RYOBI galleries look inconsistent.) Kept as a function so every call site stays
+ * a single source of truth if per-image tuning is ever needed again.
+ */
 function getPrizeGalleryImageLayout(
-  imageSrc: string,
-  options?: { isLandingImage?: boolean; thumb?: boolean }
+  _imageSrc: string,
+  _options?: { isLandingImage?: boolean; thumb?: boolean }
 ): GalleryLayoutResult {
-  const src = imageSrc.toLowerCase();
-  const { isLandingImage, thumb } = options ?? {};
-  const yMilwaukeeTb = thumb ? "-translate-y-[6%]" : "-translate-y-[5%]";
-
-  // New combo renders ("<toolset>-<toolbox>.webp", e.g. dewalt-sidchrome.webp / hikoki-kincrome.webp)
-  // are pre-normalised to a single 4:3 canvas with the subject bottom-anchored + centred, so render
-  // them identically (object-contain, no per-image scale). Intercept here, before the legacy
-  // brand-`-set` rule below that would otherwise zoom dewalt/milwaukee combos to scale-150.
-  if (/\/(milwaukee|dewalt|makita|ryobi|hikoki)-(sidchrome|milwaukee|kincrome)\.webp$/.test(src)) {
-    return { scaleClass: "", translateClass: "", objectPosition: { objectPosition: "center center" as const } };
-  }
-
-  if (isMajorDrawBrandCollectionWebp(src)) {
-    return {
-      scaleClass: "scale-90",
-      translateClass: "-translate-y-[4%]",
-      objectPosition: { objectPosition: "center center" as const },
-    };
-  }
-
-  if (isMajorDrawToolboxCompositeHero(src)) {
-    return {
-      scaleClass: "scale-90",
-      translateClass: "-translate-y-[3%]",
-      objectPosition: { objectPosition: "center center" as const },
-    };
-  }
-
-  if (src.includes("kincromeTB.webp")) {
-    return {
-      scaleClass: thumb ? "scale-75" : "scale-90",
-      translateClass: "",
-      objectPosition: { objectPosition: "center center" as const },
-    };
-  }
-
-  const isMakitaSetHero = src.includes("makitaset-") && src.endsWith(".webp");
-  const isMilwaukeeSetHero = src.includes("milwaukeeset-") && src.endsWith(".webp");
-  const isMilwaukeeSetMilwaukeeTb = src.includes("milwaukeeset-milwaukeetb");
-  const isDewaltSetSidchrome = src.includes("dewaltset-sidchrome");
-  const isMakitaUpward = isMakitaSetHero || src.includes("makita.webp");
-  const isMilwaukeeUpward = (isMilwaukeeSetHero || src.includes("milwaukee.webp")) && !isMilwaukeeSetMilwaukeeTb;
-
-  const scaleClass =
-    src.includes("dewalt.webp") || src.includes("milwaukee.webp")
-      ? "scale-125"
-      : src.includes("makita.webp")
-        ? "scale-150"
-        : isMakitaSetHero || isMilwaukeeSetHero
-          ? "scale-[1.75]"
-          : (src.includes("dewalt-set") || src.includes("milwaukee-set")) && src.endsWith(".webp")
-            ? "scale-150"
-            : "";
-
-  const translateClass = isMilwaukeeSetMilwaukeeTb
-    ? yMilwaukeeTb
-    : isMakitaUpward || isMilwaukeeUpward || isDewaltSetSidchrome
-      ? "-translate-y-[8%]"
-      : "";
-
-  const objectPosition =
-    isMakitaSetHero || isMilwaukeeSetHero || isLandingImage
-      ? { objectPosition: "center center" as const }
-      : undefined;
-
-  return { scaleClass, translateClass, objectPosition };
+  return { scaleClass: "", translateClass: "", objectPosition: { objectPosition: "center center" as const } };
 }
 
 /**
@@ -655,34 +583,10 @@ export default function PrizeShowcase({
     thumbsApi.scrollTo(columnIndex);
   }, [activeGalleryIndex, thumbsApi]);
   
-  // On mobile, prevent scroll when slug changes (navigation) — evergreen pages only.
-  // Toolset landing pages should always scroll to top so users see the hero.
-  useEffect(() => {
-    if (toolsetMode || typeof window === 'undefined' || window.innerWidth >= 640) return;
-    
-    // Save scroll position when slug changes
-    const scrollY = window.scrollY;
-    
-    // Prevent scroll immediately
-    const preventScroll = () => {
-      if (Math.abs(window.scrollY - scrollY) > 5) {
-        window.scrollTo({ top: scrollY, behavior: 'auto' });
-      }
-    };
-    
-    // Check and restore scroll position multiple times
-    const timeouts = [
-      setTimeout(preventScroll, 0),
-      setTimeout(preventScroll, 10),
-      setTimeout(preventScroll, 50),
-      setTimeout(preventScroll, 100),
-    ];
-    
-    return () => {
-      timeouts.forEach(clearTimeout);
-    };
-  }, [activeSlug, toolsetMode]);
-  
+  // (The old in-place scroll-preservation effect was removed: selecting a toolset now
+  // intentionally scrolls the prize into view on home/my-account — see handleSelectPrize —
+  // and navigating surfaces scroll to the top, so there's nothing left to preserve.)
+
   // Navigation handlers for mobile prize selector (reserved for future mobile nav UI)
   const _handlePreviousPrize = () => {
     if (filteredPrizes.length > 0) {
@@ -746,7 +650,9 @@ export default function PrizeShowcase({
       setCarouselDeactivated(false);
     }
 
-    // When NOT on promotions page: update prizes in place, no navigation
+    // When NOT on promotions page (home / my-account): update the prize in place — no
+    // navigation AND no page scroll. The wheel itself rotates the picked brand to the
+    // front (Carousel3D goTo); auto-scrolling the page here was unwanted.
     if (!isPromotionsPage && !toolsetMode) {
       setLocalEffectiveSlug(nextSlug);
       setStoreSlug(nextSlug);
@@ -771,34 +677,11 @@ export default function PrizeShowcase({
       }
     }
 
-    // Toolset landing pages: always scroll to top so user sees the hero
-    // Evergreen pages: preserve scroll when switching prizes (PowerToolsetCarousel)
-    if (toolsetMode) {
-      router.push(newUrl, { scroll: true });
-      return;
-    }
-
-    // Evergreen only: on mobile, preserve scroll position when switching between prize slugs
-    if (typeof window !== 'undefined' && window.innerWidth < 640) {
-      const scrollY = window.scrollY;
-      const originalHtmlScrollBehavior = document.documentElement.style.scrollBehavior;
-      const originalBodyScrollBehavior = document.body.style.scrollBehavior;
-      document.documentElement.style.scrollBehavior = 'auto';
-      document.body.style.scrollBehavior = 'auto';
-      router.push(newUrl, { scroll: false });
-      const restoreScroll = () => {
-        window.scrollTo({ top: scrollY, behavior: 'auto' });
-        setTimeout(() => {
-          document.documentElement.style.scrollBehavior = originalHtmlScrollBehavior;
-          document.body.style.scrollBehavior = originalBodyScrollBehavior;
-        }, 300);
-      };
-      requestAnimationFrame(restoreScroll);
-      setTimeout(restoreScroll, 0);
-      setTimeout(restoreScroll, 50);
-    } else {
-      router.push(newUrl, { scroll: false });
-    }
+    // Navigate to the new prize page. Next's App Router scrolls to the TOP of the new
+    // route AFTER it commits (default scroll behavior), so the visitor lands at the hero
+    // once the page is ready — NOT snapped up prematurely while the old content is still
+    // on screen. (We deliberately don't force an immediate window.scrollTo here.)
+    router.push(newUrl);
   };
   
   const handleToolboxTypeChange = (type: "sidchrome" | "milwaukee" | "kincrome" | "cash") => {
@@ -1033,7 +916,7 @@ export default function PrizeShowcase({
                   initial={{ opacity: 0, y: 12 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.2, duration: 0.4 }}
-                  className="font-sans font-extrabold font-[950] uppercase text-black dark:text-white mb-3 sm:mb-4 text-center text-md sm:text-[32px] lg:text-agency-title leading-[1.08]"
+                  className="text-balance font-sans font-extrabold font-[950] uppercase text-black dark:text-white mb-3 sm:mb-4 text-center text-md sm:text-[32px] lg:text-agency-title leading-[1.08]"
                 >
                   Pick your <span style={{ color: theme.primary }}>Power Toolset / Storage System</span>
                 </motion.p>
@@ -1066,6 +949,9 @@ export default function PrizeShowcase({
                           : null
                   }
                   onSelect={handleSelectPrize}
+                  // Evergreen /promotions/* navigates on select → drag must only browse,
+                  // tap commits. Home/my-account swaps in place → the ring drives selection live.
+                  selectionMode={isPromotionsPage ? "deferred" : "live"}
                   className="mb-8 sm:mb-10 lg:mb-12"
                 />
               )}

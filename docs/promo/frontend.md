@@ -125,9 +125,9 @@ Promo components use `cn()` from `@/utils/cn` for conditional class composition.
 
 Countdown timers in promo components — `GiveawayCountdownTimer`, `FloatingCountdownBanner`, `FreezePeroidBanner` — are now leaf-isolated via [`<CountdownLeaf>`](../../src/components/ui/CountdownLeaf.tsx) / [`useLeafTimer`](../../src/hooks/useLeafTimer.ts) so the parent promo section / banner host doesn't re-render on every tick. `OtherToolsetsCarousel` pauses its infinite framer-motion loop when offscreen via [`useInViewportAnimation`](../../src/hooks/useInViewportAnimation.ts), and `FloatingPromoBanner` / `FloatingGetEntriesButton` consume the device-tier CSS tokens (`--ta-blur`, `--ta-shadow-card`, `--ta-transition-dur`) so visual cost scales down on mobile / `Save-Data`. Floating elements set `data-floating-widget="true"` so the print stylesheet hides them. The new [`FloatingPromoBannerHost`](../../src/components/banners/FloatingPromoBannerHost.tsx) is mounted once in `providers.tsx` and orchestrates promo banner visibility globally instead of per-page mounting. See [shared-ui/patterns.md](../shared-ui/patterns.md#site-wide-interaction-smoothness--phase-1-2026-05-09) for the helpers.
 
-## FloatingPromoBanner safe-area inset (2026-06-09)
+## FloatingPromoBanner — removed (2026-07-01)
 
-[`FloatingPromoBanner`](../../src/components/banners/FloatingPromoBanner.tsx) is `fixed bottom-0` and now carries `pb-[env(safe-area-inset-bottom)]` on its root so its content clears the iOS home indicator. This became necessary once the app set `viewport-fit=cover` in the viewport meta — that removes the browser's automatic safe-area inset, so any bottom-pinned element must add the padding itself. Keep this class when restyling the banner.
+The floating "ENTRY BOOST ENDING SOON" promo banner (`FloatingPromoBanner` + its path-gated `FloatingPromoBannerHost` mount in `providers.tsx`) was **removed** — no longer needed. Its shared helpers (`PromoBadge`, `countdown-mode.ts`) and the `membershipTabChanged` window event stay, since `PromoBanner` still consumes them. (The Phase-1 note above references the old mount; it's historical.)
 
 ## PrizeShowcase gallery — Embla migration (Phase 1.5, 2026-05-10)
 

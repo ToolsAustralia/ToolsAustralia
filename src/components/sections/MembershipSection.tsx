@@ -156,7 +156,7 @@ export default function MembershipSection({
           ? "one-time"
           : "membership";
       setActiveTab(newTab);
-      // Dispatch event for FloatingPromoBanner to sync
+      // Dispatch event for PromoBanner to sync
       if (typeof window !== "undefined") {
         window.dispatchEvent(
           new CustomEvent("membershipTabChanged", {
@@ -548,7 +548,7 @@ export default function MembershipSection({
                 <button
                   onClick={() => {
                     setActiveTab("one-time");
-                    // Dispatch event for FloatingPromoBanner to sync
+                    // Dispatch event for PromoBanner to sync
                     if (typeof window !== "undefined") {
                       window.dispatchEvent(
                         new CustomEvent("membershipTabChanged", {
@@ -578,7 +578,7 @@ export default function MembershipSection({
                 <button
                   onClick={() => {
                     setActiveTab("membership");
-                    // Dispatch event for FloatingPromoBanner to sync
+                    // Dispatch event for PromoBanner to sync
                     if (typeof window !== "undefined") {
                       window.dispatchEvent(
                         new CustomEvent("membershipTabChanged", {

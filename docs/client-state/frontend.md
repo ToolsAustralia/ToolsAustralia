@@ -19,7 +19,6 @@ the recurring-vs-new split needs no separate request. See
 
 - `<DeviceTierProvider />` — once, writes `data-tier` / `data-viewport-tier` / `data-save-data` on `<html>`. See [shared-ui/patterns.md](../shared-ui/patterns.md#device-tier-system).
 - `<MotionConfig reducedMotion="user">` — framer-motion respects OS `prefers-reduced-motion`.
-- `<FloatingPromoBannerHost />` — global floating promo banner orchestrator (replaces per-page mounting).
 - Tracking trackers (Affiliate / Referral / PromoLink / Klaviyo identifier).
 
 The `transition-colors duration-200 ease-out` utility was removed from `<body>` to stop a global colour-transition repaint on every theme flip.

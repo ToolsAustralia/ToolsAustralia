@@ -94,6 +94,20 @@ export interface Carousel3DProps<T> {
   activeIndex?: number;
   defaultActiveIndex?: number;
   onActiveIndexChange?: (index: number) => void;
+  /**
+   * Fires when the user DELIBERATELY lands on a card — a tap, arrow, dot, or
+   * keyboard nav, plus a drag-release only when `commitOnDrag` is set. Distinct
+   * from `onActiveIndexChange` (which tracks the live front-most index as the
+   * ring spins and also fires mid-autoplay). Wire this to a selection with a side
+   * effect (navigation, in-place swap) so a free browse-spin never triggers it.
+   */
+  onCommit?: (index: number) => void;
+  /**
+   * When true, a drag-release also fires `onCommit` (a free fling counts as a
+   * deliberate pick). Default false: drag only browses and selection commits on an
+   * explicit tap/arrow/dot — the right choice when committing navigates the page.
+   */
+  commitOnDrag?: boolean;
 
   /** Horizontal ring radius (px). Falls to radiusXMobile under `mobileMaxWidth`. */
   radiusX?: number;
@@ -318,6 +332,8 @@ interface RingCardProps<T> {
   geometry: RingGeometry;
   reduceMotion: boolean;
   isActive: boolean;
+  /** When true, the focused card is tappable too (used to commit a browsed pick). */
+  committable: boolean;
   cardWidthCss: string;
   onSelect: () => void;
   label: string;
@@ -331,6 +347,7 @@ function RingCard<T>({
   geometry,
   reduceMotion,
   isActive,
+  committable,
   cardWidthCss,
   onSelect,
   label,
@@ -382,7 +399,7 @@ function RingCard<T>({
       aria-roledescription="slide"
       aria-label={label}
       aria-hidden={!isActive}
-      onClick={isActive ? undefined : onSelect}
+      onClick={isActive && !committable ? undefined : onSelect}
       style={{
         transform,
         opacity,
@@ -392,7 +409,10 @@ function RingCard<T>({
         backfaceVisibility: "hidden",
         willChange: "transform, opacity, filter",
       }}
-      className={cn("absolute left-1/2 top-1/2", isActive ? "cursor-default" : "cursor-pointer")}
+      className={cn(
+        "absolute left-1/2 top-1/2",
+        isActive && !committable ? "cursor-default" : "cursor-pointer",
+      )}
     >
       <div style={{ width: cardWidthCss }}>{renderItem(live)}</div>
     </motion.div>
@@ -407,6 +427,8 @@ export function Carousel3D<T>({
   activeIndex: controlledIndex,
   defaultActiveIndex = 0,
   onActiveIndexChange,
+  onCommit,
+  commitOnDrag = false,
   radiusX = 290,
   radiusXMobile = 168,
   radiusY = 54,
@@ -540,9 +562,24 @@ export function Carousel3D<T>({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [controlledIndex, isControlled, n]);
 
-  const next = useCallback(() => settle(Math.round(rotation.get()) + 1), [settle, rotation]);
-  const prev = useCallback(() => settle(Math.round(rotation.get()) - 1), [settle, rotation]);
-  const goTo = useCallback((i: number) => settle(i), [settle]);
+  // Report a deliberate landing to the consumer (wrapped to [0,n)). Only the
+  // user-nav funcs below call this — autoplay's auto-advance settles WITHOUT it,
+  // so a self-spin never fires a selection.
+  const commitIndex = useCallback((raw: number) => onCommit?.(((raw % n) + n) % n), [onCommit, n]);
+  const next = useCallback(() => {
+    const t = Math.round(rotation.get()) + 1;
+    settle(t);
+    commitIndex(t);
+  }, [settle, rotation, commitIndex]);
+  const prev = useCallback(() => {
+    const t = Math.round(rotation.get()) - 1;
+    settle(t);
+    commitIndex(t);
+  }, [settle, rotation, commitIndex]);
+  const goTo = useCallback((i: number) => {
+    settle(i);
+    commitIndex(i);
+  }, [settle, commitIndex]);
 
   /* ---- autoplay: pause on hover / focus-within / drag / reduced-motion --- */
   const [hovered, setHovered] = useState(false);
@@ -568,10 +605,12 @@ export function Carousel3D<T>({
   useEffect(() => {
     if (!autoRotate || reduceMotion || paused || n < 2) return;
     const id = window.setTimeout(() => {
-      if (!dragging.current) next();
+      // Auto-advance rotates the ring but must NOT fire onCommit — a self-spin is
+      // never a selection. Settle directly instead of calling next().
+      if (!dragging.current) settle(Math.round(rotation.get()) + 1);
     }, intervalMs);
     return () => window.clearTimeout(id);
-  }, [autoRotate, reduceMotion, paused, n, intervalMs, next, active]);
+  }, [autoRotate, reduceMotion, paused, n, intervalMs, settle, rotation, active]);
 
   const onPointerDown = useCallback(
     (e: React.PointerEvent) => {
@@ -629,12 +668,16 @@ export function Carousel3D<T>({
       // target, so however hard the user flings, the ring follows and lands.
       const projected = Math.round(current + vSteps * 0.18); // momentum window
       settleTo(projected, vSteps);
+      // A free fling counts as a deliberate pick only when commitOnDrag is set
+      // (live surfaces). On navigating surfaces it stays a pure browse — selection
+      // commits on an explicit tap, never on a spin.
+      if (commitOnDrag) commitIndex(projected);
       // Release the pause shortly after, so a flick coasts before autoplay resumes.
       window.setTimeout(() => {
         if (!dragging.current) setDragActive(false);
       }, 140);
     },
-    [pxPerStep, rotation, settleTo],
+    [pxPerStep, rotation, settleTo, commitOnDrag, commitIndex],
   );
 
   /* ---- whole-stage pointer parallax (reduced-motion off) ------------------ */
@@ -767,6 +810,7 @@ export function Carousel3D<T>({
               geometry={geometry}
               reduceMotion={reduceMotion}
               isActive={i === active}
+              committable={onCommit != null}
               cardWidthCss={cardWidthCss}
               onSelect={() => {
                 // Swallow the click that ends a drag so dragging never also taps.
