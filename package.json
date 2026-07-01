@@ -33,6 +33,8 @@
     "seed:past-due-member:dry": "tsx scripts/seed-past-due-member.ts --dry-run",
     "seed:promo-packages-design": "tsx scripts/seed-promo-packages-design-experiment.ts",
     "seed:promo-packages-design:dry": "tsx scripts/seed-promo-packages-design-experiment.ts --dry-run",
+    "cleanup:promo-packages-design": "tsx scripts/cleanup-promo-packages-design-experiment.ts",
+    "cleanup:promo-packages-design:apply": "tsx scripts/cleanup-promo-packages-design-experiment.ts --apply",
     "migrate:accumulated-entries": "tsx scripts/migrate-accumulated-entries.ts",
     "migrate:package-type": "tsx scripts/migrate-package-type-subscription-to-membership.ts",
     "type-check": "tsc --noEmit",
