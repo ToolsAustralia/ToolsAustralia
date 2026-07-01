@@ -1,5 +1,28 @@
 # Shared UI — Frontend
 
+## Dead-component sweep (2026-07-01)
+
+Removed ~24 presentational components with **zero real consumers** (verified via a repo-wide
+usage audit — direct/dynamic imports, barrel re-exports, JSX usage all checked). Most were old
+draw/winner/promo sections superseded by earlier redesigns:
+
+- **sections/** — `MajorDrawSection` (1.6k LOC), `MajorDrawStats`, `RecentWinnersCarousel`,
+  `GiveawaySection`, `FlowChartSection`, `ExistingPartners`, `CustomerTestimonials`,
+  `promo/WinnersShowcase`.
+- **ui/** — `HexagonalPromoBadge`, `DiagonalPatternOverlay`, `LatestWinnersBadge`,
+  `CompletedDrawRibbon`, `PaymentLoadingSpinner`, `SectionDivider`, `CountdownLeaf`,
+  `embla/EmblaCarousel`, `embla/EmblaThumbsGallery` (kept: `embla/EmblaCarouselButton` — 3 live importers).
+- **features/** — `MiniDrawDetailClient`, `PrizeCategories`. **filters/** — `WinnerFilterToggle`
+  (markup was ported into `ui/Seg.tsx` during the membership redesign). **cta/** — `MembershipCTA`.
+  **cards/** — `RecentWinnerCard` (transitive: only consumer was `RecentWinnersCarousel`).
+- Companion cleanups: dropped `CustomerTestimonials` from the (dead) `sections/index.ts` barrel;
+  removed dangling commented-out refs in `Hero.tsx` + `(site)/page.tsx`.
+
+**Kept deliberately** (documented atomic primitives, "adopt going forward" policy — technically
+unadopted but intentional): `ui/Badge.tsx` (wired into `test:ui-primitives`) and `ui/Modal.tsx`
+(re-export shim). The top-level `components/index.ts` + `sections/index.ts` barrels are unused
+but left in place (their live re-exports still resolve) — flagged for a later pass.
+
 ## hikoki-green badge fix + prize combo-render normalisation (2026-06-22)
 
 Two follow-ups after the HiKOKI launch:

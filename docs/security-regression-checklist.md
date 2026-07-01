@@ -64,7 +64,7 @@ Use this document after every security-focused change or before a major release 
 ## 9. Inline Style Remediation Tracker
 
 - Pattern overlays (countdown banners, promos, footer, stats cards) use shared utilities such as `pattern-dots-white` and `pattern-rings-soft`. When new sections need a pattern, add a utility instead of inlining `background-image`.
-- Horizontal carousels (`ProductCategories`, `ExistingPartners`, `PrizeCategories`) now rely on Tailwind utilities (`w-max`, `scroll-smooth`, `snap-start`) instead of inline width or snap attributes. Follow the same approach for future sliders.
+- Horizontal carousels (`ProductCategories`) now rely on Tailwind utilities (`w-max`, `scroll-smooth`, `snap-start`) instead of inline width or snap attributes. Follow the same approach for future sliders.
 - Progress indicators and sliders still rely on inline `style` attributes because they map live data to widths/positions. When redesigning them, prefer CSS variables populated via data attributes or convert to discrete class states to eventually drop inline styles entirely.
 
 > Tip for new teammates: run through the entire checklist in staging before every deploy that touches authentication, payments, or security headers. Record pass/fail outcomes so regressions can be traced quickly.

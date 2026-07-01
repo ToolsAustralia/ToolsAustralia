@@ -174,6 +174,8 @@ my-account/
     └── RecentOrders.tsx (existing)
 ```
 
+> **Note (2026-07-01):** `ActivePrizeDraws.tsx`, `MembershipStatus.tsx`, and `RecentOrders.tsx` (and the `my-account/components/index.ts` barrel) shown above were removed in the 2026-07-01 dead-component sweep — they had no remaining live importers. This tree is preserved as a historical record of the redesign's original layout.
+
 ## Responsive Breakpoints
 
 | Breakpoint | Behavior |

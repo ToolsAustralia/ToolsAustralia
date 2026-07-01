@@ -39,8 +39,6 @@ export {
   TableSkeleton,
   MembershipCardSkeleton,
 } from "@/components/loading/SkeletonLoader";
-export { ProgressBar, StepProgress, UploadProgress, PaymentProgress } from "@/components/loading/ProgressLoader";
-export { Spinner, ButtonSpinner, InlineSpinner, PageSpinner, CardSpinner } from "@/components/loading/SpinnerLoader";
 export {
   ErrorRecovery,
   NetworkErrorRecovery,

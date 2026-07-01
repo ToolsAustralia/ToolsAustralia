@@ -2,6 +2,15 @@
 
 This domain IS frontend (no backend surface).
 
+## Dead-code sweep (2026-07-01)
+
+`app/providers.tsx` no longer re-exports the `ProgressLoader`/`SpinnerLoader` symbols
+(`ProgressBar`/`StepProgress`/`UploadProgress`/`PaymentProgress` and `Spinner`/`ButtonSpinner`/
+`InlineSpinner`/`PageSpinner`/`CardSpinner`) — those loader files had zero consumers and were
+removed. The `useRecentWinners` query hook was also deleted (orphaned once `RecentWinnersCarousel`
+was removed). Part of a site-wide unused-component sweep; see
+[docs/shared-ui/frontend.md](../shared-ui/frontend.md#dead-component-sweep-2026-07-01).
+
 See [architecture.md](./architecture.md) for the full layout: TanStack Query, Zustand stores, Contexts, generic hooks.
 
 ## `useRevenueBreakdown` — `ChartData.membershipRenewals` (2026-06-15)

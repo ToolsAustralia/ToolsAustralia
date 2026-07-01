@@ -5,8 +5,6 @@ import Hero from "@/components/sections/Hero";
 import PrizeShowcase from "@/components/sections/promo/PrizeShowcase";
 import MembershipSection from "@/components/sections/MembershipSection";
 // import ProductCategories from "@/components/features/ProductCategories"; // Temporarily hidden until the shop is live
-// Temporarily disabled - no real reviews yet
-// import CustomerTestimonials from "@/components/sections/CustomerTestimonials";
 import HomeProducts from "./components/HomeProducts";
 import HomeMiniDraws from "./components/HomeMiniDraws";
 import LandingPageTrigger from "./components/LandingPageTrigger";
@@ -207,8 +205,6 @@ export default function HomePage() {
         {/* <SectionContainer>
           <ProductCategories showBackground={false} />
         </SectionContainer> */}
-        {/* Customer Testimonials - Temporarily disabled (no real reviews yet) */}
-        {/* <CustomerTestimonials /> */}
       </main>
     </div>
   );

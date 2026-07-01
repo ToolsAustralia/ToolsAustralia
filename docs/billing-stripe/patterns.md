@@ -21,8 +21,8 @@ Caveats:
 - **Page config name collision.** A handful of pages export `export const dynamic = "force-dynamic"` (Next.js segment config). When such a page also needs `import dynamic from "next/dynamic"`, alias the import — `import nextDynamic from "next/dynamic"` — to avoid shadowing the export. Pattern in [src/app/(site)/my-account/benefits/page.tsx](../../src/app/(site)/my-account/benefits/page.tsx).
 
 Affected callsites converted in Phase 5A:
-- `MembershipModal`: 7 production callsites (`MajorDrawSection`, `MembershipSection`, `MembershipPageClient`, `my-account/page.tsx`, `my-account/settings/page.tsx`, `my-account/membership/page.tsx`, `my-account/draws/page.tsx`, `my-account/benefits/page.tsx`).
-- `SubscriptionManagementModal`: `MembershipStatus`, `SubscriptionTab`.
+- `MembershipModal`: 7 production callsites (`MembershipSection`, `MembershipPageClient`, `my-account/page.tsx`, `my-account/settings/page.tsx`, `my-account/membership/page.tsx`, `my-account/draws/page.tsx`, `my-account/benefits/page.tsx`).
+- `SubscriptionManagementModal`: `SubscriptionTab`.
 - `PaymentMethodsTab`: `PaymentTab`.
 - All seven `UnifiedModalManager` branches.
 

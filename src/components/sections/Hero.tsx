@@ -2,7 +2,6 @@
 
 import Image from "next/image";
 import { useState, useEffect } from "react";
-// import MajorDrawStats from "./MajorDrawStats"; // Commented out for now
 import HorizontalCountdown from "./HorizontalCountdown";
 import MetallicButton from "@/components/ui/MetallicButton";
 import BrandScroller from "@/components/ui/BrandScroller";
@@ -203,9 +202,6 @@ export default function Hero() {
         </p>
         <BrandScroller speed={800} speedMobile={400} />
       </div>
-
-      {/* Major Draw Stats - Positioned at bottom with absolute positioning
-      <MajorDrawStats className="-bottom-12 sm:-bottom-16" /> */}
     </section>
   );
 }

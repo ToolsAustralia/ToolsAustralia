@@ -28,9 +28,6 @@ _(none)_
 - [src/components/layout/Header.tsx](../../src/components/layout/Header.tsx) — **score 4.5** — 1731 LOC
   - signals: loc>800 (1731 LOC); ternary-explosion (41 JSX ternaries); multiple-concerns (4 concern buckets: hooks, services, components, integrations); many-arbitraries (49 arbitrary-value classNames); long-className (longest className=382 chars); many-useState (14 useState slices)
 
-- [src/components/sections/MajorDrawSection.tsx](../../src/components/sections/MajorDrawSection.tsx) — **score 4.5** — 1550 LOC
-  - signals: loc>800 (1550 LOC); ternary-explosion (41 JSX ternaries); multiple-concerns (3 concern buckets: hooks, services, components); many-arbitraries (43 arbitrary-value classNames); long-className (longest className=702 chars); many-useState (11 useState slices)
-
 - [src/components/sections/promo/PrizeShowcase.tsx](../../src/components/sections/promo/PrizeShowcase.tsx) — **score 4.5** — 1429 LOC
   - signals: loc>800 (1429 LOC); ternary-explosion (39 JSX ternaries); multiple-concerns (3 concern buckets: hooks, services, components); many-arbitraries (39 arbitrary-value classNames); long-className (longest className=538 chars); many-useState (18 useState slices)
 
@@ -329,12 +326,6 @@ _(none)_
 - [src/components/FacebookPixel.tsx](../../src/components/FacebookPixel.tsx) — **score 1.5** — 707 LOC
   - signals: ternary-explosion (13 JSX ternaries); loc-500-800 (707 LOC)
 
-- [src/components/loading/ProgressLoader.tsx](../../src/components/loading/ProgressLoader.tsx) — **score 1.5** — 199 LOC
-  - signals: ternary-explosion (5 JSX ternaries); long-className (longest className=383 chars)
-
-- [src/components/loading/SpinnerLoader.tsx](../../src/components/loading/SpinnerLoader.tsx) — **score 1.5** — 127 LOC
-  - signals: ternary-explosion (6 JSX ternaries); long-className (longest className=378 chars)
-
 - [src/components/loading/SuccessScreen.tsx](../../src/components/loading/SuccessScreen.tsx) — **score 1.5** — 284 LOC
   - signals: ternary-explosion (4 JSX ternaries); long-className (longest className=612 chars)
 
@@ -402,9 +393,6 @@ _(none)_
 
 - [src/app/(site)/mini-draws/[id]/components/MiniDrawTabs.tsx](../../src/app/(site)/mini-draws/[id]/components/MiniDrawTabs.tsx) — **score 1.5** — 379 LOC
   - signals: ternary-explosion (7 JSX ternaries); long-className (longest className=360 chars)
-
-- [src/app/(site)/my-account/components/MembershipStatus.tsx](../../src/app/(site)/my-account/components/MembershipStatus.tsx) — **score 1.5** — 319 LOC
-  - signals: multiple-concerns (3 concern buckets: hooks, services, components); long-className (longest className=351 chars)
 
 - [src/app/(site)/my-account/support/page.tsx](../../src/app/(site)/my-account/support/page.tsx) — **score 1.5** — 131 LOC
   - signals: multiple-concerns (4 concern buckets: hooks, services, components, integrations); many-arbitraries (21 arbitrary-value classNames)
@@ -484,9 +472,6 @@ _(none)_
 - [src/components/error/ErrorRecovery.tsx](../../src/components/error/ErrorRecovery.tsx) — **score 1** — 279 LOC
   - signals: ternary-explosion (7 JSX ternaries)
 
-- [src/components/features/MiniDrawDetailClient.tsx](../../src/components/features/MiniDrawDetailClient.tsx) — **score 1** — 256 LOC
-  - signals: ternary-explosion (4 JSX ternaries)
-
 - [src/components/features/MiniDrawsFilters.tsx](../../src/components/features/MiniDrawsFilters.tsx) — **score 1** — 166 LOC
   - signals: ternary-explosion (4 JSX ternaries)
 
@@ -558,9 +543,6 @@ _(none)_
 - [src/components/ui/BrandLogoCard.tsx](../../src/components/ui/BrandLogoCard.tsx) — **score 1** — 269 LOC
   - signals: ternary-explosion (4 JSX ternaries)
 
-- [src/components/ui/CompletedDrawRibbon.tsx](../../src/components/ui/CompletedDrawRibbon.tsx) — **score 1** — 98 LOC
-  - signals: ternary-explosion (4 JSX ternaries)
-
 - [src/components/ui/EntryProgressBar.tsx](../../src/components/ui/EntryProgressBar.tsx) — **score 1** — 95 LOC
   - signals: ternary-explosion (5 JSX ternaries)
 
@@ -630,14 +612,8 @@ _(none)_
 - [src/components/email-preview/EmailPreviewLayout.tsx](../../src/components/email-preview/EmailPreviewLayout.tsx) — **score 0.5** — 129 LOC
   - signals: long-className (longest className=396 chars)
 
-- [src/components/features/PrizeCategories.tsx](../../src/components/features/PrizeCategories.tsx) — **score 0.5** — 196 LOC
-  - signals: many-arbitraries (26 arbitrary-value classNames)
-
 - [src/components/features/ProductSection.tsx](../../src/components/features/ProductSection.tsx) — **score 0.5** — 108 LOC
   - signals: long-className (longest className=354 chars)
-
-- [src/components/filters/WinnerFilterToggle.tsx](../../src/components/filters/WinnerFilterToggle.tsx) — **score 0.5** — 162 LOC
-  - signals: long-className (longest className=565 chars)
 
 - [src/components/invoice/InvoiceComponent.tsx](../../src/components/invoice/InvoiceComponent.tsx) — **score 0.5** — 525 LOC
   - signals: loc-500-800 (525 LOC)
@@ -687,15 +663,6 @@ _(none)_
 - [src/components/sections/AboutToolsAustralia.tsx](../../src/components/sections/AboutToolsAustralia.tsx) — **score 0.5** — 174 LOC
   - signals: many-arbitraries (54 arbitrary-value classNames)
 
-- [src/components/sections/CustomerTestimonials.tsx](../../src/components/sections/CustomerTestimonials.tsx) — **score 0.5** — 247 LOC
-  - signals: many-arbitraries (21 arbitrary-value classNames)
-
-- [src/components/sections/ExistingPartners.tsx](../../src/components/sections/ExistingPartners.tsx) — **score 0.5** — 230 LOC
-  - signals: many-arbitraries (41 arbitrary-value classNames)
-
-- [src/components/sections/GiveawaySection.tsx](../../src/components/sections/GiveawaySection.tsx) — **score 0.5** — 93 LOC
-  - signals: many-arbitraries (22 arbitrary-value classNames)
-
 - [src/components/sections/Hero.tsx](../../src/components/sections/Hero.tsx) — **score 0.5** — 220 LOC
   - signals: many-arbitraries (75 arbitrary-value classNames)
 
@@ -710,9 +677,6 @@ _(none)_
 
 - [src/components/sections/promo/UnlockDiscounts.tsx](../../src/components/sections/promo/UnlockDiscounts.tsx) — **score 0.5** — 319 LOC
   - signals: long-className (longest className=334 chars)
-
-- [src/components/sections/RecentWinnersCarousel.tsx](../../src/components/sections/RecentWinnersCarousel.tsx) — **score 0.5** — 309 LOC
-  - signals: long-className (longest className=515 chars)
 
 - [src/components/ui/Button.tsx](../../src/components/ui/Button.tsx) — **score 0.5** — 94 LOC
   - signals: many-arbitraries (26 arbitrary-value classNames)

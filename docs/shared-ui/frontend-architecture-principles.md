@@ -51,7 +51,7 @@ We adopt a hybrid of Brad Frost's Atomic Design with concessions to React/Next.j
 
 ### What our codebase has today
 
-- `src/components/ui/` — currently contains a mix: badges (atomic), `MetallicButton` (atomic), `PaymentLoadingSpinner` (atomic), `RichTextEditor` (organism — too big to be an atom). Some cleanup needed in Plan 4 to enforce the tier boundary.
+- `src/components/ui/` — currently contains a mix: badges (atomic), `MetallicButton` (atomic), `RichTextEditor` (organism — too big to be an atom). Some cleanup needed in Plan 4 to enforce the tier boundary.
 - `src/components/modals/ui/` — modal-specific atoms (`Button`, `Input`, `ModalContainer`, etc.). Should probably merge into `src/components/ui/` long-term.
 - `src/components/cards/`, `cta/`, `layout/`, `loading/`, `modals/`, `sections/` — domain organisms. Reasonable today.
 - `src/features/admin/users/` — feature folder pattern. Good — replicate this for other large feature surfaces.

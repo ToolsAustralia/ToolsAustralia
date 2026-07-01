@@ -1,5 +1,16 @@
 # Dashboard-Account — Frontend
 
+## Dead-component cleanup (2026-06-30)
+
+Removed five unused files under `src/app/(site)/my-account/components/` — verified zero
+importers (pages import the live components directly, not via the barrel): `EntryWallet.tsx`
+(was empty), `ActivePrizeDraws.tsx`, `MembershipStatus.tsx` (a 324-line orphan that hand-rolled
+its own tier-colour card — superseded by `src/utils/membership/tier-visuals.ts`), `RecentOrders.tsx`,
+and the `index.ts` barrel (no external consumers). Live components (`DashboardHeader`, `BottomNav`,
+`CoverBanner`, `UserInfoBar`, `QuickActions`, `MajorDrawOverview`, `SocialLinksSection`) are
+unaffected. This is step 1 of a my-account redesign that will lean on the shared membership
+primitives (`AccessRing`, `tier-visuals`, `LivePartnerDeals`, `Carousel3D`, `package-icons`).
+
 ## Pages
 
 `src/app/(site)/my-account/`:
@@ -140,7 +151,7 @@ Resolves the bulk of the earlier flag list. **Frontend-only; no backend/hook/ser
 - `src/components/modals/SubscriptionManagementModal/SettingsRedesignSubscription.tsx`
 - `src/components/modals/PaymentMethodsTab/SettingsRedesignPayment.tsx`
 
-Both are **presentational only** — every value/handler is passed from the unchanged orchestrator. They reuse the verified logic sub-components (`CurrentBenefitsCard`/`UpgradeList`/`DowngradeList`/`CancelResumeRow`/`PastDueAlert`/`PendingChangeBanner`/empty states for subscription; the Stripe `<Elements>`+`AddPaymentForm` add-form and delete `ConfirmationModal` stay in `PaymentMethodsTab/index.tsx`, the `stripePromise` singleton is never re-instantiated) wrapped in the Claude tier-themed plan hero / wallet credit-card design. The 5 subscription child modals and the payment confirm-modal/add-form were hoisted so they render once in **both** branches. **Modal-mode callers (`MembershipStatus`) and the `SettingsModal` panel embed never set `settingsRedesign` → byte-behavior-identical** (verified by dedicated Opus reviews of Phase C & D).
+Both are **presentational only** — every value/handler is passed from the unchanged orchestrator. They reuse the verified logic sub-components (`CurrentBenefitsCard`/`UpgradeList`/`DowngradeList`/`CancelResumeRow`/`PastDueAlert`/`PendingChangeBanner`/empty states for subscription; the Stripe `<Elements>`+`AddPaymentForm` add-form and delete `ConfirmationModal` stay in `PaymentMethodsTab/index.tsx`, the `stripePromise` singleton is never re-instantiated) wrapped in the Claude tier-themed plan hero / wallet credit-card design. The 5 subscription child modals and the payment confirm-modal/add-form were hoisted so they render once in **both** branches. **The `SettingsModal` panel embed (and any other modal-mode caller) never sets `settingsRedesign` → byte-behavior-identical** (verified by dedicated Opus reviews of Phase C & D). (The my-account `MembershipStatus` component, formerly a modal-mode caller, was removed in the 2026-07-01 dead-component sweep.)
 
 #### Flagged / deferred design elements (still NOT implemented — follow-ups)
 
@@ -171,7 +182,7 @@ Dashboard/account components use `cn()` from `@/utils/cn` for conditional class 
 
 ## Interaction smoothness (Phase 1, 2026-05-09)
 
-`MajorDrawHeaderStrip` and `MajorDrawOverview` (in [src/app/(site)/my-account/components/](../../src/app/(site)/my-account/components/)) are now leaf-isolated via [`<CountdownLeaf>`](../../src/components/ui/CountdownLeaf.tsx) / [`useLeafTimer`](../../src/hooks/useLeafTimer.ts) — the surrounding account dashboard does not re-render on every tick of the embedded countdown. See [shared-ui/patterns.md](../shared-ui/patterns.md#site-wide-interaction-smoothness--phase-1-2026-05-09) for the pattern.
+`MajorDrawHeaderStrip` and `MajorDrawOverview` (in [src/app/(site)/my-account/components/](../../src/app/(site)/my-account/components/)) are now leaf-isolated via a per-host leaf component wrapping [`useLeafTimer`](../../src/hooks/useLeafTimer.ts) — the surrounding account dashboard does not re-render on every tick of the embedded countdown. See [shared-ui/patterns.md](../shared-ui/patterns.md#site-wide-interaction-smoothness--phase-1-2026-05-09) for the pattern.
 
 ## Resubscribe carry-over sub-line on `MajorDrawOverview` (Phase 3, 2026-05-20 — REVERTED 2026-05-21)
 
