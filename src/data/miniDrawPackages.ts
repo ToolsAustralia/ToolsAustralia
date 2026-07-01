@@ -12,7 +12,7 @@ export interface MiniDrawPackage {
   /** Optional user-facing label override. If absent, `name` is shown. */
   displayName?: string;
   /** When true, this pack appears only for users with active subscription OR major draw entries. */
-  isMemberOnly?: boolean;
+  isAdditional?: boolean;
   price: number;
   entries: number;
   partnerDiscountHours: number;
@@ -247,7 +247,7 @@ export const miniDrawPackages: MiniDrawPackage[] = [
     _id: "additional-tradie-pack-mini",
     name: "Additional Tradie Pack (Mini Draw)",
     displayName: "Tradie Pack",
-    isMemberOnly: true,
+    isAdditional: true,
     price: 25,
     entries: 25,
     partnerDiscountHours: 48,
@@ -269,7 +269,7 @@ export const miniDrawPackages: MiniDrawPackage[] = [
     _id: "additional-foreman-pack-mini",
     name: "Additional Foreman Pack (Mini Draw)",
     displayName: "Foreman Pack",
-    isMemberOnly: true,
+    isAdditional: true,
     price: 50,
     entries: 50,
     partnerDiscountHours: 96,
@@ -291,7 +291,7 @@ export const miniDrawPackages: MiniDrawPackage[] = [
     _id: "additional-boss-pack-mini",
     name: "Additional Boss Pack (Mini Draw)",
     displayName: "Boss Pack",
-    isMemberOnly: true,
+    isAdditional: true,
     price: 125,
     entries: 125,
     partnerDiscountHours: 240,
@@ -313,7 +313,7 @@ export const miniDrawPackages: MiniDrawPackage[] = [
     _id: "additional-power-pack-mini",
     name: "Additional Power Pack (Mini Draw)",
     displayName: "Power Pack",
-    isMemberOnly: true,
+    isAdditional: true,
     price: 250,
     entries: 250,
     partnerDiscountHours: 480,
@@ -335,7 +335,7 @@ export const miniDrawPackages: MiniDrawPackage[] = [
     _id: "additional-vip-pack-mini",
     name: "Additional VIP Pack (Mini Draw)",
     displayName: "VIP Pack",
-    isMemberOnly: true,
+    isAdditional: true,
     price: 500,
     entries: 500,
     partnerDiscountHours: 720,
@@ -364,8 +364,8 @@ export const miniDrawPackages: MiniDrawPackage[] = [
 export const getMiniDrawPackagesForViewer = (hasAccess: boolean): MiniDrawPackage[] => {
   return miniDrawPackages.filter((pkg) => {
     if (!pkg.isActive) return false;
-    const isMemberOnly = pkg.isMemberOnly === true;
-    return hasAccess ? isMemberOnly : !isMemberOnly;
+    const isAdditional = pkg.isAdditional === true;
+    return hasAccess ? isAdditional : !isAdditional;
   });
 };
 

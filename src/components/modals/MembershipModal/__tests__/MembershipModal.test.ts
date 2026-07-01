@@ -70,7 +70,7 @@ const sampleMembershipPlan: LocalMembershipPlan = {
     { text: "Partner discount access" },
   ],
   subtitle: "Best value membership",
-  isMemberOnly: false,
+  isAdditional: false,
   buttonText: "Join now",
   buttonStyle: "primary",
   metadata: {
@@ -85,7 +85,7 @@ const sampleOneTimePlan: LocalMembershipPlan = {
   period: "one-time",
   features: [{ text: "20 entries" }],
   subtitle: "One-time pack",
-  isMemberOnly: false,
+  isAdditional: false,
   buttonText: "Buy now",
   buttonStyle: "primary",
   metadata: {

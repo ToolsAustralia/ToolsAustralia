@@ -16,7 +16,7 @@ export interface MembershipPackage {
   totalEntries?: number;
   shopDiscountPercent?: number;
   partnerDiscountDays?: number;
-  isMemberOnly?: boolean;
+  isAdditional?: boolean;
   isActive: boolean;
   createdAt: string;
 }
@@ -35,7 +35,7 @@ export interface MembershipPlan {
   entriesPerMonth?: number;
   totalEntries?: number;
   shopDiscountPercent?: number;
-  isMemberOnly?: boolean;
+  isAdditional?: boolean;
 }
 
 export function useMemberships() {
@@ -84,7 +84,7 @@ export function useMemberships() {
           entriesPerMonth: 0,
           totalEntries: 0,
           shopDiscountPercent: 0,
-          isMemberOnly: false,
+          isAdditional: false,
         };
       }
 
@@ -93,7 +93,7 @@ export function useMemberships() {
 
       // Generate unique ID that includes member-only status to avoid conflicts
       const baseId = pkg.name.toLowerCase().replace(/\s+/g, "-");
-      const uniqueId = pkg.isMemberOnly ? `${baseId}-member` : baseId;
+      const uniqueId = pkg.isAdditional ? `${baseId}-member` : baseId;
 
       return {
         _id: pkg._id,
@@ -109,7 +109,7 @@ export function useMemberships() {
         entriesPerMonth: pkg.entriesPerMonth,
         totalEntries: pkg.totalEntries,
         shopDiscountPercent: pkg.shopDiscountPercent,
-        isMemberOnly: pkg.isMemberOnly,
+        isAdditional: pkg.isAdditional,
       };
     },
     [getSubtitle, getButtonText]

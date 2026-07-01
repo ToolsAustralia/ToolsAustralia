@@ -12,7 +12,7 @@ import { getAdditionalPackDiscount } from "@/utils/membership/additional-pack-di
 import { cn } from "@/utils/cn";
 import { hexToRgba } from "./utils";
 import BestValueBadge from "@/components/ui/BestValueBadge";
-import { isOneTimeBestValuePlanId } from "@/utils/membership/member-package-mapping";
+import { isOneTimeBestValuePlanId } from "@/utils/membership/additional-package-mapping";
 
 interface PackagesGridProps {
   packagesWithPromo: StaticMembershipPackage[];

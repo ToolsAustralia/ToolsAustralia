@@ -172,7 +172,7 @@ const SubscriptionManagementModal: React.FC<SubscriptionManagementModalProps> = 
         ],
         buttonText: "Get Started",
         buttonStyle: "secondary",
-        isMemberOnly: false,
+        isAdditional: false,
         metadata: {
           entriesCount: promoEntries,
           promoMultiplier: membershipPromoMultiplier,

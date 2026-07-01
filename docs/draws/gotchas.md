@@ -110,3 +110,7 @@ Both routes return per-user fields (`userStats` on major-draw, `hasActiveMembers
 ## Mini-draw view-tracking Klaviyo keys are snake_case
 
 [`MiniDrawViewTracking`](../../src/app/(site)/mini-draws/[id]/components/MiniDrawViewTracking.tsx) calls `trackKlaviyoViewContent` with `product_id` / `product_name` — not the camelCase equivalents. The shape is enforced by `KlaviyoEventParams` in [src/hooks/useKlaviyoTracking.ts](../../src/hooks/useKlaviyoTracking.ts). See [docs/tracking/KLAVIYO_INTEGRATION.md](../tracking/KLAVIYO_INTEGRATION.md) for the full property-naming contract.
+
+## Terminology: `isAdditional` (was `isMemberOnly`) — 2026-07-01
+
+The package flag `isMemberOnly` was renamed to **`isAdditional`** across the codebase. It marks packages that require *additional-package access* — an **active subscription OR current major-draw entries** (see `hasAdditionalPackageAccess`), which is broader than subscribers; it was never truly "member-only". The internal `-member` UI id-suffix (a row disambiguator) is intentionally unchanged. Full rationale: [subscription/gotchas.md](../subscription/gotchas.md).

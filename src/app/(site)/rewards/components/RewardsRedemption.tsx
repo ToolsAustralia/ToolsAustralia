@@ -30,7 +30,7 @@ interface RedemptionOption {
   packageId?: string; // For package redemptions
   packageType?: "one-time" | "mini-draw"; // Package type
   entries?: number; // For package redemptions
-  isMemberOnly?: boolean; // Whether this is a member-only package
+  isAdditional?: boolean; // Whether this is a member-only package
   isPromoActive?: boolean; // Whether promo is active
   promoMultiplier?: number; // Promo multiplier
 }
@@ -54,10 +54,10 @@ export default function RewardsRedemption({ user, onPointsUpdate }: RewardsRedem
   const allOneTimePackages = useMemo(() => {
     const packages = getOneTimePackages();
     return packages.map((pkg) => {
-      if (pkg.isMemberOnly && resolvedMembershipMultiplier != null && isPromoMultiplier(resolvedMembershipMultiplier)) {
+      if (pkg.isAdditional && resolvedMembershipMultiplier != null && isPromoMultiplier(resolvedMembershipMultiplier)) {
         return applyPromoToPackage(pkg, resolvedMembershipMultiplier);
       }
-      if (!pkg.isMemberOnly && resolvedOneTimeMultiplier != null && isPromoMultiplier(resolvedOneTimeMultiplier)) {
+      if (!pkg.isAdditional && resolvedOneTimeMultiplier != null && isPromoMultiplier(resolvedOneTimeMultiplier)) {
         return applyPromoToPackage(pkg, resolvedOneTimeMultiplier);
       }
       return pkg;
@@ -96,7 +96,7 @@ export default function RewardsRedemption({ user, onPointsUpdate }: RewardsRedem
       ...(hasAccess
         ? // Users with access see additional packages
           allOneTimePackages
-            .filter((pkg) => pkg.isMemberOnly)
+            .filter((pkg) => pkg.isAdditional)
             .map((pkg) => ({
               id: `package-${pkg._id}`,
               name: `Claim ${pkg.name}`,
@@ -108,13 +108,13 @@ export default function RewardsRedemption({ user, onPointsUpdate }: RewardsRedem
               packageId: pkg._id,
               packageType: "one-time" as const,
               entries: pkg.totalEntries,
-              isMemberOnly: true,
+              isAdditional: true,
               isPromoActive: pkg.isPromoActive,
               promoMultiplier: pkg.promoMultiplier,
             }))
         : // Users without access see only regular packages
           allOneTimePackages
-            .filter((pkg) => !pkg.isMemberOnly)
+            .filter((pkg) => !pkg.isAdditional)
             .map((pkg) => ({
               id: `package-${pkg._id}`,
               name: `Claim ${pkg.name}`,
@@ -126,7 +126,7 @@ export default function RewardsRedemption({ user, onPointsUpdate }: RewardsRedem
               packageId: pkg._id,
               packageType: "one-time" as const,
               entries: pkg.totalEntries,
-              isMemberOnly: false,
+              isAdditional: false,
               isPromoActive: pkg.isPromoActive,
               promoMultiplier: pkg.promoMultiplier,
             }))),
@@ -143,7 +143,7 @@ export default function RewardsRedemption({ user, onPointsUpdate }: RewardsRedem
         packageId: pkg._id,
         packageType: "mini-draw" as const,
         entries: pkg.entries,
-        isMemberOnly: false,
+        isAdditional: false,
         isPromoActive: pkg.isPromoActive,
         promoMultiplier: pkg.promoMultiplier,
       })),
@@ -399,12 +399,12 @@ export default function RewardsRedemption({ user, onPointsUpdate }: RewardsRedem
                 {option.type === "package" && (
                   <div
                     className={`absolute top-2 right-2 sm:top-3 sm:right-3 px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-full text-xs font-semibold ${
-                      option.isMemberOnly
+                      option.isAdditional
                         ? "bg-gradient-to-r from-amber-500 to-yellow-600 text-white"
                         : "bg-gradient-to-r from-red-600 to-red-600 text-white"
                     }`}
                   >
-                    {option.isMemberOnly ? "MEMBER" : "PACKAGE"}
+                    {option.isAdditional ? "MEMBER" : "PACKAGE"}
                   </div>
                 )}
 

@@ -6,7 +6,7 @@ import { ModalContainer, ModalHeader, ModalContent } from "../ui";
 import { useMemberships } from "@/hooks/useMemberships";
 import { convertToLocalPlan, type LocalMembershipPlan } from "@/utils/membership/membership-adapters";
 import { useUserData } from "@/hooks/queries";
-import { isNonMemberPackage } from "@/utils/membership/member-package-mapping";
+import { isPublicPackage } from "@/utils/membership/additional-package-mapping";
 import { useResolvedMultiplier } from "@/hooks/queries/usePromoQueries";
 import { getEffectivePromoType } from "@/utils/promo/get-effective-promo-type";
 import { useUserMajorDrawStats } from "@/hooks/queries/useMajorDrawQueries";
@@ -186,7 +186,7 @@ const PackageSelectionModal: React.FC<PackageSelectionModalProps> = ({
             ],
             buttonText: "Get Started",
             buttonStyle: "secondary",
-            isMemberOnly: false,
+            isAdditional: false,
           },
           {
             id: "foreman",
@@ -202,7 +202,7 @@ const PackageSelectionModal: React.FC<PackageSelectionModalProps> = ({
             isPopular: true,
             buttonText: "Go Pro",
             buttonStyle: "primary",
-            isMemberOnly: false,
+            isAdditional: false,
           },
           {
             id: "boss",
@@ -217,7 +217,7 @@ const PackageSelectionModal: React.FC<PackageSelectionModalProps> = ({
             ],
             buttonText: "Become Boss",
             buttonStyle: "secondary",
-            isMemberOnly: false,
+            isAdditional: false,
           },
         ];
 
@@ -236,7 +236,7 @@ const PackageSelectionModal: React.FC<PackageSelectionModalProps> = ({
             ],
             buttonText: "Buy Now",
             buttonStyle: "secondary" as const,
-            isMemberOnly: false,
+            isAdditional: false,
             metadata: {
               entriesCount: 3,
             },
@@ -254,7 +254,7 @@ const PackageSelectionModal: React.FC<PackageSelectionModalProps> = ({
             isPopular: true,
             buttonText: "Get Tradie",
             buttonStyle: "primary" as const,
-            isMemberOnly: false,
+            isAdditional: false,
             metadata: {
               entriesCount: 15,
             },
@@ -272,7 +272,7 @@ const PackageSelectionModal: React.FC<PackageSelectionModalProps> = ({
             ],
             buttonText: "Go Foreman",
             buttonStyle: "secondary" as const,
-            isMemberOnly: true,
+            isAdditional: true,
             metadata: {
               entriesCount: 30,
             },
@@ -289,7 +289,7 @@ const PackageSelectionModal: React.FC<PackageSelectionModalProps> = ({
             ],
             buttonText: "Get Boss",
             buttonStyle: "secondary" as const,
-            isMemberOnly: true,
+            isAdditional: true,
             metadata: {
               entriesCount: 150,
             },
@@ -306,7 +306,7 @@ const PackageSelectionModal: React.FC<PackageSelectionModalProps> = ({
             ],
             buttonText: "Get Power",
             buttonStyle: "secondary" as const,
-            isMemberOnly: true,
+            isAdditional: true,
             metadata: {
               entriesCount: 600,
             },
@@ -315,7 +315,7 @@ const PackageSelectionModal: React.FC<PackageSelectionModalProps> = ({
 
         // Filter out non-member packages for existing members
         const filteredPackages = isMember
-          ? allOneTimePackages.filter((pkg) => !isNonMemberPackage(pkg.id))
+          ? allOneTimePackages.filter((pkg) => !isPublicPackage(pkg.id))
           : allOneTimePackages;
 
         // Apply resolved multiplier to one-time packages (includes alternating if no active promo)
@@ -468,14 +468,14 @@ const PackageSelectionModal: React.FC<PackageSelectionModalProps> = ({
     if (hasAdditionalPackageAccessFlag) {
       // If user has access (subscription OR entries), show additional packages
       finalMembershipPlans = finalMembershipPlans.filter((plan) => {
-        return plan.isMemberOnly === true;
+        return plan.isAdditional === true;
       });
     } else {
       // For users without access, show packages based on sub-tab selection
       if (oneTimeSubTab === "one-time") {
         // Show regular one-time packages (non-member exclusive)
         finalMembershipPlans = finalMembershipPlans.filter((plan) => {
-          return plan.isMemberOnly !== true && plan.period === "one-time";
+          return plan.isAdditional !== true && plan.period === "one-time";
         });
       } else {
         // Show membership packages (subscription) to encourage subscription

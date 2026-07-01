@@ -19,6 +19,7 @@ import { getPackageDisplayName } from "@/utils/membership/getDisplayName";
 import { buildCheckoutResumeUrl } from "@/utils/integrations/klaviyo/checkout-resume-url";
 import { hasBlockingSubscription } from "@/utils/subscription/subscription-helpers";
 import { hasAdditionalPackageAccess } from "@/utils/membership/has-additional-package-access";
+import { selectOneTimeDrawerPackages } from "@/utils/membership/additional-package-mapping";
 
 export type MembershipTab = "membership" | "one-time";
 
@@ -51,7 +52,21 @@ const isSubscriptionPlan = (p: LocalMembershipPlan) =>
  * later be unified into this hook; kept separate here to honour "recompose only"
  * (no edits to the shared MembershipSection used across 15+ pages).
  */
-export function useMembershipCardCta() {
+export function useMembershipCardCta(
+  {
+    includeAdditionalForMembers = false,
+    onPackageCtaClick,
+  }: {
+    includeAdditionalForMembers?: boolean;
+    /**
+     * Fired exactly when a package CTA genuinely opens the modal — i.e. AFTER the draw
+     * gate passes and AFTER the past-due / existing-subscriber `/my-account` early-returns.
+     * Lets a caller (e.g. the promo A/B treatment) emit a funnel event on the SAME path
+     * the shared MembershipSection emits on, without coupling this hook to A/B infra.
+     */
+    onPackageCtaClick?: (plan: LocalMembershipPlan) => void;
+  } = {},
+) {
   const router = useRouter();
   const pathname = usePathname();
   const { userData, isAuthenticated, loading: userLoading } = useUserContext();
@@ -93,17 +108,20 @@ export function useMembershipCardCta() {
   // The public /membership "Not subscribing?" section always shows the PUBLIC
   // one-time ladder (Apprentice→VIP) — the member-only "Additional" packs are a
   // my-account concept, not part of this marketing cross-sell.
+  // When `includeAdditionalForMembers` is on (A/B treatment opt-in), members see the
+  // Additional packs instead — offer parity with the control MembershipSection.
   const oneTimePlans = useMemo(() => {
-    return oneTimePackages
-      .filter((raw) => !raw.isMemberOnly)
-      .map((raw) => {
-        const local = convertToLocalPlan(raw);
-        const days = daysByName.get(raw.name);
-        const withDays =
-          days != null ? { ...local, metadata: { ...local.metadata, partnerDiscountDays: days } } : local;
-        return applyPromo(withDays, oneTimeMultiplier);
-      });
-  }, [oneTimePackages, oneTimeMultiplier, daysByName]);
+    return selectOneTimeDrawerPackages(oneTimePackages, {
+      hasAdditionalAccess: hasAccessToAdditional,
+      includeAdditional: includeAdditionalForMembers,
+    }).map((raw) => {
+      const local = convertToLocalPlan(raw);
+      const days = daysByName.get(raw.name);
+      const withDays =
+        days != null ? { ...local, metadata: { ...local.metadata, partnerDiscountDays: days } } : local;
+      return applyPromo(withDays, oneTimeMultiplier);
+    });
+  }, [oneTimePackages, oneTimeMultiplier, daysByName, hasAccessToAdditional, includeAdditionalForMembers]);
 
   const hierarchy = (p: LocalMembershipPlan) => {
     if (!hasActiveSubscription || !currentName || !isSubscriptionPlan(p)) {
@@ -129,7 +147,7 @@ export function useMembershipCardCta() {
   };
 
   const isLocked = (p: LocalMembershipPlan): boolean =>
-    !hasAccessToAdditional && !!p.isMemberOnly;
+    !hasAccessToAdditional && !!p.isAdditional;
 
   const onSelect = (plan: LocalMembershipPlan) =>
     whenGatesOpenElseGateModal(() => {
@@ -146,6 +164,7 @@ export function useMembershipCardCta() {
       }
       // new subscription / one-time / guest → open the existing modal
       membershipModal.openModal(plan);
+      onPackageCtaClick?.(plan);
 
       // Canonical Klaviyo "Started Checkout" — AUTHED users only (guests fire
       // server-side from /api/auth/register). Mirrors MembershipSection exactly.

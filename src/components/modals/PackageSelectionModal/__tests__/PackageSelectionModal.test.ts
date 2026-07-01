@@ -42,7 +42,7 @@ const tradiePlan: LocalMembershipPlan = {
   ],
   buttonText: "Get Started",
   buttonStyle: "secondary",
-  isMemberOnly: false,
+  isAdditional: false,
 };
 
 const foremanPlan: LocalMembershipPlan = {
@@ -58,7 +58,7 @@ const foremanPlan: LocalMembershipPlan = {
   isPopular: true,
   buttonText: "Go Pro",
   buttonStyle: "primary",
-  isMemberOnly: false,
+  isAdditional: false,
 };
 
 const bossPlan: LocalMembershipPlan = {
@@ -73,7 +73,7 @@ const bossPlan: LocalMembershipPlan = {
   ],
   buttonText: "Become Boss",
   buttonStyle: "secondary",
-  isMemberOnly: false,
+  isAdditional: false,
 };
 
 const oneTimePlan: LocalMembershipPlan = {
@@ -89,7 +89,7 @@ const oneTimePlan: LocalMembershipPlan = {
   isPopular: true,
   buttonText: "Get Tradie",
   buttonStyle: "primary",
-  isMemberOnly: false,
+  isAdditional: false,
   metadata: { entriesCount: 15 },
 };
 

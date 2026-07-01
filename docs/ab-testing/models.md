@@ -48,3 +48,16 @@ A/B test (control = false → video; treatment = true → still). Independent of
 `imageSrcBySlug` (which also kills the video, but by pinning a custom still).
 Defaulted + merged + boolean-validated by `VariantConfigService`. Seed an
 experiment with `npm run seed:static-vs-video-hero`.
+
+## VariantConfig.packages.design
+
+Optional `"promo" | "membership"` scalar on `VariantConfig.packages`
+(default / absent = `"promo"`). The lever for the **promo package-design** A/B
+test: `PromoPackages` branches on it — `"promo"` renders the current
+`MembershipSection`; `"membership"` renders `PromoMembershipDesign` (the
+`/membership` tier + one-time-packs design). Because it is a scalar on the
+already-spread `packages` key, it merges through `mergeVariantConfig` with no
+change to that function; `validateVariantConfig` rejects any value other than
+`"promo"`/`"membership"`. Seed an experiment (straight to active) with
+`npm run seed:promo-packages-design`. Winner metric = System A (user-level
+Bayesian conversion); read the Bayesian panel, not the legacy chi-square card.

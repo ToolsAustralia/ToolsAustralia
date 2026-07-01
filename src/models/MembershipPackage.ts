@@ -10,7 +10,7 @@ export interface IMembershipPackage extends Document {
   totalEntries?: number; // For one-time packages
   shopDiscountPercent?: number; // Discount percentage for shop purchases
   partnerDiscountDays?: number; // Days of partner discount access
-  isMemberOnly?: boolean; // Whether this package is for members only
+  isAdditional?: boolean; // Whether this package is for members only
   stripeProductId?: string;
   stripePriceId?: string;
   isActive: boolean;
@@ -66,7 +66,7 @@ const MembershipPackageSchema = new Schema<IMembershipPackage>(
       type: Number,
       min: [0, "Partner discount days cannot be negative"],
     },
-    isMemberOnly: {
+    isAdditional: {
       type: Boolean,
       default: false,
     },

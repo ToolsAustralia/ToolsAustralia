@@ -146,7 +146,7 @@ Your business facts already live as source-of-truth TS data + md docs. **Generat
 | `src/config/prizes.ts` | 13 prize entries (12 tool×storage combos +$5,000 cash, or $10,000 cash) | Structured | Prize answers |
 | `src/data/membershipPackages.ts` | Tier price/entries/partner-days, Stripe IDs | Structured | **Pull prices/entries from here, don't paraphrase** |
 | `src/data/upsellPackages.ts` | 22 upsell records, multipliers, display rules | Structured | Upsell answers |
-| `src/data/miniDrawPackages.ts` | Mini-draw pack ladder, member-only flags | Structured | Mini-draw answers |
+| `src/data/miniDrawPackages.ts` | Mini-draw pack ladder, isAdditional flags | Structured | Mini-draw answers |
 | `src/data/partnerBrandOffers.ts` | 7 partner brands (ordered; tier visibility = first N%) | Structured | Partner answers |
 | `professions.ts`, `australianStates.ts` | Audience/geography vocabulary (cross-ref Terms: ACT/SA excluded) | Structured | Context |
 | Selected `docs/*.md` | Refund/billing-anchor/referral/rewards-pause/prize-catalog | Prose (technical) | Summarise into topics; **don't surface verbatim** |

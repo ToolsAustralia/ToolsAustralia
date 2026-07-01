@@ -332,7 +332,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
       period: "one-time",
       features: [],
       subtitle: "Please select a package to continue",
-      isMemberOnly: false,
+      isAdditional: false,
       buttonText: "Select",
       buttonStyle: "primary",
       metadata: {

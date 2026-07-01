@@ -680,7 +680,7 @@ The platform doesn't only ship transactional email through SendGrid — it also 
 - **Allowlist** — a Stripe Radar value list of card fingerprints we trust enough to bypass auto-block. Audited in Mongo via `AllowlistAction`; Stripe is the source of truth.
 - **Blocked transaction** — a Mongo row mirroring a Stripe-blocked charge attempt; admins review and either allowlist or dismiss.
 - **Promo landing page** — a paid-traffic landing surface with its own hero, banner copy, FAQs, and trust bar — separate from the homepage and driven by the §6a multiplier system.
-- **Mini-draw pack ladder** — the 3-guest + 5-additional-member-only pack structure introduced 2026-05-14 (see §3b).
+- **Mini-draw pack ladder** — the 3-guest + 5-additional pack structure introduced 2026-05-14 (see §3b).
 - **TicketEntry** — one row = one ticket = one chance in a draw. Hard-keyed to a Mini Draw; Major Draw entries live separately on `MajorDraw.entries[]`. See §3e.
 - **Carry-forward** — subscription entries accumulate month-to-month while active. One-Time pack and Mini Pack entries do **not** carry forward.
 - **`autoRenew` toggle** — soft-cancel shortcut; calls Stripe `cancel_at_period_end: true`. Same effect as the §13c cancel flow; re-enable any time to undo (re-enabling an *unexpired* subscription mid-cycle).

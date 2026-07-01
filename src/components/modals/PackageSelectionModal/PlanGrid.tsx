@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { isOneTimeBestValuePlanId } from "@/utils/membership/member-package-mapping";
+import { isOneTimeBestValuePlanId } from "@/utils/membership/additional-package-mapping";
 import { getMembershipSectionColorScheme } from "@/utils/package-colors/packageColorScheme";
 import { getElectricPackageColorScheme } from "@/utils/package-colors/electricPackageScheme";
 import { getAdditionalPackDiscount } from "@/utils/membership/additional-pack-discount";

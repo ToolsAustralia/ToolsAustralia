@@ -41,7 +41,7 @@ export function getEffectivePromoType(
 
   if (packageKind === "one-time") {
     const pkg = resolvePackageForPromo(packageId);
-    if (isMember && pkg?.isMemberOnly === true) {
+    if (isMember && pkg?.isAdditional === true) {
       return "membership-packages";
     }
     return "one-time-packages";
@@ -53,7 +53,7 @@ export function getEffectivePromoType(
 /**
  * Check if a package is member-only from static data.
  */
-export function isMemberOnlyPackageById(packageId: string): boolean {
+export function isAdditionalPackageById(packageId: string): boolean {
   const pkg = resolvePackageForPromo(packageId);
-  return pkg?.isMemberOnly === true;
+  return pkg?.isAdditional === true;
 }

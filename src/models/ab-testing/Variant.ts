@@ -81,6 +81,12 @@ export interface VariantConfig {
     displayOrder?: string[]; // Reorder package IDs
     highlightPackage?: string; // Package ID to highlight/emphasize
     hidePackages?: string[]; // Package IDs to hide
+    /**
+     * A/B: which package DESIGN renders on promotions pages.
+     * "promo" (default / absent) = current MembershipSection.
+     * "membership" = the /membership tier + one-time-packs design (PromoMembershipDesign).
+     */
+    design?: "promo" | "membership";
   };
   membershipModal?: {
     showPackageSelectionFirst?: boolean; // Toggle package selection modal on step 2 (for landing/promotion pages)
