@@ -83,6 +83,14 @@ npm run seed:promo-packages-design       # activate the experiment (dev/local)
 
 **Overlap guard:** the seed refuses to activate if another active experiment already targets any of the slug targets. Override with `-- --force-overlap`. See [docs/ab-testing/promo-packages-design-runbook.md](../ab-testing/promo-packages-design-runbook.md) for full details.
 
+**Cleanup / re-seed:** `scripts/cleanup-promo-packages-design-experiment.ts` deletes the experiment and ALL its collected data (Variant, VariantAssignment, ExperimentEvent, ExperimentDailyMetrics, ExperimentHistory, then the Experiment doc) so it can be re-seeded fresh — used when a run collected data against a buggy build. It **leaves `PaymentEvent` stamps untouched** (financial records; the re-seed creates a new experiment `_id`, so stale stamps can't pollute the new metrics). **Dry-run by default** (destructive → opt-in), prints the resolved `_id` for a prod-vs-dev safety check, and refuses if 0 or >1 experiments match the name.
+
+```bash
+npm run cleanup:promo-packages-design         # DRY RUN — counts + resolved _id, no writes
+npm run cleanup:promo-packages-design:apply   # execute the deletes
+# then: npm run seed:promo-packages-design     # re-seed a fresh experiment
+```
+
 ### Affiliate commission reconciliation (safety net)
 
 The shared core [`reconcileAffiliateCommissions()`](../../src/utils/affiliate/reconcile-commissions.ts)
