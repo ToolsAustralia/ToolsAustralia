@@ -30,6 +30,7 @@ import PackageInclusionsExpanded from "@/components/modals/PackageInclusionsSlid
 import type { VariantConfig } from "@/models/ab-testing/Variant";
 import { useVariantContext } from "@/components/ab-testing/VariantProvider";
 import { useExperimentTracking } from "@/hooks/ab-testing/useExperimentTracking";
+import { useOpenMembershipModalListener } from "@/hooks/useOpenMembershipModalListener";
 import {
   getMembershipSectionColorScheme,
 } from "@/utils/package-colors/packageColorScheme";
@@ -104,27 +105,15 @@ export default function MembershipSection({
   const resolvedMembershipMultiplier = useResolvedMultiplier("membership-packages", "display");
   const resolvedOneTimeMultiplier = useResolvedMultiplier("one-time-packages", "display");
 
-  // Listen for upsell modal requests
-  useEffect(() => {
-    const handleOpenMembershipModal = (event: CustomEvent) => {
-      console.log("🎯 MembershipSection received openMembershipModal event:", event.detail);
-      const detail = event.detail ?? {};
-      const plan = detail.plan as LocalMembershipPlan | undefined;
-
-      whenGatesOpenElseGateModal(() => {
-        if (plan) {
-          membershipModal.setSelectedPlan(plan);
-        }
-        membershipModal.openModal();
-      });
-    };
-
-    window.addEventListener("openMembershipModal", handleOpenMembershipModal as EventListener);
-
-    return () => {
-      window.removeEventListener("openMembershipModal", handleOpenMembershipModal as EventListener);
-    };
-  }, [membershipModal, whenGatesOpenElseGateModal]);
+  // Open this section's modal when the hero / entry CTAs dispatch the global `openMembershipModal`
+  // event. Shared with the A/B treatment (PromoMembershipDesign) via one hook so both arms behave
+  // identically; the major-draw purchase gate is applied inside the hook.
+  useOpenMembershipModalListener((plan) => {
+    if (plan) {
+      membershipModal.setSelectedPlan(plan);
+    }
+    membershipModal.openModal();
+  });
 
   // Check if user has an active subscription (only for recurring subscription plans)
   const hasActiveSubscription = userData?.subscription?.isActive || false;
