@@ -11,6 +11,7 @@ import { useInViewportAnimation } from "@/hooks/useInViewportAnimation";
 import type { MembershipCardCta } from "@/hooks/useMembershipCardCta";
 import type { LocalMembershipPlan } from "@/utils/membership/membership-adapters";
 import { getPackageIcon } from "@/utils/images/package-icons";
+import { getPackageDisplayName } from "@/utils/membership/getDisplayName";
 import { getPartnerCatalogAccessPercentForPlanId } from "@/utils/partner-discounts/partner-catalog-visibility";
 import { TIER_HEX, tierKeyFromName, glossGrad, inkOn, inkDark, multiplierBadgeSrc } from "@/utils/membership/tier-visuals";
 import { cn } from "@/utils/cn";
@@ -20,7 +21,7 @@ function trackFor(ink: string): string {
   return ink === "#ffffff" ? "rgba(255,255,255,.22)" : "rgba(10,10,10,.22)";
 }
 
-function TierCard({ plan, cta }: { plan: LocalMembershipPlan; cta: MembershipCardCta }) {
+export function TierCard({ plan, cta }: { plan: LocalMembershipPlan; cta: MembershipCardCta }) {
   const key = tierKeyFromName(plan.name);
   const hex = TIER_HEX[key];
   const ink = inkOn(hex);
@@ -72,7 +73,7 @@ function TierCard({ plan, cta }: { plan: LocalMembershipPlan; cta: MembershipCar
           <span className="grid h-[52px] w-[52px] flex-none place-items-center rounded-[15px]" style={{ background: "linear-gradient(160deg,rgba(255,255,255,.3),rgba(255,255,255,.08))", boxShadow: "inset 0 1px 0 rgba(255,255,255,.45),inset 0 -1px 2px rgba(0,0,0,.16),0 2px 6px -2px rgba(0,0,0,.32)" }}>
             {icon && <Image src={icon} alt="" width={40} height={40} className="h-10 w-10 object-contain drop-shadow" />}
           </span>
-          <span className="font-['Poppins'] text-[16px] font-black uppercase tracking-[0.13em]">{plan.name}</span>
+          <span className="font-['Poppins'] text-[16px] font-black uppercase tracking-[0.13em]">{getPackageDisplayName(plan)}</span>
           <div className="ml-auto text-right leading-none">
             <span className="font-['Poppins'] text-[26px] font-black">${plan.price}</span>
             <span className="ml-0.5 text-xs font-semibold opacity-70">/mo</span>

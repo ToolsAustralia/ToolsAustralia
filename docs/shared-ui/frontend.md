@@ -111,6 +111,16 @@ global dark-mode schedule/toggle. That was the original intent.
 
 The `/membership` page passes no `sectionId`, so its `id="membership"` anchor is unchanged. The promo A/B treatment (`PromoMembershipDesign`) passes `sectionId="packages"` to render under `id="packages"` — preserving the `#packages` scroll anchor that promo pages use and preventing a duplicate `#membership` id on the page.
 
+### Promo treatment layout — `PromoMembershipDesign` reuses `TierCard` / `PackCard` (2026-07-01)
+
+The A/B **treatment** ([`PromoMembershipDesign`](../../src/components/sections/promo/PromoMembershipDesign.tsx)) is **not** a 1:1 copy of `/membership`. It reuses the card visuals but arranges them in a promo layout:
+
+- `TierCard` (from `MembershipTierChooser`) and `PackCard` (from `MembershipOneTimePacks`) are now **named exports** so the treatment can compose its own layout without duplicating card markup. `/membership` still renders the default components unchanged.
+- Layout: entries-multiplier header (`MultiplierBannerImage`) → **One-Time ↔ Membership toggler** (drives `cta.activeTab`/`setActiveTab`) → the active tab's cards in a grid whose column count matches the item count (so 5 Additional packs fill the row and center instead of leaving a gap in a 6-wide grid).
+- Card names use `getPackageDisplayName(plan)` (strips the `Additional ` prefix for display — data/ids unchanged). Applied inside `TierCard` + `PackCard`, so it is a no-op for the public/subscription names on `/membership`.
+- `PackCard` gained an optional `ctaLabel?: string` prop: when set (treatment passes `"Enter Now"`), it renders a visual CTA footer. **VIP exception:** on the near-black VIP card the footer uses a gold fill + dark ink (all other packs keep the dark fill) so the CTA stays legible. `/membership`'s drawer passes no `ctaLabel`, so its cards are unchanged. Treatment CTA copy is `"Enter Now"` for entry actions while preserving member-management states (`Current Plan`, `Update payment`, upgrade/downgrade).
+- `PackCard` also gained an optional `colorHex?: string` prop that overrides the derived accent hex (everything — gloss fill, ink, border, shadow — derives from it). The treatment uses it to align the one-time **Foreman** pack to the membership **Tradie** cyan (`TIER_HEX.tradie`) so the two blues read as one color. This is **treatment-scoped** (via `treatmentPackHex` in `PromoMembershipDesign`) — the shared `getPackageColorScheme` is deliberately NOT changed, so the A/B **control** (`MembershipSection`) keeps its palette and isn't altered mid-experiment.
+
 ### `features/PartnerDiscountQueue` — tier-themed partner discount card
 
 [`src/components/features/PartnerDiscountQueue.tsx`](../../src/components/features/PartnerDiscountQueue.tsx) renders the collapsible "Partner Discounts" card on `my-account`. Its visual identity is driven by the **active** package (subscription or active one-time period) resolved into `activePackageVisual` → `getMembershipSectionColorScheme(...)`, so the card matches the membership cards' tier colours.
