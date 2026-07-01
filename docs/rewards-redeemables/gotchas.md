@@ -34,3 +34,7 @@ Wrong eligibility → user sees offer they don't qualify for, or doesn't see one
 ## CSV import scale
 
 CSV bulk import is admin-triggered. For very large lists (>10k users), consider chunked processing. _TODO: confirm whether chunking is implemented or if the route times out at scale._
+
+## Terminology: `isAdditional` (was `isMemberOnly`) — 2026-07-01
+
+The package flag `isMemberOnly` was renamed to **`isAdditional`** across the codebase. It marks packages that require *additional-package access* — an **active subscription OR current major-draw entries** (see `hasAdditionalPackageAccess`), which is broader than subscribers; it was never truly "member-only". The internal `-member` UI id-suffix (a row disambiguator) is intentionally unchanged. Full rationale: [subscription/gotchas.md](../subscription/gotchas.md).

@@ -14,7 +14,7 @@ export interface LocalMembershipPlan {
   buttonStyle: "primary" | "secondary";
   originalPrice?: number;
   discount?: string;
-  isMemberOnly?: boolean;
+  isAdditional?: boolean;
   // Support for upsell metadata
   metadata?: {
     entriesCount?: number;
@@ -42,7 +42,7 @@ export function convertToLocalPlan(apiPlan: APIMembershipPlan): LocalMembershipP
     buttonStyle: apiPlan.buttonStyle,
     originalPrice: undefined, // Not available in MembershipPlan
     discount: undefined, // Not available in MembershipPlan
-    isMemberOnly: apiPlan.isMemberOnly,
+    isAdditional: apiPlan.isAdditional,
     metadata: {
       entriesCount: apiPlan.totalEntries || apiPlan.entriesPerMonth || 0,
     },
@@ -74,42 +74,42 @@ export function convertToAPIPlan(
   // If only one match found
   if (nameMatches.length === 1) {
     // console.log("🔍 Single default match:", {
-    //   selected: { id: nameMatches[0].id, _id: nameMatches[0]._id, isMemberOnly: nameMatches[0].isMemberOnly },
+    //   selected: { id: nameMatches[0].id, _id: nameMatches[0]._id, isAdditional: nameMatches[0].isAdditional },
     // });
     return nameMatches[0];
   }
 
   // Multiple matches exist, need to choose based on membership status
   // console.log("🔍 Multiple API plans with same name found:", {
-  //   localPlan: { id: localPlan.id, name: localPlan.name, isMemberOnly: localPlan.isMemberOnly },
-  //   nameMatches: nameMatches.map((p) => ({ id: p.id, _id: p._id, name: p.name, isMemberOnly: p.isMemberOnly })),
+  //   localPlan: { id: localPlan.id, name: localPlan.name, isAdditional: localPlan.isAdditional },
+  //   nameMatches: nameMatches.map((p) => ({ id: p.id, _id: p._id, name: p.name, isAdditional: p.isAdditional })),
   // });
 
-  // Choose based on matching isMemberOnly flag
-  const membershipMatch = nameMatches.find((plan) => plan.isMemberOnly === localPlan.isMemberOnly);
+  // Choose based on matching isAdditional flag
+  const membershipMatch = nameMatches.find((plan) => plan.isAdditional === localPlan.isAdditional);
   if (membershipMatch) {
     // console.log("🔍 Found membership-status match:", {
-    //   selected: { id: membershipMatch.id, _id: membershipMatch._id, isMemberOnly: membershipMatch.isMemberOnly },
+    //   selected: { id: membershipMatch.id, _id: membershipMatch._id, isAdditional: membershipMatch.isAdditional },
     // });
     return membershipMatch;
   }
 
   // Fallback: If we can't determine membership status, prefer based on LocalPlan ID containing `-member`
   if (localPlan.id.includes("-member")) {
-    const memberVersion = nameMatches.find((p) => p.isMemberOnly === true);
+    const memberVersion = nameMatches.find((p) => p.isAdditional === true);
     if (memberVersion) {
       // console.log("🔍 Fallback to member version due to -member in ID:", {
-      //   selected: { id: memberVersion.id, _id: memberVersion._id, isMemberOnly: memberVersion.isMemberOnly },
+      //   selected: { id: memberVersion.id, _id: memberVersion._id, isAdditional: memberVersion.isAdditional },
       // });
       return memberVersion;
     }
   }
 
   // Look for exact non-member matches otherwise pass along to final
-  const nonMemberVersion = nameMatches.find((p) => p.isMemberOnly === false);
+  const nonMemberVersion = nameMatches.find((p) => p.isAdditional === false);
   if (nonMemberVersion) {
     // console.log("🔍 Fallback to non-member version:", {
-    //   selected: { id: nonMemberVersion.id, _id: nonMemberVersion._id, isMemberOnly: nonMemberVersion.isMemberOnly },
+    //   selected: { id: nonMemberVersion.id, _id: nonMemberVersion._id, isAdditional: nonMemberVersion.isAdditional },
     // });
     return nonMemberVersion;
   }
@@ -117,7 +117,7 @@ export function convertToAPIPlan(
   // Final fallback: Default to the first match if status can't be determined
   const defaultMatch = nameMatches[0];
   // console.log("🔍 Final fallback - using first match:", {
-  //   selected: { id: defaultMatch.id, _id: defaultMatch._id, isMemberOnly: defaultMatch.isMemberOnly },
+  //   selected: { id: defaultMatch.id, _id: defaultMatch._id, isAdditional: defaultMatch.isAdditional },
   // });
   return defaultMatch;
 }
@@ -144,7 +144,7 @@ export function convertUpsellToLocalPlan(upsellOffer: UpsellOffer): LocalMembers
     features: upsellOffer.conditions.map((condition) => ({ text: condition })),
     buttonText: upsellOffer.buttonText,
     buttonStyle: "primary" as const, // Upsells are highlighted to drive conversion
-    isMemberOnly: false, // Upsells can be purchased by anyone
+    isAdditional: false, // Upsells can be purchased by anyone
     // Add upsell-specific tracking data that can be used by the purchase logic
     metadata: {
       entriesCount: upsellOffer.entriesCount,

@@ -19,3 +19,7 @@ Importing one constant from `data/index.ts` may pull in the whole barrel file. V
 ## Legal copy review
 
 If you change a constant in `legal.ts`, legal team must review before merge. Treat as a special category.
+
+## Terminology: `isAdditional` (was `isMemberOnly`) — 2026-07-01
+
+The package flag `isMemberOnly` was renamed to **`isAdditional`** across the codebase. It marks packages that require *additional-package access* — an **active subscription OR current major-draw entries** (see `hasAdditionalPackageAccess`), which is broader than subscribers; it was never truly "member-only". The internal `-member` UI id-suffix (a row disambiguator) is intentionally unchanged. Full rationale: [subscription/gotchas.md](../subscription/gotchas.md).

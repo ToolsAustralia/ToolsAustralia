@@ -22,7 +22,7 @@ import {
 } from "@/utils/partner-discounts/partner-discount-queue";
 import { getPackageById } from "@/data/membershipPackages";
 import { getUpsellPackageById } from "@/data/upsellPackages";
-import { normalizeMembershipPlanId } from "@/utils/membership/member-package-mapping";
+import { normalizeMembershipPlanId } from "@/utils/membership/additional-package-mapping";
 import { getMiniDrawPackageById } from "@/data/miniDrawPackages";
 import { dispatchPackagePurchase } from "@/utils/tracking/purchase-events";
 import { trackPixelPurchase } from "@/utils/tracking/pixel-purchase-tracking";
@@ -814,7 +814,7 @@ async function checkAndApplyBonusEntryPromo(
     if (packageType === "one-time" && packageId && user) {
       const pkg = getPackageById(packageId);
       const isMember = (user as { subscription?: { isActive?: boolean } })?.subscription?.isActive === true;
-      if (pkg?.isMemberOnly && isMember) {
+      if (pkg?.isAdditional && isMember) {
         effectivePackageType = "membership";
       }
     }
@@ -928,7 +928,7 @@ async function checkAndApplyPromoLink(
     const memberOnlyOneTime =
       packageType === "one-time" &&
       !!packageId &&
-      !!getPackageById(packageId)?.isMemberOnly &&
+      !!getPackageById(packageId)?.isAdditional &&
       isMember;
     const isMembershipPurchase = packageType === "membership" || memberOnlyOneTime;
     const isOneTimePurchase = packageType === "one-time" && !memberOnlyOneTime;

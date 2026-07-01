@@ -125,6 +125,22 @@ Promo components use `cn()` from `@/utils/cn` for conditional class composition.
 
 Countdown timers in promo components — `GiveawayCountdownTimer`, `FloatingCountdownBanner`, `FreezePeroidBanner` — are now leaf-isolated via [`<CountdownLeaf>`](../../src/components/ui/CountdownLeaf.tsx) / [`useLeafTimer`](../../src/hooks/useLeafTimer.ts) so the parent promo section / banner host doesn't re-render on every tick. `OtherToolsetsCarousel` pauses its infinite framer-motion loop when offscreen via [`useInViewportAnimation`](../../src/hooks/useInViewportAnimation.ts), and `FloatingPromoBanner` / `FloatingGetEntriesButton` consume the device-tier CSS tokens (`--ta-blur`, `--ta-shadow-card`, `--ta-transition-dur`) so visual cost scales down on mobile / `Save-Data`. Floating elements set `data-floating-widget="true"` so the print stylesheet hides them. The new [`FloatingPromoBannerHost`](../../src/components/banners/FloatingPromoBannerHost.tsx) is mounted once in `providers.tsx` and orchestrates promo banner visibility globally instead of per-page mounting. See [shared-ui/patterns.md](../shared-ui/patterns.md#site-wide-interaction-smoothness--phase-1-2026-05-09) for the helpers.
 
+## PromoPackages — A/B design branch (2026-07-01)
+
+[`src/components/sections/promo/PromoPackages.tsx`](../../src/components/sections/promo/PromoPackages.tsx) now branches on `variantConfig?.packages.design`:
+
+| `packages.design` | Renders | Notes |
+|---|---|---|
+| `"promo"` (default / absent) | `MembershipSection` | Control arm — unchanged existing design |
+| `"membership"` | `PromoMembershipDesign` | Treatment arm — the `/membership` tier + one-time-packs design |
+
+**`PromoMembershipDesign`** ([`src/components/sections/promo/PromoMembershipDesign.tsx`](../../src/components/sections/promo/PromoMembershipDesign.tsx)) is a thin wrapper that mirrors `MembershipPageClient`:
+- One `useMembershipCardCta({ includeAdditionalForMembers: true })` instance owning one `MembershipModal`.
+- Renders `MembershipTierChooser` with `sectionId="packages"` — this preserves the `#packages` scroll anchor and avoids a duplicate `#membership` id on the page.
+- The control path (`MembershipSection`) is unchanged.
+
+For the full experiment operational details (seeding, reading results, winner-swap cleanup checklist), see [docs/ab-testing/promo-packages-design-runbook.md](../ab-testing/promo-packages-design-runbook.md).
+
 ## FloatingPromoBanner — removed (2026-07-01)
 
 The floating "ENTRY BOOST ENDING SOON" promo banner (`FloatingPromoBanner` + its path-gated `FloatingPromoBannerHost` mount in `providers.tsx`) was **removed** — no longer needed. Its shared helpers (`PromoBadge`, `countdown-mode.ts`) and the `membershipTabChanged` window event stay, since `PromoBanner` still consumes them. (The Phase-1 note above references the old mount; it's historical.)

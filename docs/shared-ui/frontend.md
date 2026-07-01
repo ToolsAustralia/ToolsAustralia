@@ -101,6 +101,16 @@ Stray `dark:*` Tailwind utilities elsewhere in `MembershipSection` (headers,
 empty-state copy) are NOT part of the card theme and still respond to the
 global dark-mode schedule/toggle. That was the original intent.
 
+### MembershipSection — diagnostic `package_cta` click event (2026-07-01)
+
+`MembershipSection` now emits an A/B `click` `ExperimentEvent` with `{ element: "package_cta" }` on its CTA path, via `useExperimentTracking().trackEvent(...)`. The emission is **guarded** by `experimentId && variantId` — it no-ops on the 15+ non-promo pages where no experiment is active. On promo pages where the control arm is assigned, it fires alongside the same event from `PromoMembershipDesign` (the treatment arm), enabling engagement comparison. This is **diagnostic only** — see [docs/ab-testing/promo-packages-design-runbook.md](../ab-testing/promo-packages-design-runbook.md) for why the Bayesian panel (not this click event) is the winner metric.
+
+### MembershipTierChooser — `sectionId` prop (2026-07-01)
+
+[`src/components/sections/membership/MembershipTierChooser.tsx`](../../src/components/sections/membership/MembershipTierChooser.tsx) gained an optional `sectionId?: string` prop (default `"membership"`).
+
+The `/membership` page passes no `sectionId`, so its `id="membership"` anchor is unchanged. The promo A/B treatment (`PromoMembershipDesign`) passes `sectionId="packages"` to render under `id="packages"` — preserving the `#packages` scroll anchor that promo pages use and preventing a duplicate `#membership` id on the page.
+
 ### `features/PartnerDiscountQueue` — tier-themed partner discount card
 
 [`src/components/features/PartnerDiscountQueue.tsx`](../../src/components/features/PartnerDiscountQueue.tsx) renders the collapsible "Partner Discounts" card on `my-account`. Its visual identity is driven by the **active** package (subscription or active one-time period) resolved into `activePackageVisual` → `getMembershipSectionColorScheme(...)`, so the card matches the membership cards' tier colours.

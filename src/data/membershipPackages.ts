@@ -49,7 +49,7 @@ export interface StaticMembershipPackage {
   totalEntries?: number; // For one-time packages
   shopDiscountPercent?: number; // Discount percentage for shop purchases
   partnerDiscountDays?: number; // Days of partner discount access
-  isMemberOnly?: boolean; // Whether this package is for members only
+  isAdditional?: boolean; // Whether this package is for members only
   stripeProductId?: string; // Stripe product ID for integration
   stripePriceId?: string; // Stripe price ID for integration
   isActive: boolean;
@@ -82,7 +82,7 @@ export const membershipPackages: StaticMembershipPackage[] = [
     shopDiscountPercent: 5,
     // Subscriptions: partner access is lifecycle-gated (active while subscribed), not a fixed window — see partner-discount-queue.ts
     partnerDiscountDays: 0,
-    isMemberOnly: false,
+    isAdditional: false,
     isActive: true,
     stripeProductId: getStripeProductId("tradie-subscription"),
     stripePriceId: getStripePriceId("tradie-subscription"),
@@ -104,7 +104,7 @@ export const membershipPackages: StaticMembershipPackage[] = [
     shopDiscountPercent: 10,
     // Subscriptions: partner access is lifecycle-gated (active while subscribed), not a fixed window — see partner-discount-queue.ts
     partnerDiscountDays: 0,
-    isMemberOnly: false,
+    isAdditional: false,
     isActive: true,
     stripeProductId: getStripeProductId("foreman-subscription"),
     stripePriceId: getStripePriceId("foreman-subscription"),
@@ -126,7 +126,7 @@ export const membershipPackages: StaticMembershipPackage[] = [
     shopDiscountPercent: 20,
     // Subscriptions: partner access is lifecycle-gated (active while subscribed), not a fixed window — see partner-discount-queue.ts
     partnerDiscountDays: 0,
-    isMemberOnly: false,
+    isAdditional: false,
     isActive: true,
     stripeProductId: getStripeProductId("boss-subscription"),
     stripePriceId: getStripePriceId("boss-subscription"),
@@ -145,7 +145,7 @@ export const membershipPackages: StaticMembershipPackage[] = [
     totalEntries: 3,
     shopDiscountPercent: 0,
     partnerDiscountDays: 1,
-    isMemberOnly: false,
+    isAdditional: false,
     isActive: true,
     createdAt: "2025-09-23T00:13:59.823Z",
     updatedAt: "2025-09-23T00:13:59.823Z",
@@ -160,7 +160,7 @@ export const membershipPackages: StaticMembershipPackage[] = [
     totalEntries: 15,
     shopDiscountPercent: 0,
     partnerDiscountDays: 2,
-    isMemberOnly: false,
+    isAdditional: false,
     isActive: true,
     createdAt: "2025-09-23T00:13:59.925Z",
     updatedAt: "2025-09-23T00:13:59.925Z",
@@ -175,7 +175,7 @@ export const membershipPackages: StaticMembershipPackage[] = [
     totalEntries: 30,
     shopDiscountPercent: 0,
     partnerDiscountDays: 4,
-    isMemberOnly: false,
+    isAdditional: false,
     isActive: true,
     createdAt: "2025-09-23T00:14:00.043Z",
     updatedAt: "2025-09-23T00:14:00.043Z",
@@ -190,7 +190,7 @@ export const membershipPackages: StaticMembershipPackage[] = [
     totalEntries: 150,
     shopDiscountPercent: 0,
     partnerDiscountDays: 10,
-    isMemberOnly: false,
+    isAdditional: false,
     isActive: true,
     createdAt: "2025-09-23T00:14:00.145Z",
     updatedAt: "2025-09-23T00:14:00.145Z",
@@ -205,7 +205,7 @@ export const membershipPackages: StaticMembershipPackage[] = [
     totalEntries: 600,
     shopDiscountPercent: 0,
     partnerDiscountDays: 20,
-    isMemberOnly: false,
+    isAdditional: false,
     isActive: true,
     createdAt: "2025-09-23T00:14:00.247Z",
     updatedAt: "2025-09-23T00:14:00.247Z",
@@ -220,7 +220,7 @@ export const membershipPackages: StaticMembershipPackage[] = [
     totalEntries: 1500,
     shopDiscountPercent: 0,
     partnerDiscountDays: 30,
-    isMemberOnly: false,
+    isAdditional: false,
     isActive: true,
     createdAt: "2025-09-23T00:14:00.300Z",
     updatedAt: "2025-09-23T00:14:00.300Z",
@@ -237,7 +237,7 @@ export const membershipPackages: StaticMembershipPackage[] = [
     totalEntries: 10,
     shopDiscountPercent: 0,
     partnerDiscountDays: 1,
-    isMemberOnly: true,
+    isAdditional: true,
     isActive: false,
     createdAt: "2025-09-23T00:12:43.671Z",
     updatedAt: "2025-09-23T00:14:00.355Z",
@@ -252,7 +252,7 @@ export const membershipPackages: StaticMembershipPackage[] = [
     totalEntries: 15,
     shopDiscountPercent: 0,
     partnerDiscountDays: 2,
-    isMemberOnly: true,
+    isAdditional: true,
     isActive: true,
     createdAt: "2025-09-23T00:12:43.746Z",
     updatedAt: "2025-09-23T00:14:00.460Z",
@@ -267,7 +267,7 @@ export const membershipPackages: StaticMembershipPackage[] = [
     totalEntries: 30,
     shopDiscountPercent: 0,
     partnerDiscountDays: 4,
-    isMemberOnly: true,
+    isAdditional: true,
     isActive: true,
     createdAt: "2025-09-23T00:12:43.803Z",
     updatedAt: "2025-09-23T00:14:00.563Z",
@@ -282,7 +282,7 @@ export const membershipPackages: StaticMembershipPackage[] = [
     totalEntries: 150,
     shopDiscountPercent: 0,
     partnerDiscountDays: 10,
-    isMemberOnly: true,
+    isAdditional: true,
     isActive: true,
     createdAt: "2025-09-23T00:12:43.860Z",
     updatedAt: "2025-09-23T00:14:00.664Z",
@@ -297,7 +297,7 @@ export const membershipPackages: StaticMembershipPackage[] = [
     totalEntries: 600,
     shopDiscountPercent: 0,
     partnerDiscountDays: 20,
-    isMemberOnly: true,
+    isAdditional: true,
     isActive: true,
     createdAt: "2025-09-23T00:12:43.918Z",
     updatedAt: "2025-09-23T00:14:00.765Z",
@@ -312,7 +312,7 @@ export const membershipPackages: StaticMembershipPackage[] = [
     totalEntries: 1500,
     shopDiscountPercent: 0,
     partnerDiscountDays: 30,
-    isMemberOnly: true,
+    isAdditional: true,
     isActive: true,
     createdAt: "2025-09-23T00:14:00.820Z",
     updatedAt: "2025-09-23T00:14:00.820Z",
@@ -368,14 +368,14 @@ export const getPackagesByType = (type: "subscription" | "one-time"): StaticMemb
  * - Entries in the current major draw
  */
 export const getMemberOnlyPackages = (): StaticMembershipPackage[] => {
-  return membershipPackages.filter((pkg) => pkg.isMemberOnly && pkg.isActive);
+  return membershipPackages.filter((pkg) => pkg.isAdditional && pkg.isActive);
 };
 
 /**
  * Get regular (non-member) packages
  */
 export const getRegularPackages = (): StaticMembershipPackage[] => {
-  return membershipPackages.filter((pkg) => !pkg.isMemberOnly && pkg.isActive);
+  return membershipPackages.filter((pkg) => !pkg.isAdditional && pkg.isActive);
 };
 
 /**

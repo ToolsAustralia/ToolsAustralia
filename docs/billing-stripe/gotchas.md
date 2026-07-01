@@ -349,3 +349,7 @@ Both routes now sort experiments by `attributionRank` (exported from
 `src/utils/ab-testing/get-user-experiment-assignment.ts`): page-targeted beats
 wildcard `*`, and the membership-theme sentinel is excluded outright. Match
 the priority rule there if you ever add another attribution code path.
+
+## Terminology: `isAdditional` (was `isMemberOnly`) — 2026-07-01
+
+The package flag `isMemberOnly` was renamed to **`isAdditional`** across the codebase. It marks packages that require *additional-package access* — an **active subscription OR current major-draw entries** (see `hasAdditionalPackageAccess`), which is broader than subscribers; it was never truly "member-only". The internal `-member` UI id-suffix (a row disambiguator) is intentionally unchanged. Full rationale: [subscription/gotchas.md](../subscription/gotchas.md).

@@ -21,7 +21,7 @@ import { stripe } from "@/lib/stripe";
 import Stripe from "stripe";
 import { getPackageById } from "@/data/membershipPackages";
 import { getEffectivePromoType } from "@/utils/promo/get-effective-promo-type";
-import { normalizeMembershipPlanId } from "@/utils/membership/member-package-mapping";
+import { normalizeMembershipPlanId } from "@/utils/membership/additional-package-mapping";
 import { getUpsellPackageById } from "@/data/upsellPackages";
 import { processPaymentBenefits, isPaymentProcessed } from "@/utils/payment/payment-processing";
 import { extractResolvedPlatformFromMetadata } from "@/utils/tracking/resolved-attribution-metadata";

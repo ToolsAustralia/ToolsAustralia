@@ -7,7 +7,7 @@ Recurring conventions you'll see throughout subscription code.
 Two helpers in `src/utils/membership/` control how package names are shown to users:
 
 ### `getPackageDisplayName(pkg)` — catalog surfaces
-`src/utils/membership/getDisplayName.ts`. Strips the `"Additional "` prefix from member-only one-time packs (e.g. `"Additional Tradie Pack"` → `"Tradie Pack"`). Used exclusively in catalog cards, modal headers, and plan selectors — anywhere the page context already implies draw scope.
+`src/utils/membership/getDisplayName.ts`. Strips the `"Additional "` prefix from Additional one-time packs (e.g. `"Additional Tradie Pack"` → `"Tradie Pack"`). Used exclusively in catalog cards, modal headers, and plan selectors — anywhere the page context already implies draw scope.
 
 **Rule:** All catalog UI that renders a human-visible package name must call `getPackageDisplayName(plan)` instead of reading `plan.name` directly.
 
@@ -31,7 +31,7 @@ Two helpers in `src/utils/membership/` control how package names are shown to us
 
 `src/utils/membership/additional-pack-discount.ts` — `getAdditionalPackDiscount(planId)`.
 
-Computes the 50%-off discount for member-only additional packs by pairing each `additional-{tier}-pack` against its matching `{tier}-pack` regular price from `membershipPackages`. Returns `{ regularPrice, discountedPrice, percentOff }` or `null` when there is no genuine discount (inactive pack, no matching regular pack, regular price not higher, non-additional or subscription ids). Accepts the `-member` suffix appended by `useMemberships`.
+Computes the 50%-off discount for Additional packs by pairing each `additional-{tier}-pack` against its matching `{tier}-pack` regular price from `membershipPackages`. Returns `{ regularPrice, discountedPrice, percentOff }` or `null` when there is no genuine discount (inactive pack, no matching regular pack, regular price not higher, non-additional or subscription ids). Accepts the `-member` suffix appended by `useMemberships`.
 
 **Rule:** UI that displays a strike-through "was $X" price for an additional pack must call this util — do not hard-code prices or assume 50%.
 

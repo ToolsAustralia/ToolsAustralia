@@ -6,7 +6,7 @@ Don't apply discount client-side as a display tweak — compute total + discount
 
 ## R2. Member-only product enforcement
 
-Products with `isMemberOnly === true` must be gated server-side at checkout — non-member can't complete purchase. Client-side hide is for UX; server-side block is for security.
+Products with `isAdditional === true` must be gated server-side at checkout — non-member can't complete purchase. Client-side hide is for UX; server-side block is for security.
 
 ## R3. Order written by webhook only
 

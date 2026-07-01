@@ -119,7 +119,7 @@ tier sees today (`getPartnerCatalogAccessPercentForPlanId`).
 | Power Pack (mini) | `additional-power-pack-mini` | $250 | 85% | 20 days |
 | VIP Pack (mini) | `additional-vip-pack-mini` | $500 | 100% | 30 days |
 
-*(Legacy `mini-pack-4`…`mini-pack-8` are deactivated — replaced by the member-only mini packs above. Kept only so old orders resolve.)*
+*(Legacy `mini-pack-4`…`mini-pack-8` are deactivated — replaced by the Additional mini packs above. Kept only so old orders resolve.)*
 
 ### E. Upsells — FIXED window, mirror the base pack's tier (shown after a purchase, ~50–60% off)
 Upsells don't introduce new durations — each mirrors the tier/duration of the pack it's based on, and **stacks** onto existing access. Notable ones:

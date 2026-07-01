@@ -473,12 +473,12 @@ export const getBestUpsellOfferForUser = (
     // For one-time packages, filter based on membership status
     filteredPackages = filteredPackages.filter((pkg) => {
       // Check if this is a member-only upsell (additional upsellCategory)
-      const isMemberOnlyUpsell = pkg.upsellCategory === "additional";
+      const isAdditionalUpsell = pkg.upsellCategory === "additional";
 
       // ✅ FIX: Use hasAccessToAdditionalPackages instead of just isMember
       // Users with access (subscription OR major draw entries) should see additional upsells
       // Non-members without access should only see non-member upsells (one-time upsellCategory)
-      if (!hasAccessToAdditionalPackages && isMemberOnlyUpsell) {
+      if (!hasAccessToAdditionalPackages && isAdditionalUpsell) {
         return false; // Users without access shouldn't see member-only upsells
       }
 

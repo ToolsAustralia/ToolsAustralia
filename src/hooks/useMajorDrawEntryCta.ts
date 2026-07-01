@@ -77,7 +77,7 @@ export function useMajorDrawEntryCta(): UseMajorDrawEntryCtaResult {
           ],
           buttonText: "Get Started",
           buttonStyle: "secondary",
-          isMemberOnly: true,
+          isAdditional: true,
           metadata: {
             entriesCount: promoEntries,
             promoMultiplier,
@@ -106,7 +106,7 @@ export function useMajorDrawEntryCta(): UseMajorDrawEntryCtaResult {
           ],
           buttonText: "Get Started",
           buttonStyle: "secondary",
-          isMemberOnly: true,
+          isAdditional: true,
           metadata: {
             entriesCount: promoEntries,
             promoMultiplier,
@@ -172,7 +172,7 @@ export function useMajorDrawEntryCta(): UseMajorDrawEntryCtaResult {
           ],
           buttonText: "Get Started",
           buttonStyle: "secondary",
-          isMemberOnly: false,
+          isAdditional: false,
           metadata: {
             entriesCount: promoEntries,
             promoMultiplier,
@@ -206,7 +206,7 @@ export function useMajorDrawEntryCta(): UseMajorDrawEntryCtaResult {
           ],
           buttonText: "Get Started",
           buttonStyle: "secondary",
-          isMemberOnly: false,
+          isAdditional: false,
           metadata: {
             entriesCount: promoEntries,
             promoMultiplier,
@@ -263,7 +263,7 @@ export function useMajorDrawEntryCta(): UseMajorDrawEntryCtaResult {
     }
     const promoMultiplier = oneTimePromoMultiplier;
     const nonMemberOneTime = safeOneTimePackages.find(
-      (pkg) => (pkg.period === "one-time" || pkg.period === "once") && !pkg.isMemberOnly
+      (pkg) => (pkg.period === "one-time" || pkg.period === "once") && !pkg.isAdditional
     );
     if (!nonMemberOneTime) return null;
     const localPlan = convertToLocalPlan(nonMemberOneTime);

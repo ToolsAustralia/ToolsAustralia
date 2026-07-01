@@ -163,13 +163,13 @@ function resolveGrid(
 function expectedOneTime(
   oneTimeGrid: number | null,
   membershipGrid: number | null,
-  memberOnly: boolean
+  isAdditional: boolean
 ): Set<number> {
   const legit = new Set<number>();
   if (oneTimeGrid != null) legit.add(oneTimeGrid);
   else if (membershipGrid != null && membershipGrid > 1) legit.add(deriveOneTimeFromMembership(membershipGrid));
   else legit.add(1);
-  if (memberOnly && membershipGrid != null) legit.add(membershipGrid); // member bought as member
+  if (isAdditional && membershipGrid != null) legit.add(membershipGrid); // member bought as member
   return legit;
 }
 function fmtSet(s: Set<number>): string {
@@ -192,7 +192,7 @@ async function main(): Promise<void> {
 
   // Pure, client-safe helpers (no mongoose) — safe to import in a script.
   const { getPackageBaseEntries } = await import("../src/utils/payment/package-base-entries");
-  const { isMemberOnlyPackageById } = await import("../src/utils/promo/get-effective-promo-type");
+  const { isAdditionalPackageById } = await import("../src/utils/promo/get-effective-promo-type");
 
   const connectDB = (await import("../src/lib/mongodb")).default;
   await connectDB();
@@ -455,9 +455,9 @@ async function main(): Promise<void> {
       let verdict = "INFO";
 
       if (ev.packageType === "one-time") {
-        const memberOnly = ev.packageId ? isMemberOnlyPackageById(ev.packageId) : false;
-        const expAtBuy = expectedOneTime(oneTimeGridAtBuy, memGridAtBuy, memberOnly);
-        const expNow = expectedOneTime(oneTimeGridNow, memGridNow, memberOnly);
+        const isAdditional = ev.packageId ? isAdditionalPackageById(ev.packageId) : false;
+        const expAtBuy = expectedOneTime(oneTimeGridAtBuy, memGridAtBuy, isAdditional);
+        const expNow = expectedOneTime(oneTimeGridNow, memGridNow, isAdditional);
         const gridExistedAtBuy = oneTimeGridAtBuy != null || memGridAtBuy != null;
         gridAtBuyStr = `mem=${memGridAtBuy ?? "—"}|ot=${oneTimeGridAtBuy ?? "—"}`;
         gridNowStr = `mem=${memGridNow ?? "—"}|ot=${oneTimeGridNow ?? "—"}`;

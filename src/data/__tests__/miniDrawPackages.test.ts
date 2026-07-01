@@ -25,7 +25,7 @@ function main() {
     const pkg = getMiniDrawPackageById(id);
     assert.ok(pkg, `${id} must exist`);
     assert.equal(pkg!.isActive, true);
-    assert.equal(pkg!.isMemberOnly, true);
+    assert.equal(pkg!.isAdditional, true);
     assert.ok(pkg!.displayName, `${id} must have a displayName`);
   }
 
@@ -54,8 +54,8 @@ function main() {
   const memberPacks = getMiniDrawPackagesForViewer(true);
   assert.equal(guestPacks.length, 3, "guest sees Mini Pack 1–3");
   assert.equal(memberPacks.length, 5, "member/entrant sees 5 Additional minis");
-  assert.ok(guestPacks.every((p) => !p.isMemberOnly));
-  assert.ok(memberPacks.every((p) => p.isMemberOnly));
+  assert.ok(guestPacks.every((p) => !p.isAdditional));
+  assert.ok(memberPacks.every((p) => p.isAdditional));
 
   // 6. All upsells satisfy "same entries, 50% off" invariant across the file.
   for (const pkg of getMiniDrawPackages()) {

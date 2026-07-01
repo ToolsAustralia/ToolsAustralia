@@ -8,7 +8,7 @@
  */
 
 import type { StaticImageData } from "next/image";
-import { isBossTierPlanId, isVipTierPlanId } from "@/utils/membership/member-package-mapping";
+import { isBossTierPlanId, isVipTierPlanId } from "@/utils/membership/additional-package-mapping";
 
 // Import all package icons
 import apprentice from "../../../public/images/packageIcons/apprentice.webp";

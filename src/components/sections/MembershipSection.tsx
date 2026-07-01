@@ -24,11 +24,12 @@ import { useMajorDrawPurchaseGate } from "@/hooks/useMajorDrawPurchaseGate";
 import { hasAdditionalPackageAccess } from "@/utils/membership/has-additional-package-access";
 import {
   isOneTimeBestValuePlanId,
-} from "@/utils/membership/member-package-mapping";
+} from "@/utils/membership/additional-package-mapping";
 import { hasBlockingSubscription } from "@/utils/subscription/subscription-helpers";
 import PackageInclusionsExpanded from "@/components/modals/PackageInclusionsSlideUp";
 import type { VariantConfig } from "@/models/ab-testing/Variant";
 import { useVariantContext } from "@/components/ab-testing/VariantProvider";
+import { useExperimentTracking } from "@/hooks/ab-testing/useExperimentTracking";
 import {
   getMembershipSectionColorScheme,
 } from "@/utils/package-colors/packageColorScheme";
@@ -62,7 +63,8 @@ export default function MembershipSection({
   const promoToolsetSlug = usePromoThemeStore((s) => s.toolsetSlug);
 
   // Get variant config from context for A/B testing (membershipModal config)
-  const { variantConfig: contextVariantConfig } = useVariantContext();
+  const { variantConfig: contextVariantConfig, experimentId, variantId } = useVariantContext();
+  const { trackEvent } = useExperimentTracking();
   const [activeTab, setActiveTab] = useState<"membership" | "one-time">("membership");
   const [isMounted, setIsMounted] = useState(false);
   const [isInclusionsExpanded, setIsInclusionsExpanded] = useState(false);
@@ -259,6 +261,11 @@ export default function MembershipSection({
       // For new subscriptions (no active subscription), use the modal
       membershipModal.openModal(plan);
 
+      // A/B diagnostic: package CTA click (no-ops outside an experiment).
+      if (experimentId && variantId) {
+        trackEvent(experimentId, variantId, "click", { element: "package_cta", packageId: plan.id });
+      }
+
       // Canonical Klaviyo "Started Checkout" — fires for AUTHED users at the
       // EXACT moment of intent (Enter Now click), not at Pay-button submission.
       // This is the right semantic: clicking Enter Now is the user signalling
@@ -329,7 +336,7 @@ export default function MembershipSection({
       oneTimePackagesData: oneTimePackages.map((pkg) => ({
         id: pkg.id,
         name: pkg.name,
-        isMemberOnly: pkg.isMemberOnly,
+        isAdditional: pkg.isAdditional,
       })),
     });
 
@@ -350,13 +357,13 @@ export default function MembershipSection({
     } else {
       // For one-time packages, filter based on access (subscription OR current draw entries)
       if (userLoading) {
-        apiPlans = oneTimePackages.filter((pkg) => !pkg.isMemberOnly);
+        apiPlans = oneTimePackages.filter((pkg) => !pkg.isAdditional);
         console.log("🔍 User loading - showing regular packages:", apiPlans.length);
       } else if (hasAccessToAdditionalPackages) {
-        apiPlans = oneTimePackages.filter((pkg) => pkg.isMemberOnly === true);
+        apiPlans = oneTimePackages.filter((pkg) => pkg.isAdditional === true);
         console.log("🔍 User with access - showing additional packages:", apiPlans.length);
       } else {
-        apiPlans = oneTimePackages.filter((pkg) => !pkg.isMemberOnly);
+        apiPlans = oneTimePackages.filter((pkg) => !pkg.isAdditional);
         console.log("🔍 User without access - showing regular packages:", apiPlans.length);
       }
     }
@@ -481,7 +488,7 @@ export default function MembershipSection({
         ? getMembershipSectionColorScheme(plan.id, true)
         : getElectricPackageColorScheme(plan.id);
     const discount = activeTab === "one-time" ? getAdditionalPackDiscount(plan.id) : null;
-    const locked = !hasAccessToAdditionalPackages && !!plan.isMemberOnly;
+    const locked = !hasAccessToAdditionalPackages && !!plan.isAdditional;
     const current = isCurrentSubscription(plan);
     const hierarchy = getPlanHierarchy(plan);
     const isSubscriptionPlan = plan.period !== "one-time" && !plan.name.toLowerCase().includes("one-time");

@@ -49,7 +49,7 @@ import { rewardsEnabled } from "@/config/featureFlags";
 import { getPartnerDiscountBenefitTextForPackageId } from "@/utils/partner-discounts/partner-catalog-visibility";
 import { usePromoLink } from "@/hooks/usePromoLink";
 import { useReferralCode } from "@/hooks/useReferralCode";
-import { normalizeMembershipPlanId } from "@/utils/membership/member-package-mapping";
+import { normalizeMembershipPlanId } from "@/utils/membership/additional-package-mapping";
 import { getReceiptLabel } from "@/utils/membership/getReceiptLabel";
 import { useVariantContext } from "@/components/ab-testing/VariantProvider";
 import { useThemeStore } from "@/stores/useThemeStore";

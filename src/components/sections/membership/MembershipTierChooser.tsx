@@ -145,10 +145,16 @@ function TierCard({ plan, cta }: { plan: LocalMembershipPlan; cta: MembershipCar
   );
 }
 
-export default function MembershipTierChooser({ cta }: { cta: MembershipCardCta }) {
+export default function MembershipTierChooser({
+  cta,
+  sectionId = "membership",
+}: {
+  cta: MembershipCardCta;
+  sectionId?: string;
+}) {
   return (
     <section
-      id="membership"
+      id={sectionId}
       className="relative overflow-hidden bg-page py-16 sm:py-20 lg:py-24"
       style={{
         background:
