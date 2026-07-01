@@ -3,7 +3,6 @@
 import { useEffect } from "react";
 import { usePathname } from "next/navigation";
 import { usePromoPageTracking } from "@/hooks/usePromoPageTracking";
-import { isToolsetLandingSlug } from "@/config/promo-landing-slugs";
 import { PromotionsGuestThemeToggle } from "@/components/ui/ThemeToggle";
 
 /**
@@ -23,14 +22,15 @@ export default function PromotionsLayoutShell({
   const pathname = usePathname();
   usePromoPageTracking();
 
-  const slug = pathname?.replace(/^\/promotions\/?/, "") || "";
-  const isToolsetPage = isToolsetLandingSlug(slug);
-
   useEffect(() => {
-    if (isToolsetPage) {
-      window.scrollTo(0, 0);
-    }
-  }, [pathname, isToolsetPage]);
+    // Land at the top on EVERY promotions navigation — toolset landings AND evergreen
+    // prize pages (e.g. ryobi-milwaukee → hikoki-milwaukee). Next's default scroll-to-top
+    // isn't reliable for same-[slug]-segment param changes, so scroll explicitly here in
+    // the layout. Keyed on `pathname`, it runs AFTER the new route's DOM commits — so the
+    // old content is already gone (no premature snap) and toolbox `?query` changes (which
+    // don't change pathname) don't trigger it.
+    window.scrollTo(0, 0);
+  }, [pathname]);
 
   const isRyobiPage =
     pathname === "/promotions/ryobi-sidchrome" ||

@@ -280,7 +280,9 @@ export default function PromoHero({
           className={cn("promo-hero-cta-button pointer-events-auto inline-flex items-center justify-center rounded-full px-6 py-3 font-sans text-base font-extrabold tracking-wide backdrop-blur-lg sm:px-10 sm:py-4 sm:text-2xl", shouldUseBlackText ? "text-black" : "text-white")}
           style={{
             background: ctaStyle?.backgroundColor ?? theme.gradient,
-            ...(isDewaltTheme ? { color: "#000000" } : ctaStyle?.textColor ? { color: ctaStyle.textColor } : {}),
+            // Force black on light-bg themes (Ryobi neon-lime, DeWalt yellow) — the
+            // `.promo-hero-cta-button` CSS otherwise wins over the `text-black` class.
+            ...(shouldUseBlackText ? { color: "#000000" } : ctaStyle?.textColor ? { color: ctaStyle.textColor } : {}),
           }}
           suppressHydrationWarning
         >
