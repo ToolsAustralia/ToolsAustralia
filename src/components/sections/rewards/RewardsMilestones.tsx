@@ -83,11 +83,11 @@ export default function RewardsMilestones({ acct, months }: RewardsMilestonesPro
         ) : nextMilestone ? (
           <>
             <b className="text-primary-token dark:text-white">{monthsToNext} month{monthsToNext === 1 ? "" : "s"}</b> to your next{" "}
-            <b className="text-amber-600 dark:text-amber-400">+{nextMilestone.entries} free entries</b>. Rewards land in your wallet automatically.
+            <b className="text-amber-600 dark:text-amber-400">+{nextMilestone.entries} free entries</b>. Keep your membership active to unlock it.
           </>
         ) : (
           <>
-            <b className="text-emerald-600 dark:text-emerald-400">All milestones unlocked</b> — thanks for {m} months of membership. Rewards land in your wallet automatically.
+            <b className="text-emerald-600 dark:text-emerald-400">All milestones unlocked</b> — thanks for {m} months of membership.
           </>
         )}
       </p>

@@ -37,9 +37,11 @@ function CDBox({ v, l, accent }: { v: number; l: string; accent?: boolean }) {
 }
 
 /**
- * Entries wallet — the dashboard's hero figure (ported from the prototype).
- * Home: 2-column on desktop (breakdown │ divider │ countdown). Draws: pass
- * `stack` for the single-column card with an inline package button + seconds.
+ * Your entries — the dashboard's hero figure (ported from the prototype). The
+ * "one-time" bucket is EVERY non-membership entry source (one-time packs, upsell,
+ * referral, rewards/redeemables, promo-link, mini-draw), so the label is just
+ * "One-time" — not "One-time packs". Home: 2-column on desktop (breakdown │
+ * divider │ countdown). Draws: pass `stack` for the single-column card + seconds.
  */
 export default function EntryWallet({
   acct,
@@ -105,7 +107,7 @@ export default function EntryWallet({
         <span className="h-full" style={{ width: `${memberPct}%`, background: (isPastDue || isOneTime) ? "#8a93a1" : tier }} />
         <span className="h-full flex-1 bg-emerald-500" />
       </div>
-      <div className="mt-3 flex gap-6 text-[12px]">
+      <div className="mt-3 flex items-center justify-between gap-3 text-[12px]">
         <span className="inline-flex items-center gap-2 text-muted-token">
           <span className="h-2.5 w-2.5 rounded-[3px]" style={{ background: (isPastDue || isOneTime) ? "#8a93a1" : tier }} />
           Membership{" "}
@@ -113,7 +115,7 @@ export default function EntryWallet({
         </span>
         <span className="inline-flex items-center gap-2 text-muted-token">
           <span className="h-2.5 w-2.5 rounded-[3px] bg-emerald-500" />
-          One-time packs <b className="num text-primary-token dark:text-white">{entries.oneTime.toLocaleString()}</b>
+          One-time <b className="num text-primary-token dark:text-white">{entries.oneTime.toLocaleString()}</b>
         </span>
       </div>
     </div>

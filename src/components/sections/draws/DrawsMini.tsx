@@ -24,7 +24,8 @@ function idToString(id: unknown): string {
 
 /** Entries-based mini draws — % filled + remaining + the user's own entries (via MiniDrawCard). */
 export default function DrawsMini({ participation, hasActiveMembership }: DrawsMiniProps) {
-  const { data, isLoading } = useMiniDraws({ page: 1, limit: 8, status: "active", sortBy: "createdAt", sortOrder: "desc" });
+  // Fetch a wider active set so we can rank the *top* mini draws by fill % below.
+  const { data, isLoading } = useMiniDraws({ page: 1, limit: 40, status: "active", sortBy: "createdAt", sortOrder: "desc" });
 
   const participatingIds = new Set(
     (participation ?? []).filter((p) => p.totalEntries > 0).map((p) => idToString(p.miniDrawId)).filter(Boolean),
@@ -38,8 +39,14 @@ export default function DrawsMini({ participation, hasActiveMembership }: DrawsM
     return { ...md, totalEntries, minimumEntries, entriesRemaining, requiresMembership: false, hasActiveMembership, isParticipant: participatingIds.has(id) };
   });
 
-  const mine = all.filter((d) => d.isParticipant);
-  const others = all.filter((d) => !d.isParticipant);
+  // "Top mini draws" = the 8 with the highest fill % (closest to running), NOT the
+  // newest or the ones with the most entries.
+  const ranked = [...all]
+    .map((d) => ({ ...d, fillPct: d.minimumEntries > 0 ? Math.min(d.totalEntries / d.minimumEntries, 1) : 0 }))
+    .sort((a, b) => b.fillPct - a.fillPct)
+    .slice(0, 8);
+  const mine = ranked.filter((d) => d.isParticipant);
+  const others = ranked.filter((d) => !d.isParticipant);
   const entered = mine.length > 0;
 
   return (
@@ -50,7 +57,7 @@ export default function DrawsMini({ participation, hasActiveMembership }: DrawsM
             <Ticket className="h-5 w-5" />
           </span>
           <p className="text-sm text-white/80">
-            <strong className="text-white">Filled by entries, not time.</strong> Each mini draw runs the moment it fills — mini-pack entries count toward mini draws only.
+            <strong className="text-white">No clock — they run when they fill.</strong> A mini draw closes the second it hits its entry target. Mini-pack entries count here only — they don&apos;t roll into the monthly major draw.
           </p>
         </div>
       </div>

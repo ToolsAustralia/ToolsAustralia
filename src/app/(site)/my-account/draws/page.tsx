@@ -17,6 +17,7 @@ import { useDashboardState } from "@/hooks/useDashboardState";
 import { useMajorDrawEntryCta } from "@/hooks/useMajorDrawEntryCta";
 import Seg from "@/components/ui/Seg";
 import EntryWallet from "@/components/sections/dashboard/EntryWallet";
+import DashboardPromoBanner from "@/components/sections/dashboard/DashboardPromoBanner";
 import DrawsMajorHero from "@/components/sections/draws/DrawsMajorHero";
 import DrawHowItWorks from "@/components/sections/draws/DrawHowItWorks";
 import DrawWinners from "@/components/sections/draws/DrawWinners";
@@ -95,6 +96,13 @@ export default function DrawsPage() {
                   multiplier={dash.multiplier}
                 />
               )}
+              {/* Promo "get more entries" energy (multiplier / special-promo / 50%-off badges +
+                  countdown) — the draws page has no separate promo banner otherwise. */}
+              <DashboardPromoBanner
+                multiplier={dash.multiplier}
+                hasAdditionalAccess={dash.hasAdditionalAccess}
+                onGetPackage={() => openEntryFlow()}
+              />
               <DrawHowItWorks />
               <DrawWinners />
             </div>

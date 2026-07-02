@@ -46,6 +46,14 @@
 > props are gone. The draws page dropped the entries card's `-mt-[34px]` overlap (now `pt-4`) — that
 > negative margin had been covering the "View this promotion" button with "Your entries".
 
+> **Entries label + mini-draw ranking + copy (2026-07-02):** `EntryWallet`'s "One-time packs" label →
+> **"One-time"** (verified: the one-time bucket sums EVERY non-membership source — one-time packs,
+> upsell, referral, rewards/redeemables, promo-link, mini-draw — see `major-draw-queries.ts:139`), and
+> the two entry labels are flushed left/right (`justify-between`). `DrawsMini` now ranks by **fill %**
+> (top 8 closest to running) — fetches a wider active set and sorts by `totalEntries/minimumEntries`,
+> not newest — and its blurb was rewritten (was generic). `RewardsMilestones` dropped the "Rewards
+> land in your **wallet**" wording (not the business's language — there's no "entry wallet").
+
 ## Dashboard sections (2026-07-02)
 
 The member-dashboard revamp adds section-band components under `src/components/sections/dashboard/`
