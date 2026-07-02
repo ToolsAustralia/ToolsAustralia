@@ -389,4 +389,15 @@ the revamp): `DashboardHeader`, `CoverBanner`, `UserInfoBar`, `QuickActions`, `S
 `MembershipStatus`, `ActivePrizeDraws`, `RecentOrders`, `MajorDrawHeaderStrip`, `MajorDrawOverview`
 (its entries logic → `sections/dashboard/EntryWallet`; hero/countdown → `sections/draws/DrawsMajorHero`),
 the empty `EntryWallet.tsx` stub, and the stale `components/index.ts` barrel. `my-account/components/`
-now holds only `BottomNav`, `DeskNav`, `DashboardPageHeader`, and `settings/`.
+now holds only `BottomNav`, `DeskNav`, `DashboardPageHeader`, `sheets/`, and `settings/`.
+
+### Overlay sheets (2026-07-02)
+Support is now a **responsive overlay sheet** (bottom-sheet mobile / centered modal desktop), matching
+the prototype — not a page. The nav "Support" item (`BottomNav` + `DeskNav`) calls
+`useDashboardSheetStore.openSheet("support")` instead of routing; the layout mounts the global
+`components/sheets/SupportSheet` host over any dashboard page via the shared
+[`SheetShell`](../../src/components/ui/SheetShell.tsx). The `/my-account/support` route is kept for
+deep links — it opens the sheet and redirects to `/my-account`. Support content lives once in
+`SupportSheet` (`SupportSheetBody`). Payment/Manage remain settings panels (the store reserves
+`"payment"`/`"manage"` kinds for a future sheet host); the Settings **single-page** layout is still a
+follow-up.

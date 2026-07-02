@@ -2,6 +2,8 @@
 
 How client-state is organized: TanStack Query for server-state, Zustand for cross-cutting client state, React Context for scoped state.
 
+> **`useDashboardSheetStore` (2026-07-02):** tiny Zustand store holding the open dashboard overlay sheet (`"support" | "payment" | "manage" | null`) with `openSheet`/`closeSheet`. The my-account nav opens sheets via it; the layout mounts the sheet host (`SheetShell`). See [dashboard-account/frontend.md](../dashboard-account/frontend.md).
+
 ## Index
 
 - [architecture.md](./architecture.md) — TanStack Query + Zustand + Context split

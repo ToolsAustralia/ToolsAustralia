@@ -7,6 +7,7 @@ import { Settings } from "lucide-react";
 import { cn } from "@/utils/cn";
 import { Monogram } from "@/components/ui/Monogram";
 import { formatDisplayName } from "@/utils/display-name";
+import { useDashboardSheetStore } from "@/stores/useDashboardSheetStore";
 import { DASHBOARD_NAV, isNavItemActive } from "./BottomNav";
 
 interface DeskNavProps {
@@ -20,6 +21,7 @@ interface DeskNavProps {
 /** Desktop-only left sidebar (>=lg). Shares the nav model with the mobile bottom nav. */
 export default function DeskNav({ firstName, lastName, email, tierHex }: DeskNavProps) {
   const pathname = usePathname();
+  const openSheet = useDashboardSheetStore((s) => s.openSheet);
 
   return (
     <aside className="sticky top-0 hidden h-screen-svh w-[236px] shrink-0 flex-col border-r border-token bg-surface lg:flex">
@@ -46,20 +48,29 @@ export default function DeskNav({ firstName, lastName, email, tierHex }: DeskNav
         {DASHBOARD_NAV.map((item) => {
           const Icon = item.icon;
           const active = isNavItemActive(pathname, item.href);
-          return (
-            <Link
-              key={item.id}
-              href={item.href}
-              aria-current={active ? "page" : undefined}
-              className={cn(
-                "flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-red-600",
-                active
-                  ? "bg-red-600 text-white dark:bg-red-500"
-                  : "text-muted-token hover:bg-black/[.04] hover:text-primary-token dark:hover:bg-white/[.06]",
-              )}
-            >
+          const navClass = cn(
+            "flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-red-600",
+            active
+              ? "bg-red-600 text-white dark:bg-red-500"
+              : "text-muted-token hover:bg-black/[.04] hover:text-primary-token dark:hover:bg-white/[.06]",
+          );
+          const inner = (
+            <>
               <Icon className="h-5 w-5" strokeWidth={active ? 2.2 : 1.9} />
               {item.label}
+            </>
+          );
+          // Support opens an overlay sheet (prototype behavior), not a route.
+          if (item.id === "support") {
+            return (
+              <button key={item.id} type="button" onClick={() => openSheet("support")} className={navClass}>
+                {inner}
+              </button>
+            );
+          }
+          return (
+            <Link key={item.id} href={item.href} aria-current={active ? "page" : undefined} className={navClass}>
+              {inner}
             </Link>
           );
         })}

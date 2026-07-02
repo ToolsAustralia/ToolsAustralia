@@ -7,6 +7,7 @@ import { getActivePackage, type ActivePackageUserInput } from "@/utils/membershi
 import { TIER_HEX, tierKeyFromName } from "@/utils/membership/tier-visuals";
 import BottomNav from "./components/BottomNav";
 import DeskNav from "./components/DeskNav";
+import SupportSheet from "./components/sheets/SupportSheet";
 
 export default function MyAccountLayout({ children }: { children: React.ReactNode }) {
   /** Opt out of site-wide chrome (header/footer/newsletter) while on /my-account
@@ -39,6 +40,9 @@ export default function MyAccountLayout({ children }: { children: React.ReactNod
       <main className="min-w-0 flex-1 pb-16 lg:pb-0">{children}</main>
 
       <BottomNav />
+
+      {/* Global overlay sheets (Support / Payment / Manage) — prototype sheet↔modal host. */}
+      <SupportSheet />
     </div>
   );
 }

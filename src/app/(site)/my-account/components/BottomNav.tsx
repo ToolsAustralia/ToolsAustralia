@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { LayoutDashboard, Gift, Ticket, CreditCard, MessageCircle, type LucideIcon } from "lucide-react";
 import { cn } from "@/utils/cn";
+import { useDashboardSheetStore } from "@/stores/useDashboardSheetStore";
 
 export interface DashboardNavItem {
   id: string;
@@ -33,6 +34,7 @@ export function isNavItemActive(pathname: string | null, href: string): boolean 
 
 export default function BottomNav() {
   const pathname = usePathname();
+  const openSheet = useDashboardSheetStore((s) => s.openSheet);
 
   return (
     <nav
@@ -70,19 +72,29 @@ export default function BottomNav() {
             );
           }
 
-          return (
-            <Link
-              key={item.id}
-              href={item.href}
-              aria-label={item.label}
-              aria-current={active ? "page" : undefined}
-              className={cn(
-                "flex min-h-16 flex-col items-center justify-center gap-1 py-2 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-red-600",
-                active ? "text-red-600 dark:text-red-500" : "text-muted-token hover:text-primary-token",
-              )}
-            >
+          const itemClass = cn(
+            "flex min-h-16 flex-col items-center justify-center gap-1 py-2 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-red-600",
+            active ? "text-red-600 dark:text-red-500" : "text-muted-token hover:text-primary-token",
+          );
+          const itemInner = (
+            <>
               <Icon className="h-6 w-6" strokeWidth={active ? 2.2 : 1.9} />
               <span className="text-[11px] font-medium">{item.label}</span>
+            </>
+          );
+
+          // Support opens an overlay sheet (prototype behavior), not a route.
+          if (item.id === "support") {
+            return (
+              <button key={item.id} type="button" onClick={() => openSheet("support")} aria-label={item.label} className={itemClass}>
+                {itemInner}
+              </button>
+            );
+          }
+
+          return (
+            <Link key={item.id} href={item.href} aria-label={item.label} aria-current={active ? "page" : undefined} className={itemClass}>
+              {itemInner}
             </Link>
           );
         })}
