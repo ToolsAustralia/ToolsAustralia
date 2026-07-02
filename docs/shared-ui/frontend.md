@@ -124,6 +124,22 @@ payment/modal layer (`Z_INDEX` 10000). The layout-mounted Support/Payment/Manage
 scale) on desktop, with the backdrop fading (`ta-sheet-fade`); all `motion-safe`-gated (keyframes in
 [globals.css](../../src/app/globals.css)). Entrance only — close still unmounts immediately.
 
+### RewardsPartnerQueue — partner-discount queue (2026-07-03)
+
+[`RewardsPartnerQueue`](../../src/components/sections/rewards/RewardsPartnerQueue.tsx) is the Rewards-tab
+section that makes the "**highest-% pack is always active, the rest queue**" model legible. Data comes
+from the existing [`usePartnerDiscountQueue`](../../src/hooks/queries/usePartnerDiscountQueue.ts) hook
+(`GET /api/partner-discount/queue`) — a clean rebuild of the presentation, **reusing** that data layer
+rather than the old dark collapsible [`PartnerDiscountQueue`](../../src/components/features/PartnerDiscountQueue.tsx).
+It renders: the **active pack** (tier-themed via `getMembershipSectionColorScheme(...).accentHex` + `inkOn`,
+a live `useLeafTimer` countdown, and a catalogue-% `AccessRing`); an **"up next" list ranked by catalogue
+%**, each row showing the pack's own duration + when it takes over; and a footer with the total queued
+window. The per-item **"activates in ~Xd · date"** and footer **"access runs through {date}"** are derived
+client-side (active remainder + cumulative queued durations) — the API returns queued items in activation
+(highest-%) order. The up-next list lives in its own `max-h-[248px] overflow-y-auto` box so the section
+never runs away vertically. Renders `null` when there's no active pack and nothing queued. Mounted on the
+Rewards page for non-guest accounts.
+
 ### RewardsMilestones — package-themed header (2026-07-03)
 
 [`RewardsMilestones`](../../src/components/sections/rewards/RewardsMilestones.tsx) **dropped the

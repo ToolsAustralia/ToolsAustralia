@@ -21,6 +21,7 @@ import { useMajorDrawEntryCta } from "@/hooks/useMajorDrawEntryCta";
 import { useMajorDrawPurchaseGate } from "@/hooks/useMajorDrawPurchaseGate";
 import DashboardPageHeader from "../components/DashboardPageHeader";
 import RewardsPartnerCard from "@/components/sections/rewards/RewardsPartnerCard";
+import RewardsPartnerQueue from "@/components/sections/rewards/RewardsPartnerQueue";
 import RewardsClaimables from "@/components/sections/rewards/RewardsClaimables";
 import RewardsMilestones from "@/components/sections/rewards/RewardsMilestones";
 import DashboardLoader from "@/components/loading/DashboardLoader";
@@ -85,6 +86,7 @@ export default function RewardsPage() {
 
         {dash.acct !== "none" && userId && (
           <>
+            <RewardsPartnerQueue />
             <RewardsClaimables userId={userId} acct={dash.acct} />
             <RewardsMilestones acct={dash.acct} months={dash.streakMonths} tierHex={dash.tierHex} />
           </>

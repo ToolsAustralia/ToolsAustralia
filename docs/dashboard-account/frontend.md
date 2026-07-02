@@ -6,6 +6,12 @@
 > instead of a bare red-arc spinner. Home + draws cycle the brand status messages; the rest pass a
 > static label. See [shared-ui/frontend.md § DashboardLoader](../shared-ui/frontend.md#dashboardloader-ported-from-claude-design-2026-07-03).
 
+> **Partner discount queue on the Rewards tab (2026-07-03):** the Rewards page (`benefits/page.tsx`) now
+> renders [`RewardsPartnerQueue`](../../src/components/sections/rewards/RewardsPartnerQueue.tsx) (after the
+> partner card, non-guest only) — active pack + catalogue-% ring + live countdown, an own-scrolling
+> "up next" list ranked by %, and the total queued access window. See
+> [shared-ui/frontend.md § RewardsPartnerQueue](../shared-ui/frontend.md#rewardspartnerqueue--partner-discount-queue-2026-07-03).
+
 > **Foreman hero/header theme + page-header chrome (2026-07-03):** [`getDashboardStateTheme`](../../src/utils/dashboard/dashboard-state-theme.ts)
 > now special-cases the **gold tier** (Foreman `#ffd200` — the only tier `inkOn` renders with dark ink):
 > the generic `shade()` gradient darkened pure yellow to a **dusty olive** (`#947a00`), which is the only
