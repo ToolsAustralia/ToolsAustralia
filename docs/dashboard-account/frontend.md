@@ -324,3 +324,19 @@ Rebuilds `/my-account/draws` to a **Major / Mini `Seg` toggle**. Spec:
   (`useMiniDraws` + embedded `miniDrawParticipation`, `MiniDrawCard` grid — dead per-mini-draw entry
   hooks intentionally NOT wired).
 - Reuses `EntryWallet` for the entries breakdown (DRY with the home).
+
+## Dashboard revamp — Spec 4: Membership (2026-07-02)
+
+Rebuilds `/my-account/membership` to current-plan + tier list + one-time packs + manage. Spec:
+`docs/superpowers/specs/2026-07-02-dashboard-membership-design.md`.
+
+- **[`membership/page.tsx`](../../src/app/(site)/my-account/membership/page.tsx)** — thin composer:
+  `DashboardPageHeader` + `MembershipCurrentPlan` + **reused `MembershipTierChooser`** (public
+  `/membership` conversion section, driven by `useMembershipCardCta` — the verified upgrade/downgrade/
+  current/past-due/guest CTA state machine + promo-multiplied entries) + `MembershipModal`. Replaces
+  the old marketing composition.
+- **[`MembershipCurrentPlan`](../../src/components/sections/account-membership/MembershipCurrentPlan.tsx)**
+  — state-aware plan summary (tier gradient, stats, renew/paused/none) + Manage/Payment links to the
+  Settings panels. Full cancel/change flow stays in the Settings subscription panel (no duplicate).
+- **🚩 `MembershipPackagesChart` is now fully orphaned** (this page was its last user) — flagged for
+  deletion in the page header; kept for user review.

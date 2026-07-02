@@ -3,9 +3,11 @@
 ## Dashboard sections (2026-07-02)
 
 The member-dashboard revamp adds section-band components under `src/components/sections/dashboard/`
-(home), `src/components/sections/rewards/` (Rewards), and `src/components/sections/draws/` (Draws),
-each a self-contained `"use client"` band fed by props from `useDashboardState` (no API/DB calls in
-the components) — mirroring the `src/components/sections/membership/` pattern. New shared primitives live in `src/components/ui/`
+(home), `src/components/sections/rewards/` (Rewards), `src/components/sections/draws/` (Draws), and
+`src/components/sections/account-membership/` (Membership), each a self-contained `"use client"` band
+fed by props from `useDashboardState` (no API/DB calls in the components) — mirroring the
+`src/components/sections/membership/` pattern. The Membership page also **reuses** the public
+`MembershipTierChooser` (driven by `useMembershipCardCta`) for its tier + one-time-pack ladder. New shared primitives live in `src/components/ui/`
 (`Monogram`, `QuickTile` — see [ui-primitives.md](./ui-primitives.md)). Full detail:
 [docs/dashboard-account/frontend.md](../dashboard-account/frontend.md) and the specs under
 `docs/superpowers/specs/2026-07-02-*`.
