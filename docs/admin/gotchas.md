@@ -1,5 +1,20 @@
 # Admin — Gotchas
 
+## Activity-log feed used offset pagination over a live top-growing list → duplicate rows (2026-07)
+
+The admin "Recent activity" feed (`ActivityCard`, subtitle "Live event stream") and the full `ActivityLogManagement` page rendered the **same user's signup/purchase twice**. The database had **no duplicates** (verified) — it was purely a pagination bug.
+
+**Root cause:** `getActivityLog` ([`ActivityLogService.ts`](../../src/services/admin/ActivityLogService.ts)) used **numeric offset pagination** (`page` / `(page-1)*limit` slice) over a live, top-growing, time-sorted list. New site-wide activity inserted at the **top** between page fetches shifted every row **down**, so page N+1's offset re-included rows already shown on page N. The infinite-scroll client (`data.pages.flatMap(...)`) rendered both copies.
+
+**Fix (don't regress):** offset was replaced with **keyset (cursor) pagination** on a deterministic `(timestamp DESC, id DESC)` total order:
+
+- `getActivityLog` now takes `{ cursor?: string | null, limit, typeFilter?, searchTerm? }` — **no `page`**. It returns `pagination: { limit, total, nextCursor: string | null, hasMore }`. `total` (full filtered count) is kept; `page` / `totalPages` are **gone**.
+- Two exported pure helpers do the work: `compareActivitiesNewestFirst(a, b)` (timestamp DESC, then id DESC) and `paginateActivitiesByCursor(sorted, cursor, limit)` → `{ rows, nextCursor, hasMore }`. Cursor format is `"<timestampMs>:<id>"`.
+- **Keyset invariant:** because the boundary is the cursor's *position in the sort order* (not a numeric offset), paginating with a page's cursor returns the **same window even after newer rows are prepended** → consecutive pages can't overlap (no dup rows) nor gap.
+- Route `GET /api/admin/activity-log` takes `cursor` (not `page`). The client hook `useActivityLogInfinite` threads `pagination.nextCursor` into `getNextPageParam`.
+
+Fenced by `npm run test:activity-log-keyset` ([`src/services/admin/__tests__/activity-log-keyset.test.ts`](../../src/services/admin/__tests__/activity-log-keyset.test.ts)). **Distinct** from `getRecentActivities` (`dashboardSlices.ts`) — a separate, non-cursor legacy slice; do not conflate them. Any new feed built over a live, top-inserting list should keyset-paginate, never offset.
+
 ## Affiliate "Set Password" reuses the existing PUT route (2026-06-19)
 
 The affiliate detail modal ([`AffiliateDetailModal.tsx`](../../src/components/admin/AffiliateDetailModal.tsx)) has a dedicated **Set Password** footer button + nested modal, mirroring the user modal's "Set Password" (`UserDetailModal`). It does **not** add a new endpoint — it `PUT`s `{ password }` to the existing `PUT /api/admin/affiliate/[id]` (the edit form's Password field uses the same route). Both are gated by `affiliates.edit`. A 6-char minimum is enforced **server-side** in the route (client validation is bypassable). The affiliate is not emailed — this is the direct-set analog of the user `admin_set_password` action (affiliates have no reset-email flow; they sign in with username + password at the portal).
