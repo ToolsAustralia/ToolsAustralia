@@ -322,6 +322,34 @@ Rebuilds the Rewards destination (`/my-account/benefits`, nav-labelled "Rewards"
   (`DASHBOARD_NAV` → `/my-account/benefits`) is now the single entry point to claimable rewards;
   the `QuickActionsGrid` "Rewards" tile still shows the claimable-count badge.
 
+### Settings → Account settings + subscription/payment overlays (2026-07-02)
+
+The tabbed Settings destination (`?tab=account|subscription|password|payment` + `SettingsSidebar`)
+was collapsed into the Claude-design IA:
+
+- **`settings/page.tsx`** is now ONE consolidated **Account settings** page — identity card,
+  reused `ProfileTab` (email verification + personal details + saves), an Appearance card
+  (`ThemePicker`, Light/Dark only), reused `PasswordTab`, and Sign out. No `?tab=` routing, no
+  sidebar. **`SettingsSidebar.tsx` was deleted** (fully orphaned).
+- **Subscription + payment are overlay sheets**, not pages: `components/sheets/ManageSheet.tsx`
+  (`sheet === "manage"`) and `PaymentSheet.tsx` (`sheet === "payment"`), mounted in `layout.tsx`
+  next to `SupportSheet`, bottom-sheet on mobile / centered popup on desktop via `SheetShell`.
+  They **reuse the existing `SubscriptionTab` / `PaymentTab`** (SubscriptionManagementModal
+  `renderAsPanel settingsRedesign` / PaymentMethodsTab `settingsRedesign`), so all Stripe/cancel/
+  reactivate logic + child modals are unchanged (child modals z-80/90 render above the sheet z-60).
+  `ManageSheet` self-fetches `useMyAccountData` + owns a `useMembershipModal` for tier changes.
+- **Openers** (all via `useDashboardSheetStore.openSheet`): `MembershipCurrentPlan` Manage/Payment
+  rows, `MembershipTierList` member tap, the hero/RewardsPartnerCard past-due "Update payment", all
+  → `manage`; the payment row → `payment`. The global `Header` "Manage" (`/my-account?open=subscription`)
+  is honoured by a new `?open=subscription|payment` handler on the home page that opens the sheet and
+  cleans the URL. `ProfileTab`'s guest "Join a plan" now routes to `/my-account/membership`.
+- **Sidebar sticky fix:** `overflow-x-hidden` was removed from the `my-account/layout.tsx` flex
+  parent (it computed `overflow-y: auto`, becoming the sticky scroll-container and breaking
+  `DeskNav`'s `sticky top-0`); the horizontal clip moved to `<main>`.
+- **Known gap (flagged, not fixed):** `handleSignOut` still only removes `wasAuthenticated` +
+  `topBarHidden` — it does NOT clear per-user client storage (history/recents/queues/IDB), which the
+  global auth-boundary rule wants. Needs its own storage-inventory pass.
+
 ## Dashboard revamp — Spec 3: Draws (2026-07-02)
 
 Rebuilds `/my-account/draws` to a **Major / Mini `Seg` toggle**. Spec:

@@ -12,7 +12,7 @@
 import React, { useState } from "react";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useMyAccountData } from "@/hooks/queries";
 import { useUserMajorDrawStats, useCurrentMajorDraw } from "@/hooks/queries/useMajorDrawQueries";
 import { hasAdditionalPackageAccess } from "@/utils/membership/has-additional-package-access";
@@ -38,6 +38,7 @@ import {
 import { useDashboardLandingOrchestration } from "@/hooks/useDashboardLandingOrchestration";
 import { useMemberships } from "@/hooks/useMemberships";
 import { useDashboardState } from "@/hooks/useDashboardState";
+import { useDashboardSheetStore } from "@/stores/useDashboardSheetStore";
 import { useRedeemablesWallet } from "@/hooks/queries/useRedeemablesQueries";
 
 import DashboardHero from "@/components/sections/dashboard/DashboardHero";
@@ -58,6 +59,8 @@ export default function MyAccountPage() {
   const { isLoading: currentMajorDrawLoading } = useCurrentMajorDraw();
 
   const dash = useDashboardState();
+  const openSheet = useDashboardSheetStore((s) => s.openSheet);
+  const searchParams = useSearchParams();
 
   const { requestModal } = useModalPriorityStore();
   const { allowSecondaryModals } = useDashboardLandingOrchestration(
@@ -84,6 +87,15 @@ export default function MyAccountPage() {
       router.push("/login");
     }
   }, [session, status, router]);
+
+  // Deep-link: /my-account?open=subscription|payment opens the matching overlay
+  // sheet (e.g. from the global Header "Manage" action), then cleans the URL.
+  React.useEffect(() => {
+    const open = searchParams?.get("open");
+    if (open !== "subscription" && open !== "payment") return;
+    openSheet(open === "subscription" ? "manage" : "payment");
+    router.replace("/my-account", { scroll: false });
+  }, [searchParams, openSheet, router]);
 
   const modalTriggeredRef = React.useRef(false);
   const referFriendPendingRef = React.useRef(false);
@@ -256,7 +268,7 @@ export default function MyAccountPage() {
   const { user } = accountData;
   const hasAccessToAdditionalPackages = hasAdditionalPackageAccess(accountData?.user || null, majorDrawStats);
 
-  const onResolvePayment = () => router.push("/my-account/settings?tab=subscription");
+  const onResolvePayment = () => openSheet("manage");
   const onBecomeMember = () => whenGatesOpenElseGateModal(() => membershipModal.openModal());
   const onGetPackage = () => openEntryFlow();
   const onBuyPackage = () => openWithOneTimePlan();

@@ -8,6 +8,8 @@ import { TIER_HEX, tierKeyFromName } from "@/utils/membership/tier-visuals";
 import BottomNav from "./components/BottomNav";
 import DeskNav from "./components/DeskNav";
 import SupportSheet from "./components/sheets/SupportSheet";
+import ManageSheet from "./components/sheets/ManageSheet";
+import PaymentSheet from "./components/sheets/PaymentSheet";
 
 export default function MyAccountLayout({ children }: { children: React.ReactNode }) {
   /** Opt out of site-wide chrome (header/footer/newsletter) while on /my-account
@@ -27,8 +29,12 @@ export default function MyAccountLayout({ children }: { children: React.ReactNod
   const tierKey = activePackage?.packageData?.name ? tierKeyFromName(activePackage.packageData.name) : null;
   const tierHex = tierKey ? TIER_HEX[tierKey] : null;
 
+  // NOTE: no `overflow-x-hidden` on this flex parent — it would compute
+  // `overflow-y: auto`, making it the sticky scroll-container and breaking
+  // DeskNav's `sticky top-0` (the sidebar would scroll away). The horizontal
+  // clip lives on <main> instead.
   return (
-    <div className="min-h-screen-svh w-full min-w-0 max-w-full overflow-x-hidden bg-page lg:flex">
+    <div className="min-h-screen-svh w-full bg-page lg:flex">
       <DeskNav
         firstName={user?.firstName}
         lastName={user?.lastName}
@@ -37,12 +43,14 @@ export default function MyAccountLayout({ children }: { children: React.ReactNod
       />
 
       {/* Content is flush against the sidebar (no centering gap), matching the prototype. */}
-      <main className="min-w-0 flex-1 pb-16 lg:pb-0">{children}</main>
+      <main className="min-w-0 max-w-full flex-1 overflow-x-hidden pb-16 lg:pb-0">{children}</main>
 
       <BottomNav />
 
-      {/* Global overlay sheets (Support / Payment / Manage) — prototype sheet↔modal host. */}
+      {/* Global overlay sheets (Support / Manage / Payment) — prototype sheet↔modal host. */}
       <SupportSheet />
+      <ManageSheet />
+      <PaymentSheet />
     </div>
   );
 }

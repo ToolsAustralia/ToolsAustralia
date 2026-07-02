@@ -450,7 +450,7 @@ After activation, the logged-in user lives at `/my-account/`. This is where memb
 - **Membership** (`/my-account/membership`) — current package, upgrade/downgrade entry points (§10c/§10d).
 - **Support** (`/my-account/support`) — contact / help.
 
-The Profile / Password / Payment-methods / Subscription tabs live separately at `/my-account/settings` (reached via a `?tab=` query param, **not** a BottomNav tab), and `/my-account/benefits` covers the partner-discount catalog.
+**Account settings** live at `/my-account/settings` — one **consolidated page** (identity, email verification, personal details, appearance, and password change); the old Account/Subscription/Password/Payment `?tab=` sub-pages were removed in the 2026-07 dashboard revamp. **Subscription management and payment methods are overlay sheets** (bottom-sheet on mobile, centered popup on desktop, same mechanics as the Support sheet) opened from the Membership page / dashboard — not separate pages. `/my-account/benefits` covers the partner-discount catalog.
 
 **Home dashboard, top to bottom** ([src/app/(site)/my-account/page.tsx](src/app/(site)/my-account/page.tsx)):
 

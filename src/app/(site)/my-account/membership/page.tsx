@@ -15,6 +15,7 @@ import dynamic from "next/dynamic";
 
 import { useDashboardState } from "@/hooks/useDashboardState";
 import { useMembershipCardCta } from "@/hooks/useMembershipCardCta";
+import { useDashboardSheetStore } from "@/stores/useDashboardSheetStore";
 import DashboardPageHeader from "../components/DashboardPageHeader";
 import MembershipCurrentPlan from "@/components/sections/account-membership/MembershipCurrentPlan";
 import MembershipTierList from "@/components/sections/account-membership/MembershipTierList";
@@ -26,6 +27,7 @@ export default function AccountMembershipPage() {
   const router = useRouter();
   const dash = useDashboardState();
   const cta = useMembershipCardCta();
+  const openSheet = useDashboardSheetStore((s) => s.openSheet);
 
   React.useEffect(() => {
     if (status === "loading") return;
@@ -60,8 +62,8 @@ export default function AccountMembershipPage() {
           tierHex={dash.tierHex}
           tierLabel={dash.tierLabel}
           user={dash.user}
-          onManage={() => router.push("/my-account/settings?tab=subscription")}
-          onPayment={() => router.push("/my-account/settings?tab=payment")}
+          onManage={() => openSheet("manage")}
+          onPayment={() => openSheet("payment")}
           onBecomeMember={() => cta.membershipModal.openModal()}
           onBuyPackage={() => cta.membershipModal.openModal()}
         />
@@ -72,7 +74,7 @@ export default function AccountMembershipPage() {
         <MembershipTierList
           cta={cta}
           isMember={dash.acct === "active"}
-          onManagePlan={() => router.push("/my-account/settings?tab=subscription")}
+          onManagePlan={() => openSheet("manage")}
         />
       </div>
 

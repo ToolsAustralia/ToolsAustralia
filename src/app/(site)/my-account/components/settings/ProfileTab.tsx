@@ -199,9 +199,7 @@ export default function ProfileTab({ user }: ProfileTabProps) {
               variant="dark"
               size="md"
               icon={ArrowUpRight}
-              onClick={() =>
-                router.push("/my-account/settings?tab=subscription", { scroll: false })
-              }
+              onClick={() => router.push("/my-account/membership")}
             >
               Join a plan
             </SettingsButton>

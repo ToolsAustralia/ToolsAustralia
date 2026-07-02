@@ -16,6 +16,7 @@ import { Gift } from "lucide-react";
 import dynamicImport from "next/dynamic";
 
 import { useDashboardState } from "@/hooks/useDashboardState";
+import { useDashboardSheetStore } from "@/stores/useDashboardSheetStore";
 import { useMajorDrawEntryCta } from "@/hooks/useMajorDrawEntryCta";
 import { useMajorDrawPurchaseGate } from "@/hooks/useMajorDrawPurchaseGate";
 import DashboardPageHeader from "../components/DashboardPageHeader";
@@ -32,6 +33,7 @@ export default function RewardsPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
   const dash = useDashboardState();
+  const openSheet = useDashboardSheetStore((s) => s.openSheet);
   const { openWithOneTimePlan, membershipModal } = useMajorDrawEntryCta();
   const { whenGatesOpenElseGateModal } = useMajorDrawPurchaseGate();
 
@@ -63,7 +65,7 @@ export default function RewardsPage() {
   const userId = dash.user?._id ?? session.user?.id ?? "";
   const onBecomeMember = () => whenGatesOpenElseGateModal(() => membershipModal.openModal());
   const onBuyPackage = () => openWithOneTimePlan();
-  const onUpdatePayment = () => router.push("/my-account/settings?tab=subscription");
+  const onUpdatePayment = () => openSheet("manage");
 
   return (
     <div className="min-h-screen-svh w-full min-w-0 max-w-full overflow-x-hidden pb-8">
