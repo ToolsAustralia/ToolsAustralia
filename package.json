@@ -178,6 +178,7 @@
     "sweep:classname-templates:dry": "tsx scripts/codemods/sweep-classname-template-literals.ts",
     "test:klaviyo-renewal-preview": "tsx src/utils/integrations/klaviyo/__tests__/klaviyo-renewal-entries-preview.test.ts",
     "test:klaviyo-canonical": "tsx src/utils/integrations/klaviyo/__tests__/canonical-events-shape.test.ts",
+    "test:invoice-generated-gate": "tsx src/utils/integrations/klaviyo/__tests__/invoice-generated-gate.test.ts",
     "test:stripe-refund-amount": "tsx src/utils/payment/__tests__/stripe-refund-amount.test.ts",
     "test:refund-reversal": "tsx src/utils/payment/__tests__/refund-reversal.test.ts",
     "test:facebook-ads-insights-service": "tsx src/services/facebook-ads/__tests__/FacebookAdsInsightsService.test.ts",

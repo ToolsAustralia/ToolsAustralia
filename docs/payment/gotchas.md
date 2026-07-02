@@ -111,6 +111,21 @@ _2026-06-09:_ Every PaymentElement input font size in `STRIPE_PAYMENT_ELEMENT_RU
 
 The Stripe `invoice.billing_reason` parameter on `grantBenefits` / `trackKlaviyoEvent` is wired through to the `Placed Order` event in Klaviyo so attribution reports can filter automated renewals out of "true new revenue" calculations. The Klaviyo-side mechanics, custom-metric setup, and the full property naming contract live in [tracking/KLAVIYO_INTEGRATION.md](../tracking/KLAVIYO_INTEGRATION.md) — change the discriminator there, not in `payment-processing.ts`.
 
+## "Invoice Generated" (customer receipt) is emitted server-side — never from the client (fixed 2026-07)
+
+The Klaviyo **"Invoice Generated"** receipt used to be emitted by a fragile **client-side** call to `/api/invoice/finalize` from the upsell modals. Because every membership tier has an upsell configured, the old `shouldDelayInvoice()` was effectively always true, so the reliable server-side `trackInvoice` was skipped and the receipt depended entirely on the browser. If the customer navigated away (common after accepting an upsell) the receipt was silently dropped — verified in production (a real Boss subscriber fired Placed Order / Subscription Started / Upsell Accepted but **no** Invoice Generated).
+
+Now "Invoice Generated" is emitted **server-side** from [`trackKlaviyoEvent`](../../src/utils/payment/payment-processing.ts) inside `processPaymentBenefits` — idempotent and always run server-side for every charge, so it can't be dropped by the client. The call is gated by [`shouldEmitInvoiceGenerated(billingReason)`](../../src/utils/integrations/klaviyo/klaviyo-invoice-service.ts):
+
+- **EMIT** for `subscription_create` (new membership — the reported bug) and for undefined/empty `billing_reason` (one-time packs, mini-draws, and accepted upsells — each is its own charge).
+- **SKIP** for `subscription_cycle` and `subscription_threshold` (renewals — owned by the "Subscription Renewed" → "Membership Renewal" Klaviyo flow) and `subscription_update` (upgrade — owned by the `invoice.payment_succeeded` webhook's `isUpgrade` block). Skipping these prevents double-emailing.
+
+Exactly-once emission is guaranteed because `processPaymentBenefits` dedups by `paymentIntentId` / `PaymentEvent` (`BenefitsGranted-${paymentIntentId}`) before reaching `trackKlaviyoEvent`.
+
+**Behavioral consequence:** an accepted upsell is a separate PaymentIntent, so it now gets its **own** receipt — an upsell purchase yields **two** receipts (base charge + upsell charge). The old client-combined single-invoice email is gone (it required the client and was unreliable).
+
+**Removed (dead code deleted):** the `/api/invoice/finalize` route, `trackCombinedInvoice`, `buildCombinedInvoiceData`, `shouldDelayInvoice`, and the `finalizeInvoice` client logic in the upsell modals. The rule is fenced by `npm run test:invoice-generated-gate`.
+
 ## Terminology: `isAdditional` (was `isMemberOnly`) — 2026-07-01
 
 The package flag `isMemberOnly` was renamed to **`isAdditional`** across the codebase. It marks packages that require *additional-package access* — an **active subscription OR current major-draw entries** (see `hasAdditionalPackageAccess`), which is broader than subscribers; it was never truly "member-only". The internal `-member` UI id-suffix (a row disambiguator) is intentionally unchanged. Full rationale: [subscription/gotchas.md](../subscription/gotchas.md).

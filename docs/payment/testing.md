@@ -11,6 +11,7 @@ Tests live under [src/utils/payment/__tests__/](../../src/utils/payment/__tests_
 | `npm run test:anchor-billing` | Anchor billing math (overlap with [billing-stripe](../billing-stripe/) and [subscription](../subscription/)) |
 | `npm run test:stripe-collection-pause` | Pause-collection clearing + invoice selection (overlap) |
 | `npm run test:redeemables` | Reverser modules for redeemables grants (overlap with [rewards-redeemables](../rewards-redeemables/)) |
+| `npm run test:invoice-generated-gate` | Fences `shouldEmitInvoiceGenerated(billing_reason)` — the server-side "Invoice Generated" receipt gate ([backend.md](./backend.md), [gotchas.md](./gotchas.md)). Test lives at `src/utils/integrations/klaviyo/__tests__/invoice-generated-gate.test.ts` (klaviyo/tracking area, not `utils/payment/__tests__/`). |
 
 ## Test conventions
 

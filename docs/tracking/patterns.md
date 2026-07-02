@@ -24,7 +24,7 @@ Email / phone in CAPI events use SHA-256 hashing. Use the helper in `lib/faceboo
 
 `src/utils/integrations/klaviyo/klaviyo-invoice-helpers.ts` builds the `item.description` field for Klaviyo invoice emails via `getReceiptLabelByPackageId(packageId, { membership: getPackageById, mini: getMiniDrawPackageById })` rather than the raw `packageName` string. This ensures users who hold multiple member/mini-draw SKUs with the same display name can tell them apart in their email receipt.
 
-**Rule:** The `packageName` field on `InvoiceData` and `PurchaseData` structs (and stored in PaymentEvent documents) continues to use the raw `pkg.name` value — only the rendered `item.description` is label-resolved. Do not change the stored `packageName` value; it is used for reconciliation and Stripe-side reference.
+**Rule:** The `packageName` field on the `InvoiceData` struct (and stored in PaymentEvent documents) continues to use the raw `pkg.name` value — only the rendered `item.description` is label-resolved. Do not change the stored `packageName` value; it is used for reconciliation and Stripe-side reference. (As of the 2026-07 invoice-reliability change, the `PurchaseData` / `UpsellPurchaseData` combined-invoice structs were removed — `Invoice Generated` is now emitted per-charge server-side; see [KLAVIYO_INTEGRATION.md](./KLAVIYO_INTEGRATION.md).)
 
 ## P7. Klaviyo events: canonical schema for new events, freeze for legacy
 

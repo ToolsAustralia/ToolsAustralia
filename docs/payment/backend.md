@@ -17,7 +17,7 @@ The biggest helper directory in the repo. Each module has one focused responsibi
 
 | File | Purpose |
 |---|---|
-| `payment-processing.ts` | `grantBenefits()`, `processPaymentBenefits()` — the success path that writes `BenefitsGranted` ledger rows. |
+| `payment-processing.ts` | `grantBenefits()`, `processPaymentBenefits()` — the success path that writes `BenefitsGranted` ledger rows. Also hosts `trackKlaviyoEvent()`, which emits the customer receipt ("Invoice Generated") **server-side** for every charge (see below). |
 | `payment-status.ts` | Status-derivation helpers (paid / failed / pending classification). |
 | `ledger-helpers.ts` | Shared helpers for reading/writing `data.grants`. |
 
@@ -60,6 +60,23 @@ and stamp three top-level fields onto the `BenefitsGranted` `PaymentEvent`:
 - Audit evidence (`attributedClickId`, `attributedClickTimestamp`) is written into the Mixed `data`
   blob only when present. Subscriptions/renewals inherit the decision from `subscription.metadata`
   (sticky), so the converting platform stays constant across the membership lifetime.
+
+#### Server-side "Invoice Generated" receipt
+
+`trackKlaviyoEvent()` (in `payment-processing.ts`) is the single source of truth for the Klaviyo
+**"Invoice Generated"** customer receipt. It runs inside `processPaymentBenefits` (idempotent,
+always server-side for every charge), so the receipt can never be dropped by a client that navigates
+away — the failure mode of the old client-side `/api/invoice/finalize` call (removed 2026-07). It
+calls [`trackInvoice()`](../../src/utils/integrations/klaviyo/klaviyo-invoice-service.ts) gated by
+`shouldEmitInvoiceGenerated(billingReason)`:
+
+- **EMIT**: `subscription_create` (new membership) and undefined/empty `billing_reason` (one-time,
+  mini-draw, accepted upsell — each is its own charge).
+- **SKIP**: `subscription_cycle` / `subscription_threshold` (renewals → "Membership Renewal" flow)
+  and `subscription_update` (upgrade → `invoice.payment_succeeded` webhook). Prevents double-emailing.
+
+An accepted upsell is a separate PaymentIntent, so it gets its own receipt (two receipts per upsell
+purchase). See [gotchas.md](./gotchas.md) for the full incident and the removed combined-invoice path.
 
 ### Refund reversal
 

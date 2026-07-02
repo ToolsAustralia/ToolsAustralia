@@ -69,7 +69,6 @@ export interface OriginalPurchaseContext {
 export interface UpsellManagerProps {
   triggerEvent: "membership-purchase" | "ticket-purchase" | "one-time-purchase";
   userContext: UpsellUserContext;
-  originalPurchaseContext?: OriginalPurchaseContext; // Optional - for delayed invoice
   onOfferShown: (offer: UpsellOffer) => void;
   onOfferAccepted: (offer: UpsellOffer) => void;
   onOfferDeclined: (offer: UpsellOffer) => void;
