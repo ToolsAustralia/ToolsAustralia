@@ -99,6 +99,9 @@ export default function RewardsPage() {
         onClose={membershipModal.closeModal}
         selectedPlan={membershipModal.selectedPlan}
         onPlanChange={membershipModal.selectPlan}
+        membershipModalConfig={
+          membershipModal.openWithPackageSelectionFirst ? { showPackageSelectionFirst: true } : undefined
+        }
       />
     </div>
   );

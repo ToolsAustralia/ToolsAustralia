@@ -42,6 +42,7 @@ import { getFallbackRenewalDate } from "@/utils/dates/month-helpers";
 import { useMemberships } from "@/hooks/useMemberships";
 import RewardsFloatingWidget from "@/components/features/RewardsFloatingWidget";
 import { useDashboardState } from "@/hooks/useDashboardState";
+import { useRedeemablesWallet } from "@/hooks/queries/useRedeemablesQueries";
 
 import DashboardHero from "@/components/sections/dashboard/DashboardHero";
 import EntryWallet, { type EntryWalletPendingData } from "@/components/sections/dashboard/EntryWallet";
@@ -69,6 +70,7 @@ export default function MyAccountPage() {
   const { whenGatesOpenElseGateModal } = useMajorDrawPurchaseGate();
 
   useMemberships();
+  const { data: claimableWallet } = useRedeemablesWallet(session?.user?.id, { status: "claimable", limit: 20 });
 
   const activePackage = React.useMemo(() => {
     const u = accountData?.user;
@@ -354,6 +356,7 @@ export default function MyAccountPage() {
             )}
             <QuickActionsGrid
               multiplier={dash.multiplier}
+              redeemCount={claimableWallet?.total ?? claimableWallet?.wallet?.length}
               onGetPackage={hasAccessToAdditionalPackages ? onGetPackage : onBecomeMember}
               onRefer={() => setIsReferFriendModalOpen(true)}
               onPastDraws={() => setIsPastDrawsModalOpen(true)}

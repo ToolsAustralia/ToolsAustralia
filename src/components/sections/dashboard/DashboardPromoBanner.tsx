@@ -6,9 +6,9 @@
  * PromoBanner, whose scroll-morphing layout is irreconcilable with a card). Only
  * the palette escalates with the multiplier; the layout is constant.
  *
- * Renders only when a real multiplier promo is live (multiplier > 1) — no
- * fabricated promo/countdown. Copy is limited to the allowed wording:
- * "50% off one-time packages" / "{n}× free entries on every package".
+ * Renders only when a real multiplier promo is live (multiplier > 1) — the copy
+ * sells that real, resolved multiplier (never a fabricated price discount; the
+ * "50% off" line is scoped to the post-purchase upsell per BUSINESS.md, not here).
  */
 import Image from "next/image";
 import { ArrowRight, Flame } from "lucide-react";
@@ -52,8 +52,8 @@ export default function DashboardPromoBanner({ multiplier, onGetPackage, classNa
 
         <div className="relative mt-2 flex items-end justify-between gap-4">
           <div className="min-w-0">
-            <h3 className="font-['Poppins'] text-lg font-extrabold leading-tight">50% off one-time packages</h3>
-            <p className="mt-0.5 text-sm font-medium opacity-90">{multiplier}× free entries on every package</p>
+            <h3 className="font-['Poppins'] text-lg font-extrabold leading-tight">Limited-time entry boost</h3>
+            <p className="mt-0.5 text-sm font-medium opacity-90">{multiplier}× free entries on every one-time package</p>
           </div>
 
           <button

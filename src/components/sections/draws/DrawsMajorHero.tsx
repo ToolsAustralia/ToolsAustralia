@@ -120,7 +120,7 @@ export default function DrawsMajorHero({ drawName, drawDateIso, drawStatus }: Dr
 
         {!isCompleted && Number.isFinite(target) && (
           <div className="mt-5 flex items-center justify-between gap-3 rounded-2xl border border-white/10 bg-white/[0.04] p-3">
-            <span className="text-sm font-semibold text-white/70">Entries freeze in</span>
+            <span className="text-sm font-semibold text-white/70">Draw closes in</span>
             <div className="flex items-center gap-1.5">
               <CountCell v={cd.d} l="days" />
               <CountCell v={cd.h} l="hrs" />

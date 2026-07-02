@@ -26,7 +26,8 @@ export default function QuickActionsGrid({
   onPastDraws,
   className,
 }: QuickActionsGridProps) {
-  const promoBadge = multiplier > 1 ? `${multiplier}×` : "50% OFF";
+  // Only show a badge when a real promo multiplier is live — never a fabricated "50% OFF".
+  const promoBadge = multiplier > 1 ? `${multiplier}×` : undefined;
 
   return (
     <section className={className}>
@@ -41,13 +42,13 @@ export default function QuickActionsGrid({
           label="Redeem"
           badge={rewardsEnabled && redeemCount ? redeemCount : undefined}
           accentHex="#d4af37"
-          href={rewardsEnabled ? "/rewards" : undefined}
+          href={rewardsEnabled ? "/my-account/benefits" : undefined}
           disabled={!rewardsEnabled}
         />
         <QuickTile icon={Ticket} label="Vouchers" accentHex="#00c2ed" comingSoon />
         <QuickTile icon={UserPlus} label="Refer" badge="+100" accentHex="#34d399" onClick={onRefer} />
         <QuickTile icon={History} label="Past draws" accentHex="#8b5cf6" onClick={onPastDraws} />
-        <QuickTile icon={Medal} label="Milestones" accentHex="#f59e0b" comingSoon={!isDashboardFeatureOn("milestoneProgress")} href={isDashboardFeatureOn("milestoneProgress") ? "/rewards" : undefined} />
+        <QuickTile icon={Medal} label="Milestones" accentHex="#f59e0b" comingSoon={!isDashboardFeatureOn("milestoneProgress")} href={isDashboardFeatureOn("milestoneProgress") ? "/my-account/benefits" : undefined} />
         <QuickTile icon={Store} label="Partners" accentHex="#0ea5a5" href="/my-account/benefits" />
         <QuickTile icon={MessageCircle} label="Support" accentHex="#64748b" href="/my-account/support" />
       </div>
