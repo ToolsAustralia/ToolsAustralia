@@ -2,6 +2,8 @@
 
 Cross-cutting infra: health checks, cron, upload, Cloudinary, environment, Zod helpers, date utilities, validation, webhooks, operational scripts. Also owns repo-wide config files like `package.json`, `vercel.json`, and `.gitignore`.
 
+> `.gitignore` ignores `/claudeDesign` — the local-only Claude Design handoff reference (design HTML/JS prototypes), which is not part of the codebase.
+
 ## Index
 
 - [architecture.md](./architecture.md) — what lives here vs other domains
