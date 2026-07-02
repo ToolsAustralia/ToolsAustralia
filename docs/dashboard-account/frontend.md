@@ -306,3 +306,21 @@ Rebuilds the Rewards destination (`/my-account/benefits`, nav-labelled "Rewards"
   program 503 renders a neutral "temporarily unavailable" state, never a crash), `RewardsMilestones`
   (stepper gated behind the `milestoneProgress` coming-soon switch; static documented-tier teaser
   until enabled — no fabricated progress).
+
+## Dashboard revamp — Spec 3: Draws (2026-07-02)
+
+Rebuilds `/my-account/draws` to a **Major / Mini `Seg` toggle**. Spec:
+`docs/superpowers/specs/2026-07-02-dashboard-draws-design.md`.
+
+- **[`draws/page.tsx`](../../src/app/(site)/my-account/draws/page.tsx)** — thin composer fed by
+  `useDashboardState`: `DashboardPageHeader` + `Seg` → **major** (`DrawsMajorHero` → reused
+  `EntryWallet` → `DashboardPromoBanner` → "Get more entries" → `DrawHowItWorks` → `DrawWinners`) or
+  **mini** (`DrawsMini`). Flagged-for-deletion (kept, shared): `PrizeShowcase`, `MembershipSection`,
+  `LatestWinnerHero`, `WinnersTestimony`, `MajorDrawHeaderStrip`.
+- **Sections `src/components/sections/draws/`**: `DrawsMajorHero` (prize picker setup vs $10k cash
+  via `usePrizeCatalog` + `resolvePrize("cash-prize")`, live countdown, "View this promotion" →
+  `/promotions`), `DrawHowItWorks` (static 3 steps), `DrawWinners` (`useMajorDrawWinners`, monogram
+  fallback, state-not-suburb — replaces the old raw `fetch("/api/winners/all")`), `DrawsMini`
+  (`useMiniDraws` + embedded `miniDrawParticipation`, `MiniDrawCard` grid — dead per-mini-draw entry
+  hooks intentionally NOT wired).
+- Reuses `EntryWallet` for the entries breakdown (DRY with the home).
