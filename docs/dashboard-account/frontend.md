@@ -341,10 +341,19 @@ was collapsed into the Claude-design IA:
 - **Subscription + payment are overlay sheets**, not pages: `components/sheets/ManageSheet.tsx`
   (`sheet === "manage"`) and `PaymentSheet.tsx` (`sheet === "payment"`), mounted in `layout.tsx`
   next to `SupportSheet`, bottom-sheet on mobile / centered popup on desktop via `SheetShell`.
-  They **reuse the existing `SubscriptionTab` / `PaymentTab`** (SubscriptionManagementModal
-  `renderAsPanel settingsRedesign` / PaymentMethodsTab `settingsRedesign`), so all Stripe/cancel/
-  reactivate logic + child modals are unchanged (child modals z-80/90 render above the sheet z-60).
-  `ManageSheet` self-fetches `useMyAccountData` + owns a `useMembershipModal` for tier changes.
+  - `PaymentSheet` reuses `PaymentTab` (PaymentMethodsTab `settingsRedesign`) — its
+    `SettingsRedesignPayment` panel + `AddPaymentForm` were restyled to the clean prototype (see
+    shared-ui/frontend.md). Card Stripe wiring unchanged.
+  - `ManageSheet` is now a **clean custom body** (plan summary → Update payment method → Change tier
+    → Cancel membership; past-due "Update payment to resume") — NOT the heavy `SubscriptionTab`
+    panel. It **delegates the money-path flows** rather than re-implementing them (the change-tier
+    upgrade/downgrade Stripe wiring can't be safely re-implemented — zero-trial-invoice / entries-grant
+    footguns, see docs/subscription): **update-payment** → `openSheet("payment")`; **cancel** →
+    self-contained `CancellationFlowModal` (`onResolvePayment` → past-due modal); **past-due resume**
+    → self-contained `RenewalFailedModal` (opening the payment sheet alone does NOT retry the
+    invoice); **change-tier** → the proven `SubscriptionManagementModal` (modal mode) on demand. All
+    delegated modals portal at z-80/90/10000, above the sheet's z-60. `SubscriptionTab.tsx` is now
+    orphaned (kept as the documented type-only-import example; ManageSheet uses the same pattern).
 - **Openers** (all via `useDashboardSheetStore.openSheet`): `MembershipCurrentPlan` Manage/Payment
   rows, `MembershipTierList` member tap, the hero/RewardsPartnerCard past-due "Update payment", all
   → `manage`; the payment row → `payment`. The global `Header` "Manage" (`/my-account?open=subscription`)
