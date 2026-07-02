@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { AlertTriangle, ShieldCheck, Info, ChevronDown } from "lucide-react";
+import { AlertTriangle, ShieldCheck, Info } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { useQueryClient } from "@tanstack/react-query";
 import { AUSTRALIAN_STATES } from "@/data/australianStates";
@@ -10,6 +10,7 @@ import { useToast } from "@/components/ui/Toast";
 import { queryKeys } from "@/lib/queryKeys";
 import { useModalPriorityStore } from "@/stores/useModalPriorityStore";
 import BirthdatePicker from "@/components/ui/BirthdatePicker";
+import SelectMenu from "@/components/ui/SelectMenu";
 import { isGiveawayIneligible, getGiveawayIneligibilityReasons } from "@/utils/giveaway-eligibility";
 import { cn } from "@/utils/cn";
 
@@ -52,6 +53,10 @@ export default function ProfileTab({ user }: ProfileTabProps) {
     !profession || PROFESSIONS.some((p) => p.value === profession)
       ? PROFESSIONS
       : [{ value: profession, label: profession }, ...PROFESSIONS];
+  const stateOptions = AUSTRALIAN_STATES.map((s) => ({
+    value: s.code,
+    label: `${s.code} — ${s.name}${s.code === "SA" || s.code === "ACT" ? " (not eligible)" : ""}`,
+  }));
 
   const reasons = getGiveawayIneligibilityReasons(state, birthdate || user.birthdate);
   const ineligible = isGiveawayIneligible(state, birthdate || user.birthdate);
@@ -170,45 +175,14 @@ export default function ProfileTab({ user }: ProfileTabProps) {
             <label htmlFor="profession" className="mb-1.5 block text-sm font-medium text-primary-token dark:text-white">
               Profession
             </label>
-            <div className="relative">
-              <select
-                id="profession"
-                value={profession}
-                onChange={(e) => setProfession(e.target.value)}
-                className={cn(fieldClass, "appearance-none pr-9")}
-              >
-                <option value="">Select profession</option>
-                {professionOptions.map((p) => (
-                  <option key={p.value} value={p.value}>
-                    {p.label}
-                  </option>
-                ))}
-              </select>
-              <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-token" />
-            </div>
+            <SelectMenu id="profession" value={profession} onChange={setProfession} options={professionOptions} placeholder="Select profession" />
           </div>
 
           <div>
             <label htmlFor="state" className="mb-1.5 block text-sm font-medium text-primary-token dark:text-white">
               State
             </label>
-            <div className="relative">
-              <select
-                id="state"
-                value={state}
-                onChange={(e) => setState(e.target.value)}
-                className={cn(fieldClass, "appearance-none pr-9")}
-              >
-                <option value="">Select state</option>
-                {AUSTRALIAN_STATES.map((s) => (
-                  <option key={s.code} value={s.code}>
-                    {s.code} — {s.name}
-                    {s.code === "SA" || s.code === "ACT" ? " (not eligible)" : ""}
-                  </option>
-                ))}
-              </select>
-              <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-token" />
-            </div>
+            <SelectMenu id="state" value={state} onChange={setState} options={stateOptions} placeholder="Select state" />
           </div>
 
           {ineligible && (

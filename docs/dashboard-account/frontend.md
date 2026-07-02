@@ -337,7 +337,10 @@ was collapsed into the Claude-design IA:
   emoji/state tile grids; a compact giveaway-eligibility note shows only when ineligible. `PasswordTab`
   is a minimal change/set-password card + strength meter + "Email me a reset link" — the security-score
   dial, 2FA/SMS placeholder and requirements side-panel were dropped. Same endpoints
-  (`/api/user/change-password`, `/api/auth/request-password-reset`).
+  (`/api/user/change-password`, `/api/auth/request-password-reset`). Profession/State use the styled
+  `SelectMenu` dropdown (not native `<select>`); the Appearance `ThemePicker` is a segmented-pill
+  toggle; the identity card shows a **tier badge** (package icon + `tierLabel`) for members instead
+  of a generic "Member" chip. (System theme stays omitted — the theme store is light/dark only.)
 - **Subscription + payment are overlay sheets**, not pages: `components/sheets/ManageSheet.tsx`
   (`sheet === "manage"`) and `PaymentSheet.tsx` (`sheet === "payment"`), mounted in `layout.tsx`
   next to `SupportSheet`, bottom-sheet on mobile / centered popup on desktop via `SheetShell`.

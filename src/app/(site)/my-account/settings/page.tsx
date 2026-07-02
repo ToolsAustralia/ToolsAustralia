@@ -11,10 +11,12 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import React, { useCallback } from "react";
+import Image from "next/image";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { totalSignOut } from "@/utils/auth/total-sign-out";
-import { Settings as SettingsIcon, LogOut, Palette, CheckCircle2, AlertTriangle } from "lucide-react";
+import { Settings as SettingsIcon, LogOut, Palette, AlertTriangle, Crown } from "lucide-react";
+import { getPackageIcon } from "@/utils/images/package-icons";
 import { useMyAccountData } from "@/hooks/queries";
 import { useDashboardState } from "@/hooks/useDashboardState";
 import { formatDisplayName } from "@/utils/display-name";
@@ -71,6 +73,7 @@ export default function SettingsPage() {
   const displayName = formatDisplayName(user.firstName, user.lastName) || user.email;
   const subtitle = [user.profession, user.state].filter(Boolean).join(" · ") || user.email;
   const isMember = Boolean(user.subscription?.isActive) && !hasFailed;
+  const tierIcon = dash.tierKey ? getPackageIcon(`${dash.tierKey}-subscription`) : null;
 
   return (
     <div>
@@ -94,7 +97,14 @@ export default function SettingsPage() {
           {hasFailed ? (
             <SettingsBadge tone="danger" icon={AlertTriangle}>Past due</SettingsBadge>
           ) : isMember ? (
-            <SettingsBadge tone="success" icon={CheckCircle2}>Member</SettingsBadge>
+            <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-token bg-surface px-2.5 py-1 text-xs font-bold text-primary-token dark:text-white">
+              {tierIcon ? (
+                <Image src={tierIcon} alt="" width={16} height={16} className="h-4 w-4 object-contain" />
+              ) : (
+                <Crown className="h-3.5 w-3.5 text-amber-500" />
+              )}
+              {dash.tierLabel ?? "Member"}
+            </span>
           ) : (
             <SettingsBadge tone="neutral">Guest</SettingsBadge>
           )}

@@ -14,6 +14,13 @@
 > presentational-only; the shared `buildMembershipStripeAppearance` (7 modals) is untouched; all
 > Stripe wiring (SetupIntent / confirmSetup) unchanged.
 
+> **Styled dropdown + promo shimmer (2026-07-02):** new `components/ui/SelectMenu.tsx` — a
+> design-system dropdown (button + popover on `border-token` / `bg-surface`, outside-click/Escape
+> close) that replaces the native `<select>` in the settings personal-details (native OS menus don't
+> match our tokens). Separately, the dashboard promo banner shimmer now uses a dedicated
+> `promo-shimmer-sweep` keyframe (globals.css) that travels the FULL banner width — the old `shimmer`
+> keyframe was a diagonal *badge* effect whose transform overrode the band's skew, so it never swept.
+
 ## Dashboard sections (2026-07-02)
 
 The member-dashboard revamp adds section-band components under `src/components/sections/dashboard/`

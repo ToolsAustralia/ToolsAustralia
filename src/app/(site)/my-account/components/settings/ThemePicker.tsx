@@ -17,7 +17,7 @@ const OPTIONS = [
 export default function ThemePicker() {
   const { theme, setTheme } = useTheme();
   return (
-    <div role="group" aria-label="Appearance" className="grid grid-cols-2 gap-2">
+    <div role="group" aria-label="Appearance" className="flex gap-1 rounded-2xl bg-black/[.05] p-1.5 dark:bg-white/[.06]">
       {OPTIONS.map((o) => {
         const Icon = o.icon;
         const on = theme === o.value;
@@ -28,13 +28,11 @@ export default function ThemePicker() {
             aria-pressed={on}
             onClick={() => setTheme(o.value)}
             className={cn(
-              "flex items-center justify-center gap-2 rounded-xl border px-4 py-3 text-sm font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-red-600",
-              on
-                ? "border-red-600 bg-red-50 text-red-700 dark:border-red-500 dark:bg-red-500/15 dark:text-red-300"
-                : "border-token bg-surface text-muted-token hover:text-primary-token",
+              "flex flex-1 flex-col items-center justify-center gap-1.5 rounded-xl px-4 py-3 text-sm font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-red-600",
+              on ? "bg-surface text-primary-token shadow-sm dark:text-white" : "text-muted-token hover:text-primary-token",
             )}
           >
-            <Icon className="h-4 w-4" /> {o.label}
+            <Icon className="h-[18px] w-[18px]" /> {o.label}
           </button>
         );
       })}

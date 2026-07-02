@@ -65,7 +65,7 @@ export default function DashboardPromoBanner({
         {active && (
           <span
             aria-hidden
-            className="pointer-events-none absolute inset-y-0 left-[-60%] w-[42%] motion-safe:animate-[shimmer_3.4s_linear_infinite]"
+            className="pointer-events-none absolute inset-y-0 left-[-60%] w-[42%] motion-safe:animate-[promo-shimmer-sweep_3.4s_linear_infinite]"
             style={{ background: "linear-gradient(105deg,transparent,rgba(255,255,255,.5),transparent)", transform: "skewX(-18deg)" }}
           />
         )}
