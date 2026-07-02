@@ -4,6 +4,12 @@
 > ([src/utils/auth/total-sign-out.ts](../../src/utils/auth/total-sign-out.ts)) instead of a bare
 > `signOut()` + 2-key localStorage wipe. See [auth/frontend.md](../auth/frontend.md#total-sign-out-2026-07-02).
 
+> **Payment sheet panel (2026-07-02):** `SettingsRedesignPayment` (rendered by the Payment overlay
+> sheet via `PaymentMethodsTab settingsRedesign`) was rewritten from a card-face grid to the clean
+> prototype layout — hero card face (default card) → "Saved cards" radio rows (Default badge /
+> Remove) → dashed "Add a new card" → encrypted footer. Cardholder name is threaded in from the
+> orchestrator (`index.tsx`). Still presentational-only; all Stripe wiring unchanged.
+
 ## Dashboard sections (2026-07-02)
 
 The member-dashboard revamp adds section-band components under `src/components/sections/dashboard/`

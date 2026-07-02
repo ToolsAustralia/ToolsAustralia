@@ -1,25 +1,23 @@
 "use client";
 
 /**
- * Settings-page-only Claude redesign body for PaymentMethodsTab.
+ * Settings/overlay Claude redesign body for PaymentMethodsTab (the Payment sheet).
  *
  * PRESENTATIONAL ONLY. No hooks/fetch/business logic — every value/handler is
- * passed from the orchestrator (index.tsx), which keeps ALL Stripe wiring,
- * the `stripePromise` singleton, the add-form `<Elements>` block (passed in as
- * `addForm`) and the delete `ConfirmationModal`. Card set-default / delete call
- * the same handlers with the same disabled/loading state as the legacy body.
- * Modal-mode / SettingsModal never render this.
+ * passed from the orchestrator (index.tsx), which keeps ALL Stripe wiring, the
+ * `stripePromise` singleton, the add-form `<Elements>` block (passed in as
+ * `addForm`) and the delete `ConfirmationModal`. Set-default / delete call the
+ * same handlers with the same disabled/loading state. Modal-mode never renders this.
+ *
+ * Layout matches the prototype PaymentSheet: hero card face (default card) →
+ * SAVED CARDS radio rows (Default badge / Remove) → dashed "Add a new card" →
+ * encrypted footer.
  */
 
 import React from "react";
-import { AlertTriangle, Plus, Star, Trash2, ShieldCheck } from "lucide-react";
-import Link from "next/link";
-import {
-  Card,
-  SectionHeader,
-  SettingsButton,
-} from "@/app/(site)/my-account/components/settings/ui/primitives";
+import { AlertTriangle, CreditCard, Lock, Plus } from "lucide-react";
 import type { SavedPaymentMethod } from "@/hooks/useSavedPaymentMethods";
+import { cn } from "@/utils/cn";
 
 export interface SettingsRedesignPaymentProps {
   paymentMethods: SavedPaymentMethod[];
@@ -34,47 +32,52 @@ export interface SettingsRedesignPaymentProps {
   deletingId: string | null;
   /** Pre-built Elements + AddPaymentForm block (or null) — built in index.tsx. */
   addForm: React.ReactNode;
+  /** Name printed on the hero card face (from the orchestrator's user). */
+  cardholderName?: string;
   onAddNew: () => void;
   onSetDefault: (paymentMethodId: string) => void;
   onDelete: (paymentMethodId: string) => void;
 }
 
-const brandSkin = (
-  brandRaw?: string,
-): { bg: string; mark: React.ReactNode } => {
+function brandFace(brandRaw?: string): { bg: string; mark: React.ReactNode } {
   const brand = (brandRaw ?? "").toLowerCase();
   if (brand === "visa") {
     return {
-      bg: "bg-gradient-to-br from-[#1a1f71] via-[#0e1858] to-[#070b30]",
-      mark: <span className="font-poppins font-black italic text-white text-xl tracking-tight">VISA</span>,
+      bg: "linear-gradient(135deg,#141414 0%,#1b2140 48%,#0b1a3a 100%)",
+      mark: <span className="font-['Poppins'] text-xl font-black italic tracking-tight text-white">VISA</span>,
     };
   }
   if (brand === "mastercard") {
     return {
-      bg: "bg-gradient-to-br from-[#1d1d1d] via-[#2a1a14] to-[#4a0d0d]",
+      bg: "linear-gradient(135deg,#1d1d1d 0%,#2a1a14 50%,#3d0f0f 100%)",
       mark: (
         <div className="flex items-center -space-x-3">
-          <span className="w-7 h-7 rounded-full bg-[#eb001b]" />
-          <span className="w-7 h-7 rounded-full bg-[#f79e1b] mix-blend-screen" />
+          <span className="h-7 w-7 rounded-full bg-[#eb001b]" />
+          <span className="h-7 w-7 rounded-full bg-[#f79e1b] mix-blend-screen" />
         </div>
       ),
     };
   }
   if (brand === "amex" || brand === "american express") {
     return {
-      bg: "bg-gradient-to-br from-[#0a6896] via-[#0b4d77] to-[#062e49]",
-      mark: <span className="font-poppins font-black text-white text-lg tracking-wider">AMEX</span>,
+      bg: "linear-gradient(135deg,#0a6896 0%,#0b4d77 50%,#062e49 100%)",
+      mark: <span className="font-['Poppins'] text-lg font-black tracking-wider text-white">AMEX</span>,
     };
   }
   return {
-    bg: "bg-gradient-to-br from-neutral-700 via-neutral-800 to-neutral-900",
-    mark: (
-      <span className="font-poppins font-black text-white text-sm tracking-wider uppercase">
-        {brandRaw || "Card"}
-      </span>
-    ),
+    bg: "linear-gradient(135deg,#111 0%,#2a2a2e 55%,#141416 100%)",
+    mark: <span className="font-['Poppins'] text-sm font-black uppercase tracking-wider text-white">{brandRaw || "Card"}</span>,
   };
-};
+}
+
+function expLabel(meta?: SavedPaymentMethod["card"]): string {
+  return meta ? `${String(meta.expMonth).padStart(2, "0")}/${String(meta.expYear).slice(-2)}` : "––/––";
+}
+
+function brandName(brandRaw?: string): string {
+  if (!brandRaw) return "Card";
+  return brandRaw.charAt(0).toUpperCase() + brandRaw.slice(1);
+}
 
 const SettingsRedesignPayment: React.FC<SettingsRedesignPaymentProps> = ({
   paymentMethods,
@@ -82,12 +85,12 @@ const SettingsRedesignPayment: React.FC<SettingsRedesignPaymentProps> = ({
   loading,
   error,
   hasActiveSubscription,
-  subscriptionStatus,
   showAddForm,
   isCreatingSetupIntent,
   settingDefaultId,
   deletingId,
   addForm,
+  cardholderName,
   onAddNew,
   onSetDefault,
   onDelete,
@@ -95,199 +98,157 @@ const SettingsRedesignPayment: React.FC<SettingsRedesignPaymentProps> = ({
   // Dedup (mirror legacy safety net) — keep first occurrence per id.
   const uniqueMap = new Map<string, SavedPaymentMethod>();
   for (const pm of paymentMethods) {
-    if (pm.paymentMethodId && !uniqueMap.has(pm.paymentMethodId)) {
-      uniqueMap.set(pm.paymentMethodId, pm);
-    }
+    if (pm.paymentMethodId && !uniqueMap.has(pm.paymentMethodId)) uniqueMap.set(pm.paymentMethodId, pm);
   }
   const cards = Array.from(uniqueMap.values());
 
+  // Two "defaults" exist: the wallet default (pm.isDefault) and the card the
+  // Stripe subscription actually charges (subscriptionDefaultPaymentMethodId).
+  // With an active subscription the charged card wins; else fall back to the
+  // wallet default so exactly one card is starred.
+  const subscriptionCardKnown = Boolean(hasActiveSubscription) && Boolean(subscriptionDefaultPaymentMethodId);
+  const isDefaultCard = (pm: SavedPaymentMethod) =>
+    subscriptionCardKnown ? pm.paymentMethodId === subscriptionDefaultPaymentMethodId : pm.isDefault;
+
+  const heroCard = cards.find(isDefaultCard) ?? cards[0];
+  const heroFace = brandFace(heroCard?.card?.brand);
+
   return (
-    <div className="space-y-6">
-      <SectionHeader
-        title="My wallet"
-        description="The card with the star is charged for your subscription."
-        icon={ShieldCheck}
-        accent="red"
-      />
-
-      {hasActiveSubscription && (
-        <Card className="border-sky-200/80 dark:border-sky-900/60 bg-sky-50/60 dark:bg-sky-950/30 p-4 flex items-start gap-3">
-          <ShieldCheck className="w-5 h-5 text-sky-600 dark:text-sky-400 shrink-0 mt-0.5" strokeWidth={2} />
-          <div className="min-w-0">
-            <p className="text-sm font-semibold text-sky-900 dark:text-sky-200">Active subscription</p>
-            <p className="text-xs text-sky-700 dark:text-sky-300 mt-0.5">
-              Your subscription is {subscriptionStatus === "active" ? "active" : subscriptionStatus}. The
-              starred card is used for future payments — set a different card as default to change it.
-            </p>
-          </div>
-        </Card>
-      )}
-
+    <div className="space-y-5">
       {error && (
-        <Card className="border-red-200/80 dark:border-red-900/60 bg-red-50/60 dark:bg-red-950/30 p-4 flex items-start gap-2.5">
-          <AlertTriangle className="w-4 h-4 text-red-600 dark:text-red-400 shrink-0 mt-0.5" strokeWidth={2.25} />
+        <div className="flex items-start gap-2.5 rounded-2xl border border-red-200/80 bg-red-50/60 p-4 dark:border-red-900/60 dark:bg-red-950/30">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-red-600 dark:text-red-400" strokeWidth={2.25} />
           <p className="text-sm text-red-700 dark:text-red-300">{error}</p>
-        </Card>
+        </div>
       )}
 
-      {loading && (
-        <Card className="p-8 text-center">
-          <div className="w-8 h-8 mx-auto mb-3 rounded-full border-b-2 border-red-600 animate-spin" />
-          <p className="text-sm text-neutral-500 dark:text-neutral-400">Loading payment methods…</p>
-        </Card>
-      )}
-
-      {/* Add-form (Stripe Elements) is built in index.tsx and passed through */}
-      {!loading && showAddForm && addForm}
-
-      {!loading && !showAddForm && cards.length === 0 && (
-        <Card className="p-6 sm:p-10 text-center border-dashed border-neutral-300 dark:border-neutral-700">
-          <div className="w-14 h-14 mx-auto rounded-2xl bg-neutral-100 dark:bg-neutral-800 text-neutral-500 dark:text-neutral-400 flex items-center justify-center mb-4">
-            <Plus className="w-7 h-7" strokeWidth={1.5} />
-          </div>
-          <p className="font-poppins font-bold text-base text-neutral-900 dark:text-white">
-            No cards saved yet
-          </p>
-          <p className="text-sm text-neutral-500 dark:text-neutral-400 mt-1 max-w-sm mx-auto">
-            Add a card to manage your subscription and future payments.
-          </p>
-          <SettingsButton
-            variant="primary"
-            icon={Plus}
-            className="mt-5"
-            onClick={onAddNew}
-            disabled={isCreatingSetupIntent}
-          >
-            {isCreatingSetupIntent ? "Preparing…" : "Add card"}
-          </SettingsButton>
-        </Card>
-      )}
-
-      {!loading && !showAddForm && cards.length > 0 && (
+      {loading ? (
+        <div className="rounded-2xl border border-token bg-surface p-8 text-center shadow-sm">
+          <div className="mx-auto mb-3 h-8 w-8 animate-spin rounded-full border-b-2 border-red-600" />
+          <p className="text-sm text-muted-token">Loading payment methods…</p>
+        </div>
+      ) : (
         <>
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {cards.map((pm) => {
-              const meta = pm.card;
-              const skin = brandSkin(meta?.brand);
-              // Single source of truth for the star. Two different "defaults"
-              // exist: the wallet default (pm.isDefault, a Mongo flag) and the
-              // card the Stripe subscription actually charges
-              // (subscriptionDefaultPaymentMethodId). OR-ing them starred both
-              // when they diverged. With an active subscription the truthful
-              // "charged for your subscription" card wins; otherwise (no sub,
-              // or Stripe returned no subscription default) fall back to the
-              // wallet default so exactly one card is always starred.
-              const subscriptionCardKnown =
-                Boolean(hasActiveSubscription) && Boolean(subscriptionDefaultPaymentMethodId);
-              const isDefault = subscriptionCardKnown
-                ? pm.paymentMethodId === subscriptionDefaultPaymentMethodId
-                : pm.isDefault;
-              const isSettingDefault = settingDefaultId === pm.paymentMethodId;
-              const isDeleting = deletingId === pm.paymentMethodId;
-              return (
-                <div
-                  key={pm.paymentMethodId}
-                  className={`group relative rounded-2xl overflow-hidden text-white shadow-lift dark:shadow-lift-dark ${skin.bg} ${
-                    isDefault
-                      ? "ring-2 ring-red-600 ring-offset-2 ring-offset-white dark:ring-offset-neutral-950"
-                      : ""
-                  }`}
-                  style={{ aspectRatio: "1.586 / 1" }}
-                >
-                  <div className="absolute inset-0 bg-gradient-to-br from-white/10 to-transparent pointer-events-none" />
-                  <div className="relative h-full p-5 flex flex-col justify-between">
-                    <div className="flex items-start justify-between">
-                      <div className="w-10 h-7 rounded-md bg-gradient-to-br from-yellow-300 to-yellow-600 relative overflow-hidden shadow-inner">
-                        <div className="absolute inset-1 grid grid-cols-3 grid-rows-3 gap-px">
-                          {Array.from({ length: 9 }).map((_, i) => (
-                            <div key={i} className="bg-yellow-700/30 rounded-sm" />
-                          ))}
-                        </div>
-                      </div>
-                      <div className="flex flex-col items-end gap-1">
-                        {skin.mark}
-                        {isDefault && (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-white/20 backdrop-blur text-[10px] font-bold tracking-wider uppercase">
-                            <Star className="w-2.5 h-2.5" strokeWidth={2.5} /> Default
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                    <div className="font-mono flex items-center justify-between gap-1 w-full text-lg sm:text-base lg:text-sm tracking-[0.15em] mt-2">
-                      <span className="whitespace-nowrap">••••</span>
-                      <span className="whitespace-nowrap">••••</span>
-                      <span className="whitespace-nowrap">••••</span>
-                      <span className="whitespace-nowrap">{meta?.last4 ?? "••••"}</span>
-                    </div>
-                    <div className="flex items-end justify-between">
-                      <div>
-                        <p className="text-[9px] font-bold tracking-[0.18em] uppercase text-white/60">
-                          Expires
-                        </p>
-                        <p className="font-poppins font-bold text-sm tracking-wider">
-                          {meta ? `${String(meta.expMonth).padStart(2, "0")}/${String(meta.expYear).slice(-2)}` : "––/––"}
-                        </p>
-                      </div>
+          {/* Hero card face — the default / charged card */}
+          {heroCard && (
+            <div
+              className="relative overflow-hidden rounded-[1.25rem] p-5 text-white shadow-[0_18px_40px_-20px_rgba(0,0,0,.6)]"
+              style={{ background: heroFace.bg, aspectRatio: "1.9 / 1" }}
+            >
+              <span aria-hidden className="pointer-events-none absolute inset-0 bg-gradient-to-br from-white/10 to-transparent" />
+              <div className="relative flex h-full flex-col justify-between">
+                <div className="flex items-start justify-between">
+                  <div className="relative h-7 w-10 overflow-hidden rounded-md bg-gradient-to-br from-yellow-300 to-yellow-600 shadow-inner">
+                    <div className="absolute inset-1 grid grid-cols-3 grid-rows-3 gap-px">
+                      {Array.from({ length: 9 }).map((_, i) => (
+                        <div key={i} className="rounded-sm bg-yellow-700/30" />
+                      ))}
                     </div>
                   </div>
-                  <div className="absolute inset-x-0 bottom-0 p-3 flex items-center justify-end gap-1.5 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition bg-gradient-to-t from-black/50 to-transparent">
-                    {!isDefault && (
-                      <button
-                        type="button"
-                        onClick={() => onSetDefault(pm.paymentMethodId)}
-                        disabled={settingDefaultId !== null}
-                        className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-white/15 hover:bg-white/25 backdrop-blur text-white text-xs font-semibold transition disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        <Star className="w-3 h-3" strokeWidth={2.5} />
-                        {isSettingDefault ? "Setting…" : "Set default"}
-                      </button>
-                    )}
-                    <button
-                      type="button"
-                      onClick={() => onDelete(pm.paymentMethodId)}
-                      disabled={isDeleting}
-                      aria-label="Remove card"
-                      className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-white/15 hover:bg-red-500 backdrop-blur text-white transition disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" strokeWidth={2} />
-                    </button>
+                  {heroFace.mark}
+                </div>
+                <div className="flex items-center justify-between gap-1 font-mono text-lg tracking-[0.12em]">
+                  <span>••••</span>
+                  <span>••••</span>
+                  <span>••••</span>
+                  <span>{heroCard.card?.last4 ?? "••••"}</span>
+                </div>
+                <div className="flex items-end justify-between">
+                  <div className="min-w-0">
+                    <p className="text-[9px] font-bold uppercase tracking-[0.18em] text-white/60">Card holder</p>
+                    <p className="truncate font-['Poppins'] text-sm font-bold tracking-wide">{cardholderName || "Cardholder"}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-[9px] font-bold uppercase tracking-[0.18em] text-white/60">Expires</p>
+                    <p className="font-['Poppins'] text-sm font-bold tracking-wider">{expLabel(heroCard.card)}</p>
                   </div>
                 </div>
-              );
-            })}
+              </div>
+            </div>
+          )}
 
-            {/* Add-card slot */}
+          {/* Saved cards — radio rows */}
+          {cards.length > 0 && (
+            <div>
+              <p className="mb-3 text-[11px] font-bold uppercase tracking-[0.18em] text-muted-token">Saved cards</p>
+              <div className="space-y-2">
+                {cards.map((pm) => {
+                  const isDefault = isDefaultCard(pm);
+                  const isDeleting = deletingId === pm.paymentMethodId;
+                  return (
+                    <div
+                      key={pm.paymentMethodId}
+                      className={cn(
+                        "flex items-center gap-3 rounded-2xl border bg-surface p-3.5 shadow-sm transition-colors",
+                        isDefault ? "border-emerald-500 ring-1 ring-emerald-500/30" : "border-token",
+                      )}
+                    >
+                      <button
+                        type="button"
+                        onClick={() => !isDefault && onSetDefault(pm.paymentMethodId)}
+                        disabled={isDefault || settingDefaultId !== null}
+                        aria-label={isDefault ? "Default card" : "Set as default"}
+                        className="shrink-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-600 disabled:cursor-default"
+                      >
+                        <span
+                          className={cn(
+                            "grid h-5 w-5 place-items-center rounded-full border-2",
+                            isDefault ? "border-emerald-500" : "border-black/25 dark:border-white/30",
+                          )}
+                        >
+                          {isDefault && <span className="h-2.5 w-2.5 rounded-full bg-emerald-500" />}
+                        </span>
+                      </button>
+
+                      <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-black/[.05] text-muted-token dark:bg-white/[.08]">
+                        <CreditCard className="h-[18px] w-[18px]" />
+                      </span>
+
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-bold text-primary-token dark:text-white">
+                          {brandName(pm.card?.brand)} •••• {pm.card?.last4 ?? "••••"}
+                        </p>
+                        <p className="text-xs text-muted-token">
+                          Expires {expLabel(pm.card)}
+                          {isDefault ? " · Default" : ""}
+                        </p>
+                      </div>
+
+                      {!isDefault && (
+                        <button
+                          type="button"
+                          onClick={() => onDelete(pm.paymentMethodId)}
+                          disabled={isDeleting}
+                          className="shrink-0 text-xs font-semibold text-red-600 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-red-600 disabled:opacity-60 dark:text-red-500"
+                        >
+                          {isDeleting ? "Removing…" : "Remove"}
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Add a new card — reveals the Stripe Elements form */}
+          {showAddForm ? (
+            <div>{addForm}</div>
+          ) : (
             <button
               type="button"
               onClick={onAddNew}
               disabled={isCreatingSetupIntent}
-              className="group relative rounded-2xl border-2 border-dashed border-neutral-300 dark:border-neutral-700 hover:border-red-500 dark:hover:border-red-500 hover:bg-red-50/40 dark:hover:bg-red-950/20 transition-all flex flex-col items-center justify-center text-center p-6 disabled:opacity-60 disabled:cursor-not-allowed"
-              style={{ aspectRatio: "1.586 / 1" }}
+              className="flex w-full items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-token py-4 text-sm font-bold text-primary-token transition-colors hover:border-red-500 hover:bg-red-50/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-600 disabled:opacity-60 dark:text-white dark:hover:bg-red-950/20"
             >
-              <div className="w-12 h-12 rounded-2xl bg-neutral-100 dark:bg-neutral-800 group-hover:bg-red-600 group-hover:text-white text-neutral-500 dark:text-neutral-400 flex items-center justify-center transition">
-                <Plus className="w-5 h-5" strokeWidth={2.5} />
-              </div>
-              <p className="mt-3 font-poppins font-bold text-sm text-neutral-700 dark:text-neutral-300 group-hover:text-red-600 dark:group-hover:text-red-400 transition">
-                {isCreatingSetupIntent ? "Preparing…" : "Add new card"}
-              </p>
-              <p className="text-[11px] text-neutral-500 dark:text-neutral-400 mt-1">
-                Visa, Mastercard, Amex
-              </p>
+              <Plus className="h-4 w-4" /> {isCreatingSetupIntent ? "Preparing…" : "Add a new card"}
             </button>
-          </div>
+          )}
 
-          <div className="rounded-2xl border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-950/50 px-4 py-3 flex items-start gap-2.5">
-            <ShieldCheck className="w-4 h-4 text-neutral-500 dark:text-neutral-400 shrink-0 mt-0.5" strokeWidth={2} />
-            <p className="text-xs text-neutral-600 dark:text-neutral-400">
-              Cards are tokenized and stored securely by Stripe — we only keep payment-method
-              references. Removing a card detaches it from your account.{" "}
-              <Link
-                href="/privacy"
-                className="text-red-600 dark:text-red-400 font-semibold underline underline-offset-2"
-              >
-                Privacy Policy
-              </Link>
-            </p>
+          {/* Encrypted footer */}
+          <div className="flex items-start gap-2.5 rounded-2xl bg-black/[.04] px-4 py-3 dark:bg-white/[.05]">
+            <Lock className="mt-0.5 h-4 w-4 shrink-0 text-muted-token" strokeWidth={2} />
+            <p className="text-xs text-muted-token">Encrypted &amp; processed securely. We never store your full card number.</p>
           </div>
         </>
       )}

@@ -367,6 +367,7 @@ const PaymentMethodsTab: React.FC<PaymentMethodsTabProps> = ({ user, settingsRed
           settingDefaultId={settingDefaultId}
           deletingId={deletingId}
           addForm={addFormNode}
+          cardholderName={[user.firstName, user.lastName].filter(Boolean).join(" ")}
           onAddNew={() => void handleAddNewPaymentMethod()}
           onSetDefault={(id) => void handleSetDefault(id)}
           onDelete={handleDeleteClick}
