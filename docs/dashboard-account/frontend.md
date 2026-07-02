@@ -364,8 +364,10 @@ was collapsed into the Claude-design IA:
   (modal mode) with **`autoSelectPlanName`** — a new opt-in prop: once benefits load, an effect finds
   that tier in `availableUpgrades`/`availableDowngrades` (matched by name) and calls the SAME
   `setSelectedUpgrade`+`setShowUpgradeConfirm` (or downgrade) setters the in-modal click uses, so it
-  jumps straight to the upgrade/downgrade confirm (the confirm's full backdrop hides the orchestrator
-  behind it). Unmatched / current-tier taps fall through to the normal modal view. The prop is opt-in,
+  jumps straight to the confirm. When `autoSelectPlanName` is set the orchestrator renders in
+  **confirm-only mode** — it returns just the confirm modal (`return <>{childModals}</>`), skipping the
+  redundant "Manage Subscription" chrome/body (the Membership page already shows the plan + tier list);
+  closing the confirm calls `onClose`. Unmatched taps close (no stranded invisible modal). The prop is opt-in,
   so all other `SubscriptionManagementModal` callers are byte-identical. Tapping the **current** tier
   → `onManagePlan` (opens the Manage sheet).
 - **Openers** (all via `useDashboardSheetStore.openSheet`): `MembershipCurrentPlan` Manage/Payment
