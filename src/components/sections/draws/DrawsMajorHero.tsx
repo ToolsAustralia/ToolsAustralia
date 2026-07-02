@@ -1,135 +1,91 @@
 "use client";
 
 import { useState } from "react";
-import Image from "next/image";
-import { Check, ExternalLink, Trophy } from "lucide-react";
-import Seg from "@/components/ui/Seg";
-import { useLeafTimer } from "@/hooks/useLeafTimer";
-import { usePrizeCatalog } from "@/hooks/usePrizeCatalog";
+import { Check, ExternalLink } from "lucide-react";
 
 interface DrawsMajorHeroProps {
   drawName: string;
-  drawDateIso: string | null;
   drawStatus: string;
 }
 
-type PrizePick = "setup" | "cash";
+type PrizePick = "a" | "b";
 
-const ITEMS: Record<PrizePick, string[]> = {
-  setup: [
-    "Your pick of brand — Milwaukee, DeWalt, Makita & more",
-    "Toolbox + power-tool kit + storage system",
-    "$5,000 cash on top",
-  ],
-  cash: ["$10,000 cash, tax-free", "Paid straight to your bank", "Spend it however you like"],
+// Prize framing copy (matches the prototype `D.prize`; the tool-combo prize is
+// presentation framing over the real catalogue).
+const PRIZE: Record<PrizePick, { tagline: string; title: string; items: string[] }> = {
+  a: {
+    tagline: "Win the lot",
+    title: "The Ultimate Tradie Setup",
+    items: [
+      "Your pick of brand — Milwaukee, DeWalt, Makita & more",
+      "Toolbox + power-tool kit + storage system",
+      "$5,000 cash on top",
+    ],
+  },
+  b: {
+    tagline: "Take the lot in cash",
+    title: "Straight Cash",
+    items: ["$10,000 cash, tax-free", "Paid straight to your bank", "Spend it however you like"],
+  },
 };
 
-function CountCell({ v, l }: { v: number; l: string }) {
-  return (
-    <div className="flex min-w-[44px] flex-col items-center rounded-xl bg-white/10 px-2 py-1.5">
-      <span className="num text-lg font-black tabular-nums text-white">{String(v).padStart(2, "0")}</span>
-      <span className="text-[9px] font-semibold uppercase tracking-wider text-white/60">{l}</span>
-    </div>
-  );
-}
-
-/** Premium major-draw hero: prize picker (setup vs $10k cash) + live countdown + promotion link. */
-export default function DrawsMajorHero({ drawName, drawDateIso, drawStatus }: DrawsMajorHeroProps) {
-  const { activePrize, resolvePrize } = usePrizeCatalog();
-  const cashPrize = resolvePrize("cash-prize");
-  const [pick, setPick] = useState<PrizePick>("setup");
-  const now = useLeafTimer(1000);
-
-  const isCash = pick === "cash";
-  const entry = isCash ? cashPrize : activePrize;
-  const image = entry?.gallery?.[0]?.src ?? activePrize?.gallery?.[0]?.src ?? "";
-  const imageAlt = entry?.gallery?.[0]?.alt ?? "This month's prize";
-  const heading = isCash ? "Straight Cash" : activePrize?.heroHeading ?? "The Ultimate Tradie Setup";
+/** Premium dark major-draw hero — prize picker (setup vs $10k cash) + "View this promotion". */
+export default function DrawsMajorHero({ drawName, drawStatus }: DrawsMajorHeroProps) {
+  const [prize, setPrize] = useState<PrizePick>("a");
+  const p = PRIZE[prize];
   const isCompleted = drawStatus === "completed";
 
-  const target = drawDateIso ? new Date(drawDateIso).getTime() : NaN;
-  const ms = Number.isFinite(target) ? Math.max(0, target - now) : 0;
-  const cd = {
-    d: Math.floor(ms / 86_400_000),
-    h: Math.floor((ms / 3_600_000) % 24),
-    m: Math.floor((ms / 60_000) % 60),
-    s: Math.floor((ms / 1000) % 60),
-  };
-
   return (
-    <section className="relative overflow-hidden rounded-3xl bg-neutral-950 p-5 text-white shadow-lg sm:p-6">
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-0"
-        style={{
-          background:
-            "radial-gradient(58% 64% at 31% 42%, rgba(255,234,196,.14), transparent 60%), radial-gradient(60% 50% at 92% 8%, rgba(238,0,0,.20), transparent 60%)",
-        }}
-      />
-      <div className="relative">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <span className="inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-white/5 px-3 py-1 text-[11px] font-bold uppercase tracking-wide">
-            <span className="relative flex h-2 w-2">
-              {!isCompleted && <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-500 opacity-75" />}
-              <span className="relative inline-flex h-2 w-2 rounded-full bg-red-500" />
-            </span>
-            {isCompleted ? "Draw complete" : `Live · ${drawName}`}
-          </span>
-          <span className="text-xs text-white/60">Drawn 8:30 PM AEST · live on Facebook</span>
-        </div>
+    <section className="relative overflow-hidden px-5 pb-6 pt-5 text-white" style={{ background: "linear-gradient(160deg,#1a1a1e,#0b0b0d)" }}>
+      <span aria-hidden className="pointer-events-none absolute inset-0" style={{ background: "radial-gradient(360px 200px at 82% -20%,rgba(238,0,0,.32),transparent 62%)" }} />
+      <span aria-hidden className="pointer-events-none absolute inset-0" style={{ backgroundImage: "repeating-linear-gradient(135deg,rgba(255,255,255,.04) 0 1px,transparent 1px 16px)" }} />
 
-        <div className="mt-4 grid items-center gap-5 lg:grid-cols-2">
-          <div className="relative">
-            <div className="relative aspect-[4/3] w-full overflow-hidden rounded-2xl border border-white/15 bg-white/5">
-              {image && <Image src={image} alt={imageAlt} fill className="object-contain" sizes="(max-width:1024px) 100vw, 480px" />}
-            </div>
-            <span className="absolute bottom-2 left-2 inline-flex items-center gap-1 rounded-full bg-black/60 px-2.5 py-1 text-xs font-bold backdrop-blur">
-              <Trophy className="h-3 w-3 text-amber-300" /> {isCash ? "$10,000 cash" : "The Ultimate Tradie Setup"}
-            </span>
-          </div>
-
-          <div>
-            <Seg
-              value={pick}
-              onChange={setPick}
-              tone="dark"
-              accentHex="#f0a500"
-              options={[
-                { value: "setup", label: "Ultimate Setup", shortLabel: "Setup" },
-                { value: "cash", label: "$10,000 Cash", shortLabel: "Cash" },
-              ]}
-            />
-            <h2 className="mt-4 font-['Poppins'] text-2xl font-black leading-tight">{heading}</h2>
-            <ul className="mt-3 flex flex-col gap-2">
-              {ITEMS[pick].map((it) => (
-                <li key={it} className="flex items-start gap-2 text-sm text-white/90">
-                  <Check className="mt-0.5 h-4 w-4 flex-shrink-0 text-amber-300" /> {it}
-                </li>
-              ))}
-            </ul>
-            <a
-              href="/promotions"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="mt-5 inline-flex items-center gap-1.5 rounded-xl border border-white/20 px-4 py-2.5 text-sm font-bold text-white transition-colors hover:bg-white/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
-            >
-              View this promotion <ExternalLink className="h-4 w-4" />
-            </a>
-          </div>
-        </div>
-
-        {!isCompleted && Number.isFinite(target) && (
-          <div className="mt-5 flex items-center justify-between gap-3 rounded-2xl border border-white/10 bg-white/[0.04] p-3">
-            <span className="text-sm font-semibold text-white/70">Draw closes in</span>
-            <div className="flex items-center gap-1.5">
-              <CountCell v={cd.d} l="days" />
-              <CountCell v={cd.h} l="hrs" />
-              <CountCell v={cd.m} l="min" />
-              <CountCell v={cd.s} l="sec" />
-            </div>
-          </div>
-        )}
+      <div className="relative flex items-center gap-2.5">
+        <span className="inline-flex items-center gap-1.5 rounded-full px-[11px] py-[7px] text-[10px] font-extrabold uppercase tracking-[0.1em]" style={{ background: "linear-gradient(180deg,#ff2a2a,#c40d0d)" }}>
+          <span className="h-1.5 w-1.5 rounded-full bg-white shadow-[0_0_0_3px_rgba(255,255,255,.3)]" /> {isCompleted ? "Drawn" : "Live"} · {drawName}
+        </span>
+        <span className="ml-auto text-[11px] font-semibold text-white/60">Drawn 8:30 PM AEST</span>
       </div>
+
+      <div className="relative mt-[18px] text-center">
+        <div className="text-[10px] font-bold uppercase tracking-[0.16em] text-white/55">{p.tagline}</div>
+        <div className="mt-2.5 text-balance font-['Poppins'] text-[27px] font-black leading-[1.05]">{p.title}</div>
+      </div>
+
+      <div className="relative mt-4 flex gap-1.5 rounded-full border border-white/15 bg-white/[0.08] p-1">
+        {([{ k: "a", l: "Ultimate Setup" }, { k: "b", l: "$10,000 Cash" }] as const).map((o) => (
+          <button
+            key={o.k}
+            type="button"
+            onClick={() => setPrize(o.k)}
+            aria-pressed={prize === o.k}
+            className="flex-1 rounded-full py-[9px] text-[11.5px] font-extrabold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
+            style={prize === o.k ? { background: "#fff", color: "#0b0b0d" } : { color: "rgba(255,255,255,.75)" }}
+          >
+            {o.l}
+          </button>
+        ))}
+      </div>
+
+      <div className="relative mt-4 flex flex-col gap-[9px]">
+        {p.items.map((it) => (
+          <div key={it} className="flex items-center gap-2.5 text-[12px] font-semibold text-white/90">
+            <span className="grid h-[18px] w-[18px] shrink-0 place-items-center rounded-full bg-[#ee0000]/90 text-white">
+              <Check className="h-[11px] w-[11px]" />
+            </span>
+            {it}
+          </div>
+        ))}
+      </div>
+
+      <a
+        href="/promotions"
+        target="_blank"
+        rel="noopener noreferrer"
+        className="relative mt-[18px] flex items-center justify-center gap-2 rounded-full bg-white px-[18px] py-[13px] text-[12.5px] font-extrabold text-[#0b0b0d] shadow-[0_14px_30px_-16px_rgba(0,0,0,.6)] focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
+      >
+        View this promotion <ExternalLink className="h-[15px] w-[15px]" />
+      </a>
     </section>
   );
 }
