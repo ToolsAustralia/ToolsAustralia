@@ -1,9 +1,9 @@
 "use client";
 
-import Image from "next/image";
 import { Lock, ExternalLink, Store, ArrowRight } from "lucide-react";
 import { cn } from "@/utils/cn";
 import AccessRing from "@/components/ui/AccessRing";
+import { inkOn, shade } from "@/utils/membership/tier-visuals";
 import { PARTNER_BRAND_OFFERS } from "@/data/partnerBrandOffers";
 import { usePartnerDiscountSso } from "@/hooks/queries/usePartnerDiscountSso";
 import type { DashboardAccountState } from "@/utils/dashboard/dashboard-state-theme";
@@ -20,7 +20,7 @@ interface RewardsPartnerCardProps {
 
 const BRANDS = PARTNER_BRAND_OFFERS.slice(0, 4);
 
-/** Leads the Rewards page — partner-catalogue access ring + SSO portal + brand grid. */
+/** Leads the Rewards page — ported from the prototype `PartnerGrid`. */
 export default function RewardsPartnerCard({
   acct,
   partnerAccessPct,
@@ -31,97 +31,98 @@ export default function RewardsPartnerCard({
   onUpdatePayment,
 }: RewardsPartnerCardProps) {
   const sso = usePartnerDiscountSso();
-  const locked = acct === "none" || acct === "pastdue";
+  const guest = acct === "none";
+  const pastdue = acct === "pastdue";
+  const onetime = acct === "onetime";
+  const locked = guest || pastdue;
 
-  const ring =
-    acct === "none"
-      ? { pct: 0, color: "#9ca3af", headline: "Locked", sub: "Unlock partner discounts" }
-      : acct === "pastdue"
-        ? { pct: 0, color: "#d97706", headline: "Paused", sub: "Update payment to resume" }
-        : acct === "onetime"
-          ? { pct: partnerAccessPct, color: "#0ea5a5", headline: `${partnerAccessPct}% unlocked`, sub: expiryLabel ? `Access ends in ${expiryLabel}` : "Catalogue unlocked" }
-          : { pct: partnerAccessPct, color: tierHex ?? "#ee0000", headline: `${partnerAccessPct}% unlocked`, sub: "Top tool brands · catalogue unlocked" };
+  const c = guest ? "#8a8a8f" : pastdue ? "#d97706" : onetime ? "#0ea5a5" : tierHex ?? "#ee0000";
+  const pct = locked ? 0 : partnerAccessPct;
+  const headline = guest ? "Locked" : pastdue ? "Paused" : onetime ? "Access unlocked" : "Catalogue unlocked";
+  const sub = guest
+    ? "Become a member or buy a package to unlock discounts"
+    : pastdue
+      ? "Update payment to restore your discounts"
+      : onetime
+        ? `Ends in ${expiryLabel ?? "soon"} · from your pack`
+        : "of Australia's top tool brands, on your account";
 
   return (
-    <section className="rounded-3xl border border-token bg-surface p-5 shadow-sm sm:p-6">
-      <div className="flex items-center gap-5">
-        <AccessRing percent={ring.pct} size={104} stroke={10} color={ring.color} trackColor="rgba(0,0,0,0.08)">
-          {locked ? (
-            <Lock className="h-7 w-7 text-muted-token" />
-          ) : (
-            <div className="text-center leading-none">
-              <div className="num font-['Poppins'] text-2xl font-black text-primary-token dark:text-white">{ring.pct}%</div>
-              <div className="text-[9px] font-semibold uppercase tracking-wide text-muted-token">Access</div>
+    <section>
+      <span className="text-[11px] font-bold uppercase tracking-[0.18em] text-muted-token">Partner discounts</span>
+
+      <div className={cn("mt-3 rounded-[1.1rem] border bg-surface p-4 shadow-sm", pastdue ? "border-[#d97706]/45" : "border-token")}>
+        <div className="flex items-center gap-4">
+          <AccessRing percent={pct || 0.1} size={72} stroke={8} color={c} trackColor="rgba(0,0,0,0.08)">
+            <span className="num font-['Poppins'] text-base font-extrabold" style={{ color: c }}>
+              {locked ? <Lock className="h-5 w-5" /> : `${partnerAccessPct}%`}
+            </span>
+          </AccessRing>
+          <div className="min-w-0 flex-1">
+            <div className="font-['Poppins'] text-[15px] font-extrabold text-primary-token dark:text-white">{headline}</div>
+            <div className="mt-1 text-[11.5px] font-semibold leading-[1.4]" style={{ color: onetime || pastdue ? c : undefined }}>
+              <span className={onetime || pastdue ? "" : "text-muted-token"}>{sub}</span>
             </div>
-          )}
-        </AccessRing>
-
-        <div className="min-w-0 flex-1">
-          <h2 className="font-['Poppins'] text-lg font-extrabold text-primary-token dark:text-white">
-            Partner discounts
-          </h2>
-          <p className="mt-0.5 text-sm text-muted-token">{ring.sub}</p>
-
-          {!locked && (
-            <button
-              type="button"
-              onClick={() => sso.mutate()}
-              disabled={sso.isPending}
-              className="mt-3 inline-flex items-center gap-2 rounded-xl bg-gradient-to-b from-red-500 to-red-700 px-4 py-2.5 text-sm font-bold text-white transition-transform focus:outline-none focus-visible:ring-2 focus-visible:ring-red-600 disabled:opacity-60 motion-safe:active:translate-y-px"
-            >
-              <Store className="h-4 w-4" />
-              {sso.isPending ? "Opening…" : "Open partner portal"}
-              <ExternalLink className="h-3.5 w-3.5 opacity-80" />
-            </button>
-          )}
+          </div>
         </div>
-      </div>
 
-      {locked ? (
-        <div className="mt-5 grid grid-cols-1 gap-2 sm:grid-cols-2">
-          {acct === "pastdue" ? (
-            <button
-              type="button"
-              onClick={onUpdatePayment}
-              className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-gradient-to-b from-amber-400 to-amber-600 px-4 py-3 text-sm font-bold text-[#241a02] transition-transform focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-600 motion-safe:active:translate-y-px sm:col-span-2"
-            >
-              Update payment to resume <ArrowRight className="h-4 w-4" />
-            </button>
-          ) : (
-            <>
-              <button
-                type="button"
-                onClick={onBecomeMember}
-                className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-gradient-to-b from-red-500 to-red-700 px-4 py-3 text-sm font-bold text-white transition-transform focus:outline-none focus-visible:ring-2 focus-visible:ring-red-600 motion-safe:active:translate-y-px"
-              >
+        {locked ? (
+          guest ? (
+            <div className="mt-3.5 flex gap-2.5">
+              <button type="button" onClick={onBecomeMember} className="flex flex-1 items-center justify-center rounded-[10px] bg-gradient-to-br from-[#ff5a5a] to-[#c40d0d] px-3 py-3 text-[12.5px] font-extrabold text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-red-600">
                 Become a member
               </button>
-              <button
-                type="button"
-                onClick={onBuyPackage}
-                className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-token bg-surface px-4 py-3 text-sm font-bold text-primary-token transition-transform hover:bg-black/[.03] focus:outline-none focus-visible:ring-2 focus-visible:ring-red-600 dark:text-white dark:hover:bg-white/[.05] motion-safe:active:translate-y-px"
-              >
+              <button type="button" onClick={onBuyPackage} className="flex flex-1 items-center justify-center gap-1.5 rounded-[10px] border border-token px-3 py-3 text-[12.5px] font-extrabold text-primary-token focus:outline-none focus-visible:ring-2 focus-visible:ring-red-600 dark:text-white">
                 Buy a package
               </button>
-            </>
-          )}
-        </div>
-      ) : (
-        <div className={cn("mt-5 grid grid-cols-2 gap-2.5", acct === "onetime" && expiryLabel === null && "opacity-90")}>
-          {BRANDS.map((brand) => (
-            <div key={brand.id} className="flex items-center gap-2.5 rounded-2xl border border-token bg-black/[.03] p-2.5 dark:bg-white/[.04]">
-              <span className="relative h-9 w-9 shrink-0 overflow-hidden rounded-lg bg-white">
-                <Image src={brand.logo} alt={brand.name} fill className="object-contain p-1" sizes="36px" />
-              </span>
-              <div className="min-w-0 flex-1">
-                <div className="truncate text-xs font-bold text-primary-token dark:text-white">{brand.name}</div>
-                <div className="truncate text-[11px] text-muted-token">{brand.discount}</div>
-              </div>
-              <ExternalLink className="h-3.5 w-3.5 shrink-0 text-muted-token" />
             </div>
-          ))}
-        </div>
-      )}
+          ) : (
+            <button type="button" onClick={onUpdatePayment} className="mt-3.5 flex w-full items-center justify-center gap-2 rounded-[10px] bg-gradient-to-b from-[#fbbf24] to-[#d97706] px-4 py-3 text-[13px] font-extrabold text-[#241a02] focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-600">
+              Update payment <ArrowRight className="h-4 w-4" />
+            </button>
+          )
+        ) : (
+          <button
+            type="button"
+            onClick={() => sso.mutate()}
+            disabled={sso.isPending}
+            className="mt-3.5 flex w-full items-center gap-3 rounded-[10px] px-4 py-3 text-left disabled:opacity-60 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-600"
+            style={{ color: inkOn(c), background: `linear-gradient(150deg, ${shade(c, 22)}, ${shade(c, -16)})`, boxShadow: `0 14px 30px -18px ${c}` }}
+          >
+            <span className="grid h-[34px] w-[34px] shrink-0 place-items-center rounded-[10px]" style={{ background: inkOn(c) === "#ffffff" ? "rgba(255,255,255,.18)" : "rgba(0,0,0,.14)" }}>
+              <Store className="h-[17px] w-[17px]" />
+            </span>
+            <span className="min-w-0 flex-1">
+              <b className="block font-['Poppins'] text-[13px] font-extrabold">{sso.isPending ? "Opening…" : "Open partner portal"}</b>
+              <span className="text-[10px] font-semibold" style={{ color: inkOn(c) === "#ffffff" ? "rgba(255,255,255,.78)" : "rgba(0,0,0,.6)" }}>See every deal · signed in via SSO</span>
+            </span>
+            <ExternalLink className="h-4 w-4" />
+          </button>
+        )}
+      </div>
+
+      <div className={cn("mt-3 grid grid-cols-2 gap-[11px]", locked && "opacity-60 saturate-50")}>
+        {BRANDS.map((b) => {
+          const bc = locked ? "#8a93a1" : c;
+          return (
+            <div key={b.id} className="flex flex-col gap-2.5 rounded-[1.1rem] border border-token bg-surface p-3.5 shadow-sm">
+              <div className="flex items-center justify-between">
+                <span className="grid h-9 w-9 place-items-center rounded-[10px] font-['Poppins'] text-sm font-black" style={{ background: "rgba(0,0,0,.05)", color: bc }}>
+                  {b.name[0]}
+                </span>
+                <span className="font-['Poppins'] text-xs font-black" style={{ color: bc }}>{b.discount}</span>
+              </div>
+              <div>
+                <div className="flex items-center gap-1.5">
+                  <span className="truncate text-[12.5px] font-bold text-primary-token dark:text-white">{b.name}</span>
+                  {!locked && <ExternalLink className="h-3 w-3 shrink-0 text-muted-token" />}
+                </div>
+                <div className="mt-1 text-[10.5px] font-semibold text-muted-token">{b.category}</div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
     </section>
   );
 }
