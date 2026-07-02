@@ -64,8 +64,10 @@ export default function RewardsMilestones({ acct, months, tierHex }: RewardsMile
         )}
       </div>
 
-      {/* Visual track: current position + milestone nodes. */}
-      <div className="px-6 pb-9 pt-8">
+      {/* Visual track: current position + milestone nodes. The node captions hang
+          below the bar (absolute), so the bottom padding must clear them — the card
+          is `overflow-hidden` (to round the banner) and would otherwise clip them. */}
+      <div className="px-6 pb-14 pt-8">
         <div className="relative h-2 rounded-full bg-black/[.07] dark:bg-white/[.10]">
           <div
             className="absolute inset-y-0 left-0 rounded-full"

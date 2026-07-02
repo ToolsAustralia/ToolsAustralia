@@ -131,7 +131,9 @@ descriptive paragraph** and leads with a **package-themed header banner** (`glos
 `inkOn` contrast, so it recolors to Tradie / Foreman / Boss) stating the next reward — "Next: +{n} free
 entries" / "Unlocks at your {N}-month milestone" + a "{m} /{N} mo" counter (past-due → "Reactivate to
 keep your streak"; all-unlocked → "All milestones unlocked"). The visual progress track stays below.
-New `tierHex` prop (passed from `dash.tierHex` on the Rewards page).
+New `tierHex` prop (passed from `dash.tierHex` on the Rewards page). The card is `overflow-hidden`
+(to round the banner corners), so the track container carries extra bottom padding (`pb-14`) to clear
+the absolutely-positioned node captions ("+50 / 3 MO") — otherwise they'd be clipped at the card edge.
 
 ## Dashboard sections (2026-07-02)
 
