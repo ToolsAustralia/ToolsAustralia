@@ -1,5 +1,16 @@
 "use client";
 
+// ─────────────────────────────────────────────────────────────────────────────
+// FLAGGED FOR DELETION (do NOT delete here — user review pending; see
+// docs/superpowers/specs/2026-07-02-user-dashboard-revamp-foundation-home-design.md):
+//   Genuinely dead (0 usages): components/MembershipStatus.tsx, ActivePrizeDraws.tsx,
+//   RecentOrders.tsx, the empty EntryWallet.tsx stub, stale components/index.ts re-exports.
+// Superseded on THIS page but KEPT (still used by sub-pages until their own specs):
+//   DashboardHeader, CoverBanner, UserInfoBar, QuickActions, SocialLinksSection.
+//   MajorDrawOverview — entries-wallet logic extracted into sections/dashboard/EntryWallet;
+//   its major-draw/countdown role migrates to the Draws sub-project.
+// ─────────────────────────────────────────────────────────────────────────────
+
 import React, { useState } from "react";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
@@ -8,20 +19,13 @@ import { useMyAccountData } from "@/hooks/queries";
 import { useUserMajorDrawStats, useCurrentMajorDraw } from "@/hooks/queries/useMajorDrawQueries";
 import { hasAdditionalPackageAccess } from "@/utils/membership/has-additional-package-access";
 import { getActivePackage, type ActivePackageUserInput } from "@/utils/membership/get-active-package";
-
-import PartnerDiscountQueue from "@/components/features/PartnerDiscountQueue";
-import UnlockDiscounts from "@/components/sections/promo/UnlockDiscounts";
-import { hasActivePartnerDiscountAccess } from "@/utils/membership/benefit-resolution";
-import { derivePlanIdFromPackage, getLandingPageThemeFromPlanId } from "@/utils/package-colors/packageColorScheme";
 import type { LocalMembershipPlan } from "@/utils/membership/membership-adapters";
 import { useModalPriorityStore } from "@/stores/useModalPriorityStore";
 import { useMajorDrawEntryCta } from "@/hooks/useMajorDrawEntryCta";
 import { useMajorDrawPurchaseGate } from "@/hooks/useMajorDrawPurchaseGate";
 import dynamic from "next/dynamic";
 // Lazy-loaded: MembershipModal bundles Stripe + payment forms.
-const MembershipModal = dynamic(() => import("@/components/modals/MembershipModal"), {
-  ssr: false,
-});
+const MembershipModal = dynamic(() => import("@/components/modals/MembershipModal"), { ssr: false });
 // Lazy-loaded: dashboard modals only mount when opened — keep them out of the initial bundle.
 const ReferFriendModal = dynamic(() => import("@/components/modals/ReferFriendModal"), { ssr: false });
 const PastDrawsModal = dynamic(() => import("@/components/modals/PastDrawsModal"), { ssr: false });
@@ -41,92 +45,35 @@ import type {
 } from "@/components/modals/PackageDetailModal";
 const PackageDetailModal = dynamic(() => import("@/components/modals/PackageDetailModal"), { ssr: false });
 import { useMemberships } from "@/hooks/useMemberships";
-import { useResolvedMultiplier } from "@/hooks/queries/usePromoQueries";
 import RewardsFloatingWidget from "@/components/features/RewardsFloatingWidget";
-import { useDashboardEntryDisplay } from "@/hooks/useDashboardEntryDisplay";
+import { useDashboardState } from "@/hooks/useDashboardState";
 
-import DashboardHeader from "./components/DashboardHeader";
-import CoverBanner from "./components/CoverBanner";
-import UserInfoBar from "./components/UserInfoBar";
-import QuickActions from "./components/QuickActions";
-import MajorDrawOverview from "./components/MajorDrawOverview";
-import SocialLinksSection from "./components/SocialLinksSection";
-
-type PendingEntriesData = {
-  expectedEntries: number;
-  renewalDate: Date | null;
-  isFailedRenewal: boolean;
-  isPending: true;
-};
-
-function PartnerDiscountsSection({ user, className }: { user: import("@/hooks/queries/useUserQueries").UserData; className?: string }) {
-  const hasAccess = hasActivePartnerDiscountAccess(user as unknown as import("@/models/User").IUser);
-  const activePackage = getActivePackage(user as ActivePackageUserInput);
-
-  let packageTheme: ReturnType<typeof getLandingPageThemeFromPlanId> | undefined;
-  if (hasAccess) {
-    if (activePackage.source === "subscription" && activePackage.packageData) {
-      const planId = derivePlanIdFromPackage(activePackage.packageData, "subscription");
-      packageTheme = getLandingPageThemeFromPlanId(planId, true);
-    } else if (user?.enrichedOneTimePackages?.length) {
-      const queue = (user as { partnerDiscountQueue?: Array<{ packageId: string; packageType: string; status: string }> }).partnerDiscountQueue ?? [];
-      const activeIds = new Set(
-        queue
-          .filter((i) => i.status === "active" && ["one-time", "mini-draw", "upsell"].includes(i.packageType))
-          .map((i) => String(i.packageId))
-      );
-      const pkg = user.enrichedOneTimePackages
-        .filter((p) => p.isActive && p.packageData && activeIds.has(String(p.packageId)))
-        .sort((a, b) => new Date(b.purchaseDate).getTime() - new Date(a.purchaseDate).getTime())[0];
-      if (pkg?.packageData) {
-        const planId = derivePlanIdFromPackage(pkg.packageData, "one-time");
-        packageTheme = getLandingPageThemeFromPlanId(planId, false);
-      }
-    }
-  }
-
-  return (
-    <UnlockDiscounts
-      hasAccess={hasAccess}
-      showUnlockButton={!hasAccess}
-      title={hasAccess ? "Partner Discounts" : "Unlock Partner Discounts"}
-      description={
-        hasAccess
-          ? "Access exclusive discounts from Australia's top tool brands"
-          : "Get instant access to exclusive discounts from Australia's top tool brands"
-      }
-      packageTheme={packageTheme}
-      className={className}
-    />
-  );
-}
+import DashboardHero from "@/components/sections/dashboard/DashboardHero";
+import EntryWallet, { type EntryWalletPendingData } from "@/components/sections/dashboard/EntryWallet";
+import DashboardPromoBanner from "@/components/sections/dashboard/DashboardPromoBanner";
+import LoyaltyStreak from "@/components/sections/dashboard/LoyaltyStreak";
+import QuickActionsGrid from "@/components/sections/dashboard/QuickActionsGrid";
+import PartnerPreview from "@/components/sections/dashboard/PartnerPreview";
+import DashboardGuestPanel from "@/components/sections/dashboard/DashboardGuestPanel";
 
 export default function MyAccountPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
-  const {
-    data: accountData,
-    isLoading: loading,
-    error,
-  } = useMyAccountData(session?.user?.id);
+  const { data: accountData, isLoading: loading, error } = useMyAccountData(session?.user?.id);
 
   const { data: majorDrawStats, isLoading: majorDrawStatsLoading } = useUserMajorDrawStats(session?.user?.id);
   const { data: currentMajorDraw, isLoading: currentMajorDrawLoading } = useCurrentMajorDraw();
 
-  const isDrawCompletedForDashboard = currentMajorDraw?.status === "completed";
-  const dashboardEntries = useDashboardEntryDisplay(majorDrawStats, {
-    isDrawCompleted: Boolean(isDrawCompletedForDashboard),
-  });
+  const dash = useDashboardState();
 
   const { requestModal } = useModalPriorityStore();
   const { allowSecondaryModals, suppressRewardsSpotlight } = useDashboardLandingOrchestration(
-    status === "authenticated"
+    status === "authenticated",
   );
   const { openEntryFlow, openWithOneTimePlan, membershipModal } = useMajorDrawEntryCta();
   const { whenGatesOpenElseGateModal } = useMajorDrawPurchaseGate();
 
   useMemberships();
-  useResolvedMultiplier("membership-packages", "display");
 
   const activePackage = React.useMemo(() => {
     const u = accountData?.user;
@@ -143,6 +90,9 @@ export default function MyAccountPage() {
     membershipType: "subscription" | "one-time";
     accumulation: SubscriptionAccumulationData | null;
   } | null>(null);
+  // packageDetailModalData is set by the sections below (e.g. future badge clicks);
+  // retained so PackageDetailModal keeps working exactly as before.
+  void setPackageDetailModalData;
 
   React.useEffect(() => {
     if (status === "loading") return;
@@ -178,13 +128,8 @@ export default function MyAccountPage() {
   }, [allowSecondaryModals]);
 
   React.useEffect(() => {
-    if (modalTriggeredRef.current) {
-      return;
-    }
-
-    if (status === "loading" || loading || !session || !accountData) {
-      return;
-    }
+    if (modalTriggeredRef.current) return;
+    if (status === "loading" || loading || !session || !accountData) return;
 
     const setupJustCompleted = sessionStorage.getItem("setupJustCompleted");
     if (setupJustCompleted) {
@@ -269,7 +214,6 @@ export default function MyAccountPage() {
     };
 
     window.addEventListener("openMembershipModal", handleOpenMembershipModal as EventListener);
-
     return () => {
       window.removeEventListener("openMembershipModal", handleOpenMembershipModal as EventListener);
     };
@@ -279,7 +223,7 @@ export default function MyAccountPage() {
     return (
       <div className="min-h-screen-svh flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-red-600 dark:border-red-500 mx-auto mb-4"></div>
+          <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-red-600 dark:border-red-500 mx-auto mb-4" />
           <p className="text-gray-600 dark:text-gray-400">Loading your account...</p>
         </div>
       </div>
@@ -292,10 +236,7 @@ export default function MyAccountPage() {
         <div className="text-center">
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">Error Loading Account</h1>
           <p className="text-gray-600 dark:text-gray-400 mb-4">{error instanceof Error ? error.message : "An error occurred"}</p>
-          <button
-            onClick={() => window.location.reload()}
-            className="bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700"
-          >
+          <button onClick={() => window.location.reload()} className="bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700">
             Try Again
           </button>
         </div>
@@ -329,55 +270,15 @@ export default function MyAccountPage() {
   }
 
   const { user } = accountData;
-
   const hasActiveMembership = user?.subscription?.isActive === true;
   const hasAccessToAdditionalPackages = hasAdditionalPackageAccess(accountData?.user || null, majorDrawStats);
-
-  // Membership-section badge is subscription-only. A user with only a one-time
-  // pack still has activePackage.packageData set (source: "one-time"), so we
-  // must scope by source to avoid the one-time pack showing up under the
-  // Membership badge in addition to the One-time badge.
-  const membershipPackage =
-    activePackage?.source === "subscription" ? activePackage.packageData : null;
-  const showMembershipBadge = Boolean(
-    activePackage?.isActive && activePackage.source === "subscription" && membershipPackage,
-  );
-
+  const membershipPackage = activePackage?.source === "subscription" ? activePackage.packageData : null;
   const isCompleted = currentMajorDraw?.status === "completed";
-  const _isFrozen = currentMajorDraw?.status === "frozen";
-  const _isActive = currentMajorDraw?.status === "active";
-  const _isQueued = currentMajorDraw?.status === "queued";
-
   const userSubscription = user.subscription as { lastMonthAccumulatedEntries?: number } | undefined;
-  const displayMembershipEntries = dashboardEntries.membershipEntries;
-  const displayOneTimeEntries = dashboardEntries.oneTimeEntries;
-  const displayTotalEntries = dashboardEntries.currentDrawEntries;
 
-  const getProjectionData = () => {
-    if (!hasActiveMembership || !membershipPackage || !userSubscription) return null;
-
-    if (membershipPackage.type !== "subscription" || !("entriesPerMonth" in membershipPackage)) return null;
-
-    const baseEntries = (membershipPackage as { entriesPerMonth?: number }).entriesPerMonth || 0;
-    const current = userSubscription.lastMonthAccumulatedEntries ?? baseEntries;
-
-    if (baseEntries === 0) return null;
-
-    const nextMonth = current + baseEntries;
-    const month3 = nextMonth + baseEntries;
-
-    return {
-      current,
-      nextMonth,
-      month3,
-    };
-  };
-
-  const projectionData = getProjectionData();
-
-  const getPendingEntries = (): PendingEntriesData | null => {
+  // Pending-renewal projection (member/failed-renewal with no membership entries yet).
+  const getPendingEntries = (): EntryWalletPendingData | null => {
     if (majorDrawStatsLoading || !majorDrawStats) return null;
-
     const membershipEntriesInDraw = majorDrawStats?.membershipEntries ?? 0;
     const displayedMembershipEntries = isCompleted ? 0 : majorDrawStats?.membershipEntries ?? 0;
     if (membershipEntriesInDraw !== 0 || displayedMembershipEntries !== 0) return null;
@@ -398,102 +299,83 @@ export default function MyAccountPage() {
     const sub = user.subscription as { endDate?: Date | string; startDate?: Date | string } | undefined;
     let renewalDate: Date | null = null;
     if (sub) {
-      if (sub.endDate) {
-        renewalDate = new Date(sub.endDate);
-      } else if (!isEligibleFailedRenewal && sub.startDate) {
-        renewalDate = getFallbackRenewalDate(new Date(sub.startDate));
-      }
+      if (sub.endDate) renewalDate = new Date(sub.endDate);
+      else if (!isEligibleFailedRenewal && sub.startDate) renewalDate = getFallbackRenewalDate(new Date(sub.startDate));
     }
 
-    return {
-      expectedEntries,
-      renewalDate,
-      isFailedRenewal: isEligibleFailedRenewal,
-      isPending: true,
-    };
+    return { expectedEntries, renewalDate, isFailedRenewal: isEligibleFailedRenewal };
   };
 
   const pendingEntriesData = getPendingEntries();
 
-  const queue = (user as { partnerDiscountQueue?: Array<{ packageId: string; packageType: string; status: string }> }).partnerDiscountQueue ?? [];
-  const activeOneTimePackageIds = new Set(
-    queue
-      .filter((item) => item.status === "active" && ["one-time", "mini-draw", "upsell"].includes(item.packageType))
-      .map((item) => String(item.packageId))
-  );
-
-  // Show all active one-time packages (not just those in partner discount queue)
-  // Prefer enrichedOneTimePackages from API; fallback to legacy oneTimePackages with minimal packageData
-  const enrichedOneTime = (user.enrichedOneTimePackages ?? []).filter((pkg) => pkg.isActive);
-  const legacyOneTime = (user.oneTimePackages ?? []).filter((pkg) => pkg.isActive);
-  const visibleOneTimePackages = (
-    enrichedOneTime.length > 0 ? enrichedOneTime : legacyOneTime.map((pkg) => ({
-      ...pkg,
-      packageId: String(pkg.packageId),
-      packageData: { _id: String(pkg.packageId), name: "One-Time Package", type: "one-time" as const },
-    }))
-  ).map((pkg) =>
-    pkg.packageData
-      ? pkg
-      : { ...pkg, packageData: { _id: String(pkg.packageId), name: "One-Time Package", type: "one-time" as const } }
-  );
+  const onResolvePayment = () => router.push("/my-account/settings?tab=subscription");
+  const onBecomeMember = () => whenGatesOpenElseGateModal(() => membershipModal.openModal());
+  const onGetPackage = () => openEntryFlow();
+  const onBuyPackage = () => openWithOneTimePlan();
 
   return (
-    <div className="min-h-screen-svh w-full min-w-0 max-w-full overflow-x-hidden bg-gray-50 dark:bg-neutral-950">
-      <DashboardHeader showRenewalAlert={hasFailedRenewal(user as unknown as import("@/models/User").IUser)} />
-
-      <CoverBanner />
-
-      <UserInfoBar
+    <div className="min-h-screen-svh w-full min-w-0 max-w-full overflow-x-hidden pb-8">
+      <DashboardHero
+        acct={dash.acct}
         firstName={user.firstName}
         lastName={user.lastName}
-        email={user.email}
-        membershipPackage={membershipPackage}
-        showMembershipBadge={showMembershipBadge}
+        tierHex={dash.tierHex}
+        tierLabel={dash.tierLabel}
+        stateTheme={dash.stateTheme}
+        partnerAccessPct={dash.partnerAccessPct}
+        partnerAccessExpiryLabel={dash.partnerAccessExpiryLabel}
+        onOpenSettings={() => router.push("/my-account/settings")}
+        onRewardPortal={() => router.push("/my-account/benefits")}
+        onBecomeMember={onBecomeMember}
+        onUpdatePayment={onResolvePayment}
       />
 
-      <QuickActions
-        onReferFriend={() => setIsReferFriendModalOpen(true)}
-        onGetMoreEntries={() => openEntryFlow()}
-        showGetMoreEntries={hasAccessToAdditionalPackages}
-        className="mt-3 sm:mt-4"
-      />
-
-      <MajorDrawOverview
-        drawName={currentMajorDraw?.name || "Major Draw"}
-        drawStatus={currentMajorDraw?.status || "active"}
-        drawDate={currentMajorDraw?.drawDate}
-        totalEntries={displayTotalEntries}
-        membershipEntries={displayMembershipEntries}
-        oneTimeEntries={displayOneTimeEntries}
-        membershipPackage={membershipPackage}
-        oneTimePackages={visibleOneTimePackages}
-        hasActiveSubscription={hasActiveMembership}
-        onViewPastDraws={() => setIsPastDrawsModalOpen(true)}
-        onBadgeClick={(data) => {
-          setPackageDetailModalData(data);
-          setPackageDetailModalOpen(true);
-        }}
-        onOneTimeCardClick={openWithOneTimePlan}
-        projectionData={projectionData}
-        pendingEntriesData={pendingEntriesData}
-        onResolvePayment={() => router.push("/my-account/settings?tab=subscription")}
-        userSubscription={userSubscription}
-        activeOneTimePackageIds={activeOneTimePackageIds}
-        className="mt-4 sm:mt-6"
-      />
-
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 mt-6 sm:mt-8 space-y-6 sm:space-y-8">
-        <div>
-          <PartnerDiscountQueue />
+      {dash.acct === "none" ? (
+        <div className="px-4 pt-4 sm:px-6">
+          <DashboardGuestPanel drawName={dash.drawName} onBecomeMember={onBecomeMember} onBuyPackage={onBuyPackage} />
         </div>
-      </div>
+      ) : (
+        <div className="px-4 pt-4 sm:px-6 lg:grid lg:grid-cols-[1.7fr_1fr] lg:items-start lg:gap-6">
+          <div className="space-y-4">
+            <EntryWallet
+              acct={dash.acct}
+              entries={dash.entries}
+              tierHex={dash.tierHex}
+              drawName={dash.drawName}
+              drawDateIso={dash.drawDateIso}
+              drawStatus={dash.drawStatus}
+              pending={pendingEntriesData}
+              onResolvePayment={onResolvePayment}
+            />
+            <DashboardPromoBanner multiplier={dash.multiplier} onGetPackage={onGetPackage} />
+            <PartnerPreview acct={dash.acct} expiryLabel={dash.partnerAccessExpiryLabel} />
+          </div>
 
-      <div className="my-account-partner-discounts">
-        <PartnerDiscountsSection user={user} className="!pb-0 !mb-0" />
-      </div>
-
-      <SocialLinksSection className="mt-6 sm:mt-8 mb-6 sm:mb-8" />
+          <div className="mt-4 space-y-4 lg:mt-0">
+            {dash.acct === "onetime" ? (
+              <section className="rounded-3xl border border-token bg-surface p-5 shadow-sm">
+                <h3 className="font-['Poppins'] text-base font-extrabold text-primary-token dark:text-white">Make it permanent</h3>
+                <p className="mt-1 text-sm text-muted-token">Become a member for monthly free entries and lasting partner access.</p>
+                <button
+                  type="button"
+                  onClick={onBecomeMember}
+                  className="mt-3 w-full rounded-xl bg-gradient-to-b from-red-500 to-red-700 py-2.5 text-sm font-bold text-white transition-transform focus:outline-none focus-visible:ring-2 focus-visible:ring-red-600 motion-safe:active:translate-y-px"
+                >
+                  Become a member
+                </button>
+              </section>
+            ) : (
+              <LoyaltyStreak months={dash.streakMonths} acct={dash.acct} />
+            )}
+            <QuickActionsGrid
+              multiplier={dash.multiplier}
+              onGetPackage={hasAccessToAdditionalPackages ? onGetPackage : onBecomeMember}
+              onRefer={() => setIsReferFriendModalOpen(true)}
+              onPastDraws={() => setIsPastDrawsModalOpen(true)}
+            />
+          </div>
+        </div>
+      )}
 
       <RewardsFloatingWidget userId={user._id} positionAboveBottomNav suppressSpotlight={suppressRewardsSpotlight} />
 
@@ -521,9 +403,7 @@ export default function MyAccountPage() {
           hasAccessToAdditionalPackages={hasAccessToAdditionalPackages}
           onOpenSettingsSubscription={() => router.push("/my-account/settings?tab=subscription")}
           onOpenMembershipModal={() => membershipModal.openModalWithPackageSelectionFirst()}
-          onOpenSpecialPackages={() =>
-            whenGatesOpenElseGateModal(() => requestModal("special-packages", true))
-          }
+          onOpenSpecialPackages={() => whenGatesOpenElseGateModal(() => requestModal("special-packages", true))}
         />
       )}
 
