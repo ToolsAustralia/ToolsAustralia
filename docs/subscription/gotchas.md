@@ -213,6 +213,10 @@ The customer-facing Terms & Conditions page lives at [src/app/(site)/terms/page.
 
 Open legal item (not a code issue): "non-refundable once purchased" (§4) vs. the Australian Consumer Law savings clause (§11) is a lawyer review item, behaviourally consistent with code (no proration/refund on cancel) but not an enforced rule.
 
+## Upgrade Order Summary says "Charge today", not "Prorated" (2026-07-03)
+
+The upgrade payment modal's [`OrderSummary`](../../src/components/modals/StripePaymentModal/OrderSummary.tsx) row is labelled **"Charge today"** — it used to say "Prorated charge today", which is factually wrong: upgrades run with **`proration_behavior: "none"` + `billing_cycle_anchor: "now"`** ([upgrade route](../../src/app/api/stripe/upgrade-subscription-payment/route.ts); BUSINESS.md §10c), i.e. the member is charged the **full** new-tier price today and the cycle resets to now — there is no proration. Don't reintroduce "prorated" wording in the upgrade/downgrade UI. (The generic `ConfirmationModal` still has a `details.proration` block with "Prorated Amount Today"/"Prorated Entries", but that modal is used by admin/payment-delete surfaces, not the member upgrade flow.)
+
 ## Past-due reanchor — `attempt_count` is not a reliable dunning signal under `pause_collection`
 
 When a renewal fails, the app sets `pause_collection: { behavior: "keep_as_draft" }` on the subscription. This **blocks Stripe's automatic retry scheduler** — Stripe does not re-attempt the invoice while collection is paused. As a result, a manually recovered invoice (admin charge, user Pay-Now, renew-subscription retry) still has `attempt_count === 1`, even though the member genuinely was past-due.
