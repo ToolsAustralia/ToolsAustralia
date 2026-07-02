@@ -20,6 +20,14 @@
 > match our tokens). Separately, the dashboard promo banner shimmer now uses a dedicated
 > `promo-shimmer-sweep` keyframe (globals.css) that travels the FULL banner width — the old `shimmer`
 > keyframe was a diagonal *badge* effect whose transform overrode the band's skew, so it never swept.
+> The sweep uses an **ease-out** cubic-bezier (`.promo-banner-shimmer`) so the highlight enters fast
+> then decelerates, like a real shine (not a linear crawl).
+
+> **Current-plan action rows (2026-07-02):** `MembershipCurrentPlan`'s manage actions are two rich
+> rows — "Renews {date} / Auto-renews monthly → **Manage**" and "Payment method / {Visa •••• 4827} →
+> **Edit**" (the default-card label is passed in as `paymentLabel` from the membership page's
+> `useSavedPaymentMethods`) — replacing the flat icon+label rows; the redundant in-gradient "Renews …
+> cancel anytime" line was dropped.
 
 ## Dashboard sections (2026-07-02)
 

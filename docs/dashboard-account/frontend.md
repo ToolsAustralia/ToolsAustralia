@@ -361,7 +361,9 @@ was collapsed into the Claude-design IA:
   rows, `MembershipTierList` member tap, the hero/RewardsPartnerCard past-due "Update payment", all
   → `manage`; the payment row → `payment`. The global `Header` "Manage" (`/my-account?open=subscription`)
   is honoured by a new `?open=subscription|payment` handler on the home page that opens the sheet and
-  cleans the URL. `ProfileTab`'s guest "Join a plan" now routes to `/my-account/membership`.
+  cleans the URL. `ProfileTab`'s guest "Join a plan" now routes to `/my-account/membership`. The
+  membership page passes the default-card label (`useSavedPaymentMethods`) to
+  `MembershipCurrentPlan` as `paymentLabel` for its "Payment method / Visa •••• 4827 → Edit" row.
 - **Sidebar sticky fix:** `overflow-x-hidden` was removed from the `my-account/layout.tsx` flex
   parent (it computed `overflow-y: auto`, becoming the sticky scroll-container and breaking
   `DeskNav`'s `sticky top-0`); the horizontal clip moved to `<main>`.

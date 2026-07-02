@@ -1429,6 +1429,17 @@
   }
 }
 
+/* Ease-out timing → the highlight enters fast then decelerates toward the end,
+   like a realistic shine (not a constant linear crawl). */
+.promo-banner-shimmer {
+  animation: promo-shimmer-sweep 3.4s cubic-bezier(0.16, 0.85, 0.35, 1) infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .promo-banner-shimmer {
+    animation: none;
+  }
+}
+
 /* Horizontal shimmer animation for winner name */
 @keyframes shimmer-horizontal {
   0% {

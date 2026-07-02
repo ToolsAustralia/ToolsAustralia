@@ -16,6 +16,7 @@ import dynamic from "next/dynamic";
 import { useDashboardState } from "@/hooks/useDashboardState";
 import { useMembershipCardCta } from "@/hooks/useMembershipCardCta";
 import { useDashboardSheetStore } from "@/stores/useDashboardSheetStore";
+import { useSavedPaymentMethods } from "@/hooks/useSavedPaymentMethods";
 import DashboardPageHeader from "../components/DashboardPageHeader";
 import MembershipCurrentPlan from "@/components/sections/account-membership/MembershipCurrentPlan";
 import MembershipTierList from "@/components/sections/account-membership/MembershipTierList";
@@ -28,6 +29,16 @@ export default function AccountMembershipPage() {
   const dash = useDashboardState();
   const cta = useMembershipCardCta();
   const openSheet = useDashboardSheetStore((s) => s.openSheet);
+  const { paymentMethods, subscriptionDefaultPaymentMethodId } = useSavedPaymentMethods();
+
+  const defaultCard =
+    paymentMethods.find((m) => m.isDefault) ??
+    paymentMethods.find((m) => m.paymentMethodId === subscriptionDefaultPaymentMethodId) ??
+    paymentMethods[0];
+  const cardMeta = defaultCard?.card;
+  const cardLabel = cardMeta
+    ? `${cardMeta.brand ? cardMeta.brand.charAt(0).toUpperCase() + cardMeta.brand.slice(1) : "Card"} •••• ${cardMeta.last4}`
+    : undefined;
 
   React.useEffect(() => {
     if (status === "loading") return;
@@ -62,6 +73,7 @@ export default function AccountMembershipPage() {
           tierHex={dash.tierHex}
           tierLabel={dash.tierLabel}
           user={dash.user}
+          paymentLabel={cardLabel}
           onManage={() => openSheet("manage")}
           onPayment={() => openSheet("payment")}
           onBecomeMember={() => cta.membershipModal.openModal()}

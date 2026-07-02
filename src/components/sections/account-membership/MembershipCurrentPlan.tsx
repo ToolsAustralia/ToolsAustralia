@@ -1,6 +1,6 @@
 "use client";
 
-import { CreditCard, Settings, ChevronRight } from "lucide-react";
+import { CreditCard, RefreshCw, ChevronRight } from "lucide-react";
 import { cn } from "@/utils/cn";
 import { getActivePackage, type ActivePackageUserInput } from "@/utils/membership/get-active-package";
 import { glossGrad, inkOn } from "@/utils/membership/tier-visuals";
@@ -15,6 +15,8 @@ interface MembershipCurrentPlanProps {
   tierHex: string | null;
   tierLabel: string | null;
   user: UserData | null;
+  /** Default card label for the Payment-method row, e.g. "Visa •••• 4827". */
+  paymentLabel?: string;
   onManage: () => void;
   onPayment: () => void;
   onBecomeMember: () => void;
@@ -36,6 +38,7 @@ export default function MembershipCurrentPlan({
   tierHex,
   tierLabel,
   user,
+  paymentLabel,
   onManage,
   onPayment,
   onBecomeMember,
@@ -85,13 +88,12 @@ export default function MembershipCurrentPlan({
           </div>
         )}
 
-        {active && renews && <p className="mt-4 text-sm opacity-85">Renews {renews} · cancel anytime</p>}
         {pastdue && <p className="mt-4 text-sm opacity-90">Payment failed — update your card to resume entries and partner access.</p>}
       </div>
 
-      <div className="p-4 sm:p-5">
+      <div className="px-4 sm:px-5">
         {acct === "none" ? (
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-2 py-4 sm:grid-cols-2 sm:py-5">
             <button type="button" onClick={onBecomeMember} className="rounded-xl bg-gradient-to-b from-red-500 to-red-700 py-3 text-sm font-bold text-white transition-transform focus:outline-none focus-visible:ring-2 focus-visible:ring-red-600 motion-safe:active:translate-y-px">
               Become a member
             </button>
@@ -100,9 +102,15 @@ export default function MembershipCurrentPlan({
             </button>
           </div>
         ) : (
-          <div className="space-y-1">
-            <ActionRow icon={Settings} label={pastdue ? "Update payment to resume" : "Manage plan"} onClick={onManage} />
-            <ActionRow icon={CreditCard} label="Payment method" onClick={onPayment} />
+          <div className="divide-y divide-token">
+            <ManageRow
+              icon={RefreshCw}
+              title={pastdue ? "Payment paused" : renews ? `Renews ${renews}` : "Membership"}
+              sub={pastdue ? "Renew to resume" : "Auto-renews monthly"}
+              cta="Manage"
+              onClick={onManage}
+            />
+            <ManageRow icon={CreditCard} title="Payment method" sub={paymentLabel ?? "Manage your card"} cta="Edit" onClick={onPayment} />
           </div>
         )}
       </div>
@@ -119,18 +127,35 @@ function Stat({ label, value, divider }: { label: string; value: string; divider
   );
 }
 
-function ActionRow({ icon: Icon, label, onClick }: { icon: typeof Settings; label: string; onClick: () => void }) {
+function ManageRow({
+  icon: Icon,
+  title,
+  sub,
+  cta,
+  onClick,
+}: {
+  icon: typeof CreditCard;
+  title: string;
+  sub: string;
+  cta: string;
+  onClick: () => void;
+}) {
   return (
     <button
       type="button"
       onClick={onClick}
-      className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left transition-colors hover:bg-black/[.03] focus:outline-none focus-visible:ring-2 focus-visible:ring-red-600 dark:hover:bg-white/[.05]"
+      className="flex w-full items-center gap-3 py-4 text-left transition-opacity hover:opacity-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-600"
     >
       <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-black/[.05] text-muted-token dark:bg-white/[.08]">
-        <Icon className="h-5 w-5" />
+        <Icon className="h-[18px] w-[18px]" />
       </span>
-      <span className="flex-1 text-sm font-semibold text-primary-token dark:text-white">{label}</span>
-      <ChevronRight className="h-4 w-4 text-muted-token" />
+      <div className="min-w-0 flex-1">
+        <p className="text-sm font-bold text-primary-token dark:text-white">{title}</p>
+        <p className="truncate text-xs text-muted-token">{sub}</p>
+      </div>
+      <span className="inline-flex shrink-0 items-center gap-0.5 text-sm font-bold text-sky-600 dark:text-sky-400">
+        {cta} <ChevronRight className="h-4 w-4" />
+      </span>
     </button>
   );
 }
