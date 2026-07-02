@@ -19,19 +19,21 @@ interface EntryWalletProps {
   stack?: boolean;
   /** Show a seconds cell in the countdown. */
   showSeconds?: boolean;
-  /** Render an inline "Package"/"Get a package" button (with multiplier badge). */
+  /** Render the inline "Get more entries" button (with promo badges). */
   onGetPackage?: () => void;
   /** Promo multiplier for the inline package badge (>1 shows "{n}× entries"). */
   multiplier?: number;
+  /** Member/current-draw entrant → shows the "50% OFF" (Additional packages) badge. */
+  hasAdditionalAccess?: boolean;
   className?: string;
 }
 
-/** Countdown cell — prototype `CDBox`. */
-function CDBox({ v, l, accent }: { v: number; l: string; accent?: boolean }) {
+/** Countdown cell — premium red gradient, matching the promotions-page countdown. */
+function CDBox({ v, l }: { v: number; l: string }) {
   return (
-    <div className={cn("flex min-w-[46px] flex-col items-center gap-1 rounded-[11px] border bg-surface px-2.5 py-2", accent ? "border-[#d4af37]/60" : "border-token")}>
-      <span className="num text-[17px] font-extrabold leading-none tabular-nums text-primary-token dark:text-white">{String(v).padStart(2, "0")}</span>
-      <span className="text-[8px] font-bold uppercase tracking-[0.12em] text-muted-token">{l}</span>
+    <div className="flex min-w-[46px] flex-col items-center gap-0.5 rounded-xl bg-gradient-to-br from-red-500 via-red-600 to-red-700 px-2.5 py-2 shadow-[0_8px_18px_-8px_rgba(238,0,0,.6)] ring-1 ring-red-300/30">
+      <span className="num text-[18px] font-black leading-none tabular-nums text-white drop-shadow-[0_1px_2px_rgba(0,0,0,.35)]">{String(v).padStart(2, "0")}</span>
+      <span className="text-[8px] font-bold uppercase tracking-[0.12em] text-red-100">{l}</span>
     </div>
   );
 }
@@ -55,6 +57,7 @@ export default function EntryWallet({
   showSeconds,
   onGetPackage,
   multiplier = 1,
+  hasAdditionalAccess = false,
   className,
 }: EntryWalletProps) {
   const now = useLeafTimer(1000);
@@ -91,12 +94,17 @@ export default function EntryWallet({
             <button
               type="button"
               onClick={onGetPackage}
-              className="inline-flex items-center gap-1.5 rounded-full border border-token px-3 py-2 text-[12px] font-bold text-primary-token transition-transform focus:outline-none focus-visible:ring-2 focus-visible:ring-red-600 dark:text-white motion-safe:active:translate-y-px"
+              className="inline-flex items-center gap-1.5 rounded-full bg-gradient-to-b from-red-500 to-red-700 px-3.5 py-2.5 text-[12px] font-extrabold text-white shadow-[0_10px_22px_-10px_rgba(238,0,0,.6)] transition-transform focus:outline-none focus-visible:ring-2 focus-visible:ring-red-600 motion-safe:active:translate-y-px"
             >
-              <Plus className="h-[15px] w-[15px]" /> Package
+              <Plus className="h-[14px] w-[14px]" /> Get more entries
             </button>
+            {hasAdditionalAccess && (
+              <span className="absolute -left-2 -top-2 whitespace-nowrap rounded-full bg-gradient-to-b from-[#f6dd8c] to-[#d4af37] px-1.5 py-0.5 text-[8.5px] font-black text-[#241a02] shadow-[0_6px_12px_-5px_rgba(0,0,0,.5)]">
+                50% OFF
+              </span>
+            )}
             {multiplier > 1 && (
-              <span className="absolute -right-2 -top-2 whitespace-nowrap rounded-full bg-gradient-to-b from-[#f6dd8c] to-[#d4af37] px-1.5 py-1 text-[8.5px] font-black text-[#241a02] shadow-[0_6px_12px_-5px_rgba(0,0,0,.5)]">
+              <span className="absolute -right-2 -top-2 whitespace-nowrap rounded-full bg-gradient-to-b from-[#f6dd8c] to-[#d4af37] px-1.5 py-0.5 text-[8.5px] font-black text-[#241a02] shadow-[0_6px_12px_-5px_rgba(0,0,0,.5)]">
                 {multiplier}× entries
               </span>
             )}
@@ -129,10 +137,10 @@ export default function EntryWallet({
       </span>
       {showCountdown && (
         <div className="flex gap-2">
-          <CDBox v={cd.d} l="days" accent />
+          <CDBox v={cd.d} l="days" />
           <CDBox v={cd.h} l="hrs" />
-          <CDBox v={cd.m} l="min" />
-          {showSeconds && <CDBox v={cd.s} l="sec" />}
+          <CDBox v={cd.m} l="mins" />
+          {showSeconds && <CDBox v={cd.s} l="secs" />}
         </div>
       )}
     </div>

@@ -404,9 +404,10 @@ Rebuilds `/my-account/draws` to a **Major / Mini `Seg` toggle**. Spec:
   > _Update 2026-07-02:_ `DrawsMajorHero` dropped its "Live · {draw} · Drawn 8:30 PM AEST" status row
   > (redundant with the Draws toggle bar) and its `drawName`/`drawStatus` props; the draws page
   > dropped the entries card's `-mt-[34px]` overlap (→ `pt-4`) that had covered "View this promotion"
-  > with "Your entries". The draws page also now renders `DashboardPromoBanner` after the entries card
-  > (get-more-entries promo energy — multiplier / special-promo / 50%-off badges + countdown), since
-  > it has no separate promo banner otherwise; and `DrawsMini` ranks the top 8 mini draws by fill %.
+  > with "Your entries". The **separate `DashboardPromoBanner` section was removed** from the draws
+  > page — its promo energy now lives inside the `EntryWallet` "Get more entries" button (multiplier /
+  > 50%-off badges), fed by `multiplier={dash.multiplier}` + `hasAdditionalAccess={dash.hasAdditionalAccess}`.
+  > `DrawsMini` ranks the top 8 mini draws by fill %.
 
 - **Sections `src/components/sections/draws/`**: `DrawsMajorHero` (prize picker setup vs $10k cash
   via `usePrizeCatalog` + `resolvePrize("cash-prize")`, live countdown, "View this promotion" →

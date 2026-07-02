@@ -54,6 +54,15 @@
 > not newest — and its blurb was rewritten (was generic). `RewardsMilestones` dropped the "Rewards
 > land in your **wallet**" wording (not the business's language — there's no "entry wallet").
 
+> **"Get more entries" button + premium countdown (2026-07-02):** `EntryWallet`'s inline package CTA
+> carries the promo energy itself (no separate banner): "+ Package" → **"Get more entries"** with a
+> `50% OFF` badge (top-left, when `hasAdditionalAccess`) and a `{multiplier}× entries` badge
+> (top-right, when `multiplier > 1`) — new props `multiplier` / `hasAdditionalAccess`. The countdown
+> `CDBox` cells were restyled from bordered white boxes to the **red-gradient premium cells** the
+> promotions page uses ([`HorizontalCountdown`](../../src/components/sections/HorizontalCountdown.tsx)):
+> `bg-gradient-to-br from-red-500 via-red-600 to-red-700`, white `font-black` numbers, `red-100`
+> labels, `ring-1 ring-red-300/30` (accent prop dropped — every cell is gold-topped/red now).
+
 ## Dashboard sections (2026-07-02)
 
 The member-dashboard revamp adds section-band components under `src/components/sections/dashboard/`
