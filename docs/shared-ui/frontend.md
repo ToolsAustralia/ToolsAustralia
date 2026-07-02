@@ -6,9 +6,13 @@
 
 > **Payment sheet panel (2026-07-02):** `SettingsRedesignPayment` (rendered by the Payment overlay
 > sheet via `PaymentMethodsTab settingsRedesign`) was rewritten from a card-face grid to the clean
-> prototype layout — hero card face (default card) → "Saved cards" radio rows (Default badge /
-> Remove) → dashed "Add a new card" → encrypted footer. Cardholder name is threaded in from the
-> orchestrator (`index.tsx`). Still presentational-only; all Stripe wiring unchanged.
+> prototype layout — hero card face (default card, content-height not stretched) → "Saved cards"
+> radio rows (Default badge / Remove) → dashed "Add a new card" → encrypted footer. Cardholder name
+> is threaded in from the orchestrator (`index.tsx`). The **add-card form** (`AddPaymentForm` + the
+> `addFormNode` chrome in `index.tsx`) was also restyled to the design — "Add a new card" header,
+> `PaymentElement` (card details) + a **Name-on-card** input, Cancel / **Add card** buttons. Still
+> presentational-only; the shared `buildMembershipStripeAppearance` (7 modals) is untouched; all
+> Stripe wiring (SetupIntent / confirmSetup) unchanged.
 
 ## Dashboard sections (2026-07-02)
 

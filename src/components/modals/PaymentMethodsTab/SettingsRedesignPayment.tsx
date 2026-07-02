@@ -133,10 +133,10 @@ const SettingsRedesignPayment: React.FC<SettingsRedesignPaymentProps> = ({
           {heroCard && (
             <div
               className="relative overflow-hidden rounded-[1.25rem] p-5 text-white shadow-[0_18px_40px_-20px_rgba(0,0,0,.6)]"
-              style={{ background: heroFace.bg, aspectRatio: "1.9 / 1" }}
+              style={{ background: heroFace.bg }}
             >
               <span aria-hidden className="pointer-events-none absolute inset-0 bg-gradient-to-br from-white/10 to-transparent" />
-              <div className="relative flex h-full flex-col justify-between">
+              <div className="relative flex flex-col gap-[18px]">
                 <div className="flex items-start justify-between">
                   <div className="relative h-7 w-10 overflow-hidden rounded-md bg-gradient-to-br from-yellow-300 to-yellow-600 shadow-inner">
                     <div className="absolute inset-1 grid grid-cols-3 grid-rows-3 gap-px">
