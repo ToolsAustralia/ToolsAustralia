@@ -42,11 +42,12 @@ export default function SheetShell({ open, onClose, children, className, labelle
   // floating chrome but below the payment/modal layer (Z_INDEX 10000).
   const overlay = (
     <div className="fixed inset-0 z-[120] flex flex-col justify-end lg:items-center lg:justify-center lg:p-6" role="dialog" aria-modal="true" aria-labelledby={labelledBy}>
-      <button type="button" aria-label="Close" onClick={onClose} className="absolute inset-0 bg-black/55 backdrop-blur-sm" />
+      <button type="button" aria-label="Close" onClick={onClose} className="absolute inset-0 bg-black/55 backdrop-blur-sm motion-safe:animate-[ta-sheet-fade_.25s_ease-out]" />
       <div
         className={cn(
           "relative flex max-h-[90%] w-full flex-col overflow-hidden border border-token bg-surface shadow-[0_-20px_50px_-20px_rgba(0,0,0,.5)]",
           "rounded-t-[26px] lg:max-h-[86%] lg:max-w-[468px] lg:rounded-3xl lg:shadow-[0_40px_90px_-30px_rgba(0,0,0,.7)]",
+          "motion-safe:animate-[ta-sheet-up_.34s_cubic-bezier(.22,1,.36,1)] lg:motion-safe:animate-[ta-sheet-pop_.28s_cubic-bezier(.22,1,.36,1)]",
           className,
         )}
       >

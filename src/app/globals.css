@@ -1522,6 +1522,11 @@
   .ta-loader-root .ta-loader-tape-fill { width: 72% !important; }
 }
 
+/* SheetShell entrance — bottom sheet slides up (mobile), soft pop (desktop). */
+@keyframes ta-sheet-up { from { transform: translateY(100%); } to { transform: translateY(0); } }
+@keyframes ta-sheet-pop { from { opacity: 0; transform: translateY(10px) scale(0.985); } to { opacity: 1; transform: translateY(0) scale(1); } }
+@keyframes ta-sheet-fade { from { opacity: 0; } to { opacity: 1; } }
+
 /* Horizontal shimmer animation for winner name */
 @keyframes shimmer-horizontal {
   0% {

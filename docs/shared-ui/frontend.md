@@ -119,6 +119,20 @@ guarantees a true full-viewport backdrop above the nav + floating chrome, while 
 payment/modal layer (`Z_INDEX` 10000). The layout-mounted Support/Payment/Manage sheets are unaffected
 (they were already at the layout root).
 
+**Sheet entrance animation (2026-07-03):** `SheetShell` animates in — the panel slides up
+(`ta-sheet-up`, `translateY(100%)→0`) on mobile and softly pops (`ta-sheet-pop`, fade + `translateY`/
+scale) on desktop, with the backdrop fading (`ta-sheet-fade`); all `motion-safe`-gated (keyframes in
+[globals.css](../../src/app/globals.css)). Entrance only — close still unmounts immediately.
+
+### RewardsMilestones — package-themed header (2026-07-03)
+
+[`RewardsMilestones`](../../src/components/sections/rewards/RewardsMilestones.tsx) **dropped the
+descriptive paragraph** and leads with a **package-themed header banner** (`glossGrad(tierHex)` fill +
+`inkOn` contrast, so it recolors to Tradie / Foreman / Boss) stating the next reward — "Next: +{n} free
+entries" / "Unlocks at your {N}-month milestone" + a "{m} /{N} mo" counter (past-due → "Reactivate to
+keep your streak"; all-unlocked → "All milestones unlocked"). The visual progress track stays below.
+New `tierHex` prop (passed from `dash.tierHex` on the Rewards page).
+
 ## Dashboard sections (2026-07-02)
 
 The member-dashboard revamp adds section-band components under `src/components/sections/dashboard/`

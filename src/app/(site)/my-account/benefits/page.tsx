@@ -70,7 +70,6 @@ export default function RewardsPage() {
         sub="Partners · claims · milestones"
         icon={Gift}
         stateTheme={dash.stateTheme}
-        showBack
       />
 
       <div className="space-y-4 px-4 pt-4 sm:px-6">
@@ -87,7 +86,7 @@ export default function RewardsPage() {
         {dash.acct !== "none" && userId && (
           <>
             <RewardsClaimables userId={userId} acct={dash.acct} />
-            <RewardsMilestones acct={dash.acct} months={dash.streakMonths} />
+            <RewardsMilestones acct={dash.acct} months={dash.streakMonths} tierHex={dash.tierHex} />
           </>
         )}
       </div>

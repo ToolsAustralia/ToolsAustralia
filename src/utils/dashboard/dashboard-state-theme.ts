@@ -50,6 +50,14 @@ export function getDashboardStateTheme(
 ): DashboardStateTheme {
   if (acct !== "active") return FIXED[acct];
   const hex = tierHex ?? "#ee0000";
+  // A light/gold tier (Foreman #ffd200) is the only one `inkOn` renders with DARK
+  // ink, and the generic `shade()` darkens pure yellow to a dusty olive (#947a00) —
+  // the "dirty" look. Give it a purpose-built deep warm-gold gradient with WHITE ink
+  // so it reads premium; the white ink cascades in the hero (ring → white, badge →
+  // light glass, text → white). Blue/red tiers keep the derived gradient below.
+  if (inkOn(hex) === "#0a0a0a") {
+    return { gradient: "linear-gradient(157deg, #b07d0c, #664806 56%, #946a0c)", ink: "#ffffff", accent: hex };
+  }
   const gradient = `linear-gradient(157deg, ${shade(hex, -8)}, ${shade(hex, -42)} 60%, ${shade(hex, -22)})`;
   return { gradient, ink: inkOn(hex), accent: hex };
 }

@@ -6,6 +6,17 @@
 > instead of a bare red-arc spinner. Home + draws cycle the brand status messages; the rest pass a
 > static label. See [shared-ui/frontend.md § DashboardLoader](../shared-ui/frontend.md#dashboardloader-ported-from-claude-design-2026-07-03).
 
+> **Foreman hero/header theme + page-header chrome (2026-07-03):** [`getDashboardStateTheme`](../../src/utils/dashboard/dashboard-state-theme.ts)
+> now special-cases the **gold tier** (Foreman `#ffd200` — the only tier `inkOn` renders with dark ink):
+> the generic `shade()` gradient darkened pure yellow to a dusty olive (`#947a00`) and forced muddy dark
+> ink, so it gets a **purpose-built deep warm-gold gradient + white ink**. The white ink cascades through
+> `DashboardHero`'s existing `ink`/`white` logic → the access ring, tier badge glass, and text all go
+> white/light (fixing the "dusty/dirty" Foreman look). [`DashboardPageHeader`](../../src/app/(site)/my-account/components/DashboardPageHeader.tsx):
+> the **back chevron was dropped on tab-level pages** (Rewards/`benefits`, `membership` no longer pass
+> `showBack`) — it's only for pages nested under a tab (Settings, opened from the dashboard gear, keeps
+> it); and the `sub` eyebrow is now `whitespace-nowrap` with responsive tracking/size so it never wraps
+> to two rows on any device.
+
 ## Pages
 
 `src/app/(site)/my-account/`:

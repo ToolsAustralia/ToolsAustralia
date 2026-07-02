@@ -2,12 +2,15 @@
 
 import { Medal, Check, Lock } from "lucide-react";
 import { cn } from "@/utils/cn";
+import { glossGrad, inkOn } from "@/utils/membership/tier-visuals";
 import type { DashboardAccountState } from "@/utils/dashboard/dashboard-state-theme";
 
 interface RewardsMilestonesProps {
   acct: DashboardAccountState;
   /** Months of continuous membership (real member-since data). */
   months: number | null;
+  /** Owned tier hex — themes the header banner (Tradie / Foreman / Boss). */
+  tierHex?: string | null;
 }
 
 // Documented loyalty milestones (source: rewards domain). No fabricated amounts.
@@ -18,35 +21,51 @@ const MILESTONES = [
 const MAX_MO = MILESTONES[MILESTONES.length - 1].mo;
 
 /**
- * Loyalty milestones — a visual progress track showing where the member currently
- * sits and how many months remain until the next reward. Driven by real
- * continuous-membership `months` (same signal LoyaltyStreak uses); milestone
+ * Loyalty milestones — a package-themed header banner (Tradie / Foreman / Boss)
+ * stating the next reward + months-to-go, over a visual progress track showing
+ * where the member currently sits. Driven by real continuous-membership `months`;
  * amounts are documented constants, never fabricated. Member perk only.
  */
-export default function RewardsMilestones({ acct, months }: RewardsMilestonesProps) {
+export default function RewardsMilestones({ acct, months, tierHex }: RewardsMilestonesProps) {
   if (acct !== "active" && acct !== "pastdue") return null;
 
   const m = Math.max(months ?? 0, 0);
   const progressPct = Math.min(m / MAX_MO, 1) * 100;
   const nextMilestone = MILESTONES.find((ms) => ms.mo > m) ?? null;
-  const monthsToNext = nextMilestone ? Math.max(nextMilestone.mo - m, 0) : 0;
+
+  const hex = tierHex ?? "#d4af37";
+  const ink = inkOn(hex);
+  const chipBg = ink === "#0a0a0a" ? "rgba(0,0,0,.13)" : "rgba(255,255,255,.16)";
+
+  // Header banner copy by state (replaces the old descriptive paragraph).
+  const banner =
+    acct === "pastdue"
+      ? { title: "Reactivate to keep your streak", subtitle: "Milestone progress pauses while payment is overdue", right: null }
+      : nextMilestone
+        ? { title: `Next: +${nextMilestone.entries} free entries`, subtitle: `Unlocks at your ${nextMilestone.mo}-month milestone`, right: { m, of: nextMilestone.mo } }
+        : { title: "All milestones unlocked", subtitle: `Thanks for ${m} months of membership`, right: null };
 
   return (
-    <section className="rounded-3xl border border-token bg-surface p-5 shadow-sm">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <span className="grid h-8 w-8 place-items-center rounded-lg bg-amber-50 text-amber-600 dark:bg-amber-500/15 dark:text-amber-400">
-            <Medal className="h-4 w-4" />
-          </span>
-          <span className="text-[11px] font-bold uppercase tracking-[0.18em] text-muted-token">Loyalty milestones</span>
-        </div>
-        <span className="rounded-full border border-amber-400/40 px-2.5 py-1 text-xs font-semibold text-amber-600 dark:text-amber-400">
-          {m} month{m === 1 ? "" : "s"}
+    <section className="overflow-hidden rounded-3xl border border-token bg-surface shadow-sm">
+      {/* Package-themed header banner */}
+      <div className="relative flex items-center gap-3 px-4 py-3.5" style={{ background: glossGrad(hex), color: ink }}>
+        <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl" style={{ background: chipBg }}>
+          <Medal className="h-5 w-5" />
         </span>
+        <div className="min-w-0 flex-1">
+          <div className="font-['Poppins'] text-[15px] font-extrabold leading-tight">{banner.title}</div>
+          <div className="mt-0.5 text-[11px] font-semibold opacity-80">{banner.subtitle}</div>
+        </div>
+        {banner.right && (
+          <div className="shrink-0 text-right leading-none">
+            <span className="num font-['Poppins'] text-xl font-black">{banner.right.m}</span>
+            <span className="text-[11px] font-bold opacity-80"> /{banner.right.of} mo</span>
+          </div>
+        )}
       </div>
 
       {/* Visual track: current position + milestone nodes. */}
-      <div className="px-4 pb-9 pt-6">
+      <div className="px-6 pb-9 pt-8">
         <div className="relative h-2 rounded-full bg-black/[.07] dark:bg-white/[.10]">
           <div
             className="absolute inset-y-0 left-0 rounded-full"
@@ -74,23 +93,6 @@ export default function RewardsMilestones({ acct, months }: RewardsMilestonesPro
           })}
         </div>
       </div>
-
-      <p className="text-[12px] font-medium leading-[1.5] text-muted-token">
-        {acct === "pastdue" ? (
-          <>
-            <b className="text-[#d97706]">Reactivate to keep your streak</b> — milestone progress pauses while payment is overdue.
-          </>
-        ) : nextMilestone ? (
-          <>
-            <b className="text-primary-token dark:text-white">{monthsToNext} month{monthsToNext === 1 ? "" : "s"}</b> to your next{" "}
-            <b className="text-amber-600 dark:text-amber-400">+{nextMilestone.entries} free entries</b>. Keep your membership active to unlock it.
-          </>
-        ) : (
-          <>
-            <b className="text-emerald-600 dark:text-emerald-400">All milestones unlocked</b> — thanks for {m} months of membership.
-          </>
-        )}
-      </p>
     </section>
   );
 }
