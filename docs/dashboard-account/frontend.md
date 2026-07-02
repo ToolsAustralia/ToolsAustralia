@@ -382,3 +382,11 @@ copy. Previously it used the one-time multiplier for everyone — wrong for memb
 
 > **Verify before launch:** the loyalty-streak "+250 free entries at 6 months" figure is the design's
 > stated milestone — confirm the exact reward against the real `MilestoneReward` config.
+
+### Dead-code removal (2026-07-02)
+The pre-revamp scaffold under `my-account/components/` was **deleted** (all confirmed 0-usage after
+the revamp): `DashboardHeader`, `CoverBanner`, `UserInfoBar`, `QuickActions`, `SocialLinksSection`,
+`MembershipStatus`, `ActivePrizeDraws`, `RecentOrders`, `MajorDrawHeaderStrip`, `MajorDrawOverview`
+(its entries logic → `sections/dashboard/EntryWallet`; hero/countdown → `sections/draws/DrawsMajorHero`),
+the empty `EntryWallet.tsx` stub, and the stale `components/index.ts` barrel. `my-account/components/`
+now holds only `BottomNav`, `DeskNav`, `DashboardPageHeader`, and `settings/`.

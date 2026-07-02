@@ -1,14 +1,12 @@
 "use client";
 
 // ─────────────────────────────────────────────────────────────────────────────
-// FLAGGED FOR DELETION (do NOT delete here — user review pending; see
-// docs/superpowers/specs/2026-07-02-user-dashboard-revamp-foundation-home-design.md):
-//   Genuinely dead (0 usages): components/MembershipStatus.tsx, ActivePrizeDraws.tsx,
-//   RecentOrders.tsx, the empty EntryWallet.tsx stub, stale components/index.ts re-exports.
-// Superseded on THIS page but KEPT (still used by sub-pages until their own specs):
-//   DashboardHeader, CoverBanner, UserInfoBar, QuickActions, SocialLinksSection.
-//   MajorDrawOverview — entries-wallet logic extracted into sections/dashboard/EntryWallet;
-//   its major-draw/countdown role migrates to the Draws sub-project.
+// Dashboard home. The old scaffold components (DashboardHeader, CoverBanner,
+// UserInfoBar, QuickActions, SocialLinksSection, MembershipStatus, ActivePrizeDraws,
+// RecentOrders, MajorDrawHeaderStrip, MajorDrawOverview, the empty EntryWallet stub,
+// MembershipPackagesChart, and the components/index.ts barrel) were removed on
+// 2026-07-02 after the revamp superseded them — entries-wallet logic now lives in
+// sections/dashboard/EntryWallet; the hero/countdown in DrawsMajorHero.
 // ─────────────────────────────────────────────────────────────────────────────
 
 import React, { useState } from "react";

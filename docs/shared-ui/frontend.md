@@ -14,7 +14,11 @@ for both mobile + desktop. `QuickTile` is now the prototype's glossy `linear-gra
 (accent palette in [tile-colors.ts](../../src/utils/dashboard/tile-colors.ts)); `EntryWallet` is a
 responsive 2-column card with an inline countdown (`CDBox`); `PartnerPreview` uses the letter-badge
 deal-row style; `DashboardHero` is single-row on desktop (no gear — sidebar footer has it) and keeps
-the existing `AccessRing`. See [dashboard-account/frontend.md](../dashboard-account/frontend.md#dashboard-home--pixel-fidelity-rework-2026-07-02). New shared primitives live in `src/components/ui/`
+the existing `AccessRing`. See [dashboard-account/frontend.md](../dashboard-account/frontend.md#dashboard-home--pixel-fidelity-rework-2026-07-02).
+
+**Removed (2026-07-02):** `src/components/sections/MembershipPackagesChart.tsx` — orphaned after both
+`/membership` and `/my-account/membership` dropped it (the account page now uses the compact
+`sections/account-membership/MembershipTierList`). New shared primitives live in `src/components/ui/`
 (`Monogram`, `QuickTile` — see [ui-primitives.md](./ui-primitives.md)). Full detail:
 [docs/dashboard-account/frontend.md](../dashboard-account/frontend.md) and the specs under
 `docs/superpowers/specs/2026-07-02-*`.

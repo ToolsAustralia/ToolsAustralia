@@ -1,12 +1,9 @@
 "use client";
 
 // ─────────────────────────────────────────────────────────────────────────────
-// FLAGGED FOR DELETION (do NOT delete — user review pending; see
-// docs/superpowers/specs/2026-07-02-dashboard-membership-design.md):
-//   🚩 MembershipPackagesChart — after this page drops it, it becomes orphaned
-//      (this was its last remaining user; the /membership redesign already flagged it).
-//   Removed from THIS page but KEPT (shared, used elsewhere):
-//      PartnerBenefitsPromoSection(Client), MembershipSection.
+// Account Membership page. MembershipPackagesChart (this page was its last user)
+// was removed on 2026-07-02. Removed from this page but KEPT (shared, used
+// elsewhere): PartnerBenefitsPromoSection(Client), MembershipSection.
 // ─────────────────────────────────────────────────────────────────────────────
 
 import React from "react";
