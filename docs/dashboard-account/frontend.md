@@ -340,3 +340,23 @@ Rebuilds `/my-account/membership` to current-plan + tier list + one-time packs +
   Settings panels. Full cancel/change flow stays in the Settings subscription panel (no duplicate).
 - **🚩 `MembershipPackagesChart` is now fully orphaned** (this page was its last user) — flagged for
   deletion in the page header; kept for user review.
+
+## Dashboard revamp — Spec 5: Settings + Support (2026-07-02)
+
+Closes the Settings gaps + finishes shell consistency. Spec:
+`docs/superpowers/specs/2026-07-02-dashboard-settings-overlays-design.md`.
+
+- **Appearance / [`ThemePicker`](../../src/app/(site)/my-account/components/settings/ThemePicker.tsx)** —
+  Light/Dark segmented control (`useTheme` → `setTheme`, persists to `localStorage["ta-theme"]`),
+  added as an Appearance card on the Settings index. **No System mode** (deliberately dropped).
+- **[`settings/page.tsx`](../../src/app/(site)/my-account/settings/page.tsx)** — swapped the fixed
+  `DashboardHeader` for `DashboardPageHeader` (state-recolored, in-flow; removes the last fixed-bar
+  vs desktop-sidebar overlap); loading/error guards no longer render a header. `DashboardPageHeader`
+  gained an optional `onBack` so a tab returns to the index (index → dashboard).
+- **[`support/page.tsx`](../../src/app/(site)/my-account/support/page.tsx)** — rewritten to
+  `DashboardPageHeader` + Ask-Cobber card (coming-soon, gated by `cobberSupport`) + Email us + FAQ
+  accordion + kept `ContactForm`. No WhatsApp/phone. Responsive sheet-shell delivery deferred (route).
+- **🚩 Newly orphaned → flagged for deletion:** `DashboardHeader.tsx` (Settings was its last user),
+  `MajorDrawHeaderStrip.tsx` (old draws only).
+- **Flagged to verify (not modified — money path):** billing-history tab inside the shared
+  `SubscriptionManagementModal` / `PaymentMethodsTab` — the design removes billing history.

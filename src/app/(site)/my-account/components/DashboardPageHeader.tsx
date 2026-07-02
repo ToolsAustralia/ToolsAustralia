@@ -10,8 +10,10 @@ interface DashboardPageHeaderProps {
   icon?: LucideIcon;
   /** Account-state theme for the recolored band (from useDashboardState). */
   stateTheme: DashboardStateTheme;
-  /** Show a back chevron routing to the dashboard home. */
+  /** Show a back chevron. Routes to the dashboard home unless `onBack` is given. */
   showBack?: boolean;
+  /** Custom back handler (overrides the default /my-account route). */
+  onBack?: () => void;
 }
 
 /**
@@ -25,6 +27,7 @@ export default function DashboardPageHeader({
   icon: Icon,
   stateTheme,
   showBack = false,
+  onBack,
 }: DashboardPageHeaderProps) {
   const router = useRouter();
   return (
@@ -44,8 +47,8 @@ export default function DashboardPageHeader({
           {showBack && (
             <button
               type="button"
-              onClick={() => router.push("/my-account")}
-              aria-label="Back to dashboard"
+              onClick={() => (onBack ? onBack() : router.push("/my-account"))}
+              aria-label="Back"
               className="-ml-1 grid h-9 w-9 place-items-center rounded-full bg-white/15 transition-colors hover:bg-white/25 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
             >
               <ChevronLeft className="h-5 w-5" />

@@ -1,129 +1,136 @@
 "use client";
 
 import React from "react";
-import Image from "next/image";
+import Link from "next/link";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
-import { useMyAccountData } from "@/hooks/queries";
-import { Facebook, Instagram, Mail } from "lucide-react";
+import { Headset, Mail, ChevronDown, MessageCircle } from "lucide-react";
 
 import ContactForm from "@/components/features/ContactForm";
-import DashboardHeader from "../components/DashboardHeader";
-import { hasFailedRenewal } from "@/utils/subscription/subscription-helpers";
+import { useDashboardState } from "@/hooks/useDashboardState";
+import { isDashboardFeatureOn } from "@/config/dashboardFeatures";
 import { getContactEmail } from "@/lib/email/sender-identities";
+import DashboardPageHeader from "../components/DashboardPageHeader";
+
+const FAQS = [
+  { q: "When is the major draw?", a: "The major draw is held live on Facebook at 8:30 PM AEST on the 27th of each month. Entries freeze at 8:00 PM AEST that day." },
+  { q: "How do I get more entries?", a: "Every membership and one-time package comes with free entries. Buy a package or upgrade your tier from the Membership tab — the more you hold at freeze time, the more entries you have." },
+  { q: "How do partner discounts work?", a: "Active members and one-time-pack holders unlock a percentage of our partner catalogue. Open the partner portal from the Rewards tab — you're signed in automatically." },
+  { q: "How do I cancel my membership?", a: "Go to Membership → Manage plan (or Settings → Subscription). You'll keep access until the end of your current billing period." },
+];
+
+function Faq({ q, a }: { q: string; a: string }) {
+  const [open, setOpen] = React.useState(false);
+  return (
+    <div className="rounded-2xl border border-token bg-surface">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        className="flex w-full items-center justify-between gap-3 px-4 py-3.5 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-red-600"
+      >
+        <span className="text-sm font-semibold text-primary-token dark:text-white">{q}</span>
+        <ChevronDown className={`h-4 w-4 shrink-0 text-muted-token transition-transform ${open ? "rotate-180" : ""}`} />
+      </button>
+      {open && <p className="px-4 pb-4 text-sm leading-relaxed text-muted-token">{a}</p>}
+    </div>
+  );
+}
 
 export default function SupportPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
-  const { data: accountData, isLoading: loading } = useMyAccountData(session?.user?.id);
+  const dash = useDashboardState();
+  const contactEmail = getContactEmail();
+  const cobberOn = isDashboardFeatureOn("cobberSupport");
 
   React.useEffect(() => {
     if (status === "loading") return;
-    if (!session) {
-      router.push("/login");
-    }
+    if (!session) router.push("/login");
   }, [session, status, router]);
 
-  if (status === "loading" || loading) {
+  if (status === "loading" || dash.isLoading) {
     return (
       <div className="min-h-screen-svh flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-red-600 dark:border-red-500 mx-auto mb-4"></div>
-          <p className="text-gray-600 dark:text-gray-400">Loading...</p>
-        </div>
+        <div className="h-12 w-12 animate-spin rounded-full border-4 border-red-600 border-t-transparent" />
       </div>
     );
   }
 
-  if (!session || !accountData) {
-    return null;
+  if (!session) {
+    return (
+      <div className="min-h-screen-svh flex flex-col items-center justify-center gap-3 px-4 text-center">
+        <p className="text-xl font-semibold text-primary-token dark:text-white">Please sign in to contact support.</p>
+        <Link href="/login" className="rounded-lg bg-red-600 px-6 py-3 font-semibold text-white hover:bg-red-700">Sign In</Link>
+      </div>
+    );
   }
 
-  const { user } = accountData;
-  const contactEmail = getContactEmail();
-
   return (
-    <div className="min-h-screen-svh w-full min-w-0 max-w-full overflow-x-hidden bg-gray-50 dark:bg-neutral-950 pb-16 lg:pb-8">
-      <DashboardHeader
-        title="Support"
-        showRenewalAlert={hasFailedRenewal(user as unknown as import("@/models/User").IUser)}
-      />
+    <div className="min-h-screen-svh w-full min-w-0 max-w-full overflow-x-hidden pb-8">
+      <DashboardPageHeader title="How can we help?" sub="Support" icon={MessageCircle} stateTheme={dash.stateTheme} showBack />
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 pt-6 sm:pt-8 pb-6 sm:pb-8">
-        <div className="bg-white dark:bg-neutral-900 rounded-xl shadow-sm border border-gray-200 dark:border-neutral-800 overflow-hidden">
-          <div className="grid grid-cols-1 lg:grid-cols-2 min-h-[500px] lg:min-h-[600px]">
-            {/* Contact Information - Same as /contact */}
-            <div className="bg-black p-6 sm:p-8 lg:p-12 text-white relative flex flex-col">
-              <div className="absolute inset-0 z-0">
-                <Image
-                  src="/images/background/contact-bg.webp"
-                  alt="Tools Australia Support"
-                  fill
-                  className="object-cover opacity-30"
-                  sizes="(max-width: 1024px) 100vw, 50vw"
-                />
-                <div className="absolute inset-0 bg-black/60" />
+      <div className="space-y-4 px-4 pt-4 sm:px-6">
+        {/* Ask Cobber — AI assistant (coming soon, gated) */}
+        <section className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-red-600 to-red-800 p-5 text-white shadow-lg">
+          <div className="flex items-start gap-3">
+            <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-white/15">
+              <Headset className="h-6 w-6" />
+            </span>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2">
+                <h2 className="font-['Poppins'] text-lg font-extrabold">Ask Cobber</h2>
+                {!cobberOn && <span className="rounded-full bg-white/20 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide">Coming soon</span>}
+                {cobberOn && (
+                  <span className="inline-flex items-center gap-1 text-xs font-semibold">
+                    <span className="relative flex h-2 w-2"><span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-300 opacity-75" /><span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-300" /></span>
+                    Online
+                  </span>
+                )}
               </div>
-
-              <div className="relative z-20 flex flex-col h-full">
-                <div className="mb-6 sm:mb-8">
-                  <h2 className="text-[20px] sm:text-[24px] lg:text-[28px] font-semibold mb-3 sm:mb-4 font-['Poppins']">
-                    Contact Information
-                  </h2>
-                  <p className="text-[14px] sm:text-[16px] lg:text-[18px] text-white/90 font-['Poppins']">
-                    Any question or remarks? Just write us a message!
-                  </p>
-                </div>
-
-                <div className="space-y-6 sm:space-y-8">
-                  <div className="flex items-start gap-4 sm:gap-6">
-                    <Mail className="w-6 h-6 sm:w-8 sm:h-8 lg:w-10 lg:h-10 text-white flex-shrink-0 mt-1" />
-                    <div>
-                      <p className="text-[12px] sm:text-[14px] lg:text-[16px] text-white/80 font-['Poppins'] mb-1">
-                        Email
-                      </p>
-                      <a
-                        href={`mailto:${contactEmail}`}
-                        className="font-normal text-[14px] sm:text-[16px] lg:text-[18px] font-['Poppins'] text-white hover:text-red-400 transition-colors"
-                      >
-                        {contactEmail}
-                      </a>
-                    </div>
-                  </div>
-
-                  <div>
-                    <p className="text-white/80 text-[12px] sm:text-[14px] mb-3 sm:mb-4 font-['Poppins']">Follow Us:</p>
-                    <div className="flex items-center gap-3 sm:gap-4">
-                      <a
-                        href="https://www.facebook.com/toolsaust"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="w-10 h-10 sm:w-12 sm:h-12 bg-gray-800 hover:bg-blue-600 rounded-full flex items-center justify-center transition-all duration-300 transform hover:scale-110"
-                        aria-label="Follow us on Facebook"
-                      >
-                        <Facebook className="w-5 h-5 sm:w-6 sm:h-6" />
-                      </a>
-                      <a
-                        href="https://www.instagram.com/toolsaustralia/"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="w-10 h-10 sm:w-12 sm:h-12 bg-gray-800 hover:bg-gradient-to-r hover:from-purple-500 hover:to-pink-500 rounded-full flex items-center justify-center transition-all duration-300 transform hover:scale-110"
-                        aria-label="Follow us on Instagram"
-                      >
-                        <Instagram className="w-5 h-5 sm:w-6 sm:h-6" />
-                      </a>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Contact Form - Same component and API as /contact */}
-            <div className="bg-white dark:bg-neutral-900">
-              <ContactForm />
+              <p className="mt-0.5 text-sm text-white/85">Instant answers about draws, entries, membership and partner discounts.</p>
             </div>
           </div>
-        </div>
+          <button
+            type="button"
+            disabled={!cobberOn}
+            className="mt-4 w-full rounded-xl bg-white py-2.5 text-sm font-bold text-red-700 transition-transform focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70 disabled:opacity-60 motion-safe:active:translate-y-px"
+          >
+            {cobberOn ? "Start a chat" : "Available soon"}
+          </button>
+        </section>
+
+        {/* Email us */}
+        <section className="rounded-3xl border border-token bg-surface p-5 shadow-sm">
+          <div className="flex items-center gap-3">
+            <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-black/[.05] text-primary-token dark:bg-white/[.08] dark:text-white">
+              <Mail className="h-5 w-5" />
+            </span>
+            <div className="min-w-0 flex-1">
+              <h2 className="font-['Poppins'] text-base font-extrabold text-primary-token dark:text-white">Email us</h2>
+              <a href={`mailto:${contactEmail}`} className="text-sm font-semibold text-red-600 hover:underline dark:text-red-400">{contactEmail}</a>
+              <p className="text-xs text-muted-token">Usually replies within 1–2 business days.</p>
+            </div>
+          </div>
+        </section>
+
+        {/* Common questions */}
+        <section>
+          <span className="mb-3 block text-[11px] font-bold uppercase tracking-[0.18em] text-muted-token">Common questions</span>
+          <div className="space-y-2">
+            {FAQS.map((f) => (
+              <Faq key={f.q} q={f.q} a={f.a} />
+            ))}
+          </div>
+        </section>
+
+        {/* Send us a message (kept — real contact channel) */}
+        <section className="overflow-hidden rounded-3xl border border-token bg-surface shadow-sm">
+          <div className="border-b border-token px-5 py-3">
+            <h2 className="font-['Poppins'] text-base font-extrabold text-primary-token dark:text-white">Send us a message</h2>
+          </div>
+          <ContactForm />
+        </section>
       </div>
     </div>
   );

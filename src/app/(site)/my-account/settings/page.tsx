@@ -10,6 +10,8 @@ import {
   ChevronRight,
   LogOut,
   Sparkles,
+  Settings as SettingsIcon,
+  Palette,
 } from "lucide-react";
 import dynamic from "next/dynamic";
 import { useMyAccountData, type MyAccountData } from "@/hooks/queries";
@@ -26,7 +28,9 @@ import SettingsSidebar, { SETTINGS_TABS, VALID_TAB_IDS, type SettingsSection } f
 const MembershipModal = dynamic(() => import("@/components/modals/MembershipModal"), {
   ssr: false,
 });
-import DashboardHeader from "../components/DashboardHeader";
+import DashboardPageHeader from "../components/DashboardPageHeader";
+import ThemePicker from "../components/settings/ThemePicker";
+import { useDashboardState } from "@/hooks/useDashboardState";
 import ProfileTab from "../components/settings/ProfileTab";
 import PasswordTab from "../components/settings/PasswordTab";
 import SubscriptionTab from "../components/settings/SubscriptionTab";
@@ -121,19 +125,19 @@ export default function SettingsPage() {
     signOut({ callbackUrl: "/" });
   }, []);
 
+  // Dashboard view-state (account state → hero recolor for the page header).
+  const dash = useDashboardState();
+
   // ---------------------------------------------------------------------------
   // Loading / error states
   // ---------------------------------------------------------------------------
 
   if (status === "loading" || loading) {
     return (
-      <div>
-        <DashboardHeader title="Settings" showBackButton />
-        <div className="min-h-screen-svh flex items-center justify-center">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-red-600 mx-auto mb-4"></div>
-            <p className="text-gray-600 dark:text-gray-400">Loading settings...</p>
-          </div>
+      <div className="min-h-screen-svh flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-red-600 mx-auto mb-4"></div>
+          <p className="text-gray-600 dark:text-gray-400">Loading settings...</p>
         </div>
       </div>
     );
@@ -141,21 +145,18 @@ export default function SettingsPage() {
 
   if (error || !accountData) {
     return (
-      <div>
-        <DashboardHeader title="Settings" showBackButton />
-        <div className="min-h-screen-svh flex items-center justify-center">
-          <div className="text-center">
-            <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">Error Loading Settings</h1>
-            <p className="text-gray-600 dark:text-gray-400 mb-4">
-              {error instanceof Error ? error.message : "An error occurred"}
-            </p>
-            <button
-              onClick={() => window.location.reload()}
-              className="bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700"
-            >
-              Try Again
-            </button>
-          </div>
+      <div className="min-h-screen-svh flex items-center justify-center">
+        <div className="text-center">
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">Error Loading Settings</h1>
+          <p className="text-gray-600 dark:text-gray-400 mb-4">
+            {error instanceof Error ? error.message : "An error occurred"}
+          </p>
+          <button
+            onClick={() => window.location.reload()}
+            className="bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700"
+          >
+            Try Again
+          </button>
         </div>
       </div>
     );
@@ -249,11 +250,13 @@ export default function SettingsPage() {
 
   return (
     <div>
-      <DashboardHeader
+      <DashboardPageHeader
         title={headerTitle}
-        showBackButton
-        showRenewalAlert={hasFailed}
-        onBackClick={() => router.push("/my-account")}
+        sub="Settings"
+        icon={SettingsIcon}
+        stateTheme={dash.stateTheme}
+        showBack
+        onBack={() => router.push(activeSection ? "/my-account/settings" : "/my-account")}
       />
 
       {activeSection === null ? (
@@ -410,6 +413,20 @@ export default function SettingsPage() {
                 </button>
               );
             })}
+
+            {/* Appearance */}
+            <div className="sm:col-span-2 p-4 rounded-2xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900">
+              <div className="flex items-center gap-3 mb-3">
+                <div className="shrink-0 w-10 h-10 rounded-xl flex items-center justify-center bg-neutral-100 dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300">
+                  <Palette className="w-5 h-5" strokeWidth={2} />
+                </div>
+                <div>
+                  <p className="font-poppins font-bold text-base text-neutral-900 dark:text-white">Appearance</p>
+                  <p className="text-xs text-neutral-500 dark:text-neutral-400">Choose how the dashboard looks</p>
+                </div>
+              </div>
+              <ThemePicker />
+            </div>
 
             {/* Sign out card */}
             <button
