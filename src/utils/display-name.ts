@@ -26,3 +26,15 @@ export function formatDisplayName(
   const last = formatNamePart(lastName);
   return [first, last].filter(Boolean).join(" ") || "";
 }
+
+/**
+ * Two-letter monogram initials from first + last name (uppercase).
+ * Falls back to "TA" when no usable letters are present.
+ */
+export function getInitials(
+  firstName: string | undefined | null,
+  lastName?: string | undefined | null
+): string {
+  const initials = `${firstName?.trim()?.[0] ?? ""}${lastName?.trim()?.[0] ?? ""}`.toUpperCase();
+  return initials || "TA";
+}

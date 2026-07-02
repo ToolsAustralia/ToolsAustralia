@@ -6,12 +6,9 @@ import { Trophy, MapPin, ShieldCheck, Facebook } from "lucide-react";
 import { SectionContainer } from "@/components/ui/SectionContainer";
 import { useTilt } from "@/hooks/useTilt";
 import { useMajorDrawWinners, type MajorDrawWinner } from "@/hooks/queries/useWinnersQueries";
+import { getInitials } from "@/utils/display-name";
 
 const ACCENTS = ["#c8102e", "#d9a520", "#ffd200", "#00c2ed", "#ff7a1a"];
-
-function initials(first: string, last: string): string {
-  return `${first?.[0] ?? ""}${last?.[0] ?? ""}`.toUpperCase() || "TA";
-}
 
 function wonLabel(w: MajorDrawWinner): string {
   const iso = w.drawDate ?? w.selectedDate;
@@ -35,7 +32,7 @@ function WinnerCard({ w, accent }: { w: MajorDrawWinner; accent: string }) {
           <Image src={w.imageUrl} alt={`${name} — winner`} fill className="object-cover" sizes="(max-width:640px) 100vw, 360px" />
         ) : (
           <div className="absolute inset-0 grid place-items-center">
-            <span className="font-['Poppins'] text-5xl font-black text-white/85">{initials(w.winnerFirstName, w.winnerLastName)}</span>
+            <span className="font-['Poppins'] text-5xl font-black text-white/85">{getInitials(w.winnerFirstName, w.winnerLastName)}</span>
           </div>
         )}
         <span className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-black/70 to-transparent" />
