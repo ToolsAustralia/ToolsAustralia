@@ -1419,13 +1419,15 @@
 
 /* Horizontal full-width sweep for the dashboard promo banner. Keeps the skew so
    the highlight band stays diagonal while it travels the whole banner width
-   (the 42%-wide band sits at left:-60% and translates 380% of its own width). */
+   (the 42%-wide band sits at left:-60%). Travels 500% of its own width so the
+   band fully clears the right edge by ~76% of the run — the ease-out's slow tail
+   then decelerates OFF-screen, so the shine doesn't visibly "stick" at the end. */
 @keyframes promo-shimmer-sweep {
   0% {
     transform: translateX(0) skewX(-18deg);
   }
   100% {
-    transform: translateX(380%) skewX(-18deg);
+    transform: translateX(500%) skewX(-18deg);
   }
 }
 
