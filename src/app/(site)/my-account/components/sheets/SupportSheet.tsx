@@ -2,7 +2,7 @@
 
 import React from "react";
 import { Headset, Mail, ChevronDown } from "lucide-react";
-import ContactForm from "@/components/features/ContactForm";
+import SupportContactForm from "./SupportContactForm";
 import SheetShell, { SheetHead } from "@/components/ui/SheetShell";
 import { isDashboardFeatureOn } from "@/config/dashboardFeatures";
 import { getContactEmail } from "@/lib/email/sender-identities";
@@ -76,7 +76,7 @@ export function SupportSheetBody() {
         <div className="border-b border-token px-5 py-3">
           <h2 className="font-['Poppins'] text-base font-extrabold text-primary-token dark:text-white">Send us a message</h2>
         </div>
-        <ContactForm />
+        <SupportContactForm />
       </section>
     </div>
   );

@@ -367,6 +367,11 @@ was collapsed into the Claude-design IA:
 - **Sidebar sticky fix:** `overflow-x-hidden` was removed from the `my-account/layout.tsx` flex
   parent (it computed `overflow-y: auto`, becoming the sticky scroll-container and breaking
   `DeskNav`'s `sticky top-0`); the horizontal clip moved to `<main>`.
+- **Support sheet form (2026-07-02):** the embedded site `ContactForm` (its own duplicate title +
+  underline inputs + `MetallicButton` looked off in the sheet) was replaced by a compact
+  `components/sheets/SupportContactForm.tsx` — clean bordered inputs, pill subject selector, red
+  submit — same `/api/contact-submissions` POST + pixel `trackLead`. The site `/contact` `ContactForm`
+  is untouched.
 - **Total sign-out (2026-07-02, resolved):** the Account-settings Sign-out (and the Header /
   AdminSidebar / forced-logout paths) now call `totalSignOut()`
   ([src/utils/auth/total-sign-out.ts](../../src/utils/auth/total-sign-out.ts)), which clears the
