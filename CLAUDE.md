@@ -326,6 +326,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/hooks/useMajorDrawEntryCta.ts",
         "src/hooks/useMajorDrawPurchaseGate.ts",
         "src/hooks/useMiniDrawTrigger.ts",
+        "src/hooks/useMiniDrawPurchase.ts",
         "src/hooks/usePastDrawsData.ts"
       ],
       "lastVerified": "2026-06-19"

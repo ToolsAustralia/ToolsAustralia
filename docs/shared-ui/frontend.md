@@ -63,6 +63,15 @@
 > `bg-gradient-to-br from-red-500 via-red-600 to-red-700`, white `font-black` numbers, `red-100`
 > labels, `ring-1 ring-red-300/30` (accent prop dropped — every cell is gold-topped/red now).
 
+> **Mini-draw entry sheet + shared purchase hook (2026-07-02):** the Draws-tab mini cards now open
+> [`MiniDrawEntrySheet`](../../src/components/sections/draws/MiniDrawEntrySheet.tsx) in place instead of
+> navigating. The mini-draw entry-pack **money path was extracted out of `MiniDrawPackages` into the
+> shared `useMiniDrawPurchase` hook** so the detail page and the sheet share ONE orchestration (same
+> `/api/mini-draw/purchase` endpoint, webhook-confirmed grant, upsell) — `MiniDrawPackages` is now
+> presentation-only and consumes the hook (byte-identical behaviour). `MiniDrawCard` gained an optional
+> `onSelect` (module-level `CardShell` swaps `<Link>`→`<button>`). Full detail in
+> [draws/frontend.md § Mini-draw entry sheet](../draws/frontend.md#mini-draw-entry-sheet-dashboard-draws-tab-2026-07-02).
+
 ## Dashboard sections (2026-07-02)
 
 The member-dashboard revamp adds section-band components under `src/components/sections/dashboard/`

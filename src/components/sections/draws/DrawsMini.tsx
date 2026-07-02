@@ -1,9 +1,11 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { ChevronRight, Ticket, Sparkles, CheckCircle, Trophy } from "lucide-react";
 import { useMiniDraws } from "@/hooks/queries/useMiniDrawQueries";
 import MiniDrawCard, { type MiniDrawCardData } from "@/components/features/MiniDrawCard";
+import MiniDrawEntrySheet from "@/components/sections/draws/MiniDrawEntrySheet";
 
 interface DrawsMiniProps {
   /** Embedded per-user mini-draw participation (from the my-account payload). */
@@ -27,6 +29,14 @@ export default function DrawsMini({ participation, hasActiveMembership }: DrawsM
   // Fetch a wider active set so we can rank the *top* mini draws by fill % below.
   const { data, isLoading } = useMiniDraws({ page: 1, limit: 40, status: "active", sortBy: "createdAt", sortOrder: "desc" });
 
+  // Selected draw → in-place entry-pack purchase sheet (instead of navigating to /mini-draws/[id]).
+  const [selected, setSelected] = useState<MiniDrawCardData | null>(null);
+
+  const entryCountById = new Map<string, number>();
+  (participation ?? []).forEach((p) => {
+    const id = idToString(p.miniDrawId);
+    if (id) entryCountById.set(id, p.totalEntries);
+  });
   const participatingIds = new Set(
     (participation ?? []).filter((p) => p.totalEntries > 0).map((p) => idToString(p.miniDrawId)).filter(Boolean),
   );
@@ -92,7 +102,7 @@ export default function DrawsMini({ participation, hasActiveMembership }: DrawsM
               </h3>
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
                 {mine.map((md, i) => (
-                  <MiniDrawCard key={idToString(md._id)} miniDraw={md as MiniDrawCardData} index={i} />
+                  <MiniDrawCard key={idToString(md._id)} miniDraw={md as MiniDrawCardData} index={i} onSelect={() => setSelected(md as MiniDrawCardData)} />
                 ))}
               </div>
             </>
@@ -106,7 +116,7 @@ export default function DrawsMini({ participation, hasActiveMembership }: DrawsM
               )}
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
                 {others.map((md, i) => (
-                  <MiniDrawCard key={idToString(md._id)} miniDraw={md as MiniDrawCardData} index={i} />
+                  <MiniDrawCard key={idToString(md._id)} miniDraw={md as MiniDrawCardData} index={i} onSelect={() => setSelected(md as MiniDrawCardData)} />
                 ))}
               </div>
             </>
@@ -119,6 +129,15 @@ export default function DrawsMini({ participation, hasActiveMembership }: DrawsM
           View all mini draws <ChevronRight className="h-4 w-4" />
         </Link>
       </div>
+
+      {selected && (
+        <MiniDrawEntrySheet
+          open
+          onClose={() => setSelected(null)}
+          miniDraw={selected}
+          userEntryCount={entryCountById.get(idToString(selected._id)) ?? 0}
+        />
+      )}
     </section>
   );
 }
