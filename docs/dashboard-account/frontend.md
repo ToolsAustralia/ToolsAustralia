@@ -8,10 +8,12 @@
 
 > **Foreman hero/header theme + page-header chrome (2026-07-03):** [`getDashboardStateTheme`](../../src/utils/dashboard/dashboard-state-theme.ts)
 > now special-cases the **gold tier** (Foreman `#ffd200` — the only tier `inkOn` renders with dark ink):
-> the generic `shade()` gradient darkened pure yellow to a dusty olive (`#947a00`) and forced muddy dark
-> ink, so it gets a **purpose-built deep warm-gold gradient + white ink**. The white ink cascades through
-> `DashboardHero`'s existing `ink`/`white` logic → the access ring, tier badge glass, and text all go
-> white/light (fixing the "dusty/dirty" Foreman look). [`DashboardPageHeader`](../../src/app/(site)/my-account/components/DashboardPageHeader.tsx):
+> the generic `shade()` gradient darkened pure yellow to a **dusty olive** (`#947a00`), which is the only
+> thing that looked "dirty". It's replaced with a **bright, vibrant gold** true to the Foreman membership
+> colour, dipping to a warm **amber** (not olive) for depth. **Dark ink is kept** — it's the natural,
+> high-contrast pairing on bright gold (white can't read on it), and the hero's dark decor/radial adds
+> the metallic depth. (An earlier deep-gold + white-ink attempt drifted too dark / off-colour and was
+> reverted.) [`DashboardPageHeader`](../../src/app/(site)/my-account/components/DashboardPageHeader.tsx):
 > the **back chevron was dropped on tab-level pages** (Rewards/`benefits`, `membership` no longer pass
 > `showBack`) — it's only for pages nested under a tab (Settings, opened from the dashboard gear, keeps
 > it); and the `sub` eyebrow is now `whitespace-nowrap` with responsive tracking/size so it never wraps
