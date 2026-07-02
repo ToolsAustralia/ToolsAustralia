@@ -67,8 +67,13 @@ export default function AccountMembershipPage() {
         />
 
         {/* Compact tier list + one-time-pack scroll (matches the prototype MembershipPage),
-            driven by the verified useMembershipCardCta state machine. */}
-        <MembershipTierList cta={cta} isMember={dash.acct === "active"} />
+            driven by the verified useMembershipCardCta state machine. Member tier taps route
+            to the real change-tier flow (Settings → Subscription). */}
+        <MembershipTierList
+          cta={cta}
+          isMember={dash.acct === "active"}
+          onManagePlan={() => router.push("/my-account/settings?tab=subscription")}
+        />
       </div>
 
       <MembershipModal
