@@ -13,15 +13,21 @@ import { useRouter } from "next/navigation";
 import { CreditCard } from "lucide-react";
 import dynamic from "next/dynamic";
 
+import { useQueryClient } from "@tanstack/react-query";
 import { useDashboardState } from "@/hooks/useDashboardState";
 import { useMembershipCardCta } from "@/hooks/useMembershipCardCta";
 import { useDashboardSheetStore } from "@/stores/useDashboardSheetStore";
 import { useSavedPaymentMethods } from "@/hooks/useSavedPaymentMethods";
+import { queryKeys } from "@/lib/queryKeys";
+import type SubscriptionManagementModalType from "@/components/modals/SubscriptionManagementModal";
 import DashboardPageHeader from "../components/DashboardPageHeader";
 import MembershipCurrentPlan from "@/components/sections/account-membership/MembershipCurrentPlan";
 import MembershipTierList from "@/components/sections/account-membership/MembershipTierList";
 
 const MembershipModal = dynamic(() => import("@/components/modals/MembershipModal"), { ssr: false });
+// Heavy money-path flow — mounted only when a tier change is requested.
+const SubscriptionManagementModal = dynamic(() => import("@/components/modals/SubscriptionManagementModal"), { ssr: false });
+type SubMgmtUser = React.ComponentProps<typeof SubscriptionManagementModalType>["user"];
 
 export default function AccountMembershipPage() {
   const { data: session, status } = useSession();
@@ -39,6 +45,17 @@ export default function AccountMembershipPage() {
   const cardLabel = cardMeta
     ? `${cardMeta.brand ? cardMeta.brand.charAt(0).toUpperCase() + cardMeta.brand.slice(1) : "Card"} •••• ${cardMeta.last4}`
     : undefined;
+
+  // Change-tier: tapping a different tier opens the proven orchestrator, pre-targeted
+  // to that tier so it jumps straight to the upgrade/downgrade confirm.
+  const queryClient = useQueryClient();
+  const [changeTierName, setChangeTierName] = React.useState<string | null>(null);
+  const onSubscriptionUpdate = () => {
+    const userId = session?.user?.id;
+    if (!userId) return;
+    void queryClient.invalidateQueries({ queryKey: queryKeys.users.account(userId) });
+    void queryClient.invalidateQueries({ queryKey: queryKeys.users.dashboard(userId) });
+  };
 
   React.useEffect(() => {
     if (status === "loading") return;
@@ -87,6 +104,7 @@ export default function AccountMembershipPage() {
           cta={cta}
           isMember={dash.acct === "active"}
           onManagePlan={() => openSheet("manage")}
+          onChangeTier={(name) => setChangeTierName(name)}
         />
       </div>
 
@@ -96,6 +114,16 @@ export default function AccountMembershipPage() {
         selectedPlan={cta.membershipModal.selectedPlan}
         onPlanChange={cta.membershipModal.selectPlan}
       />
+
+      {dash.user && changeTierName !== null && (
+        <SubscriptionManagementModal
+          isOpen
+          onClose={() => setChangeTierName(null)}
+          user={dash.user as SubMgmtUser}
+          onSubscriptionUpdate={onSubscriptionUpdate}
+          autoSelectPlanName={changeTierName}
+        />
+      )}
     </div>
   );
 }

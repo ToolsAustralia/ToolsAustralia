@@ -356,9 +356,18 @@ was collapsed into the Claude-design IA:
     footguns, see docs/subscription): **update-payment** → `openSheet("payment")`; **cancel** →
     self-contained `CancellationFlowModal` (`onResolvePayment` → past-due modal); **past-due resume**
     → self-contained `RenewalFailedModal` (opening the payment sheet alone does NOT retry the
-    invoice); **change-tier** → the proven `SubscriptionManagementModal` (modal mode) on demand. All
-    delegated modals portal at z-80/90/10000, above the sheet's z-60. `SubscriptionTab.tsx` is now
-    orphaned (kept as the documented type-only-import example; ManageSheet uses the same pattern).
+    invoice); **change-tier** → closes the sheet and routes to the **Membership page tier list**
+    ("See all tiers below"). All delegated modals portal at z-80/90/10000, above the sheet's z-60.
+    `SubscriptionTab.tsx` is now orphaned (kept as the documented type-only-import example).
+- **Tier change (2026-07-02):** on the Membership page, a member tapping a **different** tier in
+  `MembershipTierList` fires `onChangeTier(plan.name)`, which mounts `SubscriptionManagementModal`
+  (modal mode) with **`autoSelectPlanName`** — a new opt-in prop: once benefits load, an effect finds
+  that tier in `availableUpgrades`/`availableDowngrades` (matched by name) and calls the SAME
+  `setSelectedUpgrade`+`setShowUpgradeConfirm` (or downgrade) setters the in-modal click uses, so it
+  jumps straight to the upgrade/downgrade confirm (the confirm's full backdrop hides the orchestrator
+  behind it). Unmatched / current-tier taps fall through to the normal modal view. The prop is opt-in,
+  so all other `SubscriptionManagementModal` callers are byte-identical. Tapping the **current** tier
+  → `onManagePlan` (opens the Manage sheet).
 - **Openers** (all via `useDashboardSheetStore.openSheet`): `MembershipCurrentPlan` Manage/Payment
   rows, `MembershipTierList` member tap, the hero/RewardsPartnerCard past-due "Update payment", all
   → `manage`; the payment row → `payment`. The global `Header` "Manage" (`/my-account?open=subscription`)

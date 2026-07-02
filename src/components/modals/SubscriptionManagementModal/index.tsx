@@ -77,6 +77,14 @@ interface SubscriptionManagementModalProps {
    * (MembershipStatus) and SettingsModal never set this → byte-identical.
    */
   settingsRedesign?: boolean;
+  /**
+   * Auto-open the upgrade/downgrade confirm for this tier NAME once benefits
+   * load — used when a member taps a tier in the Membership tier list, so they
+   * skip the in-modal list and go straight to the confirm. Matched
+   * case-insensitively against `availableUpgrades` / `availableDowngrades`;
+   * unmatched (or the current tier) falls through to the normal modal view.
+   */
+  autoSelectPlanName?: string;
 }
 
 const SubscriptionManagementModal: React.FC<SubscriptionManagementModalProps> = ({
@@ -87,6 +95,7 @@ const SubscriptionManagementModal: React.FC<SubscriptionManagementModalProps> = 
   membershipModal: parentMembershipModal,
   renderAsPanel = false,
   settingsRedesign = false,
+  autoSelectPlanName,
 }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [showCancellationFlow, setShowCancellationFlow] = useState(false);
@@ -261,6 +270,30 @@ const SubscriptionManagementModal: React.FC<SubscriptionManagementModalProps> = 
       }
     };
   }, [isOpen, renderAsPanel, onClose, user.subscription?.isActive, fetchSubscriptionBenefits]);
+
+  // Auto-open the upgrade/downgrade confirm for a tier tapped in the Membership
+  // tier list (`autoSelectPlanName`). Fires once per open, after benefits load;
+  // reuses the exact same setters as the in-modal onSelectUpgrade/Downgrade.
+  const autoSelectHandledRef = useRef(false);
+  useEffect(() => {
+    if (!isOpen) {
+      autoSelectHandledRef.current = false;
+      return;
+    }
+    if (autoSelectHandledRef.current || !autoSelectPlanName || !subscriptionBenefits) return;
+    const name = autoSelectPlanName.trim().toLowerCase();
+    const up = subscriptionBenefits.availableUpgrades.find((u) => u.name.trim().toLowerCase() === name);
+    const down = subscriptionBenefits.availableDowngrades.find((d) => d.name.trim().toLowerCase() === name);
+    if (up) {
+      autoSelectHandledRef.current = true;
+      setSelectedUpgrade(up);
+      setShowUpgradeConfirm(true);
+    } else if (down) {
+      autoSelectHandledRef.current = true;
+      setSelectedDowngrade(down);
+      setShowDowngradeConfirm(true);
+    }
+  }, [isOpen, autoSelectPlanName, subscriptionBenefits]);
 
   // Active subscription: either isActive=true OR past_due with autoRenew=true (failed renewal)
   // This allows us to show subscription details for past_due subscriptions

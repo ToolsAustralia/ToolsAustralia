@@ -1,32 +1,26 @@
 "use client";
 
-import React, { useState } from "react";
+import { useState } from "react";
 import Image from "next/image";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { useQueryClient } from "@tanstack/react-query";
 import { CreditCard, ChevronRight, RefreshCw, Package } from "lucide-react";
-import type SubscriptionManagementModalType from "@/components/modals/SubscriptionManagementModal";
 import SheetShell, { SheetHead } from "@/components/ui/SheetShell";
 import { useDashboardSheetStore } from "@/stores/useDashboardSheetStore";
 import { useDashboardState } from "@/hooks/useDashboardState";
 import { useMyAccountData } from "@/hooks/queries";
 import { useSavedPaymentMethods } from "@/hooks/useSavedPaymentMethods";
-import { useMembershipModal } from "@/hooks/useMembershipModal";
 import { queryKeys } from "@/lib/queryKeys";
 import { glossGrad, inkOn } from "@/utils/membership/tier-visuals";
 import { getPackageIcon } from "@/utils/images/package-icons";
 import { getFallbackRenewalDate } from "@/utils/dates/month-helpers";
 import { cn } from "@/utils/cn";
 
-// Heavy money-path flows — loaded on demand, reused as-is (no re-implementation).
-const SubscriptionManagementModal = dynamic(() => import("@/components/modals/SubscriptionManagementModal"), { ssr: false });
+// Self-contained money-path flows — loaded on demand, reused as-is.
 const CancellationFlowModal = dynamic(() => import("@/components/modals/CancellationFlowModal"), { ssr: false });
 const RenewalFailedModal = dynamic(() => import("@/components/modals/RenewalFailedModal"), { ssr: false });
-const MembershipModal = dynamic(() => import("@/components/modals/MembershipModal"), { ssr: false });
-
-type SubMgmtUser = React.ComponentProps<typeof SubscriptionManagementModalType>["user"];
 
 function ActionRow({ icon: Icon, label, value, onClick }: { icon: typeof CreditCard; label: string; value?: string; onClick: () => void }) {
   return (
@@ -52,8 +46,8 @@ function ActionRow({ icon: Icon, label, value, onClick }: { icon: typeof CreditC
  * payment method → Change tier → Cancel membership), bottom-sheet on mobile /
  * popup on desktop. Update-payment opens the Payment sheet; cancel renders the
  * self-contained CancellationFlowModal; past-due resume renders RenewalFailedModal;
- * change-tier delegates to the proven SubscriptionManagementModal (its
- * upgrade/downgrade wiring can't be safely re-implemented — see docs/subscription).
+ * change-tier routes to the Membership page tier list (tapping a tier there opens
+ * the upgrade/downgrade confirm via the orchestrator — see membership/page.tsx).
  */
 export default function ManageSheet() {
   const sheet = useDashboardSheetStore((s) => s.sheet);
@@ -63,11 +57,9 @@ export default function ManageSheet() {
   const { data: session } = useSession();
   const { data: accountData } = useMyAccountData(session?.user?.id);
   const dash = useDashboardState();
-  const membershipModal = useMembershipModal();
   const queryClient = useQueryClient();
   const { paymentMethods, subscriptionDefaultPaymentMethodId } = useSavedPaymentMethods();
 
-  const [changeTierOpen, setChangeTierOpen] = useState(false);
   const [cancelOpen, setCancelOpen] = useState(false);
   const [pastDueOpen, setPastDueOpen] = useState(false);
 
@@ -166,7 +158,15 @@ export default function ManageSheet() {
               )}
 
               <ActionRow icon={CreditCard} label="Update payment method" value={cardLabel} onClick={() => openSheet("payment")} />
-              <ActionRow icon={Package} label="Change tier" value="Upgrade or downgrade your plan" onClick={() => setChangeTierOpen(true)} />
+              <ActionRow
+                icon={Package}
+                label="Change tier"
+                value="See all tiers below"
+                onClick={() => {
+                  closeSheet();
+                  router.push("/my-account/membership");
+                }}
+              />
 
               {isActive && (
                 <button
@@ -197,18 +197,6 @@ export default function ManageSheet() {
         </div>
       </SheetShell>
 
-      {/* Change tier — delegate to the proven orchestrator (its upgrade/downgrade
-          Stripe wiring is the source of truth). */}
-      {user && (changeTierOpen || membershipModal.isModalOpen) && (
-        <SubscriptionManagementModal
-          isOpen={changeTierOpen}
-          onClose={() => setChangeTierOpen(false)}
-          user={user as SubMgmtUser}
-          membershipModal={membershipModal}
-          onSubscriptionUpdate={onSubscriptionUpdate}
-        />
-      )}
-
       {/* Cancel — self-contained retention + cancel flow. */}
       {cancelOpen && (
         <CancellationFlowModal
@@ -229,16 +217,6 @@ export default function ManageSheet() {
 
       {/* Past-due resume — self-contained pay-failed-invoice flow. */}
       {pastDueOpen && <RenewalFailedModal isOpen={pastDueOpen} onClose={() => setPastDueOpen(false)} />}
-
-      {(changeTierOpen || membershipModal.isModalOpen) && (
-        <MembershipModal
-          isOpen={membershipModal.isModalOpen}
-          onClose={membershipModal.closeModal}
-          selectedPlan={membershipModal.selectedPlan}
-          onPlanChange={membershipModal.selectPlan}
-          membershipModalConfig={membershipModal.openWithPackageSelectionFirst ? { showPackageSelectionFirst: true } : undefined}
-        />
-      )}
     </>
   );
 }

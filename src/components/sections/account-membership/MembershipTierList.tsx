@@ -12,10 +12,12 @@ import { getPartnerCatalogAccessPercentForPlanId } from "@/utils/partner-discoun
 
 interface MembershipTierListProps {
   cta: MembershipCardCta;
-  /** Active member → "Change your tier" + tier clicks route to the Manage flow. */
+  /** Active member → "Change your tier"; tapping a DIFFERENT tier opens the change flow. */
   isMember: boolean;
-  /** Route to the change-tier / manage flow (Settings → Subscription). */
+  /** Member taps the CURRENT tier → open the manage flow (billing). */
   onManagePlan: () => void;
+  /** Member taps a DIFFERENT tier → open the upgrade/downgrade confirm for that tier name. */
+  onChangeTier?: (planName: string) => void;
 }
 
 const RANK: Record<string, number> = { tradie: 0, foreman: 1, boss: 2 };
@@ -26,7 +28,7 @@ const RANK: Record<string, number> = { tradie: 0, foreman: 1, boss: 2 };
  * (`getPackageColorScheme` / `getPackageIcon`); base-entry strikethrough when a
  * promo multiplier is live; upgrade badge only for tiers above the current one.
  */
-export default function MembershipTierList({ cta, isMember, onManagePlan }: MembershipTierListProps) {
+export default function MembershipTierList({ cta, isMember, onManagePlan, onChangeTier }: MembershipTierListProps) {
   const currentPlan = cta.membershipPlans.find((p) => cta.ctaLabelFor(p) === "Current Plan");
   const currentRank = currentPlan ? RANK[tierKeyFromName(currentPlan.name)] ?? -1 : -1;
 
@@ -53,7 +55,7 @@ export default function MembershipTierList({ cta, isMember, onManagePlan }: Memb
               <button
                 key={plan.id}
                 type="button"
-                onClick={() => (isMember ? onManagePlan() : cta.onSelect(plan))}
+                onClick={() => (isMember ? (isCurrent ? onManagePlan() : onChangeTier?.(plan.name)) : cta.onSelect(plan))}
                 className={cn(
                   "flex items-center gap-3 rounded-[1.1rem] border bg-surface p-[15px] text-left shadow-sm transition-transform focus:outline-none focus-visible:ring-2 focus-visible:ring-red-600 motion-safe:active:translate-y-px",
                   isCurrent ? "border-[1.5px]" : "border-token",

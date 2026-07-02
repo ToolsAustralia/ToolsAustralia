@@ -29,6 +29,12 @@
 > `useSavedPaymentMethods`) — replacing the flat icon+label rows; the redundant in-gradient "Renews …
 > cancel anytime" line was dropped.
 
+> **Tier-change auto-select (2026-07-02):** `SubscriptionManagementModal` gained an **opt-in**
+> `autoSelectPlanName` prop — once benefits load it opens the upgrade/downgrade confirm for that tier
+> (matched by name), reusing the existing `setSelectedUpgrade`+`setShowUpgradeConfirm` setters, so
+> other callers stay byte-identical. `MembershipTierList` gained `onChangeTier(planName)` (member taps
+> a different tier). Full flow in [dashboard-account/frontend.md](../dashboard-account/frontend.md).
+
 ## Dashboard sections (2026-07-02)
 
 The member-dashboard revamp adds section-band components under `src/components/sections/dashboard/`
