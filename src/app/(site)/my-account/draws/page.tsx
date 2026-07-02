@@ -77,9 +77,9 @@ export default function DrawsPage() {
 
       {drawType === "major" ? (
         <>
-          <DrawsMajorHero drawName={dash.drawName} drawStatus={dash.drawStatus} />
-          <div className="px-[18px] pb-2 sm:px-6 lg:px-[26px]">
-            <div className="-mt-[34px] space-y-4">
+          <DrawsMajorHero />
+          <div className="px-[18px] pb-2 pt-4 sm:px-6 lg:px-[26px]">
+            <div className="space-y-4">
               {dash.acct !== "none" && (
                 <EntryWallet
                   acct={dash.acct}

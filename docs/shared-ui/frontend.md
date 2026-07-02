@@ -40,6 +40,12 @@
 > truly-claimable rewards (`isRedeemableNow`, not locked/paused) — that opens a claimables `SheetShell`
 > overlay holding the Claim buttons. "Recently claimed" stays inline.
 
+> **DrawsMajorHero — dropped status row + overlap (2026-07-02):** removed the "Live · {draw} · Drawn
+> 8:30 PM AEST" status row (redundant with the Draws toggle bar); the prize showcase (tagline / title /
+> Setup-vs-$10k picker / checklist / "View this promotion") stays, and its `drawName`/`drawStatus`
+> props are gone. The draws page dropped the entries card's `-mt-[34px]` overlap (now `pt-4`) — that
+> negative margin had been covering the "View this promotion" button with "Your entries".
+
 ## Dashboard sections (2026-07-02)
 
 The member-dashboard revamp adds section-band components under `src/components/sections/dashboard/`

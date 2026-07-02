@@ -401,6 +401,11 @@ Rebuilds `/my-account/draws` to a **Major / Mini `Seg` toggle**. Spec:
   `EntryWallet` → `DashboardPromoBanner` → "Get more entries" → `DrawHowItWorks` → `DrawWinners`) or
   **mini** (`DrawsMini`). Flagged-for-deletion (kept, shared): `PrizeShowcase`, `MembershipSection`,
   `LatestWinnerHero`, `WinnersTestimony`, `MajorDrawHeaderStrip`.
+  > _Update 2026-07-02:_ `DrawsMajorHero` dropped its "Live · {draw} · Drawn 8:30 PM AEST" status row
+  > (redundant with the Draws toggle bar) and its `drawName`/`drawStatus` props; the draws page
+  > dropped the entries card's `-mt-[34px]` overlap (→ `pt-4`) that had covered "View this promotion"
+  > with "Your entries".
+
 - **Sections `src/components/sections/draws/`**: `DrawsMajorHero` (prize picker setup vs $10k cash
   via `usePrizeCatalog` + `resolvePrize("cash-prize")`, live countdown, "View this promotion" →
   `/promotions`), `DrawHowItWorks` (static 3 steps), `DrawWinners` (`useMajorDrawWinners`, monogram
