@@ -1,8 +1,8 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import Image from "next/image";
-import { Sparkles, Clock, CalendarClock } from "lucide-react";
+import { Sparkles, Clock, CalendarClock, ChevronDown } from "lucide-react";
 import AccessRing from "@/components/ui/AccessRing";
 import { useLeafTimer } from "@/hooks/useLeafTimer";
 import { usePartnerDiscountQueue } from "@/hooks/queries/usePartnerDiscountQueue";
@@ -10,6 +10,7 @@ import { derivePlanIdFromPackage, getMembershipSectionColorScheme } from "@/util
 import { getPartnerCatalogAccessPercentForPlanId } from "@/utils/partner-discounts/partner-catalog-visibility";
 import { getPackageIconByName } from "@/utils/images/package-icons";
 import { inkOn } from "@/utils/membership/tier-visuals";
+import { cn } from "@/utils/cn";
 
 type Source = "membership" | "subscription" | "one-time" | "mini-draw" | "upsell";
 
@@ -21,8 +22,11 @@ const SOURCE_LABEL: Record<string, string> = {
   upsell: "Upsell",
 };
 
-/** Drop the internal "Additional " prefix for display (icon/theme resolution is substring-based). */
-const cleanName = (n: string | null | undefined) => (n ?? "").replace(/^additional\s+/i, "").trim();
+/** Display name: drop the internal "Additional " prefix + the trailing "(Mini Draw)" /
+ *  "(Major Draw)" scope suffix (icon/theme resolution is substring-based, so this is
+ *  display-only). Keeps the row short so the tier name doesn't truncate mid-word. */
+const cleanName = (n: string | null | undefined) =>
+  (n ?? "").replace(/^additional\s+/i, "").replace(/\s*\([^)]*\)\s*$/, "").trim();
 
 const fmtDay = (d: Date) => new Date(d).toLocaleDateString("en-AU", { day: "numeric", month: "long" });
 
@@ -47,6 +51,8 @@ function packMeta(name: string, source: Source) {
 export default function RewardsPartnerQueue() {
   const { data, isLoading } = usePartnerDiscountQueue();
   const now = useLeafTimer(1000);
+  // Collapsed by default so the section doesn't push the rest of the page down.
+  const [open, setOpen] = useState(false);
 
   const model = useMemo(() => {
     if (!data) return null;
@@ -90,16 +96,29 @@ export default function RewardsPartnerQueue() {
 
   return (
     <section className="overflow-hidden rounded-3xl border border-token bg-surface shadow-sm">
-      <div className="flex items-center justify-between gap-3 px-4 pt-4 sm:px-5">
-        <span className="text-[11px] font-bold uppercase tracking-[0.18em] text-muted-token">Partner discount queue</span>
-        {upNext.length > 0 && (
-          <span className="rounded-full border border-amber-400/40 px-2.5 py-1 text-[11px] font-bold text-amber-600 dark:text-amber-400">
-            {upNext.length} queued
-          </span>
-        )}
-      </div>
+      {/* Collapsible header — glanceable summary + chevron (collapsed by default). */}
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+        className="flex w-full items-center justify-between gap-3 px-4 py-3.5 text-left transition-colors hover:bg-black/[.02] sm:px-5 dark:hover:bg-white/[.04]"
+      >
+        <div className="min-w-0">
+          <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-muted-token">Partner discount queue</div>
+          <div className="mt-0.5 truncate text-[13px] font-semibold">
+            {active ? (
+              <><span className="text-primary-token dark:text-white">{active.name}</span><span className="text-muted-token"> · {active.pct}% active</span></>
+            ) : (
+              <span className="text-muted-token">No pack active</span>
+            )}
+            {upNext.length > 0 && <span className="text-muted-token"> · {upNext.length} queued</span>}
+          </div>
+        </div>
+        <ChevronDown className={cn("h-5 w-5 shrink-0 text-muted-token transition-transform", open && "rotate-180")} />
+      </button>
 
-      <div className="space-y-4 p-4 sm:p-5">
+      {open && (
+      <div className="space-y-4 border-t border-token p-4 sm:p-5">
         {/* Active pack — tier-themed, live countdown, catalogue-% ring */}
         {active && (() => {
           const ink = inkOn(active.accent);
@@ -159,7 +178,7 @@ export default function RewardsPartnerQueue() {
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-1.5">
                       <span className="truncate text-[13px] font-extrabold text-primary-token dark:text-white">{it.name}</span>
-                      <span className="shrink-0 rounded-full px-1.5 py-0.5 text-[9.5px] font-black" style={{ background: `${it.accent}1f`, color: it.accent }}>{it.pct}%</span>
+                      <span className="shrink-0 rounded-full px-1.5 py-0.5 text-[9.5px] font-black" style={{ background: it.accent, color: inkOn(it.accent) }}>{it.pct}%</span>
                     </div>
                     <div className="mt-0.5 truncate text-[11px] font-semibold text-muted-token">
                       Activates in ~{it.activatesInDays}d · {fmtDay(it.activationDate)}
@@ -178,6 +197,7 @@ export default function RewardsPartnerQueue() {
           <span><b className="num text-primary-token dark:text-white">{totalQueued} {totalQueued === 1 ? "day" : "days"}</b> queued · access runs through <b className="text-primary-token dark:text-white">{fmtDay(accessThrough)}</b></span>
         </div>
       </div>
+      )}
     </section>
   );
 }

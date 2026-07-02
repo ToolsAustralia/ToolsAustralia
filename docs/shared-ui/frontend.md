@@ -143,7 +143,11 @@ window. The per-item **"activates in ~Xd · date"** and footer **"access runs th
 client-side (active remainder + cumulative queued durations) — the API returns queued items in activation
 (highest-%) order. The up-next list lives in its own `max-h-[248px] overflow-y-auto` box so the section
 never runs away vertically. Renders `null` when there's no active pack and nothing queued. Mounted on the
-Rewards page for non-guest accounts.
+Rewards page for non-guest accounts. **Collapsed by default** (a clickable header with a glanceable
+summary — active pack · % · N queued — + a chevron) so it doesn't push the page down; the active card /
+explainer / up-next / footer are gated on expand. The up-next **% chip is a solid tier-accent chip with
+`inkOn` auto-contrast text** (a pale-tint + accent-text chip was unreadable for light tiers like Tradie),
+and `cleanName` also strips the trailing "(Mini Draw)" scope suffix so tier names don't truncate mid-word.
 
 ### RewardsMilestones — package-themed header (2026-07-03)
 
