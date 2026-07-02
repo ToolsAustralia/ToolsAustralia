@@ -8,6 +8,7 @@ import { useUserMajorDrawStats, useCurrentMajorDraw } from "@/hooks/queries/useM
 import { useDashboardEntryDisplay } from "@/hooks/useDashboardEntryDisplay";
 import { useResolvedMultiplier } from "@/hooks/queries/usePromoQueries";
 import { getActivePackage, type ActivePackageUserInput } from "@/utils/membership/get-active-package";
+import { hasAdditionalPackageAccess } from "@/utils/membership/has-additional-package-access";
 import { hasFailedRenewal } from "@/utils/subscription/subscription-helpers";
 import { TIER_HEX, tierKeyFromName, type TierKey } from "@/utils/membership/tier-visuals";
 import { derivePlanIdFromPackage } from "@/utils/package-colors/packageColorScheme";
@@ -32,8 +33,10 @@ export interface DashboardStateResult {
   tierHex: string | null;
   tierLabel: string | null;
   stateTheme: DashboardStateTheme;
-  /** Resolved promo multiplier (1 when no promo is live). */
+  /** Effective promo multiplier for the packages this user buys (1 when none). */
   multiplier: number;
+  /** Whether the user gets 50%-off Additional packages (members / current-draw entrants). */
+  hasAdditionalAccess: boolean;
   entries: { total: number; membership: number; oneTime: number };
   /** Partner-catalogue access % for the hero ring (0 when locked). */
   partnerAccessPct: number;
@@ -72,9 +75,12 @@ export function useDashboardState(): DashboardStateResult {
   const { data: accountData, isLoading: accountLoading } = useMyAccountData(userId);
   const { data: majorDrawStats, isLoading: statsLoading } = useUserMajorDrawStats(userId);
   const { data: currentMajorDraw, isLoading: drawLoading } = useCurrentMajorDraw();
-  // The dashboard promo card + "Packages" quick-tile both sell one-time packages,
-  // so the multiplier shown is the one-time-packages promo (not membership).
-  const resolvedMultiplier = useResolvedMultiplier("one-time-packages", "display");
+  // Members with Additional-package access buy Additional packages (50% of the
+  // one-time price), whose promo multiplier is the MEMBERSHIP-packages promo —
+  // everyone else buys public one-time packages (one-time-packages promo).
+  // Mirrors PromoBanner's `effectivePromoTypeForBanner` resolution.
+  const membershipMultiplier = useResolvedMultiplier("membership-packages", "display");
+  const oneTimeMultiplier = useResolvedMultiplier("one-time-packages", "display");
 
   const isDrawCompleted = currentMajorDraw?.status === "completed";
   const entriesDisplay = useDashboardEntryDisplay(majorDrawStats, { isDrawCompleted: Boolean(isDrawCompleted) });
@@ -91,7 +97,8 @@ export function useDashboardState(): DashboardStateResult {
         tierHex: null,
         tierLabel: null,
         stateTheme: getDashboardStateTheme("none"),
-        multiplier: resolvedMultiplier && resolvedMultiplier > 0 ? resolvedMultiplier : 1,
+        multiplier: oneTimeMultiplier && oneTimeMultiplier > 0 ? oneTimeMultiplier : 1,
+        hasAdditionalAccess: false,
         entries: { total: 0, membership: 0, oneTime: 0 },
         partnerAccessPct: 0,
         partnerAccessExpiryLabel: null,
@@ -111,6 +118,13 @@ export function useDashboardState(): DashboardStateResult {
     const hasActiveOneTime = activePackage.source === "one-time" && activePackage.isActive;
 
     const acct = deriveDashboardAccountState({ hasActiveMembership, isPastDue, hasActiveOneTime });
+
+    // Additional-package (50%-off) access = active sub OR current-draw entries.
+    const hasAdditionalAccess = hasAdditionalPackageAccess(user, majorDrawStats ?? undefined);
+    // Members (active subscription) buy Additional packs → membership multiplier;
+    // everyone else buys public one-time packs → one-time multiplier (RULE 1).
+    const rawMultiplier = hasActiveMembership ? membershipMultiplier : oneTimeMultiplier;
+    const multiplier = rawMultiplier && rawMultiplier > 0 ? rawMultiplier : 1;
 
     const tierKey =
       activePackage.packageData?.name ? tierKeyFromName(activePackage.packageData.name) : null;
@@ -143,7 +157,8 @@ export function useDashboardState(): DashboardStateResult {
       tierHex,
       tierLabel,
       stateTheme: getDashboardStateTheme(acct, tierHex),
-      multiplier: resolvedMultiplier && resolvedMultiplier > 0 ? resolvedMultiplier : 1,
+      multiplier,
+      hasAdditionalAccess,
       entries: {
         total: entriesDisplay.currentDrawEntries,
         membership: entriesDisplay.membershipEntries,
@@ -163,7 +178,9 @@ export function useDashboardState(): DashboardStateResult {
     accountLoading,
     statsLoading,
     drawLoading,
-    resolvedMultiplier,
+    membershipMultiplier,
+    oneTimeMultiplier,
+    majorDrawStats,
     entriesDisplay.currentDrawEntries,
     entriesDisplay.membershipEntries,
     entriesDisplay.oneTimeEntries,

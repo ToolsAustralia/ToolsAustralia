@@ -35,9 +35,8 @@ export default function MyAccountLayout({ children }: { children: React.ReactNod
         tierHex={tierHex}
       />
 
-      <main className="min-w-0 flex-1 pb-16 lg:pb-0">
-        <div className="mx-auto w-full max-w-[1180px]">{children}</div>
-      </main>
+      {/* Content is flush against the sidebar (no centering gap), matching the prototype. */}
+      <main className="min-w-0 flex-1 pb-16 lg:pb-0">{children}</main>
 
       <BottomNav />
     </div>

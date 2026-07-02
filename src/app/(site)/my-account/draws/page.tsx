@@ -83,15 +83,14 @@ export default function DrawsPage() {
             {dash.acct !== "none" && (
               <EntryWallet
                 acct={dash.acct}
-                entries={dash.entries}
+                entries={{ membership: dash.entries.membership, oneTime: dash.entries.oneTime }}
                 tierHex={dash.tierHex}
                 drawName={dash.drawName}
                 drawDateIso={dash.drawDateIso}
                 drawStatus={dash.drawStatus}
-                onResolvePayment={() => router.push("/my-account/settings?tab=subscription")}
               />
             )}
-            <DashboardPromoBanner multiplier={dash.multiplier} onGetPackage={() => openEntryFlow()} />
+            <DashboardPromoBanner multiplier={dash.multiplier} hasAdditionalAccess={dash.hasAdditionalAccess} onGetPackage={() => openEntryFlow()} />
             <button
               type="button"
               onClick={() => openEntryFlow()}

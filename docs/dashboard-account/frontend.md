@@ -360,3 +360,25 @@ Closes the Settings gaps + finishes shell consistency. Spec:
   `MajorDrawHeaderStrip.tsx` (old draws only).
 - **Flagged to verify (not modified — money path):** billing-history tab inside the shared
   `SubscriptionManagementModal` / `PaymentMethodsTab` — the design removes billing history.
+
+## Dashboard home — pixel-fidelity rework (2026-07-02)
+
+Reworked the home to match the Claude prototype (`ConceptHub` mobile + `ConceptHubDesktop` desktop) 1:1:
+
+- **Flush layout:** `layout.tsx` no longer centers content in a `max-w` wrapper — the content sits flush against the desktop sidebar (prototype behavior).
+- **DashboardHero:** responsive — desktop is a single row (monogram + greeting + **inline** tier chip + `AccessRing` + Reward-portal, **no gear**); mobile is two rows (+ gear). Keeps our existing `AccessRing` (preferred over the prototype's).
+- **EntryWallet:** desktop 2-column card (number + split bar + legend │ divider │ "Draw closes in" + `CDBox` cells); mobile stacks (countdown below a hairline). Headline total = membership + one-time (never contradicts the legend). Removed the projected/resolve extras (prototype shows the plain total + a separate ribbon).
+- **DashboardAlertRibbon (new):** past-due (amber) / one-time (teal) ribbon above the wallet.
+- **QuickActionsGrid + `QuickTile`:** glossy `linear-gradient(158deg,…)` chips with the prototype `CT` palette ([tile-colors.ts](../../src/utils/dashboard/tile-colors.ts)); mobile 4-col/8 tiles (adds Partners+Support), desktop 3-col/6 tiles.
+- **PartnerPreview:** access ring + prototype `DealRow` (letter badge · name · **category** · offer). Added a canonical `category` to `PARTNER_BRAND_OFFERS`.
+- **DashboardPromoBanner:** "50% off one-time packages" restored — it is the **real** member-only **Additional packages** benefit (50% of the one-time price; `hasAdditionalPackageAccess`). Gated on `hasAdditionalAccess`; palette escalates with the live multiplier + "Ends in HH:MM:SS" (next AEST midnight).
+
+### Access-aware multiplier (important logic fix)
+`useDashboardState` now resolves the multiplier per the canonical rule (mirrors `PromoBanner`
+`effectivePromoTypeForBanner` + `getEffectivePromoType`): **active subscription → membership-packages
+multiplier** (members buy Additional packs); **everyone else → one-time-packages multiplier**. It also
+exposes `hasAdditionalAccess` (active sub OR current-draw entries) which gates the real "50% off"
+copy. Previously it used the one-time multiplier for everyone — wrong for members.
+
+> **Verify before launch:** the loyalty-streak "+250 free entries at 6 months" figure is the design's
+> stated milestone — confirm the exact reward against the real `MilestoneReward` config.

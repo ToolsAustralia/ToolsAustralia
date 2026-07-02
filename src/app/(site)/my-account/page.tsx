@@ -38,14 +38,14 @@ import {
   isLandingCooldownActive,
 } from "@/utils/dashboard-landing-session";
 import { useDashboardLandingOrchestration } from "@/hooks/useDashboardLandingOrchestration";
-import { getFallbackRenewalDate } from "@/utils/dates/month-helpers";
 import { useMemberships } from "@/hooks/useMemberships";
 import RewardsFloatingWidget from "@/components/features/RewardsFloatingWidget";
 import { useDashboardState } from "@/hooks/useDashboardState";
 import { useRedeemablesWallet } from "@/hooks/queries/useRedeemablesQueries";
 
 import DashboardHero from "@/components/sections/dashboard/DashboardHero";
-import EntryWallet, { type EntryWalletPendingData } from "@/components/sections/dashboard/EntryWallet";
+import EntryWallet from "@/components/sections/dashboard/EntryWallet";
+import DashboardAlertRibbon from "@/components/sections/dashboard/DashboardAlertRibbon";
 import DashboardPromoBanner from "@/components/sections/dashboard/DashboardPromoBanner";
 import LoyaltyStreak from "@/components/sections/dashboard/LoyaltyStreak";
 import QuickActionsGrid from "@/components/sections/dashboard/QuickActionsGrid";
@@ -58,7 +58,7 @@ export default function MyAccountPage() {
   const { data: accountData, isLoading: loading, error } = useMyAccountData(session?.user?.id);
 
   const { data: majorDrawStats, isLoading: majorDrawStatsLoading } = useUserMajorDrawStats(session?.user?.id);
-  const { data: currentMajorDraw, isLoading: currentMajorDrawLoading } = useCurrentMajorDraw();
+  const { isLoading: currentMajorDrawLoading } = useCurrentMajorDraw();
 
   const dash = useDashboardState();
 
@@ -257,43 +257,7 @@ export default function MyAccountPage() {
   }
 
   const { user } = accountData;
-  const hasActiveMembership = user?.subscription?.isActive === true;
   const hasAccessToAdditionalPackages = hasAdditionalPackageAccess(accountData?.user || null, majorDrawStats);
-  const membershipPackage = activePackage?.source === "subscription" ? activePackage.packageData : null;
-  const isCompleted = currentMajorDraw?.status === "completed";
-  const userSubscription = user.subscription as { lastMonthAccumulatedEntries?: number } | undefined;
-
-  // Pending-renewal projection (member/failed-renewal with no membership entries yet).
-  const getPendingEntries = (): EntryWalletPendingData | null => {
-    if (majorDrawStatsLoading || !majorDrawStats) return null;
-    const membershipEntriesInDraw = majorDrawStats?.membershipEntries ?? 0;
-    const displayedMembershipEntries = isCompleted ? 0 : majorDrawStats?.membershipEntries ?? 0;
-    if (membershipEntriesInDraw !== 0 || displayedMembershipEntries !== 0) return null;
-
-    const isEligibleActive = hasActiveMembership;
-    const isEligibleFailedRenewal = hasFailedRenewal(user as unknown as import("@/models/User").IUser);
-    if (!isEligibleActive && !isEligibleFailedRenewal) return null;
-
-    let expectedEntries = 0;
-    if (membershipPackage && membershipPackage.type === "subscription" && "entriesPerMonth" in membershipPackage) {
-      const baseEntries = (membershipPackage as { entriesPerMonth?: number }).entriesPerMonth || 0;
-      const lastAccumulated = userSubscription?.lastMonthAccumulatedEntries ?? baseEntries;
-      expectedEntries = lastAccumulated + baseEntries;
-    } else if (userSubscription?.lastMonthAccumulatedEntries) {
-      expectedEntries = userSubscription.lastMonthAccumulatedEntries;
-    }
-
-    const sub = user.subscription as { endDate?: Date | string; startDate?: Date | string } | undefined;
-    let renewalDate: Date | null = null;
-    if (sub) {
-      if (sub.endDate) renewalDate = new Date(sub.endDate);
-      else if (!isEligibleFailedRenewal && sub.startDate) renewalDate = getFallbackRenewalDate(new Date(sub.startDate));
-    }
-
-    return { expectedEntries, renewalDate, isFailedRenewal: isEligibleFailedRenewal };
-  };
-
-  const pendingEntriesData = getPendingEntries();
 
   const onResolvePayment = () => router.push("/my-account/settings?tab=subscription");
   const onBecomeMember = () => whenGatesOpenElseGateModal(() => membershipModal.openModal());
@@ -318,49 +282,57 @@ export default function MyAccountPage() {
       />
 
       {dash.acct === "none" ? (
-        <div className="px-4 pt-4 sm:px-6">
+        <div className="px-[18px] pt-4 sm:px-6 lg:px-[26px] lg:pt-[26px]">
           <DashboardGuestPanel drawName={dash.drawName} onBecomeMember={onBecomeMember} onBuyPackage={onBuyPackage} />
         </div>
       ) : (
-        <div className="px-4 pt-4 sm:px-6 lg:grid lg:grid-cols-[1.7fr_1fr] lg:items-start lg:gap-6">
-          <div className="space-y-4">
-            <EntryWallet
-              acct={dash.acct}
-              entries={dash.entries}
-              tierHex={dash.tierHex}
-              drawName={dash.drawName}
-              drawDateIso={dash.drawDateIso}
-              drawStatus={dash.drawStatus}
-              pending={pendingEntriesData}
-              onResolvePayment={onResolvePayment}
-            />
-            <DashboardPromoBanner multiplier={dash.multiplier} onGetPackage={onGetPackage} />
-            <PartnerPreview acct={dash.acct} expiryLabel={dash.partnerAccessExpiryLabel} />
-          </div>
+        <div className="px-[18px] sm:px-6 lg:px-[26px] lg:pt-[26px]">
+          <div className="-mt-8 lg:mt-0 lg:grid lg:grid-cols-[1.7fr_1fr] lg:items-start lg:gap-[22px]">
+            {/* main column */}
+            <div className="space-y-4 lg:space-y-5">
+              <DashboardAlertRibbon acct={dash.acct} expiryLabel={dash.partnerAccessExpiryLabel} />
+              <EntryWallet
+                acct={dash.acct}
+                entries={{ membership: dash.entries.membership, oneTime: dash.entries.oneTime }}
+                tierHex={dash.tierHex}
+                drawName={dash.drawName}
+                drawDateIso={dash.drawDateIso}
+                drawStatus={dash.drawStatus}
+              />
+              <DashboardPromoBanner multiplier={dash.multiplier} hasAdditionalAccess={dash.hasAdditionalAccess} onGetPackage={onGetPackage} className="lg:hidden" />
+              <DashboardPromoBanner multiplier={dash.multiplier} hasAdditionalAccess={dash.hasAdditionalAccess} onGetPackage={onGetPackage} wide className="hidden lg:block" />
+              <PartnerPreview acct={dash.acct} partnerAccessPct={dash.partnerAccessPct} expiryLabel={dash.partnerAccessExpiryLabel} tierHex={dash.tierHex} className="hidden lg:block" />
+            </div>
 
-          <div className="mt-4 space-y-4 lg:mt-0">
-            {dash.acct === "onetime" ? (
-              <section className="rounded-3xl border border-token bg-surface p-5 shadow-sm">
-                <h3 className="font-['Poppins'] text-base font-extrabold text-primary-token dark:text-white">Make it permanent</h3>
-                <p className="mt-1 text-sm text-muted-token">Become a member for monthly free entries and lasting partner access.</p>
-                <button
-                  type="button"
-                  onClick={onBecomeMember}
-                  className="mt-3 w-full rounded-xl bg-gradient-to-b from-red-500 to-red-700 py-2.5 text-sm font-bold text-white transition-transform focus:outline-none focus-visible:ring-2 focus-visible:ring-red-600 motion-safe:active:translate-y-px"
-                >
-                  Become a member
-                </button>
-              </section>
-            ) : (
-              <LoyaltyStreak months={dash.streakMonths} acct={dash.acct} />
-            )}
-            <QuickActionsGrid
-              multiplier={dash.multiplier}
-              redeemCount={claimableWallet?.total ?? claimableWallet?.wallet?.length}
-              onGetPackage={hasAccessToAdditionalPackages ? onGetPackage : onBecomeMember}
-              onRefer={() => setIsReferFriendModalOpen(true)}
-              onPastDraws={() => setIsPastDrawsModalOpen(true)}
-            />
+            {/* aside column */}
+            <div className="mt-4 space-y-4 lg:mt-0 lg:space-y-5">
+              {dash.acct === "onetime" ? (
+                <section className="rounded-[1.1rem] border border-token bg-surface p-5 shadow-sm">
+                  <h3 className="font-['Poppins'] text-base font-extrabold text-primary-token dark:text-white">Make it permanent</h3>
+                  <p className="mt-1 text-sm text-muted-token">Become a member for monthly free entries and lasting partner access.</p>
+                  <button
+                    type="button"
+                    onClick={onBecomeMember}
+                    className="mt-3 w-full rounded-xl bg-gradient-to-b from-red-500 to-red-700 py-2.5 text-sm font-bold text-white transition-transform focus:outline-none focus-visible:ring-2 focus-visible:ring-red-600 motion-safe:active:translate-y-px"
+                  >
+                    Become a member
+                  </button>
+                </section>
+              ) : (
+                <LoyaltyStreak months={dash.streakMonths} acct={dash.acct} />
+              )}
+              <QuickActionsGrid
+                multiplier={dash.multiplier}
+                hasAdditionalAccess={dash.hasAdditionalAccess}
+                redeemCount={claimableWallet?.total ?? claimableWallet?.wallet?.length}
+                onGetPackage={hasAccessToAdditionalPackages ? onGetPackage : onBecomeMember}
+                onRefer={() => setIsReferFriendModalOpen(true)}
+                onPastDraws={() => setIsPastDrawsModalOpen(true)}
+              />
+            </div>
+
+            {/* partner preview — mobile renders it last (matches prototype order) */}
+            <PartnerPreview acct={dash.acct} partnerAccessPct={dash.partnerAccessPct} expiryLabel={dash.partnerAccessExpiryLabel} tierHex={dash.tierHex} className="mt-4 lg:hidden" />
           </div>
         </div>
       )}

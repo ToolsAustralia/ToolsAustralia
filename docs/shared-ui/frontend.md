@@ -7,7 +7,14 @@ The member-dashboard revamp adds section-band components under `src/components/s
 `src/components/sections/account-membership/` (Membership), each a self-contained `"use client"` band
 fed by props from `useDashboardState` (no API/DB calls in the components) — mirroring the
 `src/components/sections/membership/` pattern. The Membership page also **reuses** the public
-`MembershipTierChooser` (driven by `useMembershipCardCta`) for its tier + one-time-pack ladder. New shared primitives live in `src/components/ui/`
+`MembershipTierChooser` (driven by `useMembershipCardCta`) for its tier + one-time-pack ladder.
+
+**Pixel-fidelity (2026-07-02):** the home sections were reworked to match the Claude prototype 1:1
+for both mobile + desktop. `QuickTile` is now the prototype's glossy `linear-gradient(158deg,…)` chip
+(accent palette in [tile-colors.ts](../../src/utils/dashboard/tile-colors.ts)); `EntryWallet` is a
+responsive 2-column card with an inline countdown (`CDBox`); `PartnerPreview` uses the letter-badge
+deal-row style; `DashboardHero` is single-row on desktop (no gear — sidebar footer has it) and keeps
+the existing `AccessRing`. See [dashboard-account/frontend.md](../dashboard-account/frontend.md#dashboard-home--pixel-fidelity-rework-2026-07-02). New shared primitives live in `src/components/ui/`
 (`Monogram`, `QuickTile` — see [ui-primitives.md](./ui-primitives.md)). Full detail:
 [docs/dashboard-account/frontend.md](../dashboard-account/frontend.md) and the specs under
 `docs/superpowers/specs/2026-07-02-*`.

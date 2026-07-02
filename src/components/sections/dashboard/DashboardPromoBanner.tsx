@@ -1,77 +1,121 @@
 "use client";
 
 /**
- * Dashboard promo card — sells the purchase-time free-entry multiplier to drive
- * package buys. A compact, dashboard-native surface (NOT the full-bleed marketing
- * PromoBanner, whose scroll-morphing layout is irreconcilable with a card). Only
- * the palette escalates with the multiplier; the layout is constant.
+ * Dashboard promo banner — ported from the prototype `PromoBanner`.
  *
- * Renders only when a real multiplier promo is live (multiplier > 1) — the copy
- * sells that real, resolved multiplier (never a fabricated price discount; the
- * "50% off" line is scoped to the post-purchase upsell per BUSINESS.md, not here).
+ * The "50% off one-time packages" line is REAL: it is the member-only **Additional
+ * packages** benefit (packages priced at 50% of the one-time price, gated by
+ * `hasAdditionalPackageAccess` — see src/utils/membership/additional-package-mapping.ts).
+ * So the 50%-off headline shows only when the user actually has that access; the
+ * purchase-time free-entry **multiplier** (from `useResolvedMultiplier`) layers on top.
+ *
+ * Shows when the user has additional-package access OR a multiplier promo is live.
+ * Only the palette escalates with the multiplier (gold 1–3× → hot 5×/10×).
  */
 import Image from "next/image";
-import { ArrowRight, Flame } from "lucide-react";
+import { ArrowRight, Flame, Clock, Ticket } from "lucide-react";
+import { useLeafTimer } from "@/hooks/useLeafTimer";
+import { getNextMidnightAEST } from "@/utils/common/timezone";
 import { multiplierBadgeSrc } from "@/utils/membership/tier-visuals";
+import { cn } from "@/utils/cn";
 
 interface DashboardPromoBannerProps {
   multiplier: number;
+  /** Whether the user gets 50%-off Additional packages (members / current-draw entrants). */
+  hasAdditionalAccess: boolean;
   onGetPackage: () => void;
+  /** Desktop wide layout. */
+  wide?: boolean;
   className?: string;
 }
 
-function promoTheme(mult: number): { gradient: string; ink: string; hot: boolean } {
-  if (mult >= 10) return { gradient: "linear-gradient(120deg,#ff8a2b,#ff2d55 46%,#b3007a)", ink: "#ffffff", hot: true };
-  if (mult >= 5) return { gradient: "linear-gradient(120deg,#ff6a3d,#e0245e 60%,#a1004b)", ink: "#ffffff", hot: true };
-  return { gradient: "linear-gradient(120deg,#f6dd8c,#d4af37 58%,#a87f1d)", ink: "#241a02", hot: false };
+function promoTheme(mult: number) {
+  if (mult >= 10) return { grad: "linear-gradient(120deg,#ff8a2b,#ff2d55 46%,#b3007a)", ink: "#fff", hot: true };
+  if (mult >= 5) return { grad: "linear-gradient(120deg,#ff6a3d,#e0245e 60%,#a1004b)", ink: "#fff", hot: true };
+  return { grad: "linear-gradient(120deg,#f6dd8c,#d4af37 58%,#a87f1d)", ink: "#241a02", hot: false };
 }
 
-export default function DashboardPromoBanner({ multiplier, onGetPackage, className }: DashboardPromoBannerProps) {
-  if (!multiplier || multiplier <= 1) return null;
+export default function DashboardPromoBanner({
+  multiplier,
+  hasAdditionalAccess,
+  onGetPackage,
+  wide,
+  className,
+}: DashboardPromoBannerProps) {
+  const active = multiplier > 1;
+  const now = useLeafTimer(1000);
+  // Nothing accurate to promote: no 50%-off access and no live multiplier.
+  if (!hasAdditionalAccess && !active) return null;
 
-  const theme = promoTheme(multiplier);
+  const t = promoTheme(multiplier);
+  const ms = Math.max(0, getNextMidnightAEST().getTime() - now);
+  const pad = (n: number) => String(Math.floor(n)).padStart(2, "0");
+  const timer = `${pad(ms / 3_600_000)}:${pad((ms / 60_000) % 60)}:${pad((ms / 1000) % 60)}`;
   const badgeSrc = multiplierBadgeSrc(multiplier);
 
+  const heading = hasAdditionalAccess ? "50% off one-time packages" : "Bonus free entries";
+  const subtitle = active ? `${multiplier}× free entries on every package` : "Additional packages — half the one-time price";
+
   return (
-    <section
-      className={className}
-      style={{ color: theme.ink }}
-    >
-      <div className="relative overflow-hidden rounded-3xl p-5 shadow-lg" style={{ background: theme.gradient }}>
-        {theme.hot && (
+    <section className={className}>
+      <div
+        className="relative overflow-hidden rounded-[.875rem] shadow-[0_16px_34px_-18px_rgba(212,175,55,.5)]"
+        style={{ background: t.grad, color: t.ink }}
+      >
+        {active && (
           <span
             aria-hidden
-            className="pointer-events-none absolute inset-0 opacity-30 motion-safe:animate-[shimmer_3.4s_linear_infinite]"
-            style={{ background: "linear-gradient(115deg, transparent 30%, rgba(255,255,255,.35) 50%, transparent 70%)" }}
+            className="pointer-events-none absolute inset-y-0 left-[-60%] w-[42%] motion-safe:animate-[shimmer_3.4s_linear_infinite]"
+            style={{ background: "linear-gradient(105deg,transparent,rgba(255,255,255,.5),transparent)", transform: "skewX(-18deg)" }}
           />
         )}
+        <span aria-hidden className="pointer-events-none absolute -right-6 -top-8 h-32 w-32 rounded-full" style={{ background: "radial-gradient(circle,rgba(255,255,255,.4),transparent 70%)" }} />
 
-        <div className="relative flex items-center gap-2 text-xs font-bold uppercase tracking-wide">
-          <Flame className="h-4 w-4" /> Special promo
-        </div>
-
-        <div className="relative mt-2 flex items-end justify-between gap-4">
-          <div className="min-w-0">
-            <h3 className="font-['Poppins'] text-lg font-extrabold leading-tight">Limited-time entry boost</h3>
-            <p className="mt-0.5 text-sm font-medium opacity-90">{multiplier}× free entries on every one-time package</p>
-          </div>
-
-          <button
-            type="button"
-            onClick={onGetPackage}
-            className="relative inline-flex shrink-0 items-center gap-1.5 rounded-full bg-black/85 px-4 py-2 text-sm font-bold text-white transition-transform focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70 motion-safe:active:translate-y-px"
+        {active && (
+          <div
+            className={cn("relative flex items-center justify-between gap-2.5", wide ? "px-[22px] py-[9px]" : "px-4 py-2")}
+            style={{ background: t.hot ? "rgba(255,255,255,.16)" : "rgba(0,0,0,.14)", borderBottom: `1px solid ${t.hot ? "rgba(255,255,255,.22)" : "rgba(0,0,0,.1)"}` }}
           >
-            Get a package <ArrowRight className="h-4 w-4" />
-            <span className="absolute -right-2 -top-3">
-              {badgeSrc ? (
-                <Image src={badgeSrc} alt={`${multiplier}× entries`} width={34} height={34} className="h-8 w-8 object-contain drop-shadow" />
-              ) : (
-                <span className="grid h-7 w-7 place-items-center rounded-full bg-gradient-to-br from-amber-400 to-amber-700 text-[11px] font-black text-white ring-2 ring-white/60">
-                  {multiplier}×
-                </span>
-              )}
+            <span className="inline-flex items-center gap-1.5 text-[9.5px] font-black uppercase tracking-[0.08em]">
+              <Flame className="h-3 w-3" /> Special promo
             </span>
-          </button>
+            <span className="inline-flex items-center gap-1.5 text-[10px] font-extrabold">
+              <Clock className="h-3 w-3 opacity-80" /> Ends in <span className="num font-black tabular-nums tracking-[.02em]">{timer}</span>
+            </span>
+          </div>
+        )}
+
+        <div className={cn("relative flex items-center", wide ? "gap-[18px] px-[22px] py-[18px]" : "gap-3 px-4 py-[15px]")}>
+          <span
+            className={cn("grid shrink-0 place-items-center rounded-xl", wide ? "h-[46px] w-[46px]" : "h-[42px] w-[42px]")}
+            style={{ background: t.hot ? "rgba(255,255,255,.18)" : "rgba(0,0,0,.16)" }}
+          >
+            <Ticket className={wide ? "h-[23px] w-[23px]" : "h-[21px] w-[21px]"} />
+          </span>
+          <div className="min-w-0 flex-1">
+            <b className={cn("font-['Poppins'] font-extrabold leading-tight", wide ? "text-[17px]" : "text-[14.5px]")}>{heading}</b>
+            <div className={cn("mt-1 font-bold", wide ? "text-[11.5px]" : "text-[10.5px]")} style={{ color: t.hot ? "rgba(255,255,255,.85)" : "rgba(36,26,2,.72)" }}>
+              {subtitle}
+            </div>
+          </div>
+          <div className="relative shrink-0">
+            <button
+              type="button"
+              onClick={onGetPackage}
+              className={cn(
+                "inline-flex items-center gap-1.5 rounded-full font-extrabold shadow-[0_10px_22px_-10px_rgba(0,0,0,.6)] transition-transform focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70 motion-safe:active:translate-y-px",
+                wide ? "px-5 py-3 text-[13px]" : "px-[15px] py-3 text-[12px]",
+              )}
+              style={t.hot ? { background: "#fff", color: "#c40d0d" } : { background: "linear-gradient(180deg,#2a2109,#151002)", color: "#f6dd8c" }}
+            >
+              Get a package <ArrowRight className={wide ? "h-4 w-4" : "h-[15px] w-[15px]"} />
+            </button>
+            {active && (
+              <span className="absolute -right-2 -top-2 inline-flex items-center gap-0.5 rounded-md border-[1.5px] px-1.5 py-1 text-[9.5px] font-black" style={{ background: t.hot ? "#fff" : "linear-gradient(180deg,#fff3cc,#f4d873)", color: t.hot ? "#c40d0d" : "#241a02", borderColor: t.hot ? "#ffb0b0" : "#d4af37" }}>
+                {badgeSrc ? <Image src={badgeSrc} alt={`${multiplier}×`} width={16} height={16} className="h-3.5 w-3.5 object-contain" /> : <><Flame className="h-2.5 w-2.5" /> {multiplier}×</>}
+              </span>
+            )}
+          </div>
         </div>
       </div>
     </section>
