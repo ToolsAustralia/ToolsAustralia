@@ -15,8 +15,10 @@
  * 2. The Elements `key` (`${setupIntentSecret}-up-${isDarkMode ? "d" : "l"}`) is
  *    preserved — changing the key forces a fresh mount when the SetupIntent
  *    secret or theme changes.
- * 3. All payment intent / setup intent state, finalize-invoice timing, and
- *    purchase-method resolution flows are byte-identical to the original.
+ * 3. All payment intent / setup intent state and purchase-method resolution flows
+ *    are preserved. (The client-side invoice-finalize path was removed in 2026-07 —
+ *    "Invoice Generated" is now emitted server-side from payment processing, so it can
+ *    never be dropped by a client that navigates away.)
  */
 
 import React, { useState, useEffect, useCallback, useMemo } from "react";
@@ -139,7 +141,6 @@ const UpsellModal: React.FC<UpsellModalProps> = ({
   isOpen,
   onClose,
   offer,
-  userContext,
   originalPurchaseContext,
   onAccept,
   onDecline,
@@ -153,10 +154,6 @@ const UpsellModal: React.FC<UpsellModalProps> = ({
    *  in `finally` the instant the mutation resolves, so it alone cannot guard this window —
    *  a second tap would mint a fresh idempotency key and create a second real charge. */
   const [purchaseComplete, setPurchaseComplete] = useState(false);
-  const [invoiceFinalized, setInvoiceFinalized] = useState(false);
-  const finalizationTimeoutIdRef = React.useRef<NodeJS.Timeout | null>(null);
-  // ✅ FIX: Track if finalization is in progress to prevent race conditions
-  const isFinalizingRef = React.useRef<boolean>(false);
   /** Ref updates synchronously so a second tap cannot start another charge before isProcessing re-renders. */
   const upsellPurchaseLockRef = React.useRef(false);
   /** PM from original purchase context or one-shot PI lookup (webhook may not have written to DB yet). */
@@ -239,96 +236,6 @@ const UpsellModal: React.FC<UpsellModalProps> = ({
     }
   }, [isOpen, offer.id]);
 
-  /**
-   * Finalize invoice and send to Klaviyo
-   *
-   * CRITICAL: This function MUST finalize the invoice when the upsell modal is shown.
-   * Uses userContext.userId if available, otherwise falls back to userData._id from useUserContext().
-   * This ensures invoices are ALWAYS sent, even if userContext is incomplete.
-   */
-  const finalizeInvoice = useCallback(
-    async (upsellData?: {
-      paymentIntentId: string;
-      offerId: string;
-      offerName: string;
-      price: number;
-      entries: number;
-    }) => {
-      // ✅ FIX: Prevent duplicate finalization - check both state and ref
-      if (invoiceFinalized || isFinalizingRef.current) {
-        console.log("📧 Invoice finalization skipped: already finalized or in progress");
-        return;
-      }
-
-      // CRITICAL: originalPurchaseContext is REQUIRED - without it we can't finalize
-      if (!originalPurchaseContext) {
-        console.error("❌ Invoice finalization skipped: missing originalPurchaseContext", {
-          hasContext: !!originalPurchaseContext,
-          hasUserContextUserId: !!userContext?.userId,
-          hasUserDataId: !!userData?._id,
-        });
-        return;
-      }
-
-      // CRITICAL FIX: Use userContext.userId if available, otherwise fall back to userData._id
-      // This ensures we ALWAYS have a userId when finalizing invoices
-      const finalUserId = userContext?.userId || userData?._id;
-      if (!finalUserId) {
-        console.error("❌ Invoice finalization skipped: missing userId", {
-          hasUserContextUserId: !!userContext?.userId,
-          hasUserDataId: !!userData?._id,
-        });
-        return;
-      }
-
-      // ✅ FIX: Set finalizing flag and clear timeout IMMEDIATELY (not waiting for API response)
-      isFinalizingRef.current = true;
-
-      // Clear timeout immediately to prevent race condition
-      if (finalizationTimeoutIdRef.current) {
-        clearTimeout(finalizationTimeoutIdRef.current);
-        finalizationTimeoutIdRef.current = null;
-        console.log("⏰ Cleared invoice finalization timeout (finalization started)");
-      }
-
-      try {
-        console.log("📧 Finalizing invoice...", {
-          withUpsell: !!upsellData,
-          userId: finalUserId,
-          paymentIntentId: originalPurchaseContext.paymentIntentId,
-          packageName: originalPurchaseContext.packageName,
-        });
-
-        const response = await fetch("/api/invoice/finalize", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            userId: finalUserId,
-            originalPurchase: originalPurchaseContext,
-            upsellPurchase: upsellData,
-          }),
-        });
-
-        if (response.ok) {
-          const result = await response.json();
-          console.log("✅ Invoice finalized:", result);
-          setInvoiceFinalized(true);
-          // Keep isFinalizingRef.current = true to prevent any further attempts
-        } else {
-          const errorText = await response.text();
-          console.error("❌ Invoice finalization failed:", response.status, errorText);
-          // Reset flag on error so user can retry if needed
-          isFinalizingRef.current = false;
-        }
-      } catch (error) {
-        console.error("❌ Invoice finalization error:", error);
-        // Reset flag on error so user can retry if needed
-        isFinalizingRef.current = false;
-      }
-    },
-    [invoiceFinalized, originalPurchaseContext, userContext?.userId, userData?._id]
-  );
-
   // Custom close handler that resets payment processing state
   const handleClose = useCallback(() => {
     setShowPaymentProcessing(false);
@@ -337,24 +244,6 @@ const UpsellModal: React.FC<UpsellModalProps> = ({
     setLoadingSetupIntent(false);
     setPurchaseResolvedPm(null);
     setIsResolvingPurchasePm(false);
-
-    // Clear the timeout since we're closing
-    if (finalizationTimeoutIdRef.current) {
-      clearTimeout(finalizationTimeoutIdRef.current);
-      finalizationTimeoutIdRef.current = null;
-    }
-
-    // ✅ CRITICAL: Finalize invoice if not already finalized or in progress
-    // This ensures Klaviyo email is sent even if user closes modal without clicking decline
-    if (!invoiceFinalized && !isFinalizingRef.current && originalPurchaseContext) {
-      console.log("📧 Modal closing - finalizing invoice with original purchase only");
-      finalizeInvoice();
-    } else if (!invoiceFinalized && !isFinalizingRef.current) {
-      console.warn("⚠️ Modal closing but invoice not finalized - missing context:", {
-        invoiceFinalized,
-        hasContext: !!originalPurchaseContext,
-      });
-    }
 
     // Clear pending upsell (this also clears sessionStorage via the updated function)
     const { setPendingUpsellAfterSetup } = useModalPriorityStore.getState();
@@ -379,7 +268,7 @@ const UpsellModal: React.FC<UpsellModalProps> = ({
     }
 
     onClose();
-  }, [onClose, userData, invoiceFinalized, originalPurchaseContext, finalizeInvoice]);
+  }, [onClose, userData]);
 
   useEffect(() => {
     if (!isOpen || !userData?._id) {
@@ -525,54 +414,8 @@ const UpsellModal: React.FC<UpsellModalProps> = ({
       upsellPurchaseLockRef.current = false;
       setSetupIntentSecret(null);
       setLoadingSetupIntent(false);
-
-      // CRITICAL: Log context to help debug invoice finalization issues
-      console.log("🔍 UpsellModal opened:", {
-        hasContext: !!originalPurchaseContext,
-        contextDetails: originalPurchaseContext
-          ? {
-              paymentIntentId: originalPurchaseContext.paymentIntentId,
-              packageName: originalPurchaseContext.packageName,
-              packageType: originalPurchaseContext.packageType,
-            }
-          : null,
-        invoiceFinalized,
-        hasUserContextUserId: !!userContext?.userId,
-        hasUserDataId: !!userData?._id,
-        hasPaymentMethod: !!resolvedChargePm,
-      });
-
-      // CRITICAL: Start 30-second timeout for invoice finalization if we have purchase context
-      // This ensures invoices are ALWAYS sent, even if user doesn't interact with the modal
-      if (originalPurchaseContext && !invoiceFinalized && !isFinalizingRef.current) {
-        const timeoutId = setTimeout(() => {
-          // ✅ FIX: Check if finalization is in progress before calling
-          if (!isFinalizingRef.current && !invoiceFinalized) {
-            console.log("⏰ Invoice finalization timeout (30s) - sending original purchase only");
-            finalizeInvoice();
-          } else {
-            console.log("⏰ Invoice finalization timeout skipped: already finalized or in progress");
-          }
-        }, 30000); // 30 seconds = 30000ms
-
-        finalizationTimeoutIdRef.current = timeoutId;
-        console.log("⏰ Started 30-second timeout for invoice finalization");
-      } else {
-        console.warn("⚠️ Invoice timeout NOT started:", {
-          hasContext: !!originalPurchaseContext,
-          invoiceFinalized,
-          isFinalizing: isFinalizingRef.current,
-        });
-      }
-
-      return () => {
-        if (finalizationTimeoutIdRef.current) {
-          clearTimeout(finalizationTimeoutIdRef.current);
-          finalizationTimeoutIdRef.current = null;
-        }
-      };
     }
-  }, [isOpen, originalPurchaseContext, invoiceFinalized, finalizeInvoice, resolvedChargePm]); // eslint-disable-line react-hooks/exhaustive-deps -- userContext/userData omitted to avoid visibility flicker
+  }, [isOpen]);
 
   // Countdown timer for urgency - TODO: Implement countdown timer
   // useEffect(() => {
@@ -797,33 +640,8 @@ const UpsellModal: React.FC<UpsellModalProps> = ({
     // Show success modal with entry information
     showSuccess("Upsell Successful!", `${offer.title} activated`, benefits);
 
-    // ✅ CRITICAL: Always finalize invoice with both original purchase and upsell
-    // Use paymentIntentId from status.data if available, otherwise fall back to state
-    const finalUpsellPaymentIntentId = status.data?.paymentIntentId || paymentIntentId;
-    if (originalPurchaseContext && finalUpsellPaymentIntentId) {
-      console.log("📧 Finalizing invoice with upsell purchase:", {
-        upsellPaymentIntentId: finalUpsellPaymentIntentId,
-        offerId: offer.id,
-        offerName: offer.title,
-      });
-      finalizeInvoice({
-        paymentIntentId: finalUpsellPaymentIntentId,
-        offerId: offer.id,
-        offerName: offer.title,
-        price: offer.discountedPrice,
-        entries: offer.entriesCount,
-      });
-    } else {
-      console.warn("⚠️ Cannot finalize invoice with upsell - missing data:", {
-        hasOriginalContext: !!originalPurchaseContext,
-        hasPaymentIntentId: !!finalUpsellPaymentIntentId,
-      });
-      // Still finalize with original purchase only if we have context
-      if (originalPurchaseContext) {
-        console.log("📧 Finalizing invoice with original purchase only (upsell data missing)");
-        finalizeInvoice();
-      }
-    }
+    // The upsell receipt ("Invoice Generated") is emitted server-side from payment
+    // processing for the upsell charge, so no client-side invoice finalize is needed here.
 
     // Auto-close modal after showing success
     setTimeout(() => {
@@ -840,9 +658,6 @@ const UpsellModal: React.FC<UpsellModalProps> = ({
   const handleDecline = () => {
     // Call decline handler but don't close immediately
     onDecline(offer);
-
-    // Finalize invoice with original purchase only
-    finalizeInvoice();
 
     // Close after a brief delay to show the action was registered
     setTimeout(() => {

@@ -15,7 +15,7 @@ import {
   createMajorDrawEntryAddedEvent,
 } from "@/utils/integrations/klaviyo/klaviyo-events";
 import { trackPlacedOrder } from "@/utils/integrations/klaviyo/klaviyo-revenue-service";
-import { trackInvoice, shouldDelayInvoice } from "@/utils/integrations/klaviyo/klaviyo-invoice-service";
+import { trackInvoice, shouldEmitInvoiceGenerated } from "@/utils/integrations/klaviyo/klaviyo-invoice-service";
 import {
   addToPartnerDiscountQueue,
   handleSubscriptionQueueUpdate,
@@ -627,15 +627,13 @@ async function processPaymentBenefitsInternal(
 
       // console.log(`✅ Benefits granted and recorded for payment ${paymentIntentId} via ${processedBy}`);
 
-      // ✅ Check if invoice should be delayed (for upsells)
-      // If upsells exist, invoice will be finalized after upsell decision
-      const shouldSkipInvoice = packageData.packageId
-        ? shouldDelayInvoice(packageData.packageType, packageData.packageId)
-        : false;
-
-      // Track purchase event in Klaviyo (non-blocking)
-      // ✅ FIX: Pass billingReason to skip "Subscription Started" for renewals (webhook handles renewal events)
-      trackKlaviyoEvent(user as UserDocument, packageData, paymentIntentId, shouldSkipInvoice, billingReason);
+      // Track purchase event in Klaviyo (non-blocking).
+      // "Invoice Generated" is now emitted server-side from trackKlaviyoEvent (single source
+      // of truth) so it can never be dropped by a client that navigates away before the old
+      // /api/invoice/finalize call ran. billingReason lets trackKlaviyoEvent skip renewals
+      // (owned by the "Subscription Renewed" → "Membership Renewal" flow) and upgrades
+      // (owned by the invoice.payment_succeeded webhook).
+      trackKlaviyoEvent(user as UserDocument, packageData, paymentIntentId, billingReason);
 
       // ✅ CRITICAL: Update Klaviyo profile with latest user data after benefits are granted
       try {
@@ -1649,13 +1647,11 @@ function trackKlaviyoEvent(
     price: number;
   },
   paymentIntentId: string,
-  skipInvoice: boolean = false,
-  billingReason?: string // Stripe billing_reason; threaded to Placed Order as is_renewal + billing_reason
+  billingReason?: string // Stripe billing_reason; threaded to Placed Order as is_renewal + billing_reason, and gates Invoice Generated
 ): void {
   try {
     // console.log(`📊 trackKlaviyoEvent called for user: ${user.email}`);
     // console.log(`📊 Package data:`, packageData);
-    // console.log(`📊 Skip invoice: ${skipInvoice}`);
     // console.log(`📊 Billing reason: ${billingReason || "not provided"}`);
 
     const commonData = {
@@ -1732,9 +1728,21 @@ function trackKlaviyoEvent(
       console.error(`❌ Failed to track "Placed Order" event:`, error);
     });
 
-    // ✅ Track invoice (handled by invoice service)
-    // Skip if flagged - will be finalized after upsell decision via /api/invoice/finalize
-    if (!skipInvoice) {
+    // ✅ Track "Invoice Generated" server-side — the single source of truth for the
+    // invoice/receipt Klaviyo event. Emitting here (inside processPaymentBenefits, which is
+    // idempotent and always runs server-side for every charge) means the receipt can never be
+    // dropped by a client that navigates away, which is what the old client-side
+    // /api/invoice/finalize call was prone to.
+    //
+    // Skip renewals/upgrades so we never double-email (see shouldEmitInvoiceGenerated):
+    //   - subscription_cycle / subscription_threshold (renewal) → owned by the
+    //     "Subscription Renewed" → "Membership Renewal" Klaviyo flow.
+    //   - subscription_update (upgrade) → owned by the invoice.payment_succeeded webhook,
+    //     which emits an upgrade-specific Invoice Generated with the correct billing_reason.
+    //
+    // Everything else (new membership = subscription_create, one-time, mini-draw, and an
+    // accepted upsell — which is its own separate charge) gets its own reliable receipt here.
+    if (shouldEmitInvoiceGenerated(billingReason)) {
       trackInvoice(
         user as never,
         {

@@ -49,12 +49,6 @@ Full inventory of routes under `/api/stripe/**` and `/api/invoice/**`. Auth and 
 | POST | `/api/stripe/pay-failed-invoice` | User pays a specific failed renewal invoice |
 | POST | `/api/stripe/webhook` | **THE** webhook receiver; verifies signature, dedupes via `ProcessedStripeEvent`, dispatches |
 
-### Invoice surface
-
-| Method | Path | Purpose |
-|---|---|---|
-| POST | `/api/invoice/finalize` | Force-finalize a draft invoice (admin/operational) |
-
 > _TODO: read each handler to fill in exact auth requirements, request/response shapes, and error codes. Currently the routes are inventoried but not fully spec-documented._
 
 ## Cross-domain admin routes

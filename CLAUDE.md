@@ -216,7 +216,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
 ```json
 {
   "version": 1,
-  "lastModified": "2026-07-01",
+  "lastModified": "2026-07-02",
   "domains": {
     "subscription": {
       "docs": "docs/subscription/",
@@ -270,7 +270,6 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "scripts/sync-allowlist-from-blocked-transactions.ts",
         "scripts/investigate-blocked-transactions.ts",
         "src/app/api/stripe/**",
-        "src/app/api/invoice/**",
         "src/app/api/admin/allowlist/**",
         "src/app/api/admin/stripe-webhook-queue/**",
         "src/app/api/cron/reconcile-blocked-transactions/**",
@@ -281,7 +280,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/hooks/queries/admin/useAllowlistStats.ts",
         "src/utils/billing/declineCodeLabels.ts"
       ],
-      "lastVerified": "2026-06-24"
+      "lastVerified": "2026-07-02"
     },
     "payment": {
       "docs": "docs/payment/",
@@ -296,7 +295,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/hooks/use3DSRedirectHandler.ts",
         "src/hooks/useSavedPaymentMethods.ts"
       ],
-      "lastVerified": "2026-06-30"
+      "lastVerified": "2026-07-02"
     },
     "draws": {
       "docs": "docs/draws/",
@@ -550,7 +549,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/hooks/useAttribution.ts",
         "src/hooks/useUTMPersistence.ts"
       ],
-      "lastVerified": "2026-06-30"
+      "lastVerified": "2026-07-02"
     },
     "ab-testing": {
       "docs": "docs/ab-testing/",
@@ -635,10 +634,11 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/hooks/useInViewportAnimation.ts",
         "src/hooks/useLeafTimer.ts",
         "src/hooks/useTilt.ts",
+        "src/types/upsell.ts",
         "src/app/globals.css",
         "src/app/not-found.tsx"
       ],
-      "lastVerified": "2026-07-01"
+      "lastVerified": "2026-07-02"
     },
     "client-state": {
       "docs": "docs/client-state/",
@@ -784,7 +784,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "scripts/reconcile-*.ts",
         "scripts/connect-ops-db.ts"
       ],
-      "lastVerified": "2026-07-01"
+      "lastVerified": "2026-07-02"
     },
     "dev-tooling": {
       "docs": "docs/dev-tooling/",

@@ -13,7 +13,6 @@ import { UpsellManagerProps, UpsellOffer, SAMPLE_UPSELL_OFFERS } from "@/types/u
 const UpsellManager: React.FC<UpsellManagerProps> = ({
   triggerEvent,
   userContext,
-  originalPurchaseContext,
   onOfferShown,
   onOfferAccepted,
   onOfferDeclined,
@@ -23,8 +22,6 @@ const UpsellManager: React.FC<UpsellManagerProps> = ({
   const [hasShownOffer, setHasShownOffer] = useState(false);
   const [showFloatingGift, setShowFloatingGift] = useState(false);
   const [declinedOffer, setDeclinedOffer] = useState<UpsellOffer | null>(null);
-  const [invoiceFinalized, setInvoiceFinalized] = useState(false);
-  const [finalizationTimeoutId, setFinalizationTimeoutId] = useState<NodeJS.Timeout | null>(null);
   const upsellPurchaseLockRef = useRef(false);
 
   /**
@@ -121,56 +118,11 @@ const UpsellManager: React.FC<UpsellManagerProps> = ({
   }, []);
 
   /**
-   * Finalize invoice and send to Klaviyo
-   */
-  const finalizeInvoice = useCallback(
-    async (upsellData?: {
-      paymentIntentId: string;
-      offerId: string;
-      offerName: string;
-      price: number;
-      entries: number;
-    }) => {
-      if (invoiceFinalized || !originalPurchaseContext || !userContext.userId) {
-        // console.log("📧 Invoice finalization skipped:", { invoiceFinalized, hasContext: !!originalPurchaseContext });
-        return;
-      }
-
-      try {
-        // console.log("📧 Finalizing invoice...", { withUpsell: !!upsellData });
-
-        const response = await fetch("/api/invoice/finalize", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            userId: userContext.userId,
-            originalPurchase: originalPurchaseContext,
-            upsellPurchase: upsellData,
-          }),
-        });
-
-        if (response.ok) {
-          const _result = await response.json();
-          // console.log("✅ Invoice finalized:", _result);
-          setInvoiceFinalized(true);
-
-          // Clear timeout if it exists
-          if (finalizationTimeoutId) {
-            clearTimeout(finalizationTimeoutId);
-            setFinalizationTimeoutId(null);
-          }
-        } else {
-          console.error("❌ Invoice finalization failed:", await response.text());
-        }
-      } catch (error) {
-        console.error("❌ Invoice finalization error:", error);
-      }
-    },
-    [invoiceFinalized, originalPurchaseContext, userContext.userId, finalizationTimeoutId]
-  );
-
-  /**
    * Show upsell modal with selected offer
+   *
+   * Note: the invoice/receipt ("Invoice Generated") is emitted server-side from
+   * payment processing for every charge, so the modal no longer needs to finalize an
+   * invoice on show/decline/timeout.
    */
   const showUpsellOffer = useCallback(
     (offer: UpsellOffer) => {
@@ -183,18 +135,8 @@ const UpsellManager: React.FC<UpsellManagerProps> = ({
 
       // Track analytics
       trackUpsellEvent("shown", offer);
-
-      // Start 30-second timeout for invoice finalization
-      if (originalPurchaseContext && !invoiceFinalized) {
-        const timeoutId = setTimeout(() => {
-          // console.log("⏰ Invoice finalization timeout - sending original purchase only");
-          finalizeInvoice();
-        }, 30000); // 30 seconds = 30000ms
-
-        setFinalizationTimeoutId(timeoutId);
-      }
     },
-    [onOfferShown, trackUpsellEvent, originalPurchaseContext, invoiceFinalized, finalizeInvoice]
+    [onOfferShown, trackUpsellEvent]
   );
 
   /**
@@ -309,11 +251,8 @@ const UpsellManager: React.FC<UpsellManagerProps> = ({
       // Show floating gift icon for declined offer
       setDeclinedOffer(offer);
       setShowFloatingGift(true);
-
-      // Finalize invoice with original purchase only
-      finalizeInvoice();
     },
-    [onOfferDeclined, trackUpsellEvent, finalizeInvoice]
+    [onOfferDeclined, trackUpsellEvent]
   );
 
   /**
@@ -351,17 +290,6 @@ const UpsellManager: React.FC<UpsellManagerProps> = ({
 
     return () => clearTimeout(timer);
   }, [triggerEvent, userContext, hasShownOffer, selectRelevantOffer, showUpsellOffer]);
-
-  /**
-   * Cleanup finalization timeout on unmount
-   */
-  useEffect(() => {
-    return () => {
-      if (finalizationTimeoutId) {
-        clearTimeout(finalizationTimeoutId);
-      }
-    };
-  }, [finalizationTimeoutId]);
 
   /**
    * Handle modal close
