@@ -35,6 +35,11 @@
 > other callers stay byte-identical. `MembershipTierList` gained `onChangeTier(planName)` (member taps
 > a different tier). Full flow in [dashboard-account/frontend.md](../dashboard-account/frontend.md).
 
+> **Claimable rewards trigger (2026-07-02):** `RewardsClaimables` replaced its inline "Ready to claim"
+> list with an **animating gift trigger** — the icon bounces + shows a count badge ONLY when there are
+> truly-claimable rewards (`isRedeemableNow`, not locked/paused) — that opens a claimables `SheetShell`
+> overlay holding the Claim buttons. "Recently claimed" stays inline.
+
 ## Dashboard sections (2026-07-02)
 
 The member-dashboard revamp adds section-band components under `src/components/sections/dashboard/`
