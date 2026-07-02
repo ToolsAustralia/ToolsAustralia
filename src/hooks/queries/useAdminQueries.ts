@@ -420,16 +420,17 @@ export function useActivityLogInfinite(limit = 25, typeFilter?: string, searchTe
   return useInfiniteQuery<
     {
       activities: ActivityLogItem[];
-      pagination: { page: number; limit: number; total: number; totalPages: number };
+      pagination: { limit: number; total: number; nextCursor: string | null; hasMore: boolean };
     },
     Error
   >({
     queryKey: ["admin", "activity-log-infinite", limit, typeFilter, searchTerm],
-    queryFn: async ({ pageParam = 1 }) => {
-      const params = new URLSearchParams({
-        page: String(pageParam),
-        limit: String(limit),
-      });
+    queryFn: async ({ pageParam }) => {
+      const params = new URLSearchParams({ limit: String(limit) });
+      // Keyset cursor (null on the first page). Offset paging was replaced with keyset
+      // so live top-insertions can't shift the window and duplicate rows across pages.
+      const cursor = typeof pageParam === "string" ? pageParam : null;
+      if (cursor) params.append("cursor", cursor);
       if (typeFilter) params.append("type", typeFilter);
       if (searchTerm) params.append("search", searchTerm);
 
@@ -447,12 +448,8 @@ export function useActivityLogInfinite(limit = 25, typeFilter?: string, searchTe
 
       return result.data;
     },
-    getNextPageParam: (lastPage) => {
-      return lastPage.pagination.page < lastPage.pagination.totalPages
-        ? lastPage.pagination.page + 1
-        : undefined;
-    },
-    initialPageParam: 1,
+    getNextPageParam: (lastPage) => lastPage.pagination.nextCursor ?? undefined,
+    initialPageParam: null as string | null,
     staleTime: 1 * 60 * 1000,
     gcTime: 5 * 60 * 1000,
     retry: 2,
