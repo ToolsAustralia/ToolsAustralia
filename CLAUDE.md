@@ -719,7 +719,9 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/app/(site)/my-account/**",
         "src/app/(site)/components/LandingPageTrigger.tsx",
         "src/hooks/useDashboardEntryDisplay.ts",
-        "src/hooks/useDashboardLandingOrchestration.ts"
+        "src/hooks/useDashboardLandingOrchestration.ts",
+        "src/hooks/useDashboardState.ts",
+        "src/utils/dashboard/**"
       ],
       "lastVerified": "2026-06-09"
     },

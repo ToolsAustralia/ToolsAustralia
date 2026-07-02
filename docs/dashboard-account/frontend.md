@@ -244,3 +244,44 @@ Small frontend-only batch; no backend/hook/service/model change.
 - **BottomNav safe-area**: [`components/BottomNav.tsx`](../../src/app/(site)/my-account/components/BottomNav.tsx) `<nav>` gained `pb-[env(safe-area-inset-bottom)]` so the fixed mobile bottom nav clears the iOS home indicator (the app now sets `viewport-fit=cover` globally).
 - **iOS focus-zoom guard**: the `SettingsInput` base (`inputBase` in [`settings/ui/primitives.tsx`](../../src/app/(site)/my-account/components/settings/ui/primitives.tsx)) and the local `PWInput` in [`settings/PasswordTab.tsx`](../../src/app/(site)/my-account/components/settings/PasswordTab.tsx) moved from `text-sm` → `text-base` (16px). iOS Safari auto-zooms on focus of inputs under 16px; 16px disables that. Visual-only on desktop.
 - **Lazy-loaded dashboard modals**: [`page.tsx`](../../src/app/(site)/my-account/page.tsx) now wraps `ReferFriendModal`, `PastDrawsModal`, and `PackageDetailModal` in `dynamic(() => import(...), { ssr: false })`, joining the already-lazy `MembershipModal` — they stay out of the initial dashboard bundle and only mount when opened. `PackageDetailModal`'s exported types (`PackageDetailModalPackageData`, `SubscriptionAccumulationData`) are still pulled in via `import type` so the dynamic import does not drag runtime code.
+
+## Dashboard revamp — Spec 1: Foundation shell + Home (2026-07-02)
+
+Ports the Claude member-dashboard prototype onto the home. Spec 1 of a sequenced set
+(Rewards / Draws / Membership / Settings+overlays follow). Design + plan:
+`docs/superpowers/specs/2026-07-02-user-dashboard-revamp-foundation-home-design.md`,
+`docs/superpowers/plans/2026-07-02-user-dashboard-revamp-foundation-home.md`.
+
+### Responsive shell — [`layout.tsx`](../../src/app/(site)/my-account/layout.tsx)
+- `lg:` two-pane: desktop left sidebar [`DeskNav`](../../src/app/(site)/my-account/components/DeskNav.tsx) (236px, logo + nav + footer monogram/name/email + gear→Settings) + a `max-w-[1180px]` content frame; mobile keeps the bottom nav. Retains the `data-account-layout` site-chrome opt-out. Sidebar identity is fetched via cached `useMyAccountData`; tier hex derived from the active package for the footer monogram.
+- **Nav model** now lives in [`BottomNav.tsx`](../../src/app/(site)/my-account/components/BottomNav.tsx) as the shared `DASHBOARD_NAV` (+ `isNavItemActive`): **Dashboard / Rewards (→`benefits`) / Draws (raised center FAB) / Membership / Support**. Settings is reached via the gear (hero + sidebar footer), not a nav slot. `DeskNav` consumes the same model.
+
+### State hook — [`useDashboardState`](../../src/hooks/useDashboardState.ts)
+Single source of home view-state. Resolves the account state via the pure
+[`deriveDashboardAccountState`](../../src/utils/dashboard/derive-dashboard-account-state.ts)
+(precedence **pastdue > active > onetime > none**, traced against `subscription.isActive`,
+`hasFailedRenewal`, `getActivePackage().source`), plus tier + [`getDashboardStateTheme`](../../src/utils/dashboard/dashboard-state-theme.ts)
+(hero gradient/ink/accent), promo multiplier, entry buckets (`useDashboardEntryDisplay`),
+partner access %/expiry, and streak months — all from existing cached queries. Section
+components stay dumb and consume this. Pure logic is `tsx`-tested
+(`test:dashboard-state-theme`, `test:dashboard-account-state`).
+
+### Sections — `src/components/sections/dashboard/`
+`DashboardHero`, `EntryWallet` (entries hero — total/split-bar/countdown, extracted from the
+`MajorDrawOverview` concept), `DashboardPromoBanner` (compact multiplier card — new file, the
+marketing `PromoBanner`'s scroll-morphing layout is irreconcilable with a card), `LoyaltyStreak`,
+`QuickActionsGrid`, `PartnerPreview`, `DashboardGuestPanel`. Composed by
+[`page.tsx`](../../src/app/(site)/my-account/page.tsx), which **keeps all existing modal
+orchestration inline verbatim** (setup/upsell/subscription-explainer/refer/past-draws/
+package-detail + `openMembershipModal` listener) — visual layer only was recomposed.
+
+### Coming-soon switches — [`src/config/dashboardFeatures.ts`](../../src/config/dashboardFeatures.ts)
+`DASHBOARD_FEATURES` off-by-default map (`cobberSupport`, `milestoneProgress`, `personalWins`,
+`orderHistory`). Fully-built UI mounts behind these; a future session flips one to surface it.
+`LoyaltyStreak`'s milestone-unlock line and `QuickActionsGrid`'s Vouchers/Milestones tiles are gated here.
+
+### Flagged for deletion (NOT deleted — user review pending)
+Mirrored in the `page.tsx` header comment: dead `MembershipStatus.tsx`, `ActivePrizeDraws.tsx`,
+`RecentOrders.tsx`, empty `EntryWallet.tsx` stub, stale `components/index.ts` re-exports;
+superseded-but-kept `DashboardHeader`/`CoverBanner`/`UserInfoBar`/`QuickActions`/`SocialLinksSection`
+(still used by sub-pages until their specs); `MajorDrawOverview` (wallet extracted; countdown role → Draws sub-project).
