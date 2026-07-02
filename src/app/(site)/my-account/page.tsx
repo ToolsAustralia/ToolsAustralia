@@ -50,6 +50,7 @@ import LoyaltyStreak from "@/components/sections/dashboard/LoyaltyStreak";
 import QuickActionsGrid from "@/components/sections/dashboard/QuickActionsGrid";
 import PartnerPreview from "@/components/sections/dashboard/PartnerPreview";
 import DashboardGuestPanel from "@/components/sections/dashboard/DashboardGuestPanel";
+import DashboardLoader from "@/components/loading/DashboardLoader";
 
 export default function MyAccountPage() {
   const { data: session, status } = useSession();
@@ -218,14 +219,7 @@ export default function MyAccountPage() {
   }, [membershipModal, whenGatesOpenElseGateModal]);
 
   if (status === "loading" || loading || majorDrawStatsLoading || currentMajorDrawLoading) {
-    return (
-      <div className="min-h-screen-svh flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-red-600 dark:border-red-500 mx-auto mb-4" />
-          <p className="text-gray-600 dark:text-gray-400">Loading your account...</p>
-        </div>
-      </div>
-    );
+    return <DashboardLoader label="Loading your account…" />;
   }
 
   if (error) {

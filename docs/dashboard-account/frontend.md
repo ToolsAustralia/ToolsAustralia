@@ -1,5 +1,10 @@
 # Dashboard-Account — Frontend
 
+> **Loader (2026-07-02):** every `my-account/*` page's loading state (home, draws, membership,
+> settings, benefits) now returns the shared brand-forward [`DashboardLoader`](../../src/components/loading/DashboardLoader.tsx)
+> (TA wordmark, light/dark) instead of a bare red-arc spinner. See
+> [shared-ui/frontend.md § DashboardLoader](../shared-ui/frontend.md#dashboardloader-2026-07-02).
+
 ## Pages
 
 `src/app/(site)/my-account/`:

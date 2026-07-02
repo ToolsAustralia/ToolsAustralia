@@ -23,6 +23,7 @@ import DashboardPageHeader from "../components/DashboardPageHeader";
 import RewardsPartnerCard from "@/components/sections/rewards/RewardsPartnerCard";
 import RewardsClaimables from "@/components/sections/rewards/RewardsClaimables";
 import RewardsMilestones from "@/components/sections/rewards/RewardsMilestones";
+import DashboardLoader from "@/components/loading/DashboardLoader";
 
 const MembershipModal = dynamicImport(() => import("@/components/modals/MembershipModal"), { ssr: false });
 
@@ -43,12 +44,7 @@ export default function RewardsPage() {
   }, [session, status, router]);
 
   if (status === "loading" || dash.isLoading) {
-    return (
-      <div className="min-h-screen-svh flex flex-col items-center justify-center gap-4">
-        <div className="h-12 w-12 animate-spin rounded-full border-4 border-red-600 border-t-transparent" />
-        <p className="font-medium text-muted-token">Loading your rewards…</p>
-      </div>
-    );
+    return <DashboardLoader label="Loading your rewards…" />;
   }
 
   if (!session) {

@@ -27,6 +27,7 @@ import ThemePicker from "../components/settings/ThemePicker";
 import ProfileTab from "../components/settings/ProfileTab";
 import PasswordTab from "../components/settings/PasswordTab";
 import { SettingsBadge } from "../components/settings/ui/primitives";
+import DashboardLoader from "@/components/loading/DashboardLoader";
 
 export default function SettingsPage() {
   const { data: session, status } = useSession();
@@ -44,14 +45,7 @@ export default function SettingsPage() {
   }, []);
 
   if (status === "loading" || loading) {
-    return (
-      <div className="min-h-screen-svh flex items-center justify-center">
-        <div className="text-center">
-          <div className="mx-auto mb-4 h-32 w-32 animate-spin rounded-full border-b-2 border-red-600" />
-          <p className="text-gray-600 dark:text-gray-400">Loading settings...</p>
-        </div>
-      </div>
-    );
+    return <DashboardLoader label="Loading settings…" />;
   }
 
   if (error || !accountData) {

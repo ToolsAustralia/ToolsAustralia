@@ -23,6 +23,7 @@ import type SubscriptionManagementModalType from "@/components/modals/Subscripti
 import DashboardPageHeader from "../components/DashboardPageHeader";
 import MembershipCurrentPlan from "@/components/sections/account-membership/MembershipCurrentPlan";
 import MembershipTierList from "@/components/sections/account-membership/MembershipTierList";
+import DashboardLoader from "@/components/loading/DashboardLoader";
 
 const MembershipModal = dynamic(() => import("@/components/modals/MembershipModal"), { ssr: false });
 // Heavy money-path flow — mounted only when a tier change is requested.
@@ -63,11 +64,7 @@ export default function AccountMembershipPage() {
   }, [session, status, router]);
 
   if (status === "loading" || dash.isLoading) {
-    return (
-      <div className="min-h-screen-svh flex items-center justify-center">
-        <div className="h-12 w-12 animate-spin rounded-full border-4 border-red-600 border-t-transparent" />
-      </div>
-    );
+    return <DashboardLoader label="Loading your membership…" />;
   }
 
   if (!session) {

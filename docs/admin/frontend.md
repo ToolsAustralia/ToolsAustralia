@@ -1,5 +1,10 @@
 # Admin — Frontend
 
+> **Loader (2026-07-02):** the admin auth/loading states (`admin/page.tsx`, `admin/layout.tsx`
+> Suspense fallback, `admin/[tab]/page.tsx`) now render the shared [`DashboardLoader`](../../src/components/loading/DashboardLoader.tsx)
+> (TA wordmark, light/dark) with `className="bg-gray-50 dark:bg-neutral-950"` to match the admin shell,
+> replacing the bare red-arc spinner. See [shared-ui/frontend.md § DashboardLoader](../shared-ui/frontend.md#dashboardloader-2026-07-02).
+
 > **Sign-out (2026-07-02):** `AdminSidebar`'s sign-out now calls `totalSignOut()`
 > ([src/utils/auth/total-sign-out.ts](../../src/utils/auth/total-sign-out.ts)) — clears user-scoped
 > client storage before ending the session (keeps `ta-admin-theme` + admin UI-layout keys). See

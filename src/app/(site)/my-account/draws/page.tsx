@@ -21,6 +21,7 @@ import DrawsMajorHero from "@/components/sections/draws/DrawsMajorHero";
 import DrawHowItWorks from "@/components/sections/draws/DrawHowItWorks";
 import DrawWinners from "@/components/sections/draws/DrawWinners";
 import DrawsMini from "@/components/sections/draws/DrawsMini";
+import DashboardLoader from "@/components/loading/DashboardLoader";
 
 const MembershipModal = dynamic(() => import("@/components/modals/MembershipModal"), { ssr: false });
 
@@ -39,11 +40,7 @@ export default function DrawsPage() {
   }, [session, status, router]);
 
   if (status === "loading" || dash.isLoading) {
-    return (
-      <div className="min-h-screen-svh flex items-center justify-center">
-        <div className="h-12 w-12 animate-spin rounded-full border-4 border-red-600 border-t-transparent" />
-      </div>
-    );
+    return <DashboardLoader label="Loading the draws…" />;
   }
 
   if (!session) {

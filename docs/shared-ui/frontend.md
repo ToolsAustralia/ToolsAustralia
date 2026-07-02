@@ -72,6 +72,22 @@
 > `onSelect` (module-level `CardShell` swaps `<Link>`→`<button>`). Full detail in
 > [draws/frontend.md § Mini-draw entry sheet](../draws/frontend.md#mini-draw-entry-sheet-dashboard-draws-tab-2026-07-02).
 
+### DashboardLoader (2026-07-02)
+
+[`DashboardLoader`](../../src/components/loading/DashboardLoader.tsx) is the single brand-forward
+full-height loader that **replaced the old thin red-arc spinners** (`animate-spin rounded-full
+border-b-2 border-red-600` / `border-4 … border-t-transparent` + "Loading …" text) across the
+member, admin, and affiliate dashboards. It centers the **Tools Australia wordmark** — the Header's
+exact light/dark artwork swap (`/images/logo.webp` with `dark:hidden` + `White-Text Logo.webp` with
+`hidden dark:block`, so the right mark shows pre-hydration) — with a soft brand-red glow + breathing
+pulse over an indeterminate progress sweep. Props: `label?` (status line) and `className?` (bg
+override — admin/affiliate pass `bg-gray-50 dark:bg-neutral-950` / `bg-white dark:bg-neutral-950` to
+match their shells; the member dashboard uses the default `bg-page`). Two keyframes back it in
+[globals.css](../../src/app/globals.css): `ta-loader-breathe` (logo scale/opacity) + `ta-loader-sweep`
+(bar travel); both are `motion-safe`-gated with a `motion-reduce:animate-pulse` fallback. Applied on:
+member `my-account/{,draws,membership,settings,benefits}`, `admin/{,layout,[tab]}`, and
+`affiliate/{,login}`.
+
 ## Dashboard sections (2026-07-02)
 
 The member-dashboard revamp adds section-band components under `src/components/sections/dashboard/`

@@ -1,5 +1,10 @@
 # Affiliate — Frontend
 
+> **Loader (2026-07-02):** the affiliate dashboard (`affiliate/page.tsx`) and login Suspense fallback
+> (`affiliate/login/page.tsx`) now render the shared [`DashboardLoader`](../../src/components/loading/DashboardLoader.tsx)
+> (TA wordmark, light/dark) instead of a bare red-arc spinner. See
+> [shared-ui/frontend.md § DashboardLoader](../shared-ui/frontend.md#dashboardloader-2026-07-02).
+
 ## Pages
 
 `src/app/(site)/affiliate/` — affiliate portal (login, dashboard, links, commissions, payouts).
