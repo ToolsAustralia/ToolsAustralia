@@ -20,7 +20,7 @@ import { useDashboardState } from "@/hooks/useDashboardState";
 import { useMembershipCardCta } from "@/hooks/useMembershipCardCta";
 import DashboardPageHeader from "../components/DashboardPageHeader";
 import MembershipCurrentPlan from "@/components/sections/account-membership/MembershipCurrentPlan";
-import MembershipTierChooser from "@/components/sections/membership/MembershipTierChooser";
+import MembershipTierList from "@/components/sections/account-membership/MembershipTierList";
 
 const MembershipModal = dynamic(() => import("@/components/modals/MembershipModal"), { ssr: false });
 
@@ -56,7 +56,7 @@ export default function AccountMembershipPage() {
     <div className="min-h-screen-svh w-full min-w-0 max-w-full overflow-x-hidden pb-8">
       <DashboardPageHeader title="Membership" sub="Your plan & billing" icon={CreditCard} stateTheme={dash.stateTheme} showBack />
 
-      <div className="px-4 pt-4 sm:px-6">
+      <div className="space-y-4 px-[18px] pb-8 pt-4 sm:px-6 lg:px-[26px]">
         <MembershipCurrentPlan
           acct={dash.acct}
           tierKey={dash.tierKey}
@@ -68,11 +68,11 @@ export default function AccountMembershipPage() {
           onBecomeMember={() => cta.membershipModal.openModal()}
           onBuyPackage={() => cta.membershipModal.openModal()}
         />
-      </div>
 
-      {/* Tier list + one-time packages — reuses the verified conversion section
-          (tier cards + pack cards + CTA state machine) from the public /membership page. */}
-      <MembershipTierChooser cta={cta} sectionId="membership" />
+        {/* Compact tier list + one-time-pack scroll (matches the prototype MembershipPage),
+            driven by the verified useMembershipCardCta state machine. */}
+        <MembershipTierList cta={cta} isMember={dash.acct === "active"} />
+      </div>
 
       <MembershipModal
         isOpen={cta.membershipModal.isModalOpen}
