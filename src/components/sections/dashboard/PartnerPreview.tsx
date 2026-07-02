@@ -46,7 +46,7 @@ export default function PartnerPreview({ acct, partnerAccessPct, expiryLabel, ti
             <span className={isOneTime ? "" : "text-muted-token"}>{sub}</span>
           </div>
         </div>
-        <Link href="/my-account/benefits" className="inline-flex items-center gap-1 text-[12.5px] font-extrabold" style={{ color: tierHex ?? "#ee0000" }}>
+        <Link href="/my-account/rewards" className="inline-flex items-center gap-1 text-[12.5px] font-extrabold" style={{ color: tierHex ?? "#ee0000" }}>
           See all <ChevronRight className="h-3.5 w-3.5" />
         </Link>
       </div>

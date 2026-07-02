@@ -19,7 +19,7 @@ export interface DashboardNavItem {
 /** Shared dashboard navigation model — consumed by BottomNav (mobile) + DeskNav (desktop). */
 export const DASHBOARD_NAV: DashboardNavItem[] = [
   { id: "overview", label: "Dashboard", href: "/my-account", icon: LayoutDashboard },
-  { id: "rewards", label: "Rewards", href: "/my-account/benefits", icon: Gift },
+  { id: "rewards", label: "Rewards", href: "/my-account/rewards", icon: Gift },
   { id: "draws", label: "Draws", href: "/my-account/draws", icon: Ticket, center: true },
   { id: "account-membership", label: "Membership", href: "/my-account/membership", icon: CreditCard },
   { id: "support", label: "Support", href: "/my-account/support", icon: MessageCircle },

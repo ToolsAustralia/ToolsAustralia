@@ -51,7 +51,7 @@ export default function QuickActionsGrid({
           label="Redeem"
           badge={rewardsEnabled && redeemCount ? redeemCount : undefined}
           accentHex={CT.gold}
-          href={rewardsEnabled ? "/my-account/benefits" : undefined}
+          href={rewardsEnabled ? "/my-account/rewards" : undefined}
           disabled={!rewardsEnabled}
         />
         <QuickTile icon={Percent} label="Vouchers" accentHex={CT.blue} comingSoon />
@@ -62,10 +62,10 @@ export default function QuickActionsGrid({
           label="Milestones"
           accentHex={CT.violet}
           comingSoon={!milestonesOn}
-          href={milestonesOn ? "/my-account/benefits" : undefined}
+          href={milestonesOn ? "/my-account/rewards" : undefined}
         />
         {/* Mobile-only: Partners + Support (they live in the desktop sidebar). */}
-        <QuickTile icon={Store} label="Partners" accentHex={CT.blue} href="/my-account/benefits" className="lg:hidden" />
+        <QuickTile icon={Store} label="Partners" accentHex={CT.blue} href="/my-account/rewards" className="lg:hidden" />
         <QuickTile icon={Headphones} label="Support" accentHex={CT.green} href="/my-account/support" className="lg:hidden" />
       </div>
     </section>

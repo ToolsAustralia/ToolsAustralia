@@ -12,6 +12,14 @@
 > "up next" list ranked by %, and the total queued access window. See
 > [shared-ui/frontend.md § RewardsPartnerQueue](../shared-ui/frontend.md#rewardspartnerqueue--partner-discount-queue-2026-07-03).
 
+> **Route rename `benefits` → `rewards` (2026-07-03):** the dashboard Rewards tab moved from
+> `/my-account/benefits` to **`/my-account/rewards`** so the URL matches its "Rewards" label (the folder
+> is now `src/app/(site)/my-account/rewards/`). A **307 redirect** (`next.config.ts` `redirects()`) keeps
+> the old path working; all internal links were repointed (`BottomNav`, `Header` ×2, `DashboardGuestPanel`,
+> `PartnerPreview`, `QuickActionsGrid` ×3). Nav active-state is generic (`isNavItemActive` matches
+> `item.href`), so it followed automatically. **Older doc references to `benefits/page.tsx` mean
+> `rewards/page.tsx`.**
+
 > **Foreman hero/header theme + page-header chrome (2026-07-03):** [`getDashboardStateTheme`](../../src/utils/dashboard/dashboard-state-theme.ts)
 > now special-cases the **gold tier** (Foreman `#ffd200` — the only tier `inkOn` renders with dark ink):
 > the generic `shade()` gradient darkened pure yellow to a **dusty olive** (`#947a00`), which is the only

@@ -124,6 +124,11 @@ payment/modal layer (`Z_INDEX` 10000). The layout-mounted Support/Payment/Manage
 scale) on desktop, with the backdrop fading (`ta-sheet-fade`); all `motion-safe`-gated (keyframes in
 [globals.css](../../src/app/globals.css)). Entrance only — close still unmounts immediately.
 
+> **Rewards route rename (2026-07-03):** the dashboard Rewards tab moved `/my-account/benefits` →
+> `/my-account/rewards`; the `Header` (×2) + dashboard-section links (`DashboardGuestPanel`,
+> `PartnerPreview`, `QuickActionsGrid`) here were repointed. See
+> [dashboard-account/frontend.md § Route rename](../dashboard-account/frontend.md#route-rename-benefits--rewards-2026-07-03).
+
 ### RewardsPartnerQueue — partner-discount queue (2026-07-03)
 
 [`RewardsPartnerQueue`](../../src/components/sections/rewards/RewardsPartnerQueue.tsx) is the Rewards-tab

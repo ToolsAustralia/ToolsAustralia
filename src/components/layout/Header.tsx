@@ -896,7 +896,7 @@ export default function Header({ isFixed = true }: HeaderProps) {
                             My Account
                           </Link>
                           <Link
-                            href="/my-account/benefits"
+                            href="/my-account/rewards"
                             className="flex items-center gap-2 px-4 py-3 text-sm text-gray-700 dark:text-neutral-200 hover:bg-gray-50 dark:hover:bg-neutral-800 transition-colors duration-150"
                             onClick={() => setIsDesktopUserMenuOpen(false)}
                           >
@@ -1089,7 +1089,7 @@ export default function Header({ isFixed = true }: HeaderProps) {
                           My Account
                         </Link>
                         <Link
-                          href="/my-account/benefits"
+                          href="/my-account/rewards"
                           className="flex items-center gap-2 px-4 py-3 text-sm text-gray-700 dark:text-neutral-200 hover:bg-gray-50 dark:hover:bg-neutral-800 transition-colors duration-150"
                           onClick={() => setIsMobileUserMenuOpen(false)}
                         >

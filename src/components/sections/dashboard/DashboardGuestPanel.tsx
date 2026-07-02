@@ -62,7 +62,7 @@ export default function DashboardGuestPanel({ drawName, onBecomeMember, onBuyPac
         <span className="mb-3 block text-[11px] font-bold uppercase tracking-[0.18em] text-muted-token">Explore</span>
         <div className="grid grid-cols-4 gap-2 sm:gap-3">
           <QuickTile icon={CreditCard} label="Membership" accentHex="#ee0000" href="/my-account/membership" />
-          <QuickTile icon={Store} label="Partners" accentHex="#0ea5a5" href="/my-account/benefits" />
+          <QuickTile icon={Store} label="Partners" accentHex="#0ea5a5" href="/my-account/rewards" />
           <QuickTile icon={History} label="Past draws" accentHex="#8b5cf6" href="/my-account/draws" />
           <QuickTile icon={MessageCircle} label="Support" accentHex="#64748b" href="/my-account/support" />
         </div>

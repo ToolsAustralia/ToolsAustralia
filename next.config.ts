@@ -102,7 +102,12 @@ const nextConfig: NextConfig = {
 
   // SEO-friendly redirects
   async redirects() {
-    return [];
+    return [
+      // Dashboard Rewards tab moved /my-account/benefits → /my-account/rewards
+      // (the route now matches its "Rewards" label). Temporary (307) so it stays
+      // reversible; flip to permanent once the new path has settled.
+      { source: "/my-account/benefits", destination: "/my-account/rewards", permanent: false },
+    ];
   },
 
   // Optional: enforce no trailing slash (Next defaults are fine, keep explicit for clarity)
