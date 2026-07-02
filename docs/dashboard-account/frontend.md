@@ -328,9 +328,16 @@ The tabbed Settings destination (`?tab=account|subscription|password|payment` + 
 was collapsed into the Claude-design IA:
 
 - **`settings/page.tsx`** is now ONE consolidated **Account settings** page — identity card,
-  reused `ProfileTab` (email verification + personal details + saves), an Appearance card
-  (`ThemePicker`, Light/Dark only), reused `PasswordTab`, and Sign out. No `?tab=` routing, no
-  sidebar. **`SettingsSidebar.tsx` was deleted** (fully orphaned).
+  `ProfileTab` (email-verify banner + personal details), an Appearance card (`ThemePicker`,
+  Light/Dark only), `PasswordTab`, and Sign out. No `?tab=` routing, no sidebar.
+  **`SettingsSidebar.tsx` was deleted** (fully orphaned).
+- **`ProfileTab` + `PasswordTab` rebuilt to the clean Claude design** (2026-07-02): `ProfileTab` is
+  now email-verify banner + Mobile / DOB / Profession (select) / State (select) with a **single
+  "Save changes"** (one POST to `/api/user/update-profile`) instead of two per-section saves and the
+  emoji/state tile grids; a compact giveaway-eligibility note shows only when ineligible. `PasswordTab`
+  is a minimal change/set-password card + strength meter + "Email me a reset link" — the security-score
+  dial, 2FA/SMS placeholder and requirements side-panel were dropped. Same endpoints
+  (`/api/user/change-password`, `/api/auth/request-password-reset`).
 - **Subscription + payment are overlay sheets**, not pages: `components/sheets/ManageSheet.tsx`
   (`sheet === "manage"`) and `PaymentSheet.tsx` (`sheet === "payment"`), mounted in `layout.tsx`
   next to `SupportSheet`, bottom-sheet on mobile / centered popup on desktop via `SheetShell`.
@@ -346,9 +353,11 @@ was collapsed into the Claude-design IA:
 - **Sidebar sticky fix:** `overflow-x-hidden` was removed from the `my-account/layout.tsx` flex
   parent (it computed `overflow-y: auto`, becoming the sticky scroll-container and breaking
   `DeskNav`'s `sticky top-0`); the horizontal clip moved to `<main>`.
-- **Known gap (flagged, not fixed):** `handleSignOut` still only removes `wasAuthenticated` +
-  `topBarHidden` — it does NOT clear per-user client storage (history/recents/queues/IDB), which the
-  global auth-boundary rule wants. Needs its own storage-inventory pass.
+- **Total sign-out (2026-07-02, resolved):** the Account-settings Sign-out (and the Header /
+  AdminSidebar / forced-logout paths) now call `totalSignOut()`
+  ([src/utils/auth/total-sign-out.ts](../../src/utils/auth/total-sign-out.ts)), which clears the
+  user-scoped portion of client storage before ending the session (keeps device/attribution prefs).
+  See [auth/frontend.md](../auth/frontend.md#total-sign-out-2026-07-02).
 
 ## Dashboard revamp — Spec 3: Draws (2026-07-02)
 

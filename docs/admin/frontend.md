@@ -1,5 +1,10 @@
 # Admin — Frontend
 
+> **Sign-out (2026-07-02):** `AdminSidebar`'s sign-out now calls `totalSignOut()`
+> ([src/utils/auth/total-sign-out.ts](../../src/utils/auth/total-sign-out.ts)) — clears user-scoped
+> client storage before ending the session (keeps `ta-admin-theme` + admin UI-layout keys). See
+> [auth/frontend.md](../auth/frontend.md#total-sign-out-2026-07-02).
+
 ## Prize performance card — brands derived from the source of truth (2026-06-30)
 
 `PrizePerformanceCard` `PROMOTION_BRANDS` is now **derived** from `TOOLSET_LANDING_SLUGS`

@@ -11,8 +11,9 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import React, { useCallback } from "react";
-import { useSession, signOut } from "next-auth/react";
+import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
+import { totalSignOut } from "@/utils/auth/total-sign-out";
 import { Settings as SettingsIcon, LogOut, Palette, CheckCircle2, AlertTriangle } from "lucide-react";
 import { useMyAccountData } from "@/hooks/queries";
 import { useDashboardState } from "@/hooks/useDashboardState";
@@ -37,9 +38,7 @@ export default function SettingsPage() {
   }, [session, status, router]);
 
   const handleSignOut = useCallback(() => {
-    localStorage.removeItem("wasAuthenticated");
-    localStorage.removeItem("topBarHidden");
-    signOut({ callbackUrl: "/" });
+    void totalSignOut({ callbackUrl: "/" });
   }, []);
 
   if (status === "loading" || loading) {
@@ -119,7 +118,7 @@ export default function SettingsPage() {
         </div>
 
         {/* Password & security (reused, self-contained) */}
-        <PasswordTab userEmail={user.email} isEmailVerified={user.isEmailVerified} hasPassword={user.hasPassword} />
+        <PasswordTab userEmail={user.email} hasPassword={user.hasPassword} />
 
         {/* Sign out */}
         <button

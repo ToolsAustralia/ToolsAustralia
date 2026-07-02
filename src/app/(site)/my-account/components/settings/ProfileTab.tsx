@@ -1,65 +1,17 @@
 "use client";
 
-import React, { useState } from "react";
-import {
-  User,
-  Mail,
-  ShieldCheck,
-  AlertTriangle,
-  Lock,
-  CheckCircle2,
-  Phone,
-  Sparkles,
-  ArrowUpRight,
-  Info,
-} from "lucide-react";
-import { useRouter } from "next/navigation";
-import { AUSTRALIAN_STATES } from "@/data/australianStates";
-import { PROFESSIONS, isPredefinedProfession } from "@/data/professions";
-import { useToast } from "@/components/ui/Toast";
-import { useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
+import { AlertTriangle, ShieldCheck, Info, ChevronDown } from "lucide-react";
 import { useSession } from "next-auth/react";
+import { useQueryClient } from "@tanstack/react-query";
+import { AUSTRALIAN_STATES } from "@/data/australianStates";
+import { PROFESSIONS } from "@/data/professions";
+import { useToast } from "@/components/ui/Toast";
 import { queryKeys } from "@/lib/queryKeys";
 import { useModalPriorityStore } from "@/stores/useModalPriorityStore";
-import { formatDisplayName } from "@/utils/display-name";
-import GiveawayEligibilityNotice from "@/components/ui/GiveawayEligibilityNotice";
 import BirthdatePicker from "@/components/ui/BirthdatePicker";
 import { isGiveawayIneligible, getGiveawayIneligibilityReasons } from "@/utils/giveaway-eligibility";
 import { cn } from "@/utils/cn";
-import { hasFailedRenewal } from "@/utils/subscription/subscription-helpers";
-import {
-  Card,
-  SectionHeader,
-  Field,
-  SettingsInput,
-  SettingsButton,
-  SettingsBadge,
-} from "./ui/primitives";
-
-// Claude-design profession tiles, sourced from the canonical PROFESSIONS list
-// (src/data/professions.ts) so every profession in the dropdown is shown.
-// Named tiles set `profession` to the canonical value; "Other" opens the
-// free-text input so arbitrary professions still work.
-const PROFESSION_EMOJI: Record<string, string> = {
-  Builder: "🏗️",
-  Electrician: "⚡",
-  Plumber: "🔧",
-  Construction: "👷",
-  Mechanic: "🛠️",
-  Landscaper: "🌿",
-  Welder: "🔥",
-  Bricklayer: "🧱",
-  Concreter: "🪨",
-  "Fitter & Turner": "⚙️",
-  Painter: "🎨",
-  Other: "🧰",
-};
-const PROFESSION_OPTIONS: Array<{ id: string; label: string; emoji: string }> =
-  PROFESSIONS.map((p) => ({
-    id: p.value,
-    label: p.label,
-    emoji: PROFESSION_EMOJI[p.value] ?? "🧰",
-  }));
 
 interface ProfileTabProps {
   user: {
@@ -72,467 +24,213 @@ interface ProfileTabProps {
     state?: string;
     profession?: string;
     birthdate?: string;
-    subscription?: { isActive: boolean };
-    enrichedOneTimePackages?: Array<{ isActive: boolean }>;
   };
 }
 
+const fieldClass =
+  "w-full rounded-xl border border-token bg-page px-3.5 py-3 text-sm text-primary-token placeholder:text-muted-token focus:border-red-600 focus:outline-none focus:ring-2 focus:ring-red-600/25 dark:text-white";
+
+/**
+ * Personal details for the consolidated Account settings page (Claude clean
+ * design): email-verification banner + Mobile / DOB / Profession / State rows,
+ * saved by ONE "Save changes" button (single POST to /api/user/update-profile).
+ */
 export default function ProfileTab({ user }: ProfileTabProps) {
   const { data: session } = useSession();
   const { showToast } = useToast();
   const queryClient = useQueryClient();
-  const requestModal = useModalPriorityStore((state) => state.requestModal);
-  const router = useRouter();
+  const requestModal = useModalPriorityStore((s) => s.requestModal);
 
   const [mobile, setMobile] = useState(user.mobile || "");
   const [state, setState] = useState(user.state || "");
   const [profession, setProfession] = useState(user.profession || "");
-  const [birthdate, setBirthdate] = useState(
-    user.birthdate ? String(user.birthdate).slice(0, 10) : ""
-  );
-  const [isSavingMobile, setIsSavingMobile] = useState(false);
-  const [isSavingProfile, setIsSavingProfile] = useState(false);
-  // "Other" profession tile opens the free-text input.
-  const [editingProfession, setEditingProfession] = useState(false);
+  const [birthdate, setBirthdate] = useState(user.birthdate ? String(user.birthdate).slice(0, 10) : "");
+  const [isSaving, setIsSaving] = useState(false);
 
-  const invalidateAccountData = async () => {
-    if (!session?.user?.id) return;
-    await queryClient.invalidateQueries({ queryKey: queryKeys.users.account(session.user.id) });
-    await queryClient.invalidateQueries({ queryKey: queryKeys.users.detail(session.user.id) });
-  };
+  // Keep an out-of-list saved profession selectable.
+  const professionOptions =
+    !profession || PROFESSIONS.some((p) => p.value === profession)
+      ? PROFESSIONS
+      : [{ value: profession, label: profession }, ...PROFESSIONS];
 
-  const handleSaveMobile = async () => {
+  const reasons = getGiveawayIneligibilityReasons(state, birthdate || user.birthdate);
+  const ineligible = isGiveawayIneligible(state, birthdate || user.birthdate);
+
+  const handleSave = async () => {
     try {
-      setIsSavingMobile(true);
-      const res = await fetch("/api/user/update-profile", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ mobile }),
-      });
-
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || "Failed to update phone number");
-      }
-
-      showToast({
-        type: "success",
-        title: "Phone updated",
-        message: "The phone number was updated successfully.",
-      });
-      await invalidateAccountData();
-    } catch (error) {
-      showToast({
-        type: "error",
-        title: "Update failed",
-        message: error instanceof Error ? error.message : "Could not update phone number",
-      });
-    } finally {
-      setIsSavingMobile(false);
-    }
-  };
-
-  const handleSaveProfile = async () => {
-    try {
-      setIsSavingProfile(true);
+      setIsSaving(true);
       const res = await fetch("/api/user/update-profile", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          mobile,
           state: state ? state.toUpperCase() : undefined,
           profession: profession?.trim() || undefined,
           birthdate: birthdate?.trim() || undefined,
         }),
       });
-
       const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || "Failed to update profile");
+      if (!res.ok) throw new Error(data.error || "Failed to save changes");
+      showToast({ type: "success", title: "Saved", message: "Your details were updated." });
+      if (session?.user?.id) {
+        await queryClient.invalidateQueries({ queryKey: queryKeys.users.account(session.user.id) });
+        await queryClient.invalidateQueries({ queryKey: queryKeys.users.detail(session.user.id) });
       }
-
-      showToast({
-        type: "success",
-        title: "Profile updated",
-        message: "Your profile information was updated successfully.",
-      });
-      await invalidateAccountData();
     } catch (error) {
       showToast({
         type: "error",
-        title: "Update failed",
-        message: error instanceof Error ? error.message : "Could not update profile",
+        title: "Save failed",
+        message: error instanceof Error ? error.message : "Could not save changes",
       });
     } finally {
-      setIsSavingProfile(false);
+      setIsSaving(false);
     }
   };
 
-  const ineligibilityReasons = getGiveawayIneligibilityReasons(state, birthdate || user.birthdate);
-  const isIneligible = isGiveawayIneligible(state, birthdate || user.birthdate);
-
-  const hasFailed = hasFailedRenewal(user as unknown as import("@/models/User").IUser);
-  const isGuest =
-    !hasFailed &&
-    !user.subscription?.isActive &&
-    !(user.enrichedOneTimePackages?.some((p) => p.isActive));
-
   return (
-    <div className="space-y-6">
-      {/* Guest upsell strip */}
-      {isGuest && (
-        <Card className="overflow-hidden shadow-lift dark:shadow-lift-dark">
-          <div className="grid sm:grid-cols-[1fr_auto] items-center gap-4 p-5 bg-gradient-to-br from-neutral-900 to-neutral-950 text-white rounded-2xl">
-            <div className="flex items-start gap-3">
-              <div className="shrink-0 w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center">
-                <Sparkles className="w-5 h-5 text-white" strokeWidth={2} />
-              </div>
-              <div>
-                <p className="font-poppins font-bold text-base">
-                  Unlock the full Tools Australia experience
-                </p>
-                <p className="text-sm text-white/70 mt-0.5">
-                  Become a member to enter giveaways, claim partner discounts and accumulate entries.
-                </p>
-              </div>
-            </div>
-            <SettingsButton
-              variant="dark"
-              size="md"
-              icon={ArrowUpRight}
-              onClick={() => router.push("/my-account/membership")}
-            >
-              Join a plan
-            </SettingsButton>
-          </div>
-        </Card>
-      )}
-
-      {/* Personal Information */}
-      <section>
-        <SectionHeader title="Personal Information" icon={User} accent="red" />
-
-        <div className="grid sm:grid-cols-2 gap-3">
-          {/* Full name identity card */}
-          <Card className="p-4 shadow-lift dark:shadow-lift-dark">
-            <div className="flex items-start gap-3">
-              <div className="shrink-0 w-9 h-9 rounded-xl bg-neutral-100 dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300 flex items-center justify-center">
-                <User className="w-4 h-4" strokeWidth={2} />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-[10px] font-bold tracking-[0.14em] uppercase text-neutral-500 dark:text-neutral-400 flex items-center gap-1">
-                  Full name
-                  <Lock className="w-3 h-3" strokeWidth={2.25} aria-hidden />
-                </p>
-                <p className="text-sm font-semibold text-neutral-900 dark:text-white truncate mt-0.5">
-                  {formatDisplayName(user.firstName, user.lastName)}
-                </p>
-                <p className="text-[11px] text-neutral-500 dark:text-neutral-400 mt-0.5">
-                  Contact support to change
-                </p>
-              </div>
-            </div>
-          </Card>
-
-          {/* Email identity card */}
-          <Card className="p-4 shadow-lift dark:shadow-lift-dark">
-            <div className="flex items-start gap-3">
-              <div className="shrink-0 w-9 h-9 rounded-xl bg-neutral-100 dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300 flex items-center justify-center">
-                <Mail className="w-4 h-4" strokeWidth={2} />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-[10px] font-bold tracking-[0.14em] uppercase text-neutral-500 dark:text-neutral-400 flex items-center gap-1">
-                  Email
-                  <Lock className="w-3 h-3" strokeWidth={2.25} aria-hidden />
-                </p>
-                <p className="text-sm font-semibold text-neutral-900 dark:text-white truncate mt-0.5">
-                  {user.email}
-                </p>
-                <p className="text-[11px] text-neutral-500 dark:text-neutral-400 mt-0.5">
-                  Contact support to change
-                </p>
-              </div>
-            </div>
-          </Card>
-
-          {/* Email verification row */}
-          <Card className="sm:col-span-2 p-4 shadow-lift dark:shadow-lift-dark">
-            <div className="flex items-center justify-between gap-4">
-              <div className="flex items-center gap-3 min-w-0">
-                <div
-                  className={cn(
-                    "shrink-0 w-10 h-10 rounded-xl flex items-center justify-center",
-                    user.isEmailVerified
-                      ? "bg-emerald-100 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400"
-                      : "bg-amber-100 dark:bg-amber-950/50 text-amber-600 dark:text-amber-400",
-                  )}
-                >
-                  {user.isEmailVerified ? (
-                    <ShieldCheck className="w-5 h-5" strokeWidth={2} />
-                  ) : (
-                    <AlertTriangle className="w-5 h-5" strokeWidth={2} />
-                  )}
-                </div>
-                <div className="min-w-0">
-                  <p className="text-sm font-semibold text-neutral-900 dark:text-white">
-                    Email verification
-                  </p>
-                  <p className="text-xs text-neutral-500 dark:text-neutral-400 truncate">
-                    Used for sign-in &amp; receipts
-                  </p>
-                </div>
-              </div>
-              <div className="flex items-center gap-2 shrink-0">
-                {user.isEmailVerified ? (
-                  <SettingsBadge tone="success" icon={CheckCircle2}>
-                    Verified
-                  </SettingsBadge>
-                ) : (
-                  <SettingsButton
-                    variant="primary"
-                    size="sm"
-                    onClick={() => requestModal("user-setup", true, { initialStep: 3 })}
-                  >
-                    Verify Email
-                  </SettingsButton>
-                )}
-              </div>
-            </div>
-          </Card>
-        </div>
-      </section>
-
-      {/* Contact & Details */}
-      <section>
-        <SectionHeader
-          title="Contact & Details"
-          description="Used for giveaway eligibility and important account alerts."
-          icon={Phone}
-          accent="red"
-        />
-
-        <div className="space-y-5">
-          {/* Phone number + Date of birth — same row */}
-          <div className="grid grid-cols-2 gap-3 sm:gap-5 items-start">
-            <Field label="Phone number" hint="Used for renewal alerts and 2FA.">
-              <SettingsInput
-                value={mobile}
-                onChange={(e) => setMobile(e.target.value)}
-                placeholder="Enter phone number"
-                inputMode="tel"
-              />
-              <div className="flex gap-2 pt-1">
-                <SettingsButton
-                  variant="primary"
-                  size="sm"
-                  onClick={handleSaveMobile}
-                  disabled={isSavingMobile}
-                >
-                  {isSavingMobile ? "Saving…" : "Save"}
-                </SettingsButton>
-                <SettingsButton
-                  variant="secondary"
-                  size="sm"
-                  onClick={() => setMobile(user.mobile || "")}
-                >
-                  Reset
-                </SettingsButton>
-              </div>
-            </Field>
-
-            <div className="space-y-1.5">
-              <BirthdatePicker
-                value={birthdate}
-                onChange={setBirthdate}
-                label="Date of birth"
-                maxDate={new Date()}
-                placeholder="Select date of birth"
-                popoverClassName="left-auto right-0 w-[min(22rem,calc(100vw-1.5rem))] sm:left-0 sm:right-0 sm:w-full"
-              />
-              {ineligibilityReasons.under18 && (
-                <p
-                  className="mt-1.5 flex items-center gap-1.5 text-xs text-amber-700 dark:text-amber-300"
-                  role="status"
-                >
-                  <Info className="w-3.5 h-3.5 flex-shrink-0" aria-hidden />
-                  You must be 18 or over to participate in giveaways.
-                </p>
+    <div className="space-y-5">
+      {/* Email verification banner */}
+      <div
+        className={cn(
+          "flex items-center gap-3 rounded-2xl border p-4 shadow-sm",
+          user.isEmailVerified
+            ? "border-token bg-surface"
+            : "border-amber-300/60 bg-amber-50 dark:border-amber-900/50 dark:bg-amber-950/20",
+        )}
+      >
+        <span
+          className={cn(
+            "grid h-10 w-10 shrink-0 place-items-center rounded-xl",
+            user.isEmailVerified
+              ? "bg-emerald-100 text-emerald-600 dark:bg-emerald-950/50 dark:text-emerald-400"
+              : "bg-amber-100 text-amber-600 dark:bg-amber-950/50 dark:text-amber-400",
+          )}
+        >
+          {user.isEmailVerified ? <ShieldCheck className="h-5 w-5" /> : <AlertTriangle className="h-5 w-5" />}
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <p className="truncate text-sm font-semibold text-primary-token dark:text-white">{user.email}</p>
+            <span
+              className={cn(
+                "shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide",
+                user.isEmailVerified
+                  ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300"
+                  : "bg-amber-100 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300",
               )}
-            </div>
+            >
+              {user.isEmailVerified ? "Verified" : "Unverified"}
+            </span>
           </div>
+          <p className="text-xs text-muted-token">
+            {user.isEmailVerified ? "Your email is confirmed." : "Confirm your email to secure your account."}
+          </p>
+        </div>
+        {!user.isEmailVerified && (
+          <button
+            type="button"
+            onClick={() => requestModal("user-setup", true, { initialStep: 3 })}
+            className="shrink-0 rounded-full bg-red-600 px-4 py-2 text-sm font-bold text-white transition-colors hover:bg-red-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-600"
+          >
+            Verify
+          </button>
+        )}
+      </div>
 
-          {/* State — Claude design tile grid (codes map 1:1 to real `state`) */}
-          <div className="space-y-1.5">
-            <label className="text-sm font-medium text-neutral-700 dark:text-neutral-300">
-              State
+      {/* Personal details */}
+      <div className="rounded-2xl border border-token bg-surface p-5 shadow-sm">
+        <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-muted-token">Personal details</p>
+
+        <div className="mt-4 space-y-4">
+          <div>
+            <label htmlFor="mobile" className="mb-1.5 block text-sm font-medium text-primary-token dark:text-white">
+              Mobile number
             </label>
-            <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
-              {AUSTRALIAN_STATES.map((s) => {
-                const active = s.code === state;
-                const restricted = s.code === "SA" || s.code === "ACT";
-                return (
-                  <button
-                    key={s.code}
-                    type="button"
-                    onClick={() => setState(s.code)}
-                    className={cn(
-                      "relative px-3 py-2 rounded-xl border text-left transition-all",
-                      active
-                        ? "border-red-600 bg-red-50 dark:bg-red-950/30 ring-2 ring-red-600/20"
-                        : "border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 hover:border-neutral-300 dark:hover:border-neutral-700",
-                      restricted && !active && "opacity-60",
-                    )}
-                  >
-                    <p
-                      className={cn(
-                        "text-sm font-bold",
-                        active ? "text-red-700 dark:text-red-300" : "text-neutral-900 dark:text-white",
-                      )}
-                    >
-                      {s.code}
-                    </p>
-                    <p
-                      className={cn(
-                        "text-[10px] truncate",
-                        active
-                          ? "text-red-600/70 dark:text-red-300/70"
-                          : "text-neutral-500 dark:text-neutral-400",
-                      )}
-                    >
-                      {restricted ? "Not eligible" : s.name}
-                    </p>
-                    {active && (
-                      <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-red-600 text-white flex items-center justify-center">
-                        <CheckCircle2 className="w-3 h-3" strokeWidth={3} aria-hidden />
-                      </span>
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-            {ineligibilityReasons.state && (
-              <p
-                className="mt-1.5 flex items-center gap-1.5 text-xs text-amber-700 dark:text-amber-300"
-                role="status"
-              >
-                <Info className="w-3.5 h-3.5 flex-shrink-0" aria-hidden />
-                SA and ACT residents cannot participate in giveaways.
-              </p>
-            )}
+            <input
+              id="mobile"
+              type="tel"
+              inputMode="tel"
+              value={mobile}
+              onChange={(e) => setMobile(e.target.value)}
+              placeholder="0412 345 678"
+              className={fieldClass}
+            />
           </div>
 
-          {/* Profession — Claude design emoji tiles; "Other" opens free text */}
-          <div className="space-y-1.5">
-            <label className="text-sm font-medium text-neutral-700 dark:text-neutral-300">
+          <BirthdatePicker
+            value={birthdate}
+            onChange={setBirthdate}
+            label="Date of birth"
+            maxDate={new Date()}
+            placeholder="Select date of birth"
+            popoverClassName="left-auto right-0 w-[min(22rem,calc(100vw-1.5rem))] sm:left-0 sm:right-0 sm:w-full"
+          />
+
+          <div>
+            <label htmlFor="profession" className="mb-1.5 block text-sm font-medium text-primary-token dark:text-white">
               Profession
             </label>
-            <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
-              {PROFESSION_OPTIONS.map((p) => {
-                const isOtherTile = p.id === "Other";
-                const hasPredefined = isPredefinedProfession(profession.trim());
-                const otherActive =
-                  editingProfession || (!!profession.trim() && !hasPredefined);
-                const active = isOtherTile
-                  ? otherActive
-                  : hasPredefined &&
-                    p.label.toLowerCase() === profession.trim().toLowerCase();
-                return (
-                  <button
-                    key={p.id}
-                    type="button"
-                    onClick={() => {
-                      if (isOtherTile) {
-                        setEditingProfession(true);
-                        if (hasPredefined) setProfession("");
-                      } else {
-                        setEditingProfession(false);
-                        setProfession(p.label);
-                      }
-                    }}
-                    className={cn(
-                      "px-2 py-2.5 rounded-xl border text-center transition-all",
-                      active
-                        ? "border-red-600 bg-red-50 dark:bg-red-950/30"
-                        : "border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 hover:border-neutral-300 dark:hover:border-neutral-700",
-                    )}
-                  >
-                    <div className="text-lg leading-none mb-1">{p.emoji}</div>
-                    <p
-                      className={cn(
-                        "text-[11px] font-semibold",
-                        active
-                          ? "text-red-700 dark:text-red-300"
-                          : "text-neutral-700 dark:text-neutral-300",
-                      )}
-                    >
-                      {p.label}
-                    </p>
-                  </button>
-                );
-              })}
+            <div className="relative">
+              <select
+                id="profession"
+                value={profession}
+                onChange={(e) => setProfession(e.target.value)}
+                className={cn(fieldClass, "appearance-none pr-9")}
+              >
+                <option value="">Select profession</option>
+                {professionOptions.map((p) => (
+                  <option key={p.value} value={p.value}>
+                    {p.label}
+                  </option>
+                ))}
+              </select>
+              <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-token" />
             </div>
-            {(editingProfession ||
-              (!!profession.trim() && !isPredefinedProfession(profession.trim()))) && (
-              <div className="pt-1">
-                <SettingsInput
-                  value={profession}
-                  onChange={(e) => setProfession(e.target.value)}
-                  placeholder="Enter your profession"
-                  maxLength={100}
-                  autoFocus
-                />
-              </div>
-            )}
           </div>
 
-          {/* Eligibility callout — positive */}
-          {!isIneligible && !!state && !!(birthdate || user.birthdate) && (
-            <div
-              className={cn(
-                "rounded-2xl border border-emerald-200/80 dark:border-emerald-900/50",
-                "bg-emerald-50/60 dark:bg-emerald-950/20 px-4 py-3 flex items-start gap-3"
-              )}
-            >
-              <CheckCircle2
-                className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5"
-                strokeWidth={2.25}
-              />
-              <p className="text-xs sm:text-sm text-emerald-800 dark:text-emerald-200">
-                <span className="font-semibold">You&apos;re eligible to win.</span>{" "}
-                Your state, age and verification all check out.
+          <div>
+            <label htmlFor="state" className="mb-1.5 block text-sm font-medium text-primary-token dark:text-white">
+              State
+            </label>
+            <div className="relative">
+              <select
+                id="state"
+                value={state}
+                onChange={(e) => setState(e.target.value)}
+                className={cn(fieldClass, "appearance-none pr-9")}
+              >
+                <option value="">Select state</option>
+                {AUSTRALIAN_STATES.map((s) => (
+                  <option key={s.code} value={s.code}>
+                    {s.code} — {s.name}
+                    {s.code === "SA" || s.code === "ACT" ? " (not eligible)" : ""}
+                  </option>
+                ))}
+              </select>
+              <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-token" />
+            </div>
+          </div>
+
+          {ineligible && (
+            <div className="flex items-start gap-2 rounded-xl border border-amber-300/60 bg-amber-50 px-3 py-2.5 dark:border-amber-900/50 dark:bg-amber-950/20">
+              <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-600 dark:text-amber-400" aria-hidden />
+              <p className="text-xs text-amber-800 dark:text-amber-200">
+                {reasons.under18 ? "You must be 18 or over to enter giveaways. " : ""}
+                {reasons.state ? "SA and ACT residents can't enter giveaways." : ""}
               </p>
             </div>
           )}
-
-          {/* Ineligibility notice */}
-          <GiveawayEligibilityNotice
-            show={isIneligible}
-            className="pt-1"
-          />
-
-          {/* Save / Reset profile */}
-          <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2 pt-2">
-            <SettingsButton
-              variant="secondary"
-              size="md"
-              onClick={() => {
-                setState(user.state || "");
-                setProfession(user.profession || "");
-                setBirthdate(user.birthdate ? String(user.birthdate).slice(0, 10) : "");
-              }}
-            >
-              Reset
-            </SettingsButton>
-            <SettingsButton
-              variant="primary"
-              size="md"
-              onClick={handleSaveProfile}
-              disabled={isSavingProfile}
-            >
-              {isSavingProfile ? "Saving..." : "Save profile"}
-            </SettingsButton>
-          </div>
         </div>
-      </section>
+
+        <button
+          type="button"
+          onClick={handleSave}
+          disabled={isSaving}
+          className="mt-5 w-full rounded-xl bg-gradient-to-b from-red-500 to-red-700 py-3 text-sm font-bold text-white transition-transform focus:outline-none focus-visible:ring-2 focus-visible:ring-red-600 disabled:opacity-60 motion-safe:active:translate-y-px"
+        >
+          {isSaving ? "Saving…" : "Save changes"}
+        </button>
+      </div>
     </div>
   );
 }

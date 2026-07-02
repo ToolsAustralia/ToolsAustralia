@@ -1,5 +1,9 @@
 # Shared UI — Frontend
 
+> **Header sign-out (2026-07-02):** the site `Header` menu sign-out now calls `totalSignOut()`
+> ([src/utils/auth/total-sign-out.ts](../../src/utils/auth/total-sign-out.ts)) instead of a bare
+> `signOut()` + 2-key localStorage wipe. See [auth/frontend.md](../auth/frontend.md#total-sign-out-2026-07-02).
+
 ## Dashboard sections (2026-07-02)
 
 The member-dashboard revamp adds section-band components under `src/components/sections/dashboard/`

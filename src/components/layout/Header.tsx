@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
-import { signOut } from "next-auth/react";
+import { totalSignOut } from "@/utils/auth/total-sign-out";
 import { useSidebar } from "@/contexts/SidebarContext";
 import { useUserContext } from "@/contexts/UserContext";
 import { useModalPriorityStore } from "@/stores/useModalPriorityStore";
@@ -439,12 +439,9 @@ export default function Header({ isFixed = true }: HeaderProps) {
   }, [isMobileMenuOpen, isCartOpen]);
 
   const handleSignOut = () => {
-    // Clear localStorage when signing out
-    localStorage.removeItem("wasAuthenticated");
-    localStorage.removeItem("topBarHidden");
-    // setWasAuthenticated(null);
     setIsTopBarHidden(false);
-    signOut({ callbackUrl: "/" });
+    // Total sign-out: clears user-scoped client storage, then ends the session.
+    void totalSignOut({ callbackUrl: "/" });
   };
 
   const handleAffiliateLogout = async () => {
