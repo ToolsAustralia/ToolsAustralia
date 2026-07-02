@@ -62,6 +62,38 @@ Cobber AI support · milestone-progress stepper · personal "your wins" history 
 - **Two adversarial diff-reviews** (Spec 1, then whole-branch) — all findings fixed; final verdict had **no blockers**.
 - **Not yet done (recommend before merge):** manual visual QA of each destination across the 4 account states (active / one-time / past-due / guest) × light/dark × mobile/desktop against the prototype.
 
+## Pixel-fidelity rework (post-screenshot review, 2026-07-02)
+
+After comparing the live render to the Claude prototype (`ConceptHub*`, `RewardsPage`, `DrawsPage`,
+`MembershipPage`), the following were reworked to match 1:1 for **both mobile and desktop** (see
+`docs/dashboard-account/frontend.md` "pixel-fidelity rework"):
+
+- **Home** — flush layout (content against the sidebar); single-row desktop hero (no gear; inline
+  chip; our `AccessRing`); 2-column entries card with inline `CDBox` countdown; glossy `QuickTile`
+  chips (prototype `CT` palette); letter-badge partner deal rows (added canonical `category`);
+  past-due/one-time alert ribbon.
+- **Rewards** — `RewardsPartnerCard` matches `PartnerGrid` (ring + portal SSO + 2×2 brand grid).
+- **Draws** — toggle bar + dark text hero (prize picker + "View this promotion", no image/countdown);
+  reuses `EntryWallet` as the single-column "Your entries" card with an inline Package button + n×
+  badge + seconds; no separate promo banner.
+- **Membership** — compact `MembershipTierList` (tier rows + one-time-pack scroll) replaces the big
+  marketing chooser on the account page.
+
+### Logic correction — access-aware promo multiplier
+`useDashboardState` resolves the multiplier by the canonical rule (`getEffectivePromoType` /
+`PromoBanner`): **active member → membership-packages multiplier** (members buy **Additional
+packages** at 50% of the one-time price), **everyone else → one-time-packages**. It exposes
+`hasAdditionalAccess` (active sub OR current-draw entries) to gate the **real** "50% off one-time
+packages" copy (= Additional packages; 5 active tiers, not Apprentice). Previously the one-time
+multiplier was used for everyone — wrong for members.
+
+### Still to verify / flagged follow-ups
+- **Settings** is functional + already redesigned (status-aware tabs + Appearance/ThemePicker). The
+  prototype's **single-page** Settings layout and the **responsive sheet↔modal overlays**
+  (Support/Payment/Manage) are larger structural changes not yet applied — flagged as a follow-up.
+- **Loyalty milestone reward value** ("+250 at 6 months") — confirm against the real `MilestoneReward`
+  config before launch.
+
 ## Commits (feature/user-dashboard-revamp, newest first)
 
 `f6700c4e` review fixes · `f01ad026` Spec 5 · `1eade62e` Spec 4 · `c0b5d1ac` Spec 3 ·
