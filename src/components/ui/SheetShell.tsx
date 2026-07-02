@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import { cn } from "@/utils/cn";
 
@@ -34,8 +35,13 @@ export default function SheetShell({ open, onClose, children, className, labelle
 
   if (!open) return null;
 
-  return (
-    <div className="fixed inset-0 z-[60] flex flex-col justify-end lg:items-center lg:justify-center lg:p-6" role="dialog" aria-modal="true" aria-labelledby={labelledBy}>
+  // Portal to <body> so the full-viewport backdrop escapes the page's stacking
+  // context — sheets opened from deep in a route (e.g. the Draws-tab mini-draw
+  // sheet, mounted inside <main>) would otherwise render UNDER the fixed z-40
+  // BottomNav and leave the top of the screen uncovered. z sits above the nav +
+  // floating chrome but below the payment/modal layer (Z_INDEX 10000).
+  const overlay = (
+    <div className="fixed inset-0 z-[120] flex flex-col justify-end lg:items-center lg:justify-center lg:p-6" role="dialog" aria-modal="true" aria-labelledby={labelledBy}>
       <button type="button" aria-label="Close" onClick={onClose} className="absolute inset-0 bg-black/55 backdrop-blur-sm" />
       <div
         className={cn(
@@ -49,6 +55,9 @@ export default function SheetShell({ open, onClose, children, className, labelle
       </div>
     </div>
   );
+
+  if (typeof document === "undefined") return overlay;
+  return createPortal(overlay, document.body);
 }
 
 /** Shared sheet header — title + optional sub + close button. */

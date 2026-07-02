@@ -201,7 +201,7 @@ export default function AffiliateDashboardPage() {
   };
 
   if (loading) {
-    return <DashboardLoader label="Loading your dashboard…" className="bg-gray-50 dark:bg-neutral-950" />;
+    return <DashboardLoader label="Loading your dashboard…" light />;
   }
 
   if (!dashboard) {

@@ -222,7 +222,7 @@ function AffiliateLoginContent() {
 
 export default function AffiliateLoginPage() {
   return (
-    <Suspense fallback={<DashboardLoader className="bg-white dark:bg-neutral-950" />}>
+    <Suspense fallback={<DashboardLoader label="Loading…" />}>
       <AffiliateLoginContent />
     </Suspense>
   );

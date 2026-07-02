@@ -26,7 +26,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     <AdminThemeProvider>
       <div className="h-screen-dvh overflow-hidden">
         <AdminUserModalProvider>
-          <Suspense fallback={<DashboardLoader label="Loading admin…" className="bg-gray-50 dark:bg-neutral-950" />}>
+          <Suspense fallback={<DashboardLoader label="Loading admin…" />}>
             {children}
           </Suspense>
         </AdminUserModalProvider>

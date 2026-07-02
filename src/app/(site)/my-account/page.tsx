@@ -219,7 +219,7 @@ export default function MyAccountPage() {
   }, [membershipModal, whenGatesOpenElseGateModal]);
 
   if (status === "loading" || loading || majorDrawStatsLoading || currentMajorDrawLoading) {
-    return <DashboardLoader label="Loading your account…" />;
+    return <DashboardLoader />;
   }
 
   if (error) {

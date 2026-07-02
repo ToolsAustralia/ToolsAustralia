@@ -35,7 +35,14 @@
 
 ### Mini-draw entry sheet (dashboard Draws tab, 2026-07-02)
 
-On `/my-account/draws` (Mini tab), tapping a `MiniDrawCard` **no longer navigates** to `/mini-draws/[id]` — it opens [`MiniDrawEntrySheet`](../../src/components/sections/draws/MiniDrawEntrySheet.tsx) in place (prototype "Enter {draw}" design: green prize/fill card → entry-pack grid populated by `getMiniDrawPackages()` → running new-entry total → single "Add N entries · $X" CTA). The sheet drives the purchase through the shared `useMiniDrawPurchase` hook, so it hits the **same** `/api/mini-draw/purchase` endpoint and webhook-confirmed grant as the detail page — no re-implemented money path. `MiniDrawCard` gained an optional `onSelect` prop (via a module-level `CardShell` that swaps the `<Link>` for a `<button>`); when absent (the public `/mini-draws` grid, `RelatedMiniDraws`) the card still navigates. `DrawsMini` holds the `selected` state + passes the viewer's per-draw entry count from `miniDrawParticipation`.
+On `/my-account/draws` (Mini tab), tapping a `MiniDrawCard` **no longer navigates** to `/mini-draws/[id]` — it opens [`MiniDrawEntrySheet`](../../src/components/sections/draws/MiniDrawEntrySheet.tsx) in place (green prize/fill card → entry-pack grid populated by `getMiniDrawPackages()` → running new-entry total → CTA). The sheet drives the purchase through the shared `useMiniDrawPurchase` hook, so it hits the **same** `/api/mini-draw/purchase` endpoint and webhook-confirmed grant as the detail page — no re-implemented money path. `MiniDrawCard` gained an optional `onSelect` prop (via a module-level `CardShell` that swaps the `<Link>` for a `<button>`); when absent (the public `/mini-draws` grid, `RelatedMiniDraws`) the card still navigates. `DrawsMini` holds the `selected` state + passes the viewer's per-draw entry count from `miniDrawParticipation`.
+
+> _Refinements 2026-07-03:_ pack tiles lead with the **package name** (`displayName ?? name`) + "{n} free
+> entries" + price — **not** a bare entries count, and the "$/entry" line was dropped, because the product
+> sold is the pack (which *grants* free entries), not entries. The CTA reads "Get {PackName} · $X" and the
+> running-total row shows the selected pack name. A **"View mini draw"** button (under the prize card) is
+> the way back to the full `/mini-draws/[id]` detail page. The header sub was reworded ("Buy an entry pack
+> to join this draw") so "the moment it fills" is no longer duplicated with the footer line.
 
 > _TODO: verify each hook's contract by reading source._
 

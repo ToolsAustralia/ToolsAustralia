@@ -28,7 +28,7 @@ export default function AdminTabPage() {
 
   // Show loading while checking authentication
   if (status === "loading") {
-    return <DashboardLoader label="Loading admin…" className="bg-gray-50 dark:bg-neutral-950" />;
+    return <DashboardLoader label="Loading admin…" />;
   }
 
   // Don't render if not authenticated or not internal

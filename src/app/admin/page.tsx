@@ -30,7 +30,7 @@ export default function AdminDashboard() {
 
   // Show loading while checking authentication
   if (isLoading) {
-    return <DashboardLoader label="Loading admin…" className="bg-gray-50 dark:bg-neutral-950" />;
+    return <DashboardLoader label="Loading admin…" />;
   }
 
   // Don't render if not staff — the admin layout's server guard handles the redirect,

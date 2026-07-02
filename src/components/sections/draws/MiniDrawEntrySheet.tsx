@@ -1,7 +1,8 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { CreditCard, Check, Ticket, Loader2 } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { CreditCard, Check, Ticket, Loader2, ArrowUpRight } from "lucide-react";
 import SheetShell, { SheetHead } from "@/components/ui/SheetShell";
 import PaymentProcessingScreen from "@/components/loading/PaymentProcessingScreen";
 import LoginPromptModal from "@/components/modals/LoginPromptModal";
@@ -27,6 +28,7 @@ interface MiniDrawEntrySheetProps {
  * webhook-confirmed granting, upsell) that the detail page uses — never a fork.
  */
 export default function MiniDrawEntrySheet({ open, onClose, miniDraw, userEntryCount = 0 }: MiniDrawEntrySheetProps) {
+  const router = useRouter();
   // Live data reflects the optimistic bump the purchase hook writes to this same cache key,
   // so the fill bar + "you hold N" update the instant a charge is fired.
   const { data: live } = useMiniDraw(open ? miniDraw._id : undefined);
@@ -61,7 +63,7 @@ export default function MiniDrawEntrySheet({ open, onClose, miniDraw, userEntryC
         <SheetHead
           id={titleId}
           title={`Enter ${miniDraw.name}`}
-          sub="Buy entry packs — this draw runs the moment it fills"
+          sub="Buy an entry pack to join this draw"
           onClose={onClose}
         />
 
@@ -88,6 +90,18 @@ export default function MiniDrawEntrySheet({ open, onClose, miniDraw, userEntryC
             </div>
           </div>
 
+          {/* Jump to the full mini-draw detail page. */}
+          <button
+            type="button"
+            onClick={() => {
+              onClose();
+              router.push(`/mini-draws/${miniDraw._id}`);
+            }}
+            className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-xl border border-token bg-surface py-2.5 text-[12.5px] font-bold text-primary-token transition-colors hover:bg-page dark:text-white"
+          >
+            View mini draw <ArrowUpRight className="h-4 w-4" />
+          </button>
+
           {isSoldOut ? (
             <div className="mt-5 rounded-2xl border border-token bg-page py-10 text-center">
               <p className="font-semibold text-primary-token dark:text-white">Entries are now closed</p>
@@ -101,7 +115,6 @@ export default function MiniDrawEntrySheet({ open, onClose, miniDraw, userEntryC
                 {packs.map((pkg) => {
                   const disabled = isExceedsCapacity(pkg.entries);
                   const isActive = activeId === pkg._id;
-                  const perEntry = pkg.entries > 0 ? pkg.price / pkg.entries : 0;
                   return (
                     <button
                       key={pkg._id}
@@ -117,17 +130,16 @@ export default function MiniDrawEntrySheet({ open, onClose, miniDraw, userEntryC
                             : "border-token bg-surface hover:border-emerald-400/60",
                       )}
                     >
-                      <div className="flex items-baseline gap-1">
-                        <span className={cn("num font-['Poppins'] text-[26px] font-black leading-none", isActive ? "text-emerald-600 dark:text-emerald-400" : "text-primary-token dark:text-white")}>
-                          {pkg.entries.toLocaleString()}
-                        </span>
-                        <span className="text-[10px] font-bold uppercase tracking-[0.1em] text-muted-token">entries</span>
-                      </div>
-                      <div className="mt-1.5 flex w-full items-baseline justify-between gap-1">
-                        <span className="text-[15px] font-extrabold text-primary-token dark:text-white">${pkg.price.toLocaleString()}</span>
-                        <span className="text-[10px] font-semibold text-muted-token">${perEntry.toFixed(2)}/entry</span>
-                      </div>
-                      {disabled && <span className="mt-1 text-[10px] font-bold text-red-500">{remaining.toLocaleString()} left</span>}
+                      <span className={cn("font-['Poppins'] text-[14px] font-extrabold leading-tight", isActive ? "text-emerald-700 dark:text-emerald-300" : "text-primary-token dark:text-white")}>
+                        {pkg.displayName ?? pkg.name}
+                      </span>
+                      <span className="mt-0.5 text-[11px] font-semibold text-muted-token">
+                        {pkg.entries.toLocaleString()} free {pkg.entries === 1 ? "entry" : "entries"}
+                      </span>
+                      <span className={cn("num mt-2 text-[18px] font-black leading-none", isActive ? "text-emerald-600 dark:text-emerald-400" : "text-primary-token dark:text-white")}>
+                        ${pkg.price.toLocaleString()}
+                      </span>
+                      {disabled && <span className="mt-1 text-[10px] font-bold text-red-500">{remaining.toLocaleString()} entries left</span>}
                     </button>
                   );
                 })}
@@ -135,9 +147,9 @@ export default function MiniDrawEntrySheet({ open, onClose, miniDraw, userEntryC
 
               {/* Running total */}
               <div className="mt-4 rounded-2xl border border-token bg-page p-3.5">
-                <div className="flex items-center justify-between text-[11px] font-semibold text-muted-token">
+                <div className="flex items-center justify-between gap-2 text-[11px] font-semibold text-muted-token">
                   <span>New entry total in this draw</span>
-                  {selected && <span>${(ctaPrice / Math.max(ctaEntries, 1)).toFixed(2)} / entry</span>}
+                  {selected && <span className="truncate text-primary-token dark:text-white">{selected.displayName ?? selected.name}</span>}
                 </div>
                 <div className="mt-1 flex items-end justify-between">
                   <div className="flex items-baseline gap-1.5">
@@ -165,8 +177,10 @@ export default function MiniDrawEntrySheet({ open, onClose, miniDraw, userEntryC
             >
               {isPurchasing ? (
                 <><Loader2 className="h-[17px] w-[17px] animate-spin" /> Processing…</>
+              ) : selected ? (
+                <><Ticket className="h-[17px] w-[17px]" /> Get {selected.displayName ?? selected.name} · ${ctaPrice.toLocaleString()}</>
               ) : (
-                <><Ticket className="h-[17px] w-[17px]" /> Add {ctaEntries.toLocaleString()} {ctaEntries === 1 ? "entry" : "entries"} · ${ctaPrice.toLocaleString()}</>
+                <><Ticket className="h-[17px] w-[17px]" /> Choose a pack</>
               )}
             </button>
             <p className="mt-2.5 flex items-center justify-center gap-1.5 text-center text-[11px] font-medium text-muted-token">

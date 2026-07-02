@@ -72,21 +72,52 @@
 > `onSelect` (module-level `CardShell` swaps `<Link>`→`<button>`). Full detail in
 > [draws/frontend.md § Mini-draw entry sheet](../draws/frontend.md#mini-draw-entry-sheet-dashboard-draws-tab-2026-07-02).
 
-### DashboardLoader (2026-07-02)
+### DashboardLoader (ported from Claude Design, 2026-07-03)
 
-[`DashboardLoader`](../../src/components/loading/DashboardLoader.tsx) is the single brand-forward
-full-height loader that **replaced the old thin red-arc spinners** (`animate-spin rounded-full
-border-b-2 border-red-600` / `border-4 … border-t-transparent` + "Loading …" text) across the
-member, admin, and affiliate dashboards. It centers the **Tools Australia wordmark** — the Header's
-exact light/dark artwork swap (`/images/logo.webp` with `dark:hidden` + `White-Text Logo.webp` with
-`hidden dark:block`, so the right mark shows pre-hydration) — with a soft brand-red glow + breathing
-pulse over an indeterminate progress sweep. Props: `label?` (status line) and `className?` (bg
-override — admin/affiliate pass `bg-gray-50 dark:bg-neutral-950` / `bg-white dark:bg-neutral-950` to
-match their shells; the member dashboard uses the default `bg-page`). Two keyframes back it in
-[globals.css](../../src/app/globals.css): `ta-loader-breathe` (logo scale/opacity) + `ta-loader-sweep`
-(bar travel); both are `motion-safe`-gated with a `motion-reduce:animate-pulse` fallback. Applied on:
-member `my-account/{,draws,membership,settings,benefits}`, `admin/{,layout,[tab]}`, and
-`affiliate/{,login}`.
+[`DashboardLoader`](../../src/components/loading/DashboardLoader.tsx) is the single brand loader that
+**replaced the old thin red-arc spinners** (`animate-spin rounded-full border-b-2 border-red-600` /
+`border-4 … border-t-transparent` + "Loading …" text) across the member, admin, and affiliate
+dashboards. It is a **1:1 port of the Claude Design "Dashboard Loader.html"** — a premium medallion on
+which a brushed-metal **socket ratchet drives a hex bolt** (step + overshoot + settle, with the rig
+seating down on the "bite"), plus a red impact flash, friction sparks off the rim, a sheen sweep on
+the socket ring, rotating telemetry ticks, a warm pulsing core, a pulsing halo, and a contact shadow;
+under it sit "TOOLS AUSTRALIA" + a **ticked progress tape** and a **cycling status**.
+
+- **Fidelity:** the SVG lives inline in the component; the animations + theme rules are the source's
+  CSS ported verbatim into [globals.css](../../src/app/globals.css) (all `@keyframes ta*` +
+  `.ta-lo-*` / `.ta-loader-*` classes), namespaced and scoped. The source's `html[data-theme="dark"]`
+  selectors became **`.dark`** (the app's class, set on `<html>` by both the member `ThemeContext` and
+  `AdminThemeContext`), so the medallion is **theme-adaptive** (light/dark disc, rim, gloss, warm).
+  Loader CSS vars are namespaced `--lo-*` and scoped to `.ta-loader-root` so nothing leaks globally.
+- **Fullscreen:** the wrapper is `fixed inset-0 z-[100]` with its own themed background — no call-site
+  `bg-*` override needed (removed). `fixed` is safe: no dashboard-layout ancestor establishes a
+  containing block (they use only `overflow`, which does not).
+- **Status:** prop `label?` shows a static line; when omitted, it **cycles** the source's brand
+  messages ("Loading your dashboard" → "Counting your entries" → "Lining up the next draw" →
+  "Tightening the last bolt" — the source's hard-coded "June draw" was generalised). Cycling is a
+  client `useEffect` interval, skipped under `prefers-reduced-motion`.
+- **Reduced motion:** a media query scoped to `.ta-loader-root *` disables the animations (the source
+  killed animations globally — intentionally narrowed here) and freezes the tape at 72%.
+- **Fonts:** the mark/status use `var(--font-inter)` / `var(--font-poppins)` (the `next/font`
+  families the app exposes on `<html>`) — **not** bare `Inter`/`Poppins`, which resolve to nothing
+  loaded and would silently drop to system fonts.
+- **Light-lock:** `light` prop → `.ta-loader-light`, which forces the full light palette (bg, text,
+  medallion disc/rim/gloss/warm) regardless of `.dark`. Used on the **affiliate dashboard**, whose page
+  is light-only (`bg-gray-50`) — without it a dark-theme visitor would see the loader flash dark then
+  the page resolve light. Member (`bg-page`) + admin are theme-aware so they stay adaptive.
+- **Applied on:** member `my-account/{,draws}` (cycling) + `{membership,settings,benefits}` (static
+  labels), `admin/{,layout,[tab]}`, and `affiliate/{,login}` (dashboard `light`-locked).
+
+### SheetShell portals to `<body>` (2026-07-03)
+
+[`SheetShell`](../../src/components/ui/SheetShell.tsx) now renders its overlay through
+`createPortal(overlay, document.body)` (SSR-guarded) at `z-[120]` (was an in-place `z-[60]`). Sheets
+opened from **deep in a route** — e.g. the Draws-tab [`MiniDrawEntrySheet`](../../src/components/sections/draws/MiniDrawEntrySheet.tsx),
+mounted inside `<main>` — otherwise rendered under the fixed `z-40` `BottomNav` and left the top of the
+viewport uncovered (the backdrop was trapped in the page's stacking context). Portaling to `<body>`
+guarantees a true full-viewport backdrop above the nav + floating chrome, while staying below the
+payment/modal layer (`Z_INDEX` 10000). The layout-mounted Support/Payment/Manage sheets are unaffected
+(they were already at the layout root).
 
 ## Dashboard sections (2026-07-02)
 

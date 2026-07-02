@@ -1,9 +1,10 @@
 # Dashboard-Account — Frontend
 
-> **Loader (2026-07-02):** every `my-account/*` page's loading state (home, draws, membership,
-> settings, benefits) now returns the shared brand-forward [`DashboardLoader`](../../src/components/loading/DashboardLoader.tsx)
-> (TA wordmark, light/dark) instead of a bare red-arc spinner. See
-> [shared-ui/frontend.md § DashboardLoader](../shared-ui/frontend.md#dashboardloader-2026-07-02).
+> **Loader (2026-07-03):** every `my-account/*` page's loading state (home, draws, membership,
+> settings, benefits) now returns the shared [`DashboardLoader`](../../src/components/loading/DashboardLoader.tsx)
+> — the Claude Design "Dashboard Loader" (ratchet-driving-a-hex-bolt medallion, theme-adaptive) —
+> instead of a bare red-arc spinner. Home + draws cycle the brand status messages; the rest pass a
+> static label. See [shared-ui/frontend.md § DashboardLoader](../shared-ui/frontend.md#dashboardloader-ported-from-claude-design-2026-07-03).
 
 ## Pages
 

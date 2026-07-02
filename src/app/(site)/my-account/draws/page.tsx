@@ -40,7 +40,7 @@ export default function DrawsPage() {
   }, [session, status, router]);
 
   if (status === "loading" || dash.isLoading) {
-    return <DashboardLoader label="Loading the draws…" />;
+    return <DashboardLoader />;
   }
 
   if (!session) {
