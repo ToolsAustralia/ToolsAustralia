@@ -285,3 +285,24 @@ Mirrored in the `page.tsx` header comment: dead `MembershipStatus.tsx`, `ActiveP
 `RecentOrders.tsx`, empty `EntryWallet.tsx` stub, stale `components/index.ts` re-exports;
 superseded-but-kept `DashboardHeader`/`CoverBanner`/`UserInfoBar`/`QuickActions`/`SocialLinksSection`
 (still used by sub-pages until their specs); `MajorDrawOverview` (wallet extracted; countdown role → Draws sub-project).
+
+## Dashboard revamp — Spec 2: Rewards (2026-07-02)
+
+Rebuilds the Rewards destination (`/my-account/benefits`, nav-labelled "Rewards") to
+**Partners FIRST → Claimables → Milestones**, state-aware. Spec:
+`docs/superpowers/specs/2026-07-02-dashboard-rewards-design.md`.
+
+- **[`benefits/page.tsx`](../../src/app/(site)/my-account/benefits/page.tsx)** — rewritten to a thin
+  composer fed by `useDashboardState`: `DashboardPageHeader` + `RewardsPartnerCard` + (non-guest)
+  `RewardsClaimables` + `RewardsMilestones`. Keeps the login redirect + `MembershipModal`. Drops the
+  ad-hoc red hero (now `DashboardPageHeader`). Flagged-for-deletion (kept, shared): `PartnerDiscountQueue`, `UnlockDiscounts`.
+- **[`DashboardPageHeader`](../../src/app/(site)/my-account/components/DashboardPageHeader.tsx)** —
+  shared state-recolored page-header band (gradient + gold seam + title/sub + action icon + optional
+  back chevron), the prototype's `PageHeader`. Reused by Rewards / Membership / Settings sub-pages;
+  resolves the old fixed-`DashboardHeader`-vs-sidebar conflict.
+- **Sections `src/components/sections/rewards/`**: `RewardsPartnerCard` (leads — `AccessRing` +
+  `usePartnerDiscountSso` portal + `PARTNER_BRAND_OFFERS` grid; state CTAs), `RewardsClaimables`
+  (`useRedeemablesWallet` claimable/past + `useRedeemableRedemption`; **paused-safe** — the rewards
+  program 503 renders a neutral "temporarily unavailable" state, never a crash), `RewardsMilestones`
+  (stepper gated behind the `milestoneProgress` coming-soon switch; static documented-tier teaser
+  until enabled — no fabricated progress).

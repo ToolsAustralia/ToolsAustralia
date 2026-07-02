@@ -1,185 +1,105 @@
 "use client";
 
-import React, { Suspense } from "react";
+// ─────────────────────────────────────────────────────────────────────────────
+// FLAGGED FOR DELETION (do NOT delete — user review pending; see
+// docs/superpowers/specs/2026-07-02-dashboard-rewards-design.md):
+//   Removed from THIS page but KEPT (shared, used by other surfaces):
+//     PartnerDiscountQueue, UnlockDiscounts. The old red benefits hero JSX is
+//     replaced by DashboardPageHeader (goes away naturally).
+// ─────────────────────────────────────────────────────────────────────────────
+
+import React from "react";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
-import { ArrowRight } from "lucide-react";
+import { Gift } from "lucide-react";
+import dynamicImport from "next/dynamic";
 
-import { useMyAccountData } from "@/hooks/queries";
-import PartnerDiscountQueue from "@/components/features/PartnerDiscountQueue";
-import UnlockDiscounts from "@/components/sections/promo/UnlockDiscounts";
-import { hasActivePartnerDiscountAccess } from "@/utils/membership/benefit-resolution";
-import { derivePlanIdFromPackage, getLandingPageThemeFromPlanId } from "@/utils/package-colors/packageColorScheme";
-import { getActivePackage, type ActivePackageUserInput } from "@/utils/membership/get-active-package";
-import nextDynamic from "next/dynamic";
-import { useMembershipModal } from "@/hooks/useMembershipModal";
+import { useDashboardState } from "@/hooks/useDashboardState";
+import { useMajorDrawEntryCta } from "@/hooks/useMajorDrawEntryCta";
+import { useMajorDrawPurchaseGate } from "@/hooks/useMajorDrawPurchaseGate";
+import DashboardPageHeader from "../components/DashboardPageHeader";
+import RewardsPartnerCard from "@/components/sections/rewards/RewardsPartnerCard";
+import RewardsClaimables from "@/components/sections/rewards/RewardsClaimables";
+import RewardsMilestones from "@/components/sections/rewards/RewardsMilestones";
 
-// Lazy-loaded: MembershipModal bundles Stripe + payment forms.
-const MembershipModal = nextDynamic(() => import("@/components/modals/MembershipModal"), {
-  ssr: false,
-});
+const MembershipModal = dynamicImport(() => import("@/components/modals/MembershipModal"), { ssr: false });
 
-// Mark page as dynamic to prevent static generation issues
+// Data reads (session/subscription/redeemables) → render dynamically.
 export const dynamic = "force-dynamic";
 
-function PartnerBenefitsContent() {
+export default function RewardsPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
-  const { data: accountData, isLoading, error } = useMyAccountData(session?.user?.id);
-  const membershipModal = useMembershipModal();
+  const dash = useDashboardState();
+  const { openWithOneTimePlan, membershipModal } = useMajorDrawEntryCta();
+  const { whenGatesOpenElseGateModal } = useMajorDrawPurchaseGate();
 
-  // Redirect unauthenticated visitors back to login just like the main my-account page.
   React.useEffect(() => {
-    if (status === "loading") {
-      return;
-    }
-
-    if (!session) {
-      router.push("/login");
-    }
+    if (status === "loading") return;
+    if (!session) router.push("/login");
   }, [session, status, router]);
 
-  if (status === "loading" || isLoading) {
+  if (status === "loading" || dash.isLoading) {
     return (
-      <div className="min-h-screen-svh flex flex-col items-center justify-center gap-4 bg-gray-50">
-        <div className="w-12 h-12 border-4 border-red-600 border-t-transparent rounded-full animate-spin" />
-        <p className="text-gray-600 dark:text-neutral-400 font-medium">Loading your benefits...</p>
+      <div className="min-h-screen-svh flex flex-col items-center justify-center gap-4">
+        <div className="h-12 w-12 animate-spin rounded-full border-4 border-red-600 border-t-transparent" />
+        <p className="font-medium text-muted-token">Loading your rewards…</p>
       </div>
     );
   }
 
-  if (error) {
+  if (!session) {
     return (
-      <div className="min-h-screen-svh flex flex-col items-center justify-center gap-4 bg-gray-50 px-4 text-center">
-        <p className="text-2xl font-semibold text-gray-900">We couldn&apos;t load your benefits.</p>
-        <p className="text-gray-600 dark:text-neutral-400">{error instanceof Error ? error.message : "Please try again shortly."}</p>
-        <button
-          onClick={() => window.location.reload()}
-          className="px-6 py-3 bg-red-600 text-white rounded-lg font-semibold shadow hover:bg-red-700 transition"
-        >
-          Retry
-        </button>
+      <div className="min-h-screen-svh flex flex-col items-center justify-center gap-3 px-4 text-center">
+        <p className="text-xl font-semibold text-primary-token dark:text-white">Please sign in to view your rewards.</p>
+        <Link href="/login" className="rounded-lg bg-red-600 px-6 py-3 font-semibold text-white hover:bg-red-700">
+          Sign In
+        </Link>
       </div>
     );
   }
 
-  if (!session || !accountData) {
-    return null;
-  }
-
-  const { user } = accountData;
-  const hasAccess = hasActivePartnerDiscountAccess(user as unknown as import("@/models/User").IUser);
-  const activePackage = getActivePackage(user as ActivePackageUserInput);
-
-  // Package theme when user has access
-  let packageTheme: ReturnType<typeof getLandingPageThemeFromPlanId> | undefined;
-  if (hasAccess && user) {
-    if (activePackage.source === "subscription" && activePackage.packageData) {
-      const planId = derivePlanIdFromPackage(activePackage.packageData, "subscription");
-      packageTheme = getLandingPageThemeFromPlanId(planId, true);
-    } else if (user.enrichedOneTimePackages?.length) {
-      const queue = (user as { partnerDiscountQueue?: Array<{ packageId: string; packageType: string; status: string }> }).partnerDiscountQueue ?? [];
-      const activeIds = new Set(
-        queue.filter((i) => i.status === "active" && ["one-time", "mini-draw", "upsell"].includes(i.packageType)).map((i) => String(i.packageId))
-      );
-      const pkg = user.enrichedOneTimePackages
-        .filter((p) => p.isActive && p.packageData && activeIds.has(String(p.packageId)))
-        .sort((a, b) => new Date(b.purchaseDate).getTime() - new Date(a.purchaseDate).getTime())[0];
-      if (pkg?.packageData) {
-        const planId = derivePlanIdFromPackage(pkg.packageData, "one-time");
-        packageTheme = getLandingPageThemeFromPlanId(planId, false);
-      }
-    }
-  }
+  const userId = dash.user?._id ?? session.user?.id ?? "";
+  const onBecomeMember = () => whenGatesOpenElseGateModal(() => membershipModal.openModal());
+  const onBuyPackage = () => openWithOneTimePlan();
+  const onUpdatePayment = () => router.push("/my-account/settings?tab=subscription");
 
   return (
-    <div className="min-h-screen-svh w-full bg-gray-50">
-      {/* Hero Section */}
-      <section className="relative bg-gradient-to-br from-red-600 via-red-600 to-red-700 text-white pt-[90px] sm:pt-[var(--app-header-h-lg)] pb-16 overflow-hidden">
-        <div className="absolute inset-0 bg-black/10"></div>
-        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/5 to-transparent"></div>
-        <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-b from-transparent via-transparent to-black/20"></div>
-        <div className="absolute top-20 left-10 w-20 h-20 bg-white/10 rounded-full blur-xl animate-pulse"></div>
-        <div className="absolute top-40 right-20 w-16 h-16 bg-yellow-400/20 rounded-full blur-lg animate-pulse delay-1000"></div>
-        <div className="absolute bottom-20 left-1/4 w-12 h-12 bg-white/15 rounded-full blur-md animate-pulse delay-2000"></div>
+    <div className="min-h-screen-svh w-full min-w-0 max-w-full overflow-x-hidden pb-8">
+      <DashboardPageHeader
+        title="Rewards"
+        sub="Partners · claims · milestones"
+        icon={Gift}
+        stateTheme={dash.stateTheme}
+        showBack
+      />
 
-        <div className="relative max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center pb-10">
-          <p className="text-xs sm:text-sm font-bold uppercase tracking-[0.35em] text-white/70 mb-4">
-            Partner Benefits
-          </p>
-          <h1 className="text-3xl sm:text-4xl lg:text-5xl font-bold font-['Poppins'] leading-tight mb-4">
-            Everything you need to manage partner discounts.
-          </h1>
-          <p className="text-white/80 text-base sm:text-lg mb-6">
-            Jump back to your dashboard or keep scrolling to browse the current offers.
-          </p>
-          <div className="flex flex-wrap justify-center gap-4">
-            <Link
-              href="/my-account"
-              className="inline-flex items-center gap-2 bg-white text-red-600 font-semibold px-6 py-3 rounded-xl shadow-lg hover:shadow-xl transition"
-            >
-              Back to Dashboard
-            </Link>
-            <button
-              onClick={() => document?.getElementById("partner-discounts-grid")?.scrollIntoView({ behavior: "smooth" })}
-              className="inline-flex items-center gap-2 border border-white/40 text-white font-semibold px-6 py-3 rounded-xl hover:bg-white/10 transition"
-            >
-              View Discounts
-              <ArrowRight className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
-      </section>
-
-      {/* Partner Discount Queue */}
-      <section className="relative -mt-16 pb-10">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
-          <PartnerDiscountQueue startExpanded variant="detailed" />
-        </div>
-      </section>
-
-      {/* Discount Grid */}
-      <section id="partner-discounts-grid" className="bg-white ">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
-          <UnlockDiscounts
-            hasAccess={hasAccess}
-            showUnlockButton={!hasAccess}
-            title={hasAccess ? "Your Partner Discounts" : "Become a Member to Unlock"}
-            description={
-              hasAccess
-                ? "Flash your code or mention Tools Australia to redeem partner deals instantly."
-                : "Subscriptions and one-time packages both unlock our partner network. Choose what suits you best."
-            }
-            packageTheme={packageTheme}
-          />
-        </div>
-      </section>
-
-      {/* Membership Modal - Wrapped in Suspense because it uses useSearchParams via hooks */}
-      <Suspense fallback={null}>
-        <MembershipModal
-          isOpen={membershipModal.isModalOpen}
-          onClose={membershipModal.closeModal}
-          selectedPlan={membershipModal.selectedPlan}
-          onPlanChange={membershipModal.selectPlan}
+      <div className="space-y-4 px-4 pt-4 sm:px-6">
+        <RewardsPartnerCard
+          acct={dash.acct}
+          partnerAccessPct={dash.partnerAccessPct}
+          expiryLabel={dash.partnerAccessExpiryLabel}
+          tierHex={dash.tierHex}
+          onBecomeMember={onBecomeMember}
+          onBuyPackage={onBuyPackage}
+          onUpdatePayment={onUpdatePayment}
         />
-      </Suspense>
-    </div>
-  );
-}
 
-export default function PartnerBenefitsPage() {
-  return (
-    <Suspense
-      fallback={
-        <div className="min-h-screen-svh flex flex-col items-center justify-center gap-4 bg-gray-50">
-          <div className="w-12 h-12 border-4 border-red-600 border-t-transparent rounded-full animate-spin" />
-          <p className="text-gray-600 dark:text-neutral-400 font-medium">Loading your benefits...</p>
-        </div>
-      }
-    >
-      <PartnerBenefitsContent />
-    </Suspense>
+        {dash.acct !== "none" && userId && (
+          <>
+            <RewardsClaimables userId={userId} acct={dash.acct} />
+            <RewardsMilestones acct={dash.acct} months={dash.streakMonths} />
+          </>
+        )}
+      </div>
+
+      <MembershipModal
+        isOpen={membershipModal.isModalOpen}
+        onClose={membershipModal.closeModal}
+        selectedPlan={membershipModal.selectedPlan}
+        onPlanChange={membershipModal.selectPlan}
+      />
+    </div>
   );
 }
