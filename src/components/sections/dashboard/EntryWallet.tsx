@@ -67,16 +67,22 @@ export default function EntryWallet({
   const isOneTime = acct === "onetime";
   const tier = tierHex ?? "#ee0000";
 
+  // The wallet shows a two-part split, so the headline total is always the sum of
+  // the parts it renders — it can never contradict the legend (e.g. on a completed
+  // draw where membership entries are zeroed for the next cycle).
+  const currentTotal = entries.membership + entries.oneTime;
   const showProjected = Boolean(pending) && !isCompleted;
-  const displayTotal = showProjected ? pending!.expectedEntries : entries.total;
+  const headlineValue = showProjected ? pending!.expectedEntries : currentTotal;
 
-  const membershipPct = displayTotal > 0 ? (entries.membership / displayTotal) * 100 : 0;
-  const oneTimePct = displayTotal > 0 ? (entries.oneTime / displayTotal) * 100 : 0;
+  const membershipPct = currentTotal > 0 ? (entries.membership / currentTotal) * 100 : 0;
+  const oneTimePct = currentTotal > 0 ? (entries.oneTime / currentTotal) * 100 : 0;
 
   const membershipLegend = isPastDue ? "paused" : isOneTime ? "—" : entries.membership.toLocaleString();
 
   const target = drawDateIso ? new Date(drawDateIso).getTime() : NaN;
   const cd = Number.isFinite(target) ? splitRemaining(target, now) : null;
+  const showCountdown = !isCompleted && cd != null && (drawStatus === "active" || drawStatus === "frozen");
+  const footerLabel = isCompleted ? "Draw complete" : drawStatus === "queued" ? "Next draw opening soon" : "Draw closes in";
 
   return (
     <section
@@ -101,7 +107,7 @@ export default function EntryWallet({
 
       <div className="mt-1 flex items-end gap-2">
         <AnimatedNumber
-          value={isCompleted ? 0 : displayTotal}
+          value={headlineValue}
           className="num font-['Poppins'] text-5xl font-black leading-none tabular-nums text-primary-token dark:text-white"
         />
         {showProjected && pending!.renewalDate && (
@@ -111,14 +117,10 @@ export default function EntryWallet({
         )}
       </div>
 
-      {/* split bar */}
+      {/* split bar — segments always sum to the headline total */}
       <div className="mt-4 flex h-2.5 w-full overflow-hidden rounded-full bg-black/[.06] dark:bg-white/[.08]">
-        {!isCompleted && (
-          <>
-            <span className="h-full" style={{ width: `${membershipPct}%`, background: tier }} />
-            <span className="h-full bg-emerald-500" style={{ width: `${oneTimePct}%` }} />
-          </>
-        )}
+        <span className="h-full" style={{ width: `${membershipPct}%`, background: tier }} />
+        <span className="h-full bg-emerald-500" style={{ width: `${oneTimePct}%` }} />
       </div>
 
       <div className="mt-3 flex items-center justify-between text-sm">
@@ -142,13 +144,11 @@ export default function EntryWallet({
         </button>
       )}
 
-      <div className="my-4 h-px bg-gradient-to-r from-transparent via-token to-transparent" />
+      <div className="my-4 h-px bg-gradient-to-r from-transparent via-black/10 to-transparent dark:via-white/10" />
 
       <div className="flex items-center justify-between">
-        <span className="text-sm font-semibold text-muted-token">
-          {isCompleted ? "Draw complete" : "Draw closes in"}
-        </span>
-        {!isCompleted && cd && (
+        <span className="text-sm font-semibold text-muted-token">{footerLabel}</span>
+        {showCountdown && cd && (
           <div className="flex items-center gap-4">
             <CountCell v={cd.d} l="days" />
             <CountCell v={cd.h} l="hrs" />

@@ -46,7 +46,7 @@ export default function PartnerPreview({ acct, expiryLabel, className }: Partner
 
       <div className={cn("mt-4 space-y-2", locked && "pointer-events-none opacity-50 grayscale")}>
         {PREVIEW.map((brand) => (
-          <div key={brand.id} className="flex items-center gap-3 rounded-2xl border border-token bg-page/60 p-2.5">
+          <div key={brand.id} className="flex items-center gap-3 rounded-2xl border border-token bg-black/[.03] p-2.5 dark:bg-white/[.04]">
             <span className="relative h-10 w-10 shrink-0 overflow-hidden rounded-xl bg-white">
               <Image src={brand.logo} alt={brand.name} fill className="object-contain p-1" sizes="40px" />
             </span>

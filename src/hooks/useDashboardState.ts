@@ -72,7 +72,9 @@ export function useDashboardState(): DashboardStateResult {
   const { data: accountData, isLoading: accountLoading } = useMyAccountData(userId);
   const { data: majorDrawStats, isLoading: statsLoading } = useUserMajorDrawStats(userId);
   const { data: currentMajorDraw, isLoading: drawLoading } = useCurrentMajorDraw();
-  const resolvedMultiplier = useResolvedMultiplier("membership-packages", "display");
+  // The dashboard promo card + "Packages" quick-tile both sell one-time packages,
+  // so the multiplier shown is the one-time-packages promo (not membership).
+  const resolvedMultiplier = useResolvedMultiplier("one-time-packages", "display");
 
   const isDrawCompleted = currentMajorDraw?.status === "completed";
   const entriesDisplay = useDashboardEntryDisplay(majorDrawStats, { isDrawCompleted: Boolean(isDrawCompleted) });
@@ -162,7 +164,9 @@ export function useDashboardState(): DashboardStateResult {
     statsLoading,
     drawLoading,
     resolvedMultiplier,
-    entriesDisplay,
+    entriesDisplay.currentDrawEntries,
+    entriesDisplay.membershipEntries,
+    entriesDisplay.oneTimeEntries,
     currentMajorDraw,
   ]);
 }

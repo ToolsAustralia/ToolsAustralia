@@ -39,11 +39,6 @@ import {
 } from "@/utils/dashboard-landing-session";
 import { useDashboardLandingOrchestration } from "@/hooks/useDashboardLandingOrchestration";
 import { getFallbackRenewalDate } from "@/utils/dates/month-helpers";
-import type {
-  PackageDetailModalPackageData,
-  SubscriptionAccumulationData,
-} from "@/components/modals/PackageDetailModal";
-const PackageDetailModal = dynamic(() => import("@/components/modals/PackageDetailModal"), { ssr: false });
 import { useMemberships } from "@/hooks/useMemberships";
 import RewardsFloatingWidget from "@/components/features/RewardsFloatingWidget";
 import { useDashboardState } from "@/hooks/useDashboardState";
@@ -83,16 +78,6 @@ export default function MyAccountPage() {
 
   const [isReferFriendModalOpen, setIsReferFriendModalOpen] = useState(false);
   const [isPastDrawsModalOpen, setIsPastDrawsModalOpen] = useState(false);
-
-  const [packageDetailModalOpen, setPackageDetailModalOpen] = useState(false);
-  const [packageDetailModalData, setPackageDetailModalData] = useState<{
-    packageData: PackageDetailModalPackageData;
-    membershipType: "subscription" | "one-time";
-    accumulation: SubscriptionAccumulationData | null;
-  } | null>(null);
-  // packageDetailModalData is set by the sections below (e.g. future badge clicks);
-  // retained so PackageDetailModal keeps working exactly as before.
-  void setPackageDetailModalData;
 
   React.useEffect(() => {
     if (status === "loading") return;
@@ -388,24 +373,6 @@ export default function MyAccountPage() {
           membershipModal.openWithPackageSelectionFirst ? { showPackageSelectionFirst: true } : undefined
         }
       />
-
-      {packageDetailModalData && (
-        <PackageDetailModal
-          isOpen={packageDetailModalOpen}
-          onClose={() => {
-            setPackageDetailModalOpen(false);
-            setPackageDetailModalData(null);
-          }}
-          packageData={packageDetailModalData.packageData}
-          membershipType={packageDetailModalData.membershipType}
-          accumulation={packageDetailModalData.accumulation}
-          hasActiveSubscription={hasActiveMembership}
-          hasAccessToAdditionalPackages={hasAccessToAdditionalPackages}
-          onOpenSettingsSubscription={() => router.push("/my-account/settings?tab=subscription")}
-          onOpenMembershipModal={() => membershipModal.openModalWithPackageSelectionFirst()}
-          onOpenSpecialPackages={() => whenGatesOpenElseGateModal(() => requestModal("special-packages", true))}
-        />
-      )}
 
       <ReferFriendModal
         isOpen={isReferFriendModalOpen}
