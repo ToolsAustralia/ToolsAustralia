@@ -16,6 +16,19 @@ responsive 2-column card with an inline countdown (`CDBox`); `PartnerPreview` us
 deal-row style; `DashboardHero` is single-row on desktop (no gear — sidebar footer has it) and keeps
 the existing `AccessRing`. See [dashboard-account/frontend.md](../dashboard-account/frontend.md#dashboard-home--pixel-fidelity-rework-2026-07-02).
 
+**Section refinements (2026-07-02):**
+- `DashboardHero` — active-member tier chip renders the real **tier package icon**
+  (`getPackageIcon(\`${tierKey}-subscription\`)`) not a crown; the "Reward portal" button uses a
+  **premium gold** treatment distinct from foreman-yellow / boss-red; a **"Complete your profile"**
+  nudge shows when `profileComplete === false` (new `tierKey` / `profileComplete` / `onCompleteProfile` props).
+- `DashboardPromoBanner` — the left icon is now the **container-less multiplier badge image**
+  (`multiplierBadgeSrc`, shown large like the special-packages modal), falling back to a ticket glyph
+  only when no multiplier is live; the redundant button-corner badge was dropped.
+- `RewardsMilestones` — now a **visual milestone progress track** (real member-since `months`), no
+  longer a coming-soon text teaser.
+- `MembershipCurrentPlan` — the plan stat row (entries / partner access / price) is a single unified
+  paneled row with dividers instead of three cramped boxes.
+
 **Removed (2026-07-02):** `src/components/sections/MembershipPackagesChart.tsx` — orphaned after both
 `/membership` and `/my-account/membership` dropped it (the account page now uses the compact
 `sections/account-membership/MembershipTierList`). New shared primitives live in `src/components/ui/`

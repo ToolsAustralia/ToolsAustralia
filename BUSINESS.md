@@ -460,7 +460,7 @@ The Profile / Password / Payment-methods / Subscription tabs live separately at 
 4. **`MajorDrawOverview` — the primary ROI card.** Shows the current Major Draw, status, countdown to draw date, `displayTotalEntries` broken into `membershipEntries` + `oneTimeEntries`, a **3-month entry-accumulation projection**, and a `PastDrawsModal` trigger. See [src/app/(site)/my-account/components/MajorDrawOverview.tsx](src/app/(site)/my-account/components/MajorDrawOverview.tsx) and `useDashboardEntryDisplay`.
 5. **`PartnerDiscountQueue`** + **`PartnerDiscountsSection`** — the §4 catalog filtered by the user's tier visibility %. Locked rows show as "Unlock at higher tier".
 6. **`SocialLinksSection`** — Facebook / Instagram entry points (also where the §3a Facebook Live draw stream lives).
-7. **`RewardsFloatingWidget`** — entry point to §8 (currently behind the rewards pause flag).
+7. **Rewards entry point** — the dashboard sidebar / bottom-nav **Rewards** item (→ `/my-account/benefits`) is the entry point to §8 (still behind the rewards pause flag). The old floating `RewardsFloatingWidget` was removed in the 2026-07 dashboard revamp. **Purchase-gated redeemables now require a real qualifying purchase inside the campaign window to redeem** — a "one-time"/"any" coupon is no longer auto-granted from a lifetime entry balance or an old subscription (see `src/utils/redeemables/purchase-eligibility.ts`).
 
 The ROI story this dashboard tells: *"You've earned N entries this cycle, here's your projected accumulation, the draw is M days away — and here are the partner discounts you can use right now."* Every visit reinforces the value of the subscription.
 

@@ -37,7 +37,6 @@ import {
 } from "@/utils/dashboard-landing-session";
 import { useDashboardLandingOrchestration } from "@/hooks/useDashboardLandingOrchestration";
 import { useMemberships } from "@/hooks/useMemberships";
-import RewardsFloatingWidget from "@/components/features/RewardsFloatingWidget";
 import { useDashboardState } from "@/hooks/useDashboardState";
 import { useRedeemablesWallet } from "@/hooks/queries/useRedeemablesQueries";
 
@@ -61,7 +60,7 @@ export default function MyAccountPage() {
   const dash = useDashboardState();
 
   const { requestModal } = useModalPriorityStore();
-  const { allowSecondaryModals, suppressRewardsSpotlight } = useDashboardLandingOrchestration(
+  const { allowSecondaryModals } = useDashboardLandingOrchestration(
     status === "authenticated",
   );
   const { openEntryFlow, openWithOneTimePlan, membershipModal } = useMajorDrawEntryCta();
@@ -268,15 +267,18 @@ export default function MyAccountPage() {
         acct={dash.acct}
         firstName={user.firstName}
         lastName={user.lastName}
+        tierKey={dash.tierKey}
         tierHex={dash.tierHex}
         tierLabel={dash.tierLabel}
         stateTheme={dash.stateTheme}
         partnerAccessPct={dash.partnerAccessPct}
         partnerAccessExpiryLabel={dash.partnerAccessExpiryLabel}
+        profileComplete={Boolean(user.profileSetupCompleted && user.birthdate)}
         onOpenSettings={() => router.push("/my-account/settings")}
         onRewardPortal={() => router.push("/my-account/benefits")}
         onBecomeMember={onBecomeMember}
         onUpdatePayment={onResolvePayment}
+        onCompleteProfile={() => requestModal("user-setup", true)}
       />
 
       {dash.acct === "none" ? (
@@ -322,7 +324,7 @@ export default function MyAccountPage() {
               <QuickActionsGrid
                 multiplier={dash.multiplier}
                 hasAdditionalAccess={dash.hasAdditionalAccess}
-                redeemCount={claimableWallet?.total ?? claimableWallet?.wallet?.length}
+                redeemCount={claimableWallet?.wallet?.filter((i) => i.isRedeemableNow).length ?? 0}
                 onGetPackage={hasAccessToAdditionalPackages ? onGetPackage : onBecomeMember}
                 onRefer={() => setIsReferFriendModalOpen(true)}
                 onPastDraws={() => setIsPastDrawsModalOpen(true)}
@@ -334,8 +336,6 @@ export default function MyAccountPage() {
           </div>
         </div>
       )}
-
-      <RewardsFloatingWidget userId={user._id} positionAboveBottomNav suppressSpotlight={suppressRewardsSpotlight} />
 
       <MembershipModal
         isOpen={membershipModal.isModalOpen}

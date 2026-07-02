@@ -2,6 +2,8 @@ import RedeemableIssuance from "@/models/RedeemableIssuance";
 import MonthlyEntryCampaign, { PurchaseRequirement } from "@/models/MonthlyEntryCampaign";
 import MilestoneIssuance from "@/models/MilestoneIssuance";
 import MilestoneReward from "@/models/MilestoneReward";
+import User from "@/models/User";
+import { hasQualifyingPurchase } from "@/utils/redeemables/purchase-eligibility";
 import { CampaignService } from "./CampaignService";
 
 export interface RedeemableWalletItem {
@@ -48,14 +50,16 @@ export class RedeemablesWalletService {
     // without a manual admin "Issue" step.
     await CampaignService.ensureActiveCampaignIssuancesForUser(userId);
 
-    const [redeemableIssuances, milestoneIssuances] = await Promise.all([
+    const [redeemableIssuances, milestoneIssuances, purchaseUser] = await Promise.all([
       RedeemableIssuance.find({ userId }).sort({ issuedAt: -1, expiresAt: 1 }).lean(),
       MilestoneIssuance.find({ userId }).sort({ issuedAt: -1 }).lean(),
+      // Needed to gate purchase-required coupons (mirror of RedemptionService).
+      User.findById(userId).select("subscription oneTimePackages").lean(),
     ]);
 
     const campaignIds = redeemableIssuances.map((i) => i.campaignId);
     const campaigns = await MonthlyEntryCampaign.find({ _id: { $in: campaignIds } })
-      .select("name displayLabel requiresPurchase purchaseRequirement code neverExpires")
+      .select("name displayLabel requiresPurchase purchaseRequirement code neverExpires startsAt endsAt")
       .lean();
     const campaignMap = new Map(campaigns.map((campaign) => [campaign._id.toString(), campaign]));
 
@@ -67,6 +71,13 @@ export class RedeemablesWalletService {
 
     const campaignItems: RedeemableWalletItem[] = redeemableIssuances.map((issuance) => {
       const campaign = campaignMap.get(issuance.campaignId.toString());
+      const purchaseRequirement: PurchaseRequirement =
+        campaign?.purchaseRequirement ?? (campaign?.requiresPurchase ? "membership" : "none");
+      // A purchase-gated coupon is only claimable once the qualifying purchase
+      // exists — same predicate the redeem endpoint enforces.
+      const meetsPurchaseRequirement =
+        purchaseRequirement === "none" ||
+        (campaign ? hasQualifyingPurchase(purchaseUser ?? {}, campaign, purchaseRequirement, now) : true);
       return {
         issuanceId: issuance._id.toString(),
         campaignId: issuance.campaignId.toString(),
@@ -80,10 +91,11 @@ export class RedeemablesWalletService {
         expiresAt: issuance.expiresAt,
         campaignName: campaign?.name,
         displayLabel: campaign?.displayLabel,
-        purchaseRequirement: campaign?.purchaseRequirement ?? (campaign?.requiresPurchase ? "membership" : "none"),
+        purchaseRequirement,
         neverExpires: campaign?.neverExpires ?? false,
         source: "monthly-coupon",
-        isRedeemableNow: issuance.status === "active" && issuance.expiresAt > now,
+        isRedeemableNow:
+          issuance.status === "active" && issuance.expiresAt > now && meetsPurchaseRequirement,
       };
     });
 
@@ -112,9 +124,13 @@ export class RedeemablesWalletService {
 
     let items = [...campaignItems, ...milestoneItems];
     if (options?.status === "claimable") {
-      items = items.filter((item) => item.isRedeemableNow);
+      // Active + unexpired — INCLUDES purchase-locked coupons so they surface as
+      // "unlock by purchasing" (the Claim button gates on isRedeemableNow), rather
+      // than silently vanishing or being mislabeled as "past/claimed".
+      items = items.filter((item) => item.status === "active" && new Date(item.expiresAt).getTime() > now.getTime());
     } else if (options?.status === "past") {
-      items = items.filter((item) => !item.isRedeemableNow || item.status !== "active");
+      // Terminal only: redeemed / expired / cancelled / revoked, or past expiry.
+      items = items.filter((item) => item.status !== "active" || new Date(item.expiresAt).getTime() <= now.getTime());
     }
 
     items.sort((a, b) => new Date(b.issuedAt).getTime() - new Date(a.issuedAt).getTime());

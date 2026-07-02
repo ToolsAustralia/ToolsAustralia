@@ -1,6 +1,7 @@
 "use client";
 
 import { CreditCard, Settings, ChevronRight } from "lucide-react";
+import { cn } from "@/utils/cn";
 import { getActivePackage, type ActivePackageUserInput } from "@/utils/membership/get-active-package";
 import { glossGrad, inkOn } from "@/utils/membership/tier-visuals";
 import { getPartnerCatalogAccessPercentForPlanId } from "@/utils/partner-discounts/partner-catalog-visibility";
@@ -77,10 +78,10 @@ export default function MembershipCurrentPlan({
         </div>
 
         {(active || pastdue) && (
-          <div className="mt-4 grid grid-cols-3 gap-2">
+          <div className="mt-5 grid grid-cols-3 overflow-hidden rounded-2xl bg-black/[.16] ring-1 ring-white/10">
             <Stat label="Free entries / mo" value={entriesPerMonth.toLocaleString()} />
-            <Stat label="Partner access" value={`${accessPct}%`} />
-            <Stat label="Per month" value={`$${price}`} />
+            <Stat label="Partner access" value={`${accessPct}%`} divider />
+            <Stat label="Per month" value={`$${price}`} divider />
           </div>
         )}
 
@@ -109,11 +110,11 @@ export default function MembershipCurrentPlan({
   );
 }
 
-function Stat({ label, value }: { label: string; value: string }) {
+function Stat({ label, value, divider }: { label: string; value: string; divider?: boolean }) {
   return (
-    <div className="rounded-xl bg-black/15 px-3 py-2 text-center">
-      <div className="num font-['Poppins'] text-lg font-black tabular-nums">{value}</div>
-      <div className="text-[10px] font-semibold uppercase tracking-wide opacity-80">{label}</div>
+    <div className={cn("px-2.5 py-3.5 text-center", divider && "border-l border-white/10")}>
+      <div className="num font-['Poppins'] text-[22px] font-black leading-none tabular-nums">{value}</div>
+      <div className="mx-auto mt-1.5 max-w-[9ch] text-[9.5px] font-semibold uppercase leading-tight tracking-wide opacity-75">{label}</div>
     </div>
   );
 }

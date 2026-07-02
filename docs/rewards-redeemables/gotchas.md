@@ -18,6 +18,18 @@ Brief: when a user is "rewards-paused" (abuse handling), `rewardsGuard.ts` block
 
 When refunding a payment that issued redeemables, only un-redeemed issuances are reversed. Already-redeemed ones surface in `RefundProcessed.data.reversalIssues[]`. Admin must manually adjudicate (revoke compensation, request return, etc.) — there's no automatic claw-back.
 
+## Lifetime `accumulatedEntries` is NOT a purchase proxy (fixed money-path bug)
+
+Purchase-gated coupons (`purchaseRequirement` other than `"none"`) must be unlocked only by a **real qualifying purchase inside the campaign window** — checked via `hasQualifyingPurchase(...)` in [purchase-eligibility.ts](../../src/utils/redeemables/purchase-eligibility.ts).
+
+Previously `RedemptionService.redeem()` used lifetime `user.accumulatedEntries === 0` (plus any active subscription) as a "has purchased" proxy. That granted "buy to unlock" coupons **for free** to any past purchaser, and to any active subscriber even when the requirement was `"one-time"`. Fixed: redeem now selects `oneTimePackages` and calls `hasQualifyingPurchase(...)`; the wallet's `isRedeemableNow` mirrors it exactly.
+
+Two things to keep true:
+- The qualifying-purchase floor is the campaign `startsAt` (a purchase made *during* the campaign), never lifetime history. Window bounds are inclusive of both `startsAt` and `endsAt`; a `neverExpires` campaign uses `now` as the ceiling.
+- `redeem()` and `isRedeemableNow` must use the **same** predicate. If they drift, the "Claim" button and the endpoint disagree — a claimable-looking coupon 500s/`ineligible`s on submit, or a hidden coupon is still redeemable via the API.
+
+**Wallet view buckets** (`getUserWallet` status filter, consumed by `RewardsClaimables`): a purchase-locked coupon is still `active` and unexpired, so `status: "claimable"` returns it (rendered as a disabled **"Purchase to unlock" / "Members only"** row — the Claim button gates on `isRedeemableNow`), and `status: "past"` is **terminal-only** (`status !== "active"` OR past expiry). Do NOT define "past" as `!isRedeemableNow` — that would mislabel a locked-but-active coupon as "recently claimed". The home rewards-count badge counts only `isRedeemableNow` items so it never overstates what can be claimed now.
+
 ## Top-percentile timing
 
 `topMajorDrawPercentile.ts` queries draw participation. If run too early in the cycle (e.g. during `active` status), the percentile is incomplete. Best to run after `frozen` transitions. _TODO: verify whether the campaign scheduler enforces this._

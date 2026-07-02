@@ -51,10 +51,14 @@ export default function RewardsClaimables({ userId, acct }: RewardsClaimablesPro
           <ul className="mt-3 space-y-2">
             {claimItems.map((item) => {
               const canClaim = item.isRedeemableNow && !disabled;
+              // Active coupon whose purchase requirement isn't met yet — show it as
+              // locked ("Purchase to unlock"), never as claimable or claimed.
+              const locked = !item.isRedeemableNow && !disabled;
+              const lockedLabel = item.purchaseRequirement === "membership" ? "Members only" : "Purchase to unlock";
               const Icon = item.source === "milestone" ? Bolt : Gift;
               return (
                 <li key={item.issuanceId} className="flex items-center gap-3 rounded-2xl border border-token bg-black/[.03] p-3 dark:bg-white/[.04]">
-                  <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-gradient-to-b from-amber-300 to-amber-500 text-[#241a02]">
+                  <span className={cn("grid h-10 w-10 shrink-0 place-items-center rounded-xl", locked ? "bg-black/[.06] text-muted-token dark:bg-white/[.08]" : "bg-gradient-to-b from-amber-300 to-amber-500 text-[#241a02]")}>
                     <Icon className="h-5 w-5" />
                   </span>
                   <div className="min-w-0 flex-1">
@@ -74,7 +78,7 @@ export default function RewardsClaimables({ userId, acct }: RewardsClaimablesPro
                         : "cursor-default bg-black/[.05] text-muted-token dark:bg-white/[.08]",
                     )}
                   >
-                    {disabled ? "Paused" : redeem.isPending ? "Claiming…" : "Claim"}
+                    {disabled ? "Paused" : redeem.isPending ? "Claiming…" : locked ? lockedLabel : "Claim"}
                   </button>
                 </li>
               );

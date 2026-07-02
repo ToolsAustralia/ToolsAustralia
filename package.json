@@ -69,6 +69,7 @@
     "test:bayesian": "tsx src/utils/ab-testing/__tests__/bayesian-test.test.ts",
     "test:affiliate-reversal": "tsx src/utils/affiliate/__tests__/reverse-commission.test.ts",
     "test:redeemables": "tsx src/services/redeemables/__tests__/redeemables.test.ts",
+    "test:redeemables-purchase-gate": "tsx src/utils/redeemables/__tests__/purchase-eligibility.test.ts",
     "test:climb-series": "tsx src/utils/membership/__tests__/climb-series.test.ts",
     "test:dashboard-state-theme": "tsx src/utils/dashboard/__tests__/dashboard-state-theme.test.ts",
     "test:dashboard-account-state": "tsx src/utils/dashboard/__tests__/derive-dashboard-account-state.test.ts",

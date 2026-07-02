@@ -1,13 +1,12 @@
 "use client";
 
-import { Medal, Check } from "lucide-react";
+import { Medal, Check, Lock } from "lucide-react";
 import { cn } from "@/utils/cn";
-import { isDashboardFeatureOn } from "@/config/dashboardFeatures";
 import type { DashboardAccountState } from "@/utils/dashboard/dashboard-state-theme";
 
 interface RewardsMilestonesProps {
   acct: DashboardAccountState;
-  /** Months of continuous membership (used only when milestoneProgress is enabled). */
+  /** Months of continuous membership (real member-since data). */
   months: number | null;
 }
 
@@ -16,54 +15,82 @@ const MILESTONES = [
   { mo: 3, entries: 50 },
   { mo: 6, entries: 250 },
 ];
+const MAX_MO = MILESTONES[MILESTONES.length - 1].mo;
 
 /**
- * Loyalty milestones. The progress stepper (current position) is gated behind the
- * `milestoneProgress` coming-soon switch — there is no customer-facing
- * milestone-progress read yet, so we never fabricate a "% to next" figure. Until
- * enabled, a static teaser of the documented tiers is shown. Member perk only.
+ * Loyalty milestones — a visual progress track showing where the member currently
+ * sits and how many months remain until the next reward. Driven by real
+ * continuous-membership `months` (same signal LoyaltyStreak uses); milestone
+ * amounts are documented constants, never fabricated. Member perk only.
  */
 export default function RewardsMilestones({ acct, months }: RewardsMilestonesProps) {
   if (acct !== "active" && acct !== "pastdue") return null;
-  const showProgress = isDashboardFeatureOn("milestoneProgress");
-  const m = months ?? 0;
+
+  const m = Math.max(months ?? 0, 0);
+  const progressPct = Math.min(m / MAX_MO, 1) * 100;
+  const nextMilestone = MILESTONES.find((ms) => ms.mo > m) ?? null;
+  const monthsToNext = nextMilestone ? Math.max(nextMilestone.mo - m, 0) : 0;
 
   return (
     <section className="rounded-3xl border border-token bg-surface p-5 shadow-sm">
-      <div className="flex items-center gap-2">
-        <span className="grid h-8 w-8 place-items-center rounded-lg bg-amber-50 text-amber-600 dark:bg-amber-500/15 dark:text-amber-400">
-          <Medal className="h-4 w-4" />
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <span className="grid h-8 w-8 place-items-center rounded-lg bg-amber-50 text-amber-600 dark:bg-amber-500/15 dark:text-amber-400">
+            <Medal className="h-4 w-4" />
+          </span>
+          <span className="text-[11px] font-bold uppercase tracking-[0.18em] text-muted-token">Loyalty milestones</span>
+        </div>
+        <span className="rounded-full border border-amber-400/40 px-2.5 py-1 text-xs font-semibold text-amber-600 dark:text-amber-400">
+          {m} month{m === 1 ? "" : "s"}
         </span>
-        <span className="text-[11px] font-bold uppercase tracking-[0.18em] text-muted-token">Loyalty milestones</span>
       </div>
 
-      {showProgress ? (
-        <ol className="mt-4 space-y-3">
+      {/* Visual track: current position + milestone nodes. */}
+      <div className="px-4 pb-9 pt-6">
+        <div className="relative h-2 rounded-full bg-black/[.07] dark:bg-white/[.10]">
+          <div
+            className="absolute inset-y-0 left-0 rounded-full"
+            style={{ width: `${progressPct}%`, background: "linear-gradient(90deg,#fbbf24,#d97706)" }}
+          />
           {MILESTONES.map((ms) => {
-            const done = m >= ms.mo;
+            const reached = m >= ms.mo;
+            const pos = (ms.mo / MAX_MO) * 100;
             return (
-              <li key={ms.mo} className="flex items-center gap-3">
+              <div key={ms.mo} className="absolute top-1/2" style={{ left: `${pos}%`, transform: "translate(-50%,-50%)" }}>
                 <span
-                  className={cn(
-                    "grid h-8 w-8 shrink-0 place-items-center rounded-full text-xs font-bold",
-                    done ? "bg-emerald-500 text-white" : "bg-black/[.06] text-muted-token dark:bg-white/[.10]",
-                  )}
+                  className={cn("grid h-6 w-6 place-items-center rounded-full border-2 border-surface text-white shadow-sm")}
+                  style={{ background: reached ? "linear-gradient(180deg,#fbbf24,#d97706)" : "#c7ccd3" }}
                 >
-                  {done ? <Check className="h-4 w-4" /> : `${ms.mo}m`}
+                  {reached ? <Check className="h-3.5 w-3.5" /> : <Lock className="h-3 w-3" />}
                 </span>
-                <div className="flex-1 text-sm text-primary-token dark:text-white">
-                  <strong>+{ms.entries} free entries</strong> at {ms.mo} months
+                <div className="absolute left-1/2 top-[27px] -translate-x-1/2 whitespace-nowrap text-center">
+                  <div className={cn("text-[11px] font-black", reached ? "text-amber-600 dark:text-amber-400" : "text-primary-token dark:text-white")}>
+                    +{ms.entries}
+                  </div>
+                  <div className="text-[9px] font-semibold uppercase tracking-wide text-muted-token">{ms.mo} mo</div>
                 </div>
-                {done && <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400">Unlocked</span>}
-              </li>
+              </div>
             );
           })}
-        </ol>
-      ) : (
-        <p className="mt-3 text-sm text-muted-token">
-          Earn bonus entries the longer you stay a member — <strong className="text-primary-token dark:text-white">+50 free entries</strong> at 3 months and <strong className="text-primary-token dark:text-white">+250</strong> at 6 months. Rewards land in your wallet automatically.
-        </p>
-      )}
+        </div>
+      </div>
+
+      <p className="text-[12px] font-medium leading-[1.5] text-muted-token">
+        {acct === "pastdue" ? (
+          <>
+            <b className="text-[#d97706]">Reactivate to keep your streak</b> — milestone progress pauses while payment is overdue.
+          </>
+        ) : nextMilestone ? (
+          <>
+            <b className="text-primary-token dark:text-white">{monthsToNext} month{monthsToNext === 1 ? "" : "s"}</b> to your next{" "}
+            <b className="text-amber-600 dark:text-amber-400">+{nextMilestone.entries} free entries</b>. Rewards land in your wallet automatically.
+          </>
+        ) : (
+          <>
+            <b className="text-emerald-600 dark:text-emerald-400">All milestones unlocked</b> — thanks for {m} months of membership. Rewards land in your wallet automatically.
+          </>
+        )}
+      </p>
     </section>
   );
 }

@@ -304,8 +304,23 @@ Rebuilds the Rewards destination (`/my-account/benefits`, nav-labelled "Rewards"
   `usePartnerDiscountSso` portal + `PARTNER_BRAND_OFFERS` grid; state CTAs), `RewardsClaimables`
   (`useRedeemablesWallet` claimable/past + `useRedeemableRedemption`; **paused-safe** — the rewards
   program 503 renders a neutral "temporarily unavailable" state, never a crash), `RewardsMilestones`
-  (stepper gated behind the `milestoneProgress` coming-soon switch; static documented-tier teaser
-  until enabled — no fabricated progress).
+  (**visual milestone progress track** — real continuous-membership `months` drive the current
+  position + milestone nodes at 3mo/6mo and a "N months to your next +50/+250 free entries" line;
+  milestone amounts are documented constants, never fabricated. Superseded the earlier
+  `milestoneProgress`-gated text teaser now that member-since `months` is a confirmed real read).
+
+### Home + hero refinements (2026-07-02)
+
+- **`DashboardHero`** now takes `tierKey` / `profileComplete` / `onCompleteProfile`. Active members'
+  tier chip shows the real **tier package icon** (`getPackageIcon(\`${tierKey}-subscription\`)`), not a
+  generic crown. The member "Reward portal" button uses a **premium gold** treatment (distinct from
+  foreman-yellow / boss-red tier hues). When `profileComplete === false` a high-contrast
+  **"Complete your profile"** nudge renders in the hero (→ reopens the `user-setup` modal via
+  `requestModal`). `profileComplete` is derived in the home page as
+  `Boolean(user.profileSetupCompleted && user.birthdate)` (mirrors the setup-modal trigger).
+- **`RewardsFloatingWidget` removed from the home** — the sidebar/bottom-nav **Rewards** item
+  (`DASHBOARD_NAV` → `/my-account/benefits`) is now the single entry point to claimable rewards;
+  the `QuickActionsGrid` "Rewards" tile still shows the claimable-count badge.
 
 ## Dashboard revamp — Spec 3: Draws (2026-07-02)
 

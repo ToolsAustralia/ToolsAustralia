@@ -346,7 +346,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/hooks/useEntryRewardToast.ts",
         "src/utils/rewards-widget-spotlight-storage.ts"
       ],
-      "lastVerified": "2026-04-28"
+      "lastVerified": "2026-07-02"
     },
     "promo": {
       "docs": "docs/promo/",

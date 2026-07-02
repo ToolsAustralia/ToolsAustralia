@@ -86,36 +86,42 @@ export default function DashboardPromoBanner({
         )}
 
         <div className={cn("relative flex items-center", wide ? "gap-[18px] px-[22px] py-[18px]" : "gap-3 px-4 py-[15px]")}>
-          <span
-            className={cn("grid shrink-0 place-items-center rounded-xl", wide ? "h-[46px] w-[46px]" : "h-[42px] w-[42px]")}
-            style={{ background: t.hot ? "rgba(255,255,255,.18)" : "rgba(0,0,0,.16)" }}
-          >
-            <Ticket className={wide ? "h-[23px] w-[23px]" : "h-[21px] w-[21px]"} />
-          </span>
+          {/* Multiplier badge image — shown container-less and large (matches the
+              special-packages modal). Falls back to a ticket glyph when no
+              multiplier is live (50%-off-only banner). */}
+          {badgeSrc ? (
+            <Image
+              src={badgeSrc}
+              alt={`${multiplier}× entries`}
+              width={wide ? 92 : 80}
+              height={wide ? 92 : 80}
+              className={cn("shrink-0 object-contain drop-shadow-[0_8px_16px_rgba(0,0,0,.42)]", wide ? "h-[76px] w-[76px]" : "h-[64px] w-[64px]")}
+            />
+          ) : (
+            <span
+              className={cn("grid shrink-0 place-items-center rounded-xl", wide ? "h-[46px] w-[46px]" : "h-[42px] w-[42px]")}
+              style={{ background: t.hot ? "rgba(255,255,255,.18)" : "rgba(0,0,0,.16)" }}
+            >
+              <Ticket className={wide ? "h-[23px] w-[23px]" : "h-[21px] w-[21px]"} />
+            </span>
+          )}
           <div className="min-w-0 flex-1">
             <b className={cn("font-['Poppins'] font-extrabold leading-tight", wide ? "text-[17px]" : "text-[14.5px]")}>{heading}</b>
             <div className={cn("mt-1 font-bold", wide ? "text-[11.5px]" : "text-[10.5px]")} style={{ color: t.hot ? "rgba(255,255,255,.85)" : "rgba(36,26,2,.72)" }}>
               {subtitle}
             </div>
           </div>
-          <div className="relative shrink-0">
-            <button
-              type="button"
-              onClick={onGetPackage}
-              className={cn(
-                "inline-flex items-center gap-1.5 rounded-full font-extrabold shadow-[0_10px_22px_-10px_rgba(0,0,0,.6)] transition-transform focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70 motion-safe:active:translate-y-px",
-                wide ? "px-5 py-3 text-[13px]" : "px-[15px] py-3 text-[12px]",
-              )}
-              style={t.hot ? { background: "#fff", color: "#c40d0d" } : { background: "linear-gradient(180deg,#2a2109,#151002)", color: "#f6dd8c" }}
-            >
-              Get a package <ArrowRight className={wide ? "h-4 w-4" : "h-[15px] w-[15px]"} />
-            </button>
-            {active && (
-              <span className="absolute -right-2 -top-2 inline-flex items-center gap-0.5 rounded-md border-[1.5px] px-1.5 py-1 text-[9.5px] font-black" style={{ background: t.hot ? "#fff" : "linear-gradient(180deg,#fff3cc,#f4d873)", color: t.hot ? "#c40d0d" : "#241a02", borderColor: t.hot ? "#ffb0b0" : "#d4af37" }}>
-                {badgeSrc ? <Image src={badgeSrc} alt={`${multiplier}×`} width={16} height={16} className="h-3.5 w-3.5 object-contain" /> : <><Flame className="h-2.5 w-2.5" /> {multiplier}×</>}
-              </span>
+          <button
+            type="button"
+            onClick={onGetPackage}
+            className={cn(
+              "inline-flex shrink-0 items-center gap-1.5 rounded-full font-extrabold shadow-[0_10px_22px_-10px_rgba(0,0,0,.6)] transition-transform focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70 motion-safe:active:translate-y-px",
+              wide ? "px-5 py-3 text-[13px]" : "px-[15px] py-3 text-[12px]",
             )}
-          </div>
+            style={t.hot ? { background: "#fff", color: "#c40d0d" } : { background: "linear-gradient(180deg,#2a2109,#151002)", color: "#f6dd8c" }}
+          >
+            Get a package <ArrowRight className={wide ? "h-4 w-4" : "h-[15px] w-[15px]"} />
+          </button>
         </div>
       </div>
     </section>

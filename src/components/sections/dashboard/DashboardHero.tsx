@@ -1,8 +1,10 @@
 "use client";
 
-import { Settings, Crown, ShieldAlert, ArrowRight, Ticket, Gift, ChevronRight, RefreshCw } from "lucide-react";
+import Image from "next/image";
+import { Settings, Crown, ShieldAlert, ArrowRight, Ticket, Gift, ChevronRight, RefreshCw, AlertCircle } from "lucide-react";
 import AccessRing from "@/components/ui/AccessRing";
 import { Monogram } from "@/components/ui/Monogram";
+import { getPackageIcon } from "@/utils/images/package-icons";
 import { cn } from "@/utils/cn";
 import type { DashboardAccountState, DashboardStateTheme } from "@/utils/dashboard/dashboard-state-theme";
 
@@ -10,15 +12,19 @@ interface DashboardHeroProps {
   acct: DashboardAccountState;
   firstName?: string | null;
   lastName?: string | null;
+  tierKey?: "tradie" | "foreman" | "boss" | null;
   tierHex?: string | null;
   tierLabel?: string | null;
   stateTheme: DashboardStateTheme;
   partnerAccessPct: number;
   partnerAccessExpiryLabel?: string | null;
+  /** False → show a "complete your profile" nudge in the hero. */
+  profileComplete?: boolean;
   onOpenSettings: () => void;
   onRewardPortal?: () => void;
   onBecomeMember?: () => void;
   onUpdatePayment?: () => void;
+  onCompleteProfile?: () => void;
 }
 
 function greeting(hour: number): string {
@@ -31,20 +37,23 @@ export default function DashboardHero({
   acct,
   firstName,
   lastName,
+  tierKey,
   tierHex,
   tierLabel,
   stateTheme,
   partnerAccessPct,
   partnerAccessExpiryLabel,
+  profileComplete,
   onOpenSettings,
   onRewardPortal,
   onBecomeMember,
   onUpdatePayment,
+  onCompleteProfile,
 }: DashboardHeroProps) {
   const { ink } = stateTheme;
   const white = ink === "#ffffff";
   const isGuest = acct === "none";
-  const name = firstName?.trim() || (isGuest ? "there" : "there");
+  const name = firstName?.trim() || "there";
   const hour = new Date().getHours();
   const glassBg = white ? "rgba(255,255,255,.15)" : "rgba(0,0,0,.13)";
   const glassBd = white ? "rgba(255,255,255,.3)" : "rgba(0,0,0,.18)";
@@ -58,6 +67,15 @@ export default function DashboardHero({
         : acct === "onetime"
           ? { Icon: Ticket, label: "One-time pack" }
           : { Icon: Crown, label: "Guest" };
+
+  // Active members show their real tier package icon (not a generic crown).
+  const tierIcon = tierKey ? getPackageIcon(`${tierKey}-subscription`) : null;
+  const chipIconEl =
+    acct === "active" && tierIcon ? (
+      <Image src={tierIcon} alt="" width={16} height={16} className="h-4 w-4 object-contain" />
+    ) : (
+      <chip.Icon className="h-3 w-3" />
+    );
 
   // Right-side ring (member/onetime use our AccessRing).
   const ring =
@@ -74,7 +92,14 @@ export default function DashboardHero({
 
   const primaryBtn =
     acct === "active" && onRewardPortal ? (
-      <button type="button" onClick={onRewardPortal} className="inline-flex items-center gap-2 rounded-full px-[17px] py-3 text-[12.5px] font-extrabold" style={{ color: ink, background: glassBg, border: `1px solid ${glassBd}` }}>
+      // Premium gold "rewards" treatment — distinct from foreman-yellow / boss-red
+      // tier hues, reads unmistakably as the rewards entry point.
+      <button
+        type="button"
+        onClick={onRewardPortal}
+        className="inline-flex items-center gap-2 rounded-full px-[17px] py-3 text-[12.5px] font-extrabold shadow-[0_10px_22px_-10px_rgba(120,82,10,.75)] transition-transform focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70 motion-safe:active:translate-y-px"
+        style={{ background: "linear-gradient(135deg,#fbe9ad 0%,#e6c455 42%,#c99a2e 100%)", color: "#2a1e02", border: "1px solid rgba(120,82,10,.5)" }}
+      >
         <Gift className="h-[15px] w-[15px]" /> Reward portal <ChevronRight className="h-3.5 w-3.5" />
       </button>
     ) : acct === "pastdue" && onUpdatePayment ? (
@@ -89,9 +114,23 @@ export default function DashboardHero({
 
   const ChipEl = (
     <span className="inline-flex items-center gap-1.5 rounded-full px-[11px] py-[7px] text-[10px] font-extrabold uppercase tracking-[0.06em]" style={{ color: ink, background: glassBg, border: `1px solid ${glassBd}` }}>
-      <chip.Icon className="h-3 w-3" /> {chip.label}
+      {chipIconEl} {chip.label}
     </span>
   );
+
+  // Profile-incomplete nudge (member/one-time only). High-contrast so it reads on
+  // any tier hero background.
+  const profileNudgeEl =
+    !isGuest && profileComplete === false && onCompleteProfile ? (
+      <button
+        type="button"
+        onClick={onCompleteProfile}
+        className="inline-flex items-center gap-1.5 rounded-full bg-white px-[11px] py-[7px] text-[10px] font-extrabold uppercase tracking-[0.05em] shadow-sm transition-transform focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70 motion-safe:active:translate-y-px"
+        style={{ color: "#b45309", border: "1px solid rgba(180,83,9,.25)" }}
+      >
+        <AlertCircle className="h-3 w-3" /> Complete your profile <ChevronRight className="h-3 w-3" />
+      </button>
+    ) : null;
 
   const decor = (
     <>
@@ -110,9 +149,10 @@ export default function DashboardHero({
         <Monogram firstName={firstName} lastName={lastName} tierHex={tierHex} onBrand size={52} radius={16} />
         <div className="min-w-0 flex-1">
           <div className="text-[13px] font-semibold" style={{ color: soft }}>{isGuest ? "Welcome," : `${greeting(hour)},`}</div>
-          <div className="mt-1.5 flex items-center gap-3">
+          <div className="mt-1.5 flex flex-wrap items-center gap-2.5">
             <span className="font-['Poppins'] text-2xl font-extrabold">{name}</span>
             {ChipEl}
+            {profileNudgeEl}
           </div>
         </div>
         {ring}
@@ -137,6 +177,7 @@ export default function DashboardHero({
           )}
           {ring}
         </div>
+        {profileNudgeEl && <div className="mt-3">{profileNudgeEl}</div>}
         <div className="mt-4 flex items-center gap-2">
           {ChipEl}
           {primaryBtn && <span className={cn("ml-auto")}>{primaryBtn}</span>}
