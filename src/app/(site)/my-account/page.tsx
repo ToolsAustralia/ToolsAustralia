@@ -39,6 +39,7 @@ import { useDashboardLandingOrchestration } from "@/hooks/useDashboardLandingOrc
 import { useMemberships } from "@/hooks/useMemberships";
 import { useDashboardState } from "@/hooks/useDashboardState";
 import { useDashboardSheetStore } from "@/stores/useDashboardSheetStore";
+import { usePartnerDiscountSso } from "@/hooks/queries/usePartnerDiscountSso";
 import { useRedeemablesWallet } from "@/hooks/queries/useRedeemablesQueries";
 
 import DashboardHero from "@/components/sections/dashboard/DashboardHero";
@@ -61,6 +62,7 @@ export default function MyAccountPage() {
   const dash = useDashboardState();
   const openSheet = useDashboardSheetStore((s) => s.openSheet);
   const searchParams = useSearchParams();
+  const partnerSso = usePartnerDiscountSso();
 
   const { requestModal } = useModalPriorityStore();
   const { allowSecondaryModals } = useDashboardLandingOrchestration(
@@ -287,7 +289,7 @@ export default function MyAccountPage() {
         partnerAccessExpiryLabel={dash.partnerAccessExpiryLabel}
         profileComplete={Boolean(user.profileSetupCompleted && user.birthdate)}
         onOpenSettings={() => router.push("/my-account/settings")}
-        onRewardPortal={() => router.push("/my-account/benefits")}
+        onRewardPortal={() => partnerSso.mutate()}
         onBecomeMember={onBecomeMember}
         onUpdatePayment={onResolvePayment}
         onCompleteProfile={() => requestModal("user-setup", true)}

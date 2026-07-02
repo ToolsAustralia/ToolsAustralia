@@ -47,8 +47,9 @@ the existing `AccessRing`. See [dashboard-account/frontend.md](../dashboard-acco
 
 **Section refinements (2026-07-02):**
 - `DashboardHero` — active-member tier chip renders the real **tier package icon**
-  (`getPackageIcon(\`${tierKey}-subscription\`)`) not a crown; the "Reward portal" button uses a
-  **premium gold** treatment distinct from foreman-yellow / boss-red; a **"Complete your profile"**
+  (`getPackageIcon(\`${tierKey}-subscription\`)`) not a crown; the "Reward portal" button is a
+  **chip-sized premium gold** pill that **triggers the partner-discount SSO** (`onRewardPortal` →
+  `usePartnerDiscountSso().mutate()` in the home page), not a route; a **"Complete your profile"**
   nudge shows when `profileComplete === false` (new `tierKey` / `profileComplete` / `onCompleteProfile` props).
 - `DashboardPromoBanner` — the left icon is now the **container-less multiplier badge image**
   (`multiplierBadgeSrc`, shown large like the special-packages modal), falling back to a ticket glyph

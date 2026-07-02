@@ -313,8 +313,10 @@ Rebuilds the Rewards destination (`/my-account/benefits`, nav-labelled "Rewards"
 
 - **`DashboardHero`** now takes `tierKey` / `profileComplete` / `onCompleteProfile`. Active members'
   tier chip shows the real **tier package icon** (`getPackageIcon(\`${tierKey}-subscription\`)`), not a
-  generic crown. The member "Reward portal" button uses a **premium gold** treatment (distinct from
-  foreman-yellow / boss-red tier hues). When `profileComplete === false` a high-contrast
+  generic crown. The member "Reward portal" button is a **chip-sized premium gold** pill (matches the
+  tier chip) and **triggers the partner-discount SSO** (`usePartnerDiscountSso().mutate()` → MyRewards
+  portal via `POST /api/partner-discount/sso`), NOT a route to `/my-account/benefits`. When
+  `profileComplete === false` a high-contrast
   **"Complete your profile"** nudge renders in the hero (→ reopens the `user-setup` modal via
   `requestModal`). `profileComplete` is derived in the home page as
   `Boolean(user.profileSetupCompleted && user.birthdate)` (mirrors the setup-modal trigger).
