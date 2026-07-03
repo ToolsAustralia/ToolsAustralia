@@ -130,9 +130,11 @@ scale) on desktop, with the backdrop fading (`ta-sheet-fade`); all `motion-safe`
 > [dashboard-account/frontend.md § Route rename](../dashboard-account/frontend.md#route-rename-benefits--rewards-2026-07-03).
 
 > **MembershipCurrentPlan one-time fix (2026-07-03):** for `onetime` accounts the current-plan card
-> replaces the "Renews {date} · Auto-renews monthly" **Manage-subscription** row with a non-clickable
-> `InfoRow` ("One-time pack · doesn't auto-renew") — a one-time pack has no subscription, so the renewal
-> wording + Manage action was a genuine UI bug that made buyers think they'd be auto-billed monthly.
+> drops the "Renews {date} · Auto-renews monthly" **Manage-subscription** row — a one-time pack has no
+> subscription, so that renewal wording + Manage action was a genuine UI bug that made buyers think
+> they'd be auto-billed monthly. The slot now advertises membership instead: a clickable "**Become a
+> member** · Unlock exclusive rewards & free entries" row → `onBecomeMember`. The status pill is
+> `whitespace-nowrap shrink-0` so "One-time" no longer wraps to two lines.
 
 ### RewardsPartnerQueue — partner-discount queue (2026-07-03)
 

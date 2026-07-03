@@ -18,8 +18,8 @@
 > month that stacks up …") so one-time buyers don't read it as *their* one-off entries becoming permanent,
 > and it leads with membership value. Relatedly, [`MembershipCurrentPlan`](../../src/components/sections/account-membership/MembershipCurrentPlan.tsx)
 > no longer shows "Renews {date} · Auto-renews monthly" + a Manage-subscription action for a **one-time**
-> pack (a one-time pack has no subscription — that was a real UI bug) — it shows a non-clickable
-> "One-time pack · doesn't auto-renew" info row instead.
+> pack (a one-time pack has no subscription — that was a real UI bug) — that slot now advertises
+> membership ("Become a member · Unlock exclusive rewards & free entries" → `onBecomeMember`).
 
 > **Rewards portal + streak gating (2026-07-03):** the dashboard home passes `onRewardPortal` only when
 > [`partnerDiscountSsoEnabled()`](../../src/config/featureFlags.ts) is on (default off until partner-portal SSO
