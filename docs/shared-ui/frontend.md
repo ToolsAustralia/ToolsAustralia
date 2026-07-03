@@ -137,6 +137,16 @@ scale) on desktop, with the backdrop fading (`ta-sheet-fade`); all `motion-safe`
 > right below is the join path; the sub wraps so "free entries" isn't truncated). The status pill is
 > `whitespace-nowrap shrink-0` so "One-time" no longer wraps to two lines.
 
+> **Mobile dashboard hides the viewport scrollbar (2026-07-03):** the member dashboard scrolls at the
+> document level with a fixed `z-40` `BottomNav`. The brand scrollbar is styled on `<html>`, so the
+> bright-red thumb spans the full window height and visually runs *behind* the fixed nav — harmless but
+> conspicuous. Native apps show no scrollbar, so [globals.css](../../src/app/globals.css) hides the
+> document scrollbar under `max-width: 1023px` via `html:has(body[data-account-layout])` (`scrollbar-width:
+> none` + `::-webkit-scrollbar { display: none }`). Content still clears the nav through `<main>`'s
+> `pb-16`; desktop keeps its scrollbar (no bottom nav to overlap). This is a *cosmetic* hide — not the
+> heavier app-shell rework (making `<main>` its own `overflow-y-auto` scroll container), which the layout
+> comment warns breaks `DeskNav`'s `sticky top-0` and reintroduces iOS `100dvh` inner-scroll footguns.
+
 > **RewardsPartnerCard brand grid accuracy (2026-07-03):** with the SSO portal off, this grid IS the
 > live catalogue, so it now shows the **tier-accurate slice** of `PARTNER_BRAND_OFFERS` (first `N =
 > ceil(partnerAccessPct% × total)` — matching `getPartnerCatalogVisibleSliceLength`; 40% → 3 of 7) with

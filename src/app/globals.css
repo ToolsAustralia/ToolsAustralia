@@ -2347,6 +2347,21 @@ body[data-account-layout] .site-main-content {
   padding-bottom: 0 !important;
 }
 
+/* Mobile dashboard has a fixed bottom nav. The viewport scrollbar belongs to
+ * <html>, so it spans the full window height and visually runs *behind* the
+ * fixed nav — harmless, but conspicuous here because the brand scrollbar is a
+ * persistent bright-red thumb. Native apps show no scrollbar at all, so on the
+ * mobile dashboard we hide the document scrollbar (content still clears the nav
+ * via <main>'s pb-16). Desktop keeps its scrollbar — no bottom nav to overlap. */
+@media (max-width: 1023px) {
+  html:has(body[data-account-layout]) {
+    scrollbar-width: none;
+  }
+  html:has(body[data-account-layout])::-webkit-scrollbar {
+    display: none;
+  }
+}
+
 /* ===== Device-tier tokens (added 2026-05-09) ===== */
 :root {
   --ta-blur:               12px;
