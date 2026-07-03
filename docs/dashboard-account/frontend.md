@@ -1,5 +1,12 @@
 # Dashboard-Account — Frontend
 
+> **Partner access % bug (2026-07-03):** `useDashboardState.partnerAccessPct` (hero ring + `RewardsPartnerCard`)
+> was derived from `getActivePackage()`'s pack, which for a multi-pack one-time buyer picked the wrong one
+> (e.g. a 25% Apprentice pack) — while the partner-discount **queue** correctly showed the highest-% active
+> pack (40% Tradie). Fixed by resolving the % through the shared, queue-aware [`resolvePartnerCatalogPlanId`](../../src/utils/partner-discounts/partner-catalog-visibility.ts)
+> (the same resolver the SSO `member_level` + queue use), so every surface agrees. Active members fall back
+> to the tier map only if the resolver can't resolve.
+
 > **Loader (2026-07-03):** every `my-account/*` page's loading state (home, draws, membership,
 > settings, benefits) now returns the shared [`DashboardLoader`](../../src/components/loading/DashboardLoader.tsx)
 > — the Claude Design "Dashboard Loader" (ratchet-driving-a-hex-bolt medallion, theme-adaptive) —

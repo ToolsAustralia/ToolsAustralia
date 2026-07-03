@@ -11,8 +11,7 @@ import { getActivePackage, type ActivePackageUserInput } from "@/utils/membershi
 import { hasAdditionalPackageAccess } from "@/utils/membership/has-additional-package-access";
 import { hasFailedRenewal } from "@/utils/subscription/subscription-helpers";
 import { TIER_HEX, tierKeyFromName, type TierKey } from "@/utils/membership/tier-visuals";
-import { derivePlanIdFromPackage } from "@/utils/package-colors/packageColorScheme";
-import { getPartnerCatalogAccessPercentForPlanId } from "@/utils/partner-discounts/partner-catalog-visibility";
+import { getPartnerCatalogAccessPercentForPlanId, resolvePartnerCatalogPlanId } from "@/utils/partner-discounts/partner-catalog-visibility";
 import { getPartnerDiscountAccessInfo } from "@/utils/membership/benefit-resolution";
 import {
   deriveDashboardAccountState,
@@ -131,16 +130,23 @@ export function useDashboardState(): DashboardStateResult {
     const tierHex = tierKey ? TIER_HEX[tierKey] : null;
     const tierLabel = tierKey ? TIER_LABEL[tierKey] : null;
 
-    // Partner access %: member reads the tier map; one-time reads its own plan.
+    // Partner access % — resolve the effective (highest-%) active partner-catalog plan
+    // from the SHARED resolver (it reads the partner-discount queue), so the hero ring +
+    // partner card MATCH the queue instead of guessing from getActivePackage(). For a
+    // one-time buyer holding several packs the highest-% pack is the active one — e.g. a
+    // Tradie pack (40%) outranks a queued Apprentice pack (25%), the exact bug this fixes.
     let partnerAccessPct = 0;
     let partnerAccessExpiryLabel: string | null = null;
-    if (acct === "active" && tierKey) {
-      partnerAccessPct = getPartnerCatalogAccessPercentForPlanId(`${tierKey}-subscription`);
-    } else if (acct === "onetime" && activePackage.packageData) {
-      const planId = derivePlanIdFromPackage(activePackage.packageData, "one-time");
-      partnerAccessPct = getPartnerCatalogAccessPercentForPlanId(planId);
-      const info = getPartnerDiscountAccessInfo(iUser);
-      partnerAccessExpiryLabel = info.hasAccess ? expiryLabel(info.daysRemaining, info.hoursRemaining) : null;
+    if (acct === "active" || acct === "onetime") {
+      // Active member falls back to the tier map only if the resolver can't resolve
+      // (defensive — a member with subscriptionPackageData always resolves).
+      const resolved = resolvePartnerCatalogPlanId(user);
+      const partnerPlanId = resolved ?? (acct === "active" && tierKey ? `${tierKey}-subscription` : null);
+      partnerAccessPct = partnerPlanId ? getPartnerCatalogAccessPercentForPlanId(partnerPlanId) : 0;
+      if (acct === "onetime") {
+        const info = getPartnerDiscountAccessInfo(iUser);
+        partnerAccessExpiryLabel = info.hasAccess ? expiryLabel(info.daysRemaining, info.hoursRemaining) : null;
+      }
     }
 
     // Streak months (members only) from the subscription start date when present.
