@@ -3,7 +3,7 @@
 import React from "react";
 import Link from "next/link";
 import { CreditCard, Loader2, Mail } from "lucide-react";
-import { cva, type VariantProps } from "class-variance-authority";
+import { cva } from "class-variance-authority";
 import { cn } from "@/utils/cn";
 import styles from "./styles.module.css";
 import { type PayFailedInvoiceFailureCode } from "@/hooks/queries/useSubscriptionQueries";
@@ -23,6 +23,11 @@ interface ActionButtonsProps {
   onClose: () => void;
   /** Pre-encoded mailto string for the Contact Support CTA. */
   supportMailto: string;
+  /**
+   * Sheet-native mode: hide the "Close" button + the "close this modal" footer
+   * copy (the bottom sheet owns its own dismiss). Defaults to false (modal).
+   */
+  hideDismiss?: boolean;
 }
 
 const button = cva(
@@ -55,6 +60,7 @@ const ActionButtons: React.FC<ActionButtonsProps> = ({
   onBack,
   onClose,
   supportMailto,
+  hideDismiss = false,
 }) => {
   // State 1: Loading
   if (isLoading) {
@@ -78,14 +84,16 @@ const ActionButtons: React.FC<ActionButtonsProps> = ({
           <Link href="/my-account" onClick={onClose} className={cn(button({ variant: "outline" }))}>
             Go to account
           </Link>
-          <button
-            type="button"
-            onClick={onClose}
-            disabled={isLoading}
-            className={cn(button({ variant: "ghost" }))}
-          >
-            Close
-          </button>
+          {!hideDismiss && (
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={isLoading}
+              className={cn(button({ variant: "ghost" }))}
+            >
+              Close
+            </button>
+          )}
         </div>
         <div className="mt-4 text-2xs sm:text-xs text-neutral-500 dark:text-neutral-400 text-center">
           Our team may need to fix your invoice in billing before you can pay. You can still update
@@ -120,20 +128,24 @@ const ActionButtons: React.FC<ActionButtonsProps> = ({
             Back
           </button>
         )}
-        <button
-          type="button"
-          onClick={onClose}
-          disabled={isLoading}
-          className={cn(button({ variant: "ghost" }))}
-        >
-          Close
-        </button>
+        {!hideDismiss && (
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={isLoading}
+            className={cn(button({ variant: "ghost" }))}
+          >
+            Close
+          </button>
+        )}
       </div>
-      <div className="mt-4 text-2xs sm:text-xs text-neutral-500 dark:text-neutral-400 text-center">
-        {showInlineCardSetup
-          ? "You can also close this modal and add a card later under account settings."
-          : "You can close this modal and resolve the payment issue later from your account settings."}
-      </div>
+      {!hideDismiss && (
+        <div className="mt-4 text-2xs sm:text-xs text-neutral-500 dark:text-neutral-400 text-center">
+          {showInlineCardSetup
+            ? "You can also close this modal and add a card later under account settings."
+            : "You can close this modal and resolve the payment issue later from your account settings."}
+        </div>
+      )}
     </>
   );
 };

@@ -8,10 +8,14 @@ import { useDashboardState } from "@/hooks/useDashboardState";
 import { useMyAccountData } from "@/hooks/queries";
 import PaymentTab from "../settings/PaymentTab";
 
-// Past-due resolve engine — reused (embedded) so the card sheet itself retries the
-// failed invoice and resumes the subscription (handles declines / 3DS / add-card-
-// then-retry / force-charge). No separate RenewalFailedModal popup.
-const RenewalFailedModal = dynamic(() => import("@/components/modals/RenewalFailedModal"), { ssr: false });
+// Past-due resolve, rendered NATIVELY in this sheet (no modal chrome). Shares the
+// exact resolve state machine (retry / 3DS / add-card-then-retry / force-charge)
+// with RenewalFailedModal via usePastDueResolve — so the card sheet itself retries
+// the failed invoice and resumes the subscription.
+const PastDueResolvePanel = dynamic(
+  () => import("@/components/modals/RenewalFailedModal/PastDueResolvePanel"),
+  { ssr: false },
+);
 
 /**
  * "Payment method" overlay — bottom-sheet on mobile, centered popup on desktop.
@@ -34,7 +38,7 @@ export default function PaymentSheet() {
     <SheetShell open={sheet === "payment"} onClose={closeSheet} labelledBy="payment-sheet-title">
       <SheetHead title="Payment method" sub="Cards used for membership & one-time packages" onClose={closeSheet} id="payment-sheet-title" />
       <div className="space-y-5 overflow-y-auto px-5 pb-6">
-        {isPastDue && <RenewalFailedModal isOpen embedded onClose={closeSheet} />}
+        {isPastDue && <PastDueResolvePanel onResolved={closeSheet} />}
         {user ? <PaymentTab user={user} /> : null}
       </div>
     </SheetShell>

@@ -32,12 +32,6 @@ interface ShellProps extends VariantProps<typeof shellTone> {
    * Defaults to true.
    */
   closeOnBackdrop?: boolean;
-  /**
-   * Embedded mode — render just the hero+body frame inline (no fixed overlay,
-   * backdrop, close button, scroll-lock or entry animation) so the resolve flow
-   * can live inside another surface (e.g. the dashboard payment sheet).
-   */
-  embedded?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -68,7 +62,6 @@ const Shell: React.FC<ShellProps> = ({
   sub,
   children,
   closeOnBackdrop = true,
-  embedded = false,
 }) => {
   /** Entry-animation gate — 10 ms setTimeout matches CancellationUpsellModal. */
   const [isVisible, setIsVisible] = useState(false);
@@ -88,7 +81,7 @@ const Shell: React.FC<ShellProps> = ({
    * overflow properties — we do NOT capture the previous value.
    */
   useEffect(() => {
-    if (!isOpen || embedded) return;
+    if (!isOpen) return;
     document.documentElement.style.overflow = "hidden";
     document.body.style.overflow = "hidden";
     const onEscape = (event: KeyboardEvent) => {
@@ -100,7 +93,7 @@ const Shell: React.FC<ShellProps> = ({
       document.body.style.overflow = "";
       document.removeEventListener("keydown", onEscape);
     };
-  }, [isOpen, onClose, embedded]);
+  }, [isOpen, onClose]);
 
   if (!isOpen) return null;
 
@@ -111,9 +104,7 @@ const Shell: React.FC<ShellProps> = ({
     <div
       className={cn(
         "relative rounded-[22px] bg-white dark:bg-neutral-950 overflow-hidden max-xs:rounded-2xl",
-        embedded
-          ? "w-full"
-          : "w-full max-h-full overflow-y-auto overflow-x-hidden [-webkit-overflow-scrolling:touch] shadow-[0_30px_80px_rgba(0,0,0,0.45),0_8px_24px_rgba(0,0,0,0.2)]",
+        "w-full max-h-full overflow-y-auto overflow-x-hidden [-webkit-overflow-scrolling:touch] shadow-[0_30px_80px_rgba(0,0,0,0.45),0_8px_24px_rgba(0,0,0,0.2)]",
         styles.scrollFrame
       )}
     >
@@ -212,11 +203,6 @@ const Shell: React.FC<ShellProps> = ({
           </div>
     </div>
   );
-
-  // Embedded — inline card, no overlay/backdrop/close button/scroll-lock/animation.
-  if (embedded) {
-    return <div className={cn("relative w-full", shellTone({ tone }))}>{frame}</div>;
-  }
 
   return (
     <div

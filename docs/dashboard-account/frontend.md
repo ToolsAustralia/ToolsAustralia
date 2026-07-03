@@ -424,10 +424,12 @@ was collapsed into the Claude-design IA:
     **update-payment AND past-due resume** both → `openSheet("payment")`; **cancel** → self-contained
     `CancellationFlowModal` (`onResolvePayment` → `openSheet("payment")`); **change-tier** → closes the
     sheet and routes to the **Membership page tier list** ("See all tiers below"). The **`PaymentSheet`
-    embeds the `RenewalFailedModal` resolve engine** (`embedded` prop) for past-due members, so the ONE
+    renders `PastDueResolvePanel`** (sheet-native, no modal chrome) for past-due members, so the ONE
     payment sheet retries the failed invoice + resumes (declines / 3DS / add-card-then-retry /
-    force-charge) as well as manages cards — the separate past-due popup is gone. `SubscriptionTab.tsx`
-    is now orphaned (kept as the documented type-only-import example).
+    force-charge) as well as manages cards — the separate past-due popup is gone. The resolve state machine
+    is shared with the legacy `RenewalFailedModal` via `usePastDueResolve` (see subscription/frontend.md),
+    so the money path is single-sourced. `SubscriptionTab.tsx` is now orphaned (kept as the documented
+    type-only-import example).
 - **Tier change (2026-07-02):** on the Membership page, a member tapping a **different** tier in
   `MembershipTierList` fires `onChangeTier(plan.name)`, which mounts `SubscriptionManagementModal`
   (modal mode) with **`autoSelectPlanName`** — a new opt-in prop: once benefits load, an effect finds

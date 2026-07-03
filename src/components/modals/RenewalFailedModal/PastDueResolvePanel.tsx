@@ -2,8 +2,9 @@
 
 import React from "react";
 import { Elements } from "@stripe/react-stripe-js";
+import { AlertTriangle, CheckCircle2 } from "lucide-react";
+import { cn } from "@/utils/cn";
 
-import Shell from "./Shell";
 import AlertBanner from "./AlertBanner";
 import PaymentMethodPicker from "./PaymentMethodPicker";
 import ActionButtons from "./ActionButtons";
@@ -11,70 +12,107 @@ import InlineCardSetup from "./InlineCardSetup";
 import PaymentForm from "./PaymentForm";
 import { usePastDueResolve, stripePromise, renewalBillingSupportMailto } from "./usePastDueResolve";
 
-interface RenewalFailedModalProps {
-  isOpen: boolean;
-  onClose: () => void;
+interface PastDueResolvePanelProps {
+  /** Called after a successful recovery (short delay) so the host sheet can close. */
+  onResolved?: () => void;
 }
 
 /**
- * The past-due renewal-recovery MODAL. The state machine lives in
- * `usePastDueResolve` (shared with the dashboard payment sheet's sheet-native
- * `PastDueResolvePanel`); this component is just the `Shell`-wrapped presentation.
+ * Sheet-native heading — a clean, compact strip that fits a bottom sheet, NOT the
+ * modal's dark full-bleed hero. Amber for the on-hold/blocked states, emerald on
+ * success.
  */
-const RenewalFailedModal: React.FC<RenewalFailedModalProps> = ({ isOpen, onClose }) => {
-  const r = usePastDueResolve({ isOpen, onClose });
+function PanelHead({
+  tone,
+  eyebrow,
+  title,
+  sub,
+}: {
+  tone: "danger" | "success";
+  eyebrow: string;
+  title: string;
+  sub: string;
+}) {
+  const ok = tone === "success";
+  const Icon = ok ? CheckCircle2 : AlertTriangle;
+  return (
+    <div
+      className={cn(
+        "mb-4 flex items-start gap-3 rounded-2xl border p-3.5",
+        ok
+          ? "border-emerald-200 bg-emerald-50 dark:border-emerald-900/50 dark:bg-emerald-950/30"
+          : "border-amber-200 bg-amber-50 dark:border-amber-900/50 dark:bg-amber-950/30",
+      )}
+    >
+      <span
+        className={cn(
+          "grid h-9 w-9 shrink-0 place-items-center rounded-xl",
+          ok
+            ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300"
+            : "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300",
+        )}
+      >
+        <Icon className="h-[18px] w-[18px]" />
+      </span>
+      <div className="min-w-0">
+        <div
+          className={cn(
+            "text-[10px] font-bold uppercase tracking-[0.18em]",
+            ok ? "text-emerald-700 dark:text-emerald-400" : "text-amber-700 dark:text-amber-400",
+          )}
+        >
+          {eyebrow}
+        </div>
+        <div className="font-['Poppins'] text-[15px] font-extrabold text-primary-token dark:text-white">{title}</div>
+        <div className="mt-0.5 text-xs leading-[1.4] text-muted-token">{sub}</div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Past-due renewal recovery, rendered **natively inside the dashboard payment
+ * sheet** — no modal Shell / backdrop / "Close" button / "close this modal" copy.
+ * Shares the exact resolve state machine (retry / 3DS / add-card-then-retry /
+ * force-charge) with `RenewalFailedModal` via `usePastDueResolve`, so the money
+ * path stays single-sourced; only the presentation differs.
+ */
+export default function PastDueResolvePanel({ onResolved }: PastDueResolvePanelProps) {
+  const close = React.useCallback(() => onResolved?.(), [onResolved]);
+  const r = usePastDueResolve({ isOpen: true, onClose: close });
 
   /* ====== Success state ====== */
   if (r.isSuccess) {
     return (
-      <Shell
-        isOpen={isOpen}
-        onClose={onClose}
-        tone="success"
-        eyebrow="Payment received"
-        title={
-          <>
-            You&apos;re back <span data-rf-accent>in business</span>
-          </>
-        }
-        sub={<>Your subscription has been reactivated and benefits are live again.</>}
-      >
-        <div className="flex flex-col items-center justify-center py-6 text-center">
-          <p className="text-sm text-neutral-600 dark:text-neutral-300 max-w-sm">
-            Your accumulated entries and partner access are restored straight away.
-          </p>
-        </div>
-      </Shell>
+      <div>
+        <PanelHead
+          tone="success"
+          eyebrow="Payment received"
+          title="You're back in business"
+          sub="Your subscription is reactivated and benefits are live again."
+        />
+        <p className="text-sm text-muted-token">
+          Your accumulated entries and partner access are restored straight away.
+        </p>
+      </div>
     );
   }
 
-  /* ====== Payment Element confirmation state ====== */
+  /* ====== Payment Element confirmation (3DS/SCA) state ====== */
   if (r.paymentState?.requiresConfirmation && r.paymentState.clientSecret) {
     const amountLabel = r.paymentState.amount
       ? `$${((r.paymentState.amount || 0) / 100).toFixed(2)} ${r.paymentState.currency?.toUpperCase() || "AUD"}`
       : null;
 
     return (
-      <Shell
-        isOpen={isOpen}
-        onClose={onClose}
-        tone="danger"
-        eyebrow="Payment required"
-        title={
-          <>
-            Complete your <span data-rf-accent>renewal payment</span>
-          </>
-        }
-        sub={
-          amountLabel ? (
-            <>
-              <strong>{amountLabel}</strong> due to reactivate your subscription.
-            </>
-          ) : (
-            <>Confirm your payment to reactivate your subscription.</>
-          )
-        }
-      >
+      <div>
+        <PanelHead
+          tone="danger"
+          eyebrow="Payment required"
+          title="Complete your renewal payment"
+          sub={amountLabel ? `${amountLabel} due to reactivate your subscription.` : "Confirm your payment to reactivate your subscription."}
+        />
+
         {r.requiresDifferentPaymentMethod ? (
           <AlertBanner
             variant="warn"
@@ -108,45 +146,35 @@ const RenewalFailedModal: React.FC<RenewalFailedModalProps> = ({ isOpen, onClose
             selectedPaymentMethod={r.selectedPaymentMethod}
             onPaymentSuccess={r.handlePaymentSuccess}
             onPaymentError={r.handlePaymentError}
-            onCancel={onClose}
+            onCancel={close}
           />
         </Elements>
-      </Shell>
+      </div>
     );
   }
 
   /* ====== Initial / inline-card / terminal state ====== */
   return (
-    <Shell
-      isOpen={isOpen}
-      onClose={onClose}
-      tone="danger"
-      eyebrow={r.terminalCollectionFailure ? "Renewal blocked" : "Renewal on hold"}
-      title={
-        r.terminalCollectionFailure ? (
-          <>
-            We need to <span data-rf-accent>unblock</span> billing
-          </>
-        ) : r.showInlineCardSetup ? (
-          <>
-            Add a <span data-rf-accent>new card</span> to retry
-          </>
-        ) : (
-          <>
-            Resolve your <span data-rf-accent>renewal</span> in one step
-          </>
-        )
-      }
-      sub={
-        r.terminalCollectionFailure ? (
-          <>This invoice can&apos;t be charged from this screen — our team can fix it for you.</>
-        ) : r.showInlineCardSetup ? (
-          <>We&apos;ll save your card and retry the renewal automatically.</>
-        ) : (
-          <>Your last renewal payment didn&apos;t go through. Settle up to keep your benefits active.</>
-        )
-      }
-    >
+    <div>
+      <PanelHead
+        tone="danger"
+        eyebrow={r.terminalCollectionFailure ? "Renewal blocked" : "Renewal on hold"}
+        title={
+          r.terminalCollectionFailure
+            ? "We need to unblock billing"
+            : r.showInlineCardSetup
+              ? "Add a new card to retry"
+              : "Resolve your renewal in one step"
+        }
+        sub={
+          r.terminalCollectionFailure
+            ? "This invoice can't be charged from this screen — our team can fix it for you."
+            : r.showInlineCardSetup
+              ? "We'll save your card and retry the renewal automatically."
+              : "Your last renewal payment didn't go through. Settle up to keep your benefits active."
+        }
+      />
+
       {r.requiresDifferentPaymentMethod ? (
         <AlertBanner
           variant="warn"
@@ -211,11 +239,10 @@ const RenewalFailedModal: React.FC<RenewalFailedModalProps> = ({ isOpen, onClose
         onResolve={r.handleResolvePayment}
         onPayOverdue={r.handlePayOverdue}
         onBack={r.handleBackFromPayment}
-        onClose={onClose}
+        onClose={close}
         supportMailto={renewalBillingSupportMailto()}
+        hideDismiss
       />
-    </Shell>
+    </div>
   );
-};
-
-export default RenewalFailedModal;
+}

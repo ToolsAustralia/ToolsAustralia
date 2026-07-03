@@ -210,13 +210,15 @@ The flag that selects Mode A vs Mode B is `hasMembershipGrantInCurrentDrawPeriod
 - `Shell.tsx` — modal frame with dark hero, scroll-lock, Escape handler, and entry animation (mirrors RenewalFailedModal/Shell.tsx pattern).
 - `OrderSummary.tsx` — gain-framed order summary card using Plan 4 `<Card>` + `<Card.Header>` + `<Card.Body>`. Shows upgrade from/to details and billing cycle info when `upgradeInfo` is provided.
 
-> **`RenewalFailedModal` embedded mode (2026-07-03):** `RenewalFailedModal` + its `Shell` now accept an
-> `embedded` prop. When set, `Shell` renders just the hero+body frame inline (no fixed overlay, backdrop,
-> close button, scroll-lock or entry animation), so the full past-due resolve engine (retry / 3DS /
-> add-card-then-retry / force-charge) can live **inside another surface**. The member dashboard uses this to
-> render the resolve flow inside the Payment sheet (`PaymentSheet`, past-due only) instead of a separate
-> popup — see dashboard-account/frontend.md and BUSINESS.md §10e. Default (`embedded={false}`) is unchanged,
-> so the legacy `SubscriptionManagementModal` still opens it as a centered modal.
+> **Past-due resolve — shared state machine, two presentations (2026-07-03):** the past-due renewal-recovery
+> logic (retry / 3DS / add-card-then-retry / force-charge-overdue) lives in **`usePastDueResolve`**
+> ([src/components/modals/RenewalFailedModal/usePastDueResolve.ts](../../src/components/modals/RenewalFailedModal/usePastDueResolve.ts)),
+> so the money path is single-sourced. Two consumers render it: **`RenewalFailedModal`** (the legacy modal,
+> via `Shell`, used by `SubscriptionManagementModal`) and **`PastDueResolvePanel`** (sheet-native — no
+> `Shell` hero / backdrop / "Close" button / "close this modal" copy) which the dashboard **Payment sheet**
+> renders for past-due members. `ActionButtons` gained `hideDismiss` (the sheet drops the Close button +
+> footer since the sheet owns dismiss). This replaced an earlier, wrong approach that *embedded the whole
+> modal* (dark hero + Close) inside the sheet. Verify the modal path with `npm run test:renewal-failed`.
 - `PaymentMethodCard.tsx` — saved-card display ("VISA •••• 4242 / Default Payment Method / Change").
 - `PaymentForm.tsx` — exports `PaymentFormWithoutElements` (saved card path) and `PaymentFormWithElements` (new card path). All Stripe logic is preserved byte-identically from the original monolith. Uses Plan 4 `<Button>` for action buttons.
 - `styles.module.css` — composite hero gradients, scrollbar, pinstripe overlay.
