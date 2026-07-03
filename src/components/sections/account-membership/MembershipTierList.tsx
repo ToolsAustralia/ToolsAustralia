@@ -85,10 +85,10 @@ export default function MembershipTierList({ cta, isMember, onManagePlan, onChan
                     {access}% access ·{" "}
                     {boosted ? (
                       <>
-                        <s className="opacity-60">{base}</s> <b className="text-primary-token dark:text-white">{entries}</b> free entries
+                        <s className="opacity-60">{base}</s> <b className="text-primary-token dark:text-white">{entries}</b> free entries / mo
                       </>
                     ) : (
-                      <>{entries} free entries</>
+                      <>{entries} free entries / mo</>
                     )}
                   </div>
                 </div>
