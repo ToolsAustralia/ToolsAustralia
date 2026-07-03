@@ -222,9 +222,12 @@ export default function MembershipSection({
   const handlePlanSelect = (plan: LocalMembershipPlan) => {
     whenGatesOpenElseGateModal(() => {
       const hierarchy = getPlanHierarchy(plan);
+      const isSubscriptionPlan = plan.period !== "one-time" && !plan.name.toLowerCase().includes("one-time");
 
-      // past_due users must resolve payment first - route to my-account (pay-failed-invoice flow)
-      if (hasBlockingSub && isPastDue) {
+      // A past-due (blocking) member can't start a new SUBSCRIPTION — resolve payment first → /my-account.
+      // But a one-time/Additional pack is a standalone purchase (no sub conflict; the "Get more entries"
+      // flow already allows it), so only bounce subscription taps — matching useMembershipCardCta.onSelect.
+      if (hasBlockingSub && isPastDue && isSubscriptionPlan) {
         router.push("/my-account");
         return;
       }

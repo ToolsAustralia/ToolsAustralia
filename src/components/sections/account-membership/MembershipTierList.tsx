@@ -5,7 +5,7 @@ import { Package, Flame, ShieldCheck } from "lucide-react";
 import { cn } from "@/utils/cn";
 import type { MembershipCardCta } from "@/hooks/useMembershipCardCta";
 import type { LocalMembershipPlan } from "@/utils/membership/membership-adapters";
-import { TIER_HEX, tierKeyFromName, glossGrad, inkOn } from "@/utils/membership/tier-visuals";
+import { TIER_HEX, tierKeyFromName, glossGrad, inkOn, PAST_DUE_AMBER } from "@/utils/membership/tier-visuals";
 import OneTimePacksGrid from "@/components/sections/membership/OneTimePacksGrid";
 import { getPackageIcon } from "@/utils/images/package-icons";
 import { getPartnerCatalogAccessPercentForPlanId } from "@/utils/partner-discounts/partner-catalog-visibility";
@@ -30,7 +30,6 @@ interface MembershipTierListProps {
 }
 
 const RANK: Record<string, number> = { tradie: 0, foreman: 1, boss: 2 };
-const PAST_DUE_AMBER = "#d97706";
 
 /**
  * Compact tier list + one-time-pack scroll for the account Membership page —

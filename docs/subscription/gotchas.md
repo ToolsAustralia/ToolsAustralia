@@ -20,6 +20,8 @@ A `past_due` member who wants a **different** tier cannot be upgraded/downgraded
 
 `useMembershipCardCta.onSelect` bounced **every** tap to `/my-account` for a past-due member (`if (hasBlockingSub && isPastDue) router.push(...)`). That was over-broad: a past-due member can't start a second *subscription*, but a **one-time / Additional pack is a standalone purchase** (no subscription conflict — the `useMajorDrawEntryCta` "Get more entries" flow already allows it via `getOneTimePlan`). The guard is now scoped `&& isSubscriptionPlan(plan)`, so a one-time/Additional pack tap opens the purchase modal while subscription taps still route to `/my-account` (resolve/switch first). Pairs with the dashboard showing member (Additional) packs — see [dashboard-account/frontend.md](../dashboard-account/frontend.md).
 
+> **Both surfaces scoped (2026-07-04):** the ultra review found the identical guard in the shared `MembershipSection.tsx` (the public `/membership` "one-time" tab, used across 15+ pages) was left unscoped, so a past-due member tapping a one-time pack there was still bounced. `MembershipSection.handlePlanSelect` now applies the same `&& isSubscriptionPlan` scope, so the dashboard and public surfaces behave identically. Also: [`tier-visuals.ts`](../../src/utils/membership/tier-visuals.ts) now exports a canonical `PAST_DUE_AMBER` (`#d97706`) consumed by the past-due JS `style`/color usages (dashboard hero theme, PartnerPreview, RewardsPartnerCard, tier-list border) — the amber's single source of truth.
+
 ## UI / modals
 
 ### RenewalFailedModal dark mode was half-done (dark bg, dark text)

@@ -6,6 +6,12 @@
 export const TIER_HEX = { tradie: "#00c2ed", foreman: "#ffd200", boss: "#ee0000" } as const;
 export type TierKey = keyof typeof TIER_HEX;
 
+/** Canonical past-due accent (amber). Single source of truth for the JS `style`/color usages across
+ *  the past-due surfaces (dashboard hero theme, PartnerPreview, RewardsPartnerCard, tier list border).
+ *  Tailwind arbitrary-value class strings (e.g. `border-[#d97706]`) can't consume a JS const, so those
+ *  designed gradient/shade literals stay inline. */
+export const PAST_DUE_AMBER = "#d97706";
+
 export function tierKeyFromName(name: string): TierKey {
   const n = name.toLowerCase();
   if (n.includes("foreman")) return "foreman";

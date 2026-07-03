@@ -7,7 +7,7 @@
  * prototype (ConceptHub headers): teal (one-time), amber-brown (past-due),
  * neutral (guest/none).
  */
-import { shade, inkOn } from "@/utils/membership/tier-visuals";
+import { shade, inkOn, PAST_DUE_AMBER } from "@/utils/membership/tier-visuals";
 
 export type DashboardAccountState = "active" | "onetime" | "pastdue" | "none";
 
@@ -30,7 +30,7 @@ const FIXED: Record<Exclude<DashboardAccountState, "active">, DashboardStateThem
   pastdue: {
     gradient: "linear-gradient(157deg,#3a2410,#1c1410 55%,#2a1c10)",
     ink: "#ffffff",
-    accent: "#d97706",
+    accent: PAST_DUE_AMBER,
   },
   none: {
     gradient: "linear-gradient(157deg,#26262b,#161619 60%,#202027)",

@@ -5,6 +5,7 @@ import { ChevronRight, Lock } from "lucide-react";
 import { cn } from "@/utils/cn";
 import AccessRing from "@/components/ui/AccessRing";
 import { PARTNER_BRAND_OFFERS } from "@/data/partnerBrandOffers";
+import { PAST_DUE_AMBER } from "@/utils/membership/tier-visuals";
 import type { DashboardAccountState } from "@/utils/dashboard/dashboard-state-theme";
 
 interface PartnerPreviewProps {
@@ -32,7 +33,7 @@ export default function PartnerPreview({ acct, partnerAccessPct, expiryLabel, ti
   const pastDueWithPack = pastDue && partnerAccessPct > 0;
   const locked = pastDue && !pastDueWithPack;
   const isOneTime = acct === "onetime";
-  const accent = pastDue ? "#d97706" : isOneTime ? "#0ea5a5" : tierHex ?? "#ee0000";
+  const accent = pastDue ? PAST_DUE_AMBER : isOneTime ? "#0ea5a5" : tierHex ?? "#ee0000";
   const sub = pastDueWithPack
     ? `${partnerAccessPct}% active${expiryLabel ? ` · ends in ${expiryLabel}` : ""} · membership paused`
     : isOneTime && expiryLabel

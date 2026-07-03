@@ -4,7 +4,7 @@ import Image from "next/image";
 import { Lock, ExternalLink, Store, ArrowRight } from "lucide-react";
 import { cn } from "@/utils/cn";
 import AccessRing from "@/components/ui/AccessRing";
-import { inkOn, shade } from "@/utils/membership/tier-visuals";
+import { inkOn, shade, PAST_DUE_AMBER } from "@/utils/membership/tier-visuals";
 import { PARTNER_BRAND_OFFERS } from "@/data/partnerBrandOffers";
 import { usePartnerDiscountSso } from "@/hooks/queries/usePartnerDiscountSso";
 import { partnerDiscountSsoEnabled } from "@/config/featureFlags";
@@ -40,7 +40,7 @@ export default function RewardsPartnerCard({
   const pastDueWithPack = pastdue && partnerAccessPct > 0;
   const locked = guest || (pastdue && !pastDueWithPack);
 
-  const c = guest ? "#8a8a8f" : pastdue ? "#d97706" : onetime ? "#0ea5a5" : tierHex ?? "#ee0000";
+  const c = guest ? "#8a8a8f" : pastdue ? PAST_DUE_AMBER : onetime ? "#0ea5a5" : tierHex ?? "#ee0000";
   const pct = locked ? 0 : partnerAccessPct;
 
   // Show the tier-accurate slice of the catalogue (first N in order, N = ceil(pct% ·
