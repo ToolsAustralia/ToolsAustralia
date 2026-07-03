@@ -3,6 +3,7 @@
 import { Medal, Check, Lock } from "lucide-react";
 import { cn } from "@/utils/cn";
 import { glossGrad, inkOn } from "@/utils/membership/tier-visuals";
+import { isDashboardFeatureOn } from "@/config/dashboardFeatures";
 import type { DashboardAccountState } from "@/utils/dashboard/dashboard-state-theme";
 
 interface RewardsMilestonesProps {
@@ -36,6 +37,26 @@ export default function RewardsMilestones({ acct, months, tierHex }: RewardsMile
   const hex = tierHex ?? "#d4af37";
   const ink = inkOn(hex);
   const chipBg = ink === "#0a0a0a" ? "rgba(0,0,0,.13)" : "rgba(255,255,255,.16)";
+
+  // Coming soon until the milestone-reward figures are confirmed — same
+  // `milestoneProgress` switch the dashboard "Milestones" quick-tile uses. Render a
+  // themed placeholder (no unconfirmed +N figures) rather than hiding it entirely.
+  if (!isDashboardFeatureOn("milestoneProgress")) {
+    return (
+      <section className="overflow-hidden rounded-3xl border border-token bg-surface shadow-sm">
+        <div className="relative flex items-center gap-3 px-4 py-3.5" style={{ background: glossGrad(hex), color: ink }}>
+          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl" style={{ background: chipBg }}>
+            <Medal className="h-5 w-5" />
+          </span>
+          <div className="min-w-0 flex-1">
+            <div className="font-['Poppins'] text-[15px] font-extrabold leading-tight">Loyalty milestones</div>
+            <div className="mt-0.5 text-[11px] font-semibold opacity-80">Earn free entries the longer you stay</div>
+          </div>
+          <span className="shrink-0 rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.08em]" style={{ background: chipBg }}>Coming soon</span>
+        </div>
+      </section>
+    );
+  }
 
   // Header banner copy by state (replaces the old descriptive paragraph).
   const banner =

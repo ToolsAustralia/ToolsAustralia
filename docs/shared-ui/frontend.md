@@ -166,6 +166,10 @@ keep your streak"; all-unlocked → "All milestones unlocked"). The visual progr
 New `tierHex` prop (passed from `dash.tierHex` on the Rewards page). The card is `overflow-hidden`
 (to round the banner corners), so the track container carries extra bottom padding (`pb-14`) to clear
 the absolutely-positioned node captions ("+50 / 3 MO") — otherwise they'd be clipped at the card edge.
+**Coming soon (2026-07-03):** gated on `isDashboardFeatureOn("milestoneProgress")` (the same switch the
+dashboard "Milestones" quick-tile uses; currently `false`). When off it renders a **themed "Coming soon"
+placeholder** (tier-coloured banner, no unconfirmed `+N` figures / track) instead of the live milestones,
+until the milestone-reward figures are confirmed and it's re-flagged.
 
 ## Dashboard sections (2026-07-02)
 
