@@ -119,7 +119,10 @@ export default function EntryWallet({
         <span className="inline-flex items-center gap-2 text-muted-token">
           <span className="h-2.5 w-2.5 rounded-[3px]" style={{ background: (isPastDue || isOneTime) ? "#8a93a1" : tier }} />
           Membership{" "}
-          {isPastDue ? <b className="text-amber-600 dark:text-amber-500">paused</b> : isOneTime ? <b className="num text-muted-token">—</b> : <b className="num text-primary-token dark:text-white">{entries.membership.toLocaleString()}</b>}
+          {/* Past-due members KEEP their already-earned entries (winner selection has no
+              subscription-status filter — see BUSINESS.md §3e), so show the real number, not
+              "paused". What pauses is next cycle's accrual, which the seam ribbon conveys. */}
+          {isOneTime ? <b className="num text-muted-token">—</b> : <b className="num text-primary-token dark:text-white">{entries.membership.toLocaleString()}</b>}
         </span>
         <span className="inline-flex items-center gap-2 text-muted-token">
           <span className="h-2.5 w-2.5 rounded-[3px] bg-emerald-500" />

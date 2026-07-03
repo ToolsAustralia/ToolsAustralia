@@ -23,7 +23,7 @@ export default function DashboardAlertRibbon({ acct, className }: DashboardAlert
         style={{ background: "linear-gradient(100deg,#f59e0b,#d97706)", color: "#fff", border: "1px solid rgba(255,255,255,.28)" }}
       >
         <ShieldAlert className="h-4 w-4 shrink-0" />
-        <span className="text-[11.5px] font-bold leading-tight">Your membership entries are paused until you update payment</span>
+        <span className="text-[11.5px] font-bold leading-tight">Renewal failed — update payment to keep earning entries</span>
       </div>
     );
   }

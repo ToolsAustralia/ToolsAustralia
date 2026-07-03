@@ -205,8 +205,13 @@ until the milestone-reward figures are confirmed and it's re-flagged.
 > `ShieldAlert` "paused" icon (amber) instead of a % + a "Paused" label, the "Update payment" button is
 > **chip-sized** to match the "· paused" tier badge (was a large button), the redundant mobile "Past due"
 > pill was dropped, and `DashboardAlertRibbon` (past-due) is now the same **floating pill at the seam**
-> (amber `#f59e0b→#d97706`, `ShieldAlert`, "Your membership entries are paused until you update payment")
-> rather than a full-width box. `DashboardPromoBanner` puts the offer specifics
+> (amber `#f59e0b→#d97706`, `ShieldAlert`, "Renewal failed — update payment to keep earning entries")
+> rather than a full-width box. **Accuracy note:** the past-due copy frames the *future accrual*, not the
+> current entries — a past-due member **keeps** their already-earned entries in the draw (verified: winner
+> selection has no subscription-status filter, BUSINESS.md §3e), so `EntryWallet` shows the **real
+> membership number** for past-due (not a "paused" placeholder) and the total is the honored count. Only
+> the Rewards partner card reads "Paused" (partner *access* is a live benefit that does gate on `isActive`).
+> `DashboardPromoBanner` puts the offer specifics
 > as **gold badges ON the "Get a package" CTA** (`50% off` when `hasAdditionalAccess`, `{n}× entries` when a
 > multiplier is live), dropped the big starburst image + the redundant body subtitle, and shrank the heading
 > so it doesn't wrap hard. The **SPECIAL PROMO strip** got a premium treatment: a glowing, `animate-pulse`
