@@ -95,6 +95,13 @@ interface StartResponse {
   done: boolean;
   error?: string;
   message?: string;
+  allowlist?: {
+    evaluated: number;
+    added: number;
+    alreadyAllowlisted: number;
+    skipped: { fraud: number; permanent: number; notMember: number };
+    errored: number;
+  };
 }
 
 interface LiveProgress {
@@ -115,6 +122,7 @@ const ChargePastDueModal: React.FC<ChargePastDueModalProps> = ({ isOpen, onClose
   const [preview, setPreview] = useState<PreviewResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [progress, setProgress] = useState<LiveProgress | null>(null);
+  const [allowlistSummary, setAllowlistSummary] = useState<StartResponse["allowlist"] | null>(null);
   const [statusFilter, setStatusFilter] = useState<"all" | "success" | "failed" | "skipped">("all");
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 20;
@@ -219,6 +227,7 @@ const ChargePastDueModal: React.FC<ChargePastDueModalProps> = ({ isOpen, onClose
     try {
       const start: StartResponse = await post({ action: "start", confirmation: "CHARGE" });
       runIdRef.current = start.runId;
+      setAllowlistSummary(start.allowlist ?? null);
       setProgress((p) => (p ? { ...p, total: start.total } : p));
 
       let done = start.done;
@@ -283,6 +292,7 @@ const ChargePastDueModal: React.FC<ChargePastDueModalProps> = ({ isOpen, onClose
     setPreview(null);
     setError(null);
     setProgress(null);
+    setAllowlistSummary(null);
     setStatusFilter("all");
     setCurrentPage(1);
     runIdRef.current = null;
@@ -495,6 +505,17 @@ const ChargePastDueModal: React.FC<ChargePastDueModalProps> = ({ isOpen, onClose
                   <h4 className="font-semibold text-green-800 dark:text-green-200">Processing Complete</h4>
                 </div>
               </div>
+
+              {allowlistSummary && allowlistSummary.added > 0 && (
+                <div className="mb-3 text-sm text-blue-700 dark:text-blue-300">
+                  Allowlisted {allowlistSummary.added} previously-blocked{" "}
+                  {allowlistSummary.added === 1 ? "card" : "cards"} before charging
+                  {allowlistSummary.alreadyAllowlisted > 0
+                    ? ` (${allowlistSummary.alreadyAllowlisted} already on the list)`
+                    : ""}
+                  .
+                </div>
+              )}
 
               {/* Summary - Clickable for filtering */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
