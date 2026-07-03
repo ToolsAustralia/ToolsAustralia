@@ -28,11 +28,12 @@
 > "up next" list ranked by %, and the total queued access window. See
 > [shared-ui/frontend.md § RewardsPartnerQueue](../shared-ui/frontend.md#rewardspartnerqueue--partner-discount-queue-2026-07-03).
 
-> **One-time messaging (2026-07-03):** the `onetime`-state dashboard-home upsell card was reworded
-> ("Make it permanent / Become a member for monthly free entries" → "**More free entries for your money**
-> / Dollar for dollar, membership gives far more free entries than a one-time pack — a fresh batch every
-> month that stacks up …") so one-time buyers don't read it as *their* one-off entries becoming permanent,
-> and it leads with membership value. Relatedly, [`MembershipCurrentPlan`](../../src/components/sections/account-membership/MembershipCurrentPlan.tsx)
+> **One-time messaging (2026-07-03):** the `onetime`-state dashboard-home upsell card leads with the
+> partner-discount value, then entries + bonus offers: "**Keep your partner discounts** / Membership keeps
+> partner discounts on your account for good, adds more free entries every month, and unlocks member-only
+> bonus offers." (Earlier drafts — "Make it permanent" and "More free entries for your money / Dollar for
+> dollar…" — read as AI-generated and led with entries; reworded so one-time buyers don't read it as *their*
+> one-off entries becoming permanent and so partner-discount access is the lead benefit.) Relatedly, [`MembershipCurrentPlan`](../../src/components/sections/account-membership/MembershipCurrentPlan.tsx)
 > no longer shows "Renews {date} · Auto-renews monthly" + a Manage-subscription action for a **one-time**
 > pack (a one-time pack has no subscription — that was a real UI bug) — that slot now shows a
 > non-clickable "Become a member · Unlock exclusive rewards & free entries" advert (the join path is the

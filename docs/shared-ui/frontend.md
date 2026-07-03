@@ -194,8 +194,9 @@ until the milestone-reward figures are confirmed and it's re-flagged.
 > stands alone). `DashboardAlertRibbon` (one-time) is a **high-contrast teal floating pill** at the
 > hero↔entries seam (the content column is pulled up over the hero via `-mt-8`); its copy dropped the
 > "Partner access ends in {X}" claim — that's only the *active* pack's window and misleads a buyer who has
-> **queued packs** that take over next — for "Your one-time packs unlock partner discounts — become a member
-> for lasting access" (the `expiryLabel` prop was removed). `DashboardPromoBanner` puts the offer specifics
+> **queued packs** that take over next — for "Become a member for lasting partner discounts, more free
+> entries & bonus offers" (leads with the discount, then entries + offers; the `expiryLabel` prop was
+> removed and the `Clock` icon swapped for `Sparkles` since it's no longer time-based). `DashboardPromoBanner` puts the offer specifics
 > as **gold badges ON the "Get a package" CTA** (`50% off` when `hasAdditionalAccess`, `{n}× entries` when a
 > multiplier is live), dropped the big starburst image + the redundant body subtitle, and shrank the heading
 > so it doesn't wrap hard. The **SPECIAL PROMO strip** got a premium treatment: a glowing, `animate-pulse`

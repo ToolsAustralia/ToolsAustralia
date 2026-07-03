@@ -318,8 +318,8 @@ export default function MyAccountPage() {
             <div className="mt-4 space-y-4 lg:mt-0 lg:space-y-5">
               {dash.acct === "onetime" ? (
                 <section className="rounded-[1.1rem] border border-token bg-surface p-5 shadow-sm">
-                  <h3 className="font-['Poppins'] text-base font-extrabold text-primary-token dark:text-white">More free entries for your money</h3>
-                  <p className="mt-1 text-sm text-muted-token">Dollar for dollar, membership gives far more free entries than a one-time pack — a fresh batch every month that stacks up — plus lasting partner-discount access.</p>
+                  <h3 className="font-['Poppins'] text-base font-extrabold text-primary-token dark:text-white">Keep your partner discounts</h3>
+                  <p className="mt-1 text-sm text-muted-token">Membership keeps partner discounts on your account for good, adds more free entries every month, and unlocks member-only bonus offers.</p>
                   <button
                     type="button"
                     onClick={onBecomeMember}
