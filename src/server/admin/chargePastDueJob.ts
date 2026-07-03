@@ -32,6 +32,10 @@ import ChargeJobWorklist from "@/models/ChargeJobWorklist";
 import InvoiceChargeLog from "@/models/InvoiceChargeLog";
 import { previewChargePastDueInvoices } from "@/services/admin/previewChargePastDueInvoices";
 import {
+  reconcileAllowlistFromBlocked,
+  type ReconcileSummary,
+} from "@/services/allowlist/reconcileAllowlistFromBlocked";
+import {
   getCustomerDefaultPaymentMethodFromInvoice,
   payOpenInvoiceAsPastDueAdmin,
   resolveInvoicePaymentMethodId,
@@ -66,6 +70,8 @@ export interface StartChargeJobResult {
   total: number;
   /** True when there was nothing eligible — the run is finalized immediately. */
   done: boolean;
+  /** Phase 0 sweep summary. Absent if the run was empty or the sweep threw. */
+  allowlist?: ReconcileSummary;
 }
 
 export interface ChargeChunkResult {
@@ -210,7 +216,27 @@ export async function startChargePastDueJob(params: { adminId: string }): Promis
       return { runId: String(runId), total: 0, done: true };
     }
 
-    return { runId: String(runId), total: worklistItems.length, done: false };
+    // PHASE 0 — allowlist eligible blocked cards for THIS run's customers before
+    // any chunk charges them. Best-effort: a sweep failure must never abort the
+    // run (allowlisting is an optimization, collection is the job). Runs inside
+    // the lock; bounded by the run's blocked-and-not-yet-allowlisted subset.
+    let allowlist: ReconcileSummary | undefined;
+    try {
+      const stripeCustomerIds = Array.from(
+        new Set(worklistItems.map((i) => i.customerId).filter(Boolean))
+      );
+      allowlist = await reconcileAllowlistFromBlocked(
+        { kind: "customers", stripeCustomerIds },
+        { performedByUserId: new mongoose.Types.ObjectId(adminId) }
+      );
+    } catch (sweepErr) {
+      console.error(
+        `[chargePastDue] Phase 0 allowlist sweep failed for run ${String(runId)}:`,
+        sweepErr instanceof Error ? sweepErr.message : sweepErr
+      );
+    }
+
+    return { runId: String(runId), total: worklistItems.length, done: false, allowlist };
   } catch (err) {
     await releaseLock();
     throw err;
