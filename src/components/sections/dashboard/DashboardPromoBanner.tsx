@@ -53,8 +53,9 @@ export default function DashboardPromoBanner({
   const timer = `${pad(ms / 3_600_000)}:${pad((ms / 60_000) % 60)}:${pad((ms / 1000) % 60)}`;
   const badgeSrc = multiplierBadgeSrc(multiplier);
 
-  const heading = hasAdditionalAccess ? "50% off one-time packages" : "Bonus free entries";
-  const subtitle = active ? `${multiplier}× free entries on every package` : "Additional packages — half the one-time price";
+  // The offer specifics (50% off, {n}× entries) now live inline in the SPECIAL PROMO
+  // strip below, so the body carries just one short context line — no redundant repeat.
+  const heading = hasAdditionalAccess ? "On every one-time package" : "Bonus free entries";
 
   return (
     <section className={className}>
@@ -71,17 +72,28 @@ export default function DashboardPromoBanner({
         )}
         <span aria-hidden className="pointer-events-none absolute -right-6 -top-8 h-32 w-32 rounded-full" style={{ background: "radial-gradient(circle,rgba(255,255,255,.4),transparent 70%)" }} />
 
-        {active && (
+        {(hasAdditionalAccess || active) && (
           <div
-            className={cn("relative flex items-center justify-between gap-2.5", wide ? "px-[22px] py-[9px]" : "px-4 py-2")}
+            className={cn("relative flex items-center justify-between gap-2", wide ? "px-[22px] py-[9px]" : "px-4 py-2")}
             style={{ background: t.hot ? "rgba(255,255,255,.16)" : "rgba(0,0,0,.14)", borderBottom: `1px solid ${t.hot ? "rgba(255,255,255,.22)" : "rgba(0,0,0,.1)"}` }}
           >
-            <span className="inline-flex items-center gap-1.5 text-[9.5px] font-black uppercase tracking-[0.08em]">
-              <Flame className="h-3 w-3" /> Special promo
-            </span>
-            <span className="inline-flex items-center gap-1.5 text-[10px] font-extrabold">
-              <Clock className="h-3 w-3 opacity-80" /> Ends in <span className="num font-black tabular-nums tracking-[.02em]">{timer}</span>
-            </span>
+            {/* SPECIAL PROMO + the offer chips inline (50% off / n× entries) */}
+            <div className="flex min-w-0 items-center gap-1.5">
+              <span className="inline-flex shrink-0 items-center gap-1.5 text-[9.5px] font-black uppercase tracking-[0.08em]">
+                <Flame className="h-3 w-3" /> Special promo
+              </span>
+              {hasAdditionalAccess && (
+                <span className="shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-black uppercase tracking-[0.04em]" style={{ background: t.hot ? "rgba(255,255,255,.24)" : "rgba(0,0,0,.16)" }}>50% off</span>
+              )}
+              {active && (
+                <span className="shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-black uppercase tracking-[0.04em]" style={{ background: t.hot ? "rgba(255,255,255,.24)" : "rgba(0,0,0,.16)" }}>{multiplier}× entries</span>
+              )}
+            </div>
+            {active && (
+              <span className="inline-flex shrink-0 items-center gap-1.5 text-[10px] font-extrabold">
+                <Clock className="h-3 w-3 opacity-80" /> Ends in <span className="num font-black tabular-nums tracking-[.02em]">{timer}</span>
+              </span>
+            )}
           </div>
         )}
 
@@ -107,9 +119,6 @@ export default function DashboardPromoBanner({
           )}
           <div className="min-w-0 flex-1">
             <b className={cn("font-['Poppins'] font-extrabold leading-tight", wide ? "text-[17px]" : "text-[14.5px]")}>{heading}</b>
-            <div className={cn("mt-1 font-bold", wide ? "text-[11.5px]" : "text-[10.5px]")} style={{ color: t.hot ? "rgba(255,255,255,.85)" : "rgba(36,26,2,.72)" }}>
-              {subtitle}
-            </div>
           </div>
           <button
             type="button"

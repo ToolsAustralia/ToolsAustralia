@@ -106,8 +106,14 @@ export default function DashboardHero({
       <button type="button" onClick={onUpdatePayment} className="inline-flex items-center gap-2 rounded-full px-[18px] py-3 text-[12.5px] font-extrabold text-[#241a02]" style={{ background: "linear-gradient(180deg,#fbbf24,#d97706)" }}>
         <RefreshCw className="h-[15px] w-[15px]" /> Update payment
       </button>
-    ) : (acct === "onetime" || acct === "none") && onBecomeMember ? (
-      <button type="button" onClick={onBecomeMember} className="inline-flex items-center gap-2 rounded-full bg-white px-[18px] py-3 text-[12.5px] font-extrabold" style={{ color: acct === "onetime" ? "#063d3d" : "#ee0000" }}>
+    ) : acct === "onetime" && onBecomeMember ? (
+      // Chip-sized — it stands alone now (the one-time-pack badge that used to sit
+      // beside it was removed), so it matches that badge's footprint.
+      <button type="button" onClick={onBecomeMember} className="inline-flex items-center gap-1.5 rounded-full bg-white px-[11px] py-[7px] text-[10px] font-extrabold" style={{ color: "#063d3d" }}>
+        Become a member <ArrowRight className="h-3 w-3" />
+      </button>
+    ) : acct === "none" && onBecomeMember ? (
+      <button type="button" onClick={onBecomeMember} className="inline-flex items-center gap-2 rounded-full bg-white px-[18px] py-3 text-[12.5px] font-extrabold" style={{ color: "#ee0000" }}>
         Become a member <ArrowRight className="h-[15px] w-[15px]" />
       </button>
     ) : null;
@@ -118,17 +124,18 @@ export default function DashboardHero({
     </span>
   );
 
-  // Profile-incomplete nudge (member/one-time only). High-contrast so it reads on
-  // any tier hero background.
-  const profileNudgeEl =
+  // Profile-incomplete indicator — a compact amber exclamation chip that sits inline
+  // with the name (was a full "Complete your profile" pill, which crowded the hero).
+  const profileWarnEl =
     !isGuest && profileComplete === false && onCompleteProfile ? (
       <button
         type="button"
         onClick={onCompleteProfile}
-        className="inline-flex items-center gap-1.5 rounded-full bg-white px-[11px] py-[7px] text-[10px] font-extrabold uppercase tracking-[0.05em] shadow-sm transition-transform focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70 motion-safe:active:translate-y-px"
-        style={{ color: "#b45309", border: "1px solid rgba(180,83,9,.25)" }}
+        aria-label="Complete your profile"
+        title="Complete your profile"
+        className="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-amber-400 text-[#241a02] shadow-sm transition-transform focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70 motion-safe:active:translate-y-px"
       >
-        <AlertCircle className="h-3 w-3" /> Complete your profile <ChevronRight className="h-3 w-3" />
+        <AlertCircle className="h-3.5 w-3.5" />
       </button>
     ) : null;
 
@@ -151,8 +158,8 @@ export default function DashboardHero({
           <div className="text-[13px] font-semibold" style={{ color: soft }}>{isGuest ? "Welcome," : `${greeting(hour)},`}</div>
           <div className="mt-1.5 flex flex-wrap items-center gap-2.5">
             <span className="font-['Poppins'] text-2xl font-extrabold">{name}</span>
-            {ChipEl}
-            {profileNudgeEl}
+            {profileWarnEl}
+            {acct !== "onetime" && ChipEl}
           </div>
         </div>
         {ring}
@@ -165,7 +172,10 @@ export default function DashboardHero({
           <Monogram firstName={firstName} lastName={lastName} tierHex={tierHex} onBrand size={44} radius={14} />
           <div className="min-w-0 flex-1">
             <div className="text-xs font-semibold" style={{ color: soft }}>{isGuest ? "Welcome," : `${greeting(hour)},`}</div>
-            <div className="mt-1 font-['Poppins'] text-[19px] font-extrabold">{name}</div>
+            <div className="mt-1 flex items-center gap-1.5">
+              <span className="font-['Poppins'] text-[19px] font-extrabold">{name}</span>
+              {profileWarnEl}
+            </div>
           </div>
           <button type="button" onClick={onOpenSettings} aria-label="Settings" className="grid h-[38px] w-[38px] shrink-0 place-items-center rounded-[11px]" style={{ color: ink, background: glassBg, border: `1px solid ${glassBd}` }}>
             <Settings className="h-[18px] w-[18px]" />
@@ -177,9 +187,8 @@ export default function DashboardHero({
           )}
           {ring}
         </div>
-        {profileNudgeEl && <div className="mt-3">{profileNudgeEl}</div>}
         <div className="mt-4 flex items-center gap-2">
-          {ChipEl}
+          {acct !== "onetime" && ChipEl}
           {primaryBtn && <span className={cn("ml-auto")}>{primaryBtn}</span>}
         </div>
       </div>

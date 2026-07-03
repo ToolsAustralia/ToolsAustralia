@@ -179,6 +179,16 @@ dashboard "Milestones" quick-tile uses; currently `false`). When off it renders 
 placeholder** (tier-coloured banner, no unconfirmed `+N` figures / track) instead of the live milestones,
 until the milestone-reward figures are confirmed and it's re-flagged.
 
+> **Hero / ribbon / promo polish (2026-07-03):** `DashboardHero` — the "Complete your profile" pill
+> became a compact **amber exclamation chip inline with the username** (→ `onCompleteProfile`); for the
+> **one-time** state the "ONE-TIME PACK" badge was dropped and "Become a member" is now chip-sized (it
+> stands alone). `DashboardAlertRibbon` (one-time) is a **high-contrast teal floating pill** (solid gradient
+> + white text, centered `w-fit`) that reads at the hero↔entries seam (the content column is pulled up over
+> the hero via `-mt-8`), replacing the low-contrast full-width strip. `DashboardPromoBanner` moved the offer
+> specifics **inline into the SPECIAL PROMO strip** as chips (`50% off` when `hasAdditionalAccess`, `{n}×
+> entries` when a multiplier is live) and **dropped the redundant body subtitle** (the body now carries one
+> short context line); the strip shows whenever `hasAdditionalAccess || active` (was multiplier-only).
+
 ## Dashboard sections (2026-07-02)
 
 The member-dashboard revamp adds section-band components under `src/components/sections/dashboard/`
