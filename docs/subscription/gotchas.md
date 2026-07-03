@@ -14,6 +14,10 @@ A `past_due` member who wants a **different** tier cannot be upgraded/downgraded
 
 **Why no spurious grant:** cancel + void emit only `customer.subscription.deleted` + `invoice.voided` — never `invoice.payment_succeeded`. The single intended grant is the new subscription's own `subscription_create` invoice (which the webhook also detects as a resubscribe → carries over accumulated entries + applies the live promo). Do NOT "optimise" this into a proration swap on the existing sub.
 
+### Past-due members CAN buy one-time / Additional packs — only subscriptions are blocked (2026-07-03)
+
+`useMembershipCardCta.onSelect` bounced **every** tap to `/my-account` for a past-due member (`if (hasBlockingSub && isPastDue) router.push(...)`). That was over-broad: a past-due member can't start a second *subscription*, but a **one-time / Additional pack is a standalone purchase** (no subscription conflict — the `useMajorDrawEntryCta` "Get more entries" flow already allows it via `getOneTimePlan`). The guard is now scoped `&& isSubscriptionPlan(plan)`, so a one-time/Additional pack tap opens the purchase modal while subscription taps still route to `/my-account` (resolve/switch first). Pairs with the dashboard showing member (Additional) packs — see [dashboard-account/frontend.md](../dashboard-account/frontend.md).
+
 ## UI / modals
 
 ### RenewalFailedModal dark mode was half-done (dark bg, dark text)

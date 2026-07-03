@@ -36,7 +36,11 @@ export default function AccountMembershipPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
   const dash = useDashboardState();
-  const cta = useMembershipCardCta();
+  // Dashboard = the member's own account, so the one-time section shows their discounted
+  // ADDITIONAL packs (subscription OR current-draw entries → additional-package access),
+  // mirroring the control MembershipSection. Without this it always renders the public
+  // one-time ladder (e.g. "VIP Pack $1000") instead of the member-priced additional-* packs.
+  const cta = useMembershipCardCta({ includeAdditionalForMembers: true });
   const openSheet = useDashboardSheetStore((s) => s.openSheet);
   const { paymentMethods, subscriptionDefaultPaymentMethodId } = useSavedPaymentMethods();
 
