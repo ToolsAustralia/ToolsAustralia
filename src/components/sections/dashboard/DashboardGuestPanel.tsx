@@ -6,7 +6,9 @@ import { getOneTimePackages } from "@/data/membershipPackages";
 
 // Lowest PUBLIC one-time pack price (guests have no additional-pack access), derived from the
 // catalog so the "from" price can't drift stale (was a hardcoded "$10"; cheapest is Apprentice $25).
-const MIN_PACK_PRICE = Math.min(...getOneTimePackages().filter((p) => !p.isAdditional).map((p) => p.price));
+// Guard the empty case so Math.min(...[]) can't render "$Infinity" if the catalog ever has none.
+const PUBLIC_PACK_PRICES = getOneTimePackages().filter((p) => !p.isAdditional).map((p) => p.price);
+const MIN_PACK_PRICE = PUBLIC_PACK_PRICES.length ? Math.min(...PUBLIC_PACK_PRICES) : 25;
 
 interface DashboardGuestPanelProps {
   drawName: string;

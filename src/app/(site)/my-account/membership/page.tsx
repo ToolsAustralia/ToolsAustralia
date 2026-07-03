@@ -74,10 +74,10 @@ export default function AccountMembershipPage() {
     const userId = session?.user?.id;
     if (userId) {
       // Await the refetch so the subscribe flow sees the now-`canceled` state (not stale past-due).
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: queryKeys.users.account(userId) }),
-        queryClient.invalidateQueries({ queryKey: queryKeys.users.dashboard(userId) }),
-      ]);
+      // Invalidate the base users.detail key (["users", id]) — it prefix-matches account + dashboard
+      // AND the detail query UserContext + the subscribe modal actually read (account/dashboard-only
+      // invalidation never refetches detail, so the modal would keep reading stale past_due).
+      await queryClient.invalidateQueries({ queryKey: queryKeys.users.detail(userId) });
     }
     if (plan) cta.membershipModal.openModal(plan);
   };
@@ -125,7 +125,7 @@ export default function AccountMembershipPage() {
           cta={cta}
           isMember={dash.acct === "active"}
           isPastDue={dash.acct === "pastdue"}
-          currentTierKey={dash.tierKey}
+          currentTierKey={dash.subscriptionTierKey}
           onManagePlan={() => openSheet("manage")}
           onChangeTier={(name) => setChangeTierName(name)}
           onResolvePayment={() => openSheet("payment")}
@@ -154,7 +154,7 @@ export default function AccountMembershipPage() {
         <PastDueTierSwitchModal
           isOpen
           onClose={() => setSwitchTierPlan(null)}
-          currentTierLabel={dash.tierLabel ?? "your plan"}
+          currentTierLabel={dash.subscriptionTierLabel ?? "your plan"}
           newTierName={switchTierPlan.name}
           newTierPrice={switchTierPlan.price}
           onSwitched={onPastDueSwitched}

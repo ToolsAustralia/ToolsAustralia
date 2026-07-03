@@ -151,10 +151,6 @@ export default function Header({ isFixed = true }: HeaderProps) {
   const cartItemCount = summary?.totalItems || 0;
   const { userData, isAuthenticated, loading } = useUserContext();
   const { isStaff } = usePermissions();
-  // Additional-pack access = active subscription OR current-draw entries (canonical helper), used by
-  // the badge-click PackageDetailModal below so a one-time/past-due entrant with entries gets the
-  // discounted one-time packs CTA, not just active subscribers.
-  const { data: userMajorDrawStats } = useUserMajorDrawStats(userData?._id);
 
   const resolvedActivePackage = useMemo(
     () => (userData ? getActivePackage(userData as unknown as ActivePackageUserInput) : null),
@@ -172,6 +168,13 @@ export default function Header({ isFixed = true }: HeaderProps) {
     membershipType: "subscription" | "one-time";
     accumulation: SubscriptionAccumulationData | null;
   } | null>(null);
+
+  // Additional-pack access (active sub OR current-draw entries) for the badge-click PackageDetailModal.
+  // GATED on the modal being open: this Header is globally mounted, so an ungated poll would hit
+  // /api/major-draw every 60s on every page for a value only the click-opened modal reads.
+  const { data: userMajorDrawStats } = useUserMajorDrawStats(
+    packageDetailModalData ? userData?._id : undefined
+  );
 
   const openPackageDetailModal = useCallback(
     (packageData: PackageDetailModalPackageData, membershipType: "subscription" | "one-time") => {

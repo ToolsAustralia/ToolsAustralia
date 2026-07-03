@@ -31,6 +31,10 @@ export interface DashboardStateResult {
   tierKey: TierKey | null;
   tierHex: string | null;
   tierLabel: string | null;
+  /** SUBSCRIPTION tier from the persisted package — non-null even when past-due/inactive (unlike
+   *  tierKey/tierLabel, which come from getActivePackage). Marks the current tier in the past-due list. */
+  subscriptionTierKey: TierKey | null;
+  subscriptionTierLabel: string | null;
   stateTheme: DashboardStateTheme;
   /** Effective promo multiplier for the packages this user buys (1 when none). */
   multiplier: number;
@@ -99,6 +103,8 @@ export function useDashboardState(): DashboardStateResult {
         tierKey: null,
         tierHex: null,
         tierLabel: null,
+        subscriptionTierKey: null,
+        subscriptionTierLabel: null,
         stateTheme: getDashboardStateTheme("none"),
         multiplier: oneTimeMultiplier && oneTimeMultiplier > 0 ? oneTimeMultiplier : 1,
         hasAdditionalAccess: false,
@@ -135,6 +141,14 @@ export function useDashboardState(): DashboardStateResult {
       activePackage.packageData?.name ? tierKeyFromName(activePackage.packageData.name) : null;
     const tierHex = tierKey ? TIER_HEX[tierKey] : null;
     const tierLabel = tierKey ? TIER_LABEL[tierKey] : null;
+
+    // The member's SUBSCRIPTION tier from the PERSISTED package — survives past-due/inactive
+    // (getActivePackage returns null once the sub isn't active, and for a past-due member holding a
+    // one-time pack `tierKey` would point at the PACK, not their tier). Used to mark the current tier
+    // in the past-due tier list + label the switch-tier confirm.
+    const subscriptionPkgName = (user as ActivePackageUserInput).subscriptionPackageData?.name ?? null;
+    const subscriptionTierKey = subscriptionPkgName ? tierKeyFromName(subscriptionPkgName) : tierKey;
+    const subscriptionTierLabel = subscriptionTierKey ? TIER_LABEL[subscriptionTierKey] : tierLabel;
 
     // Partner access % — resolve the effective (highest-%) active partner-catalog plan
     // from the SHARED resolver (it reads the partner-discount queue), so the hero ring +
@@ -197,6 +211,8 @@ export function useDashboardState(): DashboardStateResult {
       tierKey,
       tierHex,
       tierLabel,
+      subscriptionTierKey,
+      subscriptionTierLabel,
       stateTheme: getDashboardStateTheme(acct, tierHex),
       multiplier,
       hasAdditionalAccess,

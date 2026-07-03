@@ -40,6 +40,8 @@ export default function PartnerPreview({ acct, partnerAccessPct, expiryLabel, ti
       : locked
         ? "Paused — update payment to resume"
         : "of the catalogue unlocked · top tool brands";
+  // Accent-colored subline for the one-time + past-due-with-pack states (else muted).
+  const accentSub = isOneTime || pastDueWithPack;
 
   return (
     <section className={cn("rounded-[1.1rem] border border-token bg-surface px-5 pb-4 pt-2 shadow-sm", className)}>
@@ -53,8 +55,8 @@ export default function PartnerPreview({ acct, partnerAccessPct, expiryLabel, ti
         </AccessRing>
         <div className="min-w-0 flex-1">
           <div className="font-['Poppins'] text-[15px] font-extrabold text-primary-token dark:text-white">Partner discounts</div>
-          <div className="mt-1 text-[11.5px] font-semibold" style={{ color: isOneTime || pastDueWithPack ? accent : undefined }}>
-            <span className={isOneTime || pastDueWithPack ? "" : "text-muted-token"}>{sub}</span>
+          <div className="mt-1 text-[11.5px] font-semibold" style={{ color: accentSub ? accent : undefined }}>
+            <span className={accentSub ? "" : "text-muted-token"}>{sub}</span>
           </div>
         </div>
         <Link href="/my-account/rewards" className="inline-flex items-center gap-1 text-[12.5px] font-extrabold" style={{ color: tierHex ?? "#ee0000" }}>

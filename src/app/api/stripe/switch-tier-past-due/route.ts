@@ -6,6 +6,7 @@ import { authOptions } from "@/lib/auth";
 import {
   abandonPastDueForTierSwitch,
   NotPastDueError,
+  SubscriptionRecoveredError,
 } from "@/services/subscription/switchTierPastDue";
 import {
   isSubscriptionReferenceError,
@@ -18,8 +19,9 @@ import {
  * Teardown step of the past-due tier switch: cancels the caller's past-due subscription
  * immediately and voids (forgives) its open renewal invoice(s). The client then opens the
  * ordinary fresh-subscribe flow for the new tier. No body — the teardown is target-agnostic;
- * the client enforces "different tier" (a same-tier tap resolves payment instead). Only runs
- * for a genuinely `past_due` member (409 otherwise).
+ * the client enforces "different tier" (a same-tier tap resolves payment instead). The service
+ * reconciles against live Stripe status: it refuses to cancel a sub Stripe already recovered
+ * (409 SUBSCRIPTION_RECOVERED) and no-ops an already-canceled one (idempotent retry).
  */
 export async function POST() {
   try {
@@ -35,7 +37,11 @@ export async function POST() {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
 
-    if (user.subscription?.status !== "past_due") {
+    // Allow past_due (the normal case) and canceled (an idempotent retry after a prior teardown —
+    // e.g. the first POST's response was lost). The service reconciles against LIVE Stripe status and
+    // no-ops an already-canceled/recovered sub, so the destructive cancel only fires for a live past_due.
+    const localStatus = user.subscription?.status;
+    if (localStatus !== "past_due" && localStatus !== "canceled") {
       return NextResponse.json(
         { error: "Subscription is not past due", code: "NOT_PAST_DUE" },
         { status: 409 }
@@ -52,7 +58,9 @@ export async function POST() {
   } catch (error) {
     console.error("❌ Error switching tier for past-due subscription:", error);
 
-    if (error instanceof NotPastDueError) {
+    // Recovered-race: Stripe already put the sub back to active — surface the friendly message so the
+    // client can refresh instead of retrying the (now-refused) teardown.
+    if (error instanceof NotPastDueError || error instanceof SubscriptionRecoveredError) {
       return NextResponse.json({ error: error.message, code: error.code }, { status: 409 });
     }
 
