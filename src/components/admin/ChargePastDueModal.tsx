@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
-import { AlertTriangle, XCircle, CheckCircle, X, Loader2 } from "lucide-react";
+import { AlertTriangle, XCircle, CheckCircle, X, Loader2, ShieldCheck } from "lucide-react";
 import { Button } from "../modals/ui";
 import { ChargeJobResultStatusBadge } from "@/components/admin/ui/AdminBadge";
 
@@ -115,6 +115,41 @@ interface LiveProgress {
 
 const ENDPOINT = "/api/admin/invoices/charge-past-due";
 
+/**
+ * Phase 0 result banner. Shown the moment the pre-charge allowlist sweep returns
+ * — through charging and on completion — so the sweep is always visible, even in
+ * the common steady-state where it allowlisted 0 new cards (everyone eligible is
+ * already on the list). Absent only when the sweep itself threw (best-effort).
+ */
+function Phase0Summary({ summary }: { summary: NonNullable<StartResponse["allowlist"]> }) {
+  const { evaluated, added, alreadyAllowlisted, skipped, errored } = summary;
+  const skippedTotal = skipped.fraud + skipped.permanent + skipped.notMember;
+
+  const context: string[] = [];
+  if (alreadyAllowlisted > 0) context.push(`${alreadyAllowlisted} already covered`);
+  if (skippedTotal > 0) context.push(`${skippedTotal} skipped`);
+  if (errored > 0) context.push(`${errored} error${errored === 1 ? "" : "s"}`);
+  const detail = context.length > 0 ? ` — ${context.join(" · ")}` : "";
+
+  const headline =
+    evaluated === 0
+      ? "No blocked cards among this run's customers"
+      : added > 0
+        ? `Allowlisted ${added} previously-blocked ${added === 1 ? "card" : "cards"} before charging`
+        : "No new cards needed allowlisting";
+
+  return (
+    <div className="flex items-start gap-2.5 rounded-lg border border-blue-200 dark:border-blue-900/45 bg-blue-50 dark:bg-blue-950/30 px-3.5 py-2.5 text-sm">
+      <ShieldCheck className="w-4 h-4 mt-0.5 flex-shrink-0 text-blue-600 dark:text-blue-400" />
+      <p className="text-blue-800 dark:text-blue-200">
+        <span className="font-semibold">Phase 0 · </span>
+        {headline}
+        {detail}.
+      </p>
+    </div>
+  );
+}
+
 const ChargePastDueModal: React.FC<ChargePastDueModalProps> = ({ isOpen, onClose, onCompleted }) => {
   const [confirmation, setConfirmation] = useState("");
   const [state, setState] = useState<ModalState>("idle");
@@ -123,6 +158,10 @@ const ChargePastDueModal: React.FC<ChargePastDueModalProps> = ({ isOpen, onClose
   const [error, setError] = useState<string | null>(null);
   const [progress, setProgress] = useState<LiveProgress | null>(null);
   const [allowlistSummary, setAllowlistSummary] = useState<StartResponse["allowlist"] | null>(null);
+  // Which phase of the run the modal is showing: the pre-charge allowlist sweep,
+  // then the actual charging. Kept distinct so the UI never labels the sweep as
+  // "charging".
+  const [runPhase, setRunPhase] = useState<"sweeping" | "charging" | null>(null);
   const [statusFilter, setStatusFilter] = useState<"all" | "success" | "failed" | "skipped">("all");
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 20;
@@ -212,6 +251,8 @@ const ChargePastDueModal: React.FC<ChargePastDueModalProps> = ({ isOpen, onClose
     if (confirmation !== "CHARGE") return;
 
     setState("processing");
+    setRunPhase("sweeping");
+    setAllowlistSummary(null);
     setError(null);
     stoppedRef.current = false;
     runIdRef.current = null;
@@ -228,6 +269,7 @@ const ChargePastDueModal: React.FC<ChargePastDueModalProps> = ({ isOpen, onClose
       const start: StartResponse = await post({ action: "start", confirmation: "CHARGE" });
       runIdRef.current = start.runId;
       setAllowlistSummary(start.allowlist ?? null);
+      setRunPhase("charging");
       setProgress((p) => (p ? { ...p, total: start.total } : p));
 
       let done = start.done;
@@ -293,6 +335,7 @@ const ChargePastDueModal: React.FC<ChargePastDueModalProps> = ({ isOpen, onClose
     setError(null);
     setProgress(null);
     setAllowlistSummary(null);
+    setRunPhase(null);
     setStatusFilter("all");
     setCurrentPage(1);
     runIdRef.current = null;
@@ -455,45 +498,63 @@ const ChargePastDueModal: React.FC<ChargePastDueModalProps> = ({ isOpen, onClose
             </>
           )}
 
-          {state === "processing" && progress && (
+          {state === "processing" && (
             <div className="space-y-5 py-2">
-              <div className="flex items-center gap-3">
-                <Loader2 className="w-5 h-5 animate-spin text-red-600 dark:text-red-500" />
-                <p className="text-sm font-medium text-gray-800 dark:text-neutral-100">
-                  Charging in batches… {progress.processed} of {progress.total}
-                </p>
-              </div>
-
-              {/* Progress bar */}
-              <div className="w-full bg-gray-200 dark:bg-neutral-800 rounded-full h-3 overflow-hidden">
-                <div
-                  className="bg-red-600 dark:bg-red-500 h-3 rounded-full transition-all duration-300"
-                  style={{ width: `${pct}%` }}
-                />
-              </div>
-
-              {/* Live counts */}
-              <div className="grid grid-cols-3 gap-3 text-center">
-                <div className="rounded-lg p-3 bg-green-50 dark:bg-green-950/20">
-                  <div className="text-xs text-green-600 dark:text-green-400">Succeeded</div>
-                  <div className="text-lg font-bold text-green-700 dark:text-green-300">{progress.succeeded}</div>
+              {/* Phase 0 — the pre-charge allowlist sweep runs inside the `start`
+                  request. Show it as its own step rather than mislabelling it as
+                  "charging". */}
+              {runPhase === "sweeping" && (
+                <div className="flex items-center gap-3 py-2">
+                  <Loader2 className="w-5 h-5 animate-spin text-blue-600 dark:text-blue-400" />
+                  <p className="text-sm font-medium text-gray-800 dark:text-neutral-100">
+                    Phase 0 · allowlisting eligible blocked cards before charging…
+                  </p>
                 </div>
-                <div className="rounded-lg p-3 bg-red-50 dark:bg-red-950/20">
-                  <div className="text-xs text-red-600 dark:text-red-400">Failed</div>
-                  <div className="text-lg font-bold text-red-700 dark:text-red-300">{progress.failed}</div>
-                </div>
-                <div className="rounded-lg p-3 bg-yellow-50 dark:bg-yellow-950/20">
-                  <div className="text-xs text-yellow-600 dark:text-yellow-400">Skipped</div>
-                  <div className="text-lg font-bold text-yellow-700 dark:text-yellow-300">{progress.skipped}</div>
-                </div>
-              </div>
+              )}
 
-              <p className="text-center text-sm text-gray-600 dark:text-neutral-400">
-                Collected so far: <span className="font-semibold">{formatCurrency(progress.revenueCents)}</span>
-              </p>
-              <p className="text-center text-xs text-gray-500 dark:text-neutral-500">
-                Keep this window open. You can stop anytime — already-charged members won&apos;t be charged again.
-              </p>
+              {runPhase === "charging" && progress && (
+                <>
+                  {allowlistSummary && <Phase0Summary summary={allowlistSummary} />}
+
+                  <div className="flex items-center gap-3">
+                    <Loader2 className="w-5 h-5 animate-spin text-red-600 dark:text-red-500" />
+                    <p className="text-sm font-medium text-gray-800 dark:text-neutral-100">
+                      Charging in batches… {progress.processed} of {progress.total}
+                    </p>
+                  </div>
+
+                  {/* Progress bar */}
+                  <div className="w-full bg-gray-200 dark:bg-neutral-800 rounded-full h-3 overflow-hidden">
+                    <div
+                      className="bg-red-600 dark:bg-red-500 h-3 rounded-full transition-all duration-300"
+                      style={{ width: `${pct}%` }}
+                    />
+                  </div>
+
+                  {/* Live counts */}
+                  <div className="grid grid-cols-3 gap-3 text-center">
+                    <div className="rounded-lg p-3 bg-green-50 dark:bg-green-950/20">
+                      <div className="text-xs text-green-600 dark:text-green-400">Succeeded</div>
+                      <div className="text-lg font-bold text-green-700 dark:text-green-300">{progress.succeeded}</div>
+                    </div>
+                    <div className="rounded-lg p-3 bg-red-50 dark:bg-red-950/20">
+                      <div className="text-xs text-red-600 dark:text-red-400">Failed</div>
+                      <div className="text-lg font-bold text-red-700 dark:text-red-300">{progress.failed}</div>
+                    </div>
+                    <div className="rounded-lg p-3 bg-yellow-50 dark:bg-yellow-950/20">
+                      <div className="text-xs text-yellow-600 dark:text-yellow-400">Skipped</div>
+                      <div className="text-lg font-bold text-yellow-700 dark:text-yellow-300">{progress.skipped}</div>
+                    </div>
+                  </div>
+
+                  <p className="text-center text-sm text-gray-600 dark:text-neutral-400">
+                    Collected so far: <span className="font-semibold">{formatCurrency(progress.revenueCents)}</span>
+                  </p>
+                  <p className="text-center text-xs text-gray-500 dark:text-neutral-500">
+                    Keep this window open. You can stop anytime — already-charged members won&apos;t be charged again.
+                  </p>
+                </>
+              )}
             </div>
           )}
 
@@ -506,16 +567,7 @@ const ChargePastDueModal: React.FC<ChargePastDueModalProps> = ({ isOpen, onClose
                 </div>
               </div>
 
-              {allowlistSummary && allowlistSummary.added > 0 && (
-                <div className="mb-3 text-sm text-blue-700 dark:text-blue-300">
-                  Allowlisted {allowlistSummary.added} previously-blocked{" "}
-                  {allowlistSummary.added === 1 ? "card" : "cards"} before charging
-                  {allowlistSummary.alreadyAllowlisted > 0
-                    ? ` (${allowlistSummary.alreadyAllowlisted} already on the list)`
-                    : ""}
-                  .
-                </div>
-              )}
+              {allowlistSummary && <Phase0Summary summary={allowlistSummary} />}
 
               {/* Summary - Clickable for filtering */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
