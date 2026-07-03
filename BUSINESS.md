@@ -293,6 +293,7 @@ Two parallel concepts coexist under this umbrella:
 - **`MilestoneReward` + `MilestoneIssuance`** — tier-based grants. `milestoneType` ∈ `spend-amount | entries-gained | loyalty-days`, each with a `threshold` and an `entriesAmount`. Per-user-per-cycle (unique on `milestoneRewardId × userId × achievementCycle`), supports `isRecurring` for repeatable tiers.
 - **Wallet is event-based, not balance-based.** `RedeemablesWalletService` reads `status: "active"` issuances at query time — no aggregate counter on the User.
 - **Refunds reverse only un-redeemed grants.** A redeemed issuance survives the refund and surfaces in `RefundProcessed.data.reversalIssues[]` for admin attention. See [`docs/rewards-redeemables/rules.md`](docs/rewards-redeemables/rules.md).
+- **Purchase-gated coupons need a real in-window qualifier.** A campaign coupon's `purchaseRequirement` (`none` / `membership` / `one-time` / `any`) is enforced by `hasQualifyingPurchase(...)`: `membership` needs an active subscription, and `one-time` / `any` need a one-time package bought inside the campaign's `[startsAt, endsAt|now]` window. A coupon is **no longer** redeemable off a lifetime entry balance or an old subscription — the previous `accumulatedEntries === 0` proxy let any past purchaser (or any active member, for a one-time requirement) redeem a "buy to unlock" coupon for free. Enforced in lockstep by both `RedemptionService` (the burn) and `RedeemablesWalletService` (the wallet's `isRedeemableNow`). See [src/utils/redeemables/purchase-eligibility.ts](src/utils/redeemables/purchase-eligibility.ts).
 - LIVE for issuance (admin can run campaigns); user-facing redemption gated behind the same pause flag as §8a.
 
 ---
@@ -442,27 +443,27 @@ Once cleared, the user's `userData.subscription.isActive` (or current-draw entri
 
 After activation, the logged-in user lives at `/my-account/`. This is where membership *value* is demonstrated — and the design choices here matter for retention.
 
-**Bottom navigation** (5 tabs, see [`BottomNav`](src/app/(site)/my-account/components/BottomNav.tsx)):
+**Bottom navigation** (5 tabs, shared model [`DASHBOARD_NAV`](src/app/(site)/my-account/components/BottomNav.tsx) consumed by `BottomNav` (mobile) + `DeskNav` (desktop)):
 
-- **Home** (`/`) — links to the **public site root**, not the dashboard.
-- **Profile** (`/my-account`) — the **landing dashboard** described below (this is the dashboard tab, despite the "Profile" label).
-- **Draws** (`/my-account/draws`) — current & past draws view.
+- **Dashboard** (`/my-account`) — the **landing dashboard** described below.
+- **Rewards** (`/my-account/rewards`) — partner-access card, partner-discount queue, claimable rewards, and loyalty milestones (§8; see item 7 below); renamed from `/my-account/benefits` in the 2026-07 revamp.
+- **Draws** (`/my-account/draws`) — a Major/Mini toggle over current & past draws (raised center FAB), carrying the `EntryWallet` ROI card, plus an in-place **`MiniDrawEntrySheet`** overlay to buy mini-draw entry packs without leaving the dashboard (same money path as `/mini-draws/[id]`).
 - **Membership** (`/my-account/membership`) — current package, upgrade/downgrade entry points (§10c/§10d).
-- **Support** (`/my-account/support`) — contact / help.
+- **Support** — opens an overlay **sheet** (contact / help), not a route; the `/my-account/support` page still exists but the nav button opens `openSheet("support")`.
 
-**Account settings** live at `/my-account/settings` — one **consolidated page** (identity, email verification, personal details, appearance, and password change); the old Account/Subscription/Password/Payment `?tab=` sub-pages were removed in the 2026-07 dashboard revamp. **Subscription management and payment methods are overlay sheets** (bottom-sheet on mobile, centered popup on desktop, same mechanics as the Support sheet) opened from the Membership page / dashboard — not separate pages. `/my-account/benefits` covers the partner-discount catalog.
+**Account settings** live at `/my-account/settings` — one **consolidated page** (identity, email verification, personal details, appearance, and password change); the old Account/Subscription/Password/Payment `?tab=` sub-pages were removed in the 2026-07 dashboard revamp. **Subscription management and payment methods are overlay sheets** (bottom-sheet on mobile, centered popup on desktop, same mechanics as the Support sheet) opened from the Membership page / dashboard — not separate pages. The **Rewards** tab (`/my-account/rewards`, renamed from `/my-account/benefits`) stacks the partner-access card, the partner-discount queue, claimable rewards, and loyalty milestones.
 
-**Home dashboard, top to bottom** ([src/app/(site)/my-account/page.tsx](src/app/(site)/my-account/page.tsx)):
+**Home dashboard, top to bottom** ([src/app/(site)/my-account/page.tsx](src/app/(site)/my-account/page.tsx)) — rebuilt from `src/components/sections/dashboard/*` in the 2026-07 revamp:
 
-1. **`DashboardHeader`** — renders the past-due alert when `hasFailedRenewal(user)` is true (entry point to §10e `RenewalFailedModal`).
-2. **`CoverBanner`** + **`UserInfoBar`** — identity + tier badge.
-3. **`QuickActions`** — "Refer a Friend" (§13b) and "Get More Entries" CTAs.
-4. **`MajorDrawOverview` — the primary ROI card.** Shows the current Major Draw, status, countdown to draw date, `displayTotalEntries` broken into `membershipEntries` + `oneTimeEntries`, a **3-month entry-accumulation projection**, and a `PastDrawsModal` trigger. See [src/app/(site)/my-account/components/MajorDrawOverview.tsx](src/app/(site)/my-account/components/MajorDrawOverview.tsx) and `useDashboardEntryDisplay`.
-5. **`PartnerDiscountQueue`** + **`PartnerDiscountsSection`** — the §4 catalog filtered by the user's tier visibility %. Locked rows show as "Unlock at higher tier".
-6. **`SocialLinksSection`** — Facebook / Instagram entry points (also where the §3a Facebook Live draw stream lives).
+1. **`DashboardHero`** — identity + tier badge, the partner-access % ring, and the state-aware primary actions: a complete-profile prompt, **"Become a member"** (→ `/my-account/membership`), the gated **"Reward portal"** SSO button (§16), Settings, and the past-due **"Update payment"** entry to §10e. Guests get `DashboardGuestPanel` instead of the panels below.
+2. **`DashboardAlertRibbon`** — a state seam pill: past-due ("payment failed → entries paused") or one-time ("become a member for lasting partner discounts…"); renders nothing for active / guest.
+3. **`EntryWallet` — the primary ROI card.** Entries this cycle split into `membership` + `oneTime`, and the countdown to the draw date. Replaced `MajorDrawOverview` (removed in the 2026-07 revamp); see [src/components/sections/dashboard/EntryWallet.tsx](src/components/sections/dashboard/EntryWallet.tsx).
+4. **`DashboardPromoBanner`** — the live promo multiplier / additional-access offer, with the offer specifics rendered as badges on the **"Get a package"** CTA (§6).
+5. **`PartnerPreview`** — a compact teaser of the §4 partner catalog filtered by the user's tier visibility %, linking through to the Rewards tab.
+6. **Aside column** — the one-time **"Keep your partner discounts"** upsell card (or the gated `LoyaltyStreak` card, §16), then `QuickActionsGrid` ("Get a package" / "Refer a friend" §13b / "Past draws" / a live redeemable count).
 7. **Rewards entry point** — the dashboard sidebar / bottom-nav **Rewards** item (→ `/my-account/rewards`, renamed from `/my-account/benefits` 2026-07-03) is the entry point to §8 (still behind the rewards pause flag). The old floating `RewardsFloatingWidget` was removed in the 2026-07 dashboard revamp. **Purchase-gated redeemables now require a real qualifying purchase inside the campaign window to redeem** — a "one-time"/"any" coupon is no longer auto-granted from a lifetime entry balance or an old subscription (see `src/utils/redeemables/purchase-eligibility.ts`).
 
-The ROI story this dashboard tells: *"You've earned N entries this cycle, here's your projected accumulation, the draw is M days away — and here are the partner discounts you can use right now."* Every visit reinforces the value of the subscription.
+The ROI story this dashboard tells: *"You've earned N entries this cycle (membership + one-time), the draw is M days away — and here are the partner discounts you can use right now."* Every visit reinforces the value of the subscription.
 
 ### 10i. Reactivation & resubscribe — winning back lapsed members
 
@@ -650,6 +651,7 @@ The platform doesn't only ship transactional email through SendGrid — it also 
 | **Partner Discount API @ 1,000+ brands** | Static catalog of 7 today                    | Tier % model already in place; will migrate to DB-backed catalog with admin CRUD + public API. |
 | **Partner portal (SSO)**                | Built, gated **OFF** by default              | The dashboard-hero "Reward portal" button + the Rewards-page "Open partner portal" button open the partner-discount catalogue via SSO. Gated behind `PARTNER_DISCOUNT_SSO_ENABLED` ([`partnerDiscountSsoEnabled()`](src/config/featureFlags.ts)) until the SSO integration ships; the card shows "Coming soon" meanwhile. |
 | **Loyalty streak card**                 | Built, hidden (coming soon)                  | Home `LoyaltyStreak` gated behind `DASHBOARD_FEATURES.loyaltyStreak` ([`src/config/dashboardFeatures.ts`](src/config/dashboardFeatures.ts)) until the 6-month milestone-reward figures are confirmed and it's re-flagged. |
+| **Loyalty milestones (progress)**       | Built, hidden (coming soon)                  | Distinct from the streak card above: the Rewards-page milestones section + the home dashboard's "Milestones" quick-tile are gated behind `DASHBOARD_FEATURES.milestoneProgress` ([`src/config/dashboardFeatures.ts`](src/config/dashboardFeatures.ts)); they render a themed "Coming soon" placeholder (no unconfirmed +N figures) until a customer-facing milestone-progress read lands. |
 | **TikTok Ads insights sync**            | Pixel + server-side CAPI live; hourly ad-spend wired but creds-gated | Events API (CAPI) ships via the conversion registry (§14a). Marketing-API hourly ad-spend (`fetchTikTokHourlySpend`) is wired into the Spend/Profit/ROAS columns, awaiting live `TIKTOK_ADVERTISER_ID` + `TIKTOK_MARKETING_ACCESS_TOKEN` and verification. Outstanding: the daily-insights writer for `TikTokAdInsightsDaily`. |
 | **Snapchat Ads insights sync**          | Admin shell + client pixel only              | Conversions API is a stub; no Marketing-API spend client yet — spend/ROAS show "—". Insights pipeline pending. |
 | **Mobile app (Google Play Store)**      | Not started                                  | Planned native **Android** app on the Play Store. **iOS / App Store is not on the roadmap** at this stage. |
@@ -688,7 +690,7 @@ The platform doesn't only ship transactional email through SendGrid — it also 
 - **`autoRenew` toggle** — soft-cancel shortcut; calls Stripe `cancel_at_period_end: true`. Same effect as the §13c cancel flow; re-enable any time to undo (re-enabling an *unexpired* subscription mid-cycle).
 - **Reactivate / Resubscribe** — `POST /api/stripe/renew-subscription` for a lapsed member (§10i). *Reactivate* uncancels a `canceled` sub still within a 30-day grace window — **same-tier only**, no charge (`REACTIVATE_TIER_CHANGE_NOT_ALLOWED` if a different tier is requested). *Resubscribe* (`create_new`) builds a fresh anchored subscription for a fully-expired member, via a tier picker that preserves accumulated-entries history. Distinct from the `autoRenew` mid-cycle undo and from §10e past-due payment recovery.
 - **Refund policy** — memberships are non-refundable once purchased (Terms §4); no pro-rate refunds; ACL rights preserved (§9h).
-- **`MajorDrawOverview`** — the primary ROI card on the member dashboard: entries this cycle, 3-month accumulation projection, countdown to draw date (§10h).
+- **`EntryWallet`** — the primary ROI card on the member dashboard: entries this cycle (membership + one-time) and the countdown to the draw date (§10h). Replaced `MajorDrawOverview`, removed in the 2026-07 revamp.
 - **Partner access %** — the fraction of the partner-brand catalog a tier can see; today 50/75/100% for subscriptions, 25–100% for one-time packs (time-limited).
 - **Freeze period** — the **30 minutes between 8:00 PM and 8:30 PM AEST/AEDT** on the 27th when the current draw is in `frozen` state and entries are locked. Subset of the broader "purchase blackout window."
 - **Purchase blackout window** — the **full ~4 hours from 8:00 PM (27th) to 12:00 AM (28th)** during which new-entry purchases return 403 `GATES_CLOSED`: the 30-min freeze followed by the **gap period** (8:30 PM–midnight) when the previous draw is `completed` and the next is still `queued`. Renewals processed in this window route to the next cycle's pool. See §3a.
