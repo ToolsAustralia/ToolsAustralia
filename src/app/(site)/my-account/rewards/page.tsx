@@ -65,7 +65,7 @@ export default function RewardsPage() {
   const onUpdatePayment = () => openSheet("manage");
 
   return (
-    <div className="min-h-screen-svh w-full min-w-0 max-w-full overflow-x-hidden pb-8">
+    <div className="w-full min-w-0 max-w-full overflow-x-hidden pb-8">
       <DashboardPageHeader
         title="Rewards"
         sub="Partners · claims · milestones"

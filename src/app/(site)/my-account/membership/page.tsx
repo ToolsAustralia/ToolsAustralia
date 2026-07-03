@@ -77,7 +77,7 @@ export default function AccountMembershipPage() {
   }
 
   return (
-    <div className="min-h-screen-svh w-full min-w-0 max-w-full overflow-x-hidden pb-8">
+    <div className="w-full min-w-0 max-w-full overflow-x-hidden pb-8">
       <DashboardPageHeader title="Membership" sub="Your plan & billing" icon={CreditCard} stateTheme={dash.stateTheme} />
 
       <div className="space-y-4 px-[18px] pb-8 pt-4 sm:px-6 lg:px-[26px]">

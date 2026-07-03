@@ -272,7 +272,7 @@ export default function MyAccountPage() {
   const onBuyPackage = () => openWithOneTimePlan();
 
   return (
-    <div className="min-h-screen-svh w-full min-w-0 max-w-full overflow-x-hidden pb-8">
+    <div className="w-full min-w-0 max-w-full overflow-x-hidden pb-8">
       <DashboardHero
         acct={dash.acct}
         firstName={user.firstName}

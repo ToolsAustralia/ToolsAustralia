@@ -1,5 +1,12 @@
 # Dashboard-Account — Frontend
 
+> **Mobile over-scroll fix (2026-07-03):** the dashboard **page** containers (home / rewards / membership /
+> draws) no longer set `min-h-screen-svh` — only the **layout** outer div does. Previously each page forced
+> `100svh` *and* the layout `<main>` adds `pb-16` (mobile) for the fixed `BottomNav`, so a short page became
+> `100svh + ~96px` → a phantom ~96px scroll that made the fixed nav read as part of a scrollable page. Now
+> short content fits the viewport (the outer `min-h-screen-svh` still fills the bg); tall content scrolls
+> normally. Loading / empty / signed-out states keep their own `min-h-screen-svh` (they center full-height).
+
 > **Draws countdown + cancel z-order (2026-07-03):** the **Draws** tab's `EntryWallet` drops the seconds
 > cell (`showSeconds` removed) — days/hrs/mins only. And `ManageSheet`'s "Cancel membership" now **closes the
 > sheet as it opens the `CancellationFlowModal`** (`closeSheet()` alongside `setCancelOpen(true)`) — the
