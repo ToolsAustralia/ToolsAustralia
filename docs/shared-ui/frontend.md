@@ -132,8 +132,9 @@ scale) on desktop, with the backdrop fading (`ta-sheet-fade`); all `motion-safe`
 > **MembershipCurrentPlan one-time fix (2026-07-03):** for `onetime` accounts the current-plan card
 > drops the "Renews {date} · Auto-renews monthly" **Manage-subscription** row — a one-time pack has no
 > subscription, so that renewal wording + Manage action was a genuine UI bug that made buyers think
-> they'd be auto-billed monthly. The slot now advertises membership instead: a clickable "**Become a
-> member** · Unlock exclusive rewards & free entries" row → `onBecomeMember`. The status pill is
+> they'd be auto-billed monthly. The slot now advertises membership instead: a **non-clickable** "Become a
+> member · Unlock exclusive rewards & free entries" `InfoRow` (no CTA — the "Choose a membership" section
+> right below is the join path; the sub wraps so "free entries" isn't truncated). The status pill is
 > `whitespace-nowrap shrink-0` so "One-time" no longer wraps to two lines.
 
 ### RewardsPartnerQueue — partner-discount queue (2026-07-03)

@@ -105,15 +105,10 @@ export default function MembershipCurrentPlan({
           <div className="divide-y divide-token">
             {onetime ? (
               // A one-time pack has no subscription — never show renewal wording (that
-              // would imply monthly auto-renew, a real UI bug for one-time buyers).
-              // Use the slot to advertise membership instead.
-              <ManageRow
-                icon={Crown}
-                title="Become a member"
-                sub="Unlock exclusive rewards & free entries"
-                cta="Join"
-                onClick={onBecomeMember}
-              />
+              // would imply monthly auto-renew, a real UI bug for one-time buyers). Use
+              // the slot to advertise membership — non-clickable (no CTA), since the
+              // "Choose a membership" section right below is the actual join path.
+              <InfoRow icon={Crown} title="Become a member" sub="Unlock exclusive rewards & free entries" />
             ) : (
               <ManageRow
                 icon={RefreshCw}
@@ -136,6 +131,21 @@ function Stat({ label, value, divider }: { label: string; value: string; divider
     <div className={cn("px-2.5 py-3.5 text-center", divider && "border-l border-white/10")}>
       <div className="num font-['Poppins'] text-[22px] font-black leading-none tabular-nums">{value}</div>
       <div className="mx-auto mt-1.5 max-w-[9ch] text-[9.5px] font-semibold uppercase leading-tight tracking-wide opacity-75">{label}</div>
+    </div>
+  );
+}
+
+/** Non-interactive advert/status row — no CTA. Sub wraps (not truncated) so it shows in full. */
+function InfoRow({ icon: Icon, title, sub }: { icon: typeof CreditCard; title: string; sub: string }) {
+  return (
+    <div className="flex w-full items-center gap-3 py-4 text-left">
+      <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-black/[.05] text-muted-token dark:bg-white/[.08]">
+        <Icon className="h-[18px] w-[18px]" />
+      </span>
+      <div className="min-w-0 flex-1">
+        <p className="text-sm font-bold text-primary-token dark:text-white">{title}</p>
+        <p className="text-xs leading-snug text-muted-token">{sub}</p>
+      </div>
     </div>
   );
 }
