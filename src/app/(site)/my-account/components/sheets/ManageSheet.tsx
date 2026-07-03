@@ -18,9 +18,8 @@ import { getPackageIcon } from "@/utils/images/package-icons";
 import { getFallbackRenewalDate } from "@/utils/dates/month-helpers";
 import { cn } from "@/utils/cn";
 
-// Self-contained money-path flows — loaded on demand, reused as-is.
+// Self-contained money-path flow — loaded on demand, reused as-is.
 const CancellationFlowModal = dynamic(() => import("@/components/modals/CancellationFlowModal"), { ssr: false });
-const RenewalFailedModal = dynamic(() => import("@/components/modals/RenewalFailedModal"), { ssr: false });
 
 function ActionRow({ icon: Icon, label, value, onClick }: { icon: typeof CreditCard; label: string; value?: string; onClick: () => void }) {
   return (
@@ -44,10 +43,11 @@ function ActionRow({ icon: Icon, label, value, onClick }: { icon: typeof CreditC
 /**
  * "Manage membership" overlay — clean prototype layout (plan summary → Update
  * payment method → Change tier → Cancel membership), bottom-sheet on mobile /
- * popup on desktop. Update-payment opens the Payment sheet; cancel renders the
- * self-contained CancellationFlowModal; past-due resume renders RenewalFailedModal;
- * change-tier routes to the Membership page tier list (tapping a tier there opens
- * the upgrade/downgrade confirm via the orchestrator — see membership/page.tsx).
+ * popup on desktop. Update-payment + past-due resume both open the Payment sheet
+ * (which embeds the resolve flow); cancel renders the self-contained
+ * CancellationFlowModal; change-tier routes to the Membership page tier list
+ * (tapping a tier there opens the upgrade/downgrade confirm via the orchestrator
+ * — see membership/page.tsx).
  */
 export default function ManageSheet() {
   const sheet = useDashboardSheetStore((s) => s.sheet);
@@ -61,7 +61,6 @@ export default function ManageSheet() {
   const { paymentMethods, subscriptionDefaultPaymentMethodId } = useSavedPaymentMethods();
 
   const [cancelOpen, setCancelOpen] = useState(false);
-  const [pastDueOpen, setPastDueOpen] = useState(false);
 
   const user = accountData?.user;
   const acct = dash.acct;
@@ -133,7 +132,7 @@ export default function ManageSheet() {
                           : "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300",
                       )}
                     >
-                      {isPastDue ? "Paused" : "Active"}
+                      {isPastDue ? "Past due" : "Active"}
                     </span>
                   </div>
                   <p className="mt-0.5 text-xs text-muted-token">{renewLabel}</p>
@@ -149,7 +148,7 @@ export default function ManageSheet() {
               {isPastDue && (
                 <button
                   type="button"
-                  onClick={() => setPastDueOpen(true)}
+                  onClick={() => openSheet("payment")}
                   className="flex w-full items-center justify-center gap-2 rounded-2xl py-3.5 text-sm font-bold text-[#241a02] transition-transform focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-600 motion-safe:active:translate-y-px"
                   style={{ background: "linear-gradient(180deg,#fbbf24,#d97706)" }}
                 >
@@ -157,7 +156,9 @@ export default function ManageSheet() {
                 </button>
               )}
 
-              <ActionRow icon={CreditCard} label="Update payment method" value={cardLabel} onClick={() => openSheet("payment")} />
+              {isActive && (
+                <ActionRow icon={CreditCard} label="Update payment method" value={cardLabel} onClick={() => openSheet("payment")} />
+              )}
               <ActionRow
                 icon={Package}
                 label="Change tier"
@@ -168,7 +169,7 @@ export default function ManageSheet() {
                 }}
               />
 
-              {isActive && (
+              {isMember && (
                 <button
                   type="button"
                   onClick={() => setCancelOpen(true)}
@@ -209,14 +210,11 @@ export default function ManageSheet() {
           onSaved={() => onSubscriptionUpdate()}
           onResolvePayment={() => {
             setCancelOpen(false);
-            setPastDueOpen(true);
+            openSheet("payment");
           }}
           tierDowngradeAvailable={false}
         />
       )}
-
-      {/* Past-due resume — self-contained pay-failed-invoice flow. */}
-      {pastDueOpen && <RenewalFailedModal isOpen={pastDueOpen} onClose={() => setPastDueOpen(false)} />}
     </>
   );
 }

@@ -209,6 +209,14 @@ The flag that selects Mode A vs Mode B is `hasMembershipGrantInCurrentDrawPeriod
 - `index.tsx` — orchestrator; holds all state slices, `useRef` for `activePaymentIntentRef`, and the `handlePaymentSuccess` / `handleProcessingSuccess` callbacks. Delegates to sub-components.
 - `Shell.tsx` — modal frame with dark hero, scroll-lock, Escape handler, and entry animation (mirrors RenewalFailedModal/Shell.tsx pattern).
 - `OrderSummary.tsx` — gain-framed order summary card using Plan 4 `<Card>` + `<Card.Header>` + `<Card.Body>`. Shows upgrade from/to details and billing cycle info when `upgradeInfo` is provided.
+
+> **`RenewalFailedModal` embedded mode (2026-07-03):** `RenewalFailedModal` + its `Shell` now accept an
+> `embedded` prop. When set, `Shell` renders just the hero+body frame inline (no fixed overlay, backdrop,
+> close button, scroll-lock or entry animation), so the full past-due resolve engine (retry / 3DS /
+> add-card-then-retry / force-charge) can live **inside another surface**. The member dashboard uses this to
+> render the resolve flow inside the Payment sheet (`PaymentSheet`, past-due only) instead of a separate
+> popup — see dashboard-account/frontend.md and BUSINESS.md §10e. Default (`embedded={false}`) is unchanged,
+> so the legacy `SubscriptionManagementModal` still opens it as a centered modal.
 - `PaymentMethodCard.tsx` — saved-card display ("VISA •••• 4242 / Default Payment Method / Change").
 - `PaymentForm.tsx` — exports `PaymentFormWithoutElements` (saved card path) and `PaymentFormWithElements` (new card path). All Stripe logic is preserved byte-identically from the original monolith. Uses Plan 4 `<Button>` for action buttons.
 - `styles.module.css` — composite hero gradients, scrollbar, pinstripe overlay.

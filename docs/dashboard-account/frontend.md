@@ -415,16 +415,19 @@ was collapsed into the Claude-design IA:
   - `PaymentSheet` reuses `PaymentTab` (PaymentMethodsTab `settingsRedesign`) — its
     `SettingsRedesignPayment` panel + `AddPaymentForm` were restyled to the clean prototype (see
     shared-ui/frontend.md). Card Stripe wiring unchanged.
-  - `ManageSheet` is now a **clean custom body** (plan summary → Update payment method → Change tier
-    → Cancel membership; past-due "Update payment to resume") — NOT the heavy `SubscriptionTab`
-    panel. It **delegates the money-path flows** rather than re-implementing them (the change-tier
-    upgrade/downgrade Stripe wiring can't be safely re-implemented — zero-trial-invoice / entries-grant
-    footguns, see docs/subscription): **update-payment** → `openSheet("payment")`; **cancel** →
-    self-contained `CancellationFlowModal` (`onResolvePayment` → past-due modal); **past-due resume**
-    → self-contained `RenewalFailedModal` (opening the payment sheet alone does NOT retry the
-    invoice); **change-tier** → closes the sheet and routes to the **Membership page tier list**
-    ("See all tiers below"). All delegated modals portal at z-80/90/10000, above the sheet's z-60.
-    `SubscriptionTab.tsx` is now orphaned (kept as the documented type-only-import example).
+  - `ManageSheet` is now a **clean custom body** (plan summary → active: "Update payment method" /
+    past-due: amber "Update payment to resume" → Change tier → Cancel membership). Past-due members
+    get the "Past due" badge, the amber resume button, AND the Cancel option (cancel is now gated on
+    `isMember`, not `isActive`-only — a past-due member can cancel). It **delegates the money-path
+    flows** rather than re-implementing them (the change-tier upgrade/downgrade Stripe wiring can't be
+    safely re-implemented — zero-trial-invoice / entries-grant footguns, see docs/subscription):
+    **update-payment AND past-due resume** both → `openSheet("payment")`; **cancel** → self-contained
+    `CancellationFlowModal` (`onResolvePayment` → `openSheet("payment")`); **change-tier** → closes the
+    sheet and routes to the **Membership page tier list** ("See all tiers below"). The **`PaymentSheet`
+    embeds the `RenewalFailedModal` resolve engine** (`embedded` prop) for past-due members, so the ONE
+    payment sheet retries the failed invoice + resumes (declines / 3DS / add-card-then-retry /
+    force-charge) as well as manages cards — the separate past-due popup is gone. `SubscriptionTab.tsx`
+    is now orphaned (kept as the documented type-only-import example).
 - **Tier change (2026-07-02):** on the Membership page, a member tapping a **different** tier in
   `MembershipTierList` fires `onChangeTier(plan.name)`, which mounts `SubscriptionManagementModal`
   (modal mode) with **`autoSelectPlanName`** — a new opt-in prop: once benefits load, an effect finds

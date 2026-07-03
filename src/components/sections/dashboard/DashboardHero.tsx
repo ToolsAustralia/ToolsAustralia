@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { Settings, Crown, ShieldAlert, ArrowRight, Ticket, Gift, ChevronRight, RefreshCw, AlertCircle } from "lucide-react";
+import { Settings, Crown, ShieldAlert, ArrowRight, Ticket, Gift, ChevronRight, AlertCircle } from "lucide-react";
 import AccessRing from "@/components/ui/AccessRing";
 import { Monogram } from "@/components/ui/Monogram";
 import { getPackageIcon } from "@/utils/images/package-icons";
@@ -63,7 +63,7 @@ export default function DashboardHero({
     acct === "active"
       ? { Icon: Crown, label: tierLabel ?? "Member" }
       : acct === "pastdue"
-        ? { Icon: ShieldAlert, label: `${tierLabel ?? "Plan"} · paused` }
+        ? { Icon: ShieldAlert, label: `${tierLabel ?? "Plan"} · past due` }
         : acct === "onetime"
           ? { Icon: Ticket, label: "One-time pack" }
           : { Icon: Crown, label: "Guest" };
@@ -94,7 +94,7 @@ export default function DashboardHero({
         <AccessRing percent={100} size={58} stroke={7} color="#fbbf24" trackColor={white ? "rgba(255,255,255,.22)" : "rgba(0,0,0,.14)"}>
           <ShieldAlert className="h-5 w-5" style={{ color: "#fbbf24" }} />
         </AccessRing>
-        <span className="text-[8px] font-bold uppercase tracking-[0.1em]" style={{ color: soft }}>Paused</span>
+        <span className="text-[8px] font-bold uppercase tracking-[0.1em]" style={{ color: soft }}>Past due</span>
       </div>
     ) : null;
 
@@ -111,10 +111,10 @@ export default function DashboardHero({
         <Gift className="h-3 w-3" /> Reward portal <ChevronRight className="h-3 w-3" />
       </button>
     ) : acct === "pastdue" && onUpdatePayment ? (
-      // Chip-sized — matches the "· paused" badge footprint (mirrors the one-time
-      // "Become a member" chip treatment).
+      // Chip-sized — matches the "· past due" badge footprint. Opens the Manage-
+      // membership sheet (payment resume + tier + cancel), so it's labelled as such.
       <button type="button" onClick={onUpdatePayment} className="inline-flex items-center gap-1.5 rounded-full px-[11px] py-[7px] text-[10px] font-extrabold text-[#241a02]" style={{ background: "linear-gradient(180deg,#fbbf24,#d97706)" }}>
-        <RefreshCw className="h-3 w-3" /> Update payment
+        Manage membership <ChevronRight className="h-3 w-3" />
       </button>
     ) : acct === "onetime" && onBecomeMember ? (
       // Chip-sized — it stands alone now (the one-time-pack badge that used to sit

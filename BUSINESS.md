@@ -409,14 +409,14 @@ These are not in the status enum but materially affect what entries / partner ac
 
 ### 10e. Renewal-failed customer UX
 
-When a renewal fails (Stripe emits `invoice.payment_failed`), `subscription.pastDueAt` is set and the customer sees a past-due hero card + [`RenewalFailedModal`](src/components/modals/RenewalFailedModal/index.tsx). The recovery ladder, in order:
+When a renewal fails (Stripe emits `invoice.payment_failed`), `subscription.pastDueAt` is set and the customer sees a past-due hero card + the [`RenewalFailedModal`](src/components/modals/RenewalFailedModal/index.tsx) recovery engine. In the **member dashboard** that engine now renders **embedded inside the Payment sheet** (`embedded` prop; reached from the past-due hero's "Manage membership" → "Update payment to resume", or the "Update payment method" row) rather than as a separate popup — so one bottom sheet both resumes the subscription and manages cards. (The legacy `SubscriptionManagementModal` still opens it as a modal.) The recovery ladder, in order:
 
 1. **In-app retry on the existing default card** — `payFailedInvoiceMutation`. This is the primary CTA — most failures are transient.
 2. **3DS / SCA fallback** — Stripe Payment Element renders inside the modal when the bank requires customer confirmation.
 3. **Update card** — `InlineCardSetup` (SetupIntent) renders only when Stripe returns `requiresDifferentPaymentMethod` or there's no default PM. **Not the default path** — we keep the existing card unless Stripe says otherwise.
 4. **"Pay overdue amount" force-charge** — last resort, when the invoice is no longer payable through the normal flow. Calls `/api/stripe/force-charge-overdue`.
 
-On success, the modal refetches at 3 s, then refetches again and closes together at 8 s — waiting for the §9f webhook queue worker to settle the state — and shows: *"Your subscription has been reactivated and benefits are live again."*
+On success, the flow refetches at 3 s, then refetches again and closes (the sheet/modal) at 8 s — waiting for the §9f webhook queue worker to settle the state — and shows: *"Your subscription has been reactivated and benefits are live again."*
 
 This is the **customer-facing** counterpart to §9e's admin past-due tool — the user can self-serve most failed renewals without admin involvement.
 

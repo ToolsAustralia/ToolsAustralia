@@ -32,6 +32,12 @@ interface ShellProps extends VariantProps<typeof shellTone> {
    * Defaults to true.
    */
   closeOnBackdrop?: boolean;
+  /**
+   * Embedded mode — render just the hero+body frame inline (no fixed overlay,
+   * backdrop, close button, scroll-lock or entry animation) so the resolve flow
+   * can live inside another surface (e.g. the dashboard payment sheet).
+   */
+  embedded?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -62,6 +68,7 @@ const Shell: React.FC<ShellProps> = ({
   sub,
   children,
   closeOnBackdrop = true,
+  embedded = false,
 }) => {
   /** Entry-animation gate — 10 ms setTimeout matches CancellationUpsellModal. */
   const [isVisible, setIsVisible] = useState(false);
@@ -81,7 +88,7 @@ const Shell: React.FC<ShellProps> = ({
    * overflow properties — we do NOT capture the previous value.
    */
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen || embedded) return;
     document.documentElement.style.overflow = "hidden";
     document.body.style.overflow = "hidden";
     const onEscape = (event: KeyboardEvent) => {
@@ -93,73 +100,23 @@ const Shell: React.FC<ShellProps> = ({
       document.body.style.overflow = "";
       document.removeEventListener("keydown", onEscape);
     };
-  }, [isOpen, onClose]);
+  }, [isOpen, onClose, embedded]);
 
   if (!isOpen) return null;
 
   const StatusIcon = tone === "success" ? CheckCircle : AlertTriangle;
 
-  return (
+  // Hero + white-body frame — shared by the overlay (default) and embedded modes.
+  const frame = (
     <div
       className={cn(
-        "fixed inset-0 flex items-center justify-center p-2 sm:p-4 overflow-hidden",
-        shellTone({ tone })
+        "relative rounded-[22px] bg-white dark:bg-neutral-950 overflow-hidden max-xs:rounded-2xl",
+        embedded
+          ? "w-full"
+          : "w-full max-h-full overflow-y-auto overflow-x-hidden [-webkit-overflow-scrolling:touch] shadow-[0_30px_80px_rgba(0,0,0,0.45),0_8px_24px_rgba(0,0,0,0.2)]",
+        styles.scrollFrame
       )}
-      style={{ zIndex: 80 }}
     >
-      {/* Backdrop */}
-      <div
-        className={cn(
-          "absolute inset-0 bg-black/85 backdrop-blur-md transition-opacity duration-300",
-          isVisible ? "opacity-100" : "opacity-0"
-        )}
-        onClick={closeOnBackdrop ? onClose : undefined}
-        aria-hidden
-      />
-
-      {/* Dialog panel */}
-      <div
-        className={cn(
-          "relative transform transition-all duration-300 ease-out",
-          "w-full max-w-[600px] font-sans text-neutral-950 dark:text-neutral-100 antialiased",
-          "max-h-[82dvh] flex max-xs:max-h-[88dvh]",
-          isVisible
-            ? "scale-100 opacity-100 translate-y-0"
-            : "scale-95 opacity-0 translate-y-4"
-        )}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="rf-shell-headline"
-      >
-        {/* Close button */}
-        <button
-          type="button"
-          aria-label="Close"
-          onClick={onClose}
-          className={cn(
-            "absolute top-3 right-3 z-10",
-            "w-8 h-8 max-xs:top-2 max-xs:right-2 max-xs:w-[26px] max-xs:h-[26px]",
-            "rounded-full bg-black/55 text-white/95",
-            "inline-flex items-center justify-center",
-            "border border-white/20",
-            "transition-all duration-150 backdrop-blur-md",
-            "hover:bg-black/75 hover:text-white"
-          )}
-        >
-          <X size={14} strokeWidth={2} />
-        </button>
-
-        {/* Scrollable frame */}
-        <div
-          className={cn(
-            "relative rounded-[22px] bg-white dark:bg-neutral-950",
-            "shadow-[0_30px_80px_rgba(0,0,0,0.45),0_8px_24px_rgba(0,0,0,0.2)]",
-            "w-full max-h-full overflow-y-auto overflow-x-hidden",
-            "[-webkit-overflow-scrolling:touch]",
-            "max-xs:rounded-2xl",
-            styles.scrollFrame
-          )}
-        >
           {/* ---- Hero ---- */}
           <div
             data-tone={tone}
@@ -253,7 +210,65 @@ const Shell: React.FC<ShellProps> = ({
           <div className="bg-white dark:bg-neutral-950 px-[22px] pt-4 pb-[18px] max-xs:p-[14px]">
             {children}
           </div>
-        </div>
+    </div>
+  );
+
+  // Embedded — inline card, no overlay/backdrop/close button/scroll-lock/animation.
+  if (embedded) {
+    return <div className={cn("relative w-full", shellTone({ tone }))}>{frame}</div>;
+  }
+
+  return (
+    <div
+      className={cn(
+        "fixed inset-0 flex items-center justify-center p-2 sm:p-4 overflow-hidden",
+        shellTone({ tone })
+      )}
+      style={{ zIndex: 80 }}
+    >
+      {/* Backdrop */}
+      <div
+        className={cn(
+          "absolute inset-0 bg-black/85 backdrop-blur-md transition-opacity duration-300",
+          isVisible ? "opacity-100" : "opacity-0"
+        )}
+        onClick={closeOnBackdrop ? onClose : undefined}
+        aria-hidden
+      />
+
+      {/* Dialog panel */}
+      <div
+        className={cn(
+          "relative transform transition-all duration-300 ease-out",
+          "w-full max-w-[600px] font-sans text-neutral-950 dark:text-neutral-100 antialiased",
+          "max-h-[82dvh] flex max-xs:max-h-[88dvh]",
+          isVisible
+            ? "scale-100 opacity-100 translate-y-0"
+            : "scale-95 opacity-0 translate-y-4"
+        )}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="rf-shell-headline"
+      >
+        {/* Close button */}
+        <button
+          type="button"
+          aria-label="Close"
+          onClick={onClose}
+          className={cn(
+            "absolute top-3 right-3 z-10",
+            "w-8 h-8 max-xs:top-2 max-xs:right-2 max-xs:w-[26px] max-xs:h-[26px]",
+            "rounded-full bg-black/55 text-white/95",
+            "inline-flex items-center justify-center",
+            "border border-white/20",
+            "transition-all duration-150 backdrop-blur-md",
+            "hover:bg-black/75 hover:text-white"
+          )}
+        >
+          <X size={14} strokeWidth={2} />
+        </button>
+
+        {frame}
       </div>
     </div>
   );

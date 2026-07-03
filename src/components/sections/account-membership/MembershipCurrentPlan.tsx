@@ -112,8 +112,8 @@ export default function MembershipCurrentPlan({
             ) : (
               <ManageRow
                 icon={RefreshCw}
-                title={pastdue ? "Payment paused" : renews ? `Renews ${renews}` : "Membership"}
-                sub={pastdue ? "Renew to resume" : "Auto-renews monthly"}
+                title={pastdue ? "Payment failed" : renews ? `Renews ${renews}` : "Membership"}
+                sub={pastdue ? "Update to resume" : "Auto-renews monthly"}
                 cta="Manage"
                 onClick={onManage}
               />

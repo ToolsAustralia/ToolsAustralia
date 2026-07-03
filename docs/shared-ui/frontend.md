@@ -197,7 +197,10 @@ until the milestone-reward figures are confirmed and it's re-flagged.
 > "Partner access ends in {X}" claim — that's only the *active* pack's window and misleads a buyer who has
 > **queued packs** that take over next — for "Become a member for lasting partner discounts, more free
 > entries & bonus offers" (leads with the discount, then entries + offers; the `expiryLabel` prop was
-> removed and the `Clock` icon swapped for `Sparkles` since it's no longer time-based). The **past-due**
+> removed and the `Clock` icon swapped for `Sparkles` since it's no longer time-based). Past-due status
+> copy now reads "**past due**" everywhere (hero chip "{tier} · past due", ring label "Past due",
+> `MembershipCurrentPlan` row "**Payment failed** / Update to resume") rather than "paused", and the hero's
+> past-due action is labelled "**Manage membership**" (it opens the Manage sheet). The **past-due**
 > state now mirrors that one-time treatment: the hero shows the same right-side `AccessRing` but with a
 > `ShieldAlert` "paused" icon (amber) instead of a % + a "Paused" label, the "Update payment" button is
 > **chip-sized** to match the "· paused" tier badge (was a large button), the redundant mobile "Past due"

@@ -63,9 +63,14 @@ function isNoPayableInvoiceError(errMsg: string | null | undefined): boolean {
 interface RenewalFailedModalProps {
   isOpen: boolean;
   onClose: () => void;
+  /**
+   * Render the resolve flow inline (no overlay/backdrop) so it can live inside
+   * another surface — e.g. the dashboard payment sheet. Threaded to `Shell`.
+   */
+  embedded?: boolean;
 }
 
-const RenewalFailedModal: React.FC<RenewalFailedModalProps> = ({ isOpen, onClose }) => {
+const RenewalFailedModal: React.FC<RenewalFailedModalProps> = ({ isOpen, onClose, embedded = false }) => {
   const queryClient = useQueryClient();
   const { showToast } = useToast();
   const payFailedInvoiceMutation = usePayFailedInvoice();
@@ -393,6 +398,7 @@ const RenewalFailedModal: React.FC<RenewalFailedModalProps> = ({ isOpen, onClose
       <Shell
         isOpen={isOpen}
         onClose={onClose}
+        embedded={embedded}
         tone="success"
         eyebrow="Payment received"
         title={
@@ -421,6 +427,7 @@ const RenewalFailedModal: React.FC<RenewalFailedModalProps> = ({ isOpen, onClose
       <Shell
         isOpen={isOpen}
         onClose={onClose}
+        embedded={embedded}
         tone="danger"
         eyebrow="Payment required"
         title={
@@ -497,6 +504,7 @@ const RenewalFailedModal: React.FC<RenewalFailedModalProps> = ({ isOpen, onClose
     <Shell
       isOpen={isOpen}
       onClose={onClose}
+      embedded={embedded}
       tone="danger"
       eyebrow={terminalCollectionFailure ? "Renewal blocked" : "Renewal on hold"}
       title={
