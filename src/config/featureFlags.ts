@@ -39,12 +39,27 @@ export const rewardsEnabled = (): boolean => {
 };
 
 /**
- * Rewards partner-portal (SSO) toggle. The portal opens the partner-discount
- * catalogue via SSO — kept OFF by default until the SSO integration ships. Set
- * `NEXT_PUBLIC_REWARDS_PORTAL_ENABLED="true"` to surface its entry points (the
- * dashboard-hero "Reward portal" button and the Rewards-page "Open partner
- * portal" button). Uses the public var so the value is identical on server + client
- * (no hydration mismatch) for these client-rendered buttons.
+ * Partner-discount portal (SSO) toggle — the SAME concept the SSO route gates on
+ * (`PARTNER_DISCOUNT_SSO_ENABLED`, see `src/app/api/partner-discount/sso/route.ts`).
+ * Kept OFF by default until the SSO integration ships. Gates the portal UI entry
+ * points (dashboard-hero "Reward portal" button + the Rewards-page "Open partner
+ * portal" button, which shows "Coming soon" meanwhile).
+ *
+ * The route reads the **server** var; these buttons are **client-rendered**, so the
+ * client needs the `NEXT_PUBLIC_` twin (same `rewardsEnabled` precedent above). Set
+ * BOTH to the same value: `PARTNER_DISCOUNT_SSO_ENABLED` (gates the route) and
+ * `NEXT_PUBLIC_PARTNER_DISCOUNT_SSO_ENABLED` (gates the UI).
  */
-export const rewardsPortalEnabled = (): boolean =>
-  parseBooleanFlag(process.env.NEXT_PUBLIC_REWARDS_PORTAL_ENABLED);
+export const partnerDiscountSsoEnabled = (): boolean => {
+  const serverRaw = process.env.PARTNER_DISCOUNT_SSO_ENABLED;
+  if (typeof serverRaw === "string") {
+    return parseBooleanFlag(serverRaw);
+  }
+
+  const clientRaw = process.env.NEXT_PUBLIC_PARTNER_DISCOUNT_SSO_ENABLED;
+  if (typeof clientRaw === "string") {
+    return parseBooleanFlag(clientRaw);
+  }
+
+  return false;
+};

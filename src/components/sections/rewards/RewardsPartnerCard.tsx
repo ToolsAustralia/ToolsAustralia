@@ -6,7 +6,7 @@ import AccessRing from "@/components/ui/AccessRing";
 import { inkOn, shade } from "@/utils/membership/tier-visuals";
 import { PARTNER_BRAND_OFFERS } from "@/data/partnerBrandOffers";
 import { usePartnerDiscountSso } from "@/hooks/queries/usePartnerDiscountSso";
-import { rewardsPortalEnabled } from "@/config/featureFlags";
+import { partnerDiscountSsoEnabled } from "@/config/featureFlags";
 import type { DashboardAccountState } from "@/utils/dashboard/dashboard-state-theme";
 
 interface RewardsPartnerCardProps {
@@ -82,7 +82,7 @@ export default function RewardsPartnerCard({
               Update payment <ArrowRight className="h-4 w-4" />
             </button>
           )
-        ) : rewardsPortalEnabled() ? (
+        ) : partnerDiscountSsoEnabled() ? (
           <button
             type="button"
             onClick={() => sso.mutate()}
@@ -100,7 +100,7 @@ export default function RewardsPartnerCard({
             <ExternalLink className="h-4 w-4" />
           </button>
         ) : (
-          // Partner portal (SSO) not shipped yet — see rewardsPortalEnabled().
+          // Partner portal (SSO) not shipped yet — see partnerDiscountSsoEnabled().
           <div className="mt-3.5 flex w-full items-center gap-3 rounded-[10px] border border-token px-4 py-3">
             <span className="grid h-[34px] w-[34px] shrink-0 place-items-center rounded-[10px] bg-black/[.06] text-muted-token dark:bg-white/[.08]">
               <Store className="h-[17px] w-[17px]" />

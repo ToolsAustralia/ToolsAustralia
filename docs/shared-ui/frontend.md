@@ -152,7 +152,7 @@ and `cleanName` also strips the trailing "(Mini Draw)" scope suffix so tier name
 > **"Free entries" copy + portal gate (2026-07-03):** `MembershipTierList` (tiers + one-time packs)
 > now says "**{n} free entries**" (was a bare "entries") — packages *grant* free entries, so that's the
 > correct framing everywhere. `RewardsPartnerCard`'s "Open partner portal" button is gated on
-> [`rewardsPortalEnabled()`](../../src/config/featureFlags.ts) — when off (default, until SSO ships) it
+> [`partnerDiscountSsoEnabled()`](../../src/config/featureFlags.ts) — when off (default, until SSO ships) it
 > renders a muted **"Partner portal · Coming soon"** in place of the SSO button. See
 > [config-and-data/architecture.md § Feature toggles](../config-and-data/architecture.md#configuration).
 

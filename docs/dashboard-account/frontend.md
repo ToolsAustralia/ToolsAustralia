@@ -13,7 +13,7 @@
 > [shared-ui/frontend.md § RewardsPartnerQueue](../shared-ui/frontend.md#rewardspartnerqueue--partner-discount-queue-2026-07-03).
 
 > **Rewards portal + streak gating (2026-07-03):** the dashboard home passes `onRewardPortal` only when
-> [`rewardsPortalEnabled()`](../../src/config/featureFlags.ts) is on (default off until partner-portal SSO
+> [`partnerDiscountSsoEnabled()`](../../src/config/featureFlags.ts) is on (default off until partner-portal SSO
 > ships) — so the hero "Reward portal" button doesn't render meanwhile. The home `LoyaltyStreak` card is
 > gated on `isDashboardFeatureOn("loyaltyStreak")` (`DASHBOARD_FEATURES.loyaltyStreak: false`) — hidden as
 > **coming soon** until the 6-month milestone-reward figures are confirmed and it's re-flagged.
