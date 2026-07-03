@@ -1,5 +1,11 @@
 # Dashboard-Account — Frontend
 
+> **Draws countdown + cancel z-order (2026-07-03):** the **Draws** tab's `EntryWallet` drops the seconds
+> cell (`showSeconds` removed) — days/hrs/mins only. And `ManageSheet`'s "Cancel membership" now **closes the
+> sheet as it opens the `CancellationFlowModal`** (`closeSheet()` alongside `setCancelOpen(true)`) — the
+> modal is a sibling of `SheetShell` so it survives the close; previously the Manage bottom sheet stayed
+> mounted *over* the cancellation modal.
+
 > **Incoming-entries-on-renewal note (2026-07-03):** `useDashboardState` exposes `renewalDateIso` (the
 > subscription's next renewal, from `subscription.endDate` when active + `autoRenew`) and
 > `membershipEntriesPerRenewal` (`activePackage.entriesPerMonth × promo multiplier`). `EntryWallet` uses them

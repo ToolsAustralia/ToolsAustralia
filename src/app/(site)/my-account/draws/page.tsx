@@ -87,7 +87,6 @@ export default function DrawsPage() {
                   drawStatus={dash.drawStatus}
                   stack
                   eyebrow="Your entries"
-                  showSeconds
                   onGetPackage={() => openEntryFlow()}
                   multiplier={dash.multiplier}
                   hasAdditionalAccess={dash.hasAdditionalAccess}

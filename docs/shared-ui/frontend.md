@@ -215,6 +215,9 @@ until the milestone-reward figures are confirmed and it's re-flagged.
 > selection has no subscription-status filter, BUSINESS.md §3e), so `EntryWallet` shows the **real
 > membership number** for past-due (not a "paused" placeholder) and the total is the honored count. Only
 > the Rewards partner card reads "Paused" (partner *access* is a live benefit that does gate on `isActive`).
+> **No-access users see NO partner-catalog glimpse:** `PartnerPreview` (home) and `RewardsPartnerCard`
+> (Rewards) now **fully hide** the brand deals/grid for no-access states (guest / past-due) rather than
+> dimming a teaser — the access ring + unlock CTA stay, the brands are gone.
 > `EntryWallet` also takes `renewalDateIso` + `entriesPerRenewal`: for an **active** member sitting at **0
 > membership entries** it shows "**+{N} free entries land on your renewal · {date}**" as a **premium gold
 > pill** (gold gradient `Sparkles` chip + gold-tinted gradient bg, matching the wallet's gold accent bar —

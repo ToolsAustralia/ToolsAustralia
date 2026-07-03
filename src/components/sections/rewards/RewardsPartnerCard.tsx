@@ -119,7 +119,10 @@ export default function RewardsPartnerCard({
         )}
       </div>
 
-      <div className={cn("mt-3 grid grid-cols-2 gap-[11px]", locked && "opacity-60 saturate-50")}>
+      {/* No partner-catalog access (guest / past-due) → hide the brand grid entirely,
+          no dimmed glimpse; the ring + CTA above already prompt to unlock. */}
+      {!locked && (
+        <div className="mt-3 grid grid-cols-2 gap-[11px]">
         {brands.map((b) => {
           const bc = locked ? "#8a93a1" : c;
           const hasLink = !locked && Boolean(b.businessLink) && b.businessLink !== "#";
@@ -155,7 +158,8 @@ export default function RewardsPartnerCard({
             <div key={b.id} className={tileClass}>{inner}</div>
           );
         })}
-      </div>
+        </div>
+      )}
     </section>
   );
 }

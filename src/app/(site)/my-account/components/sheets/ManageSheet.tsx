@@ -172,7 +172,13 @@ export default function ManageSheet() {
               {isMember && (
                 <button
                   type="button"
-                  onClick={() => setCancelOpen(true)}
+                  // Close THIS sheet as the cancellation flow opens — otherwise the
+                  // Manage bottom sheet stays mounted over the CancellationFlowModal
+                  // (it's a sibling of SheetShell, so it survives the close).
+                  onClick={() => {
+                    setCancelOpen(true);
+                    closeSheet();
+                  }}
                   className="w-full rounded-2xl border border-red-200 bg-surface py-3.5 text-sm font-bold text-red-600 transition-colors hover:bg-red-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-600 dark:border-red-900/60 dark:hover:bg-red-950/20"
                 >
                   Cancel membership

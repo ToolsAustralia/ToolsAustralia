@@ -51,27 +51,32 @@ export default function PartnerPreview({ acct, partnerAccessPct, expiryLabel, ti
         </Link>
       </div>
 
-      <div className="h-px bg-gradient-to-r from-transparent via-black/10 to-transparent dark:via-white/10" />
-
-      <div className={cn(locked && "opacity-50 grayscale")}>
-        {DEALS.map((d) => (
-          <div key={d.id} className="flex items-center gap-[11px] border-b border-token py-[11px] last:border-0">
-            <span
-              className="grid h-[30px] w-[30px] shrink-0 place-items-center rounded-[9px] font-['Poppins'] text-xs font-black"
-              style={{ background: "rgba(0,0,0,.05)", color: tierHex ?? "#ee0000" }}
-            >
-              {d.name[0]}
-            </span>
-            <div className="min-w-0 flex-1">
-              <div className="truncate text-[12.5px] font-bold text-primary-token dark:text-white">{d.name}</div>
-              <div className="mt-0.5 text-[10px] font-semibold uppercase tracking-[0.04em] text-muted-token">{d.category}</div>
-            </div>
-            <span className="whitespace-nowrap font-['Poppins'] text-[13px] font-black" style={{ color: tierHex ?? "#ee0000" }}>
-              {d.discount}
-            </span>
+      {/* No partner-catalog access (past due) → hide the deal glimpse entirely; the
+          header already says "Paused — update payment to resume". */}
+      {!locked && (
+        <>
+          <div className="h-px bg-gradient-to-r from-transparent via-black/10 to-transparent dark:via-white/10" />
+          <div>
+            {DEALS.map((d) => (
+              <div key={d.id} className="flex items-center gap-[11px] border-b border-token py-[11px] last:border-0">
+                <span
+                  className="grid h-[30px] w-[30px] shrink-0 place-items-center rounded-[9px] font-['Poppins'] text-xs font-black"
+                  style={{ background: "rgba(0,0,0,.05)", color: tierHex ?? "#ee0000" }}
+                >
+                  {d.name[0]}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-[12.5px] font-bold text-primary-token dark:text-white">{d.name}</div>
+                  <div className="mt-0.5 text-[10px] font-semibold uppercase tracking-[0.04em] text-muted-token">{d.category}</div>
+                </div>
+                <span className="whitespace-nowrap font-['Poppins'] text-[13px] font-black" style={{ color: tierHex ?? "#ee0000" }}>
+                  {d.discount}
+                </span>
+              </div>
+            ))}
           </div>
-        ))}
-      </div>
+        </>
+      )}
     </section>
   );
 }
