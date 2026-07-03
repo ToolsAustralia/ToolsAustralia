@@ -211,6 +211,9 @@ until the milestone-reward figures are confirmed and it's re-flagged.
 > selection has no subscription-status filter, BUSINESS.md §3e), so `EntryWallet` shows the **real
 > membership number** for past-due (not a "paused" placeholder) and the total is the honored count. Only
 > the Rewards partner card reads "Paused" (partner *access* is a live benefit that does gate on `isActive`).
+> `EntryWallet` also takes `renewalDateIso` + `entriesPerRenewal`: for an **active** member sitting at **0
+> membership entries** it shows "**{N} free entries will be added upon renewal on {date}**" (the date is the
+> trialing-safe renewal from `subscription.endDate` — see dashboard-account/frontend.md).
 > `DashboardPromoBanner` puts the offer specifics
 > as **gold badges ON the "Get a package" CTA** (`50% off` when `hasAdditionalAccess`, `{n}× entries` when a
 > multiplier is live), dropped the big starburst image + the redundant body subtitle, and shrank the heading

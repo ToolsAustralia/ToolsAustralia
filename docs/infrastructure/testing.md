@@ -7,7 +7,7 @@
 Two `tsx` seeds create a login-ready member in a specific state so you can eyeball the dashboard without waiting for real billing. Both **hard-refuse any non-`sk_test_` key**, tag their Stripe objects for cleanup, write the DB state **atomically** (`updateOne`, dodging the webhook `__v` race — see gotchas.md), and support `--dry-run` + `--cleanup`:
 
 - **`npm run seed:past-due-member -- --email=<addr>`** — was-active-then-`past_due` (via a Stripe **test clock** that advances past a failing renewal), with a real open invoice + a restored good card so the resolve/recovery flow can succeed.
-- **`npm run seed:active-member -- --email=<addr>`** — a plain **active** member (no test clock) with **zero major-draw entries** — the "just subscribed / renewal grant hasn't landed" state, for seeing how the dashboard renders 0 entries. It does NOT add `MajorDraw` entries; run with `stripe listen` STOPPED if a running app would otherwise grant them.
+- **`npm run seed:active-member -- --email=<addr> [--renews-in-days=N]`** — an **active** member with **zero major-draw entries**, whose renewal is anchored **`N` days out (default 1 = tomorrow)** via `trial_end` — so Stripe reports it `trialing` (the 25-27th anchor-day artifact) with `current_period_end` = the renewal date, while the DB stores `active` with `endDate` = that date. Use it to see the dashboard's "**{N} free entries will be added upon renewal on {date}**" note (active member, 0 entries, renewal coming). It does NOT add `MajorDraw` entries; run with `stripe listen` STOPPED if a running app would otherwise grant them.
 
 ## Pure unit tests are `tsx` scripts wired as `test:<scope>`
 

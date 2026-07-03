@@ -25,6 +25,10 @@ interface EntryWalletProps {
   multiplier?: number;
   /** Member/current-draw entrant → shows the "50% OFF" (Additional packages) badge. */
   hasAdditionalAccess?: boolean;
+  /** ISO renewal date — with `entriesPerRenewal`, shows an "entries incoming on renewal" note for active members sitting at 0. */
+  renewalDateIso?: string | null;
+  /** Entries this member gets on the next renewal (for the incoming-entries note). */
+  entriesPerRenewal?: number;
   className?: string;
 }
 
@@ -58,6 +62,8 @@ export default function EntryWallet({
   onGetPackage,
   multiplier = 1,
   hasAdditionalAccess = false,
+  renewalDateIso,
+  entriesPerRenewal,
   className,
 }: EntryWalletProps) {
   const now = useLeafTimer(1000);
@@ -65,6 +71,13 @@ export default function EntryWallet({
   const isPastDue = acct === "pastdue";
   const isOneTime = acct === "onetime";
   const isCompleted = drawStatus === "completed";
+
+  // Active member whose monthly grant hasn't landed yet → tell them what's coming and when.
+  const showRenewalNote =
+    acct === "active" && entries.membership === 0 && (entriesPerRenewal ?? 0) > 0 && !!renewalDateIso;
+  const renewalDateLabel = renewalDateIso
+    ? new Date(renewalDateIso).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" })
+    : null;
 
   const membership = isCompleted ? 0 : entries.membership;
   const total = membership + entries.oneTime;
@@ -129,6 +142,15 @@ export default function EntryWallet({
           One-time <b className="num text-primary-token dark:text-white">{entries.oneTime.toLocaleString()}</b>
         </span>
       </div>
+      {showRenewalNote && renewalDateLabel && (
+        <div className="mt-3 flex items-center gap-2 rounded-xl border border-token bg-black/[.02] px-3 py-2 text-[11.5px] leading-[1.35] text-muted-token dark:bg-white/[.03]">
+          <Clock className="h-3.5 w-3.5 shrink-0 text-[#d4af37]" />
+          <span>
+            <b className="text-primary-token dark:text-white">{(entriesPerRenewal ?? 0).toLocaleString()} free entries</b> will be added upon renewal on{" "}
+            <b className="text-primary-token dark:text-white">{renewalDateLabel}</b>
+          </span>
+        </div>
+      )}
     </div>
   );
 

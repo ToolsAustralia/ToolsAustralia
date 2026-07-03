@@ -1,5 +1,13 @@
 # Dashboard-Account — Frontend
 
+> **Incoming-entries-on-renewal note (2026-07-03):** `useDashboardState` exposes `renewalDateIso` (the
+> subscription's next renewal, from `subscription.endDate` when active + `autoRenew`) and
+> `membershipEntriesPerRenewal` (`activePackage.entriesPerMonth × promo multiplier`). `EntryWallet` uses them
+> to show "**{N} free entries will be added upon renewal on {date}**" for an **active member sitting at 0
+> membership entries** (the "subscribed but the monthly grant hasn't landed" state). **Trialing-safe:**
+> `endDate` is already the normalized renewal anchor for `trialing` (25-27th anchor-day) members, so the note
+> reads the *renewal* date without any live Stripe `trialing` check (see docs/BILLING_ANCHOR_24.md).
+
 > **Hero "Become a member" → membership page (2026-07-03):** the dashboard-home hero's "Become a member"
 > button now `router.push("/my-account/membership")` (the tier list) instead of opening the membership
 > modal — the other become-a-member entry points (guest panel, upsell card) still open the modal.

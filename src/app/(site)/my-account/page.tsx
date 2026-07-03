@@ -308,6 +308,8 @@ export default function MyAccountPage() {
                 drawName={dash.drawName}
                 drawDateIso={dash.drawDateIso}
                 drawStatus={dash.drawStatus}
+                renewalDateIso={dash.renewalDateIso}
+                entriesPerRenewal={dash.membershipEntriesPerRenewal}
               />
               <DashboardPromoBanner multiplier={dash.multiplier} hasAdditionalAccess={dash.hasAdditionalAccess} onGetPackage={onGetPackage} className="lg:hidden" />
               <DashboardPromoBanner multiplier={dash.multiplier} hasAdditionalAccess={dash.hasAdditionalAccess} onGetPackage={onGetPackage} wide className="hidden lg:block" />

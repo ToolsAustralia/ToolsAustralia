@@ -91,6 +91,8 @@ export default function DrawsPage() {
                   onGetPackage={() => openEntryFlow()}
                   multiplier={dash.multiplier}
                   hasAdditionalAccess={dash.hasAdditionalAccess}
+                  renewalDateIso={dash.renewalDateIso}
+                  entriesPerRenewal={dash.membershipEntriesPerRenewal}
                 />
               )}
               <DrawHowItWorks />

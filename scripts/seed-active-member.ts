@@ -50,6 +50,8 @@ function getArg(prefix: string): string | undefined {
 const EMAIL = getArg("--email=");
 const PASSWORD = getArg("--password=") ?? "TestPass123!";
 const PACKAGE_ID = getArg("--package=") ?? "tradie-subscription";
+/** Renewal is anchored this many days out via `trial_end` (default: tomorrow). */
+const RENEWS_IN_DAYS = Math.max(1, parseInt(getArg("--renews-in-days=") ?? "1", 10) || 1);
 
 const STRIPE_API_VERSION = "2025-08-27.basil" as const;
 const TOKEN_GOOD = "tok_visa"; // always-succeeds
@@ -190,19 +192,27 @@ async function main(): Promise<void> {
   });
   console.log(`  customer: ${customer.id}`);
 
-  console.log("Creating active subscription (payment_behavior: error_if_incomplete)…");
+  // Anchor the renewal to `RENEWS_IN_DAYS` from now via `trial_end` (mirrors the real
+  // 25-27th anchor-day-24 flow — see docs/BILLING_ANCHOR_24.md). Stripe then reports
+  // the sub as `trialing` with current_period_end = trial_end = the RENEWAL date. The
+  // member is a real active member; the DB stores status "active" (deriveMembershipStatus
+  // maps trialing → active), so the dashboard reads `subscription.endDate` as the renewal.
+  const nowUnix = Math.floor(Date.now() / 1000);
+  const trialEnd = nowUnix + RENEWS_IN_DAYS * 86400;
+  console.log(`Creating subscription — renews in ${RENEWS_IN_DAYS} day(s) via trial_end (Stripe status: trialing)…`);
   const sub = await stripe.subscriptions.create({
     customer: customer.id,
     items: [{ price: price.id }],
-    payment_behavior: "error_if_incomplete",
+    trial_end: trialEnd,
+    proration_behavior: "none",
     expand: ["latest_invoice"],
     metadata: { seed_active_member: SEED_TAG, seed_email: EMAIL },
   });
-  const firstInvoice = sub.latest_invoice as Stripe.Invoice;
-  const periodEnd = periodEndOf(sub);
-  const periodEndDate = periodEnd ? new Date(periodEnd * 1000) : undefined;
-  console.log(`  subscription: ${sub.id}  status: ${sub.status}`);
-  console.log(`  first invoice: ${firstInvoice.id}  status: ${firstInvoice.status}`);
+  const firstInvoice = (sub.latest_invoice as Stripe.Invoice | null) ?? null;
+  const periodEnd = periodEndOf(sub) ?? trialEnd;
+  const periodEndDate = new Date(periodEnd * 1000);
+  console.log(`  subscription: ${sub.id}  status: ${sub.status}  renews: ${periodEndDate.toISOString()}`);
+  if (firstInvoice) console.log(`  first invoice: ${firstInvoice.id}  status: ${firstInvoice.status}`);
 
   console.log(`\nFinding or creating MongoDB user: ${EMAIL}…`);
   let user = await User.findOne({ email: EMAIL.toLowerCase() });
@@ -291,10 +301,12 @@ async function main(): Promise<void> {
   console.log();
   console.log("STRIPE OBJECTS");
   console.log(`  Customer ID:     ${customer.id}`);
-  console.log(`  Subscription ID: ${sub.id}  (${sub.status})`);
-  console.log(`  First invoice:   ${firstInvoice.id}  (${firstInvoice.status})`);
+  console.log(`  Subscription ID: ${sub.id}  (Stripe: ${sub.status})`);
+  console.log(`  Renews on:       ${periodEndDate.toISOString()}  (in ${RENEWS_IN_DAYS} day(s))`);
+  if (firstInvoice) console.log(`  First invoice:   ${firstInvoice.id}  (${firstInvoice.status})`);
   console.log();
-  console.log("  The member is ACTIVE with 0 major-draw entries — the 'renewal grant not landed yet' state.");
+  console.log(`  ACTIVE member, 0 major-draw entries, renews in ${RENEWS_IN_DAYS} day(s) — the 'renewal coming, grant not landed' state.`);
+  console.log("  Stripe reports 'trialing' (anchor-day trial_end artifact); the DB stores 'active' with endDate = the renewal date.");
   console.log("  If entries appear, a running `stripe listen` granted them — re-run with the listener STOPPED.");
   console.log(`  Cleanup: npm run seed:active-member -- --cleanup --email=${EMAIL}`);
   console.log("=".repeat(72));

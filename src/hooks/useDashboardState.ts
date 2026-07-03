@@ -44,6 +44,10 @@ export interface DashboardStateResult {
   /** Whole months of continuous membership, or null for non-members. */
   streakMonths: number | null;
   isPastDue: boolean;
+  /** ISO renewal date (subscription.endDate) when active + autoRenew; trialing-safe. Null otherwise. */
+  renewalDateIso: string | null;
+  /** Membership entries the member gets on the next renewal (tier entriesPerMonth × promo). 0 for non-members. */
+  membershipEntriesPerRenewal: number;
   drawName: string;
   drawDateIso: string | null;
   drawStatus: string;
@@ -103,6 +107,8 @@ export function useDashboardState(): DashboardStateResult {
         partnerAccessExpiryLabel: null,
         streakMonths: null,
         isPastDue: false,
+        renewalDateIso: null,
+        membershipEntriesPerRenewal: 0,
         drawName: currentMajorDraw?.name ?? "Major Draw",
         drawDateIso: currentMajorDraw?.drawDate ? String(currentMajorDraw.drawDate) : null,
         drawStatus: currentMajorDraw?.status ?? "active",
@@ -156,6 +162,22 @@ export function useDashboardState(): DashboardStateResult {
       if (startRaw) streakMonths = monthsBetween(new Date(startRaw), new Date());
     }
 
+    // Renewal date — subscription.endDate is already the normalized renewal anchor even
+    // for `trialing` (25-27th anchor-day) members, so reading it is trialing-safe (see
+    // docs/BILLING_ANCHOR_24.md); gated on autoRenew like the canonical next_renewal_date.
+    let renewalDateIso: string | null = null;
+    if (hasActiveMembership) {
+      const sub = user.subscription as { endDate?: string | Date; autoRenew?: boolean } | undefined;
+      if (sub?.autoRenew !== false && sub?.endDate) {
+        const d = new Date(sub.endDate);
+        if (!Number.isNaN(d.getTime())) renewalDateIso = d.toISOString();
+      }
+    }
+    // Entries granted on the next renewal (this tier's monthly entries × the live promo).
+    const membershipEntriesPerRenewal = hasActiveMembership
+      ? Math.round((activePackage.entriesPerMonth || 0) * multiplier)
+      : 0;
+
     return {
       isLoading,
       acct,
@@ -174,6 +196,8 @@ export function useDashboardState(): DashboardStateResult {
       partnerAccessExpiryLabel,
       streakMonths,
       isPastDue,
+      renewalDateIso,
+      membershipEntriesPerRenewal,
       drawName: currentMajorDraw?.name ?? "Major Draw",
       drawDateIso: currentMajorDraw?.drawDate ? String(currentMajorDraw.drawDate) : null,
       drawStatus: currentMajorDraw?.status ?? "active",
