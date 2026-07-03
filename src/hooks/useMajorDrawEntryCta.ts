@@ -7,6 +7,7 @@ import { useResolvedMultiplier } from "@/hooks/queries/usePromoQueries";
 import { convertToLocalPlan, type LocalMembershipPlan } from "@/utils/membership/membership-adapters";
 import { useUserMajorDrawStats } from "@/hooks/queries/useMajorDrawQueries";
 import { hasAdditionalPackageAccess } from "@/utils/membership/has-additional-package-access";
+import { hasBlockingSubscription } from "@/utils/subscription/subscription-helpers";
 import { getEffectivePromoType } from "@/utils/promo/get-effective-promo-type";
 import { useMajorDrawPurchaseGate } from "@/hooks/useMajorDrawPurchaseGate";
 
@@ -319,11 +320,20 @@ export function useMajorDrawEntryCta(): UseMajorDrawEntryCtaResult {
           return;
         }
 
-        const correctPlan = getHeavyDutyPack();
+        // A user who already holds a (blocking) subscription — active / past_due /
+        // etc. — CANNOT create a second subscription, so pre-select a ONE-TIME pack
+        // (getOneTimePlan), never a membership sub (getHeavyDutyPack) which would fail
+        // with EXISTING_SUBSCRIPTION. Non-subscribers get the Tradie sub as the default.
+        const correctPlan = hasBlockingSubscription(userData) ? getOneTimePlan() : getHeavyDutyPack();
 
         if (openLocalModal) {
-          membershipModal.setSelectedPlan(correctPlan);
-          membershipModal.openModal();
+          if (correctPlan) {
+            membershipModal.setSelectedPlan(correctPlan);
+            membershipModal.openModal();
+          } else {
+            // No concrete one-time plan resolved yet → let the user pick a pack.
+            membershipModal.openModalWithPackageSelectionFirst();
+          }
           return;
         }
 
@@ -340,6 +350,7 @@ export function useMajorDrawEntryCta(): UseMajorDrawEntryCtaResult {
       whenGatesOpenElseGateModal,
       clearModalFromSession,
       getHeavyDutyPack,
+      getOneTimePlan,
       userData,
       userMajorDrawStats,
       membershipModal,
