@@ -31,6 +31,24 @@ interface ProfileTabProps {
 const fieldClass =
   "w-full rounded-xl border border-token bg-page px-3.5 py-3 text-sm text-primary-token placeholder:text-muted-token focus:border-red-600 focus:outline-none focus:ring-2 focus:ring-red-600/25 dark:text-white";
 
+/** Field label + a per-field "incomplete" indicator (amber "Required" chip) shown
+ *  when that specific field is still empty — replaces the old descriptive sentence. */
+function FieldLabel({ htmlFor, children, incomplete }: { htmlFor?: string; children: React.ReactNode; incomplete?: boolean }) {
+  return (
+    <label htmlFor={htmlFor} className="mb-1.5 flex items-center gap-1.5 text-sm font-medium text-primary-token dark:text-white">
+      <span>{children}</span>
+      {incomplete && (
+        <span
+          title="Required for the draw"
+          className="inline-flex items-center gap-0.5 rounded-full bg-amber-100 px-1.5 py-[1px] text-[9px] font-bold uppercase tracking-wide text-amber-700 dark:bg-amber-950/50 dark:text-amber-300"
+        >
+          <AlertTriangle className="h-2.5 w-2.5" /> Required
+        </span>
+      )}
+    </label>
+  );
+}
+
 /**
  * Personal details for the consolidated Account settings page (Claude clean
  * design): email-verification banner + Mobile / DOB / Profession / State rows,
@@ -70,8 +88,6 @@ export default function ProfileTab({ user }: ProfileTabProps) {
     !profession.trim() && "profession",
     !state.trim() && "state",
   ].filter(Boolean) as string[];
-  const missingText =
-    missing.length <= 1 ? missing[0] ?? "" : `${missing.slice(0, -1).join(", ")} and ${missing[missing.length - 1]}`;
 
   const handleSave = async () => {
     try {
@@ -164,15 +180,10 @@ export default function ProfileTab({ user }: ProfileTabProps) {
             </span>
           )}
         </div>
-        {missing.length > 0 && (
-          <p className="mt-2 text-xs font-medium text-amber-700 dark:text-amber-400">Add your {missingText} so you&apos;re set for the draw.</p>
-        )}
 
         <div className="mt-4 space-y-4">
           <div>
-            <label htmlFor="mobile" className="mb-1.5 block text-sm font-medium text-primary-token dark:text-white">
-              Mobile number
-            </label>
+            <FieldLabel htmlFor="mobile" incomplete={!mobile.trim()}>Mobile number</FieldLabel>
             <input
               id="mobile"
               type="tel"
@@ -184,26 +195,25 @@ export default function ProfileTab({ user }: ProfileTabProps) {
             />
           </div>
 
-          <BirthdatePicker
-            value={birthdate}
-            onChange={setBirthdate}
-            label="Date of birth"
-            maxDate={new Date()}
-            placeholder="Select date of birth"
-            popoverClassName="left-auto right-0 w-[min(22rem,calc(100vw-1.5rem))] sm:left-0 sm:right-0 sm:w-full"
-          />
+          <div>
+            <FieldLabel htmlFor="birthdate" incomplete={!birthdate.trim()}>Date of birth</FieldLabel>
+            <BirthdatePicker
+              id="birthdate"
+              value={birthdate}
+              onChange={setBirthdate}
+              maxDate={new Date()}
+              placeholder="Select date of birth"
+              popoverClassName="left-auto right-0 w-[min(22rem,calc(100vw-1.5rem))] sm:left-0 sm:right-0 sm:w-full"
+            />
+          </div>
 
           <div>
-            <label htmlFor="profession" className="mb-1.5 block text-sm font-medium text-primary-token dark:text-white">
-              Profession
-            </label>
+            <FieldLabel htmlFor="profession" incomplete={!profession.trim()}>Profession</FieldLabel>
             <SelectMenu id="profession" value={profession} onChange={setProfession} options={professionOptions} placeholder="Select profession" />
           </div>
 
           <div>
-            <label htmlFor="state" className="mb-1.5 block text-sm font-medium text-primary-token dark:text-white">
-              State
-            </label>
+            <FieldLabel htmlFor="state" incomplete={!state.trim()}>State</FieldLabel>
             <SelectMenu id="state" value={state} onChange={setState} options={stateOptions} placeholder="Select state" />
           </div>
 
