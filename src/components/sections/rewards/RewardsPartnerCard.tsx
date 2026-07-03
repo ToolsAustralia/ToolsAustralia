@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { Lock, ExternalLink, Store, ArrowRight } from "lucide-react";
 import { cn } from "@/utils/cn";
 import AccessRing from "@/components/ui/AccessRing";
@@ -19,8 +20,6 @@ interface RewardsPartnerCardProps {
   onUpdatePayment: () => void;
 }
 
-const BRANDS = PARTNER_BRAND_OFFERS.slice(0, 4);
-
 /** Leads the Rewards page — ported from the prototype `PartnerGrid`. */
 export default function RewardsPartnerCard({
   acct,
@@ -39,6 +38,13 @@ export default function RewardsPartnerCard({
 
   const c = guest ? "#8a8a8f" : pastdue ? "#d97706" : onetime ? "#0ea5a5" : tierHex ?? "#ee0000";
   const pct = locked ? 0 : partnerAccessPct;
+
+  // Show the tier-accurate slice of the catalogue (first N in order, N = ceil(pct% ·
+  // total) — same rule as getPartnerCatalogVisibleSliceLength). Locked users see a
+  // 4-brand dimmed teaser. With the SSO portal off, this grid IS the live catalogue.
+  const total = PARTNER_BRAND_OFFERS.length;
+  const visibleCount = locked ? 4 : Math.min(total, Math.max(1, Math.ceil((partnerAccessPct / 100) * total)));
+  const brands = PARTNER_BRAND_OFFERS.slice(0, visibleCount);
   const headline = guest ? "Locked" : pastdue ? "Paused" : onetime ? "Access unlocked" : "Catalogue unlocked";
   const sub = guest
     ? "Become a member or buy a package to unlock discounts"
@@ -114,24 +120,39 @@ export default function RewardsPartnerCard({
       </div>
 
       <div className={cn("mt-3 grid grid-cols-2 gap-[11px]", locked && "opacity-60 saturate-50")}>
-        {BRANDS.map((b) => {
+        {brands.map((b) => {
           const bc = locked ? "#8a93a1" : c;
-          return (
-            <div key={b.id} className="flex flex-col gap-2.5 rounded-[1.1rem] border border-token bg-surface p-3.5 shadow-sm">
-              <div className="flex items-center justify-between">
-                <span className="grid h-9 w-9 place-items-center rounded-[10px] font-['Poppins'] text-sm font-black" style={{ background: "rgba(0,0,0,.05)", color: bc }}>
-                  {b.name[0]}
+          const hasLink = !locked && Boolean(b.businessLink) && b.businessLink !== "#";
+          const tileClass = "flex flex-col gap-2.5 rounded-[1.1rem] border border-token bg-surface p-3.5 shadow-sm";
+          const inner = (
+            <>
+              <div className="flex items-center justify-between gap-2">
+                <span className="grid h-9 w-9 shrink-0 place-items-center overflow-hidden rounded-[10px] bg-white ring-1 ring-black/[.06]">
+                  <Image src={b.logo} alt={b.name} width={30} height={30} className="h-7 w-7 object-contain" />
                 </span>
                 <span className="font-['Poppins'] text-xs font-black" style={{ color: bc }}>{b.discount}</span>
               </div>
-              <div>
+              <div className="min-w-0">
                 <div className="flex items-center gap-1.5">
                   <span className="truncate text-[12.5px] font-bold text-primary-token dark:text-white">{b.name}</span>
-                  {!locked && <ExternalLink className="h-3 w-3 shrink-0 text-muted-token" />}
+                  {hasLink && <ExternalLink className="h-3 w-3 shrink-0 text-muted-token" />}
                 </div>
-                <div className="mt-1 text-[10.5px] font-semibold text-muted-token">{b.category}</div>
+                <div className="mt-1 truncate text-[10.5px] font-semibold text-muted-token">{b.category}</div>
               </div>
-            </div>
+            </>
+          );
+          return hasLink ? (
+            <a
+              key={b.id}
+              href={b.businessLink}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={cn(tileClass, "transition-shadow hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-red-600")}
+            >
+              {inner}
+            </a>
+          ) : (
+            <div key={b.id} className={tileClass}>{inner}</div>
           );
         })}
       </div>

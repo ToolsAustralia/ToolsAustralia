@@ -137,6 +137,14 @@ scale) on desktop, with the backdrop fading (`ta-sheet-fade`); all `motion-safe`
 > right below is the join path; the sub wraps so "free entries" isn't truncated). The status pill is
 > `whitespace-nowrap shrink-0` so "One-time" no longer wraps to two lines.
 
+> **RewardsPartnerCard brand grid accuracy (2026-07-03):** with the SSO portal off, this grid IS the
+> live catalogue, so it now shows the **tier-accurate slice** of `PARTNER_BRAND_OFFERS` (first `N =
+> ceil(partnerAccessPct% × total)` — matching `getPartnerCatalogVisibleSliceLength`; 40% → 3 of 7) with
+> each brand's **real logo** (`b.logo` via `next/image`, was a letter monogram) and **real offer**
+> (`discount` + `category`). Each tile is now a **link to `b.businessLink`** (new tab) when a real URL is
+> set (brands with a `"#"` placeholder stay non-clickable). Locked (guest/past-due) still shows a 4-brand
+> dimmed teaser.
+
 ### RewardsPartnerQueue — partner-discount queue (2026-07-03)
 
 [`RewardsPartnerQueue`](../../src/components/sections/rewards/RewardsPartnerQueue.tsx) is the Rewards-tab
