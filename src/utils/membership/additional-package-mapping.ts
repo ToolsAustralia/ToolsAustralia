@@ -7,6 +7,11 @@
  * Terminology: "Additional" packs (flagged `isAdditional`) were previously mislabelled
  * "member-only". They are NOT subscriber-only — access is granted to anyone entered in
  * the current major draw (subscriber OR someone who bought entries this cycle).
+ *
+ * ⚠️ FRONTEND COPY RULE: "Additional" is a BACKEND-ONLY term (this flag, the `additional-*`
+ * ids). In any USER-FACING string these are always called "one-time packages / one-time packs"
+ * — never "Additional packages". A member just sees better prices + the per-card % off badge.
+ * See docs/subscription/package-terminology.md.
  */
 
 import { StaticMembershipPackage } from "@/data/membershipPackages";

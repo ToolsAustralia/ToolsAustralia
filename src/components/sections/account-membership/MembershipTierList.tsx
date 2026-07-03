@@ -59,10 +59,6 @@ export default function MembershipTierList({
         return currentPlan ? RANK[tierKeyFromName(currentPlan.name)] ?? -1 : -1;
       })();
 
-  // Members with additional-package access get their discounted ADDITIONAL packs here (not the
-  // public one-time ladder), so the section header reflects that rather than "No subscription".
-  const showingAdditionalOneTime = cta.oneTimePlans[0]?.isAdditional === true;
-
   return (
     <>
       <section>
@@ -156,12 +152,10 @@ export default function MembershipTierList({
       {cta.oneTimePlans.length > 0 && (
         <section>
           <div className="flex items-center justify-between">
-            <span className="text-[11px] font-bold uppercase tracking-[0.18em] text-muted-token">
-              {showingAdditionalOneTime ? "Additional packages" : "One-time packages"}
-            </span>
-            <span className="text-[11px] font-bold text-muted-token">
-              {showingAdditionalOneTime ? "Member pricing" : "No subscription"}
-            </span>
+            {/* Frontend copy rule: ALWAYS "One-time packages" — never surface the backend-only
+                "Additional" term (isAdditional / additional-* ids). See docs/subscription/package-terminology.md. */}
+            <span className="text-[11px] font-bold uppercase tracking-[0.18em] text-muted-token">One-time packages</span>
+            <span className="text-[11px] font-bold text-muted-token">No subscription</span>
           </div>
           {/* Reuse the /membership "Not subscribing?" PackCard styling (was a compact scroll). */}
           <OneTimePacksGrid className="mt-3" cta={cta} />
