@@ -1,5 +1,9 @@
 # Dashboard-Account — Frontend
 
+> **Hero "Become a member" → membership page (2026-07-03):** the dashboard-home hero's "Become a member"
+> button now `router.push("/my-account/membership")` (the tier list) instead of opening the membership
+> modal — the other become-a-member entry points (guest panel, upsell card) still open the modal.
+
 > **Settings completeness indicator (2026-07-03):** `ProfileTab` (the Account-settings "Personal details"
 > card) shows an amber **"{N} to complete"** badge + a "Add your {missing fields} so you're set for the draw"
 > line, computed live from the edited mobile / DOB / profession / state values (shrinks as the user fills

@@ -286,7 +286,7 @@ export default function MyAccountPage() {
         profileComplete={Boolean(user.profileSetupCompleted && user.birthdate)}
         onOpenSettings={() => router.push("/my-account/settings")}
         onRewardPortal={partnerDiscountSsoEnabled() ? () => partnerSso.mutate() : undefined}
-        onBecomeMember={onBecomeMember}
+        onBecomeMember={() => router.push("/my-account/membership")}
         onUpdatePayment={onResolvePayment}
         onCompleteProfile={() => requestModal("user-setup", true)}
       />

@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { Package, Flame } from "lucide-react";
+import { Package, Flame, ShieldCheck } from "lucide-react";
 import { cn } from "@/utils/cn";
 import type { MembershipCardCta } from "@/hooks/useMembershipCardCta";
 import type { LocalMembershipPlan } from "@/utils/membership/membership-adapters";
@@ -35,9 +35,14 @@ export default function MembershipTierList({ cta, isMember, onManagePlan, onChan
   return (
     <>
       <section>
-        <span className="text-[11px] font-bold uppercase tracking-[0.18em] text-muted-token">
-          {isMember ? "Change your tier" : "Choose a membership"}
-        </span>
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-[11px] font-bold uppercase tracking-[0.18em] text-muted-token">
+            {isMember ? "Change your tier" : "Choose a membership"}
+          </span>
+          <span className="inline-flex shrink-0 items-center gap-1 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">
+            <ShieldCheck className="h-3.5 w-3.5" /> Cancel anytime
+          </span>
+        </div>
         <div className="mt-3 flex flex-col gap-2.5">
           {cta.membershipPlans.map((plan: LocalMembershipPlan) => {
             const key = tierKeyFromName(plan.name);
