@@ -201,7 +201,8 @@ until the milestone-reward figures are confirmed and it's re-flagged.
 > multiplier is live), dropped the big starburst image + the redundant body subtitle, and shrank the heading
 > so it doesn't wrap hard. The **SPECIAL PROMO strip** got a premium treatment: a glowing, `animate-pulse`
 > flame, a wide-tracked glowing label, a **sheen sweep** (`promo-strip-shine` keyframe in globals.css), and
-> a live **pulsing red-dot "Ends in {timer}" chip**.
+> a live **pulsing red-dot "Ends in {timer}" chip**. `DrawHowItWorks` step 1 ("Get your entries") drops the
+> "the more you hold, the more entries you have" tail — the first sentence carries it.
 
 ## Dashboard sections (2026-07-02)
 

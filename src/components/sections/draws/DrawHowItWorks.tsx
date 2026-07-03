@@ -6,7 +6,7 @@ const STEPS = [
   {
     icon: Ticket,
     title: "Get your entries",
-    body: "Every membership and one-time package comes with free entries. The more you hold, the more entries you have in the draw.",
+    body: "Every membership and one-time package comes with free entries.",
   },
   {
     icon: Snowflake,
