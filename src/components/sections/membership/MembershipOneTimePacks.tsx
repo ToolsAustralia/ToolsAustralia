@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Image from "next/image";
-import { Bolt, Crown, ChevronDown, ArrowRight } from "lucide-react";
+import { Bolt, Crown, ChevronDown, ArrowRight, Ticket } from "lucide-react";
 import AccessRing from "@/components/ui/AccessRing";
 import type { MembershipCardCta } from "@/hooks/useMembershipCardCta";
 import type { LocalMembershipPlan } from "@/utils/membership/membership-adapters";
@@ -11,6 +11,7 @@ import { getPackageDisplayName } from "@/utils/membership/getDisplayName";
 import { getPartnerCatalogAccessPercentForPlanId } from "@/utils/partner-discounts/partner-catalog-visibility";
 import { getPackageColorScheme } from "@/utils/package-colors/packageColorScheme";
 import { glossGrad, inkOn, multiplierBadgeSrc } from "@/utils/membership/tier-visuals";
+import { getAdditionalPackDiscount } from "@/utils/membership/additional-pack-discount";
 import { cn } from "@/utils/cn";
 
 function trackFor(ink: string): string {
@@ -41,6 +42,9 @@ export function PackCard({
   const boosted = promo > 1;
   const badgeSrc = multiplierBadgeSrc(promo);
   const locked = cta.isLocked(plan);
+  // Additional (member) packs are discounted off the public one-time price → a coupon
+  // badge in the top-LEFT (the promo-multiplier badge lives top-right). Null for public packs.
+  const discount = getAdditionalPackDiscount(plan.id);
   const isVip = /vip/i.test(plan.id);
   // VIP gets the premium black-and-gold treatment instead of the gold gloss.
   const cardBg = isVip ? "linear-gradient(165deg,#2a241a 0%,#19150e 46%,#0b0906 100%)" : glossGrad(hex);
@@ -77,6 +81,11 @@ export function PackCard({
         ) : (
           <span className="absolute right-1.5 top-6 z-[4] inline-flex items-center rounded-full bg-black/25 px-2 py-0.5 text-[11px] font-black text-white">{promo}×</span>
         ))}
+      {discount && (
+        <span className="absolute left-0 top-5 z-[4] inline-flex items-center gap-1 rounded-r-[9px] bg-gradient-to-r from-[#ee0000] to-[#b00000] py-1 pl-2 pr-2.5 text-[10px] font-black uppercase tracking-[0.04em] text-white shadow-[0_5px_12px_-5px_rgba(238,0,0,.85)]">
+          <Ticket className="h-3 w-3" /> {discount.percentOff}% off
+        </span>
+      )}
       <div className="relative z-[2] bg-black/[0.18] py-[7px] text-[8.5px] font-black uppercase tracking-[0.12em]">One-time payment</div>
       <div className="relative z-[2] flex flex-col items-center gap-2 px-2.5 pb-4 pt-3.5">
         {icon && <Image src={icon} alt="" width={46} height={46} className="h-[46px] w-[46px] object-contain drop-shadow" />}

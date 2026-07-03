@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ChevronRight } from "lucide-react";
+import { ChevronRight, Lock } from "lucide-react";
 import { cn } from "@/utils/cn";
 import AccessRing from "@/components/ui/AccessRing";
 import { PARTNER_BRAND_OFFERS } from "@/data/partnerBrandOffers";
@@ -37,8 +37,12 @@ export default function PartnerPreview({ acct, partnerAccessPct, expiryLabel, ti
   return (
     <section className={cn("rounded-[1.1rem] border border-token bg-surface px-5 pb-4 pt-2 shadow-sm", className)}>
       <div className="flex items-center gap-4 py-3">
-        <AccessRing percent={partnerAccessPct} size={58} stroke={7} color={accent} trackColor="rgba(0,0,0,0.08)">
-          <span className="num font-['Poppins'] text-sm font-black" style={{ color: accent }}>{partnerAccessPct}%</span>
+        <AccessRing percent={locked ? 0.1 : partnerAccessPct} size={58} stroke={7} color={accent} trackColor="rgba(0,0,0,0.08)">
+          {locked ? (
+            <Lock className="h-5 w-5" style={{ color: accent }} />
+          ) : (
+            <span className="num font-['Poppins'] text-sm font-black" style={{ color: accent }}>{partnerAccessPct}%</span>
+          )}
         </AccessRing>
         <div className="min-w-0 flex-1">
           <div className="font-['Poppins'] text-[15px] font-extrabold text-primary-token dark:text-white">Partner discounts</div>

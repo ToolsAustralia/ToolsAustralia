@@ -108,8 +108,8 @@ export default function MembershipTierList({ cta, isMember, onManagePlan, onChan
             <span className="text-[11px] font-bold uppercase tracking-[0.18em] text-muted-token">One-time packages</span>
             <span className="text-[11px] font-bold text-muted-token">No subscription</span>
           </div>
-          {/* Reuse the /membership section's ElectricPackageCard styling (was a compact scroll). */}
-          <OneTimePacksGrid className="mt-2" plans={cta.oneTimePlans} onSelect={cta.onSelect} />
+          {/* Reuse the /membership "Not subscribing?" PackCard styling (was a compact scroll). */}
+          <OneTimePacksGrid className="mt-3" cta={cta} />
         </section>
       )}
     </>

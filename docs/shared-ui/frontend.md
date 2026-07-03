@@ -170,9 +170,12 @@ and `cleanName` also strips the trailing "(Mini Draw)" scope suffix so tier name
 > correct framing everywhere. Recurring **tiers** append "**/ mo**" ("{n} free entries / mo") since the grant
 > repeats monthly; **one-time packs** stay "{n} free entries" (single grant). Its header row also carries a
 > "**✓ Cancel anytime**" reassurance (emerald, right-aligned) next to "Choose a membership" / "Change your tier".
-> Its **one-time packages** section renders `OneTimePacksGrid` — the SAME `ElectricPackageCard` styling the
-> public `/membership` section uses (electric colour scheme + additional-pack discount tag + best-value
-> ribbon), instead of the old compact scroll cards, so the dashboard packs match the marketing page.
+> Its **one-time packages** section renders `OneTimePacksGrid`, which reuses the **`PackCard`** from the
+> public `/membership` "Not subscribing?" section (`MembershipOneTimePacks`) — electric card + CATALOGUE
+> ACCESS ring + N-day window + free-entries + promo-multiplier badge (top-right) — instead of the old
+> compact scroll cards, so the dashboard packs match the marketing page. `PackCard` also now renders a
+> **50%-off coupon badge (top-left, `Ticket` icon)** on Additional (member) packs, driven by
+> `getAdditionalPackDiscount(plan.id)` (shown on `/membership` too).
 > `RewardsPartnerCard`'s "Open partner portal" button is gated on
 > [`partnerDiscountSsoEnabled()`](../../src/config/featureFlags.ts) — when off (default, until SSO ships) it
 > renders a muted **"Partner portal · Coming soon"** in place of the SSO button. See
@@ -217,7 +220,8 @@ until the milestone-reward figures are confirmed and it's re-flagged.
 > the Rewards partner card reads "Paused" (partner *access* is a live benefit that does gate on `isActive`).
 > **No-access users see NO partner-catalog glimpse:** `PartnerPreview` (home) and `RewardsPartnerCard`
 > (Rewards) now **fully hide** the brand deals/grid for no-access states (guest / past-due) rather than
-> dimming a teaser — the access ring + unlock CTA stay, the brands are gone.
+> dimming a teaser — the access ring + unlock CTA stay, the brands are gone. `PartnerPreview`'s access ring
+> also shows a **`Lock` icon** (not "0%") when past-due, matching `RewardsPartnerCard`.
 > `EntryWallet` also takes `renewalDateIso` + `entriesPerRenewal`: for an **active** member sitting at **0
 > membership entries** it shows "**+{N} free entries land on your renewal · {date}**" as a **premium gold
 > pill** (gold gradient `Sparkles` chip + gold-tinted gradient bg, matching the wallet's gold accent bar —
