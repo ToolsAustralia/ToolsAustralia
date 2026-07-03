@@ -23,7 +23,9 @@ import type SubscriptionManagementModalType from "@/components/modals/Subscripti
 import DashboardPageHeader from "../components/DashboardPageHeader";
 import MembershipCurrentPlan from "@/components/sections/account-membership/MembershipCurrentPlan";
 import MembershipTierList from "@/components/sections/account-membership/MembershipTierList";
+import PastDueTierSwitchModal from "@/components/sections/account-membership/PastDueTierSwitchModal";
 import DashboardLoader from "@/components/loading/DashboardLoader";
+import type { LocalMembershipPlan } from "@/utils/membership/membership-adapters";
 
 const MembershipModal = dynamic(() => import("@/components/modals/MembershipModal"), { ssr: false });
 // Heavy money-path flow — mounted only when a tier change is requested.
@@ -56,6 +58,24 @@ export default function AccountMembershipPage() {
     if (!userId) return;
     void queryClient.invalidateQueries({ queryKey: queryKeys.users.account(userId) });
     void queryClient.invalidateQueries({ queryKey: queryKeys.users.dashboard(userId) });
+  };
+
+  // Past-due tier switch: tapping a DIFFERENT tier while past-due can't upgrade/downgrade in
+  // place (proration spawns a granting invoice — docs/PAST_DUE_REANCHOR.md). The confirm modal
+  // runs the cancel+void teardown, then we open the ordinary subscribe flow for the new tier.
+  const [switchTierPlan, setSwitchTierPlan] = React.useState<LocalMembershipPlan | null>(null);
+  const onPastDueSwitched = async () => {
+    const plan = switchTierPlan;
+    setSwitchTierPlan(null);
+    const userId = session?.user?.id;
+    if (userId) {
+      // Await the refetch so the subscribe flow sees the now-`canceled` state (not stale past-due).
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: queryKeys.users.account(userId) }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.users.dashboard(userId) }),
+      ]);
+    }
+    if (plan) cta.membershipModal.openModal(plan);
   };
 
   React.useEffect(() => {
@@ -100,8 +120,12 @@ export default function AccountMembershipPage() {
         <MembershipTierList
           cta={cta}
           isMember={dash.acct === "active"}
+          isPastDue={dash.acct === "pastdue"}
+          currentTierKey={dash.tierKey}
           onManagePlan={() => openSheet("manage")}
           onChangeTier={(name) => setChangeTierName(name)}
+          onResolvePayment={() => openSheet("payment")}
+          onSwitchTier={(plan) => setSwitchTierPlan(plan)}
         />
       </div>
 
@@ -119,6 +143,17 @@ export default function AccountMembershipPage() {
           user={dash.user as SubMgmtUser}
           onSubscriptionUpdate={onSubscriptionUpdate}
           autoSelectPlanName={changeTierName}
+        />
+      )}
+
+      {switchTierPlan && (
+        <PastDueTierSwitchModal
+          isOpen
+          onClose={() => setSwitchTierPlan(null)}
+          currentTierLabel={dash.tierLabel ?? "your plan"}
+          newTierName={switchTierPlan.name}
+          newTierPrice={switchTierPlan.price}
+          onSwitched={onPastDueSwitched}
         />
       )}
     </div>

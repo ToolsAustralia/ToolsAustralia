@@ -2,6 +2,18 @@
 
 Real failure modes, surprising behaviours, and tribal knowledge from incidents. Most of these came from production bugs and have lessons attached.
 
+## Money path
+
+### Past-due tier switch = cancel + void → resubscribe (never proration) (2026-07-03)
+
+A `past_due` member who wants a **different** tier cannot be upgraded/downgraded in place. Reactivation (`renew-subscription` → `retry_payment`) pays the overdue invoice on the **same** tier, and `reactivate` is same-tier-only — both because a proration swap on a live subscription spawns a granting `subscription_update` invoice (the $0-trial-guard footgun). So switching tiers while past-due is modelled as a **teardown + fresh subscribe**:
+
+- Service: [`abandonPastDueForTierSwitch(user)`](../../src/services/subscription/switchTierPastDue.ts) — asserts `subscription.status === "past_due"` (throws `NotPastDueError` otherwise; this immediate-cancels, so it must NEVER run on an active sub), calls `cancelSubscription` (auto-immediate for past-due → `status:"canceled"`, `isActive:false`, partner queue ended, `lastMonthAccumulatedEntries` preserved), then **voids every open/uncollectible invoice** on the sub via `stripe.invoices.list({subscription,status})` + `voidInvoice`. Void is best-effort and runs **after** cancel (so no dunning retry races it).
+- Route: [`POST /api/stripe/switch-tier-past-due`](../../src/app/api/stripe/switch-tier-past-due/route.ts) — no body; the teardown is target-agnostic and the client enforces "different tier" (a same-tier tap resolves payment instead).
+- Client: [`PastDueTierSwitchModal`](../../src/components/sections/account-membership/PastDueTierSwitchModal.tsx) confirms → POSTs → on success the membership page invalidates the account/dashboard queries (so the subscribe flow sees `canceled`, not stale `past_due`) and opens the normal `MembershipModal` subscribe for the new tier.
+
+**Why no spurious grant:** cancel + void emit only `customer.subscription.deleted` + `invoice.voided` — never `invoice.payment_succeeded`. The single intended grant is the new subscription's own `subscription_create` invoice (which the webhook also detects as a resubscribe → carries over accumulated entries + applies the live promo). Do NOT "optimise" this into a proration swap on the existing sub.
+
 ## UI / modals
 
 ### RenewalFailedModal dark mode was half-done (dark bg, dark text)

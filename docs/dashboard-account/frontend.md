@@ -54,6 +54,8 @@
 > without needing a member visit — the earlier "only advances when the rewards page is opened" bug was the
 > GET-was-a-no-op issue already fixed in that route.
 
+> **Past-due tier switch on the membership page (2026-07-03):** [`membership/page.tsx`](../../src/app/(site)/my-account/membership/page.tsx) now passes `isPastDue`/`currentTierKey`/`onResolvePayment`/`onSwitchTier` to `MembershipTierList` and renders `PastDueTierSwitchModal` when a past-due member taps a *different* tier. `onPastDueSwitched` **awaits** invalidation of `queryKeys.users.account`/`.dashboard` before opening the subscribe `MembershipModal`, so the fresh-subscribe flow reads the now-`canceled` state rather than stale `past_due`. Tapping the *current* past-due tier opens the payment sheet instead. The money path (cancel + void → resubscribe) lives in [subscription/gotchas.md § Past-due tier switch](../subscription/gotchas.md#money-path); business rules in BUSINESS.md §10i.
+
 > **Loader (2026-07-03):** every `my-account/*` page's loading state (home, draws, membership,
 > settings, benefits) now returns the shared [`DashboardLoader`](../../src/components/loading/DashboardLoader.tsx)
 > — the Claude Design "Dashboard Loader" (ratchet-driving-a-hex-bolt medallion, theme-adaptive) —

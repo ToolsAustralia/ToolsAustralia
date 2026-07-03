@@ -167,6 +167,8 @@ scale) on desktop, with the backdrop fading (`ta-sheet-fade`); all `motion-safe`
 > [`useDashboardState`](../../src/hooks/useDashboardState.ts) — see
 > [dashboard-account/frontend.md](../dashboard-account/frontend.md#partner-access-for-past-due).
 
+> **Past-due tier list — mark current + switch tier (2026-07-03):** [`MembershipTierList`](../../src/components/sections/account-membership/MembershipTierList.tsx) now takes `isPastDue` + `currentTierKey` + `onResolvePayment` + `onSwitchTier`. For a past-due member it (a) heads the section "**Your membership**" (not "Choose a membership"), (b) marks the current tier with a **"Current · Past due"** amber pill + amber border (a past-due member's plans all read "Update payment", so the current tier is matched by `tierKeyFromName(plan.name) === currentTierKey` instead of the active-member "Current Plan" CTA label), (c) routes a tap on the **current** tier → `onResolvePayment` (payment sheet) and a tap on a **different** tier → `onSwitchTier(plan)`. The switch opens [`PastDueTierSwitchModal`](../../src/components/sections/account-membership/PastDueTierSwitchModal.tsx) — a self-contained amber confirm that POSTs the cancel+void teardown (`/api/stripe/switch-tier-past-due`) then calls `onSwitched` so the page opens the ordinary subscribe flow for the new tier. See [subscription/gotchas.md § Past-due tier switch](../subscription/gotchas.md#money-path) + BUSINESS.md §10i.
+
 ### RewardsPartnerQueue — partner-discount queue (2026-07-03)
 
 [`RewardsPartnerQueue`](../../src/components/sections/rewards/RewardsPartnerQueue.tsx) is the Rewards-tab
