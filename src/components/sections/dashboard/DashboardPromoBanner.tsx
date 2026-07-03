@@ -12,7 +12,7 @@
  * Shows when the user has additional-package access OR a multiplier promo is live.
  * Only the palette escalates with the multiplier (gold 1–3× → hot 5×/10×).
  */
-import { ArrowRight, Flame, Clock } from "lucide-react";
+import { ArrowRight, Flame } from "lucide-react";
 import { useLeafTimer } from "@/hooks/useLeafTimer";
 import { getNextMidnightAEST } from "@/utils/common/timezone";
 import { cn } from "@/utils/cn";
@@ -71,15 +71,22 @@ export default function DashboardPromoBanner({
 
         {(hasAdditionalAccess || active) && (
           <div
-            className={cn("relative flex items-center justify-between gap-2.5", wide ? "px-[22px] py-[9px]" : "px-4 py-2")}
-            style={{ background: t.hot ? "rgba(255,255,255,.16)" : "rgba(0,0,0,.14)", borderBottom: `1px solid ${t.hot ? "rgba(255,255,255,.22)" : "rgba(0,0,0,.1)"}` }}
+            className={cn("relative flex items-center justify-between gap-2.5 overflow-hidden", wide ? "px-[22px] py-2.5" : "px-4 py-2")}
+            style={{ background: t.hot ? "rgba(255,255,255,.18)" : "rgba(0,0,0,.16)", borderBottom: `1px solid ${t.hot ? "rgba(255,255,255,.28)" : "rgba(0,0,0,.14)"}` }}
           >
-            <span className="inline-flex items-center gap-1.5 text-[9.5px] font-black uppercase tracking-[0.08em]">
-              <Flame className="h-3 w-3" /> Special promo
+            {/* sheen sweep across the strip */}
+            <span aria-hidden className="promo-strip-shine pointer-events-none absolute inset-y-0 -left-1/3 w-1/4" style={{ background: "linear-gradient(105deg,transparent,rgba(255,255,255,.55),transparent)" }} />
+            <span className="relative inline-flex items-center gap-1.5">
+              <Flame className="h-[15px] w-[15px] motion-safe:animate-pulse" style={{ filter: "drop-shadow(0 0 6px rgba(255,190,70,.95))" }} />
+              <span className="text-[10px] font-black uppercase tracking-[0.2em]" style={{ textShadow: "0 1px 3px rgba(0,0,0,.32)" }}>Special promo</span>
             </span>
             {active && (
-              <span className="inline-flex items-center gap-1.5 text-[10px] font-extrabold">
-                <Clock className="h-3 w-3 opacity-80" /> Ends in <span className="num font-black tabular-nums tracking-[.02em]">{timer}</span>
+              <span className="relative inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[10px] font-extrabold" style={{ background: t.hot ? "rgba(0,0,0,.25)" : "rgba(255,255,255,.4)" }}>
+                <span className="relative flex h-1.5 w-1.5">
+                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#ff5a3c] opacity-80" />
+                  <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-[#ff5a3c]" />
+                </span>
+                Ends in <span className="num font-black tabular-nums tracking-[.03em]">{timer}</span>
               </span>
             )}
           </div>

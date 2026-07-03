@@ -189,7 +189,9 @@ until the milestone-reward figures are confirmed and it's re-flagged.
 > for lasting access" (the `expiryLabel` prop was removed). `DashboardPromoBanner` puts the offer specifics
 > as **gold badges ON the "Get a package" CTA** (`50% off` when `hasAdditionalAccess`, `{n}× entries` when a
 > multiplier is live), dropped the big starburst image + the redundant body subtitle, and shrank the heading
-> so it doesn't wrap hard; the SPECIAL PROMO strip is now just the label + countdown.
+> so it doesn't wrap hard. The **SPECIAL PROMO strip** got a premium treatment: a glowing, `animate-pulse`
+> flame, a wide-tracked glowing label, a **sheen sweep** (`promo-strip-shine` keyframe in globals.css), and
+> a live **pulsing red-dot "Ends in {timer}" chip**.
 
 ## Dashboard sections (2026-07-02)
 
