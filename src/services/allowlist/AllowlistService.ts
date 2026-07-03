@@ -531,4 +531,14 @@ export class AllowlistService {
     ]);
     return { totalActiveAllowlisted: result[0]?.totalActiveAllowlisted ?? 0 };
   }
+
+  /**
+   * True if this card fingerprint currently has an active "added" AllowlistAction
+   * (i.e. it is on Stripe's allowlist). Read-only; used by the reconcile sweep to
+   * count "already allowlisted" and skip a redundant apply().
+   */
+  async isAllowlisted(cardFingerprint: string): Promise<boolean> {
+    const existing = await this.repo.findActiveAddedActionByFingerprint(cardFingerprint);
+    return !!existing;
+  }
 }

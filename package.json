@@ -145,6 +145,7 @@
     "reconcile:affiliate-commissions:prod": "tsx scripts/reconcile-affiliate-commissions.ts --apply --prod",
     "test:affiliate-attribution": "tsx src/utils/affiliate/__tests__/affiliate-attribution.test.ts",
     "test:allowlist": "tsx src/services/allowlist/__tests__/AllowlistService.test.ts",
+    "test:allowlist-reconcile": "tsx src/services/allowlist/__tests__/reconcileAllowlistFromBlocked.test.ts",
     "test:blocked-transaction-repo": "tsx src/services/allowlist/__tests__/blockedTransactionRepo.test.ts",
     "test:blocked-eligibility-mapper": "tsx src/utils/admin/__tests__/blockedTransactionEligibility.test.ts",
     "test:list-blocked-filters": "tsx src/services/allowlist/__tests__/listBlockedFilters.test.ts",
