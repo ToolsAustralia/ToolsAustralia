@@ -52,6 +52,8 @@ export interface SupportChatState {
   rateLimitMinutesLeft: number | null;
   /** Clears the rateLimited state (e.g. when the widget receives a successful non-429 response). */
   clearRateLimit: () => void;
+  /** Set when the server returns 503 (kill-switch / daily budget). Cleared on the next 2xx. */
+  unavailable: boolean;
   input: string;
   setInput: (v: string) => void;
   sendUserMessage: (text: string) => Promise<void>;
@@ -89,6 +91,9 @@ export function useSupportChat(): SupportChatState {
   // answers bypass this limit (they return a 200 stream via deflection).
   const [rateLimited, setRateLimited] = useState<RateLimitedState | null>(null);
   const clearRateLimit = useCallback(() => setRateLimited(null), []);
+
+  // ── Service-unavailable state (kill-switch / daily budget → 503) ────────────
+  const [unavailable, setUnavailable] = useState(false);
 
   // ── free-form text input ───────────────────────────────────────────────────
   const [input, setInput] = useState("");
@@ -143,10 +148,25 @@ export function useSupportChat(): SupportChatState {
         return resp;
       }
 
-      // On success (2xx), clear any stale rate-limit state so the widget
-      // returns to normal once the window has reset and a new message goes through.
+      // Handle 503 chat_unavailable (kill-switch / daily budget — plain JSON).
+      if (resp.status === 503) {
+        try {
+          const clone = resp.clone();
+          const json = (await clone.json()) as Record<string, unknown>;
+          if (json?.success === false) {
+            setUnavailable(true);
+          }
+        } catch {
+          // JSON parse failed — fall through to normal error handling
+        }
+        return resp;
+      }
+
+      // On success (2xx), clear any stale rate-limit / unavailable state so the
+      // widget returns to normal once the window resets and a message goes through.
       if (resp.ok) {
         setRateLimited(null);
+        setUnavailable(false);
       }
 
       // On success, read and persist the conversationId header
@@ -217,6 +237,18 @@ export function useSupportChat(): SupportChatState {
     savePersistedMessages(messages);
   }, [messages]);
 
+  // ── Suppress the generic error box when a specific gate notice is showing ────
+  // The 401 (captcha), 429 (rate-limit) and 503 (unavailable) responses come back
+  // as non-2xx, so the AI SDK transport throws → useChat sets a top-level `error`.
+  // We've already surfaced the specific, actionable notice, so clear the generic
+  // "Something went wrong" error to avoid rendering it STACKED above the captcha /
+  // rate-limit / busy message.
+  useEffect(() => {
+    if (error && (captchaRequired || rateLimited || unavailable)) {
+      clearError();
+    }
+  }, [error, captchaRequired, rateLimited, unavailable, clearError]);
+
   // ── Send helpers ───────────────────────────────────────────────────────────
   const sendUserMessage = useCallback(
     async (text: string) => {
@@ -263,6 +295,7 @@ export function useSupportChat(): SupportChatState {
     clearSupportChatStorage();
     setCaptchaRequired(false);
     setRateLimited(null);
+    setUnavailable(false);
     pendingMessageRef.current = null;
     pendingTokenRef.current = null;
   }, [setMessages]);
@@ -282,6 +315,7 @@ export function useSupportChat(): SupportChatState {
     rateLimited,
     rateLimitMinutesLeft,
     clearRateLimit,
+    unavailable,
     input,
     setInput,
     sendUserMessage,

@@ -4,6 +4,22 @@ Hard-won lessons. Read before touching the widget mount, the route runtime, or t
 
 ---
 
+## Chat error/limit/captcha UX — no stacked errors, no dead-ends (2026-07-04)
+
+**The trap:** the 401 (captcha), 429 (rate-limit) and 503 (kill-switch/budget) responses come back as **plain non-2xx JSON**, not a stream. `useSupportChat`'s `customFetch` reads them and sets a specific flag (`captchaRequired` / `rateLimited` / `unavailable`), but then **returns the same non-ok `Response`** — and the AI SDK v6 transport (`HttpChatTransport.sendMessages`) unconditionally throws on any non-2xx, which `useChat` turns into a top-level `error`. Left unhandled, the widget rendered the red **"Something went wrong"** box **stacked above** the amber captcha/limit notice on *every* gated turn — the normal path, not an edge case.
+
+**The fixes (all client-side, [useSupportChat.ts](../../src/components/support-chat/useSupportChat.ts) + [SupportChatWidget.tsx](../../src/components/support-chat/SupportChatWidget.tsx)):**
+- **No stacked error:** an effect clears the generic `error` whenever a gate flag is set, and the error box is also render-guarded `!captchaRequired && !isRateLimited && !unavailable`. The user sees only the specific, actionable notice.
+- **503 gets a friendly notice:** `customFetch` now handles 503 → `unavailable` state → a calm "Cobber's taking a short break… leave us a message" card (was falling through to the generic error). Cleared on the next 2xx.
+- **Captcha expiry/error recover:** `<HCaptcha>` now wires `onExpire`/`onChalExpired`/`onError` to remount a fresh challenge (`captchaKey++`) — hCaptcha tokens expire ~2 min; before this the user was left on a dead box.
+- **Input locked while gated:** the textarea + send are disabled during `captchaRequired`/`unavailable` (not just `rateLimited`), so typing a new message can't silently abandon the pending captcha turn.
+
+**Still-solid (verified against `node_modules/ai`):** the one-shot captcha token is read+nulled inside the transport `body()` (only race-free spot); the optimistic user message is trimmed before a captcha re-send (no dup); members never see the captcha (server + client guards); stop/abort doesn't trip the error banner.
+
+**Open item (flagged, not yet changed):** `withChatbot` runs the kill-switch/budget gate (503) **before** `ChatService`, so it blocks **FAQ deflection too** — contradicting the documented "kill switch disables only the generative bot, FAQ still works." `ChatService` already deflects *before* its own budget re-check ([ChatService.ts:555](../../src/services/support-chat/ChatService.ts#L555) then L591), so the correct fix is to drop `withChatbot`'s budget gate and let `ChatService` own it (moves the gate to after deflection). Deferred pending owner sign-off (it's a security-pipeline change + a `test:chat-withchatbot` update).
+
+---
+
 ## Deflection must be HIGH-PRECISION — a low-confidence "nearest FAQ" is confidently-wrong (2026-06-27)
 
 **Incident:** an owner stress-test found Cobber giving confidently-wrong canned answers — "how to become a member" → the *partner-brand* application; "how membership works" → the *refund* policy; "where can I see my entries" → "get **more** entries"; "did I win" → the prize *catalog*; "what tier am I on" → the *downgrade* explainer. A scripted audit measured a **45% mis-route rate** over 20 realistic questions.

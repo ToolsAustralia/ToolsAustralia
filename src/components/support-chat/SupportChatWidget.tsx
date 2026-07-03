@@ -153,6 +153,7 @@ export default function SupportChatWidget({ side = "right" }: SupportChatWidgetP
     isAuthenticated,
     rateLimited,
     rateLimitMinutesLeft,
+    unavailable,
     input,
     setInput,
     sendUserMessage,
@@ -242,6 +243,10 @@ export default function SupportChatWidget({ side = "right" }: SupportChatWidgetP
   const isStreaming = status === "submitted" || status === "streaming";
   const showIntro = hasOpened && messages.length === 0;
   const isRateLimited = rateLimited !== null;
+  // Block free-text input while a pending captcha, a rate-limit, or an
+  // unavailable state is showing — typing a new message would silently abandon
+  // the captcha turn / send into a wall.
+  const inputBlocked = isRateLimited || captchaRequired || unavailable;
 
   return (
     <>
@@ -379,12 +384,30 @@ export default function SupportChatWidget({ side = "right" }: SupportChatWidgetP
               </div>
             )}
 
-            {error && (
+            {/* Generic error — hidden when a specific gate notice (captcha / rate-limit
+                / unavailable) is showing, so the user never sees a stacked
+                "something went wrong" over the actionable message. */}
+            {error && !captchaRequired && !isRateLimited && !unavailable && (
               <div className="bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 rounded-xl px-3 py-2 text-xs">
                 <span>Something went wrong. </span>
                 <button onClick={clearError} className="underline">
                   Try again
                 </button>
+              </div>
+            )}
+
+            {/* Service-unavailable notice (kill-switch / daily budget → 503). */}
+            {unavailable && !captchaRequired && (
+              <div className="bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 rounded-xl px-3 py-3 text-xs text-amber-800 dark:text-amber-200">
+                <p className="font-medium mb-1">Cobber&apos;s taking a short break</p>
+                <p>
+                  Our assistant is temporarily unavailable. Please try again shortly,
+                  or{" "}
+                  <a href="/contact" className="underline">
+                    leave us a message
+                  </a>{" "}
+                  and our team will help.
+                </p>
               </div>
             )}
 
@@ -429,6 +452,12 @@ export default function SupportChatWidget({ side = "right" }: SupportChatWidgetP
                         setCaptchaKey((k) => k + 1);
                         onCaptchaVerify(token);
                       }}
+                      // hCaptcha tokens expire (~2 min) and the widget can error
+                      // (network/script). Remount a FRESH challenge so the user is
+                      // never left staring at a dead/expired box.
+                      onExpire={() => setCaptchaKey((k) => k + 1)}
+                      onChalExpired={() => setCaptchaKey((k) => k + 1)}
+                      onError={() => setCaptchaKey((k) => k + 1)}
                     />
                     <p className="mt-1.5 text-amber-600 dark:text-amber-400">
                       Or{" "}
@@ -490,10 +519,18 @@ export default function SupportChatWidget({ side = "right" }: SupportChatWidgetP
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={handleKeyDown}
-                placeholder={isRateLimited ? "Tap a quick question above to continue…" : "Type a message…"}
-                disabled={isRateLimited}
+                placeholder={
+                  captchaRequired
+                    ? "Complete the check above to continue…"
+                    : unavailable
+                    ? "Cobber's unavailable right now…"
+                    : isRateLimited
+                    ? "Tap a quick question above to continue…"
+                    : "Type a message…"
+                }
+                disabled={inputBlocked}
                 rows={1}
-                className={`flex-1 resize-none text-sm bg-gray-50 dark:bg-neutral-800 border border-gray-200 dark:border-neutral-700 rounded-xl px-3 py-2 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-orange-400 dark:focus:ring-orange-500 max-h-24 overflow-auto${isRateLimited ? " opacity-50 cursor-not-allowed" : ""}`}
+                className={`flex-1 resize-none text-sm bg-gray-50 dark:bg-neutral-800 border border-gray-200 dark:border-neutral-700 rounded-xl px-3 py-2 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-orange-400 dark:focus:ring-orange-500 max-h-24 overflow-auto${inputBlocked ? " opacity-50 cursor-not-allowed" : ""}`}
                 style={{ lineHeight: "1.5" }}
               />
               {/* Stop button — shown while streaming */}
@@ -517,7 +554,7 @@ export default function SupportChatWidget({ side = "right" }: SupportChatWidgetP
                 /* Send button */
                 <button
                   type="submit"
-                  disabled={!input.trim() || isRateLimited}
+                  disabled={!input.trim() || inputBlocked}
                   aria-label="Send message"
                   className="shrink-0 w-9 h-9 rounded-xl bg-orange-500 hover:bg-orange-600 disabled:opacity-40 disabled:cursor-not-allowed text-white flex items-center justify-center transition-colors"
                 >
