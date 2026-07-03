@@ -129,6 +129,11 @@ scale) on desktop, with the backdrop fading (`ta-sheet-fade`); all `motion-safe`
 > `PartnerPreview`, `QuickActionsGrid`) here were repointed. See
 > [dashboard-account/frontend.md § Route rename](../dashboard-account/frontend.md#route-rename-benefits--rewards-2026-07-03).
 
+> **MembershipCurrentPlan one-time fix (2026-07-03):** for `onetime` accounts the current-plan card
+> replaces the "Renews {date} · Auto-renews monthly" **Manage-subscription** row with a non-clickable
+> `InfoRow` ("One-time pack · doesn't auto-renew") — a one-time pack has no subscription, so the renewal
+> wording + Manage action was a genuine UI bug that made buyers think they'd be auto-billed monthly.
+
 ### RewardsPartnerQueue — partner-discount queue (2026-07-03)
 
 [`RewardsPartnerQueue`](../../src/components/sections/rewards/RewardsPartnerQueue.tsx) is the Rewards-tab
