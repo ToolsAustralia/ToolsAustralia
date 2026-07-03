@@ -215,8 +215,10 @@ until the milestone-reward figures are confirmed and it's re-flagged.
 > as **gold badges ON the "Get a package" CTA** (`50% off` when `hasAdditionalAccess`, `{n}× entries` when a
 > multiplier is live), dropped the big starburst image + the redundant body subtitle, and shrank the heading
 > so it doesn't wrap hard. The **SPECIAL PROMO strip** got a premium treatment: a glowing, `animate-pulse`
-> flame, a wide-tracked glowing label, a **sheen sweep** (`promo-strip-shine` keyframe in globals.css), and
-> a live **pulsing red-dot "Ends in {timer}" chip**. `DrawHowItWorks` step 1 ("Get your entries") drops the
+> flame, a wide-tracked glowing label, and a live **pulsing red-dot "Ends in {timer}" chip**. (The strip's
+> own `promo-strip-shine` sheen sweep was removed — it double-shimmered against the whole-banner
+> `promo-banner-shimmer`; the keyframe/class were deleted from globals.css.) `DrawHowItWorks` step 1
+> ("Get your entries") drops the
 > "the more you hold, the more entries you have" tail — the first sentence carries it.
 
 ## Dashboard sections (2026-07-02)

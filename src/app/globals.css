@@ -1437,18 +1437,6 @@
   animation: promo-shimmer-sweep 3.4s cubic-bezier(0.16, 0.85, 0.35, 1) infinite;
 }
 
-/* Sheen sweep across the SPECIAL PROMO strip (skewed highlight, travels + pauses). */
-@keyframes promo-strip-shine {
-  0% { transform: translateX(0) skewX(-18deg); }
-  55%, 100% { transform: translateX(1400%) skewX(-18deg); }
-}
-.promo-strip-shine {
-  transform: skewX(-18deg);
-  animation: promo-strip-shine 3.8s cubic-bezier(0.5, 0, 0.2, 1) infinite;
-}
-@media (prefers-reduced-motion: reduce) {
-  .promo-strip-shine { animation: none; opacity: 0; }
-}
 @media (prefers-reduced-motion: reduce) {
   .promo-banner-shimmer {
     animation: none;

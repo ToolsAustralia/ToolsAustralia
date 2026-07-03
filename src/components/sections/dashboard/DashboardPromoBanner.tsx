@@ -74,8 +74,6 @@ export default function DashboardPromoBanner({
             className={cn("relative flex items-center justify-between gap-2.5 overflow-hidden", wide ? "px-[22px] py-2.5" : "px-4 py-2")}
             style={{ background: t.hot ? "rgba(255,255,255,.18)" : "rgba(0,0,0,.16)", borderBottom: `1px solid ${t.hot ? "rgba(255,255,255,.28)" : "rgba(0,0,0,.14)"}` }}
           >
-            {/* sheen sweep across the strip */}
-            <span aria-hidden className="promo-strip-shine pointer-events-none absolute inset-y-0 -left-1/3 w-1/4" style={{ background: "linear-gradient(105deg,transparent,rgba(255,255,255,.55),transparent)" }} />
             <span className="relative inline-flex items-center gap-1.5">
               <Flame className="h-[15px] w-[15px] motion-safe:animate-pulse" style={{ filter: "drop-shadow(0 0 6px rgba(255,190,70,.95))" }} />
               <span className="text-[10px] font-black uppercase tracking-[0.2em]" style={{ textShadow: "0 1px 3px rgba(0,0,0,.32)" }}>Special promo</span>
