@@ -6,7 +6,7 @@ import { cn } from "@/utils/cn";
 import type { MembershipCardCta } from "@/hooks/useMembershipCardCta";
 import type { LocalMembershipPlan } from "@/utils/membership/membership-adapters";
 import { TIER_HEX, tierKeyFromName, glossGrad, inkOn } from "@/utils/membership/tier-visuals";
-import { getPackageColorScheme } from "@/utils/package-colors/packageColorScheme";
+import OneTimePacksGrid from "@/components/sections/membership/OneTimePacksGrid";
 import { getPackageIcon } from "@/utils/images/package-icons";
 import { getPartnerCatalogAccessPercentForPlanId } from "@/utils/partner-discounts/partner-catalog-visibility";
 
@@ -108,51 +108,8 @@ export default function MembershipTierList({ cta, isMember, onManagePlan, onChan
             <span className="text-[11px] font-bold uppercase tracking-[0.18em] text-muted-token">One-time packages</span>
             <span className="text-[11px] font-bold text-muted-token">No subscription</span>
           </div>
-          <div className="mt-3 flex gap-2.5 overflow-x-auto pb-1">
-            {cta.oneTimePlans.map((pk: LocalMembershipPlan) => {
-              const isVip = /vip/i.test(pk.id);
-              const accent = getPackageColorScheme(pk.id).accentHex;
-              const entries = pk.metadata?.entriesCount ?? 0;
-              const base = (pk.metadata?.originalEntries as number | undefined) ?? entries;
-              const boosted = ((pk.metadata?.promoMultiplier as number | undefined) ?? 1) > 1;
-              const days = pk.metadata?.partnerDiscountDays as number | undefined;
-              const access = getPartnerCatalogAccessPercentForPlanId(pk.id);
-              const icon = getPackageIcon(pk.id);
-              const bg = isVip ? "linear-gradient(165deg,#2a241a 0%,#19150e 46%,#0b0906 100%)" : glossGrad(accent);
-              const ink = isVip ? "#f3d98f" : inkOn(accent);
-              return (
-                <button
-                  key={pk.id}
-                  type="button"
-                  onClick={() => cta.onSelect(pk)}
-                  className="relative w-[140px] shrink-0 overflow-hidden rounded-[.875rem] border p-3.5 text-left shadow-[0_12px_26px_-16px_rgba(0,0,0,.5)] focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
-                  style={{ background: bg, color: ink, borderColor: isVip ? "rgba(212,175,55,.6)" : "rgba(255,255,255,.2)" }}
-                >
-                  <span aria-hidden className="pointer-events-none absolute inset-x-0 top-0 h-[42%]" style={{ background: isVip ? "linear-gradient(180deg,rgba(255,236,180,.12),transparent)" : "linear-gradient(180deg,rgba(255,255,255,.22),transparent)" }} />
-                  <div className="relative flex items-center gap-2">
-                    {icon && <Image src={icon} alt="" width={28} height={28} className="h-7 w-7 object-contain drop-shadow" />}
-                    <span className="font-['Poppins'] text-[13px] font-black uppercase tracking-[0.04em]">{pk.name}</span>
-                  </div>
-                  <div className="relative mt-2.5 font-['Poppins'] text-2xl font-black">${pk.price}</div>
-                  <div className="relative mt-2 text-[10px] font-bold leading-[1.4] opacity-85">
-                    {access}% access
-                    <br />
-                    {boosted ? (
-                      <><s className="opacity-60">{base}</s> {entries} free entries</>
-                    ) : (
-                      <>{entries} free entries</>
-                    )}
-                    {days != null && (
-                      <>
-                        <br />
-                        {days}d window
-                      </>
-                    )}
-                  </div>
-                </button>
-              );
-            })}
-          </div>
+          {/* Reuse the /membership section's ElectricPackageCard styling (was a compact scroll). */}
+          <OneTimePacksGrid className="mt-2" plans={cta.oneTimePlans} onSelect={cta.onSelect} />
         </section>
       )}
     </>

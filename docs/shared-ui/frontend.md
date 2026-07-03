@@ -169,7 +169,11 @@ and `cleanName` also strips the trailing "(Mini Draw)" scope suffix so tier name
 > now says "**{n} free entries**" (was a bare "entries") — packages *grant* free entries, so that's the
 > correct framing everywhere. Recurring **tiers** append "**/ mo**" ("{n} free entries / mo") since the grant
 > repeats monthly; **one-time packs** stay "{n} free entries" (single grant). Its header row also carries a
-> "**✓ Cancel anytime**" reassurance (emerald, right-aligned) next to "Choose a membership" / "Change your tier". `RewardsPartnerCard`'s "Open partner portal" button is gated on
+> "**✓ Cancel anytime**" reassurance (emerald, right-aligned) next to "Choose a membership" / "Change your tier".
+> Its **one-time packages** section renders `OneTimePacksGrid` — the SAME `ElectricPackageCard` styling the
+> public `/membership` section uses (electric colour scheme + additional-pack discount tag + best-value
+> ribbon), instead of the old compact scroll cards, so the dashboard packs match the marketing page.
+> `RewardsPartnerCard`'s "Open partner portal" button is gated on
 > [`partnerDiscountSsoEnabled()`](../../src/config/featureFlags.ts) — when off (default, until SSO ships) it
 > renders a muted **"Partner portal · Coming soon"** in place of the SSO button. See
 > [config-and-data/architecture.md § Feature toggles](../config-and-data/architecture.md#configuration).
@@ -212,8 +216,10 @@ until the milestone-reward figures are confirmed and it's re-flagged.
 > membership number** for past-due (not a "paused" placeholder) and the total is the honored count. Only
 > the Rewards partner card reads "Paused" (partner *access* is a live benefit that does gate on `isActive`).
 > `EntryWallet` also takes `renewalDateIso` + `entriesPerRenewal`: for an **active** member sitting at **0
-> membership entries** it shows "**{N} free entries will be added upon renewal on {date}**" (the date is the
-> trialing-safe renewal from `subscription.endDate` — see dashboard-account/frontend.md).
+> membership entries** it shows "**+{N} free entries land on your renewal · {date}**" as a **premium gold
+> pill** (gold gradient `Sparkles` chip + gold-tinted gradient bg, matching the wallet's gold accent bar —
+> was a plain grey box). The date is the trialing-safe renewal from `subscription.endDate` (see
+> dashboard-account/frontend.md).
 > `DashboardPromoBanner` puts the offer specifics
 > as **gold badges ON the "Get a package" CTA** (`50% off` when `hasAdditionalAccess`, `{n}× entries` when a
 > multiplier is live), dropped the big starburst image + the redundant body subtitle, and shrank the heading

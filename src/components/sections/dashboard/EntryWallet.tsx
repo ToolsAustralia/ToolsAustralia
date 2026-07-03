@@ -1,7 +1,7 @@
 "use client";
 
 import { cn } from "@/utils/cn";
-import { Clock, Plus } from "lucide-react";
+import { Clock, Plus, Sparkles } from "lucide-react";
 import { AnimatedNumber } from "@/components/ui/AnimatedNumber";
 import { useLeafTimer } from "@/hooks/useLeafTimer";
 import type { DashboardAccountState } from "@/utils/dashboard/dashboard-state-theme";
@@ -143,12 +143,15 @@ export default function EntryWallet({
         </span>
       </div>
       {showRenewalNote && renewalDateLabel && (
-        <div className="mt-3 flex items-center gap-2 rounded-xl border border-token bg-black/[.02] px-3 py-2 text-[11.5px] leading-[1.35] text-muted-token dark:bg-white/[.03]">
-          <Clock className="h-3.5 w-3.5 shrink-0 text-[#d4af37]" />
-          <span>
-            <b className="text-primary-token dark:text-white">{(entriesPerRenewal ?? 0).toLocaleString()} free entries</b> will be added upon renewal on{" "}
-            <b className="text-primary-token dark:text-white">{renewalDateLabel}</b>
+        <div className="mt-3.5 flex items-center gap-3 rounded-[14px] border border-[#e4c86a]/45 bg-gradient-to-r from-[#f6dd8c]/25 via-[#f6dd8c]/[.08] to-transparent px-3 py-2.5 dark:border-[#d4af37]/30 dark:from-[#d4af37]/[.16]">
+          <span className="grid h-8 w-8 shrink-0 place-items-center rounded-[10px] bg-gradient-to-b from-[#f6dd8c] to-[#d4af37] text-[#241a02] shadow-[0_5px_12px_-5px_rgba(212,175,55,.8)]">
+            <Sparkles className="h-[16px] w-[16px]" />
           </span>
+          <p className="min-w-0 text-[12px] leading-[1.3] text-muted-token">
+            <b className="font-['Poppins'] text-primary-token dark:text-white">+{(entriesPerRenewal ?? 0).toLocaleString()} free entries</b> land on your renewal
+            {" · "}
+            <b className="whitespace-nowrap text-primary-token dark:text-white">{renewalDateLabel}</b>
+          </p>
         </div>
       )}
     </div>
