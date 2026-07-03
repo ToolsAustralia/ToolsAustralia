@@ -15,18 +15,15 @@ interface DashboardAlertRibbonProps {
  */
 export default function DashboardAlertRibbon({ acct, className }: DashboardAlertRibbonProps) {
   if (acct === "pastdue") {
+    // High-contrast amber pill floating at the hero↔entries seam — mirrors the
+    // one-time teal pill below (the parent column is pulled up over the hero).
     return (
       <div
-        className={className}
-        style={{ display: "flex", alignItems: "center", gap: 13, padding: "13px 15px", borderRadius: "0.875rem", background: "linear-gradient(100deg,rgba(217,119,6,.16),rgba(217,119,6,.07))", border: "1px solid rgba(217,119,6,.42)" }}
+        className={cn("relative z-10 mx-auto flex w-fit max-w-full items-center gap-2 rounded-full px-3.5 py-2 shadow-[0_10px_24px_-10px_rgba(217,119,6,.75)]", className)}
+        style={{ background: "linear-gradient(100deg,#f59e0b,#d97706)", color: "#fff", border: "1px solid rgba(255,255,255,.28)" }}
       >
-        <span className="grid h-9 w-9 shrink-0 place-items-center rounded-[10px] text-[#d97706]" style={{ background: "rgba(217,119,6,.2)" }}>
-          <ShieldAlert className="h-[18px] w-[18px]" />
-        </span>
-        <div className="min-w-0 flex-1">
-          <b className="font-['Poppins'] text-[13px] font-extrabold text-primary-token dark:text-white">Payment failed</b>
-          <div className="mt-0.5 text-[11px] leading-[1.4] text-muted-token">Your membership entries are paused until you update payment.</div>
-        </div>
+        <ShieldAlert className="h-4 w-4 shrink-0" />
+        <span className="text-[11.5px] font-bold leading-tight">Your membership entries are paused until you update payment</span>
       </div>
     );
   }

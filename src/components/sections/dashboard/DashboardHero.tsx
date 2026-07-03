@@ -77,7 +77,8 @@ export default function DashboardHero({
       <chip.Icon className="h-3 w-3" />
     );
 
-  // Right-side ring (member/onetime use our AccessRing).
+  // Right-side ring — members/one-time show the partner-access %; past-due shows a
+  // shield icon (paused) in the same ring so the state leans into the one-time look.
   const ring =
     acct === "active" || acct === "onetime" ? (
       <div className="flex flex-col items-center gap-1">
@@ -87,6 +88,13 @@ export default function DashboardHero({
         <span className="text-[8px] font-bold uppercase tracking-[0.1em]" style={{ color: soft }}>
           {acct === "onetime" && partnerAccessExpiryLabel ? `${partnerAccessExpiryLabel} left` : "Access"}
         </span>
+      </div>
+    ) : acct === "pastdue" ? (
+      <div className="flex flex-col items-center gap-1">
+        <AccessRing percent={100} size={58} stroke={7} color="#fbbf24" trackColor={white ? "rgba(255,255,255,.22)" : "rgba(0,0,0,.14)"}>
+          <ShieldAlert className="h-5 w-5" style={{ color: "#fbbf24" }} />
+        </AccessRing>
+        <span className="text-[8px] font-bold uppercase tracking-[0.1em]" style={{ color: soft }}>Paused</span>
       </div>
     ) : null;
 
@@ -103,8 +111,10 @@ export default function DashboardHero({
         <Gift className="h-3 w-3" /> Reward portal <ChevronRight className="h-3 w-3" />
       </button>
     ) : acct === "pastdue" && onUpdatePayment ? (
-      <button type="button" onClick={onUpdatePayment} className="inline-flex items-center gap-2 rounded-full px-[18px] py-3 text-[12.5px] font-extrabold text-[#241a02]" style={{ background: "linear-gradient(180deg,#fbbf24,#d97706)" }}>
-        <RefreshCw className="h-[15px] w-[15px]" /> Update payment
+      // Chip-sized — matches the "· paused" badge footprint (mirrors the one-time
+      // "Become a member" chip treatment).
+      <button type="button" onClick={onUpdatePayment} className="inline-flex items-center gap-1.5 rounded-full px-[11px] py-[7px] text-[10px] font-extrabold text-[#241a02]" style={{ background: "linear-gradient(180deg,#fbbf24,#d97706)" }}>
+        <RefreshCw className="h-3 w-3" /> Update payment
       </button>
     ) : acct === "onetime" && onBecomeMember ? (
       // Chip-sized — it stands alone now (the one-time-pack badge that used to sit
@@ -180,11 +190,6 @@ export default function DashboardHero({
           <button type="button" onClick={onOpenSettings} aria-label="Settings" className="grid h-[38px] w-[38px] shrink-0 place-items-center rounded-[11px]" style={{ color: ink, background: glassBg, border: `1px solid ${glassBd}` }}>
             <Settings className="h-[18px] w-[18px]" />
           </button>
-          {acct === "pastdue" && (
-            <span className="inline-flex items-center gap-1.5 rounded-full px-[11px] py-2 text-[9px] font-extrabold uppercase tracking-[0.08em] text-[#241a02]" style={{ background: "linear-gradient(180deg,#fbbf24,#d97706)" }}>
-              <ShieldAlert className="h-3 w-3" /> Past due
-            </span>
-          )}
           {ring}
         </div>
         <div className="mt-4 flex items-center gap-2">
