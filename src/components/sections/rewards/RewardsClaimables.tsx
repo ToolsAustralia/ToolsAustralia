@@ -9,11 +9,9 @@ import {
   useRedeemableRedemption,
   type RedeemableWalletItem,
 } from "@/hooks/queries/useRedeemablesQueries";
-import type { DashboardAccountState } from "@/utils/dashboard/dashboard-state-theme";
 
 interface RewardsClaimablesProps {
   userId: string;
-  acct: DashboardAccountState;
 }
 
 function label(item: RedeemableWalletItem): string {
@@ -25,8 +23,7 @@ function label(item: RedeemableWalletItem): string {
  * there's something to claim now) that opens a claimables overlay sheet, plus a
  * "Recently claimed" list. Paused-safe (rewards API 503 → neutral state).
  */
-export default function RewardsClaimables({ userId, acct }: RewardsClaimablesProps) {
-  const disabled = acct === "pastdue";
+export default function RewardsClaimables({ userId }: RewardsClaimablesProps) {
   const [open, setOpen] = useState(false);
   const claimable = useRedeemablesWallet(userId, { status: "claimable", limit: 10 });
   const past = useRedeemablesWallet(userId, { status: "past", limit: 6 });
@@ -44,8 +41,11 @@ export default function RewardsClaimables({ userId, acct }: RewardsClaimablesPro
 
   const claimItems = claimable.data?.wallet ?? [];
   const pastItems = past.data?.wallet ?? [];
-  // Only TRULY claimable items drive the animation + badge (locked / paused don't).
-  const claimableCount = claimItems.filter((i) => i.isRedeemableNow && !disabled).length;
+  // Only TRULY claimable items drive the animation + badge. Trust the server's per-item
+  // isRedeemableNow — it already gates membership coupons on an active subscription (hasQualifyingPurchase),
+  // so a past-due member can still claim milestone rewards + none/one-time/any coupons; the redeem
+  // endpoint enforces the identical predicate. A blanket past-due disable wrongly hid those.
+  const claimableCount = claimItems.filter((i) => i.isRedeemableNow).length;
   const hasClaimable = claimableCount > 0;
 
   return (
@@ -117,8 +117,8 @@ export default function RewardsClaimables({ userId, acct }: RewardsClaimablesPro
           ) : (
             <ul className="space-y-2">
               {claimItems.map((item) => {
-                const canClaim = item.isRedeemableNow && !disabled;
-                const locked = !item.isRedeemableNow && !disabled;
+                const canClaim = item.isRedeemableNow;
+                const locked = !item.isRedeemableNow;
                 const lockedLabel = item.purchaseRequirement === "membership" ? "Members only" : "Purchase to unlock";
                 const Icon = item.source === "milestone" ? Bolt : Gift;
                 return (
@@ -139,7 +139,7 @@ export default function RewardsClaimables({ userId, acct }: RewardsClaimablesPro
                         canClaim ? "bg-gradient-to-b from-red-500 to-red-700 text-white disabled:opacity-60" : "cursor-default bg-black/[.05] text-muted-token dark:bg-white/[.08]",
                       )}
                     >
-                      {disabled ? "Paused" : redeem.isPending ? "Claiming…" : locked ? lockedLabel : "Claim"}
+                      {redeem.isPending ? "Claiming…" : locked ? lockedLabel : "Claim"}
                     </button>
                   </li>
                 );

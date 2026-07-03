@@ -24,11 +24,18 @@ const DEALS = PARTNER_BRAND_OFFERS.slice(0, 3);
  * Greyed when past due; teal accent for one-time; links to the full Rewards page.
  */
 export default function PartnerPreview({ acct, partnerAccessPct, expiryLabel, tierHex, className }: PartnerPreviewProps) {
-  const locked = acct === "pastdue";
+  // A past-due member who still holds a live one-time pack keeps real partner access (honored by
+  // the queue + SSO + shop) — only a past-due member with NO live pack is truly locked. Mirrors
+  // RewardsPartnerCard so the home widget and the Rewards page agree instead of falsely reading
+  // "Paused / 0%" here while the Rewards page shows the pack active.
+  const pastDue = acct === "pastdue";
+  const pastDueWithPack = pastDue && partnerAccessPct > 0;
+  const locked = pastDue && !pastDueWithPack;
   const isOneTime = acct === "onetime";
-  const accent = locked ? "#d97706" : isOneTime ? "#0ea5a5" : tierHex ?? "#ee0000";
-  const sub =
-    isOneTime && expiryLabel
+  const accent = pastDue ? "#d97706" : isOneTime ? "#0ea5a5" : tierHex ?? "#ee0000";
+  const sub = pastDueWithPack
+    ? `${partnerAccessPct}% active${expiryLabel ? ` · ends in ${expiryLabel}` : ""} · membership paused`
+    : isOneTime && expiryLabel
       ? `Access ends in ${expiryLabel} · from your pack`
       : locked
         ? "Paused — update payment to resume"
@@ -46,8 +53,8 @@ export default function PartnerPreview({ acct, partnerAccessPct, expiryLabel, ti
         </AccessRing>
         <div className="min-w-0 flex-1">
           <div className="font-['Poppins'] text-[15px] font-extrabold text-primary-token dark:text-white">Partner discounts</div>
-          <div className="mt-1 text-[11.5px] font-semibold" style={{ color: isOneTime ? accent : undefined }}>
-            <span className={isOneTime ? "" : "text-muted-token"}>{sub}</span>
+          <div className="mt-1 text-[11.5px] font-semibold" style={{ color: isOneTime || pastDueWithPack ? accent : undefined }}>
+            <span className={isOneTime || pastDueWithPack ? "" : "text-muted-token"}>{sub}</span>
           </div>
         </div>
         <Link href="/my-account/rewards" className="inline-flex items-center gap-1 text-[12.5px] font-extrabold" style={{ color: tierHex ?? "#ee0000" }}>
@@ -55,8 +62,9 @@ export default function PartnerPreview({ acct, partnerAccessPct, expiryLabel, ti
         </Link>
       </div>
 
-      {/* No partner-catalog access (past due) → hide the deal glimpse entirely; the
-          header already says "Paused — update payment to resume". */}
+      {/* No partner-catalog access (past due with no live pack) → hide the deal glimpse entirely;
+          the header already says "Paused — update payment to resume". A past-due member WITH a live
+          pack is not locked, so their deals show. */}
       {!locked && (
         <>
           <div className="h-px bg-gradient-to-r from-transparent via-black/10 to-transparent dark:via-white/10" />

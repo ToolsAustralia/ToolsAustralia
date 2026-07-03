@@ -7,6 +7,8 @@ import { usePathname, useRouter } from "next/navigation";
 import { totalSignOut } from "@/utils/auth/total-sign-out";
 import { useSidebar } from "@/contexts/SidebarContext";
 import { useUserContext } from "@/contexts/UserContext";
+import { useUserMajorDrawStats } from "@/hooks/queries/useMajorDrawQueries";
+import { hasAdditionalPackageAccess } from "@/utils/membership/has-additional-package-access";
 import { useModalPriorityStore } from "@/stores/useModalPriorityStore";
 import { useMajorDrawPurchaseGate } from "@/hooks/useMajorDrawPurchaseGate";
 // User setup store removed - using unified modal priority system
@@ -149,6 +151,10 @@ export default function Header({ isFixed = true }: HeaderProps) {
   const cartItemCount = summary?.totalItems || 0;
   const { userData, isAuthenticated, loading } = useUserContext();
   const { isStaff } = usePermissions();
+  // Additional-pack access = active subscription OR current-draw entries (canonical helper), used by
+  // the badge-click PackageDetailModal below so a one-time/past-due entrant with entries gets the
+  // discounted one-time packs CTA, not just active subscribers.
+  const { data: userMajorDrawStats } = useUserMajorDrawStats(userData?._id);
 
   const resolvedActivePackage = useMemo(
     () => (userData ? getActivePackage(userData as unknown as ActivePackageUserInput) : null),
@@ -1736,7 +1742,7 @@ export default function Header({ isFixed = true }: HeaderProps) {
           membershipType={packageDetailModalData.membershipType}
           accumulation={packageDetailModalData.accumulation}
           hasActiveSubscription={userData?.subscription?.isActive === true}
-          hasAccessToAdditionalPackages={userData?.subscription?.isActive === true}
+          hasAccessToAdditionalPackages={hasAdditionalPackageAccess(userData, userMajorDrawStats)}
           onOpenSettingsSubscription={() => router.push("/my-account?open=subscription")}
           onOpenMembershipModal={() => router.push("/membership")}
           onOpenSpecialPackages={() =>

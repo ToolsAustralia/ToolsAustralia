@@ -58,6 +58,11 @@
 
 > **One-time section shows member (Additional) packs (2026-07-03):** the dashboard membership page now calls `useMembershipCardCta({ includeAdditionalForMembers: true })` (was the default `false`). The dashboard is the member's own account, so its one-time section shows the member's **discounted `additional-*` packs** (subscription OR current-draw entries → additional-package access), mirroring the control `MembershipSection` — not the public one-time ladder (`vip-pack $1000` etc.). Without the flag `selectOneTimeDrawerPackages` always returned public packs, so members saw undiscounted prices and the coupon badge (`getAdditionalPackDiscount`, which only matches `additional-*` ids) never appeared. The public `/membership` page keeps the default (`false`) on purpose — that marketing surface shows the public ladder.
 
+> **User-flow audit fixes (2026-07-03):**
+> - **Home "Packages" quick-tile** (`page.tsx` `QuickActionsGrid`) — `onGetPackage` was `hasAccessToAdditionalPackages ? onGetPackage : onBecomeMember`, mis-sending a past-due member (no current-draw entries) into a subscribe intent that 409s (`EXISTING_SUBSCRIPTION`). Now `onGetPackage={onGetPackage}` unconditionally — `openEntryFlow` already routes every state (additional-access → packs modal; blocking-sub/past-due → pre-selects a one-time pack; non-member → Tradie sub). Removed the now-unused `hasAccessToAdditionalPackages`/`majorDrawStats` data bindings.
+> - **Settings identity badge** (`settings/page.tsx`) — a one-time buyer (`dash.acct === "onetime"`) fell through to "Guest"; now shows a **"One-time"** `info` badge before the Guest fallback, matching `DashboardHero`/`MembershipCurrentPlan`.
+> - **`RewardsClaimables`** no longer takes an `acct` prop (the past-due gate moved server-side to `isRedeemableNow`) — `rewards/page.tsx` drops `acct={dash.acct}`. See [shared-ui/frontend.md § User-flow audit fixes](../shared-ui/frontend.md).
+
 > **Loader (2026-07-03):** every `my-account/*` page's loading state (home, draws, membership,
 > settings, benefits) now returns the shared [`DashboardLoader`](../../src/components/loading/DashboardLoader.tsx)
 > — the Claude Design "Dashboard Loader" (ratchet-driving-a-hex-bolt medallion, theme-adaptive) —

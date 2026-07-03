@@ -15,7 +15,6 @@ import { useSession } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useMyAccountData } from "@/hooks/queries";
 import { useUserMajorDrawStats, useCurrentMajorDraw } from "@/hooks/queries/useMajorDrawQueries";
-import { hasAdditionalPackageAccess } from "@/utils/membership/has-additional-package-access";
 import { getActivePackage, type ActivePackageUserInput } from "@/utils/membership/get-active-package";
 import type { LocalMembershipPlan } from "@/utils/membership/membership-adapters";
 import { useModalPriorityStore } from "@/stores/useModalPriorityStore";
@@ -59,7 +58,7 @@ export default function MyAccountPage() {
   const router = useRouter();
   const { data: accountData, isLoading: loading, error } = useMyAccountData(session?.user?.id);
 
-  const { data: majorDrawStats, isLoading: majorDrawStatsLoading } = useUserMajorDrawStats(session?.user?.id);
+  const { isLoading: majorDrawStatsLoading } = useUserMajorDrawStats(session?.user?.id);
   const { isLoading: currentMajorDrawLoading } = useCurrentMajorDraw();
 
   const dash = useDashboardState();
@@ -264,7 +263,6 @@ export default function MyAccountPage() {
   }
 
   const { user } = accountData;
-  const hasAccessToAdditionalPackages = hasAdditionalPackageAccess(accountData?.user || null, majorDrawStats);
 
   const onResolvePayment = () => openSheet("manage");
   const onBecomeMember = () => whenGatesOpenElseGateModal(() => membershipModal.openModal());
@@ -337,7 +335,10 @@ export default function MyAccountPage() {
                 multiplier={dash.multiplier}
                 hasAdditionalAccess={dash.hasAdditionalAccess}
                 redeemCount={claimableWallet?.wallet?.filter((i) => i.isRedeemableNow).length ?? 0}
-                onGetPackage={hasAccessToAdditionalPackages ? onGetPackage : onBecomeMember}
+                // openEntryFlow already routes every state correctly (additional-access → packs modal;
+                // blocking-sub/past-due → pre-selects a one-time pack; non-member → Tradie sub). The old
+                // `? onBecomeMember` fallback mis-sent a past-due member into a subscribe intent (409).
+                onGetPackage={onGetPackage}
                 onRefer={() => setIsReferFriendModalOpen(true)}
                 onPastDraws={() => setIsPastDrawsModalOpen(true)}
               />

@@ -87,7 +87,7 @@ export default function RewardsPage() {
         {dash.acct !== "none" && userId && (
           <>
             <RewardsPartnerQueue />
-            <RewardsClaimables userId={userId} acct={dash.acct} />
+            <RewardsClaimables userId={userId} />
             <RewardsMilestones acct={dash.acct} months={dash.streakMonths} tierHex={dash.tierHex} />
           </>
         )}

@@ -99,6 +99,10 @@ export default function SettingsPage() {
               )}
               {dash.tierLabel ?? "Member"}
             </span>
+          ) : dash.acct === "onetime" ? (
+            // A one-time pack buyer is a paying customer with an active pack, not a guest — match
+            // DashboardHero ("One-time pack") + MembershipCurrentPlan ("One-time").
+            <SettingsBadge tone="info">One-time</SettingsBadge>
           ) : (
             <SettingsBadge tone="neutral">Guest</SettingsBadge>
           )}

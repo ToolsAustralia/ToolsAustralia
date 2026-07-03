@@ -2,6 +2,11 @@
 
 import { Ticket, Gift, ShieldCheck, CreditCard, Store, History, MessageCircle, ArrowRight } from "lucide-react";
 import { QuickTile } from "@/components/ui/QuickTile";
+import { getOneTimePackages } from "@/data/membershipPackages";
+
+// Lowest PUBLIC one-time pack price (guests have no additional-pack access), derived from the
+// catalog so the "from" price can't drift stale (was a hardcoded "$10"; cheapest is Apprentice $25).
+const MIN_PACK_PRICE = Math.min(...getOneTimePackages().filter((p) => !p.isAdditional).map((p) => p.price));
 
 interface DashboardGuestPanelProps {
   drawName: string;
@@ -25,7 +30,7 @@ export default function DashboardGuestPanel({ drawName, onBecomeMember, onBuyPac
     <div className={className}>
       <section className="rounded-3xl border border-token bg-surface p-5 shadow-sm">
         <h3 className="font-['Poppins'] text-lg font-extrabold text-primary-token dark:text-white">Enter the {drawName}</h3>
-        <p className="mt-1 text-sm text-muted-token">Membership from $20/mo · packages from $10.</p>
+        <p className="mt-1 text-sm text-muted-token">Membership from $20/mo · packages from ${MIN_PACK_PRICE}.</p>
         <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
           <button
             type="button"
