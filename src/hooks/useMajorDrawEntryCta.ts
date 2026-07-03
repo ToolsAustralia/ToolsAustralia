@@ -7,6 +7,10 @@ import { useResolvedMultiplier } from "@/hooks/queries/usePromoQueries";
 import { convertToLocalPlan, type LocalMembershipPlan } from "@/utils/membership/membership-adapters";
 import { useUserMajorDrawStats } from "@/hooks/queries/useMajorDrawQueries";
 import { hasAdditionalPackageAccess } from "@/utils/membership/has-additional-package-access";
+import {
+  MEMBERSHIP_PACKAGES_QUERY_PARAM,
+  parseMembershipPackagesTab,
+} from "@/utils/membership/packagesTabParam";
 import { getEffectivePromoType } from "@/utils/promo/get-effective-promo-type";
 import { useMajorDrawPurchaseGate } from "@/hooks/useMajorDrawPurchaseGate";
 
@@ -319,7 +323,16 @@ export function useMajorDrawEntryCta(): UseMajorDrawEntryCtaResult {
           return;
         }
 
-        const correctPlan = getHeavyDutyPack();
+        // Ad landings with `?packages=one-time` open the ONE-TIME flow instead of the subscription
+        // default, so the modal's PackageSelectionModal opens on the One-Time tab (it derives its tab
+        // from the passed plan's `period`). Falls back to the subscription default if no one-time plan
+        // is resolvable yet. Guests only — members with additional access already diverted above.
+        const forcedOneTime =
+          typeof window !== "undefined" &&
+          parseMembershipPackagesTab(
+            new URLSearchParams(window.location.search).get(MEMBERSHIP_PACKAGES_QUERY_PARAM)
+          ) === "one-time";
+        const correctPlan = (forcedOneTime && getOneTimePlan()) || getHeavyDutyPack();
 
         if (openLocalModal) {
           membershipModal.setSelectedPlan(correctPlan);
@@ -340,6 +353,7 @@ export function useMajorDrawEntryCta(): UseMajorDrawEntryCtaResult {
       whenGatesOpenElseGateModal,
       clearModalFromSession,
       getHeavyDutyPack,
+      getOneTimePlan,
       userData,
       userMajorDrawStats,
       membershipModal,
