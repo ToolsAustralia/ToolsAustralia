@@ -105,6 +105,42 @@ global dark-mode schedule/toggle. That was the original intent.
 
 `MembershipSection` now emits an A/B `click` `ExperimentEvent` with `{ element: "package_cta" }` on its CTA path, via `useExperimentTracking().trackEvent(...)`. The emission is **guarded** by `experimentId && variantId` — it no-ops on the 15+ non-promo pages where no experiment is active. On promo pages where the control arm is assigned, it fires alongside the same event from `PromoMembershipDesign` (the treatment arm), enabling engagement comparison. This is **diagnostic only** — see [docs/ab-testing/promo-packages-design-runbook.md](../ab-testing/promo-packages-design-runbook.md) for why the Bayesian panel (not this click event) is the winner metric.
 
+### MembershipSection / PromoMembershipDesign — `?packages=` tab pre-select (2026-07-03)
+
+Ad landings can open the packages section on a chosen tab via `?packages=one-time` (or `membership`).
+The param is parsed by the shared helper [`packagesTabParam.ts`](../../src/utils/membership/packagesTabParam.ts)
+(`MEMBERSHIP_PACKAGES_QUERY_PARAM` + `parseMembershipPackagesTab`) — see
+[subscription/frontend.md](../subscription/frontend.md#packages-url-param--pre-select-the-packages-tab-2026-07-03)
+for the parser contract and the treatment arm's `forcedTab` option.
+
+**Control arm — `MembershipSection`:**
+- Reads the param via `useSearchParams()` and seeds the initial `activeTab` (`forcedPackagesTab ?? "membership"`).
+- **Guards the user-state override effect:** when a valid param is present, the effect that re-derives the
+  tab from `hasActiveSubscription`/`hasAccessToAdditionalPackages` early-returns, so a logged-in
+  non-subscriber landing on `?packages=one-time` still opens on One-Time (and a later `userData` change
+  can't fight a manual toggle). Absent/invalid param → byte-for-byte the previous behavior.
+
+**Treatment arm — `PromoMembershipDesign`** reads the same param and passes it to
+`useMembershipCardCta({ forcedTab })`. Which arm renders is the A/B choice in `PromoPackages`, so both
+honour the param and the behavior is A/B-bucket-agnostic. The standalone `/membership` page (drawer, no
+toggle) does not read the param.
+
+**Banner sync — `PromoBanner` is a third `activeTab` owner.** It reads the `?packages=` param in its **mount
+effect** (via `window.location.search` + the shared parser) and `setActiveTab` to the forced value, so the
+multiplier badge matches a forced One-Time landing on **both** arms — independent of any dispatch.
+
+Why `window.location.search` and not `useSearchParams()`: `PromoBanner` renders **outside** the promo pages'
+`<Suspense>` boundaries (it sits above them in `[slug]/page.tsx` / `ToolsetLandingPage`), so `useSearchParams()`
+there would force the statically-generated routes to de-opt (build error / banner pop-in). Reading in a
+client-only effect keeps the banner server-rendered with the `"membership"` default and applies the param
+post-mount (a brief flip, consistent with the client-read trade-off) — with no hydration mismatch.
+
+For **post-load manual toggles**: the control arm's `MembershipSection` toggle buttons emit
+`membershipTabChanged`, so the banner follows a manual switch. The treatment arm's toggle
+(`PromoMembershipDesign`) does **not** emit that event — a **pre-existing** gap, unrelated to this param
+feature — so on the treatment arm the banner badge stays on the landing tab after a manual toggle. The
+`?packages=` landing state is honoured on both arms regardless; only post-load treatment toggling diverges.
+
 ### MembershipTierChooser — `sectionId` prop (2026-07-01)
 
 [`src/components/sections/membership/MembershipTierChooser.tsx`](../../src/components/sections/membership/MembershipTierChooser.tsx) gained an optional `sectionId?: string` prop (default `"membership"`).

@@ -56,6 +56,7 @@ export function useMembershipCardCta(
   {
     includeAdditionalForMembers = false,
     onPackageCtaClick,
+    forcedTab = null,
   }: {
     includeAdditionalForMembers?: boolean;
     /**
@@ -65,6 +66,12 @@ export function useMembershipCardCta(
      * the shared MembershipSection emits on, without coupling this hook to A/B infra.
      */
     onPackageCtaClick?: (plan: LocalMembershipPlan) => void;
+    /**
+     * Pre-selects the initial tab from a URL param (`?packages=`), mirroring MembershipSection.
+     * When set, it overrides the user-state default below; the visitor can still toggle manually.
+     * Passed by the promo treatment (PromoMembershipDesign); omitted elsewhere (e.g. /membership).
+     */
+    forcedTab?: MembershipTab | null;
   } = {},
 ) {
   const router = useRouter();
@@ -87,7 +94,7 @@ export function useMembershipCardCta(
   const currentName = (userData?.subscriptionPackageData?.name ?? "").toLowerCase();
 
   const [activeTab, setActiveTab] = useState<MembershipTab>(
-    hasActiveSubscription && hasAccessToAdditional ? "one-time" : "membership",
+    forcedTab ?? (hasActiveSubscription && hasAccessToAdditional ? "one-time" : "membership"),
   );
 
   const membershipPlans = useMemo(
