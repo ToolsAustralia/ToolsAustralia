@@ -2,7 +2,12 @@
 
 import dynamic from "next/dynamic";
 import { useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { useMembershipCardCta, type MembershipCardCta } from "@/hooks/useMembershipCardCta";
+import {
+  MEMBERSHIP_PACKAGES_QUERY_PARAM,
+  parseMembershipPackagesTab,
+} from "@/utils/membership/packagesTabParam";
 import type { LocalMembershipPlan } from "@/utils/membership/membership-adapters";
 import { useVariantContext } from "@/components/ab-testing/VariantProvider";
 import { useExperimentTracking } from "@/hooks/ab-testing/useExperimentTracking";
@@ -59,8 +64,16 @@ export default function PromoMembershipDesign() {
   const { experimentId, variantId } = useVariantContext();
   const { trackEvent } = useExperimentTracking();
 
+  // Ad landings can pre-select the One-Time tab via `?packages=one-time` (mirrors the control arm,
+  // MembershipSection). Absent/invalid → null → normal user-state default.
+  const searchParams = useSearchParams();
+  const forcedTab = parseMembershipPackagesTab(
+    searchParams.get(MEMBERSHIP_PACKAGES_QUERY_PARAM),
+  );
+
   const baseCta = useMembershipCardCta({
     includeAdditionalForMembers: true,
+    forcedTab,
     onPackageCtaClick: (plan) => {
       if (experimentId && variantId) {
         trackEvent(experimentId, variantId, "click", { element: "package_cta", packageId: plan.id });

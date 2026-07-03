@@ -24,6 +24,10 @@ import { usePromoTheme, usePromoThemeStore } from "@/stores/usePromoThemeStore";
 import { useUserContext } from "@/contexts/UserContext";
 import { useUserMajorDrawStats } from "@/hooks/queries/useMajorDrawQueries";
 import { hasAdditionalPackageAccess } from "@/utils/membership/has-additional-package-access";
+import {
+  MEMBERSHIP_PACKAGES_QUERY_PARAM,
+  parseMembershipPackagesTab,
+} from "@/utils/membership/packagesTabParam";
 import Image from "next/image";
 import { hasBundledMultiplierAssets, isPromoMultiplier } from "@/types/promo-multiplier";
 import { cn } from "@/utils/cn";
@@ -195,6 +199,8 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
 
   // Gap period: gates closed (no active draw), next draw ~3.5hrs away
   const isGapPeriod = currentDraw?.status !== "active";
+  // Default tab; the mount effect below seeds it from the `?packages=` ad-landing param and keeps it in
+  // sync with MembershipSection via the `membershipTabChanged` event.
   const [activeTab, setActiveTab] = useState<"membership" | "one-time">("membership");
 
   const [holidayDevPreview, setHolidayDevPreview] = useState<HolidayPromoSlot | null>(() =>
@@ -310,14 +316,22 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
     }
   }, [currentAlternatingMultipliers, effectivePromoTypeForBanner, activePromo]); // eslint-disable-line react-hooks/exhaustive-deps -- activeTab only used in dev log; effectivePromoTypeForBanner captures tab
 
-  // Listen for tab changes from MembershipSection
+  // On mount: seed the tab from the `?packages=` ad-landing param (so the multiplier badge matches a forced
+  // One-Time landing), then keep it in sync with MembershipSection's toggle via `membershipTabChanged`.
+  // We read `window.location.search` rather than `useSearchParams()` on purpose: PromoBanner renders
+  // OUTSIDE the promo pages' Suspense boundaries, so `useSearchParams()` here would force these statically
+  // generated routes to de-opt (build error / banner pop-in). Reading in an effect is client-only and
+  // avoids a hydration mismatch — the server renders the "membership" default; the param applies post-mount.
   useEffect(() => {
+    const forced = parseMembershipPackagesTab(
+      new URLSearchParams(window.location.search).get(MEMBERSHIP_PACKAGES_QUERY_PARAM),
+    );
+    if (forced) setActiveTab(forced);
+
     const handleTabChange = (event: CustomEvent<{ activeTab: "membership" | "one-time" }>) => {
       setActiveTab(event.detail.activeTab);
     };
-
     window.addEventListener("membershipTabChanged", handleTabChange as EventListener);
-
     return () => {
       window.removeEventListener("membershipTabChanged", handleTabChange as EventListener);
     };
