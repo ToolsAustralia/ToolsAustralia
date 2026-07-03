@@ -3,6 +3,12 @@
 /**
  * Sweep Stripe allowlist from `blockedtransactions` collection.
  *
+ * Thin CLI wrapper: the sweep itself — aggregation, eligibility gating,
+ * `apply()`, the already-allowlisted short-circuit, throttle, and 429 retry —
+ * lives in the shared `src/services/allowlist/reconcileAllowlistFromBlocked`
+ * service (the charge-past-due Phase 0 path uses the same service). This
+ * script drives it with `{ kind: "window" }` for the full-history catch-up.
+ *
  * For every unique card fingerprint in the BlockedTransaction collection,
  * call `AllowlistService.apply()` with `source: "admin_bulk"`. Eligible cards
  * (paying members, no fraud-signal / no permanent-issue decline codes) get
@@ -20,7 +26,7 @@
  * Stripe-blocked failures for legitimate paying members whose cards were
  * auto-blocked before the webhook was wired.
  *
- * Idempotency: this script pre-checks `AllowlistAction` for an existing
+ * Idempotency: the sweep pre-checks `AllowlistAction` for an existing
  * `added` row per fingerprint and skips both the Stripe call and the
  * `apply()` invocation in that case — re-runs are no-ops on the *added*
  * path. Re-running on previously-*skipped* fingerprints will re-evaluate
@@ -42,11 +48,10 @@
  * Safety:
  *   - Always run --dry-run first, eyeball the eligibility breakdown.
  *   - Idempotent — re-runs are no-ops for already-allowlisted cards.
- *   - Per-card try/catch — one failure does not abort the run.
- *   - Polite throttle (DELAY_BETWEEN_APPLIES_MS) keeps under Stripe's
- *     read+write rate-limit headroom.
- *   - 429 retry-with-Retry-After at the per-card boundary; the Stripe
- *     client itself also has `maxNetworkRetries: 2`.
+ *   - Per-card try/catch, throttle, and 429 retry-with-Retry-After all live
+ *     in the shared service (`reconcileBlockedFingerprints`); one failure does
+ *     not abort the run. The Stripe client also has `maxNetworkRetries: 2`.
+ *     DELAY_BETWEEN_APPLIES_MS / MAX_RETRIES_429 here are passed through to it.
  *
  * Env: .env.local must have MONGODB_URI and STRIPE_SECRET_KEY.
  *
