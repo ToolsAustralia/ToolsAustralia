@@ -153,6 +153,19 @@ export function useDashboardState(): DashboardStateResult {
         const info = getPartnerDiscountAccessInfo(iUser);
         partnerAccessExpiryLabel = info.hasAccess ? expiryLabel(info.daysRemaining, info.hoursRemaining) : null;
       }
+    } else if (acct === "pastdue") {
+      // A past-due member KEEPS any one-time pack partner access they paid for — that window
+      // is independent of subscription status and is honored everywhere else (the queue,
+      // SSO, the shop). Without this the account state (precedence pastdue > onetime) collapses
+      // to "pastdue" and zeroes the %, so the Rewards card falsely reads "Paused / 0%" while the
+      // queue below it shows the pack "· 25% active". Guard on source !== "membership" so a
+      // stale-active membership queue row (a paused benefit) is never surfaced as live access.
+      const info = getPartnerDiscountAccessInfo(iUser);
+      if (info.hasAccess && info.source !== "membership") {
+        const resolved = resolvePartnerCatalogPlanId(user);
+        partnerAccessPct = resolved ? getPartnerCatalogAccessPercentForPlanId(resolved) : 0;
+        partnerAccessExpiryLabel = expiryLabel(info.daysRemaining, info.hoursRemaining);
+      }
     }
 
     // Streak months (members only) from the subscription start date when present.

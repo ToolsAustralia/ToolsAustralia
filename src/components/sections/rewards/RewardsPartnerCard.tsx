@@ -34,7 +34,11 @@ export default function RewardsPartnerCard({
   const guest = acct === "none";
   const pastdue = acct === "pastdue";
   const onetime = acct === "onetime";
-  const locked = guest || pastdue;
+  // A past-due member keeps any one-time pack partner access they paid for (honored by the
+  // queue + SSO + shop). Only a past-due member with NO live pack is truly paused/locked —
+  // otherwise the card would falsely read "Paused / 0%" while the queue shows "· 25% active".
+  const pastDueWithPack = pastdue && partnerAccessPct > 0;
+  const locked = guest || (pastdue && !pastDueWithPack);
 
   const c = guest ? "#8a8a8f" : pastdue ? "#d97706" : onetime ? "#0ea5a5" : tierHex ?? "#ee0000";
   const pct = locked ? 0 : partnerAccessPct;
@@ -45,14 +49,24 @@ export default function RewardsPartnerCard({
   const total = PARTNER_BRAND_OFFERS.length;
   const visibleCount = locked ? 4 : Math.min(total, Math.max(1, Math.ceil((partnerAccessPct / 100) * total)));
   const brands = PARTNER_BRAND_OFFERS.slice(0, visibleCount);
-  const headline = guest ? "Locked" : pastdue ? "Paused" : onetime ? "Access unlocked" : "Catalogue unlocked";
+  const headline = guest
+    ? "Locked"
+    : pastDueWithPack
+      ? "Active from your pack"
+      : pastdue
+        ? "Paused"
+        : onetime
+          ? "Access unlocked"
+          : "Catalogue unlocked";
   const sub = guest
     ? "Become a member or buy a package to unlock discounts"
-    : pastdue
-      ? "Update payment to restore your discounts"
-      : onetime
-        ? `Ends in ${expiryLabel ?? "soon"} · from your pack`
-        : "of Australia's top tool brands, on your account";
+    : pastDueWithPack
+      ? `${partnerAccessPct}% active${expiryLabel ? ` · ends in ${expiryLabel}` : ""} · membership paused`
+      : pastdue
+        ? "Update payment to restore your discounts"
+        : onetime
+          ? `Ends in ${expiryLabel ?? "soon"} · from your pack`
+          : "of Australia's top tool brands, on your account";
 
   return (
     <section>
@@ -73,21 +87,22 @@ export default function RewardsPartnerCard({
           </div>
         </div>
 
-        {locked ? (
-          guest ? (
-            <div className="mt-3.5 flex gap-2.5">
-              <button type="button" onClick={onBecomeMember} className="flex flex-1 items-center justify-center rounded-[10px] bg-gradient-to-br from-[#ff5a5a] to-[#c40d0d] px-3 py-3 text-[12.5px] font-extrabold text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-red-600">
-                Become a member
-              </button>
-              <button type="button" onClick={onBuyPackage} className="flex flex-1 items-center justify-center gap-1.5 rounded-[10px] border border-token px-3 py-3 text-[12.5px] font-extrabold text-primary-token focus:outline-none focus-visible:ring-2 focus-visible:ring-red-600 dark:text-white">
-                Buy a package
-              </button>
-            </div>
-          ) : (
-            <button type="button" onClick={onUpdatePayment} className="mt-3.5 flex w-full items-center justify-center gap-2 rounded-[10px] bg-gradient-to-b from-[#fbbf24] to-[#d97706] px-4 py-3 text-[13px] font-extrabold text-[#241a02] focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-600">
-              Update payment <ArrowRight className="h-4 w-4" />
+        {guest ? (
+          <div className="mt-3.5 flex gap-2.5">
+            <button type="button" onClick={onBecomeMember} className="flex flex-1 items-center justify-center rounded-[10px] bg-gradient-to-br from-[#ff5a5a] to-[#c40d0d] px-3 py-3 text-[12.5px] font-extrabold text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-red-600">
+              Become a member
             </button>
-          )
+            <button type="button" onClick={onBuyPackage} className="flex flex-1 items-center justify-center gap-1.5 rounded-[10px] border border-token px-3 py-3 text-[12.5px] font-extrabold text-primary-token focus:outline-none focus-visible:ring-2 focus-visible:ring-red-600 dark:text-white">
+              Buy a package
+            </button>
+          </div>
+        ) : pastdue ? (
+          // Past-due keeps the "Update payment" CTA whether or not a pack is live — it restores
+          // the (higher) membership partner tier. When a pack IS live the ring/grid above already
+          // show the real access, so this is a restore-more prompt, not a "you have nothing" one.
+          <button type="button" onClick={onUpdatePayment} className="mt-3.5 flex w-full items-center justify-center gap-2 rounded-[10px] bg-gradient-to-b from-[#fbbf24] to-[#d97706] px-4 py-3 text-[13px] font-extrabold text-[#241a02] focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-600">
+            {pastDueWithPack ? "Update payment to restore membership" : "Update payment"} <ArrowRight className="h-4 w-4" />
+          </button>
         ) : partnerDiscountSsoEnabled() ? (
           <button
             type="button"
@@ -119,8 +134,9 @@ export default function RewardsPartnerCard({
         )}
       </div>
 
-      {/* No partner-catalog access (guest / past-due) → hide the brand grid entirely,
-          no dimmed glimpse; the ring + CTA above already prompt to unlock. */}
+      {/* No partner-catalog access (guest / past-due with no live pack) → hide the brand grid
+          entirely, no dimmed glimpse; the ring + CTA above already prompt to unlock. A past-due
+          member WITH a live pack is not locked, so their accessible slice shows. */}
       {!locked && (
         <div className="mt-3 grid grid-cols-2 gap-[11px]">
         {brands.map((b) => {

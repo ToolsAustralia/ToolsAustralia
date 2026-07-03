@@ -155,6 +155,18 @@ scale) on desktop, with the backdrop fading (`ta-sheet-fade`); all `motion-safe`
 > set (brands with a `"#"` placeholder stay non-clickable). Locked (guest/past-due) still shows a 4-brand
 > dimmed teaser.
 
+> **Past-due keeps live one-time pack access (2026-07-03):** a past-due member who still holds a live
+> one-time pack has REAL partner access (the pack window is independent of subscription status — honored by
+> the queue, SSO, and the shop), so the card no longer force-locks every past-due user. `pastDueWithPack =
+> pastdue && partnerAccessPct > 0` → `locked` is now `guest || (pastdue && !pastDueWithPack)`. For
+> `pastDueWithPack` the ring shows the real % (not a `Lock`), the headline reads **"Active from your pack"**
+> with sub `{pct}% active · ends in {expiry} · membership paused`, the tier-accurate brand slice shows, and
+> the CTA stays **"Update payment to restore membership"** (the pack is live; updating payment restores the
+> higher membership tier). This fixes the contradiction where the card read "Paused / 0%" while
+> `RewardsPartnerQueue` right below it showed the same pack "· 25% active". The 0/expiry values are fed by
+> [`useDashboardState`](../../src/hooks/useDashboardState.ts) — see
+> [dashboard-account/frontend.md](../dashboard-account/frontend.md#partner-access-for-past-due).
+
 ### RewardsPartnerQueue — partner-discount queue (2026-07-03)
 
 [`RewardsPartnerQueue`](../../src/components/sections/rewards/RewardsPartnerQueue.tsx) is the Rewards-tab

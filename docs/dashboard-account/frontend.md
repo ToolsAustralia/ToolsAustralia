@@ -39,6 +39,21 @@
 > (the same resolver the SSO `member_level` + queue use), so every surface agrees. Active members fall back
 > to the tier map only if the resolver can't resolve.
 
+> <a id="partner-access-for-past-due"></a>**Partner access for past-due members (2026-07-03):**
+> `partnerAccessPct` / `partnerAccessExpiryLabel` were only computed for `acct === "active" | "onetime"`,
+> so a **past-due member who still holds a live one-time pack** got `0`/`null` — because the account-state
+> precedence is `pastdue > onetime`, a past-due-with-pack user resolves to `acct === "pastdue"`. That made
+> `RewardsPartnerCard` read "Paused / 0%" even though the pack window is real (independent of subscription
+> status; honored by the queue, SSO, and the shop) and `RewardsPartnerQueue` right below showed it "· 25%
+> active". Fixed with an `else if (acct === "pastdue")` branch: read [`getPartnerDiscountAccessInfo`](../../src/utils/membership/benefit-resolution.ts)
+> and, when `hasAccess && source !== "membership"` (the guard rejects a stale-active *membership* queue row,
+> a paused benefit), resolve the % via `resolvePartnerCatalogPlanId` + set the expiry label. The card then
+> shows real access — see [shared-ui/frontend.md § Past-due keeps live one-time pack access](../shared-ui/frontend.md#past-due-keeps-live-one-time-pack-access-2026-07-03).
+> **Server-side activation is already handled**: the daily cron `GET /api/cron/process-partner-discount-queues`
+> (`vercel.json` `0 15 * * *`, v2.0.0 does its work in GET) sweeps every queue and activates due packs
+> without needing a member visit — the earlier "only advances when the rewards page is opened" bug was the
+> GET-was-a-no-op issue already fixed in that route.
+
 > **Loader (2026-07-03):** every `my-account/*` page's loading state (home, draws, membership,
 > settings, benefits) now returns the shared [`DashboardLoader`](../../src/components/loading/DashboardLoader.tsx)
 > — the Claude Design "Dashboard Loader" (ratchet-driving-a-hex-bolt medallion, theme-adaptive) —
