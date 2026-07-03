@@ -6,8 +6,6 @@ import type { DashboardAccountState } from "@/utils/dashboard/dashboard-state-th
 
 interface DashboardAlertRibbonProps {
   acct: DashboardAccountState;
-  /** One-time time-gated access label, e.g. "5 days". */
-  expiryLabel?: string | null;
   className?: string;
 }
 
@@ -15,7 +13,7 @@ interface DashboardAlertRibbonProps {
  * State alert ribbon above the entries card — past-due (amber) or one-time (teal),
  * ported from the prototype. Renders nothing for active / guest.
  */
-export default function DashboardAlertRibbon({ acct, expiryLabel, className }: DashboardAlertRibbonProps) {
+export default function DashboardAlertRibbon({ acct, className }: DashboardAlertRibbonProps) {
   if (acct === "pastdue") {
     return (
       <div
@@ -43,7 +41,7 @@ export default function DashboardAlertRibbon({ acct, expiryLabel, className }: D
       >
         <Clock className="h-4 w-4 shrink-0" />
         <span className="text-[11.5px] font-bold leading-tight">
-          Partner access ends {expiryLabel ? `in ${expiryLabel}` : "soon"} — become a member to keep it
+          Your one-time packs unlock partner discounts — become a member for lasting access
         </span>
       </div>
     );

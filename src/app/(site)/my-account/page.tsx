@@ -300,7 +300,7 @@ export default function MyAccountPage() {
           <div className="-mt-8 lg:mt-0 lg:grid lg:grid-cols-[1.7fr_1fr] lg:items-start lg:gap-[22px]">
             {/* main column */}
             <div className="space-y-4 lg:space-y-5">
-              <DashboardAlertRibbon acct={dash.acct} expiryLabel={dash.partnerAccessExpiryLabel} />
+              <DashboardAlertRibbon acct={dash.acct} />
               <EntryWallet
                 acct={dash.acct}
                 entries={{ membership: dash.entries.membership, oneTime: dash.entries.oneTime }}

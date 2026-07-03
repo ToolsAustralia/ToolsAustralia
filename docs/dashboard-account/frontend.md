@@ -1,5 +1,10 @@
 # Dashboard-Account — Frontend
 
+> **Settings completeness indicator (2026-07-03):** `ProfileTab` (the Account-settings "Personal details"
+> card) shows an amber **"{N} to complete"** badge + a "Add your {missing fields} so you're set for the draw"
+> line, computed live from the edited mobile / DOB / profession / state values (shrinks as the user fills
+> them) — so the user can see what's left. Email verification keeps its own banner.
+
 > **Partner access % bug (2026-07-03):** `useDashboardState.partnerAccessPct` (hero ring + `RewardsPartnerCard`)
 > was derived from `getActivePackage()`'s pack, which for a multi-pack one-time buyer picked the wrong one
 > (e.g. a 25% Apprentice pack) — while the partner-discount **queue** correctly showed the highest-% active

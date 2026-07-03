@@ -12,11 +12,9 @@
  * Shows when the user has additional-package access OR a multiplier promo is live.
  * Only the palette escalates with the multiplier (gold 1–3× → hot 5×/10×).
  */
-import Image from "next/image";
-import { ArrowRight, Flame, Clock, Ticket } from "lucide-react";
+import { ArrowRight, Flame, Clock } from "lucide-react";
 import { useLeafTimer } from "@/hooks/useLeafTimer";
 import { getNextMidnightAEST } from "@/utils/common/timezone";
-import { multiplierBadgeSrc } from "@/utils/membership/tier-visuals";
 import { cn } from "@/utils/cn";
 
 interface DashboardPromoBannerProps {
@@ -51,7 +49,6 @@ export default function DashboardPromoBanner({
   const ms = Math.max(0, getNextMidnightAEST().getTime() - now);
   const pad = (n: number) => String(Math.floor(n)).padStart(2, "0");
   const timer = `${pad(ms / 3_600_000)}:${pad((ms / 60_000) % 60)}:${pad((ms / 1000) % 60)}`;
-  const badgeSrc = multiplierBadgeSrc(multiplier);
 
   // The offer specifics (50% off, {n}× entries) now live inline in the SPECIAL PROMO
   // strip below, so the body carries just one short context line — no redundant repeat.
@@ -74,63 +71,45 @@ export default function DashboardPromoBanner({
 
         {(hasAdditionalAccess || active) && (
           <div
-            className={cn("relative flex items-center justify-between gap-2", wide ? "px-[22px] py-[9px]" : "px-4 py-2")}
+            className={cn("relative flex items-center justify-between gap-2.5", wide ? "px-[22px] py-[9px]" : "px-4 py-2")}
             style={{ background: t.hot ? "rgba(255,255,255,.16)" : "rgba(0,0,0,.14)", borderBottom: `1px solid ${t.hot ? "rgba(255,255,255,.22)" : "rgba(0,0,0,.1)"}` }}
           >
-            {/* SPECIAL PROMO + the offer chips inline (50% off / n× entries) */}
-            <div className="flex min-w-0 items-center gap-1.5">
-              <span className="inline-flex shrink-0 items-center gap-1.5 text-[9.5px] font-black uppercase tracking-[0.08em]">
-                <Flame className="h-3 w-3" /> Special promo
-              </span>
-              {hasAdditionalAccess && (
-                <span className="shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-black uppercase tracking-[0.04em]" style={{ background: t.hot ? "rgba(255,255,255,.24)" : "rgba(0,0,0,.16)" }}>50% off</span>
-              )}
-              {active && (
-                <span className="shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-black uppercase tracking-[0.04em]" style={{ background: t.hot ? "rgba(255,255,255,.24)" : "rgba(0,0,0,.16)" }}>{multiplier}× entries</span>
-              )}
-            </div>
+            <span className="inline-flex items-center gap-1.5 text-[9.5px] font-black uppercase tracking-[0.08em]">
+              <Flame className="h-3 w-3" /> Special promo
+            </span>
             {active && (
-              <span className="inline-flex shrink-0 items-center gap-1.5 text-[10px] font-extrabold">
+              <span className="inline-flex items-center gap-1.5 text-[10px] font-extrabold">
                 <Clock className="h-3 w-3 opacity-80" /> Ends in <span className="num font-black tabular-nums tracking-[.02em]">{timer}</span>
               </span>
             )}
           </div>
         )}
 
-        <div className={cn("relative flex items-center", wide ? "gap-[18px] px-[22px] py-[18px]" : "gap-3 px-4 py-[15px]")}>
-          {/* Multiplier badge image — shown container-less and large (matches the
-              special-packages modal). Falls back to a ticket glyph when no
-              multiplier is live (50%-off-only banner). */}
-          {badgeSrc ? (
-            <Image
-              src={badgeSrc}
-              alt={`${multiplier}× entries`}
-              width={wide ? 92 : 80}
-              height={wide ? 92 : 80}
-              className={cn("shrink-0 object-contain drop-shadow-[0_8px_16px_rgba(0,0,0,.42)]", wide ? "h-[76px] w-[76px]" : "h-[64px] w-[64px]")}
-            />
-          ) : (
-            <span
-              className={cn("grid shrink-0 place-items-center rounded-xl", wide ? "h-[46px] w-[46px]" : "h-[42px] w-[42px]")}
-              style={{ background: t.hot ? "rgba(255,255,255,.18)" : "rgba(0,0,0,.16)" }}
-            >
-              <Ticket className={wide ? "h-[23px] w-[23px]" : "h-[21px] w-[21px]"} />
-            </span>
-          )}
+        <div className={cn("relative flex items-center", wide ? "gap-4 px-[22px] py-[15px]" : "gap-3 px-4 py-[13px]")}>
           <div className="min-w-0 flex-1">
-            <b className={cn("font-['Poppins'] font-extrabold leading-tight", wide ? "text-[17px]" : "text-[14.5px]")}>{heading}</b>
+            <b className={cn("font-['Poppins'] font-extrabold leading-tight", wide ? "text-[15px]" : "text-[12.5px]")}>{heading}</b>
           </div>
-          <button
-            type="button"
-            onClick={onGetPackage}
-            className={cn(
-              "inline-flex shrink-0 items-center gap-1.5 rounded-full font-extrabold shadow-[0_10px_22px_-10px_rgba(0,0,0,.6)] transition-transform focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70 motion-safe:active:translate-y-px",
-              wide ? "px-5 py-3 text-[13px]" : "px-[15px] py-3 text-[12px]",
+          {/* Offer badges live ON the CTA (50% off / n× entries) so the body text has
+              room and doesn't wrap hard — a gold pill each, like the mini-draw sheet. */}
+          <div className="relative shrink-0">
+            {hasAdditionalAccess && (
+              <span className="absolute -left-1.5 -top-2.5 z-10 whitespace-nowrap rounded-full bg-gradient-to-b from-[#f6dd8c] to-[#d4af37] px-1.5 py-0.5 text-[8.5px] font-black text-[#241a02] shadow-[0_6px_12px_-5px_rgba(0,0,0,.5)]">50% off</span>
             )}
-            style={t.hot ? { background: "#fff", color: "#c40d0d" } : { background: "linear-gradient(180deg,#2a2109,#151002)", color: "#f6dd8c" }}
-          >
-            Get a package <ArrowRight className={wide ? "h-4 w-4" : "h-[15px] w-[15px]"} />
-          </button>
+            {active && (
+              <span className="absolute -right-1.5 -top-2.5 z-10 whitespace-nowrap rounded-full bg-gradient-to-b from-[#f6dd8c] to-[#d4af37] px-1.5 py-0.5 text-[8.5px] font-black text-[#241a02] shadow-[0_6px_12px_-5px_rgba(0,0,0,.5)]">{multiplier}× entries</span>
+            )}
+            <button
+              type="button"
+              onClick={onGetPackage}
+              className={cn(
+                "inline-flex items-center gap-1.5 rounded-full font-extrabold shadow-[0_10px_22px_-10px_rgba(0,0,0,.6)] transition-transform focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70 motion-safe:active:translate-y-px",
+                wide ? "px-5 py-3 text-[13px]" : "px-[15px] py-2.5 text-[12px]",
+              )}
+              style={t.hot ? { background: "#fff", color: "#c40d0d" } : { background: "linear-gradient(180deg,#2a2109,#151002)", color: "#f6dd8c" }}
+            >
+              Get a package <ArrowRight className={wide ? "h-4 w-4" : "h-[15px] w-[15px]"} />
+            </button>
+          </div>
         </div>
       </div>
     </section>

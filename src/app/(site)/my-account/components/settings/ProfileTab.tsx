@@ -61,6 +61,18 @@ export default function ProfileTab({ user }: ProfileTabProps) {
   const reasons = getGiveawayIneligibilityReasons(state, birthdate || user.birthdate);
   const ineligible = isGiveawayIneligible(state, birthdate || user.birthdate);
 
+  // Completeness indicator — which personal-detail fields are still empty (live from
+  // the edited values, so the prompt shrinks as the user fills them in). Email
+  // verification has its own banner below, so it's not counted here.
+  const missing = [
+    !mobile.trim() && "mobile number",
+    !birthdate.trim() && "date of birth",
+    !profession.trim() && "profession",
+    !state.trim() && "state",
+  ].filter(Boolean) as string[];
+  const missingText =
+    missing.length <= 1 ? missing[0] ?? "" : `${missing.slice(0, -1).join(", ")} and ${missing[missing.length - 1]}`;
+
   const handleSave = async () => {
     try {
       setIsSaving(true);
@@ -143,8 +155,18 @@ export default function ProfileTab({ user }: ProfileTabProps) {
       </div>
 
       {/* Personal details */}
-      <div className="rounded-2xl border border-token bg-surface p-5 shadow-sm">
-        <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-muted-token">Personal details</p>
+      <div className={cn("rounded-2xl border bg-surface p-5 shadow-sm", missing.length > 0 ? "border-amber-300/60" : "border-token")}>
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-muted-token">Personal details</p>
+          {missing.length > 0 && (
+            <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-700 dark:bg-amber-950/50 dark:text-amber-300">
+              <AlertTriangle className="h-3 w-3" /> {missing.length} to complete
+            </span>
+          )}
+        </div>
+        {missing.length > 0 && (
+          <p className="mt-2 text-xs font-medium text-amber-700 dark:text-amber-400">Add your {missingText} so you&apos;re set for the draw.</p>
+        )}
 
         <div className="mt-4 space-y-4">
           <div>

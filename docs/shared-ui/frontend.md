@@ -182,12 +182,14 @@ until the milestone-reward figures are confirmed and it's re-flagged.
 > **Hero / ribbon / promo polish (2026-07-03):** `DashboardHero` — the "Complete your profile" pill
 > became a compact **amber exclamation chip inline with the username** (→ `onCompleteProfile`); for the
 > **one-time** state the "ONE-TIME PACK" badge was dropped and "Become a member" is now chip-sized (it
-> stands alone). `DashboardAlertRibbon` (one-time) is a **high-contrast teal floating pill** (solid gradient
-> + white text, centered `w-fit`) that reads at the hero↔entries seam (the content column is pulled up over
-> the hero via `-mt-8`), replacing the low-contrast full-width strip. `DashboardPromoBanner` moved the offer
-> specifics **inline into the SPECIAL PROMO strip** as chips (`50% off` when `hasAdditionalAccess`, `{n}×
-> entries` when a multiplier is live) and **dropped the redundant body subtitle** (the body now carries one
-> short context line); the strip shows whenever `hasAdditionalAccess || active` (was multiplier-only).
+> stands alone). `DashboardAlertRibbon` (one-time) is a **high-contrast teal floating pill** at the
+> hero↔entries seam (the content column is pulled up over the hero via `-mt-8`); its copy dropped the
+> "Partner access ends in {X}" claim — that's only the *active* pack's window and misleads a buyer who has
+> **queued packs** that take over next — for "Your one-time packs unlock partner discounts — become a member
+> for lasting access" (the `expiryLabel` prop was removed). `DashboardPromoBanner` puts the offer specifics
+> as **gold badges ON the "Get a package" CTA** (`50% off` when `hasAdditionalAccess`, `{n}× entries` when a
+> multiplier is live), dropped the big starburst image + the redundant body subtitle, and shrank the heading
+> so it doesn't wrap hard; the SPECIAL PROMO strip is now just the label + countdown.
 
 ## Dashboard sections (2026-07-02)
 
