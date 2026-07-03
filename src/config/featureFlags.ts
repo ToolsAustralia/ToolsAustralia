@@ -37,3 +37,14 @@ export const rewardsEnabled = (): boolean => {
 
   return false;
 };
+
+/**
+ * Rewards partner-portal (SSO) toggle. The portal opens the partner-discount
+ * catalogue via SSO — kept OFF by default until the SSO integration ships. Set
+ * `NEXT_PUBLIC_REWARDS_PORTAL_ENABLED="true"` to surface its entry points (the
+ * dashboard-hero "Reward portal" button and the Rewards-page "Open partner
+ * portal" button). Uses the public var so the value is identical on server + client
+ * (no hydration mismatch) for these client-rendered buttons.
+ */
+export const rewardsPortalEnabled = (): boolean =>
+  parseBooleanFlag(process.env.NEXT_PUBLIC_REWARDS_PORTAL_ENABLED);

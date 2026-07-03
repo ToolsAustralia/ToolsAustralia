@@ -18,6 +18,8 @@ export const DASHBOARD_FEATURES = {
   personalWins: false,
   /** Full purchase history — only the last-10 `recentOrders` are returned today. */
   orderHistory: false,
+  /** Loyalty streak card — the 6-month milestone reward figures aren't confirmed yet. */
+  loyaltyStreak: false,
 } as const;
 
 export type DashboardFeature = keyof typeof DASHBOARD_FEATURES;

@@ -47,6 +47,8 @@ import EntryWallet from "@/components/sections/dashboard/EntryWallet";
 import DashboardAlertRibbon from "@/components/sections/dashboard/DashboardAlertRibbon";
 import DashboardPromoBanner from "@/components/sections/dashboard/DashboardPromoBanner";
 import LoyaltyStreak from "@/components/sections/dashboard/LoyaltyStreak";
+import { rewardsPortalEnabled } from "@/config/featureFlags";
+import { isDashboardFeatureOn } from "@/config/dashboardFeatures";
 import QuickActionsGrid from "@/components/sections/dashboard/QuickActionsGrid";
 import PartnerPreview from "@/components/sections/dashboard/PartnerPreview";
 import DashboardGuestPanel from "@/components/sections/dashboard/DashboardGuestPanel";
@@ -283,7 +285,7 @@ export default function MyAccountPage() {
         partnerAccessExpiryLabel={dash.partnerAccessExpiryLabel}
         profileComplete={Boolean(user.profileSetupCompleted && user.birthdate)}
         onOpenSettings={() => router.push("/my-account/settings")}
-        onRewardPortal={() => partnerSso.mutate()}
+        onRewardPortal={rewardsPortalEnabled() ? () => partnerSso.mutate() : undefined}
         onBecomeMember={onBecomeMember}
         onUpdatePayment={onResolvePayment}
         onCompleteProfile={() => requestModal("user-setup", true)}
@@ -326,9 +328,9 @@ export default function MyAccountPage() {
                     Become a member
                   </button>
                 </section>
-              ) : (
+              ) : isDashboardFeatureOn("loyaltyStreak") ? (
                 <LoyaltyStreak months={dash.streakMonths} acct={dash.acct} />
-              )}
+              ) : null}
               <QuickActionsGrid
                 multiplier={dash.multiplier}
                 hasAdditionalAccess={dash.hasAdditionalAccess}
