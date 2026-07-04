@@ -75,10 +75,12 @@ export default function ManageSheet() {
     void queryClient.invalidateQueries({ queryKey: queryKeys.users.dashboard(userId) });
   };
 
-  // Plan summary
-  const tierHex = dash.tierHex ?? "#26262b";
-  const tierIcon = dash.tierKey ? getPackageIcon(`${dash.tierKey}-subscription`) : null;
-  const tierName = dash.tierLabel ?? (user?.subscriptionPackageData as { name?: string } | undefined)?.name ?? "Membership";
+  // Plan summary — use the persisted SUBSCRIPTION tier. dash.tierKey/Hex/Label come from
+  // getActivePackage and are null for a past-due member (isActive false), which would show a generic
+  // Package icon + neutral colour next to the real tier name. subscriptionTier* survives past-due.
+  const tierHex = dash.subscriptionTierHex ?? "#26262b";
+  const tierIcon = dash.subscriptionTierKey ? getPackageIcon(`${dash.subscriptionTierKey}-subscription`) : null;
+  const tierName = dash.subscriptionTierLabel ?? (user?.subscriptionPackageData as { name?: string } | undefined)?.name ?? "Membership";
   const price = (user?.subscriptionPackageData as { price?: number } | undefined)?.price;
   const sub = user?.subscription as { endDate?: string | Date; startDate?: string | Date; autoRenew?: boolean } | undefined;
   const renewDate = (() => {

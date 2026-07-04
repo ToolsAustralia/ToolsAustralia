@@ -83,7 +83,7 @@ export default function SettingsPage() {
       <div className="mx-auto max-w-3xl space-y-5 px-3 py-5 sm:px-6 sm:py-8">
         {/* Identity card */}
         <div className="flex items-center gap-4 rounded-3xl border border-token bg-surface p-5 shadow-sm">
-          <Monogram firstName={user.firstName} lastName={user.lastName} tierHex={dash.tierHex ?? "#ee0000"} onBrand size={52} radius={16} />
+          <Monogram firstName={user.firstName} lastName={user.lastName} tierHex={dash.subscriptionTierHex ?? "#ee0000"} onBrand size={52} radius={16} />
           <div className="min-w-0 flex-1">
             <h2 className="truncate font-['Poppins'] text-base font-bold text-primary-token dark:text-white sm:text-lg">{displayName}</h2>
             <p className="truncate text-xs text-muted-token sm:text-sm">{subtitle}</p>
