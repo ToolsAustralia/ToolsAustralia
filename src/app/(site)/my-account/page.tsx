@@ -40,6 +40,7 @@ import { useDashboardState } from "@/hooks/useDashboardState";
 import { useDashboardSheetStore } from "@/stores/useDashboardSheetStore";
 import { usePartnerDiscountSso } from "@/hooks/queries/usePartnerDiscountSso";
 import { useRedeemablesWallet } from "@/hooks/queries/useRedeemablesQueries";
+import { derivePlanIdFromPackage } from "@/utils/package-colors/packageColorScheme";
 
 import DashboardHero from "@/components/sections/dashboard/DashboardHero";
 import EntryWallet from "@/components/sections/dashboard/EntryWallet";
@@ -181,7 +182,14 @@ export default function MyAccountPage() {
     const packageName = pkg && "name" in pkg ? (pkg.name as string) : undefined;
     const sub = accountData.user?.subscription as { lastMonthAccumulatedEntries?: number; packageId?: string } | undefined;
     const lastMonthAccumulatedEntries = sub?.lastMonthAccumulatedEntries ?? entriesPerMonth;
-    const selectedPackageId = sub?.packageId != null ? String(sub.packageId) : undefined;
+    // Derive the plan id from the SAME effective package as name/entries — NOT the raw
+    // subscription.packageId. During a downgrade-preservation window the two disagree (effective =
+    // preserved Foreman, raw packageId = new Tradie), which made the explainer show a "Foreman" header
+    // with a Tradie chart + 50% partner offers (should be 75%). Deriving from pkg keeps the modal's
+    // tier, entries, partner %, and chart all consistent.
+    const selectedPackageId = pkg
+      ? derivePlanIdFromPackage(pkg as { _id?: string; name: string; type?: "subscription" | "one-time" }, "subscription")
+      : undefined;
 
     const t = window.setTimeout(() => {
       const { activeModal: modalNow, modalQueue } = useModalPriorityStore.getState();

@@ -155,9 +155,12 @@ const PackageDetailModal: React.FC<PackageDetailModalProps> = ({
 
   /** Partner catalog access % — same source the rest of the site uses
    * (UpgradeConfirm BenefitsBody, MembershipSection, etc.). Subscription:
-   * Tradie 50, Foreman 75, Boss 100. One-time ladder: VIP/Power/Boss/etc. */
+   * Tradie 50, Foreman 75, Boss 100. One-time ladder: VIP/Power/Boss/etc.
+   * For subscriptions use the SAME normalized id as the chart (`chartPackageId`) — a bare
+   * "Foreman" name would resolve to the one-time ladder's 55% instead of the subscription 75%,
+   * disagreeing with the chart. One-time pack names already carry their tier, so `_id ?? name` is fine. */
   const partnerAccessPercent = getPartnerCatalogAccessPercentForPlanId(
-    packageData._id ?? packageData.name
+    isSubscription ? chartPackageId : packageData._id ?? packageData.name
   );
 
   return (
