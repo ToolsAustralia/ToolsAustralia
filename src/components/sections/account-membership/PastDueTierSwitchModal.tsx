@@ -16,6 +16,8 @@ interface PastDueTierSwitchModalProps {
   newTierPrice: number;
   /** Teardown succeeded (past-due sub canceled + invoice voided) → caller opens the subscribe flow. */
   onSwitched: () => void;
+  /** Stripe already recovered the sub (dunning succeeded) → caller closes + refetches to the active state. */
+  onRecovered: () => void;
 }
 
 /**
@@ -33,6 +35,7 @@ export default function PastDueTierSwitchModal({
   newTierName,
   newTierPrice,
   onSwitched,
+  onRecovered,
 }: PastDueTierSwitchModalProps) {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -53,10 +56,18 @@ export default function PastDueTierSwitchModal({
     try {
       const res = await fetch("/api/stripe/switch-tier-past-due", { method: "POST" });
       const json = await res.json().catch(() => ({}));
-      if (!res.ok || !json?.success) {
-        throw new Error(json?.error || "Couldn't switch your tier. Please try again.");
+      if (res.ok && json?.success) {
+        onSwitched();
+        return;
       }
-      onSwitched();
+      // Stripe already recovered the sub (dunning succeeded) while our DB still read past_due — the
+      // teardown correctly refused to cancel a paid sub. Don't dead-end on a red error: hand back to
+      // the caller to refresh into the resolved active state.
+      if (json?.code === "SUBSCRIPTION_RECOVERED") {
+        onRecovered();
+        return;
+      }
+      throw new Error(json?.error || "Couldn't switch your tier. Please try again.");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Couldn't switch your tier. Please try again.");
       setSubmitting(false);

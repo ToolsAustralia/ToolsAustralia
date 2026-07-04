@@ -176,6 +176,12 @@ scale) on desktop, with the backdrop fading (`ta-sheet-fade`); all `motion-safe`
 > - **`DashboardGuestPanel`** — `MIN_PACK_PRICE` guards the empty-array case (`prices.length ? Math.min(...) : 25`) so it can't render "$Infinity" if the catalog ever has no public one-time packs.
 > - **`PartnerPreview`** — hoisted the duplicated `isOneTime || pastDueWithPack` into `const accentSub`.
 
+> **Flow-verification fixes (2026-07-04):**
+> - **`PartnerPreview`** deal-row accents (See-all link, letter badges, discount amounts) now use `accent` (teal for one-time, amber for past-due-with-pack, tier hue for active) instead of a hard-coded `tierHex ?? "#ee0000"` — so a one-time buyer's widget is coherently teal (matching `RewardsPartnerCard`) instead of a teal ring beside red/yellow deal accents.
+> - **`RewardsClaimables`** empty-state copy no longer says "Keep your membership active to earn more" (wrong for a one-time buyer, who has no membership) — neutral "Rewards you earn will appear here."
+> - **`MembershipCurrentPlan`** reads entries from the persisted `subscriptionPackageData` for past-due (was 0 via `getActivePackage`) and gates "Auto-renews monthly" on `autoRenew`. Takes `subscriptionTier*` from the page. See [dashboard-account/frontend.md](../dashboard-account/frontend.md).
+> - **`PastDueTierSwitchModal`** gained an `onRecovered` prop — on 409 `SUBSCRIPTION_RECOVERED` it hands back to the page to refresh instead of showing the positive server message inside a red error box.
+
 > **Flagged-finding fixes (2026-07-04):**
 > - **`MembershipSection` past-due one-time consistency** — the shared `/membership` section's `handlePlanSelect` bounced ALL past-due taps to `/my-account`; now scoped `&& isSubscriptionPlan` (matching `useMembershipCardCta.onSelect`), so a past-due member can buy a one-time/Additional pack on the public page too. See [subscription/gotchas.md § Both surfaces scoped](../subscription/gotchas.md#money-path).
 > - **Canonical `PAST_DUE_AMBER`** — the amber accent (`#d97706`) now has one source of truth in [`tier-visuals.ts`](../../src/utils/membership/tier-visuals.ts), consumed by `MembershipTierList` (border), `PartnerPreview`, and `RewardsPartnerCard` (was re-declared/hardcoded in each). Tailwind arbitrary-value class strings (the "Current · Past due" pill, gradient buttons) keep their literals — a JS const can't feed a Tailwind bracket at build time.

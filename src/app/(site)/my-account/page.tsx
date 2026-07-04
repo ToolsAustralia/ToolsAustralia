@@ -271,13 +271,15 @@ export default function MyAccountPage() {
 
   return (
     <div className="w-full min-w-0 max-w-full overflow-x-hidden pb-8">
+      {/* subscription-derived tier so a past-due member's chip reads their real tier (e.g. "Boss"),
+          not "Plan" — dash.tierKey is null for past-due (getActivePackage gates on isActive). */}
       <DashboardHero
         acct={dash.acct}
         firstName={user.firstName}
         lastName={user.lastName}
-        tierKey={dash.tierKey}
-        tierHex={dash.tierHex}
-        tierLabel={dash.tierLabel}
+        tierKey={dash.subscriptionTierKey}
+        tierHex={dash.subscriptionTierHex}
+        tierLabel={dash.subscriptionTierLabel}
         stateTheme={dash.stateTheme}
         partnerAccessPct={dash.partnerAccessPct}
         partnerAccessExpiryLabel={dash.partnerAccessExpiryLabel}

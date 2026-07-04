@@ -16,6 +16,7 @@ import dynamic from "next/dynamic";
 import { useQueryClient } from "@tanstack/react-query";
 import { useDashboardState } from "@/hooks/useDashboardState";
 import { useMembershipCardCta } from "@/hooks/useMembershipCardCta";
+import { useMajorDrawPurchaseGate } from "@/hooks/useMajorDrawPurchaseGate";
 import { useDashboardSheetStore } from "@/stores/useDashboardSheetStore";
 import { useSavedPaymentMethods } from "@/hooks/useSavedPaymentMethods";
 import { queryKeys } from "@/lib/queryKeys";
@@ -41,6 +42,9 @@ export default function AccountMembershipPage() {
   // mirroring the control MembershipSection. Without this it always renders the public
   // one-time ladder (e.g. "VIP Pack $1000") instead of the member-priced additional-* packs.
   const cta = useMembershipCardCta({ includeAdditionalForMembers: true });
+  // The switch is a resubscribe (new purchase) → gate the tap on the major-draw freeze, matching the
+  // server gate on /api/stripe/switch-tier-past-due, so the destructive teardown never runs mid-freeze.
+  const { whenGatesOpenElseGateModal } = useMajorDrawPurchaseGate();
   const openSheet = useDashboardSheetStore((s) => s.openSheet);
   const { paymentMethods, subscriptionDefaultPaymentMethodId } = useSavedPaymentMethods();
 
@@ -82,6 +86,15 @@ export default function AccountMembershipPage() {
     if (plan) cta.membershipModal.openModal(plan);
   };
 
+  // Recovered-race: the teardown refused to cancel because Stripe already put the sub back to active
+  // (a dunning retry succeeded). Close the confirm + refetch so the page re-renders as the resolved
+  // active state instead of dead-ending on a red error.
+  const onPastDueRecovered = () => {
+    setSwitchTierPlan(null);
+    const userId = session?.user?.id;
+    if (userId) void queryClient.invalidateQueries({ queryKey: queryKeys.users.detail(userId) });
+  };
+
   React.useEffect(() => {
     if (status === "loading") return;
     if (!session) router.push("/login");
@@ -107,9 +120,9 @@ export default function AccountMembershipPage() {
       <div className="space-y-4 px-[18px] pb-8 pt-4 sm:px-6 lg:px-[26px]">
         <MembershipCurrentPlan
           acct={dash.acct}
-          tierKey={dash.tierKey}
-          tierHex={dash.tierHex}
-          tierLabel={dash.tierLabel}
+          tierKey={dash.subscriptionTierKey}
+          tierHex={dash.subscriptionTierHex}
+          tierLabel={dash.subscriptionTierLabel}
           user={dash.user}
           paymentLabel={cardLabel}
           onManage={() => openSheet("manage")}
@@ -129,7 +142,7 @@ export default function AccountMembershipPage() {
           onManagePlan={() => openSheet("manage")}
           onChangeTier={(name) => setChangeTierName(name)}
           onResolvePayment={() => openSheet("payment")}
-          onSwitchTier={(plan) => setSwitchTierPlan(plan)}
+          onSwitchTier={(plan) => whenGatesOpenElseGateModal(() => setSwitchTierPlan(plan))}
         />
       </div>
 
@@ -158,6 +171,7 @@ export default function AccountMembershipPage() {
           newTierName={switchTierPlan.name}
           newTierPrice={switchTierPlan.price}
           onSwitched={onPastDueSwitched}
+          onRecovered={onPastDueRecovered}
         />
       )}
     </div>

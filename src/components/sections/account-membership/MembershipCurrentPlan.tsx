@@ -50,10 +50,17 @@ export default function MembershipCurrentPlan({
   const hex = tierHex ?? "#26262b";
 
   const pkg = user ? getActivePackage(user as ActivePackageUserInput) : null;
-  const entriesPerMonth = pkg?.entriesPerMonth ?? 0;
-  const price = (user?.subscriptionPackageData as { price?: number } | undefined)?.price ?? 0;
+  const subPkg = user?.subscriptionPackageData as { price?: number; entriesPerMonth?: number } | undefined;
+  // For a subscription (active OR past-due) read entries from the PERSISTED subscription package —
+  // getActivePackage returns null for past-due (isActive false), which would show 0 entries and
+  // contradict the tier list right below on the same page.
+  const entriesPerMonth = active || pastdue ? subPkg?.entriesPerMonth ?? pkg?.entriesPerMonth ?? 0 : pkg?.entriesPerMonth ?? 0;
+  const price = subPkg?.price ?? 0;
   const accessPct = tierKey ? getPartnerCatalogAccessPercentForPlanId(`${tierKey}-subscription`) : 0;
   const renews = renewLabel(user);
+  // Soft-cancel: an active member with autoRenew off keeps benefits until endDate, then lapses — so
+  // "Auto-renews monthly" would be wrong (matches the EntryWallet/hero gating on autoRenew).
+  const autoRenewOff = (user?.subscription as { autoRenew?: boolean } | undefined)?.autoRenew === false;
 
   const statusPill =
     active ? "Active" : pastdue ? "Past due" : onetime ? "One-time" : "Guest";
@@ -112,8 +119,18 @@ export default function MembershipCurrentPlan({
             ) : (
               <ManageRow
                 icon={RefreshCw}
-                title={pastdue ? "Payment failed" : renews ? `Renews ${renews}` : "Membership"}
-                sub={pastdue ? "Update to resume" : "Auto-renews monthly"}
+                title={
+                  pastdue
+                    ? "Payment failed"
+                    : autoRenewOff
+                      ? renews
+                        ? `Ends ${renews}`
+                        : "Membership"
+                      : renews
+                        ? `Renews ${renews}`
+                        : "Membership"
+                }
+                sub={pastdue ? "Update to resume" : autoRenewOff ? "Cancels at period end" : "Auto-renews monthly"}
                 cta="Manage"
                 onClick={onManage}
               />

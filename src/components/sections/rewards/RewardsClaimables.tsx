@@ -25,7 +25,9 @@ function label(item: RedeemableWalletItem): string {
  */
 export default function RewardsClaimables({ userId }: RewardsClaimablesProps) {
   const [open, setOpen] = useState(false);
-  const claimable = useRedeemablesWallet(userId, { status: "claimable", limit: 10 });
+  // Match the home "Redeem" tile's params ({ status: "claimable", limit: 20 }) so the two share one
+  // deduped query and can't show different counts (a >10-claimable user would otherwise diverge).
+  const claimable = useRedeemablesWallet(userId, { status: "claimable", limit: 20 });
   const past = useRedeemablesWallet(userId, { status: "past", limit: 6 });
   const redeem = useRedeemableRedemption(userId);
 
@@ -77,7 +79,7 @@ export default function RewardsClaimables({ userId }: RewardsClaimablesProps) {
             {hasClaimable ? `${claimableCount} reward${claimableCount > 1 ? "s" : ""} to claim` : "No rewards to claim"}
           </p>
           <p className="text-sm text-muted-token">
-            {hasClaimable ? "Tap to view and claim your free entries." : "Keep your membership active to earn more."}
+            {hasClaimable ? "Tap to view and claim your free entries." : "Rewards you earn will appear here."}
           </p>
         </div>
         <ChevronRight className="h-5 w-5 shrink-0 text-muted-token" />
@@ -113,7 +115,7 @@ export default function RewardsClaimables({ userId }: RewardsClaimablesProps) {
           {claimable.isLoading ? (
             <div className="h-14 animate-pulse rounded-2xl bg-black/[.05] dark:bg-white/[.06]" />
           ) : claimItems.length === 0 ? (
-            <p className="text-sm text-muted-token">No rewards to claim right now — keep your membership active to earn more.</p>
+            <p className="text-sm text-muted-token">No rewards to claim right now — they&apos;ll appear here as you earn them.</p>
           ) : (
             <ul className="space-y-2">
               {claimItems.map((item) => {

@@ -12,6 +12,7 @@ import {
   isSubscriptionReferenceError,
   SUBSCRIPTION_REFERENCE_ERROR_CODES,
 } from "@/services/subscription";
+import { enforceMajorDrawOpenForNewPurchasesOr403 } from "@/utils/draws/major-draw-gate-http";
 
 /**
  * POST /api/stripe/switch-tier-past-due
@@ -47,6 +48,12 @@ export async function POST() {
         { status: 409 }
       );
     }
+
+    // The switch is a resubscribe (a NEW purchase), so gate it on the major-draw freeze exactly like
+    // create-subscription-existing-user does — otherwise a freeze would let the irreversible teardown
+    // (cancel + void) run while the follow-on resubscribe 403s, stranding the member in `canceled`.
+    const gateResponse = await enforceMajorDrawOpenForNewPurchasesOr403();
+    if (gateResponse) return gateResponse;
 
     const result = await abandonPastDueForTierSwitch(user);
 

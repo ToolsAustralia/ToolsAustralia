@@ -105,6 +105,7 @@ const SubscriptionManagementModal: React.FC<SubscriptionManagementModalProps> = 
   const [selectedDowngrade, setSelectedDowngrade] = useState<DowngradeOption | null>(null);
   const [subscriptionBenefits, setSubscriptionBenefits] = useState<SubscriptionBenefits | null>(null);
   const [benefitsLoading, setBenefitsLoading] = useState(false);
+  const [benefitsError, setBenefitsError] = useState(false);
   const { showSuccess } = useLoading();
 
   // Stripe payment confirmation state
@@ -227,6 +228,7 @@ const SubscriptionManagementModal: React.FC<SubscriptionManagementModalProps> = 
     if ((!isOpen && !renderAsPanel) || !user.subscription?.isActive) return;
 
     setBenefitsLoading(true);
+    setBenefitsError(false);
     try {
       const response = await fetch("/api/subscription/benefits", {
         credentials: "include",
@@ -235,9 +237,12 @@ const SubscriptionManagementModal: React.FC<SubscriptionManagementModalProps> = 
       if (response.ok) {
         const data = await response.json();
         setSubscriptionBenefits(data.data);
+      } else {
+        setBenefitsError(true);
       }
     } catch (error) {
       console.error("Failed to fetch subscription benefits:", error);
+      setBenefitsError(true);
     } finally {
       setBenefitsLoading(false);
     }
@@ -302,6 +307,13 @@ const SubscriptionManagementModal: React.FC<SubscriptionManagementModalProps> = 
       onClose();
     }
   }, [isOpen, autoSelectPlanName, subscriptionBenefits, onClose]);
+
+  // Confirm-only mode renders no body of its own, so a benefits-fetch FAILURE would leave an invisible,
+  // stuck modal (the parent only resets via onClose, and the auto-select effect above early-returns while
+  // subscriptionBenefits is null). Close on error so the tier tap never silently no-ops.
+  useEffect(() => {
+    if (confirmOnly && benefitsError) onClose();
+  }, [confirmOnly, benefitsError, onClose]);
 
   // Active subscription: either isActive=true OR past_due with autoRenew=true (failed renewal)
   // This allows us to show subscription details for past_due subscriptions
@@ -1147,8 +1159,19 @@ const SubscriptionManagementModal: React.FC<SubscriptionManagementModalProps> = 
 
   // Tier-change (confirm-only) mode: render just the confirm modals — no redundant
   // "Manage Subscription" chrome/body (the Membership page already shows the plan + tiers).
+  // Show a spinner while benefits load so the tier tap isn't a silent, invisible window before
+  // the up/down-grade confirm opens.
   if (confirmOnly) {
-    return <>{childModals}</>;
+    return (
+      <>
+        {benefitsLoading && !showUpgradeConfirm && !showDowngradeConfirm && (
+          <div className="fixed inset-0 z-[9999] grid place-items-center bg-black/50">
+            <div className="h-9 w-9 animate-spin rounded-full border-[3px] border-white/30 border-t-white" />
+          </div>
+        )}
+        {childModals}
+      </>
+    );
   }
 
   if (renderAsPanel) {

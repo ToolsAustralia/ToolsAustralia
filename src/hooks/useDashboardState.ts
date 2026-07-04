@@ -32,9 +32,11 @@ export interface DashboardStateResult {
   tierHex: string | null;
   tierLabel: string | null;
   /** SUBSCRIPTION tier from the persisted package — non-null even when past-due/inactive (unlike
-   *  tierKey/tierLabel, which come from getActivePackage). Marks the current tier in the past-due list. */
+   *  tierKey/tierLabel/tierHex, which come from getActivePackage). Marks the current tier in the
+   *  past-due list + drives the hero/current-plan tier identity so they don't blank out when past-due. */
   subscriptionTierKey: TierKey | null;
   subscriptionTierLabel: string | null;
+  subscriptionTierHex: string | null;
   stateTheme: DashboardStateTheme;
   /** Effective promo multiplier for the packages this user buys (1 when none). */
   multiplier: number;
@@ -105,6 +107,7 @@ export function useDashboardState(): DashboardStateResult {
         tierLabel: null,
         subscriptionTierKey: null,
         subscriptionTierLabel: null,
+        subscriptionTierHex: null,
         stateTheme: getDashboardStateTheme("none"),
         multiplier: oneTimeMultiplier && oneTimeMultiplier > 0 ? oneTimeMultiplier : 1,
         hasAdditionalAccess: false,
@@ -149,6 +152,7 @@ export function useDashboardState(): DashboardStateResult {
     const subscriptionPkgName = (user as ActivePackageUserInput).subscriptionPackageData?.name ?? null;
     const subscriptionTierKey = subscriptionPkgName ? tierKeyFromName(subscriptionPkgName) : tierKey;
     const subscriptionTierLabel = subscriptionTierKey ? TIER_LABEL[subscriptionTierKey] : tierLabel;
+    const subscriptionTierHex = subscriptionTierKey ? TIER_HEX[subscriptionTierKey] : null;
 
     // Partner access % — resolve the effective (highest-%) active partner-catalog plan
     // from the SHARED resolver (it reads the partner-discount queue), so the hero ring +
@@ -213,6 +217,7 @@ export function useDashboardState(): DashboardStateResult {
       tierLabel,
       subscriptionTierKey,
       subscriptionTierLabel,
+      subscriptionTierHex,
       stateTheme: getDashboardStateTheme(acct, tierHex),
       multiplier,
       hasAdditionalAccess,
