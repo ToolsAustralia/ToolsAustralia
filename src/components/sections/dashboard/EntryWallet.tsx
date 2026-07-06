@@ -3,6 +3,7 @@
 import { cn } from "@/utils/cn";
 import { Clock, Plus } from "lucide-react";
 import { AnimatedNumber } from "@/components/ui/AnimatedNumber";
+import FreeEntriesChip from "@/components/ui/FreeEntriesChip";
 import { useLeafTimer } from "@/hooks/useLeafTimer";
 import type { DashboardAccountState } from "@/utils/dashboard/dashboard-state-theme";
 
@@ -158,16 +159,7 @@ export default function EntryWallet({
           card. The figure is the accumulated renewal grant (carry-forward + base, no promo). */}
       {showRenewalNote && renewalDateLabel && (
         <div className="mt-4 flex items-center gap-3 border-t border-token pt-3.5">
-          <span className="flex min-w-[54px] shrink-0 flex-col items-center gap-0.5 rounded-xl bg-gradient-to-br from-[#f6dd8c] via-[#e9c65f] to-[#d4af37] px-3 py-2 text-[#241a02] shadow-[0_8px_18px_-8px_rgba(212,175,55,.6),inset_0_0_0_1px_rgba(246,221,140,.5)]">
-            <span className="num font-['Poppins'] text-[19px] font-black leading-none tracking-[-.02em] [text-shadow:0_1px_1px_rgba(255,255,255,.25)]">
-              +{(entriesPerRenewal ?? 0).toLocaleString()}
-            </span>
-            <span className="text-[8px] font-extrabold uppercase leading-[1.1] tracking-[0.1em] opacity-90">
-              Free
-              <br />
-              Entries
-            </span>
-          </span>
+          <FreeEntriesChip value={entriesPerRenewal ?? 0} tone="gold" />
           <div className="min-w-0 text-[13px] leading-[1.38] text-muted-token">
             <span className="mb-px block font-['Poppins'] text-[13.5px] font-bold text-primary-token dark:text-white">Land on your renewal</span>
             Your accumulated entries drop in on{" "}
@@ -177,16 +169,7 @@ export default function EntryWallet({
       )}
       {showPastDueNote && (
         <div className="mt-4 flex items-center gap-3 border-t border-token pt-3.5">
-          <span className="flex min-w-[54px] shrink-0 flex-col items-center gap-0.5 rounded-xl bg-gradient-to-br from-amber-400 via-amber-500 to-amber-600 px-3 py-2 text-white shadow-[0_8px_18px_-8px_rgba(217,119,6,.55),inset_0_0_0_1px_rgba(253,211,120,.45)]">
-            <span className="num font-['Poppins'] text-[19px] font-black leading-none tracking-[-.02em] [text-shadow:0_1px_1px_rgba(120,60,0,.3)]">
-              +{(pastDueRenewalEntries ?? 0).toLocaleString()}
-            </span>
-            <span className="text-[8px] font-extrabold uppercase leading-[1.1] tracking-[0.1em] opacity-90">
-              Free
-              <br />
-              Entries
-            </span>
-          </span>
+          <FreeEntriesChip value={pastDueRenewalEntries ?? 0} tone="amber" />
           <div className="min-w-0 text-[13px] leading-[1.38] text-muted-token">
             <span className="mb-px block font-['Poppins'] text-[13.5px] font-bold text-primary-token dark:text-white">Waiting on your renewal</span>
             Settle <b className="whitespace-nowrap font-semibold text-primary-token dark:text-white">${pastDueRenewalCost}</b> and your free entries land as soon as it clears.

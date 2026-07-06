@@ -24,6 +24,9 @@ import { useSavedPaymentMethods, type SavedPaymentMethod } from "@/hooks/useSave
 import { useUserContext } from "@/contexts/UserContext";
 import { getPastDueRenewalPreview } from "@/utils/subscription/past-due-renewal-preview";
 import type { IUser } from "@/models/User";
+import { getPackageById } from "@/data/membershipPackages";
+import { tierKeyFromName } from "@/utils/membership/tier-visuals";
+import { getPartnerCatalogAccessPercentForPlanId } from "@/utils/partner-discounts/partner-catalog-visibility";
 import { useHtmlDarkForUi } from "@/hooks/useHtmlDarkForUi";
 import { buildMembershipStripeAppearance } from "@/utils/payment/stripe/membership-stripe-appearance";
 import { getStripePromise } from "@/lib/stripe-client";
@@ -81,6 +84,16 @@ export function usePastDueResolve({ isOpen, onClose }: UsePastDueResolveArgs) {
   // What the member pays + the entries they unlock on resolve — reuses the canonical preview so the
   // popup/sheet match the dashboard note, the renewal-failure email, and the Klaviyo property.
   const renewalPreview = getPastDueRenewalPreview((userData ?? {}) as unknown as IUser);
+  // Partner-catalog access % the member RESTORES by reactivating — their subscription tier's %
+  // (Tradie 50 / Foreman 75 / Boss 100). Drives the "on hold" ring in the modal header, framing the
+  // resolve around the paused member benefit rather than just "renewal failed".
+  const subscriptionPkg = (() => {
+    const pid = ((userData ?? {}) as unknown as IUser).subscription?.packageId;
+    return pid ? getPackageById(String(pid)) : null;
+  })();
+  const tierKey = subscriptionPkg?.name ? tierKeyFromName(subscriptionPkg.name) : null;
+  const tierLabel = subscriptionPkg?.name ?? null;
+  const restorablePartnerPct = tierKey ? getPartnerCatalogAccessPercentForPlanId(`${tierKey}-subscription`) : 0;
   // Source of truth = the actual `.dark` class on <html> (what Tailwind styles the
   // surface with), NOT useThemeStore — those can disagree (time-based auto-dark, or
   // /admin theme). useHtmlDarkForUi reads the class so the PaymentElement matches.
@@ -408,6 +421,8 @@ export function usePastDueResolve({ isOpen, onClose }: UsePastDueResolveArgs) {
     paymentMethods,
     userData,
     renewalPreview,
+    restorablePartnerPct,
+    tierLabel,
     isNoPayableInvoice,
     // handlers
     handlePayOverdue,

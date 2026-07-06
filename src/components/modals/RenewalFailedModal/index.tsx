@@ -2,6 +2,7 @@
 
 import React from "react";
 import { Elements } from "@stripe/react-stripe-js";
+import { Lock } from "lucide-react";
 
 import Shell from "./Shell";
 import AlertBanner from "./AlertBanner";
@@ -11,10 +12,35 @@ import InlineCardSetup from "./InlineCardSetup";
 import PaymentForm from "./PaymentForm";
 import { usePastDueResolve, stripePromise, renewalBillingSupportMailto } from "./usePastDueResolve";
 import RenewalPreviewNote from "./RenewalPreviewNote";
+import AccessRing from "@/components/ui/AccessRing";
 
 interface RenewalFailedModalProps {
   isOpen: boolean;
   onClose: () => void;
+}
+
+/**
+ * The "on hold" partner-access ring shown in the modal header for the clean resolve state — the
+ * member's subscription-tier partner-catalog % (50 / 75 / 100) with a lock + "Paused", so the modal
+ * leads with the member benefit that's frozen, not just "renewal failed".
+ */
+function PartnerHoldRing({ pct }: { pct: number }) {
+  return (
+    <div className="flex shrink-0 flex-col items-center gap-1">
+      <div className="relative">
+        <AccessRing percent={pct} size={72} stroke={7} color="#d97706" trackColor="rgba(217,119,6,.16)">
+          <div className="flex flex-col items-center leading-none">
+            <span className="num font-['Poppins'] text-[18px] font-black text-amber-700 dark:text-amber-400">{pct}%</span>
+            <span className="text-[7px] font-extrabold uppercase tracking-[0.1em] text-amber-600">Partner</span>
+          </div>
+        </AccessRing>
+        <span className="absolute -right-0.5 -top-0.5 grid h-[22px] w-[22px] place-items-center rounded-full border-2 border-white bg-gradient-to-b from-amber-400 to-amber-600 text-white shadow-[0_4px_10px_-4px_rgba(217,119,6,.8)] dark:border-neutral-950">
+          <Lock className="h-[11px] w-[11px]" />
+        </span>
+      </div>
+      <span className="text-[8.5px] font-extrabold uppercase tracking-[0.1em] text-amber-700 dark:text-amber-400">Paused</span>
+    </div>
+  );
 }
 
 /**
@@ -33,12 +59,8 @@ const RenewalFailedModal: React.FC<RenewalFailedModalProps> = ({ isOpen, onClose
         onClose={onClose}
         tone="success"
         eyebrow="Payment received"
-        title={
-          <>
-            You&apos;re back <span data-rf-accent>in business</span>
-          </>
-        }
-        sub={<>Your subscription has been reactivated and benefits are live again.</>}
+        title="You're back in business"
+        sub="Your subscription has been reactivated and benefits are live again."
       >
         <div className="flex flex-col items-center justify-center py-6 text-center">
           <p className="text-sm text-neutral-600 dark:text-neutral-300 max-w-sm">
@@ -61,15 +83,11 @@ const RenewalFailedModal: React.FC<RenewalFailedModalProps> = ({ isOpen, onClose
         onClose={onClose}
         tone="danger"
         eyebrow="Payment required"
-        title={
-          <>
-            Complete your <span data-rf-accent>renewal payment</span>
-          </>
-        }
+        title="Complete your renewal payment"
         sub={
           amountLabel ? (
             <>
-              <strong>{amountLabel}</strong> due to reactivate your subscription.
+              <strong className="font-bold text-neutral-900 dark:text-white">{amountLabel}</strong> due to reactivate your subscription.
             </>
           ) : (
             <>Confirm your payment to reactivate your subscription.</>
@@ -122,30 +140,23 @@ const RenewalFailedModal: React.FC<RenewalFailedModalProps> = ({ isOpen, onClose
       isOpen={isOpen}
       onClose={onClose}
       tone="danger"
-      eyebrow={r.terminalCollectionFailure ? "Renewal blocked" : "Renewal on hold"}
+      heroAside={
+        !r.terminalCollectionFailure && !r.showInlineCardSetup ? <PartnerHoldRing pct={r.restorablePartnerPct} /> : undefined
+      }
+      eyebrow={r.terminalCollectionFailure ? "Renewal blocked" : r.showInlineCardSetup ? "Add a card" : "Membership on hold"}
       title={
-        r.terminalCollectionFailure ? (
-          <>
-            We need to <span data-rf-accent>unblock</span> billing
-          </>
-        ) : r.showInlineCardSetup ? (
-          <>
-            Add a <span data-rf-accent>new card</span> to retry
-          </>
-        ) : (
-          <>
-            Resolve your <span data-rf-accent>renewal</span> in one step
-          </>
-        )
+        r.terminalCollectionFailure
+          ? "We need to unblock billing"
+          : r.showInlineCardSetup
+            ? "Add a new card to retry"
+            : "Reactivate to restore your benefits"
       }
       sub={
-        r.terminalCollectionFailure ? (
-          <>This invoice can&apos;t be charged from this screen — our team can fix it for you.</>
-        ) : r.showInlineCardSetup ? (
-          <>We&apos;ll save your card and retry the renewal automatically.</>
-        ) : (
-          <>Your last renewal payment didn&apos;t go through. Settle up to keep your benefits active.</>
-        )
+        r.terminalCollectionFailure
+          ? "This invoice can't be charged from this screen — our team can fix it for you."
+          : r.showInlineCardSetup
+            ? "We'll save your card and retry the renewal automatically."
+            : "Your partner discounts, entries & member offers are paused until your renewal clears."
       }
     >
       {/* What they pay + the entries they unlock — only on the normal resolve prompt, not the
@@ -220,6 +231,7 @@ const RenewalFailedModal: React.FC<RenewalFailedModalProps> = ({ isOpen, onClose
         onBack={r.handleBackFromPayment}
         onClose={onClose}
         supportMailto={renewalBillingSupportMailto()}
+        hideDismiss
       />
     </Shell>
   );

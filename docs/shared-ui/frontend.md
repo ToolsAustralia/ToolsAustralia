@@ -12,16 +12,16 @@
 > (was "…keep earning entries"). Leads with member benefits and still names entries, mirroring the one-time (teal)
 > sibling pill's vocabulary ("partner discounts, more free entries & bonus offers") for one consistent benefits phrasing.
 
-> **EntryWallet "free entries" stat chip (2026-07-06):** `sections/dashboard/EntryWallet` shows a renewal note
-> (active member, `showRenewalNote`, gold) and a past-due note (`showPastDueNote`, amber, driven by
-> `pastDueRenewalEntries` + `pastDueRenewalCost`). Both render a **stat chip that mirrors the red countdown
-> `CDBox` recipe** — `rounded-xl` · `bg-gradient-to-br` · `shadow-[0_8px_18px_-8px_…]` · inset ring · a
-> Poppins-black `+N` over a tiny stacked `FREE / ENTRIES` uppercase label — so "entries you gain" reads as the
-> gold/amber sibling of the "time you're losing" countdown, hung on a `border-t border-token` seam (no
-> card-in-card box). This replaced the earlier flat tinted-box + Sparkles-tile note (which read as generic /
-> AI-ish and heavier than the rest of the section). The chip figure is the corrected accumulated renewal grant
-> (see [dashboard-account/frontend.md](../dashboard-account/frontend.md)); props come from `useDashboardState`.
-> Copy always says "free entries." Presentational-only; EntryWallet stays dumb.
+> **`FreeEntriesChip` — the "+N free entries" stat chip (2026-07-06):** shared component
+> [components/ui/FreeEntriesChip.tsx](../../src/components/ui/FreeEntriesChip.tsx) (`{ value, tone: "gold" | "amber" }`),
+> the single source for the three surfaces that show it: `EntryWallet`'s renewal note (gold) + past-due note
+> (amber), and the resolve popup/sheet `RenewalPreviewNote` (amber). It **mirrors the red countdown `CDBox`
+> recipe** — `rounded-xl` · `bg-gradient-to-br` · `shadow-[0_8px_18px_-8px_…]` · inset ring · a Poppins-black
+> `+N` — so "entries you gain" reads as the gold/amber sibling of the "time you're losing" countdown. **"FREE"
+> is a white corner badge** (not a second label row) so the chip stays one-number-tall + compact; the single
+> label under the number is "ENTRIES". Replaced the earlier flat tinted-box + Sparkles-tile note. In
+> `EntryWallet` it hangs on a `border-t border-token` seam (no card-in-card); the figure is the corrected
+> accumulated renewal grant (see [dashboard-account/frontend.md](../dashboard-account/frontend.md)). Presentational-only.
 
 > **Header sign-out (2026-07-02):** the site `Header` menu sign-out now calls `totalSignOut()`
 > ([src/utils/auth/total-sign-out.ts](../../src/utils/auth/total-sign-out.ts)) instead of a bare

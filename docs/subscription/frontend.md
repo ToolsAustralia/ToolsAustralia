@@ -220,6 +220,17 @@ The flag that selects Mode A vs Mode B is `hasMembershipGrantInCurrentDrawPeriod
 > footer since the sheet owns dismiss). This replaced an earlier, wrong approach that *embedded the whole
 > modal* (dark hero + Close) inside the sheet. Verify the modal path with `npm run test:renewal-failed`.
 
+> **RenewalFailedModal hero redesign — benefit-led, amber, less text (2026-07-06):** the `Shell` hero was
+> rebuilt from the dark red-glow + uppercase-acumin banner to a **light, tone-tinted header** (amber past-due /
+> emerald success) with a sentence-case Poppins headline. `Shell` gained an optional **`heroAside`** slot; the
+> clean past-due resolve state passes a **`PartnerHoldRing`** — the member's subscription-tier partner-catalog %
+> (50 / 75 / 100, from `usePastDueResolve.restorablePartnerPct`) drawn with `AccessRing`, a lock, and "Paused" —
+> so the modal leads with the **paused member benefit**, not just "renewal failed". Copy trimmed to eyebrow +
+> one headline ("Reactivate to restore your benefits") + one line. The redundant **"Close" text button + footer
+> were removed** (the ✕ dismisses — the modal now passes `hideDismiss` to `ActionButtons`). `data-rf-accent` /
+> the CSS-module dark-hero classes (`heroBg`, `heroStripeOverlay`, tone-glow) are no longer used. The sheet
+> (`PastDueResolvePanel`) keeps its amber `PanelHead`.
+
 > **Resolve flow is amber, note uses the dashboard stat chip (2026-07-06):** the past-due resolve flow is
 > **amber**, not red — `ActionButtons`' `primary`/`outline` variants + the loading spinner were recolored to
 > amber (`from-[#f59e0b] to-[#d97706]`) so "Resolve payment issue" matches the amber past-due language (PanelHead,
