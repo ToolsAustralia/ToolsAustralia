@@ -11,6 +11,7 @@ import { getActivePackage, type ActivePackageUserInput } from "@/utils/membershi
 import { hasAdditionalPackageAccess } from "@/utils/membership/has-additional-package-access";
 import { hasFailedRenewal } from "@/utils/subscription/subscription-helpers";
 import { getPastDueRenewalPreview } from "@/utils/subscription/past-due-renewal-preview";
+import { calculateRenewalEntries } from "@/utils/payment/subscription-entries-calculator";
 import { TIER_HEX, tierKeyFromName, type TierKey } from "@/utils/membership/tier-visuals";
 import { getPartnerCatalogAccessPercentForPlanId, resolvePartnerCatalogPlanId } from "@/utils/partner-discounts/partner-catalog-visibility";
 import { getPartnerDiscountAccessInfo } from "@/utils/membership/benefit-resolution";
@@ -57,7 +58,8 @@ export interface DashboardStateResult {
   pastDueRenewalCost: number | null;
   /** ISO renewal date (subscription.endDate) when active + autoRenew; trialing-safe. Null otherwise. */
   renewalDateIso: string | null;
-  /** Membership entries the member gets on the next renewal (tier entriesPerMonth × promo). 0 for non-members. */
+  /** Membership entries the member gets on the next renewal = accumulated carry-forward + base
+   *  (BUSINESS.md carry-forward rule; no promo — matches the real grant). 0 for non-members. */
   membershipEntriesPerRenewal: number;
   drawName: string;
   drawDateIso: string | null;
@@ -211,9 +213,15 @@ export function useDashboardState(): DashboardStateResult {
         if (!Number.isNaN(d.getTime())) renewalDateIso = d.toISOString();
       }
     }
-    // Entries granted on the next renewal (this tier's monthly entries × the live promo).
+    // Entries granted on the next renewal = the accumulated carry-forward + this month's base
+    // (BUSINESS.md "Carry-forward rule"; the canonical webhook grant, calculateRenewalEntries).
+    // NO promo multiplier — promo applies only at join / resubscribe / upgrade, never on a renewal
+    // cycle, so this matches what the member actually receives (and the past-due settle preview).
     const membershipEntriesPerRenewal = hasActiveMembership
-      ? Math.round((activePackage.entriesPerMonth || 0) * multiplier)
+      ? calculateRenewalEntries(
+          activePackage.entriesPerMonth || 0,
+          iUser.subscription?.lastMonthAccumulatedEntries,
+        ).entriesToGrant
       : 0;
 
     // Past-due: the entries + cost the member unlocks by settling their failed renewal. Same

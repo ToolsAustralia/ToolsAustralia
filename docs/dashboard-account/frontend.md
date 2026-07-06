@@ -13,13 +13,17 @@
 > modal is a sibling of `SheetShell` so it survives the close; previously the Manage bottom sheet stayed
 > mounted *over* the cancellation modal.
 
-> **Incoming-entries-on-renewal note (2026-07-03):** `useDashboardState` exposes `renewalDateIso` (the
-> subscription's next renewal, from `subscription.endDate` when active + `autoRenew`) and
-> `membershipEntriesPerRenewal` (`activePackage.entriesPerMonth × promo multiplier`). `EntryWallet` uses them
-> to show "**{N} free entries will be added upon renewal on {date}**" for an **active member sitting at 0
-> membership entries** (the "subscribed but the monthly grant hasn't landed" state). **Trialing-safe:**
-> `endDate` is already the normalized renewal anchor for `trialing` (25-27th anchor-day) members, so the note
-> reads the *renewal* date without any live Stripe `trialing` check (see docs/BILLING_ANCHOR_24.md).
+> **Incoming-entries-on-renewal note (2026-07-03, number corrected 2026-07-06):** `useDashboardState` exposes
+> `renewalDateIso` (the subscription's next renewal, from `subscription.endDate` when active + `autoRenew`) and
+> `membershipEntriesPerRenewal`. `EntryWallet` uses them to show the free entries that land on renewal for an
+> **active member sitting at 0 membership entries** (the "subscribed but the monthly grant hasn't landed" state).
+> **Number fix (2026-07-06):** `membershipEntriesPerRenewal` was `entriesPerMonth × promo` — *initial-signup*
+> math that over-promised (e.g. 150 during a 5× promo) what a renewal actually grants. It now uses the CANONICAL
+> `calculateRenewalEntries(activePackage.entriesPerMonth, subscription.lastMonthAccumulatedEntries).entriesToGrant`
+> = **accumulated carry-forward + base, no promo** (BUSINESS.md "Carry-forward rule"; the same primitive the Stripe
+> renewal webhook, the past-due settle note, the renewal-failure email, and Klaviyo use — renewals never apply
+> promo). **Trialing-safe:** `endDate` is already the normalized renewal anchor for `trialing` (25-27th anchor-day)
+> members, so the note reads the *renewal* date without any live Stripe `trialing` check (see docs/BILLING_ANCHOR_24.md).
 
 > **Past-due settle-to-reactivate note (2026-07-06):** the past-due sibling of the note above. `useDashboardState`
 > exposes `pastDueRenewalEntries` + `pastDueRenewalCost` (both null unless `acct === "pastdue"`), computed via
@@ -30,6 +34,15 @@
 > resolve popup/sheet (`RenewalPreviewNote`), the renewal-failure email, and Klaviyo all show one number.
 > Both entries + cost read `subscription.packageId` (the billed package = the failed invoice), so they never
 > mismatch.
+
+> **Past-due partner access reconcile (2026-07-06):** a past-due member holding a live one-time pack was showing
+> partner access as **Paused / 0%**. The `/api/users/[id]/my-account` route returned the **raw, un-swept**
+> `partnerDiscountQueue`, and the client resolves access from `status:"active"` rows only — but a past-due
+> member's eligible pack sits `queued` behind the now-defunct membership row until a sweep runs. Fix: the route
+> now reconciles an in-memory CLONE (`processPartnerDiscountQueue`) before returning, the sanctioned read side of
+> the reconcile-then-read rule — so the client sees the member's REAL entitlement. Side-effect-free (the canonical
+> persisted sweep stays with the cron + `GET /api/partner-discount/queue`). **Entries were never affected**
+> (`entries.oneTime` renders unconditionally); only the partner-access % was stale. See [auth/backend.md](../auth/backend.md).
 
 > **Hero "Become a member" → membership page (2026-07-03):** the dashboard-home hero's "Become a member"
 > button now `router.push("/my-account/membership")` (the tier list) instead of opening the membership

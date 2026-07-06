@@ -1,12 +1,15 @@
 # Shared UI — Frontend
 
-> **EntryWallet past-due settle note (2026-07-06):** `sections/dashboard/EntryWallet` gained
-> `pastDueRenewalEntries` + `pastDueRenewalCost` props. When `acct === "pastdue"` and both are present it
-> renders an **amber** "**Settle ${cost} to reactivate · +{N} free entries land as soon as it clears**" note
-> — the past-due sibling of the existing gold `showRenewalNote` (active-member incoming-entries) note, same
-> icon-tile + gradient visual. Both props come from `useDashboardState` and share their source with the
-> resolve popup/sheet + email (see [dashboard-account/frontend.md](../dashboard-account/frontend.md) and
-> [subscription/frontend.md](../subscription/frontend.md)). Presentational-only; EntryWallet stays dumb.
+> **EntryWallet "free entries" stat chip (2026-07-06):** `sections/dashboard/EntryWallet` shows a renewal note
+> (active member, `showRenewalNote`, gold) and a past-due note (`showPastDueNote`, amber, driven by
+> `pastDueRenewalEntries` + `pastDueRenewalCost`). Both render a **stat chip that mirrors the red countdown
+> `CDBox` recipe** — `rounded-xl` · `bg-gradient-to-br` · `shadow-[0_8px_18px_-8px_…]` · inset ring · a
+> Poppins-black `+N` over a tiny stacked `FREE / ENTRIES` uppercase label — so "entries you gain" reads as the
+> gold/amber sibling of the "time you're losing" countdown, hung on a `border-t border-token` seam (no
+> card-in-card box). This replaced the earlier flat tinted-box + Sparkles-tile note (which read as generic /
+> AI-ish and heavier than the rest of the section). The chip figure is the corrected accumulated renewal grant
+> (see [dashboard-account/frontend.md](../dashboard-account/frontend.md)); props come from `useDashboardState`.
+> Copy always says "free entries." Presentational-only; EntryWallet stays dumb.
 
 > **Header sign-out (2026-07-02):** the site `Header` menu sign-out now calls `totalSignOut()`
 > ([src/utils/auth/total-sign-out.ts](../../src/utils/auth/total-sign-out.ts)) instead of a bare

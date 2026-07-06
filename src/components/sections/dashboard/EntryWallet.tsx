@@ -1,7 +1,7 @@
 "use client";
 
 import { cn } from "@/utils/cn";
-import { Clock, Plus, Sparkles } from "lucide-react";
+import { Clock, Plus } from "lucide-react";
 import { AnimatedNumber } from "@/components/ui/AnimatedNumber";
 import { useLeafTimer } from "@/hooks/useLeafTimer";
 import type { DashboardAccountState } from "@/utils/dashboard/dashboard-state-theme";
@@ -152,28 +152,45 @@ export default function EntryWallet({
           One-time <b className="num text-primary-token dark:text-white">{entries.oneTime.toLocaleString()}</b>
         </span>
       </div>
+      {/* Renewal + past-due "free entries" notes — a gold/amber stat chip that mirrors the red
+          countdown CDBox recipe (rounded-xl · gradient · outer shadow · inset ring · number over a
+          tiny uppercase label), so "entries you gain" reads as the countdown's sibling, not a bolt-on
+          card. The figure is the accumulated renewal grant (carry-forward + base, no promo). */}
       {showRenewalNote && renewalDateLabel && (
-        <div className="mt-3.5 flex items-center gap-3 rounded-[14px] border border-[#e4c86a]/45 bg-gradient-to-r from-[#f6dd8c]/25 via-[#f6dd8c]/[.08] to-transparent px-3 py-2.5 dark:border-[#d4af37]/30 dark:from-[#d4af37]/[.16]">
-          <span className="grid h-8 w-8 shrink-0 place-items-center rounded-[10px] bg-gradient-to-b from-[#f6dd8c] to-[#d4af37] text-[#241a02] shadow-[0_5px_12px_-5px_rgba(212,175,55,.8)]">
-            <Sparkles className="h-[16px] w-[16px]" />
+        <div className="mt-4 flex items-center gap-3 border-t border-token pt-3.5">
+          <span className="flex min-w-[54px] shrink-0 flex-col items-center gap-0.5 rounded-xl bg-gradient-to-br from-[#f6dd8c] via-[#e9c65f] to-[#d4af37] px-3 py-2 text-[#241a02] shadow-[0_8px_18px_-8px_rgba(212,175,55,.6),inset_0_0_0_1px_rgba(246,221,140,.5)]">
+            <span className="num font-['Poppins'] text-[19px] font-black leading-none tracking-[-.02em] [text-shadow:0_1px_1px_rgba(255,255,255,.25)]">
+              +{(entriesPerRenewal ?? 0).toLocaleString()}
+            </span>
+            <span className="text-[8px] font-extrabold uppercase leading-[1.1] tracking-[0.1em] opacity-90">
+              Free
+              <br />
+              Entries
+            </span>
           </span>
-          <p className="min-w-0 text-[12px] leading-[1.3] text-muted-token">
-            <b className="font-['Poppins'] text-primary-token dark:text-white">+{(entriesPerRenewal ?? 0).toLocaleString()} free entries</b> land on your renewal
-            {" · "}
-            <b className="whitespace-nowrap text-primary-token dark:text-white">{renewalDateLabel}</b>
-          </p>
+          <div className="min-w-0 text-[13px] leading-[1.38] text-muted-token">
+            <span className="mb-px block font-['Poppins'] text-[13.5px] font-bold text-primary-token dark:text-white">Land on your renewal</span>
+            Your accumulated entries drop in on{" "}
+            <b className="whitespace-nowrap font-semibold text-primary-token dark:text-white">{renewalDateLabel}</b>.
+          </div>
         </div>
       )}
       {showPastDueNote && (
-        <div className="mt-3.5 flex items-center gap-3 rounded-[14px] border border-amber-400/45 bg-gradient-to-r from-amber-400/20 via-amber-400/[.06] to-transparent px-3 py-2.5 dark:border-amber-500/30 dark:from-amber-500/[.14]">
-          <span className="grid h-8 w-8 shrink-0 place-items-center rounded-[10px] bg-gradient-to-b from-amber-400 to-amber-600 text-white shadow-[0_5px_12px_-5px_rgba(217,119,6,.8)]">
-            <Sparkles className="h-[16px] w-[16px]" />
+        <div className="mt-4 flex items-center gap-3 border-t border-token pt-3.5">
+          <span className="flex min-w-[54px] shrink-0 flex-col items-center gap-0.5 rounded-xl bg-gradient-to-br from-amber-400 via-amber-500 to-amber-600 px-3 py-2 text-white shadow-[0_8px_18px_-8px_rgba(217,119,6,.55),inset_0_0_0_1px_rgba(253,211,120,.45)]">
+            <span className="num font-['Poppins'] text-[19px] font-black leading-none tracking-[-.02em] [text-shadow:0_1px_1px_rgba(120,60,0,.3)]">
+              +{(pastDueRenewalEntries ?? 0).toLocaleString()}
+            </span>
+            <span className="text-[8px] font-extrabold uppercase leading-[1.1] tracking-[0.1em] opacity-90">
+              Free
+              <br />
+              Entries
+            </span>
           </span>
-          <p className="min-w-0 text-[12px] leading-[1.3] text-muted-token">
-            Settle <b className="whitespace-nowrap font-['Poppins'] text-primary-token dark:text-white">${pastDueRenewalCost}</b> to reactivate
-            {" · "}
-            <b className="font-['Poppins'] text-primary-token dark:text-white">+{(pastDueRenewalEntries ?? 0).toLocaleString()} free entries</b> land as soon as it clears
-          </p>
+          <div className="min-w-0 text-[13px] leading-[1.38] text-muted-token">
+            <span className="mb-px block font-['Poppins'] text-[13.5px] font-bold text-primary-token dark:text-white">Waiting on your renewal</span>
+            Settle <b className="whitespace-nowrap font-semibold text-primary-token dark:text-white">${pastDueRenewalCost}</b> and your free entries land as soon as it clears.
+          </div>
         </div>
       )}
     </div>

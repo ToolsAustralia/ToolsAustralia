@@ -7,7 +7,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import connectDB from "@/lib/mongodb";
-import User from "@/models/User";
+import User, { type IUser } from "@/models/User";
 import Order from "@/models/Order";
 import MiniDraw from "@/models/MiniDraw";
 import { getServerSession } from "next-auth";
@@ -15,6 +15,7 @@ import { authOptions } from "@/lib/auth";
 import { requirePermission } from "@/lib/api-auth-permissions";
 import { getPackageById } from "@/data/membershipPackages";
 import { getEffectiveBenefits } from "@/utils/membership/benefit-resolution";
+import { processPartnerDiscountQueue } from "@/utils/partner-discounts/partner-discount-queue";
 import { hasMembershipGrantInCurrentDrawPeriod } from "@/utils/draws/has-membership-grant-this-draw";
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -218,6 +219,25 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     //   userId: userData._id,
     // });
 
+    // Reconcile-then-read: the stored partnerDiscountQueue can be stale — a finished active window
+    // the daily cron hasn't swept yet, or (for a PAST-DUE member) an eligible one-time pack still
+    // sitting `queued` behind the now-defunct membership row. Sweep an in-memory CLONE so the client's
+    // partner-access resolution reflects the member's REAL current entitlement instead of the stored
+    // status. Sanctioned read side of the reconcile-then-read rule (see getReconciledPartnerDiscountSummary)
+    // and side-effect-free: the canonical persisted sweep stays with the cron + `GET /api/partner-discount/queue`.
+    const iUserForQueue = userData as unknown as IUser;
+    let reconciledPartnerDiscountQueue = iUserForQueue.partnerDiscountQueue;
+    try {
+      const sweepClone = {
+        subscription: iUserForQueue.subscription,
+        partnerDiscountQueue: (iUserForQueue.partnerDiscountQueue ?? []).map((item) => ({ ...item })),
+      } as unknown as IUser;
+      await processPartnerDiscountQueue(sweepClone);
+      reconciledPartnerDiscountQueue = sweepClone.partnerDiscountQueue;
+    } catch (error) {
+      console.error("my-account: partner-discount queue reconcile failed; serving raw queue", error);
+    }
+
     // ✅ CRITICAL: Add cache control headers to ensure fresh data
     // This prevents Next.js from caching subscription status changes
     const response = NextResponse.json({
@@ -225,6 +245,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       data: {
         user: {
           ...userData,
+          partnerDiscountQueue: reconciledPartnerDiscountQueue,
           subscriptionPackageData,
           enrichedOneTimePackages: oneTimePackageData,
           hasCurrentDrawMembershipGrant,
