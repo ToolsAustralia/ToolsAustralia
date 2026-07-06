@@ -94,7 +94,9 @@ export default function DashboardHero({
         <AccessRing percent={100} size={58} stroke={7} color="#fbbf24" trackColor={white ? "rgba(255,255,255,.22)" : "rgba(0,0,0,.14)"}>
           <ShieldAlert className="h-5 w-5" style={{ color: "#fbbf24" }} />
         </AccessRing>
-        <span className="text-[8px] font-bold uppercase tracking-[0.1em]" style={{ color: soft }}>Past due</span>
+        {/* "Paused" (access), not "Past due" — the chip already carries the "· past due" status, so
+            repeating it under the ring is redundant. This mirrors the Rewards/Partner card's "Paused". */}
+        <span className="text-[8px] font-bold uppercase tracking-[0.1em]" style={{ color: soft }}>Paused</span>
       </div>
     ) : null;
 

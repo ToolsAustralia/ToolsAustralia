@@ -38,12 +38,15 @@ const button = cva(
   {
     variants: {
       variant: {
+        // Amber, not red — this is the PAST-DUE resolve flow, so the CTA matches the amber
+        // past-due language everywhere else (PanelHead, hero "Manage membership", the ribbon).
+        // Red is reserved for draw urgency / "get entries".
         primary: cn(
-          "bg-gradient-to-b from-[#ee0000] to-[#b91c1c] text-white border-[1.5px] border-[#b91c1c] shadow-[0_8px_18px_rgba(238,0,0,0.32)]",
+          "bg-gradient-to-b from-[#f59e0b] to-[#d97706] text-white border-[1.5px] border-[#b45309] shadow-[0_8px_18px_rgba(217,119,6,0.32)]",
           styles.btnPrimary
         ),
         outline:
-          "bg-white text-[#b91c1c] border-[1.5px] border-[#fecaca] hover:bg-[#fff1f2] hover:border-[#ee0000]",
+          "bg-white text-[#b45309] border-[1.5px] border-[#fcd34d] hover:bg-[#fffbeb] hover:border-[#d97706]",
         ghost:
           "bg-transparent text-[#525252] dark:text-neutral-300 border-[1.5px] border-transparent hover:bg-[#fafafa] dark:hover:bg-neutral-800",
       },
@@ -66,7 +69,7 @@ const ActionButtons: React.FC<ActionButtonsProps> = ({
   if (isLoading) {
     return (
       <div className="flex flex-col items-center justify-center py-6 sm:py-8">
-        <Loader2 className="w-6 h-6 sm:w-8 sm:h-8 text-red-600 animate-spin mb-3" />
+        <Loader2 className="w-6 h-6 sm:w-8 sm:h-8 text-amber-600 animate-spin mb-3" />
         <p className="text-sm text-neutral-600 dark:text-neutral-300">Loading payment options…</p>
       </div>
     );

@@ -1,5 +1,12 @@
 # Shared UI — Frontend
 
+> **Past-due hero de-dup — ring says "Paused" (2026-07-06):** the past-due `DashboardHero` stamped the state
+> three times in one stack — the access ring label ("Past due"), the tier chip ("TRADIE · PAST DUE"), and the
+> amber ribbon ("Renewal failed…"). The ring label + chip were the literal same words. The ring (which shows the
+> partner-access % for active/one-time) now labels the past-due shield **"Paused"** (access paused) instead of
+> repeating "Past due" — matching the Rewards/Partner card's "Paused" vocabulary. The chip keeps "· past due"
+> (tier + status identity); the ribbon stays the CTA.
+
 > **Past-due ribbon copy — benefits, not just entries (2026-07-06):** `DashboardAlertRibbon`'s past-due (amber)
 > pill now reads "Renewal failed — update payment to keep your **partner discounts, free entries & bonus offers**"
 > (was "…keep earning entries"). Leads with member benefits and still names entries, mirroring the one-time (teal)

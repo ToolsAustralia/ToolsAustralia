@@ -220,6 +220,16 @@ The flag that selects Mode A vs Mode B is `hasMembershipGrantInCurrentDrawPeriod
 > footer since the sheet owns dismiss). This replaced an earlier, wrong approach that *embedded the whole
 > modal* (dark hero + Close) inside the sheet. Verify the modal path with `npm run test:renewal-failed`.
 
+> **Resolve flow is amber, note uses the dashboard stat chip (2026-07-06):** the past-due resolve flow is
+> **amber**, not red — `ActionButtons`' `primary`/`outline` variants + the loading spinner were recolored to
+> amber (`from-[#f59e0b] to-[#d97706]`) so "Resolve payment issue" matches the amber past-due language (PanelHead,
+> hero "Manage membership", the ribbon); red stays reserved for draw urgency / "get entries". And
+> `RenewalPreviewNote` now renders the **same amber "free entries" stat chip** as the dashboard `EntryWallet`
+> past-due note (the countdown-CDBox recipe — see [shared-ui/frontend.md](../shared-ui/frontend.md)) instead of the
+> old Sparkles-tile inline note, so the resolve sheet/popup and the dashboard read as one design. _Note: the
+> `RenewalFailedModal` Shell hero still uses the red `tone="danger"` glow — the sheet (PastDueResolvePanel) uses
+> the amber PanelHead, so it's fully amber; the modal hero is the one remaining red past-due surface._
+
 > **Renewal preview note — "Settle $X → +N free entries" (2026-07-06):** both resolve surfaces render
 > **`RenewalPreviewNote`** ([RenewalFailedModal/RenewalPreviewNote.tsx](../../src/components/modals/RenewalFailedModal/RenewalPreviewNote.tsx))
 > in the **initial** resolve state only (gated `!terminalCollectionFailure && !showInlineCardSetup`), so a
