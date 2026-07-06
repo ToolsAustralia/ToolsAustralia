@@ -368,6 +368,23 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
   const isPlaceholderPlan =
     !activePlan || activePlan.id === "placeholder" || activePlan.id.startsWith("placeholder-");
 
+  /** The ONE dismissal path for the package picker (✕ / backdrop / Escape). Selection-first with
+   *  nothing chosen yet: dismissing must not strand the user on the placeholder payment step
+   *  (grey skeletons, no package) — close the whole membership modal instead. Once a real plan is
+   *  selected, dismissal just closes the picker. A PICK never routes through here
+   *  (PackageSelectionModal no longer self-closes; the parent closes via handlePackageSelect). */
+  const dismissPackageSelection = useCallback(() => {
+    setIsPackageSelectionOpen(false);
+    if (configSelectionFirst && isPlaceholderPlan) onClose();
+  }, [configSelectionFirst, isPlaceholderPlan, onClose]);
+
+  // Orphan-proofing: ANY whole-modal close (Escape, payment success, programmatic) while the
+  // picker is open must also close the picker — MembershipModal stays mounted with isOpen=false,
+  // so a stale isPackageSelectionOpen would leave the picker rendered over the page.
+  useEffect(() => {
+    if (!isOpen && isPackageSelectionOpen) setIsPackageSelectionOpen(false);
+  }, [isOpen, isPackageSelectionOpen]);
+
   // Hooks for API integration
   const { createSubscription, createOneTimePurchase, createSubscriptionExistingUser } = useStripeSubscription();
   const { subscriptionPackages, oneTimePackages } = useMemberships();
@@ -757,6 +774,13 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
   useEffect(() => {
     const handleEscapeKey = (event: KeyboardEvent) => {
       if (event.key === "Escape" && isOpen) {
+        // Picker open → Escape DISMISSES THE PICKER (same semantics as its ✕/backdrop), not the
+        // whole modal underneath it. Previously this closed the membership modal while
+        // isPackageSelectionOpen stayed true, leaving the picker orphaned over the page.
+        if (isPackageSelectionOpen) {
+          dismissPackageSelection();
+          return;
+        }
         handleClose();
       }
     };
@@ -770,7 +794,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
       document.removeEventListener("keydown", handleEscapeKey);
       document.body.style.overflow = "unset";
     };
-  }, [isOpen, handleClose]);
+  }, [isOpen, handleClose, isPackageSelectionOpen, dismissPackageSelection]);
 
   useEffect(() => {
     const handleUpsellPayment = (event: CustomEvent) => {
@@ -4742,16 +4766,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
       {/* Package Selection Modal */}
       <PackageSelectionModal
         isOpen={isPackageSelectionOpen}
-        onClose={() => {
-          // DISMISSAL ONLY (✕ / backdrop) — a pick never routes through here anymore
-          // (PackageSelectionModal.handlePlanSelect no longer self-closes; the parent closes via
-          // handlePackageSelect), so this can't fire on the select path with stale state.
-          setIsPackageSelectionOpen(false);
-          // Selection-first with nothing chosen yet: dismissing the picker must not strand the
-          // user on the placeholder payment step (grey skeletons, no package) — close the whole
-          // membership modal instead. Once a real plan is selected, dismissal behaves normally.
-          if (configSelectionFirst && isPlaceholderPlan) onClose();
-        }}
+        onClose={dismissPackageSelection}
         currentPlan={activePlan}
         onPlanSelect={handlePackageSelect}
       />

@@ -18,9 +18,16 @@
 > 3. **Dismissing the picker before choosing closes the whole modal** (`configSelectionFirst &&
 >    isPlaceholderPlan`) instead of stranding the user on the skeleton payment step; after a real plan is
 >    selected, dismissal behaves normally ("Change" flow unaffected).
+> 4. **Hardening from the second adversarial pass:** Escape while the picker is open now dismisses the
+>    PICKER (same `dismissPackageSelection` path as ✕/backdrop) instead of closing the whole modal and
+>    leaving the picker orphaned over the page (pre-existing hole — MembershipModal stays mounted with
+>    `isOpen=false`, so stale `isPackageSelectionOpen` kept rendering it); an orphan-proofing effect also
+>    resets the picker on ANY whole-modal close. The picker's 200ms tap→glow→select timeout is cancelled on
+>    close/unmount (a pick followed by an instant ✕ used to commit the plan into the closed modal — stale
+>    preselect that skipped selection-first on the next open) and a rapid re-pick supersedes the pending one.
 > Note: "Buy a package" → Apprentice Pack preselected straight into payment is `openWithOneTimePlan()`
 > working as designed (first public one-time pack in the static catalog). Test-infra caveat: the modal smoke
-> tests are `renderToString`-only — they cannot catch these interaction paths; both regressions here were
+> tests are `renderToString`-only — they cannot catch these interaction paths; all regressions here were
 > found by control-flow tracing + adversarial review.
 
 > **Guest panel: view-the-draw redirect (2026-07-06):** `DashboardGuestPanel`'s "Enter the {draw}" card title
