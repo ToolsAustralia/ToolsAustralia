@@ -1,5 +1,9 @@
 # Shared UI — Frontend
 
+> **Tier list: "See full membership details" link (2026-07-07):** `MembershipTierList` renders a small
+> centered sky text-link under the tier cards → the PUBLIC **`/membership`** page (the in-depth benefit
+> breakdown), so undecided users can read the full pitch before committing from the dashboard tier list.
+
 > **MembershipModal selection-first: synchronous + dismissal-only onClose contract (2026-07-06):** the
 > guest-conversion "Become a member" flow. Three coordinated changes (adversarially verified — the first
 > iteration had a same-tick stale-state blocker, see below):
