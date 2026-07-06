@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Image from "next/image";
-import { Bolt, Crown, ChevronDown, ArrowRight, Ticket } from "lucide-react";
+import { Bolt, Crown, ChevronDown, Ticket } from "lucide-react";
 import AccessRing from "@/components/ui/AccessRing";
 import type { MembershipCardCta } from "@/hooks/useMembershipCardCta";
 import type { LocalMembershipPlan } from "@/utils/membership/membership-adapters";
@@ -21,18 +21,12 @@ function trackFor(ink: string): string {
 export function PackCard({
   plan,
   cta,
-  ctaLabel,
-  colorHex,
 }: {
   plan: LocalMembershipPlan;
   cta: MembershipCardCta;
-  /** When set, renders a visual "Enter Now"-style CTA footer inside the card (promo treatment). */
-  ctaLabel?: string;
-  /** Override the derived accent hex (treatment-only color alignment); everything derives from it. */
-  colorHex?: string;
 }) {
   const scheme = getPackageColorScheme(plan.id);
-  const hex = colorHex ?? scheme.accentHex;
+  const hex = scheme.accentHex;
   const ink = inkOn(hex);
   const access = getPartnerCatalogAccessPercentForPlanId(plan.id);
   const icon = getPackageIcon(plan.id);
@@ -121,29 +115,6 @@ export function PackCard({
           <Bolt className="h-3 w-3" /> {entries.toLocaleString()} free entries
         </span>
         <div className="mt-0.5 font-['Poppins'] text-[20px] font-black">${plan.price}</div>
-        {ctaLabel && (
-          <span
-            className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-[12px] px-3 py-2 font-['Poppins'] text-[12.5px] font-black"
-            style={
-              isVip
-                ? {
-                    // VIP card is near-black — a dark button vanishes. Gold button + dark ink,
-                    // matching the VIP gold text/theme, so the CTA reads clearly.
-                    background: "linear-gradient(180deg,#fbe9b0,#e8c75a 46%,#c8a13a)",
-                    color: "#1a1206",
-                    boxShadow:
-                      "0 8px 20px -12px rgba(212,175,55,.75),inset 0 1px 0 rgba(255,244,210,.65),inset 0 -1px 0 rgba(120,90,20,.5)",
-                  }
-                : {
-                    background: "linear-gradient(180deg,#18181e,#0b0b0d)",
-                    color: "#ffffff",
-                    boxShadow: "0 8px 20px -12px rgba(0,0,0,.6),inset 0 1px 0 rgba(255,255,255,.14),inset 0 -1px 0 rgba(0,0,0,.5)",
-                  }
-            }
-          >
-            {ctaLabel} <ArrowRight className="h-3.5 w-3.5" />
-          </span>
-        )}
       </div>
     </button>
   );

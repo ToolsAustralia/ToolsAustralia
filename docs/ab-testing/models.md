@@ -49,15 +49,16 @@ A/B test (control = false → video; treatment = true → still). Independent of
 Defaulted + merged + boolean-validated by `VariantConfigService`. Seed an
 experiment with `npm run seed:static-vs-video-hero`.
 
-## VariantConfig.packages.design
+## VariantConfig.packages
 
-Optional `"promo" | "membership"` scalar on `VariantConfig.packages`
-(default / absent = `"promo"`). The lever for the **promo package-design** A/B
-test: `PromoPackages` branches on it — `"promo"` renders the current
-`MembershipSection`; `"membership"` renders `PromoMembershipDesign` (the
-`/membership` tier + one-time-packs design). Because it is a scalar on the
-already-spread `packages` key, it merges through `mergeVariantConfig` with no
-change to that function; `validateVariantConfig` rejects any value other than
-`"promo"`/`"membership"`. Seed an experiment (straight to active) with
-`npm run seed:promo-packages-design`. Winner metric = System A (user-level
-Bayesian conversion); read the Bayesian panel, not the legacy chi-square card.
+Optional object on `VariantConfig` with three keys, all still live and passed
+through by `PromoPackages` on promotions pages:
+
+- `displayOrder?: string[]` — reorder package IDs.
+- `highlightPackage?: string` — package ID to highlight/emphasize.
+- `hidePackages?: string[]` — package IDs to hide.
+
+> Historical note: a `packages.design` scalar (`"promo" | "membership"`) existed
+> for the 2026-07 promo package-design experiment; it was removed 2026-07-06
+> when the experiment concluded (control won) — see
+> [promo-packages-design-runbook.md](./promo-packages-design-runbook.md).

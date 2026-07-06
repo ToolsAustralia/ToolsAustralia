@@ -76,27 +76,7 @@ npm run seed:static-vs-video-hero:prod:dry   # PROD: preview
 npm run seed:static-vs-video-hero:prod       # PROD: create the draft experiment
 ```
 
-### A/B seed: promo package-design experiment
-
-`scripts/seed-promo-packages-design-experiment.ts` creates and **immediately activates** the promo package-design A/B experiment across every prize slug (both dynamic `[slug]` prize pages and toolset/brand pages). This is an **authorized deviation** from the standard seed pattern — other seeds create a `draft`; this one goes straight to `active` because the experiment is designed to run immediately.
-
-```bash
-npm run seed:promo-packages-design:dry   # preview — prints the plan; creates nothing
-npm run seed:promo-packages-design       # activate the experiment (dev/local)
-# :prod variants not applicable — seed targets the connected DB (use --prod flag via connect-ops-db.ts pattern if needed)
-```
-
-**Idempotent and dry-run-default-safe.** The `:dry` variant is the safe preview step; run it first.
-
-**Overlap guard:** the seed refuses to activate if another active experiment already targets any of the slug targets. Override with `-- --force-overlap`. See [docs/ab-testing/promo-packages-design-runbook.md](../ab-testing/promo-packages-design-runbook.md) for full details.
-
-**Cleanup / re-seed:** `scripts/cleanup-promo-packages-design-experiment.ts` deletes the experiment and ALL its collected data (Variant, VariantAssignment, ExperimentEvent, ExperimentDailyMetrics, ExperimentHistory, then the Experiment doc) so it can be re-seeded fresh — used when a run collected data against a buggy build. It **leaves `PaymentEvent` stamps untouched** (financial records; the re-seed creates a new experiment `_id`, so stale stamps can't pollute the new metrics). **Dry-run by default** (destructive → opt-in), prints the resolved `_id` for a prod-vs-dev safety check, and refuses if 0 or >1 experiments match the name.
-
-```bash
-npm run cleanup:promo-packages-design         # DRY RUN — counts + resolved _id, no writes
-npm run cleanup:promo-packages-design:apply   # execute the deletes
-# then: npm run seed:promo-packages-design     # re-seed a fresh experiment
-```
+> Historical: the promo packages-design experiment (2026-07, concluded — control won) had its own seed/cleanup scripts (`seed:promo-packages-design`, `cleanup:promo-packages-design`); both scripts and their npm entries were removed when the experiment ended.
 
 ### Affiliate commission reconciliation (safety net)
 

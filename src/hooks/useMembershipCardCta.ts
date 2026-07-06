@@ -55,23 +55,8 @@ const isSubscriptionPlan = (p: LocalMembershipPlan) =>
 export function useMembershipCardCta(
   {
     includeAdditionalForMembers = false,
-    onPackageCtaClick,
-    forcedTab = null,
   }: {
     includeAdditionalForMembers?: boolean;
-    /**
-     * Fired exactly when a package CTA genuinely opens the modal — i.e. AFTER the draw
-     * gate passes and AFTER the past-due / existing-subscriber `/my-account` early-returns.
-     * Lets a caller (e.g. the promo A/B treatment) emit a funnel event on the SAME path
-     * the shared MembershipSection emits on, without coupling this hook to A/B infra.
-     */
-    onPackageCtaClick?: (plan: LocalMembershipPlan) => void;
-    /**
-     * Pre-selects the initial tab from a URL param (`?packages=`), mirroring MembershipSection.
-     * When set, it overrides the user-state default below; the visitor can still toggle manually.
-     * Passed by the promo treatment (PromoMembershipDesign); omitted elsewhere (e.g. /membership).
-     */
-    forcedTab?: MembershipTab | null;
   } = {},
 ) {
   const router = useRouter();
@@ -94,7 +79,7 @@ export function useMembershipCardCta(
   const currentName = (userData?.subscriptionPackageData?.name ?? "").toLowerCase();
 
   const [activeTab, setActiveTab] = useState<MembershipTab>(
-    forcedTab ?? (hasActiveSubscription && hasAccessToAdditional ? "one-time" : "membership"),
+    hasActiveSubscription && hasAccessToAdditional ? "one-time" : "membership",
   );
 
   const membershipPlans = useMemo(
@@ -115,8 +100,8 @@ export function useMembershipCardCta(
   // The public /membership "Not subscribing?" section always shows the PUBLIC
   // one-time ladder (Apprentice→VIP) — the member-only "Additional" packs are a
   // my-account concept, not part of this marketing cross-sell.
-  // When `includeAdditionalForMembers` is on (A/B treatment opt-in), members see the
-  // Additional packs instead — offer parity with the control MembershipSection.
+  // When `includeAdditionalForMembers` is on (my-account membership page), members
+  // see the Additional packs instead — matching the shared MembershipSection offer.
   const oneTimePlans = useMemo(() => {
     return selectOneTimeDrawerPackages(oneTimePackages, {
       hasAdditionalAccess: hasAccessToAdditional,
@@ -174,7 +159,6 @@ export function useMembershipCardCta(
       }
       // new subscription / one-time / guest → open the existing modal
       membershipModal.openModal(plan);
-      onPackageCtaClick?.(plan);
 
       // Canonical Klaviyo "Started Checkout" — AUTHED users only (guests fire
       // server-side from /api/auth/register). Mirrors MembershipSection exactly.

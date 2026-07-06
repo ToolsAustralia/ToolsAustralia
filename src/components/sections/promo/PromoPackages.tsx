@@ -3,23 +3,15 @@
 import MembershipSection from "@/components/sections/MembershipSection";
 import { useVariantContext } from "@/components/ab-testing/VariantProvider";
 import { SectionContainer } from "@/components/ui";
-import PromoMembershipDesign from "./PromoMembershipDesign";
 
+// The 2026-07 packages-design A/B test ended with this (the original promo
+// design) as the winner — the "membership" treatment branch was removed.
+// See docs/ab-testing/promo-packages-design-runbook.md for the record.
 export default function PromoPackages() {
-  // Get variant config from context
+  // Variant config still flows for future experiments (hidePackages / displayOrder).
   const { variantConfig } = useVariantContext();
-
-  // Extract packages config (passed to MembershipSection when it supports it)
   const packagesConfig = variantConfig?.packages;
 
-  // A/B TREATMENT: render the /membership tier + one-time-packs design.
-  // MembershipTierChooser (via PromoMembershipDesign) owns its own full-bleed <section id="packages">,
-  // so we do NOT wrap it in the control's section/container.
-  if (packagesConfig?.design === "membership") {
-    return <PromoMembershipDesign />;
-  }
-
-  // CONTROL: current promo package block (unchanged).
   return (
     <>
       {/* Packages Section with scroll target */}

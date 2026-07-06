@@ -1,6 +1,7 @@
 "use client";
 
-import { Ticket, Gift, ShieldCheck, CreditCard, Store, History, MessageCircle, ArrowRight } from "lucide-react";
+import Link from "next/link";
+import { Ticket, Gift, ShieldCheck, CreditCard, Store, History, MessageCircle, ArrowRight, ArrowUpRight } from "lucide-react";
 import { QuickTile } from "@/components/ui/QuickTile";
 import { getOneTimePackages } from "@/data/membershipPackages";
 
@@ -31,7 +32,19 @@ export default function DashboardGuestPanel({ drawName, onBecomeMember, onBuyPac
   return (
     <div className={className}>
       <section className="rounded-3xl border border-token bg-surface p-5 shadow-sm">
-        <h3 className="font-['Poppins'] text-lg font-extrabold text-primary-token dark:text-white">Enter the {drawName}</h3>
+        <div className="flex items-center justify-between gap-3">
+          <h3 className="font-['Poppins'] text-lg font-extrabold text-primary-token dark:text-white">Enter the {drawName}</h3>
+          {/* A guest holds no entries yet — give them a way to SEE the draw (prize showcase)
+              before committing to a purchase. */}
+          <Link
+            href="/major-draw"
+            aria-label={`View the ${drawName}`}
+            title={`View the ${drawName}`}
+            className="grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-token bg-surface text-muted-token transition-colors hover:bg-black/[.03] hover:text-primary-token focus:outline-none focus-visible:ring-2 focus-visible:ring-red-600 dark:hover:bg-white/[.05] dark:hover:text-white"
+          >
+            <ArrowUpRight className="h-4 w-4" />
+          </Link>
+        </div>
         <p className="mt-1 text-sm text-muted-token">Membership from $20/mo · packages from ${MIN_PACK_PRICE}.</p>
         <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
           <button
