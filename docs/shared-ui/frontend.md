@@ -1,5 +1,13 @@
 # Shared UI — Frontend
 
+> **Mini-draw copy: no "only drawn when full" framing (2026-07-07, owner call):** the Draws mini-tab explainer
+> (`DrawsMini`) and the entry sheet footnote (`MiniDrawEntrySheet`) no longer lead with "no clock — they run
+> when they fill" / "picked the moment it fills" — for a draw far from its target that reads as "might sit
+> forever" and discourages entry. Reframed to agency + certainty with the SAME mechanics: "**Small pools, real
+> chances.** Every entry pushes the draw to the finish line — and someone always takes the prize." / "winner
+> drawn automatically — someone always takes the prize." The mini-vs-major distinction line (mini-pack entries
+> don't roll into the major draw) is retained. Trigger model unchanged.
+
 > **Tier list: "See full membership details" link (2026-07-07):** `MembershipTierList` renders a small
 > centered sky text-link under the tier cards → the PUBLIC **`/membership`** page (the in-depth benefit
 > breakdown), so undecided users can read the full pitch before committing from the dashboard tier list.
