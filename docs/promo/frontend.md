@@ -1,5 +1,19 @@
 # Promo — Frontend
 
+## /promotions/giveaway — prize-combinations gallery (2026-07-06, DRAFT pending owner design rating)
+
+A clickable index of every major-draw prize combination: `src/app/promotions/giveaway/page.tsx` (server —
+static metadata, builds serializable cards) + colocated `GiveawayGalleryClient.tsx` (brand filter pills +
+grid). Cards come from `listPrizes()` (5 brands × 3 toolbox stacks + `cash-prize`), each using the SAME
+manifest-verified landing hero art as its `/promotions/<slug>` page via `getLandingHeroImagePaths(slug)` —
+mobile asset `< lg`, desktop asset `≥ lg` (the promotions-wide 1024px art-direction split), rendered
+`object-contain` on a **white plate in both themes** (the hero art is composited for light backgrounds; this
+avoids the 4-way viewport×theme class matrix). Combos with no shipped art are skipped, not broken. Each card
+deep-links to `/promotions/<slug>`. A static route beside `[slug]` — Next static-over-dynamic precedence
+means "giveaway" never hits the dynamic prize route. **Analytics caveat:** `usePromoPageTracking`'s
+`isValidPromoSlug` doesn't include "giveaway", so gallery visits fire NO PromoAnalyticsVisit (harmless);
+extend the validator + pageType deliberately if gallery tracking is wanted.
+
 ## Landing page — new design assets, full replace (2026-06-23)
 
 The promo landing hero **images + videos were fully replaced** with the new
