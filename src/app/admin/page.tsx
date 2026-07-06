@@ -7,6 +7,7 @@ import AdminPage from "@/app/admin/component/AdminPage";
 import { AdminUser } from "@/types/admin";
 import { usePermissions } from "@/hooks/usePermissions";
 import { firstAccessibleTabId } from "@/app/admin/component/adminTabs";
+import DashboardLoader from "@/components/loading/DashboardLoader";
 
 export default function AdminDashboard() {
   const router = useRouter();
@@ -29,11 +30,7 @@ export default function AdminDashboard() {
 
   // Show loading while checking authentication
   if (isLoading) {
-    return (
-      <div className="min-h-screen-svh flex items-center justify-center">
-        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-red-600"></div>
-      </div>
-    );
+    return <DashboardLoader label="Loading admin…" />;
   }
 
   // Don't render if not staff — the admin layout's server guard handles the redirect,

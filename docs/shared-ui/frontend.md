@@ -1,5 +1,397 @@
 # Shared UI — Frontend
 
+> **Redeemable unlock flow + MembershipModal coupon auto-apply (2026-07-06):** `RewardsClaimables` gained an
+> `onUnlock` prop — locked purchase-required coupons render an actionable amber "Join to unlock" / "Purchase to
+> unlock" CTA (was a disabled dead-end). `MembershipModal` now **auto-applies** codes arriving via the
+> `openMembershipModal` prefill event (`pendingAutoApplyCode` one-shot → `handleCouponApply("auto")`) — prefill
+> alone lost the coupon carry if the user paid without clicking Apply. Legacy `RedeemablesWallet`'s never-wired
+> "Unlock" no-op removed (qualified items redeem directly). Full flow + routing rules:
+> [rewards-redeemables/frontend.md](../rewards-redeemables/frontend.md).
+
+> **Scheduled downgrade shown on the plan status row (2026-07-06):** `MembershipCurrentPlan` (and, in lockstep,
+> the dashboard `ManageSheet` plan summary) now surface a **pending downgrade**. When a member downgrades, they
+> keep the higher tier's benefits until `endDate` (`getEffectiveBenefits` → the card still shows the higher
+> tier + stats), then drop to `subscription.packageId` (the new lower tier). The status row now reads
+> **"Downgrades to {tier}" / "{date} · ${price}/mo after"** instead of "Renews … / Auto-renews monthly",
+> driven by the canonical `hasPendingDowngrade` + `getDowngradeEffectiveDate` (same source as the Header
+> "Premium benefits" countdown). Row precedence: **past-due > scheduled cancel (autoRenew off) > scheduled
+> downgrade > normal renewal** (a cancel supersedes a downgrade).
+
+> **Tier re-tap after cancelling the payment modal (2026-07-06):** from the account membership "Change your
+> tier" list, tapping a tier sets the page's `changeTierName` → mounts `SubscriptionManagementModal` in
+> `confirmOnly` mode (`autoSelectPlanName`), which auto-opens the upgrade confirm → Stripe payment modal. The
+> parent only resets `changeTierName` via its `onClose`, and the auto-select is latched by a ref that clears
+> only on unmount — so any cancel exit that doesn't call the parent `onClose` leaves the modal mounted + the
+> ref latched, making a re-tap of the **same** tier a silent no-op (looked like a ~1-min "won't open"; it was
+> actually permanent until an unrelated remount). The `UpgradeConfirmModal`/`DowngradeConfirmModal` cancels
+> already called `if (confirmOnly) onClose()`; the **`StripePaymentModal` cancel was missing it** — added, so
+> cancelling the payment step in confirmOnly closes the whole flow and a re-tap re-opens. No TTL/dedup was
+> involved. Verified: `npm run test:subscription-management`.
+
+> **`UpgradeBenefitStatGrid` — one benefit grid for both upgrade steps (2026-07-06):** the two steps of the
+> membership upgrade flow rendered DIFFERENT benefit cells — step 1 (`UpgradeConfirmModal/BenefitsBody`) showed
+> **Partner offers % · Partner access · Free entries / cycle** (Anton font, icon+tint, real props); step 2
+> (`StripePaymentModal/UpgradeBenefitsPreview`) showed **Entries / mo · Partner access · Per month $** (acumin
+> font, bordered, **hardcoded** entries + a stale/unused partner %). Extracted
+> [components/ui/UpgradeBenefitStatGrid.tsx](../../src/components/ui/UpgradeBenefitStatGrid.tsx)
+> (`{ tier, partnerPct, entriesPerCycle }`) — the single 3-cell grid both steps now render, so they're identical
+> (same stats, labels, font, icons, tint). Numbers must be canonical: partner-catalog %
+> (`getPartnerCatalogAccessPercentForPlanId`) + the package's `entriesPerMonth`. Price is NOT a cell (it lives in
+> the order summary / checklist). See [subscription/frontend.md](../subscription/frontend.md).
+
+> **Partner-discount card de-dup — past-due-with-pack subline (2026-07-06):** for a past-due member holding a
+> live one-time pack, `RewardsPartnerCard` + `PartnerPreview` showed `"{pct}% active · ends in {X} · membership
+> paused"` — but the ring already renders `{pct}%` (and the Rewards headline already says "Active from your
+> pack"), so `{pct}%`/"active" were duplicated. Sublines now drop the ring-duplicating `%`: Rewards →
+> `"Ends in {X} · membership paused"`, PartnerPreview (generic "Partner discounts" headline) →
+> `"Active · ends in {X} · membership paused"`. Same facts, no echo.
+
+> **Past-due hero de-dup — ring says "Paused" (2026-07-06):** the past-due `DashboardHero` stamped the state
+> three times in one stack — the access ring label ("Past due"), the tier chip ("TRADIE · PAST DUE"), and the
+> amber ribbon ("Renewal failed…"). The ring label + chip were the literal same words. The ring (which shows the
+> partner-access % for active/one-time) now labels the past-due shield **"Paused"** (access paused) instead of
+> repeating "Past due" — matching the Rewards/Partner card's "Paused" vocabulary. The chip keeps "· past due"
+> (tier + status identity); the ribbon stays the CTA.
+
+> **Past-due ribbon copy — benefits, not just entries (2026-07-06):** `DashboardAlertRibbon`'s past-due (amber)
+> pill now reads "Renewal failed — update payment to keep your **partner discounts, free entries & bonus offers**"
+> (was "…keep earning entries"). Leads with member benefits and still names entries, mirroring the one-time (teal)
+> sibling pill's vocabulary ("partner discounts, more free entries & bonus offers") for one consistent benefits phrasing.
+
+> **`FreeEntriesChip` — the "+N free entries" stat chip (2026-07-06):** shared component
+> [components/ui/FreeEntriesChip.tsx](../../src/components/ui/FreeEntriesChip.tsx) (`{ value, tone: "gold" | "amber" }`),
+> the single source for the three surfaces that show it: `EntryWallet`'s renewal note (gold) + past-due note
+> (amber), and the resolve popup/sheet `RenewalPreviewNote` (amber). It **mirrors the red countdown `CDBox`
+> recipe** — `rounded-xl` · `bg-gradient-to-br` · `shadow-[0_8px_18px_-8px_…]` · inset ring · a Poppins-black
+> `+N` — so "entries you gain" reads as the gold/amber sibling of the "time you're losing" countdown. **"FREE"
+> is a white corner badge** (not a second label row) so the chip stays one-number-tall + compact; the single
+> label under the number is "ENTRIES". Replaced the earlier flat tinted-box + Sparkles-tile note. In
+> `EntryWallet` it hangs on a `border-t border-token` seam (no card-in-card); the figure is the corrected
+> accumulated renewal grant (see [dashboard-account/frontend.md](../dashboard-account/frontend.md)). Presentational-only.
+
+> **Header sign-out (2026-07-02):** the site `Header` menu sign-out now calls `totalSignOut()`
+> ([src/utils/auth/total-sign-out.ts](../../src/utils/auth/total-sign-out.ts)) instead of a bare
+> `signOut()` + 2-key localStorage wipe. See [auth/frontend.md](../auth/frontend.md#total-sign-out-2026-07-02).
+
+> **Payment sheet panel (2026-07-02):** `SettingsRedesignPayment` (rendered by the Payment overlay
+> sheet via `PaymentMethodsTab settingsRedesign`) was rewritten from a card-face grid to the clean
+> prototype layout — hero card face (default card, content-height not stretched) → "Saved cards"
+> radio rows (Default badge / Remove) → dashed "Add a new card" → encrypted footer. Cardholder name
+> is threaded in from the orchestrator (`index.tsx`). The **add-card form** (`AddPaymentForm` + the
+> `addFormNode` chrome in `index.tsx`) was also restyled to the design — "Add a new card" header,
+> `PaymentElement` (card details) + a **Name-on-card** input, Cancel / **Add card** buttons. Still
+> presentational-only; the shared `buildMembershipStripeAppearance` (7 modals) is untouched; all
+> Stripe wiring (SetupIntent / confirmSetup) unchanged.
+
+> **Styled dropdown + promo shimmer (2026-07-02):** new `components/ui/SelectMenu.tsx` — a
+> design-system dropdown (button + popover on `border-token` / `bg-surface`, outside-click/Escape
+> close) that replaces the native `<select>` in the settings personal-details (native OS menus don't
+> match our tokens). Separately, the dashboard promo banner shimmer now uses a dedicated
+> `promo-shimmer-sweep` keyframe (globals.css) that travels the FULL banner width — the old `shimmer`
+> keyframe was a diagonal *badge* effect whose transform overrode the band's skew, so it never swept.
+> The sweep uses an **ease-out** cubic-bezier (`.promo-banner-shimmer`) so the highlight enters fast
+> then decelerates, like a real shine (not a linear crawl).
+
+> **Current-plan action rows (2026-07-02):** `MembershipCurrentPlan`'s manage actions are two rich
+> rows — "Renews {date} / Auto-renews monthly → **Manage**" and "Payment method / {Visa •••• 4827} →
+> **Edit**" (the default-card label is passed in as `paymentLabel` from the membership page's
+> `useSavedPaymentMethods`) — replacing the flat icon+label rows; the redundant in-gradient "Renews …
+> cancel anytime" line was dropped.
+
+> **Tier-change auto-select (2026-07-02):** `SubscriptionManagementModal` gained an **opt-in**
+> `autoSelectPlanName` prop — once benefits load it opens the upgrade/downgrade confirm for that tier
+> (matched by name), reusing the existing `setSelectedUpgrade`+`setShowUpgradeConfirm` setters, so
+> other callers stay byte-identical. `MembershipTierList` gained `onChangeTier(planName)` (member taps
+> a different tier). Full flow in [dashboard-account/frontend.md](../dashboard-account/frontend.md).
+
+> **Claimable rewards trigger (2026-07-02):** `RewardsClaimables` replaced its inline "Ready to claim"
+> list with an **animating gift trigger** — the icon bounces + shows a count badge ONLY when there are
+> truly-claimable rewards (`isRedeemableNow`, not locked/paused) — that opens a claimables `SheetShell`
+> overlay holding the Claim buttons. "Recently claimed" stays inline.
+
+> **DrawsMajorHero — dropped status row + overlap (2026-07-02):** removed the "Live · {draw} · Drawn
+> 8:30 PM AEST" status row (redundant with the Draws toggle bar); the prize showcase (tagline / title /
+> Setup-vs-$10k picker / checklist / "View this promotion") stays, and its `drawName`/`drawStatus`
+> props are gone. The draws page dropped the entries card's `-mt-[34px]` overlap (now `pt-4`) — that
+> negative margin had been covering the "View this promotion" button with "Your entries".
+
+> **Entries label + mini-draw ranking + copy (2026-07-02):** `EntryWallet`'s "One-time packs" label →
+> **"One-time"** (verified: the one-time bucket sums EVERY non-membership source — one-time packs,
+> upsell, referral, rewards/redeemables, promo-link, mini-draw — see `major-draw-queries.ts:139`), and
+> the two entry labels are flushed left/right (`justify-between`). `DrawsMini` now ranks by **fill %**
+> (top 8 closest to running) — fetches a wider active set and sorts by `totalEntries/minimumEntries`,
+> not newest — and its blurb was rewritten (was generic). `RewardsMilestones` dropped the "Rewards
+> land in your **wallet**" wording (not the business's language — there's no "entry wallet").
+
+> **"Get more entries" button + premium countdown (2026-07-02):** `EntryWallet`'s inline package CTA
+> carries the promo energy itself (no separate banner): "+ Package" → **"Get more entries"** with a
+> `50% OFF` badge (top-left, when `hasAdditionalAccess`) and a `{multiplier}× entries` badge
+> (top-right, when `multiplier > 1`) — new props `multiplier` / `hasAdditionalAccess`. The countdown
+> `CDBox` cells were restyled from bordered white boxes to the **red-gradient premium cells** the
+> promotions page uses ([`HorizontalCountdown`](../../src/components/sections/HorizontalCountdown.tsx)):
+> `bg-gradient-to-br from-red-500 via-red-600 to-red-700`, white `font-black` numbers, `red-100`
+> labels, `ring-1 ring-red-300/30` (accent prop dropped — every cell is gold-topped/red now).
+
+> **Mini-draw entry sheet + shared purchase hook (2026-07-02):** the Draws-tab mini cards now open
+> [`MiniDrawEntrySheet`](../../src/components/sections/draws/MiniDrawEntrySheet.tsx) in place instead of
+> navigating. The mini-draw entry-pack **money path was extracted out of `MiniDrawPackages` into the
+> shared `useMiniDrawPurchase` hook** so the detail page and the sheet share ONE orchestration (same
+> `/api/mini-draw/purchase` endpoint, webhook-confirmed grant, upsell) — `MiniDrawPackages` is now
+> presentation-only and consumes the hook (byte-identical behaviour). `MiniDrawCard` gained an optional
+> `onSelect` (module-level `CardShell` swaps `<Link>`→`<button>`). Full detail in
+> [draws/frontend.md § Mini-draw entry sheet](../draws/frontend.md#mini-draw-entry-sheet-dashboard-draws-tab-2026-07-02).
+
+### DashboardLoader (ported from Claude Design, 2026-07-03)
+
+[`DashboardLoader`](../../src/components/loading/DashboardLoader.tsx) is the single brand loader that
+**replaced the old thin red-arc spinners** (`animate-spin rounded-full border-b-2 border-red-600` /
+`border-4 … border-t-transparent` + "Loading …" text) across the member, admin, and affiliate
+dashboards. It is a **1:1 port of the Claude Design "Dashboard Loader.html"** — a premium medallion on
+which a brushed-metal **socket ratchet drives a hex bolt** (step + overshoot + settle, with the rig
+seating down on the "bite"), plus a red impact flash, friction sparks off the rim, a sheen sweep on
+the socket ring, rotating telemetry ticks, a warm pulsing core, a pulsing halo, and a contact shadow;
+under it sit "TOOLS AUSTRALIA" + a **ticked progress tape** and a **cycling status**.
+
+- **Fidelity:** the SVG lives inline in the component; the animations + theme rules are the source's
+  CSS ported verbatim into [globals.css](../../src/app/globals.css) (all `@keyframes ta*` +
+  `.ta-lo-*` / `.ta-loader-*` classes), namespaced and scoped. The source's `html[data-theme="dark"]`
+  selectors became **`.dark`** (the app's class, set on `<html>` by both the member `ThemeContext` and
+  `AdminThemeContext`), so the medallion is **theme-adaptive** (light/dark disc, rim, gloss, warm).
+  Loader CSS vars are namespaced `--lo-*` and scoped to `.ta-loader-root` so nothing leaks globally.
+- **Fullscreen:** the wrapper is `fixed inset-0 z-[100]` with its own themed background — no call-site
+  `bg-*` override needed (removed). `fixed` is safe: no dashboard-layout ancestor establishes a
+  containing block (they use only `overflow`, which does not).
+- **Status:** prop `label?` shows a static line; when omitted, it **cycles** the source's brand
+  messages ("Loading your dashboard" → "Counting your entries" → "Lining up the next draw" →
+  "Tightening the last bolt" — the source's hard-coded "June draw" was generalised). Cycling is a
+  client `useEffect` interval, skipped under `prefers-reduced-motion`.
+- **Reduced motion:** a media query scoped to `.ta-loader-root *` disables the animations (the source
+  killed animations globally — intentionally narrowed here) and freezes the tape at 72%.
+- **Fonts:** the mark/status use `var(--font-inter)` / `var(--font-poppins)` (the `next/font`
+  families the app exposes on `<html>`) — **not** bare `Inter`/`Poppins`, which resolve to nothing
+  loaded and would silently drop to system fonts.
+- **Light-lock:** `light` prop → `.ta-loader-light`, which forces the full light palette (bg, text,
+  medallion disc/rim/gloss/warm) regardless of `.dark`. Used on the **affiliate dashboard**, whose page
+  is light-only (`bg-gray-50`) — without it a dark-theme visitor would see the loader flash dark then
+  the page resolve light. Member (`bg-page`) + admin are theme-aware so they stay adaptive.
+- **Applied on:** member `my-account/{,draws}` (cycling) + `{membership,settings,benefits}` (static
+  labels), `admin/{,layout,[tab]}`, and `affiliate/{,login}` (dashboard `light`-locked).
+
+### SheetShell portals to `<body>` (2026-07-03)
+
+[`SheetShell`](../../src/components/ui/SheetShell.tsx) now renders its overlay through
+`createPortal(overlay, document.body)` (SSR-guarded) at `z-[120]` (was an in-place `z-[60]`). Sheets
+opened from **deep in a route** — e.g. the Draws-tab [`MiniDrawEntrySheet`](../../src/components/sections/draws/MiniDrawEntrySheet.tsx),
+mounted inside `<main>` — otherwise rendered under the fixed `z-40` `BottomNav` and left the top of the
+viewport uncovered (the backdrop was trapped in the page's stacking context). Portaling to `<body>`
+guarantees a true full-viewport backdrop above the nav + floating chrome, while staying below the
+payment/modal layer (`Z_INDEX` 10000). The layout-mounted Support/Payment/Manage sheets are unaffected
+(they were already at the layout root).
+
+**Sheet entrance animation (2026-07-03):** `SheetShell` animates in — the panel slides up
+(`ta-sheet-up`, `translateY(100%)→0`) on mobile and softly pops (`ta-sheet-pop`, fade + `translateY`/
+scale) on desktop, with the backdrop fading (`ta-sheet-fade`); all `motion-safe`-gated (keyframes in
+[globals.css](../../src/app/globals.css)). Entrance only — close still unmounts immediately.
+
+> **Rewards route rename (2026-07-03):** the dashboard Rewards tab moved `/my-account/benefits` →
+> `/my-account/rewards`; the `Header` (×2) + dashboard-section links (`DashboardGuestPanel`,
+> `PartnerPreview`, `QuickActionsGrid`) here were repointed. See
+> [dashboard-account/frontend.md § Route rename](../dashboard-account/frontend.md#route-rename-benefits--rewards-2026-07-03).
+
+> **MembershipCurrentPlan one-time fix (2026-07-03):** for `onetime` accounts the current-plan card
+> drops the "Renews {date} · Auto-renews monthly" **Manage-subscription** row — a one-time pack has no
+> subscription, so that renewal wording + Manage action was a genuine UI bug that made buyers think
+> they'd be auto-billed monthly. The slot now advertises membership instead: a **non-clickable** "Become a
+> member · Unlock exclusive rewards & free entries" `InfoRow` (no CTA — the "Choose a membership" section
+> right below is the join path; the sub wraps so "free entries" isn't truncated). The status pill is
+> `whitespace-nowrap shrink-0` so "One-time" no longer wraps to two lines.
+
+> **Mobile dashboard hides the viewport scrollbar (2026-07-03):** the member dashboard scrolls at the
+> document level with a fixed `z-40` `BottomNav`. The brand scrollbar is styled on `<html>`, so the
+> bright-red thumb spans the full window height and visually runs *behind* the fixed nav — harmless but
+> conspicuous. Native apps show no scrollbar, so [globals.css](../../src/app/globals.css) hides the
+> document scrollbar under `max-width: 1023px` via `html:has(body[data-account-layout])` (`scrollbar-width:
+> none` + `::-webkit-scrollbar { display: none }`). Content still clears the nav through `<main>`'s
+> `pb-16`; desktop keeps its scrollbar (no bottom nav to overlap). This is a *cosmetic* hide — not the
+> heavier app-shell rework (making `<main>` its own `overflow-y-auto` scroll container), which the layout
+> comment warns breaks `DeskNav`'s `sticky top-0` and reintroduces iOS `100dvh` inner-scroll footguns.
+
+> **RewardsPartnerCard brand grid accuracy (2026-07-03):** with the SSO portal off, this grid IS the
+> live catalogue, so it now shows the **tier-accurate slice** of `PARTNER_BRAND_OFFERS` (first `N =
+> ceil(partnerAccessPct% × total)` — matching `getPartnerCatalogVisibleSliceLength`; 40% → 3 of 7) with
+> each brand's **real logo** (`b.logo` via `next/image`, was a letter monogram) and **real offer**
+> (`discount` + `category`). Each tile is now a **link to `b.businessLink`** (new tab) when a real URL is
+> set (brands with a `"#"` placeholder stay non-clickable). Locked (guest/past-due) still shows a 4-brand
+> dimmed teaser.
+
+> **Past-due keeps live one-time pack access (2026-07-03):** a past-due member who still holds a live
+> one-time pack has REAL partner access (the pack window is independent of subscription status — honored by
+> the queue, SSO, and the shop), so the card no longer force-locks every past-due user. `pastDueWithPack =
+> pastdue && partnerAccessPct > 0` → `locked` is now `guest || (pastdue && !pastDueWithPack)`. For
+> `pastDueWithPack` the ring shows the real % (not a `Lock`), the headline reads **"Active from your pack"**
+> with sub `{pct}% active · ends in {expiry} · membership paused`, the tier-accurate brand slice shows, and
+> the CTA stays **"Update payment to restore membership"** (the pack is live; updating payment restores the
+> higher membership tier). This fixes the contradiction where the card read "Paused / 0%" while
+> `RewardsPartnerQueue` right below it showed the same pack "· 25% active". The 0/expiry values are fed by
+> [`useDashboardState`](../../src/hooks/useDashboardState.ts) — see
+> [dashboard-account/frontend.md](../dashboard-account/frontend.md#partner-access-for-past-due).
+
+> **Past-due tier list — mark current + switch tier (2026-07-03):** [`MembershipTierList`](../../src/components/sections/account-membership/MembershipTierList.tsx) now takes `isPastDue` + `currentTierKey` + `onResolvePayment` + `onSwitchTier`. For a past-due member it (a) heads the section "**Your membership**" (not "Choose a membership"), (b) marks the current tier with a **"Current · Past due"** amber pill + amber border (a past-due member's plans all read "Update payment", so the current tier is matched by `tierKeyFromName(plan.name) === currentTierKey` instead of the active-member "Current Plan" CTA label), (c) routes a tap on the **current** tier → `onResolvePayment` (payment sheet) and a tap on a **different** tier → `onSwitchTier(plan)`. The switch opens [`PastDueTierSwitchModal`](../../src/components/sections/account-membership/PastDueTierSwitchModal.tsx) — a self-contained amber confirm that POSTs the cancel+void teardown (`/api/stripe/switch-tier-past-due`) then calls `onSwitched` so the page opens the ordinary subscribe flow for the new tier. See [subscription/gotchas.md § Past-due tier switch](../subscription/gotchas.md#money-path) + BUSINESS.md §10i.
+
+> **One-time section header is ALWAYS "One-time packages" (2026-07-03):** the tier list's one-time section header stays "One-time packages" / "No subscription" for **all** states — even when the dashboard feeds it the member's discounted `additional-*` packs. "Additional" is a **backend-only** term; user-facing copy always says "one-time packs" (see [subscription/package-terminology.md](../subscription/package-terminology.md)). The member's discount is conveyed per-card by the `getAdditionalPackDiscount` "% off" coupon badge, not by the header. The pack list (`OneTimePacksGrid` → `PackCard`) renders whatever `cta.oneTimePlans` carries; which set that is (public vs discounted) is driven by the page's `useMembershipCardCta({ includeAdditionalForMembers: true })` — see [dashboard-account/frontend.md](../dashboard-account/frontend.md).
+
+> **Code-review fixes (2026-07-04):**
+> - **`Header`** — the added `useUserMajorDrawStats` is now GATED on the package-detail modal being open (`packageDetailModalData ? userData?._id : undefined`). It was firing `/api/major-draw` every 60s for every authed user on every page (the Header is globally mounted) to feed a click-only modal; the query is disabled until the modal opens.
+> - **`DashboardGuestPanel`** — `MIN_PACK_PRICE` guards the empty-array case (`prices.length ? Math.min(...) : 25`) so it can't render "$Infinity" if the catalog ever has no public one-time packs.
+> - **`PartnerPreview`** — hoisted the duplicated `isOneTime || pastDueWithPack` into `const accentSub`.
+
+> **Partner-% tier-mismatch fixes (2026-07-04):** the `SubscriptionExplainerModal` "How it works" popup for a Foreman member showed **50% partner offers + a Tradie chart** (header/entries were Foreman). Root cause: the popup's `%` and chart came from `selectedPackageId` = the raw `subscription.packageId` (the *billed* tier — Tradie during a downgrade-preservation window), while name/entries came from the *effective* package. Fixed at the caller ([`my-account/page.tsx`](../../src/app/(site)/my-account/page.tsx) derives `selectedPackageId` from the effective `pkg` via `derivePlanIdFromPackage(pkg, "subscription")`) and hardened the modal (its `%` fallback appends `-subscription` to the tier — a bare "Foreman" would resolve to the one-time ladder's 55%). Same class fixed in `PackageDetailModal`: its `%` used `packageData._id ?? packageData.name` (a weaker derivation than its chart's `toChartPackageId`), so a name-fallback subscription would show 55% beside a Foreman chart — now the subscription `%` uses the same normalized `chartPackageId`. **General rule:** `getPartnerCatalogAccessPercentForPlanId` only returns the subscription mapping when the id contains "subscription" — always pass `\`${tier}-subscription\`` / `derivePlanIdFromPackage(pkg, "subscription")`, never a bare name or raw `subscription.packageId`, for a subscription display.
+
+> **Flow-verification fixes (2026-07-04):**
+> - **`PartnerPreview`** deal-row accents (See-all link, letter badges, discount amounts) now use `accent` (teal for one-time, amber for past-due-with-pack, tier hue for active) instead of a hard-coded `tierHex ?? "#ee0000"` — so a one-time buyer's widget is coherently teal (matching `RewardsPartnerCard`) instead of a teal ring beside red/yellow deal accents.
+> - **`RewardsClaimables`** empty-state copy no longer says "Keep your membership active to earn more" (wrong for a one-time buyer, who has no membership) — neutral "Rewards you earn will appear here."
+> - **`MembershipCurrentPlan`** reads entries from the persisted `subscriptionPackageData` for past-due (was 0 via `getActivePackage`) and gates "Auto-renews monthly" on `autoRenew`. Takes `subscriptionTier*` from the page. See [dashboard-account/frontend.md](../dashboard-account/frontend.md).
+> - **`PastDueTierSwitchModal`** gained an `onRecovered` prop — on 409 `SUBSCRIPTION_RECOVERED` it hands back to the page to refresh instead of showing the positive server message inside a red error box.
+
+> **Flagged-finding fixes (2026-07-04):**
+> - **`MembershipSection` past-due one-time consistency** — the shared `/membership` section's `handlePlanSelect` bounced ALL past-due taps to `/my-account`; now scoped `&& isSubscriptionPlan` (matching `useMembershipCardCta.onSelect`), so a past-due member can buy a one-time/Additional pack on the public page too. See [subscription/gotchas.md § Both surfaces scoped](../subscription/gotchas.md#money-path).
+> - **Canonical `PAST_DUE_AMBER`** — the amber accent (`#d97706`) now has one source of truth in [`tier-visuals.ts`](../../src/utils/membership/tier-visuals.ts), consumed by `MembershipTierList` (border), `PartnerPreview`, and `RewardsPartnerCard` (was re-declared/hardcoded in each). Tailwind arbitrary-value class strings (the "Current · Past due" pill, gradient buttons) keep their literals — a JS const can't feed a Tailwind bracket at build time.
+
+> **User-flow audit fixes (2026-07-03):** a multi-agent audit found the one-time-pack flag bug was a *pattern*. Fixed siblings:
+> - **`PartnerPreview`** — was `locked = acct === "pastdue"`, wrongly showing "Paused / 🔒 / 0%" for a past-due member who still holds a live one-time pack. Now mirrors `RewardsPartnerCard`: `pastDueWithPack = acct === "pastdue" && partnerAccessPct > 0`; only truly locks a past-due member with **no** live pack, else shows the real % + "N% active · from your pack · membership paused" + the deal glimpse. The home widget and Rewards page now agree.
+> - **`RewardsClaimables`** — was `disabled = acct === "pastdue"`, forcing `claimableCount` to 0 and every Claim button to "Paused" for ALL past-due members. But the server's per-item `isRedeemableNow` already gates membership coupons on an active subscription (`hasQualifyingPurchase`), so milestone rewards + none/one-time/any coupons are genuinely claimable while past-due (the redeem endpoint enforces the same predicate). Dropped the blanket disable (and the `acct` prop) — claimability is now purely `isRedeemableNow`; membership-gated items still show "Members only".
+> - **`Header`** (`PackageDetailModal`) — `hasAccessToAdditionalPackages` was `subscription?.isActive === true`, omitting the "current-draw entries" half of the rule, so a one-time/past-due entrant with entries was denied the discounted one-time-packs CTA. Now uses the canonical `hasAdditionalPackageAccess(userData, useUserMajorDrawStats(...))`, matching `my-account/page.tsx`.
+> - **`DashboardGuestPanel`** — "packages from $10" was stale (cheapest is Apprentice $25); now derived from the catalog (`min` of active public one-time packs).
+
+### RewardsPartnerQueue — partner-discount queue (2026-07-03)
+
+[`RewardsPartnerQueue`](../../src/components/sections/rewards/RewardsPartnerQueue.tsx) is the Rewards-tab
+section that makes the "**highest-% pack is always active, the rest queue**" model legible. Data comes
+from the existing [`usePartnerDiscountQueue`](../../src/hooks/queries/usePartnerDiscountQueue.ts) hook
+(`GET /api/partner-discount/queue`) — a clean rebuild of the presentation, **reusing** that data layer
+rather than the old dark collapsible [`PartnerDiscountQueue`](../../src/components/features/PartnerDiscountQueue.tsx).
+It renders: the **active pack** (tier-themed via `getMembershipSectionColorScheme(...).accentHex` + `inkOn`,
+a live `useLeafTimer` countdown, and a catalogue-% `AccessRing`); an **"up next" list ranked by catalogue
+%**, each row showing the pack's own duration + when it takes over; and a footer with the total queued
+window. The per-item **"activates in ~Xd · date"** and footer **"access runs through {date}"** are derived
+client-side (active remainder + cumulative queued durations) — the API returns queued items in activation
+(highest-%) order. The up-next list lives in its own `max-h-[248px] overflow-y-auto` box so the section
+never runs away vertically. Renders `null` when there's no active pack and nothing queued. Mounted on the
+Rewards page for non-guest accounts. **Collapsed by default** (a clickable header with a glanceable
+summary — active pack · % · N queued — + a chevron) so it doesn't push the page down; the active card /
+explainer / up-next / footer are gated on expand. The up-next **% chip is a solid tier-accent chip with
+`inkOn` auto-contrast text** (a pale-tint + accent-text chip was unreadable for light tiers like Tradie),
+and `cleanName` also strips the trailing "(Mini Draw)" scope suffix so tier names don't truncate mid-word.
+
+> **"Free entries" copy + portal gate (2026-07-03):** `MembershipTierList` (tiers + one-time packs)
+> now says "**{n} free entries**" (was a bare "entries") — packages *grant* free entries, so that's the
+> correct framing everywhere. Recurring **tiers** append "**/ mo**" ("{n} free entries / mo") since the grant
+> repeats monthly; **one-time packs** stay "{n} free entries" (single grant). Its header row also carries a
+> "**✓ Cancel anytime**" reassurance (emerald, right-aligned) next to "Choose a membership" / "Change your tier".
+> Its **one-time packages** section renders `OneTimePacksGrid`, which reuses the **`PackCard`** from the
+> public `/membership` "Not subscribing?" section (`MembershipOneTimePacks`) — electric card + CATALOGUE
+> ACCESS ring + N-day window + free-entries + promo-multiplier badge (top-right) — instead of the old
+> compact scroll cards, so the dashboard packs match the marketing page. `PackCard` also now renders a
+> **50%-off coupon badge (top-left, `Ticket` icon)** on Additional (member) packs, driven by
+> `getAdditionalPackDiscount(plan.id)` (shown on `/membership` too).
+> `RewardsPartnerCard`'s "Open partner portal" button is gated on
+> [`partnerDiscountSsoEnabled()`](../../src/config/featureFlags.ts) — when off (default, until SSO ships) it
+> renders a muted **"Partner portal · Coming soon"** in place of the SSO button. See
+> [config-and-data/architecture.md § Feature toggles](../config-and-data/architecture.md#configuration).
+
+### RewardsMilestones — package-themed header (2026-07-03)
+
+[`RewardsMilestones`](../../src/components/sections/rewards/RewardsMilestones.tsx) **dropped the
+descriptive paragraph** and leads with a **package-themed header banner** (`glossGrad(tierHex)` fill +
+`inkOn` contrast, so it recolors to Tradie / Foreman / Boss) stating the next reward — "Next: +{n} free
+entries" / "Unlocks at your {N}-month milestone" + a "{m} /{N} mo" counter (past-due → "Reactivate to
+keep your streak"; all-unlocked → "All milestones unlocked"). The visual progress track stays below.
+New `tierHex` prop (passed from `dash.tierHex` on the Rewards page). The card is `overflow-hidden`
+(to round the banner corners), so the track container carries extra bottom padding (`pb-14`) to clear
+the absolutely-positioned node captions ("+50 / 3 MO") — otherwise they'd be clipped at the card edge.
+**Coming soon (2026-07-03):** gated on `isDashboardFeatureOn("milestoneProgress")` (the same switch the
+dashboard "Milestones" quick-tile uses; currently `false`). When off it renders a **themed "Coming soon"
+placeholder** (tier-coloured banner, no unconfirmed `+N` figures / track) instead of the live milestones,
+until the milestone-reward figures are confirmed and it's re-flagged.
+
+> **Hero / ribbon / promo polish (2026-07-03):** `DashboardHero` — the "Complete your profile" pill
+> became a compact **amber exclamation chip inline with the username** (→ `onCompleteProfile`); for the
+> **one-time** state the "ONE-TIME PACK" badge was dropped and "Become a member" is now chip-sized (it
+> stands alone). `DashboardAlertRibbon` (one-time) is a **high-contrast teal floating pill** at the
+> hero↔entries seam (the content column is pulled up over the hero via `-mt-8`); its copy dropped the
+> "Partner access ends in {X}" claim — that's only the *active* pack's window and misleads a buyer who has
+> **queued packs** that take over next — for "Become a member for lasting partner discounts, more free
+> entries & bonus offers" (leads with the discount, then entries + offers; the `expiryLabel` prop was
+> removed and the `Clock` icon swapped for `Sparkles` since it's no longer time-based). Past-due status
+> copy now reads "**past due**" everywhere (hero chip "{tier} · past due", ring label "Past due",
+> `MembershipCurrentPlan` row "**Payment failed** / Update to resume") rather than "paused", and the hero's
+> past-due action is labelled "**Manage membership**" (it opens the Manage sheet). The **past-due**
+> state now mirrors that one-time treatment: the hero shows the same right-side `AccessRing` but with a
+> `ShieldAlert` "paused" icon (amber) instead of a % + a "Paused" label, the "Update payment" button is
+> **chip-sized** to match the "· paused" tier badge (was a large button), the redundant mobile "Past due"
+> pill was dropped, and `DashboardAlertRibbon` (past-due) is now the same **floating pill at the seam**
+> (amber `#f59e0b→#d97706`, `ShieldAlert`, "Renewal failed — update payment to keep earning entries")
+> rather than a full-width box. **Accuracy note:** the past-due copy frames the *future accrual*, not the
+> current entries — a past-due member **keeps** their already-earned entries in the draw (verified: winner
+> selection has no subscription-status filter, BUSINESS.md §3e), so `EntryWallet` shows the **real
+> membership number** for past-due (not a "paused" placeholder) and the total is the honored count. Only
+> the Rewards partner card reads "Paused" (partner *access* is a live benefit that does gate on `isActive`).
+> **No-access users see NO partner-catalog glimpse:** `PartnerPreview` (home) and `RewardsPartnerCard`
+> (Rewards) now **fully hide** the brand deals/grid for no-access states (guest / past-due) rather than
+> dimming a teaser — the access ring + unlock CTA stay, the brands are gone. `PartnerPreview`'s access ring
+> also shows a **`Lock` icon** (not "0%") when past-due, matching `RewardsPartnerCard`.
+> `EntryWallet` also takes `renewalDateIso` + `entriesPerRenewal`: for an **active** member sitting at **0
+> membership entries** it shows "**+{N} free entries land on your renewal · {date}**" as a **premium gold
+> pill** (gold gradient `Sparkles` chip + gold-tinted gradient bg, matching the wallet's gold accent bar —
+> was a plain grey box). The date is the trialing-safe renewal from `subscription.endDate` (see
+> dashboard-account/frontend.md).
+> `DashboardPromoBanner` puts the offer specifics
+> as **gold badges ON the "Get a package" CTA** (`50% off` when `hasAdditionalAccess`, `{n}× entries` when a
+> multiplier is live), dropped the big starburst image + the redundant body subtitle, and shrank the heading
+> so it doesn't wrap hard. The **SPECIAL PROMO strip** got a premium treatment: a glowing, `animate-pulse`
+> flame, a wide-tracked glowing label, and a live **pulsing red-dot "Ends in {timer}" chip**. (The strip's
+> own `promo-strip-shine` sheen sweep was removed — it double-shimmered against the whole-banner
+> `promo-banner-shimmer`; the keyframe/class were deleted from globals.css.) `DrawHowItWorks` step 1
+> ("Get your entries") drops the
+> "the more you hold, the more entries you have" tail — the first sentence carries it.
+
+## Dashboard sections (2026-07-02)
+
+The member-dashboard revamp adds section-band components under `src/components/sections/dashboard/`
+(home), `src/components/sections/rewards/` (Rewards), `src/components/sections/draws/` (Draws), and
+`src/components/sections/account-membership/` (Membership), each a self-contained `"use client"` band
+fed by props from `useDashboardState` (no API/DB calls in the components) — mirroring the
+`src/components/sections/membership/` pattern. The Membership page also **reuses** the public
+`MembershipTierChooser` (driven by `useMembershipCardCta`) for its tier + one-time-pack ladder.
+
+**Pixel-fidelity (2026-07-02):** the home sections were reworked to match the Claude prototype 1:1
+for both mobile + desktop. `QuickTile` is now the prototype's glossy `linear-gradient(158deg,…)` chip
+(accent palette in [tile-colors.ts](../../src/utils/dashboard/tile-colors.ts)); `EntryWallet` is a
+responsive 2-column card with an inline countdown (`CDBox`); `PartnerPreview` uses the letter-badge
+deal-row style; `DashboardHero` is single-row on desktop (no gear — sidebar footer has it) and keeps
+the existing `AccessRing`. See [dashboard-account/frontend.md](../dashboard-account/frontend.md#dashboard-home--pixel-fidelity-rework-2026-07-02).
+
+**Section refinements (2026-07-02):**
+- `DashboardHero` — active-member tier chip renders the real **tier package icon**
+  (`getPackageIcon(\`${tierKey}-subscription\`)`) not a crown; the "Reward portal" button is a
+  **chip-sized premium gold** pill that **triggers the partner-discount SSO** (`onRewardPortal` →
+  `usePartnerDiscountSso().mutate()` in the home page), not a route; a **"Complete your profile"**
+  nudge shows when `profileComplete === false` (new `tierKey` / `profileComplete` / `onCompleteProfile` props).
+- `DashboardPromoBanner` — the left icon is now the **container-less multiplier badge image**
+  (`multiplierBadgeSrc`, shown large like the special-packages modal), falling back to a ticket glyph
+  only when no multiplier is live; the redundant button-corner badge was dropped.
+- `RewardsMilestones` — now a **visual milestone progress track** (real member-since `months`), no
+  longer a coming-soon text teaser.
+- `MembershipCurrentPlan` — the plan stat row (entries / partner access / price) is a single unified
+  paneled row with dividers instead of three cramped boxes.
+
+**Removed (2026-07-02):** `src/components/sections/MembershipPackagesChart.tsx` — orphaned after both
+`/membership` and `/my-account/membership` dropped it (the account page now uses the compact
+`sections/account-membership/MembershipTierList`). New shared primitives live in `src/components/ui/`
+(`Monogram`, `QuickTile` — see [ui-primitives.md](./ui-primitives.md)). Full detail:
+[docs/dashboard-account/frontend.md](../dashboard-account/frontend.md) and the specs under
+`docs/superpowers/specs/2026-07-02-*`.
+
 ## hikoki-green badge fix + prize combo-render normalisation (2026-06-22)
 
 Two follow-ups after the HiKOKI launch:

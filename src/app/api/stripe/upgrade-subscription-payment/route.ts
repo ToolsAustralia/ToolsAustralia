@@ -216,6 +216,11 @@ export async function POST(request: NextRequest) {
       // ✅ NO PRORATION UPGRADE: charge full price now and reset billing cycle
       proration_behavior: "none",
       billing_cycle_anchor: "now",
+      // A member can upgrade while scheduled to cancel at period end. Stripe (API > 2018-02-28) does NOT
+      // auto-clear a pending cancel on an item swap, so we must clear it explicitly — otherwise the upgrade
+      // "sticks" in the DB (webhook sets autoRenew=true) but Stripe still cancels at period end. Charge-safe:
+      // cancel_at_period_end does not trigger prorations/invoices.
+      cancel_at_period_end: false,
       payment_behavior: "error_if_incomplete", // ✅ CRITICAL: Force payment collection, error if payment fails
       default_payment_method: paymentMethod.id,
       expand: ["latest_invoice.payment_intent"], // ✅ Get payment intent for frontend

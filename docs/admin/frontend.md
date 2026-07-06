@@ -1,5 +1,16 @@
 # Admin — Frontend
 
+> **Loader (2026-07-03):** the admin auth/loading states (`admin/page.tsx`, `admin/layout.tsx`
+> Suspense fallback, `admin/[tab]/page.tsx`) now render the shared [`DashboardLoader`](../../src/components/loading/DashboardLoader.tsx)
+> — the Claude Design "Dashboard Loader" medallion (theme-adaptive; adapts via the `.dark` class
+> `AdminThemeContext` sets on `<html>`) with a static `label="Loading admin…"` — replacing the bare
+> red-arc spinner. See [shared-ui/frontend.md § DashboardLoader](../shared-ui/frontend.md#dashboardloader-ported-from-claude-design-2026-07-03).
+
+> **Sign-out (2026-07-02):** `AdminSidebar`'s sign-out now calls `totalSignOut()`
+> ([src/utils/auth/total-sign-out.ts](../../src/utils/auth/total-sign-out.ts)) — clears user-scoped
+> client storage before ending the session (keeps `ta-admin-theme` + admin UI-layout keys). See
+> [auth/frontend.md](../auth/frontend.md#total-sign-out-2026-07-02).
+
 ## Prize performance card — brands derived from the source of truth (2026-06-30)
 
 `PrizePerformanceCard` `PROMOTION_BRANDS` is now **derived** from `TOOLSET_LANDING_SLUGS`

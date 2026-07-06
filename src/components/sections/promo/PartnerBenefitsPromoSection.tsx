@@ -15,9 +15,11 @@ const BENEFITS = [
     text: "Your entries carry over and stack each billing cycle — the longer you stay subscribed, the more entries you hold.",
   },
   {
+    // Copy rule: user-facing text says "one-time packs", never the backend-only "Additional
+    // Packs" term (isAdditional flag). See docs/subscription/package-terminology.md.
     icon: Zap,
-    title: "Exclusive Additional Packs",
-    text: "Members unlock Additional Packs with up to 2× more entries at the same price as standard one-time packs.",
+    title: "Boosted One-Time Packs",
+    text: "As a member, your one-time packs come with up to 2× more entries — at the same price as the standard version.",
   },
   {
     icon: Percent,

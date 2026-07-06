@@ -1,5 +1,19 @@
 # Partner — Gotchas
 
+## Queue uses the EFFECTIVE (downgrade-preserved) subscription tier, not the billed one (2026-07-04)
+
+`subscriptionPartnerCatalogPercent()` (`partner-discount-queue.ts`) resolves the membership's partner %
+from the **effective** tier via a local `effectiveSubscriptionPackageId()` helper — the downgrade-preserved
+`previousSubscription.packageId` while still within its benefit period, else `subscription.packageId`.
+Previously it read the **raw** `subscription.packageId` (the billed tier), which during a
+downgrade-preservation window understates the tier (e.g. Tradie 50 vs effective Foreman 75), so
+`reconcilePartnerDiscountSubscriptionVsQueue` could let a mid-tier one-time pack wrongly outrank the
+membership and activate a lower-% pack over the member's real access. The helper mirrors
+`getEffectiveBenefits`' preservation rule **inline** because benefit-resolution imports
+`calculateActivePartnerDiscountPeriod` from this module — importing `getEffectiveBenefits` back would cycle.
+(Same class as the `SubscriptionExplainerModal`/`PackageDetailModal` display bug: never key a subscription's
+partner tier off the raw/billed `packageId`.)
+
 ## Subscription-cancel queue removal timing
 
 Cancel-immediately removes from queue NOW. Cancel-at-period-end does NOT remove until the period actually ends. Common mistake: assuming `cancelledAt` triggers queue removal — it doesn't. The trigger is the `end` action call.

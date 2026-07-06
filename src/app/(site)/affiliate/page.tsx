@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Copy, Check, Eye, EyeOff, Settings, DollarSign, Users, TrendingUp } from "lucide-react";
+import DashboardLoader from "@/components/loading/DashboardLoader";
 
 interface AffiliateDashboard {
   name: string;
@@ -200,14 +201,7 @@ export default function AffiliateDashboardPage() {
   };
 
   if (loading) {
-    return (
-      <div className="min-h-screen-svh flex items-center justify-center bg-gray-50">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-red-600 mx-auto mb-4"></div>
-          <p className="text-gray-600 dark:text-neutral-400">Loading your dashboard...</p>
-        </div>
-      </div>
-    );
+    return <DashboardLoader label="Loading your dashboard…" light />;
   }
 
   if (!dashboard) {

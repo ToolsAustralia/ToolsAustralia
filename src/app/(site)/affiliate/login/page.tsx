@@ -6,6 +6,7 @@ import Link from "next/link";
 import { Eye, EyeOff } from "lucide-react";
 import Image from "next/image";
 import { ThemeToggleButton } from "@/components/ui/ThemeToggle";
+import DashboardLoader from "@/components/loading/DashboardLoader";
 
 // Mark page as dynamic to prevent static generation issues
 export const dynamic = "force-dynamic";
@@ -221,13 +222,7 @@ function AffiliateLoginContent() {
 
 export default function AffiliateLoginPage() {
   return (
-    <Suspense
-      fallback={
-        <div className="h-screen-dvh bg-white dark:bg-neutral-950 flex items-center justify-center">
-          <div className="w-12 h-12 border-4 border-red-600 dark:border-red-500 border-t-transparent rounded-full animate-spin" />
-        </div>
-      }
-    >
+    <Suspense fallback={<DashboardLoader label="Loading…" />}>
       <AffiliateLoginContent />
     </Suspense>
   );

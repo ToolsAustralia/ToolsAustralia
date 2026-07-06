@@ -7,6 +7,7 @@ import { useResolvedMultiplier } from "@/hooks/queries/usePromoQueries";
 import { convertToLocalPlan, type LocalMembershipPlan } from "@/utils/membership/membership-adapters";
 import { useUserMajorDrawStats } from "@/hooks/queries/useMajorDrawQueries";
 import { hasAdditionalPackageAccess } from "@/utils/membership/has-additional-package-access";
+import { hasBlockingSubscription } from "@/utils/subscription/subscription-helpers";
 import {
   MEMBERSHIP_PACKAGES_QUERY_PARAM,
   parseMembershipPackagesTab,
@@ -323,20 +324,31 @@ export function useMajorDrawEntryCta(): UseMajorDrawEntryCtaResult {
           return;
         }
 
-        // Ad landings with `?packages=one-time` open the ONE-TIME flow instead of the subscription
-        // default, so the modal's PackageSelectionModal opens on the One-Time tab (it derives its tab
-        // from the passed plan's `period`). Falls back to the subscription default if no one-time plan
-        // is resolvable yet. Guests only — members with additional access already diverted above.
+        // A user who already holds a (blocking) subscription — active / past_due / etc. — CANNOT create a
+        // second subscription, so pre-select a ONE-TIME pack (getOneTimePlan), never a membership sub
+        // (getHeavyDutyPack) which would fail with EXISTING_SUBSCRIPTION. This takes precedence.
+        // Otherwise: ad landings with `?packages=one-time` also open the ONE-TIME flow (guests — members
+        // with additional access already diverted above), falling back to the subscription default if no
+        // one-time plan is resolvable yet; and plain non-subscribers get the Tradie sub as the default.
         const forcedOneTime =
           typeof window !== "undefined" &&
           parseMembershipPackagesTab(
             new URLSearchParams(window.location.search).get(MEMBERSHIP_PACKAGES_QUERY_PARAM)
           ) === "one-time";
-        const correctPlan = (forcedOneTime && getOneTimePlan()) || getHeavyDutyPack();
+        const correctPlan = hasBlockingSubscription(userData)
+          ? getOneTimePlan()
+          : forcedOneTime
+            ? getOneTimePlan() ?? getHeavyDutyPack()
+            : getHeavyDutyPack();
 
         if (openLocalModal) {
-          membershipModal.setSelectedPlan(correctPlan);
-          membershipModal.openModal();
+          if (correctPlan) {
+            membershipModal.setSelectedPlan(correctPlan);
+            membershipModal.openModal();
+          } else {
+            // No concrete one-time plan resolved yet → let the user pick a pack.
+            membershipModal.openModalWithPackageSelectionFirst();
+          }
           return;
         }
 

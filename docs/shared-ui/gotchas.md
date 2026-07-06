@@ -132,7 +132,7 @@ Client-side Klaviyo calls — [LoginModal](../../src/components/modals/LoginModa
 
 ## MembershipModal pre-warm toast removed — single actionable toast only
 
-The MembershipModal auto-creates a subscription on open (background pre-warm) so checkout is faster on purchase click. Previously, if a stale `EXISTING_SUBSCRIPTION` (409) was returned during this pre-warm, it would immediately surface an `EXISTING_SUBSCRIPTION` error toast — followed by a second "Active Subscription Found" toast if the user then clicked Purchase. This produced two toasts for a single user action. The pre-warm path now only logs the 409 response and does not show a toast; the single actionable "Active Subscription Found" toast on the purchase-click path is the only one displayed.
+The MembershipModal auto-creates a subscription on open (background pre-warm) so checkout is faster on purchase click. Previously, if a stale `EXISTING_SUBSCRIPTION` (409) was returned during this pre-warm, it would immediately surface an `EXISTING_SUBSCRIPTION` error toast — followed by a second "Active Subscription Found" toast if the user then clicked Purchase. This produced two toasts for a single user action. The pre-warm path now only logs the 409 response and does not show a toast; the single actionable "Active Subscription Found" toast on the purchase-click path is the only one displayed. Its **"Manage Subscription"** action deep-links to **`/my-account?open=subscription`**, which opens the **Manage-membership bottom sheet** on arrival (handled in `my-account/page.tsx`) — not just the dashboard home.
 
 ## `ModalContent` is already `flex-1 overflow-y-auto` — don't wrap it again (2026-05-27)
 

@@ -77,6 +77,14 @@ interface SubscriptionManagementModalProps {
    * (MembershipStatus) and SettingsModal never set this → byte-identical.
    */
   settingsRedesign?: boolean;
+  /**
+   * Auto-open the upgrade/downgrade confirm for this tier NAME once benefits
+   * load — used when a member taps a tier in the Membership tier list, so they
+   * skip the in-modal list and go straight to the confirm. Matched
+   * case-insensitively against `availableUpgrades` / `availableDowngrades`;
+   * unmatched (or the current tier) falls through to the normal modal view.
+   */
+  autoSelectPlanName?: string;
 }
 
 const SubscriptionManagementModal: React.FC<SubscriptionManagementModalProps> = ({
@@ -87,6 +95,7 @@ const SubscriptionManagementModal: React.FC<SubscriptionManagementModalProps> = 
   membershipModal: parentMembershipModal,
   renderAsPanel = false,
   settingsRedesign = false,
+  autoSelectPlanName,
 }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [showCancellationFlow, setShowCancellationFlow] = useState(false);
@@ -96,6 +105,7 @@ const SubscriptionManagementModal: React.FC<SubscriptionManagementModalProps> = 
   const [selectedDowngrade, setSelectedDowngrade] = useState<DowngradeOption | null>(null);
   const [subscriptionBenefits, setSubscriptionBenefits] = useState<SubscriptionBenefits | null>(null);
   const [benefitsLoading, setBenefitsLoading] = useState(false);
+  const [benefitsError, setBenefitsError] = useState(false);
   const { showSuccess } = useLoading();
 
   // Stripe payment confirmation state
@@ -218,6 +228,7 @@ const SubscriptionManagementModal: React.FC<SubscriptionManagementModalProps> = 
     if ((!isOpen && !renderAsPanel) || !user.subscription?.isActive) return;
 
     setBenefitsLoading(true);
+    setBenefitsError(false);
     try {
       const response = await fetch("/api/subscription/benefits", {
         credentials: "include",
@@ -226,9 +237,12 @@ const SubscriptionManagementModal: React.FC<SubscriptionManagementModalProps> = 
       if (response.ok) {
         const data = await response.json();
         setSubscriptionBenefits(data.data);
+      } else {
+        setBenefitsError(true);
       }
     } catch (error) {
       console.error("Failed to fetch subscription benefits:", error);
+      setBenefitsError(true);
     } finally {
       setBenefitsLoading(false);
     }
@@ -261,6 +275,45 @@ const SubscriptionManagementModal: React.FC<SubscriptionManagementModalProps> = 
       }
     };
   }, [isOpen, renderAsPanel, onClose, user.subscription?.isActive, fetchSubscriptionBenefits]);
+
+  // Tier-change mode: when opened with `autoSelectPlanName` (a member tapped a tier
+  // in the Membership list), render ONLY the confirm modal — the full "Manage
+  // Subscription" body would just duplicate the Membership page.
+  const confirmOnly = Boolean(autoSelectPlanName);
+
+  // Auto-open the upgrade/downgrade confirm for the tapped tier once benefits load,
+  // reusing the exact same setters as the in-modal onSelectUpgrade/Downgrade.
+  const autoSelectHandledRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!isOpen) {
+      autoSelectHandledRef.current = null;
+      return;
+    }
+    if (!autoSelectPlanName || !subscriptionBenefits) return;
+    if (autoSelectHandledRef.current === autoSelectPlanName) return;
+    autoSelectHandledRef.current = autoSelectPlanName;
+    const name = autoSelectPlanName.trim().toLowerCase();
+    const up = subscriptionBenefits.availableUpgrades.find((u) => u.name.trim().toLowerCase() === name);
+    const down = subscriptionBenefits.availableDowngrades.find((d) => d.name.trim().toLowerCase() === name);
+    if (up) {
+      setSelectedUpgrade(up);
+      setShowUpgradeConfirm(true);
+    } else if (down) {
+      setSelectedDowngrade(down);
+      setShowDowngradeConfirm(true);
+    } else {
+      // The tapped tier isn't an available up/down-grade — don't strand an
+      // invisible confirm-only modal; close so the page can reset.
+      onClose();
+    }
+  }, [isOpen, autoSelectPlanName, subscriptionBenefits, onClose]);
+
+  // Confirm-only mode renders no body of its own, so a benefits-fetch FAILURE would leave an invisible,
+  // stuck modal (the parent only resets via onClose, and the auto-select effect above early-returns while
+  // subscriptionBenefits is null). Close on error so the tier tap never silently no-ops.
+  useEffect(() => {
+    if (confirmOnly && benefitsError) onClose();
+  }, [confirmOnly, benefitsError, onClose]);
 
   // Active subscription: either isActive=true OR past_due with autoRenew=true (failed renewal)
   // This allows us to show subscription details for past_due subscriptions
@@ -969,7 +1022,10 @@ const SubscriptionManagementModal: React.FC<SubscriptionManagementModalProps> = 
         {selectedUpgrade && membershipPackage ? (
           <UpgradeConfirmModal
             isOpen={showUpgradeConfirm && !!selectedUpgrade}
-            onClose={() => setShowUpgradeConfirm(false)}
+            onClose={() => {
+              setShowUpgradeConfirm(false);
+              if (confirmOnly) onClose();
+            }}
             onConfirm={handleUpgradeSubscription}
             isLoading={isLoading}
             fromPackageName={membershipPackage.name}
@@ -992,6 +1048,7 @@ const SubscriptionManagementModal: React.FC<SubscriptionManagementModalProps> = 
               // matures naturally to "abandoned" rather than being incorrectly recorded.
               pendingCancellationEventId.current = null;
               setShowDowngradeConfirm(false);
+              if (confirmOnly) onClose();
             }}
             onConfirm={handleDowngradeSubscription}
             isLoading={isLoading}
@@ -1029,6 +1086,11 @@ const SubscriptionManagementModal: React.FC<SubscriptionManagementModalProps> = 
             setShowStripePaymentModal(false);
             setUpgradeData(null);
             setSelectedUpgrade(null);
+            // confirmOnly (tier-list tap → straight to confirm/pay): there's no management view to
+            // return to, so cancel must close the WHOLE flow — otherwise the parent's changeTierName
+            // stays set + the autoSelect ref stays latched, and re-tapping the SAME tier is a no-op
+            // until an unrelated remount. Mirrors the UpgradeConfirmModal/DowngradeConfirmModal cancels.
+            if (confirmOnly) onClose();
           }}
           clientSecret={upgradeData?.clientSecret || ""}
           packageName={upgradeData?.packageName || ""}
@@ -1099,6 +1161,23 @@ const SubscriptionManagementModal: React.FC<SubscriptionManagementModalProps> = 
       </ModalContent>
     </>
   );
+
+  // Tier-change (confirm-only) mode: render just the confirm modals — no redundant
+  // "Manage Subscription" chrome/body (the Membership page already shows the plan + tiers).
+  // Show a spinner while benefits load so the tier tap isn't a silent, invisible window before
+  // the up/down-grade confirm opens.
+  if (confirmOnly) {
+    return (
+      <>
+        {benefitsLoading && !showUpgradeConfirm && !showDowngradeConfirm && (
+          <div className="fixed inset-0 z-[9999] grid place-items-center bg-black/50">
+            <div className="h-9 w-9 animate-spin rounded-full border-[3px] border-white/30 border-t-white" />
+          </div>
+        )}
+        {childModals}
+      </>
+    );
+  }
 
   if (renderAsPanel) {
     return <div className="w-full">{subscriptionContent}</div>;

@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import Image from "next/image";
 import { useRouter, usePathname } from "next/navigation";
-import { signOut } from "next-auth/react";
+import { totalSignOut } from "@/utils/auth/total-sign-out";
 import { usePermissions } from "@/hooks/usePermissions";
 import {
   AlertCircle,
@@ -163,11 +163,8 @@ export default function AdminSidebar({
   }, []);
 
   const handleSignOut = () => {
-    // Clear localStorage when signing out
-    localStorage.removeItem("wasAuthenticated");
-    localStorage.removeItem("topBarHidden");
-    // Sign out and redirect to home page
-    signOut({ callbackUrl: "/" });
+    // Total sign-out: clears user-scoped client storage, then ends the session.
+    void totalSignOut({ callbackUrl: "/" });
   };
 
   const handleTabChange = (tabId: string) => {

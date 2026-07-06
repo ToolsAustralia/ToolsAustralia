@@ -27,10 +27,22 @@
 
 | Hook | Purpose | Source |
 |---|---|---|
-| `useMajorDrawEntryCta()` | CTA state for the major-draw entry button | [src/hooks/useMajorDrawEntryCta.ts](../../src/hooks/useMajorDrawEntryCta.ts) |
+| `useMajorDrawEntryCta()` | CTA state for the major-draw "Get more entries" button. **`openEntryFlow` pre-selects a pack by state:** additional-access users → the special-packages modal; users with an **existing (blocking) subscription** (active / past_due) → a **one-time pack** (`getOneTimePlan`, never a membership sub — a 2nd subscription would 500 with `EXISTING_SUBSCRIPTION`); everyone else → the Tradie sub as the default. | [src/hooks/useMajorDrawEntryCta.ts](../../src/hooks/useMajorDrawEntryCta.ts) |
 | `useMajorDrawPurchaseGate()` | Gating logic — should the user be allowed to purchase right now? `gatesClosed = currentMajorDraw?.status !== "active"`, which is true during both the **30-min freeze (8:00–8:30 PM)** and the **3h 30min gap (8:30 PM → 12:00 AM)**. Surfaces [`GateClosedModal`](../../src/components/modals/GateClosedModal.tsx) with the next draw's name and activation date. Mirrors the server gate in [backend.md](./backend.md) `major-draw-gate-http.ts`. See [rules R3a](./rules.md#r3a-new-entry-purchases-require-status-active--the-blackout-covers-freeze-and-gap). | [src/hooks/useMajorDrawPurchaseGate.ts](../../src/hooks/useMajorDrawPurchaseGate.ts) |
 | `useMiniDrawTrigger()` | Trigger / opening mini-draw modals or flows | [src/hooks/useMiniDrawTrigger.ts](../../src/hooks/useMiniDrawTrigger.ts) |
+| `useMiniDrawPurchase({ miniDrawId, minimumEntries, totalEntries })` | **The single source of truth for the mini-draw entry-pack money path**, extracted from `MiniDrawPackages` so multiple surfaces share ONE orchestration (never a fork). Owns: optimistic cache bump → `POST /api/mini-draw/purchase` (webhook-only granting) → 3DS `requiresAction` / no-saved-card `requiresPayment` branches → `PaymentProcessingScreen` polling → success toast + invalidation + post-purchase upsell. Returns `{ purchase, purchasingPackageId, entriesRemaining, isSoldOut, isExceedsCapacity, paymentProcessing, loginModal }`; the consumer renders `PaymentProcessingScreen` + `LoginPromptModal` from that state. Consumed by both `MiniDrawPackages` (detail page) and `MiniDrawEntrySheet` (dashboard Draws tab). | [src/hooks/useMiniDrawPurchase.ts](../../src/hooks/useMiniDrawPurchase.ts) |
 | `usePastDrawsData()` | Fetch list of past draws (used by `PastDrawsModal`; the `/draw-results` page no longer consumes it — it SSRs the unified winners feed instead) | [src/hooks/usePastDrawsData.ts](../../src/hooks/usePastDrawsData.ts) |
+
+### Mini-draw entry sheet (dashboard Draws tab, 2026-07-02)
+
+On `/my-account/draws` (Mini tab), tapping a `MiniDrawCard` **no longer navigates** to `/mini-draws/[id]` — it opens [`MiniDrawEntrySheet`](../../src/components/sections/draws/MiniDrawEntrySheet.tsx) in place (green prize/fill card → entry-pack grid populated by `getMiniDrawPackages()` → running new-entry total → CTA). The sheet drives the purchase through the shared `useMiniDrawPurchase` hook, so it hits the **same** `/api/mini-draw/purchase` endpoint and webhook-confirmed grant as the detail page — no re-implemented money path. `MiniDrawCard` gained an optional `onSelect` prop (via a module-level `CardShell` that swaps the `<Link>` for a `<button>`); when absent (the public `/mini-draws` grid, `RelatedMiniDraws`) the card still navigates. `DrawsMini` holds the `selected` state + passes the viewer's per-draw entry count from `miniDrawParticipation`.
+
+> _Refinements 2026-07-03:_ pack tiles lead with the **package name** (`displayName ?? name`) + "{n} free
+> entries" + price — **not** a bare entries count, and the "$/entry" line was dropped, because the product
+> sold is the pack (which *grants* free entries), not entries. The CTA reads "Get {PackName} · $X" and the
+> running-total row shows the selected pack name. A **"View mini draw"** button (under the prize card) is
+> the way back to the full `/mini-draws/[id]` detail page. The header sub was reworded ("Buy an entry pack
+> to join this draw") so "the moment it fills" is no longer duplicated with the footer line.
 
 > _TODO: verify each hook's contract by reading source._
 

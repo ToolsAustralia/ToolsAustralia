@@ -20,6 +20,7 @@
 
 import { getSession, signOut } from "next-auth/react";
 import type { Session } from "next-auth";
+import { clearUserScopedClientStorage } from "@/utils/auth/total-sign-out";
 import { ErrorContext } from "@/types/error-reporting";
 import { collectErrorContext } from "@/utils/error-reporting/collect-error-context";
 
@@ -152,10 +153,9 @@ export async function apiRequest<T = unknown>(endpoint: string, options: Request
 
       if (shouldForceLogout) {
         try {
-          // Force sign out so NextAuth clears the session cookie.
-
-          // Using void ensures we do not block error propagation.
-
+          // Clear user-scoped client storage, then force sign out so NextAuth
+          // clears the session cookie. void ensures we don't block error propagation.
+          clearUserScopedClientStorage();
           void signOut();
         } catch (signOutError) {
           // If signOut fails for any reason, log it but still surface the original error.

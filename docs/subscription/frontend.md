@@ -232,6 +232,59 @@ The flag that selects Mode A vs Mode B is `hasMembershipGrantInCurrentDrawPeriod
 - `index.tsx` — orchestrator; holds all state slices, `useRef` for `activePaymentIntentRef`, and the `handlePaymentSuccess` / `handleProcessingSuccess` callbacks. Delegates to sub-components.
 - `Shell.tsx` — modal frame with dark hero, scroll-lock, Escape handler, and entry animation (mirrors RenewalFailedModal/Shell.tsx pattern).
 - `OrderSummary.tsx` — gain-framed order summary card using Plan 4 `<Card>` + `<Card.Header>` + `<Card.Body>`. Shows upgrade from/to details and billing cycle info when `upgradeInfo` is provided.
+
+> **Past-due resolve — shared state machine, two presentations (2026-07-03):** the past-due renewal-recovery
+> logic (retry / 3DS / add-card-then-retry / force-charge-overdue) lives in **`usePastDueResolve`**
+> ([src/components/modals/RenewalFailedModal/usePastDueResolve.ts](../../src/components/modals/RenewalFailedModal/usePastDueResolve.ts)),
+> so the money path is single-sourced. Two consumers render it: **`RenewalFailedModal`** (the legacy modal,
+> via `Shell`, used by `SubscriptionManagementModal`) and **`PastDueResolvePanel`** (sheet-native — no
+> `Shell` hero / backdrop / "Close" button / "close this modal" copy) which the dashboard **Payment sheet**
+> renders for past-due members. `ActionButtons` gained `hideDismiss` (the sheet drops the Close button +
+> footer since the sheet owns dismiss). This replaced an earlier, wrong approach that *embedded the whole
+> modal* (dark hero + Close) inside the sheet. Verify the modal path with `npm run test:renewal-failed`.
+
+> **Upgrade flow — consistent benefit cells across both steps (2026-07-06):** `StripePaymentModal`'s
+> `UpgradeBenefitsPreview` used to render a **hardcoded** per-tier cell set (`tierBenefitCells`: entries 100/40/15
+> baked in, a stale unused partner %) that disagreed with the confirm step (`UpgradeConfirmModal`). Both now
+> render the shared **`UpgradeBenefitStatGrid`** (see [shared-ui/frontend.md](../shared-ui/frontend.md)) fed from
+> **canonical** data — `StripePaymentModal` derives the destination-tier partner % via
+> `getPartnerCatalogAccessPercentForPlanId(\`${tier}-subscription\`)` and entries via
+> `getPackageById(...).entriesPerMonth`, so the payment step's cells match the confirm step's exactly (Boss
+> 100%/100, Foreman 75%/40, Tradie 50%/15). The recurring price stays in the `OrderSummary`, not a stat cell.
+> Verified: `npm run test:upgrade-confirm` + `npm run test:stripe-payment`.
+
+> **RenewalFailedModal hero redesign — benefit-led, amber, less text (2026-07-06):** the `Shell` hero was
+> rebuilt from the dark red-glow + uppercase-acumin banner to a **light, tone-tinted header** (amber past-due /
+> emerald success) with a sentence-case Poppins headline. `Shell` gained an optional **`heroAside`** slot; the
+> clean past-due resolve state passes a **`PartnerHoldRing`** — the member's subscription-tier partner-catalog %
+> (50 / 75 / 100, from `usePastDueResolve.restorablePartnerPct`) drawn with `AccessRing`, a lock, and "Paused" —
+> so the modal leads with the **paused member benefit**, not just "renewal failed". Copy trimmed to eyebrow +
+> one headline ("Reactivate to restore your benefits") + one line. The redundant **"Close" text button + footer
+> were removed** (the ✕ dismisses — the modal now passes `hideDismiss` to `ActionButtons`). `data-rf-accent` /
+> the CSS-module dark-hero classes (`heroBg`, `heroStripeOverlay`, tone-glow) are no longer used. The sheet
+> (`PastDueResolvePanel`) keeps its amber `PanelHead`.
+
+> **Resolve flow is amber, note uses the dashboard stat chip (2026-07-06):** the past-due resolve flow is
+> **amber**, not red — `ActionButtons`' `primary`/`outline` variants + the loading spinner were recolored to
+> amber (`from-[#f59e0b] to-[#d97706]`) so "Resolve payment issue" matches the amber past-due language (PanelHead,
+> hero "Manage membership", the ribbon); red stays reserved for draw urgency / "get entries". And
+> `RenewalPreviewNote` now renders the **same amber "free entries" stat chip** as the dashboard `EntryWallet`
+> past-due note (the countdown-CDBox recipe — see [shared-ui/frontend.md](../shared-ui/frontend.md)) instead of the
+> old Sparkles-tile inline note, so the resolve sheet/popup and the dashboard read as one design. _Note: the
+> `RenewalFailedModal` Shell hero still uses the red `tone="danger"` glow — the sheet (PastDueResolvePanel) uses
+> the amber PanelHead, so it's fully amber; the modal hero is the one remaining red past-due surface._
+
+> **Renewal preview note — "Settle $X → +N free entries" (2026-07-06):** both resolve surfaces render
+> **`RenewalPreviewNote`** ([RenewalFailedModal/RenewalPreviewNote.tsx](../../src/components/modals/RenewalFailedModal/RenewalPreviewNote.tsx))
+> in the **initial** resolve state only (gated `!terminalCollectionFailure && !showInlineCardSetup`), so a
+> past-due member sees what they pay and the entries that land when it clears. `usePastDueResolve` exposes
+> `renewalPreview` computed via **`getPastDueRenewalPreview(user)`**
+> ([src/utils/subscription/past-due-renewal-preview.ts](../../src/utils/subscription/past-due-renewal-preview.ts)),
+> which reuses the CANONICAL `getRenewalEntriesPreviewForProfile` (same source as the Klaviyo
+> `past_due_renewal_entries` property + the renewal-failure email) for entries, and the **same** package's
+> `.price` for cost — so the popup, the sheet, the dashboard `EntryWallet` note, the email, and Klaviyo all
+> show one consistent number. The dashboard mirror is driven by `dash.pastDueRenewalEntries` /
+> `dash.pastDueRenewalCost` from `useDashboardState` (see docs/dashboard-account).
 - `PaymentMethodCard.tsx` — saved-card display ("VISA •••• 4242 / Default Payment Method / Change").
 - `PaymentForm.tsx` — exports `PaymentFormWithoutElements` (saved card path) and `PaymentFormWithElements` (new card path). All Stripe logic is preserved byte-identically from the original monolith. Uses Plan 4 `<Button>` for action buttons.
 - `styles.module.css` — composite hero gradients, scrollbar, pinstripe overlay.

@@ -488,7 +488,17 @@ async function main(): Promise<void> {
     pastDueSub.status === "past_due" || pastDueSub.status === "unpaid"
       ? pastDueSub.status
       : "past_due";
-  user.subscription = {
+  // Write ATOMICALLY (updateOne, no optimistic-concurrency __v check) rather than
+  // saving the in-memory doc created back in Step 6. The ~30s of Stripe test-clock
+  // work leaves a long window in which a Stripe webhook — if `stripe listen` is
+  // forwarding to a running app — re-saves this user and bumps its version, which
+  // makes a stale `user.save()` here throw `VersionError` and strands the member in
+  // the intermediate "active" state. `$set` replaces the whole subscription subdoc
+  // (so any prior/webhook-written fields, incl. lastReanchoredInvoiceId, are cleared)
+  // and is immune to the version race. The good recovery PM goes on
+  // savedPaymentMethods so the user-facing renew route (which reads this array, not
+  // the Stripe default) works.
+  const pastDueSubscription = {
     packageId: PACKAGE_ID,
     status: dbStatus,
     isActive: false,
@@ -496,19 +506,41 @@ async function main(): Promise<void> {
     endDate: periodEndDate,
     autoRenew: true,
     pastDueAt: new Date(),
-    // clear lastReanchoredInvoiceId so the recovery flow is not blocked
-    lastReanchoredInvoiceId: undefined,
   } as IUser["subscription"];
-  // Push the good recovery PM to savedPaymentMethods so the user-facing
-  // renew-subscription route (which reads this array, not the Stripe default) works.
-  user.savedPaymentMethods = [
+  const savedPaymentMethods = [
     { paymentMethodId: recoveryPmId, isDefault: true, createdAt: new Date() },
   ];
-  user.markModified("subscription");
-  user.markModified("savedPaymentMethods");
-  await user.save();
-  console.log(`  MongoDB user saved with status=${dbStatus}, isActive=false, pastDueAt=now.`);
+  const applyPastDue = () =>
+    User.updateOne({ _id: user._id }, { $set: { subscription: pastDueSubscription, savedPaymentMethods } });
+
+  // Write past_due, then verify + re-assert a few times to defend against a Stripe
+  // webhook processing concurrently (the first-invoice `payment_succeeded`) that would
+  // re-activate this user. Bounded (~10s) so it never hangs. If the app's webhook QUEUE
+  // processes the active event AFTER this loop finishes, re-run the seed with `stripe
+  // listen` STOPPED — the seed writes the DB directly and does not need the app's webhooks.
+  let finalStatus = "";
+  let finalActive: boolean | undefined;
+  for (let i = 0; i < 4; i++) {
+    await applyPastDue();
+    await sleep(2500);
+    const fresh = await User.findById(user._id)
+      .select("subscription.status subscription.isActive")
+      .lean<{ subscription?: { status?: string; isActive?: boolean } }>();
+    finalStatus = fresh?.subscription?.status ?? "(unknown)";
+    finalActive = fresh?.subscription?.isActive;
+    if (finalStatus === dbStatus && finalActive === false) break;
+    console.log(
+      `  [reassert ${i + 1}/4] status drifted to '${finalStatus}' (isActive=${finalActive}) — re-asserting past_due…`
+    );
+  }
+  console.log(`  Final DB state: status=${finalStatus}, isActive=${finalActive}, pastDueAt=now.`);
   console.log(`  savedPaymentMethods: [{ paymentMethodId: ${recoveryPmId}, isDefault: true }]`);
+  if (finalStatus !== dbStatus || finalActive !== false) {
+    console.warn(
+      "  ⚠️  A concurrent webhook keeps re-activating this user. Re-run the seed with `stripe listen` STOPPED " +
+        "(the seed writes the DB directly), then restart the listener for recovery testing."
+    );
+  }
 
   // -------------------------------------------------------------------------
   // Step 12: Print QA summary + checklist

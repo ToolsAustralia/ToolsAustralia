@@ -10,6 +10,9 @@ Companion to [tailwind-conventions.md](./tailwind-conventions.md), [component-de
 |---|---|---|
 | `Button` | `variant` (primary/outline/ghost/link) × `size` (sm/md/lg) × `tone` (red/tier-tradie/tier-foreman/tier-boss/neutral) | Any button or button-styled link. Supports `loading` and `asChild`. |
 | `Badge` | `tone` (red/gold/tier-*/neutral/success/warning/info) × `size` (sm/md) | Status pills, labels, counters |
+| `Monogram` | `onBrand` (white-on-brand vs glossy tier tile) × `size`/`radius`/`tierHex` | User-initials identity tile (the dashboard avatar — no photos). Uses `getInitials` (`utils/display-name`) + `glossGrad`/`inkOn` (`tier-visuals`). Added 2026-07-02. |
+| `QuickTile` | `comingSoon`/`disabled` × `badge` × `accentHex` × `href`/`onClick` | Glossy quick-action tile (≥44px), count/promo badge, "Soon" pill for gated features. Renders `Link` or `button`. Added 2026-07-02 for the dashboard `QuickActionsGrid`. |
+| `SheetShell` (+ `SheetHead`) | `open` × `onClose` | Responsive overlay — slide-up bottom sheet (mobile) / centered modal max-w-468 (desktop) over a blurred backdrop; closes on backdrop/Escape, locks body scroll. Added 2026-07-02 for the dashboard Support/Payment/Manage sheets (see [dashboard-account/frontend.md](../dashboard-account/frontend.md)); driven by `useDashboardSheetStore` (client-state). |
 | `Card` (compound: Card.Header/Body/Footer) | `padding` (none/sm/md/lg) | Content containers, panels |
 | `Modal` | re-export of `ModalContainer` (zIndex prop) | Any modal — adopt this path going forward |
 

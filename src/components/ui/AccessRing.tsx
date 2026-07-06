@@ -1,5 +1,5 @@
 "use client";
-import type { ReactNode } from "react";
+import React, { type ReactNode } from "react";
 import { cn } from "@/utils/cn";
 
 /**

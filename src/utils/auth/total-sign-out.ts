@@ -1,0 +1,103 @@
+import { signOut } from "next-auth/react";
+
+/**
+ * Total sign-out — clears the USER-scoped portion of browser storage before
+ * ending the server session, so the next person on a shared device can't see the
+ * previous user's in-progress work / breadcrumbs, and no user-stamped client
+ * state carries into the next authenticated session.
+ *
+ * This app has NO IndexedDB / offline outbox / Cache-Storage writes (verified),
+ * so only `localStorage` + `sessionStorage` need clearing.
+ *
+ * KEEP (never cleared here): device prefs (`ta-theme`, `ta-admin-theme`) and
+ * pre-auth **attribution** (`tools-aus:*`, `affiliate_code`, `ab_*`,
+ * `promoWelcomeShown_*`, admin UI layout, dev-only keys). Those are device- or
+ * campaign-level, not user-private, and the 401 guard in `useErrorHandling`
+ * deliberately protects the attribution keys.
+ */
+
+/** User-scoped localStorage keys (exact match). */
+const USER_LOCAL_KEYS = [
+  "wasAuthenticated",
+  "topBarHidden",
+  "auth-token",
+  "subscription_upgraded",
+  "subscription_downgraded",
+  "modal-priority-store", // zustand persist (defaults to localStorage)
+];
+
+/** User-scoped localStorage key prefixes (per-user breadcrumbs). */
+const USER_LOCAL_PREFIXES = ["subscriptionExplainerSeen_", "rewardsWidgetSpotlightSeen_"];
+
+/** User-scoped sessionStorage keys (exact match). */
+const USER_SESSION_KEYS = [
+  "dashboardPostPurchaseLanding",
+  "dashboardLandingCooldownUntilMs",
+  "dashboardDeferSubscriptionExplainerSession",
+  "pendingUpsell",
+  "pendingUpsellFlag",
+  "modalSessionShown",
+  "specialPackagesModalShown",
+  "recentPurchaseTimestamp",
+  "userSetupModalState",
+  "showReferFriendAfterSetup",
+  "setupJustCompleted",
+  "membership_subscription_checkout",
+];
+
+/** User-scoped sessionStorage key prefixes. */
+const USER_SESSION_PREFIXES = ["ta:dashboard-card-nudge-clicked:", "emailVerificationModal_"];
+
+function clearScoped(store: Storage, keys: string[], prefixes: string[]): void {
+  for (const key of keys) {
+    try {
+      store.removeItem(key);
+    } catch {
+      /* ignore — one failure must never block sign-out */
+    }
+  }
+  try {
+    // Snapshot keys first: removing while iterating shifts indices.
+    const all: string[] = [];
+    for (let i = 0; i < store.length; i++) {
+      const k = store.key(i);
+      if (k) all.push(k);
+    }
+    for (const k of all) {
+      if (prefixes.some((p) => k.startsWith(p))) {
+        try {
+          store.removeItem(k);
+        } catch {
+          /* ignore */
+        }
+      }
+    }
+  } catch {
+    /* ignore — storage may be unavailable */
+  }
+}
+
+/** Clear the user-scoped portion of client storage; keep device/attribution prefs. */
+export function clearUserScopedClientStorage(): void {
+  if (typeof window === "undefined") return;
+  try {
+    clearScoped(window.localStorage, USER_LOCAL_KEYS, USER_LOCAL_PREFIXES);
+  } catch {
+    /* ignore */
+  }
+  try {
+    clearScoped(window.sessionStorage, USER_SESSION_KEYS, USER_SESSION_PREFIXES);
+  } catch {
+    /* ignore */
+  }
+}
+
+/**
+ * Clear user-scoped client storage, then end the NextAuth session.
+ * Use this for every deliberate/forced sign-out instead of calling `signOut`
+ * directly, so the client-side clear can never be skipped.
+ */
+export async function totalSignOut(options?: { callbackUrl?: string }): Promise<void> {
+  clearUserScopedClientStorage();
+  await signOut({ callbackUrl: options?.callbackUrl ?? "/" });
+}

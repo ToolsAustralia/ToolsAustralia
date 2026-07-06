@@ -1,8 +1,8 @@
 "use client";
 
 import React from "react";
-import { Check, Calendar, Tag, Percent, Sparkles } from "lucide-react";
-import { getPartnerAccessDurationLabel } from "@/utils/partner-discounts/partner-access-duration";
+import { Check, Tag, Sparkles } from "lucide-react";
+import UpgradeBenefitStatGrid, { tierFromPackageName } from "@/components/ui/UpgradeBenefitStatGrid";
 
 interface BenefitsBodyProps {
   toPackageName: string;
@@ -22,48 +22,6 @@ interface BenefitsBodyProps {
   fromPackageName: string;
   toPackagePrice: number;
 }
-
-/** Icon wrapper shared by all stat cells.
- * Uses var(--tier-icon-bg-light) as background and var(--tier-color-deep)
- * as icon colour — both are set on the outer [data-tier] frame by styles.module.css.
- */
-const StatIcon: React.FC<{ children: React.ReactNode }> = ({ children }) => (
-  <div
-    className="w-8 h-8 rounded-lg mx-auto mb-1.5 inline-flex items-center justify-center"
-    style={{
-      background: "var(--tier-icon-bg-light)",
-      color: "var(--tier-color-deep)",
-    }}
-  >
-    {children}
-  </div>
-);
-
-/** A single stat cell inside the 3-column stat grid. */
-const StatCell: React.FC<{
-  icon: React.ReactNode;
-  value: string | number;
-  label: string;
-}> = ({ icon, value, label }) => (
-  <div
-    className="text-center px-2 py-3 rounded-xl border"
-    style={{
-      background: "var(--tier-stat-bg)",
-      borderColor: "var(--tier-stat-border)",
-    }}
-  >
-    <StatIcon>{icon}</StatIcon>
-    {/* Original CSS: font-family Anton/Inter, 22px, color #0a0a0a (not tier-colored). */}
-    <div
-      className="font-[Anton,Inter,sans-serif] text-[22px] leading-none text-neutral-900 dark:text-white"
-    >
-      {value}
-    </div>
-    <div className="text-[9px] font-extrabold tracking-[0.12em] uppercase text-neutral-600 dark:text-neutral-400 mt-1">
-      {label}
-    </div>
-  </div>
-);
 
 /** A single item inside the checks list.
  * SVG icon colour is set via inline style (mirrors original's :global(svg) selector).
@@ -104,7 +62,8 @@ const BenefitsBody: React.FC<BenefitsBodyProps> = ({
   toEntriesPerMonth,
   currentEntries,
   upgradeEntriesGrant,
-  fromPackageName,
+  // fromPackageName intentionally not destructured — retained in the props for caller
+  // compatibility but not rendered (the hero shows the from→to transition).
   toPackagePrice,
 }) => {
   const hasEntriesGrant =
@@ -133,25 +92,12 @@ const BenefitsBody: React.FC<BenefitsBodyProps> = ({
         {toPackageName} activates today
       </div>
 
-      {/* Stat grid — 3 columns, gap 8px, mb 12px */}
-      <div className="grid grid-cols-3 gap-2 mb-3">
-        {/* Cell 1: Partner offers % */}
-        <StatCell
-          icon={<Percent size={18} />}
-          value={`${toPartnerAccessPercent}%`}
-          label="Partner offers"
-        />
-        {/* Cell 2: Partner access — subscription upgrade, lifecycle-gated */}
-        <StatCell
-          icon={<Calendar size={18} />}
-          value={getPartnerAccessDurationLabel({ isSubscription: true })!.short}
-          label="Partner access"
-        />
-        {/* Cell 3: Free entries / cycle */}
-        <StatCell
-          icon={<Sparkles size={18} />}
-          value={toEntriesPerMonth}
-          label="Free entries / cycle"
+      {/* Stat grid — shared with StripePaymentModal step 2 so both steps show identical cells. */}
+      <div className="mb-3">
+        <UpgradeBenefitStatGrid
+          tier={tierFromPackageName(toPackageName)}
+          partnerPct={toPartnerAccessPercent}
+          entriesPerCycle={toEntriesPerMonth}
         />
       </div>
 

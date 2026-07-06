@@ -1,5 +1,14 @@
 # Auth — Backend
 
+> **`GET /api/users/[id]/my-account` reconciles the partner-discount queue (2026-07-06):** this account-data
+> route (`.lean()` read, consumed by `useMyAccountData` → `useDashboardState`) now sweeps an in-memory CLONE of
+> `partnerDiscountQueue` via `processPartnerDiscountQueue` before returning `user`, so the client receives the
+> member's REAL current entitlement rather than a stale stored `status`. Without it, a past-due member's eligible
+> one-time pack (still `queued` behind the defunct membership row) read as 0% partner access. Sanctioned read
+> side of the reconcile-then-read rule (mirrors `getReconciledPartnerDiscountSummary`); **side-effect-free** — the
+> canonical persisted sweep stays with the cron + `GET /api/partner-discount/queue`. See
+> [dashboard-account/frontend.md](../dashboard-account/frontend.md) and [partner/](../partner/).
+
 ## Lib
 
 | File | Role |

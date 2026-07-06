@@ -4,9 +4,11 @@ import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
-import { signOut } from "next-auth/react";
+import { totalSignOut } from "@/utils/auth/total-sign-out";
 import { useSidebar } from "@/contexts/SidebarContext";
 import { useUserContext } from "@/contexts/UserContext";
+import { useUserMajorDrawStats } from "@/hooks/queries/useMajorDrawQueries";
+import { hasAdditionalPackageAccess } from "@/utils/membership/has-additional-package-access";
 import { useModalPriorityStore } from "@/stores/useModalPriorityStore";
 import { useMajorDrawPurchaseGate } from "@/hooks/useMajorDrawPurchaseGate";
 // User setup store removed - using unified modal priority system
@@ -166,6 +168,13 @@ export default function Header({ isFixed = true }: HeaderProps) {
     membershipType: "subscription" | "one-time";
     accumulation: SubscriptionAccumulationData | null;
   } | null>(null);
+
+  // Additional-pack access (active sub OR current-draw entries) for the badge-click PackageDetailModal.
+  // GATED on the modal being open: this Header is globally mounted, so an ungated poll would hit
+  // /api/major-draw every 60s on every page for a value only the click-opened modal reads.
+  const { data: userMajorDrawStats } = useUserMajorDrawStats(
+    packageDetailModalData ? userData?._id : undefined
+  );
 
   const openPackageDetailModal = useCallback(
     (packageData: PackageDetailModalPackageData, membershipType: "subscription" | "one-time") => {
@@ -439,12 +448,9 @@ export default function Header({ isFixed = true }: HeaderProps) {
   }, [isMobileMenuOpen, isCartOpen]);
 
   const handleSignOut = () => {
-    // Clear localStorage when signing out
-    localStorage.removeItem("wasAuthenticated");
-    localStorage.removeItem("topBarHidden");
-    // setWasAuthenticated(null);
     setIsTopBarHidden(false);
-    signOut({ callbackUrl: "/" });
+    // Total sign-out: clears user-scoped client storage, then ends the session.
+    void totalSignOut({ callbackUrl: "/" });
   };
 
   const handleAffiliateLogout = async () => {
@@ -899,7 +905,7 @@ export default function Header({ isFixed = true }: HeaderProps) {
                             My Account
                           </Link>
                           <Link
-                            href="/my-account/benefits"
+                            href="/my-account/rewards"
                             className="flex items-center gap-2 px-4 py-3 text-sm text-gray-700 dark:text-neutral-200 hover:bg-gray-50 dark:hover:bg-neutral-800 transition-colors duration-150"
                             onClick={() => setIsDesktopUserMenuOpen(false)}
                           >
@@ -1092,7 +1098,7 @@ export default function Header({ isFixed = true }: HeaderProps) {
                           My Account
                         </Link>
                         <Link
-                          href="/my-account/benefits"
+                          href="/my-account/rewards"
                           className="flex items-center gap-2 px-4 py-3 text-sm text-gray-700 dark:text-neutral-200 hover:bg-gray-50 dark:hover:bg-neutral-800 transition-colors duration-150"
                           onClick={() => setIsMobileUserMenuOpen(false)}
                         >
@@ -1739,7 +1745,7 @@ export default function Header({ isFixed = true }: HeaderProps) {
           membershipType={packageDetailModalData.membershipType}
           accumulation={packageDetailModalData.accumulation}
           hasActiveSubscription={userData?.subscription?.isActive === true}
-          hasAccessToAdditionalPackages={userData?.subscription?.isActive === true}
+          hasAccessToAdditionalPackages={hasAdditionalPackageAccess(userData, userMajorDrawStats)}
           onOpenSettingsSubscription={() => router.push("/my-account?open=subscription")}
           onOpenMembershipModal={() => router.push("/membership")}
           onOpenSpecialPackages={() =>

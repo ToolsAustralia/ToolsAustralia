@@ -325,6 +325,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/hooks/useMajorDrawEntryCta.ts",
         "src/hooks/useMajorDrawPurchaseGate.ts",
         "src/hooks/useMiniDrawTrigger.ts",
+        "src/hooks/useMiniDrawPurchase.ts",
         "src/hooks/usePastDrawsData.ts"
       ],
       "lastVerified": "2026-07-03"
@@ -345,7 +346,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/hooks/useEntryRewardToast.ts",
         "src/utils/rewards-widget-spotlight-storage.ts"
       ],
-      "lastVerified": "2026-04-28"
+      "lastVerified": "2026-07-02"
     },
     "promo": {
       "docs": "docs/promo/",
@@ -474,6 +475,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/lib/api-auth.ts",
         "src/lib/jwt.ts",
         "src/lib/debugAuth.ts",
+        "src/utils/auth/**",
         "src/components/auth/**",
         "src/app/api/auth/**",
         "src/app/api/user/**",
@@ -648,6 +650,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/contexts/AdminUserModalContext.tsx",
         "src/stores/index.ts",
         "src/stores/useModalPriorityStore.ts",
+        "src/stores/useDashboardSheetStore.ts",
         "src/lib/queries.ts",
         "src/lib/queryKeys.ts",
         "src/lib/requestDeduplication.ts",
@@ -719,9 +722,11 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/app/(site)/my-account/**",
         "src/app/(site)/components/LandingPageTrigger.tsx",
         "src/hooks/useDashboardEntryDisplay.ts",
-        "src/hooks/useDashboardLandingOrchestration.ts"
+        "src/hooks/useDashboardLandingOrchestration.ts",
+        "src/hooks/useDashboardState.ts",
+        "src/utils/dashboard/**"
       ],
-      "lastVerified": "2026-06-09"
+      "lastVerified": "2026-07-02"
     },
     "security-csp": {
       "docs": "docs/security-csp/",

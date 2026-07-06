@@ -42,7 +42,7 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({ packageName, amount, upgrad
             </span>
           </div>
           <div className="flex items-center justify-between text-sm pt-2 border-t border-neutral-100 dark:border-neutral-700">
-            <span className="text-neutral-600 dark:text-neutral-300 font-medium">Prorated charge today</span>
+            <span className="text-neutral-600 dark:text-neutral-300 font-medium">Charge today</span>
             <span className="font-bold text-neutral-900 dark:text-white">${(amount / 100).toFixed(2)} AUD</span>
           </div>
 

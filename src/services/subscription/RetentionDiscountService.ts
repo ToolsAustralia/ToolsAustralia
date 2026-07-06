@@ -100,14 +100,21 @@ export function buildCouponParams(): {
  *
  * Order matters — most critical exclusion first:
  * 1. Past-due: the retention discount must never stack on a failed-renewal scenario.
- * 2. Already consumed: the offer is one-time only.
- * 3. No Stripe subscription ID: cannot apply a discount to what doesn't exist.
+ * 2. Scheduled to cancel: an already-cancelling member un-cancels via "Resume membership", not a discount.
+ * 3. Already consumed: the offer is one-time only.
+ * 4. No Stripe subscription ID: cannot apply a discount to what doesn't exist.
  */
 export function retentionDiscountBlockReason(
   user: Pick<IUser, "subscription" | "retentionOffersConsumed" | "stripeSubscriptionId">
 ): string | null {
   if (hasFailedRenewal(user as IUser)) {
     return "past-due: retention discount not allowed";
+  }
+  // Already scheduled to cancel: a 2-month coupon bills nothing before Stripe cancels at period end, so
+  // the member is recorded "saved" yet still churns. Retention offers are for members still DECIDING to
+  // cancel; the explicit un-cancel path is the dashboard "Resume membership" button.
+  if (user.subscription?.autoRenew === false) {
+    return "scheduled to cancel: retention discount not allowed";
   }
   if (user.retentionOffersConsumed?.discount50_2mo) {
     return "retention discount already used";

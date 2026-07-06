@@ -1,5 +1,39 @@
 # Rewards-Redeemables — Frontend
 
+## Locked-coupon unlock flow — purchase with the code carried (2026-07-06)
+
+A **purchase-required coupon the user does NOT yet qualify for** (`isRedeemableNow: false`,
+`purchaseRequirement !== "none"`) is now an actionable **Unlock CTA** on the dashboard rewards claimables
+sheet (`RewardsClaimables` `onUnlock` prop, wired by `my-account/rewards/page.tsx` `onUnlockCoupon`),
+opening the qualifying-purchase flow **with the coupon code carried** (freeze-gated via
+`whenGatesOpenElseGateModal`):
+
+- **`membership`-required** → the membership join flow (`membershipModal.openModal()` — membership
+  packages) + the code sent via the `openMembershipModal` prefill event. Label: "Join to unlock".
+- **`one-time` / `any`-required** → one-time packages: members with additional access get
+  `requestModal("special-packages", { initialCouponCode })` (true auto-apply); everyone else gets the
+  MembershipModal **one-time** flow (`openWithOneTimePlan()`) + the prefill event — `SpecialPackagesModal`
+  renders `null` without additional access, and the locked cohort is usually exactly that cohort. Label:
+  "Purchase to unlock".
+
+**MembershipModal now AUTO-APPLIES codes arriving via the prefill event** (`pendingAutoApplyCode` one-shot
+effect → `handleCouponApply("auto")`, mirroring SpecialPackagesModal's `initialCouponCode`). Previously the
+event only prefilled the input with `couponApplied=false` — paying without a manual Apply click carried NO
+code, so the coupon was never redeemed. After payment the webhook redeems the coupon off the qualifying
+purchase (`checkAndRedeemCampaign` → `RedemptionService`, gate: `hasQualifyingPurchase`).
+
+**Qualified** purchase-required coupons (`isRedeemableNow: true`) claim/redeem **directly** on every surface —
+the gate is already satisfied. The legacy `/rewards` wallet's amber "Unlock" button for qualified items was a
+silent no-op (`onRequirePurchase` was never passed by any call site) and is removed; those items now show the
+normal Redeem button. `RewardsFloatingWidget` (unmounted since the dashboard revamp) retains the old inverted
+gating — if ever remounted, port this flow first.
+
+Known edge (flagged, not built — product decision): **mini-draw purchases never satisfy `one-time`/`any`**
+(`hasQualifyingPurchase` reads only `oneTimePackages`; mini purchases persist to `miniDrawPackages`), yet the
+modal doesn't block a campaign code on a mini pack — the webhook redeem then fails silently (warn-only).
+Also: `neverExpires` campaigns with a stale `endsAt` stay active but one-time purchases after `endsAt` never
+qualify (window ceiling is `endsAt` when present).
+
 ## Pages
 
 - `src/app/(site)/rewards/` — main rewards page; user wallet view + redeem CTAs

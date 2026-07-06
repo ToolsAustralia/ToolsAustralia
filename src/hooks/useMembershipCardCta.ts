@@ -159,8 +159,11 @@ export function useMembershipCardCta(
   const onSelect = (plan: LocalMembershipPlan) =>
     whenGatesOpenElseGateModal(() => {
       const h = hierarchy(plan);
-      // past_due users must resolve payment first → /my-account
-      if (hasBlockingSub && isPastDue) {
+      // A past-due member can't start a new SUBSCRIPTION (must resolve/switch first → /my-account),
+      // but CAN still buy a ONE-TIME / Additional pack (it's a standalone purchase, not a second
+      // subscription — the "Get more entries" flow already allows this). So only bounce subscription
+      // taps; let one-time/Additional pack taps open the purchase modal.
+      if (hasBlockingSub && isPastDue && isSubscriptionPlan(plan)) {
         router.push("/my-account");
         return;
       }

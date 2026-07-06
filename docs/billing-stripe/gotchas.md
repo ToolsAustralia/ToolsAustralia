@@ -1,5 +1,16 @@
 # Billing-Stripe — Gotchas
 
+## Tier change on a scheduled-to-cancel sub MUST clear `cancel_at_period_end` (2026-07-06)
+
+A member who is `cancel_at_period_end` (autoRenew off, still active) can still upgrade/downgrade. **Stripe API >
+2018-02-28 does NOT auto-clear a pending cancellation when you swap items / change the anchor** — you must send
+`cancel_at_period_end: false` explicitly. Both routes previously omitted it:
+
+- **Upgrade** ([upgrade-subscription-payment/route.ts](../../src/app/api/stripe/upgrade-subscription-payment/route.ts)) — the DB (webhook pending-upgrade branch) set `autoRenew=true`, but Stripe still held `cancel_at_period_end=true`, so DB and Stripe diverged and a later `subscription.updated` flipped the DB back to cancelled.
+- **Downgrade** ([downgrade-subscription/route.ts](../../src/app/api/stripe/downgrade-subscription/route.ts)) — worse: at period end Stripe fired `customer.subscription.deleted` **before** the downgraded price ever renewed, so the member was **dropped entirely** instead of continuing on the lower tier. This route has no dedicated webhook reconciliation, so it also sets `autoRenew=true` + clears `cancelledAt` in its own DB write.
+
+**Fix:** both `stripe.subscriptions.update` calls now send `cancel_at_period_end: false`. Charge-safe — per Stripe's proration docs, `cancel_at_period_end` is not a proration-triggering param, so it spawns no invoice (distinct from the `trial_end`/anchor footgun in [PAST_DUE_REANCHOR](../PAST_DUE_REANCHOR.md)). The no-tier-change "just resume" path uses `PATCH /api/stripe/update-auto-renew {autoRenew:true}`.
+
 ## One-time purchase: gate the new-vs-existing branch on the LOWERCASED user lookup (2026-06-19)
 
 `create-one-time-purchase` does two email lookups: `registeredUser` (line ~167, **lowercased** — `findOne({ email: userEmail.toLowerCase() })`) used everywhere in the route, and previously a redundant case-sensitive `existingUser` (`findOne({ email: userEmail })`). The new-vs-existing branch was gated on the **case-sensitive** one. Because emails are stored **lowercase** (`User` schema `lowercase: true`), a new user who typed their email with **any uppercase** missed that lookup → fell into the `accountCreationPending` (webhook-creates-the-account) branch → the client's one-time success handler (which only acts when `data.user` is present) did nothing → **user logged out / not redirected after a successful payment**, plus a duplicate-account risk.
