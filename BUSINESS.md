@@ -400,6 +400,7 @@ These are not in the status enum but materially affect what entries / partner ac
 
 - `proration_behavior: "none"`, `billing_cycle_anchor: "now"`, `payment_behavior: "error_if_incomplete"`. See [src/app/api/stripe/upgrade-subscription-payment/route.ts](src/app/api/stripe/upgrade-subscription-payment/route.ts).
 - User pays the **full new-tier price immediately**; renewal date resets to today.
+- **Upgrading OVERWRITES a scheduled cancellation.** A member who is `cancel_at_period_end` (autoRenew off) can upgrade instead — the update explicitly sets `cancel_at_period_end: false`, so the pending cancel is cleared (Stripe > 2018-02-28 does **not** auto-clear it on an item swap; charge-safe since `cancel_at_period_end` triggers no proration). Without this the DB would read "upgraded/active" while Stripe still cancels at period end.
 - **Entries are granted immediately on upgrade** — the grant runs **server-side in the Stripe webhook** after the upgrade invoice is paid (the route records `user.subscription.pendingChange` and defers benefit-granting to the webhook). The `upgradeEntriesGrant` figure shown in [UpgradeConfirmModal](src/components/modals/UpgradeConfirmModal/index.tsx) is only the **display amount** (computed client-side via `calculateUpgradeEntries`), not the grant mechanism.
 
 ### 10d. Downgrades — no charge now, takes effect at cycle end
@@ -407,6 +408,8 @@ These are not in the status enum but materially affect what entries / partner ac
 - `proration_behavior: "none"`, no immediate charge. User pays current (higher) price until cycle end.
 - **Old benefits stay live** via the §10b `previousSubscription` cache until `endDate`.
 - `DowngradeConfirmModal` shows `effectiveDateLabel` (e.g. "Fri 26 Dec") so the user sees exactly when the new tier kicks in.
+- **Downgrading OVERWRITES a scheduled cancellation.** A member who is `cancel_at_period_end` can downgrade instead of cancelling — the update sets `cancel_at_period_end: false` and the route resets `autoRenew: true` / clears `cancelledAt` in the DB (this path has no dedicated webhook reconciliation). **Critical:** without this, Stripe cancels at period end *before* the downgraded price ever renews, so the member is **dropped entirely** instead of continuing on the lower tier.
+- **Resuming instead:** a member who just wants to stop the scheduled cancellation (not change tier) taps **"Resume membership"** in the dashboard Manage sheet → `PATCH /api/stripe/update-auto-renew {autoRenew:true}` (the §10-`autoRenew` soft-cancel undo — no charge, no tier change).
 
 ### 10e. Renewal-failed customer UX
 
