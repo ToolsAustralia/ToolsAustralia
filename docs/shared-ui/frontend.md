@@ -1,5 +1,9 @@
 # Shared UI — Frontend
 
+> **Guest panel: view-the-draw redirect (2026-07-06):** `DashboardGuestPanel`'s "Enter the {draw}" card title
+> row now carries a small `ArrowUpRight` icon-link to **`/major-draw`** (the prize showcase) — a guest holds no
+> entries yet, so they get a way to *see* the draw before committing to either CTA.
+
 > **Redeemable unlock flow + MembershipModal coupon auto-apply (2026-07-06):** `RewardsClaimables` gained an
 > `onUnlock` prop — locked purchase-required coupons render an actionable amber "Join to unlock" / "Purchase to
 > unlock" CTA (was a disabled dead-end). `MembershipModal` now **auto-applies** codes arriving via the
