@@ -1,5 +1,16 @@
 # Shared UI — Frontend
 
+> **Tier re-tap after cancelling the payment modal (2026-07-06):** from the account membership "Change your
+> tier" list, tapping a tier sets the page's `changeTierName` → mounts `SubscriptionManagementModal` in
+> `confirmOnly` mode (`autoSelectPlanName`), which auto-opens the upgrade confirm → Stripe payment modal. The
+> parent only resets `changeTierName` via its `onClose`, and the auto-select is latched by a ref that clears
+> only on unmount — so any cancel exit that doesn't call the parent `onClose` leaves the modal mounted + the
+> ref latched, making a re-tap of the **same** tier a silent no-op (looked like a ~1-min "won't open"; it was
+> actually permanent until an unrelated remount). The `UpgradeConfirmModal`/`DowngradeConfirmModal` cancels
+> already called `if (confirmOnly) onClose()`; the **`StripePaymentModal` cancel was missing it** — added, so
+> cancelling the payment step in confirmOnly closes the whole flow and a re-tap re-opens. No TTL/dedup was
+> involved. Verified: `npm run test:subscription-management`.
+
 > **`UpgradeBenefitStatGrid` — one benefit grid for both upgrade steps (2026-07-06):** the two steps of the
 > membership upgrade flow rendered DIFFERENT benefit cells — step 1 (`UpgradeConfirmModal/BenefitsBody`) showed
 > **Partner offers % · Partner access · Free entries / cycle** (Anton font, icon+tint, real props); step 2

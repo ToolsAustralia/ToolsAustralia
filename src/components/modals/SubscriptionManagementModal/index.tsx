@@ -1086,6 +1086,11 @@ const SubscriptionManagementModal: React.FC<SubscriptionManagementModalProps> = 
             setShowStripePaymentModal(false);
             setUpgradeData(null);
             setSelectedUpgrade(null);
+            // confirmOnly (tier-list tap → straight to confirm/pay): there's no management view to
+            // return to, so cancel must close the WHOLE flow — otherwise the parent's changeTierName
+            // stays set + the autoSelect ref stays latched, and re-tapping the SAME tier is a no-op
+            // until an unrelated remount. Mirrors the UpgradeConfirmModal/DowngradeConfirmModal cancels.
+            if (confirmOnly) onClose();
           }}
           clientSecret={upgradeData?.clientSecret || ""}
           packageName={upgradeData?.packageName || ""}
