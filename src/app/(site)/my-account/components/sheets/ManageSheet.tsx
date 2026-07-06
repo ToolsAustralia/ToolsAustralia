@@ -17,6 +17,9 @@ import { queryKeys } from "@/lib/queryKeys";
 import { glossGrad, inkOn } from "@/utils/membership/tier-visuals";
 import { getPackageIcon } from "@/utils/images/package-icons";
 import { getFallbackRenewalDate } from "@/utils/dates/month-helpers";
+import { hasPendingDowngrade, getDowngradeEffectiveDate } from "@/utils/membership/benefit-resolution";
+import { getPackageById } from "@/data/membershipPackages";
+import type { IUser } from "@/models/User";
 import { cn } from "@/utils/cn";
 
 // Self-contained money-path flow — loaded on demand, reused as-is.
@@ -115,13 +118,24 @@ export default function ManageSheet() {
     return d.toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" });
   })();
   const autoRenew = sub?.autoRenew !== false;
+  // Scheduled downgrade — mirror the Membership page's MembershipCurrentPlan card so both surfaces agree.
+  const downgradePending = !!user && isActive && autoRenew && hasPendingDowngrade(user as unknown as Partial<IUser>);
+  const downgradeDate = downgradePending ? getDowngradeEffectiveDate(user as unknown as Partial<IUser>) : null;
+  const downgradeTargetId = (user?.subscription as { packageId?: unknown } | undefined)?.packageId;
+  const downgradeTarget =
+    downgradePending && downgradeTargetId != null ? getPackageById(String(downgradeTargetId)) : null;
+  const downgradeDateLabel = downgradeDate
+    ? downgradeDate.toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" })
+    : null;
   const renewLabel = isPastDue
     ? "Payment failed — renew to resume"
-    : renewDate
-      ? `${autoRenew ? "Renews" : "Ends"} ${renewDate}${autoRenew ? " · auto-renews monthly" : ""}`
-      : autoRenew
-        ? "Auto-renews monthly"
-        : "";
+    : downgradePending && downgradeTarget && downgradeDateLabel
+      ? `Downgrades to ${downgradeTarget.name} · ${downgradeDateLabel}`
+      : renewDate
+        ? `${autoRenew ? "Renews" : "Ends"} ${renewDate}${autoRenew ? " · auto-renews monthly" : ""}`
+        : autoRenew
+          ? "Auto-renews monthly"
+          : "";
 
   // Default card label for the "Update payment method" row.
   const defaultCard =

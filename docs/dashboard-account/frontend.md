@@ -13,6 +13,11 @@
 > modal is a sibling of `SheetShell` so it survives the close; previously the Manage bottom sheet stayed
 > mounted *over* the cancellation modal.
 
+> **Scheduled downgrade in ManageSheet plan summary (2026-07-06):** the ManageSheet `renewLabel` now shows
+> **"Downgrades to {tier} · {date}"** when `hasPendingDowngrade` (active member with a `previousSubscription`
+> window), mirroring the Membership page's `MembershipCurrentPlan` status row so both surfaces agree. See
+> [shared-ui/frontend.md](../shared-ui/frontend.md).
+
 > **Resume membership from ManageSheet (2026-07-06):** when a member is scheduled to cancel at period end
 > (`isActive && subscription.autoRenew === false` — the same state `subscription/benefits` calls `isCancelled`),
 > `ManageSheet` now shows a green **"Resume membership"** button in place of "Cancel membership" (mirrors the

@@ -6,6 +6,9 @@ import { getActivePackage, type ActivePackageUserInput } from "@/utils/membershi
 import { glossGrad, inkOn } from "@/utils/membership/tier-visuals";
 import { getPartnerCatalogAccessPercentForPlanId } from "@/utils/partner-discounts/partner-catalog-visibility";
 import { getFallbackRenewalDate } from "@/utils/dates/month-helpers";
+import { hasPendingDowngrade, getDowngradeEffectiveDate } from "@/utils/membership/benefit-resolution";
+import { getPackageById } from "@/data/membershipPackages";
+import type { IUser } from "@/models/User";
 import type { UserData } from "@/hooks/queries/useUserQueries";
 import type { DashboardAccountState } from "@/utils/dashboard/dashboard-state-theme";
 
@@ -62,6 +65,39 @@ export default function MembershipCurrentPlan({
   // "Auto-renews monthly" would be wrong (matches the EntryWallet/hero gating on autoRenew).
   const autoRenewOff = (user?.subscription as { autoRenew?: boolean } | undefined)?.autoRenew === false;
 
+  // Scheduled downgrade: the member keeps the current (higher) tier's benefits until `endDate`, then drops
+  // to `subscription.packageId` (the new lower tier). getEffectiveBenefits keeps the plan card showing the
+  // higher tier meanwhile; surface the pending change on the status row (canonical helpers — same source as
+  // the Header "Premium benefits" countdown). A cancel (autoRenewOff) supersedes it.
+  const downgradePending =
+    !!user && (active || pastdue) && !autoRenewOff && hasPendingDowngrade(user as unknown as Partial<IUser>);
+  const downgradeDate = downgradePending ? getDowngradeEffectiveDate(user as unknown as Partial<IUser>) : null;
+  const downgradeTargetId = (user?.subscription as { packageId?: unknown } | undefined)?.packageId;
+  const downgradeTarget =
+    downgradePending && downgradeTargetId != null ? getPackageById(String(downgradeTargetId)) : null;
+  const downgradeDateLabel = downgradeDate
+    ? downgradeDate.toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" })
+    : null;
+
+  // Status-row title/sub — precedence: past-due > scheduled cancel > scheduled downgrade > normal renewal.
+  let planRowTitle: string;
+  let planRowSub: string;
+  if (pastdue) {
+    planRowTitle = "Payment failed";
+    planRowSub = "Update to resume";
+  } else if (autoRenewOff) {
+    planRowTitle = renews ? `Ends ${renews}` : "Membership";
+    planRowSub = "Cancels at period end";
+  } else if (downgradePending && downgradeTarget) {
+    planRowTitle = `Downgrades to ${downgradeTarget.name}`;
+    planRowSub = downgradeDateLabel
+      ? `${downgradeDateLabel}${downgradeTarget.price != null ? ` · $${downgradeTarget.price}/mo after` : ""}`
+      : "Scheduled at period end";
+  } else {
+    planRowTitle = renews ? `Renews ${renews}` : "Membership";
+    planRowSub = "Auto-renews monthly";
+  }
+
   const statusPill =
     active ? "Active" : pastdue ? "Past due" : onetime ? "One-time" : "Guest";
   const planName = active || pastdue ? tierLabel ?? "Membership" : onetime ? pkg?.packageData?.name ?? "One-time pack" : "Free";
@@ -117,23 +153,7 @@ export default function MembershipCurrentPlan({
               // "Choose a membership" section right below is the actual join path.
               <InfoRow icon={Crown} title="Become a member" sub="Unlock exclusive rewards & free entries" />
             ) : (
-              <ManageRow
-                icon={RefreshCw}
-                title={
-                  pastdue
-                    ? "Payment failed"
-                    : autoRenewOff
-                      ? renews
-                        ? `Ends ${renews}`
-                        : "Membership"
-                      : renews
-                        ? `Renews ${renews}`
-                        : "Membership"
-                }
-                sub={pastdue ? "Update to resume" : autoRenewOff ? "Cancels at period end" : "Auto-renews monthly"}
-                cta="Manage"
-                onClick={onManage}
-              />
+              <ManageRow icon={RefreshCw} title={planRowTitle} sub={planRowSub} cta="Manage" onClick={onManage} />
             )}
             <ManageRow icon={CreditCard} title="Payment method" sub={paymentLabel ?? "Manage your card"} cta="Edit" onClick={onPayment} />
           </div>

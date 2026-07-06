@@ -1,5 +1,14 @@
 # Shared UI — Frontend
 
+> **Scheduled downgrade shown on the plan status row (2026-07-06):** `MembershipCurrentPlan` (and, in lockstep,
+> the dashboard `ManageSheet` plan summary) now surface a **pending downgrade**. When a member downgrades, they
+> keep the higher tier's benefits until `endDate` (`getEffectiveBenefits` → the card still shows the higher
+> tier + stats), then drop to `subscription.packageId` (the new lower tier). The status row now reads
+> **"Downgrades to {tier}" / "{date} · ${price}/mo after"** instead of "Renews … / Auto-renews monthly",
+> driven by the canonical `hasPendingDowngrade` + `getDowngradeEffectiveDate` (same source as the Header
+> "Premium benefits" countdown). Row precedence: **past-due > scheduled cancel (autoRenew off) > scheduled
+> downgrade > normal renewal** (a cancel supersedes a downgrade).
+
 > **Tier re-tap after cancelling the payment modal (2026-07-06):** from the account membership "Change your
 > tier" list, tapping a tier sets the page's `changeTierName` → mounts `SubscriptionManagementModal` in
 > `confirmOnly` mode (`autoSelectPlanName`), which auto-opens the upgrade confirm → Stripe payment modal. The
