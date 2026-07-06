@@ -13,6 +13,18 @@
 > modal is a sibling of `SheetShell` so it survives the close; previously the Manage bottom sheet stayed
 > mounted *over* the cancellation modal.
 
+> **Cancel flow didn't close + duplicate toast (2026-07-06):** `ManageSheet`'s "Cancel membership" opens a
+> `CancellationFlowModal` gated on local `cancelOpen` state (`{cancelOpen && …}` / `isOpen={cancelOpen}`). Its
+> `onCancelled` handler called `onSubscriptionUpdate()` + `closeSheet()` but **not** `setCancelOpen(false)` — and
+> `closeSheet()` only clears the sheet store (already null by then), so the flow modal **lingered** after a
+> successful cancel. The re-enabled "cancel anyway" button then got re-clicked → a second (idempotent) cancel
+> POST → the **duplicate "Subscription Cancelled" toast**. So one root cause produced both symptoms. Fix: add
+> `setCancelOpen(false)` to `onCancelled` (and the twin omission on `onSaved`, which left the retention
+> save-success screen lingering). A ref-latch in Step4Confirm was considered and rejected (adversarially
+> verified): it wouldn't block the post-completion re-click, and `disabled={isCancelling}` already covers the
+> in-flight case. The sibling `SubscriptionManagementModal` cancel path was already correct
+> (`handleFlowCancelled` → `setShowCancellationFlow(false)`).
+
 > **Incoming-entries-on-renewal note (2026-07-03, number corrected 2026-07-06):** `useDashboardState` exposes
 > `renewalDateIso` (the subscription's next renewal, from `subscription.endDate` when active + `autoRenew`) and
 > `membershipEntriesPerRenewal`. `EntryWallet` uses them to show the free entries that land on renewal for an

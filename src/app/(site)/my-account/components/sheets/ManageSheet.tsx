@@ -212,10 +212,21 @@ export default function ManageSheet() {
           isOpen={cancelOpen}
           onClose={() => setCancelOpen(false)}
           onCancelled={() => {
+            // MUST reset cancelOpen — it's the only state that mounts + opens this modal
+            // ({cancelOpen && …} / isOpen={cancelOpen}). closeSheet() only clears the sheet
+            // store (already null here). Without this the flow modal lingers after a successful
+            // cancel, and the re-enabled "cancel anyway" button gets re-clicked → a second
+            // (idempotent) cancel POST → the duplicate "Subscription Cancelled" toast.
+            setCancelOpen(false);
             onSubscriptionUpdate();
             closeSheet();
           }}
-          onSaved={() => onSubscriptionUpdate()}
+          onSaved={() => {
+            // Same fix for the retention save-success path — otherwise "Back to my account"
+            // leaves the success screen lingering (StepSaveSuccess → onDone → onSaved).
+            setCancelOpen(false);
+            onSubscriptionUpdate();
+          }}
           onResolvePayment={() => {
             setCancelOpen(false);
             openSheet("payment");
