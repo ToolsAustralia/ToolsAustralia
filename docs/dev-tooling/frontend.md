@@ -36,6 +36,10 @@ No Stripe, no providers, no real purchase. Mock data sourced from `src/data/memb
 
 When a modal is moved from a monolith `.tsx` file to a folder structure (`/index.tsx`), update the `source` path in the `MODAL_SOURCES` map inside this file.
 
+Note (2026-07-06): the gallery's `PackageSelectionModal` entry passes `onPlanSelect={close}` — the picker no
+longer self-closes after a pick (close-after-pick is the parent's job inside `onPlanSelect`; `onClose` is
+dismissal-only). See [shared-ui/frontend.md](../shared-ui/frontend.md) for the contract.
+
 When a modal's props change, the gallery mount must follow. Note `ChargePastDueModal` (gallery id `admin-charge-past-due`) is now self-driven (it owns its `start → chunk` charge loop) and no longer takes an `onConfirm` prop — the gallery mounts it with just `isOpen`/`onClose` (the optional `onCompleted` is omitted). The separate `ChargePastDueUserModal` is unrelated and still uses `onConfirm`.
 
 ### CancellationFlowHarnessClient

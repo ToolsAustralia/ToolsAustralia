@@ -363,10 +363,15 @@ const PackageSelectionModal: React.FC<PackageSelectionModalProps> = ({
 
     setSelectedPlan(plan);
 
-    // Auto-confirm: brief visual feedback then close (tap → glow → close)
+    // Auto-confirm: brief visual feedback then hand the pick to the parent (tap → glow → select).
+    // Deliberately does NOT call onClose() here — closing after a pick is the PARENT's job inside
+    // onPlanSelect (MembershipModal.handlePackageSelect does setIsPackageSelectionOpen(false)).
+    // That keeps `onClose` meaning DISMISSAL ONLY (✕ / backdrop), so consumers can react to "user
+    // backed out without choosing". The old select-then-onClose pair fired in the same tick,
+    // BEFORE React committed the new plan — a dismiss-handler reading the selected plan still saw
+    // the placeholder and wrongly closed the whole membership modal right after a pick.
     setTimeout(() => {
       onPlanSelect(plan);
-      onClose();
     }, 200);
   };
 
