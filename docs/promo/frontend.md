@@ -125,21 +125,11 @@ Promo components use `cn()` from `@/utils/cn` for conditional class composition.
 
 Countdown timers in promo components — `GiveawayCountdownTimer`, `FloatingCountdownBanner`, `FreezePeroidBanner` — are now leaf-isolated via [`<CountdownLeaf>`](../../src/components/ui/CountdownLeaf.tsx) / [`useLeafTimer`](../../src/hooks/useLeafTimer.ts) so the parent promo section / banner host doesn't re-render on every tick. `OtherToolsetsCarousel` pauses its infinite framer-motion loop when offscreen via [`useInViewportAnimation`](../../src/hooks/useInViewportAnimation.ts), and `FloatingPromoBanner` / `FloatingGetEntriesButton` consume the device-tier CSS tokens (`--ta-blur`, `--ta-shadow-card`, `--ta-transition-dur`) so visual cost scales down on mobile / `Save-Data`. Floating elements set `data-floating-widget="true"` so the print stylesheet hides them. The new [`FloatingPromoBannerHost`](../../src/components/banners/FloatingPromoBannerHost.tsx) is mounted once in `providers.tsx` and orchestrates promo banner visibility globally instead of per-page mounting. See [shared-ui/patterns.md](../shared-ui/patterns.md#site-wide-interaction-smoothness--phase-1-2026-05-09) for the helpers.
 
-## PromoPackages — A/B design branch (2026-07-01)
+## PromoPackages — packages-design experiment concluded, control won (2026-07-06)
 
-[`src/components/sections/promo/PromoPackages.tsx`](../../src/components/sections/promo/PromoPackages.tsx) now branches on `variantConfig?.packages.design`:
+[`src/components/sections/promo/PromoPackages.tsx`](../../src/components/sections/promo/PromoPackages.tsx) always renders the control block: `<section id="packages">` + `SectionContainer` + `MembershipSection` (`title="Choose Your Entry Package"`), still passing `variantConfig?.packages` through for `hidePackages` / `displayOrder`.
 
-| `packages.design` | Renders | Notes |
-|---|---|---|
-| `"promo"` (default / absent) | `MembershipSection` | Control arm — unchanged existing design |
-| `"membership"` | `PromoMembershipDesign` | Treatment arm — the `/membership` tier + one-time-packs design |
-
-**`PromoMembershipDesign`** ([`src/components/sections/promo/PromoMembershipDesign.tsx`](../../src/components/sections/promo/PromoMembershipDesign.tsx)) is a thin wrapper that mirrors `MembershipPageClient`:
-- One `useMembershipCardCta({ includeAdditionalForMembers: true })` instance owning one `MembershipModal`.
-- Renders `MembershipTierChooser` with `sectionId="packages"` — this preserves the `#packages` scroll anchor and avoids a duplicate `#membership` id on the page.
-- The control path (`MembershipSection`) is unchanged.
-
-For the full experiment operational details (seeding, reading results, winner-swap cleanup checklist), see [docs/ab-testing/promo-packages-design-runbook.md](../ab-testing/promo-packages-design-runbook.md).
+Historical: from 2026-07-01 to 2026-07-06 it branched on `variantConfig?.packages.design` for the packages-design A/B test — `"membership"` rendered a `PromoMembershipDesign` treatment (the `/membership` tier + one-time-packs design). The control won (3.11% vs 2.65% conversion), so the treatment component, the `packages.design` config key, and the branch were removed. The generic experiment plumbing (`VariantAssignmentWrapper`, `getActiveExperimentForSlug`, `getServerVariantAssignment`) stays for future experiments. Historical operational details: [docs/ab-testing/promo-packages-design-runbook.md](../ab-testing/promo-packages-design-runbook.md).
 
 ## FloatingPromoBanner — removed (2026-07-01)
 

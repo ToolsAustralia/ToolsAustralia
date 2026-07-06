@@ -21,7 +21,7 @@ function trackFor(ink: string): string {
   return ink === "#ffffff" ? "rgba(255,255,255,.22)" : "rgba(10,10,10,.22)";
 }
 
-export function TierCard({ plan, cta }: { plan: LocalMembershipPlan; cta: MembershipCardCta }) {
+function TierCard({ plan, cta }: { plan: LocalMembershipPlan; cta: MembershipCardCta }) {
   const key = tierKeyFromName(plan.name);
   const hex = TIER_HEX[key];
   const ink = inkOn(hex);

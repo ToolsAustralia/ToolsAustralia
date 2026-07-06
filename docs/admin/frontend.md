@@ -506,16 +506,14 @@ has shipped (light won — see [shared-ui/frontend.md](../shared-ui/frontend.md)
 and `MembershipSection` no longer reads this field, but the checkbox stays in
 the editor for future revival.
 
-## A/B variant editor — package design (promo vs membership)
+## A/B variant editor — package design (removed)
 
-[`VariantConfigEditor`](../../src/components/admin/ab-testing/VariantConfigEditor.tsx)
-has a **Package Design (A/B)** `<select>` in the Packages Configuration section,
-bound to `config.packages.design` (`"promo"` = control / current
-`MembershipSection`; `"membership"` = the `/membership` tier + one-time-packs
-design). It is the admin control for the **promo package-design** experiment
-(seeded straight-to-active via `npm run seed:promo-packages-design`). Absent =
-`"promo"`; the two-option select can't express "clear to absent", which is fine
-— validation treats absent and `"promo"` identically.
+Historical note: `VariantConfigEditor` previously had a **Package Design (A/B)**
+`<select>` (`config.packages.design`) for the 2026-07 promo packages-design
+experiment. The experiment concluded 2026-07-06 — control won — and the
+selector, the `packages.design` config key, and its validation were removed.
+The remaining Packages Configuration inputs (`hidePackages`, `displayOrder`,
+`highlightPackage`) are unaffected.
 
 ## A/B variant editor — per-slug hero image map
 

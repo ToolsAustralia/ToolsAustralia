@@ -204,12 +204,6 @@ export class VariantConfigService {
         if (packages.hidePackages && !Array.isArray(packages.hidePackages)) {
           errors.push("Packages hidePackages must be an array");
         }
-        if (
-          packages.design !== undefined &&
-          (typeof packages.design !== "string" || !["promo", "membership"].includes(packages.design as string))
-        ) {
-          errors.push('Packages design must be "promo" or "membership"');
-        }
       }
     }
 

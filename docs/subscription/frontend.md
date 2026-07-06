@@ -40,9 +40,9 @@ All client reads of subscription state go through one of these four hooks. They 
 useMembershipCardCta({ includeAdditionalForMembers?: boolean })
 ```
 
-`includeAdditionalForMembers` defaults to `false`. All 15+ existing callers (the `/membership` page, `MembershipSection`, and other consumers) pass no argument and are **unchanged** in behaviour.
+`includeAdditionalForMembers` defaults to `false`. All other callers (the `/membership` page, `MembershipSection`, and the 15+ remaining consumers) pass no argument and are **unchanged** in behaviour.
 
-When `true` AND the user has additional-package access (`hasAdditionalAccess`), the one-time drawer surfaces `isAdditional` packs — the same "Additional" packs the control arm's `MembershipSection` shows. This is used by the promo A/B treatment (`PromoMembershipDesign`) to achieve **offer parity** between the two arms: the test measures design, not the offer.
+When `true` AND the user has additional-package access (`hasAdditionalAccess`), the one-time drawer surfaces `isAdditional` packs — the same "Additional" packs `MembershipSection` shows to eligible members. The sole caller passing `true` is the my-account membership page ([`src/app/(site)/my-account/membership/page.tsx`](../../src/app/(site)/my-account/membership/page.tsx)). (The flag was originally added for the promo packages-design A/B treatment; that experiment concluded in 2026-07 — control won, the treatment was removed — but the flag was kept for the my-account page.)
 
 The source-selection logic is factored into a pure helper:
 
@@ -65,14 +65,12 @@ One-Time tab. The param is parsed by a single shared helper,
   caller falls back to its normal (user-state) default. The default (`membership`) is expressed by
   **omitting** the param, keeping organic URLs clean (mirrors the `?toolbox=` convention).
 
-Both `activeTab` owners honour it (whichever the A/B experiment renders on a promo page):
-
-- **`useMembershipCardCta`** (treatment arm + drives `/membership`) takes an optional `forcedTab` option.
-  When set it seeds the initial `activeTab` (`forcedTab ?? (hasActiveSubscription && hasAccessToAdditional ? "one-time" : "membership")`).
-  `/membership` (`MembershipPageClient`) passes no `forcedTab`, so it is **unchanged**; only the promo
-  treatment (`PromoMembershipDesign`) reads the param and passes it in.
-- **`MembershipSection`** (control arm) reads the param and guards its override effect — documented in
-  [shared-ui/frontend.md](../shared-ui/frontend.md#membershipsection--promomembershipdesign--packages-tab-pre-select-2026-07-03).
+On promotions pages the `activeTab` owner is **`MembershipSection`**, which reads the param and guards
+its override effect — documented in [shared-ui/frontend.md](../shared-ui/frontend.md). (During the 2026-07
+packages-design A/B test, `useMembershipCardCta` also took a `forcedTab` option so the promo treatment
+could honour the param; the experiment concluded — control won — and the option was removed with the
+treatment. `/membership` (`MembershipPageClient`) never passed it, so it still seeds `activeTab` purely
+from user state.)
 
 The param only sets the **initial** tab — the visitor can still toggle manually afterwards.
 
@@ -340,4 +338,4 @@ The public page ([`src/app/(site)/membership/components/MembershipPageClient.tsx
 - **Visual fidelity (2026-06-29):** cards use the prototype's exact glossy fills via [`src/utils/membership/tier-visuals.ts`](../../src/utils/membership/tier-visuals.ts) (`glossGrad`/`inkOn`/`shade`). Hero is the dark `bhero` with a fanned glossy deck. Tier cards bounce the entries number on scroll-in (`entries-bounce` keyframe in globals.css).
 - **One-time packs — collapsible cross-sell (2026-06-30):** the **public** one-time ladder (Apprentice→VIP, `!isAdditional` — `oneTimePlans` is always the public set; the "Additional" packs are a my-account concept) lives in [`MembershipOneTimePacks.tsx`](../../src/components/sections/membership/MembershipOneTimePacks.tsx), rendered **collapsed by default** beneath the three subscription tiers inside `MembershipTierChooser`. The reveal uses a `grid-rows-[0fr→1fr]` + opacity transition; the inner wrapper is `overflow-hidden` only while collapsed (an `onTransitionEnd` frees it to `overflow-visible` once open so the pack cards' hover-lift and glow shadows aren't clipped). The VIP pack keeps its premium black-and-gold crown + metallic-gold name + `vip-sheen` shimmer. The **collapsed toggle is a premium drawer-handle** that previews the catalogue with mini glossy pack-chips (same recipe as the real cards) + live boost badge + glossy chevron disc — see the `MembershipOneTimePacks` entry in [docs/shared-ui/ui-primitives.md](../shared-ui/ui-primitives.md) for the full anatomy.
 - **Promo-multiplier badge (2026-06-30):** the boost art is the `/images/badge/X{n}.webp` set, resolved via `multiplierBadgeSrc(promo)` in `tier-visuals.ts` (known set 2/3/5/10/12/15/20 → text-pill `{n}×` fallback for any other admin multiplier, so an arbitrary value never 404s). On **tier cards** it is **absolutely positioned** in the top-right of the entries column over a fixed-height header zone (anchored to grow upward, paired with the `was {base}` strikethrough), so its size is **independent of the card height** — bumping the badge never reflows the big — sometimes 4-digit — entries number. On **one-time pack cards** it is likewise absolutely positioned top-right. Both render only when `promoMultiplier > 1` — membership boost is the `membership-packages` multiplier (currently ×10), one-time is the separate `one-time-packages` multiplier (currently ×5); when a type's promo is off, no badge shows.
-- **`useOpenMembershipModalListener` (2026-07-01):** shared hook ([`src/hooks/useOpenMembershipModalListener.ts`](../../src/hooks/useOpenMembershipModalListener.ts)) that subscribes a package section's `MembershipModal` to the global `openMembershipModal` event dispatched by the hero / entry CTAs, with the major-draw purchase gate applied **inside** the hook. Any section that owns a MembershipModal — control `MembershipSection`, the promo A/B treatment `PromoMembershipDesign`, and future variants — opts in with one line (`useOpenMembershipModalListener((plan) => openModal(plan))`), so the hero "Enter Now" contract can't be forgotten by a new section. See [promo/gotchas.md](../promo/gotchas.md) for the incident this fixed.
+- **`useOpenMembershipModalListener` (2026-07-01):** shared hook ([`src/hooks/useOpenMembershipModalListener.ts`](../../src/hooks/useOpenMembershipModalListener.ts)) that subscribes a package section's `MembershipModal` to the global `openMembershipModal` event dispatched by the hero / entry CTAs, with the major-draw purchase gate applied **inside** the hook. Any section that owns a MembershipModal — `MembershipSection` today, plus any future section — opts in with one line (`useOpenMembershipModalListener((plan) => openModal(plan))`), so the hero "Enter Now" contract can't be forgotten by a new section. See [promo/gotchas.md](../promo/gotchas.md) for the incident this fixed.

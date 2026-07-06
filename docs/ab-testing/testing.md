@@ -13,8 +13,9 @@
 
 Run these directly via the `test:<scope>` entries in `package.json` (see [infrastructure/testing.md](../infrastructure/testing.md) for the full list):
 
-- `npm run test:variant-config-design` — validates `VariantConfig.packages.design` enum acceptance (`"promo"` / `"membership"`), rejects invalid values, and confirms the field survives `mergeVariantConfig` with the expected default behaviour.
-- `npm run test:one-time-drawer-packages` — validates `selectOneTimeDrawerPackages` offer-parity logic: ensures that `includeAdditionalForMembers: true` surfaces `isAdditional` packs when the user `hasAdditionalAccess`, and that the default (`false`) suppresses them — confirming the promo A/B treatment and the standard `/membership` page both get the correct set.
+- `npm run test:one-time-drawer-packages` — validates `selectOneTimeDrawerPackages` pack-selection logic: ensures that `includeAdditionalForMembers: true` surfaces `isAdditional` packs when the user `hasAdditionalAccess`, and that the default (`false`) suppresses them. The my-account membership page (`src/app/(site)/my-account/membership/page.tsx`) passes `includeAdditionalForMembers`; the standard `/membership` page uses the default.
+
+> `test:variant-config-design` was removed 2026-07-06 along with the `VariantConfig.packages.design` field when the promo packages-design experiment concluded (control won) — see [promo-packages-design-runbook.md](./promo-packages-design-runbook.md).
 
 ## What's NOT well tested
 

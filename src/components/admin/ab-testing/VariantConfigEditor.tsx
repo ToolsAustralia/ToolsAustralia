@@ -543,32 +543,6 @@ export default function VariantConfigEditor({ variant, experimentId: _experiment
       {/* Packages Config */}
       <FormSection title="Packages Configuration" icon={Package}>
         <div className="space-y-4">
-          <div>
-            <label htmlFor="packagesDesign" className="mb-1 block text-sm font-medium">
-              Package Design (A/B)
-            </label>
-            <select
-              id="packagesDesign"
-              name="packagesDesign"
-              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
-              value={formData.config.packages?.design || "promo"}
-              onChange={(e) =>
-                setFormData({
-                  ...formData,
-                  config: {
-                    ...formData.config,
-                    packages: {
-                      ...formData.config.packages,
-                      design: e.target.value as "promo" | "membership",
-                    },
-                  },
-                })
-              }
-            >
-              <option value="promo">promo (control — current MembershipSection)</option>
-              <option value="membership">membership (treatment — /membership design)</option>
-            </select>
-          </div>
           <Input
             id="highlightPackage"
             name="highlightPackage"

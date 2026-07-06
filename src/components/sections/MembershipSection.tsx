@@ -119,8 +119,7 @@ export default function MembershipSection({
   const resolvedOneTimeMultiplier = useResolvedMultiplier("one-time-packages", "display");
 
   // Open this section's modal when the hero / entry CTAs dispatch the global `openMembershipModal`
-  // event. Shared with the A/B treatment (PromoMembershipDesign) via one hook so both arms behave
-  // identically; the major-draw purchase gate is applied inside the hook.
+  // event; the major-draw purchase gate is applied inside the hook.
   useOpenMembershipModalListener((plan) => {
     if (plan) {
       membershipModal.setSelectedPlan(plan);

@@ -495,31 +495,29 @@ global dark-mode schedule/toggle. That was the original intent.
 
 ### MembershipSection — diagnostic `package_cta` click event (2026-07-01)
 
-`MembershipSection` now emits an A/B `click` `ExperimentEvent` with `{ element: "package_cta" }` on its CTA path, via `useExperimentTracking().trackEvent(...)`. The emission is **guarded** by `experimentId && variantId` — it no-ops on the 15+ non-promo pages where no experiment is active. On promo pages where the control arm is assigned, it fires alongside the same event from `PromoMembershipDesign` (the treatment arm), enabling engagement comparison. This is **diagnostic only** — see [docs/ab-testing/promo-packages-design-runbook.md](../ab-testing/promo-packages-design-runbook.md) for why the Bayesian panel (not this click event) is the winner metric.
+`MembershipSection` emits an A/B `click` `ExperimentEvent` with `{ element: "package_cta" }` on its CTA path, via `useExperimentTracking().trackEvent(...)`. The emission is **guarded** by `experimentId && variantId` — it no-ops on every page where no experiment is active (which, since the 2026-07 packages-design experiment concluded — control won — is currently all of them; the plumbing stays ready for the next promo-page experiment). This is **diagnostic only** — see [docs/ab-testing/promo-packages-design-runbook.md](../ab-testing/promo-packages-design-runbook.md) for why the Bayesian panel (not this click event) was the winner metric.
 
-### MembershipSection / PromoMembershipDesign — `?packages=` tab pre-select (2026-07-03)
+### MembershipSection — `?packages=` tab pre-select (2026-07-03)
 
 Ad landings can open the packages section on a chosen tab via `?packages=one-time` (or `membership`).
 The param is parsed by the shared helper [`packagesTabParam.ts`](../../src/utils/membership/packagesTabParam.ts)
 (`MEMBERSHIP_PACKAGES_QUERY_PARAM` + `parseMembershipPackagesTab`) — see
 [subscription/frontend.md](../subscription/frontend.md#packages-url-param--pre-select-the-packages-tab-2026-07-03)
-for the parser contract and the treatment arm's `forcedTab` option.
+for the parser contract. Consumers: `MembershipSection`, `PromoBanner`, and `useMajorDrawEntryCta`
+(which also parses the param via the shared helper).
 
-**Control arm — `MembershipSection`:**
+**`MembershipSection`:**
 - Reads the param via `useSearchParams()` and seeds the initial `activeTab` (`forcedPackagesTab ?? "membership"`).
 - **Guards the user-state override effect:** when a valid param is present, the effect that re-derives the
   tab from `hasActiveSubscription`/`hasAccessToAdditionalPackages` early-returns, so a logged-in
   non-subscriber landing on `?packages=one-time` still opens on One-Time (and a later `userData` change
   can't fight a manual toggle). Absent/invalid param → byte-for-byte the previous behavior.
 
-**Treatment arm — `PromoMembershipDesign`** reads the same param and passes it to
-`useMembershipCardCta({ forcedTab })`. Which arm renders is the A/B choice in `PromoPackages`, so both
-honour the param and the behavior is A/B-bucket-agnostic. The standalone `/membership` page (drawer, no
-toggle) does not read the param.
+The standalone `/membership` page (drawer, no toggle) does not read the param.
 
-**Banner sync — `PromoBanner` is a third `activeTab` owner.** It reads the `?packages=` param in its **mount
+**Banner sync — `PromoBanner` is a second `activeTab` owner.** It reads the `?packages=` param in its **mount
 effect** (via `window.location.search` + the shared parser) and `setActiveTab` to the forced value, so the
-multiplier badge matches a forced One-Time landing on **both** arms — independent of any dispatch.
+multiplier badge matches a forced One-Time landing — independent of any dispatch.
 
 Why `window.location.search` and not `useSearchParams()`: `PromoBanner` renders **outside** the promo pages'
 `<Suspense>` boundaries (it sits above them in `[slug]/page.tsx` / `ToolsetLandingPage`), so `useSearchParams()`
@@ -527,27 +525,22 @@ there would force the statically-generated routes to de-opt (build error / banne
 client-only effect keeps the banner server-rendered with the `"membership"` default and applies the param
 post-mount (a brief flip, consistent with the client-read trade-off) — with no hydration mismatch.
 
-For **post-load manual toggles**: the control arm's `MembershipSection` toggle buttons emit
-`membershipTabChanged`, so the banner follows a manual switch. The treatment arm's toggle
-(`PromoMembershipDesign`) does **not** emit that event — a **pre-existing** gap, unrelated to this param
-feature — so on the treatment arm the banner badge stays on the landing tab after a manual toggle. The
-`?packages=` landing state is honoured on both arms regardless; only post-load treatment toggling diverges.
+For **post-load manual toggles**: `MembershipSection`'s toggle buttons emit `membershipTabChanged`, so the
+banner follows a manual switch.
+
+> Historical: during the 2026-07 packages-design A/B test the treatment arm (`PromoMembershipDesign`) honoured
+> the same param via a `useMembershipCardCta({ forcedTab })` option. The experiment concluded 2026-07-06 —
+> control won — so the treatment component and the `forcedTab` option were removed.
 
 ### MembershipTierChooser — `sectionId` prop (2026-07-01)
 
-[`src/components/sections/membership/MembershipTierChooser.tsx`](../../src/components/sections/membership/MembershipTierChooser.tsx) gained an optional `sectionId?: string` prop (default `"membership"`).
+[`src/components/sections/membership/MembershipTierChooser.tsx`](../../src/components/sections/membership/MembershipTierChooser.tsx) has an optional `sectionId?: string` prop (default `"membership"`).
 
-The `/membership` page passes no `sectionId`, so its `id="membership"` anchor is unchanged. The promo A/B treatment (`PromoMembershipDesign`) passes `sectionId="packages"` to render under `id="packages"` — preserving the `#packages` scroll anchor that promo pages use and preventing a duplicate `#membership` id on the page.
+The `/membership` page passes no `sectionId`, so its `id="membership"` anchor is unchanged. The prop was added for the 2026-07 packages-design A/B treatment (which passed `sectionId="packages"`); that treatment is gone (control won), so no caller currently overrides the default — the prop remains for any future embedder that needs a different anchor id. `TierCard` is internal to the file again (no longer a named export — its sole external importer was the deleted treatment). `PackCard` (in `MembershipOneTimePacks.tsx`) **is** still a named export, used by `OneTimePacksGrid`.
 
-### Promo treatment layout — `PromoMembershipDesign` reuses `TierCard` / `PackCard` (2026-07-01)
+### Promo treatment layout — removed (packages-design A/B concluded, control won)
 
-The A/B **treatment** ([`PromoMembershipDesign`](../../src/components/sections/promo/PromoMembershipDesign.tsx)) is **not** a 1:1 copy of `/membership`. It reuses the card visuals but arranges them in a promo layout:
-
-- `TierCard` (from `MembershipTierChooser`) and `PackCard` (from `MembershipOneTimePacks`) are now **named exports** so the treatment can compose its own layout without duplicating card markup. `/membership` still renders the default components unchanged.
-- Layout: entries-multiplier header (`MultiplierBannerImage`) → **One-Time ↔ Membership toggler** (drives `cta.activeTab`/`setActiveTab`) → the active tab's cards in a grid whose column count matches the item count (so 5 Additional packs fill the row and center instead of leaving a gap in a 6-wide grid).
-- Card names use `getPackageDisplayName(plan)` (strips the `Additional ` prefix for display — data/ids unchanged). Applied inside `TierCard` + `PackCard`, so it is a no-op for the public/subscription names on `/membership`.
-- `PackCard` gained an optional `ctaLabel?: string` prop: when set (treatment passes `"Enter Now"`), it renders a visual CTA footer. **VIP exception:** on the near-black VIP card the footer uses a gold fill + dark ink (all other packs keep the dark fill) so the CTA stays legible. `/membership`'s drawer passes no `ctaLabel`, so its cards are unchanged. Treatment CTA copy is `"Enter Now"` for entry actions while preserving member-management states (`Current Plan`, `Update payment`, upgrade/downgrade).
-- `PackCard` also gained an optional `colorHex?: string` prop that overrides the derived accent hex (everything — gloss fill, ink, border, shadow — derives from it). The treatment uses it to align the one-time **Foreman** pack to the membership **Tradie** cyan (`TIER_HEX.tradie`) so the two blues read as one color. This is **treatment-scoped** (via `treatmentPackHex` in `PromoMembershipDesign`) — the shared `getPackageColorScheme` is deliberately NOT changed, so the A/B **control** (`MembershipSection`) keeps its palette and isn't altered mid-experiment.
+Historical: the 2026-07 packages-design experiment's treatment arm, `PromoMembershipDesign`, recomposed `TierCard`/`PackCard` into a promo-specific layout. The experiment concluded 2026-07-06 with the **control** (`MembershipSection` on promotions pages) winning, and the treatment component was deleted — along with `TierCard`'s named export and `PackCard`'s treatment-only `ctaLabel`/`colorHex` props (the CTA-footer render block is gone; PackCard renders as it does on `/membership`). The shared `getPackageColorScheme` palette was never changed by the experiment.
 
 ### `features/PartnerDiscountQueue` — tier-themed partner discount card
 
