@@ -1,5 +1,6 @@
 "use client";
 
+import React from "react";
 import FreeEntriesChip from "@/components/ui/FreeEntriesChip";
 import type { PastDueRenewalPreview } from "@/utils/subscription/past-due-renewal-preview";
 
