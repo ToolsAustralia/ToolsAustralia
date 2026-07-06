@@ -541,21 +541,14 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
     [queryClient]
   );
 
-  const handleClose = useCallback(async () => {
-    if (paymentIntentId) {
-      try {
-        await fetch("/api/stripe/cancel-payment-intent", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ paymentIntentId }),
-        });
-        console.log("✅ Cancelled PaymentIntent on modal close:", paymentIntentId);
-      } catch (error) {
-        console.error("❌ Failed to cancel PaymentIntent on modal close:", error);
-      }
-    }
+  const handleClose = useCallback(() => {
+    // Close the UI FIRST, then cancel any pending PaymentIntent fire-and-forget. Awaiting the
+    // cancel fetch before onClose() left the modal visibly open for a whole network round-trip —
+    // a re-tap of a selection-first CTA in that window re-opened the modal WITHOUT ever rendering
+    // a closed frame, so the picker's once-per-open latch stayed armed and the picker never
+    // auto-opened again (skeleton payment view). The cancel is best-effort cleanup; nothing here
+    // depends on its result.
+    const intentToCancel = paymentIntentId;
 
     setPaymentIntentClientSecret(null);
     setPaymentIntentId(null);
@@ -567,6 +560,18 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
     setProcessingPackageName("");
     setProcessingPackageType(undefined as unknown as "one-time" | "membership" | "upsell" | "mini-draw");
     onClose();
+
+    if (intentToCancel) {
+      void fetch("/api/stripe/cancel-payment-intent", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ paymentIntentId: intentToCancel }),
+      })
+        .then(() => console.log("✅ Cancelled PaymentIntent on modal close:", intentToCancel))
+        .catch((error) => console.error("❌ Failed to cancel PaymentIntent on modal close:", error));
+    }
   }, [onClose, paymentIntentId]);
 
   useEffect(() => {
@@ -767,6 +772,15 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
     }
 
     if (!isOpen) {
+      packageSelectionAutoOpenedRef.current = false;
+    }
+
+    // The latch is per PLACEHOLDER-EPISODE, not per rendered-closed frame: once a real plan is
+    // selected, re-arm it. A selection-first request can arrive while the modal never rendered a
+    // closed frame (e.g. re-tapping "Become a member" during the old awaited-close window, or a
+    // plan-less openMembershipModal event) — plan flips real → placeholder and the picker must
+    // auto-open again. Within one placeholder episode the latch still prevents dismiss→reopen loops.
+    if (isOpen && !isPlaceholderPlan) {
       packageSelectionAutoOpenedRef.current = false;
     }
   }, [isOpen, currentStep, pathname, isPackageSelectionOpen, finalMembershipModalConfig, isPlaceholderPlan]);
