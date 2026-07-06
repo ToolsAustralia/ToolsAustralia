@@ -1,5 +1,17 @@
 # Dashboard-Account — Frontend
 
+> **Never bare-`openModal()` the MembershipModal (2026-07-06):** `useMembershipModal.openModal()` without a
+> plan (and no prior selection) renders the **payment step with no package** — a broken skeleton view. The
+> sanctioned no-plan open is **`openModalWithPackageSelectionFirst()`** (the promotions "Enter Now" path), and
+> the page's `<MembershipModal>` must thread `membershipModalConfig={openWithPackageSelectionFirst ? {
+> showPackageSelectionFirst: true } : undefined}`. Fixed on all dashboard surfaces: rewards `onBecomeMember` +
+> the unlock-coupon membership branch, home `onBecomeMember` + the plan-less `openMembershipModal` event
+> branch, and the membership page's guest CTAs (whose modal render was also missing the config pass-through).
+> `getHeavyDutyPack()` is NOT a substitute default — it returns a one-time pack for entry-holders, mislabeling
+> a "Become a member" tap. Landing note: `MajorDrawSection` self-defends at render
+> (`selectedPlan || getHeavyDutyPack()`); `MembershipSection`'s plan-less listener branch still bare-opens
+> (pre-existing, A/B-configured surface — flagged, not touched).
+
 > **Rewards page: locked-coupon unlock routing (2026-07-06):** `my-account/rewards/page.tsx` wires
 > `RewardsClaimables onUnlock={onUnlockCoupon}` — a locked purchase-required coupon opens the qualifying
 > purchase flow with the code carried: `membership`-required → `membershipModal.openModal()` (membership

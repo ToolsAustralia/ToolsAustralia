@@ -127,8 +127,8 @@ export default function AccountMembershipPage() {
           paymentLabel={cardLabel}
           onManage={() => openSheet("manage")}
           onPayment={() => openSheet("payment")}
-          onBecomeMember={() => cta.membershipModal.openModal()}
-          onBuyPackage={() => cta.membershipModal.openModal()}
+          onBecomeMember={() => cta.membershipModal.openModalWithPackageSelectionFirst()}
+          onBuyPackage={() => cta.membershipModal.openModalWithPackageSelectionFirst()}
         />
 
         {/* Compact tier list + one-time-pack scroll (matches the prototype MembershipPage),
@@ -151,6 +151,9 @@ export default function AccountMembershipPage() {
         onClose={cta.membershipModal.closeModal}
         selectedPlan={cta.membershipModal.selectedPlan}
         onPlanChange={cta.membershipModal.selectPlan}
+        membershipModalConfig={
+          cta.membershipModal.openWithPackageSelectionFirst ? { showPackageSelectionFirst: true } : undefined
+        }
       />
 
       {dash.user && changeTierName !== null && (

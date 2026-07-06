@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
 import { ModalContainer, ModalHeader, ModalContent } from "../ui";
 import { useMemberships } from "@/hooks/useMemberships";
@@ -35,6 +35,24 @@ const PackageSelectionModal: React.FC<PackageSelectionModalProps> = ({
   const [selectedPlan, setSelectedPlan] = useState<LocalMembershipPlan>(currentPlan);
   // Sub-tab for one-time packages: allow switching between regular one-time and membership packages
   const [oneTimeSubTab, setOneTimeSubTab] = useState<"one-time" | "membership">("one-time");
+  /** Pending auto-confirm pick (the 200ms tap→glow→select delay). Cancelled when the picker closes
+   *  so a pick can't fire into a modal the user has already dismissed — previously a pick followed
+   *  by an instant ✕ committed the plan into the CLOSED modal's state, leaving a stale preselected
+   *  plan (which then skipped selection-first) on the next open. */
+  const pendingPickTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (isOpen) return;
+    if (pendingPickTimeoutRef.current) {
+      clearTimeout(pendingPickTimeoutRef.current);
+      pendingPickTimeoutRef.current = null;
+    }
+  }, [isOpen]);
+  useEffect(
+    () => () => {
+      if (pendingPickTimeoutRef.current) clearTimeout(pendingPickTimeoutRef.current);
+    },
+    [],
+  );
 
   // Get user data to determine membership status
   const { data: user } = useUserData(session?.user?.id);
@@ -361,12 +379,21 @@ const PackageSelectionModal: React.FC<PackageSelectionModalProps> = ({
   const handlePlanSelect = (plan: LocalMembershipPlan) => {
     if (isCurrentPlan(plan)) return;
 
+    // Rapid re-pick within the glow window: the latest pick wins, exactly once.
+    if (pendingPickTimeoutRef.current) clearTimeout(pendingPickTimeoutRef.current);
+
     setSelectedPlan(plan);
 
-    // Auto-confirm: brief visual feedback then close (tap → glow → close)
-    setTimeout(() => {
+    // Auto-confirm: brief visual feedback then hand the pick to the parent (tap → glow → select).
+    // Deliberately does NOT call onClose() here — closing after a pick is the PARENT's job inside
+    // onPlanSelect (MembershipModal.handlePackageSelect does setIsPackageSelectionOpen(false)).
+    // That keeps `onClose` meaning DISMISSAL ONLY (✕ / backdrop / Escape), so consumers can react
+    // to "user backed out without choosing". The old select-then-onClose pair fired in the same
+    // tick, BEFORE React committed the new plan — a dismiss-handler reading the selected plan
+    // still saw the placeholder and wrongly closed the whole membership modal right after a pick.
+    pendingPickTimeoutRef.current = setTimeout(() => {
+      pendingPickTimeoutRef.current = null;
       onPlanSelect(plan);
-      onClose();
     }, 200);
   };
 

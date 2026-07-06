@@ -1,7 +1,38 @@
 # Shared UI — Frontend
 
+> **MembershipModal selection-first: synchronous + dismissal-only onClose contract (2026-07-06):** the
+> guest-conversion "Become a member" flow. Three coordinated changes (adversarially verified — the first
+> iteration had a same-tick stale-state blocker, see below):
+> 1. **`PackageSelectionModal` no longer self-closes after a pick** — `onPlanSelect` hands the pick to the
+>    parent, which closes the picker (`handlePackageSelect`); **`onClose` now means DISMISSAL ONLY**
+>    (✕/backdrop). The old select-then-`onClose()` pair fired before React committed the new plan, so any
+>    dismiss-handler reading the selected plan saw the stale placeholder — the first fix iteration closed the
+>    WHOLE modal right after a pick because of this. Consumers: MembershipModal + the dev modals gallery
+>    (whose `onPlanSelect` now closes).
+> 2. **Config-driven selection-first opens the picker synchronously** (any provided config whose flag isn't
+>    `false`, incl. legacy `{}`), gated on `isPlaceholderPlan` — a REAL selected plan (specific card clicked)
+>    is never overridden by the picker. Previously a **300ms-delayed overlay** left the placeholder payment
+>    view (grey skeletons) as the guaranteed first paint, and inline `membershipModalConfig` objects reset the
+>    timer on every parent re-render, starving the overlay. The implicit promotions-page auto-open keeps its
+>    intentional 300ms delay.
+> 3. **Dismissing the picker before choosing closes the whole modal** (`configSelectionFirst &&
+>    isPlaceholderPlan`) instead of stranding the user on the skeleton payment step; after a real plan is
+>    selected, dismissal behaves normally ("Change" flow unaffected).
+> 4. **Hardening from the second adversarial pass:** Escape while the picker is open now dismisses the
+>    PICKER (same `dismissPackageSelection` path as ✕/backdrop) instead of closing the whole modal and
+>    leaving the picker orphaned over the page (pre-existing hole — MembershipModal stays mounted with
+>    `isOpen=false`, so stale `isPackageSelectionOpen` kept rendering it); an orphan-proofing effect also
+>    resets the picker on ANY whole-modal close. The picker's 200ms tap→glow→select timeout is cancelled on
+>    close/unmount (a pick followed by an instant ✕ used to commit the plan into the closed modal — stale
+>    preselect that skipped selection-first on the next open) and a rapid re-pick supersedes the pending one.
+> Note: "Buy a package" → Apprentice Pack preselected straight into payment is `openWithOneTimePlan()`
+> working as designed (first public one-time pack in the static catalog). Test-infra caveat: the modal smoke
+> tests are `renderToString`-only — they cannot catch these interaction paths; all regressions here were
+> found by control-flow tracing + adversarial review.
+
 > **Guest panel: view-the-draw redirect (2026-07-06):** `DashboardGuestPanel`'s "Enter the {draw}" card title
-> row now carries a small `ArrowUpRight` icon-link to **`/major-draw`** (the prize showcase) — a guest holds no
+> row now carries a small `ArrowUpRight` icon-link to **`/promotions`** (→ the default promotions landing, the
+> prize showcase; NOT `/major-draw`, which hard-redirects to `/promotional/giveaway`) — a guest holds no
 > entries yet, so they get a way to *see* the draw before committing to either CTA.
 
 > **Redeemable unlock flow + MembershipModal coupon auto-apply (2026-07-06):** `RewardsClaimables` gained an

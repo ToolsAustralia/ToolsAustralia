@@ -358,11 +358,32 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
   );
 
   const showPackageSelectionFirst = finalMembershipModalConfig?.showPackageSelectionFirst === true;
+  /** Config-driven selection-first (flag defaults ON for any provided config, incl. legacy `{}`) —
+   *  the predicate the auto-open effect uses; the picker's dismiss handler mirrors it. */
+  const configSelectionFirst =
+    finalMembershipModalConfig != null && finalMembershipModalConfig.showPackageSelectionFirst !== false;
   const activePlan =
     selectedPlan || (showPackageSelectionFirst ? membershipPlaceholderPlan : placeholderPlan);
 
   const isPlaceholderPlan =
     !activePlan || activePlan.id === "placeholder" || activePlan.id.startsWith("placeholder-");
+
+  /** The ONE dismissal path for the package picker (✕ / backdrop / Escape). Selection-first with
+   *  nothing chosen yet: dismissing must not strand the user on the placeholder payment step
+   *  (grey skeletons, no package) — close the whole membership modal instead. Once a real plan is
+   *  selected, dismissal just closes the picker. A PICK never routes through here
+   *  (PackageSelectionModal no longer self-closes; the parent closes via handlePackageSelect). */
+  const dismissPackageSelection = useCallback(() => {
+    setIsPackageSelectionOpen(false);
+    if (configSelectionFirst && isPlaceholderPlan) onClose();
+  }, [configSelectionFirst, isPlaceholderPlan, onClose]);
+
+  // Orphan-proofing: ANY whole-modal close (Escape, payment success, programmatic) while the
+  // picker is open must also close the picker — MembershipModal stays mounted with isOpen=false,
+  // so a stale isPackageSelectionOpen would leave the picker rendered over the page.
+  useEffect(() => {
+    if (!isOpen && isPackageSelectionOpen) setIsPackageSelectionOpen(false);
+  }, [isOpen, isPackageSelectionOpen]);
 
   // Hooks for API integration
   const { createSubscription, createOneTimePurchase, createSubscriptionExistingUser } = useStripeSubscription();
@@ -722,6 +743,21 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
       !packageSelectionAutoOpenedRef.current &&
       !isPackageSelectionOpen
     ) {
+      // CONFIG-driven selection-first (any config whose flag isn't false — includes legacy `{}`
+      // variant configs, e.g. dashboard "Become a member"): open the picker synchronously —
+      // selection IS the first view. The old 300ms timer made the placeholder payment step (grey
+      // skeletons) the guaranteed first paint, and because callers pass the config as an inline
+      // object, every parent re-render re-ran this effect and RESET the timer — starving the
+      // overlay indefinitely. Gated on isPlaceholderPlan: a REAL selected plan means selection
+      // already happened (a specific plan card was clicked) — don't override it with the picker.
+      if (finalMembershipModalConfig != null) {
+        if (isPlaceholderPlan) {
+          setIsPackageSelectionOpen(true);
+          packageSelectionAutoOpenedRef.current = true;
+        }
+        return;
+      }
+      // Implicit promotions-page auto-open keeps its intentional 300ms delay (hero paints first).
       const timer = setTimeout(() => {
         setIsPackageSelectionOpen(true);
         packageSelectionAutoOpenedRef.current = true;
@@ -733,11 +769,18 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
     if (!isOpen) {
       packageSelectionAutoOpenedRef.current = false;
     }
-  }, [isOpen, currentStep, pathname, isPackageSelectionOpen, finalMembershipModalConfig]);
+  }, [isOpen, currentStep, pathname, isPackageSelectionOpen, finalMembershipModalConfig, isPlaceholderPlan]);
 
   useEffect(() => {
     const handleEscapeKey = (event: KeyboardEvent) => {
       if (event.key === "Escape" && isOpen) {
+        // Picker open → Escape DISMISSES THE PICKER (same semantics as its ✕/backdrop), not the
+        // whole modal underneath it. Previously this closed the membership modal while
+        // isPackageSelectionOpen stayed true, leaving the picker orphaned over the page.
+        if (isPackageSelectionOpen) {
+          dismissPackageSelection();
+          return;
+        }
         handleClose();
       }
     };
@@ -751,7 +794,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
       document.removeEventListener("keydown", handleEscapeKey);
       document.body.style.overflow = "unset";
     };
-  }, [isOpen, handleClose]);
+  }, [isOpen, handleClose, isPackageSelectionOpen, dismissPackageSelection]);
 
   useEffect(() => {
     const handleUpsellPayment = (event: CustomEvent) => {
@@ -4723,7 +4766,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
       {/* Package Selection Modal */}
       <PackageSelectionModal
         isOpen={isPackageSelectionOpen}
-        onClose={() => setIsPackageSelectionOpen(false)}
+        onClose={dismissPackageSelection}
         currentPlan={activePlan}
         onPlanSelect={handlePackageSelect}
       />

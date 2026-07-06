@@ -35,9 +35,10 @@ export default function DashboardGuestPanel({ drawName, onBecomeMember, onBuyPac
         <div className="flex items-center justify-between gap-3">
           <h3 className="font-['Poppins'] text-lg font-extrabold text-primary-token dark:text-white">Enter the {drawName}</h3>
           {/* A guest holds no entries yet — give them a way to SEE the draw (prize showcase)
-              before committing to a purchase. */}
+              before committing to a purchase. /promotions → the default promotions LANDING page
+              (NOT /major-draw, which hard-redirects to /promotional/giveaway). */}
           <Link
-            href="/major-draw"
+            href="/promotions"
             aria-label={`View the ${drawName}`}
             title={`View the ${drawName}`}
             className="grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-token bg-surface text-muted-token transition-colors hover:bg-black/[.03] hover:text-primary-token focus:outline-none focus-visible:ring-2 focus-visible:ring-red-600 dark:hover:bg-white/[.05] dark:hover:text-white"
