@@ -10,8 +10,9 @@ import { CreditCard, ChevronRight, RefreshCw, Package } from "lucide-react";
 import SheetShell, { SheetHead } from "@/components/ui/SheetShell";
 import { useDashboardSheetStore } from "@/stores/useDashboardSheetStore";
 import { useDashboardState } from "@/hooks/useDashboardState";
-import { useMyAccountData } from "@/hooks/queries";
+import { useMyAccountData, useUpdateAutoRenew } from "@/hooks/queries";
 import { useSavedPaymentMethods } from "@/hooks/useSavedPaymentMethods";
+import { useToast } from "@/components/ui/Toast";
 import { queryKeys } from "@/lib/queryKeys";
 import { glossGrad, inkOn } from "@/utils/membership/tier-visuals";
 import { getPackageIcon } from "@/utils/images/package-icons";
@@ -59,6 +60,8 @@ export default function ManageSheet() {
   const dash = useDashboardState();
   const queryClient = useQueryClient();
   const { paymentMethods, subscriptionDefaultPaymentMethodId } = useSavedPaymentMethods();
+  const updateAutoRenew = useUpdateAutoRenew();
+  const { showToast } = useToast();
 
   const [cancelOpen, setCancelOpen] = useState(false);
 
@@ -73,6 +76,29 @@ export default function ManageSheet() {
     if (!userId) return;
     void queryClient.invalidateQueries({ queryKey: queryKeys.users.account(userId) });
     void queryClient.invalidateQueries({ queryKey: queryKeys.users.dashboard(userId) });
+  };
+
+  // Undo a scheduled cancellation — no charge (PATCH /api/stripe/update-auto-renew just flips Stripe's
+  // cancel_at_period_end back to false); the purpose-built inverse of the cancel path. NOT renewSubscription,
+  // whose reactivate branch imposes a valid-payment-method precondition that would block a card-less member.
+  const handleResume = async () => {
+    try {
+      await updateAutoRenew.mutateAsync({ autoRenew: true });
+      showToast({
+        type: "success",
+        title: "Membership resumed",
+        message: "Your scheduled cancellation is off — your membership keeps renewing.",
+        duration: 8000,
+      });
+      onSubscriptionUpdate();
+    } catch (err) {
+      showToast({
+        type: "error",
+        title: "Couldn't resume membership",
+        message: err instanceof Error ? err.message : "Please try again in a moment.",
+        duration: 8000,
+      });
+    }
   };
 
   // Plan summary — use the persisted SUBSCRIPTION tier. dash.tierKey/Hex/Label come from
@@ -171,7 +197,19 @@ export default function ManageSheet() {
                 }}
               />
 
-              {isMember && (
+              {isActive && !autoRenew ? (
+                // Already scheduled to cancel at period end → the meaningful action is to RESUME
+                // (undo), not "cancel" again. Mirrors CancelResumeRow's Cancel↔Reactivate switch.
+                <button
+                  type="button"
+                  onClick={() => void handleResume()}
+                  disabled={updateAutoRenew.isPending}
+                  className="flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-b from-emerald-500 to-emerald-600 py-3.5 text-sm font-bold text-white transition-transform focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 motion-safe:active:translate-y-px disabled:opacity-60"
+                >
+                  <RefreshCw className="h-4 w-4" />
+                  {updateAutoRenew.isPending ? "Resuming…" : "Resume membership"}
+                </button>
+              ) : isMember ? (
                 <button
                   type="button"
                   // Close THIS sheet as the cancellation flow opens — otherwise the
@@ -185,7 +223,7 @@ export default function ManageSheet() {
                 >
                   Cancel membership
                 </button>
-              )}
+              ) : null}
             </>
           ) : (
             <div className="rounded-2xl border border-token bg-surface p-5 text-center shadow-sm">

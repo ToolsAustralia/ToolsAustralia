@@ -13,6 +13,15 @@
 > modal is a sibling of `SheetShell` so it survives the close; previously the Manage bottom sheet stayed
 > mounted *over* the cancellation modal.
 
+> **Resume membership from ManageSheet (2026-07-06):** when a member is scheduled to cancel at period end
+> (`isActive && subscription.autoRenew === false` — the same state `subscription/benefits` calls `isCancelled`),
+> `ManageSheet` now shows a green **"Resume membership"** button in place of "Cancel membership" (mirrors the
+> `CancelResumeRow` Cancel↔Reactivate switch). It calls `useUpdateAutoRenew().mutateAsync({ autoRenew: true })`
+> → `PATCH /api/stripe/update-auto-renew`, the **no-charge** inverse of the cancel path (flips Stripe
+> `cancel_at_period_end` back to `false`; no proration/anchor/item mutation, no valid-payment-method
+> precondition). Deliberately NOT `renewSubscription` — its `reactivate` branch runs `getValidPaymentMethod`
+> first and 400s / diverts a card-less member, which is wrong for a still-paid period.
+
 > **Cancel flow didn't close + duplicate toast (2026-07-06):** `ManageSheet`'s "Cancel membership" opens a
 > `CancellationFlowModal` gated on local `cancelOpen` state (`{cancelOpen && …}` / `isOpen={cancelOpen}`). Its
 > `onCancelled` handler called `onSubscriptionUpdate()` + `closeSheet()` but **not** `setCancelOpen(false)` — and
