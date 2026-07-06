@@ -1,22 +1,27 @@
 # Promo — Frontend
 
-## /promotions/giveaway — prize-combinations gallery (2026-07-07, designed — pending owner rating)
+## /promotions — prize-combinations gallery (2026-07-07, designed — pending owner rating)
 
-Editorial index of every major-draw prize combination: `src/app/promotions/giveaway/page.tsx` (server —
-static metadata, builds serializable cards) + colocated `GiveawayGalleryClient.tsx` (filter pills + grid).
+Editorial index of every major-draw prize combination, now the PROMOTIONS ROOT (owner call — the old bare
+/promotions was a redirect to DEFAULT_PRIZE_SLUG): `src/app/promotions/page.tsx` (server —
+static metadata, builds serializable cards) + `_components/GiveawayGalleryClient.tsx` (filter pills + grid).
 Page composition: **dark hero band** (combo count eyebrow, display heading) → **featured headline combo**
 (`DEFAULT_PRIZE_SLUG`, full-width art overlapping the hero, "This month's headline" badge, `priority` images
-— excluded from the grid) → **brand-dotted filter pills** + grid of **brand-accented cards** (top hairline,
-value badge and hover glow in the brand's `BRAND_THEMES` primary; Milwaukee uses the TA site red per
-prize-brand-colors convention; badge ink via YIQ luminance so DeWalt/Ryobi yellows get dark ink) → **gold
-cash-alternative band** ("Rather have the cash?") closing the page. Cards come from `listPrizes()`, each
+— excluded from the grid only in the UNFILTERED view, so a filtered pair matching only the featured combo
+still shows it) → **sticky glass filter dock** (follows the scroll on every viewport — the promotions layout
+is chrome-free so `top` offsets are safe) with TWO independent dimensions: **toolset brand** (brand-dotted
+pills) × **toolbox brand** (Sidchrome / Milwaukee Toolbox / Kincrome) — combinable (AND) or single; tapping an
+active pill clears it; count + Clear live in the dock (sm+) / below it (mobile) → grid of **brand-accented
+cards** (top hairline, value badge and hover glow in the brand's `BRAND_THEMES` primary; Milwaukee uses the TA
+site red per prize-brand-colors convention; badge ink via YIQ luminance so DeWalt/Ryobi yellows get dark ink;
+a small "{storage} TB" chip on each card) → **gold cash-alternative band** ("Rather have the cash?") closing
+the page. Cards come from `listPrizes()`, each
 using the SAME manifest-verified landing hero art as its `/promotions/<slug>` page via
 `getLandingHeroImagePaths(slug)` — mobile asset `< lg`, desktop asset `≥ lg` (the promotions-wide 1024px
 art-direction split), `object-contain` on a **white plate in both themes** (the art is composited for light
-backgrounds). Combos with no shipped art are skipped, not broken. A static route beside `[slug]` — Next
-static-over-dynamic precedence means "giveaway" never hits the dynamic prize route. **Analytics caveat:**
-`usePromoPageTracking`'s `isValidPromoSlug` doesn't include "giveaway", so gallery visits fire NO
-PromoAnalyticsVisit (harmless); extend the validator + pageType deliberately if gallery tracking is wanted.
+backgrounds). Combos with no shipped art are skipped, not broken. **Analytics caveat:** the bare `/promotions`
+path has no promo slug, so `usePromoPageTracking` fires NO PromoAnalyticsVisit for gallery views (harmless);
+extend the validator + pageType deliberately if gallery tracking is wanted.
 
 ## Landing page — new design assets, full replace (2026-06-23)
 
