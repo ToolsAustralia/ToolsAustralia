@@ -35,7 +35,8 @@ export default function PartnerPreview({ acct, partnerAccessPct, expiryLabel, ti
   const isOneTime = acct === "onetime";
   const accent = pastDue ? PAST_DUE_AMBER : isOneTime ? "#0ea5a5" : tierHex ?? "#ee0000";
   const sub = pastDueWithPack
-    ? `${partnerAccessPct}% active${expiryLabel ? ` · ends in ${expiryLabel}` : ""} · membership paused`
+    ? // Ring already shows the %; drop the duplicate "25%" — keep the "Active" signal + the new facts.
+      `Active${expiryLabel ? ` · ends in ${expiryLabel}` : ""} · membership paused`
     : isOneTime && expiryLabel
       ? `Access ends in ${expiryLabel} · from your pack`
       : locked

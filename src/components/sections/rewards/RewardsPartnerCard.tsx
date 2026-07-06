@@ -61,7 +61,8 @@ export default function RewardsPartnerCard({
   const sub = guest
     ? "Become a member or buy a package to unlock discounts"
     : pastDueWithPack
-      ? `${partnerAccessPct}% active${expiryLabel ? ` · ends in ${expiryLabel}` : ""} · membership paused`
+      ? // Ring already shows the %, headline already says "Active" — subline carries only the new facts.
+        `${expiryLabel ? `Ends in ${expiryLabel} · ` : ""}membership paused`
       : pastdue
         ? "Update payment to restore your discounts"
         : onetime

@@ -1,5 +1,12 @@
 # Shared UI — Frontend
 
+> **Partner-discount card de-dup — past-due-with-pack subline (2026-07-06):** for a past-due member holding a
+> live one-time pack, `RewardsPartnerCard` + `PartnerPreview` showed `"{pct}% active · ends in {X} · membership
+> paused"` — but the ring already renders `{pct}%` (and the Rewards headline already says "Active from your
+> pack"), so `{pct}%`/"active" were duplicated. Sublines now drop the ring-duplicating `%`: Rewards →
+> `"Ends in {X} · membership paused"`, PartnerPreview (generic "Partner discounts" headline) →
+> `"Active · ends in {X} · membership paused"`. Same facts, no echo.
+
 > **Past-due hero de-dup — ring says "Paused" (2026-07-06):** the past-due `DashboardHero` stamped the state
 > three times in one stack — the access ring label ("Past due"), the tier chip ("TRADIE · PAST DUE"), and the
 > amber ribbon ("Renewal failed…"). The ring label + chip were the literal same words. The ring (which shows the
