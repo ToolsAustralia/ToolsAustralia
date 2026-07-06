@@ -216,8 +216,12 @@ export default function MyAccountPage() {
       whenGatesOpenElseGateModal(() => {
         if (plan) {
           membershipModal.setSelectedPlan(plan);
+          membershipModal.openModal();
+        } else {
+          // Plan-less event → selection-first; a bare openModal() with no selected plan renders
+          // the payment step with no package (broken).
+          membershipModal.openModalWithPackageSelectionFirst();
         }
-        membershipModal.openModal();
       });
     };
 
@@ -273,7 +277,9 @@ export default function MyAccountPage() {
   const { user } = accountData;
 
   const onResolvePayment = () => openSheet("manage");
-  const onBecomeMember = () => whenGatesOpenElseGateModal(() => membershipModal.openModal());
+  // Selection-first — a bare openModal() has no selected plan and renders the payment step with
+  // no package (broken). Same fix as the rewards page's onBecomeMember.
+  const onBecomeMember = () => whenGatesOpenElseGateModal(() => membershipModal.openModalWithPackageSelectionFirst());
   const onGetPackage = () => openEntryFlow();
   const onBuyPackage = () => openWithOneTimePlan();
 

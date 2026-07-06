@@ -63,7 +63,11 @@ export default function RewardsPage() {
   }
 
   const userId = dash.user?._id ?? session.user?.id ?? "";
-  const onBecomeMember = () => whenGatesOpenElseGateModal(() => membershipModal.openModal());
+  // Package selection first — a bare openModal() has no selected plan, which renders the payment
+  // step with no package (broken). Selection-first is the sanctioned no-plan open (promotions
+  // "Enter Now" path); getHeavyDutyPack() is NOT used here because it returns a one-time pack for
+  // entry-holders, which would mislabel a "Become a member" tap.
+  const onBecomeMember = () => whenGatesOpenElseGateModal(() => membershipModal.openModalWithPackageSelectionFirst());
   const onBuyPackage = () => openWithOneTimePlan();
   const onUpdatePayment = () => openSheet("manage");
 
@@ -83,7 +87,10 @@ export default function RewardsPage() {
       const code = (item.campaignCode || item.code || "").trim().toUpperCase();
       if (item.purchaseRequirement === "membership") {
         if (code) window.dispatchEvent(new CustomEvent("openMembershipModal", { detail: { referralCode: code } }));
-        membershipModal.openModal();
+        // Selection-first (never a bare openModal() — no selected plan renders a broken payment
+        // step). The user picks their membership tier; the auto-applied code's mismatch gate
+        // blocks it on a non-qualifying package type at submit.
+        membershipModal.openModalWithPackageSelectionFirst();
         return;
       }
       // "one-time" / "any" — route to one-time package entries.
