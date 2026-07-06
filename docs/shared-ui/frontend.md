@@ -1,5 +1,10 @@
 # Shared UI — Frontend
 
+> **Past-due ribbon copy — benefits, not just entries (2026-07-06):** `DashboardAlertRibbon`'s past-due (amber)
+> pill now reads "Renewal failed — update payment to keep your **partner discounts, free entries & bonus offers**"
+> (was "…keep earning entries"). Leads with member benefits and still names entries, mirroring the one-time (teal)
+> sibling pill's vocabulary ("partner discounts, more free entries & bonus offers") for one consistent benefits phrasing.
+
 > **EntryWallet "free entries" stat chip (2026-07-06):** `sections/dashboard/EntryWallet` shows a renewal note
 > (active member, `showRenewalNote`, gold) and a past-due note (`showPastDueNote`, amber, driven by
 > `pastDueRenewalEntries` + `pastDueRenewalCost`). Both render a **stat chip that mirrors the red countdown
