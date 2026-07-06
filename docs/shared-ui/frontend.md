@@ -1,7 +1,8 @@
 # Shared UI — Frontend
 
 > **Guest panel: view-the-draw redirect (2026-07-06):** `DashboardGuestPanel`'s "Enter the {draw}" card title
-> row now carries a small `ArrowUpRight` icon-link to **`/major-draw`** (the prize showcase) — a guest holds no
+> row now carries a small `ArrowUpRight` icon-link to **`/promotions`** (→ the default promotions landing, the
+> prize showcase; NOT `/major-draw`, which hard-redirects to `/promotional/giveaway`) — a guest holds no
 > entries yet, so they get a way to *see* the draw before committing to either CTA.
 
 > **Redeemable unlock flow + MembershipModal coupon auto-apply (2026-07-06):** `RewardsClaimables` gained an
