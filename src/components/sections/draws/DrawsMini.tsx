@@ -67,10 +67,9 @@ export default function DrawsMini({ participation, hasActiveMembership }: DrawsM
             <Ticket className="h-5 w-5" />
           </span>
           {/* Deliberately NOT "only drawn when full" (owner call) — that framing discourages
-              entering a draw that's far from its target. Sell agency + certainty instead: every
-              entry moves it, and a winner is always drawn. Same mechanics, motivating frame. */}
+              entering a draw that's far from its target. Short, motivating, same mechanics. */}
           <p className="text-sm text-white/80">
-            <strong className="text-white">Small pools, real chances.</strong> Every entry pushes the draw to the finish line — and someone always takes the prize. Mini-pack entries count here only — they don&apos;t roll into the monthly major draw.
+            <strong className="text-white">Small pools, real chances</strong> — someone always takes the prize. Mini entries don&apos;t roll into the major draw.
           </p>
         </div>
       </div>
