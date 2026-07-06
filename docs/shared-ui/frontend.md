@@ -1,5 +1,16 @@
 # Shared UI — Frontend
 
+> **MembershipModal selection-first is now synchronous (2026-07-06):** `showPackageSelectionFirst: true`
+> previously opened the package picker only as a **300ms-delayed overlay** on top of the payment step — the
+> placeholder payment view (grey skeletons, no package) was the guaranteed first paint, and because callers
+> pass `membershipModalConfig` as an inline object, every parent re-render re-ran the auto-open effect and
+> **reset the timer**, starving the overlay (looked exactly like the "no selected package" bug). Now: the
+> explicit config opens the picker **synchronously** (the implicit promotions-page auto-open keeps its
+> intentional 300ms delay), and dismissing the picker **before choosing a plan closes the whole modal**
+> instead of stranding the user on the skeleton payment step. Note: "Buy a package" → Apprentice Pack
+> preselected straight into payment is `openWithOneTimePlan()` working as designed (first public one-time
+> pack in the static catalog).
+
 > **Guest panel: view-the-draw redirect (2026-07-06):** `DashboardGuestPanel`'s "Enter the {draw}" card title
 > row now carries a small `ArrowUpRight` icon-link to **`/promotions`** (→ the default promotions landing, the
 > prize showcase; NOT `/major-draw`, which hard-redirects to `/promotional/giveaway`) — a guest holds no

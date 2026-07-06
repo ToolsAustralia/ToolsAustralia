@@ -722,6 +722,17 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
       !packageSelectionAutoOpenedRef.current &&
       !isPackageSelectionOpen
     ) {
+      // EXPLICIT selection-first (config.showPackageSelectionFirst === true, e.g. dashboard
+      // "Become a member" with no plan): open the picker synchronously — selection IS the first
+      // view. The 300ms timer made the placeholder payment step (grey skeletons) the guaranteed
+      // first paint, and because callers pass the config as an inline object, every parent
+      // re-render re-ran this effect and RESET the timer — starving the overlay indefinitely.
+      if (finalMembershipModalConfig?.showPackageSelectionFirst === true) {
+        setIsPackageSelectionOpen(true);
+        packageSelectionAutoOpenedRef.current = true;
+        return;
+      }
+      // Implicit promotions-page auto-open keeps its intentional 300ms delay (hero paints first).
       const timer = setTimeout(() => {
         setIsPackageSelectionOpen(true);
         packageSelectionAutoOpenedRef.current = true;
@@ -4723,7 +4734,13 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
       {/* Package Selection Modal */}
       <PackageSelectionModal
         isOpen={isPackageSelectionOpen}
-        onClose={() => setIsPackageSelectionOpen(false)}
+        onClose={() => {
+          setIsPackageSelectionOpen(false);
+          // Selection-first with nothing chosen yet: dismissing the picker must not strand the
+          // user on the placeholder payment step (grey skeletons, no package) — close the whole
+          // membership modal instead. Once a real plan is selected, dismissal behaves normally.
+          if (showPackageSelectionFirst && isPlaceholderPlan) onClose();
+        }}
         currentPlan={activePlan}
         onPlanSelect={handlePackageSelect}
       />
