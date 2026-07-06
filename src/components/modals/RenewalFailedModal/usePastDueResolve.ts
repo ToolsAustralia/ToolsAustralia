@@ -22,6 +22,8 @@ import { ApiError } from "@/lib/queries";
 import { formatPaymentError } from "@/utils/payment/stripe/payment-error-messages";
 import { useSavedPaymentMethods, type SavedPaymentMethod } from "@/hooks/useSavedPaymentMethods";
 import { useUserContext } from "@/contexts/UserContext";
+import { getPastDueRenewalPreview } from "@/utils/subscription/past-due-renewal-preview";
+import type { IUser } from "@/models/User";
 import { useHtmlDarkForUi } from "@/hooks/useHtmlDarkForUi";
 import { buildMembershipStripeAppearance } from "@/utils/payment/stripe/membership-stripe-appearance";
 import { getStripePromise } from "@/lib/stripe-client";
@@ -76,6 +78,9 @@ export function usePastDueResolve({ isOpen, onClose }: UsePastDueResolveArgs) {
   const updateSubscriptionPaymentMethod = useUpdateSubscriptionPaymentMethod();
   const { paymentMethods, loading: _paymentMethodsLoading, savePaymentMethod } = useSavedPaymentMethods();
   const { userData } = useUserContext();
+  // What the member pays + the entries they unlock on resolve — reuses the canonical preview so the
+  // popup/sheet match the dashboard note, the renewal-failure email, and the Klaviyo property.
+  const renewalPreview = getPastDueRenewalPreview((userData ?? {}) as unknown as IUser);
   // Source of truth = the actual `.dark` class on <html> (what Tailwind styles the
   // surface with), NOT useThemeStore — those can disagree (time-based auto-dark, or
   // /admin theme). useHtmlDarkForUi reads the class so the PaymentElement matches.
@@ -402,6 +407,7 @@ export function usePastDueResolve({ isOpen, onClose }: UsePastDueResolveArgs) {
     membershipStripeAppearance,
     paymentMethods,
     userData,
+    renewalPreview,
     isNoPayableInvoice,
     // handlers
     handlePayOverdue,

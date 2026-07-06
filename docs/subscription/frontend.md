@@ -219,6 +219,18 @@ The flag that selects Mode A vs Mode B is `hasMembershipGrantInCurrentDrawPeriod
 > renders for past-due members. `ActionButtons` gained `hideDismiss` (the sheet drops the Close button +
 > footer since the sheet owns dismiss). This replaced an earlier, wrong approach that *embedded the whole
 > modal* (dark hero + Close) inside the sheet. Verify the modal path with `npm run test:renewal-failed`.
+
+> **Renewal preview note — "Settle $X → +N free entries" (2026-07-06):** both resolve surfaces render
+> **`RenewalPreviewNote`** ([RenewalFailedModal/RenewalPreviewNote.tsx](../../src/components/modals/RenewalFailedModal/RenewalPreviewNote.tsx))
+> in the **initial** resolve state only (gated `!terminalCollectionFailure && !showInlineCardSetup`), so a
+> past-due member sees what they pay and the entries that land when it clears. `usePastDueResolve` exposes
+> `renewalPreview` computed via **`getPastDueRenewalPreview(user)`**
+> ([src/utils/subscription/past-due-renewal-preview.ts](../../src/utils/subscription/past-due-renewal-preview.ts)),
+> which reuses the CANONICAL `getRenewalEntriesPreviewForProfile` (same source as the Klaviyo
+> `past_due_renewal_entries` property + the renewal-failure email) for entries, and the **same** package's
+> `.price` for cost — so the popup, the sheet, the dashboard `EntryWallet` note, the email, and Klaviyo all
+> show one consistent number. The dashboard mirror is driven by `dash.pastDueRenewalEntries` /
+> `dash.pastDueRenewalCost` from `useDashboardState` (see docs/dashboard-account).
 - `PaymentMethodCard.tsx` — saved-card display ("VISA •••• 4242 / Default Payment Method / Change").
 - `PaymentForm.tsx` — exports `PaymentFormWithoutElements` (saved card path) and `PaymentFormWithElements` (new card path). All Stripe logic is preserved byte-identically from the original monolith. Uses Plan 4 `<Button>` for action buttons.
 - `styles.module.css` — composite hero gradients, scrollbar, pinstripe overlay.

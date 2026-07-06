@@ -10,6 +10,7 @@ import { useResolvedMultiplier } from "@/hooks/queries/usePromoQueries";
 import { getActivePackage, type ActivePackageUserInput } from "@/utils/membership/get-active-package";
 import { hasAdditionalPackageAccess } from "@/utils/membership/has-additional-package-access";
 import { hasFailedRenewal } from "@/utils/subscription/subscription-helpers";
+import { getPastDueRenewalPreview } from "@/utils/subscription/past-due-renewal-preview";
 import { TIER_HEX, tierKeyFromName, type TierKey } from "@/utils/membership/tier-visuals";
 import { getPartnerCatalogAccessPercentForPlanId, resolvePartnerCatalogPlanId } from "@/utils/partner-discounts/partner-catalog-visibility";
 import { getPartnerDiscountAccessInfo } from "@/utils/membership/benefit-resolution";
@@ -50,6 +51,10 @@ export interface DashboardStateResult {
   /** Whole months of continuous membership, or null for non-members. */
   streakMonths: number | null;
   isPastDue: boolean;
+  /** Entries a PAST-DUE member unlocks once they settle their failed renewal (base + carry-over). Null otherwise. */
+  pastDueRenewalEntries: number | null;
+  /** The renewal charge a PAST-DUE member settles (their tier's monthly price). Null otherwise. */
+  pastDueRenewalCost: number | null;
   /** ISO renewal date (subscription.endDate) when active + autoRenew; trialing-safe. Null otherwise. */
   renewalDateIso: string | null;
   /** Membership entries the member gets on the next renewal (tier entriesPerMonth × promo). 0 for non-members. */
@@ -116,6 +121,8 @@ export function useDashboardState(): DashboardStateResult {
         partnerAccessExpiryLabel: null,
         streakMonths: null,
         isPastDue: false,
+        pastDueRenewalEntries: null,
+        pastDueRenewalCost: null,
         renewalDateIso: null,
         membershipEntriesPerRenewal: 0,
         drawName: currentMajorDraw?.name ?? "Major Draw",
@@ -209,6 +216,11 @@ export function useDashboardState(): DashboardStateResult {
       ? Math.round((activePackage.entriesPerMonth || 0) * multiplier)
       : 0;
 
+    // Past-due: the entries + cost the member unlocks by settling their failed renewal. Same
+    // canonical source as the resolve popup/sheet, the renewal-failure email, and Klaviyo.
+    const pastDuePreview =
+      acct === "pastdue" ? getPastDueRenewalPreview(iUser) : { entries: null, cost: null };
+
     return {
       isLoading,
       acct,
@@ -230,6 +242,8 @@ export function useDashboardState(): DashboardStateResult {
       partnerAccessExpiryLabel,
       streakMonths,
       isPastDue,
+      pastDueRenewalEntries: pastDuePreview.entries,
+      pastDueRenewalCost: pastDuePreview.cost,
       renewalDateIso,
       membershipEntriesPerRenewal,
       drawName: currentMajorDraw?.name ?? "Major Draw",

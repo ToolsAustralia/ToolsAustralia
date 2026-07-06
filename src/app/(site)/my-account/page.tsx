@@ -318,6 +318,8 @@ export default function MyAccountPage() {
                 drawStatus={dash.drawStatus}
                 renewalDateIso={dash.renewalDateIso}
                 entriesPerRenewal={dash.membershipEntriesPerRenewal}
+                pastDueRenewalEntries={dash.pastDueRenewalEntries}
+                pastDueRenewalCost={dash.pastDueRenewalCost}
               />
               <DashboardPromoBanner multiplier={dash.multiplier} hasAdditionalAccess={dash.hasAdditionalAccess} onGetPackage={onGetPackage} className="lg:hidden" />
               <DashboardPromoBanner multiplier={dash.multiplier} hasAdditionalAccess={dash.hasAdditionalAccess} onGetPackage={onGetPackage} wide className="hidden lg:block" />

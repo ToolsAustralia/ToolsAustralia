@@ -10,6 +10,7 @@ import ActionButtons from "./ActionButtons";
 import InlineCardSetup from "./InlineCardSetup";
 import PaymentForm from "./PaymentForm";
 import { usePastDueResolve, stripePromise, renewalBillingSupportMailto } from "./usePastDueResolve";
+import RenewalPreviewNote from "./RenewalPreviewNote";
 
 interface RenewalFailedModalProps {
   isOpen: boolean;
@@ -147,6 +148,12 @@ const RenewalFailedModal: React.FC<RenewalFailedModalProps> = ({ isOpen, onClose
         )
       }
     >
+      {/* What they pay + the entries they unlock — only on the normal resolve prompt, not the
+          add-card / terminal states. */}
+      {!r.terminalCollectionFailure && !r.showInlineCardSetup ? (
+        <RenewalPreviewNote preview={r.renewalPreview} />
+      ) : null}
+
       {r.requiresDifferentPaymentMethod ? (
         <AlertBanner
           variant="warn"

@@ -21,6 +21,16 @@
 > `endDate` is already the normalized renewal anchor for `trialing` (25-27th anchor-day) members, so the note
 > reads the *renewal* date without any live Stripe `trialing` check (see docs/BILLING_ANCHOR_24.md).
 
+> **Past-due settle-to-reactivate note (2026-07-06):** the past-due sibling of the note above. `useDashboardState`
+> exposes `pastDueRenewalEntries` + `pastDueRenewalCost` (both null unless `acct === "pastdue"`), computed via
+> `getPastDueRenewalPreview(iUser)` ([src/utils/subscription/past-due-renewal-preview.ts](../../src/utils/subscription/past-due-renewal-preview.ts)).
+> `EntryWallet` renders an **amber** "**Settle ${cost} to reactivate · +{N} free entries land as soon as it
+> clears**" note (mirrors the gold active-member note visual). Entries reuse the CANONICAL
+> `getRenewalEntriesPreviewForProfile` and cost is the **same** package's `.price`, so the dashboard note, the
+> resolve popup/sheet (`RenewalPreviewNote`), the renewal-failure email, and Klaviyo all show one number.
+> Both entries + cost read `subscription.packageId` (the billed package = the failed invoice), so they never
+> mismatch.
+
 > **Hero "Become a member" → membership page (2026-07-03):** the dashboard-home hero's "Become a member"
 > button now `router.push("/my-account/membership")` (the tier list) instead of opening the membership
 > modal — the other become-a-member entry points (guest panel, upsell card) still open the modal.

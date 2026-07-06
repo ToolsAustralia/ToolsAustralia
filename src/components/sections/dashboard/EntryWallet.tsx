@@ -29,6 +29,10 @@ interface EntryWalletProps {
   renewalDateIso?: string | null;
   /** Entries this member gets on the next renewal (for the incoming-entries note). */
   entriesPerRenewal?: number;
+  /** Past-due: entries the member unlocks once they settle their failed renewal (with `pastDueRenewalCost`, shows the "settle to reactivate" note). */
+  pastDueRenewalEntries?: number | null;
+  /** Past-due: the renewal charge the member settles (their tier's monthly price). */
+  pastDueRenewalCost?: number | null;
   className?: string;
 }
 
@@ -64,6 +68,8 @@ export default function EntryWallet({
   hasAdditionalAccess = false,
   renewalDateIso,
   entriesPerRenewal,
+  pastDueRenewalEntries,
+  pastDueRenewalCost,
   className,
 }: EntryWalletProps) {
   const now = useLeafTimer(1000);
@@ -78,6 +84,10 @@ export default function EntryWallet({
   const renewalDateLabel = renewalDateIso
     ? new Date(renewalDateIso).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" })
     : null;
+
+  // Past-due member → what they pay and the entries that land when they settle their failed renewal.
+  const showPastDueNote =
+    isPastDue && (pastDueRenewalEntries ?? 0) > 0 && pastDueRenewalCost != null;
 
   const membership = isCompleted ? 0 : entries.membership;
   const total = membership + entries.oneTime;
@@ -151,6 +161,18 @@ export default function EntryWallet({
             <b className="font-['Poppins'] text-primary-token dark:text-white">+{(entriesPerRenewal ?? 0).toLocaleString()} free entries</b> land on your renewal
             {" · "}
             <b className="whitespace-nowrap text-primary-token dark:text-white">{renewalDateLabel}</b>
+          </p>
+        </div>
+      )}
+      {showPastDueNote && (
+        <div className="mt-3.5 flex items-center gap-3 rounded-[14px] border border-amber-400/45 bg-gradient-to-r from-amber-400/20 via-amber-400/[.06] to-transparent px-3 py-2.5 dark:border-amber-500/30 dark:from-amber-500/[.14]">
+          <span className="grid h-8 w-8 shrink-0 place-items-center rounded-[10px] bg-gradient-to-b from-amber-400 to-amber-600 text-white shadow-[0_5px_12px_-5px_rgba(217,119,6,.8)]">
+            <Sparkles className="h-[16px] w-[16px]" />
+          </span>
+          <p className="min-w-0 text-[12px] leading-[1.3] text-muted-token">
+            Settle <b className="whitespace-nowrap font-['Poppins'] text-primary-token dark:text-white">${pastDueRenewalCost}</b> to reactivate
+            {" · "}
+            <b className="font-['Poppins'] text-primary-token dark:text-white">+{(pastDueRenewalEntries ?? 0).toLocaleString()} free entries</b> land as soon as it clears
           </p>
         </div>
       )}

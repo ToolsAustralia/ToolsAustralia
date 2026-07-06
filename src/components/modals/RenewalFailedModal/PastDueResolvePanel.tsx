@@ -11,6 +11,7 @@ import ActionButtons from "./ActionButtons";
 import InlineCardSetup from "./InlineCardSetup";
 import PaymentForm from "./PaymentForm";
 import { usePastDueResolve, stripePromise, renewalBillingSupportMailto } from "./usePastDueResolve";
+import RenewalPreviewNote from "./RenewalPreviewNote";
 
 interface PastDueResolvePanelProps {
   /** Called after a successful recovery (short delay) so the host sheet can close. */
@@ -174,6 +175,12 @@ export default function PastDueResolvePanel({ onResolved }: PastDueResolvePanelP
               : "Your last renewal payment didn't go through. Settle up to keep your benefits active."
         }
       />
+
+      {/* What they pay + the entries they unlock — only on the normal resolve prompt, not the
+          add-card / terminal states. */}
+      {!r.terminalCollectionFailure && !r.showInlineCardSetup ? (
+        <RenewalPreviewNote preview={r.renewalPreview} />
+      ) : null}
 
       {r.requiresDifferentPaymentMethod ? (
         <AlertBanner

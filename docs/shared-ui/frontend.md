@@ -1,5 +1,13 @@
 # Shared UI — Frontend
 
+> **EntryWallet past-due settle note (2026-07-06):** `sections/dashboard/EntryWallet` gained
+> `pastDueRenewalEntries` + `pastDueRenewalCost` props. When `acct === "pastdue"` and both are present it
+> renders an **amber** "**Settle ${cost} to reactivate · +{N} free entries land as soon as it clears**" note
+> — the past-due sibling of the existing gold `showRenewalNote` (active-member incoming-entries) note, same
+> icon-tile + gradient visual. Both props come from `useDashboardState` and share their source with the
+> resolve popup/sheet + email (see [dashboard-account/frontend.md](../dashboard-account/frontend.md) and
+> [subscription/frontend.md](../subscription/frontend.md)). Presentational-only; EntryWallet stays dumb.
+
 > **Header sign-out (2026-07-02):** the site `Header` menu sign-out now calls `totalSignOut()`
 > ([src/utils/auth/total-sign-out.ts](../../src/utils/auth/total-sign-out.ts)) instead of a bare
 > `signOut()` + 2-key localStorage wipe. See [auth/frontend.md](../auth/frontend.md#total-sign-out-2026-07-02).
