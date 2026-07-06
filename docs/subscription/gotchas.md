@@ -2,6 +2,10 @@
 
 Real failure modes, surprising behaviours, and tribal knowledge from incidents. Most of these came from production bugs and have lessons attached.
 
+## Retention offers must be blocked for an already-scheduled-to-cancel member (2026-07-06)
+
+The `accept_offer` route (`/api/subscription/cancellation-flow`) never re-validates the offer against the server-side eligibility filter — the filter is **advisory (drives the UI only)**. So the per-service block-reason guards (`retentionPauseBlockReason` / `retentionDiscountBlockReason`) are the *entire* backend gate at accept time. They previously checked only past-due / already-consumed / no-sub. **Gap:** a member already scheduled to cancel (`autoRenew` off, `cancel_at_period_end` true) who reaches `accept_offer` (UI-gated on every surface, but reachable via a stale-two-tab race or a direct authenticated POST) would get a pause/discount that Stripe silently overrides by cancelling at period end — recording a false `outcome: "saved"`. Same class as the upgrade/downgrade "didn't clear the pending cancel" bug. **Fix:** both guards now return `409 "scheduled to cancel: retention {pause,discount} not allowed"`; the member un-cancels via the explicit dashboard **"Resume membership"** button instead. Guard chosen over silently clearing the cancel — a retention offer is for members still *deciding*, and Resume is the deliberate un-cancel path. Unit-tested (`test:retention-pause`, `test:retention-discount`).
+
 ## Money path
 
 ### Past-due tier switch = cancel + void → resubscribe (never proration) (2026-07-03)

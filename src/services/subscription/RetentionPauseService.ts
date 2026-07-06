@@ -73,14 +73,21 @@ export function computeResumeAt(now: Date): number {
  *
  * Order matters — most critical exclusion first:
  * 1. Past-due: retention pauses must never stack on a failed-renewal scenario.
- * 2. Already consumed: the offer is one-time only.
- * 3. No Stripe subscription ID: cannot update what doesn't exist.
+ * 2. Scheduled to cancel: an already-cancelling member un-cancels via "Resume membership", not a pause.
+ * 3. Already consumed: the offer is one-time only.
+ * 4. No Stripe subscription ID: cannot update what doesn't exist.
  */
 export function retentionPauseBlockReason(
   user: Pick<IUser, "subscription" | "retentionOffersConsumed" | "stripeSubscriptionId">
 ): string | null {
   if (hasFailedRenewal(user as IUser)) {
     return "past-due: retention pause not allowed";
+  }
+  // Already scheduled to cancel (autoRenew off / cancel_at_period_end true): a pause would be silently
+  // overridden by Stripe cancelling at period end, recording a false "saved". Retention offers are for
+  // members still DECIDING to cancel; the explicit un-cancel path is the dashboard "Resume membership".
+  if (user.subscription?.autoRenew === false) {
+    return "scheduled to cancel: retention pause not allowed";
   }
   if (user.retentionOffersConsumed?.pause30d) {
     return "retention pause already used";

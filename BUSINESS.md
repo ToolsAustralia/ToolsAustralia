@@ -564,6 +564,7 @@ A daily reconciliation cron (`15 3 * * *`, [src/app/api/cron/reconcile-blocked-t
 ### 13c. Cancellation / retention flow
 
 - `CancellationFlowModal` orchestrates a retention sequence: **pause offer** (`RetentionPauseService`) and **discount offer** (`RetentionDiscountService`) before final cancellation.
+- **Retention offers are for members still *deciding* to cancel — a member already scheduled to cancel (`autoRenew` off / `cancel_at_period_end` true) is blocked from accepting either** (`retentionPauseBlockReason` / `retentionDiscountBlockReason` return a `409 "scheduled to cancel: …"`). Otherwise the pause/discount is silently overridden by Stripe cancelling at period end, recording a false "saved". Such a member un-cancels via the explicit **"Resume membership"** button (§10 `autoRenew` undo), not a cancel-flow offer. (The accept route does not re-validate eligibility, so these service-level guards are the backend backstop.)
 - All steps emit `CancellationFlowEvent` for analytics.
 - A maturity cron (`cancellation-retention-maturity`) flips paused subscriptions back to active when the pause window ends; a resume cron resumes early-returners.
 

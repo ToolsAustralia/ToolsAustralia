@@ -87,6 +87,22 @@ function testBlockReasonEligibleUser() {
   assert.strictEqual(reason, null, "eligible user should return null");
 }
 
+/** Scheduled to cancel (autoRenew off, still active) → blocked; the member resumes, doesn't pause. */
+function testBlockReasonScheduledToCancel() {
+  const user = makeUser({
+    subscription: {
+      packageId: "pro",
+      startDate: new Date(),
+      isActive: true,
+      autoRenew: false,
+      status: "active",
+    },
+  });
+  const reason = retentionPauseBlockReason(user);
+  assert.ok(reason !== null, "should block scheduled-to-cancel user");
+  assert.ok(reason!.includes("scheduled to cancel"), `expected 'scheduled to cancel' in: "${reason}"`);
+}
+
 /** Past-due guard takes priority over consumed guard. */
 function testBlockReasonPastDueTakesPriority() {
   const user = makeUser({
@@ -122,6 +138,7 @@ function run() {
   testBlockReasonAlreadyConsumed();
   testBlockReasonNoSubscription();
   testBlockReasonEligibleUser();
+  testBlockReasonScheduledToCancel();
   testBlockReasonPastDueTakesPriority();
   testBlockReasonUndefinedConsumedFlag();
   console.log("PASS RetentionPauseService");

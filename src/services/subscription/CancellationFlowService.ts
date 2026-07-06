@@ -233,6 +233,8 @@ function retentionOfferErrorToStatus(message: string): number {
     case "retention discount already used":
     case "past-due: retention pause not allowed":
     case "past-due: retention discount not allowed":
+    case "scheduled to cancel: retention pause not allowed":
+    case "scheduled to cancel: retention discount not allowed":
     case "no active subscription":
       return 409;
     case "user not found":
