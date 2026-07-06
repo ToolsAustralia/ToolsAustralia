@@ -1,5 +1,17 @@
 # Shared UI — Frontend
 
+> **Mini-draw copy: no "only drawn when full" framing (2026-07-07, owner call):** the Draws mini-tab explainer
+> (`DrawsMini`) and the entry sheet footnote (`MiniDrawEntrySheet`) no longer lead with "no clock — they run
+> when they fill" / "picked the moment it fills" — for a draw far from its target that reads as "might sit
+> forever" and discourages entry. Reframed short + motivating with the SAME mechanics (owner also asked for
+> brevity): "**Small pools, real chances** — someone always takes the prize. Mini entries don't roll into the
+> major draw." / entry sheet: "winner drawn automatically — someone always takes the prize." Trigger model
+> unchanged.
+
+> **Tier list: "See full membership details" link (2026-07-07):** `MembershipTierList` renders a small
+> centered sky text-link under the tier cards → the PUBLIC **`/membership`** page (the in-depth benefit
+> breakdown), so undecided users can read the full pitch before committing from the dashboard tier list.
+
 > **MembershipModal selection-first: synchronous + dismissal-only onClose contract (2026-07-06):** the
 > guest-conversion "Become a member" flow. Three coordinated changes (adversarially verified — the first
 > iteration had a same-tick stale-state blocker, see below):
@@ -18,6 +30,14 @@
 > 3. **Dismissing the picker before choosing closes the whole modal** (`configSelectionFirst &&
 >    isPlaceholderPlan`) instead of stranding the user on the skeleton payment step; after a real plan is
 >    selected, dismissal behaves normally ("Change" flow unaffected).
+> 5. **Reopen-while-closing fix (2026-07-07):** the picked-plan → ✕ → re-tap flow could show the placeholder
+>    payment view with the picker never opening. Root cause (traced): `handleClose` AWAITED the
+>    PaymentIntent-cancel fetch before `onClose()`, leaving the modal visibly open a whole network
+>    round-trip — a selection-first re-tap in that window re-opened WITHOUT ever rendering a closed frame,
+>    so `packageSelectionAutoOpenedRef` (reset only on a rendered `isOpen=false` commit) stayed armed. Fixes:
+>    `handleClose` now closes the UI first and cancels the intent **fire-and-forget**; and the latch is
+>    **per placeholder-episode** (re-armed whenever a real plan is selected), so a fresh selection-first
+>    request auto-opens the picker even if no closed frame ever rendered.
 > 4. **Hardening from the second adversarial pass:** Escape while the picker is open now dismisses the
 >    PICKER (same `dismissPackageSelection` path as ✕/backdrop) instead of closing the whole modal and
 >    leaving the picker orphaned over the page (pre-existing hole — MembershipModal stays mounted with

@@ -183,8 +183,10 @@ export default function MiniDrawEntrySheet({ open, onClose, miniDraw, userEntryC
                 <><Ticket className="h-[17px] w-[17px]" /> Choose a pack</>
               )}
             </button>
+            {/* Not "the moment it fills" — that reads as "might sit forever" for a low-fill draw
+                (owner call). Same mechanics, motivating frame: winner is automatic + guaranteed. */}
             <p className="mt-2.5 flex items-center justify-center gap-1.5 text-center text-[11px] font-medium text-muted-token">
-              <Check className="h-3.5 w-3.5 text-emerald-500" /> Entries added instantly · this draw is picked automatically the moment it fills.
+              <Check className="h-3.5 w-3.5 text-emerald-500" /> Entries added instantly · winner drawn automatically — someone always takes the prize.
             </p>
           </div>
         )}

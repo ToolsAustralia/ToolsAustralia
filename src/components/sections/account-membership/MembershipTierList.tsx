@@ -1,7 +1,8 @@
 "use client";
 
 import Image from "next/image";
-import { Package, Flame, ShieldCheck } from "lucide-react";
+import Link from "next/link";
+import { Package, Flame, ShieldCheck, ChevronRight } from "lucide-react";
 import { cn } from "@/utils/cn";
 import type { MembershipCardCta } from "@/hooks/useMembershipCardCta";
 import type { LocalMembershipPlan } from "@/utils/membership/membership-adapters";
@@ -145,6 +146,16 @@ export default function MembershipTierList({
               </button>
             );
           })}
+        </div>
+        {/* In-depth membership details live on the PUBLIC /membership page (full benefit
+            breakdown) — a light text link so undecided users can read before committing. */}
+        <div className="mt-3 text-center">
+          <Link
+            href="/membership"
+            className="inline-flex items-center gap-1 text-[12.5px] font-bold text-sky-600 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-red-600 dark:text-sky-400"
+          >
+            See full membership details <ChevronRight className="h-3.5 w-3.5" />
+          </Link>
         </div>
       </section>
 

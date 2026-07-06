@@ -66,8 +66,10 @@ export default function DrawsMini({ participation, hasActiveMembership }: DrawsM
           <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-white/10">
             <Ticket className="h-5 w-5" />
           </span>
+          {/* Deliberately NOT "only drawn when full" (owner call) — that framing discourages
+              entering a draw that's far from its target. Short, motivating, same mechanics. */}
           <p className="text-sm text-white/80">
-            <strong className="text-white">No clock — they run when they fill.</strong> A mini draw closes the second it hits its entry target. Mini-pack entries count here only — they don&apos;t roll into the monthly major draw.
+            <strong className="text-white">Small pools, real chances</strong> — someone always takes the prize. Mini entries don&apos;t roll into the major draw.
           </p>
         </div>
       </div>

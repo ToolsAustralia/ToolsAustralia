@@ -1,5 +1,16 @@
 # Dashboard-Account — Frontend
 
+> **"Become a member" preselects the Tradie subscription (2026-07-07, owner decision):** matching the tier-card
+> behavior ("clicking Tradie opens it with Tradie — why not Become a member too?"), every dashboard
+> "Become a member" CTA now opens the MembershipModal **payment-ready with the promo-boosted Tradie
+> subscription preselected** ("Change" swaps tiers): home + rewards use the new
+> `useMajorDrawEntryCta.getTradieSubscriptionPlan()` (extracted from `getHeavyDutyPack`'s non-member branch —
+> `getHeavyDutyPack` itself is access-dependent and returns a ONE-TIME pack for entry-holders, wrong for a
+> membership CTA); the membership page routes through `cta.onSelect(tradie)` for full tier-card parity (freeze
+> gate + Started Checkout tracking), falling back to the package picker until the catalog resolves. The
+> rewards unlock-coupon membership branch does the same (mirrors the reference widget's
+> `openMembershipModalWithTradie`). This also makes these CTAs independent of the picker-first orchestration.
+
 > **Never bare-`openModal()` the MembershipModal (2026-07-06):** `useMembershipModal.openModal()` without a
 > plan (and no prior selection) renders the **payment step with no package** — a broken skeleton view. The
 > sanctioned no-plan open is **`openModalWithPackageSelectionFirst()`** (the promotions "Enter Now" path), and
