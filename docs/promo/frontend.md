@@ -11,15 +11,22 @@ Page composition: **dark hero band** (combo count eyebrow, display heading) → 
 still shows it) → **sticky glass filter dock** (follows the scroll on every viewport — the promotions layout
 is chrome-free so `top` offsets are safe) with TWO independent dimensions: **toolset brand** (brand-dotted
 pills) × **toolbox brand** (Sidchrome / Milwaukee Toolbox / Kincrome) — combinable (AND) or single; tapping an
-active pill clears it; count + Clear live in the dock (sm+) / below it (mobile) → grid of **brand-accented
-cards** (top hairline, value badge and hover glow in the brand's `BRAND_THEMES` primary; Milwaukee uses the TA
-site red per prize-brand-colors convention; badge ink via YIQ luminance so DeWalt/Ryobi yellows get dark ink;
-a small "{storage} TB" chip on each card) → **gold cash-alternative band** ("Rather have the cash?") closing
-the page. Cards come from `listPrizes()`, each
+active pill clears it; count + Clear live in the dock (sm+) / below it (mobile) → grid of **showroom
+`ComboCard`s** (extracted component; dark glass shell `from-white/[.07]`, pointer tilt via `useTilt(4)`
+(motion-safe), top hairline / value badge / hover border+glow in the brand's `BRAND_THEMES` primary; Milwaukee
+uses the TA site red per prize-brand-colors convention; badge ink via YIQ luminance so DeWalt/Ryobi yellows
+get dark ink; identity row renders the **brand wordmark SVG** (`wordmarkSrc`, `public/images/brands/<name>/`)
+when shipped, falling back to the text title, beside a "{storage} toolbox" chip) → **gold cash-alternative
+band** ("Rather have the cash?") closing the page. The hero also mounts **`GalleryCountdown`**
+(`_components/GalleryCountdown.tsx`) — a live major-draw countdown in the dashboard's red countdown-chip
+vocabulary via `useCurrentMajorDraw` (30s tick; renders nothing until the draw resolves and only while
+`status === "active"`, so the hero reserves no space for it). Filter pills are dark-theme-only styles now
+(the page ground is dark in both themes). Cards come from `listPrizes()`, each
 using the SAME manifest-verified landing hero art as its `/promotions/<slug>` page via
 `getLandingHeroImagePaths(slug)` — mobile asset `< lg`, desktop asset `≥ lg` (the promotions-wide 1024px
-art-direction split), `object-contain` on a **white plate in both themes** (the art is composited for light
-backgrounds). Combos with no shipped art are skipped, not broken. **Analytics caveat:** the bare `/promotions`
+art-direction split), `object-contain` on a **white art plate framed inside the dark shell** (rounded inset
+`m-2.5` — the art is composited for light backgrounds, so the plate reads as a lit display case). Combos with
+no shipped art are skipped, not broken. **Analytics caveat:** the bare `/promotions`
 path has no promo slug, so `usePromoPageTracking` fires NO PromoAnalyticsVisit for gallery views (harmless);
 extend the validator + pageType deliberately if gallery tracking is wanted.
 

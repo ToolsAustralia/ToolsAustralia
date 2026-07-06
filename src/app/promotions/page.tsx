@@ -6,6 +6,7 @@ import { listPrizes, DEFAULT_PRIZE_SLUG, type PrizeCatalogEntry } from "@/config
 import { getLandingHeroImagePaths } from "@/config/promo-landing-slugs";
 import { BRAND_THEMES, type BrandKey } from "@/config/brand-theme";
 import GiveawayGalleryClient, { type GiveawayGalleryCard } from "./_components/GiveawayGalleryClient";
+import GalleryCountdown from "./_components/GalleryCountdown";
 
 const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://toolsaustralia.com.au";
 
@@ -47,8 +48,17 @@ const BRAND_DISPLAY: Record<string, string> = {
 
 const STORAGE_DISPLAY: Record<string, string> = {
   sidchrome: "Sidchrome",
-  milwaukee: "Milwaukee Toolbox",
+  milwaukee: "Milwaukee",
   kincrome: "Kincrome",
+};
+
+/** Real brand wordmark SVGs (public/images/brands/name/). */
+const BRAND_WORDMARK: Record<string, string> = {
+  milwaukee: "/images/brands/name/milwaukeeText.svg",
+  dewalt: "/images/brands/name/dewaltText.svg",
+  makita: "/images/brands/name/makitaText.svg",
+  ryobi: "/images/brands/name/ryobiText.svg",
+  hikoki: "/images/brands/name/hikokiText.svg",
 };
 
 /** Brand accent for the gallery. Milwaukee uses the Tools Australia site red (matches the
@@ -84,6 +94,7 @@ function toCard(prize: PrizeCatalogEntry): GiveawayGalleryCard | null {
     brandKey: brandLabel ? brand : "all",
     storageKey: storageLabel ? storage : "all",
     storageLabel: storageLabel ?? "",
+    wordmarkSrc: BRAND_WORDMARK[brand],
     description: prize.label,
     valueLabel: prize.prizeValueLabel,
     accentHex,
@@ -92,13 +103,23 @@ function toCard(prize: PrizeCatalogEntry): GiveawayGalleryCard | null {
   };
 }
 
+/** Sum the catalog's "$35,000+ Value" labels into a headline prize-pool figure. */
+function prizePoolTotal(prizes: PrizeCatalogEntry[]): number {
+  return prizes
+    .filter((p) => p.slug !== "cash-prize")
+    .reduce((sum, p) => {
+      const digits = (p.prizeValueLabel ?? "").replace(/[^0-9]/g, "");
+      return sum + (digits ? parseInt(digits, 10) : 0);
+    }, 0);
+}
+
 /**
- * /promotions — the giveaway combinations gallery (owner: the gallery IS the promotions root; the old
- * page here was a bare redirect to DEFAULT_PRIZE_SLUG). Editorial index of every major-draw
- * prize combination: featured headline combo (the default prize) → brand-filterable grid of
- * brand-accented cards (each using its landing page's own hero art) → gold cash-alternative band.
- * Every card deep-links to its `/promotions/<slug>` landing page. Newsletter, footer, theme toggle
- * and the modal manager come from the promotions layout.
+ * /promotions — the giveaway combinations showroom (owner: the gallery IS the promotions root;
+ * the old page here was a bare redirect to DEFAULT_PRIZE_SLUG). Deliberately single-look dark —
+ * the promotions section's cinematic mood. Composition: pinstriped hero (prize-pool stat, live
+ * draw countdown, brand wordmark strip) → featured headline combo (dark billboard) → sticky
+ * dual-filter dock + showroom grid → gold cash-alternative band. Every card deep-links to its
+ * `/promotions/<slug>` landing page. Newsletter, footer and modal manager come from the layout.
  */
 export default function GiveawayGalleryPage() {
   const prizes = listPrizes();
@@ -120,38 +141,76 @@ export default function GiveawayGalleryPage() {
     .map((s) => ({ key: s, label: STORAGE_DISPLAY[s] }));
 
   const comboCount = cards.length;
+  const poolTotal = prizePoolTotal(prizes);
 
   return (
-    <div className="min-h-svh w-full overflow-hidden bg-white dark:bg-neutral-950">
+    <div className="min-h-svh w-full overflow-hidden bg-slate-950">
       <main className="w-full overflow-hidden">
-        {/* ── Hero band — dark slate, promotions vocabulary ── */}
-        <section className="relative overflow-hidden bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950">
+        {/* ── Cinematic hero ── */}
+        <section className="relative overflow-hidden">
+          {/* Pinstripe + red pulse — the promotions hero vocabulary. */}
           <div
             aria-hidden
-            className="pointer-events-none absolute -top-24 left-1/2 h-72 w-[42rem] -translate-x-1/2 rounded-full opacity-25"
+            className="pointer-events-none absolute inset-0"
+            style={{ backgroundImage: "repeating-linear-gradient(45deg, transparent 0 14px, rgba(255,255,255,0.014) 14px 28px)" }}
+          />
+          <div
+            aria-hidden
+            className="pointer-events-none absolute -top-32 left-1/2 h-96 w-[52rem] -translate-x-1/2 rounded-full opacity-30"
             style={{ background: "radial-gradient(closest-side, #ee0000, transparent 70%)" }}
           />
-          <div className="relative mx-auto w-full max-w-7xl px-4 pb-10 pt-12 text-center sm:px-6 sm:pb-14 sm:pt-16 lg:px-8">
-            <p className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-red-500 sm:text-xs">
-              Major draw · {comboCount} prize combinations
+          <div className="relative mx-auto w-full max-w-7xl px-4 pb-12 pt-14 text-center sm:px-6 sm:pb-16 sm:pt-20 lg:px-8">
+            <p className="text-[11px] font-extrabold uppercase tracking-[0.24em] text-red-500 sm:text-xs">
+              One major draw · {comboCount} ways to win it
             </p>
-            <h1 className="mt-3 font-sans text-3xl font-extrabold font-[950] uppercase leading-[1.05] text-white sm:text-4xl lg:text-5xl">
-              Pick your dream combination
+            <h1 className="mx-auto mt-4 max-w-4xl font-sans text-4xl font-extrabold font-[950] uppercase leading-[0.95] tracking-tight text-white sm:text-5xl lg:text-7xl">
+              Pick your dream
+              <span className="block text-transparent [-webkit-text-stroke:2px_#ee0000] sm:[-webkit-text-stroke:3px_#ee0000]">
+                combination
+              </span>
             </h1>
-            <p className="mx-auto mt-4 max-w-2xl text-base text-gray-300 sm:text-lg">
-              Your favourite power-tool brand, premium toolbox storage and{" "}
-              <span className="font-bold text-white">$5,000 cash</span> — in every combination. Or skip the tools
-              and take <span className="font-bold text-white">$10,000 straight to your bank</span>.
+            <p className="mx-auto mt-5 max-w-2xl text-base text-gray-300 sm:text-lg">
+              Your brand. Your toolbox. <span className="font-bold text-white">$5,000 cash in every combo</span> —
+              or skip the tools and take <span className="font-bold text-white">$10,000 straight to your bank</span>.
             </p>
+
+            {/* Stat row */}
+            <div className="mx-auto mt-7 flex max-w-2xl items-stretch justify-center divide-x divide-white/10 rounded-2xl border border-white/10 bg-white/[.04] py-4 backdrop-blur-sm">
+              {[
+                { v: `$${Math.round(poolTotal / 1000)}K+`, l: "in prize combinations" },
+                { v: String(comboCount), l: "combinations, one winner" },
+                { v: "$10K", l: "cash alternative" },
+              ].map(({ v, l }) => (
+                <div key={l} className="flex-1 px-3">
+                  <div className="text-xl font-black tabular-nums text-white sm:text-2xl">{v}</div>
+                  <div className="mt-1 text-[10px] font-bold uppercase tracking-[0.14em] text-gray-500 sm:text-[11px]">{l}</div>
+                </div>
+              ))}
+            </div>
+
+            {/* Live draw countdown (renders nothing until the draw resolves). */}
+            <GalleryCountdown />
+
+            {/* Brand wordmark strip — the five toolset brands, real SVG wordmarks. */}
+            <div className="mt-9 flex flex-wrap items-center justify-center gap-x-8 gap-y-4 opacity-80">
+              {brands.map(({ key, label }) =>
+                BRAND_WORDMARK[key] ? (
+                  <span key={key} className="relative block h-5 w-24 sm:h-6 sm:w-28">
+                    <Image src={BRAND_WORDMARK[key]} alt={label} fill unoptimized className="object-contain" />
+                  </span>
+                ) : null,
+              )}
+            </div>
           </div>
         </section>
 
-        {/* ── Featured headline combo — full-width art, the obvious first click ── */}
+        {/* ── Featured headline combo — dark billboard ── */}
         {featured && (
           <section className="mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8">
             <Link
               href={`/promotions/${featured.slug}`}
-              className="group relative -mt-6 block overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-[0_18px_50px_rgba(0,0,0,0.18)] transition-transform duration-300 hover:-translate-y-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-600 dark:border-neutral-700 sm:-mt-8"
+              className="group relative block overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-b from-white/[.07] to-white/[.02] shadow-[0_28px_70px_-20px_rgba(0,0,0,0.9)] transition-transform duration-300 hover:-translate-y-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500"
+              style={{ boxShadow: `0 28px 70px -20px rgba(0,0,0,0.9), 0 0 60px -30px ${featured.accentHex}` }}
             >
               <span
                 aria-hidden
@@ -164,7 +223,7 @@ export default function GiveawayGalleryPage() {
               >
                 This month&apos;s headline
               </span>
-              <div className="relative w-full bg-white">
+              <div className="relative m-2.5 overflow-hidden rounded-xl bg-white sm:m-3">
                 <div className="relative aspect-[1080/1164] w-full lg:hidden">
                   <Image
                     src={featured.images.mobile}
@@ -186,14 +245,17 @@ export default function GiveawayGalleryPage() {
                   />
                 </div>
               </div>
-              <div className="flex flex-col gap-2 border-t border-gray-100 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5 dark:border-neutral-800 dark:bg-neutral-900">
+              <div className="flex flex-col gap-2 px-4 pb-4 pt-1 sm:flex-row sm:items-center sm:justify-between sm:px-5 sm:pb-5">
                 <div className="min-w-0">
-                  <h2 className="font-sans text-xl font-extrabold uppercase leading-tight text-gray-900 dark:text-white sm:text-2xl">
+                  <h2 className="font-sans text-xl font-extrabold uppercase leading-tight text-white sm:text-2xl">
                     {featured.title}
                   </h2>
-                  <p className="mt-1 line-clamp-2 text-sm text-gray-600 dark:text-neutral-400">{featured.description}</p>
+                  <p className="mt-1 line-clamp-2 text-sm text-gray-400">{featured.description}</p>
                 </div>
-                <span className="inline-flex shrink-0 items-center gap-1.5 text-sm font-bold text-red-600 dark:text-red-500">
+                <span
+                  className="inline-flex shrink-0 items-center gap-1.5 text-sm font-bold"
+                  style={{ color: featured.accentHex }}
+                >
                   {featured.valueLabel ? `${featured.valueLabel} · ` : ""}View this combination
                   <ArrowRight className="h-4 w-4 transition-transform duration-300 group-hover:translate-x-1" />
                 </span>
@@ -202,20 +264,17 @@ export default function GiveawayGalleryPage() {
           </section>
         )}
 
-        {/* ── Filterable gallery ── */}
+        {/* ── Filterable showroom ── */}
         <GiveawayGalleryClient cards={cards} featuredSlug={featured?.slug} brands={brands} storages={storages} />
 
         {/* ── Cash alternative — distinct gold band, closing the page ── */}
         {cash && (
-          <section className="mx-auto w-full max-w-7xl px-4 pb-14 pt-2 sm:px-6 lg:px-8">
+          <section className="mx-auto w-full max-w-7xl px-4 pb-16 pt-4 sm:px-6 lg:px-8">
             <Link
               href="/promotions/cash-prize"
-              className="group relative flex flex-col items-start gap-4 overflow-hidden rounded-2xl border border-[#e4c86a]/60 bg-gradient-to-br from-[#f9e9ad] via-[#e9c65f] to-[#d4af37] p-6 shadow-[0_18px_44px_-14px_rgba(212,175,55,0.55)] transition-transform duration-300 hover:-translate-y-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-600 sm:flex-row sm:items-center sm:justify-between sm:p-8"
+              className="group relative flex flex-col items-start gap-4 overflow-hidden rounded-2xl border border-[#e4c86a]/60 bg-gradient-to-br from-[#f9e9ad] via-[#e9c65f] to-[#d4af37] p-6 shadow-[0_24px_60px_-18px_rgba(212,175,55,0.5)] transition-transform duration-300 hover:-translate-y-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 sm:flex-row sm:items-center sm:justify-between sm:p-8"
             >
-              <span
-                aria-hidden
-                className="pointer-events-none absolute -right-10 -top-16 h-56 w-56 rounded-full bg-white/25 blur-2xl"
-              />
+              <span aria-hidden className="pointer-events-none absolute -right-10 -top-16 h-56 w-56 rounded-full bg-white/25 blur-2xl" />
               <div className="relative flex items-center gap-4">
                 <span className="grid h-14 w-14 shrink-0 place-items-center rounded-2xl bg-[#241a02]/90 text-[#f6dd8c] shadow-lg">
                   <Banknote className="h-7 w-7" />
