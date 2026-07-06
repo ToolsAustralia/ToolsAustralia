@@ -127,7 +127,14 @@ export default function AccountMembershipPage() {
           paymentLabel={cardLabel}
           onManage={() => openSheet("manage")}
           onPayment={() => openSheet("payment")}
-          onBecomeMember={() => cta.membershipModal.openModalWithPackageSelectionFirst()}
+          onBecomeMember={() => {
+            // Open with the Tradie SUBSCRIPTION preselected — identical to tapping the Tradie tier
+            // card below (cta.onSelect handles the freeze gate + Started Checkout tracking).
+            // Fallback to the package picker if the catalog hasn't resolved yet.
+            const tradie = cta.membershipPlans.find((p) => p.name.trim().toLowerCase() === "tradie");
+            if (tradie) cta.onSelect(tradie);
+            else cta.membershipModal.openModalWithPackageSelectionFirst();
+          }}
           onBuyPackage={() => cta.membershipModal.openModalWithPackageSelectionFirst()}
         />
 

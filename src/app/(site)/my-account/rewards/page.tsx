@@ -39,7 +39,7 @@ export default function RewardsPage() {
   const dash = useDashboardState();
   const openSheet = useDashboardSheetStore((s) => s.openSheet);
   const requestModal = useModalPriorityStore((s) => s.requestModal);
-  const { openWithOneTimePlan, membershipModal } = useMajorDrawEntryCta();
+  const { openWithOneTimePlan, membershipModal, getTradieSubscriptionPlan } = useMajorDrawEntryCta();
   const { whenGatesOpenElseGateModal } = useMajorDrawPurchaseGate();
 
   React.useEffect(() => {
@@ -63,11 +63,11 @@ export default function RewardsPage() {
   }
 
   const userId = dash.user?._id ?? session.user?.id ?? "";
-  // Package selection first — a bare openModal() has no selected plan, which renders the payment
-  // step with no package (broken). Selection-first is the sanctioned no-plan open (promotions
-  // "Enter Now" path); getHeavyDutyPack() is NOT used here because it returns a one-time pack for
-  // entry-holders, which would mislabel a "Become a member" tap.
-  const onBecomeMember = () => whenGatesOpenElseGateModal(() => membershipModal.openModalWithPackageSelectionFirst());
+  // Open with the Tradie SUBSCRIPTION preselected — the same behavior as tapping the Tradie tier
+  // card (owner decision): payment-ready with a "Change" button to swap tiers. Never a bare
+  // openModal() (no plan renders the payment step with skeletons and no package).
+  const onBecomeMember = () =>
+    whenGatesOpenElseGateModal(() => membershipModal.openModal(getTradieSubscriptionPlan()));
   const onBuyPackage = () => openWithOneTimePlan();
   const onUpdatePayment = () => openSheet("manage");
 
@@ -87,10 +87,10 @@ export default function RewardsPage() {
       const code = (item.campaignCode || item.code || "").trim().toUpperCase();
       if (item.purchaseRequirement === "membership") {
         if (code) window.dispatchEvent(new CustomEvent("openMembershipModal", { detail: { referralCode: code } }));
-        // Selection-first (never a bare openModal() — no selected plan renders a broken payment
-        // step). The user picks their membership tier; the auto-applied code's mismatch gate
-        // blocks it on a non-qualifying package type at submit.
-        membershipModal.openModalWithPackageSelectionFirst();
+        // Tradie subscription preselected (same as "Become a member" / the reference widget's
+        // openMembershipModalWithTradie) — payment-ready with "Change" to swap tiers; the
+        // auto-applied code rides the prefill event.
+        membershipModal.openModal(getTradieSubscriptionPlan());
         return;
       }
       // "one-time" / "any" — route to one-time package entries.

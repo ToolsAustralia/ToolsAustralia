@@ -71,7 +71,7 @@ export default function MyAccountPage() {
   const { allowSecondaryModals } = useDashboardLandingOrchestration(
     status === "authenticated",
   );
-  const { openEntryFlow, openWithOneTimePlan, membershipModal } = useMajorDrawEntryCta();
+  const { openEntryFlow, openWithOneTimePlan, membershipModal, getTradieSubscriptionPlan } = useMajorDrawEntryCta();
   const { whenGatesOpenElseGateModal } = useMajorDrawPurchaseGate();
 
   useMemberships();
@@ -277,9 +277,11 @@ export default function MyAccountPage() {
   const { user } = accountData;
 
   const onResolvePayment = () => openSheet("manage");
-  // Selection-first — a bare openModal() has no selected plan and renders the payment step with
-  // no package (broken). Same fix as the rewards page's onBecomeMember.
-  const onBecomeMember = () => whenGatesOpenElseGateModal(() => membershipModal.openModalWithPackageSelectionFirst());
+  // Open with the Tradie SUBSCRIPTION preselected — same behavior as tapping the Tradie tier card
+  // (owner decision): payment-ready with a "Change" button to swap tiers. Never a bare openModal()
+  // (no plan renders the payment step with skeletons and no package).
+  const onBecomeMember = () =>
+    whenGatesOpenElseGateModal(() => membershipModal.openModal(getTradieSubscriptionPlan()));
   const onGetPackage = () => openEntryFlow();
   const onBuyPackage = () => openWithOneTimePlan();
 
