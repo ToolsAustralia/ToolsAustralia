@@ -1,5 +1,22 @@
 # Rewards-Redeemables — Gotchas
 
+## Purchase gate: every leg is an EVENT check, never a state check (2026-07-07)
+
+`hasQualifyingPurchase`'s `membership` leg used to be `subscription.isActive === true` — a STATE check. For
+any campaign targeting `all-active-subscribers` with requirement `membership` or `any`, the gate was
+tautological: every recipient could claim instantly with zero purchase (found via the owner's `testpurchase`
+coupon — `purchaseRequirement: "any"`, redeemed 3 seconds after issuance). Now `membership` requires the
+subscription to have been **purchased inside the campaign window** (`subscription.startDate` ∈
+`[startsAt, endsAt|now]` — startDate is set on join/resubscribe, both charged). The intended flow for
+EXISTING members is carrying the code **on** a purchase (one-time pack for `one-time`/`any`) — the webhook
+redeems via this same predicate right after the purchase persists. Lockstep holds: `RedemptionService` (burn)
+passes the full user doc; `RedeemablesWalletService` (isRedeemableNow) selects the full `subscription`
+subdoc, so `startDate` flows to both. Known caveats (accepted, documented): a **downgrade** also resets
+`startDate` without a charge (member-initiated, rare); a `membership`-required campaign targeted at existing
+members is a config smell — they can't buy a second membership, so it's effectively a join-campaign
+requirement. Regression-tested: `npm run test:redeemables-purchase-gate` (19 assertions incl. the
+existing-member cases).
+
 ## Campaign audience: pins are authoritative; empty pin list = NOBODY (2026-07-06)
 
 The audience predicate exists **twice** — cron path (`TargetingService.resolveTargetUserIds` → `resolveManualUsers`)

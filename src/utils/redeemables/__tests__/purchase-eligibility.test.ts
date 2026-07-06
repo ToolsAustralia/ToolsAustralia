@@ -25,14 +25,41 @@ function testRequirementNone() {
 
 function testMembership() {
   check(
-    hasQualifyingPurchase({ subscription: { isActive: true } }, window, "membership", now),
+    hasQualifyingPurchase(
+      { subscription: { isActive: true, startDate: new Date("2026-07-10T00:00:00.000Z") } },
+      window,
+      "membership",
+      now
+    ),
     true,
-    '"membership": active subscription → true'
+    '"membership": subscription PURCHASED in-window → true'
+  );
+  // Regression (the "testpurchase" bug): merely BEING a member must not qualify — a long-standing
+  // subscriber (startDate pre-window) claimed a purchase-required coupon 3s after issuance.
+  check(
+    hasQualifyingPurchase(
+      { subscription: { isActive: true, startDate: new Date("2026-05-01T00:00:00.000Z") } },
+      window,
+      "membership",
+      now
+    ),
+    false,
+    '"membership": active but PRE-window subscription (existing member) → false (regression)'
   );
   check(
-    hasQualifyingPurchase({ subscription: { isActive: false } }, window, "membership", now),
+    hasQualifyingPurchase({ subscription: { isActive: true } }, window, "membership", now),
     false,
-    '"membership": inactive subscription → false'
+    '"membership": active subscription with no startDate → false'
+  );
+  check(
+    hasQualifyingPurchase(
+      { subscription: { isActive: false, startDate: new Date("2026-07-10T00:00:00.000Z") } },
+      window,
+      "membership",
+      now
+    ),
+    false,
+    '"membership": inactive subscription (even in-window startDate) → false'
   );
   check(
     hasQualifyingPurchase({}, window, "membership", now),
@@ -59,7 +86,12 @@ function testOneTime() {
   );
   // Regression: an active member must NOT auto-pass a one-time requirement.
   check(
-    hasQualifyingPurchase({ subscription: { isActive: true } }, window, "one-time", now),
+    hasQualifyingPurchase(
+      { subscription: { isActive: true, startDate: new Date("2026-07-10T00:00:00.000Z") } },
+      window,
+      "one-time",
+      now
+    ),
     false,
     '"one-time": active subscription but no in-window one-time → false (regression)'
   );
@@ -67,9 +99,26 @@ function testOneTime() {
 
 function testAny() {
   check(
-    hasQualifyingPurchase({ subscription: { isActive: true } }, window, "any", now),
+    hasQualifyingPurchase(
+      { subscription: { isActive: true, startDate: new Date("2026-07-10T00:00:00.000Z") } },
+      window,
+      "any",
+      now
+    ),
     true,
-    '"any": active subscription, no one-time → true'
+    '"any": subscription purchased in-window, no one-time → true'
+  );
+  // Regression (the "testpurchase" bug, requirement "any" + all-active-subscribers targeting):
+  // an EXISTING member (pre-window sub) with no in-window one-time must NOT pass.
+  check(
+    hasQualifyingPurchase(
+      { subscription: { isActive: true, startDate: new Date("2026-05-01T00:00:00.000Z") } },
+      window,
+      "any",
+      now
+    ),
+    false,
+    '"any": existing member (pre-window sub), no in-window one-time → false (regression)'
   );
   check(
     hasQualifyingPurchase({ oneTimePackages: [inWindowPurchase] }, window, "any", now),
