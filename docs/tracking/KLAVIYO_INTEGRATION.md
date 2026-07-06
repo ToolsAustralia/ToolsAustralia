@@ -46,7 +46,7 @@ Critical: post-purchase events fire from the **server**, not the browser. The br
 | `Mini-Draw Package Purchased` | `grantBenefits` (mini-draw type) |
 | `Upsell Accepted` | `grantBenefits` (upsell type) |
 | `Major Draw Entry Added` / `Won` / `Ended` | draw services |
-| `Invoice Generated` | invoice service layer |
+| `Invoice Generated` | **server-side** from `trackKlaviyoEvent` (payment-processing.ts) via `trackInvoice` — see "Invoice Generated (customer receipt)" below |
 
 ### Browser-side events
 
@@ -130,6 +130,33 @@ To make honest reporting possible, every `Placed Order` event carries an `is_ren
 **Default Klaviyo metrics still see all revenue** — `is_renewal` is purely additive. To get a "new revenue only" report, create a custom metric in Klaviyo (Account → Metrics → Create) keyed on `Placed Order` with the condition `is_renewal EQUALS false`. Use that one for "what is this campaign actually driving" analysis; use the default `Placed Order` metric for LTV and total revenue.
 
 Refund linking is unaffected — `Refunded Order` continues to link by `Order ID` only.
+
+## `Invoice Generated` (customer receipt) — server-side, gated by `billing_reason`
+
+`Invoice Generated` is the receipt event; the Klaviyo **"Invoice"** flow triggers on it and sends the **"Receipt"** email. As of the **2026-07 invoice-reliability change** it is emitted **server-side** from [`trackKlaviyoEvent`](../../src/utils/payment/payment-processing.ts) (inside `processPaymentBenefits`, which is idempotent and always runs server-side for every charge). It **no longer** depends on a client-side `/api/invoice/finalize` call, so it can never be dropped by a browser that navigates away after paying.
+
+The emit/skip decision is a pure predicate — `shouldEmitInvoiceGenerated(billingReason?)` in [`klaviyo-invoice-service.ts`](../../src/utils/integrations/klaviyo/klaviyo-invoice-service.ts) — keyed on the Stripe `billing_reason`:
+
+| `billing_reason` | Charge | `Invoice Generated`? | Who owns the customer email |
+|---|---|---|---|
+| `subscription_create` | New membership (first cycle) | **EMIT** (server-side) | "Invoice" flow → "Receipt" |
+| undefined / `""` | One-time pack, mini-draw, accepted upsell | **EMIT** (each charge its own receipt) | "Invoice" flow → "Receipt" |
+| `subscription_cycle` / `subscription_threshold` | Renewal | **SKIP** | "Subscription Renewed" → **"Membership Renewal"** flow (live) |
+| `subscription_update` | Upgrade | **SKIP** here | emitted by the `invoice.payment_succeeded` webhook's `isUpgrade` block |
+
+Renewals are skipped so we never **double-email**: a renewing member already gets the "Membership Renewal" flow email off the `Subscription Renewed` event. Upgrades are skipped here because the webhook emits an upgrade-specific `Invoice Generated` with the correct `billing_reason`.
+
+`buildInvoiceData` ([`klaviyo-invoice-helpers.ts`](../../src/utils/integrations/klaviyo/klaviyo-invoice-helpers.ts)) hard-codes `billingReason: "subscription_create"` for memberships and `undefined` otherwise — so a new membership charge routes to the Invoice flow just like a one-time purchase.
+
+The Receipt template renders the line item as `{{ item.description }}`. `buildInvoiceData` resolves that label via `getReceiptLabelByPackageId` for membership / one-time / mini (adds "(Member)" / "(Mini Draw)" disambiguators) — but **upsell** offer ids (`membership-upsell-boss`, `onetime-upsell-foreman`, …) live in `upsellPackages.ts`, not the membership/mini catalogs, so the helper would fall back to the raw id. For `packageType === "upsell"` we use the clean offer name (`packageData.packageName`, e.g. "Foreman Pack") instead. Fenced by `npm run test:invoice-generated-gate`.
+
+**Two live flows, one split:**
+- **"Invoice" flow** — triggers on `Invoice Generated`, sends "Receipt". Receives new memberships, one-time packs, mini-draws, and accepted upsells.
+- **"Membership Renewal" flow** — triggers on `Subscription Renewed`, sends the renewal email. Receives renewals only.
+
+**Behavioral consequence of the 2026-07 change:** an accepted upsell is its own separate Stripe charge, so it now produces its **own** `Invoice Generated` — a user who buys and then accepts an upsell receives **two** receipts, not the single client-combined invoice the old flow produced. The old client-driven "combined invoice" / delay-until-upsell-decision path (`trackCombinedInvoice`, `shouldDelayInvoice`, `buildCombinedInvoiceData`) has been **removed**.
+
+`Invoice Generated` carries **no** top-level `$value` — it is not a Klaviyo revenue metric. Revenue lives on `Placed Order` (with the `is_renewal` discriminator) and `Subscription Renewed` (see the `$value` rule above).
 
 ## EMQ-equivalent for Klaviyo: profile properties
 

@@ -59,7 +59,13 @@ export interface ActivityLogItem {
 }
 
 export interface ActivityLogInput {
-  page: number;
+  /**
+   * Keyset cursor from a previous page's `nextCursor` (`"<timestampMs>:<id>"`).
+   * Omit / null for the first (newest) page. Keyset — not a numeric offset — so
+   * rows inserted at the top of the feed between requests can't shift the window
+   * (which is what caused duplicate rows under the old `page`/offset pagination).
+   */
+  cursor?: string | null;
   limit: number;
   typeFilter?: string | null;
   searchTerm?: string | null;
@@ -68,11 +74,62 @@ export interface ActivityLogInput {
 export interface ActivityLogPage {
   activities: ActivityLogItem[];
   pagination: {
-    page: number;
     limit: number;
+    /** Total matching rows across all pages (after type/search filters). */
     total: number;
-    totalPages: number;
+    /** Keyset cursor to pass as `cursor` for the next (older) page; null when there are no more. */
+    nextCursor: string | null;
+    hasMore: boolean;
   };
+}
+
+/** Encode the keyset cursor for a row in the (timestamp DESC, id DESC) total order. */
+function encodeActivityCursor(item: ActivityLogItem): string {
+  return `${item.timestamp.getTime()}:${item.id}`;
+}
+
+/** Decode `"<timestampMs>:<id>"`. Returns null for a malformed cursor (treated as first page). */
+function decodeActivityCursor(cursor: string): { ms: number; id: string } | null {
+  const sep = cursor.indexOf(":");
+  if (sep === -1) return null;
+  const ms = Number(cursor.slice(0, sep));
+  const id = cursor.slice(sep + 1);
+  if (!Number.isFinite(ms) || !id) return null;
+  return { ms, id };
+}
+
+/** Total-order comparator: timestamp DESC, then id DESC — a stable, unambiguous keyset order. */
+export function compareActivitiesNewestFirst(a: ActivityLogItem, b: ActivityLogItem): number {
+  const dt = b.timestamp.getTime() - a.timestamp.getTime();
+  if (dt !== 0) return dt;
+  return a.id < b.id ? 1 : a.id > b.id ? -1 : 0; // id DESC
+}
+
+/**
+ * Keyset-paginate an already-sorted (`compareActivitiesNewestFirst`) list.
+ *
+ * Returns the window of rows strictly AFTER `cursor` in (timestamp, id) order. Because the
+ * boundary is the cursor's *position in the sort order* — not a numeric offset — rows inserted
+ * at the top of the feed between requests cannot shift the window, so consecutive pages never
+ * overlap (the offset-drift duplicate-row bug this replaced) nor gap.
+ */
+export function paginateActivitiesByCursor(
+  sorted: ActivityLogItem[],
+  cursor: string | null,
+  limit: number
+): { rows: ActivityLogItem[]; nextCursor: string | null; hasMore: boolean } {
+  const decoded = cursor ? decodeActivityCursor(cursor) : null;
+  let windowStart = 0;
+  if (decoded) {
+    const idx = sorted.findIndex(
+      (a) => a.timestamp.getTime() < decoded.ms || (a.timestamp.getTime() === decoded.ms && a.id < decoded.id)
+    );
+    windowStart = idx === -1 ? sorted.length : idx;
+  }
+  const rows = sorted.slice(windowStart, windowStart + limit);
+  const hasMore = windowStart + limit < sorted.length;
+  const nextCursor = hasMore && rows.length > 0 ? encodeActivityCursor(rows[rows.length - 1]) : null;
+  return { rows, nextCursor, hasMore };
 }
 
 function getTimeAgo(date: Date): string {
@@ -114,7 +171,7 @@ function getPackageName(packageId: string): string {
  * descending, and paginates.
  */
 export async function getActivityLog(input: ActivityLogInput): Promise<ActivityLogPage> {
-  const { page, limit, typeFilter, searchTerm } = input;
+  const { cursor, limit, typeFilter, searchTerm } = input;
   const search = (searchTerm || "").toLowerCase();
 
   const activities: ActivityLogItem[] = [];
@@ -549,8 +606,8 @@ export async function getActivityLog(input: ActivityLogInput): Promise<ActivityL
     });
   }
 
-  // ─── Sort, filter, paginate ────────────────────────────────────────────────
-  activities.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+  // ─── Sort (deterministic total order), filter, keyset-paginate ─────────────
+  activities.sort(compareActivitiesNewestFirst);
 
   let filteredActivities = activities;
   if (typeFilter) {
@@ -563,13 +620,10 @@ export async function getActivityLog(input: ActivityLogInput): Promise<ActivityL
   }
 
   const total = filteredActivities.length;
-  const totalPages = Math.ceil(total / limit);
-  const startIndex = (page - 1) * limit;
-  const endIndex = startIndex + limit;
-  const paginatedActivities = filteredActivities.slice(startIndex, endIndex);
+  const { rows, nextCursor, hasMore } = paginateActivitiesByCursor(filteredActivities, cursor ?? null, limit);
 
   return {
-    activities: paginatedActivities,
-    pagination: { page, limit, total, totalPages },
+    activities: rows,
+    pagination: { limit, total, nextCursor, hasMore },
   };
 }

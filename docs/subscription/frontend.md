@@ -53,6 +53,29 @@ selectOneTimeDrawerPackages(packages, { hasAdditionalAccess, includeAdditional }
 
 This helper is **only** called when `includeAdditionalForMembers` is `true`; the default path is unaffected. Test: `npm run test:one-time-drawer-packages`.
 
+### `?packages=` URL param — pre-select the packages tab (2026-07-03)
+
+Ad landings can open the membership section on a chosen tab via a URL query param, e.g.
+`/promotions/makita?packages=one-time`. Used so a one-time-focused ad creative opens the section on the
+One-Time tab. The param is parsed by a single shared helper,
+[`src/utils/membership/packagesTabParam.ts`](../../src/utils/membership/packagesTabParam.ts):
+
+- `MEMBERSHIP_PACKAGES_QUERY_PARAM = "packages"` — the query key.
+- `parseMembershipPackagesTab(raw)` → `"membership" | "one-time" | null`. Invalid/absent → `null`, so the
+  caller falls back to its normal (user-state) default. The default (`membership`) is expressed by
+  **omitting** the param, keeping organic URLs clean (mirrors the `?toolbox=` convention).
+
+Both `activeTab` owners honour it (whichever the A/B experiment renders on a promo page):
+
+- **`useMembershipCardCta`** (treatment arm + drives `/membership`) takes an optional `forcedTab` option.
+  When set it seeds the initial `activeTab` (`forcedTab ?? (hasActiveSubscription && hasAccessToAdditional ? "one-time" : "membership")`).
+  `/membership` (`MembershipPageClient`) passes no `forcedTab`, so it is **unchanged**; only the promo
+  treatment (`PromoMembershipDesign`) reads the param and passes it in.
+- **`MembershipSection`** (control arm) reads the param and guards its override effect — documented in
+  [shared-ui/frontend.md](../shared-ui/frontend.md#membershipsection--promomembershipdesign--packages-tab-pre-select-2026-07-03).
+
+The param only sets the **initial** tab — the visitor can still toggle manually afterwards.
+
 ## Pages and routes
 
 The user-facing membership UI is split between:

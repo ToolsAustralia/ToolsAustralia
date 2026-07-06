@@ -779,7 +779,7 @@ export function createRefundedOrderEvent(
  * to create "Invoice Generated" events for Klaviyo email flows.
  *
  * Should NOT be called directly from payment processing code.
- * Use trackInvoice() or trackCombinedInvoice() from klaviyo-invoice-service.ts instead.
+ * Use trackInvoice() from klaviyo-invoice-service.ts instead.
  */
 export function createInvoiceGeneratedEvent(
   user: IUser,

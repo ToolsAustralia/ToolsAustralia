@@ -51,9 +51,12 @@ const NormActivityLogRowSchema = z.object({
 export const NormActivityLogSchema = z.object({
   activities: z.array(NormActivityLogRowSchema),
   pagination: z.object({
-    page: z.number().int().positive(),
     limit: z.number().int().positive(),
     total: z.number().int().nonnegative().describe("Total matching rows across all pages, after type/search filters"),
-    totalPages: z.number().int().nonnegative(),
+    nextCursor: z
+      .string()
+      .nullable()
+      .describe("Opaque keyset cursor; pass as `cursor` to fetch the next (older) page. null when no more rows."),
+    hasMore: z.boolean().describe("Whether more (older) rows exist beyond this page"),
   }),
 });

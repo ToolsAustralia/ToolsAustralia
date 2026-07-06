@@ -22,7 +22,7 @@ const ACTIVITY_TYPES: readonly ActivityLogItemType[] = [
 ] as const;
 
 const QuerySchema = z.object({
-  page: z.coerce.number().int().positive().default(1),
+  cursor: z.string().max(200).optional(),
   limit: z.coerce.number().int().positive().max(100).default(25),
   type: z.enum(ACTIVITY_TYPES as unknown as [ActivityLogItemType, ...ActivityLogItemType[]]).optional(),
   search: z.string().max(200).optional(),
@@ -40,7 +40,7 @@ export const GET = withNorm(
     if (!parsed.success) return ctx.error(400, "bad_query", "Invalid query params", parsed.error.issues);
 
     const { activities, pagination } = await getActivityLog({
-      page: parsed.data.page,
+      cursor: parsed.data.cursor ?? null,
       limit: parsed.data.limit,
       typeFilter: parsed.data.type ?? null,
       searchTerm: parsed.data.search ?? null,

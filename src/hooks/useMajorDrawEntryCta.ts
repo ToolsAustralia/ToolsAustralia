@@ -8,6 +8,10 @@ import { convertToLocalPlan, type LocalMembershipPlan } from "@/utils/membership
 import { useUserMajorDrawStats } from "@/hooks/queries/useMajorDrawQueries";
 import { hasAdditionalPackageAccess } from "@/utils/membership/has-additional-package-access";
 import { hasBlockingSubscription } from "@/utils/subscription/subscription-helpers";
+import {
+  MEMBERSHIP_PACKAGES_QUERY_PARAM,
+  parseMembershipPackagesTab,
+} from "@/utils/membership/packagesTabParam";
 import { getEffectivePromoType } from "@/utils/promo/get-effective-promo-type";
 import { useMajorDrawPurchaseGate } from "@/hooks/useMajorDrawPurchaseGate";
 
@@ -320,11 +324,22 @@ export function useMajorDrawEntryCta(): UseMajorDrawEntryCtaResult {
           return;
         }
 
-        // A user who already holds a (blocking) subscription — active / past_due /
-        // etc. — CANNOT create a second subscription, so pre-select a ONE-TIME pack
-        // (getOneTimePlan), never a membership sub (getHeavyDutyPack) which would fail
-        // with EXISTING_SUBSCRIPTION. Non-subscribers get the Tradie sub as the default.
-        const correctPlan = hasBlockingSubscription(userData) ? getOneTimePlan() : getHeavyDutyPack();
+        // A user who already holds a (blocking) subscription — active / past_due / etc. — CANNOT create a
+        // second subscription, so pre-select a ONE-TIME pack (getOneTimePlan), never a membership sub
+        // (getHeavyDutyPack) which would fail with EXISTING_SUBSCRIPTION. This takes precedence.
+        // Otherwise: ad landings with `?packages=one-time` also open the ONE-TIME flow (guests — members
+        // with additional access already diverted above), falling back to the subscription default if no
+        // one-time plan is resolvable yet; and plain non-subscribers get the Tradie sub as the default.
+        const forcedOneTime =
+          typeof window !== "undefined" &&
+          parseMembershipPackagesTab(
+            new URLSearchParams(window.location.search).get(MEMBERSHIP_PACKAGES_QUERY_PARAM)
+          ) === "one-time";
+        const correctPlan = hasBlockingSubscription(userData)
+          ? getOneTimePlan()
+          : forcedOneTime
+            ? getOneTimePlan() ?? getHeavyDutyPack()
+            : getHeavyDutyPack();
 
         if (openLocalModal) {
           if (correctPlan) {

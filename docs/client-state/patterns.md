@@ -67,6 +67,12 @@ Both infinite hooks share a `buildQueryString(filter, offset)` helper that skips
 
 Page size is `50` for both infinite hooks; `getNextPageParam` returns `loaded < total ? loaded : undefined`.
 
+### Activity-log infinite feed (`useActivityLogInfinite`, `src/hooks/queries/useAdminQueries.ts`)
+
+`useActivityLogInfinite(limit = 25, typeFilter?, searchTerm?)` backs the admin Overview "Recent activity" feed. Unlike the charge-past-due infinite hooks (which use `offset` paging), this one uses **keyset (cursor) pagination**: `initialPageParam` is `null`, `pageParam` is an opaque cursor string sent as the `cursor` query param (omitted on the first page), and `getNextPageParam` returns `lastPage.pagination.nextCursor ?? undefined`. Page shape is `{ activities, pagination: { limit, total, nextCursor: string | null, hasMore: boolean } }`.
+
+**Why keyset, not offset:** the activity log is a live, top-growing feed. Offset paging over it caused page N+1 to re-include rows already shown on page N (new top-insertions shifted the window), so the infinite scroll rendered duplicate rows. A cursor anchors each page to a stable row, keeping the window stable against new top-insertions. Prefer keyset over offset for any live, top-inserting infinite feed.
+
 ### Cancellation-flow analytics hooks (`src/hooks/queries/admin/`)
 
 | Hook | TanStack primitive | Query key | DTO(s) |

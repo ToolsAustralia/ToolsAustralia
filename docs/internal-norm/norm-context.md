@@ -904,19 +904,19 @@ This is a strict subset of `/v1/dashboard/stats.revenue`. Same data, narrower pa
     amount: number | null,                   // AUD; null when not a money-movement activity
     miniDrawId: string | null                // Mongo MiniDraw._id for mini-draw entries; null otherwise
   }>,
-  pagination: { page, limit, total, totalPages }  // total = matching rows after type/search filter, across all pages
+  pagination: { limit, total, nextCursor, hasMore }  // keyset cursor; total = matching rows after type/search filter, across all pages; nextCursor is null on the last page
 }
 ```
 
 **Inputs (query params)**:
 | Param | Required | Default | Notes |
 |---|---|---|---|
-| `page` | no | `1` | 1-indexed |
+| `cursor` | no | — | Opaque keyset cursor from a previous page's `nextCursor`; omit for the first (newest) page |
 | `limit` | no | `25` | Max 100 |
 | `type` | no | — | One of the twelve activity-type enum values; omitted = no type filter |
 | `search` | no | — | Case-insensitive substring match against the user-name string and the action string |
 
-**Data source**: Multi-collection scan windowed to `now − 90 days` — `User` (signups via `createdAt`, subscription changes via `subscription.lastUpgradeDate` / `lastDowngradeDate` / `cancelledAt` / `pastDueAt`), `PaymentEvent` (`eventType: "BenefitsGranted"`; `upsell` package → `upsell_accepted`, high-value cut at `>= $300` which `upsell_accepted` takes precedence over), `MajorDraw` (`status: "completed"` with `updatedAt` in window), `Winner` (to label completed draws), `ReferralEvent` (to enrich signup labels with referral codes), `CancellationFlowEvent` (`outcome: "saved"` retention-offer acceptances → `cancellation_offer_accepted`), `StaffActivity` (staff edits via `PATCH /api/admin/staff/*` → `admin_role_update`), `AffiliatePayout` (committed payouts → `affiliate_payout`). Internally collects all candidate rows in the window, merges + sorts by timestamp, applies the `type` + `search` filter, then paginates.
+**Data source**: Multi-collection scan windowed to `now − 90 days` — `User` (signups via `createdAt`, subscription changes via `subscription.lastUpgradeDate` / `lastDowngradeDate` / `cancelledAt` / `pastDueAt`), `PaymentEvent` (`eventType: "BenefitsGranted"`; `upsell` package → `upsell_accepted`, high-value cut at `>= $300` which `upsell_accepted` takes precedence over), `MajorDraw` (`status: "completed"` with `updatedAt` in window), `Winner` (to label completed draws), `ReferralEvent` (to enrich signup labels with referral codes), `CancellationFlowEvent` (`outcome: "saved"` retention-offer acceptances → `cancellation_offer_accepted`), `StaffActivity` (staff edits via `PATCH /api/admin/staff/*` → `admin_role_update`), `AffiliatePayout` (committed payouts → `affiliate_payout`). Internally collects all candidate rows in the window, merges + sorts by a deterministic `(timestamp DESC, id DESC)` total order, applies the `type` + `search` filter, then **keyset-paginates** by `cursor` (rows strictly after the cursor's position). Keyset — not numeric offset — so rows arriving at the top of the feed between page requests can't shift the window; consecutive pages never overlap (no duplicate rows) or gap.
 
 **Constraints**: `read` tier. `requiredPermission: overview.view`. Read-only. Email / lastName / mobile are intentionally stripped — use `userId` as the opaque correlation key. The `admin_role_update` action embeds the acting staff member's email in the admin UI; the Norm projection **redacts** it to the static string `"A staff member was updated"` (and its `firstName` is `null`), so no email round-trips. `affiliate_payout` rows carry `firstName: null` (the affiliate business name is not projected). Note the relationship to `/v1/dashboard/recent-activities`: both pull from the same source-domain mix (signups + payments + subscription changes + completed major draws), but recent-activities is "top N candidates from each source" with no filter and includes high-value `Order` rows at `>= $200`; activity-log is "everything in the last 90 days, filterable by type / search" and uses `PaymentEvent.data.price >= $300` for the high-value cutoff. Use recent-activities for the latest cross-domain feed; use activity-log when you need to filter by type or search for a subject.
 
