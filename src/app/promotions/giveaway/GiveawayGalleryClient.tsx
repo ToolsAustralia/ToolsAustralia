@@ -12,38 +12,33 @@ export interface GiveawayGalleryCard {
   slug: string;
   /** Short display title, e.g. "Milwaukee × Sidchrome". */
   title: string;
-  /** Brand filter key ("milwaukee" | "dewalt" | "makita" | "ryobi" | "hikoki" | "cash"). */
+  /** Brand filter key ("milwaukee" | "dewalt" | "makita" | "ryobi" | "hikoki"). */
   brandKey: string;
   /** Full combo description (the catalog label). */
   description: string;
   /** e.g. "$35,000+ Value". */
   valueLabel?: string;
+  /** Brand identity: accent hex + ink color readable on it (computed server-side). */
+  accentHex: string;
+  accentInk: string;
   /** Manifest-verified landing hero art (light variants). */
   images: { desktop: string; mobile: string };
 }
 
 interface GiveawayGalleryClientProps {
   cards: GiveawayGalleryCard[];
+  /** Brand filter pills, in display order, with their accent hex for the pill dot. */
+  brands: Array<{ key: string; label: string; accentHex: string }>;
 }
 
-const BRAND_FILTERS: Array<{ key: string; label: string }> = [
-  { key: "all", label: "All combinations" },
-  { key: "milwaukee", label: "Milwaukee" },
-  { key: "dewalt", label: "DeWalt" },
-  { key: "makita", label: "Makita" },
-  { key: "ryobi", label: "Ryobi" },
-  { key: "hikoki", label: "HiKOKI" },
-  { key: "cash", label: "Cash" },
-];
-
 /**
- * Clickable gallery of every major-draw prize combination. Each card renders the SAME
- * landing hero art the combination's `/promotions/<slug>` page uses — mobile asset under
- * `lg`, desktop asset from `lg` up (the promotions-wide 1024px art-direction split) — on a
- * white plate (the hero art is composited for light backgrounds), and deep-links to the
- * combination's landing page. Brand pills filter client-side; no data fetching.
+ * Brand-filterable gallery of the major-draw prize combinations. Each card renders the SAME
+ * landing hero art its `/promotions/<slug>` page uses — mobile asset under `lg`, desktop asset
+ * from `lg` up (the promotions-wide 1024px art-direction split) — on a white plate (the art is
+ * composited for light backgrounds), carries its BRAND accent (top hairline, value badge, hover
+ * glow), and deep-links to the combination's landing page. Filtering is client-side only.
  */
-export default function GiveawayGalleryClient({ cards }: GiveawayGalleryClientProps) {
+export default function GiveawayGalleryClient({ cards, brands }: GiveawayGalleryClientProps) {
   const [filter, setFilter] = useState<string>("all");
 
   const visible = useMemo(
@@ -52,11 +47,24 @@ export default function GiveawayGalleryClient({ cards }: GiveawayGalleryClientPr
   );
 
   return (
-    <SectionContainer className="py-10 sm:py-14 lg:py-16">
-      {/* Brand filter pills */}
+    <SectionContainer className="pb-4 pt-8 sm:pt-10">
+      {/* Brand filter pills — each carries its brand dot so the row doubles as a legend. */}
       <div className="-mx-4 overflow-x-auto px-4 pb-1 sm:mx-0 sm:px-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         <div className="flex w-max gap-2 sm:w-auto sm:flex-wrap">
-          {BRAND_FILTERS.map(({ key, label }) => {
+          <button
+            type="button"
+            onClick={() => setFilter("all")}
+            aria-pressed={filter === "all"}
+            className={cn(
+              "whitespace-nowrap rounded-full border px-4 py-2 text-sm font-bold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-red-600",
+              filter === "all"
+                ? "border-transparent bg-gradient-to-b from-red-500 to-red-700 text-white shadow-[0_10px_22px_-10px_rgba(238,0,0,.6)]"
+                : "border-gray-200 bg-white text-gray-700 hover:border-red-300 hover:text-red-600 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-300 dark:hover:border-red-800",
+            )}
+          >
+            All brands
+          </button>
+          {brands.map(({ key, label, accentHex }) => {
             const active = filter === key;
             return (
               <button
@@ -65,12 +73,17 @@ export default function GiveawayGalleryClient({ cards }: GiveawayGalleryClientPr
                 onClick={() => setFilter(key)}
                 aria-pressed={active}
                 className={cn(
-                  "whitespace-nowrap rounded-full border px-4 py-2 text-sm font-bold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-red-600",
+                  "inline-flex items-center gap-2 whitespace-nowrap rounded-full border px-4 py-2 text-sm font-bold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-red-600",
                   active
                     ? "border-transparent bg-gradient-to-b from-red-500 to-red-700 text-white shadow-[0_10px_22px_-10px_rgba(238,0,0,.6)]"
                     : "border-gray-200 bg-white text-gray-700 hover:border-red-300 hover:text-red-600 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-300 dark:hover:border-red-800",
                 )}
               >
+                <span
+                  aria-hidden
+                  className={cn("h-2.5 w-2.5 rounded-full", active && "ring-2 ring-white/60")}
+                  style={{ background: accentHex }}
+                />
                 {label}
               </button>
             );
@@ -78,18 +91,35 @@ export default function GiveawayGalleryClient({ cards }: GiveawayGalleryClientPr
         </div>
       </div>
 
-      <p className="mt-4 text-sm font-semibold text-gray-500 dark:text-neutral-400">
-        {visible.length} prize combination{visible.length === 1 ? "" : "s"}
+      <p className="mt-4 text-sm font-semibold tabular-nums text-gray-500 dark:text-neutral-400">
+        {visible.length} combination{visible.length === 1 ? "" : "s"}
+        {filter !== "all" && " · every one includes $5,000 cash"}
       </p>
 
-      {/* Gallery grid */}
+      {/* Gallery grid — brand-accented cards. */}
       <ul className="mt-4 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 lg:gap-6">
         {visible.map((card) => (
           <li key={card.slug}>
             <Link
               href={`/promotions/${card.slug}`}
-              className="group flex h-full flex-col overflow-hidden rounded-xl border border-gray-200 bg-white shadow-[0_8px_32px_rgba(0,0,0,0.08)] transition-all duration-300 hover:-translate-y-1 hover:border-red-300 hover:shadow-[0_16px_40px_rgba(238,0,0,0.18)] focus:outline-none focus-visible:ring-2 focus-visible:ring-red-600 dark:border-neutral-700 dark:bg-neutral-900 dark:hover:border-red-800"
+              className="group relative flex h-full flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-[0_8px_32px_rgba(0,0,0,0.08)] transition-all duration-300 hover:-translate-y-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-600 dark:border-neutral-700 dark:bg-neutral-900"
+              style={{ ["--brand" as string]: card.accentHex }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.borderColor = card.accentHex;
+                e.currentTarget.style.boxShadow = `0 18px 44px -14px ${card.accentHex}66`;
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.borderColor = "";
+                e.currentTarget.style.boxShadow = "";
+              }}
             >
+              {/* Brand hairline */}
+              <span
+                aria-hidden
+                className="absolute inset-x-0 top-0 z-10 h-[3px]"
+                style={{ background: `linear-gradient(90deg, ${card.accentHex}, transparent 78%)` }}
+              />
+
               {/* Image plate — hero art is composited for light backgrounds, so the plate stays
                   white in both themes. Art-directed: mobile asset < lg, desktop asset ≥ lg. */}
               <div className="relative w-full overflow-hidden bg-white">
@@ -112,7 +142,10 @@ export default function GiveawayGalleryClient({ cards }: GiveawayGalleryClientPr
                   />
                 </div>
                 {card.valueLabel && (
-                  <span className="absolute right-3 top-3 rounded-full bg-gradient-to-b from-red-500 to-red-700 px-3 py-1 text-[11px] font-extrabold uppercase tracking-wide text-white shadow-md">
+                  <span
+                    className="absolute right-3 top-3 rounded-full px-3 py-1 text-[11px] font-extrabold uppercase tracking-wide shadow-md"
+                    style={{ background: card.accentHex, color: card.accentInk }}
+                  >
                     {card.valueLabel}
                   </span>
                 )}
