@@ -1,5 +1,30 @@
 # Rewards-Redeemables — Gotchas
 
+## Campaign audience: pins are authoritative; empty pin list = NOBODY (2026-07-06)
+
+The audience predicate exists **twice** — cron path (`TargetingService.resolveTargetUserIds` → `resolveManualUsers`)
+and lazy wallet-fetch path (`CampaignService.isUserEligibleForCampaign`, called via
+`ensureActiveCampaignIssuancesForUser` on every wallet read; **the lazy path is the dominant gate in practice**).
+Any semantics change must be applied to BOTH. Two divergences were found + fixed (2026-07-06):
+
+1. **Empty-pin fallback (critical):** `manual-users`/`csv-users` with an empty `segmentConfig.includeUserIds`
+   lazily issued to the **entire active-subscriber base** (`return hasActiveSubscription` fallback), while the
+   cron issued to nobody. Now: empty pins ⇒ eligible for **no one**, and both the create route (zod
+   `superRefine`) and `CampaignService.updateCampaign` (merged-state guard — PUT is partial, so it validates
+   `payload ?? existing`) reject a manual/csv campaign without pins.
+2. **Pinned non-subscribers were silently dropped:** the cron required `subscription.isActive` on manual
+   resolution and the lazy path required `hasActiveSubscription` even for pinned users — yet the admin picker
+   explicitly offers `subscriptionStatus: "inactive" | "any"`, and dynamic-segment pins already bypassed the
+   check. Now **pins work regardless of subscription status in both paths** (deactivated accounts,
+   `isActive: false`, stay excluded).
+
+Known-but-unbuilt (flagged, not fixed): campaign edits don't propagate to issued coupons (`expiresAt` copied at
+issue time; no revoke machinery — nothing ever sets issuance `status: "cancelled"`); the
+`requiresRecentPurchaseDays` knob exists in the model/zod but is evaluated nowhere; `/api/redeemables/status`
+returns every active campaign's shared code to any authed user regardless of targeting (not redeemable without
+an issuance, but leaks existence); redeem-by-code never auto-issues (in-audience user gets `campaign_not_found`
+until a wallet fetch materializes their issuance).
+
 ## Pause behaviour
 
 (Migrated from `docs/rewards-pause.md`.)

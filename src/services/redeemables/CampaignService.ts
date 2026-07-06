@@ -130,6 +130,29 @@ export class CampaignService {
       else delete normalizedUpdates.displayLabel;
     }
 
+    // Guard the MERGED state (PUT is partial): manual-users / csv-users target exactly the pinned
+    // users, so the effective pin list must be non-empty — otherwise a mode switch (or a pin wipe)
+    // strands a campaign that the issuance paths treat as "nobody" (and historically the lazy path
+    // wrongly widened to ALL active subscribers). The create route enforces the same via zod.
+    if (updates.targetingMode !== undefined || updates.segmentConfig !== undefined) {
+      const existing = await MonthlyEntryCampaign.findById(campaignId)
+        .select("targetingMode segmentConfig")
+        .lean();
+      const effectiveMode = updates.targetingMode ?? existing?.targetingMode;
+      const effectiveInclude =
+        updates.segmentConfig !== undefined
+          ? updates.segmentConfig?.includeUserIds
+          : existing?.segmentConfig?.includeUserIds;
+      if (
+        (effectiveMode === "manual-users" || effectiveMode === "csv-users") &&
+        !(effectiveInclude && effectiveInclude.length > 0)
+      ) {
+        throw new Error(
+          `targetingMode "${effectiveMode}" requires at least one user in segmentConfig.includeUserIds`
+        );
+      }
+    }
+
     const updateOperation: { $set: Record<string, unknown> } = { $set: normalizedUpdates };
 
     // When neverExpires is true, set endsAt to far-future instead of unsetting.
@@ -301,11 +324,14 @@ export class CampaignService {
     if (!CampaignService.isCampaignLive(campaign, now)) return false;
 
     if (campaign.targetingMode === "manual-users" || campaign.targetingMode === "csv-users") {
+      // Pins are AUTHORITATIVE: the admin explicitly picked these users (the picker even offers
+      // inactive-subscription filters), so membership status must not silently drop them — matching
+      // dynamic-segment pin semantics (and TargetingService.resolveManualUsers). And an EMPTY pin
+      // list targets NOBODY: the old `return hasActiveSubscription` fallback lazily issued a
+      // "manual users" campaign to the ENTIRE active-subscriber base (the cron, correctly, issued
+      // to no one — the two paths contradicted). Zod now also rejects empty pins at create/update.
       const include = (campaign.segmentConfig?.includeUserIds || []).map(String);
-      if (include.length > 0) {
-        return include.includes(userId) && hasActiveSubscription;
-      }
-      return hasActiveSubscription;
+      return include.includes(userId);
     }
 
     if (campaign.targetingMode === "all-active-subscribers") {

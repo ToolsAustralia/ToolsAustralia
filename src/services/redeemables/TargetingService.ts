@@ -49,7 +49,12 @@ export class TargetingService {
     const objectIds = userIds.filter((id) => mongoose.Types.ObjectId.isValid(id)).map((id) => new mongoose.Types.ObjectId(id));
     if (!objectIds.length) return [];
 
-    const users = await User.find({ _id: { $in: objectIds }, "subscription.isActive": true, isActive: true })
+    // Pins are AUTHORITATIVE — no subscription requirement. The admin picker explicitly offers
+    // inactive/any subscription filters, so a pinned non-subscriber must still receive the coupon
+    // (previously `"subscription.isActive": true` here silently dropped them, contradicting the
+    // dynamic-segment pin semantics and the lazy isUserEligibleForCampaign path). Deactivated
+    // accounts (isActive false) stay excluded.
+    const users = await User.find({ _id: { $in: objectIds }, isActive: true })
       .select("_id")
       .lean();
 

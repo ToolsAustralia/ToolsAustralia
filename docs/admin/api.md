@@ -21,6 +21,7 @@ The `/api/admin/**` namespace. Per the manifest, this domain is the catch-all fo
 | `GET /api/admin/facebook-ads/health/settings` | [tracking](../tracking/) | Read health verdict engine settings (requires `facebookAds.view`) |
 | `PUT /api/admin/facebook-ads/health/settings` | [tracking](../tracking/) | Update health verdict engine settings (requires `facebookAds.edit`) |
 | `POST /api/admin/facebook-ads/health/snooze` | [tracking](../tracking/) | Create or update a snooze for an ad (requires `facebookAds.edit`) |
+| `POST/PUT /api/admin/monthly-coupon/campaign[/[id]]` | [rewards-redeemables](../rewards-redeemables/) | Redeemable-campaign create/update. **Validation (2026-07-06):** `manual-users`/`csv-users` targeting requires a non-empty `segmentConfig.includeUserIds` — create rejects via zod `superRefine`; update validates the MERGED state in `CampaignService.updateCampaign` (PUT is partial). See [rewards-redeemables/gotchas.md](../rewards-redeemables/gotchas.md). |
 | _TODO_ | — | Affiliate, draw, other admin routes |
 
 > _TODO: read [src/app/api/admin/](../../src/app/api/admin/) and enumerate every sub-route._
