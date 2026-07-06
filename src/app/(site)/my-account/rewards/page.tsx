@@ -17,8 +17,10 @@ import dynamicImport from "next/dynamic";
 
 import { useDashboardState } from "@/hooks/useDashboardState";
 import { useDashboardSheetStore } from "@/stores/useDashboardSheetStore";
+import { useModalPriorityStore } from "@/stores/useModalPriorityStore";
 import { useMajorDrawEntryCta } from "@/hooks/useMajorDrawEntryCta";
 import { useMajorDrawPurchaseGate } from "@/hooks/useMajorDrawPurchaseGate";
+import type { RedeemableWalletItem } from "@/hooks/queries/useRedeemablesQueries";
 import DashboardPageHeader from "../components/DashboardPageHeader";
 import RewardsPartnerCard from "@/components/sections/rewards/RewardsPartnerCard";
 import RewardsPartnerQueue from "@/components/sections/rewards/RewardsPartnerQueue";
@@ -36,6 +38,7 @@ export default function RewardsPage() {
   const router = useRouter();
   const dash = useDashboardState();
   const openSheet = useDashboardSheetStore((s) => s.openSheet);
+  const requestModal = useModalPriorityStore((s) => s.requestModal);
   const { openWithOneTimePlan, membershipModal } = useMajorDrawEntryCta();
   const { whenGatesOpenElseGateModal } = useMajorDrawPurchaseGate();
 
@@ -64,6 +67,34 @@ export default function RewardsPage() {
   const onBuyPackage = () => openWithOneTimePlan();
   const onUpdatePayment = () => openSheet("manage");
 
+  /**
+   * Locked purchase-required coupon tapped in the claimables sheet → open the QUALIFYING purchase
+   * flow with the coupon code carried, on the surface matching the requirement:
+   * - "membership"      → the membership join flow (same as onBecomeMember) — membership packages.
+   * - "one-time" / "any" → one-time packages: SpecialPackagesModal (true auto-apply) for members with
+   *   additional access; everyone else gets the MembershipModal ONE-TIME flow (SpecialPackagesModal
+   *   renders null without access — the locked cohort is usually exactly that cohort).
+   * The code rides the `openMembershipModal` prefill event (MembershipModal auto-applies campaign
+   * codes on arrival) or SpecialPackagesModal's `initialCouponCode`; after payment the webhook
+   * redeems the coupon off the qualifying purchase (server gate: hasQualifyingPurchase).
+   */
+  const onUnlockCoupon = (item: RedeemableWalletItem) =>
+    whenGatesOpenElseGateModal(() => {
+      const code = (item.campaignCode || item.code || "").trim().toUpperCase();
+      if (item.purchaseRequirement === "membership") {
+        if (code) window.dispatchEvent(new CustomEvent("openMembershipModal", { detail: { referralCode: code } }));
+        membershipModal.openModal();
+        return;
+      }
+      // "one-time" / "any" — route to one-time package entries.
+      if (dash.hasAdditionalAccess) {
+        requestModal("special-packages", true, code ? { initialCouponCode: code } : undefined);
+        return;
+      }
+      if (code) window.dispatchEvent(new CustomEvent("openMembershipModal", { detail: { referralCode: code } }));
+      openWithOneTimePlan();
+    });
+
   return (
     <div className="w-full min-w-0 max-w-full overflow-x-hidden pb-8">
       <DashboardPageHeader
@@ -87,7 +118,7 @@ export default function RewardsPage() {
         {dash.acct !== "none" && userId && (
           <>
             <RewardsPartnerQueue />
-            <RewardsClaimables userId={userId} />
+            <RewardsClaimables userId={userId} onUnlock={onUnlockCoupon} />
             <RewardsMilestones acct={dash.acct} months={dash.streakMonths} tierHex={dash.tierHex} />
           </>
         )}

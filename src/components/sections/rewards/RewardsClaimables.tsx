@@ -12,6 +12,12 @@ import {
 
 interface RewardsClaimablesProps {
   userId: string;
+  /**
+   * Locked purchase-required coupon tapped → open the qualifying-purchase flow with the coupon
+   * code carried (membership-required → membership modal; one-time/any → one-time packages).
+   * Without it, locked items render the old disabled label (no dead-end regression for other mounts).
+   */
+  onUnlock?: (item: RedeemableWalletItem) => void;
 }
 
 function label(item: RedeemableWalletItem): string {
@@ -23,7 +29,7 @@ function label(item: RedeemableWalletItem): string {
  * there's something to claim now) that opens a claimables overlay sheet, plus a
  * "Recently claimed" list. Paused-safe (rewards API 503 → neutral state).
  */
-export default function RewardsClaimables({ userId }: RewardsClaimablesProps) {
+export default function RewardsClaimables({ userId, onUnlock }: RewardsClaimablesProps) {
   const [open, setOpen] = useState(false);
   // Match the home "Redeem" tile's params ({ status: "claimable", limit: 20 }) so the two share one
   // deduped query and can't show different counts (a >10-claimable user would otherwise diverge).
@@ -121,7 +127,11 @@ export default function RewardsClaimables({ userId }: RewardsClaimablesProps) {
               {claimItems.map((item) => {
                 const canClaim = item.isRedeemableNow;
                 const locked = !item.isRedeemableNow;
-                const lockedLabel = item.purchaseRequirement === "membership" ? "Members only" : "Purchase to unlock";
+                // Locked purchase-required coupon → an ACTIONABLE unlock CTA (opens the qualifying
+                // purchase flow with the code carried), not a disabled dead-end. Server-side the burn
+                // stays gated by hasQualifyingPurchase either way.
+                const unlockable = locked && item.purchaseRequirement !== "none" && !!onUnlock;
+                const lockedLabel = item.purchaseRequirement === "membership" ? (unlockable ? "Join to unlock" : "Members only") : "Purchase to unlock";
                 const Icon = item.source === "milestone" ? Bolt : Gift;
                 return (
                   <li key={item.issuanceId} className="flex items-center gap-3 rounded-2xl border border-token bg-black/[.03] p-3 dark:bg-white/[.04]">
@@ -134,11 +144,22 @@ export default function RewardsClaimables({ userId }: RewardsClaimablesProps) {
                     </div>
                     <button
                       type="button"
-                      disabled={!canClaim || redeem.isPending}
-                      onClick={() => redeem.mutate({ issuanceId: item.issuanceId, entriesAmount: item.entriesAmount })}
+                      disabled={(!canClaim && !unlockable) || redeem.isPending}
+                      onClick={() => {
+                        if (canClaim) {
+                          redeem.mutate({ issuanceId: item.issuanceId, entriesAmount: item.entriesAmount });
+                        } else if (unlockable) {
+                          setOpen(false); // close this sheet so the purchase modal isn't stacked under it
+                          onUnlock?.(item);
+                        }
+                      }}
                       className={cn(
                         "shrink-0 rounded-full px-4 py-2 text-sm font-bold transition-transform focus:outline-none focus-visible:ring-2 focus-visible:ring-red-600 motion-safe:active:translate-y-px",
-                        canClaim ? "bg-gradient-to-b from-red-500 to-red-700 text-white disabled:opacity-60" : "cursor-default bg-black/[.05] text-muted-token dark:bg-white/[.08]",
+                        canClaim
+                          ? "bg-gradient-to-b from-red-500 to-red-700 text-white disabled:opacity-60"
+                          : unlockable
+                            ? "bg-gradient-to-b from-amber-400 to-amber-600 text-white disabled:opacity-60"
+                            : "cursor-default bg-black/[.05] text-muted-token dark:bg-white/[.08]",
                       )}
                     >
                       {redeem.isPending ? "Claiming…" : locked ? lockedLabel : "Claim"}

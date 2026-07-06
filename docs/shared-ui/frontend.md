@@ -1,5 +1,13 @@
 # Shared UI — Frontend
 
+> **Redeemable unlock flow + MembershipModal coupon auto-apply (2026-07-06):** `RewardsClaimables` gained an
+> `onUnlock` prop — locked purchase-required coupons render an actionable amber "Join to unlock" / "Purchase to
+> unlock" CTA (was a disabled dead-end). `MembershipModal` now **auto-applies** codes arriving via the
+> `openMembershipModal` prefill event (`pendingAutoApplyCode` one-shot → `handleCouponApply("auto")`) — prefill
+> alone lost the coupon carry if the user paid without clicking Apply. Legacy `RedeemablesWallet`'s never-wired
+> "Unlock" no-op removed (qualified items redeem directly). Full flow + routing rules:
+> [rewards-redeemables/frontend.md](../rewards-redeemables/frontend.md).
+
 > **Scheduled downgrade shown on the plan status row (2026-07-06):** `MembershipCurrentPlan` (and, in lockstep,
 > the dashboard `ManageSheet` plan summary) now surface a **pending downgrade**. When a member downgrades, they
 > keep the higher tier's benefits until `endDate` (`getEffectiveBenefits` → the card still shows the higher

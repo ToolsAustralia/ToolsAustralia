@@ -1,5 +1,12 @@
 # Dashboard-Account — Frontend
 
+> **Rewards page: locked-coupon unlock routing (2026-07-06):** `my-account/rewards/page.tsx` wires
+> `RewardsClaimables onUnlock={onUnlockCoupon}` — a locked purchase-required coupon opens the qualifying
+> purchase flow with the code carried: `membership`-required → `membershipModal.openModal()` (membership
+> packages) + `openMembershipModal` prefill event; `one-time`/`any` → `hasAdditionalAccess ?
+> requestModal("special-packages", { initialCouponCode }) : openWithOneTimePlan()` (one-time packages).
+> Freeze-gated. Details: [rewards-redeemables/frontend.md](../rewards-redeemables/frontend.md).
+
 > **Mobile over-scroll fix (2026-07-03):** the dashboard **page** containers (home / rewards / membership /
 > draws) no longer set `min-h-screen-svh` — only the **layout** outer div does. Previously each page forced
 > `100svh` *and* the layout `<main>` adds `pb-16` (mobile) for the fixed `BottomNav`, so a short page became

@@ -177,6 +177,10 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
   const [upsellTriggered, setUpsellTriggered] = useState(false);
   const [couponCode, setCouponCode] = useState("");
   const [couponApplied, setCouponApplied] = useState(false);
+  /** Code that arrived via the `openMembershipModal` prefill event and should be AUTO-applied
+   *  (campaign coupons from the rewards unlock flow) — a prefill-only code the user must manually
+   *  "Apply" loses the coupon carry entirely if they pay without clicking Apply. */
+  const [pendingAutoApplyCode, setPendingAutoApplyCode] = useState<string | null>(null);
   const [couponType, setCouponType] = useState<"referral" | "promo" | "campaign" | null>(null);
   const [campaignPurchaseRequirement, setCampaignPurchaseRequirement] = useState<"none" | "membership" | "one-time" | "any" | null>(null);
   const {
@@ -788,6 +792,10 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
       setCouponType(null);
       setReferralInfo(null);
       setReferralError(null);
+      // Auto-apply the incoming code once state settles (effect below) — mirrors
+      // SpecialPackagesModal's initialCouponCode auto-apply, so the rewards unlock
+      // flow's code is actually carried on the purchase without a manual Apply click.
+      setPendingAutoApplyCode(incomingCode);
     };
 
     window.addEventListener("openMembershipModal", handleOpenMembershipModalPrefill as EventListener);
@@ -1702,6 +1710,21 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
       handleCouponApply("auto");
     }
   }, [storedReferralCode, couponCode, couponApplied, isValidatingReferral, handleCouponApply]);
+
+  // Auto-apply a code that arrived via the `openMembershipModal` prefill event (rewards unlock
+  // flow). One-shot: the pending flag clears BEFORE applying so a failed validation surfaces its
+  // error once and never loops; the user can still adjust + Apply manually.
+  useEffect(() => {
+    if (
+      pendingAutoApplyCode &&
+      couponCode.trim().toUpperCase() === pendingAutoApplyCode &&
+      !couponApplied &&
+      !isValidatingReferral
+    ) {
+      setPendingAutoApplyCode(null);
+      handleCouponApply("auto");
+    }
+  }, [pendingAutoApplyCode, couponCode, couponApplied, isValidatingReferral, handleCouponApply]);
 
   const handlePackageChange = () => {
     const isMiniDrawPackage = activePlan.id.startsWith("mini-pack-");
