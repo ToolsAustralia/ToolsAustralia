@@ -220,6 +220,16 @@ The flag that selects Mode A vs Mode B is `hasMembershipGrantInCurrentDrawPeriod
 > footer since the sheet owns dismiss). This replaced an earlier, wrong approach that *embedded the whole
 > modal* (dark hero + Close) inside the sheet. Verify the modal path with `npm run test:renewal-failed`.
 
+> **Upgrade flow — consistent benefit cells across both steps (2026-07-06):** `StripePaymentModal`'s
+> `UpgradeBenefitsPreview` used to render a **hardcoded** per-tier cell set (`tierBenefitCells`: entries 100/40/15
+> baked in, a stale unused partner %) that disagreed with the confirm step (`UpgradeConfirmModal`). Both now
+> render the shared **`UpgradeBenefitStatGrid`** (see [shared-ui/frontend.md](../shared-ui/frontend.md)) fed from
+> **canonical** data — `StripePaymentModal` derives the destination-tier partner % via
+> `getPartnerCatalogAccessPercentForPlanId(\`${tier}-subscription\`)` and entries via
+> `getPackageById(...).entriesPerMonth`, so the payment step's cells match the confirm step's exactly (Boss
+> 100%/100, Foreman 75%/40, Tradie 50%/15). The recurring price stays in the `OrderSummary`, not a stat cell.
+> Verified: `npm run test:upgrade-confirm` + `npm run test:stripe-payment`.
+
 > **RenewalFailedModal hero redesign — benefit-led, amber, less text (2026-07-06):** the `Shell` hero was
 > rebuilt from the dark red-glow + uppercase-acumin banner to a **light, tone-tinted header** (amber past-due /
 > emerald success) with a sentence-case Poppins headline. `Shell` gained an optional **`heroAside`** slot; the

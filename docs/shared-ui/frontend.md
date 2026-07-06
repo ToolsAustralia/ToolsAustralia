@@ -1,5 +1,16 @@
 # Shared UI — Frontend
 
+> **`UpgradeBenefitStatGrid` — one benefit grid for both upgrade steps (2026-07-06):** the two steps of the
+> membership upgrade flow rendered DIFFERENT benefit cells — step 1 (`UpgradeConfirmModal/BenefitsBody`) showed
+> **Partner offers % · Partner access · Free entries / cycle** (Anton font, icon+tint, real props); step 2
+> (`StripePaymentModal/UpgradeBenefitsPreview`) showed **Entries / mo · Partner access · Per month $** (acumin
+> font, bordered, **hardcoded** entries + a stale/unused partner %). Extracted
+> [components/ui/UpgradeBenefitStatGrid.tsx](../../src/components/ui/UpgradeBenefitStatGrid.tsx)
+> (`{ tier, partnerPct, entriesPerCycle }`) — the single 3-cell grid both steps now render, so they're identical
+> (same stats, labels, font, icons, tint). Numbers must be canonical: partner-catalog %
+> (`getPartnerCatalogAccessPercentForPlanId`) + the package's `entriesPerMonth`. Price is NOT a cell (it lives in
+> the order summary / checklist). See [subscription/frontend.md](../subscription/frontend.md).
+
 > **Partner-discount card de-dup — past-due-with-pack subline (2026-07-06):** for a past-due member holding a
 > live one-time pack, `RewardsPartnerCard` + `PartnerPreview` showed `"{pct}% active · ends in {X} · membership
 > paused"` — but the ring already renders `{pct}%` (and the Rewards headline already says "Active from your
