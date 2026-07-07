@@ -75,6 +75,15 @@ The pure helpers (eligibility predicate + held-draft picker + recovery idempoten
 | Finalize | `recover-finalize-${newInvoiceId}` | — |
 | Pay | `admin-charge-${newInvoiceId}` (existing) | 24h via `invoiceId` (existing) |
 
+**Per-subscription recovery lock ([`RecoveryClaim`](../../src/models/RecoveryClaim.ts)):** a fine-grained
+claim keyed `_id: "recover:<subscriptionId>"` (helper
+[`recovery-claim.ts`](../../src/utils/payment/recovery/recovery-claim.ts) — `acquireRecoveryClaim` /
+`releaseRecoveryClaim`) serializes stranded recovery so concurrent member clicks and cross-tool
+attempts (member Pay-Now / Force-Charge / admin Charge / Force-Charge / switch-tier teardown) cannot
+finalize+pay two different held drafts for the same subscription. It is **not** the global
+`ChargeJobLock` singleton; a stale claim (older than `RECOVERY_CLAIM_STALE_MS` = 120s) is deterministically
+reclaimed, with a 300s TTL index as a crash-release backstop.
+
 The 24h DB lock checks for any `InvoiceChargeLog` row tagged `result.recovery.originalInvoiceId === <id>`; the pay step's lock continues to work via the standard past-due window since the new invoice id is fresh.
 
 ### Failure semantics

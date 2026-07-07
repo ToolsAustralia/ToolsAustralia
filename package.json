@@ -213,6 +213,7 @@
     "test:charge-lock-rate-limit": "tsx src/server/admin/__tests__/chargeLockRateLimitPolicy.test.ts",
     "test:charge-past-due-post-pay": "tsx src/server/admin/__tests__/chargePastDuePostPayPolicy.test.ts",
     "test:invoice-charge-log-actor": "tsx src/models/__tests__/invoice-charge-log-actor.test.ts",
+    "test:recovery-claim": "tsx src/utils/payment/recovery/__tests__/recovery-claim.test.ts",
     "test:force-charge-policy": "tsx src/server/admin/__tests__/forceChargePastDuePolicy.test.ts",
     "test:recover-stranded-past-due-policy": "tsx src/server/admin/__tests__/recoverStrandedPastDuePolicy.test.ts",
     "test:charge-or-recover-policy": "tsx src/server/admin/__tests__/chargeOrRecoverPolicy.test.ts",

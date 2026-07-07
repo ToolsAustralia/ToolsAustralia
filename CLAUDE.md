@@ -700,6 +700,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/models/ChargeJobLock.ts",
         "src/models/ChargeJobRun.ts",
         "src/models/ChargeJobWorklist.ts",
+        "src/models/RecoveryClaim.ts",
         "src/models/StaffActivity.ts",
         "src/lib/audit-log.ts",
         "src/lib/__tests__/staff-activity.test.ts",
@@ -714,7 +715,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/models/DashboardStatsDailySnapshot.ts",
         "src/services/admin/dashboard-stats/**"
       ],
-      "lastVerified": "2026-07-06"
+      "lastVerified": "2026-07-07"
     },
     "dashboard-account": {
       "docs": "docs/dashboard-account/",
