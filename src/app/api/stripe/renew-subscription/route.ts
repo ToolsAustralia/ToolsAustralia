@@ -15,6 +15,13 @@ import {
   analyzeStripePayErrorForExcessiveRetry,
 } from "@/utils/payment/stripe/stripe-excessive-retry";
 import { resumeAfterSuccessfulRenewalPayment } from "@/services/subscription/SubscriptionCollectionPauseService";
+import { listOpenSubscriptionInvoices } from "@/utils/payment/failed-invoice-handler";
+import {
+  isOriginalInvoiceEligibleForRecovery,
+  deriveExpectedCycleAmountCents,
+} from "@/utils/payment/recovery/stranded-invoice-policy";
+import { prepareRecoveredCycleInvoice } from "@/services/subscription/prepareRecoveredCycleInvoice";
+import { acquireRecoveryClaim, releaseRecoveryClaim } from "@/utils/payment/recovery/recovery-claim";
 
 const renewSubscriptionSchema = z.object({
   packageId: z.string().optional(), // Optional: renew with same or different package
@@ -211,6 +218,72 @@ export async function POST(request: NextRequest) {
 
     if (renewalStrategy === "retry_payment" && existingSubscription) {
       // console.log(`💳 [RETRY_PAYMENT] Retrying payment for existing subscription`);
+
+      // A retry-exhausted "stranded" invoice can't be paid via stripe.invoices.pay() (Stripe rejects
+      // it). Recover it — void it + finalize the held cycle draft via the shared primitive — and
+      // return the finalized draft's PaymentIntent for client confirmation (same as pay-failed-invoice).
+      const openInvoices = await listOpenSubscriptionInvoices(existingSubscription.id);
+      const strandedInvoice = openInvoices.find((inv) => isOriginalInvoiceEligibleForRecovery(inv).eligible);
+      if (strandedInvoice) {
+        const claimed = await acquireRecoveryClaim(existingSubscription.id, "renew-subscription");
+        if (!claimed) {
+          return NextResponse.json(
+            { error: "A recovery for this subscription is already in progress. Please try again shortly." },
+            { status: 409 }
+          );
+        }
+        try {
+          const packageFallbackCents =
+            typeof targetPackage.price === "number" ? Math.round(targetPackage.price * 100) : null;
+          const subForAmount = await stripe.subscriptions.retrieve(existingSubscription.id);
+          const expectedAmountCents = deriveExpectedCycleAmountCents(subForAmount, packageFallbackCents);
+          const customerId =
+            user.stripeCustomerId ||
+            (typeof strandedInvoice.customer === "string"
+              ? strandedInvoice.customer
+              : strandedInvoice.customer?.id) ||
+            "";
+
+          if (expectedAmountCents && expectedAmountCents > 0) {
+            const prepared = await prepareRecoveredCycleInvoice({
+              subscriptionId: existingSubscription.id,
+              strandedInvoice,
+              expectedAmountCents,
+              audit: {
+                actor: "member",
+                userId: user._id.toString(),
+                customerId,
+                amount: expectedAmountCents,
+              },
+            });
+            if (prepared.ok && prepared.paymentIntent?.client_secret) {
+              return NextResponse.json({
+                success: true,
+                requiresPaymentConfirmation: true,
+                message: "Complete payment to reactivate your subscription",
+                data: {
+                  grantEntryRewardToast: false,
+                  paymentIntent: {
+                    id: prepared.paymentIntent.id,
+                    clientSecret: prepared.paymentIntent.client_secret,
+                    amount: prepared.paymentIntent.amount,
+                    currency: "aud",
+                    status: prepared.paymentIntent.status,
+                  },
+                  subscription: {
+                    id: existingSubscription.id,
+                    packageId: targetPackage._id,
+                    packageName: targetPackage.name,
+                  },
+                },
+              });
+            }
+          }
+          // Recovery unavailable (no held draft / no PI) → fall through to the legacy pay path below.
+        } finally {
+          await releaseRecoveryClaim(existingSubscription.id).catch(() => {});
+        }
+      }
 
       // Get the latest invoice
       const latestInvoice = existingSubscription.latest_invoice as Stripe.Invoice | string;
