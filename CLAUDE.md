@@ -790,7 +790,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "scripts/reconcile-*.ts",
         "scripts/connect-ops-db.ts"
       ],
-      "lastVerified": "2026-07-06"
+      "lastVerified": "2026-07-07"
     },
     "dev-tooling": {
       "docs": "docs/dev-tooling/",

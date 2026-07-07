@@ -163,7 +163,7 @@ The dashboard **Default Max Duration** project setting is **300s** — it applie
 
 `lib/environment.ts` validates and exposes env vars. Don't access `process.env.X` directly — go through this module so missing/invalid vars fail fast at boot.
 
-[`.env.example`](../../.env.example) is the checked-in scaffold — opt-in, not exhaustive. It documents the small set of env vars that have caused onboarding pain and aren't covered by `lib/environment.ts` boot validation (currently: `STRIPE_WORKER_INTERNAL_SECRET`, which gates the internal Stripe webhook worker route — see [billing-stripe/STRIPE_WEBHOOK_QUEUE.md](../billing-stripe/STRIPE_WEBHOOK_QUEUE.md)). `.gitignore` line 36 has a `!.env.example` negation against the blanket `.env*` rule so this single example file ships with the repo.
+[`.env.example`](../../.env.example) is the checked-in env reference listing every environment variable the codebase reads, grouped by area, with placeholder values. It ships despite the blanket `.env*` gitignore rule via the `!.env.example` negation in `.gitignore`. Copy it to `.env.local` and fill in real secrets (which stay gitignored). It's a developer/onboarding + Claude-session guide, not read at runtime; `lib/environment.ts` validates required vars at boot.
 
 ## Migrated from `src/docs/ENVIRONMENT_SETUP.md`
 
