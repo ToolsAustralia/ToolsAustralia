@@ -390,6 +390,75 @@ async function testOverBudget() {
   pass("over-budget → canned busy fallback, no model call, writeAudit(200)");
 }
 
+// ─── Test 3b: deflect wins over budget (kill-switch / budget must NOT block FAQ) ─
+// Regression lock for the withChatbot budget-gate removal: even when the budget guard
+// says NOT ok (kill switch on OR daily budget exhausted), a deflectable FAQ question
+// must STILL be answered for free — deflection runs and returns BEFORE the budget check,
+// so the guard is never even consulted for a deflected turn.
+
+async function testDeflectWinsOverBudget() {
+  console.log("\nchatService.respond — deflect wins over budget (FAQ free while killed)");
+
+  const { ctx, writeAuditCalls } = makeCtx({ kind: "anonymous", ipKey: "8.8.8.8" });
+  const persist = makePersistSpy();
+
+  let modelCalled = false;
+  let budgetChecked = false;
+
+  const deps: ChatServiceDeps = {
+    tryDeflect: async () => ({
+      answered: true,
+      answer: "You can see your entries in My Account.",
+      sources: [{ id: "where-entries", title: "Where are my entries" }],
+    }),
+    // Budget guard trips (kill switch / over budget) — deflection must win anyway.
+    assertWithinBudget: async () => {
+      budgetChecked = true;
+      return { ok: false, reason: "kill_switch" };
+    },
+    recordUsage: async () => {},
+    streamFn: () => {
+      modelCalled = true;
+      return {
+        toUIMessageStreamResponse: () => new Response("should-not-run", { status: 200 }),
+      };
+    },
+    persist: persist.port,
+    escalateToHuman: async () => ({ submissionId: "x" }),
+    getModel: () => ({ modelId: "claude-haiku-4-5" }) as never,
+  };
+
+  const res = await chatService.respond(
+    { ctx, messages: [userMessage("Where can I see my entries?")] },
+    deps
+  );
+  const body = await res.text();
+  await new Promise((r) => setTimeout(r, 0));
+
+  if (modelCalled) {
+    fail("model NOT called (deflected)", "streamFn was invoked while over budget");
+    return;
+  }
+  if (budgetChecked) {
+    fail("budget NOT consulted for a deflected turn", "assertWithinBudget ran even though deflection won");
+    return;
+  }
+  if (!/My Account/i.test(body)) {
+    fail("deflection answer streamed while over budget", `body: ${body.slice(0, 120)}`);
+    return;
+  }
+  if (ctx.audit.deflected !== true) {
+    fail("audit.deflected === true", `got ${ctx.audit.deflected}`);
+    return;
+  }
+  if (!writeAuditCalls.includes(200)) {
+    fail("writeAudit(200) called", `got ${JSON.stringify(writeAuditCalls)}`);
+    return;
+  }
+
+  pass("deflect wins over budget → FAQ answered free, no model, budget never consulted, deflected=true");
+}
+
 // ─── Test 4a: generative rate limit — limit exceeded ─────────────────────────
 
 async function testGenRateLimitExceeded() {
@@ -774,6 +843,7 @@ async function run() {
   await testDeflectable();
   await testNonDeflectable();
   await testOverBudget();
+  await testDeflectWinsOverBudget();
   await testGenRateLimitExceeded();
   await testGenRateLimitOk();
   await testRequestHumanNoEmail();

@@ -100,7 +100,6 @@ async function testRateLimit429() {
     getSession: noSession(),
     anonLimiter: blocked,
     memberLimiter: allowed,
-    assertBudget: async () => ({ ok: true }),
     writeAudit: writer,
   });
 
@@ -119,49 +118,36 @@ async function testRateLimit429() {
   checkDeep("audit.actorKind is anonymous", calls[0]?.actorKind, "anonymous");
 }
 
-// ─── Test: kill-switch / budget 503 ──────────────────────────────────────────
-
-async function testKillSwitch503() {
-  console.log("\nkill-switch: budget !ok → 503");
+// ─── Test: no budget/kill-switch gate in withChatbot (moved to ChatService) ───
+// The kill-switch + daily-budget gate was intentionally REMOVED from withChatbot
+// so it can't block free FAQ deflection. Once past rate-limiting, withChatbot ALWAYS
+// reaches the handler; ChatService owns the budget/kill-switch gate AFTER it has
+// tried FAQ deflection (see ChatService.respond + chat-service.test.ts "deflect wins
+// over budget"). This test locks that withChatbot itself never short-circuits on budget.
+async function testNoBudgetGateReachesHandler() {
+  console.log("\nno budget gate: withChatbot reaches the handler (ChatService owns budget)");
 
   const { calls, writer } = makeAuditCapture();
-
   const allowed = makeLimiter({ success: true, remaining: 10, retryAfterSeconds: 0 });
 
-  const handler = withChatbot(async () => new Response("ok", { status: 200 }), {
-    getSession: memberSession(),
-    anonLimiter: allowed,
-    memberLimiter: allowed,
-    assertBudget: async () => ({ ok: false, reason: "kill_switch" }),
-    writeAudit: writer,
-  });
+  let handlerReached = false;
+  const handler = withChatbot(
+    async () => {
+      handlerReached = true;
+      return new Response("ok", { status: 200 });
+    },
+    {
+      getSession: memberSession(),
+      anonLimiter: allowed,
+      memberLimiter: allowed,
+      writeAudit: writer,
+    }
+  );
 
   const res = await handler(makeRequest("1.2.3.4"));
-  checkDeep("status is 503", res.status, 503);
-
-  const body = await res.json() as Record<string, unknown>;
-  checkDeep("body.code is kill_switch", body.code, "kill_switch");
-  checkDeep("body.error is chat_unavailable", body.error, "chat_unavailable");
-
-  check("audit row written for 503", calls.length === 1);
-  checkDeep("audit.status is 503", calls[0]?.status, 503);
-  checkDeep("audit.escalated is false (503 early exit)", calls[0]?.escalated, false);
-  checkDeep("audit.actorKind is member (kill-switch with member session)", calls[0]?.actorKind, "member");
-
-  // daily_budget variant
-  const { calls: calls2, writer: writer2 } = makeAuditCapture();
-  const h2 = withChatbot(async () => new Response("ok", { status: 200 }), {
-    getSession: noSession(),
-    anonLimiter: allowed,
-    memberLimiter: allowed,
-    assertBudget: async () => ({ ok: false, reason: "daily_budget" }),
-    writeAudit: writer2,
-  });
-  const res2 = await h2(makeRequest());
-  checkDeep("daily_budget → 503", res2.status, 503);
-  const body2 = await res2.json() as Record<string, unknown>;
-  checkDeep("daily_budget body.code is daily_budget", body2.code, "daily_budget");
-  checkDeep("daily_budget audit.status is 503", calls2[0]?.status, 503);
+  check("handler is reached (no budget short-circuit)", handlerReached);
+  checkDeep("status is 200 (not 503)", res.status, 200);
+  check("withChatbot writes no 503 audit row", !calls.some((c) => c.status === 503));
 }
 
 // ─── Test: anonymous actor flagged + uses anonLimiter ────────────────────────
@@ -184,7 +170,6 @@ async function testAnonymousActor() {
     getSession: noSession(),
     anonLimiter,
     memberLimiter,
-    assertBudget: async () => ({ ok: true }),
     writeAudit: async () => {},
   });
 
@@ -220,7 +205,6 @@ async function testMemberActor() {
     getSession: memberSession("abc-user-id", "Bob"),
     anonLimiter,
     memberLimiter,
-    assertBudget: async () => ({ ok: true }),
     writeAudit: async () => {},
   });
 
@@ -249,7 +233,6 @@ async function testIpHashing() {
     getSession: noSession(),
     anonLimiter: allowed,
     memberLimiter: allowed,
-    assertBudget: async () => ({ ok: true }),
     writeAudit: writer,
   });
 
@@ -278,7 +261,6 @@ async function testZodError400() {
     getSession: noSession(),
     anonLimiter: allowed,
     memberLimiter: allowed,
-    assertBudget: async () => ({ ok: true }),
     writeAudit: writer,
   });
 
@@ -301,7 +283,6 @@ async function testHandlerThrow500() {
     getSession: noSession(),
     anonLimiter: allowed,
     memberLimiter: allowed,
-    assertBudget: async () => ({ ok: true }),
     writeAudit: writer,
   });
 
@@ -330,7 +311,6 @@ async function testSuccessPathAuditTool() {
     getSession: memberSession(),
     anonLimiter: allowed,
     memberLimiter: allowed,
-    assertBudget: async () => ({ ok: true }),
     writeAudit: writer,
   });
 
@@ -388,7 +368,7 @@ async function run() {
   console.log("withChatbot + redactPII tests");
 
   await testRateLimit429();
-  await testKillSwitch503();
+  await testNoBudgetGateReachesHandler();
   await testAnonymousActor();
   await testMemberActor();
   await testIpHashing();

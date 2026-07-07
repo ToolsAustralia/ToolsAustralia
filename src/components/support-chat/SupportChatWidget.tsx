@@ -7,6 +7,12 @@
  *
  * Design decisions:
  * - z-index 9000: below Z_INDEX.MODAL_BASE (10000) so upsell/renewal/gate modals always win.
+ * - Entry points: the floating bubble everywhere EXCEPT /my-account, where the dashboard
+ *   "Ask Cobber" card is the canonical launcher (it dispatches OPEN_SUPPORT_CHAT_EVENT).
+ *   The bubble is suppressed there to avoid a duplicate affordance; the panel still opens
+ *   via the event and is closed by its own header ✕.
+ * - The panel hides while a dashboard overlay sheet (Support/Payment/Manage — SheetShell
+ *   portaled to <body> at z-[120]) is open, so Cobber never floats over it.
  * - Labelled "AI Support Assistant" in the header AND the intro message.
  * - 4-6 quick-reply buttons shown before the text input (no LLM cost on deflection).
  * - hCaptcha rendered when the server returns captcha_required (anonymous guests only).
@@ -25,9 +31,12 @@ import React, {
   type KeyboardEvent,
 } from "react";
 import dynamic from "next/dynamic";
+import { usePathname } from "next/navigation";
 import Image from "next/image";
 import type { UIMessage } from "ai";
 import { Z_INDEX } from "@/constants/z-index";
+import { useDashboardSheetStore } from "@/stores/useDashboardSheetStore";
+import { OPEN_SUPPORT_CHAT_EVENT } from "@/lib/support-chat/widget-events";
 import { useSupportChat } from "./useSupportChat";
 import {
   hasAcknowledgedDisclosure,
@@ -174,6 +183,24 @@ export default function SupportChatWidget({ side = "right" }: SupportChatWidgetP
   // `null` means "not yet checked" (SSR-safe); checked on first panel open.
   const [disclosureAcked, setDisclosureAcked] = useState<boolean | null>(null);
 
+  const pathname = usePathname();
+  // On /my-account the dashboard "Ask Cobber" card is the canonical Cobber entry
+  // point, so the floating bubble is suppressed there (no duplicate affordance).
+  const onDashboard = pathname?.startsWith("/my-account") ?? false;
+  // Dashboard overlay sheets (Support / Payment / Manage) portal to <body> BELOW
+  // this widget's z-index; hide the panel while one is open so Cobber never floats
+  // over it. ("Start a chat" closes the Support sheet before opening the panel, so
+  // this mainly guards the panel against a later-opened sheet.)
+  const dashboardSheetOpen = useDashboardSheetStore((s) => s.sheet !== null);
+
+  // Open the panel when any surface dispatches the shared open-chat event (e.g. the
+  // dashboard "Ask Cobber" card). Mirrors the site's openMembershipModal contract.
+  useEffect(() => {
+    const handler = () => setOpen(true);
+    window.addEventListener(OPEN_SUPPORT_CHAT_EVENT, handler);
+    return () => window.removeEventListener(OPEN_SUPPORT_CHAT_EVENT, handler);
+  }, []);
+
   // Auto-scroll to bottom when messages change
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -250,7 +277,9 @@ export default function SupportChatWidget({ side = "right" }: SupportChatWidgetP
 
   return (
     <>
-      {/* Floating bubble */}
+      {/* Floating bubble — suppressed on /my-account, where the dashboard
+          "Ask Cobber" card is the canonical entry point (no duplicate affordance). */}
+      {!onDashboard && (
       <button
         onClick={() => setOpen((v) => !v)}
         aria-label={open ? "Close chat" : "Open AI support chat"}
@@ -284,9 +313,11 @@ export default function SupportChatWidget({ side = "right" }: SupportChatWidgetP
           </div>
         )}
       </button>
+      )}
 
-      {/* Panel */}
-      {open && (
+      {/* Panel — hidden while a dashboard overlay sheet is open so Cobber never
+          floats over it (see dashboardSheetOpen). */}
+      {open && !dashboardSheetOpen && (
         <div
           className={`fixed bottom-24 ${sideClass} w-[22rem] max-w-[calc(100vw-2.5rem)] bg-white dark:bg-neutral-900 rounded-2xl shadow-2xl flex flex-col border border-gray-200 dark:border-neutral-700 overflow-hidden`}
           style={{ zIndex: Z_INDEX.MODAL_BASE - 1000, height: "min(560px, calc(100svh - 8rem))" }}

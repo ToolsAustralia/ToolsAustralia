@@ -10,8 +10,11 @@
  * docs/superpowers/specs/2026-07-02-user-dashboard-revamp-foundation-home-design.md.
  */
 export const DASHBOARD_FEATURES = {
-  /** AI support assistant ("Ask Cobber") — Support overlay sub-project. */
-  cobberSupport: false,
+  /** AI support assistant ("Ask Cobber") — Support overlay sub-project. LIVE: the
+   *  dashboard "Start a chat" card opens the Cobber support-chat panel
+   *  (SupportChatWidget). On /my-account the floating bubble is suppressed so this
+   *  card is the single Cobber entry point. */
+  cobberSupport: true,
   /** Loyalty milestone-progress bars — no customer-facing milestone-progress read yet. */
   milestoneProgress: false,
   /** Personal "your wins" history — only a global winners endpoint exists today. */

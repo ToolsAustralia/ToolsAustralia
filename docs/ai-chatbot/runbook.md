@@ -9,7 +9,8 @@ Actionable playbook for the Tools Australia support chatbot. For architecture an
 | Signal | First action |
 |--------|-------------|
 | Bot giving wrong answer | Fix canonical data → redeploy (see §1) |
-| Bot returning 503 | Check `CHAT_KILL_SWITCH`, Vercel logs (see §3) |
+| Bot returning 503 | Infra/platform signal (NOT the kill switch) — check Vercel logs (see §3) |
+| Every turn canned "busy" | Kill switch on or budget tripped — check `CHAT_KILL_SWITCH` / budget (see §3a, §5) |
 | Spend spike / cost alarm | Set `CHAT_KILL_SWITCH=true` immediately (see §4) |
 | Budget tripped | Users see fallback; raise `CHAT_DAILY_TOKEN_BUDGET_USD` or wait for reset (see §5) |
 | Investigating a bad conversation | Query `ChatAuditLog` + `ChatConversation` (see §6) |
@@ -46,18 +47,19 @@ Actionable playbook for the Tools Australia support chatbot. For architecture an
 
 ---
 
-## 3. Bot is down (returning 503 or not responding)
+## 3. Bot is down (every turn canned, 503, or not responding)
 
-**Symptom:** Chat widget shows an error or "service unavailable".
+**Symptom:** Chat widget streams the canned "busy" reply on every generative turn, shows an error, or a genuine 503 "service unavailable". (Kill switch / budget → canned "busy" on the LLM path, FAQ still answers; a real 503 is infra.)
 
 **Checks (in order):**
 
 ### 3a. Kill switch
 ```bash
 # Check the env var (Vercel Dashboard → Project → Settings → Environment Variables)
-CHAT_KILL_SWITCH=true   # if set, bot returns 503 immediately
+CHAT_KILL_SWITCH=true   # if set, the paid LLM path is off; the bot streams a canned
+                        # "busy" reply and FAQ deflection still answers (NOT a 503)
 ```
-If the kill switch is set, unset it in Vercel and redeploy (or remove from `.env.local` for local).
+If the kill switch is set, unset it in Vercel and redeploy (or remove from `.env.local` for local). Note: a genuine **503** is an infra/platform signal, not the kill switch — the kill switch and daily budget gate only the LLM path *inside* `ChatService`, after free FAQ deflection.
 
 ### 3b. Vercel logs
 Go to Vercel Dashboard → Project → Deployments → select the active deployment → Functions → `/api/chat`. Look for:
@@ -85,7 +87,7 @@ Check https://status.anthropic.com/ for outages affecting `claude-haiku-4-5` (pr
 CHAT_KILL_SWITCH=true
 # Redeploy (or use Vercel instant rollback if a recent deploy is clean).
 ```
-This returns 503 for all chat requests immediately. FAQ deflection and authenticated sessions are also blocked — it is a hard stop. Use only while investigating.
+This disables the **paid LLM path** immediately: every generative turn streams the canned "busy" fallback instead of calling the model. **Free FAQ deflection and escalation still work** (the gate lives inside `ChatService`, after deflection), so common questions keep getting answered at zero cost. To take the bot down entirely, revert the deploy.
 
 **Tune rate limits (without full kill):**
 The rate limiters are hardcoded in `src/lib/support-chat/withChatbot.ts`:
@@ -117,7 +119,7 @@ This is the canned `BUSY_FALLBACK_TEXT` response. It means `assertWithinBudget()
 
 **What's still working:** FAQ deflection still answers common questions (no model cost). Escalation (leaving a message) still works. Only the LLM generative path is gated.
 
-Note: both `CHAT_KILL_SWITCH=true` and a tripped daily budget also take FAQ deflection offline — `withChatbot` gates before deflection runs.
+This is by design: both `CHAT_KILL_SWITCH=true` and a tripped daily budget gate **only the paid LLM path**, inside `ChatService`, *after* free FAQ deflection has run — so FAQ stays live. (`withChatbot` deliberately holds no budget gate; see `withChatbot.ts` pipeline note + `chat-service.test.ts` "deflect wins over budget".)
 
 **To raise the budget (same day):**
 ```bash

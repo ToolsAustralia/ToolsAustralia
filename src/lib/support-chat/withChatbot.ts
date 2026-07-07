@@ -5,7 +5,13 @@
  * src/lib/internal-norm/withNorm.ts but for an UNTRUSTED PUBLIC CALLER.
  *
  * Pipeline order:
- *   identify → rate-limit → kill-switch/budget → handler → audit
+ *   identify → rate-limit → handler → audit
+ *
+ * NOTE: the kill-switch + daily-budget gate is intentionally NOT in this pipeline.
+ * It lives inside ChatService AFTER the free FAQ-deflection step, so a tripped kill
+ * switch or an exhausted daily budget disables only the paid LLM path — free FAQ
+ * deflection keeps working. (A 503 gate here previously blocked FAQ too — see
+ * docs/ai-chatbot/gotchas.md.)
  *
  * Key differences from withNorm():
  *   - No HMAC/bearer auth. Members identified by NextAuth session cookie; anonymous
@@ -13,10 +19,11 @@
  *   - Two independent rate limiters: stricter for anonymous (15 req/min), looser for
  *     members (40 req/min). Both are Mongo-backed (createDistributedRateLimiter) and
  *     FAIL OPEN — store hiccup allows the request. The fail-CLOSED cost guard
- *     (assertWithinBudget) is the real backstop against abuse.
+ *     (assertWithinBudget) is the real backstop against abuse, but it runs inside
+ *     ChatService (after FAQ deflection), NOT here — see the pipeline note above.
  *   - The response is a streaming ReadableStream so withChatbot CANNOT clone().text()
  *     it to hash the body. Audit-timing decision:
- *       • Early exits (429, 503) write their own audit row immediately (status known).
+ *       • Early exit (429) writes its own audit row immediately (status known).
  *       • Success path: ctx.writeAudit(status) + mutable ctx.audit are provided to the
  *         handler (ChatService, Task 1.7) so it calls writeAudit at stream end when
  *         token counts are known. withChatbot does NOT auto-write the success audit.
@@ -30,7 +37,7 @@
  * Usage:
  *   export const POST = withChatbot(handler);
  *   // or with injected deps for tests:
- *   export const POST = withChatbot(handler, { getSession, anonLimiter, memberLimiter, assertBudget, writeAudit });
+ *   export const POST = withChatbot(handler, { getSession, anonLimiter, memberLimiter, writeAudit });
  */
 
 import { ZodError } from "zod";
@@ -135,11 +142,6 @@ export interface WithChatbotDeps {
    */
   memberLimiter?: RateLimiter;
   /**
-   * Cost/kill-switch gate. Defaults to assertWithinBudget from costGuard.ts.
-   * Fails CLOSED: any error → { ok: false, reason: 'error' }.
-   */
-  assertBudget?: () => Promise<{ ok: boolean; reason?: string }>;
-  /**
    * Audit writer. Defaults to writeChatAudit from audit.ts.
    * Best-effort — never throws.
    */
@@ -231,30 +233,11 @@ export function withChatbot(
       );
     }
 
-    // ── 3. Kill-switch + daily budget ────────────────────────────────────────
-    // assertWithinBudget covers both the env kill-switch AND the Mongo daily
-    // budget. Fails CLOSED: any error → { ok: false }.
-    const assertBudget = deps.assertBudget ?? defaultAssertBudget;
-    const budget = await assertBudget();
-    if (!budget.ok) {
-      const auditWriter = deps.writeAudit ?? writeChatAudit;
-      await auditWriter({
-        requestId,
-        actorKind: actor.kind,
-        status: 503,
-        deflected: false,
-        escalated: false,
-        ipHash,
-        durationMs: Date.now() - started,
-      });
-      return jsonResponse(503, {
-        success: false,
-        error: "chat_unavailable",
-        code: budget.reason ?? "unavailable",
-      });
-    }
-
-    // ── 4. Handler ───────────────────────────────────────────────────────────
+    // ── 3. Handler ───────────────────────────────────────────────────────────
+    // NOTE: the kill-switch + daily-budget gate is deliberately NOT here. It runs
+    // inside ChatService AFTER free FAQ deflection, so a tripped kill switch /
+    // exhausted daily budget disables only the paid LLM path — free FAQ deflection
+    // keeps working. (A 503 gate at this point previously blocked FAQ too.)
     // Provide ctx.audit (mutable accumulator) and ctx.writeAudit so ChatService
     // can record the final status + token counts at stream end.
 
@@ -340,7 +323,3 @@ async function defaultGetSession(_req: Request): Promise<Session | null> {
   return getServerSession(authOptions) as Promise<Session | null>;
 }
 
-async function defaultAssertBudget(): Promise<{ ok: boolean; reason?: string }> {
-  const { assertWithinBudget } = await import("@/lib/support-chat/costGuard");
-  return assertWithinBudget();
-}

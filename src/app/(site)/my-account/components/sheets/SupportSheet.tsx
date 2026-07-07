@@ -7,6 +7,7 @@ import SheetShell, { SheetHead } from "@/components/ui/SheetShell";
 import { isDashboardFeatureOn } from "@/config/dashboardFeatures";
 import { getContactEmail } from "@/lib/email/sender-identities";
 import { useDashboardSheetStore } from "@/stores/useDashboardSheetStore";
+import { openSupportChat } from "@/lib/support-chat/widget-events";
 
 const FAQS = [
   { q: "When is the major draw?", a: "Live on Facebook at 8:30 PM AEST on the 27th of each month. Entries freeze at 8:00 PM AEST that day." },
@@ -32,6 +33,13 @@ function Faq({ q, a }: { q: string; a: string }) {
 export function SupportSheetBody() {
   const contactEmail = getContactEmail();
   const cobberOn = isDashboardFeatureOn("cobberSupport");
+  const closeSheet = useDashboardSheetStore((s) => s.closeSheet);
+  // "Start a chat" is the dashboard's canonical Cobber entry point. Close this
+  // sheet first (so it doesn't sit under the panel), then open the chat panel.
+  const handleStartChat = () => {
+    closeSheet();
+    openSupportChat();
+  };
   return (
     <div className="space-y-4">
       <section className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-red-600 to-red-800 p-5 text-white shadow-lg">
@@ -51,7 +59,7 @@ export function SupportSheetBody() {
             <p className="mt-0.5 text-sm text-white/85">Instant answers about draws, entries, membership and partner discounts.</p>
           </div>
         </div>
-        <button type="button" disabled={!cobberOn} className="mt-4 w-full rounded-xl bg-white py-2.5 text-sm font-bold text-red-700 disabled:opacity-60 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70">
+        <button type="button" disabled={!cobberOn} onClick={cobberOn ? handleStartChat : undefined} className="mt-4 w-full rounded-xl bg-white py-2.5 text-sm font-bold text-red-700 disabled:opacity-60 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70">
           {cobberOn ? "Start a chat" : "Available soon"}
         </button>
       </section>

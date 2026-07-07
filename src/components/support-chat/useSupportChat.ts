@@ -148,7 +148,12 @@ export function useSupportChat(): SupportChatState {
         return resp;
       }
 
-      // Handle 503 chat_unavailable (kill-switch / daily budget — plain JSON).
+      // Handle 503 chat_unavailable — DEFENSIVE / infra only. The app itself no
+      // longer returns 503 for the kill-switch or daily budget: those now gate only
+      // the paid LLM path INSIDE ChatService (after free FAQ deflection), and a
+      // tripped guard streams a friendly in-chat "busy" message (200) instead — so
+      // FAQ keeps working and the input stays usable. This branch remains to keep the
+      // UX graceful if the platform/gateway ever returns a genuine 503.
       if (resp.status === 503) {
         try {
           const clone = resp.clone();
