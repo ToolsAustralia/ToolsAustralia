@@ -123,10 +123,22 @@ Modal shows success, closes, refreshes user data
 
 ❌ **DO NOT**:
 - Create new subscriptions
-- Create new invoices
+- Create new **manual** invoices (a Stripe-created held cycle draft may be finalized — see the stranded exception below — but never `stripe.invoices.create()`, which sets `billing_reason: "manual"` and skips the webhook renewal pipeline)
 - Create new PaymentIntents
 - Manually mark invoices as paid
 - Disable Stripe's automatic retry system
+
+### Exception: stranded (retry-exhausted) invoices are recovered
+
+When Stripe's Smart Retries exhaust, the renewal invoice becomes **"stranded"** — status stays `open` but `attempt_count >= 1` and `next_payment_attempt == null` (Dashboard label: "Failed"). `stripe.invoices.pay()` **rejects** these ("This invoice can no longer be paid…"), which used to produce a terminal `invoice_not_payable` dead-end.
+
+The member paths (`pay-failed-invoice`, `force-charge-overdue`, `renew-subscription`) now **recover** instead, via the shared [`prepareRecoveredCycleInvoice`](../src/services/subscription/prepareRecoveredCycleInvoice.ts) primitive (under a per-subscription `RecoveryClaim` lock):
+
+1. **Void** the stranded original.
+2. **Finalize** the pre-existing **held cycle draft** (`pause_collection: keep_as_draft` leaves one per missed cycle) — this is a Stripe-created `subscription_cycle` invoice, **not** a manually-created one, so `billing_reason` stays `subscription_cycle` and the webhook renewal pipeline + reanchor run normally.
+3. Interactive paths return that finalized draft's PaymentIntent `client_secret` through the existing `requiresPaymentConfirmation` shape; off_session Force-Charge pays it directly.
+
+If no held draft exists, recovery returns a terminal, member-safe error (never creates a manual invoice). Expected cycle amount is single-sourced from the live subscription price (`deriveExpectedCycleAmountCents`), surviving a past-due tier switch.
 
 ### Stripe Retry Behavior
 

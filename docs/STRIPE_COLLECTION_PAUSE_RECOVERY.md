@@ -16,6 +16,10 @@ Recovery paths covered in code:
 - Admin past-due charge — [`src/server/admin/chargePastDueShared.ts`](../src/server/admin/chargePastDueShared.ts) after a successful `invoices.pay`.
 - User retry — [`src/app/api/stripe/renew-subscription/route.ts`](../src/app/api/stripe/renew-subscription/route.ts) after a successful `invoices.pay`.
 
+### Stranded-invoice recovery (shared primitive)
+
+Once Smart Retries exhaust, the open invoice becomes **stranded** (`open` + `attempt_count>=1` + `next_payment_attempt==null`; Dashboard "Failed") and `stripe.invoices.pay()` rejects it. All member paths (`pay-failed-invoice`, `force-charge-overdue`, `renew-subscription`) **and** the admin recover/Force-Charge tools now recover it through **one** shared primitive, [`prepareRecoveredCycleInvoice`](../src/services/subscription/prepareRecoveredCycleInvoice.ts): **void the stranded original → finalize the held cycle draft** (ordering is pick-draft → finalize → void so a missing draft never strands a cycle), serialized by a per-subscription [`RecoveryClaim`](../src/models/RecoveryClaim.ts) lock. The finalized draft keeps `billing_reason: subscription_cycle`, so paying it triggers the normal `invoice.payment_succeeded` resume + reanchor above. It **never creates a manual invoice**. Expected cycle amount is single-sourced from the live subscription price (`deriveExpectedCycleAmountCents`), surviving a past-due tier switch. See [FAILED_RENEWAL_PAY_NOW.md](./FAILED_RENEWAL_PAY_NOW.md).
+
 ## “Missing” invoice while paused
 
 With `keep_as_draft`, newer cycle invoices can stay **draft** until collection resumes. Any tool that only lists **open** invoices (for example, some admin previews) may not show a draft. Check the subscription in the Stripe Dashboard: **Invoices** on the customer or subscription, including **draft** and **open**.

@@ -331,6 +331,7 @@ The non-obvious rule that ties everything together:
 - When a renewal fails (`subscription_cycle`), `pauseAfterRenewalFailure` sets `pause_collection: keep_as_draft` to **stop Stripe from stacking draft invoices**.
 - On a successful payment, `resumeAfterSuccessfulRenewalPayment` clears the pause **before** granting benefits — this is deliberate, so the resume survives a webhook timeout.
 - After clearing the pause and granting benefits, the webhook also **reanchors future renewals** to the recovery-payment date (clamped 25/26/27 → 24) — see §9b and `docs/PAST_DUE_REANCHOR.md`.
+- **Stranded-invoice recovery (member self-serve).** Once Stripe's Smart Retries exhaust, the renewal invoice becomes "stranded" (still `open`, but the Dashboard labels it "Failed") and `stripe.invoices.pay()` rejects it — which used to dead-end members at a "contact support" screen. Members can now **self-recover**: Pay-Now (`pay-failed-invoice`), the off_session "Pay overdue" (`force-charge-overdue`), and the renew retry (`renew-subscription`) all **void the stranded invoice and finalize the held cycle draft** via the shared `prepareRecoveredCycleInvoice` primitive (serialized by a per-subscription `RecoveryClaim` lock), then collect on that draft — no manual invoice is ever created (so `billing_reason` stays `subscription_cycle` and §9d resume + reanchor still run). Admin Force-Charge on a stranded invoice now recovers too. See `docs/FAILED_RENEWAL_PAY_NOW.md`.
 
 ### 9e. Past-due admin charge tool
 
