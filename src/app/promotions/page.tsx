@@ -148,7 +148,13 @@ export default async function GiveawayGalleryPage() {
           get this from VariantAssignmentWrapper). */}
       <VariantProvider experimentId={null} variantId={null} variantConfig={null} isLoading={false}>
         <Suspense fallback={null}>
-          <PromoBanner initialMembershipPromo={membershipPromo} initialOneTimePromo={oneTimePromo} />
+          {/* followOnScroll={false}: keep the banner in-flow on the gallery — it must not turn into
+              the fixed scroll-follow pill (the gallery has its own sticky filter dock). */}
+          <PromoBanner
+            initialMembershipPromo={membershipPromo}
+            initialOneTimePromo={oneTimePromo}
+            followOnScroll={false}
+          />
         </Suspense>
       </VariantProvider>
 

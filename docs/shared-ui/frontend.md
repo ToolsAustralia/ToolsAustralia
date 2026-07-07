@@ -1,5 +1,11 @@
 # Shared UI — Frontend
 
+> **PromoBanner `followOnScroll` prop (2026-07-07):** `PromoBanner` (`sections/promo/PromoBanner.tsx`) gained
+> an optional **`followOnScroll?: boolean`** (default `true` = the landing-page behaviour where it goes
+> `fixed z-50` and floats as a pill on scroll). When `false`, `applyScrollThreshold` early-returns so
+> `isScrolled` never flips true — the banner stays `relative`/in-flow and just scrolls away. Passed `false` on
+> the `/promotions` gallery, which has its own sticky filter dock (two floating top elements would collide).
+
 > **Header nav: "Giveaways" dropdown replaces "Mini Draws" (2026-07-07):** the top-nav "Mini Draws" tab
 > (`Header.tsx`, desktop + mobile) is now a **"Giveaways" dropdown** mirroring the existing "Results" dropdown
 > pattern: **Major Draw → `/promotions`** (the combinations gallery) and **Mini Draw → `/mini-draws`** (existing
