@@ -763,24 +763,35 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
         return;
       }
       // Implicit promotions-page auto-open keeps its intentional 300ms delay (hero paints first).
-      const timer = setTimeout(() => {
-        setIsPackageSelectionOpen(true);
-        packageSelectionAutoOpenedRef.current = true;
-      }, 300);
+      // Gated on isPlaceholderPlan — MIRRORS the config branch above. Never auto-open the picker
+      // over a real, already-selected plan (e.g. an abandoned-checkout deep-link that pre-selects a
+      // package, or a plan chosen earlier this session). Combined with the once-per-session latch
+      // (which no longer re-arms mid-session), this makes an auto-reopen structurally impossible
+      // after the user has a plan — the root of the 2026-07-07 conversion-killing reopen loop.
+      if (isPlaceholderPlan) {
+        const timer = setTimeout(() => {
+          setIsPackageSelectionOpen(true);
+          packageSelectionAutoOpenedRef.current = true;
+        }, 300);
 
-      return () => clearTimeout(timer);
+        return () => clearTimeout(timer);
+      }
     }
 
+    // The picker auto-opens AT MOST ONCE per modal-open session. The latch re-arms ONLY when the
+    // modal fully closes (below) — never while it stays open.
+    //
+    // ⚠️ DO NOT re-arm this latch on a `!isPlaceholderPlan` (or any other in-session) condition.
+    // Doing so caused a conversion-killing reopen loop (2026-07-07): the auto-open effect is the
+    // ONLY code path that opens the picker automatically, and while the modal is open the latch is
+    // the only gate stopping it from firing again. A re-arm keyed on `!isPlaceholderPlan` disarmed
+    // that gate after every pick, so the effect immediately re-opened the picker — and on
+    // /promotions/* the picker's dismiss handler does NOT close the modal (configSelectionFirst is
+    // false there), so users were trapped: select-or-exit → reopen → repeat, never reaching payment.
+    // Each tier tap minted an `incomplete` Stripe subscription. New conversions went to ~zero.
+    // To let the user change plans, use the explicit "Change" button (handlePackageChange), never a
+    // latch re-arm. See docs/subscription/package-selection-first.md.
     if (!isOpen) {
-      packageSelectionAutoOpenedRef.current = false;
-    }
-
-    // The latch is per PLACEHOLDER-EPISODE, not per rendered-closed frame: once a real plan is
-    // selected, re-arm it. A selection-first request can arrive while the modal never rendered a
-    // closed frame (e.g. re-tapping "Become a member" during the old awaited-close window, or a
-    // plan-less openMembershipModal event) — plan flips real → placeholder and the picker must
-    // auto-open again. Within one placeholder episode the latch still prevents dismiss→reopen loops.
-    if (isOpen && !isPlaceholderPlan) {
       packageSelectionAutoOpenedRef.current = false;
     }
   }, [isOpen, currentStep, pathname, isPackageSelectionOpen, finalMembershipModalConfig, isPlaceholderPlan]);
