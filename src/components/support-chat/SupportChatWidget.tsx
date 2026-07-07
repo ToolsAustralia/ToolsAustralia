@@ -38,6 +38,7 @@ import { Z_INDEX } from "@/constants/z-index";
 import { useDashboardSheetStore } from "@/stores/useDashboardSheetStore";
 import { OPEN_SUPPORT_CHAT_EVENT } from "@/lib/support-chat/widget-events";
 import { useSupportChat } from "./useSupportChat";
+import { useDodgeFloatingObstacles } from "./useDodgeFloatingObstacles";
 import {
   hasAcknowledgedDisclosure,
   acknowledgeDisclosure,
@@ -201,6 +202,12 @@ export default function SupportChatWidget({ side = "right" }: SupportChatWidgetP
     return () => window.removeEventListener(OPEN_SUPPORT_CHAT_EVENT, handler);
   }, []);
 
+  // Collision-aware placement: lift the floating bubble above any other bottom-anchored
+  // floating element (draw countdown banner, "get entries" bar, upsell gift) that would
+  // overlap its corner. Only while the bubble is actually shown AND closed — an open
+  // panel (z-9000) already covers those obstacles (z ≤ 50), so no lift is needed then.
+  const dodgeBottom = useDodgeFloatingObstacles(side, !onDashboard && !open);
+
   // Auto-scroll to bottom when messages change
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -284,7 +291,12 @@ export default function SupportChatWidget({ side = "right" }: SupportChatWidgetP
         onClick={() => setOpen((v) => !v)}
         aria-label={open ? "Close chat" : "Open AI support chat"}
         className={`fixed bottom-5 ${sideClass} w-14 h-14 rounded-full bg-orange-500 hover:bg-orange-600 text-white shadow-lg flex items-center justify-center transition-all duration-200 hover:scale-105 focus:outline-none focus:ring-2 focus:ring-orange-400 focus:ring-offset-2`}
-        style={{ zIndex: Z_INDEX.MODAL_BASE - 1000 }}
+        style={{
+          zIndex: Z_INDEX.MODAL_BASE - 1000,
+          // Lift above a colliding bottom floater (0 = keep the default bottom-5).
+          // `transition-all` animates the move, so it slides rather than jumps.
+          ...(dodgeBottom > 0 ? { bottom: `${dodgeBottom}px` } : {}),
+        }}
       >
         {open ? (
           <svg

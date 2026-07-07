@@ -4,6 +4,25 @@ Hard-won lessons. Read before touching the widget mount, the route runtime, or t
 
 ---
 
+## Launcher placement — collision-aware, not per-page hardcoding (2026-07-07)
+
+The floating bubble mustn't overlap the site's OTHER bottom-anchored floaters (the draw countdown banner `FloatingCountdownBanner`, the promotions "get entries" bar `FloatingGetEntriesButton`, the upsell gift `FloatingGiftIcon`). Researched pattern (Intercom/Zendesk/Material): keep a persistent corner FAB and **lift it above** the obstacle — never hide it, never move it into a menu.
+
+**How it works:** [`useDodgeFloatingObstacles`](../../src/components/support-chat/useDodgeFloatingObstacles.ts) scans `document.querySelectorAll('[data-floating-widget]')`, does an **AABB overlap test against the bubble's DEFAULT corner rect**, and returns the bubble's target `bottom` (obstacle top + 12px) when one collides, else 0. The widget applies it as an inline `bottom` (the existing `transition-all` animates the slide). Obstacles opt in **declaratively** by carrying `data-floating-widget` — no per-page wiring, no store.
+
+**Why the AABB test is load-bearing (don't "simplify" it to a boolean "banner present"):**
+- **Mobile** the countdown banner is near-full-width → it reaches the corner → bubble lifts.
+- **Desktop** the same banner is centered + narrow (`max-w-4xl`) → it does NOT reach the corner → no lift (correct — a boolean would over-lift here).
+- **Top-docked** banners (the scroll-follow `PromoBanner` flips to `top-4`) never intersect the bottom rect → ignored for free.
+
+**Two deliberate scoping choices:**
+- **Dodge only while the bubble is shown AND the panel is closed** (`enabled = !onDashboard && !open`). An open panel is `z-9000` and opaque — it already covers every obstacle (`z ≤ 50`), so lifting it would instead expose the banner *below* it. On `/my-account` the bubble is suppressed entirely (the "Ask Cobber" card is the entry), so no dodge there.
+- **Corner selection stays the `side` prop** (right by default, `left` on promotions where the right corner holds the theme toggle + account FAB). The hook only decides how far UP to sit, not which corner.
+
+**Reactivity:** recomputes on scroll (rAF, banners collapse/appear), resize, and a `MutationObserver` (a banner dismissed via ✕ or mounted via AnimatePresence un-lifts the bubble immediately). When you add a NEW bottom-anchored floater, give it `data-floating-widget="true"` and the launcher dodges it automatically.
+
+---
+
 ## Chat error/limit/captcha UX — no stacked errors, no dead-ends (2026-07-04)
 
 **The trap:** the 401 (captcha), 429 (rate-limit) and 503 (kill-switch/budget) responses come back as **plain non-2xx JSON**, not a stream. `useSupportChat`'s `customFetch` reads them and sets a specific flag (`captchaRequired` / `rateLimited` / `unavailable`), but then **returns the same non-ok `Response`** — and the AI SDK v6 transport (`HttpChatTransport.sendMessages`) unconditionally throws on any non-2xx, which `useChat` turns into a top-level `error`. Left unhandled, the widget rendered the red **"Something went wrong"** box **stacked above** the amber captcha/limit notice on *every* gated turn — the normal path, not an edge case.

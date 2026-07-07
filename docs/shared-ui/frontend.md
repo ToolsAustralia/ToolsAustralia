@@ -1,5 +1,9 @@
 # Shared UI — Frontend
 
+## `data-floating-widget` — the bottom-floater coordination contract (2026-07-07)
+
+Any element that **fixes itself to the bottom of the viewport** (banners, sticky CTA bars, corner FABs) MUST carry **`data-floating-widget="true"`** on its outermost fixed node. This is the opt-in contract the Cobber support-chat launcher reads to avoid overlapping them: [`useDodgeFloatingObstacles`](../../src/components/support-chat/useDodgeFloatingObstacles.ts) scans `[data-floating-widget]` and lifts the bubble above any that collide with its corner (AABB test — see [ai-chatbot/gotchas.md § Launcher placement](../ai-chatbot/gotchas.md)). Current carriers: [`FloatingCountdownBanner`](../../src/components/banners/FloatingCountdownBanner.tsx), [`FloatingGetEntriesButton`](../../src/components/sections/promo/FloatingGetEntriesButton.tsx), [`FloatingGiftIcon`](../../src/components/ui/FloatingGiftIcon.tsx). **When you add a new bottom-anchored floater, add the attribute** and the launcher dodges it automatically — no other wiring. (The attribute is cheap and inert for anything that doesn't consume it.)
+
 ## FAQ answers render markdown (2026-06-25)
 
 `FAQSection` (`src/components/ui/FAQSection.tsx`) renders each FAQ `answer` through `<ChatMarkdown>` (`src/components/support-chat/ChatMarkdown.tsx`) so markdown links in `src/data/faqs.ts` answers become clickable — internal links (`/...`) navigate in-app, external (`http...`) open in a new tab. Plain-text answers render unchanged. The same renderer powers the Cobber support chat widget, so the FAQ page and the bot stay visually consistent.
