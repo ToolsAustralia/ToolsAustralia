@@ -33,7 +33,11 @@ extend the validator + pageType deliberately if gallery tracking is wanted.
 **Chrome parity + newsletter overlap (2026-07-07):** the gallery mounts the SAME top chrome the brand
 landing pages use — `PromoBanner` (the sticky site-wide promo/countdown strip that reads as the "navbar") and
 `PromotionsAccountButton` (floating account/nav menu, authed-only). **Both are `<Suspense>`-wrapped** (`PromoBanner`
-reads `useSearchParams`). The page is `async` and server-fetches `getEffectivePromosForDisplay()` to pass
+reads `useSearchParams`). **`PromoBanner` MUST also be wrapped in a `<VariantProvider … isLoading={false}>`**:
+it calls `useVariantContext()`, and with NO provider the default context is `isLoading: true` *forever* →
+`isPromoResolved` stays false → the banner is stuck in its centered-logo **loading skeleton** and never renders
+the promo strip (this was the "banner shows only a logo, no promos" bug). The `[slug]` pages get a real provider
+from `VariantAssignmentWrapper`; the gallery runs no experiment, so a resolved empty provider is correct. The page is `async` and server-fetches `getEffectivePromosForDisplay()` to pass
 `initialMembershipPromo`/`initialOneTimePromo` to `PromoBanner`, AND mounts `<PromoThemeInitializer slug={DEFAULT_PRIZE_SLUG} />`
 — WITHOUT both, the banner rendered unthemed/empty and looked different from the `[slug]` pages (owner: "should
 be the same PromoBanner"). Fabricated "$XXXk+ prize-pool" stat row removed (owner). Overlap fix: the layout's

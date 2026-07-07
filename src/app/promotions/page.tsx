@@ -8,6 +8,7 @@ import { getLandingHeroImagePaths } from "@/config/promo-landing-slugs";
 import { BRAND_THEMES, type BrandKey } from "@/config/brand-theme";
 import { getEffectivePromosForDisplay } from "@/utils/database/queries/promo-queries";
 import PromoThemeInitializer from "@/components/promo/PromoThemeInitializer";
+import { VariantProvider } from "@/components/ab-testing/VariantProvider";
 import PromoBanner from "@/components/sections/promo/PromoBanner";
 import PromotionsAccountButton from "@/components/sections/promo/PromotionsAccountButton";
 import GiveawayGalleryClient, { type GiveawayGalleryCard } from "./_components/GiveawayGalleryClient";
@@ -139,10 +140,17 @@ export default async function GiveawayGalleryPage() {
       <PromoThemeInitializer slug={DEFAULT_PRIZE_SLUG} />
 
       {/* Same sticky promo strip the brand landing pages mount — gives the chrome-free promotions
-          section its "navbar". Suspense-wrapped: PromoBanner reads useSearchParams. */}
-      <Suspense fallback={null}>
-        <PromoBanner initialMembershipPromo={membershipPromo} initialOneTimePromo={oneTimePromo} />
-      </Suspense>
+          section its "navbar". Suspense-wrapped: PromoBanner reads useSearchParams. The
+          VariantProvider is REQUIRED: PromoBanner reads useVariantContext(), and without a provider
+          the default context is `isLoading: true` forever — the banner then stays stuck in its
+          centered-logo loading skeleton and never renders the promo strip. The gallery runs no A/B
+          experiment, so a resolved empty provider (isLoading=false) is correct (the [slug] pages
+          get this from VariantAssignmentWrapper). */}
+      <VariantProvider experimentId={null} variantId={null} variantConfig={null} isLoading={false}>
+        <Suspense fallback={null}>
+          <PromoBanner initialMembershipPromo={membershipPromo} initialOneTimePromo={oneTimePromo} />
+        </Suspense>
+      </VariantProvider>
 
       <main className="w-full overflow-x-clip">
         {/* ── Hero ── theme-aware: light gradient in light mode, slate in dark. */}
