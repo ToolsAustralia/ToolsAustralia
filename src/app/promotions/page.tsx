@@ -1,11 +1,18 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { ArrowRight, Banknote } from "lucide-react";
 import { listPrizes, DEFAULT_PRIZE_SLUG, type PrizeCatalogEntry } from "@/config/prizes";
 import { getLandingHeroImagePaths } from "@/config/promo-landing-slugs";
 import { BRAND_THEMES, type BrandKey } from "@/config/brand-theme";
+import { getEffectivePromosForDisplay } from "@/utils/database/queries/promo-queries";
+import PromoThemeInitializer from "@/components/promo/PromoThemeInitializer";
+import { VariantProvider } from "@/components/ab-testing/VariantProvider";
+import PromoBanner from "@/components/sections/promo/PromoBanner";
+import PromotionsAccountButton from "@/components/sections/promo/PromotionsAccountButton";
 import GiveawayGalleryClient, { type GiveawayGalleryCard } from "./_components/GiveawayGalleryClient";
+import GalleryCountdown from "./_components/GalleryCountdown";
 
 const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://toolsaustralia.com.au";
 
@@ -47,8 +54,17 @@ const BRAND_DISPLAY: Record<string, string> = {
 
 const STORAGE_DISPLAY: Record<string, string> = {
   sidchrome: "Sidchrome",
-  milwaukee: "Milwaukee Toolbox",
+  milwaukee: "Milwaukee",
   kincrome: "Kincrome",
+};
+
+/** Real brand wordmark SVGs (public/images/brands/name/) — brand-colored, read on both themes. */
+const BRAND_WORDMARK: Record<string, string> = {
+  milwaukee: "/images/brands/name/milwaukeeText.svg",
+  dewalt: "/images/brands/name/dewaltText.svg",
+  makita: "/images/brands/name/makitaText.svg",
+  ryobi: "/images/brands/name/ryobiText.svg",
+  hikoki: "/images/brands/name/hikokiText.svg",
 };
 
 /** Brand accent for the gallery. Milwaukee uses the Tools Australia site red (matches the
@@ -56,15 +72,6 @@ const STORAGE_DISPLAY: Record<string, string> = {
 function brandAccent(brand: string): string {
   if (brand === "milwaukee") return "#ee0000";
   return BRAND_THEMES[brand as BrandKey]?.primary ?? "#ee0000";
-}
-
-/** Readable ink on a brand accent (YIQ luminance — yellow/lime/cyan need dark ink). */
-function inkOn(hex: string): string {
-  const n = hex.replace("#", "");
-  const r = parseInt(n.slice(0, 2), 16);
-  const g = parseInt(n.slice(2, 4), 16);
-  const b = parseInt(n.slice(4, 6), 16);
-  return (r * 299 + g * 587 + b * 114) / 1000 >= 150 ? "#241a02" : "#ffffff";
 }
 
 function toCard(prize: PrizeCatalogEntry): GiveawayGalleryCard | null {
@@ -84,23 +91,28 @@ function toCard(prize: PrizeCatalogEntry): GiveawayGalleryCard | null {
     brandKey: brandLabel ? brand : "all",
     storageKey: storageLabel ? storage : "all",
     storageLabel: storageLabel ?? "",
+    wordmarkSrc: BRAND_WORDMARK[brand],
     description: prize.label,
-    valueLabel: prize.prizeValueLabel,
     accentHex,
-    accentInk: inkOn(accentHex),
     images: { desktop: images.desktop, mobile: images.mobile },
   };
 }
 
 /**
- * /promotions — the giveaway combinations gallery (owner: the gallery IS the promotions root; the old
- * page here was a bare redirect to DEFAULT_PRIZE_SLUG). Editorial index of every major-draw
- * prize combination: featured headline combo (the default prize) → brand-filterable grid of
- * brand-accented cards (each using its landing page's own hero art) → gold cash-alternative band.
- * Every card deep-links to its `/promotions/<slug>` landing page. Newsletter, footer, theme toggle
- * and the modal manager come from the promotions layout.
+ * /promotions — the giveaway combinations showroom (owner: the gallery IS the promotions root;
+ * the old page here was a bare redirect to DEFAULT_PRIZE_SLUG). THEME-AWARE (light + dark, follows
+ * the promotions guest theme toggle) and mounts the SAME chrome the brand landing pages use:
+ * PromoThemeInitializer (so PromoBanner + account button render themed/identical to the [slug]
+ * pages) + PromoBanner (the "navbar") + PromotionsAccountButton. Composition: hero (heading,
+ * live draw countdown, brand wordmark strip) → featured lead combo → sticky dual-filter dock +
+ * showroom grid (2-up on mobile) → gold cash band. Every card deep-links to `/promotions/<slug>`.
+ * `overflow-x-clip` (not `overflow-hidden`) on the ancestors so the sticky dock actually sticks.
  */
-export default function GiveawayGalleryPage() {
+export default async function GiveawayGalleryPage() {
+  const effectivePromos = await getEffectivePromosForDisplay().catch(() => []);
+  const membershipPromo = effectivePromos.find((p) => p.type === "membership-packages") || null;
+  const oneTimePromo = effectivePromos.find((p) => p.type === "one-time-packages") || null;
+
   const prizes = listPrizes();
   const cash = prizes.find((p) => p.slug === "cash-prize");
   const featured = toCard(prizes.find((p) => p.slug === DEFAULT_PRIZE_SLUG) ?? prizes[0]);
@@ -122,49 +134,94 @@ export default function GiveawayGalleryPage() {
   const comboCount = cards.length;
 
   return (
-    <div className="min-h-svh w-full overflow-hidden bg-white dark:bg-neutral-950">
-      <main className="w-full overflow-hidden">
-        {/* ── Hero band — dark slate, promotions vocabulary ── */}
-        <section className="relative overflow-hidden bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950">
+    <div className="min-h-svh w-full overflow-x-clip bg-white dark:bg-neutral-950">
+      {/* Theme the promo chrome to the site default (Milwaukee/red) so PromoBanner + account button
+          render exactly like they do on the [slug] pages. */}
+      <PromoThemeInitializer slug={DEFAULT_PRIZE_SLUG} />
+
+      {/* Same sticky promo strip the brand landing pages mount — gives the chrome-free promotions
+          section its "navbar". Suspense-wrapped: PromoBanner reads useSearchParams. The
+          VariantProvider is REQUIRED: PromoBanner reads useVariantContext(), and without a provider
+          the default context is `isLoading: true` forever — the banner then stays stuck in its
+          centered-logo loading skeleton and never renders the promo strip. The gallery runs no A/B
+          experiment, so a resolved empty provider (isLoading=false) is correct (the [slug] pages
+          get this from VariantAssignmentWrapper). */}
+      <VariantProvider experimentId={null} variantId={null} variantConfig={null} isLoading={false}>
+        <Suspense fallback={null}>
+          <PromoBanner initialMembershipPromo={membershipPromo} initialOneTimePromo={oneTimePromo} />
+        </Suspense>
+      </VariantProvider>
+
+      <main className="w-full overflow-x-clip">
+        {/* ── Hero ── theme-aware: light gradient in light mode, slate in dark. */}
+        <section className="relative overflow-hidden bg-gradient-to-b from-gray-50 to-white dark:from-slate-950 dark:to-neutral-950">
+          {/* Pinstripe — dark mode only (invisible on white). */}
           <div
             aria-hidden
-            className="pointer-events-none absolute -top-24 left-1/2 h-72 w-[42rem] -translate-x-1/2 rounded-full opacity-25"
+            className="pointer-events-none absolute inset-0 hidden dark:block"
+            style={{ backgroundImage: "repeating-linear-gradient(45deg, transparent 0 14px, rgba(255,255,255,0.014) 14px 28px)" }}
+          />
+          <div
+            aria-hidden
+            className="pointer-events-none absolute -top-32 left-1/2 h-96 w-[52rem] -translate-x-1/2 rounded-full opacity-20 dark:opacity-30"
             style={{ background: "radial-gradient(closest-side, #ee0000, transparent 70%)" }}
           />
-          <div className="relative mx-auto w-full max-w-7xl px-4 pb-10 pt-12 text-center sm:px-6 sm:pb-14 sm:pt-16 lg:px-8">
-            <p className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-red-500 sm:text-xs">
-              Major draw · {comboCount} prize combinations
+          <div className="relative mx-auto w-full max-w-7xl px-4 pb-12 pt-14 text-center sm:px-6 sm:pb-16 sm:pt-20 lg:px-8">
+            <p className="text-[11px] font-extrabold uppercase tracking-[0.24em] text-red-600 sm:text-xs dark:text-red-500">
+              One major draw · {comboCount} ways to win it
             </p>
-            <h1 className="mt-3 font-sans text-3xl font-extrabold font-[950] uppercase leading-[1.05] text-white sm:text-4xl lg:text-5xl">
-              Pick your dream combination
+            <h1 className="mx-auto mt-4 max-w-4xl font-sans text-4xl font-extrabold font-[950] uppercase leading-[0.95] tracking-tight text-gray-900 sm:text-5xl lg:text-7xl dark:text-white">
+              Pick your dream
+              <span className="block text-transparent [-webkit-text-stroke:2px_#ee0000] sm:[-webkit-text-stroke:3px_#ee0000]">
+                combination
+              </span>
             </h1>
-            <p className="mx-auto mt-4 max-w-2xl text-base text-gray-300 sm:text-lg">
-              Your favourite power-tool brand, premium toolbox storage and{" "}
-              <span className="font-bold text-white">$5,000 cash</span> — in every combination. Or skip the tools
-              and take <span className="font-bold text-white">$10,000 straight to your bank</span>.
+            <p className="mx-auto mt-5 max-w-2xl text-base text-gray-600 sm:text-lg dark:text-gray-300">
+              Your brand. Your toolbox.{" "}
+              <span className="font-bold text-gray-900 dark:text-white">$5,000 cash in every combo</span> — or skip
+              the tools and take{" "}
+              <span className="font-bold text-gray-900 dark:text-white">$10,000 straight to your bank</span>.
             </p>
+
+            {/* Live draw countdown (renders nothing until the draw resolves). */}
+            <GalleryCountdown />
+
+            {/* Brand wordmark marquee — ONE scrolling row (matches the /membership brand marquee),
+                bigger white cards. 4 copies so the animated half (-50%) always exceeds the viewport
+                for a seamless loop even with only 5 brands. Hover pauses; masked edges. */}
+            <div className="relative mt-10 overflow-hidden [mask-image:linear-gradient(90deg,transparent,#000_8%,#000_92%,transparent)]">
+              <div className="flex w-max items-center gap-3.5 animate-[marquee-scroll_45s_linear_infinite] hover:[animation-play-state:paused]">
+                {[...brands, ...brands, ...brands, ...brands].map(({ key, label }, i) =>
+                  BRAND_WORDMARK[key] ? (
+                    <div
+                      key={`${key}-${i}`}
+                      className="flex h-[64px] flex-shrink-0 items-center justify-center rounded-2xl border border-gray-200 bg-white px-7 shadow-sm sm:h-[80px] sm:px-9 dark:border-white/10"
+                    >
+                      <span className="relative block h-8 w-28 sm:h-10 sm:w-36">
+                        <Image src={BRAND_WORDMARK[key]} alt={label} fill unoptimized className="object-contain" />
+                      </span>
+                    </div>
+                  ) : null,
+                )}
+              </div>
+            </div>
           </div>
         </section>
 
-        {/* ── Featured headline combo — full-width art, the obvious first click ── */}
+        {/* ── Featured lead combo ── */}
         {featured && (
           <section className="mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8">
             <Link
               href={`/promotions/${featured.slug}`}
-              className="group relative -mt-6 block overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-[0_18px_50px_rgba(0,0,0,0.18)] transition-transform duration-300 hover:-translate-y-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-600 dark:border-neutral-700 sm:-mt-8"
+              className="group relative block overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-[0_18px_44px_-16px_rgba(0,0,0,0.2)] transition-transform duration-300 hover:-translate-y-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500 dark:border-white/10 dark:bg-gradient-to-b dark:from-white/[.07] dark:to-white/[.02]"
+              style={{ boxShadow: `0 22px 60px -22px ${featured.accentHex}4d` }}
             >
               <span
                 aria-hidden
                 className="absolute inset-x-0 top-0 z-10 h-[3px]"
                 style={{ background: `linear-gradient(90deg, ${featured.accentHex}, transparent 78%)` }}
               />
-              <span
-                className="absolute left-4 top-4 z-10 rounded-full px-3 py-1 text-[11px] font-extrabold uppercase tracking-wide shadow-md"
-                style={{ background: featured.accentHex, color: featured.accentInk }}
-              >
-                This month&apos;s headline
-              </span>
-              <div className="relative w-full bg-white">
+              <div className="relative m-2.5 overflow-hidden rounded-xl bg-white sm:m-3">
                 <div className="relative aspect-[1080/1164] w-full lg:hidden">
                   <Image
                     src={featured.images.mobile}
@@ -186,15 +243,18 @@ export default function GiveawayGalleryPage() {
                   />
                 </div>
               </div>
-              <div className="flex flex-col gap-2 border-t border-gray-100 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5 dark:border-neutral-800 dark:bg-neutral-900">
+              <div className="flex flex-col gap-2 px-4 pb-4 pt-1 sm:flex-row sm:items-center sm:justify-between sm:px-5 sm:pb-5">
                 <div className="min-w-0">
-                  <h2 className="font-sans text-xl font-extrabold uppercase leading-tight text-gray-900 dark:text-white sm:text-2xl">
+                  <h2 className="font-sans text-xl font-extrabold uppercase leading-tight text-gray-900 sm:text-2xl dark:text-white">
                     {featured.title}
                   </h2>
-                  <p className="mt-1 line-clamp-2 text-sm text-gray-600 dark:text-neutral-400">{featured.description}</p>
+                  <p className="mt-1 line-clamp-2 text-sm text-gray-600 dark:text-gray-400">{featured.description}</p>
                 </div>
-                <span className="inline-flex shrink-0 items-center gap-1.5 text-sm font-bold text-red-600 dark:text-red-500">
-                  {featured.valueLabel ? `${featured.valueLabel} · ` : ""}View this combination
+                <span
+                  className="inline-flex shrink-0 items-center gap-1.5 text-sm font-bold"
+                  style={{ color: featured.accentHex }}
+                >
+                  View this combination
                   <ArrowRight className="h-4 w-4 transition-transform duration-300 group-hover:translate-x-1" />
                 </span>
               </div>
@@ -202,20 +262,19 @@ export default function GiveawayGalleryPage() {
           </section>
         )}
 
-        {/* ── Filterable gallery ── */}
+        {/* ── Filterable showroom ── */}
         <GiveawayGalleryClient cards={cards} featuredSlug={featured?.slug} brands={brands} storages={storages} />
 
-        {/* ── Cash alternative — distinct gold band, closing the page ── */}
+        {/* ── Cash alternative — distinct gold band, closing the page ──
+             Extra bottom padding clears the layout's NewsletterSection, which is absolutely
+             positioned + `-translate-y-1/2` so it tucks up by half its height into the page's end. */}
         {cash && (
-          <section className="mx-auto w-full max-w-7xl px-4 pb-14 pt-2 sm:px-6 lg:px-8">
+          <section className="mx-auto w-full max-w-7xl px-4 pb-28 pt-4 sm:px-6 sm:pb-36 lg:px-8 lg:pb-44">
             <Link
               href="/promotions/cash-prize"
-              className="group relative flex flex-col items-start gap-4 overflow-hidden rounded-2xl border border-[#e4c86a]/60 bg-gradient-to-br from-[#f9e9ad] via-[#e9c65f] to-[#d4af37] p-6 shadow-[0_18px_44px_-14px_rgba(212,175,55,0.55)] transition-transform duration-300 hover:-translate-y-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-600 sm:flex-row sm:items-center sm:justify-between sm:p-8"
+              className="group relative flex flex-col items-start gap-4 overflow-hidden rounded-2xl border border-[#e4c86a]/60 bg-gradient-to-br from-[#f9e9ad] via-[#e9c65f] to-[#d4af37] p-6 shadow-[0_24px_60px_-18px_rgba(212,175,55,0.5)] transition-transform duration-300 hover:-translate-y-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 sm:flex-row sm:items-center sm:justify-between sm:p-8"
             >
-              <span
-                aria-hidden
-                className="pointer-events-none absolute -right-10 -top-16 h-56 w-56 rounded-full bg-white/25 blur-2xl"
-              />
+              <span aria-hidden className="pointer-events-none absolute -right-10 -top-16 h-56 w-56 rounded-full bg-white/25 blur-2xl" />
               <div className="relative flex items-center gap-4">
                 <span className="grid h-14 w-14 shrink-0 place-items-center rounded-2xl bg-[#241a02]/90 text-[#f6dd8c] shadow-lg">
                   <Banknote className="h-7 w-7" />
@@ -237,6 +296,11 @@ export default function GiveawayGalleryPage() {
           </section>
         )}
       </main>
+
+      {/* Floating account/nav menu — the same one the brand landing pages mount (authed users only). */}
+      <Suspense fallback={null}>
+        <PromotionsAccountButton />
+      </Suspense>
     </div>
   );
 }

@@ -1,5 +1,13 @@
 # Shared UI — Frontend
 
+> **Header nav: "Giveaways" dropdown replaces "Mini Draws" (2026-07-07):** the top-nav "Mini Draws" tab
+> (`Header.tsx`, desktop + mobile) is now a **"Giveaways" dropdown** mirroring the existing "Results" dropdown
+> pattern: **Major Draw → `/promotions`** (the combinations gallery) and **Mini Draw → `/mini-draws`** (existing
+> route — the request said "/mini-draw" but the real route is plural). State: `isGiveawaysMenuOpen` /
+> `isMobileGiveawaysOpen`; active-state helper `isGiveawaysActive()` = on `/promotions` OR `/mini-draws`;
+> click-outside closes via the `.giveaways-dropdown-container` selector. Trigger icon `Gift`, items `Trophy`
+> (major) / `Ticket` (mini).
+
 > **Mini-draw copy: no "only drawn when full" framing (2026-07-07, owner call):** the Draws mini-tab explainer
 > (`DrawsMini`) and the entry sheet footnote (`MiniDrawEntrySheet`) no longer lead with "no clock — they run
 > when they fill" / "picked the moment it fills" — for a draw far from its target that reads as "might sit
