@@ -13,7 +13,7 @@
  * InvoiceChargeLog rows (depends on `past-due-charge-idempotency`).
  */
 
-import { RECENT_ATTEMPT_WINDOW_HOURS, cutoffForRecentAttempt } from "./past-due-charge-idempotency";
+import { cutoffForRecentAttempt } from "./past-due-charge-idempotency";
 
 export { RECENT_ATTEMPT_WINDOW_HOURS } from "./past-due-charge-idempotency";
 
