@@ -73,15 +73,6 @@ function brandAccent(brand: string): string {
   return BRAND_THEMES[brand as BrandKey]?.primary ?? "#ee0000";
 }
 
-/** Readable ink on a brand accent (YIQ luminance — yellow/lime/cyan need dark ink). */
-function inkOn(hex: string): string {
-  const n = hex.replace("#", "");
-  const r = parseInt(n.slice(0, 2), 16);
-  const g = parseInt(n.slice(2, 4), 16);
-  const b = parseInt(n.slice(4, 6), 16);
-  return (r * 299 + g * 587 + b * 114) / 1000 >= 150 ? "#241a02" : "#ffffff";
-}
-
 function toCard(prize: PrizeCatalogEntry): GiveawayGalleryCard | null {
   const images = getLandingHeroImagePaths(prize.slug);
   // No landing art shipped for this combo → skip rather than render a broken card.
@@ -101,9 +92,7 @@ function toCard(prize: PrizeCatalogEntry): GiveawayGalleryCard | null {
     storageLabel: storageLabel ?? "",
     wordmarkSrc: BRAND_WORDMARK[brand],
     description: prize.label,
-    valueLabel: prize.prizeValueLabel,
     accentHex,
-    accentInk: inkOn(accentHex),
     images: { desktop: images.desktop, mobile: images.mobile },
   };
 }
@@ -248,7 +237,7 @@ export default async function GiveawayGalleryPage() {
                   className="inline-flex shrink-0 items-center gap-1.5 text-sm font-bold"
                   style={{ color: featured.accentHex }}
                 >
-                  {featured.valueLabel ? `${featured.valueLabel} · ` : ""}View this combination
+                  View this combination
                   <ArrowRight className="h-4 w-4 transition-transform duration-300 group-hover:translate-x-1" />
                 </span>
               </div>

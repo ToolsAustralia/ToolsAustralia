@@ -45,8 +45,11 @@ dark:bg-neutral-950`, follows the promotions guest theme toggle) — it was comm
 mode too. Cards, dock, hero, featured lead all carry light+dark pairs; the brand wordmark SVGs are
 brand-colored (`#c92a28`/`#FEBD17`/`#BFD730`…) so they read on both grounds without inverting. **Grid is
 `grid-cols-2` on mobile** (2-up — owner: "see in general what we're offering", small is fine), `lg:grid-cols-3`;
-card copy compacts on mobile (wordmark scaled, toolbox chip + description hidden `<sm`, "View" vs "View this
-combination"). **Sticky filter dock now actually sticks:** the page ancestors use `overflow-x-clip` (NOT
+card copy compacts on mobile (wordmark scaled, toolbox chip + full catalog-label description hidden `<sm`, "View"
+vs "View this combination"). **No value badge** (owner: "remove the price value") — and the **prize name is
+always shown**: the short combo title (`card.title`, e.g. "Milwaukee × Sidchrome", truncated) on mobile, the
+full catalog-label description from `sm`. The `accentInk`/`inkOn` YIQ helper was removed with the badge.
+**Sticky filter dock now actually sticks:** the page ancestors use `overflow-x-clip` (NOT
 `overflow-hidden`, which establishes a scroll container and silently breaks `position: sticky`); the dock's
 `top-16 sm:top-20` clears the `PromoBanner` (which goes `fixed z-50` when scrolled). The "This month's headline"
 badge on the featured combo was removed (owner).

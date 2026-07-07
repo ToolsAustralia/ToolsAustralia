@@ -23,11 +23,8 @@ export interface GiveawayGalleryCard {
   wordmarkSrc?: string;
   /** Full combo description (the catalog label). */
   description: string;
-  /** e.g. "$35,000+ Value". */
-  valueLabel?: string;
-  /** Brand identity: accent hex + ink color readable on it (computed server-side). */
+  /** Brand accent hex (computed server-side) — hairline, hover glow, CTA color. */
   accentHex: string;
-  accentInk: string;
   /** Manifest-verified landing hero art (light variants). */
   images: { desktop: string; mobile: string };
 }
@@ -97,18 +94,10 @@ function ComboCard({ card }: { card: GiveawayGalleryCard }) {
             className="object-contain object-center transition-transform duration-500 group-hover:scale-[1.045]"
           />
         </div>
-        {card.valueLabel && (
-          <span
-            className="absolute right-2 top-2 rounded-full px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-wide shadow-md sm:right-2.5 sm:top-2.5 sm:px-2.5 sm:py-1 sm:text-[10.5px]"
-            style={{ background: card.accentHex, color: card.accentInk }}
-          >
-            {card.valueLabel}
-          </span>
-        )}
       </div>
 
-      {/* Identity + copy — compact on mobile (2-up), fuller from sm. */}
-      <div className="flex flex-1 flex-col gap-1.5 px-3 pb-3 pt-1 sm:px-4 sm:pb-4">
+      {/* Identity + name — brand wordmark, then the prize name (always visible, truncated on mobile). */}
+      <div className="flex flex-1 flex-col gap-1 px-3 pb-3 pt-1 sm:gap-1.5 sm:px-4 sm:pb-4">
         <div className="flex items-center justify-between gap-2">
           {card.wordmarkSrc ? (
             <span className="relative block h-5 w-24 shrink-0 sm:h-6 sm:w-28">
@@ -123,6 +112,10 @@ function ComboCard({ card }: { card: GiveawayGalleryCard }) {
             {card.storageLabel}
           </span>
         </div>
+        {/* Prize name — short combo title always; full catalog label from sm. */}
+        <h3 className="truncate font-sans text-[12.5px] font-bold text-gray-900 sm:hidden dark:text-white">
+          {card.title}
+        </h3>
         <p className="hidden text-[13px] leading-snug text-gray-600 sm:line-clamp-2 sm:block dark:text-gray-400">
           {card.description}
         </p>
