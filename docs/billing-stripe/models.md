@@ -51,7 +51,8 @@ Key fields:
 - `invoiceId` (indexed)
 - `customerId` (indexed)
 - `userId` (indexed, ref `User`)
-- `adminId` (indexed, ref `User`) — who triggered
+- `actor: "admin" | "member" | "system"` (indexed, default `"admin"`) — who initiated the row. Member self-serve recovery (Pay-Now / Force-Charge on a stranded invoice) writes `member` rows with no `adminId`.
+- `adminId` (indexed, ref `User`) — who triggered; **required only when `actor === "admin"`** (member/system rows omit it). Readers tolerate absence (`adminLabel()` → "(unknown admin)").
 - `status: "success" | "failed" | "skipped"`
 - `errorCode` — generic Stripe error code (e.g. `card_declined`, `expired_card`)
 - `declineCode` (optional, no index) — Stripe's specific decline reason from `error.decline_code` (e.g. `do_not_honor`, `insufficient_funds`, `lost_card`); complements the generic `errorCode`. `error.code` answers _what kind of failure_; `error.decline_code` answers _why the issuer specifically declined_ — both are persisted so admins can distinguish recoverable issues (insufficient funds → retry later) from permanent ones (lost/stolen card → stop retrying).
