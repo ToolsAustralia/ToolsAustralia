@@ -61,6 +61,14 @@ Resume callers (must run *before* benefit application):
 - `src/server/admin/chargePastDueShared.ts` after successful `invoices.pay`
 - `/api/stripe/renew-subscription` after user retry success
 
+### `prepareRecoveredCycleInvoice(params, deps?)`
+
+[prepareRecoveredCycleInvoice.ts](../../src/services/subscription/prepareRecoveredCycleInvoice.ts) — the **one shared** "prepare a payable cycle invoice from a stranded past-due state" primitive, reused by the admin recover flow, the member interactive Pay-Now flow, and the member/admin off_session Force-Charge flow.
+
+Ordering is deliberately **pick → finalize → void** (not void-first): it finds the held cycle draft (`pickHeldDraftForRecovery`, matched against the live-price `expectedAmountCents`), `finalizeInvoice(auto_advance:false)`s it, then voids the stranded original **last and non-fatally** (a void failure is logged and the recovery still succeeds — the draft is already finalized+payable). If no held draft exists it returns `no_held_draft` **without voiding anything**, so a member's current cycle can never be left with zero invoices; it **never** creates a manual invoice (would flip `billing_reason` off `subscription_cycle` and skip the webhook renewal pipeline + reanchor).
+
+It **never pays, resumes `pause_collection`, or reanchors** — the caller pays (interactive → return the finalized draft's PI `client_secret`; off_session → `payOpenInvoiceAsPastDueAdmin`) and the `invoice.payment_succeeded` webhook clears pause + reanchors. When an `audit` ctx is supplied it writes the recovery `InvoiceChargeLog` rows tagged `result.recovery.step` with the caller's `actor` (`admin`/`member`); side-effecting Stripe/DB ops are injectable for unit tests (`npm run test:prepare-recovered-cycle`).
+
 ### `pauseCollectionPolicy.ts` (pure helpers)
 
 [pauseCollectionPolicy.ts](../../src/services/subscription/pauseCollectionPolicy.ts)
