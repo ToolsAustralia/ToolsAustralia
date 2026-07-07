@@ -80,5 +80,6 @@ User-facing pay-now flow for failed renewals:
 - **PM management**: `payment-method-manager.ts`, `payment-method-delete-flow.ts`, `account-manager.ts`
 - **Subscription helpers**: `subscription-creation-guard.ts`, `subscription-state-manager.ts`, `subscription-entries-calculator.ts`, `subscription-error-handler.ts`, `subscription-response-handler.ts`
 - **Failed invoice**: `failed-invoice-handler.ts`, `failed-invoice-selection.ts`
+- **Stranded-invoice recovery (pure)**: `recovery/stranded-invoice-policy.ts` — the environment-free eligibility predicate (`isOriginalInvoiceEligibleForRecovery`), held-draft picker (`pickHeldDraftForRecovery`), and recovery idempotency-key builders. Relocated here from `src/server/admin/` so the shared recovery primitive (`src/services/subscription/prepareRecoveredCycleInvoice.ts`) and the member-facing pay paths reuse them without a service → server/admin dependency.
 - **Cleanup / queries**: `payment-cleanup.ts`, `payment-event-net-queries.ts`
 - **Cross-feature calculators**: `upsell-entries-calculator.ts`, `upsell-promo-multiplier.ts`

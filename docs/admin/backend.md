@@ -64,7 +64,7 @@ The recovery flow lives in [`src/server/admin/recoverStrandedPastDue.ts`](../../
 5. `stripe.invoices.finalizeInvoice()` — this is the same battle-tested path used in [`pay-failed-invoice/route.ts:150`](../../src/app/api/stripe/pay-failed-invoice/route.ts#L150) and [`invoice-payment-intent.ts:163`](../../src/utils/payment/stripe/invoice-payment-intent.ts#L163). Manual finalize bypasses `pause_collection: keep_as_draft`.
 6. Delegate to `payOpenInvoiceAsPastDueAdmin` ([`chargePastDueShared.ts`](../../src/server/admin/chargePastDueShared.ts)) for the actual charge — inherits its log row + idempotency key + `resumeAfterSuccessfulRenewalPayment` on success.
 
-Pure helpers live in [`recoverStrandedPastDuePolicy.ts`](../../src/server/admin/recoverStrandedPastDuePolicy.ts) so they're testable without `STRIPE_SECRET_KEY`. Tests: `npm run test:recover-stranded-past-due-policy`.
+The pure helpers (eligibility predicate + held-draft picker + recovery idempotency-key builders) now live in the neutral module [`src/utils/payment/recovery/stranded-invoice-policy.ts`](../../src/utils/payment/recovery/stranded-invoice-policy.ts) — relocated out of `src/server/admin/` so the shared recovery primitive (`prepareRecoveredCycleInvoice`) and member-facing pay paths reuse them without a service → server/admin dependency. [`recoverStrandedPastDuePolicy.ts`](../../src/server/admin/recoverStrandedPastDuePolicy.ts) re-exports them for backward compatibility and keeps the admin-only 24h-lock predicate `hasRecentRecoveryAttempt`. All testable without `STRIPE_SECRET_KEY`. Tests: `npm run test:recover-stranded-past-due-policy`.
 
 ### Idempotency model
 
