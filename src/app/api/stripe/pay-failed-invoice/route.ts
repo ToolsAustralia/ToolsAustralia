@@ -38,6 +38,13 @@ import {
   isPaymentIntentClientConfirmable,
 } from "@/utils/payment/stripe/payment-intent-payable";
 import { classifyStripeInvoicePayInitFailure } from "@/utils/payment/stripe/stripe-invoice-pay-errors";
+import {
+  isOriginalInvoiceEligibleForRecovery,
+  deriveExpectedCycleAmountCents,
+} from "@/utils/payment/recovery/stranded-invoice-policy";
+import { prepareRecoveredCycleInvoice } from "@/services/subscription/prepareRecoveredCycleInvoice";
+import { acquireRecoveryClaim, releaseRecoveryClaim } from "@/utils/payment/recovery/recovery-claim";
+import { getPackageById } from "@/data/membershipPackages";
 
 export async function POST(_request: NextRequest) {
   try {
@@ -99,6 +106,145 @@ export async function POST(_request: NextRequest) {
           status: "paid",
         },
       });
+    }
+
+    // ── STRANDED RECOVERY (guarded EARLY RETURN — must NOT fall through to invoices.pay() below) ──
+    // If the selected invoice is "stranded" (open-but-retry-exhausted / uncollectible / void),
+    // Stripe rejects stripe.invoices.pay() on it ("This invoice can no longer be paid…"). Recover
+    // instead: void it + finalize the held cycle draft, and return that finalized draft's
+    // PaymentIntent client_secret via the SAME requiresPaymentConfirmation shape the client already
+    // confirms. See prepareRecoveredCycleInvoice + docs/FAILED_RENEWAL_PAY_NOW.md.
+    if (isOriginalInvoiceEligibleForRecovery(invoiceData.invoice).eligible) {
+      const subscriptionId = user.stripeSubscriptionId;
+      const STRANDED_SUPPORT_DETAILS =
+        "This renewal needs to be reopened in billing before you can pay. Please contact support and we'll fix it for you.";
+
+      const claimed = await acquireRecoveryClaim(subscriptionId, "pay-failed-invoice");
+      if (!claimed) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: "Recovery in progress",
+            details: "We're already reopening this renewal. Please wait a moment and try again.",
+          },
+          { status: 409 }
+        );
+      }
+
+      try {
+        // Expected cycle amount from the LIVE subscription price (survives a past-due tier switch).
+        let subscription: Stripe.Subscription;
+        try {
+          subscription = await stripe.subscriptions.retrieve(subscriptionId);
+        } catch {
+          return NextResponse.json(
+            {
+              success: false,
+              error: "Invoice cannot be paid",
+              details: STRANDED_SUPPORT_DETAILS,
+              failureCode: "invoice_not_payable",
+            },
+            { status: 400 }
+          );
+        }
+        const pid = user.subscription?.packageId;
+        const pkgId =
+          typeof pid === "string"
+            ? pid
+            : pid && typeof pid === "object" && "_id" in pid
+              ? String((pid as { _id: unknown })._id)
+              : undefined;
+        const pkg = pkgId ? getPackageById(pkgId) : undefined;
+        const packageFallbackCents =
+          pkg && pkg.isActive && typeof pkg.price === "number" ? Math.round(pkg.price * 100) : null;
+        const expectedAmountCents = deriveExpectedCycleAmountCents(subscription, packageFallbackCents);
+
+        const customerId =
+          user.stripeCustomerId ||
+          (typeof invoiceData.invoice.customer === "string"
+            ? invoiceData.invoice.customer
+            : invoiceData.invoice.customer?.id) ||
+          "";
+
+        if (!expectedAmountCents || expectedAmountCents <= 0) {
+          return NextResponse.json(
+            {
+              success: false,
+              error: "Invoice cannot be paid",
+              details: STRANDED_SUPPORT_DETAILS,
+              failureCode: "invoice_not_payable",
+            },
+            { status: 400 }
+          );
+        }
+
+        const prepared = await prepareRecoveredCycleInvoice({
+          subscriptionId,
+          strandedInvoice: invoiceData.invoice,
+          expectedAmountCents,
+          audit: {
+            actor: "member",
+            userId: String(user._id),
+            customerId,
+            amount: expectedAmountCents,
+          },
+        });
+
+        if (!prepared.ok) {
+          // no_held_draft / finalize_failed — surface the terminal, member-safe error the modal
+          // already handles (terminalCollectionFailure). Never fall through to invoices.pay().
+          return NextResponse.json(
+            {
+              success: false,
+              error: "Invoice cannot be paid",
+              details: STRANDED_SUPPORT_DETAILS,
+              failureCode: "invoice_not_payable",
+            },
+            { status: 400 }
+          );
+        }
+
+        // Finalize may have auto-collected if a default PM was attached — treat a paid invoice as success.
+        if (prepared.finalizedInvoice.status === "paid") {
+          return NextResponse.json({
+            success: true,
+            message: "Invoice has been paid successfully",
+            data: { invoiceId: prepared.finalizedInvoice.id, status: "paid" },
+          });
+        }
+
+        const pi = prepared.paymentIntent;
+        if (!pi?.client_secret || !isPaymentIntentClientConfirmable(pi)) {
+          return NextResponse.json(
+            {
+              success: false,
+              error: "Payment setup error",
+              details: "Unable to start payment for this invoice. Please contact support.",
+              failureCode: "payment_intent_not_payable",
+            },
+            { status: 400 }
+          );
+        }
+
+        // Return the finalized draft's PI via the existing interactive shape (client confirms it).
+        return NextResponse.json({
+          success: false,
+          requiresPaymentConfirmation: true,
+          message: "Payment confirmation required",
+          data: {
+            paymentIntent: {
+              id: pi.id,
+              clientSecret: pi.client_secret,
+              amount: pi.amount,
+              currency: pi.currency,
+              status: pi.status,
+            },
+            invoiceId: prepared.finalizedInvoice.id,
+          },
+        });
+      } finally {
+        await releaseRecoveryClaim(subscriptionId).catch(() => {});
+      }
     }
 
     // Get PaymentIntent - use the one from invoiceData, or extract/retrieve if needed
