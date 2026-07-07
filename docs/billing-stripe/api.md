@@ -48,6 +48,7 @@ Full inventory of routes under `/api/stripe/**` and `/api/invoice/**`. Auth and 
 | POST | `/api/stripe/create-one-time-purchase` | Mini-draw / one-time pack purchase (new user) |
 | POST | `/api/stripe/create-one-time-purchase-existing-user` | Same, for existing user |
 | POST | `/api/stripe/pay-failed-invoice` | User pays a specific failed renewal invoice. **Stranded (open-but-retry-exhausted) invoices are auto-recovered:** the route voids the dead invoice + finalizes the held cycle draft via [`prepareRecoveredCycleInvoice`](../../src/services/subscription/prepareRecoveredCycleInvoice.ts) (under a `RecoveryClaim` lock) and returns the finalized draft's PaymentIntent `client_secret` through the existing `requiresPaymentConfirmation` shape — no more `invoice_not_payable` dead-end. Never creates a manual invoice (`billing_reason` stays `subscription_cycle`). |
+| POST | `/api/stripe/force-charge-overdue` | Member self-serve off_session charge of the current cycle via `forceChargeCurrentCycle`. **Stranded invoices are recovered** (void + finalize the held draft via `prepareRecoveredCycleInvoice` under the `RecoveryClaim` lock, then off_session-pay the finalized draft on its per-attempt idempotency key). New reason `no_held_draft` (409). |
 | POST | `/api/stripe/webhook` | **THE** webhook receiver; verifies signature, dedupes via `ProcessedStripeEvent`, dispatches |
 
 > _TODO: read each handler to fill in exact auth requirements, request/response shapes, and error codes. Currently the routes are inventoried but not fully spec-documented._

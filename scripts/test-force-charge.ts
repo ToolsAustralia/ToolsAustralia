@@ -100,7 +100,15 @@ async function main(): Promise<void> {
 
   if (!live) {
     console.log("=== Plan (dry-run) ===");
-    console.log(`  Will ${eligibility.target.kind === "draft" ? "FINALIZE then PAY" : "PAY"}`);
+    console.log(
+      `  Will ${
+        eligibility.target.kind === "stranded"
+          ? "RECOVER (void stranded + finalize held draft) then PAY"
+          : eligibility.target.kind === "draft"
+            ? "FINALIZE then PAY"
+            : "PAY"
+      }`
+    );
     console.log(`  invoice id: ${eligibility.target.invoice.id ?? "(none)"}`);
     console.log(`  expected amount (cents): ${eligibility.expectedAmountCents}`);
     console.log("");

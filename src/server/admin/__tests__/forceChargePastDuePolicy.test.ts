@@ -70,6 +70,70 @@ function testPickTargetSkipsZeroRemaining() {
   assert.equal(t, null);
 }
 
+function testPickTargetStrandedOpenReturnsStranded() {
+  // open + retry-exhausted (attempt_count>=1 && next_payment_attempt==null) => kind:"stranded"
+  const open = [
+    {
+      id: "in_s1",
+      status: "open",
+      collection_method: "charge_automatically",
+      amount_remaining: 4000,
+      attempt_count: 1,
+      next_payment_attempt: null,
+      created: 200,
+    } as unknown as Stripe.Invoice,
+  ];
+  const t = pickForceChargeTarget(open, [], 4000);
+  assert.equal(t?.kind, "stranded");
+  assert.equal(t?.invoice.id, "in_s1");
+}
+
+function testPickTargetLiveOpenPreferredOverStranded() {
+  // A live open (Stripe still retrying) is preferred over a stranded one — even if older.
+  const open = [
+    {
+      id: "in_stranded",
+      status: "open",
+      collection_method: "charge_automatically",
+      amount_remaining: 4000,
+      attempt_count: 3,
+      next_payment_attempt: null,
+      created: 400,
+    } as unknown as Stripe.Invoice,
+    {
+      id: "in_live",
+      status: "open",
+      collection_method: "charge_automatically",
+      amount_remaining: 4000,
+      attempt_count: 1,
+      next_payment_attempt: 9999999999,
+      created: 100,
+    } as unknown as Stripe.Invoice,
+  ];
+  const t = pickForceChargeTarget(open, [], 4000);
+  assert.equal(t?.kind, "open");
+  assert.equal(t?.invoice.id, "in_live");
+}
+
+function testPickTargetStrandedPreferredOverDraft() {
+  // A stranded open is recovered before falling back to a held draft.
+  const open = [
+    {
+      id: "in_s1",
+      status: "open",
+      collection_method: "charge_automatically",
+      amount_remaining: 4000,
+      attempt_count: 2,
+      next_payment_attempt: null,
+      created: 200,
+    } as unknown as Stripe.Invoice,
+  ];
+  const draft = [{ id: "in_d1", status: "draft", amount_due: 4000, created: 300 } as Stripe.Invoice];
+  const t = pickForceChargeTarget(open, draft, 4000);
+  assert.equal(t?.kind, "stranded");
+  assert.equal(t?.invoice.id, "in_s1");
+}
+
 function testPeriodAlreadyPaidWhenInvoiceCoversCurrentEnd() {
   const paid = [
     {
@@ -159,6 +223,9 @@ function run() {
   testPickTargetReturnsNullWhenNeitherFits();
   testPickTargetSkipsManualCollection();
   testPickTargetSkipsZeroRemaining();
+  testPickTargetStrandedOpenReturnsStranded();
+  testPickTargetLiveOpenPreferredOverStranded();
+  testPickTargetStrandedPreferredOverDraft();
   testPeriodAlreadyPaidWhenInvoiceCoversCurrentEnd();
   testPeriodNotPaidWhenNoOverlap();
   testPeriodNotPaidWhenNoPaidInvoices();

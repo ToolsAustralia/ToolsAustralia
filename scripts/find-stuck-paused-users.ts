@@ -88,7 +88,8 @@ async function main(): Promise<void> {
       draftCount = draftList.data.length;
       const target = pickForceChargeTarget(openList.data, draftList.data, expectedAmount);
       if (target) {
-        verdict = `chargeable_${target.kind}`;
+        // A "stranded" open is chargeable only via recovery (void + finalize held draft), not directly.
+        verdict = target.kind === "stranded" ? "recoverable_stranded" : `chargeable_${target.kind}`;
         chargeable++;
       } else {
         verdict = "stuck";
