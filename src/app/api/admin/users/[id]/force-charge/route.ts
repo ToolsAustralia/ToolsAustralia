@@ -23,6 +23,7 @@ const statusByReason: Record<
   recent_charge_attempt: 409,
   period_already_paid: 409,
   no_chargeable_invoice: 409,
+  no_held_draft: 409,
   finalize_failed: 502,
   pay_failed: 502,
 };

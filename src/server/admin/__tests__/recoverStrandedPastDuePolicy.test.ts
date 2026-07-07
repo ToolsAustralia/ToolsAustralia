@@ -7,6 +7,7 @@ import {
   buildRecoveryItemIdempotencyKey,
   isOriginalInvoiceEligibleForRecovery,
   pickHeldDraftForRecovery,
+  deriveExpectedCycleAmountCents,
   hasRecentRecoveryAttempt,
 } from "../recoverStrandedPastDuePolicy";
 
@@ -175,6 +176,28 @@ function testHasRecentRecoveryAttemptReturnsFalseForEmptyRows() {
   assert.equal(result, false);
 }
 
+function makeSubWithUnitAmount(unit: number | null): Stripe.Subscription {
+  return { items: { data: [{ price: { unit_amount: unit } }] } } as unknown as Stripe.Subscription;
+}
+
+function testDeriveExpectedAmountPrefersLiveSubPrice() {
+  // Live sub price beats a stale DB package amount (the tier-switch-while-past_due case).
+  assert.equal(deriveExpectedCycleAmountCents(makeSubWithUnitAmount(4000), 5000), 4000);
+}
+
+function testDeriveExpectedAmountFallsBackToPackageWhenUnitNull() {
+  assert.equal(deriveExpectedCycleAmountCents(makeSubWithUnitAmount(null), 5000), 5000);
+}
+
+function testDeriveExpectedAmountFallsBackWhenNoItems() {
+  const sub = { items: { data: [] } } as unknown as Stripe.Subscription;
+  assert.equal(deriveExpectedCycleAmountCents(sub, 5000), 5000);
+}
+
+function testDeriveExpectedAmountNullWhenNeitherAvailable() {
+  assert.equal(deriveExpectedCycleAmountCents(makeSubWithUnitAmount(null), null), null);
+}
+
 function run() {
   testIdempotencyKeysAreStableAndDistinct();
   testEligibleWhenUncollectible();
@@ -193,6 +216,10 @@ function run() {
   testRecentLockIgnoresDifferentInvoice();
   testRecentLockIgnoresRowsWithoutRecoveryTag();
   testHasRecentRecoveryAttemptReturnsFalseForEmptyRows();
+  testDeriveExpectedAmountPrefersLiveSubPrice();
+  testDeriveExpectedAmountFallsBackToPackageWhenUnitNull();
+  testDeriveExpectedAmountFallsBackWhenNoItems();
+  testDeriveExpectedAmountNullWhenNeitherAvailable();
   console.log("recoverStrandedPastDuePolicy tests passed");
 }
 

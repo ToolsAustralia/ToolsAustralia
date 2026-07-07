@@ -11,6 +11,7 @@
  */
 
 import type Stripe from "stripe";
+import { isOriginalInvoiceEligibleForRecovery } from "@/utils/payment/recovery/stranded-invoice-policy";
 
 /** Stable Stripe idempotency key for the finalize step. */
 export function buildForceChargeFinalizeIdempotencyKey(invoiceId: string): string {
@@ -19,31 +20,42 @@ export function buildForceChargeFinalizeIdempotencyKey(invoiceId: string): strin
 
 export type ForceChargeTarget =
   | { kind: "open"; invoice: Stripe.Invoice }
+  // A "stranded" open invoice (retry-exhausted): stripe.invoices.pay() rejects it, so the
+  // orchestrator recovers it (void + finalize the held draft) instead of paying it directly.
+  | { kind: "stranded"; invoice: Stripe.Invoice }
   | { kind: "draft"; invoice: Stripe.Invoice };
 
 /**
  * Pick the single best invoice on the user's current subscription to charge.
- * - Prefers an `open` invoice (collection_method=charge_automatically, amount_remaining>0)
- * - Else picks the newest `draft` invoice whose amount_due matches expectedAmountCents
- * - Returns null when neither fits (caller must BLOCK with "no_chargeable_invoice")
+ * - Prefers a **live** `open` invoice (charge_automatically, amount_remaining>0, Stripe still
+ *   retrying) → `kind: "open"` (pay directly).
+ * - Else a **stranded** open invoice (retry-exhausted per `isOriginalInvoiceEligibleForRecovery`)
+ *   → `kind: "stranded"` (the orchestrator recovers it, never pays it directly).
+ * - Else the newest `draft` invoice whose amount_due matches expectedAmountCents → `kind: "draft"`.
+ * - Returns null when none fit (caller BLOCKs with "no_chargeable_invoice").
  *
- * Never returns a candidate that would require creating a new invoice — the design
- * explicitly disallows that.
+ * Never returns a candidate that would require creating a new invoice — the design disallows that.
  */
 export function pickForceChargeTarget(
   openInvoices: Stripe.Invoice[],
   draftInvoices: Stripe.Invoice[],
   expectedAmountCents: number
 ): ForceChargeTarget | null {
-  // Open candidates first
-  const eligibleOpen = openInvoices.filter(
-    (inv) =>
-      inv.collection_method === "charge_automatically" &&
-      (inv.amount_remaining ?? 0) > 0
+  const candidateOpens = openInvoices.filter(
+    (inv) => inv.collection_method === "charge_automatically" && (inv.amount_remaining ?? 0) > 0
   );
-  if (eligibleOpen.length > 0) {
-    eligibleOpen.sort((a, b) => b.created - a.created);
-    return { kind: "open", invoice: eligibleOpen[0]! };
+  // Partition by Stripe's retry state: a live open can be paid directly; a stranded open
+  // (attempt_count>=1 && next_payment_attempt==null) must be recovered, not paid.
+  const liveOpens = candidateOpens.filter((inv) => !isOriginalInvoiceEligibleForRecovery(inv).eligible);
+  const strandedOpens = candidateOpens.filter((inv) => isOriginalInvoiceEligibleForRecovery(inv).eligible);
+
+  if (liveOpens.length > 0) {
+    liveOpens.sort((a, b) => b.created - a.created);
+    return { kind: "open", invoice: liveOpens[0]! };
+  }
+  if (strandedOpens.length > 0) {
+    strandedOpens.sort((a, b) => b.created - a.created);
+    return { kind: "stranded", invoice: strandedOpens[0]! };
   }
 
   // Draft fallback — must match expected cycle amount

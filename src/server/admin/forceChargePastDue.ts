@@ -43,6 +43,9 @@ import {
   payOpenInvoiceAsPastDueAdmin,
   type PastDueChargeResultRow,
 } from "./chargePastDueShared";
+import { pickHeldDraftForRecovery } from "@/utils/payment/recovery/stranded-invoice-policy";
+import { prepareRecoveredCycleInvoice } from "@/services/subscription/prepareRecoveredCycleInvoice";
+import { acquireRecoveryClaim, releaseRecoveryClaim } from "@/utils/payment/recovery/recovery-claim";
 
 /** A read-only diagnostic of the user's force-charge eligibility. */
 export type ForceChargeEligibility =
@@ -73,6 +76,7 @@ export type ForceChargeResultReason =
   | "recent_charge_attempt"
   | "period_already_paid"
   | "no_chargeable_invoice"
+  | "no_held_draft"
   | "finalize_failed"
   | "pay_failed";
 
@@ -242,9 +246,38 @@ export async function forceChargeCurrentCycle(params: {
 
   const { target, expectedAmountCents, subscriptionId } = eligibility;
 
+  // For a STRANDED open target, the invoice we actually finalize+pay is the HELD DRAFT (recovery
+  // voids the stranded original and finalizes the draft). Anchor the budget / idempotency key /
+  // subscriptionId stamp on the DRAFT id (not the stranded open id) so they all track the paid row.
+  let strandedOriginal: Stripe.Invoice | null = null;
+  let targetInvoiceId: string | undefined;
+  if (target.kind === "stranded") {
+    strandedOriginal = target.invoice;
+    let draftForRecovery: Stripe.Invoice | null = null;
+    try {
+      const drafts = await stripe.invoices.list({
+        subscription: subscriptionId,
+        status: "draft",
+        limit: 10,
+      });
+      draftForRecovery = pickHeldDraftForRecovery(drafts.data, expectedAmountCents);
+    } catch {
+      // fall through to the no_held_draft guard
+    }
+    if (!draftForRecovery?.id) {
+      return {
+        ok: false,
+        reason: "no_held_draft",
+        message: "No held draft to recover the stranded invoice; recovery cannot proceed.",
+      };
+    }
+    targetInvoiceId = draftForRecovery.id;
+  } else {
+    targetInvoiceId = target.invoice.id;
+  }
+
   // Per-path Force Charge budget: count prior force-charge attempts on this
   // invoice + this triggeredBy path within the 6h window.
-  const targetInvoiceId = target.invoice.id;
   if (!targetInvoiceId) {
     return {
       ok: false,
@@ -280,9 +313,45 @@ export async function forceChargeCurrentCycle(params: {
     return { ok: false, reason: "user_not_found", message: "User vanished mid-execution" };
   }
 
-  // Step 1: Finalize the draft if needed
+  // Step 1: Produce the payable invoice.
   let payableInvoice: Stripe.Invoice = target.invoice;
-  if (target.kind === "draft") {
+  if (target.kind === "stranded" && strandedOriginal) {
+    // Recover: void the stranded original + finalize the held draft via the shared primitive,
+    // under the per-subscription recovery lock. The finalized DRAFT (targetInvoiceId) is what we pay.
+    const claimed = await acquireRecoveryClaim(subscriptionId, `force-charge:${params.triggeredBy}`);
+    if (!claimed) {
+      return {
+        ok: false,
+        reason: "recent_charge_attempt",
+        message: "A recovery for this subscription is already in progress. Try again shortly.",
+      };
+    }
+    let prepared: Awaited<ReturnType<typeof prepareRecoveredCycleInvoice>>;
+    try {
+      prepared = await prepareRecoveredCycleInvoice({
+        subscriptionId,
+        strandedInvoice: strandedOriginal,
+        expectedAmountCents,
+        audit: {
+          actor: params.triggeredBy === "admin" ? "admin" : "member",
+          adminId,
+          userId,
+          customerId: user.stripeCustomerId,
+          amount: expectedAmountCents,
+        },
+      });
+    } finally {
+      await releaseRecoveryClaim(subscriptionId).catch(() => {});
+    }
+    if (!prepared.ok) {
+      return {
+        ok: false,
+        reason: prepared.reason === "no_held_draft" ? "no_held_draft" : "finalize_failed",
+        message: prepared.message,
+      };
+    }
+    payableInvoice = prepared.finalizedInvoice;
+  } else if (target.kind === "draft") {
     const targetId = target.invoice.id;
     if (!targetId) {
       return {

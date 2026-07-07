@@ -33,10 +33,29 @@ function testFiltersSendInvoice() {
   assert.equal(pickOpenInvoiceForFailedRenewal([a]), null);
 }
 
+function testStillReturnsStrandedOpenInvoice() {
+  // APPROACH B GUARD: the shared picker must KEEP returning a stranded (retry-exhausted) open
+  // invoice — the admin recover path and Norm's `willRecover` depend on it being surfaced.
+  // Member paths detect "stranded" at the PAY step; this selector must NOT be hardened to drop it.
+  const stranded = {
+    id: "in_stranded",
+    object: "invoice",
+    created: 300,
+    amount_remaining: 4000,
+    collection_method: "charge_automatically",
+    status: "open",
+    attempt_count: 3,
+    next_payment_attempt: null,
+  } as unknown as Stripe.Invoice;
+  const picked = pickOpenInvoiceForFailedRenewal([stranded]);
+  assert.equal(picked?.id, "in_stranded", "shared picker must still return stranded opens (Approach B)");
+}
+
 function run() {
   testPicksNewestOpenWithAmount();
   testFiltersZeroRemaining();
   testFiltersSendInvoice();
+  testStillReturnsStrandedOpenInvoice();
   console.log("failed-invoice pause selection tests passed");
 }
 

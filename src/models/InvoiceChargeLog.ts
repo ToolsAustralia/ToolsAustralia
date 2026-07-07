@@ -4,7 +4,10 @@ export interface IInvoiceChargeLog extends Document {
   invoiceId: string;
   customerId: string;
   userId: mongoose.Types.ObjectId;
-  adminId: mongoose.Types.ObjectId;
+  /** Who initiated the row. Member self-serve recovery rows carry `member` (no adminId). */
+  actor: "admin" | "member" | "system";
+  /** Required only when `actor === "admin"`. Absent for member/system self-serve recovery rows. */
+  adminId?: mongoose.Types.ObjectId;
   status: "success" | "failed" | "skipped";
   errorCode?: string;
   declineCode?: string;
@@ -35,10 +38,20 @@ const InvoiceChargeLogSchema = new Schema<IInvoiceChargeLog>(
       required: false,
       index: true,
     },
+    actor: {
+      type: String,
+      enum: ["admin", "member", "system"],
+      required: true,
+      default: "admin", // back-compat: existing admin writers omit `actor`
+      index: true,
+    },
     adminId: {
       type: Schema.Types.ObjectId,
       ref: "User",
-      required: true,
+      // Required only for admin-initiated rows; member/system self-serve recovery rows have none.
+      required: function (this: { actor?: string }) {
+        return this.actor === "admin";
+      },
       index: true,
     },
     status: {
