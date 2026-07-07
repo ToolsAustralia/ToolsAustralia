@@ -5,12 +5,9 @@ import InvoiceChargeLog from "@/models/InvoiceChargeLog";
 import User from "@/models/User";
 import { getPackageById } from "@/data/membershipPackages";
 import {
-  buildRecoveryVoidIdempotencyKey,
-  buildRecoveryFinalizeIdempotencyKey,
   deriveExpectedCycleAmountCents,
   hasRecentRecoveryAttempt,
   isOriginalInvoiceEligibleForRecovery,
-  pickHeldDraftForRecovery,
   RECENT_ATTEMPT_WINDOW_HOURS,
 } from "./recoverStrandedPastDuePolicy";
 import {
@@ -20,6 +17,7 @@ import {
   type PastDueChargeResultRow,
 } from "./chargePastDueShared";
 import { buildAdminChargeIdempotencyKey, cutoffForRecentAttempt } from "./past-due-charge-idempotency";
+import { prepareRecoveredCycleInvoice } from "@/services/subscription/prepareRecoveredCycleInvoice";
 
 export type RecoverStrandedResult =
   | { ok: true; row: PastDueChargeResultRow; newInvoiceId: string }
@@ -263,119 +261,34 @@ export async function recoverStrandedPastDueInvoice(params: {
     amount: expectedAmountCents,
   };
 
-  // ─── 4. Void original (idempotent) ───
-  if (originalInvoice.status === "uncollectible") {
-    try {
-      await stripe.invoices.voidInvoice(originalInvoiceId, undefined, {
-        idempotencyKey: buildRecoveryVoidIdempotencyKey(originalInvoiceId),
-      });
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      await InvoiceChargeLog.create({
-        ...baseLogFields,
-        invoiceId: originalInvoiceId,
-        status: "failed",
-        attemptedAt: new Date(),
-        errorMessage: `void failed: ${message}`,
-        result: { recovery: { step: "void", originalInvoiceId } },
-      });
-      return { ok: false, reason: "void_failed", message };
-    }
-  }
-  await InvoiceChargeLog.create({
-    ...baseLogFields,
-    invoiceId: originalInvoiceId,
-    status: originalInvoice.status === "void" ? "skipped" : "success",
-    attemptedAt: new Date(),
-    errorMessage:
-      originalInvoice.status === "void"
-        ? "Original already void; skipped void step"
-        : "Voided original invoice",
-    result: { recovery: { step: "void", originalInvoiceId } },
+  // ─── 4–6. Void stranded original + finalize held draft (shared primitive) ───
+  // prepareRecoveredCycleInvoice does pick-held-draft → finalize(auto_advance:false) → void
+  // (non-fatal), writes the recovery-tagged InvoiceChargeLog rows via the admin audit ctx, and
+  // returns the finalized draft. Its failure reasons are a subset of RecoverStrandedResult.reason
+  // (frozen union). NOTE two intended behavior deltas vs the old inline flow: it now voids
+  // OPEN-stranded originals (not only `uncollectible`), and a void failure is non-fatal
+  // (logged, recovery proceeds) rather than returning `void_failed`. The `result.recovery.step`
+  // tags are preserved so `payOpenInvoiceAsPastDueAdmin`'s 30s debounce still excludes them.
+  const prepared = await prepareRecoveredCycleInvoice({
+    subscriptionId: user.stripeSubscriptionId,
+    strandedInvoice: originalInvoice,
+    expectedAmountCents,
+    audit: {
+      actor: "admin",
+      adminId,
+      userId,
+      customerId: user.stripeCustomerId,
+      amount: expectedAmountCents,
+    },
   });
-
-  // ─── 5. Find a held draft for the missed cycle ───
-  // CRITICAL: never create new manual invoices. Stripe-cycle drafts preserve
-  // `billing_reason: "subscription_cycle"`, which the webhook needs to fire
-  // the full renewal pipeline. A manually-created invoice would have
-  // `billing_reason: "manual"` and silently skip the pipeline.
-  let draftInvoice: Stripe.Invoice | null = null;
-  try {
-    const drafts = await stripe.invoices.list({
-      subscription: user.stripeSubscriptionId,
-      status: "draft",
-      limit: 10,
-    });
-    draftInvoice = pickHeldDraftForRecovery(drafts.data, expectedAmountCents);
-  } catch (err) {
-    console.error("[recoverStrandedPastDue] listing drafts failed:", err);
+  if (!prepared.ok) {
+    return { ok: false, reason: prepared.reason, message: prepared.message };
   }
-
-  if (!draftInvoice) {
-    await InvoiceChargeLog.create({
-      ...baseLogFields,
-      invoiceId: originalInvoiceId,
-      status: "skipped",
-      attemptedAt: new Date(),
-      errorMessage:
-        "No held draft found on the subscription; recovery cannot proceed without one (manual invoices break the webhook renewal pipeline)",
-      result: { recovery: { step: "create", originalInvoiceId } },
-    });
-    return {
-      ok: false,
-      reason: "no_held_draft",
-      message:
-        "No held draft invoice exists on the subscription. Stripe must have a cycle-billed invoice to finalize and pay; manual invoices break the renewal pipeline.",
-    };
-  }
-
-  const newInvoiceId = draftInvoice.id;
-  // Defensive: Stripe always returns an id on Invoice.create, but the type allows null.
-  // Narrow before passing to downstream calls that require a string.
+  const finalizedInvoice = prepared.finalizedInvoice;
+  const newInvoiceId = finalizedInvoice.id;
   if (!newInvoiceId) {
-    return {
-      ok: false,
-      reason: "draft_create_failed",
-      message: "Stripe returned a draft without an id",
-    };
+    return { ok: false, reason: "draft_create_failed", message: "Finalized invoice has no id" };
   }
-  await InvoiceChargeLog.create({
-    ...baseLogFields,
-    invoiceId: newInvoiceId,
-    status: "skipped",
-    attemptedAt: new Date(),
-    errorMessage: `Used existing held draft ${newInvoiceId}`,
-    result: { recovery: { step: "create", originalInvoiceId, newInvoiceId } },
-  });
-
-  // ─── 6. Finalize the draft ───
-  let finalizedInvoice: Stripe.Invoice;
-  try {
-    finalizedInvoice = await stripe.invoices.finalizeInvoice(
-      newInvoiceId,
-      { expand: ["payment_intent"] },
-      { idempotencyKey: buildRecoveryFinalizeIdempotencyKey(newInvoiceId) }
-    );
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    await InvoiceChargeLog.create({
-      ...baseLogFields,
-      invoiceId: newInvoiceId,
-      status: "failed",
-      attemptedAt: new Date(),
-      errorMessage: `finalize failed: ${message}`,
-      result: { recovery: { step: "finalize", originalInvoiceId, newInvoiceId } },
-    });
-    return { ok: false, reason: "finalize_failed", message };
-  }
-  await InvoiceChargeLog.create({
-    ...baseLogFields,
-    invoiceId: newInvoiceId,
-    status: "skipped",
-    attemptedAt: new Date(),
-    errorMessage: `Finalized; status=${finalizedInvoice.status}`,
-    result: { recovery: { step: "finalize", originalInvoiceId, newInvoiceId } },
-  });
 
   // ─── 7. Pay via the existing primitive (writes its own log row + resumes pause) ───
   const customer = await fetchCustomerWithRetry(user.stripeCustomerId);
