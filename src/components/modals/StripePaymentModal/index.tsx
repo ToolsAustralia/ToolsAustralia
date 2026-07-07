@@ -25,8 +25,10 @@ import { useThemeStore } from "@/stores/useThemeStore";
 import { buildMembershipStripeAppearance } from "@/utils/payment/stripe/membership-stripe-appearance";
 import { Lock } from "lucide-react";
 import { resolveBillingAddress } from "@/lib/payment/defaultBillingAddress";
-import { getPartnerAccessDurationLabel } from "@/utils/partner-discounts/partner-access-duration";
 import PaymentProcessingScreen from "@/components/loading/PaymentProcessingScreen";
+import { getPackageById } from "@/data/membershipPackages";
+import { getPartnerCatalogAccessPercentForPlanId } from "@/utils/partner-discounts/partner-catalog-visibility";
+import { tierFromPackageName as benefitTierFromPackageName } from "@/components/ui/UpgradeBenefitStatGrid";
 
 import Shell from "./Shell";
 import OrderSummary from "./OrderSummary";
@@ -72,29 +74,6 @@ function tierFromPackageName(name: string): "tier-tradie" | "tier-foreman" | "ti
   if (lower.includes("boss")) return "tier-boss";
   if (lower.includes("foreman")) return "tier-foreman";
   return "tier-tradie";
-}
-
-/** Per-tier baseline benefit cells for the compact preview. Numbers mirror
- * VerticalAccumulationChart and the partner-discount catalog. These cells are
- * subscription-only (Tradie/Foreman/Boss tiers): partner access is
- * lifecycle-gated, so we show "While active" rather than a fixed day count. */
-function tierBenefitCells(
-  packageName: string,
-  monthlyPrice: number
-): Array<{ label: string; value: string | number }> {
-  const tier = tierFromPackageName(packageName);
-  const benefits =
-    tier === "tier-boss"
-      ? { entries: 100, partner: "75%" }
-      : tier === "tier-foreman"
-      ? { entries: 40, partner: "25%" }
-      : { entries: 15, partner: "10%" };
-  const partnerAccess = getPartnerAccessDurationLabel({ isSubscription: true });
-  return [
-    { label: "Entries / mo", value: benefits.entries },
-    { label: "Partner access", value: partnerAccess ? partnerAccess.short : "While active" },
-    { label: "Per month", value: `$${monthlyPrice}` },
-  ];
 }
 
 // ============================================================
@@ -188,6 +167,14 @@ const StripePaymentModal: React.FC<StripePaymentModalProps> = ({
   // Headline copy: "Upgrading to Foreman" for upgrades
   const headlinePackagePart = upgradeInfo?.toPackage?.name ?? packageName;
 
+  // Canonical destination-tier benefit numbers (partner-catalog % + the package's entriesPerMonth),
+  // so the benefit cells here MATCH the UpgradeConfirmModal step exactly — no hardcoded/drifting values.
+  const benefitTierKey = benefitTierFromPackageName(upgradeInfo?.toPackage?.name ?? packageName);
+  const benefitPlanId = `${benefitTierKey}-subscription`;
+  const benefitPkg = getPackageById(packageId || benefitPlanId) ?? getPackageById(benefitPlanId);
+  const toEntriesPerCycle = benefitPkg?.entriesPerMonth ?? 0;
+  const toPartnerPct = getPartnerCatalogAccessPercentForPlanId(benefitPlanId);
+
   // Shared props for both PaymentForm variants
   const paymentFormProps = {
     clientSecret,
@@ -232,7 +219,8 @@ const StripePaymentModal: React.FC<StripePaymentModalProps> = ({
       <UpgradeBenefitsPreview
         toPackageName={upgradeInfo?.toPackage?.name ?? packageName}
         fromPackageName={upgradeInfo?.fromPackage?.name}
-        cells={tierBenefitCells(upgradeInfo?.toPackage?.name ?? packageName, upgradeInfo?.toPackage?.price ?? amount / 100)}
+        partnerPct={toPartnerPct}
+        entriesPerCycle={toEntriesPerCycle}
       />
 
       {/* Order summary — gain-framed */}

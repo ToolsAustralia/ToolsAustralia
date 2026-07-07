@@ -66,9 +66,29 @@ function pickHighestTierNonMembershipItem(items: PartnerDiscountQueueItem[]): Pa
   });
 }
 
+/**
+ * Effective subscription package id — the downgrade-preserved (previous) tier while still within its
+ * benefit period, else the current subscription tier. Mirrors `getEffectiveBenefits`' preservation rule
+ * WITHOUT importing it: benefit-resolution imports `calculateActivePartnerDiscountPeriod` from this
+ * module, so importing back would create a cycle.
+ */
+function effectiveSubscriptionPackageId(user: IUser): string | undefined {
+  const prev = user.subscription?.previousSubscription;
+  if (prev?.packageId && prev.endDate && new Date(prev.endDate) > new Date()) {
+    return String(prev.packageId);
+  }
+  return user.subscription?.packageId != null ? String(user.subscription.packageId) : undefined;
+}
+
 function subscriptionPartnerCatalogPercent(user: IUser): number {
-  if (!user.subscription?.isActive || !user.subscription.packageId) return 0;
-  return getPartnerCatalogAccessPercentForPlanId(user.subscription.packageId);
+  if (!user.subscription?.isActive) return 0;
+  // Use the EFFECTIVE (downgrade-preserved) tier, NOT the raw/billed subscription.packageId — during a
+  // downgrade-preservation window the billed id understates the member's real partner tier (e.g. Tradie
+  // 50 vs effective Foreman 75), which could wrongly let a mid-tier one-time pack outrank the membership
+  // in reconcilePartnerDiscountSubscriptionVsQueue and activate a lower-% pack over their real access.
+  const packageId = effectiveSubscriptionPackageId(user);
+  if (!packageId) return 0;
+  return getPartnerCatalogAccessPercentForPlanId(packageId);
 }
 
 /**

@@ -3,6 +3,11 @@
 ## Next dev indicator position is `top-left` (dev-only) (2026-06-26)
 
 `next.config.ts` sets `devIndicators: { position: "top-left" }` so Next's dev build/route indicator (the "N" pill) doesn't overlap the bottom floating widgets (the Cobber support bubble — bottom-left on promotions, bottom-right elsewhere — plus the promotions theme toggle + account FAB). Next only supports the **4 corners** (`bottom-left`/`bottom-right`/`top-left`/`top-right`) — there is **no mid-height option**, and its drag-to-move snaps to the nearest corner too. Set `devIndicators: false` to hide it. It is **never rendered in production**.
+## `seed-past-due-member.ts` — write final state ATOMICALLY, not via a stale `.save()` (2026-07-03)
+
+The QA seed (`npm run seed:past-due-member`) creates the member (`__v: 0`), then spends ~30–50s on Stripe **test-clock** work before writing the final `past_due` state. If `stripe listen` is forwarding the seed's own Stripe events to a **running app**, a webhook (first-invoice `payment_succeeded`) re-saves that same user doc and **bumps `__v`** in that window. A subsequent `user.save()` on the *stale* in-memory doc then throws Mongoose **`VersionError: No matching document found … version 0`**, so the past-due write never lands and the member is stranded in the intermediate **active** state (which is why the admin showed "Active").
+
+Fix (Step 11): write the final state with an **atomic `User.updateOne({ _id }, { $set: … })`** (no optimistic-concurrency `__v` check), then **verify + re-assert** it in a bounded loop (~10s) so a concurrently-processing webhook can't win. If the app's **webhook queue** processes the active event *after* the loop, the script warns to re-run with `stripe listen` **stopped** — the seed writes the DB directly and doesn't need the app's webhooks (restart the listener only for recovery-channel testing). **General rule:** any script that mutates a doc across a long async gap (external API calls, `sleep`, test-clock advances) must write with `updateOne`/`findByIdAndUpdate`, never a `.save()` on a doc loaded before the gap.
 
 ## `AFFILIATE_JWT_SECRET` — optional, but setting it forces a one-time affiliate re-login (2026-06-19)
 

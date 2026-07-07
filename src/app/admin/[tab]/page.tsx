@@ -5,6 +5,7 @@ import { useSession } from "next-auth/react";
 import { useEffect } from "react";
 import AdminPage from "@/app/admin/component/AdminPage";
 import { AdminUser } from "@/types/admin";
+import DashboardLoader from "@/components/loading/DashboardLoader";
 
 export default function AdminTabPage() {
   const router = useRouter();
@@ -27,11 +28,7 @@ export default function AdminTabPage() {
 
   // Show loading while checking authentication
   if (status === "loading") {
-    return (
-      <div className="min-h-screen-svh flex items-center justify-center">
-        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-red-600"></div>
-      </div>
-    );
+    return <DashboardLoader label="Loading admin…" />;
   }
 
   // Don't render if not authenticated or not internal

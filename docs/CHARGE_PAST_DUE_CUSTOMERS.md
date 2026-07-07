@@ -142,9 +142,19 @@ All charge attempts are logged to `InvoiceChargeLog` collection with:
 
 ### Idempotency Keys
 
-- **Stable Key**: `admin-charge-${invoiceId}`
-- **DO NOT use `Date.now()`** - it breaks idempotency
-- Rely on database `canRetryAt` for timing control
+⚠️ **The 24h replay trap (incident 2026-06-29).** Stripe retains an idempotency key for **24 hours** and **replays the cached response for any reuse within that window — without re-attempting the charge** (response header `idempotent-replayed: true`). A key that is stable across separate runs therefore silently turns every run within 24h of the prior one into a replay of the old outcome. The daily bulk run used a static `admin-charge-${invoiceId}` and replayed **656/668** prior declines, collecting **$0**, while Stripe recorded no new attempts. The DB skip window is only 6h, so in the 6h–24h gap the code calls Stripe but Stripe replays.
+
+**The rule:** the key MUST vary whenever you intend a genuinely NEW attempt, and may be stable ONLY across retries that must dedupe to one charge. `payOpenInvoiceAsPastDueAdmin` takes a **required** `idempotencyKey` (no stable default). Builders in `src/server/admin/past-due-charge-idempotency.ts`:
+
+| Path | Key | Why |
+|---|---|---|
+| Bulk daily run | `admin-charge-${invoiceId}-run-${runId}` | fresh each run (real retry); stable within a run (resumed chunk dedupes) |
+| Per-user "Charge" click | `admin-charge-${invoiceId}-once-${floor(now/30s)}` | fresh on a deliberate retry 30s+ later; concurrent submits in one 30s bucket dedupe to a single charge (the per-user route has no lock) |
+| Force Charge | `admin-charge-${invoiceId}-fc-${triggeredBy}-${N}` | per-attempt within the 3-per-6h budget |
+| Recovery pay step | `admin-charge-${newInvoiceId}` | stable is correct — the invoice is freshly created per recovery |
+
+- **DO NOT** reuse a bare `admin-charge-${invoiceId}` on a path that re-charges the **same** invoice across runs/clicks — Stripe will replay it for 24h.
+- Regression-guarded by `npm run test:past-due-idempotency-keys`.
 
 ### Scheduled Retries Behavior
 
@@ -232,9 +242,10 @@ Located at: `src/components/admin/ChargePastDueModal.tsx`
 
 ### Required Before Implementation
 
-1. **Stripe Idempotency Key**:
-   - ✅ Use stable key: `admin-charge-${invoiceId}`
-   - ❌ Do NOT use `Date.now()` - it breaks idempotency
+1. **Stripe Idempotency Key** (see "Idempotency Keys" above for the full table):
+   - ✅ Scope the key to its dedupe unit — bulk → `…-run-${runId}`, per-click → `…-once-${floor(now/30s)}` (concurrent submits dedupe, deliberate retries stay fresh), Force Charge → `…-fc-${triggeredBy}-${N}`.
+   - ✅ A stable `admin-charge-${invoiceId}` is correct ONLY for the recovery pay step (a held draft, finalized — it leaves the draft pool so it can't be re-selected/replayed; the 6h recovery lock backs this).
+   - ❌ Do NOT reuse a static `admin-charge-${invoiceId}` on a path that re-charges the same invoice across runs/clicks — Stripe **replays** it for 24h without re-charging (incident 2026-06-29: 668 "failed", $0).
 
 2. **Payment Method Extraction**:
    - Extract `payment_method` from `invoice.default_payment_method` before charging

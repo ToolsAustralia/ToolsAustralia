@@ -36,7 +36,6 @@ import { useUpdateSubscriptionPaymentMethod } from "@/hooks/queries";
 import { useToast } from "@/components/ui/Toast";
 import { Elements } from "@stripe/react-stripe-js";
 import { getStripePromise } from "@/lib/stripe-client";
-import { Button } from "../ui";
 import ConfirmationModal from "../ConfirmationModal";
 import { formatDisplayName } from "@/utils/display-name";
 import { useThemeStore } from "@/stores/useThemeStore";
@@ -296,20 +295,8 @@ const PaymentMethodsTab: React.FC<PaymentMethodsTabProps> = ({ user, settingsRed
   // bodies so the `stripePromise` singleton is never re-instantiated.
   const addFormNode =
     setupIntentClientSecret != null ? (
-      <div className="border-2 border-gray-200 dark:border-neutral-700 border-l-4 border-l-red-500 dark:border-l-red-400 rounded-lg p-2 sm:p-4 bg-gray-50 dark:bg-neutral-800 shadow-sm">
-        <div className="flex items-center justify-between mb-3 sm:mb-4">
-          <h4 className="text-xs sm:text-sm font-semibold text-gray-900 dark:text-neutral-100">Add New Payment Method</h4>
-          <Button
-            type="button"
-            onClick={() => {
-              setShowAddForm(false);
-              setSetupIntentClientSecret(null);
-            }}
-            className="text-xs sm:text-sm text-gray-600 dark:text-neutral-400 hover:text-gray-800 dark:text-neutral-100 dark:hover:text-white px-2 py-1 hover:bg-gray-200 dark:hover:bg-neutral-700 rounded transition-colors"
-          >
-            Cancel
-          </Button>
-        </div>
+      <div className="rounded-2xl border border-token bg-surface p-5 shadow-sm">
+        <h4 className="mb-4 font-['Poppins'] text-base font-bold text-primary-token dark:text-white">Add a new card</h4>
         <Elements
           key={`${setupIntentClientSecret || "no-secret"}-${isDarkMode ? "dark" : "light"}`}
           stripe={stripePromise}
@@ -367,6 +354,7 @@ const PaymentMethodsTab: React.FC<PaymentMethodsTabProps> = ({ user, settingsRed
           settingDefaultId={settingDefaultId}
           deletingId={deletingId}
           addForm={addFormNode}
+          cardholderName={[user.firstName, user.lastName].filter(Boolean).join(" ")}
           onAddNew={() => void handleAddNewPaymentMethod()}
           onSetDefault={(id) => void handleSetDefault(id)}
           onDelete={handleDeleteClick}

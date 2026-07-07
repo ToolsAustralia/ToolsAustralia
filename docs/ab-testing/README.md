@@ -12,7 +12,8 @@ Purpose-built A/B testing infrastructure with deduplication, DB optimization, an
 - [patterns.md](./patterns.md) — assignment-once, server-resolved variants
 - [gotchas.md](./gotchas.md) — flicker, late-assignment, dedupe edge cases
 - [models.md](./models.md) — `models/ab-testing/`
-- [testing.md](./testing.md) — _TODO_
+- [testing.md](./testing.md) — test scripts
+- [promo-packages-design-runbook.md](./promo-packages-design-runbook.md) — **concluded experiment record** (2026-07 promo package-design test — control won 2026-07-06): what was tested, outcome numbers, teardown performed
 
 ## Migrated from
 

@@ -1,12 +1,12 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
 import { ModalContainer, ModalHeader, ModalContent } from "../ui";
 import { useMemberships } from "@/hooks/useMemberships";
 import { convertToLocalPlan, type LocalMembershipPlan } from "@/utils/membership/membership-adapters";
 import { useUserData } from "@/hooks/queries";
-import { isNonMemberPackage } from "@/utils/membership/member-package-mapping";
+import { isPublicPackage } from "@/utils/membership/additional-package-mapping";
 import { useResolvedMultiplier } from "@/hooks/queries/usePromoQueries";
 import { getEffectivePromoType } from "@/utils/promo/get-effective-promo-type";
 import { useUserMajorDrawStats } from "@/hooks/queries/useMajorDrawQueries";
@@ -35,6 +35,24 @@ const PackageSelectionModal: React.FC<PackageSelectionModalProps> = ({
   const [selectedPlan, setSelectedPlan] = useState<LocalMembershipPlan>(currentPlan);
   // Sub-tab for one-time packages: allow switching between regular one-time and membership packages
   const [oneTimeSubTab, setOneTimeSubTab] = useState<"one-time" | "membership">("one-time");
+  /** Pending auto-confirm pick (the 200ms tap→glow→select delay). Cancelled when the picker closes
+   *  so a pick can't fire into a modal the user has already dismissed — previously a pick followed
+   *  by an instant ✕ committed the plan into the CLOSED modal's state, leaving a stale preselected
+   *  plan (which then skipped selection-first) on the next open. */
+  const pendingPickTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (isOpen) return;
+    if (pendingPickTimeoutRef.current) {
+      clearTimeout(pendingPickTimeoutRef.current);
+      pendingPickTimeoutRef.current = null;
+    }
+  }, [isOpen]);
+  useEffect(
+    () => () => {
+      if (pendingPickTimeoutRef.current) clearTimeout(pendingPickTimeoutRef.current);
+    },
+    [],
+  );
 
   // Get user data to determine membership status
   const { data: user } = useUserData(session?.user?.id);
@@ -186,7 +204,7 @@ const PackageSelectionModal: React.FC<PackageSelectionModalProps> = ({
             ],
             buttonText: "Get Started",
             buttonStyle: "secondary",
-            isMemberOnly: false,
+            isAdditional: false,
           },
           {
             id: "foreman",
@@ -202,7 +220,7 @@ const PackageSelectionModal: React.FC<PackageSelectionModalProps> = ({
             isPopular: true,
             buttonText: "Go Pro",
             buttonStyle: "primary",
-            isMemberOnly: false,
+            isAdditional: false,
           },
           {
             id: "boss",
@@ -217,7 +235,7 @@ const PackageSelectionModal: React.FC<PackageSelectionModalProps> = ({
             ],
             buttonText: "Become Boss",
             buttonStyle: "secondary",
-            isMemberOnly: false,
+            isAdditional: false,
           },
         ];
 
@@ -236,7 +254,7 @@ const PackageSelectionModal: React.FC<PackageSelectionModalProps> = ({
             ],
             buttonText: "Buy Now",
             buttonStyle: "secondary" as const,
-            isMemberOnly: false,
+            isAdditional: false,
             metadata: {
               entriesCount: 3,
             },
@@ -254,7 +272,7 @@ const PackageSelectionModal: React.FC<PackageSelectionModalProps> = ({
             isPopular: true,
             buttonText: "Get Tradie",
             buttonStyle: "primary" as const,
-            isMemberOnly: false,
+            isAdditional: false,
             metadata: {
               entriesCount: 15,
             },
@@ -272,7 +290,7 @@ const PackageSelectionModal: React.FC<PackageSelectionModalProps> = ({
             ],
             buttonText: "Go Foreman",
             buttonStyle: "secondary" as const,
-            isMemberOnly: true,
+            isAdditional: true,
             metadata: {
               entriesCount: 30,
             },
@@ -289,7 +307,7 @@ const PackageSelectionModal: React.FC<PackageSelectionModalProps> = ({
             ],
             buttonText: "Get Boss",
             buttonStyle: "secondary" as const,
-            isMemberOnly: true,
+            isAdditional: true,
             metadata: {
               entriesCount: 150,
             },
@@ -306,7 +324,7 @@ const PackageSelectionModal: React.FC<PackageSelectionModalProps> = ({
             ],
             buttonText: "Get Power",
             buttonStyle: "secondary" as const,
-            isMemberOnly: true,
+            isAdditional: true,
             metadata: {
               entriesCount: 600,
             },
@@ -315,7 +333,7 @@ const PackageSelectionModal: React.FC<PackageSelectionModalProps> = ({
 
         // Filter out non-member packages for existing members
         const filteredPackages = isMember
-          ? allOneTimePackages.filter((pkg) => !isNonMemberPackage(pkg.id))
+          ? allOneTimePackages.filter((pkg) => !isPublicPackage(pkg.id))
           : allOneTimePackages;
 
         // Apply resolved multiplier to one-time packages (includes alternating if no active promo)
@@ -361,12 +379,21 @@ const PackageSelectionModal: React.FC<PackageSelectionModalProps> = ({
   const handlePlanSelect = (plan: LocalMembershipPlan) => {
     if (isCurrentPlan(plan)) return;
 
+    // Rapid re-pick within the glow window: the latest pick wins, exactly once.
+    if (pendingPickTimeoutRef.current) clearTimeout(pendingPickTimeoutRef.current);
+
     setSelectedPlan(plan);
 
-    // Auto-confirm: brief visual feedback then close (tap → glow → close)
-    setTimeout(() => {
+    // Auto-confirm: brief visual feedback then hand the pick to the parent (tap → glow → select).
+    // Deliberately does NOT call onClose() here — closing after a pick is the PARENT's job inside
+    // onPlanSelect (MembershipModal.handlePackageSelect does setIsPackageSelectionOpen(false)).
+    // That keeps `onClose` meaning DISMISSAL ONLY (✕ / backdrop / Escape), so consumers can react
+    // to "user backed out without choosing". The old select-then-onClose pair fired in the same
+    // tick, BEFORE React committed the new plan — a dismiss-handler reading the selected plan
+    // still saw the placeholder and wrongly closed the whole membership modal right after a pick.
+    pendingPickTimeoutRef.current = setTimeout(() => {
+      pendingPickTimeoutRef.current = null;
       onPlanSelect(plan);
-      onClose();
     }, 200);
   };
 
@@ -468,14 +495,14 @@ const PackageSelectionModal: React.FC<PackageSelectionModalProps> = ({
     if (hasAdditionalPackageAccessFlag) {
       // If user has access (subscription OR entries), show additional packages
       finalMembershipPlans = finalMembershipPlans.filter((plan) => {
-        return plan.isMemberOnly === true;
+        return plan.isAdditional === true;
       });
     } else {
       // For users without access, show packages based on sub-tab selection
       if (oneTimeSubTab === "one-time") {
         // Show regular one-time packages (non-member exclusive)
         finalMembershipPlans = finalMembershipPlans.filter((plan) => {
-          return plan.isMemberOnly !== true && plan.period === "one-time";
+          return plan.isAdditional !== true && plan.period === "one-time";
         });
       } else {
         // Show membership packages (subscription) to encourage subscription

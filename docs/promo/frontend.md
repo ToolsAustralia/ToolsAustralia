@@ -1,5 +1,69 @@
 # Promo — Frontend
 
+## /promotions — prize-combinations gallery (2026-07-07, designed — pending owner rating)
+
+Editorial index of every major-draw prize combination, now the PROMOTIONS ROOT (owner call — the old bare
+/promotions was a redirect to DEFAULT_PRIZE_SLUG): `src/app/promotions/page.tsx` (server —
+static metadata, builds serializable cards) + `_components/GiveawayGalleryClient.tsx` (filter pills + grid).
+Page composition: **dark hero band** (combo count eyebrow, display heading) → **featured headline combo**
+(`DEFAULT_PRIZE_SLUG`, full-width art overlapping the hero, "This month's headline" badge, `priority` images
+— excluded from the grid only in the UNFILTERED view, so a filtered pair matching only the featured combo
+still shows it) → **sticky glass filter dock** (follows the scroll on every viewport — the promotions layout
+is chrome-free so `top` offsets are safe) with TWO independent dimensions: **toolset brand** (brand-dotted
+pills) × **toolbox brand** (Sidchrome / Milwaukee Toolbox / Kincrome) — combinable (AND) or single; tapping an
+active pill clears it; count + Clear live in the dock (sm+) / below it (mobile) → grid of **showroom
+`ComboCard`s** (extracted component; dark glass shell `from-white/[.07]`, pointer tilt via `useTilt(4)`
+(motion-safe), top hairline / value badge / hover border+glow in the brand's `BRAND_THEMES` primary; Milwaukee
+uses the TA site red per prize-brand-colors convention; badge ink via YIQ luminance so DeWalt/Ryobi yellows
+get dark ink; identity row renders the **brand wordmark SVG** (`wordmarkSrc`, `public/images/brands/<name>/`)
+when shipped, falling back to the text title, beside a "{storage} toolbox" chip) → **gold cash-alternative
+band** ("Rather have the cash?") closing the page. The hero also mounts **`GalleryCountdown`**
+(`_components/GalleryCountdown.tsx`) — a live major-draw countdown in the dashboard's red countdown-chip
+vocabulary via `useCurrentMajorDraw` (30s tick; renders nothing until the draw resolves and only while
+`status === "active"`, so the hero reserves no space for it). Filter pills are dark-theme-only styles now
+(the page ground is dark in both themes). Cards come from `listPrizes()`, each
+using the SAME manifest-verified landing hero art as its `/promotions/<slug>` page via
+`getLandingHeroImagePaths(slug)` — mobile asset `< lg`, desktop asset `≥ lg` (the promotions-wide 1024px
+art-direction split), `object-contain` on a **white art plate framed inside the dark shell** (rounded inset
+`m-2.5` — the art is composited for light backgrounds, so the plate reads as a lit display case). Combos with
+no shipped art are skipped, not broken. **Analytics caveat:** the bare `/promotions`
+path has no promo slug, so `usePromoPageTracking` fires NO PromoAnalyticsVisit for gallery views (harmless);
+extend the validator + pageType deliberately if gallery tracking is wanted.
+
+**Chrome parity + newsletter overlap (2026-07-07):** the gallery mounts the SAME top chrome the brand
+landing pages use — `PromoBanner` (the sticky site-wide promo/countdown strip that reads as the "navbar") and
+`PromotionsAccountButton` (floating account/nav menu, authed-only). **Both are `<Suspense>`-wrapped** (`PromoBanner`
+reads `useSearchParams`). **`PromoBanner` MUST also be wrapped in a `<VariantProvider … isLoading={false}>`**:
+it calls `useVariantContext()`, and with NO provider the default context is `isLoading: true` *forever* →
+`isPromoResolved` stays false → the banner is stuck in its centered-logo **loading skeleton** and never renders
+the promo strip (this was the "banner shows only a logo, no promos" bug). The `[slug]` pages get a real provider
+from `VariantAssignmentWrapper`; the gallery runs no experiment, so a resolved empty provider is correct.
+The gallery also passes **`followOnScroll={false}`** so the banner stays in-flow and never becomes the
+fixed scroll-follow pill (the gallery has its own sticky filter dock — two floating top elements would fight). The page is `async` and server-fetches `getEffectivePromosForDisplay()` to pass
+`initialMembershipPromo`/`initialOneTimePromo` to `PromoBanner`, AND mounts `<PromoThemeInitializer slug={DEFAULT_PRIZE_SLUG} />`
+— WITHOUT both, the banner rendered unthemed/empty and looked different from the `[slug]` pages (owner: "should
+be the same PromoBanner"). Fabricated "$XXXk+ prize-pool" stat row removed (owner). Overlap fix: the layout's
+`NewsletterSection` is `absolute … -translate-y-1/2`, tucking up half its height into the page end; the gold
+cash band carries `pb-28 sm:pb-36 lg:pb-44` so the newsletter floats over empty ground, not the band.
+
+**Theme-aware + mobile 2-up + sticky-dock fix (2026-07-07):** the gallery is now **light + dark** (`bg-white
+dark:bg-neutral-950`, follows the promotions guest theme toggle) — it was committed-dark; owner wanted light
+mode too. Cards, dock, hero, featured lead all carry light+dark pairs; the brand wordmark SVGs are
+brand-colored (`#c92a28`/`#FEBD17`/`#BFD730`…) so they read on both grounds without inverting. The hero
+**brand strip is a one-row marquee** (matches the `/membership` `MembershipBrandShowcase`:
+`animate-[marquee-scroll_45s_linear_infinite]`, masked edges, hover-pause, bigger white cards); the 5 toolset
+wordmarks are repeated **4×** so the keyframe's `-50%` animated half always exceeds the viewport for a seamless
+loop (2× isn't enough with only 5 brands on wide screens). **Grid is
+`grid-cols-2` on mobile** (2-up — owner: "see in general what we're offering", small is fine), `lg:grid-cols-3`;
+card copy compacts on mobile (wordmark scaled, toolbox chip + full catalog-label description hidden `<sm`, "View"
+vs "View this combination"). **No value badge** (owner: "remove the price value") — and the **prize name is
+always shown**: the short combo title (`card.title`, e.g. "Milwaukee × Sidchrome", truncated) on mobile, the
+full catalog-label description from `sm`. The `accentInk`/`inkOn` YIQ helper was removed with the badge.
+**Sticky filter dock now actually sticks:** the page ancestors use `overflow-x-clip` (NOT
+`overflow-hidden`, which establishes a scroll container and silently breaks `position: sticky`); the dock's
+`top-16 sm:top-20` clears the `PromoBanner` (which goes `fixed z-50` when scrolled). The "This month's headline"
+badge on the featured combo was removed (owner).
+
 ## Landing page — new design assets, full replace (2026-06-23)
 
 The promo landing hero **images + videos were fully replaced** with the new
@@ -125,9 +189,15 @@ Promo components use `cn()` from `@/utils/cn` for conditional class composition.
 
 Countdown timers in promo components — `GiveawayCountdownTimer`, `FloatingCountdownBanner`, `FreezePeroidBanner` — are now leaf-isolated via [`<CountdownLeaf>`](../../src/components/ui/CountdownLeaf.tsx) / [`useLeafTimer`](../../src/hooks/useLeafTimer.ts) so the parent promo section / banner host doesn't re-render on every tick. `OtherToolsetsCarousel` pauses its infinite framer-motion loop when offscreen via [`useInViewportAnimation`](../../src/hooks/useInViewportAnimation.ts), and `FloatingPromoBanner` / `FloatingGetEntriesButton` consume the device-tier CSS tokens (`--ta-blur`, `--ta-shadow-card`, `--ta-transition-dur`) so visual cost scales down on mobile / `Save-Data`. Floating elements set `data-floating-widget="true"` so the print stylesheet hides them. The new [`FloatingPromoBannerHost`](../../src/components/banners/FloatingPromoBannerHost.tsx) is mounted once in `providers.tsx` and orchestrates promo banner visibility globally instead of per-page mounting. See [shared-ui/patterns.md](../shared-ui/patterns.md#site-wide-interaction-smoothness--phase-1-2026-05-09) for the helpers.
 
-## FloatingPromoBanner safe-area inset (2026-06-09)
+## PromoPackages — packages-design experiment concluded, control won (2026-07-06)
 
-[`FloatingPromoBanner`](../../src/components/banners/FloatingPromoBanner.tsx) is `fixed bottom-0` and now carries `pb-[env(safe-area-inset-bottom)]` on its root so its content clears the iOS home indicator. This became necessary once the app set `viewport-fit=cover` in the viewport meta — that removes the browser's automatic safe-area inset, so any bottom-pinned element must add the padding itself. Keep this class when restyling the banner.
+[`src/components/sections/promo/PromoPackages.tsx`](../../src/components/sections/promo/PromoPackages.tsx) always renders the control block: `<section id="packages">` + `SectionContainer` + `MembershipSection` (`title="Choose Your Entry Package"`), still passing `variantConfig?.packages` through for `hidePackages` / `displayOrder`.
+
+Historical: from 2026-07-01 to 2026-07-06 it branched on `variantConfig?.packages.design` for the packages-design A/B test — `"membership"` rendered a `PromoMembershipDesign` treatment (the `/membership` tier + one-time-packs design). The control won (3.11% vs 2.65% conversion), so the treatment component, the `packages.design` config key, and the branch were removed. The generic experiment plumbing (`VariantAssignmentWrapper`, `getActiveExperimentForSlug`, `getServerVariantAssignment`) stays for future experiments. Historical operational details: [docs/ab-testing/promo-packages-design-runbook.md](../ab-testing/promo-packages-design-runbook.md).
+
+## FloatingPromoBanner — removed (2026-07-01)
+
+The floating "ENTRY BOOST ENDING SOON" promo banner (`FloatingPromoBanner` + its path-gated `FloatingPromoBannerHost` mount in `providers.tsx`) was **removed** — no longer needed. Its shared helpers (`PromoBadge`, `countdown-mode.ts`) and the `membershipTabChanged` window event stay, since `PromoBanner` still consumes them. (The Phase-1 note above references the old mount; it's historical.)
 
 ## Cobber support widget on promotions (2026-06-26)
 

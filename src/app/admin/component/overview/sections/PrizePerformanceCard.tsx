@@ -11,6 +11,7 @@ import { useMetricsFormatting } from "@/hooks/useMetricsFormatting";
 import { useSpendByUrlAnalytics } from "@/hooks/queries/useSpendByUrlAnalytics";
 import { getWebsiteLaunchDateUTC } from "@/utils/common/timezone";
 import { cn } from "@/utils/cn";
+import { TOOLSET_LANDING_SLUGS, type ToolsetLandingSlug } from "@/config/promo-landing-slugs";
 import type { DateRange } from "@/components/admin/DateRangeToggle";
 
 /** Same calendar-day semantics as Facebook Ads → Spend by URL (Australia/Sydney) */
@@ -21,7 +22,7 @@ const AEST_TIMEZONE = "Australia/Sydney";
  *
  * Data logic is ported from the legacy `AdvertisingBreakdownSection`:
  * `useSpendByUrlAnalytics(startDate, endDate)` over the same AEST calendar-day
- * window, grouped/summed per promotion brand (Ryobi / Milwaukee / Dewalt / Makita),
+ * window, grouped/summed per promotion brand (derived from `TOOLSET_LANDING_SLUGS`),
  * with `roas = revenue / spend`. The "Sync from Meta" button (recovered from the
  * legacy section) POSTs to `/api/admin/analytics/spend-by-url/sync` and invalidates
  * the `useSpendByUrlAnalytics` query on success. The per-row detail modal is (for now)
@@ -46,12 +47,46 @@ const COLUMNS: Column[] = [
   { key: "conversions", label: "Conversions", align: "right" },
 ];
 
-const PROMOTION_BRANDS = [
-  { brand: "Ryobi", slug: "ryobi", logoPath: "/images/brands/name/ryobiText.svg" },
-  { brand: "Milwaukee", slug: "milwaukee", logoPath: "/images/brands/name/milwaukeeText.svg" },
-  { brand: "Dewalt", slug: "dewalt", logoPath: "/images/brands/name/dewaltText.svg" },
-  { brand: "Makita", slug: "makita", logoPath: "/images/brands/name/makitaText.svg" },
-] as const;
+/**
+ * Display names for the ROAS table (logo `alt` + label). Typed against
+ * `ToolsetLandingSlug` so adding a brand to `TOOLSET_LANDING_SLUGS` forces a display
+ * name here at compile time — the table can't silently drift out of sync with the rest
+ * of the app (this fork is exactly why HiKOKI was missing before).
+ */
+const BRAND_DISPLAY_NAME: Record<ToolsetLandingSlug, string> = {
+  ryobi: "Ryobi",
+  milwaukee: "Milwaukee",
+  dewalt: "Dewalt",
+  makita: "Makita",
+  hikoki: "HiKOKI",
+};
+
+/**
+ * Promotion brands tracked here — DERIVED from the single source of truth
+ * (`TOOLSET_LANDING_SLUGS`, src/config/promo-landing-slugs.ts). Each brand's Meta ad
+ * spend/revenue is matched by its `/promotions/<slug>` URL. To add a brand: add it to
+ * the source of truth, ship its `/images/brands/name/<slug>Text.svg` wordmark, and add a
+ * `BRAND_DISPLAY_NAME` entry — it then appears here automatically (once it has spend).
+ * See docs/config-and-data: "Adding a promotion brand".
+ */
+const PROMOTION_BRANDS = TOOLSET_LANDING_SLUGS.map((slug) => ({
+  brand: BRAND_DISPLAY_NAME[slug],
+  slug,
+  logoPath: `/images/brands/name/${slug}Text.svg`,
+}));
+
+/**
+ * Extracts the **toolset** slug from a promotion URL: the first path segment after
+ * `/promotions/`, i.e. the part before the first `-`. So `/promotions/ryobi-milwaukee`
+ * (Ryobi toolset + Milwaukee toolbox) resolves to `ryobi`, NOT `milwaukee`. Matching this
+ * exact segment — rather than a substring of the URL — is what guarantees each brand row
+ * counts only its own toolset's spend and never folds in a `*-<brand>` toolbox suffix.
+ * Returns null for non-promotion URLs (e.g. the `unknown://meta-ad/<id>` placeholder).
+ */
+function promotionsToolsetSlug(canonicalUrl: string): string | null {
+  const match = canonicalUrl.match(/\/promotions\/([^/?#]+)/);
+  return match ? match[1].toLowerCase().split("-")[0] : null;
+}
 
 export default function PrizePerformanceCard({
   dateRange,
@@ -132,11 +167,13 @@ export default function PrizePerformanceCard({
     if (!data?.rows) return [];
 
     return PROMOTION_BRANDS.map((promo) => {
-      // Sum all URL rows for this promotion (Meta can split spend across URL variants)
+      // Sum every URL row whose TOOLSET segment is this brand. Meta can split spend across
+      // URL variants, so the toolset landing `/promotions/<brand>` AND every
+      // `/promotions/<brand>-*` prize page roll up into this one brand row. Matching the
+      // toolset segment (not a substring) keeps a `*-<brand>` toolbox suffix — e.g.
+      // `/promotions/ryobi-milwaukee` — counted under its toolset (Ryobi), never Milwaukee.
       const rowsForPromo = data.rows.filter(
-        (r) =>
-          r.canonicalUrl.includes(`/promotions/${promo.slug}`) ||
-          r.canonicalUrl.endsWith(`/promotions/${promo.slug}`)
+        (r) => promotionsToolsetSlug(r.canonicalUrl) === promo.slug
       );
 
       const spend = rowsForPromo.reduce((s, r) => s + r.spend, 0);

@@ -430,11 +430,11 @@ The `User` document (§2) holds the bulk of customer PII — identity (name, ema
 
 ### 9e. What sign-out clears client-side
 
-Sign-out is wired in two places — the dashboard Settings page and the site Header — and both run the same sequence **before** the server `signOut` (this satisfies the privacy + multi-user-safety rule that user-scoped client storage be cleared at the auth boundary):
+Every sign-out trigger — the dashboard Settings page, the site Header, the AdminSidebar, and the 401/403/`USER_NOT_FOUND` forced-logout in `lib/queries.ts` — clears user-scoped client storage **before** the server `signOut` through one canonical helper, `totalSignOut()` / `clearUserScopedClientStorage()` ([total-sign-out.ts](src/utils/auth/total-sign-out.ts)) (this satisfies the privacy + multi-user-safety rule that user-scoped client storage be cleared at the auth boundary). The helper:
 
-1. `localStorage.removeItem("wasAuthenticated")` and `removeItem("topBarHidden")` (UI hints).
-2. `clearSupportChatStorage()` — removes the per-user chat keys `ta_support_chat_conversation_id` and `ta_support_chat_messages` so chat history can't leak to the next user on a shared device; each removal is independently fault-tolerant ([chatStorage.ts:21-24,108-117](src/lib/support-chat/chatStorage.ts#L21)).
-3. `signOut({ callbackUrl: "/" })`.
+1. Removes auth breadcrumbs (`wasAuthenticated`, `topBarHidden`, `auth-token`), per-user "seen" flags, and in-progress checkout/upsell/setup state from `localStorage` + `sessionStorage`.
+2. Clears the per-user chat keys `ta_support_chat_conversation_id` and `ta_support_chat_messages` — delegated to the chat module's own `clearSupportChatStorage()` so chat history can't leak to the next user on a shared device; each removal is independently fault-tolerant ([chatStorage.ts:21-24,108-117](src/lib/support-chat/chatStorage.ts#L21)).
+3. Calls `signOut({ callbackUrl: "/" })` (the `queries.ts` forced-logout keeps its own bare `signOut()`).
 
 **Intentionally NOT cleared:** the device-level `ta_support_chat_disclosure_ack` key (the one-time "I've seen the AI notice" flag) — treated as a device pref like cookie-consent, so users aren't re-nagged on every account switch ([chatStorage.ts:65-70](src/lib/support-chat/chatStorage.ts#L65)).
 

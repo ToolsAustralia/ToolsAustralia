@@ -1,8 +1,8 @@
 # Client State — Gotchas
 
-## Forced sign-out in `apiRequest` now clears support-chat client storage (2026-06-24)
+## Forced sign-out in `apiRequest` clears user-scoped client storage (2026-06-24, updated 2026-07-07)
 
-`lib/queries.ts` `shouldForceLogout` path now calls `clearSupportChatStorage()` immediately before `signOut()` per the org rule: per-user localStorage must be wiped at auth-error sign-out to prevent chat `conversationId` from leaking to the next user on a shared device. `clearSupportChatStorage()` is SSR-safe (guards `typeof window === "undefined"` internally).
+`lib/queries.ts` `shouldForceLogout` path calls `clearUserScopedClientStorage()` ([src/utils/auth/total-sign-out.ts](../../src/utils/auth/total-sign-out.ts)) immediately before its in-place `signOut()` per the org rule: per-user localStorage must be wiped at auth-error sign-out to prevent leakage to the next user on a shared device. That helper clears auth breadcrumbs + per-user flags **and** support-chat history / `conversationId` (delegated to `clearSupportChatStorage()`), all SSR-safe (each guards `typeof window === "undefined"` internally). It keeps its bare `signOut()` (not `totalSignOut()`) because the clear + sign-out are deliberately separate here.
 
 ## `apiRequest` no longer sends an `Authorization` header (2026-06-19)
 

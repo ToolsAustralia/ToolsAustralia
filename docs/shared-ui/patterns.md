@@ -5,7 +5,7 @@
 Two helpers control how package names are shown to users. See `docs/subscription/patterns.md P0` for the full rule summary.
 
 ### Catalog surfaces — `getPackageDisplayName(plan)`
-Catalog-facing components (`MembershipSection`, `PackageSelectionModal/PlanCard`, `SpecialPackagesModal/PackagesGrid`, `SpecialPackagesModal/BenefitsPanel`, `PackageInclusionsSlideUp`) render package names via `getPackageDisplayName(plan)` from `src/utils/membership/getDisplayName.ts` instead of reading `plan.name` directly. This strips the `"Additional "` prefix from member-only one-time packs so users see "Tradie Pack" rather than "Additional Tradie Pack".
+Catalog-facing components (`MembershipSection`, `PackageSelectionModal/PlanCard`, `SpecialPackagesModal/PackagesGrid`, `SpecialPackagesModal/BenefitsPanel`, `PackageInclusionsSlideUp`) render package names via `getPackageDisplayName(plan)` from `src/utils/membership/getDisplayName.ts` instead of reading `plan.name` directly. This strips the `"Additional "` prefix from Additional one-time packs so users see "Tradie Pack" rather than "Additional Tradie Pack".
 
 Mini-draw package modals (`MiniDrawPackageModal`, `MiniDrawPackages` tooltip) use `pkg.displayName ?? pkg.name` since `MiniDrawPackage` carries its own `displayName` field.
 
@@ -134,6 +134,7 @@ Two keyframes were added to `src/app/globals.css` as part of the cancellation fl
 
 - **`@keyframes scaleIn`** — `scale(.6) opacity(0)` → `scale(1) opacity(1)` in 0.35s ease-out. Used by `StepSaveSuccess` check-circle via `motion-safe:animate-[scaleIn_.35s_ease-out_forwards]`.
 - **`.cf-cta-shine`** — reusable CSS class that produces the same shine sweep as the membership "Enter Now" button (`.ta-enter-cta::after`). Sets `position: relative; overflow: hidden` on the host; the `::after` pseudo-element uses `inset: -40%`, `linear-gradient(115deg, transparent 0%, rgba(255,255,255,0.45) 50%, transparent 100%)`, and the shared `ta-enter-shine` keyframe (3.6s ease-in-out infinite) — **no duplicate keyframe**. Direct children are lifted via `.cf-cta-shine > * { position: relative; z-index: 1 }` so content always sits above the sweep. Reduced-motion gated: `@media (prefers-reduced-motion: reduce)` disables animation and transform on `::after`. Used by `PrimaryCta` (`primitives.tsx`) — children are wrapped in `<span className="relative z-[1] inline-flex items-center justify-center gap-2">` to guarantee layering above the shine regardless of children content.
+- **`@keyframes promo-shimmer-sweep`** — full-width diagonal highlight sweep for the dashboard promo banner ([`DashboardPromoBanner`](../../src/components/sections/dashboard/DashboardPromoBanner.tsx)). Keeps a fixed `skewX(-18deg)` so the highlight band stays diagonal while it travels the whole banner width: the 42%-wide band sits at `left:-60%` and `translateX(0 → 380%)` of its own width.
 
 ### Print stylesheet
 
@@ -143,8 +144,8 @@ Two keyframes were added to `src/app/globals.css` as part of the cancellation fl
 
 [`src/components/features/MiniDrawPackages.tsx`](../../src/components/features/MiniDrawPackages.tsx) is the purchase UI rendered on the `/mini-draws/[id]` page. It now uses `getMiniDrawPackagesForViewer(hasAccess)` instead of the raw `miniDrawPackages` array to show only the tier-appropriate packages:
 
-- Guests / users without current draw entries and no active subscription → Mini Pack 1, 2, 3 (`isMemberOnly` absent / false).
-- Users with an active subscription OR at least one current draw entry → the five `additional-*-pack-mini` records (`isMemberOnly: true`).
+- Guests / users without current draw entries and no active subscription → Mini Pack 1, 2, 3 (`isAdditional` absent / false).
+- Users with an active subscription OR at least one current draw entry → the five `additional-*-pack-mini` records (`isAdditional: true`).
 
 `hasAccess` is derived via `useUserMajorDrawStats(userData?._id)` + `hasAdditionalPackageAccess(userData, userMajorDrawStats)`, reusing the same helpers as the major-draw catalog. The `viewerPackages` computed list replaces all three in-component usages of the raw array: the grid render, the selected-package-modal lookup, and the `handlePurchase` package lookup.
 

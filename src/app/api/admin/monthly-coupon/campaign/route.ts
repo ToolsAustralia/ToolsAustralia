@@ -31,6 +31,19 @@ const campaignSchema = z.object({
   purchaseRequirement: z.enum(["none", "membership", "one-time", "any"]).optional(),
   segmentConfig: monthlyCouponSegmentConfigSchema,
   isActive: z.boolean().optional(),
+}).superRefine((data, ctx) => {
+  // manual-users / csv-users target EXACTLY the pinned users — an empty pin list is an admin
+  // mistake, not "everyone" (the lazy issuance path used to widen it to all active subscribers).
+  if (
+    (data.targetingMode === "manual-users" || data.targetingMode === "csv-users") &&
+    !(data.segmentConfig?.includeUserIds && data.segmentConfig.includeUserIds.length > 0)
+  ) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["segmentConfig", "includeUserIds"],
+      message: `targetingMode "${data.targetingMode}" requires at least one user in segmentConfig.includeUserIds`,
+    });
+  }
 });
 
 export async function GET(request: NextRequest) {

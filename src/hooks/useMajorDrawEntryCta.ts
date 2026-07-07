@@ -7,6 +7,11 @@ import { useResolvedMultiplier } from "@/hooks/queries/usePromoQueries";
 import { convertToLocalPlan, type LocalMembershipPlan } from "@/utils/membership/membership-adapters";
 import { useUserMajorDrawStats } from "@/hooks/queries/useMajorDrawQueries";
 import { hasAdditionalPackageAccess } from "@/utils/membership/has-additional-package-access";
+import { hasBlockingSubscription } from "@/utils/subscription/subscription-helpers";
+import {
+  MEMBERSHIP_PACKAGES_QUERY_PARAM,
+  parseMembershipPackagesTab,
+} from "@/utils/membership/packagesTabParam";
 import { getEffectivePromoType } from "@/utils/promo/get-effective-promo-type";
 import { useMajorDrawPurchaseGate } from "@/hooks/useMajorDrawPurchaseGate";
 
@@ -17,6 +22,8 @@ interface UseMajorDrawEntryCtaResult {
   membershipPromoMultiplier: number;
   oneTimePromoMultiplier: number;
   getHeavyDutyPack: () => LocalMembershipPlan;
+  /** Promo-boosted Tradie SUBSCRIPTION from the catalog — the canonical "Become a member" preselect. */
+  getTradieSubscriptionPlan: () => LocalMembershipPlan;
   getOneTimePlan: () => LocalMembershipPlan | null;
   openEntryFlow: (options?: { openLocalModal?: boolean }) => void;
   openWithOneTimePlan: () => void;
@@ -45,6 +52,81 @@ export function useMajorDrawEntryCta(): UseMajorDrawEntryCtaResult {
 
   const membershipPromoMultiplier = resolvedMembership ?? 1;
   const oneTimePromoMultiplier = resolvedOneTime ?? 1;
+
+  /**
+   * The promo-boosted TRADIE SUBSCRIPTION plan from the real catalog — the canonical
+   * "Become a member" preselect (same object a Tradie tier-card tap uses), regardless of the
+   * user's additional-pack access. Contrast getHeavyDutyPack, which is access-dependent and
+   * returns a ONE-TIME pack for entry-holders — wrong for a membership CTA.
+   */
+  const getTradieSubscriptionPlan = useCallback((): LocalMembershipPlan => {
+    const promoMultiplier = membershipPromoMultiplier;
+    const targetPackageId = "tradie-subscription";
+
+    const packageData = safeSubscriptionPackages.find((pkg) => pkg.id === targetPackageId);
+
+    if (!packageData) {
+      // Fallback if packages aren't loaded yet (or the id is missing from the catalog)
+      const baseEntries = 15; // Tradie subscription has 15 entries per month
+      const promoEntries = baseEntries * promoMultiplier;
+
+      return {
+        id: targetPackageId,
+        name: "Tradie",
+        price: 20,
+        period: "mo",
+        features: [
+          {
+            text: `${promoEntries} Free Accumulated Entries${
+              promoMultiplier > 1 ? ` (${promoMultiplier}X PROMO!)` : ""
+            }`,
+          },
+          // { text: "5% Off Shop purchases" }, // Temporarily disabled - Shop coming soon
+          { text: "50% Access to Partner Discounts" },
+          { text: "Mini Draws" },
+        ],
+        buttonText: "Get Started",
+        buttonStyle: "secondary",
+        isAdditional: false,
+        metadata: {
+          entriesCount: promoEntries,
+          promoMultiplier,
+          originalEntries: baseEntries,
+          isPromoActive: promoMultiplier > 1,
+        },
+      };
+    }
+
+    const localPlan = convertToLocalPlan(packageData);
+
+    // Apply promo multiplier if active
+    if (promoMultiplier <= 1) {
+      return localPlan;
+    }
+
+    const originalEntries = localPlan.metadata?.entriesCount ?? 0;
+    const promoEntries = originalEntries * promoMultiplier;
+
+    return {
+      ...localPlan,
+      features: localPlan.features.map((feature) => {
+        if (feature.text.toLowerCase().includes("entries")) {
+          return {
+            ...feature,
+            text: feature.text.replace(/\d+/, promoEntries.toString()),
+          };
+        }
+        return feature;
+      }),
+      metadata: {
+        ...localPlan.metadata,
+        entriesCount: promoEntries,
+        originalEntries,
+        promoMultiplier,
+        isPromoActive: true,
+      },
+    };
+  }, [safeSubscriptionPackages, membershipPromoMultiplier]);
 
   const getHeavyDutyPack = useCallback((): LocalMembershipPlan => {
     // Check if user has access to additional packages (subscription OR current draw entries)
@@ -77,7 +159,7 @@ export function useMajorDrawEntryCta(): UseMajorDrawEntryCtaResult {
           ],
           buttonText: "Get Started",
           buttonStyle: "secondary",
-          isMemberOnly: true,
+          isAdditional: true,
           metadata: {
             entriesCount: promoEntries,
             promoMultiplier,
@@ -106,7 +188,7 @@ export function useMajorDrawEntryCta(): UseMajorDrawEntryCtaResult {
           ],
           buttonText: "Get Started",
           buttonStyle: "secondary",
-          isMemberOnly: true,
+          isAdditional: true,
           metadata: {
             entriesCount: promoEntries,
             promoMultiplier,
@@ -146,110 +228,13 @@ export function useMajorDrawEntryCta(): UseMajorDrawEntryCtaResult {
         },
       };
     } else {
-      const promoMultiplier = membershipPromoMultiplier;
-      // Non-member path: Use Tradie subscription package
-      const targetPackageId = "tradie-subscription";
-
-      if (safeSubscriptionPackages.length === 0) {
-        // Fallback if packages aren't loaded yet
-        const baseEntries = 15; // Tradie subscription has 15 entries per month
-        const promoEntries = baseEntries * promoMultiplier;
-
-        return {
-          id: targetPackageId,
-          name: "Tradie",
-          price: 20,
-          period: "mo",
-          features: [
-            {
-              text: `${promoEntries} Free Accumulated Entries${
-                promoMultiplier > 1 ? ` (${promoMultiplier}X PROMO!)` : ""
-              }`,
-            },
-            // { text: "5% Off Shop purchases" }, // Temporarily disabled - Shop coming soon
-            { text: "50% Access to Partner Discounts" },
-            { text: "Mini Draws" },
-          ],
-          buttonText: "Get Started",
-          buttonStyle: "secondary",
-          isMemberOnly: false,
-          metadata: {
-            entriesCount: promoEntries,
-            promoMultiplier,
-            originalEntries: baseEntries,
-            isPromoActive: promoMultiplier > 1,
-          },
-        };
-      }
-
-      const packageData = safeSubscriptionPackages.find((pkg) => pkg.id === targetPackageId);
-
-      if (!packageData) {
-        // Fallback if package not found
-        const baseEntries = 15; // Tradie subscription has 15 entries per month
-        const promoEntries = baseEntries * promoMultiplier;
-
-        return {
-          id: targetPackageId,
-          name: "Tradie",
-          price: 20,
-          period: "mo",
-          features: [
-            {
-              text: `${promoEntries} Free Accumulated Entries${
-                promoMultiplier > 1 ? ` (${promoMultiplier}X PROMO!)` : ""
-              }`,
-            },
-            // { text: "5% Off Shop purchases" }, // Temporarily disabled - Shop coming soon
-            { text: "50% Access to Partner Discounts" },
-            { text: "Mini Draws" },
-          ],
-          buttonText: "Get Started",
-          buttonStyle: "secondary",
-          isMemberOnly: false,
-          metadata: {
-            entriesCount: promoEntries,
-            promoMultiplier,
-            originalEntries: baseEntries,
-            isPromoActive: promoMultiplier > 1,
-          },
-        };
-      }
-
-      const localPlan = convertToLocalPlan(packageData);
-
-      // Apply promo multiplier if active
-      if (promoMultiplier <= 1) {
-        return localPlan;
-      }
-
-      const originalEntries = localPlan.metadata?.entriesCount ?? 0;
-      const promoEntries = originalEntries * promoMultiplier;
-
-      return {
-        ...localPlan,
-        features: localPlan.features.map((feature) => {
-          if (feature.text.toLowerCase().includes("entries")) {
-            return {
-              ...feature,
-              text: feature.text.replace(/\d+/, promoEntries.toString()),
-            };
-          }
-          return feature;
-        }),
-        metadata: {
-          ...localPlan.metadata,
-          entriesCount: promoEntries,
-          originalEntries,
-          promoMultiplier,
-          isPromoActive: true,
-        },
-      };
+      // Non-member path: the Tradie subscription (shared builder; handles catalog fallbacks + promo).
+      return getTradieSubscriptionPlan();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- oneTimePromoMultiplier required for isMember path plan recalculation
   }, [
     safeOneTimePackages,
-    safeSubscriptionPackages,
+    getTradieSubscriptionPlan,
     membershipPromoMultiplier,
     oneTimePromoMultiplier,
     userData,
@@ -263,7 +248,7 @@ export function useMajorDrawEntryCta(): UseMajorDrawEntryCtaResult {
     }
     const promoMultiplier = oneTimePromoMultiplier;
     const nonMemberOneTime = safeOneTimePackages.find(
-      (pkg) => (pkg.period === "one-time" || pkg.period === "once") && !pkg.isMemberOnly
+      (pkg) => (pkg.period === "one-time" || pkg.period === "once") && !pkg.isAdditional
     );
     if (!nonMemberOneTime) return null;
     const localPlan = convertToLocalPlan(nonMemberOneTime);
@@ -319,11 +304,31 @@ export function useMajorDrawEntryCta(): UseMajorDrawEntryCtaResult {
           return;
         }
 
-        const correctPlan = getHeavyDutyPack();
+        // A user who already holds a (blocking) subscription — active / past_due / etc. — CANNOT create a
+        // second subscription, so pre-select a ONE-TIME pack (getOneTimePlan), never a membership sub
+        // (getHeavyDutyPack) which would fail with EXISTING_SUBSCRIPTION. This takes precedence.
+        // Otherwise: ad landings with `?packages=one-time` also open the ONE-TIME flow (guests — members
+        // with additional access already diverted above), falling back to the subscription default if no
+        // one-time plan is resolvable yet; and plain non-subscribers get the Tradie sub as the default.
+        const forcedOneTime =
+          typeof window !== "undefined" &&
+          parseMembershipPackagesTab(
+            new URLSearchParams(window.location.search).get(MEMBERSHIP_PACKAGES_QUERY_PARAM)
+          ) === "one-time";
+        const correctPlan = hasBlockingSubscription(userData)
+          ? getOneTimePlan()
+          : forcedOneTime
+            ? getOneTimePlan() ?? getHeavyDutyPack()
+            : getHeavyDutyPack();
 
         if (openLocalModal) {
-          membershipModal.setSelectedPlan(correctPlan);
-          membershipModal.openModal();
+          if (correctPlan) {
+            membershipModal.setSelectedPlan(correctPlan);
+            membershipModal.openModal();
+          } else {
+            // No concrete one-time plan resolved yet → let the user pick a pack.
+            membershipModal.openModalWithPackageSelectionFirst();
+          }
           return;
         }
 
@@ -340,6 +345,7 @@ export function useMajorDrawEntryCta(): UseMajorDrawEntryCtaResult {
       whenGatesOpenElseGateModal,
       clearModalFromSession,
       getHeavyDutyPack,
+      getOneTimePlan,
       userData,
       userMajorDrawStats,
       membershipModal,
@@ -355,6 +361,7 @@ export function useMajorDrawEntryCta(): UseMajorDrawEntryCtaResult {
       membershipPromoMultiplier,
       oneTimePromoMultiplier,
       getHeavyDutyPack,
+      getTradieSubscriptionPlan,
       getOneTimePlan,
       openEntryFlow,
       openWithOneTimePlan,
@@ -366,6 +373,7 @@ export function useMajorDrawEntryCta(): UseMajorDrawEntryCtaResult {
       membershipPromoMultiplier,
       oneTimePromoMultiplier,
       getHeavyDutyPack,
+      getTradieSubscriptionPlan,
       getOneTimePlan,
       openEntryFlow,
       openWithOneTimePlan,

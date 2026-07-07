@@ -4,6 +4,11 @@ This domain IS frontend (no backend surface).
 
 See [architecture.md](./architecture.md) for the full layout: TanStack Query, Zustand stores, Contexts, generic hooks.
 
+> **Forced-logout storage clear (2026-07-02):** the 401/403/USER_NOT_FOUND path in
+> [`queries.ts`](../../src/lib/queries.ts) now calls `clearUserScopedClientStorage()` before its
+> in-place `signOut()`, so an expired session also wipes user-scoped client storage (`modal-priority-store`
+> lives here too). See [auth/frontend.md](../auth/frontend.md#total-sign-out-2026-07-02).
+
 ## `useRevenueBreakdown` — `ChartData.membershipRenewals` (2026-06-15)
 
 [`useAdminQueries.ts`](../../src/hooks/queries/useAdminQueries.ts) `ChartData` (and
@@ -19,7 +24,6 @@ the recurring-vs-new split needs no separate request. See
 
 - `<DeviceTierProvider />` — once, writes `data-tier` / `data-viewport-tier` / `data-save-data` on `<html>`. See [shared-ui/patterns.md](../shared-ui/patterns.md#device-tier-system).
 - `<MotionConfig reducedMotion="user">` — framer-motion respects OS `prefers-reduced-motion`.
-- `<FloatingPromoBannerHost />` — global floating promo banner orchestrator (replaces per-page mounting).
 - Tracking trackers (Affiliate / Referral / PromoLink / Klaviyo identifier).
 
 The `transition-colors duration-200 ease-out` utility was removed from `<body>` to stop a global colour-transition repaint on every theme flip.

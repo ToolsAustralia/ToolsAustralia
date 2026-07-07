@@ -7,10 +7,10 @@ export type { ActivityLogItem } from "@/services/admin/ActivityLogService";
 
 /**
  * GET /api/admin/activity-log
- * Get paginated activity log with filters
+ * Get keyset-paginated activity log with filters
  *
  * Query Parameters:
- * - page: Page number (default: 1)
+ * - cursor: Keyset cursor from a previous page's `nextCursor` (optional; omit for the first page)
  * - limit: Items per page (default: 25)
  * - type: Filter by activity type (optional)
  * - search: Search term (optional)
@@ -23,12 +23,12 @@ export async function GET(request: NextRequest) {
     await connectDB();
 
     const searchParams = request.nextUrl.searchParams;
-    const page = parseInt(searchParams.get("page") || "1", 10);
+    const cursor = searchParams.get("cursor");
     const limit = parseInt(searchParams.get("limit") || "25", 10);
     const typeFilter = searchParams.get("type");
     const searchTerm = searchParams.get("search");
 
-    const data = await getActivityLog({ page, limit, typeFilter, searchTerm });
+    const data = await getActivityLog({ cursor, limit, typeFilter, searchTerm });
 
     return NextResponse.json({ success: true, data });
   } catch (error) {

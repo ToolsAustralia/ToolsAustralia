@@ -22,7 +22,7 @@ Users earn redeemable items via campaigns and draws. Each issuance is a `Redeema
 | `RedemptionAnalyticsService.ts` | Reporting on redemptions. |
 | `CsvImportService.ts` | Bulk import of redeemables (admin tool). |
 
-Cross-domain helper: [campaignAudienceFilter.ts](../../src/utils/redeemables/campaignAudienceFilter.ts), [topMajorDrawPercentile.ts](../../src/utils/redeemables/topMajorDrawPercentile.ts), [cancellation-upsell-eligibility.ts](../../src/utils/redeemables/cancellation-upsell-eligibility.ts).
+Cross-domain helper: [campaignAudienceFilter.ts](../../src/utils/redeemables/campaignAudienceFilter.ts), [topMajorDrawPercentile.ts](../../src/utils/redeemables/topMajorDrawPercentile.ts), [cancellation-upsell-eligibility.ts](../../src/utils/redeemables/cancellation-upsell-eligibility.ts), [purchase-eligibility.ts](../../src/utils/redeemables/purchase-eligibility.ts) (purchase-gated coupon predicate, shared by redeem + wallet).
 
 ## Lifecycle
 

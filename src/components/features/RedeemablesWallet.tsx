@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Ticket, Calendar, CheckCircle2, Clock3, Gift, Loader2, Lock, Sparkles } from "lucide-react";
+import { Ticket, Calendar, CheckCircle2, Clock3, Gift, Loader2, Sparkles } from "lucide-react";
 import { useRedeemablesWallet, useRedeemablesStatus, useRedeemableRedemption } from "@/hooks/queries";
 import { useToast } from "@/components/ui/Toast";
 import { useKlaviyoTracking } from "@/hooks/useKlaviyoTracking";
@@ -10,7 +10,6 @@ import { trackEvent } from "@/lib/gtm";
 interface RedeemablesWalletProps {
   userId: string;
   variant?: "dashboard" | "rewards";
-  onRequirePurchase?: (item: { issuanceId: string; campaignName?: string; displayLabel?: string }) => void;
 }
 
 function formatStatus(status: string): string {
@@ -26,7 +25,7 @@ function formatStatus(status: string): string {
   }
 }
 
-export default function RedeemablesWallet({ userId, variant = "dashboard", onRequirePurchase }: RedeemablesWalletProps) {
+export default function RedeemablesWallet({ userId, variant = "dashboard" }: RedeemablesWalletProps) {
   const { data: walletData, isLoading: isWalletLoading } = useRedeemablesWallet(userId, { page: 1, limit: 30 });
   const { data: status, isLoading: isStatusLoading } = useRedeemablesStatus(userId);
   const redemptionMutation = useRedeemableRedemption(userId);
@@ -178,30 +177,19 @@ export default function RedeemablesWallet({ userId, variant = "dashboard", onReq
                       </div>
 
                       {item.isRedeemableNow ? (
-                        item.purchaseRequirement !== "none" ? (
-                          <button
-                            onClick={() =>
-                              onRequirePurchase?.({
-                                issuanceId: item.issuanceId,
-                                campaignName: item.campaignName,
-                                displayLabel: item.displayLabel,
-                              })
-                            }
-                            className="shrink-0 inline-flex items-center gap-1.5 h-9 px-3 rounded-lg bg-amber-500 text-white text-xs sm:text-sm font-semibold hover:bg-amber-600"
-                          >
-                            <Lock className="w-4 h-4" />
-                            Unlock
-                          </button>
-                        ) : (
-                          <button
-                            onClick={() => onRedeem({ issuanceId: item.issuanceId, entriesAmount: item.entriesAmount })}
-                            disabled={redemptionMutation.isPending}
-                            className="shrink-0 inline-flex items-center gap-1.5 h-9 px-3 rounded-lg bg-red-600 text-white text-xs sm:text-sm font-semibold hover:bg-red-700 disabled:opacity-50"
-                          >
-                            <CheckCircle2 className="w-4 h-4" />
-                            Redeem
-                          </button>
-                        )
+                        // isRedeemableNow means the purchase gate is already satisfied (server-side
+                        // hasQualifyingPurchase), so purchase-required items redeem directly like any
+                        // other. The old amber "Unlock" branch here called onRequirePurchase, which no
+                        // call site ever passed — a silent no-op dead-end. The unlock-by-purchasing flow
+                        // for NOT-yet-qualified coupons lives on the dashboard rewards claimables sheet.
+                        <button
+                          onClick={() => onRedeem({ issuanceId: item.issuanceId, entriesAmount: item.entriesAmount })}
+                          disabled={redemptionMutation.isPending}
+                          className="shrink-0 inline-flex items-center gap-1.5 h-9 px-3 rounded-lg bg-red-600 text-white text-xs sm:text-sm font-semibold hover:bg-red-700 disabled:opacity-50"
+                        >
+                          <CheckCircle2 className="w-4 h-4" />
+                          Redeem
+                        </button>
                       ) : (
                         <div className="shrink-0 inline-flex items-center gap-1.5 h-9 px-3 rounded-lg bg-gray-100 text-gray-600 dark:text-neutral-400 text-xs sm:text-sm font-medium">
                           <Clock3 className="w-4 h-4" />

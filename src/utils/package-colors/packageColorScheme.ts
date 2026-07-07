@@ -369,7 +369,10 @@ export function getLandingPageThemeFromSlug(slug: string): {
   const scheme = getPackageColorScheme(colorKey);
   const brand = LANDING_PAGE_BRAND[colorKey] ?? LANDING_PAGE_BRAND["milwaukee-red"];
   const { primary, primaryLight, primaryDark } = brand;
-  const preferDarkBackground = slug === "ryobi-sidchrome" || slug === "ryobi-milwaukee";
+  // Ryobi's neon lime needs dark text/CTAs on ALL its toolbox variants (sidchrome,
+  // milwaukee, AND kincrome — the last was missing, so kincrome banners/CTAs rendered
+  // white-on-lime). One check keeps every Ryobi slug legible.
+  const preferDarkBackground = slug.startsWith("ryobi-");
   const brandGradient = brandCanvasGradientFromSlug(slug);
   const fallbackGradient = `linear-gradient(90deg, ${primary} 0%, ${primaryLight} 50%, ${primary} 100%)`;
   const fallbackSolid = `linear-gradient(90deg, ${primaryDark} 0%, ${primary} 50%, ${primaryDark} 100%)`;

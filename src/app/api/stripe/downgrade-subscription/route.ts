@@ -185,6 +185,10 @@ export async function POST(request: NextRequest) {
       })),
       proration_behavior: "none", // No immediate charge - user pays current price until cycle ends
       billing_cycle_anchor: "unchanged", // Keep current billing cycle - new price at next cycle
+      // A member can downgrade while scheduled to cancel at period end. Without clearing the pending cancel,
+      // Stripe cancels at period end (customer.subscription.deleted) BEFORE the downgraded price ever renews —
+      // the member is dropped entirely instead of continuing on the lower tier. Clear it (charge-safe).
+      cancel_at_period_end: false,
       description: downgradeDescription, // ✅ Formatted downgrade description for Stripe dashboard
       metadata: {
         userId: user._id.toString(),
@@ -237,6 +241,12 @@ export async function POST(request: NextRequest) {
     // previousSubscription handles preserving old benefits until endDate
     user.subscription.packageId = newPackage._id;
     user.subscription.startDate = new Date(); // New subscription starts now (in Stripe)
+
+    // Downgrading OVERWRITES a scheduled cancellation — the member chose to continue (cheaper), not cancel.
+    // We cleared Stripe's cancel_at_period_end above; mirror it in the DB now (this route has no dedicated
+    // webhook reconciliation, so don't rely on the async subscription.updated to fix autoRenew).
+    user.subscription.autoRenew = true;
+    user.subscription.cancelledAt = undefined;
 
     await user.save();
 

@@ -2,6 +2,10 @@
 
 Cross-cutting infra: health checks, cron, upload, Cloudinary, environment, Zod helpers, date utilities, validation, webhooks, operational scripts. Also owns repo-wide config files like `package.json`, `vercel.json`, and `.gitignore`.
 
+> `.gitignore` ignores `/claudeDesign` — the local-only Claude Design handoff reference (design HTML/JS prototypes), which is not part of the codebase.
+
+> `.env.example` — `NEXT_PUBLIC_PARTNER_DISCOUNT_SSO_ENABLED` is the client twin of the server-only `PARTNER_DISCOUNT_SSO_ENABLED` (which gates the SSO route). Client-rendered portal buttons can only read `NEXT_PUBLIC_*`, so set both to the same value. Read via `partnerDiscountSsoEnabled()` in `src/config/featureFlags.ts`.
+
 ## Index
 
 - [architecture.md](./architecture.md) — what lives here vs other domains

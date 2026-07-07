@@ -87,7 +87,7 @@ interface IMembershipPackage {
   totalEntries?: number;          // one-time packages
   shopDiscountPercent?: number;
   partnerDiscountDays?: number;
-  isMemberOnly?: boolean;
+  isAdditional?: boolean;
   stripeProductId?: string;
   stripePriceId?: string;
   isActive: boolean;

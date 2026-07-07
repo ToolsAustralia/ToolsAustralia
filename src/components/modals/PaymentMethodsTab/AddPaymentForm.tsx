@@ -3,7 +3,6 @@
 import React, { useState } from "react";
 import { Loader2 } from "lucide-react";
 import { PaymentElement, useStripe, useElements } from "@stripe/react-stripe-js";
-import { Button } from "../ui";
 
 interface AddPaymentFormProps {
   clientSecret: string;
@@ -13,6 +12,10 @@ interface AddPaymentFormProps {
   userName?: string;
   userPhone?: string;
 }
+
+const fieldClass =
+  "w-full rounded-xl border border-token bg-page px-3.5 py-3 text-sm text-primary-token placeholder:text-muted-token focus:border-red-600 focus:outline-none focus:ring-2 focus:ring-red-600/25 dark:text-white";
+const labelClass = "mb-1.5 block text-[11px] font-bold uppercase tracking-[0.14em] text-muted-token";
 
 const AddPaymentForm: React.FC<AddPaymentFormProps> = ({
   clientSecret,
@@ -26,13 +29,11 @@ const AddPaymentForm: React.FC<AddPaymentFormProps> = ({
   const elements = useElements();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [nameOnCard, setNameOnCard] = useState(userName || "");
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-
-    if (!stripe || !elements) {
-      return;
-    }
+    if (!stripe || !elements) return;
 
     setIsSubmitting(true);
     setError(null);
@@ -45,7 +46,7 @@ const AddPaymentForm: React.FC<AddPaymentFormProps> = ({
         return;
       }
 
-      // Pass name, email, phone, and address in confirmParams since we're hiding those fields
+      // Name comes from the field; email/phone/address hidden and passed here.
       const { error: confirmError, setupIntent } = await stripe.confirmSetup({
         elements,
         clientSecret,
@@ -53,12 +54,12 @@ const AddPaymentForm: React.FC<AddPaymentFormProps> = ({
         confirmParams: {
           payment_method_data: {
             billing_details: {
-              name: userName || userEmail || "Customer",
+              name: nameOnCard.trim() || userName || userEmail || "Customer",
               email: userEmail,
               phone: userPhone || undefined,
               address: {
-                country: "AU", // Default to Australia (country is auto-detected in form)
-                line1: "1 Martin Place", // Default address line
+                country: "AU",
+                line1: "1 Martin Place",
                 city: "Sydney",
                 state: "NSW",
                 postal_code: "2000",
@@ -79,7 +80,6 @@ const AddPaymentForm: React.FC<AddPaymentFormProps> = ({
           typeof setupIntent.payment_method === "string"
             ? setupIntent.payment_method
             : setupIntent.payment_method.id;
-
         onSuccess(paymentMethodId);
       } else {
         setError("Payment method not found");
@@ -92,64 +92,61 @@ const AddPaymentForm: React.FC<AddPaymentFormProps> = ({
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-3 sm:space-y-4">
-      <div className="rounded-lg border border-gray-300 dark:border-neutral-600 p-2 sm:p-3 [&_iframe]:!min-h-[200px] sm:[&_iframe]:!min-h-[auto]">
+    <form onSubmit={handleSubmit} className="space-y-4">
+      <div>
+        <label className={labelClass}>Card details</label>
         <PaymentElement
           options={{
             layout: "tabs",
-            fields: {
-              billingDetails: {
-                name: "never" as const,
-                email: "never" as const,
-                phone: "never" as const,
-                address: {
-                  country: "auto" as const, // Auto-detect country based on user location
-                  line1: "never" as const,
-                  line2: "never" as const,
-                  city: "never" as const,
-                  state: "never" as const,
-                  postalCode: "never" as const,
-                },
-              },
-            },
-            terms: {
-              card: "never" as const, // Hide the "By providing your card information..." terms text
-              applePay: "never" as const,
-              googlePay: "never" as const,
-            },
+            fields: { billingDetails: "never" as const },
+            terms: { card: "never" as const, applePay: "never" as const, googlePay: "never" as const },
           }}
         />
       </div>
 
+      <div>
+        <label htmlFor="name-on-card" className={labelClass}>
+          Name on card
+        </label>
+        <input
+          id="name-on-card"
+          type="text"
+          value={nameOnCard}
+          onChange={(e) => setNameOnCard(e.target.value)}
+          placeholder="Name on card"
+          autoComplete="cc-name"
+          className={fieldClass}
+        />
+      </div>
+
       {error && (
-        <div className="bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 px-3 sm:px-4 py-2 sm:py-3 rounded-lg text-xs sm:text-sm">
+        <div className="rounded-xl border border-red-200 bg-red-50 px-3.5 py-2.5 text-sm text-red-700 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-300">
           {error}
         </div>
       )}
 
-      <div className="flex flex-col sm:flex-row gap-2">
-        <Button
-          type="submit"
-          disabled={isSubmitting || !stripe}
-          className="w-full sm:w-auto bg-gradient-to-r from-red-600 to-red-400 text-white px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-semibold hover:from-red-675 hover:to-red-650 disabled:opacity-60 disabled:cursor-not-allowed"
-        >
-          {isSubmitting ? (
-            <>
-              <Loader2 className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2 animate-spin" />
-              Saving...
-            </>
-          ) : (
-            "Save Payment Method"
-          )}
-        </Button>
-        <Button
+      <div className="flex gap-2.5">
+        <button
           type="button"
           onClick={onCancel}
           disabled={isSubmitting}
-          className="w-full sm:w-auto border border-gray-300 dark:border-neutral-600 text-gray-700 dark:text-neutral-300 px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-semibold hover:bg-gray-50 dark:hover:bg-neutral-700 disabled:opacity-60"
+          className="flex-1 rounded-full border border-token bg-surface py-3 text-sm font-bold text-primary-token transition-colors hover:bg-black/[.03] focus:outline-none focus-visible:ring-2 focus-visible:ring-red-600 disabled:opacity-60 dark:text-white dark:hover:bg-white/[.05]"
         >
           Cancel
-        </Button>
+        </button>
+        <button
+          type="submit"
+          disabled={isSubmitting || !stripe}
+          className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-full bg-gradient-to-b from-red-500 to-red-700 py-3 text-sm font-bold text-white transition-transform focus:outline-none focus-visible:ring-2 focus-visible:ring-red-600 disabled:opacity-60 motion-safe:active:translate-y-px"
+        >
+          {isSubmitting ? (
+            <>
+              <Loader2 className="h-4 w-4 animate-spin" /> Saving…
+            </>
+          ) : (
+            "Add card"
+          )}
+        </button>
       </div>
     </form>
   );

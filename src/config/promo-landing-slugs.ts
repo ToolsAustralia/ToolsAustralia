@@ -1,6 +1,6 @@
 /**
  * Toolset landing page configuration.
- * Maps toolset slugs (ryobi, milwaukee, dewalt, makita) to prize slugs
+ * Maps toolset slugs (ryobi, milwaukee, dewalt, makita, hikoki) to prize slugs
  * and provides helpers for landing hero images.
  */
 
@@ -15,6 +15,17 @@ import {
 } from "@/utils/promo/landing-image-resolver";
 import { slugToBrandKey } from "@/config/brand-theme";
 
+/**
+ * Source of truth for the single-brand "toolset" promotion URLs (`/promotions/<slug>`).
+ *
+ * Adding a brand here flows through to everything that DERIVES from this list — including
+ * the admin Overview "Prize performance" ROAS-by-brand card, the per-promotion analytics
+ * funnel (PromoAnalyticsRepository), promo-slug validation, and Klaviyo brand attribution
+ * (via `getAllBrandKeys`). When you add a brand, you also need: (1) its prize slugs in
+ * `PrizeSlug`/`PRIZE_CATALOG` (./prizes.ts), (2) its `BrandKey` + theme (./brand-theme.ts),
+ * (3) the `/images/brands/name/<slug>Text.svg` wordmark, and (4) its `/promotions/<slug>`
+ * route. Full checklist in docs/config-and-data: "Adding a promotion brand".
+ */
 export const TOOLSET_LANDING_SLUGS = [
   "ryobi",
   "milwaukee",

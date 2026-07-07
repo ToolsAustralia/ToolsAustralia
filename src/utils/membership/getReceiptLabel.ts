@@ -22,7 +22,7 @@ export function getReceiptLabel(pkg: StaticMembershipPackage | MiniDrawPackage):
   }
   // StaticMembershipPackage path — strip "Additional " and append "(Member)" when member-only
   const mp = pkg as StaticMembershipPackage;
-  if (mp.isMemberOnly === true && mp.name.startsWith("Additional ")) {
+  if (mp.isAdditional === true && mp.name.startsWith("Additional ")) {
     return `${mp.name.replace(/^Additional\s+/, "")} (Member)`;
   }
   return mp.name;

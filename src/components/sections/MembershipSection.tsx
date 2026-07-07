@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { useRouter, usePathname } from "next/navigation";
+import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import dynamic from "next/dynamic";
 
 // Lazy-loaded: MembershipModal bundles Stripe + payment forms.
@@ -24,16 +24,22 @@ import { useMajorDrawPurchaseGate } from "@/hooks/useMajorDrawPurchaseGate";
 import { hasAdditionalPackageAccess } from "@/utils/membership/has-additional-package-access";
 import {
   isOneTimeBestValuePlanId,
-} from "@/utils/membership/member-package-mapping";
+} from "@/utils/membership/additional-package-mapping";
 import { hasBlockingSubscription } from "@/utils/subscription/subscription-helpers";
 import PackageInclusionsExpanded from "@/components/modals/PackageInclusionsSlideUp";
 import type { VariantConfig } from "@/models/ab-testing/Variant";
 import { useVariantContext } from "@/components/ab-testing/VariantProvider";
+import { useExperimentTracking } from "@/hooks/ab-testing/useExperimentTracking";
+import { useOpenMembershipModalListener } from "@/hooks/useOpenMembershipModalListener";
 import {
   getMembershipSectionColorScheme,
 } from "@/utils/package-colors/packageColorScheme";
 import { getElectricPackageColorScheme } from "@/utils/package-colors/electricPackageScheme";
 import { getAdditionalPackDiscount } from "@/utils/membership/additional-pack-discount";
+import {
+  MEMBERSHIP_PACKAGES_QUERY_PARAM,
+  parseMembershipPackagesTab,
+} from "@/utils/membership/packagesTabParam";
 import ElectricPackageCard from "@/components/sections/membership/ElectricPackageCard";
 import { usePromoTheme, usePromoThemeStore } from "@/stores/usePromoThemeStore";
 import { hasMultiplierBanner } from "@/utils/promo/multiplier-banner";
@@ -62,8 +68,18 @@ export default function MembershipSection({
   const promoToolsetSlug = usePromoThemeStore((s) => s.toolsetSlug);
 
   // Get variant config from context for A/B testing (membershipModal config)
-  const { variantConfig: contextVariantConfig } = useVariantContext();
-  const [activeTab, setActiveTab] = useState<"membership" | "one-time">("membership");
+  const { variantConfig: contextVariantConfig, experimentId, variantId } = useVariantContext();
+  const { trackEvent } = useExperimentTracking();
+  // Ad landings can pre-select the One-Time tab via `?packages=one-time`. A valid param seeds the
+  // initial tab and overrides the user-state default effect below; the visitor can still toggle
+  // manually afterwards. Absent/invalid → null → unchanged behavior.
+  const searchParams = useSearchParams();
+  const forcedPackagesTab = parseMembershipPackagesTab(
+    searchParams.get(MEMBERSHIP_PACKAGES_QUERY_PARAM),
+  );
+  const [activeTab, setActiveTab] = useState<"membership" | "one-time">(
+    forcedPackagesTab ?? "membership",
+  );
   const [isMounted, setIsMounted] = useState(false);
   const [isInclusionsExpanded, setIsInclusionsExpanded] = useState(false);
   /** Must be top-level — image onError fallback for multiplier banner */
@@ -102,27 +118,14 @@ export default function MembershipSection({
   const resolvedMembershipMultiplier = useResolvedMultiplier("membership-packages", "display");
   const resolvedOneTimeMultiplier = useResolvedMultiplier("one-time-packages", "display");
 
-  // Listen for upsell modal requests
-  useEffect(() => {
-    const handleOpenMembershipModal = (event: CustomEvent) => {
-      console.log("🎯 MembershipSection received openMembershipModal event:", event.detail);
-      const detail = event.detail ?? {};
-      const plan = detail.plan as LocalMembershipPlan | undefined;
-
-      whenGatesOpenElseGateModal(() => {
-        if (plan) {
-          membershipModal.setSelectedPlan(plan);
-        }
-        membershipModal.openModal();
-      });
-    };
-
-    window.addEventListener("openMembershipModal", handleOpenMembershipModal as EventListener);
-
-    return () => {
-      window.removeEventListener("openMembershipModal", handleOpenMembershipModal as EventListener);
-    };
-  }, [membershipModal, whenGatesOpenElseGateModal]);
+  // Open this section's modal when the hero / entry CTAs dispatch the global `openMembershipModal`
+  // event; the major-draw purchase gate is applied inside the hook.
+  useOpenMembershipModalListener((plan) => {
+    if (plan) {
+      membershipModal.setSelectedPlan(plan);
+    }
+    membershipModal.openModal();
+  });
 
   // Check if user has an active subscription (only for recurring subscription plans)
   const hasActiveSubscription = userData?.subscription?.isActive || false;
@@ -146,8 +149,12 @@ export default function MembershipSection({
     setMultiplierBannerLoadFailed(false);
   }, [effectivePromoMultiplier, activeTab, promoThemeSlug, promoToolsetSlug]);
 
-  // Update default tab: no active subscription → membership tab; with subscription and access → one-time
+  // Update default tab: no active subscription → membership tab; with subscription and access → one-time.
+  // A URL-forced tab (`?packages=`) wins: skip the user-state override so a logged-in non-subscriber
+  // landing on `?packages=one-time` still opens on One-Time, and a later userData change won't fight
+  // a manual toggle.
   useEffect(() => {
+    if (forcedPackagesTab) return;
     if (!userLoading && userData) {
       // Users without an active subscription always default to membership so they can subscribe
       const newTab = !hasActiveSubscription
@@ -156,7 +163,7 @@ export default function MembershipSection({
           ? "one-time"
           : "membership";
       setActiveTab(newTab);
-      // Dispatch event for FloatingPromoBanner to sync
+      // Dispatch event for PromoBanner to sync
       if (typeof window !== "undefined") {
         window.dispatchEvent(
           new CustomEvent("membershipTabChanged", {
@@ -165,7 +172,12 @@ export default function MembershipSection({
         );
       }
     }
-  }, [hasActiveSubscription, hasAccessToAdditionalPackages, userLoading, userData]);
+  }, [hasActiveSubscription, hasAccessToAdditionalPackages, userLoading, userData, forcedPackagesTab]);
+
+  // Note: PromoBanner independently seeds its own tab from the same `?packages=` param (it is a third
+  // `activeTab` owner), so a forced landing needs no mount-time `membershipTabChanged` dispatch here —
+  // relying on effect ordering across the Suspense boundary would be racy. Manual toggles still emit the
+  // event from the toggle buttons below, which keeps the banner in sync after load.
 
   // Check if a plan is the user's current subscription
   // Note: This only applies to subscription plans, not one-time packages
@@ -231,9 +243,12 @@ export default function MembershipSection({
   const handlePlanSelect = (plan: LocalMembershipPlan) => {
     whenGatesOpenElseGateModal(() => {
       const hierarchy = getPlanHierarchy(plan);
+      const isSubscriptionPlan = plan.period !== "one-time" && !plan.name.toLowerCase().includes("one-time");
 
-      // past_due users must resolve payment first - route to my-account (pay-failed-invoice flow)
-      if (hasBlockingSub && isPastDue) {
+      // A past-due (blocking) member can't start a new SUBSCRIPTION — resolve payment first → /my-account.
+      // But a one-time/Additional pack is a standalone purchase (no sub conflict; the "Get more entries"
+      // flow already allows it), so only bounce subscription taps — matching useMembershipCardCta.onSelect.
+      if (hasBlockingSub && isPastDue && isSubscriptionPlan) {
         router.push("/my-account");
         return;
       }
@@ -258,6 +273,11 @@ export default function MembershipSection({
 
       // For new subscriptions (no active subscription), use the modal
       membershipModal.openModal(plan);
+
+      // A/B diagnostic: package CTA click (no-ops outside an experiment).
+      if (experimentId && variantId) {
+        trackEvent(experimentId, variantId, "click", { element: "package_cta", packageId: plan.id });
+      }
 
       // Canonical Klaviyo "Started Checkout" — fires for AUTHED users at the
       // EXACT moment of intent (Enter Now click), not at Pay-button submission.
@@ -329,7 +349,7 @@ export default function MembershipSection({
       oneTimePackagesData: oneTimePackages.map((pkg) => ({
         id: pkg.id,
         name: pkg.name,
-        isMemberOnly: pkg.isMemberOnly,
+        isAdditional: pkg.isAdditional,
       })),
     });
 
@@ -350,13 +370,13 @@ export default function MembershipSection({
     } else {
       // For one-time packages, filter based on access (subscription OR current draw entries)
       if (userLoading) {
-        apiPlans = oneTimePackages.filter((pkg) => !pkg.isMemberOnly);
+        apiPlans = oneTimePackages.filter((pkg) => !pkg.isAdditional);
         console.log("🔍 User loading - showing regular packages:", apiPlans.length);
       } else if (hasAccessToAdditionalPackages) {
-        apiPlans = oneTimePackages.filter((pkg) => pkg.isMemberOnly === true);
+        apiPlans = oneTimePackages.filter((pkg) => pkg.isAdditional === true);
         console.log("🔍 User with access - showing additional packages:", apiPlans.length);
       } else {
-        apiPlans = oneTimePackages.filter((pkg) => !pkg.isMemberOnly);
+        apiPlans = oneTimePackages.filter((pkg) => !pkg.isAdditional);
         console.log("🔍 User without access - showing regular packages:", apiPlans.length);
       }
     }
@@ -481,7 +501,7 @@ export default function MembershipSection({
         ? getMembershipSectionColorScheme(plan.id, true)
         : getElectricPackageColorScheme(plan.id);
     const discount = activeTab === "one-time" ? getAdditionalPackDiscount(plan.id) : null;
-    const locked = !hasAccessToAdditionalPackages && !!plan.isMemberOnly;
+    const locked = !hasAccessToAdditionalPackages && !!plan.isAdditional;
     const current = isCurrentSubscription(plan);
     const hierarchy = getPlanHierarchy(plan);
     const isSubscriptionPlan = plan.period !== "one-time" && !plan.name.toLowerCase().includes("one-time");
@@ -548,7 +568,7 @@ export default function MembershipSection({
                 <button
                   onClick={() => {
                     setActiveTab("one-time");
-                    // Dispatch event for FloatingPromoBanner to sync
+                    // Dispatch event for PromoBanner to sync
                     if (typeof window !== "undefined") {
                       window.dispatchEvent(
                         new CustomEvent("membershipTabChanged", {
@@ -578,7 +598,7 @@ export default function MembershipSection({
                 <button
                   onClick={() => {
                     setActiveTab("membership");
-                    // Dispatch event for FloatingPromoBanner to sync
+                    // Dispatch event for PromoBanner to sync
                     if (typeof window !== "undefined") {
                       window.dispatchEvent(
                         new CustomEvent("membershipTabChanged", {

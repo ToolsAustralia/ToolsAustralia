@@ -18,7 +18,7 @@ import {
   resolveInvoicePaymentMethodId,
   type PastDueChargeResultRow,
 } from "./chargePastDueShared";
-import { cutoffForRecentAttempt } from "./past-due-charge-idempotency";
+import { buildAdminChargeIdempotencyKey, cutoffForRecentAttempt } from "./past-due-charge-idempotency";
 
 export type RecoverStrandedResult =
   | { ok: true; row: PastDueChargeResultRow; newInvoiceId: string }
@@ -393,6 +393,12 @@ export async function recoverStrandedPastDueInvoice(params: {
   }
 
   // No chargeRunId — recovery is per-user, not batch.
+  // Stable key on `newInvoiceId` (a held draft selected per recovery, then finalized).
+  // Stability is correct here, and does NOT hit the 24h replay trap, because once
+  // finalized this invoice leaves the draft pool (`pickHeldDraftForRecovery` only
+  // selects `status: draft`), so a later recovery can't re-select and re-pay it; the
+  // 6h recent-recovery lock blocks fast retries. Within a single recovery, stability
+  // dedupes a retried pay of this same invoice to one charge.
   const row = await payOpenInvoiceAsPastDueAdmin({
     invoice: finalizedInvoice,
     paymentMethodId,
@@ -400,6 +406,7 @@ export async function recoverStrandedPastDueInvoice(params: {
     user: { _id: user._id, email: user.email },
     adminId,
     bypassRecentAttemptLock: params.bypassRecentRecoveryLock,
+    idempotencyKey: buildAdminChargeIdempotencyKey(newInvoiceId),
   });
 
   return { ok: true, row, newInvoiceId };

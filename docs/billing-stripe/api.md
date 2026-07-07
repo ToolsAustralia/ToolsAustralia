@@ -12,6 +12,7 @@ Full inventory of routes under `/api/stripe/**` and `/api/invoice/**`. Auth and 
 | POST | `/api/stripe/create-subscription-existing-user` | Existing user (re-)subscribing. On the resubscribe branch (gated by the same `isResubscribeForMetadata` boolean that decides `subscription.metadata.isResubscribe`), sets `existingUser.subscription.lastResubscribedAt = new Date()` immediately before the primary `save()` (with `markModified("subscription")`). UX-only timestamp consumed by `/api/payment-status/[paymentIntentId]` for the success-page carry-over banner; never fires on initial subscribe, upgrade, or renewal. |
 | POST | `/api/stripe/renew-subscription` | User retry on a failed renewal invoice; clears pause-collection on success |
 | POST | `/api/stripe/cancel-subscription` | User-facing cancel (delegates to subscription/CancelSubscriptionService) |
+| POST | `/api/stripe/switch-tier-past-due` | Past-due tier-switch **teardown** (no body): cancels the caller's `past_due` sub immediately + voids its open/uncollectible renewal invoice(s), then the client opens the ordinary subscribe flow for the new tier. Accepts `past_due` **or** `canceled` (idempotent retry); the service reconciles against LIVE Stripe status — refuses to cancel a recovered sub (**409 `SUBSCRIPTION_RECOVERED`**), no-ops an already-gone one. 409 `NOT_PAST_DUE` otherwise. **Freeze-gated** (`enforceMajorDrawOpenForNewPurchasesOr403` → 403) like the resubscribe it hands off to, so a major-draw freeze can't strand a member mid-teardown. Delegates to `subscription/switchTierPastDue.abandonPastDueForTierSwitch`. See BUSINESS.md §10i + subscription/gotchas.md § Reconcile against LIVE Stripe status. |
 | POST | `/api/stripe/cancel-incomplete-subscription` | Clean up stuck `incomplete` checkout |
 | POST | `/api/stripe/confirm-subscription-payment` | Confirm a Payment Intent for a created subscription |
 | POST | `/api/stripe/upgrade-subscription-payment` | Upgrade flow — proration via Payment Intent |
@@ -48,12 +49,6 @@ Full inventory of routes under `/api/stripe/**` and `/api/invoice/**`. Auth and 
 | POST | `/api/stripe/create-one-time-purchase-existing-user` | Same, for existing user |
 | POST | `/api/stripe/pay-failed-invoice` | User pays a specific failed renewal invoice |
 | POST | `/api/stripe/webhook` | **THE** webhook receiver; verifies signature, dedupes via `ProcessedStripeEvent`, dispatches |
-
-### Invoice surface
-
-| Method | Path | Purpose |
-|---|---|---|
-| POST | `/api/invoice/finalize` | Force-finalize a draft invoice (admin/operational) |
 
 > _TODO: read each handler to fill in exact auth requirements, request/response shapes, and error codes. Currently the routes are inventoried but not fully spec-documented._
 

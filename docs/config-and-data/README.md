@@ -39,6 +39,9 @@ Static config (feature flags, brand theme, prizes), constants (z-index, legal, p
 | 38 | **Talk to a real person** — escalation → `/contact`; also catches prize-fulfilment + duplicate-charge disputes | ALL QUESTIONS |
 
 Entries 18–21 are the premeditated answers for the top-volume support inbox questions (cancel, refund, delete, unexpected charge). Entries 22–27 cover upgrade/downgrade/reactivate/pause lifecycle transitions plus onboarding setup and promo deals. Entries 28–38 (added 2026-06-27) close the answer-quality gaps the support-quality audit found: joining/how-membership-works, **account-aware navigation** (29/30/31/37 — they recite NO data, only point to My Account), login/data/GST/safety knowledge, and a human-escalation route. All wired into `decisionTree.ts` (high-precision intent rules placed first) for zero-LLM deflection. See `docs/ai-chatbot/gotchas.md` (the 2026-06-27 answer-quality overhaul) and `docs/ai-chatbot/implementation-spec.md`.
+> **`partnerBrandOffers.ts` (2026-07-02):** `PartnerBrandOffer` gained a `category` field (short label — Vehicle / Media / Supply / Trade / Auto / Tools) shown in the dashboard partner deal rows. Additive; the Unlock-Discounts grid is unaffected.
+
+> **`dashboardFeatures.ts` (2026-07-02):** `DASHBOARD_FEATURES` — off-by-default visibility switches for member-dashboard features that are **built but hidden** (`cobberSupport`, `milestoneProgress`, `personalWins`, `orderHistory`). The UI is fully implemented and mounted behind these flags; flip one to `true` (once its backing endpoint lands) to surface it. `isDashboardFeatureOn(feature)` reads them. This is a small visibility map, not flag infrastructure — see the dashboard revamp spec (`docs/superpowers/specs/2026-07-02-user-dashboard-revamp-foundation-home-design.md`).
 
 ## Index
 

@@ -177,6 +177,10 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
   const [upsellTriggered, setUpsellTriggered] = useState(false);
   const [couponCode, setCouponCode] = useState("");
   const [couponApplied, setCouponApplied] = useState(false);
+  /** Code that arrived via the `openMembershipModal` prefill event and should be AUTO-applied
+   *  (campaign coupons from the rewards unlock flow) — a prefill-only code the user must manually
+   *  "Apply" loses the coupon carry entirely if they pay without clicking Apply. */
+  const [pendingAutoApplyCode, setPendingAutoApplyCode] = useState<string | null>(null);
   const [couponType, setCouponType] = useState<"referral" | "promo" | "campaign" | null>(null);
   const [campaignPurchaseRequirement, setCampaignPurchaseRequirement] = useState<"none" | "membership" | "one-time" | "any" | null>(null);
   const {
@@ -332,7 +336,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
       period: "one-time",
       features: [],
       subtitle: "Please select a package to continue",
-      isMemberOnly: false,
+      isAdditional: false,
       buttonText: "Select",
       buttonStyle: "primary",
       metadata: {
@@ -354,11 +358,32 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
   );
 
   const showPackageSelectionFirst = finalMembershipModalConfig?.showPackageSelectionFirst === true;
+  /** Config-driven selection-first (flag defaults ON for any provided config, incl. legacy `{}`) —
+   *  the predicate the auto-open effect uses; the picker's dismiss handler mirrors it. */
+  const configSelectionFirst =
+    finalMembershipModalConfig != null && finalMembershipModalConfig.showPackageSelectionFirst !== false;
   const activePlan =
     selectedPlan || (showPackageSelectionFirst ? membershipPlaceholderPlan : placeholderPlan);
 
   const isPlaceholderPlan =
     !activePlan || activePlan.id === "placeholder" || activePlan.id.startsWith("placeholder-");
+
+  /** The ONE dismissal path for the package picker (✕ / backdrop / Escape). Selection-first with
+   *  nothing chosen yet: dismissing must not strand the user on the placeholder payment step
+   *  (grey skeletons, no package) — close the whole membership modal instead. Once a real plan is
+   *  selected, dismissal just closes the picker. A PICK never routes through here
+   *  (PackageSelectionModal no longer self-closes; the parent closes via handlePackageSelect). */
+  const dismissPackageSelection = useCallback(() => {
+    setIsPackageSelectionOpen(false);
+    if (configSelectionFirst && isPlaceholderPlan) onClose();
+  }, [configSelectionFirst, isPlaceholderPlan, onClose]);
+
+  // Orphan-proofing: ANY whole-modal close (Escape, payment success, programmatic) while the
+  // picker is open must also close the picker — MembershipModal stays mounted with isOpen=false,
+  // so a stale isPackageSelectionOpen would leave the picker rendered over the page.
+  useEffect(() => {
+    if (!isOpen && isPackageSelectionOpen) setIsPackageSelectionOpen(false);
+  }, [isOpen, isPackageSelectionOpen]);
 
   // Hooks for API integration
   const { createSubscription, createOneTimePurchase, createSubscriptionExistingUser } = useStripeSubscription();
@@ -516,21 +541,14 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
     [queryClient]
   );
 
-  const handleClose = useCallback(async () => {
-    if (paymentIntentId) {
-      try {
-        await fetch("/api/stripe/cancel-payment-intent", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ paymentIntentId }),
-        });
-        console.log("✅ Cancelled PaymentIntent on modal close:", paymentIntentId);
-      } catch (error) {
-        console.error("❌ Failed to cancel PaymentIntent on modal close:", error);
-      }
-    }
+  const handleClose = useCallback(() => {
+    // Close the UI FIRST, then cancel any pending PaymentIntent fire-and-forget. Awaiting the
+    // cancel fetch before onClose() left the modal visibly open for a whole network round-trip —
+    // a re-tap of a selection-first CTA in that window re-opened the modal WITHOUT ever rendering
+    // a closed frame, so the picker's once-per-open latch stayed armed and the picker never
+    // auto-opened again (skeleton payment view). The cancel is best-effort cleanup; nothing here
+    // depends on its result.
+    const intentToCancel = paymentIntentId;
 
     setPaymentIntentClientSecret(null);
     setPaymentIntentId(null);
@@ -542,6 +560,18 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
     setProcessingPackageName("");
     setProcessingPackageType(undefined as unknown as "one-time" | "membership" | "upsell" | "mini-draw");
     onClose();
+
+    if (intentToCancel) {
+      void fetch("/api/stripe/cancel-payment-intent", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ paymentIntentId: intentToCancel }),
+      })
+        .then(() => console.log("✅ Cancelled PaymentIntent on modal close:", intentToCancel))
+        .catch((error) => console.error("❌ Failed to cancel PaymentIntent on modal close:", error));
+    }
   }, [onClose, paymentIntentId]);
 
   useEffect(() => {
@@ -718,22 +748,64 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
       !packageSelectionAutoOpenedRef.current &&
       !isPackageSelectionOpen
     ) {
-      const timer = setTimeout(() => {
-        setIsPackageSelectionOpen(true);
-        packageSelectionAutoOpenedRef.current = true;
-      }, 300);
+      // CONFIG-driven selection-first (any config whose flag isn't false — includes legacy `{}`
+      // variant configs, e.g. dashboard "Become a member"): open the picker synchronously —
+      // selection IS the first view. The old 300ms timer made the placeholder payment step (grey
+      // skeletons) the guaranteed first paint, and because callers pass the config as an inline
+      // object, every parent re-render re-ran this effect and RESET the timer — starving the
+      // overlay indefinitely. Gated on isPlaceholderPlan: a REAL selected plan means selection
+      // already happened (a specific plan card was clicked) — don't override it with the picker.
+      if (finalMembershipModalConfig != null) {
+        if (isPlaceholderPlan) {
+          setIsPackageSelectionOpen(true);
+          packageSelectionAutoOpenedRef.current = true;
+        }
+        return;
+      }
+      // Implicit promotions-page auto-open keeps its intentional 300ms delay (hero paints first).
+      // Gated on isPlaceholderPlan — MIRRORS the config branch above. Never auto-open the picker
+      // over a real, already-selected plan (e.g. an abandoned-checkout deep-link that pre-selects a
+      // package, or a plan chosen earlier this session). Combined with the once-per-session latch
+      // (which no longer re-arms mid-session), this makes an auto-reopen structurally impossible
+      // after the user has a plan — the root of the 2026-07-07 conversion-killing reopen loop.
+      if (isPlaceholderPlan) {
+        const timer = setTimeout(() => {
+          setIsPackageSelectionOpen(true);
+          packageSelectionAutoOpenedRef.current = true;
+        }, 300);
 
-      return () => clearTimeout(timer);
+        return () => clearTimeout(timer);
+      }
     }
 
+    // The picker auto-opens AT MOST ONCE per modal-open session. The latch re-arms ONLY when the
+    // modal fully closes (below) — never while it stays open.
+    //
+    // ⚠️ DO NOT re-arm this latch on a `!isPlaceholderPlan` (or any other in-session) condition.
+    // Doing so caused a conversion-killing reopen loop (2026-07-07): the auto-open effect is the
+    // ONLY code path that opens the picker automatically, and while the modal is open the latch is
+    // the only gate stopping it from firing again. A re-arm keyed on `!isPlaceholderPlan` disarmed
+    // that gate after every pick, so the effect immediately re-opened the picker — and on
+    // /promotions/* the picker's dismiss handler does NOT close the modal (configSelectionFirst is
+    // false there), so users were trapped: select-or-exit → reopen → repeat, never reaching payment.
+    // Each tier tap minted an `incomplete` Stripe subscription. New conversions went to ~zero.
+    // To let the user change plans, use the explicit "Change" button (handlePackageChange), never a
+    // latch re-arm. See docs/subscription/package-selection-first.md.
     if (!isOpen) {
       packageSelectionAutoOpenedRef.current = false;
     }
-  }, [isOpen, currentStep, pathname, isPackageSelectionOpen, finalMembershipModalConfig]);
+  }, [isOpen, currentStep, pathname, isPackageSelectionOpen, finalMembershipModalConfig, isPlaceholderPlan]);
 
   useEffect(() => {
     const handleEscapeKey = (event: KeyboardEvent) => {
       if (event.key === "Escape" && isOpen) {
+        // Picker open → Escape DISMISSES THE PICKER (same semantics as its ✕/backdrop), not the
+        // whole modal underneath it. Previously this closed the membership modal while
+        // isPackageSelectionOpen stayed true, leaving the picker orphaned over the page.
+        if (isPackageSelectionOpen) {
+          dismissPackageSelection();
+          return;
+        }
         handleClose();
       }
     };
@@ -747,7 +819,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
       document.removeEventListener("keydown", handleEscapeKey);
       document.body.style.overflow = "unset";
     };
-  }, [isOpen, handleClose]);
+  }, [isOpen, handleClose, isPackageSelectionOpen, dismissPackageSelection]);
 
   useEffect(() => {
     const handleUpsellPayment = (event: CustomEvent) => {
@@ -788,6 +860,10 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
       setCouponType(null);
       setReferralInfo(null);
       setReferralError(null);
+      // Auto-apply the incoming code once state settles (effect below) — mirrors
+      // SpecialPackagesModal's initialCouponCode auto-apply, so the rewards unlock
+      // flow's code is actually carried on the purchase without a manual Apply click.
+      setPendingAutoApplyCode(incomingCode);
     };
 
     window.addEventListener("openMembershipModal", handleOpenMembershipModalPrefill as EventListener);
@@ -1702,6 +1778,21 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
       handleCouponApply("auto");
     }
   }, [storedReferralCode, couponCode, couponApplied, isValidatingReferral, handleCouponApply]);
+
+  // Auto-apply a code that arrived via the `openMembershipModal` prefill event (rewards unlock
+  // flow). One-shot: the pending flag clears BEFORE applying so a failed validation surfaces its
+  // error once and never loops; the user can still adjust + Apply manually.
+  useEffect(() => {
+    if (
+      pendingAutoApplyCode &&
+      couponCode.trim().toUpperCase() === pendingAutoApplyCode &&
+      !couponApplied &&
+      !isValidatingReferral
+    ) {
+      setPendingAutoApplyCode(null);
+      handleCouponApply("auto");
+    }
+  }, [pendingAutoApplyCode, couponCode, couponApplied, isValidatingReferral, handleCouponApply]);
 
   const handlePackageChange = () => {
     const isMiniDrawPackage = activePlan.id.startsWith("mini-pack-");
@@ -4326,7 +4417,10 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
           action: {
             label: "Manage Subscription",
             onClick: () => {
-              router.push("/my-account");
+              // Open the Manage-membership bottom sheet on arrival (the ?open=subscription
+              // deep-link is handled in my-account/page.tsx), so the user lands straight on
+              // update-payment / change-tier / cancel — not just the dashboard home.
+              router.push("/my-account?open=subscription");
             },
           },
         });
@@ -4697,7 +4791,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
       {/* Package Selection Modal */}
       <PackageSelectionModal
         isOpen={isPackageSelectionOpen}
-        onClose={() => setIsPackageSelectionOpen(false)}
+        onClose={dismissPackageSelection}
         currentPlan={activePlan}
         onPlanSelect={handlePackageSelect}
       />

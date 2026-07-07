@@ -15,14 +15,14 @@ import {
   createMajorDrawEntryAddedEvent,
 } from "@/utils/integrations/klaviyo/klaviyo-events";
 import { trackPlacedOrder } from "@/utils/integrations/klaviyo/klaviyo-revenue-service";
-import { trackInvoice, shouldDelayInvoice } from "@/utils/integrations/klaviyo/klaviyo-invoice-service";
+import { trackInvoice, shouldEmitInvoiceGenerated } from "@/utils/integrations/klaviyo/klaviyo-invoice-service";
 import {
   addToPartnerDiscountQueue,
   handleSubscriptionQueueUpdate,
 } from "@/utils/partner-discounts/partner-discount-queue";
 import { getPackageById } from "@/data/membershipPackages";
 import { getUpsellPackageById } from "@/data/upsellPackages";
-import { normalizeMembershipPlanId } from "@/utils/membership/member-package-mapping";
+import { normalizeMembershipPlanId } from "@/utils/membership/additional-package-mapping";
 import { getMiniDrawPackageById } from "@/data/miniDrawPackages";
 import { dispatchPackagePurchase } from "@/utils/tracking/purchase-events";
 import { trackPixelPurchase } from "@/utils/tracking/pixel-purchase-tracking";
@@ -41,7 +41,7 @@ import {
   setLedgerPromoLink,
 } from "@/utils/payment/ledger-helpers";
 import { classifyIsRenewal } from "@/services/attribution/classifyIsRenewal";
-import { normalizeUtmToPlatform } from "@/services/attribution/normalizePlatform";
+import { reconcilePersistedAttribution } from "@/services/attribution/reconcilePersistedAttribution";
 import type { ConvertingPlatform, AttributionConfidence } from "@/types/attribution";
 
 /** Optional membership ledger (Stripe invoice path) — lastMonthDelta for refunds. */
@@ -417,18 +417,31 @@ async function processPaymentBenefitsInternal(
         // Single-platform attribution (spec: prefer the edge-resolved decision; otherwise
         // fall back to a UTM-based resolve from the merged attributionData). Never throws.
         const isRenewal = classifyIsRenewal({ billingReason, isResubscribe });
-        let convertingPlatform: ConvertingPlatform | null = resolvedAttribution?.platform ?? null;
-        let attributionConfidence: AttributionConfidence | null = resolvedAttribution?.confidence ?? null;
         const attributedClickId = resolvedAttribution?.attributedClickId ?? null;
         const attributedClickTimestamp = resolvedAttribution?.attributedClickTimestamp ?? null;
-        if (!convertingPlatform) {
-          const fallback = normalizeUtmToPlatform(
-            typeof attributionData.utmSource === "string" ? attributionData.utmSource : undefined,
-            typeof attributionData.utmMedium === "string" ? attributionData.utmMedium : undefined
-          );
-          convertingPlatform = fallback ?? "direct";
-          attributionConfidence = "utm_only";
-        }
+        // Prefer the edge-resolved decision, but recover an owned-channel (Klaviyo)
+        // last-touch that lives in the persisted signup/checkout UTM when the edge
+        // (cookie-only) yielded `direct`/none — otherwise those Klaviyo conversions
+        // leak to `direct` and need the per-cycle backfill. See reconcilePersistedAttribution.
+        //
+        // The recovery is gated by the owned-channel recency window so a months-old
+        // signup touch doesn't get credited for an unrelated later purchase. The touch
+        // time is `now` for a UTM captured at THIS checkout (attributionSource === "session"),
+        // otherwise the user's signup time (`user.createdAt`).
+        const nowMs = Date.now();
+        const userCreatedAtMs = (user as { createdAt?: Date }).createdAt?.getTime() ?? null;
+        const persistedTouchAt = attributionData.attributionSource === "session" ? nowMs : userCreatedAtMs;
+        const { platform: convertingPlatform, confidence: attributionConfidence } =
+          reconcilePersistedAttribution({
+            edgePlatform: resolvedAttribution?.platform ?? null,
+            edgeConfidence: resolvedAttribution?.confidence ?? null,
+            persistedUtmSource:
+              typeof attributionData.utmSource === "string" ? attributionData.utmSource : undefined,
+            persistedUtmMedium:
+              typeof attributionData.utmMedium === "string" ? attributionData.utmMedium : undefined,
+            persistedTouchAt,
+            now: nowMs,
+          });
 
         const paymentEventData: Record<string, unknown> = {
           entries: packageData.entries,
@@ -614,15 +627,13 @@ async function processPaymentBenefitsInternal(
 
       // console.log(`✅ Benefits granted and recorded for payment ${paymentIntentId} via ${processedBy}`);
 
-      // ✅ Check if invoice should be delayed (for upsells)
-      // If upsells exist, invoice will be finalized after upsell decision
-      const shouldSkipInvoice = packageData.packageId
-        ? shouldDelayInvoice(packageData.packageType, packageData.packageId)
-        : false;
-
-      // Track purchase event in Klaviyo (non-blocking)
-      // ✅ FIX: Pass billingReason to skip "Subscription Started" for renewals (webhook handles renewal events)
-      trackKlaviyoEvent(user as UserDocument, packageData, paymentIntentId, shouldSkipInvoice, billingReason);
+      // Track purchase event in Klaviyo (non-blocking).
+      // "Invoice Generated" is now emitted server-side from trackKlaviyoEvent (single source
+      // of truth) so it can never be dropped by a client that navigates away before the old
+      // /api/invoice/finalize call ran. billingReason lets trackKlaviyoEvent skip renewals
+      // (owned by the "Subscription Renewed" → "Membership Renewal" flow) and upgrades
+      // (owned by the invoice.payment_succeeded webhook).
+      trackKlaviyoEvent(user as UserDocument, packageData, paymentIntentId, billingReason);
 
       // ✅ CRITICAL: Update Klaviyo profile with latest user data after benefits are granted
       try {
@@ -801,7 +812,7 @@ async function checkAndApplyBonusEntryPromo(
     if (packageType === "one-time" && packageId && user) {
       const pkg = getPackageById(packageId);
       const isMember = (user as { subscription?: { isActive?: boolean } })?.subscription?.isActive === true;
-      if (pkg?.isMemberOnly && isMember) {
+      if (pkg?.isAdditional && isMember) {
         effectivePackageType = "membership";
       }
     }
@@ -915,7 +926,7 @@ async function checkAndApplyPromoLink(
     const memberOnlyOneTime =
       packageType === "one-time" &&
       !!packageId &&
-      !!getPackageById(packageId)?.isMemberOnly &&
+      !!getPackageById(packageId)?.isAdditional &&
       isMember;
     const isMembershipPurchase = packageType === "membership" || memberOnlyOneTime;
     const isOneTimePurchase = packageType === "one-time" && !memberOnlyOneTime;
@@ -1636,13 +1647,11 @@ function trackKlaviyoEvent(
     price: number;
   },
   paymentIntentId: string,
-  skipInvoice: boolean = false,
-  billingReason?: string // Stripe billing_reason; threaded to Placed Order as is_renewal + billing_reason
+  billingReason?: string // Stripe billing_reason; threaded to Placed Order as is_renewal + billing_reason, and gates Invoice Generated
 ): void {
   try {
     // console.log(`📊 trackKlaviyoEvent called for user: ${user.email}`);
     // console.log(`📊 Package data:`, packageData);
-    // console.log(`📊 Skip invoice: ${skipInvoice}`);
     // console.log(`📊 Billing reason: ${billingReason || "not provided"}`);
 
     const commonData = {
@@ -1719,9 +1728,21 @@ function trackKlaviyoEvent(
       console.error(`❌ Failed to track "Placed Order" event:`, error);
     });
 
-    // ✅ Track invoice (handled by invoice service)
-    // Skip if flagged - will be finalized after upsell decision via /api/invoice/finalize
-    if (!skipInvoice) {
+    // ✅ Track "Invoice Generated" server-side — the single source of truth for the
+    // invoice/receipt Klaviyo event. Emitting here (inside processPaymentBenefits, which is
+    // idempotent and always runs server-side for every charge) means the receipt can never be
+    // dropped by a client that navigates away, which is what the old client-side
+    // /api/invoice/finalize call was prone to.
+    //
+    // Skip renewals/upgrades so we never double-email (see shouldEmitInvoiceGenerated):
+    //   - subscription_cycle / subscription_threshold (renewal) → owned by the
+    //     "Subscription Renewed" → "Membership Renewal" Klaviyo flow.
+    //   - subscription_update (upgrade) → owned by the invoice.payment_succeeded webhook,
+    //     which emits an upgrade-specific Invoice Generated with the correct billing_reason.
+    //
+    // Everything else (new membership = subscription_create, one-time, mini-draw, and an
+    // accepted upsell — which is its own separate charge) gets its own reliable receipt here.
+    if (shouldEmitInvoiceGenerated(billingReason)) {
       trackInvoice(
         user as never,
         {

@@ -4,8 +4,8 @@
 
 | Service | Responsibility |
 |---|---|
-| `RedeemablesWalletService.ts` | Read user wallet (active issuances, history, balances). |
-| `RedemptionService.ts` | Execute redemption: validate, atomic burn, fulfillment hand-off. |
+| `RedeemablesWalletService.ts` | Read user wallet (active issuances, history, balances). Sets each campaign coupon's `isRedeemableNow` — gates purchase-required coupons via `hasQualifyingPurchase(...)` (loads user `subscription` + `oneTimePackages`), mirroring `RedemptionService` so the "Claim" button matches the redeem endpoint. |
+| `RedemptionService.ts` | Execute redemption: validate, atomic burn, fulfillment hand-off. Purchase-gated coupons are enforced with `hasQualifyingPurchase(...)` before the burn (returns `ineligible` otherwise). |
 | `CampaignService.ts` | Run a campaign: target users, write `RedeemableIssuance` rows. |
 | `DrawGrantService.ts` | Issue redeemables tied to draw outcomes (winners, top-percentile). |
 | `TargetingService.ts` | Audience selection helpers — segments, filters, percentile. |
@@ -20,6 +20,7 @@
 | `campaignAudienceFilter.ts` | Pure-policy filter — given a user, does this campaign apply? |
 | `topMajorDrawPercentile.ts` | "Top N%" computation across major-draw participants. |
 | `cancellation-upsell-eligibility.ts` | Decides who gets the cancel-upsell offer based on redeemable history. |
+| `purchase-eligibility.ts` | Pure predicate `hasQualifyingPurchase(user, campaign, requirement, now)` — resolves a campaign's `purchaseRequirement` (`"none"` \| `"membership"` \| `"one-time"` \| `"any"`) against the user's active subscription and in-window `oneTimePackages`. The single source of truth shared by the redeem endpoint and the wallet's `isRedeemableNow`. |
 
 ## Refund integration
 

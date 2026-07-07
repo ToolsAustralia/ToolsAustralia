@@ -31,6 +31,27 @@ interface MiniDrawCardProps {
   miniDraw: MiniDrawCardData;
   index?: number;
   viewMode?: "grid" | "list";
+  /**
+   * When provided, the card opens this handler (e.g. an in-place entry sheet) instead of
+   * navigating to the mini-draw detail page. Used by the dashboard Draws tab.
+   */
+  onSelect?: () => void;
+}
+
+/** Wraps the card body in a link (navigate) OR a button (in-place `onSelect`) — module-level so the subtree never remounts. */
+function CardShell({ onSelect, href, className, children }: { onSelect?: () => void; href: string; className?: string; children: React.ReactNode }) {
+  if (onSelect) {
+    return (
+      <button type="button" onClick={onSelect} className={cn("w-full text-left", className)}>
+        {children}
+      </button>
+    );
+  }
+  return (
+    <Link href={href} className={className}>
+      {children}
+    </Link>
+  );
 }
 
 function getUrgencyBadge(percentage: number, status: string) {
@@ -56,6 +77,7 @@ export default function MiniDrawCard({
   miniDraw,
   index = 0,
   viewMode = "grid",
+  onSelect,
 }: MiniDrawCardProps) {
   const prefersReduced = useReducedMotion();
   const { userData, isAuthenticated } = useUserContext();
@@ -127,7 +149,7 @@ export default function MiniDrawCard({
   if (viewMode === "list") {
     return (
       <motion.div variants={cardVariants} initial="hidden" animate="visible">
-        <Link href={detailHref} className="block">
+        <CardShell onSelect={onSelect} href={detailHref} className="block">
           <div className="bg-white dark:bg-neutral-900 rounded-2xl border border-gray-100 dark:border-neutral-800 shadow-sm hover:shadow-md transition-all duration-300 overflow-hidden group">
             <div className="flex">
               <div className="relative w-28 h-28 sm:w-36 sm:h-36 flex-shrink-0 overflow-hidden">
@@ -202,7 +224,7 @@ export default function MiniDrawCard({
               </div>
             </div>
           </div>
-        </Link>
+        </CardShell>
       </motion.div>
     );
   }
@@ -215,7 +237,7 @@ export default function MiniDrawCard({
       animate="visible"
       className="h-full"
     >
-      <Link href={detailHref} className="block h-full">
+      <CardShell onSelect={onSelect} href={detailHref} className="block h-full">
         <div className="bg-white dark:bg-neutral-900 rounded-2xl border border-gray-100 dark:border-neutral-800 shadow-sm hover:shadow-lg transition-all duration-300 overflow-hidden group h-full flex flex-col">
           {/* Image Section */}
           <div className="relative">
@@ -328,7 +350,7 @@ export default function MiniDrawCard({
             </div>
           </div>
         </div>
-      </Link>
+      </CardShell>
     </motion.div>
   );
 }

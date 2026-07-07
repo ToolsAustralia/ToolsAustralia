@@ -48,6 +48,34 @@ toolset, so the prize grid is `5 × 3 = 15` tool combos + cash:
   `getLandingHeroImagePaths` returns `null` for `brand === "hikoki"` (no bespoke landing hero
   art yet → standard promo hero).
 
+## P0c. Adding a promotion brand — source of truth & the lists that derive from it
+
+A "promotion brand" (Ryobi / Milwaukee / Dewalt / Makita / HiKOKI) surfaces under `/promotions/`
+as **two URL shapes**: the **brand / toolset URL** `/promotions/<brand>` (e.g. `/promotions/hikoki`,
+from `TOOLSET_LANDING_SLUGS`) and per-prize **evergreen URLs** `/promotions/<brand>-<toolbox>`
+(e.g. `/promotions/hikoki-sidchrome`, from the `PrizeSlug` union in `prizes.ts`).
+
+**Source of truth — add the brand here:**
+- `promo-landing-slugs.ts` → `TOOLSET_LANDING_SLUGS` (+ `TOOLSET_TO_PRIZE_SLUGS` + `LANDING_HERO_MAP`) — the brand/toolset URL slugs.
+- `prizes.ts` → `PrizeSlug` union + `PRIZE_CATALOG` + `getPrizeLabel` — the evergreen prize URLs.
+- `brand-theme.ts` → `BrandKey` + `BRAND_THEMES` + `slugToBrandKey` / `getAllBrandKeys` — colours + the canonical brand enumeration.
+
+**Derives automatically — NO edit needed** (these import the source of truth, so a new brand flows through):
+- Admin Overview **"Prize performance"** ROAS-by-brand card ([`PrizePerformanceCard.tsx`](../../src/app/admin/component/overview/sections/PrizePerformanceCard.tsx)) — maps over `TOOLSET_LANDING_SLUGS`.
+- Per-promotion analytics funnel (`PromoAnalyticsRepository.getAllPromoSlugs`) and promo-slug validation (`validate-promo-slug.ts`).
+- **Klaviyo brand attribution** (`klaviyo/brand-extraction.ts` → the `brandInterest` profile property) — validates against `getAllBrandKeys()`.
+- Brand colour/theme resolution (`prize-brand-colors.ts`, `packageColorScheme.ts`).
+
+**Still needs a manual touch when adding a brand:**
+1. Ship the wordmark `public/images/brands/name/<slug>Text.svg` (used by the ROAS card + promo carousel).
+2. Add the `/promotions/<slug>` static route (`src/app/promotions/<slug>/page.tsx`).
+3. Add a `BRAND_DISPLAY_NAME[slug]` entry in `PrizePerformanceCard.tsx` — **compile-enforced** (typed `Record<ToolsetLandingSlug, string>`, so `tsc` fails until you add it; this is the guardrail that replaced the silent fork).
+4. Add the public-carousel maps in `prize-selection/constants.ts` (`POWERSET_IMAGES` / `POWERSET_BRAND_TEXT` / `POWERSET_LABELS`, keyed by `ToolsetType`).
+
+**Cosmetic-only, NOT consistency-critical** (safe to skip; not part of admin tracking): the decorative login-page toolset rotator (`src/app/login/page.tsx` `TOOLSETS`) and the one-off `scripts/convert-drawn-tonight-tomorrow-*` asset converters.
+
+**ROAS-card matching is by toolset segment, not substring (2026-06-30):** the card assigns each Meta spend row to a brand via `promotionsToolsetSlug(canonicalUrl)` — the first `/promotions/<segment>` path segment, taken up to the first `-` (the toolset). So `/promotions/ryobi-milwaukee` counts toward **Ryobi** (the toolset), never Milwaukee (the toolbox); the toolset landing `/promotions/<brand>` and every `/promotions/<brand>-*` prize page roll up into that one brand row. The earlier `canonicalUrl.includes('/promotions/<slug>')` substring match produced the *same* result on today's URLs (the toolset is always the first segment, so no brand actually double-counted), but it relied on that implicit invariant; the explicit segment match makes "count by toolset" correct-by-construction.
+
 ## P1. Re-export through `index.ts`
 
 `src/data/index.ts` re-exports common data files for clean imports:

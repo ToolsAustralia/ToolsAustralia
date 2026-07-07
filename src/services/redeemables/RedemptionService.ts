@@ -4,6 +4,7 @@ import RedeemableIssuance from "@/models/RedeemableIssuance";
 import MilestoneIssuance from "@/models/MilestoneIssuance";
 import MilestoneReward from "@/models/MilestoneReward";
 import User from "@/models/User";
+import { hasQualifyingPurchase } from "@/utils/redeemables/purchase-eligibility";
 import { DrawGrantService } from "./DrawGrantService";
 
 export type RedemptionFailureReason =
@@ -35,7 +36,7 @@ export class RedemptionService {
       return { success: false, reason: "unauthorized" };
     }
 
-    const user = await User.findById(params.userId).select("_id isActive subscription isEmailVerified accumulatedEntries");
+    const user = await User.findById(params.userId).select("_id isActive subscription isEmailVerified accumulatedEntries oneTimePackages");
     if (!user || !user.isActive) {
       return { success: false, reason: "unauthorized" };
     }
@@ -178,17 +179,12 @@ export class RedemptionService {
       return { success: false, reason: "campaign_not_active" };
     }
 
+    // Purchase-gated coupons require a REAL qualifying purchase inside the
+    // campaign window — not a lifetime entry balance or an old subscription.
+    // (Previously `accumulatedEntries === 0` was used as a proxy, which granted
+    // "buy to unlock" coupons for free to any past purchaser / active member.)
     const purchaseReq = campaign.purchaseRequirement ?? (campaign.requiresPurchase ? "membership" : "none");
-    
-    if (purchaseReq === "membership" && !user.subscription?.isActive) {
-      return { success: false, reason: "ineligible" };
-    }
-    
-    if (purchaseReq === "one-time" && !user.subscription?.isActive && user.accumulatedEntries === 0) {
-      return { success: false, reason: "ineligible" };
-    }
-    
-    if (purchaseReq === "any" && !user.subscription?.isActive && user.accumulatedEntries === 0) {
+    if (!hasQualifyingPurchase(user, campaign, purchaseReq, now)) {
       return { success: false, reason: "ineligible" };
     }
 

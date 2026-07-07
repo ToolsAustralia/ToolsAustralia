@@ -46,7 +46,7 @@ const DEFAULT_TRADIE_PLAN: LocalMembershipPlan = {
   ],
   buttonText: "Get Started",
   buttonStyle: "secondary",
-  isMemberOnly: false,
+  isAdditional: false,
   metadata: { entriesCount: 15 },
 };
 

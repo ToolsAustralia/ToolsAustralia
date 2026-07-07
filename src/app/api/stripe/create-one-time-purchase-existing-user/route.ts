@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import connectDB from "@/lib/mongodb";
 import User from "@/models/User";
 import { getPackageById } from "@/data/membershipPackages";
-import { normalizeMembershipPlanId } from "@/utils/membership/member-package-mapping";
+import { normalizeMembershipPlanId } from "@/utils/membership/additional-package-mapping";
 import { getMiniDrawPackageById } from "@/data/miniDrawPackages";
 import { stripe } from "@/lib/stripe";
 import Stripe from "stripe";

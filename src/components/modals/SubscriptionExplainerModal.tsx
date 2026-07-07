@@ -155,11 +155,12 @@ const SubscriptionExplainerModal: React.FC<SubscriptionExplainerModalProps> = ({
     : null;
 
   /** Partner catalog access % — same source the rest of the site uses
-   * (Tradie 50, Foreman 75, Boss 100 for subscriptions). Derived from the
-   * selectedPackageId (or packageName fallback) so we match PackageDetailModal,
+   * (Tradie 50, Foreman 75, Boss 100 for subscriptions). This is always a SUBSCRIPTION
+   * explainer, so the fallback appends `-subscription` to the tier (a bare "Foreman"
+   * would wrongly resolve to the one-time ladder's 55%). Matches PackageDetailModal,
    * UpgradeConfirm BenefitsBody, and MembershipSection. */
   const partnerAccessPercent = getPartnerCatalogAccessPercentForPlanId(
-    selectedPackageId ?? packageName ?? ""
+    selectedPackageId ?? (tier !== "neutral" ? `${tier}-subscription` : "")
   );
 
   return (

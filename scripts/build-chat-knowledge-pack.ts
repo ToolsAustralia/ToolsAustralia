@@ -89,10 +89,10 @@ Most subscriptions renew **monthly on the member's own billing date** (the day o
 
 function buildOneTimePacksSection(): string {
   const oneTime = membershipPackages.filter(
-    (p: StaticMembershipPackage) => p.type === "one-time" && p.isActive && !p.isMemberOnly
+    (p: StaticMembershipPackage) => p.type === "one-time" && p.isActive && !p.isAdditional
   );
   const additional = membershipPackages.filter(
-    (p: StaticMembershipPackage) => p.type === "one-time" && p.isActive && p.isMemberOnly
+    (p: StaticMembershipPackage) => p.type === "one-time" && p.isActive && p.isAdditional
   );
 
   const rows = oneTime
@@ -130,8 +130,8 @@ ${addRows}`;
 
 function buildMiniDrawSection(): string {
   const active = miniDrawPackages.filter((p: MiniDrawPackage) => p.isActive);
-  const guest = active.filter((p) => p.isMemberOnly !== true);
-  const member = active.filter((p) => p.isMemberOnly === true);
+  const guest = active.filter((p) => p.isAdditional !== true);
+  const member = active.filter((p) => p.isAdditional === true);
 
   const guestRows = guest
     .map((p) => `| ${p.displayName ?? p.name} | $${p.price} | ${p.entries} entries |`)

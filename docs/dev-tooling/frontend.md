@@ -15,13 +15,13 @@
 ### MembershipSectionDevClient
 
 `src/components/dev/MembershipSectionDevClient.tsx` — electric package card preview harness. Controls:
-- **User state**: `guest` | `subscriber` | `entries` — drives which one-time tab shows (regular vs member-only packs)
+- **User state**: `guest` | `subscriber` | `entries` — drives which one-time tab shows (regular vs Additional packs)
 - **Tab**: `one-time` | `membership` — switches between `ElectricPackageCard` with `getElectricPackageColorScheme` (one-time) and `getMembershipSectionColorScheme` (membership)
 - **Multiplier**: `1x` / `2x` / `5x` / `10x` — simulates promo multiplier in plan metadata
 - **Theme toggle**: wraps output in a `.dark` class div
 - **Reduced-motion**: adds `[&_*]:!transition-none [&_*]:!animate-none` to disable animations
 - **Old-vs-new**: shows a reminder label to open the live section in another tab for comparison
-- **Locked-preview**: forces the member-only (additional) packs to render in their locked state regardless of access, so the locked card UI can be previewed from a no-access user state
+- **Locked-preview**: forces the Additional packs to render in their locked state regardless of access, so the locked card UI can be previewed from a no-access user state
 
 The harness computes and passes `showBestValue` (boss tier for membership tab; power/vip tiers for one-time tab via `isOneTimeBestValuePlanId`) and `ribbon` ("MOST POPULAR" for foreman tier) to each `ElectricPackageCard`; the multiplier badge renders automatically when a 2x/5x/10x multiplier is selected.
 
@@ -35,6 +35,10 @@ No Stripe, no providers, no real purchase. Mock data sourced from `src/data/memb
 - A label + category for the sidebar
 
 When a modal is moved from a monolith `.tsx` file to a folder structure (`/index.tsx`), update the `source` path in the `MODAL_SOURCES` map inside this file.
+
+Note (2026-07-06): the gallery's `PackageSelectionModal` entry passes `onPlanSelect={close}` — the picker no
+longer self-closes after a pick (close-after-pick is the parent's job inside `onPlanSelect`; `onClose` is
+dismissal-only). See [shared-ui/frontend.md](../shared-ui/frontend.md) for the contract.
 
 When a modal's props change, the gallery mount must follow. Note `ChargePastDueModal` (gallery id `admin-charge-past-due`) is now self-driven (it owns its `start → chunk` charge loop) and no longer takes an `onConfirm` prop — the gallery mounts it with just `isOpen`/`onClose` (the optional `onCompleted` is omitted). The separate `ChargePastDueUserModal` is unrelated and still uses `onConfirm`.
 

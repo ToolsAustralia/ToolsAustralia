@@ -4,10 +4,11 @@ import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
-import { signOut } from "next-auth/react";
-import { clearSupportChatStorage } from "@/lib/support-chat/chatStorage";
+import { totalSignOut } from "@/utils/auth/total-sign-out";
 import { useSidebar } from "@/contexts/SidebarContext";
 import { useUserContext } from "@/contexts/UserContext";
+import { useUserMajorDrawStats } from "@/hooks/queries/useMajorDrawQueries";
+import { hasAdditionalPackageAccess } from "@/utils/membership/has-additional-package-access";
 import { useModalPriorityStore } from "@/stores/useModalPriorityStore";
 import { useMajorDrawPurchaseGate } from "@/hooks/useMajorDrawPurchaseGate";
 // User setup store removed - using unified modal priority system
@@ -38,6 +39,7 @@ import {
   Store,
   Ticket,
   Trophy,
+  Gift,
   BarChart3,
   Handshake,
   HelpCircle,
@@ -139,6 +141,8 @@ export default function Header({ isFixed = true }: HeaderProps) {
   }, [isMobileUserMenuOpen]);
   const [isResultsMenuOpen, setIsResultsMenuOpen] = useState(false);
   const [isMobileResultsOpen, setIsMobileResultsOpen] = useState(false);
+  const [isGiveawaysMenuOpen, setIsGiveawaysMenuOpen] = useState(false);
+  const [isMobileGiveawaysOpen, setIsMobileGiveawaysOpen] = useState(false);
   const [isTopBarHidden, setIsTopBarHidden] = useState(false);
   const [authStateResolved, setAuthStateResolved] = useState(false); // Track if authentication state has been resolved
   // const [wasAuthenticated, // setWasAuthenticated] = useState<boolean | null>(null);
@@ -167,6 +171,13 @@ export default function Header({ isFixed = true }: HeaderProps) {
     membershipType: "subscription" | "one-time";
     accumulation: SubscriptionAccumulationData | null;
   } | null>(null);
+
+  // Additional-pack access (active sub OR current-draw entries) for the badge-click PackageDetailModal.
+  // GATED on the modal being open: this Header is globally mounted, so an ungated poll would hit
+  // /api/major-draw every 60s on every page for a value only the click-opened modal reads.
+  const { data: userMajorDrawStats } = useUserMajorDrawStats(
+    packageDetailModalData ? userData?._id : undefined
+  );
 
   const openPackageDetailModal = useCallback(
     (packageData: PackageDetailModalPackageData, membershipType: "subscription" | "one-time") => {
@@ -373,6 +384,7 @@ export default function Header({ isFixed = true }: HeaderProps) {
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent | TouchEvent) => {
       const resultsDropdown = document.querySelector(".results-dropdown-container");
+      const giveawaysDropdown = document.querySelector(".giveaways-dropdown-container");
       const desktopUserMenu = document.querySelector(".desktop-user-menu-container");
       const mobileUserMenu = document.querySelector(".mobile-user-menu-container");
       const target = event.target as Element;
@@ -380,6 +392,11 @@ export default function Header({ isFixed = true }: HeaderProps) {
       // Close Results dropdown if clicking outside
       if (isResultsMenuOpen && resultsDropdown && !resultsDropdown.contains(target)) {
         setIsResultsMenuOpen(false);
+      }
+
+      // Close Giveaways dropdown if clicking outside
+      if (isGiveawaysMenuOpen && giveawaysDropdown && !giveawaysDropdown.contains(target)) {
+        setIsGiveawaysMenuOpen(false);
       }
 
       // Close desktop user menu if clicking outside
@@ -403,7 +420,7 @@ export default function Header({ isFixed = true }: HeaderProps) {
       document.removeEventListener("mousedown", handleClickOutside);
       document.removeEventListener("touchstart", handleClickOutside);
     };
-  }, [isResultsMenuOpen, isDesktopUserMenuOpen, isMobileUserMenuOpen]);
+  }, [isResultsMenuOpen, isGiveawaysMenuOpen, isDesktopUserMenuOpen, isMobileUserMenuOpen]);
 
   // Disable background scrolling when sidebars are open
   useEffect(() => {
@@ -440,13 +457,9 @@ export default function Header({ isFixed = true }: HeaderProps) {
   }, [isMobileMenuOpen, isCartOpen]);
 
   const handleSignOut = () => {
-    // Clear localStorage when signing out
-    localStorage.removeItem("wasAuthenticated");
-    localStorage.removeItem("topBarHidden");
-    // setWasAuthenticated(null);
     setIsTopBarHidden(false);
-    clearSupportChatStorage();
-    signOut({ callbackUrl: "/" });
+    // Total sign-out: clears user-scoped client storage (incl. chat history), then ends the session.
+    void totalSignOut({ callbackUrl: "/" });
   };
 
   const handleAffiliateLogout = async () => {
@@ -482,6 +495,11 @@ export default function Header({ isFixed = true }: HeaderProps) {
   // Helper function to check if Results dropdown should be active
   const isResultsActive = () => {
     return pathname.startsWith("/draw-results");
+  };
+
+  // Giveaways dropdown is active on either the major-draw gallery (/promotions) or mini draws.
+  const isGiveawaysActive = () => {
+    return pathname.startsWith("/promotions") || pathname.startsWith("/mini-draws");
   };
 
   return (
@@ -613,17 +631,44 @@ export default function Header({ isFixed = true }: HeaderProps) {
             >
               Shop
             </Link>
-            <Link
-              href="/mini-draws"
-              className={`text-[15px] xl:text-[16px] font-medium leading-normal transition-colors duration-200 py-2 px-3 rounded-lg ${
-                isActiveLink("/mini-draws")
-                  ? "text-white bg-red-600"
-                  : "text-black dark:text-white hover:text-white hover:bg-gradient-to-r hover:from-red-600 hover:to-red-700"
-              }`}
-              aria-current={isActiveLink("/mini-draws") ? "page" : undefined}
-            >
-              Mini Draws
-            </Link>
+            {/* Giveaways Dropdown — Major Draw (/promotions gallery) + Mini Draw (/mini-draws) */}
+            <div className="relative giveaways-dropdown-container">
+              <button
+                onClick={() => setIsGiveawaysMenuOpen(!isGiveawaysMenuOpen)}
+                suppressHydrationWarning
+                className={`flex items-center gap-1 text-[15px] xl:text-[16px] font-medium leading-normal transition-colors duration-200 py-2 px-3 rounded-lg ${
+                  isGiveawaysActive()
+                    ? "text-white bg-red-600"
+                    : "text-black dark:text-white hover:text-white hover:bg-gradient-to-r hover:from-red-600 hover:to-red-700"
+                }`}
+              >
+                Giveaways
+                <ChevronDown
+                  className={cn("w-4 h-4 transition-transform duration-200", isGiveawaysMenuOpen ? "rotate-180" : "")}
+                />
+              </button>
+
+              {isGiveawaysMenuOpen && (
+                <div className="absolute top-full left-0 mt-2 w-48 bg-white dark:bg-neutral-900 rounded-xl shadow-xl border border-gray-200 dark:border-neutral-700 py-2 z-[75] animate-fade-in">
+                  <Link
+                    href="/promotions"
+                    className="flex items-center gap-3 px-4 py-3 text-sm text-gray-700 dark:text-neutral-200 hover:bg-gray-50 dark:hover:bg-neutral-800 transition-colors duration-150"
+                    onClick={() => setIsGiveawaysMenuOpen(false)}
+                  >
+                    <Trophy className="w-4 h-4" />
+                    Major Draw
+                  </Link>
+                  <Link
+                    href="/mini-draws"
+                    className="flex items-center gap-3 px-4 py-3 text-sm text-gray-700 dark:text-neutral-200 hover:bg-gray-50 dark:hover:bg-neutral-800 transition-colors duration-150"
+                    onClick={() => setIsGiveawaysMenuOpen(false)}
+                  >
+                    <Ticket className="w-4 h-4" />
+                    Mini Draw
+                  </Link>
+                </div>
+              )}
+            </div>
             <Link
               href="/membership"
               className={`text-[15px] xl:text-[16px] font-medium leading-normal transition-colors duration-200 py-2 px-3 rounded-lg ${
@@ -633,7 +678,7 @@ export default function Header({ isFixed = true }: HeaderProps) {
               }`}
               aria-current={isActiveLink("/membership") ? "page" : undefined}
             >
-              Membership Package
+              Membership
             </Link>
             {isAuthenticated && isRewardsFeatureEnabled && (
               <Link
@@ -901,7 +946,7 @@ export default function Header({ isFixed = true }: HeaderProps) {
                             My Account
                           </Link>
                           <Link
-                            href="/my-account/benefits"
+                            href="/my-account/rewards"
                             className="flex items-center gap-2 px-4 py-3 text-sm text-gray-700 dark:text-neutral-200 hover:bg-gray-50 dark:hover:bg-neutral-800 transition-colors duration-150"
                             onClick={() => setIsDesktopUserMenuOpen(false)}
                           >
@@ -1094,7 +1139,7 @@ export default function Header({ isFixed = true }: HeaderProps) {
                           My Account
                         </Link>
                         <Link
-                          href="/my-account/benefits"
+                          href="/my-account/rewards"
                           className="flex items-center gap-2 px-4 py-3 text-sm text-gray-700 dark:text-neutral-200 hover:bg-gray-50 dark:hover:bg-neutral-800 transition-colors duration-150"
                           onClick={() => setIsMobileUserMenuOpen(false)}
                         >
@@ -1335,19 +1380,54 @@ export default function Header({ isFixed = true }: HeaderProps) {
                   Shop
                 </Link>
 
-                <Link
-                  href="/mini-draws"
-                  className={`sidebar-item flex items-center gap-3 py-3 px-3 transition-[colors,transform,opacity] duration-[var(--ta-transition-dur)] rounded-xl text-base font-medium ${
-                    isActiveLink("/mini-draws")
-                      ? "text-white bg-red-600"
-                      : "text-gray-700 dark:text-neutral-200 hover:text-red-600 hover:bg-gray-50 dark:hover:bg-neutral-800"
-                  }`}
-                  onClick={handleCloseMobileMenu}
-                  aria-current={isActiveLink("/mini-draws") ? "page" : undefined}
-                >
-                  <Ticket className="w-5 h-5" />
-                  Mini Draws
-                </Link>
+                {/* Giveaways Collapsible — Major Draw (/promotions) + Mini Draw (/mini-draws) */}
+                <div>
+                  <button
+                    onClick={() => setIsMobileGiveawaysOpen(!isMobileGiveawaysOpen)}
+                    className={`sidebar-item flex items-center gap-3 py-3 px-3 transition-[colors,transform,opacity] duration-[var(--ta-transition-dur)] rounded-xl text-base font-medium w-full ${
+                      isGiveawaysActive()
+                        ? "text-white bg-red-600"
+                        : "text-gray-700 dark:text-neutral-200 hover:text-red-600 hover:bg-gray-50 dark:hover:bg-neutral-800"
+                    }`}
+                  >
+                    <Gift className="w-5 h-5" />
+                    Giveaways
+                    <ChevronDown
+                      className={`w-5 h-5 ml-auto transition-transform duration-200 ${
+                        isMobileGiveawaysOpen ? "rotate-180" : ""
+                      }`}
+                    />
+                  </button>
+
+                  {isMobileGiveawaysOpen && (
+                    <div className="ml-8 mt-2 space-y-1">
+                      <Link
+                        href="/promotions"
+                        className={`sidebar-item flex items-center gap-3 py-2 px-3 transition-[colors,transform,opacity] duration-[var(--ta-transition-dur)] rounded-xl text-sm font-medium ${
+                          isActiveLink("/promotions")
+                            ? "text-white bg-red-600"
+                            : "text-gray-600 dark:text-neutral-400 hover:text-red-600 hover:bg-gray-50"
+                        }`}
+                        onClick={handleCloseMobileMenu}
+                      >
+                        <Trophy className="w-4 h-4" />
+                        Major Draw
+                      </Link>
+                      <Link
+                        href="/mini-draws"
+                        className={`sidebar-item flex items-center gap-3 py-2 px-3 transition-[colors,transform,opacity] duration-[var(--ta-transition-dur)] rounded-xl text-sm font-medium ${
+                          isActiveLink("/mini-draws")
+                            ? "text-white bg-red-600"
+                            : "text-gray-600 dark:text-neutral-400 hover:text-red-600 hover:bg-gray-50"
+                        }`}
+                        onClick={handleCloseMobileMenu}
+                      >
+                        <Ticket className="w-4 h-4" />
+                        Mini Draw
+                      </Link>
+                    </div>
+                  )}
+                </div>
 
                 <Link
                   href="/membership"
@@ -1360,7 +1440,7 @@ export default function Header({ isFixed = true }: HeaderProps) {
                   aria-current={isActiveLink("/membership") ? "page" : undefined}
                 >
                   <Crown className="w-5 h-5" />
-                  Membership Package
+                  Membership
                 </Link>
 
                 {isAuthenticated && isRewardsFeatureEnabled && (
@@ -1741,7 +1821,7 @@ export default function Header({ isFixed = true }: HeaderProps) {
           membershipType={packageDetailModalData.membershipType}
           accumulation={packageDetailModalData.accumulation}
           hasActiveSubscription={userData?.subscription?.isActive === true}
-          hasAccessToAdditionalPackages={userData?.subscription?.isActive === true}
+          hasAccessToAdditionalPackages={hasAdditionalPackageAccess(userData, userMajorDrawStats)}
           onOpenSettingsSubscription={() => router.push("/my-account?open=subscription")}
           onOpenMembershipModal={() => router.push("/membership")}
           onOpenSpecialPackages={() =>

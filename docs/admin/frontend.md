@@ -1,5 +1,27 @@
 # Admin — Frontend
 
+> **Loader (2026-07-03):** the admin auth/loading states (`admin/page.tsx`, `admin/layout.tsx`
+> Suspense fallback, `admin/[tab]/page.tsx`) now render the shared [`DashboardLoader`](../../src/components/loading/DashboardLoader.tsx)
+> — the Claude Design "Dashboard Loader" medallion (theme-adaptive; adapts via the `.dark` class
+> `AdminThemeContext` sets on `<html>`) with a static `label="Loading admin…"` — replacing the bare
+> red-arc spinner. See [shared-ui/frontend.md § DashboardLoader](../shared-ui/frontend.md#dashboardloader-ported-from-claude-design-2026-07-03).
+
+> **Sign-out (2026-07-02):** `AdminSidebar`'s sign-out now calls `totalSignOut()`
+> ([src/utils/auth/total-sign-out.ts](../../src/utils/auth/total-sign-out.ts)) — clears user-scoped
+> client storage before ending the session (keeps `ta-admin-theme` + admin UI-layout keys). See
+> [auth/frontend.md](../auth/frontend.md#total-sign-out-2026-07-02).
+
+## Prize performance card — brands derived from the source of truth (2026-06-30)
+
+`PrizePerformanceCard` `PROMOTION_BRANDS` is now **derived** from `TOOLSET_LANDING_SLUGS`
+([`src/config/promo-landing-slugs.ts`](../../src/config/promo-landing-slugs.ts)) instead of a
+private hardcoded 4-brand array, so **HiKOKI** (and any future brand) appears automatically once
+it has Meta spend on its `/promotions/<slug>` URL. Display names come from a `BRAND_DISPLAY_NAME`
+map typed `Record<ToolsetLandingSlug, string>` — adding a brand to the source of truth without a
+display name is a **compile error**, not silent drift. The forked array was exactly why HiKOKI was
+missing here while every other surface already had it. Logo path is derived by convention
+(`/images/brands/name/<slug>Text.svg`). Full checklist: config-and-data/patterns.md → "Adding a promotion brand".
+
 ## Prize performance card — SVG brand logos (2026-06-22)
 
 `PrizePerformanceCard` `PROMOTION_BRANDS` logos now point at the shared SVG wordmarks
@@ -483,6 +505,15 @@ Admin uses [AdminThemeContext](../theme/architecture.md#three-contexts) — sepa
 has shipped (light won — see [shared-ui/frontend.md](../shared-ui/frontend.md))
 and `MembershipSection` no longer reads this field, but the checkbox stays in
 the editor for future revival.
+
+## A/B variant editor — package design (removed)
+
+Historical note: `VariantConfigEditor` previously had a **Package Design (A/B)**
+`<select>` (`config.packages.design`) for the 2026-07 promo packages-design
+experiment. The experiment concluded 2026-07-06 — control won — and the
+selector, the `packages.design` config key, and its validation were removed.
+The remaining Packages Configuration inputs (`hidePackages`, `displayOrder`,
+`highlightPackage`) are unaffected.
 
 ## A/B variant editor — per-slug hero image map
 

@@ -28,6 +28,12 @@ interface ShellProps extends VariantProps<typeof shellTone> {
   /** Modal body content — renders inside the scrolling white frame. */
   children: ReactNode;
   /**
+   * Optional hero visual rendered on the LEFT of the header (e.g. the partner-access
+   * "on hold" ring for the initial past-due state). When omitted, a compact tone-colored
+   * status icon-tile is shown instead.
+   */
+  heroAside?: ReactNode;
+  /**
    * When false, clicking the backdrop does nothing (Escape still works).
    * Defaults to true.
    */
@@ -61,6 +67,7 @@ const Shell: React.FC<ShellProps> = ({
   title,
   sub,
   children,
+  heroAside,
   closeOnBackdrop = true,
 }) => {
   /** Entry-animation gate — 10 ms setTimeout matches CancellationUpsellModal. */
@@ -98,6 +105,59 @@ const Shell: React.FC<ShellProps> = ({
   if (!isOpen) return null;
 
   const StatusIcon = tone === "success" ? CheckCircle : AlertTriangle;
+  const isSuccessTone = tone === "success";
+  // Light, tone-tinted header (amber past-due / emerald success) — replaces the old dark red-glow hero.
+  const toneText = isSuccessTone ? "text-emerald-600 dark:text-emerald-400" : "text-amber-600 dark:text-amber-400";
+  const toneBg = isSuccessTone ? "from-emerald-50 dark:from-emerald-950/30" : "from-amber-50 dark:from-amber-950/30";
+  const toneTile = isSuccessTone
+    ? "bg-emerald-100 text-emerald-600 dark:bg-emerald-900/40 dark:text-emerald-300"
+    : "bg-amber-100 text-amber-600 dark:bg-amber-900/40 dark:text-amber-300";
+  const toneHair = isSuccessTone ? "via-emerald-400/50" : "via-amber-400/50";
+
+  // Hero + white-body frame — shared by the overlay (default) and embedded modes.
+  const frame = (
+    <div
+      className={cn(
+        "relative rounded-[22px] bg-white dark:bg-neutral-950 overflow-hidden max-xs:rounded-2xl",
+        "w-full max-h-full overflow-y-auto overflow-x-hidden [-webkit-overflow-scrolling:touch] shadow-[0_30px_80px_rgba(0,0,0,0.45),0_8px_24px_rgba(0,0,0,0.2)]",
+        styles.scrollFrame
+      )}
+    >
+          {/* ---- Hero — light, tone-tinted, benefit-led ---- */}
+          <div className={cn("relative bg-gradient-to-b to-transparent px-5 pt-5 pb-[18px] max-xs:px-4 max-xs:pt-4", toneBg)}>
+            <div className="flex items-center gap-4 max-xs:gap-3">
+              {/* Left visual — the partner-access "on hold" ring (heroAside) or a tone icon-tile. */}
+              {heroAside ?? (
+                <span className={cn("grid h-12 w-12 shrink-0 place-items-center rounded-2xl", toneTile)}>
+                  <StatusIcon className="h-6 w-6" strokeWidth={2} />
+                </span>
+              )}
+              {/* pr-8 keeps the headline clear of the ✕ close button */}
+              <div className="min-w-0 pr-8">
+                <span className={cn("inline-flex items-center gap-1.5 text-[10.5px] font-extrabold uppercase tracking-[0.16em]", toneText)}>
+                  <span className="h-1.5 w-1.5 rounded-full bg-current" aria-hidden />
+                  {eyebrow}
+                </span>
+                <h2
+                  id="rf-shell-headline"
+                  className="mt-1 font-['Poppins'] text-[19px] font-extrabold leading-[1.16] tracking-[-.01em] text-neutral-900 dark:text-white max-xs:text-[17px]"
+                >
+                  {title}
+                </h2>
+                <p className="mt-1 text-[12.5px] leading-[1.4] text-neutral-600 dark:text-neutral-300 max-xs:text-[12px]">
+                  {sub}
+                </p>
+              </div>
+            </div>
+            <span aria-hidden className={cn("absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent to-transparent", toneHair)} />
+          </div>
+
+          {/* ---- White body slot ---- */}
+          <div className="bg-white dark:bg-neutral-950 px-[22px] pt-4 pb-[18px] max-xs:p-[14px]">
+            {children}
+          </div>
+    </div>
+  );
 
   return (
     <div
@@ -139,121 +199,17 @@ const Shell: React.FC<ShellProps> = ({
           className={cn(
             "absolute top-3 right-3 z-10",
             "w-8 h-8 max-xs:top-2 max-xs:right-2 max-xs:w-[26px] max-xs:h-[26px]",
-            "rounded-full bg-black/55 text-white/95",
+            "rounded-full bg-black/[0.06] text-neutral-500 dark:bg-white/10 dark:text-neutral-300",
             "inline-flex items-center justify-center",
-            "border border-white/20",
-            "transition-all duration-150 backdrop-blur-md",
-            "hover:bg-black/75 hover:text-white"
+            "border border-black/5 dark:border-white/10",
+            "transition-all duration-150",
+            "hover:bg-black/10 hover:text-neutral-700 dark:hover:bg-white/15 dark:hover:text-white"
           )}
         >
           <X size={14} strokeWidth={2} />
         </button>
 
-        {/* Scrollable frame */}
-        <div
-          className={cn(
-            "relative rounded-[22px] bg-white dark:bg-neutral-950",
-            "shadow-[0_30px_80px_rgba(0,0,0,0.45),0_8px_24px_rgba(0,0,0,0.2)]",
-            "w-full max-h-full overflow-y-auto overflow-x-hidden",
-            "[-webkit-overflow-scrolling:touch]",
-            "max-xs:rounded-2xl",
-            styles.scrollFrame
-          )}
-        >
-          {/* ---- Hero ---- */}
-          <div
-            data-tone={tone}
-            className={cn(
-              "relative px-5 pt-[18px] pb-4 text-white overflow-hidden",
-              "max-xs:px-3.5 max-xs:pt-[14px] max-xs:pb-3",
-              styles.heroBg,
-              styles.heroStripeOverlay
-            )}
-          >
-            {/* Inner — sits above the stripe overlay (z-index: 2) */}
-            <div className="relative z-[2]">
-
-              {/* Status icon */}
-              <div className="flex justify-center mb-2 max-xs:mb-1.5">
-                <span
-                  className={cn(
-                    "inline-flex items-center justify-center",
-                    tone === "success" ? "text-[#4ade80]" : "text-[#ff6b6b]"
-                  )}
-                >
-                  <StatusIcon
-                    size={36}
-                    strokeWidth={2}
-                    className="max-xs:w-7 max-xs:h-7"
-                  />
-                </span>
-              </div>
-
-              {/* Eyebrow */}
-              <div className="flex items-center justify-center gap-2 mb-1.5 max-xs:gap-1.5 max-xs:mb-1">
-                {/* Left line — fades from transparent → accent */}
-                <span
-                  className="flex-none h-px basis-7 max-xs:basis-[18px]"
-                  style={{
-                    background:
-                      "linear-gradient(90deg, transparent, var(--tone-accent))",
-                  }}
-                />
-                {/* Pip dot */}
-                <span
-                  className="w-1.5 h-1.5 rounded-full flex-none"
-                  style={{ backgroundColor: "var(--tone-accent)" }}
-                  aria-hidden
-                />
-                {/* Label */}
-                <span
-                  className="font-extrabold text-[11px] tracking-[0.22em] uppercase max-xs:text-[10px] max-xs:tracking-[0.18em]"
-                  style={{ color: "var(--tone-accent)" }}
-                >
-                  {eyebrow}
-                </span>
-                {/* Right line — fades from accent → transparent */}
-                <span
-                  className="flex-none h-px basis-7 max-xs:basis-[18px]"
-                  style={{
-                    background:
-                      "linear-gradient(90deg, var(--tone-accent), transparent)",
-                  }}
-                />
-              </div>
-
-              {/* Headline — data-rf-accent spans + <strong> are auto-colored via
-                  the CSS module rule [data-tone] [data-rf-accent], [data-tone] strong. */}
-              <h2
-                id="rf-shell-headline"
-                className={cn(
-                  "font-acumin font-normal text-[26px] leading-none",
-                  "tracking-[0.005em] text-center uppercase",
-                  "mb-1.5 max-xs:text-[22px]"
-                )}
-              >
-                {title}
-              </h2>
-
-              {/* Sub-copy — <strong> is auto-colored via CSS module. */}
-              <p
-                data-rf-sub
-                className={cn(
-                  "text-center text-xs text-white/70 leading-snug",
-                  "max-w-[440px] mx-auto mb-2",
-                  "max-xs:text-[11px] max-xs:mb-1.5 max-xs:leading-[1.35]"
-                )}
-              >
-                {sub}
-              </p>
-            </div>
-          </div>
-
-          {/* ---- White body slot ---- */}
-          <div className="bg-white dark:bg-neutral-950 px-[22px] pt-4 pb-[18px] max-xs:p-[14px]">
-            {children}
-          </div>
-        </div>
+        {frame}
       </div>
     </div>
   );

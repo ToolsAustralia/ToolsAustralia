@@ -10,6 +10,29 @@
 
 [src/components/auth/](../../src/components/auth/) — login form, signup form, password reset, OAuth buttons.
 
+## Total sign-out (2026-07-02)
+
+`totalSignOut()` / `clearUserScopedClientStorage()` in
+[src/utils/auth/total-sign-out.ts](../../src/utils/auth/total-sign-out.ts) are the single entry point
+for signing out. `clearUserScopedClientStorage()` wipes the **user-scoped** portion of `localStorage`
++ `sessionStorage` (auth breadcrumbs `wasAuthenticated`/`topBarHidden`/`auth-token`, per-user "seen"
+flags `subscriptionExplainerSeen_*`/`rewardsWidgetSpotlightSeen_*`, in-progress
+checkout/upsell/setup/verify state, `subscription_upgraded`/`downgraded`, `modal-priority-store`) and
+**keeps** device/attribution keys (`ta-theme`, `ta-admin-theme`, `tools-aus:*`, `affiliate_code`,
+`ab_*`, `promoWelcomeShown_*`, admin-UI + dev keys). It also clears **support-chat** history +
+`conversationId` by delegating to the chat module's own `clearSupportChatStorage()`
+([src/lib/support-chat/chatStorage.ts](../../src/lib/support-chat/chatStorage.ts)) — so the chat key
+list stays owned by the chat module and isn't duplicated here. Every step is try/caught so one failure
+never blocks sign-out. `totalSignOut()` clears then calls NextAuth `signOut`.
+
+Wired into every sign-out trigger: the Header menu, AdminSidebar, the Account-settings Sign-out, and
+the 401/403/USER_NOT_FOUND forced-logout in [`src/lib/queries.ts`](../../src/lib/queries.ts)
+(clear-only — keeps its in-place `signOut()`). This app has **no IndexedDB / offline outbox / Cache
+Storage** (verified), so there's nothing else to drain into the next account. **When you add a new
+per-user client-storage key, add it to the clear lists in `total-sign-out.ts`** (or, for a self-contained
+feature module, add a `clear*()` of your own and call it from `clearUserScopedClientStorage()`, as
+support-chat does).
+
 > _TODO: enumerate exact components._
 
 ## Context

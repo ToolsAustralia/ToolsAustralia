@@ -183,11 +183,11 @@ When a membership subscriber completes a purchase, they are offered a post-payme
 
 The category multiplier (default 10×) is admin-configurable via `UpsellMultiplierConfig`. See [upsell/architecture.md](../upsell/architecture.md) for the formula.
 
-## `isMemberOnly` and the mini-draw catalog swap
+## `isAdditional` and the mini-draw catalog swap
 
-`MiniDrawPackage.isMemberOnly` controls which mini-draw packs are shown to subscribers vs guests (the catalog-swap rule in [src/utils/membership/has-additional-package-access.ts](../../src/utils/membership/has-additional-package-access.ts)).
+`MiniDrawPackage.isAdditional` controls which mini-draw packs are shown to subscribers vs guests (the catalog-swap rule in [src/utils/membership/has-additional-package-access.ts](../../src/utils/membership/has-additional-package-access.ts)).
 
-The five new `additional-*-pack-mini` records carry `isMemberOnly: true`, so they appear in the subscriber mini-draw catalog while guests still see `mini-pack-1/2/3`. **However**, being in the `isMemberOnly` catalog does NOT route these packs through `getEffectivePromoType`'s subscriber-bonus branch — they stay on the `mini-packages` promo path (typically `1×` multiplier). The flag governs catalog visibility only.
+The five new `additional-*-pack-mini` records carry `isAdditional: true`, so they appear in the subscriber mini-draw catalog while guests still see `mini-pack-1/2/3`. **However**, being in the `isAdditional` catalog does NOT route these packs through `getEffectivePromoType`'s subscriber-bonus branch — they stay on the `mini-packages` promo path (typically `1×` multiplier). The flag governs catalog visibility only.
 
 ## `getEffectivePromoType` — unchanged
 

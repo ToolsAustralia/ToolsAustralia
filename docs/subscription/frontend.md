@@ -15,7 +15,7 @@
 
 **Promo multiplier badge:** rendered internally by `ElectricPackageCard`; the section no longer renders its own badge overlay. No double-badge.
 
-**Locked state:** `locked = !hasAccessToAdditionalPackages && !!plan.isMemberOnly` — same gate as before, now expressed as a prop rather than conditional button markup.
+**Locked state:** `locked = !hasAccessToAdditionalPackages && !!plan.isAdditional` — same gate as before, now expressed as a prop rather than conditional button markup.
 
 ---
 
@@ -31,6 +31,48 @@ All client reads of subscription state go through one of these four hooks. They 
 | `useMembershipModal()` | Modal controller for the membership upgrade/downgrade/cancel flow. | [src/hooks/useMembershipModal.ts](../../src/hooks/useMembershipModal.ts) |
 
 > _TODO: verify each hook's exact return shape and query-key — pull from source when next refreshing this doc._
+
+### `useMembershipCardCta` — `includeAdditionalForMembers`
+
+[`src/hooks/useMembershipCardCta.ts`](../../src/hooks/useMembershipCardCta.ts) accepts an optional options object:
+
+```ts
+useMembershipCardCta({ includeAdditionalForMembers?: boolean })
+```
+
+`includeAdditionalForMembers` defaults to `false`. All other callers (the `/membership` page, `MembershipSection`, and the 15+ remaining consumers) pass no argument and are **unchanged** in behaviour.
+
+When `true` AND the user has additional-package access (`hasAdditionalAccess`), the one-time drawer surfaces `isAdditional` packs — the same "Additional" packs `MembershipSection` shows to eligible members. The sole caller passing `true` is the my-account membership page ([`src/app/(site)/my-account/membership/page.tsx`](../../src/app/(site)/my-account/membership/page.tsx)). (The flag was originally added for the promo packages-design A/B treatment; that experiment concluded in 2026-07 — control won, the treatment was removed — but the flag was kept for the my-account page.)
+
+The source-selection logic is factored into a pure helper:
+
+```ts
+selectOneTimeDrawerPackages(packages, { hasAdditionalAccess, includeAdditional })
+// src/utils/membership/additional-package-mapping.ts
+```
+
+This helper is **only** called when `includeAdditionalForMembers` is `true`; the default path is unaffected. Test: `npm run test:one-time-drawer-packages`.
+
+### `?packages=` URL param — pre-select the packages tab (2026-07-03)
+
+Ad landings can open the membership section on a chosen tab via a URL query param, e.g.
+`/promotions/makita?packages=one-time`. Used so a one-time-focused ad creative opens the section on the
+One-Time tab. The param is parsed by a single shared helper,
+[`src/utils/membership/packagesTabParam.ts`](../../src/utils/membership/packagesTabParam.ts):
+
+- `MEMBERSHIP_PACKAGES_QUERY_PARAM = "packages"` — the query key.
+- `parseMembershipPackagesTab(raw)` → `"membership" | "one-time" | null`. Invalid/absent → `null`, so the
+  caller falls back to its normal (user-state) default. The default (`membership`) is expressed by
+  **omitting** the param, keeping organic URLs clean (mirrors the `?toolbox=` convention).
+
+On promotions pages the `activeTab` owner is **`MembershipSection`**, which reads the param and guards
+its override effect — documented in [shared-ui/frontend.md](../shared-ui/frontend.md). (During the 2026-07
+packages-design A/B test, `useMembershipCardCta` also took a `forcedTab` option so the promo treatment
+could honour the param; the experiment concluded — control won — and the option was removed with the
+treatment. `/membership` (`MembershipPageClient`) never passed it, so it still seeds `activeTab` purely
+from user state.)
+
+The param only sets the **initial** tab — the visitor can still toggle manually afterwards.
 
 ## Pages and routes
 
@@ -188,6 +230,59 @@ The flag that selects Mode A vs Mode B is `hasMembershipGrantInCurrentDrawPeriod
 - `index.tsx` — orchestrator; holds all state slices, `useRef` for `activePaymentIntentRef`, and the `handlePaymentSuccess` / `handleProcessingSuccess` callbacks. Delegates to sub-components.
 - `Shell.tsx` — modal frame with dark hero, scroll-lock, Escape handler, and entry animation (mirrors RenewalFailedModal/Shell.tsx pattern).
 - `OrderSummary.tsx` — gain-framed order summary card using Plan 4 `<Card>` + `<Card.Header>` + `<Card.Body>`. Shows upgrade from/to details and billing cycle info when `upgradeInfo` is provided.
+
+> **Past-due resolve — shared state machine, two presentations (2026-07-03):** the past-due renewal-recovery
+> logic (retry / 3DS / add-card-then-retry / force-charge-overdue) lives in **`usePastDueResolve`**
+> ([src/components/modals/RenewalFailedModal/usePastDueResolve.ts](../../src/components/modals/RenewalFailedModal/usePastDueResolve.ts)),
+> so the money path is single-sourced. Two consumers render it: **`RenewalFailedModal`** (the legacy modal,
+> via `Shell`, used by `SubscriptionManagementModal`) and **`PastDueResolvePanel`** (sheet-native — no
+> `Shell` hero / backdrop / "Close" button / "close this modal" copy) which the dashboard **Payment sheet**
+> renders for past-due members. `ActionButtons` gained `hideDismiss` (the sheet drops the Close button +
+> footer since the sheet owns dismiss). This replaced an earlier, wrong approach that *embedded the whole
+> modal* (dark hero + Close) inside the sheet. Verify the modal path with `npm run test:renewal-failed`.
+
+> **Upgrade flow — consistent benefit cells across both steps (2026-07-06):** `StripePaymentModal`'s
+> `UpgradeBenefitsPreview` used to render a **hardcoded** per-tier cell set (`tierBenefitCells`: entries 100/40/15
+> baked in, a stale unused partner %) that disagreed with the confirm step (`UpgradeConfirmModal`). Both now
+> render the shared **`UpgradeBenefitStatGrid`** (see [shared-ui/frontend.md](../shared-ui/frontend.md)) fed from
+> **canonical** data — `StripePaymentModal` derives the destination-tier partner % via
+> `getPartnerCatalogAccessPercentForPlanId(\`${tier}-subscription\`)` and entries via
+> `getPackageById(...).entriesPerMonth`, so the payment step's cells match the confirm step's exactly (Boss
+> 100%/100, Foreman 75%/40, Tradie 50%/15). The recurring price stays in the `OrderSummary`, not a stat cell.
+> Verified: `npm run test:upgrade-confirm` + `npm run test:stripe-payment`.
+
+> **RenewalFailedModal hero redesign — benefit-led, amber, less text (2026-07-06):** the `Shell` hero was
+> rebuilt from the dark red-glow + uppercase-acumin banner to a **light, tone-tinted header** (amber past-due /
+> emerald success) with a sentence-case Poppins headline. `Shell` gained an optional **`heroAside`** slot; the
+> clean past-due resolve state passes a **`PartnerHoldRing`** — the member's subscription-tier partner-catalog %
+> (50 / 75 / 100, from `usePastDueResolve.restorablePartnerPct`) drawn with `AccessRing`, a lock, and "Paused" —
+> so the modal leads with the **paused member benefit**, not just "renewal failed". Copy trimmed to eyebrow +
+> one headline ("Reactivate to restore your benefits") + one line. The redundant **"Close" text button + footer
+> were removed** (the ✕ dismisses — the modal now passes `hideDismiss` to `ActionButtons`). `data-rf-accent` /
+> the CSS-module dark-hero classes (`heroBg`, `heroStripeOverlay`, tone-glow) are no longer used. The sheet
+> (`PastDueResolvePanel`) keeps its amber `PanelHead`.
+
+> **Resolve flow is amber, note uses the dashboard stat chip (2026-07-06):** the past-due resolve flow is
+> **amber**, not red — `ActionButtons`' `primary`/`outline` variants + the loading spinner were recolored to
+> amber (`from-[#f59e0b] to-[#d97706]`) so "Resolve payment issue" matches the amber past-due language (PanelHead,
+> hero "Manage membership", the ribbon); red stays reserved for draw urgency / "get entries". And
+> `RenewalPreviewNote` now renders the **same amber "free entries" stat chip** as the dashboard `EntryWallet`
+> past-due note (the countdown-CDBox recipe — see [shared-ui/frontend.md](../shared-ui/frontend.md)) instead of the
+> old Sparkles-tile inline note, so the resolve sheet/popup and the dashboard read as one design. _Note: the
+> `RenewalFailedModal` Shell hero still uses the red `tone="danger"` glow — the sheet (PastDueResolvePanel) uses
+> the amber PanelHead, so it's fully amber; the modal hero is the one remaining red past-due surface._
+
+> **Renewal preview note — "Settle $X → +N free entries" (2026-07-06):** both resolve surfaces render
+> **`RenewalPreviewNote`** ([RenewalFailedModal/RenewalPreviewNote.tsx](../../src/components/modals/RenewalFailedModal/RenewalPreviewNote.tsx))
+> in the **initial** resolve state only (gated `!terminalCollectionFailure && !showInlineCardSetup`), so a
+> past-due member sees what they pay and the entries that land when it clears. `usePastDueResolve` exposes
+> `renewalPreview` computed via **`getPastDueRenewalPreview(user)`**
+> ([src/utils/subscription/past-due-renewal-preview.ts](../../src/utils/subscription/past-due-renewal-preview.ts)),
+> which reuses the CANONICAL `getRenewalEntriesPreviewForProfile` (same source as the Klaviyo
+> `past_due_renewal_entries` property + the renewal-failure email) for entries, and the **same** package's
+> `.price` for cost — so the popup, the sheet, the dashboard `EntryWallet` note, the email, and Klaviyo all
+> show one consistent number. The dashboard mirror is driven by `dash.pastDueRenewalEntries` /
+> `dash.pastDueRenewalCost` from `useDashboardState` (see docs/dashboard-account).
 - `PaymentMethodCard.tsx` — saved-card display ("VISA •••• 4242 / Default Payment Method / Change").
 - `PaymentForm.tsx` — exports `PaymentFormWithoutElements` (saved card path) and `PaymentFormWithElements` (new card path). All Stripe logic is preserved byte-identically from the original monolith. Uses Plan 4 `<Button>` for action buttons.
 - `styles.module.css` — composite hero gradients, scrollbar, pinstripe overlay.
@@ -230,3 +325,17 @@ Smoke test: `npm run test:stripe-payment`.
 - **Price display:** regular (struck) price stacks on top of the discounted price in a vertical `flex-col items-end` span — struck regular price shown first (small, `text-white/40 line-through`), discounted price below (bold, accent-coloured).
 - **Entries display:** when `pkg.isPromoActive && pkg.originalEntries !== pkg.totalEntries`, a struck `originalEntries` line is shown on top of the boosted `totalEntries` count (mirrors the price stacking pattern).
 - **Best Value badge:** the `BestValueBadge` for one-time best-value plans is rendered at `scale-[0.6] origin-top-left` via the `className` prop, shrinking the corner ribbon ~40% and anchoring it tightly to the top-left corner of the card.
+
+## Public `/membership` page (2026-06 redesign)
+
+The public page ([`src/app/(site)/membership/components/MembershipPageClient.tsx`](../../src/app/(site)/membership/components/MembershipPageClient.tsx)) is a 10-section marketing layout (light-first, three dark "beats") composed from [`src/components/sections/membership/`](../../src/components/sections/membership/): Hero → TrustStrip → BrandShowcase → HowItWorks → **TierChooser** → EntriesStack → DrawCycle → PrizeChooser → WinnersWall → FinalCta. `page.tsx` stays a thin server shell. (BrandShowcase is now **just** the partner-brand marquee + "become a member" CTA; the one-time packs it used to host moved into TierChooser — see below.)
+
+- **It never purchases directly.** The conversion section (`MembershipTierChooser`) renders prototype tier cards (subscriptions) and, beneath them, a collapsible "Not subscribing?" block of one-time pack cards ([`MembershipOneTimePacks.tsx`](../../src/components/sections/membership/MembershipOneTimePacks.tsx)). Both call a single `onSelect(plan)` into [`useMembershipCardCta`](../../src/hooks/useMembershipCardCta.ts). That hook ports `MembershipSection`'s exact CTA state machine — label (`Enter Now` / `Current Plan` / `Upgrade/Downgrade to …` / `Update payment`), lock (`!hasAdditionalAccess && isAdditional`), routing (past_due / existing-subscriber → `/my-account`; guest / new sub / one-time → `MembershipModal.openModal(plan)`), all wrapped in `whenGatesOpenElseGateModal` — plus the authed-only Klaviyo "Started Checkout" event. `MembershipSection` is **untouched** and still used by 15+ other pages; the new page just doesn't render it. (The two intentionally mirror logic; could be unified into the hook later.)
+- **Partner access % footgun:** a subscription `LocalMembershipPlan.id` is the bare tier name (`"tradie"`), so `getPartnerCatalogAccessPercentForPlanId(plan.id)` falls through to the one-time ladder (40/55/70). Pass `` `${tier}-subscription` `` to get the subscription % (50/75/100). One-time pack ids (`"apprentice-pack"`) resolve correctly as-is.
+- **Catalogue-driven:** brand surfaces (BrandShowcase, the portal-phone deals) read counts/slices from `PARTNER_BRAND_OFFERS` + `getPartnerCatalogVisibleSliceLength`, never a hardcoded count, so 7 → 1,000+ brands needs no rework.
+- **Real data, gaps handled:** tiers/entries/price via `useMemberships` (+ promo via `useResolvedMultiplier`); winners via `useMajorDrawWinners` (shows **state** not suburb, monogram fallback when `imageUrl` absent, qualitative "Verified draw" badge); prize via `usePrizeCatalog` (`prizeValueLabel` is a string, images are `gallery[].src`; "+$5k"/"27th"/"1,000+" are copy). Climb math lives in [`src/utils/membership/climb-series.ts`](../../src/utils/membership/climb-series.ts) (test: `npm run test:climb-series`).
+- **Flagged for deletion (not deleted):** see [`REDESIGN-DELETION-FLAGS.md`](./REDESIGN-DELETION-FLAGS.md).
+- **Visual fidelity (2026-06-29):** cards use the prototype's exact glossy fills via [`src/utils/membership/tier-visuals.ts`](../../src/utils/membership/tier-visuals.ts) (`glossGrad`/`inkOn`/`shade`). Hero is the dark `bhero` with a fanned glossy deck. Tier cards bounce the entries number on scroll-in (`entries-bounce` keyframe in globals.css).
+- **One-time packs — collapsible cross-sell (2026-06-30):** the **public** one-time ladder (Apprentice→VIP, `!isAdditional` — `oneTimePlans` is always the public set; the "Additional" packs are a my-account concept) lives in [`MembershipOneTimePacks.tsx`](../../src/components/sections/membership/MembershipOneTimePacks.tsx), rendered **collapsed by default** beneath the three subscription tiers inside `MembershipTierChooser`. The reveal uses a `grid-rows-[0fr→1fr]` + opacity transition; the inner wrapper is `overflow-hidden` only while collapsed (an `onTransitionEnd` frees it to `overflow-visible` once open so the pack cards' hover-lift and glow shadows aren't clipped). The VIP pack keeps its premium black-and-gold crown + metallic-gold name + `vip-sheen` shimmer. The **collapsed toggle is a premium drawer-handle** that previews the catalogue with mini glossy pack-chips (same recipe as the real cards) + live boost badge + glossy chevron disc — see the `MembershipOneTimePacks` entry in [docs/shared-ui/ui-primitives.md](../shared-ui/ui-primitives.md) for the full anatomy.
+- **Promo-multiplier badge (2026-06-30):** the boost art is the `/images/badge/X{n}.webp` set, resolved via `multiplierBadgeSrc(promo)` in `tier-visuals.ts` (known set 2/3/5/10/12/15/20 → text-pill `{n}×` fallback for any other admin multiplier, so an arbitrary value never 404s). On **tier cards** it is **absolutely positioned** in the top-right of the entries column over a fixed-height header zone (anchored to grow upward, paired with the `was {base}` strikethrough), so its size is **independent of the card height** — bumping the badge never reflows the big — sometimes 4-digit — entries number. On **one-time pack cards** it is likewise absolutely positioned top-right. Both render only when `promoMultiplier > 1` — membership boost is the `membership-packages` multiplier (currently ×10), one-time is the separate `one-time-packages` multiplier (currently ×5); when a type's promo is off, no badge shows.
+- **`useOpenMembershipModalListener` (2026-07-01):** shared hook ([`src/hooks/useOpenMembershipModalListener.ts`](../../src/hooks/useOpenMembershipModalListener.ts)) that subscribes a package section's `MembershipModal` to the global `openMembershipModal` event dispatched by the hero / entry CTAs, with the major-draw purchase gate applied **inside** the hook. Any section that owns a MembershipModal — `MembershipSection` today, plus any future section — opts in with one line (`useOpenMembershipModalListener((plan) => openModal(plan))`), so the hero "Enter Now" contract can't be forgotten by a new section. See [promo/gotchas.md](../promo/gotchas.md) for the incident this fixed.

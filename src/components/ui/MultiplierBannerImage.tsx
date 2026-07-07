@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   getMultiplierBannerImagePaths,
   BANNER_DIMENSIONS,
@@ -45,10 +45,15 @@ export default function MultiplierBannerImage({
   const pathKey = paths.join("|");
   const [index, setIndex] = useState(0);
   const [loaded, setLoaded] = useState(false);
+  const imgRef = useRef<HTMLImageElement | null>(null);
 
   useEffect(() => {
     setIndex(0);
-    setLoaded(false);
+    // A cached image does NOT fire onLoad after a src swap (branded→generic fallback, or the
+    // promo-theme slug settling on client-side nav), which strands the shimmer forever. If the
+    // freshly-set src is already complete, resolve immediately; otherwise wait for onLoad.
+    const img = imgRef.current;
+    setLoaded(!!(img && img.complete && img.naturalWidth > 0));
   }, [multiplier, slug, toolsetSlug, pathKey]);
 
   if (paths.length === 0) {
@@ -61,6 +66,7 @@ export default function MultiplierBannerImage({
   return (
     <div className={cn("relative", className)}>
       <Image
+        ref={imgRef}
         src={src}
         alt={alt}
         width={width}

@@ -18,7 +18,7 @@ import {
 import { usePromoTheme, usePromoThemeStore } from "@/stores/usePromoThemeStore";
 import { getLandingHeroImagePaths } from "@/config/promo-landing-slugs";
 import { useThemeStore } from "@/stores/useThemeStore";
-import { getImageForMode, getFallbackImagePath, LANDING_HERO_BACKGROUND } from "@/utils/promo/landing-image-resolver";
+import { getImageForMode, getFallbackImagePath, resolveLandingHeroBackground } from "@/utils/promo/landing-image-resolver";
 import { getLandingHeroVideoPaths } from "@/utils/promo/landing-video-resolver";
 import LandingHeroVideo from "./LandingHeroVideo";
 import { cn } from "@/utils/cn";
@@ -147,6 +147,11 @@ export default function PromoHero({
   const shouldUseBlackText = preferDark || isDewaltTheme;
 
   if (isLoading) {
+    // Brand-aware stage background: when the slug maps to a brand with a shipped
+    // bg-{brand} asset, that brand background stands in for the skeleton; otherwise the
+    // shared generic background. effectiveSlug is set on first paint (prizeSlug prop),
+    // so the right background shows immediately even while the draw query loads.
+    const loaderBackground = resolveLandingHeroBackground(effectiveSlug);
     return (
       <section className="relative flex flex-col items-center overflow-visible pt-20 sm:pt-40 aspect-[1080/1164] min-h-[clamp(380px,228px+38vw,520px)] lg:aspect-[2560/1044] lg:min-h-0">
         {/* Hero "stage" background stands in for the skeleton so the load-in is seamless. */}
@@ -155,7 +160,7 @@ export default function PromoHero({
         >
           <div className="lg:hidden absolute inset-0 bg-white dark:bg-neutral-950">
             <Image
-              src={LANDING_HERO_BACKGROUND.mobile}
+              src={loaderBackground.mobile}
               alt=""
               aria-hidden
               fill
@@ -166,7 +171,7 @@ export default function PromoHero({
           </div>
           <div className="absolute inset-0 hidden bg-white dark:bg-neutral-950 lg:block">
             <Image
-              src={LANDING_HERO_BACKGROUND.desktop}
+              src={loaderBackground.desktop}
               alt=""
               aria-hidden
               fill
@@ -275,7 +280,9 @@ export default function PromoHero({
           className={cn("promo-hero-cta-button pointer-events-auto inline-flex items-center justify-center rounded-full px-6 py-3 font-sans text-base font-extrabold tracking-wide backdrop-blur-lg sm:px-10 sm:py-4 sm:text-2xl", shouldUseBlackText ? "text-black" : "text-white")}
           style={{
             background: ctaStyle?.backgroundColor ?? theme.gradient,
-            ...(isDewaltTheme ? { color: "#000000" } : ctaStyle?.textColor ? { color: ctaStyle.textColor } : {}),
+            // Force black on light-bg themes (Ryobi neon-lime, DeWalt yellow) — the
+            // `.promo-hero-cta-button` CSS otherwise wins over the `text-black` class.
+            ...(shouldUseBlackText ? { color: "#000000" } : ctaStyle?.textColor ? { color: ctaStyle.textColor } : {}),
           }}
           suppressHydrationWarning
         >

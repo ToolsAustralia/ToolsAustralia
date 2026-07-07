@@ -998,11 +998,13 @@ export default function ModalsGalleryClient() {
         packages={specialPackages}
         onPackageSelect={() => {}}
       />
+      {/* The picker no longer self-closes after a pick (close-after-pick is the parent's job
+          inside onPlanSelect; onClose is dismissal-only) — mirror MembershipModal's contract. */}
       <PackageSelectionModal
         isOpen={isOpen("package-selection")}
         onClose={close}
         currentPlan={SAMPLE_PLAN}
-        onPlanSelect={() => {}}
+        onPlanSelect={close}
       />
       <PackageDetailModal
         isOpen={isOpen("package-detail")}

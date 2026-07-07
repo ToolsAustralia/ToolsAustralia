@@ -56,29 +56,6 @@ export interface PackageData {
 }
 
 /**
- * Purchase data structure for combined invoices
- */
-export interface PurchaseData {
-  paymentIntentId: string;
-  packageId: string;
-  packageName: string;
-  packageType: "membership" | "one-time" | "mini-draw";
-  price: number;
-  entries: number;
-}
-
-/**
- * Upsell purchase data structure
- */
-export interface UpsellPurchaseData {
-  paymentIntentId: string;
-  offerId: string;
-  offerName: string;
-  price: number;
-  entries: number;
-}
-
-/**
  * Generate unique invoice number
  *
  * Format: INV-{timestamp}-{random4chars}
@@ -119,10 +96,7 @@ export function determinePackageTier(packageId: string, packageType: PackageType
 }
 
 /**
- * Build invoice data from package purchase
- *
- * Creates invoice data structure for individual purchases.
- * Used when invoice should be sent immediately (no upsells).
+ * Build invoice data for a single charge (one line item).
  *
  * @param packageData - Package purchase data
  * @param paymentIntentId - Stripe payment intent ID
@@ -131,6 +105,15 @@ export function determinePackageTier(packageId: string, packageType: PackageType
 export function buildInvoiceData(packageData: PackageData, paymentIntentId: string): InvoiceData {
   const invoiceNumber = generateInvoiceNumber();
   const packageTier = determinePackageTier(packageData.packageId, packageData.packageType);
+
+  // Receipt line-item label. Upsell offer ids (e.g. "membership-upsell-boss") live in
+  // upsellPackages.ts, not the membership/mini catalogs, so getReceiptLabelByPackageId would
+  // fall back to the raw id — use the clean offer name instead. Membership / one-time / mini
+  // resolve to their catalog label (which adds disambiguating "(Member)"/"(Mini Draw)" suffixes).
+  const itemDescription =
+    packageData.packageType === "upsell"
+      ? packageData.packageName
+      : getReceiptLabelByPackageId(packageData.packageId, { membership: getPackageById, mini: getMiniDrawPackageById });
 
   return {
     invoiceId: `inv_${paymentIntentId}`,
@@ -146,68 +129,11 @@ export function buildInvoiceData(packageData: PackageData, paymentIntentId: stri
     entries_gained: packageData.entries,
     items: [
       {
-        description: getReceiptLabelByPackageId(packageData.packageId, { membership: getPackageById, mini: getMiniDrawPackageById }),
+        description: itemDescription,
         quantity: 1,
         unit_price: packageData.price,
         total_price: packageData.price,
       },
     ],
-  };
-}
-
-/**
- * Build combined invoice data (original purchase + optional upsell)
- *
- * Creates invoice data structure for combined invoices.
- * Used when invoice should be sent after upsell decision (combined original + upsell).
- *
- * @param originalPurchase - Original purchase data
- * @param upsellPurchase - Optional upsell purchase data
- * @returns Complete combined invoice data structure
- */
-export function buildCombinedInvoiceData(
-  originalPurchase: PurchaseData,
-  upsellPurchase?: UpsellPurchaseData
-): InvoiceData {
-  const invoiceNumber = generateInvoiceNumber();
-  const packageTier = determinePackageTier(originalPurchase.packageId, originalPurchase.packageType);
-
-  // Build items array starting with original purchase
-  const items: InvoiceItem[] = [
-    {
-      description: getReceiptLabelByPackageId(originalPurchase.packageId, { membership: getPackageById, mini: getMiniDrawPackageById }),
-      quantity: 1,
-      unit_price: originalPurchase.price,
-      total_price: originalPurchase.price,
-    },
-  ];
-
-  // Add upsell item if present
-  if (upsellPurchase) {
-    items.push({
-      description: upsellPurchase.offerName,
-      quantity: 1,
-      unit_price: upsellPurchase.price,
-      total_price: upsellPurchase.price,
-    });
-  }
-
-  // Calculate totals
-  const totalAmount = items.reduce((sum, item) => sum + item.total_price, 0);
-  const totalEntries = originalPurchase.entries + (upsellPurchase?.entries || 0);
-
-  return {
-    invoiceId: `inv_${originalPurchase.paymentIntentId}`,
-    invoiceNumber,
-    packageType: originalPurchase.packageType,
-    packageId: originalPurchase.packageId,
-    packageName: originalPurchase.packageName,
-    packageTier,
-    partnerDiscountCatalogPercent: getPartnerCatalogAccessPercentForPlanId(originalPurchase.packageId),
-    totalAmount,
-    paymentIntentId: originalPurchase.paymentIntentId,
-    billingReason: originalPurchase.packageType === "membership" ? "subscription_create" : undefined,
-    entries_gained: totalEntries,
-    items,
   };
 }

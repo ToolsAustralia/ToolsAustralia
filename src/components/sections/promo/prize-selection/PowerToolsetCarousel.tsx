@@ -3,13 +3,12 @@
 import { useRef } from "react";
 import Image from "next/image";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
-import { ChevronLeft, ChevronRight } from "lucide-react";
-import type { PrizeCatalogEntry } from "@/config/prizes";
+import type { PrizeCatalogEntry, PrizeSlug } from "@/config/prizes";
 import { getBrandGlowColor } from "@/utils/prize-brand-colors";
 import { getPackageColorScheme, getToolsetBadgeStyle } from "@/utils/package-colors/packageColorScheme";
+import { Carousel3D, type Carousel3DItemState } from "@/components/ui/Carousel3D";
 import { POWERSET_IMAGES, POWERSET_LABELS, POWERSET_BRAND_TEXT } from "./constants";
 import { getToolsetFromSlug } from "./utils";
-import type { PrizeSlug } from "@/config/prizes";
 import { cn } from "@/utils/cn";
 import { useDeviceProfile } from "@/hooks/useDeviceProfile";
 import { useInViewportAnimation } from "@/hooks/useInViewportAnimation";
@@ -21,6 +20,15 @@ interface PowerToolsetCarouselProps {
   activeSlug: string | null;
   /** Called when user selects a toolset */
   onSelect: (slug: string) => void;
+  /**
+   * How a selection commits, since selecting can be cheap or expensive per surface:
+   * - `"live"` (home, my-account — `onSelect` swaps in place): a drag-release AND a
+   *   tap both select, so the ring drives the choice like the membership turntable.
+   * - `"deferred"` (evergreen `/promotions/*` — `onSelect` navigates): drag only
+   *   browses; selection commits on an explicit tap, so a spin never fires a route
+   *   change. Default `"deferred"` (the safe choice when committing navigates).
+   */
+  selectionMode?: "live" | "deferred";
   /** Optional className for the container */
   className?: string;
 }
@@ -51,10 +59,6 @@ const sideItemVariants = {
   },
 };
 
-/** Hide native scrollbars but keep touch/hover scroll when overflow-x is scroll (desktop rail fallback). */
-const SCROLL_NO_BAR =
-  "overflow-y-hidden [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden";
-
 const centerVariants = {
   enter: {
     opacity: 0,
@@ -76,14 +80,70 @@ const centerVariants = {
   },
 };
 
+/** Toolset brand → package colour-scheme key (drives badge text colour). */
+function getToolsetColorKey(toolset: string): string {
+  if (toolset === "milwaukee") return "milwaukee-red";
+  if (toolset === "dewalt") return "dewalt-yellow";
+  if (toolset === "makita") return "makita-teal";
+  if (toolset === "ryobi") return "ryobi-green";
+  if (toolset === "hikoki") return "hikoki-green";
+  return "milwaukee-red";
+}
+
 /**
- * Power toolset carousel - focused image centered, non-focused split left & right.
- * No container - images only. Modify constants.ts for image paths and sizes.
+ * Bright per-brand glow hex for the card halo. Derived from each brand's signature
+ * colour but kept VIVID so every brand reads as a glow on the dark card — the shared
+ * `getBrandGlowColor` uses each brand's `primaryDark`, which is too dim for Makita's
+ * and (especially) HiKOKI's dark brand greens. Scoped here so gallery/border glows
+ * elsewhere are untouched. Add a brand here when adding a toolset.
+ */
+const TOOLSET_GLOW_HEX: Record<string, string> = {
+  milwaukee: "#ff2630",
+  dewalt: "#ffc21a",
+  makita: "#13c8f0",
+  ryobi: "#c8ff1a",
+  hikoki: "#16d894",
+};
+
+/**
+ * Split a label into two visually-balanced lines at the word boundary nearest the
+ * middle. We force this break ourselves (with a <br/>) and let the pill hug the WIDER
+ * line via `w-max` — the only reliable way to get "exactly two rows, full text, no
+ * truncation, container = text width". Pure CSS can't hug a *wrapped* block: `w-fit`
+ * measures the one-line width, and `w-fit` + `text-balance` collapse to 3 short rows.
+ */
+function splitTwoLines(text: string): [string, string] {
+  const words = text.trim().split(/\s+/);
+  if (words.length < 2) return [text, ""];
+  const total = text.length;
+  let acc = 0;
+  let bestIdx = 1;
+  let bestDiff = Infinity;
+  for (let i = 0; i < words.length - 1; i++) {
+    acc += words[i].length + 1; // running length of line 1 (incl. the trailing space)
+    const diff = Math.abs(acc - (total - acc));
+    if (diff < bestDiff) {
+      bestDiff = diff;
+      bestIdx = i + 1;
+    }
+  }
+  return [words.slice(0, bestIdx).join(" "), words.slice(bestIdx).join(" ")];
+}
+
+/**
+ * Power toolset carousel — the focused toolset rides front-and-centre on the
+ * reusable <Carousel3D> coverflow ring, the rest fanning out to the sides. The
+ * carousel engine owns motion / physics / drag / a11y; this file owns the card
+ * material + the two special non-carousel states (all-toolsets grid when nothing
+ * is selected, single hero when there's only one toolset). Every focused brand
+ * image renders with one uniform frame (object-contain, dead-centre) so they all
+ * sit centred like the Makita shot — no per-brand nudges.
  */
 export function PowerToolsetCarousel({
   prizes,
   activeSlug,
   onSelect,
+  selectionMode = "deferred",
   className = "",
 }: PowerToolsetCarouselProps) {
   const prefersReducedMotion = useReducedMotion();
@@ -99,49 +159,103 @@ export function PowerToolsetCarousel({
       : null;
   const activeIndex = activePrize ? prizes.findIndex((p) => p.slug === activePrize.slug) : 0;
   const n = prizes.length;
-  /**
-   * One item each side, same 3-up as tablet: prev | active | next in prize order
-   * (circular for n >= 3). For n === 2, the “other” sits on the opposite side.
-   */
-  let leftNeighbor: PrizeCatalogEntry | null = null;
-  let rightNeighbor: PrizeCatalogEntry | null = null;
-  if (activePrize && n >= 2) {
-    if (n === 2) {
-      if (activeIndex === 0) {
-        rightNeighbor = prizes[1] ?? null;
-      } else {
-        leftNeighbor = prizes[0] ?? null;
-      }
-    } else {
-      leftNeighbor = prizes[(activeIndex - 1 + n) % n] ?? null;
-      rightNeighbor = prizes[(activeIndex + 1) % n] ?? null;
-    }
-  }
-  // Second neighbours each side — only when there are 5+ toolsets (at n<=4 the i±2 indices
-  // collide/duplicate). Shown on sm+ so the carousel fills out to a 5-up (2 | active | 2) on
-  // desktop now there are 5 brands; mobile stays 3-up to avoid overflow.
-  const leftNeighbor2 = activePrize && n >= 5 ? (prizes[(activeIndex - 2 + n) % n] ?? null) : null;
-  const rightNeighbor2 = activePrize && n >= 5 ? (prizes[(activeIndex + 2) % n] ?? null) : null;
 
   const activeToolset = activePrize ? getToolsetFromSlug(activePrize.slug) : null;
   const activeImgSrc = activeToolset ? POWERSET_IMAGES[activeToolset] : null;
-
   const glowColor = activeSlug != null ? getBrandGlowColor(activeSlug as PrizeSlug) : "transparent";
 
-  const getToolsetColorKey = (toolset: string) => {
-    if (toolset === "milwaukee") return "milwaukee-red";
-    if (toolset === "dewalt") return "dewalt-yellow";
-    if (toolset === "makita") return "makita-teal";
-    if (toolset === "ryobi") return "ryobi-green";
-    if (toolset === "hikoki") return "hikoki-green";
-    return "milwaukee-red";
-  };
+  // The 3D ring carries the selection only when something is focused and there are
+  // at least two toolsets to turn between. The null (deactivated/cash) and single
+  // toolset cases keep their bespoke layouts below.
+  const useCarousel = activeSlug != null && n >= 2;
 
-  const canStepPrize = activePrize && n > 1;
-  const prevPrizeSlug = canStepPrize ? prizes[(activeIndex - 1 + n) % n].slug : null;
-  const nextPrizeSlug = canStepPrize ? prizes[(activeIndex + 1) % n].slug : null;
-  /** 3 toolsets are already visible; step buttons only when a 4+ prize is off-screen. */
-  const showStepButtons = n > 3;
+  /** One toolset card for the Carousel3D ring — presentational; the ring applies the transform. */
+  const renderToolsetCard = ({ item, isActive }: Carousel3DItemState<PrizeCatalogEntry>) => {
+    const toolset = getToolsetFromSlug(item.slug);
+    const imgSrc = toolset ? POWERSET_IMAGES[toolset] : null;
+    if (!imgSrc) return null;
+    const label = toolset ? POWERSET_LABELS[toolset] : null;
+    const brandLogo = toolset ? POWERSET_BRAND_TEXT[toolset] : null;
+    const scheme = toolset ? getPackageColorScheme(getToolsetColorKey(toolset)) : null;
+    const badgeStyle = toolset ? getToolsetBadgeStyle(toolset) : null;
+    const glowHex = (toolset && TOOLSET_GLOW_HEX[toolset]) || "#ff2630";
+    // Gentle idle bob on the focused card only (the rest hold still); reduced-motion off.
+    const float = isActive && !prefersReducedMotion;
+    return (
+      <div className="relative flex w-full flex-col items-center">
+        {brandLogo && (
+          <div className="relative z-10 h-8 w-36 sm:h-10 sm:w-44">
+            <Image
+              src={brandLogo}
+              alt={toolset ?? ""}
+              fill
+              unoptimized
+              draggable={false}
+              className="select-none object-contain object-center"
+              sizes="176px"
+            />
+          </div>
+        )}
+        {/* Uniform frame: every brand composite is object-contain + dead-centre, so each
+            focused toolset sits centred regardless of the source artwork. The focused
+            card bobs gently for a bit of life (matches the membership turntable feel). */}
+        <motion.div
+          className="relative mt-2 aspect-[5/4] w-full"
+          animate={float ? { y: [0, -10, 0] } : { y: 0 }}
+          transition={
+            float ? { duration: 3.6, repeat: Infinity, ease: "easeInOut" } : { duration: 0.3 }
+          }
+        >
+          <div
+            aria-hidden
+            className="pointer-events-none absolute -inset-6 rounded-[2.75rem] blur-2xl transition-opacity duration-300"
+            style={{
+              background: `radial-gradient(ellipse 82% 76% at 50% 50%, ${glowHex}, transparent 72%)`,
+              opacity: isActive ? 0.9 : 0,
+            }}
+          />
+          <Image
+            src={imgSrc}
+            alt={item.label}
+            fill
+            draggable={false}
+            className="select-none object-contain object-center drop-shadow-2xl"
+            sizes="(max-width: 640px) 64vw, 320px"
+          />
+        </motion.div>
+        {label && scheme && badgeStyle && isActive && (() => {
+          // Two balanced lines, break forced by us; the pill hugs the WIDER line
+          // (w-max = max-content) so it's exactly two rows, full text, no truncation,
+          // and the container is only as wide as the text. max-w-[92vw] just guards
+          // against viewport overflow on the narrowest phones.
+          const [line1, line2] = splitTwoLines(`${label} + $5000 CASH`);
+          return (
+            <div className="relative z-10 mt-2 flex w-full justify-center">
+              <div
+                className="w-max max-w-[92vw] shrink-0 rounded-xl px-3 py-1.5 shadow-lg backdrop-blur-md"
+                style={{
+                  background: badgeStyle.background,
+                  boxShadow: badgeStyle.boxShadow,
+                  border: badgeStyle.border,
+                }}
+              >
+                <p
+                  className={cn(
+                    "text-center font-sans text-[11px] font-extrabold leading-tight sm:text-sm",
+                    scheme.buttonText,
+                  )}
+                >
+                  {line1}
+                  <br />
+                  {line2}
+                </p>
+              </div>
+            </div>
+          );
+        })()}
+      </div>
+    );
+  };
 
   const renderActiveCenter = (outerClass: string, frameClass: string) => (
     <div className={outerClass}>
@@ -204,7 +318,7 @@ export function PowerToolsetCarousel({
                     src={activeImgSrc}
                     alt={activePrize?.label ?? "Selected power toolset"}
                     fill
-                    className="object-contain drop-shadow-2xl"
+                    className="object-contain object-center drop-shadow-2xl"
                     sizes="(max-width: 640px) min(68vw, 17rem), (max-width: 1024px) 360px, (max-width: 1280px) 440px, 500px"
                     priority
                   />
@@ -242,9 +356,7 @@ export function PowerToolsetCarousel({
   const renderSideImage = (
     prizeOption: PrizeCatalogEntry,
     index: number,
-    fromLeft: boolean,
-    /** Wider "peek" cards when flanking the active toolset; grid uses compact tiles */
-    layout: "grid" | "selectedRail" = "grid"
+    fromLeft: boolean
   ) => {
     const toolset = getToolsetFromSlug(prizeOption.slug);
     const imgSrc = toolset ? POWERSET_IMAGES[toolset] : null;
@@ -253,11 +365,6 @@ export function PowerToolsetCarousel({
     if (!imgSrc) return null;
     const scheme = toolset ? getPackageColorScheme(getToolsetColorKey(toolset)) : null;
     const badgeStyle = toolset ? getToolsetBadgeStyle(toolset) : null;
-    const shellClass =
-      layout === "selectedRail"
-        ? // Match tablet: one tile each side, ~half to two-thirds the hero read
-          "relative h-32 w-20 min-w-[4.5rem] shrink-0 overflow-visible min-[400px]:w-24 min-[400px]:min-w-[5.5rem] sm:h-32 sm:min-w-[6rem] sm:w-24 md:h-36 md:w-28 lg:h-40 lg:w-32 xl:h-44 xl:w-36"
-        : "relative h-28 w-[5.5rem] shrink-0 overflow-visible sm:h-40 sm:w-32 lg:h-44 lg:w-36 xl:h-48 xl:w-40";
     return (
       <motion.div
         key={prizeOption.slug}
@@ -266,7 +373,7 @@ export function PowerToolsetCarousel({
         initial="hidden"
         animate="visible"
         whileHover="hover"
-        className={shellClass}
+        className="relative h-28 w-[5.5rem] shrink-0 overflow-visible sm:h-40 sm:w-32 lg:h-44 lg:w-36 xl:h-48 xl:w-40"
       >
         {brandLogo && (
             <div
@@ -292,7 +399,7 @@ export function PowerToolsetCarousel({
               src={imgSrc}
               alt={prizeOption.label}
               fill
-              className="object-contain"
+              className="object-contain object-center"
               sizes="(max-width: 640px) 120px, (max-width: 1024px) 180px, 220px"
             />
           </div>
@@ -321,8 +428,9 @@ export function PowerToolsetCarousel({
 
   return (
     <div ref={rootRef} className={cn("flex flex-col items-center gap-2 sm:gap-3", className)}>
-      {/* Carousel label - brand logo for active toolset */}
-      {activeToolset && POWERSET_BRAND_TEXT[activeToolset] && (
+      {/* Carousel label — brand logo for the active toolset. The 3D ring carries its
+          own per-card wordmark, so only the non-carousel (single-toolset) state shows it. */}
+      {!useCarousel && activeToolset && POWERSET_BRAND_TEXT[activeToolset] && (
         <AnimatePresence mode="wait">
           <motion.div
             key={activeToolset}
@@ -356,103 +464,65 @@ export function PowerToolsetCarousel({
         role="group"
         aria-label="Select power toolset"
       >
-      {/* When nothing selected (e.g. cash-prize): single row of all toolsets, no center gap */}
-      {activeSlug == null ? (
-        <div
-          className={
-            prizes.length === 4
-              ? // 2×2 on narrow phones; one row from md when four tiles fit; avoids 3+1 from flex-wrap
-                "grid w-full grid-cols-2 place-items-center gap-x-6 gap-y-10 px-2 pt-7 sm:gap-x-10 sm:gap-y-12 sm:pt-9 sm:px-4 md:grid-cols-4 md:gap-x-10 md:gap-y-8 md:pt-8 lg:gap-x-16 xl:gap-x-20"
-              : "flex flex-wrap items-start justify-center gap-5 sm:gap-8 pt-6 sm:pt-7"
-          }
-        >
-          {prizes.map((prize, i) => renderSideImage(prize, i, true))}
-        </div>
-      ) : (
-        <>
-          {n === 1 && activePrize ? (
-            <div className="flex w-full justify-center overflow-x-hidden overflow-y-hidden pt-4 sm:pt-6 md:pt-8">
-              {renderActiveCenter(
-                "relative z-[1] flex w-full min-w-0 max-w-[min(100%,420px)] items-center justify-center px-2",
-                "relative mx-auto w-full max-w-[min(100%,420px)] sm:mx-0 sm:h-[260px] sm:w-[340px] sm:min-h-0 sm:max-w-none md:h-[280px] md:w-[380px] lg:h-[290px] lg:w-[400px] xl:h-[310px] xl:w-[440px]"
-              )}
-            </div>
-          ) : (
-            <div className="relative w-full overflow-x-hidden overflow-y-hidden pt-4 sm:pt-6 md:pt-8">
-              {/*
-                Single 3-up row: left neighbor | active | right neighbor (circular for n &gt;= 3).
-                Step chevrons only when a 4+ prize is off the strip (n &gt; 3).
-              */}
-              {showStepButtons && prevPrizeSlug && (
-                <button
-                  type="button"
-                  onClick={() => onSelect(prevPrizeSlug)}
-                  className="absolute left-0 top-1/2 z-20 -translate-y-1/2 rounded-full border border-white/15 bg-black/50 p-1.5 text-white shadow-md backdrop-blur-sm transition hover:bg-black/70 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/60"
-                  aria-label="Previous power toolset"
-                >
-                  <ChevronLeft className="h-5 w-5" aria-hidden />
-                </button>
-              )}
-              {showStepButtons && nextPrizeSlug && (
-                <button
-                  type="button"
-                  onClick={() => onSelect(nextPrizeSlug)}
-                  className="absolute right-0 top-1/2 z-20 -translate-y-1/2 rounded-full border border-white/15 bg-black/50 p-1.5 text-white shadow-md backdrop-blur-sm transition hover:bg-black/70 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/60"
-                  aria-label="Next power toolset"
-                >
-                  <ChevronRight className="h-5 w-5" aria-hidden />
-                </button>
-              )}
-
-              <div
-                className={cn("mx-auto flex w-full min-w-0 max-w-6xl items-center justify-center gap-1 pt-0 sm:gap-2 md:gap-4 lg:gap-6", showStepButtons ? "sm:px-10" : "px-1 sm:px-2")}
-              >
-                <div
-                  className={`flex min-h-0 min-w-0 flex-1 items-center justify-end gap-1 self-center sm:gap-2 md:gap-4 lg:gap-6 ${
-                    leftNeighbor ? "overflow-visible" : "justify-end"
-                  } ${SCROLL_NO_BAR}`}
-                >
-                  {leftNeighbor2 && (
-                    <div className="hidden shrink-0 sm:block">{renderSideImage(leftNeighbor2, 1, true, "selectedRail")}</div>
-                  )}
-                  {leftNeighbor ? (
-                    renderSideImage(leftNeighbor, 0, true, "selectedRail")
-                  ) : (
-                    <div
-                      className="h-32 w-20 min-w-[4.5rem] min-[400px]:w-24 min-[400px]:min-w-[5.5rem] shrink-0 sm:min-w-[6rem] sm:w-24"
-                      aria-hidden
-                    />
-                  )}
-                </div>
-
-                {renderActiveCenter(
-                  "relative z-[1] flex w-full min-w-0 max-w-[min(68vw,17rem)] shrink-0 grow-0 items-center justify-center self-center sm:max-w-[min(100%,400px)]",
-                  "relative mx-auto h-[min(32vw,9.5rem)] min-h-[8.5rem] w-full max-w-[min(68vw,17rem)] sm:mx-0 sm:h-[260px] sm:min-h-0 sm:max-w-[400px] sm:w-[320px] md:h-[280px] md:w-[360px] lg:h-[290px] lg:w-[400px] xl:h-[310px] xl:w-[420px]"
-                )}
-
-                <div
-                  className={`flex min-h-0 min-w-0 flex-1 items-center justify-start gap-1 self-center sm:gap-2 md:gap-4 lg:gap-6 ${
-                    rightNeighbor ? "overflow-visible" : "justify-start"
-                  } ${SCROLL_NO_BAR}`}
-                >
-                  {rightNeighbor ? (
-                    renderSideImage(rightNeighbor, 0, false, "selectedRail")
-                  ) : (
-                    <div
-                      className="h-32 w-20 min-w-[4.5rem] min-[400px]:w-24 min-[400px]:min-w-[5.5rem] shrink-0 sm:min-w-[6rem] sm:w-24"
-                      aria-hidden
-                    />
-                  )}
-                  {rightNeighbor2 && (
-                    <div className="hidden shrink-0 sm:block">{renderSideImage(rightNeighbor2, 1, false, "selectedRail")}</div>
-                  )}
-                </div>
-              </div>
-            </div>
-          )}
-        </>
-      )}
-    </motion.div>
+        {activeSlug == null ? (
+          // Nothing selected (e.g. cash-prize): a single grid of all toolsets, no focus.
+          <div
+            className={
+              prizes.length === 4
+                ? "grid w-full grid-cols-2 place-items-center gap-x-6 gap-y-10 px-2 pt-7 sm:gap-x-10 sm:gap-y-12 sm:pt-9 sm:px-4 md:grid-cols-4 md:gap-x-10 md:gap-y-8 md:pt-8 lg:gap-x-16 xl:gap-x-20"
+                : "flex flex-wrap items-start justify-center gap-5 sm:gap-8 pt-6 sm:pt-7"
+            }
+          >
+            {prizes.map((prize, i) => renderSideImage(prize, i, true))}
+          </div>
+        ) : useCarousel ? (
+          // overflow-x-clip: the fanned far cards spread wide — clip horizontally so
+          // they never push the page into a horizontal scroll on narrow phones (y
+          // stays visible so the card badge/glow aren't cropped). pb reserves room for
+          // the focused card's description pill (which sits low in the wheel) so it never
+          // overlaps the "OR / $10,000 cash" block below.
+          <div className="overflow-x-clip pb-6 sm:pb-10">
+            <Carousel3D<PrizeCatalogEntry>
+              key={prizes.map((p) => p.slug).join("|")}
+              items={prizes}
+              getKey={(p) => p.slug}
+              getLabel={(p) => p.label}
+              label="Select power toolset"
+              renderItem={renderToolsetCard}
+              defaultActiveIndex={activeIndex < 0 ? 0 : activeIndex}
+              onCommit={(idx) => {
+                const slug = prizes[idx]?.slug;
+                if (slug) onSelect(slug);
+              }}
+              commitOnDrag={selectionMode === "live"}
+              layout="wheel"
+              autoRotate={false}
+              hideControls
+              radiusX={232}
+              radiusXMobile={144}
+              radiusY={84}
+              radiusYMobile={54}
+              depthZ={140}
+              rotate={20}
+              minScale={0.5}
+              minOpacity={0.32}
+              maxBlur={2.4}
+              perspective={1000}
+              stageHeight="clamp(288px, 72vw, 430px)"
+              cardWidth={300}
+              cardWidthMobileMax={230}
+            />
+          </div>
+        ) : (
+          // Single toolset: one centred hero, no ring to turn.
+          <div className="flex w-full justify-center overflow-x-hidden overflow-y-hidden pt-4 sm:pt-6 md:pt-8">
+            {renderActiveCenter(
+              "relative z-[1] flex w-full min-w-0 max-w-[min(100%,420px)] items-center justify-center px-2",
+              "relative mx-auto w-full max-w-[min(100%,420px)] sm:mx-0 sm:h-[260px] sm:w-[340px] sm:min-h-0 sm:max-w-none md:h-[280px] md:w-[380px] lg:h-[290px] lg:w-[400px] xl:h-[310px] xl:w-[440px]"
+            )}
+          </div>
+        )}
+      </motion.div>
     </div>
   );
 }

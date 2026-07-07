@@ -48,3 +48,17 @@ A/B test (control = false → video; treatment = true → still). Independent of
 `imageSrcBySlug` (which also kills the video, but by pinning a custom still).
 Defaulted + merged + boolean-validated by `VariantConfigService`. Seed an
 experiment with `npm run seed:static-vs-video-hero`.
+
+## VariantConfig.packages
+
+Optional object on `VariantConfig` with three keys, all still live and passed
+through by `PromoPackages` on promotions pages:
+
+- `displayOrder?: string[]` — reorder package IDs.
+- `highlightPackage?: string` — package ID to highlight/emphasize.
+- `hidePackages?: string[]` — package IDs to hide.
+
+> Historical note: a `packages.design` scalar (`"promo" | "membership"`) existed
+> for the 2026-07 promo package-design experiment; it was removed 2026-07-06
+> when the experiment concluded (control won) — see
+> [promo-packages-design-runbook.md](./promo-packages-design-runbook.md).

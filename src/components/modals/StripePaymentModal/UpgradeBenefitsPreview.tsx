@@ -2,6 +2,7 @@
 
 import React from "react";
 import { Sparkles, ArrowUp } from "lucide-react";
+import UpgradeBenefitStatGrid from "@/components/ui/UpgradeBenefitStatGrid";
 
 type Tier = "tradie" | "foreman" | "boss" | "neutral";
 
@@ -10,8 +11,10 @@ interface UpgradeBenefitsPreviewProps {
   toPackageName: string;
   /** Current package, when this is a tier change. Hidden when undefined (one-off). */
   fromPackageName?: string;
-  /** Compact stat strip — show 2-3 cells max. */
-  cells: Array<{ label: string; value: string | number }>;
+  /** Canonical destination-tier benefit numbers — partner-catalog % + the package's entriesPerMonth.
+   *  Rendered via the SHARED UpgradeBenefitStatGrid so this step matches the confirm step exactly. */
+  partnerPct: number;
+  entriesPerCycle: number;
 }
 
 function tierFromName(name: string): Tier {
@@ -81,7 +84,8 @@ const TIER_THEME: Record<
 const UpgradeBenefitsPreview: React.FC<UpgradeBenefitsPreviewProps> = ({
   toPackageName,
   fromPackageName,
-  cells,
+  partnerPct,
+  entriesPerCycle,
 }) => {
   const theme = TIER_THEME[tierFromName(toPackageName)];
   return (
@@ -139,31 +143,8 @@ const UpgradeBenefitsPreview: React.FC<UpgradeBenefitsPreviewProps> = ({
         </div>
       </div>
 
-      {/* Stat cells — tier-themed border + light tier tint background */}
-      {cells.length > 0 && (
-        <div
-          className="grid gap-2"
-          style={{ gridTemplateColumns: `repeat(${cells.length}, minmax(0, 1fr))` }}
-        >
-          {cells.map((c, i) => (
-            <div
-              key={i}
-              className="text-center rounded-lg border bg-white dark:bg-neutral-800/60 px-2 py-2"
-              style={{ borderColor: theme.border }}
-            >
-              <p className="font-acumin text-base leading-none text-neutral-900 dark:text-white">
-                {c.value}
-              </p>
-              <p
-                className="text-[9px] font-extrabold tracking-[0.12em] uppercase mt-1 leading-tight"
-                style={{ color: theme.deep }}
-              >
-                {c.label}
-              </p>
-            </div>
-          ))}
-        </div>
-      )}
+      {/* Stat cells — the SHARED grid, so this step's cells match the confirm step exactly. */}
+      <UpgradeBenefitStatGrid tier={tierFromName(toPackageName)} partnerPct={partnerPct} entriesPerCycle={entriesPerCycle} />
     </div>
   );
 };

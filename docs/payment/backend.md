@@ -17,7 +17,7 @@ The biggest helper directory in the repo. Each module has one focused responsibi
 
 | File | Purpose |
 |---|---|
-| `payment-processing.ts` | `grantBenefits()`, `processPaymentBenefits()` — the success path that writes `BenefitsGranted` ledger rows. |
+| `payment-processing.ts` | `grantBenefits()`, `processPaymentBenefits()` — the success path that writes `BenefitsGranted` ledger rows. Also hosts `trackKlaviyoEvent()`, which emits the customer receipt ("Invoice Generated") **server-side** for every charge (see below). |
 | `payment-status.ts` | Status-derivation helpers (paid / failed / pending classification). |
 | `ledger-helpers.ts` | Shared helpers for reading/writing `data.grants`. |
 
@@ -28,16 +28,55 @@ The biggest helper directory in the repo. Each module has one focused responsibi
 and stamp three top-level fields onto the `BenefitsGranted` `PaymentEvent`:
 
 - `convertingPlatform` (enum | null), `attributionConfidence` (enum | null), `isRenewal` (boolean).
-- **Precedence**: prefer the edge-resolved decision passed in `resolvedAttribution` (stamped into
-  Stripe metadata at the edge and read back in the webhook via
-  `extractResolvedPlatformFromMetadata`). When none is present (legacy / force-charge paths),
-  fall back to `normalizeUtmToPlatform(attributionData.utmSource, utmMedium)`; a present-but-unknown
-  source becomes `"other"`, an absent source becomes `"direct"`, and confidence is `"utm_only"`.
+- **Precedence** is resolved by [`reconcilePersistedAttribution`](../../src/services/attribution/reconcilePersistedAttribution.ts),
+  which reconciles the edge-resolved decision (passed in `resolvedAttribution`, stamped into Stripe
+  metadata at the edge and read back in the webhook via `extractResolvedPlatformFromMetadata`) with
+  the UTM persisted on the `PaymentEvent` (merged session → signup):
+  - **Edge gave a positive signal** (a paid click, or a cookie owned-channel last-touch — anything
+    other than `direct`) → trust it; that platform/confidence wins.
+  - **Edge gave `direct`** → recover an **owned-channel** (`klaviyo_email` / `klaviyo_sms`) platform
+    from the persisted UTM if one is present **and the touch is within the owned-channel recency
+    window** (5 days for Klaviyo — `windowDaysFor` in
+    [`platformPriority.ts`](../../src/services/attribution/platformPriority.ts)), else stay `direct`.
+    The cookie-only edge resolver structurally cannot see a Klaviyo touch captured at signup
+    (`User.signupAttribution`), so without this those conversions leaked to `direct`. The recovery is
+    windowed by passing `now` (conversion time = `Date.now()`) and `persistedTouchAt` into
+    `reconcilePersistedAttribution`: a UTM captured at **this** checkout
+    (`attributionData.attributionSource === "session"`) counts as a current touch (`persistedTouchAt = now`),
+    whereas a UTM carried from signup is windowed against the user's signup time
+    (`user.createdAt`). A stale signup-Klaviyo touch with no recent click therefore resolves to
+    `direct`, matching the windowed historical reconcile in
+    [`scripts/backfill-klaviyo-attribution-cycle.ts`](../../scripts/backfill-klaviyo-attribution-cycle.ts).
+    **Paid sources are not recovered** — a real paid click in-window already wins at the edge, so
+    `direct` genuinely means "no paid click."
+  - **No edge decision at all** (legacy / force-charge paths) → fall back to any recognised persisted
+    UTM, else `direct`; a present-but-unknown source becomes `"other"`, an absent source becomes
+    `"direct"`. Confidence in the recovered/fallback cases is `"utm_only"`.
+  - This makes the live `convertingPlatform` match what
+    [`scripts/backfill-klaviyo-attribution-cycle.ts`](../../scripts/backfill-klaviyo-attribution-cycle.ts)
+    produces, retiring the per-cycle backfill for future rows.
 - `isRenewal` comes from `classifyIsRenewal({ billingReason, isResubscribe })` — true only for a
   `subscription_cycle` that is not a create / upgrade / resubscribe.
 - Audit evidence (`attributedClickId`, `attributedClickTimestamp`) is written into the Mixed `data`
   blob only when present. Subscriptions/renewals inherit the decision from `subscription.metadata`
   (sticky), so the converting platform stays constant across the membership lifetime.
+
+#### Server-side "Invoice Generated" receipt
+
+`trackKlaviyoEvent()` (in `payment-processing.ts`) is the single source of truth for the Klaviyo
+**"Invoice Generated"** customer receipt. It runs inside `processPaymentBenefits` (idempotent,
+always server-side for every charge), so the receipt can never be dropped by a client that navigates
+away — the failure mode of the old client-side `/api/invoice/finalize` call (removed 2026-07). It
+calls [`trackInvoice()`](../../src/utils/integrations/klaviyo/klaviyo-invoice-service.ts) gated by
+`shouldEmitInvoiceGenerated(billingReason)`:
+
+- **EMIT**: `subscription_create` (new membership) and undefined/empty `billing_reason` (one-time,
+  mini-draw, accepted upsell — each is its own charge).
+- **SKIP**: `subscription_cycle` / `subscription_threshold` (renewals → "Membership Renewal" flow)
+  and `subscription_update` (upgrade → `invoice.payment_succeeded` webhook). Prevents double-emailing.
+
+An accepted upsell is a separate PaymentIntent, so it gets its own receipt (two receipts per upsell
+purchase). See [gotchas.md](./gotchas.md) for the full incident and the removed combined-invoice path.
 
 ### Refund reversal
 

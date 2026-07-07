@@ -85,10 +85,16 @@ async function buildJobs(): Promise<Job[]> {
       if (await exists(src)) jobs.push({ src, dest: destFor(targetForNumber(n), viewport) });
     }
   }
-  // Shared hero-stage background (replaces the skeleton loader).
-  for (const base of ["bg-desktop", "bg-mobile"]) {
-    const src = path.join(BG_DIR, `${base}.png`);
-    if (await exists(src)) jobs.push({ src, dest: path.join(BG_DIR, `${base}.webp`) });
+  // Hero-stage backgrounds (skeleton-loader stand-ins): the shared bg-{desktop,mobile}
+  // PLUS per-brand bg-{brand}-{desktop,mobile} (used as the brand-aware loader). Convert
+  // every bg-*.png in the dir so new brands drop in without touching this script.
+  if (await exists(BG_DIR)) {
+    for (const name of await fs.readdir(BG_DIR)) {
+      if (/^bg-.*\.png$/i.test(name)) {
+        const src = path.join(BG_DIR, name);
+        jobs.push({ src, dest: path.join(BG_DIR, name.replace(/\.png$/i, ".webp")) });
+      }
+    }
   }
   return jobs;
 }

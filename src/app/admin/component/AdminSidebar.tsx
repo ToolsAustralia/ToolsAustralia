@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import Image from "next/image";
 import { useRouter, usePathname } from "next/navigation";
-import { signOut } from "next-auth/react";
+import { totalSignOut } from "@/utils/auth/total-sign-out";
 import { usePermissions } from "@/hooks/usePermissions";
 import {
   AlertCircle,
@@ -15,7 +15,6 @@ import {
   Shield,
   X,
 } from "lucide-react";
-import { clearSupportChatStorage } from "@/lib/support-chat/chatStorage";
 import { ADMIN_TAB_GROUPS } from "./adminTabs";
 
 const ADMIN_CIRCULAR_LOGO = "/images/Tools Australia Logo/Social Media Profile_Black Background.webp";
@@ -164,12 +163,8 @@ export default function AdminSidebar({
   }, []);
 
   const handleSignOut = () => {
-    // Clear localStorage when signing out
-    localStorage.removeItem("wasAuthenticated");
-    localStorage.removeItem("topBarHidden");
-    clearSupportChatStorage();
-    // Sign out and redirect to home page
-    signOut({ callbackUrl: "/" });
+    // Total sign-out: clears user-scoped client storage (incl. chat history), then ends the session.
+    void totalSignOut({ callbackUrl: "/" });
   };
 
   const handleTabChange = (tabId: string) => {

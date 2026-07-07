@@ -6,7 +6,7 @@ import type { LocalMembershipPlan } from "@/utils/membership/membership-adapters
 import { getElectricPackageColorScheme } from "@/utils/package-colors/electricPackageScheme";
 import { getMembershipSectionColorScheme } from "@/utils/package-colors/packageColorScheme";
 import { getAdditionalPackDiscount } from "@/utils/membership/additional-pack-discount";
-import { isOneTimeBestValuePlanId } from "@/utils/membership/member-package-mapping";
+import { isOneTimeBestValuePlanId } from "@/utils/membership/additional-package-mapping";
 import ElectricPackageCard from "@/components/sections/membership/ElectricPackageCard";
 
 type UserState = "guest" | "subscriber" | "entries";
@@ -15,7 +15,7 @@ type Mult = 1 | 2 | 5 | 10;
 
 function toLocalPlan(pkg: StaticMembershipPackage, mult: Mult): LocalMembershipPlan {
   const baseEntries = pkg.type === "subscription" ? pkg.entriesPerMonth ?? 0 : pkg.totalEntries ?? 0;
-  const id = pkg.isMemberOnly ? `${pkg._id}-member` : pkg._id;
+  const id = pkg.isAdditional ? `${pkg._id}-member` : pkg._id;
   const multiplied = mult > 1;
   return {
     id,
@@ -25,7 +25,7 @@ function toLocalPlan(pkg: StaticMembershipPackage, mult: Mult): LocalMembershipP
     features: pkg.features.map((text) => ({ text })),
     buttonText: "Enter Now",
     buttonStyle: "primary",
-    isMemberOnly: pkg.isMemberOnly,
+    isAdditional: pkg.isAdditional,
     metadata: {
       entriesCount: multiplied ? baseEntries * mult : baseEntries,
       originalEntries: baseEntries,
@@ -58,8 +58,8 @@ export default function MembershipSectionDevClient() {
     const oneTime = membershipPackages.filter((p) => p.type === "one-time" && p.isActive);
     const showMemberOnly = hasAccess || lockedPreview;
     const filtered = showMemberOnly
-      ? oneTime.filter((p) => p.isMemberOnly === true)
-      : oneTime.filter((p) => !p.isMemberOnly);
+      ? oneTime.filter((p) => p.isAdditional === true)
+      : oneTime.filter((p) => !p.isAdditional);
     return filtered.map((p) => toLocalPlan(p, mult));
   }, [tab, hasAccess, mult, lockedPreview]);
 
@@ -132,7 +132,7 @@ export default function MembershipSectionDevClient() {
               tab === "one-time"
                 ? getAdditionalPackDiscount(plan.id)
                 : null;
-            const locked = tab === "one-time" && plan.isMemberOnly === true && !hasAccess;
+            const locked = tab === "one-time" && plan.isAdditional === true && !hasAccess;
             const showBestValue =
               tab === "membership"
                 ? plan.id.includes("boss")
