@@ -181,9 +181,19 @@ const BANNER_SHADOW_FLOAT =
 interface PromoBannerProps {
   initialMembershipPromo?: ServerPromo | null;
   initialOneTimePromo?: ServerPromo | null;
+  /**
+   * When false, the banner stays in-flow (relative) and never switches to the fixed/floating
+   * scroll-follow pill — it just scrolls away with the page. Default true (the landing-page
+   * behaviour). Set false on the /promotions gallery, which has its own sticky filter dock.
+   */
+  followOnScroll?: boolean;
 }
 
-export default function PromoBanner({ initialMembershipPromo, initialOneTimePromo }: PromoBannerProps) {
+export default function PromoBanner({
+  initialMembershipPromo,
+  initialOneTimePromo,
+  followOnScroll = true,
+}: PromoBannerProps) {
   const theme = usePromoTheme();
   const slug = usePromoThemeStore((s) => s.slug);
   const toolsetSlug = usePromoThemeStore((s) => s.toolsetSlug);
@@ -339,6 +349,8 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
 
   const applyScrollThreshold = useCallback(() => {
     if (typeof window === "undefined") return;
+    // Scroll-follow disabled → stay in-flow (isScrolled never goes true; it's the only setter).
+    if (!followOnScroll) return;
     const scrollY = window.scrollY;
     const isMobile = window.innerWidth < 1024;
     const scrollThreshold = isMobile ? 100 : 200;
@@ -355,7 +367,7 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
       }
       return nextScrolled;
     });
-  }, [floatTop, floatLeft, floatWidth]);
+  }, [floatTop, floatLeft, floatWidth, followOnScroll]);
 
   // Handle scroll detection - show fixed banner when user scrolls past threshold, revert when back to top
   useEffect(() => {

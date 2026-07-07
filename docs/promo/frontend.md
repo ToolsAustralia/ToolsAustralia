@@ -37,7 +37,9 @@ reads `useSearchParams`). **`PromoBanner` MUST also be wrapped in a `<VariantPro
 it calls `useVariantContext()`, and with NO provider the default context is `isLoading: true` *forever* →
 `isPromoResolved` stays false → the banner is stuck in its centered-logo **loading skeleton** and never renders
 the promo strip (this was the "banner shows only a logo, no promos" bug). The `[slug]` pages get a real provider
-from `VariantAssignmentWrapper`; the gallery runs no experiment, so a resolved empty provider is correct. The page is `async` and server-fetches `getEffectivePromosForDisplay()` to pass
+from `VariantAssignmentWrapper`; the gallery runs no experiment, so a resolved empty provider is correct.
+The gallery also passes **`followOnScroll={false}`** so the banner stays in-flow and never becomes the
+fixed scroll-follow pill (the gallery has its own sticky filter dock — two floating top elements would fight). The page is `async` and server-fetches `getEffectivePromosForDisplay()` to pass
 `initialMembershipPromo`/`initialOneTimePromo` to `PromoBanner`, AND mounts `<PromoThemeInitializer slug={DEFAULT_PRIZE_SLUG} />`
 — WITHOUT both, the banner rendered unthemed/empty and looked different from the `[slug]` pages (owner: "should
 be the same PromoBanner"). Fabricated "$XXXk+ prize-pool" stat row removed (owner). Overlap fix: the layout's
