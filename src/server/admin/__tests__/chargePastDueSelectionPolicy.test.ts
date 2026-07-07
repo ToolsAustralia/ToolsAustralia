@@ -121,6 +121,20 @@ function testNonChargeableInvoiceOnCorrectSubYieldsNullTarget() {
   assert.equal(result.target, null, "send_invoice collection method should not be a target");
 }
 
+function testStrandedInvoiceStillReturnedAsTarget() {
+  // APPROACH B GUARD: a stranded (retry-exhausted) open invoice on the current sub must STILL be
+  // returned as the target — the admin recover path routes it via chooseChargeAction, and Norm's
+  // `willRecover` reads this selection. Do NOT harden this layer to exclude stranded invoices
+  // (member paths detect "stranded" at the pay step instead).
+  const stranded = {
+    ...(makeInvoice("in_stranded", { subId: "sub_abc" }) as unknown as Record<string, unknown>),
+    attempt_count: 3,
+    next_payment_attempt: null,
+  } as unknown as Stripe.Invoice;
+  const result = selectCurrentSubscriptionChargeable([stranded], "sub_abc");
+  assert.equal(result.target?.id, "in_stranded", "stranded invoice must still be the target (Approach B)");
+}
+
 function run() {
   testNewApiFieldReturnsTargetWhenMatching();
   testLegacyRootFieldReturnsTargetWhenMatching();
@@ -132,6 +146,7 @@ function run() {
   testEmptyInvoiceListReturnsNullTarget();
   testMultipleInvoicesMixedSubsOnlyMatchingSelected();
   testNonChargeableInvoiceOnCorrectSubYieldsNullTarget();
+  testStrandedInvoiceStillReturnedAsTarget();
   console.log("chargePastDueSelectionPolicy tests passed");
 }
 
