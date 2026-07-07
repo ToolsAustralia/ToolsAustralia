@@ -178,15 +178,24 @@ export default async function GiveawayGalleryPage() {
             {/* Live draw countdown (renders nothing until the draw resolves). */}
             <GalleryCountdown />
 
-            {/* Brand wordmark strip — the five toolset brands, real SVG wordmarks (brand-colored). */}
-            <div className="mt-9 flex flex-wrap items-center justify-center gap-x-8 gap-y-4 opacity-90">
-              {brands.map(({ key, label }) =>
-                BRAND_WORDMARK[key] ? (
-                  <span key={key} className="relative block h-5 w-24 sm:h-6 sm:w-28">
-                    <Image src={BRAND_WORDMARK[key]} alt={label} fill unoptimized className="object-contain" />
-                  </span>
-                ) : null,
-              )}
+            {/* Brand wordmark marquee — ONE scrolling row (matches the /membership brand marquee),
+                bigger white cards. 4 copies so the animated half (-50%) always exceeds the viewport
+                for a seamless loop even with only 5 brands. Hover pauses; masked edges. */}
+            <div className="relative mt-10 overflow-hidden [mask-image:linear-gradient(90deg,transparent,#000_8%,#000_92%,transparent)]">
+              <div className="flex w-max items-center gap-3.5 animate-[marquee-scroll_45s_linear_infinite] hover:[animation-play-state:paused]">
+                {[...brands, ...brands, ...brands, ...brands].map(({ key, label }, i) =>
+                  BRAND_WORDMARK[key] ? (
+                    <div
+                      key={`${key}-${i}`}
+                      className="flex h-[64px] flex-shrink-0 items-center justify-center rounded-2xl border border-gray-200 bg-white px-7 shadow-sm sm:h-[80px] sm:px-9 dark:border-white/10"
+                    >
+                      <span className="relative block h-8 w-28 sm:h-10 sm:w-36">
+                        <Image src={BRAND_WORDMARK[key]} alt={label} fill unoptimized className="object-contain" />
+                      </span>
+                    </div>
+                  ) : null,
+                )}
+              </div>
             </div>
           </div>
         </section>

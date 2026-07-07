@@ -43,7 +43,11 @@ cash band carries `pb-28 sm:pb-36 lg:pb-44` so the newsletter floats over empty 
 **Theme-aware + mobile 2-up + sticky-dock fix (2026-07-07):** the gallery is now **light + dark** (`bg-white
 dark:bg-neutral-950`, follows the promotions guest theme toggle) — it was committed-dark; owner wanted light
 mode too. Cards, dock, hero, featured lead all carry light+dark pairs; the brand wordmark SVGs are
-brand-colored (`#c92a28`/`#FEBD17`/`#BFD730`…) so they read on both grounds without inverting. **Grid is
+brand-colored (`#c92a28`/`#FEBD17`/`#BFD730`…) so they read on both grounds without inverting. The hero
+**brand strip is a one-row marquee** (matches the `/membership` `MembershipBrandShowcase`:
+`animate-[marquee-scroll_45s_linear_infinite]`, masked edges, hover-pause, bigger white cards); the 5 toolset
+wordmarks are repeated **4×** so the keyframe's `-50%` animated half always exceeds the viewport for a seamless
+loop (2× isn't enough with only 5 brands on wide screens). **Grid is
 `grid-cols-2` on mobile** (2-up — owner: "see in general what we're offering", small is fine), `lg:grid-cols-3`;
 card copy compacts on mobile (wordmark scaled, toolbox chip + full catalog-label description hidden `<sm`, "View"
 vs "View this combination"). **No value badge** (owner: "remove the price value") — and the **prize name is
