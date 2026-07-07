@@ -93,3 +93,21 @@ export function pickHeldDraftForRecovery(
   matches.sort((a, b) => b.created - a.created);
   return matches[0] ?? null;
 }
+
+/**
+ * The per-cycle amount a recovery should match a held draft against.
+ *
+ * Prefers the LIVE Stripe subscription price (`items.data[0].price.unit_amount`) over the DB
+ * package price. A member who switched tier while past_due has a held draft billed at the NEW
+ * price; matching by the (possibly stale) DB package amount would wrongly yield `no_held_draft`.
+ * Falls back to the package amount only when the live unit price is unavailable (e.g. `null` for
+ * tiered/metered prices). Returns `null` when neither is available.
+ */
+export function deriveExpectedCycleAmountCents(
+  subscription: Stripe.Subscription,
+  packageFallbackCents: number | null
+): number | null {
+  const unit = subscription.items?.data?.[0]?.price?.unit_amount;
+  if (typeof unit === "number" && unit > 0) return unit;
+  return packageFallbackCents;
+}

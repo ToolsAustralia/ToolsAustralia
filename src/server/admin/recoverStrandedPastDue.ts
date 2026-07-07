@@ -7,6 +7,7 @@ import { getPackageById } from "@/data/membershipPackages";
 import {
   buildRecoveryVoidIdempotencyKey,
   buildRecoveryFinalizeIdempotencyKey,
+  deriveExpectedCycleAmountCents,
   hasRecentRecoveryAttempt,
   isOriginalInvoiceEligibleForRecovery,
   pickHeldDraftForRecovery,
@@ -105,14 +106,30 @@ export async function checkRecoveryEligibility(params: {
 
   const packageId = (user.subscription as { packageId?: string } | undefined)?.packageId;
   const pkg = packageId ? getPackageById(packageId) : undefined;
-  if (!pkg || !pkg.isActive || typeof pkg.price !== "number") {
+  const packageFallbackCents =
+    pkg && pkg.isActive && typeof pkg.price === "number" ? Math.round(pkg.price * 100) : null;
+
+  // Prefer the LIVE Stripe subscription price over the (possibly stale) DB package amount. A member
+  // who switched tier while past_due has a held draft billed at the NEW price; matching the draft by
+  // the stale package amount would wrongly yield `no_held_draft`. See docs/PAST_DUE_REANCHOR.md.
+  let subscription: Stripe.Subscription;
+  try {
+    subscription = await stripe.subscriptions.retrieve(user.stripeSubscriptionId);
+  } catch (err) {
+    return {
+      eligible: false,
+      reason: "subscription_inactive",
+      message: err instanceof Error ? err.message : String(err),
+    };
+  }
+  const expectedAmountCents = deriveExpectedCycleAmountCents(subscription, packageFallbackCents);
+  if (expectedAmountCents == null || expectedAmountCents <= 0) {
     return {
       eligible: false,
       reason: "package_not_found",
-      message: `MembershipPackage "${packageId ?? ""}" not found or inactive`,
+      message: `No live subscription price and MembershipPackage "${packageId ?? ""}" not found or inactive`,
     };
   }
-  const expectedAmountCents = Math.round(pkg.price * 100);
 
   // ─── 2. Fetch original invoice and verify eligibility ───
   let originalInvoice: Stripe.Invoice;

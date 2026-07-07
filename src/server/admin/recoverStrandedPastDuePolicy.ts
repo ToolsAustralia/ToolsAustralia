@@ -25,6 +25,7 @@ export {
   buildRecoveryItemIdempotencyKey,
   isOriginalInvoiceEligibleForRecovery,
   pickHeldDraftForRecovery,
+  deriveExpectedCycleAmountCents,
 } from "@/utils/payment/recovery/stranded-invoice-policy";
 export type { EligibilityResult } from "@/utils/payment/recovery/stranded-invoice-policy";
 
