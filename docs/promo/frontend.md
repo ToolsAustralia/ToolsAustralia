@@ -30,16 +30,26 @@ no shipped art are skipped, not broken. **Analytics caveat:** the bare `/promoti
 path has no promo slug, so `usePromoPageTracking` fires NO PromoAnalyticsVisit for gallery views (harmless);
 extend the validator + pageType deliberately if gallery tracking is wanted.
 
-**Chrome parity + newsletter overlap (2026-07-07):** the gallery now mounts the SAME top chrome the brand
+**Chrome parity + newsletter overlap (2026-07-07):** the gallery mounts the SAME top chrome the brand
 landing pages use — `PromoBanner` (the sticky site-wide promo/countdown strip that reads as the "navbar") and
-`PromotionsAccountButton` (floating account/nav menu, authed-only) — the page previously had neither, which is
-why it "looked different / had no navbar". **Both are wrapped in `<Suspense>`**: `PromoBanner` calls
-`useSearchParams`, which on this STATICALLY-rendered page (no server data fetch, unlike the dynamic/ISR `[slug]`
-page that mounts it bare) would otherwise force a static-generation opt-out at build time. The removed
-fabricated "$XXXk+ prize-pool" stat row is gone (owner: didn't like it). Overlap fix: the layout's
-`NewsletterSection` is `absolute … -translate-y-1/2`, so it tucks up by half its height into the end of the
-page `children`; the closing gold cash band now carries `pb-28 sm:pb-36 lg:pb-44` so the newsletter floats
-over empty slate instead of overlapping the band.
+`PromotionsAccountButton` (floating account/nav menu, authed-only). **Both are `<Suspense>`-wrapped** (`PromoBanner`
+reads `useSearchParams`). The page is `async` and server-fetches `getEffectivePromosForDisplay()` to pass
+`initialMembershipPromo`/`initialOneTimePromo` to `PromoBanner`, AND mounts `<PromoThemeInitializer slug={DEFAULT_PRIZE_SLUG} />`
+— WITHOUT both, the banner rendered unthemed/empty and looked different from the `[slug]` pages (owner: "should
+be the same PromoBanner"). Fabricated "$XXXk+ prize-pool" stat row removed (owner). Overlap fix: the layout's
+`NewsletterSection` is `absolute … -translate-y-1/2`, tucking up half its height into the page end; the gold
+cash band carries `pb-28 sm:pb-36 lg:pb-44` so the newsletter floats over empty ground, not the band.
+
+**Theme-aware + mobile 2-up + sticky-dock fix (2026-07-07):** the gallery is now **light + dark** (`bg-white
+dark:bg-neutral-950`, follows the promotions guest theme toggle) — it was committed-dark; owner wanted light
+mode too. Cards, dock, hero, featured lead all carry light+dark pairs; the brand wordmark SVGs are
+brand-colored (`#c92a28`/`#FEBD17`/`#BFD730`…) so they read on both grounds without inverting. **Grid is
+`grid-cols-2` on mobile** (2-up — owner: "see in general what we're offering", small is fine), `lg:grid-cols-3`;
+card copy compacts on mobile (wordmark scaled, toolbox chip + description hidden `<sm`, "View" vs "View this
+combination"). **Sticky filter dock now actually sticks:** the page ancestors use `overflow-x-clip` (NOT
+`overflow-hidden`, which establishes a scroll container and silently breaks `position: sticky`); the dock's
+`top-16 sm:top-20` clears the `PromoBanner` (which goes `fixed z-50` when scrolled). The "This month's headline"
+badge on the featured combo was removed (owner).
 
 ## Landing page — new design assets, full replace (2026-06-23)
 

@@ -39,7 +39,7 @@ export default function GalleryCountdown() {
 
   return (
     <div className="mt-7 flex flex-col items-center gap-2.5">
-      <span className="inline-flex items-center gap-1.5 text-[11px] font-extrabold uppercase tracking-[0.2em] text-gray-400">
+      <span className="inline-flex items-center gap-1.5 text-[11px] font-extrabold uppercase tracking-[0.2em] text-gray-500 dark:text-gray-400">
         <Clock className="h-3.5 w-3.5 text-red-500" /> {draw.name ?? "Major draw"} closes in
       </span>
       <div className="flex gap-2">

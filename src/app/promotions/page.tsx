@@ -6,6 +6,8 @@ import { ArrowRight, Banknote } from "lucide-react";
 import { listPrizes, DEFAULT_PRIZE_SLUG, type PrizeCatalogEntry } from "@/config/prizes";
 import { getLandingHeroImagePaths } from "@/config/promo-landing-slugs";
 import { BRAND_THEMES, type BrandKey } from "@/config/brand-theme";
+import { getEffectivePromosForDisplay } from "@/utils/database/queries/promo-queries";
+import PromoThemeInitializer from "@/components/promo/PromoThemeInitializer";
 import PromoBanner from "@/components/sections/promo/PromoBanner";
 import PromotionsAccountButton from "@/components/sections/promo/PromotionsAccountButton";
 import GiveawayGalleryClient, { type GiveawayGalleryCard } from "./_components/GiveawayGalleryClient";
@@ -55,7 +57,7 @@ const STORAGE_DISPLAY: Record<string, string> = {
   kincrome: "Kincrome",
 };
 
-/** Real brand wordmark SVGs (public/images/brands/name/). */
+/** Real brand wordmark SVGs (public/images/brands/name/) — brand-colored, read on both themes. */
 const BRAND_WORDMARK: Record<string, string> = {
   milwaukee: "/images/brands/name/milwaukeeText.svg",
   dewalt: "/images/brands/name/dewaltText.svg",
@@ -108,13 +110,19 @@ function toCard(prize: PrizeCatalogEntry): GiveawayGalleryCard | null {
 
 /**
  * /promotions — the giveaway combinations showroom (owner: the gallery IS the promotions root;
- * the old page here was a bare redirect to DEFAULT_PRIZE_SLUG). Deliberately single-look dark —
- * the promotions section's cinematic mood. Composition: pinstriped hero (prize-pool stat, live
- * draw countdown, brand wordmark strip) → featured headline combo (dark billboard) → sticky
- * dual-filter dock + showroom grid → gold cash-alternative band. Every card deep-links to its
- * `/promotions/<slug>` landing page. Newsletter, footer and modal manager come from the layout.
+ * the old page here was a bare redirect to DEFAULT_PRIZE_SLUG). THEME-AWARE (light + dark, follows
+ * the promotions guest theme toggle) and mounts the SAME chrome the brand landing pages use:
+ * PromoThemeInitializer (so PromoBanner + account button render themed/identical to the [slug]
+ * pages) + PromoBanner (the "navbar") + PromotionsAccountButton. Composition: hero (heading,
+ * live draw countdown, brand wordmark strip) → featured lead combo → sticky dual-filter dock +
+ * showroom grid (2-up on mobile) → gold cash band. Every card deep-links to `/promotions/<slug>`.
+ * `overflow-x-clip` (not `overflow-hidden`) on the ancestors so the sticky dock actually sticks.
  */
-export default function GiveawayGalleryPage() {
+export default async function GiveawayGalleryPage() {
+  const effectivePromos = await getEffectivePromosForDisplay().catch(() => []);
+  const membershipPromo = effectivePromos.find((p) => p.type === "membership-packages") || null;
+  const oneTimePromo = effectivePromos.find((p) => p.type === "one-time-packages") || null;
+
   const prizes = listPrizes();
   const cash = prizes.find((p) => p.slug === "cash-prize");
   const featured = toCard(prizes.find((p) => p.slug === DEFAULT_PRIZE_SLUG) ?? prizes[0]);
@@ -136,49 +144,53 @@ export default function GiveawayGalleryPage() {
   const comboCount = cards.length;
 
   return (
-    <div className="min-h-svh w-full overflow-hidden bg-slate-950">
+    <div className="min-h-svh w-full overflow-x-clip bg-white dark:bg-neutral-950">
+      {/* Theme the promo chrome to the site default (Milwaukee/red) so PromoBanner + account button
+          render exactly like they do on the [slug] pages. */}
+      <PromoThemeInitializer slug={DEFAULT_PRIZE_SLUG} />
+
       {/* Same sticky promo strip the brand landing pages mount — gives the chrome-free promotions
-          section its "navbar" (site-wide promo + major-draw countdown; props optional, self-hydrates).
-          Suspense-wrapped: PromoBanner reads useSearchParams, which would otherwise opt this
-          statically-rendered page out of static generation (the [slug] page is already dynamic). */}
+          section its "navbar". Suspense-wrapped: PromoBanner reads useSearchParams. */}
       <Suspense fallback={null}>
-        <PromoBanner />
+        <PromoBanner initialMembershipPromo={membershipPromo} initialOneTimePromo={oneTimePromo} />
       </Suspense>
 
-      <main className="w-full overflow-hidden">
-        {/* ── Cinematic hero ── */}
-        <section className="relative overflow-hidden">
-          {/* Pinstripe + red pulse — the promotions hero vocabulary. */}
+      <main className="w-full overflow-x-clip">
+        {/* ── Hero ── theme-aware: light gradient in light mode, slate in dark. */}
+        <section className="relative overflow-hidden bg-gradient-to-b from-gray-50 to-white dark:from-slate-950 dark:to-neutral-950">
+          {/* Pinstripe — dark mode only (invisible on white). */}
           <div
             aria-hidden
-            className="pointer-events-none absolute inset-0"
+            className="pointer-events-none absolute inset-0 hidden dark:block"
             style={{ backgroundImage: "repeating-linear-gradient(45deg, transparent 0 14px, rgba(255,255,255,0.014) 14px 28px)" }}
           />
           <div
             aria-hidden
-            className="pointer-events-none absolute -top-32 left-1/2 h-96 w-[52rem] -translate-x-1/2 rounded-full opacity-30"
+            className="pointer-events-none absolute -top-32 left-1/2 h-96 w-[52rem] -translate-x-1/2 rounded-full opacity-20 dark:opacity-30"
             style={{ background: "radial-gradient(closest-side, #ee0000, transparent 70%)" }}
           />
           <div className="relative mx-auto w-full max-w-7xl px-4 pb-12 pt-14 text-center sm:px-6 sm:pb-16 sm:pt-20 lg:px-8">
-            <p className="text-[11px] font-extrabold uppercase tracking-[0.24em] text-red-500 sm:text-xs">
+            <p className="text-[11px] font-extrabold uppercase tracking-[0.24em] text-red-600 sm:text-xs dark:text-red-500">
               One major draw · {comboCount} ways to win it
             </p>
-            <h1 className="mx-auto mt-4 max-w-4xl font-sans text-4xl font-extrabold font-[950] uppercase leading-[0.95] tracking-tight text-white sm:text-5xl lg:text-7xl">
+            <h1 className="mx-auto mt-4 max-w-4xl font-sans text-4xl font-extrabold font-[950] uppercase leading-[0.95] tracking-tight text-gray-900 sm:text-5xl lg:text-7xl dark:text-white">
               Pick your dream
               <span className="block text-transparent [-webkit-text-stroke:2px_#ee0000] sm:[-webkit-text-stroke:3px_#ee0000]">
                 combination
               </span>
             </h1>
-            <p className="mx-auto mt-5 max-w-2xl text-base text-gray-300 sm:text-lg">
-              Your brand. Your toolbox. <span className="font-bold text-white">$5,000 cash in every combo</span> —
-              or skip the tools and take <span className="font-bold text-white">$10,000 straight to your bank</span>.
+            <p className="mx-auto mt-5 max-w-2xl text-base text-gray-600 sm:text-lg dark:text-gray-300">
+              Your brand. Your toolbox.{" "}
+              <span className="font-bold text-gray-900 dark:text-white">$5,000 cash in every combo</span> — or skip
+              the tools and take{" "}
+              <span className="font-bold text-gray-900 dark:text-white">$10,000 straight to your bank</span>.
             </p>
 
             {/* Live draw countdown (renders nothing until the draw resolves). */}
             <GalleryCountdown />
 
-            {/* Brand wordmark strip — the five toolset brands, real SVG wordmarks. */}
-            <div className="mt-9 flex flex-wrap items-center justify-center gap-x-8 gap-y-4 opacity-80">
+            {/* Brand wordmark strip — the five toolset brands, real SVG wordmarks (brand-colored). */}
+            <div className="mt-9 flex flex-wrap items-center justify-center gap-x-8 gap-y-4 opacity-90">
               {brands.map(({ key, label }) =>
                 BRAND_WORDMARK[key] ? (
                   <span key={key} className="relative block h-5 w-24 sm:h-6 sm:w-28">
@@ -190,25 +202,19 @@ export default function GiveawayGalleryPage() {
           </div>
         </section>
 
-        {/* ── Featured headline combo — dark billboard ── */}
+        {/* ── Featured lead combo ── */}
         {featured && (
           <section className="mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8">
             <Link
               href={`/promotions/${featured.slug}`}
-              className="group relative block overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-b from-white/[.07] to-white/[.02] shadow-[0_28px_70px_-20px_rgba(0,0,0,0.9)] transition-transform duration-300 hover:-translate-y-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500"
-              style={{ boxShadow: `0 28px 70px -20px rgba(0,0,0,0.9), 0 0 60px -30px ${featured.accentHex}` }}
+              className="group relative block overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-[0_18px_44px_-16px_rgba(0,0,0,0.2)] transition-transform duration-300 hover:-translate-y-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500 dark:border-white/10 dark:bg-gradient-to-b dark:from-white/[.07] dark:to-white/[.02]"
+              style={{ boxShadow: `0 22px 60px -22px ${featured.accentHex}4d` }}
             >
               <span
                 aria-hidden
                 className="absolute inset-x-0 top-0 z-10 h-[3px]"
                 style={{ background: `linear-gradient(90deg, ${featured.accentHex}, transparent 78%)` }}
               />
-              <span
-                className="absolute left-4 top-4 z-10 rounded-full px-3 py-1 text-[11px] font-extrabold uppercase tracking-wide shadow-md"
-                style={{ background: featured.accentHex, color: featured.accentInk }}
-              >
-                This month&apos;s headline
-              </span>
               <div className="relative m-2.5 overflow-hidden rounded-xl bg-white sm:m-3">
                 <div className="relative aspect-[1080/1164] w-full lg:hidden">
                   <Image
@@ -233,10 +239,10 @@ export default function GiveawayGalleryPage() {
               </div>
               <div className="flex flex-col gap-2 px-4 pb-4 pt-1 sm:flex-row sm:items-center sm:justify-between sm:px-5 sm:pb-5">
                 <div className="min-w-0">
-                  <h2 className="font-sans text-xl font-extrabold uppercase leading-tight text-white sm:text-2xl">
+                  <h2 className="font-sans text-xl font-extrabold uppercase leading-tight text-gray-900 sm:text-2xl dark:text-white">
                     {featured.title}
                   </h2>
-                  <p className="mt-1 line-clamp-2 text-sm text-gray-400">{featured.description}</p>
+                  <p className="mt-1 line-clamp-2 text-sm text-gray-600 dark:text-gray-400">{featured.description}</p>
                 </div>
                 <span
                   className="inline-flex shrink-0 items-center gap-1.5 text-sm font-bold"
@@ -255,8 +261,7 @@ export default function GiveawayGalleryPage() {
 
         {/* ── Cash alternative — distinct gold band, closing the page ──
              Extra bottom padding clears the layout's NewsletterSection, which is absolutely
-             positioned + `-translate-y-1/2` so it tucks up by half its height into the page's
-             end; without this the newsletter overlapped the gold band. */}
+             positioned + `-translate-y-1/2` so it tucks up by half its height into the page's end. */}
         {cash && (
           <section className="mx-auto w-full max-w-7xl px-4 pb-28 pt-4 sm:px-6 sm:pb-36 lg:px-8 lg:pb-44">
             <Link
