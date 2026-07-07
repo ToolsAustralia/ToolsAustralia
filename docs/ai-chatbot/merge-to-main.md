@@ -88,15 +88,22 @@ The new admin read `GET /api/admin/chatbot-cost` is **not** mirrored to internal
 ### 4f. 🟢 TASK — cleanup
 Remove the manifest **ghost path** `scripts/embed-chat-knowledge.ts` from the `support-chat` domain in `CLAUDE.md` (the file doesn't exist — Phase 1 uses offline TF-IDF, no embeddings).
 
+### 4g. ✅ DECIDED — hCaptcha deferred; guests are FAQ-only at launch
+Owner decision (2026-07-07): **skip hCaptcha for the initial release** (cost). Leave `HCAPTCHA_SECRET` / `NEXT_PUBLIC_HCAPTCHA_SITEKEY` **unset**. This needs **no code** — it's the default: because `verifyHcaptcha` fails **closed**, anonymous visitors get free FAQ deflection + a "sign in to chat" nudge for anything the FAQ can't answer, and signed-in **members** (incl. everyone on `/my-account`) get the **full generative bot**. So there is **zero anonymous exposure on the paid path** (guests can't reach it); the daily budget (`CHAT_DAILY_TOKEN_BUDGET_USD`) remains the hard spend cap for members. hCaptcha isn't the cost cap — the daily budget is — so deferring it doesn't raise cost risk.
+
+To let guests get AI answers **later**, pick one:
+- **hCaptcha** — set the two env vars (captcha-gated guest generative). Already built + tested; no code.
+- **Open the gate** — add a `CHAT_ALLOW_GUEST_GENERATIVE`-style flag (~10 lines) so guests reach the LLM behind the rate-limit + daily-budget only. **Not built now** (no speculative flag per CLAUDE.md §4); wire it when the decision is made. Watch the admin Chatbot Cost page + `ChatAuditLog` anonymous rows and set a conservative budget ($2–3/day) if you go this route.
+
 ## 5. Production env checklist
 
 | Var | Needed | Effect if unset |
 |---|---|---|
 | `ANTHROPIC_API_KEY` | **Yes** | Every generative turn degrades to a canned "having trouble" reply (bot still deflects FAQs). Set a **monthly spend cap** in the Anthropic console as the hard ceiling. |
-| `HCAPTCHA_SECRET` | **Yes (for guests)** | `verifyHcaptcha` fails **closed** → all anonymous first generative turns get `401 captcha_required` (guests = FAQ-only). Members/FAQ unaffected. |
-| `NEXT_PUBLIC_HCAPTCHA_SITEKEY` | **Yes (for guests)** | Guest captcha can't render → guests can't pass the generative gate. |
-| `CHAT_KILL_SWITCH` | No (`false`) | See §4c/§4d. |
-| `CHAT_DAILY_TOKEN_BUDGET_USD` | No (`5`) | App-level daily USD ceiling; 503 once exceeded (currently incl. FAQ — §4c). |
+| `HCAPTCHA_SECRET` | **Deferred (optional)** — see §4g | Left unset for the initial release (owner decision, 2026-07-07). `verifyHcaptcha` fails **closed**, so guests are then FAQ-only (their generative turns get `401 captcha_required` → a "sign in to chat" nudge); members/FAQ unaffected. Set it (with the sitekey) later to give guests captcha-gated generative answers. |
+| `NEXT_PUBLIC_HCAPTCHA_SITEKEY` | **Deferred (optional)** — see §4g | Public sitekey. Unset → the widget shows a "sign in to chat" nudge to guests instead of a captcha. |
+| `CHAT_KILL_SWITCH` | No (`false`) | See §4c/§4d. On → paid LLM path streams the canned "busy" reply; **free FAQ still works**. |
+| `CHAT_DAILY_TOKEN_BUDGET_USD` | No (`5`) | Hard app-level daily USD ceiling. Once exceeded, the LLM path streams the canned "busy" reply; **free FAQ deflection keeps working** (§4c). This is the real spend cap. |
 | `CHAT_MODEL_PRIMARY`/`ESCALATION` | No | Default `claude-haiku-4-5` / `claude-sonnet-4-6`. |
 | `CHAT_GENERATIVE_LIMIT_MAX`/`WINDOW_SECONDS` | No | Per-user LLM cap (default 5/300s); FAQ never counts; fails open. |
 | `GOOGLE_GENERATIVE_AI_API_KEY` (+ `CHAT_GOOGLE_MODEL_*`) | Only if provider toggled to Google | Toggling to Google without it degrades every turn to canned. |
