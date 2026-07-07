@@ -30,6 +30,17 @@ no shipped art are skipped, not broken. **Analytics caveat:** the bare `/promoti
 path has no promo slug, so `usePromoPageTracking` fires NO PromoAnalyticsVisit for gallery views (harmless);
 extend the validator + pageType deliberately if gallery tracking is wanted.
 
+**Chrome parity + newsletter overlap (2026-07-07):** the gallery now mounts the SAME top chrome the brand
+landing pages use — `PromoBanner` (the sticky site-wide promo/countdown strip that reads as the "navbar") and
+`PromotionsAccountButton` (floating account/nav menu, authed-only) — the page previously had neither, which is
+why it "looked different / had no navbar". **Both are wrapped in `<Suspense>`**: `PromoBanner` calls
+`useSearchParams`, which on this STATICALLY-rendered page (no server data fetch, unlike the dynamic/ISR `[slug]`
+page that mounts it bare) would otherwise force a static-generation opt-out at build time. The removed
+fabricated "$XXXk+ prize-pool" stat row is gone (owner: didn't like it). Overlap fix: the layout's
+`NewsletterSection` is `absolute … -translate-y-1/2`, so it tucks up by half its height into the end of the
+page `children`; the closing gold cash band now carries `pb-28 sm:pb-36 lg:pb-44` so the newsletter floats
+over empty slate instead of overlapping the band.
+
 ## Landing page — new design assets, full replace (2026-06-23)
 
 The promo landing hero **images + videos were fully replaced** with the new

@@ -1,10 +1,13 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { ArrowRight, Banknote } from "lucide-react";
 import { listPrizes, DEFAULT_PRIZE_SLUG, type PrizeCatalogEntry } from "@/config/prizes";
 import { getLandingHeroImagePaths } from "@/config/promo-landing-slugs";
 import { BRAND_THEMES, type BrandKey } from "@/config/brand-theme";
+import PromoBanner from "@/components/sections/promo/PromoBanner";
+import PromotionsAccountButton from "@/components/sections/promo/PromotionsAccountButton";
 import GiveawayGalleryClient, { type GiveawayGalleryCard } from "./_components/GiveawayGalleryClient";
 import GalleryCountdown from "./_components/GalleryCountdown";
 
@@ -103,16 +106,6 @@ function toCard(prize: PrizeCatalogEntry): GiveawayGalleryCard | null {
   };
 }
 
-/** Sum the catalog's "$35,000+ Value" labels into a headline prize-pool figure. */
-function prizePoolTotal(prizes: PrizeCatalogEntry[]): number {
-  return prizes
-    .filter((p) => p.slug !== "cash-prize")
-    .reduce((sum, p) => {
-      const digits = (p.prizeValueLabel ?? "").replace(/[^0-9]/g, "");
-      return sum + (digits ? parseInt(digits, 10) : 0);
-    }, 0);
-}
-
 /**
  * /promotions — the giveaway combinations showroom (owner: the gallery IS the promotions root;
  * the old page here was a bare redirect to DEFAULT_PRIZE_SLUG). Deliberately single-look dark —
@@ -141,10 +134,17 @@ export default function GiveawayGalleryPage() {
     .map((s) => ({ key: s, label: STORAGE_DISPLAY[s] }));
 
   const comboCount = cards.length;
-  const poolTotal = prizePoolTotal(prizes);
 
   return (
     <div className="min-h-svh w-full overflow-hidden bg-slate-950">
+      {/* Same sticky promo strip the brand landing pages mount — gives the chrome-free promotions
+          section its "navbar" (site-wide promo + major-draw countdown; props optional, self-hydrates).
+          Suspense-wrapped: PromoBanner reads useSearchParams, which would otherwise opt this
+          statically-rendered page out of static generation (the [slug] page is already dynamic). */}
+      <Suspense fallback={null}>
+        <PromoBanner />
+      </Suspense>
+
       <main className="w-full overflow-hidden">
         {/* ── Cinematic hero ── */}
         <section className="relative overflow-hidden">
@@ -173,20 +173,6 @@ export default function GiveawayGalleryPage() {
               Your brand. Your toolbox. <span className="font-bold text-white">$5,000 cash in every combo</span> —
               or skip the tools and take <span className="font-bold text-white">$10,000 straight to your bank</span>.
             </p>
-
-            {/* Stat row */}
-            <div className="mx-auto mt-7 flex max-w-2xl items-stretch justify-center divide-x divide-white/10 rounded-2xl border border-white/10 bg-white/[.04] py-4 backdrop-blur-sm">
-              {[
-                { v: `$${Math.round(poolTotal / 1000)}K+`, l: "in prize combinations" },
-                { v: String(comboCount), l: "combinations, one winner" },
-                { v: "$10K", l: "cash alternative" },
-              ].map(({ v, l }) => (
-                <div key={l} className="flex-1 px-3">
-                  <div className="text-xl font-black tabular-nums text-white sm:text-2xl">{v}</div>
-                  <div className="mt-1 text-[10px] font-bold uppercase tracking-[0.14em] text-gray-500 sm:text-[11px]">{l}</div>
-                </div>
-              ))}
-            </div>
 
             {/* Live draw countdown (renders nothing until the draw resolves). */}
             <GalleryCountdown />
@@ -267,9 +253,12 @@ export default function GiveawayGalleryPage() {
         {/* ── Filterable showroom ── */}
         <GiveawayGalleryClient cards={cards} featuredSlug={featured?.slug} brands={brands} storages={storages} />
 
-        {/* ── Cash alternative — distinct gold band, closing the page ── */}
+        {/* ── Cash alternative — distinct gold band, closing the page ──
+             Extra bottom padding clears the layout's NewsletterSection, which is absolutely
+             positioned + `-translate-y-1/2` so it tucks up by half its height into the page's
+             end; without this the newsletter overlapped the gold band. */}
         {cash && (
-          <section className="mx-auto w-full max-w-7xl px-4 pb-16 pt-4 sm:px-6 lg:px-8">
+          <section className="mx-auto w-full max-w-7xl px-4 pb-28 pt-4 sm:px-6 sm:pb-36 lg:px-8 lg:pb-44">
             <Link
               href="/promotions/cash-prize"
               className="group relative flex flex-col items-start gap-4 overflow-hidden rounded-2xl border border-[#e4c86a]/60 bg-gradient-to-br from-[#f9e9ad] via-[#e9c65f] to-[#d4af37] p-6 shadow-[0_24px_60px_-18px_rgba(212,175,55,0.5)] transition-transform duration-300 hover:-translate-y-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 sm:flex-row sm:items-center sm:justify-between sm:p-8"
@@ -296,6 +285,11 @@ export default function GiveawayGalleryPage() {
           </section>
         )}
       </main>
+
+      {/* Floating account/nav menu — the same one the brand landing pages mount (authed users only). */}
+      <Suspense fallback={null}>
+        <PromotionsAccountButton />
+      </Suspense>
     </div>
   );
 }
