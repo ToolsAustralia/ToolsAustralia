@@ -9,6 +9,7 @@ import { useUserContext } from "@/contexts/UserContext";
 import { useThemeStore } from "@/stores/useThemeStore";
 import { ThemeToggleButton } from "@/components/ui/ThemeToggle";
 import { hexToRgbaString } from "@/utils/package-colors/packageColorScheme";
+import { useDodgeFloatingObstacles } from "@/components/support-chat/useDodgeFloatingObstacles";
 
 const MENU_ITEMS = [
   { href: "/my-account", label: "My Account", icon: LayoutDashboard },
@@ -43,6 +44,11 @@ export default function PromotionsAccountButton() {
 
   const isVisible = !loading && isAuthenticated;
 
+  // Lift the whole FAB stack (theme toggle + account button) above the full-width
+  // floating "Enter Now" bar when it scrolls in — same collision-dodge the Cobber
+  // launcher uses. Returns 0 (keep the default bottom-16/sm:bottom-4) when clear.
+  const dodgeBottom = useDodgeFloatingObstacles("right", isVisible);
+
   // Default expanded on desktop (lg: 1024px+)
   useEffect(() => {
     const mq = window.matchMedia("(min-width: 1024px)");
@@ -72,7 +78,8 @@ export default function PromotionsAccountButton() {
           animate={{ opacity: 1, x: 0, scale: 1 }}
           exit={{ opacity: 0, x: 40, scale: 0.9 }}
           transition={{ type: "spring", stiffness: 350, damping: 28 }}
-          className="fixed right-4 bottom-16 z-40 flex flex-col items-end gap-3 sm:bottom-4"
+          className="fixed right-4 bottom-16 z-40 flex flex-col items-end gap-3 sm:bottom-4 transition-[bottom] duration-300 ease-out"
+          style={dodgeBottom > 0 ? { bottom: dodgeBottom } : undefined}
         >
           <motion.div
             initial={{ opacity: 0, y: 8 }}
