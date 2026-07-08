@@ -130,7 +130,7 @@ Updated as each task in the user-roles migration replaces legacy `session.user.r
 | `/api/admin/promo-analytics/page-detail` | GET | `promos.view` |
 | `/api/admin/stripe-webhook-queue` | GET | `errorReports.view` |
 | `/api/admin/stripe-webhook-queue` | POST | `errorReports.edit` |
-| `/api/admin/submissions/unviewed-count` | GET | `overview.view` |
+| `/api/admin/submissions/unviewed-count` | GET | `submissions.view` |
 | `/api/contact-submissions` | GET | `submissions.view` |
 | `/api/contact-submissions` | POST | _(public — no auth)_ |
 | `/api/contact-submissions/[id]` | GET | `submissions.view` |
