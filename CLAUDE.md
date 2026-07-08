@@ -831,7 +831,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/constants/**",
         "src/data/**"
       ],
-      "lastVerified": "2026-06-23"
+      "lastVerified": "2026-07-08"
     },
     "support-chat": {
       "docs": "docs/ai-chatbot/",
@@ -852,7 +852,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "scripts/eval-chat-goldenset.ts",
         "scripts/calibrate-chat-deflection.ts"
       ],
-      "lastVerified": "2026-06-29"
+      "lastVerified": "2026-07-08"
     }
   }
 }

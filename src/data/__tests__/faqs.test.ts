@@ -34,6 +34,55 @@ function main() {
     );
   }
 
+  // 3b. COMPLIANCE — customer copy must use ENTRY framing, never gambling / "odds" /
+  // "chance" framing. See the design rule (docs/superpowers/plans/2026-07-02-user-
+  // dashboard-revamp-foundation-home.md): forbidden "boost odds" / "increase chance";
+  // allowed "free entries" / "{n}× entries" / "more entries". This is a game-of-chance
+  // trade promotion — say a purchase ADDS entries, never that it improves odds/chances.
+  const gamblingPhrases = [
+    // odds / chance framing
+    "odds",
+    "chance",
+    "boost your chances",
+    "increase your chance",
+    "better odds",
+    "bet on",
+    // never self-describe as a lottery / gambling / raffle — it's a giveaway
+    "lottery",
+    "lotto",
+    "gambl",
+    "raffle",
+    "sweepstake",
+    "wager",
+  ];
+  for (const banned of gamblingPhrases) {
+    assert.ok(
+      !lowerText.includes(banned),
+      `FAQs must not use gambling/odds/chance/lottery framing: "${banned}" — it's a tool giveaway; describe value in terms of ENTRIES`
+    );
+  }
+
+  // 3c. COMPLIANCE — entries are a FREE inclusion with a membership or one-time pack
+  // (the product sold). They are NEVER sold or priced on their own (Australian
+  // trade-promotion law). Correct: "the $25 Apprentice pack includes 3 free entries".
+  const sellingEntriesPhrases = [
+    "buy entries",
+    "buying entries",
+    "buy more entries",
+    "purchase entries",
+    "purchasing entries",
+    "sell entries",
+    "selling entries",
+    "per entry",
+    "entry purchase",
+  ];
+  for (const banned of sellingEntriesPhrases) {
+    assert.ok(
+      !lowerText.includes(banned),
+      `FAQs must not frame entries as sold/priced ("${banned}") — entries are FREE with a membership or pack (the product sold), never sold on their own`
+    );
+  }
+
   // 4. Cancellation self-service entry (id 18) must exist with correct content.
   const cancelEntry = entries.find((e) => e.id === "18");
   assert.ok(cancelEntry !== undefined, "FAQ entry id=18 (cancel/stop auto-renewal) must exist");
