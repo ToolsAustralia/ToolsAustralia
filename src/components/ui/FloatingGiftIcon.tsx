@@ -37,7 +37,7 @@ const FloatingGiftIcon: React.FC<FloatingGiftIconProps> = ({
   if (!isVisible) return null;
 
   return (
-    <div className="fixed bottom-6 right-6 z-[40]">
+    <div data-floating-widget="true" className="fixed bottom-6 right-6 z-[40]">
       {/* Tooltip */}
       {showTooltip && (
         <div className="absolute bottom-16 right-0 bg-gray-900 text-white text-sm rounded-lg px-3 py-2 shadow-lg max-w-xs">

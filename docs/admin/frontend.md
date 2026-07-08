@@ -565,6 +565,44 @@ Endpoints + aggregation rules: [api.md](./api.md#cancellation-flow-analytics).
 
 **Client-safe constant copies.** `CancellationFlowAnalytics.tsx` declares its own module-local `CANCELLATION_REASONS` and `OFFER_TYPES` constants (identical values and order to the model) instead of importing them from `@/models/CancellationFlowEvent`. That module is a Mongoose model file — runtime-evaluating it in a client component crashes (`mongoose` is `serverExternalPackages`, so `models.CancellationFlowEvent` is undefined in the browser). The type-only imports (`import type { CancellationReason, OfferType }`) remain safe because types are fully erased at build time. Keep the local constants in sync by hand whenever the model's `CANCELLATION_REASONS` or `OFFER_TYPES` arrays change. This is the same pattern used elsewhere on this branch for the same class of crash.
 
+## Chatbot (Cobber) — availability, cost & usage (2026-06-26, updated 2026-07-08)
+
+[src/components/admin/ChatbotCostManagement.tsx](../../src/components/admin/ChatbotCostManagement.tsx) is the **`chatbot`** tab — relocated 2026-07-08 from the Analytics group to the **Team** group (below Norm) and renamed "Chatbot Cost" → "Chatbot", since the section now toggles availability, not just reports cost. Rendered by `AdminPage` on `selectedTab === "chatbot"` (URL `/admin/chatbot`; the H1 derives from the id via `capitalize`). Gated by `overview.view`. Read-only **except** two `PATCH` controls: the Cobber availability (pause) toggle and the AI model provider toggle (see below). The component file/class keep the `ChatbotCost*` name (still primarily the cost-analytics surface). No external chart library.
+
+**Headline KPI: Deflection rate** — the share of requests answered free (via FAQ deflection) with no LLM/AI spend. Higher = lower cost.
+
+**Range switcher.** A `Segmented` control lets the admin pick 7 / 30 / 90 days. State is local (`useState`) — no URL sync needed for a cost dashboard.
+
+**Cobber availability (pause) toggle — the primary on/off control (a `Power`-icon `Card`, above Budget status).** A `Segmented` (size `sm`) **Live / Paused** switch wired to `useSetChatKillSwitch()` (`PATCH /api/admin/chatbot-settings { killSwitch }`). Paused = the DB `ChatSettings.killSwitch`, which hides the chat bubble site-wide (via `GET /api/chat/config`) **and** blocks the generative path server-side (costGuard). Reads a **dedicated** `useChatbotSettings()` GET (`{ activeProvider, killSwitch, killSwitchEnvForced }`) — NOT the cost-analytics `config.killSwitch` (env-only). When `killSwitchEnvForced` (the `CHAT_KILL_SWITCH` env break-glass is set), the toggle is locked with an amber note (env wins over the DB toggle). A red "Paused" pill shows in the header when effectively paused. Full mechanics: [docs/ai-chatbot/gotchas.md](../ai-chatbot/gotchas.md).
+
+**Budget status panel (below the availability card).** A `Card` showing today's spend vs the configured daily cap — `fmtUsd(todayUsd) / fmtUsd(dailyBudgetUsd)` — with a horizontal `ProgressBar` (green < 50%, amber 50–80%, red > 80%), percent-used label, and a projected monthly spend line (`last7Usd / 7 * 30` when 7+ days of data, else `last30Usd`). If loading, the bar renders at 0%. (The old read-only `ShieldOff` "KILL SWITCH ON" badge that used to live in this header was removed 2026-07-08 — pause state now lives in the availability card above.)
+
+**AI model provider toggle (the one interactive control, below the budget panel — always visible, even with zero traffic).** A `Card` with a `Bot`-icon header and a `Segmented` (size `sm`) switching Cobber's live LLM provider between **Claude Haiku** (`anthropic`) and **Gemini Flash-Lite** (`google`). Shows the current resolved `config.model` inline. Wired to `useSetChatProvider()` (`src/hooks/queries/admin/useChatbotSettings.ts`) — a TanStack mutation that `PATCH`es `/api/admin/chatbot-settings` and invalidates `["admin", "chatbot-cost"]` so the model name refetches. **Optimistic display:** `displayedProvider` shows `setProvider.variables` (the target) while `isPending`, reconciling to server truth on refetch; on error it auto-reverts (pending clears → falls back to `config.activeProvider`) and an inline red message shows. The `Segmented` is wrapped in a `pointer-events-none opacity-60` div while pending/loading (it has no `disabled` prop). The switch is DB-backed (`ChatSettings` singleton) and takes effect server-side on the next chat request. Deflected FAQ answers are free on either provider.
+
+**Metric cards (top row):** Cost today (USD) · Cost 30-day · **Deflection rate %** (highlighted emerald) · Escalations · Total tokens (in + out).
+
+**Saved by deflection MetricCard (below metric cards, inside `hasData` block).** Shows `~fmtUsd(estSaved)` where `estSaved = deflectedCount × (last30Usd / llmCount)`. If `llmCount === 0`, shows `$0.00`. Subtitle: "est. vs answering everything with AI (last 30 days)". This is an estimate — the label includes `~`.
+
+**Daily cost area chart.** `RevenueAreaChart` over the `daily` array from the API (ascending, filled in for zero-spend days). Amber accent to match a "money" visual language.
+
+**Breakdowns (donuts).** Both breakdowns use a local `DonutBreakdown` helper (donut on the left via the shared `Donut` from `@/components/admin/ui`, a labelled legend with count + % on the right) — replaced the previous horizontal `BarList`s for a clearer share-of-total read. Donut center label = total requests; segments carry `count` for the hover readout. **Padding note:** the shared `Card` has **no built-in padding** (it only sets radius/border/bg — callers add their own), so every `Card` on this page — `DonutBreakdown`, the daily-spend chart, the empty state, the budget panel, and the provider toggle — passes `className="p-4"`. Omitting it renders content flush to the card edge.
+- **Request type breakdown.** Deflected (FAQ / free, green) vs LLM calls (paid, orange). Footer: total requests · conversations count (distinct `conversationId`s, if > 0) · avg response; second line: Cost / AI answer · Cost / conversation (both guarded, only shown if denominator > 0).
+- **Actor breakdown.** Members (indigo) vs anonymous (slate) requesters. No footer — the legend already shows each share's % (dropped the old redundant "Members X% · Anonymous Y%" line and its now-unused `memberPct`/`anonPct` derivations).
+
+**Config strip (small/muted, bottom of `hasData` block).** A `Settings`-icon row showing: `Daily budget: {fmtUsd(dailyBudgetUsd)} · Limit: {generativeLimitMax} AI answers / {generativeLimitWindowSeconds/60} min per user`. The model name is no longer here — it moved to the AI model provider toggle card above. Uses `bg-neutral-50 dark:bg-neutral-800/50` with a border.
+
+**ProgressBar component.** `src/components/admin/ui/ProgressBar.tsx` — a minimal `h-2` horizontal bar, colour driven by `pct` (0–100, clamped), exported from the barrel. Not a chart-library component.
+
+**Empty state.** When `usage.totalRequests === 0` a friendly card renders: "No chatbot activity recorded yet."
+
+**Data hooks:** `useChatbotCostAnalytics(days)` — TanStack `useQuery`, inline queryKey `["admin", "chatbot-cost", days]`, fetches `/api/admin/chatbot-cost?days=${days}`. The returned `ChatbotCostData` includes `config` (incl. `config.activeProvider`) and `usage.conversationsCount`. `useSetChatProvider()` — TanStack `useMutation` (`src/hooks/queries/admin/useChatbotSettings.ts`), `PATCH`es `/api/admin/chatbot-settings` then invalidates `["admin", "chatbot-cost"]` (partial-prefix match reconciles every range cache).
+
+**Service:** `src/services/admin/chatbotCostAnalytics.ts`. Pure shaper `summarizeAuditRows` (no Mongo) is tested separately via `npm run test:chat-admin-usage`. The DB entry point `getChatbotCostAnalytics({ days })` queries `ChatDailyBudget` for cost rows and `ChatAuditLog` for request audit rows (now including `conversationId` in the `.select()` projection), fills zero-day gaps in the daily array, and reads `config` from env vars server-side.
+
+**Client-safe constant note.** `ChatbotCostManagement.tsx` does not import from `@/models/ChatAuditLog`; the `actorKind` literal tuple is re-declared locally with a "keep in sync" comment — same pattern as `CancellationFlowAnalytics.tsx`.
+
+Endpoint: `GET /api/admin/chatbot-cost` — see [api.md](./api.md).
+
 ## Facebook Ads Management — Health view tab (Task 29, 2026-05-27)
 
 `FacebookAdsManagement` (`src/components/admin/FacebookAdsManagement.tsx`) now supports a third `viewMode` value: `"health"`.
