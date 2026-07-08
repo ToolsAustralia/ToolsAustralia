@@ -4,11 +4,15 @@ import { getUnviewedSubmissionsCount } from "@/services/admin/submissionsCountSe
 
 /**
  * GET /api/admin/submissions/unviewed-count
- * Get count of unviewed contact submissions and partner applications (admin only)
+ * Get count of unviewed contact submissions and partner applications.
+ *
+ * Gated by `submissions.view` — the badge's "View submissions" button routes to
+ * /admin/submissions (which requires submissions.view), so this keeps the badge
+ * visible to exactly the roles that can act on it (e.g. a scoped support role).
  */
 export async function GET() {
   try {
-    const _guard = await requirePermission("overview.view");
+    const _guard = await requirePermission("submissions.view");
     if (_guard instanceof NextResponse) return _guard;
 
     const data = await getUnviewedSubmissionsCount();
