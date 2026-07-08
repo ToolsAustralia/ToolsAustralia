@@ -1,5 +1,9 @@
 # Client State — Gotchas
 
+## `useOrder` must read `{ order }`, not `{ success, data }` (fixed 2026-07-08)
+
+`useOrder` ([useOrderQueries.ts](../../src/hooks/queries/useOrderQueries.ts)) previously typed the `GET /api/orders/[id]` response as `{ success, data }` while the route returns `{ order }` — so `data` was always `undefined`, `/checkout/success` rendered its error state, and the shop Purchase pixel (shop's only Meta signal) could never fire. Dormant while shop is "Coming Soon", but it would have shipped broken at launch. **The sibling order hooks are still aspirational**: `useOrders`/`useInfiniteOrders` expect a pagination shape `/api/orders` doesn't return (`{ orders }`), and `useRecentOrders`/`useOrderAnalytics` call endpoints that don't exist — none currently has a live consumer. Align them against the real routes as part of shop-launch work; don't trust the hook's declared response type without reading the route.
+
 ## `useChatbotSettings` — Cobber pause query + mutation (2026-07-08)
 
 [`src/hooks/queries/admin/useChatbotSettings.ts`](../../src/hooks/queries/admin/useChatbotSettings.ts) now exports, besides `useSetChatProvider`: a `useChatbotSettings()` **query** (key `["admin","chatbot-settings"]`, 30s stale) returning `{ activeProvider, killSwitch, killSwitchEnvForced }`, and a `useSetChatKillSwitch()` **mutation** (`PATCH { killSwitch }`) that pauses/resumes Cobber. Both mutations invalidate **both** `["admin","chatbot-settings"]` and `["admin","chatbot-cost"]` so the availability toggle and the cost tab's config strip stay in lockstep. Consumed only by `ChatbotCostManagement`.

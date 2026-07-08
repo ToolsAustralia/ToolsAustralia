@@ -111,6 +111,10 @@ Both routes return per-user fields (`userStats` on major-draw, `hasActiveMembers
 
 [`MiniDrawViewTracking`](../../src/app/(site)/mini-draws/[id]/components/MiniDrawViewTracking.tsx) calls `trackKlaviyoViewContent` with `product_id` / `product_name` — not the camelCase equivalents. The shape is enforced by `KlaviyoEventParams` in [src/hooks/useKlaviyoTracking.ts](../../src/hooks/useKlaviyoTracking.ts). See [docs/tracking/KLAVIYO_INTEGRATION.md](../tracking/KLAVIYO_INTEGRATION.md) for the full property-naming contract.
 
+## Mini-draw-success Purchase pixel: per-mount ref is NOT enough dedup (2026-07-08)
+
+[`MiniDrawSuccessClient.tsx`](../../src/app/(site)/mini-draw-success/components/MiniDrawSuccessClient.tsx)'s browser Purchase fire is guarded by `shouldSuppressPurchasePixel` / `markPurchasePixelFired` ([purchase-pixel-fired-storage.ts](../../src/utils/tracking/purchase-pixel-fired-storage.ts)) **in addition to** its `firedRef` — the guard suppresses only re-fires older than 46h (younger ones are merged by Meta and recover a swallowed first fire). Do not remove the localStorage guard: the ref only survives one mount, and Meta's event_id dedup lasts ~48h — a revisit of the success URL >48h after purchase (history, restored tab) re-fired a fully-valued Purchase that Meta counted as a new conversion, inflating reported ROAS. The key (`purchasePixelFired_${paymentIntentId}`) is deliberately NOT cleared on sign-out (no user data, and clearing reintroduces the re-fire) and self-prunes after 30 days.
+
 ## Terminology: `isAdditional` (was `isMemberOnly`) — 2026-07-01
 
 The package flag `isMemberOnly` was renamed to **`isAdditional`** across the codebase. It marks packages that require *additional-package access* — an **active subscription OR current major-draw entries** (see `hasAdditionalPackageAccess`), which is broader than subscribers; it was never truly "member-only". The internal `-member` UI id-suffix (a row disambiguator) is intentionally unchanged. Full rationale: [subscription/gotchas.md](../subscription/gotchas.md).

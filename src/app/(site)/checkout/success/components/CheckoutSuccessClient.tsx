@@ -21,6 +21,7 @@ import { useOrder } from "@/hooks/queries/useOrderQueries";
 import { Skeleton } from "@/components/ui/skeleton";
 import { trackConversion } from "@/lib/tracking/dispatch-client";
 import { buildPurchaseEvent } from "@/lib/tracking/canonical-event";
+import { markPurchasePixelFired, shouldSuppressPurchasePixel } from "@/utils/tracking/purchase-pixel-fired-storage";
 
 interface CheckoutSuccessClientProps {
   orderId: string;
@@ -37,7 +38,18 @@ export default function CheckoutSuccessClient({ orderId }: CheckoutSuccessClient
     if (!order) return;
     if (order.paymentStatus !== "paid") return;
     if (!order.totalAmount || order.totalAmount <= 0) return;
+    // firedRef only survives one mount; Meta's event_id dedup only ~48h. Re-fires
+    // inside that window are merged by Meta and recover a swallowed first fire —
+    // which matters most here, since shop has no CAPI counterpart to anchor the
+    // real conversion. Only a revisit BEYOND the window (which Meta would count
+    // as a brand-new conversion) is suppressed.
+    const purchaseEventId = order.orderNumber ?? orderId;
+    if (shouldSuppressPurchasePixel(purchaseEventId)) {
+      firedRef.current = true;
+      return;
+    }
     firedRef.current = true;
+    markPurchasePixelFired(purchaseEventId);
     trackConversion(
       buildPurchaseEvent({
         value: order.totalAmount,

@@ -346,7 +346,13 @@ async function saveUserWithVerification(
  * Handle payment success with event-based idempotency
  * @returns false if payment was not processed, undefined otherwise
  */
-async function handlePaymentSuccess(paymentIntent: Stripe.PaymentIntent): Promise<boolean | undefined> {
+async function handlePaymentSuccess(
+  paymentIntent: Stripe.PaymentIntent,
+  // Stripe event.created (Unix seconds) = the moment payment actually succeeded.
+  // paymentIntent.created is the PI's CREATION time, which can precede payment by
+  // minutes-to-days (form opened, 3DS deferred) — wrong for Meta's event_time.
+  eventCreatedUnixSeconds?: number
+): Promise<boolean | undefined> {
   try {
     webhookLog("info", `🔄 Processing payment success: ${paymentIntent.id}`);
 
@@ -827,10 +833,10 @@ async function handlePaymentSuccess(paymentIntent: Stripe.PaymentIntent): Promis
     // Process ONLY non-subscription payments (explicit types)
     if (paymentType === "upsell") {
       webhookLog("info", `Processing upsell payment: ${paymentIntent.id}`);
-      await handleUpsellWebhook(user, paymentIntent);
+      await handleUpsellWebhook(user, paymentIntent, eventCreatedUnixSeconds);
     } else if (paymentType === "mini-draw") {
       webhookLog("info", `Processing mini-draw payment: ${paymentIntent.id}`);
-      await handleMiniDrawWebhook(user, paymentIntent);
+      await handleMiniDrawWebhook(user, paymentIntent, eventCreatedUnixSeconds);
     } else if (paymentType === "one-time") {
       webhookLog("info", `🔄 Processing one-time payment: ${paymentIntent.id}`);
 
@@ -877,7 +883,7 @@ async function handlePaymentSuccess(paymentIntent: Stripe.PaymentIntent): Promis
         type: paymentIntent.metadata.type,
         packageType: paymentIntent.metadata.packageType,
       });
-      await handleOneTimeWebhook(user, paymentIntent);
+      await handleOneTimeWebhook(user, paymentIntent, eventCreatedUnixSeconds);
       webhookLog("info", `✅ One-time payment processing completed: ${paymentIntent.id}`);
     } else {
       // ✅ CRITICAL: Never process membership/subscription via PI here
@@ -924,7 +930,11 @@ async function handlePaymentSuccess(paymentIntent: Stripe.PaymentIntent): Promis
 /**
  * Handle upsell payments in webhook (backup processing)
  */
-async function handleUpsellWebhook(user: { _id: { toString: () => string } }, paymentIntent: Stripe.PaymentIntent) {
+async function handleUpsellWebhook(
+  user: { _id: { toString: () => string } },
+  paymentIntent: Stripe.PaymentIntent,
+  eventCreatedUnixSeconds?: number
+) {
   const offerId = paymentIntent.metadata.offerId;
   
   // Get upsell package details
@@ -1037,6 +1047,9 @@ async function handleUpsellWebhook(user: { _id: { toString: () => string } }, pa
     "webhook",
     {
       created: paymentIntent.created * 1000, // Convert Stripe timestamp (seconds) to milliseconds
+      // Payment SUCCESS moment (event.created) for Meta event_time — PI creation can
+      // precede payment (form opened, deferred confirm), which would back-date the conversion.
+      chargedAt: (eventCreatedUnixSeconds ?? paymentIntent.created) * 1000,
       type: "upsell",
       packageType: "upsell",
       // ✅ Pass original package type for bonus entry promo checks
@@ -1085,7 +1098,11 @@ async function handleUpsellWebhook(user: { _id: { toString: () => string } }, pa
 /**
  * Handle one-time package payments in webhook (backup processing)
  */
-async function handleOneTimeWebhook(user: { _id: { toString: () => string } }, paymentIntent: Stripe.PaymentIntent) {
+async function handleOneTimeWebhook(
+  user: { _id: { toString: () => string } },
+  paymentIntent: Stripe.PaymentIntent,
+  eventCreatedUnixSeconds?: number
+) {
   webhookLog("info", `🎯 handleOneTimeWebhook called for PaymentIntent: ${paymentIntent.id}`);
   /** Canonical id (matches static `membershipPackages`); `-member` suffix from useMemberships breaks getPackageById + promo parity with UI. */
   const rawPackageId = paymentIntent.metadata.packageId || "";
@@ -1211,6 +1228,9 @@ async function handleOneTimeWebhook(user: { _id: { toString: () => string } }, p
     "webhook",
     {
       created: paymentIntent.created * 1000, // Convert Stripe timestamp (seconds) to milliseconds
+      // Payment SUCCESS moment (event.created) for Meta event_time — PI creation can
+      // precede payment (form opened, deferred confirm), which would back-date the conversion.
+      chargedAt: (eventCreatedUnixSeconds ?? paymentIntent.created) * 1000,
       type: "one-time",
       packageType: "one-time",
       affiliateCode: paymentIntent.metadata.affiliateCode,
@@ -1298,7 +1318,11 @@ async function handleOneTimeWebhook(user: { _id: { toString: () => string } }, p
 /**
  * Handle mini draw payments in webhook (backup processing)
  */
-async function handleMiniDrawWebhook(user: { _id: { toString: () => string } }, paymentIntent: Stripe.PaymentIntent) {
+async function handleMiniDrawWebhook(
+  user: { _id: { toString: () => string } },
+  paymentIntent: Stripe.PaymentIntent,
+  eventCreatedUnixSeconds?: number
+) {
   const packageId = paymentIntent.metadata.packageId;
   const miniDrawId = paymentIntent.metadata.miniDrawId; // Extract MiniDraw ID from metadata
   const packageName = paymentIntent.metadata.packageName || `Mini Draw Package ${packageId}`;
@@ -1367,6 +1391,9 @@ async function handleMiniDrawWebhook(user: { _id: { toString: () => string } }, 
     "webhook",
     {
       created: paymentIntent.created * 1000, // Convert Stripe timestamp (seconds) to milliseconds
+      // Payment SUCCESS moment (event.created) for Meta event_time — PI creation can
+      // precede payment (form opened, deferred confirm), which would back-date the conversion.
+      chargedAt: (eventCreatedUnixSeconds ?? paymentIntent.created) * 1000,
       type: "mini-draw",
       packageType: "mini-draw",
       miniDrawId: miniDrawId, // Pass MiniDraw ID to payment processing
@@ -3995,6 +4022,9 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
       "webhook",
       {
         created: Math.floor(paymentTimestamp * 1000), // Use paid_at timestamp, not invoice creation time
+        // Same paid_at moment, under the tracking-specific name so Meta event_time
+        // derivation reads one field with one meaning across all purchase paths.
+        chargedAt: Math.floor(paymentTimestamp * 1000),
         type: "subscription",
         packageType: "membership",
         promoLinkCode: promoLinkCode || undefined,
@@ -5057,7 +5087,7 @@ export async function dispatchStripeEvent(event: Stripe.Event): Promise<{ should
   switch (event.type) {
     case "payment_intent.succeeded":
       webhookLog("info", `📥 Received payment_intent.succeeded event for: ${event.data.object.id}`);
-      const paymentProcessed = await handlePaymentSuccess(event.data.object);
+      const paymentProcessed = await handlePaymentSuccess(event.data.object, event.created);
       shouldMarkAsProcessed = paymentProcessed !== false; // Only if actually processed
       webhookLog(
         "info",

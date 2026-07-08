@@ -6,7 +6,8 @@ import connectDB from "@/lib/mongodb";
 import User from "@/models/User";
 import { sendConversion } from "@/lib/tracking/dispatch";
 import type { CanonicalEvent, RequestContext } from "@/lib/tracking/types";
-import { eventTimeNow } from "@/lib/tracking/canonical-event";
+import { normalizeEpochToUnixSeconds, resolveEventTime } from "@/lib/tracking/canonical-event";
+import { mirrorEventNameSchema } from "@/utils/tracking/mirror-event-names";
 import { extractRequestContext } from "@/utils/tracking/facebook-helpers";
 import { extractTikTokContext } from "@/utils/tracking/tiktok-helpers";
 
@@ -45,7 +46,10 @@ const customDataSchema = z
   .optional();
 
 const conversionBodySchema = z.object({
-  eventName: z.string().min(1),
+  // Funnel-event allowlist — this endpoint is unauthenticated, so value-bearing
+  // events (Purchase, Subscribe, …) must not be constructible through it. Real
+  // Purchases reach CAPI only via the Stripe webhook (verified payment).
+  eventName: mirrorEventNameSchema,
   eventId: z.string().min(1),
   eventTime: z.number().optional(),
   value: z.number().optional(),
@@ -150,7 +154,9 @@ export async function POST(request: NextRequest) {
   const event: CanonicalEvent = {
     eventName: parsed.eventName,
     eventId: parsed.eventId,
-    eventTime: parsed.eventTime ?? eventTimeNow(),
+    // Client clocks aren't trusted: normalize a possible ms epoch, then clamp to
+    // Meta's accepted window (out-of-range event_time rejects the whole request).
+    eventTime: resolveEventTime(normalizeEpochToUnixSeconds(parsed.eventTime)),
     value: parsed.value,
     currency: parsed.currency,
     userData,
