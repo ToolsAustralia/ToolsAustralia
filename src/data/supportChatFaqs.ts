@@ -267,7 +267,7 @@ export function getSupportChatFaqEntries(): FaqEntry[] {
       id: "32",
       question: "How do I log in, or what if I can't?",
       answer:
-        "Sign in from the [login page](/login). A few things that catch people out: if you created your account without setting a password, use the \"email me a sign-in code\" option instead of a password; \"Sign in with Google\" only works if you already have an account with that email (otherwise register first); and you can reset a password from the login page (the reset link is single-use and can be requested once every few minutes). Still stuck? [Contact us](/contact) and we'll help.",
+        "Sign in with your email and password from the [login page](/login), or use **Sign in with Google**. **Forgot your password?** On the login page tap **\"Forgot password?\"** (or go straight to [reset your password](/reset-password)), enter the email you joined with, and we'll email you a **single-use reset link** — it stays valid for 24 hours, and you can request a new one every 5 minutes. Open the link, choose a new password, and you're back in. Two things that catch people out: **\"Sign in with Google\"** only works if you already have an account with that email (otherwise register first), and if you get **\"no account found\"** when resetting, double-check the email address you used to join. Still stuck? [Contact us](/contact) and we'll help.",
       category: "PAYMENTS",
     },
     {

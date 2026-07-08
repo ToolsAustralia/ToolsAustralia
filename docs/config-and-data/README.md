@@ -9,6 +9,8 @@ Static config (feature flags, brand theme, prizes), constants (z-index, legal, p
 
 **Vocabulary:** customer-facing copy says **"membership"**, not "subscription" (project naming rule). Membership management (cancel / pause / upgrade / downgrade / reactivate / view tier + renewal) lives on **My Account → Membership → Manage plan** — the old **"Settings → Subscription"** tab was **REMOVED** in the 2026-07 dashboard revamp; never reference it. Test `test:chat-faqs` enforces "Membership entries" present, "subscription entries" absent, and NO "Settings → Subscription".
 
+**Login / forgot-password (id 32, verified 2026-07-07):** the `/login` page offers **email + password** or **Sign in with Google** only. Forgot-password: click **"Forgot password?"** → `/reset-password` → enter email → **single-use reset link** (valid 24h; one request per 5 min; "no account found" if the email isn't registered). There is **NO "email me a sign-in code"** option on the login page (the `passwordless-login` route is **SMS-OTP** and not exposed there) — the FAQ was corrected to drop that false claim.
+
 **Chatbot corpus entries (`supportChatFaqs.ts`, as of 2026-07-07):**
 
 | id | Question | Category |

@@ -230,6 +230,8 @@ function buildKeyPagesSection(): string {
   const pages = [
     { label: "My Account (dashboard)",           path: "/my-account" },
     { label: "Membership (manage plan, billing, tier)", path: "/my-account/membership" },
+    { label: "Login",                             path: "/login" },
+    { label: "Reset / forgot password",           path: "/reset-password" },
     { label: "FAQ page",                          path: "/faq" },
     { label: "Draw Results",                      path: "/draw-results" },
     { label: "Winners",                           path: "/winners" },

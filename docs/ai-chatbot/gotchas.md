@@ -12,6 +12,8 @@ The chatbot's FAQ knowledge is **NOT** the `/faq` page's data anymore:
 
 **Membership management nav — "Settings → Subscription" was REMOVED** in the 2026-07 dashboard revamp (the tabbed `?tab=` IA is gone). Everything that manages membership (cancel / pause / upgrade / downgrade / reactivate / change tier / view renewal + tier) now lives on **My Account → Membership → Manage plan** (the "manage" sheet; deep-link `/my-account?open=subscription`). Payment methods → the Membership page's Payment sheet. Profile → Settings. This was fixed across `supportChatFaqs.ts` (10 refs), `systemPrompt.ts` (locations + rules), the pack builder's hardcoded prose + key-pages map, and main's dashboard SupportSheet. `test:chat-faqs` now locks that NO "Settings → Subscription" string reappears.
 
+**Login / forgot-password FAQ (id 32, corrected 2026-07-07):** `/login` is **email+password or Google** only. The old FAQ claimed an "email me a sign-in code" option — that's **false** (the `passwordless-login` route is SMS-OTP and isn't exposed on the login page); it was removed. id 32 now explains the real forgot-password flow: "Forgot password?" → `/reset-password` → enter email → single-use link (24h, one request/5 min). Added `/login` + `/reset-password` to the pack's key-pages map so the LLM may link them. The deflection rule for id 32 already catches "forgot/reset password".
+
 ---
 
 ## Guest generative access + per-actor provider routing (2026-07-07)
