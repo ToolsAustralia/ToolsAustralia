@@ -8,7 +8,7 @@ Hard-won lessons. Read before touching the widget mount, the route runtime, or t
 
 "Turn Cobber off" is now a real operator action, not just an env var + redeploy. There are two OR'd signals, resolved in [chatSettings.ts](../../src/lib/support-chat/chatSettings.ts):
 
-- **Admin Pause toggle** — `ChatSettings.killSwitch` (DB boolean, default false). Flipped from **Admin → Chatbot Cost → "Cobber availability"** (`useSetChatKillSwitch` → `PATCH /api/admin/chatbot-settings`). No deploy.
+- **Admin Pause toggle** — `ChatSettings.killSwitch` (DB boolean, default false). Flipped from **Admin → Team → Chatbot → "Cobber availability"** (`useSetChatKillSwitch` → `PATCH /api/admin/chatbot-settings`). No deploy. (Tab relocated 2026-07-08 from Analytics/"Chatbot Cost" to the Team group; id `chatbot-cost` → `chatbot`.)
 - **`CHAT_KILL_SWITCH` env** — break-glass override. **Wins over and locks** the admin toggle (`killSwitchEnvForced` disables the UI switch). Use when you can't reach the admin panel.
 
 Effective off = `isChatKillSwitchEnvOn() || getDbChatKillSwitch()` (`getChatKillSwitchEffective()`). When off, **two** things happen:

@@ -1,8 +1,10 @@
 # Admin — Gotchas
 
-## "Cobber availability" pause toggle in the Chatbot Cost tab (2026-07-08)
+## "Cobber availability" pause toggle in the Chatbot tab (2026-07-08)
 
 `ChatbotCostManagement.tsx` gained a **Cobber availability (Live / Paused)** control (the `Power` card, above Budget status). Paused = admin (DB) kill switch on → the chat bubble is hidden site-wide **and** the generative path is blocked server-side. It reads a **dedicated** `useChatbotSettings()` GET (`{ activeProvider, killSwitch, killSwitchEnvForced }`) and writes via `useSetChatKillSwitch()` (`PATCH /api/admin/chatbot-settings { killSwitch }`) — **not** the cost-analytics `config.killSwitch` (which is env-only and was retired from the old badge). When `killSwitchEnvForced` (the `CHAT_KILL_SWITCH` env break-glass is set), the toggle is locked with an amber note — env wins over the DB toggle. Only `overview.view` is required (same low bar as the provider switch). Full mechanics live in [docs/ai-chatbot/gotchas.md](../ai-chatbot/gotchas.md). Not mirrored to Norm (chatbot on/off config isn't useful to the external assistant).
+
+**Location (2026-07-08):** this tab moved from the **Analytics** group ("Chatbot Cost", id `chatbot-cost`) to the **Team** group, below Norm — now **Admin → Team → Chatbot** (id `chatbot`, URL `/admin/chatbot`). The cost-analytics backend (`/api/admin/chatbot-cost`, `useChatbotCostAnalytics`, the `["admin","chatbot-cost"]` query key) kept its name — only the sidebar tab id/label moved. `overview.view` gate unchanged, so Chatbot can show under Team to a viewer who lacks `settings.view` (Staff/Roles/Norm hidden).
 
 ## Admin sign-out clears support-chat client storage via `totalSignOut` (2026-06-24, updated 2026-07-07)
 

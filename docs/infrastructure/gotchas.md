@@ -2,7 +2,7 @@
 
 ## `CHAT_KILL_SWITCH` is now the *override* for the admin pause toggle (2026-07-08)
 
-`CHAT_KILL_SWITCH` (`.env.example`) is no longer the only way to disable Cobber. It is now the **break-glass override**: `true` still disables Cobber instantly (now also **hides the bubble site-wide**, not just the generative path), and it **wins over and locks** the DB-backed admin "Cobber availability" toggle (Admin → Chatbot Cost). For normal pausing prefer the admin toggle (no deploy); use the env var when the panel is unreachable. Effective state = `env || DB` (`getChatKillSwitchEffective`). It is **not** a `src/config/featureFlags.ts` flag — it stays env-level so it works without a DB read.
+`CHAT_KILL_SWITCH` (`.env.example`) is no longer the only way to disable Cobber. It is now the **break-glass override**: `true` still disables Cobber instantly (now also **hides the bubble site-wide**, not just the generative path), and it **wins over and locks** the DB-backed admin "Cobber availability" toggle (Admin → Team → Chatbot). For normal pausing prefer the admin toggle (no deploy); use the env var when the panel is unreachable. Effective state = `env || DB` (`getChatKillSwitchEffective`). It is **not** a `src/config/featureFlags.ts` flag — it stays env-level so it works without a DB read.
 
 ## Next dev indicator position is `top-left` (dev-only) (2026-06-26)
 
