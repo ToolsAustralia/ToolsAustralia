@@ -9,7 +9,7 @@ import {
   Hash,
   TrendingDown,
   Settings,
-  ShieldOff,
+  Power,
   Bot,
 } from "lucide-react";
 import {
@@ -24,6 +24,8 @@ import { MetricCard } from "@/components/admin/metrics/shared/MetricCard";
 import { useChatbotCostAnalytics } from "@/hooks/queries/admin/useChatbotCostAnalytics";
 import {
   useSetChatProvider,
+  useChatbotSettings,
+  useSetChatKillSwitch,
   type ChatProvider,
 } from "@/hooks/queries/admin/useChatbotSettings";
 
@@ -69,6 +71,13 @@ function fmtMs(n: number): string {
 const PROVIDER_OPTIONS: { value: ChatProvider; label: string }[] = [
   { value: "anthropic", label: "Claude Haiku" },
   { value: "google", label: "Gemini Flash-Lite" },
+];
+
+type Availability = "live" | "paused";
+
+const AVAILABILITY_OPTIONS: { value: Availability; label: string }[] = [
+  { value: "live", label: "Live" },
+  { value: "paused", label: "Paused" },
 ];
 
 /**
@@ -130,6 +139,21 @@ export default function ChatbotCostManagement() {
   const [days, setDays] = useState<RangeDays>(30);
   const { data, isLoading, isError } = useChatbotCostAnalytics(days);
   const setProvider = useSetChatProvider();
+
+  // Cobber availability (pause) — DB-backed admin toggle, OR'd with the env
+  // break-glass. When paused: bubble hidden site-wide + generative path blocked.
+  const { data: settings, isLoading: settingsLoading } = useChatbotSettings();
+  const setKill = useSetChatKillSwitch();
+  const envForced = settings?.killSwitchEnvForced ?? false;
+  const effectivePaused = envForced || (settings?.killSwitch ?? false);
+  const displayedAvailability: Availability =
+    setKill.isPending && setKill.variables !== undefined
+      ? setKill.variables
+        ? "paused"
+        : "live"
+      : effectivePaused
+        ? "paused"
+        : "live";
 
   if (isError) {
     return (
@@ -243,18 +267,69 @@ export default function ChatbotCostManagement() {
         />
       </div>
 
+      {/* ── Cobber availability (pause) ──────────────────────────────────────── */}
+      <Card className="p-4">
+        <div className="flex items-center justify-between gap-4 flex-wrap">
+          <div className="min-w-0">
+            <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">
+              <Power className="w-3.5 h-3.5 shrink-0" />
+              Cobber availability
+              {effectivePaused && (
+                <span className="ml-1 inline-flex items-center rounded-full bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 px-2 py-0.5 text-[10px] font-bold">
+                  Paused
+                </span>
+              )}
+            </p>
+            <p className="mt-1 text-xs text-neutral-400 dark:text-neutral-500 max-w-prose">
+              Paused hides the chat bubble across the site and stops all AI
+              answers. Free FAQ replies and the daily budget are unaffected.
+            </p>
+          </div>
+          <div className="flex items-center gap-2.5">
+            {setKill.isPending && (
+              <span className="text-xs text-neutral-400 dark:text-neutral-500">
+                Updating…
+              </span>
+            )}
+            <div
+              className={
+                setKill.isPending || settingsLoading || envForced
+                  ? "pointer-events-none opacity-60"
+                  : ""
+              }
+            >
+              <Segmented<Availability>
+                options={AVAILABILITY_OPTIONS}
+                value={displayedAvailability}
+                onChange={(v) => {
+                  const nextPaused = v === "paused";
+                  if (nextPaused !== effectivePaused) setKill.mutate(nextPaused);
+                }}
+                size="sm"
+              />
+            </div>
+          </div>
+        </div>
+        {envForced && (
+          <p className="mt-2 text-xs text-amber-600 dark:text-amber-400">
+            Forced off by the{" "}
+            <code className="font-mono">CHAT_KILL_SWITCH</code> env override —
+            clear it in your host env to use this toggle.
+          </p>
+        )}
+        {setKill.isError && (
+          <p className="mt-2 text-xs text-red-600 dark:text-red-400">
+            Couldn’t update Cobber’s availability. Please try again.
+          </p>
+        )}
+      </Card>
+
       {/* ── Budget status panel ──────────────────────────────────────────────── */}
       <Card className="p-4">
         <div className="flex items-center justify-between gap-3 mb-3 flex-wrap">
           <p className="text-xs font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">
             Budget status — today
           </p>
-          {config?.killSwitch && (
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 px-2.5 py-1 text-xs font-semibold">
-              <ShieldOff className="w-3.5 h-3.5" />
-              KILL SWITCH ON — generative bot disabled
-            </span>
-          )}
         </div>
         <div className="flex items-end justify-between gap-2 mb-1.5">
           <span className="text-sm text-neutral-700 dark:text-neutral-200 font-medium">

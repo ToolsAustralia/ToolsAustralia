@@ -235,11 +235,17 @@ async function testAssertWithinBudget() {
   const savedKillSwitch = process.env.CHAT_KILL_SWITCH;
   const savedBudget = process.env.CHAT_DAILY_TOKEN_BUDGET_USD;
 
+  // DB killSwitch is OFF for all env-focused cases below; each case that cares
+  // about the DB toggle overrides readKillSwitch explicitly. Stubbing it keeps
+  // this suite DB-free (the real default reads ChatSettings from Mongo).
+  const dbKillOff = async () => false;
+
   try {
     // Under budget → ok
     setEnv({ CHAT_KILL_SWITCH: undefined, CHAT_DAILY_TOKEN_BUDGET_USD: "5" });
     const r1 = await assertWithinBudget({
       readSpendUsd: async () => 2.5,
+      readKillSwitch: dbKillOff,
     });
     expect("under budget → ok:true", r1, { ok: true });
 
@@ -247,6 +253,7 @@ async function testAssertWithinBudget() {
     setEnv({ CHAT_KILL_SWITCH: undefined, CHAT_DAILY_TOKEN_BUDGET_USD: "5" });
     const r2 = await assertWithinBudget({
       readSpendUsd: async () => 6.0,
+      readKillSwitch: dbKillOff,
     });
     expect("over budget → reason daily_budget", r2, {
       ok: false,
@@ -257,6 +264,7 @@ async function testAssertWithinBudget() {
     setEnv({ CHAT_KILL_SWITCH: undefined, CHAT_DAILY_TOKEN_BUDGET_USD: "5" });
     const r3 = await assertWithinBudget({
       readSpendUsd: async () => 5.0,
+      readKillSwitch: dbKillOff,
     });
     expect("at budget → reason daily_budget", r3, {
       ok: false,
@@ -267,6 +275,7 @@ async function testAssertWithinBudget() {
     setEnv({ CHAT_KILL_SWITCH: "true", CHAT_DAILY_TOKEN_BUDGET_USD: "5" });
     const r4 = await assertWithinBudget({
       readSpendUsd: async () => 0,
+      readKillSwitch: dbKillOff,
     });
     expect("CHAT_KILL_SWITCH=true → reason kill_switch", r4, {
       ok: false,
@@ -277,6 +286,7 @@ async function testAssertWithinBudget() {
     setEnv({ CHAT_KILL_SWITCH: "TRUE", CHAT_DAILY_TOKEN_BUDGET_USD: "5" });
     const r5 = await assertWithinBudget({
       readSpendUsd: async () => 0,
+      readKillSwitch: dbKillOff,
     });
     expect("CHAT_KILL_SWITCH=TRUE → reason kill_switch", r5, {
       ok: false,
@@ -287,8 +297,44 @@ async function testAssertWithinBudget() {
     setEnv({ CHAT_KILL_SWITCH: "false", CHAT_DAILY_TOKEN_BUDGET_USD: "5" });
     const r6 = await assertWithinBudget({
       readSpendUsd: async () => 0,
+      readKillSwitch: dbKillOff,
     });
     expect("CHAT_KILL_SWITCH=false → ok:true", r6, { ok: true });
+
+    // Admin (DB) killSwitch ON with env OFF → kill_switch (the admin Pause toggle)
+    setEnv({ CHAT_KILL_SWITCH: undefined, CHAT_DAILY_TOKEN_BUDGET_USD: "5" });
+    const rDb = await assertWithinBudget({
+      readSpendUsd: async () => 0,
+      readKillSwitch: async () => true,
+    });
+    expect("DB killSwitch=true (env off) → reason kill_switch", rDb, {
+      ok: false,
+      reason: "kill_switch",
+    });
+
+    // Env override wins even when the DB toggle is off
+    setEnv({ CHAT_KILL_SWITCH: "true", CHAT_DAILY_TOKEN_BUDGET_USD: "5" });
+    const rEnvWins = await assertWithinBudget({
+      readSpendUsd: async () => 0,
+      readKillSwitch: async () => false,
+    });
+    expect("env kill=true beats DB killSwitch=false → kill_switch", rEnvWins, {
+      ok: false,
+      reason: "kill_switch",
+    });
+
+    // readKillSwitch throws → fail closed: reason 'error'
+    setEnv({ CHAT_KILL_SWITCH: undefined, CHAT_DAILY_TOKEN_BUDGET_USD: "5" });
+    const rKillThrows = await assertWithinBudget({
+      readSpendUsd: async () => 0,
+      readKillSwitch: async () => {
+        throw new Error("DB unavailable");
+      },
+    });
+    expect("readKillSwitch throws → reason error (fail-closed)", rKillThrows, {
+      ok: false,
+      reason: "error",
+    });
 
     // readSpendUsd throws → fail closed: reason 'error'
     setEnv({ CHAT_KILL_SWITCH: undefined, CHAT_DAILY_TOKEN_BUDGET_USD: "5" });
@@ -296,6 +342,7 @@ async function testAssertWithinBudget() {
       readSpendUsd: async () => {
         throw new Error("DB unavailable");
       },
+      readKillSwitch: dbKillOff,
     });
     expect("readSpendUsd throws → reason error (fail-closed)", r7, {
       ok: false,
@@ -309,6 +356,7 @@ async function testAssertWithinBudget() {
     });
     const r8 = await assertWithinBudget({
       readSpendUsd: async () => 4.99,
+      readKillSwitch: dbKillOff,
     });
     expect("no budget env var → default $5, under budget → ok:true", r8, {
       ok: true,
@@ -316,6 +364,7 @@ async function testAssertWithinBudget() {
 
     const r9 = await assertWithinBudget({
       readSpendUsd: async () => 5.0,
+      readKillSwitch: dbKillOff,
     });
     expect(
       "no budget env var → default $5, at $5 spend → daily_budget",
@@ -327,6 +376,7 @@ async function testAssertWithinBudget() {
     setEnv({ CHAT_KILL_SWITCH: undefined, CHAT_DAILY_TOKEN_BUDGET_USD: "abc" });
     const rNaN = await assertWithinBudget({
       readSpendUsd: async () => 5.01, // over the default $5 fallback
+      readKillSwitch: dbKillOff,
     });
     expect(
       "CHAT_DAILY_TOKEN_BUDGET_USD=abc → falls back to $5 default → over budget → daily_budget",
@@ -340,6 +390,7 @@ async function testAssertWithinBudget() {
     setEnv({ CHAT_KILL_SWITCH: undefined, CHAT_DAILY_TOKEN_BUDGET_USD: "5" });
     const r10 = await assertWithinBudget({
       readSpendUsd: async () => 1.0,
+      readKillSwitch: dbKillOff,
       now: () => new Date("2026-06-24T23:59:59.000Z"),
     });
     expect("custom now() injection → ok:true", r10, { ok: true });

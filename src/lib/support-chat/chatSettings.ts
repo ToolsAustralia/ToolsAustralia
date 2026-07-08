@@ -30,7 +30,7 @@ export async function resolveActorProvider(
 }
 
 export interface ChatSettingsDeps {
-  findOne?: () => Promise<{ activeProvider: ChatProvider } | null>;
+  findOne?: () => Promise<{ activeProvider?: ChatProvider; killSwitch?: boolean } | null>;
   upsert?: (provider: ChatProvider) => Promise<void>;
 }
 
@@ -68,6 +68,60 @@ export async function setActiveChatProvider(provider: ChatProvider, deps?: ChatS
   await ChatSettings.findOneAndUpdate(
     { key: "chat" },
     { $set: { activeProvider: provider } },
+    { upsert: true, new: true }
+  );
+}
+
+// ─── Kill switch (Cobber pause) ──────────────────────────────────────────────
+//
+// Two independent off signals, OR'd together for the effective state:
+//   • CHAT_KILL_SWITCH env var — break-glass override, set in the host env.
+//   • ChatSettings.killSwitch  — admin "Pause" toggle, DB-backed, no deploy.
+// The env override wins: an admin cannot un-pause Cobber while the env var is on.
+// When either is on, the bubble is hidden (GET /api/chat/config) AND the
+// generative path is blocked (costGuard). Free FAQ deflection still answers on a
+// direct API call, but the hidden bubble means users can't reach it via the UI.
+
+/** True when the CHAT_KILL_SWITCH env break-glass override is set. */
+export function isChatKillSwitchEnvOn(): boolean {
+  return (process.env.CHAT_KILL_SWITCH ?? "").toLowerCase() === "true";
+}
+
+/**
+ * Reads the admin (DB) killSwitch from the singleton ChatSettings doc.
+ * Fail-safe: on any error returns false (do NOT hide/kill Cobber on a DB blip —
+ * the env override remains the reliable break-glass, and costGuard still caps
+ * spend via the daily budget).
+ */
+export async function getDbChatKillSwitch(deps?: ChatSettingsDeps): Promise<boolean> {
+  try {
+    if (deps?.findOne) {
+      const doc = await deps.findOne();
+      return doc?.killSwitch ?? false;
+    }
+    const { default: connectDB } = await import("@/lib/mongodb");
+    const { default: ChatSettings } = await import("@/models/ChatSettings");
+    await connectDB();
+    const doc = await ChatSettings.findOne({ key: "chat" }).lean();
+    return (doc as { killSwitch?: boolean } | null)?.killSwitch ?? false;
+  } catch {
+    return false;
+  }
+}
+
+/** Effective kill state = env break-glass OR admin (DB) toggle. */
+export async function getChatKillSwitchEffective(deps?: ChatSettingsDeps): Promise<boolean> {
+  return isChatKillSwitchEnvOn() || (await getDbChatKillSwitch(deps));
+}
+
+/** Upserts the admin (DB) killSwitch on the singleton ChatSettings doc. */
+export async function setChatKillSwitch(on: boolean): Promise<void> {
+  const { default: connectDB } = await import("@/lib/mongodb");
+  const { default: ChatSettings } = await import("@/models/ChatSettings");
+  await connectDB();
+  await ChatSettings.findOneAndUpdate(
+    { key: "chat" },
+    { $set: { killSwitch: on } },
     { upsert: true, new: true }
   );
 }

@@ -4,6 +4,24 @@ Hard-won lessons. Read before touching the widget mount, the route runtime, or t
 
 ---
 
+## Cobber has TWO kill switches — admin (DB) + env override (2026-07-08)
+
+"Turn Cobber off" is now a real operator action, not just an env var + redeploy. There are two OR'd signals, resolved in [chatSettings.ts](../../src/lib/support-chat/chatSettings.ts):
+
+- **Admin Pause toggle** — `ChatSettings.killSwitch` (DB boolean, default false). Flipped from **Admin → Chatbot Cost → "Cobber availability"** (`useSetChatKillSwitch` → `PATCH /api/admin/chatbot-settings`). No deploy.
+- **`CHAT_KILL_SWITCH` env** — break-glass override. **Wins over and locks** the admin toggle (`killSwitchEnvForced` disables the UI switch). Use when you can't reach the admin panel.
+
+Effective off = `isChatKillSwitchEnvOn() || getDbChatKillSwitch()` (`getChatKillSwitchEffective()`). When off, **two** things happen:
+1. **Bubble hidden site-wide.** `SupportChatWidgetMount` fetches `GET /api/chat/config` (public, `{ enabled }`) on mount and stays unmounted when `enabled:false`. It renders nothing until the fetch resolves (a paused bot never flashes a bubble) and **fails open** on fetch error (a transient blip shouldn't hide Cobber).
+2. **Generative path blocked server-side.** `assertWithinBudget` (costGuard) now OR's the env kill with the **DB** kill via an injectable `readKillSwitch` dep (default `getDbChatKillSwitch`) — so a direct API caller can't spend against a paused bot either. Returns `reason:"kill_switch"` → canned `BUSY_FALLBACK_TEXT`.
+
+**Footguns:**
+- **FAQ deflection still answers a paused bot on a *direct* API call** — it runs before the budget/kill gate (unchanged, deliberate). That's harmless because the bubble is hidden, so no UI reaches it; it's free and grounded. Do **not** "fix" this by moving the gate before deflection (breaks the free-FAQ-survives-503 design + its regression test).
+- **`getDbChatKillSwitch` fails *open* (returns false on error); `assertWithinBudget` fails *closed*.** Intentional asymmetry: a DB blip must not hide Cobber for everyone (env override stays the reliable break-glass), but inside the cost gate a thrown reader still hits the outer catch → `reason:"error"` → blocked. Locked by `cost-guard.test.ts` ("DB killSwitch=true → kill_switch", "env kill beats DB", "readKillSwitch throws → error").
+- **The admin `config.killSwitch` from cost-analytics is env-only and no longer drives the badge** — the availability toggle + Paused pill read the dedicated `useChatbotSettings()` GET (`{ activeProvider, killSwitch, killSwitchEnvForced }`) so the DB toggle actually reflects.
+
+---
+
 ## FAQ corpus is decoupled from the /faq page + "Settings → Subscription" is dead (2026-07-07)
 
 The chatbot's FAQ knowledge is **NOT** the `/faq` page's data anymore:

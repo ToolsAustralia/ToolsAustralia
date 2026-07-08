@@ -1,5 +1,9 @@
 # Infrastructure — Gotchas
 
+## `CHAT_KILL_SWITCH` is now the *override* for the admin pause toggle (2026-07-08)
+
+`CHAT_KILL_SWITCH` (`.env.example`) is no longer the only way to disable Cobber. It is now the **break-glass override**: `true` still disables Cobber instantly (now also **hides the bubble site-wide**, not just the generative path), and it **wins over and locks** the DB-backed admin "Cobber availability" toggle (Admin → Chatbot Cost). For normal pausing prefer the admin toggle (no deploy); use the env var when the panel is unreachable. Effective state = `env || DB` (`getChatKillSwitchEffective`). It is **not** a `src/config/featureFlags.ts` flag — it stays env-level so it works without a DB read.
+
 ## Next dev indicator position is `top-left` (dev-only) (2026-06-26)
 
 `next.config.ts` sets `devIndicators: { position: "top-left" }` so Next's dev build/route indicator (the "N" pill) doesn't overlap the bottom floating widgets (the Cobber support bubble — bottom-left on promotions, bottom-right elsewhere — plus the promotions theme toggle + account FAB). Next only supports the **4 corners** (`bottom-left`/`bottom-right`/`top-left`/`top-right`) — there is **no mid-height option**, and its drag-to-move snaps to the nearest corner too. Set `devIndicators: false` to hide it. It is **never rendered in production**.

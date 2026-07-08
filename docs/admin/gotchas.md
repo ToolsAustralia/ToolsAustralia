@@ -1,5 +1,9 @@
 # Admin — Gotchas
 
+## "Cobber availability" pause toggle in the Chatbot Cost tab (2026-07-08)
+
+`ChatbotCostManagement.tsx` gained a **Cobber availability (Live / Paused)** control (the `Power` card, above Budget status). Paused = admin (DB) kill switch on → the chat bubble is hidden site-wide **and** the generative path is blocked server-side. It reads a **dedicated** `useChatbotSettings()` GET (`{ activeProvider, killSwitch, killSwitchEnvForced }`) and writes via `useSetChatKillSwitch()` (`PATCH /api/admin/chatbot-settings { killSwitch }`) — **not** the cost-analytics `config.killSwitch` (which is env-only and was retired from the old badge). When `killSwitchEnvForced` (the `CHAT_KILL_SWITCH` env break-glass is set), the toggle is locked with an amber note — env wins over the DB toggle. Only `overview.view` is required (same low bar as the provider switch). Full mechanics live in [docs/ai-chatbot/gotchas.md](../ai-chatbot/gotchas.md). Not mirrored to Norm (chatbot on/off config isn't useful to the external assistant).
+
 ## Admin sign-out clears support-chat client storage via `totalSignOut` (2026-06-24, updated 2026-07-07)
 
 `AdminSidebar.tsx` `handleSignOut` calls `totalSignOut()` ([`src/utils/auth/total-sign-out.ts`](../../src/utils/auth/total-sign-out.ts)). Its `clearUserScopedClientStorage()` wipes per-user localStorage **including support-chat history / `conversationId`**, which it clears by delegating to the chat module's own `clearSupportChatStorage()` (single source of truth for the chat key list). This satisfies the org rule (per-user storage wiped at sign-out so chat can't leak to the next user on a shared device) with one canonical helper instead of a per-call-site clear — the site `Header` and the settings page sign-out the same way.

@@ -1,6 +1,7 @@
 "use client";
 
 import nextDynamic from "next/dynamic";
+import { useEffect, useState } from "react";
 
 /**
  * Client-side mount wrapper for the support chat widget.
@@ -26,5 +27,29 @@ export default function SupportChatWidgetMount({
 }: {
   side?: "left" | "right";
 }) {
+  // Availability gate: when Cobber is paused (admin toggle or CHAT_KILL_SWITCH
+  // env override), GET /api/chat/config returns { enabled: false } and the whole
+  // widget stays unmounted — no bubble anywhere. `null` = not yet known: render
+  // nothing until we do, so a paused bot never flashes a bubble. Fail-open: a
+  // config-fetch error keeps the bubble (a transient blip shouldn't hide Cobber;
+  // the paid path is still blocked server-side).
+  const [enabled, setEnabled] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/chat/config", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((json) => {
+        if (!cancelled) setEnabled(json?.data?.enabled !== false);
+      })
+      .catch(() => {
+        if (!cancelled) setEnabled(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  if (enabled !== true) return null;
   return <SupportChatWidget side={side} />;
 }

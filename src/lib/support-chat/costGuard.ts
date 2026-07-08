@@ -13,6 +13,8 @@
  * so a DB outage can never uncap spend.
  */
 
+import { getDbChatKillSwitch } from "./chatSettings";
+
 // ─── 1. Price table ──────────────────────────────────────────────────────────
 
 /** USD per 1 million tokens */
@@ -97,6 +99,11 @@ export interface BudgetGateResult {
 export interface AssertBudgetDeps {
   /** Override to inject a stub in tests; defaults to real ChatDailyBudget read. */
   readSpendUsd?: () => Promise<number>;
+  /**
+   * Override to inject a stub in tests; defaults to the real DB read of the
+   * admin (ChatSettings) killSwitch. OR'd with the CHAT_KILL_SWITCH env var.
+   */
+  readKillSwitch?: () => Promise<boolean>;
   /** Override to inject a fixed "now" for tests. */
   now?: () => Date;
 }
@@ -106,13 +113,19 @@ export interface AssertBudgetDeps {
  *
  * Fail-closed: any error (env misconfiguration, DB outage, etc.) returns
  * { ok: false, reason: 'error' } — a DB outage must NOT uncap spend.
+ *
+ * Kill switch = env break-glass (CHAT_KILL_SWITCH) OR the admin DB toggle
+ * (ChatSettings.killSwitch), so pausing Cobber from the admin panel also stops
+ * the paid path for direct API callers, not just the hidden bubble.
  */
 export async function assertWithinBudget(
   deps: AssertBudgetDeps = {}
 ): Promise<BudgetGateResult> {
   try {
-    const killSwitch =
+    const envKill =
       (process.env.CHAT_KILL_SWITCH ?? "").toLowerCase() === "true";
+    const readKillSwitch = deps.readKillSwitch ?? getDbChatKillSwitch;
+    const killSwitch = envKill || (await readKillSwitch());
     const parsed = parseFloat(process.env.CHAT_DAILY_TOKEN_BUDGET_USD ?? "5");
     const budgetUsd = Number.isFinite(parsed) ? parsed : 5;
 
