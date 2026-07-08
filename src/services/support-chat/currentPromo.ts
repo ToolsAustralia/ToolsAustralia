@@ -59,7 +59,7 @@ export async function getCurrentPromoBlurb(
     const distinct = new Set(active.map(([, e]) => e.multiplier));
     if (distinct.size === 1) {
       const m = active[0][1].multiplier;
-      return `Right now there's a ${m}X entry-multiplier promotion running on qualifying purchases — it boosts the entries on a purchase automatically (the price doesn't change).`;
+      return `Right now there's a ${m}X entry-multiplier promotion running on qualifying purchases — it multiplies the entries on a purchase automatically (the price doesn't change).`;
     }
 
     const parts = active.map(
@@ -67,7 +67,7 @@ export async function getCurrentPromoBlurb(
     );
     return `Right now there are entry-multiplier promotions running: ${parts.join(
       "; "
-    )} — they boost the entries on a qualifying purchase automatically (the price doesn't change).`;
+    )} — they multiply the entries on a qualifying purchase automatically (the price doesn't change).`;
   } catch (err) {
     // Fail-safe: a promo lookup must never break or delay a support answer.
     console.error("[currentPromo] failed to resolve current promo", err);

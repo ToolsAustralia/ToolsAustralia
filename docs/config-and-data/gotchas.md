@@ -1,5 +1,9 @@
 # Config & Data — Gotchas
 
+## FAQ corpus: entry framing only — no "odds" / "chance" (compliance, 2026-07-08)
+
+`supportChatFaqs.ts` is customer-facing (Cobber). It must use **entry** framing, never gambling/probability framing, and must never call it a **lottery / lotto / raffle / sweepstake / gambling** — it's a giveaway. Forbidden: "odds", "chance(s)", "boost your chances", "increase your chance", "better odds", "lottery", "raffle", "gambl…", "wager"; allowed: "giveaway", "prize draw", "free entries", "{n}× entries", "more entries", "a purchase **adds** entries". This is a game-of-chance trade promotion (see BUSINESS.md §1). `npm run test:chat-faqs` ([faqs.test.ts](../../src/data/__tests__/faqs.test.ts)) now asserts the corpus contains none of the banned words, and the system prompt has a matching HARD RULE so LLM paraphrases stay compliant. After editing the corpus, run `npm run build:chat-knowledge-pack`. Full context: [docs/ai-chatbot/gotchas.md](../ai-chatbot/gotchas.md).
+
 ## FAQ renewal date is NOT a blanket "24th" (anchor-24 nuance)
 
 The chatbot FAQ corpus (`supportChatFaqs.ts`) must NOT say "subscriptions renew on the 24th of each month" — that over-generalises. Per `docs/BILLING_ANCHOR_24.md`, **only members who join on the 25th/26th/27th are anchored to renew on the 24th**; everyone else renews on their own monthly billing date (their signup day-of-month), and past-due recoveries reanchor to the recovery date (clamped to the 24th). The accurate FAQ wording is "renews monthly on your own billing date; 25th–27th joiners are anchored to the 24th" and points members to **My Account → Membership** for their exact date (the old "Settings → Subscription" tab was removed 2026-07). Corrected 2026-06-25 (also propagated to the chat knowledge pack + systemPrompt).

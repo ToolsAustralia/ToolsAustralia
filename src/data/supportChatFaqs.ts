@@ -35,7 +35,7 @@ export function getSupportChatFaqEntries(): FaqEntry[] {
       id: "1",
       question: "What is Tools Australia?",
       answer:
-        "Tools Australia is a membership-driven monthly tool giveaway platform built for Australian tradies — electricians, plumbers, carpenters, builders, mechanics, and more. You earn entries into our Major Draw by joining a membership or purchasing one-time tool packs. More entries means better odds of winning.",
+        "Tools Australia is a membership-driven monthly tool giveaway platform built for Australian tradies — electricians, plumbers, carpenters, builders, mechanics, and more. You earn entries into our Major Draw by joining a membership or purchasing one-time tool packs. Every membership and tool pack adds entries to your account, and all your entries go into each monthly Major Draw.",
       category: "SHOPPING",
     },
     {
@@ -84,7 +84,7 @@ export function getSupportChatFaqEntries(): FaqEntry[] {
       id: "8",
       question: "How do I get more entries?",
       answer:
-        "You can boost your chances in several ways: subscribe to a higher membership tier; buy one-time, Additional, or Mini Draw packs; take a post-purchase upsell offer (heavily discounted bonus entries offered right after checkout); refer a friend (both you and your friend receive 100 bonus entries when they make their first purchase); or keep an eye out for promo codes and special campaigns.",
+        "There are several ways to earn more entries: subscribe to a higher membership tier; buy one-time, Additional, or Mini Draw packs; take a post-purchase upsell offer (heavily discounted bonus entries offered right after checkout); refer a friend (both you and your friend receive 100 bonus entries when they make their first purchase); or keep an eye out for promo codes and special campaigns.",
       category: "SHOPPING",
     },
     {
@@ -228,7 +228,7 @@ export function getSupportChatFaqEntries(): FaqEntry[] {
       id: "27",
       question: "Do you run entry promotions or bonus-entry deals?",
       answer:
-        "Yes. From time to time we run entry-multiplier promotions (like double-entry weekends) that boost the entries on your purchase automatically, and some promos add a fixed number of bonus entries on top. You can also enter referral, promo, or campaign codes at checkout — these add bonus entries, they don't change the price. Keep an eye on our emails and the [promotions page](/promotions) for what's running this cycle.",
+        "Yes. From time to time we run entry-multiplier promotions (like double-entry weekends) that multiply the entries on your purchase automatically, and some promos add a fixed number of bonus entries on top. You can also enter referral, promo, or campaign codes at checkout — these add bonus entries, they don't change the price. Keep an eye on our emails and the [promotions page](/promotions) for what's running this cycle.",
       category: "SHOPPING",
     },
 

@@ -6,7 +6,7 @@
 
 ## 1. What the business is
 
-Tools Australia is a **membership-driven giveaway and rewards platform** for Australian tradespeople — electricians, plumbers, carpenters, builders, mechanics, and adjacent trades. The user's trade is captured via [src/data/professions.ts](src/data/professions.ts) and state via [src/data/australianStates.ts](src/data/australianStates.ts), so audience segmentation and prize/promo targeting can be trade-specific. Customers buy **entries** into monthly tool giveaways. More entries = better odds. Entries are earned by:
+Tools Australia is a **membership-driven giveaway and rewards platform** for Australian tradespeople — electricians, plumbers, carpenters, builders, mechanics, and adjacent trades. The user's trade is captured via [src/data/professions.ts](src/data/professions.ts) and state via [src/data/australianStates.ts](src/data/australianStates.ts), so audience segmentation and prize/promo targeting can be trade-specific. Customers buy **entries** into monthly tool giveaways — every purchase adds entries that go into the draw. (**Compliance:** customer-facing copy uses **entry** framing only — forbidden: "odds" / "chance" / "boost your chances" / "increase your chance"; allowed: "free entries" / "{n}× entries" / "more entries". This is a game-of-chance trade promotion, not gambling. Applies to Cobber, promo copy, and marketing alike.) Entries are earned by:
 
 1. **Buying a one-time tool pack** (Apprentice → VIP).
 2. **Subscribing to a monthly membership** (Tradie / Foreman / Boss).

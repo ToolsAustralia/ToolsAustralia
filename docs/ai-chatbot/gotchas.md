@@ -4,6 +4,19 @@ Hard-won lessons. Read before touching the widget mount, the route runtime, or t
 
 ---
 
+## Compliance: NO gambling / "odds" / "chance" framing — entry framing only (2026-07-08)
+
+Tools Australia runs a **game-of-chance trade promotion**, not gambling. Customer-facing copy (Cobber included) must describe value in terms of **entries**, never probability, and must **never call it a lottery / lotto / raffle / sweepstake / gambling / betting** — it's a "giveaway" or "prize draw". Forbidden: `"odds"`, `"chance(s)"`, `"boost your chances"`, `"increase your chance"`, `"better odds"`, `"lottery"`, `"raffle"`, `"gambl…"`; allowed: `"giveaway"`, `"prize draw"`, `"free entries"`, `"{n}× entries"`, `"more entries"`, "a purchase **adds** entries". If a user asks "is this gambling / a lottery?", Cobber does **not** label it either way — it explains it's a tool giveaway where members buy entries into monthly prize draws and points to [Terms](/terms). (Origin: the dashboard-revamp design rule; now also stated in BUSINESS.md §1.)
+
+Enforced in three places — keep them in lockstep:
+1. **FAQ corpus** ([supportChatFaqs.ts](../../src/data/supportChatFaqs.ts)) — rewrote "better odds of winning" / "boost your chances" / "boost the entries" to entry framing. This feeds the deflection matcher **and** the knowledge pack, so `npm run build:chat-knowledge-pack` after any edit.
+2. **System prompt** ([systemPrompt.ts](../../src/services/support-chat/systemPrompt.ts)) — a HARD RULE forbids the LLM from ever generating odds/chance/gambling framing, so grounded answers stay compliant even when the model paraphrases. (Changes the cached prefix once — expected.)
+3. **Guard test** ([faqs.test.ts](../../src/data/__tests__/faqs.test.ts) → `npm run test:chat-faqs`) — asserts the corpus contains none of the banned words, so a regression fails CI-style.
+
+Note: `currentPromo.ts` ("multiplies the entries") is also customer-facing. The decision-tree **trigger** phrases ("boost my chances") and the routing golden-set question are user *inputs* (matching), not output — leave them so Cobber still recognises the question.
+
+---
+
 ## Cobber has TWO kill switches — admin (DB) + env override (2026-07-08)
 
 "Turn Cobber off" is now a real operator action, not just an env var + redeploy. There are two OR'd signals, resolved in [chatSettings.ts](../../src/lib/support-chat/chatSettings.ts):
