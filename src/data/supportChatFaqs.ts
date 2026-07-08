@@ -35,14 +35,14 @@ export function getSupportChatFaqEntries(): FaqEntry[] {
       id: "1",
       question: "What is Tools Australia?",
       answer:
-        "Tools Australia is a membership-driven monthly tool giveaway platform built for Australian tradies — electricians, plumbers, carpenters, builders, mechanics, and more. You earn entries into our Major Draw by joining a membership or purchasing one-time tool packs. Every membership and tool pack adds entries to your account, and all your entries go into each monthly Major Draw.",
+        "Tools Australia is a membership-driven monthly tool giveaway platform built for Australian tradies — electricians, plumbers, carpenters, builders, mechanics, and more. You get free entries into our Major Draw with every membership or one-time tool pack — the entries come free with the product; they're never sold on their own. All your entries go into each monthly Major Draw.",
       category: "SHOPPING",
     },
     {
       id: "2",
       question: "When is the Major Draw and how does it work?",
       answer:
-        "The Major Draw runs on the 27th of every month. Entries freeze at 8:00 PM AEST/AEDT, and the draw goes live on Facebook at 8:30 PM. New entry purchases are blocked from 8:00 PM on the 27th until midnight (the start of the 28th). The winner is selected by a government-certified independent random-draw service — randomdraws.com.au — not by Tools Australia. The verification link is published on our [Draw Results](/draw-results) page after each draw.",
+        "The Major Draw runs on the 27th of every month. Entries freeze at 8:00 PM AEST/AEDT, and the draw goes live on Facebook at 8:30 PM. New purchases are blocked from 8:00 PM on the 27th until midnight (the start of the 28th). The winner is selected by a government-certified independent random-draw service — randomdraws.com.au — not by Tools Australia. The verification link is published on our [Draw Results](/draw-results) page after each draw.",
       category: "SHOPPING",
     },
     {
@@ -56,14 +56,14 @@ export function getSupportChatFaqEntries(): FaqEntry[] {
       id: "4",
       question: "What are my membership options and how many entries do I get?",
       answer:
-        "We have three monthly membership tiers (all prices in AUD): Tradie at $20/month gives you 15 entries per month; Foreman at $40/month gives you 40 entries; Boss at $80/month gives you 100 entries. Higher tiers also unlock a larger slice of our partner-discount catalog. Membership entries accumulate and carry forward each month while your membership stays active. You can join on the [membership page](/membership).",
+        "We have three monthly membership tiers (all prices in AUD): Tradie at $20/month includes 15 free entries per month; Foreman at $40/month includes 40 free entries; Boss at $80/month includes 100 free entries. Higher tiers also unlock a larger slice of our partner-discount catalog. Membership entries accumulate and carry forward each month while your membership stays active. You can join on the [membership page](/membership).",
       category: "SHOPPING",
     },
     {
       id: "5",
-      question: "Can I buy entries without a membership?",
+      question: "Can I enter without a membership?",
       answer:
-        "Yes. One-time tool packs let you enter the Major Draw without a monthly commitment. Packs range from Apprentice ($25, 3 entries) up to VIP ($1,000, 1,500 entries). If you already have an active membership or entries in the current draw, you also unlock discounted Additional packs — same entries at roughly half the price. One-time and Additional pack entries are valid for the current cycle only and do not carry forward.",
+        "Yes. One-time tool packs let you enter the Major Draw without a monthly commitment — each pack includes free entries. Packs range from Apprentice ($25, 3 free entries) up to VIP ($1,000, 1,500 free entries). If you already have an active membership or entries in the current draw, you also unlock discounted Additional packs — the same free entries, in a pack priced at roughly half as much. Entries from one-time and Additional packs are valid for the current cycle only and do not carry forward.",
       category: "SHOPPING",
     },
     {
@@ -77,7 +77,7 @@ export function getSupportChatFaqEntries(): FaqEntry[] {
       id: "7",
       question: "Do my entries carry forward if I cancel my membership?",
       answer:
-        "If you cancel mid-cycle, the entries you have already earned this cycle remain valid — they stay in the draw pool for the current month's draw on the 27th. Membership entries stop accumulating from the next renewal cycle. One-time pack entries are always scoped to the cycle they were purchased in and do not carry forward regardless of membership status.",
+        "If you cancel mid-cycle, the entries you have already earned this cycle remain valid — they stay in the draw pool for the current month's draw on the 27th. Membership entries stop accumulating from the next renewal cycle. Entries from a one-time pack are always scoped to the cycle the pack was purchased in and do not carry forward regardless of membership status.",
       category: "SHOPPING",
     },
     {
@@ -237,7 +237,7 @@ export function getSupportChatFaqEntries(): FaqEntry[] {
       id: "28",
       question: "How do I become a member and how does membership work?",
       answer:
-        "Becoming a member is simple: choose a monthly membership tier — Tradie ($20/month, 15 entries), Foreman ($40/month, 40 entries), or Boss ($80/month, 100 entries) — and sign up on the [membership page](/membership) (or from [My Account](/my-account)). Your entries go into the monthly Major Draw straight away and accumulate each month while your membership stays active, and higher tiers unlock more of our partner-discount catalog. Membership renews monthly and you can cancel anytime. Prefer no monthly commitment? You can also enter with one-time tool packs instead.",
+        "Becoming a member is simple: choose a monthly membership tier — Tradie ($20/month, 15 free entries), Foreman ($40/month, 40 free entries), or Boss ($80/month, 100 free entries) — and sign up on the [membership page](/membership) (or from [My Account](/my-account)). Your entries go into the monthly Major Draw straight away and accumulate each month while your membership stays active, and higher tiers unlock more of our partner-discount catalog. Membership renews monthly and you can cancel anytime. Prefer no monthly commitment? You can also enter with one-time tool packs instead.",
       category: "SHOPPING",
     },
 
