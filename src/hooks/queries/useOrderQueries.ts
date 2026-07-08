@@ -173,8 +173,12 @@ export const useOrder = (orderId?: string) => {
   return useQuery({
     queryKey: queryKeys.orders.detail(orderId!),
     queryFn: async () => {
-      const response = await apiGet<{ success: boolean; data: Order }>(`/api/orders/${orderId}`);
-      return response.data;
+      // GET /api/orders/[id] returns { order } (src/app/api/orders/[id]/route.ts) —
+      // reading the previously-assumed { success, data } shape made `order` always
+      // undefined, which rendered /checkout/success's error state and silenced the
+      // shop Purchase pixel (shop's only Meta signal — no CAPI counterpart).
+      const response = await apiGet<{ order: Order }>(`/api/orders/${orderId}`);
+      return response.order;
     },
     enabled: !!orderId,
     staleTime: 5 * 60 * 1000, // 5 minutes
