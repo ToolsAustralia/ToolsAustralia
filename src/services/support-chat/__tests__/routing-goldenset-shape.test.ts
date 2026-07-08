@@ -4,10 +4,10 @@ import path from "node:path";
 config({ path: path.resolve(process.cwd(), ".env.local") });
 
 import { ROUTING_GOLDEN_SET } from "./routingGoldenSet";
-import { getFaqEntries } from "@/data/faqs";
+import { getSupportChatFaqEntries } from "@/data/supportChatFaqs";
 
 function main() {
-  const ids = new Set(getFaqEntries().map((e) => e.id));
+  const ids = new Set(getSupportChatFaqEntries().map((e) => e.id));
   assert.ok(ROUTING_GOLDEN_SET.length >= 80, `expected >= 80 routing cases, got ${ROUTING_GOLDEN_SET.length}`);
 
   const seenQuestions = new Set<string>();

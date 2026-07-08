@@ -1,11 +1,11 @@
 import assert from "node:assert/strict";
-import { getFaqEntries } from "@/data/faqs";
+import { getSupportChatFaqEntries } from "@/data/supportChatFaqs";
 
 function main() {
-  const entries = getFaqEntries();
+  const entries = getSupportChatFaqEntries();
 
   // 1. Returns a non-empty array of well-formed entries.
-  assert.ok(Array.isArray(entries) && entries.length > 0, "getFaqEntries() must return a non-empty array");
+  assert.ok(Array.isArray(entries) && entries.length > 0, "getSupportChatFaqEntries() must return a non-empty array");
   for (const entry of entries) {
     assert.ok(typeof entry.id === "string" && entry.id.length > 0, `entry must have an id: ${JSON.stringify(entry)}`);
     assert.ok(typeof entry.question === "string" && entry.question.length > 0, `entry ${entry.id} must have a question`);
@@ -43,8 +43,8 @@ function main() {
     "Cancel FAQ (id 18) must include the /my-account link"
   );
   assert.ok(
-    cancelLower.includes("subscription") && (cancelLower.includes("tab") || cancelLower.includes("settings")),
-    "Cancel FAQ (id 18) must reference the Subscription tab/settings path"
+    cancelLower.includes("/my-account/membership") && cancelLower.includes("manage plan"),
+    "Cancel FAQ (id 18) must route to My Account → Membership → Manage plan (the current management path; the Settings → Subscription tab was removed)"
   );
   assert.ok(
     cancelLower.includes("non-refundable"),
@@ -96,25 +96,25 @@ function main() {
   // 8. Total entry count must be 38 after the membership/account-aware additions.
   assert.strictEqual(entries.length, 38, `Expected 38 FAQ entries, got ${entries.length}`);
 
-  // 9. Upgrade entry (id 22) must exist and link to /my-account.
+  // 9. Upgrade entry (id 22) must exist and route to the Membership manage flow.
   const upgradeEntry = entries.find((e) => e.id === "22");
   assert.ok(upgradeEntry !== undefined, "FAQ entry id=22 (upgrade membership) must exist");
   assert.ok(
-    upgradeEntry!.answer.includes("[My Account](/my-account)"),
-    "Upgrade FAQ (id 22) must include [My Account](/my-account) link"
+    upgradeEntry!.answer.includes("/my-account/membership"),
+    "Upgrade FAQ (id 22) must link to /my-account/membership (the current manage path)"
   );
 
-  // 10. Downgrade entry (id 23) must exist and link to /my-account.
+  // 10. Downgrade entry (id 23) must exist and route to the Membership manage flow.
   const downgradeEntry = entries.find((e) => e.id === "23");
   assert.ok(downgradeEntry !== undefined, "FAQ entry id=23 (downgrade membership) must exist");
   assert.ok(
-    downgradeEntry!.answer.includes("[My Account](/my-account)"),
-    "Downgrade FAQ (id 23) must include [My Account](/my-account) link"
+    downgradeEntry!.answer.includes("/my-account/membership"),
+    "Downgrade FAQ (id 23) must link to /my-account/membership (the current manage path)"
   );
 
   // 11. Membership terminology: customer-facing copy says "Membership entries"
-  // (not "Subscription entries"). The literal "Settings → Subscription" tab name
-  // is intentionally preserved, so we don't assert absence of the word "subscription".
+  // (not "Subscription entries"). Management routes to Membership → Manage plan;
+  // the old "Settings → Subscription" tab was REMOVED in the 2026-07 dashboard revamp.
   assert.ok(
     combinedText.includes("Membership entries"),
     'FAQs must use "Membership entries" (not "Subscription entries") in customer-facing copy'
@@ -122,6 +122,10 @@ function main() {
   assert.ok(
     !lowerText.includes("subscription entries"),
     'FAQs must NOT say "subscription entries" — use "membership entries"'
+  );
+  assert.ok(
+    !combinedText.includes("Settings → Subscription"),
+    'FAQs must NOT reference the removed "Settings → Subscription" tab — route to Membership → Manage plan'
   );
 
   // 12. Join / how-membership-works entry (id 28) must exist and link to /membership.

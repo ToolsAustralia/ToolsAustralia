@@ -49,7 +49,8 @@
 | [src/data/australianStates.ts](../../src/data/australianStates.ts) | AU state codes + names (reference) |
 | [src/data/brandLogos.ts](../../src/data/brandLogos.ts) | Brand logo asset paths |
 | [src/data/dev/](../../src/data/dev/) | Dev fixtures |
-| [src/data/faqs.ts](../../src/data/faqs.ts) | FAQ content |
+| [src/data/faqs.ts](../../src/data/faqs.ts) | `/faq` **page** FAQ content (generic, owner-controlled) + the shared `FaqEntry` type |
+| [src/data/supportChatFaqs.ts](../../src/data/supportChatFaqs.ts) | **Cobber chatbot** FAQ corpus (`getSupportChatFaqEntries`) — deflection + knowledge pack only, NOT the /faq page |
 | [src/data/index.ts](../../src/data/index.ts) | Re-exports |
 | [src/data/membershipPackages.ts](../../src/data/membershipPackages.ts) | **Static** package definitions (subscription packages keyed by string id) |
 | [src/data/miniDrawPackages.ts](../../src/data/miniDrawPackages.ts) | **Static** mini-draw package definitions. Exports `getMiniDrawPackagesForViewer(hasAccess)` for tier-aware catalog (guests → Mini Pack 1–3; access holders → additional-*-pack-mini). Untiered `getMiniDrawPackages()` kept for admin/lookup callers. |

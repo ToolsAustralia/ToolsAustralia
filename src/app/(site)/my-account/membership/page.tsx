@@ -140,7 +140,7 @@ export default function AccountMembershipPage() {
 
         {/* Compact tier list + one-time-pack scroll (matches the prototype MembershipPage),
             driven by the verified useMembershipCardCta state machine. Member tier taps route
-            to the real change-tier flow (Settings → Subscription). */}
+            to the real change-tier flow (the Manage sheet / Manage plan). */}
         <MembershipTierList
           cta={cta}
           isMember={dash.acct === "active"}

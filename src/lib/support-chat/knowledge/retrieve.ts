@@ -20,7 +20,8 @@
  *   function body with a $vectorSearch call while keeping the return shape.
  */
 
-import { getFaqEntries, type FaqEntry } from "@/data/faqs";
+import { getSupportChatFaqEntries } from "@/data/supportChatFaqs";
+import type { FaqEntry } from "@/data/faqs";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -148,7 +149,7 @@ export function searchFaqs(query: string): RankedFaq[] {
   const queryTokens = tokenise(query);
   if (queryTokens.length === 0) return [];
 
-  const entries = getFaqEntries();
+  const entries = getSupportChatFaqEntries();
   const { idf, fallback } = buildIdf(entries);
 
   const queryVec = tfidf(termFreq(queryTokens), idf, fallback);

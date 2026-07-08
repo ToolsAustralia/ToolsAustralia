@@ -34,7 +34,7 @@ import { membershipPackages, type StaticMembershipPackage } from "@/data/members
 import { miniDrawPackages, type MiniDrawPackage } from "@/data/miniDrawPackages";
 import { PARTNER_BRAND_OFFERS } from "@/data/partnerBrandOffers";
 import { PRIZE_CATALOG, getPrizeLabel } from "@/config/prizes";
-import { getFaqEntries } from "@/data/faqs";
+import { getSupportChatFaqEntries } from "@/data/supportChatFaqs";
 
 // ─── Paths ────────────────────────────────────────────────────────────────────
 const ROOT = process.cwd();
@@ -84,7 +84,7 @@ Partner access is **lifecycle-gated** — active for the full duration of an act
 |---|---|---|---|---|
 ${rows}
 
-Most subscriptions renew **monthly on the member's own billing date** (the day of the month they first subscribed). **Members who join on the 25th, 26th, or 27th are anchored to renew on the 24th** so their payment settles 3+ days before the 27th Major Draw. (A past-due subscription that later recovers is also reanchored, clamped to the 24th.) Members can see their exact next billing date in My Account → Settings → Subscription. [from BUSINESS.md]`;
+Most subscriptions renew **monthly on the member's own billing date** (the day of the month they first subscribed). **Members who join on the 25th, 26th, or 27th are anchored to renew on the 24th** so their payment settles 3+ days before the 27th Major Draw. (A past-due subscription that later recovers is also reanchored, clamped to the 24th.) Members can see their exact next billing date on their My Account → Membership page. [from BUSINESS.md]`;
 }
 
 function buildOneTimePacksSection(): string {
@@ -229,7 +229,7 @@ function buildKeyPagesSection(): string {
   // Keep in sync with the site's real routes.
   const pages = [
     { label: "My Account (dashboard)",           path: "/my-account" },
-    { label: "Settings → Subscription tab",       path: "/my-account/settings?tab=subscription" },
+    { label: "Membership (manage plan, billing, tier)", path: "/my-account/membership" },
     { label: "FAQ page",                          path: "/faq" },
     { label: "Draw Results",                      path: "/draw-results" },
     { label: "Winners",                           path: "/winners" },
@@ -248,12 +248,12 @@ Use these paths when directing members to a page. Only use paths from this list 
 
 ${list}
 
-**Usage:** when referencing a page in a response, link it with markdown: e.g. \`[My Account](/my-account)\`, \`[Settings → Subscription tab](/my-account/settings?tab=subscription)\`, \`[contact us](/contact)\`.`;
+**Usage:** when referencing a page in a response, link it with markdown: e.g. \`[My Account](/my-account)\`, \`[Membership](/my-account/membership)\`, \`[contact us](/contact)\`.`;
 }
 
 function buildFaqSection(): string {
   // Use the REAL FAQ entries — do not re-type them.
-  const entries = getFaqEntries()
+  const entries = getSupportChatFaqEntries()
     .map((e, i) => `### Q${i + 1}: ${e.question}\n${e.answer}`)
     .join("\n\n");
 

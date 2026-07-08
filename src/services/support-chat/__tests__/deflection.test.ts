@@ -3,7 +3,7 @@
  *
  * Verifies the no-LLM deflection layer:
  *   - decision-tree high-precision intent matches return `answered:true` with grounded
- *     canned answers sourced directly from getFaqEntries() (no drift).
+ *     canned answers sourced directly from getSupportChatFaqEntries() (no drift).
  *   - faqSearch keyword fallback also returns grounded answers.
  *   - Off-topic questions return `answered:false` (falls through to LLM).
  *   - No module from provider.ts / ai SDK is imported (proves zero LLM involvement).
@@ -22,7 +22,7 @@ config({ path: path.resolve(process.cwd(), ".env.local") });
 
 import { tryDeflect } from "../deflection/index";
 import { matchIntent } from "../deflection/decisionTree";
-import { getFaqEntries } from "@/data/faqs";
+import { getSupportChatFaqEntries } from "@/data/supportChatFaqs";
 import { membershipPackages } from "@/data/membershipPackages";
 
 // ─── Helper ──────────────────────────────────────────────────────────────────
@@ -58,13 +58,13 @@ async function testDrawDate() {
     return;
   }
 
-  // No-drift: returned answer must exactly equal a getFaqEntries() entry's .answer
-  const faqEntries = getFaqEntries();
+  // No-drift: returned answer must exactly equal a getSupportChatFaqEntries() entry's .answer
+  const faqEntries = getSupportChatFaqEntries();
   const matchedFaq = faqEntries.find((e) => e.answer === result.answer);
   if (!matchedFaq) {
     fail(
       "answer grounded to FAQ entry",
-      "answer text does not exactly match any getFaqEntries() .answer (possible drift)"
+      "answer text does not exactly match any getSupportChatFaqEntries() .answer (possible drift)"
     );
     return;
   }
@@ -118,7 +118,7 @@ async function testPricing() {
     }
   }
 
-  const faqEntries = getFaqEntries();
+  const faqEntries = getSupportChatFaqEntries();
   const matchedFaq = faqEntries.find((e) => e.answer === result.answer);
   if (!matchedFaq) {
     fail("answer grounded to FAQ entry", "answer text does not match any FAQ entry (possible drift)");
@@ -151,7 +151,7 @@ async function testRefund() {
     return;
   }
 
-  const faqEntries = getFaqEntries();
+  const faqEntries = getSupportChatFaqEntries();
   const matchedFaq = faqEntries.find((e) => e.answer === result.answer);
   if (!matchedFaq) {
     fail("answer grounded to FAQ entry", "answer text does not match any FAQ entry (possible drift)");
@@ -187,7 +187,7 @@ async function testEligibility() {
     return;
   }
 
-  const faqEntries = getFaqEntries();
+  const faqEntries = getSupportChatFaqEntries();
   const matchedFaq = faqEntries.find((e) => e.answer === result.answer);
   if (!matchedFaq) {
     fail("answer grounded to FAQ entry", "answer text does not match any FAQ entry (possible drift)");
@@ -264,7 +264,7 @@ async function testLayer2Coverage() {
   }
 
   // 3. No-drift: the Layer-2 answer must equal a real FAQ entry's answer.
-  const faqEntries = getFaqEntries();
+  const faqEntries = getSupportChatFaqEntries();
   const matchedFaq = faqEntries.find((e) => e.answer === result.answer);
   if (!matchedFaq) {
     fail("Layer-2 answer grounded to FAQ entry", "answer text does not match any FAQ entry (possible drift)");
@@ -298,13 +298,13 @@ async function testCancellationSelfService() {
   // Verified by the answered:true result from tryDeflect (which only returns true
   // for grounded deflections, never for LLM responses).
 
-  // No-drift: returned answer must exactly equal a getFaqEntries() entry's .answer
-  const faqEntries = getFaqEntries();
+  // No-drift: returned answer must exactly equal a getSupportChatFaqEntries() entry's .answer
+  const faqEntries = getSupportChatFaqEntries();
   const matchedFaq = faqEntries.find((e) => e.answer === result.answer);
   if (!matchedFaq) {
     fail(
       "answer grounded to FAQ entry",
-      "answer text does not exactly match any getFaqEntries() .answer (possible drift)"
+      "answer text does not exactly match any getSupportChatFaqEntries() .answer (possible drift)"
     );
     return;
   }
@@ -329,7 +329,7 @@ async function testStopAutoRenewal() {
     return;
   }
 
-  const faqEntries = getFaqEntries();
+  const faqEntries = getSupportChatFaqEntries();
   const matchedFaq = faqEntries.find((e) => e.answer === result.answer);
   if (!matchedFaq || matchedFaq.id !== "18") {
     fail(
@@ -352,7 +352,7 @@ async function testUnexpectedCharge() {
     return;
   }
 
-  const faqEntries = getFaqEntries();
+  const faqEntries = getSupportChatFaqEntries();
   const matchedFaq = faqEntries.find((e) => e.answer === result.answer);
   if (!matchedFaq || matchedFaq.id !== "21") {
     fail(
@@ -375,7 +375,7 @@ async function testDeleteAccount() {
     return;
   }
 
-  const faqEntries = getFaqEntries();
+  const faqEntries = getSupportChatFaqEntries();
   const matchedFaq = faqEntries.find((e) => e.answer === result.answer);
   if (!matchedFaq || matchedFaq.id !== "20") {
     fail(
@@ -426,13 +426,13 @@ async function testUpgradeMembership() {
     return;
   }
 
-  // No-drift: returned answer must exactly equal a getFaqEntries() entry's .answer
-  const faqEntries = getFaqEntries();
+  // No-drift: returned answer must exactly equal a getSupportChatFaqEntries() entry's .answer
+  const faqEntries = getSupportChatFaqEntries();
   const matchedFaq = faqEntries.find((e) => e.answer === result.answer);
   if (!matchedFaq) {
     fail(
       "answer grounded to FAQ entry",
-      "answer text does not exactly match any getFaqEntries() .answer (possible drift)"
+      "answer text does not exactly match any getSupportChatFaqEntries() .answer (possible drift)"
     );
     return;
   }
@@ -461,13 +461,13 @@ async function testPauseMembership() {
     return;
   }
 
-  // No-drift: returned answer must exactly equal a getFaqEntries() entry's .answer
-  const faqEntries = getFaqEntries();
+  // No-drift: returned answer must exactly equal a getSupportChatFaqEntries() entry's .answer
+  const faqEntries = getSupportChatFaqEntries();
   const matchedFaq = faqEntries.find((e) => e.answer === result.answer);
   if (!matchedFaq) {
     fail(
       "answer grounded to FAQ entry",
-      "answer text does not exactly match any getFaqEntries() .answer (possible drift)"
+      "answer text does not exactly match any getSupportChatFaqEntries() .answer (possible drift)"
     );
     return;
   }
@@ -494,7 +494,7 @@ async function expectRoute(question: string, expectedId: string): Promise<void> 
     fail(`"${question}" → id ${expectedId}`, `answered=${result.answered} (expected a deflection)`);
     return;
   }
-  const matchedFaq = getFaqEntries().find((e) => e.answer === result.answer);
+  const matchedFaq = getSupportChatFaqEntries().find((e) => e.answer === result.answer);
   if (!matchedFaq) {
     fail(`"${question}" grounded`, "answer matches no FAQ entry (drift)");
     return;
@@ -604,7 +604,7 @@ async function run() {
   }
 
   console.log("PASS — deflection test");
-  console.log(`  FAQ entries available : ${getFaqEntries().length}`);
+  console.log(`  FAQ entries available : ${getSupportChatFaqEntries().length}`);
   console.log("  Covered: draw date, pricing (source-tied), refund, eligibility (excluded states), off-topic×2, Layer-2 coverage, cancel self-service, stop auto-renewal, unexpected charge, delete account, determinism, upgrade membership, pause membership");
   process.exit(0);
 }

@@ -1,5 +1,9 @@
 # Dashboard-Account — Gotchas
 
+## Membership management path: no "Settings → Subscription" tab (2026-07-07)
+
+The 2026-07 revamp removed the tabbed Settings IA (`?tab=subscription`/`payment`). Membership management is now the **Manage sheet** (`useDashboardSheetStore.openSheet("manage")`), reached from the **Membership page** (`/my-account/membership`) "Manage plan" button or the `/my-account?open=subscription` deep-link; payment is the **Payment sheet**. Settings holds only Profile / Theme / Password. Copy that referenced "Settings → Subscription" was corrected — the dashboard SupportSheet FAQ ("cancel my membership" → "Membership → Manage plan") and the membership-page change-tier comment. Chatbot copy lives separately (see [ai-chatbot/gotchas.md](../ai-chatbot/gotchas.md)).
+
 ## Landing-trigger storage
 
 `dashboard-landing-session.ts` and `dashboard-entry-hold.ts` use sessionStorage. If user opens multiple tabs, each has its own session — landing experiences may re-fire.

@@ -4,6 +4,16 @@ Hard-won lessons. Read before touching the widget mount, the route runtime, or t
 
 ---
 
+## FAQ corpus is decoupled from the /faq page + "Settings → Subscription" is dead (2026-07-07)
+
+The chatbot's FAQ knowledge is **NOT** the `/faq` page's data anymore:
+- **`src/data/faqs.ts`** = the `/faq` **page only** (generic, owner-controlled — order/shipping/payment/rewards/partner). Reverted to the owner's original set; do not add chatbot knowledge here. It still exports the shared `FaqEntry` type.
+- **`src/data/supportChatFaqs.ts`** = the **Cobber corpus** (`getSupportChatFaqEntries()`) — feeds ONLY the deflection matcher (`decisionTree` + `faqSearch`) and the knowledge pack. Edit chatbot FAQs HERE, then `npm run build:chat-knowledge-pack`. Consumers: `knowledge/retrieve.ts`, `deflection/decisionTree.ts`, `scripts/build-chat-knowledge-pack.ts`, and the tests. **Don't** repoint them back to `faqs.ts` (that would put the 7-entry page set into the bot).
+
+**Membership management nav — "Settings → Subscription" was REMOVED** in the 2026-07 dashboard revamp (the tabbed `?tab=` IA is gone). Everything that manages membership (cancel / pause / upgrade / downgrade / reactivate / change tier / view renewal + tier) now lives on **My Account → Membership → Manage plan** (the "manage" sheet; deep-link `/my-account?open=subscription`). Payment methods → the Membership page's Payment sheet. Profile → Settings. This was fixed across `supportChatFaqs.ts` (10 refs), `systemPrompt.ts` (locations + rules), the pack builder's hardcoded prose + key-pages map, and main's dashboard SupportSheet. `test:chat-faqs` now locks that NO "Settings → Subscription" string reappears.
+
+---
+
 ## Guest generative access + per-actor provider routing (2026-07-07)
 
 Two coupled controls let guests get AI answers cheaply while members keep the quality model:

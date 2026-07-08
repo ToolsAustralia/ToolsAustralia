@@ -21,7 +21,7 @@
  *   the majority of support traffic.
  */
 
-import { getFaqEntries } from "@/data/faqs";
+import { getSupportChatFaqEntries } from "@/data/supportChatFaqs";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -755,7 +755,7 @@ export function resolveToFaqEntry(faqId: string): {
   answer: string;
   source: { id: string; title: string };
 } | null {
-  const entry = getFaqEntries().find((e) => e.id === faqId);
+  const entry = getSupportChatFaqEntries().find((e) => e.id === faqId);
   if (!entry) return null;
   return {
     answer: entry.answer,

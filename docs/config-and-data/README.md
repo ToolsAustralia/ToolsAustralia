@@ -2,13 +2,14 @@
 
 Static config (feature flags, brand theme, prizes), constants (z-index, legal, promo banner), seed data (australian states, professions, sample products/users/winners).
 
-## `src/data/faqs.ts` — FAQ entries (updated 2026-06-27)
+## FAQ data — TWO separate sources (decoupled 2026-07-07)
 
-**Single source of truth** for the `/faq` page, the Cobber support-chat **deflection matcher** (decisionTree intent rules + faqSearch TF-IDF cosine), AND the generated **knowledge pack** the LLM is grounded on. Add support knowledge HERE (never by hand-copying doc prose into the pack builder) so all three stay in sync with zero drift. FAQ answers support markdown (links render via `ChatMarkdown` in the widget and on the `/faq` page).
+- **`src/data/faqs.ts`** — feeds the **`/faq` page ONLY**. This is the small, generic owner-controlled set (order/shipping/payment/rewards/partner). Do **not** add chatbot knowledge here — the page is the owner's, kept as-is. It still exports the shared `FaqEntry` type + `faqCategories`.
+- **`src/data/supportChatFaqs.ts`** — the **Cobber chatbot corpus** (`getSupportChatFaqEntries()`). Feeds ONLY the chatbot: the **deflection matcher** (decisionTree intent rules + faqSearch TF-IDF cosine) and the generated **knowledge pack** the LLM is grounded on. It is NOT rendered on the `/faq` page. Add support knowledge HERE (never by hand-copying prose into the pack builder), then re-run `npm run build:chat-knowledge-pack`. Answers support markdown (rendered via `ChatMarkdown` in the widget).
 
-**Vocabulary:** customer-facing copy says **"membership"**, not "subscription" (project naming rule); the literal **"Settings → Subscription"** references are kept verbatim because that is the actual My-Account tab label. Test `test:chat-faqs` enforces "Membership entries" present and "subscription entries" absent.
+**Vocabulary:** customer-facing copy says **"membership"**, not "subscription" (project naming rule). Membership management (cancel / pause / upgrade / downgrade / reactivate / view tier + renewal) lives on **My Account → Membership → Manage plan** — the old **"Settings → Subscription"** tab was **REMOVED** in the 2026-07 dashboard revamp; never reference it. Test `test:chat-faqs` enforces "Membership entries" present, "subscription entries" absent, and NO "Settings → Subscription".
 
-**Current entries (as of 2026-06-26):**
+**Chatbot corpus entries (`supportChatFaqs.ts`, as of 2026-07-07):**
 
 | id | Question | Category |
 |----|----------|----------|

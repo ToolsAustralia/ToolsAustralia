@@ -4,7 +4,7 @@
 
 ### `src/data/__tests__/faqs.test.ts` — `npm run test:chat-faqs`
 
-Regression suite for `src/data/faqs.ts`. Added 2026-06-24 when the FAQ content was rewritten from stale e-commerce boilerplate (PayPal, international shipping, 3-5 business day shipping) to the real membership/giveaway domain.
+Regression suite for the **chatbot FAQ corpus** `src/data/supportChatFaqs.ts` (repointed 2026-07-07 when the corpus was split out of `faqs.ts`; the `/faq` page's `faqs.ts` is a separate generic owner-controlled set). Added 2026-06-24 when the FAQ content was rewritten from stale e-commerce boilerplate (PayPal, international shipping, 3-5 business day shipping) to the real membership/giveaway domain. Now also asserts NO stale "Settings → Subscription" tab reference (removed in the 2026-07 dashboard revamp).
 
 Asserts:
 - `getFaqEntries()` returns a non-empty array of well-formed entries with valid `id`, `question`, `answer`, and `category` fields.

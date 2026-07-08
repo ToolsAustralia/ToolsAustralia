@@ -13,7 +13,7 @@ const FAQS = [
   { q: "When is the major draw?", a: "Live on Facebook at 8:30 PM AEST on the 27th of each month. Entries freeze at 8:00 PM AEST that day." },
   { q: "How do I get more entries?", a: "Every membership and one-time package comes with free entries. Buy a package or upgrade your tier from the Membership tab — the more you hold at freeze time, the more entries you have." },
   { q: "How do partner discounts work?", a: "Active members and one-time-pack holders unlock a percentage of our partner catalogue. Open the partner portal from Rewards — you're signed in automatically." },
-  { q: "How do I cancel my membership?", a: "Membership → Manage plan (or Settings → Subscription). You keep access until the end of your current billing period." },
+  { q: "How do I cancel my membership?", a: "Membership → Manage plan. You keep access until the end of your current billing period." },
 ];
 
 function Faq({ q, a }: { q: string; a: string }) {
