@@ -4,6 +4,20 @@ Hard-won lessons. Read before touching the widget mount, the route runtime, or t
 
 ---
 
+## Guest generative access + per-actor provider routing (2026-07-07)
+
+Two coupled controls let guests get AI answers cheaply while members keep the quality model:
+
+- **`CHAT_ALLOW_GUEST_GENERATIVE`** (env, default off). When **on**, anonymous guests **skip the hCaptcha gate** in `ChatService` and reach the LLM directly — protected only by the per-IP generative rate limit (5/300s) + the daily budget. When **off**, the gate stays **fail-closed** (guests are FAQ-only). The flag is resolved once at module load (`GUEST_GENERATIVE_ALLOWED`) — **flipping it needs a redeploy/cold start**, and it is server-env only (never client-flippable; the route passes nothing client-derived into `deps.allowGuestGenerative`).
+- **`resolveActorProvider(actorKind, resolveActive)`** ([chatSettings.ts](../../src/lib/support-chat/chatSettings.ts)) routes **anonymous → Gemini** (`GUEST_CHAT_PROVIDER = "google"`, ~10× cheaper than Haiku) and **member → the admin-toggled provider** (`getActiveChatProvider`, default `anthropic`). Guest turns short-circuit — they never await the DB active-provider read. A member reaches Gemini only via the explicit admin toggle; a guest can never reach Anthropic.
+
+**Footguns (verified by adversarial review):**
+- **Guests now REQUIRE `GOOGLE_GENERATIVE_AI_API_KEY`.** With the flag on, *every* guest turn routes to Gemini — so a missing Google key makes 100% of guest generative turns silently degrade to the canned `MODEL_ERROR_FALLBACK_TEXT` (no crash — `assertProviderApiKey` throws at construction, caught → canned + `ErrorReport`). Set the Google key whenever `CHAT_ALLOW_GUEST_GENERATIVE=true`. `.env.example` documents this.
+- **The gate skip is all-or-nothing.** With the flag on, the ENTIRE anonymous captcha block is skipped (`verifyHcaptcha`, `isAnonConversationVerified`, `markHumanVerified` never run); `freshlyVerified` stays false so guest conversations get no `humanVerifiedAt`. If you later turn the flag OFF, resumed guest conversations correctly fail closed (require a fresh captcha).
+- **Budget is the only hard guest cap.** The per-IP generative limiter fails *open*; `assertWithinBudget` (fail-closed, runs before the gate) is the real backstop. On Gemini the budget stretches ~10× further, so a burst overshoot is cheap — acceptable by design. Locked by `guest-gate.test.ts` "allowGuestGenerative=true → captcha skipped" + `chat-settings.test.ts` "resolveActorProvider".
+
+---
+
 ## Launcher placement — collision-aware, not per-page hardcoding (2026-07-07)
 
 The floating bubble mustn't overlap the site's OTHER bottom-anchored floaters (the draw countdown banner `FloatingCountdownBanner`, the promotions "get entries" bar `FloatingGetEntriesButton`, the upsell gift `FloatingGiftIcon`). Researched pattern (Intercom/Zendesk/Material): keep a persistent corner FAB and **lift it above** the obstacle — never hide it, never move it into a menu.

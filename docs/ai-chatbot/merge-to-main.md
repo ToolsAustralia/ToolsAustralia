@@ -88,12 +88,14 @@ The new admin read `GET /api/admin/chatbot-cost` is **not** mirrored to internal
 ### 4f. 🟢 TASK — cleanup
 Remove the manifest **ghost path** `scripts/embed-chat-knowledge.ts` from the `support-chat` domain in `CLAUDE.md` (the file doesn't exist — Phase 1 uses offline TF-IDF, no embeddings).
 
-### 4g. ✅ DECIDED — hCaptcha deferred; guests are FAQ-only at launch
-Owner decision (2026-07-07): **skip hCaptcha for the initial release** (cost). Leave `HCAPTCHA_SECRET` / `NEXT_PUBLIC_HCAPTCHA_SITEKEY` **unset**. This needs **no code** — it's the default: because `verifyHcaptcha` fails **closed**, anonymous visitors get free FAQ deflection + a "sign in to chat" nudge for anything the FAQ can't answer, and signed-in **members** (incl. everyone on `/my-account`) get the **full generative bot**. So there is **zero anonymous exposure on the paid path** (guests can't reach it); the daily budget (`CHAT_DAILY_TOKEN_BUDGET_USD`) remains the hard spend cap for members. hCaptcha isn't the cost cap — the daily budget is — so deferring it doesn't raise cost risk.
+### 4g. ✅ DECIDED — hCaptcha deferred; guest access via the open gate (guests → Gemini)
+hCaptcha is **skipped** for the initial release (cost) — leave `HCAPTCHA_SECRET` / `NEXT_PUBLIC_HCAPTCHA_SITEKEY` **unset**. hCaptcha isn't the cost cap; the daily budget is.
 
-To let guests get AI answers **later**, pick one:
-- **hCaptcha** — set the two env vars (captcha-gated guest generative). Already built + tested; no code.
-- **Open the gate** — add a `CHAT_ALLOW_GUEST_GENERATIVE`-style flag (~10 lines) so guests reach the LLM behind the rate-limit + daily-budget only. **Not built now** (no speculative flag per CLAUDE.md §4); wire it when the decision is made. Watch the admin Chatbot Cost page + `ChatAuditLog` anonymous rows and set a conservative budget ($2–3/day) if you go this route.
+Guest access is controlled by **`CHAT_ALLOW_GUEST_GENERATIVE`** (built 2026-07-07):
+- **Unset / `false` (default):** guests are **FAQ-only** — `verifyHcaptcha` fails closed, so a guest's non-FAQ turn gets a "sign in to chat" nudge. Members (incl. everyone on `/my-account`) get the full bot. Zero anonymous exposure on the paid path.
+- **`true`:** guests **reach the LLM without hCaptcha**, routed to **Gemini** (`resolveActorProvider` → `google`, ~10× cheaper), protected by the per-IP rate limit + the daily budget. **Requires `GOOGLE_GENERATIVE_AI_API_KEY`** (guests always use Gemini) or guest turns degrade to the canned reply.
+
+Owner's chosen launch posture: **open guests on Gemini** (`CHAT_ALLOW_GUEST_GENERATIVE=true` + the Google key), so the risky/high-volume anonymous segment runs on the cheap model while members keep the admin-toggled provider. The daily budget stretches ~10× on Gemini (~6,100 guest answers/$5-day). Watch the admin Chatbot Cost page + `ChatAuditLog` anonymous rows; revert to FAQ-only by unsetting the flag. Fully covered in [gotchas.md § Guest generative access](./gotchas.md).
 
 ## 5. Production env checklist
 
@@ -106,7 +108,8 @@ To let guests get AI answers **later**, pick one:
 | `CHAT_DAILY_TOKEN_BUDGET_USD` | No (`5`) | Hard app-level daily USD ceiling. Once exceeded, the LLM path streams the canned "busy" reply; **free FAQ deflection keeps working** (§4c). This is the real spend cap. |
 | `CHAT_MODEL_PRIMARY`/`ESCALATION` | No | Default `claude-haiku-4-5` / `claude-sonnet-4-6`. |
 | `CHAT_GENERATIVE_LIMIT_MAX`/`WINDOW_SECONDS` | No | Per-user LLM cap (default 5/300s); FAQ never counts; fails open. |
-| `GOOGLE_GENERATIVE_AI_API_KEY` (+ `CHAT_GOOGLE_MODEL_*`) | Only if provider toggled to Google | Toggling to Google without it degrades every turn to canned. |
+| `CHAT_ALLOW_GUEST_GENERATIVE` | **Set `true`** for the chosen launch posture (§4g) | Off (default) → guests FAQ-only. On → guests get generative answers on **Gemini** without hCaptcha (rate-limit + budget guard them). Requires the Google key below. |
+| `GOOGLE_GENERATIVE_AI_API_KEY` (+ `CHAT_GOOGLE_MODEL_*`) | **Yes if `CHAT_ALLOW_GUEST_GENERATIVE=true`** (guests always use Gemini), or if the member provider is toggled to Google | Missing → every guest turn (and any Gemini-toggled member turn) degrades to the canned reply. |
 
 ## 6. How to land it
 

@@ -73,7 +73,10 @@ import {
   recordUsage as realRecordUsage,
 } from "@/lib/support-chat/costGuard";
 import { getChatModel } from "@/lib/support-chat/provider";
-import { getActiveChatProvider as realGetActiveChatProvider } from "@/lib/support-chat/chatSettings";
+import {
+  getActiveChatProvider as realGetActiveChatProvider,
+  resolveActorProvider,
+} from "@/lib/support-chat/chatSettings";
 import { getCurrentPromoBlurb } from "@/services/support-chat/currentPromo";
 import { getKnowledgePack } from "@/lib/support-chat/knowledge/pack";
 import { buildSystemPrompt } from "@/services/support-chat/systemPrompt";
@@ -96,9 +99,17 @@ import { createDistributedRateLimiter } from "@/utils/security/rateLimiter";
 // Env vars (see .env.example):
 //   CHAT_GENERATIVE_LIMIT_MAX            — integer; default 5
 //   CHAT_GENERATIVE_LIMIT_WINDOW_SECONDS — integer (seconds); default 300 (5 min)
+//   CHAT_ALLOW_GUEST_GENERATIVE          — "true" to let anonymous guests reach the
+//                                          LLM WITHOUT hCaptcha (default off = FAQ-only)
 
 const _genMax = Number(process.env.CHAT_GENERATIVE_LIMIT_MAX);
 const _genWindowSec = Number(process.env.CHAT_GENERATIVE_LIMIT_WINDOW_SECONDS);
+
+// When true, anonymous guests skip the hCaptcha gate and get generative answers
+// (routed to Gemini via resolveActorProvider), protected only by the per-IP rate
+// limit + the daily budget. Default OFF → guests stay FAQ-only (fail-closed).
+const GUEST_GENERATIVE_ALLOWED: boolean =
+  process.env.CHAT_ALLOW_GUEST_GENERATIVE === "true";
 
 const GEN_MAX: number = Number.isFinite(_genMax) && _genMax > 0 ? _genMax : 5;
 const GEN_WINDOW_MS: number =
@@ -237,6 +248,12 @@ export interface ChatServiceDeps {
    * Inject a stub in tests to avoid real network calls.
    */
   verifyHcaptcha?: typeof realVerifyHcaptcha;
+  /**
+   * When true, anonymous guests skip the hCaptcha gate entirely (open guest
+   * generative access). Defaults to the CHAT_ALLOW_GUEST_GENERATIVE env flag.
+   * Inject in tests to exercise both the gated and open paths.
+   */
+  allowGuestGenerative?: boolean;
   /**
    * Generative rate-limit check. Defaults to the module-level `generativeLimiter`.
    * Inject a stub in tests to force success or failure without Mongo.
@@ -544,6 +561,7 @@ export const chatService = {
     const persist = deps.persist ?? defaultPersist;
     const escalate = deps.escalateToHuman ?? realEscalateToHuman;
     const verifyHcaptchaFn = deps.verifyHcaptcha ?? realVerifyHcaptcha;
+    const allowGuestGenerative = deps.allowGuestGenerative ?? GUEST_GENERATIVE_ALLOWED;
     const checkGenerativeLimit =
       deps.checkGenerativeLimit ??
       ((key: string) => generativeLimiter.check(key));
@@ -607,7 +625,11 @@ export const chatService = {
     // "the conversation was already verified" (do NOT re-stamp) — even though
     // the resumed client may also send a token on every turn.
     let freshlyVerified = false;
-    if (ctx.actor.kind === "anonymous") {
+    // Skip the hCaptcha gate entirely when guest generative access is open
+    // (CHAT_ALLOW_GUEST_GENERATIVE) — guests then reach the LLM directly, protected
+    // by the per-IP generative rate limit + the daily budget, and are routed to the
+    // cheap provider (Gemini) below. When the flag is OFF this stays fail-closed.
+    if (ctx.actor.kind === "anonymous" && !allowGuestGenerative) {
       // Check whether the resumed conversation is already human-verified.
       let alreadyVerified = false;
       if (input.conversationId) {
@@ -682,8 +704,10 @@ export const chatService = {
       if (deps.getModel) {
         model = deps.getModel();
       } else {
-        const resolveProvider = deps.getActiveChatProvider ?? realGetActiveChatProvider;
-        const provider = await resolveProvider();
+        const resolveActive = deps.getActiveChatProvider ?? realGetActiveChatProvider;
+        // Guests → Gemini (cheap); members → the admin-toggled provider. Guest turns
+        // short-circuit before the DB read for the active provider.
+        const provider = await resolveActorProvider(ctx.actor.kind, resolveActive);
         model = getChatModel("primary", provider);
         const resolvePromo = deps.getCurrentPromo ?? getCurrentPromoBlurb;
         currentPromo = await resolvePromo();

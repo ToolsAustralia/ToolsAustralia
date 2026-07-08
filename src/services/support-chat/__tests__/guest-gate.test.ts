@@ -502,6 +502,69 @@ async function testMemberNoGate() {
   pass("member + miss → model called, verifyHcaptcha NOT called, writeAudit(200)");
 }
 
+// ─── Gate case 7: allowGuestGenerative=true → anon skips captcha entirely ─────
+
+async function testGuestGenerativeOpen() {
+  console.log("\ngate — allowGuestGenerative=true: anonymous + miss + NO token → model called (captcha skipped)");
+
+  const { ctx, writeAuditCalls } = makeCtx({ kind: "anonymous", ipKey: "1.2.3.4" });
+  const { port, markHumanVerifiedCalls, isAnonVerifiedCalls } = makePersistStub();
+  const stream = makeStreamStub(true);
+  let verifyCalled = false;
+
+  const deps: ChatServiceDeps = {
+    tryDeflect: async () => ({ answered: false }),
+    assertWithinBudget: async () => ({ ok: true }),
+    recordUsage: async () => {},
+    streamFn: stream.streamFn,
+    persist: port,
+    escalateToHuman: async () => ({ submissionId: "x" }),
+    getModel: () => ({ modelId: "gemini-2.5-flash-lite" }) as never,
+    verifyHcaptcha: async () => {
+      verifyCalled = true;
+      return false;
+    },
+    // The open-guest flag — anonymous guests reach the LLM WITHOUT hCaptcha.
+    allowGuestGenerative: true,
+  };
+
+  const res = await chatService.respond(
+    // NO hcaptchaToken — proves the gate is skipped, not passed.
+    { ctx, messages: [userMessage("An LLM question the FAQ can't answer")] },
+    deps
+  );
+
+  await res.text();
+  await new Promise((r) => setTimeout(r, 10));
+
+  if (res.status !== 200) {
+    fail("status 200 (LLM path, gate open)", `got ${res.status}`);
+    return;
+  }
+  if (stream.calls !== 1) {
+    fail("model called exactly once", `streamFn called ${stream.calls} times`);
+    return;
+  }
+  if (verifyCalled) {
+    fail("verifyHcaptcha NOT called (gate open)", "was called");
+    return;
+  }
+  if (isAnonVerifiedCalls.length > 0) {
+    fail("isAnonConversationVerified NOT consulted (gate open)", `called ${isAnonVerifiedCalls.length} times`);
+    return;
+  }
+  if (markHumanVerifiedCalls.length > 0) {
+    fail("markHumanVerified NOT called (no captcha)", `called ${markHumanVerifiedCalls.length} times`);
+    return;
+  }
+  if (!writeAuditCalls.includes(200)) {
+    fail("writeAudit(200) called", `got ${JSON.stringify(writeAuditCalls)}`);
+    return;
+  }
+
+  pass("allowGuestGenerative=true → anon + no token → model called, captcha fully skipped, writeAudit(200)");
+}
+
 // ─── verifyHcaptcha unit tests ────────────────────────────────────────────────
 
 async function testVerifyHcaptchaEmptyToken() {
@@ -641,6 +704,7 @@ async function run() {
   await testAnonAlreadyVerified();
   await testAnonDeflectionAnswered();
   await testMemberNoGate();
+  await testGuestGenerativeOpen();
 
   // verifyHcaptcha unit tests
   await testVerifyHcaptchaEmptyToken();

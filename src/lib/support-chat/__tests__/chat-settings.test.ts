@@ -12,6 +12,7 @@ import assert from "node:assert/strict";
 import {
   getActiveChatProvider,
   setActiveChatProvider,
+  resolveActorProvider,
 } from "../chatSettings";
 import type { ChatProvider } from "../chatSettings";
 
@@ -142,11 +143,41 @@ async function testSetActiveChatProvider() {
   }
 }
 
+// ─── resolveActorProvider ─────────────────────────────────────────────────────
+
+async function testResolveActorProvider() {
+  console.log("\nresolveActorProvider");
+
+  // 8. anonymous (guest) → always "google" (Gemini), and resolveActive is NOT called.
+  {
+    let activeCalled = false;
+    const result = await resolveActorProvider("anonymous", async () => {
+      activeCalled = true;
+      return "anthropic";
+    });
+    expect("anonymous → 'google' (guest = Gemini)", result, "google");
+    expect("anonymous → resolveActive NOT consulted", activeCalled, false);
+  }
+
+  // 9. member → the resolved active provider ("anthropic").
+  {
+    const result = await resolveActorProvider("member", async () => "anthropic");
+    expect("member + active 'anthropic' → 'anthropic'", result, "anthropic");
+  }
+
+  // 10. member → the resolved active provider ("google") when toggled.
+  {
+    const result = await resolveActorProvider("member", async () => "google");
+    expect("member + active 'google' → 'google'", result, "google");
+  }
+}
+
 // ─── runner ───────────────────────────────────────────────────────────────────
 
 async function run() {
   await testGetActiveChatProvider();
   await testSetActiveChatProvider();
+  await testResolveActorProvider();
 
   console.log(`\n${"─".repeat(60)}`);
   if (failures > 0) {
