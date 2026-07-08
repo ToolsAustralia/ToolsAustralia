@@ -1,5 +1,9 @@
 # Promo — Frontend
 
+## /promotions gallery filter — full-width sticky bar at `top-0` (2026-07-08)
+
+`GiveawayGalleryClient` filter dock was `sticky top-16 sm:top-20` inside a `SectionContainer` — the `top-16/20` was meant to clear a fixed PromoBanner, but on `/promotions` the PromoBanner is rendered **in-flow** (`followOnScroll={false}`, [page.tsx](../../src/app/promotions/page.tsx)) and there's **no fixed header** (the gallery is chrome-free), so that offset left a big empty gap above the filter once it stuck. Fixed: the dock is now a **full-width sticky bar** (`sticky top-0 w-full`, edge-to-edge glass + bottom border) pulled OUT of `SectionContainer` (rendered directly in the page's full-width `<main>`), with its content still in an inner `max-w-7xl` container. The grid sits in its own `SectionContainer` below. **Note:** `top-0` is correct only because nothing is fixed above the gallery here — do NOT copy this to the `[slug]` pages, where the PromoBanner IS a fixed scroll-follow pill.
+
 ## FloatingCountdownBanner "Enter Now" → `/promotions` (2026-07-08)
 
 The floating countdown banner's `handleViewDetails` ("Enter Now" / "Visit Page") now navigates to the **`/promotions` gallery landing**, not `/promotions/${DEFAULT_PRIZE_SLUG}` (owner request). The `?aff` affiliate param is still preserved. Consistent with `/promotions` now being the real root gallery (it used to bare-redirect to `DEFAULT_PRIZE_SLUG`). The `DEFAULT_PRIZE_SLUG` import was dropped from the banner. Other default-slug links (Footer, WinnerCard, HorizontalCountdown, admin promo/affiliate link builders) were **left as-is** — only this banner was changed.
