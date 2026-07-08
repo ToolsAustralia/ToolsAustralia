@@ -4,7 +4,7 @@
 
 Per CLAUDE.md:
 - **SendGrid** — transactional email (verification, password reset, login code, staff invite, contact/partner notifications, admin replies, **major-draw winner**, **referral reward**), sent from code via `EmailService`.
-- **Klaviyo** — marketing / lifecycle email (invoice receipt, renewal success/failed, signup payment failed, future draw reminder). The code only **tracks events**; the email/flow lives in the Klaviyo UI. The hardened HTML is pasted into Klaviyo manually.
+- **Klaviyo** — marketing / lifecycle email (invoice receipt, renewal success/failed, signup payment failed). The code only **tracks events**; the email/flow lives in the Klaviyo UI. The hardened HTML is pasted into Klaviyo manually.
 
 ## 2026 design system
 
@@ -36,7 +36,6 @@ All transactional templates share one visual family (dark industrial navy header
 | `subscription-renewal-email-template.html` | `klaviyo/` | **Klaviyo** — `Subscription Renewed` | Django |
 | `renewal-failed-email-template.html` | `klaviyo/` | **Klaviyo** — `Subscription Renewal Failed` | Django |
 | `subscription-payment-failed-email-template.html` | `klaviyo/` | **Klaviyo** — `Subscription Payment Failed` (signup) | Django |
-| `draw-reminder-email-template.html` | `klaviyo/` | **NOT WIRED** — prepared for future use (no event/cron triggers it yet) | Django |
 
 ## Wired SendGrid emails of note (2026)
 
@@ -66,7 +65,7 @@ Every `{{ event.X }}` / `{{ person.X }}` in a Klaviyo template MUST match a real
 | `renewal-failed-email-template.html` | Failed Membership Renewal | Subscription Renewal Failed | `event.failure_reason/amount/package_name/failure_message/failure_code/payment_intent_id/entries/entries_formatted` |
 | `subscription-payment-failed-email-template.html` | Failed Membership Purchase | Subscription Payment Failed | uses **`event.price`** — this metric has **no `amount`** field — plus `event.failure_reason/failure_code/failure_message/package_name/payment_intent_id` |
 
-`person.*` are profile (not event) properties: `first_name`, `current_draw_name`, `current_draw_entries`, etc. The unwired `draw-reminder` uses `person.current_draw_entries` (NOT `current_entries`).
+`person.*` are profile (not event) properties: `first_name`, etc.
 
 ## Preview app
 

@@ -15,7 +15,6 @@ import MiniDrawFullCapacityPreview from "./MiniDrawFullCapacityPreview";
 import WinnerEmailPreview from "./WinnerEmailPreview";
 import ReferralRewardEmailPreview from "./ReferralRewardEmailPreview";
 import StaffInvitePreview from "./StaffInvitePreview";
-import DrawReminderPreview from "./DrawReminderPreview";
 
 export type EmailPreviewTabId =
   | "verification"
@@ -31,8 +30,7 @@ export type EmailPreviewTabId =
   | "invoice"
   | "subscription-renewal"
   | "renewal-failed"
-  | "payment-failed"
-  | "draw-reminder";
+  | "payment-failed";
 
 type Badge = "SendGrid" | "Klaviyo" | "Future";
 type NavItem = { id: EmailPreviewTabId; label: string; badge: Badge };
@@ -71,7 +69,6 @@ const NAV: NavGroup[] = [
       { id: "subscription-renewal", label: "Renewal success", badge: "Klaviyo" },
       { id: "renewal-failed", label: "Renewal failed", badge: "Klaviyo" },
       { id: "payment-failed", label: "Signup failed", badge: "Klaviyo" },
-      { id: "draw-reminder", label: "Draw reminder", badge: "Future" },
     ],
   },
 ];
@@ -126,8 +123,6 @@ const EmailPreviewLayout: React.FC = () => {
         return <RenewalFailedPreview />;
       case "payment-failed":
         return <PaymentFailedPreview />;
-      case "draw-reminder":
-        return <DrawReminderPreview />;
       default:
         return null;
     }
