@@ -30,6 +30,14 @@ Two coupled controls let guests get AI answers cheaply while members keep the qu
 
 ---
 
+## Widget visual system — adaptive brand accent, fixed semantics (2026-07-07)
+
+The `SupportChatWidget` "Workshop" redesign replaced the old fixed **orange** with an **adaptive brand accent**:
+- `usePromoTheme()` supplies `accent = theme.primary` / `accentDeep = theme.primaryDark`; a pure `accentInk(hex)` helper picks **dark ink** when the accent is light (luminance > 0.62 — DeWalt yellow, Ryobi lime) else **white**. These are exposed as CSS custom props (`--cob-acc`, `--cob-acc-deep`, `--cob-acc-ink`) on the launcher + panel `style`, consumed via Tailwind arbitrary values (`bg-[var(--cob-acc)]`, gradients inline). Because `usePromoTheme()` **defaults to Milwaukee (Tools Australia red)**, off-promo pages get red automatically — no special-casing.
+- **The accent is used ONLY for:** launcher, header band, your-message bubbles, send, quick-reply chips, the welcome "Cobber" highlight, and assistant message links (`[&_a]:text-[var(--cob-acc)]` — out-specificities ChatMarkdown's hardcoded link colour).
+- **Semantics are FIXED regardless of brand** (do NOT wire these to the accent, or they vanish into a same-hue brand): **green** Online dot, **amber** notices (rate-limit / busy / captcha — heading amber, body neutral-ink for contrast), **red** hard error. On green/yellow brands the notices stay distinct via border + label, not colour alone.
+- Other changes: messages are **grouped** by run (one `CobberMini` avatar per assistant run, warm sand bubbles, `motion-safe` slide-in), a crafted **welcome/empty state**, slimmer header, and the existing **cobber.png** avatar is kept (DRY'd into `CobberMini` + `COBBER_AVATAR`). **Source-citation chips were designed but NOT built** — the citation data isn't streamed to the client yet (a separate backend task).
+
 ## Launcher placement — collision-aware, not per-page hardcoding (2026-07-07)
 
 The floating bubble mustn't overlap the site's OTHER bottom-anchored floaters (the draw countdown banner `FloatingCountdownBanner`, the promotions "get entries" bar `FloatingGetEntriesButton`, the upsell gift `FloatingGiftIcon`). Researched pattern (Intercom/Zendesk/Material): keep a persistent corner FAB and **lift it above** the obstacle — never hide it, never move it into a menu.
