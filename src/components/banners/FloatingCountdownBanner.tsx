@@ -6,7 +6,6 @@ import { X, Lock } from "lucide-react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { useCurrentMajorDraw, useNextDraw } from "@/hooks/queries/useMajorDrawQueries";
 import { useLeafTimer } from "@/hooks/useLeafTimer";
-import { DEFAULT_PRIZE_SLUG } from "@/config/prizes";
 import { cn } from "@/utils/cn";
 import { addRAFScrollListener } from "@/utils/dom/listenerHelpers";
 
@@ -133,15 +132,11 @@ const FloatingCountdownBanner: React.FC<FloatingCountdownBannerProps> = ({ class
     setIsDismissed(true);
   };
 
-  // Navigate to giveaway page using the default prize slug
-  // This ensures we always navigate to an existing promotional page
+  // Navigate to the promotions gallery landing (not a specific prize slug).
   const handleViewDetails = () => {
     // Preserve affiliate code from URL if present (App Router compatible)
     const affiliateCode = searchParams.get("aff");
-    const newUrl = affiliateCode 
-      ? `/promotions/${DEFAULT_PRIZE_SLUG}?aff=${affiliateCode}`
-      : `/promotions/${DEFAULT_PRIZE_SLUG}`;
-    
+    const newUrl = affiliateCode ? `/promotions?aff=${affiliateCode}` : "/promotions";
     router.push(newUrl);
   };
 

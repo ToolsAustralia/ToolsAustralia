@@ -1,5 +1,9 @@
 # Promo — Frontend
 
+## FloatingCountdownBanner "Enter Now" → `/promotions` (2026-07-08)
+
+The floating countdown banner's `handleViewDetails` ("Enter Now" / "Visit Page") now navigates to the **`/promotions` gallery landing**, not `/promotions/${DEFAULT_PRIZE_SLUG}` (owner request). The `?aff` affiliate param is still preserved. Consistent with `/promotions` now being the real root gallery (it used to bare-redirect to `DEFAULT_PRIZE_SLUG`). The `DEFAULT_PRIZE_SLUG` import was dropped from the banner. Other default-slug links (Footer, WinnerCard, HorizontalCountdown, admin promo/affiliate link builders) were **left as-is** — only this banner was changed.
+
 ## /promotions — prize-combinations gallery (2026-07-07, designed — pending owner rating)
 
 Editorial index of every major-draw prize combination, now the PROMOTIONS ROOT (owner call — the old bare
