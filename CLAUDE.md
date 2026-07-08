@@ -134,6 +134,16 @@ The **internal-norm / OpenClaw** gateway (`docs/internal-norm/`) re-exposes admi
 
 The `adding-api-route` skill encodes this as step 7. This rule is not hook-enforced — you're expected to apply it on your own; `/review` should also flag an admin read/shape change that left Norm stale.
 
+### 11. Customer-facing copy — free-entry framing, never gambling (LEGAL)
+
+Tools Australia is an Australian **game-of-chance trade promotion**, **NOT gambling**. This is a legal line. **Every** customer-facing string — Cobber, promo/landing pages, membership + pack UI, mini-draws, checkout/upsell, Klaviyo + SendGrid emails, SEO/meta, SMS/push — MUST follow both rules. Apply them to every new or edited customer string, and flag any existing violation you notice.
+
+1. **No gambling / probability framing.** Never use: "odds", "chance(s) of winning", "boost your chances", "increase your chance", "better odds", "lottery", "lotto", "raffle", "sweepstake", "gamble/gambling", "bet". Never call the platform or its draws a lottery / gambling / raffle. Use: "giveaway", "prize draw", "free entries", "{n}× entries", "more entries". If a user asks "is this gambling / a lottery?", **don't label it** — say it's a tool giveaway where members get **free entries** into monthly prize draws, and point to `/terms`.
+
+2. **Entries are NEVER sold — they are a FREE inclusion.** We legally cannot sell entries. The product a customer buys is the **membership or the one-time / mini pack**; the entries come **free** with it. Never say a member "buys / purchases / pays for entries", and never price entries per unit ("$X per entry", "$X for N entries", "$/entry", "Per Entry", a tier shown as "N entries · $X"). Correct: "the $25 Apprentice pack **includes** 3 free entries", "Tradie ($20/mo) **includes** 15 free entries", "$X/giveaway · includes N free entries". The purchasable unit is the **pack** (canonical mini-draw name: **"Mini Pack"**), never "entries" / "entry pack".
+
+Enforcement: Cobber's FAQ corpus is guarded by `npm run test:chat-faqs` (bans these words) + a HARD RULE in `src/services/support-chat/systemPrompt.ts`; `BUSINESS.md §1` states the model. For the rest of the site this is a **judgment rule** (not hook-enforced) — `/review` should flag violations. Getting this wrong is a **legal exposure** for Tools Australia; treat it as non-negotiable.
+
 ## Commands
 
 Dev/build use **Turbopack**. Both `dev` and `build` first run `prebuild`/`predev` which regenerates the upsell image manifest via `scripts/build-upsell-image-manifest.ts` — if you add/change files under the upsell image directories, that script must succeed before the app will start.
