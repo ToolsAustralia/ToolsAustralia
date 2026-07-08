@@ -6,6 +6,15 @@
 - `/reset-password` — token-based reset
 - `/oauth-redirect` — OAuth callback handling
 
+### Cobber on the auth pages (2026-07-07)
+
+`/login` and `/reset-password` live **outside** the `(site)` route group, so they don't
+inherit `(site)/layout.tsx`'s Cobber support-chat mount. Each now has its own tiny
+`layout.tsx` that renders `<SupportChatWidgetMount />` — a signed-out user stuck on login
+or mid-password-reset is exactly who needs "how do I log in / I forgot my password" help
+(FAQ id 32). The visitor is anonymous, so Cobber answers from free FAQ deflection (+ guest
+LLM when `CHAT_ALLOW_GUEST_GENERATIVE` is on). Keep the two auth layouts in lockstep.
+
 ## Components
 
 [src/components/auth/](../../src/components/auth/) — login form, signup form, password reset, OAuth buttons.
