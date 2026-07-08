@@ -10,6 +10,10 @@ The route also emits `[cancellation-upsell] …` `console.log` lines that are vi
 
 
 
+## Purchase pixel re-fires after Meta's ~48h dedup window (fixed 2026-07-08)
+
+`UpsellSuccessClient.tsx` used to guard the browser Purchase fire with only a per-mount `firedRef`. Meta deduplicates identical `event_id`s for ~48h, so a refresh was harmless — but reopening the same `/upsell-success?payment_intent=...` URL (history, restored tab) **more than 48h after purchase** re-fired a fully-valued Purchase that Meta counted as a brand-new conversion, inflating Meta-reported ROAS. Now guarded persistently via `shouldSuppressPurchasePixel` / `markPurchasePixelFired` ([src/utils/tracking/purchase-pixel-fired-storage.ts](../../src/utils/tracking/purchase-pixel-fired-storage.ts), localStorage key `purchasePixelFired_${paymentIntentId}` holding the FIRST-fire time). The guard is window-aware: re-fires younger than 46h stay allowed (Meta merges them; they recover a silently swallowed first fire), only older re-fires — the ones Meta would count as new — are suppressed. The flag is deliberately **not** cleared on sign-out (no user data; clearing would reintroduce the re-fire), and storage failures (e.g. Safari private mode) degrade to the pre-guard behavior with Meta's 48h dedup as fallback. If you add a new success page that fires Purchase, use the same guard.
+
 ## Image manifest staleness
 
 (Migrated from `docs/UPSELL_IMAGE_SELECTOR.md` — _TODO: read root file and merge._)

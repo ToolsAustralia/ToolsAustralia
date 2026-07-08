@@ -43,13 +43,13 @@ Standard Meta events and where they fire:
 | Event | Browser Pixel | CAPI | Dedup key | Notes |
 |---|---|---|---|---|
 | `PageView` | ✓ (init script + route effect) | ✗ | n/a | Gated off internal routes via `shouldTrackRoute()`. Pixel-only by design — per-page CAPI hit isn't worth the load. |
-| `ViewContent` | ✓ (4-arg fbq) | ✓ (via `/api/facebook/track`) | per-fire UUID (hybrid) | Product / mini-draw pages. Hybrid via `usePixelTracking().trackViewContent` → `fireMetaHybridEvent`. |
+| `ViewContent` | ✓ (4-arg fbq) | ✓ (via `/api/tracking/conversion` mirror) | per-fire UUID (hybrid) | Product / mini-draw pages. Hybrid via `usePixelTracking().trackViewContent` → `fireMetaHybridEvent`. |
 | `AddToCart` | ✓ (4-arg fbq) | ✓ | per-fire UUID (hybrid) | Hybrid via same hook + helper. |
 | `InitiateCheckout` | ✓ (4-arg fbq) | ✓ | per-fire UUID (hybrid) | Fires on `MembershipModal` checkout intent. `/checkout` mock page does NOT fire (shop not live). |
 | `AddPaymentInfo` | ✓ (4-arg fbq) | ✓ | per-fire UUID (hybrid) | Currently no caller — wired in the hook ready for the real shop launch. |
 | `Lead` | ✓ (4-arg fbq) | ✓ | per-fire UUID (hybrid) | Contact form. |
 | `CompleteRegistration` | ✓ (4-arg fbq) | ✓ | `pixelEventId` (server-generated, round-tripped) | Server CAPI in `register/route.ts`, client Pixel in `MembershipModal.tsx`. |
-| `Purchase` | ✓ (4-arg fbq, `action_source=website`) | ✓ (`action_source=system_generated`) | `paymentIntentId` | Hybrid via dedicated Purchase path (not the hook). |
+| `Purchase` | ✓ (4-arg fbq, `action_source=website`) | ✓ (`action_source=system_generated`) | `paymentIntentId` | Hybrid via dedicated Purchase path (not the hook). CAPI `event_time` = actual Stripe charge time via `eventTimeUnixSeconds` (see Hard rule 6). |
 
 Custom events (Meta accepts any name; they show up in Events Manager and are usable for audiences):
 
@@ -115,6 +115,8 @@ Implementation: `shouldTrackRoute(pathname)` helper in `src/utils/tracking/shoul
 3. **fbc must use click-capture time, not event-send time** — see `getFBCFromURL()` (Phase 4 fix).
 4. **Server-initiated events use `action_source: "system_generated"`** — Stripe webhooks have no live browser session. Only checkout-flow client-side fires use `"website"`. (Phase 4 fix.)
 5. **No new event without updating this doc** — every new event_name belongs in the inventory table above.
+6. **Purchase `event_time` is the charge time, not the send time** — pass `eventTimeUnixSeconds` (Stripe charge `created` / invoice `paid_at`, Unix SECONDS) into `buildPurchaseEvent` / `trackPixelPurchase`. Meta books the conversion at `event_time`, so defaulting to "now" shifts pre-midnight purchases into the next day's reporting whenever the webhook lands after midnight. `resolveEventTime` clamps out-of-window values (Meta accepts ≤7 days past; out-of-range rejects the whole `/events` request) and falls back to "now". (2026-07-08 fix.)
+7. **The `/api/tracking/conversion` mirror only accepts the funnel allowlist** — `MIRROR_EVENT_NAMES` in `src/utils/tracking/mirror-event-names.ts` (ViewContent, AddToCart, InitiateCheckout, AddPaymentInfo, Lead, Search). The endpoint is unauthenticated; never add value-bearing events (Purchase / Subscribe / StartTrial) to the allowlist.
 
 ## Common bugs to watch for
 
@@ -123,6 +125,7 @@ Implementation: `shouldTrackRoute(pathname)` helper in `src/utils/tracking/shoul
 - Calling `trackFacebookEvent` server-side expecting it to fire → it's a no-op (checks `typeof window`). Use `sendFacebookEvent` instead.
 - Hashing `fbc` or `fbp` → breaks click attribution. They must be sent plaintext.
 - Putting `+`, spaces, or dashes in phone numbers before hashing → match fails.
+- Passing a **millisecond** epoch (`Date.now()`, `paymentIntent.created * 1000`) as `event_time` → far-future value, Meta rejects the **entire** `/events` request. Route timestamps through `normalizeEpochToUnixSeconds` + `resolveEventTime` (`src/lib/tracking/canonical-event.ts`).
 
 ## The hybrid pattern (reusable for TikTok / Snapchat)
 
@@ -130,10 +133,11 @@ The Meta hybrid Pixel+CAPI flow converges on a single shape that every other ad 
 
 ```
 1. Browser fires Pixel: fbq('track', 'EventName', customData, { eventID: STABLE_ID })
-2. Browser POSTs to:    /api/facebook/track { event_name, event_id: STABLE_ID, custom_data }
+2. Browser POSTs to:    /api/tracking/conversion { eventName, eventId: STABLE_ID, customData }
+                        (eventName must be in the MIRROR_EVENT_NAMES allowlist; /api/facebook/track was removed 2026-05-12)
 3. Server enriches:     user_data (hashed PII from NextAuth session) + fbc/fbp/IP/UA from request
-4. Server fires CAPI:   sendFacebookEvent({ event_id: STABLE_ID, ... action_source: "website" })
-5. Meta dedupes browser + server events by event_id within 48h.
+4. Server fires CAPI:   sendConversion → facebookProvider ({ event_id: STABLE_ID, ... action_source: "website" })
+5. Meta dedupes browser + server events by event_name + event_id within 48h (first-received wins).
 ```
 
 For TikTok and Snapchat, the same `STABLE_ID` flows:

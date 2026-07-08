@@ -142,6 +142,9 @@ npm run test:ui-primitives          # Button, Badge, Card primitives
 npm run test:upsell-shell           # UpsellHero, InfoGrid, UrgencyBanner, TrustBar primitives
 npm run test:cancellation-flow-hook # pure step-machine reducer (offerPhaseFor/nextOfferState) — locks the cursor-driven OFFER phase incl. the 3-rung `other` waterfall
 npm run test:capi-userdata          # Meta CAPI mirror: stripEmpty drops blank PII; guest userData reaches FB CAPI SHA-256-hashed into em/ph/fn/ln
+npm run test:purchase-event-time    # CAPI Purchase event_time = charge time (src/lib/tracking/__tests__/purchase-event-time.test.ts): ms-vs-seconds epoch normalization, and timestamps older than Meta's 7-day attribution window clamp to now
+npm run test:purchase-pixel-fired   # localStorage guard (src/utils/tracking/__tests__/purchase-pixel-fired-storage.test.ts) that stops the success page re-firing the browser Purchase pixel on revisit/refresh
+npm run test:mirror-event-names     # /api/tracking/conversion funnel-event allowlist (src/utils/tracking/__tests__/mirror-event-names.test.ts): the unauthenticated mirror endpoint accepts only funnel events — value-bearing events (Purchase etc.) are rejected, so a Purchase can't be forged through it
 npm run test:find-recoverable-subscription # guard re-validates each listed sub's real .status (Stripe list({status:"trialing"}) leaks incomplete subs)
 npm run test:cancel-incomplete-subscription # helper only cancels real `incomplete` subs, voids only `open` invoices, best-effort on errors, idempotent
 npm run test:http-rejection-severity # pure classifier: 5xx→high, coded 4xx→medium, skip <400/401/403/404/429/codeless-4xx

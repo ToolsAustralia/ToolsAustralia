@@ -12,6 +12,7 @@ Tests live under [src/utils/payment/__tests__/](../../src/utils/payment/__tests_
 | `npm run test:stripe-collection-pause` | Pause-collection clearing + invoice selection (overlap) |
 | `npm run test:redeemables` | Reverser modules for redeemables grants (overlap with [rewards-redeemables](../rewards-redeemables/)) |
 | `npm run test:invoice-generated-gate` | Fences `shouldEmitInvoiceGenerated(billing_reason)` — the server-side "Invoice Generated" receipt gate ([backend.md](./backend.md), [gotchas.md](./gotchas.md)). Test lives at `src/utils/integrations/klaviyo/__tests__/invoice-generated-gate.test.ts` (klaviyo/tracking area, not `utils/payment/__tests__/`). |
+| `npm run test:purchase-event-time` | Fences the CAPI Purchase `event_time` pipeline used by `grantBenefits` — `normalizeEpochToUnixSeconds` (ms vs seconds) + `resolveEventTime` (out-of-window → "now") ([backend.md](./backend.md)). Test lives at `src/lib/tracking/__tests__/purchase-event-time.test.ts` (tracking area, not `utils/payment/__tests__/`). |
 
 ## Test conventions
 

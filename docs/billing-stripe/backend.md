@@ -21,6 +21,8 @@ Responsibilities:
 
 CSP note: this route gets a special header set in [src/middleware.ts](../../src/middleware.ts) (no COEP) so server-to-server POSTs from Stripe work. See [security-csp](../security-csp/).
 
+**`chargedAt` threading for Meta event_time (2026-07-08).** `dispatchStripeEvent`'s `payment_intent.succeeded` case passes `event.created` into `handlePaymentSuccess(paymentIntent, eventCreatedUnixSeconds)`, which threads it to `handleOneTimeWebhook` / `handleUpsellWebhook` / `handleMiniDrawWebhook`. Each sets `paymentMetadata.chargedAt = (eventCreatedUnixSeconds ?? paymentIntent.created) * 1000` (ms) — the payment **success** moment, deliberately distinct from `created` (`paymentIntent.created * 1000` = PI *creation* time, which can precede payment on deferred confirms and also feeds campaign-window matching, so its semantics are unchanged). The membership `invoice.payment_succeeded` path sets `chargedAt` from the same `paid_at`-derived `paymentTimestamp` it already used for `created`. Sole consumer is the Facebook CAPI Purchase `event_time` in [payment-processing.ts](../../src/utils/payment/payment-processing.ts) (`chargedAt ?? created`, normalized + window-clamped) — see [payment/backend.md](../payment/backend.md) and [tracking/gotchas.md](../tracking/gotchas.md) → "Meta books Purchase at event_time". `event.created` is queue-lag-immune: the webhook queue stores the raw event, so delayed reprocessing still carries the original success time.
+
 ## Anchor-billing helper
 
 [src/utils/billing/anchor-billing.ts](../../src/utils/billing/anchor-billing.ts) — `getSubscriptionCreateParamsForAnchor(joinDate)` returns the Stripe `subscriptions.create()` params for users joining 25th/26th/27th to anchor renewal to the 24th.

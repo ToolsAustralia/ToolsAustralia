@@ -24,14 +24,11 @@
 /** Same-origin endpoint over the canonical `sendConversion` dispatcher. */
 const MIRROR_ENDPOINT = "/api/tracking/conversion";
 
-/** Meta standard funnel events supported by this mirror. */
-export type MirrorEventName =
-  | "ViewContent"
-  | "AddToCart"
-  | "InitiateCheckout"
-  | "AddPaymentInfo"
-  | "Lead"
-  | "Search";
+// Single source of truth lives in mirror-event-names.ts (no "use client") so the
+// server route enforces the exact same allowlist this client helper promises.
+// Type-only re-export — erased at compile time, no zod in the client chunk.
+export type { MirrorEventName } from "./mirror-event-names";
+import type { MirrorEventName } from "./mirror-event-names";
 
 interface MirrorCustomData {
   contentIds?: string[];

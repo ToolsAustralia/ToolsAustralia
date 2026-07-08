@@ -8,6 +8,7 @@ import { SectionContainer } from "@/components/ui";
 import { usePaymentStatus } from "@/hooks/queries";
 import { trackConversion } from "@/lib/tracking/dispatch-client";
 import { buildPurchaseEvent } from "@/lib/tracking/canonical-event";
+import { markPurchasePixelFired, shouldSuppressPurchasePixel } from "@/utils/tracking/purchase-pixel-fired-storage";
 
 interface PurchaseSuccessClientProps {
   searchParams: {
@@ -37,7 +38,16 @@ export default function PurchaseSuccessClient({ searchParams }: PurchaseSuccessC
     const value = status.data.price;
     const currency = status.data.currency;
     if (typeof value !== "number" || value <= 0) return;
+    // firedRef only survives one mount; Meta's event_id dedup only ~48h. Re-fires
+    // inside that window are merged by Meta (and recover a swallowed first fire),
+    // so only a revisit BEYOND the window — which Meta would count as a brand-new
+    // conversion — is suppressed.
+    if (shouldSuppressPurchasePixel(paymentIntentId)) {
+      firedRef.current = true;
+      return;
+    }
     firedRef.current = true;
+    markPurchasePixelFired(paymentIntentId);
     trackConversion(
       buildPurchaseEvent({
         value,

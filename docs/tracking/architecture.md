@@ -26,6 +26,8 @@ Every conversion event MUST be dual-fired (browser pixel + server CAPI) with a s
 
 The Provider interface does not allow opting out — if `enabled()` reports a surface live, both sides fire.
 
+Meta merges the pair on `event_name` + `event_id` within a **48h window** (first-received wins). Because that window is finite, the success pages persist a per-`event_id` "fired" flag in localStorage ([`purchase-pixel-fired-storage.ts`](../../src/utils/tracking/purchase-pixel-fired-storage.ts)) so a revisit >48h after purchase can't re-fire a counted browser Purchase. And because Meta books the conversion at `event_time` (Unix seconds, ≤7 days old — out-of-range rejects the whole `/events` request), Purchase events carry the actual Stripe charge time via `eventTimeUnixSeconds` → `resolveEventTime` ([canonical-event.ts](../../src/lib/tracking/canonical-event.ts)), not the webhook send time. See [gotchas.md](./gotchas.md) for both incidents.
+
 ## Missing-credentials safety
 
 When pixel id or access token is absent, the matching surface is a silent no-op: no script tag injection, no `fetch` call, no console-spam, no thrown errors. See [`docs/superpowers/specs/2026-05-11-tracking-provider-registry-design.md`](../superpowers/specs/2026-05-11-tracking-provider-registry-design.md) §8a for the full behavior matrix.

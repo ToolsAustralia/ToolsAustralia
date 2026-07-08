@@ -26,6 +26,7 @@ import { normalizeMembershipPlanId } from "@/utils/membership/additional-package
 import { getMiniDrawPackageById } from "@/data/miniDrawPackages";
 import { dispatchPackagePurchase } from "@/utils/tracking/purchase-events";
 import { trackPixelPurchase } from "@/utils/tracking/pixel-purchase-tracking";
+import { normalizeEpochToUnixSeconds } from "@/lib/tracking/canonical-event";
 import { getUserActiveExperimentAssignment } from "@/utils/ab-testing/get-user-experiment-assignment";
 import type { AttributionParams } from "@/types/tracking";
 import { PromoRedemptionService } from "@/services/promo/PromoRedemptionService";
@@ -68,6 +69,13 @@ function buildAttributionFields(sessionAttribution?: AttributionParams | null) {
 // Type definitions for better type safety
 type PaymentMetadata = {
   created?: number;
+  /**
+   * The moment payment actually SUCCEEDED, in ms (webhook paths set it from Stripe
+   * event.created / invoice paid_at). Used only for the Meta CAPI Purchase
+   * event_time. Distinct from `created`, which on payment_intent paths is the PI's
+   * creation time (can precede payment) and also feeds campaign-window matching.
+   */
+  chargedAt?: number;
   type?: string;
   packageType?: string;
   miniDrawId?: string;
@@ -1498,6 +1506,13 @@ async function grantBenefits(
         // The browser Pixel still fires the matching Purchase from PaymentSuccessHandler /
         // PaymentProcessingScreen with action_source=website, and Meta dedupes them via event_id.
         actionSource: "system_generated",
+        // Meta books the conversion at event_time. Prefer chargedAt (the payment
+        // SUCCESS moment: Stripe event.created / invoice paid_at, ms) over created
+        // (PI creation time on payment_intent paths — can precede payment). This keeps
+        // a purchase paid at 23:59 in that day even when the webhook runs after
+        // midnight, without back-dating deferred confirms to when the form was opened.
+        // Absent/garbage → falls back to "now" (the pre-fix behavior).
+        eventTimeUnixSeconds: normalizeEpochToUnixSeconds(paymentMetadata?.chargedAt ?? paymentMetadata?.created),
         ...(isResubscribe && { isResubscribe: true }),
         ...(experimentAssignment && {
           experimentId: experimentAssignment.experimentId,

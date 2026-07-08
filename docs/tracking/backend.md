@@ -6,7 +6,7 @@
 |---|---|
 | [src/lib/tracking/dispatch.ts](../../src/lib/tracking/dispatch.ts) | `sendConversion(event, ctx)` — server fan-out (CANONICAL) |
 | [src/lib/tracking/dispatch-client.ts](../../src/lib/tracking/dispatch-client.ts) | `trackConversion(event)` — browser fan-out |
-| [src/lib/tracking/canonical-event.ts](../../src/lib/tracking/canonical-event.ts) | `buildPurchaseEvent`, `hashPII`, `assertValidEvent` |
+| [src/lib/tracking/canonical-event.ts](../../src/lib/tracking/canonical-event.ts) | `buildPurchaseEvent`, `hashPII`, `assertValidEvent`, `normalizeEpochToUnixSeconds` (ms-or-seconds epoch → Unix seconds, deterministic `> 1e11` cutoff), `resolveEventTime` (clamps to Meta's accepted event_time window, falls back to "now") |
 | [src/lib/tracking/registry.ts](../../src/lib/tracking/registry.ts) | `getAllProviders()` |
 | [src/lib/tracking/providers/facebook.ts](../../src/lib/tracking/providers/facebook.ts) | Facebook provider — wraps `sendFacebookEvent` and `fbq` |
 | [src/lib/tracking/providers/tiktok.ts](../../src/lib/tracking/providers/tiktok.ts) | TikTok provider — pixel + Events API (`capiSend` delegates to `src/lib/tiktok.ts`) |
@@ -73,6 +73,8 @@ The actual reset (`resetDrawPropertiesForAllUsers`) is still invoked from the ex
 ## Meta CAPI events
 
 Fired server-side from purchase / cancel / signup paths. Parallel to client-side pixel for redundancy.
+
+**Purchase `event_time` = payment-success time, not send time (2026-07-08).** `BuildPurchaseEventInput` and `PixelPurchaseParams` accept optional `eventTimeUnixSeconds` (Unix SECONDS the payment actually succeeded); [`buildPurchaseEvent`](../../src/lib/tracking/canonical-event.ts) now sets `eventTime: resolveEventTime(input.eventTimeUnixSeconds)` instead of unconditionally "now". The webhook path ([`payment-processing.ts`](../../src/utils/payment/payment-processing.ts)) passes `normalizeEpochToUnixSeconds(paymentMetadata?.chargedAt ?? paymentMetadata?.created)`: `chargedAt` (ms) is Stripe `event.created` on the `payment_intent.succeeded` paths and invoice `paid_at` on the membership path — deliberately NOT `paymentIntent.created`, which is the PI's creation time and can precede payment (deferred confirm → back-dated conversion). The `created` fallback is **ms** at the webhook call sites but seconds in the legacy default, and the normalizer handles both. `resolveEventTime` clamps to Meta's accepted window (≤7 days past minus a 1h safety margin, +60s future skew) and falls back to "now", so a bad timestamp can only degrade to the pre-fix behavior — never reject the request. Test: `npm run test:purchase-event-time`. See [gotchas.md](./gotchas.md) → "Meta books Purchase at `event_time`".
 
 ## TikTok Events API (v1.3)
 

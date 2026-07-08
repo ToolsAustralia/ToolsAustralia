@@ -17,7 +17,7 @@ The biggest helper directory in the repo. Each module has one focused responsibi
 
 | File | Purpose |
 |---|---|
-| `payment-processing.ts` | `grantBenefits()`, `processPaymentBenefits()` — the success path that writes `BenefitsGranted` ledger rows. Also hosts `trackKlaviyoEvent()`, which emits the customer receipt ("Invoice Generated") **server-side** for every charge (see below). |
+| `payment-processing.ts` | `grantBenefits()`, `processPaymentBenefits()` — the success path that writes `BenefitsGranted` ledger rows. Also hosts `trackKlaviyoEvent()`, which emits the customer receipt ("Invoice Generated") **server-side** for every charge, and fires the server-side Meta CAPI **Purchase** with `event_time` = Stripe charge time (both below). |
 | `payment-status.ts` | Status-derivation helpers (paid / failed / pending classification). |
 | `ledger-helpers.ts` | Shared helpers for reading/writing `data.grants`. |
 
@@ -77,6 +77,26 @@ calls [`trackInvoice()`](../../src/utils/integrations/klaviyo/klaviyo-invoice-se
 
 An accepted upsell is a separate PaymentIntent, so it gets its own receipt (two receipts per upsell
 purchase). See [gotchas.md](./gotchas.md) for the full incident and the removed combined-invoice path.
+
+#### Server-side Facebook CAPI Purchase — `event_time` = Stripe charge time
+
+`grantBenefits()` also fires the server-side Meta CAPI **Purchase** via
+[`trackPixelPurchase()`](../../src/utils/tracking/pixel-purchase-tracking.ts) with
+`actionSource: "system_generated"` (there is no live browser session in the webhook; the browser
+Pixel fires the matching event with `action_source=website` and Meta dedups the pair by `event_id`).
+It passes `eventTimeUnixSeconds: normalizeEpochToUnixSeconds(paymentMetadata?.chargedAt ?? paymentMetadata?.created)`
+([`canonical-event.ts`](../../src/lib/tracking/canonical-event.ts)), so Meta books the conversion at
+the **payment SUCCESS moment** instead of the webhook-processing moment — a purchase paid at
+23:59 (Melbourne) no longer lands in the next day's Meta reporting. `chargedAt` (ms) is set by the
+webhook handlers from Stripe `event.created` on the `payment_intent.succeeded` paths and from the
+invoice `paid_at` on the membership path; it exists separately from `created` because on PI paths
+`created` is the PaymentIntent's **creation** time, which can precede payment (form opened, deferred
+confirm) and would back-date the conversion. The fallback `created` is **milliseconds** at the
+webhook call sites but **seconds** in the legacy default built inside
+`processPaymentBenefitsInternal`; the normalizer handles both deterministically (`> 1e11` cutoff).
+Values outside Meta's accepted window (or garbage) fall back to "now" via `resolveEventTime` — the
+pre-fix behavior — so a bad timestamp can never make Meta reject the event.
+Test: `npm run test:purchase-event-time`.
 
 ### Refund reversal
 

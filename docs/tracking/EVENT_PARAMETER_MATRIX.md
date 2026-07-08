@@ -14,11 +14,11 @@ Every conversion flows through the canonical registry ([`src/lib/tracking/`](../
 
 - **Browser:** `trackConversion(event)` / `tiktokProvider.pixelTrack(event)` / `fbq('track', …)` — fires the on-page pixels.
 - **Server:** `sendConversion(event, ctx)` → each provider's `capiSend` — fires Meta CAPI + TikTok Events API.
-- **Dedup glue:** one `event_id` shared by both surfaces of a platform. TikTok matches `event` name + `event_id` + pixel (48h window); Meta matches `event_name` + `event_id`.
+- **Dedup glue:** one `event_id` shared by both surfaces of a platform. TikTok matches `event` name + `event_id` + pixel (48h window); Meta matches `event_name` + `event_id` within **48h**, first-received wins.
 
 Two server entry points:
 - **Purchase:** `trackPixelPurchase(...)` from the Stripe webhook ([pixel-purchase-tracking.ts](../../src/utils/tracking/pixel-purchase-tracking.ts)) → `sendConversion`.
-- **Funnel events** (ViewContent / AddToCart / InitiateCheckout / AddPaymentInfo / Lead): browser fires via [`usePixelTracking`](../../src/hooks/usePixelTracking.ts) `fireFunnelEvent`, which fires the FB + TikTok browser pixels **and** mirrors to `/api/tracking/conversion` → `sendConversion`, all sharing one `event_id`.
+- **Funnel events** (ViewContent / AddToCart / InitiateCheckout / AddPaymentInfo / Lead): browser fires via [`usePixelTracking`](../../src/hooks/usePixelTracking.ts) `fireFunnelEvent`, which fires the FB + TikTok browser pixels **and** mirrors to `/api/tracking/conversion` → `sendConversion`, all sharing one `event_id`. The mirror endpoint is unauthenticated, so it enforces a server-side `eventName` allowlist ([`mirror-event-names.ts`](../../src/utils/tracking/mirror-event-names.ts): ViewContent / AddToCart / InitiateCheckout / AddPaymentInfo / Lead / Search — no value-bearing events) and clamps client-supplied `eventTime` — see [api.md](./api.md).
 
 > **Optional `userData` on the mirror.** `fireFunnelEvent` (and the `trackInitiateCheckout` / `trackAddPaymentInfo` wrappers) accept an optional `userData: MirrorUserData` that is forwarded **only to the CAPI mirror**, never to the browser pixel calls. The mirror runs it through `stripEmpty` (drops `undefined` / `null` / `""`) and `/api/tracking/conversion` SHA-256-hashes the supplied fields server-side via `hashPII` → `em / ph / fn / ln / ct / st / zp / country / db / external_id`. Fields: `email, phone, firstName, lastName, city, state, zipCode, country, birthdate, externalId`. fbc/fbp/IP/UA are server-derived and intentionally excluded from `MirrorUserData`. `fireFunnelEvent` also threads `packageType` through to CAPI `custom_data` (AddPaymentInfo needs it; without the passthrough it was dropped).
 

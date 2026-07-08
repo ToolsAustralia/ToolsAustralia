@@ -78,6 +78,13 @@ export interface PixelPurchaseParams {
    * event_source_url. Meta accepts this and treats it as backend-attributed.
    */
   actionSource?: "website" | "system_generated";
+  /**
+   * Unix SECONDS the charge actually happened (Stripe PI `created` / invoice
+   * `paid_at`). Without it the CAPI event_time is the webhook send moment, which
+   * books purchases paid just before midnight into the next day's Meta reporting.
+   * Out-of-window values fall back to "now" — see resolveEventTime.
+   */
+  eventTimeUnixSeconds?: number;
 }
 
 /** Server-side fallback for event_source_url when not in request context (Meta requires it for website events). */
@@ -132,6 +139,7 @@ export async function trackPixelPurchase(params: PixelPurchaseParams): Promise<b
       entriesAdded,
       pointsEarned,
       actionSource,
+      eventTimeUnixSeconds,
     } = params;
 
     if (!orderId?.trim()) {
@@ -157,6 +165,8 @@ export async function trackPixelPurchase(params: PixelPurchaseParams): Promise<b
       // Webhook-initiated payments should pass `actionSource: "system_generated"`
       // so Meta's spec is honored (no live browser session, no real event_source_url).
       actionSource,
+      // Charge time, not send time — keeps the conversion in the day the money moved.
+      eventTimeUnixSeconds,
       userData: {
         email: userEmail,
         phone: userPhone,
