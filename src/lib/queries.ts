@@ -153,8 +153,9 @@ export async function apiRequest<T = unknown>(endpoint: string, options: Request
 
       if (shouldForceLogout) {
         try {
-          // Clear user-scoped client storage, then force sign out so NextAuth
-          // clears the session cookie. void ensures we don't block error propagation.
+          // Clear user-scoped client storage (incl. chat history), then force sign
+          // out so NextAuth clears the session cookie. void ensures we don't block
+          // error propagation.
           clearUserScopedClientStorage();
           void signOut();
         } catch (signOutError) {

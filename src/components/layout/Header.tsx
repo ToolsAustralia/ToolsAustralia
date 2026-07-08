@@ -458,7 +458,7 @@ export default function Header({ isFixed = true }: HeaderProps) {
 
   const handleSignOut = () => {
     setIsTopBarHidden(false);
-    // Total sign-out: clears user-scoped client storage, then ends the session.
+    // Total sign-out: clears user-scoped client storage (incl. chat history), then ends the session.
     void totalSignOut({ callbackUrl: "/" });
   };
 

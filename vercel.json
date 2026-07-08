@@ -104,6 +104,7 @@
     "src/app/api/invoice/**/route.ts": { "maxDuration": 60 },
     "src/app/api/orders/**/route.ts": { "maxDuration": 60 },
     "src/app/api/admin/facebook-ads/health/insights/route.ts": { "maxDuration": 30 },
+    "src/app/api/chat/route.ts": { "maxDuration": 60 },
     "src/app/api/**/route.ts": { "maxDuration": 10 }
   }
 }

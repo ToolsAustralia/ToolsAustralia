@@ -1,5 +1,12 @@
 # Infrastructure — Gotchas
 
+## `CHAT_KILL_SWITCH` is now the *override* for the admin pause toggle (2026-07-08)
+
+`CHAT_KILL_SWITCH` (`.env.example`) is no longer the only way to disable Cobber. It is now the **break-glass override**: `true` still disables Cobber instantly (now also **hides the bubble site-wide**, not just the generative path), and it **wins over and locks** the DB-backed admin "Cobber availability" toggle (Admin → Team → Chatbot). For normal pausing prefer the admin toggle (no deploy); use the env var when the panel is unreachable. Effective state = `env || DB` (`getChatKillSwitchEffective`). It is **not** a `src/config/featureFlags.ts` flag — it stays env-level so it works without a DB read.
+
+## Next dev indicator position is `top-left` (dev-only) (2026-06-26)
+
+`next.config.ts` sets `devIndicators: { position: "top-left" }` so Next's dev build/route indicator (the "N" pill) doesn't overlap the bottom floating widgets (the Cobber support bubble — bottom-left on promotions, bottom-right elsewhere — plus the promotions theme toggle + account FAB). Next only supports the **4 corners** (`bottom-left`/`bottom-right`/`top-left`/`top-right`) — there is **no mid-height option**, and its drag-to-move snaps to the nearest corner too. Set `devIndicators: false` to hide it. It is **never rendered in production**.
 ## `seed-past-due-member.ts` — write final state ATOMICALLY, not via a stale `.save()` (2026-07-03)
 
 The QA seed (`npm run seed:past-due-member`) creates the member (`__v: 0`), then spends ~30–50s on Stripe **test-clock** work before writing the final `past_due` state. If `stripe listen` is forwarding the seed's own Stripe events to a **running app**, a webhook (first-invoice `payment_succeeded`) re-saves that same user doc and **bumps `__v`** in that window. A subsequent `user.save()` on the *stale* in-memory doc then throws Mongoose **`VersionError: No matching document found … version 0`**, so the past-due write never lands and the member is stranded in the intermediate **active** state (which is why the admin showed "Active").

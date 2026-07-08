@@ -3,6 +3,7 @@ import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
 import NewsletterSection from "@/components/sections/NewsletterSection";
 import UnifiedModalManager from "@/components/modals/UnifiedModalManager";
+import SupportChatWidgetMount from "@/components/support-chat/SupportChatWidgetMount";
 
 // Mark layout as dynamic to prevent static generation issues with useSearchParams
 export const dynamic = "force-dynamic";
@@ -31,6 +32,8 @@ export default function SiteLayout({ children }: { children: React.ReactNode }) 
       <Suspense fallback={null}>
         <UnifiedModalManager />
       </Suspense>
+      {/* AI Support Chat Widget — z-9000, below modal base of 10000 */}
+      <SupportChatWidgetMount />
     </>
   );
 }

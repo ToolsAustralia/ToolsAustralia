@@ -163,7 +163,7 @@ export default function AdminSidebar({
   }, []);
 
   const handleSignOut = () => {
-    // Total sign-out: clears user-scoped client storage, then ends the session.
+    // Total sign-out: clears user-scoped client storage (incl. chat history), then ends the session.
     void totalSignOut({ callbackUrl: "/" });
   };
 

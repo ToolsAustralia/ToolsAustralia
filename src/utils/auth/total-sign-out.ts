@@ -1,4 +1,5 @@
 import { signOut } from "next-auth/react";
+import { clearSupportChatStorage } from "@/lib/support-chat/chatStorage";
 
 /**
  * Total sign-out — clears the USER-scoped portion of browser storage before
@@ -7,7 +8,9 @@ import { signOut } from "next-auth/react";
  * state carries into the next authenticated session.
  *
  * This app has NO IndexedDB / offline outbox / Cache-Storage writes (verified),
- * so only `localStorage` + `sessionStorage` need clearing.
+ * so only `localStorage` + `sessionStorage` need clearing. Support-chat history
+ * (also localStorage) is cleared by delegating to the chat module's own
+ * clearSupportChatStorage() — it owns its key list, so we never duplicate it here.
  *
  * KEEP (never cleared here): device prefs (`ta-theme`, `ta-admin-theme`) and
  * pre-auth **attribution** (`tools-aus:*`, `affiliate_code`, `ab_*`,
@@ -89,6 +92,13 @@ export function clearUserScopedClientStorage(): void {
     clearScoped(window.sessionStorage, USER_SESSION_KEYS, USER_SESSION_PREFIXES);
   } catch {
     /* ignore */
+  }
+  // Support-chat history + conversationId (per-user localStorage). Delegate to the
+  // chat module so its key list stays the single source of truth.
+  try {
+    clearSupportChatStorage();
+  } catch {
+    /* ignore — one failure must never block sign-out */
   }
 }
 

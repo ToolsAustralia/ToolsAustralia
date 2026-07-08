@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import MetallicAccordion, { MetallicAccordionItem } from "./MetallicAccordion";
+import ChatMarkdown from "@/components/support-chat/ChatMarkdown";
 import { cn } from "@/utils/cn";
 
 export interface FAQItem {
@@ -62,11 +63,12 @@ export default function FAQSection({
   const filteredFAQs =
     activeCategory === "ALL QUESTIONS" ? faqs : faqs.filter((faq) => faq.category === activeCategory);
 
-  // Convert FAQ items to accordion items
+  // Convert FAQ items to accordion items; render answers through ChatMarkdown
+  // so markdown links like [Draw Results](/draw-results) become clickable.
   const accordionItems: MetallicAccordionItem[] = filteredFAQs.map((faq) => ({
     id: faq.id,
     title: faq.question,
-    content: faq.answer,
+    content: <ChatMarkdown>{faq.answer}</ChatMarkdown>,
   }));
 
   return (

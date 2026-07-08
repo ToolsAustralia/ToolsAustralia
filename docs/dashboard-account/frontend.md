@@ -658,8 +658,16 @@ Closes the Settings gaps + finishes shell consistency. Spec:
   vs desktop-sidebar overlap); loading/error guards no longer render a header. `DashboardPageHeader`
   gained an optional `onBack` so a tab returns to the index (index → dashboard).
 - **[`support/page.tsx`](../../src/app/(site)/my-account/support/page.tsx)** — rewritten to
-  `DashboardPageHeader` + Ask-Cobber card (coming-soon, gated by `cobberSupport`) + Email us + FAQ
-  accordion + kept `ContactForm`. No WhatsApp/phone. Responsive sheet-shell delivery deferred (route).
+  `DashboardPageHeader` + Ask-Cobber card + Email us + FAQ accordion + kept `ContactForm`. No
+  WhatsApp/phone. Responsive sheet-shell delivery deferred (route).
+- **Ask-Cobber card is LIVE (2026-07-07):** `cobberSupport` was flipped **on**, so the card in
+  `SupportSheetBody` (both the Support sheet and the `/my-account/support` route) now shows "Online /
+  **Start a chat**", and that button opens the Cobber support-chat panel. It calls `closeSheet()` then
+  `openSupportChat()` ([widget-events.ts](../../src/lib/support-chat/widget-events.ts)) — the shared
+  window event the `SupportChatWidget` listens for. On `/my-account` the floating chat bubble is
+  **suppressed** so this card is the single Cobber entry point; the panel also hides while any
+  Support/Payment/Manage `SheetShell` is open (z-index de-dup). See
+  [ai-chatbot/merge-to-main.md § 4a/4b](../ai-chatbot/merge-to-main.md).
 - **🚩 Newly orphaned → flagged for deletion:** `DashboardHeader.tsx` (Settings was its last user),
   `MajorDrawHeaderStrip.tsx` (old draws only).
 - **Flagged to verify (not modified — money path):** billing-history tab inside the shared

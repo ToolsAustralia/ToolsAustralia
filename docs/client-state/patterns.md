@@ -85,6 +85,18 @@ Read-only admin cancellation-flow analytics. Both hooks live in [`src/hooks/quer
 - `useCancellationFlowAnalytics`: `buildQueryString(filter)` skips absent `startDate`/`endDate`; both map 1:1 to query params on `/api/admin/cancellation-flow-analytics`. The whole `filter` is part of the query key, so changing the range refetches.
 - `useCancellationFlowUsersByReason`: drill-down hook for the "Reason × outcome" table rows (consumed by `CancellationReasonUsersModal`). Filter is `{ reason: CancellationReason, outcome?: "in_progress"|"saved"|"cancelled", startDate?, endDate?, page?, limit? }`; all fields except `reason` are skipped from the URL when absent. Pass `filter = null` (or `options.enabled = false`) to keep the query idle until a row is selected. Returns the same `{ data, isLoading, isError }` shape as the parent hook. Backed by `/api/admin/cancellation-flow-analytics/users-by-reason`.
 
+### Chatbot cost & settings hooks (`src/hooks/queries/admin/`)
+
+| Hook | TanStack primitive | Query key / target | DTO(s) |
+|---|---|---|---|
+| `useChatbotCostAnalytics(days)` | `useQuery` | key `["admin", "chatbot-cost", days]` → `GET /api/admin/chatbot-cost?days=` | `ChatbotCostData` (from `@/services/admin/chatbotCostAnalytics`) |
+| `useSetChatProvider()` | `useMutation` | `PATCH /api/admin/chatbot-settings` | `ChatProvider` (`"anthropic" \| "google"`) |
+
+Both back the **Chatbot Cost & Usage** admin panel ([`ChatbotCostManagement.tsx`](../../src/components/admin/ChatbotCostManagement.tsx) — see [admin/frontend.md](../admin/frontend.md)).
+
+- `useChatbotCostAnalytics`: read-only; `days` is in the key so switching the 7/30/90 range refetches. Returns `{ data, isLoading, isError }`.
+- `useSetChatProvider` ([`useChatbotSettings.ts`](../../src/hooks/queries/admin/useChatbotSettings.ts)): switches Cobber's live LLM provider. On success it `invalidateQueries({ queryKey: ["admin", "chatbot-cost"] })` — a **partial-prefix** match that reconciles every cached range at once, so the panel's model name / active provider refresh with no reload. Consumers use `mutation.variables` (the target provider) for an optimistic toggle while `isPending`; on error `isPending` clears and the UI falls back to the server's `config.activeProvider` (auto-revert). DB-backed via the `ChatSettings` singleton — see [ai-chatbot/](../ai-chatbot/).
+
 ### Hourly revenue hook (`src/hooks/queries/admin/`)
 
 `useHourlyRevenue({ startDate, endDate, platform })` ([`src/hooks/queries/admin/useHourlyRevenue.ts`](../../src/hooks/queries/admin/useHourlyRevenue.ts)) — `useQuery`, key `["admin", "analytics", "hourly-revenue", platform, startDate, endDate]`, enabled only when both dates are set. `platform` ∈ `meta` | `tiktok` | `snapchat` | `klaviyo` | `ad-channels` | `all`. Fetches the SHARED-1 hour-of-day series from `GET /api/admin/analytics/hourly-revenue` — each bucket is `{ hour, revenue, conversions, spend }` (`spend` null when the group has no spend source), plus a range `totalSpend`. **No aggressive polling** (1 min stale, `refetchOnWindowFocus: false`, no interval) — the underlying refund-`$lookup` aggregation is heavy. Consumed by `PlatformHourlyRevenueSection` (TikTok / Snapchat) and `AllPlatformsManagement`.

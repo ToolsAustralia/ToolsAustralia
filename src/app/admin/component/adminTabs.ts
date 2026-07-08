@@ -25,6 +25,7 @@ import {
   LineChart,
   Mail,
   Megaphone,
+  MessageSquare,
   ScrollText,
   Shield,
   TrendingUp,
@@ -118,6 +119,9 @@ export const ADMIN_TAB_GROUPS: AdminTabGroup[] = [
   // The Team page hosts three sub-tabs: Staff, Roles, Logs (audit trail).
   // `requires: "settings.view"` covers Staff/Roles; the in-page Logs sub-tab
   // additionally requires `audit.view` and is hidden when absent.
+  // Chatbot (Cobber) sits here too — it's an internal AI surface like Norm
+  // (availability toggle + cost/usage). Its own `overview.view` gate is kept, so
+  // it may show to a viewer who can't see Staff/Roles.
   {
     id: "team",
     label: "Team",
@@ -125,6 +129,7 @@ export const ADMIN_TAB_GROUPS: AdminTabGroup[] = [
     tabs: [
       { id: "team", label: "Team", icon: Shield, requires: "settings.view" },
       { id: "norm", label: "Norm", icon: Bot, requires: "settings.view" },
+      { id: "chatbot", label: "Chatbot", icon: MessageSquare, requires: "overview.view" },
     ],
   },
 ];

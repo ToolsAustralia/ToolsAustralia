@@ -6,6 +6,15 @@
 - `/reset-password` — token-based reset
 - `/oauth-redirect` — OAuth callback handling
 
+### Cobber on the auth pages (2026-07-07)
+
+`/login` and `/reset-password` live **outside** the `(site)` route group, so they don't
+inherit `(site)/layout.tsx`'s Cobber support-chat mount. Each now has its own tiny
+`layout.tsx` that renders `<SupportChatWidgetMount />` — a signed-out user stuck on login
+or mid-password-reset is exactly who needs "how do I log in / I forgot my password" help
+(FAQ id 32). The visitor is anonymous, so Cobber answers from free FAQ deflection (+ guest
+LLM when `CHAT_ALLOW_GUEST_GENERATIVE` is on). Keep the two auth layouts in lockstep.
+
 ## Components
 
 [src/components/auth/](../../src/components/auth/) — login form, signup form, password reset, OAuth buttons.
@@ -19,14 +28,19 @@ for signing out. `clearUserScopedClientStorage()` wipes the **user-scoped** port
 flags `subscriptionExplainerSeen_*`/`rewardsWidgetSpotlightSeen_*`, in-progress
 checkout/upsell/setup/verify state, `subscription_upgraded`/`downgraded`, `modal-priority-store`) and
 **keeps** device/attribution keys (`ta-theme`, `ta-admin-theme`, `tools-aus:*`, `affiliate_code`,
-`ab_*`, `promoWelcomeShown_*`, admin-UI + dev keys). Every step is try/caught so one failure never
-blocks sign-out. `totalSignOut()` clears then calls NextAuth `signOut`.
+`ab_*`, `promoWelcomeShown_*`, admin-UI + dev keys). It also clears **support-chat** history +
+`conversationId` by delegating to the chat module's own `clearSupportChatStorage()`
+([src/lib/support-chat/chatStorage.ts](../../src/lib/support-chat/chatStorage.ts)) — so the chat key
+list stays owned by the chat module and isn't duplicated here. Every step is try/caught so one failure
+never blocks sign-out. `totalSignOut()` clears then calls NextAuth `signOut`.
 
 Wired into every sign-out trigger: the Header menu, AdminSidebar, the Account-settings Sign-out, and
 the 401/403/USER_NOT_FOUND forced-logout in [`src/lib/queries.ts`](../../src/lib/queries.ts)
 (clear-only — keeps its in-place `signOut()`). This app has **no IndexedDB / offline outbox / Cache
 Storage** (verified), so there's nothing else to drain into the next account. **When you add a new
-per-user client-storage key, add it to the clear lists in `total-sign-out.ts`.**
+per-user client-storage key, add it to the clear lists in `total-sign-out.ts`** (or, for a self-contained
+feature module, add a `clear*()` of your own and call it from `clearUserScopedClientStorage()`, as
+support-chat does).
 
 > _TODO: enumerate exact components._
 

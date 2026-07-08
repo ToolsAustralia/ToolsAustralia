@@ -48,6 +48,35 @@ const BUSINESS_TRIGGER_GLOBS = [
 ];
 const BUSINESS_DOCS = ["README.md", "BUSINESS.md"];
 
+// CLAUDE.md rule 5b: CUSTOMER.md (the customer-side companion to BUSINESS.md) must stay in sync with
+// customer-material source — the customer data model (User), the lifecycle/state machine, account
+// creation & auth, the membership journey (cancel/upgrade/downgrade/reactivate), entries/eligibility,
+// perks (partner/referral/affiliate), the marketing data captured about the customer, and the account
+// surface. When a touched source file matches one of these globs and CUSTOMER.md was NOT edited in the
+// same turn, the Stop is BLOCKED. Mirrors the BUSINESS_TRIGGER mechanism. Add new customer-material
+// source paths here when you introduce them.
+const CUSTOMER_TRIGGER_GLOBS = [
+  "src/models/User.ts",
+  "src/contexts/UserContext.tsx",
+  "src/models/MembershipStatusHistory.ts",
+  "src/models/ReferralEvent.ts",
+  "src/services/subscription/CancelSubscriptionService.ts",
+  "src/components/auth/**",
+  "src/app/api/auth/**",
+  "src/lib/auth.ts",
+  "src/components/modals/CancellationFlowModal/**",
+  "src/components/modals/SubscriptionManagementModal/**",
+  "src/utils/giveaway-eligibility.ts",
+  "src/utils/payment/subscription-entries-calculator.ts",
+  "src/utils/partner-discounts/**",
+  "src/lib/referral.ts",
+  "src/lib/affiliate.ts",
+  "src/services/attribution/**",
+  "src/services/klaviyo/**",
+  "src/app/(site)/my-account/**",
+];
+const CUSTOMER_DOCS = ["CUSTOMER.md"];
+
 function readTouched() {
   if (!fs.existsSync(TRACKER_PATH)) return [];
   const content = fs.readFileSync(TRACKER_PATH, "utf8");
@@ -152,7 +181,7 @@ async function main() {
     if (f.startsWith("docs/")) return false;     // editing docs is not "code change"
     if (f.startsWith(".claude/")) return false;  // hook/skill edits don't need doc updates
     if (f === "CLAUDE.md") return false;         // CLAUDE.md edits track themselves
-    if (f === "BUSINESS.md" || f === "README.md") return false; // top-level business docs track themselves (rule 5 handled by the business-trigger check below)
+    if (f === "BUSINESS.md" || f === "README.md" || f === "CUSTOMER.md") return false; // top-level status docs track themselves (rule 5 / 5b handled by the trigger checks below)
     return !isTrivialEdit(f);
   });
 
@@ -166,6 +195,12 @@ async function main() {
   const businessTriggers = substantive.filter((f) => matchesAny(f, BUSINESS_TRIGGER_GLOBS));
   const businessDocsChanged = BUSINESS_DOCS.some((d) => changedFilesUnder(d).length > 0);
   const businessStale = businessTriggers.length > 0 && !businessDocsChanged;
+
+  // Customer-doc sync check (CLAUDE.md rule 5b). If any substantive edit hit a customer-material
+  // source file and CUSTOMER.md was not edited this turn, flag it.
+  const customerTriggers = substantive.filter((f) => matchesAny(f, CUSTOMER_TRIGGER_GLOBS));
+  const customerDocsChanged = CUSTOMER_DOCS.some((d) => changedFilesUnder(d).length > 0);
+  const customerStale = customerTriggers.length > 0 && !customerDocsChanged;
 
   // Group by domain.
   const affected = new Map(); // domain -> string[] of files
@@ -236,6 +271,20 @@ async function main() {
     lines.push("one-line clarifying touch to the relevant BUSINESS.md section (or note it) so this check passes.");
   }
 
+  if (customerStale) {
+    lines.push("");
+    lines.push("STALE CUSTOMER DOC — you edited customer-material source but did not update CUSTOMER.md:");
+    for (const f of customerTriggers.slice(0, 8)) lines.push(`  - ${f}`);
+    if (customerTriggers.length > 8) lines.push(`  ... and ${customerTriggers.length - 8} more`);
+    lines.push("");
+    lines.push("CUSTOMER.md is the top-level CUSTOMER-context doc (the customer's data model, lifecycle, and flows");
+    lines.push("— the companion to BUSINESS.md). Per CLAUDE.md rule 5b you MUST update it in the same task when a");
+    lines.push("change flips a fact it asserts: a new/changed User field, a lifecycle-state change, an auth/");
+    lines.push("registration change, an entries/eligibility/perks change, or a change to what customer data is");
+    lines.push("captured. If your edit changed NO customer-level fact (pure refactor), make a one-line clarifying");
+    lines.push("touch to CUSTOMER.md so this check passes.");
+  }
+
   // Rot detection — flag fresh domains that haven't been verified in a while.
   const today = todayIso();
   const rotted = [];
@@ -258,7 +307,7 @@ async function main() {
     lines.push("Consider running `/doc-domain <name>` to do a deeper refresh.");
   }
 
-  if (stale.length > 0 || orphans.length > 0 || businessStale) {
+  if (stale.length > 0 || orphans.length > 0 || businessStale || customerStale) {
     process.stderr.write(
       `BLOCKED: Documentation is out of sync with code changes.\n${lines.join("\n")}\n\n` +
       `After updating the docs, your Stop will be allowed.\n`,

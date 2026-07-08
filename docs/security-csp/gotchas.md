@@ -1,5 +1,9 @@
 # Security & CSP — Gotchas
 
+## `next.config.ts` `devIndicators` is dev-only — NOT a security/CSP setting (2026-06-26)
+
+`next.config.ts` now sets `devIndicators: { position: "top-left" }`. This only moves Next's dev build/route indicator (the "N" pill) off the bottom floating widgets (Cobber support bubble, promotions theme toggle + account FAB). It is **development-only** (never rendered in production) and has **zero effect on CSP, security headers, or middleware**. Next supports only the 4 corners here (no mid-height); `false` hides it. Mentioned because `next.config.ts` lives in this domain — don't mistake it for a header change.
+
 ## `requireSameOrigin` is the CSRF guard for cookie-authed mutations (2026-06-19)
 
 [utils/security/requireSameOrigin.ts](../../src/utils/security/requireSameOrigin.ts) — call `requireSameOrigin(request)` at the top of any state-changing route that authenticates from a cookie (cart/orders/mini-draws, affiliate `bank-details`/`update-account`). It returns a 403 `NextResponse` when the request's `Origin` is cross-site, else `null`.
