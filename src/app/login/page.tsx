@@ -496,7 +496,21 @@ function LoginPageContent() {
           errorMessage.includes("construct") ||
           result.status === 429;
 
-        if (isRateLimitError) {
+        if (result.error === "ACCOUNT_DEACTIVATED") {
+          // Deactivated accounts are rejected at login (auth.ts authorize) —
+          // show the real reason instead of "invalid credentials".
+          showToast({
+            type: "error",
+
+            title: "Account Deactivated",
+
+            message: "This account has been deactivated. Please contact an administrator to restore access.",
+
+            duration: 8000,
+          });
+
+          setError("This account has been deactivated. Please contact an administrator.");
+        } else if (isRateLimitError) {
           // Show toast notification for rate limit errors
 
           showToast({
