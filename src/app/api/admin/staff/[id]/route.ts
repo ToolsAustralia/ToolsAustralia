@@ -11,6 +11,8 @@ import { sendStaffInviteEmail } from "@/lib/email/staff-invite";
 const PatchSchema = z.object({
   roleId: z.string().min(1).optional(),
   resendInvite: z.boolean().optional(),
+  firstName: z.string().trim().min(1).max(50).optional(),
+  lastName: z.string().trim().min(1).max(50).optional(),
 });
 
 const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
@@ -50,6 +52,15 @@ export async function PATCH(
   const user = await User.findById(id);
   if (!user || (user.userType !== "staff" && user.userType !== "admin")) {
     return NextResponse.json({ error: "Staff user not found" }, { status: 404 });
+  }
+
+  // Name edits — no tokenVersion bump: names carry no authorization, and the
+  // jwt callback re-syncs firstName/lastName from the DB on the next request.
+  if (parsed.data.firstName) {
+    user.firstName = parsed.data.firstName;
+  }
+  if (parsed.data.lastName) {
+    user.lastName = parsed.data.lastName;
   }
 
   if (parsed.data.roleId) {
