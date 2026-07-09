@@ -27,6 +27,7 @@ import {
   Check,
   ShieldCheck,
   ShieldAlert,
+  TrendingUp,
   type LucideIcon,
 } from "lucide-react";
 import ActivityTab from "./UserDetailModal/ActivityTab";
@@ -1331,21 +1332,64 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
   const membershipDisplayStatus = deriveMembershipDisplayStatus(user.subscription);
   const partnerAccessRing = user.partnerAccessRing ?? null;
   const nextRenewalEntries = user.subscription?.nextRenewalEntries ?? null;
-  const renewalEndDate =
-    user.subscription?.endDate && user.subscription?.autoRenew !== false
-      ? new Date(user.subscription.endDate)
-      : null;
-  // date-fns format() THROWS on an invalid date — guard before formatting.
-  const renewalDateLabel =
-    renewalEndDate && !Number.isNaN(renewalEndDate.getTime())
-      ? format(renewalEndDate, "d MMM yyyy")
-      : null;
-  const majorDrawRenewalSub =
-    nextRenewalEntries != null
+  const renewalLandsInCurrentDraw = user.subscription?.renewalLandsInCurrentDraw ?? false;
+  // "+N …" preview badge under the Major Draw Entries card. Shown ONLY when those
+  // entries will land in the CURRENTLY-displayed draw — otherwise it misleads
+  // ("+N on renewal" next to this draw when the renewal is a future draw's grant):
+  //  - past-due: settling adds entries to the current draw immediately → "on recovery"
+  //  - active: only when the renewal falls within the current draw cycle (a
+  //    next-cycle renewal lands in a different draw → no badge).
+  const majorDrawRenewalBadge =
+    nextRenewalEntries != null && nextRenewalEntries > 0
       ? membershipDisplayStatus === "past_due"
-        ? `+${nextRenewalEntries.toLocaleString()} after payment recovery`
-        : `+${nextRenewalEntries.toLocaleString()} on renewal${renewalDateLabel ? ` · ${renewalDateLabel}` : ""}`
+        ? `+${nextRenewalEntries.toLocaleString()} on recovery`
+        : renewalLandsInCurrentDraw
+          ? `+${nextRenewalEntries.toLocaleString()} on renewal`
+          : undefined
       : undefined;
+
+  // Partner-access ring (same instrument as the /my-account hero). On mobile it
+  // REPLACES the avatar (header is too tight for both); on sm+ the avatar shows
+  // on the left and this renders on the right with a label. Rendered once here so
+  // both placements stay in sync. `null` when the member has no partner access.
+  const hasPartnerRing = !!partnerAccessRing && partnerAccessRing.state !== "none";
+  const renderPartnerRing = (size: number, showLabel: boolean) => {
+    if (!partnerAccessRing || partnerAccessRing.state === "none") return null;
+    const isPaused = partnerAccessRing.state === "pastdue";
+    return (
+      <div
+        className="flex flex-col items-center gap-0.5"
+        title="Partner-catalogue access — same ring the member sees on /my-account"
+      >
+        {isPaused ? (
+          <AccessRing percent={100} size={size} stroke={5} color="#fbbf24" trackColor="rgba(128,128,128,.18)">
+            <ShieldAlert className="h-3.5 w-3.5 sm:h-4 sm:w-4" style={{ color: "#fbbf24" }} />
+          </AccessRing>
+        ) : (
+          <AccessRing
+            percent={partnerAccessRing.percent}
+            size={size}
+            stroke={5}
+            color={hasActiveSubscription ? borderGradientColor : "#10b981"}
+            trackColor="rgba(128,128,128,.18)"
+          >
+            <span className="num text-2xs sm:text-xs font-extrabold text-slate-900 dark:text-white">
+              {partnerAccessRing.percent}%
+            </span>
+          </AccessRing>
+        )}
+        {showLabel ? (
+          <span className="text-[8px] font-bold uppercase tracking-[0.1em] text-slate-500 dark:text-neutral-400 whitespace-nowrap">
+            {isPaused
+              ? "Paused"
+              : partnerAccessRing.state === "onetime" && partnerAccessRing.expiryLabel
+                ? `${partnerAccessRing.expiryLabel} left`
+                : "Partner access"}
+          </span>
+        ) : null}
+      </div>
+    );
+  };
 
   return (
     <>
@@ -1355,7 +1399,13 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
           {/* Header */}
           <div className="flex items-center justify-between p-3 sm:p-4 lg:p-6 border-b-2 border-slate-200/50 dark:border-neutral-700 bg-gradient-to-r from-slate-50 to-white dark:from-neutral-900 dark:to-neutral-950">
             <div className="flex items-center gap-2 sm:gap-3 lg:gap-4 min-w-0 flex-1">
-              {/* User Avatar - Logo or Package Icon (matching UsersManagement) */}
+              {/* Mobile: the partner-access ring stands in for the avatar (no room
+                  for both in the mobile header). Falls back to the avatar when the
+                  member has no partner access. */}
+              {hasPartnerRing && <div className="flex sm:hidden flex-shrink-0">{renderPartnerRing(42, false)}</div>}
+              {/* User Avatar - Logo or Package Icon (matching UsersManagement).
+                  Hidden on mobile when the ring took its place. */}
+              <div className={hasPartnerRing ? "hidden sm:block flex-shrink-0" : "flex-shrink-0"}>
               {hasActiveSubscription && packageIcon ? (
                 <span
                   className={`inline-flex items-center justify-center rounded-full shadow-lg relative overflow-hidden flex-shrink-0 w-10 h-10 sm:w-12 sm:h-12 lg:w-14 lg:h-14 ${
@@ -1392,6 +1442,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                   />
                 </div>
               )}
+              </div>
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap min-w-0">
                   <h2 className="text-[14px] sm:text-lg lg:text-2xl font-bold text-gray-900 dark:text-white truncate">
@@ -1424,38 +1475,12 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                 </div>
               </div>
             </div>
-            {/* Partner-access ring — the SAME instrument the member sees on the
-                /my-account hero (percent while access is live, amber shield while
-                membership access is paused past-due, "{N} left" for one-time windows). */}
-            {partnerAccessRing && partnerAccessRing.state !== "none" && (
-              <div
-                className="hidden sm:flex flex-col items-center gap-0.5 flex-shrink-0 mr-2 lg:mr-3"
-                title="Partner-catalogue access — same ring the member sees on /my-account"
-              >
-                {partnerAccessRing.state === "pastdue" ? (
-                  <AccessRing percent={100} size={52} stroke={6} color="#fbbf24" trackColor="rgba(128,128,128,.18)">
-                    <ShieldAlert className="h-4 w-4" style={{ color: "#fbbf24" }} />
-                  </AccessRing>
-                ) : (
-                  <AccessRing
-                    percent={partnerAccessRing.percent}
-                    size={52}
-                    stroke={6}
-                    color={hasActiveSubscription ? borderGradientColor : "#10b981"}
-                    trackColor="rgba(128,128,128,.18)"
-                  >
-                    <span className="num text-xs font-extrabold text-slate-900 dark:text-white">
-                      {partnerAccessRing.percent}%
-                    </span>
-                  </AccessRing>
-                )}
-                <span className="text-[8px] font-bold uppercase tracking-[0.1em] text-slate-500 dark:text-neutral-400">
-                  {partnerAccessRing.state === "pastdue"
-                    ? "Paused"
-                    : partnerAccessRing.state === "onetime" && partnerAccessRing.expiryLabel
-                      ? `${partnerAccessRing.expiryLabel} left`
-                      : "Partner access"}
-                </span>
+            {/* Partner-access ring on the right — sm+ only (mobile shows it in
+                place of the avatar). Amber shield while past-due access is paused,
+                "{N} left" caption for one-time windows. */}
+            {hasPartnerRing && (
+              <div className="hidden sm:flex flex-shrink-0 mr-2 lg:mr-3">
+                {renderPartnerRing(52, true)}
               </div>
             )}
             <button
@@ -1508,9 +1533,9 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                       value: user.statistics.currentDrawEntries,
                       icon: Trophy,
                       color: "yellow",
-                      // What the next successful renewal (or past-due recovery) grants —
-                      // server-derived via the canonical calculateRenewalEntries math.
-                      sub: majorDrawRenewalSub,
+                      // What the next renewal (or past-due recovery) grants INTO THIS DRAW —
+                      // gated server-side to the current draw cycle (renewalLandsInCurrentDraw).
+                      badge: majorDrawRenewalBadge,
                     },
                     {
                       title: "Rewards Points",
@@ -1545,7 +1570,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                     value: string | number;
                     icon: LucideIcon;
                     color: string;
-                    sub?: string;
+                    badge?: string;
                   }>).map((stat, idx) => {
                     const Icon = stat.icon;
                     const iconConfig = getIconColorConfig(stat.color);
@@ -1570,10 +1595,11 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                           <p className="text-base sm:text-xl lg:text-2xl font-bold text-slate-900 dark:text-white leading-none tracking-tight">
                             {typeof stat.value === "number" ? stat.value.toLocaleString() : stat.value}
                           </p>
-                          {stat.sub ? (
-                            <p className="text-3xs sm:text-2xs lg:text-xs font-semibold text-emerald-600 dark:text-emerald-400 mt-1 truncate">
-                              {stat.sub}
-                            </p>
+                          {stat.badge ? (
+                            <span className="mt-1.5 inline-flex max-w-full items-center gap-1 rounded-full bg-emerald-50 dark:bg-emerald-950/40 px-1.5 py-0.5 text-3xs sm:text-2xs font-bold text-emerald-700 dark:text-emerald-400 ring-1 ring-emerald-200/70 dark:ring-emerald-500/25">
+                              <TrendingUp className="w-2.5 h-2.5 shrink-0" strokeWidth={2.5} aria-hidden />
+                              <span className="truncate">{stat.badge}</span>
+                            </span>
                           ) : null}
                         </div>
                         <div

@@ -1424,7 +1424,7 @@ export const NORM_ENDPOINTS = {
     requiredPermission: "users.view",
     path: "/v1/users/:id",
     method: "GET",
-    summary: "Single-user detail with statistics counts (PII-safe: firstName + state only; email/lastName/mobile/address/savedPaymentMethods/orders array stripped)",
+    summary: "Single-user detail with statistics counts + membership signals: subscription (incl. cancelledAt, nextRenewalEntries — what the next renewal grants — and renewalLandsInCurrentDraw — whether that grant lands in the current draw or a future one) and partnerAccessRing (partner-catalogue access % + state). PII-safe: firstName + state only; email/lastName/mobile/address/savedPaymentMethods/orders array stripped",
     responseSchema: NormUsersGetSchema,
   },
   "users.update": {

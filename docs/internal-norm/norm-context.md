@@ -3717,7 +3717,16 @@ PII not exposed: same uniform user-domain PII discipline — `email`, `lastName`
   createdAt: ISO8601,
   updatedAt: ISO8601,
   lastLogin: ISO8601 | null,
-  subscription: { packageId, packageName, isActive, startDate, endDate, status, autoRenew, lastMonthAccumulatedEntries } | null,  // lastMonthAccumulatedEntries = membership carry-forward entries that roll into the next draw on renewal; preserved through cancellation for resubscribe
+  subscription: { packageId, packageName, isActive, startDate, endDate, cancelledAt, status, autoRenew, lastMonthAccumulatedEntries, nextRenewalEntries, renewalLandsInCurrentDraw } | null,
+    // cancelledAt = ISO when the member scheduled cancellation (still active until endDate); null if not cancelling. cancelledAt set + autoRenew:false ⇒ "scheduled to cancel".
+    // lastMonthAccumulatedEntries = membership carry-forward entries that roll into the next draw on renewal; preserved through cancellation for resubscribe.
+    // nextRenewalEntries = entries the member gets on their NEXT successful renewal (carry-forward + monthly base; NEVER promo-multiplied). For past_due/unpaid it is what settling the failed renewal grants. null when no renewal is coming (autoRenew off / cancelled / not recovering). Use for win-back / renewal-value replies.
+    // renewalLandsInCurrentDraw = true iff those renewal entries land in the CURRENTLY-ACTIVE draw (renewal before its entry freeze). false ⇒ the renewal falls after the current draw closes, so the grant goes to a FUTURE draw and won't boost the member's current-draw entry count. Always false for past_due/cancelled/guest.
+  partnerAccessRing: {                           // partner-catalogue access the member currently sees on their /my-account hero — non-PII
+    state: "active" | "onetime" | "pastdue" | "none",  // active member / one-time-pack buyer / past-due / no access
+    percent: number,                             // 0–100 partner-catalogue access %; 0 when locked (membership access pauses while past_due)
+    expiryLabel: string | null                   // one-time-pack window label e.g. "5 days" / "24hr"; null for lifecycle membership access or when locked
+  },
   statistics: {
     totalSpent: number,                          // AUD dollars; refund-net
     totalOrders: number,                         // count of Order rows
@@ -3731,11 +3740,11 @@ PII not exposed: same uniform user-domain PII discipline — `email`, `lastName`
   accumulatedEntries: number                     // LIFETIME total entries ever received — NOT the renewal carry-forward. For membership win-back replies use subscription.lastMonthAccumulatedEntries (the balance that rolls into the next draw on renewal).
 }
 ```
-PII not exposed: same uniform user-domain discipline — `email`, `lastName`, `mobile`, `address` stripped. The admin route additionally loads full `Order` rows, referral history, and Stripe-side saved payment methods — those are NOT in the Norm projection (`totalOrders`/`totalOrderValue` are counts/sums only; the orders array, referrals feed, and savedPaymentMethods Stripe lookups are stripped to keep the call light and PII-free).
+PII not exposed: same uniform user-domain discipline — `email`, `lastName`, `mobile`, `address` stripped. The admin route additionally loads full `Order` rows, referral history, and Stripe-side saved payment methods — those are NOT in the Norm projection (`totalOrders`/`totalOrderValue` are counts/sums only; the orders array, referrals feed, and savedPaymentMethods Stripe lookups are stripped to keep the call light and PII-free). `partnerAccessRing`, `subscription.nextRenewalEntries`, and `subscription.cancelledAt` are derived operational signals (tier %, entry count, ISO date) — no new PII.
 
 **Inputs**: `id` as path segment (Mongo `User._id`). No query params.
 
-**Data source**: `User` (excluding password/token/savedPaymentMethods/bankDetails) + `PaymentEvent` (refund-net `totalSpent` + total count) + active `MajorDraw` (current-draw entries) + `Order` (count + sum only). Orchestrated by `getAdminUserDetail` in `src/services/admin/UserAdminQueryService.ts`.
+**Data source**: `User` (excluding password/token/savedPaymentMethods/bankDetails) + `PaymentEvent` (refund-net `totalSpent` + total count) + active `MajorDraw` (current-draw entries) + `Order` (count + sum only). `partnerAccessRing` via `resolvePartnerAccessRing` and `nextRenewalEntries` via `resolveNextRenewalEntries` (the same shared resolvers the /my-account hero + admin user-detail modal use, so all three agree). Orchestrated by `getAdminUserDetail` in `src/services/admin/UserAdminQueryService.ts`.
 
 **Constraints**: `read` tier. `requiredPermission: users.view`. Read-only. `400 bad_path` if `id` is not a valid `ObjectId`; `404 not_found` if the user does not exist.
 
