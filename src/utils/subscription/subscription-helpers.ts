@@ -116,4 +116,64 @@ export function hasBlockingSubscription(user: { subscription?: { status?: string
   );
 }
 
+/**
+ * Display-level membership state for admin surfaces (user-detail modal header badge).
+ *
+ * Distinct from the event-history `MembershipNormalizedStatus` (analytics) — this
+ * derives the CURRENT state from the subscription sub-document alone, so it works on
+ * both a raw `IUser.subscription` and the admin API's subscription projection.
+ */
+export type MembershipDisplayStatus =
+  | "active"
+  | "scheduled_cancel"
+  | "past_due"
+  | "paused"
+  | "cancelled"
+  | "none";
+
+/**
+ * Derive the current membership display state.
+ *
+ * Rules (each traced to the real lifecycle):
+ * - Payment recovery first: `past_due` / `unpaid` win even when the member also
+ *   cancelled while past due (the known combination `hasFailedRenewal` documents) —
+ *   the payment problem is the actionable signal.
+ * - `paused` is DEFENSIVE: nothing currently writes `subscription.status = "paused"`
+ *   to the DB (retention pause lives on Stripe's `pause_collection`, which does not
+ *   change the status — see MembershipAnalyticsService "There is no DB 'paused'
+ *   flag"). The arm exists because `BLOCKING_SUBSCRIPTION_STATUSES` anticipates the
+ *   Stripe `paused` status; a retention-paused member therefore currently displays
+ *   as Active (matching every other admin surface) — a known limitation until a DB
+ *   pause signal exists.
+ * - An active subscription with `autoRenew === false` is SCHEDULED TO CANCEL: it stays
+ *   live until `endDate`, then lapses (no renewal). `trialing` here is a paid, active
+ *   member (the 25-27th anchor-day artifact) — never surface "trial".
+ * - `cancelled`/`canceled` (terminal, isActive false) → cancelled.
+ * - `incomplete` / `incomplete_expired` / unknown → never-activated shell → "none"
+ *   (a guest with no membership).
+ */
+export function deriveMembershipDisplayStatus(
+  subscription:
+    | {
+        status?: string;
+        isActive?: boolean;
+        autoRenew?: boolean;
+      }
+    | null
+    | undefined
+): MembershipDisplayStatus {
+  if (!subscription) return "none";
+  const status = subscription.status?.toLowerCase();
+
+  if (status === "past_due" || status === "unpaid") return "past_due";
+  if (status === "paused") return "paused";
+
+  if (subscription.isActive) {
+    return subscription.autoRenew === false ? "scheduled_cancel" : "active";
+  }
+
+  if (status === "cancelled" || status === "canceled") return "cancelled";
+  return "none";
+}
+
 

@@ -117,6 +117,11 @@
 > pack (40% Tradie). Fixed by resolving the % through the shared, queue-aware [`resolvePartnerCatalogPlanId`](../../src/utils/partner-discounts/partner-catalog-visibility.ts)
 > (the same resolver the SSO `member_level` + queue use), so every surface agrees. Active members fall back
 > to the tier map only if the resolver can't resolve.
+>
+> **2026-07-09:** the hook's local `expiryLabel` formatter was replaced by the shared
+> `formatPartnerAccessExpiryLabel` from [`partner-access-ring.ts`](../../src/utils/partner-discounts/partner-access-ring.ts)
+> — the same module that mirrors this whole ring derivation server-side for the admin user-detail modal
+> (`resolvePartnerAccessRing`). One source for the ring math + caption across member and admin surfaces.
 
 > <a id="partner-access-for-past-due"></a>**Partner access for past-due members (2026-07-03):**
 > `partnerAccessPct` / `partnerAccessExpiryLabel` were only computed for `acct === "active" | "onetime"`,
