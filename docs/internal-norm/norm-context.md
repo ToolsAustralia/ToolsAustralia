@@ -2627,6 +2627,32 @@ Rows are sorted first by `adFormat` (`video` → `static` → `carousel` → `un
 
 ---
 
+### `GET /v1/analytics/repeat-purchases`
+
+**Returns**: All-time summary of one-time-package **repeat purchases** (reconversion) — the one-time equivalent of renewal analytics: buyers who purchased a one-time pack and came back to buy again.
+```ts
+{
+  oneTimeBuyers: number,          // distinct users with ≥1 countable one-time purchase
+  repeatBuyers: number,           // distinct users with ≥2
+  repeatRate: number,             // repeatBuyers / oneTimeBuyers, 0–1
+  medianDaysToReturn: number | null,  // median AEST-day gap first→second; null if no repeat buyers
+  repeatRevenue: number,          // AUD; sum of 2nd-and-later purchase prices
+  becameMembers: number,          // repeat buyers who later started a membership (new sub, not a renewal)
+  totalPurchases: number,         // total countable one-time purchases
+  buckets: Array<{ bucket: string, users: number, sharePct: number, revenue: number }>,   // first→second gap: same-day | 1-7d | 7-30d | 30-60d | 60-90d | 90-180d | 180d+; revenue = repeat revenue (2nd+ purchases) from buyers in the bucket, buckets sum to repeatRevenue
+  windows: Array<{ windowDays: number, eligible: number, returned: number, rate: number }>  // matured return-rate per window (1/7/30/60/90/180d)
+}
+```
+A **countable one-time purchase** = `BenefitsGranted` with `packageType: "one-time"`, refund-netted (rows whose `paymentIntentId` has a `RefundProcessed` are dropped). Excludes `upsell` (same-session appendage), `mini-draw` (separate product), and `membership`. The cohort is **one-time buyers who were NOT an active member when they bought** — people choosing one-time packs instead of a subscription. Active-member top-ups (Additional packs) are excluded; never-members, one-time buyers who *later* subscribe, and **lapsed members who keep buying one-time packs after their subscription ended** are included (the latter are prime "persuade to resubscribe" targets). "Active at purchase" = a membership charge exists after that purchase, or the most recent one is within ~30 days before it. `daysToReturn` is measured in **AEST calendar days** anchor→second purchase. `windows[]` uses **matured denominators**: `eligible(W)` counts only buyers whose first purchase is ≥ W days old, so a young dataset never reports a misleading long-window rate. `becameMembers` flags (never excludes) buyers who later started a membership (`data.billingReason !== "subscription_cycle"`) after their first one-time purchase.
+
+**Inputs**: none (all-time). The admin tab supports a cohort date filter on first-purchase date; the Norm read is all-time only.
+
+**Data source**: `getRepeatPurchaseSummary` (`src/services/admin/repeatPurchaseAnalytics.ts`) — live aggregation over `PaymentEvent` (one lean scan of one-time `BenefitsGranted` + a membership-conversion scan), refund set from `loadRefundedPaymentIntentIds`. The same service powers the admin **Repeat Purchases** analytics tab, so figures match.
+
+**Constraints**: `read` tier. `requiredPermission: pageAnalytics.view`. Rate limit 10/min. Read-only. **No PII** — aggregate counts only (the admin per-user cohort list is intentionally NOT mirrored). Identity is per `userId`; the same human on two emails counts as two users.
+
+---
+
 ### `GET /v1/metrics/debug`
 
 **Returns**: Engineer-facing diagnostic snapshot of recent `BenefitsGranted` PaymentEvent activity for a sliding window.

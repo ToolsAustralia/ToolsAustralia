@@ -702,7 +702,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "eslint/rules/norm-must-import-service.js",
         "eslint/rules/index.js"
       ],
-      "lastVerified": "2026-07-02"
+      "lastVerified": "2026-07-09"
     },
     "admin": {
       "docs": "docs/admin/",

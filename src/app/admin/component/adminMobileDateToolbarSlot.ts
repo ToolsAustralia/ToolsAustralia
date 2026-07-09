@@ -7,6 +7,7 @@ export const ADMIN_TABS_WITH_MOBILE_LAYOUT_DATE_TOOLBAR = [
   "facebook-ads",
   "promo-analytics",
   "cancellation-flow",
+  "repeat-purchases",
   "tiktok-ads",
   "snapchat-ads",
   "all-platforms",

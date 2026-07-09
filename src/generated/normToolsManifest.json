@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-07-09T01:32:04.260Z",
+  "generatedAt": "2026-07-09T06:24:52.223Z",
   "endpoints": [
     {
       "registryKey": "pending-actions.status",
@@ -183,6 +183,13 @@
       "path": "/v1/analytics/mer-by-draw",
       "method": "GET",
       "summary": "Marketing Efficiency Ratio (New Revenue ÷ Ad Spend) per major draw, with per-platform breakdown. New Revenue excludes subscription renewals; blended numerator spans all platforms incl. direct. One row per draw since attribution went live (28 Apr 2026), newest first."
+    },
+    {
+      "registryKey": "analytics.repeat-purchases",
+      "tier": "read",
+      "path": "/v1/analytics/repeat-purchases",
+      "method": "GET",
+      "summary": "One-time-package repeat-purchase (reconversion) summary, all-time: distinct one-time buyers, repeat buyers, repeat rate, median days to return, repeat revenue, became-members count, first→second gap buckets, and matured return-rate-by-window. Aggregate counts only, no PII. Excludes upsells, mini-draws, and membership renewals; refunded purchases netted out."
     },
     {
       "registryKey": "cancellation-flow-analytics.list",

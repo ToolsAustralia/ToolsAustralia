@@ -66,11 +66,27 @@ whose second purchase came within W days; `rate = returned/eligible`. This avoid
 left-censoring lie (site is 7.4 months old — the 180d window has a tiny matured cohort). Same
 "matured vs pending" concept as `Retention90Split` in cancellation analytics.
 
+**Cohort = one-time buyers who were NOT an ACTIVE member when they bought (added 2026-07-09
+after owner review).** The purpose is the one-time-buyer recurrence story — people buying
+one-time packs *instead of* subscribing, whom we could persuade to subscribe. A user is
+excluded only if they were an **active member at their first one-time purchase**
+(`wasActiveMemberAt`: a membership charge exists after the anchor, or the most recent charge
+is within 30 days before it). This deliberately:
+- **excludes** active members topping up with Additional packs (already recurring via a sub);
+- **keeps** never-members and one-time buyers who *later* subscribe (`becameMember`);
+- **keeps** lapsed members who resume buying one-time packs after their subscription ended
+  (e.g. charged 9 Jun, bought 10 Jul → 31 days → lapsed → included) — a prime "win them back
+  to a subscription" target. This case is why we use *active-at-purchase* rather than
+  *ever-a-member-before*.
+
+Caveats: the 30-day coverage approximates one billing cycle (PaymentEvent stores no per-charge
+period-end); a member who signed up before the `paymentevents` collection began (2025-11-27)
+may only have renewal rows, limiting detection for pre-launch members.
+
 **`becameMember` flag (per user)** — true when a `packageType: "membership"` BenefitsGranted
-with `data.billingReason !== "subscription_cycle"` (the established new-membership
-discriminator, `revenueAggregator.ts:84-86`) exists after the anchor. Surfaced as a flag +
-summary count, NOT an exclusion — one-time → member conversion is a different success story
-the owner will want visible.
+with `data.billingReason !== "subscription_cycle"` exists *after* the anchor. With member-first
+users excluded from the cohort, this now cleanly means "a one-time buyer who **later** converted
+to a member" — surfaced as a flag, a KPI count, and a Users-list filter (Members / Non-members).
 
 **Known limitation (documented in UI footnote):** identity is `userId`; the same human on two
 emails counts as two users (no account-merge machinery exists in the codebase).
@@ -186,13 +202,13 @@ users-list endpoint is mirrored only with the PII-safe projection (firstName + o
 analytics KPI surface).
 
 ## 7. Out of scope (deliberately)
-- **Klaviyo activation (approved direction, phase 2):** add `first_one_time_purchase_date` +
-  `last_one_time_purchase_date` to the existing profile sync (`klaviyo-helpers.ts` — today's
-  `first/last_purchase_date` mix one-time + mini-draw + upsell dates) plus a dry-run-first
-  backfill script (`backfill-klaviyo-membership-properties.ts` pattern). No pushed derivations
-  (repeat flags/buckets) — Klaviyo derives targeting natively from `Placed Order`
-  (`package_type` always emitted) + these dates; the winback flow itself is built in Klaviyo's
-  UI with zero code. Trips the CUSTOMER.md hook (third-party data change) — update in-task.
+- **Klaviyo activation — DEFERRED (not building now, owner decision 2026-07-09).** Not required
+  for this feature. Documented option for later: the winback flow + "repeat one-time buyer"
+  segment can already be built in Klaviyo's UI today (every purchase fires `Placed Order` with
+  `package_type` always emitted; profiles carry `total_one_time_packages` + `membership_status`).
+  The only code gap, if ever pursued, is one-time-specific date properties
+  (`first/last_one_time_purchase_date`) since today's `first/last_purchase_date` pool one-time +
+  mini-draw + upsell. No pushed analytics derivations. Revisit after the tab ships.
 - CSV export of the cohort (`users.export`-gated route + blob download) — cheap follow-up if
   wanted.
 - Mini-draw comebacks as an opt-in toggle.
