@@ -308,6 +308,7 @@
     "migrate:seed-staff-roles:dry": "tsx scripts/migrate-seed-staff-roles.ts --dry-run",
     "test:staff-activity": "tsx src/lib/__tests__/staff-activity.test.ts",
     "test:session-invalidation": "tsx src/lib/__tests__/session-invalidation.test.ts",
+    "test:membership-display-status": "tsx src/utils/subscription/__tests__/membership-display-status.test.ts",
     "migrate:create-norm": "tsx scripts/migrations/2026-05-20-create-norm-user-and-role.ts",
     "migrate:rename-additional-flag": "tsx scripts/migrations/2026-07-01-rename-membership-package-is-additional.ts",
     "migrate:rename-additional-flag:apply": "tsx scripts/migrations/2026-07-01-rename-membership-package-is-additional.ts --apply",

@@ -5,6 +5,7 @@ import type { LucideIcon } from "lucide-react";
 import {
   AlertTriangle,
   Ban,
+  CalendarClock,
   CheckCircle,
   Clock,
   CreditCard,
@@ -12,6 +13,7 @@ import {
   XCircle,
 } from "lucide-react";
 import type { AdminUserListItem } from "@/types/admin";
+import { deriveMembershipDisplayStatus } from "@/utils/subscription/subscription-helpers";
 
 /** Matches subscription column badges in admin users table */
 export const ADMIN_BADGE_BASE =
@@ -129,6 +131,72 @@ export function renderSubscriptionStateBadge(
 
 export function renderAdminSubscriptionBadge(user: AdminUserListItem): React.ReactNode {
   return renderSubscriptionStateBadge(user.subscription ?? null);
+}
+
+/**
+ * Rich membership-state badge for the user-detail modal HEADER.
+ *
+ * Unlike the coarse `renderSubscriptionStateBadge` (list rows), this surfaces the
+ * full lifecycle the admin needs at a glance — including "scheduled to cancel"
+ * with its end date — via the shared `deriveMembershipDisplayStatus` derivation.
+ */
+export function renderMembershipStatusBadge(
+  subscription?:
+    | { status?: string; isActive?: boolean; autoRenew?: boolean; endDate?: string | Date | null }
+    | null
+): React.ReactNode {
+  const state = deriveMembershipDisplayStatus(subscription);
+
+  switch (state) {
+    case "active":
+      return (
+        <AdminBadge
+          variant="success"
+          icon={CreditCard}
+          iconClassName="opacity-90 text-emerald-600 dark:text-emerald-400"
+          showPulseDot
+        >
+          Active member
+        </AdminBadge>
+      );
+    case "past_due":
+      return (
+        <AdminBadge variant="warning" icon={AlertTriangle} iconClassName="text-amber-600 dark:text-amber-400">
+          Past Due
+        </AdminBadge>
+      );
+    case "paused":
+      return (
+        <AdminBadge variant="info" icon={PauseCircle} iconClassName="text-sky-600 dark:text-sky-400">
+          Paused
+        </AdminBadge>
+      );
+    case "scheduled_cancel": {
+      const endRaw = subscription?.endDate ? new Date(subscription.endDate) : null;
+      const endLabel =
+        endRaw && !Number.isNaN(endRaw.getTime())
+          ? endRaw.toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" })
+          : null;
+      return (
+        <AdminBadge variant="tagOrange" icon={CalendarClock} iconClassName="text-orange-600 dark:text-orange-400">
+          {endLabel ? `Cancels ${endLabel}` : "Cancellation scheduled"}
+        </AdminBadge>
+      );
+    }
+    case "cancelled":
+      return (
+        <AdminBadge variant="danger" icon={XCircle} iconClassName="text-red-600 dark:text-red-400">
+          Cancelled
+        </AdminBadge>
+      );
+    case "none":
+    default:
+      return (
+        <AdminBadge variant="neutral" icon={Ban} iconClassName="opacity-70">
+          Guest — no membership
+        </AdminBadge>
+      );
+  }
 }
 
 export function VerificationBadge({ verified, label }: { verified: boolean; label?: string }) {

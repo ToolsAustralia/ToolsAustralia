@@ -15,3 +15,7 @@ Membership-discount eligibility lives in the queue, not in `User.subscription` d
 ## P3. Visibility computed server-side
 
 Catalog visibility resolution happens server-side via `partner-catalog-visibility.ts` — don't filter on the client. Prevents enumeration attacks and keeps logic central.
+
+## P4. Partner-access ring resolved once, shared across surfaces (2026-07-09)
+
+[`resolvePartnerAccessRing(user)`](../../src/utils/partner-discounts/partner-access-ring.ts) is the single derivation for the "access %" ring instrument: state precedence `pastdue > active > onetime > none` (`deriveDashboardAccountState`), percent from the shared queue-aware resolver (`buildPartnerCatalogContext` → `resolvePartnerCatalogPlanId` → `getPartnerCatalogAccessPercentForPlanId` — downgrade-preservation aware, never guessed from the stored packageId), and the past-due nuance (membership access pauses; a paid one-time window with `source !== "membership"` is kept). It mirrors `useDashboardState`'s hero-ring math exactly and feeds the admin user-detail modal via `AdminUserDetail.partnerAccessRing` (server-derived — no access logic in admin JSX). `formatPartnerAccessExpiryLabel` is the single "{N} days / 24hr" caption formatter (the dashboard hook imports it too). New surfaces needing the ring should consume this util, not re-derive.

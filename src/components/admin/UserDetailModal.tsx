@@ -26,6 +26,8 @@ import {
   Copy,
   Check,
   ShieldCheck,
+  ShieldAlert,
+  type LucideIcon,
 } from "lucide-react";
 import ActivityTab from "./UserDetailModal/ActivityTab";
 import { Controller, useFieldArray, useForm } from "react-hook-form";
@@ -74,10 +76,13 @@ import {
   EntrySourceBadge,
   MiniDrawParticipationStatusBadge,
   OrderStatusBadge,
+  renderMembershipStatusBadge,
   renderSubscriptionStateBadge,
   SubscriptionHistoryStatusBadge,
   VerificationBadge,
 } from "@/components/admin/ui/AdminBadge";
+import AccessRing from "@/components/ui/AccessRing";
+import { deriveMembershipDisplayStatus } from "@/utils/subscription/subscription-helpers";
 import { cn } from "@/utils/cn";
 
 // Proper interfaces for user data structures
@@ -1321,6 +1326,27 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
     user?.subscription?.packageName?.toLowerCase().includes("boss") ||
     user?.subscription?.packageName?.toLowerCase().includes("power");
 
+  // Header badge + partner-access ring + next-renewal preview. All three are
+  // server-derived (shared canonical helpers) — the modal only formats them.
+  const membershipDisplayStatus = deriveMembershipDisplayStatus(user.subscription);
+  const partnerAccessRing = user.partnerAccessRing ?? null;
+  const nextRenewalEntries = user.subscription?.nextRenewalEntries ?? null;
+  const renewalEndDate =
+    user.subscription?.endDate && user.subscription?.autoRenew !== false
+      ? new Date(user.subscription.endDate)
+      : null;
+  // date-fns format() THROWS on an invalid date — guard before formatting.
+  const renewalDateLabel =
+    renewalEndDate && !Number.isNaN(renewalEndDate.getTime())
+      ? format(renewalEndDate, "d MMM yyyy")
+      : null;
+  const majorDrawRenewalSub =
+    nextRenewalEntries != null
+      ? membershipDisplayStatus === "past_due"
+        ? `+${nextRenewalEntries.toLocaleString()} after payment recovery`
+        : `+${nextRenewalEntries.toLocaleString()} on renewal${renewalDateLabel ? ` · ${renewalDateLabel}` : ""}`
+      : undefined;
+
   return (
     <>
       {/* Main Modal */}
@@ -1367,9 +1393,15 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                 </div>
               )}
               <div className="min-w-0 flex-1">
-                <h2 className="text-[14px] sm:text-lg lg:text-2xl font-bold text-gray-900 dark:text-white truncate">
-                  {formatDisplayName(user?.firstName, user?.lastName)}
-                </h2>
+                <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap min-w-0">
+                  <h2 className="text-[14px] sm:text-lg lg:text-2xl font-bold text-gray-900 dark:text-white truncate">
+                    {formatDisplayName(user?.firstName, user?.lastName)}
+                  </h2>
+                  {/* Membership lifecycle at a glance: Active / Past Due / Paused /
+                      Cancels {date} / Cancelled / Guest — derived from the same
+                      subscription fields the customer lifecycle uses. */}
+                  <span className="flex-shrink-0">{renderMembershipStatusBadge(user?.subscription)}</span>
+                </div>
                 <div className="flex items-center gap-1 sm:gap-1.5 min-w-0 mt-0.5">
                   <p className="text-2xs sm:text-xs lg:text-base text-gray-600 dark:text-neutral-400 truncate min-w-0">
                     {user?.email}
@@ -1392,6 +1424,40 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                 </div>
               </div>
             </div>
+            {/* Partner-access ring — the SAME instrument the member sees on the
+                /my-account hero (percent while access is live, amber shield while
+                membership access is paused past-due, "{N} left" for one-time windows). */}
+            {partnerAccessRing && partnerAccessRing.state !== "none" && (
+              <div
+                className="hidden sm:flex flex-col items-center gap-0.5 flex-shrink-0 mr-2 lg:mr-3"
+                title="Partner-catalogue access — same ring the member sees on /my-account"
+              >
+                {partnerAccessRing.state === "pastdue" ? (
+                  <AccessRing percent={100} size={52} stroke={6} color="#fbbf24" trackColor="rgba(128,128,128,.18)">
+                    <ShieldAlert className="h-4 w-4" style={{ color: "#fbbf24" }} />
+                  </AccessRing>
+                ) : (
+                  <AccessRing
+                    percent={partnerAccessRing.percent}
+                    size={52}
+                    stroke={6}
+                    color={hasActiveSubscription ? borderGradientColor : "#10b981"}
+                    trackColor="rgba(128,128,128,.18)"
+                  >
+                    <span className="num text-xs font-extrabold text-slate-900 dark:text-white">
+                      {partnerAccessRing.percent}%
+                    </span>
+                  </AccessRing>
+                )}
+                <span className="text-[8px] font-bold uppercase tracking-[0.1em] text-slate-500 dark:text-neutral-400">
+                  {partnerAccessRing.state === "pastdue"
+                    ? "Paused"
+                    : partnerAccessRing.state === "onetime" && partnerAccessRing.expiryLabel
+                      ? `${partnerAccessRing.expiryLabel} left`
+                      : "Partner access"}
+                </span>
+              </div>
+            )}
             <button
               onClick={onCloseAction}
               className="rounded-lg text-gray-400 hover:text-gray-600 dark:text-neutral-400 dark:hover:text-neutral-200 hover:bg-gray-100/80 dark:hover:bg-neutral-800 transition-colors flex-shrink-0 p-1 sm:p-2"
@@ -1430,7 +1496,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
               <div className="space-y-3 sm:space-y-4 lg:space-y-6">
                 {/* Quick Stats - Elevated Design with Darker Icon Backgrounds */}
                 <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-2 sm:gap-3 lg:gap-4">
-                  {[
+                  {([
                     {
                       title: "Total Spent",
                       value: formatCurrency(user.statistics.totalSpent),
@@ -1442,6 +1508,9 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                       value: user.statistics.currentDrawEntries,
                       icon: Trophy,
                       color: "yellow",
+                      // What the next successful renewal (or past-due recovery) grants —
+                      // server-derived via the canonical calculateRenewalEntries math.
+                      sub: majorDrawRenewalSub,
                     },
                     {
                       title: "Rewards Points",
@@ -1471,7 +1540,13 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                           },
                         ]
                       : []),
-                  ].map((stat, idx) => {
+                  ] as Array<{
+                    title: string;
+                    value: string | number;
+                    icon: LucideIcon;
+                    color: string;
+                    sub?: string;
+                  }>).map((stat, idx) => {
                     const Icon = stat.icon;
                     const iconConfig = getIconColorConfig(stat.color);
                     return (
@@ -1495,6 +1570,11 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                           <p className="text-base sm:text-xl lg:text-2xl font-bold text-slate-900 dark:text-white leading-none tracking-tight">
                             {typeof stat.value === "number" ? stat.value.toLocaleString() : stat.value}
                           </p>
+                          {stat.sub ? (
+                            <p className="text-3xs sm:text-2xs lg:text-xs font-semibold text-emerald-600 dark:text-emerald-400 mt-1 truncate">
+                              {stat.sub}
+                            </p>
+                          ) : null}
                         </div>
                         <div
                           className={cn("h-1", iconConfig.bg, "opacity-60 group-hover:opacity-100 transition-opacity duration-300")}

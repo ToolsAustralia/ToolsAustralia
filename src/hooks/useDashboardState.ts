@@ -14,6 +14,7 @@ import { getPastDueRenewalPreview } from "@/utils/subscription/past-due-renewal-
 import { calculateRenewalEntries } from "@/utils/payment/subscription-entries-calculator";
 import { TIER_HEX, tierKeyFromName, type TierKey } from "@/utils/membership/tier-visuals";
 import { getPartnerCatalogAccessPercentForPlanId, resolvePartnerCatalogPlanId } from "@/utils/partner-discounts/partner-catalog-visibility";
+import { formatPartnerAccessExpiryLabel } from "@/utils/partner-discounts/partner-access-ring";
 import { getPartnerDiscountAccessInfo } from "@/utils/membership/benefit-resolution";
 import {
   deriveDashboardAccountState,
@@ -72,12 +73,9 @@ function monthsBetween(start: Date, now: Date): number {
   return Math.max(0, now.getDate() >= start.getDate() ? months : months - 1);
 }
 
-function expiryLabel(days: number, hours: number): string | null {
-  if (days > 1) return `${days} days`;
-  if (days === 1) return "1 day";
-  if (hours > 0) return `${hours}hr`;
-  return null;
-}
+// Single source for the "{N} days left" ring caption — shared with the admin
+// user-detail modal's partner-access ring (partner-access-ring.ts).
+const expiryLabel = formatPartnerAccessExpiryLabel;
 
 /**
  * Single source of dashboard-home view state: resolves the account state

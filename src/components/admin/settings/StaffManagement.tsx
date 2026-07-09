@@ -11,6 +11,7 @@ import {
   AlertCircle,
   Crown,
   Loader2,
+  Pencil,
   Plus,
   Search,
   Send,
@@ -91,6 +92,7 @@ export default function StaffManagement() {
   const [search, setSearch] = useState("");
   const [inviting, setInviting] = useState(false);
   const [removing, setRemoving] = useState<StaffUser | null>(null);
+  const [editing, setEditing] = useState<StaffUser | null>(null);
   const [rowError, setRowError] = useState<Record<string, string>>({});
 
   const staff = staffResp?.data ?? [];
@@ -174,6 +176,7 @@ export default function StaffManagement() {
               onRemoveRequest={
                 canRemoveStaff ? () => setRemoving(s) : undefined
               }
+              onEditRequest={canInviteStaff ? () => setEditing(s) : undefined}
               onMutated={() => qc.invalidateQueries({ queryKey: ["admin", "staff"] })}
             />
           ))}
@@ -201,6 +204,17 @@ export default function StaffManagement() {
           }}
         />
       )}
+
+      {editing && (
+        <EditStaffModal
+          staff={editing}
+          onClose={() => setEditing(null)}
+          onSaved={() => {
+            setEditing(null);
+            qc.invalidateQueries({ queryKey: ["admin", "staff"] });
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -211,6 +225,7 @@ function StaffRow({
   error,
   onRowError,
   onRemoveRequest,
+  onEditRequest,
   onMutated,
 }: {
   staff: StaffUser;
@@ -219,6 +234,8 @@ function StaffRow({
   onRowError: (id: string, message: string | null) => void;
   /** Undefined hides the Remove button (caller gates by settings.delete). */
   onRemoveRequest?: () => void;
+  /** Undefined hides the Edit-name button (caller gates by settings.edit). */
+  onEditRequest?: () => void;
   onMutated: () => void;
 }) {
   const { data: session } = useSession();
@@ -320,6 +337,16 @@ function StaffRow({
         </div>
 
         <div className="flex gap-1">
+          {onEditRequest && (
+            <button
+              type="button"
+              title="Edit name"
+              onClick={onEditRequest}
+              className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-neutral-800 text-gray-600 dark:text-gray-300 transition-colors"
+            >
+              <Pencil className="w-4 h-4" />
+            </button>
+          )}
           {staff.inviteStatus !== "active" && (
             <button
               type="button"
@@ -490,6 +517,93 @@ function InviteModal({
         >
           {mut.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
           Send invite
+        </button>
+      </div>
+    </ModalShell>
+  );
+}
+
+function EditStaffModal({
+  staff,
+  onClose,
+  onSaved,
+}: {
+  staff: StaffUser;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const [firstName, setFirstName] = useState(staff.firstName);
+  const [lastName, setLastName] = useState(staff.lastName);
+  const [error, setError] = useState<string | null>(null);
+
+  const mut = useMutation({
+    mutationFn: async () => {
+      const r = await fetch(`/api/admin/staff/${staff.id}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ firstName: firstName.trim(), lastName: lastName.trim() }),
+      });
+      if (!r.ok) throw new Error((await safeError(r)) ?? "Failed to save name");
+    },
+    onSuccess: () => onSaved(),
+    onError: (e: unknown) => setError((e as Error).message),
+  });
+
+  const canSubmit =
+    firstName.trim() &&
+    lastName.trim() &&
+    (firstName.trim() !== staff.firstName || lastName.trim() !== staff.lastName) &&
+    !mut.isPending;
+
+  return (
+    <ModalShell title="Edit name" onClose={onClose}>
+      <p className="text-sm text-gray-500 dark:text-gray-400 mb-3 -mt-2">
+        {staff.email}
+      </p>
+      <div className="grid grid-cols-2 gap-3 mb-4">
+        <label className="block">
+          <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+            First name
+          </span>
+          <input
+            autoFocus
+            value={firstName}
+            onChange={(e) => setFirstName(e.target.value)}
+            maxLength={50}
+            className="mt-1 w-full border border-gray-200 dark:border-gray-700 bg-white dark:bg-neutral-800 text-gray-900 dark:text-gray-100 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#ee0000]/40"
+          />
+        </label>
+        <label className="block">
+          <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+            Last name
+          </span>
+          <input
+            value={lastName}
+            onChange={(e) => setLastName(e.target.value)}
+            maxLength={50}
+            className="mt-1 w-full border border-gray-200 dark:border-gray-700 bg-white dark:bg-neutral-800 text-gray-900 dark:text-gray-100 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#ee0000]/40"
+          />
+        </label>
+      </div>
+      {error && (
+        <p className="text-red-600 dark:text-red-400 text-sm mb-3">{error}</p>
+      )}
+      <div className="flex justify-end gap-2">
+        <button
+          type="button"
+          onClick={onClose}
+          className="px-3 py-1.5 text-sm rounded-lg hover:bg-gray-100 dark:hover:bg-neutral-800 text-gray-700 dark:text-gray-200"
+        >
+          Cancel
+        </button>
+        <button
+          type="button"
+          disabled={!canSubmit}
+          onClick={() => mut.mutate()}
+          className="px-3 py-1.5 text-sm rounded-lg bg-gradient-to-r from-[#ee0000] to-[#ff4444] text-white font-medium hover:shadow-lg disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1.5"
+        >
+          {mut.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
+          Save
         </button>
       </div>
     </ModalShell>

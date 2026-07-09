@@ -218,6 +218,12 @@ export interface AdminUserDetail {
     lastDowngradeDate?: string;
     lastUpgradeDate?: string;
     lastMonthAccumulatedEntries?: number;
+    /**
+     * Entries granted on the next successful renewal (carry-forward + monthly base —
+     * the canonical calculateRenewalEntries math; renewals are never promo-multiplied).
+     * Null when no renewal is coming (autoRenew off, cancelled, guest).
+     */
+    nextRenewalEntries?: number | null;
   } | null;
 
   // Package Information
@@ -303,6 +309,18 @@ export interface AdminUserDetail {
     }>;
     totalQueuedDays: number;
     totalQueuedItems: number;
+  };
+
+  /**
+   * Partner-access ring — mirrors the my-account hero ring (same resolver + precedence:
+   * pastdue > active > onetime > none). `percent` is 0 while locked/paused; `expiryLabel`
+   * is the one-time window label ("5 days" / "24hr"). Optional for back-compat with
+   * cached payloads predating this field.
+   */
+  partnerAccessRing?: {
+    state: "active" | "onetime" | "pastdue" | "none";
+    percent: number;
+    expiryLabel: string | null;
   };
 
   // Saved payment methods preview

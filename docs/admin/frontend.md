@@ -66,6 +66,35 @@ KPI revenue breakdown uses) plus a `totals.membershipRenewals`. This is the admi
 time-series endpoint only; the Norm `dashboard.revenue-breakdown` endpoint is a
 separate single-period shape and is unaffected.
 
+## UserDetailModal — header status badge, partner-access ring, renewal-entries preview (2026-07-09)
+
+Three at-a-glance additions so an admin understands the account without digging:
+
+- **Membership status badge** (header, next to the name): `renderMembershipStatusBadge(user.subscription)`
+  ([AdminBadge.tsx](../../src/components/admin/ui/AdminBadge.tsx)) driven by the shared pure derivation
+  [`deriveMembershipDisplayStatus`](../../src/utils/subscription/subscription-helpers.ts) — states:
+  **Active member** (incl. `trialing`, the anchor-day artifact — never shown as "trial") / **Cancels {endDate}**
+  (active + `autoRenew: false`) / **Past Due** (`past_due`/`unpaid`; wins over cancelled-while-past-due) /
+  **Paused** (defensive arm — nothing writes a DB `paused` status today; retention pause lives on Stripe
+  `pause_collection`, so retention-paused members display as Active, same as every other admin surface) /
+  **Cancelled** / **Guest — no membership** (incomplete/none). The route now
+  also projects `subscription.cancelledAt` (was declared on `AdminUserDetail` but never sent). Regression
+  test: `npm run test:membership-display-status`.
+- **Partner-access ring** (header, before the close button, `sm+`): the SAME instrument the member sees on
+  the /my-account hero — percent ring while access is live ("{N} left" caption for one-time windows), amber
+  `ShieldAlert` "Paused" ring while past-due (membership access pauses; a paid one-time window is kept).
+  Server-derived as `partnerAccessRing` on `AdminUserDetail` via
+  [`resolvePartnerAccessRing`](../../src/utils/partner-discounts/partner-access-ring.ts) — queue-aware,
+  downgrade-preservation aware, same precedence (pastdue > active > onetime > none) and primitives as
+  `useDashboardState`; **no access logic in the JSX**. Renders the shared
+  [`AccessRing`](../../src/components/ui/AccessRing.tsx).
+- **Next-renewal entries preview** (Overview → "Major Draw Entries" card sub-line): "+N on renewal · {date}"
+  for renewing members, "+N after payment recovery" for past-due. Server-derived as
+  `subscription.nextRenewalEntries` using the CANONICAL math (`calculateRenewalEntries` — carry-forward +
+  monthly base, never promo-multiplied; effective package via `getEffectiveBenefits`, recovery via
+  `getRenewalEntriesPreviewForProfile`) — the same number the member's dashboard note, the renewal-failure
+  email, and Klaviyo show. `null` (no sub-line) when no renewal is coming (autoRenew off / cancelled / guest).
+
 ## UserDetailModal — Partner Discount Access section (2026-06-16)
 
 The Activity tab of [`UserDetailModal`](../../src/components/admin/UserDetailModal.tsx) now shows a
@@ -86,7 +115,8 @@ history, but the card uses the reconciled summary.
 
 > Not yet mirrored to Norm: `partnerDiscountSummary` is on the admin `buildAdminUserProfile` shape,
 > which Norm's `users.get` does not consume (Norm uses a separate projection). It could be exposed to
-> Norm (counts + dates are PII-safe) — flagged, not wired.
+> Norm (counts + dates are PII-safe) — flagged, not wired. The same applies to the 2026-07-09 additions
+> (`partnerAccessRing`, `subscription.nextRenewalEntries`, `subscription.cancelledAt`).
 
 ## A/B VariantConfigEditor — "Static hero image only (disable hero video)" (2026-06-15)
 
