@@ -125,15 +125,15 @@ Verbose audits belong in `/plan`, `/review`, and `/debug`. Outside those skills,
 
 Worktrees for this repo live at `<repo-root>/.worktrees/<kebab-branch-name>/`, not under `.claude/worktrees/` or any other location. Use the existing `wt-new.sh` script when present — it handles env file copy and `npm install`. If you're using an EnterWorktree-style tool with a different default, override it.
 
-**`.env.local` does NOT merge — sync it on merge-back.** `.env.local` is **gitignored** (`.gitignore`), so it is per-folder and git **never** carries it between a worktree and the main folder — merging a branch moves tracked files only. `wt-new.sh` copies it **main → new worktree** at creation, but there is **no automatic reverse**. So when a worktree/branch is merged into the main folder (or its branch is merged to `main`), any env vars the branch introduced in its `.env.local` must be **manually added to the main folder's `.env.local`**, or the merged code runs on main missing its config. On merge-back, diff the two files by var name and append the missing ones **with their values**:
+**`.env.local` does NOT merge — sync it directly, don't wait for merge.** `.env.local` is **gitignored** (`.gitignore`), so git **never** carries it between a worktree and the main folder — merging moves tracked files only. `wt-new.sh` copies it **main → new worktree** at creation, but there is **no automatic reverse**. So whenever you add or change an env var in a **worktree's** `.env.local`, **also add it to the main folder's `.env.local` right then** (keep the two in sync) — the main folder needs the config independently of git, so there's no reason to defer to a merge. Diff the two files by var name to find what's missing:
 
 ```bash
-# from the worktree: list VAR= names present here but not in the main folder's .env.local
+# from the worktree: VAR= names present here but not in the main folder's .env.local
 comm -23 <(grep -oE '^[A-Za-z_][A-Za-z0-9_]*=' .env.local | sed 's/=//' | sort -u) \
          <(grep -oE '^[A-Za-z_][A-Za-z0-9_]*=' <repo-root>/.env.local | sed 's/=//' | sort -u)
 ```
 
-The tracked `.env.example` DOES merge and is the authoritative list of *which* vars exist — keep it updated so the merged main folder knows what to fill in. **Production/Vercel env is separate** — new vars must also be added there (see `.env.example` comments). When you finish a branch that added env vars, remind the user to sync `.env.local` to the main folder + Vercel.
+Keep the tracked `.env.example` updated too — it IS the authoritative list of *which* vars exist, and it DOES merge. **Production/Vercel env is separate** — add new vars there as well (see `.env.example` comments). When a branch adds an env var, sync it to the main folder's `.env.local` + Vercel then and there, not at merge time.
 
 ### 10. Mirror admin API changes to Norm — or flag them
 
