@@ -115,7 +115,11 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, email }) => {
       if (result?.error) {
         // Check if error is related to email verification
         const errorMessage = result.error.toLowerCase();
-        if (errorMessage.includes("email") && errorMessage.includes("verify")) {
+        if (result.error === "ACCOUNT_DEACTIVATED") {
+          // Deactivated accounts are rejected at login (auth.ts authorize) —
+          // show the real reason instead of "invalid credentials".
+          setError("This account has been deactivated. Please contact an administrator.");
+        } else if (errorMessage.includes("email") && errorMessage.includes("verify")) {
           setNeedsEmailVerification(true);
           setError("Please verify your email address to continue.");
           // Show verification UI - user must click "Send Verification Code" to receive email
@@ -542,7 +546,13 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, email }) => {
           router.push("/my-account");
           router.refresh();
         } else {
-          setError(result.error || "Sign-in failed. Please try again.");
+          // result.error is a machine code (e.g. "CredentialsSignin"), not
+          // display copy — map it instead of rendering it raw.
+          setError(
+            result.error === "ACCOUNT_DEACTIVATED"
+              ? "This account has been deactivated. Please contact an administrator."
+              : "Sign-in failed. Please try again."
+          );
         }
       } else {
         setError(data.error || "Invalid sign-in code");

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Trophy, ArrowRight } from "lucide-react";
 import { Card, SectionTitle, DataTable, type Column } from "@/components/admin/ui";
 import { useMetricsFormatting } from "@/hooks/useMetricsFormatting";
+import { usePermissions } from "@/hooks/usePermissions";
 import { useTopMiniDraws } from "@/hooks/queries/admin/useAdminMiniDrawsList";
 
 interface DrawRow extends Record<string, unknown> {
@@ -38,7 +39,11 @@ const TOP_N = 5;
 export default function TopDrawsCard() {
   const router = useRouter();
   const { formatNumber } = useMetricsFormatting();
-  const { data, isLoading } = useTopMiniDraws();
+  // The list route requires miniDraws.view; without this gate a staff role
+  // lacking it fired a guaranteed 403 on every Overview mount.
+  const { has } = usePermissions();
+  const canViewMiniDraws = has("miniDraws.view");
+  const { data, isLoading } = useTopMiniDraws(50, canViewMiniDraws);
 
   // Clicking a row deep-links to the Mini Draws admin tab with its search box
   // pre-filled by the draw name (MiniDrawManagement reads `?search=`).
@@ -108,15 +113,24 @@ export default function TopDrawsCard() {
         subtitle="Active draws · closest to drawing"
         icon={Trophy}
         right={
-          <Link
-            href="/admin/mini-draws"
-            className="text-2xs font-semibold text-neutral-500 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-white inline-flex items-center gap-1"
-          >
-            View all <ArrowRight className="w-3 h-3" strokeWidth={2} />
-          </Link>
+          canViewMiniDraws ? (
+            <Link
+              href="/admin/mini-draws"
+              className="text-2xs font-semibold text-neutral-500 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-white inline-flex items-center gap-1"
+            >
+              View all <ArrowRight className="w-3 h-3" strokeWidth={2} />
+            </Link>
+          ) : undefined
         }
       />
-      {showSkeleton ? (
+      {!canViewMiniDraws ? (
+        <div className="flex flex-col items-center justify-center text-center py-10 text-neutral-400 dark:text-neutral-500">
+          <Trophy className="w-8 h-8 mb-3 opacity-60" strokeWidth={1.75} />
+          <p className="text-sm font-semibold text-neutral-500 dark:text-neutral-400">
+            Requires the mini-draws permission
+          </p>
+        </div>
+      ) : showSkeleton ? (
         <div className="space-y-3">
           {Array.from({ length: 4 }).map((_, i) => (
             <div key={i} className="h-9 rounded-md bg-neutral-100 dark:bg-neutral-800/60 animate-pulse" />

@@ -516,7 +516,7 @@ See [architecture.md](./architecture.md#categories) for the full inventory.
 Client components must use `usePermissions()` from `@/hooks/usePermissions` for authorization decisions — never read `session?.user?.role` directly in JSX or effects.
 
 - **`Header.tsx`** — The desktop and mobile user-menu dropdowns show "Admin Dashboard" when `isStaff` is true (replaces `userData?.role === "admin"`). Staff still see the same Admin-only branch in the ternary; the `isStaff` signal comes from `usePermissions()` which reads `session.user.userType === "staff"` with a legacy-admin bridge.
-- **`LoginModal/index.tsx`** — The post-login redirect (`/admin` vs `/my-account`) uses `isStaff` from `usePermissions()` instead of `session.user?.role === "admin"`.
+- **`LoginModal/index.tsx`** — The post-login redirect (`/admin` vs `/my-account`) uses `isStaff` from `usePermissions()` instead of `session.user?.role === "admin"`. Its password-login error handler also branches on `result.error === "ACCOUNT_DEACTIVATED"` (thrown by `authorize()` for `isActive: false` accounts, 2026-07-09) to show "This account has been deactivated…" instead of the generic invalid-credentials message — mirror this branch in any new login surface (see [auth/gotchas.md](../auth/gotchas.md)).
 
 Display-only `user.role` reads (e.g. the "Admin" badge on user rows in `UsersManagement.tsx` and `UserRow.tsx`) are intentionally NOT replaced — they show the role of the listed user, not the current viewer.
 

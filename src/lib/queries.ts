@@ -48,6 +48,22 @@ export function invalidateSessionCache() {
   cachedSession = null;
 }
 
+/**
+ * True when a failed response means the SESSION ITSELF is invalid and the user
+ * must be force-signed-out:
+ *  - 401 → not authenticated (session missing, expired, or invalidated server-side)
+ *  - 404 + USER_NOT_FOUND → dangling session whose backing user record is gone
+ *
+ * 403 is deliberately excluded: it means "authenticated but not allowed", which
+ * is ROUTINE for staff whose role holds a subset of permissions — e.g. the admin
+ * Overview mounts widgets whose endpoints the role can't read. Treating 403 as
+ * an auth failure force-logged-out every limited-role staff member seconds
+ * after login (regression test: npm run test:session-invalidation).
+ */
+export function shouldInvalidateSession(status: number, errorCode?: string): boolean {
+  return status === 401 || (status === 404 && errorCode === "USER_NOT_FOUND");
+}
+
 // Custom error class for API errors
 
 export class ApiError extends Error {
@@ -141,15 +157,12 @@ export async function apiRequest<T = unknown>(endpoint: string, options: Request
       const errorCode =
         data && typeof data === "object" && "code" in data ? (data as { code?: string }).code : undefined;
 
-      // Detect authentication / authorization failures that should invalidate the session:
-
-      // - 401 / 403 -> generic auth failures
-
-      // - 404 + USER_NOT_FOUND -> dangling session where backing user record is gone
+      // Detect authentication failures that should invalidate the session —
+      // see shouldInvalidateSession() for why 403 must never be one of them.
 
       const status = response.status;
 
-      const shouldForceLogout = status === 401 || status === 403 || (status === 404 && errorCode === "USER_NOT_FOUND");
+      const shouldForceLogout = shouldInvalidateSession(status, errorCode);
 
       if (shouldForceLogout) {
         try {

@@ -63,8 +63,11 @@ type TopListResponse = {
  * `poolLimit` caps the pool; active draws are few, so 50 covers them. Per-draw
  * revenue is not derivable (no priced tickets / no `miniDrawId` on PaymentEvent),
  * so the card shows name / capacity / entries / fill only.
+ *
+ * `enabled` must be false when the viewer lacks `miniDraws.view` — the route
+ * 403s otherwise, and the card renders its no-access state instead.
  */
-export function useTopMiniDraws(poolLimit = 50) {
+export function useTopMiniDraws(poolLimit = 50, enabled = true) {
   return useQuery({
     queryKey: ["admin", "mini-draw", "top", "active-pool", poolLimit],
     queryFn: async () => {
@@ -73,6 +76,7 @@ export function useTopMiniDraws(poolLimit = 50) {
       );
       return res.data.miniDraws;
     },
+    enabled,
     staleTime: 5 * 60 * 1000,
     gcTime: 10 * 60 * 1000,
     refetchOnWindowFocus: false,

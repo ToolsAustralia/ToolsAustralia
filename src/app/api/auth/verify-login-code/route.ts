@@ -106,6 +106,16 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Code valid — but a deactivated account must never mint a bridge token.
+    // Checked AFTER code validation so account status is only revealed to the
+    // inbox holder; the auto-login provider re-checks isActive as a backstop.
+    if (user.isActive === false) {
+      return NextResponse.json(
+        { success: false, error: "This account has been deactivated. Please contact an administrator." },
+        { status: 403 }
+      );
+    }
+
     // Code valid - clear it and create session token
     user.loginCode = undefined;
     user.loginCodeExpires = undefined;

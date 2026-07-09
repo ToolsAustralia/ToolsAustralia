@@ -111,6 +111,19 @@ export const authOptions: NextAuthOptions = {
 
           authDebugLog("✅ Password valid for user:", credentials.email);
 
+          // Deactivated accounts must be rejected AT login, not after. Without
+          // this, login succeeds (session issued) and the jwt callback's
+          // subsequent-request guard kills the token seconds later — an endless
+          // login→auto-logout loop with no explanation (removed staff,
+          // admin-deactivated users, invited staff who set a password via the
+          // public reset flow without completing /staff-setup). Checked AFTER
+          // password validation so account status is only revealed to someone
+          // holding valid credentials.
+          if (user.isActive === false) {
+            authDebugLog("❌ Account is deactivated:", credentials.email);
+            throw new Error("ACCOUNT_DEACTIVATED");
+          }
+
           const result = {
             id: user._id.toString(),
             email: user.email,
@@ -125,6 +138,13 @@ export const authOptions: NextAuthOptions = {
           authDebugLog("✅ Returning user data:", result);
           return result;
         } catch (error) {
+          // Rethrow the deactivation rejection so NextAuth surfaces it as
+          // result.error = "ACCOUNT_DEACTIVATED" (login UIs show a clear
+          // message). Returning null here would collapse it into the generic
+          // "CredentialsSignin" invalid-credentials error.
+          if (error instanceof Error && error.message === "ACCOUNT_DEACTIVATED") {
+            throw error;
+          }
           console.error("❌ Auth error:", error);
           console.error("❌ Error details:", {
             message: error instanceof Error ? error.message : "Unknown error",
@@ -153,6 +173,21 @@ export const authOptions: NextAuthOptions = {
           const payload = await verifyJWT(credentials.token);
           authDebugLog("✅ Auto-login token verified for:", payload.email);
 
+          // A valid auto-login token must not bypass the deactivation check —
+          // same login→auto-logout loop as the credentials provider otherwise.
+          await connectDB();
+          const dbUser = await User.findById(payload.sub).select("isActive").lean();
+          if (!dbUser) {
+            authDebugLog("❌ Auto-login rejected: account no longer exists:", payload.email);
+            return null;
+          }
+          if (dbUser.isActive === false) {
+            authDebugLog("❌ Auto-login rejected: account deactivated:", payload.email);
+            // Thrown (not null) so callers see result.error = "ACCOUNT_DEACTIVATED"
+            // and can show the real reason — parity with the credentials provider.
+            throw new Error("ACCOUNT_DEACTIVATED");
+          }
+
           return {
             id: payload.sub,
             email: payload.email,
@@ -163,7 +198,13 @@ export const authOptions: NextAuthOptions = {
             roleId: (payload as { roleId?: string | null }).roleId ?? null,
           };
         } catch (error) {
-          console.error("❌ Auto-login token verification failed:", error);
+          // Surface the deactivation rejection as result.error = "ACCOUNT_DEACTIVATED"
+          // (returning null would collapse it into the generic CredentialsSignin).
+          if (error instanceof Error && error.message === "ACCOUNT_DEACTIVATED") {
+            throw error;
+          }
+          // Anything else: bad/expired token or a transient DB failure.
+          console.error("❌ Auto-login failed (token invalid or lookup error):", error);
           return null;
         }
       },
@@ -195,6 +236,13 @@ export const authOptions: NextAuthOptions = {
           await connectDB();
           const dbUser = await User.findOne({ email: token.email || user?.email });
           if (dbUser) {
+            // Never mint a first token for a deactivated account (providers
+            // already reject at login; this covers any path that skips them).
+            if (dbUser.isActive === false) {
+              authDebugLog("🔒 JWT invalidated: account is deactivated");
+              token.deleted = true;
+              return token;
+            }
             token.sub = dbUser._id.toString(); // Use MongoDB ObjectId as the subject
             token.role = dbUser.role; // Set role from database
             token.firstName = dbUser.firstName;
@@ -334,6 +382,14 @@ export const authOptions: NextAuthOptions = {
             // New users must register through the normal flow to set up their account
             authDebugLog(`❌ Google sign-in rejected: No existing account for ${user.email}`);
             return false; // Reject sign-in for new users
+          }
+
+          // Same deactivation gate as the credentials provider — reject at
+          // login instead of issuing a session the jwt callback kills seconds
+          // later (NextAuth surfaces this as error=AccessDenied).
+          if (existingUser.isActive === false) {
+            authDebugLog(`❌ Google sign-in rejected: account deactivated for ${user.email}`);
+            return false;
           }
 
           // Update user's email verification status if signing in via Google

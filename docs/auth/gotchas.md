@@ -1,5 +1,17 @@
 # Auth — Gotchas
 
+## Deactivated accounts are rejected AT login, not after (fixed 2026-07-09)
+
+`authorize()` used to check only user-exists + password — never `isActive` — so a deactivated account (`User.isActive: false`) **logged in successfully** and got a session; the jwt callback's subsequent-request guard ([auth.ts](../../src/lib/auth.ts) `!dbUser || dbUser.isActive === false` → `token.deleted`) then killed it on the first session refresh, seconds later. Result: an unexplained, endlessly-recurring login→auto-logout loop. Who hits it: removed staff (`DELETE /api/admin/staff/[id]` leaves `isActive:false` with the password intact), admin-deactivated users (`toggle_status` / `basicInfo.isActive` — neither guards `userType`), and invited staff who never completed `/staff-setup` but obtained a password via the public forgot-password flow (`reset-password` sets ONLY the password, never `isActive`).
+
+Now every login path rejects up-front:
+- **Credentials** `authorize()` throws `ACCOUNT_DEACTIVATED` — checked **after** `bcrypt.compare` so account status is only revealed to a valid credential holder. The catch-all in `authorize` **rethrows** this specific error (otherwise it would collapse into the generic `CredentialsSignin`); `/login` and `LoginModal` both branch on `result.error === "ACCOUNT_DEACTIVATED"` and show "This account has been deactivated. Please contact an administrator."
+- **Google** `signIn` callback returns `false` (surfaces as `AccessDenied`, same UX as unknown-email rejection).
+- **Email sign-in code**: `POST /api/auth/verify-login-code` rejects with 403 + the clear message **after** the OTP is validated (status only revealed to the inbox holder; `send-login-code` still emails a code so an unauthenticated probe learns nothing). Backstop: the **auto-login** provider re-checks `isActive` in the DB before accepting any bridge token (the JWT alone can't prove the account is still active) and throws `ACCOUNT_DEACTIVATED` — its catch-all rethrows it, same pattern as credentials — which `LoginModal`'s code path maps to the clear message (it never renders raw `result.error` codes).
+- **jwt callback first branch** refuses to mint a first token for an inactive account (`token.deleted`) — covers any provider path that slips through.
+
+The subsequent-request guard stays — it's what invalidates a *live* session when an admin deactivates mid-session. Related: the client-side half of the old symptom (403 → force sign-out in `apiRequest`) was fixed the same day — see [client-state/gotchas.md](../client-state/gotchas.md).
+
 ## JWT/auth remediation — 2026-06-19 (in progress)
 
 Tracked in [jwt-auth-remediation-spec.md](./jwt-auth-remediation-spec.md). Landed so far (no existing NextAuth session is invalidated by any of these):
