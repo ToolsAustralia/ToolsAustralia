@@ -164,10 +164,13 @@ export default function GiveawayGalleryClient({ cards, featuredSlug, brands, sto
   };
 
   return (
-    <SectionContainer className="pb-4 pt-6 sm:pt-8">
-      {/* ── Sticky filter dock — theme-aware glass; `top` clears the fixed PromoBanner ── */}
-      <div className="sticky top-16 z-30 sm:top-20">
-        <div className="rounded-2xl border border-gray-200 bg-white/90 p-3 shadow-[0_12px_32px_-12px_rgba(0,0,0,0.25)] backdrop-blur-xl sm:p-4 dark:border-white/10 dark:bg-slate-950/85 dark:shadow-[0_16px_40px_-12px_rgba(0,0,0,0.9)]">
+    <>
+      {/* ── Full-width sticky filter bar — theme-aware glass. `top-0` (not top-16/20):
+          on /promotions the PromoBanner is IN-FLOW (followOnScroll={false}) and there is
+          NO fixed header, so nothing sits above the gallery — the bar spans edge-to-edge
+          and sticks flush to the viewport top. Content stays in the max-w-7xl container. ── */}
+      <div className="sticky top-0 z-30 mt-6 w-full border-b border-gray-200 bg-white/90 shadow-[0_8px_24px_-16px_rgba(0,0,0,0.25)] backdrop-blur-xl sm:mt-8 dark:border-white/10 dark:bg-slate-950/85 dark:shadow-[0_10px_28px_-16px_rgba(0,0,0,0.9)]">
+        <div className="mx-auto w-full max-w-7xl px-4 py-3 sm:px-6 lg:px-8">
           <div className="flex flex-col gap-2.5">
             {/* Toolset brand row */}
             <div className="flex items-center gap-2.5">
@@ -232,8 +235,9 @@ export default function GiveawayGalleryClient({ cards, featuredSlug, brands, sto
         </div>
       </div>
 
-      {/* Mobile count + clear (the dock keeps them on sm+). */}
-      <p className="mt-3 flex items-center gap-3 text-sm font-semibold tabular-nums text-gray-500 sm:hidden dark:text-gray-400">
+      <SectionContainer className="pb-4 pt-4 sm:pt-6">
+      {/* Mobile count + clear (the bar keeps them on sm+). */}
+      <p className="flex items-center gap-3 text-sm font-semibold tabular-nums text-gray-500 sm:hidden dark:text-gray-400">
         {visible.length} combination{visible.length === 1 ? "" : "s"}
         {!unfiltered && (
           <button type="button" onClick={clear} className="font-bold text-red-600 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500 dark:text-red-500">
@@ -256,6 +260,7 @@ export default function GiveawayGalleryClient({ cards, featuredSlug, brands, sto
           ))}
         </ul>
       )}
-    </SectionContainer>
+      </SectionContainer>
+    </>
   );
 }

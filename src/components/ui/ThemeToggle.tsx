@@ -5,6 +5,7 @@ import { Sun, Moon } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { useThemeStore } from "@/stores/useThemeStore";
 import { useUserContext } from "@/contexts/UserContext";
+import { useDodgeFloatingObstacles } from "@/components/support-chat/useDodgeFloatingObstacles";
 
 /**
  * Round light/dark control (sun/moon). Used on promotions: guest FAB and can be composed elsewhere.
@@ -53,11 +54,19 @@ export function PromotionsGuestThemeToggle() {
   const pathname = usePathname();
   const { isAuthenticated, loading } = useUserContext();
   const onPromotionsRoute = pathname === "/promotions" || pathname?.startsWith("/promotions/");
+  const show = Boolean(onPromotionsRoute) && !loading && !isAuthenticated;
+  // Lift above the full-width floating "Enter Now" bar (and any other bottom
+  // right-corner floating widget) when it scrolls in — the same collision-dodge
+  // the Cobber launcher uses. Returns 0 (keep the default bottom-4) when clear.
+  const dodgeBottom = useDodgeFloatingObstacles("right", show);
 
-  if (!onPromotionsRoute || loading || isAuthenticated) return null;
+  if (!show) return null;
 
   return (
-    <div className="fixed z-[55] pointer-events-auto bottom-4 right-4">
+    <div
+      className="fixed z-[55] pointer-events-auto bottom-4 right-4 transition-[bottom] duration-300 ease-out"
+      style={dodgeBottom > 0 ? { bottom: dodgeBottom } : undefined}
+    >
       <ThemeToggleButton />
     </div>
   );

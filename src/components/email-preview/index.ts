@@ -19,6 +19,5 @@ export { default as SubscriptionRenewalPreview } from "./SubscriptionRenewalPrev
 export { default as WinnerEmailPreview } from "./WinnerEmailPreview";
 export { default as ReferralRewardEmailPreview } from "./ReferralRewardEmailPreview";
 export { default as StaffInvitePreview } from "./StaffInvitePreview";
-export { default as DrawReminderPreview } from "./DrawReminderPreview";
 export { default as EmailPreviewLayout } from "./EmailPreviewLayout";
 export type { EmailPreviewTabId } from "./EmailPreviewLayout";

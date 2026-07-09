@@ -10,7 +10,6 @@ Custom-HTML (CODE) templates to paste into the matching Klaviyo flow email. Edit
 | `subscription-renewal-email-template.html` | Membership Renewal | Subscription Renewed | `TLyiRY` | **CODE** — paste directly |
 | `renewal-failed-email-template.html` | Failed Membership Renewal | Subscription Renewal Failed | _check in UI_ | _check in UI_ |
 | `subscription-payment-failed-email-template.html` | Failed Membership Purchase | Subscription Payment Failed | _check in UI_ | _check in UI_ |
-| `draw-reminder-email-template.html` | **NOT WIRED** (future) | — | — | — |
 
 ## How to paste
 

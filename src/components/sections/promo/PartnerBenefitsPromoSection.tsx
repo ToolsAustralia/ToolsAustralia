@@ -226,7 +226,7 @@ export default function PartnerBenefitsPromoSection({ scrollToId = "packages" }:
                             {tier.name}
                           </p>
                           <p className="text-2xs text-gray-400 font-sans">
-                            {tier.entries} entries/mo &middot; {tier.price}/giveaway
+                            {tier.price}/giveaway &middot; includes {tier.entries} free entries/mo
                           </p>
                         </div>
 

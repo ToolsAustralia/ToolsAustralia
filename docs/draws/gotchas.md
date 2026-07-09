@@ -1,5 +1,9 @@
 # Draws — Gotchas
 
+## Mini-draw copy: "Mini Pack" (never "entries"/"entry pack"), free-entry framing (2026-07-08)
+
+Mini-draw customer copy must sell the **pack**, not entries — the canonical product name is **"Mini Pack"** (`upsellPackages.ts` `displayName`), and entries are a **free inclusion**. Fixed the hero ("Entries start from $1" → "Mini packs start from $1"; "Per Entry" → "Per Pack"), `MiniDrawTabs` ("Purchase entry packages" / "entries can be purchased" → "mini pack"), `HowMiniDrawsWork`, and `MiniDrawEntrySheet` ("entry pack" → "mini pack"). Never price entries per unit and never say "buy entries". This is the site-wide legal rule — see **CLAUDE.md §11** (game-of-chance trade promotion; entries never sold; no odds/chance/gambling framing).
+
 ## Mini-draw entries auth = NextAuth session, not a bearer token (2026-06-19)
 
 `/api/mini-draws/entries` (GET/POST/PUT) used a private `getUserFromToken` that read `Authorization: Bearer <token>`. It now authorizes via `requireAuthenticatedUserDoc()` (NextAuth `getServerSession`, in [api-auth.ts](../../src/lib/api-auth.ts)), and the mutating POST/PUT call `requireSameOrigin(request)` for CSRF. Clients send no `Authorization` header — the session cookie is auto-attached. Part of the JWT/auth remediation; see [docs/auth/jwt-auth-remediation-spec.md](../auth/jwt-auth-remediation-spec.md).

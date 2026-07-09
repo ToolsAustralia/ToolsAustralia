@@ -10,7 +10,7 @@
  *  - mso Arial font fallback, web font only for non-Outlook
  *  - hidden padded preheader, light + dark mode via <head> classes
  *
- * The Klaviyo paste-ready HTML templates (invoice, renewals, draw reminder) live
+ * The Klaviyo paste-ready HTML templates (invoice, renewals) live
  * as standalone files in email-templates/klaviyo/ and intentionally duplicate this
  * markup because they are pasted into Klaviyo. Keep the two visually in lockstep
  * when editing the header/footer.

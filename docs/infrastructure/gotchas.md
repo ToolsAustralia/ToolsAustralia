@@ -1,5 +1,13 @@
 # Infrastructure — Gotchas
 
+## env vars: `.env.example` is the registry — `npm run check:env` detects drift (2026-07-09)
+
+`.env.example` is the tracked source of truth for **which** env vars exist (rescued from the `.env*` ignore by the `!.env.example` negation in `.gitignore`). `.env.local` holds per-folder **values** (gitignored, never merges — see CLAUDE.md §9); Vercel holds prod. There is **no runtime env validation** — `src/lib/environment.ts` only detects `NODE_ENV` (despite `.env.example`'s old header implying it validates).
+
+Detect discrepancies with **`npm run check:env`** (current folder; exits 1 if a declared var is unset) / **`npm run check:env:all`** (main + every git worktree) — `scripts/check-env.mjs`, read-only, prints **names only** (no secret leakage). It diffs each folder's `.env.local` against `.env.example`: **MISSING** = declared in example but not set here; **EXTRA** = set locally but not registered in example. Per-folder vars (`PORT` from `wt-new.sh`, `E2E_*` test creds) are allowlisted. A quiet `--warn` is wired into `predev`, so drift surfaces on every `npm run dev`.
+
+**Known gap (2026-07-09):** `.env.example` is currently **incomplete** (~25 of ~93 real vars) and **inconsistent across branches** (main 25, staging 11, origin/main effectively empty). Completing it to a full canonical registry (safe placeholders, no secret values) is the real fix; the drift-detection tooling above is the ongoing guard.
+
 ## `CHAT_KILL_SWITCH` is now the *override* for the admin pause toggle (2026-07-08)
 
 `CHAT_KILL_SWITCH` (`.env.example`) is no longer the only way to disable Cobber. It is now the **break-glass override**: `true` still disables Cobber instantly (now also **hides the bubble site-wide**, not just the generative path), and it **wins over and locks** the DB-backed admin "Cobber availability" toggle (Admin → Team → Chatbot). For normal pausing prefer the admin toggle (no deploy); use the env var when the panel is unreachable. Effective state = `env || DB` (`getChatKillSwitchEffective`). It is **not** a `src/config/featureFlags.ts` flag — it stays env-level so it works without a DB read.

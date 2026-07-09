@@ -14,7 +14,7 @@ const steps = [
   {
     icon: Ticket,
     title: "Join Mini Draws",
-    description: "Browse active draws and purchase the entry packages that suit your goals.",
+    description: "Browse active draws and grab the mini pack that suits your goals — free entries included.",
     step: 2,
   },
   {

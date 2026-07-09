@@ -61,7 +61,7 @@ export default function MiniDrawsHero() {
             transition={{ duration, delay: 0.35 }}
           >
             Enter exciting mini draws to win amazing tools, equipment, and accessories worth thousands of dollars.
-            Entries start from just <span className="text-white font-semibold">$1</span>.
+            Mini packs start from just <span className="text-white font-semibold">$1</span>.
           </motion.p>
 
           {/* Stats Row */}
@@ -77,7 +77,7 @@ export default function MiniDrawsHero() {
               </div>
               <div className="text-left">
                 <div className="text-white font-bold text-sm sm:text-base">From $1</div>
-                <div className="text-gray-400 text-2xs sm:text-xs">Per Entry</div>
+                <div className="text-gray-400 text-2xs sm:text-xs">Per Pack</div>
               </div>
             </div>
 

@@ -63,7 +63,7 @@ export default function MiniDrawEntrySheet({ open, onClose, miniDraw, userEntryC
         <SheetHead
           id={titleId}
           title={`Enter ${miniDraw.name}`}
-          sub="Buy an entry pack to join this draw"
+          sub="Buy a mini pack to join this draw"
           onClose={onClose}
         />
 
@@ -109,7 +109,7 @@ export default function MiniDrawEntrySheet({ open, onClose, miniDraw, userEntryC
             </div>
           ) : (
             <>
-              <div className="mb-2.5 mt-5 text-[11px] font-bold uppercase tracking-[0.16em] text-muted-token">Choose an entry pack</div>
+              <div className="mb-2.5 mt-5 text-[11px] font-bold uppercase tracking-[0.16em] text-muted-token">Choose a mini pack</div>
 
               <div className="grid grid-cols-2 gap-2.5">
                 {packs.map((pkg) => {

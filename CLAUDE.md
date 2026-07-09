@@ -125,6 +125,15 @@ Verbose audits belong in `/plan`, `/review`, and `/debug`. Outside those skills,
 
 Worktrees for this repo live at `<repo-root>/.worktrees/<kebab-branch-name>/`, not under `.claude/worktrees/` or any other location. Use the existing `wt-new.sh` script when present — it handles env file copy and `npm install`. If you're using an EnterWorktree-style tool with a different default, override it.
 
+**Env vars: `.env.example` is the registry; `.env.local` is per-folder and must be synced by hand.** `.env.example` (tracked; kept out of the `.env*` ignore by `!.env.example`) is the **single source of truth for WHICH vars exist** — it must list **every** var the app reads, with a comment + a **safe placeholder (never a real secret value)**. There is no runtime env validation, so keep it complete by hand: when you add a var, **register it in `.env.example` in the same commit**. `.env.local` holds the **values**, is **gitignored**, and **never merges** — `wt-new.sh` copies it main → new worktree at creation, but there is no reverse. So when a branch adds/changes an env var, **set the value in your `.env.local`, the main folder's `.env.local`, AND Vercel right then** (don't wait for a merge; the main folder + prod need the config independently of git). Detect drift with the doctor:
+
+```bash
+npm run check:env       # this folder's .env.local vs .env.example (exit 1 if a declared var is unset)
+npm run check:env:all   # main folder + every git worktree
+```
+
+`scripts/check-env.mjs` is read-only + names-only (no secret leakage); it reports **MISSING** (declared but unset here) + **EXTRA** (set locally but not registered — go add it to `.env.example`). `PORT` + `E2E_*` are allowlisted (legitimately per-folder). A quiet `--warn` runs in `predev`, so drift surfaces on every `npm run dev`. Because `.env.example` is tracked, completing it on one branch and merging to `main` propagates the registry to every branch/worktree.
+
 ### 10. Mirror admin API changes to Norm — or flag them
 
 The **internal-norm / OpenClaw** gateway (`docs/internal-norm/`) re-exposes admin data to an external AI by wrapping the **same services** the `/api/admin/**` routes use. So an admin-side change can silently drift the Norm surface. Whenever you **add a read endpoint under `src/app/api/admin/**`**, **change an existing admin route's response shape**, or **change a service that feeds one**:
@@ -133,6 +142,16 @@ The **internal-norm / OpenClaw** gateway (`docs/internal-norm/`) re-exposes admi
 - If it's a **new** admin read Norm could usefully expose but you're not wiring it now, **flag it to the user explicitly** ("this could be mirrored to Norm — want me to?") rather than silently skipping it.
 
 The `adding-api-route` skill encodes this as step 7. This rule is not hook-enforced — you're expected to apply it on your own; `/review` should also flag an admin read/shape change that left Norm stale.
+
+### 11. Customer-facing copy — free-entry framing, never gambling (LEGAL)
+
+Tools Australia is an Australian **game-of-chance trade promotion**, **NOT gambling**. This is a legal line. **Every** customer-facing string — Cobber, promo/landing pages, membership + pack UI, mini-draws, checkout/upsell, Klaviyo + SendGrid emails, SEO/meta, SMS/push — MUST follow both rules. Apply them to every new or edited customer string, and flag any existing violation you notice.
+
+1. **No gambling / probability framing.** Never use: "odds", "chance(s) of winning", "boost your chances", "increase your chance", "better odds", "lottery", "lotto", "raffle", "sweepstake", "gamble/gambling", "bet". Never call the platform or its draws a lottery / gambling / raffle. Use: "giveaway", "prize draw", "free entries", "{n}× entries", "more entries". If a user asks "is this gambling / a lottery?", **don't label it** — say it's a tool giveaway where members get **free entries** into monthly prize draws, and point to `/terms`.
+
+2. **Entries are NEVER sold — they are a FREE inclusion.** We legally cannot sell entries. The product a customer buys is the **membership or the one-time / mini pack**; the entries come **free** with it. Never say a member "buys / purchases / pays for entries", and never price entries per unit ("$X per entry", "$X for N entries", "$/entry", "Per Entry", a tier shown as "N entries · $X"). Correct: "the $25 Apprentice pack **includes** 3 free entries", "Tradie ($20/mo) **includes** 15 free entries", "$X/giveaway · includes N free entries". The purchasable unit is the **pack** (canonical mini-draw name: **"Mini Pack"**), never "entries" / "entry pack".
+
+Enforcement: Cobber's FAQ corpus is guarded by `npm run test:chat-faqs` (bans these words) + a HARD RULE in `src/services/support-chat/systemPrompt.ts`; `BUSINESS.md §1` states the model. For the rest of the site this is a **judgment rule** (not hook-enforced) — `/review` should flag violations. Getting this wrong is a **legal exposure** for Tools Australia; treat it as non-negotiable.
 
 ## Commands
 
@@ -393,7 +412,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "scripts/convert-drawn-tonight-tomorrow-to-webp.ts",
         "scripts/convert-drawn-tonight-tomorrow-videos.ts"
       ],
-      "lastVerified": "2026-07-07"
+      "lastVerified": "2026-07-08"
     },
     "affiliate": {
       "docs": "docs/affiliate/",
@@ -804,7 +823,8 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "scripts/stripe-*.ts",
         "scripts/verify-*.ts",
         "scripts/reconcile-*.ts",
-        "scripts/connect-ops-db.ts"
+        "scripts/connect-ops-db.ts",
+        "scripts/check-env.mjs"
       ],
       "lastVerified": "2026-07-09"
     },

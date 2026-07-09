@@ -75,7 +75,7 @@ export default function MiniDrawTabs({ miniDraw }: MiniDrawTabsProps) {
     {
       icon: Trophy,
       title: "Entry Methods",
-      desc: "Purchase entry packages (membership required)",
+      desc: "Buy a mini pack to receive free entries (membership required)",
     },
     {
       icon: Sparkles,
@@ -92,7 +92,7 @@ export default function MiniDrawTabs({ miniDraw }: MiniDrawTabsProps) {
   const flowSteps = [
     {
       label: "Open",
-      text: "Once the draw is live, entries can be purchased until capacity is reached.",
+      text: "Once the draw is live, mini packs can be purchased until capacity is reached.",
     },
     {
       label: "Capacity Reached",

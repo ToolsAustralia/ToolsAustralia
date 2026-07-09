@@ -18,7 +18,6 @@ The hardened custom-HTML templates we copy/paste into Klaviyo **CODE** flow emai
 | `subscription-renewal-email-template.html` | Membership Renewal |
 | `renewal-failed-email-template.html` | Failed Membership Renewal |
 | `subscription-payment-failed-email-template.html` | Failed Membership Purchase |
-| `draw-reminder-email-template.html` | _not wired (future)_ |
 
 These use Klaviyo Django merge tags (`{{ event.* }}`, `{{ person.* }}`, `{% if %}`, `{% unsubscribe %}`). Merge tags must match the flow's trigger-metric event properties + profile properties — see [`klaviyo/INDEX.md`](klaviyo/INDEX.md) and `docs/email/architecture.md` ("Klaviyo merge-field verification"). Paste into the template the **live flow** uses (CODE editor only — drag-and-drop flows must be switched to a Custom HTML block first).
 

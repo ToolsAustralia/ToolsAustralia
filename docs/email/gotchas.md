@@ -1,5 +1,9 @@
 # Email — Gotchas
 
+## Email copy is customer-facing — same free-entry / no-gambling rule (2026-07-08)
+
+Email templates (Klaviyo + SendGrid) count as customer-facing copy and must follow **CLAUDE.md §11** (no "odds/chance/lottery/gambling"; entries are a free inclusion, never sold). The Klaviyo `draw-reminder-email-template.html` used the forbidden "better odds" (+ "shot at the prize") — and since it was **never deployed to Klaviyo** (no snapshot in `email-templates/klaviyo-exports/`, marked NOT WIRED), it was **removed entirely** (2026-07-08) along with its `/email-preview` tab (`DrawReminderPreview`, the `EmailPreviewLayout` wiring, and its `designSamples.generated.ts` entry). **Reminder:** editing a live template's repo `.html` fixes the SOURCE only — the copy must also be updated **in Klaviyo** (paste the corrected HTML). Check `email-templates/klaviyo-exports/` for a deployed snapshot to gauge whether a template is actually live before assuming a fix took effect.
+
 ## Templates live under `email-templates/`, not `src/`
 
 Two subfolders: `email-templates/klaviyo/` = the **paste-ready Klaviyo** custom-HTML templates (invoice, subscription-renewal, renewal-failed, subscription-payment-failed, draw-reminder); `email-templates/klaviyo-exports/` = **read-only export snapshots** (reference only). Easy to miss when scanning `src/`. There are **no SendGrid HTML files** — every SendGrid email (incl. staff-invite, migrated to code June 2026) is code-as-source in `src/lib/email/templates.ts` + `components.ts`. Nothing is runtime-loaded from disk anymore, so there's no `process.cwd()` / file-tracing footgun.
