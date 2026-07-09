@@ -118,3 +118,7 @@ Both back the **Chatbot Cost & Usage** admin panel ([`ChatbotCostManagement.tsx`
 ## P6. Generic hooks small and focused
 
 `useDebounce`, `useMediaQuery`, `useIsLgUp` — each does ONE thing. Don't bundle multiple concerns into one hook.
+
+## P7. Repeat-purchase analytics hooks
+
+`src/hooks/queries/admin/useRepeatPurchaseAnalytics.ts` exposes `useRepeatPurchaseSummary(filter)` (`useQuery`) and `useRepeatPurchaseUsers(filter, options)` (`useInfiniteQuery`, 50/page) for the admin **Repeat Purchases** tab. Inline query keys `["admin","analytics","repeat-purchases","summary",filter]` / `["admin","analytics","repeat-purchases","users",{...filter,limit}]` (the dominant admin convention — see P1). Both unwrap the `{ success, data }` envelope and throw on `success === false`. The users hook returns a flattened facade `{ rows, totalCount, hasMore, fetchNextPage, isFetchingNextPage, isLoading, isError }` (the `useChargePastDueRuns` shape) for the "Load more" button. Summary `staleTime` 5 min; users list 2 min + `enabled` gating (draw presets need resolved dates). Backed by `/api/admin/analytics/repeat-purchases`, `…/users`, and `…/users/export` (see [admin/api.md](../admin/api.md)).

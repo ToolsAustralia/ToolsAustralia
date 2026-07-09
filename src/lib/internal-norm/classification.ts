@@ -94,6 +94,7 @@ import {
   NormHourlyRevenueSchema,
 } from "./schemas/analytics-spend";
 import { NormMerByDrawSchema } from "./schemas/mer";
+import { NormRepeatPurchaseSummarySchema } from "./schemas/repeat-purchases";
 import {
   NormPromoActiveSchema,
   NormPromoEffectiveSchema,
@@ -544,6 +545,15 @@ export const NORM_ENDPOINTS = {
     summary: "Marketing Efficiency Ratio (New Revenue ÷ Ad Spend) per major draw, with per-platform breakdown. New Revenue excludes subscription renewals; blended numerator spans all platforms incl. direct. One row per draw since attribution went live (28 Apr 2026), newest first.",
     rateLimit: { perMinute: 10 },
     responseSchema: NormMerByDrawSchema,
+  },
+  "analytics.repeat-purchases": {
+    tier: "read",
+    requiredPermission: "pageAnalytics.view",
+    path: "/v1/analytics/repeat-purchases",
+    method: "GET",
+    summary: "One-time-package repeat-purchase (reconversion) summary, all-time: distinct one-time buyers, repeat buyers, repeat rate, median days to return, repeat revenue, became-members count, first→second gap buckets, and matured return-rate-by-window. Aggregate counts only, no PII. Excludes upsells, mini-draws, and membership renewals; refunded purchases netted out.",
+    rateLimit: { perMinute: 10 },
+    responseSchema: NormRepeatPurchaseSummarySchema,
   },
 
   // ─── Cancellation-flow analytics (wired) ─────────────────────────────

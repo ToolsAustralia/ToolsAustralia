@@ -11,7 +11,7 @@ Two `tsx` seeds create a login-ready member in a specific state so you can eyeba
 
 ## Pure unit tests are `tsx` scripts wired as `test:<scope>`
 
-There is no jest/vitest — each test is a standalone `tsx` script under `src/**/__tests__/*.test.ts` that throws on failure, registered as a `test:<scope>` entry in `package.json` (without the entry it's undiscoverable). Keep tests pure (no live DB/Stripe/network) by injecting side effects: e.g. `npm run test:promo-visit` exercises `recordPromoVisit` with stubbed `hasRecentVisit`/`recordVisit` deps. See `.claude/skills/writing-tsx-test`.
+There is no jest/vitest — each test is a standalone `tsx` script under `src/**/__tests__/*.test.ts` that throws on failure, registered as a `test:<scope>` entry in `package.json` (without the entry it's undiscoverable). Keep tests pure (no live DB/Stripe/network) by injecting side effects: e.g. `npm run test:promo-visit` exercises `recordPromoVisit` with stubbed `hasRecentVisit`/`recordVisit` deps. `npm run test:repeat-purchase-analytics` (`src/services/admin/__tests__/repeatPurchaseAnalytics.test.ts`) covers the repeat-purchase reconversion shaper (`summarizeRepeatPurchases`) with an injected `diffAestDays` + fixed `now`, so bucket boundaries, matured-window denominators, and the became-member flag are verified without touching Mongo. See `.claude/skills/writing-tsx-test`.
 
 ## Health check
 

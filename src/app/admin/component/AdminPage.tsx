@@ -29,6 +29,7 @@ import PastDueChargeHistory from "./PastDueChargeHistory";
 import StripeWebhookQueueManagement from "@/components/admin/StripeWebhookQueueManagement";
 import PromoAnalyticsManagement from "@/components/admin/PromoAnalyticsManagement";
 import CancellationFlowAnalytics from "@/components/admin/CancellationFlowAnalytics";
+import RepeatPurchaseAnalytics from "@/components/admin/RepeatPurchaseAnalytics";
 import ChatbotCostManagement from "@/components/admin/ChatbotCostManagement";
 import ActivityLogManagement from "./ActivityLogManagement";
 import SettingsTab from "./SettingsTab";
@@ -172,6 +173,7 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
                   {selectedTab === "klaviyo" && "Klaviyo campaign & flow revenue, scheduled sends, and hourly"}
                   {selectedTab === "all-platforms" && "Combined ad effectiveness — spend, revenue, ROAS, and hourly across every platform"}
                   {selectedTab === "cancellation-flow" && "Cancellation-flow funnel, save rate, and retention analytics"}
+                  {selectedTab === "repeat-purchases" && "One-time buyers who came back — repeat rate, time-to-return, and the fetchable cohort"}
                   {selectedTab === "chatbot" && "Cobber AI chatbot — availability, daily spend, deflection rate, and usage"}
                   {selectedTab === "ab-testing" && "Manage A/B testing experiments and analyze variant performance"}
                   {selectedTab === "error-reports" && "View and manage error reports from users"}
@@ -258,6 +260,9 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
 
           {/* CANCELLATION FLOW ANALYTICS TAB */}
           {selectedTab === "cancellation-flow" && <CancellationFlowAnalytics />}
+
+          {/* REPEAT PURCHASES ANALYTICS TAB */}
+          {selectedTab === "repeat-purchases" && <RepeatPurchaseAnalytics />}
           {selectedTab === "chatbot" && <ChatbotCostManagement />}
 
           {/* ACTIVITY LOG TAB */}

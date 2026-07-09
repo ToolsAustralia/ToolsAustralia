@@ -718,6 +718,16 @@ Record<AttributedPlatformKey, {
 }
 ```
 
+## Repeat-purchase analytics
+
+`GET /api/admin/analytics/repeat-purchases` — one-time-package **repeat purchase** (reconversion) summary. Guarded by `pageAnalytics.view`. Optional `?startDate&endDate` (AEST `yyyy-MM-dd`, inclusive) filters the cohort by **first-purchase** date. Returns `{ success, data: RepeatPurchaseSummary }` — `oneTimeBuyers`, `repeatBuyers`, `repeatRate`, `medianDaysToReturn`, `repeatRevenue`, `becameMembers`, `totalPurchases`, `buckets[]` (first→second gap: `same-day` / `1-7d` / `7-30d` / `30-60d` / `60-90d` / `90-180d` / `180d+`), and `windows[]` (matured return-rate per 1/7/30/60/90/180-day window).
+
+`GET /api/admin/analytics/repeat-purchases/users` — paged, filterable cohort list (`pageAnalytics.view`). Query: `segment` (`all` | `returned` | `not-returned`), `bucket?`, `member` (`all` | `member` | `non-member` — filters by the `becameMember` conversion flag, reconciles with the "Became members" KPI), `startDate?`, `endDate?`, `page?`, `limit?` (≤100, UI pages 50 at a time via `useInfiniteQuery` "Load more"). Returns `{ success, data: { rows, totalCount, page, limit } }`; each row carries the user's **first** purchase, the **second** (reconversion) purchase, the **last** (most-recent) purchase, `daysToReturn`, `purchaseCount`, `totalSpent`, and `becameMember`. Full PII to the admin UI (firstName/lastName/email hydrated per page) — mirrors the cancellation-flow `users-by-reason` precedent.
+
+`GET /api/admin/analytics/repeat-purchases/users/export` — CSV of the **whole** filtered cohort (same `segment`/`bucket`/`startDate`/`endDate` params, no paging). Gated by `pageAnalytics.view` (the tab already shows these rows incl. email, so the export is the same data downloadable — not a new data class; raise to a stricter permission if org policy requires). Returns `text/csv` with a `content-disposition` attachment (`repeat-purchases-<segment>[-<bucket>]-<AEST date-time>.csv`); columns: name, email, user id, first purchase + package, returned Y/N, days to return, purchases, last purchase + package, total spent, became member.
+
+All delegate to `src/services/admin/repeatPurchaseAnalytics.ts` (see [backend.md](backend.md)). A **countable** purchase = one-time `BenefitsGranted`, refund-netted; upsells / mini-draws / membership excluded. The cohort is **one-time buyers who were NOT an active member when they bought** — people choosing one-time packs instead of subscribing. Active-member top-ups are excluded; never-members, later-converters, and **lapsed members who keep buying one-time after their subscription ended** are included. Days are AEST calendar days. The summary read is mirrored to Norm as `analytics.repeat-purchases` (aggregate-only, no PII); the users list + export are not.
+
 ## Auth
 
 Per [auth rules R1-R2](../auth/rules.md): every handler must call `requireAdmin(session)`. Middleware doesn't gate `/api/admin/**`.
