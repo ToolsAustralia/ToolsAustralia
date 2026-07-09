@@ -156,7 +156,7 @@ export function renderMembershipStatusBadge(
           iconClassName="opacity-90 text-emerald-600 dark:text-emerald-400"
           showPulseDot
         >
-          Active member
+          Active
         </AdminBadge>
       );
     case "past_due":

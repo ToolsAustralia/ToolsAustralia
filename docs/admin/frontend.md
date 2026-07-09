@@ -72,18 +72,21 @@ Three at-a-glance additions so an admin understands the account without digging:
 
 - **Membership status badge** (header, next to the name): `renderMembershipStatusBadge(user.subscription)`
   ([AdminBadge.tsx](../../src/components/admin/ui/AdminBadge.tsx)) driven by the shared pure derivation
-  [`deriveMembershipDisplayStatus`](../../src/utils/subscription/subscription-helpers.ts) — states:
-  **Active member** (incl. `trialing`, the anchor-day artifact — never shown as "trial") / **Cancels {endDate}**
+  [`deriveMembershipDisplayStatus`](../../src/utils/subscription/subscription-helpers.ts) — states (labels):
+  **Active** (incl. `trialing`, the anchor-day artifact — never shown as "trial") / **Cancels {endDate}**
   (active + `autoRenew: false`) / **Past Due** (`past_due`/`unpaid`; wins over cancelled-while-past-due) /
   **Paused** (defensive arm — nothing writes a DB `paused` status today; retention pause lives on Stripe
   `pause_collection`, so retention-paused members display as Active, same as every other admin surface) /
   **Cancelled** / **Guest — no membership** (incomplete/none). The route now
   also projects `subscription.cancelledAt` (was declared on `AdminUserDetail` but never sent). Regression
   test: `npm run test:membership-display-status`.
-- **Partner-access ring** (header, before the close button, `sm+`): the SAME instrument the member sees on
-  the /my-account hero — percent ring while access is live ("{N} left" caption for one-time windows), amber
-  `ShieldAlert` "Paused" ring while past-due (membership access pauses; a paid one-time window is kept).
-  Server-derived as `partnerAccessRing` on `AdminUserDetail` via
+- **Partner-access ring**: the SAME instrument the member sees on the /my-account hero — percent ring while
+  access is live ("{N} left" caption for one-time windows), amber `ShieldAlert` "Paused" ring while past-due
+  (membership access pauses; a paid one-time window is kept). **Placement (2026-07-09):** on **desktop** (`sm+`)
+  it renders on the right of the header (before the close button) with its label; on **mobile** it **replaces
+  the avatar** in the left slot (the mobile header has no room for both) — falling back to the avatar when the
+  member has no partner access. Rendered once via a local `renderPartnerRing(size, showLabel)` so both
+  placements stay in sync. Server-derived as `partnerAccessRing` on `AdminUserDetail` via
   [`resolvePartnerAccessRing`](../../src/utils/partner-discounts/partner-access-ring.ts) — queue-aware,
   downgrade-preservation aware, same precedence (pastdue > active > onetime > none) and primitives as
   `useDashboardState`; **no access logic in the JSX**. Renders the shared
