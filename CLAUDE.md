@@ -667,6 +667,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/stores/useModalPriorityStore.ts",
         "src/stores/useDashboardSheetStore.ts",
         "src/lib/queries.ts",
+        "src/lib/__tests__/session-invalidation.test.ts",
         "src/lib/queryKeys.ts",
         "src/lib/requestDeduplication.ts",
         "src/app/providers.tsx",
