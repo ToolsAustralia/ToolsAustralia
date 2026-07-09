@@ -90,10 +90,20 @@ Three at-a-glance additions so an admin understands the account without digging:
   [`AccessRing`](../../src/components/ui/AccessRing.tsx).
 - **Next-renewal entries preview** (Overview → "Major Draw Entries" card sub-line): "+N on renewal · {date}"
   for renewing members, "+N after payment recovery" for past-due. Server-derived as
-  `subscription.nextRenewalEntries` using the CANONICAL math (`calculateRenewalEntries` — carry-forward +
-  monthly base, never promo-multiplied; effective package via `getEffectiveBenefits`, recovery via
-  `getRenewalEntriesPreviewForProfile`) — the same number the member's dashboard note, the renewal-failure
+  `subscription.nextRenewalEntries` via the shared [`resolveNextRenewalEntries`](../../src/utils/subscription/next-renewal-entries.ts)
+  (carry-forward + monthly base, never promo-multiplied; effective package via `getEffectiveBenefits`,
+  recovery gated on `hasFailedRenewal`) — the same number the member's dashboard note, the renewal-failure
   email, and Klaviyo show. `null` (no sub-line) when no renewal is coming (autoRenew off / cancelled / guest).
+
+**Server parity + Norm (2026-07-09):** `partnerAccessRing`, `subscription.nextRenewalEntries`, and
+`subscription.cancelledAt` are computed once by the shared resolvers and returned by BOTH the admin
+`/api/admin/users/[id]` route (inline `buildAdminUserProfile`) and the Norm `users.get` service
+[`getAdminUserDetail`](../../src/services/admin/UserAdminQueryService.ts) — so the admin UI and the Norm
+projection report identical values by construction. The three fields are mirrored into
+`NormUsersGetSchema` + the `/v1/users/:id` route and documented in
+[docs/internal-norm/norm-context.md](../internal-norm/norm-context.md); they are non-PII derived signals
+(tier %, entry count, ISO date). Verified against the live schema with a per-user `NormUsersGetSchema.parse()`
+sweep (the runtime-500 check `norm:smoke` would catch).
 
 ## UserDetailModal — Partner Discount Access section (2026-06-16)
 

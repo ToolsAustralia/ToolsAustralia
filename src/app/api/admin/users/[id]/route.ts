@@ -13,13 +13,7 @@ import { getPackageById } from "@/data/membershipPackages";
 import { getMiniDrawPackageById } from "@/data/miniDrawPackages";
 import { getReconciledPartnerDiscountSummary } from "@/utils/partner-discounts/partner-discount-queue";
 import { resolvePartnerAccessRing } from "@/utils/partner-discounts/partner-access-ring";
-import { hasFailedRenewal } from "@/utils/subscription/subscription-helpers";
-import { getEffectiveBenefits } from "@/utils/membership/benefit-resolution";
-import { calculateRenewalEntries } from "@/utils/payment/subscription-entries-calculator";
-import {
-  getRenewalEntriesPreviewForProfile,
-  isSubscriptionRecoveryStatus,
-} from "@/utils/integrations/klaviyo/klaviyo-renewal-entries-preview";
+import { resolveNextRenewalEntries } from "@/utils/subscription/next-renewal-entries";
 import { adminUserUpdateSchema } from "@/utils/validation/admin-user-update";
 import type { AdminUserUpdatePayload } from "@/types/admin";
 import { rewardsEnabled } from "@/config/featureFlags";
@@ -544,38 +538,10 @@ async function buildAdminUserProfile(userId: string) {
   // but keeps a paid one-time window). See utils/partner-discounts/partner-access-ring.
   const partnerAccessRing = resolvePartnerAccessRing(user as unknown as IUser);
 
-  // Entries granted on the NEXT successful renewal — the same canonical math as the
-  // customer dashboard note, the renewal-failure email, and Klaviyo:
-  // calculateRenewalEntries(base, carry-forward); renewals are NEVER promo-multiplied.
-  // Active members use the EFFECTIVE package (downgrade-preservation aware);
-  // past_due/unpaid use the recovery preview; autoRenew:false → null (no renewal coming).
-  let nextRenewalEntries: number | null = null;
-  if (user.subscription) {
-    if (isSubscriptionRecoveryStatus(user.subscription.status)) {
-      // Gate on hasFailedRenewal like every member-facing recovery surface:
-      // cancelled-while-past-due (autoRenew off) is NOT recovering — no preview.
-      nextRenewalEntries = hasFailedRenewal(user as unknown as IUser)
-        ? getRenewalEntriesPreviewForProfile(user as unknown as IUser)
-        : null;
-    } else if (user.subscription.isActive && user.subscription.autoRenew !== false) {
-      // effective.entriesPerMonth carries the CACHED preserved-benefit value during a
-      // downgrade window (matches the dashboard) even if the previous package is
-      // missing from static data; fall back to the stored package only when the
-      // whole effective resolution is null.
-      const effective = getEffectiveBenefits(user as unknown as IUser);
-      const baseEntries =
-        effective?.entriesPerMonth ??
-        (user.subscription.packageId
-          ? getPackageById(String(user.subscription.packageId))?.entriesPerMonth
-          : undefined);
-      if (baseEntries !== undefined) {
-        nextRenewalEntries = calculateRenewalEntries(
-          baseEntries,
-          user.subscription.lastMonthAccumulatedEntries
-        ).entriesToGrant;
-      }
-    }
-  }
+  // Entries granted on the NEXT successful renewal — canonical shared resolver
+  // (same number the customer dashboard note, the renewal-failure email, Klaviyo,
+  // and the Norm users.get projection show). null when no renewal is coming.
+  const nextRenewalEntries = resolveNextRenewalEntries(user as unknown as IUser);
 
   const redemptionHistory = user.redemptionHistory || [];
 

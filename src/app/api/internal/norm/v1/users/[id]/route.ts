@@ -23,7 +23,9 @@ export const GET = withNorm(
     // PII-safe projection: firstName + opaque userId + state only. Email,
     // lastName, mobile, savedPaymentMethods, full referral history, raw orders,
     // partner-discount queue, redemption history, miniDraw participation arrays
-    // are intentionally stripped — Norm gets statistics counts only.
+    // are intentionally stripped — Norm gets statistics counts only. The added
+    // partnerAccessRing / nextRenewalEntries / cancelledAt are derived signals
+    // (tier %, entry count, ISO date) — no new PII.
     return ctx.ok({
       userId: detail.id,
       firstName: detail.firstName || null,
@@ -48,11 +50,20 @@ export const GET = withNorm(
             endDate: detail.subscription.endDate
               ? new Date(detail.subscription.endDate).toISOString()
               : null,
+            cancelledAt: detail.subscription.cancelledAt
+              ? new Date(detail.subscription.cancelledAt).toISOString()
+              : null,
             status: detail.subscription.status ?? null,
             autoRenew: detail.subscription.autoRenew ?? null,
             lastMonthAccumulatedEntries: detail.subscription.lastMonthAccumulatedEntries ?? null,
+            nextRenewalEntries: detail.subscription.nextRenewalEntries ?? null,
           }
         : null,
+      partnerAccessRing: {
+        state: detail.partnerAccessRing.state,
+        percent: detail.partnerAccessRing.percent,
+        expiryLabel: detail.partnerAccessRing.expiryLabel,
+      },
       statistics: {
         totalSpent: detail.totalSpent,
         totalOrders: detail.totalOrders,

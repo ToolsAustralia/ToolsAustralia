@@ -11,12 +11,15 @@ import User from "@/models/User";
 import PaymentEvent from "@/models/PaymentEvent";
 import MajorDraw from "@/models/MajorDraw";
 import MiniDraw from "@/models/MiniDraw";
+import type { IUser } from "@/models/User";
 import { getPackageById } from "@/data/membershipPackages";
 import {
   buildUserFilter,
   getActiveSubscriptionFilter,
   getEverPaidUserFilter,
 } from "@/utils/admin/userFilterBuilder";
+import { resolvePartnerAccessRing, type PartnerAccessRing } from "@/utils/partner-discounts/partner-access-ring";
+import { resolveNextRenewalEntries } from "@/utils/subscription/next-renewal-entries";
 
 /** True iff `id` is a syntactically-valid Mongo ObjectId. */
 export function isValidUserObjectId(id: string): boolean {
@@ -680,10 +683,15 @@ export interface AdminUserDetailResult {
     isActive: boolean;
     startDate?: Date;
     endDate?: Date;
+    cancelledAt?: Date | null;
     status?: string;
     autoRenew?: boolean;
     lastMonthAccumulatedEntries?: number | null;
+    /** Entries granted on the next successful renewal (carry-forward + base; never promo-multiplied). null when no renewal is coming. */
+    nextRenewalEntries?: number | null;
   } | null;
+  /** Partner-access ring — same derivation as the /my-account hero (pastdue > active > onetime > none). */
+  partnerAccessRing: PartnerAccessRing;
   totalSpent: number;
   totalOrders: number;
   totalOrderValue: number;
@@ -766,6 +774,13 @@ export async function getAdminUserDetail(userId: string): Promise<AdminUserDetai
     ? getPackageById(user.subscription.packageId.toString())?.name ?? null
     : null;
 
+  // Same shared derivations as the admin user-detail route, so Norm and the
+  // admin UI report identical numbers by construction (the lean doc carries
+  // subscription + partnerDiscountQueue + oneTimePackages — the exclusion
+  // .select() above only drops PII/secret fields).
+  const partnerAccessRing = resolvePartnerAccessRing(user as unknown as IUser);
+  const nextRenewalEntries = resolveNextRenewalEntries(user as unknown as IUser);
+
   return {
     id: user._id.toString(),
     firstName: user.firstName,
@@ -789,11 +804,14 @@ export async function getAdminUserDetail(userId: string): Promise<AdminUserDetai
           isActive: user.subscription.isActive ?? false,
           startDate: user.subscription.startDate,
           endDate: user.subscription.endDate,
+          cancelledAt: user.subscription.cancelledAt ?? null,
           status: user.subscription.status,
           autoRenew: user.subscription.autoRenew,
           lastMonthAccumulatedEntries: user.subscription.lastMonthAccumulatedEntries ?? null,
+          nextRenewalEntries,
         }
       : null,
+    partnerAccessRing,
     totalSpent,
     totalOrders,
     totalOrderValue,

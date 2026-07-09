@@ -201,6 +201,12 @@ export const NormUsersGetSchema = z.object({
       isActive: z.boolean(),
       startDate: z.string().nullable(),
       endDate: z.string().nullable(),
+      cancelledAt: z
+        .string()
+        .nullable()
+        .describe(
+          "ISO 8601 UTC when the member scheduled cancellation (still active until endDate); null if not cancelling. Pairs with autoRenew:false to mean 'scheduled to cancel'.",
+        ),
       status: z.string().nullable(),
       autoRenew: z.boolean().nullable(),
       lastMonthAccumulatedEntries: z
@@ -211,8 +217,35 @@ export const NormUsersGetSchema = z.object({
         .describe(
           "Membership accumulated entries carried forward into the next draw on renewal; preserved through cancellation for resubscribe. Distinct from top-level accumulatedEntries (lifetime total).",
         ),
+      nextRenewalEntries: z
+        .number()
+        .int()
+        .nonnegative()
+        .nullable()
+        .describe(
+          "Entries the member will receive on their NEXT successful renewal (carry-forward + monthly base; renewals are never promo-multiplied). For past_due/unpaid members it is what settling the failed renewal grants. null when no renewal is coming (autoRenew off, cancelled, or not recovering). Use this for win-back / renewal-value replies.",
+        ),
     })
     .nullable(),
+  partnerAccessRing: z
+    .object({
+      state: z
+        .enum(["active", "onetime", "pastdue", "none"])
+        .describe("Account state driving partner access: active member / one-time-pack buyer / past-due / none"),
+      percent: z
+        .number()
+        .int()
+        .min(0)
+        .max(100)
+        .describe("Partner-catalogue access % the member currently sees (0 when locked; membership access pauses while past_due)"),
+      expiryLabel: z
+        .string()
+        .nullable()
+        .describe("Time-gated one-time-pack window label, e.g. '5 days' / '24hr'; null for lifecycle (membership) access or when locked"),
+    })
+    .describe(
+      "Partner-catalogue access ring — the same signal the member sees on their /my-account hero. state 'none' + percent 0 = no partner access.",
+    ),
   statistics: z.object({
     totalSpent: z.number().nonnegative().describe("AUD dollars; refund-net"),
     totalOrders: z.number().int().nonnegative().describe("Count of Order rows"),

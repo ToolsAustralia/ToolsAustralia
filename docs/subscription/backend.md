@@ -1,5 +1,9 @@
 # Subscription — Backend
 
+## Shared renewal-entries resolver (2026-07-09)
+
+[`resolveNextRenewalEntries(user)`](../../src/utils/subscription/next-renewal-entries.ts) is the single source for "entries the member gets on their NEXT successful renewal" — carry-forward + monthly base via `calculateRenewalEntries` (renewals are **never** promo-multiplied). It handles all member states: `past_due`/`unpaid` still recovering (gated on `hasFailedRenewal`) → the settle preview; active + `autoRenew !== false` → effective-package base (downgrade-preservation aware); everything else → `null`. Shared by the admin user-detail route, the Norm `users.get` service projection (`getAdminUserDetail`), and mirrors the customer dashboard note (`useDashboardState.membershipEntriesPerRenewal`) — so all four agree by construction. Reach for this instead of re-deriving renewal entries.
+
 ## Services
 
 All non-trivial subscription logic lives under [`src/services/subscription/`](../../src/services/subscription/). Per CLAUDE.md, route handlers must delegate here — no business logic in `route.ts`.
