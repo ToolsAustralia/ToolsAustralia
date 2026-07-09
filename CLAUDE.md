@@ -125,15 +125,14 @@ Verbose audits belong in `/plan`, `/review`, and `/debug`. Outside those skills,
 
 Worktrees for this repo live at `<repo-root>/.worktrees/<kebab-branch-name>/`, not under `.claude/worktrees/` or any other location. Use the existing `wt-new.sh` script when present — it handles env file copy and `npm install`. If you're using an EnterWorktree-style tool with a different default, override it.
 
-**`.env.local` does NOT merge — sync it directly, don't wait for merge.** `.env.local` is **gitignored** (`.gitignore`), so git **never** carries it between a worktree and the main folder — merging moves tracked files only. `wt-new.sh` copies it **main → new worktree** at creation, but there is **no automatic reverse**. So whenever you add or change an env var in a **worktree's** `.env.local`, **also add it to the main folder's `.env.local` right then** (keep the two in sync) — the main folder needs the config independently of git, so there's no reason to defer to a merge. Diff the two files by var name to find what's missing:
+**Env vars: `.env.example` is the registry; `.env.local` is per-folder and must be synced by hand.** `.env.example` (tracked; kept out of the `.env*` ignore by `!.env.example`) is the **single source of truth for WHICH vars exist** — it must list **every** var the app reads, with a comment + a **safe placeholder (never a real secret value)**. There is no runtime env validation, so keep it complete by hand: when you add a var, **register it in `.env.example` in the same commit**. `.env.local` holds the **values**, is **gitignored**, and **never merges** — `wt-new.sh` copies it main → new worktree at creation, but there is no reverse. So when a branch adds/changes an env var, **set the value in your `.env.local`, the main folder's `.env.local`, AND Vercel right then** (don't wait for a merge; the main folder + prod need the config independently of git). Detect drift with the doctor:
 
 ```bash
-# from the worktree: VAR= names present here but not in the main folder's .env.local
-comm -23 <(grep -oE '^[A-Za-z_][A-Za-z0-9_]*=' .env.local | sed 's/=//' | sort -u) \
-         <(grep -oE '^[A-Za-z_][A-Za-z0-9_]*=' <repo-root>/.env.local | sed 's/=//' | sort -u)
+npm run check:env       # this folder's .env.local vs .env.example (exit 1 if a declared var is unset)
+npm run check:env:all   # main folder + every git worktree
 ```
 
-Keep the tracked `.env.example` updated too — it IS the authoritative list of *which* vars exist, and it DOES merge. **Production/Vercel env is separate** — add new vars there as well (see `.env.example` comments). When a branch adds an env var, sync it to the main folder's `.env.local` + Vercel then and there, not at merge time.
+`scripts/check-env.mjs` is read-only + names-only (no secret leakage); it reports **MISSING** (declared but unset here) + **EXTRA** (set locally but not registered — go add it to `.env.example`). `PORT` + `E2E_*` are allowlisted (legitimately per-folder). A quiet `--warn` runs in `predev`, so drift surfaces on every `npm run dev`. Because `.env.example` is tracked, completing it on one branch and merging to `main` propagates the registry to every branch/worktree.
 
 ### 10. Mirror admin API changes to Norm — or flag them
 
@@ -822,7 +821,8 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "scripts/stripe-*.ts",
         "scripts/verify-*.ts",
         "scripts/reconcile-*.ts",
-        "scripts/connect-ops-db.ts"
+        "scripts/connect-ops-db.ts",
+        "scripts/check-env.mjs"
       ],
       "lastVerified": "2026-07-06"
     },
