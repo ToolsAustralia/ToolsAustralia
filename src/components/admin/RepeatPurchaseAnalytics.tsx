@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { Users, Repeat, TrendingUp, Clock, DollarSign, Star, BarChart3, Download } from "lucide-react";
 import { Card, SectionTitle, MetricCard, DataTable, Segmented, type Column } from "@/components/admin/ui";
 import { AdminDateRangeToolbar } from "@/components/admin/AdminDateRangeToolbar";
@@ -65,6 +65,7 @@ export default function RepeatPurchaseAnalytics() {
   const [segment, setSegment] = useState<RepeatSegment>("all");
   const [bucket, setBucket] = useState<RepeatBucketKey | null>(null);
   const [member, setMember] = useState<RepeatMemberFilter>("all");
+  const usersRef = useRef<HTMLDivElement>(null);
   const {
     rows: userRows,
     totalCount,
@@ -106,6 +107,18 @@ export default function RepeatPurchaseAnalytics() {
   };
 
   const bucketMax = Math.max(1, ...(summary?.buckets ?? []).map((b) => b.users));
+
+  // Clicking a bucket bar in the "How soon they bought again" chart drives the Users
+  // list below: set (or toggle off) the bucket filter, then scroll the list into view.
+  // A bucket only exists for a *returned* buyer, so if the segment is on "not yet
+  // returned" we reset it to "all" — mirroring the bucket pills' own not-returned guard.
+  const selectBucket = (b: RepeatBucketKey) => {
+    if (segment === "not-returned") setSegment("all");
+    setBucket((cur) => (cur === b ? null : b));
+    const reduceMotion =
+      typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    usersRef.current?.scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth", block: "start" });
+  };
 
   const rows: UserTableRow[] = useMemo(
     () =>
@@ -216,7 +229,18 @@ export default function RepeatPurchaseAnalytics() {
           ) : (
             <div className="space-y-2.5">
               {(summary?.buckets ?? []).map((b) => (
-                <div key={b.bucket}>
+                <button
+                  key={b.bucket}
+                  type="button"
+                  onClick={() => selectBucket(b.bucket)}
+                  aria-pressed={bucket === b.bucket}
+                  title={`Show the ${BUCKET_LABEL[b.bucket].toLowerCase()} buyers below`}
+                  className={`w-full text-left rounded-lg -mx-2 px-2 py-1.5 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500/50 ${
+                    bucket === b.bucket
+                      ? "bg-red-50 dark:bg-red-950/30"
+                      : "hover:bg-neutral-50 dark:hover:bg-neutral-800/60"
+                  }`}
+                >
                   <div className="flex items-center justify-between gap-2 mb-1">
                     <span className="text-xs font-medium text-neutral-700 dark:text-neutral-300 truncate">{BUCKET_LABEL[b.bucket]}</span>
                     <div className="flex items-baseline gap-2 shrink-0">
@@ -230,7 +254,7 @@ export default function RepeatPurchaseAnalytics() {
                     </div>
                     <span className="text-2xs text-neutral-500 dark:text-neutral-400 num tabular-nums w-16 text-right shrink-0">{money(b.revenue)}</span>
                   </div>
-                </div>
+                </button>
               ))}
             </div>
           )}
@@ -266,6 +290,7 @@ export default function RepeatPurchaseAnalytics() {
         </Card>
       </div>
 
+      <div ref={usersRef} className="scroll-mt-6">
       <Card className="p-5">
         <SectionTitle
           title="Users"
@@ -357,6 +382,7 @@ export default function RepeatPurchaseAnalytics() {
           </>
         )}
       </Card>
+      </div>
 
       <p className="text-2xs text-neutral-400 leading-snug">
         <strong>Who’s here:</strong> people buying one-time packs <em>instead of</em> subscribing — the ones you could persuade to subscribe. That includes customers who’ve never subscribed <em>and</em> former members who let their membership lapse but keep buying one-time packs. <strong>Left out:</strong> people who were <strong>active members</strong> when they bought (they’re topping up an existing subscription, not choosing one-time over it). A one-time buyer who <em>later</em> subscribes stays, shown as “Member”. <strong>What counts:</strong> paid one-time pack purchases, refunds removed. <strong>Upsells and mini-draw packs don’t count</strong> — an upsell happens right after another purchase, and mini-draws are a separate product. Dates use <strong>Australian Eastern Time</strong>. Each account is counted on its own, so someone who used two email addresses shows up as two people. The date filter at the top uses each person’s <strong>first</strong> qualifying purchase.
