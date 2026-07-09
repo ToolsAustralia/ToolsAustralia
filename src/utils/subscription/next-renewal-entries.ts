@@ -29,6 +29,33 @@ import {
   isSubscriptionRecoveryStatus,
 } from "@/utils/integrations/klaviyo/klaviyo-renewal-entries-preview";
 
+/**
+ * Do the member's next-renewal entries land in the CURRENTLY-ACTIVE major draw?
+ *
+ * Entries added by a renewal only count toward a draw if they arrive before that
+ * draw's entries freeze (`freezeEntriesAt`, 30 min before `drawDate`). Once the
+ * current draw freezes / draws, the next renewal grant lands in the NEXT draw —
+ * so surfacing "+N on renewal" against the current draw's entry count would
+ * mislead ("no point showing next month's renewal — those entries are a
+ * different draw"). Use this to gate the renewal preview to the current cycle.
+ *
+ * Returns false when either input is missing/invalid (fail-closed — don't show
+ * a preview we can't place in a draw).
+ */
+export function renewalEntriesLandInCurrentDraw(
+  renewalDate: Date | string | null | undefined,
+  draw: { freezeEntriesAt?: Date | string | null; drawDate?: Date | string | null } | null | undefined,
+): boolean {
+  if (!renewalDate || !draw) return false;
+  const renewal = new Date(renewalDate).getTime();
+  if (Number.isNaN(renewal)) return false;
+  const boundaryRaw = draw.freezeEntriesAt ?? draw.drawDate;
+  if (!boundaryRaw) return false;
+  const boundary = new Date(boundaryRaw).getTime();
+  if (Number.isNaN(boundary)) return false;
+  return renewal <= boundary;
+}
+
 /** Pure + server/client-safe. Returns null when no renewal grant is coming. */
 export function resolveNextRenewalEntries(user: IUser): number | null {
   const sub = user.subscription;

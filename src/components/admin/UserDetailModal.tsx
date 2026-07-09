@@ -27,6 +27,7 @@ import {
   Check,
   ShieldCheck,
   ShieldAlert,
+  TrendingUp,
   type LucideIcon,
 } from "lucide-react";
 import ActivityTab from "./UserDetailModal/ActivityTab";
@@ -1331,20 +1332,20 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
   const membershipDisplayStatus = deriveMembershipDisplayStatus(user.subscription);
   const partnerAccessRing = user.partnerAccessRing ?? null;
   const nextRenewalEntries = user.subscription?.nextRenewalEntries ?? null;
-  const renewalEndDate =
-    user.subscription?.endDate && user.subscription?.autoRenew !== false
-      ? new Date(user.subscription.endDate)
-      : null;
-  // date-fns format() THROWS on an invalid date — guard before formatting.
-  const renewalDateLabel =
-    renewalEndDate && !Number.isNaN(renewalEndDate.getTime())
-      ? format(renewalEndDate, "d MMM yyyy")
-      : null;
-  const majorDrawRenewalSub =
-    nextRenewalEntries != null
+  const renewalLandsInCurrentDraw = user.subscription?.renewalLandsInCurrentDraw ?? false;
+  // "+N …" preview badge under the Major Draw Entries card. Shown ONLY when those
+  // entries will land in the CURRENTLY-displayed draw — otherwise it misleads
+  // ("+N on renewal" next to this draw when the renewal is a future draw's grant):
+  //  - past-due: settling adds entries to the current draw immediately → "on recovery"
+  //  - active: only when the renewal falls within the current draw cycle (a
+  //    next-cycle renewal lands in a different draw → no badge).
+  const majorDrawRenewalBadge =
+    nextRenewalEntries != null && nextRenewalEntries > 0
       ? membershipDisplayStatus === "past_due"
-        ? `+${nextRenewalEntries.toLocaleString()} after payment recovery`
-        : `+${nextRenewalEntries.toLocaleString()} on renewal${renewalDateLabel ? ` · ${renewalDateLabel}` : ""}`
+        ? `+${nextRenewalEntries.toLocaleString()} on recovery`
+        : renewalLandsInCurrentDraw
+          ? `+${nextRenewalEntries.toLocaleString()} on renewal`
+          : undefined
       : undefined;
 
   return (
@@ -1508,9 +1509,9 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                       value: user.statistics.currentDrawEntries,
                       icon: Trophy,
                       color: "yellow",
-                      // What the next successful renewal (or past-due recovery) grants —
-                      // server-derived via the canonical calculateRenewalEntries math.
-                      sub: majorDrawRenewalSub,
+                      // What the next renewal (or past-due recovery) grants INTO THIS DRAW —
+                      // gated server-side to the current draw cycle (renewalLandsInCurrentDraw).
+                      badge: majorDrawRenewalBadge,
                     },
                     {
                       title: "Rewards Points",
@@ -1545,7 +1546,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                     value: string | number;
                     icon: LucideIcon;
                     color: string;
-                    sub?: string;
+                    badge?: string;
                   }>).map((stat, idx) => {
                     const Icon = stat.icon;
                     const iconConfig = getIconColorConfig(stat.color);
@@ -1570,10 +1571,11 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                           <p className="text-base sm:text-xl lg:text-2xl font-bold text-slate-900 dark:text-white leading-none tracking-tight">
                             {typeof stat.value === "number" ? stat.value.toLocaleString() : stat.value}
                           </p>
-                          {stat.sub ? (
-                            <p className="text-3xs sm:text-2xs lg:text-xs font-semibold text-emerald-600 dark:text-emerald-400 mt-1 truncate">
-                              {stat.sub}
-                            </p>
+                          {stat.badge ? (
+                            <span className="mt-1.5 inline-flex max-w-full items-center gap-1 rounded-full bg-emerald-50 dark:bg-emerald-950/40 px-1.5 py-0.5 text-3xs sm:text-2xs font-bold text-emerald-700 dark:text-emerald-400 ring-1 ring-emerald-200/70 dark:ring-emerald-500/25">
+                              <TrendingUp className="w-2.5 h-2.5 shrink-0" strokeWidth={2.5} aria-hidden />
+                              <span className="truncate">{stat.badge}</span>
+                            </span>
                           ) : null}
                         </div>
                         <div

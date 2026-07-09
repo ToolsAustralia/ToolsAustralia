@@ -224,6 +224,12 @@ export interface AdminUserDetail {
      * Null when no renewal is coming (autoRenew off, cancelled, guest).
      */
     nextRenewalEntries?: number | null;
+    /**
+     * True iff an active member's next-renewal entries land in the CURRENTLY-ACTIVE
+     * draw (renewal before that draw's freeze). false ⇒ a future draw's grant, so the
+     * "+N on renewal" preview must NOT be shown against the current draw's count.
+     */
+    renewalLandsInCurrentDraw?: boolean;
   } | null;
 
   // Package Information

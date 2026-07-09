@@ -3717,10 +3717,11 @@ PII not exposed: same uniform user-domain PII discipline — `email`, `lastName`
   createdAt: ISO8601,
   updatedAt: ISO8601,
   lastLogin: ISO8601 | null,
-  subscription: { packageId, packageName, isActive, startDate, endDate, cancelledAt, status, autoRenew, lastMonthAccumulatedEntries, nextRenewalEntries } | null,
+  subscription: { packageId, packageName, isActive, startDate, endDate, cancelledAt, status, autoRenew, lastMonthAccumulatedEntries, nextRenewalEntries, renewalLandsInCurrentDraw } | null,
     // cancelledAt = ISO when the member scheduled cancellation (still active until endDate); null if not cancelling. cancelledAt set + autoRenew:false ⇒ "scheduled to cancel".
     // lastMonthAccumulatedEntries = membership carry-forward entries that roll into the next draw on renewal; preserved through cancellation for resubscribe.
     // nextRenewalEntries = entries the member gets on their NEXT successful renewal (carry-forward + monthly base; NEVER promo-multiplied). For past_due/unpaid it is what settling the failed renewal grants. null when no renewal is coming (autoRenew off / cancelled / not recovering). Use for win-back / renewal-value replies.
+    // renewalLandsInCurrentDraw = true iff those renewal entries land in the CURRENTLY-ACTIVE draw (renewal before its entry freeze). false ⇒ the renewal falls after the current draw closes, so the grant goes to a FUTURE draw and won't boost the member's current-draw entry count. Always false for past_due/cancelled/guest.
   partnerAccessRing: {                           // partner-catalogue access the member currently sees on their /my-account hero — non-PII
     state: "active" | "onetime" | "pastdue" | "none",  // active member / one-time-pack buyer / past-due / no access
     percent: number,                             // 0–100 partner-catalogue access %; 0 when locked (membership access pauses while past_due)

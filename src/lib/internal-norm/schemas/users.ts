@@ -225,6 +225,11 @@ export const NormUsersGetSchema = z.object({
         .describe(
           "Entries the member will receive on their NEXT successful renewal (carry-forward + monthly base; renewals are never promo-multiplied). For past_due/unpaid members it is what settling the failed renewal grants. null when no renewal is coming (autoRenew off, cancelled, or not recovering). Use this for win-back / renewal-value replies.",
         ),
+      renewalLandsInCurrentDraw: z
+        .boolean()
+        .describe(
+          "True iff an active member's next-renewal entries land in the CURRENTLY-ACTIVE major draw (renewal before that draw's entry freeze). false ⇒ the renewal falls after the current draw closes, so those entries go to a FUTURE draw and won't boost the member's current-draw entry count. Always false for past_due/cancelled/guest.",
+        ),
     })
     .nullable(),
   partnerAccessRing: z

@@ -4,6 +4,8 @@
 
 [`resolveNextRenewalEntries(user)`](../../src/utils/subscription/next-renewal-entries.ts) is the single source for "entries the member gets on their NEXT successful renewal" — carry-forward + monthly base via `calculateRenewalEntries` (renewals are **never** promo-multiplied). It handles all member states: `past_due`/`unpaid` still recovering (gated on `hasFailedRenewal`) → the settle preview; active + `autoRenew !== false` → effective-package base (downgrade-preservation aware); everything else → `null`. Shared by the admin user-detail route, the Norm `users.get` service projection (`getAdminUserDetail`), and mirrors the customer dashboard note (`useDashboardState.membershipEntriesPerRenewal`) — so all four agree by construction. Reach for this instead of re-deriving renewal entries.
 
+The sibling [`renewalEntriesLandInCurrentDraw(renewalDate, draw)`](../../src/utils/subscription/next-renewal-entries.ts) answers whether a member's renewal grant lands in the **currently-active** draw — true iff the renewal falls before the draw's `freezeEntriesAt` (fallback `drawDate`). A renewal after the current draw's freeze grants into the NEXT draw (the member's current-draw entries reset to 0 for the new cycle), so surfaces that show "entries on renewal" against the *current* draw count must gate on this (the admin user-detail modal + Norm `subscription.renewalLandsInCurrentDraw` both do). Fail-closed: returns false on any missing/invalid input.
+
 ## Services
 
 All non-trivial subscription logic lives under [`src/services/subscription/`](../../src/services/subscription/). Per CLAUDE.md, route handlers must delegate here — no business logic in `route.ts`.

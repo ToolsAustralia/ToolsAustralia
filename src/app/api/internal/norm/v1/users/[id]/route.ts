@@ -57,6 +57,7 @@ export const GET = withNorm(
             autoRenew: detail.subscription.autoRenew ?? null,
             lastMonthAccumulatedEntries: detail.subscription.lastMonthAccumulatedEntries ?? null,
             nextRenewalEntries: detail.subscription.nextRenewalEntries ?? null,
+            renewalLandsInCurrentDraw: detail.subscription.renewalLandsInCurrentDraw ?? false,
           }
         : null,
       partnerAccessRing: {

@@ -13,7 +13,10 @@ import { getPackageById } from "@/data/membershipPackages";
 import { getMiniDrawPackageById } from "@/data/miniDrawPackages";
 import { getReconciledPartnerDiscountSummary } from "@/utils/partner-discounts/partner-discount-queue";
 import { resolvePartnerAccessRing } from "@/utils/partner-discounts/partner-access-ring";
-import { resolveNextRenewalEntries } from "@/utils/subscription/next-renewal-entries";
+import {
+  resolveNextRenewalEntries,
+  renewalEntriesLandInCurrentDraw,
+} from "@/utils/subscription/next-renewal-entries";
 import { adminUserUpdateSchema } from "@/utils/validation/admin-user-update";
 import type { AdminUserUpdatePayload } from "@/types/admin";
 import { rewardsEnabled } from "@/config/featureFlags";
@@ -543,6 +546,27 @@ async function buildAdminUserProfile(userId: string) {
   // and the Norm users.get projection show). null when no renewal is coming.
   const nextRenewalEntries = resolveNextRenewalEntries(user as unknown as IUser);
 
+  // Does that renewal land in the CURRENTLY-ACTIVE draw? A renewal after this
+  // draw's freeze grants into the NEXT draw, so the "+N on renewal" preview must
+  // only show against the current draw's entry count when it actually lands there.
+  // Fetched independently of `majorDraws` above (that query is user-scoped, so a
+  // member with 0 current-draw entries isn't in it). Only meaningful for an active
+  // renewing member — past-due settle lands immediately, and the modal frames that
+  // separately ("+N on recovery").
+  const renewalDateForDrawGate =
+    user.subscription?.isActive && user.subscription?.autoRenew !== false
+      ? user.subscription?.endDate ?? null
+      : null;
+  const activeDrawForGate = renewalDateForDrawGate
+    ? await MajorDraw.findOne({ status: "active" })
+        .select("freezeEntriesAt drawDate")
+        .lean<{ freezeEntriesAt?: Date | null; drawDate?: Date | null } | null>()
+    : null;
+  const renewalLandsInCurrentDraw = renewalEntriesLandInCurrentDraw(
+    renewalDateForDrawGate,
+    activeDrawForGate
+  );
+
   const redemptionHistory = user.redemptionHistory || [];
 
   const daysSinceLastLogin = user.lastLogin
@@ -661,6 +685,7 @@ async function buildAdminUserProfile(userId: string) {
           autoRenew: user.subscription.autoRenew,
           lastMonthAccumulatedEntries: user.subscription.lastMonthAccumulatedEntries,
           nextRenewalEntries,
+          renewalLandsInCurrentDraw,
           previousSubscription: user.subscription.previousSubscription,
           pendingChange: user.subscription.pendingChange,
           lastDowngradeDate: user.subscription.lastDowngradeDate,

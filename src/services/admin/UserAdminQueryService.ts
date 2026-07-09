@@ -19,7 +19,10 @@ import {
   getEverPaidUserFilter,
 } from "@/utils/admin/userFilterBuilder";
 import { resolvePartnerAccessRing, type PartnerAccessRing } from "@/utils/partner-discounts/partner-access-ring";
-import { resolveNextRenewalEntries } from "@/utils/subscription/next-renewal-entries";
+import {
+  resolveNextRenewalEntries,
+  renewalEntriesLandInCurrentDraw,
+} from "@/utils/subscription/next-renewal-entries";
 
 /** True iff `id` is a syntactically-valid Mongo ObjectId. */
 export function isValidUserObjectId(id: string): boolean {
@@ -689,6 +692,8 @@ export interface AdminUserDetailResult {
     lastMonthAccumulatedEntries?: number | null;
     /** Entries granted on the next successful renewal (carry-forward + base; never promo-multiplied). null when no renewal is coming. */
     nextRenewalEntries?: number | null;
+    /** True iff those renewal entries land in the CURRENTLY-ACTIVE draw (renewal before its freeze). false = they land in a future draw, so don't surface against the current draw. */
+    renewalLandsInCurrentDraw?: boolean;
   } | null;
   /** Partner-access ring — same derivation as the /my-account hero (pastdue > active > onetime > none). */
   partnerAccessRing: PartnerAccessRing;
@@ -725,7 +730,7 @@ export async function getAdminUserDetail(userId: string): Promise<AdminUserDetai
     PaymentEvent.find({ userId: userObjectId })
       .select("eventType paymentIntentId data")
       .lean(),
-    MajorDraw.findOne({ status: "active" }).select("entries").lean(),
+    MajorDraw.findOne({ status: "active" }).select("entries freezeEntriesAt drawDate").lean(),
     PaymentEvent.countDocuments({ userId: userObjectId }),
   ]);
 
@@ -780,6 +785,17 @@ export async function getAdminUserDetail(userId: string): Promise<AdminUserDetai
   // .select() above only drops PII/secret fields).
   const partnerAccessRing = resolvePartnerAccessRing(user as unknown as IUser);
   const nextRenewalEntries = resolveNextRenewalEntries(user as unknown as IUser);
+  // Only meaningful for an active renewing member — gates the "+N on renewal"
+  // preview to the current draw (a renewal after this draw's freeze lands in the
+  // NEXT draw). currentMajorDraw here is the active draw (not user-scoped).
+  const renewalDateForDrawGate =
+    user.subscription?.isActive && user.subscription?.autoRenew !== false
+      ? user.subscription?.endDate ?? null
+      : null;
+  const renewalLandsInCurrentDraw = renewalEntriesLandInCurrentDraw(
+    renewalDateForDrawGate,
+    currentMajorDraw as { freezeEntriesAt?: Date | null; drawDate?: Date | null } | null,
+  );
 
   return {
     id: user._id.toString(),
@@ -809,6 +825,7 @@ export async function getAdminUserDetail(userId: string): Promise<AdminUserDetai
           autoRenew: user.subscription.autoRenew,
           lastMonthAccumulatedEntries: user.subscription.lastMonthAccumulatedEntries ?? null,
           nextRenewalEntries,
+          renewalLandsInCurrentDraw,
         }
       : null,
     partnerAccessRing,
