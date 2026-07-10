@@ -23,6 +23,91 @@ A single customer can be more than one of the last two at once (e.g. an active m
 
 ---
 
+## Journey map — the customer path at a glance
+
+> **This is a router, not a restatement.** Each stage links to the section that OWNS the detail — CUSTOMER.md for *which field / what data*, [BUSINESS.md](BUSINESS.md) for *mechanics*, `docs/<domain>/` for *internals*. Per the single-source-of-truth contract nothing here re-explains a flow; it points you at the one place that does. Keep it a map: update the pointers when sections move, don't grow mechanics here.
+
+### The membership spine — acquisition → conversion → lifecycle → win-back
+
+```mermaid
+flowchart TD
+    A["Anonymous visitor<br/>UTM &amp; click-IDs captured (§8a)"] --> B["Register — MembershipModal step 1<br/>POST /api/auth/register"]
+    B --> C["Guest account created<br/>passwordless · isAuthenticated:false · NO membership (§4a)"]
+    C --> D["Step 2 payment<br/>uses guestUserData, still not logged in"]
+    D --> E["Payment success<br/>/api/auth/auto-login = payment proof → session (§4a)"]
+    E --> F["Stripe webhook grants membership<br/>subscription.isActive:true → active (§5.1)"]
+    F --> G["UserSetupModal<br/>profession / state / email-verify (BUSINESS §10g)"]
+    G --> H["Post-purchase upsell offer<br/>accept / decline / dismiss (§2i)"]
+    H --> I["Member dashboard /my-account (§9a)"]
+    I -->|"renews anchor-24"| J{"Monthly renewal (§5.2)"}
+    J -->|"paid"| I
+    J -->|"fails"| K["past_due → recovery ladder<br/>retry · 3DS · update card · pay overdue (BUSINESS §10e)"]
+    K -->|"recovered"| I
+    I -->|"upgrade / downgrade"| L["Tier change (§5.3 / §5.4)"]
+    L --> I
+    I -->|"cancel"| M["CancellationFlowModal<br/>retention offers (§5.6)"]
+    M -->|"saved"| I
+    M -->|"proceeds"| N["scheduled_cancel → canceled (§3, §5.7)"]
+    N -->|"within ~30d grace"| O["Reactivate — no charge, same tier (§5.7)"]
+    N -->|"expired"| P["Resubscribe — new charge, any tier<br/>entries carry over (§5.7 / BUSINESS §10i)"]
+    O --> I
+    P --> F
+    classDef gotcha fill:#fde68a,stroke:#b45309,color:#111827;
+    class C gotcha;
+```
+
+The **highlighted** node is the codebase's most non-obvious rule: registering in step 1 does **not** log the user in or grant membership — the guest crosses step 2 as `guestUserData` and only becomes a session after Stripe payment-proof (§4a, [docs/auth/gotchas.md](docs/auth/gotchas.md)). Side flows not on this spine (one-time / Additional packs, Mini Pack entry, perks) are in the router table below.
+
+### Subscription lifecycle states
+
+The canonical 9-state enum lives on [`MembershipStatusHistory`](src/models/MembershipStatusHistory.ts); the full table + transition mechanics are [BUSINESS.md §10](BUSINESS.md). The picture:
+
+```mermaid
+stateDiagram-v2
+    [*] --> none
+    none --> incomplete: start checkout
+    incomplete --> incomplete_expired: payment never collected
+    incomplete --> active: payment collected
+    incomplete --> trialing: joins 25th-27th
+    trialing --> active: on the 24th anchor
+    active --> past_due: renewal fails
+    past_due --> active: pay overdue or retry
+    past_due --> unpaid: Stripe gives up
+    active --> scheduled_cancel: cancel or autoRenew off
+    scheduled_cancel --> active: resume / upgrade / downgrade
+    scheduled_cancel --> canceled: cycle ends
+    canceled --> active: reactivate within grace
+    canceled --> active: resubscribe
+    unpaid --> active: resubscribe
+```
+
+Two **ghost states** ride on top of the enum without being in it: `pendingChange` (upgrade charge in-flight) and `previousSubscription` (downgrade benefits held until `endDate`). They change what tier the customer effectively has *right now* — see §3b / [BUSINESS.md §10b](BUSINESS.md).
+
+### Stage → authoritative source
+
+| Journey stage | What happens | Owns the detail |
+|---|---|---|
+| Acquisition / attribution | UTM + click-IDs captured; converting platform resolved at purchase | §8a, §8b · [docs/tracking/](docs/tracking/) |
+| Register (guest bridge) | Step-1 register creates a passwordless guest — **no login, no membership** | §4a, §4b · [docs/auth/gotchas.md](docs/auth/gotchas.md) |
+| Login | password / email sign-in code / Google / post-payment auto-login | §4c–§4f |
+| First payment & activation | Full price at signup; webhook grants membership | §5.1 · [BUSINESS.md §9, §10g](BUSINESS.md) |
+| Post-purchase setup | UserSetupModal captures profession/state + email-verify prompt | [BUSINESS.md §10g](BUSINESS.md) · [docs/USER_SETUP_MODAL.md](docs/USER_SETUP_MODAL.md) |
+| Upsell offer | Post-success offer; per-trigger dedup | §2i · [docs/upsell/](docs/upsell/) · [BUSINESS.md §5](BUSINESS.md) |
+| Member dashboard | The ROI surface at `/my-account` | §9a · [BUSINESS.md §10h](BUSINESS.md) |
+| Renewal (anchor-24) | Monthly renew; 25th–27th joiners anchored to the 24th | §5.2 · [BUSINESS.md §9b](BUSINESS.md) · [BILLING_ANCHOR_24.md](docs/BILLING_ANCHOR_24.md) |
+| Upgrade / Downgrade | Immediate charge + cycle reset vs. deferred with benefits preserved | §5.3, §5.4 · [BUSINESS.md §10c, §10d](BUSINESS.md) |
+| Auto-renew toggle | Soft-cancel shortcut (`cancel_at_period_end`) | §5.5 · [BUSINESS.md §10a](BUSINESS.md) |
+| Past-due recovery | Self-serve retry → 3DS → update card → pay overdue | §3a · [BUSINESS.md §10e](BUSINESS.md) · [FAILED_RENEWAL_PAY_NOW.md](docs/FAILED_RENEWAL_PAY_NOW.md) |
+| Cancellation & retention | CancellationFlowModal; five save-offers, seven reasons | §5.6 · [BUSINESS.md §13c](BUSINESS.md) · [docs/subscription/cancellation-flow.md](docs/subscription/cancellation-flow.md) |
+| Reactivate vs Resubscribe | Grace-window reactivate vs. fully-expired win-back | §5.7 · [BUSINESS.md §10i](BUSINESS.md) |
+| Entries & eligibility | How entries are earned; 18+, SA/ACT excluded | §6, §6a · [BUSINESS.md §3](BUSINESS.md) |
+| One-time / Additional packs | Non-recurring packs (guest or member) | [BUSINESS.md §2](BUSINESS.md) · [docs/cart-shop-products/](docs/cart-shop-products/) |
+| Mini-draw entry | Threshold-triggered Mini Pack purchase | [docs/draws/](docs/draws/) · [BUSINESS.md §3b](BUSINESS.md) |
+| Perks | Partner / referral / affiliate / rewards | §7 · [docs/partner/](docs/partner/), [docs/referrals/](docs/referrals/), [docs/affiliate/](docs/affiliate/), [docs/rewards-redeemables/](docs/rewards-redeemables/) |
+| Account surface & data rights | Dashboard, PII footprint, delete chat, sign-out clearing | §9 |
+
+---
+
 ## 2. The customer data model
 
 Every field below lives on the `User` Mongoose model ([src/models/User.ts](src/models/User.ts); interface lines 3-313, schema 315-1133). This is a **load-bearing** inventory — keep it intact when the model changes.
@@ -171,7 +256,7 @@ These exist on the same collection but are RBAC / service-account machinery ([Us
 
 `User.subscription.status` is a free-form `String` that defaults to `"incomplete"` and receives Stripe status values directly ([User.ts:493-496](src/models/User.ts#L493)). The **canonical enum** lives on `MembershipStatusHistory.membershipStatus` ([MembershipStatusHistory.ts:26-40](src/models/MembershipStatusHistory.ts#L26)) and is mirrored as `MembershipNormalizedStatus` ([membershipAnalytics.ts:15-24](src/types/admin/membershipAnalytics.ts#L15)).
 
-**For the full 9-state table and transition mechanics, see [BUSINESS.md §10](BUSINESS.md).** What follows is the customer-OWNED field mapping and a customer's-eye summary.
+**For the full 9-state table and transition mechanics, see [BUSINESS.md §10](BUSINESS.md); for the visual lifecycle diagram, see the Journey map near the top of this doc.** What follows is the customer-OWNED field mapping and a customer's-eye summary.
 
 ### 3a. Field mapping
 
