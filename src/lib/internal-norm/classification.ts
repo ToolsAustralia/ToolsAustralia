@@ -551,7 +551,7 @@ export const NORM_ENDPOINTS = {
     requiredPermission: "pageAnalytics.view",
     path: "/v1/analytics/repeat-purchases",
     method: "GET",
-    summary: "One-time-package repeat-purchase (reconversion) summary, all-time: distinct one-time buyers, repeat buyers, repeat rate, median days to return, repeat revenue, became-members count, first→second gap buckets, and matured return-rate-by-window. Aggregate counts only, no PII. Excludes upsells, mini-draws, and membership renewals; refunded purchases netted out.",
+    summary: "One-time-package repeat-purchase (reconversion) summary, all-time: distinct one-time buyers, repeat buyers, repeat rate, median days to return, repeat revenue, became-members count, first→second gap buckets, matured return-rate-by-window, and a per-package breakdown (which starting pack drives repeats/member-conversions vs per-purchase gross). Aggregate counts only, no PII. Excludes upsells, mini-draws, and membership renewals; refunded purchases netted out.",
     rateLimit: { perMinute: 10 },
     responseSchema: NormRepeatPurchaseSummarySchema,
   },

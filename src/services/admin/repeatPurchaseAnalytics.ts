@@ -8,6 +8,7 @@ import {
   REPEAT_WINDOW_DAYS,
   type RepeatBucketKey,
   type RepeatMemberFilter,
+  type RepeatPackageBreakdown,
   type RepeatPurchaseSummary,
   type RepeatPurchaseUserRow,
   type RepeatPurchaseUsersResult,
@@ -141,6 +142,40 @@ export function summarizeRepeatPurchases(
   const bucketUsers = Object.fromEntries(REPEAT_BUCKET_KEYS.map((k) => [k, 0])) as Record<RepeatBucketKey, number>;
   const bucketRevenue = Object.fromEntries(REPEAT_BUCKET_KEYS.map((k) => [k, 0])) as Record<RepeatBucketKey, number>;
 
+  // Per-package rollup, two attributions on the SAME cohort purchases:
+  //  • anchor-grouped ("started with this pack") — each buyer counted once under their FIRST pack;
+  //  • per-purchase gross — each purchase counted under the pack actually bought.
+  // packageId/packageName are both optional on PaymentEvent, so key defensively.
+  interface PkgAccum {
+    packageId: string;
+    packageName: string;
+    startedBuyers: number;
+    startedReturned: number;
+    startedBecameMembers: number;
+    startedRevenue: number;
+    purchases: number;
+    grossRevenue: number;
+  }
+  const pkg = new Map<string, PkgAccum>();
+  const ensurePkg = (id: string, name?: string): PkgAccum => {
+    const key = id || name || "unknown";
+    let a = pkg.get(key);
+    if (!a) {
+      a = {
+        packageId: key,
+        packageName: name || id || "Unknown",
+        startedBuyers: 0,
+        startedReturned: 0,
+        startedBecameMembers: 0,
+        startedRevenue: 0,
+        purchases: 0,
+        grossRevenue: 0,
+      };
+      pkg.set(key, a);
+    }
+    return a;
+  };
+
   for (const acc of cohort) {
     const anchor = acc.purchases[0];
     const second = acc.purchases[1];
@@ -151,6 +186,19 @@ export function summarizeRepeatPurchases(
     const firstNew = memInfo.get(acc.userId)?.firstNew ?? null;
     const becameMember = firstNew != null && firstNew > anchor.ts;
     if (becameMember) becameMembers++;
+
+    // Per-package: anchor attribution (this buyer counted once under their first pack) …
+    const anchorPkg = ensurePkg(anchor.packageId, anchor.packageName);
+    anchorPkg.startedBuyers++;
+    anchorPkg.startedRevenue += acc.totalSpent;
+    if (second) anchorPkg.startedReturned++;
+    if (becameMember) anchorPkg.startedBecameMembers++;
+    // … and per-purchase gross (each purchase under the pack actually bought).
+    for (const p of acc.purchases) {
+      const pp = ensurePkg(p.packageId, p.packageName);
+      pp.purchases++;
+      pp.grossRevenue += p.price;
+    }
 
     let daysToReturn: number | undefined;
     let bucket: RepeatBucketKey | undefined;
@@ -213,6 +261,30 @@ export function summarizeRepeatPurchases(
     revenue: Math.round(bucketRevenue[bucket] * 100) / 100,
   }));
 
+  // Biggest (most trustworthy + highest-impact) cohorts first; revenue breaks ties.
+  const packages: RepeatPackageBreakdown[] = [...pkg.values()]
+    .map((a) => ({
+      packageId: a.packageId,
+      packageName: a.packageName,
+      startedBuyers: a.startedBuyers,
+      startedReturned: a.startedReturned,
+      startedRepeatRate: a.startedBuyers ? a.startedReturned / a.startedBuyers : 0,
+      startedBecameMembers: a.startedBecameMembers,
+      startedMemberRate: a.startedBuyers ? a.startedBecameMembers / a.startedBuyers : 0,
+      startedRevenue: Math.round(a.startedRevenue * 100) / 100,
+      purchases: a.purchases,
+      grossRevenue: Math.round(a.grossRevenue * 100) / 100,
+    }))
+    // Most starters first (trust + impact); ties break on downstream then gross, so packs
+    // that only ever appear as add-on/repeat buys (0 starters) sink to the bottom, ordered
+    // by how much they were bought.
+    .sort(
+      (x, y) =>
+        y.startedBuyers - x.startedBuyers ||
+        y.startedRevenue - x.startedRevenue ||
+        y.grossRevenue - x.grossRevenue
+    );
+
   const summary: RepeatPurchaseSummary = {
     oneTimeBuyers,
     repeatBuyers,
@@ -223,6 +295,7 @@ export function summarizeRepeatPurchases(
     totalPurchases,
     buckets,
     windows,
+    packages,
   };
 
   return { summary, users };

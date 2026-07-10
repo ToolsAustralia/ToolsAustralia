@@ -136,15 +136,6 @@ function DisclosureNotice({ onAcknowledge }: { onAcknowledge: () => void }) {
             You&apos;re chatting with an <strong>AI assistant</strong>, not a
             person.
           </li>
-          <li>
-            Messages may be processed by a third-party AI provider, possibly{" "}
-            <strong>overseas</strong> — so don&apos;t share card numbers or
-            passwords.
-          </li>
-          <li>
-            Chats are stored <strong>in Australia</strong>, deleted after{" "}
-            <strong>90 days</strong>; members can clear theirs anytime.
-          </li>
         </ul>
         <p className="text-xs text-gray-500 dark:text-gray-400">
           Read our{" "}

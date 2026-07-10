@@ -31,6 +31,31 @@ export interface RepeatWindowRate {
   rate: number;
 }
 
+export interface RepeatPackageBreakdown {
+  /** Grouping key (packageId, or packageName / "unknown" when the id is missing). */
+  packageId: string;
+  /** Display name (packageName, falling back to packageId / "Unknown"). */
+  packageName: string;
+  // ── "Started with this pack" (anchor-grouped: buyers whose FIRST one-time pack was this) ──
+  /** Distinct buyers whose anchor (first) one-time purchase was this package — the rate denominator. */
+  startedBuyers: number;
+  /** Of those buyers, how many came back for a 2nd+ purchase. */
+  startedReturned: number;
+  /** startedReturned / startedBuyers, 0–1 (0 when no buyers). */
+  startedRepeatRate: number;
+  /** Of those buyers, how many later started a membership (see RepeatPurchaseUserRow.becameMember). */
+  startedBecameMembers: number;
+  /** startedBecameMembers / startedBuyers, 0–1 (0 when no buyers). */
+  startedMemberRate: number;
+  /** All one-time spend (dollars) from those buyers — first + repeat ("downstream"). */
+  startedRevenue: number;
+  // ── "All purchases" (per-purchase gross: this package, every time it was bought) ──
+  /** Count of one-time purchase events of this package across the cohort. */
+  purchases: number;
+  /** Sum of price (dollars) of those purchases. */
+  grossRevenue: number;
+}
+
 export interface RepeatPurchaseSummary {
   /** Distinct users with ≥1 countable one-time purchase in the cohort window. */
   oneTimeBuyers: number;
@@ -48,6 +73,8 @@ export interface RepeatPurchaseSummary {
   totalPurchases: number;
   buckets: RepeatBucketCount[];
   windows: RepeatWindowRate[];
+  /** Per one-time package: anchor-grouped rates/revenue + per-purchase gross. Sorted by startedBuyers desc. */
+  packages: RepeatPackageBreakdown[];
 }
 
 export type RepeatSegment = "all" | "returned" | "not-returned";

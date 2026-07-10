@@ -17,4 +17,20 @@ export const NormRepeatPurchaseSummarySchema = z.object({
   windows: z.array(
     z.object({ windowDays: z.number(), eligible: z.number(), returned: z.number(), rate: z.number() })
   ),
+  // Per one-time package: anchor-grouped rates/revenue ("started*") + per-purchase gross.
+  // Aggregate-only — package name + counts + AUD + rates, no user identifiers.
+  packages: z.array(
+    z.object({
+      packageId: z.string(),
+      packageName: z.string(),
+      startedBuyers: z.number(),
+      startedReturned: z.number(),
+      startedRepeatRate: z.number(),
+      startedBecameMembers: z.number(),
+      startedMemberRate: z.number(),
+      startedRevenue: z.number(),
+      purchases: z.number(),
+      grossRevenue: z.number(),
+    })
+  ),
 });
