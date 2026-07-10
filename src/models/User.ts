@@ -886,6 +886,12 @@ const UserSchema = new Schema<IUser>(
           type: Date,
           default: Date.now,
         },
+        // Original purchase PaymentIntent id that triggered this upsell — the
+        // /api/upsell/purchase one-purchase-per-appearance dedup keys on it.
+        // Rows written before 2026-07-10 lack it (strict mode stripped it).
+        triggeringPaymentIntentId: {
+          type: String,
+        },
       },
     ],
 

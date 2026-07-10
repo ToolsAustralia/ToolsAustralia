@@ -43,10 +43,10 @@ Cross-domain helper: [campaignAudienceFilter.ts](../../src/utils/redeemables/cam
 
 When a payment that granted redeemables is refunded:
 1. Refund webhook → `processRefundReversal` ([payment](../payment/architecture.md)).
-2. Reverser modules in `src/utils/payment/reversers/` reverse each grant kind.
-3. Redeemables reverser un-issues redeemables that haven't been redeemed yet.
+2. `buildLedgerReversalSteps` ([refund-ledger-reversal.ts](../../src/utils/payment/refund-ledger-reversal.ts)) registers one named step per grant kind and runs them through the generic orchestrator in `src/utils/payment/reversers/`.
+3. The redeemables steps claw back grants tied to the payment — **redeemed or not**: milestone issuances are revoked (redeemed ones un-redeemed first, removing their granted entries and draw entries), and a coupon/milestone redemption consumed on the refunded purchase is un-redeemed.
 
-Already-redeemed redeemables aren't reversed — the value's been consumed. This appears in `RefundProcessed.data.reversalIssues[]` for admin awareness.
+Redeemed value is reclaimed automatically, not written off — only reversal steps that **fail** appear in `RefundProcessed.data.reversalIssues[]` for admin attention.
 
 ## Pause behaviour
 

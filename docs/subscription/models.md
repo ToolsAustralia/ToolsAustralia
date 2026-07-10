@@ -293,3 +293,7 @@ Two boolean flags that gate the new cancellation-flow one-time retention offers.
 | `retentionOffersConsumed.discount50_2mo` | `boolean` (default `false`) | 50% discount for 2 months offer |
 
 **+100 entries offer:** reuses the existing top-level `cancellationUpsellRedeemed` flag (and `cancellationUpsellRedeemedAt`). No new field was added for it — the legacy flag was already purpose-built for this one-time offer and its semantics are identical.
+
+## `User.upsellPurchases[].triggeringPaymentIntentId` — added to the schema (2026-07-10)
+
+The `upsellPurchases` array on `User` (upsell-domain data, but it lives on this model) declared `triggeringPaymentIntentId?` in the TS interface since inception, but the field was **missing from the Mongoose schema block** — under `strict: true` Mongoose silently stripped it on every write, so the `/api/upsell/purchase` "one purchase per appearance" dedup (which keys on `offerId + triggeringPaymentIntentId`) never matched. Fixed 2026-07-10 by adding the field to the schema. **Caveat:** rows written before the fix permanently lack the field, so the dedup only bites on upsell purchases made after it.

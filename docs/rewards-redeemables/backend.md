@@ -24,7 +24,7 @@
 
 ## Refund integration
 
-The refund-reverser module for redeemables lives in [src/utils/payment/reversers/](../../src/utils/payment/reversers/) — pulls from this domain's models to un-issue unredeemed grants. Already-redeemed grants surface in `RefundProcessed.data.reversalIssues[]`.
+The refund-reversal steps for redeemables (`campaignUnredeem`, `milestoneRevoke`) are registered in `buildLedgerReversalSteps` ([src/utils/payment/refund-ledger-reversal.ts](../../src/utils/payment/refund-ledger-reversal.ts)); [src/utils/payment/reversers/](../../src/utils/payment/reversers/) holds only the generic orchestrator + types. Milestone issuances granted by the refunded payment are revoked — already-redeemed ones are un-redeemed first (entries clawed back) — and a coupon redeemed on the refunded purchase is un-redeemed back to `active`. Only step **failures** surface in `RefundProcessed.data.reversalIssues[]`.
 
 ## Cron / jobs
 

@@ -14,7 +14,7 @@ Like Stripe idempotency: every `RedeemableIssuance` has a deterministic key deri
 
 ## P4. Reverser modules for refund symmetry
 
-A redeemables reverser module under [src/utils/payment/reversers/](../../src/utils/payment/reversers/) un-issues unredeemed grants when the originating payment is refunded. Follows the [payment P1 reverser pattern](../payment/patterns.md#p1-reverser-modules-per-grant-type).
+Refund symmetry is implemented as named reversal steps (`campaignUnredeem`, `milestoneRevoke`, `promoLink.unredeem`, …) registered in `buildLedgerReversalSteps` ([src/utils/payment/refund-ledger-reversal.ts](../../src/utils/payment/refund-ledger-reversal.ts)) and run by the generic orchestrator under [src/utils/payment/reversers/](../../src/utils/payment/reversers/). Steps claw back redeemed grants too (un-redeem, then revoke). Follows the [payment P1 reverser pattern](../payment/patterns.md#p1-reverser-modules-per-grant-type).
 
 ## P5. Wallet read uses TanStack Query, not Zustand
 

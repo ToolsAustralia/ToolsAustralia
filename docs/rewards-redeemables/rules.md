@@ -8,9 +8,9 @@ Redemption must be atomic: validate → burn → fulfill. If fulfillment fails a
 
 `RedeemableIssuance` writes use a stable issuance key (`${campaignId}:${userId}` or `${drawId}:${userId}` etc.) to prevent double-issuance from webhook retries or campaign re-runs.
 
-## R3. Refund reversal — only un-redeemed issuances
+## R3. Refund reversal — redeemed issuances are clawed back too
 
-Refund reverser un-issues only `status: "active"` (not yet redeemed). Already-redeemed issuances are surfaced in `RefundProcessed.data.reversalIssues[]` for admin awareness — they aren't reversed automatically.
+Full-refund reversal revokes milestone issuances granted by the refunded payment; an already-**redeemed** issuance is first un-redeemed (`RedemptionService.unredeemMilestoneRedemption` removes the granted entries + draw entries) and then set `status: "revoked"` ([MilestoneService.revokeIssuancesFromPaymentEvent](../../src/services/milestones/MilestoneService.ts)). A monthly coupon or milestone redemption consumed *on* the refunded purchase is likewise un-redeemed (coupon back to `status: "active"`, its entries removed). `RefundProcessed.data.reversalIssues[]` records reversal-step **failures** only — nothing survives by design, only by error. Steps are registered in `buildLedgerReversalSteps` ([refund-ledger-reversal.ts](../../src/utils/payment/refund-ledger-reversal.ts)).
 
 ## R4. Wallet conservation under pause
 

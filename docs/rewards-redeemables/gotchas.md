@@ -58,7 +58,7 @@ Brief: when a user is "rewards-paused" (abuse handling), `rewardsGuard.ts` block
 
 ## Already-redeemed reversal
 
-When refunding a payment that issued redeemables, only un-redeemed issuances are reversed. Already-redeemed ones surface in `RefundProcessed.data.reversalIssues[]`. Admin must manually adjudicate (revoke compensation, request return, etc.) — there's no automatic claw-back.
+When refunding a payment that issued redeemables, redeemed issuances do **not** survive: `MilestoneService.revokeIssuancesFromPaymentEvent` un-redeems a redeemed issuance first (clawing back its granted entries and draw entries via `RedemptionService.unredeemMilestoneRedemption`) and then sets `status: "revoked"`. A monthly coupon redeemed on the refunded purchase is auto-un-redeemed back to `active`. `RefundProcessed.data.reversalIssues[]` holds only the reversal steps that **failed** — those are what an admin must manually adjudicate; it is not a list of surviving redeemed grants.
 
 ## Lifetime `accumulatedEntries` is NOT a purchase proxy (fixed money-path bug)
 
