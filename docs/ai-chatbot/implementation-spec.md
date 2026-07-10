@@ -1250,12 +1250,10 @@ Four additions that satisfy the Privacy Act disclosure obligation for the Phase-
 A `DisclosureNotice` card is shown **inside the chat panel** the very first time a user opens it, replacing the normal chat UI until they acknowledge it. The card contains:
 
 - "You're chatting with an AI assistant, not a person."
-- "Messages may be processed by a third-party AI provider, possibly overseas — so don't share card numbers or passwords."
-- "Chats are stored in Australia, deleted after 90 days; members can clear theirs anytime."
 - A link to `/privacy`.
 - A "Got it — start chatting" button.
 
-> Copy tightened 2026-07-10 to reduce perceived text (was four longer bullets). All three Privacy-Act disclosure points are preserved — AI-not-a-person, third-party/overseas processing (APP 8), and AU-storage + 90-day retention/delete — with the "don't share sensitive details" nudge merged into the overseas bullet (and still shown persistently via the input-area micro-hint, #2 below).
+> Copy history (2026-07-10): tightened from four longer bullets to three, then **further reduced the same day, at the owner's request, to a single bullet** (AI-not-a-person). The third-party/overseas-processing (APP 8) and AU-storage/90-day-retention bullets were **removed from the first-run card**. **Compliance note:** those two disclosures now live only in the **privacy policy** (`/privacy`, linked from the card) — they are no longer surfaced in-widget on first open. The "don't share card numbers/passwords" nudge is unaffected here — it remains shown **persistently** via the input-area micro-hint (#2 below). If the APP-8 overseas-processing disclosure needs first-run prominence for compliance, restore that bullet.
 
 Acknowledgement is persisted to a **device-level** localStorage key (`ta_support_chat_disclosure_ack = "1"`). This key is intentionally NOT in `CHAT_STORAGE_KEYS` and NOT cleared by `clearSupportChatStorage()`. It is a generic AI notice — analogous to a cookie-consent acknowledgement — and clearing it on sign-out would re-nag every user on a shared device, which is the wrong UX and wrong privacy posture. The distinction is: `CHAT_STORAGE_KEYS` holds per-user conversation data (clear on sign-out to prevent leakage); `DISCLOSURE_ACK_KEY` is a device pref (keep across sessions).
 
