@@ -873,7 +873,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "scripts/eval-chat-goldenset.ts",
         "scripts/calibrate-chat-deflection.ts"
       ],
-      "lastVerified": "2026-07-08"
+      "lastVerified": "2026-07-10"
     }
   }
 }

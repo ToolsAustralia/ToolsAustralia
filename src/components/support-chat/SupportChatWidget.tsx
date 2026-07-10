@@ -133,21 +133,17 @@ function DisclosureNotice({ onAcknowledge }: { onAcknowledge: () => void }) {
         </p>
         <ul className="space-y-2 text-xs leading-relaxed list-disc list-inside marker:text-[#C9A063]">
           <li>
-            You&apos;re chatting with an <strong>AI assistant</strong> — not a
+            You&apos;re chatting with an <strong>AI assistant</strong>, not a
             person.
           </li>
           <li>
-            Your messages may be processed by a third-party AI provider, which
-            may be <strong>located overseas</strong>.
+            Messages may be processed by a third-party AI provider, possibly{" "}
+            <strong>overseas</strong> — so don&apos;t share card numbers or
+            passwords.
           </li>
           <li>
-            Please <strong>don&apos;t share</strong> sensitive details like full
-            card numbers or passwords — you won&apos;t need to.
-          </li>
-          <li>
-            Chats are stored <strong>securely in Australia</strong> and
-            automatically deleted after <strong>90 days</strong>. Signed-in
-            members can delete their history anytime.
+            Chats are stored <strong>in Australia</strong>, deleted after{" "}
+            <strong>90 days</strong>; members can clear theirs anytime.
           </li>
         </ul>
         <p className="text-xs text-gray-500 dark:text-gray-400">
