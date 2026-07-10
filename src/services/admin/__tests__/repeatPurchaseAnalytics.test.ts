@@ -241,4 +241,53 @@ check("window rates use matured denominators", () => {
   assert.equal(w180.returned, 1);
 });
 
+// --- per-package breakdown: anchor grouping vs per-purchase gross, members, invariants ---
+check("package breakdown splits anchor vs per-purchase and honours members", () => {
+  const { summary } = run(
+    [
+      // a: starts Apprentice, returns buying Tradie; signs up after anchor → became member
+      ev("a", "2026-01-01", "apprentice", 25),
+      ev("a", "2026-01-10", "tradie", 50),
+      // b: starts Apprentice, single purchase
+      ev("b", "2026-01-02", "apprentice", 25),
+      // c: starts Tradie, returns buying Tradie again
+      ev("c", "2026-01-03", "tradie", 50),
+      ev("c", "2026-02-03", "tradie", 50),
+    ],
+    [["a", [{ t: Date.UTC(2026, 0, 5), isNew: true }]]] // a's signup is AFTER their anchor
+  );
+  const byId = Object.fromEntries(summary.packages.map((p) => [p.packageId, p]));
+
+  // Apprentice — anchor group: 2 buyers started here (a, b); a returned; a became a member.
+  assert.equal(byId["apprentice"].startedBuyers, 2);
+  assert.equal(byId["apprentice"].startedReturned, 1);
+  assert.equal(byId["apprentice"].startedRepeatRate, 0.5);
+  assert.equal(byId["apprentice"].startedBecameMembers, 1);
+  assert.equal(byId["apprentice"].startedMemberRate, 0.5);
+  assert.equal(byId["apprentice"].startedRevenue, 100); // a: 25+50, b: 25
+  // Apprentice — per-purchase gross: only the two apprentice purchases (a's & b's anchors).
+  assert.equal(byId["apprentice"].purchases, 2);
+  assert.equal(byId["apprentice"].grossRevenue, 50);
+
+  // Tradie — anchor group: 1 buyer started here (c); c returned.
+  assert.equal(byId["tradie"].startedBuyers, 1);
+  assert.equal(byId["tradie"].startedReturned, 1);
+  assert.equal(byId["tradie"].startedRevenue, 100); // c: 50+50
+  // Tradie — per-purchase gross: a's 2nd (50) + c's two (50+50) = 3 purchases, $150.
+  assert.equal(byId["tradie"].purchases, 3);
+  assert.equal(byId["tradie"].grossRevenue, 150);
+
+  // Invariants: each attribution counts every purchase exactly once.
+  const sumStarted = summary.packages.reduce((s, p) => s + p.startedRevenue, 0);
+  const sumGross = summary.packages.reduce((s, p) => s + p.grossRevenue, 0);
+  assert.equal(sumStarted, sumGross);
+  assert.equal(sumGross, 200); // 25+50+25+50+50
+  assert.equal(summary.packages.reduce((s, p) => s + p.purchases, 0), summary.totalPurchases);
+  assert.equal(summary.packages.reduce((s, p) => s + p.startedBuyers, 0), summary.oneTimeBuyers);
+  assert.equal(summary.packages.reduce((s, p) => s + p.startedReturned, 0), summary.repeatBuyers);
+  assert.equal(summary.packages.reduce((s, p) => s + p.startedBecameMembers, 0), summary.becameMembers);
+  // Sorted by startedBuyers desc → apprentice (2) before tradie (1).
+  assert.equal(summary.packages[0].packageId, "apprentice");
+});
+
 console.log(`\n${passed} checks passed`);

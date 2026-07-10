@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useRef, useState } from "react";
-import { Users, Repeat, TrendingUp, Clock, DollarSign, Star, BarChart3, Download } from "lucide-react";
+import { Users, Repeat, TrendingUp, Clock, DollarSign, Star, BarChart3, Download, Package } from "lucide-react";
 import { Card, SectionTitle, MetricCard, DataTable, Segmented, type Column } from "@/components/admin/ui";
 import { AdminDateRangeToolbar } from "@/components/admin/AdminDateRangeToolbar";
 import { useAdminDateFilter } from "@/hooks/useAdminDateFilter";
@@ -27,6 +27,9 @@ const money = (n: number) =>
   new Intl.NumberFormat("en-AU", { style: "currency", currency: "AUD", maximumFractionDigits: 0 }).format(n);
 const fmtDate = (iso?: string) =>
   iso ? new Date(iso).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" }) : "—";
+const pct = (n: number) => `${(n * 100).toFixed(1)}%`;
+/** Fewer buyers than this started with a pack → its rates are too noisy to trust; the row is dimmed + flagged. */
+const LOW_N = 15;
 
 const USER_COLUMNS: Column[] = [
   { key: "user", label: "User", sortable: false },
@@ -289,6 +292,110 @@ export default function RepeatPurchaseAnalytics() {
           </p>
         </Card>
       </div>
+
+      <Card className="p-5">
+        <SectionTitle
+          title="By one-time package"
+          subtitle="Which starting pack brings buyers back — and which just sells. Rates are per buyer who started with that pack; thin samples are flagged."
+          icon={Package}
+        />
+        {summaryLoading ? (
+          <div className="space-y-2">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="h-9 rounded bg-neutral-100 dark:bg-neutral-800 animate-pulse" />
+            ))}
+          </div>
+        ) : (summary?.packages ?? []).length === 0 ? (
+          <p className="text-sm text-neutral-500 dark:text-neutral-400 py-6 text-center">No one-time package activity in this range yet.</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-2xs uppercase tracking-wider text-neutral-400 dark:text-neutral-500">
+                  <th className="py-1.5 px-2 text-left" />
+                  <th className="py-1.5 px-2 text-center font-semibold border-b border-neutral-200 dark:border-neutral-800" colSpan={4}>
+                    Started with this pack
+                  </th>
+                  <th className="py-1.5 px-2 text-center font-semibold border-b border-neutral-200 dark:border-neutral-800" colSpan={2}>
+                    All purchases
+                  </th>
+                </tr>
+                <tr className="border-b border-neutral-200 dark:border-neutral-800 text-2xs uppercase tracking-wider text-neutral-500 dark:text-neutral-400">
+                  <th className="py-2 px-2 text-left font-semibold">Package</th>
+                  <th className="py-2 px-2 text-right font-semibold">Buyers</th>
+                  <th className="py-2 px-2 text-right font-semibold">Repeat rate</th>
+                  <th className="py-2 px-2 text-right font-semibold">Became member</th>
+                  <th className="py-2 px-2 text-right font-semibold">Downstream</th>
+                  <th className="py-2 px-2 text-right font-semibold">Purchases</th>
+                  <th className="py-2 px-2 text-right font-semibold">Gross</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(summary?.packages ?? []).map((p) => {
+                  const noStarters = p.startedBuyers === 0; // only ever bought as a later/add-on purchase
+                  const lowN = p.startedBuyers < LOW_N;
+                  const dash = <span className="text-neutral-300 dark:text-neutral-600">—</span>;
+                  return (
+                    <tr
+                      key={p.packageId}
+                      className={`border-b border-neutral-100 dark:border-neutral-800/60 ${lowN ? "opacity-60" : ""}`}
+                      title={
+                        noStarters
+                          ? "Nobody started with this pack — it only shows up as a later/add-on purchase, so it has gross figures but no starting-pack rates."
+                          : lowN
+                            ? `Small sample — ${p.startedBuyers} buyer${p.startedBuyers === 1 ? "" : "s"} started here, so these rates are noisy.`
+                            : undefined
+                      }
+                    >
+                      <td className="py-2.5 px-2 text-neutral-800 dark:text-neutral-200 font-medium">
+                        <span className="flex items-center gap-1.5">
+                          <span className="truncate">{p.packageName}</span>
+                          {noStarters ? (
+                            <span className="shrink-0 rounded-full bg-neutral-100 dark:bg-neutral-800 text-neutral-500 dark:text-neutral-400 px-1.5 py-0.5 text-2xs font-semibold">
+                              add-on only
+                            </span>
+                          ) : lowN ? (
+                            <span className="shrink-0 rounded-full bg-neutral-100 dark:bg-neutral-800 text-neutral-500 dark:text-neutral-400 px-1.5 py-0.5 text-2xs font-semibold">
+                              small sample
+                            </span>
+                          ) : null}
+                        </span>
+                      </td>
+                      <td className="py-2.5 px-2 text-right num tabular-nums">{p.startedBuyers.toLocaleString("en-AU")}</td>
+                      <td className="py-2.5 px-2 text-right">
+                        {noStarters ? (
+                          dash
+                        ) : (
+                          <>
+                            <span className="num tabular-nums font-semibold text-neutral-900 dark:text-white">{pct(p.startedRepeatRate)}</span>
+                            <span className="block text-2xs text-neutral-400 num tabular-nums">{p.startedReturned} of {p.startedBuyers}</span>
+                          </>
+                        )}
+                      </td>
+                      <td className="py-2.5 px-2 text-right">
+                        {noStarters ? (
+                          dash
+                        ) : (
+                          <>
+                            <span className="num tabular-nums font-semibold text-neutral-900 dark:text-white">{pct(p.startedMemberRate)}</span>
+                            <span className="block text-2xs text-neutral-400 num tabular-nums">{p.startedBecameMembers} of {p.startedBuyers}</span>
+                          </>
+                        )}
+                      </td>
+                      <td className="py-2.5 px-2 text-right num tabular-nums text-neutral-500 dark:text-neutral-400">{noStarters ? dash : money(p.startedRevenue)}</td>
+                      <td className="py-2.5 px-2 text-right num tabular-nums text-neutral-500 dark:text-neutral-400">{p.purchases.toLocaleString("en-AU")}</td>
+                      <td className="py-2.5 px-2 text-right num tabular-nums text-neutral-500 dark:text-neutral-400">{money(p.grossRevenue)}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+        <p className="text-2xs text-neutral-400 leading-snug mt-3">
+          <strong>Started with this pack</strong> groups each buyer by their <em>first</em> one-time pack: repeat rate and member rate are the share of those buyers who came back or later subscribed, and <strong>Downstream</strong> is all their one-time spend. <strong>All purchases</strong> counts every time the pack was bought by people in this list, and its gross. Rows with fewer than {LOW_N} buyers are dimmed — too few to read a rate into.
+        </p>
+      </Card>
 
       <div ref={usersRef} className="scroll-mt-6">
       <Card className="p-5">
