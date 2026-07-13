@@ -53,6 +53,7 @@ import {
 } from "@/services/subscription/SubscriptionCollectionPauseService";
 import { decideClearPause, shouldReanchorAfterRecovery } from "@/services/subscription/pauseCollectionPolicy";
 import { STRIPE_SUBSCRIPTION_METADATA_IS_RESUBSCRIBE } from "@/utils/payment/stripe-subscription-metadata";
+import { decideStreakOnSubscriptionCreate } from "@/utils/subscription/streak";
 import { trackPixelSubscriptionRenewal } from "@/utils/tracking/pixel-purchase-tracking";
 import { executeBackgroundJob } from "@/utils/webhook/background-jobs";
 import {
@@ -3432,14 +3433,30 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
     }
 
     if (expandedInvoice.billing_reason === "subscription_cycle" && expandedInvoice.id) {
+      let firstTimePaidCycle = false;
       try {
-        await upsertRenewalCycleFromPaidInvoice({
+        ({ firstTimeSucceeded: firstTimePaidCycle } = await upsertRenewalCycleFromPaidInvoice({
           invoice: expandedInvoice,
           userId: new mongoose.Types.ObjectId(String(user._id)),
           stripeSubscriptionId: subscriptionId,
-        });
+        }));
       } catch (cycleErr) {
         webhookLog("warn", `Membership renewal cycle (paid) persist failed (non-blocking): ${cycleErr}`);
+      }
+      // Membership Streak: +1 per first-paid renewal cycle (replay-proof via the
+      // ledger pre-image — a redelivered webhook sees "succeeded" and skips).
+      if (firstTimePaidCycle) {
+        try {
+          await User.updateOne({ _id: user._id }, { $inc: { "subscription.streakMonths": 1 } });
+          if (user.subscription) {
+            // Keep the in-memory doc fresh so any later user.save() in this handler can't regress the counter.
+            user.subscription.streakMonths = (user.subscription.streakMonths ?? 0) + 1;
+          }
+          webhookLog("info", `Streak +1 → ${user.subscription?.streakMonths} (cycle invoice ${expandedInvoice.id})`);
+        } catch (streakErr) {
+          // Counter drift is repairable by re-running scripts/backfill-membership-streaks.ts --live
+          console.error(`Streak increment failed for user ${user._id} invoice ${expandedInvoice.id}:`, streakErr);
+        }
       }
     }
 
@@ -3690,6 +3707,45 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
         subscription.metadata?.upgradeType === "no_proration" &&
         invoice.billing_reason !== "subscription_cycle" // ✅ CRITICAL: Renewals should NOT be treated as upgrades
     );
+
+    // Membership Streak: start/continue/reset on subscription_create (upgrades excluded — continuity).
+    // Renewal increments live beside the renewal-cycle upsert above. Idempotent per invoice id.
+    try {
+      const streakDecision = decideStreakOnSubscriptionCreate({
+        billingReason: expandedInvoice.billing_reason,
+        isUpgrade,
+        isResubscribe,
+        previousEndDate: user.subscription?.endDate ?? null,
+        currentStreakMonths: user.subscription?.streakMonths ?? 0,
+        currentStreakGeneration: user.subscription?.streakGeneration ?? 1,
+        now: new Date(),
+      });
+      if (streakDecision.action === "start" && expandedInvoice.id) {
+        const res = await User.updateOne(
+          { _id: user._id, "subscription.lastStreakStartInvoiceId": { $ne: expandedInvoice.id } },
+          {
+            $set: {
+              "subscription.streakMonths": streakDecision.streakMonths,
+              "subscription.streakGeneration": streakDecision.streakGeneration,
+              "subscription.lastStreakStartInvoiceId": expandedInvoice.id,
+            },
+          }
+        );
+        if (res.modifiedCount === 1 && user.subscription) {
+          user.subscription.streakMonths = streakDecision.streakMonths;
+          user.subscription.streakGeneration = streakDecision.streakGeneration;
+          user.subscription.lastStreakStartInvoiceId = expandedInvoice.id;
+          webhookLog(
+            "info",
+            `Streak ${isResubscribe ? "reset (out-of-grace resubscribe)" : "started"} — generation ${streakDecision.streakGeneration} (invoice ${expandedInvoice.id})`
+          );
+        }
+      } else if (streakDecision.action === "continue") {
+        webhookLog("info", `Streak continues at ${user.subscription?.streakMonths ?? 0} (grace-window resubscribe)`);
+      }
+    } catch (streakErr) {
+      console.error(`Streak start writer failed for user ${user._id}:`, streakErr);
+    }
 
     // ✅ NEW: Calculate entries using accumulated entries system
     const baseEntries = membershipPackage.entriesPerMonth || 0;

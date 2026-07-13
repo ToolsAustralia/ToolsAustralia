@@ -83,6 +83,14 @@ export interface IUser extends Document {
     // after a cancellation). Drives the carry-over banner on the success page
     // and the activity-card sub-line. Optional — only set on resubscribe.
     lastResubscribedAt?: Date;
+
+    /** Membership Streak: consecutive paid renewals (join = month 0). Written ONLY by the
+     *  Stripe webhook writers + the backfill script. See docs/superpowers/specs/2026-07-07-membership-streak-design.md */
+    streakMonths?: number;
+    /** Increments on each out-of-grace resubscribe reset; scopes milestone re-earning. */
+    streakGeneration?: number;
+    /** Invoice id of the last subscription_create the streak start/reset writer consumed (idempotency marker). */
+    lastStreakStartInvoiceId?: string;
   };
 
   // One-time packages (can have multiple)
@@ -590,6 +598,24 @@ const UserSchema = new Schema<IUser>(
       // Timestamp of most recent resubscribe — see interface comment.
       lastResubscribedAt: {
         type: Date,
+        required: false,
+      },
+
+      // Membership Streak (see interface comments). Defaults keep legacy docs valid.
+      streakMonths: {
+        type: Number,
+        required: false,
+        default: 0,
+        min: [0, "Streak months cannot be negative"],
+      },
+      streakGeneration: {
+        type: Number,
+        required: false,
+        default: 1,
+        min: [1, "Streak generation starts at 1"],
+      },
+      lastStreakStartInvoiceId: {
+        type: String,
         required: false,
       },
     },

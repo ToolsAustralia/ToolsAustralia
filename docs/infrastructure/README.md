@@ -34,6 +34,10 @@ Connectivity probe: `npm run test:igodirect-sso` (see [dev-tooling/testing.md](.
 
 Rewards SSO test scripts (in `package.json`): `test:igodirect-sso` (connectivity probe), `test:member-level` (the partner-catalog tier resolver) and `test:sso-access` (the SSO access gate) — see [partner/gotchas.md](../partner/gotchas.md).
 
+## Membership Streak backfill (added 2026-07-07)
+
+`scripts/backfill-membership-streaks.ts` — reconstructs `subscription.streakMonths` + `streakGeneration` for every member from the `MembershipRenewalCycle` ledger (cross-checked against `MembershipStatusHistory` cancels). **Dry-run by default** (`backfill:membership-streaks:dry`); `backfill:membership-streaks` runs `--live`. Re-runnable — it is also the drift-repair tool for the webhook streak counter. Append-mode CSV audit, adaptive progress lines, 3-tier exit codes (0 clean / 1 anomalies / 2 fatal). Pure walker logic lives in `src/utils/subscription/streak.ts` (`npm run test:streak`). See [subscription/backend.md](../subscription/backend.md).
+
 ## AI support chatbot infra (added 2026-06-24)
 
 Foundations for the `support-chat` domain (see [docs/ai-chatbot/](../ai-chatbot/)). This is a **FAQ-only** bot — member account tools and Bedrock were removed per owner decision (2026-06-24).
