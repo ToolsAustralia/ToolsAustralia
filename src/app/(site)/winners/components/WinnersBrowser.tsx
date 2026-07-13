@@ -1,12 +1,12 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { MapPin, Search, ShieldCheck, Trophy } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { ChevronDown, Search } from "lucide-react";
 import type { WinnerSummary } from "@/types/winner";
 import { formatWinnerName } from "@/utils/winner-name-formatter";
 import { getWinnerSearchableContent } from "@/utils/winners";
 import { Stagger } from "../../draw-results/components/Reveal";
-import { auDateParts } from "../../draw-results/components/format";
+import WinnerBoardCard from "../../draw-results/components/WinnerBoardCard";
 import WinnersTestimony from "./WinnersTestimony";
 
 type Filter = "all" | "major" | "mini";
@@ -18,105 +18,14 @@ const FILTERS: [Filter, string][] = [
   ["mini", "Mini draws"],
 ];
 
-// Premium winner card (design: WinnerProCard) — accent-glow dark stage,
-// gradient-bordered artwork, name + 1st-prize, location, prize, then a footer
-// with the drawn DATE (prize value intentionally omitted) + verify link.
-function WallCard({ w }: { w: WinnerSummary }) {
-  const winner = formatWinnerName(w.winnerFirstName, w.winnerLastName);
-  const { full } = auDateParts(w.wonOnDate || w.selectedDate);
-  const img = w.imageUrl || w.prize.images?.[0];
-  const isMajor = w.drawType === "major";
-  const prizeText = w.selectedPrize || w.prize.name;
-  return (
-    <article
-      className="lp-lift overflow-hidden flex flex-col"
-      style={{ background: "var(--panel)", border: "1px solid var(--line)", borderRadius: 22, boxShadow: "var(--shadow)" }}
-    >
-      {/* dark stage with corner accent glow */}
-      <div
-        className="relative overflow-hidden p-4 sm:p-5"
-        style={{ background: "radial-gradient(120% 90% at 80% 0%, color-mix(in srgb, var(--accent) 16%, #0c0f1a), #080a12 70%)" }}
-      >
-        <div className="flex justify-center mb-3.5">
-          <span
-            className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 font-mono text-[9.5px] tracking-[.12em] uppercase font-bold"
-            style={{ background: "rgba(2,6,15,.6)", border: "1px solid color-mix(in srgb, var(--accent) 50%, transparent)", color: "#eef0f4" }}
-          >
-            <Trophy size={12} strokeWidth={2.2} style={{ color: "var(--accent)" }} /> {full} · {isMajor ? "Major" : "Mini"} Draw Winner
-          </span>
-        </div>
-        {/* gradient-bordered prize image */}
-        <div
-          className="rounded-[18px] p-[2.5px]"
-          style={{ background: "linear-gradient(135deg, var(--accent-2), var(--accent) 55%, color-mix(in srgb, var(--accent) 40%, #fff))" }}
-        >
-          <div
-            className="relative overflow-hidden rounded-[15px] flex items-center justify-center"
-            style={{ aspectRatio: "4 / 3.4", background: "linear-gradient(180deg,#11131c,#0a0c14)" }}
-          >
-            {img ? (
-              // eslint-disable-next-line @next/next/no-img-element -- external Cloudinary art
-              <img src={img} alt={`${winner} — ${prizeText}`} loading="lazy" className="w-full h-full object-contain p-3" />
-            ) : (
-              <Trophy aria-hidden="true" style={{ width: 52, height: 52, color: "rgba(255,255,255,.3)" }} />
-            )}
-          </div>
-        </div>
-        <div className="mt-3.5">
-          <div className="flex items-center justify-between gap-3">
-            <h3 className="lp-display text-2xl leading-none truncate flex-1 min-w-0" style={{ color: "#fff" }}>
-              {winner}
-            </h3>
-            <span
-              className="inline-flex items-center shrink-0 rounded-full px-2.5 py-1 font-mono text-[9px] tracking-[.1em] uppercase font-bold"
-              style={{ background: "var(--accent)", color: "var(--on-accent)" }}
-            >
-              1st Prize
-            </span>
-          </div>
-          {w.winnerState ? (
-            <span className="inline-flex items-center gap-1 text-[12px] mt-2" style={{ color: "#9aa0ac" }}>
-              <MapPin size={13} /> {w.winnerState}
-            </span>
-          ) : null}
-        </div>
-        <p className="mt-2 text-[13px] leading-snug font-medium" style={{ color: "#c2c6cf" }}>
-          {prizeText}
-        </p>
-      </div>
-      {/* footer — drawn date + verify (no prize value) */}
-      <div
-        className="px-5 py-4 flex items-center justify-between gap-3"
-        style={{ borderTop: "2px solid color-mix(in srgb, var(--accent) 60%, transparent)" }}
-      >
-        <div className="min-w-0">
-          <div className="font-mono text-[9px] tracking-[.14em] uppercase" style={{ color: "var(--ink-3)" }}>
-            Drawn
-          </div>
-          <div className="lp-display lp-num text-xl" style={{ color: "var(--ink)" }}>
-            {full}
-          </div>
-        </div>
-        {w.drawResultUrl ? (
-          <a
-            href={w.drawResultUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            aria-label="Verify draw on randomdraws.com.au"
-            className="inline-flex items-center gap-1.5 rounded-lg px-3 font-mono text-[10px] tracking-[.1em] uppercase font-bold shrink-0 transition-colors"
-            style={{ height: 38, border: "1px solid var(--line-2)", color: "var(--accent)" }}
-          >
-            <ShieldCheck size={15} /> Verify
-          </a>
-        ) : null}
-      </div>
-    </article>
-  );
-}
+// Reveal the board in pages so a large archive doesn't dump hundreds of tiles
+// at once (matches the design's "Show N more" behaviour).
+const PAGE = 8;
 
 export default function WinnersBrowser({ winners }: { winners: WinnerSummary[] }) {
   const [filter, setFilter] = useState<Filter>("all");
   const [query, setQuery] = useState("");
+  const [visible, setVisible] = useState(PAGE);
   const q = query.trim().toLowerCase();
 
   const shown = useMemo(() => {
@@ -130,6 +39,14 @@ export default function WinnersBrowser({ winners }: { winners: WinnerSummary[] }
     }
     return list;
   }, [filter, q, winners]);
+
+  // Any change to the filter or search resets the board back to the first page.
+  useEffect(() => {
+    setVisible(PAGE);
+  }, [filter, q]);
+
+  const paged = shown.slice(0, visible);
+  const remaining = shown.length - visible;
 
   return (
     <>
@@ -179,15 +96,27 @@ export default function WinnersBrowser({ winners }: { winners: WinnerSummary[] }
         </div>
       </div>
 
-      {/* winner grid */}
+      {/* winners board */}
       <section className="py-12 sm:py-20" style={{ background: "var(--bg)" }}>
         <div className="lp-container">
           {shown.length > 0 ? (
-            <Stagger className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 sm:gap-6">
-              {shown.map((w) => (
-                <WallCard key={w.id} w={w} />
-              ))}
-            </Stagger>
+            <>
+              <Stagger className="lw-grid">
+                {paged.map((w) => (
+                  <WinnerBoardCard key={w.id} w={w} />
+                ))}
+              </Stagger>
+              {remaining > 0 ? (
+                <div className="lw-more">
+                  <button type="button" className="lw-morebtn" onClick={() => setVisible((v) => v + PAGE)}>
+                    Show {Math.min(PAGE, remaining)} more <ChevronDown size={16} />
+                  </button>
+                  <span className="lw-count">
+                    Showing {paged.length} of {shown.length} winners
+                  </span>
+                </div>
+              ) : null}
+            </>
           ) : (
             <p className="text-[14px]" style={{ color: "var(--ink-3)" }}>
               No winners match this {filter === "all" ? "search" : "filter"} yet — try clearing it or check back after

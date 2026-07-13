@@ -557,3 +557,261 @@
     animation: none;
   }
 }
+
+/* ── Winners board — tile grid ───────────────────────────────────────────────
+ * A faithful port of the standalone "Winners Board" design onto this page's
+ * scoped design system (brand-red --accent, --panel/--line/--ink tokens,
+ * light + dark). Shared by /winners (WinnersBrowser) and /draw-results
+ * (WinnersWall). Each tile is a winner photo (or an initials monogram when
+ * there's no artwork) with the name + state on a bottom scrim, a month pill,
+ * an accent top stripe, then the prize + a muted draw-type sub-line. */
+.ta-results .lw-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+}
+@media (min-width: 600px) {
+  .ta-results .lw-grid {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 14px;
+  }
+}
+@media (min-width: 920px) {
+  .ta-results .lw-grid {
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+  }
+}
+
+.ta-results .lw-tile {
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  border-radius: 14px;
+  background: linear-gradient(180deg, var(--panel), var(--panel-2));
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow);
+  transition: transform 0.3s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.3s cubic-bezier(0.22, 1, 0.36, 1),
+    border-color 0.3s;
+}
+.ta-results a.lw-tile {
+  text-decoration: none;
+  color: inherit;
+}
+/* accent top stripe */
+.ta-results .lw-tile::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 3px;
+  z-index: 2;
+  background: var(--accent);
+}
+.ta-results .lw-tile:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--shadow);
+  border-color: var(--line-2);
+}
+
+.ta-results .lw-photo {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  background: var(--panel-2);
+}
+@media (min-width: 920px) {
+  .ta-results .lw-photo {
+    aspect-ratio: 1 / 1;
+  }
+}
+.ta-results .lw-photo img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+/* Initials monogram fallback — used when a winner has no photo or prize art. */
+.ta-results .lw-monogram {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-archivo), "Archivo", system-ui, sans-serif;
+  font-weight: 900;
+  font-size: clamp(30px, 6.4vw, 54px);
+  letter-spacing: -0.02em;
+  color: var(--accent);
+  background: radial-gradient(120% 120% at 50% 0%, color-mix(in srgb, var(--accent) 16%, transparent), transparent 60%),
+    var(--panel-2);
+}
+.ta-results .lw-when {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 3;
+  font-family: var(--font-space-mono), ui-monospace, monospace;
+  font-weight: 700;
+  font-size: 10px;
+  line-height: 1;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #fff;
+  background: rgba(10, 10, 10, 0.6);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  padding: 5px 8px;
+  border-radius: 99px;
+  white-space: nowrap;
+}
+.ta-results .lw-scrim {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 62%;
+  z-index: 1;
+  pointer-events: none;
+  background: linear-gradient(180deg, transparent, rgba(0, 0, 0, 0.74));
+}
+.ta-results .lw-nameplate {
+  position: absolute;
+  left: 13px;
+  right: 13px;
+  bottom: 12px;
+  z-index: 2;
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.ta-results .lw-name {
+  font-family: var(--font-archivo), "Archivo", system-ui, sans-serif;
+  font-weight: 900;
+  font-size: 16px;
+  line-height: 1.08;
+  letter-spacing: -0.01em;
+  color: #fff;
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.5);
+}
+.ta-results .lw-loc {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-weight: 600;
+  font-size: 11.5px;
+  line-height: 1;
+  color: rgba(255, 255, 255, 0.9);
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
+}
+.ta-results .lw-loc svg {
+  flex: none;
+  opacity: 0.9;
+}
+.ta-results .lw-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 13px 15px 15px;
+}
+.ta-results .lw-prize {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  font-weight: 700;
+  font-size: 12.5px;
+  line-height: 1.35;
+  color: var(--ink);
+}
+.ta-results .lw-prize-ic {
+  color: var(--accent);
+  flex: none;
+  margin-top: 1px;
+}
+.ta-results .lw-prize-ic svg {
+  display: block;
+}
+.ta-results .lw-sub {
+  display: block;
+  margin-top: 2px;
+  font-weight: 600;
+  font-size: 11.5px;
+  line-height: 1.3;
+  color: var(--ink-3);
+}
+/* Optional verification affordance — only rendered when a winner has a
+ * randomdraws.com.au result link (preserves the /winners "Verify" feature). */
+.ta-results .lw-verify {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  align-self: flex-start;
+  font-family: var(--font-space-mono), ui-monospace, monospace;
+  font-weight: 700;
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  text-decoration: none;
+  transition: color 0.2s;
+}
+.ta-results a.lw-tile:hover .lw-verify,
+.ta-results .lw-verify:hover {
+  color: var(--accent);
+}
+
+/* Show-more control */
+.ta-results .lw-more {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 11px;
+  margin-top: clamp(22px, 3vw, 32px);
+}
+.ta-results .lw-morebtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 700;
+  font-size: 13.5px;
+  line-height: 1;
+  color: var(--ink);
+  background: var(--panel-2);
+  border: 1px solid var(--line-2);
+  border-radius: 999px;
+  padding: 13px 24px;
+  min-height: 46px;
+  cursor: pointer;
+  transition: transform 0.15s cubic-bezier(0.22, 1, 0.36, 1), color 0.3s, border-color 0.3s, background 0.3s;
+}
+.ta-results .lw-morebtn:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+  transform: translateY(-1px);
+}
+.ta-results .lw-morebtn:active {
+  transform: translateY(1px) scale(0.99);
+}
+.ta-results .lw-morebtn svg {
+  transition: transform 0.15s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.ta-results .lw-morebtn:hover svg {
+  transform: translateY(2px);
+}
+.ta-results .lw-count {
+  font-weight: 600;
+  font-size: 11.5px;
+  line-height: 1;
+  color: var(--ink-3);
+}
+@media (prefers-reduced-motion: reduce) {
+  .ta-results .lw-tile,
+  .ta-results .lw-morebtn,
+  .ta-results .lw-morebtn svg {
+    transition: none;
+  }
+}
