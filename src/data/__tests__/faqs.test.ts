@@ -143,7 +143,22 @@ function main() {
   );
 
   // 8. Total entry count must be 38 after the membership/account-aware additions.
-  assert.strictEqual(entries.length, 38, `Expected 38 FAQ entries, got ${entries.length}`);
+  assert.strictEqual(entries.length, 39, `Expected 39 FAQ entries, got ${entries.length}`);
+
+  // 8b. Active-member-but-0-entries (id 39) must exist and explain the renewal-timing
+  // mechanic (entries are credited on the renewal date; a fresh draw starts empty), and
+  // route to My Account → Membership — never recite a live count.
+  const zeroEntries = entries.find((e) => e.id === "39");
+  assert.ok(zeroEntries !== undefined, "FAQ entry id=39 (active but 0 entries) must exist");
+  const zeroLower = zeroEntries!.answer.toLowerCase();
+  assert.ok(
+    zeroLower.includes("renewal") && zeroLower.includes("credited"),
+    "0-entries FAQ (id 39) must explain entries are credited on the renewal date"
+  );
+  assert.ok(
+    zeroEntries!.answer.includes("/my-account/membership"),
+    "0-entries FAQ (id 39) must route to My Account → Membership for the renewal date"
+  );
 
   // 9. Upgrade entry (id 22) must exist and route to the Membership manage flow.
   const upgradeEntry = entries.find((e) => e.id === "22");

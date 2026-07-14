@@ -1,5 +1,9 @@
 # Config & Data — Gotchas
 
+## Cobber FAQ corpus is now 39 entries — id39 = "active but 0 entries" (2026-07-09)
+
+`supportChatFaqs.ts` gained **id39** ("I have an active membership but I see 0 entries — why?") — it explains the entry **timing** mechanic (membership entries are credited on the member's renewal date; each Major Draw is a fresh pool, so an active member briefly sees 0 for the upcoming draw until their next renewal). `faqs.test.ts` count assertion bumped 38 → **39** (+ id39 content guards). After editing the corpus run `npm run build:chat-knowledge-pack`. Full context + the account-state pattern: [docs/ai-chatbot/gotchas.md](../ai-chatbot/gotchas.md).
+
 ## FAQ corpus: entry framing only — no "odds" / "chance" (compliance, 2026-07-08)
 
 `supportChatFaqs.ts` is customer-facing (Cobber). It must use **entry** framing, never gambling/probability framing, and must never call it a **lottery / lotto / raffle / sweepstake / gambling** — it's a giveaway. Forbidden: "odds", "chance(s)", "boost your chances", "increase your chance", "better odds", "lottery", "raffle", "gambl…", "wager"; allowed: "giveaway", "prize draw", "free entries", "{n}× entries", "more entries", "a purchase **adds** entries". This is a game-of-chance trade promotion (see BUSINESS.md §1). **Entries are also never sold on their own** — the product bought is the membership/pack, and entries are a **free inclusion** ("the $25 pack includes 3 free entries", never "$25 for 3 entries"); the guard also bans "buy/sell/purchase entries" and "per entry". `npm run test:chat-faqs` ([faqs.test.ts](../../src/data/__tests__/faqs.test.ts)) now asserts the corpus contains none of the banned words, and the system prompt has a matching HARD RULE so LLM paraphrases stay compliant. After editing the corpus, run `npm run build:chat-knowledge-pack`. Full context: [docs/ai-chatbot/gotchas.md](../ai-chatbot/gotchas.md).

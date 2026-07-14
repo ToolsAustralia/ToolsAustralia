@@ -312,5 +312,12 @@ export function getSupportChatFaqEntries(): FaqEntry[] {
         "Happy to point you to a human. You can reach our support team anytime via the [contact page](/contact) — they typically reply within one business day. Tell them what you need — a billing question, a prize you've won, or a charge you don't recognise — and they'll help you directly.",
       category: "ALL QUESTIONS",
     },
+    {
+      id: "39",
+      question: "I have an active membership but I see 0 entries — why?",
+      answer:
+        "That's usually just timing, not a problem. Your membership entries are free and are **credited to each Major Draw on your renewal (billing) date**, and they build up month over month while your membership stays active. Each monthly draw is a fresh pool, so once one draw is held (on the 27th) your entries for the **next** draw are credited on your **next renewal date** — so an active member often sees **0 entries for the upcoming draw** in the short gap between a draw and their renewal. They appear automatically on your renewal date; there's nothing you need to do. (If a renewal payment recently failed, your entries are credited as soon as you settle it.) You can see your exact renewal date on [My Account → Membership](/my-account/membership). If that date has already passed and you still see 0, please [contact us](/contact) and we'll look into it. I can't see your account from here, so I can't read your live entry count.",
+      category: "SHOPPING",
+    },
   ];
 }

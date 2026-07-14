@@ -4,6 +4,14 @@ Hard-won lessons. Read before touching the widget mount, the route runtime, or t
 
 ---
 
+## Account-STATE questions: explain the mechanic, don't just deflect to the dashboard (2026-07-09)
+
+Cobber has **no account access**, so for "my…" questions it can't recite a value. But there's a difference between a **lookup** ("where are my entries" → id29, pure navigation) and a **"why is my account in this state"** question — and the latter must **explain the mechanic**, or it reads as skipping the question. First case handled: **"I'm an active member but I see 0 entries"** (FAQ **id39**). The real rule (verified: [next-renewal-entries.ts:36](../../src/utils/subscription/next-renewal-entries.ts#L36), [major-draw-queries.ts:120](../../src/utils/database/queries/major-draw-queries.ts#L120)): membership entries are stored **per-draw** and **credited on the member's RENEWAL (billing) date**, accumulating monthly; each Major Draw is a fresh pool, so after a draw is held (the 27th) a member's entries for the **next** draw are credited on their **next renewal** — so an active member briefly seeing 0 for the upcoming draw is normal (past-due members: 0 until they settle). Cobber now explains this + points to My Account → Membership + escalates only if 0 persists past the renewal date.
+
+**Where Cobber's knowledge is configured (3 levers — keep in lockstep, rebuild the pack after any corpus edit):** (1) `src/data/supportChatFaqs.ts` — the FAQ corpus (free deflection **and** LLM knowledge pack); (2) `src/services/support-chat/systemPrompt.ts` — the ACCOUNT SELF-SERVICE MAP + answering rules (governs the LLM path); (3) `src/services/support-chat/deflection/decisionTree.ts` — intent→FAQ rules for free no-LLM matching (lock it with a case in `routingGoldenSet.ts` → `npm run test:chat-routing`). id39 was wired across all three.
+
+---
+
 ## Compliance: NO gambling / "odds" / "chance" framing — entry framing only (2026-07-08)
 
 Tools Australia runs a **game-of-chance trade promotion**, not gambling. Customer-facing copy (Cobber included) must describe value in terms of **entries**, never probability, and must **never call it a lottery / lotto / raffle / sweepstake / gambling / betting** — it's a "giveaway" or "prize draw". Forbidden: `"odds"`, `"chance(s)"`, `"boost your chances"`, `"increase your chance"`, `"better odds"`, `"lottery"`, `"raffle"`, `"gambl…"`; allowed: `"giveaway"`, `"prize draw"`, `"free entries"`, `"{n}× entries"`, `"more entries"`, "a purchase **adds** entries". If a user asks "is this gambling / a lottery?", Cobber does **not** label it either way — it explains it's a tool giveaway where members buy entries into monthly prize draws and points to [Terms](/terms). (Origin: the dashboard-revamp design rule; now also stated in BUSINESS.md §1.)

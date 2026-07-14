@@ -47,6 +47,16 @@ export const ROUTING_GOLDEN_SET: RoutingCase[] = [
     note: "audit: account-aware personal count → id29",
   },
   {
+    question: "i have an active subscription but i still only see 0 entries",
+    expect: { kind: "deflect", faqId: "39" },
+    note: "active member sees 0 entries → renewal-timing explainer id39 (not 'where' id29)",
+  },
+  {
+    question: "when do my entries show up",
+    expect: { kind: "deflect", faqId: "39" },
+    note: "entry-timing question → id39 (credited on renewal date)",
+  },
+  {
     question: "what tier am i on",
     expect: { kind: "deflect", faqId: "30" },
     note: "audit: was mis-routed → downgrade id23; must route to tier lookup id30",
