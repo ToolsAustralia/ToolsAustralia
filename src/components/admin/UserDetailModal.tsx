@@ -27,7 +27,6 @@ import {
   Check,
   ShieldCheck,
   ShieldAlert,
-  TrendingUp,
   type LucideIcon,
 } from "lucide-react";
 import ActivityTab from "./UserDetailModal/ActivityTab";
@@ -1339,12 +1338,20 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
   //  - past-due: settling adds entries to the current draw immediately → "on recovery"
   //  - active: only when the renewal falls within the current draw cycle (a
   //    next-cycle renewal lands in a different draw → no badge).
+  // Renewal-landing date for the active preview — same source the draw gate uses
+  // (subscription.endDate → renewalLandsInCurrentDraw), so the shown date matches the
+  // "lands in this draw" gate. Past-due recovery grants immediately on settle → no future date.
+  const renewalDateLabel = user.subscription?.endDate
+    ? new Date(user.subscription.endDate).toLocaleDateString("en-AU", { day: "numeric", month: "short" })
+    : null;
   const majorDrawRenewalBadge =
     nextRenewalEntries != null && nextRenewalEntries > 0
       ? membershipDisplayStatus === "past_due"
-        ? `+${nextRenewalEntries.toLocaleString()} on recovery`
+        ? `${nextRenewalEntries.toLocaleString()} on recovery`
         : renewalLandsInCurrentDraw
-          ? `+${nextRenewalEntries.toLocaleString()} on renewal`
+          ? renewalDateLabel
+            ? `${nextRenewalEntries.toLocaleString()} on renewal · ${renewalDateLabel}`
+            : `${nextRenewalEntries.toLocaleString()} on renewal`
           : undefined
       : undefined;
 
@@ -1577,9 +1584,9 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                     return (
                       <div
                         key={idx}
-                        className="relative rounded-xl shadow-lg dark:shadow-none border-2 border-slate-200/50 dark:border-neutral-600 hover:border-slate-300 dark:hover:border-neutral-500 hover:shadow-xl dark:hover:shadow-none transition-all duration-300 overflow-hidden group bg-gradient-to-br from-white via-slate-50 to-white dark:from-neutral-900 dark:via-neutral-900 dark:to-neutral-950"
+                        className="relative flex flex-col rounded-xl shadow-lg dark:shadow-none border-2 border-slate-200/50 dark:border-neutral-600 hover:border-slate-300 dark:hover:border-neutral-500 hover:shadow-xl dark:hover:shadow-none transition-all duration-300 overflow-hidden group bg-gradient-to-br from-white via-slate-50 to-white dark:from-neutral-900 dark:via-neutral-900 dark:to-neutral-950"
                       >
-                        <div className="p-2 sm:p-3 lg:p-4">
+                        <div className="p-2 sm:p-3 lg:p-4 flex-1">
                           <div className="flex items-start justify-between mb-1 sm:mb-2">
                             <div className="flex-1 min-w-0">
                               <p className="text-slate-600 dark:text-neutral-400 font-semibold text-3xs sm:text-2xs lg:text-xs mb-0.5 sm:mb-1 truncate uppercase tracking-wide">
@@ -1596,9 +1603,8 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                             {typeof stat.value === "number" ? stat.value.toLocaleString() : stat.value}
                           </p>
                           {stat.badge ? (
-                            <span className="mt-1.5 inline-flex max-w-full items-center gap-1 rounded-full bg-emerald-50 dark:bg-emerald-950/40 px-1.5 py-0.5 text-3xs sm:text-2xs font-bold text-emerald-700 dark:text-emerald-400 ring-1 ring-emerald-200/70 dark:ring-emerald-500/25">
-                              <TrendingUp className="w-2.5 h-2.5 shrink-0" strokeWidth={2.5} aria-hidden />
-                              <span className="truncate">{stat.badge}</span>
+                            <span className="mt-1.5 inline-flex max-w-full items-center rounded-full bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 text-3xs sm:text-2xs font-bold leading-tight text-emerald-700 dark:text-emerald-400 ring-1 ring-emerald-200/70 dark:ring-emerald-500/25">
+                              {stat.badge}
                             </span>
                           ) : null}
                         </div>
@@ -2651,9 +2657,9 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                     return (
                       <div
                         key={idx}
-                        className="relative rounded-xl shadow-lg dark:shadow-none border-2 border-slate-200/50 dark:border-neutral-600 hover:border-slate-300 dark:hover:border-neutral-500 hover:shadow-xl dark:hover:shadow-none transition-all duration-300 overflow-hidden group bg-gradient-to-br from-white via-slate-50 to-white dark:from-neutral-900 dark:via-neutral-900 dark:to-neutral-950"
+                        className="relative flex flex-col rounded-xl shadow-lg dark:shadow-none border-2 border-slate-200/50 dark:border-neutral-600 hover:border-slate-300 dark:hover:border-neutral-500 hover:shadow-xl dark:hover:shadow-none transition-all duration-300 overflow-hidden group bg-gradient-to-br from-white via-slate-50 to-white dark:from-neutral-900 dark:via-neutral-900 dark:to-neutral-950"
                       >
-                        <div className="p-2 sm:p-3 lg:p-4">
+                        <div className="p-2 sm:p-3 lg:p-4 flex-1">
                           <div className="flex items-start justify-between mb-1 sm:mb-2">
                             <div className="flex-1 min-w-0">
                               <p className="text-slate-600 dark:text-neutral-400 font-semibold text-3xs sm:text-2xs lg:text-xs mb-0.5 sm:mb-1 truncate uppercase tracking-wide">

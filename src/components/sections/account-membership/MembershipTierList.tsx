@@ -127,12 +127,18 @@ export default function MembershipTierList({
                       </span>
                     )}
                   </div>
-                  {/* Access first, then entries (with base strikethrough when boosted). */}
+                  {/* Access first, then entries. The current tier shows its recurring BASE rate
+                      ("/ mo") — renewals never re-apply the promo, so the boosted number would
+                      over-state what this member keeps getting. An upgrade/join target shows the
+                      boosted grant as a one-time "to start" (the 10× fires once at join/upgrade,
+                      matching the upgrade modal's "N to start" + base "/ cycle" after). */}
                   <div className="mt-1 text-[11px] font-semibold text-muted-token">
                     {access}% access ·{" "}
-                    {boosted ? (
+                    {isCurrent ? (
+                      <>{base} free entries / mo</>
+                    ) : boosted ? (
                       <>
-                        <s className="opacity-60">{base}</s> <b className="text-primary-token dark:text-white">{entries}</b> free entries / mo
+                        <s className="opacity-60">{base}</s> <b className="text-primary-token dark:text-white">{entries}</b> free entries to start
                       </>
                     ) : (
                       <>{entries} free entries / mo</>

@@ -647,6 +647,11 @@ Rebuilds `/my-account/membership` to current-plan + tier list + one-time packs +
 - **[`MembershipCurrentPlan`](../../src/components/sections/account-membership/MembershipCurrentPlan.tsx)**
   — state-aware plan summary (tier gradient, stats, renew/paused/none) + Manage/Payment links to the
   Settings panels. Full cancel/change flow stays in the Settings subscription panel (no duplicate).
+  The page also passes **`entriesPerRenewal={dash.membershipEntriesPerRenewal}`** so the card can show
+  the "Free entries accumulate each month — {N} land on your renewal, {date}" hint (same accumulated
+  renewal grant the `EntryWallet` shows) and an ⓘ that re-opens `SubscriptionExplainerModal`. The
+  "Free entries / mo" stat stays the tier **base**; see [shared-ui/frontend.md](../shared-ui/frontend.md)
+  "Entries framing" (2026-07-15) for the base-vs-one-time-boost distinction.
 - **🚩 `MembershipPackagesChart` is now fully orphaned** (this page was its last user) — flagged for
   deletion in the page header; kept for user review.
 

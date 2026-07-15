@@ -101,8 +101,16 @@ Three at-a-glance additions so an admin understands the account without digging:
   downgrade-preservation aware, same precedence (pastdue > active > onetime > none) and primitives as
   `useDashboardState`; **no access logic in the JSX**. Renders the shared
   [`AccessRing`](../../src/components/ui/AccessRing.tsx).
-- **Next-renewal entries preview** (Overview → "Major Draw Entries" card): a green pill **badge** "+N on
-  renewal" (active) / "+N on recovery" (past-due). Server-derived as `subscription.nextRenewalEntries` via
+- **Next-renewal entries preview** (Overview → "Major Draw Entries" card): a green pill **badge** "N on
+  renewal · {date}" (active) / "N on recovery" (past-due). **(2026-07-15)** dropped the leading "+" and the
+  `TrendingUp` icon, and the active badge now appends the **renewal-landing date** ("15 Jul", day+short-month,
+  no year — renewals are monthly so the year is redundant), formatted client-side from `subscription.endDate`
+  — the **same** field the draw gate reads (`renewalDateForDrawGate` → `renewalLandsInCurrentDraw`), so the
+  shown date always agrees with the "lands in this draw" gate. Past-due "on recovery" carries no date (settling
+  grants immediately). The stat cards were also made `flex flex-col` with a `flex-1` body so the coloured accent
+  bar sits **flush at the card bottom** on every card — previously a card without the badge (Total Spent /
+  Rewards / Engagement) left blank space below its bar when the grid stretched it to the taller badge card's
+  height. Server-derived as `subscription.nextRenewalEntries` via
   the shared [`resolveNextRenewalEntries`](../../src/utils/subscription/next-renewal-entries.ts) (carry-forward
   + monthly base, never promo-multiplied) — the same number the member's dashboard note, the renewal-failure
   email, and Klaviyo show. **Draw-cycle gated (2026-07-09):** the active-member badge shows ONLY when
