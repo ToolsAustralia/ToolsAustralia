@@ -158,20 +158,38 @@ function CycleFuse({ fx, left, right }: { fx: number; left: string; right: React
   );
 }
 
-/** Tempering rail — the six milestone rungs (Lv.2 … Lv.12). */
+/** The floating "+N free entries" pill above a rung. */
+function RungAmount({ entries, compact, className }: { entries: number; compact?: boolean; className?: string }) {
+  return (
+    <span
+      className={cn(
+        "pointer-events-none absolute -top-[19px] left-1/2 -translate-x-1/2 whitespace-nowrap rounded-[5px] border border-token bg-surface px-1.5 py-[3px] text-[8.5px] font-bold leading-none text-[var(--s-b)] shadow-sm",
+        className
+      )}
+    >
+      +{entries}
+      {!compact && " free entries"}
+    </span>
+  );
+}
+
+/**
+ * Tempering rail — the six milestone rungs (Lv.2 … Lv.12). The NEXT rung shows
+ * its reward persistently; hovering ANY rung reveals that level's reward (and
+ * hides the persistent pill so two pills never collide).
+ */
 function TemperingRail({ months, showAllAmounts }: { months: number; showAllAmounts?: boolean }) {
   const next = nextStreakMilestone(months);
   return (
-    <div className="mb-3 flex gap-1.5 pt-5">
+    <div className="group/rail mb-3 flex gap-1.5 pt-5">
       {STREAK_MILESTONES.map((rung) => {
         const earned = !showAllAmounts && isRungEarned(rung.level, months);
         const isNext = showAllAmounts ? rung.level === STREAK_MILESTONES[0].level : rung.level === next.rungLevel && months < 12;
-        const showAmt = showAllAmounts || isNext;
         return (
           <div
             key={rung.level}
             className={cn(
-              "relative flex h-[30px] flex-1 items-center justify-center rounded-[7px] border font-['Poppins'] text-[10.5px] font-extrabold",
+              "group/plate relative flex h-[30px] flex-1 items-center justify-center rounded-[7px] border font-['Poppins'] text-[10.5px] font-extrabold",
               earned
                 ? "border-[var(--s-b)] text-[#241a04] shadow-[inset_0_1px_0_rgba(255,255,255,.5),inset_0_-2px_4px_var(--s-sh)]"
                 : isNext
@@ -181,10 +199,16 @@ function TemperingRail({ months, showAllAmounts }: { months: number; showAllAmou
             style={earned ? { background: "linear-gradient(180deg, var(--s-hi), var(--s-b) 88%)" } : undefined}
           >
             Lv.{rung.level}
-            {showAmt && (
-              <span className="absolute -top-[19px] left-1/2 -translate-x-1/2 whitespace-nowrap rounded-[5px] border border-token bg-surface px-1.5 py-[3px] text-[8.5px] font-bold leading-none text-[var(--s-b)] shadow-sm">
-                +{rung.entries}{!showAllAmounts && " free entries"}
-              </span>
+            {showAllAmounts ? (
+              // Guest teaser: the whole ladder is the sell — every amount visible.
+              <RungAmount entries={rung.entries} compact />
+            ) : (
+              <>
+                {/* Persistent pill on the NEXT rung — hides while any rung is hovered. */}
+                {isNext && <RungAmount entries={rung.entries} className="group-has-[div:hover]/rail:hidden" />}
+                {/* Hover pill on EVERY rung — hover a level to see its reward. */}
+                <RungAmount entries={rung.entries} className="hidden group-hover/plate:block" />
+              </>
             )}
           </div>
         );
@@ -216,14 +240,13 @@ export default function LoyaltyStreak({
   const next = nextStreakMilestone(m);
 
   const cardStyle = accent as unknown as CSSProperties;
-  const noLift = state === "atrisk" || state === "paused";
 
   /* ── guest / one-time teaser — the full ladder as the sell ── */
   if (isTeaser) {
     return (
       <section
         className={cn(
-          "relative overflow-hidden rounded-[17px] border border-token bg-surface p-4 shadow-[inset_0_1px_0_rgba(255,255,255,.5),0_1px_2px_rgba(60,47,4,.05),0_10px_28px_-14px_rgba(60,47,4,.16)] transition-transform duration-300 motion-safe:hover:-translate-y-[3px] dark:shadow-[inset_0_1px_0_rgba(255,255,255,.05),0_1px_2px_rgba(0,0,0,.35),0_12px_30px_-14px_rgba(0,0,0,.6)]",
+          "relative overflow-hidden rounded-[17px] border border-token bg-surface p-4 shadow-[inset_0_1px_0_rgba(255,255,255,.5),0_1px_2px_rgba(60,47,4,.05),0_10px_28px_-14px_rgba(60,47,4,.16)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,.05),0_1px_2px_rgba(0,0,0,.35),0_12px_30px_-14px_rgba(0,0,0,.6)]",
           className
         )}
         style={cardStyle}
@@ -248,7 +271,7 @@ export default function LoyaltyStreak({
           <button
             type="button"
             onClick={onSeeMemberships}
-            className="mt-2.5 block w-full rounded-[9px] bg-gradient-to-b from-red-400 to-red-600 py-[11px] text-center text-[13px] font-bold leading-none text-white shadow-[inset_0_1px_0_rgba(255,255,255,.25),0_6px_16px_-6px_rgba(220,38,38,.55)] transition-transform focus:outline-none focus-visible:ring-2 focus-visible:ring-red-600 motion-safe:hover:-translate-y-px motion-safe:active:translate-y-px"
+            className="mt-2.5 block w-full rounded-[9px] bg-gradient-to-b from-red-400 to-red-600 py-[11px] text-center text-[13px] font-bold leading-none text-white shadow-[inset_0_1px_0_rgba(255,255,255,.25),0_6px_16px_-6px_rgba(220,38,38,.55)] transition-transform focus:outline-none focus-visible:ring-2 focus-visible:ring-red-600 motion-safe:active:translate-y-px"
           >
             See memberships
           </button>
@@ -326,8 +349,7 @@ export default function LoyaltyStreak({
   return (
     <section
       className={cn(
-        "relative overflow-hidden rounded-[17px] border border-token bg-surface p-4 shadow-[inset_0_1px_0_rgba(255,255,255,.5),0_1px_2px_rgba(60,47,4,.05),0_10px_28px_-14px_rgba(60,47,4,.16)] transition-transform duration-300 dark:shadow-[inset_0_1px_0_rgba(255,255,255,.05),0_1px_2px_rgba(0,0,0,.35),0_12px_30px_-14px_rgba(0,0,0,.6)]",
-        !noLift && "motion-safe:hover:-translate-y-[3px]",
+        "relative overflow-hidden rounded-[17px] border border-token bg-surface p-4 shadow-[inset_0_1px_0_rgba(255,255,255,.5),0_1px_2px_rgba(60,47,4,.05),0_10px_28px_-14px_rgba(60,47,4,.16)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,.05),0_1px_2px_rgba(0,0,0,.35),0_12px_30px_-14px_rgba(0,0,0,.6)]",
         className
       )}
       style={cardStyle}
@@ -400,7 +422,7 @@ export default function LoyaltyStreak({
         <button
           type="button"
           onClick={onUpdateCard}
-          className="mt-2.5 block w-full rounded-[9px] bg-gradient-to-b from-red-400 to-red-600 py-[11px] text-center text-[13px] font-bold leading-none text-white shadow-[inset_0_1px_0_rgba(255,255,255,.25),0_6px_16px_-6px_rgba(220,38,38,.55)] transition-transform focus:outline-none focus-visible:ring-2 focus-visible:ring-red-600 motion-safe:hover:-translate-y-px motion-safe:active:translate-y-px"
+          className="mt-2.5 block w-full rounded-[9px] bg-gradient-to-b from-red-400 to-red-600 py-[11px] text-center text-[13px] font-bold leading-none text-white shadow-[inset_0_1px_0_rgba(255,255,255,.25),0_6px_16px_-6px_rgba(220,38,38,.55)] transition-transform focus:outline-none focus-visible:ring-2 focus-visible:ring-red-600 motion-safe:active:translate-y-px"
         >
           Update card
         </button>
