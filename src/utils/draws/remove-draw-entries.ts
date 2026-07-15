@@ -23,7 +23,8 @@ type MajorDrawSourceType =
   | "mini-draw"
   | "bonus-entry-promo"
   | "promo-link"
-  | "cancellation-upsell";
+  | "cancellation-upsell"
+  | "streak";
 
 /**
  * Source types for mini draw entries

@@ -166,3 +166,7 @@ Test: `npm run test:purchase-event-time`.
 - **Save card**: `/api/stripe/create-setup-intent` → returns client_secret.
 - **3DS verify**: `/api/stripe/verify-payment-complete` → reads PI status, returns app-level state (`succeeded`/`failed`/`pending`).
 - **Failed renewal**: `/api/stripe/pay-failed-invoice` → `failed-invoice-selection` → `failed-invoice-handler` → resume + grants on success.
+
+## Major-draw fresh-row shape (Streak P2 touch, 2026-07-07)
+
+`addToMajorDraw`'s `freshEntriesBySource` zero-shape in [payment-processing.ts](../../src/utils/payment/payment-processing.ts) now enumerates the full source-key set (`referral`, `cancellation-upsell`, `promo-link`, and the new `streak` bucket included) so downstream readers never hit a missing key. The `streak` bucket is written only by `DrawGrantService` (rewards-redeemables domain) — payment-path grants never write it.

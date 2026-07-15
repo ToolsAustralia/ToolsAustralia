@@ -38,6 +38,10 @@ Rewards SSO test scripts (in `package.json`): `test:igodirect-sso` (connectivity
 
 `scripts/backfill-membership-streaks.ts` — reconstructs `subscription.streakMonths` + `streakGeneration` for every member from the `MembershipRenewalCycle` ledger (cross-checked against `MembershipStatusHistory` cancels). **Dry-run by default** (`backfill:membership-streaks:dry`); `backfill:membership-streaks` runs `--live`. Re-runnable — it is also the drift-repair tool for the webhook streak counter. Append-mode CSV audit, adaptive progress lines, 3-tier exit codes (0 clean / 1 anomalies / 2 fatal). Pure walker logic lives in `src/utils/subscription/streak.ts` (`npm run test:streak`). See [subscription/backend.md](../subscription/backend.md).
 
+## Membership Streak reward-ladder seed (added 2026-07-07, P2)
+
+`scripts/seed-streak-milestone-rewards.ts` (`seed:streak-rewards[:dry]`) — three safe-ordered stages: (1) drops the legacy `MilestoneIssuance` unique index and syncs the generation-scoped one; (2) upserts the 6 streak rungs (`STREAK-2R…12R`, autoGrant, **`isActive:false`** — dark); (3) inserts `backfilled` marker issuances for every rung a member passed pre-launch (recognition, zero entries — prevents retroactive mass-grants on activation). `--activate` flips the rungs live (**P3 launch runbook only**, after the P1 backfill has run `--live`). Dry-run default, CSV audit, progress lines. See [rewards-redeemables/gotchas.md](../rewards-redeemables/gotchas.md).
+
 ## AI support chatbot infra (added 2026-06-24)
 
 Foundations for the `support-chat` domain (see [docs/ai-chatbot/](../ai-chatbot/)). This is a **FAQ-only** bot — member account tools and Bedrock were removed per owner decision (2026-06-24).

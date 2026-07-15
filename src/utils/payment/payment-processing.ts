@@ -2218,8 +2218,11 @@ async function addToMajorDraw(
         "one-time-package": 0,
         upsell: 0,
         "mini-draw": 0,
+        referral: 0,
         "bonus-entry-promo": 0,
         "promo-link": 0,
+        "cancellation-upsell": 0,
+        streak: 0,
       };
       freshEntriesBySource[sourceType] = entriesAmount;
 

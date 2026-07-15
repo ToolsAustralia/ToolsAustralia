@@ -1,9 +1,37 @@
 import mongoose from "mongoose";
-import MilestoneReward, { IMilestoneReward } from "@/models/MilestoneReward";
+import MilestoneReward, { IMilestoneReward, MilestoneType } from "@/models/MilestoneReward";
 import MilestoneIssuance from "@/models/MilestoneIssuance";
 import User from "@/models/User";
 import { RedemptionService } from "@/services/redeemables/RedemptionService";
-import { MilestoneEvaluator } from "./MilestoneEvaluator";
+import { MilestoneEvaluator, UserMilestoneMetrics } from "./MilestoneEvaluator";
+
+/**
+ * Explicit metric mapping — every MilestoneType names its metric. The old
+ * implicit "anything else → loyaltyDays" fallthrough was a mass-fire hazard:
+ * a new type reaching an unpatched resolver would bind to the wrong metric.
+ */
+export function resolveMetricValue(milestoneType: MilestoneType, metrics: UserMilestoneMetrics): number {
+  switch (milestoneType) {
+    case "spend-amount":
+      return metrics.spendAmount;
+    case "entries-gained":
+      return metrics.entriesGained;
+    case "loyalty-days":
+      return metrics.loyaltyDays;
+    case "streak-months":
+      return metrics.streakMonths;
+  }
+}
+
+/** Recurring rewards issue one cycle per whole multiple of the threshold. */
+export function computeCycles(reward: Pick<IMilestoneReward, "isRecurring" | "threshold">, metricValue: number): number {
+  if (metricValue < reward.threshold) return 0;
+  return reward.isRecurring ? Math.max(1, Math.floor(metricValue / reward.threshold)) : 1;
+}
+
+function isDuplicateKeyError(err: unknown): boolean {
+  return Boolean(err && typeof err === "object" && "code" in err && (err as { code?: number }).code === 11000);
+}
 
 export interface MilestoneRewardPerformance {
   issuedCount: number;
@@ -11,6 +39,8 @@ export interface MilestoneRewardPerformance {
   activeCount: number;
   expiredCount: number;
   cancelledCount: number;
+  /** Pre-launch streak rungs marked achieved with zero entries (spec §3). Excluded from issuedCount. */
+  backfilledCount: number;
   totalEntriesGranted: number;
   redemptionRate: number;
 }
@@ -19,7 +49,7 @@ export interface MilestoneRewardWithPerformance {
   id: string;
   name: string;
   displayLabel?: string;
-  milestoneType: "spend-amount" | "entries-gained" | "loyalty-days";
+  milestoneType: MilestoneType;
   threshold: number;
   entriesAmount: number;
   code: string;
@@ -28,6 +58,7 @@ export interface MilestoneRewardWithPerformance {
   startsAt: Date | null;
   endsAt: Date | null;
   isRecurring: boolean;
+  autoGrant: boolean;
   createdBy: string | null;
   createdAt: Date;
   updatedAt: Date;
@@ -55,18 +86,23 @@ export class MilestoneService {
       activeCount: number;
       expiredCount: number;
       cancelledCount: number;
+      backfilledCount: number;
       totalEntriesGranted: number;
     }>([
       { $match: { milestoneRewardId: { $in: rewardIds } } },
       {
         $group: {
           _id: "$milestoneRewardId",
-          issuedCount: { $sum: 1 },
+          // Backfilled markers are recognition-without-grant — not real issuances.
+          issuedCount: { $sum: { $cond: [{ $ne: ["$status", "backfilled"] }, 1, 0] } },
           redeemedCount: { $sum: { $cond: [{ $eq: ["$status", "redeemed"] }, 1, 0] } },
           activeCount: { $sum: { $cond: [{ $eq: ["$status", "active"] }, 1, 0] } },
           expiredCount: { $sum: { $cond: [{ $eq: ["$status", "expired"] }, 1, 0] } },
           cancelledCount: { $sum: { $cond: [{ $eq: ["$status", "cancelled"] }, 1, 0] } },
-          totalEntriesGranted: { $sum: "$entriesAmount" },
+          backfilledCount: { $sum: { $cond: [{ $eq: ["$status", "backfilled"] }, 1, 0] } },
+          totalEntriesGranted: {
+            $sum: { $cond: [{ $eq: ["$status", "redeemed"] }, "$entriesAmount", 0] },
+          },
         },
       },
     ]);
@@ -82,6 +118,7 @@ export class MilestoneService {
             activeCount: row.activeCount || 0,
             expiredCount: row.expiredCount || 0,
             cancelledCount: row.cancelledCount || 0,
+            backfilledCount: row.backfilledCount || 0,
             totalEntriesGranted: row.totalEntriesGranted || 0,
             redemptionRate: issuedCount > 0 ? Math.round((redeemedCount / issuedCount) * 100) : 0,
           },
@@ -107,6 +144,7 @@ export class MilestoneService {
         activeCount: 0,
         expiredCount: 0,
         cancelledCount: 0,
+        backfilledCount: 0,
         totalEntriesGranted: 0,
         redemptionRate: 0,
       };
@@ -123,6 +161,7 @@ export class MilestoneService {
         startsAt: reward.startsAt ?? null,
         endsAt: reward.endsAt ?? null,
         isRecurring: reward.isRecurring,
+        autoGrant: reward.autoGrant ?? false,
         createdBy: reward.createdBy ? String(reward.createdBy) : null,
         createdAt: reward.createdAt,
         updatedAt: reward.updatedAt,
@@ -134,7 +173,7 @@ export class MilestoneService {
   static async createReward(input: {
     name: string;
     displayLabel?: string;
-    milestoneType: "spend-amount" | "entries-gained" | "loyalty-days";
+    milestoneType: MilestoneType;
     threshold: number;
     entriesAmount: number;
     code: string;
@@ -143,6 +182,7 @@ export class MilestoneService {
     startsAt?: Date;
     endsAt?: Date;
     isRecurring?: boolean;
+    autoGrant?: boolean;
     createdBy?: string;
   }): Promise<IMilestoneReward> {
     const normalizedCode = input.code.trim().toUpperCase();
@@ -160,6 +200,7 @@ export class MilestoneService {
       startsAt: input.startsAt,
       endsAt: input.neverExpires ? undefined : input.endsAt,
       isRecurring: input.isRecurring ?? false,
+      autoGrant: input.autoGrant ?? false,
       createdBy:
         input.createdBy && mongoose.Types.ObjectId.isValid(input.createdBy)
           ? new mongoose.Types.ObjectId(input.createdBy)
@@ -172,7 +213,7 @@ export class MilestoneService {
     updates: Partial<{
       name: string;
       displayLabel: string;
-      milestoneType: "spend-amount" | "entries-gained" | "loyalty-days";
+      milestoneType: MilestoneType;
       threshold: number;
       entriesAmount: number;
       code: string;
@@ -181,6 +222,7 @@ export class MilestoneService {
       startsAt: Date;
       endsAt: Date;
       isRecurring: boolean;
+      autoGrant: boolean;
     }>
   ): Promise<IMilestoneReward | null> {
     if (!mongoose.Types.ObjectId.isValid(rewardId)) {
@@ -245,41 +287,70 @@ export class MilestoneService {
     let issuedCount = 0;
     const issuanceIds: string[] = [];
     for (const reward of activeRewards) {
-      const currentMetric = (() => {
-        if (reward.milestoneType === "spend-amount") return metrics.spendAmount;
-        if (reward.milestoneType === "entries-gained") return metrics.entriesGained;
-        return metrics.loyaltyDays;
-      })();
+      const currentMetric = resolveMetricValue(reward.milestoneType, metrics);
+      const effectiveCycles = computeCycles(reward, currentMetric);
+      if (effectiveCycles === 0) continue;
 
-      if (currentMetric < reward.threshold) {
-        continue;
-      }
+      // Streak rungs are scoped to the CURRENT streak generation so they are
+      // re-earnable after a full lapse → resubscribe reset; other types live
+      // on generation 1 forever (their metrics never reset).
+      const issuanceGeneration = reward.milestoneType === "streak-months" ? metrics.streakGeneration : 1;
 
-      const maxCycles = reward.isRecurring ? Math.floor(currentMetric / reward.threshold) : 1;
-      const effectiveCycles = Math.max(1, maxCycles);
       for (let cycle = 1; cycle <= effectiveCycles; cycle++) {
         const existing = await MilestoneIssuance.findOne({
           milestoneRewardId: reward._id,
           userId: new mongoose.Types.ObjectId(userId),
+          streakGeneration: issuanceGeneration,
           achievementCycle: cycle,
         })
-          .select("_id")
+          .select("_id status")
           .lean();
-        if (existing) continue;
 
-        const created = await MilestoneIssuance.create({
-          milestoneRewardId: reward._id,
-          userId: new mongoose.Types.ObjectId(userId),
-          milestoneType: reward.milestoneType,
-          thresholdReached: reward.threshold * cycle,
-          achievementCycle: cycle,
-          entriesAmount: reward.entriesAmount,
-          status: "active",
-          issuedAt: now,
-          expiresAt: reward.neverExpires ? undefined : reward.endsAt,
-        });
+        if (existing) {
+          // Crash-safety sweep: an ACTIVE issuance of an autoGrant reward means a
+          // previous run created it but died before granting — grant it now.
+          if (reward.autoGrant && existing.status === "active") {
+            try {
+              await RedemptionService.autoRedeemMilestoneIssuance(userId, String(existing._id));
+            } catch (grantErr) {
+              console.error(`Auto-grant sweep failed for issuance ${existing._id}:`, grantErr);
+            }
+          }
+          continue;
+        }
+
+        let created;
+        try {
+          created = await MilestoneIssuance.create({
+            milestoneRewardId: reward._id,
+            userId: new mongoose.Types.ObjectId(userId),
+            milestoneType: reward.milestoneType,
+            thresholdReached: reward.threshold * cycle,
+            achievementCycle: cycle,
+            streakGeneration: issuanceGeneration,
+            entriesAmount: reward.entriesAmount,
+            status: "active",
+            issuedAt: now,
+            expiresAt: reward.neverExpires ? undefined : reward.endsAt,
+          });
+        } catch (createErr) {
+          // Concurrent webhook/cron/grant paths race here; the unique index is
+          // the guarantee — a duplicate-key loser just moves on, it must never
+          // abort the remaining rungs.
+          if (isDuplicateKeyError(createErr)) continue;
+          throw createErr;
+        }
         issuedCount++;
         issuanceIds.push(String(created._id));
+
+        if (reward.autoGrant) {
+          try {
+            await RedemptionService.autoRedeemMilestoneIssuance(userId, String(created._id));
+          } catch (grantErr) {
+            // Issuance stays "active" — the nightly cron sweep (above) self-heals.
+            console.error(`Auto-grant failed for issuance ${created._id} (will self-heal):`, grantErr);
+          }
+        }
       }
     }
 

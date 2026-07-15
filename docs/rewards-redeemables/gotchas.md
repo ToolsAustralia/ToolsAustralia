@@ -1,5 +1,15 @@
 # Rewards-Redeemables — Gotchas
 
+## Membership Streak auto-grant path (P2, 2026-07-07)
+
+- **Auto-grant is two-step and crash-safe by sweep**: `checkAndIssueMilestones` creates the issuance `active`, then `RedemptionService.autoRedeemMilestoneIssuance` flips it `redeemed` atomically and grants via `DrawGrantService(…, "streak", { skipMilestoneCheck: true })`. If the grant step dies, the issuance stays `active` and the next check (payment webhook or nightly cron) self-heals it — never delete that sweep branch.
+- **E11000 in the rung loop = "already issued", continue.** Three callers race (payment webhook, nightly cron, post-grant re-check); the generation-scoped unique index is the guarantee. An uncaught duplicate-key throw would abort the user's remaining rungs.
+- **`skipMilestoneCheck` prevents re-entrancy** (grant → check → grant …) and streak-granted entries are **excluded from the `entries-gained` metric** in `MilestoneEvaluator` (free entries never compound into more free entries).
+- **`totalEntriesGranted` semantics changed (P2):** it now sums **redeemed** issuances only (was: all rows, which would have counted zero-granted `backfilled` markers and unclaimed/expired issuances as "granted"). `issuedCount` excludes `backfilled`.
+- **The claim wallet excludes `backfilled`** (`RedeemablesWalletService` filters `status ≠ backfilled`) — markers belong on the milestone ladder, not the claim list.
+- **Streak reversal targets the `streak` bucket**: `unredeemMilestoneRedemption` picks the draw source by `milestoneType` — do not hardcode `bonus-entry-promo` back in.
+- **Launch order is load-bearing**: `backfill:membership-streaks --live` (P1 counters) → `seed:streak-rewards` (drops legacy issuance index, creates rungs `isActive:false`, inserts markers) → `seed:streak-rewards --live --activate` only at P3 launch. Activating before markers exist mass-grants historical rungs.
+
 ## Purchase gate: every leg is an EVENT check, never a state check (2026-07-07)
 
 `hasQualifyingPurchase`'s `membership` leg used to be `subscription.isActive === true` — a STATE check. For

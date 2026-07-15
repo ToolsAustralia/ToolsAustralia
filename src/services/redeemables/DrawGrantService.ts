@@ -1,8 +1,16 @@
 import mongoose from "mongoose";
 import { MilestoneService } from "@/services/milestones";
 
+/** Draw buckets this service may grant into. "streak" = Membership Streak auto-grants. */
+export type DrawGrantSourceKey = "bonus-entry-promo" | "streak";
+
 export class DrawGrantService {
-  static async grantMonthlyCouponEntries(userId: string, entries: number): Promise<void> {
+  static async grantMonthlyCouponEntries(
+    userId: string,
+    entries: number,
+    sourceKey: DrawGrantSourceKey = "bonus-entry-promo",
+    opts: { skipMilestoneCheck?: boolean } = {}
+  ): Promise<void> {
     if (entries <= 0) return;
 
     const { getTargetMajorDraw } = await import("@/utils/draws/major-draw-helpers");
@@ -11,9 +19,10 @@ export class DrawGrantService {
     try {
       activeMajorDraw = await getTargetMajorDraw();
     } catch (error) {
-      console.warn("No target major draw available for coupon / milestone entry grant", {
+      console.warn("No target major draw available for coupon / milestone / streak entry grant", {
         userId,
         entries,
+        sourceKey,
         error: error instanceof Error ? error.message : String(error),
       });
       return;
@@ -27,7 +36,7 @@ export class DrawGrantService {
 
     if (existingEntry) {
       existingEntry.totalEntries += entries;
-      existingEntry.entriesBySource["bonus-entry-promo"] = (existingEntry.entriesBySource["bonus-entry-promo"] || 0) + entries;
+      existingEntry.entriesBySource[sourceKey] = (existingEntry.entriesBySource[sourceKey] || 0) + entries;
       existingEntry.lastUpdatedDate = now;
     } else {
       activeMajorDraw.entries.push({
@@ -39,7 +48,10 @@ export class DrawGrantService {
           upsell: 0,
           "mini-draw": 0,
           referral: 0,
-          "bonus-entry-promo": entries,
+          "bonus-entry-promo": 0,
+          "cancellation-upsell": 0,
+          streak: 0,
+          [sourceKey]: entries,
         },
         firstAddedDate: now,
         lastUpdatedDate: now,
@@ -48,10 +60,15 @@ export class DrawGrantService {
 
     await activeMajorDraw.save();
 
-    try {
-      await MilestoneService.checkAndIssueMilestones(userId);
-    } catch (error) {
-      console.error("Failed to evaluate milestones after entry grant:", error);
+    // The streak auto-grant path passes skipMilestoneCheck to prevent re-entrancy
+    // (grant → check → grant …). Streak entries are also excluded from the
+    // entries-gained metric, so nothing is lost by skipping here.
+    if (!opts.skipMilestoneCheck) {
+      try {
+        await MilestoneService.checkAndIssueMilestones(userId);
+      } catch (error) {
+        console.error("Failed to evaluate milestones after entry grant:", error);
+      }
     }
   }
 }

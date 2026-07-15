@@ -297,6 +297,64 @@ export class RedemptionService {
   }
 
   /**
+   * Auto-grant an ACTIVE milestone issuance straight into the Major Draw — the
+   * Membership Streak delivery path (autoGrant rewards; no manual claim step).
+   * Mirrors the atomic manual-claim block above: findOneAndUpdate active→redeemed
+   * is the concurrency gate (a racing caller loses and no-ops), then the entries
+   * land via DrawGrantService under the "streak" source bucket. The milestone
+   * re-check is skipped to prevent re-entrancy (streak entries are excluded from
+   * the entries-gained metric anyway).
+   */
+  static async autoRedeemMilestoneIssuance(
+    userId: string,
+    milestoneIssuanceId: string
+  ): Promise<{ success: boolean; entriesGranted?: number; error?: string }> {
+    if (!mongoose.Types.ObjectId.isValid(userId) || !mongoose.Types.ObjectId.isValid(milestoneIssuanceId)) {
+      return { success: false, error: "invalid_ids" };
+    }
+    const now = new Date();
+    const updated = await MilestoneIssuance.findOneAndUpdate(
+      {
+        _id: new mongoose.Types.ObjectId(milestoneIssuanceId),
+        userId: new mongoose.Types.ObjectId(userId),
+        status: "active",
+        $or: [{ expiresAt: { $exists: false } }, { expiresAt: null }, { expiresAt: { $gt: now } }],
+      },
+      {
+        $set: {
+          status: "redeemed",
+          redeemedAt: now,
+        },
+      },
+      { new: true }
+    );
+    if (!updated) {
+      return { success: false, error: "not_active_or_concurrent" };
+    }
+
+    await User.findByIdAndUpdate(new mongoose.Types.ObjectId(userId), {
+      $inc: { accumulatedEntries: updated.entriesAmount },
+      $push: {
+        redemptionHistory: {
+          redemptionId: `milestone-${String(updated._id)}`,
+          redemptionType: "entry",
+          pointsDeducted: 0,
+          value: updated.entriesAmount,
+          description: "Streak milestone — landed automatically",
+          redeemedAt: now,
+          status: "completed",
+        },
+      },
+    });
+
+    await DrawGrantService.grantMonthlyCouponEntries(userId, updated.entriesAmount, "streak", {
+      skipMilestoneCheck: true,
+    });
+
+    return { success: true, entriesGranted: updated.entriesAmount };
+  }
+
+  /**
    * Undo milestone reward redemption (entries granted when user redeemed an active issuance).
    */
   static async unredeemMilestoneRedemption(params: {
@@ -328,7 +386,10 @@ export class RedemptionService {
       );
 
       const { removeMajorDrawEntries } = await import("@/utils/draws/remove-draw-entries");
-      await removeMajorDrawEntries(userId, entriesAmount, "bonus-entry-promo");
+      // Streak auto-grants land in the "streak" bucket; every other milestone
+      // redemption lands in "bonus-entry-promo" — reversal must match the grant.
+      const sourceKey = doc.milestoneType === "streak-months" ? "streak" : "bonus-entry-promo";
+      await removeMajorDrawEntries(userId, entriesAmount, sourceKey);
 
       return { success: true };
     } catch (e) {

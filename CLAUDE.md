@@ -368,6 +368,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
       "docs": "docs/rewards-redeemables/",
       "paths": [
         "src/services/redeemables/**",
+        "src/services/milestones/**",
         "src/utils/redeemables/**",
         "src/models/RedeemableIssuance.ts",
         "src/models/MilestoneIssuance.ts",

@@ -3129,8 +3129,8 @@ PII not exposed: `email`, `phone`, `bankDetails`, `password` on the affiliate, a
     id: string,                                  // MilestoneReward _id
     name: string,                                // admin label, 3–120 chars
     displayLabel?: string,                       // optional short label shown to users (≤60 chars)
-    milestoneType: "spend-amount" | "entries-gained" | "loyalty-days",
-    threshold: number,                           // integer; meaning depends on milestoneType (AUD for spend-amount, count for entries-gained, days for loyalty-days)
+    milestoneType: "spend-amount" | "entries-gained" | "loyalty-days" | "streak-months",
+    threshold: number,                           // integer; meaning depends on milestoneType (AUD for spend-amount, count for entries-gained, days for loyalty-days, consecutive paid RENEWALS for streak-months)
     entriesAmount: number,                       // integer >=1; entries granted when the milestone fires
     code: string,                                // uppercase A-Z0-9 with optional hyphens, 6–32 chars, unique per row
     isActive: boolean,                           // admin on/off toggle
@@ -3138,16 +3138,18 @@ PII not exposed: `email`, `phone`, `bankDetails`, `password` on the affiliate, a
     startsAt: ISO8601 | null,                    // null if the reward has no scheduled start window
     endsAt: ISO8601 | null,                      // null when neverExpires=true or when no end window is set
     isRecurring: boolean,                        // if true, the reward fires once per full threshold cycle
+    autoGrant: boolean,                          // Membership Streak rungs: issuance is granted straight into the Major Draw (no manual claim)
     createdBy: string | null,                    // opaque User._id of the admin who created the row, or null
     createdAt: ISO8601,
     updatedAt: ISO8601,
     performance: {
-      issuedCount: number,                       // total MilestoneIssuance rows for this reward
+      issuedCount: number,                       // MilestoneIssuance rows for this reward, EXCLUDING "backfilled" markers
       redeemedCount: number,                     // status === "redeemed"
       activeCount: number,                       // status === "active"
       expiredCount: number,                      // status === "expired"
       cancelledCount: number,                    // status === "cancelled"
-      totalEntriesGranted: number,               // sum of MilestoneIssuance.entriesAmount across all rows for this reward
+      backfilledCount: number,                   // pre-launch streak rungs marked achieved with ZERO entries granted
+      totalEntriesGranted: number,               // sum of entriesAmount across REDEEMED issuances only (actually-granted entries)
       redemptionRate: number                     // whole percent (0–100), rounded; redeemedCount / issuedCount; 0 if issuedCount === 0
     }
   }>,

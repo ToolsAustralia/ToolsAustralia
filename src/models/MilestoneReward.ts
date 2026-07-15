@@ -1,6 +1,6 @@
 import mongoose, { Document, Schema } from "mongoose";
 
-export type MilestoneType = "spend-amount" | "entries-gained" | "loyalty-days";
+export type MilestoneType = "spend-amount" | "entries-gained" | "loyalty-days" | "streak-months";
 
 export interface IMilestoneReward extends Document {
   name: string;
@@ -14,6 +14,9 @@ export interface IMilestoneReward extends Document {
   startsAt?: Date;
   endsAt?: Date;
   isRecurring: boolean;
+  /** When true the issuance is granted straight into the Major Draw on issue —
+   *  no manual claim step. Used by the Membership Streak rungs (streak-months). */
+  autoGrant: boolean;
   createdBy?: mongoose.Types.ObjectId;
   createdAt: Date;
   updatedAt: Date;
@@ -34,7 +37,7 @@ const MilestoneRewardSchema = new Schema<IMilestoneReward>(
     },
     milestoneType: {
       type: String,
-      enum: ["spend-amount", "entries-gained", "loyalty-days"],
+      enum: ["spend-amount", "entries-gained", "loyalty-days", "streak-months"],
       required: [true, "milestoneType is required"],
     },
     threshold: {
@@ -72,6 +75,10 @@ const MilestoneRewardSchema = new Schema<IMilestoneReward>(
       type: Date,
     },
     isRecurring: {
+      type: Boolean,
+      default: false,
+    },
+    autoGrant: {
       type: Boolean,
       default: false,
     },
