@@ -181,38 +181,44 @@ function RungAmount({ entries, compact, className }: { entries: number; compact?
 function TemperingRail({ months, showAllAmounts }: { months: number; showAllAmounts?: boolean }) {
   const next = nextStreakMilestone(months);
   return (
-    <div className="group/rail mb-3 flex gap-1.5 pt-5">
-      {STREAK_MILESTONES.map((rung) => {
-        const earned = !showAllAmounts && isRungEarned(rung.level, months);
-        const isNext = showAllAmounts ? rung.level === STREAK_MILESTONES[0].level : rung.level === next.rungLevel && months < 12;
-        return (
-          <div
-            key={rung.level}
-            className={cn(
-              "group/plate relative flex h-[30px] flex-1 items-center justify-center rounded-[7px] border font-['Poppins'] text-[10.5px] font-extrabold",
-              earned
-                ? "border-[var(--s-b)] text-[#241a04] shadow-[inset_0_1px_0_rgba(255,255,255,.5),inset_0_-2px_4px_var(--s-sh)]"
-                : isNext
-                  ? "border-[var(--s-b)] text-[var(--s-b)] motion-safe:animate-[ta-streak-pulse_2.2s_ease-in-out_infinite]"
-                  : cn(STEEL_FILL, STEEL_BORDER, "text-muted-token")
-            )}
-            style={earned ? { background: "linear-gradient(180deg, var(--s-hi), var(--s-b) 88%)" } : undefined}
-          >
-            Lv.{rung.level}
-            {showAllAmounts ? (
-              // Guest teaser: the whole ladder is the sell — every amount visible.
-              <RungAmount entries={rung.entries} compact />
-            ) : (
-              <>
-                {/* Persistent pill on the NEXT rung — hides while any rung is hovered. */}
-                {isNext && <RungAmount entries={rung.entries} className="group-has-[div:hover]/rail:hidden" />}
-                {/* Hover pill on EVERY rung — hover a level to see its reward. */}
-                <RungAmount entries={rung.entries} className="hidden group-hover/plate:block" />
-              </>
-            )}
-          </div>
-        );
-      })}
+    // pt-5 = headroom the pills float into; the hover group is the PLATES ROW
+    // (gaps included), so the persistent pill can't flicker while the cursor
+    // crosses between plates.
+    <div className="mb-3 pt-5">
+      <div className="group/rail flex gap-1.5">
+        {STREAK_MILESTONES.map((rung) => {
+          const earned = !showAllAmounts && isRungEarned(rung.level, months);
+          const isNext = showAllAmounts ? rung.level === STREAK_MILESTONES[0].level : rung.level === next.rungLevel && months < 12;
+          return (
+            <div
+              key={rung.level}
+              className={cn(
+                "group/plate relative flex h-[30px] flex-1 items-center justify-center rounded-[7px] border font-['Poppins'] text-[10.5px] font-extrabold",
+                earned
+                  ? "border-[var(--s-b)] text-[#241a04] shadow-[inset_0_1px_0_rgba(255,255,255,.5),inset_0_-2px_4px_var(--s-sh)]"
+                  : isNext
+                    ? "border-[var(--s-b)] text-[var(--s-b)] motion-safe:animate-[ta-streak-pulse_2.2s_ease-in-out_infinite]"
+                    : cn(STEEL_FILL, STEEL_BORDER, "text-muted-token")
+              )}
+              style={earned ? { background: "linear-gradient(180deg, var(--s-hi), var(--s-b) 88%)" } : undefined}
+            >
+              Lv.{rung.level}
+              {showAllAmounts ? (
+                // Guest teaser: the whole ladder is the sell — every amount visible.
+                <RungAmount entries={rung.entries} compact />
+              ) : (
+                <>
+                  {/* Persistent pill on the NEXT rung — hidden whenever the cursor is
+                      anywhere on the rail (a hover pill takes over; no overlaps). */}
+                  {isNext && <RungAmount entries={rung.entries} className="group-hover/rail:hidden" />}
+                  {/* Hover pill on EVERY rung — hover a level to see its reward. */}
+                  <RungAmount entries={rung.entries} className="hidden group-hover/plate:block" />
+                </>
+              )}
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -302,7 +308,7 @@ export default function LoyaltyStreak({
       case "fresh":
         return (
           <>
-            <b className="font-semibold text-primary-token dark:text-white">Fresh steel, same forge.</b> First renewal restarts the streak — +{STREAK_MILESTONES[0].entries} free entries at your 2nd.
+            <b className="font-semibold text-primary-token dark:text-white">Fresh steel.</b> Every renewal builds your streak — +{STREAK_MILESTONES[0].entries} free entries at your 2nd.
           </>
         );
       case "atrisk":
