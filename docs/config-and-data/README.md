@@ -67,7 +67,7 @@ Entries 18–21 are the premeditated answers for the top-volume support inbox qu
 
 `DASHBOARD_FEATURES.loyaltyStreak` + `milestoneProgress` are **false in git** until the streak launch runbook completes against the PRODUCTION database (backfill → seed markers → activate → flip flags). The card/toast copy promises "+N free entries, automatic" — showing it while rungs are `isActive:false` would assert grants that never happen, and rungs crossed in that window would be marker-stamped at seed time and never paid. The full runbook is documented on the flag in `src/config/dashboardFeatures.ts`.
 
-**Local preview convention:** flipping both flags to `true` in your working copy is fine once the runbook has run against the DB your `.env.local` points at (the owner's dev DB completed a full rehearsal 2026-07-15: rungs active + 548 markers, zero stray grants). That flip must stay **uncommitted** — the committed value only changes as launch step 4, after the production runbook run.
+**Local preview:** set `NEXT_PUBLIC_DASHBOARD_STREAK_PREVIEW=true` in `.env.local` (registered in `.env.example`; never set in Vercel). Both flags read the override via the `STREAK_PREVIEW` const, so git stays dark with a clean working tree — no uncommitted code flip needed. Only meaningful once the runbook has run against the DB your `.env.local` points at (the owner's dev DB completed a full rehearsal 2026-07-15: rungs active + 548 markers, zero stray grants). At production launch (step 4) replace `STREAK_PREVIEW` with `true` on both flags and deploy.
 
 ## Cobber streak FAQs (2026-07-15)
 

@@ -6,6 +6,8 @@ Cross-cutting infra: health checks, cron, upload, Cloudinary, environment, Zod h
 
 > `.env.example` — `NEXT_PUBLIC_PARTNER_DISCOUNT_SSO_ENABLED` is the client twin of the server-only `PARTNER_DISCOUNT_SSO_ENABLED` (which gates the SSO route). Client-rendered portal buttons can only read `NEXT_PUBLIC_*`, so set both to the same value. Read via `partnerDiscountSsoEnabled()` in `src/config/featureFlags.ts`.
 
+> `.env.example` — `NEXT_PUBLIC_DASHBOARD_STREAK_PREVIEW` is **local-dev only**: lights the Membership Streak dashboard surfaces while git ships their flags dark (`src/config/dashboardFeatures.ts` reads it via `STREAK_PREVIEW`). Never set in Vercel — production launches by flipping the committed flags (streak launch runbook step 4).
+
 ## Index
 
 - [architecture.md](./architecture.md) — what lives here vs other domains
