@@ -1,8 +1,14 @@
 # Config & Data — Gotchas
 
-## Cobber FAQ corpus is now 39 entries — id39 = "active but 0 entries" (2026-07-09)
+## Cobber FAQ corpus is now 68 entries — knowledge-gap batch (2026-07-15)
 
-`supportChatFaqs.ts` gained **id39** ("I have an active membership but I see 0 entries — why?") — it explains the entry **timing** mechanic (membership entries are credited on the member's renewal date; each Major Draw is a fresh pool, so an active member briefly sees 0 for the upcoming draw until their next renewal). `faqs.test.ts` count assertion bumped 38 → **39** (+ id39 content guards). After editing the corpus run `npm run build:chat-knowledge-pack`. Full context + the account-state pattern: [docs/ai-chatbot/gotchas.md](../ai-chatbot/gotchas.md).
+`supportChatFaqs.ts` grew **39 → 68** with the knowledge-gap batch: ids **40-68** cover referrals/affiliate (40-43), account+auth (44-46), promo codes & the after-checkout offer (47-50), upgrade/downgrade/anchor billing (51-53), past-due lifecycle (54-59), advanced partner discounts (60-62), and mini-draws/prizes (63-68). id24 was **extended** (reactivation timing/grace window), not added. `faqs.test.ts` count assertion bumped 39 → **68** (+ an **id54** guard).
+
+**The accuracy fix:** id54 ("I'm past due and want to cancel — do I keep access?") states the correct rule — a **past-due cancel is IMMEDIATE** (no end-of-period access), unlike a normal cancellation. It is routed **ahead of** the broad id13 "past due" decision-tree rule (Layer 1 short-circuits Layer 2, so a specific FAQ that shares a token with a broad rule is unreachable unless its rule is placed first).
+
+Four of the new entries are **account-aware** (40 referral link, 55 catch-up billing, 62 partner-window 'upcoming', 68 mini-draw entries) — they recite no personal data and have a matching note in the systemPrompt ACCOUNT SELF-SERVICE MAP.
+
+After editing the corpus run `npm run build:chat-knowledge-pack`, then `npm run test:chat-faqs` / `test:chat-routing` / `test:chat-routing-shape` / `test:chat-deflection`. Full context + the account-state pattern + the Layer-1-precedence rule: [docs/ai-chatbot/gotchas.md](../ai-chatbot/gotchas.md).
 
 ## FAQ corpus: entry framing only — no "odds" / "chance" (compliance, 2026-07-08)
 

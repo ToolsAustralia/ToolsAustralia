@@ -19,9 +19,11 @@ import type { FaqEntry } from "@/data/faqs";
  * "Settings → Subscription" tab was REMOVED in the 2026-07 dashboard revamp — never
  * reference it. Profile (trade / state / email) is still under **Settings**.
  *
- * Account-aware entries (ids 29, 30, 31, 37) deliberately recite NO personal data —
- * Cobber has no account access. They route the user to the right self-service
- * location (log in → My Account → …). This is navigation, not data exposure.
+ * Account-aware entries (ids 29, 30, 31, 37, 40, 55, 62, 68) deliberately recite NO
+ * personal data — Cobber has no account access. They route the user to the right
+ * self-service location (log in → My Account → …). This is navigation, not data
+ * exposure. Their intent also has a matching note in the systemPrompt ACCOUNT
+ * SELF-SERVICE MAP so the LLM path stays consistent with the deflection path.
  */
 export function getSupportChatFaqEntries(): FaqEntry[] {
   const isRewardsFeatureEnabled = rewardsEnabled();
@@ -203,9 +205,9 @@ export function getSupportChatFaqEntries(): FaqEntry[] {
     },
     {
       id: "24",
-      question: "I cancelled — how do I restart my membership?",
+      question: "I cancelled or turned off auto-renew — how (and how long) do I have to restart my membership?",
       answer:
-        "Welcome back! If you cancelled recently, you can reactivate your existing plan with no new charge — note that reactivation keeps you on the same tier. If your membership has fully ended, you can resubscribe on any tier you like. Either way your entry history is preserved. Just head to [My Account → Membership](/my-account/membership) → **Manage plan** to restart.",
+        "Welcome back! If you turned off auto-renew or scheduled a cancellation, your plan keeps running until your current paid period ends — and you can **Resume** it for free any time before then (there's a short grace window too), staying on your same tier. Once that access date has passed the membership is fully ended, so you'd resubscribe instead — and then you can pick any tier you like. Either way your entry history is preserved. Head to [My Account → Membership](/my-account/membership) → **Manage plan** to Resume or resubscribe, and [contact us](/contact) if you're unsure which applies to you.",
       category: "PAYMENTS",
     },
     {
@@ -318,6 +320,223 @@ export function getSupportChatFaqEntries(): FaqEntry[] {
       answer:
         "That's usually just timing, not a problem. Your membership entries are free and are **credited to each Major Draw on your renewal (billing) date**, and they build up month over month while your membership stays active. Each monthly draw is a fresh pool, so once one draw is held (on the 27th) your entries for the **next** draw are credited on your **next renewal date** — so an active member often sees **0 entries for the upcoming draw** in the short gap between a draw and their renewal. They appear automatically on your renewal date; there's nothing you need to do. (If a renewal payment recently failed, your entries are credited as soon as you settle it.) You can see your exact renewal date on [My Account → Membership](/my-account/membership). If that date has already passed and you still see 0, please [contact us](/contact) and we'll look into it. I can't see your account from here, so I can't read your live entry count.",
       category: "SHOPPING",
+    },
+
+    // ── REFERRALS & AFFILIATE ────────────────────────────────────────────────
+    {
+      id: "40",
+      question: "How do I refer a mate, and where's my referral link or code?",
+      answer:
+        "Love that! Head to [My Account](/my-account) and open the \"Refer a Friend\" panel — that's where your personal referral code and shareable link live, ready to send to a mate. When your mate signs up with your code and makes their **first** purchase, **you both get 100 free bonus entries** dropped straight into the current monthly prize draw. If your code isn't showing up, give [our team](/contact) a shout and we'll sort it. I can't see your account from here, so I can't read out your code.",
+      category: "REWARDS",
+    },
+    {
+      id: "41",
+      question: "Can I refer someone who already has an account or has already bought something?",
+      answer:
+        "Referrals are just for **brand-new mates** — the code only works for someone who hasn't made any purchase yet, so an existing customer who's already bought won't qualify. Each person can also only ever be credited to **one** referrer (first code used wins), so if your mate already applied someone else's code, a second one won't override it. For genuinely new mates though, share away — you'll both pick up 100 free bonus entries on their first purchase!",
+      category: "REWARDS",
+    },
+    {
+      id: "42",
+      question: "Is there a limit on how many mates I can refer, and when do the bonus entries land?",
+      answer:
+        "No cap at all — refer as many mates as you like, and each successful referral stacks **another 100 free bonus entries** for you (there's no one-time limit). The entries land **immediately** when your mate completes their first purchase, going straight into the current monthly prize draw for both of you. You can watch your successful referrals tally up in the \"Refer a Friend\" panel on [My Account](/my-account).",
+      category: "REWARDS",
+    },
+    {
+      id: "43",
+      question: "Is there an affiliate program — can I earn commission, and how's it different from referring a mate?",
+      answer:
+        "Two different things! **Referring a mate** is open to every member — you share your code and you both get 100 free bonus entries when they first buy. The **affiliate program** is a separate partner arrangement that earns a cash commission (30% by default) and is set up by our team, not self-serve. If you'd like to be considered as an affiliate, [get in touch](/contact) and we'll take it from there.",
+      category: "PARTNERSHIPS",
+    },
+
+    // ── ACCOUNT & AUTH ───────────────────────────────────────────────────────
+    {
+      id: "44",
+      question: "Do I have to verify my email to use my membership?",
+      answer:
+        "No — verifying your email is optional and never required to use your membership or to receive your free entries. Your account works and your entries are granted whether or not your email is verified. The one place it matters is signing in with an emailed one-time code — for that we need to confirm your address. You can always verify later from [My Account → Settings](/my-account/settings).",
+      category: "ALL QUESTIONS",
+    },
+    {
+      id: "45",
+      question: "I signed up with Google — can I add an email + password, and how do I change my password?",
+      answer:
+        "Yes — if you joined with Google (or another passwordless method) you can set a password from [My Account → Settings](/my-account/settings). Since there's no existing password on the account, it's a first-time set, so you won't be asked for a current password — just choose a new one and you'll then be able to sign in with email + password too. If your account already has a password, the same Settings area lets you change it, and you'll need to enter your current one first. If anything looks off, [contact us](/contact) and we'll help.",
+      category: "ALL QUESTIONS",
+    },
+    {
+      id: "46",
+      question: "Why does it say 'This account has been deactivated' when I try to log in?",
+      answer:
+        "That message means the account itself has been deactivated, so sign-in is blocked — it isn't a password problem, and resetting your password won't restore access. To have it looked into and reactivated, please [contact us](/contact) and our team can help sort it out.",
+      category: "ALL QUESTIONS",
+    },
+
+    // ── PROMO CODES & AFTER-CHECKOUT OFFER ───────────────────────────────────
+    {
+      id: "47",
+      question: "I entered a promo code at checkout but it said invalid — why?",
+      answer:
+        "A promo code has to be 6–32 characters (letters, numbers and hyphens), so a stray space or typo is the most common culprit. Beyond format, a code is turned down if it's inactive, expired, already used on your account (they're one-use-per-member), or set for a different audience (for example, returning members only). Promo codes also only add free bonus entries on a **membership or one-time pack** — they don't apply to Mini Packs or the after-checkout offer. Double-check the exact spelling, and if it still won't take, [contact us](/contact) and we'll check that specific code for you.",
+      category: "REWARDS",
+    },
+    {
+      id: "48",
+      question: "Do bonus entries from a promo code, referral, or the after-checkout offer carry forward, or only this draw?",
+      answer:
+        "Free bonus entries from a promo code, a referral, or the after-checkout offer all count toward the **current major draw** only — like the free entries in a one-time pack, they're scoped to that draw and don't roll into future ones. The only entries that carry forward month to month are the free entries included with an **active membership**, which keep accumulating while your membership stays active. You can see your current draw entries anytime on [My Account](/my-account).",
+      category: "REWARDS",
+    },
+    {
+      id: "49",
+      question: "That discounted bonus-entries offer right after I paid — is it a one-off or another subscription?",
+      answer:
+        "That offer right after checkout is a genuine **one-off** — a single payment tied to that order at a discounted price, not a new subscription and not a recurring charge, so you won't be billed for it again. It simply adds more free bonus entries to your current draw. You can review any charges under [My Account → Membership](/my-account/membership), and if something looks unexpected, [contact us](/contact).",
+      category: "PAYMENTS",
+    },
+    {
+      id: "50",
+      question: "If a 2× entries promo is running, does it also apply to the after-checkout offer?",
+      answer:
+        "Yes — when a multiplied entries promo (like a 2× entries promo) is live, it stacks with the after-checkout offer. The offer's free entries are worked out as the active promo multiplier × the offer's own multiplier × its base entries, so a running promo increases that bonus too. For a mini after-checkout offer the offer's own multiplier is fixed at 1×, so it still picks up the promo on its base entries.",
+      category: "REWARDS",
+    },
+
+    // ── UPGRADE / DOWNGRADE / ANCHOR BILLING ─────────────────────────────────
+    {
+      id: "51",
+      question: "If I upgrade to a higher tier mid-cycle, do I keep the free entries I've already built up? And do I get credit for the unused days on my old tier?",
+      answer:
+        "Good news on your entries: upgrading mid-cycle keeps everything you've already built up. Your accumulated free entries carry over, and on top of that your new tier's free entries are added right away, so you're never worse off for upgrading early. On the billing side, an upgrade charges the new tier's full price straight away and resets your billing cycle to that date — there's no pro-rata credit for the unused days on your old tier, so it's usually best to upgrade close to your renewal date. You can review your tier and renewal date any time in [My Account → Membership](/my-account/membership).",
+      category: "PAYMENTS",
+    },
+    {
+      id: "52",
+      question: "If I downgrade to a cheaper tier, will I lose the free entries I've accumulated?",
+      answer:
+        "No — downgrading doesn't wipe the free entries you've built up; your accumulated entries carry forward. You stay on your current tier until the end of the cycle you've already paid for, and the cheaper tier (with its lower monthly free-entry base) takes effect from your next renewal. So each renewal going forward gives you the new tier's monthly free entries plus whatever you've carried over. You can see your current tier and next renewal date in [My Account → Membership](/my-account/membership).",
+      category: "PAYMENTS",
+    },
+    {
+      id: "53",
+      question: "I joined late in the month and paid full price but I renew on the 24th — did I overpay for a short first period?",
+      answer:
+        "You haven't been short-changed. If you joined on the 25th, 26th, or 27th, your renewal is anchored to the 24th so you always have a few days to sort out any renewal payment before the monthly prize draw period. You paid the normal full package price at signup (it's never prorated) and you received the full benefits and free entries that come with your pack straight away — the period up to the 24th is a genuine full inclusion, not a partial one. You can check your renewal date any time in [My Account → Membership](/my-account/membership), and if anything looks off, [contact us](/contact).",
+      category: "PAYMENTS",
+    },
+
+    // ── PAST-DUE & LIFECYCLE ─────────────────────────────────────────────────
+    {
+      id: "54",
+      question: "I'm past due and want to cancel — do I keep access until the end of the month like a normal cancellation?",
+      answer:
+        "Past due works differently from a normal cancellation. If a renewal payment has failed and your account is past due, cancelling ends your membership **immediately** — there's no paid period left to run out, so it won't carry through to the end of the month the way a regular cancellation does. Any free entries you already earned this cycle stay valid in the draw pool. You can do this from [My Account → Membership](/my-account/membership) → **Manage plan**, or [contact us](/contact) if you'd rather settle the outstanding payment first.",
+      category: "PAYMENTS",
+    },
+    {
+      id: "55",
+      question: "I was past due and just paid to catch up — when am I charged next?",
+      answer:
+        "Once your catch-up payment clears, your billing date resets: your next charge lands about **one month from the day you caught up**, not your old renewal date. (If that day happens to fall on the 25th, 26th, or 27th, it shifts to the 24th so there's a buffer before the monthly draw.) Your benefits and free entries switch back on straight away. You can see your exact next renewal date on [My Account → Membership](/my-account/membership) — if it looks off, [contact us](/contact). I can't see your account from here, so I can't read your live billing date.",
+      category: "PAYMENTS",
+    },
+    {
+      id: "56",
+      question: "While past due, do I keep my free entries and partner discounts?",
+      answer:
+        "While a renewal is unpaid and your membership sits in a past-due state, member benefits are paused — partner-discount access is on hold and the new cycle's free entries haven't been credited yet. The good part: any free entries you already earned in earlier cycles stay safe in the draw pool, and the moment your payment goes through, your benefits and the new entries are reinstated. You can retry the payment from [My Account → Membership](/my-account/membership), and [contact us](/contact) if you need a hand.",
+      category: "PAYMENTS",
+    },
+    {
+      id: "57",
+      question: "What if I never fix my failed renewal — does my membership auto-cancel?",
+      answer:
+        "No — a failed renewal won't automatically cancel your membership. We pause collection so no new charges stack up, and your subscription simply waits for you: you can retry the payment whenever you're ready and pick up right where you left off. Until it's settled, your member benefits stay paused. Head to [My Account → Membership](/my-account/membership) to retry, or [contact us](/contact) if the payment won't go through.",
+      category: "PAYMENTS",
+    },
+    {
+      id: "58",
+      question: "My membership shows 'trial' or 'trialing' — did I not pay, or is it a free trial?",
+      answer:
+        "No free trial here — if your membership shows 'trial' or 'trialing' (usually on a payment receipt), you were still charged the full price at signup. It's just a billing label we use to line your renewal up with the 24th of the month; your membership is fully active, with benefits and free entries live from day one. Your account itself shows your plan as **Active** on [My Account → Membership](/my-account/membership). If anything looks off, [contact us](/contact).",
+      category: "PAYMENTS",
+    },
+    {
+      id: "59",
+      question: "How long does pausing my membership last, and what happens to my entries and billing?",
+      answer:
+        "If you take the pause offer during the cancellation flow, your membership pauses for **30 days** and then resumes automatically — you don't have to do anything. While paused you aren't billed, and your free entries are frozen rather than lost: nothing new is added, but everything you've already earned stays put and starts accruing again once the plan restarts. The pause is a one-time option and only appears when you begin cancelling from [My Account → Membership](/my-account/membership) → **Manage plan**. Need something different? [contact us](/contact).",
+      category: "PAYMENTS",
+    },
+
+    // ── PARTNER DISCOUNTS — ADVANCED ─────────────────────────────────────────
+    {
+      id: "60",
+      question: "I'm a Tradie member but bought a higher one-time pack (like a Boss or VIP pack) — do I get extra partner discounts, or does my 50% still apply?",
+      answer:
+        "Partner-discount access isn't stacked or added together — at any moment you get the single highest active tier across your membership and any active packs. Your Tradie membership unlocks 50% of the partner catalogue, but while a higher pack's window is running its access takes over automatically (a Boss one-time pack opens more of the catalogue, a VIP one-time pack opens the whole thing); once that pack window ends you simply drop back to your membership's 50%. You can see your current effective access and which packs are live any time on [My Account → Rewards](/my-account/rewards).",
+      category: "REWARDS",
+    },
+    {
+      id: "61",
+      question: "If I cancel my membership, do I keep partner discounts until my paid cycle ends? What about a pack I bought?",
+      answer:
+        "Your membership's partner-discount access is tied to your membership being active, so with a standard end-of-period cancellation you keep it right through to your paid-up renewal date — it ends when the membership actually lapses, not the moment you hit cancel. Any one-time pack you bought is completely separate: its partner-discount window runs to its own expiry regardless of what happens to your membership, so you keep that pack's access even after the membership ends. You can check both your membership status and any active pack windows on [My Account → Rewards](/my-account/rewards).",
+      category: "REWARDS",
+    },
+    {
+      id: "62",
+      question: "I bought a pack but my partner-discount access says 'upcoming' / hasn't started — why?",
+      answer:
+        "Partner-discount windows run one at a time, not all at once. If you buy a pack at the same tier as one that's already active, the new pack queues up behind it and its window starts the moment the current one finishes — so 'upcoming' just means it's next in line, and none of your paid access is lost (a higher-tier pack is the exception: it jumps ahead and takes over straight away). You can see the running window and what's queued on [My Account → Rewards](/my-account/rewards); if a pack still shows upcoming after the active window should have ended, [contact us](/contact) and we'll sort it out.",
+      category: "REWARDS",
+    },
+
+    // ── MINI DRAWS & PRIZES ──────────────────────────────────────────────────
+    {
+      id: "63",
+      question: "How is a Mini Draw winner chosen, and when will my Mini Draw be drawn?",
+      answer:
+        "Each Mini Draw runs until it fills its set number of entries — once it hits that point it automatically closes to new entries, and a winner is then picked at random using an independent, government-approved random-draw tool. Every draw, both major and mini, is independently certified by randomdraws.com.au, and the winner is contacted directly. Because a Mini Draw is drawn once it fills, the timing depends on how quickly that particular draw reaches its target — you can see which draws are open on the [Mini Draws page](/mini-draws) and past results on the [Winners wall](/winners).",
+      category: "ALL QUESTIONS",
+    },
+    {
+      id: "64",
+      question: "If I win, will you post my full name publicly?",
+      answer:
+        "No — we never publish a winner's full surname or contact details. On the public [Winners wall](/winners) we only ever show your first name plus the initial of your last name (for example \"John D.\") alongside your state. Your full details stay private and are only used by our team to get in touch and organise your prize.",
+      category: "ALL QUESTIONS",
+    },
+    {
+      id: "65",
+      question: "If I win, do I have to pay anything to claim the prize or get the tools delivered?",
+      answer:
+        "Not at all — there's no claim fee and no delivery charge. If you take the cash option, it goes straight to your bank account, and if you take the tool prize, our team arranges delivery for you. After the live draw we contact the winner directly and handle all the logistics from there, so there's nothing to pay to receive your prize. You can read the full details on our [terms page](/terms).",
+      category: "ALL QUESTIONS",
+    },
+    {
+      id: "66",
+      question: "The Mini Draw I wanted already has a winner — is that it, or will it run again?",
+      answer:
+        "A Mini Draw can run again — many of them cycle through multiple rounds, each with its own separate winner. When a new round opens it starts fresh, so entries from a previous round don't carry over into the next one. Keep an eye on the [Mini Draws page](/mini-draws) to catch the next round of the prize you're after.",
+      category: "ALL QUESTIONS",
+    },
+    {
+      id: "67",
+      question: "If I get a refund on a pack or membership, do I lose the free entries it gave?",
+      answer:
+        "Yes — the free entries are a bonus inclusion tied to that purchase, so if the payment is refunded or reversed, the entries that came with it are removed too. In practice this only comes up with genuine billing-error or one-time pack refunds, since memberships aren't refundable once charged and you keep your benefits and entries through the paid cycle. If you think entries were removed in error, please [contact us](/contact) and we'll sort it out.",
+      category: "PAYMENTS",
+    },
+    {
+      id: "68",
+      question: "Where do I see the Mini Draws I've entered and my mini-draw entries?",
+      answer:
+        "Your Mini Draw entries are tracked separately from your Major Draw entries, so they won't show up in the main entry count on your dashboard. To see the Mini Draws you're in, head to the [Mini Draws page](/mini-draws), and you can manage the rest of your account from [My Account](/my-account). If something looks off or an entry seems to be missing after a purchase, [contact us](/contact) and we'll take a look. I can't see your account from here, so I can't read your live entries.",
+      category: "ALL QUESTIONS",
     },
   ];
 }
