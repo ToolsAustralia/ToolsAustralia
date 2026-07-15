@@ -619,8 +619,15 @@
 .ta-results .lw-photo {
   position: relative;
   width: 100%;
-  aspect-ratio: 4 / 3;
+  /* Mobile: taller (portrait) frame so winner photos aren't cropped at the
+     head; widens to landscape on tablet and square on desktop. */
+  aspect-ratio: 3 / 4;
   background: var(--panel-2);
+}
+@media (min-width: 600px) {
+  .ta-results .lw-photo {
+    aspect-ratio: 4 / 3;
+  }
 }
 @media (min-width: 920px) {
   .ta-results .lw-photo {
@@ -651,20 +658,20 @@
 }
 .ta-results .lw-when {
   position: absolute;
-  top: 10px;
-  right: 10px;
+  top: 9px;
+  right: 9px;
   z-index: 3;
   font-family: var(--font-space-mono), ui-monospace, monospace;
   font-weight: 700;
-  font-size: 10px;
+  font-size: 9px;
   line-height: 1;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.05em;
   text-transform: uppercase;
   color: #fff;
   background: rgba(10, 10, 10, 0.6);
   backdrop-filter: blur(4px);
   -webkit-backdrop-filter: blur(4px);
-  padding: 5px 8px;
+  padding: 4px 7px;
   border-radius: 99px;
   white-space: nowrap;
 }
@@ -692,7 +699,7 @@
 .ta-results .lw-name {
   font-family: var(--font-archivo), "Archivo", system-ui, sans-serif;
   font-weight: 900;
-  font-size: 16px;
+  font-size: 14px;
   line-height: 1.08;
   letter-spacing: -0.01em;
   color: #fff;
@@ -703,7 +710,7 @@
   align-items: center;
   gap: 4px;
   font-weight: 600;
-  font-size: 11.5px;
+  font-size: 10.5px;
   line-height: 1;
   color: rgba(255, 255, 255, 0.9);
   text-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
@@ -715,55 +722,27 @@
 .ta-results .lw-body {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding: 13px 15px 15px;
+  gap: 5px;
+  padding: 11px 13px 13px;
 }
+/* Prize name — clamped to 2 lines so a long product name never dominates. */
 .ta-results .lw-prize {
-  display: flex;
-  align-items: flex-start;
-  gap: 7px;
   font-weight: 700;
-  font-size: 12.5px;
-  line-height: 1.35;
+  font-size: 11.5px;
+  line-height: 1.34;
   color: var(--ink);
-}
-.ta-results .lw-prize-ic {
-  color: var(--accent);
-  flex: none;
-  margin-top: 1px;
-}
-.ta-results .lw-prize-ic svg {
-  display: block;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 .ta-results .lw-sub {
-  display: block;
-  margin-top: 2px;
   font-weight: 600;
-  font-size: 11.5px;
+  font-size: 10.5px;
   line-height: 1.3;
   color: var(--ink-3);
 }
-/* Optional verification affordance — only rendered when a winner has a
- * randomdraws.com.au result link (preserves the /winners "Verify" feature). */
-.ta-results .lw-verify {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  align-self: flex-start;
-  font-family: var(--font-space-mono), ui-monospace, monospace;
-  font-weight: 700;
-  font-size: 10px;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--ink-3);
-  text-decoration: none;
-  transition: color 0.2s;
-}
-.ta-results a.lw-tile:hover .lw-verify,
-.ta-results .lw-verify:hover {
-  color: var(--accent);
-}
-
 /* Show-more control */
 .ta-results .lw-more {
   display: flex;
