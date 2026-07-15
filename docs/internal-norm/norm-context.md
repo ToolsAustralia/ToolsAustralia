@@ -3161,7 +3161,7 @@ PII not exposed: `createdBy` is the opaque admin User._id only — name/email of
 
 **Inputs**: none.
 
-**Data source**: `MilestoneReward` collection (full table, sorted `createdAt` desc), joined with a `MilestoneIssuance` `$group` aggregate keyed by `milestoneRewardId`. Orchestrated by `MilestoneService.listRewardsWithPerformance` in `src/services/milestones/MilestoneService.ts` — the shared helper `MilestoneService.aggregatePerformanceByRewardIds` is the same code the admin route (`GET /api/admin/milestone-rewards`) calls for its issuance roll-up, so the numbers match by construction.
+**Data source**: `MilestoneReward` collection (full table, sorted `createdAt` desc), joined with a `MilestoneIssuance` `$group` aggregate keyed by `milestoneRewardId`. Orchestrated by `MilestoneService.listRewardsWithPerformance` in `src/services/milestones/MilestoneService.ts` — the shared helper `MilestoneService.aggregatePerformanceByRewardIds` is the same code the admin route (`GET /api/admin/milestone-rewards`) calls for its issuance roll-up, so the numbers match by construction. The route projects `recurrencePeriod` / `autoGrant` verbatim from the service row (smoke-verified against the runtime `responseSchema` 2026-07-15).
 
 **Constraints**: `read` tier. `requiredPermission: promos.view`. Read-only. The underlying admin route (`GET /api/admin/milestone-rewards`) currently authenticates via `requireAdminUser` (legacy admin check) rather than `requirePermission` — a separate migration concern; Norm's own gate uses `promos.view` as the explicit grant.
 
