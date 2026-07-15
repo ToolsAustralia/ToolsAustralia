@@ -4,6 +4,7 @@ import MembershipRenewalCycle from "@/models/MembershipRenewalCycle";
 import MembershipStatusHistory from "@/models/MembershipStatusHistory";
 import type { MembershipAnalyticsActor, MembershipNormalizedStatus } from "@/types/admin/membershipAnalytics";
 import { paidAtDateFromStripeInvoice } from "@/utils/affiliate/affiliate-recurring-invoice";
+import { isFirstTimePaidCycle } from "@/utils/subscription/streak";
 import type { IUser } from "@/models/User";
 
 /** Minimal shape from cancel subscription flow (avoid circular import with CancelSubscriptionService). */
@@ -25,19 +26,24 @@ function invoicePeriodEndDate(invoice: Stripe.Invoice): Date | null {
 
 /**
  * Upsert renewal cycle when a subscription_cycle invoice is paid.
+ *
+ * Returns `firstTimeSucceeded`: true only when this call transitioned the row
+ * INTO paid (pre-image absent / "expected" / "failed"). Webhook replays see a
+ * "succeeded"/"recovered" pre-image and get false — the Membership Streak
+ * increment keys off this signal (replay-proof by construction).
  */
 export async function upsertRenewalCycleFromPaidInvoice(input: {
   invoice: Stripe.Invoice;
   userId: mongoose.Types.ObjectId;
   stripeSubscriptionId?: string;
-}): Promise<void> {
+}): Promise<{ firstTimeSucceeded: boolean }> {
   const { invoice, userId, stripeSubscriptionId } = input;
   const invoiceId = invoice.id;
-  if (!invoiceId) return;
-  if (invoice.billing_reason !== "subscription_cycle") return;
+  if (!invoiceId) return { firstTimeSucceeded: false };
+  if (invoice.billing_reason !== "subscription_cycle") return { firstTimeSucceeded: false };
 
   const dueAt = invoicePeriodEndDate(invoice);
-  if (!dueAt) return;
+  if (!dueAt) return { firstTimeSucceeded: false };
 
   const succeededAt = paidAtDateFromStripeInvoice(invoice) ?? new Date();
   const amountDueCents = invoice.amount_due ?? 0;
@@ -48,7 +54,7 @@ export async function upsertRenewalCycleFromPaidInvoice(input: {
   const paymentIntentId =
     typeof pi === "string" ? pi : pi && typeof pi === "object" && "id" in pi ? (pi as Stripe.PaymentIntent).id : undefined;
 
-  await MembershipRenewalCycle.findOneAndUpdate(
+  const previous = await MembershipRenewalCycle.findOneAndUpdate(
     { stripeInvoiceId: invoiceId },
     {
       $set: {
@@ -65,8 +71,9 @@ export async function upsertRenewalCycleFromPaidInvoice(input: {
         confidence: "stripe",
       },
     },
-    { upsert: true, new: true }
+    { upsert: true, new: false } // pre-image: null on fresh insert
   );
+  return { firstTimeSucceeded: isFirstTimePaidCycle(previous?.status ?? null) };
 }
 
 /**

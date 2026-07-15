@@ -207,6 +207,16 @@ The five new `additional-*-pack-mini` records carry `isAdditional: true`, so the
 
 [src/utils/promo/get-effective-promo-type.ts](../../src/utils/promo/get-effective-promo-type.ts) resolves tier-based purchase multipliers (subscriber vs entrant vs guest). This logic is **not** changed by the upsell remap. Upsell entry math uses a separate `UpsellMultiplierConfig` knob; `getEffectivePromoType` affects package purchases only.
 
+## Membership Streak counter (P1 — 2026-07-07)
+
+The streak (consecutive paid renewals; join = month 0) lives on `User.subscription.streakMonths` with `streakGeneration` scoping re-earns after a full lapse. All decision logic is pure and DB-free in [src/utils/subscription/streak.ts](../../src/utils/subscription/streak.ts) (`npm run test:streak`, 22 assertions):
+
+- `isFirstTimePaidCycle(preImageStatus)` — gates the webhook's `$inc` on the `MembershipRenewalCycle` pre-image (replay-proof; recovery increments late because it pays the same cycle invoice).
+- `decideStreakOnSubscriptionCreate(...)` — start (fresh join / out-of-grace resubscribe, generation bump only when a prior streak existed) / continue (within `RESUBSCRIBE_GRACE_DAYS = 30` of `subscription.endDate`) / none (upgrades, non-create invoices).
+- `computeStreakFromHistory(...)` — the backfill/repair walker: counts paid cycles, breaks generations on >`BREAK_GAP_DAYS` (65-day) gaps **with cancel evidence** (a `canceled` OR `scheduled_cancel` history row from `CANCEL_LOOKBACK_DAYS` (40d) before the previous paid cycle up to the next one — a scheduled-cancel *click* precedes the lapse), continues over recovery/pause gaps (~60d, no cancel evidence) without crediting missed months, and rounds UP to whole months since join for history-incomplete active members with no detected breaks (never under-credit veterans — owner-approved). The runner additionally **never regresses a live-written reset**: when the user's live `streakGeneration` exceeds the computed one, the row is skipped (`LIVE-RESET-PRESERVED` in the CSV).
+
+Continuity rules (spec §2): recovered past-due keeps; retention pause freezes (emergent — `behavior: void` produces no cycle invoice); grace reactivate continues; upgrade/downgrade untouched; only out-of-grace `create_new` resets. Writers live in the Stripe webhook — see [billing-stripe/backend.md](../billing-stripe/backend.md#membership-streak-writers-in-the-webhook--added-2026-07-07-p1) — and the backfill script `scripts/backfill-membership-streaks.ts` ([infrastructure](../infrastructure/README.md#membership-streak-backfill-added-2026-07-07)). Invariants: [gotchas.md](./gotchas.md#membership-streak-counter--three-invariants-2026-07-07-p1). Grants/milestones are P2 (not yet built).
+
 ## Jobs / cron / locks
 
 `ChargeJobLock` (model) is a **single-document** distributed lock used to serialise the past-due charge job, ensuring only one instance of the operational charge run executes at a time across deployments. The doc's `_id` is hard-coded to `"charge-job-lock"`. See [models.md](./models.md#chargejoblock).

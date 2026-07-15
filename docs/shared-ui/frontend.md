@@ -524,7 +524,7 @@ Display-only `user.role` reads (e.g. the "Admin" badge on user rows in `UsersMan
 
 ### WinnerCard
 
-[src/components/cards/WinnerCard.tsx](../../src/components/cards/WinnerCard.tsx) renders a winner tile (image, name, prize, draw-type badge) and is consumed by the homepage Latest Winners hero, the recent-winners carousel, and the membership-modal winner strip. (The `/winners` grid and the "Hear from our winners" section now use their own `.ta-results` cards — see [docs/draws/frontend.md](../draws/frontend.md).) Its exported `WinnerCardData` type is still the shared shape (`= WinnerSummary`) used by those feeds.
+[src/components/cards/WinnerCard.tsx](../../src/components/cards/WinnerCard.tsx) renders a winner tile (image, name, prize, draw-type badge). **As of 2026-07-13 it is no longer rendered anywhere** — the homepage `LatestWinnerHero` moved to the shared **Winners Board** tile (`WinnerBoardCard`, see [docs/draws/frontend.md](../draws/frontend.md)), so the homepage, `/winners`, and the draw-results wall now share one card. Only its exported `WinnerCardData` type (`= WinnerSummary`) is still imported (by `WinnerTestimoniesClient`); the component below is retained as reference and is safe to delete once that type import is repointed to `WinnerSummary`.
 
 - The top badge reads **`<date>` MAJOR DRAW WINNER** or **`<date>` MINI DRAW WINNER** — date prefix from [`getWinnerDisplayDate`](../../src/utils/winners.ts) (en-AU short format, e.g. `27 APR 2026`), draw-type suffix from `winner.drawType`. The whole label is uppercased and tracked via Tailwind classes; do not pre-uppercase in the helper.
 - The whole card is wrapped in a `<Link>`. Clicking anywhere navigates to:
@@ -534,6 +534,12 @@ Display-only `user.role` reads (e.g. the "Admin" badge on user rows in `UsersMan
 - Uses a named Tailwind group (`group/card`) on the outer Link so the inner image's unnamed `group-hover:scale` only fires on image hover, not on bottom-CTA hover.
 
 ## Sections
+
+### `sections/LatestWinnerHero` — homepage "Latest Winners" (Winners Board, 2026-07-13)
+
+[src/components/sections/LatestWinnerHero.tsx](../../src/components/sections/LatestWinnerHero.tsx) renders the homepage/promotions/my-account "Latest Winners" block. It fetches `/api/winners/all?limit=16`, then renders the shared **Winners Board** grid (`WinnerBoardCard` in a `.lw-grid`) — **2 columns on mobile, 4 on desktop, 8 tiles per page** (a "See More" button pages by 8; once exhausted it becomes a "View All Winners" → `/winners` link). It replaced the previous Embla carousel + `WinnerCard`.
+
+Because the board's `.lw-*` styles are scoped under `.ta-results`, the grid is wrapped in a `<div className="ta-results …">` that (a) self-loads the Archivo/Space-Mono font vars, (b) sets `background: transparent`, and (c) pipes the active promo accent into the board via inline `--accent` / `--accent-2` (so themed promotion pages keep their colour). The heading and the "Join our next giveaway" CTA stay **outside** that wrapper, so they keep their existing site styling. Cards are passed an `href` (major → `/promotions/${DEFAULT_PRIZE_SLUG}`, mini → `/mini-draws`) so they stay navigational rather than becoming randomdraws verify links.
 
 ### `sections/membership/ElectricPackageCard` — live membership card
 
