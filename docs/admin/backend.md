@@ -376,3 +376,9 @@ if (adminCheck) return adminCheck; // 401/403
 Some services under `src/services/admin/` expose secondary "projection" methods consumed by the internal-norm read tier so that admin + Norm share one code path:
 
 - `PromoBannerTextService.listBannerTextsProjection()` / `.getActiveBannerTextProjection()` — return banner-text rows in the shared `{id, ..., createdBy: {id, name, email}}` shape with `startDate` / `endDate` AEST-converted at the service boundary. The existing `getAllBannerTexts` / `getActiveBannerText` remain for the admin route's response envelope; the projection wrappers are what `/api/internal/norm/v1/promo/banner-text` and `…/banner-text/active` call.
+
+## Streak-related admin touches (2026-07-15)
+
+- `MajorDrawService.getMajorDrawParticipantsSafe` — the `zeroEntriesBySource()` shape (and `MajorDrawParticipantSafe`) now includes `"promo-link"` and `streak`, so participants projections (admin + the Norm mirror `major-draw.participants`) carry the Membership Streak bucket instead of silently dropping it.
+- `delete-user-cascade` — now also deletes the user's `MilestoneIssuance` + `RedeemableIssuance` rows (step 8b); orphaned issuance rows previously kept polluting the milestone/redeemables performance aggregates after account deletion.
+- **Known admin gaps (deliberate, P4 scope):** admin user-detail projections do not yet expose `subscription.streakMonths`/`streakGeneration`, the user-detail entries-by-source breakdowns do not list the streak bucket, the user-export registry has no streak field, and there is no manual streak-adjustment tool. Support currently diagnoses streaks via the DB / repair script.

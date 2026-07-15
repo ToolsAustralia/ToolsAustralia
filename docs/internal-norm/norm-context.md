@@ -2136,7 +2136,9 @@ Cancelled draws are excluded — only `queued | active | frozen | completed` dra
       "mini-draw": number,
       referral: number,
       "bonus-entry-promo": number,
-      "cancellation-upsell": number            // retention-offer entries
+      "cancellation-upsell": number,           // retention-offer entries
+      "promo-link": number,                    // promo-link bonus entries
+      streak: number                           // Membership Streak auto-grants (rungs at renewals 2/4/6/8/10/12, annual repeat)
     },
     firstAddedDate: ISO8601,
     lastUpdatedDate: ISO8601

@@ -20,6 +20,8 @@ import Order from "@/models/Order";
 import Winner from "@/models/Winner";
 import ReferralEvent from "@/models/ReferralEvent";
 import TicketEntry from "@/models/TicketEntry";
+import MilestoneIssuance from "@/models/MilestoneIssuance";
+import RedeemableIssuance from "@/models/RedeemableIssuance";
 import mongoose from "mongoose";
 import { DeletionSummary } from "./get-user-deletion-summary";
 
@@ -39,6 +41,8 @@ export interface CascadeDeletionResult {
     winnersDeleted: number;
     referralEventsDeleted: number;
     ticketEntriesDeleted: number;
+    milestoneIssuancesDeleted: number;
+    redeemableIssuancesDeleted: number;
   };
 }
 
@@ -82,6 +86,8 @@ export async function deleteUserWithCascade(userId: string): Promise<CascadeDele
       winnersDeleted: 0,
       referralEventsDeleted: 0,
       ticketEntriesDeleted: 0,
+      milestoneIssuancesDeleted: 0,
+      redeemableIssuancesDeleted: 0,
     };
 
     // 1. Remove entries from Major Draw and clear winner if applicable
@@ -211,6 +217,13 @@ export async function deleteUserWithCascade(userId: string): Promise<CascadeDele
     const ticketEntriesResult = await TicketEntry.deleteMany({ userId: userObjectId }, { session });
     cleanupReport.ticketEntriesDeleted = ticketEntriesResult.deletedCount || 0;
 
+    // 8b. Delete reward issuance ledgers — orphaned rows would keep polluting the
+    // admin milestone/redeemables performance aggregates after the user is gone.
+    const milestoneIssuancesResult = await MilestoneIssuance.deleteMany({ userId: userObjectId }, { session });
+    cleanupReport.milestoneIssuancesDeleted = milestoneIssuancesResult.deletedCount || 0;
+    const redeemableIssuancesResult = await RedeemableIssuance.deleteMany({ userId: userObjectId }, { session });
+    cleanupReport.redeemableIssuancesDeleted = redeemableIssuancesResult.deletedCount || 0;
+
     // 9. Delete the user document (hard delete)
     // console.log(`👤 Deleting user document...`);
     await User.deleteOne({ _id: userObjectId }, { session });
@@ -275,6 +288,8 @@ export async function deleteUserWithCascade(userId: string): Promise<CascadeDele
         winnersDeleted: 0,
         referralEventsDeleted: 0,
         ticketEntriesDeleted: 0,
+        milestoneIssuancesDeleted: 0,
+        redeemableIssuancesDeleted: 0,
       },
     };
   } finally {
