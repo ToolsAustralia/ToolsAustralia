@@ -65,7 +65,9 @@ Entries 18–21 are the premeditated answers for the top-volume support inbox qu
 
 ## Dashboard streak flags ship DARK (2026-07-15)
 
-`DASHBOARD_FEATURES.loyaltyStreak` + `milestoneProgress` are **false** until the streak launch runbook completes (backfill → seed markers → activate → flip flags). The card/toast copy promises "+N free entries, automatic" — showing it while rungs are `isActive:false` would assert grants that never happen, and rungs crossed in that window would be marker-stamped at seed time and never paid. The full runbook is documented on the flag in `src/config/dashboardFeatures.ts`.
+`DASHBOARD_FEATURES.loyaltyStreak` + `milestoneProgress` are **false in git** until the streak launch runbook completes against the PRODUCTION database (backfill → seed markers → activate → flip flags). The card/toast copy promises "+N free entries, automatic" — showing it while rungs are `isActive:false` would assert grants that never happen, and rungs crossed in that window would be marker-stamped at seed time and never paid. The full runbook is documented on the flag in `src/config/dashboardFeatures.ts`.
+
+**Local preview convention:** flipping both flags to `true` in your working copy is fine once the runbook has run against the DB your `.env.local` points at (the owner's dev DB completed a full rehearsal 2026-07-15: rungs active + 548 markers, zero stray grants). That flip must stay **uncommitted** — the committed value only changes as launch step 4, after the production runbook run.
 
 ## Cobber streak FAQs (2026-07-15)
 
