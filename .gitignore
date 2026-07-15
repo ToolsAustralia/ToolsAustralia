@@ -17,8 +17,9 @@
 # testing
 /coverage
 
-# backfill audit logs (one-off ops scripts write CSV audit trails to cwd)
+# backfill/seed audit logs (one-off ops scripts write CSV audit trails to cwd)
 backfill-*.csv
+seed-*.csv
 
 # scratch / read-only probe scripts + ops CSV audit output (may contain PII) — never commit/build
 /temp

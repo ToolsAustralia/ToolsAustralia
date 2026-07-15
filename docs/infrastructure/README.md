@@ -40,7 +40,7 @@ Rewards SSO test scripts (in `package.json`): `test:igodirect-sso` (connectivity
 
 ## Membership Streak reward-ladder seed (added 2026-07-07, P2)
 
-`scripts/seed-streak-milestone-rewards.ts` (`seed:streak-rewards[:dry]`) — three safe-ordered stages: (1) drops the legacy `MilestoneIssuance` unique index and syncs the generation-scoped one; (2) upserts the 6 streak rungs (`STREAK-2R…12R`, autoGrant, **`isActive:false`** — dark); (3) inserts `backfilled` marker issuances for every rung a member passed pre-launch (recognition, zero entries — prevents retroactive mass-grants on activation). `--activate` flips the rungs live (**P3 launch runbook only**, after the P1 backfill has run `--live`). Dry-run default, CSV audit, progress lines. See [rewards-redeemables/gotchas.md](../rewards-redeemables/gotchas.md).
+`scripts/seed-streak-milestone-rewards.ts` (`seed:streak-rewards[:dry]`) — three safe-ordered stages: (1) drops the legacy `MilestoneIssuance` unique index and syncs the generation-scoped one; (2) upserts the 6 streak rungs (`STREAK-2R…12R`, autoGrant, **`isActive:false`** — dark); (3) inserts `backfilled` marker issuances for every rung a member passed pre-launch (recognition, zero entries — prevents retroactive mass-grants on activation). `--activate` flips the rungs live (**P3 launch runbook only**, after the P1 backfill has run `--live`). Dry-run default, CSV audit (`seed-*.csv` — gitignored alongside `backfill-*.csv`; audit CSVs are never committed), progress lines. See [rewards-redeemables/gotchas.md](../rewards-redeemables/gotchas.md).
 
 ## AI support chatbot infra (added 2026-06-24)
 
