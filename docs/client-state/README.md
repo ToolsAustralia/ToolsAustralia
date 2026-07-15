@@ -15,3 +15,7 @@ How client-state is organized: TanStack Query for server-state, Zustand for cros
 - [gotchas.md](./gotchas.md) — context vs store, hydration mismatches
 - [models.md](./models.md) — _N/A_
 - [testing.md](./testing.md) — _TODO_
+
+## Cancellation-flow query hooks — stakes addition (2026-07-15)
+
+`src/hooks/queries/useCancellationFlow.ts`: `StartCancellationFlowResponse` now carries server-derived `streakMonths` (drives the streak-stakes screen), and the new `useStakesActionCancellationFlow` mutation posts `{ action: "stakes", eventId, stakesAction: "kept"|"continued" }` — fire-and-forget analytics, callers never block UI on it.

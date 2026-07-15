@@ -23,6 +23,10 @@ export type OfferType = (typeof OFFER_TYPES)[number];
 export const OUTCOME_VALUES = ["in_progress", "saved", "cancelled"] as const;
 export type CancellationOutcome = (typeof OUTCOME_VALUES)[number];
 
+/** What the member did on the streak-stakes screen (spec §7b M3). */
+export const STAKES_ACTIONS = ["kept", "continued"] as const;
+export type StakesAction = (typeof STAKES_ACTIONS)[number];
+
 export interface ICancellationFlowEvent extends Document {
   userId: mongoose.Types.ObjectId;
   reason: CancellationReason;
@@ -31,6 +35,11 @@ export interface ICancellationFlowEvent extends Document {
   offerAccepted?: OfferType | null; // null allowed: Mongoose enum validator skips null/undefined
   outcome: CancellationOutcome;
   pastDue: boolean;
+  /** Membership Streak at flow start (server-stamped) — segments save-rate analytics by streak depth. */
+  streakMonthsAtStart?: number;
+  /** Streak-stakes screen exit: "kept" (kept membership) | "continued" (proceeded to offers).
+   *  null = screen never actioned (feature dark, past-due routing, or modal closed on it). */
+  stakesAction?: StakesAction | null;
   startedAt: Date;
   endedAt?: Date;
   savedAt?: Date;
@@ -48,6 +57,8 @@ const CancellationFlowEventSchema = new Schema<ICancellationFlowEvent>(
     offerAccepted: { type: String, enum: OFFER_TYPES, default: null }, // null allowed: Mongoose enum validator skips null/undefined
     outcome: { type: String, enum: OUTCOME_VALUES, required: true, default: "in_progress", index: true },
     pastDue: { type: Boolean, default: false },
+    streakMonthsAtStart: { type: Number, min: 0 },
+    stakesAction: { type: String, enum: STAKES_ACTIONS, default: null }, // null allowed: Mongoose enum validator skips null/undefined
     startedAt: { type: Date, required: true },
     endedAt: { type: Date },
     savedAt: { type: Date },

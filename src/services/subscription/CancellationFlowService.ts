@@ -30,6 +30,7 @@ import CancellationFlowEvent, {
   type CancellationReason,
   type OfferType,
   type CancellationOutcome,
+  type StakesAction,
 } from "@/models/CancellationFlowEvent";
 import User from "@/models/User";
 import { resolveOfferSequence } from "@/utils/subscription/cancellation-flow-routing";
@@ -75,6 +76,8 @@ export interface StartFlowInput {
   reasonText?: string;
   pastDue: boolean;
   offersShown: OfferType[];
+  /** Membership Streak at flow start (server-derived) — stamped for save-rate analytics by streak depth. */
+  streakMonths?: number;
 }
 
 /**
@@ -87,6 +90,7 @@ export async function startFlow({
   reasonText,
   pastDue,
   offersShown,
+  streakMonths,
 }: StartFlowInput): Promise<string> {
   await connectDB();
   const event = await CancellationFlowEvent.create({
@@ -95,10 +99,32 @@ export async function startFlow({
     reasonText: reasonText ?? undefined,
     pastDue,
     offersShown,
+    streakMonthsAtStart: streakMonths ?? 0,
     outcome: "in_progress",
     startedAt: new Date(),
   });
   return (event._id as mongoose.Types.ObjectId).toString();
+}
+
+/**
+ * Record the member's exit from the streak-stakes screen (spec §7b M3):
+ * "kept" (kept membership from the stakes screen) or "continued" (proceeded to
+ * the offer waterfall). Only writes while the event is still in_progress.
+ */
+export async function recordStakesAction(params: {
+  eventId: string;
+  userId: string;
+  stakesAction: StakesAction;
+}): Promise<void> {
+  await connectDB();
+  await CancellationFlowEvent.updateOne(
+    {
+      _id: new mongoose.Types.ObjectId(params.eventId),
+      userId: new mongoose.Types.ObjectId(params.userId),
+      outcome: "in_progress",
+    },
+    { $set: { stakesAction: params.stakesAction } }
+  );
 }
 
 export interface RecordOutcomeInput {
@@ -148,6 +174,8 @@ export async function recordOutcome({
 export interface UserCancellationContext {
   pastDue: boolean;
   consumed: ConsumedFlags;
+  /** Membership Streak — consecutive paid renewals (0 when absent). */
+  streakMonths: number;
 }
 
 /**
@@ -177,7 +205,8 @@ export async function getUserCancellationContext(userId: string): Promise<UserCa
     discount50_2mo: !!user.retentionOffersConsumed?.discount50_2mo,
     bonusEntries100: !!user.cancellationUpsellRedeemed,
   };
-  return { pastDue, consumed };
+  const streakMonths = (user.subscription as { streakMonths?: number } | undefined)?.streakMonths ?? 0;
+  return { pastDue, consumed, streakMonths };
 }
 
 // ---------------------------------------------------------------------------

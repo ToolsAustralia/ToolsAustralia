@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import type { OfferType, CancellationReason } from "@/models/CancellationFlowEvent";
+import { isDashboardFeatureOn } from "@/config/dashboardFeatures";
 import type { FlowState, AcceptResult } from "./types";
 
 const INITIAL_STATE: FlowState = {
@@ -12,6 +13,7 @@ const INITIAL_STATE: FlowState = {
   offersShown: [],
   offerCursor: 0,
   pastDue: false,
+  streakMonths: 0,
   saveSuccess: false,
   acceptedOffer: null,
   acceptResult: null,
@@ -21,10 +23,33 @@ interface ApplyStartPayload {
   eventId: string;
   offersShown: OfferType[];
   pastDue: boolean;
+  streakMonths?: number;
 }
 
 /** The cursor-driven phase slice of FlowState the step-machine controls. */
 export type OfferPhase = Pick<FlowState, "step" | "offerCursor">;
+
+/**
+ * Pure: resolve the phase entered after a successful `start` (spec §7b M3).
+ *
+ * - Past-due members keep their dedicated routing (offersShown=[] → step 4
+ *   "Resolve payment" variant) — the stakes screen is a retention surface,
+ *   not a dunning surface.
+ * - While the Membership Streak feature is live (`stakesEnabled`), every other
+ *   member sees the STAKES screen first — ALWAYS, regardless of streak depth
+ *   (owner decision: content adapts, visibility doesn't).
+ * - Feature dark → the pre-streak flow, unchanged.
+ */
+export function startPhaseFor(
+  offersShown: OfferType[],
+  pastDue: boolean,
+  stakesEnabled: boolean
+): OfferPhase {
+  if (!pastDue && stakesEnabled) {
+    return { step: "stakes", offerCursor: 0 };
+  }
+  return offerPhaseFor(offersShown, 0);
+}
 
 /**
  * Pure: resolve the phase for a given offers list + cursor.
@@ -80,19 +105,30 @@ export function useCancellationFlow() {
 
   /**
    * Called after the `start` mutation succeeds.
-   * Stores the returned eventId/offersShown/pastDue and decides the next step
-   * via the pure {@link offerPhaseFor} helper:
-   * - offersShown.length === 0 → step 4 (direct confirm, no offers / past-due)
-   * - else → step 2, offerCursor 0 (offer phase, renders offersShown[0])
+   * Stores the returned eventId/offersShown/pastDue/streakMonths and decides
+   * the next step via the pure {@link startPhaseFor} helper:
+   * - past-due → old routing (offersShown=[] → step 4 "Resolve payment")
+   * - streak feature live → "stakes" (the Membership Streak stakes screen)
+   * - feature dark → offer phase / confirm exactly as before
    */
-  const applyStart = ({ eventId, offersShown, pastDue }: ApplyStartPayload) => {
+  const applyStart = ({ eventId, offersShown, pastDue, streakMonths }: ApplyStartPayload) => {
     setState((s) => ({
       ...s,
       eventId,
       offersShown,
       pastDue,
-      ...offerPhaseFor(offersShown, 0),
+      streakMonths: streakMonths ?? 0,
+      ...startPhaseFor(offersShown, pastDue, isDashboardFeatureOn("loyaltyStreak")),
     }));
+  };
+
+  /**
+   * Leave the stakes screen toward the offer waterfall ("Continue cancelling").
+   * Pure re-resolution via {@link offerPhaseFor}: offers exist → step 2 rung 0;
+   * no offers → step 4 (confirm).
+   */
+  const continueFromStakes = () => {
+    setState((s) => ({ ...s, ...offerPhaseFor(s.offersShown, 0) }));
   };
 
   /**
@@ -125,6 +161,7 @@ export function useCancellationFlow() {
     selectReason,
     setReasonText,
     applyStart,
+    continueFromStakes,
     decline,
     requestExit,
     markSaved,

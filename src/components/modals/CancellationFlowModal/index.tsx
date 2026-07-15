@@ -33,9 +33,15 @@ import React, { useEffect } from "react";
 import { ModalContainer, ModalContent } from "../ui";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { useCancellationFlow } from "./useCancellationFlow";
-import { useStartCancellationFlow, useOutcomeCancellationFlow, useAcceptOffer } from "@/hooks/queries/useCancellationFlow";
+import {
+  useStartCancellationFlow,
+  useOutcomeCancellationFlow,
+  useAcceptOffer,
+  useStakesActionCancellationFlow,
+} from "@/hooks/queries/useCancellationFlow";
 import StepSaveSuccess from "./StepSaveSuccess";
 import Step1Reason from "./Step1Reason";
+import StepStakes from "./StepStakes";
 import Step2Offer from "./Step2Offer";
 import Step4Confirm from "./Step4Confirm";
 import type { CancellationFlowModalProps } from "./types";
@@ -68,6 +74,7 @@ const CancellationFlowModal: React.FC<CancellationFlowModalProps> = ({
   const startMutation = useStartCancellationFlow();
   const outcomeMutation = useOutcomeCancellationFlow();
   const acceptOfferMutation = useAcceptOffer();
+  const stakesMutation = useStakesActionCancellationFlow();
 
   // Reset flow state when the modal opens
   useEffect(() => {
@@ -88,6 +95,20 @@ const CancellationFlowModal: React.FC<CancellationFlowModalProps> = ({
           <Step1Reason
             flowHook={flowHook}
             startMutation={startMutation}
+            onClose={handleHeaderClose}
+          />
+        );
+
+      case "stakes":
+        // Membership Streak stakes screen (spec §7b M3) — between reason and
+        // the offer waterfall. "Keep" mirrors Step4Confirm's keep (close, no
+        // outcome recorded — "saved" is reserved for accepted offers).
+        return (
+          <StepStakes
+            state={state}
+            stakesMutation={stakesMutation}
+            onKeep={handleHeaderClose}
+            onContinue={flowHook.continueFromStakes}
             onClose={handleHeaderClose}
           />
         );
