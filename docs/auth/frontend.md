@@ -71,3 +71,7 @@ Auth components use `cn()` from `@/utils/cn` for conditional class composition. 
 The "Sign in" h1 and "Please login to continue to your account." sub-copy render inline (baseline-aligned, `flex-wrap`) below `lg` and stack vertically on desktop, so the form header doesn't dominate small viewports.
 
 `RotatingToolsetCard` is defined inline in `src/app/login/page.tsx` because it has a single consumer. It reuses shared brand assets (`POWERSET_IMAGES`, `POWERSET_BRAND_TEXT` from `src/components/sections/promo/prize-selection/constants.ts`) and brand color helpers (`getToolsetBadgeStyle`, `getPackageColorScheme`, `getLandingPageThemeFromSlug`, `hexToRgbaString` from `src/utils/package-colors/packageColorScheme.ts`) — the same module that powers the prize selection carousel, so Ryobi's lime-on-dark-green pill treatment is identical across the site. Auto-rotation respects `prefers-reduced-motion`.
+
+## Sign-out storage clear — streak celebration marker (2026-07-07)
+
+`total-sign-out.ts` `USER_LOCAL_PREFIXES` gains `ta-streak-seen:` — the Membership Streak celebration marker (last-celebrated streak level per user, written by `useStreakCelebration`). Per-user breadcrumb; must not leak the previous member's streak position on a shared device.

@@ -30,7 +30,14 @@ const USER_LOCAL_KEYS = [
 ];
 
 /** User-scoped localStorage key prefixes (per-user breadcrumbs). */
-const USER_LOCAL_PREFIXES = ["subscriptionExplainerSeen_", "rewardsWidgetSpotlightSeen_"];
+const USER_LOCAL_PREFIXES = [
+  "subscriptionExplainerSeen_",
+  "rewardsWidgetSpotlightSeen_",
+  // Membership Streak celebration marker (last-celebrated streak level, per user —
+  // useStreakCelebration). Must not leak the previous member's streak position to
+  // the next sign-in on a shared device.
+  "ta-streak-seen:",
+];
 
 /** User-scoped sessionStorage keys (exact match). */
 const USER_SESSION_KEYS = [

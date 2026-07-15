@@ -723,3 +723,10 @@ deep links — it opens the sheet and redirects to `/my-account`. Support conten
 `SupportSheet` (`SupportSheetBody`). Payment/Manage remain settings panels (the store reserves
 `"payment"`/`"manage"` kinds for a future sheet host); the Settings **single-page** layout is still a
 follow-up.
+
+## Membership Streak state (P3 — 2026-07-07)
+
+- `useDashboardState.streakMonths` now reads the REAL durable counter (`user.subscription.streakMonths` — P1) for `active` **and** `pastdue` members (past-due keeps its banked count); the old `monthsBetween(startDate)` derivation is deleted (upgrades reset `startDate` — the exact bug the counter fixes). `entries` gains a `streak` bucket (from `streakEntries` on the major-draw stats payload, via `useDashboardEntryDisplay` — streak is never frozen by the pre-purchase hold since purchases can't change it).
+- **[streak-display.ts](../../src/utils/dashboard/streak-display.ts)** — pure display derivations: `streakAccentVars(tierKey)` (Build Kit `--s-*` tier themes + tempered-steel default), `deriveStreakCardState` (fresh/active/atrisk/paused/founding), `deriveStreakCycleFuse(renewalDateIso)` (day-in-cycle from the real renewal date).
+- **[useStreakCelebration.ts](../../src/hooks/useStreakCelebration.ts)** — once-per-rung celebration on the first dashboard visit after a milestone lands (spec §7b M1): per-user localStorage marker (`ta-streak-seen:<userId>`), seeds silently on first visit (no retro celebrations — mirrors the backfill "recognise, don't pay" policy), celebrates the newest rung crossed since last seen.
+- The my-account page renders the streak card in the aside for ALL states behind `DASHBOARD_FEATURES.loyaltyStreak` (one-time holders get the teaser variant — it replaced the "Keep your partner discounts" card), passes the guest teaser into `DashboardGuestPanel`, and mounts the celebration toast.

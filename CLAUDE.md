@@ -761,6 +761,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/hooks/useDashboardEntryDisplay.ts",
         "src/hooks/useDashboardLandingOrchestration.ts",
         "src/hooks/useDashboardState.ts",
+        "src/hooks/useStreakCelebration.ts",
         "src/utils/dashboard/**"
       ],
       "lastVerified": "2026-07-15"

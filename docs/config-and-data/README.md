@@ -58,3 +58,7 @@ Entries 18–21 are the premeditated answers for the top-volume support inbox qu
 - [gotchas.md](./gotchas.md) — fixture-as-prod-fallback risk
 - [models.md](./models.md) — _N/A_
 - [testing.md](./testing.md) — _TODO_
+
+## Membership Streak ladder config (P3 — 2026-07-07)
+
+`src/config/streakMilestones.ts` — the SINGLE client-side source for the streak reward ladder (rungs 2/4/6/8/10/12 → +100…+600 free entries, repeating every 12 renewals). MUST mirror the seeded `MilestoneReward` rows (`scripts/seed-streak-milestone-rewards.ts`); every UI surface (streak card rail, milestones track, guest teaser, wallet, future cancellation stakes) reads from it. Helpers: `nextStreakMilestone(streak)` (annual-repeat aware — streak 13 → Lv.14 +100), `isRungEarned(rungLevel, streak)` (year-cycle position).

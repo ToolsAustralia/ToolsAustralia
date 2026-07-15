@@ -45,12 +45,13 @@ export interface DashboardStateResult {
   multiplier: number;
   /** Whether the user gets 50%-off Additional packages (members / current-draw entrants). */
   hasAdditionalAccess: boolean;
-  entries: { total: number; membership: number; oneTime: number };
+  entries: { total: number; membership: number; oneTime: number; streak: number };
   /** Partner-catalogue access % for the hero ring (0 when locked). */
   partnerAccessPct: number;
   /** One-time time-gated access label, e.g. "5 days" / "24hr" (null otherwise). */
   partnerAccessExpiryLabel: string | null;
-  /** Whole months of continuous membership, or null for non-members. */
+  /** Membership Streak: consecutive paid renewals (the durable P1 counter — never
+   *  derived from startDate, which upgrades reset). Null for non-members. */
   streakMonths: number | null;
   isPastDue: boolean;
   /** Entries a PAST-DUE member unlocks once they settle their failed renewal (base + carry-over). Null otherwise. */
@@ -66,11 +67,6 @@ export interface DashboardStateResult {
   drawDateIso: string | null;
   drawStatus: string;
   user: UserData | null;
-}
-
-function monthsBetween(start: Date, now: Date): number {
-  const months = (now.getFullYear() - start.getFullYear()) * 12 + (now.getMonth() - start.getMonth());
-  return Math.max(0, now.getDate() >= start.getDate() ? months : months - 1);
 }
 
 // Single source for the "{N} days left" ring caption — shared with the admin
@@ -116,7 +112,7 @@ export function useDashboardState(): DashboardStateResult {
         stateTheme: getDashboardStateTheme("none"),
         multiplier: oneTimeMultiplier && oneTimeMultiplier > 0 ? oneTimeMultiplier : 1,
         hasAdditionalAccess: false,
-        entries: { total: 0, membership: 0, oneTime: 0 },
+        entries: { total: 0, membership: 0, oneTime: 0, streak: 0 },
         partnerAccessPct: 0,
         partnerAccessExpiryLabel: null,
         streakMonths: null,
@@ -193,11 +189,12 @@ export function useDashboardState(): DashboardStateResult {
       }
     }
 
-    // Streak months (members only) from the subscription start date when present.
+    // Membership Streak — the REAL durable counter (P1, subscription.streakMonths:
+    // consecutive paid renewals; recovery keeps it, pauses freeze it, upgrades never
+    // touch it). Members only (active + past-due — past-due keeps its banked count).
     let streakMonths: number | null = null;
-    if (acct === "active") {
-      const startRaw = (user.subscription as { startDate?: string | Date } | undefined)?.startDate;
-      if (startRaw) streakMonths = monthsBetween(new Date(startRaw), new Date());
+    if (acct === "active" || acct === "pastdue") {
+      streakMonths = (user.subscription as { streakMonths?: number } | undefined)?.streakMonths ?? 0;
     }
 
     // Renewal date — subscription.endDate is already the normalized renewal anchor even
@@ -243,6 +240,7 @@ export function useDashboardState(): DashboardStateResult {
         total: entriesDisplay.currentDrawEntries,
         membership: entriesDisplay.membershipEntries,
         oneTime: entriesDisplay.oneTimeEntries,
+        streak: entriesDisplay.streakEntries,
       },
       partnerAccessPct,
       partnerAccessExpiryLabel,
@@ -268,6 +266,7 @@ export function useDashboardState(): DashboardStateResult {
     entriesDisplay.currentDrawEntries,
     entriesDisplay.membershipEntries,
     entriesDisplay.oneTimeEntries,
+    entriesDisplay.streakEntries,
     currentMajorDraw,
   ]);
 }

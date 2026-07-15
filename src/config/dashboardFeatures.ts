@@ -15,14 +15,18 @@ export const DASHBOARD_FEATURES = {
    *  (SupportChatWidget). On /my-account the floating bubble is suppressed so this
    *  card is the single Cobber entry point. */
   cobberSupport: true,
-  /** Loyalty milestone-progress bars — no customer-facing milestone-progress read yet. */
-  milestoneProgress: false,
+  /** Loyalty milestone-progress bars — LIVE: driven by the real streak counter
+   *  (subscription.streakMonths) + the single MILESTONES config (streakMilestones.ts). */
+  milestoneProgress: true,
   /** Personal "your wins" history — only a global winners endpoint exists today. */
   personalWins: false,
   /** Full purchase history — only the last-10 `recentOrders` are returned today. */
   orderHistory: false,
-  /** Loyalty streak card — the 6-month milestone reward figures aren't confirmed yet. */
-  loyaltyStreak: false,
+  /** Loyalty streak card — LIVE: the Membership Streak medallion card (Build Kit,
+   *  claudeDesign/Membership milestone streak design), real counter + real ladder.
+   *  NOTE: reward GRANTS stay dark until the rungs are activated
+   *  (`seed:streak-rewards --live --activate` — the P3 launch runbook step). */
+  loyaltyStreak: true,
 } as const;
 
 export type DashboardFeature = keyof typeof DASHBOARD_FEATURES;
