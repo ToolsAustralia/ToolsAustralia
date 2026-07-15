@@ -27,6 +27,7 @@ import {
   Check,
   ShieldCheck,
   ShieldAlert,
+  Flame,
   type LucideIcon,
 } from "lucide-react";
 import ActivityTab from "./UserDetailModal/ActivityTab";
@@ -2484,6 +2485,25 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                             <span className="font-medium text-sm">
                               {user.subscription.autoRenew ? "Enabled" : "Disabled"}
                             </span>
+                          </div>
+                          <div>
+                            <p className="text-xs text-gray-600 dark:text-neutral-400 mb-1">Membership Streak</p>
+                            {(user.subscription.streakMonths ?? 0) > 0 ? (
+                              <p className="font-medium text-sm inline-flex items-center gap-1">
+                                <Flame className="h-3.5 w-3.5 text-amber-500" />
+                                {user.subscription.streakMonths} renewal{user.subscription.streakMonths === 1 ? "" : "s"}
+                                {(user.subscription.streakGeneration ?? 1) > 1 && (
+                                  <span
+                                    className="text-xs text-gray-500 dark:text-neutral-400"
+                                    title="Streak generation — this member lapsed and started a new streak; milestones are re-earnable per generation"
+                                  >
+                                    · gen {user.subscription.streakGeneration}
+                                  </span>
+                                )}
+                              </p>
+                            ) : (
+                              <p className="font-medium text-sm text-gray-500 dark:text-neutral-400">No streak yet</p>
+                            )}
                           </div>
                           <div>
                             <p className="text-xs text-gray-600 dark:text-neutral-400 mb-1">Rewards Points</p>

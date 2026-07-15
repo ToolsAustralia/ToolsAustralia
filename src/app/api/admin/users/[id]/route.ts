@@ -690,6 +690,8 @@ async function buildAdminUserProfile(userId: string) {
           pendingChange: user.subscription.pendingChange,
           lastDowngradeDate: user.subscription.lastDowngradeDate,
           lastUpgradeDate: user.subscription.lastUpgradeDate,
+          streakMonths: user.subscription.streakMonths ?? 0,
+          streakGeneration: user.subscription.streakGeneration ?? 1,
         }
       : null,
     oneTimePackages: (user.oneTimePackages || []).map((pkg) => ({

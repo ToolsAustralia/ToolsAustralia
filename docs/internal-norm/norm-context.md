@@ -3621,7 +3621,8 @@ PII not exposed: the `changedBy` row on the underlying document includes `firstN
       endDate: ISO8601 | null,
       status: string | null,                     // active | trialing | past_due | incomplete | cancelled
       autoRenew: boolean | null,
-      lastMonthAccumulatedEntries: number | null  // membership carry-forward entries that roll into the next draw on renewal; preserved through cancellation for resubscribe
+      lastMonthAccumulatedEntries: number | null, // membership carry-forward entries that roll into the next draw on renewal; preserved through cancellation for resubscribe
+      streakMonths: number                       // Membership Streak — consecutive paid renewals (join = month 0); milestone renewals (2/4/6/8/10/12, repeating every 12) auto-grant free entries into the Major Draw
     } | null,
     totalSpent: number,                          // AUD dollars; refund-net lifetime spend
     majorDrawEntries: number,                    // entries in the currently-active major draw only
@@ -3749,11 +3750,13 @@ PII not exposed: same uniform user-domain PII discipline — `email`, `lastName`
   createdAt: ISO8601,
   updatedAt: ISO8601,
   lastLogin: ISO8601 | null,
-  subscription: { packageId, packageName, isActive, startDate, endDate, cancelledAt, status, autoRenew, lastMonthAccumulatedEntries, nextRenewalEntries, renewalLandsInCurrentDraw } | null,
+  subscription: { packageId, packageName, isActive, startDate, endDate, cancelledAt, status, autoRenew, lastMonthAccumulatedEntries, nextRenewalEntries, renewalLandsInCurrentDraw, streakMonths, streakGeneration } | null,
     // cancelledAt = ISO when the member scheduled cancellation (still active until endDate); null if not cancelling. cancelledAt set + autoRenew:false ⇒ "scheduled to cancel".
     // lastMonthAccumulatedEntries = membership carry-forward entries that roll into the next draw on renewal; preserved through cancellation for resubscribe.
     // nextRenewalEntries = entries the member gets on their NEXT successful renewal (carry-forward + monthly base; NEVER promo-multiplied). For past_due/unpaid it is what settling the failed renewal grants. null when no renewal is coming (autoRenew off / cancelled / not recovering). Use for win-back / renewal-value replies.
     // renewalLandsInCurrentDraw = true iff those renewal entries land in the CURRENTLY-ACTIVE draw (renewal before its entry freeze). false ⇒ the renewal falls after the current draw closes, so the grant goes to a FUTURE draw and won't boost the member's current-draw entry count. Always false for past_due/cancelled/guest.
+    // streakMonths = Membership Streak: consecutive paid renewals (join = month 0). Milestone renewals (2/4/6/8/10/12, repeating every 12) auto-grant free entries into the Major Draw. A fixed payment issue / pause / ≤30-day rejoin does NOT break it; a full lapse resets it.
+    // streakGeneration = bumps on each out-of-grace resubscribe reset; milestone rungs are re-earnable per generation.
   partnerAccessRing: {                           // partner-catalogue access the member currently sees on their /my-account hero — non-PII
     state: "active" | "onetime" | "pastdue" | "none",  // active member / one-time-pack buyer / past-due / no access
     percent: number,                             // 0–100 partner-catalogue access %; 0 when locked (membership access pauses while past_due)

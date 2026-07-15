@@ -180,6 +180,13 @@ export const EXPORT_FIELDS: ExportFieldDefinition[] = [
     type: "boolean",
     group: "subscription",
   },
+  {
+    key: "subscription.streakMonths",
+    displayName: "Membership Streak (renewals)",
+    type: "number",
+    group: "subscription",
+    description: "Consecutive paid renewals (Membership Streak; join = month 0)",
+  },
 
   // Financial
   {

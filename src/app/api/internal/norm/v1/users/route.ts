@@ -77,6 +77,7 @@ export const GET = withNorm(
               status: u.subscription.status ?? null,
               autoRenew: null,
               lastMonthAccumulatedEntries: u.subscription.lastMonthAccumulatedEntries ?? null,
+              streakMonths: u.subscription.streakMonths ?? 0,
             }
           : null,
         totalSpent: u.totalSpent,
