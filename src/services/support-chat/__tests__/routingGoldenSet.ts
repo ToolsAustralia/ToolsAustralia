@@ -437,6 +437,88 @@ export const ROUTING_GOLDEN_SET: RoutingCase[] = [
     note: "account-aware: profile update (state field affects eligibility) → id37",
   },
 
+  // ── Knowledge-gap batch (2026-07-15): specific sub-intents beat broad rules ──
+  {
+    question: "how do i refer a mate and where is my referral link",
+    expect: { kind: "deflect", faqId: "40" },
+    note: "referral link/code (account-aware) → id40, not get-more-entries id8",
+  },
+  {
+    question: "is there a limit on how many mates i can refer",
+    expect: { kind: "deflect", faqId: "42" },
+    note: "referral cap / when entries land → id42, not id8 ('bonus entries')",
+  },
+  {
+    question: "do bonus entries from a promo code carry forward or only this draw",
+    expect: { kind: "deflect", faqId: "48" },
+    note: "promo/referral/offer bonus entries scoped to current draw → id48, not id7/id8",
+  },
+  {
+    question: "i am past due and want to cancel do i keep access",
+    expect: { kind: "deflect", faqId: "54" },
+    note: "ACCURACY: past-due cancel is IMMEDIATE → id54, must beat id13 ('past due') and id18",
+  },
+  {
+    question: "i was past due and just paid to catch up when am i charged next",
+    expect: { kind: "deflect", faqId: "55" },
+    note: "past-due catch-up reanchors billing (account-aware) → id55, must beat id11/id13",
+  },
+  {
+    question: "while past due do i keep my free entries and partner discounts",
+    expect: { kind: "deflect", faqId: "56" },
+    note: "benefits paused while past due → id56, must beat id13 ('past due') and id54",
+  },
+  {
+    question: "i joined late in the month did i overpay for a short first period",
+    expect: { kind: "deflect", faqId: "53" },
+    note: "anchor-24 full-price-not-prorated reassurance → id53, must beat id11 ('renew on the 24th')",
+  },
+  {
+    question: "i bought a higher one time pack do i get extra partner discounts",
+    expect: { kind: "deflect", faqId: "60" },
+    note: "partner access = single highest tier, not additive → id60, must beat id16",
+  },
+  {
+    question: "if i cancel my membership do i keep partner discounts",
+    expect: { kind: "deflect", faqId: "61" },
+    note: "membership partner access ends at period end; pack window independent → id61, must beat id16",
+  },
+  {
+    question: "my partner discount access says upcoming why",
+    expect: { kind: "deflect", faqId: "62" },
+    note: "partner windows run one-at-a-time; same-tier queues (account-aware) → id62, must beat id16",
+  },
+  {
+    question: "how is a mini draw winner chosen and when will my mini draw be drawn",
+    expect: { kind: "deflect", faqId: "63" },
+    note: "mini-draw winner selection/timing → id63, must beat id6 ('mini draw')",
+  },
+  {
+    question: "the mini draw already has a winner will it run again",
+    expect: { kind: "deflect", faqId: "66" },
+    note: "mini draws cycle through rounds → id66, must beat id6 and id63",
+  },
+  {
+    question: "where do i see the mini draws i have entered",
+    expect: { kind: "deflect", faqId: "68" },
+    note: "mini-draw entries tracked separately (account-aware) → id68, must beat id6",
+  },
+  {
+    question: "if i get a refund do i lose the free entries it gave",
+    expect: { kind: "deflect", faqId: "67" },
+    note: "refund removes the bonus entries it granted → id67, must beat id12/id19 ('refund')",
+  },
+  {
+    question: "why does my membership say trialing",
+    expect: { kind: "deflect", faqId: "58" },
+    note: "L2: 'trialing' is a cosmetic anchor label, not a free trial → id58 (unique keyword)",
+  },
+  {
+    question: "why does it say my account has been deactivated",
+    expect: { kind: "deflect", faqId: "46" },
+    note: "L2: deactivated account is not a password issue → id46 (unique keyword)",
+  },
+
   // ── Off-topic (must abstain) ─────────────────────────────────────────────────
   {
     question: "what's the weather in sydney",

@@ -328,6 +328,237 @@ const INTENT_RULES: IntentRule[] = [
     excludes: ["partner", "one-time", "one time", "pack", "email", "newsletter", "mailing"],
   },
 
+  // ══ Specific sub-intents that MUST beat a broad topic rule ═══════════════════
+  // These new FAQs share a token with a broad rule below ("mini draw" → id6,
+  // "bonus entries" → id8, "renew on the 24th" → id11, "refund" → id12,
+  // "past due" → id13, "partner discount" → id16). Because Layer 1 SHORT-CIRCUITS
+  // Layer 2, a broad match here would make the specific FAQ unreachable — so each
+  // specific rule is placed FIRST. Intra-block order also matters (id54 before id56;
+  // id63→id66→id68; id60→id61→id62).
+
+  // Refer a mate — where's my link/code (account-aware; precede id8 "referral entries")
+  {
+    faqId: "40",
+    signals: [
+      "refer a mate",
+      "refer a friend",
+      "referral link",
+      "referral code",
+      "where s my referral",
+      "where is my referral",
+      "my referral code",
+      "my referral link",
+      "how do i refer",
+      "share my referral",
+    ],
+  },
+  // Referral limit / when do bonus entries land — precede id8 "bonus entries"
+  {
+    faqId: "42",
+    signals: [
+      "limit on how many",
+      "limit on referrals",
+      "how many mates can i refer",
+      "how many can i refer",
+      "referral cap",
+      "cap on referrals",
+      "do referrals stack",
+      "when do the bonus entries land",
+      "when do bonus entries land",
+      "do i only get the bonus once",
+      "max referrals",
+    ],
+  },
+  // Do bonus/promo/referral/offer entries carry forward — precede id7/id8
+  {
+    faqId: "48",
+    signals: [
+      "do bonus entries from",
+      "carry forward or only this draw",
+      "only this draw",
+      "after checkout offer carry",
+      "promo code referral",
+      "do promo entries carry forward",
+      "promo entries carry forward",
+      "referral entries carry forward",
+      "do bonus entries carry",
+      "bonus entries roll over",
+    ],
+  },
+  // Past due + want to cancel — cancel is IMMEDIATE (precede id13 "past due" AND id56)
+  {
+    faqId: "54",
+    signals: [
+      "past due and want to cancel",
+      "past due cancel",
+      "cancel while past due",
+      "cancel while i m past due",
+      "cancel my membership while past due",
+      "if i cancel while past due",
+      "cancel after failed payment",
+      "cancel after a failed payment",
+      "past due immediate cancel",
+      "cancel my membership past due",
+    ],
+  },
+  // Past due, just caught up — when charged next (account-aware; precede id11/id13)
+  {
+    faqId: "55",
+    signals: [
+      "paid to catch up",
+      "just paid to catch up",
+      "catch up when am i charged",
+      "caught up when charged",
+      "when am i charged after catching up",
+      "next charge after catch up",
+      "after catching up",
+      "billing after past due",
+      "past due paid when",
+      "paid the overdue",
+    ],
+  },
+  // While past due — do I keep entries / partner discounts (precede id13; after id54)
+  {
+    faqId: "56",
+    signals: [
+      "while past due do i keep",
+      "past due do i keep",
+      "keep my entries while past due",
+      "keep entries while past due",
+      "entries while past due",
+      "partner discounts while past due",
+      "benefits while past due",
+      "do i lose entries past due",
+      "free entries while past due",
+      "past due keep my",
+    ],
+  },
+  // Joined late, paid full price, renew on 24th — did I overpay (precede id11)
+  {
+    faqId: "53",
+    signals: [
+      "did i overpay",
+      "overpaid for a short",
+      "overpay for a short",
+      "short first period",
+      "short first month",
+      "paid full price but i renew",
+      "prorated first month",
+      "joined late in the month",
+      "joined late and paid",
+    ],
+  },
+  // Higher pack partner discount — highest tier wins, not additive (precede id16)
+  {
+    faqId: "60",
+    signals: [
+      "extra partner discounts",
+      "do i get extra partner",
+      "does my 50 still apply",
+      "does my 50",
+      "bought a higher pack",
+      "higher one time pack",
+      "do partner discounts stack",
+      "do discounts stack",
+      "vip pack partner",
+      "boss pack partner",
+    ],
+  },
+  // Cancel membership — keep partner discounts + pack window (precede id16; after id60)
+  {
+    faqId: "61",
+    signals: [
+      "keep partner discounts",
+      "partner discounts after cancelling",
+      "partner discounts after i cancel",
+      "do i keep partner discounts",
+      "keep partner discount if i cancel",
+      "keep discounts until my paid",
+      "partner discount after cancelling",
+      "keep my partner discount",
+      "discounts until my paid cycle",
+    ],
+  },
+  // Partner-discount window shows 'upcoming'/queued (account-aware; precede id16; after id61)
+  {
+    faqId: "62",
+    signals: [
+      "partner discount upcoming",
+      "partner discount access says upcoming",
+      "discount access says upcoming",
+      "access says upcoming",
+      "discount says upcoming",
+      "pack shows upcoming",
+      "partner discount pending",
+      "discount access not active",
+      "partner discount not active yet",
+    ],
+  },
+  // Mini Draw — how is the winner chosen / when drawn (precede id6; before id66/id68)
+  {
+    faqId: "63",
+    signals: [
+      "mini draw winner",
+      "how is a mini draw winner",
+      "how is the mini draw",
+      "when will my mini draw",
+      "when does the mini draw",
+      "when will the mini draw",
+      "mini draw drawn",
+      "how do you pick the mini draw",
+      "mini draw certified",
+      "mini draw winner chosen",
+    ],
+  },
+  // Mini Draw already has a winner — will it run again (precede id6; after id63)
+  {
+    faqId: "66",
+    signals: [
+      "mini draw already has a winner",
+      "already has a winner",
+      "will the mini draw run again",
+      "mini draw run again",
+      "will it run again",
+      "mini draw new round",
+      "mini draw next round",
+      "mini draw cycles",
+      "do mini draws repeat",
+      "is that mini draw over",
+    ],
+  },
+  // Where do I see the Mini Draws I've entered (account-aware; precede id6; after id66)
+  {
+    faqId: "68",
+    signals: [
+      "mini draws i ve entered",
+      "mini draws i entered",
+      "see my mini draws",
+      "my mini draw entries",
+      "which mini draws have i entered",
+      "mini draw entries not showing",
+      "find my mini draw entries",
+      "where do i see my mini draws",
+      "see the mini draws i",
+      "my mini draw participation",
+    ],
+  },
+  // Refund removes the free entries it gave — precede id12/id19 (bare "refund")
+  {
+    faqId: "67",
+    signals: [
+      "do i lose the free entries",
+      "lose the free entries it gave",
+      "lose entries if i get a refund",
+      "refund and free entries",
+      "entries after a refund",
+      "lose entries on refund",
+      "keep entries after refund",
+      "refunded pack entries",
+      "do entries get removed on refund",
+      "refund lose entries",
+    ],
+  },
+
   // ── Draw timing ────────────────────────────────────────────────────────────
   {
     faqId: "2",

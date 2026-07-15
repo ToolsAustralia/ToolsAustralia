@@ -142,8 +142,11 @@ function main() {
     "Unexpected-charge FAQ (id 21) must explain renewal happens on the member's own billing date (NOT a blanket 'the 24th of each month' — only 25th–27th joiners are anchored to the 24th)"
   );
 
-  // 8. Total entry count must be 38 after the membership/account-aware additions.
-  assert.strictEqual(entries.length, 39, `Expected 39 FAQ entries, got ${entries.length}`);
+  // 8. Total entry count. Bumped 39 → 68 (2026-07-15) after the knowledge-gap batch:
+  // ids 40-68 (referrals/affiliate, account+auth, promo/offer, upgrade/downgrade/anchor,
+  // past-due lifecycle incl. id54, advanced partner, mini-draws/prizes). id24 was extended
+  // (reactivation timing), not added, so it does not change the count.
+  assert.strictEqual(entries.length, 68, `Expected 68 FAQ entries, got ${entries.length}`);
 
   // 8b. Active-member-but-0-entries (id 39) must exist and explain the renewal-timing
   // mechanic (entries are credited on the renewal date; a fresh draw starts empty), and
@@ -158,6 +161,17 @@ function main() {
   assert.ok(
     zeroEntries!.answer.includes("/my-account/membership"),
     "0-entries FAQ (id 39) must route to My Account → Membership for the renewal date"
+  );
+
+  // 8c. Past-due cancellation (id 54) must state the ACCURATE rule: cancelling while
+  // past due ends the membership IMMEDIATELY (unlike a normal end-of-period cancel).
+  // This is the accuracy fix — CancelSubscriptionService cancels past_due immediately.
+  const pastDueCancel = entries.find((e) => e.id === "54");
+  assert.ok(pastDueCancel !== undefined, "FAQ entry id=54 (past-due cancel) must exist");
+  const pastDueCancelLower = pastDueCancel!.answer.toLowerCase();
+  assert.ok(
+    pastDueCancelLower.includes("past due") && pastDueCancelLower.includes("immediately"),
+    "Past-due-cancel FAQ (id 54) must state that cancelling while past due ends the membership immediately"
   );
 
   // 9. Upgrade entry (id 22) must exist and route to the Membership manage flow.
