@@ -11,6 +11,7 @@
 import type { ExportFieldDefinition } from "./userExportFields";
 import { getFieldDefinition } from "./userExportFields";
 import { getPackageById } from "@/data/membershipPackages";
+import { SUBSCRIBED_SUBSCRIPTION_STATUSES } from "@/utils/admin/userFilterBuilder";
 import PaymentEvent from "@/models/PaymentEvent";
 import MajorDraw from "@/models/MajorDraw";
 
@@ -238,10 +239,25 @@ export function transformUserData(
   const transformed: TransformedUserData = {};
   const userId = typeof user._id === "string" ? user._id : user._id.toString();
 
-  // Map packageId to packageName if needed
+  // Map packageId to packageName — only for a CURRENT membership.
+  // A cancelled/expired member keeps subscription.packageId set (it's the "current package after
+  // any changes", never cleared), so without this gate the "Subscription Package" column shows a
+  // stale package for someone who is no longer subscribed — misleading on an audience export that
+  // may omit the "Subscription Active" column.
+  // "Current" reuses the app's SUBSCRIBED_SUBSCRIPTION_STATUSES set (active / trialing / past_due
+  // — subscribed incl. payment-problem-but-not-ended), so past_due members (a lapsed-but-
+  // recoverable win-back audience) DO show their package, while fully cancelled / unpaid members
+  // (isActive=false, non-subscribed status) stay blank. The isActive===true fallback covers any
+  // legacy record that is active but has no status set; trialing is included via the constant even
+  // if its isActive flag ever lags.
+  const sub = user.subscription;
+  const isCurrentMembership =
+    sub?.isActive === true ||
+    (typeof sub?.status === "string" &&
+      (SUBSCRIBED_SUBSCRIPTION_STATUSES as readonly string[]).includes(sub.status));
   let packageName: string | null = null;
-  if (user.subscription?.packageId) {
-    packageName = getPackageName(user.subscription.packageId);
+  if (isCurrentMembership && sub?.packageId) {
+    packageName = getPackageName(sub.packageId);
   }
 
   // Process each selected field

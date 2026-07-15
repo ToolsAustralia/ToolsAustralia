@@ -82,6 +82,13 @@ export const EXPORT_FIELDS: ExportFieldDefinition[] = [
     isDefault: true,
   },
   {
+    key: "profession",
+    displayName: "Profession",
+    type: "string",
+    group: "basic",
+    description: "Customer's trade/profession (e.g. Builder, Electrician, Other)",
+  },
+  {
     key: "id",
     displayName: "User ID",
     type: "string",
