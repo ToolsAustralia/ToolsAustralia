@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Flame, X } from "lucide-react";
 
 interface StreakCelebrationToastProps {
@@ -9,20 +9,26 @@ interface StreakCelebrationToastProps {
   level: number;
   /** The draw that received the free entries. */
   drawName: string;
-  onDismiss: () => void;
 }
 
 /**
  * Membership Streak celebration toast — a toast, NOT a modal (decided, spec
  * §7b M2: the dashboard already stacks modals at load). Non-blocking, silent,
- * auto-dismisses; the in-card banner carries the same message for the session.
+ * auto-hides; the in-card banner carries the same message for the session.
+ * Visibility is SELF-managed (auto-hide + the X only hide the toast) so
+ * dismissing it never clears the shared `justHit` state that keeps the in-card
+ * banner alive — and the run-once timer can't be restarted by parent re-renders.
  * Design: Build Kit §06 (surface card, streak-gold border, flame icon).
  */
-export default function StreakCelebrationToast({ entries, level, drawName, onDismiss }: StreakCelebrationToastProps) {
+export default function StreakCelebrationToast({ entries, level, drawName }: StreakCelebrationToastProps) {
+  const [visible, setVisible] = useState(true);
+
   useEffect(() => {
-    const t = setTimeout(onDismiss, 8000);
+    const t = setTimeout(() => setVisible(false), 8000);
     return () => clearTimeout(t);
-  }, [onDismiss]);
+  }, []);
+
+  if (!visible) return null;
 
   return (
     <div
@@ -36,7 +42,7 @@ export default function StreakCelebrationToast({ entries, level, drawName, onDis
       </div>
       <button
         type="button"
-        onClick={onDismiss}
+        onClick={() => setVisible(false)}
         aria-label="Dismiss"
         className="shrink-0 rounded p-0.5 text-muted-token transition-colors hover:text-primary-token focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-600 dark:hover:text-white"
       >

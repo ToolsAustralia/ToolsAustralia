@@ -15,18 +15,27 @@ export const DASHBOARD_FEATURES = {
    *  (SupportChatWidget). On /my-account the floating bubble is suppressed so this
    *  card is the single Cobber entry point. */
   cobberSupport: true,
-  /** Loyalty milestone-progress bars — LIVE: driven by the real streak counter
-   *  (subscription.streakMonths) + the single MILESTONES config (streakMilestones.ts). */
-  milestoneProgress: true,
+  /** Loyalty milestone-progress bars — BUILT, dark until streak launch: driven by
+   *  the real streak counter (subscription.streakMonths) + the single MILESTONES
+   *  config (streakMilestones.ts). Flip with loyaltyStreak (launch runbook step 4). */
+  milestoneProgress: false,
   /** Personal "your wins" history — only a global winners endpoint exists today. */
   personalWins: false,
   /** Full purchase history — only the last-10 `recentOrders` are returned today. */
   orderHistory: false,
-  /** Loyalty streak card — LIVE: the Membership Streak medallion card (Build Kit,
-   *  claudeDesign/Membership milestone streak design), real counter + real ladder.
-   *  NOTE: reward GRANTS stay dark until the rungs are activated
-   *  (`seed:streak-rewards --live --activate` — the P3 launch runbook step). */
-  loyaltyStreak: true,
+  /** Loyalty streak card — BUILT, dark until streak launch: the Membership Streak
+   *  medallion card (Build Kit, claudeDesign/Membership milestone streak design),
+   *  real counter + real ladder. MUST stay false until reward grants are ACTIVE:
+   *  the card/toast promise "+N free entries, automatic", so showing it while the
+   *  rungs are still `isActive:false` asserts grants that never happen — and any
+   *  rung crossed during such a window would be marker-stamped at seed time and
+   *  never paid. Launch runbook (in order, after this branch deploys):
+   *    1. npx tsx scripts/backfill-membership-streaks.ts --live --roundup-incomplete
+   *    2. npm run seed:streak-rewards            (index + rungs dark + markers)
+   *    3. npx tsx scripts/seed-streak-milestone-rewards.ts --live --activate
+   *    4. flip loyaltyStreak + milestoneProgress to true (this file) and deploy.
+   *  (To preview locally, flip to true in your working copy only.) */
+  loyaltyStreak: false,
 } as const;
 
 export type DashboardFeature = keyof typeof DASHBOARD_FEATURES;

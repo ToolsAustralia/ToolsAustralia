@@ -34,7 +34,7 @@ export function useStreakCelebration(
   userId: string | null | undefined,
   streakMonths: number | null,
   enabled: boolean
-): { justHit: StreakJustHit | null; dismiss: () => void } {
+): { justHit: StreakJustHit | null } {
   const [justHit, setJustHit] = useState<StreakJustHit | null>(null);
 
   useEffect(() => {
@@ -69,8 +69,15 @@ export function useStreakCelebration(
         localStorage.setItem(key, String(streakMonths));
       } catch {}
       if (hit) setJustHit(hit);
+    } else if (streakMonths < lastSeen) {
+      // Streak reset (full lapse → resubscribe). Re-seed the marker DOWN so the
+      // new generation's rungs celebrate as they're re-earned — otherwise a
+      // member who peaked at 8 would celebrate nothing until they pass 8 again.
+      try {
+        localStorage.setItem(key, String(streakMonths));
+      } catch {}
     }
   }, [enabled, userId, streakMonths]);
 
-  return { justHit, dismiss: () => setJustHit(null) };
+  return { justHit };
 }

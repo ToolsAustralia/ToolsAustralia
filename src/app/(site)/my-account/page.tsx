@@ -72,6 +72,11 @@ export default function MyAccountPage() {
     dash.streakMonths,
     isDashboardFeatureOn("loyaltyStreak") && dash.acct === "active"
   );
+  // Celebration copy must name the RECEIVING draw: during the freeze window (and
+  // once a draw completes) grants route to the NEXT queued draw, not the one the
+  // dashboard is displaying — naming the displayed draw would be false there.
+  const streakReceivingDrawName =
+    dash.drawStatus === "frozen" || dash.drawStatus === "completed" ? "next Major Draw" : dash.drawName;
   const openSheet = useDashboardSheetStore((s) => s.openSheet);
   const searchParams = useSearchParams();
   const partnerSso = usePartnerDiscountSso();
@@ -320,8 +325,7 @@ export default function MyAccountPage() {
         <StreakCelebrationToast
           entries={streakCelebration.justHit.entries}
           level={streakCelebration.justHit.level}
-          drawName={dash.drawName}
-          onDismiss={streakCelebration.dismiss}
+          drawName={streakReceivingDrawName}
         />
       )}
 
@@ -369,7 +373,7 @@ export default function MyAccountPage() {
                   renewalDateIso={dash.renewalDateIso}
                   justHit={
                     streakCelebration.justHit
-                      ? { entries: streakCelebration.justHit.entries, drawName: dash.drawName }
+                      ? { entries: streakCelebration.justHit.entries, drawName: streakReceivingDrawName }
                       : null
                   }
                   onUpdateCard={onResolvePayment}

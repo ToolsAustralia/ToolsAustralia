@@ -62,3 +62,11 @@ Entries 18–21 are the premeditated answers for the top-volume support inbox qu
 ## Membership Streak ladder config (P3 — 2026-07-07)
 
 `src/config/streakMilestones.ts` — the SINGLE client-side source for the streak reward ladder (rungs 2/4/6/8/10/12 → +100…+600 free entries, repeating every 12 renewals). MUST mirror the seeded `MilestoneReward` rows (`scripts/seed-streak-milestone-rewards.ts`); every UI surface (streak card rail, milestones track, guest teaser, wallet, future cancellation stakes) reads from it. Helpers: `nextStreakMilestone(streak)` (annual-repeat aware — streak 13 → Lv.14 +100), `isRungEarned(rungLevel, streak)` (year-cycle position).
+
+## Dashboard streak flags ship DARK (2026-07-15)
+
+`DASHBOARD_FEATURES.loyaltyStreak` + `milestoneProgress` are **false** until the streak launch runbook completes (backfill → seed markers → activate → flip flags). The card/toast copy promises "+N free entries, automatic" — showing it while rungs are `isActive:false` would assert grants that never happen, and rungs crossed in that window would be marker-stamped at seed time and never paid. The full runbook is documented on the flag in `src/config/dashboardFeatures.ts`.
+
+## Cobber streak FAQs (2026-07-15)
+
+`src/data/supportChatFaqs.ts` ids **69–71** (REWARDS): what the Membership Streak is + the ladder, continuity rules (failed payment / pause / 30-day rejoin grace / reset), and where to see it. The corpus-size assertion in `src/data/__tests__/faqs.test.ts` is pinned at 71 — bump it deliberately when adding entries (CLAUDE.md rule 5c).

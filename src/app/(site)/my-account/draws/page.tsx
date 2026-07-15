@@ -80,7 +80,7 @@ export default function DrawsPage() {
               {dash.acct !== "none" && (
                 <EntryWallet
                   acct={dash.acct}
-                  entries={{ membership: dash.entries.membership, oneTime: dash.entries.oneTime }}
+                  entries={{ membership: dash.entries.membership, oneTime: dash.entries.oneTime, streak: dash.entries.streak }}
                   tierHex={dash.tierHex}
                   drawName={dash.drawName}
                   drawDateIso={dash.drawDateIso}

@@ -98,6 +98,9 @@ export function deriveStreakCycleFuse(renewalDateIso: string | null, now: Date =
   if (Number.isNaN(end.getTime())) return null;
   const start = new Date(end);
   start.setMonth(start.getMonth() - 1);
+  // Month-end overflow guard: a 29–31st renewal minus one month can overflow
+  // (31 Mar → "31 Feb" → 3 Mar); clamp to the last day of the intended month.
+  if (start.getDate() !== end.getDate()) start.setDate(0);
   const totalDays = Math.max(1, Math.round((end.getTime() - start.getTime()) / DAY_MS));
   const elapsed = Math.round((now.getTime() - start.getTime()) / DAY_MS);
   const day = Math.min(Math.max(elapsed + 1, 1), totalDays);

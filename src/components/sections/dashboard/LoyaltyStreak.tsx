@@ -188,7 +188,10 @@ function TemperingRail({ months, showAllAmounts }: { months: number; showAllAmou
       <div className="group/rail flex gap-1.5">
         {STREAK_MILESTONES.map((rung) => {
           const earned = !showAllAmounts && isRungEarned(rung.level, months);
-          const isNext = showAllAmounts ? rung.level === STREAK_MILESTONES[0].level : rung.level === next.rungLevel && months < 12;
+          // No `months < 12` cap: founding hides the rail, but at-risk/paused members
+          // with a year-2+ streak still render it and need the next-rung affordance
+          // (nextStreakMilestone is annual-aware, so rungLevel is already correct).
+          const isNext = showAllAmounts ? rung.level === STREAK_MILESTONES[0].level : rung.level === next.rungLevel;
           return (
             <div
               key={rung.level}

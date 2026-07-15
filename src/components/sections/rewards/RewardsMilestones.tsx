@@ -103,7 +103,7 @@ export default function RewardsMilestones({ acct, months, tierHex }: RewardsMile
             return (
               <div key={ms.level} className="absolute top-1/2" style={{ left: `${pos}%`, transform: "translate(-50%,-50%)" }}>
                 <span
-                  className="grid h-6 w-6 place-items-center rounded-full border-2 border-surface text-white shadow-sm"
+                  className="grid h-6 w-6 place-items-center rounded-full border-2 border-[var(--bg-surface)] text-white shadow-sm"
                   style={{
                     background: reached ? "linear-gradient(180deg,#fbbf24,#d97706)" : "#c7ccd3",
                     ...(reached && isPastDue ? { filter: "saturate(.55)" } : {}),
