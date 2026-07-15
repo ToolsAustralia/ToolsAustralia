@@ -124,6 +124,7 @@ export default function AccountMembershipPage() {
           tierHex={dash.subscriptionTierHex}
           tierLabel={dash.subscriptionTierLabel}
           user={dash.user}
+          entriesPerRenewal={dash.membershipEntriesPerRenewal}
           paymentLabel={cardLabel}
           onManage={() => openSheet("manage")}
           onPayment={() => openSheet("payment")}

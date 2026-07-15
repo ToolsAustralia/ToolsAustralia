@@ -1,7 +1,8 @@
 "use client";
 
-import { CreditCard, RefreshCw, ChevronRight, Crown } from "lucide-react";
+import { CreditCard, RefreshCw, ChevronRight, Crown, Info } from "lucide-react";
 import { cn } from "@/utils/cn";
+import { useModalPriorityStore } from "@/stores/useModalPriorityStore";
 import { getActivePackage, type ActivePackageUserInput } from "@/utils/membership/get-active-package";
 import { glossGrad, inkOn } from "@/utils/membership/tier-visuals";
 import { getPartnerCatalogAccessPercentForPlanId } from "@/utils/partner-discounts/partner-catalog-visibility";
@@ -18,6 +19,10 @@ interface MembershipCurrentPlanProps {
   tierHex: string | null;
   tierLabel: string | null;
   user: UserData | null;
+  /** Entries that land on the next renewal (accumulated carry-forward + this month's base) —
+   *  the same `calculateRenewalEntries` value the Dashboard EntryWallet shows. Drives the
+   *  "N land on your renewal" accumulation hint. */
+  entriesPerRenewal?: number;
   /** Default card label for the Payment-method row, e.g. "Visa •••• 4827". */
   paymentLabel?: string;
   onManage: () => void;
@@ -41,12 +46,14 @@ export default function MembershipCurrentPlan({
   tierHex,
   tierLabel,
   user,
+  entriesPerRenewal,
   paymentLabel,
   onManage,
   onPayment,
   onBecomeMember,
   onBuyPackage,
 }: MembershipCurrentPlanProps) {
+  const requestModal = useModalPriorityStore((s) => s.requestModal);
   const active = acct === "active";
   const pastdue = acct === "pastdue";
   const onetime = acct === "onetime";
@@ -64,6 +71,21 @@ export default function MembershipCurrentPlan({
   // Soft-cancel: an active member with autoRenew off keeps benefits until endDate, then lapses — so
   // "Auto-renews monthly" would be wrong (matches the EntryWallet/hero gating on autoRenew).
   const autoRenewOff = (user?.subscription as { autoRenew?: boolean } | undefined)?.autoRenew === false;
+
+  // Re-open the one-time-per-account entries explainer on demand (force = bypass the
+  // hasSeenExplainer gate). Same payload the my-account auto-trigger builds; entriesPerMonth
+  // is the card's own displayed base so the modal's stat matches the "Free entries / mo" tile.
+  const openEntriesExplainer = () => {
+    if (!user) return;
+    const sub = user.subscription as { lastMonthAccumulatedEntries?: number } | undefined;
+    requestModal("subscription-explainer", true, {
+      entriesPerMonth,
+      packageName: tierLabel ?? undefined,
+      userId: user._id,
+      lastMonthAccumulatedEntries: sub?.lastMonthAccumulatedEntries ?? entriesPerMonth,
+      selectedPackageId: tierKey ? `${tierKey}-subscription` : undefined,
+    });
+  };
 
   // Scheduled downgrade: the member keeps the current (higher) tier's benefits until `endDate`, then drops
   // to `subscription.packageId` (the new lower tier). getEffectiveBenefits keeps the plan card showing the
@@ -125,10 +147,19 @@ export default function MembershipCurrentPlan({
 
         {(active || pastdue) && (
           <div className="mt-5 grid grid-cols-3 overflow-hidden rounded-2xl bg-black/[.16] ring-1 ring-white/10">
-            <Stat label="Free entries / mo" value={entriesPerMonth.toLocaleString()} />
+            <Stat label="Free entries / mo" value={entriesPerMonth.toLocaleString()} onInfo={openEntriesExplainer} />
             <Stat label="Partner access" value={`${accessPct}%`} divider />
             <Stat label="Per month" value={`$${price}`} divider />
           </div>
+        )}
+
+        {/* Accumulation hint — ties the base "Free entries / mo" above to what actually lands next
+            (base + carry-forward; promo never re-applies on renewal). Active + auto-renewing only:
+            a soft-cancelled member has no future renewal, and past-due shows the failure note below. */}
+        {active && !autoRenewOff && (entriesPerRenewal ?? 0) > 0 && renews && (
+          <p className="mt-3 text-[11.5px] leading-snug opacity-80">
+            Free entries accumulate each month — <b className="font-bold opacity-100">{(entriesPerRenewal ?? 0).toLocaleString()}</b> land on your renewal, {renews}.
+          </p>
         )}
 
         {pastdue && <p className="mt-4 text-sm opacity-90">Payment failed — update your card to resume entries and partner access.</p>}
@@ -163,10 +194,22 @@ export default function MembershipCurrentPlan({
   );
 }
 
-function Stat({ label, value, divider }: { label: string; value: string; divider?: boolean }) {
+function Stat({ label, value, divider, onInfo }: { label: string; value: string; divider?: boolean; onInfo?: () => void }) {
   return (
     <div className={cn("px-2.5 py-3.5 text-center", divider && "border-l border-white/10")}>
-      <div className="num font-['Poppins'] text-[22px] font-black leading-none tabular-nums">{value}</div>
+      <div className="flex items-center justify-center gap-1">
+        <span className="num font-['Poppins'] text-[22px] font-black leading-none tabular-nums">{value}</span>
+        {onInfo && (
+          <button
+            type="button"
+            onClick={onInfo}
+            aria-label="How free entries accumulate"
+            className="grid h-4 w-4 place-items-center rounded-full text-current opacity-70 transition-opacity hover:opacity-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
+          >
+            <Info className="h-[13px] w-[13px]" />
+          </button>
+        )}
+      </div>
       <div className="mx-auto mt-1.5 max-w-[9ch] text-[9.5px] font-semibold uppercase leading-tight tracking-wide opacity-75">{label}</div>
     </div>
   );

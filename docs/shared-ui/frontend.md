@@ -359,6 +359,21 @@ explainer / up-next / footer are gated on expand. The up-next **% chip is a soli
 `inkOn` auto-contrast text** (a pale-tint + accent-text chip was unreadable for light tiers like Tradie),
 and `cleanName` also strips the trailing "(Mini Draw)" scope suffix so tier names don't truncate mid-word.
 
+> **Entries framing: "/ mo" base vs one-time boost + on-demand explainer (2026-07-15):** fixes the
+> promo multiplier being shown as if it were a recurring monthly rate. The 10×/5× multiplier is a
+> **one-time grant at join/resubscribe/upgrade** — renewals always grant the tier's **base**, accumulating
+> (`calculateRenewalEntries`) — so "150 / 400 / 1000 free entries **/ mo**" over-stated what a member keeps
+> receiving and contradicted the upgrade modal ("40 / cycle" + "+475 to start"). Now in `MembershipTierList`:
+> the **current** tier shows its **base** rate only ("{base} free entries / mo", no strikethrough — it's what
+> renewals grant); an **upgrade/join** target keeps the strikethrough + "{promo}× entries" flame badge but
+> reads "~~{base}~~ **{boosted}** free entries **to start**" (was "/ mo"). In `MembershipCurrentPlan`: the
+> "Free entries / mo" stat gained an **ⓘ** button that re-opens `SubscriptionExplainerModal`
+> (`requestModal("subscription-explainer", true, …)` — `force` bypasses the once-per-account `hasSeenExplainer`
+> gate; `entriesPerMonth` is the card's own displayed base so the modal's stat matches the tile), plus an
+> **accumulation hint** under the stat grid — "Free entries accumulate each month — **{N}** land on your
+> renewal, {date}" where `N` = `entriesPerRenewal` (`dash.membershipEntriesPerRenewal`, the same accumulated
+> renewal grant the Dashboard EntryWallet shows), rendered for **active + auto-renewing** members only.
+
 > **"Free entries" copy + portal gate (2026-07-03):** `MembershipTierList` (tiers + one-time packs)
 > now says "**{n} free entries**" (was a bare "entries") — packages *grant* free entries, so that's the
 > correct framing everywhere. Recurring **tiers** append "**/ mo**" ("{n} free entries / mo") since the grant
