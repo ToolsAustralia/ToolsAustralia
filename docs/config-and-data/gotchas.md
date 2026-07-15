@@ -1,5 +1,15 @@
 # Config & Data — Gotchas
 
+## Cobber FAQ corpus is now 68 entries — knowledge-gap batch (2026-07-15)
+
+`supportChatFaqs.ts` grew **39 → 68** with the knowledge-gap batch: ids **40-68** cover referrals/affiliate (40-43), account+auth (44-46), promo codes & the after-checkout offer (47-50), upgrade/downgrade/anchor billing (51-53), past-due lifecycle (54-59), advanced partner discounts (60-62), and mini-draws/prizes (63-68). id24 was **extended** (reactivation timing/grace window), not added. `faqs.test.ts` count assertion bumped 39 → **68** (+ an **id54** guard).
+
+**The accuracy fix:** id54 ("I'm past due and want to cancel — do I keep access?") states the correct rule — a **past-due cancel is IMMEDIATE** (no end-of-period access), unlike a normal cancellation. It is routed **ahead of** the broad id13 "past due" decision-tree rule (Layer 1 short-circuits Layer 2, so a specific FAQ that shares a token with a broad rule is unreachable unless its rule is placed first).
+
+Four of the new entries are **account-aware** (40 referral link, 55 catch-up billing, 62 partner-window 'upcoming', 68 mini-draw entries) — they recite no personal data and have a matching note in the systemPrompt ACCOUNT SELF-SERVICE MAP.
+
+After editing the corpus run `npm run build:chat-knowledge-pack`, then `npm run test:chat-faqs` / `test:chat-routing` / `test:chat-routing-shape` / `test:chat-deflection`. Full context + the account-state pattern + the Layer-1-precedence rule: [docs/ai-chatbot/gotchas.md](../ai-chatbot/gotchas.md).
+
 ## FAQ corpus: entry framing only — no "odds" / "chance" (compliance, 2026-07-08)
 
 `supportChatFaqs.ts` is customer-facing (Cobber). It must use **entry** framing, never gambling/probability framing, and must never call it a **lottery / lotto / raffle / sweepstake / gambling** — it's a giveaway. Forbidden: "odds", "chance(s)", "boost your chances", "increase your chance", "better odds", "lottery", "raffle", "gambl…", "wager"; allowed: "giveaway", "prize draw", "free entries", "{n}× entries", "more entries", "a purchase **adds** entries". This is a game-of-chance trade promotion (see BUSINESS.md §1). **Entries are also never sold on their own** — the product bought is the membership/pack, and entries are a **free inclusion** ("the $25 pack includes 3 free entries", never "$25 for 3 entries"); the guard also bans "buy/sell/purchase entries" and "per entry". `npm run test:chat-faqs` ([faqs.test.ts](../../src/data/__tests__/faqs.test.ts)) now asserts the corpus contains none of the banned words, and the system prompt has a matching HARD RULE so LLM paraphrases stay compliant. After editing the corpus, run `npm run build:chat-knowledge-pack`. Full context: [docs/ai-chatbot/gotchas.md](../ai-chatbot/gotchas.md).
