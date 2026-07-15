@@ -41,6 +41,7 @@ const MilestoneRewardRowSchema = z.object({
   startsAt: z.string().nullable(),                // ISO 8601 or null
   endsAt: z.string().nullable(),                  // ISO 8601 or null
   isRecurring: z.boolean(),
+  recurrencePeriod: z.number().int().positive().nullable(), // 12 for streak rungs (ladder repeats annually); null = legacy whole-multiple recurrence
   autoGrant: z.boolean(),                         // streak rungs grant straight into the draw (no claim)
   createdBy: z.string().nullable(),               // opaque User._id string or null
   createdAt: z.string(),                          // ISO 8601

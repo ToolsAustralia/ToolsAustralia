@@ -14,6 +14,12 @@ export interface IMilestoneReward extends Document {
   startsAt?: Date;
   endsAt?: Date;
   isRecurring: boolean;
+  /** Recurrence cadence for recurring rewards. Unset → legacy "every whole
+   *  multiple of threshold" (floor(metric/threshold) cycles). Set (e.g. 12 for
+   *  the Membership Streak) → the rung repeats every `recurrencePeriod` metric
+   *  units AFTER its threshold: fires at threshold, threshold+12, threshold+24…
+   *  This is how the full streak ladder cycles annually (month 14 ≡ month 2). */
+  recurrencePeriod?: number;
   /** When true the issuance is granted straight into the Major Draw on issue —
    *  no manual claim step. Used by the Membership Streak rungs (streak-months). */
   autoGrant: boolean;
@@ -77,6 +83,11 @@ const MilestoneRewardSchema = new Schema<IMilestoneReward>(
     isRecurring: {
       type: Boolean,
       default: false,
+    },
+    recurrencePeriod: {
+      type: Number,
+      required: false,
+      min: [1, "recurrencePeriod must be at least 1"],
     },
     autoGrant: {
       type: Boolean,

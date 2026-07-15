@@ -23,10 +23,26 @@ export function resolveMetricValue(milestoneType: MilestoneType, metrics: UserMi
   }
 }
 
-/** Recurring rewards issue one cycle per whole multiple of the threshold. */
-export function computeCycles(reward: Pick<IMilestoneReward, "isRecurring" | "threshold">, metricValue: number): number {
+/**
+ * Cycles a reward has earned at a given metric value.
+ * - Non-recurring: fires once at threshold.
+ * - Recurring, no recurrencePeriod (legacy spend/entries rewards): one cycle
+ *   per whole multiple of the threshold — floor(metric/threshold).
+ * - Recurring WITH recurrencePeriod (the Membership Streak ladder, period 12):
+ *   the rung repeats every period AFTER its threshold — fires at threshold,
+ *   threshold+period, threshold+2·period… so the full ladder cycles annually
+ *   (streak month 14 ≡ month 2, 24 ≡ 12, owner decision 2026-07-07).
+ */
+export function computeCycles(
+  reward: Pick<IMilestoneReward, "isRecurring" | "threshold" | "recurrencePeriod">,
+  metricValue: number
+): number {
   if (metricValue < reward.threshold) return 0;
-  return reward.isRecurring ? Math.max(1, Math.floor(metricValue / reward.threshold)) : 1;
+  if (!reward.isRecurring) return 1;
+  if (reward.recurrencePeriod && reward.recurrencePeriod > 0) {
+    return Math.floor((metricValue - reward.threshold) / reward.recurrencePeriod) + 1;
+  }
+  return Math.max(1, Math.floor(metricValue / reward.threshold));
 }
 
 function isDuplicateKeyError(err: unknown): boolean {
@@ -58,6 +74,8 @@ export interface MilestoneRewardWithPerformance {
   startsAt: Date | null;
   endsAt: Date | null;
   isRecurring: boolean;
+  /** Annual-cycle cadence (12 for streak rungs); null = legacy whole-multiple recurrence. */
+  recurrencePeriod: number | null;
   autoGrant: boolean;
   createdBy: string | null;
   createdAt: Date;
@@ -161,6 +179,7 @@ export class MilestoneService {
         startsAt: reward.startsAt ?? null,
         endsAt: reward.endsAt ?? null,
         isRecurring: reward.isRecurring,
+        recurrencePeriod: reward.recurrencePeriod ?? null,
         autoGrant: reward.autoGrant ?? false,
         createdBy: reward.createdBy ? String(reward.createdBy) : null,
         createdAt: reward.createdAt,
@@ -182,6 +201,7 @@ export class MilestoneService {
     startsAt?: Date;
     endsAt?: Date;
     isRecurring?: boolean;
+    recurrencePeriod?: number;
     autoGrant?: boolean;
     createdBy?: string;
   }): Promise<IMilestoneReward> {
@@ -200,6 +220,7 @@ export class MilestoneService {
       startsAt: input.startsAt,
       endsAt: input.neverExpires ? undefined : input.endsAt,
       isRecurring: input.isRecurring ?? false,
+      recurrencePeriod: input.recurrencePeriod,
       autoGrant: input.autoGrant ?? false,
       createdBy:
         input.createdBy && mongoose.Types.ObjectId.isValid(input.createdBy)
@@ -222,6 +243,7 @@ export class MilestoneService {
       startsAt: Date;
       endsAt: Date;
       isRecurring: boolean;
+      recurrencePeriod: number;
       autoGrant: boolean;
     }>
   ): Promise<IMilestoneReward | null> {

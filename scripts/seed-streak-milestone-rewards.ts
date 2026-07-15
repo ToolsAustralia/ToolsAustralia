@@ -35,15 +35,18 @@ const ACTIVATE = process.argv.includes("--activate");
 const CSV_PATH = path.resolve(process.cwd(), `seed-streak-rewards-${Date.now()}.csv`);
 const LEGACY_INDEX = "milestoneRewardId_1_userId_1_achievementCycle_1";
 
+// ALL rungs recur annually (owner decision 2026-07-07): each fires at
+// threshold + 12k renewals — the full ladder repeats every streak year
+// (month 14 ≡ month 2 → +100 again, … month 24 ≡ month 12 → +600 + anniversary).
+const RECURRENCE_PERIOD = 12;
 const RUNGS = [
-  { threshold: 2, entriesAmount: 100, code: "STREAK-2R", isRecurring: false },
-  { threshold: 4, entriesAmount: 200, code: "STREAK-4R", isRecurring: false },
-  { threshold: 6, entriesAmount: 300, code: "STREAK-6R", isRecurring: false },
-  { threshold: 8, entriesAmount: 400, code: "STREAK-8R", isRecurring: false },
-  { threshold: 10, entriesAmount: 500, code: "STREAK-10R", isRecurring: false },
-  // The 12-rung IS the recurring anniversary row: cycle 1 = 12 renewals
-  // (+ Founding badge in the UI), cycle 2 = 24, ... (floor(streak/12) cycles).
-  { threshold: 12, entriesAmount: 600, code: "STREAK-12R", isRecurring: true },
+  { threshold: 2, entriesAmount: 100, code: "STREAK-2R" },
+  { threshold: 4, entriesAmount: 200, code: "STREAK-4R" },
+  { threshold: 6, entriesAmount: 300, code: "STREAK-6R" },
+  { threshold: 8, entriesAmount: 400, code: "STREAK-8R" },
+  { threshold: 10, entriesAmount: 500, code: "STREAK-10R" },
+  // Cycle 1 of the 12-rung also carries the permanent Founding badge in the UI.
+  { threshold: 12, entriesAmount: 600, code: "STREAK-12R" },
 ] as const;
 
 async function main(): Promise<number> {
@@ -51,6 +54,7 @@ async function main(): Promise<number> {
   const User = (await import("../src/models/User")).default;
   const MilestoneReward = (await import("../src/models/MilestoneReward")).default;
   const MilestoneIssuance = (await import("../src/models/MilestoneIssuance")).default;
+  const { computeCycles } = await import("../src/services/milestones/MilestoneService");
 
   await connectDB();
   console.log(`\n🔥 Streak reward ladder seed — ${LIVE ? "LIVE" : "DRY-RUN (no writes)"}${ACTIVATE ? " + ACTIVATE" : ""}\n`);
@@ -102,13 +106,14 @@ async function main(): Promise<number> {
         code: rung.code,
         isActive: ACTIVATE, // dark by default; --activate only at P3 launch
         neverExpires: true,
-        isRecurring: rung.isRecurring,
+        isRecurring: true,
+        recurrencePeriod: RECURRENCE_PERIOD,
         autoGrant: true,
       });
       rewardIdByThreshold.set(rung.threshold, String(created._id));
-      console.log(`＋ Created ${rung.code} (+${rung.entriesAmount} @ renewal ${rung.threshold}${rung.isRecurring ? ", recurring" : ""}, isActive: ${ACTIVATE})`);
+      console.log(`＋ Created ${rung.code} (+${rung.entriesAmount} @ renewal ${rung.threshold} + every ${RECURRENCE_PERIOD} after, isActive: ${ACTIVATE})`);
     } else {
-      console.log(`＋ Would create ${rung.code} (+${rung.entriesAmount} @ renewal ${rung.threshold}${rung.isRecurring ? ", recurring" : ""})`);
+      console.log(`＋ Would create ${rung.code} (+${rung.entriesAmount} @ renewal ${rung.threshold} + every ${RECURRENCE_PERIOD} after)`);
     }
   }
 
@@ -141,7 +146,12 @@ async function main(): Promise<number> {
         if (streak < rung.threshold) continue;
         const rewardId = rewardIdByThreshold.get(rung.threshold);
         if (!rewardId) continue; // dry-run without existing rewards — counted below
-        const cycles = rung.isRecurring ? Math.max(1, Math.floor(streak / rung.threshold)) : 1;
+        // Same math the engine uses — markers must cover every cycle the
+        // member passed pre-launch, including annual repeats.
+        const cycles = computeCycles(
+          { isRecurring: true, threshold: rung.threshold, recurrencePeriod: RECURRENCE_PERIOD },
+          streak
+        );
         for (let cycle = 1; cycle <= cycles; cycle++) {
           if (!LIVE) {
             created++;

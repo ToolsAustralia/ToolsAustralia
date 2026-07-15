@@ -3138,6 +3138,7 @@ PII not exposed: `email`, `phone`, `bankDetails`, `password` on the affiliate, a
     startsAt: ISO8601 | null,                    // null if the reward has no scheduled start window
     endsAt: ISO8601 | null,                      // null when neverExpires=true or when no end window is set
     isRecurring: boolean,                        // if true, the reward fires once per full threshold cycle
+    recurrencePeriod: number | null,             // 12 on streak rungs (each rung repeats every 12 renewals after its threshold — the ladder cycles annually); null = legacy whole-multiple recurrence
     autoGrant: boolean,                          // Membership Streak rungs: issuance is granted straight into the Major Draw (no manual claim)
     createdBy: string | null,                    // opaque User._id of the admin who created the row, or null
     createdAt: ISO8601,
