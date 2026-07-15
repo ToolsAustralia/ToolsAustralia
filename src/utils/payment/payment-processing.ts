@@ -693,7 +693,9 @@ async function processPaymentBenefitsInternal(
       }
 
       try {
-        const milestoneResult = await MilestoneService.checkAndIssueMilestones(userId);
+        // Paid-payment path — the ONLY surface allowed to create new streak-months
+        // issuances (payment-coupled grants; see checkAndIssueMilestones docs).
+        const milestoneResult = await MilestoneService.checkAndIssueMilestones(userId, { allowStreakIssuance: true });
         if (milestoneResult.issuanceIds.length > 0) {
           await addMilestoneIssuanceIds(benefitsGrantedEventId(paymentIntentId), milestoneResult.issuanceIds);
         }

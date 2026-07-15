@@ -5,13 +5,20 @@ import { MilestoneService } from "@/services/milestones";
 export type DrawGrantSourceKey = "bonus-entry-promo" | "streak";
 
 export class DrawGrantService {
+  /**
+   * @returns true when the entries actually landed in a draw; false when no
+   * target draw was available (e.g. a freeze window with no queued draw).
+   * Callers that grant a PAID entitlement (the streak auto-grant) must treat
+   * false/throw as "not delivered" and compensate — a persistence error on the
+   * hot draw document (e.g. VersionError) still throws.
+   */
   static async grantMonthlyCouponEntries(
     userId: string,
     entries: number,
     sourceKey: DrawGrantSourceKey = "bonus-entry-promo",
     opts: { skipMilestoneCheck?: boolean } = {}
-  ): Promise<void> {
-    if (entries <= 0) return;
+  ): Promise<boolean> {
+    if (entries <= 0) return false;
 
     const { getTargetMajorDraw } = await import("@/utils/draws/major-draw-helpers");
 
@@ -25,7 +32,7 @@ export class DrawGrantService {
         sourceKey,
         error: error instanceof Error ? error.message : String(error),
       });
-      return;
+      return false;
     }
 
     const userObjectId = new mongoose.Types.ObjectId(userId);
@@ -70,5 +77,7 @@ export class DrawGrantService {
         console.error("Failed to evaluate milestones after entry grant:", error);
       }
     }
+
+    return true;
   }
 }

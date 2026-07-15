@@ -295,7 +295,20 @@ export class MilestoneService {
     }).sort({ threshold: 1, createdAt: -1 });
   }
 
-  static async checkAndIssueMilestones(userId: string): Promise<{ issuedCount: number; issuanceIds: string[] }> {
+  /**
+   * `allowStreakIssuance` — streak-months rungs are PAYMENT-COUPLED: a member
+   * must never gain draw entries in a month they paid nothing (BUSINESS
+   * invariant). Only the paid-invoice path (payment-processing) passes true;
+   * the cron mass evaluator and post-grant re-checks run with the default
+   * false, which still SWEEPS existing active streak issuances (delivery
+   * retry of an already-earned, already-paid reward) but never creates new
+   * ones from a possibly-stale `streakMonths` (e.g. a lapsed member's counter,
+   * or a rung activated/configured after the fact).
+   */
+  static async checkAndIssueMilestones(
+    userId: string,
+    opts: { allowStreakIssuance?: boolean } = {}
+  ): Promise<{ issuedCount: number; issuanceIds: string[] }> {
     if (!mongoose.Types.ObjectId.isValid(userId)) {
       return { issuedCount: 0, issuanceIds: [] };
     }
@@ -312,6 +325,8 @@ export class MilestoneService {
       const currentMetric = resolveMetricValue(reward.milestoneType, metrics);
       const effectiveCycles = computeCycles(reward, currentMetric);
       if (effectiveCycles === 0) continue;
+
+      const suppressNewIssuance = reward.milestoneType === "streak-months" && !opts.allowStreakIssuance;
 
       // Streak rungs are scoped to the CURRENT streak generation so they are
       // re-earnable after a full lapse → resubscribe reset; other types live
@@ -331,6 +346,8 @@ export class MilestoneService {
         if (existing) {
           // Crash-safety sweep: an ACTIVE issuance of an autoGrant reward means a
           // previous run created it but died before granting — grant it now.
+          // (Runs even when new streak issuance is suppressed: this is delivery
+          // retry of an already-earned reward, not a new grant decision.)
           if (reward.autoGrant && existing.status === "active") {
             try {
               await RedemptionService.autoRedeemMilestoneIssuance(userId, String(existing._id));
@@ -340,6 +357,8 @@ export class MilestoneService {
           }
           continue;
         }
+
+        if (suppressNewIssuance) continue;
 
         let created;
         try {

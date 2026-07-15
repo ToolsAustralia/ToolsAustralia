@@ -4,9 +4,12 @@
  * Seed the Membership Streak reward ladder (P2) — SAFE ORDER, three stages:
  *
  *   1. DROP the legacy MilestoneIssuance unique index (rewardId,userId,cycle) —
- *      replaced by the generation-scoped index defined in the schema.
- *   2. CREATE the 6 rungs as `isActive: false` (dark) — renewals 2/4/6/8/10 →
- *      +100..+500 non-recurring; renewal 12 → +600 `isRecurring` (anniversaries).
+ *      replaced by the generation-scoped index defined in the schema — and stamp
+ *      `streakGeneration: 1` onto every legacy issuance row (a missing field is
+ *      invisible to both the generation-scoped dedupe query and the new unique
+ *      index, so without the stamp every pre-launch issuance would RE-ISSUE).
+ *   2. CREATE the 6 rungs as `isActive: false` (dark) — ALL recurring annually
+ *      (renewals 2/4/6/8/10/12 → +100..+600, each repeats every 12 renewals).
  *      All `autoGrant: true`, `neverExpires: true`.
  *   3. INSERT "backfilled" marker issuances for every rung a member passed
  *      BEFORE launch (spec §3: recognise, never retro-grant — markers block the
@@ -72,6 +75,25 @@ async function main(): Promise<number> {
       }
     } else {
       console.log(`✓ Legacy index already gone`);
+    }
+    // Stamp streakGeneration:1 onto legacy rows BEFORE building the new unique
+    // index: Mongo's { streakGeneration: 1 } query does NOT match documents where
+    // the field is missing, so unstamped legacy rows are invisible to the engine's
+    // dedupe query AND to the generation-scoped unique index — every pre-launch
+    // issuance would silently re-issue (double-grant) on the user's next evaluation.
+    const legacyRows = await MilestoneIssuance.countDocuments({ streakGeneration: { $exists: false } });
+    if (legacyRows > 0) {
+      if (LIVE) {
+        const stamped = await MilestoneIssuance.updateMany(
+          { streakGeneration: { $exists: false } },
+          { $set: { streakGeneration: 1 } }
+        );
+        console.log(`🩹 Stamped streakGeneration:1 onto ${stamped.modifiedCount}/${legacyRows} legacy issuance rows`);
+      } else {
+        console.log(`🩹 Would stamp streakGeneration:1 onto ${legacyRows} legacy issuance rows`);
+      }
+    } else {
+      console.log(`✓ No legacy issuance rows missing streakGeneration`);
     }
     if (LIVE) {
       await MilestoneIssuance.syncIndexes();

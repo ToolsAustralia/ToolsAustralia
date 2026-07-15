@@ -9,6 +9,7 @@ import {
   isFirstTimePaidCycle,
   decideStreakOnSubscriptionCreate,
   computeStreakFromHistory,
+  carryStreakAcrossSubscriptionReplace,
 } from "../streak";
 
 const NOW = new Date("2026-08-10T00:00:00Z");
@@ -201,6 +202,67 @@ t("no cycles at all, active member joined mid-coverage → streak 0 (month 0)", 
   });
   assert.equal(r.streakMonths, 0);
   assert.equal(r.confidence, "ledger-complete");
+});
+t("REPAIR mode (roundUpIncomplete:false) → walked value only, no calendar credit", () => {
+  const r = computeStreakFromHistory({
+    joinDate: d("2025-09-10"), coverageStart: d("2026-04-29"),
+    cycles: [{ dueAt: d("2026-05-10") }, { dueAt: d("2026-06-10") }],
+    cancelDates: [], isCurrentlyActive: true, now: d("2026-06-20"),
+    roundUpIncomplete: false,
+  });
+  assert.equal(r.confidence, "history-incomplete");
+  assert.equal(r.streakMonths, 2); // NOT 9 — repair runs never credit unwalked months
+});
+
+console.log("\n— carryStreakAcrossSubscriptionReplace (API subdoc replacement) —");
+t("no prior subscription → fresh defaults (0, gen 1)", () => {
+  const c = carryStreakAcrossSubscriptionReplace(null, NOW);
+  assert.equal(c.streakMonths, 0);
+  assert.equal(c.streakGeneration, 1);
+});
+t("prior subscription still ACTIVE → carry untouched (upgrade-style replacement)", () => {
+  const c = carryStreakAcrossSubscriptionReplace(
+    { isActive: true, endDate: days(-20), streakMonths: 7, streakGeneration: 2, lastStreakStartInvoiceId: "in_x" },
+    NOW
+  );
+  assert.deepEqual(c, { streakMonths: 7, streakGeneration: 2, lastStreakStartInvoiceId: "in_x" });
+});
+t("inactive, resubscribe WITHIN grace → carry untouched (streak continues)", () => {
+  const c = carryStreakAcrossSubscriptionReplace(
+    { isActive: false, endDate: days(RESUBSCRIBE_GRACE_DAYS - 5), streakMonths: 7, streakGeneration: 1 },
+    NOW
+  );
+  assert.equal(c.streakMonths, 7);
+  assert.equal(c.streakGeneration, 1);
+});
+t("inactive, resubscribe PAST grace with prior streak → reset 0 + generation bump", () => {
+  const c = carryStreakAcrossSubscriptionReplace(
+    { isActive: false, endDate: days(RESUBSCRIBE_GRACE_DAYS + 40), streakMonths: 7, streakGeneration: 1 },
+    NOW
+  );
+  assert.equal(c.streakMonths, 0);
+  assert.equal(c.streakGeneration, 2);
+});
+t("inactive, past grace, prior streak 0 → start, generation kept", () => {
+  const c = carryStreakAcrossSubscriptionReplace(
+    { isActive: false, endDate: days(120), streakMonths: 0, streakGeneration: 1 },
+    NOW
+  );
+  assert.equal(c.streakMonths, 0);
+  assert.equal(c.streakGeneration, 1);
+});
+t("inactive, NO endDate on record → conservative reset + bump when prior streak", () => {
+  const c = carryStreakAcrossSubscriptionReplace(
+    { isActive: false, endDate: null, streakMonths: 3, streakGeneration: 1 },
+    NOW
+  );
+  assert.equal(c.streakMonths, 0);
+  assert.equal(c.streakGeneration, 2);
+});
+t("missing streak fields on a legacy subdoc → treated as 0/gen 1", () => {
+  const c = carryStreakAcrossSubscriptionReplace({ isActive: false, endDate: days(10) }, NOW);
+  assert.equal(c.streakMonths, 0);
+  assert.equal(c.streakGeneration, 1);
 });
 
 console.log(`\n${passed} streak tests passed`);

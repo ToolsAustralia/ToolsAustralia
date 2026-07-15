@@ -332,24 +332,83 @@ export class RedemptionService {
       return { success: false, error: "not_active_or_concurrent" };
     }
 
-    await User.findByIdAndUpdate(new mongoose.Types.ObjectId(userId), {
-      $inc: { accumulatedEntries: updated.entriesAmount },
-      $push: {
-        redemptionHistory: {
-          redemptionId: `milestone-${String(updated._id)}`,
-          redemptionType: "entry",
-          pointsDeducted: 0,
-          value: updated.entriesAmount,
-          description: "Streak milestone — landed automatically",
-          redeemedAt: now,
-          status: "completed",
-        },
-      },
-    });
+    const redemptionId = `milestone-${String(updated._id)}`;
+    const reopenIssuance = () =>
+      MilestoneIssuance.updateOne(
+        { _id: updated._id, status: "redeemed" },
+        { $set: { status: "active" }, $unset: { redeemedAt: 1 } }
+      );
 
-    await DrawGrantService.grantMonthlyCouponEntries(userId, updated.entriesAmount, "streak", {
-      skipMilestoneCheck: true,
-    });
+    // Step A — wallet counter + history row. If this fails nothing else has
+    // happened yet: re-open the issuance so the auto-grant sweep retries later.
+    try {
+      await User.findByIdAndUpdate(new mongoose.Types.ObjectId(userId), {
+        $inc: { accumulatedEntries: updated.entriesAmount },
+        $push: {
+          redemptionHistory: {
+            redemptionId,
+            redemptionType: "entry",
+            pointsDeducted: 0,
+            value: updated.entriesAmount,
+            description: "Streak milestone — landed automatically",
+            redeemedAt: now,
+            status: "completed",
+          },
+        },
+      });
+    } catch (walletErr) {
+      await reopenIssuance().catch((revertErr) =>
+        console.error("Streak auto-grant compensation (issuance re-open) failed:", revertErr)
+      );
+      return {
+        success: false,
+        error: `wallet_update_failed_reverted: ${walletErr instanceof Error ? walletErr.message : String(walletErr)}`,
+      };
+    }
+
+    // Step B — land the entries. A paid-for milestone must never vanish behind a
+    // "redeemed" status with zero draw entries: on ANY failure (no target draw,
+    // or a save error on the hot draw doc) revert step A, then re-open the
+    // issuance so the sweep retries. The issuance is re-opened ONLY when the
+    // wallet revert succeeded — otherwise a sweep retry would double-count the
+    // wallet $inc; on that double-fault we leave it redeemed and log loudly.
+    let granted = false;
+    let grantError: unknown = null;
+    try {
+      granted = await DrawGrantService.grantMonthlyCouponEntries(userId, updated.entriesAmount, "streak", {
+        skipMilestoneCheck: true,
+      });
+    } catch (e) {
+      grantError = e;
+    }
+    if (!granted) {
+      const msg = grantError instanceof Error ? grantError.message : grantError ? String(grantError) : "no_target_draw";
+      let walletReverted = false;
+      try {
+        await User.updateOne(
+          { _id: new mongoose.Types.ObjectId(userId) },
+          { $inc: { accumulatedEntries: -updated.entriesAmount }, $pull: { redemptionHistory: { redemptionId } } }
+        );
+        walletReverted = true;
+      } catch (revertErr) {
+        console.error("Streak auto-grant compensation (wallet revert) FAILED — issuance left redeemed:", {
+          userId,
+          milestoneIssuanceId,
+          revertErr,
+        });
+      }
+      if (walletReverted) {
+        await reopenIssuance().catch((revertErr) =>
+          console.error("Streak auto-grant compensation (issuance re-open) failed:", revertErr)
+        );
+      }
+      console.error("Streak auto-grant did not land — issuance re-opened for the sweep to retry:", {
+        userId,
+        milestoneIssuanceId,
+        error: msg,
+      });
+      return { success: false, error: `grant_failed_reverted: ${msg}` };
+    }
 
     return { success: true, entriesGranted: updated.entriesAmount };
   }

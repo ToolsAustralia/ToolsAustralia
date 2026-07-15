@@ -170,3 +170,8 @@ Test: `npm run test:purchase-event-time`.
 ## Major-draw fresh-row shape (Streak P2 touch, 2026-07-07)
 
 `addToMajorDraw`'s `freshEntriesBySource` zero-shape in [payment-processing.ts](../../src/utils/payment/payment-processing.ts) now enumerates the full source-key set (`referral`, `cancellation-upsell`, `promo-link`, and the new `streak` bucket included) so downstream readers never hit a missing key. The `streak` bucket is written only by `DrawGrantService` (rewards-redeemables domain) — payment-path grants never write it.
+
+## Streak hooks in the payment path (2026-07-15)
+
+- `payment-processing.ts` is the ONLY caller passing `{ allowStreakIssuance: true }` to `MilestoneService.checkAndIssueMilestones` — new streak-months issuances are payment-coupled by construction (the cron/mass evaluator may only re-deliver, never newly issue).
+- `reverseMembershipLedger` ([refund-ledger-reversal.ts](../../src/utils/payment/refund-ledger-reversal.ts)) now gives back a refunded renewal's streak +1: it atomically flips the matching `MembershipRenewalCycle` row (`userId` + `paymentIntentId` + `billing_reason: subscription_cycle`, `succeeded/recovered → refunded` — the pre-image gate makes replays no-op) and decrements `subscription.streakMonths` with a floor of 0. The milestone issuances granted on that payment were already revoked via `grants.milestoneIssuanceIds` (`milestoneRevoke` step).

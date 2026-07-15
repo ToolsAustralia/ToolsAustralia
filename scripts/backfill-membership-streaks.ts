@@ -7,10 +7,15 @@
  * Spec: docs/superpowers/specs/2026-07-07-membership-streak-design.md §3
  * Walker: src/utils/subscription/streak.ts → computeStreakFromHistory
  *   - counts paid cycles (succeeded/recovered) ordered by dueAt
- *   - generation break = gap > 35 days WITH an intervening out-of-grace "canceled"
- *     status-history row; gaps without cancel evidence continue (recovery/pause lag)
- *   - history-incomplete (join predates ~2026-04-29 coverage) + active + no breaks
- *     → rounds UP to whole months since join (never under-credit veterans)
+ *   - generation break = gap > 65 days (BREAK_GAP_DAYS) WITH cancel evidence — a
+ *     "canceled"/"scheduled_cancel" history row within the 40-day lookback window;
+ *     gaps without cancel evidence continue (recovery/pause lag)
+ *   - --roundup-incomplete ONLY (the one-time LAUNCH run): history-incomplete
+ *     (join predates ~2026-04-29 coverage) + active + no breaks → rounds UP to
+ *     whole months since join (never under-credit veterans). Standing REPAIR
+ *     runs must omit the flag: `now` advances every run, so re-applying the
+ *     round-up would credit pure calendar months (e.g. unpaid past-due
+ *     stretches) that were never paid.
  *
  * This script is RE-RUNNABLE and doubles as the drift-repair tool (pure $set from
  * recomputation — referenced by the webhook increment's error path).
@@ -18,7 +23,8 @@
  *
  * Usage:
  *   npm run backfill:membership-streaks:dry          # DEFAULT: dry-run, no writes
- *   npm run backfill:membership-streaks              # --live: writes counters
+ *   npm run backfill:membership-streaks              # --live: REPAIR mode (no round-up)
+ *   npx tsx scripts/backfill-membership-streaks.ts --live --roundup-incomplete   # LAUNCH run (once)
  *   npx tsx scripts/backfill-membership-streaks.ts --user=<mongoId>   [--live]
  *
  * Exit codes: 0 clean · 1 completed with anomalies (see CSV) · 2 fatal.
@@ -32,6 +38,7 @@ import path from "path";
 config({ path: path.resolve(process.cwd(), ".env.local") });
 
 const LIVE = process.argv.includes("--live");
+const ROUNDUP_INCOMPLETE = process.argv.includes("--roundup-incomplete");
 const USER_ARG = process.argv.find((a) => a.startsWith("--user="))?.split("=")[1];
 const CSV_PATH = path.resolve(process.cwd(), `backfill-membership-streaks-${Date.now()}.csv`);
 
@@ -113,6 +120,8 @@ async function main(): Promise<number> {
           cancelDates: cancels.map((c) => new Date(c.effectiveAt)),
           isCurrentlyActive: Boolean(user.subscription?.isActive),
           now,
+          // Launch-only veterans' round-up; repair runs recompute from the ledger alone.
+          roundUpIncomplete: ROUNDUP_INCOMPLETE,
         });
         byConfidence[result.confidence] = (byConfidence[result.confidence] ?? 0) + 1;
 

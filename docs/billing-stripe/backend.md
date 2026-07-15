@@ -25,12 +25,14 @@ CSP note: this route gets a special header set in [src/middleware.ts](../../src/
 
 ## Membership Streak writers (in the webhook — added 2026-07-07, P1)
 
-`handleInvoicePaymentSucceeded` carries the two (and only two) live writers of `User.subscription.streakMonths`/`streakGeneration`:
+`handleInvoicePaymentSucceeded` carries the two webhook writers of `User.subscription.streakMonths`/`streakGeneration` (the other live writers: the resubscribe/renew routes' `carryStreakAcrossSubscriptionReplace` spread, the refund decrement in `reverseMembershipLedger`, and the backfill script):
 
 1. **Renewal increment** — beside the `upsertRenewalCycleFromPaidInvoice` call (strictly `billing_reason === "subscription_cycle"`). The upsert now returns `{ firstTimeSucceeded }` from the `MembershipRenewalCycle` **pre-image** (`new: false`): absent/`expected`/`failed` → this payment transitioned the cycle into paid → `$inc streakMonths` + mirror onto the in-memory doc. A queue redelivery sees `succeeded` → no-op. Past-due recovery pays the *same* cycle invoice → increments naturally, late. Decision helper: `isFirstTimePaidCycle` in [src/utils/subscription/streak.ts](../../src/utils/subscription/streak.ts).
 2. **Start/reset** — after the `isUpgrade` detection in the `subscription_create` grant path. `decideStreakOnSubscriptionCreate` returns start (fresh join / out-of-grace resubscribe → `streakMonths: 0`, generation bump only when a prior streak existed), continue (grace-window resubscribe — no write), or none (upgrades, non-create invoices). Guarded by `subscription.lastStreakStartInvoiceId $ne invoiceId`.
 
 The `$0`-trial guard returns before both writers for its invoices; upgrades never match either gate (Mode A = `subscription_update`, Mode B = excluded by `isUpgrade`). Drift repair: `npm run backfill:membership-streaks`. Tests: `npm run test:streak`. Invariants: [subscription/gotchas.md](../subscription/gotchas.md#membership-streak-counter--three-invariants-2026-07-07-p1).
+
+**Route-side carry (2026-07-15):** `create-subscription-existing-user` and `renew-subscription` (both branches) replace the whole `user.subscription` subdoc and persist BEFORE this webhook runs — each now spreads `carryStreakAcrossSubscriptionReplace(prev)` into the replacement (in-route grace/reset decision from the OLD `endDate`; the webhook then sees the NEW endDate, computes "continue", and preserves what the route wrote). Previously both wiped banked streaks (review BLOCKER). Never add a subdoc-replacing route without this carry.
 
 ## Anchor-billing helper
 
