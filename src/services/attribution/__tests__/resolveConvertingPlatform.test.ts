@@ -104,7 +104,8 @@ const DAY = 24 * 60 * 60 * 1000;
   });
   assert.equal(r.platform, "klaviyo_sms");
 }
-// 12. Paid click STILL beats owned last-touch (paid stays top priority).
+// 12. On an EXACT recency tie, the paid click outranks the owned last-touch (the paid
+//     click has a real click id → higher confidence).
 {
   const r = resolveConvertingPlatform({
     clicks: [{ platform: "meta", clickId: "fb.1.x", capturedAt: NOW - 1 * DAY }],
@@ -113,6 +114,29 @@ const DAY = 24 * 60 * 60 * 1000;
     now: NOW,
   });
   assert.equal(r.platform, "meta");
+  assert.equal(r.confidence, "click");
+}
+// 12b. Klaviyo competes at the paid-click level: a MORE-RECENT Klaviyo last-touch beats an
+//      older paid click (product decision — measure Klaviyo's true last-touch performance).
+{
+  const r = resolveConvertingPlatform({
+    clicks: [{ platform: "meta", clickId: "fb.1.x", capturedAt: NOW - 3 * DAY }],
+    lastTouchUtm: { utm_source: "klaviyo", utm_medium: "email" },
+    lastTouchUtmCapturedAt: NOW - 1 * DAY,
+    now: NOW,
+  });
+  assert.equal(r.platform, "klaviyo_email");
+  assert.equal(r.confidence, "utm_only");
+}
+// 12c. Conversely, a more-recent paid click still beats an older in-window Klaviyo touch.
+{
+  const r = resolveConvertingPlatform({
+    clicks: [{ platform: "tiktok", clickId: "t", capturedAt: NOW - 1 * DAY }],
+    lastTouchUtm: { utm_source: "klaviyo", utm_medium: "sms" },
+    lastTouchUtmCapturedAt: NOW - 3 * DAY,
+    now: NOW,
+  });
+  assert.equal(r.platform, "tiktok");
   assert.equal(r.confidence, "click");
 }
 // 13. Owned last-touch beyond its 5d window → falls through to the first-touch fallback.

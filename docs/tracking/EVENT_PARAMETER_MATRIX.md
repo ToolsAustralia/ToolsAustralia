@@ -93,7 +93,7 @@ Two server entry points:
 | Source | Meta key | Hashed? |
 |---|---|---|
 | email | `em` | **SHA-256** |
-| phone | `ph` | **SHA-256** (digits) |
+| phone | `ph` | **SHA-256** (E.164 digits, via shared `metaPhoneDigits` — same normalizer on AM/CAPI/prepareUserData) |
 | first / last name | `fn` / `ln` | **SHA-256** |
 | city / state / zip | `ct` / `st` / `zp` | **SHA-256** |
 | country | `country` | **SHA-256** (2-letter) |

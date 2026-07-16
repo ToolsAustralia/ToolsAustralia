@@ -51,7 +51,7 @@ Triangulated from working code (Stape GTM tag, a Python wrapper, mParticle, Adob
 
 ## Event naming
 
-`Purchase` is TikTok's current official **web** standard event. TikTok renamed `CompletePayment → Purchase` and recommends `Purchase` for new setups; `PlaceAnOrder` is sunset in 2027. We send `Purchase` on **both** pixel and Events API (identical name + `event_id` is required for dedup). Other events we use: `ViewContent`, `AddToCart`, `InitiateCheckout`, `AddPaymentInfo`, `CompleteRegistration`, `Subscribe`, `Search`.
+`Purchase` is TikTok's current official **web** standard event. TikTok renamed `CompletePayment → Purchase` and recommends `Purchase` for new setups; `PlaceAnOrder` is sunset in 2027. We send `Purchase` on **both** pixel and Events API (identical name + `event_id` is required for dedup). Other standard events we use: `ViewContent`, `AddToCart`, `InitiateCheckout`, `AddPaymentInfo`, `CompleteRegistration` (server-side on all four register branches since 2026-07, sharing the Meta `pixelEventId`), `Subscribe`, `Search`. We also send two **custom** event names server-only (no browser twin): `MembershipUpgrade` / `MembershipDowngrade` (via `sendTikTokServerCustomEvent` in `pixel-purchase-tracking.ts`, same `event_id` as the Meta custom event). ⚠️ TikTok's acceptance of non-standard event names is **unverified against the live API** — on go-live, confirm in Events Manager that these arrive (they are reporting-only signals; TikTok can't optimize on custom names the way it does standard ones).
 
 > The legacy `trackPixelSubscriptionRenewal` still fires TikTok `CompletePayment` (browser-only, renewals are intentionally not deduped/sent to CAPI). Out of scope for this work.
 

@@ -87,7 +87,7 @@ This is a deliberate policy choice (Meta does not explicitly forbid renewals as 
 ## Match Quality (EMQ)
 
 Hashed user_data sent to CAPI (server-side only):
-- `em` (email), `ph` (phone, digits-only), `fn`, `ln`, `ct`, `st`, `zp`, `country`, `external_id` — all SHA-256 hashed via `prepareUserData()` in `src/utils/tracking/facebook-helpers.ts`.
+- `em` (email), `ph` (phone — **E.164 digits with country code**, e.g. `61412345678`, normalized via the shared `metaPhoneDigits` helper since 2026-07), `fn`, `ln`, `ct`, `st`, `zp`, `country`, `external_id` — all SHA-256 hashed via `prepareUserData()` in `src/utils/tracking/facebook-helpers.ts`. The same `metaPhoneDigits` is used by `buildAdvancedMatching` (browser AM) and `facebookProvider.capiSend`, so every Meta surface produces identical `ph` hashes.
 
 Plaintext fields (do NOT hash):
 - `client_ip_address`, `client_user_agent`, `fbc`, `fbp`.

@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import connectDB from "@/lib/mongodb";
 import { runMetaSpendByUrlSync } from "@/services/meta/runMetaSpendByUrlSync";
 import { formatDateForFacebook } from "@/lib/facebook-marketing";
@@ -12,8 +12,20 @@ export const maxDuration = 300;
  * GET /api/cron/sync-meta-spend-by-url
  * Re-syncs the last 8 days of ad-level insights and recomputes URL aggregates (overlap for Meta revisions).
  */
-export async function GET() {
+export async function GET(request: NextRequest) {
   const startTime = Date.now();
+
+  // Authorize like sync-meta-ads and the other cron routes: this runs a heavy paginated
+  // Meta Marketing API download + Mongo bulk write, so it must not be triggerable by an
+  // unauthenticated caller. Middleware does not run for /api/**, so gate here.
+  const cronSecret = process.env.CRON_SECRET;
+  if (cronSecret) {
+    const authHeader = request.headers.get("authorization");
+    if (authHeader !== `Bearer ${cronSecret}`) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+  }
+
   try {
     const adAccountId = process.env.FACEBOOK_AD_ACCOUNT_ID;
     const accessToken = process.env.FACEBOOK_MARKETING_ACCESS_TOKEN;

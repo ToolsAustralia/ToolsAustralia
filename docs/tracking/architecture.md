@@ -36,7 +36,7 @@ When pixel id or access token is absent, the matching surface is a silent no-op:
 
 | Path | Role |
 |---|---|
-| [src/components/FacebookPixel.tsx](../../src/components/FacebookPixel.tsx) | FB Pixel loader |
+| [src/components/FacebookPixel.tsx](../../src/components/FacebookPixel.tsx) | Legacy FB helper exports only (`trackFacebookEvent` etc.) — the dead never-mounted loader component was removed 2026-07; the live loader is `ConversionPixels` → `facebookProvider.loadPixel` |
 | [src/components/GoogleTagManager.tsx](../../src/components/GoogleTagManager.tsx) | GTM loader |
 | [src/components/KlaviyoPageTracker.tsx](../../src/components/KlaviyoPageTracker.tsx) | Klaviyo page-view tracking |
 | [src/components/KlaviyoScriptLoader.tsx](../../src/components/KlaviyoScriptLoader.tsx) | Klaviyo SDK loader |
@@ -118,18 +118,25 @@ The capture registry at `src/lib/tracking/` reads `fbclid` / `_fbc`, `ttclid`, `
 
 Klaviyo attribution is identified via the UTM tuple `utm_source=klaviyo` + `utm_medium=email|sms` — NOT via `_kx` (see [KLAVIYO_INTEGRATION.md](./KLAVIYO_INTEGRATION.md) attribution section).
 
-### Attribution resolver — priority ladder + recency windows
+### Attribution resolver — unified recency race + fallbacks
 
-The resolver lives at `src/services/attribution/`. At the `create-*` route edge (subscription creation, one-time purchase, etc.), it reads the cookie / request body and resolves exactly **one** `convertingPlatform` per payment:
+The resolver lives at `src/services/attribution/`. At the `create-*` route edge (subscription creation, one-time purchase, etc.), it reads the cookie / request body and resolves exactly **one** `convertingPlatform` per payment.
 
-**Priority (highest to lowest):**
-1. Paid clicks — click ID present + within recency window: Meta (7d), TikTok (7d), Snapchat (7d). Resolved **first-touch** from `_ta_attr`.
-2. **Klaviyo owned — LAST-touch.** UTM tuple `utm_source=klaviyo` + `utm_medium=email|sms` (5d window) read from the **`_ta_attr_last`** cookie. Ranks below paid clicks but **above** the first-touch UTM fallback, so a returning user who clicks a Klaviyo email is credited to Klaviyo rather than their original first-touch source. Only tier-2 (owned) platforms resolve here; a tier-1 UTM in `_ta_attr_last` is ignored and handled by steps 1 / 3.
-3. First-touch UTM fallback — normalized `_ta_attr.utm_source` (Google `utm_source=google`; Meta domain-forms; or an owned channel that *was* the first touch), honoring its window.
-4. Direct — no attribution signals.
-5. Other — UTM source present but unrecognised.
+**Product decision (2026-07): ALL channels compete in ONE recency race — most-recent `capturedAt` wins**, regardless of paid vs owned. Klaviyo owned channels (`klaviyo_email` / `klaviyo_sms`) were **promoted out of the old lower tier** to race on recency at the SAME level as paid clicks, so a more-recent Klaviyo last-touch beats an *older* in-window Meta/TikTok/Snapchat paid click. This measures Klaviyo's true last-touch performance instead of always burying it beneath any in-window paid click. (Previously owned channels were Tier 2 — always outranked by any in-window paid click.)
 
-Recency tiebreak: if two click IDs are present (e.g. a user clicked a TikTok ad then a Meta ad), the **most recent** `captured_at` wins.
+**Candidates that enter the race** (`resolveConvertingPlatform`):
+- **Paid clicks** — click ID present + within window (Meta 7d, TikTok 7d, Snapchat 7d), from the first-touch `_ta_attr` cookie. Confidence `click`.
+- **Klaviyo owned — LAST-touch** — UTM tuple `utm_source=klaviyo` + `utm_medium=email|sms` (5d window) from the overwriting **`_ta_attr_last`** cookie, but only when it carries a trustworthy `capturedAt`. Confidence `utm_only`.
+
+The most-recent `capturedAt` across all candidates wins. **On an exact recency TIE, the real paid click (has a click id, confidence `click`) outranks the owned utm-only touch.** A candidate with `capturedAt === null` cannot win the race (its recency can't be trusted) and degrades to the fallbacks below.
+
+**Fallbacks, in order, when no candidate wins the race:**
+1. Owned (Klaviyo) last-touch WITHOUT a trustworthy timestamp — still ranks above the durable first-touch cookie (a Klaviyo recipient is a returning user whose first touch is some earlier source), honoring the channel window.
+2. First-touch UTM fallback — normalized `_ta_attr.utm_source` (Google `utm_source=google`; Meta domain-forms; or an owned channel that *was* the first touch), honoring its window.
+3. Direct — recognised-but-expired, or no attribution signals at all.
+4. Other — UTM source present but unrecognised.
+
+Windows are unchanged (paid 7d, Klaviyo 5d) and confidence semantics are unchanged (paid `click`, Klaviyo `utm_only`). The only remaining paid-vs-owned distinction is confidence + resolution source. The `PlatformRule.tier` field was replaced by an `owned: boolean` flag in [`platformPriority.ts`](../../src/services/attribution/platformPriority.ts); `isOwnedChannel()` now reads `owned`.
 
 `attributionConfidence` is set to:
 - `click` — a click ID (fbclid / ttclid / ScCid) was the winning signal

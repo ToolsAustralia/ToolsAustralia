@@ -12,6 +12,7 @@
  */
 
 import { hashData } from "@/lib/facebook-hash";
+import { metaPhoneDigits } from "@/lib/tracking/advanced-matching";
 
 /**
  * Cookie storing the click-capture timestamp for the current fbclid.
@@ -223,10 +224,11 @@ export function prepareUserData(userData?: {
     hashedData.em = hashData(userData.email);
   }
 
-  // Hash phone (required format: digits only, no spaces/special chars, SHA-256)
+  // Hash phone (Meta ph spec: E.164 digits with country code, no +, no leading zero).
+  // MUST use the same normalizer as buildAdvancedMatching / capiSend so every Meta
+  // surface produces identical hashes ("0412 345 678" → hash of "61412345678").
   if (userData.phone) {
-    // Remove all non-digit characters before hashing
-    const phoneDigits = userData.phone.replace(/\D/g, "");
+    const phoneDigits = metaPhoneDigits(userData.phone);
     if (phoneDigits) {
       hashedData.ph = hashData(phoneDigits);
     }

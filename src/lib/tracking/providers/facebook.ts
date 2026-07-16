@@ -7,6 +7,7 @@
 
 import type { CanonicalEvent, ConversionProvider, RequestContext } from "../types";
 import { hashPII } from "../canonical-event";
+import { metaPhoneDigits } from "../advanced-matching";
 import { getAllowedHostnames } from "../hostname-gate";
 // `FacebookEvent` is a type (erased at build). `sendFacebookEvent` is the SERVER CAPI sender and
 // transitively imports undici (node:net), so it must NOT be a *static* import here: this module is
@@ -137,7 +138,8 @@ async function capiSend(event: CanonicalEvent, ctx: RequestContext): Promise<boo
 
   const userData: FacebookEvent["user_data"] = {
     ...(u.email && { em: hashPII(u.email) }),
-    ...(u.phone && { ph: hashPII(u.phone.replace(/\D/g, "")) }),
+    // E.164 digits (61…) — MUST match buildAdvancedMatching so browser AM + CAPI hashes align.
+    ...(u.phone && metaPhoneDigits(u.phone) && { ph: hashPII(metaPhoneDigits(u.phone)) }),
     ...(u.firstName && { fn: hashPII(u.firstName) }),
     ...(u.lastName && { ln: hashPII(u.lastName) }),
     ...(u.city && { ct: hashPII(u.city) }),

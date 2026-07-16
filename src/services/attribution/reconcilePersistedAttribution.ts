@@ -10,9 +10,12 @@
 // signal the backfill uses, so the two agree and the recurring backfill is no longer
 // needed going forward.
 //
-// Scope is deliberately limited to OWNED channels (Klaviyo email/SMS): a real paid
-// click in-window would already have won at the edge (tier 1), so an edge result of
-// `direct` genuinely means "no paid click" — we do not resurrect a stale paid UTM.
+// Scope is deliberately limited to OWNED channels (Klaviyo email/SMS): any in-window
+// paid click OR cookie-visible owned last-touch would already have won the recency race
+// at the edge, so an edge result of `direct` genuinely means "no in-window signal the
+// cookies could see" — we only recover a persisted owned-channel touch (invisible to the
+// cookie-only edge), never resurrect a stale paid UTM. When the edge already resolved a
+// positive platform (paid click OR a recency-winning Klaviyo last-touch), we trust it.
 //
 // RECENCY WINDOW: a persisted owned-channel touch is only credited when it is recent
 // enough to plausibly have driven the purchase — the same per-channel window the cookie

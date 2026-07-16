@@ -93,6 +93,8 @@ Fired server-side from purchase / cancel / signup paths. Parallel to client-side
 
 Both helpers also accept `userPhone`, `userFirstName`, `userLastName`, `userState`, `userBirthdate`, `userZipCode` so the resulting CAPI event carries hashed `ph`/`fn`/`ln`/`st`/`db`/`zp`. Pass them from the in-scope User document fields (`user.mobile`, `user.firstName`, `user.lastName`, `user.state`, `user.birthdate`). Note: the User model has no `postCode`/`zipCode` field today, so `userZipCode` is unused in practice.
 
+**TikTok parity for tier changes (2026-07).** Both helpers fire `MembershipUpgrade` / `MembershipDowngrade` to Meta as **custom** events — Meta's `Subscribe` standard event is reserved for the *initial* paid start, so firing it on tier changes would pollute the Subscribe optimization signal. TikTok previously received nothing for these: the browser-only `trackTikTokEvent` helper no-ops server-side (`window` undefined). They now also call `sendTikTokServerCustomEvent` ([`pixel-purchase-tracking.ts`](../../src/utils/tracking/pixel-purchase-tracking.ts)), which sends the real TikTok Events API custom event via `tiktokProvider.capiSend` with the **same `event_id`** as the Meta custom event (`upgrade-{subscriptionId}-{pi|ts}` / `downgrade-{subscriptionId}-{ts}`). It no-ops cleanly when TikTok CAPI creds are unset and never throws. The legacy `trackTikTokEvent("Subscribe", …)` call is retained after it purely for the shared param shape (still a server-side no-op).
+
 ## CompleteRegistration helper
 
 The pure helper `userDataForRegistration(u)` at `src/utils/tracking/registration-user-data.ts` builds the input passed to `prepareUserData` for `CompleteRegistration` CAPI events. It includes `state` and `birthdate` from the user document so the resulting `user_data` carries hashed `st` and `db` whenever populated. Used by all four `prepareUserData` call sites in `src/app/api/auth/register/route.ts`.
@@ -161,8 +163,8 @@ reconcilePersistedAttribution(input: {
 
 **Resolution order:**
 1. **No edge decision at all** (`edgePlatform` null) → fall back to any recognised persisted UTM via `normalizeUtmToPlatform`, else `direct` (preserves the prior no-metadata fallback).
-2. **Edge produced a positive signal** (`!== "direct"`) → trust it.
-3. **Edge `=== "direct"`** → recover a persisted **OWNED-channel** (`klaviyo_email`/`klaviyo_sms`) touch via `normalizeUtmToPlatform` + `isOwnedChannel` — **but only when the touch is within the channel's recency window** (see below). **Paid sources are intentionally NOT recovered** — a real paid click in-window already wins at the edge (tier 1), so an edge `direct` genuinely means "no paid click"; we do not resurrect a stale paid UTM.
+2. **Edge produced a positive signal** (`!== "direct"`) → trust it (a paid click, OR a recency-winning Klaviyo last-touch — both now win the edge recency race).
+3. **Edge `=== "direct"`** → recover a persisted **OWNED-channel** (`klaviyo_email`/`klaviyo_sms`) touch via `normalizeUtmToPlatform` + `isOwnedChannel` — **but only when the touch is within the channel's recency window** (see below). **Paid sources are intentionally NOT recovered** — any in-window paid click OR cookie-visible Klaviyo last-touch already won the recency race at the edge, so an edge `direct` genuinely means "no in-window signal the cookies could see"; we do not resurrect a stale paid UTM.
 
 **Owned-channel recency window (added 2026-06-30):** the recovered owned touch is only credited when it is recent enough to plausibly have driven the purchase, using `windowDaysFor(platform)` from [`platformPriority.ts`](../../src/services/attribution/platformPriority.ts) — **5 days for Klaviyo email/SMS**, the SAME single source of truth the cookie resolver enforces. Recency is checked against the touch's capture time, which the caller supplies:
 - UTM captured at **this checkout** (`data.attributionSource === "session"`) → `persistedTouchAt = now` (always in-window).
