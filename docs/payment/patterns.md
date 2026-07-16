@@ -58,6 +58,8 @@ Don't reach into `User.subscription` from random code. The manager centralizes t
 
 Helpers wrap Stripe SDK calls and return classified results. Subscription error mapping lives in `subscription-error-handler.ts`. Apply the same shape for new payment helpers — don't let raw Stripe errors propagate to route handlers.
 
+Confirm-time card declines are the exception that *does* reach the route `catch` (with `confirm: true`, `stripe.paymentIntents.create` / `invoices.pay` THROW instead of returning a failed intent). Route catch blocks use `isStripeCardError()` from `payment-error-detection.ts` to return the 400 `{ error: "Payment failed", code, decline_code }` shape — never a generic 500 — so the client can render decline guidance via `getCardDeclineGuidance()`. See [gotchas.md](./gotchas.md#confirm-time-card-declines-throw--routes-must-return-the-400-payment-failed-shape-fixed-2026-07).
+
 ## P10. Net-queries via `payment-event-net-queries.ts`
 
 When computing aggregates like "net entries granted to this user," use the helpers in `payment-event-net-queries.ts` rather than ad-hoc `PaymentEvent.aggregate()` calls. Keeps the refund-vs-grant logic in one place.

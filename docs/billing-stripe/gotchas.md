@@ -1,5 +1,11 @@
 # Billing-Stripe — Gotchas
 
+## Confirm-time card declines are THROWN by the SDK, not returned (2026-07-16)
+
+With `confirm: true`, `stripe.paymentIntents.create` — and likewise `stripe.invoices.pay` and `stripe.subscriptions.update(payment_behavior: "error_if_incomplete")` — **reject with a `StripeCardError`** on an issuer decline instead of resolving with a failed intent. A branch that inspects `paymentIntent.last_payment_error` after `create()` resolves (both one-time-purchase routes have one) **never sees these declines** — they land in the catch block. Previously the generic catch-alls turned them into HTTP 500 with a generic message; production bug: `decline_code: invalid_account` → 500 "Failed to create one-time purchase".
+
+**Fix:** the catch blocks in `create-one-time-purchase`, `create-one-time-purchase-existing-user`, `upgrade-subscription-payment`, and `renew-subscription` (inner `invoices.pay` catch, before the final `throw paymentError`) now detect card errors via [`isStripeCardError()`](../../src/utils/payment/stripe/payment-error-detection.ts) (matches the SDK class name `type === "StripeCardError"` or raw API `rawType === "card_error"`) and return the sibling 400 `Payment failed` shape used by `create-subscription-existing-user` — exact bodies per route in [api.md → Thrown card declines](./api.md#thrown-card-declines--400-payment-failed). Non-card Stripe errors (e.g. `StripeInvalidRequestError`) and non-Stripe errors keep their 500 behavior; `ErrorReport` auto-logging is unchanged (declines still logged, severity `medium` via the expected-decline classifier).
+
 ## Tier change on a scheduled-to-cancel sub MUST clear `cancel_at_period_end` (2026-07-06)
 
 A member who is `cancel_at_period_end` (autoRenew off, still active) can still upgrade/downgrade. **Stripe API >

@@ -14,6 +14,8 @@ import { safeEventSourceUrl } from "@/utils/tracking/event-source-url";
 // Fallback processing removed to prevent duplicate Facebook tracking
 // Webhook is now the single source of truth for payment processing
 import { savePaymentMethodToUser } from "@/utils/payment/payment-method-manager";
+import { isStripeCardError } from "@/utils/payment/stripe/payment-error-detection";
+import { analyzeStripePayErrorForExcessiveRetry } from "@/utils/payment/stripe/stripe-excessive-retry";
 import { autoLogPaymentErrorServer } from "@/utils/error-reporting/auto-log-error-server";
 import AnonymousIdService from "@/services/ab-testing/AnonymousIdService";
 import VariantAssignmentService from "@/services/ab-testing/VariantAssignmentService";
@@ -941,7 +943,30 @@ export async function POST(request: NextRequest) {
     autoLogPaymentErrorServer(error, request, errorContext).catch((logError) => {
       console.warn("Failed to auto-log payment error:", logError);
     });
-    
+
+    // Card declines: with confirm:true, stripe.paymentIntents.create THROWS a
+    // StripeCardError instead of returning a failed intent, so they land here —
+    // not in the last_payment_error branch above. Return the sibling 400
+    // "Payment failed" shape (see create-subscription-existing-user) so the
+    // client can show accurate decline guidance instead of a generic 500.
+    if (isStripeCardError(error)) {
+      const excessiveRetry = await analyzeStripePayErrorForExcessiveRetry(stripe, error);
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Payment failed",
+          details: errorMessage || "Unable to process payment",
+          ...(errorCode && { code: errorCode }),
+          ...(declineCode && { decline_code: declineCode }),
+          ...(excessiveRetry.requiresDifferentPaymentMethod && {
+            requiresDifferentPaymentMethod: true,
+            ...(excessiveRetry.failureReason && { failureReason: excessiveRetry.failureReason }),
+          }),
+        },
+        { status: 400 }
+      );
+    }
+
     return NextResponse.json({ error: "Failed to create one-time purchase" }, { status: 500 });
   }
 }

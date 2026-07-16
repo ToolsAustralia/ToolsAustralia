@@ -161,6 +161,7 @@ npm run test:mer                     # pure computeDrawMerRow: blended New Reven
 npm run test:platform-revenue-breakdown # covers the per-platform acquisition-revenue-by-category breakdown service (src/services/admin/__tests__/platformRevenueBreakdown.test.ts) backing /api/admin/dashboard/revenue-details/by-platform (the per-platform drill-down hover/expand).
 npm run test:landing-draw-day-urgency # pure unit test for the landing draw-day urgency resolver (src/utils/promo/__tests__/landing-draw-day-urgency.test.ts). No DB/env needed.
 npm run test:reconcile-attribution   # pure reconciler (src/services/attribution/__tests__/reconcilePersistedAttribution.test.ts): when the cookie-only edge decision is `direct`/absent, recovers an OWNED-channel (klaviyo_email/sms) platform from the persisted signup UTM so Klaviyo conversions aren't buried in `direct`; paid sources are never resurrected. Locks the live path to the same logic as scripts/backfill-klaviyo-attribution-cycle.ts. No DB/env needed.
+npm run test:decline-guidance        # card-decline guidance pipeline (src/utils/payment/stripe/__tests__/payment-error-decline-guidance.test.ts): formatPaymentError / getCardDeclineGuidance / isStripeCardError / extractPaymentErrorCodes.
 ```
 
 ## QA seed: past-due member for reanchor recovery testing

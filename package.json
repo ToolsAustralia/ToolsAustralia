@@ -63,6 +63,7 @@
     "test:reanchor-gate": "tsx src/services/subscription/__tests__/reanchor-gate.test.ts",
     "test:trial-invoice": "tsx src/utils/billing/__tests__/trial-invoice.test.ts",
     "test:subscription-period": "tsx src/utils/payment/stripe/__tests__/subscription-period.test.ts",
+    "test:decline-guidance": "tsx src/utils/payment/stripe/__tests__/payment-error-decline-guidance.test.ts",
     "test:recover-stranded-bulk": "tsx src/server/admin/__tests__/recoverStrandedBulkPolicy.test.ts",
     "test:recover-stranded-bulk-run": "tsx src/server/admin/__tests__/recoverStrandedBulk.test.ts",
     "test:outbound-fetch": "tsx src/lib/http/__tests__/outbound.test.ts",
