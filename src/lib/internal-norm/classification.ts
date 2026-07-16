@@ -72,6 +72,7 @@ import {
   NormFacebookAdsHourlyInsightsSchema,
   NormFacebookAdsPurchaseAuditSchema,
 } from "./schemas/facebook-ads";
+import { NormTikTokAdsInsightsSchema } from "./schemas/tiktok-ads";
 import {
   NormMajorDrawCurrentAndLastSchema,
   NormMajorDrawExportAggregateSchema,
@@ -680,6 +681,18 @@ export const NORM_ENDPOINTS = {
     method: "GET",
     summary: "Reconcile local PaymentEvent (non-renewal) revenue vs Meta Insights purchase revenue",
     responseSchema: NormFacebookAdsPurchaseAuditSchema,
+  },
+
+  // ─── TikTok ads (per-ad daily insights; creds-gated, launching soon) ──────────
+  "tiktok-ads.insights": {
+    tier: "read",
+    requiredPermission: "facebookAds.view",
+    path: "/v1/tiktok-ads/insights",
+    method: "GET",
+    summary:
+      "TikTok per-ad insights for a date range: per-ad spend + TikTok-reported conversions/revenue/ROAS + totals (empty until TikTok Marketing-API creds are set)",
+    rateLimit: { perMinute: 10 },
+    responseSchema: NormTikTokAdsInsightsSchema,
   },
 
   // ─── Facebook Ads Health — verdict engine (wired reads; settings/snooze writes roadmap) ─

@@ -67,6 +67,10 @@
     {
       "path": "/api/cron/sync-meta-ads",
       "schedule": "59 12,13 * * *"
+    },
+    {
+      "path": "/api/cron/sync-tiktok-ads",
+      "schedule": "45 2 * * *"
     }
   ],
   "functions": {
@@ -91,6 +95,7 @@
     "src/app/api/cron/monthly-redeemables-issuance/route.ts": { "maxDuration": 300 },
     "src/app/api/cron/sync-meta-spend-by-url/route.ts": { "maxDuration": 300 },
     "src/app/api/cron/sync-meta-ads/route.ts": { "maxDuration": 300 },
+    "src/app/api/cron/sync-tiktok-ads/route.ts": { "maxDuration": 300 },
     "src/app/api/cron/reconcile-blocked-transactions/route.ts": { "maxDuration": 300 },
     "src/app/api/cron/reconcile-affiliate-commissions/route.ts": { "maxDuration": 300 },
     "src/app/api/cron/reconcile-major-draw-entries/route.ts": { "maxDuration": 300 },

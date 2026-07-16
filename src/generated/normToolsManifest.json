@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-07-10T07:00:38.092Z",
+  "generatedAt": "2026-07-16T03:36:02.095Z",
   "endpoints": [
     {
       "registryKey": "pending-actions.status",
@@ -267,6 +267,13 @@
       "path": "/v1/facebook-ads/purchase-audit",
       "method": "GET",
       "summary": "Reconcile local PaymentEvent (non-renewal) revenue vs Meta Insights purchase revenue"
+    },
+    {
+      "registryKey": "tiktok-ads.insights",
+      "tier": "read",
+      "path": "/v1/tiktok-ads/insights",
+      "method": "GET",
+      "summary": "TikTok per-ad insights for a date range: per-ad spend + TikTok-reported conversions/revenue/ROAS + totals (empty until TikTok Marketing-API creds are set)"
     },
     {
       "registryKey": "facebook-ads.health.insights",

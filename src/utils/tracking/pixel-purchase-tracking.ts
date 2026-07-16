@@ -27,6 +27,8 @@ import {
 } from "./facebook-helpers";
 import { sendConversion } from "@/lib/tracking/dispatch";
 import { buildPurchaseEvent } from "@/lib/tracking/canonical-event";
+import { tiktokProvider } from "@/lib/tracking/providers/tiktok";
+import type { CanonicalEvent } from "@/lib/tracking/types";
 
 export interface PixelPurchaseParams {
   value: number;
@@ -96,6 +98,80 @@ function getServerEventSourceUrlFallback(): string | undefined {
   if (!base) return undefined;
   const url = base.startsWith("http") ? base : `https://${base}`;
   return `${url.replace(/\/$/, "")}/shop`;
+}
+
+/**
+ * Fire a server-side TikTok Events API custom event (e.g. MembershipUpgrade / Downgrade).
+ * The legacy browser `trackTikTokEvent` helper no-ops in a server route (`window` undefined),
+ * so these subscription-change conversions never reached TikTok — Meta received them, TikTok
+ * did not. This sends the real Events API event via tiktokProvider.capiSend, with the SAME
+ * event_id as the Meta custom event. No-ops cleanly when TikTok CAPI creds are unset.
+ */
+async function sendTikTokServerCustomEvent(params: {
+  eventName: string;
+  eventId: string;
+  value: number;
+  currency: string;
+  packageId: string;
+  packageName?: string;
+  packageType: string;
+  orderId?: string;
+  user: {
+    email?: string;
+    phone?: string;
+    firstName?: string;
+    lastName?: string;
+    state?: string;
+    birthdate?: string | Date;
+    zipCode?: string;
+    externalId?: string;
+  };
+  requestContext?: {
+    client_ip_address?: string;
+    client_user_agent?: string;
+    event_source_url?: string;
+  };
+}): Promise<void> {
+  try {
+    const { requestContext } = params;
+    const eventSourceUrl = requestContext?.event_source_url ?? getServerEventSourceUrlFallback();
+    const canonical: CanonicalEvent = {
+      eventName: params.eventName,
+      eventId: params.eventId,
+      eventTime: Math.floor(Date.now() / 1000),
+      value: params.value,
+      currency: params.currency,
+      userData: {
+        email: params.user.email,
+        phone: params.user.phone,
+        firstName: params.user.firstName,
+        lastName: params.user.lastName,
+        state: params.user.state,
+        birthdate: params.user.birthdate,
+        zipCode: params.user.zipCode,
+        country: "AU",
+        ...(params.user.externalId && { externalId: params.user.externalId }),
+        ...(requestContext?.client_ip_address && { clientIpAddress: requestContext.client_ip_address }),
+        ...(requestContext?.client_user_agent && { clientUserAgent: requestContext.client_user_agent }),
+      },
+      customData: {
+        contentIds: [params.packageId],
+        ...(params.packageName && { contentName: params.packageName }),
+        contentType: "product",
+        packageType: params.packageType,
+        ...(params.orderId && { orderId: params.orderId }),
+      },
+      ...(eventSourceUrl && { eventSourceUrl }),
+      actionSource: "website",
+    };
+    await tiktokProvider.capiSend(canonical, {
+      clientIpAddress: requestContext?.client_ip_address,
+      clientUserAgent: requestContext?.client_user_agent,
+      ...(eventSourceUrl && { eventSourceUrl }),
+    });
+  } catch {
+    // never throw from tracking
+  }
 }
 
 /**
@@ -592,9 +668,32 @@ export async function trackPixelSubscriptionUpgrade(params: {
 
     await sendFacebookEvent(upgradeFacebookEvent);
 
-    // Track TikTok Pixel - Use Subscribe event for upgrade
+    // TikTok: the browser trackTikTokEvent helper below no-ops server-side (window undefined),
+    // so fire the real TikTok Events API custom event here — with the SAME event_id as the Meta
+    // event — which is what actually delivers upgrades to TikTok (parity with Meta).
+    await sendTikTokServerCustomEvent({
+      eventName: "MembershipUpgrade",
+      eventId: capiEventId,
+      value: Math.abs(newValue - oldValue),
+      currency,
+      packageId: newPackageId,
+      packageName: newPackageName,
+      packageType: "subscription_upgrade",
+      orderId: paymentIntentId,
+      user: {
+        email: userEmail,
+        phone: userPhone,
+        firstName: userFirstName,
+        lastName: userLastName,
+        state: userState,
+        birthdate: userBirthdate,
+        zipCode: userZipCode,
+        externalId: userId,
+      },
+      requestContext,
+    });
+    // Legacy browser pixel call (no-op server-side; retained for the shared param shape).
     await trackTikTokEvent("Subscribe", commonParams);
-    // console.log(`📱 TikTok Pixel: Subscription Upgrade tracked - ${oldPackageName} → ${newPackageName}`);
   } catch {
     // console.error(`❌ Error tracking pixel subscription upgrade:`, error);
   }
@@ -713,9 +812,31 @@ export async function trackPixelSubscriptionDowngrade(params: {
 
     await sendFacebookEvent(downgradeFacebookEvent);
 
-    // Track TikTok Pixel - Use Subscribe event for downgrade (still a subscription)
+    // TikTok: browser helper below no-ops server-side — fire the real TikTok Events API custom
+    // event with the SAME event_id as the Meta event (parity with Meta).
+    await sendTikTokServerCustomEvent({
+      eventName: "MembershipDowngrade",
+      eventId: capiEventId,
+      value: Math.abs(newValue - oldValue),
+      currency,
+      packageId: newPackageId,
+      packageName: newPackageName,
+      packageType: "subscription_downgrade",
+      orderId: paymentIntentId,
+      user: {
+        email: userEmail,
+        phone: userPhone,
+        firstName: userFirstName,
+        lastName: userLastName,
+        state: userState,
+        birthdate: userBirthdate,
+        zipCode: userZipCode,
+        externalId: userId,
+      },
+      requestContext,
+    });
+    // Legacy browser pixel call (no-op server-side; retained for the shared param shape).
     await trackTikTokEvent("Subscribe", commonParams);
-    // console.log(`📱 TikTok Pixel: Subscription Downgrade tracked - ${oldPackageName} → ${newPackageName}`);
   } catch {
     // console.error(`❌ Error tracking pixel subscription downgrade:`, error);
   }

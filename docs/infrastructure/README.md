@@ -38,6 +38,11 @@ Rewards SSO test scripts (in `package.json`): `test:igodirect-sso` (connectivity
 
 `scripts/backfill-membership-streaks.ts` — reconstructs `subscription.streakMonths` + `streakGeneration` for every member from the `MembershipRenewalCycle` ledger (cross-checked against `MembershipStatusHistory` cancels). **Dry-run by default** (`backfill:membership-streaks:dry`); `backfill:membership-streaks` runs `--live`. Re-runnable — it is also the drift-repair tool for the webhook streak counter. Append-mode CSV audit, adaptive progress lines, 3-tier exit codes (0 clean / 1 anomalies / 2 fatal). Pure walker logic lives in `src/utils/subscription/streak.ts` (`npm run test:streak`). See [subscription/backend.md](../subscription/backend.md).
 
+## TikTok ad-insights nightly cron + Meta spend-sync auth fix (added 2026-07-16)
+
+- **New cron** `/api/cron/sync-tiktok-ads` (`45 2 * * *`, `maxDuration: 300s`) — nightly re-sync of a trailing 8-day window of TikTok ad-level insights into `TikTokAdInsightsDaily` (delegates to `TikTokInsightsSyncService`; the TikTok analogue of `sync-meta-ads`). Gated on `Authorization: Bearer ${CRON_SECRET}` like the other crons; no-ops when the TikTok Marketing-API env (`TIKTOK_ADVERTISER_ID` / `TIKTOK_MARKETING_ACCESS_TOKEN`, already registered in `.env.example`) is unset. See [architecture.md](./architecture.md#vercel-cron-schedules) and [api.md](./api.md).
+- **Security fix** — `/api/cron/sync-meta-spend-by-url` was previously **unauthenticated** (heavy paginated Meta API + Mongo sync, triggerable by anyone); it now enforces the same `CRON_SECRET` Bearer gate as the other crons. See [gotchas.md § Cron auth bypass](./gotchas.md).
+
 ## AI support chatbot infra (added 2026-06-24)
 
 Foundations for the `support-chat` domain (see [docs/ai-chatbot/](../ai-chatbot/)). This is a **FAQ-only** bot — member account tools and Bedrock were removed per owner decision (2026-06-24).

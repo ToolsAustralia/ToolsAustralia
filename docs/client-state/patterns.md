@@ -103,6 +103,10 @@ Both back the **Chatbot Cost & Usage** admin panel ([`ChatbotCostManagement.tsx`
 
 `useKlaviyoAnalytics(range)` ([`src/hooks/queries/admin/useKlaviyoAnalytics.ts`](../../src/hooks/queries/admin/useKlaviyoAnalytics.ts)) — `useQuery`, key `["admin", "klaviyo", "analytics", range]`. Fetches Klaviyo-attributed campaign/flow revenue + scheduled view from `GET /api/admin/klaviyo/analytics`. **Throttle-aware**: long `staleTime` (10 min), `refetchOnWindowFocus: false`, **no `refetchInterval`** — the Klaviyo reporting API is ~2/min and the route caches. Returns `{ data, stale, cachedAt }`; consumed by `KlaviyoAnalyticsManagement`.
 
+### Per-ad insights breakdown hooks (`src/hooks/queries/admin/`)
+
+`useTikTokAdsInsights({ startDate, endDate, enabled })` ([`src/hooks/queries/admin/useTikTokAdsInsights.ts`](../../src/hooks/queries/admin/useTikTokAdsInsights.ts)) — `useQuery`, key `["admin", "tiktok-ads", "insights", startDate, endDate]`, `enabled` only when `enabled !== false` **and** both `startDate`/`endDate` (`YYYY-MM-DD`) are set. Fetches the per-TikTok-ad breakdown (`adName` + `spend` + TikTok-reported `conversions`/`revenue` + `ROAS`) from `GET /api/admin/tiktok-ads/insights?startDate=&endDate=`, unwrapping the `{ success, data }` envelope and throwing on `success === false`. Returns `TikTokAdInsightsResult` (rows are `TikTokAdInsightsRow`), both **re-exported** from `@/services/admin/tiktok/tiktokAdInsightsQuery` via a **type-only import** so the server query service's Mongoose model is never bundled client-side (`no-models-in-client`). Polling profile mirrors `useFacebookAdsInsights` ([`src/hooks/queries/useFacebookAdsInsights.ts`](../../src/hooks/queries/useFacebookAdsInsights.ts)): `staleTime` 1 min, `gcTime` 10 min, `refetchOnWindowFocus: true`, `refetchInterval` 2 min, `retry: 2` with exponential `retryDelay` capped at 30 s.
+
 ## P3. Modal priority coordination
 
 `useModalPriorityStore` exposes a `register / unregister / current` API. Modals register on mount with their priority; only the highest-priority active modal renders.

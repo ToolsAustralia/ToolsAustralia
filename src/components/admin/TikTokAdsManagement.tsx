@@ -2,14 +2,16 @@
 
 import React from "react";
 import PlatformHourlyRevenueSection from "@/components/admin/PlatformHourlyRevenueSection";
+import TikTokAdBreakdownTable from "@/components/admin/TikTokAdBreakdownTable";
 import { useAdminDateFilter } from "@/hooks/useAdminDateFilter";
 import { AdminDateRangeToolbar } from "@/components/admin/AdminDateRangeToolbar";
 
 /**
- * TikTok Ads analytics. Server-side attributed revenue by hour (from SHARED-1,
- * convertingPlatform === "tiktok"). Ad spend + ROAS arrive when the TikTok
- * Marketing-API insights sync ships. Owns the AEST date window and passes it
- * to the shared hourly section.
+ * TikTok Ads analytics. Two views over the same AEST date window:
+ *  1. Server-side attributed revenue by hour (from SHARED-1, convertingPlatform === "tiktok").
+ *  2. Per-ad breakdown (adName + spend + TikTok-reported conversions/revenue + ROAS) from
+ *     TikTokAdInsightsDaily, fed by the /api/cron/sync-tiktok-ads nightly sync — the TikTok
+ *     analogue of the Meta "Ads" / Spend-by-URL breakdown.
  */
 export default function TikTokAdsManagement() {
   const df = useAdminDateFilter("today");
@@ -26,6 +28,7 @@ export default function TikTokAdsManagement() {
         startDate={df.startDate}
         endDate={df.endDate}
       />
+      <TikTokAdBreakdownTable startDate={df.startDate} endDate={df.endDate} />
     </div>
   );
 }
