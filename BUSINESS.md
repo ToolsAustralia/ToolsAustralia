@@ -185,7 +185,7 @@ Source of truth: [src/data/partnerBrandOffers.ts](src/data/partnerBrandOffers.ts
   6. Toolman Lane (10% off)
   7. BAL Building Services (free quote)
 - **Percentage-access = catalog visibility.** A tier's percentage maps to the first N entries of the ordered `PARTNER_BRAND_OFFERS` array. Tradie sees ~50% of the list, Foreman ~75%, Boss 100%.
-- API surface today is intentionally narrow: partner applications (`/api/partner-applications/**`) and an eligibility queue (`/api/partner-discount/queue`). **No general partner-discount CRUD.**
+- API surface today is intentionally narrow: partner applications (`/api/partner-applications/**`), an eligibility queue (`/api/partner-discount/queue`), and — built 2026-07-16, **default-dark behind `IGODIRECT_MEMBER_STATUS_ENABLED`** — a vendor-facing member-status read (`GET /api/partner-discount/member-status`) that iGoDirect's MyRewards portal calls at SSO sign-in / page load / offer redemption to check a member's live access (`active`, tier %, expiry; Tools Australia is the source of truth, the portal reflects it). **No general partner-discount CRUD.**
 - **Partner application flow** — businesses pitch to join the catalog via the public partner page; admins review submissions in the admin UI and reply through the same API. The application is the **inbound** side of the partner system (separate from the outbound member-facing discount catalog). Models: [`PartnerApplication`](src/models/PartnerApplication.ts).
 - The `PartnerDiscount` Mongo model exists with `discountPercent` and validity dates but is **not yet used** for the live catalog.
 

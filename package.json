@@ -72,6 +72,7 @@
     "backfill:membership-streaks:dry": "tsx scripts/backfill-membership-streaks.ts",
     "test:igodirect-sso": "tsx scripts/test-igodirect-sso.ts",
     "test:member-level": "tsx src/utils/partner-discounts/__tests__/member-level.test.ts",
+    "test:member-status": "tsx src/utils/partner-discounts/__tests__/member-status.test.ts",
     "test:sso-access": "tsx src/utils/partner-discounts/__tests__/sso-access.test.ts",
     "test:electric-scheme": "tsx src/utils/package-colors/__tests__/electricPackageScheme.test.ts",
     "test:variant-config-membership-theme": "tsx src/services/ab-testing/__tests__/variantConfigService.membershipTheme.test.ts",

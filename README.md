@@ -31,7 +31,7 @@ Membership-driven giveaway and rewards platform for Australian tradies. Members 
 
 - **Shop** — product/cart/checkout scaffolding is built (models, APIs, CartContext, brand and product pages). The `/shop` landing currently renders a *Coming Soon* page. Shop discount lines in each membership tier are intentionally hidden until launch.
 - **Partner Discount API** — partner catalog is currently the curated list of 7 brands. The next milestone replaces this with a database-driven catalog targeting **1,000+ partner brands**, surfaced through a proper API and admin CRUD. The percentage-access tier model is already in place and will scale 1:1.
-- **Partner Discount Portal (SSO)** — single sign-on into the external partner-discounts portal ("see every deal, signed in via SSO") is built but held behind the `PARTNER_DISCOUNT_SSO_ENABLED` go-live gate. The dashboard hero and Rewards page show a *Coming soon* partner-portal entry until it's cleared to launch; the in-app 7-brand catalog stays the live surface meanwhile.
+- **Partner Discount Portal (SSO)** — single sign-on into the external partner-discounts portal ("see every deal, signed in via SSO") is built but held behind the `PARTNER_DISCOUNT_SSO_ENABLED` go-live gate. The dashboard hero and Rewards page show a *Coming soon* partner-portal entry until it's cleared to launch; the in-app 7-brand catalog stays the live surface meanwhile. Its companion **member-status API** (`GET /api/partner-discount/member-status` — the portal vendor's live read of a member's access at sign-in / page load / redemption) is likewise built and held behind `IGODIRECT_MEMBER_STATUS_ENABLED`.
 - **Snapchat ad-spend sync** — both TikTok and Snapchat admin tabs show server-side **attributed revenue** (hour-of-day). Meta and **TikTok** ad-spend are now wired — TikTok both hour-of-day (Marketing-API hourly client) **and per-ad daily** (`TikTokAdInsightsDaily`, nightly `/api/cron/sync-tiktok-ads` → the admin per-TikTok-ad spend/ROAS breakdown), awaiting live credentials/verification; **Snapchat** still has no Marketing-API spend client, so its spend + ROAS show "—" until that lands.
 - **Mobile app** — native **Android** app on the **Google Play Store** is planned. iOS / App Store is **not** on the roadmap.
 - **2nd- and 3rd-place winners per Major Draw** — multiple winner rows per draw are already storable (`Winner` keyed by `drawId + cycle`, no unique constraint); today each cycle has a single Grand Winner. Ordered placings would need a small `place`/`rank` field added to distinguish positions.
@@ -39,7 +39,7 @@ Membership-driven giveaway and rewards platform for Australian tradies. Members 
 
 ### Known not-yet-built
 
-- Public partner-discount API endpoints (beyond partner applications + the partner-discount queue eligibility check).
+- Public partner-discount API endpoints (beyond partner applications, the partner-discount queue eligibility check, and the vendor-only iGoDirect member-status read).
 - Shop checkout / fulfilment.
 - Snapchat **ad-spend** sync (no Marketing-API client yet) and the daily-insights writer for `SnapchatAdInsightsDaily`. (TikTok's ad-spend is wired — hour-of-day + per-ad daily writer via `/api/cron/sync-tiktok-ads` — creds-gated/unverified against the live API.)
 
