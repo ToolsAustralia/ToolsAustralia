@@ -38,6 +38,8 @@ import { useResolvedMultiplier } from "@/hooks/queries/usePromoQueries";
 import { convertToLocalPlan, type LocalMembershipPlan } from "@/utils/membership/membership-adapters";
 import { hasFailedRenewal } from "@/utils/subscription/subscription-helpers";
 import { calculateRenewalEntries, calculateUpgradeEntries } from "@/utils/payment/subscription-entries-calculator";
+import { getCardDeclineGuidance } from "@/utils/payment/stripe/payment-error-messages";
+import { extractPaymentErrorCodes } from "@/utils/payment/stripe/payment-error-detection";
 import { useMajorDrawPurchaseGate } from "@/hooks/useMajorDrawPurchaseGate";
 import { getPartnerCatalogAccessPercentForMembershipPackageId } from "@/utils/partner-discounts/partner-catalog-visibility";
 import { useLoading } from "@/contexts/LoadingContext";
@@ -704,11 +706,18 @@ const SubscriptionManagementModal: React.FC<SubscriptionManagementModalProps> = 
       const isPaymentMethodError =
         errorMessage.includes("payment method") || errorMessage.includes("No valid payment method");
 
+      // Card decline (400 body with code/decline_code on ApiError.data):
+      // show the specific, concise decline guidance instead of the generic line.
+      const { code, declineCode } = extractPaymentErrorCodes(error);
+      const declineGuidance = getCardDeclineGuidance(declineCode, code);
+
       showToast({
         type: "error",
-        title: "Reactivation Failed",
+        title: declineGuidance ? declineGuidance.title : "Reactivation Failed",
         message: isPaymentMethodError
           ? "Your saved payment method is no longer valid. Please add a new payment method to reactivate your subscription."
+          : declineGuidance
+          ? declineGuidance.message
           : errorMessage,
         duration: 15000, // Longer duration for important messages
       });

@@ -13,6 +13,7 @@ Tests live under [src/utils/payment/__tests__/](../../src/utils/payment/__tests_
 | `npm run test:redeemables` | Reverser modules for redeemables grants (overlap with [rewards-redeemables](../rewards-redeemables/)) |
 | `npm run test:invoice-generated-gate` | Fences `shouldEmitInvoiceGenerated(billing_reason)` — the server-side "Invoice Generated" receipt gate ([backend.md](./backend.md), [gotchas.md](./gotchas.md)). Test lives at `src/utils/integrations/klaviyo/__tests__/invoice-generated-gate.test.ts` (klaviyo/tracking area, not `utils/payment/__tests__/`). |
 | `npm run test:purchase-event-time` | Fences the CAPI Purchase `event_time` pipeline used by `grantBenefits` — `normalizeEpochToUnixSeconds` (ms vs seconds) + `resolveEventTime` (out-of-window → "now") ([backend.md](./backend.md)). Test lives at `src/lib/tracking/__tests__/purchase-event-time.test.ts` (tracking area, not `utils/payment/__tests__/`). |
+| `npm run test:decline-guidance` | Fences the confirm-time card-decline pipeline ([gotchas.md](./gotchas.md#confirm-time-card-declines-throw--routes-must-return-the-400-payment-failed-shape-fixed-2026-07)): `isStripeCardError` duck-typing, `extractPaymentErrorCodes` across all error shapes (incl. ApiError `.data`), the `DECLINE_CODE_GUIDANCE` map (sensitive-code non-leak + message-length caps), and `formatPaymentError` end-to-end for the production bug shape (`decline_code: invalid_account` carried on `ApiError.data`). Test lives at `src/utils/payment/stripe/__tests__/payment-error-decline-guidance.test.ts`. |
 
 ## Test conventions
 

@@ -9,6 +9,8 @@ import { authOptions } from "@/lib/auth";
 import Stripe from "stripe";
 import { enforceMajorDrawOpenForNewPurchasesOr403 } from "@/utils/draws/major-draw-gate-http";
 import { extractRequestContext } from "@/utils/tracking/facebook-helpers";
+import { isStripeCardError } from "@/utils/payment/stripe/payment-error-detection";
+import { analyzeStripePayErrorForExcessiveRetry } from "@/utils/payment/stripe/stripe-excessive-retry";
 import {
   getSubscriptionPeriodStart,
   getSubscriptionPeriodEnd,
@@ -558,6 +560,30 @@ export async function POST(request: NextRequest) {
 
     if (error instanceof z.ZodError) {
       return NextResponse.json({ error: "Invalid request data", details: error.issues }, { status: 400 });
+    }
+
+    // Card declines: subscriptions.update with payment_behavior
+    // "error_if_incomplete" THROWS a StripeCardError on decline. Return the
+    // sibling 400 "Payment failed" shape (see create-subscription-existing-user)
+    // so the client can show accurate decline guidance instead of a generic 500.
+    if (isStripeCardError(error)) {
+      const stripeError = error as { message?: string; code?: string; decline_code?: string; type?: string };
+      const excessiveRetry = await analyzeStripePayErrorForExcessiveRetry(stripe, error);
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Payment failed",
+          details: stripeError.message || "Unable to process payment",
+          ...(stripeError.code && { code: stripeError.code }),
+          ...(stripeError.decline_code && { decline_code: stripeError.decline_code }),
+          ...(stripeError.type && { type: stripeError.type }),
+          ...(excessiveRetry.requiresDifferentPaymentMethod && {
+            requiresDifferentPaymentMethod: true,
+            ...(excessiveRetry.failureReason && { failureReason: excessiveRetry.failureReason }),
+          }),
+        },
+        { status: 400 }
+      );
     }
 
     const errorMessage = error instanceof Error ? error.message : "Unknown error occurred";

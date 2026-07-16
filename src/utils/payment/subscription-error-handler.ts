@@ -75,6 +75,24 @@ export function handleSubscriptionError(error: unknown): SubscriptionError {
     };
   }
 
+  // Handle ApiError from src/lib/queries.ts — the response body is preserved
+  // on `.data`, so surface details (e.g. the card decline reason) + code.
+  if (error && typeof error === "object" && "data" in error) {
+    const body = (error as { data?: { error?: string; code?: string; details?: unknown } }).data;
+    if (body && typeof body === "object") {
+      const details = typeof body.details === "string" ? body.details : undefined;
+      const errorMessage = details || body.error || "Failed to create subscription";
+
+      return {
+        type: SubscriptionErrorType.SUBSCRIPTION_CREATION_FAILED,
+        message: `Subscription creation failed: ${errorMessage}`,
+        userMessage: errorMessage,
+        originalError: error,
+        code: body.code,
+      };
+    }
+  }
+
   // Handle Error objects
   if (error instanceof Error) {
     // Check for network errors
