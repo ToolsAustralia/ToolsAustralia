@@ -1,5 +1,17 @@
 // src/lib/tracking/advanced-matching.ts
 import { hashPII } from "./canonical-event";
+import { normalizePhoneE164 } from "@/utils/tracking/tiktok-helpers";
+
+/**
+ * Meta `ph` normalization: E.164 digits WITH country code, no `+`, no leading zero —
+ * per Meta's spec, `"0412 345 678"` must hash as `"61412345678"`, not `"0412345678"`.
+ * Reuses the same AU-aware normalizer the TikTok path uses (client-bundle-safe).
+ * MUST be used by every Meta phone-hash site (browser AM, CAPI provider, legacy
+ * prepareUserData) so all surfaces produce identical hashes.
+ */
+export function metaPhoneDigits(phone: string): string {
+  return normalizePhoneE164(phone).replace(/\D/g, "");
+}
 
 /**
  * Subset of Meta's Advanced Matching parameters that we collect.
@@ -80,7 +92,7 @@ export function buildAdvancedMatching(input: AdvancedMatchingInput): AdvancedMat
 
   const mobile = nonEmpty(input.mobile);
   if (mobile) {
-    const digits = mobile.replace(/\D/g, "");
+    const digits = metaPhoneDigits(mobile); // E.164 digits (61…), per Meta's ph spec
     if (digits.length > 0) result.ph = hashPII(digits);
   }
 
