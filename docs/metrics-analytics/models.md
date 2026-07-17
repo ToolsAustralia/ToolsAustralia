@@ -2,9 +2,18 @@
 
 ## `LandingPageMetricsDaily`
 
-[src/models/LandingPageMetricsDaily.ts](../../src/models/LandingPageMetricsDaily.ts) — daily per-page metric aggregations.
+[src/models/LandingPageMetricsDaily.ts](../../src/models/LandingPageMetricsDaily.ts) — materialized aggregate: Meta ad spend + delivery metrics per **canonical landing URL** per day. Rebuilt per-date (delete+insertMany) by `SpendByUrlAggregationService.recomputeForDateRange` from `MetaAdInsightsDaily` × `MetaAdDestination`. No TTL — this collection is the permanent record that outlives the per-ad insights TTL (~60d prod).
 
-> _TODO: pull schema (likely fields: date, pagePath, visits, conversions, revenue, ...)._
+Fields: `adAccountId`, `date` (`YYYY-MM-DD`), `canonicalUrl` (query/hash stripped; `unknown://meta-ad/<adId>` when the destination is unresolved), `spendCents`, `impressions`, `clicks`, `conversions`, `revenueCents` (both Meta-reported), `adIds[]`, `computedAt`. Unique index `{adAccountId, date, canonicalUrl}`.
+
+### `packagesFocus` split (added 2026-07-17)
+
+Optional embedded subdoc `packagesFocus?: { membership, "one-time" }`, each side an `ILandingFocusMetrics` (`spendCents / impressions / clicks / conversions / revenueCents`). It splits the row's totals by the **landing-URL packages focus** of each contributing ad: an ad is `one-time` iff its primary raw URL carries `?packages=one-time`; **everything else is `membership`** (ads never use `?packages=membership` — the default is expressed by omission). The split lives *inside* the row because `canonicalizeLandingUrl` strips query strings, so both URL variants collapse into one `canonicalUrl` row.
+
+Semantics readers must respect:
+- Focus subtotals sum to the row totals for resolved rows (classification derives from `MetaAdDestination.rawUrls` via [src/utils/metrics/packages-focus.ts](../../src/utils/metrics/packages-focus.ts)).
+- `unknown://` rows and rows written **before** this feature carry **no** subdoc — read them as the **`unclassified`** bucket, never as membership.
+- Row key/index unchanged; the field is additive, so pre-existing consumers are unaffected.
 
 ## Reads from other domains
 

@@ -11,7 +11,7 @@ Two `tsx` seeds create a login-ready member in a specific state so you can eyeba
 
 ## Pure unit tests are `tsx` scripts wired as `test:<scope>`
 
-There is no jest/vitest — each test is a standalone `tsx` script under `src/**/__tests__/*.test.ts` that throws on failure, registered as a `test:<scope>` entry in `package.json` (without the entry it's undiscoverable). Keep tests pure (no live DB/Stripe/network) by injecting side effects: e.g. `npm run test:promo-visit` exercises `recordPromoVisit` with stubbed `hasRecentVisit`/`recordVisit` deps. `npm run test:repeat-purchase-analytics` (`src/services/admin/__tests__/repeatPurchaseAnalytics.test.ts`) covers the repeat-purchase reconversion shaper (`summarizeRepeatPurchases`) with an injected `diffAestDays` + fixed `now`, so bucket boundaries, matured-window denominators, and the became-member flag are verified without touching Mongo. See `.claude/skills/writing-tsx-test`.
+There is no jest/vitest — each test is a standalone `tsx` script under `src/**/__tests__/*.test.ts` that throws on failure, registered as a `test:<scope>` entry in `package.json` (without the entry it's undiscoverable). Added 2026-07-17: `test:packages-focus` (landing-URL membership/one-time classification util) and `test:landing-page-focus` (pure `buildLandingPageDailyDocs` aggregation split — mixed-focus rows, `unknown://` rows carry no subdoc). Keep tests pure (no live DB/Stripe/network) by injecting side effects: e.g. `npm run test:promo-visit` exercises `recordPromoVisit` with stubbed `hasRecentVisit`/`recordVisit` deps. `npm run test:repeat-purchase-analytics` (`src/services/admin/__tests__/repeatPurchaseAnalytics.test.ts`) covers the repeat-purchase reconversion shaper (`summarizeRepeatPurchases`) with an injected `diffAestDays` + fixed `now`, so bucket boundaries, matured-window denominators, and the became-member flag are verified without touching Mongo. See `.claude/skills/writing-tsx-test`.
 
 ## Health check
 
@@ -31,6 +31,15 @@ curl -H "x-cron-secret: $CRON_SECRET" http://localhost:3000/api/cron/major-draw-
 
 ```bash
 npm run migrate:<name>:dry
+```
+
+### Packages-focus aggregate backfill (2026-07-17)
+
+[`scripts/backfill-packages-focus-aggregates.ts`](../../scripts/backfill-packages-focus-aggregates.ts) — one-off, re-runnable rebuild of `LandingPageMetricsDaily` over every date still covered by `MetaAdInsightsDaily` (~60-day TTL window), so resolved rows gain the `packagesFocus` membership/one-time split (see `docs/metrics-analytics/`). It re-runs the same idempotent per-day `recomputeForDateRange` the crons use — deterministic from source collections; older dates keep their rows and read as `unclassified`. `--since=YYYY-MM-DD` narrows the window. Needs `MONGODB_URI` + `FACEBOOK_AD_ACCOUNT_ID` in `.env.local`; run the dry variant against the DB that actually holds Meta insights first.
+
+```bash
+npm run backfill:packages-focus:dry   # report dates + row counts, write nothing
+npm run backfill:packages-focus       # live rebuild
 ```
 
 ### Targeting production from ops scripts (`--prod`)

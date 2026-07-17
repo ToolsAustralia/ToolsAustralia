@@ -4,7 +4,9 @@ import React, { useMemo, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { RefreshCw, ChevronDown, ChevronUp, ChevronRight, Link2, ArrowDown, ArrowUp } from "lucide-react";
 import { useSpendByUrlAnalytics, useSpendByUrlDetail } from "@/hooks/queries/useSpendByUrlAnalytics";
+import { usePackagesFocusBreakdown, type PackagesFocusTotals } from "@/hooks/queries/usePackagesFocusBreakdown";
 import SpendByUrlAdBreakdownTable from "@/components/admin/spend-by-url/SpendByUrlAdBreakdownTable";
+import { Badge } from "@/components/admin/ui";
 import { cn } from "@/utils/cn";
 
 function isUnresolvedLandingUrl(canonicalUrl: string): boolean {
@@ -46,6 +48,22 @@ function profitForSort(row: { revenue: number; spend: number }) {
   return row.revenue - row.spend;
 }
 
+function FocusTile({ label, totals }: { label: string; totals: PackagesFocusTotals }) {
+  // Always-white card like this tab's other cards (see the table card below) — no dark:
+  // text variants, or the spend figure renders white-on-white in admin dark mode.
+  return (
+    <div className="bg-white rounded-lg sm:rounded-xl shadow-lg border border-gray-100 p-3 min-w-0">
+      <p className="text-2xs sm:text-xs font-medium text-gray-500 truncate">{label}</p>
+      <p className="text-sm sm:text-base font-semibold text-gray-900 tabular-nums mt-0.5">
+        {formatAud(totals.spend)}
+      </p>
+      <p className="text-2xs sm:text-xs text-gray-500 tabular-nums truncate mt-0.5">
+        {formatAud(totals.revenue)} · {totals.roas.toFixed(2)}x · {formatNum(totals.conversions)}
+      </p>
+    </div>
+  );
+}
+
 interface SpendByUrlSectionProps {
   startDate: string;
   endDate: string;
@@ -71,6 +89,12 @@ export default function SpendByUrlSection({ startDate, endDate, dateReady }: Spe
 
   const detailQuery = useSpendByUrlDetail(
     expandedUrl,
+    dateReady ? startDate : undefined,
+    dateReady ? endDate : undefined
+  );
+
+  const focusQuery = usePackagesFocusBreakdown(
+    "meta",
     dateReady ? startDate : undefined,
     dateReady ? endDate : undefined
   );
@@ -199,7 +223,18 @@ export default function SpendByUrlSection({ startDate, endDate, dateReady }: Spe
 
   return (
     <div className="space-y-3 sm:space-y-4 min-w-0 w-full">
-      
+      {dateReady &&
+        !focusQuery.isError &&
+        focusQuery.data &&
+        focusQuery.data.summary.total.spendCents > 0 && (
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 sm:gap-3">
+            <FocusTile label="Membership" totals={focusQuery.data.summary.membership} />
+            <FocusTile label="One-time" totals={focusQuery.data.summary["one-time"]} />
+            {focusQuery.data.summary.unclassified.spendCents > 0 && (
+              <FocusTile label="Unclassified" totals={focusQuery.data.summary.unclassified} />
+            )}
+          </div>
+        )}
 
       <div className="flex flex-row items-center justify-between gap-2 sm:gap-4 min-w-0 w-full">
           <div className="flex flex-row flex-wrap items-center gap-2 sm:gap-3 min-w-0 flex-1">
@@ -411,6 +446,16 @@ export default function SpendByUrlSection({ startDate, endDate, dateReady }: Spe
                           <span className="block break-all text-2xs sm:text-sm leading-snug line-clamp-3 sm:line-clamp-none">
                             {row.canonicalUrl}
                           </span>
+                          {row.packagesFocus && (
+                            <span className="flex flex-wrap gap-1 mt-0.5">
+                              {row.packagesFocus.membership.spend > 0 && (
+                                <Badge tone="neutral">M {formatAud(row.packagesFocus.membership.spend)}</Badge>
+                              )}
+                              {row.packagesFocus["one-time"].spend > 0 && (
+                                <Badge tone="info">OT {formatAud(row.packagesFocus["one-time"].spend)}</Badge>
+                              )}
+                            </span>
+                          )}
                         </td>
                         <td className="py-1.5 px-0.5 sm:py-2.5 sm:px-2 text-right font-medium whitespace-nowrap tabular-nums text-2xs sm:text-sm">
                           {formatAud(row.spend)}
