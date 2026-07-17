@@ -2,6 +2,10 @@ import { z } from "zod";
 import { withNorm } from "@/lib/internal-norm/withNorm";
 import { NormAnalyticsSpendByUrlDetailSchema } from "@/lib/internal-norm/schemas/analytics-spend";
 import { SpendByUrlAggregationService } from "@/services/analytics/SpendByUrlAggregationService";
+import { ensureSpendByUrlFreshness } from "@/services/meta/spendByUrlFreshness";
+
+// On-read freshness may sync the trailing 1-2 days from Meta (time-budgeted).
+export const maxDuration = 60;
 
 const QuerySchema = z.object({
   startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "startDate must be YYYY-MM-DD"),
@@ -38,6 +42,10 @@ export const GET = withNorm(
     if (!parsed.success) {
       return ctx.error(400, "bad_query", "Invalid query params", parsed.error.issues);
     }
+
+    // Same near-real-time refresh the admin route gets — keeps Norm's figures
+    // in lockstep with the dashboard (time-budgeted; see spendByUrlFreshness).
+    await ensureSpendByUrlFreshness(adAccountId, parsed.data.startDate, parsed.data.endDate);
 
     const result = await aggService.getSpendByUrlDetailFormatted(
       adAccountId,

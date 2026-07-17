@@ -145,6 +145,10 @@ Response (shared formatted shape for admin + Norm):
 - `src/utils/metrics/__tests__/packages-focus.test.ts` (tsx script + `test:packages-focus` npm entry): derivation rule incl. case/whitespace tolerance, invalid values, `?packages=membership` → membership, multi-param URLs, non-URL strings.
 - Aggregation math: per-focus subtotals sum to row totals; mixed-focus same-canonicalUrl ads split correctly; unknown-destination rows produce no subdoc.
 
+## 12b. Addendum (2026-07-17, post-ship): on-read freshness
+
+DJ found the snapshot model confusing in production (modal up to ~3h behind the live Ad Spend KPI). Resolution shipped the same day: `src/services/meta/spendByUrlFreshness.ts` — every spend-by-url read (admin + Norm list/detail + packages-focus breakdown) self-refreshes the trailing 1–2 AEST days from Meta when the materialized data is >5 min old, via a **minimal** window sync (one insights page → missing-only destination resolve → per-day rebuild) behind a hard **12s time budget** (Meta's rate-limit backoff can reach 120s/wait — on expiry the read serves stored data and the refresh completes for the next read). No data-source fork, no response-shape change; the cron demotes to history/restatement backstop. Tests: `npm run test:spend-freshness`.
+
 ## 13. Non-goals / documented follow-ups
 
 - **TikTok destination resolver** (ad→URL mapping) + registering a TikTok ad-channel provider for dashboard spend — follow-up; the UI toggle and platform-keyed API are ready for it.

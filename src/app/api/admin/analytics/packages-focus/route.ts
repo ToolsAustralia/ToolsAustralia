@@ -4,6 +4,9 @@ import connectDB from "@/lib/mongodb";
 import { PackagesFocusBreakdownService } from "@/services/analytics/PackagesFocusBreakdownService";
 
 export const dynamic = "force-dynamic";
+// The service's on-read freshness may sync the trailing 1-2 days from Meta
+// (time-budgeted; see spendByUrlFreshness).
+export const maxDuration = 60;
 
 const breakdownService = new PackagesFocusBreakdownService();
 
