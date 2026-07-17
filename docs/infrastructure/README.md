@@ -29,10 +29,12 @@ See [.env.example](../../.env.example):
 - `IGODIRECT_SSO_SECRET` — **secret**; signs the MyRewards SSO JWT. `.env.local` / Vercel only — never commit a real value.
 - `IGODIRECT_CLIENT_ID` (`2412`), `IGODIRECT_DOMAIN_CODE` (`ToolsAustralia`), `IGODIRECT_DOMAIN_URL` (`myrewards.toolsaustralia.com.au`) — non-secret tenant identifiers.
 - `PARTNER_DISCOUNT_SSO_ENABLED` — **go-live gate**. `POST /api/partner-discount/sso` is inert in prod (404) unless this is exactly `"true"`. Keep UNSET in prod until rewards SSO is cleared to launch (vendor deprovisioning + `member_level` + member-deletion/DPA answers). See [auth/igodirect-sso-implementation-plan.md](../auth/igodirect-sso-implementation-plan.md) "Go-live gate".
+- `IGODIRECT_MEMBER_STATUS_KEY` (added 2026-07-16) — **secret**; the bearer key iGoDirect presents on `GET /api/partner-discount/member-status`. We mint it (≥32 random bytes) and hand it to the vendor over a secure channel. `.env.local` / Vercel only. Unset ⇒ the route fails closed (500).
+- `IGODIRECT_MEMBER_STATUS_ENABLED` (added 2026-07-16) — **go-live gate** for the member-status read: 503 `{"error":"disabled"}` in prod unless exactly `"true"`; always on in local dev. See [partner/igodirect-member-status-api-plan.md](../partner/igodirect-member-status-api-plan.md) §6.
 
 Connectivity probe: `npm run test:igodirect-sso` (see [dev-tooling/testing.md](../dev-tooling/testing.md)).
 
-Rewards SSO test scripts (in `package.json`): `test:igodirect-sso` (connectivity probe), `test:member-level` (the partner-catalog tier resolver) and `test:sso-access` (the SSO access gate) — see [partner/gotchas.md](../partner/gotchas.md).
+Rewards SSO test scripts (in `package.json`): `test:igodirect-sso` (connectivity probe), `test:member-level` (the partner-catalog tier resolver), `test:sso-access` (the SSO access gate) and `test:member-status` (the iGoDirect member-status API helpers + reconcile decision, added 2026-07-16) — see [partner/gotchas.md](../partner/gotchas.md).
 
 ## Membership Streak backfill (added 2026-07-07)
 
