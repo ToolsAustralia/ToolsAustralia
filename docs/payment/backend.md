@@ -132,7 +132,7 @@ Test: `npm run test:purchase-event-time`.
 | `subscription-creation-guard.ts` | Pre-create check via `stripeCustomerHasManageableSubscription` ([subscription patterns P11](../subscription/patterns.md)). |
 | `subscription-state-manager.ts` | Mongo-side state writes after Stripe confirms. |
 | `subscription-entries-calculator.ts` | Compute renewal entries given package + accumulator. |
-| `subscription-error-handler.ts` | Map Stripe errors to user-facing responses. |
+| `subscription-error-handler.ts` | Map Stripe errors to user-facing responses. `handleSubscriptionError()` has a dedicated ApiError branch (body on `.data`): `userMessage` surfaces `data.details` (e.g. the card decline reason) and `code` comes from `data.code`. Previously only axios-style `.response.data` was handled, so ApiError always fell to the generic `Error` branch. |
 | `subscription-response-handler.ts` | Serialize subscription state for API responses. |
 
 ### Failed-invoice retry

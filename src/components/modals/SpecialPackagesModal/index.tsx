@@ -32,6 +32,7 @@ import { useLoading } from "@/contexts/LoadingContext";
 import { useModalPriorityStore } from "@/stores/useModalPriorityStore";
 import { UpsellOffer, UpsellUserContext, OriginalPurchaseContext } from "@/types/upsell";
 import { getPackageBaseEntries } from "@/utils/payment/package-base-entries";
+import { formatPaymentError } from "@/utils/payment/stripe/payment-error-messages";
 import { resolveUpsellPromoMultiplierForDisplay } from "@/utils/payment/upsell-promo-multiplier";
 import { markPurchaseCompleted } from "@/utils/tracking/purchase-tracking";
 import { PaymentProcessingScreen } from "@/components/loading";
@@ -463,12 +464,14 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({
     } catch (error) {
       console.error("Special package purchase failed:", error);
       hideLoading();
-      const msg = error instanceof Error ? error.message : "Unknown error";
-      console.error(`Purchase failed: ${msg}`);
+      // Central payment-error copy: shows concise decline guidance when the
+      // API 400 carries code/decline_code (ApiError.data), generic otherwise.
+      const formatted = formatPaymentError(error);
+      console.error(`Purchase failed: ${formatted.message}`);
       showToast({
         type: "error",
-        title: "Purchase failed",
-        message: msg,
+        title: formatted.title,
+        message: formatted.message,
         duration: 8000,
       });
     } finally {

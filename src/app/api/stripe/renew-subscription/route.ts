@@ -8,6 +8,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import Stripe from "stripe";
 import { getValidPaymentMethod } from "@/utils/payment/stripe/stripe-helpers";
+import { isStripeCardError } from "@/utils/payment/stripe/payment-error-detection";
 import { getSubscriptionCreateParamsForAnchor, getNextAnchorTimestamp } from "@/utils/billing/anchor-billing";
 import { getSubscriptionPeriodEnd } from "@/utils/payment/stripe/subscription-period";
 import {
@@ -416,6 +417,24 @@ export async function POST(request: NextRequest) {
                 "This card cannot be charged right now due to repeated declines. Please use a different payment method.",
               requiresDifferentPaymentMethod: true,
               ...(payErrRetry.failureReason && { failureReason: payErrRetry.failureReason }),
+            },
+            { status: 400 }
+          );
+        }
+
+        // Card declines thrown by invoices.pay: return the sibling 400
+        // "Payment failed" shape (see create-subscription-existing-user) so the
+        // client can show accurate decline guidance instead of a generic 500.
+        if (isStripeCardError(paymentError)) {
+          const stripeError = paymentError as { message?: string; code?: string; decline_code?: string; type?: string };
+          return NextResponse.json(
+            {
+              success: false,
+              error: "Payment failed",
+              details: stripeError.message || "Unable to process payment",
+              ...(stripeError.code && { code: stripeError.code }),
+              ...(stripeError.decline_code && { decline_code: stripeError.decline_code }),
+              ...(stripeError.type && { type: stripeError.type }),
             },
             { status: 400 }
           );

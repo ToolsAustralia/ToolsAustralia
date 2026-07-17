@@ -61,6 +61,8 @@ Wrap every Stripe SDK call with a thin classifier that returns one of:
 
 Then map to HTTP responses uniformly. The pattern is in `retrieveStripeSubscription()` ([subscription/SubscriptionReferenceService.ts:68-93](../../src/services/subscription/SubscriptionReferenceService.ts#L68-L93)) — apply to other Stripe calls.
 
+**Card declines are a fifth class — and they are THROWN on confirm-time calls.** `paymentIntents.create(confirm: true)` / `invoices.pay` / `subscriptions.update(payment_behavior: "error_if_incomplete")` reject with a `StripeCardError` instead of returning a failed intent. Detect in the catch with [`isStripeCardError()`](../../src/utils/payment/stripe/payment-error-detection.ts) and return the 400 `Payment failed` shape (never a generic 500) — see [api.md → Thrown card declines](./api.md#thrown-card-declines--400-payment-failed) and the matching [gotcha](./gotchas.md#confirm-time-card-declines-are-thrown-by-the-sdk-not-returned-2026-07-16).
+
 ## P5. Resume-before-benefits on success
 
 The pattern is: the cleanup that *enables future success* runs before the work that *grants this success*. Specifically `resumeAfterSuccessfulRenewalPayment()` runs before `processPaymentBenefits()` so a benefits failure can't leave Stripe in a paused-collection state.

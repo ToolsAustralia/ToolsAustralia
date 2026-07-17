@@ -10,12 +10,12 @@ Full inventory of routes under `/api/stripe/**` and `/api/invoice/**`. Auth and 
 |---|---|---|
 | POST | `/api/stripe/create-subscription` | New user signup; uses anchor helper for 25th-27th joiners |
 | POST | `/api/stripe/create-subscription-existing-user` | Existing user (re-)subscribing. On the resubscribe branch (gated by the same `isResubscribeForMetadata` boolean that decides `subscription.metadata.isResubscribe`), sets `existingUser.subscription.lastResubscribedAt = new Date()` immediately before the primary `save()` (with `markModified("subscription")`). UX-only timestamp consumed by `/api/payment-status/[paymentIntentId]` for the success-page carry-over banner; never fires on initial subscribe, upgrade, or renewal. |
-| POST | `/api/stripe/renew-subscription` | User retry on a failed renewal invoice; clears pause-collection on success. The `retry_payment` branch also **recovers a stranded** invoice (void + finalize the held draft via `prepareRecoveredCycleInvoice` under the `RecoveryClaim` lock) and returns the finalized draft's PI for client confirmation, instead of blindly paying `latest_invoice`. |
+| POST | `/api/stripe/renew-subscription` | User retry on a failed renewal invoice; clears pause-collection on success. The `retry_payment` branch also **recovers a stranded** invoice (void + finalize the held draft via `prepareRecoveredCycleInvoice` under the `RecoveryClaim` lock) and returns the finalized draft's PI for client confirmation, instead of blindly paying `latest_invoice`. Card declines thrown by `invoices.pay` return the 400 Payment-failed shape (see [§ Thrown card declines](#thrown-card-declines--400-payment-failed)) instead of the former generic 500; the excessive-retry 400 and `requiresPaymentConfirmation` paths before it are unchanged. |
 | POST | `/api/stripe/cancel-subscription` | User-facing cancel (delegates to subscription/CancelSubscriptionService) |
 | POST | `/api/stripe/switch-tier-past-due` | Past-due tier-switch **teardown** (no body): cancels the caller's `past_due` sub immediately + voids its open/uncollectible renewal invoice(s), then the client opens the ordinary subscribe flow for the new tier. Accepts `past_due` **or** `canceled` (idempotent retry); the service reconciles against LIVE Stripe status — refuses to cancel a recovered sub (**409 `SUBSCRIPTION_RECOVERED`**), no-ops an already-gone one. 409 `NOT_PAST_DUE` otherwise. **Freeze-gated** (`enforceMajorDrawOpenForNewPurchasesOr403` → 403) like the resubscribe it hands off to, so a major-draw freeze can't strand a member mid-teardown. Delegates to `subscription/switchTierPastDue.abandonPastDueForTierSwitch`. See BUSINESS.md §10i + subscription/gotchas.md § Reconcile against LIVE Stripe status. |
 | POST | `/api/stripe/cancel-incomplete-subscription` | Clean up stuck `incomplete` checkout |
 | POST | `/api/stripe/confirm-subscription-payment` | Confirm a Payment Intent for a created subscription |
-| POST | `/api/stripe/upgrade-subscription-payment` | Upgrade flow — proration via Payment Intent |
+| POST | `/api/stripe/upgrade-subscription-payment` | Upgrade flow — immediate full-price charge (`proration_behavior: "none"` + `billing_cycle_anchor: "now"`, `payment_behavior: "error_if_incomplete"`, clears `cancel_at_period_end`); returns the PI for client confirmation when needed. Thrown card declines → 400 Payment-failed shape ([§ Thrown card declines](#thrown-card-declines--400-payment-failed)) |
 | POST | `/api/stripe/downgrade-subscription` | Downgrade flow — preserves old benefits via `User.subscription.previousSubscription` |
 | POST | `/api/stripe/update-auto-renew` | Toggle `cancel_at_period_end` |
 
@@ -45,8 +45,8 @@ Full inventory of routes under `/api/stripe/**` and `/api/invoice/**`. Auth and 
 
 | Method | Path | Purpose |
 |---|---|---|
-| POST | `/api/stripe/create-one-time-purchase` | Mini-draw / one-time pack purchase (new user) |
-| POST | `/api/stripe/create-one-time-purchase-existing-user` | Same, for existing user |
+| POST | `/api/stripe/create-one-time-purchase` | Mini-draw / one-time pack purchase (new user). Thrown confirm-time card declines → 400 Payment-failed shape ([§ Thrown card declines](#thrown-card-declines--400-payment-failed)) |
+| POST | `/api/stripe/create-one-time-purchase-existing-user` | Same, for existing user. Thrown confirm-time card declines → same 400 shape |
 | POST | `/api/stripe/pay-failed-invoice` | User pays a specific failed renewal invoice. **Stranded (open-but-retry-exhausted) invoices are auto-recovered:** the route voids the dead invoice + finalizes the held cycle draft via [`prepareRecoveredCycleInvoice`](../../src/services/subscription/prepareRecoveredCycleInvoice.ts) (under a `RecoveryClaim` lock) and returns the finalized draft's PaymentIntent `client_secret` through the existing `requiresPaymentConfirmation` shape — no more `invoice_not_payable` dead-end. Never creates a manual invoice (`billing_reason` stays `subscription_cycle`). |
 | POST | `/api/stripe/force-charge-overdue` | Member self-serve off_session charge of the current cycle via `forceChargeCurrentCycle`. **Stranded invoices are recovered** (void + finalize the held draft via `prepareRecoveredCycleInvoice` under the `RecoveryClaim` lock, then off_session-pay the finalized draft on its per-attempt idempotency key). New reason `no_held_draft` (409). |
 | POST | `/api/stripe/webhook` | **THE** webhook receiver; verifies signature, dedupes via `ProcessedStripeEvent`, dispatches |
@@ -129,3 +129,30 @@ When wrapping a `SubscriptionReferenceError`, map:
 - `STRIPE_RETRYABLE` → 503
 
 When a Stripe SDK error reaches the handler, classify before responding (see [patterns.md](./patterns.md)).
+
+### Thrown card declines → 400 "Payment failed"
+
+With `confirm: true`, `stripe.paymentIntents.create` — and likewise `stripe.invoices.pay` and `stripe.subscriptions.update(payment_behavior: "error_if_incomplete")` — **throw** a `StripeCardError` on a confirm-time decline instead of resolving with a failed intent. Route catch blocks detect these via [`isStripeCardError()`](../../src/utils/payment/stripe/payment-error-detection.ts) and return the sibling 400 shape (originated by `create-subscription-existing-user`):
+
+```json
+{
+  "success": false,
+  "error": "Payment failed",
+  "details": "<Stripe's decline message>",
+  "code": "<stripe error code, when present>",
+  "decline_code": "<issuer decline code, when present>",
+  "type": "<stripe error type, when present>",
+  "requiresDifferentPaymentMethod": true,
+  "failureReason": "<analyzer reason>"
+}
+```
+
+`requiresDifferentPaymentMethod` / `failureReason` appear only when `analyzeStripePayErrorForExcessiveRetry` flags the card. Implementations (2026-07-16, previously these declines fell into generic catch-alls and returned HTTP 500):
+
+- `create-one-time-purchase-existing-user` — card-error branch in the outer catch, before the `instanceof Error` 500 branch; runs the excessive-retry analyzer. The pre-existing 400 branch reading `paymentIntent.last_payment_error` only fires when `create()` *resolves* with a non-succeeded PI — it never sees thrown declines.
+- `create-one-time-purchase` — same branch, after the existing `autoLogPaymentErrorServer` call (error logging unchanged); echoes `details`/`code`/`decline_code` (no `type` field in this route's body) which the old 500 didn't.
+- `upgrade-subscription-payment` — same branch in the outer catch (declines from `subscriptions.update` with `payment_behavior: "error_if_incomplete"`); runs the excessive-retry analyzer.
+- `renew-subscription` — in the inner `invoices.pay` catch, immediately before the final `throw paymentError`; no analyzer fields here (the dedicated excessive-retry 400 path above it already returns `requiresDifferentPaymentMethod`).
+- `create-subscription-existing-user` — the original shape (via `rejectAndLog`; may also include `correlationId`).
+
+Non-card Stripe errors (e.g. `StripeInvalidRequestError`) and non-Stripe errors keep their existing 500 behavior. `ErrorReport` auto-logging is unchanged — card declines are still logged, severity `medium` via the expected-decline classifier.

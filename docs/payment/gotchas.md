@@ -63,15 +63,20 @@ Brief: when a payment succeeds, attribution data (UTM, affiliate, referrer) is w
 
 ## Payment error handling
 
-(Migrated stub from `docs/PAYMENT_ERROR_HANDLING_AND_RECOVERY.md` — _TODO: read full source and merge here._)
+The client-side classification pipeline lives in [`payment-error-detection.ts`](../../src/utils/payment/stripe/payment-error-detection.ts) (categorize + recovery strategy) and [`payment-error-messages.ts`](../../src/utils/payment/stripe/payment-error-messages.ts) (user-facing title + message). Subscription-creation error mapping lives in `subscription-error-handler.ts` (`SubscriptionErrorType` enum: creation-failed / network / validation / …), which now also handles the ApiError shape (body on `.data`) — see [backend.md](./backend.md).
 
-Brief: Stripe errors get classified into:
-- `card_error` (4xx — surface to user with `error.message`)
-- `invalid_request` (4xx — programming bug, log + generic 400)
-- `api_error` (5xx — retry once, then 503)
-- `authentication_error` / `idempotency_error` — log + 500
+## Confirm-time card declines THROW — routes must return the 400 "Payment failed" shape (fixed 2026-07)
 
-The classification helpers live in `subscription-error-handler.ts` and are reusable across payment routes.
+With `confirm: true`, `stripe.paymentIntents.create` / `stripe.invoices.pay` **THROW** a `StripeCardError` on an issuer decline instead of returning a failed intent — the decline lands in the route's generic `catch`, not in any `last_payment_error` branch. Production bug: a confirm-time decline ("Invalid account.", `decline_code: invalid_account`) on `POST /api/stripe/create-one-time-purchase-existing-user` came back as a generic 500 and the user saw "Failed to create one-time purchase Please try again." with no actionable guidance.
+
+The pipeline that fixes it:
+
+- **Server**: route catch blocks call [`isStripeCardError(error)`](../../src/utils/payment/stripe/payment-error-detection.ts) — duck-typed (`type === "StripeCardError"` || `rawType === "card_error"`) — and return the 400 `{ success: false, error: "Payment failed", details, code, decline_code, … }` shape instead of a 500. Non-card Stripe errors must stay 500.
+- **Client extraction**: [`extractPaymentErrorCodes(error)`](../../src/utils/payment/stripe/payment-error-detection.ts) returns `{ code, declineCode }` from any error shape that reaches the client — raw Stripe error (direct props), plain 400 body, ApiError from `src/lib/queries.ts` (body on `.data`), axios-style (`.response.data`). The internal `extractResponseBody()` makes `extractErrorMessage` / `extractErrorCode` / `categorizeError` probe ApiError `.data` too — previously only axios `.response.data` was probed, so ApiError decline info was invisible to the client pipeline. `categorizeError` also probes `.data` for the `requiresDifferentPaymentMethod` / `failureReason` / `failureCode` flags.
+- **Guidance**: [`getCardDeclineGuidance(declineCode, errorCode)`](../../src/utils/payment/stripe/payment-error-messages.ts) looks up the `DECLINE_CODE_GUIDANCE` map (short, direct copy — 1–2 sentences, one next step). `formatPaymentError()` returns the decline-specific title/message when the error carries a code/decline_code, unless the errorType is `stripe_excessive_retry` / `invoice_collection_blocked` / setup- or payment-intent recovery — those keep priority (their next step is more specific than the decline reason).
+- **Never leak sensitive codes**: `lost_card`, `stolen_card`, `pickup_card`, `fraudulent` are deliberately NOT in the map — they fall through to the generic "Your card was declined. Try a different card, or contact your bank." per Stripe guidance never to reveal those reasons. The generic `card_declined` + `insufficient_funds` switch cases in `formatPaymentError` reuse the same concise copy.
+
+Fenced by `npm run test:decline-guidance` (incl. the sensitive-code non-leak and the production ApiError bug shape).
 
 ## Failed invoice recovery selection
 

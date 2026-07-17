@@ -25,7 +25,7 @@ All client reads of subscription state go through one of these four hooks. They 
 
 | Hook | What it returns | Source |
 |---|---|---|
-| `useStripeSubscription()` | The user's Stripe subscription record (status, `cancel_at_period_end`, `current_period_end`, `pause_collection`). Driven by TanStack Query. | [src/hooks/useStripeSubscription.ts](../../src/hooks/useStripeSubscription.ts) |
+| `useStripeSubscription()` | The user's Stripe subscription record (status, `cancel_at_period_end`, `current_period_end`, `pause_collection`). Driven by TanStack Query. Its create-flow helpers (`createSubscription`, `createOneTimePurchase`, `createSubscriptionExistingUser`) attach the full non-success API body to the thrown error's `.data` (ApiError shape) so `formatPaymentError` can show per-decline-code guidance (`decline_code`, `requiresDifferentPaymentMethod`); `createOneTimePurchase` re-throws on failure (previously swallowed the error and returned `null`, which made MembershipModal show a generic "Failed to create account" for guest one-time card declines). | [src/hooks/useStripeSubscription.ts](../../src/hooks/useStripeSubscription.ts) |
 | `useMemberships()` | The catalog of available `MembershipPackage` rows (subscription tier choices). | [src/hooks/useMemberships.ts](../../src/hooks/useMemberships.ts) |
 | `useActivePackage()` | The user's currently-effective package, accounting for downgrade-preservation (`previousSubscription`). | [src/hooks/useActivePackage.ts](../../src/hooks/useActivePackage.ts) |
 | `useMembershipModal()` | Modal controller for the membership upgrade/downgrade/cancel flow. | [src/hooks/useMembershipModal.ts](../../src/hooks/useMembershipModal.ts) |
@@ -284,7 +284,7 @@ The flag that selects Mode A vs Mode B is `hasMembershipGrantInCurrentDrawPeriod
 > show one consistent number. The dashboard mirror is driven by `dash.pastDueRenewalEntries` /
 > `dash.pastDueRenewalCost` from `useDashboardState` (see docs/dashboard-account).
 - `PaymentMethodCard.tsx` — saved-card display ("VISA •••• 4242 / Default Payment Method / Change").
-- `PaymentForm.tsx` — exports `PaymentFormWithoutElements` (saved card path) and `PaymentFormWithElements` (new card path). All Stripe logic is preserved byte-identically from the original monolith. Uses Plan 4 `<Button>` for action buttons.
+- `PaymentForm.tsx` — exports `PaymentFormWithoutElements` (saved card path) and `PaymentFormWithElements` (new card path). Stripe confirm logic is preserved from the original monolith. Uses Plan 4 `<Button>` for action buttons. **Error handling (2026-07-16):** in both submit paths, a non-OK response from `POST /api/stripe/upgrade-subscription-payment` throws an `Error` carrying the parsed response body on `.data` (ApiError shape), and both `catch` blocks toast via `formatPaymentError(err)` ([src/utils/payment/stripe/payment-error-messages.ts](../../src/utils/payment/stripe/payment-error-messages.ts)) instead of the old hard-coded "Payment Failed" title + raw `err.message`. Since the route returns `400 { error: "Payment failed", details, code, decline_code }` for confirm-time card declines (instead of a generic 500), the member sees concise decline-specific guidance (e.g. "Not enough funds on this card. Try another card.").
 - `styles.module.css` — composite hero gradients, scrollbar, pinstripe overlay.
 
 **Stripe preservation invariants:**

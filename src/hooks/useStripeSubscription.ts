@@ -159,10 +159,14 @@ export function useStripeSubscription() {
       if (!response.ok || !result.success) {
         const apiError = new Error(result.error || result.details || `HTTP ${response.status}: Failed to create subscription`) as Error & {
           code?: string;
+          data?: unknown;
           response?: { data?: { error?: string; code?: string } };
         };
         apiError.code = result.code;
         apiError.response = { data: { error: result.error, code: result.code } };
+        // Carry the full body on `.data` (ApiError shape) so formatPaymentError
+        // can show decline-specific guidance from code/decline_code/details.
+        apiError.data = result;
         throw apiError;
       }
 
@@ -196,7 +200,15 @@ export function useStripeSubscription() {
       const result = await response.json();
 
       if (!result.success) {
-        throw new Error(result.error || result.details || "Failed to create purchase");
+        // Carry the full body on `.data` (ApiError shape) so formatPaymentError
+        // can show decline-specific guidance from code/decline_code/details.
+        const apiError = new Error(result.error || result.details || "Failed to create purchase") as Error & {
+          code?: string;
+          data?: unknown;
+        };
+        apiError.code = result.code;
+        apiError.data = result;
+        throw apiError;
       }
 
       return result;
@@ -204,7 +216,9 @@ export function useStripeSubscription() {
       const errorMessage = err instanceof Error ? err.message : "Failed to create purchase";
       setError(errorMessage);
       console.error("One-time purchase creation error:", err);
-      return null;
+      // Re-throw (was: return null) so MembershipModal's catch can show the
+      // real decline reason instead of a generic "Failed to create account".
+      throw err;
     } finally {
       setLoading(false);
     }
@@ -241,10 +255,15 @@ export function useStripeSubscription() {
         // Create an error object that preserves the API response structure
         const apiError = new Error(result.error || result.details || "Failed to create subscription") as Error & {
           code?: string;
+          data?: unknown;
           response?: { data?: { error?: string; code?: string } };
         };
         apiError.code = result.code;
         apiError.response = { data: { error: result.error, code: result.code } };
+        // Carry the full body on `.data` (ApiError shape) so formatPaymentError
+        // can show decline-specific guidance from decline_code / the
+        // requiresDifferentPaymentMethod excessive-retry flag.
+        apiError.data = result;
 
         console.log("🔍 Throwing API error:", {
           message: apiError.message,
