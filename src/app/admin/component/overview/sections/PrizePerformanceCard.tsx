@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import Image from "next/image";
 import { Trophy, RotateCw } from "lucide-react";
 import { formatInTimeZone } from "date-fns-tz";
@@ -9,10 +9,11 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, SectionTitle, DataTable, type Column } from "@/components/admin/ui";
 import { useMetricsFormatting } from "@/hooks/useMetricsFormatting";
 import { useSpendByUrlAnalytics } from "@/hooks/queries/useSpendByUrlAnalytics";
-import { getWebsiteLaunchDateUTC } from "@/utils/common/timezone";
+import { resolveAestDateWindow } from "@/utils/admin/resolveAestDateWindow";
 import { cn } from "@/utils/cn";
 import { TOOLSET_LANDING_SLUGS, type ToolsetLandingSlug } from "@/config/promo-landing-slugs";
 import type { DateRange } from "@/components/admin/DateRangeToggle";
+import PrizePerformanceAdsModal from "@/components/modals/PrizePerformanceAdsModal";
 
 /** Same calendar-day semantics as Facebook Ads → Spend by URL (Australia/Sydney) */
 const AEST_TIMEZONE = "Australia/Sydney";
@@ -25,9 +26,11 @@ const AEST_TIMEZONE = "Australia/Sydney";
  * window, grouped/summed per promotion brand (derived from `TOOLSET_LANDING_SLUGS`),
  * with `roas = revenue / spend`. The "Sync from Meta" button (recovered from the
  * legacy section) POSTs to `/api/admin/analytics/spend-by-url/sync` and invalidates
- * the `useSpendByUrlAnalytics` query on success. The per-row detail modal is (for now)
- * dropped — re-adding `PrizePerformanceAdsModal` on row click is a noted follow-up.
- * Presentation uses the kit `Card` + `DataTable`.
+ * the `useSpendByUrlAnalytics` query on success. Clicking a prize row opens
+ * `PrizePerformanceAdsModal` — a per-prize campaign → ad set → ad tree with a
+ * Membership / One-time / Unclassified focus split — passing the brand's matched
+ * landing URLs so the modal can pull its own per-ad detail. Presentation uses the
+ * kit `Card` + `DataTable`.
  */
 interface PrizeRow extends Record<string, unknown> {
   id: string;
@@ -37,6 +40,8 @@ interface PrizeRow extends Record<string, unknown> {
   revenue: number;
   conversions: number;
   roas: number;
+  /** Landing URLs matched to this brand — handed to the drill-down modal on row click. */
+  canonicalUrls: string[];
 }
 
 const COLUMNS: Column[] = [
@@ -100,35 +105,10 @@ export default function PrizePerformanceCard({
   const { fmtCompact, formatNumber } = useMetricsFormatting();
 
   // Same date range as /admin/facebook-ads spend-by-url: AEST calendar + optional URL start/end
-  const startDate = useMemo(() => {
-    if (customStartDate && customEndDate) return customStartDate;
-    if (dateRange === "custom" && customStartDate) return customStartDate;
-    if (dateRange === "today") {
-      return formatInTimeZone(new Date(), AEST_TIMEZONE, "yyyy-MM-dd");
-    }
-    if (dateRange === "yesterday") {
-      return formatInTimeZone(subDays(new Date(), 1), AEST_TIMEZONE, "yyyy-MM-dd");
-    }
-    if (dateRange === "all-time") {
-      return formatInTimeZone(getWebsiteLaunchDateUTC(), AEST_TIMEZONE, "yyyy-MM-dd");
-    }
-    return undefined;
-  }, [dateRange, customStartDate, customEndDate]);
-
-  const endDate = useMemo(() => {
-    if (customStartDate && customEndDate) return customEndDate;
-    if (dateRange === "custom" && customEndDate) return customEndDate;
-    if (dateRange === "today") {
-      return formatInTimeZone(new Date(), AEST_TIMEZONE, "yyyy-MM-dd");
-    }
-    if (dateRange === "yesterday") {
-      return formatInTimeZone(subDays(new Date(), 1), AEST_TIMEZONE, "yyyy-MM-dd");
-    }
-    if (dateRange === "all-time") {
-      return formatInTimeZone(new Date(), AEST_TIMEZONE, "yyyy-MM-dd");
-    }
-    return undefined;
-  }, [dateRange, customStartDate, customEndDate]);
+  const { startDate, endDate } = useMemo(
+    () => resolveAestDateWindow(dateRange, customStartDate, customEndDate),
+    [dateRange, customStartDate, customEndDate]
+  );
 
   const { data, isLoading, error } = useSpendByUrlAnalytics(startDate, endDate);
 
@@ -189,9 +169,16 @@ export default function PrizePerformanceCard({
         revenue,
         conversions,
         roas,
+        canonicalUrls: rowsForPromo.map((r) => r.canonicalUrl),
       };
     }).filter((m) => m.spend > 0 || m.revenue > 0 || m.conversions > 0); // Only show rows with data
   }, [data?.rows]);
+
+  const [selectedBrand, setSelectedBrand] = useState<{
+    brand: string;
+    slug: string;
+    canonicalUrls: string[];
+  } | null>(null);
 
   const renderCell = (key: string, row: PrizeRow) => {
     if (key === "brand") {
@@ -241,6 +228,7 @@ export default function PrizePerformanceCard({
   };
 
   return (
+    <>
     <Card className="p-5">
       <SectionTitle
         title="Prize performance"
@@ -284,8 +272,29 @@ export default function PrizePerformanceCard({
           No advertising data for promotion pages in this period.
         </p>
       ) : (
-        <DataTable<PrizeRow> columns={COLUMNS} rows={rows} renderCell={renderCell} />
+        <DataTable<PrizeRow>
+          columns={COLUMNS}
+          rows={rows}
+          renderCell={renderCell}
+          onRowClick={(row) =>
+            setSelectedBrand({
+              brand: row.brand as string,
+              slug: row.id as string,
+              canonicalUrls: row.canonicalUrls as string[],
+            })
+          }
+        />
       )}
     </Card>
+    <PrizePerformanceAdsModal
+      isOpen={!!selectedBrand}
+      onClose={() => setSelectedBrand(null)}
+      brandLabel={selectedBrand?.brand ?? ""}
+      slug={selectedBrand?.slug ?? ""}
+      startDate={startDate ?? ""}
+      endDate={endDate ?? ""}
+      canonicalUrls={selectedBrand?.canonicalUrls ?? []}
+    />
+    </>
   );
 }

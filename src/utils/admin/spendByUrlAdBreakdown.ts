@@ -1,4 +1,9 @@
 import type { SpendByUrlDetailRow } from "@/hooks/queries/useSpendByUrlAnalytics";
+import type {
+  PackagesFocusCampaignNode,
+  PackagesFocusAdNode,
+  PackagesFocusTotals,
+} from "@/hooks/queries/usePackagesFocusBreakdown";
 
 export type SpendByUrlAdSortColumn =
   | "ad"
@@ -134,4 +139,63 @@ export function spendByUrlDetailRowsFingerprint(rows: SpendByUrlDetailRow[]): st
     .map((r) => r.adId)
     .sort()
     .join(",");
+}
+
+/**
+ * Group per-ad detail rows into the campaign → adset → ad tree shape shared with
+ * the packages-focus breakdown endpoint, so PrizePerformanceAdsModal and
+ * AdSpendFocusModal render through one CampaignTreeTable. Detail rows are
+ * pre-aggregated per ad, so node totals are simple sums; each ad node carries
+ * its packagesFocus for badge display + chip filtering.
+ */
+export function groupSpendByUrlDetailRowsByCampaign(rows: SpendByUrlDetailRow[]): PackagesFocusCampaignNode[] {
+  const toTotals = (acc: { spendCents: number; revenueCents: number; conversions: number; impressions: number; clicks: number }): PackagesFocusTotals => {
+    const spend = Math.round(acc.spendCents) / 100;
+    const revenue = Math.round(acc.revenueCents) / 100;
+    return {
+      spend, spendCents: acc.spendCents, revenue, revenueCents: acc.revenueCents,
+      roas: spend > 0 ? revenue / spend : 0,
+      conversions: acc.conversions, impressions: acc.impressions, clicks: acc.clicks,
+    };
+  };
+
+  type Acc = { spendCents: number; revenueCents: number; conversions: number; impressions: number; clicks: number };
+  const newAcc = (): Acc => ({ spendCents: 0, revenueCents: 0, conversions: 0, impressions: 0, clicks: 0 });
+  const add = (acc: Acc, r: SpendByUrlDetailRow) => {
+    acc.spendCents += r.spendCents; acc.revenueCents += r.revenueCents;
+    acc.conversions += r.conversions; acc.impressions += r.impressions; acc.clicks += r.clicks;
+  };
+
+  const campaigns = new Map<string, { name?: string; acc: Acc; adsets: Map<string, { name?: string; acc: Acc; ads: PackagesFocusAdNode[] }> }>();
+  for (const r of rows) {
+    const cid = r.campaignId ?? "unknown-campaign";
+    const sid = r.adsetId ?? "unknown-adset";
+    const c = campaigns.get(cid) ?? { name: undefined, acc: newAcc(), adsets: new Map() };
+    c.name = r.campaignName ?? c.name;
+    add(c.acc, r);
+    const s = c.adsets.get(sid) ?? { name: undefined, acc: newAcc(), ads: [] };
+    s.name = r.adsetName ?? s.name;
+    add(s.acc, r);
+    const adAcc = newAcc();
+    add(adAcc, r);
+    s.ads.push({ adId: r.adId, adName: r.adName, adFormat: r.adFormat, totals: toTotals(adAcc), packagesFocus: r.packagesFocus });
+    c.adsets.set(sid, s);
+    campaigns.set(cid, c);
+  }
+
+  return [...campaigns.entries()]
+    .map(([campaignId, c]) => ({
+      campaignId,
+      campaignName: c.name,
+      totals: toTotals(c.acc),
+      adsets: [...c.adsets.entries()]
+        .map(([adsetId, s]) => ({
+          adsetId,
+          adsetName: s.name,
+          totals: toTotals(s.acc),
+          ads: s.ads.sort((a, b) => b.totals.spendCents - a.totals.spendCents),
+        }))
+        .sort((a, b) => b.totals.spendCents - a.totals.spendCents),
+    }))
+    .sort((a, b) => b.totals.spendCents - a.totals.spendCents);
 }

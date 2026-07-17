@@ -494,6 +494,22 @@ Thin handler — delegates to `PaymentEventRepository.aggregateRevenueByHourAndP
 
 The Facebook Ads tab's hourly breakdown (`GET/POST /api/admin/facebook-ads/hourly-insights`) sources its per-hour **revenue + conversions** from this same aggregator (the `meta` slice) — i.e. server-side `convertingPlatform === "meta"` attribution, **not** `utm_source` and **not** Meta's pixel/CAPI numbers — merged with Facebook Marketing-API hourly **spend**. So its hourly revenue now matches the rest of the dashboard. (The separate Meta-reported insights table is intentionally left as-is for pixel-vs-server comparison.)
 
+## Packages-focus breakdown (membership vs one-time landing URLs)
+
+### `GET /api/admin/analytics/packages-focus?startDate=YYYY-MM-DD&endDate=YYYY-MM-DD&platform=meta`
+
+Gated by `requirePermission("facebookAds.view")` (same paid-ads permission as the spend-by-url family). Splits ad spend / Meta-reported revenue / ROAS / conversions by the **landing-URL packages focus**: `one-time` (URL carries `?packages=one-time`) vs `membership` (everything else — the default is expressed by omitting the param), plus an `unclassified` bucket (unresolved `unknown://` destinations + aggregate rows written before the feature). Added 2026-07-17; feeds the Overview's Ad Spend / ROAS KPI drill-down modal.
+
+Thin handler — validates params (`platform` ∈ `meta` | `tiktok`, default `meta`; missing dates → `400`) and delegates to `PackagesFocusBreakdownService.getBreakdownFormatted()` (`src/services/analytics/PackagesFocusBreakdownService.ts`). Response `{ success: true, platform, supported, reason?, meta, summary, detail }`:
+
+- `summary` — per-bucket totals (`membership` / `"one-time"` / `unclassified` / `total`, each `spend/spendCents/revenue/revenueCents/roas/conversions/impressions/clicks`) summed from the **materialized** `LandingPageMetricsDaily.packagesFocus` subdocs → works for any range, survives the per-ad insights TTL. Revenue basis is **Meta-reported** (`action_values`), same as the headline ROAS KPI.
+- `detail` — campaign → ad-set → ad tree per bucket from the **live** `MetaAdInsightsDaily` × `MetaAdDestination` join (nodes sorted by spend desc at every level). Bounded by the insights TTL (~60d prod): `availableSince` = the account's oldest retained insights date (unbounded indexed lookup, range-independent), `complete = availableSince <= startDate`. A zero-activity range with the floor before it is `complete: true` with empty buckets.
+- `platform=tiktok` short-circuits to `{ supported: false, reason: "awaiting-url-mapping", … }` (zeroed summary, empty buckets) until a TikTok ad→URL destination resolver ships — TikTok has no landing-URL concept yet.
+
+Mirrored to Norm as `analytics.packages-focus` (`/api/internal/norm/v1/analytics/packages-focus`, schema in `src/lib/internal-norm/schemas/analytics-spend.ts`) — lockstep per CLAUDE.md rule 10.
+
+**Related additive shape changes (2026-07-17):** `GET /api/admin/analytics/spend-by-url` list rows gained an optional `packagesFocus` split (`{ membership, "one-time" }` of `spend/spendCents/revenue/revenueCents/conversions/roas`); `…/spend-by-url/detail` rows gained optional `campaignId/campaignName/adsetId/adsetName` + a required `packagesFocus: "membership" | "one-time" | "unclassified"`. Norm's list/detail schemas updated in lockstep.
+
 ## TikTok ad-level insights (per-ad breakdown)
 
 ### `GET /api/admin/tiktok-ads/insights?startDate=YYYY-MM-DD&endDate=YYYY-MM-DD`

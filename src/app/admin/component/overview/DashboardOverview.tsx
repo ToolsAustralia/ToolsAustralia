@@ -235,6 +235,8 @@ export default function DashboardOverview() {
         rangeLabel={kpiRangeLabel}
         statsLoading={statsLoading}
         membershipLoading={membershipLoading}
+        startDate={customStartDate || undefined}
+        endDate={customEndDate || undefined}
       />
 
       {/* Revenue breakdown + advertising by platform — same row, above the charts */}

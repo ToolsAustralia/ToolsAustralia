@@ -445,6 +445,8 @@ On landing with marketing query params, the client persists **`utm_source`, `utm
 | First-party cookie | `_ta_attr` | 90 days | **first-touch** (never overwrites a non-expired value), `SameSite=Lax`, `Domain=.toolsaustralia.com.au; Secure` in prod ([attribution-cookie.ts:11,56-69](src/utils/tracking/attribution-cookie.ts#L11)) |
 | First-party cookie | `_ta_attr_last` | 7 days | **last-touch** (always overwritten on every UTM landing) — feeds the Tier-2 owned-channel (Klaviyo) resolution in §8b ([attribution-cookie.ts:13-19,71-77](src/utils/tracking/attribution-cookie.ts#L13)) |
 
+The landing URL's **`?packages=one-time`** marker is also captured (as `packages_focus`, only ever `"one-time"`) into the same session store and `_ta_attr` cookie, and stamped onto payments as `PaymentEvent.data.packagesFocus` — a seed for future revenue-by-landing-focus reporting. **Membership is the default and is stored by absence**: ads never carry `?packages=membership`, so organic and pre-feature traffic stores nothing.
+
 Paid **click IDs** are captured into separate cookies on mount: Meta `_fbc`/`_fbc_ts` (synthesized from `?fbclid=` so it survives without the Meta SDK), TikTok `ttclid`, Snapchat `_sc_click`; the Meta browser-ID `_fbp` is set by the Pixel. A **signup snapshot** is also persisted server-side in `User.signupAttribution` (§2h).
 
 ### 8b. The "converting platform" concept

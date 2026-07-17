@@ -16,5 +16,6 @@ export const attributionSchema = z
     campaign_id: z.string().optional(),
     adset_id: z.string().optional(),
     ad_id: z.string().optional(),
+    packages_focus: z.literal("one-time").optional(),
   })
   .optional();

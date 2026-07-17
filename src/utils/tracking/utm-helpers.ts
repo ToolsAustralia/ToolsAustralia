@@ -9,6 +9,7 @@
  */
 
 import type { UTMParams, AttributionParams } from "@/types/tracking";
+import { MEMBERSHIP_PACKAGES_QUERY_PARAM, parseMembershipPackagesTab } from "@/utils/membership/packagesTabParam";
 
 /**
  * Extracts UTM parameters from URL or URLSearchParams
@@ -93,6 +94,11 @@ export function extractAttributionParams(urlOrParams: string | URLSearchParams):
     if (campaignId) params.campaign_id = campaignId;
     if (adsetId) params.adset_id = adsetId;
     if (adId) params.ad_id = adId;
+
+    // Landing-URL packages focus. Reuse the canonical parser; membership is the
+    // default (expressed by absence) so only "one-time" is ever captured.
+    const packagesTab = parseMembershipPackagesTab(searchParams.get(MEMBERSHIP_PACKAGES_QUERY_PARAM));
+    if (packagesTab === "one-time") params.packages_focus = "one-time";
 
     return params;
   } catch {

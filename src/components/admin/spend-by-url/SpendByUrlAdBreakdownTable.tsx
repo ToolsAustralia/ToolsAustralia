@@ -4,6 +4,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { ArrowDown, ArrowUp, Search, ChevronDown, ChevronUp } from "lucide-react";
 import { useDebounce } from "@/hooks/useDebounce";
 import type { SpendByUrlDetailRow } from "@/hooks/queries/useSpendByUrlAnalytics";
+import { Badge } from "@/components/admin/ui";
 import {
   filterSpendByUrlDetailRows,
   groupAdsByFormatForDisplay,
@@ -305,6 +306,11 @@ export default function SpendByUrlAdBreakdownTable({
                           {d.adName}
                         </span>
                       ) : null}
+                      {d.packagesFocus && d.packagesFocus !== "unclassified" && (
+                        <Badge tone={d.packagesFocus === "one-time" ? "info" : "neutral"} className="mt-0.5">
+                          {d.packagesFocus === "one-time" ? "One-time" : "Membership"}
+                        </Badge>
+                      )}
                     </td>
                     <td className={cn(cellPad, "text-right whitespace-nowrap tabular-nums")}>
                       {formatAud(d.spend)}

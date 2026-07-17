@@ -1,0 +1,159 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { Loader2, AlertCircle } from "lucide-react";
+import { ModalContainer, ModalHeader, ModalContent } from "@/components/modals/ui";
+import {
+  usePackagesFocusBreakdown,
+  type PackagesFocusTotals,
+} from "@/hooks/queries/usePackagesFocusBreakdown";
+import CampaignTreeTable from "@/components/admin/spend-by-url/CampaignTreeTable";
+
+type FocusTab = "membership" | "one-time" | "unclassified";
+type Platform = "meta" | "tiktok";
+
+const fmtAud = (n: number) =>
+  new Intl.NumberFormat("en-AU", { style: "currency", currency: "AUD", maximumFractionDigits: 0 }).format(n);
+
+function SummaryTile({ label, totals, active, onClick }: {
+  label: string;
+  totals: PackagesFocusTotals | undefined;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`text-left rounded-xl border p-3 transition-colors ${
+        active
+          ? "border-neutral-900 dark:border-white ring-1 ring-neutral-900 dark:ring-white"
+          : "border-neutral-200 dark:border-neutral-800 hover:border-neutral-300 dark:hover:border-neutral-700"
+      }`}
+    >
+      <p className="text-2xs font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">{label}</p>
+      <p className="font-display font-extrabold text-lg text-neutral-900 dark:text-white mt-1">
+        {totals ? fmtAud(totals.spend) : "—"}
+      </p>
+      <p className="text-2xs text-neutral-500 dark:text-neutral-400 mt-0.5">
+        {totals ? `${fmtAud(totals.revenue)} rev · ${totals.roas.toFixed(2)}x ROAS · ${totals.conversions} conv` : ""}
+      </p>
+    </button>
+  );
+}
+
+/**
+ * Drill-down for the Ad Spend + ROAS KPI tiles: how spend/return splits between
+ * membership-focus landing URLs (default) and one-time-focus URLs
+ * (?packages=one-time), with a campaign → ad set → ad tree per bucket.
+ * Revenue here is Meta-reported (action_values) — the same basis as the KPI.
+ */
+export default function AdSpendFocusModal({
+  isOpen, onClose, startDate, endDate, rangeLabel,
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  startDate?: string;
+  endDate?: string;
+  rangeLabel?: string;
+}) {
+  const [platform, setPlatform] = useState<Platform>("meta");
+  const [focusTab, setFocusTab] = useState<FocusTab>("one-time");
+
+  const { data, isLoading, error } = usePackagesFocusBreakdown(platform, startDate, endDate, { enabled: isOpen });
+
+  useEffect(() => {
+    if (!isOpen) {
+      setPlatform("meta");
+      setFocusTab("one-time");
+    }
+  }, [isOpen]);
+
+  const summary = data?.supported ? data.summary : undefined;
+  const buckets = data?.supported ? data.detail.buckets : undefined;
+  const showUnclassified = (summary?.unclassified.spendCents ?? 0) > 0;
+
+  const platformChip = (p: Platform, label: string) => (
+    <button
+      type="button"
+      onClick={() => setPlatform(p)}
+      className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
+        platform === p
+          ? "bg-neutral-900 text-white dark:bg-white dark:text-neutral-900 border-transparent"
+          : "border-neutral-300 dark:border-neutral-700 text-neutral-600 dark:text-neutral-300 hover:border-neutral-400"
+      }`}
+    >
+      {label}
+    </button>
+  );
+
+  return (
+    <ModalContainer isOpen={isOpen} onClose={onClose} size="4xl" height="fixed" className="!max-w-[1100px]">
+      <ModalHeader
+        title="Ad spend — packages focus"
+        subtitle={
+          data?.supported
+            ? `Membership vs one-time landing URLs${rangeLabel ? ` · ${rangeLabel}` : ""} · Meta-reported revenue`
+            : rangeLabel
+        }
+        onClose={onClose}
+      />
+      <ModalContent padding="none">
+        <div className="flex-1 overflow-y-auto p-4 space-y-4">
+          <div className="flex flex-wrap items-center gap-2">
+            {platformChip("meta", "Meta")}
+            {platformChip("tiktok", "TikTok")}
+          </div>
+
+          {platform === "tiktok" && data && !data.supported && (
+            <div className="p-6 text-center text-sm text-neutral-500 dark:text-neutral-400 border border-dashed border-neutral-300 dark:border-neutral-700 rounded-xl">
+              TikTok ad→landing-URL mapping isn&apos;t synced yet — the split lights up here once the TikTok
+              destination resolver ships. Spend itself is on the TikTok Ads tab.
+            </div>
+          )}
+
+          {error && (
+            <div className="p-4 bg-red-50 dark:bg-red-950/30 border-2 border-red-200 dark:border-red-900/45 rounded-lg flex items-center gap-2">
+              <AlertCircle className="w-5 h-5 text-red-600 dark:text-red-400 flex-shrink-0" />
+              <span className="text-red-700 dark:text-red-300 text-sm">
+                {error instanceof Error ? error.message : "Failed to load"}
+              </span>
+            </div>
+          )}
+
+          {isLoading && !data && (
+            <div className="p-8 text-center">
+              <Loader2 className="w-10 h-10 mx-auto mb-3 text-gray-400 animate-spin" />
+              <p className="text-gray-600 dark:text-neutral-400">Loading…</p>
+            </div>
+          )}
+
+          {summary && (
+            <div className={`grid gap-3 ${showUnclassified ? "grid-cols-1 sm:grid-cols-3" : "grid-cols-1 sm:grid-cols-2"}`}>
+              <SummaryTile label="Membership focus" totals={summary.membership} active={focusTab === "membership"} onClick={() => setFocusTab("membership")} />
+              <SummaryTile label="One-time focus" totals={summary["one-time"]} active={focusTab === "one-time"} onClick={() => setFocusTab("one-time")} />
+              {showUnclassified && (
+                <SummaryTile label="Unclassified" totals={summary.unclassified} active={focusTab === "unclassified"} onClick={() => setFocusTab("unclassified")} />
+              )}
+            </div>
+          )}
+
+          {data?.supported && !data.detail.complete && (
+            <p className="text-2xs text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 border border-amber-100 dark:border-amber-900/40 rounded px-2 py-1">
+              {data.detail.availableSince
+                ? `Per-campaign detail covers ${data.detail.availableSince} onwards (older per-ad data has expired); the summary tiles above cover the full selected range.`
+                : "No per-ad campaign detail is available yet (no synced ad-level data); the summary tiles above still cover the full selected range."}
+            </p>
+          )}
+
+          {buckets && (
+            <CampaignTreeTable
+              campaigns={buckets[focusTab]}
+              ariaLabel={`Campaigns — ${focusTab} focus`}
+            />
+          )}
+        </div>
+      </ModalContent>
+    </ModalContainer>
+  );
+}
