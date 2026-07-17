@@ -24,6 +24,7 @@ interface StoredUTM {
   campaign_id?: string;
   adset_id?: string;
   ad_id?: string;
+  packages_focus?: "one-time";
   capturedAt: number;
 }
 
@@ -47,6 +48,8 @@ export function getStoredUTMParams(): AttributionParams | null {
     if (cookie.campaign_id) p.campaign_id = cookie.campaign_id;
     if (cookie.adset_id) p.adset_id = cookie.adset_id;
     if (cookie.ad_id) p.ad_id = cookie.ad_id;
+    // Validate the literal so a tampered cookie can't smuggle an arbitrary value.
+    if (cookie.packages_focus === "one-time") p.packages_focus = "one-time";
     if (Object.keys(p).length > 0) return p;
   }
   try {
@@ -70,6 +73,7 @@ export function getStoredUTMParams(): AttributionParams | null {
     if (parsed.campaign_id) params.campaign_id = parsed.campaign_id;
     if (parsed.adset_id) params.adset_id = parsed.adset_id;
     if (parsed.ad_id) params.ad_id = parsed.ad_id;
+    if (parsed.packages_focus === "one-time") params.packages_focus = "one-time";
 
     return Object.keys(params).length > 0 ? params : null;
   } catch {
@@ -91,7 +95,8 @@ export function setStoredUTMParams(params: AttributionParams): void {
     params.utm_term ||
     params.campaign_id ||
     params.adset_id ||
-    params.ad_id;
+    params.ad_id ||
+    params.packages_focus;
   if (!params || !hasAny) return;
   try {
     const stored: StoredUTM = {
@@ -103,6 +108,7 @@ export function setStoredUTMParams(params: AttributionParams): void {
       ...(params.campaign_id && { campaign_id: params.campaign_id }),
       ...(params.adset_id && { adset_id: params.adset_id }),
       ...(params.ad_id && { ad_id: params.ad_id }),
+      ...(params.packages_focus === "one-time" && { packages_focus: "one-time" as const }),
       capturedAt: Date.now(),
     };
     sessionStorage.setItem(UTM_STORAGE_KEY, JSON.stringify(stored));

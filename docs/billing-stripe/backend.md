@@ -135,3 +135,5 @@ The resolved metadata (`attr_platform`, `attr_confidence`, and related keys from
 - **Subscription / renewal** (`handleInvoicePaymentSucceeded`) — read from `subscription?.metadata ?? expandedInvoice.metadata`, matching the `sessionAttribution` source order. Because the decision lives on the subscription, every recurring renewal inherits the same converting platform (sticky).
 
 The ledger writer (`processPaymentBenefits`, in the [payment](../payment/backend.md) domain) then persists `convertingPlatform` / `attributionConfidence` / `isRenewal` onto the `BenefitsGranted` row, falling back to a UTM-based resolve only when no edge decision was stamped.
+
+**`attr_packages_focus` (added 2026-07-17):** the webhook's `extractAttributionFromMetadata` also reads back the landing-URL packages-focus marker stamped by `buildAttributionMetadata` (`attr_packages_focus`, only ever `"one-time"`, validated `=== "one-time"` on read) and forwards it inside `sessionAttribution.packages_focus`. See [docs/tracking/backend.md](../tracking/backend.md) for the full capture pipeline; the ledger write is documented in [docs/payment/backend.md](../payment/backend.md).

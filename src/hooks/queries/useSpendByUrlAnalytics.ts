@@ -1,6 +1,15 @@
 import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 
+export interface SpendByUrlFocusTotals {
+  spend: number;
+  spendCents: number;
+  revenue: number;
+  revenueCents: number;
+  conversions: number;
+  roas: number;
+}
+
 export interface SpendByUrlRow {
   canonicalUrl: string;
   spend: number;
@@ -13,6 +22,8 @@ export interface SpendByUrlRow {
   cpc: number;
   roas: number;
   adIds: string[];
+  /** membership vs one-time split; absent = pre-split data or unknown:// row */
+  packagesFocus?: { membership: SpendByUrlFocusTotals; "one-time": SpendByUrlFocusTotals };
 }
 
 export interface SpendByUrlResponse {
@@ -58,6 +69,12 @@ export interface SpendByUrlDetailRow {
   roas: number;
   /** From Meta creative shape at last sync */
   adFormat: "video" | "static" | "carousel" | "unknown";
+  campaignId?: string;
+  campaignName?: string;
+  adsetId?: string;
+  adsetName?: string;
+  /** Landing-URL strategy of this ad; "unclassified" = destination unresolved */
+  packagesFocus: "membership" | "one-time" | "unclassified";
 }
 
 export interface SpendByUrlDetailResponse {

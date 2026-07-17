@@ -123,6 +123,15 @@ resolveAttributionAtEdge(request: NextRequest): { decision: ResolveResult; metad
 
 **Where it is called:** at the top of each create-* route's `POST` handler (or, for routes that fan out into sub-handler functions, at the point where `request` is in scope in `POST` before delegation). The returned `metadata` is spread into the same Stripe metadata object that already contains `buildAttributionMetadata(...)`. This means every subscription, one-time purchase, upsell, mini-draw, and payment-intent creation stamps resolved attribution.
 
+## Landing-URL packages focus capture (`packages_focus`, added 2026-07-17)
+
+The attribution pipeline additionally captures which **landing-page packages variant** the visitor came in through, as a seed for future true-ROAS-per-focus reporting (no UI/aggregation consumer yet):
+
+- **Capture:** `extractAttributionParams` ([utm-helpers.ts](../../src/utils/tracking/utm-helpers.ts)) reads the `packages` query param via `parseMembershipPackagesTab` and sets `packages_focus: "one-time"` **only when the value is `one-time`**. Membership is the default and is expressed by ABSENCE — organic traffic and `?packages=membership` (never used by ads) store nothing. `AttributionParams` ([src/types/tracking.ts](../../src/types/tracking.ts)) carries the field; the cookie `FIELDS` whitelist ([attribution-cookie.ts](../../src/utils/tracking/attribution-cookie.ts)), the legacy sessionStorage store ([utm-storage.ts](../../src/utils/tracking/utm-storage.ts) — projects fields explicitly, so it needed the field added to `StoredUTM`, both reads, and the write spread), and `useUTMPersistence`'s `hasAny` gate all include it, so a landing with ONLY `?packages=one-time` now persists attribution. `useAttribution` passes the stored object through unmodified (no change needed).
+- **Checkout → Stripe:** the `attribution` body field (`attributionSchema`, `z.literal("one-time").optional()`) flows to `buildAttributionMetadata`, which stamps `attr_packages_focus` — validated `=== "one-time"` at every boundary so a tampered cookie cannot inject arbitrary strings.
+- **Webhook → ledger:** `extractAttributionFromMetadata` (stripe-webhook-handlers) reads it back; `processPaymentBenefits` persists `data.packagesFocus: "one-time"` in the PaymentEvent Mixed blob (camelCase per blob convention), independent of the session/signup merge gate.
+- **Analysis rule (for the future consumer):** missing value = membership-default for ad-attributed payments; rows with `attributionAdId` can also be classified retroactively via the ad's stored `MetaAdDestination` URL.
+
 ## Historical backfill derivation (`deriveBackfillAttribution`)
 
 [src/services/attribution/deriveBackfillAttribution.ts](../../src/services/attribution/deriveBackfillAttribution.ts) — pure function used by the PaymentEvent historical backfill to assign a `convertingPlatform` to rows that predate click-ID capture.

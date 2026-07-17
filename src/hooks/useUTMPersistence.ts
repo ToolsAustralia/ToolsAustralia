@@ -33,7 +33,8 @@ export function useUTMPersistence() {
       params.utm_term ||
       params.campaign_id ||
       params.adset_id ||
-      params.ad_id;
+      params.ad_id ||
+      params.packages_focus;
     if (hasAny) {
       setStoredUTMParams(params);              // legacy session store (transitional)
       writeAttributionCookie(params);          // durable, login/OAuth-immune, FIRST-touch (paid)

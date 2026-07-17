@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-07-16T03:36:02.095Z",
+  "generatedAt": "2026-07-17T06:59:57.318Z",
   "endpoints": [
     {
       "registryKey": "pending-actions.status",
@@ -169,6 +169,13 @@
       "path": "/v1/analytics/spend-by-url/detail",
       "method": "GET",
       "summary": "Per-ad spend / delivery / conversion breakdown for one or more canonical destination URLs"
+    },
+    {
+      "registryKey": "analytics.packages-focus",
+      "tier": "read",
+      "path": "/v1/analytics/packages-focus",
+      "method": "GET",
+      "summary": "Membership vs one-time landing-URL split of Meta ad spend/ROAS: bucket summary (materialized, any range) + campaign→adset→ad detail (live join, ~60-day insights window). platform=tiktok returns supported:false until its URL mapping ships."
     },
     {
       "registryKey": "analytics.hourly-revenue",

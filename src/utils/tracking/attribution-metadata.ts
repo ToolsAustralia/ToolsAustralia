@@ -23,6 +23,8 @@ export function buildAttributionMetadata(attribution?: AttributionParams | null)
   if (attribution.campaign_id) meta.attr_campaign_id = attribution.campaign_id;
   if (attribution.adset_id) meta.attr_adset_id = attribution.adset_id;
   if (attribution.ad_id) meta.attr_ad_id = attribution.ad_id;
+  // Validate the literal so a tampered cookie can't stamp an arbitrary value.
+  if (attribution.packages_focus === "one-time") meta.attr_packages_focus = "one-time";
 
   return meta;
 }

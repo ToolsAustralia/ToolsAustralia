@@ -250,7 +250,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
 ```json
 {
   "version": 1,
-  "lastModified": "2026-07-16",
+  "lastModified": "2026-07-17",
   "domains": {
     "subscription": {
       "docs": "docs/subscription/",
@@ -314,7 +314,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/hooks/queries/admin/useAllowlistStats.ts",
         "src/utils/billing/declineCodeLabels.ts"
       ],
-      "lastVerified": "2026-07-16"
+      "lastVerified": "2026-07-17"
     },
     "payment": {
       "docs": "docs/payment/",
@@ -329,7 +329,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/hooks/use3DSRedirectHandler.ts",
         "src/hooks/useSavedPaymentMethods.ts"
       ],
-      "lastVerified": "2026-07-16"
+      "lastVerified": "2026-07-17"
     },
     "draws": {
       "docs": "docs/draws/",
@@ -570,6 +570,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/services/klaviyo/**",
         "src/services/attribution/**",
         "src/types/attribution.ts",
+        "src/types/tracking.ts",
         "src/services/facebook-ads-health/**",
         "src/models/MetaAdDestination.ts",
         "src/models/MetaAdInsightsDaily.ts",
@@ -585,7 +586,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/hooks/useAttribution.ts",
         "src/hooks/useUTMPersistence.ts"
       ],
-      "lastVerified": "2026-07-16"
+      "lastVerified": "2026-07-17"
     },
     "ab-testing": {
       "docs": "docs/ab-testing/",
@@ -616,7 +617,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/utils/dashboard-entry-hold.ts",
         "src/utils/dashboard-landing-session.ts"
       ],
-      "lastVerified": "2026-05-04"
+      "lastVerified": "2026-07-17"
     },
     "contact": {
       "docs": "docs/contact/",
@@ -674,7 +675,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/app/globals.css",
         "src/app/not-found.tsx"
       ],
-      "lastVerified": "2026-07-16"
+      "lastVerified": "2026-07-17"
     },
     "client-state": {
       "docs": "docs/client-state/",
@@ -699,7 +700,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/hooks/usePrefetching.ts",
         "src/hooks/useConfetti.ts"
       ],
-      "lastVerified": "2026-07-16"
+      "lastVerified": "2026-07-17"
     },
     "internal-norm": {
       "docs": "docs/internal-norm/",
@@ -721,7 +722,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "eslint/rules/norm-must-import-service.js",
         "eslint/rules/index.js"
       ],
-      "lastVerified": "2026-07-16"
+      "lastVerified": "2026-07-17"
     },
     "admin": {
       "docs": "docs/admin/",
@@ -750,7 +751,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/models/DashboardStatsDailySnapshot.ts",
         "src/services/admin/dashboard-stats/**"
       ],
-      "lastVerified": "2026-07-16"
+      "lastVerified": "2026-07-17"
     },
     "dashboard-account": {
       "docs": "docs/dashboard-account/",
@@ -826,7 +827,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "scripts/connect-ops-db.ts",
         "scripts/check-env.mjs"
       ],
-      "lastVerified": "2026-07-16"
+      "lastVerified": "2026-07-17"
     },
     "dev-tooling": {
       "docs": "docs/dev-tooling/",

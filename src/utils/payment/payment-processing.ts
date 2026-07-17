@@ -422,6 +422,13 @@ async function processPaymentBenefitsInternal(
           attributionData.promotionSlug = signupAttr.promotionSlug;
         }
 
+        // Landing-URL packages focus (seed for future true-ROAS-per-focus).
+        // Only ever "one-time"; absence = membership-default at analysis time.
+        // Independent of the useSession gate — the focus is meaningful on its own.
+        if (sessionAttribution?.packages_focus === "one-time") {
+          attributionData.packagesFocus = "one-time";
+        }
+
         // Single-platform attribution (spec: prefer the edge-resolved decision; otherwise
         // fall back to a UTM-based resolve from the merged attributionData). Never throws.
         const isRenewal = classifyIsRenewal({ billingReason, isResubscribe });

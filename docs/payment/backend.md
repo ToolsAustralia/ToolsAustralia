@@ -57,6 +57,17 @@ and stamp three top-level fields onto the `BenefitsGranted` `PaymentEvent`:
     produces, retiring the per-cycle backfill for future rows.
 - `isRenewal` comes from `classifyIsRenewal({ billingReason, isResubscribe })` — true only for a
   `subscription_cycle` that is not a create / upgrade / resubscribe.
+
+#### Landing-URL packages focus in the `data` blob (added 2026-07-17)
+
+When the webhook-forwarded `sessionAttribution.packages_focus === "one-time"`, `processPaymentBenefits`
+persists `data.packagesFocus: "one-time"` on the `BenefitsGranted` row (camelCase per the blob's
+convention, set **independently** of the session/signup merge gate since the marker is meaningful on
+its own). It records that the customer's landing URL carried `?packages=one-time` (one-time-focused ad
+variant). Membership is the default and is expressed by **absence** — analysis must treat missing as
+membership-default. No aggregation consumer exists yet; this is the seed for future true-ROAS-per-focus
+reporting (capture pipeline documented in [docs/tracking/backend.md](../tracking/backend.md); no
+`PaymentEvent` schema change — the blob is `Mixed`).
 - Audit evidence (`attributedClickId`, `attributedClickTimestamp`) is written into the Mixed `data`
   blob only when present. Subscriptions/renewals inherit the decision from `subscription.metadata`
   (sticky), so the converting platform stays constant across the membership lifetime.

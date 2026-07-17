@@ -260,6 +260,7 @@ function extractAttributionFromMetadata(metadata: Stripe.Metadata): {
   campaign_id?: string;
   adset_id?: string;
   ad_id?: string;
+  packages_focus?: "one-time";
 } | undefined {
   const utmSource = metadata.attr_utm_source;
   const utmMedium = metadata.attr_utm_medium;
@@ -269,8 +270,12 @@ function extractAttributionFromMetadata(metadata: Stripe.Metadata): {
   const campaignId = metadata.attr_campaign_id;
   const adsetId = metadata.attr_adset_id;
   const adId = metadata.attr_ad_id;
+  const packagesFocus = metadata.attr_packages_focus;
 
-  if (utmSource || utmMedium || utmCampaign || utmContent || utmTerm || campaignId || adsetId || adId) {
+  if (
+    utmSource || utmMedium || utmCampaign || utmContent || utmTerm ||
+    campaignId || adsetId || adId || packagesFocus === "one-time"
+  ) {
     return {
       ...(utmSource && { utm_source: utmSource }),
       ...(utmMedium && { utm_medium: utmMedium }),
@@ -280,6 +285,8 @@ function extractAttributionFromMetadata(metadata: Stripe.Metadata): {
       ...(campaignId && { campaign_id: campaignId }),
       ...(adsetId && { adset_id: adsetId }),
       ...(adId && { ad_id: adId }),
+      // Validate the literal so a tampered metadata value can't be persisted.
+      ...(packagesFocus === "one-time" && { packages_focus: "one-time" as const }),
     };
   }
   return undefined;

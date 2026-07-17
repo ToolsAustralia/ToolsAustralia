@@ -24,7 +24,7 @@ export interface StoredAttribution extends AttributionParams {
 
 const FIELDS: (keyof AttributionParams)[] = [
   "utm_source", "utm_medium", "utm_campaign", "utm_content", "utm_term",
-  "campaign_id", "adset_id", "ad_id",
+  "campaign_id", "adset_id", "ad_id", "packages_focus",
 ];
 
 /** JSON-encode params + capturedAt. Returns "" when no params present. */

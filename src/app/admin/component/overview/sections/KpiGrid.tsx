@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, type ElementType } from "react";
+import { useMemo, useRef, useState, type ElementType } from "react";
 import {
   DollarSign,
   TrendingUp,
@@ -15,6 +15,8 @@ import Image from "next/image";
 import { MetricCard, Popover, TrendPill, type Tone } from "@/components/admin/ui";
 import { getPackageIcon, type PackageIconData } from "@/utils/images/package-icons";
 import { tierColorByPackageId } from "./tierColors";
+import AdSpendFocusModal from "@/components/modals/AdSpendFocusModal";
+import { resolveAestDateWindow } from "@/utils/admin/resolveAestDateWindow";
 import type { DateRange } from "@/components/admin/DateRangeToggle";
 import type { TrendData } from "@/types/admin/trend-types";
 import type {
@@ -153,6 +155,8 @@ export default function KpiGrid({
   rangeLabel = "",
   statsLoading = false,
   membershipLoading = false,
+  startDate,
+  endDate,
 }: {
   stats: AdminDashboardStats | undefined;
   membership: MembershipByPackageData | undefined;
@@ -160,7 +164,17 @@ export default function KpiGrid({
   rangeLabel?: string;
   statsLoading?: boolean;
   membershipLoading?: boolean;
+  startDate?: string;
+  endDate?: string;
 }) {
+  // Ad Spend / ROAS drill-down modal — resolves the page date filter to concrete
+  // AEST yyyy-MM-dd bounds (same window as Facebook Ads → Spend by URL).
+  const focusWindow = useMemo(
+    () => resolveAestDateWindow(dateRange, startDate, endDate),
+    [dateRange, startDate, endDate],
+  );
+  const [adSpendFocusOpen, setAdSpendFocusOpen] = useState(false);
+
   const users = stats?.users;
   const revenue = stats?.revenue;
   const facebookAds = stats?.facebookAds;
@@ -266,6 +280,8 @@ export default function KpiGrid({
             tone="blue"
             trend={trendPct(facebookAds?.spendTrend)}
             loading={showStatsSkeleton}
+            onClick={() => setAdSpendFocusOpen(true)}
+            active={adSpendFocusOpen}
           />
           <MetricCard
             title="ROAS"
@@ -275,6 +291,8 @@ export default function KpiGrid({
             tone="green"
             trend={trendPct(facebookAds?.roasTrend)}
             loading={showStatsSkeleton}
+            onClick={() => setAdSpendFocusOpen(true)}
+            active={adSpendFocusOpen}
           />
           <KpiCard
             title="MRR"
@@ -355,6 +373,14 @@ export default function KpiGrid({
           />
         </div>
       </div>
+
+      <AdSpendFocusModal
+        isOpen={adSpendFocusOpen}
+        onClose={() => setAdSpendFocusOpen(false)}
+        startDate={focusWindow.startDate}
+        endDate={focusWindow.endDate}
+        rangeLabel={rangeLabel}
+      />
     </div>
   );
 }
