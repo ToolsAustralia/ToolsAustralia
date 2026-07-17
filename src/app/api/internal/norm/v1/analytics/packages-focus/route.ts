@@ -9,6 +9,10 @@ const QuerySchema = z.object({
   platform: z.enum(["meta", "tiktok"]).default("meta"),
 });
 
+// The service's on-read freshness may sync the trailing 1-2 days from Meta
+// (time-budgeted; see spendByUrlFreshness).
+export const maxDuration = 60;
+
 const breakdownService = new PackagesFocusBreakdownService();
 
 /**

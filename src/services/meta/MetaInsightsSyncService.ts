@@ -16,6 +16,14 @@ export interface SyncInsightsResult {
 
 export interface SyncInsightsDateRangeOptions {
   onProgress?: SyncInsightsProgress;
+  /**
+   * Skip the per-account adset-metadata refetch (291+ adsets → several seconds)
+   * AND omit its four denormalized fields from the $set so existing values the
+   * cron wrote are left untouched (a $set of nulls would clobber the Health
+   * view's data). Used by the on-read freshness path (spendByUrlFreshness),
+   * which only needs spend/revenue-level fields; the cron keeps metadata fresh.
+   */
+  skipAdsetMetadata?: boolean;
 }
 
 /**
@@ -46,8 +54,11 @@ export class MetaInsightsSyncService {
     });
     log?.(`[insights] Download finished: ${raw.length} insight rows. Step 2/2: Upserting into MongoDB…`);
 
-    // Fetch adset metadata once per ad-account to denormalize into each row.
-    const metadataList = await fetchAdsetMetadata(adAccountId, accessToken);
+    // Fetch adset metadata once per ad-account to denormalize into each row
+    // (skipped by the on-read freshness path — see SyncInsightsDateRangeOptions).
+    const metadataList = options?.skipAdsetMetadata
+      ? []
+      : await fetchAdsetMetadata(adAccountId, accessToken);
     const metadataByAdsetId = new Map<string, AdsetMetadata>(
       metadataList.map((m) => [m.adsetId, m])
     );
@@ -98,10 +109,16 @@ export class MetaInsightsSyncService {
         reach: metrics.reach,
         frequency: metrics.frequency,
         cpmCents: metrics.cpmCents,
-        adsetBudgetCents: meta?.dailyBudgetCents ?? meta?.lifetimeBudgetCents ?? null,
-        campaignObjective: meta?.campaignObjective ?? null,
-        learningStatus: meta?.learningStatus ?? null,
-        lastSignificantEdit: meta?.lastSignificantEdit ?? null,
+        // When skipAdsetMetadata is set these four fields are OMITTED (not
+        // nulled) so the cron-written values survive an on-read refresh.
+        ...(options?.skipAdsetMetadata
+          ? {}
+          : {
+              adsetBudgetCents: meta?.dailyBudgetCents ?? meta?.lifetimeBudgetCents ?? null,
+              campaignObjective: meta?.campaignObjective ?? null,
+              learningStatus: meta?.learningStatus ?? null,
+              lastSignificantEdit: meta?.lastSignificantEdit ?? null,
+            }),
         raw: row as unknown as Record<string, unknown>,
         // CRITICAL for TTL: always use $set (not $setOnInsert) so each re-sync
         // refreshes the syncedAt clock, extending the TTL on frequently-touched rows.

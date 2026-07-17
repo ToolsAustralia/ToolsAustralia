@@ -123,6 +123,10 @@ resolveAttributionAtEdge(request: NextRequest): { decision: ResolveResult; metad
 
 **Where it is called:** at the top of each create-* route's `POST` handler (or, for routes that fan out into sub-handler functions, at the point where `request` is in scope in `POST` before delegation). The returned `metadata` is spread into the same Stripe metadata object that already contains `buildAttributionMetadata(...)`. This means every subscription, one-time purchase, upsell, mini-draw, and payment-intent creation stamps resolved attribution.
 
+## Spend-by-url on-read freshness (2026-07-17)
+
+[src/services/meta/spendByUrlFreshness.ts](../../src/services/meta/spendByUrlFreshness.ts) makes the Meta spend-by-url pipeline near-real-time: reads touching the trailing 1–2 AEST days trigger a throttled (5-min), time-budgeted (12s) refresh — insights window sync → **missing-only** destination resolve → aggregate rebuild — instead of waiting for the 3-hourly cron. The cron remains the history/restatement backstop. Full write-up: `docs/metrics-analytics/backend.md`.
+
 ## Landing-URL packages focus capture (`packages_focus`, added 2026-07-17)
 
 The attribution pipeline additionally captures which **landing-page packages variant** the visitor came in through, as a seed for future true-ROAS-per-focus reporting (no UI/aggregation consumer yet):

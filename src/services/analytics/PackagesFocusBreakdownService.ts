@@ -5,6 +5,7 @@ import {
   derivePackagesFocusForDestination,
   type PackagesFocusBucket,
 } from "@/utils/metrics/packages-focus";
+import { ensureSpendByUrlFreshness } from "@/services/meta/spendByUrlFreshness";
 
 export type AdsPlatform = "meta" | "tiktok";
 export interface PackagesFocusTotals {
@@ -112,6 +113,10 @@ export class PackagesFocusBreakdownService {
         detail: { complete: false, availableSince: null, buckets: { membership: [], "one-time": [], unclassified: [] } },
       };
     }
+
+    // Near-real-time: refresh the trailing 1-2 days from Meta when stale
+    // (>5min), bounded by a hard time budget — see spendByUrlFreshness.
+    await ensureSpendByUrlFreshness(adAccountId, startDate, endDate);
 
     const [summary, detail] = await Promise.all([
       this.buildSummary(adAccountId, startDate, endDate),

@@ -2,8 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { requirePermission } from "@/lib/api-auth-permissions";
 import connectDB from "@/lib/mongodb";
 import { SpendByUrlAggregationService } from "@/services/analytics/SpendByUrlAggregationService";
+import { ensureSpendByUrlFreshness } from "@/services/meta/spendByUrlFreshness";
 
 export const dynamic = "force-dynamic";
+// On-read freshness may sync the trailing 1-2 days from Meta (time-budgeted).
+export const maxDuration = 60;
 
 const aggService = new SpendByUrlAggregationService();
 
@@ -36,6 +39,10 @@ export async function GET(request: NextRequest) {
         { status: 400 }
       );
     }
+
+    // Near-real-time: refresh the trailing 1-2 days from Meta when stale (>5min),
+    // bounded by a hard time budget — see spendByUrlFreshness.
+    await ensureSpendByUrlFreshness(adAccountId, startDate, endDate);
 
     const result = await aggService.getSpendByUrlListFormatted(adAccountId, startDate, endDate);
 
