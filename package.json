@@ -192,6 +192,8 @@
     "backfill:converting-platform:dry": "tsx scripts/backfill-converting-platform.ts --dry-run",
     "backfill:klaviyo-cycle": "tsx scripts/backfill-klaviyo-attribution-cycle.ts",
     "backfill:klaviyo-cycle:dry": "tsx scripts/backfill-klaviyo-attribution-cycle.ts --dry-run",
+    "backfill:paid-attribution": "tsx scripts/backfill-paid-attribution-recovery.ts",
+    "backfill:paid-attribution:dry": "tsx scripts/backfill-paid-attribution-recovery.ts --dry-run",
     "sync:allowlist-from-blocked": "tsx scripts/sync-allowlist-from-blocked-transactions.ts",
     "sync:allowlist-from-blocked:dry": "tsx scripts/sync-allowlist-from-blocked-transactions.ts --dry-run",
     "investigate:blocked": "tsx scripts/investigate-blocked-transactions.ts",

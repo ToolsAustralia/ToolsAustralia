@@ -106,7 +106,17 @@ export interface DeclineSummaryFilterInput {
 export async function summariseDeclineCodes(
   input: DeclineSummaryFilterInput
 ): Promise<DeclineCodeSummary> {
-  const match: Record<string, unknown> = { status: "failed" };
+  // Excludes recovery machinery rows so each decline is counted exactly once:
+  // - step-audit rows (`result.recovery.step` — void/finalize audits, codeless) are
+  //   not card outcomes at all;
+  // - the bulk run's recovery SUMMARY row (`result.recovery.bulk` — keyed on the
+  //   original worklist invoice, codeless) duplicates the recovery pay row on the
+  //   NEW invoice, which carries the real declineCode and is the row we count.
+  const match: Record<string, unknown> = {
+    status: "failed",
+    "result.recovery.step": { $exists: false },
+    "result.recovery.bulk": { $exists: false },
+  };
   if (input.startDate || input.endDate) {
     const range: { $gte?: Date; $lt?: Date } = {};
     if (input.startDate) range.$gte = input.startDate;
@@ -167,11 +177,21 @@ export function buildRunsFilter(input: RunsFilterInput): FilterQuery<IChargeJobR
   return f;
 }
 
-/** Filter builder for manual retries. endDate is exclusive (start of next AEST day). */
+/**
+ * Filter builder for manual retries. endDate is exclusive (start of next AEST day).
+ *
+ * Excludes recovery step-audit rows (`result.recovery.step`) — they are machinery
+ * audit (void/finalize/create steps), not admin retries. Real per-user recovery PAY
+ * rows have no step tag and stay listed; the bulk run's recovery pay rows carry a
+ * chargeRunId and so never match `{ chargeRunId: null }` in the first place.
+ */
 export function buildManualRetriesFilter(
   input: ManualRetriesFilterInput
 ): FilterQuery<IInvoiceChargeLog> {
-  const f: FilterQuery<IInvoiceChargeLog> = { chargeRunId: null };
+  const f: FilterQuery<IInvoiceChargeLog> = {
+    chargeRunId: null,
+    "result.recovery.step": { $exists: false },
+  };
   if (input.startDate || input.endDate) {
     const range: { $gte?: Date; $lt?: Date } = {};
     if (input.startDate) range.$gte = input.startDate;

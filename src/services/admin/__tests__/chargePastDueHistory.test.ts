@@ -48,6 +48,18 @@ function testManualRetriesFilterAlwaysSetsChargeRunIdNull() {
   assert.equal(f.chargeRunId, null);
 }
 
+function testManualRetriesFilterExcludesRecoveryStepAuditRows() {
+  // Recovery machinery audit rows (void/finalize/create step audits, tagged
+  // result.recovery.step) are not admin retries and must never surface in the
+  // Manual Retries view — only real pay/outcome rows belong there.
+  const f = buildManualRetriesFilter({});
+  assert.deepEqual(
+    (f as Record<string, unknown>)["result.recovery.step"],
+    { $exists: false },
+    "manual-retries filter must exclude recovery step-audit rows"
+  );
+}
+
 function testManualRetriesFilterDateRangeUsesGteAndLt() {
   const f = buildManualRetriesFilter({
     startDate: new Date("2026-05-05T14:00:00.000Z"),
@@ -179,6 +191,7 @@ function run() {
   testRunsFilterStatus();
   testRunsFilterIgnoresInvalidStatus();
   testManualRetriesFilterAlwaysSetsChargeRunIdNull();
+  testManualRetriesFilterExcludesRecoveryStepAuditRows();
   testManualRetriesFilterDateRangeUsesGteAndLt();
   testFormatDurationMs();
   testParseAestDayStart();
