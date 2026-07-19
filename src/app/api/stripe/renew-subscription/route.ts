@@ -11,6 +11,7 @@ import { getValidPaymentMethod } from "@/utils/payment/stripe/stripe-helpers";
 import { isStripeCardError } from "@/utils/payment/stripe/payment-error-detection";
 import { getSubscriptionCreateParamsForAnchor, getNextAnchorTimestamp } from "@/utils/billing/anchor-billing";
 import { getSubscriptionPeriodEnd } from "@/utils/payment/stripe/subscription-period";
+import { carryStreakAcrossSubscriptionReplace } from "@/utils/subscription/streak";
 import {
   analyzePaymentIntentForExcessiveRetry,
   analyzeStripePayErrorForExcessiveRetry,
@@ -591,6 +592,11 @@ export async function POST(request: NextRequest) {
     const newSubscriptionEndDate =
       newSubscriptionPeriodEnd != null ? new Date(newSubscriptionPeriodEnd * 1000) : undefined;
 
+    // Streak fields must survive the whole-object subscription replacements below,
+    // and the grace/reset decision must use the OLD endDate — these saves land
+    // before the webhook's streak writer, which only ever sees the NEW endDate.
+    const streakCarry = carryStreakAcrossSubscriptionReplace(user.subscription);
+
     // Check if payment completed immediately
     if (
       latestInvoice?.status === "paid" &&
@@ -607,6 +613,7 @@ export async function POST(request: NextRequest) {
         isActive: true, // active or trialing both have access
         autoRenew: true,
         status: "active",
+        ...streakCarry,
       };
       user.stripeSubscriptionId = newSubscription.id;
 
@@ -645,6 +652,7 @@ export async function POST(request: NextRequest) {
       isActive: false,
       autoRenew: true,
       status: newSubscription.status,
+      ...streakCarry,
     };
     user.stripeSubscriptionId = newSubscription.id;
 

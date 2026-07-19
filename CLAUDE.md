@@ -86,6 +86,21 @@ Both files include a "Coming soon" section — when something ships, **move the 
 
 **This rule IS hook-enforced (trigger-based).** The `Stop` hook (`.claude/hooks/doc-sync.mjs`) holds a curated `CUSTOMER_TRIGGER_GLOBS` list of customer-material source paths; if you edit one of them substantively and do **not** touch CUSTOMER.md in the same turn, it BLOCKS with `STALE CUSTOMER DOC`. The hook only checks that CUSTOMER.md was *touched* — it cannot verify the content is correct, so you still own getting the wording right. If a triggered edit genuinely changed no customer-level fact (pure refactor), make a one-line clarifying touch to CUSTOMER.md to clear the block. When you add a new customer-material source file, add its path to `CUSTOMER_TRIGGER_GLOBS` in the hook.
 
+### 5c. Keep Cobber's knowledge in sync with customer-facing changes
+
+Cobber (the AI support chatbot) answers ONLY from grounded knowledge: the FAQ corpus (`src/data/supportChatFaqs.ts`), the generated knowledge pack (`src/generated/chatKnowledgePack.ts`, rebuilt by `npm run build:chat-knowledge-pack` — also runs in `prebuild`/`predev`), and the ACCOUNT SELF-SERVICE MAP in `src/services/support-chat/systemPrompt.ts`. A customer-facing change that skips Cobber leaves it either ignorant of the feature (hallucination risk on legally constrained copy — see rule 11) or asserting stale facts.
+
+Whenever a change alters **anything a customer can see or experience** — a feature ships or is removed, a price/tier/perk/policy changes, a flow or page location moves, draw/entry mechanics change — check Cobber in the same task:
+
+- Does an existing FAQ entry now assert a stale fact? Fix it.
+- Is this a new customer-visible feature/mechanic? Add FAQ entries (match the corpus's id/category conventions; free-entry framing per rule 11).
+- Is it a "my account"-type surface? Add/update the matching bullet in the systemPrompt ACCOUNT SELF-SERVICE MAP (navigation only, never a data value).
+- Then re-run `npm run build:chat-knowledge-pack` and `npm run test:chat-faqs` (the count assertion in `src/data/__tests__/faqs.test.ts` pins the corpus size — bump it deliberately).
+
+**Timing caveat:** Cobber must describe what is LIVE for customers, not what is merged. If a feature ships dark (flag off / rewards inactive), land the FAQ entries in the same branch but make sure the feature's launch step and the copy agree by launch time.
+
+This is a judgment rule (not hook-enforced) — `/review` should flag customer-facing changes that leave Cobber stale.
+
 ### 6. Verify before claiming — AND before branching on assumed state
 
 Never state a fact about the code, this codebase's runtime behavior, or a third-party API/service without first checking. "Checking" means a Read, Grep, Bash command, doc lookup, or runtime probe — not recall.
@@ -250,7 +265,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
 ```json
 {
   "version": 1,
-  "lastModified": "2026-07-17",
+  "lastModified": "2026-07-19",
   "domains": {
     "subscription": {
       "docs": "docs/subscription/",
@@ -329,7 +344,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/hooks/use3DSRedirectHandler.ts",
         "src/hooks/useSavedPaymentMethods.ts"
       ],
-      "lastVerified": "2026-07-17"
+      "lastVerified": "2026-07-19"
     },
     "draws": {
       "docs": "docs/draws/",
@@ -362,12 +377,13 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/hooks/useMiniDrawPurchase.ts",
         "src/hooks/usePastDrawsData.ts"
       ],
-      "lastVerified": "2026-07-08"
+      "lastVerified": "2026-07-14"
     },
     "rewards-redeemables": {
       "docs": "docs/rewards-redeemables/",
       "paths": [
         "src/services/redeemables/**",
+        "src/services/milestones/**",
         "src/utils/redeemables/**",
         "src/models/RedeemableIssuance.ts",
         "src/models/MilestoneIssuance.ts",
@@ -586,7 +602,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/hooks/useAttribution.ts",
         "src/hooks/useUTMPersistence.ts"
       ],
-      "lastVerified": "2026-07-17"
+      "lastVerified": "2026-07-19"
     },
     "ab-testing": {
       "docs": "docs/ab-testing/",
@@ -751,7 +767,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/models/DashboardStatsDailySnapshot.ts",
         "src/services/admin/dashboard-stats/**"
       ],
-      "lastVerified": "2026-07-17"
+      "lastVerified": "2026-07-19"
     },
     "dashboard-account": {
       "docs": "docs/dashboard-account/",
@@ -761,9 +777,10 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/hooks/useDashboardEntryDisplay.ts",
         "src/hooks/useDashboardLandingOrchestration.ts",
         "src/hooks/useDashboardState.ts",
+        "src/hooks/useStreakCelebration.ts",
         "src/utils/dashboard/**"
       ],
-      "lastVerified": "2026-07-09"
+      "lastVerified": "2026-07-15"
     },
     "security-csp": {
       "docs": "docs/security-csp/",
@@ -827,7 +844,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "scripts/connect-ops-db.ts",
         "scripts/check-env.mjs"
       ],
-      "lastVerified": "2026-07-17"
+      "lastVerified": "2026-07-19"
     },
     "dev-tooling": {
       "docs": "docs/dev-tooling/",

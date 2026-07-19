@@ -73,6 +73,63 @@ export function decideStreakOnSubscriptionCreate(params: {
   };
 }
 
+export interface StreakCarry {
+  streakMonths: number;
+  streakGeneration: number;
+  lastStreakStartInvoiceId?: string;
+}
+
+/**
+ * Streak fields to embed when an API route REPLACES the whole `user.subscription`
+ * subdocument (resubscribe / renew flows). Those routes persist the replacement —
+ * including the NEW endDate — before the webhook's streak writer runs, so without
+ * this the replacement (a) wiped the counter and (b) fed the webhook's decision a
+ * future endDate, making the wipe stand. The grace/reset decision must therefore
+ * be made HERE, from the PRE-replacement subscription, via the same rule module
+ * as the webhook writer.
+ *
+ * - No prior subscription → fresh defaults (streak 0, generation 1).
+ * - Prior subscription still active (upgrade-style replacement) → carry untouched.
+ * - Inactive + within RESUBSCRIBE_GRACE_DAYS of the old endDate → carry untouched.
+ * - Inactive + past grace (or no endDate — conservative) → reset to 0; bump the
+ *   generation only when a prior streak existed (generation scopes re-earning).
+ */
+export function carryStreakAcrossSubscriptionReplace(
+  prev:
+    | {
+        isActive?: boolean;
+        endDate?: Date | null;
+        streakMonths?: number;
+        streakGeneration?: number;
+        lastStreakStartInvoiceId?: string;
+      }
+    | null
+    | undefined,
+  now: Date = new Date()
+): StreakCarry {
+  if (!prev) return { streakMonths: 0, streakGeneration: 1 };
+  const currentStreakMonths = prev.streakMonths ?? 0;
+  const currentStreakGeneration = prev.streakGeneration ?? 1;
+  const marker = prev.lastStreakStartInvoiceId ? { lastStreakStartInvoiceId: prev.lastStreakStartInvoiceId } : {};
+
+  // Still active (upgrade-style replacement) — upgrades/downgrades never touch the streak.
+  if (prev.isActive) return { streakMonths: currentStreakMonths, streakGeneration: currentStreakGeneration, ...marker };
+
+  const decision = decideStreakOnSubscriptionCreate({
+    billingReason: "subscription_create",
+    isUpgrade: false,
+    isResubscribe: true,
+    previousEndDate: prev.endDate ?? null,
+    currentStreakMonths,
+    currentStreakGeneration,
+    now,
+  });
+  if (decision.action === "start") {
+    return { streakMonths: 0, streakGeneration: decision.streakGeneration, ...marker };
+  }
+  return { streakMonths: currentStreakMonths, streakGeneration: currentStreakGeneration, ...marker };
+}
+
 /**
  * A gap between paid cycles long enough that an in-grace return is impossible:
  * 30-day grace + one billing cycle (~31d, the new sub's first renewal is what
@@ -98,6 +155,14 @@ export interface StreakBackfillInput {
   cancelDates: Date[];
   isCurrentlyActive: boolean;
   now: Date;
+  /**
+   * Veterans' round-up (history-incomplete + active + no breaks → whole months
+   * since join). Correct exactly ONCE, at launch. On standing REPAIR runs `now`
+   * has advanced, so re-applying it credits pure calendar months (e.g. an unpaid
+   * past-due stretch) — repair callers must pass false. Default true (launch
+   * behavior, owner-approved).
+   */
+  roundUpIncomplete?: boolean;
 }
 
 export interface StreakBackfillResult {
@@ -132,7 +197,7 @@ export function wholeMonthsBetween(a: Date, b: Date): number {
  * one — a live-written reset always wins over a recomputation.
  */
 export function computeStreakFromHistory(input: StreakBackfillInput): StreakBackfillResult {
-  const { joinDate, coverageStart, cycles, cancelDates, isCurrentlyActive, now } = input;
+  const { joinDate, coverageStart, cycles, cancelDates, isCurrentlyActive, now, roundUpIncomplete = true } = input;
   const DAY = 24 * 60 * 60 * 1000;
   let count = 0;
   let generation = 1;
@@ -160,7 +225,7 @@ export function computeStreakFromHistory(input: StreakBackfillInput): StreakBack
 
   const historyIncomplete = joinDate !== null && joinDate < coverageStart;
   let streakMonths = count;
-  if (historyIncomplete && isCurrentlyActive && breaks === 0 && joinDate) {
+  if (roundUpIncomplete && historyIncomplete && isCurrentlyActive && breaks === 0 && joinDate) {
     streakMonths = Math.max(count, wholeMonthsBetween(joinDate, now));
   }
 

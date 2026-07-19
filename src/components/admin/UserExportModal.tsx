@@ -110,6 +110,9 @@ function getFilterSummary(filters: UserFilters): string {
       filters.inActiveMajorDraw === "yes" ? "In active major draw" : "Not in active major draw"
     );
   }
+  if (filters.streak) {
+    parts.push(filters.streak === "none" ? "No streak" : `Streak: ${filters.streak}+ renewals`);
+  }
 
   return parts.length > 0 ? parts.join(", ") : "All users";
 }
@@ -246,6 +249,7 @@ export default function UserExportModal({ isOpen, onClose, filters, totalUsers }
         }
       }
       if (filters.inActiveMajorDraw) params.set("inActiveMajorDraw", filters.inActiveMajorDraw);
+      if (filters.streak) params.set("streak", filters.streak);
 
       const response = await fetch(`/api/admin/users/export?${params.toString()}`, {
         method: "GET",

@@ -58,6 +58,8 @@ export const GET = withNorm(
             lastMonthAccumulatedEntries: detail.subscription.lastMonthAccumulatedEntries ?? null,
             nextRenewalEntries: detail.subscription.nextRenewalEntries ?? null,
             renewalLandsInCurrentDraw: detail.subscription.renewalLandsInCurrentDraw ?? false,
+            streakMonths: detail.subscription.streakMonths ?? 0,
+            streakGeneration: detail.subscription.streakGeneration ?? 1,
           }
         : null,
       partnerAccessRing: {

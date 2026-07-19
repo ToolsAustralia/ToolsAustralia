@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import type { OfferType } from "@/models/CancellationFlowEvent";
-import { offerPhaseFor, nextOfferState, applySaveSuccess } from "../useCancellationFlow";
+import { offerPhaseFor, nextOfferState, applySaveSuccess, startPhaseFor } from "../useCancellationFlow";
 import type { FlowState, AcceptResult } from "../types";
 import type { AcceptOfferResponse } from "@/hooks/queries/useCancellationFlow";
 
@@ -30,8 +30,8 @@ void _driftB;
 // Helper: walk the reducer from the start of a sequence, collecting the
 // (step, offerCursor) at each stage: initial applyStart, then one decline per
 // rung until step 4.
-function walk(offersShown: OfferType[]): { step: number; offerCursor: number }[] {
-  const trace: { step: number; offerCursor: number }[] = [];
+function walk(offersShown: OfferType[]): { step: FlowState["step"]; offerCursor: number }[] {
+  const trace: { step: FlowState["step"]; offerCursor: number }[] = [];
   let phase = offerPhaseFor(offersShown, 0); // mirrors applyStart
   trace.push({ ...phase });
   // Decline until we land on step 4 (guard against runaway loop).
@@ -120,10 +120,33 @@ function baseState(): FlowState {
     offersShown: ["discount_50_2mo", "bonus_entries_100"],
     offerCursor: 0,
     pastDue: false,
+    streakMonths: 0,
     saveSuccess: false,
     acceptedOffer: null,
     acceptResult: null,
   };
+}
+
+// --- startPhaseFor: the stakes routing (spec §7b M3) ------------------------
+function testStartPhaseForStakesRouting() {
+  const seq: OfferType[] = ["pause_30d", "discount_50_2mo"];
+
+  // Streak feature LIVE + not past-due → stakes screen FIRST — always,
+  // regardless of streak depth (owner decision) and even with zero offers.
+  assert.deepStrictEqual(startPhaseFor(seq, false, true), { step: "stakes", offerCursor: 0 });
+  assert.deepStrictEqual(startPhaseFor([], false, true), { step: "stakes", offerCursor: 0 });
+
+  // Past-due keeps its dedicated routing (never sees stakes — dunning, not retention).
+  assert.deepStrictEqual(startPhaseFor([], true, true), { step: 4, offerCursor: 0 });
+
+  // Feature DARK → pre-streak flow byte-identical.
+  assert.deepStrictEqual(startPhaseFor(seq, false, false), { step: 2, offerCursor: 0 });
+  assert.deepStrictEqual(startPhaseFor([], false, false), { step: 4, offerCursor: 0 });
+
+  // Leaving stakes re-resolves through offerPhaseFor: offers → step 2 rung 0;
+  // none → step 4 (mirrors continueFromStakes()).
+  assert.deepStrictEqual(offerPhaseFor(seq, 0), { step: 2, offerCursor: 0 });
+  assert.deepStrictEqual(offerPhaseFor([], 0), { step: 4, offerCursor: 0 });
 }
 
 function testApplySaveSuccessDiscount() {
@@ -159,10 +182,11 @@ function run() {
   testOneElementSequence();
   testEmptyPastDueSequence();
   testOfferPhaseForEdges();
+  testStartPhaseForStakesRouting();
   testApplySaveSuccessDiscount();
   testApplySaveSuccessNoResult();
   testApplySaveSuccessPure();
-  console.log("PASS useCancellationFlow step-machine (incl. 3-element `other` waterfall — discount reached, not skipped)");
+  console.log("PASS useCancellationFlow step-machine (incl. 3-element `other` waterfall — discount reached, not skipped; stakes routing)");
 }
 
 run();

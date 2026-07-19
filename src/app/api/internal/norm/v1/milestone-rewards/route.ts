@@ -25,6 +25,8 @@ export const GET = withNorm(
         startsAt: row.startsAt ? row.startsAt.toISOString() : null,
         endsAt: row.endsAt ? row.endsAt.toISOString() : null,
         isRecurring: row.isRecurring,
+        recurrencePeriod: row.recurrencePeriod,
+        autoGrant: row.autoGrant,
         createdBy: row.createdBy,
         createdAt: row.createdAt.toISOString(),
         updatedAt: row.updatedAt.toISOString(),

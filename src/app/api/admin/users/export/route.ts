@@ -128,6 +128,7 @@ export async function GET(request: NextRequest) {
         dateTo: searchParams.get("dateTo") || "",
         states: stateList,
         inActiveMajorDraw: searchParams.get("inActiveMajorDraw") || "",
+        streak: searchParams.get("streak") || "",
       };
       const filter = await buildUserFilter(filters);
       const rawUsers = await User.find(filter)

@@ -37,6 +37,23 @@ This feature allows administrators to bulk charge customers with past_due invoic
 - Invoices already charged in last 24h
 - Users whose subscription status is NOT `"past_due"` in database
 
+## Stranded invoices in the bulk run (pay-vs-recover routing)
+
+⚠️ **Incident 2026-07-19: 558/744 rows "failed" with Stripe's _"This invoice can no longer be paid. Consider voiding, marking as uncollectible, or marking as paid out of band instead."_ — $0 collected from them, and no charge attempt ever appeared on the customers' Stripe timelines.** Root cause: the bulk job unconditionally called `stripe.invoices.pay()` on every worklist invoice, including **stranded** ones — invoices whose Smart Retries exhausted (`attempt_count >= 1`, `next_payment_attempt: null`) and whose every PaymentIntent had been **canceled**. Stripe rejects `invoices.pay()` outright for those (no new PaymentIntent is created, which is why nothing showed in the Stripe transactions list). The per-user "Charge" button already routed these through recovery (`chargeOrRecover`); the bulk job never got that branch.
+
+**Current behavior:** `chargeWorklistItem` retrieves each invoice with `expand: ["customer", "payments"]` and routes it via the pure `decideBulkChargeAction` (`src/server/admin/chargeOrRecoverPolicy.ts`):
+
+- **pay** — the invoice is live (retry scheduled), OR it is exhausted but a payable invoice_payment remains (`payments.data[].status === "open"`, i.e. the PaymentIntent is still confirmable — e.g. a recovered-then-declined cycle finalized with `auto_advance: false`). A direct `invoices.pay()` genuinely reaches the card here; 28 of the 2026-07-19 run's 177 real declines were this shape and must never be misrouted to recovery (their held draft was already consumed → recovery would dead-end at `no_held_draft`).
+- **recover** — the invoice is `void`/`uncollectible`, or open-exhausted with **no payable invoice_payment left** (all canceled → `invoices.pay()` is guaranteed to be rejected). Routed through `recoverStrandedPastDueInvoice`: void the stranded original → finalize the held current-cycle draft (`pause_collection: keep_as_draft` holds one per missed cycle) → pay it with the stable `admin-charge-${newInvoiceId}` key. Same machinery as the per-user path and the Recover Stranded panel.
+
+**Double-charge guards on the recover branch** (added after adversarial review, same day): the risk is a SECOND recovery for the same member consuming a *sibling* same-amount held draft with fresh idempotency keys. Guards, stacked: (1) the per-subscription **`RecoveryClaim`** is acquired before recovering (`bulk-charge:<runId>`, released in `finally`) — serializes against member Pay-Now / renew / Force-Charge and concurrent chunks; (2) **`bypassRecentRecoveryLock: false`** keeps the 6h `hasRecentRecoveryAttempt` repeat-guard active, so a crash-resumed chunk or same-day re-run refuses instead of re-recovering (made possible by excluding recovery step-audit rows from the pay primitive's 6h check); (3) per-draft Stripe idempotency keys + paid-drafts-leave-the-pool dedupe same-draft repeats.
+
+**Run accounting:** the recover branch writes exactly **one run-tagged `InvoiceChargeLog` summary row keyed on the ORIGINAL worklist invoice id** (mapped by `summarizeBulkRecoveryOutcome`; carries `result.recovery.bulk: true` + `newInvoiceId`). The recovery's PAY row on the NEW invoice id is also run-tagged (keeps it out of the Manual Retries view; carries the real `declineCode` for decline analytics) — but run totals are restricted to **worklist invoice ids** (`recomputeTotalsFromLogs`), so it never double-counts the member. Step-audit rows are untagged, tagged `result.recovery.step`, and excluded from Manual Retries and the decline summary. Outcome mapping: recovered-and-paid → `success` (counts toward run revenue); recovery pay declined → `failed` with the decline message; refusals before any Stripe write (`no_held_draft`, `not_past_due`, `invoice_already_paid`, recovery claim held, prior recovery within 6h, …) → `skipped`; mid-flight `void_failed` / `draft_create_failed` / `finalize_failed` → `failed`.
+
+**Members with no held draft (`no_held_draft`)** cannot be auto-recovered by this run — there is nothing cycle-billed to re-finalize, and manual invoices are forbidden (they'd break the `subscription_cycle` renewal pipeline). They surface as skips; the Recover Stranded panel's `BLOCKED_NO_DRAFT` bucket tracks the same population. 249 of the 558 stranded members in the 2026-07-19 run were in this state.
+
+Regression-guarded by `npm run test:charge-or-recover-policy` (`decideBulkChargeAction` + `summarizeBulkRecoveryOutcome`).
+
 ## API Endpoint
 
 **POST** `/api/admin/invoices/charge-past-due`
@@ -322,6 +339,7 @@ Located at: `src/components/admin/ChargePastDueModal.tsx`
 3. **No Eligible Invoices**: Check that users have `subscription.status === "past_due"` in database
 4. **All Skipped**: Verify invoice filtering criteria are met
 5. **High Failure Rate**: Check Stripe dashboard for decline patterns
+6. **Mass "This invoice can no longer be paid" failures**: these are stranded invoices (see "Stranded invoices in the bulk run" above). Since 2026-07-19 the bulk run auto-recovers them; if you see this error at scale again, verify `decideBulkChargeAction` is being applied and that `payments` is expanded on the invoice retrieve.
 
 ### Logs
 

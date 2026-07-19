@@ -11,6 +11,7 @@ import { authOptions } from "@/lib/auth";
 import { ErrorLoggingService } from "@/services/error-reporting/ErrorLoggingService";
 import { getSubscriptionCreateParamsForAnchor, getNextAnchorTimestamp } from "@/utils/billing/anchor-billing";
 import { getSubscriptionPeriodEnd } from "@/utils/payment/stripe/subscription-period";
+import { carryStreakAcrossSubscriptionReplace } from "@/utils/subscription/streak";
 import {
   checkCanCreateSubscription,
   EXISTING_SUBSCRIPTION_CODE,
@@ -392,6 +393,11 @@ export async function POST(request: NextRequest) {
       ? existingUser.subscription!.lastMonthAccumulatedEntries
       : undefined;
 
+    // Streak fields must survive this whole-object replacement, and the grace/reset
+    // decision must be made HERE from the OLD endDate — this save lands before the
+    // webhook's streak writer, which only ever sees the NEW endDate.
+    const streakCarry = carryStreakAcrossSubscriptionReplace(existingUser.subscription);
+
     // Omit pendingChange/previousSubscription – Mongoose rejects undefined for these subdocument paths
     existingUser.subscription = {
       packageId: membershipPackage._id,
@@ -404,6 +410,7 @@ export async function POST(request: NextRequest) {
       pendingStripeSubscriptionRequestId: validatedData.subscriptionRequestId ?? idempotencyKey,
       pendingStripeSubscriptionCreatedAt: new Date(subscription.created * 1000),
       lastMonthAccumulatedEntries: preservedLastMonthAccumulatedEntries,
+      ...streakCarry,
     };
 
     // Log resubscription detection

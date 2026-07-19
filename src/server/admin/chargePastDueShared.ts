@@ -392,9 +392,15 @@ export async function payOpenInvoiceAsPastDueAdmin(params: {
       };
     }
   } else {
+    // Excludes recovery step-audit rows (`result.recovery.step`) for the same reason the
+    // 30s debounce does: they are machinery audit rows written milliseconds before this
+    // pay call (create/finalize/void), not real charge attempts. Without this exclusion a
+    // NON-bypassed recovery pay would self-block on its own just-written audit rows —
+    // which is what previously forced every recovery caller to bypass this lock entirely.
     const recentAttempt = await InvoiceChargeLog.findOne({
       invoiceId,
       attemptedAt: { $gte: cutoffForRecentAttempt() },
+      "result.recovery.step": { $exists: false },
     })
       .select({ _id: 1, status: 1, attemptedAt: 1 })
       .lean();

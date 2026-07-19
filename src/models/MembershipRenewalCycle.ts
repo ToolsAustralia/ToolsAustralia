@@ -1,6 +1,8 @@
 import mongoose, { Document, Schema } from "mongoose";
 
-export type MembershipRenewalCycleStatus = "expected" | "succeeded" | "failed" | "recovered";
+/** "refunded" = a counted paid cycle whose payment was later fully refunded — the
+ *  streak decrement flips it so replays/repairs never re-count the cycle. */
+export type MembershipRenewalCycleStatus = "expected" | "succeeded" | "failed" | "recovered" | "refunded";
 
 export interface IMembershipRenewalCycle extends Document {
   stripeInvoiceId: string;
@@ -29,7 +31,7 @@ const MembershipRenewalCycleSchema = new Schema<IMembershipRenewalCycle>(
     status: {
       type: String,
       required: true,
-      enum: ["expected", "succeeded", "failed", "recovered"],
+      enum: ["expected", "succeeded", "failed", "recovered", "refunded"],
       index: true,
     },
     dueAt: { type: Date, required: true, index: true },

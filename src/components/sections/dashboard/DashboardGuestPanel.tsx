@@ -15,6 +15,8 @@ interface DashboardGuestPanelProps {
   drawName: string;
   onBecomeMember: () => void;
   onBuyPackage: () => void;
+  /** Membership Streak "Members only" teaser (Build Kit §05) — the ladder as the sell. */
+  streakTeaser?: React.ReactNode;
   className?: string;
 }
 
@@ -28,7 +30,7 @@ const MEMBER_BENEFITS = [
  * Guest (no-plan) home body. A one-time package also grants draw entry + catalogue
  * access, so we NEVER gate everything behind membership — two equal CTAs.
  */
-export default function DashboardGuestPanel({ drawName, onBecomeMember, onBuyPackage, className }: DashboardGuestPanelProps) {
+export default function DashboardGuestPanel({ drawName, onBecomeMember, onBuyPackage, streakTeaser, className }: DashboardGuestPanelProps) {
   return (
     <div className={className}>
       <section className="rounded-3xl border border-token bg-surface p-5 shadow-sm">
@@ -78,6 +80,9 @@ export default function DashboardGuestPanel({ drawName, onBecomeMember, onBuyPac
           ))}
         </ul>
       </section>
+
+      {/* Membership Streak teaser — the full reward ladder as the reason to join */}
+      {streakTeaser && <div className="mt-4">{streakTeaser}</div>}
 
       <section className="mt-4">
         <span className="mb-3 block text-[11px] font-bold uppercase tracking-[0.18em] text-muted-token">Explore</span>

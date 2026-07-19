@@ -55,6 +55,9 @@ export interface IMajorDraw extends Document {
       referral?: number;
       "bonus-entry-promo"?: number;
       "cancellation-upsell"?: number;
+      "promo-link"?: number;
+      /** Membership Streak milestone auto-grants (P2). */
+      streak?: number;
     };
     firstAddedDate: Date; // When user first got entries
     lastUpdatedDate: Date; // When entries were last updated
@@ -247,6 +250,23 @@ const MajorDrawSchema = new Schema<IMajorDraw>(
             type: Number,
             default: 0,
             min: [0, "Cancellation upsell entries cannot be negative"],
+          },
+          // Typed-at-checkout PromoLink code entries. Was summed by
+          // major-draw-queries and seeded by addToMajorDraw but ABSENT from
+          // this schema — a .save()-path write would have dropped it (the exact
+          // strict-mode footgun the cancellation-upsell comment documents).
+          "promo-link": {
+            type: Number,
+            default: 0,
+            min: [0, "Promo link entries cannot be negative"],
+          },
+          // Membership Streak milestone auto-grants (P2) — granted via
+          // DrawGrantService with sourceKey "streak" (a .save() path, so this
+          // schema key is load-bearing, not cosmetic).
+          streak: {
+            type: Number,
+            default: 0,
+            min: [0, "Streak entries cannot be negative"],
           },
         },
         firstAddedDate: {

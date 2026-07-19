@@ -43,6 +43,8 @@ export interface ListUsersArgs {
   dateTo?: string;
   states?: string[];
   inActiveMajorDraw?: string;
+  /** Membership Streak: "none" = streak 0/absent; a number string = at least N consecutive paid renewals */
+  streak?: string;
   sortBy?: string;
   sortOrder?: "asc" | "desc";
 }
@@ -69,6 +71,8 @@ export interface UserListRow {
     endDate?: Date;
     status?: string;
     lastMonthAccumulatedEntries?: number | null;
+    /** Membership Streak — consecutive paid renewals (join = month 0). */
+    streakMonths?: number;
   } | null;
   totalSpent: number;
   majorDrawEntries: number;
@@ -125,6 +129,7 @@ export async function listAdminUsers(args: ListUsersArgs): Promise<ListUsersResu
     dateTo: args.dateTo ?? "",
     states: args.states ?? [],
     inActiveMajorDraw: args.inActiveMajorDraw ?? "",
+    streak: args.streak ?? "",
   });
 
   const isComputedFieldSort = COMPUTED_SORT_FIELDS.has(sortBy);
@@ -231,6 +236,7 @@ export async function listAdminUsers(args: ListUsersArgs): Promise<ListUsersResu
         endDate?: Date;
         status?: string;
         lastMonthAccumulatedEntries?: number;
+        streakMonths?: number;
       };
       miniDrawParticipation?: Array<{ isActive?: boolean }>;
       rewardsPoints?: number;
@@ -272,6 +278,7 @@ export async function listAdminUsers(args: ListUsersArgs): Promise<ListUsersResu
               endDate: u.subscription.endDate,
               status: u.subscription.status,
               lastMonthAccumulatedEntries: u.subscription.lastMonthAccumulatedEntries ?? null,
+              streakMonths: u.subscription.streakMonths ?? 0,
             }
           : null,
       totalSpent,
@@ -694,6 +701,10 @@ export interface AdminUserDetailResult {
     nextRenewalEntries?: number | null;
     /** True iff those renewal entries land in the CURRENTLY-ACTIVE draw (renewal before its freeze). false = they land in a future draw, so don't surface against the current draw. */
     renewalLandsInCurrentDraw?: boolean;
+    /** Membership Streak — consecutive paid renewals (join = month 0). */
+    streakMonths?: number;
+    /** Streak generation — bumps on each out-of-grace resubscribe reset (scopes milestone re-earning). */
+    streakGeneration?: number;
   } | null;
   /** Partner-access ring — same derivation as the /my-account hero (pastdue > active > onetime > none). */
   partnerAccessRing: PartnerAccessRing;
@@ -826,6 +837,8 @@ export async function getAdminUserDetail(userId: string): Promise<AdminUserDetai
           lastMonthAccumulatedEntries: user.subscription.lastMonthAccumulatedEntries ?? null,
           nextRenewalEntries,
           renewalLandsInCurrentDraw,
+          streakMonths: user.subscription.streakMonths ?? 0,
+          streakGeneration: user.subscription.streakGeneration ?? 1,
         }
       : null,
     partnerAccessRing,

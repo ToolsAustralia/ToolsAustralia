@@ -41,14 +41,19 @@ and stamp three top-level fields onto the `BenefitsGranted` `PaymentEvent`:
     The cookie-only edge resolver structurally cannot see a Klaviyo touch captured at signup
     (`User.signupAttribution`), so without this those conversions leaked to `direct`. The recovery is
     windowed by passing `now` (conversion time = `Date.now()`) and `persistedTouchAt` into
-    `reconcilePersistedAttribution`: a UTM captured at **this** checkout
-    (`attributionData.attributionSource === "session"`) counts as a current touch (`persistedTouchAt = now`),
-    whereas a UTM carried from signup is windowed against the user's signup time
+    `reconcilePersistedAttribution`. **Touch dating (revised 2026-07-19):** a **session**-carried UTM
+    is undatable — the client payload prefers the 90-day first-touch `_ta_attr` cookie with
+    `capturedAt` stripped, and renewals re-carry frozen subscription metadata — so it passes
+    `persistedTouchAt = null` (owned channels still credit via the lenient null rule; nothing else
+    changes for Klaviyo). A UTM carried from **signup** is windowed against the user's signup time
     (`user.createdAt`). A stale signup-Klaviyo touch with no recent click therefore resolves to
     `direct`, matching the windowed historical reconcile in
     [`scripts/backfill-klaviyo-attribution-cycle.ts`](../../scripts/backfill-klaviyo-attribution-cycle.ts).
-    **Paid sources are not recovered** — a real paid click in-window already wins at the edge, so
-    `direct` genuinely means "no paid click."
+    **Paid sources ARE now recovered, strictly (2026-07-19)** — only when affirmatively within the
+    platform's 7-day click window of a datable anchor, which in practice means signup-sourced UTMs
+    (purchase within 7d of a paid-UTM signup, e.g. the same-session Meta-ad signup→purchase whose
+    cookie was missing at PI-creation time). Undatable (session-carried) or stale paid UTMs stay
+    `direct`; renewals can never flip. See docs/tracking/backend.md §"Persisted-UTM reconciliation".
   - **No edge decision at all** (legacy / force-charge paths) → fall back to any recognised persisted
     UTM, else `direct`; a present-but-unknown source becomes `"other"`, an absent source becomes
     `"direct"`. Confidence in the recovered/fallback cases is `"utm_only"`.
@@ -177,3 +182,12 @@ Test: `npm run test:purchase-event-time`.
 - **Save card**: `/api/stripe/create-setup-intent` → returns client_secret.
 - **3DS verify**: `/api/stripe/verify-payment-complete` → reads PI status, returns app-level state (`succeeded`/`failed`/`pending`).
 - **Failed renewal**: `/api/stripe/pay-failed-invoice` → `failed-invoice-selection` → `failed-invoice-handler` → resume + grants on success.
+
+## Major-draw fresh-row shape (Streak P2 touch, 2026-07-07)
+
+`addToMajorDraw`'s `freshEntriesBySource` zero-shape in [payment-processing.ts](../../src/utils/payment/payment-processing.ts) now enumerates the full source-key set (`referral`, `cancellation-upsell`, `promo-link`, and the new `streak` bucket included) so downstream readers never hit a missing key. The `streak` bucket is written only by `DrawGrantService` (rewards-redeemables domain) — payment-path grants never write it.
+
+## Streak hooks in the payment path (2026-07-15)
+
+- `payment-processing.ts` is the ONLY caller passing `{ allowStreakIssuance: true }` to `MilestoneService.checkAndIssueMilestones` — new streak-months issuances are payment-coupled by construction (the cron/mass evaluator may only re-deliver, never newly issue).
+- `reverseMembershipLedger` ([refund-ledger-reversal.ts](../../src/utils/payment/refund-ledger-reversal.ts)) now gives back a refunded renewal's streak +1: it atomically flips the matching `MembershipRenewalCycle` row (`userId` + `paymentIntentId` + `billing_reason: subscription_cycle`, `succeeded/recovered → refunded` — the pre-image gate makes replays no-op) and decrements `subscription.streakMonths` with a floor of 0. The milestone issuances granted on that payment were already revoked via `grants.milestoneIssuanceIds` (`milestoneRevoke` step).

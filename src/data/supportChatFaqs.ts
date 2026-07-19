@@ -538,5 +538,28 @@ export function getSupportChatFaqEntries(): FaqEntry[] {
         "Your Mini Draw entries are tracked separately from your Major Draw entries, so they won't show up in the main entry count on your dashboard. To see the Mini Draws you're in, head to the [Mini Draws page](/mini-draws), and you can manage the rest of your account from [My Account](/my-account). If something looks off or an entry seems to be missing after a purchase, [contact us](/contact) and we'll take a look. I can't see your account from here, so I can't read your live entries.",
       category: "ALL QUESTIONS",
     },
+
+    // ── MEMBERSHIP STREAK ────────────────────────────────────────────────────
+    {
+      id: "69",
+      question: "What is the Membership Streak and what do I get for it?",
+      answer:
+        "The Membership Streak rewards you for keeping your membership going month after month. Every consecutive monthly renewal builds your streak — your first renewal takes it to 1, and the rewards start at your 2nd. Milestone renewals include bonus free entries on top of your membership's usual monthly entries: +100 at your 2nd renewal, +200 at your 4th, +300 at your 6th, +400 at your 8th, +500 at your 10th, and +600 at your 12th — where you also earn the permanent Founding member badge. The free entries are added automatically to that month's Major Draw when the milestone renewal goes through — nothing to claim. After 12 renewals the ladder starts again for your next membership year, so the milestones keep coming for as long as you stay. You can see your streak on your [My Account](/my-account) dashboard.",
+      category: "REWARDS",
+    },
+    {
+      id: "70",
+      question: "Will I lose my streak if a payment fails, I pause, or I cancel my membership?",
+      answer:
+        "The streak is built to be forgiving. A failed renewal payment doesn't break it — fix your card or catch up on the payment and your streak carries straight on. If you pause your membership through the pause offer, the streak freezes and resumes when you come back. If you cancel and rejoin within 30 days of your membership ending, your streak continues from where it left off. Upgrading or downgrading your tier never affects it. Only a full lapse — being without a membership for more than 30 days — resets the streak to zero, and even then you can earn every milestone again on your new streak. Manage your membership any time from [My Account → Membership](/my-account/membership).",
+      category: "REWARDS",
+    },
+    {
+      id: "71",
+      question: "Where do I see my streak and the free entries my streak milestones gave me?",
+      answer:
+        "Your streak lives on your [My Account](/my-account) dashboard — the Streak card shows your current streak, your next milestone, and the free entries it will include. When a milestone lands, its free entries appear as their own \"Streak\" portion of your entry total and are already in that month's Major Draw — no claiming needed. I can't see your account from here, so I can't read your live streak or entry count; if a milestone renewal has gone through and the free entries haven't appeared, [contact us](/contact) and we'll take a look.",
+      category: "REWARDS",
+    },
   ];
 }

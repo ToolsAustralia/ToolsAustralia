@@ -47,6 +47,8 @@ The MajorDraw schema's `entries.entriesBySource` is a fixed enum. Mongoose stric
 
 The `cancellation-upsell` key was added to fix exactly this — entries from `/api/cancellation-upsell/redeem` had been silently dropped from the breakdown for any prior redemption.
 
+**2026-07-07 (Streak P2):** two keys added — **`streak`** (Membership Streak auto-grants; load-bearing because `DrawGrantService` writes via `.save()`, the strictest drop path) and **`promo-link`** (pre-existing drift: it was summed by `major-draw-queries` and seeded by `addToMajorDraw` but absent from the schema). The full consumer checklist when adding a source key: MajorDraw schema + TS interface → both summations in `major-draw-queries.ts` (note `streak` is returned as its own `streakEntries`, NOT folded into `oneTimeEntries`) → `freshEntriesBySource` in `payment-processing.ts` → the fresh-row shape in `DrawGrantService` → `MajorDrawSourceType` in `remove-draw-entries.ts` → reversal source in `RedemptionService.unredeemMilestoneRedemption` (streak-months issuances reverse from `streak`).
+
 
 
 ## Major-draw transitions

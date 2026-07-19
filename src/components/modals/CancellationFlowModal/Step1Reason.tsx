@@ -73,6 +73,7 @@ const Step1Reason: React.FC<Step1ReasonProps> = ({ flowHook, startMutation, onCl
         eventId: result.eventId,
         offersShown: result.offersShown,
         pastDue: result.pastDue,
+        streakMonths: result.streakMonths,
       });
     } catch {
       // Error displayed via startMutation.isError / startMutation.error below

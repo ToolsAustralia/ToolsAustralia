@@ -31,6 +31,7 @@ import {
   Download,
   MapPin,
   BarChart3,
+  Flame,
 } from "lucide-react";
 import Image from "next/image";
 import { AdminUserListItem, UserFilters } from "@/types/admin";
@@ -196,6 +197,7 @@ export default function UsersManagement() {
     role: undefined,
     states: undefined,
     inActiveMajorDraw: undefined,
+    streak: undefined,
     sortBy: "createdAt",
     sortOrder: "desc",
   });
@@ -302,6 +304,7 @@ export default function UsersManagement() {
       role: undefined,
       states: undefined,
       inActiveMajorDraw: undefined,
+      streak: undefined,
       sortBy: "createdAt",
       sortOrder: "desc",
     });
@@ -316,7 +319,8 @@ export default function UsersManagement() {
       filters.membershipPackage ||
       filters.role ||
       (filters.states?.length ?? 0) > 0 ||
-      filters.inActiveMajorDraw
+      filters.inActiveMajorDraw ||
+      filters.streak
     );
   }, [filters]);
 
@@ -611,6 +615,27 @@ export default function UsersManagement() {
                     page: 1,
                   }))
                 }
+              />
+            </div>
+
+            {/* Membership Streak filter (consecutive paid renewals) */}
+            <div className="min-w-[100px] sm:min-w-[130px] lg:min-w-[150px]">
+              <Dropdown
+                options={[
+                  { value: "", label: "Streak", icon: Flame },
+                  { value: "1", label: "1+ renewals", icon: Flame },
+                  { value: "2", label: "2+ renewals", icon: Flame },
+                  { value: "4", label: "4+ renewals", icon: Flame },
+                  { value: "6", label: "6+ renewals", icon: Flame },
+                  { value: "8", label: "8+ renewals", icon: Flame },
+                  { value: "10", label: "10+ renewals", icon: Flame },
+                  { value: "12", label: "12+ (Founding)", icon: Flame },
+                  { value: "none", label: "No streak", icon: Ban },
+                ]}
+                value={filters.streak || ""}
+                onChange={(value) => updateFilter("streak", value)}
+                placeholder="Streak"
+                active={!!filters.streak}
               />
             </div>
 

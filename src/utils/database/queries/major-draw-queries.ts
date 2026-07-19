@@ -10,6 +10,8 @@ export interface UserMajorDrawStats {
   totalEntries: number;
   membershipEntries: number;
   oneTimeEntries: number;
+  /** Membership Streak auto-grants — own bucket, never folded into oneTimeEntries. */
+  streakEntries: number;
   currentDrawEntries: number;
   totalDrawsEntered: number;
   entriesByPackage: Array<{
@@ -111,6 +113,7 @@ export async function getUserMajorDrawStats(userId: string, majorDrawId: string)
         totalEntries: 0,
         membershipEntries: 0,
         oneTimeEntries: 0,
+        streakEntries: 0,
         currentDrawEntries: 0,
         totalDrawsEntered: 0,
         entriesByPackage: [],
@@ -128,6 +131,7 @@ export async function getUserMajorDrawStats(userId: string, majorDrawId: string)
         totalEntries: 0,
         membershipEntries: 0,
         oneTimeEntries: 0,
+        streakEntries: 0,
         currentDrawEntries: 0,
         totalDrawsEntered: 0,
         entriesByPackage: [],
@@ -145,6 +149,9 @@ export async function getUserMajorDrawStats(userId: string, majorDrawId: string)
       (userEntry.entriesBySource["bonus-entry-promo"] || 0) +
       (userEntry.entriesBySource["cancellation-upsell"] || 0) +
       (userEntry.entriesBySource["promo-link"] || 0);
+    // Membership Streak auto-grants — a distinct bucket (NOT folded into
+    // one-time) so the wallet can render it as its own line (P3).
+    const streakEntries = userEntry.entriesBySource["streak"] || 0;
 
     // Create entriesByPackage array from aggregated data
     const entriesByPackage = Object.entries(userEntry.entriesBySource)
@@ -166,6 +173,7 @@ export async function getUserMajorDrawStats(userId: string, majorDrawId: string)
       totalEntries,
       membershipEntries,
       oneTimeEntries,
+      streakEntries,
       currentDrawEntries: totalEntries,
       totalDrawsEntered: entriesByPackage.length,
       entriesByPackage,
@@ -176,6 +184,7 @@ export async function getUserMajorDrawStats(userId: string, majorDrawId: string)
       totalEntries: 0,
       membershipEntries: 0,
       oneTimeEntries: 0,
+      streakEntries: 0,
       currentDrawEntries: 0,
       totalDrawsEntered: 0,
       entriesByPackage: [],
@@ -232,6 +241,7 @@ export async function getUserCurrentMajorDrawStats(userId: string): Promise<User
         totalEntries: 0,
         membershipEntries: 0,
         oneTimeEntries: 0,
+        streakEntries: 0,
         currentDrawEntries: 0,
         totalDrawsEntered: 0,
         entriesByPackage: [],
@@ -253,6 +263,7 @@ export async function getUserCurrentMajorDrawStats(userId: string): Promise<User
         totalEntries: 0,
         membershipEntries: 0,
         oneTimeEntries: 0,
+        streakEntries: 0,
         currentDrawEntries: 0,
         totalDrawsEntered: 0,
         entriesByPackage: [],
@@ -272,6 +283,9 @@ export async function getUserCurrentMajorDrawStats(userId: string): Promise<User
       (userEntry.entriesBySource["bonus-entry-promo"] || 0) +
       (userEntry.entriesBySource["cancellation-upsell"] || 0) +
       (userEntry.entriesBySource["promo-link"] || 0);
+    // Membership Streak auto-grants — a distinct bucket (NOT folded into
+    // one-time) so the wallet can render it as its own line (P3).
+    const streakEntries = userEntry.entriesBySource["streak"] || 0;
 
     // Create entriesByPackage array from aggregated data
     const entriesByPackage = Object.entries(userEntry.entriesBySource)
@@ -293,6 +307,7 @@ export async function getUserCurrentMajorDrawStats(userId: string): Promise<User
       totalEntries,
       membershipEntries,
       oneTimeEntries,
+      streakEntries,
       currentDrawEntries: totalEntries,
       totalDrawsEntered: entriesByPackage.length,
       entriesByPackage,
@@ -303,6 +318,7 @@ export async function getUserCurrentMajorDrawStats(userId: string): Promise<User
       totalEntries: 0,
       membershipEntries: 0,
       oneTimeEntries: 0,
+      streakEntries: 0,
       currentDrawEntries: 0,
       totalDrawsEntered: 0,
       entriesByPackage: [],

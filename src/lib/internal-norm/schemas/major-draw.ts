@@ -148,6 +148,9 @@ const EntriesBySourceSchema = z.object({
   referral: z.number(),
   "bonus-entry-promo": z.number(),
   "cancellation-upsell": z.number(),
+  "promo-link": z.number(),
+  // Membership Streak auto-grants (rungs at renewals 2/4/6/8/10/12, annual repeat).
+  streak: z.number(),
 });
 
 const MajorDrawParticipantSafeSchema = z.object({

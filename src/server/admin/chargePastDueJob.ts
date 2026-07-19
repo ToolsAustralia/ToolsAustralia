@@ -12,6 +12,14 @@
  *            totals from logs; finalize + release the lock when the worklist is
  *            drained.
  *
+ * Each worklist item is routed pay-vs-recover (`decideBulkChargeAction`): live
+ * invoices go through `payOpenInvoiceAsPastDueAdmin`, while stranded ones —
+ * retries exhausted and every PaymentIntent canceled, which `invoices.pay`
+ * rejects with "This invoice can no longer be paid" — go through
+ * `recoverStrandedPastDueInvoice` (void original → finalize held draft → pay),
+ * mirroring the per-user chargeOrRecover composition. See
+ * docs/CHARGE_PAST_DUE_CUSTOMERS.md § "Stranded invoices in the bulk run".
+ *
  * Resumability/double-charge safety comes entirely from the existing per-invoice
  * primitive `payOpenInvoiceAsPastDueAdmin` (30s debounce, 6h recent-attempt lock,
  * late still-past-due re-check, already-paid catch, plus a RUN-SCOPED Stripe
@@ -40,6 +48,16 @@ import {
   payOpenInvoiceAsPastDueAdmin,
   resolveInvoicePaymentMethodId,
 } from "@/server/admin/chargePastDueShared";
+import {
+  decideBulkChargeAction,
+  summarizeBulkRecoveryOutcome,
+} from "@/server/admin/chargeOrRecoverPolicy";
+import { recoverStrandedPastDueInvoice } from "@/server/admin/recoverStrandedPastDue";
+import { resolveInvoiceSubId } from "@/server/admin/chargePastDueSelectionPolicy";
+import {
+  acquireRecoveryClaim,
+  releaseRecoveryClaim,
+} from "@/utils/payment/recovery/recovery-claim";
 import { buildBulkChargeIdempotencyKey } from "@/server/admin/past-due-charge-idempotency";
 import {
   ORPHAN_RUN_THRESHOLD_MS,
@@ -87,22 +105,37 @@ export interface ChargeChunkResult {
 function classifySkipReason(errorMessage?: string | null): string | undefined {
   if (!errorMessage) return undefined;
   const m = errorMessage.toLowerCase();
-  if (m.includes("already paid")) return "already_paid";
+  if (m.includes("already paid") || m.includes("already_paid")) return "already_paid";
   if (m.includes("no longer past_due") || m.includes('not past_due') || m.includes('no_longer_past_due')) return "no_longer_past_due";
   if (m.includes("payment method")) return "missing_payment_method";
-  if (m.includes("window") || m.includes("debounce") || m.includes("within last")) return "recently_attempted";
+  if (m.includes("window") || m.includes("debounce") || m.includes("within last") || m.includes("within the last")) return "recently_attempted";
   return undefined; // → "other" bucket
 }
 
-/** Recompute authoritative totals for a run from its persisted InvoiceChargeLog rows. */
+/**
+ * Recompute authoritative totals for a run from its persisted InvoiceChargeLog rows.
+ *
+ * Rows are restricted to WORKLIST invoice ids — exactly one outcome row per item.
+ * The recovery flow's run-tagged pay row lives on the NEW (recovered) invoice id and
+ * must not double-count the member's outcome/revenue. Falls back to unrestricted when
+ * the worklist doc is gone (legacy runs past the 7-day worklist TTL — those predate
+ * the recover branch, so all their rows are worklist-keyed anyway).
+ */
 async function recomputeTotalsFromLogs(
   runId: mongoose.Types.ObjectId,
   eligibleCount: number
 ): Promise<ChargeJobRunTotals> {
-  const rows = await InvoiceChargeLog.find({ chargeRunId: runId })
-    .select({ status: 1, amount: 1, errorMessage: 1 })
-    .lean();
-  const aggRows: ChargeLogRowForAggregation[] = rows.map((r) => ({
+  const [worklistDoc, rows] = await Promise.all([
+    ChargeJobWorklist.findOne({ runId }).select({ "items.invoiceId": 1 }).lean(),
+    InvoiceChargeLog.find({ chargeRunId: runId })
+      .select({ invoiceId: 1, status: 1, amount: 1, errorMessage: 1 })
+      .lean(),
+  ]);
+  const worklistIds = worklistDoc
+    ? new Set((worklistDoc.items ?? []).map((i) => i.invoiceId))
+    : null;
+  const scoped = worklistIds ? rows.filter((r) => worklistIds.has(r.invoiceId)) : rows;
+  const aggRows: ChargeLogRowForAggregation[] = scoped.map((r) => ({
     status: r.status,
     amount: r.amount ?? 0,
     skipReason: classifySkipReason(r.errorMessage),
@@ -287,7 +320,11 @@ async function chargeWorklistItem(
 ): Promise<void> {
   let invoice: Stripe.Invoice;
   try {
-    invoice = (await stripe.invoices.retrieve(item.invoiceId, { expand: ["customer"] })) as Stripe.Invoice;
+    // `payments` is expanded so decideBulkChargeAction can tell a truly unpayable
+    // invoice (every PaymentIntent canceled) from an exhausted-but-payable one.
+    invoice = (await stripe.invoices.retrieve(item.invoiceId, {
+      expand: ["customer", "payments"],
+    })) as Stripe.Invoice;
   } catch {
     // Invoice no longer retrievable (deleted/void). Log a skip so it counts as done.
     await InvoiceChargeLog.create({
@@ -301,6 +338,105 @@ async function chargeWorklistItem(
       errorMessage: "Skipped: invoice not retrievable (deleted/void)",
       chargeRunId: runId,
     });
+    return;
+  }
+
+  // Pay-vs-recover branch (the bulk counterpart of the per-user chargeOrRecover).
+  // A stranded invoice — retries exhausted AND no payable invoice_payment left —
+  // is guaranteed to be rejected by `stripe.invoices.pay()` ("This invoice can no
+  // longer be paid", no charge ever reaches the card), so route it through the
+  // stranded-recovery primitive instead: void the original, finalize the held
+  // current-cycle draft, pay that. The branch runs BEFORE payment-method
+  // resolution because recovery resolves its own PM from the customer.
+  const decision = decideBulkChargeAction(invoice);
+  if (decision.kind === "recover") {
+    // Exactly ONE run-tagged row per item, keyed on the ORIGINAL worklist invoice
+    // id — the chunk loop's `remaining` computation and the (worklist-scoped) run
+    // totals key on it. The recovery's step-audit rows are untagged and its pay
+    // row on the NEW invoice id is run-tagged but outside the worklist, so
+    // neither double-counts the member.
+    const logRecoverySummary = async (summary: {
+      status: "success" | "failed" | "skipped";
+      errorMessage: string;
+      amount: number;
+      newInvoiceId?: string;
+    }): Promise<void> => {
+      await InvoiceChargeLog.create({
+        invoiceId: item.invoiceId,
+        customerId: item.customerId,
+        userId: item.userId,
+        adminId: new mongoose.Types.ObjectId(adminId),
+        status: summary.status,
+        amount: summary.amount,
+        attemptedAt: new Date(),
+        errorMessage: summary.errorMessage,
+        result: {
+          recovery: {
+            bulk: true,
+            originalInvoiceId: item.invoiceId,
+            ...(summary.newInvoiceId ? { newInvoiceId: summary.newInvoiceId } : {}),
+          },
+        },
+        chargeRunId: runId,
+      });
+    };
+
+    // Per-subscription RecoveryClaim — serializes against the member Pay-Now /
+    // renew / Force-Charge recovery flows AND against a concurrent chunk touching
+    // the same member, so two entries can never finalize+pay two DIFFERENT held
+    // drafts for one subscription (the double-charge the claim exists to prevent;
+    // same precedent as forceChargePastDue). Claim held → skip, retried next run.
+    const subscriptionId = resolveInvoiceSubId(
+      invoice as Stripe.Invoice & {
+        subscription?: string | Stripe.Subscription | null;
+        parent?: { subscription_details?: { subscription?: string | null } | null } | null;
+      }
+    );
+    if (!subscriptionId) {
+      await logRecoverySummary({
+        status: "skipped",
+        amount: invoice.amount_remaining || item.amount,
+        errorMessage: "Skipped: recovery has no resolvable subscription id on the invoice",
+      });
+      return;
+    }
+    const claimed = await acquireRecoveryClaim(subscriptionId, `bulk-charge:${String(runId)}`);
+    if (!claimed) {
+      await logRecoverySummary({
+        status: "skipped",
+        amount: invoice.amount_remaining || item.amount,
+        errorMessage:
+          "Skipped: another recovery for this subscription is in progress (recovery claim held)",
+      });
+      return;
+    }
+    try {
+      // bypassRecentRecoveryLock: FALSE — deliberately unlike the admin-click
+      // paths. The 6h hasRecentRecoveryAttempt guard on the ORIGINAL invoice
+      // stays active, so a crash-resumed chunk or a same-day re-run cannot start
+      // a SECOND recovery that would pick a sibling held draft with fresh
+      // idempotency keys (the double-charge path). The recovery's internal pay
+      // no longer self-blocks without the bypass because the pay primitive's 6h
+      // check excludes recovery step-audit rows.
+      const recovery = await recoverStrandedPastDueInvoice({
+        userId: String(item.userId),
+        originalInvoiceId: item.invoiceId,
+        adminId,
+        bypassRecentRecoveryLock: false,
+        chargeRunId: runId,
+      });
+      await logRecoverySummary(
+        summarizeBulkRecoveryOutcome(recovery, invoice.amount_remaining || item.amount)
+      );
+    } catch (err) {
+      await logRecoverySummary({
+        status: "failed",
+        amount: invoice.amount_remaining || item.amount,
+        errorMessage: `Unexpected error during recovery: ${err instanceof Error ? err.message : String(err)}`,
+      });
+    } finally {
+      await releaseRecoveryClaim(subscriptionId).catch(() => {});
+    }
     return;
   }
 
@@ -392,7 +528,9 @@ export async function processChargePastDueChunk(params: {
     return {
       runId,
       total: items.length,
-      processed: loggedIds.size,
+      // Count logged WORKLIST items only — `loggedIds` may also contain the recovery
+      // pay rows' NEW invoice ids, which are not worklist items.
+      processed: items.length - remaining.length,
       processedThisChunk: 0,
       done: true,
       totals,

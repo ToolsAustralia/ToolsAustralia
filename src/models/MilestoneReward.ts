@@ -1,6 +1,6 @@
 import mongoose, { Document, Schema } from "mongoose";
 
-export type MilestoneType = "spend-amount" | "entries-gained" | "loyalty-days";
+export type MilestoneType = "spend-amount" | "entries-gained" | "loyalty-days" | "streak-months";
 
 export interface IMilestoneReward extends Document {
   name: string;
@@ -14,6 +14,15 @@ export interface IMilestoneReward extends Document {
   startsAt?: Date;
   endsAt?: Date;
   isRecurring: boolean;
+  /** Recurrence cadence for recurring rewards. Unset → legacy "every whole
+   *  multiple of threshold" (floor(metric/threshold) cycles). Set (e.g. 12 for
+   *  the Membership Streak) → the rung repeats every `recurrencePeriod` metric
+   *  units AFTER its threshold: fires at threshold, threshold+12, threshold+24…
+   *  This is how the full streak ladder cycles annually (month 14 ≡ month 2). */
+  recurrencePeriod?: number;
+  /** When true the issuance is granted straight into the Major Draw on issue —
+   *  no manual claim step. Used by the Membership Streak rungs (streak-months). */
+  autoGrant: boolean;
   createdBy?: mongoose.Types.ObjectId;
   createdAt: Date;
   updatedAt: Date;
@@ -34,7 +43,7 @@ const MilestoneRewardSchema = new Schema<IMilestoneReward>(
     },
     milestoneType: {
       type: String,
-      enum: ["spend-amount", "entries-gained", "loyalty-days"],
+      enum: ["spend-amount", "entries-gained", "loyalty-days", "streak-months"],
       required: [true, "milestoneType is required"],
     },
     threshold: {
@@ -72,6 +81,15 @@ const MilestoneRewardSchema = new Schema<IMilestoneReward>(
       type: Date,
     },
     isRecurring: {
+      type: Boolean,
+      default: false,
+    },
+    recurrencePeriod: {
+      type: Number,
+      required: false,
+      min: [1, "recurrencePeriod must be at least 1"],
+    },
+    autoGrant: {
       type: Boolean,
       default: false,
     },

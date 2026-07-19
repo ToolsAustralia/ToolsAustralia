@@ -2,9 +2,11 @@
 
 Cross-cutting infra: health checks, cron, upload, Cloudinary, environment, Zod helpers, date utilities, validation, webhooks, operational scripts. Also owns repo-wide config files like `package.json`, `vercel.json`, and `.gitignore`.
 
-> `.gitignore` ignores `/claudeDesign` — the local-only Claude Design handoff reference (design HTML/JS prototypes), which is not part of the codebase.
+> `.gitignore` ignores `/claudeDesign` — the local-only Claude Design handoff reference (design HTML/JS prototypes), which is not part of the codebase. `eslint.config.mjs` also ignores `claudeDesign/**` (the folder is still on disk, so ESLint would otherwise lint the concept JS and fail `npm run lint` with ~100 errors).
 
 > `.env.example` — `NEXT_PUBLIC_PARTNER_DISCOUNT_SSO_ENABLED` is the client twin of the server-only `PARTNER_DISCOUNT_SSO_ENABLED` (which gates the SSO route). Client-rendered portal buttons can only read `NEXT_PUBLIC_*`, so set both to the same value. Read via `partnerDiscountSsoEnabled()` in `src/config/featureFlags.ts`.
+
+> `.env.example` — `NEXT_PUBLIC_DASHBOARD_STREAK_PREVIEW` is **local-dev only**: lights the Membership Streak dashboard surfaces while git ships their flags dark (`src/config/dashboardFeatures.ts` reads it via `STREAK_PREVIEW`). Never set in Vercel — production launches by flipping the committed flags (streak launch runbook step 4).
 
 ## Index
 
@@ -38,7 +40,11 @@ Rewards SSO test scripts (in `package.json`): `test:igodirect-sso` (connectivity
 
 ## Membership Streak backfill (added 2026-07-07)
 
-`scripts/backfill-membership-streaks.ts` — reconstructs `subscription.streakMonths` + `streakGeneration` for every member from the `MembershipRenewalCycle` ledger (cross-checked against `MembershipStatusHistory` cancels). **Dry-run by default** (`backfill:membership-streaks:dry`); `backfill:membership-streaks` runs `--live`. Re-runnable — it is also the drift-repair tool for the webhook streak counter. Append-mode CSV audit, adaptive progress lines, 3-tier exit codes (0 clean / 1 anomalies / 2 fatal). Pure walker logic lives in `src/utils/subscription/streak.ts` (`npm run test:streak`). See [subscription/backend.md](../subscription/backend.md).
+`scripts/backfill-membership-streaks.ts` — reconstructs `subscription.streakMonths` + `streakGeneration` for every member from the `MembershipRenewalCycle` ledger (cross-checked against `MembershipStatusHistory` cancels). **Dry-run by default** (`backfill:membership-streaks:dry`); `backfill:membership-streaks` runs `--live` in **repair mode**. The veterans' round-up (history-incomplete + active + no breaks → whole months since join) is gated behind `--roundup-incomplete` and is **launch-only** — repeated repair runs with it would credit pure calendar months (`now` advances each run). Re-runnable — it is also the drift-repair tool for the webhook streak counter. Append-mode CSV audit, adaptive progress lines, 3-tier exit codes (0 clean / 1 anomalies / 2 fatal). Pure walker logic lives in `src/utils/subscription/streak.ts` (`npm run test:streak`). See [subscription/backend.md](../subscription/backend.md).
+
+## Membership Streak reward-ladder seed (added 2026-07-07, P2)
+
+`scripts/seed-streak-milestone-rewards.ts` (`seed:streak-rewards[:dry]`) — three safe-ordered stages: (1) drops the legacy `MilestoneIssuance` unique index, **stamps `streakGeneration: 1` onto every legacy issuance row** (missing fields are invisible to the generation-scoped dedupe query + unique index — without the stamp every pre-launch issuance would re-issue/double-grant), and syncs the generation-scoped index; (2) upserts the 6 streak rungs (`STREAK-2R…12R`, ALL `isRecurring` with `recurrencePeriod: 12`, autoGrant, **`isActive:false`** — dark); (3) inserts `backfilled` marker issuances for every rung a member passed pre-launch (recognition, zero entries — prevents retroactive mass-grants on activation). `--activate` flips the rungs live (**launch runbook only**, after the launch backfill ran `--live --roundup-incomplete`; the final runbook step flips `DASHBOARD_FEATURES.loyaltyStreak`/`milestoneProgress` on). Dry-run default, CSV audit (`seed-*.csv` — gitignored alongside `backfill-*.csv`; audit CSVs are never committed), progress lines. See [rewards-redeemables/gotchas.md](../rewards-redeemables/gotchas.md).
 
 ## TikTok ad-insights nightly cron + Meta spend-sync auth fix (added 2026-07-16)
 
