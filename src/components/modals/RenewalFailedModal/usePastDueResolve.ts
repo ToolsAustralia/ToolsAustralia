@@ -29,12 +29,8 @@ import { tierKeyFromName } from "@/utils/membership/tier-visuals";
 import { getPartnerCatalogAccessPercentForPlanId } from "@/utils/partner-discounts/partner-catalog-visibility";
 import { useHtmlDarkForUi } from "@/hooks/useHtmlDarkForUi";
 import { buildMembershipStripeAppearance } from "@/utils/payment/stripe/membership-stripe-appearance";
-import { getStripePromise } from "@/lib/stripe-client";
 import { queryKeys } from "@/lib/queryKeys";
 import { SUPPORT_EMAIL } from "@/lib/email/sender-identities";
-
-// Module-scope singleton — Stripe prohibits re-instantiation per render.
-export const stripePromise = getStripePromise();
 
 const RENEWAL_BILLING_SUPPORT_SUBJECT = encodeURIComponent("Subscription renewal – cannot pay invoice");
 

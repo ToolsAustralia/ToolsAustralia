@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
 import Link from "next/link";
-import Image from "next/image";
+import Image, { getImageProps } from "next/image";
 import { ArrowRight, Banknote } from "lucide-react";
 import { listPrizes, DEFAULT_PRIZE_SLUG, type PrizeCatalogEntry } from "@/config/prizes";
 import { getLandingHeroImagePaths } from "@/config/promo-landing-slugs";
@@ -15,6 +15,11 @@ import GiveawayGalleryClient, { type GiveawayGalleryCard } from "./_components/G
 import GalleryCountdown from "./_components/GalleryCountdown";
 
 const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://toolsaustralia.com.au";
+
+// Marketing route class: ISR like its [slug]/brand siblings. Without this the gallery went
+// static-FOREVER and baked getEffectivePromosForDisplay() promo objects at build time —
+// which PromoBanner prefers over fresh client data (review finding, 2026-07-19).
+export const revalidate = 60;
 
 export const metadata: Metadata = {
   title: "Giveaway Prize Combinations - Tools Australia",
@@ -133,8 +138,28 @@ export default async function GiveawayGalleryPage() {
 
   const comboCount = cards.length;
 
+  // Media-scoped preload pair for the featured hero's <picture> below (see docs/promo/gotchas.md):
+  // a raw-path preload never matches the optimized `/_next/image` URL the browser actually
+  // requests, so it silently preloads nothing useful. Also doubles as the <picture>'s
+  // <source>/fallback <img> props — a single <picture> with viewport-scoped <source>s (not two
+  // separate always-mounted `<Image>`s toggled by `lg:hidden`/`hidden lg:block`) is what actually
+  // guarantees exactly one variant downloads: `display:none` does not stop an `<img>` from
+  // fetching.
+  const featuredPreload = featured
+    ? {
+        mobile: getImageProps({ src: featured.images.mobile, alt: featured.title, fill: true, sizes: "100vw", loading: "eager" }).props,
+        desktop: getImageProps({ src: featured.images.desktop, alt: featured.title, fill: true, sizes: "100vw", loading: "eager" }).props,
+      }
+    : null;
+
   return (
     <div className="min-h-svh w-full overflow-x-clip bg-white dark:bg-neutral-950">
+      {featuredPreload && (
+        <>
+          <link rel="preload" as="image" media="(max-width: 1023px)" imageSrcSet={featuredPreload.mobile.srcSet} imageSizes="100vw" />
+          <link rel="preload" as="image" media="(min-width: 1024px)" imageSrcSet={featuredPreload.desktop.srcSet} imageSizes="100vw" />
+        </>
+      )}
       {/* Theme the promo chrome to the site default (Milwaukee/red) so PromoBanner + account button
           render exactly like they do on the [slug] pages. */}
       <PromoThemeInitializer slug={DEFAULT_PRIZE_SLUG} />
@@ -228,25 +253,19 @@ export default async function GiveawayGalleryPage() {
                 style={{ background: `linear-gradient(90deg, ${featured.accentHex}, transparent 78%)` }}
               />
               <div className="relative m-2.5 overflow-hidden rounded-xl bg-white sm:m-3">
-                <div className="relative aspect-[1080/1164] w-full lg:hidden">
-                  <Image
-                    src={featured.images.mobile}
-                    alt={featured.title}
-                    fill
-                    priority
-                    sizes="100vw"
-                    className="object-contain object-center transition-transform duration-500 group-hover:scale-[1.03]"
-                  />
-                </div>
-                <div className="relative hidden aspect-[2560/1044] w-full lg:block">
-                  <Image
-                    src={featured.images.desktop}
-                    alt={featured.title}
-                    fill
-                    priority
-                    sizes="100vw"
-                    className="object-contain object-center transition-transform duration-500 group-hover:scale-[1.03]"
-                  />
+                {/* ONE <picture> — the aspect ratio itself is viewport-responsive (mobile portrait
+                    1080/1164, desktop wide 2560/1044) via Tailwind breakpoint classes on this SAME
+                    div, matching the two-div layout exactly; the <source>s below pick the image. */}
+                <div className="relative aspect-[1080/1164] w-full lg:aspect-[2560/1044]">
+                  <picture>
+                    <source media="(min-width: 1024px)" srcSet={featuredPreload!.desktop.srcSet} sizes="100vw" />
+                    <source media="(max-width: 1023px)" srcSet={featuredPreload!.mobile.srcSet} sizes="100vw" />
+                    <img
+                      {...featuredPreload!.mobile}
+                      alt={featured.title}
+                      className="object-contain object-center transition-transform duration-500 group-hover:scale-[1.03]"
+                    />
+                  </picture>
                 </div>
               </div>
               <div className="flex flex-col gap-2 px-4 pb-4 pt-1 sm:flex-row sm:items-center sm:justify-between sm:px-5 sm:pb-5">

@@ -1,11 +1,12 @@
 "use client";
 
-import dynamic from "next/dynamic";
+import { Suspense } from "react";
+import nextDynamic from "next/dynamic";
 import { usePromoLink } from "@/hooks/usePromoLink";
 import { useUTMPersistence } from "@/hooks/useUTMPersistence";
 import { usePromoWelcomeModal } from "@/hooks/usePromoWelcomeModal";
 
-const PromoWelcomeModal = dynamic(
+const PromoWelcomeModal = nextDynamic(
   () => import("@/components/modals/PromoWelcomeModal").then((m) => m.default),
   { ssr: false }
 );
@@ -22,7 +23,7 @@ const PromoWelcomeModal = dynamic(
  *
  * @see docs/UTM_ATTRIBUTION.md
  */
-export default function PromoLinkTracker() {
+function PromoLinkTrackerInner() {
   const { promoCode } = usePromoLink();
   useUTMPersistence();
   const { isOpen, campaignData, dismiss } = usePromoWelcomeModal(promoCode);
@@ -32,4 +33,15 @@ export default function PromoLinkTracker() {
   }
 
   return <PromoWelcomeModal isOpen={isOpen} onClose={dismiss} campaignData={campaignData} />;
+}
+
+// Suspense self-wrap: useSearchParams (via usePromoLink/useUTMPersistence) requires a boundary
+// for prerendered (marketing-class) pages — docs/security-csp/rules.md R8. Mounted site-wide
+// (providers.tsx) so every route's render tree passes through here.
+export default function PromoLinkTracker() {
+  return (
+    <Suspense fallback={null}>
+      <PromoLinkTrackerInner />
+    </Suspense>
+  );
 }

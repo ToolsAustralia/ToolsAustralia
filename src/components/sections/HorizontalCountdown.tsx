@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
 import { useCurrentMajorDraw } from "@/hooks/queries/useMajorDrawQueries";
@@ -11,7 +11,7 @@ interface HorizontalCountdownProps {
   className?: string;
 }
 
-const HorizontalCountdown: React.FC<HorizontalCountdownProps> = ({ className = "" }) => {
+const HorizontalCountdownInner: React.FC<HorizontalCountdownProps> = ({ className = "" }) => {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [timeLeft, setTimeLeft] = useState({
@@ -147,4 +147,11 @@ const HorizontalCountdown: React.FC<HorizontalCountdownProps> = ({ className = "
   );
 };
 
-export default HorizontalCountdown;
+// Suspense self-wrap: useSearchParams requires a boundary for prerendered (marketing-class) pages — docs/security-csp/rules.md R8.
+export default function HorizontalCountdown(props: HorizontalCountdownProps) {
+  return (
+    <Suspense fallback={null}>
+      <HorizontalCountdownInner {...props} />
+    </Suspense>
+  );
+}

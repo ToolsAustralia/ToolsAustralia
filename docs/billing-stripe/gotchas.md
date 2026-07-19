@@ -374,3 +374,7 @@ the priority rule there if you ever add another attribution code path.
 ## Terminology: `isAdditional` (was `isMemberOnly`) — 2026-07-01
 
 The package flag `isMemberOnly` was renamed to **`isAdditional`** across the codebase. It marks packages that require *additional-package access* — an **active subscription OR current major-draw entries** (see `hasAdditionalPackageAccess`), which is broader than subscribers; it was never truly "member-only". The internal `-member` UI id-suffix (a row disambiguator) is intentionally unchanged. Full rationale: [subscription/gotchas.md](../subscription/gotchas.md).
+
+## Stripe.js loads via `@stripe/stripe-js/pure` only (2026-07-19)
+
+`src/lib/stripe-client.ts` imports `loadStripe` from the `/pure` entry — the DEFAULT `@stripe/stripe-js` entry injects https://js.stripe.com on mere import, which shipped Stripe to 100 % of guests when the modal chunk evaluated. Import `loadStripe` nowhere else (lint: `internal-norm/no-eager-stripe`); call `getStripePromise()` lazily inside components/handlers. Note: with `/pure`, Stripe's fraud-signal collection starts at first `getStripePromise()` call (payment-surface mount) instead of page load — intended.

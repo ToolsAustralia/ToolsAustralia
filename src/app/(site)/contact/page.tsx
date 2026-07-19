@@ -6,6 +6,10 @@ import MetallicDivider from "@/components/ui/MetallicDivider";
 import { Facebook, Instagram, Mail } from "lucide-react";
 import { getContactEmail } from "@/lib/email/sender-identities";
 
+// nonce-CSP route class — must render per-request; never cache HTML with a baked nonce
+// (see docs/security-csp/architecture.md "Route classes").
+export const dynamic = "force-dynamic";
+
 // SEO Metadata for Contact Page
 export const metadata: Metadata = {
   title: "Contact Us | Tools Australia",

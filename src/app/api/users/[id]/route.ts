@@ -6,6 +6,7 @@ import { authOptions } from "@/lib/auth";
 import { requirePermission } from "@/lib/api-auth-permissions";
 import { getPackageById } from "@/data/membershipPackages";
 import { getEffectiveBenefits } from "@/utils/membership/benefit-resolution";
+import { MY_ACCOUNT_USER_FIELDS } from "@/utils/dashboard/my-account-projection";
 
 /**
  * GET /api/users/[id]
@@ -35,18 +36,18 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     // Check if id is a valid MongoDB ObjectId (24 character hex string)
     const isValidObjectId = /^[0-9a-fA-F]{24}$/.test(id);
 
+    // Explicit include-list projection (same list as the my-account route) —
+    // see src/utils/dashboard/my-account-projection.ts before adding client fields.
     if (isValidObjectId) {
       // Regular MongoDB ObjectId
-      user = await User.findById(id).select("-password -emailVerificationToken -passwordResetToken").lean();
+      user = await User.findById(id).select(MY_ACCOUNT_USER_FIELDS).lean();
     } else {
       // Google OAuth user ID - find by email from session
       if (!session.user.email) {
         return NextResponse.json({ error: "User email not found in session" }, { status: 400 });
       }
 
-      user = await User.findOne({ email: session.user.email })
-        .select("-password -emailVerificationToken -passwordResetToken")
-        .lean();
+      user = await User.findOne({ email: session.user.email }).select(MY_ACCOUNT_USER_FIELDS).lean();
     }
 
     if (!user) {

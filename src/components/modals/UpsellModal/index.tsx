@@ -9,9 +9,16 @@
  * import path.
  *
  * STRIPE PRESERVATION INVARIANTS:
- * 1. stripePromise is a module-scope singleton (Stripe prohibits re-instantiation
- *    per render). The Elements provider lives inside PaymentSection.tsx, but the
- *    promise is created exactly once at module load and passed down.
+ * 1. `getStripePromise()` is called lazily inside the component (via
+ *    `useMemo(() => getStripePromise(), [])`), NOT at module scope — a
+ *    module-scope call would boot Stripe.js for every visitor who downloads
+ *    this chunk, even ones who never open the modal (2026-07 perf audit).
+ *    `getStripePromise()` itself still returns a module-level cached
+ *    singleton (`src/lib/stripe-client.ts`) — Stripe prohibits
+ *    re-instantiation per render — so `stripePromise` identity is stable
+ *    across renders even though the call site is now inside the component.
+ *    The Elements provider lives inside PaymentSection.tsx; the promise is
+ *    passed down as a prop.
  * 2. The Elements `key` (`${setupIntentSecret}-up-${isDarkMode ? "d" : "l"}`) is
  *    preserved — changing the key forces a fresh mount when the SetupIntent
  *    secret or theme changes.
@@ -58,9 +65,6 @@ import PaymentSection from "./PaymentSection";
 import AcceptDeclineRow from "./AcceptDeclineRow";
 import BenefitsList from "./BenefitsList";
 import TrustIndicators from "./TrustIndicators";
-
-// Module-scope Stripe singleton — Stripe prohibits re-instantiation per render.
-const stripePromise = getStripePromise();
 
 /** Swap static catalog entry counts in inclusion lines with the dynamically resolved upsell entries. */
 function applyDynamicUpsellEntryCountToLines(lines: string[], calculatedEntries: number): string[] {
@@ -148,6 +152,9 @@ const UpsellModal: React.FC<UpsellModalProps> = ({
   // Note: onAccept is not used in this implementation as we handle purchases directly
   // This maintains backward compatibility with the interface
   void onAccept; // Suppress unused parameter warning
+  // Lazy Stripe boot — see "STRIPE PRESERVATION INVARIANTS" #1 above. getStripePromise()
+  // itself returns a module-level cached singleton, so this identity is stable across renders.
+  const stripePromise = useMemo(() => getStripePromise(), []);
   const [isProcessing, setIsProcessing] = useState(false);
   /** Latches true once a purchase succeeds, so the Purchase button can't be re-tapped
    *  during the ~3s success window before the modal auto-closes. `isProcessing` is reset

@@ -9,9 +9,16 @@
  * import path.
  *
  * STRIPE PRESERVATION INVARIANTS:
- * 1. stripePromise is a module-scope singleton (Stripe prohibits re-instantiation
- *    per render). The Elements provider lives inside PaymentSection.tsx, but the
- *    promise is created exactly once at module load and passed down.
+ * 1. `getStripePromise()` is called lazily inside the component (via
+ *    `useMemo(() => getStripePromise(), [])`), NOT at module scope — a
+ *    module-scope call would boot Stripe.js for every visitor who downloads
+ *    this chunk, even ones who never open the modal (2026-07 perf audit).
+ *    `getStripePromise()` itself still returns a module-level cached
+ *    singleton (`src/lib/stripe-client.ts`) — Stripe prohibits
+ *    re-instantiation per render — so `stripePromise` identity is stable
+ *    across renders even though the call site is now inside the component.
+ *    The Elements provider lives inside PaymentSection.tsx; the promise is
+ *    passed down as a prop.
  * 2. The Elements `key` (`${setupIntentSecret}-sp-${isDarkMode ? "d" : "l"}`) is
  *    preserved — changing the key forces a fresh mount when the SetupIntent
  *    secret or theme changes.
@@ -63,9 +70,6 @@ import PurchaseFooter, { TrustIndicators } from "./PurchaseFooter";
 import BenefitsPanel from "./BenefitsPanel";
 import { isPackageHiddenByVariant, variantDisplayOrderRank } from "./utils";
 
-// Module-scope Stripe singleton — Stripe prohibits re-instantiation per render.
-const stripePromise = getStripePromise();
-
 /**
  * SpecialPackagesModalProps Interface
  * Props for the SpecialPackagesModal component
@@ -91,6 +95,9 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({
   onPackageSelect,
 }) => {
   const { variantConfig } = useVariantContext();
+  // Lazy Stripe boot — see "STRIPE PRESERVATION INVARIANTS" #1 above. getStripePromise()
+  // itself returns a module-level cached singleton, so this identity is stable across renders.
+  const stripePromise = useMemo(() => getStripePromise(), []);
   const [isProcessing, setIsProcessing] = useState(false);
   const [selectedPackage, setSelectedPackage] = useState<StaticMembershipPackage | null>(null);
   const [couponCode, setCouponCode] = useState("");

@@ -13,9 +13,9 @@ export function useActivePromoBannerText() {
   return useQuery<PromoBannerTextResponse>({
     queryKey: ["promo-banner-text", "active"],
     queryFn: async () => {
-      const response = await fetch("/api/admin/promo/banner-text/active", {
-        cache: "no-store", // Prevent browser caching
-      });
+      // No cache:"no-store" — the route now serves public s-maxage=60 (2026-07-19); let the
+      // browser/CDN honor it. React Query's staleTime/refetchInterval still control freshness.
+      const response = await fetch("/api/admin/promo/banner-text/active");
       if (!response.ok) {
         throw new Error("Failed to fetch active banner text");
       }

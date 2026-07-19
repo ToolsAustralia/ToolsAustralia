@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { Check, Gift, Star, Zap, AlertCircle, Tag, X } from "lucide-react";
 import { Z_INDEX } from "@/constants/z-index";
-import { usePaymentStatus, type PaymentStatusResponse } from "@/hooks/queries";
+import { usePaymentStatus, type PaymentStatusResponse } from "@/hooks/queries/usePaymentQueries";
 import { rewardsEnabled } from "@/config/featureFlags";
 import { getPartnerDiscountBenefitTextForPackageId } from "@/utils/partner-discounts/partner-catalog-visibility";
 import { getPackageById } from "@/data/membershipPackages";

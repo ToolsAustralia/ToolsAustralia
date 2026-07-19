@@ -269,11 +269,14 @@ export default function PromoBanner({
   const isPromoResolved =
     !isEffectiveForBannerLoading && !isDrawLoading && !isVariantLoading;
 
-  // Legacy: use initial data for "active promo" object when provided (e.g. promotions page SSR)
-  const { data: membershipPromoClient } = usePromoByType("membership-packages");
-  const { data: oneTimePromoClient } = usePromoByType("one-time-packages");
-  const membershipPromo = initialMembershipPromo || membershipPromoClient;
-  const oneTimePromo = initialOneTimePromo || oneTimePromoClient;
+  // Server-baked initial* props are first-paint seeds ONLY — the client query wins once
+  // it resolves. Under ISR + stale-while-revalidate the baked props can be stale for
+  // whole sessions if they take precedence (2026-07 final-review fix). isSuccess (not
+  // truthiness) decides so a promo that ENDED (client resolves null) clears the seed.
+  const { data: membershipPromoClient, isSuccess: membershipPromoResolved } = usePromoByType("membership-packages");
+  const { data: oneTimePromoClient, isSuccess: oneTimePromoResolved } = usePromoByType("one-time-packages");
+  const membershipPromo = membershipPromoResolved ? membershipPromoClient : initialMembershipPromo;
+  const oneTimePromo = oneTimePromoResolved ? oneTimePromoClient : initialOneTimePromo;
 
   // Determine which promo to display based on effective promo type (aligns with multiplier resolution)
   const getActivePromo = () => {

@@ -52,3 +52,33 @@ The matcher uses **a single regex** with all exclusions combined inside one nega
 - `experimental.staleTimes: { dynamic: 30, static: 180 }` — restores client-side router cache window (Next 15 reset the dynamic default to 0s, hurting back/forward nav feel).
 
 The deprecated `domains` field is removed; `remotePatterns` covers all hosts including `localhost` for dev.
+
+## Route classes: nonce vs marketing (2026-07-19)
+
+The site serves two CSP classes, decided per-pathname in `src/middleware.ts` (`isStaticMarketingRoute`):
+
+| Class | Routes | Rendering | CSP script-src | x-nonce |
+|---|---|---|---|---|
+| **Marketing** | `/`, `/promotions/**`, `/winners`, `/draw-results`, `/terms`, `/competition-term-majordraw` | Static/ISR (`revalidate` 60–300) | no-nonce variant (`'unsafe-inline'` — the same fallback `next.config.ts` always shipped) | absent |
+| **Nonce** | everything else | Dynamic — every page declares `export const dynamic = "force-dynamic"` (or is naturally dynamic) | `'nonce-…'` + Next hashes + the four app snippet hashes (below), no `unsafe-inline` | set per request |
+
+**Why they can't mix:** Next stamps the request's nonce into EVERY inline script it emits (verified in production: 56/56 inline scripts nonced, including all `__next_f` RSC-payload scripts). Cached/ISR HTML therefore carries a *baked* nonce that can never match a fresh per-request CSP header — every script on the page would be blocked. So cached HTML must be served under the no-nonce policy, and nonce-policy routes must render per-request. **The invariant: a route is either nonce-class + dynamic or marketing-class + static.**
+
+**Trade-off accepted (DJ, 2026-07-19):** marketing routes run `'unsafe-inline'` script-src. These pages are anonymous (no session-scoped markup — auth state is client-fetched), all other directives (frame-ancestors, object-src 'none', base-uri, host allowlists) still apply, and this matches the pre-existing static-fallback policy in `next.config.ts`. Pure hash-based CSP was investigated and rejected: Next's RSC inline scripts change per request/revalidation and cannot be hashed.
+
+**Enforcement:** the `next build` route table is the check — only the marketing routes may appear as `○/●` (static/SSG); every other page route must be `ƒ`. The doc-sync for this model lives here; the middleware carries the same invariant in its header comment.
+
+**Related change:** the root layout's blanket `force-dynamic` (added 2026-01-21) and the `(site)` layout's `useSearchParams` workaround were removed — they were silently killing the ISR that `/promotions/[slug]` (`revalidate = 60`, `generateStaticParams`, `dynamicParams = false`) had declared since it shipped, which made every ad click pay a serverless render + Mongo queries. The `(site)` layout's Suspense boundaries are the documented fix for `useSearchParams`.
+
+## Inline-script hashes (2026-07-19)
+
+The root layout is **nonce-free** (`getNonce()` = a `headers()` read = every auto-static route goes dynamic, killing marketing-route ISR). The app's own inline scripts instead execute via **sha256 hash allowlisting** in the NONCE variant of `buildContentSecurityPolicy` ([csp.ts](../../src/utils/security/csp.ts)); on marketing routes the fallback variant's `'unsafe-inline'` covers them. Exactly four FIXED (zero-interpolation) snippet constants exist, in [`src/utils/security/inline-snippets.ts`](../../src/utils/security/inline-snippets.ts):
+
+| Constant | Rendered by | Purpose |
+|---|---|---|
+| `THEME_BOOTSTRAP_SNIPPET` | `src/app/layout.tsx` `<head>` | pre-hydration dark-mode apply (no light flash) |
+| `DEVICE_TIER_SNIPPET` | `src/app/layout.tsx` `<head>` | pre-paint `data-tier` on `<html>` for CSS tokens |
+| `GTM_INIT_SNIPPET` | `src/components/GoogleTagManager.tsx` | dataLayer + `gtm.start` seed (container id loads as a separate src-script) |
+| `KLAVIYO_QUEUE_SNIPPET` | `src/components/KlaviyoScriptLoader.tsx` | Klaviyo queue/Proxy stub (suite loads as a lazyOnload src-script) |
+
+Rules: a hash covers **exact bytes** — consumers must render the constant verbatim; editing a constant requires recomputing its hash in `csp.ts` (the mapping comment sits next to the tokens). The hashes live ONLY in the nonce variant — adding them to the fallback variant would make browsers ignore its `'unsafe-inline'` (CSP2) and break every other inline script there. Anything needing interpolation (pixel ids, route state) must be imperative provider code or a src-script — see [tracking/gotchas.md](../tracking/gotchas.md) "Pixel bootstraps are imperative provider code". Drift guard: `npm run test:csp-inline-hashes` ([inline-script-hashes.test.ts](../../src/utils/security/__tests__/inline-script-hashes.test.ts)) recomputes each hash against the built CSP in both variants. JSON-LD `<script type="application/ld+json">` blocks need neither nonce nor hash — CSP script-src doesn't gate non-executable data blocks.

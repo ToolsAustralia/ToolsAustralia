@@ -29,6 +29,8 @@ const eslintConfig = [
       // Allow unused vars/args prefixed with _ for intentional placeholders (API signatures, props)
       "@typescript-eslint/no-unused-vars": ["warn", { "argsIgnorePattern": "^_", "varsIgnorePattern": "^_" }],
       "internal-norm/norm-must-import-service": "error",
+      // loadStripe/getStripePromise must not run at module scope — see src/lib/stripe-client.ts.
+      "internal-norm/no-eager-stripe": "error",
       // Server-only Mongoose imports must never land in a "use client" component (runtime crash / bundle bloat).
       "local/no-models-in-client": "error",
     },

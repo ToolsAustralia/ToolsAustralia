@@ -55,3 +55,19 @@ Dev mode often bypasses rate limits for testing. Check the env-flag to ensure it
 ## Migrated from `docs/security-regression-checklist.md`
 
 > _TODO: read root file and merge._
+
+## Root-layout `force-dynamic` silently killed all ISR for 6 months (2026-01 → 2026-07)
+
+A blanket `export const dynamic = "force-dynamic"` in `src/app/layout.tsx` (added in a broad payment-flow commit, 4a414d53) overrode every page's own `revalidate` — including the promotions ad-landing pages that explicitly declared ISR — because the most-dynamic segment config in a layout chain wins. Every ad click paid a serverless render + 3–5 Mongo queries + `no-store` HTML. Lesson: never put rendering-mode config in a shared layout; per-page only. Found by the 2026-07-17 perf audit; removed 2026-07-19.
+
+## `getNonce()`/`headers()` in shared server components makes pages dynamic
+
+Any `headers()`/`cookies()` read in a layout or shared server component drags the whole subtree dynamic — a try/catch around it does not undo the dynamic marking. `getNonce()` is a `headers()` read. Marketing-class pages and their server components must not call it (they don't need it: their CSP variant allows un-nonced inline scripts).
+
+## Route-segment config is IGNORED in `"use client"` pages (found 2026-07-19)
+
+`export const dynamic = "force-dynamic"` (and `revalidate`) in a client-component page file is silently inert — Next only honors segment config from server modules. Under the old blanket layout force-dynamic this was invisible (the layout did the work); once the layout stopped forcing, "protected" client pages started prerendering and failing. The sanctioned fix is the 3-line server shim: rename the client page to `page-client.tsx` and create a server `page.tsx` that exports the segment config + `export { default } from "./page-client"`. Never trust a segment export you can see in a file that starts with "use client".
+
+## `useSearchParams` requires a Suspense boundary on any prerendered page — components self-wrap
+
+Every client component that calls `useSearchParams()` and is reachable from a marketing-class (prerendered) page must wrap itself: default-export a thin `<Suspense fallback={null}>` shell around the real `XInner` component in the same file. Layout-level Suspense does NOT cover page children. Trade-off: on static pages these sections render nothing in the prerendered HTML and hydrate in client-side — keep such components below the fold or visually self-contained (the hero must never call useSearchParams).

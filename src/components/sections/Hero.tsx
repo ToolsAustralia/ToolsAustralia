@@ -1,6 +1,6 @@
 "use client";
 
-import Image from "next/image";
+import { getImageProps } from "next/image";
 import { useState, useEffect } from "react";
 // import MajorDrawStats from "./MajorDrawStats"; // Commented out for now
 import HorizontalCountdown from "./HorizontalCountdown";
@@ -39,35 +39,39 @@ export default function Hero() {
 
     return () => observer.disconnect();
   }, []);
+
+  // Media-scoped preload pair for the bg <picture> below — mirrors the ToolsetLandingPage
+  // pattern (see docs/promo/gotchas.md): a raw-path preload never matches the optimized
+  // `/_next/image` URL the browser actually requests, so it silently preloads nothing useful.
+  // Also doubles as the `<picture>`'s `<source>`/fallback `<img>` props below — a single
+  // `<picture>` with viewport-scoped `<source>`s (not two separate always-mounted `<Image>`s)
+  // is what actually guarantees exactly one variant downloads: `display:none` does not stop an
+  // `<img>` from fetching, so two CSS-hidden-toggled `<Image>`s both fetch regardless of viewport.
+  const mobileBg = getImageProps({ src: "/images/background/mobileBg.webp", alt: "Tools background", fill: true, sizes: "100vw", loading: "eager" }).props;
+  const desktopBg = getImageProps({ src: "/images/background/desktopBg.webp", alt: "Tools background", fill: true, sizes: "100vw", loading: "eager" }).props;
+
   return (
-    <section
-      className={`relative hero-bg min-h-screen-svh flex flex-col  pb-10 sm:pb-8 pt-[60px] sm:pt-[100px] lg:pt-[var(--app-header-h-lg)] w-full overflow-visible hero-section ${
-        isTopBarVisible ? "top-bar-visible" : ""
-      }`}
-    >
-      {/* Background Images - Responsive for mobile and desktop */}
+    <>
+      <link rel="preload" as="image" media="(max-width: 1023px)" imageSrcSet={mobileBg.srcSet} imageSizes="100vw" />
+      <link rel="preload" as="image" media="(min-width: 1024px)" imageSrcSet={desktopBg.srcSet} imageSizes="100vw" />
+      <section
+        className={`relative hero-bg min-h-screen-svh flex flex-col  pb-10 sm:pb-8 pt-[60px] sm:pt-[100px] lg:pt-[var(--app-header-h-lg)] w-full overflow-visible hero-section ${
+          isTopBarVisible ? "top-bar-visible" : ""
+        }`}
+      >
+      {/* Background Image - ONE <picture> with viewport-scoped <source>s selects exactly one
+          variant to fetch (not two separate `<Image>`s toggled by CSS `hidden`/`lg:block`,
+          which both download regardless of visibility — see docs/shared-ui/gotchas.md
+          "Viewport-correct priority/preload"). `loading="eager"` on the fallback `<img>` (it's
+          the hero either way) — NOT `priority`, which would emit a competing
+          `<link rel=preload fetchpriority=high>` on top of the media-scoped preload pair above. */}
       <div className="absolute inset-0 z-0">
-        {/* Mobile Background */}
-        {/* Note: priority removed to prevent preload warning on desktop where this image is hidden */}
-        <div className="lg:hidden absolute inset-0">
-          <Image
-            src="/images/background/mobileBg.webp"
-            alt="Tools background"
-            fill
-            className="object-cover"
-            sizes="100vw"
-          />
-        </div>
-        {/* Desktop Background */}
-        <div className="hidden lg:block absolute inset-0">
-          <Image
-            src="/images/background/desktopBg.webp"
-            alt="Tools background"
-            fill
-            className="object-cover"
-            priority
-            sizes="100vw"
-          />
+        <div className="absolute inset-0">
+          <picture>
+            <source media="(min-width: 1024px)" srcSet={desktopBg.srcSet} sizes="100vw" />
+            <source media="(max-width: 1023px)" srcSet={mobileBg.srcSet} sizes="100vw" />
+            <img {...mobileBg} alt="Tools background" className="object-cover" />
+          </picture>
         </div>
         {/* Dark overlay for better text readability */}
         <div className="absolute inset-0 bg-black/20 dark:bg-black/45" />
@@ -207,6 +211,7 @@ export default function Hero() {
       {/* Major Draw Stats - Positioned at bottom with absolute positioning
       <MajorDrawStats className="-bottom-12 sm:-bottom-16" /> */}
     </section>
+    </>
   );
 }
 

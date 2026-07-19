@@ -32,8 +32,28 @@ declare global {
       grantConsent: () => void;
     };
     _ttqInit?: boolean;
+    /** Set by TikTok's bootstrap so the SDK knows which global holds the queue. */
+    TiktokAnalyticsObject?: string;
   }
 }
+
+/**
+ * TikTok's pre-SDK stub is an ARRAY with method proxies + bookkeeping props
+ * attached (faithful TS transcription of the official `!function (w, d, t)`
+ * bootstrap). Each proxy pushes `[methodName, ...args]` onto the array; the
+ * SDK drains it on load. The string index signature covers the dynamically
+ * attached method proxies (`page`, `track`, …).
+ */
+interface TtqStubArray extends Array<unknown> {
+  [key: string]: unknown;
+}
+
+/** Method proxies TikTok's bootstrap predefines on the ttq queue array. */
+const TTQ_METHODS = [
+  "page", "track", "identify", "instances", "debug", "on", "off", "once", "ready",
+  "alias", "group", "enableCookie", "disableCookie", "holdConsent", "revokeConsent",
+  "grantConsent",
+] as const;
 
 function envEnabled(): { pixel: boolean; capi: boolean } {
   return {
@@ -42,7 +62,7 @@ function envEnabled(): { pixel: boolean; capi: boolean } {
   };
 }
 
-function loadPixel(opts: { nonce?: string; advancedMatching?: Record<string, string> }): void {
+function loadPixel(): void {
   if (typeof window === "undefined") return;
   if (window._ttqInit) return;
   const pixelId = process.env.NEXT_PUBLIC_TIKTOK_PIXEL_ID;
@@ -52,20 +72,70 @@ function loadPixel(opts: { nonce?: string; advancedMatching?: Record<string, str
   // Decide whether to fire the initial page() based on the current route.
   // Excluded routes (admin / my-account / affiliate / etc.) skip the initial fire.
   const firePagePing = shouldTrackRoute(window.location.pathname);
-  const pageLine = firePagePing ? "ttq.page();" : "";
 
-  const script = document.createElement("script");
-  if (opts.nonce) script.setAttribute("nonce", opts.nonce);
-  script.innerHTML = `
-    !function (w, d, t) {
-      w.TiktokAnalyticsObject=t;var ttq=w[t]=w[t]||[];ttq.methods=["page","track","identify","instances","debug","on","off","once","ready","alias","group","enableCookie","disableCookie","holdConsent","revokeConsent","grantConsent"],ttq.setAndDefer=function(t,e){t[e]=function(){t.push([e].concat(Array.prototype.slice.call(arguments,0)))}};for(var i=0;i<ttq.methods.length;i++)ttq.setAndDefer(ttq,ttq.methods[i]);ttq.instance=function(t){for(
-      var e=ttq._i[t]||[],n=0;n<ttq.methods.length;n++)ttq.setAndDefer(e,ttq.methods[n]);return e},ttq.load=function(e,n){var r="https://analytics.tiktok.com/i18n/pixel/events.js",o=n&&n.partner;ttq._i=ttq._i||{},ttq._i[e]=[],ttq._i[e]._u=r,ttq._t=ttq._t||{},ttq._t[e]=+new Date,ttq._o=ttq._o||{},ttq._o[e]=n||{};n=document.createElement("script")
-      ;n.type="text/javascript",n.async=!0,n.src=r+"?sdkid="+e+"&lib="+t;e=document.getElementsByTagName("script")[0];e.parentNode.insertBefore(n,e)};
-      ttq.load('${pixelId}');
-      ${pageLine}
-    }(window, document, 'ttq');
-  `;
-  document.head.appendChild(script);
+  // Imperative transcription of TikTok's official bootstrap. Written as real TS
+  // so the provider injects ZERO inline script text — inline pixel bootstraps
+  // are unhashable (env interpolation) and would require a CSP nonce, which
+  // would keep the root layout dynamic. See docs/tracking/gotchas.md.
+  // Statement order matches the original minified snippet exactly.
+  const w = window as unknown as Record<string, unknown>;
+  w.TiktokAnalyticsObject = "ttq";
+  const ttq = (w.ttq as TtqStubArray | undefined) || ([] as unknown[] as TtqStubArray);
+  w.ttq = ttq;
+  ttq.methods = TTQ_METHODS.slice();
+
+  // setAndDefer(target, method): install a queueing proxy that records the call
+  // as [method, ...args] on the target array until the SDK replaces it.
+  const setAndDefer = (target: TtqStubArray, method: string): void => {
+    target[method] = function (this: unknown) {
+      // eslint-disable-next-line prefer-rest-params
+      target.push([method as unknown].concat(Array.prototype.slice.call(arguments, 0) as unknown[]));
+    };
+  };
+  ttq.setAndDefer = setAndDefer;
+  for (let i = 0; i < TTQ_METHODS.length; i++) setAndDefer(ttq, TTQ_METHODS[i]);
+
+  // ttq.instance(pixelId): per-pixel queue with the same deferred proxies.
+  ttq.instance = function (instancePixelId: string): TtqStubArray {
+    const registry = (ttq._i as Record<string, TtqStubArray> | undefined) || {};
+    const inst = registry[instancePixelId] || ([] as unknown[] as TtqStubArray);
+    for (let n = 0; n < TTQ_METHODS.length; n++) setAndDefer(inst, TTQ_METHODS[n]);
+    return inst;
+  };
+
+  // ttq.load(pixelId, options): register bookkeeping (_i/_t/_o) and inject the
+  // SDK <script src>. events.js is a src-script on analytics.tiktok.com —
+  // host-allowlisted in CSP script-src, so it needs neither nonce nor hash.
+  // (The minified original also computed `o = n && n.partner` — dead, dropped.)
+  ttq.load = function (loadPixelId: string, options?: Record<string, unknown>): void {
+    const sdkSrc = "https://analytics.tiktok.com/i18n/pixel/events.js";
+    const registry = (ttq._i as Record<string, TtqStubArray> | undefined) || {};
+    ttq._i = registry;
+    const instanceQueue = [] as unknown[] as TtqStubArray;
+    registry[loadPixelId] = instanceQueue;
+    instanceQueue._u = sdkSrc;
+    const loadTimes = (ttq._t as Record<string, number> | undefined) || {};
+    ttq._t = loadTimes;
+    loadTimes[loadPixelId] = Date.now();
+    const loadOptions = (ttq._o as Record<string, Record<string, unknown>> | undefined) || {};
+    ttq._o = loadOptions;
+    loadOptions[loadPixelId] = options || {};
+    const sdk = document.createElement("script");
+    sdk.type = "text/javascript";
+    sdk.async = true;
+    sdk.src = `${sdkSrc}?sdkid=${loadPixelId}&lib=ttq`;
+    const firstScript = document.getElementsByTagName("script")[0];
+    // Original inserts before the first <script>; fall back to <head> append in
+    // the (theoretical) scriptless-document case instead of throwing.
+    if (firstScript && firstScript.parentNode) {
+      firstScript.parentNode.insertBefore(sdk, firstScript);
+    } else {
+      document.head.appendChild(sdk);
+    }
+  };
+
+  (ttq.load as (id: string, options?: Record<string, unknown>) => void)(pixelId);
+  if (firePagePing) (ttq.page as () => void)();
   window._ttqInit = true;
 }
 

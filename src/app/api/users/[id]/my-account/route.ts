@@ -17,6 +17,11 @@ import { getPackageById } from "@/data/membershipPackages";
 import { getEffectiveBenefits } from "@/utils/membership/benefit-resolution";
 import { processPartnerDiscountQueue } from "@/utils/partner-discounts/partner-discount-queue";
 import { hasMembershipGrantInCurrentDrawPeriod } from "@/utils/draws/has-membership-grant-this-draw";
+import {
+  MY_ACCOUNT_MINI_DRAW_FIELDS,
+  MY_ACCOUNT_ORDER_FIELDS,
+  MY_ACCOUNT_USER_FIELDS,
+} from "@/utils/dashboard/my-account-projection";
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -40,17 +45,17 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     let user;
     const isValidObjectId = /^[0-9a-fA-F]{24}$/.test(id);
 
+    // Explicit include-list projection — this payload is polled for every member;
+    // see src/utils/dashboard/my-account-projection.ts before adding client fields.
     if (isValidObjectId) {
-      user = await User.findById(id).select("-password -emailVerificationToken -passwordResetToken").lean();
+      user = await User.findById(id).select(MY_ACCOUNT_USER_FIELDS).lean();
     } else {
       // Google OAuth user - find by email from session
       if (!session.user.email) {
         return NextResponse.json({ error: "User email not found in session" }, { status: 400 });
       }
 
-      user = await User.findOne({ email: session.user.email })
-        .select("-password -emailVerificationToken -passwordResetToken")
-        .lean();
+      user = await User.findOne({ email: session.user.email }).select(MY_ACCOUNT_USER_FIELDS).lean();
     }
 
     if (!user) {
@@ -173,15 +178,19 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
     // Get related data from database
     const [activeMiniDraws, recentOrders, hasCurrentDrawMembershipGrant] = await Promise.all([
+      // .select() is load-bearing: an unprojected MiniDraw doc carries the full
+      // per-user entries[] array (one subdoc per participant — MB-scale on the wire).
       MiniDraw.find({
         isActive: true,
         endDate: { $gt: new Date() },
       })
+        .select(MY_ACCOUNT_MINI_DRAW_FIELDS)
         .limit(5)
         .lean(),
       Order.find({
         userId: userData._id,
       })
+        .select(MY_ACCOUNT_ORDER_FIELDS)
         .sort({ createdAt: -1 })
         .limit(10)
         .lean(),

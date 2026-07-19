@@ -1,5 +1,16 @@
 # Dashboard-Account — Gotchas
 
+## The my-account payload is include-list projected (2026-07-19)
+
+Everything the dashboard derives (`useDashboardState`, `useDashboardEntryDisplay`, the sheets, the
+draws page's `miniDrawParticipation` read) consumes `GET /api/users/[id]/my-account`, whose User /
+MiniDraw / Order queries are projected through
+[src/utils/dashboard/my-account-projection.ts](../../src/utils/dashboard/my-account-projection.ts).
+A new dashboard surface that reads a User field NOT in `MY_ACCOUNT_USER_FIELDS` will see `undefined`
+at runtime with no type error — add the field to the projection first (fields inside `subscription`
+ship automatically). `activeMiniDraws` deliberately excludes `entries[]`/`winner` (the MB-scale wire
+leak this fixed). Contract + guard: [auth/gotchas.md](../auth/gotchas.md), `npm run test:my-account-projection`.
+
 ## Membership management path: no "Settings → Subscription" tab (2026-07-07)
 
 The 2026-07 revamp removed the tabbed Settings IA (`?tab=subscription`/`payment`). Membership management is now the **Manage sheet** (`useDashboardSheetStore.openSheet("manage")`), reached from the **Membership page** (`/my-account/membership`) "Manage plan" button or the `/my-account?open=subscription` deep-link; payment is the **Payment sheet**. Settings holds only Profile / Theme / Password. Copy that referenced "Settings → Subscription" was corrected — the dashboard SupportSheet FAQ ("cancel my membership" → "Membership → Manage plan") and the membership-page change-tier comment. Chatbot copy lives separately (see [ai-chatbot/gotchas.md](../ai-chatbot/gotchas.md)).

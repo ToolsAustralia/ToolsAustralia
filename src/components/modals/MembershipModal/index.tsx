@@ -9,10 +9,17 @@
  * import path.
  *
  * STRIPE PRESERVATION INVARIANTS:
- * 1. `getStripePromise()` resolves at module scope (Stripe prohibits
- *    re-instantiation per render). Stored as `stripePromise` and passed down
- *    transitively via PaymentMethodSelector (which has its own module-scope
- *    singleton — both call the same memoized factory).
+ * 1. `getStripePromise()` is called lazily inside the component (via
+ *    `useMemo(() => getStripePromise(), [])`), NOT at module scope — a
+ *    module-scope call would boot Stripe.js for every visitor who downloads
+ *    this chunk, even ones who never open the modal (2026-07 perf audit).
+ *    `getStripePromise()` itself still returns a module-level cached
+ *    singleton (`src/lib/stripe-client.ts`) — Stripe prohibits
+ *    re-instantiation per render — so `stripePromise` identity is stable
+ *    across renders even though the call site is now inside the component.
+ *    Stored as `stripePromise` and passed down transitively via
+ *    PaymentMethodSelector (which has its own lazy call to the same
+ *    memoized factory, also moved in-component for the same reason).
  * 2. `cardFormRef` is owned at the orchestrator level and forwarded to
  *    PaymentMethodSelector. The orchestrator's confirmStripeIntent() call
  *    sites continue to work unchanged.
@@ -26,6 +33,7 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import Image from "next/image";
 import PackageSelectionModal from "../PackageSelectionModal";
+import { consumePendingOpenMembershipModalDetail } from "./LazyMembershipModal";
 import { formatNamePart } from "@/utils/display-name";
 import ExistingAccountModal from "../ExistingAccountModal";
 import { ModalContainer, ModalHeader, ModalContent } from "../ui";
@@ -35,9 +43,6 @@ import { useStripeSubscription } from "@/hooks/useStripeSubscription";
 import { getStripePromise } from "@/lib/stripe-client";
 import { useMemberships } from "@/hooks/useMemberships";
 import { cn } from "@/utils/cn";
-
-// Module-scope Stripe singleton — Stripe prohibits re-instantiation per render.
-const stripePromise = getStripePromise();
 
 import { usePurchaseMembership } from "@/hooks/queries/useMembershipQueries";
 import { usePurchaseUpsell } from "@/hooks/queries/useUpsellQueries";
@@ -132,7 +137,7 @@ interface OneTimePurchaseData {
   autoLogin?: boolean;
 }
 
-interface MembershipModalProps {
+export interface MembershipModalProps {
   isOpen: boolean;
   onClose: () => void;
   selectedPlan: LocalMembershipPlan | null;
@@ -158,6 +163,9 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
   const pathname = usePathname();
   const { showToast } = useToast();
   const promoTheme = usePromoTheme();
+  // Lazy Stripe boot — see "STRIPE PRESERVATION INVARIANTS" #1 above. getStripePromise()
+  // itself returns a module-level cached singleton, so this identity is stable across renders.
+  const stripePromise = useMemo(() => getStripePromise(), []);
 
   // Get variant config from context (for A/B testing)
   // Use prop if provided, otherwise try to get from context
@@ -867,6 +875,15 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
     };
 
     window.addEventListener("openMembershipModal", handleOpenMembershipModalPrefill as EventListener);
+
+    // Under LazyMembershipModal the chunk mounts AFTER the host dispatched the open
+    // event, so replay any pre-mount detail the wrapper buffered (rewards coupon-unlock
+    // flow — 2026-07 final-review fix; see LazyMembershipModal.tsx).
+    const pendingDetail = consumePendingOpenMembershipModalDetail();
+    if (pendingDetail) {
+      handleOpenMembershipModalPrefill({ detail: pendingDetail } as CustomEvent);
+    }
+
     return () => {
       window.removeEventListener("openMembershipModal", handleOpenMembershipModalPrefill as EventListener);
     };

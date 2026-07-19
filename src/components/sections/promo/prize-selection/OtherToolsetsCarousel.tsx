@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, useRef } from "react";
+import { useCallback, useEffect, useMemo, useState, useRef, Suspense } from "react";
 import Image from "next/image";
 import { useRouter, useSearchParams } from "next/navigation";
 import useEmblaCarousel from "embla-carousel-react";
@@ -47,7 +47,7 @@ interface OtherToolsetsCarouselProps {
 
 const ALL_TOOLSETS = ["ryobi", "milwaukee", "dewalt", "makita", "hikoki"] as const;
 
-export function OtherToolsetsCarousel({
+function OtherToolsetsCarouselInner({
   referrerSlug,
   currentToolsetSlug,
   onNavigate,
@@ -206,5 +206,14 @@ export function OtherToolsetsCarousel({
         </div>
       </div>
     </div>
+  );
+}
+
+// Suspense self-wrap: useSearchParams requires a boundary for prerendered (marketing-class) pages — docs/security-csp/rules.md R8.
+export function OtherToolsetsCarousel(props: OtherToolsetsCarouselProps) {
+  return (
+    <Suspense fallback={null}>
+      <OtherToolsetsCarouselInner {...props} />
+    </Suspense>
   );
 }

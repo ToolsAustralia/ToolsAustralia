@@ -17,7 +17,7 @@ import { SpeedInsightsClient } from "@/components/tracking/SpeedInsightsClient";
 import Script from "next/script";
 // Import console log silencer for production - must be imported early
 import "@/utils/common/silence-logs";
-import { getNonce } from "@/utils/security/getNonce";
+import { THEME_BOOTSTRAP_SNIPPET, DEVICE_TIER_SNIPPET } from "@/utils/security/inline-snippets";
 import { cn } from "@/utils/cn";
 
 const inter = Inter({
@@ -75,16 +75,24 @@ export const metadata: Metadata = {
   },
 };
 
-export const dynamic = "force-dynamic";
+// NOTE (2026-07-19): the blanket `export const dynamic = "force-dynamic"` that lived here
+// (added 2026-01-21, commit 4a414d53) was removed to restore ISR/static rendering on the
+// anonymous marketing routes (/, /promotions/**, /winners, /draw-results, /terms). Every
+// OTHER page declares its own force-dynamic (nonce-CSP route class) — see
+// docs/security-csp/architecture.md "Route classes" and src/middleware.ts.
 
-export default async function RootLayout({ children }: { children: React.ReactNode }) {
+// NOTE (2026-07-19): this layout is deliberately NONCE-FREE. The CSP nonce util
+// (src/utils/security) reads headers(), which makes every auto-static route dynamic
+// and kills marketing-route ISR. Inline scripts here execute via sha256 hashes
+// allowlisted in csp.ts (the constants live in src/utils/security/inline-snippets.ts)
+// on nonce-class routes, and via the fallback CSP's 'unsafe-inline' on marketing
+// routes. JSON-LD blocks are non-executable data — CSP script-src doesn't gate them.
+// Everything else here is a src-script on a host-allowlisted origin. Do NOT
+// reintroduce headers()/cookies()/nonce reads in this file.
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   const siteUrl = (process.env.NEXT_PUBLIC_APP_URL || "https://toolsaustralia.com.au").replace(/\/$/, "");
   const googleVerify = process.env.NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION;
   const bingVerify = process.env.NEXT_PUBLIC_BING_SITE_VERIFICATION;
-
-  // Get CSP nonce from request headers (set by middleware in production)
-  // This allows JSON-LD scripts to execute under strict CSP without 'unsafe-inline'
-  const nonce = await getNonce();
 
   return (
     <html lang="en-AU" className={cn(inter.variable, poppins.variable)} suppressHydrationWarning>
@@ -94,40 +102,36 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         <meta name="theme-color" content="#ffffff" />
         {/* Light is the default. Apply dark before React hydrates only when the user chose it
             (persisted `ta-theme`), so a dark-mode user never flashes light. Legacy v0 auto-dark
-            (userManualOverride === false) is ignored — it resolves to the light default. */}
-        <script
-          nonce={nonce}
-          dangerouslySetInnerHTML={{
-            __html: `(function(){try{var r=localStorage.getItem("ta-theme");var t=null,o;if(r){var p=JSON.parse(r);if(p&&p.state){t=p.state.theme;o=p.state.userManualOverride}}if(t==="dark"&&o!==false){document.documentElement.classList.add("dark");var m=document.querySelector('meta[name="theme-color"]');if(m)m.setAttribute("content","#0a0a0a");document.documentElement.style.colorScheme="dark"}}catch(e){}})();`,
-          }}
-        />
+            (userManualOverride === false) is ignored — it resolves to the light default.
+            The snippet string lives in inline-snippets.ts: its sha256 is allowlisted in csp.ts,
+            so it must stay byte-exact (no nonce attr — see the layout-level NOTE above). */}
+        <script dangerouslySetInnerHTML={{ __html: THEME_BOOTSTRAP_SNIPPET }} />
         {/* Set data-tier on <html> before paint so CSS tokens (--ta-blur etc.) match the device on first frame.
-            Otherwise DeviceTierProvider's useEffect runs post-hydration, flipping tokens and flashing backdrop-blur'd UI. */}
-        <script
-          nonce={nonce}
-          dangerouslySetInnerHTML={{
-            __html: `(function(){try{var w=window.innerWidth;var t=w<768?"mobile":w<1024?"tablet":"desktop";document.documentElement.dataset.tier=t;document.documentElement.dataset.viewportTier=t;}catch(e){}})();`,
-          }}
-        />
+            Otherwise DeviceTierProvider's useEffect runs post-hydration, flipping tokens and flashing backdrop-blur'd UI.
+            Same hash-allowlisted constant treatment as the theme bootstrap above. */}
+        <script dangerouslySetInnerHTML={{ __html: DEVICE_TIER_SNIPPET }} />
         {googleVerify ? <meta name="google-site-verification" content={googleVerify} /> : null}
         {bingVerify ? <meta name="msvalidate.01" content={bingVerify} /> : null}
         {/** Facebook domain verification meta tag so Meta can confirm ownership for ads */}
         <meta name="facebook-domain-verification" content="jed8ml25qbnzev5ifwhx9tcgov6x7z" />
-        {/** Organization & Website JSON-LD for brand signals */}
+        {/** Organization & Website JSON-LD for brand signals.
+             No nonce: JSON-LD is non-executable data, CSP script-src doesn't gate it. */}
         <OrganizationJsonLd
           name="Tools Australia"
           url={siteUrl}
           logo={`${siteUrl}/images/Tools%20Australia%20Logo/Social%20Media%20Profile_Black%20Background.webp`}
           // Listing social profiles here helps search engines connect verified brand entities.
           sameAs={["https://www.facebook.com/toolsaust", "https://www.instagram.com/toolsaustralia/"]}
-          nonce={nonce}
         />
-        <WebSiteJsonLd name="Tools Australia" url={siteUrl} nonce={nonce} />
-        {/* Contentsquare UX analytics — afterInteractive defers until Next is hydrated, removing it from the critical render path */}
+        <WebSiteJsonLd name="Tools Australia" url={siteUrl} />
+        {/* Contentsquare UX analytics — lazyOnload defers to browser idle AFTER the load event
+            (2026-07-19 perf: it's the single heaviest third-party script, ~157 KB gz / 520 KB raw;
+            at afterInteractive it competed with hydration on low-end phones). Trade-off accepted
+            by DJ: session recordings miss the first ~2-4 s of a visit. Conversion pixels
+            (GTM / Meta / TikTok) intentionally stay at afterInteractive — see docs/tracking/rules.md. */}
         <Script
           src="https://t.contentsquare.net/uxa/80b94ffdd640f.js"
-          strategy="afterInteractive"
-          nonce={nonce}
+          strategy="lazyOnload"
           data-tracking-pixel="true"
         />
       </head>
@@ -137,17 +141,14 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         <GoogleTagManager
           gtmId={process.env.NEXT_PUBLIC_GTM_ID}
           disabled={process.env.NODE_ENV === "development" && !process.env.NEXT_PUBLIC_ENABLE_GTM_TESTING}
-          nonce={nonce}
         />
         <TopLoadingBar />
         <ConversionPixels
           disabled={process.env.NODE_ENV === "development" && !process.env.NEXT_PUBLIC_ENABLE_PIXEL_TESTING}
-          nonce={nonce}
         />
         <KlaviyoScriptLoader
           companyId={process.env.NEXT_PUBLIC_KLAVIYO_COMPANY_ID}
           disabled={process.env.NODE_ENV === "development" && !process.env.NEXT_PUBLIC_ENABLE_PIXEL_TESTING}
-          nonce={nonce}
         />
         <KlaviyoPageTracker />
         <Providers>{children}</Providers>

@@ -4,7 +4,16 @@
  * PaymentForm — two sub-components that handle Stripe payment confirmation.
  *
  * CRITICAL STRIPE PRESERVATION RULES (do not alter without code review):
- * 1. stripePromise is a module-scope singleton (Stripe prohibits re-instantiation).
+ * 1. `getStripePromise()` is called lazily inside `PaymentFormWithoutElements`
+ *    (via `useMemo(() => getStripePromise(), [])`), NOT at module scope — a
+ *    module-scope call would boot Stripe.js for every visitor who downloads
+ *    this chunk, even ones who never open the modal (2026-07 perf audit).
+ *    `getStripePromise()` itself still returns a module-level cached
+ *    singleton (`src/lib/stripe-client.ts`) — Stripe prohibits
+ *    re-instantiation per render — so `stripePromise` identity is stable
+ *    across renders even though the call site is now inside the component.
+ *    `PaymentFormWithElements` doesn't need it — it uses `useStripe()`/
+ *    `useElements()` from the surrounding `<Elements>` provider instead.
  * 2. <Elements key={clientSecret || "no-secret"}> re-mount key is required for Stripe correctness.
  * 3. All useStripe(), useElements(), stripe.confirmPayment(), stripe.confirmCardPayment() calls
  *    are preserved byte-identically from the original StripePaymentModal.tsx.
@@ -15,7 +24,7 @@
  * RenewalFailedModal pattern.
  */
 
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import { Stripe } from "@stripe/stripe-js";
 import { PaymentElement, useStripe, useElements } from "@stripe/react-stripe-js";
 import { CreditCard, CheckCircle, Loader2 } from "lucide-react";
@@ -31,11 +40,7 @@ import PaymentMethodSelector from "@/components/modals/PaymentMethodSelector";
 /** Upgrade completed server-side with no PaymentIntent to poll */
 export const IMMEDIATE_UPGRADE_NO_PI = "IMMEDIATE_UPGRADE_NO_PI";
 
-// Module-scope singleton — Stripe prohibits re-instantiation per render.
-const stripePromise = getStripePromise();
-
 export type { StripeBillingAddress };
-export { stripePromise };
 
 // ============================================================
 // Shared props interface
@@ -84,6 +89,10 @@ export const PaymentFormWithoutElements: React.FC<PaymentFormProps> = ({
   upgradeInfo,
 }) => {
   const { showToast } = useToast();
+  // Lazy Stripe boot — see the header comment's invariant #1. getStripePromise()
+  // itself returns a module-level cached singleton, so this identity is stable
+  // across renders.
+  const stripePromise = useMemo(() => getStripePromise(), []);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
   const [stripeInstance, setStripeInstance] = useState<Stripe | null>(null);
@@ -92,7 +101,7 @@ export const PaymentFormWithoutElements: React.FC<PaymentFormProps> = ({
 
   React.useEffect(() => {
     stripePromise.then((stripe) => setStripeInstance(stripe));
-  }, []);
+  }, [stripePromise]);
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();

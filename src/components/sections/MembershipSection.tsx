@@ -1,13 +1,8 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, Suspense } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
-import dynamic from "next/dynamic";
-
-// Lazy-loaded: MembershipModal bundles Stripe + payment forms.
-const MembershipModal = dynamic(() => import("@/components/modals/MembershipModal"), {
-  ssr: false,
-});
+import MembershipModal from "@/components/modals/MembershipModal/LazyMembershipModal";
 import { useMemberships } from "@/hooks/useMemberships";
 import { useUserContext } from "@/contexts/UserContext";
 import { useMembershipModal } from "@/hooks/useMembershipModal";
@@ -55,7 +50,7 @@ interface MembershipSectionProps {
   variantConfig?: VariantConfig["packages"]; // Optional variant config for packages
 }
 
-export default function MembershipSection({
+function MembershipSectionInner({
   title: _title = "CHOOSE YOUR PACKAGE",
   padding = "py-12 sm:py-16 lg:py-20",
   titleColor = "text-black",
@@ -692,5 +687,14 @@ export default function MembershipSection({
         membershipModalConfig={contextVariantConfig?.membershipModal}
       />
     </section>
+  );
+}
+
+// Suspense self-wrap: useSearchParams requires a boundary for prerendered (marketing-class) pages — docs/security-csp/rules.md R8.
+export default function MembershipSection(props: MembershipSectionProps) {
+  return (
+    <Suspense fallback={null}>
+      <MembershipSectionInner {...props} />
+    </Suspense>
   );
 }

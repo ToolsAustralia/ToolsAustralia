@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { Metadata } from "next";
 import { Suspense } from "react";
 import dynamic from "next/dynamic";
+import { getImageProps } from "next/image";
 
 import PromoThemeInitializer from "@/components/promo/PromoThemeInitializer";
 import PromoViewTracking from "@/app/promotions/_components/PromoViewTracking";
@@ -53,10 +54,11 @@ import { createCachedQuery } from "@/utils/database/queries/server-queries";
 import mongoose from "mongoose";
 import ExperimentService from "@/services/ab-testing/ExperimentService";
 import { VariantAssignmentWrapper } from "@/components/ab-testing/VariantAssignmentWrapper";
-import { getServerVariantAssignment } from "@/utils/ab-testing/get-server-variant-assignment";
 import type { PromoImagePaths } from "@/utils/promo/promo-hero-types";
 import { resolveEvergreenHeroImages } from "@/utils/promo/landing-image-resolver";
 import { getLandingHeroImagePaths } from "@/config/promo-landing-slugs";
+import { getLandingHeroUrgencyFromDrawDay } from "@/utils/promo/promo-hero-images";
+import { getLandingHeroVideoPaths } from "@/utils/promo/landing-video-resolver";
 
 interface PromotionsPageProps {
   params: Promise<{ slug: string }>;
@@ -140,40 +142,57 @@ export default async function PromotionsPage({ params }: PromotionsPageProps) {
     ? { desktop: landingForPrize.desktop, mobile: landingForPrize.mobile }
     : { desktop: fallbackAllPrizes.desktop, mobile: fallbackAllPrizes.mobile };
 
+  // Calendar-day (AEST) tier — mirrors ToolsetLandingPage's derivation — so the video-vs-still
+  // preload decision below matches what PromoHero actually resolves for this slug/tier.
+  const landingDrawDayUrgency = getLandingHeroUrgencyFromDrawDay(majorDraw);
+
+  // Video mode never paints the still (PromoHero renders the clip as the primary hero), so
+  // preloading the raw image path there wastes bandwidth on an asset the browser downloads but
+  // never displays. Still mode preloads the OPTIMIZED `/_next/image` URL (via getImageProps) —
+  // a raw-path `<link rel="preload" as="image" href=...>` never matches the URL the browser's
+  // image request actually resolves to, so it silently preloads nothing useful. See
+  // docs/promo/gotchas.md and ToolsetLandingPage.tsx (same pattern).
+  const heroVideo = getLandingHeroVideoPaths(prize.slug, landingDrawDayUrgency);
+  const heroImagePreload = heroVideo
+    ? null
+    : {
+        mobile: getImageProps({ src: heroImagePaths.mobile, alt: "", fill: true, sizes: "100vw" }).props,
+        desktop: getImageProps({ src: heroImagePaths.desktop, alt: "", fill: true, sizes: "100vw" }).props,
+      };
+
   // Get experiment ID for variant assignment
   const experimentId = activeExperiment?._id 
     ? (activeExperiment._id instanceof mongoose.Types.ObjectId ? activeExperiment._id.toString() : String(activeExperiment._id))
     : null;
 
-  // Attempt server-side variant assignment (optional optimization)
-  // If this fails, client-side fallback will handle it
-  const serverAssignment = experimentId 
-    ? await getServerVariantAssignment(experimentId, slug).catch(() => null)
-    : null;
+  // A/B assignment is client-authoritative (POST /api/ab-testing/assign). The old
+  // server-side read called cookies()/getServerSession — under this page's ISR the
+  // dynamic-API throw was swallowed by .catch(() => null), so it could never succeed
+  // here; removed 2026-07-19 for consistency with ToolsetLandingPage.
 
   return (
     <>
-      {/* Preload hero images for faster LCP - responsive with media queries */}
-      <link 
-        rel="preload" 
-        as="image" 
-        href={heroImagePaths.desktop} 
-        media="(min-width: 1024px)"
-        imageSizes="100vw" 
-      />
-      <link 
-        rel="preload" 
-        as="image" 
-        href={heroImagePaths.mobile} 
-        media="(max-width: 1023px)"
-        imageSizes="100vw" 
-      />
+      {heroImagePreload && (
+        <>
+          <link
+            rel="preload"
+            as="image"
+            media="(min-width: 1024px)"
+            imageSrcSet={heroImagePreload.desktop.srcSet}
+            imageSizes="100vw"
+          />
+          <link
+            rel="preload"
+            as="image"
+            media="(max-width: 1023px)"
+            imageSrcSet={heroImagePreload.mobile.srcSet}
+            imageSizes="100vw"
+          />
+        </>
+      )}
 
-      <VariantAssignmentWrapper 
+      <VariantAssignmentWrapper
         experimentId={experimentId}
-        initialVariantId={serverAssignment?.variantId}
-        initialVariantConfig={serverAssignment?.variantConfig}
-        initialAnonymousId={serverAssignment?.anonymousId}
       >
         <PromoThemeInitializer slug={prize.slug} />
         <PromoViewTracking

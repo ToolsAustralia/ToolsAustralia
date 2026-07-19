@@ -33,6 +33,10 @@ const newsreader = Newsreader({
   display: "swap",
 });
 
+// Marketing route class: static + ISR (no-nonce CSP). Winner data changes only when a draw
+// completes; 5 minutes staleness is acceptable and removes a per-request Mongo round trip.
+export const revalidate = 300;
+
 export const metadata: Metadata = {
   title: "Winners | Tools Australia",
   description:

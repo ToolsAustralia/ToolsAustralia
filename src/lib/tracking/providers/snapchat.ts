@@ -9,7 +9,12 @@ import { shouldTrackRoute } from "@/utils/tracking/should-track-route";
 interface SnapchatGlobal {
   (command: string, eventNameOrParams?: string | Record<string, unknown>, params?: Record<string, unknown>): void;
   queue?: unknown[];
+  /** Installed by scevent.min.js on load; absent while the stub is queueing. */
+  handleRequest?: (...args: unknown[]) => void;
 }
+
+/** Pre-SDK stub with the queue guaranteed present (assigned right after creation). */
+type SnaptrStub = SnapchatGlobal & { queue: IArguments[] };
 
 declare global {
   interface Window {
@@ -25,7 +30,7 @@ function envEnabled(): { pixel: boolean; capi: boolean } {
   };
 }
 
-function loadPixel(opts: { nonce?: string; advancedMatching?: Record<string, string> }): void {
+function loadPixel(): void {
   if (typeof window === "undefined") return;
   if (window._snaptrInit) return;
   const pixelId = process.env.NEXT_PUBLIC_SNAPCHAT_PIXEL_ID;
@@ -34,20 +39,42 @@ function loadPixel(opts: { nonce?: string; advancedMatching?: Record<string, str
 
   // Skip initial PAGE_VIEW on excluded routes (admin / my-account / affiliate / etc.)
   const firePageView = shouldTrackRoute(window.location.pathname);
-  const pageViewLine = firePageView ? `window.snaptr('track', 'PAGE_VIEW');` : "";
 
-  // Snapchat's standard inline pixel init (see snap.com/business/snap-pixel docs).
-  const script = document.createElement("script");
-  if (opts.nonce) script.setAttribute("nonce", opts.nonce);
-  script.innerHTML = `
-    (function(e,t,n){if(e.snaptr)return;var a=e.snaptr=function(){a.handleRequest?
-    a.handleRequest.apply(a,arguments):a.queue.push(arguments)};a.queue=[];var s='script';
-    r=t.createElement(s);r.async=!0;r.src=n;var u=t.getElementsByTagName(s)[0];
-    u.parentNode.insertBefore(r,u);})(window,document,'https://sc-static.net/scevent.min.js');
-    window.snaptr('init', '${pixelId}');
-    ${pageViewLine}
-  `;
-  document.head.appendChild(script);
+  // Imperative transcription of Snapchat's standard inline pixel init (see
+  // snap.com/business/snap-pixel docs). Written as real TS so the provider
+  // injects ZERO inline script text — inline pixel bootstraps are unhashable
+  // (env interpolation) and would require a CSP nonce, which would keep the
+  // root layout dynamic. See docs/tracking/gotchas.md.
+  // Same as the original stub: if window.snaptr already exists, skip stub
+  // creation + SDK injection — the original IIFE returned early too, while the
+  // init/PAGE_VIEW calls below still ran.
+  if (!window.snaptr) {
+    const stub = function (this: unknown) {
+      if (stub.handleRequest) {
+        // Method-call spread keeps `this === stub`, same as the stub's .apply(a, arguments).
+        // eslint-disable-next-line prefer-rest-params
+        stub.handleRequest(...(Array.prototype.slice.call(arguments) as unknown[]));
+      } else {
+        // eslint-disable-next-line prefer-rest-params
+        stub.queue.push(arguments);
+      }
+    } as unknown as SnaptrStub;
+    window.snaptr = stub;
+    stub.queue = [];
+    // SDK loader is a src-script (scevent.min.js), matching the original stub's
+    // injected tag — inserted before the first <script>, exactly like the stub.
+    const sdk = document.createElement("script");
+    sdk.async = true;
+    sdk.src = "https://sc-static.net/scevent.min.js";
+    const firstScript = document.getElementsByTagName("script")[0];
+    if (firstScript && firstScript.parentNode) {
+      firstScript.parentNode.insertBefore(sdk, firstScript);
+    } else {
+      document.head.appendChild(sdk);
+    }
+  }
+  window.snaptr("init", pixelId);
+  if (firePageView) window.snaptr("track", "PAGE_VIEW");
   window._snaptrInit = true;
 }
 

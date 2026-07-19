@@ -16,6 +16,10 @@ import { ProductJsonLd, BreadcrumbJsonLd } from "@/components/seo/StructuredData
 import { createCachedQuery } from "@/utils/database/queries/server-queries";
 import { getNonce } from "@/utils/security/getNonce";
 
+// nonce-CSP route class — must render per-request; never cache HTML with a baked nonce
+// (see docs/security-csp/architecture.md "Route classes").
+export const dynamic = "force-dynamic";
+
 interface ProductPageProps {
   params: Promise<{
     slug: string;
