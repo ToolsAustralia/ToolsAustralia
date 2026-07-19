@@ -42,7 +42,10 @@ import {
   setLedgerPromoLink,
 } from "@/utils/payment/ledger-helpers";
 import { classifyIsRenewal } from "@/services/attribution/classifyIsRenewal";
-import { reconcilePersistedAttribution } from "@/services/attribution/reconcilePersistedAttribution";
+import {
+  reconcilePersistedAttribution,
+  resolveSignupTouchAtMs,
+} from "@/services/attribution/reconcilePersistedAttribution";
 import type { ConvertingPlatform, AttributionConfidence } from "@/types/attribution";
 
 /** Optional membership ledger (Stripe invoice path) — lastMonthDelta for refunds. */
@@ -445,13 +448,18 @@ async function processPaymentBenefitsInternal(
         // fabricate freshness and resurrect stale paid touches the edge correctly ruled
         // out (and flip every renewal). So session-sourced touches pass `null` (undatable
         // → the strict paid recovery stays OFF; the lenient owned/Klaviyo recovery still
-        // credits, unchanged). Signup-sourced touches are dated by `user.createdAt` —
-        // the one persisted anchor we have; paid recovery therefore fires only for
-        // purchases within the platform window of SIGNUP (e.g. the same-session
-        // Meta-ad signup→purchase that the edge missed for lack of a cookie).
+        // credits, unchanged). Signup-sourced touches are anchored to the captured
+        // AD-VISIT time (`signupAttribution.visitedAt`, falling back to `user.createdAt`
+        // for legacy records — see resolveSignupTouchAtMs): registration updates
+        // signupAttribution in place for returning plain accounts, so account age is the
+        // wrong anchor — a 196-day-old member who clicked a retargeting ad 62s before
+        // buying is a FRESH paid touch (2026-07-19 audit). Paid recovery therefore fires
+        // only for purchases within the platform window of the captured ad visit.
         const nowMs = Date.now();
-        const userCreatedAtMs = (user as { createdAt?: Date }).createdAt?.getTime() ?? null;
-        const persistedTouchAt = attributionData.attributionSource === "session" ? null : userCreatedAtMs;
+        const persistedTouchAt =
+          attributionData.attributionSource === "session"
+            ? null
+            : resolveSignupTouchAtMs(signupAttr?.visitedAt, (user as { createdAt?: Date }).createdAt);
         const { platform: convertingPlatform, confidence: attributionConfidence } =
           reconcilePersistedAttribution({
             edgePlatform: resolvedAttribution?.platform ?? null,
