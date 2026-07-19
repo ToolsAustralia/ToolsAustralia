@@ -58,3 +58,7 @@ The Norm User row has `serviceAccount: true`. The admin user list and Settings �
 ## G8. Audit-log write failures are silent by design
 
 Per the security checklist: a `NormCallLog` write failure logs `console.error` and does NOT fail the request. This protects Norm from an audit-collection outage taking it offline, but means "missing audit row" is not the same as "request didn't happen". Cross-reference with server logs (the `requestId` ULID appears in both) when investigating.
+
+## eslint/rules/index.js now hosts non-Norm rules too (2026-07-19)
+
+The local ESLint plugin registered as `internal-norm` gained `no-eager-stripe` (a payment-perf guardrail — see docs/payment/gotchas.md). The plugin NAMESPACE no longer implies Norm-only content; if more general rules accumulate, renaming the namespace (e.g. `local-rules`) is a sanctioned future cleanup — coordinate with every `eslint.config.mjs` reference when doing so.

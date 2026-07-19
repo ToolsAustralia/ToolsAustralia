@@ -114,7 +114,7 @@ Every field below lives on the `User` Mongoose model ([src/models/User.ts](src/m
 
 **PII legend:** **PII** = personal/identifying or payment data (email/phone/address/name/payment/DOB); **Sensitive** = secret/credential material; **—** = non-sensitive.
 
-> **Caveats.** The schema is `strict: true` + `strictQuery: true` — fields not in the schema are rejected ([User.ts:1130-1131](src/models/User.ts#L1130)). `mobile` is normalized to `+61…` format on every save via a pre-save hook ([User.ts:1136-1158](src/models/User.ts#L1136)). The exact client-facing `UserData` shape returned to the browser (defined in `@/hooks/queries/useUserQueries`) is **unverified** here; credential/secret fields below are presumed stripped from API responses but that projection was not traced.
+> **Caveats.** The schema is `strict: true` + `strictQuery: true` — fields not in the schema are rejected ([User.ts:1130-1131](src/models/User.ts#L1130)). `mobile` is normalized to `+61…` format on every save via a pre-save hook ([User.ts:1136-1158](src/models/User.ts#L1136)). The exact client-facing `UserData` shape returned to the browser (defined in `@/hooks/queries/useUserQueries`) is since 2026-07-19 an explicit **include-list wire projection** (`MY_ACCOUNT_USER_FIELDS`, [src/utils/dashboard/my-account-projection.ts](src/utils/dashboard/my-account-projection.ts)): all credential/secret fields below are excluded from API responses, as are `processedPayments`, `upsellHistory`, `upsellPurchases`, `redemptionHistory`, and `cart` — a wire-shape change only; nothing changed in what is *stored* about the customer.
 
 ### 2a. Identity & profile
 
