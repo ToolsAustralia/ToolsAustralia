@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, type ReactNode } from "react";
+import React, { useState, useEffect, Suspense, type ReactNode } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { X, Lock } from "lucide-react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
@@ -49,7 +49,7 @@ function FloatingCountdownLeaf({
   return <>{render({ timeLeft, isExpired })}</>;
 }
 
-const FloatingCountdownBanner: React.FC<FloatingCountdownBannerProps> = ({ className = "" }) => {
+const FloatingCountdownBannerInner: React.FC<FloatingCountdownBannerProps> = ({ className = "" }) => {
   const router = useRouter();
   const searchParams = useSearchParams();
   const pathname = usePathname();
@@ -401,4 +401,11 @@ const FloatingCountdownBanner: React.FC<FloatingCountdownBannerProps> = ({ class
   );
 };
 
-export default FloatingCountdownBanner;
+// Suspense self-wrap: useSearchParams requires a boundary for prerendered (marketing-class) pages — docs/security-csp/rules.md R8.
+export default function FloatingCountdownBanner(props: FloatingCountdownBannerProps) {
+  return (
+    <Suspense fallback={null}>
+      <FloatingCountdownBannerInner {...props} />
+    </Suspense>
+  );
+}

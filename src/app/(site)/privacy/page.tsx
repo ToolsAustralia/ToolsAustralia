@@ -3,6 +3,10 @@ import { BreadcrumbJsonLd } from "@/components/seo/StructuredData";
 import { getNonce } from "@/utils/security/getNonce";
 import { getContactEmail } from "@/lib/email/sender-identities";
 
+// nonce-CSP route class — must render per-request; never cache HTML with a baked nonce
+// (see docs/security-csp/architecture.md "Route classes").
+export const dynamic = "force-dynamic";
+
 // Metadata helps search engines understand this page.
 export const metadata: Metadata = {
   title: "Privacy Policy | Tools Australia",

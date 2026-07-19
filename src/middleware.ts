@@ -11,15 +11,35 @@ function isInternalUser(token: JWT | null): boolean {
   return token?.userType === "staff" || token?.userType === "admin" || token?.role === "admin";
 }
 
+// ---------------------------------------------------------------------------
+// CSP route classes (2026-07-19 perf/caching — docs/security-csp/architecture.md)
+//
+// Anonymous marketing routes are served as cached/ISR HTML. Cached HTML cannot
+// carry a per-request nonce (Next stamps the request's nonce into EVERY inline
+// script — a cached copy would mismatch the fresh CSP header and every script
+// would be blocked). So these routes get the no-nonce CSP variant
+// ('unsafe-inline' script-src — the same fallback next.config.ts already ships)
+// and NO x-nonce header; every OTHER route keeps the per-request nonce CSP and
+// MUST render dynamically (per-page `export const dynamic = "force-dynamic"` or
+// a naturally dynamic API). INVARIANT: a route is either nonce-class + dynamic
+// or marketing-class + static — never mix. When adding a public page, pick its
+// class explicitly; the `next build` route table is the enforcement check.
+// ---------------------------------------------------------------------------
+const STATIC_MARKETING_PATHS = ["/promotions", "/winners", "/draw-results", "/terms", "/competition-term-majordraw"];
+function isStaticMarketingRoute(pathname: string): boolean {
+  if (pathname === "/") return true;
+  return STATIC_MARKETING_PATHS.some((p) => pathname === p || pathname.startsWith(`${p}/`));
+}
+
 export default withAuth(
   function middleware(req) {
     const { pathname } = req.nextUrl;
     const token = req.nextauth.token;
 
-    // Generate nonce for CSP (only in production)
-    // In development, CSP headers are disabled to allow Next.js dev tools to work
+    // Generate nonce for CSP (only in production, only for nonce-class routes —
+    // marketing-class routes serve cached HTML and get the no-nonce CSP variant)
     const isProduction = process.env.NODE_ENV === "production";
-    const nonce = isProduction ? generateNonce() : undefined;
+    const nonce = isProduction && !isStaticMarketingRoute(pathname) ? generateNonce() : undefined;
 
     // Protected routes that require authentication
     const protectedRoutes = ["/rewards", "/my-account"];
@@ -94,6 +114,16 @@ export default withAuth(
       });
       // Attach nonce to request headers so server components can read it
       response.headers.set("x-nonce", nonce);
+    }
+
+    // Marketing class (production): explicit no-nonce security headers so the
+    // policy served with cached HTML never depends on next.config fallback
+    // ordering. No x-nonce header → getNonce() returns undefined → inline
+    // scripts render un-nonced, allowed by this variant's 'unsafe-inline'.
+    if (isProduction && !nonce) {
+      buildSecurityHeaders().forEach(({ key, value }) => {
+        response.headers.set(key, value);
+      });
     }
 
     return response;

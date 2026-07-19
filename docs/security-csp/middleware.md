@@ -32,3 +32,7 @@ The block-list lives inline in `middleware.ts`. To add or remove a prefix, edit 
 ```
 
 Single entry with a negative lookahead — all exclusions are in one regex so they are OR'd correctly (multiple matcher entries use include semantics in Next.js).
+
+## Route-class branch (2026-07-19)
+
+`middleware()` now decides the CSP class before generating a nonce: `isStaticMarketingRoute(pathname)` → no nonce is generated, `buildSecurityHeaders()` (no-nonce variant) is set explicitly, and no `x-nonce` request header is attached (so `getNonce()` returns `undefined` and inline scripts render un-nonced). All other routes keep the existing per-request nonce flow unchanged. The redirect paths (protected-route → /login, admin → /) are always nonce-class. Middleware still runs for marketing routes even when Vercel serves cached HTML — the headers it sets apply to the cached response.

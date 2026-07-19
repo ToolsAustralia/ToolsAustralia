@@ -238,14 +238,19 @@ interface PromoTrustBarProps {
 
 export default function PromoTrustBar({ initialMajorDraw }: PromoTrustBarProps = {}) {
   const theme = usePromoTheme();
-  const { data: currentMajorDraw } = useCurrentMajorDraw();
+  const { data: currentMajorDraw, isSuccess: currentDrawResolved } = useCurrentMajorDraw();
   // 60s tick is enough — the bar shows down to minutes, not seconds.
   const nowMs = useLeafTimer(60_000);
 
   // Prefer the server-fetched prop on first paint. The client hook may return
   // stale cached data from a previous draw state; the page just re-rendered
   // server-side so the prop is authoritative.
-  const draw = initialMajorDraw ?? currentMajorDraw;
+  // Client-resolved data WINS once the query settles; the server-baked prop is only a
+  // first-paint seed. Under ISR + Vercel stale-while-revalidate the baked prop can be
+  // minutes-to-hours old on a stale-served copy — preferring it pinned outdated draw
+  // state for whole sessions (2026-07 final-review fix). isSuccess (not truthiness)
+  // decides so a resolved "no active draw" (null) also correctly clears the seed.
+  const draw = currentDrawResolved ? currentMajorDraw : initialMajorDraw;
   const freezeMs = draw?.freezeEntriesAt ? new Date(draw.freezeEntriesAt).getTime() : null;
   const drawMs = draw?.drawDate ? new Date(draw.drawDate).getTime() : null;
 

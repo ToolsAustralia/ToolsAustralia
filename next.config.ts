@@ -119,6 +119,12 @@ const nextConfig: NextConfig = {
     ];
   },
 
+  // Bound stale-while-revalidate for ISR pages to 1 hour. Next's default expire window is
+  // ~1 YEAR, which lets the CDN serve arbitrarily old marketing HTML while revalidating in
+  // the background — the client-wins merges in PromoBanner/PromoHero/PromoTrustBar are the
+  // primary defense; this caps how stale the first paint can ever be (2026-07 final review).
+  expireTime: 3600,
+
   // Optional: enforce no trailing slash (Next defaults are fine, keep explicit for clarity)
   trailingSlash: false,
 };

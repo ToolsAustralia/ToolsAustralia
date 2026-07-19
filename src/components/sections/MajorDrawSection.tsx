@@ -1,8 +1,7 @@
 "use client";
 
-import React, { useState, useEffect, useCallback, useMemo } from "react";
+import React, { useState, useEffect, useCallback, useMemo, Suspense } from "react";
 import Image from "next/image";
-import dynamic from "next/dynamic";
 import { useSearchParams } from "next/navigation";
 import { Users, Zap, Check, ChevronLeft, ChevronRight } from "lucide-react";
 import * as LucideIcons from "lucide-react";
@@ -12,11 +11,7 @@ import useEmblaCarousel from "embla-carousel-react";
 import ClassNames from "embla-carousel-class-names";
 import type { EmblaCarouselType, EmblaOptionsType } from "embla-carousel";
 import { EmblaCarouselButton } from "@/components/ui/embla/EmblaCarouselButton";
-// Lazy-loaded: MembershipModal pulls in Stripe + payment forms; only ship its
-// JS once the user opens the membership flow.
-const MembershipModal = dynamic(() => import("@/components/modals/MembershipModal"), {
-  ssr: false,
-});
+import MembershipModal from "@/components/modals/MembershipModal/LazyMembershipModal";
 import { useUserContext } from "@/contexts/UserContext";
 import { useMajorDrawEntryCta } from "@/hooks/useMajorDrawEntryCta";
 import { useMajorDrawPurchaseGate } from "@/hooks/useMajorDrawPurchaseGate";
@@ -333,7 +328,7 @@ const formatTimeWithoutPeriod = (date: Date): string => {
   return `${hour12}:${minutesStr}${period}`;
 };
 
-export default function MajorDrawSection({ className = "" }: MajorDrawSectionProps) {
+function MajorDrawSectionInner({ className = "" }: MajorDrawSectionProps) {
   const searchParams = useSearchParams();
   const [showBreakdown, setShowBreakdown] = useState(false);
   const [isSpecsModalOpen, setIsSpecsModalOpen] = useState(false);
@@ -1669,5 +1664,14 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
         onPlanChange={membershipModal.selectPlan}
       />
     </>
+  );
+}
+
+// Suspense self-wrap: useSearchParams requires a boundary for prerendered (marketing-class) pages — docs/security-csp/rules.md R8.
+export default function MajorDrawSection(props: MajorDrawSectionProps) {
+  return (
+    <Suspense fallback={null}>
+      <MajorDrawSectionInner {...props} />
+    </Suspense>
   );
 }

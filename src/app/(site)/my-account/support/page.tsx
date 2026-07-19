@@ -1,22 +1,4 @@
-"use client";
-
-import { useEffect } from "react";
-import { useRouter } from "next/navigation";
-import { useDashboardSheetStore } from "@/stores/useDashboardSheetStore";
-
-/**
- * Support is now an overlay sheet (opened from the nav), not a page. This route
- * is kept for deep links / bookmarks: it opens the dashboard with the Support
- * sheet showing. The content lives in `components/sheets/SupportSheet`.
- */
-export default function SupportRoute() {
-  const router = useRouter();
-  const openSheet = useDashboardSheetStore((s) => s.openSheet);
-
-  useEffect(() => {
-    openSheet("support");
-    router.replace("/my-account");
-  }, [openSheet, router]);
-
-  return null;
-}
+// nonce-CSP route class — must render per-request (docs/security-csp/architecture.md).
+// Segment config is ignored in "use client" files, so this server shim carries it.
+export const dynamic = "force-dynamic";
+export { default } from "./page-client";

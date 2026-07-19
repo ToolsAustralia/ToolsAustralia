@@ -35,9 +35,30 @@ declare global {
       eventNameOrParams?: string | Record<string, unknown>,
       parameters?: Record<string, unknown>,
     ) => void;
+    /** Meta's legacy alias for the fbq queue fn — set by the bootstrap for old integrations. */
+    _fbq?: unknown;
     _fbPixelInit?: boolean;
   }
 }
+
+/**
+ * Shape of the pre-SDK fbq queue stub (faithful TS transcription of Meta's
+ * `!function(f,b,e,v,n,t,s){...}` fbevents bootstrap). Until fbevents.js
+ * arrives, calls queue as raw IArguments; the SDK installs `callMethod` and
+ * drains `queue` on load.
+ */
+interface FbqStub {
+  (...args: unknown[]): void;
+  callMethod?: (...args: unknown[]) => void;
+  push: FbqStub;
+  loaded: boolean;
+  version: string;
+  queue: IArguments[];
+}
+
+/** Loose call/props view of window.fbq for the bootstrap-only calls that the
+ * strict 4-arg Window.fbq signature can't express (boolean args, props). */
+type FbqLoose = ((...args: unknown[]) => void) & { disablePushState?: boolean };
 
 function envEnabled(): { pixel: boolean; capi: boolean } {
   const pixelId = process.env.NEXT_PUBLIC_FACEBOOK_PIXEL_ID;
@@ -48,33 +69,54 @@ function envEnabled(): { pixel: boolean; capi: boolean } {
   };
 }
 
-function loadPixel(opts: { nonce?: string; advancedMatching?: Record<string, string> }): void {
+function loadPixel(opts?: { advancedMatching?: Record<string, string> }): void {
   if (typeof window === "undefined") return;
   if (window._fbPixelInit) return;
   const pixelId = process.env.NEXT_PUBLIC_FACEBOOK_PIXEL_ID;
   if (!pixelId) return;
   if (!getAllowedHostnames().includes(window.location.hostname)) return;
 
-  // Render the init call. When advancedMatching is provided, fbq accepts it as
-  // the second arg: fbq('init', pixelId, { em, ph, ... }). Mid-session login
-  // re-init is handled separately by ConversionPixelsAdvancedMatching.
-  const initCall = opts.advancedMatching
-    ? `window.fbq('init', '${pixelId}', ${JSON.stringify(opts.advancedMatching)});`
-    : `window.fbq('init', '${pixelId}');`;
-
   // Decide whether to fire the initial PageView based on the current route.
-  // The decision is made at load-time (TS) so the inline script doesn't need
-  // its own pathname-gating logic; this is safe because loadPixel runs once
-  // per session on initial mount, when window.location.pathname is reliable.
+  // The decision is made here (TS) so the bootstrap doesn't need its own
+  // pathname-gating logic; this is safe because loadPixel runs once per
+  // session on initial mount, when window.location.pathname is reliable.
   const fireInitialPageView = shouldTrackRoute(window.location.pathname);
-  const pageViewLine = fireInitialPageView ? `window.fbq('track', 'PageView');` : "";
 
-  const script = document.createElement("script");
-  script.id = "facebook-pixel-script";
-  script.async = true;
-  if (opts.nonce) script.setAttribute("nonce", opts.nonce);
+  // Imperative transcription of Meta's fbevents bootstrap (the classic
+  // `!function(f,b,e,v,n,t,s){...}` inline snippet). Written as real TS so the
+  // provider injects ZERO inline script text — inline pixel bootstraps are
+  // unhashable (env/route/user interpolation) and would require a CSP nonce,
+  // which would keep the root layout dynamic. See docs/tracking/gotchas.md.
+  // Same as the original stub: if window.fbq already exists (another loader
+  // got here first), skip stub creation + SDK injection — the original IIFE
+  // returned early too, while the set/init/PageView calls below still ran.
+  if (!window.fbq) {
+    const stub = function (this: unknown) {
+      if (stub.callMethod) {
+        // Method-call spread keeps `this === stub`, same as the stub's .apply(n, arguments).
+        // eslint-disable-next-line prefer-rest-params
+        stub.callMethod(...(Array.prototype.slice.call(arguments) as unknown[]));
+      } else {
+        // eslint-disable-next-line prefer-rest-params
+        stub.queue.push(arguments);
+      }
+    } as FbqStub;
+    window.fbq = stub;
+    if (!window._fbq) window._fbq = stub;
+    stub.push = stub;
+    stub.loaded = true;
+    stub.version = "2.0";
+    stub.queue = [];
+    // SDK loader is a src-script on connect.facebook.net — host-allowlisted in
+    // CSP script-src, so it needs neither nonce nor hash.
+    const sdk = document.createElement("script");
+    sdk.id = "facebook-pixel-script";
+    sdk.async = true;
+    sdk.src = "https://connect.facebook.net/en_US/fbevents.js";
+    document.head.appendChild(sdk);
+  }
 
-  // Inline init:
+  // Bootstrap calls, in the exact order of the former inline text:
   //  1) `disablePushState = true` — stop Meta's HTML5 History State listener
   //     from auto-firing PageView on every Next.js SPA route change. Without
   //     this, the Pixel fires PageView on /admin, /my-account, etc., bypassing
@@ -86,27 +128,24 @@ function loadPixel(opts: { nonce?: string; advancedMatching?: Record<string, str
   //     auto-scraping form inputs for advanced matching. We supply our own
   //     hashed advanced matching server-side via CAPI's user_data. MUST come
   //     BEFORE init. Per https://developers.facebook.com/docs/meta-pixel/advanced/
-  //  3) Initial PageView is conditional on `shouldTrackRoute(pathname)` —
+  //  3) `init` — when advancedMatching is provided, fbq accepts it as the
+  //     second arg: fbq('init', pixelId, { em, ph, ... }). Mid-session login
+  //     re-init is handled separately by ConversionPixelsAdvancedMatching.
+  //  4) Initial PageView is conditional on `shouldTrackRoute(pathname)` —
   //     skipped on excluded routes (admin / my-account / affiliate / etc.)
-  script.innerHTML = `
-    !function(f,b,e,v,n,t,s)
-    {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
-    n.callMethod.apply(n,arguments):n.queue.push(arguments)};
-    if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
-    n.queue=[];t=b.createElement(e);t.async=!0;
-    t.src=v;s=b.getElementsByTagName(e)[0];
-    s.parentNode.insertBefore(t,s)}(window, document,'script',
-    'https://connect.facebook.net/en_US/fbevents.js');
-    window.fbq.disablePushState = true;
-    window.fbq('set', 'autoConfig', false, '${pixelId}');
-    ${initCall}
-    ${pageViewLine}
-    window._fbPixelInit = true;
-  `;
-  document.head.appendChild(script);
+  const fbq = window.fbq as FbqLoose;
+  fbq.disablePushState = true;
+  fbq("set", "autoConfig", false, pixelId);
+  if (opts?.advancedMatching) {
+    fbq("init", pixelId, opts.advancedMatching);
+  } else {
+    fbq("init", pixelId);
+  }
+  if (fireInitialPageView) fbq("track", "PageView");
+  window._fbPixelInit = true;
 }
 
-// Re-export for inline-script consistency between modules.
+// Re-export for route-gating consistency between modules.
 export { EXCLUDED_TRACKING_PREFIXES };
 
 function pixelTrack(event: CanonicalEvent): void {

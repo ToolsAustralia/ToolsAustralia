@@ -85,8 +85,12 @@ export interface ConversionProvider {
   enabled(): { pixel: boolean; capi: boolean };
   /** Hostnames that may run the browser pixel. Pixel refuses on any other host. */
   productionHostnames(): string[];
-  /** Inject the provider's pixel script. Idempotent. No-op if `enabled().pixel` is false. */
-  loadPixel(opts: { nonce?: string; advancedMatching?: Record<string, string> }): void;
+  /**
+   * Bootstrap the provider's pixel imperatively (queue stub + src-script SDK —
+   * never inline script text; see docs/tracking/gotchas.md). Idempotent.
+   * No-op if `enabled().pixel` is false.
+   */
+  loadPixel(opts?: { advancedMatching?: Record<string, string> }): void;
   /** Fire the event in the browser. No-op if `enabled().pixel` is false or hostname is non-prod. */
   pixelTrack(event: CanonicalEvent): void;
   /** Send the event server-to-server. MUST return false (no network call) if `enabled().capi` is false. MUST return false on validation failure (never throw). */

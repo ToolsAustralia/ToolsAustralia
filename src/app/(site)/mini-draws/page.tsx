@@ -8,6 +8,10 @@ import { ProductCardSkeleton, Skeleton } from "@/components/loading/SkeletonLoad
 import MiniDrawsHero from "./components/MiniDrawsHero";
 import HowMiniDrawsWork from "./components/HowMiniDrawsWork";
 
+// nonce-CSP route class — must render per-request; never cache HTML with a baked nonce
+// (see docs/security-csp/architecture.md "Route classes").
+export const dynamic = "force-dynamic";
+
 export const metadata: Metadata = {
   title: "Mini Draws | Tools Australia",
   description:

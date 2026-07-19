@@ -19,7 +19,15 @@ export async function GET(_request: NextRequest) {
           success: true,
           data: null,
         },
-        { status: 200 }
+        {
+          status: 200,
+          // Same CDN caching as the found-text path below — this null branch is the COMMON
+          // response whenever no banner is scheduled, and it was missing the header
+          // (caught by the 2026-07-19 prod-server check).
+          headers: {
+            "Cache-Control": "public, s-maxage=60, stale-while-revalidate=120",
+          },
+        }
       );
     }
 
@@ -53,10 +61,11 @@ export async function GET(_request: NextRequest) {
       },
       {
         status: 200,
+        // Public, admin-scheduled content with no per-user data — cache at the CDN like the
+        // sibling /api/promo/effective-for-banner (2026-07-19 perf: was no-store, which forced
+        // one serverless + Mongo round trip per ad-landing visitor).
         headers: {
-          "Cache-Control": "no-store, no-cache, must-revalidate",
-          "Pragma": "no-cache",
-          "Expires": "0",
+          "Cache-Control": "public, s-maxage=60, stale-while-revalidate=120",
         },
       }
     );

@@ -5,6 +5,10 @@ import ShopContent from "@/components/features/ShopContent";
 import MembershipSection from "@/components/sections/MembershipSection";
 import MetallicDivider from "@/components/ui/MetallicDivider";
 
+// nonce-CSP route class — must render per-request; never cache HTML with a baked nonce
+// (see docs/security-csp/architecture.md "Route classes").
+export const dynamic = "force-dynamic";
+
 // SEO Metadata for Shop Page
 export const metadata: Metadata = {
   title: "Shop Tools & Equipment | Tools Australia",
