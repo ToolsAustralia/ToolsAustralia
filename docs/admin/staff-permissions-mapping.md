@@ -95,6 +95,7 @@ Updated as each task in the user-roles migration replaces legacy `session.user.r
 | `/api/admin/facebook-ads/hourly-insights` | GET/POST | `facebookAds.view` |
 | `/api/admin/facebook-ads/insights` | GET | `facebookAds.view` |
 | `/api/admin/facebook-ads/purchase-audit` | GET | `facebookAds.view` |
+| `/api/admin/tiktok-ads/insights` | GET | `facebookAds.view` |
 | `/api/admin/health/dashboard-stats-snapshot` | GET | `overview.view` |
 | `/api/admin/health/membership-snapshot` | GET | `overview.view` |
 | `/api/admin/invoices/charge-past-due` | GET | `users.view` |

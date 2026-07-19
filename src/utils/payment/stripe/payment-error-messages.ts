@@ -5,7 +5,124 @@
  * Ensures consistent, user-friendly messaging with actionable guidance.
  */
 
-import { categorizeError } from "./payment-error-detection";
+import { categorizeError, extractPaymentErrorCodes } from "./payment-error-detection";
+
+/**
+ * Stripe decline_code / card error code → short, direct user guidance.
+ *
+ * Keep every message to 1–2 short sentences with ONE clear next step — the
+ * user is mid-checkout, not reading a manual. Codes are the same vocabulary
+ * as the admin catalog in src/utils/billing/declineCodeLabels.ts.
+ *
+ * Sensitive codes (lost_card, stolen_card, pickup_card, fraudulent) are
+ * deliberately NOT mapped — per Stripe guidance, never reveal the real
+ * reason; they fall through to the generic decline message.
+ */
+const DECLINE_CODE_GUIDANCE: Record<string, { title: string; message: string }> = {
+  insufficient_funds: {
+    title: "Card Declined",
+    message: "Not enough funds on this card. Try another card.",
+  },
+  expired_card: {
+    title: "Card Expired",
+    message: "This card has expired. Use a different card.",
+  },
+  incorrect_cvc: {
+    title: "Incorrect CVC",
+    message: "The security code (CVC) is wrong. Check the code on your card and try again.",
+  },
+  invalid_cvc: {
+    title: "Incorrect CVC",
+    message: "The security code (CVC) is wrong. Check the code on your card and try again.",
+  },
+  incorrect_number: {
+    title: "Invalid Card Number",
+    message: "The card number is incorrect. Check it and try again.",
+  },
+  invalid_number: {
+    title: "Invalid Card Number",
+    message: "The card number is incorrect. Check it and try again.",
+  },
+  invalid_expiry_month: {
+    title: "Invalid Expiry Date",
+    message: "The expiry date is incorrect. Check it and try again.",
+  },
+  invalid_expiry_year: {
+    title: "Invalid Expiry Date",
+    message: "The expiry date is incorrect. Check it and try again.",
+  },
+  invalid_account: {
+    title: "Card Declined",
+    message: "This card is linked to a closed or invalid account. Use a different card, or contact your bank.",
+  },
+  card_velocity_exceeded: {
+    title: "Card Limit Reached",
+    message: "This card has hit its spending limit. Try another card, or contact your bank.",
+  },
+  withdrawal_count_limit_exceeded: {
+    title: "Card Limit Reached",
+    message: "This card has hit its spending limit. Try another card, or contact your bank.",
+  },
+  processing_error: {
+    title: "Processing Issue",
+    message: "Your bank couldn't process this. Wait a moment and try again.",
+  },
+  try_again_later: {
+    title: "Processing Issue",
+    message: "Your bank couldn't process this. Wait a moment and try again.",
+  },
+  reenter_transaction: {
+    title: "Processing Issue",
+    message: "Your bank couldn't process this. Wait a moment and try again.",
+  },
+  issuer_not_available: {
+    title: "Processing Issue",
+    message: "Your bank couldn't process this. Wait a moment and try again.",
+  },
+  transaction_not_allowed: {
+    title: "Card Not Supported",
+    message: "This card doesn't support this payment. Use a different card.",
+  },
+  card_not_supported: {
+    title: "Card Not Supported",
+    message: "This card doesn't support this payment. Use a different card.",
+  },
+  service_not_allowed: {
+    title: "Card Not Supported",
+    message: "This card doesn't support this payment. Use a different card.",
+  },
+  currency_not_supported: {
+    title: "Card Not Supported",
+    message: "This card doesn't support this payment. Use a different card.",
+  },
+  authentication_required: {
+    title: "Verification Needed",
+    message: "Your bank needs to verify this payment. Try again and complete the verification step.",
+  },
+};
+
+const GENERIC_DECLINE_GUIDANCE = {
+  title: "Card Declined",
+  message: "Your card was declined. Try a different card, or contact your bank.",
+};
+
+/**
+ * Short, direct guidance for a card decline. Looks up decline_code first,
+ * then the card error code (bad-CVC/expiry/number errors carry the reason in
+ * `code` with no decline_code). Unknown or sensitive decline codes get the
+ * generic decline message. Returns null for non-card codes so callers fall
+ * through to their normal handling.
+ */
+export function getCardDeclineGuidance(
+  declineCode?: string | null,
+  errorCode?: string | null
+): { title: string; message: string } | null {
+  if (declineCode && DECLINE_CODE_GUIDANCE[declineCode]) return DECLINE_CODE_GUIDANCE[declineCode];
+  if (errorCode && DECLINE_CODE_GUIDANCE[errorCode]) return DECLINE_CODE_GUIDANCE[errorCode];
+  // Any decline code (incl. unmapped/sensitive ones) is still a card decline.
+  if (declineCode || errorCode === "card_declined") return GENERIC_DECLINE_GUIDANCE;
+  return null;
+}
 
 /**
  * Format payment error message with user-friendly language and actionable guidance
@@ -17,6 +134,28 @@ export function formatPaymentError(error: unknown): {
   shouldIncludeTryAgain: boolean;
 } {
   const { errorType } = categorizeError(error);
+
+  // Card declines: prefer specific, concise guidance from the server-provided
+  // code/decline_code (the 400 "Payment failed" shape) over the generic
+  // category messages below. Recovery/blocked states keep priority — their
+  // next step ("use a different card", "contact support") is more specific
+  // than the decline reason.
+  if (
+    errorType !== "stripe_excessive_retry" &&
+    errorType !== "invoice_collection_blocked" &&
+    errorType !== "setup_intent_unexpected_state" &&
+    errorType !== "payment_intent_unexpected_state"
+  ) {
+    const { code, declineCode } = extractPaymentErrorCodes(error);
+    const declineGuidance = getCardDeclineGuidance(declineCode, code);
+    if (declineGuidance) {
+      return {
+        title: declineGuidance.title,
+        message: declineGuidance.message,
+        shouldIncludeTryAgain: false,
+      };
+    }
+  }
   
   // Extract original error message for context
   let originalMessage = "";
@@ -99,9 +238,9 @@ export function formatPaymentError(error: unknown): {
     
     case "card_declined":
       return {
-        title: "Card Declined",
-        message: "Your card was declined. Please check your card details or try a different payment method.",
-        shouldIncludeTryAgain: true,
+        title: GENERIC_DECLINE_GUIDANCE.title,
+        message: GENERIC_DECLINE_GUIDANCE.message,
+        shouldIncludeTryAgain: false,
       };
 
     case "stripe_excessive_retry":
@@ -122,9 +261,9 @@ export function formatPaymentError(error: unknown): {
 
     case "insufficient_funds":
       return {
-        title: "Insufficient Funds",
-        message: "Insufficient funds. Please ensure you have sufficient balance and try again.",
-        shouldIncludeTryAgain: true,
+        title: DECLINE_CODE_GUIDANCE.insufficient_funds.title,
+        message: DECLINE_CODE_GUIDANCE.insufficient_funds.message,
+        shouldIncludeTryAgain: false,
       };
     
     case "network_error":

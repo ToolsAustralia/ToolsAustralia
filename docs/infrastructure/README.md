@@ -31,10 +31,12 @@ See [.env.example](../../.env.example):
 - `IGODIRECT_SSO_SECRET` — **secret**; signs the MyRewards SSO JWT. `.env.local` / Vercel only — never commit a real value.
 - `IGODIRECT_CLIENT_ID` (`2412`), `IGODIRECT_DOMAIN_CODE` (`ToolsAustralia`), `IGODIRECT_DOMAIN_URL` (`myrewards.toolsaustralia.com.au`) — non-secret tenant identifiers.
 - `PARTNER_DISCOUNT_SSO_ENABLED` — **go-live gate**. `POST /api/partner-discount/sso` is inert in prod (404) unless this is exactly `"true"`. Keep UNSET in prod until rewards SSO is cleared to launch (vendor deprovisioning + `member_level` + member-deletion/DPA answers). See [auth/igodirect-sso-implementation-plan.md](../auth/igodirect-sso-implementation-plan.md) "Go-live gate".
+- `IGODIRECT_MEMBER_STATUS_KEY` (added 2026-07-16) — **secret**; the bearer key iGoDirect presents on `GET /api/partner-discount/member-status`. We mint it (≥32 random bytes) and hand it to the vendor over a secure channel. `.env.local` / Vercel only. Unset ⇒ the route fails closed (500).
+- `IGODIRECT_MEMBER_STATUS_ENABLED` (added 2026-07-16) — **go-live gate** for the member-status read: 503 `{"error":"disabled"}` in prod unless exactly `"true"`; always on in local dev. See [partner/igodirect-member-status-api-plan.md](../partner/igodirect-member-status-api-plan.md) §6.
 
 Connectivity probe: `npm run test:igodirect-sso` (see [dev-tooling/testing.md](../dev-tooling/testing.md)).
 
-Rewards SSO test scripts (in `package.json`): `test:igodirect-sso` (connectivity probe), `test:member-level` (the partner-catalog tier resolver) and `test:sso-access` (the SSO access gate) — see [partner/gotchas.md](../partner/gotchas.md).
+Rewards SSO test scripts (in `package.json`): `test:igodirect-sso` (connectivity probe), `test:member-level` (the partner-catalog tier resolver), `test:sso-access` (the SSO access gate) and `test:member-status` (the iGoDirect member-status API helpers + reconcile decision, added 2026-07-16) — see [partner/gotchas.md](../partner/gotchas.md).
 
 ## Membership Streak backfill (added 2026-07-07)
 
@@ -43,6 +45,11 @@ Rewards SSO test scripts (in `package.json`): `test:igodirect-sso` (connectivity
 ## Membership Streak reward-ladder seed (added 2026-07-07, P2)
 
 `scripts/seed-streak-milestone-rewards.ts` (`seed:streak-rewards[:dry]`) — three safe-ordered stages: (1) drops the legacy `MilestoneIssuance` unique index, **stamps `streakGeneration: 1` onto every legacy issuance row** (missing fields are invisible to the generation-scoped dedupe query + unique index — without the stamp every pre-launch issuance would re-issue/double-grant), and syncs the generation-scoped index; (2) upserts the 6 streak rungs (`STREAK-2R…12R`, ALL `isRecurring` with `recurrencePeriod: 12`, autoGrant, **`isActive:false`** — dark); (3) inserts `backfilled` marker issuances for every rung a member passed pre-launch (recognition, zero entries — prevents retroactive mass-grants on activation). `--activate` flips the rungs live (**launch runbook only**, after the launch backfill ran `--live --roundup-incomplete`; the final runbook step flips `DASHBOARD_FEATURES.loyaltyStreak`/`milestoneProgress` on). Dry-run default, CSV audit (`seed-*.csv` — gitignored alongside `backfill-*.csv`; audit CSVs are never committed), progress lines. See [rewards-redeemables/gotchas.md](../rewards-redeemables/gotchas.md).
+
+## TikTok ad-insights nightly cron + Meta spend-sync auth fix (added 2026-07-16)
+
+- **New cron** `/api/cron/sync-tiktok-ads` (`45 2 * * *`, `maxDuration: 300s`) — nightly re-sync of a trailing 8-day window of TikTok ad-level insights into `TikTokAdInsightsDaily` (delegates to `TikTokInsightsSyncService`; the TikTok analogue of `sync-meta-ads`). Gated on `Authorization: Bearer ${CRON_SECRET}` like the other crons; no-ops when the TikTok Marketing-API env (`TIKTOK_ADVERTISER_ID` / `TIKTOK_MARKETING_ACCESS_TOKEN`, already registered in `.env.example`) is unset. See [architecture.md](./architecture.md#vercel-cron-schedules) and [api.md](./api.md).
+- **Security fix** — `/api/cron/sync-meta-spend-by-url` was previously **unauthenticated** (heavy paginated Meta API + Mongo sync, triggerable by anyone); it now enforces the same `CRON_SECRET` Bearer gate as the other crons. See [gotchas.md § Cron auth bypass](./gotchas.md).
 
 ## AI support chatbot infra (added 2026-06-24)
 

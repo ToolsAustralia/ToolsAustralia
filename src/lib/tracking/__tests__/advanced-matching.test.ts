@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { buildAdvancedMatching } from "../advanced-matching";
+import { buildAdvancedMatching, metaPhoneDigits } from "../advanced-matching";
 
 function isHexHash64(value: unknown): boolean {
   return typeof value === "string" && /^[a-f0-9]{64}$/.test(value);
@@ -43,6 +43,22 @@ async function testPhoneStripsNonDigits() {
   assert.equal(am.ph, expected);
 }
 
+// Regression (2026-07 fix): a LOCAL-format AU mobile must hash as its E.164 digits
+// ("0412 345 678" → "61412345678"), not the raw digit strip ("0412345678") — the old
+// behavior wasted the ph match key against Meta's user graph.
+async function testLocalPhoneNormalizedToE164Digits() {
+  const { hashPII } = await import("../canonical-event");
+  const local = buildAdvancedMatching({ _id: "u", mobile: "0412 345 678" });
+  const e164 = buildAdvancedMatching({ _id: "u", mobile: "+61 412 345 678" });
+  assert.equal(local.ph, hashPII("61412345678"), "local format must hash E.164 digits");
+  assert.equal(local.ph, e164.ph, "local and E.164 inputs must produce IDENTICAL hashes");
+
+  // The shared helper every Meta site (AM, CAPI provider, prepareUserData) uses:
+  assert.equal(metaPhoneDigits("0412 345 678"), "61412345678");
+  assert.equal(metaPhoneDigits("+61 412 345 678"), "61412345678");
+  assert.equal(metaPhoneDigits("61412345678"), "61412345678");
+}
+
 async function testBirthdateNormalizedToYYYYMMDD() {
   const { hashPII } = await import("../canonical-event");
   const am = buildAdvancedMatching({ _id: "u", birthdate: "1990-06-15" });
@@ -83,6 +99,7 @@ async function run() {
   await testHashesAllProvidedFields();
   await testNormalizationMatchesServerHashPII();
   await testPhoneStripsNonDigits();
+  await testLocalPhoneNormalizedToE164Digits();
   await testBirthdateNormalizedToYYYYMMDD();
   await testCountryDefaultsToAU();
   await testUndefinedFieldsAreDropped();

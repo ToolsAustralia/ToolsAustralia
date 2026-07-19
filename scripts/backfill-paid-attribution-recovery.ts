@@ -90,8 +90,9 @@ async function main() {
   const User = (await import("../src/models/User")).default;
   const mongoose = (await import("mongoose")).default;
 
-  // Tier 1 = paid platforms — derived from the single source of truth, not a forked list.
-  const PAID = new Set(PLATFORM_PRIORITY.filter((r) => r.tier === 1).map((r) => r.platform));
+  // Paid platforms = non-owned rows — derived from the single source of truth, not a
+  // forked list. (platformPriority replaced `tier: 1|2` with `owned: boolean` on main.)
+  const PAID = new Set(PLATFORM_PRIORITY.filter((r) => !r.owned).map((r) => r.platform));
 
   const [sy, sm, sd] = START_STR.split("-").map(Number);
   const [ey, em, ed] = END_STR.split("-").map(Number);

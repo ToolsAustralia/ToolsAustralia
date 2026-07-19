@@ -62,6 +62,17 @@ and stamp three top-level fields onto the `BenefitsGranted` `PaymentEvent`:
     produces, retiring the per-cycle backfill for future rows.
 - `isRenewal` comes from `classifyIsRenewal({ billingReason, isResubscribe })` — true only for a
   `subscription_cycle` that is not a create / upgrade / resubscribe.
+
+#### Landing-URL packages focus in the `data` blob (added 2026-07-17)
+
+When the webhook-forwarded `sessionAttribution.packages_focus === "one-time"`, `processPaymentBenefits`
+persists `data.packagesFocus: "one-time"` on the `BenefitsGranted` row (camelCase per the blob's
+convention, set **independently** of the session/signup merge gate since the marker is meaningful on
+its own). It records that the customer's landing URL carried `?packages=one-time` (one-time-focused ad
+variant). Membership is the default and is expressed by **absence** — analysis must treat missing as
+membership-default. No aggregation consumer exists yet; this is the seed for future true-ROAS-per-focus
+reporting (capture pipeline documented in [docs/tracking/backend.md](../tracking/backend.md); no
+`PaymentEvent` schema change — the blob is `Mixed`).
 - Audit evidence (`attributedClickId`, `attributedClickTimestamp`) is written into the Mixed `data`
   blob only when present. Subscriptions/renewals inherit the decision from `subscription.metadata`
   (sticky), so the converting platform stays constant across the membership lifetime.
@@ -126,7 +137,7 @@ Test: `npm run test:purchase-event-time`.
 | `subscription-creation-guard.ts` | Pre-create check via `stripeCustomerHasManageableSubscription` ([subscription patterns P11](../subscription/patterns.md)). |
 | `subscription-state-manager.ts` | Mongo-side state writes after Stripe confirms. |
 | `subscription-entries-calculator.ts` | Compute renewal entries given package + accumulator. |
-| `subscription-error-handler.ts` | Map Stripe errors to user-facing responses. |
+| `subscription-error-handler.ts` | Map Stripe errors to user-facing responses. `handleSubscriptionError()` has a dedicated ApiError branch (body on `.data`): `userMessage` surfaces `data.details` (e.g. the card decline reason) and `code` comes from `data.code`. Previously only axios-style `.response.data` was handled, so ApiError always fell to the generic `Error` branch. |
 | `subscription-response-handler.ts` | Serialize subscription state for API responses. |
 
 ### Failed-invoice retry

@@ -1,9 +1,129 @@
 import MetaAdInsightsDaily from "@/models/MetaAdInsightsDaily";
 import MetaAdDestination from "@/models/MetaAdDestination";
 import LandingPageMetricsDaily from "@/models/LandingPageMetricsDaily";
+import type { ILandingPackagesFocusSplit } from "@/models/LandingPageMetricsDaily";
+import {
+  derivePackagesFocusForDestination,
+  type PackagesFocus,
+  type PackagesFocusBucket,
+} from "@/utils/metrics/packages-focus";
 
 function centsToAud(cents: number): number {
   return Math.round(cents) / 100;
+}
+
+function emptyFocusMetrics() {
+  return { spendCents: 0, impressions: 0, clicks: 0, conversions: 0, revenueCents: 0 };
+}
+
+type FocusAccumulator = ILandingPackagesFocusSplit;
+
+export interface LandingPageDailyDoc {
+  adAccountId: string;
+  date: string;
+  canonicalUrl: string;
+  spendCents: number;
+  impressions: number;
+  clicks: number;
+  conversions: number;
+  revenueCents: number;
+  adIds: string[];
+  packagesFocus?: ILandingPackagesFocusSplit;
+  computedAt: Date;
+}
+
+/**
+ * Pure per-day aggregation: insights × destinations → LandingPageMetricsDaily docs.
+ * Extracted from recomputeForDateRange so the focus-split math is unit-testable
+ * without Mongo. Row totals are accumulated exactly as before; additionally each
+ * RESOLVED row carries a packagesFocus split (membership vs one-time per ad,
+ * classified from the ad's primary raw URL). unknown:// rows get no split —
+ * readers treat them as the "unclassified" bucket.
+ */
+export function buildLandingPageDailyDocs(params: {
+  adAccountId: string;
+  date: string;
+  computedAt: Date;
+  insights: Array<{
+    adId: string;
+    spendCents: number;
+    impressions: number;
+    clicks: number;
+    conversions?: number | null;
+    revenueCents?: number | null;
+  }>;
+  destByAd: Map<string, { canonicalUrl?: string | null; rawUrls?: string[] | null }>;
+}): LandingPageDailyDoc[] {
+  const agg = new Map<
+    string,
+    {
+      spendCents: number;
+      impressions: number;
+      clicks: number;
+      conversions: number;
+      revenueCents: number;
+      adIds: Set<string>;
+      focus?: FocusAccumulator;
+    }
+  >();
+
+  for (const row of params.insights) {
+    const dest = params.destByAd.get(row.adId);
+    const canonicalUrl = dest?.canonicalUrl ?? `unknown://meta-ad/${row.adId}`;
+
+    const cur =
+      agg.get(canonicalUrl) ?? {
+        spendCents: 0,
+        impressions: 0,
+        clicks: 0,
+        conversions: 0,
+        revenueCents: 0,
+        adIds: new Set<string>(),
+      };
+
+    cur.spendCents += row.spendCents;
+    cur.impressions += row.impressions;
+    cur.clicks += row.clicks;
+    cur.conversions += row.conversions ?? 0;
+    cur.revenueCents += row.revenueCents ?? 0;
+    cur.adIds.add(row.adId);
+
+    const bucket = derivePackagesFocusForDestination(dest);
+    if (bucket !== "unclassified") {
+      cur.focus ??= { membership: emptyFocusMetrics(), "one-time": emptyFocusMetrics() };
+      const slice = cur.focus[bucket as PackagesFocus];
+      slice.spendCents += row.spendCents;
+      slice.impressions += row.impressions;
+      slice.clicks += row.clicks;
+      slice.conversions += row.conversions ?? 0;
+      slice.revenueCents += row.revenueCents ?? 0;
+    }
+
+    agg.set(canonicalUrl, cur);
+  }
+
+  return [...agg.entries()].map(([canonicalUrl, v]) => ({
+    adAccountId: params.adAccountId,
+    date: params.date,
+    canonicalUrl,
+    spendCents: v.spendCents,
+    impressions: v.impressions,
+    clicks: v.clicks,
+    conversions: v.conversions,
+    revenueCents: v.revenueCents,
+    adIds: [...v.adIds],
+    ...(v.focus ? { packagesFocus: v.focus } : {}),
+    computedAt: params.computedAt,
+  }));
+}
+
+export interface SpendByUrlFocusTotals {
+  spend: number;          // AUD dollars
+  spendCents: number;
+  revenue: number;        // AUD dollars
+  revenueCents: number;
+  conversions: number;
+  roas: number;           // ratio; 0 when spend is 0
 }
 
 export interface SpendByUrlListRow {
@@ -18,6 +138,11 @@ export interface SpendByUrlListRow {
   cpc: number;            // AUD per click; 0 when clicks is 0
   roas: number;           // ratio; 0 when spend is 0
   adIds: string[];
+  /** membership vs one-time split of this row; absent = row predates the split or is unknown:// (unclassified) */
+  packagesFocus?: {
+    membership: SpendByUrlFocusTotals;
+    "one-time": SpendByUrlFocusTotals;
+  };
 }
 
 export interface SpendByUrlListResult {
@@ -43,6 +168,12 @@ export interface SpendByUrlDetailRow {
   cpc: number;            // AUD per click
   roas: number;           // ratio
   adFormat: "video" | "static" | "carousel" | "unknown";
+  campaignId?: string;
+  campaignName?: string;
+  adsetId?: string;
+  adsetName?: string;
+  /** Landing-URL strategy of this ad; "unclassified" = destination unresolved (unknown:// or no dest doc) */
+  packagesFocus: PackagesFocusBucket;
 }
 
 export interface SpendByUrlDetailResult {
@@ -76,6 +207,11 @@ export interface RecomputeResult {
 export type SpendByUrlDetailAggRow = {
   adId: string;
   adName?: string;
+  campaignId?: string;
+  campaignName?: string;
+  adsetId?: string;
+  adsetName?: string;
+  packagesFocus: PackagesFocusBucket;
   spendCents: number;
   impressions: number;
   clicks: number;
@@ -117,59 +253,23 @@ export class SpendByUrlAggregationService {
 
       const adIds = [...new Set(insights.map((i) => i.adId))];
       const dests = await MetaAdDestination.find({ adId: { $in: adIds } }).lean();
-      const destByAd = new Map(dests.map((d) => [d.adId, d]));
-
-      const agg = new Map<
-        string,
-        {
-          spendCents: number;
-          impressions: number;
-          clicks: number;
-          conversions: number;
-          revenueCents: number;
-          adIds: Set<string>;
-        }
-      >();
-
-      for (const row of insights) {
-        const dest = destByAd.get(row.adId);
-        const canonicalUrl =
-          dest?.canonicalUrl ?? `unknown://meta-ad/${row.adId}`;
-
-        const cur =
-          agg.get(canonicalUrl) ?? {
-            spendCents: 0,
-            impressions: 0,
-            clicks: 0,
-            conversions: 0,
-            revenueCents: 0,
-            adIds: new Set<string>(),
-          };
-
-        cur.spendCents += row.spendCents;
-        cur.impressions += row.impressions;
-        cur.clicks += row.clicks;
-        cur.conversions += row.conversions ?? 0;
-        cur.revenueCents += row.revenueCents ?? 0;
-        cur.adIds.add(row.adId);
-        agg.set(canonicalUrl, cur);
-      }
 
       await LandingPageMetricsDaily.deleteMany({ adAccountId, date });
 
-      const computedAt = new Date();
-      const docs = [...agg.entries()].map(([canonicalUrl, v]) => ({
+      const docs = buildLandingPageDailyDocs({
         adAccountId,
         date,
-        canonicalUrl,
-        spendCents: v.spendCents,
-        impressions: v.impressions,
-        clicks: v.clicks,
-        conversions: v.conversions,
-        revenueCents: v.revenueCents,
-        adIds: [...v.adIds],
-        computedAt,
-      }));
+        computedAt: new Date(),
+        insights: insights.map((i) => ({
+          adId: i.adId,
+          spendCents: i.spendCents,
+          impressions: i.impressions,
+          clicks: i.clicks,
+          conversions: i.conversions,
+          revenueCents: i.revenueCents,
+        })),
+        destByAd: new Map(dests.map((d) => [d.adId, { canonicalUrl: d.canonicalUrl, rawUrls: d.rawUrls }])),
+      });
 
       if (docs.length > 0) {
         await LandingPageMetricsDaily.insertMany(docs, { ordered: false });
@@ -197,6 +297,7 @@ export class SpendByUrlAggregationService {
       conversions: number;
       revenueCents: number;
       adIds: string[];
+      packagesFocus?: ILandingPackagesFocusSplit;
     }>
   > {
     const daily = await LandingPageMetricsDaily.find({
@@ -213,6 +314,7 @@ export class SpendByUrlAggregationService {
         conversions: number;
         revenueCents: number;
         adIds: Set<string>;
+        focus?: FocusAccumulator;
       }
     >();
 
@@ -233,6 +335,17 @@ export class SpendByUrlAggregationService {
       for (const id of row.adIds ?? []) {
         cur.adIds.add(id);
       }
+      if (row.packagesFocus) {
+        cur.focus ??= { membership: emptyFocusMetrics(), "one-time": emptyFocusMetrics() };
+        for (const key of ["membership", "one-time"] as const) {
+          const s = row.packagesFocus[key];
+          cur.focus[key].spendCents += s.spendCents;
+          cur.focus[key].impressions += s.impressions;
+          cur.focus[key].clicks += s.clicks;
+          cur.focus[key].conversions += s.conversions;
+          cur.focus[key].revenueCents += s.revenueCents;
+        }
+      }
       map.set(row.canonicalUrl, cur);
     }
 
@@ -245,6 +358,7 @@ export class SpendByUrlAggregationService {
         conversions: v.conversions,
         revenueCents: v.revenueCents,
         adIds: [...v.adIds],
+        ...(v.focus ? { packagesFocus: v.focus } : {}),
       }))
       .sort((a, b) => b.spendCents - a.spendCents);
   }
@@ -300,7 +414,10 @@ export class SpendByUrlAggregationService {
       return [];
     }
 
-    const mergedDestByAd = new Map<string, { adFormat?: string }>();
+    const mergedDestByAd = new Map<
+      string,
+      { adFormat?: string; canonicalUrl?: string | null; rawUrls?: string[] | null }
+    >();
     const adIdSet = new Set<string>();
 
     for (const canonicalUrl of uniqueUrls) {
@@ -311,8 +428,12 @@ export class SpendByUrlAggregationService {
         until
       );
       for (const [id, d] of destByAd) {
-        const doc = d as { adFormat?: string };
-        mergedDestByAd.set(id, { adFormat: doc.adFormat });
+        const doc = d as { adFormat?: string; canonicalUrl?: string | null; rawUrls?: string[] | null };
+        mergedDestByAd.set(id, {
+          adFormat: doc.adFormat,
+          canonicalUrl: doc.canonicalUrl,
+          rawUrls: doc.rawUrls,
+        });
       }
       for (const id of adIds) {
         adIdSet.add(id);
@@ -334,6 +455,10 @@ export class SpendByUrlAggregationService {
       string,
       {
         adName?: string;
+        campaignId?: string;
+        campaignName?: string;
+        adsetId?: string;
+        adsetName?: string;
         spendCents: number;
         impressions: number;
         clicks: number;
@@ -345,6 +470,10 @@ export class SpendByUrlAggregationService {
     for (const row of rows) {
       const cur = byAd.get(row.adId) ?? {
         adName: row.adName,
+        campaignId: row.campaignId,
+        campaignName: row.campaignName,
+        adsetId: row.adsetId,
+        adsetName: row.adsetName,
         spendCents: 0,
         impressions: 0,
         clicks: 0,
@@ -352,6 +481,11 @@ export class SpendByUrlAggregationService {
         revenueCents: 0,
       };
       cur.adName = row.adName ?? cur.adName;
+      // campaign/adset are denormalized per insights row — latest-non-null wins
+      cur.campaignId = row.campaignId ?? cur.campaignId;
+      cur.campaignName = row.campaignName ?? cur.campaignName;
+      cur.adsetId = row.adsetId ?? cur.adsetId;
+      cur.adsetName = row.adsetName ?? cur.adsetName;
       cur.spendCents += row.spendCents;
       cur.impressions += row.impressions;
       cur.clicks += row.clicks;
@@ -370,9 +504,15 @@ export class SpendByUrlAggregationService {
           raw === "video" || raw === "static" || raw === "carousel" || raw === "unknown"
             ? raw
             : "unknown";
+        const packagesFocus = derivePackagesFocusForDestination(dest);
         return {
           adId,
           adName: v.adName,
+          campaignId: v.campaignId,
+          campaignName: v.campaignName,
+          adsetId: v.adsetId,
+          adsetName: v.adsetName,
+          packagesFocus,
           spendCents: v.spendCents,
           impressions: v.impressions,
           clicks: v.clicks,
@@ -417,6 +557,18 @@ export class SpendByUrlAggregationService {
       rows: rows.map((r) => {
         const spend = centsToAud(r.spendCents);
         const revenue = centsToAud(r.revenueCents);
+        const formatFocus = (m: { spendCents: number; revenueCents: number; conversions: number }) => {
+          const fSpend = centsToAud(m.spendCents);
+          const fRevenue = centsToAud(m.revenueCents);
+          return {
+            spend: fSpend,
+            spendCents: m.spendCents,
+            revenue: fRevenue,
+            revenueCents: m.revenueCents,
+            conversions: m.conversions,
+            roas: fSpend > 0 ? fRevenue / fSpend : 0,
+          };
+        };
         return {
           canonicalUrl: r.canonicalUrl,
           spend,
@@ -429,6 +581,14 @@ export class SpendByUrlAggregationService {
           cpc: r.clicks > 0 ? spend / r.clicks : 0,
           roas: spend > 0 ? revenue / spend : 0,
           adIds: r.adIds,
+          ...(r.packagesFocus
+            ? {
+                packagesFocus: {
+                  membership: formatFocus(r.packagesFocus.membership),
+                  "one-time": formatFocus(r.packagesFocus["one-time"]),
+                },
+              }
+            : {}),
         };
       }),
     };
@@ -476,6 +636,11 @@ export class SpendByUrlAggregationService {
           cpc: r.clicks > 0 ? spend / r.clicks : 0,
           roas: spend > 0 ? revenue / spend : 0,
           adFormat: r.adFormat,
+          campaignId: r.campaignId,
+          campaignName: r.campaignName,
+          adsetId: r.adsetId,
+          adsetName: r.adsetName,
+          packagesFocus: r.packagesFocus,
         };
       }),
     };

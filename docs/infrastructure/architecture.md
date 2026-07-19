@@ -139,7 +139,8 @@ Two scripts ship for finding and fixing the major-draw entry-row corruption docu
 | `/api/cron/process-partner-discount-queues` | `0 15 * * *` | Daily — clears partner discount queue |
 | `/api/cron/ab-testing-experiments` | `0 * * * *` | Hourly — A/B test scheduling |
 | `/api/cron/ab-testing-aggregate-metrics` | `0 3 * * *` | Daily — A/B test metrics roll-up |
-| `/api/cron/sync-meta-spend-by-url` | `30 2 * * *` | Daily — Meta ad spend sync |
+| `/api/cron/sync-meta-spend-by-url` | `30 2 * * *` | Daily — Meta ad spend sync. Bearer `CRON_SECRET` gate (added 2026-07-16 — see [gotchas.md § Cron auth bypass](./gotchas.md)). |
+| `/api/cron/sync-tiktok-ads` | `45 2 * * *` | Daily — re-syncs a trailing 8-day window of TikTok ad-level insights into `TikTokAdInsightsDaily` (delegates to `TikTokInsightsSyncService`; the TikTok analogue of `sync-meta-ads`). Bearer `CRON_SECRET` gate; no-ops when the TikTok Marketing-API env is unset. `maxDuration: 300s`. |
 | `/api/cron/membership-daily-snapshot` | `0 14 * * *` and `0 15 * * *` | Daily ×2 — writes yesterday's `MembershipDailySnapshot` per package. Idempotent upsert; the second fire is a no-op for redundancy. |
 | `/api/cron/dashboard-stats-daily-snapshot` | `0 14 * * *` and `0 15 * * *` | Daily ×2 — re-upserts a 90-day sliding window of `DashboardStatsDailySnapshot` rows. The second fire heals first-run failures. Idempotent. `maxDuration: 300s`. |
 | `/api/cron/cancellation-retention-resume` | `0 16 * * *` | Daily — clears stale `pauseReason="retention"` metadata on Stripe subscriptions whose 30-day retention pause window has elapsed. Primary job is metadata cleanup (prevents future recovery-pause mis-identification by `decideClearPause`); defensively resumes `pause_collection` if Stripe hasn't auto-resumed. Idempotent. `maxDuration: 300s`. |

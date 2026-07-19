@@ -72,6 +72,7 @@ import {
   NormFacebookAdsHourlyInsightsSchema,
   NormFacebookAdsPurchaseAuditSchema,
 } from "./schemas/facebook-ads";
+import { NormTikTokAdsInsightsSchema } from "./schemas/tiktok-ads";
 import {
   NormMajorDrawCurrentAndLastSchema,
   NormMajorDrawExportAggregateSchema,
@@ -89,6 +90,7 @@ import {
 } from "./schemas/mini-draw";
 import { NormWinnerDetailSchema } from "./schemas/winners";
 import {
+  NormAnalyticsPackagesFocusSchema,
   NormAnalyticsSpendByUrlDetailSchema,
   NormAnalyticsSpendByUrlListSchema,
   NormHourlyRevenueSchema,
@@ -528,6 +530,16 @@ export const NORM_ENDPOINTS = {
     method: "POST",
     summary: "Trigger ad-destination URL sync from Meta",
   },
+  "analytics.packages-focus": {
+    tier: "read",
+    requiredPermission: "facebookAds.view",
+    path: "/v1/analytics/packages-focus",
+    method: "GET",
+    summary:
+      "Membership vs one-time landing-URL split of Meta ad spend/ROAS: bucket summary (materialized, any range) + campaign→adset→ad detail (live join, ~60-day insights window). platform=tiktok returns supported:false until its URL mapping ships.",
+    rateLimit: { perMinute: 10 },
+    responseSchema: NormAnalyticsPackagesFocusSchema,
+  },
   "analytics.hourly-revenue": {
     tier: "read",
     requiredPermission: "facebookAds.view",
@@ -680,6 +692,18 @@ export const NORM_ENDPOINTS = {
     method: "GET",
     summary: "Reconcile local PaymentEvent (non-renewal) revenue vs Meta Insights purchase revenue",
     responseSchema: NormFacebookAdsPurchaseAuditSchema,
+  },
+
+  // ─── TikTok ads (per-ad daily insights; creds-gated, launching soon) ──────────
+  "tiktok-ads.insights": {
+    tier: "read",
+    requiredPermission: "facebookAds.view",
+    path: "/v1/tiktok-ads/insights",
+    method: "GET",
+    summary:
+      "TikTok per-ad insights for a date range: per-ad spend + TikTok-reported conversions/revenue/ROAS + totals (empty until TikTok Marketing-API creds are set)",
+    rateLimit: { perMinute: 10 },
+    responseSchema: NormTikTokAdsInsightsSchema,
   },
 
   // ─── Facebook Ads Health — verdict engine (wired reads; settings/snooze writes roadmap) ─

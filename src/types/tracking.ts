@@ -42,6 +42,14 @@ export interface AttributionParams extends UTMParams {
   campaign_id?: string;
   adset_id?: string;
   ad_id?: string;
+  /**
+   * Landing-URL packages focus. ONLY ever "one-time" (captured when the landing
+   * URL carried ?packages=one-time). Membership is the default and is expressed
+   * by ABSENCE — ads never use ?packages=membership, and storing nothing keeps
+   * organic traffic out of the attribution stores. Missing = membership-default
+   * at analysis time.
+   */
+  packages_focus?: "one-time";
 }
 
 /**

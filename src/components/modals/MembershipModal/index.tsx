@@ -4316,6 +4316,14 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
             if ("code" in err.error) return err.error.code as string;
             if ("type" in err.error) return err.error.type as string;
           }
+          // ApiError from src/lib/queries.ts carries the response body on `.data`
+          if ("data" in err) {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const data = (err as any).data;
+            if (data?.code) return data.code;
+            if (data?.error?.code) return data.error.code;
+            if (data?.error?.type) return data.error.type;
+          }
           if ("response" in err) {
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const response = (err as any).response;
@@ -4332,6 +4340,13 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
           if ("decline_code" in err) return err.decline_code as string;
           if ("error" in err && typeof err.error === "object" && err.error !== null) {
             if ("decline_code" in err.error) return err.error.decline_code as string;
+          }
+          // ApiError from src/lib/queries.ts carries the response body on `.data`
+          if ("data" in err) {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const data = (err as any).data;
+            if (data?.decline_code) return data.decline_code;
+            if (data?.error?.decline_code) return data.error.decline_code;
           }
           if ("response" in err) {
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -4367,6 +4382,30 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
             errorMessage = `${apiError.response.data.details} (${apiError.response.data.error})`;
           }
         }
+      } else if (
+        error &&
+        typeof error === "object" &&
+        "data" in error &&
+        (error as { data?: unknown }).data &&
+        typeof (error as { data: unknown }).data === "object"
+      ) {
+        // ApiError from src/lib/queries.ts: the response body is preserved on
+        // `.data` (not `.response.data`), so read details/code/decline_code there.
+        const body = (error as {
+          data: { error?: string; details?: unknown; message?: string; code?: string; decline_code?: string };
+        }).data;
+
+        if (typeof body.details === "string" && body.details) {
+          errorMessage = body.details;
+        } else if (typeof body.error === "string" && body.error) {
+          errorMessage = body.error;
+        } else if (typeof body.message === "string" && body.message) {
+          errorMessage = body.message;
+        }
+        errorCode = body.code ?? errorCode;
+        declineCode = body.decline_code;
+
+        console.error("🔍 API Error Response Structure:", JSON.stringify(body, null, 2));
       } else if (error && typeof error === "object" && "message" in error) {
         const err = error as { message: string; code?: string; decline_code?: string; type?: string };
         errorMessage = err.message;

@@ -67,7 +67,9 @@ Signing must include all params being sent (or use unsigned with strict allowlis
 
 ## Cron auth bypass
 
-If you forget the shared-secret check, anyone can hit `/api/cron/foo` and trigger jobs. Watch out — this has happened in other codebases.
+If you forget the shared-secret check, anyone can hit `/api/cron/foo` and trigger jobs.
+
+**Incident (July 2026):** `/api/cron/sync-meta-spend-by-url` shipped **without** a `CRON_SECRET` check while its sibling `sync-meta-ads` was gated — so any unauthenticated caller could trigger its heavy paginated Meta Marketing API download + Mongo bulk write. Fixed by adding the standard `Authorization: Bearer ${CRON_SECRET}` gate (`src/app/api/cron/sync-meta-spend-by-url/route.ts`). Copy an existing gated cron's auth block whenever you add a `/api/cron/*` route — middleware does not run for `/api/**`, so the route handler is the only gate.
 
 ## Date timezone drift
 

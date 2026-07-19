@@ -24,6 +24,7 @@ import Button from "@/components/ui/Button";
 import { type SavedPaymentMethod } from "@/hooks/useSavedPaymentMethods";
 import { getStripePromise } from "@/lib/stripe-client";
 import { paymentIntentIdFromClientSecret } from "@/lib/payment/payment-intent-id";
+import { formatPaymentError } from "@/utils/payment/stripe/payment-error-messages";
 import { type StripeBillingAddress } from "@/lib/payment/defaultBillingAddress";
 import PaymentMethodSelector from "@/components/modals/PaymentMethodSelector";
 
@@ -124,7 +125,11 @@ export const PaymentFormWithoutElements: React.FC<PaymentFormProps> = ({
           const result = await response.json();
 
           if (!response.ok) {
-            throw new Error(result.error || result.details || "Failed to create upgrade payment");
+            // Carry the body on `.data` (ApiError shape) so formatPaymentError
+            // can show decline-specific guidance from code/decline_code.
+            const apiError = new Error(result.error || result.details || "Failed to create upgrade payment");
+            Object.assign(apiError, { data: result });
+            throw apiError;
           }
 
           // ✅ UPDATE: Set upgrade info from API response
@@ -182,11 +187,13 @@ export const PaymentFormWithoutElements: React.FC<PaymentFormProps> = ({
       }
     } catch (err: unknown) {
       console.error("Payment failed:", err);
-      const errorMessage = err instanceof Error ? err.message : "Payment could not be processed. Please try again.";
+      // Central payment-error copy: concise decline guidance when the API 400
+      // carries code/decline_code, generic message otherwise.
+      const formatted = formatPaymentError(err);
       showToast({
         type: "error",
-        title: "Payment Failed",
-        message: errorMessage,
+        title: formatted.title,
+        message: formatted.message,
         duration: 10000,
       });
     } finally {
@@ -329,7 +336,11 @@ export const PaymentFormWithElements: React.FC<PaymentFormProps> = ({
         const result = await response.json();
 
         if (!response.ok) {
-          throw new Error(result.error || result.details || "Failed to create upgrade payment");
+          // Carry the body on `.data` (ApiError shape) so formatPaymentError
+          // can show decline-specific guidance from code/decline_code.
+          const apiError = new Error(result.error || result.details || "Failed to create upgrade payment");
+          Object.assign(apiError, { data: result });
+          throw apiError;
         }
 
         // ✅ UPDATE: Set upgrade info from API response
@@ -399,11 +410,13 @@ export const PaymentFormWithElements: React.FC<PaymentFormProps> = ({
       }
     } catch (err: unknown) {
       console.error("Payment failed:", err);
-      const errorMessage = err instanceof Error ? err.message : "Payment could not be processed. Please try again.";
+      // Central payment-error copy: concise decline guidance when the API 400
+      // carries code/decline_code, generic message otherwise.
+      const formatted = formatPaymentError(err);
       showToast({
         type: "error",
-        title: "Payment Failed",
-        message: errorMessage,
+        title: formatted.title,
+        message: formatted.message,
         duration: 10000,
       });
     } finally {

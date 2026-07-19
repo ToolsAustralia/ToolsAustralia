@@ -8,6 +8,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import Stripe from "stripe";
 import { getValidPaymentMethod } from "@/utils/payment/stripe/stripe-helpers";
+import { isStripeCardError } from "@/utils/payment/stripe/payment-error-detection";
 import { getSubscriptionCreateParamsForAnchor, getNextAnchorTimestamp } from "@/utils/billing/anchor-billing";
 import { getSubscriptionPeriodEnd } from "@/utils/payment/stripe/subscription-period";
 import { carryStreakAcrossSubscriptionReplace } from "@/utils/subscription/streak";
@@ -23,6 +24,7 @@ import {
 } from "@/utils/payment/recovery/stranded-invoice-policy";
 import { prepareRecoveredCycleInvoice } from "@/services/subscription/prepareRecoveredCycleInvoice";
 import { acquireRecoveryClaim, releaseRecoveryClaim } from "@/utils/payment/recovery/recovery-claim";
+import { resolveAttributionAtEdge } from "@/services/attribution/resolveAtEdge";
 
 const renewSubscriptionSchema = z.object({
   packageId: z.string().optional(), // Optional: renew with same or different package
@@ -421,6 +423,24 @@ export async function POST(request: NextRequest) {
           );
         }
 
+        // Card declines thrown by invoices.pay: return the sibling 400
+        // "Payment failed" shape (see create-subscription-existing-user) so the
+        // client can show accurate decline guidance instead of a generic 500.
+        if (isStripeCardError(paymentError)) {
+          const stripeError = paymentError as { message?: string; code?: string; decline_code?: string; type?: string };
+          return NextResponse.json(
+            {
+              success: false,
+              error: "Payment failed",
+              details: stripeError.message || "Unable to process payment",
+              ...(stripeError.code && { code: stripeError.code }),
+              ...(stripeError.decline_code && { decline_code: stripeError.decline_code }),
+              ...(stripeError.type && { type: stripeError.type }),
+            },
+            { status: 400 }
+          );
+        }
+
         throw paymentError;
       }
     }
@@ -508,6 +528,12 @@ export async function POST(request: NextRequest) {
     const hasAnchor = Object.keys(anchorParams).length > 0;
     const next24Date = hasAnchor ? new Date(getNextAnchorTimestamp(new Date()) * 1000) : null;
 
+    // Resolve converting-platform attribution at the edge and stamp it onto the NEW
+    // subscription's metadata, exactly like create-subscription-existing-user. This
+    // create_new branch mints a fresh subscription (billing_reason subscription_create =
+    // a conversion, not a renewal), so without this the win-back conversion carried no
+    // attr_platform and the webhook stamped it `direct`. Never throws.
+    const { metadata: resolvedAttr } = resolveAttributionAtEdge(request);
     const baseMetadata = {
       packageId: targetPackage._id,
       packageName: targetPackage.name,
@@ -515,6 +541,7 @@ export async function POST(request: NextRequest) {
       userId: user._id.toString(),
       renewalType: "new_subscription",
       ...(typeof anchorMetadata === "object" && anchorMetadata !== null ? anchorMetadata : {}),
+      ...resolvedAttr,
     };
 
     const createPayload: Stripe.SubscriptionCreateParams = {

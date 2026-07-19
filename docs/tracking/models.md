@@ -9,11 +9,11 @@
 
 ## TikTokAdInsightsDaily
 
-[`src/models/TikTokAdInsightsDaily.ts`](../../src/models/TikTokAdInsightsDaily.ts). Daily ad-level insights from TikTok Marketing API. Same shape as `MetaAdInsightsDaily`. Unique key: `(adAccountId, date, adId)`. No sync service writes to this yet — sync ships in a follow-up spec.
+[`src/models/TikTokAdInsightsDaily.ts`](../../src/models/TikTokAdInsightsDaily.ts). Daily ad-level insights from TikTok Marketing API. Same shape as `MetaAdInsightsDaily`. Unique key: `(adAccountId, date, adId)` (`adAccountId` holds the TikTok `advertiser_id`). **Now written** by `TikTokInsightsSyncService` (admin domain, [`src/services/admin/tiktok/`](../../src/services/admin/tiktok/)), fed nightly by the `/api/cron/sync-tiktok-ads` cron; read by the admin TikTok per-ad breakdown. TTL index on `syncedAt`: 35d (dev) / 60d (prod), mirroring `MetaAdInsightsDaily` — anchored to `syncedAt` so the nightly re-upsert of the trailing window refreshes the clock on touched rows (active ads stay alive past 60d). `conversions`/`revenueCents` are TikTok-reported (the platform's own attribution), NOT a join of first-party `PaymentEvent` sales.
 
 ## SnapchatAdInsightsDaily
 
-[`src/models/SnapchatAdInsightsDaily.ts`](../../src/models/SnapchatAdInsightsDaily.ts). Same shape and same status as TikTok.
+[`src/models/SnapchatAdInsightsDaily.ts`](../../src/models/SnapchatAdInsightsDaily.ts). Same shape as TikTok, but still an orphaned shell — **no sync service writes to this collection yet** (unlike TikTok, which now has `TikTokInsightsSyncService`).
 
 ## FacebookAdsHealthSnooze
 

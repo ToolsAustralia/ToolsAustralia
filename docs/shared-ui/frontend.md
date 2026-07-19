@@ -730,6 +730,10 @@ All previous call sites now render `WinnersTestimony` directly: the homepage + p
 
 ## Modals
 
+### AdSpendFocusModal (admin, 2026-07-17)
+
+[`src/components/modals/AdSpendFocusModal.tsx`](../../src/components/modals/AdSpendFocusModal.tsx) — drill-down for the admin Overview's Ad Spend / ROAS KPI tiles: membership vs one-time landing-URL split with a campaign → ad-set → ad tree per bucket. Built on `ModalContainer` (`size="4xl" height="fixed" className="!max-w-[1100px]"`), query gated on `isOpen`, state reset on close, Meta/TikTok platform chips (TikTok = dashed awaiting box until its URL mapping ships). The tree itself is the admin-domain `CampaignTreeTable` (see `docs/admin/frontend.md` — "Packages-focus drill-downs"). `PrizePerformanceAdsModal` (same folder) was upgraded the same day to reuse that tree with focus chips — documented alongside it in `docs/admin/frontend.md`.
+
 ### PrizeSpecificationsModal
 
 [`src/components/modals/PrizeSpecificationsModal/`](../../src/components/modals/PrizeSpecificationsModal/) shows the full spec breakdown for a prize (`prize?: PrizeCatalogEntry`). Built on `ModalContainer` (`size="4xl"`).

@@ -47,7 +47,7 @@ See [patterns.md](./patterns.md#site-wide-interaction-smoothness--phase-1-2026-0
 
 ## Index
 
-[src/components/index.ts](../../src/components/index.ts) — re-exports common primitives for clean imports.
+[src/components/index.ts](../../src/components/index.ts) — re-exports common primitives for clean imports. (2026-07: the `FacebookPixel` default re-export was removed along with the dead never-mounted component; the barrel still `export *`s that file's helper functions.)
 
 ## Principles
 

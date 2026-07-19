@@ -11,8 +11,10 @@ import {
 import { buildCheckoutResumeUrl } from "@/utils/integrations/klaviyo/checkout-resume-url";
 import { getPackageById } from "@/data/membershipPackages";
 // TikTok Pixel tracking disabled for now - client-side only
-// import { trackTikTokEvent } from "@/components/TikTokPixel";
 import { sendFacebookEvent, FacebookEvent, getFacebookTestEventCode } from "@/lib/facebook";
+import { tiktokProvider } from "@/lib/tracking/providers/tiktok";
+import type { CanonicalEvent } from "@/lib/tracking/types";
+import { extractTikTokContext } from "@/utils/tracking/tiktok-helpers";
 import {
   generateEventID,
   prepareUserData,
@@ -259,6 +261,48 @@ const registerRateLimiter = createDistributedRateLimiter("auth-register", {
  * POST /api/auth/register
  * Register a new user account or update existing plain account
  */
+/**
+ * Fire CompleteRegistration to the TikTok Events API (server-side) — parity with the Meta
+ * CAPI CompleteRegistration this route already sends. The legacy browser TikTok helper never
+ * ran here (window is undefined server-side), so TikTok received ZERO registration signal.
+ * This sends the real Events API event with the SAME event_id as the Meta event (dedup-safe),
+ * plus ttclid/_ttp for match quality. Never throws (tracking must not break registration).
+ */
+async function sendTikTokCompleteRegistration(
+  request: NextRequest,
+  user: { email?: string | null; mobile?: string | null; _id: { toString(): string } },
+  eventId: string,
+): Promise<void> {
+  try {
+    const ctx = extractRequestContext(request);
+    const tt = extractTikTokContext(request);
+    const referer = request.headers.get("referer") || undefined;
+    const canonical: CanonicalEvent = {
+      eventName: "CompleteRegistration",
+      eventId,
+      eventTime: Math.floor(Date.now() / 1000),
+      userData: {
+        ...(user.email && { email: user.email }),
+        ...(user.mobile && { phone: user.mobile }),
+        externalId: user._id.toString(),
+        ...(tt.ttclid && { ttclid: tt.ttclid }),
+        ...(tt.ttp && { ttp: tt.ttp }),
+        ...(ctx.client_ip_address && { clientIpAddress: ctx.client_ip_address }),
+        ...(ctx.client_user_agent && { clientUserAgent: ctx.client_user_agent }),
+      },
+      ...(referer && { eventSourceUrl: referer }),
+      actionSource: "website",
+    };
+    await tiktokProvider.capiSend(canonical, {
+      clientIpAddress: ctx.client_ip_address,
+      clientUserAgent: ctx.client_user_agent,
+      ...(referer && { eventSourceUrl: referer }),
+    });
+  } catch (e) {
+    console.error("❌ TikTok CompleteRegistration (non-blocking):", e);
+  }
+}
+
 export async function POST(request: NextRequest) {
   try {
     const identifier = getClientIdentifier(
@@ -483,6 +527,9 @@ export async function POST(request: NextRequest) {
             console.error("❌ Pixel registration update tracking failed (non-blocking):", pixelError);
           }
 
+          // TikTok Events API — parity with the Meta CAPI CompleteRegistration above.
+          await sendTikTokCompleteRegistration(request, existingUser, eventID);
+
           // Return updated user data (same format as new registration)
           return NextResponse.json({
             success: true,
@@ -592,6 +639,9 @@ export async function POST(request: NextRequest) {
         console.error("❌ Pixel registration update tracking failed (non-blocking):", pixelError);
       }
 
+      // TikTok Events API — parity with the Meta CAPI CompleteRegistration above.
+      await sendTikTokCompleteRegistration(request, existingUser, eventID);
+
       return NextResponse.json({
         success: true,
         message: "Step 1 completed",
@@ -681,6 +731,9 @@ export async function POST(request: NextRequest) {
       } catch (pixelError) {
         console.error("❌ Pixel registration update tracking failed (non-blocking):", pixelError);
       }
+
+      // TikTok Events API — parity with the Meta CAPI CompleteRegistration above.
+      await sendTikTokCompleteRegistration(request, existingUser, eventID);
 
       return NextResponse.json({
         success: true,
@@ -893,10 +946,8 @@ export async function POST(request: NextRequest) {
         console.error("❌ Error sending CompleteRegistration to Facebook Conversions API:", apiError);
       }
 
-      // 3. Track TikTok Pixel (disabled for now - client-side only)
-      // TikTok pixel tracking is client-side only and will be handled in the client component
-      // trackTikTokEvent("CompleteRegistration", registrationParams);
-      // console.log(`📱 TikTok Pixel: Registration tracked for ${newUser.email}`);
+      // 3. TikTok Events API — parity with the Meta CAPI CompleteRegistration above.
+      await sendTikTokCompleteRegistration(request, newUser, eventID);
     } catch (pixelError) {
       console.error("❌ Pixel registration tracking failed (non-blocking):", pixelError);
     }

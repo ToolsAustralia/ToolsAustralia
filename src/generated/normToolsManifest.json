@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-07-15T06:21:57.598Z",
+  "generatedAt": "2026-07-19T11:36:07.283Z",
   "endpoints": [
     {
       "registryKey": "pending-actions.status",
@@ -171,6 +171,13 @@
       "summary": "Per-ad spend / delivery / conversion breakdown for one or more canonical destination URLs"
     },
     {
+      "registryKey": "analytics.packages-focus",
+      "tier": "read",
+      "path": "/v1/analytics/packages-focus",
+      "method": "GET",
+      "summary": "Membership vs one-time landing-URL split of Meta ad spend/ROAS: bucket summary (materialized, any range) + campaign→adset→ad detail (live join, ~60-day insights window). platform=tiktok returns supported:false until its URL mapping ships."
+    },
+    {
       "registryKey": "analytics.hourly-revenue",
       "tier": "read",
       "path": "/v1/analytics/hourly-revenue",
@@ -267,6 +274,13 @@
       "path": "/v1/facebook-ads/purchase-audit",
       "method": "GET",
       "summary": "Reconcile local PaymentEvent (non-renewal) revenue vs Meta Insights purchase revenue"
+    },
+    {
+      "registryKey": "tiktok-ads.insights",
+      "tier": "read",
+      "path": "/v1/tiktok-ads/insights",
+      "method": "GET",
+      "summary": "TikTok per-ad insights for a date range: per-ad spend + TikTok-reported conversions/revenue/ROAS + totals (empty until TikTok Marketing-API creds are set)"
     },
     {
       "registryKey": "facebook-ads.health.insights",

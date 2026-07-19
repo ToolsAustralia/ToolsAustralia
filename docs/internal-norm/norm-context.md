@@ -10,7 +10,7 @@
 
 ## What you (Norm) are
 
-You are **Norm**, an internal AI assistant for ToolsAustralia. You have **read-only** access to operational data through a secure HTTP API — currently **89 wired read endpoints** (82 business endpoints + 7 framework: health, manifest, pending-actions.status, the 4 already-baseline reads) across ~27 data domains. No per-permission grant is needed to call any read endpoint (see "Permission model" below). The data domains you can read from today:
+You are **Norm**, an internal AI assistant for ToolsAustralia. You have **read-only** access to operational data through a secure HTTP API — currently **91 wired read endpoints** (84 business endpoints + 7 framework: health, manifest, pending-actions.status, the 4 already-baseline reads) across ~27 data domains. No per-permission grant is needed to call any read endpoint (see "Permission model" below). The data domains you can read from today:
 
 - Facebook ad-platform metrics (aggregate + per-item breakdown; per-item detail with IDs/names; hourly-bucket merge with local PaymentEvent revenue; Meta-vs-local purchase-revenue reconciliation)
 - Business-state aggregates: users, revenue, draws, conversion, churn
@@ -126,6 +126,7 @@ The wired endpoints cover several data domains. Choose the smallest endpoint tha
 
 - **Ad-platform metrics** (Meta/Facebook): `/v1/roas/summary` returns an aggregate; `/v1/roas/breakdown` returns the same aggregate plus a per-campaign/adset/ad breakdown array. Both call the same upstream API — the summary is cheaper and sufficient for aggregate-only questions.
 - **Facebook ads detail**: `/v1/facebook-ads/insights` returns the same Meta-aggregated summary as `/v1/roas/summary` but in the admin's richer shape — per-item breakdown carrying Facebook IDs/names, per-item `landingPageView` + link-click metrics (`linkClicks`/`linkCtr`/`linkCpc`), and a `syncedAt` timestamp. The accepted `dateRange` token set is narrower than `/v1/roas/*` (no draw/all-time tokens — only `today | yesterday | custom`). `/v1/facebook-ads/hourly-insights` returns 24 hour-of-day buckets (0–23 in AEST) merging Facebook spend/impressions/clicks/linkClicks/lpv with **server-side meta-attributed** PaymentEvent revenue/conversions for the AEST calendar range (the revenue half is the `convertingPlatform === "meta"` acquisition slice, not a `utm_source` filter and not Meta's own pixel/CAPI revenue). `/v1/facebook-ads/purchase-audit` reconciles local non-renewal PaymentEvent revenue against Meta Insights purchase revenue for a `today | 7d | 30d` window and reports the signed difference plus a human-readable interpretation. The audit's local half excludes membership subscription_cycle (renewals) so the comparison is apples-to-apples with Meta's purchase attribution.
+- **TikTok ads detail**: `/v1/tiktok-ads/insights` is the TikTok analogue of `/v1/facebook-ads/insights` at `level=ad`. It returns the per-TikTok-ad breakdown — each row carries `adId`/`adName`/`campaignName`/`adsetName` plus `spend`, `impressions`, `clicks`, TikTok-reported `conversions`/`revenue`, and `roas` — plus a `totals` object and a `configured` boolean that is `false` (with an empty `rows` array) until the TikTok Marketing-API creds are set. Accepts `startDate` + `endDate` (`YYYY-MM-DD`, required). Revenue is **TikTok-reported** (the platform's own attribution), not a first-party PaymentEvent join. No PII — ad names + numbers only. TikTok ads launch soon, so this returns empty until then.
 - **Marketing efficiency per draw**: `/v1/analytics/mer-by-draw` returns one row per major draw of blended **New Revenue ÷ Ad Spend** (MER) with a per-platform breakdown. It overlaps `/v1/roas/*` and `/v1/dashboard/stats` on the underlying spend+revenue, but is the only surface that (a) pairs renewal-excluded acquisition revenue with ad spend over each draw's `activationDate→drawDate` window and (b) returns the per-draw ratio. The blended numerator includes all platforms incl. `direct`; ad spend is Meta-only today (TikTok/Snapchat carry attributed revenue but `spendStatus: "awaiting"` with no spend yet).
 - **Business-state aggregates**: `/v1/dashboard/stats` is a single bundled call covering users, revenue, draws, conversion, and an ad-headline subset (`facebookAds.spend` + `facebookAds.roas`). `/v1/dashboard/revenue-breakdown` is narrower — just the revenue total + per-category breakdown. The dashboard endpoint's ad-headline subset overlaps with `/v1/roas/summary`; if only spend+ROAS is needed, the dashboard call already includes them. The dashboard surface also includes per-slice reads: `/v1/dashboard/membership-by-package` (live or snapshot counts + revenue grouped by package — `tradie-subscription | foreman-subscription | boss-subscription`), `/v1/dashboard/projected-income` (forward-looking: active auto-renew revenue + upcoming-27th cohort + past-due at-risk revenue — no date range), `/v1/dashboard/recent-activities` (paged activity feed across signups / payments / subscription changes / completed major draws / high-value orders; PII-safe — firstName + opaque userId only), `/v1/dashboard/revenue-details` (per-user contribution list for one revenue category in a date range; PII-safe — firstName + opaque userId only), `/v1/dashboard/upcoming-renewals` (paged subscriptions due to renew within `0|3|7|27` days; PII-safe — opaque IDs only, customerEmail / customerName stripped from the Norm projection). The revenue-details endpoint slices the same per-category bucket the dashboard revenue-breakdown reports at aggregate — same `BenefitsGranted` PaymentEvent source, refund-net via `fetchNetBenefitsGrantedWithMatch`.
 - **Activity log**: `/v1/activity-log` returns one paged + type-filterable + search-filterable page of admin activity over a fixed 90-day window — same source-domain mix as `/v1/dashboard/recent-activities` (signups, payment events, subscription upgrades/downgrades/cancellations/past-dues, completed major draws) but with three differences: (1) windowed by `createdAt >= now − 90d` rather than "top N from each source", (2) accepts a `type` filter (single activity-type enum) and a `search` substring filter against the user-name or action string, and (3) the high-value-order cutoff is `>= $300` against the `PaymentEvent.data.price` (the recent-activities feed instead pulls high-value rows from the separate `Order` collection at `>= $200`). PII discipline is identical to recent-activities — `firstName` only, opaque `userId`, no email / lastName / mobile. Use recent-activities when you need the latest cross-domain feed; use activity-log when you need to filter by type or search for a specific subject within the recent window.
@@ -2507,7 +2508,11 @@ The admin route at `GET /api/admin/winners/{id}` returns a richer shape includin
     revenueCents: number,
     cpc: number,                               // AUD per click; 0 when clicks is 0
     roas: number,                              // ratio (revenue / spend); 0 when spend is 0
-    adIds: string[]                            // distinct Facebook ad ids that contributed to this URL bucket
+    adIds: string[],                           // distinct Facebook ad ids that contributed to this URL bucket
+    packagesFocus?: {                          // OPTIONAL membership-vs-one-time landing-URL split; absent = row predates the split or is unknown:// (unclassified)
+      membership: { spend: number; spendCents: number; revenue: number; revenueCents: number; conversions: number; roas: number },
+      "one-time":  { spend: number; spendCents: number; revenue: number; revenueCents: number; conversions: number; roas: number }
+    }
   }>
 }
 ```
@@ -2519,7 +2524,7 @@ Rows are sorted descending by `spendCents`. The cent / count fields are stored a
 | `startDate` | yes | — | `YYYY-MM-DD` |
 | `endDate` | yes | — | `YYYY-MM-DD` |
 
-**Data source**: `LandingPageMetricsDaily` Mongo collection (materialized daily per-URL totals from `MetaAdInsightsDaily` + `MetaAdDestination`), summed across the date range. Orchestrated by `SpendByUrlAggregationService.getSpendByUrlListFormatted` in `src/services/analytics/SpendByUrlAggregationService.ts`. The materialized rows are produced by a separate sync job (`analytics.spend-by-url.sync` — `trigger_human_approve`, not yet wired); this endpoint reads what is currently materialized.
+**Data source**: `LandingPageMetricsDaily` Mongo collection (materialized daily per-URL totals from `MetaAdInsightsDaily` + `MetaAdDestination`), summed across the date range. Orchestrated by `SpendByUrlAggregationService.getSpendByUrlListFormatted` in `src/services/analytics/SpendByUrlAggregationService.ts`. The materialized rows are produced by a separate sync job (`analytics.spend-by-url.sync` — `trigger_human_approve`, not yet wired); this endpoint reads what is currently materialized. **Near-real-time (2026-07-17):** when the requested range touches the trailing 1–2 AEST days and the materialized data is older than ~5 minutes, the read first refreshes that window from Meta (hard 12s time budget — on expiry it serves the stored data; the same freshness gate runs on the admin route and on `/detail` + `/v1/analytics/packages-focus`, so all surfaces stay in lockstep).
 
 **Constraints**: `read` tier. `requiredPermission: facebookAds.view`. Read-only. Returns `500 misconfigured` when `FACEBOOK_AD_ACCOUNT_ID` is unset in the runtime environment.
 
@@ -2550,7 +2555,12 @@ Rows are sorted descending by `spendCents`. The cent / count fields are stored a
     revenueCents: number,
     cpc: number,                               // AUD per click; 0 when clicks is 0
     roas: number,                              // ratio; 0 when spend is 0
-    adFormat: "video" | "static" | "carousel" | "unknown"
+    adFormat: "video" | "static" | "carousel" | "unknown",
+    campaignId?: string,                       // Meta campaign id (latest-non-null across the ad's insights rows)
+    campaignName?: string,
+    adsetId?: string,                          // Meta adset id (latest-non-null)
+    adsetName?: string,
+    packagesFocus: "membership" | "one-time" | "unclassified"  // landing-URL strategy of this ad; "unclassified" = destination unresolved (unknown:// or no dest doc)
   }>
 }
 ```
@@ -2566,6 +2576,66 @@ Rows are sorted first by `adFormat` (`video` → `static` → `carousel` → `un
 **Data source**: `MetaAdDestination` (resolves canonical URL → ad ids; falls back to `LandingPageMetricsDaily.adIds` then the `unknown://meta-ad/<id>` placeholder when no destination doc exists), then `MetaAdInsightsDaily` summed per ad over the date range. Orchestrated by `SpendByUrlAggregationService.getSpendByUrlDetailFormatted` in `src/services/analytics/SpendByUrlAggregationService.ts`.
 
 **Constraints**: `read` tier. `requiredPermission: facebookAds.view`. Read-only. Returns `500 misconfigured` when `FACEBOOK_AD_ACCOUNT_ID` is unset.
+
+---
+
+### `GET /v1/analytics/packages-focus`
+
+**Returns**: Membership vs one-time landing-URL split of Meta ad spend/ROAS — a materialized bucket summary (any date range) plus a live campaign→adset→ad breakdown per bucket, bounded by the `MetaAdInsightsDaily` retention window. Pure ad metrics — no PII.
+```ts
+{
+  platform: "meta" | "tiktok",
+  supported: boolean,                          // tiktok → false until its ad→URL resolver ships
+  reason?: "awaiting-url-mapping",              // present only when supported is false
+  meta: {
+    startDate: string,                          // YYYY-MM-DD
+    endDate: string,                            // YYYY-MM-DD
+    currency: "AUD",
+    adAccountId: string                         // "" for tiktok (no account concept yet)
+  },
+  summary: {                                    // materialized (LandingPageMetricsDaily) — works for ANY range
+    membership: { spend: number, spendCents: number, revenue: number, revenueCents: number, roas: number, conversions: number, impressions: number, clicks: number },
+    "one-time": { spend: number, spendCents: number, revenue: number, revenueCents: number, roas: number, conversions: number, impressions: number, clicks: number },
+    unclassified: { spend: number, spendCents: number, revenue: number, revenueCents: number, roas: number, conversions: number, impressions: number, clicks: number },  // unknown:// destinations + pre-feature aggregate rows
+    total: { spend: number, spendCents: number, revenue: number, revenueCents: number, roas: number, conversions: number, impressions: number, clicks: number }
+  },
+  detail: {                                     // live join (MetaAdInsightsDaily × MetaAdDestination) — bounded by insights retention
+    complete: boolean,                          // availableSince !== null && availableSince <= startDate
+    availableSince: string | null,              // account's oldest retained MetaAdInsightsDaily date — an UNBOUNDED lookup independent of the requested range; null = no insights ever recorded for this account
+    buckets: {
+      membership: Array<CampaignNode>,
+      "one-time": Array<CampaignNode>,
+      unclassified: Array<CampaignNode>
+    }
+  }
+}
+// CampaignNode
+{
+  campaignId: string, campaignName?: string,
+  totals: { spend, spendCents, revenue, revenueCents, roas, conversions, impressions, clicks },
+  adsets: Array<{
+    adsetId: string, adsetName?: string,
+    totals: { spend, spendCents, revenue, revenueCents, roas, conversions, impressions, clicks },
+    ads: Array<{
+      adId: string, adName?: string,
+      adFormat: "video" | "static" | "carousel" | "unknown",
+      totals: { spend, spendCents, revenue, revenueCents, roas, conversions, impressions, clicks }
+    }>
+  }>
+}
+```
+`spend`/`revenue` are AUD dollars, `spendCents`/`revenueCents` the underlying cent values (may carry fractional cents — upstream Meta returns fractional values on some rows); `roas` is `revenue / spend`, `0` when spend is `0`. `platform: "tiktok"` short-circuits to `supported: false`, `reason: "awaiting-url-mapping"`, an all-zero `summary`, and an empty `detail` — TikTok has no ad→landing-URL destination resolver yet (`TikTokAdInsightsDaily` carries no landing-URL concept). `detail.availableSince` is NOT clipped to the requested range: it is the account's true retained-data floor, so a range with zero in-range ad delivery can still report `complete: true` (with empty `buckets`) when that floor predates the range start — absence of delivery is not the same as missing data. Campaign/adset/ad nodes within each bucket are sorted descending by `totals.spendCents`.
+
+**Inputs (query params)**:
+| Param | Required | Default | Notes |
+|---|---|---|---|
+| `startDate` | yes | — | `YYYY-MM-DD` |
+| `endDate` | yes | — | `YYYY-MM-DD` |
+| `platform` | no | `meta` | `meta \| tiktok` |
+
+**Data source**: `summary` sums materialized `LandingPageMetricsDaily` rows (permanent — survives the per-ad insights TTL) across the date range, splitting each row's `packagesFocus` membership/one-time subtotals (rows without a split fall into `unclassified`). `detail` is a live join of `MetaAdInsightsDaily` (per-ad daily delivery, ~60d prod TTL) × `MetaAdDestination` (ad → canonical URL → focus bucket), grouped campaign→adset→ad. Orchestrated by `PackagesFocusBreakdownService.getBreakdownFormatted` in `src/services/analytics/PackagesFocusBreakdownService.ts`.
+
+**Constraints**: `read` tier. `requiredPermission: facebookAds.view`. Rate limit 10/min. Read-only. No PII. Returns `500 misconfigured` when `platform=meta` (the default) and `FACEBOOK_AD_ACCOUNT_ID` is unset in the runtime environment — `platform=tiktok` never requires it. `detail` coverage is bounded by the `MetaAdInsightsDaily` retention window; use `complete`/`availableSince` to detect partial coverage rather than assuming the full requested range was scanned.
 
 ---
 
@@ -3982,6 +4052,12 @@ If an operator requests a capability not in this document and not in the current
 ---
 
 ## Last updated
+
+`2026-07-17` — **On-read freshness for spend-by-url reads (behavioral; no shape/count change).** `/v1/analytics/spend-by-url`, `/detail`, and `/v1/analytics/packages-focus` (and their admin twins) now self-refresh: a read touching the trailing 1–2 AEST days with materialized data >5 min old triggers a minimal Meta sync for just that window (insights page → missing-only destination resolve → per-day aggregate rebuild) behind a hard 12s time budget — stale-but-consistent data is served if Meta is slow, and failures never fail the read. Intraday figures therefore track Meta closely instead of lagging up to ~3h behind the sync cron (now the history/restatement backstop). Expect these calls to occasionally take a few seconds longer when they land on a stale window. Note the mental-model shift: these `read`-tier calls may now trigger WRITES to the analytics materialization itself (insights/destination upserts + aggregate rebuild — the same idempotent writes the sync cron performs); the gateway remains read-only with respect to business data, and no Norm-controllable input changes what gets written.
+
+`2026-07-17` — **Extended `/v1/analytics/spend-by-url` + `/detail` row shapes (additive; no count change).** List rows gained an OPTIONAL `packagesFocus` split (`{ membership, "one-time" }` of `{ spend, spendCents, revenue, revenueCents, conversions, roas }`) mirroring the materialized `LandingPageMetricsDaily` focus subtotals — absent when a row predates the split or resolves to `unknown://` (unclassified). Detail rows gained OPTIONAL `campaignId` / `campaignName` / `adsetId` / `adsetName` (latest-non-null across the ad's `MetaAdInsightsDaily` rows) and a REQUIRED `packagesFocus` enum (`"membership" | "one-time" | "unclassified"`, derived per ad from its `MetaAdDestination` primary URL; `"unclassified"` = destination unresolved). Both changes flow through the shared `SpendByUrlAggregationService.getSpendByUrl{List,Detail}Formatted` so admin + Norm stay in lockstep. Pure ad metrics — no PII.
+
+`2026-07-17` — **Wired `/v1/analytics/packages-focus` (90 → 91; 83 → 84 business).** `read` tier, `facebookAds.view`, 10/min. Membership vs one-time landing-URL split of Meta ad spend/ROAS: a materialized `LandingPageMetricsDaily` bucket summary (works for any range) plus a live `MetaAdInsightsDaily` × `MetaAdDestination` campaign→adset→ad breakdown per bucket, bounded by the insights collection's ~60d retention window. `platform=tiktok` returns an explicit `supported: false` payload (no ad→URL resolver yet). Wraps `PackagesFocusBreakdownService.getBreakdownFormatted` — the same service the admin `/api/admin/analytics/packages-focus` route uses, so figures match by construction. No PII (pure ad metrics). `detail.availableSince` is the account's TRUE retained-data floor — an unbounded oldest-date lookup independent of the requested range, not clipped to `[startDate, endDate]` — so `detail.complete` can be `true` with empty `buckets` when a range has zero in-range ad delivery but the floor still predates the range start; treat `complete`/`availableSince` as the partial-coverage signal, not an empty `buckets` array by itself. Returns `500 misconfigured` when `platform=meta` (the default) and `FACEBOOK_AD_ACCOUNT_ID` is unset.
 
 `2026-06-04` — **Wired `/v1/analytics/mer-by-draw` (89 → 90).** `read` tier, `overview.view`, 10/min. Marketing Efficiency Ratio (blended New Revenue ÷ Ad Spend) per major draw with a per-platform breakdown, starting from the 28 Apr 2026 attribution draw. Wraps the same `getMerByDraw` service as the admin Overview MER card. No PII (draw-level aggregates). Ad spend is Meta-only today — TikTok/Snapchat rows report `spendStatus: "awaiting"` until their spend integration lands.
 
