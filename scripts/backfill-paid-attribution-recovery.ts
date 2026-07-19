@@ -10,10 +10,11 @@
  * UP-CREDIT ONLY, exactly mirroring live:
  *   - `direct` → `meta`/`tiktok`/`snapchat`/`google` when the persisted UTM normalises to a
  *     tier-1 paid platform AND the touch is signup-anchored (`data.attributionSource === "signup"`,
- *     dated by `user.createdAt`) AND the purchase falls within the platform's click window
- *     (7d) of that anchor — decided by the SAME `reconcilePersistedAttribution` the webhook
- *     runs, evaluated at the ORIGINAL purchase time (`event.timestamp`), so this script can
- *     never drift from live.
+ *     dated by the captured AD-VISIT time `signupAttribution.visitedAt`, falling back to
+ *     `user.createdAt` for legacy records — `resolveSignupTouchAtMs`) AND the purchase falls
+ *     within the platform's click window (7d) of that anchor — decided by the SAME
+ *     `reconcilePersistedAttribution` the webhook runs, evaluated at the ORIGINAL purchase
+ *     time (`event.timestamp`), so this script can never drift from live.
  *   - Session-carried UTMs never flip (undatable — the client payload strips the cookie's
  *     `capturedAt`; renewals re-carry frozen metadata). Missing `attributionSource` is treated
  *     as session (conservative: unknown origin → no flip).
@@ -81,7 +82,7 @@ function money(dollars: number): string {
 async function main() {
   const { createAESTDateAsUTC } = await import("../src/utils/common/timezone");
   const { normalizeUtmToPlatform } = await import("../src/services/attribution/normalizePlatform");
-  const { reconcilePersistedAttribution } = await import(
+  const { reconcilePersistedAttribution, resolveSignupTouchAtMs } = await import(
     "../src/services/attribution/reconcilePersistedAttribution"
   );
   const { PLATFORM_PRIORITY } = await import("../src/services/attribution/platformPriority");
@@ -129,11 +130,17 @@ async function main() {
     return p != null && PAID.has(p);
   });
   const userIds = [...new Set(candidates.map((r) => String(r.userId)))];
-  const users = await User.find({ _id: { $in: userIds } }, { createdAt: 1 }).lean().exec();
-  const createdAtMap = new Map(
-    (users as Array<{ _id: unknown; createdAt?: Date }>).map((u) => [
+  const users = await User.find(
+    { _id: { $in: userIds } },
+    { createdAt: 1, "signupAttribution.visitedAt": 1 }
+  ).lean().exec();
+  // Anchor = captured ad-visit time (visitedAt), createdAt only as legacy fallback —
+  // same resolveSignupTouchAtMs the live webhook uses (account age buried returning
+  // members converting off retargeting ads).
+  const touchAtMap = new Map(
+    (users as Array<{ _id: unknown; createdAt?: Date; signupAttribution?: { visitedAt?: Date } }>).map((u) => [
       String(u._id),
-      u.createdAt ? new Date(u.createdAt).getTime() : null,
+      resolveSignupTouchAtMs(u.signupAttribution?.visitedAt, u.createdAt),
     ])
   );
 
@@ -170,9 +177,9 @@ async function main() {
     const eventMs = new Date(r.timestamp as Date).getTime();
 
     // LIVE dating rule: session-carried (or unknown-origin) UTMs are undatable → null →
-    // the strict paid recovery never fires. Signup-sourced → user.createdAt.
+    // the strict paid recovery never fires. Signup-sourced → ad-visit anchor.
     const touchAt =
-      data.attributionSource === "signup" ? (createdAtMap.get(String(r.userId)) ?? null) : null;
+      data.attributionSource === "signup" ? (touchAtMap.get(String(r.userId)) ?? null) : null;
 
     if (data.attributionSource !== "signup") { add(keptSessionUndatable, price); continue; }
     if (touchAt == null) { add(keptNoAnchor, price); continue; }
@@ -207,7 +214,7 @@ async function main() {
 
   // CSV audit
   if (!NO_CSV) {
-    const header = "paymentIntentId,from,to,ageDaysFromSignup,priceDollars,attributionSource,dryRun\n";
+    const header = "paymentIntentId,from,to,ageDaysFromAdVisitAnchor,priceDollars,attributionSource,dryRun\n";
     const body = toWrite
       .map((w) =>
         [w.pid, "direct/utm_only", w.to, w.ageDays == null ? "" : w.ageDays.toFixed(2), w.price.toFixed(2), w.attributionSource, DRY_RUN]
@@ -259,7 +266,7 @@ async function main() {
   console.log(line("TOTAL flipped ✅", totalFlipped));
   console.log(line("Kept direct — session/unknown (undatable)", keptSessionUndatable));
   console.log(line("Kept direct — signup out-of-window (stale)", keptOutOfWindow));
-  console.log(line("Kept direct — no user/createdAt anchor", keptNoAnchor));
+  console.log(line("Kept direct — no visitedAt/createdAt anchor", keptNoAnchor));
   console.log(line("Kept — real paid click (never touched)", keptPaidClick));
   console.log("=".repeat(78));
   console.log(
