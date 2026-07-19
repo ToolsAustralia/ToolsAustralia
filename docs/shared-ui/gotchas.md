@@ -72,6 +72,35 @@ The abandoned-checkout email CTA built by `buildCheckoutResumeUrl` lands the use
 
 If the `packageId` from the URL no longer resolves to a known package (e.g. the link is from a stale email referencing a discontinued tier), the hook silently no-ops after cleaning the URL — no error, no surfaced toast. In `NODE_ENV=development` a `console.warn` surfaces for debugging.
 
+## Rendering a `dynamic()` component while closed still downloads its chunk (2026-07)
+
+`next/dynamic(() => import(...), { ssr: false })` only defers **when** the chunk loads relative to SSR — it does NOT defer loading until the component is actually shown. A `<DynamicModal isOpen={false} .../>` mount still triggers the `import()` and downloads/evaluates the chunk on render, even though nothing is visible. This shipped Stripe.js + the entire ~7k-line `MembershipModal` payment chunk to every guest who merely landed on a page containing a `<MembershipModal>` mount point (homepage, `/membership`, draw pages, dashboard) — the 2026-07 perf audit finding.
+
+**Fix pattern:** gate the render itself, not just the import — see [`LazyMembershipModal`](../../src/components/modals/MembershipModal/LazyMembershipModal.tsx): a small wrapper that renders `null` until the first `isOpen === true`, then mounts the real `dynamic()` component and keeps it mounted for the rest of the session (so close/reopen animation and internal state behave like an always-mounted modal). Any heavy modal that's conditionally rendered from a page-level mount point (not user-triggered open) should use this pattern, not a bare `dynamic()` call. See [payment/frontend.md](../payment/frontend.md) for the full write-up and [payment/gotchas.md](../payment/gotchas.md) for the companion "Stripe boots on import" fix.
+
+## Viewport-correct `priority`/preload — a CSS-hidden `<img>` (even `loading="eager"`, not just `priority`) still downloads (2026-07-19, corrected 2026-07-19)
+
+A common pattern in this codebase used to be two separate `<Image>` elements for the same hero slot — one in an `lg:hidden` container, one in a `hidden lg:block` container. Marking **both** `priority`, or even swapping both to plain `loading="eager"`, still downloads BOTH images on every device: a CSS-hidden element (`display:none`) does **not** defer an `<img>`'s network fetch regardless of its `loading`/`priority` attribute — hiding a *second, fully-mounted* `<img>` element is never sufficient, no matter what loading mode it uses. (Original version of this entry recommended `loading="eager"` on both as a fix — that was wrong; corrected below. `<video preload="auto">` has the identical problem — see [promo/gotchas.md](../promo/gotchas.md) "CSS-hidden `<video preload>`".)
+
+**The actual fix is structural, not attribute-level: render ONE `<picture>` element with viewport-scoped `<source media=...>`s and a single fallback `<img>`, not two separate `<Image>`s toggled by CSS.** The browser's native `<picture>`/`<source>` matching means only the `<source>` whose `media` query matches ever gets fetched — there is no second element in the DOM competing for bandwidth. Reference implementation: `src/components/sections/Hero.tsx`'s background (also `src/app/promotions/page.tsx`'s featured-card hero):
+
+```tsx
+const mobileBg = getImageProps({ src: "...", alt: "...", fill: true, sizes: "100vw", loading: "eager" }).props;
+const desktopBg = getImageProps({ src: "...", alt: "...", fill: true, sizes: "100vw", loading: "eager" }).props;
+// ...
+<picture>
+  <source media="(min-width: 1024px)" srcSet={desktopBg.srcSet} sizes="100vw" />
+  <source media="(max-width: 1023px)" srcSet={mobileBg.srcSet} sizes="100vw" />
+  <img {...mobileBg} alt="..." className="object-cover" />
+</picture>
+```
+
+If the two viewport variants also need different container geometry (e.g. a different `aspect-[...]` per viewport, not just a different image source — see the `/promotions` featured card), put the RESPONSIVE variant on the SAME wrapper div via Tailwind breakpoint classes (`aspect-[1080/1164] lg:aspect-[2560/1044]`) rather than two conditionally-hidden divs — one div, one `<picture>`, one `<img>` in the DOM at a time.
+
+- Still add your OWN single, **media-scoped** preload `<link>` pair via the SAME `getImageProps` result (`<link rel="preload" as="image" media="(max-width: 1023px)" imageSrcSet={mobileProps.srcSet} imageSizes="100vw" />` + the `(min-width: 1024px)` desktop twin) so the browser starts the request before it even parses the `<picture>`. Raw-path `href` preloads don't work here — see [promo/gotchas.md](../promo/gotchas.md) "Raw-path image preloads never match `/_next/image` URLs."
+- **Components rendered at multiple call sites** (e.g. `PrizeShowcase`'s first-gallery-slide `priority`): if one call site already sits below another `priority` hero on the same page, add an opt-out prop (e.g. `priorityFirstSlide?: boolean`, default `true`) rather than hardcoding `priority` — two competing `priority` images on one page fight for the browser's preload attention, and the lower one never needed it anyway. (Correction 2026-07-20: PrizeShowcase's main slide DOES also render a mobile/desktop pair in places — the opt-out prop is still the right tool for the *priority* question, but don't cite this component as "no hidden pair"; check the actual markup per call site.)
+- **When only ONE of the two variants needs `priority`-style urgency and the other is a non-visual fallback** (e.g. `PromoHero`'s still-image fallback, which is itself gated behind `showVideo`/`viewport` JS state rather than pure CSS `hidden`), `loading="eager"` on the still (not `priority`) is correct — the JS gate, not CSS, is what prevents the *other* viewport's branch from mounting at all.
+
 ## Z-index conflicts
 
 Modals, banners, tooltips, dropdowns — many things stack. If something disappears behind another, check `z-index.ts` and the constant in use.

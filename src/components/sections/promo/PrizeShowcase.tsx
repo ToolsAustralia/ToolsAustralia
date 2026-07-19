@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useMemo, useState, Suspense, type CSSProperties } from "react";
 import Image from "next/image";
 import { motion } from "framer-motion";
 import { useRouter } from "next/navigation";
@@ -165,6 +165,11 @@ interface PrizeShowcaseProps {
   firstBannerVariant?: "first-prize-text" | "multiplier" | "none";
   /** When false, hides `GiveawayCountdownTimer` (e.g. `/my-account/draws`). */
   showCountdown?: boolean;
+  /** Whether the first gallery slide gets `priority` (eager + preload). Default `true`. Set
+   *  `false` when this instance renders below another `priority` hero on the same page (e.g. the
+   *  homepage, where `Hero` + `MembershipSection` already sit above it) — two competing
+   *  `priority` images fight for the browser's single preload slot. */
+  priorityFirstSlide?: boolean;
 }
 
 /** Temporary: hide branded “First prize” text image strip. Set to `false` to show again. */
@@ -364,12 +369,13 @@ const _getFormattedLabel = (label: string, slug?: string, isMobile?: boolean) =>
 };
 
 
-export default function PrizeShowcase({
+function PrizeShowcaseInner({
   slug: slugProp,
   toolsetMode = false,
   toolsetSlug,
   firstBannerVariant = "first-prize-text",
   showCountdown = true,
+  priorityFirstSlide = true,
 }: PrizeShowcaseProps = {}) {
   const effectiveFirstBannerVariant =
     TEMP_HIDE_FIRST_PRIZE_TEXT_BANNER && firstBannerVariant === "first-prize-text"
@@ -1025,7 +1031,7 @@ export default function PrizeShowcase({
                               scaleClass={scaleClass}
                               translateClass={translateClass}
                               objectPosition={objectPosition}
-                              priority={index === 0}
+                              priority={priorityFirstSlide && index === 0}
                               sizes="(max-width: 1024px) 100vw, 50vw"
                             />
                           </div>
@@ -1055,7 +1061,7 @@ export default function PrizeShowcase({
                     scaleClass={scaleClass}
                     translateClass={translateClass}
                     objectPosition={objectPosition}
-                    priority
+                    priority={priorityFirstSlide}
                     sizes="(max-width: 1024px) 100vw, 50vw"
                   />
                 </div>
@@ -1319,5 +1325,14 @@ export default function PrizeShowcase({
         title={activePrize.heroHeading}
       />
     </section>
+  );
+}
+
+// Suspense self-wrap: useSearchParams requires a boundary for prerendered (marketing-class) pages — docs/security-csp/rules.md R8.
+export default function PrizeShowcase(props: PrizeShowcaseProps = {}) {
+  return (
+    <Suspense fallback={null}>
+      <PrizeShowcaseInner {...props} />
+    </Suspense>
   );
 }

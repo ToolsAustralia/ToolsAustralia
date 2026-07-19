@@ -83,14 +83,33 @@ landing brand** (its art shipped; the `getLandingHeroImagePaths` `hikoki` null-g
 removed and `hikoki-*` added to `LANDING_HERO_MAP`). Notes:
 - **No dark variants** — the new design has none, so the old `-dark`/`-dark-mobile` webps were
   deleted and `resolveLandingHeroImage` falls back to the light file (existing behaviour).
-- **mp4-only, drawn tier falls back to base (2026-06-27)** — only `.mp4` ships (H.264 plays in
-  every supported browser), so the `webm` `<source>` was **removed** from `LandingHeroVideo` (no
-  more base-clip 404s). `getLandingHeroVideoPaths` now returns an **ordered mp4 list** (`srcs:
-  string[]`): on the `drawn-tonight` / `drawn-tomorrow` tier the drawn clip is first with the
-  **base clip appended as a fallback**, so a brand that ships no drawn art (**HiKOKI** has only
-  base clips) still animates via its base clip instead of dropping to the still — the browser
-  advances to the next `<source>` natively when the drawn one 404s. This mirrors the image
-  resolver, which already drops a missing drawn still back to the base image.
+- **WebM-first, MP4 fallback; drawn tier falls back to base (2026-07-19, supersedes the
+  2026-06-27 mp4-only note below)** — every clip now ships **both** a `.webm` (VP9, ~25-40% of
+  the `.mp4` size in practice) and its `.mp4` twin (H.264, universal fallback). `getLandingHeroVideoPaths`
+  returns an **ordered `LandingVideoSource[]` list** (`{ sources: Array<{ src, type: "video/webm"
+  | "video/mp4" }> }`, was `{ srcs: string[] }`): for each clip tier, WebM precedes its MP4 twin;
+  on the `drawn-tonight` / `drawn-tomorrow` tier the drawn pair is first with the **base pair
+  appended as a fallback**, so a brand that ships no drawn art (**HiKOKI** has only base clips)
+  still animates via its base clip instead of dropping to the still — the browser advances to the
+  next `<source>` natively both when a format is unsupported AND when a drawn-tier file 404s. This
+  mirrors the image resolver, which already drops a missing drawn still back to the base image.
+  `LandingHeroVideo` renders `sources.sources.map(s => <source key={s.src} src={s.src}
+  type={s.type} />)` — the browser plays the first `<source>` it both supports and can load, so
+  WebM-capable browsers (Chrome/Firefox/Edge) never fetch the MP4 at all. **Regenerate a missing
+  WebM twin** with `ffmpeg -i <clip>.mp4 -c:v libvpx-vp9 -crf 36 -b:v 0 -an -row-mt 1 -deadline
+  good -cpu-used 4 <clip>.webm` (matches `scripts/convert-drawn-tonight-tomorrow-videos.ts`'s own
+  WebM encode step, which additionally handles the numbered art-team export layout for the drawn
+  tiers specifically — see that script's header comment before reusing it for a new asset drop).
+  Regression test: `npm run test:landing-video-resolver`.
+
+  <details><summary>Historical: mp4-only note (2026-06-27, no longer accurate)</summary>
+
+  Only `.mp4` shipped (H.264 plays in every supported browser), so the `webm` `<source>` was
+  removed from `LandingHeroVideo` to avoid base-clip 404s. `getLandingHeroVideoPaths` returned an
+  ordered mp4 list (`srcs: string[]`). Superseded by the WebM-first entry above — do not follow
+  this note for new work.
+
+  </details>
 - Source PNG statics were converted to webp (format only); manifest regenerated via
   `build:landing-manifest` (32 entries = 30 combos + all-prizes).
 
