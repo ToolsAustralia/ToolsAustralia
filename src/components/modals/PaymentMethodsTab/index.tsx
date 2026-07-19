@@ -14,9 +14,15 @@
  * import path.
  *
  * STRIPE PRESERVATION INVARIANTS:
- * 1. `stripePromise` is a module-scope singleton (Stripe prohibits re-instantiation
- *    per render). The Elements provider lives inside the orchestrator, but the
- *    promise is created exactly once at module load.
+ * 1. `getStripePromise()` is called lazily inside the component (via
+ *    `useMemo(() => getStripePromise(), [])`), NOT at module scope — a
+ *    module-scope call would boot Stripe.js for every visitor who downloads
+ *    this chunk, even ones who never open the modal (2026-07 perf audit).
+ *    `getStripePromise()` itself still returns a module-level cached
+ *    singleton (`src/lib/stripe-client.ts`) — Stripe prohibits
+ *    re-instantiation per render — so `stripePromise` identity is stable
+ *    across renders even though the call site is now inside the component.
+ *    The Elements provider lives inside the orchestrator.
  * 2. The Elements `key` (`setupIntentClientSecret || "no-secret"`) is preserved —
  *    changing the key forces a fresh mount when the SetupIntent secret changes.
  * 3. The embedded `<ConfirmationModal>` portal for delete-confirm flow stays in
@@ -46,9 +52,6 @@ import AddPaymentCTA from "./AddPaymentCTA";
 import AddPaymentForm from "./AddPaymentForm";
 import SettingsRedesignPayment from "./SettingsRedesignPayment";
 
-// Module-scope Stripe singleton — Stripe prohibits re-instantiation per render.
-const stripePromise = getStripePromise();
-
 interface PaymentMethodsTabProps {
   user: {
     _id: string;
@@ -73,6 +76,9 @@ interface PaymentMethodsTabProps {
 type DeleteFlowState = { paymentMethodId: string; kind: PaymentMethodDeleteFlowKind };
 
 const PaymentMethodsTab: React.FC<PaymentMethodsTabProps> = ({ user, settingsRedesign = false }) => {
+  // Lazy Stripe boot — see "STRIPE PRESERVATION INVARIANTS" #1 above. getStripePromise()
+  // itself returns a module-level cached singleton, so this identity is stable across renders.
+  const stripePromise = useMemo(() => getStripePromise(), []);
   const { showToast } = useToast();
   const {
     paymentMethods,

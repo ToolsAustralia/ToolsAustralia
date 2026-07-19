@@ -14,9 +14,15 @@
  * import path.
  *
  * STRIPE PRESERVATION INVARIANTS:
- * 1. `stripePromise` is a module-scope singleton (Stripe prohibits
- *    re-instantiation per render). The Elements provider lives in this
- *    orchestrator; the promise is created exactly once at module load.
+ * 1. `getStripePromise()` is called lazily inside the component (via
+ *    `useMemo(() => getStripePromise(), [])`), NOT at module scope — a
+ *    module-scope call would boot Stripe.js for every visitor who downloads
+ *    this chunk, even ones who never open the modal (2026-07 perf audit).
+ *    `getStripePromise()` itself still returns a module-level cached
+ *    singleton (`src/lib/stripe-client.ts`) — Stripe prohibits
+ *    re-instantiation per render — so `stripePromise` identity is stable
+ *    across renders even though the call site is now inside the component.
+ *    The Elements provider lives in this orchestrator.
  * 2. The `<Elements>` `key` value
  *    `elements-${activeIntentType}-${packageType}-${secretPrefix}-${amount}-${packageName}-${theme}`
  *    is preserved verbatim — changing the key forces a fresh mount when the
@@ -45,9 +51,6 @@ import SavedCardPreview from "./SavedCardPreview";
 import ChangeMethodRow from "./ChangeMethodRow";
 import AddNewCardRow from "./AddNewCardRow";
 import CardFormSection from "./CardFormSection";
-
-// Module-scope Stripe singleton — Stripe prohibits re-instantiation per render.
-const stripePromise = getStripePromise();
 
 interface PaymentMethodSelectorProps {
   onPaymentMethodSelect: (paymentMethod: SavedPaymentMethod | null) => void;
@@ -122,6 +125,9 @@ const PaymentMethodSelector: React.FC<PaymentMethodSelectorProps> = ({
   onPaymentMethodTypeChange,
   onElementReady,
 }) => {
+  // Lazy Stripe boot — see "STRIPE PRESERVATION INVARIANTS" #1 above. getStripePromise()
+  // itself returns a module-level cached singleton, so this identity is stable across renders.
+  const stripePromise = useMemo(() => getStripePromise(), []);
   // Determine which clientSecret to use (PaymentIntent takes priority for wallet payments)
   const activeClientSecret = paymentIntentClientSecret || setupIntentClientSecret;
   // Stripe Elements requires a client_secret string; API may return { client_secret, type }

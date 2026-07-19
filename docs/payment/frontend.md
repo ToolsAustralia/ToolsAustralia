@@ -11,6 +11,18 @@
 
 The `<Elements>` provider (Stripe.js root) is loaded by the consumers — typically via `useElementsOptions` or a context provider in the parent route group. The browser SDK loader is at [src/lib/stripe-client.ts](../../src/lib/stripe-client.ts) (in the [billing-stripe](../billing-stripe/) domain).
 
+### `LazyMembershipModal` — the ONLY sanctioned way to mount `MembershipModal`
+
+[`LazyMembershipModal.tsx`](../../src/components/modals/MembershipModal/LazyMembershipModal.tsx) wraps `MembershipModal` (`./index`) in a `next/dynamic({ ssr: false })` load PLUS a render-gate: it renders `null` until the first `isOpen === true`, then keeps the real modal mounted for the rest of the session (so close animation / internal step state behave like the always-mounted original). This exists because `dynamic()` alone is not enough — see [shared-ui/gotchas.md](../shared-ui/gotchas.md) "rendering a `dynamic()` component while closed still downloads its chunk." Without the render-gate, every guest who lands on a page with a `<MembershipModal>` mount point downloaded the ~7k-line payment chunk (Stripe/embla/zoom libs included) whether or not they ever opened it — the 2026-07 perf audit finding that motivated this wrapper.
+
+**Every call site imports `LazyMembershipModal`, never `MembershipModal/index` directly** (the one exception is the dev-only `src/components/dev/ModalsGalleryClient.tsx`, which intentionally always renders the modal gallery). Import it as:
+
+```tsx
+import MembershipModal from "@/components/modals/MembershipModal/LazyMembershipModal";
+```
+
+— keeping the local name `MembershipModal` so JSX at call sites is unchanged. `MembershipModalProps` is exported from `MembershipModal/index.tsx` and re-used via `import type` in the wrapper (erased at build, does not pull the heavy chunk).
+
 ## Hooks
 
 | Hook | Returns | Source |

@@ -9,8 +9,16 @@
  * modification because the folder/index.tsx resolves as the same import path.
  *
  * STRIPE PRESERVATION INVARIANTS (checked by code review):
- * 1. stripePromise is a module-scope singleton (imported from PaymentForm.tsx
- *    which declares it at module scope). Stripe prohibits re-instantiation.
+ * 1. `getStripePromise()` is called lazily inside this component (via
+ *    `useMemo(() => getStripePromise(), [])`), NOT at module scope — a
+ *    module-scope call would boot Stripe.js for every visitor who downloads
+ *    this chunk, even ones who never open the modal (2026-07 perf audit).
+ *    `getStripePromise()` itself still returns a module-level cached
+ *    singleton (`src/lib/stripe-client.ts`) — Stripe prohibits
+ *    re-instantiation per render — so `stripePromise` identity is stable
+ *    across renders even though the call site is now inside the component.
+ *    (Previously imported the module-scope singleton from PaymentForm.tsx —
+ *    that file no longer computes or exports one; see its own invariant #1.)
  * 2. <Elements key={clientSecret || "no-secret"}> re-mount key is kept for
  *    Stripe correctness — changing the key forces a fresh mount when the
  *    clientSecret changes.
@@ -25,6 +33,7 @@ import { useThemeStore } from "@/stores/useThemeStore";
 import { buildMembershipStripeAppearance } from "@/utils/payment/stripe/membership-stripe-appearance";
 import { Lock } from "lucide-react";
 import { resolveBillingAddress } from "@/lib/payment/defaultBillingAddress";
+import { getStripePromise } from "@/lib/stripe-client";
 import PaymentProcessingScreen from "@/components/loading/PaymentProcessingScreen";
 import { getPackageById } from "@/data/membershipPackages";
 import { getPartnerCatalogAccessPercentForPlanId } from "@/utils/partner-discounts/partner-catalog-visibility";
@@ -37,7 +46,6 @@ import {
   PaymentFormWithoutElements,
   PaymentFormWithElements,
   IMMEDIATE_UPGRADE_NO_PI,
-  stripePromise,
 } from "./PaymentForm";
 import { type SavedPaymentMethod } from "@/hooks/useSavedPaymentMethods";
 
@@ -93,6 +101,9 @@ const StripePaymentModal: React.FC<StripePaymentModalProps> = ({
   const { data: session } = useSession();
   const stripeBillingAddress = resolveBillingAddress(session?.user);
   const activePaymentIntentRef = useRef<string | null>(null);
+  // Lazy Stripe boot — see "STRIPE PRESERVATION INVARIANTS" #1 above. getStripePromise()
+  // itself returns a module-level cached singleton, so this identity is stable across renders.
+  const stripePromise = useMemo(() => getStripePromise(), []);
 
   // Match the Stripe Element to the app theme + 16px inputs via the shared
   // appearance builder (same pattern as PaymentMethodSelector). Avoids a
