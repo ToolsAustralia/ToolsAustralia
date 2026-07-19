@@ -1,5 +1,13 @@
 # Cart-Shop-Products — Gotchas
 
+## CartContext value is memoized — keep new constituents stable (2026-07-19)
+
+`CartContext`'s provider value is wrapped in `useMemo` (it previously re-rendered every cart consumer on
+each provider render). Every constituent is a `useState` value or a `useCallback`-wrapped function; if you
+add a new field to the context value, keep it referentially stable and add it to the memo's deps array —
+an inline object/function there silently defeats the memo. Same incident/pattern as
+[client-state/gotchas.md](../client-state/gotchas.md) "Unmemoized context values fan out".
+
 ## Cart auth is the NextAuth session cookie, not a bearer token (2026-06-19)
 
 The cart/orders/mini-draws routes used to read `Authorization: Bearer <token>` and resolve the user from it. They now authorize via `requireAuthenticatedUserDoc()` (NextAuth `getServerSession`) — the browser sends the session cookie automatically, so **client cart calls send no `Authorization` header**. Concrete consequences:
@@ -64,3 +72,7 @@ If you ever refactor the sync loop, preserve this invariant: an op in `pendingOp
 ## Klaviyo event keys are snake_case
 
 The cart and product callsites — `CartContext.trackKlaviyoRemoveFromCart`, `ProductCard.trackKlaviyoAddToCart`, `ProductInteractions.trackKlaviyoAddToCart`, `ProductViewTracking.trackKlaviyoViewContent` — pass `product_id` / `product_name` / `num_items`, not the camelCase equivalents. The shape is enforced by `KlaviyoEventParams` in [src/hooks/useKlaviyoTracking.ts](../../src/hooks/useKlaviyoTracking.ts). Mixing camelCase keys creates duplicate shadow properties on Klaviyo profiles and silently breaks any flow or segment built against the snake_case variant. See [docs/tracking/KLAVIYO_INTEGRATION.md](../tracking/KLAVIYO_INTEGRATION.md) for the full property-naming contract.
+
+## Shop brand pages: generateStaticParams removed (2026-07-19)
+
+`/shop/brand/[brand]` had `generateStaticParams` + `force-dynamic` together — the params won and the pages prerendered, which is a breakage under the nonce-CSP route class (prerendered HTML has no nonces; the runtime CSP header expects them). generateStaticParams was removed; params resolve per-request. Nonce-class pages must never prerender — check the `next build` route table.

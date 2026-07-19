@@ -23,3 +23,12 @@ Use `requestDeduplication.ts` helpers when multiple components might request the
 ## R6. Hydration safety
 
 Server-rendered components must produce identical markup to client first-paint. State that differs (theme, locale, time-based) must be bootstrapped pre-React.
+
+## R7. Global providers must not poll — polling is page-scoped via options
+
+A hook mounted in a root provider (`UserProvider`, `CartProvider`, anything in `providers.tsx`) runs on
+**every page**, so an unconditional `refetchInterval` there polls the whole site. Polling must be
+**opt-in per call site**: expose it as an option (`useMyAccountData(userId, { poll })`) defaulting to
+off, and let the provider gate it on `usePathname()` (UserProvider polls the my-account payload only on
+`/my-account*`). Other callers sharing the query key still receive the polled data without their own
+interval. See [gotchas.md](./gotchas.md) for the incident that motivated this.
