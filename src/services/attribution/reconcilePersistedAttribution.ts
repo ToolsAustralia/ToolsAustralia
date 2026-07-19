@@ -35,14 +35,38 @@
 //     initial-checkout metadata — dating these `now` would fabricate freshness (and
 //     flip every renewal). Null keeps the lenient owned recovery working while the
 //     strict paid recovery stays off.
-//   - touch carried from signup → `persistedTouchAt = user.createdAt` (the one persisted
-//     anchor we have — paid recovery fires only within the window of SIGNUP).
+//   - touch carried from signup → `persistedTouchAt = resolveSignupTouchAtMs(...)`:
+//     `signupAttribution.visitedAt` (the ad-landing capture time) with `user.createdAt`
+//     as the legacy fallback. Paid recovery therefore fires only within the platform
+//     window of the captured AD VISIT — not of account creation, which buried
+//     returning members converting off retargeting ads (fixed 2026-07-19).
 // Pass `now` to enable the window; omit it for legacy non-windowed resolution.
 import type { ConvertingPlatform, AttributionConfidence } from "@/types/attribution";
 import { normalizeUtmToPlatform } from "./normalizePlatform";
 import { isOwnedChannel, windowDaysFor } from "./platformPriority";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Resolve the epoch-ms anchor for a SIGNUP-persisted touch: the **ad-landing capture
+ * time** (`signupAttribution.visitedAt` — stamped when the promo visit that carried
+ * the UTM was recorded), falling back to account creation only for legacy records
+ * without it. Account age is the WRONG anchor for returning members: a 196-day-old
+ * account that clicked a retargeting ad 62 seconds before buying is a FRESH paid
+ * touch, not a stale one (2026-07-19 prod audit — BOF retargeting conversions were
+ * being buried as `direct`). Registration updates `signupAttribution` in place for
+ * existing plain accounts, so `visitedAt` tracks the latest captured ad visit while
+ * `createdAt` stays frozen at first signup.
+ */
+export function resolveSignupTouchAtMs(
+  signupVisitedAt: Date | string | number | null | undefined,
+  userCreatedAt: Date | string | number | null | undefined
+): number | null {
+  const visited = signupVisitedAt != null ? new Date(signupVisitedAt).getTime() : NaN;
+  if (Number.isFinite(visited)) return visited;
+  const created = userCreatedAt != null ? new Date(userCreatedAt).getTime() : NaN;
+  return Number.isFinite(created) ? created : null;
+}
 
 /**
  * Is a persisted owned-channel touch recent enough to count, per the channel's window?

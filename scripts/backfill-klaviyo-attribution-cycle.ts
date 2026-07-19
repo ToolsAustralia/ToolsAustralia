@@ -73,7 +73,7 @@ function money(dollars: number): string {
 async function main() {
   const { createAESTDateAsUTC } = await import("../src/utils/common/timezone");
   const { normalizeUtmToPlatform } = await import("../src/services/attribution/normalizePlatform");
-  const { reconcilePersistedAttribution } = await import("../src/services/attribution/reconcilePersistedAttribution");
+  const { reconcilePersistedAttribution, resolveSignupTouchAtMs } = await import("../src/services/attribution/reconcilePersistedAttribution");
   const connectDB = (await import("../src/lib/mongodb")).default;
   const PaymentEvent = (await import("../src/models/PaymentEvent")).default;
   const User = (await import("../src/models/User")).default;
@@ -108,11 +108,17 @@ async function main() {
     return last != null && KLAVIYO.has(last);
   });
   const userIds = [...new Set(candidates.map((r) => String(r.userId)))];
-  const users = await User.find({ _id: { $in: userIds } }, { createdAt: 1 }).lean().exec();
-  const createdAtMap = new Map(
-    (users as Array<{ _id: unknown; createdAt?: Date }>).map((u) => [
+  const users = await User.find(
+    { _id: { $in: userIds } },
+    { createdAt: 1, "signupAttribution.visitedAt": 1 }
+  ).lean().exec();
+  // Anchor = captured ad/link-visit time (visitedAt), createdAt as legacy fallback —
+  // resolveSignupTouchAtMs, the same anchor the live webhook uses (2026-07-19: account
+  // age buried returning members whose signupAttribution was refreshed in place).
+  const touchAtMap = new Map(
+    (users as Array<{ _id: unknown; createdAt?: Date; signupAttribution?: { visitedAt?: Date } }>).map((u) => [
       String(u._id),
-      u.createdAt ? new Date(u.createdAt).getTime() : null,
+      resolveSignupTouchAtMs(u.signupAttribution?.visitedAt, u.createdAt),
     ])
   );
 
@@ -136,7 +142,7 @@ async function main() {
     if (conf === "click") { add(keptPaidClick, price); continue; }
 
     const eventMs = new Date(r.timestamp as Date).getTime();
-    const touchAt = data.attributionSource === "session" ? eventMs : (createdAtMap.get(String(r.userId)) ?? null);
+    const touchAt = data.attributionSource === "session" ? eventMs : (touchAtMap.get(String(r.userId)) ?? null);
     const ageDays = touchAt == null ? null : (eventMs - touchAt) / 86_400_000;
 
     // Same function the live path uses. edgePlatform="direct" models "no positive click";
