@@ -1,5 +1,8 @@
 import assert from "node:assert/strict";
-import { reconcilePersistedAttribution } from "../reconcilePersistedAttribution";
+import {
+  reconcilePersistedAttribution,
+  resolveSignupTouchAtMs,
+} from "../reconcilePersistedAttribution";
 
 // The leak we are fixing: edge-only resolution returned `direct` (no paid click, no
 // owned-channel COOKIE), but the user's Klaviyo touch is in the persisted signup UTM.
@@ -309,6 +312,42 @@ assert.deepEqual(
     now: NOW,
   }),
   { platform: "klaviyo_email", confidence: "utm_only" }
+);
+
+// ---- resolveSignupTouchAtMs (the signup-touch anchor) ----
+// visitedAt (the captured ad-visit time) wins over createdAt: a 196-day-old account
+// that clicked a retargeting ad seconds before buying is a FRESH touch (2026-07-19 audit).
+const VISITED = new Date("2026-07-19T08:34:22.399Z");
+const CREATED = new Date("2026-01-04T06:37:17.211Z");
+assert.equal(resolveSignupTouchAtMs(VISITED, CREATED), VISITED.getTime());
+
+// Legacy record without visitedAt → falls back to createdAt.
+assert.equal(resolveSignupTouchAtMs(null, CREATED), CREATED.getTime());
+assert.equal(resolveSignupTouchAtMs(undefined, CREATED), CREATED.getTime());
+
+// Neither available → null (undatable; the strict paid recovery then never fires).
+assert.equal(resolveSignupTouchAtMs(null, null), null);
+assert.equal(resolveSignupTouchAtMs(undefined, undefined), null);
+
+// String/number date forms are accepted (lean docs / JSON payloads).
+assert.equal(resolveSignupTouchAtMs("2026-07-19T08:34:22.399Z", null), VISITED.getTime());
+assert.equal(resolveSignupTouchAtMs(VISITED.getTime(), null), VISITED.getTime());
+
+// Invalid visitedAt → falls back to createdAt rather than NaN.
+assert.equal(resolveSignupTouchAtMs("not-a-date", CREATED), CREATED.getTime());
+
+// End-to-end: the Chris Agullo shape — old account, fresh retargeting ad visit,
+// purchase 62s after the visit → recovered as meta once anchored on visitedAt.
+assert.deepEqual(
+  reconcilePersistedAttribution({
+    edgePlatform: "direct",
+    edgeConfidence: "utm_only",
+    persistedUtmSource: "facebook.com",
+    persistedUtmMedium: "cpc",
+    persistedTouchAt: resolveSignupTouchAtMs(VISITED, CREATED),
+    now: VISITED.getTime() + 62_000,
+  }),
+  { platform: "meta", confidence: "utm_only" }
 );
 
 console.log("reconcilePersistedAttribution: all assertions passed");

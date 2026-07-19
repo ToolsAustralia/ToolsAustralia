@@ -45,15 +45,19 @@ and stamp three top-level fields onto the `BenefitsGranted` `PaymentEvent`:
     is undatable — the client payload prefers the 90-day first-touch `_ta_attr` cookie with
     `capturedAt` stripped, and renewals re-carry frozen subscription metadata — so it passes
     `persistedTouchAt = null` (owned channels still credit via the lenient null rule; nothing else
-    changes for Klaviyo). A UTM carried from **signup** is windowed against the user's signup time
-    (`user.createdAt`). A stale signup-Klaviyo touch with no recent click therefore resolves to
-    `direct`, matching the windowed historical reconcile in
+    changes for Klaviyo). A UTM carried from **signup** is windowed against the **captured
+    ad-visit time** (`resolveSignupTouchAtMs(signupAttribution.visitedAt, user.createdAt)` —
+    `visitedAt` is stamped at the promo landing; account creation is only the legacy fallback,
+    since registration refreshes `signupAttribution` in place for returning accounts). A stale
+    signup-Klaviyo touch with no recent visit therefore resolves to `direct`, matching the
+    windowed historical reconcile in
     [`scripts/backfill-klaviyo-attribution-cycle.ts`](../../scripts/backfill-klaviyo-attribution-cycle.ts).
     **Paid sources ARE now recovered, strictly (2026-07-19)** — only when affirmatively within the
     platform's 7-day click window of a datable anchor, which in practice means signup-sourced UTMs
-    (purchase within 7d of a paid-UTM signup, e.g. the same-session Meta-ad signup→purchase whose
-    cookie was missing at PI-creation time). Undatable (session-carried) or stale paid UTMs stay
-    `direct`; renewals can never flip. See docs/tracking/backend.md §"Persisted-UTM reconciliation".
+    (purchase within 7d of the captured paid **ad visit** — covering both same-session
+    signup→purchase and returning members converting off retargeting ads). Undatable
+    (session-carried) or stale paid UTMs stay `direct`; renewals can never flip. See
+    docs/tracking/backend.md §"Persisted-UTM reconciliation".
   - **No edge decision at all** (legacy / force-charge paths) → fall back to any recognised persisted
     UTM, else `direct`; a present-but-unknown source becomes `"other"`, an absent source becomes
     `"direct"`. Confidence in the recovered/fallback cases is `"utm_only"`.
