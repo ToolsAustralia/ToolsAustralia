@@ -26,6 +26,7 @@ import type {
 } from "@/components/modals/CancellationFlowModal/types";
 import Step1Reason from "@/components/modals/CancellationFlowModal/Step1Reason";
 import Step2Offer from "@/components/modals/CancellationFlowModal/Step2Offer";
+import StepStakes from "@/components/modals/CancellationFlowModal/StepStakes";
 import Step4Confirm from "@/components/modals/CancellationFlowModal/Step4Confirm";
 import StepSaveSuccess from "@/components/modals/CancellationFlowModal/StepSaveSuccess";
 import { useCancellationFlow } from "@/components/modals/CancellationFlowModal/useCancellationFlow";
@@ -75,6 +76,7 @@ function baseState(over: Partial<FlowState> = {}): FlowState {
     offersShown: ["discount_50_2mo", "bonus_entries_100"],
     offerCursor: 0,
     pastDue: false,
+    streakMonths: 0,
     saveSuccess: false,
     acceptedOffer: null,
     acceptResult: null,
@@ -208,7 +210,7 @@ function Step1Panel({ width }: { width: number }) {
     <Panel label="Step 1 — Reason (default)" width={width}>
       <Step1Reason
         flowHook={flowHook}
-        startMutation={mockMutation({ eventId: "evt_demo", offersShown: ["discount_50_2mo", "bonus_entries_100"], pastDue: false })}
+        startMutation={mockMutation({ eventId: "evt_demo", offersShown: ["discount_50_2mo", "bonus_entries_100"], pastDue: false, streakMonths: 0 })}
         onClose={() => {}}
       />
     </Panel>
@@ -278,6 +280,47 @@ export default function CancellationFlowHarnessClient() {
 
           {/* ── Step 1 ────────────────────────────────────────────── */}
           <Step1Panel width={viewport} />
+
+          {/* ── Stakes — Membership Streak stakes screen (spec §7b M3) ── */}
+          <Panel label="Stakes — LOSS framing (streak 7, next +400 at 8th)" width={viewport}>
+            <StepStakes
+              state={baseState({ step: "stakes", streakMonths: 7 })}
+              stakesMutation={mockMutation({ ok: true })}
+              onKeep={noop}
+              onContinue={noop}
+              onClose={noop}
+            />
+          </Panel>
+          <Panel label="Stakes — FORWARD framing (streak 0, ladder tease)" width={viewport}>
+            <StepStakes
+              state={baseState({ step: "stakes", streakMonths: 0 })}
+              stakesMutation={mockMutation({ ok: true })}
+              onKeep={noop}
+              onContinue={noop}
+              onClose={noop}
+            />
+          </Panel>
+          <Panel label="Stakes — FORWARD framing (streak 1 — ONE renewal from +100)" width={viewport}>
+            <StepStakes
+              state={baseState({ step: "stakes", streakMonths: 1 })}
+              stakesMutation={mockMutation({ ok: true })}
+              onKeep={noop}
+              onContinue={noop}
+              onClose={noop}
+            />
+          </Panel>
+          <Panel label="Step 2 — pause_30d with a 7-renewal streak (freeze reframe row)" width={viewport}>
+            <Step2Offer
+              state={baseState({ offersShown: ["pause_30d"], offerCursor: 0, streakMonths: 7 })}
+              outcomeMutation={mockMutation({ ok: true })}
+              acceptOfferMutation={mockMutation({ ok: true, resumesAt: "2026-08-14T00:00:00.000Z" })}
+              onDecline={noop}
+              onAcceptedOffer={noop}
+              tierDowngradeAvailable
+              entrySnapshot={SAMPLE_ENTRY_SNAPSHOT}
+              onClose={noop}
+            />
+          </Panel>
 
           {/* ── Step 2 — each of the 5 offer types (WITH real entrySnapshot) ── */}
           {ALL_OFFERS.map((offer) => (

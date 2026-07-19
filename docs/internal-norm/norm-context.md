@@ -2137,7 +2137,9 @@ Cancelled draws are excluded — only `queued | active | frozen | completed` dra
       "mini-draw": number,
       referral: number,
       "bonus-entry-promo": number,
-      "cancellation-upsell": number            // retention-offer entries
+      "cancellation-upsell": number,           // retention-offer entries
+      "promo-link": number,                    // promo-link bonus entries
+      streak: number                           // Membership Streak auto-grants (rungs at renewals 2/4/6/8/10/12, annual repeat)
     },
     firstAddedDate: ISO8601,
     lastUpdatedDate: ISO8601
@@ -3199,8 +3201,8 @@ PII not exposed: `email`, `phone`, `bankDetails`, `password` on the affiliate, a
     id: string,                                  // MilestoneReward _id
     name: string,                                // admin label, 3–120 chars
     displayLabel?: string,                       // optional short label shown to users (≤60 chars)
-    milestoneType: "spend-amount" | "entries-gained" | "loyalty-days",
-    threshold: number,                           // integer; meaning depends on milestoneType (AUD for spend-amount, count for entries-gained, days for loyalty-days)
+    milestoneType: "spend-amount" | "entries-gained" | "loyalty-days" | "streak-months",
+    threshold: number,                           // integer; meaning depends on milestoneType (AUD for spend-amount, count for entries-gained, days for loyalty-days, consecutive paid RENEWALS for streak-months)
     entriesAmount: number,                       // integer >=1; entries granted when the milestone fires
     code: string,                                // uppercase A-Z0-9 with optional hyphens, 6–32 chars, unique per row
     isActive: boolean,                           // admin on/off toggle
@@ -3208,16 +3210,19 @@ PII not exposed: `email`, `phone`, `bankDetails`, `password` on the affiliate, a
     startsAt: ISO8601 | null,                    // null if the reward has no scheduled start window
     endsAt: ISO8601 | null,                      // null when neverExpires=true or when no end window is set
     isRecurring: boolean,                        // if true, the reward fires once per full threshold cycle
+    recurrencePeriod: number | null,             // 12 on streak rungs (each rung repeats every 12 renewals after its threshold — the ladder cycles annually); null = legacy whole-multiple recurrence
+    autoGrant: boolean,                          // Membership Streak rungs: issuance is granted straight into the Major Draw (no manual claim)
     createdBy: string | null,                    // opaque User._id of the admin who created the row, or null
     createdAt: ISO8601,
     updatedAt: ISO8601,
     performance: {
-      issuedCount: number,                       // total MilestoneIssuance rows for this reward
+      issuedCount: number,                       // MilestoneIssuance rows for this reward, EXCLUDING "backfilled" markers
       redeemedCount: number,                     // status === "redeemed"
       activeCount: number,                       // status === "active"
       expiredCount: number,                      // status === "expired"
       cancelledCount: number,                    // status === "cancelled"
-      totalEntriesGranted: number,               // sum of MilestoneIssuance.entriesAmount across all rows for this reward
+      backfilledCount: number,                   // pre-launch streak rungs marked achieved with ZERO entries granted
+      totalEntriesGranted: number,               // sum of entriesAmount across REDEEMED issuances only (actually-granted entries)
       redemptionRate: number                     // whole percent (0–100), rounded; redeemedCount / issuedCount; 0 if issuedCount === 0
     }
   }>,
@@ -3228,7 +3233,7 @@ PII not exposed: `createdBy` is the opaque admin User._id only — name/email of
 
 **Inputs**: none.
 
-**Data source**: `MilestoneReward` collection (full table, sorted `createdAt` desc), joined with a `MilestoneIssuance` `$group` aggregate keyed by `milestoneRewardId`. Orchestrated by `MilestoneService.listRewardsWithPerformance` in `src/services/milestones/MilestoneService.ts` — the shared helper `MilestoneService.aggregatePerformanceByRewardIds` is the same code the admin route (`GET /api/admin/milestone-rewards`) calls for its issuance roll-up, so the numbers match by construction.
+**Data source**: `MilestoneReward` collection (full table, sorted `createdAt` desc), joined with a `MilestoneIssuance` `$group` aggregate keyed by `milestoneRewardId`. Orchestrated by `MilestoneService.listRewardsWithPerformance` in `src/services/milestones/MilestoneService.ts` — the shared helper `MilestoneService.aggregatePerformanceByRewardIds` is the same code the admin route (`GET /api/admin/milestone-rewards`) calls for its issuance roll-up, so the numbers match by construction. The route projects `recurrencePeriod` / `autoGrant` verbatim from the service row (smoke-verified against the runtime `responseSchema` 2026-07-15).
 
 **Constraints**: `read` tier. `requiredPermission: promos.view`. Read-only. The underlying admin route (`GET /api/admin/milestone-rewards`) currently authenticates via `requireAdminUser` (legacy admin check) rather than `requirePermission` — a separate migration concern; Norm's own gate uses `promos.view` as the explicit grant.
 
@@ -3686,7 +3691,8 @@ PII not exposed: the `changedBy` row on the underlying document includes `firstN
       endDate: ISO8601 | null,
       status: string | null,                     // active | trialing | past_due | incomplete | cancelled
       autoRenew: boolean | null,
-      lastMonthAccumulatedEntries: number | null  // membership carry-forward entries that roll into the next draw on renewal; preserved through cancellation for resubscribe
+      lastMonthAccumulatedEntries: number | null, // membership carry-forward entries that roll into the next draw on renewal; preserved through cancellation for resubscribe
+      streakMonths: number                       // Membership Streak — consecutive paid renewals (join = month 0); milestone renewals (2/4/6/8/10/12, repeating every 12) auto-grant free entries into the Major Draw
     } | null,
     totalSpent: number,                          // AUD dollars; refund-net lifetime spend
     majorDrawEntries: number,                    // entries in the currently-active major draw only
@@ -3814,11 +3820,13 @@ PII not exposed: same uniform user-domain PII discipline — `email`, `lastName`
   createdAt: ISO8601,
   updatedAt: ISO8601,
   lastLogin: ISO8601 | null,
-  subscription: { packageId, packageName, isActive, startDate, endDate, cancelledAt, status, autoRenew, lastMonthAccumulatedEntries, nextRenewalEntries, renewalLandsInCurrentDraw } | null,
+  subscription: { packageId, packageName, isActive, startDate, endDate, cancelledAt, status, autoRenew, lastMonthAccumulatedEntries, nextRenewalEntries, renewalLandsInCurrentDraw, streakMonths, streakGeneration } | null,
     // cancelledAt = ISO when the member scheduled cancellation (still active until endDate); null if not cancelling. cancelledAt set + autoRenew:false ⇒ "scheduled to cancel".
     // lastMonthAccumulatedEntries = membership carry-forward entries that roll into the next draw on renewal; preserved through cancellation for resubscribe.
     // nextRenewalEntries = entries the member gets on their NEXT successful renewal (carry-forward + monthly base; NEVER promo-multiplied). For past_due/unpaid it is what settling the failed renewal grants. null when no renewal is coming (autoRenew off / cancelled / not recovering). Use for win-back / renewal-value replies.
     // renewalLandsInCurrentDraw = true iff those renewal entries land in the CURRENTLY-ACTIVE draw (renewal before its entry freeze). false ⇒ the renewal falls after the current draw closes, so the grant goes to a FUTURE draw and won't boost the member's current-draw entry count. Always false for past_due/cancelled/guest.
+    // streakMonths = Membership Streak: consecutive paid renewals (join = month 0). Milestone renewals (2/4/6/8/10/12, repeating every 12) auto-grant free entries into the Major Draw. A fixed payment issue / pause / ≤30-day rejoin does NOT break it; a full lapse resets it.
+    // streakGeneration = bumps on each out-of-grace resubscribe reset; milestone rungs are re-earnable per generation.
   partnerAccessRing: {                           // partner-catalogue access the member currently sees on their /my-account hero — non-PII
     state: "active" | "onetime" | "pastdue" | "none",  // active member / one-time-pack buyer / past-due / no access
     percent: number,                             // 0–100 partner-catalogue access %; 0 when locked (membership access pauses while past_due)

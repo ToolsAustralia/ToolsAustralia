@@ -146,7 +146,24 @@ function main() {
   // ids 40-68 (referrals/affiliate, account+auth, promo/offer, upgrade/downgrade/anchor,
   // past-due lifecycle incl. id54, advanced partner, mini-draws/prizes). id24 was extended
   // (reactivation timing), not added, so it does not change the count.
-  assert.strictEqual(entries.length, 68, `Expected 68 FAQ entries, got ${entries.length}`);
+  // Bumped 68 → 71 (2026-07-15): ids 69-71 — the Membership Streak batch (what it is
+  // + ladder, continuity rules, where to see it).
+  assert.strictEqual(entries.length, 71, `Expected 71 FAQ entries, got ${entries.length}`);
+
+  // 8c. Membership Streak batch (ids 69-71) must exist, use free-entry framing, and
+  // never frame the streak as something you BUY (rule 11: kept by KEEPING membership).
+  const streakFaq = entries.find((e) => e.id === "69");
+  assert.ok(streakFaq !== undefined, "FAQ entry id=69 (Membership Streak) must exist");
+  assert.ok(
+    streakFaq!.answer.includes("free entries") && streakFaq!.answer.includes("renewal"),
+    "Streak FAQ (id 69) must explain free entries land on milestone renewals"
+  );
+  const streakContinuity = entries.find((e) => e.id === "70");
+  assert.ok(streakContinuity !== undefined, "FAQ entry id=70 (streak continuity) must exist");
+  assert.ok(
+    streakContinuity!.answer.includes("30 days"),
+    "Streak continuity FAQ (id 70) must state the 30-day rejoin grace"
+  );
 
   // 8b. Active-member-but-0-entries (id 39) must exist and explain the renewal-timing
   // mechanic (entries are credited on the renewal date; a fresh draw starts empty), and

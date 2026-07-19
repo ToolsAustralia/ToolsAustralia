@@ -9,7 +9,7 @@ import type { DashboardAccountState } from "@/utils/dashboard/dashboard-state-th
 
 interface EntryWalletProps {
   acct: DashboardAccountState;
-  entries: { membership: number; oneTime: number };
+  entries: { membership: number; oneTime: number; streak?: number };
   tierHex?: string | null;
   drawName: string;
   drawDateIso: string | null;
@@ -91,8 +91,12 @@ export default function EntryWallet({
     isPastDue && (pastDueRenewalEntries ?? 0) > 0 && pastDueRenewalCost != null;
 
   const membership = isCompleted ? 0 : entries.membership;
-  const total = membership + entries.oneTime;
+  // Streak = Membership Streak milestone free entries (their own gold bucket —
+  // never folded into one-time; matches the medallion identity on the streak card).
+  const streak = isCompleted ? 0 : (entries.streak ?? 0);
+  const total = membership + entries.oneTime + streak;
   const memberPct = total > 0 ? (membership / total) * 100 : 0;
+  const streakPct = total > 0 ? (streak / total) * 100 : 0;
 
   const target = drawDateIso ? new Date(drawDateIso).getTime() : NaN;
   const ms = Number.isFinite(target) ? Math.max(0, target - now) : 0;
@@ -138,8 +142,11 @@ export default function EntryWallet({
       <div className="mt-4 flex h-[9px] overflow-hidden rounded-full border border-token" style={{ maxWidth: stack ? undefined : undefined }}>
         <span className="h-full" style={{ width: `${memberPct}%`, background: (isPastDue || isOneTime) ? "#8a93a1" : tier }} />
         <span className="h-full flex-1 bg-emerald-500" />
+        {streak > 0 && (
+          <span className="h-full" style={{ width: `${streakPct}%`, background: "linear-gradient(90deg,#fbbf24,#d97706)" }} />
+        )}
       </div>
-      <div className="mt-3 flex items-center justify-between gap-3 text-[12px]">
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-3 text-[12px]">
         <span className="inline-flex items-center gap-2 text-muted-token">
           <span className="h-2.5 w-2.5 rounded-[3px]" style={{ background: (isPastDue || isOneTime) ? "#8a93a1" : tier }} />
           Membership{" "}
@@ -152,6 +159,12 @@ export default function EntryWallet({
           <span className="h-2.5 w-2.5 rounded-[3px] bg-emerald-500" />
           One-time <b className="num text-primary-token dark:text-white">{entries.oneTime.toLocaleString()}</b>
         </span>
+        {streak > 0 && (
+          <span className="inline-flex items-center gap-2 text-muted-token">
+            <span className="h-2.5 w-2.5 rounded-[3px]" style={{ background: "linear-gradient(90deg,#fbbf24,#d97706)" }} />
+            Streak <b className="num text-[#b45309] dark:text-amber-400">{streak.toLocaleString()}</b>
+          </span>
+        )}
       </div>
       {/* Renewal + past-due "free entries" notes — a gold/amber stat chip that mirrors the red
           countdown CDBox recipe (rounded-xl · gradient · outer shadow · inset ring · number over a

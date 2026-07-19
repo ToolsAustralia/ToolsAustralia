@@ -1,7 +1,7 @@
 import mongoose, { Document, Schema } from "mongoose";
 import type { MilestoneType } from "@/models/MilestoneReward";
 
-export type MilestoneIssuanceStatus = "active" | "redeemed" | "expired" | "cancelled" | "revoked";
+export type MilestoneIssuanceStatus = "active" | "redeemed" | "expired" | "cancelled" | "revoked" | "backfilled";
 
 export interface IMilestoneIssuance extends Document {
   milestoneRewardId: mongoose.Types.ObjectId;
@@ -9,6 +9,9 @@ export interface IMilestoneIssuance extends Document {
   milestoneType: MilestoneType;
   thresholdReached: number;
   achievementCycle: number;
+  /** Membership Streak generation this issuance belongs to (User.subscription.streakGeneration
+   *  at issue time; 1 for non-streak milestone types). Scopes re-earning after a streak reset. */
+  streakGeneration: number;
   entriesAmount: number;
   status: MilestoneIssuanceStatus;
   issuedAt: Date;
@@ -36,7 +39,7 @@ const MilestoneIssuanceSchema = new Schema<IMilestoneIssuance>(
     },
     milestoneType: {
       type: String,
-      enum: ["spend-amount", "entries-gained", "loyalty-days"],
+      enum: ["spend-amount", "entries-gained", "loyalty-days", "streak-months"],
       required: [true, "milestoneType is required"],
       index: true,
     },
@@ -51,6 +54,12 @@ const MilestoneIssuanceSchema = new Schema<IMilestoneIssuance>(
       min: 1,
       default: 1,
     },
+    streakGeneration: {
+      type: Number,
+      required: true,
+      min: 1,
+      default: 1,
+    },
     entriesAmount: {
       type: Number,
       required: [true, "entriesAmount is required"],
@@ -58,7 +67,9 @@ const MilestoneIssuanceSchema = new Schema<IMilestoneIssuance>(
     },
     status: {
       type: String,
-      enum: ["active", "redeemed", "expired", "cancelled", "revoked"],
+      // "backfilled" = achieved before the streak feature launched — visible as
+      // completed in the UI, blocks re-issuance, granted ZERO entries (spec §3).
+      enum: ["active", "redeemed", "expired", "cancelled", "revoked", "backfilled"],
       default: "active",
       index: true,
     },
@@ -86,7 +97,14 @@ const MilestoneIssuanceSchema = new Schema<IMilestoneIssuance>(
   }
 );
 
-MilestoneIssuanceSchema.index({ milestoneRewardId: 1, userId: 1, achievementCycle: 1 }, { unique: true });
+// Uniqueness is per streak generation so rungs are re-earnable after a full
+// lapse → resubscribe reset (generation bump). The legacy 3-field unique index
+// (milestoneRewardId, userId, achievementCycle) must be DROPPED in the DB when
+// this ships — scripts/seed-streak-milestone-rewards.ts step 0 does it.
+MilestoneIssuanceSchema.index(
+  { milestoneRewardId: 1, userId: 1, streakGeneration: 1, achievementCycle: 1 },
+  { unique: true }
+);
 MilestoneIssuanceSchema.index({ userId: 1, status: 1, issuedAt: -1 });
 
 const MilestoneIssuance =

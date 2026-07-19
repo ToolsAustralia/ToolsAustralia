@@ -14,7 +14,7 @@ export interface RedeemableWalletItem {
   code?: string;
   campaignCode?: string;
   entriesAmount: number;
-  status: "active" | "redeemed" | "expired" | "cancelled" | "revoked";
+  status: "active" | "redeemed" | "expired" | "cancelled" | "revoked" | "backfilled";
   issuedAt: Date;
   redeemedAt?: Date;
   expiresAt: Date;
@@ -52,7 +52,11 @@ export class RedeemablesWalletService {
 
     const [redeemableIssuances, milestoneIssuances, purchaseUser] = await Promise.all([
       RedeemableIssuance.find({ userId }).sort({ issuedAt: -1, expiresAt: 1 }).lean(),
-      MilestoneIssuance.find({ userId }).sort({ issuedAt: -1 }).lean(),
+      // "backfilled" = pre-launch streak recognition markers (zero entries) —
+      // they belong on the P3 milestone ladder, never in the claim wallet.
+      MilestoneIssuance.find({ userId, status: { $ne: "backfilled" } })
+        .sort({ issuedAt: -1 })
+        .lean(),
       // Needed to gate purchase-required coupons (mirror of RedemptionService).
       User.findById(userId).select("subscription oneTimePackages").lean(),
     ]);

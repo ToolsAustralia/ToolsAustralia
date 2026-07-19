@@ -35,6 +35,13 @@ const UserSubscriptionSchema = z.object({
     .describe(
       "Membership accumulated entries carried forward into the next draw on renewal; preserved through cancellation for resubscribe. Distinct from top-level accumulatedEntries (lifetime total).",
     ),
+  streakMonths: z
+    .number()
+    .int()
+    .nonnegative()
+    .describe(
+      "Membership Streak — consecutive paid renewals (join = month 0). Milestone renewals (2/4/6/8/10/12, repeating every 12) auto-grant free entries into the Major Draw.",
+    ),
 });
 
 const UserListRowSchema = z.object({
@@ -224,6 +231,20 @@ export const NormUsersGetSchema = z.object({
         .nullable()
         .describe(
           "Entries the member will receive on their NEXT successful renewal (carry-forward + monthly base; renewals are never promo-multiplied). For past_due/unpaid members it is what settling the failed renewal grants. null when no renewal is coming (autoRenew off, cancelled, or not recovering). Use this for win-back / renewal-value replies.",
+        ),
+      streakMonths: z
+        .number()
+        .int()
+        .nonnegative()
+        .describe(
+          "Membership Streak — consecutive paid renewals (join = month 0). Milestone renewals (2/4/6/8/10/12, repeating every 12) auto-grant free entries into the Major Draw.",
+        ),
+      streakGeneration: z
+        .number()
+        .int()
+        .positive()
+        .describe(
+          "Streak generation — bumps on each out-of-grace resubscribe reset; milestone rungs are re-earnable per generation.",
         ),
       renewalLandsInCurrentDraw: z
         .boolean()

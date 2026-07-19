@@ -14,7 +14,7 @@
 // projected — only the aggregate performance block per reward.
 import { z } from "zod";
 
-const MILESTONE_TYPES = ["spend-amount", "entries-gained", "loyalty-days"] as const;
+const MILESTONE_TYPES = ["spend-amount", "entries-gained", "loyalty-days", "streak-months"] as const;
 
 const MilestoneRewardPerformanceSchema = z.object({
   issuedCount: z.number().int().nonnegative(),
@@ -22,6 +22,8 @@ const MilestoneRewardPerformanceSchema = z.object({
   activeCount: z.number().int().nonnegative(),
   expiredCount: z.number().int().nonnegative(),
   cancelledCount: z.number().int().nonnegative(),
+  // Pre-launch streak rungs marked achieved with zero entries (excluded from issuedCount).
+  backfilledCount: z.number().int().nonnegative(),
   totalEntriesGranted: z.number().int().nonnegative(),
   redemptionRate: z.number().int().min(0).max(100), // whole-percent (0-100), rounded server-side
 });
@@ -39,6 +41,8 @@ const MilestoneRewardRowSchema = z.object({
   startsAt: z.string().nullable(),                // ISO 8601 or null
   endsAt: z.string().nullable(),                  // ISO 8601 or null
   isRecurring: z.boolean(),
+  recurrencePeriod: z.number().int().positive().nullable(), // 12 for streak rungs (ladder repeats annually); null = legacy whole-multiple recurrence
+  autoGrant: z.boolean(),                         // streak rungs grant straight into the draw (no claim)
   createdBy: z.string().nullable(),               // opaque User._id string or null
   createdAt: z.string(),                          // ISO 8601
   updatedAt: z.string(),                          // ISO 8601

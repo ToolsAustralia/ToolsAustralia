@@ -47,6 +47,8 @@ import EntryWallet from "@/components/sections/dashboard/EntryWallet";
 import DashboardAlertRibbon from "@/components/sections/dashboard/DashboardAlertRibbon";
 import DashboardPromoBanner from "@/components/sections/dashboard/DashboardPromoBanner";
 import LoyaltyStreak from "@/components/sections/dashboard/LoyaltyStreak";
+import StreakCelebrationToast from "@/components/sections/dashboard/StreakCelebrationToast";
+import { useStreakCelebration } from "@/hooks/useStreakCelebration";
 import { partnerDiscountSsoEnabled } from "@/config/featureFlags";
 import { isDashboardFeatureOn } from "@/config/dashboardFeatures";
 import QuickActionsGrid from "@/components/sections/dashboard/QuickActionsGrid";
@@ -63,6 +65,18 @@ export default function MyAccountPage() {
   const { isLoading: currentMajorDrawLoading } = useCurrentMajorDraw();
 
   const dash = useDashboardState();
+  // Membership Streak celebration — fires once per crossed rung, on the first
+  // dashboard visit after the reward landed (toast + in-card banner, never a modal).
+  const streakCelebration = useStreakCelebration(
+    session?.user?.id,
+    dash.streakMonths,
+    isDashboardFeatureOn("loyaltyStreak") && dash.acct === "active"
+  );
+  // Celebration copy must name the RECEIVING draw: during the freeze window (and
+  // once a draw completes) grants route to the NEXT queued draw, not the one the
+  // dashboard is displaying — naming the displayed draw would be false there.
+  const streakReceivingDrawName =
+    dash.drawStatus === "frozen" || dash.drawStatus === "completed" ? "next Major Draw" : dash.drawName;
   const openSheet = useDashboardSheetStore((s) => s.openSheet);
   const searchParams = useSearchParams();
   const partnerSso = usePartnerDiscountSso();
@@ -307,9 +321,22 @@ export default function MyAccountPage() {
         onCompleteProfile={() => requestModal("user-setup", true)}
       />
 
+      {streakCelebration.justHit && (
+        <StreakCelebrationToast
+          entries={streakCelebration.justHit.entries}
+          level={streakCelebration.justHit.level}
+          drawName={streakReceivingDrawName}
+        />
+      )}
+
       {dash.acct === "none" ? (
         <div className="px-[18px] pt-4 sm:px-6 lg:px-[26px] lg:pt-[26px]">
-          <DashboardGuestPanel drawName={dash.drawName} onBecomeMember={onBecomeMember} onBuyPackage={onBuyPackage} />
+          <DashboardGuestPanel
+            drawName={dash.drawName}
+            onBecomeMember={onBecomeMember}
+            onBuyPackage={onBuyPackage}
+            streakTeaser={isDashboardFeatureOn("loyaltyStreak") ? <LoyaltyStreak months={null} acct="none" onSeeMemberships={onBecomeMember} /> : null}
+          />
         </div>
       ) : (
         <div className="px-[18px] sm:px-6 lg:px-[26px] lg:pt-[26px]">
@@ -319,7 +346,7 @@ export default function MyAccountPage() {
               <DashboardAlertRibbon acct={dash.acct} />
               <EntryWallet
                 acct={dash.acct}
-                entries={{ membership: dash.entries.membership, oneTime: dash.entries.oneTime }}
+                entries={{ membership: dash.entries.membership, oneTime: dash.entries.oneTime, streak: dash.entries.streak }}
                 tierHex={dash.tierHex}
                 drawName={dash.drawName}
                 drawDateIso={dash.drawDateIso}
@@ -336,7 +363,23 @@ export default function MyAccountPage() {
 
             {/* aside column */}
             <div className="mt-4 space-y-4 lg:mt-0 lg:space-y-5">
-              {dash.acct === "onetime" ? (
+              {isDashboardFeatureOn("loyaltyStreak") ? (
+                // One-time holders get the "Members only" teaser variant (Build Kit §05);
+                // members get the live medallion card. The teaser IS the become-a-member sell.
+                <LoyaltyStreak
+                  months={dash.streakMonths}
+                  acct={dash.acct}
+                  tierKey={dash.subscriptionTierKey}
+                  renewalDateIso={dash.renewalDateIso}
+                  justHit={
+                    streakCelebration.justHit
+                      ? { entries: streakCelebration.justHit.entries, drawName: streakReceivingDrawName }
+                      : null
+                  }
+                  onUpdateCard={onResolvePayment}
+                  onSeeMemberships={onBecomeMember}
+                />
+              ) : dash.acct === "onetime" ? (
                 <section className="rounded-[1.1rem] border border-token bg-surface p-5 shadow-sm">
                   <h3 className="font-['Poppins'] text-base font-extrabold text-primary-token dark:text-white">Keep your partner discounts</h3>
                   <p className="mt-1 text-sm text-muted-token">Membership keeps partner discounts on your account for good, adds more free entries every month, and unlocks member-only bonus offers.</p>
@@ -348,8 +391,6 @@ export default function MyAccountPage() {
                     Become a member
                   </button>
                 </section>
-              ) : isDashboardFeatureOn("loyaltyStreak") ? (
-                <LoyaltyStreak months={dash.streakMonths} acct={dash.acct} />
               ) : null}
               <QuickActionsGrid
                 multiplier={dash.multiplier}

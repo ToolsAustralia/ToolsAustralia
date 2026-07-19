@@ -27,6 +27,8 @@ export interface StartCancellationFlowResponse {
   eventId: string;
   offersShown: OfferType[];
   pastDue: boolean;
+  /** Membership Streak at flow start (server-derived) — drives the stakes screen. */
+  streakMonths: number;
 }
 
 export interface OutcomeCancellationFlowData {
@@ -82,6 +84,23 @@ export const useOutcomeCancellationFlow = () => {
         eventId,
         outcome,
         ...(offerAccepted ? { offerAccepted } : {}),
+      });
+    },
+  });
+};
+
+/**
+ * Records the member's exit from the streak-stakes screen (spec §7b M3):
+ * "kept" (kept membership) or "continued" (proceeded to the offer waterfall).
+ * Fire-and-forget analytics — callers must never block UI on it.
+ */
+export const useStakesActionCancellationFlow = () => {
+  return useMutation({
+    mutationFn: async ({ eventId, stakesAction }: { eventId: string; stakesAction: "kept" | "continued" }) => {
+      return apiPost<{ ok: boolean }>("/api/subscription/cancellation-flow", {
+        action: "stakes",
+        eventId,
+        stakesAction,
       });
     },
   });

@@ -362,6 +362,32 @@ async function reverseMembershipLedger(
   grants: IPaymentGrantLedger | null,
   paymentIntentId: string
 ): Promise<void> {
+  // Membership Streak: a fully refunded COUNTED renewal must give back its +1.
+  // The atomic status flip (succeeded/recovered → refunded, pre-image gate) makes
+  // the decrement idempotent across replayed refund events AND removes the cycle
+  // from the backfill walker's count (it only reads succeeded/recovered), so
+  // repair runs agree with the live counter. Create invoices never have a
+  // subscription_cycle row, so joining payments are naturally excluded.
+  try {
+    const MembershipRenewalCycle = (await import("@/models/MembershipRenewalCycle")).default;
+    const countedCycle = await MembershipRenewalCycle.findOneAndUpdate(
+      {
+        userId: user._id,
+        paymentIntentId,
+        billingReason: "subscription_cycle",
+        status: { $in: ["succeeded", "recovered"] },
+      },
+      { $set: { status: "refunded" } },
+      { new: false }
+    );
+    if (countedCycle) {
+      await User.updateOne({ _id: user._id }, { $inc: { "subscription.streakMonths": -1 } });
+      await User.updateOne({ _id: user._id }, { $max: { "subscription.streakMonths": 0 } });
+    }
+  } catch (e) {
+    console.error("Refund: streak decrement failed (cycle row untouched or partially reversed):", e);
+  }
+
   if (user.stripeSubscriptionId) {
     try {
       const subscription = await stripe.subscriptions.retrieve(user.stripeSubscriptionId);

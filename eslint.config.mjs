@@ -17,7 +17,8 @@ const compat = new FlatCompat({
 const eslintConfig = [
   ...compat.extends("next/core-web-vitals", "next/typescript"),
   {
-    ignores: ["node_modules/**", ".next/**", "out/**", "build/**", "next-env.d.ts", "src/generated/**"],
+    // claudeDesign/ = design-handoff reference material (concept HTML/JS), never shipped or imported.
+    ignores: ["node_modules/**", ".next/**", "out/**", "build/**", "next-env.d.ts", "src/generated/**", "claudeDesign/**"],
   },
   {
     plugins: {

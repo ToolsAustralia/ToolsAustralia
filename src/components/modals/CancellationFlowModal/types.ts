@@ -65,14 +65,17 @@ export interface CancellationEntrySnapshot {
 
 export interface FlowState {
   /**
-   * 1 = reason capture, 2 = OFFER phase (cursor-driven over `offersShown` —
-   * renders `offersShown[offerCursor]`; declining advances `offerCursor`),
+   * 1 = reason capture, "stakes" = the Membership Streak stakes screen (spec
+   * §7b M3 — shown after start for non-past-due members while the streak
+   * feature is live; ALWAYS shown regardless of streak depth, content adapts),
+   * 2 = OFFER phase (cursor-driven over `offersShown` — renders
+   * `offersShown[offerCursor]`; declining advances `offerCursor`),
    * 4 = confirm. `3` is retained in the union for backwards type-compat but is
    * never produced by the step-machine (the old hardcoded "step 3 = +100" was
    * the multi-rung-skipping bug). The bonus_entries_100 rung is now just
    * another offer rendered during the step-2 OFFER phase via Step2Offer.
    */
-  step: 1 | 2 | 3 | 4;
+  step: 1 | "stakes" | 2 | 3 | 4;
   reason: CancellationReason | null;
   reasonText: string;
   eventId: string | null;
@@ -80,6 +83,8 @@ export interface FlowState {
   /** Index into `offersShown` for the current OFFER-phase rung (step 2). */
   offerCursor: number;
   pastDue: boolean;
+  /** Membership Streak at flow start (server-derived via the start response). */
+  streakMonths: number;
   /** Terminal flag: an offer was accepted — renderer shows StepSaveSuccess. */
   saveSuccess: boolean;
   /** Which offer was accepted (drives the success-screen copy). */

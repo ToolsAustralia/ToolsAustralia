@@ -173,6 +173,8 @@ export interface AdminUserListItem {
     startDate: string;
     endDate?: string;
     status: string;
+    /** Membership Streak — consecutive paid renewals (join = month 0). */
+    streakMonths?: number;
   } | null;
   totalSpent: number;
   majorDrawEntries: number;
@@ -230,6 +232,10 @@ export interface AdminUserDetail {
      * "+N on renewal" preview must NOT be shown against the current draw's count.
      */
     renewalLandsInCurrentDraw?: boolean;
+    /** Membership Streak — consecutive paid renewals (join = month 0). */
+    streakMonths?: number;
+    /** Streak generation — bumps on each out-of-grace resubscribe reset (scopes milestone re-earning). */
+    streakGeneration?: number;
   } | null;
 
   // Package Information
@@ -444,6 +450,8 @@ export interface UserFilters {
   states?: string[];
   /** Active major draw with entries: yes | no */
   inActiveMajorDraw?: "yes" | "no" | "";
+  /** Membership Streak: "none" = streak 0/absent; a number string ("2","6","12") = at least N consecutive paid renewals. */
+  streak?: string;
   sortBy?: "createdAt" | "email" | "lastLogin" | "totalSpent" | "majorDrawEntries" | "miniDrawCount";
   sortOrder?: "asc" | "desc";
 }

@@ -10,21 +10,33 @@
 // signal the backfill uses, so the two agree and the recurring backfill is no longer
 // needed going forward.
 //
-// Scope is deliberately limited to OWNED channels (Klaviyo email/SMS): any in-window
-// paid click OR cookie-visible owned last-touch would already have won the recency race
-// at the edge, so an edge result of `direct` genuinely means "no in-window signal the
-// cookies could see" — we only recover a persisted owned-channel touch (invisible to the
-// cookie-only edge), never resurrect a stale paid UTM. When the edge already resolved a
-// positive platform (paid click OR a recency-winning Klaviyo last-touch), we trust it.
+// Recovery covers two persisted-signal classes, with different strictness:
+//   - OWNED channels (Klaviyo email/SMS): recovered leniently — unknown recency still
+//     counts (signup-era Klaviyo data predates touch timestamps).
+//   - PAID platforms (meta/tiktok/snapchat/google): recovered STRICTLY — only when the
+//     touch is affirmatively inside the platform's click window (both timestamps known).
+//     The edge is cookie-only, so a fresh paid touch is invisible to it whenever the
+//     durable cookie is missing at PI-creation time (in-app-browser signup → external
+//     browser checkout, Safari ITP, cookie blockers). Measured 2026-07-19: 272
+//     direct-bucketed purchases in 30 days carried a paid utm_source (~$9.0k); ~1/3 were
+//     within the 7d window — including a same-session signup→purchase off a Meta
+//     retargeting ad. A stale or undatable paid UTM still stays `direct` — we never
+//     resurrect a paid touch we cannot date.
 //
 // RECENCY WINDOW: a persisted owned-channel touch is only credited when it is recent
 // enough to plausibly have driven the purchase — the same per-channel window the cookie
 // resolver enforces (`windowDaysFor`, 5d for Klaviyo). This is what keeps the data
 // truthful: a user who signed up via a Klaviyo click months ago, then returns with no
 // fresh click and buys, is `direct` — not Klaviyo. The window is checked against the
-// touch's capture time:
-//   - touch captured at THIS checkout (session)  → pass `persistedTouchAt = now`
-//   - touch carried from signup                  → pass `persistedTouchAt = user.createdAt`
+// best persisted anchor for the touch time:
+//   - session-carried UTM (client payload / subscription metadata) → `persistedTouchAt = null`.
+//     UNDATABLE by construction: the client's payload prefers the 90-day first-touch
+//     `_ta_attr` cookie with `capturedAt` STRIPPED, and renewals re-carry the frozen
+//     initial-checkout metadata — dating these `now` would fabricate freshness (and
+//     flip every renewal). Null keeps the lenient owned recovery working while the
+//     strict paid recovery stays off.
+//   - touch carried from signup → `persistedTouchAt = user.createdAt` (the one persisted
+//     anchor we have — paid recovery fires only within the window of SIGNUP).
 // Pass `now` to enable the window; omit it for legacy non-windowed resolution.
 import type { ConvertingPlatform, AttributionConfidence } from "@/types/attribution";
 import { normalizeUtmToPlatform } from "./normalizePlatform";
@@ -51,6 +63,25 @@ function isWithinOwnedWindow(
   return age >= 0 && age <= windowDays * DAY_MS;
 }
 
+/**
+ * Is a persisted PAID-platform touch AFFIRMATIVELY within the platform's click window?
+ * Strict by design — the opposite polarity of `isWithinOwnedWindow` on missing data:
+ * unknown `now`, unknown `touchAt`, or an unmodeled platform (no window row, e.g.
+ * "other") does NOT count. This keeps the original "never resurrect a stale paid UTM"
+ * stance intact — a paid touch is only credited when we can prove it is fresh.
+ */
+function isAffirmativelyWithinPaidWindow(
+  platform: ConvertingPlatform,
+  touchAt: number | null | undefined,
+  now: number | null | undefined
+): boolean {
+  if (now == null || touchAt == null) return false;
+  const windowDays = windowDaysFor(platform);
+  if (windowDays == null) return false;
+  const age = now - touchAt;
+  return age >= 0 && age <= windowDays * DAY_MS;
+}
+
 export function reconcilePersistedAttribution(input: {
   /** Platform from the edge-resolved decision (Stripe metadata `attr_platform`). Null when the route stamped none. */
   edgePlatform: ConvertingPlatform | null;
@@ -61,9 +92,10 @@ export function reconcilePersistedAttribution(input: {
   /** utm_medium persisted on the PaymentEvent (merged session → signup). */
   persistedUtmMedium?: string;
   /**
-   * Epoch ms of when the persisted owned-channel touch happened (session → `now`,
-   * signup → `user.createdAt`). Used with `now` to enforce the channel recency window.
-   * Null → recency unknown (credited rather than buried).
+   * Epoch ms anchor for when the persisted touch happened (signup → `user.createdAt`;
+   * session-carried UTMs are undatable → `null`, see header). Used with `now` to
+   * enforce the recency windows. Null → recency unknown: owned channels still credit
+   * (lenient), paid platforms never do (strict).
    */
   persistedTouchAt?: number | null;
   /** Epoch ms of the conversion. When provided, the owned-channel recency window is enforced. */
@@ -87,6 +119,19 @@ export function reconcilePersistedAttribution(input: {
   // resolver structurally could not see — but only when it is recent enough to count.
   if (isOwnedChannel(persisted) && isWithinOwnedWindow(persisted!, input.persistedTouchAt, input.now)) {
     return { platform: persisted as ConvertingPlatform, confidence: "utm_only" };
+  }
+
+  // Edge === "direct" + a persisted PAID-platform UTM: the durable cookie can be missing
+  // at PI-creation time even for a fresh paid touch (in-app-browser signup → external
+  // browser checkout, ITP, blockers) — the edge then stamps `direct` while the persisted
+  // signup/session UTM knows better. Recover it ONLY when affirmatively in-window;
+  // stale or undatable paid UTMs stay `direct` (see header note).
+  if (
+    persisted &&
+    !isOwnedChannel(persisted) &&
+    isAffirmativelyWithinPaidWindow(persisted, input.persistedTouchAt, input.now)
+  ) {
+    return { platform: persisted, confidence: "utm_only" };
   }
 
   return { platform: "direct", confidence: edgeConfidence ?? "utm_only" };

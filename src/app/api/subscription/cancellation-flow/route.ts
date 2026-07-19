@@ -3,11 +3,19 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { z } from "zod";
 import mongoose from "mongoose";
-import { CANCELLATION_REASONS, type CancellationReason, OFFER_TYPES, type OfferType } from "@/models/CancellationFlowEvent";
+import {
+  CANCELLATION_REASONS,
+  type CancellationReason,
+  OFFER_TYPES,
+  type OfferType,
+  STAKES_ACTIONS,
+  type StakesAction,
+} from "@/models/CancellationFlowEvent";
 import {
   planFlow,
   startFlow,
   recordOutcome,
+  recordStakesAction,
   getUserCancellationContext,
   acceptOffer,
   AcceptOfferError,
@@ -32,8 +40,14 @@ const AcceptOfferSchema = z.object({
   offer: z.enum([...OFFER_TYPES] as [string, ...string[]]),
 });
 
+const StakesSchema = z.object({
+  action: z.literal("stakes"),
+  eventId: z.string().refine((v) => mongoose.Types.ObjectId.isValid(v), "invalid eventId"),
+  stakesAction: z.enum([...STAKES_ACTIONS] as [string, ...string[]]),
+});
+
 const Body = z
-  .discriminatedUnion("action", [StartSchema, OutcomeSchema, AcceptOfferSchema])
+  .discriminatedUnion("action", [StartSchema, OutcomeSchema, AcceptOfferSchema, StakesSchema])
   .superRefine((data, ctx) => {
     // "other" must carry free-text — admin needs to know what "other" means.
     if (
@@ -52,9 +66,12 @@ const Body = z
 /**
  * POST /api/subscription/cancellation-flow
  *
- * Two actions:
+ * Four actions:
  *   { action: "start", reason, reasonText? }
- *     → { eventId, offersShown, pastDue }
+ *     → { eventId, offersShown, pastDue, streakMonths }
+ *
+ *   { action: "stakes", eventId, stakesAction: "kept"|"continued" }
+ *     → { ok: true }             (streak-stakes screen exit — spec §7b M3)
  *
  *   { action: "outcome", eventId, outcome: "saved"|"cancelled", offerAccepted? }
  *     → { ok: true }
@@ -97,8 +114,19 @@ export async function POST(req: NextRequest) {
         reasonText: parsed.data.reasonText,
         pastDue,
         offersShown,
+        streakMonths: ctx.streakMonths,
       });
-      return NextResponse.json({ eventId, offersShown, pastDue });
+      // streakMonths is server-derived so the stakes screen renders real data.
+      return NextResponse.json({ eventId, offersShown, pastDue, streakMonths: ctx.streakMonths });
+    }
+
+    if (parsed.data.action === "stakes") {
+      await recordStakesAction({
+        eventId: parsed.data.eventId,
+        userId,
+        stakesAction: parsed.data.stakesAction as StakesAction,
+      });
+      return NextResponse.json({ ok: true });
     }
 
     if (parsed.data.action === "accept_offer") {

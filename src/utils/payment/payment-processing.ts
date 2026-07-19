@@ -434,18 +434,24 @@ async function processPaymentBenefitsInternal(
         const isRenewal = classifyIsRenewal({ billingReason, isResubscribe });
         const attributedClickId = resolvedAttribution?.attributedClickId ?? null;
         const attributedClickTimestamp = resolvedAttribution?.attributedClickTimestamp ?? null;
-        // Prefer the edge-resolved decision, but recover an owned-channel (Klaviyo)
-        // last-touch that lives in the persisted signup/checkout UTM when the edge
-        // (cookie-only) yielded `direct`/none — otherwise those Klaviyo conversions
-        // leak to `direct` and need the per-cycle backfill. See reconcilePersistedAttribution.
+        // Prefer the edge-resolved decision, but recover a persisted touch when the
+        // edge (cookie-only) yielded `direct`/none — owned Klaviyo touches leniently,
+        // paid-platform touches strictly in-window. See reconcilePersistedAttribution.
         //
-        // The recovery is gated by the owned-channel recency window so a months-old
-        // signup touch doesn't get credited for an unrelated later purchase. The touch
-        // time is `now` for a UTM captured at THIS checkout (attributionSource === "session"),
-        // otherwise the user's signup time (`user.createdAt`).
+        // TOUCH-TIME HONESTY: a "session"-sourced UTM is NOT necessarily fresh — the
+        // client's attribution payload prefers the 90-day first-touch `_ta_attr` cookie
+        // with its `capturedAt` STRIPPED (getStoredUTMParams), and renewals re-carry the
+        // subscription metadata's frozen initial-checkout UTM. Dating those `now` would
+        // fabricate freshness and resurrect stale paid touches the edge correctly ruled
+        // out (and flip every renewal). So session-sourced touches pass `null` (undatable
+        // → the strict paid recovery stays OFF; the lenient owned/Klaviyo recovery still
+        // credits, unchanged). Signup-sourced touches are dated by `user.createdAt` —
+        // the one persisted anchor we have; paid recovery therefore fires only for
+        // purchases within the platform window of SIGNUP (e.g. the same-session
+        // Meta-ad signup→purchase that the edge missed for lack of a cookie).
         const nowMs = Date.now();
         const userCreatedAtMs = (user as { createdAt?: Date }).createdAt?.getTime() ?? null;
-        const persistedTouchAt = attributionData.attributionSource === "session" ? nowMs : userCreatedAtMs;
+        const persistedTouchAt = attributionData.attributionSource === "session" ? null : userCreatedAtMs;
         const { platform: convertingPlatform, confidence: attributionConfidence } =
           reconcilePersistedAttribution({
             edgePlatform: resolvedAttribution?.platform ?? null,
@@ -700,7 +706,9 @@ async function processPaymentBenefitsInternal(
       }
 
       try {
-        const milestoneResult = await MilestoneService.checkAndIssueMilestones(userId);
+        // Paid-payment path — the ONLY surface allowed to create new streak-months
+        // issuances (payment-coupled grants; see checkAndIssueMilestones docs).
+        const milestoneResult = await MilestoneService.checkAndIssueMilestones(userId, { allowStreakIssuance: true });
         if (milestoneResult.issuanceIds.length > 0) {
           await addMilestoneIssuanceIds(benefitsGrantedEventId(paymentIntentId), milestoneResult.issuanceIds);
         }
@@ -2225,8 +2233,11 @@ async function addToMajorDraw(
         "one-time-package": 0,
         upsell: 0,
         "mini-draw": 0,
+        referral: 0,
         "bonus-entry-promo": 0,
         "promo-link": 0,
+        "cancellation-upsell": 0,
+        streak: 0,
       };
       freshEntriesBySource[sourceType] = entriesAmount;
 

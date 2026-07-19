@@ -35,8 +35,8 @@ assert.deepEqual(
   { platform: "meta", confidence: "click" }
 );
 
-// Edge `direct` + a PAID persisted UTM (no click) → stay `direct`. A real paid click
-// in-window would already have won at the edge, so we do NOT resurrect a stale paid UTM.
+// Edge `direct` + a PAID persisted UTM with NO timestamps → stay `direct`. Paid recovery
+// is strict: an undatable paid touch is never resurrected (unknown timing ≠ fresh).
 assert.deepEqual(
   reconcilePersistedAttribution({
     edgePlatform: "direct",
@@ -185,6 +185,128 @@ assert.deepEqual(
     persistedUtmSource: "klaviyo",
     persistedUtmMedium: "email",
     persistedTouchAt: NOW - 365 * DAY,
+  }),
+  { platform: "klaviyo_email", confidence: "utm_only" }
+);
+
+// ---- Paid-platform recovery (edge `direct`, strict window) ----
+// The 2026-07-19 leak: same-session signup→purchase off a Meta retargeting ad, but the
+// durable cookie was absent at PI-creation time → edge stamped `direct` while the
+// persisted signup UTM (facebook.com/cpc, captured seconds earlier) knew better.
+// In-window + datable → recovered as meta/utm_only.
+assert.deepEqual(
+  reconcilePersistedAttribution({
+    edgePlatform: "direct",
+    edgeConfidence: "utm_only",
+    persistedUtmSource: "facebook.com",
+    persistedUtmMedium: "cpc",
+    persistedTouchAt: NOW - 1 * 60 * 1000, // signed up 1 minute before purchasing
+    now: NOW,
+  }),
+  { platform: "meta", confidence: "utm_only" }
+);
+
+// Exactly at the 7-day Meta boundary → still within.
+assert.deepEqual(
+  reconcilePersistedAttribution({
+    edgePlatform: "direct",
+    edgeConfidence: "utm_only",
+    persistedUtmSource: "facebook.com",
+    persistedUtmMedium: "cpc",
+    persistedTouchAt: NOW - 7 * DAY,
+    now: NOW,
+  }),
+  { platform: "meta", confidence: "utm_only" }
+);
+
+// Outside the 7-day window (stale signup UTM) → stays `direct`. The original
+// "never resurrect a stale paid UTM" stance is preserved.
+assert.deepEqual(
+  reconcilePersistedAttribution({
+    edgePlatform: "direct",
+    edgeConfidence: "utm_only",
+    persistedUtmSource: "facebook.com",
+    persistedUtmMedium: "cpc",
+    persistedTouchAt: NOW - 8 * DAY,
+    now: NOW,
+  }),
+  { platform: "direct", confidence: "utm_only" }
+);
+
+// Paid recovery is STRICT on missing data (opposite polarity of the owned-channel rule):
+// window enabled but touchAt unknown → stays `direct` (an undatable paid touch never counts).
+assert.deepEqual(
+  reconcilePersistedAttribution({
+    edgePlatform: "direct",
+    edgeConfidence: "utm_only",
+    persistedUtmSource: "facebook.com",
+    persistedUtmMedium: "cpc",
+    persistedTouchAt: null,
+    now: NOW,
+  }),
+  { platform: "direct", confidence: "utm_only" }
+);
+
+// Legacy caller (no `now`) → paid recovery disabled entirely (unlike owned channels).
+assert.deepEqual(
+  reconcilePersistedAttribution({
+    edgePlatform: "direct",
+    edgeConfidence: "utm_only",
+    persistedUtmSource: "facebook.com",
+    persistedUtmMedium: "cpc",
+    persistedTouchAt: NOW - 1 * DAY,
+  }),
+  { platform: "direct", confidence: "utm_only" }
+);
+
+// Future touchAt (clock skew / bad data) → stays `direct` (age < 0 is not in-window).
+assert.deepEqual(
+  reconcilePersistedAttribution({
+    edgePlatform: "direct",
+    edgeConfidence: "utm_only",
+    persistedUtmSource: "facebook.com",
+    persistedUtmMedium: "cpc",
+    persistedTouchAt: NOW + 1 * DAY,
+    now: NOW,
+  }),
+  { platform: "direct", confidence: "utm_only" }
+);
+
+// Unrecognized paid-ish source normalizes to "other" (no window row) → never recovered.
+assert.deepEqual(
+  reconcilePersistedAttribution({
+    edgePlatform: "direct",
+    edgeConfidence: "utm_only",
+    persistedUtmSource: "some-random-newsletter",
+    persistedUtmMedium: "cpc",
+    persistedTouchAt: NOW - 1 * DAY,
+    now: NOW,
+  }),
+  { platform: "direct", confidence: "utm_only" }
+);
+
+// TikTok gets the same strict in-window recovery as Meta (7d).
+assert.deepEqual(
+  reconcilePersistedAttribution({
+    edgePlatform: "direct",
+    edgeConfidence: "utm_only",
+    persistedUtmSource: "tiktok",
+    persistedUtmMedium: "cpc",
+    persistedTouchAt: NOW - 3 * DAY,
+    now: NOW,
+  }),
+  { platform: "tiktok", confidence: "utm_only" }
+);
+
+// A positive edge signal still always wins over an in-window persisted paid UTM.
+assert.deepEqual(
+  reconcilePersistedAttribution({
+    edgePlatform: "klaviyo_email",
+    edgeConfidence: "utm_only",
+    persistedUtmSource: "facebook.com",
+    persistedUtmMedium: "cpc",
+    persistedTouchAt: NOW,
+    now: NOW,
   }),
   { platform: "klaviyo_email", confidence: "utm_only" }
 );

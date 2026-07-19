@@ -2469,3 +2469,20 @@ html[data-save-data="true"] [class*="border-glow-"]:not(:focus-visible) {
     pointer-events: none;
   }
 }
+
+/* ── Membership Streak (Build Kit: claudeDesign/Membership milestone streak design) ──
+   Medallion ring breathe, next-rung pulse, celebration toast entrance. Consumed via
+   motion-safe: arbitrary animate classes, so reduced-motion users get static end-states.
+   The --s-glow custom property is set per-card from the member's tier (streak-display.ts). */
+@keyframes ta-streak-glowpulse {
+  0%, 100% { filter: drop-shadow(0 0 6px var(--s-glow)); }
+  50% { filter: drop-shadow(0 0 14px var(--s-glow)); }
+}
+@keyframes ta-streak-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 transparent; }
+  50% { box-shadow: 0 0 10px 1px var(--s-glow); }
+}
+@keyframes ta-streak-toast {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: none; }
+}

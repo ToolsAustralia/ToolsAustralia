@@ -31,6 +31,7 @@ export async function GET(request: NextRequest) {
     const sortOrder = searchParams.get("sortOrder") === "asc" ? "asc" : "desc";
     const states = searchParams.getAll("state").map((s) => s.trim()).filter(Boolean);
     const inActiveMajorDraw = searchParams.get("inActiveMajorDraw") || "";
+    const streak = searchParams.get("streak") || "";
 
     const result = await listAdminUsers({
       page,
@@ -44,6 +45,7 @@ export async function GET(request: NextRequest) {
       dateTo,
       states,
       inActiveMajorDraw,
+      streak,
       sortBy,
       sortOrder,
     });

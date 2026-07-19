@@ -505,6 +505,8 @@ export interface MajorDrawParticipantSafe {
     referral: number;
     "bonus-entry-promo": number;
     "cancellation-upsell": number;
+    "promo-link": number;
+    streak: number;
   };
   firstAddedDate: string;   // ISO 8601 UTC
   lastUpdatedDate: string;  // ISO 8601 UTC
@@ -544,6 +546,8 @@ function zeroEntriesBySource(): MajorDrawParticipantSafe["entriesBySource"] {
     referral: 0,
     "bonus-entry-promo": 0,
     "cancellation-upsell": 0,
+    "promo-link": 0,
+    streak: 0,
   };
 }
 

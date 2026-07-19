@@ -101,6 +101,8 @@ export async function buildUserFilter(
     states?: string[];
     /** "yes" = has entries in active major draw; "no" = not in that set */
     inActiveMajorDraw?: string;
+    /** Membership Streak: "none" = streak 0/absent; a number string = at least N consecutive paid renewals */
+    streak?: string;
   }
 ): Promise<Record<string, unknown>> {
   const {
@@ -114,6 +116,7 @@ export async function buildUserFilter(
     state,
     states,
     inActiveMajorDraw,
+    streak,
   } = filters;
 
   // Initialize filter object
@@ -436,6 +439,26 @@ export async function buildUserFilter(
     } else if (oidList.length > 0) {
       if (!filter.$and) filter.$and = [];
       (filter.$and as Array<Record<string, unknown>>).push({ _id: { $nin: oidList } });
+    }
+  }
+
+  // Membership Streak filter: "none" = no streak banked (field missing or 0);
+  // a numeric value = at least N consecutive paid renewals (subscription.streakMonths).
+  // Unknown values are ignored (no-op) rather than matching nothing.
+  if (streak !== undefined && streak !== null && String(streak).trim() !== "") {
+    if (streak === "none") {
+      if (!filter.$and) filter.$and = [];
+      (filter.$and as Array<Record<string, unknown>>).push({
+        $or: [
+          { "subscription.streakMonths": { $exists: false } },
+          { "subscription.streakMonths": { $lte: 0 } },
+        ],
+      });
+    } else {
+      const minStreak = parseInt(String(streak), 10);
+      if (Number.isFinite(minStreak) && minStreak > 0) {
+        filter["subscription.streakMonths"] = { $gte: minStreak };
+      }
     }
   }
 

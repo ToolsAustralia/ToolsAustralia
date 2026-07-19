@@ -265,6 +265,12 @@ const PauseOfferCard: React.FC<PauseOfferCardProps> = ({
             <div className="mt-3.5 border-t border-dashed border-neutral-200 pt-3 dark:border-neutral-700">
               <FeatureRow>30 days off — no charge</FeatureRow>
               <FeatureRow>Entries frozen, not lost</FeatureRow>
+              {/* Streak-freeze reframe (spec §7b M3) — only when a real streak is at stake. */}
+              {state.streakMonths >= 2 && (
+                <FeatureRow>
+                  Your {state.streakMonths}-renewal streak freezes — carries on when you&apos;re back
+                </FeatureRow>
+              )}
               <FeatureRow>Auto-resumes after the pause</FeatureRow>
             </div>
           </ValueCard>

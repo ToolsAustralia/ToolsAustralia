@@ -215,9 +215,20 @@ export async function recoverStrandedPastDueInvoice(params: {
    * When true, skip the 6h recovery-lock check AND pass
    * `bypassRecentAttemptLock: true` to the final `payOpenInvoiceAsPastDueAdmin`
    * call so the recovered pay isn't gated by the very write that void/finalize
-   * steps just made.
+   * steps just made. (Note: the pay primitive's 6h check now excludes recovery
+   * step-audit rows itself, so non-bypassed recovery no longer self-blocks —
+   * bulk passes false to keep the 6h repeat-guard active.)
    */
   bypassRecentRecoveryLock?: boolean;
+  /**
+   * When set (bulk chunked run), tags the recovery's PAY row on the NEW invoice
+   * with the run id — keeping bulk machine activity out of the Manual Retries
+   * view ({ chargeRunId: null }) and letting decline analytics count the pay
+   * attempt (which carries the real declineCode) exactly once. Run totals are
+   * unaffected: they are restricted to worklist invoice ids, and the new
+   * invoice id is never in the worklist. Per-user callers omit it (null).
+   */
+  chargeRunId?: mongoose.Types.ObjectId | null;
 }): Promise<RecoverStrandedResult> {
   const { userId, originalInvoiceId, adminId } = params;
 
@@ -322,7 +333,8 @@ export async function recoverStrandedPastDueInvoice(params: {
     };
   }
 
-  // No chargeRunId — recovery is per-user, not batch.
+  // chargeRunId: null for per-user recovery; the bulk chunked run passes its run id
+  // (see the param doc above).
   // Stable key on `newInvoiceId` (a held draft selected per recovery, then finalized).
   // Stability is correct here, and does NOT hit the 24h replay trap, because once
   // finalized this invoice leaves the draft pool (`pickHeldDraftForRecovery` only
@@ -335,6 +347,7 @@ export async function recoverStrandedPastDueInvoice(params: {
     customerId: user.stripeCustomerId,
     user: { _id: user._id, email: user.email },
     adminId,
+    chargeRunId: params.chargeRunId ?? null,
     bypassRecentAttemptLock: params.bypassRecentRecoveryLock,
     idempotencyKey: buildAdminChargeIdempotencyKey(newInvoiceId),
   });
