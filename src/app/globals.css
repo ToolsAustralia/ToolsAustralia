@@ -415,8 +415,12 @@
 :root {
   --background: #ffffff;
   --foreground: #171717;
-  /* Fire animation - grainy/noisy background image for glitter effect */
-  --glitter: url("https://assets.codepen.io/13471/silver-glitter-background.png");
+  /* Fire animation - grainy/noisy background image for glitter effect.
+   * Self-hosted (2026-07-20): was hotlinked from assets.codepen.io (third-party
+   * SPOF + extra connection on ad landing pages, and it served ~1.4MB). The
+   * first-party copy is downscaled to 800x534 + palette-quantized (~244KB) -
+   * indistinguishable at the 350-400px tile widths under the .fire blur(4px). */
+  --glitter: url("/images/effects/glitter.png");
 }
 
 /* Dark mode theme tokens - only active when .dark class is present */
@@ -2297,10 +2301,12 @@
  * background-blend-mode: overlay stack; opacity 0.7 on .fire keeps the old
  * composite weight AND creates the stacking context that contains the blending.
  *
- * Seamless loop: each glitter layer is one background-tile taller than the
- * banner and translates up by exactly one tile per iteration, so the snap-back
- * frame is pixel-identical to frame 0. If you change a background-size tile
- * height you MUST change the matching layer height + keyframe distance.
+ * Seamless loop: each glitter layer is one background-tile (plus a 32px blur
+ * bleed, 16px per edge) taller than the banner and translates up by exactly
+ * one tile per iteration, so the snap-back frame IS pixel-identical to frame 0
+ * and the blur-feathered layer edges never enter the visible clip. If you
+ * change a background-size tile height you MUST change the matching layer
+ * height + keyframe distance (the +32px bleed and top: -16px stay as-is).
  *
  * RULE: animate transform/opacity only here. Never reintroduce
  * background-position / filter / box-shadow keyframes on this surface. */
@@ -2324,11 +2330,16 @@
   pointer-events: none;
 }
 
-/* Moving glitter fields (see block comment above for the loop contract). */
+/* Moving glitter fields (see block comment above for the loop contract).
+ * top: -16px + the extra 32px of height are a bleed margin: blur(4px) feathers
+ * the layer's top/bottom edges, so both edges must stay OUTSIDE the overflow
+ * clip at every point of the loop (layer spans [-16px, 100% + 16px] relative to
+ * the clip at BOTH translate endpoints) - otherwise the feathered top edge
+ * drifts through view as a soft blip each iteration. */
 .fire > .fire-glitter,
 .fire::after {
   position: absolute;
-  top: 0;
+  top: -16px;
   left: 0;
   right: 0;
   background-image: var(--glitter);
@@ -2339,13 +2350,13 @@
 }
 
 .fire > .fire-glitter {
-  height: calc(100% + 650px);
+  height: calc(100% + 650px + 32px);
   background-size: 400px 650px;
   animation: fire-rise-650 8s linear infinite;
 }
 
 .fire::after {
-  height: calc(100% + 500px);
+  height: calc(100% + 500px + 32px);
   background-size: 350px 500px;
   animation: fire-rise-500 8s linear infinite;
 }
