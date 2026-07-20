@@ -8,15 +8,13 @@ import {
   trackCompleteRegistration as fbTrackCompleteRegistration,
   trackSubscribe as fbTrackSubscribe,
   trackRemoveFromCart as fbTrackRemoveFromCart,
-} from "@/components/FacebookPixel";
-import {
   trackTikTokEvent,
   trackTikTokPurchase,
   trackTikTokSearch,
   trackTikTokCompleteRegistration,
   trackTikTokSubscribe,
   trackTikTokContact,
-} from "@/components/TikTokPixel";
+} from "@/utils/tracking/legacy-pixel-helpers";
 import {
   mirrorMetaEventToCapi,
   generateMirrorEventId,

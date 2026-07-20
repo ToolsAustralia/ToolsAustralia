@@ -326,9 +326,6 @@ _(none)_
 - [src/components/admin/promo-analytics/UTMCampaignBreakdownTable.tsx](../../src/components/admin/promo-analytics/UTMCampaignBreakdownTable.tsx) — **score 1.5** — 229 LOC
   - signals: ternary-explosion (5 JSX ternaries); long-className (longest className=693 chars)
 
-- [src/components/FacebookPixel.tsx](../../src/components/FacebookPixel.tsx) — **score 1.5** — 707 LOC
-  - signals: ternary-explosion (13 JSX ternaries); loc-500-800 (707 LOC)
-
 - [src/components/loading/ProgressLoader.tsx](../../src/components/loading/ProgressLoader.tsx) — **score 1.5** — 199 LOC
   - signals: ternary-explosion (5 JSX ternaries); long-className (longest className=383 chars)
 

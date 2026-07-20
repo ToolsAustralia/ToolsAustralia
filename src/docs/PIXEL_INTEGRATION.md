@@ -39,10 +39,16 @@ import PixelTracker from "@/components/PixelTracker";
 />
 ```
 
-### 2. Individual Pixel Components
+### 2. Pixel loading + legacy helpers
 
-- `FacebookPixel`: Handles Meta Pixel initialization and tracking
-- `TikTokPixel`: Handles TikTok Pixel initialization and tracking
+The live browser-pixel LOADERS are the provider-registry components — `ConversionPixels`
+→ `facebookProvider` / `tiktokProvider` (`src/lib/tracking/providers/`). The old
+`src/components/FacebookPixel.tsx` and `src/components/TikTokPixel.tsx` loader components
+were **never mounted** and were removed (perf Tier-2, 2026-07). Their still-consumed
+imperative event helpers (`trackFacebookEvent`, `trackTikTokEvent`, `trackPurchase`,
+`trackCompleteRegistration`, …) moved verbatim to
+`src/utils/tracking/legacy-pixel-helpers.ts` — same export names, zero behaviour change.
+Prefer `trackConversion(...)` / the provider registry in new code for Pixel↔CAPI dedup.
 
 ### 3. Auto-Accept Mode
 

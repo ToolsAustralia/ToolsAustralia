@@ -3,14 +3,18 @@
 /**
  * SupportChatWidget.tsx
  *
- * Floating chat bubble + slide-up panel for the AI support assistant ("Cobber").
+ * Slide-up PANEL for the AI support assistant ("Cobber") — the heavy half of the widget
+ * (react-markdown + AI SDK + hCaptcha). It is LAZY: `SupportChatWidgetMount` renders the
+ * eager launcher (ChatBubbleButton) and only `next/dynamic`-imports THIS panel on the
+ * first open. The panel therefore owns no launcher of its own — it receives `open` /
+ * `onClose` props from the mount and renders the panel when `open` is true.
  *
  * Design decisions:
  * - z-index 9000: below Z_INDEX.MODAL_BASE (10000) so upsell/renewal/gate modals always win.
- * - Entry points: the floating bubble everywhere EXCEPT /my-account, where the dashboard
- *   "Ask Cobber" card is the canonical launcher (it dispatches OPEN_SUPPORT_CHAT_EVENT).
- *   The bubble is suppressed there to avoid a duplicate affordance; the panel still opens
- *   via the event and is closed by its own header ✕.
+ * - Open state + open paths (the bubble click, and OPEN_SUPPORT_CHAT_EVENT from the
+ *   dashboard "Ask Cobber" card) live in the mount; the launcher is suppressed on
+ *   /my-account so the card is the canonical entry there. The panel is closed by its own
+ *   header ✕ (onClose).
  * - The panel hides while a dashboard overlay sheet (Support/Payment/Manage — SheetShell
  *   portaled to <body> at z-[120]) is open, so Cobber never floats over it.
  * - Labelled "AI support mate" in the header AND the welcome block.
@@ -22,16 +26,17 @@
  * - Pure UI: no DB, no business logic, no direct model calls. Talks only to /api/chat.
  *
  * Adaptive brand accent ("Workshop v2"):
- * - The launcher fill, header band, YOUR message bubbles, the send button, quick-reply
- *   chips and the "Cobber" name highlight are all driven by usePromoTheme() — which
- *   DEFAULTS to Milwaukee (Tools Australia red) off a prize page, so non-promo surfaces
- *   get red automatically. Applied as CSS custom properties (--cob-acc / --cob-acc-deep /
- *   --cob-acc-ink) on the launcher + panel, consumed via Tailwind arbitrary values.
+ * - The header band, YOUR message bubbles, the send button, quick-reply chips and the
+ *   "Cobber" name highlight are all driven by usePromoTheme() (via useCobberAccentVars) —
+ *   which DEFAULTS to Milwaukee (Tools Australia red) off a prize page, so non-promo
+ *   surfaces get red automatically. Applied as CSS custom properties (--cob-acc /
+ *   --cob-acc-deep / --cob-acc-ink) on the panel root, consumed via Tailwind arbitrary
+ *   values. The eager launcher (ChatBubbleButton) themes itself from the same module.
  * - Semantics stay FIXED regardless of accent: online dot = green, notices = amber,
  *   hard error = red.
  */
 
-import React, {
+import {
   useRef,
   useEffect,
   useState,
@@ -40,54 +45,26 @@ import React, {
   type KeyboardEvent,
 } from "react";
 import dynamic from "next/dynamic";
-import { usePathname } from "next/navigation";
 import Image from "next/image";
 import type { UIMessage } from "ai";
 import { Z_INDEX } from "@/constants/z-index";
 import { useDashboardSheetStore } from "@/stores/useDashboardSheetStore";
-import { usePromoTheme } from "@/stores/usePromoThemeStore";
-import { OPEN_SUPPORT_CHAT_EVENT } from "@/lib/support-chat/widget-events";
 import { useSupportChat } from "./useSupportChat";
-import { useDodgeFloatingObstacles } from "./useDodgeFloatingObstacles";
 import {
   hasAcknowledgedDisclosure,
   acknowledgeDisclosure,
 } from "@/lib/support-chat/chatStorage";
 import ChatMarkdown from "./ChatMarkdown";
+import { useCobberAccentVars, COBBER_AVATAR, COBBER_ALT } from "./cobberAccent";
 
 const HCaptcha = dynamic(() => import("@hcaptcha/react-hcaptcha"), {
   ssr: false,
 });
 
-// Cobber avatar — the owner ships a real image; keep it everywhere (no mascot SVG).
-const COBBER_AVATAR = "/images/icons/cobber.png";
-const COBBER_ALT = "Cobber — Tools Australia AI support assistant";
-
 // Subtle bubble entry — reuse the existing globals.css keyframe (opacity + translateY),
 // gated behind motion-safe: so it never fires when prefers-reduced-motion is set.
 const BUBBLE_RISE =
   "motion-safe:animate-[ta-sheet-pop_0.28s_cubic-bezier(0.2,0.7,0.3,1)_both]";
-
-// ── Accent ink helper ─────────────────────────────────────────────────────────
-// Pick a legible text colour for a filled accent surface by the accent's relative
-// luminance. LIGHT accents (DeWalt yellow #FDB813, Ryobi lime #e0ff00) → dark ink;
-// everything else (Milwaukee red, blues, greens) → white. Pure; handles #RGB and
-// #RRGGBB; falls back to white on any parse failure.
-function accentInk(hex: string): string {
-  const fallback = "#FFFFFF";
-  if (typeof hex !== "string") return fallback;
-  let h = hex.trim().replace(/^#/, "");
-  if (h.length === 3) {
-    h = h[0] + h[0] + h[1] + h[1] + h[2] + h[2];
-  }
-  if (h.length !== 6 || /[^0-9a-fA-F]/.test(h)) return fallback;
-  const r = parseInt(h.slice(0, 2), 16);
-  const g = parseInt(h.slice(2, 4), 16);
-  const b = parseInt(h.slice(4, 6), 16);
-  if (Number.isNaN(r) || Number.isNaN(g) || Number.isNaN(b)) return fallback;
-  const luminance = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
-  return luminance > 0.62 ? "#1A1400" : fallback;
-}
 
 // ── Message grouping ──────────────────────────────────────────────────────────
 // Collapse consecutive same-role messages into one visual turn (one avatar per run).
@@ -194,18 +171,22 @@ function CobberMini() {
   );
 }
 
-// ── Main widget component ─────────────────────────────────────────────────────
+// ── Main panel component ──────────────────────────────────────────────────────
 interface SupportChatWidgetProps {
   /**
-   * Which screen corner the floating bubble + panel dock to. Default "right".
-   * Set to "left" where the bottom-right corner is already taken (e.g. the
-   * promotions pages, where the guest theme toggle + account FAB live there).
+   * Which screen corner the panel docks to. Default "right". Set to "left" where the
+   * bottom-right corner is already taken (e.g. the promotions pages, where the guest
+   * theme toggle + account FAB live there). Must match the launcher's `side`.
    */
   side?: "left" | "right";
+  /** Whether the panel is open. Owned by SupportChatWidgetMount (eager). */
+  open: boolean;
+  /** Close the panel (header ✕). Owned by SupportChatWidgetMount. */
+  onClose: () => void;
 }
 
-export default function SupportChatWidget({ side = "right" }: SupportChatWidgetProps) {
-  // Horizontal dock — same inset on either side so the bubble/panel line up.
+export default function SupportChatWidget({ side = "right", open, onClose }: SupportChatWidgetProps) {
+  // Horizontal dock — same inset on either side so the panel lines up with the launcher.
   const sideClass = side === "left" ? "left-5" : "right-5";
   const {
     messages,
@@ -226,19 +207,11 @@ export default function SupportChatWidget({ side = "right" }: SupportChatWidgetP
     resetConversation,
   } = useSupportChat();
 
-  // Adaptive accent — reads the current promo theme (defaults to Milwaukee = TA red
-  // off a prize page). Exposed to the tree as CSS custom properties so both the
-  // launcher and the panel colour themselves from one source.
-  const theme = usePromoTheme();
-  const accent = theme.primary;
-  const accentDeep = theme.primaryDark;
-  const accentVars = {
-    ["--cob-acc" as string]: accent,
-    ["--cob-acc-deep" as string]: accentDeep,
-    ["--cob-acc-ink" as string]: accentInk(accent),
-  } as React.CSSProperties;
+  // Adaptive accent — CSS custom properties applied to the panel root; descendants
+  // consume them via Tailwind arbitrary values. Same source the eager launcher themes
+  // itself from (see cobberAccent.ts).
+  const accentVars = useCobberAccentVars();
 
-  const [open, setOpen] = useState(false);
   const [hasOpened, setHasOpened] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -249,29 +222,11 @@ export default function SupportChatWidget({ side = "right" }: SupportChatWidgetP
   // `null` means "not yet checked" (SSR-safe); checked on first panel open.
   const [disclosureAcked, setDisclosureAcked] = useState<boolean | null>(null);
 
-  const pathname = usePathname();
-  // On /my-account the dashboard "Ask Cobber" card is the canonical Cobber entry
-  // point, so the floating bubble is suppressed there (no duplicate affordance).
-  const onDashboard = pathname?.startsWith("/my-account") ?? false;
   // Dashboard overlay sheets (Support / Payment / Manage) portal to <body> BELOW
   // this widget's z-index; hide the panel while one is open so Cobber never floats
   // over it. ("Start a chat" closes the Support sheet before opening the panel, so
   // this mainly guards the panel against a later-opened sheet.)
   const dashboardSheetOpen = useDashboardSheetStore((s) => s.sheet !== null);
-
-  // Open the panel when any surface dispatches the shared open-chat event (e.g. the
-  // dashboard "Ask Cobber" card). Mirrors the site's openMembershipModal contract.
-  useEffect(() => {
-    const handler = () => setOpen(true);
-    window.addEventListener(OPEN_SUPPORT_CHAT_EVENT, handler);
-    return () => window.removeEventListener(OPEN_SUPPORT_CHAT_EVENT, handler);
-  }, []);
-
-  // Collision-aware placement: lift the floating bubble above any other bottom-anchored
-  // floating element (draw countdown banner, "get entries" bar, upsell gift) that would
-  // overlap its corner. Only while the bubble is actually shown AND closed — an open
-  // panel (z-9000) already covers those obstacles (z ≤ 50), so no lift is needed then.
-  const dodgeBottom = useDodgeFloatingObstacles(side, !onDashboard && !open);
 
   // Auto-scroll to bottom when messages change
   useEffect(() => {
@@ -349,53 +304,9 @@ export default function SupportChatWidget({ side = "right" }: SupportChatWidgetP
 
   return (
     <>
-      {/* Floating bubble — suppressed on /my-account, where the dashboard
-          "Ask Cobber" card is the canonical entry point (no duplicate affordance). */}
-      {!onDashboard && (
-      <button
-        onClick={() => setOpen((v) => !v)}
-        aria-label={open ? "Close chat" : "Open AI support chat"}
-        className={`fixed bottom-5 ${sideClass} w-14 h-14 rounded-full text-[var(--cob-acc-ink)] shadow-lg flex items-center justify-center transition-all duration-200 hover:scale-105 active:scale-95 focus:outline-none focus:ring-2 focus:ring-[var(--cob-acc)] focus:ring-offset-2`}
-        style={{
-          zIndex: Z_INDEX.MODAL_BASE - 1000,
-          background: "linear-gradient(180deg, var(--cob-acc), var(--cob-acc-deep))",
-          ...accentVars,
-          // Lift above a colliding bottom floater (0 = keep the default bottom-5).
-          // `transition-all` animates the move, so it slides rather than jumps.
-          ...(dodgeBottom > 0 ? { bottom: `${dodgeBottom}px` } : {}),
-        }}
-      >
-        {open ? (
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            className="w-6 h-6"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-            strokeWidth={2}
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="M6 18L18 6M6 6l12 12"
-            />
-          </svg>
-        ) : (
-          <div className="w-full h-full rounded-full overflow-hidden ring-2 ring-white/30">
-            <Image
-              src={COBBER_AVATAR}
-              alt={COBBER_ALT}
-              width={56}
-              height={56}
-              className="w-full h-full object-cover"
-            />
-          </div>
-        )}
-      </button>
-      )}
-
-      {/* Panel — hidden while a dashboard overlay sheet is open so Cobber never
-          floats over it (see dashboardSheetOpen). */}
+      {/* Panel — hidden while a dashboard overlay sheet is open so Cobber never floats
+          over it (see dashboardSheetOpen). The eager launcher lives in the mount
+          (ChatBubbleButton); this lazy component renders the panel only. */}
       {open && !dashboardSheetOpen && (
         <div
           className={`fixed bottom-24 ${sideClass} w-[22rem] max-w-[calc(100vw-2.5rem)] bg-white dark:bg-neutral-900 rounded-2xl shadow-2xl flex flex-col border border-gray-200 dark:border-neutral-700 overflow-hidden`}
@@ -432,7 +343,7 @@ export default function SupportChatWidget({ side = "right" }: SupportChatWidgetP
               </p>
             </div>
             <button
-              onClick={() => setOpen(false)}
+              onClick={onClose}
               aria-label="Close chat"
               className="p-1.5 rounded-lg bg-white/15 hover:bg-white/25 transition-colors shrink-0"
             >
