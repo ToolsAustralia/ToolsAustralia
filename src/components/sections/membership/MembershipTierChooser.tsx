@@ -73,9 +73,9 @@ function TierCard({ plan, cta }: { plan: LocalMembershipPlan; cta: MembershipCar
           <span className="grid h-[52px] w-[52px] flex-none place-items-center rounded-[15px]" style={{ background: "linear-gradient(160deg,rgba(255,255,255,.3),rgba(255,255,255,.08))", boxShadow: "inset 0 1px 0 rgba(255,255,255,.45),inset 0 -1px 2px rgba(0,0,0,.16),0 2px 6px -2px rgba(0,0,0,.32)" }}>
             {icon && <Image src={icon} alt="" width={40} height={40} className="h-10 w-10 object-contain drop-shadow" />}
           </span>
-          <span className="font-['Poppins'] text-[16px] font-black uppercase tracking-[0.13em]">{getPackageDisplayName(plan)}</span>
+          <span className="font-poppins text-[16px] font-black uppercase tracking-[0.13em]">{getPackageDisplayName(plan)}</span>
           <div className="ml-auto text-right leading-none">
-            <span className="font-['Poppins'] text-[26px] font-black">${plan.price}</span>
+            <span className="font-poppins text-[26px] font-black">${plan.price}</span>
             <span className="ml-0.5 text-xs font-semibold opacity-70">/mo</span>
           </div>
         </div>
@@ -104,7 +104,7 @@ function TierCard({ plan, cta }: { plan: LocalMembershipPlan; cta: MembershipCar
             )}
             <span
               ref={numRef}
-              className={cn("inline-block font-['Poppins'] text-[50px] font-black leading-[0.9] tracking-[-0.03em]", numInView && "animate-[entries-bounce_0.7s_cubic-bezier(.34,1.56,.64,1)_both]")}
+              className={cn("inline-block font-poppins text-[50px] font-black leading-[0.9] tracking-[-0.03em]", numInView && "animate-[entries-bounce_0.7s_cubic-bezier(.34,1.56,.64,1)_both]")}
               style={boosted ? { textShadow: `0 0 24px ${hex}` } : undefined}
             >
               <AnimatedNumber value={entries} />
@@ -115,7 +115,7 @@ function TierCard({ plan, cta }: { plan: LocalMembershipPlan; cta: MembershipCar
         <span className="h-full self-stretch" style={{ background: seam }} />
         <div className="flex flex-col items-center gap-2">
           <AccessRing percent={access} size={100} stroke={10} color={ink} trackColor={trackFor(ink)}>
-            <span className="font-['Poppins'] text-[21px] font-black">{access}%</span>
+            <span className="font-poppins text-[21px] font-black">{access}%</span>
           </AccessRing>
           <span className="text-[10px] font-bold uppercase tracking-[0.08em] opacity-[0.78]">catalogue access</span>
         </div>
@@ -135,7 +135,7 @@ function TierCard({ plan, cta }: { plan: LocalMembershipPlan; cta: MembershipCar
         <button
           type="button"
           onClick={() => cta.onSelect(plan)}
-          className="flex h-[50px] w-full items-center justify-center gap-2 rounded-[14px] font-['Poppins'] text-[14.5px] font-black text-white transition-transform hover:-translate-y-0.5"
+          className="flex h-[50px] w-full items-center justify-center gap-2 rounded-[14px] font-poppins text-[14.5px] font-black text-white transition-transform hover:-translate-y-0.5"
           style={{ background: "linear-gradient(180deg,#18181e,#0b0b0d)", boxShadow: "0 10px 24px -12px rgba(0,0,0,.6),inset 0 1px 0 rgba(255,255,255,.14),inset 0 -1px 0 rgba(0,0,0,.5)" }}
         >
           {cta.ctaLabelFor(plan)} <ArrowRight className="h-4 w-4" />
@@ -172,7 +172,7 @@ export default function MembershipTierChooser({
             </span>
             Choose your tier
           </span>
-          <h2 className="mt-3.5 font-['Poppins'] text-3xl font-black tracking-tight text-primary-token sm:text-4xl lg:text-5xl dark:text-white">
+          <h2 className="mt-3.5 font-poppins text-3xl font-black tracking-tight text-primary-token sm:text-4xl lg:text-5xl dark:text-white">
             Pick how far{" "}
             <span style={{ background: "linear-gradient(92deg,#ff3b3b,#ee0000 58%,#b40000)", WebkitBackgroundClip: "text", backgroundClip: "text", color: "transparent" }}>you go.</span>
           </h2>

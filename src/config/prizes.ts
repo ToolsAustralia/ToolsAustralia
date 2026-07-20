@@ -1,21 +1,21 @@
 /**
- * Lucide icon name so we can resolve dynamically without importing every icon upfront.
- * Using string keys keeps the catalog serialisable and easy for newer developers to update.
+ * FULL prize catalog — deep spec-sheet data. SERVER-ONLY / lazy-chunk-only.
+ *
+ * This module is ~170 KB of source and runs top-level side effects
+ * (`applySpecItemImages` below), so it must NEVER be statically imported from a
+ * client component: it would land in every page's first-load JS. Client consumers
+ * use `./prize-summaries` (the lightweight subset — shared types + light fields
+ * live THERE and are re-exported here so server consumers keep one import path).
+ * The one client surface that needs deep specs — the specifications modal — gets
+ * this module via a click-gated `await import("@/config/prizes")` in PrizeShowcase.
+ *
+ * Drift guard: `npm run test:prize-summaries` asserts the two catalogs agree on
+ * slugs and every shared field. Edit prize data in BOTH files.
  */
-export type LucideIconName = keyof typeof import("lucide-react");
+import type { PrizeMedia, PrizeSlug, PrizeSummary } from "./prize-summaries";
 
-export interface PrizeMedia {
-  src: string;
-  alt: string;
-  /** Optional art-directed URL (e.g. landing `-mobile` assets in promo gallery). */
-  mobileSrc?: string;
-}
-
-export interface PrizeHighlight {
-  icon: LucideIconName;
-  title: string;
-  description: string;
-}
+export type { LucideIconName, PrizeHighlight, PrizeMedia, PrizeSlug, PrizeSummary } from "./prize-summaries";
+export { DEFAULT_PRIZE_SLUG, getPrizeLabel } from "./prize-summaries";
 
 export interface PrizeSpecItem {
   name: string;
@@ -35,37 +35,11 @@ export interface PrizeSpecSection {
   items: PrizeSpecItem[];
 }
 
-export interface PrizeCatalogEntry {
-  slug: PrizeSlug;
-  label: string;
-  heroHeading: string;
-  heroSubheading?: string;
-  summary: string;
+/** Full catalog entry = the client-safe summary + the deep fields that stay in THIS module. */
+export interface PrizeCatalogEntry extends PrizeSummary {
   detailedDescription: string;
-  prizeValueLabel?: string;
-  gallery: PrizeMedia[];
-  highlights: PrizeHighlight[];
   specSections: PrizeSpecSection[];
-  cardBackgroundImage?: string; // Optional background image for toggle cards
 }
-
-export type PrizeSlug =
-  | "milwaukee-sidchrome"
-  | "dewalt-sidchrome"
-  | "makita-sidchrome"
-  | "ryobi-sidchrome"
-  | "milwaukee-milwaukee"
-  | "dewalt-milwaukee"
-  | "makita-milwaukee"
-  | "ryobi-milwaukee"
-  | "milwaukee-kincrome"
-  | "dewalt-kincrome"
-  | "makita-kincrome"
-  | "ryobi-kincrome"
-  | "hikoki-sidchrome"
-  | "hikoki-milwaukee"
-  | "hikoki-kincrome"
-  | "cash-prize";
 
 /** Strict canonical name for the Ryobi prize - use consistently across labels, headings, and display. */
 export const RYOBI_PRIZE_STRICT_NAME = "Custom Ryobi 18V ONE+ Kit with 36V Brushless Ryobi Lawn Mower";
@@ -3085,81 +3059,12 @@ export const PRIZE_CATALOG: PrizeCatalogEntry[] = [
   },
 ];
 
-export const DEFAULT_PRIZE_SLUG: PrizeSlug = "milwaukee-milwaukee";
-
 export function getPrizeBySlug(slug: string): PrizeCatalogEntry | undefined {
   return PRIZE_CATALOG.find((prize) => prize.slug === slug);
 }
 
 export function listPrizes(): PrizeCatalogEntry[] {
   return PRIZE_CATALOG.slice();
-}
-
-/**
- * Get a short, user-friendly label for a prize slug
- * Useful for displaying selected prize in winner cards and admin interfaces
- * @param slug - The prize slug to get the label for
- * @returns A short label string, or undefined if slug is invalid
- */
-export function getPrizeLabel(slug: PrizeSlug | string | undefined): string | undefined {
-  if (!slug) return undefined;
-  const prize = getPrizeBySlug(slug);
-  if (!prize) return undefined;
-  
-  // Return a shorter, more display-friendly version of the label
-  if (slug === "cash-prize") {
-    return "$10,000 Cash";
-  }
-  
-  // For tool prizes, extract the key brand names
-  if (slug === "milwaukee-sidchrome") {
-    return "Sidchrome + Milwaukee 13pc + PACKOUT + $5,000 Cash";
-  }
-  if (slug === "dewalt-sidchrome") {
-    return "Sidchrome + DeWalt 14pc + ToughSystem + $5,000 Cash";
-  }
-  if (slug === "makita-sidchrome") {
-    return "Sidchrome + Makita 15pc + MAKTRAK + $5,000 Cash";
-  }
-  if (slug === "ryobi-sidchrome") {
-    return "Sidchrome + Ryobi 19pc + LINK + $5,000 Cash";
-  }
-  if (slug === "milwaukee-milwaukee") {
-    return "Milwaukee Toolbox + Milwaukee 13pc + PACKOUT + $5,000 Cash";
-  }
-  if (slug === "dewalt-milwaukee") {
-    return "Milwaukee Toolbox + DeWalt 14pc + ToughSystem + $5,000 Cash";
-  }
-  if (slug === "makita-milwaukee") {
-    return "Milwaukee Toolbox + Makita 15pc + MAKTRAK + $5,000 Cash";
-  }
-  if (slug === "ryobi-milwaukee") {
-    return "Milwaukee Toolbox + Ryobi 19pc + LINK + $5,000 Cash";
-  }
-  if (slug === "milwaukee-kincrome") {
-    return "Kincrome CONTOUR® + Milwaukee 13pc + PACKOUT + $5,000 Cash";
-  }
-  if (slug === "dewalt-kincrome") {
-    return "Kincrome CONTOUR® + DeWalt 14pc + ToughSystem + $5,000 Cash";
-  }
-  if (slug === "makita-kincrome") {
-    return "Kincrome CONTOUR® + Makita 15pc + MAKTRAK + $5,000 Cash";
-  }
-  if (slug === "ryobi-kincrome") {
-    return "Kincrome CONTOUR® + Ryobi 19pc + LINK + $5,000 Cash";
-  }
-  if (slug === "hikoki-sidchrome") {
-    return "Sidchrome + HiKOKI 15pc + Multi Cruiser + $5,000 Cash";
-  }
-  if (slug === "hikoki-milwaukee") {
-    return "Milwaukee Toolbox + HiKOKI 15pc + Multi Cruiser + $5,000 Cash";
-  }
-  if (slug === "hikoki-kincrome") {
-    return "Kincrome CONTOUR® + HiKOKI 15pc + Multi Cruiser + $5,000 Cash";
-  }
-
-  // Fallback to full label
-  return prize.label;
 }
 
 /**

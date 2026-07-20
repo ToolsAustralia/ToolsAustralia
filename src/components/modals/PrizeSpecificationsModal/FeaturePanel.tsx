@@ -65,7 +65,7 @@ const FeaturePanel: React.FC<FeaturePanelProps> = ({ prize, className }) => {
 
       {/* Title + summary */}
       <div className="space-y-2">
-        <h3 className="font-['Poppins'] text-lg font-bold leading-tight tracking-tight text-white">
+        <h3 className="font-poppins text-lg font-bold leading-tight tracking-tight text-white">
           {prize.heroHeading || prize.label}
         </h3>
         {prize.summary && (

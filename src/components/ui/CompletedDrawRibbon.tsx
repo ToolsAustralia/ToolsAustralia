@@ -30,7 +30,7 @@ export default function CompletedDrawRibbon({
   const isDewaltSlug = (slug ?? "").toLowerCase().startsWith("dewalt-");
   const useDarkText = preferDark || isDewaltSlug;
 
-  const labelClass = `font-['Poppins'] font-black uppercase leading-none tracking-[0.08em] ${
+  const labelClass = `font-poppins font-black uppercase leading-none tracking-[0.08em] ${
     useDarkText ? "text-black" : "text-white"
   }`;
 

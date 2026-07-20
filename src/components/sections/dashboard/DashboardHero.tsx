@@ -83,7 +83,7 @@ export default function DashboardHero({
     acct === "active" || acct === "onetime" ? (
       <div className="flex flex-col items-center gap-1">
         <AccessRing percent={partnerAccessPct} size={58} stroke={7} color={ink} trackColor={white ? "rgba(255,255,255,.22)" : "rgba(0,0,0,.14)"}>
-          <span className="num font-['Poppins'] text-sm font-extrabold" style={{ color: ink }}>{partnerAccessPct}%</span>
+          <span className="num font-poppins text-sm font-extrabold" style={{ color: ink }}>{partnerAccessPct}%</span>
         </AccessRing>
         <span className="text-[8px] font-bold uppercase tracking-[0.1em]" style={{ color: soft }}>
           {acct === "onetime" && partnerAccessExpiryLabel ? `${partnerAccessExpiryLabel} left` : "Access"}
@@ -169,7 +169,7 @@ export default function DashboardHero({
         <div className="min-w-0 flex-1">
           <div className="text-[13px] font-semibold" style={{ color: soft }}>{isGuest ? "Welcome," : `${greeting(hour)},`}</div>
           <div className="mt-1.5 flex flex-wrap items-center gap-2.5">
-            <span className="font-['Poppins'] text-2xl font-extrabold">{name}</span>
+            <span className="font-poppins text-2xl font-extrabold">{name}</span>
             {profileWarnEl}
             {acct !== "onetime" && ChipEl}
           </div>
@@ -185,7 +185,7 @@ export default function DashboardHero({
           <div className="min-w-0 flex-1">
             <div className="text-xs font-semibold" style={{ color: soft }}>{isGuest ? "Welcome," : `${greeting(hour)},`}</div>
             <div className="mt-1 flex items-center gap-1.5">
-              <span className="font-['Poppins'] text-[19px] font-extrabold">{name}</span>
+              <span className="font-poppins text-[19px] font-extrabold">{name}</span>
               {profileWarnEl}
             </div>
           </div>

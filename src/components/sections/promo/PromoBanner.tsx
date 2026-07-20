@@ -3,7 +3,7 @@
 import { Fragment, useState, useEffect, useLayoutEffect, useRef, useMemo, useCallback } from "react";
 import type { CSSProperties, ReactNode } from "react";
 import { useLeafTimer } from "@/hooks/useLeafTimer";
-import { motion, animate, useMotionValue, useReducedMotion } from "framer-motion";
+import { m, animate, useMotionValue, useReducedMotion } from "framer-motion";
 import { usePathname } from "next/navigation";
 import { usePromoByType, useEffectiveForBanner } from "@/hooks/queries/usePromoQueries";
 import { useSidebar } from "@/contexts/SidebarContext";
@@ -269,11 +269,14 @@ export default function PromoBanner({
   const isPromoResolved =
     !isEffectiveForBannerLoading && !isDrawLoading && !isVariantLoading;
 
-  // Legacy: use initial data for "active promo" object when provided (e.g. promotions page SSR)
-  const { data: membershipPromoClient } = usePromoByType("membership-packages");
-  const { data: oneTimePromoClient } = usePromoByType("one-time-packages");
-  const membershipPromo = initialMembershipPromo || membershipPromoClient;
-  const oneTimePromo = initialOneTimePromo || oneTimePromoClient;
+  // Server-baked initial* props are first-paint seeds ONLY — the client query wins once
+  // it resolves. Under ISR + stale-while-revalidate the baked props can be stale for
+  // whole sessions if they take precedence (2026-07 final-review fix). isSuccess (not
+  // truthiness) decides so a promo that ENDED (client resolves null) clears the seed.
+  const { data: membershipPromoClient, isSuccess: membershipPromoResolved } = usePromoByType("membership-packages");
+  const { data: oneTimePromoClient, isSuccess: oneTimePromoResolved } = usePromoByType("one-time-packages");
+  const membershipPromo = membershipPromoResolved ? membershipPromoClient : initialMembershipPromo;
+  const oneTimePromo = oneTimePromoResolved ? oneTimePromoClient : initialOneTimePromo;
 
   // Determine which promo to display based on effective promo type (aligns with multiplier resolution)
   const getActivePromo = () => {
@@ -662,7 +665,7 @@ export default function PromoBanner({
         <div className="relative flex w-full items-center justify-center px-4 min-h-[5rem] sm:min-h-[8rem] lg:min-h-[8.25rem]">
           {/* White-text Tools Australia logo, gently breathing — reads as a branded
               loading state on the dark bar. */}
-          <motion.img
+          <m.img
             src="/images/Tools%20Australia%20Logo/White-Text%20Logo.webp"
             alt=""
             draggable={false}
@@ -709,7 +712,7 @@ export default function PromoBanner({
         />
       )}
 
-      <motion.div
+      <m.div
         ref={bannerRef}
         role="button"
         tabIndex={0}
@@ -751,6 +754,9 @@ export default function PromoBanner({
         {/* Outer stays overflow-visible so the multiplier badge (absolute) is not clipped; pill rounding + clip only on the bg/flame layer. */}
         <div className="relative w-full min-w-0 overflow-visible">
           <div
+            // Mobile fire animation stops while the banner is stuck/floating on scroll
+            // (globals.css `[data-banner-stuck]` gate) — repaint shouldn't fight scrolling.
+            data-banner-stuck={isScrolled ? "true" : undefined}
             className={`pointer-events-none absolute inset-0 z-0 min-h-full ${
               isScrolled ? "overflow-hidden rounded-[9999px]" : ""
             } ${bgColorClass}`}
@@ -772,6 +778,8 @@ export default function PromoBanner({
             }
             aria-hidden
           >
+            {/* Fire effect — all layers are CSS pseudo-elements on `.fire` (globals.css);
+                the element itself needs no children. */}
             <div className="fire pointer-events-none absolute inset-0 min-h-full w-full" />
           </div>
           <div
@@ -799,7 +807,7 @@ export default function PromoBanner({
                 } ${isScrolled ? "max-sm:min-h-[3.5rem]" : ""}`}
               >
                 {isContentReady ? (
-                  <motion.div
+                  <m.div
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     transition={{ duration: 0.3, ease: "easeOut" }}
@@ -839,7 +847,7 @@ export default function PromoBanner({
                       onError={handleLeftImageError}
                       priority
                     />
-                  </motion.div>
+                  </m.div>
                 ) : (
                   <div
                     className={`${
@@ -906,7 +914,7 @@ export default function PromoBanner({
                   ? new Date(nextDraw.activationDate).getTime()
                   : null;
                 return (
-                  <motion.div
+                  <m.div
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     transition={{ duration: 0.3, ease: "easeOut", delay: 0.15 }}
@@ -943,7 +951,7 @@ export default function PromoBanner({
                         );
                       }}
                     />
-                  </motion.div>
+                  </m.div>
                 );
               }
 
@@ -989,7 +997,7 @@ export default function PromoBanner({
                 const labelClass = `${rightSectionLabelClass} font-medium text-2xs sm:text-2xs lg:text-sm`;
                 const endMs = countdownDisplay.endMs ?? null;
                 return (
-                  <motion.div
+                  <m.div
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     transition={{ duration: 0.3, ease: "easeOut", delay: 0.15 }}
@@ -1026,7 +1034,7 @@ export default function PromoBanner({
                         );
                       }}
                     />
-                  </motion.div>
+                  </m.div>
                 );
               }
 
@@ -1054,7 +1062,7 @@ export default function PromoBanner({
                   ? new Date(currentDraw.freezeEntriesAt).getTime()
                   : null;
                 return (
-                  <motion.div
+                  <m.div
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     transition={{ duration: 0.3, ease: "easeOut", delay: 0.15 }}
@@ -1081,7 +1089,7 @@ export default function PromoBanner({
                         );
                       }}
                     />
-                  </motion.div>
+                  </m.div>
                 );
               }
 
@@ -1104,7 +1112,7 @@ export default function PromoBanner({
               }
 
               return (
-                <motion.div
+                <m.div
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   transition={{ duration: 0.3, ease: "easeOut", delay: 0.15 }}
@@ -1144,7 +1152,7 @@ export default function PromoBanner({
                       );
                     }}
                   />
-                </motion.div>
+                </m.div>
               );
                     })()}
                   </div>
@@ -1153,7 +1161,7 @@ export default function PromoBanner({
             </div>
           </div>
         </div>
-      </motion.div>
+      </m.div>
       <PromoHolidayDevToolbar forcedSlot={holidayDevPreview} onForcedSlotChange={setHolidayDevPreview} />
     </>
   );

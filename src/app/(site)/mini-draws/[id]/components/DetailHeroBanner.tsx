@@ -153,7 +153,7 @@ export default function DetailHeroBanner({
 
         {/* Prize Name */}
         <motion.h1
-          className="text-xl sm:text-2xl lg:text-[2rem] xl:text-[2.25rem] font-bold font-['Poppins'] text-white leading-tight mb-3 sm:mb-4"
+          className="text-xl sm:text-2xl lg:text-[2rem] xl:text-[2.25rem] font-bold font-poppins text-white leading-tight mb-3 sm:mb-4"
           initial={{ opacity: 0, y: 15 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: d, delay: 0.18 }}

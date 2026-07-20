@@ -73,10 +73,14 @@
   color: #e5e5e5 !important;
 }
 
-/* Acumin Pro Condensed - Ultra Black Italic. Add font file (e.g. AcuminProCondensed-UltraBlackItalic.woff2) to public/fonts/ to load. */
+/* Acumin Pro Condensed - Ultra Black Italic. local() sources only: the woff2 was never
+   added to public/fonts/, so the url() source 404'd on every page for every visitor
+   (console noise + a wasted request — removed 2026-07-20). To ship the webfont, add the
+   licensed file as public/fonts/AcuminProCondensed-UltraBlackItalic.woff2 and append
+   `, url("/fonts/AcuminProCondensed-UltraBlackItalic.woff2") format("woff2")` here. */
 @font-face {
   font-family: "Acumin Pro Condensed";
-  src: local("Acumin Pro Condensed Ultra Black Italic"), local("AcuminProCondensed-UltraBlackItalic"), url("/fonts/AcuminProCondensed-UltraBlackItalic.woff2") format("woff2");
+  src: local("Acumin Pro Condensed Ultra Black Italic"), local("AcuminProCondensed-UltraBlackItalic");
   font-weight: 950;
   font-style: italic;
   font-display: swap;
@@ -411,8 +415,12 @@
 :root {
   --background: #ffffff;
   --foreground: #171717;
-  /* Fire animation - grainy/noisy background image for glitter effect */
-  --glitter: url("https://assets.codepen.io/13471/silver-glitter-background.png");
+  /* Fire animation - grainy/noisy background image for glitter effect.
+   * Self-hosted (2026-07-20): was hotlinked from assets.codepen.io (third-party
+   * SPOF + extra connection on ad landing pages, and it served ~1.4MB). The
+   * first-party copy is downscaled to 800x534 + palette-quantized (~244KB) -
+   * indistinguishable at the 350-400px tile widths under the .fire blur(4px). */
+  --glitter: url("/images/effects/glitter.png");
 }
 
 /* Dark mode theme tokens - only active when .dark class is present */
@@ -510,7 +518,12 @@
   h5,
   h6 {
     font-family: var(--font-poppins), "Poppins", system-ui, sans-serif;
-    font-weight: 800;
+    /* Poppins is loaded at 400/500/600/700/900 (see src/app/layout.tsx). With
+       `font-synthesis: none`, a requested 800 (not loaded) is font-matched to
+       the nearest loaded weight ABOVE it — 900 — so headings already render 900.
+       Pin it to the actually-loaded 900 so intent == render (no synthesis, no
+       silent fallback). */
+    font-weight: 900;
     font-synthesis: none;
   }
 
@@ -621,7 +634,7 @@
 @layer components {
   /* Form input utility class for consistent styling */
   .form-input {
-    @apply w-full py-3 px-4 pr-10 border-b focus:outline-none focus:ring-0 focus:ring-offset-0 focus:border-red-600 bg-transparent text-black dark:text-white font-['Poppins'] transition-all duration-300 placeholder-gray-500 dark:placeholder-gray-400;
+    @apply w-full py-3 px-4 pr-10 border-b focus:outline-none focus:ring-0 focus:ring-offset-0 focus:border-red-600 bg-transparent text-black dark:text-white font-poppins transition-all duration-300 placeholder-gray-500 dark:placeholder-gray-400;
   }
 
   .btn-primary {
@@ -1869,6 +1882,10 @@
 .vip-premium-inner-luminosity {
   pointer-events: none;
   background: radial-gradient(ellipse 88% 60% at 50% 38%, rgba(212, 175, 55, 0.1) 0%, transparent 58%);
+  /* Base = the animation's 0%/100% rest opacity, so a tier-gated `animation: none`
+     parks at 0.26 instead of the default 1.0 (~4x the peak — the vip-sheen bug class,
+     2026-07-20 review). Currently no live consumer, but any future one is now safe. */
+  opacity: 0.26;
   animation: vip-inner-wash 4s ease-in-out infinite;
 }
 
@@ -2273,8 +2290,22 @@
   transform: rotate(3deg) translate(0px, -4px);
 }
 
-/* Fire animation effect for promo banner background - mild/subtle version */
-/* Note: Position is handled by Tailwind classes (relative/fixed), ::before will work with any positioned parent */
+/* Fire animation effect for promo banner background - mild/subtle version.
+ * Note: Position is handled by Tailwind classes (relative/fixed) on the .fire div.
+ *
+ * 2026-07-20: REVERTED to the original background-position rendering. The Tier-2
+ * transform rewrite (separate glitter layers + `mix-blend-mode: overlay`) shifted
+ * the flame's hue — it read GREEN against brand-coloured banners, because
+ * mix-blend-mode blends the glitter against the banner BACKDROP instead of the
+ * fire's own warm gradient. This single-element `background-blend-mode` version is
+ * self-contained (its colour never depends on the banner behind it), so the flame
+ * stays warm on every promo. Colour fidelity of this brand element wins over the
+ * micro-optimisation. The main-thread cost is mitigated by GATES instead of a
+ * rewrite: the animation is disabled while the banner is stuck/floating on scroll
+ * (mobile — the `[data-banner-stuck]` rule in the tier-gate block below) and for
+ * save-data + prefers-reduced-motion. `--glitter` stays SELF-HOSTED (the CodePen
+ * hotlink removal is kept). If you must optimise this again, verify the colour
+ * against a brand-coloured banner (e.g. a green/teal promo), not just the default. */
 .fire {
   overflow: hidden;
 }
@@ -2293,21 +2324,15 @@
   background-blend-mode: overlay, overlay;
   background-position: 0px 0px, 0px 0px, 50% 100%;
   background-repeat: repeat, repeat, repeat;
-  /* Use overlay blend mode to blend naturally with dark background */
-
-  /* Reduced brightness and contrast to blend with dark banner background */
   filter: brightness(1.5) blur(4px) contrast(2.5);
-  /* Slower animation for more subtle effect */
   animation: fire 8s linear infinite;
-  /* Removed dark box-shadow to keep background transparent */
   pointer-events: none;
   z-index: 0;
-  /* Ensure no background color - let it blend with banner background */
   background-color: transparent;
   opacity: 0.7;
 }
 
-/* Ensure text appears above fire effect */
+/* Any .fire content children sit above the effect. */
 .fire > * {
   position: relative;
   z-index: 1;
@@ -2319,6 +2344,36 @@
   }
   100% {
     background-position: center -500px, center -650px, 50% 100%;
+  }
+}
+
+/* UrgencyClockIcon (promo banner urgency label): one subtle scale pulse on the
+ * wrapper + a steps(60) second hand (1 style update per second - replaces the
+ * old framer-motion 4-track shake/glow/smooth-sweep stack). Both are gated off
+ * for low-tier devices below. */
+.ta-clock-pulse {
+  animation: ta-clock-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes ta-clock-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.08);
+  }
+}
+
+.ta-clock-second-hand {
+  transform-box: fill-box;
+  transform-origin: 50% 50%;
+  animation: ta-clock-tick 60s steps(60, end) infinite;
+}
+
+@keyframes ta-clock-tick {
+  to {
+    transform: rotate(360deg);
   }
 }
 
@@ -2417,12 +2472,60 @@ html[data-save-data="true"] {
 }
 
 @media (max-width: 767.98px), (prefers-reduced-motion: reduce) {
-  .animate-shimmer, .animate-shimmer-horizontal {
+  .animate-shimmer, .animate-shimmer-horizontal, .animate-shimmer-horizontal-fast {
     animation: none !important;
   }
 }
 html[data-tier="mobile"] [class*="border-glow-"]:not(:focus-visible),
+html[data-tier="tablet"] [class*="border-glow-"]:not(:focus-visible),
 html[data-save-data="true"] [class*="border-glow-"]:not(:focus-visible) {
+  animation: none !important;
+}
+
+/* Promo-banner surface tier gates (2026-07-20, perf Tier-2 Task 1): low-tier
+ * devices get the static fire gradient + frozen glitter, a static clock icon,
+ * and static countdown "live" dots. Desktop keeps the full look.
+ * (prefers-reduced-motion is already handled by the global 1ms rule above;
+ * save-data also demotes data-tier to "mobile" post-hydration - the explicit
+ * selector keeps the gate correct pre-hydration and self-documenting.)
+ * Extended (Tier-2 Task 2) to the remaining infinite filter/box-shadow loops:
+ * glow-pulse* (Tailwind animate-glow-pulse* icon glows) and the vip-* keyframe
+ * classes (vip-premium-shell-glow, vip-premium-inner-luminosity,
+ * animate-vip-premium-price-halo, animate-vip-premium-enter-wrap,
+ * animate-vip-icon-halo, plus the arbitrary animate-[vip-sheen_...] sweep -
+ * all matched by the substring selectors below). */
+/* NOTE (2026-07-20): `.fire` is NO LONGER gated off on mobile/tablet. Its Tier-2
+ * rewrite made it transform-only (GPU-composited) with a static filter — the
+ * per-frame background-position repaint that was the original jank source is gone,
+ * so the brand fire animation is cheap on phones/tablets and stays ON there. It is
+ * still disabled for `save-data` (explicit data/battery preference) and
+ * prefers-reduced-motion (global rule). The clock/dot/glow/vip loops remain gated
+ * on mobile+tablet — they were not part of the transform rewrite. */
+html[data-tier="mobile"] .ta-clock-pulse,
+html[data-tier="mobile"] .ta-clock-second-hand,
+html[data-tier="mobile"] .ta-countdown-dot,
+html[data-tier="mobile"] [class*="glow-pulse"],
+html[data-tier="mobile"] [class*="vip-"],
+html[data-tier="tablet"] .ta-clock-pulse,
+html[data-tier="tablet"] .ta-clock-second-hand,
+html[data-tier="tablet"] .ta-countdown-dot,
+html[data-tier="tablet"] [class*="glow-pulse"],
+html[data-tier="tablet"] [class*="vip-"],
+html[data-save-data="true"] .fire::before,
+html[data-save-data="true"] .ta-clock-pulse,
+html[data-save-data="true"] .ta-clock-second-hand,
+html[data-save-data="true"] .ta-countdown-dot,
+html[data-save-data="true"] [class*="glow-pulse"],
+html[data-save-data="true"] [class*="vip-"] {
+  animation: none !important;
+}
+
+/* Mobile: the promo-banner fire animates in its resting (full-width) state, but
+ * stops once the banner sticks/floats on scroll — that's when its per-frame
+ * repaint would compete with scrolling. PromoBanner sets data-banner-stuck="true"
+ * on the flame's background layer while `isScrolled`. Desktop/tablet keep it
+ * animating in both states. */
+html[data-tier="mobile"] [data-banner-stuck="true"] .fire::before {
   animation: none !important;
 }
 

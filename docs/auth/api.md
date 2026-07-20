@@ -8,9 +8,30 @@
 | _TODO_ | `/api/auth/**` | Domain-specific auth helpers (signup, password reset, etc.) |
 | `POST` | `/api/user/change-password` | Change **or** first-time set the session user's password |
 | _TODO_ | `/api/user/**` | Other current-user reads/writes |
+| `GET` | `/api/users/[id]` | Session user (or staff w/ `users.view`) — enriched user record, **include-list projected** |
+| `GET` | `/api/users/[id]/my-account` | Session user (or staff w/ `users.view`) — my-account payload (user + activeMiniDraws + recentOrders + insights), **include-list projected** |
 | _TODO_ | `/api/users/**` | Multi-user reads (admin-only typically) |
 
 > _TODO: read each handler under [src/app/api/auth/](../../src/app/api/auth/), [src/app/api/user/](../../src/app/api/user/), [src/app/api/users/](../../src/app/api/users/) and document._
+
+### `GET /api/users/[id]` + `GET /api/users/[id]/my-account` — explicit wire projections (2026-07-19)
+
+Both routes select the User document with the **additive include-list** `MY_ACCOUNT_USER_FIELDS` from
+[src/utils/dashboard/my-account-projection.ts](../../src/utils/dashboard/my-account-projection.ts) — on **both** the
+`findById` branch and the `findOne`-by-email (Google OAuth id) branch. This replaced the old 3-field exclude-list
+(`-password -emailVerificationToken -passwordResetToken`), which still shipped every other auth secret
+(`smsOtpCode`, `loginCode`, `emailVerificationCode`, `inviteToken`, reset expiries…) plus wire bloat
+(`processedPayments`, `upsellHistory`, `upsellPurchases`, `redemptionHistory`, `cart`) to the client.
+
+The my-account route additionally projects its sibling queries: `MiniDraw.find().select(MY_ACCOUNT_MINI_DRAW_FIELDS)`
+(kills the MB-scale per-user `entries[]` arrays that used to ship with every poll) and
+`Order.find().select(MY_ACCOUNT_ORDER_FIELDS)`.
+
+`hasPassword` on `/api/users/[id]` is unaffected — it comes from a separate password-only query.
+`subscription` is projected as the whole subdocument, so the streak fields (`streakMonths`, `streakGeneration`),
+`lastMonthAccumulatedEntries`, and `previousSubscription` all still ship. **Footgun:** a new client-consumed User
+field must be added to `MY_ACCOUNT_USER_FIELDS` or it silently vanishes — see [gotchas.md](./gotchas.md).
+Guarded by `npm run test:my-account-projection`.
 
 ### `POST /api/user/change-password` (set-password support — 2026-05-19)
 

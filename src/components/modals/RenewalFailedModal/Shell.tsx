@@ -140,7 +140,7 @@ const Shell: React.FC<ShellProps> = ({
                 </span>
                 <h2
                   id="rf-shell-headline"
-                  className="mt-1 font-['Poppins'] text-[19px] font-extrabold leading-[1.16] tracking-[-.01em] text-neutral-900 dark:text-white max-xs:text-[17px]"
+                  className="mt-1 font-poppins text-[19px] font-extrabold leading-[1.16] tracking-[-.01em] text-neutral-900 dark:text-white max-xs:text-[17px]"
                 >
                   {title}
                 </h2>

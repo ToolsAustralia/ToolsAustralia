@@ -41,7 +41,7 @@ export function Monogram({
   return (
     <span
       aria-hidden="true"
-      className={cn("inline-grid place-items-center font-['Poppins'] font-black leading-none", className)}
+      className={cn("inline-grid place-items-center font-poppins font-black leading-none", className)}
       style={{
         width: size,
         height: size,

@@ -58,14 +58,14 @@ export default function ProductSection({
       <div className="w-full px-2 sm:px-3 lg:px-8 lg:max-w-7xl lg:mx-auto">
         {/* Section Header - Mobile/Tablet: Title only */}
         <div className="lg:hidden text-center mb-6 sm:mb-8">
-          <h2 className="text-[20px] sm:text-[24px] font-bold text-black dark:text-white mb-2 sm:mb-3 font-['Poppins'] leading-tight">
+          <h2 className="text-[20px] sm:text-[24px] font-bold text-black dark:text-white mb-2 sm:mb-3 font-poppins leading-tight">
             {title}
           </h2>
         </div>
 
         {/* Section Header - Desktop: Title and View All button */}
         <div className="hidden lg:flex flex-row items-center justify-between mb-16">
-          <h2 className="text-[32px] font-bold text-black dark:text-white font-['Poppins'] leading-tight">{title}</h2>
+          <h2 className="text-[32px] font-bold text-black dark:text-white font-poppins leading-tight">{title}</h2>
 
           {showViewAll && (
             <Link

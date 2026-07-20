@@ -756,3 +756,7 @@ All delegate to `src/services/admin/repeatPurchaseAnalytics.ts` (see [backend.md
 ## Auth
 
 Per [auth rules R1-R2](../auth/rules.md): every handler must call `requireAdmin(session)`. Middleware doesn't gate `/api/admin/**`.
+
+## Promo banner-text active endpoint — cache headers (2026-07-19)
+
+`GET /api/admin/promo/banner-text/active` (public read despite living under /api/admin — no auth, admin-scheduled content, no per-user data) now returns `Cache-Control: public, s-maxage=60, stale-while-revalidate=120` instead of `no-store`, matching `/api/promo/effective-for-banner`. It is fetched above the fold by every promotions visitor; no-store forced one serverless + Mongo round trip per ad click. The admin WRITE endpoints under `banner-text/` are unchanged (still uncached).

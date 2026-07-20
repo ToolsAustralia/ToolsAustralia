@@ -66,3 +66,10 @@ Shop/cart components use `cn()` from `@/utils/cn` for conditional class composit
 `PurchaseSuccessClient.tsx` fires the browser Purchase pixel via `trackConversion(buildPurchaseEvent(...))` on mount, with `eventId = paymentIntentId` for browser↔server dedup. It passes `contentName: status.data.packageName` so the Purchase carries `content_name` on both the pixel and the server Events API/CAPI (same source as the server, so values match). The shop checkout success (`CheckoutSuccessClient.tsx`) is browser-only (no server CAPI today), so it has no `content_name` parity requirement. Field-by-field reference: [docs/tracking/EVENT_PARAMETER_MATRIX.md](../tracking/EVENT_PARAMETER_MATRIX.md).
 
 **Re-fire guard (2026-07-08):** both success clients wrap the fire in `shouldSuppressPurchasePixel` / `markPurchasePixelFired` from [src/utils/tracking/purchase-pixel-fired-storage.ts](../../src/utils/tracking/purchase-pixel-fired-storage.ts) (localStorage key `purchasePixelFired_${eventId}` holding the first-fire time, pruned after 30 days; suppresses only re-fires older than 46h — younger ones are merged by Meta's dedup and double as delivery recovery). The old per-mount `firedRef` alone re-fired the Purchase on every remount (refresh, back-nav, history revisit); Meta's event_id dedup only lasts ~48h, so a revisit later than that counted as a brand-new conversion and inflated Meta-reported ROAS. The guard's `eventId` is `paymentIntentId` on `/purchase-success` and `order.orderNumber ?? orderId` on `/checkout/success`. First legitimate fire is unchanged. See the gotchas entry for why this matters most on the shop path.
+
+## 2026-07-20 — Tier-2 perf: Poppins codemod
+
+Components in this domain were touched by the sitewide `font-'[Poppins]'` → `font-poppins`
+codemod (`npm run sweep:font-poppins`). Their Poppins-classed text now renders **real Poppins**
+instead of a browser fallback — an intended visual change. Details + rules:
+docs/shared-ui/tailwind-conventions.md §10.

@@ -39,7 +39,7 @@ export default function MembershipFinalCta({ cta }: { cta: MembershipCardCta }) 
         >
           <Gift className="h-3 w-3 flex-none sm:h-3.5 sm:w-3.5" style={{ color: "#d4af37" }} /> Refer a mate · both get {REFERRAL_ENTRIES} free entries
         </span>
-        <h2 className="mx-auto mt-5 max-w-3xl font-['Poppins'] text-4xl font-black tracking-tight sm:text-5xl lg:text-6xl">
+        <h2 className="mx-auto mt-5 max-w-3xl font-poppins text-4xl font-black tracking-tight sm:text-5xl lg:text-6xl">
           Join today.{" "}
           <span className="bg-gradient-to-r from-amber-300 to-amber-500 bg-clip-text text-transparent">Be in this month&apos;s draw.</span>
         </h2>

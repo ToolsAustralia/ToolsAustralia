@@ -30,13 +30,13 @@ export default function DrawHowItWorks() {
           const Icon = step.icon;
           return (
             <li key={step.title} className="relative rounded-2xl border border-token bg-black/[.02] p-4 dark:bg-white/[.03]">
-              <span className="absolute right-3 top-3 font-['Poppins'] text-2xl font-black text-black/[.08] dark:text-white/[.10]">
+              <span className="absolute right-3 top-3 font-poppins text-2xl font-black text-black/[.08] dark:text-white/[.10]">
                 {i + 1}
               </span>
               <span className="grid h-10 w-10 place-items-center rounded-xl bg-red-50 text-red-600 dark:bg-red-500/15 dark:text-red-400">
                 <Icon className="h-5 w-5" />
               </span>
-              <h3 className="mt-3 font-['Poppins'] text-sm font-extrabold text-primary-token dark:text-white">{step.title}</h3>
+              <h3 className="mt-3 font-poppins text-sm font-extrabold text-primary-token dark:text-white">{step.title}</h3>
               <p className="mt-1 text-xs leading-relaxed text-muted-token">{step.body}</p>
             </li>
           );

@@ -1,8 +1,7 @@
 "use client";
 
-import React, { useState, useEffect, useCallback, useMemo } from "react";
+import React, { useState, useEffect, useCallback, useMemo, Suspense } from "react";
 import Image from "next/image";
-import dynamic from "next/dynamic";
 import { useSearchParams } from "next/navigation";
 import { Users, Zap, Check, ChevronLeft, ChevronRight } from "lucide-react";
 import * as LucideIcons from "lucide-react";
@@ -12,16 +11,11 @@ import useEmblaCarousel from "embla-carousel-react";
 import ClassNames from "embla-carousel-class-names";
 import type { EmblaCarouselType, EmblaOptionsType } from "embla-carousel";
 import { EmblaCarouselButton } from "@/components/ui/embla/EmblaCarouselButton";
-// Lazy-loaded: MembershipModal pulls in Stripe + payment forms; only ship its
-// JS once the user opens the membership flow.
-const MembershipModal = dynamic(() => import("@/components/modals/MembershipModal"), {
-  ssr: false,
-});
+import MembershipModal from "@/components/modals/MembershipModal/LazyMembershipModal";
 import { useUserContext } from "@/contexts/UserContext";
 import { useMajorDrawEntryCta } from "@/hooks/useMajorDrawEntryCta";
 import { useMajorDrawPurchaseGate } from "@/hooks/useMajorDrawPurchaseGate";
 import { useCurrentMajorDraw, useUserMajorDrawStats } from "@/hooks/queries/useMajorDrawQueries";
-import PrizeSpecificationsModal from "@/components/modals/PrizeSpecificationsModal";
 import { usePrizeCatalog } from "@/hooks/usePrizeCatalog";
 import { Skeleton } from "@/components/loading/SkeletonLoader";
 import {
@@ -30,8 +24,17 @@ import {
   getBrandGlowColor,
 } from "@/utils/prize-brand-colors";
 import { getMembershipSectionColorScheme } from "@/utils/package-colors/packageColorScheme";
-import type { PrizeCatalogEntry, PrizeSlug } from "@/config/prizes";
+import type { PrizeSlug, PrizeSummary } from "@/config/prize-summaries";
+// Type-only (erased at compile): the deep-catalog VALUES only ever arrive through the
+// click-gated `import("@/config/prizes")` in the specs-modal effect below.
+import type { PrizeCatalogEntry } from "@/config/prizes";
 import { cn } from "@/utils/cn";
+import dynamic from "next/dynamic";
+
+// Click-gated heavy chunk (LazyMembershipModal latch pattern — see
+// src/components/modals/MembershipModal/LazyMembershipModal.tsx and PrizeShowcase):
+// rendered only after the first open via the specsEverOpened latch below.
+const PrizeSpecificationsModal = dynamic(() => import("@/components/modals/PrizeSpecificationsModal"), { ssr: false });
 
 interface MajorDrawSectionProps {
   className?: string;
@@ -333,10 +336,15 @@ const formatTimeWithoutPeriod = (date: Date): string => {
   return `${hour12}:${minutesStr}${period}`;
 };
 
-export default function MajorDrawSection({ className = "" }: MajorDrawSectionProps) {
+function MajorDrawSectionInner({ className = "" }: MajorDrawSectionProps) {
   const searchParams = useSearchParams();
   const [showBreakdown, setShowBreakdown] = useState(false);
   const [isSpecsModalOpen, setIsSpecsModalOpen] = useState(false);
+  // First-open latch for the click-gated specs-modal chunk (LazyMembershipModal pattern).
+  const [specsEverOpened, setSpecsEverOpened] = useState(false);
+  if (isSpecsModalOpen && !specsEverOpened) setSpecsEverOpened(true); // render-phase latch (same-component setState is safe)
+  // Deep catalog entry for the specs modal — resolved lazily, see the effect below.
+  const [specsPrize, setSpecsPrize] = useState<PrizeCatalogEntry | null>(null);
   const [selectedPrizeSlug, setSelectedPrizeSlug] = useState<string | null>(null);
   const [toolboxType, setToolboxType] = useState<"sidchrome" | "milwaukee" | "kincrome" | "cash">("milwaukee");
   const [mobilePrizeIndex, setMobilePrizeIndex] = useState(0);
@@ -370,6 +378,30 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
       );
     }
   }, [activeSlug, defaultSlug, selectedPrizeSlug]);
+
+  // Deep spec-sheet data is deliberately NOT in the client prize summaries — resolve the
+  // full catalog entry from `@/config/prizes` (its own click-gated chunk, cached after the
+  // first open) whenever the specs modal is open for the active prize. Until it lands the
+  // modal shows its built-in "Prize information is loading" state.
+  const specsSlug = activePrize?.slug;
+  useEffect(() => {
+    if (!isSpecsModalOpen || !specsSlug) return;
+    let cancelled = false;
+    // Stale-specs guard: switching prizes then reopening must not flash the previous sheet.
+    setSpecsPrize((prev) => (prev && prev.slug !== specsSlug ? null : prev));
+    import("@/config/prizes")
+      .then(({ getPrizeBySlug }) => {
+        if (!cancelled) setSpecsPrize(getPrizeBySlug(specsSlug) ?? null);
+      })
+      .catch((error) => {
+        // Keep the null/loading state — the modal's "Prize information is loading. Please try
+        // again in a moment." copy covers it, and reopening re-runs this effect (chunk retry).
+        console.error("MajorDrawSection: failed to load deep prize catalog for specs modal", error);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isSpecsModalOpen, specsSlug]);
 
   // Fetch next draw name when current draw is frozen or completed (gap state)
   useEffect(() => {
@@ -539,7 +571,6 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
   const prizeSubheading = selectedPrize.heroSubheading;
   const prizeLabel = selectedPrize.label;
   const prizeSummary = selectedPrize.summary;
-  const _prizeDescription = selectedPrize.detailedDescription;
 
   // Get brand colors for active prize to match View Specs button and other elements
   const activePrizeSlug = activeSlug || defaultSlug;
@@ -714,9 +745,9 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
   };
 
   const filterPrizesByToolboxType = (
-    prizeList: PrizeCatalogEntry[],
+    prizeList: PrizeSummary[],
     toolboxType: "sidchrome" | "milwaukee" | "kincrome" | "cash"
-  ): PrizeCatalogEntry[] => {
+  ): PrizeSummary[] => {
     if (toolboxType === "cash") {
       return prizeList.filter((p) => p.slug === "cash-prize");
     }
@@ -763,7 +794,7 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
 
     return (
       <div className={layout === "desktop" ? "mt-4 sm:mt-6 max-w-5xl mx-auto" : "mt-4 sm:mt-6"}>
-        <p className="text-lg sm:text-xl font-bold text-black dark:text-white font-['Poppins'] mb-2 sm:mb-3 text-center">
+        <p className="text-lg sm:text-xl font-bold text-black dark:text-white font-poppins mb-2 sm:mb-3 text-center">
           Pick Your Power Toolset / Storage System
         </p>
         {/* Toolbox type toggle - clickable, updates content only (no URL nav) */}
@@ -853,7 +884,7 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
                       )}
                       <div className="relative z-10 w-full overflow-visible">
                         <div
-                          className={`text-base font-bold font-['Poppins'] leading-tight break-words text-center ${
+                          className={`text-base font-bold font-poppins leading-tight break-words text-center ${
                             isActive ? "text-white" : "text-gray-900 dark:text-neutral-100"
                           }`}
                         >
@@ -945,7 +976,7 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
                       )}
                       <div className="relative z-10 w-full overflow-visible">
                         <div
-                          className={`text-base font-bold font-['Poppins'] leading-tight break-words text-center ${
+                          className={`text-base font-bold font-poppins leading-tight break-words text-center ${
                             isActive ? "text-white" : "text-gray-900 dark:text-neutral-100"
                           }`}
                         >
@@ -989,7 +1020,7 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
                 </div>
               )}
               <div className="relative z-10">
-                <div className={cn("text-base font-bold font-['Poppins'] leading-tight break-words text-center", isActive ? "text-white" : "text-gray-900 dark:text-neutral-100")}>
+                <div className={cn("text-base font-bold font-poppins leading-tight break-words text-center", isActive ? "text-white" : "text-gray-900 dark:text-neutral-100")}>
                   <div className="block">{formattedLabel.line1}</div>
                   {formattedLabel.line2 && <div className="block">{formattedLabel.line2}</div>}
                   {formattedLabel.line3 && <div className="block">{formattedLabel.line3}</div>}
@@ -1021,7 +1052,7 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
               <Icon className={cn("w-3.5 h-3.5 sm:w-5 sm:h-5", brandColors.textColor)} />
             </div>
             <div className="flex-1 min-w-0 relative z-10">
-              <h3 className="text-xs sm:text-lg font-bold text-white font-['Poppins'] mb-0.5 sm:mb-1 drop-shadow-md leading-tight line-clamp-2 sm:line-clamp-none">
+              <h3 className="text-xs sm:text-lg font-bold text-white font-poppins mb-0.5 sm:mb-1 drop-shadow-md leading-tight line-clamp-2 sm:line-clamp-none">
                 {highlight.title}
               </h3>
               <p className="text-2xs sm:text-sm text-gray-300 font-['Inter'] leading-tight sm:leading-relaxed hidden lg:block">
@@ -1072,7 +1103,7 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
             <div className="text-center space-y-2 px-4">
               {/* Mobile: Main Title */}
               <div className="flex items-center justify-center gap-2">
-                <h2 className="hidden lg:block text-[24px] font-bold text-black dark:text-white font-['Poppins'] leading-tight">
+                <h2 className="hidden lg:block text-[24px] font-bold text-black dark:text-white font-poppins leading-tight">
                   {prizeHeroHeading}
                 </h2>
               </div>
@@ -1492,7 +1523,7 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
                               key={item.label}
                               className="bg-white/10 backdrop-blur-[var(--ta-blur)] rounded-2xl p-2 sm:p-3 text-center border border-white/20"
                             >
-                              <div className="text-lg sm:text-2xl font-bold text-white font-['Poppins']">
+                              <div className="text-lg sm:text-2xl font-bold text-white font-poppins">
                                 {String(item.value).padStart(2, "0")}
                               </div>
                               <div className="text-2xs sm:text-[12px] text-white/80 font-medium">{item.label}</div>
@@ -1541,7 +1572,7 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
                       .replace("-500", "-400/30")} mb-2`}
                   >
                     <h2
-                      className={cn("text-4xl font-bold", brandColors.textColor, "font-['Poppins'] leading-tight drop-shadow-lg")}
+                      className={cn("text-4xl font-bold", brandColors.textColor, "font-poppins leading-tight drop-shadow-lg")}
                     >
                       {majorDraw?.name || activePrize?.heroHeading || "Major Draw"}
                     </h2>
@@ -1655,11 +1686,13 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
         </div>
       </section>
 
-      <PrizeSpecificationsModal
-        isOpen={isSpecsModalOpen}
-        onClose={() => setIsSpecsModalOpen(false)}
-        prize={selectedPrize}
-      />
+      {specsEverOpened && (
+        <PrizeSpecificationsModal
+          isOpen={isSpecsModalOpen}
+          onClose={() => setIsSpecsModalOpen(false)}
+          prize={specsPrize}
+        />
+      )}
 
       {/* Membership Modal */}
       <MembershipModal
@@ -1669,5 +1702,14 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
         onPlanChange={membershipModal.selectPlan}
       />
     </>
+  );
+}
+
+// Suspense self-wrap: useSearchParams requires a boundary for prerendered (marketing-class) pages — docs/security-csp/rules.md R8.
+export default function MajorDrawSection(props: MajorDrawSectionProps) {
+  return (
+    <Suspense fallback={null}>
+      <MajorDrawSectionInner {...props} />
+    </Suspense>
   );
 }

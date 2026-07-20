@@ -5,6 +5,10 @@ import { FAQPageJsonLd, BreadcrumbJsonLd } from "@/components/seo/StructuredData
 import { getFaqEntries, faqCategories } from "@/data/faqs";
 import { getNonce } from "@/utils/security/getNonce";
 
+// nonce-CSP route class — must render per-request; never cache HTML with a baked nonce
+// (see docs/security-csp/architecture.md "Route classes").
+export const dynamic = "force-dynamic";
+
 // SEO Metadata for FAQ Page
 export const metadata: Metadata = {
   title: "Frequently Asked Questions | Tools Australia",

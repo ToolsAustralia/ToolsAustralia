@@ -6,6 +6,10 @@ import MetallicDivider from "@/components/ui/MetallicDivider";
 import { Facebook, Instagram, Mail } from "lucide-react";
 import { getContactEmail } from "@/lib/email/sender-identities";
 
+// nonce-CSP route class — must render per-request; never cache HTML with a baked nonce
+// (see docs/security-csp/architecture.md "Route classes").
+export const dynamic = "force-dynamic";
+
 // SEO Metadata for Contact Page
 export const metadata: Metadata = {
   title: "Contact Us | Tools Australia",
@@ -50,7 +54,7 @@ export default function ContactPage() {
         <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8">
           <div className="flex flex-col lg:flex-row items-center justify-between gap-6">
             <div className="text-center lg:text-left">
-              <h1 className="text-[32px] sm:text-[40px] lg:text-[48px] font-bold font-['Poppins'] mb-4">
+              <h1 className="text-[32px] sm:text-[40px] lg:text-[48px] font-bold font-poppins mb-4">
                 <span className="text-white">C</span>
                 <span className="bg-gradient-to-r from-red-600 to-red-675 bg-clip-text text-transparent">o</span>
                 <span className="text-white">ntact</span>
@@ -94,10 +98,10 @@ export default function ContactPage() {
               <div className="relative z-20 flex flex-col h-full">
                 {/* Top Section - Contact Information Header */}
                 <div className="mb-6 sm:mb-8">
-                  <h2 className="text-[20px] sm:text-[24px] lg:text-[28px] font-semibold mb-3 sm:mb-4 font-['Poppins']">
+                  <h2 className="text-[20px] sm:text-[24px] lg:text-[28px] font-semibold mb-3 sm:mb-4 font-poppins">
                     Contact Information
                   </h2>
-                  <p className="text-[14px] sm:text-[16px] lg:text-[18px] text-white/90 font-['Poppins']">
+                  <p className="text-[14px] sm:text-[16px] lg:text-[18px] text-white/90 font-poppins">
                     Say something to start a live chat with our team
                   </p>
                 </div>
@@ -107,12 +111,12 @@ export default function ContactPage() {
                   <div className="flex items-start gap-4 sm:gap-6">
                     <Mail className="w-6 h-6 sm:w-8 sm:h-8 lg:w-10 lg:h-10 text-white flex-shrink-0 mt-1" />
                     <div>
-                      <p className="text-[12px] sm:text-[14px] lg:text-[16px] text-white/80 font-['Poppins'] mb-1">
+                      <p className="text-[12px] sm:text-[14px] lg:text-[16px] text-white/80 font-poppins mb-1">
                         Email
                       </p>
                       <a
                         href={`mailto:${getContactEmail()}`}
-                        className="font-normal text-[14px] sm:text-[16px] lg:text-[18px] font-['Poppins'] text-white hover:text-red-400 transition-colors"
+                        className="font-normal text-[14px] sm:text-[16px] lg:text-[18px] font-poppins text-white hover:text-red-400 transition-colors"
                       >
                         {getContactEmail()}
                       </a>
@@ -121,7 +125,7 @@ export default function ContactPage() {
 
                   {/* Social Media Section */}
                   <div>
-                    <p className="text-white/80 text-[12px] sm:text-[14px] mb-3 sm:mb-4 font-['Poppins']">Follow Us:</p>
+                    <p className="text-white/80 text-[12px] sm:text-[14px] mb-3 sm:mb-4 font-poppins">Follow Us:</p>
                     <div className="flex items-center gap-3 sm:gap-4">
                       <a
                         href="https://www.facebook.com/toolsaust"

@@ -16,6 +16,10 @@ import { ProductJsonLd, BreadcrumbJsonLd } from "@/components/seo/StructuredData
 import { createCachedQuery } from "@/utils/database/queries/server-queries";
 import { getNonce } from "@/utils/security/getNonce";
 
+// nonce-CSP route class — must render per-request; never cache HTML with a baked nonce
+// (see docs/security-csp/architecture.md "Route classes").
+export const dynamic = "force-dynamic";
+
 interface ProductPageProps {
   params: Promise<{
     slug: string;
@@ -269,7 +273,7 @@ export default async function ProductDetailPage({ params }: ProductPageProps) {
                 </div>
                 <ShareButton name={product.name} brand={product.brand} />
               </div>
-              <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-neutral-100 mb-3 font-['Poppins']">{product.name}</h1>
+              <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-neutral-100 mb-3 font-poppins">{product.name}</h1>
             </div>
 
             {/* Rating & Reviews */}
@@ -290,7 +294,7 @@ export default async function ProductDetailPage({ params }: ProductPageProps) {
 
             {/* Price */}
             <div className="flex items-center gap-3">
-              <span className="text-3xl font-bold text-red-600 font-['Poppins']">${product.price}</span>
+              <span className="text-3xl font-bold text-red-600 font-poppins">${product.price}</span>
               <span className="text-sm text-gray-500 dark:text-neutral-500 line-through">${(product.price * 1.2).toFixed(2)}</span>
               <span className="bg-gradient-to-r from-green-500 to-green-600 text-white px-2 py-1 rounded-full text-sm font-bold">
                 Save 20%

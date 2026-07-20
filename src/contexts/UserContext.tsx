@@ -1,7 +1,8 @@
 "use client";
 
-import React, { createContext, useContext, ReactNode } from "react";
+import React, { createContext, useContext, useMemo, useCallback, ReactNode } from "react";
 import { useSession } from "next-auth/react";
+import { usePathname } from "next/navigation";
 import {
   useUserData as useUserDataQuery,
   useMyAccountData,
@@ -49,6 +50,7 @@ interface UserProviderProps {
 export const UserProvider: React.FC<UserProviderProps> = ({ children }) => {
   const { data: session } = useSession();
   const userId = session?.user?.id;
+  const pathname = usePathname();
 
   // Use React Query hooks for data fetching
   const {
@@ -58,7 +60,11 @@ export const UserProvider: React.FC<UserProviderProps> = ({ children }) => {
     refetch: refetchUserData,
   } = useUserDataQuery(userId);
 
-  const { data: accountData, isLoading: accountLoading, error: accountError } = useMyAccountData(userId);
+  // Poll only while the member is on /my-account — this provider is mounted globally,
+  // and an unconditional interval here refetched the my-account payload site-wide.
+  const { data: accountData, isLoading: accountLoading, error: accountError } = useMyAccountData(userId, {
+    poll: pathname?.startsWith("/my-account") ?? false,
+  });
 
   const membershipStatus = useUserMembership(userId);
   const userStats = useUserStats(userId);
@@ -77,21 +83,40 @@ export const UserProvider: React.FC<UserProviderProps> = ({ children }) => {
   const isMember = hasActiveSubscription;
   const isAuthenticated = !!session;
 
-  const value: UserContextType = {
-    userData: userData || null,
-    loading,
-    error,
-    isAuthenticated,
-    session,
-    refetch: () => {
-      refetchUserData();
-    },
-    hasActiveSubscription,
-    isMember,
-    accountData: accountData || null,
-    membershipStatus,
-    userStats,
-  };
+  const refetch = useCallback(() => {
+    refetchUserData();
+  }, [refetchUserData]);
+
+  // Memoized: without this, every render of the provider (e.g. a poll tick) produced
+  // a fresh value object and re-rendered every context consumer (~39 components).
+  const value = useMemo<UserContextType>(
+    () => ({
+      userData: userData || null,
+      loading,
+      error,
+      isAuthenticated,
+      session,
+      refetch,
+      hasActiveSubscription,
+      isMember,
+      accountData: accountData || null,
+      membershipStatus,
+      userStats,
+    }),
+    [
+      userData,
+      loading,
+      error,
+      isAuthenticated,
+      session,
+      refetch,
+      hasActiveSubscription,
+      isMember,
+      accountData,
+      membershipStatus,
+      userStats,
+    ]
+  );
 
   return <UserContext.Provider value={value}>{children}</UserContext.Provider>;
 };

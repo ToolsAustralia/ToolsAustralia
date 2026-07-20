@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import { BreadcrumbJsonLd } from "@/components/seo/StructuredData";
-import { getNonce } from "@/utils/security/getNonce";
 import { getContactEmail } from "@/lib/email/sender-identities";
 
 export const metadata: Metadata = {
@@ -8,13 +7,12 @@ export const metadata: Metadata = {
   description: "Review the membership, giveaway, and ecommerce terms that govern your use of Tools Australia.",
 };
 
-export default async function TermsPage() {
+export default function TermsPage() {
   const baseUrl = (process.env.NEXT_PUBLIC_APP_URL || "https://toolsaustralia.com.au").replace(/\/$/, "");
   const contactEmail = getContactEmail();
 
-  // Get CSP nonce from request headers (set by middleware in production)
-  const nonce = await getNonce();
-
+  // No getNonce() here: JSON-LD is non-executable data (CSP script-src doesn't gate it),
+  // and a headers() read would make this marketing-class page dynamic, breaking prerender.
   return (
     <>
       <BreadcrumbJsonLd
@@ -22,7 +20,6 @@ export default async function TermsPage() {
           { name: "Home", item: `${baseUrl}/` },
           { name: "Terms and Conditions", item: `${baseUrl}/terms` },
         ]}
-        nonce={nonce}
       />
       <main className="bg-slate-950 text-gray-100 pt-[110px] pb-24 sm:pt-[120px]">
         {/* Using the same layout spacing as other static pages keeps design consistent */}

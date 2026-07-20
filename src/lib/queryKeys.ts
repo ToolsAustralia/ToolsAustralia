@@ -81,6 +81,9 @@ export const queryKeys = {
   // Winners (major draw winners list - shared cache for homepage, promotions, modal)
   winners: {
     majorDraws: ["winners", "major-draws"] as const,
+    // Combined winners feed (major + mini) from /api/winners/all — shared by the
+    // Latest Winners board and the testimony carousel so a page fetches once.
+    feed: (limit: number) => ["winners", "feed", limit] as const,
   },
 
   // Upsell queries

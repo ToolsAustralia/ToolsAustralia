@@ -1,17 +1,17 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
 import { useCurrentMajorDraw } from "@/hooks/queries/useMajorDrawQueries";
-import { DEFAULT_PRIZE_SLUG } from "@/config/prizes";
+import { DEFAULT_PRIZE_SLUG } from "@/config/prize-summaries";
 import { cn } from "@/utils/cn";
 
 interface HorizontalCountdownProps {
   className?: string;
 }
 
-const HorizontalCountdown: React.FC<HorizontalCountdownProps> = ({ className = "" }) => {
+const HorizontalCountdownInner: React.FC<HorizontalCountdownProps> = ({ className = "" }) => {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [timeLeft, setTimeLeft] = useState({
@@ -83,7 +83,7 @@ const HorizontalCountdown: React.FC<HorizontalCountdownProps> = ({ className = "
         {/* Left Column - Text */}
         <div className="text-center sm:text-left sm:col-span-3">
           <div className="flex items-center justify-center sm:justify-start gap-3 mb-2">
-            <h3 className="text-sm sm:text-base font-bold text-white font-['Poppins'] leading-tight break-words">
+            <h3 className="text-sm sm:text-base font-bold text-white font-poppins leading-tight break-words">
               UNTIL NEXT LIVE DRAW
             </h3>
           </div>
@@ -93,14 +93,14 @@ const HorizontalCountdown: React.FC<HorizontalCountdownProps> = ({ className = "
         <div className="text-center sm:col-span-6">
           {isExpired ? (
             <div className="text-center">
-              <div className="text-2xl sm:text-3xl font-bold text-red-400 mb-2 font-['Poppins']">DRAW IN PROGRESS!</div>
+              <div className="text-2xl sm:text-3xl font-bold text-red-400 mb-2 font-poppins">DRAW IN PROGRESS!</div>
               <p className="text-sm text-gray-300">Check back soon for results</p>
             </div>
           ) : (
             <div className="grid grid-cols-4 gap-2 sm:gap-2">
               {/* Days */}
               <div className="bg-gradient-to-br from-red-500 via-red-600 to-red-700 rounded-lg px-2 py-2 sm:px-4 sm:py-2 shadow-lg w-full ring-2 ring-red-300/20">
-                <div className="text-lg sm:text-xl font-bold text-white mb-0.5 font-['Poppins'] drop-shadow-md">
+                <div className="text-lg sm:text-xl font-bold text-white mb-0.5 font-poppins drop-shadow-md">
                   {timeLeft.days.toString().padStart(2, "0")}
                 </div>
                 <div className="text-xs text-red-100 font-medium">DAYS</div>
@@ -108,7 +108,7 @@ const HorizontalCountdown: React.FC<HorizontalCountdownProps> = ({ className = "
 
               {/* Hours */}
               <div className="bg-gradient-to-br from-red-500 via-red-600 to-red-700 rounded-lg px-2 py-2 sm:px-4 sm:py-2 shadow-lg w-full ring-2 ring-red-300/20">
-                <div className="text-lg sm:text-xl font-bold text-white mb-0.5 font-['Poppins'] drop-shadow-md">
+                <div className="text-lg sm:text-xl font-bold text-white mb-0.5 font-poppins drop-shadow-md">
                   {timeLeft.hours.toString().padStart(2, "0")}
                 </div>
                 <div className="text-xs text-red-100 font-medium">HRS</div>
@@ -116,7 +116,7 @@ const HorizontalCountdown: React.FC<HorizontalCountdownProps> = ({ className = "
 
               {/* Minutes */}
               <div className="bg-gradient-to-br from-red-500 via-red-600 to-red-700 rounded-lg px-2 py-2 sm:px-4 sm:py-2 shadow-lg w-full ring-2 ring-red-300/20">
-                <div className="text-lg sm:text-xl font-bold text-white mb-0.5 font-['Poppins'] drop-shadow-md">
+                <div className="text-lg sm:text-xl font-bold text-white mb-0.5 font-poppins drop-shadow-md">
                   {timeLeft.minutes.toString().padStart(2, "0")}
                 </div>
                 <div className="text-xs text-red-100 font-medium">MINS</div>
@@ -124,7 +124,7 @@ const HorizontalCountdown: React.FC<HorizontalCountdownProps> = ({ className = "
 
               {/* Seconds */}
               <div className="bg-gradient-to-br from-red-500 via-red-600 to-red-700 rounded-lg px-2 py-2 sm:px-4 sm:py-2 shadow-lg w-full ring-2 ring-red-300/20">
-                <div className="text-lg sm:text-xl font-bold text-white mb-0.5 font-['Poppins'] drop-shadow-md">
+                <div className="text-lg sm:text-xl font-bold text-white mb-0.5 font-poppins drop-shadow-md">
                   {timeLeft.seconds.toString().padStart(2, "0")}
                 </div>
                 <div className="text-xs text-red-100 font-medium">SECS</div>
@@ -147,4 +147,11 @@ const HorizontalCountdown: React.FC<HorizontalCountdownProps> = ({ className = "
   );
 };
 
-export default HorizontalCountdown;
+// Suspense self-wrap: useSearchParams requires a boundary for prerendered (marketing-class) pages — docs/security-csp/rules.md R8.
+export default function HorizontalCountdown(props: HorizontalCountdownProps) {
+  return (
+    <Suspense fallback={null}>
+      <HorizontalCountdownInner {...props} />
+    </Suspense>
+  );
+}

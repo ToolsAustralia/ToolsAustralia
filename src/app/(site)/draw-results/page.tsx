@@ -28,6 +28,10 @@ const spaceMono = Space_Mono({
   display: "swap",
 });
 
+// Marketing route class: static + ISR (no-nonce CSP). Draw-results stats change on draw
+// completion; 5-minute revalidate replaces 3 per-request Mongo queries.
+export const revalidate = 300;
+
 export const metadata: Metadata = {
   title: "Draw Results & Winners | Tools Australia",
   description:

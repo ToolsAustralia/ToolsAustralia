@@ -91,7 +91,7 @@ export default function PartnerHero({ onBecomePartnerAction }: PartnerHeroProps)
                 </div>
 
                 {/* Main Title */}
-                <h1 className="text-[32px] sm:text-[48px] font-black leading-[32px] sm:leading-[48px] text-white font-['Poppins',_sans-serif] mb-4 sm:mb-6 drop-shadow-lg">
+                <h1 className="text-[32px] sm:text-[48px] font-black leading-[32px] sm:leading-[48px] text-white font-poppins mb-4 sm:mb-6 drop-shadow-lg">
                   Partner with the
                   <span className="block text-red-600">Tool Experts</span>
                 </h1>
@@ -105,7 +105,7 @@ export default function PartnerHero({ onBecomePartnerAction }: PartnerHeroProps)
 
                 {/* Mobile Feature Cards - Before Button */}
                 <div className="mb-8">
-                  <h3 className="text-lg font-bold text-white mb-4 font-['Poppins'] text-center drop-shadow-md">
+                  <h3 className="text-lg font-bold text-white mb-4 font-poppins text-center drop-shadow-md">
                     Why Partner With Us?
                   </h3>
                   <div className="overflow-x-auto pb-4 brand-scrollbar">
@@ -113,7 +113,7 @@ export default function PartnerHero({ onBecomePartnerAction }: PartnerHeroProps)
                       {/* Feature Card 1 */}
                       <div className="relative group bg-gradient-to-br from-slate-700/80 via-slate-600/80 to-slate-700/80 backdrop-blur-[var(--ta-blur)] rounded-2xl p-4 shadow-[0_8px_32px_rgba(0,0,0,0.4)] border border-slate-500/30 flex-shrink-0 w-64">
                         <div className="absolute inset-0 bg-gradient-to-br from-white/10 via-transparent to-transparent pointer-events-none z-10"></div>
-                        <h4 className="text-base font-bold text-white mb-2 font-['Poppins'] relative z-20">
+                        <h4 className="text-base font-bold text-white mb-2 font-poppins relative z-20">
                           Increased Sales
                         </h4>
                         <p className="text-xs text-slate-200 font-['Inter'] relative z-20">
@@ -124,7 +124,7 @@ export default function PartnerHero({ onBecomePartnerAction }: PartnerHeroProps)
                       {/* Feature Card 2 */}
                       <div className="relative group bg-gradient-to-br from-slate-700/80 via-slate-600/80 to-slate-700/80 backdrop-blur-[var(--ta-blur)] rounded-2xl p-4 shadow-[0_8px_32px_rgba(0,0,0,0.4)] border border-slate-500/30 flex-shrink-0 w-64">
                         <div className="absolute inset-0 bg-gradient-to-br from-white/10 via-transparent to-transparent pointer-events-none z-10"></div>
-                        <h4 className="text-base font-bold text-white mb-2 font-['Poppins'] relative z-20">
+                        <h4 className="text-base font-bold text-white mb-2 font-poppins relative z-20">
                           Brand Exposure
                         </h4>
                         <p className="text-xs text-slate-200 font-['Inter'] relative z-20">
@@ -135,7 +135,7 @@ export default function PartnerHero({ onBecomePartnerAction }: PartnerHeroProps)
                       {/* Feature Card 3 */}
                       <div className="relative group bg-gradient-to-br from-slate-700/80 via-slate-600/80 to-slate-700/80 backdrop-blur-[var(--ta-blur)] rounded-2xl p-4 shadow-[0_8px_32px_rgba(0,0,0,0.4)] border border-slate-500/30 flex-shrink-0 w-64">
                         <div className="absolute inset-0 bg-gradient-to-br from-white/10 via-transparent to-transparent pointer-events-none z-10"></div>
-                        <h4 className="text-base font-bold text-white mb-2 font-['Poppins'] relative z-20">
+                        <h4 className="text-base font-bold text-white mb-2 font-poppins relative z-20">
                           Premium Placement
                         </h4>
                         <p className="text-xs text-slate-200 font-['Inter'] relative z-20">
@@ -146,7 +146,7 @@ export default function PartnerHero({ onBecomePartnerAction }: PartnerHeroProps)
                       {/* Feature Card 4 */}
                       <div className="relative group bg-gradient-to-br from-slate-700/80 via-slate-600/80 to-slate-700/80 backdrop-blur-[var(--ta-blur)] rounded-2xl p-4 shadow-[0_8px_32px_rgba(0,0,0,0.4)] border border-slate-500/30 flex-shrink-0 w-64">
                         <div className="absolute inset-0 bg-gradient-to-br from-white/10 via-transparent to-transparent pointer-events-none z-10"></div>
-                        <h4 className="text-base font-bold text-white mb-2 font-['Poppins'] relative z-20">
+                        <h4 className="text-base font-bold text-white mb-2 font-poppins relative z-20">
                           Easy Integration
                         </h4>
                         <p className="text-xs text-slate-200 font-['Inter'] relative z-20">
@@ -181,7 +181,7 @@ export default function PartnerHero({ onBecomePartnerAction }: PartnerHeroProps)
               </div>
 
               {/* Main Title */}
-              <h1 className="text-[64px] font-black leading-[64px] text-white font-['Poppins',_sans-serif] mb-6 drop-shadow-lg">
+              <h1 className="text-[64px] font-black leading-[64px] text-white font-poppins mb-6 drop-shadow-lg">
                 Partner with the
                 <span className="block text-red-600">Tool Experts</span>
               </h1>
@@ -203,7 +203,7 @@ export default function PartnerHero({ onBecomePartnerAction }: PartnerHeroProps)
               {/* Feature Card 1 */}
               <div className="relative group bg-gradient-to-br from-slate-700/80 via-slate-600/80 to-slate-700/80 backdrop-blur-[var(--ta-blur)] rounded-2xl p-6 shadow-[0_8px_32px_rgba(0,0,0,0.4)] border border-slate-500/30">
                 <div className="absolute inset-0 bg-gradient-to-br from-white/10 via-transparent to-transparent pointer-events-none z-10"></div>
-                <h3 className="text-lg font-bold text-white mb-2 font-['Poppins'] relative z-20">Increased Sales</h3>
+                <h3 className="text-lg font-bold text-white mb-2 font-poppins relative z-20">Increased Sales</h3>
                 <p className="text-sm text-slate-200 font-['Inter'] relative z-20">
                   Increase your sales with your community of tradespeople and tool enthusiasts.
                 </p>
@@ -212,7 +212,7 @@ export default function PartnerHero({ onBecomePartnerAction }: PartnerHeroProps)
               {/* Feature Card 2 */}
               <div className="relative group bg-gradient-to-br from-slate-700/80 via-slate-600/80 to-slate-700/80 backdrop-blur-[var(--ta-blur)] rounded-2xl p-6 shadow-[0_8px_32px_rgba(0,0,0,0.4)] border border-slate-500/30">
                 <div className="absolute inset-0 bg-gradient-to-br from-white/10 via-transparent to-transparent pointer-events-none z-10"></div>
-                <h3 className="text-lg font-bold text-white mb-2 font-['Poppins'] relative z-20">Brand Exposure</h3>
+                <h3 className="text-lg font-bold text-white mb-2 font-poppins relative z-20">Brand Exposure</h3>
                 <p className="text-sm text-slate-200 font-['Inter'] relative z-20">
                   Connect directly with engaged tradies, builders, and tool enthusiasts across Australia.
                 </p>
@@ -221,7 +221,7 @@ export default function PartnerHero({ onBecomePartnerAction }: PartnerHeroProps)
               {/* Feature Card 3 */}
               <div className="relative group bg-gradient-to-br from-slate-700/80 via-slate-600/80 to-slate-700/80 backdrop-blur-[var(--ta-blur)] rounded-2xl p-6 shadow-[0_8px_32px_rgba(0,0,0,0.4)] border border-slate-500/30">
                 <div className="absolute inset-0 bg-gradient-to-br from-white/10 via-transparent to-transparent pointer-events-none z-10"></div>
-                <h3 className="text-lg font-bold text-white mb-2 font-['Poppins'] relative z-20">Premium Placement</h3>
+                <h3 className="text-lg font-bold text-white mb-2 font-poppins relative z-20">Premium Placement</h3>
                 <p className="text-sm text-slate-200 font-['Inter'] relative z-20">
                   Get priority positioning in our marketplace
                 </p>
@@ -230,7 +230,7 @@ export default function PartnerHero({ onBecomePartnerAction }: PartnerHeroProps)
               {/* Feature Card 4 */}
               <div className="relative group bg-gradient-to-br from-slate-700/80 via-slate-600/80 to-slate-700/80 backdrop-blur-[var(--ta-blur)] rounded-2xl p-6 shadow-[0_8px_32px_rgba(0,0,0,0.4)] border border-slate-500/30">
                 <div className="absolute inset-0 bg-gradient-to-br from-white/10 via-transparent to-transparent pointer-events-none z-10"></div>
-                <h3 className="text-lg font-bold text-white mb-2 font-['Poppins'] relative z-20">Easy Integration</h3>
+                <h3 className="text-lg font-bold text-white mb-2 font-poppins relative z-20">Easy Integration</h3>
                 <p className="text-sm text-slate-200 font-['Inter'] relative z-20">
                   Simple setup process with dedicated support
                 </p>

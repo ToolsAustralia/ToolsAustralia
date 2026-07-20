@@ -15,12 +15,17 @@ type Platform = "meta" | "tiktok";
 const fmtAud = (n: number) =>
   new Intl.NumberFormat("en-AU", { style: "currency", currency: "AUD", maximumFractionDigits: 0 }).format(n);
 
-function SummaryTile({ label, totals, active, onClick }: {
+function SummaryTile({ label, totals, totalSpendCents, active, onClick }: {
   label: string;
   totals: PackagesFocusTotals | undefined;
+  /** Sum of all three buckets' spend, for the share-of-total badge. Cents to avoid float drift. */
+  totalSpendCents: number;
   active: boolean;
   onClick: () => void;
 }) {
+  // Share of total ad spend across all focus buckets. One decimal so tiny buckets
+  // (e.g. unclassified) read honestly instead of rounding to 0%.
+  const sharePct = totals && totalSpendCents > 0 ? (totals.spendCents / totalSpendCents) * 100 : null;
   return (
     <button
       type="button"
@@ -34,6 +39,11 @@ function SummaryTile({ label, totals, active, onClick }: {
       <p className="text-2xs font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">{label}</p>
       <p className="font-display font-extrabold text-lg text-neutral-900 dark:text-white mt-1">
         {totals ? fmtAud(totals.spend) : "—"}
+        {sharePct !== null && (
+          <span className="ml-1.5 align-middle text-xs font-semibold text-neutral-400 dark:text-neutral-500">
+            {sharePct.toFixed(1)}%
+          </span>
+        )}
       </p>
       <p className="text-2xs text-neutral-500 dark:text-neutral-400 mt-0.5">
         {totals ? `${fmtAud(totals.revenue)} rev · ${totals.roas.toFixed(2)}x ROAS · ${totals.conversions} conv` : ""}
@@ -128,15 +138,20 @@ export default function AdSpendFocusModal({
             </div>
           )}
 
-          {summary && (
-            <div className={`grid gap-3 ${showUnclassified ? "grid-cols-1 sm:grid-cols-3" : "grid-cols-1 sm:grid-cols-2"}`}>
-              <SummaryTile label="Membership focus" totals={summary.membership} active={focusTab === "membership"} onClick={() => setFocusTab("membership")} />
-              <SummaryTile label="One-time focus" totals={summary["one-time"]} active={focusTab === "one-time"} onClick={() => setFocusTab("one-time")} />
-              {showUnclassified && (
-                <SummaryTile label="Unclassified" totals={summary.unclassified} active={focusTab === "unclassified"} onClick={() => setFocusTab("unclassified")} />
-              )}
-            </div>
-          )}
+          {summary && (() => {
+            // Total across all three buckets (unclassified is 0 when hidden — safe to include).
+            const totalSpendCents =
+              summary.membership.spendCents + summary["one-time"].spendCents + summary.unclassified.spendCents;
+            return (
+              <div className={`grid gap-3 ${showUnclassified ? "grid-cols-1 sm:grid-cols-3" : "grid-cols-1 sm:grid-cols-2"}`}>
+                <SummaryTile label="Membership focus" totals={summary.membership} totalSpendCents={totalSpendCents} active={focusTab === "membership"} onClick={() => setFocusTab("membership")} />
+                <SummaryTile label="One-time focus" totals={summary["one-time"]} totalSpendCents={totalSpendCents} active={focusTab === "one-time"} onClick={() => setFocusTab("one-time")} />
+                {showUnclassified && (
+                  <SummaryTile label="Unclassified" totals={summary.unclassified} totalSpendCents={totalSpendCents} active={focusTab === "unclassified"} onClick={() => setFocusTab("unclassified")} />
+                )}
+              </div>
+            );
+          })()}
 
           {data?.supported && !data.detail.complete && (
             <p className="text-2xs text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 border border-amber-100 dark:border-amber-900/40 rounded px-2 py-1">

@@ -1,14 +1,11 @@
 "use client";
 
-import React from "react";
+import React, { useMemo } from "react";
 import { Elements } from "@stripe/react-stripe-js";
 import { CreditCard, Loader2 } from "lucide-react";
 import { getStripePromise } from "@/lib/stripe-client";
 import { StripeInlineCardSetupForm } from "@/components/payment/StripeInlineCardSetupForm";
 import { formatDisplayName } from "@/utils/display-name";
-
-// Module-scope singleton — Stripe prohibits re-instantiation per render.
-const stripePromise = getStripePromise();
 
 interface InlineCardSetupProps {
   setupIntentSecret: string | null;
@@ -35,6 +32,11 @@ const InlineCardSetup: React.FC<InlineCardSetupProps> = ({
   isLoading,
   onSuccess,
 }) => {
+  // Lazy Stripe boot — getStripePromise() returns a module-level cached singleton
+  // (Stripe prohibits re-instantiation per render), so this identity is stable
+  // across renders; calling it here (not at module scope) avoids booting Stripe.js
+  // for every visitor who downloads this chunk (2026-07 perf audit).
+  const stripePromise = useMemo(() => getStripePromise(), []);
   const userName =
     formatDisplayName(userData?.firstName, userData?.lastName) || undefined;
 

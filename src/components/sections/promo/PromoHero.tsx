@@ -41,16 +41,18 @@ export default function PromoHero({
   initialMajorDraw,
   prizeSlug = null,
 }: PromoHeroProps) {
-  const { isLoading, data: currentDraw } = useCurrentMajorDraw();
-  const { data: activePromo } = usePromoByType("membership-packages");
+  const { isLoading, data: currentDraw, isSuccess: currentDrawResolved } = useCurrentMajorDraw();
+  const { data: activePromo, isSuccess: activePromoResolved } = usePromoByType("membership-packages");
   const heroRef = useScrollAnimation();
   const { openEntryFlow } = useMajorDrawEntryCta();
 
   const { experimentId, variantId, variantConfig, isLoading: _isVariantLoading } = useVariantContext();
   const { trackEvent } = useExperimentTracking();
 
-  const _promo = initialPromo || activePromo;
-  const majorDraw = initialMajorDraw || currentDraw;
+  // Client query wins once resolved; server-baked props are first-paint seeds only
+  // (ISR + stale-while-revalidate can serve old baked values — 2026-07 final-review fix).
+  const _promo = activePromoResolved ? activePromo : initialPromo;
+  const majorDraw = currentDrawResolved ? currentDraw : initialMajorDraw;
   const resolvedMultiplier = useResolvedMultiplier("membership-packages", "display");
 
   const handleEnterNow = () => {
@@ -68,6 +70,21 @@ export default function PromoHero({
   const [imageError, setImageError] = useState(false);
   /** Set if the hero clip's sources all fail — fall back to the still hero. */
   const [videoFailed, setVideoFailed] = useState(false);
+
+  // null until mounted: SSR renders NO <video>, so a phone never downloads the desktop
+  // clip (display:none does not stop <video preload="auto"> fetching). Visual parity:
+  // the clips open on a white frame, so pre-mount is the same white container as today.
+  // (Not `useIsLgUp`: that hook's SSR/first-paint snapshot is `false`, which would mount
+  // the MOBILE video during SSR on every request — including desktop — instead of neither;
+  // local tri-state is required to render zero videos before mount.)
+  const [viewport, setViewport] = useState<"mobile" | "desktop" | null>(null);
+  useEffect(() => {
+    const mq = window.matchMedia("(min-width: 1024px)");
+    const apply = () => setViewport(mq.matches ? "desktop" : "mobile");
+    apply();
+    mq.addEventListener("change", apply);
+    return () => mq.removeEventListener("change", apply);
+  }, []);
 
   const storeSlug = usePromoThemeStore((s) => s.slug);
   const effectiveSlug = storeSlug ?? prizeSlug ?? null;
@@ -127,11 +144,14 @@ export default function PromoHero({
       ? getLandingHeroVideoPaths(effectiveSlug, landingDrawDayUrgency)
       : null;
 
-  // Video-first: the clip is the PRIMARY hero from first paint (the still never flashes in
-  // front of it). The still renders only when there is no clip, the clip failed to load
-  // (`videoFailed`), or the user prefers reduced motion (handled purely in CSS via
-  // `motion-reduce:` — no JS gate, so no SSR→client swap). See useDeviceProfile: reduced-motion
-  // is CSS-driven by convention.
+  // Video-first: once mounted, the clip is the PRIMARY hero for its viewport (the still never
+  // flashes in front of it there). Pre-mount (`viewport === null`) BOTH containers briefly fall
+  // to the still-image branch below — the mobile/desktop `viewport ===` check in the JSX gates
+  // the actual `<video>` mount, not this flag — which is the same still-fallback path already
+  // used when there's no clip, just momentary. The still also renders when there is no clip, the
+  // clip failed to load (`videoFailed`), or the user prefers reduced motion (handled purely in
+  // CSS via `motion-reduce:` — no JS gate, so no SSR→client swap). See useDeviceProfile:
+  // reduced-motion is CSS-driven by convention.
   const showVideo = heroVideoPaths != null && !videoFailed;
 
   // A failed clip only disqualifies THAT clip — give a fresh attempt when the slug/tier
@@ -164,7 +184,7 @@ export default function PromoHero({
               alt=""
               aria-hidden
               fill
-              priority
+              loading="eager"
               sizes="100vw"
               className="object-contain object-top"
             />
@@ -175,7 +195,7 @@ export default function PromoHero({
               alt=""
               aria-hidden
               fill
-              priority
+              loading="eager"
               sizes="100vw"
               className="object-contain object-top"
             />
@@ -202,7 +222,7 @@ export default function PromoHero({
             still never flashes in front of it. The still shows only when there is no clip / the
             clip failed (`!showVideo`), or — purely in CSS — for reduced-motion users. */}
         <div className="lg:hidden absolute inset-0 bg-white dark:bg-neutral-950">
-          {showVideo && heroVideoPaths ? (
+          {showVideo && heroVideoPaths && viewport === "mobile" ? (
             <>
               <LandingHeroVideo
                 sources={heroVideoPaths.mobile}
@@ -222,7 +242,7 @@ export default function PromoHero({
               src={heroImagePaths.mobile}
               alt={`Promo Hero - ${resolvedMultiplier}x Entries Active`}
               fill
-              priority
+              loading="eager"
               className="object-contain object-top"
               sizes="100vw"
               onError={() => setImageError(true)}
@@ -230,7 +250,7 @@ export default function PromoHero({
           )}
         </div>
         <div className="absolute inset-0 hidden bg-white dark:bg-neutral-950 lg:block">
-          {showVideo && heroVideoPaths ? (
+          {showVideo && heroVideoPaths && viewport === "desktop" ? (
             <>
               <LandingHeroVideo
                 sources={heroVideoPaths.desktop}
@@ -250,7 +270,7 @@ export default function PromoHero({
               src={heroImagePaths.desktop}
               alt={`Promo Hero - ${resolvedMultiplier}x Entries Active`}
               fill
-              priority
+              loading="eager"
               sizes="100vw"
               className="object-contain object-top"
               onError={() => setImageError(true)}
@@ -277,7 +297,7 @@ export default function PromoHero({
         <button
           type="button"
           onClick={handleEnterNow}
-          className={cn("promo-hero-cta-button pointer-events-auto inline-flex items-center justify-center rounded-full px-6 py-3 font-sans text-base font-extrabold tracking-wide backdrop-blur-lg sm:px-10 sm:py-4 sm:text-2xl", shouldUseBlackText ? "text-black" : "text-white")}
+          className={cn("promo-hero-cta-button pointer-events-auto inline-flex items-center justify-center rounded-full px-6 py-3 font-sans text-base font-extrabold tracking-wide backdrop-blur-[var(--ta-blur)] sm:px-10 sm:py-4 sm:text-2xl", shouldUseBlackText ? "text-black" : "text-white")}
           style={{
             background: ctaStyle?.backgroundColor ?? theme.gradient,
             // Force black on light-bg themes (Ryobi neon-lime, DeWalt yellow) — the

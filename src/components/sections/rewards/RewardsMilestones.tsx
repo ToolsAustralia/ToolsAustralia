@@ -53,7 +53,7 @@ export default function RewardsMilestones({ acct, months, tierHex }: RewardsMile
             <Medal className="h-5 w-5" />
           </span>
           <div className="min-w-0 flex-1">
-            <div className="font-['Poppins'] text-[15px] font-extrabold leading-tight">Loyalty milestones</div>
+            <div className="font-poppins text-[15px] font-extrabold leading-tight">Loyalty milestones</div>
             <div className="mt-0.5 text-[11px] font-semibold opacity-80">Earn free entries the longer you stay</div>
           </div>
           <span className="shrink-0 rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.08em]" style={{ background: chipBg }}>Coming soon</span>
@@ -78,12 +78,12 @@ export default function RewardsMilestones({ acct, months, tierHex }: RewardsMile
           <Medal className="h-5 w-5" />
         </span>
         <div className="min-w-0 flex-1">
-          <div className="font-['Poppins'] text-[15px] font-extrabold leading-tight">{banner.title}</div>
+          <div className="font-poppins text-[15px] font-extrabold leading-tight">{banner.title}</div>
           <div className="mt-0.5 text-[11px] font-semibold opacity-80">{banner.subtitle}</div>
         </div>
         {banner.right && (
           <div className="shrink-0 text-right leading-none">
-            <span className="num font-['Poppins'] text-xl font-black tabular-nums">{banner.right.m}</span>
+            <span className="num font-poppins text-xl font-black tabular-nums">{banner.right.m}</span>
             <span className="text-[11px] font-bold opacity-80"> /{banner.right.of} mo</span>
           </div>
         )}

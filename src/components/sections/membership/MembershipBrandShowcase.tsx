@@ -18,7 +18,7 @@ export default function MembershipBrandShowcase({ cta }: { cta: MembershipCardCt
     >
       <div className="relative z-[1] mx-auto max-w-7xl px-5 text-center sm:px-6">
         <span className="text-xs font-bold uppercase tracking-[0.18em] text-red-600">Partner discounts</span>
-        <h2 className="mx-auto mt-4 max-w-3xl font-['Poppins'] text-3xl font-black tracking-tight text-primary-token sm:text-4xl lg:text-5xl dark:text-white">
+        <h2 className="mx-auto mt-4 max-w-3xl font-poppins text-3xl font-black tracking-tight text-primary-token sm:text-4xl lg:text-5xl dark:text-white">
           Become a member,{" "}
           <span className="text-red-600">unlock partner discounts</span>
         </h2>
@@ -37,9 +37,12 @@ export default function MembershipBrandShowcase({ cta }: { cta: MembershipCardCt
         </div>
       </div>
 
-      {/* Partner brand marquee */}
-      <div className="relative z-[1] mt-12 overflow-hidden [mask-image:linear-gradient(90deg,transparent,#000_7%,#000_93%,transparent)]">
-        <div className="flex w-max gap-3.5 animate-[marquee-scroll_34s_linear_infinite] hover:[animation-play-state:paused]">
+      {/* Partner brand marquee. Perf: play-state rides --ta-marquee-state (paused on
+          Save-Data / reduced-motion); content-visibility:auto skips paint + animation work
+          while scrolled offscreen — same pure-CSS pattern as the /promotions marquee (no
+          extra JS observer; fixed-height strip, so no CLS). */}
+      <div className="relative z-[1] mt-12 overflow-hidden [mask-image:linear-gradient(90deg,transparent,#000_7%,#000_93%,transparent)] [content-visibility:auto] [contain-intrinsic-size:auto_72px]">
+        <div className="flex w-max gap-3.5 animate-[marquee-scroll_34s_linear_infinite] [animation-play-state:var(--ta-marquee-state)] hover:[animation-play-state:paused]">
           {marquee.map((b, i) => (
             <div key={`${b.id}-${i}`} className="flex h-[72px] flex-shrink-0 items-center justify-center rounded-2xl border border-token bg-white px-7 shadow-sm">
               <Image src={b.logo} alt={b.name} width={150} height={40} className="h-10 w-auto max-w-[150px] object-contain" />

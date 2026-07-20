@@ -75,7 +75,7 @@ export default function MiniDrawEntrySheet({ open, onClose, miniDraw, userEntryC
                 <CreditCard className="h-5 w-5" />
               </span>
               <div className="min-w-0">
-                <div className="truncate font-['Poppins'] text-[17px] font-extrabold leading-tight">{miniDraw.prize?.name ?? miniDraw.name}</div>
+                <div className="truncate font-poppins text-[17px] font-extrabold leading-tight">{miniDraw.prize?.name ?? miniDraw.name}</div>
                 <div className="mt-0.5 text-[11px] font-bold uppercase tracking-[0.14em] text-white/80">
                   You hold {userEntries.toLocaleString()} {userEntries === 1 ? "entry" : "entries"}
                 </div>
@@ -130,7 +130,7 @@ export default function MiniDrawEntrySheet({ open, onClose, miniDraw, userEntryC
                             : "border-token bg-surface hover:border-emerald-400/60",
                       )}
                     >
-                      <span className={cn("font-['Poppins'] text-[14px] font-extrabold leading-tight", isActive ? "text-emerald-700 dark:text-emerald-300" : "text-primary-token dark:text-white")}>
+                      <span className={cn("font-poppins text-[14px] font-extrabold leading-tight", isActive ? "text-emerald-700 dark:text-emerald-300" : "text-primary-token dark:text-white")}>
                         {pkg.displayName ?? pkg.name}
                       </span>
                       <span className="mt-0.5 text-[11px] font-semibold text-muted-token">
@@ -153,7 +153,7 @@ export default function MiniDrawEntrySheet({ open, onClose, miniDraw, userEntryC
                 </div>
                 <div className="mt-1 flex items-end justify-between">
                   <div className="flex items-baseline gap-1.5">
-                    <span className="num font-['Poppins'] text-[26px] font-black leading-none text-primary-token dark:text-white">{newTotal.toLocaleString()}</span>
+                    <span className="num font-poppins text-[26px] font-black leading-none text-primary-token dark:text-white">{newTotal.toLocaleString()}</span>
                     {ctaEntries > 0 && <span className="num text-[13px] font-black text-emerald-600 dark:text-emerald-400">+{ctaEntries.toLocaleString()}</span>}
                   </div>
                   <span className="num text-[20px] font-black text-primary-token dark:text-white">${ctaPrice.toLocaleString()}</span>

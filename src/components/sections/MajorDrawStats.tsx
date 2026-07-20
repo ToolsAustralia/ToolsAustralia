@@ -88,7 +88,7 @@ const MajorDrawStats: React.FC<MajorDrawStatsProps> = ({ className = "" }) => {
               <div className="w-8 h-8 bg-gradient-to-br from-red-500 via-red-600 to-red-700 rounded-full flex items-center justify-center shadow-lg mx-auto mb-1 ring-2 ring-red-300/30">
                 <Gift className="w-4 h-4 text-white drop-shadow-md" />
               </div>
-              <div className="text-sm font-bold text-white mb-0.5 font-['Poppins']">
+              <div className="text-sm font-bold text-white mb-0.5 font-poppins">
                 {formatCurrency(stats.totalPrizeValue)}
               </div>
               <p className="text-2xs text-gray-300 font-medium leading-tight">Total given in prizes</p>
@@ -99,7 +99,7 @@ const MajorDrawStats: React.FC<MajorDrawStatsProps> = ({ className = "" }) => {
               <div className="w-8 h-8 bg-gradient-to-br from-slate-400 via-gray-300 to-slate-200 rounded-full flex items-center justify-center shadow-lg mx-auto mb-1 ring-2 ring-slate-400/30">
                 <Award className="w-4 h-4 text-gray-900 drop-shadow-md" />
               </div>
-              <div className="text-sm font-bold text-white mb-0.5 font-['Poppins']">
+              <div className="text-sm font-bold text-white mb-0.5 font-poppins">
                 {stats.totalWinners.toLocaleString()}
               </div>
               <p className="text-2xs text-gray-300 font-medium leading-tight">Winners to date</p>
@@ -110,8 +110,8 @@ const MajorDrawStats: React.FC<MajorDrawStatsProps> = ({ className = "" }) => {
               <div className="w-8 h-8 bg-gradient-to-br from-blue-400 via-cyan-400 to-blue-300 rounded-full flex items-center justify-center shadow-lg mx-auto mb-1 ring-2 ring-blue-400/30">
                 <Users className="w-4 h-4 text-gray-900 drop-shadow-md" />
               </div>
-              <div className="text-sm font-bold text-white mb-0.5 font-['Poppins'] tabular-nums">
-                <AnimatedNumber value={stats.totalEntries} className="font-['Poppins'] font-bold" />
+              <div className="text-sm font-bold text-white mb-0.5 font-poppins tabular-nums">
+                <AnimatedNumber value={stats.totalEntries} className="font-poppins font-bold" />
               </div>
               <p className="text-2xs text-gray-300 font-medium leading-tight">Total entries</p>
             </div>
@@ -130,7 +130,7 @@ const MajorDrawStats: React.FC<MajorDrawStatsProps> = ({ className = "" }) => {
               <Gift className="w-8 h-8 text-white drop-shadow-md" />
             </div>
             <div>
-              <div className="text-2xl sm:text-3xl font-bold text-white mb-1 font-['Poppins']">
+              <div className="text-2xl sm:text-3xl font-bold text-white mb-1 font-poppins">
                 {formatCurrency(stats.totalPrizeValue)}
               </div>
               <p className="text-xs sm:text-sm text-gray-300 font-medium">Total given in prizes</p>
@@ -147,7 +147,7 @@ const MajorDrawStats: React.FC<MajorDrawStatsProps> = ({ className = "" }) => {
               <Award className="w-8 h-8 text-gray-900 drop-shadow-md" />
             </div>
             <div>
-              <div className="text-2xl sm:text-3xl font-bold text-white mb-1 font-['Poppins']">
+              <div className="text-2xl sm:text-3xl font-bold text-white mb-1 font-poppins">
                 {stats.totalWinners.toLocaleString()}
               </div>
               <p className="text-xs sm:text-sm text-gray-300 font-medium">Winners to date</p>
@@ -164,8 +164,8 @@ const MajorDrawStats: React.FC<MajorDrawStatsProps> = ({ className = "" }) => {
               <Users className="w-8 h-8 text-gray-900 drop-shadow-md" />
             </div>
             <div>
-              <div className="text-2xl sm:text-3xl font-bold text-white mb-1 font-['Poppins'] tabular-nums">
-                <AnimatedNumber value={stats.totalEntries} className="font-['Poppins'] font-bold text-2xl sm:text-3xl" />
+              <div className="text-2xl sm:text-3xl font-bold text-white mb-1 font-poppins tabular-nums">
+                <AnimatedNumber value={stats.totalEntries} className="font-poppins font-bold text-2xl sm:text-3xl" />
               </div>
               <p className="text-xs sm:text-sm text-gray-300 font-medium">Total entries</p>
             </div>

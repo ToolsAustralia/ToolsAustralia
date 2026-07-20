@@ -23,3 +23,13 @@ UTM params, generic user ids OK. Email + phone require Meta CAPI's hashing conve
 ## R6. CSP must include tracking origins
 
 Adding a new tracking provider requires updating CSP — see [security-csp](../security-csp/). Don't bypass CSP with `unsafe-inline`.
+
+## R7. Third-party script timing policy (2026-07-19 perf)
+
+| Class | Scripts | strategy | Why |
+|---|---|---|---|
+| Conversion-critical | GTM (`GoogleTagManager`, next/script `afterInteractive`); Meta + TikTok pixels (`ConversionPixels` — mounts via `useEffect`/`provider.loadPixel()`, equivalent immediate post-hydration timing) | immediate post-hydration | Ad attribution/conversions must not miss early events. |
+| Klaviyo queue stub | `klaviyo-onsite-queue` (inline Proxy, ~1 KB) | `afterInteractive` | Must exist before any identify/track/page call or events DROP (helpers bail on `!window.klaviyo`). |
+| Analytics / marketing suites | Contentsquare, Klaviyo onsite suite (`klaviyo-onsite-suite`) | `lazyOnload` | ~157 KB gz + ~80 KB gz; at hydration they competed with interactivity on low-end phones. Queued Klaviyo events deliver on arrival. |
+
+Adding a new `afterInteractive` (or earlier) tag requires a written perf justification in the PR — the combined third-party payload measured ~539 KB gz / 1.75 MB raw at hydration before this policy (2026-07-17 audit). Never collapse the Klaviyo queue stub into the lazy suite script — see the gotcha below.

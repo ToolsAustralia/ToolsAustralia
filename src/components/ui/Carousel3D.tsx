@@ -46,7 +46,7 @@ import {
 } from "react";
 import {
   animate,
-  motion,
+  m,
   useMotionValue,
   useMotionValueEvent,
   useReducedMotion,
@@ -394,7 +394,7 @@ function RingCard<T>({
   });
 
   return (
-    <motion.div
+    <m.div
       role="group"
       aria-roledescription="slide"
       aria-label={label}
@@ -415,7 +415,7 @@ function RingCard<T>({
       )}
     >
       <div style={{ width: cardWidthCss }}>{renderItem(live)}</div>
-    </motion.div>
+    </m.div>
   );
 }
 
@@ -770,7 +770,7 @@ export function Carousel3D<T>({
         {`${labelFor(active)} (${active + 1} of ${n})`}
       </p>
 
-      <motion.div
+      <m.div
         ref={stageRef}
         id={stageId}
         className={cn(
@@ -796,7 +796,7 @@ export function Carousel3D<T>({
         onPointerCancel={endDrag}
       >
         {/* Tilting inner world: floor shadow + cards parallax as one stage. */}
-        <motion.div
+        <m.div
           className="absolute inset-0"
           style={{ transformStyle: "preserve-3d", rotateX: tiltX, rotateY: tiltY }}
         >
@@ -841,8 +841,8 @@ export function Carousel3D<T>({
               renderItem={renderItem}
             />
           ))}
-        </motion.div>
-      </motion.div>
+        </m.div>
+      </m.div>
 
       {hideControls ? null : renderControls ? (
         renderControls(controls)

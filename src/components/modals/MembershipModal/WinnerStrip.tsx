@@ -68,7 +68,7 @@ function WinnerCard({
           {winner.drawName?.trim() || "Major draw"}
         </p>
         <p className="text-[10px] tabular-nums text-white/70 drop-shadow-sm">{displayDate}</p>
-        <p className="truncate font-['Poppins'] text-sm font-bold text-white drop-shadow-sm">
+        <p className="truncate font-poppins text-sm font-bold text-white drop-shadow-sm">
           {displayName}
         </p>
       </div>

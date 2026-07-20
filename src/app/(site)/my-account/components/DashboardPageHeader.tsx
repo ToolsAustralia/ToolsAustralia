@@ -56,7 +56,7 @@ export default function DashboardPageHeader({
           )}
           <div>
             {sub && <div className="whitespace-nowrap text-[10px] font-bold uppercase tracking-[0.12em] opacity-80 sm:text-[11px] sm:tracking-[0.18em]">{sub}</div>}
-            <h1 className="font-['Poppins'] text-2xl font-extrabold leading-tight">{title}</h1>
+            <h1 className="font-poppins text-2xl font-extrabold leading-tight">{title}</h1>
           </div>
         </div>
         {Icon && (

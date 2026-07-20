@@ -112,7 +112,7 @@ export default function CheckoutSuccessClient({ orderId }: CheckoutSuccessClient
             <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
               <CheckCircle className="w-12 h-12 text-green-600" />
             </div>
-            <h1 className="text-3xl sm:text-4xl font-bold text-gray-900 mb-2 font-['Poppins']">Order Confirmed!</h1>
+            <h1 className="text-3xl sm:text-4xl font-bold text-gray-900 mb-2 font-poppins">Order Confirmed!</h1>
             <p className="text-gray-600 dark:text-neutral-400 text-lg">Thank you for your purchase. We&apos;re getting your order ready.</p>
             <div className="mt-4 inline-block bg-green-100 text-green-800 px-4 py-2 rounded-full text-sm font-medium">
               Order: {order.orderNumber}
@@ -128,7 +128,7 @@ export default function CheckoutSuccessClient({ orderId }: CheckoutSuccessClient
                 <Package className="w-6 h-6 text-blue-600" />
               </div>
               <div>
-                <h2 className="text-xl font-bold text-gray-900 font-['Poppins']">Order Details</h2>
+                <h2 className="text-xl font-bold text-gray-900 font-poppins">Order Details</h2>
                 <p className="text-gray-600 dark:text-neutral-400">Items in your order</p>
               </div>
             </div>
@@ -173,7 +173,7 @@ export default function CheckoutSuccessClient({ orderId }: CheckoutSuccessClient
                   <Truck className="w-6 h-6 text-orange-600" />
                 </div>
                 <div>
-                  <h3 className="text-lg font-bold text-gray-900 font-['Poppins']">Shipping Information</h3>
+                  <h3 className="text-lg font-bold text-gray-900 font-poppins">Shipping Information</h3>
                   <p className="text-gray-600 dark:text-neutral-400 text-sm">Delivery details</p>
                 </div>
               </div>
@@ -216,7 +216,7 @@ export default function CheckoutSuccessClient({ orderId }: CheckoutSuccessClient
                   <CreditCard className="w-6 h-6 text-green-600" />
                 </div>
                 <div>
-                  <h3 className="text-lg font-bold text-gray-900 font-['Poppins']">Payment Information</h3>
+                  <h3 className="text-lg font-bold text-gray-900 font-poppins">Payment Information</h3>
                   <p className="text-gray-600 dark:text-neutral-400 text-sm">Payment details</p>
                 </div>
               </div>
@@ -241,7 +241,7 @@ export default function CheckoutSuccessClient({ orderId }: CheckoutSuccessClient
 
         {/* Next Steps */}
         <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6 mb-8">
-          <h2 className="text-xl font-bold text-gray-900 mb-4 font-['Poppins']">What&apos;s Next?</h2>
+          <h2 className="text-xl font-bold text-gray-900 mb-4 font-poppins">What&apos;s Next?</h2>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="text-center p-4 bg-blue-50 rounded-lg">
               <Mail className="w-8 h-8 text-blue-600 mx-auto mb-2" />

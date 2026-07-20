@@ -22,7 +22,7 @@ import { MetricCard } from "@/components/admin/metrics/shared/MetricCard";
 import { formatNumber, formatPercentage } from "@/utils/metrics/formatters";
 import { formatCurrency } from "@/utils/metrics/formatters";
 import { queryKeys } from "@/lib/queryKeys";
-import { getPrizeLabel } from "@/config/prizes";
+import { getPrizeLabel } from "@/config/prize-summaries";
 import { DateRange } from "@/components/admin/DateRangeToggle";
 import { DateRangeDropdown } from "@/components/admin/overview/DateRangeDropdown";
 import { AdminMobileLayoutDateRangeShell } from "@/app/admin/component/AdminMobileLayoutDateRangeShell";

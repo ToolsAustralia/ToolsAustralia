@@ -248,6 +248,7 @@ This repo has nine specialist Cursor subagents (frontend, backend-api, mongo-dat
 - **Console output** — production builds strip `console.log`/`info`/`debug`/`warn` (`next.config.ts` `compiler.removeConsole`). Use `console.error` for genuine errors that must survive, or route through `ErrorReport`. **This also applies when debugging staging / Vercel preview deploys** — those are production builds, so any temporary `console.log` you add to diagnose a live issue will be invisible. Use `console.error` for ad-hoc debug logging on staging too.
 - **`mongoose` is `serverExternalPackages`** — don't try to bundle it into client code.
 - **Operational scripts must show progress.** Long-running `scripts/*.ts` (backfills, migrations, syncs, reconciliations) run via `tsx` — **not** the Next build — so `console.log` is **not** stripped there; use it freely. Every such script must emit: (1) an **up-front total count** (so progress has a denominator), (2) a **periodic progress line** with `processed/total (%) · rate/sec · ETA` on an *adaptive cadence* (~20 lines regardless of size, so even a few-hundred-row run visibly moves), and (3) a **final summary**. A script that prints a header then goes silent for minutes reads as "hung" — never ship that. Reference implementations: `scripts/backfill-converting-platform.ts`, `scripts/backfill-klaviyo-membership-properties.ts` (also: `--dry-run` default-safe, append-mode CSV audit log, 3-tier exit codes). The `writing-ops-script` skill enforces the dry-run + audit parts; this bullet adds the progress-logging requirement.
+- **Performance footguns (2026-07 audit — each of these shipped and cost real users).** (1) Never render a `dynamic()` modal unconditionally — rendering it closed still downloads its chunk; gate on first open (reference: `src/components/modals/MembershipModal/LazyMembershipModal.tsx`). (2) Never boot Stripe at module scope and only import `loadStripe` in `src/lib/stripe-client.ts` (lint-enforced: `internal-norm/no-eager-stripe`). (3) List endpoints project with explicit `.select()` include-lists — an unprojected `.find()` once shipped MB-scale `entries[]` arrays every 2 minutes (pattern + guard test: `src/utils/dashboard/my-account-projection.ts`). (4) `priority`/preloads must be viewport-scoped (`getImageProps` + media-scoped `<link>`/`<picture>`); a CSS-hidden `<video preload="auto">` or eager `<img>` still downloads — mount per-viewport. (5) Third-party scripts follow the timing policy in `docs/tracking/rules.md` R7 (conversion pixels immediate; analytics/marketing suites `lazyOnload`; the Klaviyo queue stub must stay `afterInteractive`). (6) New always-on animations need a tier/reduced-motion gate; new landing-path polling needs a written justification. (7) Public pages have a CSP **route class** (nonce+dynamic vs marketing+static) — never let a page prerender under the nonce CSP; see `docs/security-csp/architecture.md` and rule R8 there.
 
 ## Domain Manifest
 
@@ -265,7 +266,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
 ```json
 {
   "version": 1,
-  "lastModified": "2026-07-19",
+  "lastModified": "2026-07-20",
   "domains": {
     "subscription": {
       "docs": "docs/subscription/",
@@ -298,7 +299,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/hooks/useOpenMembershipModalListener.ts",
         "src/app/(site)/membership/**"
       ],
-      "lastVerified": "2026-07-16"
+      "lastVerified": "2026-07-19"
     },
     "billing-stripe": {
       "docs": "docs/billing-stripe/",
@@ -342,7 +343,8 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/hooks/usePaymentIntent.ts",
         "src/hooks/useSetupIntent.ts",
         "src/hooks/use3DSRedirectHandler.ts",
-        "src/hooks/useSavedPaymentMethods.ts"
+        "src/hooks/useSavedPaymentMethods.ts",
+        "eslint/rules/no-eager-stripe.js"
       ],
       "lastVerified": "2026-07-19"
     },
@@ -377,7 +379,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/hooks/useMiniDrawPurchase.ts",
         "src/hooks/usePastDrawsData.ts"
       ],
-      "lastVerified": "2026-07-14"
+      "lastVerified": "2026-07-19"
     },
     "rewards-redeemables": {
       "docs": "docs/rewards-redeemables/",
@@ -396,7 +398,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/hooks/useEntryRewardToast.ts",
         "src/utils/rewards-widget-spotlight-storage.ts"
       ],
-      "lastVerified": "2026-07-02"
+      "lastVerified": "2026-07-19"
     },
     "promo": {
       "docs": "docs/promo/",
@@ -428,7 +430,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "scripts/convert-drawn-tonight-tomorrow-to-webp.ts",
         "scripts/convert-drawn-tonight-tomorrow-videos.ts"
       ],
-      "lastVerified": "2026-07-08"
+      "lastVerified": "2026-07-19"
     },
     "affiliate": {
       "docs": "docs/affiliate/",
@@ -445,7 +447,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/hooks/useAffiliateAuth.ts",
         "src/hooks/useAffiliateLink.ts"
       ],
-      "lastVerified": "2026-06-19"
+      "lastVerified": "2026-07-19"
     },
     "referrals": {
       "docs": "docs/referrals/",
@@ -470,7 +472,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/app/api/partner-discount/**",
         "src/app/(site)/partner/**"
       ],
-      "lastVerified": "2026-06-24"
+      "lastVerified": "2026-07-19"
     },
     "upsell": {
       "docs": "docs/upsell/",
@@ -501,7 +503,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/contexts/CartContext.tsx",
         "src/hooks/usePurchaseInvalidation.ts"
       ],
-      "lastVerified": "2026-07-08"
+      "lastVerified": "2026-07-19"
     },
     "error-reporting": {
       "docs": "docs/error-reporting/",
@@ -542,7 +544,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "scripts/migrate-seed-staff-roles.ts",
         "src/contexts/UserContext.tsx"
       ],
-      "lastVerified": "2026-07-16"
+      "lastVerified": "2026-07-19"
     },
     "email": {
       "docs": "docs/email/",
@@ -642,7 +644,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/models/ContactSubmission.ts",
         "src/app/(site)/contact/**"
       ],
-      "lastVerified": "2026-04-28"
+      "lastVerified": "2026-07-19"
     },
     "theme": {
       "docs": "docs/theme/",
@@ -689,9 +691,15 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/hooks/useTilt.ts",
         "src/types/upsell.ts",
         "src/app/globals.css",
-        "src/app/not-found.tsx"
+        "src/app/not-found.tsx",
+        "src/app/(site)/page.tsx",
+        "src/app/(site)/components/HomeProducts.tsx",
+        "src/app/(site)/layout.tsx",
+        "src/app/(site)/faq/**",
+        "src/app/(site)/privacy/**",
+        "src/app/lazy-motion-features.ts"
       ],
-      "lastVerified": "2026-07-17"
+      "lastVerified": "2026-07-20"
     },
     "client-state": {
       "docs": "docs/client-state/",
@@ -716,7 +724,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/hooks/usePrefetching.ts",
         "src/hooks/useConfetti.ts"
       ],
-      "lastVerified": "2026-07-17"
+      "lastVerified": "2026-07-19"
     },
     "internal-norm": {
       "docs": "docs/internal-norm/",
@@ -780,7 +788,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/hooks/useStreakCelebration.ts",
         "src/utils/dashboard/**"
       ],
-      "lastVerified": "2026-07-15"
+      "lastVerified": "2026-07-19"
     },
     "security-csp": {
       "docs": "docs/security-csp/",
@@ -791,7 +799,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/models/RateLimit.ts",
         "next.config.ts"
       ],
-      "lastVerified": "2026-06-19"
+      "lastVerified": "2026-07-19"
     },
     "mongodb": {
       "docs": "docs/mongodb/",

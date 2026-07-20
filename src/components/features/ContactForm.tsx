@@ -241,8 +241,8 @@ export default function ContactForm() {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
             </svg>
           </div>
-          <h3 className="text-lg sm:text-xl font-semibold text-black dark:text-white mb-2 font-['Poppins']">Message Sent!</h3>
-          <p className="text-sm sm:text-base text-gray-600 dark:text-gray-400 font-['Poppins']">
+          <h3 className="text-lg sm:text-xl font-semibold text-black dark:text-white mb-2 font-poppins">Message Sent!</h3>
+          <p className="text-sm sm:text-base text-gray-600 dark:text-gray-400 font-poppins">
             Thank you for contacting us. We&apos;ll get back to you soon.
           </p>
         </div>
@@ -259,8 +259,8 @@ export default function ContactForm() {
       <div className="relative z-10">
         {/* Form Header */}
         <div className="mb-8">
-          <h3 className="text-[24px] font-semibold text-black dark:text-white mb-2 font-['Poppins']">Send us a message</h3>
-          <p className="text-[14px] text-gray-600 dark:text-gray-400 mb-4 font-['Poppins']">
+          <h3 className="text-[24px] font-semibold text-black dark:text-white mb-2 font-poppins">Send us a message</h3>
+          <p className="text-[14px] text-gray-600 dark:text-gray-400 mb-4 font-poppins">
             Fill out the form below and we&apos;ll get back to you as soon as possible.
           </p>
         </div>
@@ -268,7 +268,7 @@ export default function ContactForm() {
         {/* Error Message */}
         {submitError && (
           <div className="mb-6 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
-            <p className="text-sm text-red-700 dark:text-red-300 font-['Poppins']">{submitError}</p>
+            <p className="text-sm text-red-700 dark:text-red-300 font-poppins">{submitError}</p>
           </div>
         )}
 
@@ -276,7 +276,7 @@ export default function ContactForm() {
           {/* First Name and Last Name Row */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
             <div className="relative">
-              <label className="block text-[12px] font-medium text-gray-600 dark:text-gray-400 mb-2 font-['Poppins']">First Name</label>
+              <label className="block text-[12px] font-medium text-gray-600 dark:text-gray-400 mb-2 font-poppins">First Name</label>
               <div className="relative">
                 <input
                   type="text"
@@ -314,7 +314,7 @@ export default function ContactForm() {
               ></div>
             </div>
             <div className="relative">
-              <label className="block text-[12px] font-medium text-gray-600 dark:text-gray-400 mb-2 font-['Poppins']">Last Name</label>
+              <label className="block text-[12px] font-medium text-gray-600 dark:text-gray-400 mb-2 font-poppins">Last Name</label>
               <div className="relative">
                 <input
                   type="text"
@@ -351,7 +351,7 @@ export default function ContactForm() {
 
           {/* Email Row */}
           <div className="relative">
-            <label className="block text-[12px] font-medium text-gray-600 dark:text-gray-400 mb-2 font-['Poppins']">Email</label>
+            <label className="block text-[12px] font-medium text-gray-600 dark:text-gray-400 mb-2 font-poppins">Email</label>
             <div className="relative">
               <input
                 type="email"
@@ -387,7 +387,7 @@ export default function ContactForm() {
 
           {/* Phone Number Row */}
           <div className="relative">
-            <label className="block text-[12px] font-medium text-gray-600 dark:text-gray-400 mb-2 font-['Poppins']">Phone Number</label>
+            <label className="block text-[12px] font-medium text-gray-600 dark:text-gray-400 mb-2 font-poppins">Phone Number</label>
             <div className="relative">
               <input
                 type="tel"
@@ -423,7 +423,7 @@ export default function ContactForm() {
 
           {/* Subject Selection */}
           <div>
-            <label className="block text-[14px] font-semibold text-black dark:text-white mb-2 font-['Poppins']">Select Subject?</label>
+            <label className="block text-[14px] font-semibold text-black dark:text-white mb-2 font-poppins">Select Subject?</label>
             <div className="flex flex-wrap gap-3 sm:gap-4">
               {subjects.map((subject) => (
                 <label
@@ -438,7 +438,7 @@ export default function ContactForm() {
                     onChange={handleInputChange}
                     className="w-[16px] h-[16px] text-red-600 border-gray-400 dark:border-neutral-500 focus:ring-0 focus:ring-offset-0 rounded-full transition-all duration-300"
                   />
-                  <span className="text-[12px] text-black dark:text-white font-['Poppins'] select-none">{subject}</span>
+                  <span className="text-[12px] text-black dark:text-white font-poppins select-none">{subject}</span>
                 </label>
               ))}
             </div>
@@ -447,9 +447,9 @@ export default function ContactForm() {
           {/* Message */}
           <div className="relative">
             <div className="flex justify-between items-center mb-2">
-              <label className="block text-[12px] font-medium text-gray-600 dark:text-gray-400 font-['Poppins']">Message</label>
+              <label className="block text-[12px] font-medium text-gray-600 dark:text-gray-400 font-poppins">Message</label>
               <span
-                className={`text-2xs font-['Poppins'] ${
+                className={`text-2xs font-poppins ${
                   formData.message.length < 10
                     ? "text-red-500"
                     : formData.message.length > 500

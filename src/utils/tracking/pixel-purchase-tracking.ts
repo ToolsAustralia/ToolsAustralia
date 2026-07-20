@@ -11,8 +11,7 @@
  * Klaviyo events stay as a direct call (Klaviyo is marketing automation, not a CAPI provider).
  */
 
-import { trackFacebookEvent } from "@/components/FacebookPixel";
-import { trackTikTokEvent } from "@/components/TikTokPixel";
+import { trackFacebookEvent, trackTikTokEvent } from "./legacy-pixel-helpers";
 import {
   sendFacebookEvent,
   FacebookEvent,

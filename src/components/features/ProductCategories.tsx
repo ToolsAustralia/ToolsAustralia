@@ -247,7 +247,7 @@ export default function ProductCategories({
         {/* Section Header */}
         <div className="text-center mb-8 sm:mb-10 lg:mb-12">
           <h2
-            className={`text-[20px] sm:text-[24px] lg:text-[48px] font-bold font-['Poppins'] mb-2 sm:mb-3 lg:mb-4 leading-tight ${
+            className={`text-[20px] sm:text-[24px] lg:text-[48px] font-bold font-poppins mb-2 sm:mb-3 lg:mb-4 leading-tight ${
               showBackground ? "text-white drop-shadow-lg" : "text-gray-900 dark:text-white"
             }`}
           >
@@ -310,7 +310,7 @@ export default function ProductCategories({
                           sizes="(max-width: 640px) 48px, 64px"
                         />
                       </div>
-                      <h3 className="text-white text-[14px] sm:text-[16px] font-bold font-['Poppins'] mb-2">
+                      <h3 className="text-white text-[14px] sm:text-[16px] font-bold font-poppins mb-2">
                         {brand.name}
                       </h3>
                       {/* Metallic brand badge */}
@@ -368,7 +368,7 @@ export default function ProductCategories({
                         sizes="64px"
                       />
                     </div>
-                    <h3 className="text-white text-[18px] font-bold font-['Poppins'] mb-2">{brand.name}</h3>
+                    <h3 className="text-white text-[18px] font-bold font-poppins mb-2">{brand.name}</h3>
                     {/* Metallic brand badge */}
                     <div className="relative inline-block">
                       <div

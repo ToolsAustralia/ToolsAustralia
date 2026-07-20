@@ -9,9 +9,9 @@ import {
   useAddPaymentMethod,
   useDeletePaymentMethod,
   useSetDefaultPaymentMethod,
-} from "@/hooks/queries";
+} from "@/hooks/queries/usePaymentQueries";
 import { useUserContext } from "@/contexts/UserContext";
-import type { SavedPaymentMethod, PaymentMethodsQueryResult } from "@/hooks/queries";
+import type { SavedPaymentMethod, PaymentMethodsQueryResult } from "@/hooks/queries/usePaymentQueries";
 import { ApiError } from "@/lib/queries";
 
 export type DeletePaymentMethodOutcome =

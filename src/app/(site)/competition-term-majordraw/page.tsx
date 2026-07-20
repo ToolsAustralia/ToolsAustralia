@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import { BreadcrumbJsonLd } from "@/components/seo/StructuredData";
-import { getNonce } from "@/utils/security/getNonce";
 import { getCurrentMajorDrawServer } from "@/utils/database/queries/major-draw-server-queries";
 import { getContactEmail } from "@/lib/email/sender-identities";
 import { NTP_NUMBER, NSW_LICENSE } from "@/constants/legal";
@@ -49,7 +48,8 @@ function formatPromotionDate(date: Date | string | null | undefined): string {
 export default async function MajorGiveawayTermsPage() {
   const baseUrl = (process.env.NEXT_PUBLIC_APP_URL || "https://toolsaustralia.com.au").replace(/\/$/, "");
   const contactEmail = getContactEmail();
-  const nonce = await getNonce();
+  // No getNonce() here: JSON-LD is non-executable data (CSP script-src doesn't gate it),
+  // and a headers() read would make this marketing-class ISR page dynamic.
 
   const eligibleStates = [
     "Victoria (VIC)",
@@ -132,7 +132,6 @@ export default async function MajorGiveawayTermsPage() {
           { name: "Home", item: `${baseUrl}/` },
           { name: "Competition Terms", item: `${baseUrl}/competition-term-majordraw` },
         ]}
-        nonce={nonce}
       />
       <main className="bg-slate-950 text-gray-100 pt-[110px] pb-24 sm:pt-[120px]">
         <div className="mx-auto flex max-w-5xl flex-col gap-12 px-4 sm:px-6 lg:px-8 text-sm leading-relaxed sm:text-base">

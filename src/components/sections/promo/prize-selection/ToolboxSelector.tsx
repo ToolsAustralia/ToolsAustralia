@@ -2,7 +2,7 @@
 
 import type { CSSProperties } from "react";
 import Image from "next/image";
-import { motion } from "framer-motion";
+import { m } from "framer-motion";
 import { TOOLBOX_IMAGES, TOOLBOX_LABELS, TOOLBOX_SIZES, TOOLBOX_UNIFIED_FRAME } from "./constants";
 import { cn } from "@/utils/cn";
 
@@ -65,7 +65,7 @@ export function ToolboxSelector({
   className = "",
 }: ToolboxSelectorProps) {
   return (
-    <motion.div
+    <m.div
       variants={containerVariants}
       initial="hidden"
       animate="visible"
@@ -79,7 +79,7 @@ export function ToolboxSelector({
         const imageScale = TOOLBOX_SIZES[type]?.imageScale ?? 1;
 
         return (
-          <motion.button
+          <m.button
             key={type}
             type="button"
             onClick={() => onSelect(type)}
@@ -88,7 +88,7 @@ export function ToolboxSelector({
             aria-pressed={isActive}
             aria-label={ARIA_LABEL[type]}
           >
-            <motion.div
+            <m.div
               className="relative isolate mx-auto w-full max-w-[var(--tb-max-w)] shrink-0 overflow-visible h-[var(--tb-h)] will-change-transform sm:max-w-[var(--tb-max-w-d)] sm:h-[var(--tb-h-d)]"
               style={
                 {
@@ -150,7 +150,7 @@ export function ToolboxSelector({
                   }}
                 />
               </div>
-            </motion.div>
+            </m.div>
 
             {/* Equal-height columns: grow pushes the label row to the same baseline across all toolboxes */}
             <div className="min-h-0 w-full flex-1 basis-0" aria-hidden="true" />
@@ -168,9 +168,9 @@ export function ToolboxSelector({
                 </span>
               </div>
             </div>
-          </motion.button>
+          </m.button>
         );
       })}
-    </motion.div>
+    </m.div>
   );
 }

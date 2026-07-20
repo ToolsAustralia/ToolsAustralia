@@ -1,11 +1,11 @@
 "use client";
 
 import Image from "next/image";
-import { motion } from "framer-motion";
+import { m } from "framer-motion";
 import { getBrandGlowColor } from "@/utils/prize-brand-colors";
 import { getPackageColorScheme, getToolsetBadgeStyle } from "@/utils/package-colors/packageColorScheme";
 import { POWERSET_IMAGES, POWERSET_LABELS, POWERSET_BRAND_TEXT } from "./constants";
-import type { PrizeSlug } from "@/config/prizes";
+import type { PrizeSlug } from "@/config/prize-summaries";
 import { cn } from "@/utils/cn";
 
 interface StaticToolsetHighlightProps {
@@ -45,7 +45,7 @@ export function StaticToolsetHighlight({
   return (
     <div className={cn("flex flex-col items-center gap-2 sm:gap-3", className)}>
       {brandTextSrc && (
-        <motion.div
+        <m.div
           initial={{ opacity: 0, y: -4 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.2 }}
@@ -59,10 +59,10 @@ export function StaticToolsetHighlight({
             className="object-contain"
             sizes="(max-width: 640px) 160px, (max-width: 1024px) 208px, 240px"
           />
-        </motion.div>
+        </m.div>
       )}
 
-      <motion.div
+      <m.div
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.4, ease: "easeOut" }}
@@ -75,7 +75,7 @@ export function StaticToolsetHighlight({
             opacity: 0.5,
           }}
         />
-        <motion.div
+        <m.div
           className="relative w-[220px] h-[155px] sm:w-[360px] sm:h-[250px] lg:w-[440px] lg:h-[305px]"
           animate={{ y: [0, -6, 0] }}
           transition={{
@@ -92,7 +92,7 @@ export function StaticToolsetHighlight({
               priority
             />
           </div>
-        </motion.div>
+        </m.div>
         {label && scheme && badgeStyle && (
           <div className="relative z-10 w-full max-w-[480px] sm:max-w-[560px] px-2">
             <div
@@ -111,7 +111,7 @@ export function StaticToolsetHighlight({
             </div>
           </div>
         )}
-      </motion.div>
+      </m.div>
     </div>
   );
 }

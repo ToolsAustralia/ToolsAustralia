@@ -1,18 +1,15 @@
 /**
  * Stripe Client Singleton
- * 
- * Provides a single shared instance of Stripe.js to avoid multiple
- * initializations and reduce r.stripe.com/b beacon calls.
- * 
- * Usage:
- * ```typescript
- * import { getStripePromise } from '@/lib/stripe-client';
- * 
- * const stripePromise = getStripePromise();
- * ```
+ *
+ * Uses "@stripe/stripe-js/pure" so importing this module NEVER injects
+ * https://js.stripe.com — the script loads on the FIRST getStripePromise() call
+ * (i.e. when a payment surface actually mounts). Do not import loadStripe from
+ * "@stripe/stripe-js" anywhere else: the default entry injects on import.
+ * Enforced by eslint internal-norm/no-eager-stripe.
  */
 
-import { loadStripe, Stripe } from "@stripe/stripe-js";
+import { loadStripe } from "@stripe/stripe-js/pure";
+import type { Stripe } from "@stripe/stripe-js";
 
 let stripePromise: Promise<Stripe | null> | null = null;
 

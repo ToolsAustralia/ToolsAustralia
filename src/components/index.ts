@@ -5,10 +5,7 @@ export * from "./sections";
 export * from "./features";
 
 // Pixel tracking components
-export { default as TikTokPixel } from "./TikTokPixel";
 export { default as PixelTracker } from "./PixelTracker";
-export * from "./FacebookPixel";
-export * from "./TikTokPixel";
 export * from "./PixelTracker";
 
 // Pixel tracking hooks

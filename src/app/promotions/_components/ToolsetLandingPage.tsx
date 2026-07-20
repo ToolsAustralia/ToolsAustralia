@@ -1,5 +1,6 @@
 import { Suspense } from "react";
 import dynamic from "next/dynamic";
+import { getImageProps } from "next/image";
 
 import PromoThemeInitializer from "@/components/promo/PromoThemeInitializer";
 import PromoBanner from "@/components/sections/promo/PromoBanner";
@@ -20,12 +21,12 @@ import { getEffectivePromosForDisplay } from "@/utils/database/queries/promo-que
 import { getCurrentMajorDrawServer } from "@/utils/database/queries/major-draw-server-queries";
 import ExperimentService from "@/services/ab-testing/ExperimentService";
 import { VariantAssignmentWrapper } from "@/components/ab-testing/VariantAssignmentWrapper";
-import { getServerVariantAssignment } from "@/utils/ab-testing/get-server-variant-assignment";
 import {
   getLandingHeroUrgencyFromDrawDay,
   getMajorDrawHeroUrgencyFromMajorDraw,
   getPromoImagePaths,
 } from "@/utils/promo/promo-hero-images";
+import { getLandingHeroVideoPaths } from "@/utils/promo/landing-video-resolver";
 import type { PromoImagePaths } from "@/utils/promo/promo-hero-types";
 import mongoose from "mongoose";
 
@@ -93,39 +94,54 @@ export default async function ToolsetLandingPage({ toolsetSlug }: ToolsetLanding
   });
   const heroImagePaths: PromoImagePaths = landingHero ?? standardHero;
 
+  // Video mode never paints the still (PromoHero renders the clip as the primary hero), so
+  // preloading the raw image path there wastes bandwidth on an asset the browser downloads but
+  // never displays. Still mode preloads the OPTIMIZED `/_next/image` URL (via getImageProps) —
+  // a raw-path `<link rel="preload" as="image" href=...>` never matches the URL the browser's
+  // image request actually resolves to, so it silently preloads nothing useful.
+  const heroVideo = getLandingHeroVideoPaths(defaultPrizeSlug, landingDrawDayUrgency);
+  const heroImagePreload = heroVideo
+    ? null
+    : {
+        mobile: getImageProps({ src: heroImagePaths.mobile, alt: "", fill: true, sizes: "100vw" }).props,
+        desktop: getImageProps({ src: heroImagePaths.desktop, alt: "", fill: true, sizes: "100vw" }).props,
+      };
+
   const experimentId = activeExperiment?._id
     ? (activeExperiment._id instanceof mongoose.Types.ObjectId
         ? activeExperiment._id.toString()
         : String(activeExperiment._id))
     : null;
 
-  const serverAssignment = experimentId
-    ? await getServerVariantAssignment(experimentId, defaultPrizeSlug).catch(() => null)
-    : null;
+  // A/B assignment is client-authoritative (POST /api/ab-testing/assign creates the
+  // assignment, records the page_view event, and sets the anon-id cookie). The server-side
+  // read that used to seed initial* props called cookies()/getServerSession — incompatible
+  // with this page's ISR (revalidate 60). Removing it changes nothing for first-time
+  // visitors (there was no assignment to read); returning assigned visitors briefly see
+  // the default variant until the client assignment applies. Accepted by DJ 2026-07-19.
 
   return (
     <>
-      <link
-        rel="preload"
-        as="image"
-        href={heroImagePaths.desktop}
-        media="(min-width: 1024px)"
-        imageSizes="100vw"
-      />
-      <link
-        rel="preload"
-        as="image"
-        href={heroImagePaths.mobile}
-        media="(max-width: 1023px)"
-        imageSizes="100vw"
-      />
+      {heroImagePreload && (
+        <>
+          <link
+            rel="preload"
+            as="image"
+            media="(min-width: 1024px)"
+            imageSrcSet={heroImagePreload.desktop.srcSet}
+            imageSizes="100vw"
+          />
+          <link
+            rel="preload"
+            as="image"
+            media="(max-width: 1023px)"
+            imageSrcSet={heroImagePreload.mobile.srcSet}
+            imageSizes="100vw"
+          />
+        </>
+      )}
 
-      <VariantAssignmentWrapper
-        experimentId={experimentId}
-        initialVariantId={serverAssignment?.variantId}
-        initialVariantConfig={serverAssignment?.variantConfig}
-        initialAnonymousId={serverAssignment?.anonymousId}
-      >
+      <VariantAssignmentWrapper experimentId={experimentId}>
         <PromoThemeInitializer slug={defaultPrizeSlug} toolsetSlug={toolsetSlug} />
         {prize && (
           <PromoViewTracking

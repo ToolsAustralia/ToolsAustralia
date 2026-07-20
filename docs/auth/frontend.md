@@ -66,7 +66,7 @@ Auth components use `cn()` from `@/utils/cn` for conditional class composition. 
 `/login` uses a two-column layout (desktop) / form-then-card stack (mobile):
 
 - **Left:** sign-in form, theme toggle, "Forgot password?", Google OAuth, and the "Create one" link to `/membership`. NextAuth wiring is unchanged.
-- **Right:** the all-prizes evergreen collage (`/images/background/promo/landing/all-prizes/all-prizes-mobile.webp`, same asset as `/draw-results`) sits behind a `RotatingToolsetCard` that auto-cycles Milwaukee → DeWalt → Makita → Ryobi every ~3.5s. The card surface tints per active brand so Ryobi's lime brand colour never lands on a white surface. Layout is text-left + contained image-right on `lg+`, image-on-top + text-below on smaller widths. Wordmark, hero photo, piece-count pill, and a bottom-right animated badge chip all swap in unison; the headline ("Earn Partner Discounts & Win Tools") and body stay static. Badge content pairs 1:1 with the active brand (Milwaukee→Secure Payment, DeWalt→Premium Partner Discounts, Makita→Exclusive Offers, Ryobi→Drawn Live) and uses the brand's darker accent (`brandTheme.primaryDark`) for label text so it stays readable on the white chip surface in every step.
+- **Right:** the all-prizes evergreen collage (`/images/background/promo/landing/all-prizes/all-prizes-mobile.webp`, same asset as `/draw-results`) sits behind a `RotatingToolsetCard` that auto-cycles Milwaukee → DeWalt → Makita → Ryobi → HiKOKI every ~3.5s (HiKOKI added 2026-07-20 — 15pc kit, `hikoki-green` color key, `Ticket`/"Free Entries · Into Every Draw" badge; reuses the existing `POWERSET_IMAGES.hikoki` / `POWERSET_BRAND_TEXT.hikoki` assets). The card surface tints per active brand so Ryobi's lime brand colour never lands on a white surface. Layout is text-left + contained image-right on `lg+`, image-on-top + text-below on smaller widths. Wordmark, hero photo, piece-count pill, and a bottom-right animated badge chip all swap in unison; the headline ("Earn Partner Discounts & Win Tools") and body stay static. Badge content pairs 1:1 with the active brand (Milwaukee→Secure Payment, DeWalt→Premium Partner Discounts, Makita→Exclusive Offers, Ryobi→Drawn Live) and uses the brand's darker accent (`brandTheme.primaryDark`) for label text so it stays readable on the white chip surface in every step.
 
 The "Sign in" h1 and "Please login to continue to your account." sub-copy render inline (baseline-aligned, `flex-wrap`) below `lg` and stack vertically on desktop, so the form header doesn't dominate small viewports.
 
@@ -75,3 +75,10 @@ The "Sign in" h1 and "Please login to continue to your account." sub-copy render
 ## Sign-out storage clear — streak celebration marker (2026-07-07)
 
 `total-sign-out.ts` `USER_LOCAL_PREFIXES` gains `ta-streak-seen:` — the Membership Streak celebration marker (last-celebrated streak level per user, written by `useStreakCelebration`). Per-user breadcrumb; must not leak the previous member's streak position on a shared device.
+
+## 2026-07-20 — Tier-2 perf: Poppins codemod
+
+Components in this domain were touched by the sitewide `font-'[Poppins]'` → `font-poppins`
+codemod (`npm run sweep:font-poppins`). Their Poppins-classed text now renders **real Poppins**
+instead of a browser fallback — an intended visual change. Details + rules:
+docs/shared-ui/tailwind-conventions.md §10.
