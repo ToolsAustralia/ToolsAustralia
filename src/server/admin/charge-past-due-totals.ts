@@ -5,6 +5,7 @@
  */
 
 import type { ChargeJobRunTotals } from "@/models/ChargeJobRun";
+import { skipReasonToBucket } from "@/utils/admin/chargeSkipReasons";
 
 /** Orphan-run cleanup window — 30min lock auto-expiry + 5min skew buffer. */
 export const ORPHAN_RUN_THRESHOLD_MS = 35 * 60 * 1000;
@@ -16,37 +17,13 @@ export interface ChargeLogRowForAggregation {
   skipReason?: string;
 }
 
-const KNOWN_SKIP_REASONS = new Set([
-  "recently_attempted",
-  "no_longer_past_due",
-  "already_paid",
-  "missing_payment_method",
-]);
-
 function bumpSkipBucket(
   totals: ChargeJobRunTotals,
   reason: string | undefined
 ): void {
   totals.skipped.total += 1;
-  switch (reason) {
-    case "recently_attempted":
-      totals.skipped.recentlyAttempted += 1;
-      break;
-    case "no_longer_past_due":
-      totals.skipped.noLongerPastDue += 1;
-      break;
-    case "already_paid":
-      totals.skipped.alreadyPaid += 1;
-      break;
-    case "missing_payment_method":
-      totals.skipped.missingPaymentMethod += 1;
-      break;
-    default:
-      if (!reason || !KNOWN_SKIP_REASONS.has(reason)) {
-        totals.skipped.other += 1;
-      }
-      break;
-  }
+  // Bucket key === breakdown field name (kept in lockstep by chargeSkipReasons.ts).
+  totals.skipped[skipReasonToBucket(reason)] += 1;
 }
 
 /** Build a fresh empty totals object — no shared references. */
@@ -62,6 +39,8 @@ export function emptyTotals(eligibleCount: number = 0): ChargeJobRunTotals {
       noLongerPastDue: 0,
       alreadyPaid: 0,
       missingPaymentMethod: 0,
+      noHeldDraft: 0,
+      awaitingRetry: 0,
       other: 0,
     },
     revenueCents: 0,

@@ -258,7 +258,7 @@
     "test:force-charge-policy": "tsx src/server/admin/__tests__/forceChargePastDuePolicy.test.ts",
     "test:recover-stranded-past-due-policy": "tsx src/server/admin/__tests__/recoverStrandedPastDuePolicy.test.ts",
     "test:charge-or-recover-policy": "tsx src/server/admin/__tests__/chargeOrRecoverPolicy.test.ts",
-    "test:past-due-history": "tsx src/server/admin/__tests__/charge-past-due-totals.test.ts && tsx src/services/admin/__tests__/chargePastDueHistory.test.ts",
+    "test:past-due-history": "tsx src/server/admin/__tests__/charge-past-due-totals.test.ts && tsx src/services/admin/__tests__/chargePastDueHistory.test.ts && tsx src/utils/admin/__tests__/chargeSkipReasons.test.ts",
     "cleanup:membership-backfill": "tsx scripts/cleanup-membership-backfill-rows.ts --live",
     "cleanup:membership-backfill:dry": "tsx scripts/cleanup-membership-backfill-rows.ts",
     "cleanup:abandoned-incomplete": "tsx scripts/cleanup-abandoned-incomplete-subscriptions.ts --live",

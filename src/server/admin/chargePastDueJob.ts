@@ -64,6 +64,7 @@ import {
   aggregateRunTotals,
   type ChargeLogRowForAggregation,
 } from "@/server/admin/charge-past-due-totals";
+import { classifySkipReasonFromMessage } from "@/utils/admin/chargeSkipReasons";
 
 const LOCK_ID = "charge-job-lock";
 const LOCK_WINDOW_MS = 30 * 60 * 1000; // 30 min — renewed each chunk.
@@ -101,16 +102,12 @@ export interface ChargeChunkResult {
   totals: ChargeJobRunTotals;
 }
 
-/** Best-effort map a skip log's errorMessage back to a skip-bucket reason. */
-function classifySkipReason(errorMessage?: string | null): string | undefined {
-  if (!errorMessage) return undefined;
-  const m = errorMessage.toLowerCase();
-  if (m.includes("already paid") || m.includes("already_paid")) return "already_paid";
-  if (m.includes("no longer past_due") || m.includes('not past_due') || m.includes('no_longer_past_due')) return "no_longer_past_due";
-  if (m.includes("payment method")) return "missing_payment_method";
-  if (m.includes("window") || m.includes("debounce") || m.includes("within last") || m.includes("within the last")) return "recently_attempted";
-  return undefined; // → "other" bucket
-}
+/**
+ * Best-effort map a skip log's errorMessage back to a skip-bucket reason. Delegates to
+ * the shared pure classifier so the run bucketer, the totals aggregator, and the admin
+ * drawer all agree (recognizes no_held_draft + awaiting_retry).
+ */
+const classifySkipReason = classifySkipReasonFromMessage;
 
 /**
  * Recompute authoritative totals for a run from its persisted InvoiceChargeLog rows.

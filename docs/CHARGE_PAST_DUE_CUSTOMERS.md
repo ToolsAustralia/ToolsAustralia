@@ -339,7 +339,21 @@ Located at: `src/components/admin/ChargePastDueModal.tsx`
 3. **No Eligible Invoices**: Check that users have `subscription.status === "past_due"` in database
 4. **All Skipped**: Verify invoice filtering criteria are met
 5. **High Failure Rate**: Check Stripe dashboard for decline patterns
-6. **Mass "This invoice can no longer be paid" failures**: these are stranded invoices (see "Stranded invoices in the bulk run" above). Since 2026-07-19 the bulk run auto-recovers them; if you see this error at scale again, verify `decideBulkChargeAction` is being applied and that `payments` is expanded on the invoice retrieve.
+6. **Mass "This invoice can no longer be paid" failures**: these are stranded invoices (see "Stranded invoices in the bulk run" above). Since 2026-07-19 the bulk run auto-recovers the retries-EXHAUSTED ones (`next_payment_attempt == null`). A residual few can still surface where Stripe **still has a retry scheduled** (`next_payment_attempt` set) but the current PaymentIntent is unpayable — since 2026-07-20 those are recorded as **skipped → "Awaiting Stripe retry"** with an accurate message (Stripe auto-retries them), not as scary failures. If you see the raw "consider voiding" text at scale again, verify `decideBulkChargeAction` is applied, `payments` is expanded, and the reclassification branch in `payOpenInvoiceAsPastDueAdmin` is intact.
+
+### Skip breakdown buckets
+
+The run's SKIP BREAKDOWN (admin run-detail drawer) names each skip reason instead of dumping them into "Other":
+
+| Bucket | Meaning | Actionable? |
+|---|---|---|
+| **No held draft (stranded)** | Past-due member whose failed-renewal invoice is dead AND whose next cycle hasn't minted a re-billable draft yet | Self-heals: Stripe mints a held draft at their next billing date; a later run recovers them. (Median ~3 days.) |
+| **Awaiting Stripe retry** | `invoices.pay()` had no payable attempt now, but Stripe has a scheduled retry | No action — Stripe auto-retries on its schedule |
+| Recently attempted (6h) | Charged within the 6h per-invoice window | Re-runnable after the window |
+| No longer past due | Late re-check found the member recovered mid-run | None (already paid another way) |
+| Already paid / Missing payment method | Self-explanatory | — |
+
+The buckets are derived by the shared pure classifier `src/utils/admin/chargeSkipReasons.ts` (`classifySkipBucketFromMessage`), used by the server totals aggregator AND the drawer (which recomputes the breakdown client-side from the run's rows, so even historical runs whose persisted totals predate these buckets display correctly). Regression-guarded by `npm run test:past-due-history` (`chargeSkipReasons.test.ts` + `charge-past-due-totals.test.ts`).
 
 ### Logs
 
