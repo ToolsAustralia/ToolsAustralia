@@ -17,7 +17,7 @@ import { useRouter } from "next/navigation";
 import { totalSignOut } from "@/utils/auth/total-sign-out";
 import { Settings as SettingsIcon, LogOut, Palette, AlertTriangle, Crown } from "lucide-react";
 import { getPackageIcon } from "@/utils/images/package-icons";
-import { useMyAccountData } from "@/hooks/queries";
+import { useMyAccountData, useUserData } from "@/hooks/queries";
 import { useDashboardState } from "@/hooks/useDashboardState";
 import { formatDisplayName } from "@/utils/display-name";
 import { hasFailedRenewal } from "@/utils/subscription/subscription-helpers";
@@ -33,6 +33,12 @@ export default function SettingsPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
   const { data: accountData, isLoading: loading, error } = useMyAccountData(session?.user?.id);
+  // hasPassword is DERIVED on /api/users/[id] (a password-only query), not carried by
+  // the my-account payload — reading user.hasPassword off accountData was always
+  // undefined, so passwordless (Google-OAuth) members were wrongly shown the
+  // "change password" flow. Source it from the users/[id] payload (shared cache, warmed
+  // by UserProvider — no extra fetch).
+  const { data: userDetail } = useUserData(session?.user?.id);
   const dash = useDashboardState();
 
   React.useEffect(() => {
@@ -126,7 +132,7 @@ export default function SettingsPage() {
         </div>
 
         {/* Password & security (reused, self-contained) */}
-        <PasswordTab userEmail={user.email} hasPassword={user.hasPassword} />
+        <PasswordTab userEmail={user.email} hasPassword={userDetail?.hasPassword} />
 
         {/* Sign out */}
         <button
