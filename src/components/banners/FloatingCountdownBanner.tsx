@@ -175,7 +175,7 @@ const FloatingCountdownBannerInner: React.FC<FloatingCountdownBannerProps> = ({ 
             }}
             className={`relative pointer-events-auto bg-gradient-to-r from-gray-900 via-gray-800 to-black rounded-xl shadow-2xl border ${
               gatesClosed ? "border-yellow-500/50" : "border-red-500/50"
-            } backdrop-blur-[var(--ta-blur)] overflow-visible w-full mx-4 ${
+            } overflow-visible w-full mx-4 ${
               isCollapsedState ? "max-w-md" : "max-w-4xl"
             }`}
           >
@@ -196,10 +196,11 @@ const FloatingCountdownBannerInner: React.FC<FloatingCountdownBannerProps> = ({ 
               {/* Collapsed State - Show only text with pulsing indicator */}
               {isCollapsedState ? (
                 <div className="flex items-center justify-center gap-3 py-2">
-                  {/* Pulsing Indicator - Yellow/Orange when gates closed, Green when open */}
+                  {/* Status indicator - Yellow/Orange when gates closed, Green when open.
+                      Static in the collapsed pill (perf Tier-2 Task 1): the collapsed state
+                      persists for the whole scroll session, so no always-on ping/pulse here. */}
                   <div className="relative">
-                    <div className={cn("w-3 h-3", gatesClosed ? "bg-yellow-400" : "bg-green-400", "rounded-full animate-pulse")}></div>
-                    <div className={cn("absolute inset-0 w-3 h-3", gatesClosed ? "bg-yellow-400" : "bg-green-400", "rounded-full animate-ping opacity-75")}></div>
+                    <div className={cn("w-3 h-3", gatesClosed ? "bg-yellow-400" : "bg-green-400", "rounded-full")}></div>
                   </div>
 
                   {/* Text - Only title, no subtitle */}
@@ -311,10 +312,12 @@ const FloatingCountdownBannerInner: React.FC<FloatingCountdownBannerProps> = ({ 
                   {/* Mobile Expanded */}
                   <div className="text-center">
                     <div className="flex items-center justify-center gap-2 mb-2">
-                      {/* Pulsing Indicator - Yellow/Orange when gates closed, Green when open */}
+                      {/* Pulsing Indicator - Yellow/Orange when gates closed, Green when open.
+                          ta-countdown-dot: globals.css freezes the ping/pulse on
+                          mobile/tablet/save-data tiers (perf Tier-2 Task 1). */}
                       <div className="relative">
-                        <div className={cn("w-3 h-3", gatesClosed ? "bg-yellow-400" : "bg-green-400", "rounded-full animate-pulse")}></div>
-                        <div className={cn("absolute inset-0 w-3 h-3", gatesClosed ? "bg-yellow-400" : "bg-green-400", "rounded-full animate-ping opacity-75")}></div>
+                        <div className={cn("ta-countdown-dot w-3 h-3", gatesClosed ? "bg-yellow-400" : "bg-green-400", "rounded-full animate-pulse")}></div>
+                        <div className={cn("ta-countdown-dot absolute inset-0 w-3 h-3", gatesClosed ? "bg-yellow-400" : "bg-green-400", "rounded-full animate-ping opacity-75")}></div>
                       </div>
                       {gatesClosed && <Lock className="w-3 h-3 text-yellow-400 flex-shrink-0" />}
                       <p className="text-sm sm:text-base font-semibold text-yellow-400 font-['Poppins']">

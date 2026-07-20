@@ -2277,52 +2277,118 @@
   transform: rotate(3deg) translate(0px, -4px);
 }
 
-/* Fire animation effect for promo banner background - mild/subtle version */
-/* Note: Position is handled by Tailwind classes (relative/fixed), ::before will work with any positioned parent */
+/* Fire animation effect for promo banner background - mild/subtle version.
+ * Note: Position is handled by Tailwind classes (relative/fixed) on the .fire div.
+ *
+ * 2026-07-20 perf rewrite (Tier-2 Task 1): the old version animated
+ * `background-position` on a single pseudo-element, which repainted on the main
+ * thread AND re-ran the brightness/blur/contrast filter every frame. Now each
+ * moving glitter field is its own layer animated with transform-ONLY keyframes:
+ * the filter is applied per layer, so each layer rasterizes once (filter baked
+ * into the cached texture) and the compositor just slides textures.
+ *
+ * Layer stack (bottom -> top), replacing the old 3-deep background-image stack:
+ *   .fire::before        static warm glow gradient (never animated)
+ *   .fire > .fire-glitter 400x650 glitter field, rises 650px / 8s (rendered as a
+ *                         child div by PromoBanner - the ONLY .fire consumer)
+ *   .fire::after         350x500 glitter field, rises 500px / 8s
+ * The two speeds preserve the original parallax "twinkle" between the fields.
+ * mix-blend-mode: overlay on the glitter layers reproduces the old
+ * background-blend-mode: overlay stack; opacity 0.7 on .fire keeps the old
+ * composite weight AND creates the stacking context that contains the blending.
+ *
+ * Seamless loop: each glitter layer is one background-tile taller than the
+ * banner and translates up by exactly one tile per iteration, so the snap-back
+ * frame is pixel-identical to frame 0. If you change a background-size tile
+ * height you MUST change the matching layer height + keyframe distance.
+ *
+ * RULE: animate transform/opacity only here. Never reintroduce
+ * background-position / filter / box-shadow keyframes on this surface. */
 .fire {
   overflow: hidden;
+  opacity: 0.7;
 }
 
 .fire::before,
 .fire::after {
   content: "";
+}
+
+/* Bottom layer: static warm glow anchored to the banner box (was the old 3rd
+ * background layer). Filter is static - painted once. */
+.fire::before {
   position: absolute;
   inset: 0;
-}
-
-.fire::before {
-  background-image: var(--glitter), var(--glitter),
-    linear-gradient(0deg, rgba(255, 255, 255, 0.2) 0px, rgba(255, 137, 81, 0.3) 5px, rgba(220, 188, 22, 0.25) 30%);
-  background-size: 350px 500px, 400px 650px, 100% 100%;
-  background-blend-mode: overlay, overlay;
-  background-position: 0px 0px, 0px 0px, 50% 100%;
-  background-repeat: repeat, repeat, repeat;
-  /* Use overlay blend mode to blend naturally with dark background */
-
-  /* Reduced brightness and contrast to blend with dark banner background */
+  background-image: linear-gradient(0deg, rgba(255, 255, 255, 0.2) 0px, rgba(255, 137, 81, 0.3) 5px, rgba(220, 188, 22, 0.25) 30%);
   filter: brightness(1.5) blur(4px) contrast(2.5);
-  /* Slower animation for more subtle effect */
-  animation: fire 8s linear infinite;
-  /* Removed dark box-shadow to keep background transparent */
   pointer-events: none;
-  z-index: 0;
-  /* Ensure no background color - let it blend with banner background */
-  background-color: transparent;
-  opacity: 0.7;
 }
 
-/* Ensure text appears above fire effect */
-.fire > * {
-  position: relative;
-  z-index: 1;
+/* Moving glitter fields (see block comment above for the loop contract). */
+.fire > .fire-glitter,
+.fire::after {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  background-image: var(--glitter);
+  background-repeat: repeat;
+  mix-blend-mode: overlay;
+  filter: brightness(1.5) blur(4px) contrast(2.5);
+  pointer-events: none;
 }
 
-@keyframes fire {
-  0% {
-    background-position: center 0px, center 0px, 50% 100%;
+.fire > .fire-glitter {
+  height: calc(100% + 650px);
+  background-size: 400px 650px;
+  animation: fire-rise-650 8s linear infinite;
+}
+
+.fire::after {
+  height: calc(100% + 500px);
+  background-size: 350px 500px;
+  animation: fire-rise-500 8s linear infinite;
+}
+
+@keyframes fire-rise-500 {
+  to {
+    transform: translate3d(0, -500px, 0);
   }
+}
+
+@keyframes fire-rise-650 {
+  to {
+    transform: translate3d(0, -650px, 0);
+  }
+}
+
+/* UrgencyClockIcon (promo banner urgency label): one subtle scale pulse on the
+ * wrapper + a steps(60) second hand (1 style update per second - replaces the
+ * old framer-motion 4-track shake/glow/smooth-sweep stack). Both are gated off
+ * for low-tier devices below. */
+.ta-clock-pulse {
+  animation: ta-clock-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes ta-clock-pulse {
+  0%,
   100% {
-    background-position: center -500px, center -650px, 50% 100%;
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.08);
+  }
+}
+
+.ta-clock-second-hand {
+  transform-box: fill-box;
+  transform-origin: 50% 50%;
+  animation: ta-clock-tick 60s steps(60, end) infinite;
+}
+
+@keyframes ta-clock-tick {
+  to {
+    transform: rotate(360deg);
   }
 }
 
@@ -2427,6 +2493,30 @@ html[data-save-data="true"] {
 }
 html[data-tier="mobile"] [class*="border-glow-"]:not(:focus-visible),
 html[data-save-data="true"] [class*="border-glow-"]:not(:focus-visible) {
+  animation: none !important;
+}
+
+/* Promo-banner surface tier gates (2026-07-20, perf Tier-2 Task 1): low-tier
+ * devices get the static fire gradient + frozen glitter, a static clock icon,
+ * and static countdown "live" dots. Desktop keeps the full look.
+ * (prefers-reduced-motion is already handled by the global 1ms rule above;
+ * save-data also demotes data-tier to "mobile" post-hydration - the explicit
+ * selector keeps the gate correct pre-hydration and self-documenting.) */
+html[data-tier="mobile"] .fire > .fire-glitter,
+html[data-tier="mobile"] .fire::after,
+html[data-tier="mobile"] .ta-clock-pulse,
+html[data-tier="mobile"] .ta-clock-second-hand,
+html[data-tier="mobile"] .ta-countdown-dot,
+html[data-tier="tablet"] .fire > .fire-glitter,
+html[data-tier="tablet"] .fire::after,
+html[data-tier="tablet"] .ta-clock-pulse,
+html[data-tier="tablet"] .ta-clock-second-hand,
+html[data-tier="tablet"] .ta-countdown-dot,
+html[data-save-data="true"] .fire > .fire-glitter,
+html[data-save-data="true"] .fire::after,
+html[data-save-data="true"] .ta-clock-pulse,
+html[data-save-data="true"] .ta-clock-second-hand,
+html[data-save-data="true"] .ta-countdown-dot {
   animation: none !important;
 }
 

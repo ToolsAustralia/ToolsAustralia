@@ -775,7 +775,11 @@ export default function PromoBanner({
             }
             aria-hidden
           >
-            <div className="fire pointer-events-none absolute inset-0 min-h-full w-full" />
+            <div className="fire pointer-events-none absolute inset-0 min-h-full w-full">
+              {/* Second (parallax) glitter field of the fire effect — globals.css positions
+                  and animates it (transform-only); pseudo-elements carry the other two layers. */}
+              <div className="fire-glitter" />
+            </div>
           </div>
           <div
             className={`relative z-10 w-full overflow-visible ${
