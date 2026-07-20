@@ -1882,6 +1882,10 @@
 .vip-premium-inner-luminosity {
   pointer-events: none;
   background: radial-gradient(ellipse 88% 60% at 50% 38%, rgba(212, 175, 55, 0.1) 0%, transparent 58%);
+  /* Base = the animation's 0%/100% rest opacity, so a tier-gated `animation: none`
+     parks at 0.26 instead of the default 1.0 (~4x the peak — the vip-sheen bug class,
+     2026-07-20 review). Currently no live consumer, but any future one is now safe. */
+  opacity: 0.26;
   animation: vip-inner-wash 4s ease-in-out infinite;
 }
 
