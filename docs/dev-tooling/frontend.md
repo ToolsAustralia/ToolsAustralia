@@ -92,3 +92,7 @@ When a modal's props change, the gallery mount must follow. Note `ChargePastDueM
 arbitrary `font-['[Poppins]']` Tailwind class → the real `font-poppins` utility across
 `src/**`. Dry-run by default, `--apply` to write; follows the `sweep-brand-red` conventions
 (codemod-runner + per-file replacement summary). What/why: docs/shared-ui/tailwind-conventions.md §10.
+
+_Fix round 1 (2026-07-20):_ `sweep-font-poppins.ts` regex hardened to also match the
+fallback-suffixed `font-['[Poppins]',sans-serif]` form (was exact-literal only), preserving
+variant prefixes; dry-run/apply behavior unchanged; idempotent.

@@ -121,14 +121,16 @@ register a global `@font-face` named `Poppins`.
 
 So the arbitrary class **`font-['Poppins']` compiles to `font-family: Poppins`** — a bare
 family the browser can't resolve to the loaded face, so those elements silently render a
-**fallback** font. The Tier-2 codemod **`npm run sweep:font-poppins`** (dry-run default;
-`scripts/codemods/sweep-font-poppins.ts`) rewrote all **296 `font-['Poppins']` occurrences
-across 94 files** → `font-poppins`, so they now render the **actual loaded Poppins**. This
-is an **intended, sitewide visual change** (headings, buttons, labels, form inputs, chart
-labels, badges — anywhere the arbitrary class was used).
+**fallback** font. The **fallback-suffixed** form `font-['Poppins',sans-serif]` has the same
+defect (the first family, `Poppins`, still doesn't resolve). The Tier-2 codemod
+**`npm run sweep:font-poppins`** (dry-run default; `scripts/codemods/sweep-font-poppins.ts`)
+matches **both** forms and rewrote **300 occurrences across 95 files** (296 bare + 4
+fallback-suffixed `<h1>` hero titles — incl. the flagship homepage "Tools Australia" title)
+→ `font-poppins`, so they now render the **actual loaded Poppins**. This is an **intended,
+sitewide visual change** (headings, buttons, labels, form inputs, chart labels, badges).
 
 - **Rule:** to apply Poppins, use `font-poppins` (or the `font-display` utility, also mapped
-  to `--font-poppins`). Never `font-['Poppins']` / `font-[Poppins]`.
+  to `--font-poppins`). Never `font-['Poppins']` / `font-['Poppins',sans-serif]` / `font-[Poppins]`.
 - **`.form-input`** (globals.css `@layer components`) and the global `h1–h6` rule use the
   same `--font-poppins` var. `h1–h6` is pinned to `font-weight: 900` (a **loaded** weight;
   Poppins loads 400/500/600/700/900 in `src/app/layout.tsx`) with `font-synthesis: none` —

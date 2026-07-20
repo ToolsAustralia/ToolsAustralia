@@ -91,7 +91,7 @@ export default function PartnerHero({ onBecomePartnerAction }: PartnerHeroProps)
                 </div>
 
                 {/* Main Title */}
-                <h1 className="text-[32px] sm:text-[48px] font-black leading-[32px] sm:leading-[48px] text-white font-['Poppins',_sans-serif] mb-4 sm:mb-6 drop-shadow-lg">
+                <h1 className="text-[32px] sm:text-[48px] font-black leading-[32px] sm:leading-[48px] text-white font-poppins mb-4 sm:mb-6 drop-shadow-lg">
                   Partner with the
                   <span className="block text-red-600">Tool Experts</span>
                 </h1>
@@ -181,7 +181,7 @@ export default function PartnerHero({ onBecomePartnerAction }: PartnerHeroProps)
               </div>
 
               {/* Main Title */}
-              <h1 className="text-[64px] font-black leading-[64px] text-white font-['Poppins',_sans-serif] mb-6 drop-shadow-lg">
+              <h1 className="text-[64px] font-black leading-[64px] text-white font-poppins mb-6 drop-shadow-lg">
                 Partner with the
                 <span className="block text-red-600">Tool Experts</span>
               </h1>

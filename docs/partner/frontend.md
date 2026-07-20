@@ -37,3 +37,7 @@ Components in this domain were touched by the sitewide `font-'[Poppins]'` → `f
 codemod (`npm run sweep:font-poppins`). Their Poppins-classed text now renders **real Poppins**
 instead of a browser fallback — an intended visual change. Details + rules:
 docs/shared-ui/tailwind-conventions.md §10.
+
+_Fix round 1 (2026-07-20):_ `PartnerHero` two `<h1>` hero titles used the fallback-suffixed
+`font-['[Poppins]',sans-serif]` literal (missed by the round-1 codemod) and rendered a
+fallback until converted to `font-poppins`. See docs/shared-ui/tailwind-conventions.md §10.
