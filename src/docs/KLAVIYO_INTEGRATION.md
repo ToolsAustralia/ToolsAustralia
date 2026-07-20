@@ -14,19 +14,23 @@ This project uses Klaviyo's onsite JavaScript for client-side tracking alongside
 - Root layout: `src/app/layout.tsx`
 
   - Renders `KlaviyoScriptLoader` in the `<body>` near other tracking components:
-    - `PixelTracker`
+    - `ConversionPixels` (the live Meta/TikTok/Snap browser-pixel loader — provider registry)
     - `KlaviyoScriptLoader`
     - `KlaviyoPageTracker`
 
 - Script loader component: `src/components/KlaviyoScriptLoader.tsx`
-  - Client component that:
-    - Uses `next/script` with `strategy="afterInteractive"`.
-    - Injects Klaviyo's recommended proxy/queue snippet.
-    - Loads `https://static.klaviyo.com/onsite/js/klaviyo.js?company_id=NEXT_PUBLIC_KLAVIYO_COMPANY_ID`.
+  - Client component that loads the onsite suite in **TWO stages** (2026-07-19 perf split):
+    1. `klaviyo-onsite-queue` — a ~1 KB inline `next/script` (`strategy="afterInteractive"`)
+       that installs only the `window.klaviyo` Proxy + `window._klOnsite` queue, so any
+       identify/track/page call from hydration onward buffers.
+    2. `klaviyo-onsite-suite` — the ~80 KB gz suite
+       (`https://static.klaviyo.com/onsite/js/klaviyo.js?company_id=…`), injected on the
+       FIRST queued event OR at browser idle (whichever comes first), which drains the queue.
   - Props:
     - `companyId?: string` – from `process.env.NEXT_PUBLIC_KLAVIYO_COMPANY_ID`.
     - `disabled?: boolean` – typically `NODE_ENV === "development" && !NEXT_PUBLIC_ENABLE_PIXEL_TESTING`.
-    - `nonce?: string` – CSP nonce from `getNonce`.
+    - (No `nonce` prop: the inline queue snippet is a FIXED string whose sha256 is
+      allowlisted in `csp.ts`, so it needs no per-request nonce.)
 
 ## SPA page view tracking
 
@@ -72,7 +76,9 @@ For local development, set `NEXT_PUBLIC_KLAVIYO_COMPANY_ID` to your Klaviyo comp
 
 - File: `src/utils/security/csp.ts`
   - `script-src` includes `https://static.klaviyo.com` so the onsite script can load under the current Content Security Policy.
-  - When a nonce is present, the inline loader snippet uses `nonce={nonce}` via `next/script`.
+  - The inline queue snippet is a FIXED string (`KLAVIYO_QUEUE_SNIPPET` in `inline-snippets.ts`)
+    whose sha256 is allowlisted in `csp.ts` — so it loads with no per-request nonce (the root
+    layout is deliberately nonce-free).
 
 ## How to use in new code
 

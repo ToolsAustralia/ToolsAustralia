@@ -367,7 +367,7 @@ export default function PartnerDiscounts() {
             <Gift className="w-5 h-5 text-white" />
           </div>
           <div className="min-w-0 flex-1 text-left">
-            <h2 className="text-lg font-bold bg-gradient-to-r from-gray-900 via-gray-800 to-gray-900 bg-clip-text text-transparent font-['Poppins'] truncate">
+            <h2 className="text-lg font-bold bg-gradient-to-r from-gray-900 via-gray-800 to-gray-900 bg-clip-text text-transparent font-poppins truncate">
               Partner Discounts
             </h2>
             {summary.isActiveSubscription && summary.subscriptionBenefits ? (

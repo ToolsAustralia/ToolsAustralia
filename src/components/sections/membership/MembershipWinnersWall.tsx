@@ -32,7 +32,7 @@ function WinnerCard({ w, accent }: { w: MajorDrawWinner; accent: string }) {
           <Image src={w.imageUrl} alt={`${name} — winner`} fill className="object-cover" sizes="(max-width:640px) 100vw, 360px" />
         ) : (
           <div className="absolute inset-0 grid place-items-center">
-            <span className="font-['Poppins'] text-5xl font-black text-white/85">{getInitials(w.winnerFirstName, w.winnerLastName)}</span>
+            <span className="font-poppins text-5xl font-black text-white/85">{getInitials(w.winnerFirstName, w.winnerLastName)}</span>
           </div>
         )}
         <span className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-black/70 to-transparent" />
@@ -40,7 +40,7 @@ function WinnerCard({ w, accent }: { w: MajorDrawWinner; accent: string }) {
           <Trophy className="h-3 w-3" /> Winner
         </span>
         <div className="absolute inset-x-3 bottom-3 text-white">
-          <strong className="block font-['Poppins'] text-lg font-extrabold leading-tight">{name}</strong>
+          <strong className="block font-poppins text-lg font-extrabold leading-tight">{name}</strong>
           {w.winnerState && (
             <span className="inline-flex items-center gap-1 text-xs text-white/85">
               <MapPin className="h-3 w-3" /> {w.winnerState}
@@ -49,7 +49,7 @@ function WinnerCard({ w, accent }: { w: MajorDrawWinner; accent: string }) {
         </div>
       </div>
       <div className="p-4">
-        <div className="font-['Poppins'] text-sm font-bold text-primary-token dark:text-white">{prize}</div>
+        <div className="font-poppins text-sm font-bold text-primary-token dark:text-white">{prize}</div>
         <div className="mt-2 flex items-center justify-between text-xs">
           <span className="inline-flex items-center gap-1 font-semibold text-emerald-600">
             <ShieldCheck className="h-3.5 w-3.5" /> Verified draw
@@ -79,7 +79,7 @@ export default function MembershipWinnersWall() {
       <SectionContainer as="div" className="relative">
         <div className="text-center">
           <span className="text-xs font-bold uppercase tracking-[0.18em] text-red-600">Past winners</span>
-          <h2 className="mt-4 font-['Poppins'] text-3xl font-extrabold tracking-tight text-primary-token sm:text-4xl lg:text-5xl dark:text-white">
+          <h2 className="mt-4 font-poppins text-3xl font-extrabold tracking-tight text-primary-token sm:text-4xl lg:text-5xl dark:text-white">
             Real tradies, real gear.
           </h2>
         </div>

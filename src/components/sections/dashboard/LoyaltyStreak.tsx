@@ -121,7 +121,7 @@ function Medallion({
           />
         )}
         <span
-          className={cn("font-['Poppins'] text-[42px] font-extrabold leading-[.9] tracking-[-.02em] tabular-nums", isEmpty ? "text-[var(--s-b)]" : "text-white")}
+          className={cn("font-poppins text-[42px] font-extrabold leading-[.9] tracking-[-.02em] tabular-nums", isEmpty ? "text-[var(--s-b)]" : "text-white")}
           style={isEmpty ? undefined : { textShadow: "0 1px 2px var(--s-sh)" }}
         >
           {lvl}
@@ -196,7 +196,7 @@ function TemperingRail({ months, showAllAmounts }: { months: number; showAllAmou
             <div
               key={rung.level}
               className={cn(
-                "group/plate relative flex h-[30px] flex-1 items-center justify-center rounded-[7px] border font-['Poppins'] text-[10.5px] font-extrabold",
+                "group/plate relative flex h-[30px] flex-1 items-center justify-center rounded-[7px] border font-poppins text-[10.5px] font-extrabold",
                 earned
                   ? "border-[var(--s-b)] text-[#241a04] shadow-[inset_0_1px_0_rgba(255,255,255,.5),inset_0_-2px_4px_var(--s-sh)]"
                   : isNext
@@ -262,7 +262,7 @@ export default function LoyaltyStreak({
       >
         <span className="pointer-events-none absolute inset-0" style={{ background: "radial-gradient(190px at 50% 40%, rgba(217,119,6,.20), transparent 70%)" }} />
         <div className="relative mb-2 flex items-center justify-between">
-          <span className="inline-flex items-center gap-[7px] font-['Poppins'] text-[13.5px] font-extrabold text-primary-token dark:text-white">
+          <span className="inline-flex items-center gap-[7px] font-poppins text-[13.5px] font-extrabold text-primary-token dark:text-white">
             <AnvilIcon className="h-3 w-[21px]" /> Streak
           </span>
           <span className="rounded-full border px-2.5 py-1.5 text-[12px] font-semibold leading-none backdrop-blur-[4px]" style={{ borderColor: "color-mix(in srgb, var(--s-b) 42%, transparent)", color: "var(--s-b)" }}>
@@ -367,7 +367,7 @@ export default function LoyaltyStreak({
       <span className="pointer-events-none absolute inset-0 opacity-10 dark:opacity-[.18]" style={{ background: "radial-gradient(150px at 50% 34%, var(--s-glow), transparent 70%)" }} />
 
       <div className="relative mb-2 flex items-center justify-between">
-        <span className="inline-flex items-center gap-[7px] font-['Poppins'] text-[13.5px] font-extrabold text-primary-token dark:text-white">
+        <span className="inline-flex items-center gap-[7px] font-poppins text-[13.5px] font-extrabold text-primary-token dark:text-white">
           <AnvilIcon className="h-3 w-[21px]" /> Streak
         </span>
         <span

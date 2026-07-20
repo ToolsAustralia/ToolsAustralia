@@ -44,7 +44,7 @@ export default function GiveawaySection({ className = "" }: GiveawaySectionProps
               {/* Main Title with Icon */}
               <div className="flex items-center justify-start gap-2">
                 <Gift className="w-4 h-4 sm:w-5 sm:h-5 lg:w-8 lg:h-8 text-yellow-500" />
-                <h2 className="text-[18px] sm:text-[20px] lg:text-[36px] font-bold text-black font-['Poppins'] leading-tight">
+                <h2 className="text-[18px] sm:text-[20px] lg:text-[36px] font-bold text-black font-poppins leading-tight">
                   Next Giveaway
                 </h2>
               </div>

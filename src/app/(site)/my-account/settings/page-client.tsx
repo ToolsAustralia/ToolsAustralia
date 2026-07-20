@@ -17,7 +17,7 @@ import { useRouter } from "next/navigation";
 import { totalSignOut } from "@/utils/auth/total-sign-out";
 import { Settings as SettingsIcon, LogOut, Palette, AlertTriangle, Crown } from "lucide-react";
 import { getPackageIcon } from "@/utils/images/package-icons";
-import { useMyAccountData } from "@/hooks/queries";
+import { useMyAccountData, useUserData } from "@/hooks/queries";
 import { useDashboardState } from "@/hooks/useDashboardState";
 import { formatDisplayName } from "@/utils/display-name";
 import { hasFailedRenewal } from "@/utils/subscription/subscription-helpers";
@@ -33,6 +33,12 @@ export default function SettingsPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
   const { data: accountData, isLoading: loading, error } = useMyAccountData(session?.user?.id);
+  // hasPassword is DERIVED on /api/users/[id] (a password-only query), not carried by
+  // the my-account payload — reading user.hasPassword off accountData was always
+  // undefined, so passwordless (Google-OAuth) members were wrongly shown the
+  // "change password" flow. Source it from the users/[id] payload (shared cache, warmed
+  // by UserProvider — no extra fetch).
+  const { data: userDetail } = useUserData(session?.user?.id);
   const dash = useDashboardState();
 
   React.useEffect(() => {
@@ -85,7 +91,7 @@ export default function SettingsPage() {
         <div className="flex items-center gap-4 rounded-3xl border border-token bg-surface p-5 shadow-sm">
           <Monogram firstName={user.firstName} lastName={user.lastName} tierHex={dash.subscriptionTierHex ?? "#ee0000"} onBrand size={52} radius={16} />
           <div className="min-w-0 flex-1">
-            <h2 className="truncate font-['Poppins'] text-base font-bold text-primary-token dark:text-white sm:text-lg">{displayName}</h2>
+            <h2 className="truncate font-poppins text-base font-bold text-primary-token dark:text-white sm:text-lg">{displayName}</h2>
             <p className="truncate text-xs text-muted-token sm:text-sm">{subtitle}</p>
           </div>
           {hasFailed ? (
@@ -118,7 +124,7 @@ export default function SettingsPage() {
               <Palette className="h-5 w-5" />
             </span>
             <div>
-              <p className="font-['Poppins'] text-base font-bold text-primary-token dark:text-white">Appearance</p>
+              <p className="font-poppins text-base font-bold text-primary-token dark:text-white">Appearance</p>
               <p className="text-xs text-muted-token">Choose how the dashboard looks</p>
             </div>
           </div>
@@ -126,7 +132,7 @@ export default function SettingsPage() {
         </div>
 
         {/* Password & security (reused, self-contained) */}
-        <PasswordTab userEmail={user.email} hasPassword={user.hasPassword} />
+        <PasswordTab userEmail={user.email} hasPassword={userDetail?.hasPassword} />
 
         {/* Sign out */}
         <button

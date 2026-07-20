@@ -1,35 +1,15 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import WinnersTestimony from "../winners/components/WinnersTestimony";
-import type { WinnerCardData } from "@/components/cards/WinnerCard";
+import { useWinnersFeed, WINNERS_FEED_LIMIT } from "@/hooks/queries/useWinnersQueries";
 
 /**
- * Client component to fetch and display winner testimonies on the home page
- * This is separated from the server component to allow client-side data fetching
+ * Client component to fetch and display winner testimonies on the home page.
+ * Uses the shared winners feed (useWinnersFeed) so this and the Latest Winners
+ * board collapse onto a single request per page instead of two.
  */
 export default function WinnerTestimoniesClient() {
-  const [winners, setWinners] = useState<WinnerCardData[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    const fetchWinners = async () => {
-      try {
-        const response = await fetch("/api/winners/all?limit=100");
-        const data = await response.json();
-
-        if (data.success && data.winners) {
-          setWinners(data.winners);
-        }
-      } catch (error) {
-        console.error("Error fetching winners:", error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchWinners();
-  }, []);
+  const { data: winners = [], isLoading: loading } = useWinnersFeed(WINNERS_FEED_LIMIT);
 
   // Only render if we have winners (loading state is handled by Suspense)
   if (loading || winners.length === 0) {

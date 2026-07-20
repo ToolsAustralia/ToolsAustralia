@@ -5,7 +5,7 @@ import { BarChart3, Users, UserCheck, DollarSign } from "lucide-react";
 import { ModalContainer, ModalHeader, ModalContent } from "./ui";
 import { MetricCard } from "@/components/admin/metrics/shared/MetricCard";
 import { formatNumber, formatCurrency } from "@/utils/metrics/formatters";
-import { getPrizeLabel } from "@/config/prizes";
+import { getPrizeLabel } from "@/config/prize-summaries";
 import { usePromoPageDetail } from "@/hooks/queries/usePromoPageDetail";
 import UTMCampaignBreakdownTable from "@/components/admin/promo-analytics/UTMCampaignBreakdownTable";
 

@@ -44,7 +44,7 @@ export default function HowMiniDrawsWork() {
           animate={isInView ? { opacity: 1, y: 0 } : {}}
           transition={{ duration: prefersReduced ? 0 : 0.5 }}
         >
-          <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 font-['Poppins'] mb-3">
+          <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 font-poppins mb-3">
             How Mini Draws Work
           </h2>
           <p className="text-gray-600 dark:text-neutral-400 max-w-2xl mx-auto">
@@ -86,7 +86,7 @@ export default function HowMiniDrawsWork() {
                 </span>
               </div>
 
-              <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-2 font-['Poppins']">{step.title}</h3>
+              <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-2 font-poppins">{step.title}</h3>
               <p className="text-sm sm:text-base text-gray-600 dark:text-neutral-400 leading-relaxed max-w-xs mx-auto">
                 {step.href ? (
                   <>

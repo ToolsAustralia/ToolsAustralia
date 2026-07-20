@@ -101,7 +101,7 @@ export default function PastDueTierSwitchModal({
           <div className="flex items-center gap-2 text-[11px] font-black uppercase tracking-[0.14em]">
             <Repeat className="h-3.5 w-3.5" /> Switch tier
           </div>
-          <h2 className="mt-1.5 font-['Poppins'] text-xl font-extrabold leading-tight">
+          <h2 className="mt-1.5 font-poppins text-xl font-extrabold leading-tight">
             Switch to {newTierName}?
           </h2>
         </div>

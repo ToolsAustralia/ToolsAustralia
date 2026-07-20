@@ -3,7 +3,6 @@
  * Shared between ToolboxSelector, PowerToolsetCarousel, and PrizeShowcase.
  */
 
-import type { PrizeCatalogEntry } from "@/config/prizes";
 import type { ToolboxType } from "./constants";
 
 /** Query key for toolset promo landing pages (`/promotions/makita` etc.) — persists toolbox/cash selection on refresh. */
@@ -70,11 +69,11 @@ export function getToolsetFromSlug(slug: string): string | null {
   return toolset || null;
 }
 
-/** Filter prizes by toolbox type */
-export function filterPrizesByToolboxType(
-  prizes: PrizeCatalogEntry[],
+/** Filter prizes by toolbox type. Generic so both `PrizeSummary` (client) and `PrizeCatalogEntry` (server/lazy) lists flow through. */
+export function filterPrizesByToolboxType<T extends { slug: string }>(
+  prizes: T[],
   toolboxType: ToolboxType
-): PrizeCatalogEntry[] {
+): T[] {
   if (toolboxType === "cash") {
     return prizes.filter((p) => p.slug === "cash-prize");
   }

@@ -75,3 +75,10 @@ The "Sign in" h1 and "Please login to continue to your account." sub-copy render
 ## Sign-out storage clear — streak celebration marker (2026-07-07)
 
 `total-sign-out.ts` `USER_LOCAL_PREFIXES` gains `ta-streak-seen:` — the Membership Streak celebration marker (last-celebrated streak level per user, written by `useStreakCelebration`). Per-user breadcrumb; must not leak the previous member's streak position on a shared device.
+
+## 2026-07-20 — Tier-2 perf: Poppins codemod
+
+Components in this domain were touched by the sitewide `font-'[Poppins]'` → `font-poppins`
+codemod (`npm run sweep:font-poppins`). Their Poppins-classed text now renders **real Poppins**
+instead of a browser fallback — an intended visual change. Details + rules:
+docs/shared-ui/tailwind-conventions.md §10.

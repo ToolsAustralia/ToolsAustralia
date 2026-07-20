@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, Suspense, type ReactNode } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { m, AnimatePresence } from "framer-motion";
 import { X, Lock } from "lucide-react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { useCurrentMajorDraw, useNextDraw } from "@/hooks/queries/useMajorDrawQueries";
@@ -155,7 +155,7 @@ const FloatingCountdownBannerInner: React.FC<FloatingCountdownBannerProps> = ({ 
   return (
     <AnimatePresence>
       {isReady && !isDismissed && (
-        <motion.div
+        <m.div
           data-floating-widget="true"
           initial={{ opacity: 0, y: 100 }}
           animate={{ opacity: 1, y: 0 }}
@@ -163,7 +163,7 @@ const FloatingCountdownBannerInner: React.FC<FloatingCountdownBannerProps> = ({ 
           transition={{ type: "spring", stiffness: 300, damping: 30 }}
           className={cn("fixed bottom-10 sm:bottom-12 left-0 right-0 z-50 flex justify-center pointer-events-none", className)}
         >
-          <motion.div
+          <m.div
             animate={{
               scale: isCollapsedState ? 0.95 : 1,
             }}
@@ -175,7 +175,7 @@ const FloatingCountdownBannerInner: React.FC<FloatingCountdownBannerProps> = ({ 
             }}
             className={`relative pointer-events-auto bg-gradient-to-r from-gray-900 via-gray-800 to-black rounded-xl shadow-2xl border ${
               gatesClosed ? "border-yellow-500/50" : "border-red-500/50"
-            } backdrop-blur-[var(--ta-blur)] overflow-visible w-full mx-4 ${
+            } overflow-visible w-full mx-4 ${
               isCollapsedState ? "max-w-md" : "max-w-4xl"
             }`}
           >
@@ -196,15 +196,16 @@ const FloatingCountdownBannerInner: React.FC<FloatingCountdownBannerProps> = ({ 
               {/* Collapsed State - Show only text with pulsing indicator */}
               {isCollapsedState ? (
                 <div className="flex items-center justify-center gap-3 py-2">
-                  {/* Pulsing Indicator - Yellow/Orange when gates closed, Green when open */}
+                  {/* Status indicator - Yellow/Orange when gates closed, Green when open.
+                      Static in the collapsed pill (perf Tier-2 Task 1): the collapsed state
+                      persists for the whole scroll session, so no always-on ping/pulse here. */}
                   <div className="relative">
-                    <div className={cn("w-3 h-3", gatesClosed ? "bg-yellow-400" : "bg-green-400", "rounded-full animate-pulse")}></div>
-                    <div className={cn("absolute inset-0 w-3 h-3", gatesClosed ? "bg-yellow-400" : "bg-green-400", "rounded-full animate-ping opacity-75")}></div>
+                    <div className={cn("w-3 h-3", gatesClosed ? "bg-yellow-400" : "bg-green-400", "rounded-full")}></div>
                   </div>
 
                   {/* Text - Only title, no subtitle */}
                   <div className="text-center">
-                    <h3 className="text-sm sm:text-base font-bold text-white font-['Poppins'] leading-tight">
+                    <h3 className="text-sm sm:text-base font-bold text-white font-poppins leading-tight">
                       {gatesClosed ? "GATES CLOSED" : "WIN THE BEST TRADIE SETUP"}
                     </h3>
                   </div>
@@ -219,7 +220,7 @@ const FloatingCountdownBannerInner: React.FC<FloatingCountdownBannerProps> = ({ 
                         {gatesClosed && (
                           <Lock className="w-4 h-4 text-yellow-400 flex-shrink-0" />
                         )}
-                        <h3 className="text-sm sm:text-base font-bold text-white font-['Poppins'] leading-tight break-words">
+                        <h3 className="text-sm sm:text-base font-bold text-white font-poppins leading-tight break-words">
                           {gatesClosed ? "GATES CLOSED" : "WIN THE BEST TRADIE SETUP"}
                         </h3>
                       </div>
@@ -238,7 +239,7 @@ const FloatingCountdownBannerInner: React.FC<FloatingCountdownBannerProps> = ({ 
                         render={({ timeLeft, isExpired }) =>
                           isExpired ? (
                             <div className="text-center">
-                              <div className="text-2xl sm:text-3xl font-bold text-red-400 mb-2 font-['Poppins']">
+                              <div className="text-2xl sm:text-3xl font-bold text-red-400 mb-2 font-poppins">
                                 DRAW IN PROGRESS!
                               </div>
                               <a
@@ -257,7 +258,7 @@ const FloatingCountdownBannerInner: React.FC<FloatingCountdownBannerProps> = ({ 
                             <div className="grid grid-cols-4 gap-2 sm:gap-2">
                               {/* Days */}
                               <div className={cn("bg-gradient-to-br", gatesClosed ? "from-yellow-500 via-orange-500 to-orange-600" : "from-red-500 via-red-600 to-red-700", "rounded-lg px-2 py-2 sm:px-4 sm:py-2 shadow-lg w-full ring-2", gatesClosed ? "ring-yellow-300/20" : "ring-red-300/20")}>
-                                <div className="text-lg sm:text-xl font-bold text-white mb-0.5 font-['Poppins'] drop-shadow-md">
+                                <div className="text-lg sm:text-xl font-bold text-white mb-0.5 font-poppins drop-shadow-md">
                                   {timeLeft.days.toString().padStart(2, "0")}
                                 </div>
                                 <div className={cn("text-xs", gatesClosed ? "text-yellow-100" : "text-red-100", "font-medium")}>DAYS</div>
@@ -265,7 +266,7 @@ const FloatingCountdownBannerInner: React.FC<FloatingCountdownBannerProps> = ({ 
 
                               {/* Hours */}
                               <div className={cn("bg-gradient-to-br", gatesClosed ? "from-yellow-500 via-orange-500 to-orange-600" : "from-red-500 via-red-600 to-red-700", "rounded-lg px-2 py-2 sm:px-4 sm:py-2 shadow-lg w-full ring-2", gatesClosed ? "ring-yellow-300/20" : "ring-red-300/20")}>
-                                <div className="text-lg sm:text-xl font-bold text-white mb-0.5 font-['Poppins'] drop-shadow-md">
+                                <div className="text-lg sm:text-xl font-bold text-white mb-0.5 font-poppins drop-shadow-md">
                                   {timeLeft.hours.toString().padStart(2, "0")}
                                 </div>
                                 <div className={cn("text-xs", gatesClosed ? "text-yellow-100" : "text-red-100", "font-medium")}>HRS</div>
@@ -273,7 +274,7 @@ const FloatingCountdownBannerInner: React.FC<FloatingCountdownBannerProps> = ({ 
 
                               {/* Minutes */}
                               <div className={cn("bg-gradient-to-br", gatesClosed ? "from-yellow-500 via-orange-500 to-orange-600" : "from-red-500 via-red-600 to-red-700", "rounded-lg px-2 py-2 sm:px-4 sm:py-2 shadow-lg w-full ring-2", gatesClosed ? "ring-yellow-300/20" : "ring-red-300/20")}>
-                                <div className="text-lg sm:text-xl font-bold text-white mb-0.5 font-['Poppins'] drop-shadow-md">
+                                <div className="text-lg sm:text-xl font-bold text-white mb-0.5 font-poppins drop-shadow-md">
                                   {timeLeft.minutes.toString().padStart(2, "0")}
                                 </div>
                                 <div className={cn("text-xs", gatesClosed ? "text-yellow-100" : "text-red-100", "font-medium")}>MINS</div>
@@ -281,7 +282,7 @@ const FloatingCountdownBannerInner: React.FC<FloatingCountdownBannerProps> = ({ 
 
                               {/* Seconds */}
                               <div className={cn("bg-gradient-to-br", gatesClosed ? "from-yellow-500 via-orange-500 to-orange-600" : "from-red-500 via-red-600 to-red-700", "rounded-lg px-2 py-2 sm:px-4 sm:py-2 shadow-lg w-full ring-2", gatesClosed ? "ring-yellow-300/20" : "ring-red-300/20")}>
-                                <div className="text-lg sm:text-xl font-bold text-white mb-0.5 font-['Poppins'] drop-shadow-md">
+                                <div className="text-lg sm:text-xl font-bold text-white mb-0.5 font-poppins drop-shadow-md">
                                   {timeLeft.seconds.toString().padStart(2, "0")}
                                 </div>
                                 <div className={cn("text-xs", gatesClosed ? "text-yellow-100" : "text-red-100", "font-medium")}>SECS</div>
@@ -311,13 +312,15 @@ const FloatingCountdownBannerInner: React.FC<FloatingCountdownBannerProps> = ({ 
                   {/* Mobile Expanded */}
                   <div className="text-center">
                     <div className="flex items-center justify-center gap-2 mb-2">
-                      {/* Pulsing Indicator - Yellow/Orange when gates closed, Green when open */}
+                      {/* Pulsing Indicator - Yellow/Orange when gates closed, Green when open.
+                          ta-countdown-dot: globals.css freezes the ping/pulse on
+                          mobile/tablet/save-data tiers (perf Tier-2 Task 1). */}
                       <div className="relative">
-                        <div className={cn("w-3 h-3", gatesClosed ? "bg-yellow-400" : "bg-green-400", "rounded-full animate-pulse")}></div>
-                        <div className={cn("absolute inset-0 w-3 h-3", gatesClosed ? "bg-yellow-400" : "bg-green-400", "rounded-full animate-ping opacity-75")}></div>
+                        <div className={cn("ta-countdown-dot w-3 h-3", gatesClosed ? "bg-yellow-400" : "bg-green-400", "rounded-full animate-pulse")}></div>
+                        <div className={cn("ta-countdown-dot absolute inset-0 w-3 h-3", gatesClosed ? "bg-yellow-400" : "bg-green-400", "rounded-full animate-ping opacity-75")}></div>
                       </div>
                       {gatesClosed && <Lock className="w-3 h-3 text-yellow-400 flex-shrink-0" />}
-                      <p className="text-sm sm:text-base font-semibold text-yellow-400 font-['Poppins']">
+                      <p className="text-sm sm:text-base font-semibold text-yellow-400 font-poppins">
                         {gatesClosed
                           ? (nextDrawName ? `Next Draw: ${nextDrawName}` : "Come back when the next draw opens")
                           : (drawName || "UNTIL NEXT LIVE DRAW")}
@@ -329,7 +332,7 @@ const FloatingCountdownBannerInner: React.FC<FloatingCountdownBannerProps> = ({ 
                       render={({ timeLeft, isExpired }) =>
                         isExpired ? (
                           <div className="text-center">
-                            <div className="text-xl font-bold text-red-400 mb-2 font-['Poppins']">DRAW IN PROGRESS!</div>
+                            <div className="text-xl font-bold text-red-400 mb-2 font-poppins">DRAW IN PROGRESS!</div>
                             <a
                               href="https://www.facebook.com/toolsaust"
                               target="_blank"
@@ -348,7 +351,7 @@ const FloatingCountdownBannerInner: React.FC<FloatingCountdownBannerProps> = ({ 
                             <div className="grid grid-cols-4 gap-1 flex-1">
                               {/* Days */}
                               <div className={cn("bg-gradient-to-br", gatesClosed ? "from-yellow-500 via-orange-500 to-orange-600" : "from-red-500 via-red-600 to-red-700", "rounded px-1 py-1 shadow-lg ring-1", gatesClosed ? "ring-yellow-300/20" : "ring-red-300/20")}>
-                                <div className="text-sm font-bold text-white mb-0.5 font-['Poppins'] drop-shadow-md">
+                                <div className="text-sm font-bold text-white mb-0.5 font-poppins drop-shadow-md">
                                   {timeLeft.days.toString().padStart(2, "0")}
                                 </div>
                                 <div className={cn("text-2xs", gatesClosed ? "text-yellow-100" : "text-red-100", "font-medium")}>DAYS</div>
@@ -356,7 +359,7 @@ const FloatingCountdownBannerInner: React.FC<FloatingCountdownBannerProps> = ({ 
 
                               {/* Hours */}
                               <div className={cn("bg-gradient-to-br", gatesClosed ? "from-yellow-500 via-orange-500 to-orange-600" : "from-red-500 via-red-600 to-red-700", "rounded px-1 py-1 shadow-lg ring-1", gatesClosed ? "ring-yellow-300/20" : "ring-red-300/20")}>
-                                <div className="text-sm font-bold text-white mb-0.5 font-['Poppins'] drop-shadow-md">
+                                <div className="text-sm font-bold text-white mb-0.5 font-poppins drop-shadow-md">
                                   {timeLeft.hours.toString().padStart(2, "0")}
                                 </div>
                                 <div className={cn("text-2xs", gatesClosed ? "text-yellow-100" : "text-red-100", "font-medium")}>HRS</div>
@@ -364,7 +367,7 @@ const FloatingCountdownBannerInner: React.FC<FloatingCountdownBannerProps> = ({ 
 
                               {/* Minutes */}
                               <div className={cn("bg-gradient-to-br", gatesClosed ? "from-yellow-500 via-orange-500 to-orange-600" : "from-red-500 via-red-600 to-red-700", "rounded px-1 py-1 shadow-lg ring-1", gatesClosed ? "ring-yellow-300/20" : "ring-red-300/20")}>
-                                <div className="text-sm font-bold text-white mb-0.5 font-['Poppins'] drop-shadow-md">
+                                <div className="text-sm font-bold text-white mb-0.5 font-poppins drop-shadow-md">
                                   {timeLeft.minutes.toString().padStart(2, "0")}
                                 </div>
                                 <div className={cn("text-2xs", gatesClosed ? "text-yellow-100" : "text-red-100", "font-medium")}>MINS</div>
@@ -372,7 +375,7 @@ const FloatingCountdownBannerInner: React.FC<FloatingCountdownBannerProps> = ({ 
 
                               {/* Seconds */}
                               <div className={cn("bg-gradient-to-br", gatesClosed ? "from-yellow-500 via-orange-500 to-orange-600" : "from-red-500 via-red-600 to-red-700", "rounded px-1 py-1 shadow-lg ring-1", gatesClosed ? "ring-yellow-300/20" : "ring-red-300/20")}>
-                                <div className="text-sm font-bold text-white mb-0.5 font-['Poppins'] drop-shadow-md">
+                                <div className="text-sm font-bold text-white mb-0.5 font-poppins drop-shadow-md">
                                   {timeLeft.seconds.toString().padStart(2, "0")}
                                 </div>
                                 <div className={cn("text-2xs", gatesClosed ? "text-yellow-100" : "text-red-100", "font-medium")}>SECS</div>
@@ -394,8 +397,8 @@ const FloatingCountdownBannerInner: React.FC<FloatingCountdownBannerProps> = ({ 
                 </div>
               )}
             </div>
-          </motion.div>
-        </motion.div>
+          </m.div>
+        </m.div>
       )}
     </AnimatePresence>
   );

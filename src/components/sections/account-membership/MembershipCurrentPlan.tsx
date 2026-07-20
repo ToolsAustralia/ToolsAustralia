@@ -140,7 +140,7 @@ export default function MembershipCurrentPlan({
             <div className="text-[11px] font-bold uppercase tracking-[0.18em] opacity-80">
               {active ? "Current plan" : pastdue ? "Plan paused" : onetime ? "Active pack" : "No plan"}
             </div>
-            <div className="mt-0.5 font-['Poppins'] text-2xl font-black">{planName}</div>
+            <div className="mt-0.5 font-poppins text-2xl font-black">{planName}</div>
           </div>
           <span className="shrink-0 whitespace-nowrap rounded-full bg-black/25 px-3 py-1 text-xs font-bold">{statusPill}</span>
         </div>
@@ -198,7 +198,7 @@ function Stat({ label, value, divider, onInfo }: { label: string; value: string;
   return (
     <div className={cn("px-2.5 py-3.5 text-center", divider && "border-l border-white/10")}>
       <div className="flex items-center justify-center gap-1">
-        <span className="num font-['Poppins'] text-[22px] font-black leading-none tabular-nums">{value}</span>
+        <span className="num font-poppins text-[22px] font-black leading-none tabular-nums">{value}</span>
         {onInfo && (
           <button
             type="button"

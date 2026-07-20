@@ -57,7 +57,7 @@ export default function DrawsPage() {
     <div className="w-full min-w-0 max-w-full overflow-x-hidden pb-8">
       {/* draw-type toggle bar (prototype uses this instead of a colored PageHeader) */}
       <div className="flex items-center gap-2.5 border-b border-token bg-surface px-[18px] py-3.5 sm:px-6 lg:px-[26px]">
-        <span className="font-['Poppins'] text-base font-extrabold text-primary-token dark:text-white">Draws</span>
+        <span className="font-poppins text-base font-extrabold text-primary-token dark:text-white">Draws</span>
         <div className="ml-auto">
           <Seg
             value={drawType}

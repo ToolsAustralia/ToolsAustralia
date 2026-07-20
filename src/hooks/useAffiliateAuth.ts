@@ -17,6 +17,20 @@ export function useAffiliateAuth() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // Perf gate: the real session cookie (`__Host-affiliate_token`) is httpOnly, so JS can't
+    // read it. Affiliate login sets a non-httpOnly `affiliate_ui` marker (cleared on logout);
+    // guests and regular users never carry it. Skip the check-auth network call unless the
+    // marker is present — this is the common case (most visitors aren't affiliates). Keep the
+    // cookie name in sync with the affiliate login/logout routes.
+    const hasAffiliateMarker =
+      typeof document !== "undefined" && document.cookie.includes("affiliate_ui=");
+    if (!hasAffiliateMarker) {
+      setIsAuthenticated(false);
+      setAffiliateData(null);
+      setLoading(false);
+      return;
+    }
+
     // Check affiliate authentication by calling an API endpoint
     const checkAuth = async () => {
       try {

@@ -60,7 +60,7 @@ export default function MembershipPrizeChooser() {
           >
             <Trophy className="h-3.5 w-3.5" style={{ color: "#d4af37" }} /> This month&apos;s prize
           </span>
-          <h2 className="mt-5 font-['Poppins'] text-[26px] font-black leading-tight tracking-tight sm:text-4xl lg:text-5xl">
+          <h2 className="mt-5 font-poppins text-[26px] font-black leading-tight tracking-tight sm:text-4xl lg:text-5xl">
             Win the Ultimate Tradie Setup.{" "}
             <span className="bg-gradient-to-r from-amber-300 to-amber-500 bg-clip-text text-transparent">Or take the $10,000 cash.</span>
           </h2>
@@ -82,7 +82,7 @@ export default function MembershipPrizeChooser() {
             <div className="hidden lg:block">
               <Seg value={pick} onChange={setPick} tone="dark" accentHex="#f0a500" options={pickOptions} />
             </div>
-            <div className="mt-5 font-['Poppins'] text-5xl font-extrabold text-amber-300">
+            <div className="mt-5 font-poppins text-5xl font-extrabold text-amber-300">
               <AnimatedNumber value={amount} format={(n) => `$${Math.round(n).toLocaleString()}`} />
             </div>
             <div className="text-sm text-white/60">{amountCap}</div>

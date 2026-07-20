@@ -189,6 +189,22 @@ export const useMajorDrawStats = () => {
   });
 };
 
+/**
+ * The current user's stats for the active draw.
+ *
+ * Kept on its OWN user-scoped key `majorDraw.userStats(userId)` — NOT folded into
+ * `majorDraw.current` — because this key is the write-target for an extensive
+ * optimistic-update + rollback ecosystem (redeemables, upsell, membership, mini/major
+ * entry, purchase-invalidation, success toasts). Those flows `setQueryData` this key to
+ * show an instant "+N entries" bump before the server confirms; a `select` over
+ * `majorDraw.current` would read a different cache entry and silently drop that feedback.
+ *
+ * Churn reduction (Tier-2): dropped the redundant 1-minute `refetchInterval` and raised
+ * `staleTime` 0 → 30s. The user's own entry count only changes via THEIR mutations, which
+ * already optimistically write + invalidate this key, so a background poll added nothing.
+ * The key is user-scoped, so a login is always a cold fetch (fresh stats); `refetchOnMount`
+ * + `refetchOnWindowFocus` cover cross-device/admin grants.
+ */
 export const useUserMajorDrawStats = (userId?: string) => {
   return useQuery({
     queryKey: queryKeys.majorDraw.userStats(userId!),
@@ -206,12 +222,11 @@ export const useUserMajorDrawStats = (userId?: string) => {
       return response.data.userStats;
     },
     enabled: !!userId,
-    staleTime: 0, // Always consider data stale to ensure fresh data after login
+    staleTime: 30 * 1000, // was 0 — user-driven changes are already applied optimistically
     gcTime: 5 * 60 * 1000, // 5 minutes - reduced for fresher data
-    refetchInterval: 1 * 60 * 1000, // Refetch every 1 minute for real-time stats
-    refetchIntervalInBackground: false, // Pause polling on hidden tabs; refetchOnWindowFocus catches up on tab focus
+    refetchIntervalInBackground: false,
     refetchOnWindowFocus: true, // Refetch when user returns to tab
-    refetchOnMount: true, // Always refetch on mount for fresh data
+    refetchOnMount: true, // Fresh stats on first mount after login (user-scoped key = cold fetch)
   });
 };
 

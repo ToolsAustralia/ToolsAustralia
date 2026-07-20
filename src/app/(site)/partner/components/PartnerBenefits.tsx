@@ -53,7 +53,7 @@ export default function PartnerBenefits() {
             Partnership Benefits
           </div>
 
-          <h2 className="text-[28px] sm:text-[36px] lg:text-[48px] font-black leading-tight text-black font-['Poppins'] mb-6">
+          <h2 className="text-[28px] sm:text-[36px] lg:text-[48px] font-black leading-tight text-black font-poppins mb-6">
             Why Choose
             <span className="block text-red-600">Tools Australia?</span>
           </h2>
@@ -72,7 +72,7 @@ export default function PartnerBenefits() {
               className="group bg-white rounded-2xl p-6 shadow-lg border border-gray-100 hover:shadow-2xl transition-all duration-500 transform hover:-translate-y-2 hover:scale-105"
             >
               {/* Content */}
-              <h3 className="text-xl font-bold text-gray-800 dark:text-neutral-100 mb-3 font-['Poppins'] group-hover:text-red-600 transition-colors duration-300">
+              <h3 className="text-xl font-bold text-gray-800 dark:text-neutral-100 mb-3 font-poppins group-hover:text-red-600 transition-colors duration-300">
                 {benefit.title}
               </h3>
 
@@ -89,7 +89,7 @@ export default function PartnerBenefits() {
         {/* Success Stories Section */}
         <div className="bg-gradient-to-r from-gray-50 to-gray-100 rounded-3xl p-8 lg:p-12">
           <div className="text-center mb-10">
-            <h3 className="text-[24px] sm:text-[28px] lg:text-[32px] font-bold text-gray-800 dark:text-neutral-100 mb-4 font-['Poppins']">
+            <h3 className="text-[24px] sm:text-[28px] lg:text-[32px] font-bold text-gray-800 dark:text-neutral-100 mb-4 font-poppins">
               Partner Success Stories
             </h3>
             <p className="text-gray-600 dark:text-neutral-400 font-['Inter'] max-w-2xl mx-auto">
@@ -101,10 +101,10 @@ export default function PartnerBenefits() {
             {/* Success Story 1 */}
             <div className="bg-white rounded-2xl p-6 shadow-lg">
               <div className="mb-4">
-                <h4 className="font-bold text-gray-800 dark:text-neutral-100 font-['Poppins'] mb-1">PowerTool Pro</h4>
+                <h4 className="font-bold text-gray-800 dark:text-neutral-100 font-poppins mb-1">PowerTool Pro</h4>
                 <p className="text-sm text-gray-600 dark:text-neutral-400 font-['Inter']">Tool Retailer</p>
               </div>
-              <div className="text-2xl font-bold text-red-600 mb-2 font-['Poppins']">+250%</div>
+              <div className="text-2xl font-bold text-red-600 mb-2 font-poppins">+250%</div>
               <p className="text-gray-600 dark:text-neutral-400 font-['Inter'] text-sm">
                 Increase in online sales within 6 months of partnership
               </p>
@@ -113,20 +113,20 @@ export default function PartnerBenefits() {
             {/* Success Story 2 */}
             <div className="bg-white rounded-2xl p-6 shadow-lg">
               <div className="mb-4">
-                <h4 className="font-bold text-gray-800 dark:text-neutral-100 font-['Poppins'] mb-1">BuildMaster</h4>
+                <h4 className="font-bold text-gray-800 dark:text-neutral-100 font-poppins mb-1">BuildMaster</h4>
                 <p className="text-sm text-gray-600 dark:text-neutral-400 font-['Inter']">Construction Tools</p>
               </div>
-              <div className="text-2xl font-bold text-red-600 mb-2 font-['Poppins']">15,000+</div>
+              <div className="text-2xl font-bold text-red-600 mb-2 font-poppins">15,000+</div>
               <p className="text-gray-600 dark:text-neutral-400 font-['Inter'] text-sm">New customers acquired through our platform</p>
             </div>
 
             {/* Success Story 3 */}
             <div className="bg-white rounded-2xl p-6 shadow-lg">
               <div className="mb-4">
-                <h4 className="font-bold text-gray-800 dark:text-neutral-100 font-['Poppins'] mb-1">TradeMax</h4>
+                <h4 className="font-bold text-gray-800 dark:text-neutral-100 font-poppins mb-1">TradeMax</h4>
                 <p className="text-sm text-gray-600 dark:text-neutral-400 font-['Inter']">Professional Tools</p>
               </div>
-              <div className="text-2xl font-bold text-red-600 mb-2 font-['Poppins']">#1</div>
+              <div className="text-2xl font-bold text-red-600 mb-2 font-poppins">#1</div>
               <p className="text-gray-600 dark:text-neutral-400 font-['Inter'] text-sm">
                 Top-rated partner in their category for 2 years running
               </p>

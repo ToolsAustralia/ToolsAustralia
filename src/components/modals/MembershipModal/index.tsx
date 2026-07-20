@@ -64,7 +64,7 @@ import { type PaymentStatusResponse } from "@/hooks/queries";
 import { trackConversion } from "@/lib/tracking/dispatch-client";
 import { buildPurchaseEvent } from "@/lib/tracking/canonical-event";
 import { useToast } from "@/components/ui/Toast";
-import { trackCompleteRegistration, trackFacebookEvent } from "@/components/FacebookPixel";
+import { trackCompleteRegistration, trackFacebookEvent } from "@/utils/tracking/legacy-pixel-helpers";
 import { usePixelTracking } from "@/hooks/usePixelTracking";
 import { useKlaviyoTracking } from "@/hooks/useKlaviyoTracking";
 import { buildCheckoutResumeUrl } from "@/utils/integrations/klaviyo/checkout-resume-url";

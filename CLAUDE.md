@@ -693,9 +693,11 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/app/globals.css",
         "src/app/not-found.tsx",
         "src/app/(site)/page.tsx",
+        "src/app/(site)/components/HomeProducts.tsx",
         "src/app/(site)/layout.tsx",
         "src/app/(site)/faq/**",
-        "src/app/(site)/privacy/**"
+        "src/app/(site)/privacy/**",
+        "src/app/lazy-motion-features.ts"
       ],
       "lastVerified": "2026-07-19"
     },

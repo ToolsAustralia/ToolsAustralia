@@ -111,3 +111,32 @@ Avoid the last form. Prefer either a static class or a CVA variant.
 - **Fixed-bottom CTAs add the safe-area inset**: `bottom-[calc(env(safe-area-inset-bottom)+1rem)]` so they clear the iOS home indicator (the app sets `viewport-fit=cover`).
 
 See [gotchas.md](./gotchas.md) "Mobile-UX hardening pass" for the per-file fix list and the WebKit bug reference.
+
+## 10. Fonts: use `font-poppins`, never `font-['Poppins']` (2026-07-20)
+
+`next/font/google` registers Poppins under a **hashed family name** exposed only via the
+CSS variable `--font-poppins` (wired to the `font-poppins` utility in `tailwind.config.ts`
+→ `fontFamily.poppins = [var(--font-poppins), "Poppins", "sans-serif"]`). It does **not**
+register a global `@font-face` named `Poppins`.
+
+So the arbitrary class **`font-['Poppins']` compiles to `font-family: Poppins`** — a bare
+family the browser can't resolve to the loaded face, so those elements silently render a
+**fallback** font. The **fallback-suffixed** form `font-['Poppins',sans-serif]` has the same
+defect (the first family, `Poppins`, still doesn't resolve). The Tier-2 codemod
+**`npm run sweep:font-poppins`** (dry-run default; `scripts/codemods/sweep-font-poppins.ts`)
+matches **both** forms and rewrote **300 occurrences across 95 files** (296 bare + 4
+fallback-suffixed `<h1>` hero titles — incl. the flagship homepage "Tools Australia" title)
+→ `font-poppins`, so they now render the **actual loaded Poppins**. This is an **intended,
+sitewide visual change** (headings, buttons, labels, form inputs, chart labels, badges).
+
+- **Rule:** to apply Poppins, use `font-poppins` (or the `font-display` utility, also mapped
+  to `--font-poppins`). Never `font-['Poppins']` / `font-['Poppins',sans-serif]` / `font-[Poppins]`.
+- **`.form-input`** (globals.css `@layer components`) and the global `h1–h6` rule use the
+  same `--font-poppins` var. `h1–h6` is pinned to `font-weight: 900` (a **loaded** weight;
+  Poppins loads 400/500/600/700/900 in `src/app/layout.tsx`) with `font-synthesis: none` —
+  previously it requested the **unloaded** 800, which font-matched up to 900 anyway, so this
+  is intent==render, not a visual change.
+- **Poppins weight set is NOT trimmable:** every loaded weight (400/500/600/700/900) has live
+  `font-poppins` consumers post-codemod — `font-normal`/`medium`/`semibold`/`bold`(=800→900)/
+  `black`(=900) plus the h1–h6 (900) and `.ta-loader-status` (700). Dropping any would
+  misweight real content.

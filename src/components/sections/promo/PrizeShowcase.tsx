@@ -2,14 +2,15 @@
 
 import { useCallback, useEffect, useMemo, useState, Suspense, type CSSProperties } from "react";
 import Image from "next/image";
-import { motion } from "framer-motion";
+import dynamic from "next/dynamic";
+import { m } from "framer-motion";
 import { useRouter } from "next/navigation";
 import useEmblaCarousel from "embla-carousel-react";
 import Fade from "embla-carousel-fade";
 import ClassNames from "embla-carousel-class-names";
 import type { EmblaCarouselType, EmblaOptionsType } from "embla-carousel";
 import {
-  Zap, Package, Battery, Wrench, DollarSign, Star, Banknote, Shield, Award,
+  Zap, Package, Battery, Wrench, DollarSign, Star, Banknote, Shield, Award, Expand,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/utils/cn";
@@ -18,15 +19,25 @@ const ICON_MAP: Record<string, LucideIcon> = {
   Zap, Package, Battery, Wrench, DollarSign, Star, Banknote, Shield, Award,
 };
 
+// Click-gated heavy chunks (LazyMembershipModal latch pattern —
+// src/components/modals/MembershipModal/LazyMembershipModal.tsx): rendering a dynamic()
+// component fetches and evaluates its chunk even with isOpen=false, so neither viewer is
+// rendered until its FIRST open (see the *EverOpened latches below); after that it stays
+// mounted so close animations and internal state behave like the always-mounted version.
+const PrizeSpecificationsModal = dynamic(() => import("@/components/modals/PrizeSpecificationsModal"), { ssr: false });
+const FullscreenImageViewer = dynamic(() => import("@/components/ui/FullscreenImageViewer"), { ssr: false });
+
 import { useScrollAnimation } from "@/hooks/useScrollAnimation";
-import PrizeSpecificationsModal from "@/components/modals/PrizeSpecificationsModal";
 import { useMajorDrawEntryCta } from "@/hooks/useMajorDrawEntryCta";
 import { usePrizeCatalog } from "@/hooks/usePrizeCatalog";
 import { getPrizeBrandColors, getBrandGlowColor, getBrandBorderColor } from "@/utils/prize-brand-colors";
 import { getLandingPageThemeFromSlug } from "@/utils/package-colors/packageColorScheme";
 import { usePromoTheme } from "@/stores/usePromoThemeStore";
 import { useSearchParams, usePathname } from "next/navigation";
-import type { PrizeCatalogEntry, PrizeMedia, PrizeSlug } from "@/config/prizes";
+import type { PrizeMedia, PrizeSlug, PrizeSummary } from "@/config/prize-summaries";
+// Type-only (erased at compile): the deep-catalog VALUES only ever arrive through the
+// click-gated `import("@/config/prizes")` in the specs-modal effect below.
+import type { PrizeCatalogEntry } from "@/config/prizes";
 import { SECTION_CONTAINER_CLASSES } from "@/components/ui";
 import { getLandingHeroImagePaths } from "@/config/promo-landing-slugs";
 import { getImageForMode } from "@/utils/promo/landing-image-resolver";
@@ -46,17 +57,43 @@ import {
 import { getPrizesForToolsetSlug, isToolsetLandingSlug } from "@/config/promo-landing-slugs";
 import { isValidPromoSlug } from "@/utils/promo-analytics/validate-promo-slug";
 import { usePromoThemeStore } from "@/stores/usePromoThemeStore";
-import { getPrizeBySlug, listPrizes } from "@/config/prizes";
-import FullscreenImageViewer, {
-  FullscreenTriggerButton,
-  type FullscreenImageItem,
-} from "@/components/ui/FullscreenImageViewer";
+import { getPrizeSummaryBySlug, listPrizeSummaries } from "@/config/prize-summaries";
+import type { FullscreenImageItem } from "@/components/ui/FullscreenImageViewer";
 import GiveawayCountdownTimer from "./GiveawayCountdownTimer";
 import { useResolvedMultiplier } from "@/hooks/queries/usePromoQueries";
 import { hasMultiplierBanner } from "@/utils/promo/multiplier-banner";
 import MultiplierBannerImage from "@/components/ui/MultiplierBannerImage";
 
 const FROM_PROMO_SLUG_KEY = "tools-aus:from-promo-slug";
+
+/**
+ * Eager stand-in for `FullscreenTriggerButton`: the canonical button shares a module with
+ * the heavy viewer (react-zoom-pan-pinch + embla + ModalContainer), which is now a
+ * click-gated dynamic chunk — importing it statically here would pull that whole module
+ * back into the landing graph. Keep the markup in sync with
+ * `src/components/ui/FullscreenImageViewer.tsx`.
+ */
+function FullscreenTriggerButton({
+  onClick,
+  label = "View image in fullscreen",
+}: {
+  onClick: () => void;
+  label?: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={(event) => {
+        event.stopPropagation();
+        onClick();
+      }}
+      aria-label={label}
+      className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-black/55 text-white transition hover:bg-black/75 focus:outline-none focus-visible:ring-2 focus-visible:ring-white"
+    >
+      <Expand className="h-4 w-4" />
+    </button>
+  );
+}
 
 type GallerySlideImage = { src: string; alt?: string; mobileSrc?: string };
 
@@ -412,8 +449,15 @@ function PrizeShowcaseInner({
   const [thumbsRef, thumbsApi] = useEmblaCarousel(thumbsOptions, thumbsPlugins);
   const [mobilePrizeIndex, setMobilePrizeIndex] = useState(0);
   const [isSpecsModalOpen, setIsSpecsModalOpen] = useState(false);
+  // First-open latches for the two click-gated dynamic chunks (LazyMembershipModal pattern).
+  const [specsEverOpened, setSpecsEverOpened] = useState(false);
+  if (isSpecsModalOpen && !specsEverOpened) setSpecsEverOpened(true); // render-phase latch (same-component setState is safe)
+  // Deep catalog entry for the specs modal — resolved lazily, see the effect below.
+  const [specsPrize, setSpecsPrize] = useState<PrizeCatalogEntry | null>(null);
   const [isNavigating, _setIsNavigating] = useState(false);
   const [isFullscreenOpen, setIsFullscreenOpen] = useState(false);
+  const [fullscreenEverOpened, setFullscreenEverOpened] = useState(false);
+  if (isFullscreenOpen && !fullscreenEverOpened) setFullscreenEverOpened(true); // render-phase latch
   const [fullscreenStartIndex, setFullscreenStartIndex] = useState(0);
   const [isMounted, setIsMounted] = useState(false);
   const [multiplierBannerLoadFailed, setMultiplierBannerLoadFailed] = useState(false);
@@ -449,10 +493,10 @@ function PrizeShowcaseInner({
     toolsetMode && toolsetSlug && isToolsetLandingSlug(toolsetSlug)
       ? getPrizesForToolsetSlug(toolsetSlug)
       : null;
-  const toolsetPrizesCatalog: PrizeCatalogEntry[] = toolsetPrizeSlugs
+  const toolsetPrizesCatalog: PrizeSummary[] = toolsetPrizeSlugs
     ? (toolsetPrizeSlugs
-        .map((s) => getPrizeBySlug(s))
-        .filter((p): p is PrizeCatalogEntry => p != null) ?? [])
+        .map((s) => getPrizeSummaryBySlug(s))
+        .filter((p): p is PrizeSummary => p != null) ?? [])
     : [];
 
   // Toolset mode: effective slug from toolbox selection; kept in sync with `?toolbox=` on the landing URL
@@ -480,7 +524,7 @@ function PrizeShowcaseInner({
     if (localEffectiveSlug) return localEffectiveSlug;
     const tt: "sidchrome" | "milwaukee" | "kincrome" =
       toolboxType === "cash" ? lastNonCashToolboxType : toolboxType;
-    return filterPrizesByToolboxType(listPrizes(), tt)[0]?.slug ?? slugProp;
+    return filterPrizesByToolboxType(listPrizeSummaries(), tt)[0]?.slug ?? slugProp;
   })();
 
   const { prizes, activePrize, activeSlug } = usePrizeCatalog({ slug: effectiveSlugForCatalog ?? undefined });
@@ -614,6 +658,29 @@ function PrizeShowcaseInner({
   useEffect(() => {
     setIsMounted(true);
   }, []);
+
+  // Deep spec-sheet data is deliberately NOT in the client prize summaries — resolve the
+  // full catalog entry from `@/config/prizes` (its own click-gated chunk, cached after the
+  // first open) whenever the specs modal is open for the active prize. Until it lands the
+  // modal shows its built-in "Prize information is loading" state.
+  useEffect(() => {
+    if (!isSpecsModalOpen || !activeSlug) return;
+    let cancelled = false;
+    // Stale-specs guard: switching prizes then reopening must not flash the previous sheet.
+    setSpecsPrize((prev) => (prev && prev.slug !== activeSlug ? null : prev));
+    import("@/config/prizes")
+      .then(({ getPrizeBySlug }) => {
+        if (!cancelled) setSpecsPrize(getPrizeBySlug(activeSlug) ?? null);
+      })
+      .catch((error) => {
+        // Keep the null/loading state — the modal's "Prize information is loading. Please try
+        // again in a moment." copy covers it, and reopening re-runs this effect (chunk retry).
+        console.error("PrizeShowcase: failed to load deep prize catalog for specs modal", error);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isSpecsModalOpen, activeSlug]);
 
   const handleEnterNow = () => openEntryFlow({ openLocalModal: false });
 
@@ -869,13 +936,13 @@ function PrizeShowcaseInner({
           </div>
 
           {(prizes.length > 1 || toolsetMode) && (
-            <motion.div
+            <m.div
               initial={{ opacity: 0, y: 24 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5, ease: "easeOut" }}
               className="mt-6 sm:mt-8 mb-10 sm:mb-12 lg:mb-14"
             >
-              <motion.div
+              <m.div
                 initial={{ opacity: 0, y: 12 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.1, duration: 0.4 }}
@@ -887,7 +954,7 @@ function PrizeShowcaseInner({
                 <p className="mt-1 text-xs sm:text-sm text-gray-600 dark:text-neutral-400 font-medium break-words whitespace-normal">
                   Milwaukee, Kincrome, or Sidchrome — plus power toolset & $5,000 cash
                 </p>
-              </motion.div>
+              </m.div>
 
               <ToolboxSelector
                 selectedType={
@@ -900,7 +967,7 @@ function PrizeShowcaseInner({
               />
 
               {toolsetMode && toolsetSlug ? (
-                <motion.p
+                <m.p
                   initial={{ opacity: 0, y: 12 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.2, duration: 0.4 }}
@@ -916,16 +983,16 @@ function PrizeShowcaseInner({
                           : "Makita"}{" "}
                   </span>
                   Power Toolset / Storage System
-                </motion.p>
+                </m.p>
               ) : (
-                <motion.p
+                <m.p
                   initial={{ opacity: 0, y: 12 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.2, duration: 0.4 }}
                   className="text-balance font-sans font-extrabold font-[950] uppercase text-black dark:text-white mb-3 sm:mb-4 text-center text-md sm:text-[32px] lg:text-agency-title leading-[1.08]"
                 >
                   Pick your <span style={{ color: theme.primary }}>Power Toolset / Storage System</span>
-                </motion.p>
+                </m.p>
               )}
 
               {toolsetMode && toolsetSlug ? (
@@ -991,7 +1058,7 @@ function PrizeShowcaseInner({
 
                 
               </div>
-            </motion.div>
+            </m.div>
           )}
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 items-start">
@@ -1311,19 +1378,23 @@ function PrizeShowcaseInner({
         )}
       </div>
 
-      <PrizeSpecificationsModal
-        isOpen={isSpecsModalOpen}
-        onClose={() => setIsSpecsModalOpen(false)}
-        prize={activePrize}
-      />
+      {specsEverOpened && (
+        <PrizeSpecificationsModal
+          isOpen={isSpecsModalOpen}
+          onClose={() => setIsSpecsModalOpen(false)}
+          prize={specsPrize}
+        />
+      )}
 
-      <FullscreenImageViewer
-        isOpen={isFullscreenOpen}
-        images={fullscreenImages}
-        initialIndex={fullscreenStartIndex}
-        onClose={() => setIsFullscreenOpen(false)}
-        title={activePrize.heroHeading}
-      />
+      {fullscreenEverOpened && (
+        <FullscreenImageViewer
+          isOpen={isFullscreenOpen}
+          images={fullscreenImages}
+          initialIndex={fullscreenStartIndex}
+          onClose={() => setIsFullscreenOpen(false)}
+          title={activePrize.heroHeading}
+        />
+      )}
     </section>
   );
 }

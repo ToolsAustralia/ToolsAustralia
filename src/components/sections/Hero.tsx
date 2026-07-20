@@ -84,7 +84,7 @@ export default function Hero() {
           <div className="lg:hidden flex flex-col items-center justify-center min-h-[calc(100vh-200px)] py-8">
             <div className="max-w-[621px] w-full px-4">
               {/* Main Title */}
-              <h1 className="text-[40px] sm:text-[60px] font-black leading-[40px] sm:leading-[60px] text-white font-['Poppins',_sans-serif] mb-4 sm:mb-6 text-center drop-shadow-lg">
+              <h1 className="text-[40px] sm:text-[60px] font-black leading-[40px] sm:leading-[60px] text-white font-poppins mb-4 sm:mb-6 text-center drop-shadow-lg">
                 Tools Australia
               </h1>
 
@@ -141,7 +141,7 @@ export default function Hero() {
           <div className="hidden lg:flex items-start justify-start py-12">
             <div className="max-w-[621px]">
               {/* Main Title */}
-              <h1 className="text-[80px] font-black leading-[80px] text-white font-['Poppins',_sans-serif] mb-6 drop-shadow-lg">
+              <h1 className="text-[80px] font-black leading-[80px] text-white font-poppins mb-6 drop-shadow-lg">
                 Tools Australia
               </h1>
 

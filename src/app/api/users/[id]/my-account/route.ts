@@ -180,15 +180,21 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     const [activeMiniDraws, recentOrders, hasCurrentDrawMembershipGrant] = await Promise.all([
       // .select() is load-bearing: an unprojected MiniDraw doc carries the full
       // per-user entries[] array (one subdoc per participant — MB-scale on the wire).
+      // MiniDraw has no endDate field — active draws are gated by isActive/status
+      // (they auto-close at minimumEntries), so an `endDate: { $gt: now }` clause
+      // matched zero docs and left activeMiniDraws permanently empty. Filter on
+      // isActive only, matching the canonical active query (sitemap.ts / getActiveMiniDraws).
       MiniDraw.find({
         isActive: true,
-        endDate: { $gt: new Date() },
       })
         .select(MY_ACCOUNT_MINI_DRAW_FIELDS)
         .limit(5)
         .lean(),
+      // Order's owner field is `user` (see src/models/Order.ts + every other Order
+      // query). Querying `userId` matched zero docs, so recentOrders/totalSpent were
+      // permanently empty. Match the model field.
       Order.find({
-        userId: userData._id,
+        user: userData._id,
       })
         .select(MY_ACCOUNT_ORDER_FIELDS)
         .sort({ createdAt: -1 })

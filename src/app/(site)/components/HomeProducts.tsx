@@ -73,7 +73,7 @@ export default function HomeProducts({ sectionType, title }: HomeProductsProps) 
       <section className="pt-8 pb-4 bg-white w-full overflow-hidden">
         <SectionContainer>
           <div className="text-center">
-            <div className="text-[20px] sm:text-[24px] font-bold text-black mb-2 sm:mb-3 font-['Poppins']">{title}</div>
+            <div className="text-[20px] sm:text-[24px] font-bold text-black mb-2 sm:mb-3 font-poppins">{title}</div>
             <div className="text-gray-500">Loading products...</div>
           </div>
         </SectionContainer>
@@ -86,7 +86,7 @@ export default function HomeProducts({ sectionType, title }: HomeProductsProps) 
       <section className="py-12 sm:py-16 lg:py-20 bg-white w-full overflow-hidden">
         <SectionContainer>
           <div className="text-center">
-            <div className="text-[20px] sm:text-[24px] font-bold text-black mb-2 sm:mb-3 font-['Poppins']">{title}</div>
+            <div className="text-[20px] sm:text-[24px] font-bold text-black mb-2 sm:mb-3 font-poppins">{title}</div>
             <div className="text-red-500">{error}</div>
           </div>
         </SectionContainer>

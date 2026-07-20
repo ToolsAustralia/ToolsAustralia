@@ -52,11 +52,11 @@ export default function PartnerPreview({ acct, partnerAccessPct, expiryLabel, ti
           {locked ? (
             <Lock className="h-5 w-5" style={{ color: accent }} />
           ) : (
-            <span className="num font-['Poppins'] text-sm font-black" style={{ color: accent }}>{partnerAccessPct}%</span>
+            <span className="num font-poppins text-sm font-black" style={{ color: accent }}>{partnerAccessPct}%</span>
           )}
         </AccessRing>
         <div className="min-w-0 flex-1">
-          <div className="font-['Poppins'] text-[15px] font-extrabold text-primary-token dark:text-white">Partner discounts</div>
+          <div className="font-poppins text-[15px] font-extrabold text-primary-token dark:text-white">Partner discounts</div>
           <div className="mt-1 text-[11.5px] font-semibold" style={{ color: accentSub ? accent : undefined }}>
             <span className={accentSub ? "" : "text-muted-token"}>{sub}</span>
           </div>
@@ -76,7 +76,7 @@ export default function PartnerPreview({ acct, partnerAccessPct, expiryLabel, ti
             {DEALS.map((d) => (
               <div key={d.id} className="flex items-center gap-[11px] border-b border-token py-[11px] last:border-0">
                 <span
-                  className="grid h-[30px] w-[30px] shrink-0 place-items-center rounded-[9px] font-['Poppins'] text-xs font-black"
+                  className="grid h-[30px] w-[30px] shrink-0 place-items-center rounded-[9px] font-poppins text-xs font-black"
                   style={{ background: "rgba(0,0,0,.05)", color: accent }}
                 >
                   {d.name[0]}
@@ -85,7 +85,7 @@ export default function PartnerPreview({ acct, partnerAccessPct, expiryLabel, ti
                   <div className="truncate text-[12.5px] font-bold text-primary-token dark:text-white">{d.name}</div>
                   <div className="mt-0.5 text-[10px] font-semibold uppercase tracking-[0.04em] text-muted-token">{d.category}</div>
                 </div>
-                <span className="whitespace-nowrap font-['Poppins'] text-[13px] font-black" style={{ color: accent }}>
+                <span className="whitespace-nowrap font-poppins text-[13px] font-black" style={{ color: accent }}>
                   {d.discount}
                 </span>
               </div>

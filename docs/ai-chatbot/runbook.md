@@ -61,6 +61,14 @@ CHAT_KILL_SWITCH=true   # if set, the paid LLM path is off; the bot streams a ca
 ```
 If the kill switch is set, unset it in Vercel and redeploy (or remove from `.env.local` for local). Note: a genuine **503** is an infra/platform signal, not the kill switch — the kill switch and daily budget gate only the LLM path *inside* `ChatService`, after free FAQ deflection.
 
+> **Bubble visibility is CDN-cached ~60 s (perf Tier-2, 2026-07-20).** The Pause toggle / `CHAT_KILL_SWITCH`
+> hides the floating bubble via `GET /api/chat/config` (`{ enabled: !killed }`). That route now serves
+> `Cache-Control: public, s-maxage=60, stale-while-revalidate=300`, and the client mount
+> ([`SupportChatWidgetMount`](../../src/components/support-chat/SupportChatWidgetMount.tsx)) no longer sends
+> `cache: "no-store"`. So after you flip Pause, the **bubble** can take up to ~60 s (plus SWR) to
+> appear/disappear for a given visitor. This is cosmetic only — the paid LLM path is blocked server-side in
+> `costGuard` the instant the switch flips, regardless of what the cached flag says.
+
 ### 3b. Vercel logs
 Go to Vercel Dashboard → Project → Deployments → select the active deployment → Functions → `/api/chat`. Look for:
 - `[ChatService] model setup failed` — knowledge pack missing or `ANTHROPIC_API_KEY` unset.

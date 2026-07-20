@@ -1,9 +1,6 @@
 "use client";
 
-import { useRef } from "react";
-import { motion, useReducedMotion } from "framer-motion";
 import { cn } from "@/utils/cn";
-import { useInViewportAnimation } from "@/hooks/useInViewportAnimation";
 
 const SIZE_MAP = {
   sm: "w-4 h-4",
@@ -18,78 +15,38 @@ export interface UrgencyClockIconProps {
   ariaLabel?: string;
 }
 
+/**
+ * Urgency clock for the promo banner's static-urgency label.
+ *
+ * Perf rewrite (2026-07-20, Tier-2 Task 1): the previous version ran FOUR
+ * infinite framer-motion tracks (scale pulse + x/y/rotate shake), a blurred
+ * glow span, and a smooth 2s SVG second-hand sweep — an always-on rAF/repaint
+ * stack. It is now pure CSS: one subtle scale pulse on the wrapper
+ * (`.ta-clock-pulse`, transform-only → compositor) and a `steps(60)` 60s
+ * second-hand tick (`.ta-clock-second-hand`, one style update per second).
+ * Both classes are tier-gated in globals.css (mobile/tablet/save-data get a
+ * static icon; prefers-reduced-motion is covered by the global 1ms rule), so
+ * no JS motion/viewport hooks are needed here.
+ */
 export default function UrgencyClockIcon({
   className = "",
   size = "md",
   animated = true,
   ariaLabel = "Limited time offer",
 }: UrgencyClockIconProps) {
-  const prefersReducedMotion = useReducedMotion();
-  const ref = useRef<HTMLSpanElement>(null);
-  const inView = useInViewportAnimation(ref);
-  const shouldAnimate = animated && !prefersReducedMotion && inView;
-
   const sizeClass = SIZE_MAP[size];
 
   return (
-    <motion.span
-      ref={ref}
+    <span
       role="img"
       aria-label={ariaLabel}
-      className={cn("relative inline-flex items-center justify-center text-red-500", sizeClass, className)}
-      animate={
-        shouldAnimate
-          ? {
-              scale: [1, 1.08, 1],
-              x: [0, -1, 1, -2, 2, -1, 1, 0],
-              y: [0, 1, -1, 2, -2, 1, -1, 0],
-              rotate: [0, -3, 3, -2, 2, 0],
-            }
-          : undefined
-      }
-      transition={
-        shouldAnimate
-          ? {
-              scale: {
-                duration: 1.2,
-                repeat: Infinity,
-                ease: "easeInOut",
-              },
-              x: {
-                duration: 0.4,
-                repeat: Infinity,
-                repeatDelay: 2.5,
-                ease: "easeInOut",
-              },
-              y: {
-                duration: 0.4,
-                repeat: Infinity,
-                repeatDelay: 2.5,
-                ease: "easeInOut",
-              },
-              rotate: {
-                duration: 0.4,
-                repeat: Infinity,
-                repeatDelay: 2.5,
-                ease: "easeInOut",
-              },
-            }
-          : undefined
-      }
-    >
-      {/* Glow pulse */}
-      {shouldAnimate && (
-        <motion.span
-          className="absolute inset-0 rounded-full bg-red-500/30 blur-lg"
-          animate={{ scale: [1, 1.6], opacity: [0.6, 0] }}
-          transition={{
-            duration: 1.2,
-            repeat: Infinity,
-            ease: "easeOut",
-          }}
-        />
+      className={cn(
+        "relative inline-flex items-center justify-center text-red-500",
+        sizeClass,
+        animated && "ta-clock-pulse",
+        className,
       )}
-
+    >
       <svg
         viewBox="0 0 24 24"
         className="relative z-10 h-full w-full"
@@ -146,25 +103,14 @@ export default function UrgencyClockIcon({
         {/* Minute hand */}
         <line x1="12" y1="12" x2="12" y2="5" />
 
-        {/* Second hand */}
-        {shouldAnimate ? (
-          <motion.g
-            style={{ transformOrigin: "50% 50%", transformBox: "fill-box" }}
-            animate={{ rotate: 360 }}
-            transition={{
-              repeat: Infinity,
-              duration: 2,
-              ease: "linear",
-            }}
-          >
-            <circle cx="12" cy="12" r="9" fill="none" stroke="none" />
-            <line x1="12" y1="12" x2="12" y2="3" />
-            <circle cx="12" cy="12" r="1" fill="currentColor" />
-          </motion.g>
-        ) : (
+        {/* Second hand — the invisible r=9 circle makes the group's fill-box
+            symmetric around (12,12) so the CSS rotation pivots on the dial center. */}
+        <g className={animated ? "ta-clock-second-hand" : undefined}>
+          <circle cx="12" cy="12" r="9" fill="none" stroke="none" />
           <line x1="12" y1="12" x2="12" y2="3" />
-        )}
+          <circle cx="12" cy="12" r="1" fill="currentColor" />
+        </g>
       </svg>
-    </motion.span>
+    </span>
   );
 }

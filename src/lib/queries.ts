@@ -32,6 +32,11 @@ const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "";
 
 // In-memory session cache to reduce redundant /api/auth/session calls
 let cachedSession: { session: Session | null; timestamp: number } | null = null;
+// In-flight de-dupe: on a cold load, many hooks fire apiRequest concurrently. Without
+// this, each would call getSession() and hit /api/auth/session in parallel. We share the
+// SAME in-flight promise so only one network request runs; it clears once resolved, after
+// which the resolved value is served from `cachedSession` for the TTL window.
+let cachedSessionPromise: Promise<Session | null> | null = null;
 const SESSION_CACHE_TTL = 30_000; // 30 seconds
 
 async function getCachedSession() {
@@ -39,13 +44,22 @@ async function getCachedSession() {
   if (cachedSession && now - cachedSession.timestamp < SESSION_CACHE_TTL) {
     return cachedSession.session;
   }
-  const session = await getSession();
-  cachedSession = { session, timestamp: now };
-  return session;
+  // Coalesce concurrent cold-load callers onto one getSession() call.
+  cachedSessionPromise ??= getSession()
+    .then((session) => {
+      cachedSession = { session, timestamp: Date.now() };
+      return session;
+    })
+    .finally(() => {
+      // Allow the next post-TTL caller to refetch; the value lives on in cachedSession.
+      cachedSessionPromise = null;
+    });
+  return cachedSessionPromise;
 }
 
 export function invalidateSessionCache() {
   cachedSession = null;
+  cachedSessionPromise = null;
 }
 
 /**

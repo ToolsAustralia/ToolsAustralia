@@ -36,12 +36,11 @@ When pixel id or access token is absent, the matching surface is a silent no-op:
 
 | Path | Role |
 |---|---|
-| [src/components/FacebookPixel.tsx](../../src/components/FacebookPixel.tsx) | Legacy FB helper exports only (`trackFacebookEvent` etc.) — the dead never-mounted loader component was removed 2026-07; the live loader is `ConversionPixels` → `facebookProvider.loadPixel` |
+| [src/utils/tracking/legacy-pixel-helpers.ts](../../src/utils/tracking/legacy-pixel-helpers.ts) | Legacy FB + TikTok imperative event helpers (`trackFacebookEvent`, `trackTikTokEvent`, …) — moved here 2026-07 when the dead never-mounted `FacebookPixel.tsx` / `TikTokPixel.tsx` components were deleted; the live loaders are `ConversionPixels` → `facebookProvider`/`tiktokProvider.loadPixel` |
 | [src/components/GoogleTagManager.tsx](../../src/components/GoogleTagManager.tsx) | GTM loader |
 | [src/components/KlaviyoPageTracker.tsx](../../src/components/KlaviyoPageTracker.tsx) | Klaviyo page-view tracking |
 | [src/components/KlaviyoScriptLoader.tsx](../../src/components/KlaviyoScriptLoader.tsx) | Klaviyo SDK loader |
 | [src/components/PixelTracker.tsx](../../src/components/PixelTracker.tsx) | Generic pixel tracker |
-| [src/components/TikTokPixel.tsx](../../src/components/TikTokPixel.tsx) | TikTok Pixel loader |
 | [src/components/tracking/](../../src/components/tracking/) | Other tracking components |
 | [src/lib/facebook.ts](../../src/lib/facebook.ts) | Meta CAPI server-side |
 | [src/lib/tiktok.ts](../../src/lib/tiktok.ts) | TikTok Events API (v1.3) server-side |

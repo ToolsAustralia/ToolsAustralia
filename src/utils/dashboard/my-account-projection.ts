@@ -27,8 +27,13 @@
  * fields (`streakMonths`, `streakGeneration`, `lastStreakStartInvoiceId`),
  * `lastMonthAccumulatedEntries`, `previousSubscription`, etc.
  */
-export const MY_ACCOUNT_MINI_DRAW_FIELDS = "name description prize endDate isActive";
-export const MY_ACCOUNT_ORDER_FIELDS = "orderNumber totalAmount status createdAt items";
+// NOTE: no `endDate` — MiniDraw has no such path (draws close on isActive/status +
+// minimumEntries, not a date). It was a phantom projection field that never shipped.
+export const MY_ACCOUNT_MINI_DRAW_FIELDS = "name description prize isActive";
+// NOTE: no `items` — Order stores line items under `products`/`tickets`, not `items`
+// (see src/models/Order.ts). `items` was a phantom field; the member UI reads only
+// `totalAmount` (insights.totalSpent) + the order count, both covered below.
+export const MY_ACCOUNT_ORDER_FIELDS = "orderNumber totalAmount status createdAt";
 export const MY_ACCOUNT_USER_FIELDS = [
   "firstName",
   "lastName",

@@ -1,5 +1,13 @@
 # Admin — Frontend
 
+> **Prize catalog imports (2026-07-20, perf Tier-2):** admin client surfaces that only need
+> slugs/labels (`PromoAnalyticsManagement`, `PromoPageDetailModal`, the ab-testing
+> `ExperimentDetailModal`/`ExperimentFormModal`) now import from the lightweight
+> `@/config/prize-summaries` (`listPrizeSummaries` / `getPrizeLabel`). The one admin surface that
+> renders a deep field — `MajorDrawManagement`'s Prize Information card (`detailedDescription`) —
+> deliberately keeps a static `@/config/prizes` import (admin-chunk only, never in the landing
+> graph). See [config-and-data architecture](../config-and-data/architecture.md) "Prize catalog split".
+
 ## Repeat Purchases tab (2026-07-09)
 
 `repeat-purchases` — a new **Analytics** group tab (`RepeatPurchaseAnalytics`, `src/components/admin/RepeatPurchaseAnalytics.tsx`), gated by `pageAnalytics.view`. Measures one-time-package buyers who came back and bought again (the one-time equivalent of renewal analytics). Structure mirrors `AllPlatformsManagement`: a right-aligned `AdminDateRangeToolbar` (default `all-time`; cohort filter = first-purchase date) → a 6-tile `MetricCard` KPI grid (one-time buyers / repeat buyers / repeat rate / median days to return / repeat revenue / became members) → a `BarList` of first→second-purchase gap buckets + a "return rate by window" table (matured denominators) → a Users `Card` with a `Segmented` (All / Returned / Not yet returned) + bucket chips + `DataTable` whose User cell is a `ClickableUserDisplay` opening the shared User Detail modal. Loading = `MetricCard` skeletons + pulse bars; empty/error = inline messages. All styling is paired light/`dark:` Tailwind from the `@/components/admin/ui` kit (no chart library). Registered in `adminTabs.ts` (Analytics group), rendered + subtitled in `AdminPage.tsx`, and added to `ADMIN_TABS_WITH_MOBILE_LAYOUT_DATE_TOOLBAR` so the date dropdown portals into the mobile header. Data via `useRepeatPurchaseSummary` / `useRepeatPurchaseUsers` (see [client-state](../client-state/patterns.md)).
@@ -773,3 +781,10 @@ Presentation-only tweaks to four Overview section cards under `src/app/admin/com
   - `TopDrawsCard` — draw-name + entries cells gained `text-xs sm:text-sm`.
   - `UpcomingRenewalsCard` — member-name + amount values `text-sm` → `text-xs sm:text-sm`.
   - The shared `SectionTitle` (in `Card.tsx`), `DataTable`, and the `KpiGrid` Ad-Spend/ROAS tiles were **not** touched.
+
+## 2026-07-20 — Tier-2 perf: Poppins codemod
+
+Components in this domain were touched by the sitewide `font-'[Poppins]'` → `font-poppins`
+codemod (`npm run sweep:font-poppins`). Their Poppins-classed text now renders **real Poppins**
+instead of a browser fallback — an intended visual change. Details + rules:
+docs/shared-ui/tailwind-conventions.md §10.

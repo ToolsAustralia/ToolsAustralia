@@ -110,8 +110,15 @@ The "Hear from our winners" section is now a single **draws-domain** component, 
 It is **portable**: it self-loads its fonts (Archivo / Space Mono / Newsreader) and wraps its output in `.ta-results`, and the shared stylesheet [src/app/(site)/draw-results/draw-results.css](../../src/app/(site)/draw-results/draw-results.css) is imported globally in [src/app/layout.tsx](../../src/app/layout.tsx). So it renders identically on every host page. Call sites:
 
 - `/winners` page (SSR) — rendered inline by `WinnersBrowser`.
-- Homepage + promotions — via [src/app/(site)/components/WinnerTestimoniesClient.tsx](../../src/app/(site)/components/WinnerTestimoniesClient.tsx) (and its lazy wrapper).
+- Homepage + promotions — via [src/app/(site)/components/WinnerTestimoniesClient.tsx](../../src/app/(site)/components/WinnerTestimoniesClient.tsx) (and its lazy wrapper `WinnerTestimoniesClientLazy`, which as of 2026-07-20 wraps the dynamic import in `LazyMount` so the chunk + fetch defer until near-viewport, matching the homepage).
 - Account draws tab — [src/app/(site)/my-account/draws/page.tsx](../../src/app/(site)/my-account/draws/page.tsx).
+
+> **Shared winners feed (perf Tier-2, 2026-07-20):** `WinnerTestimoniesClient` and the homepage/promotions
+> `LatestWinnerHero` both previously did their own raw `useEffect` fetch of `/api/winners/all` (limit 100 and
+> 16), so every page made **two** requests. They now share [`useWinnersFeed(WINNERS_FEED_LIMIT)`](../../src/hooks/queries/useWinnersQueries.ts)
+> (React Query key `winners.feed(limit)`), so a page fetches **once** and the CDN `s-maxage=300` entry is
+> reused; the board slices the most recent 16 client-side. Both consumers MUST pass the same exported
+> `WINNERS_FEED_LIMIT` so they collapse onto one key/URL.
 
 It filters to winners with a testimony (`hasWinnerTestimony`), shows a cleaned excerpt (`getWinnerTestimonyExcerpt`), and the modal strips rich-text HTML to clean paragraphs (`stripRichTextHtml`) — all from [src/utils/winners.ts](../../src/utils/winners.ts). The modal's "Watch the draw" link uses `watchUrl` (the Facebook link — see "Draw-level result & watch links" below) when present.
 
@@ -133,3 +140,10 @@ Draw components use `cn()` from `@/utils/cn` for conditional class composition. 
 ## Conversion tracking (Purchase)
 
 `MiniDrawSuccessClient.tsx` fires the browser Purchase pixel via `trackConversion(buildPurchaseEvent(...))`, with `eventId = paymentIntentId` for browser↔server dedup. The fire is guarded by `shouldSuppressPurchasePixel` / `markPurchasePixelFired` ([purchase-pixel-fired-storage.ts](../../src/utils/tracking/purchase-pixel-fired-storage.ts), localStorage key `purchasePixelFired_${paymentIntentId}` holding the first-fire time) — not just a per-mount `firedRef`. Re-fires within 46h of the first fire stay allowed (Meta merges them; free delivery-recovery); only older re-fires are suppressed. The ref alone re-fired on every remount (refresh/back-nav/history revisit); Meta's event_id dedup only lasts ~48h, so a revisit later than that counted as a brand-new conversion and inflated Meta-reported ROAS. The first legitimate fire and the server CAPI redundancy are unchanged. It passes `contentName: status.data.packageName` so the Purchase carries `content_name` on both the pixel and the server Events API/CAPI (same source as the server, so values match). Field-by-field reference: [docs/tracking/EVENT_PARAMETER_MATRIX.md](../tracking/EVENT_PARAMETER_MATRIX.md).
+
+## 2026-07-20 — Tier-2 perf: Poppins codemod
+
+Components in this domain were touched by the sitewide `font-'[Poppins]'` → `font-poppins`
+codemod (`npm run sweep:font-poppins`). Their Poppins-classed text now renders **real Poppins**
+instead of a browser fallback — an intended visual change. Details + rules:
+docs/shared-ui/tailwind-conventions.md §10.

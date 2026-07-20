@@ -23,7 +23,7 @@ const FormSection = ({
       <div className="p-2 bg-gradient-to-r from-red-600 to-red-700 rounded-lg">
         <Icon className="w-5 h-5 text-white" />
       </div>
-      <h3 className="text-lg font-bold text-gray-900 font-['Poppins']">{title}</h3>
+      <h3 className="text-lg font-bold text-gray-900 font-poppins">{title}</h3>
     </div>
     {children}
   </div>
@@ -273,7 +273,7 @@ const PartnershipFormSection: React.FC<PartnershipFormSectionProps> = ({ classNa
             <div className="inline-flex items-center justify-center w-20 h-20 bg-green-100 rounded-full mb-6">
               <CheckCircle className="w-10 h-10 text-green-600" />
             </div>
-            <h2 className="text-3xl sm:text-4xl font-bold text-gray-900 font-['Poppins'] mb-4">
+            <h2 className="text-3xl sm:text-4xl font-bold text-gray-900 font-poppins mb-4">
               Application Submitted!
             </h2>
             <p className="text-lg text-gray-600 dark:text-neutral-400 font-['Inter'] mb-8">
@@ -295,7 +295,7 @@ const PartnershipFormSection: React.FC<PartnershipFormSectionProps> = ({ classNa
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Header */}
         <div className="text-center mb-12">
-          <h2 className="text-3xl sm:text-4xl font-bold text-gray-900 font-['Poppins'] mb-4">
+          <h2 className="text-3xl sm:text-4xl font-bold text-gray-900 font-poppins mb-4">
             Ready to Partner with Us?
           </h2>
           <p className="text-lg text-gray-600 dark:text-neutral-400 font-['Inter'] max-w-2xl mx-auto">

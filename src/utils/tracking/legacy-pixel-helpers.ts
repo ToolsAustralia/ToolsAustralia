@@ -1,8 +1,30 @@
-"use client";
+/**
+ * legacy-pixel-helpers.ts
+ *
+ * Legacy imperative browser-pixel event helpers for Facebook + TikTok.
+ *
+ * These moved here (perf Tier-2) from the now-deleted `src/components/FacebookPixel.tsx`
+ * and `src/components/TikTokPixel.tsx`. Those files each carried a never-mounted loader
+ * COMPONENT plus these helper functions; the components were dead code (the live pixel
+ * loaders are `ConversionPixels` → `facebookProvider`/`tiktokProvider`), so the components
+ * were removed and only these still-consumed helpers were relocated — with identical
+ * export names, zero behaviour change.
+ *
+ * Consumers: `hooks/usePixelTracking.ts`, `utils/tracking/pixel-purchase-tracking.ts`,
+ * `components/modals/MembershipModal`. NEW code should prefer `trackConversion(...)`
+ * (dispatch-client) / the provider registry for proper Pixel↔CAPI dedup across providers.
+ *
+ * `window.fbq` is typed by the ambient `Window` augmentation in
+ * `src/lib/tracking/providers/facebook.ts`; TikTok helpers delegate to `tiktokProvider`
+ * (they never touch `window.ttq` directly), so no local global augmentation is needed.
+ */
 
 import { trackConversion } from "@/lib/tracking/dispatch-client";
-import { buildPurchaseEvent } from "@/lib/tracking/canonical-event";
+import { buildPurchaseEvent, eventTimeNow } from "@/lib/tracking/canonical-event";
 import { getAllowedHostnames } from "@/lib/tracking/hostname-gate";
+import { tiktokProvider } from "@/lib/tracking/providers/tiktok";
+
+// ── Facebook ────────────────────────────────────────────────────────────────
 
 /**
  * Hostnames where the browser pixel is allowed to fire. Reads from
@@ -16,28 +38,8 @@ export function isProductionBrowserHostname(hostname: string): boolean {
   return getAllowedHostnames().includes(hostname);
 }
 
-declare global {
-  interface Window {
-    fbq: (
-      command: string,
-      eventNameOrPixelId?: string,
-      eventNameOrParams?: string | Record<string, unknown>,
-      parameters?: Record<string, unknown>
-    ) => void;
-    _fbp?: string; // Facebook Browser ID cookie
-    _fbPixelInit?: boolean; // Global flag to prevent multiple initializations
-  }
-}
-
 // Track recent events to prevent duplicates (within 1 second)
 const recentEvents = new Map<string, number>(); // eventKey -> timestamp
-
-// NOTE (2026-07): the legacy <FacebookPixel> default component that used to live here
-// (a complete second pixel-init implementation: inline fbevents loader, disablePushState,
-// autoConfig, fbq init + initial PageView) was removed as dead code — it was never
-// mounted anywhere. The LIVE loader is <ConversionPixels> → facebookProvider.loadPixel
-// (src/lib/tracking/providers/facebook.ts). Only the helper exports below are consumed
-// (usePixelTracking, MembershipModal, pixel-purchase-tracking).
 
 /**
  * Track Facebook Pixel event with optional EventID for deduplication
@@ -380,4 +382,110 @@ export const trackRemoveFromCart = (
     ...(productId && { content_ids: [productId] }),
     ...(contentName && { content_name: contentName }),
   });
+};
+
+// ── TikTok ──────────────────────────────────────────────────────────────────
+
+/**
+ * Track a TikTok-only event by name + params.
+ *
+ * Legacy callers (subscription helpers in pixel-purchase-tracking.ts, etc.) don't
+ * have a canonical eventId, so we synthesize one. This means dedup with TikTok
+ * Events API won't be effective — but legacy callers also didn't have CAPI fan-out,
+ * so this matches today's behavior. NEW code should use `trackConversion(...)`
+ * with a real eventId for proper Pixel↔CAPI dedup across all providers.
+ *
+ * Goes through `tiktokProvider.pixelTrack` so the production-hostname gate
+ * AND missing-credentials check (spec §3 invariants #2 and #4) are enforced.
+ */
+export const trackTikTokEvent = (eventName: string, parameters?: Record<string, unknown>) => {
+  if (typeof window === "undefined") return;
+  const en = tiktokProvider.enabled();
+  if (!en.pixel) return;
+  const allowed = tiktokProvider.productionHostnames();
+  if (!allowed.includes(window.location.hostname)) return;
+  try {
+    tiktokProvider.pixelTrack({
+      eventName,
+      eventId: `legacy-${eventName}-${Date.now()}`,
+      eventTime: eventTimeNow(),
+      providerData: { tiktok: parameters },
+    });
+  } catch {
+    // Silently fail — TikTok is not critical-path.
+  }
+};
+
+export const trackTikTokPurchase = (value: number, currency: string = "AUD", orderId?: string) => {
+  trackTikTokEvent("CompletePayment", {
+    value,
+    currency,
+    content_type: "product",
+    ...(orderId && { order_id: orderId }),
+  });
+};
+
+export const trackTikTokAddToCart = (value: number, currency: string = "AUD", productId?: string) => {
+  trackTikTokEvent("AddToCart", {
+    value,
+    currency,
+    content_type: "product",
+    ...(productId && { content_ids: [productId] }),
+  });
+};
+
+export const trackTikTokInitiateCheckout = (value: number, currency: string = "AUD", numItems?: number) => {
+  trackTikTokEvent("InitiateCheckout", {
+    value,
+    currency,
+    content_type: "product",
+    ...(numItems && { num_items: numItems }),
+  });
+};
+
+export const trackTikTokViewContent = (value: number, currency: string = "AUD", productId?: string) => {
+  trackTikTokEvent("ViewContent", {
+    value,
+    currency,
+    content_type: "product",
+    ...(productId && { content_ids: [productId] }),
+  });
+};
+
+export const trackTikTokSearch = (searchString: string) => {
+  trackTikTokEvent("Search", {
+    search_string: searchString,
+    content_type: "product",
+  });
+};
+
+export const trackTikTokCompleteRegistration = (method?: string) => {
+  trackTikTokEvent("CompleteRegistration", {
+    content_type: "user",
+    ...(method && { registration_method: method }),
+  });
+};
+
+export const trackTikTokLead = (value?: number, currency: string = "AUD") => {
+  trackTikTokEvent("SubmitForm", {
+    content_type: "lead",
+    ...(value && { value, currency }),
+  });
+};
+
+export const trackTikTokSubscribe = (value?: number, currency: string = "AUD") => {
+  trackTikTokEvent("Subscribe", {
+    content_type: "subscription",
+    ...(value && { value, currency }),
+  });
+};
+
+export const trackTikTokContact = () => {
+  trackTikTokEvent("Contact", {
+    content_type: "contact",
+  });
+};
+
+export const trackTikTokCustomEvent = (eventName: string, parameters?: Record<string, unknown>) => {
+  trackTikTokEvent(eventName, parameters);
 };

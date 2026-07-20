@@ -380,7 +380,7 @@ export default function MyAccountPage() {
                 />
               ) : dash.acct === "onetime" ? (
                 <section className="rounded-[1.1rem] border border-token bg-surface p-5 shadow-sm">
-                  <h3 className="font-['Poppins'] text-base font-extrabold text-primary-token dark:text-white">Keep your partner discounts</h3>
+                  <h3 className="font-poppins text-base font-extrabold text-primary-token dark:text-white">Keep your partner discounts</h3>
                   <p className="mt-1 text-sm text-muted-token">Membership keeps partner discounts on your account for good, adds more free entries every month, and unlocks member-only bonus offers.</p>
                   <button
                     type="button"

@@ -65,7 +65,7 @@ const winnerTestimoniesSkeleton = (
   >
     <SectionContainer>
       <div className="text-center">
-        <div className="text-[20px] sm:text-[24px] font-bold text-black dark:text-white mb-2 sm:mb-3 font-['Poppins']">
+        <div className="text-[20px] sm:text-[24px] font-bold text-black dark:text-white mb-2 sm:mb-3 font-poppins">
           Winner Testimonies
         </div>
         <div className="text-gray-500 dark:text-neutral-400">Loading testimonies...</div>
@@ -81,7 +81,7 @@ const miniDrawsSkeleton = (
   >
     <SectionContainer>
       <div className="text-center">
-        <div className="text-[20px] sm:text-[24px] font-bold text-black dark:text-white mb-2 sm:mb-3 font-['Poppins']">
+        <div className="text-[20px] sm:text-[24px] font-bold text-black dark:text-white mb-2 sm:mb-3 font-poppins">
           MINI DRAWS
         </div>
         <div className="text-gray-500 dark:text-neutral-400">Loading mini draws...</div>
@@ -97,7 +97,7 @@ const bestsellersSkeleton = (
   >
     <SectionContainer>
       <div className="text-center">
-        <div className="text-[20px] sm:text-[24px] font-bold text-black dark:text-white mb-2 sm:mb-3 font-['Poppins']">
+        <div className="text-[20px] sm:text-[24px] font-bold text-black dark:text-white mb-2 sm:mb-3 font-poppins">
           BEST SELLERS
         </div>
         <div className="text-gray-500 dark:text-neutral-400">Loading products...</div>
@@ -113,7 +113,7 @@ const newArrivalsSkeleton = (
   >
     <SectionContainer>
       <div className="text-center">
-        <div className="text-[20px] sm:text-[24px] font-bold text-black dark:text-white mb-2 sm:mb-3 font-['Poppins']">
+        <div className="text-[20px] sm:text-[24px] font-bold text-black dark:text-white mb-2 sm:mb-3 font-poppins">
           NEW ARRIVALS
         </div>
         <div className="text-gray-500 dark:text-neutral-400">Loading products...</div>

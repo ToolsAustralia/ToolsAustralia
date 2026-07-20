@@ -99,7 +99,7 @@ export default function PixelConsentModal({ isOpen, onCloseAction, onAccept, onD
         >
           <div className="flex items-center justify-center">
             <div className="text-center">
-              <h2 className="text-xl font-bold font-['Poppins']">Privacy & Analytics</h2>
+              <h2 className="text-xl font-bold font-poppins">Privacy & Analytics</h2>
               <p className="text-sm text-white/80 mt-1">Please choose your preference</p>
             </div>
           </div>

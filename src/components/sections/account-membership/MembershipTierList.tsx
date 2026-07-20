@@ -110,7 +110,7 @@ export default function MembershipTierList({
                 </span>
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className="font-['Poppins'] text-sm font-extrabold text-primary-token dark:text-white">{plan.name}</span>
+                    <span className="font-poppins text-sm font-extrabold text-primary-token dark:text-white">{plan.name}</span>
                     {isCurrent &&
                       (isPastDue ? (
                         <span className="rounded-full border border-[#d97706]/50 px-2 py-0.5 text-[11px] font-semibold text-[#b45309] dark:text-[#fbbf24]">
@@ -146,7 +146,7 @@ export default function MembershipTierList({
                   </div>
                 </div>
                 <div className="text-right">
-                  <div className="font-['Poppins'] text-base font-black" style={{ color: hex }}>${plan.price}</div>
+                  <div className="font-poppins text-base font-black" style={{ color: hex }}>${plan.price}</div>
                   <div className="mt-0.5 text-[9px] font-semibold text-muted-token">/mo</div>
                 </div>
               </button>

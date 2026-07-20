@@ -31,7 +31,7 @@ export default function FAQPageClient({ faqs, categories }: FAQPageClientProps) 
         <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8">
           <div className="flex flex-col lg:flex-row items-center justify-between gap-6">
             <div className="text-center lg:text-left">
-              <h1 className="text-[32px] sm:text-[40px] lg:text-[48px] font-bold font-['Poppins'] mb-4">
+              <h1 className="text-[32px] sm:text-[40px] lg:text-[48px] font-bold font-poppins mb-4">
                 <span className="text-white">F</span>
                 <span className="bg-gradient-to-r from-red-600 to-red-675 bg-clip-text text-transparent">A</span>
                 <span className="text-white">Q</span>

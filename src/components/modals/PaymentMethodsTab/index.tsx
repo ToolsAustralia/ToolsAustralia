@@ -302,7 +302,7 @@ const PaymentMethodsTab: React.FC<PaymentMethodsTabProps> = ({ user, settingsRed
   const addFormNode =
     setupIntentClientSecret != null ? (
       <div className="rounded-2xl border border-token bg-surface p-5 shadow-sm">
-        <h4 className="mb-4 font-['Poppins'] text-base font-bold text-primary-token dark:text-white">Add a new card</h4>
+        <h4 className="mb-4 font-poppins text-base font-bold text-primary-token dark:text-white">Add a new card</h4>
         <Elements
           key={`${setupIntentClientSecret || "no-secret"}-${isDarkMode ? "dark" : "light"}`}
           stripe={stripePromise}

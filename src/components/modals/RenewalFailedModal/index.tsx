@@ -31,7 +31,7 @@ function PartnerHoldRing({ pct }: { pct: number }) {
       <div className="relative">
         <AccessRing percent={pct} size={72} stroke={7} color="#d97706" trackColor="rgba(217,119,6,.16)">
           <div className="flex flex-col items-center leading-none">
-            <span className="num font-['Poppins'] text-[18px] font-black text-amber-700 dark:text-amber-400">{pct}%</span>
+            <span className="num font-poppins text-[18px] font-black text-amber-700 dark:text-amber-400">{pct}%</span>
             <span className="text-[7px] font-extrabold uppercase tracking-[0.1em] text-amber-600">Partner</span>
           </div>
         </AccessRing>

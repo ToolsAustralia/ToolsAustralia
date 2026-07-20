@@ -75,7 +75,7 @@ export const RecentWinnerCard = memo(function RecentWinnerCard({
             <div className="bg-black/80 backdrop-blur-[var(--ta-blur)] rounded-xl sm:rounded-2xl px-2.5 py-1.5 sm:px-3 sm:py-2 border border-white/20 shadow-[0_4px_12px_rgba(0,0,0,0.5)]">
               <div className="flex items-center gap-1.5 sm:gap-2">
                 <Gift className="w-3 h-3 sm:w-4 sm:h-4 text-emerald-400" />
-                <span className="text-2xs sm:text-xs font-bold text-white font-['Poppins'] max-w-[120px] sm:max-w-[150px] truncate">
+                <span className="text-2xs sm:text-xs font-bold text-white font-poppins max-w-[120px] sm:max-w-[150px] truncate">
                   {winner.selectedPrize}
                 </span>
               </div>
@@ -88,7 +88,7 @@ export const RecentWinnerCard = memo(function RecentWinnerCard({
           <div className="bg-black/75 backdrop-blur-[var(--ta-blur)] rounded-xl sm:rounded-2xl px-3 py-2.5 sm:px-5 sm:py-4 border border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.4)] relative overflow-hidden">
             {/* Winner Name and Location - Same Row */}
             <div className="relative flex flex-wrap items-center gap-x-2 sm:gap-x-3 gap-y-1">
-              <p className="text-base sm:text-2xl font-bold font-['Poppins'] tracking-tight relative inline-block">
+              <p className="text-base sm:text-2xl font-bold font-poppins tracking-tight relative inline-block">
                 <span className="relative z-10 bg-gradient-to-r from-white via-yellow-50 via-white to-yellow-50 bg-clip-text text-transparent drop-shadow-[0_0_15px_rgba(255,255,255,0.9),0_0_25px_rgba(255,215,0,0.3)] sm:drop-shadow-[0_0_10px_rgba(255,255,255,0.6)] sm:group-hover:drop-shadow-[0_0_15px_rgba(255,255,255,0.9),0_0_25px_rgba(255,215,0,0.3)] transition-[filter,color] duration-[var(--ta-transition-dur)]">
                   {formattedName}
                 </span>
@@ -115,7 +115,7 @@ export const RecentWinnerCard = memo(function RecentWinnerCard({
             <div className="p-1.5 sm:p-2 bg-gradient-to-br from-red-600 to-red-700 rounded-lg sm:rounded-xl shadow-lg flex-shrink-0">
               <Award className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
             </div>
-            <span className="text-sm sm:text-lg font-bold text-gray-900 font-['Poppins'] tracking-tight truncate">
+            <span className="text-sm sm:text-lg font-bold text-gray-900 font-poppins tracking-tight truncate">
               {winner.drawName}
             </span>
           </div>

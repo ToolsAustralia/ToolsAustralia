@@ -552,7 +552,7 @@ Display-only `user.role` reads (e.g. the "Admin" badge on user rows in `UsersMan
 
 ### `sections/LatestWinnerHero` — homepage "Latest Winners" (Winners Board, 2026-07-13)
 
-[src/components/sections/LatestWinnerHero.tsx](../../src/components/sections/LatestWinnerHero.tsx) renders the homepage/promotions/my-account "Latest Winners" block. It fetches `/api/winners/all?limit=16`, then renders the shared **Winners Board** grid (`WinnerBoardCard` in a `.lw-grid`) — **2 columns on mobile, 4 on desktop, 8 tiles per page** (a "See More" button pages by 8; once exhausted it becomes a "View All Winners" → `/winners` link). It replaced the previous Embla carousel + `WinnerCard`.
+[src/components/sections/LatestWinnerHero.tsx](../../src/components/sections/LatestWinnerHero.tsx) renders the homepage/promotions/my-account "Latest Winners" block. As of perf Tier-2 (2026-07-20) it reads the **shared** [`useWinnersFeed(WINNERS_FEED_LIMIT)`](../../src/hooks/queries/useWinnersQueries.ts) React Query hook (instead of its own `useEffect` fetch of `/api/winners/all?limit=16`) and **slices the most recent 16 client-side** (`BOARD_MAX`). The same hook backs `WinnerTestimoniesClient`, so a page that shows both now makes **one** `/api/winners/all` request rather than two — see [draws/frontend.md § Winner testimony display](../draws/frontend.md#winner-testimony-display--winnerstestimony-the-one-hear-from-our-winners-section-2026-06-11). It then renders the shared **Winners Board** grid (`WinnerBoardCard` in a `.lw-grid`) — **2 columns on mobile, 4 on desktop, 8 tiles per page** (a "See More" button pages by 8; once exhausted it becomes a "View All Winners" → `/winners` link). It replaced the previous Embla carousel + `WinnerCard`.
 
 Because the board's `.lw-*` styles are scoped under `.ta-results`, the grid is wrapped in a `<div className="ta-results …">` that (a) self-loads the Archivo/Space-Mono font vars, (b) sets `background: transparent`, and (c) pipes the active promo accent into the board via inline `--accent` / `--accent-2` (so themed promotion pages keep their colour). The heading and the "Join our next giveaway" CTA stay **outside** that wrapper, so they keep their existing site styling. Cards are passed an `href` (major → `/promotions/${DEFAULT_PRIZE_SLUG}`, mini → `/mini-draws`) so the whole tile links to the giveaway.
 
@@ -737,6 +737,8 @@ All previous call sites now render `WinnersTestimony` directly: the homepage + p
 ### PrizeSpecificationsModal
 
 [`src/components/modals/PrizeSpecificationsModal/`](../../src/components/modals/PrizeSpecificationsModal/) shows the full spec breakdown for a prize (`prize?: PrizeCatalogEntry`). Built on `ModalContainer` (`size="4xl"`).
+
+**Click-gated since perf Tier-2 (2026-07-20):** both hosts (`PrizeShowcase`, dead-code `MajorDrawSection`) mount it via `next/dynamic` behind a first-open latch and resolve the deep `PrizeCatalogEntry` with `await import("@/config/prizes")` at open time — the modal's `prize` prop is `null` until that lands (it renders its built-in "Prize information is loading" state). The modal's own `@/config/prizes` imports are **type-only**. See [promo frontend](../promo/frontend.md) "PrizeShowcase — prize-summaries split".
 
 **Responsive layout (2026-06-02):**
 - **Mobile (`<lg`)** — stacked: `Hero` landscape banner on top (wrapped in `lg:hidden`), then the scrollable specs below.
@@ -952,6 +954,8 @@ Fullpage modal for browsing a gallery of winner / prize / draw photos. Used by `
 #### Companion
 
 `FullscreenTriggerButton` — small expand-icon button used by callsites to open the viewer.
+
+**Module-weight footgun (2026-07-20):** the trigger lives in the SAME module as the heavy viewer (react-zoom-pan-pinch + embla + ModalContainer), so a static import of just the button still pulls the whole viewer into the importer's chunk. `PrizeShowcase` therefore loads the viewer via `next/dynamic` behind a first-open latch and renders its own eager markup-identical trigger stand-in (kept in sync by comment). If another eager surface needs the trigger, split the button into its own file instead of static-importing this module.
 
 ## SubscriptionManagementModal / PaymentMethodsTab — settings redesign variant (2026-05-19)
 

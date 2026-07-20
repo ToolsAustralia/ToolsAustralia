@@ -65,7 +65,7 @@ function PanelHead({
         >
           {eyebrow}
         </div>
-        <div className="font-['Poppins'] text-[15px] font-extrabold text-primary-token dark:text-white">{title}</div>
+        <div className="font-poppins text-[15px] font-extrabold text-primary-token dark:text-white">{title}</div>
         <div className="mt-0.5 text-xs leading-[1.4] text-muted-token">{sub}</div>
       </div>
     </div>

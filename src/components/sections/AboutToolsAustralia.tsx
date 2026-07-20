@@ -10,7 +10,7 @@ export default function AboutToolsAustralia() {
             About Tools Australia
           </div>
 
-          <h2 className="text-[28px] sm:text-[36px] lg:text-[48px] font-black leading-tight text-black font-['Poppins'] mb-6">
+          <h2 className="text-[28px] sm:text-[36px] lg:text-[48px] font-black leading-tight text-black font-poppins mb-6">
             Australia&apos;s Premier
             <span className="block text-red-600">Tool Marketplace</span>
           </h2>
@@ -25,7 +25,7 @@ export default function AboutToolsAustralia() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-16 items-center mb-16">
           {/* Left Column - Content */}
           <div>
-            <h3 className="text-[24px] sm:text-[28px] lg:text-[32px] font-bold text-gray-800 dark:text-neutral-100 mb-6 font-['Poppins']">
+            <h3 className="text-[24px] sm:text-[28px] lg:text-[32px] font-bold text-gray-800 dark:text-neutral-100 mb-6 font-poppins">
               Connecting Tools with the People Who Need Them
             </h3>
 
@@ -129,7 +129,7 @@ export default function AboutToolsAustralia() {
         {/* Mission Statement */}
         <div className="bg-gradient-to-r from-gray-900 to-gray-800 rounded-3xl p-8 lg:p-12 text-center">
           <div className="max-w-4xl mx-auto">
-            <h3 className="text-[24px] sm:text-[28px] lg:text-[32px] font-bold text-white mb-6 font-['Poppins']">
+            <h3 className="text-[24px] sm:text-[28px] lg:text-[32px] font-bold text-white mb-6 font-poppins">
               Our Mission
             </h3>
 
@@ -144,7 +144,7 @@ export default function AboutToolsAustralia() {
         {/* Values Section */}
         <div className="mt-16 grid grid-cols-1 md:grid-cols-3 gap-8">
           <div className="text-center">
-            <h4 className="text-xl font-bold text-gray-800 dark:text-neutral-100 mb-3 font-['Poppins']">Quality First</h4>
+            <h4 className="text-xl font-bold text-gray-800 dark:text-neutral-100 mb-3 font-poppins">Quality First</h4>
             <p className="text-gray-600 dark:text-neutral-400 font-['Inter']">
               We only give away tools from trusted, top-tier brands. Every prize is hand-picked and vetted to meet the
               highest standards for performance, durability, and value.
@@ -152,7 +152,7 @@ export default function AboutToolsAustralia() {
           </div>
 
           <div className="text-center">
-            <h4 className="text-xl font-bold text-gray-800 dark:text-neutral-100 mb-3 font-['Poppins']">Community Driven</h4>
+            <h4 className="text-xl font-bold text-gray-800 dark:text-neutral-100 mb-3 font-poppins">Community Driven</h4>
             <p className="text-gray-600 dark:text-neutral-400 font-['Inter']">
               Our members are the heart of what we do. From shaping the giveaways we launch to sharing their wins and
               stories, our community fuels the excitement that keeps us growing.
@@ -160,7 +160,7 @@ export default function AboutToolsAustralia() {
           </div>
 
           <div className="text-center">
-            <h4 className="text-xl font-bold text-gray-800 dark:text-neutral-100 mb-3 font-['Poppins']">Innovation</h4>
+            <h4 className="text-xl font-bold text-gray-800 dark:text-neutral-100 mb-3 font-poppins">Innovation</h4>
             <p className="text-gray-600 dark:text-neutral-400 font-['Inter']">
               We’re constantly improving how Australians win and engage – from streamlined entry systems to unique
               membership perks – making tool giveaways easier, fairer, and more rewarding than ever.
