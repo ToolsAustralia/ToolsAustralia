@@ -319,3 +319,7 @@ Before R7's timing policy, GTM + Meta + TikTok + Klaviyo + Contentsquare (~539 K
 ## Klaviyo suite: first-event trigger + idle fallback (2026-07-20 fix)
 
 Pure `lazyOnload` for the suite LOST every queued event when a visitor bounced before browser idle — including the authed `Started Checkout` that drives the abandoned-checkout email. `KlaviyoScriptLoader` now injects the suite script on the FIRST `klaviyo`/`_klOnsite` push (patched queue push, with retry because the afterInteractive queue snippet may install after the effect) or at browser idle, whichever comes first. Tracked visitors ship events as fast as pre-split; event-less visitors keep the full deferral. Don't "simplify" back to a plain lazyOnload `<Script>`.
+
+## GTM custom-HTML tags are blocklisted client-side (2026-07-20)
+
+`GTM_INIT_SNIPPET` pushes `{'gtm.blocklist':['html']}` before gtm.js loads. Why: container GTM-TBCCQQVZ's ONLY tag is a dead legacy Hotjar custom-HTML tag whose loader is CSP-blocked (console error on every page); the blocklist stops GTM from attempting the injection at all. If you ever add a legitimate custom-HTML tag to the container, REMOVE the blocklist key from `src/utils/security/inline-snippets.ts` (and recompute the GTM_INIT_SNIPPET hash in csp.ts — `npm run test:csp-inline-hashes` guards the pairing). Best end-state: delete the Hotjar tag in the GTM UI, then this blocklist becomes belt-and-braces.

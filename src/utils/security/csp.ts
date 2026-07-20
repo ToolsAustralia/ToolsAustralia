@@ -29,7 +29,7 @@ export function buildContentSecurityPolicy(nonce?: string): string {
   // src/utils/security/inline-snippets.ts (drift-checked by `npm run test:csp-inline-hashes`):
   //   'sha256-gArcobE6Y/czAZSkBLxA1CAGS1xvw6cghHIBwfNpkok=' → THEME_BOOTSTRAP_SNIPPET
   //   'sha256-yEQTk36ZkLbyTcwSVYFpl/2k0ZDTLfLcCaNGWE/vG98=' → DEVICE_TIER_SNIPPET
-  //   'sha256-XOzt6sTmb/mi6l0HeHNGb8cIRz6ivMa4DXPDUySYCUw=' → GTM_INIT_SNIPPET
+  //   'sha256-xaGf90svAEIA1mo6apEICfa+VIdlJdA72R2TvCgsBLY=' → GTM_INIT_SNIPPET
   //   'sha256-z/YgGrCJhp1RQPr9KSfm7P9DNBwUTwHa1UAaVdzzWQY=' → KLAVIYO_QUEUE_SNIPPET
   // They belong ONLY to the nonce variant: adding hashes to the fallback variant
   // would make browsers ignore its 'unsafe-inline' (CSP2 rule) and break every
@@ -43,7 +43,7 @@ export function buildContentSecurityPolicy(nonce?: string): string {
   const vercelToolbarConnect = isVercelPreview ? " https://vercel.live https://*.pusher.com wss://*.pusher.com" : "";
 
   const scriptSrc = nonce
-    ? `script-src 'self' 'nonce-${nonce}' 'unsafe-eval' https://connect.facebook.net https://js.stripe.com https://analytics.tiktok.com https://static.klaviyo.com https://static-tracking.klaviyo.com https://static-forms.klaviyo.com https://www.googletagmanager.com https://js.hcaptcha.com https://*.hcaptcha.com https://applepay.cdn-apple.com https://script.hotjar.com https://t.contentsquare.net${vercelToolbarScript} 'sha256-DYFSjgyML0TKIOzsnWRWtsvywBFJ9rY4U8a6TgrKiXU=' 'sha256-fLWhKT52f/f9E2X9DpwgQUgQe08peiH9FRDd5oyirNk=' 'sha256-gArcobE6Y/czAZSkBLxA1CAGS1xvw6cghHIBwfNpkok=' 'sha256-yEQTk36ZkLbyTcwSVYFpl/2k0ZDTLfLcCaNGWE/vG98=' 'sha256-XOzt6sTmb/mi6l0HeHNGb8cIRz6ivMa4DXPDUySYCUw=' 'sha256-z/YgGrCJhp1RQPr9KSfm7P9DNBwUTwHa1UAaVdzzWQY='`
+    ? `script-src 'self' 'nonce-${nonce}' 'unsafe-eval' https://connect.facebook.net https://js.stripe.com https://analytics.tiktok.com https://static.klaviyo.com https://static-tracking.klaviyo.com https://static-forms.klaviyo.com https://www.googletagmanager.com https://js.hcaptcha.com https://*.hcaptcha.com https://applepay.cdn-apple.com https://script.hotjar.com https://t.contentsquare.net${vercelToolbarScript} 'sha256-DYFSjgyML0TKIOzsnWRWtsvywBFJ9rY4U8a6TgrKiXU=' 'sha256-fLWhKT52f/f9E2X9DpwgQUgQe08peiH9FRDd5oyirNk=' 'sha256-gArcobE6Y/czAZSkBLxA1CAGS1xvw6cghHIBwfNpkok=' 'sha256-yEQTk36ZkLbyTcwSVYFpl/2k0ZDTLfLcCaNGWE/vG98=' 'sha256-xaGf90svAEIA1mo6apEICfa+VIdlJdA72R2TvCgsBLY=' 'sha256-z/YgGrCJhp1RQPr9KSfm7P9DNBwUTwHa1UAaVdzzWQY='`
     : `script-src 'self' 'unsafe-inline' 'unsafe-eval' https://connect.facebook.net https://js.stripe.com https://analytics.tiktok.com https://static.klaviyo.com https://static-tracking.klaviyo.com https://static-forms.klaviyo.com https://www.googletagmanager.com https://js.hcaptcha.com https://*.hcaptcha.com https://applepay.cdn-apple.com https://script.hotjar.com https://t.contentsquare.net${vercelToolbarScript}`;
   const directives = [
     "default-src 'self'",
