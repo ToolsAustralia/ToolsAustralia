@@ -2293,92 +2293,57 @@
 /* Fire animation effect for promo banner background - mild/subtle version.
  * Note: Position is handled by Tailwind classes (relative/fixed) on the .fire div.
  *
- * 2026-07-20 perf rewrite (Tier-2 Task 1): the old version animated
- * `background-position` on a single pseudo-element, which repainted on the main
- * thread AND re-ran the brightness/blur/contrast filter every frame. Now each
- * moving glitter field is its own layer animated with transform-ONLY keyframes:
- * the filter is applied per layer, so each layer rasterizes once (filter baked
- * into the cached texture) and the compositor just slides textures.
- *
- * Layer stack (bottom -> top), replacing the old 3-deep background-image stack:
- *   .fire::before        static warm glow gradient (never animated)
- *   .fire > .fire-glitter 400x650 glitter field, rises 650px / 8s (rendered as a
- *                         child div by PromoBanner - the ONLY .fire consumer)
- *   .fire::after         350x500 glitter field, rises 500px / 8s
- * The two speeds preserve the original parallax "twinkle" between the fields.
- * mix-blend-mode: overlay on the glitter layers reproduces the old
- * background-blend-mode: overlay stack; opacity 0.7 on .fire keeps the old
- * composite weight AND creates the stacking context that contains the blending.
- *
- * Seamless loop: each glitter layer is one background-tile (plus a 32px blur
- * bleed, 16px per edge) taller than the banner and translates up by exactly
- * one tile per iteration, so the snap-back frame IS pixel-identical to frame 0
- * and the blur-feathered layer edges never enter the visible clip. If you
- * change a background-size tile height you MUST change the matching layer
- * height + keyframe distance (the +32px bleed and top: -16px stay as-is).
- *
- * RULE: animate transform/opacity only here. Never reintroduce
- * background-position / filter / box-shadow keyframes on this surface. */
+ * 2026-07-20: REVERTED to the original background-position rendering. The Tier-2
+ * transform rewrite (separate glitter layers + `mix-blend-mode: overlay`) shifted
+ * the flame's hue — it read GREEN against brand-coloured banners, because
+ * mix-blend-mode blends the glitter against the banner BACKDROP instead of the
+ * fire's own warm gradient. This single-element `background-blend-mode` version is
+ * self-contained (its colour never depends on the banner behind it), so the flame
+ * stays warm on every promo. Colour fidelity of this brand element wins over the
+ * micro-optimisation. The main-thread cost is mitigated by GATES instead of a
+ * rewrite: the animation is disabled while the banner is stuck/floating on scroll
+ * (mobile — the `[data-banner-stuck]` rule in the tier-gate block below) and for
+ * save-data + prefers-reduced-motion. `--glitter` stays SELF-HOSTED (the CodePen
+ * hotlink removal is kept). If you must optimise this again, verify the colour
+ * against a brand-coloured banner (e.g. a green/teal promo), not just the default. */
 .fire {
   overflow: hidden;
-  opacity: 0.7;
 }
 
 .fire::before,
 .fire::after {
   content: "";
-}
-
-/* Bottom layer: static warm glow anchored to the banner box (was the old 3rd
- * background layer). Filter is static - painted once. */
-.fire::before {
   position: absolute;
   inset: 0;
-  background-image: linear-gradient(0deg, rgba(255, 255, 255, 0.2) 0px, rgba(255, 137, 81, 0.3) 5px, rgba(220, 188, 22, 0.25) 30%);
+}
+
+.fire::before {
+  background-image: var(--glitter), var(--glitter),
+    linear-gradient(0deg, rgba(255, 255, 255, 0.2) 0px, rgba(255, 137, 81, 0.3) 5px, rgba(220, 188, 22, 0.25) 30%);
+  background-size: 350px 500px, 400px 650px, 100% 100%;
+  background-blend-mode: overlay, overlay;
+  background-position: 0px 0px, 0px 0px, 50% 100%;
+  background-repeat: repeat, repeat, repeat;
   filter: brightness(1.5) blur(4px) contrast(2.5);
+  animation: fire 8s linear infinite;
   pointer-events: none;
+  z-index: 0;
+  background-color: transparent;
+  opacity: 0.7;
 }
 
-/* Moving glitter fields (see block comment above for the loop contract).
- * top: -16px + the extra 32px of height are a bleed margin: blur(4px) feathers
- * the layer's top/bottom edges, so both edges must stay OUTSIDE the overflow
- * clip at every point of the loop (layer spans [-16px, 100% + 16px] relative to
- * the clip at BOTH translate endpoints) - otherwise the feathered top edge
- * drifts through view as a soft blip each iteration. */
-.fire > .fire-glitter,
-.fire::after {
-  position: absolute;
-  top: -16px;
-  left: 0;
-  right: 0;
-  background-image: var(--glitter);
-  background-repeat: repeat;
-  mix-blend-mode: overlay;
-  filter: brightness(1.5) blur(4px) contrast(2.5);
-  pointer-events: none;
+/* Any .fire content children sit above the effect. */
+.fire > * {
+  position: relative;
+  z-index: 1;
 }
 
-.fire > .fire-glitter {
-  height: calc(100% + 650px + 32px);
-  background-size: 400px 650px;
-  animation: fire-rise-650 8s linear infinite;
-}
-
-.fire::after {
-  height: calc(100% + 500px + 32px);
-  background-size: 350px 500px;
-  animation: fire-rise-500 8s linear infinite;
-}
-
-@keyframes fire-rise-500 {
-  to {
-    transform: translate3d(0, -500px, 0);
+@keyframes fire {
+  0% {
+    background-position: center 0px, center 0px, 50% 100%;
   }
-}
-
-@keyframes fire-rise-650 {
-  to {
-    transform: translate3d(0, -650px, 0);
+  100% {
+    background-position: center -500px, center -650px, 50% 100%;
   }
 }
 
@@ -2546,13 +2511,21 @@ html[data-tier="tablet"] .ta-clock-second-hand,
 html[data-tier="tablet"] .ta-countdown-dot,
 html[data-tier="tablet"] [class*="glow-pulse"],
 html[data-tier="tablet"] [class*="vip-"],
-html[data-save-data="true"] .fire > .fire-glitter,
-html[data-save-data="true"] .fire::after,
+html[data-save-data="true"] .fire::before,
 html[data-save-data="true"] .ta-clock-pulse,
 html[data-save-data="true"] .ta-clock-second-hand,
 html[data-save-data="true"] .ta-countdown-dot,
 html[data-save-data="true"] [class*="glow-pulse"],
 html[data-save-data="true"] [class*="vip-"] {
+  animation: none !important;
+}
+
+/* Mobile: the promo-banner fire animates in its resting (full-width) state, but
+ * stops once the banner sticks/floats on scroll — that's when its per-frame
+ * repaint would compete with scrolling. PromoBanner sets data-banner-stuck="true"
+ * on the flame's background layer while `isScrolled`. Desktop/tablet keep it
+ * animating in both states. */
+html[data-tier="mobile"] [data-banner-stuck="true"] .fire::before {
   animation: none !important;
 }
 
