@@ -45,7 +45,15 @@ export const DEVICE_TIER_SNIPPET = `(function(){try{var w=window.innerWidth;var 
  * half (which needs interpolation) loads as a separate src-script on
  * www.googletagmanager.com (host-allowlisted), so nothing here is dynamic.
  */
-export const GTM_INIT_SNIPPET = `window.dataLayer=window.dataLayer||[];window.dataLayer.push({'gtm.start':new Date().getTime(),event:'gtm.js'});`;
+export const GTM_INIT_SNIPPET = `window.dataLayer=window.dataLayer||[];window.dataLayer.push({'gtm.blocklist':['html']});window.dataLayer.push({'gtm.start':new Date().getTime(),event:'gtm.js'});`;
+// ^ 'gtm.blocklist':['html'] (2026-07-20): container GTM-TBCCQQVZ's ONLY tag is a dead
+// legacy Hotjar custom-HTML tag whose loader (static.hotjar.com) is CSP-blocked — the
+// blocklist stops GTM from even attempting the injection, killing the console error at
+// the source without allowlisting a second session recorder. REMOVE this blocklist key
+// (and recompute the hash in csp.ts) if a legitimate custom-HTML tag is ever added to
+// the container — better: also delete the Hotjar tag in the GTM UI so the container
+// isn't carrying dead weight. Docs: docs/tracking/gotchas.md + developers.google.com
+// /tag-platform/tag-manager/restriction.
 
 /**
  * Klaviyo onsite queue stub (KlaviyoScriptLoader): Klaviyo's official

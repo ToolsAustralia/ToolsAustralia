@@ -244,3 +244,7 @@ Fix: a `purchaseComplete` state latch set to `true` in the success branch (befor
 ## MultiplierBannerImage: stuck "GEARING UP YOUR MULTIPLIERS…" loader on a cached `src` swap (2026-07-01)
 
 [`MultiplierBannerImage`](../../src/components/ui/MultiplierBannerImage.tsx) fades the banner in on the `<Image>` `onLoad` and shows a shimmer loader until then, swapping `src` through an ordered path list (branded → generic). On a promo page the branded/slug inputs settle *after* first paint (the promo-theme store populates in an effect), so the `src` swaps. When the swapped-in `src` points at an **already-cached** image, the browser does **not** re-fire `onLoad` → `loaded` stayed `false` forever → the shimmer never cleared, and only a hard refresh (fresh uncached load) fixed it ("needs a refresh for the correct image"). Fix: in the `[multiplier, slug, toolsetSlug, pathKey]` reset effect, resolve `loaded` immediately when the freshly-set image is already complete (`imgRef.current.complete && naturalWidth > 0`), alongside the existing `onLoad` path. Root-level fix — benefits **every** consumer (currently `MembershipSection` + `PrizeShowcase`).
+
+## Acumin @font-face is local()-only (2026-07-20)
+
+The url() source 404'd on every page (file never added to public/fonts/). If the licensed woff2 is ever obtained, re-add the url() source per the comment in globals.css.

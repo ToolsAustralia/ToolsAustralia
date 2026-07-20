@@ -73,10 +73,14 @@
   color: #e5e5e5 !important;
 }
 
-/* Acumin Pro Condensed - Ultra Black Italic. Add font file (e.g. AcuminProCondensed-UltraBlackItalic.woff2) to public/fonts/ to load. */
+/* Acumin Pro Condensed - Ultra Black Italic. local() sources only: the woff2 was never
+   added to public/fonts/, so the url() source 404'd on every page for every visitor
+   (console noise + a wasted request — removed 2026-07-20). To ship the webfont, add the
+   licensed file as public/fonts/AcuminProCondensed-UltraBlackItalic.woff2 and append
+   `, url("/fonts/AcuminProCondensed-UltraBlackItalic.woff2") format("woff2")` here. */
 @font-face {
   font-family: "Acumin Pro Condensed";
-  src: local("Acumin Pro Condensed Ultra Black Italic"), local("AcuminProCondensed-UltraBlackItalic"), url("/fonts/AcuminProCondensed-UltraBlackItalic.woff2") format("woff2");
+  src: local("Acumin Pro Condensed Ultra Black Italic"), local("AcuminProCondensed-UltraBlackItalic");
   font-weight: 950;
   font-style: italic;
   font-display: swap;

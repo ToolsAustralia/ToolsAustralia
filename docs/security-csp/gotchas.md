@@ -71,3 +71,12 @@ Any `headers()`/`cookies()` read in a layout or shared server component drags th
 ## `useSearchParams` requires a Suspense boundary on any prerendered page — components self-wrap
 
 Every client component that calls `useSearchParams()` and is reachable from a marketing-class (prerendered) page must wrap itself: default-export a thin `<Suspense fallback={null}>` shell around the real `XInner` component in the same file. Layout-level Suspense does NOT cover page children. Trade-off: on static pages these sections render nothing in the prerendered HTML and hydrate in client-side — keep such components below the fold or visually self-contained (the hero must never call useSearchParams).
+
+## Console-cleanup decisions (2026-07-20, staging sweep after perf-tier1)
+
+The staging console showed 5 error classes; disposition of each:
+- **Klaviyo `static-app.klaviyo.com` translations fetch** — legit Klaviyo onsite host that was never allowlisted; ADDED to connect-src.
+- **Vercel Toolbar (`vercel.live` + pusher websockets)** — injected only on preview/staging deployments; allowlisted CONDITIONALLY (`VERCEL_ENV !== "production"`), so the production policy is byte-identical.
+- **`static.hotjar.com/c/hotjar-*.js`** — the dead legacy Hotjar tag inside GTM container GTM-TBCCQQVZ; NOW ALSO neutralized in code via gtm.blocklist:['html'] in GTM_INIT_SNIPPET (2026-07-20, see docs/tracking/gotchas.md); deleting the tag in the GTM UI remains the clean end-state, NOT allowlisting — loading a second session recorder was explicitly rejected in the 2026-07 audit.
+- **`*.on.aws` / `*.run.app` `events?cee=no` beacons** — emitted by the Hotjar-by-Contentsquare module embedded in the CS bundle. Neither Contentsquare's CSP docs (`*.contentsquare.net/.com` — already allowlisted) nor Hotjar's (`*.hotjar.com/.io` — already allowlisted) document these endpoints. DELIBERATELY NOT allowlisted: wildcarding generic cloud hosts in connect-src opens a data-exfiltration channel. Resolution path: ask Contentsquare support to serve collection from their documented domains, or disable the Hotjar module in the CS admin.
+- **Acumin font 404** — placeholder @font-face url() for a file never shipped; url() source removed (local()-only) in globals.css.

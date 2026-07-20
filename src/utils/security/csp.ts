@@ -29,20 +29,34 @@ export function buildContentSecurityPolicy(nonce?: string): string {
   // src/utils/security/inline-snippets.ts (drift-checked by `npm run test:csp-inline-hashes`):
   //   'sha256-gArcobE6Y/czAZSkBLxA1CAGS1xvw6cghHIBwfNpkok=' → THEME_BOOTSTRAP_SNIPPET
   //   'sha256-yEQTk36ZkLbyTcwSVYFpl/2k0ZDTLfLcCaNGWE/vG98=' → DEVICE_TIER_SNIPPET
-  //   'sha256-XOzt6sTmb/mi6l0HeHNGb8cIRz6ivMa4DXPDUySYCUw=' → GTM_INIT_SNIPPET
+  //   'sha256-xaGf90svAEIA1mo6apEICfa+VIdlJdA72R2TvCgsBLY=' → GTM_INIT_SNIPPET
   //   'sha256-z/YgGrCJhp1RQPr9KSfm7P9DNBwUTwHa1UAaVdzzWQY=' → KLAVIYO_QUEUE_SNIPPET
   // They belong ONLY to the nonce variant: adding hashes to the fallback variant
   // would make browsers ignore its 'unsafe-inline' (CSP2 rule) and break every
   // other inline script on non-nonce routes.
+  // Vercel Toolbar (injected ONLY on preview/staging deployments, never production):
+  // allow its script + websockets there so staging consoles stay clean, per
+  // https://vercel.com/docs/vercel-toolbar/managing-toolbar. On production
+  // VERCEL_ENV === "production", so these stay empty and the policy is unchanged.
+  const isVercelPreview = !!process.env.VERCEL_ENV && process.env.VERCEL_ENV !== "production";
+  const vercelToolbarScript = isVercelPreview ? " https://vercel.live" : "";
+  const vercelToolbarConnect = isVercelPreview ? " https://vercel.live https://*.pusher.com wss://*.pusher.com" : "";
+
   const scriptSrc = nonce
-    ? `script-src 'self' 'nonce-${nonce}' 'unsafe-eval' https://connect.facebook.net https://js.stripe.com https://analytics.tiktok.com https://static.klaviyo.com https://static-tracking.klaviyo.com https://static-forms.klaviyo.com https://www.googletagmanager.com https://js.hcaptcha.com https://*.hcaptcha.com https://applepay.cdn-apple.com https://script.hotjar.com https://t.contentsquare.net 'sha256-DYFSjgyML0TKIOzsnWRWtsvywBFJ9rY4U8a6TgrKiXU=' 'sha256-fLWhKT52f/f9E2X9DpwgQUgQe08peiH9FRDd5oyirNk=' 'sha256-gArcobE6Y/czAZSkBLxA1CAGS1xvw6cghHIBwfNpkok=' 'sha256-yEQTk36ZkLbyTcwSVYFpl/2k0ZDTLfLcCaNGWE/vG98=' 'sha256-XOzt6sTmb/mi6l0HeHNGb8cIRz6ivMa4DXPDUySYCUw=' 'sha256-z/YgGrCJhp1RQPr9KSfm7P9DNBwUTwHa1UAaVdzzWQY='`
-    : `script-src 'self' 'unsafe-inline' 'unsafe-eval' https://connect.facebook.net https://js.stripe.com https://analytics.tiktok.com https://static.klaviyo.com https://static-tracking.klaviyo.com https://static-forms.klaviyo.com https://www.googletagmanager.com https://js.hcaptcha.com https://*.hcaptcha.com https://applepay.cdn-apple.com https://script.hotjar.com https://t.contentsquare.net`;
+    ? `script-src 'self' 'nonce-${nonce}' 'unsafe-eval' https://connect.facebook.net https://js.stripe.com https://analytics.tiktok.com https://static.klaviyo.com https://static-tracking.klaviyo.com https://static-forms.klaviyo.com https://www.googletagmanager.com https://js.hcaptcha.com https://*.hcaptcha.com https://applepay.cdn-apple.com https://script.hotjar.com https://t.contentsquare.net${vercelToolbarScript} 'sha256-DYFSjgyML0TKIOzsnWRWtsvywBFJ9rY4U8a6TgrKiXU=' 'sha256-fLWhKT52f/f9E2X9DpwgQUgQe08peiH9FRDd5oyirNk=' 'sha256-gArcobE6Y/czAZSkBLxA1CAGS1xvw6cghHIBwfNpkok=' 'sha256-yEQTk36ZkLbyTcwSVYFpl/2k0ZDTLfLcCaNGWE/vG98=' 'sha256-xaGf90svAEIA1mo6apEICfa+VIdlJdA72R2TvCgsBLY=' 'sha256-z/YgGrCJhp1RQPr9KSfm7P9DNBwUTwHa1UAaVdzzWQY='`
+    : `script-src 'self' 'unsafe-inline' 'unsafe-eval' https://connect.facebook.net https://js.stripe.com https://analytics.tiktok.com https://static.klaviyo.com https://static-tracking.klaviyo.com https://static-forms.klaviyo.com https://www.googletagmanager.com https://js.hcaptcha.com https://*.hcaptcha.com https://applepay.cdn-apple.com https://script.hotjar.com https://t.contentsquare.net${vercelToolbarScript}`;
   const directives = [
     "default-src 'self'",
     "base-uri 'self'",
     "block-all-mixed-content",
     // Network requests: Facebook (Pixel/CAPI), Stripe (payment/fraud), hCaptcha (fraud detection), Google Pay (payment manifest), Apple Pay (payment relay), Klaviyo (tracking/API/anonymous-login/forms), TikTok (pixel API), GTM/GA, Hotjar (sessions/tracking)
-    "connect-src 'self' https://www.facebook.com https://graph.facebook.com https://connect.facebook.net https://api.stripe.com https://r.stripe.com https://b.stripecdn.com https://q.stripe.com https://m.stripe.com https://api.hcaptcha.com https://hcaptcha.com https://*.hcaptcha.com https://pay.google.com https://paymentrelayservice.apple.com https://fast.a.klaviyo.com https://a.klaviyo.com https://static-tracking.klaviyo.com https://static-forms.klaviyo.com https://atlas-app.services.klaviyo.com https://analytics.tiktok.com https://analytics-ipv6.tiktok.com https://www.googletagmanager.com https://www.google-analytics.com https://vc.hotjar.io https://*.hotjar.io https://*.hotjar.com https://t.contentsquare.net https://*.contentsquare.net https://tcvsapi.contentsquare.com https://*.contentsquare.com",
+    // static-app.klaviyo.com added 2026-07-20: the onsite suite fetches locale data
+    // (translations/en-AU/onsite-atlas/latest.json) from it — was never allowlisted.
+    // NOT added: the *.on.aws / *.run.app event beacons emitted by the
+    // Hotjar-by-Contentsquare module — neither vendor's CSP docs list them, and
+    // wildcarding generic cloud hosts in connect-src would open an exfiltration
+    // channel; see docs/security-csp/gotchas.md "Console-cleanup decisions".
+    `connect-src 'self' https://www.facebook.com https://graph.facebook.com https://connect.facebook.net https://api.stripe.com https://r.stripe.com https://b.stripecdn.com https://q.stripe.com https://m.stripe.com https://api.hcaptcha.com https://hcaptcha.com https://*.hcaptcha.com https://pay.google.com https://paymentrelayservice.apple.com https://fast.a.klaviyo.com https://a.klaviyo.com https://static-tracking.klaviyo.com https://static-forms.klaviyo.com https://static-app.klaviyo.com https://atlas-app.services.klaviyo.com https://analytics.tiktok.com https://analytics-ipv6.tiktok.com https://www.googletagmanager.com https://www.google-analytics.com https://vc.hotjar.io https://*.hotjar.io https://*.hotjar.com https://t.contentsquare.net https://*.contentsquare.net https://tcvsapi.contentsquare.com https://*.contentsquare.com${vercelToolbarConnect}`,
     "font-src 'self' https: data: https://applepay.cdn-apple.com",
     // Form submissions: Facebook Pixel fallback tracking
     "form-action 'self' https://www.facebook.com",
