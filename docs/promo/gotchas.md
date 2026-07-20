@@ -61,3 +61,19 @@ The root-layout `force-dynamic` that nullified `/promotions/**`'s declared `reva
 ## Banner-text endpoint is CDN-cacheable now
 
 `/api/admin/promo/banner-text/active` (public, no auth, admin-scheduled content) serves `public, s-maxage=60, stale-while-revalidate=120` — matching its sibling `/api/promo/effective-for-banner` — and the client hook dropped its `cache: "no-store"`. It was `no-store` before, which forced one serverless + Mongo round trip per ad-landing visitor for content that changes at most a few times a day.
+
+## Guest promo hooks no longer poll — flips reach an active guest ≤120 s (perf Tier-2, 2026-07-20)
+
+The four public promo-surface hooks — `useActivePromos` (was a 30 s `refetchInterval`), `useEffectiveForBanner`,
+`useCurrentAlternatingMultipliers`, `useActivePromoBannerText` (all were 60 s) — **dropped their
+`refetchInterval`** and now use `staleTime: 60 s` + `refetchOnWindowFocus`/`refetchOnMount` (and no
+`cache: "no-store"`, so the routes' `s-maxage=60` CDN entries are honoured — the POST `/api/admin/promo/active`
+used by `useActivePromos` isn't CDN-cached, but the poll removal still applies).
+
+**Freshness contract:** a promo **multiplier flip** (or banner-text change) reaches an **active** guest within
+**≈120 s** — the value refreshes on their next focus/navigation once the 60 s `staleTime` lapses, served
+fresh-within-60 s from the CDN. An **idle** guest who leaves the tab focused but never interacts only refreshes
+on focus — this is the **accepted trade** for eliminating the every-30/60 s poll. This is safe because the
+banner **countdown ticks client-side from `endDate`** (`useLeafTimer` leaf tickers in `PromoBanner` /
+`FloatingCountdownBanner`) — no on-screen clock depends on the poll; only the multiplier/banner-text *values*
+do. See [client-state/rules.md R8](../client-state/rules.md#r8-prefer-cdn-s-maxage--focusnavigation-refetch-over-a-guest-refetchinterval).

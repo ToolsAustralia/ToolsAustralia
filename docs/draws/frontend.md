@@ -110,8 +110,15 @@ The "Hear from our winners" section is now a single **draws-domain** component, 
 It is **portable**: it self-loads its fonts (Archivo / Space Mono / Newsreader) and wraps its output in `.ta-results`, and the shared stylesheet [src/app/(site)/draw-results/draw-results.css](../../src/app/(site)/draw-results/draw-results.css) is imported globally in [src/app/layout.tsx](../../src/app/layout.tsx). So it renders identically on every host page. Call sites:
 
 - `/winners` page (SSR) — rendered inline by `WinnersBrowser`.
-- Homepage + promotions — via [src/app/(site)/components/WinnerTestimoniesClient.tsx](../../src/app/(site)/components/WinnerTestimoniesClient.tsx) (and its lazy wrapper).
+- Homepage + promotions — via [src/app/(site)/components/WinnerTestimoniesClient.tsx](../../src/app/(site)/components/WinnerTestimoniesClient.tsx) (and its lazy wrapper `WinnerTestimoniesClientLazy`, which as of 2026-07-20 wraps the dynamic import in `LazyMount` so the chunk + fetch defer until near-viewport, matching the homepage).
 - Account draws tab — [src/app/(site)/my-account/draws/page.tsx](../../src/app/(site)/my-account/draws/page.tsx).
+
+> **Shared winners feed (perf Tier-2, 2026-07-20):** `WinnerTestimoniesClient` and the homepage/promotions
+> `LatestWinnerHero` both previously did their own raw `useEffect` fetch of `/api/winners/all` (limit 100 and
+> 16), so every page made **two** requests. They now share [`useWinnersFeed(WINNERS_FEED_LIMIT)`](../../src/hooks/queries/useWinnersQueries.ts)
+> (React Query key `winners.feed(limit)`), so a page fetches **once** and the CDN `s-maxage=300` entry is
+> reused; the board slices the most recent 16 client-side. Both consumers MUST pass the same exported
+> `WINNERS_FEED_LIMIT` so they collapse onto one key/URL.
 
 It filters to winners with a testimony (`hasWinnerTestimony`), shows a cleaned excerpt (`getWinnerTestimonyExcerpt`), and the modal strips rich-text HTML to clean paragraphs (`stripRichTextHtml`) — all from [src/utils/winners.ts](../../src/utils/winners.ts). The modal's "Watch the draw" link uses `watchUrl` (the Facebook link — see "Draw-level result & watch links" below) when present.
 

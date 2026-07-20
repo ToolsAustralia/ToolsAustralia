@@ -66,7 +66,10 @@ export default function SupportChatWidgetMount({
 
   useEffect(() => {
     let cancelled = false;
-    fetch("/api/chat/config", { cache: "no-store" })
+    // No cache:"no-store" — the route serves public s-maxage=60; honoring the CDN/browser
+    // cache means most page loads read the enabled bit without a fresh origin hit. A ≤60s
+    // stale flag is safe (the paid path is blocked server-side regardless).
+    fetch("/api/chat/config")
       .then((r) => (r.ok ? r.json() : null))
       .then((json) => {
         if (!cancelled) setEnabled(json?.data?.enabled !== false);

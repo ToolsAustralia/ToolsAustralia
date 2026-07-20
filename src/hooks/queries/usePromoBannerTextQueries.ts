@@ -14,16 +14,17 @@ export function useActivePromoBannerText() {
     queryKey: ["promo-banner-text", "active"],
     queryFn: async () => {
       // No cache:"no-store" — the route now serves public s-maxage=60 (2026-07-19); let the
-      // browser/CDN honor it. React Query's staleTime/refetchInterval still control freshness.
+      // browser/CDN honor it. React Query's staleTime/focus-refetch control freshness.
       const response = await fetch("/api/admin/promo/banner-text/active");
       if (!response.ok) {
         throw new Error("Failed to fetch active banner text");
       }
       return response.json();
     },
-    staleTime: 30 * 1000, // 30 seconds
-    refetchInterval: 60 * 1000, // Refetch every 1 minute
-    refetchIntervalInBackground: false, // Pause polling on hidden tabs; refetchOnWindowFocus catches up on tab focus
+    // Perf Tier-2: dropped the 60s guest poll; banner text changes reach an active guest
+    // within ≤120s via s-maxage=60 + focus/navigation refetch. Banner countdown ticks
+    // client-side from endDate, so no time-critical state depends on this interval.
+    staleTime: 60 * 1000, // 60 seconds
     refetchOnWindowFocus: true,
     refetchOnMount: true, // Ensure fresh data on mount
   });
