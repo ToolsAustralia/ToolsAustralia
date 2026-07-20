@@ -3,7 +3,7 @@
 import { useRef } from "react";
 import Image from "next/image";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
-import type { PrizeCatalogEntry, PrizeSlug } from "@/config/prizes";
+import type { PrizeSlug, PrizeSummary } from "@/config/prize-summaries";
 import { getBrandGlowColor } from "@/utils/prize-brand-colors";
 import { getPackageColorScheme, getToolsetBadgeStyle } from "@/utils/package-colors/packageColorScheme";
 import { Carousel3D, type Carousel3DItemState } from "@/components/ui/Carousel3D";
@@ -15,7 +15,7 @@ import { useInViewportAnimation } from "@/hooks/useInViewportAnimation";
 
 interface PowerToolsetCarouselProps {
   /** All toolset options for the current toolbox type */
-  prizes: PrizeCatalogEntry[];
+  prizes: PrizeSummary[];
   /** Slug of the currently selected/active prize */
   activeSlug: string | null;
   /** Called when user selects a toolset */
@@ -170,7 +170,7 @@ export function PowerToolsetCarousel({
   const useCarousel = activeSlug != null && n >= 2;
 
   /** One toolset card for the Carousel3D ring — presentational; the ring applies the transform. */
-  const renderToolsetCard = ({ item, isActive }: Carousel3DItemState<PrizeCatalogEntry>) => {
+  const renderToolsetCard = ({ item, isActive }: Carousel3DItemState<PrizeSummary>) => {
     const toolset = getToolsetFromSlug(item.slug);
     const imgSrc = toolset ? POWERSET_IMAGES[toolset] : null;
     if (!imgSrc) return null;
@@ -354,7 +354,7 @@ export function PowerToolsetCarousel({
   );
 
   const renderSideImage = (
-    prizeOption: PrizeCatalogEntry,
+    prizeOption: PrizeSummary,
     index: number,
     fromLeft: boolean
   ) => {
@@ -482,7 +482,7 @@ export function PowerToolsetCarousel({
           // the focused card's description pill (which sits low in the wheel) so it never
           // overlaps the "OR / $10,000 cash" block below.
           <div className="overflow-x-clip pb-6 sm:pb-10">
-            <Carousel3D<PrizeCatalogEntry>
+            <Carousel3D<PrizeSummary>
               key={prizes.map((p) => p.slug).join("|")}
               items={prizes}
               getKey={(p) => p.slug}

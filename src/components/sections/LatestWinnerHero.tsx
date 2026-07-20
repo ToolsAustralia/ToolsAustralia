@@ -6,7 +6,7 @@ import { Archivo, Space_Mono } from "next/font/google";
 import { ArrowRight, ChevronDown } from "lucide-react";
 import WinnerBoardCard from "@/app/(site)/draw-results/components/WinnerBoardCard";
 import { Stagger } from "@/app/(site)/draw-results/components/Reveal";
-import { DEFAULT_PRIZE_SLUG } from "@/config/prizes";
+import { DEFAULT_PRIZE_SLUG } from "@/config/prize-summaries";
 import { usePromoTheme } from "@/stores/usePromoThemeStore";
 import type { WinnerSummary } from "@/types/winner";
 import { cn } from "@/utils/cn";

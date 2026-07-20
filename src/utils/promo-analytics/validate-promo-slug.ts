@@ -1,9 +1,9 @@
-import { listPrizes } from "@/config/prizes";
+import { listPrizeSummaries } from "@/config/prize-summaries";
 import { TOOLSET_LANDING_SLUGS, isToolsetLandingSlug } from "@/config/promo-landing-slugs";
 import type { PromoPageType } from "@/models/PromoAnalyticsVisit";
 
 // Use Set<string> for runtime membership checks (slug values are strings at runtime)
-const EVERGREEN_SLUGS = new Set(listPrizes().map((p) => p.slug)) as Set<string>;
+const EVERGREEN_SLUGS = new Set(listPrizeSummaries().map((p) => p.slug)) as Set<string>;
 const TOOLSET_SLUGS_SET = new Set(TOOLSET_LANDING_SLUGS) as Set<string>;
 
 /**

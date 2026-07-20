@@ -14,7 +14,8 @@
 |---|---|
 | [src/config/brand-theme.ts](../../src/config/brand-theme.ts) | Brand color tokens |
 | [src/config/featureFlags.ts](../../src/config/featureFlags.ts) | Feature-flag values (currently env / static) |
-| [src/config/prizes.ts](../../src/config/prizes.ts) | Prize catalog config (see Prize spec-item photos below) |
+| [src/config/prizes.ts](../../src/config/prizes.ts) | FULL prize catalog — deep spec sheets; server/lazy-chunk only (see Prize catalog split below) |
+| [src/config/prize-summaries.ts](../../src/config/prize-summaries.ts) | Lightweight client prize catalog — the ONLY prize module client components may statically import |
 | [src/config/promo-landing-slugs.ts](../../src/config/promo-landing-slugs.ts) | Slug allowlist for promo pages |
 | [src/config/rewardsSettings.ts](../../src/config/rewardsSettings.ts) | Rewards-system settings |
 | [src/config/dashboardFeatures.ts](../../src/config/dashboardFeatures.ts) | Dashboard coming-soon visibility switches (`DASHBOARD_FEATURES`) |
@@ -25,6 +26,15 @@
 > muted "Coming soon" in its place). `DASHBOARD_FEATURES` gained **`loyaltyStreak: false`** (the home
 > `LoyaltyStreak` card is hidden until the 6-month milestone-reward figures are confirmed and it's
 > re-flagged in a later session — same convention as the other coming-soon switches).
+
+### Prize catalog split — prizes.ts vs prize-summaries.ts (2026-07-20)
+
+`prizes.ts` (~170 KB source; also runs the `applySpecItemImages()` top-level side effect) used to sit in every page's client graph via `usePrizeCatalog` / `DEFAULT_PRIZE_SLUG` imports in Footer, LatestWinnerHero, HorizontalCountdown, etc. It is now split:
+
+- **[`prize-summaries.ts`](../../src/config/prize-summaries.ts)** — `PrizeSummary` = every catalog field EXCEPT `specSections` + `detailedDescription`. Owns the shared types (`PrizeSlug`, `PrizeMedia`, `PrizeHighlight`, `LucideIconName`), `DEFAULT_PRIZE_SLUG`, `getPrizeSummaryBySlug` / `listPrizeSummaries` / `getPrizeLabel`. Pure literal data, no side effects; within a brand the three toolbox variants share every gallery shot except the first hero image, so each brand's tail is a shared `<BRAND>_GALLERY_SHOTS` const (that factoring is what keeps the module inside its size budget). **MUST NOT import from `./prizes`.**
+- **[`prizes.ts`](../../src/config/prizes.ts)** — keeps the deep spec-sheet arrays, `PRIZE_CATALOG` (`PrizeCatalogEntry extends PrizeSummary` + `detailedDescription` + `specSections`), `getPrizeBySlug` / `listPrizes`. It imports + re-exports the shared types/helpers from `prize-summaries`, so **server** consumers keep their single `@/config/prizes` import path. Client components must never static-import it — the specifications modal reaches it via a click-gated `await import("@/config/prizes")` (see [promo frontend](../promo/frontend.md)).
+
+**Drift guard:** the two catalogs duplicate the light fields by design (summaries must stay literal + side-effect-free). `npm run test:prize-summaries` fails on ANY divergence — slug order, any shared field value, a deep field leaking into summaries, or the summaries source exceeding **40 KB**. When editing prize data, edit BOTH files and run that test.
 
 ### Prize spec-item photos
 

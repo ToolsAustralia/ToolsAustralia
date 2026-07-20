@@ -3,7 +3,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { Facebook, Instagram } from "lucide-react";
-import { DEFAULT_PRIZE_SLUG } from "@/config/prizes";
+import { DEFAULT_PRIZE_SLUG } from "@/config/prize-summaries";
 import { MAJOR_GIVEAWAY_NOTIFICATION, NSW_LICENSE } from "@/constants/legal";
 
 export default function Footer() {

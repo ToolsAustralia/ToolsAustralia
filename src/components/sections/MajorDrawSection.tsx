@@ -16,7 +16,6 @@ import { useUserContext } from "@/contexts/UserContext";
 import { useMajorDrawEntryCta } from "@/hooks/useMajorDrawEntryCta";
 import { useMajorDrawPurchaseGate } from "@/hooks/useMajorDrawPurchaseGate";
 import { useCurrentMajorDraw, useUserMajorDrawStats } from "@/hooks/queries/useMajorDrawQueries";
-import PrizeSpecificationsModal from "@/components/modals/PrizeSpecificationsModal";
 import { usePrizeCatalog } from "@/hooks/usePrizeCatalog";
 import { Skeleton } from "@/components/loading/SkeletonLoader";
 import {
@@ -25,8 +24,17 @@ import {
   getBrandGlowColor,
 } from "@/utils/prize-brand-colors";
 import { getMembershipSectionColorScheme } from "@/utils/package-colors/packageColorScheme";
-import type { PrizeCatalogEntry, PrizeSlug } from "@/config/prizes";
+import type { PrizeSlug, PrizeSummary } from "@/config/prize-summaries";
+// Type-only (erased at compile): the deep-catalog VALUES only ever arrive through the
+// click-gated `import("@/config/prizes")` in the specs-modal effect below.
+import type { PrizeCatalogEntry } from "@/config/prizes";
 import { cn } from "@/utils/cn";
+import dynamic from "next/dynamic";
+
+// Click-gated heavy chunk (LazyMembershipModal latch pattern — see
+// src/components/modals/MembershipModal/LazyMembershipModal.tsx and PrizeShowcase):
+// rendered only after the first open via the specsEverOpened latch below.
+const PrizeSpecificationsModal = dynamic(() => import("@/components/modals/PrizeSpecificationsModal"), { ssr: false });
 
 interface MajorDrawSectionProps {
   className?: string;
@@ -332,6 +340,11 @@ function MajorDrawSectionInner({ className = "" }: MajorDrawSectionProps) {
   const searchParams = useSearchParams();
   const [showBreakdown, setShowBreakdown] = useState(false);
   const [isSpecsModalOpen, setIsSpecsModalOpen] = useState(false);
+  // First-open latch for the click-gated specs-modal chunk (LazyMembershipModal pattern).
+  const [specsEverOpened, setSpecsEverOpened] = useState(false);
+  if (isSpecsModalOpen && !specsEverOpened) setSpecsEverOpened(true); // render-phase latch (same-component setState is safe)
+  // Deep catalog entry for the specs modal — resolved lazily, see the effect below.
+  const [specsPrize, setSpecsPrize] = useState<PrizeCatalogEntry | null>(null);
   const [selectedPrizeSlug, setSelectedPrizeSlug] = useState<string | null>(null);
   const [toolboxType, setToolboxType] = useState<"sidchrome" | "milwaukee" | "kincrome" | "cash">("milwaukee");
   const [mobilePrizeIndex, setMobilePrizeIndex] = useState(0);
@@ -365,6 +378,22 @@ function MajorDrawSectionInner({ className = "" }: MajorDrawSectionProps) {
       );
     }
   }, [activeSlug, defaultSlug, selectedPrizeSlug]);
+
+  // Deep spec-sheet data is deliberately NOT in the client prize summaries — resolve the
+  // full catalog entry from `@/config/prizes` (its own click-gated chunk, cached after the
+  // first open) whenever the specs modal is open for the active prize. Until it lands the
+  // modal shows its built-in "Prize information is loading" state.
+  const specsSlug = activePrize?.slug;
+  useEffect(() => {
+    if (!isSpecsModalOpen || !specsSlug) return;
+    let cancelled = false;
+    void import("@/config/prizes").then(({ getPrizeBySlug }) => {
+      if (!cancelled) setSpecsPrize(getPrizeBySlug(specsSlug) ?? null);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [isSpecsModalOpen, specsSlug]);
 
   // Fetch next draw name when current draw is frozen or completed (gap state)
   useEffect(() => {
@@ -534,7 +563,6 @@ function MajorDrawSectionInner({ className = "" }: MajorDrawSectionProps) {
   const prizeSubheading = selectedPrize.heroSubheading;
   const prizeLabel = selectedPrize.label;
   const prizeSummary = selectedPrize.summary;
-  const _prizeDescription = selectedPrize.detailedDescription;
 
   // Get brand colors for active prize to match View Specs button and other elements
   const activePrizeSlug = activeSlug || defaultSlug;
@@ -709,9 +737,9 @@ function MajorDrawSectionInner({ className = "" }: MajorDrawSectionProps) {
   };
 
   const filterPrizesByToolboxType = (
-    prizeList: PrizeCatalogEntry[],
+    prizeList: PrizeSummary[],
     toolboxType: "sidchrome" | "milwaukee" | "kincrome" | "cash"
-  ): PrizeCatalogEntry[] => {
+  ): PrizeSummary[] => {
     if (toolboxType === "cash") {
       return prizeList.filter((p) => p.slug === "cash-prize");
     }
@@ -1650,11 +1678,13 @@ function MajorDrawSectionInner({ className = "" }: MajorDrawSectionProps) {
         </div>
       </section>
 
-      <PrizeSpecificationsModal
-        isOpen={isSpecsModalOpen}
-        onClose={() => setIsSpecsModalOpen(false)}
-        prize={selectedPrize}
-      />
+      {specsEverOpened && (
+        <PrizeSpecificationsModal
+          isOpen={isSpecsModalOpen}
+          onClose={() => setIsSpecsModalOpen(false)}
+          prize={specsPrize}
+        />
+      )}
 
       {/* Membership Modal */}
       <MembershipModal

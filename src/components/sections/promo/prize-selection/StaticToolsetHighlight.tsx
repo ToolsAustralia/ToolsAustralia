@@ -5,7 +5,7 @@ import { motion } from "framer-motion";
 import { getBrandGlowColor } from "@/utils/prize-brand-colors";
 import { getPackageColorScheme, getToolsetBadgeStyle } from "@/utils/package-colors/packageColorScheme";
 import { POWERSET_IMAGES, POWERSET_LABELS, POWERSET_BRAND_TEXT } from "./constants";
-import type { PrizeSlug } from "@/config/prizes";
+import type { PrizeSlug } from "@/config/prize-summaries";
 import { cn } from "@/utils/cn";
 
 interface StaticToolsetHighlightProps {

@@ -738,6 +738,8 @@ All previous call sites now render `WinnersTestimony` directly: the homepage + p
 
 [`src/components/modals/PrizeSpecificationsModal/`](../../src/components/modals/PrizeSpecificationsModal/) shows the full spec breakdown for a prize (`prize?: PrizeCatalogEntry`). Built on `ModalContainer` (`size="4xl"`).
 
+**Click-gated since perf Tier-2 (2026-07-20):** both hosts (`PrizeShowcase`, dead-code `MajorDrawSection`) mount it via `next/dynamic` behind a first-open latch and resolve the deep `PrizeCatalogEntry` with `await import("@/config/prizes")` at open time — the modal's `prize` prop is `null` until that lands (it renders its built-in "Prize information is loading" state). The modal's own `@/config/prizes` imports are **type-only**. See [promo frontend](../promo/frontend.md) "PrizeShowcase — prize-summaries split".
+
 **Responsive layout (2026-06-02):**
 - **Mobile (`<lg`)** — stacked: `Hero` landscape banner on top (wrapped in `lg:hidden`), then the scrollable specs below.
 - **Desktop (`lg+`)** — two columns inside a `flex lg:flex-row` body: [`FeaturePanel`](../../src/components/modals/PrizeSpecificationsModal/FeaturePanel.tsx) on the left (`lg:w-[38%]`, sticky-feeling, non-scrolling) and the specs (`TabBar` + `SpecCard` list) scrolling on the right via `ModalContent`. The top `Hero` is hidden at `lg`.
@@ -952,6 +954,8 @@ Fullpage modal for browsing a gallery of winner / prize / draw photos. Used by `
 #### Companion
 
 `FullscreenTriggerButton` — small expand-icon button used by callsites to open the viewer.
+
+**Module-weight footgun (2026-07-20):** the trigger lives in the SAME module as the heavy viewer (react-zoom-pan-pinch + embla + ModalContainer), so a static import of just the button still pulls the whole viewer into the importer's chunk. `PrizeShowcase` therefore loads the viewer via `next/dynamic` behind a first-open latch and renders its own eager markup-identical trigger stand-in (kept in sync by comment). If another eager surface needs the trigger, split the button into its own file instead of static-importing this module.
 
 ## SubscriptionManagementModal / PaymentMethodsTab — settings redesign variant (2026-05-19)
 

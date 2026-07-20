@@ -105,6 +105,7 @@
     "test:landing-image-resolver": "tsx src/utils/promo/__tests__/landing-image-resolver.test.ts",
     "test:landing-video-resolver": "tsx src/utils/promo/__tests__/landing-video-resolver.test.ts",
     "test:landing-draw-day-urgency": "tsx src/utils/promo/__tests__/landing-draw-day-urgency.test.ts",
+    "test:prize-summaries": "tsx src/config/__tests__/prize-summaries.test.ts",
     "test:promo-visit": "tsx src/utils/promo-analytics/__tests__/record-promo-visit.test.ts",
     "test:additional-pack-discount": "tsx src/utils/membership/__tests__/additional-pack-discount.test.ts",
     "test:partner-discount-queue": "tsx src/utils/partner-discounts/__tests__/partner-discount-queue.test.ts",

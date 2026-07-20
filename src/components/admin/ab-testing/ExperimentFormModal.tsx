@@ -19,7 +19,7 @@ import {
   StoppingRules,
   Experiment,
 } from "@/hooks/queries/useABTestingQueries";
-import { listPrizes } from "@/config/prizes";
+import { listPrizeSummaries } from "@/config/prize-summaries";
 import DateRangeCalendar from "@/components/admin/DateRangeCalendar";
 import { createAESTDateAsUTC } from "@/utils/common/timezone";
 
@@ -60,7 +60,7 @@ export default function ExperimentFormModal({ isOpen, onClose, onSuccess, experi
 
   const createMutation = useCreateExperiment();
   const updateMutation = useUpdateExperiment();
-  const prizes = listPrizes();
+  const prizes = listPrizeSummaries();
 
   // Reset / hydrate form when modal opens. In edit mode, populate from the
   // passed experiment so the user is editing existing values, not a blank form.

@@ -42,7 +42,7 @@ qualify (window ceiling is `endsAt` when present).
 
 | Hook | Purpose | Source |
 |---|---|---|
-| `usePrizeCatalog()` | Fetches the prize catalog for display | [src/hooks/usePrizeCatalog.ts](../../src/hooks/usePrizeCatalog.ts) |
+| `usePrizeCatalog()` | Serves the lightweight `PrizeSummary` catalog (from `@/config/prize-summaries`, 2026-07-20 — NOT the deep spec entries; see [config-and-data architecture](../config-and-data/architecture.md)) | [src/hooks/usePrizeCatalog.ts](../../src/hooks/usePrizeCatalog.ts) |
 | `useEntryRewardToast()` | Shows a toast when a user gets a reward via draw/campaign | [src/hooks/useEntryRewardToast.ts](../../src/hooks/useEntryRewardToast.ts) |
 
 ## Helpers

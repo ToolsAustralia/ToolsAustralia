@@ -30,25 +30,6 @@ import { ThemeProvider } from "@/contexts/ThemeContext";
 import ThemeMetaSync from "@/components/system/ThemeMetaSync";
 import MajorDrawTestControls from "@/components/dev/MajorDrawTestControls";
 
-// Export loading components for global use
-export {
-  Skeleton,
-  ProductCardSkeleton,
-  UserProfileSkeleton,
-  TableSkeleton,
-  MembershipCardSkeleton,
-} from "@/components/loading/SkeletonLoader";
-export { ProgressBar, StepProgress, UploadProgress, PaymentProgress } from "@/components/loading/ProgressLoader";
-export { Spinner, ButtonSpinner, InlineSpinner, PageSpinner, CardSpinner } from "@/components/loading/SpinnerLoader";
-export {
-  ErrorRecovery,
-  NetworkErrorRecovery,
-  ServerErrorRecovery,
-  ValidationErrorRecovery,
-  FallbackContent,
-} from "@/components/error/ErrorRecovery";
-export { useErrorRecovery } from "@/hooks/useErrorRecovery";
-
 export function Providers({ children }: { children: React.ReactNode }) {
   const [queryClient] = useState(
     () =>

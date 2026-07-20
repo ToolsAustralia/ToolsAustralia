@@ -2,7 +2,10 @@
 
 import React, { useState, useEffect } from "react";
 import { useCurrentMajorDraw } from "@/hooks/queries/useMajorDrawQueries";
-import { usePrizeCatalog } from "@/hooks/usePrizeCatalog";
+// Full catalog import (not usePrizeCatalog): this admin card renders `detailedDescription`,
+// a deep field deliberately excluded from the client prize-summaries split. Admin-chunk only —
+// never reachable from the marketing/landing graph, so the heavy module is acceptable here.
+import { DEFAULT_PRIZE_SLUG, getPrizeBySlug } from "@/config/prizes";
 import { formatDateInAEST, formatCountdown } from "@/utils/common/timezone";
 import { useToast } from "@/components/ui/Toast";
 import WinnerSelectionModal, { type WinnerSelectionData } from "@/components/modals/WinnerSelectionModal";
@@ -30,7 +33,7 @@ export default function MajorDrawManagement() {
   const canSelectMajorWinner = has("majorDraw.selectWinner");
   const { showToast } = useToast();
   const { data: currentMajorDraw, isLoading, error, refetch } = useCurrentMajorDraw();
-  const { activePrize } = usePrizeCatalog();
+  const activePrize = getPrizeBySlug(DEFAULT_PRIZE_SLUG);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);

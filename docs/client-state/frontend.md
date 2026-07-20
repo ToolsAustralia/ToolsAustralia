@@ -30,6 +30,8 @@ the recurring-vs-new split needs no separate request. See
 
 The `transition-colors duration-200 ease-out` utility was removed from `<body>` to stop a global colour-transition repaint on every theme flip.
 
+The file's dead re-export block (Skeleton/Progress/Spinner loaders, ErrorRecovery variants, `useErrorRecovery` — zero importers ever used the `@/app/providers` path for them) was deleted in perf Tier-2 (2026-07-20); import those from their own modules (`@/components/loading/*`, `@/components/error/ErrorRecovery`, `@/hooks/useErrorRecovery`).
+
 ## Listener helpers in floating widgets
 
 `RewardsFloatingWidget` uses [`addThrottledResize`](../../src/utils/dom/listenerHelpers.ts) instead of a raw `window.addEventListener("resize", …)` so positional recompute on viewport resize is RAF-throttled. The button is tagged with `data-floating-widget="true"` for the print stylesheet.

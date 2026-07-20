@@ -9,7 +9,7 @@ import { formatMajorDrawLiveDateLineUtc } from "@/utils/common/timezone";
 import { useMajorDrawEntryCta } from "@/hooks/useMajorDrawEntryCta";
 import { useLeafTimer } from "@/hooks/useLeafTimer";
 import { useInViewportAnimation } from "@/hooks/useInViewportAnimation";
-import type { PrizeSlug } from "@/config/prizes";
+import type { PrizeSlug } from "@/config/prize-summaries";
 import { cn } from "@/utils/cn";
 
 interface GiveawayCountdownTimerProps {

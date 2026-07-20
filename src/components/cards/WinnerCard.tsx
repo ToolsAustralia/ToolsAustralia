@@ -3,7 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
-import { DEFAULT_PRIZE_SLUG } from "@/config/prizes";
+import { DEFAULT_PRIZE_SLUG } from "@/config/prize-summaries";
 import type { WinnerSummary } from "@/types/winner";
 import { usePromoTheme } from "@/stores/usePromoThemeStore";
 import { formatWinnerName } from "@/utils/winner-name-formatter";
