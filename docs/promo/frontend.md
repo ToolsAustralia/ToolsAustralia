@@ -70,7 +70,11 @@ brand-colored (`#c92a28`/`#FEBD17`/`#BFD730`…) so they read on both grounds wi
 **brand strip is a one-row marquee** (matches the `/membership` `MembershipBrandShowcase`:
 `animate-[marquee-scroll_45s_linear_infinite]`, masked edges, hover-pause, bigger white cards); the 5 toolset
 wordmarks are repeated **4×** so the keyframe's `-50%` animated half always exceeds the viewport for a seamless
-loop (2× isn't enough with only 5 brands on wide screens). **Grid is
+loop (2× isn't enough with only 5 brands on wide screens). Perf (2026-07-20): both marquees carry
+`[animation-play-state:var(--ta-marquee-state)]` (paused on Save-Data / reduced-motion) and
+`[content-visibility:auto]` + `[contain-intrinsic-size:auto_<h>px]` on the masked wrapper so the strip skips
+paint/animation work offscreen — pure CSS because this page is a Server Component (see
+[shared-ui/gotchas.md](../shared-ui/gotchas.md)). **Grid is
 `grid-cols-2` on mobile** (2-up — owner: "see in general what we're offering", small is fine), `lg:grid-cols-3`;
 card copy compacts on mobile (wordmark scaled, toolbox chip + full catalog-label description hidden `<sm`, "View"
 vs "View this combination"). **No value badge** (owner: "remove the price value") — and the **prize name is

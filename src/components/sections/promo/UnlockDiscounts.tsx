@@ -166,7 +166,9 @@ export default function UnlockDiscounts({
   }, [hasAccess, userData]);
 
   return (
-    <section ref={discountsRef} className={clsx("py-8 sm:py-12 lg:py-16 mb-12 relative", className)}>
+    // Stable id: FloatingGetEntriesButton's IntersectionObserver targets this section
+    // (replaces the old per-scroll-frame textContent scan). Nothing anchors/styles it.
+    <section id="unlock-partner-discounts" ref={discountsRef} className={clsx("py-8 sm:py-12 lg:py-16 mb-12 relative", className)}>
       <div className="w-full px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
         {/* Section Header */}
         <div className="text-center mb-8 sm:mb-12">

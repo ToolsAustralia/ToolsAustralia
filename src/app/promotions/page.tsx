@@ -219,9 +219,12 @@ export default async function GiveawayGalleryPage() {
 
             {/* Brand wordmark marquee — ONE scrolling row (matches the /membership brand marquee),
                 bigger white cards. 4 copies so the animated half (-50%) always exceeds the viewport
-                for a seamless loop even with only 5 brands. Hover pauses; masked edges. */}
-            <div className="relative mt-10 overflow-hidden [mask-image:linear-gradient(90deg,transparent,#000_8%,#000_92%,transparent)]">
-              <div className="flex w-max items-center gap-3.5 animate-[marquee-scroll_45s_linear_infinite] hover:[animation-play-state:paused]">
+                for a seamless loop even with only 5 brands. Hover pauses; masked edges.
+                Perf: play-state rides --ta-marquee-state (paused on Save-Data / reduced-motion);
+                content-visibility:auto skips paint + animation work while scrolled offscreen —
+                pure CSS because this is a server component (fixed-height strip, so no CLS). */}
+            <div className="relative mt-10 overflow-hidden [mask-image:linear-gradient(90deg,transparent,#000_8%,#000_92%,transparent)] [content-visibility:auto] [contain-intrinsic-size:auto_80px]">
+              <div className="flex w-max items-center gap-3.5 animate-[marquee-scroll_45s_linear_infinite] [animation-play-state:var(--ta-marquee-state)] hover:[animation-play-state:paused]">
                 {[...brands, ...brands, ...brands, ...brands].map(({ key, label }, i) =>
                   BRAND_WORDMARK[key] ? (
                     <div

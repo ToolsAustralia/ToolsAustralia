@@ -86,7 +86,7 @@ The token block in [`src/app/globals.css`](../../src/app/globals.css) exposes:
 | `--ta-shadow-card` / `--ta-shadow-card-hover` | Card shadow + hover variant |
 | `--ta-card-hover-y` | Hover lift translation (-4px / -2px / 0) |
 | `--ta-transition-dur` | Transition duration (200ms desktop / 150ms mobile / 1ms when `prefers-reduced-motion`) |
-| `--ta-marquee-state` | `running` / `paused` (paused on `Save-Data` and `prefers-reduced-motion`) |
+| `--ta-marquee-state` | `running` / `paused` (paused on `Save-Data` and `prefers-reduced-motion`). Consumed via `[animation-play-state:var(--ta-marquee-state)]` by the two CSS marquees: the `/promotions` hero wordmark marquee and `MembershipBrandShowcase`. Add it to any new CSS marquee. |
 
 Components consume tokens via Tailwind arbitrary-value syntax, e.g. `backdrop-blur-[var(--ta-blur)]`, `shadow-[var(--ta-shadow-card)]`. iOS Safari requires `-webkit-backdrop-filter` alongside `backdrop-filter`; Tailwind v3 only emits the unprefixed form, so `globals.css` mirrors it globally for any class matching `[class*="backdrop-blur"]`. `@media (prefers-reduced-transparency: reduce)` zeros `--ta-blur`; `@media (prefers-reduced-motion: reduce)` collapses transitions and pauses marquees globally.
 
@@ -110,7 +110,7 @@ Prefer these over `window.addEventListener("resize", …)` / `("scroll", …)` d
 
 ### In-viewport gating
 
-[`useInViewportAnimation(ref)`](../../src/hooks/useInViewportAnimation.ts) returns `true` when the ref is within a 200px-margin IntersectionObserver. Use it to pause infinite framer-motion / canvas animations while their host is offscreen — used by `BrandScroller`, `OtherToolsetsCarousel`, animated number ramps.
+[`useInViewportAnimation(ref)`](../../src/hooks/useInViewportAnimation.ts) returns `true` when the ref is within a 200px-margin IntersectionObserver. Use it to pause infinite framer-motion / canvas animations while their host is offscreen — used by `BrandScroller`, `OtherToolsetsCarousel`, animated number ramps. For **pure-CSS marquees in Server Components** prefer `content-visibility: auto` + `contain-intrinsic-size` on the strip wrapper instead (no client boundary needed) — see the two `marquee-scroll` consumers. `BrandScroller` additionally skips the embla `AutoScroll` plugin outright (static strip) under `useReducedMotion()` / `navigator.connection?.saveData`.
 
 ### Embla wrappers
 

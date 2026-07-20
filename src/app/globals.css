@@ -2498,11 +2498,12 @@ html[data-save-data="true"] {
 }
 
 @media (max-width: 767.98px), (prefers-reduced-motion: reduce) {
-  .animate-shimmer, .animate-shimmer-horizontal {
+  .animate-shimmer, .animate-shimmer-horizontal, .animate-shimmer-horizontal-fast {
     animation: none !important;
   }
 }
 html[data-tier="mobile"] [class*="border-glow-"]:not(:focus-visible),
+html[data-tier="tablet"] [class*="border-glow-"]:not(:focus-visible),
 html[data-save-data="true"] [class*="border-glow-"]:not(:focus-visible) {
   animation: none !important;
 }
@@ -2512,22 +2513,34 @@ html[data-save-data="true"] [class*="border-glow-"]:not(:focus-visible) {
  * and static countdown "live" dots. Desktop keeps the full look.
  * (prefers-reduced-motion is already handled by the global 1ms rule above;
  * save-data also demotes data-tier to "mobile" post-hydration - the explicit
- * selector keeps the gate correct pre-hydration and self-documenting.) */
+ * selector keeps the gate correct pre-hydration and self-documenting.)
+ * Extended (Tier-2 Task 2) to the remaining infinite filter/box-shadow loops:
+ * glow-pulse* (Tailwind animate-glow-pulse* icon glows) and the vip-* keyframe
+ * classes (vip-premium-shell-glow, vip-premium-inner-luminosity,
+ * animate-vip-premium-price-halo, animate-vip-premium-enter-wrap,
+ * animate-vip-icon-halo, plus the arbitrary animate-[vip-sheen_...] sweep -
+ * all matched by the substring selectors below). */
 html[data-tier="mobile"] .fire > .fire-glitter,
 html[data-tier="mobile"] .fire::after,
 html[data-tier="mobile"] .ta-clock-pulse,
 html[data-tier="mobile"] .ta-clock-second-hand,
 html[data-tier="mobile"] .ta-countdown-dot,
+html[data-tier="mobile"] [class*="glow-pulse"],
+html[data-tier="mobile"] [class*="vip-"],
 html[data-tier="tablet"] .fire > .fire-glitter,
 html[data-tier="tablet"] .fire::after,
 html[data-tier="tablet"] .ta-clock-pulse,
 html[data-tier="tablet"] .ta-clock-second-hand,
 html[data-tier="tablet"] .ta-countdown-dot,
+html[data-tier="tablet"] [class*="glow-pulse"],
+html[data-tier="tablet"] [class*="vip-"],
 html[data-save-data="true"] .fire > .fire-glitter,
 html[data-save-data="true"] .fire::after,
 html[data-save-data="true"] .ta-clock-pulse,
 html[data-save-data="true"] .ta-clock-second-hand,
-html[data-save-data="true"] .ta-countdown-dot {
+html[data-save-data="true"] .ta-countdown-dot,
+html[data-save-data="true"] [class*="glow-pulse"],
+html[data-save-data="true"] [class*="vip-"] {
   animation: none !important;
 }
 

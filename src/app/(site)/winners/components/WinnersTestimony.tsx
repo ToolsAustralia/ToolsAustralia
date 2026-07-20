@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { addRAFScrollListener, addThrottledResize } from "@/utils/dom/listenerHelpers";
 import { Archivo, Newsreader, Space_Mono } from "next/font/google";
 import { ChevronRight, Play, X } from "lucide-react";
 import type { WinnerSummary } from "@/types/winner";
@@ -215,23 +216,51 @@ export default function WinnersTestimony({ winners }: { winners: WinnerSummary[]
     [stories.length]
   );
 
-  const onScroll = useCallback(() => {
+  // Active-dot tracking. rAF-throttled scroll listener (not a per-event React
+  // onScroll) with child centers cached per layout — card widths only change
+  // with the viewport (flexBasis is %/px based), so we re-measure on resize
+  // instead of reading offsetLeft/clientWidth of every card on every frame.
+  // setIdx only fires when the nearest card actually changes.
+  const idxRef = useRef(0);
+  useEffect(() => {
     const track = trackRef.current;
-    if (!track) return;
-    const center = track.scrollLeft + track.clientWidth / 2;
-    let best = 0;
-    let bestD = Infinity;
-    for (let i = 0; i < stories.length; i++) {
-      const c = track.children[i] as HTMLElement | undefined;
-      if (!c) continue;
-      const cc = c.offsetLeft + c.clientWidth / 2;
-      const d = Math.abs(cc - center);
-      if (d < bestD) {
-        bestD = d;
-        best = i;
+    if (!track || stories.length === 0) return;
+
+    let centers: number[] = [];
+    let halfViewport = 0;
+    const measure = () => {
+      halfViewport = track.clientWidth / 2;
+      centers = [];
+      for (let i = 0; i < stories.length; i++) {
+        const c = track.children[i] as HTMLElement | undefined;
+        centers.push(c ? c.offsetLeft + c.clientWidth / 2 : 0);
       }
-    }
-    setIdx(best);
+    };
+    measure();
+
+    // Helper passes scrollTop (vertical); this track scrolls horizontally, so
+    // ignore the arg and read scrollLeft — the only per-frame layout value.
+    const removeScroll = addRAFScrollListener(track, () => {
+      const center = track.scrollLeft + halfViewport;
+      let best = 0;
+      let bestD = Infinity;
+      for (let i = 0; i < centers.length; i++) {
+        const d = Math.abs(centers[i] - center);
+        if (d < bestD) {
+          bestD = d;
+          best = i;
+        }
+      }
+      if (best !== idxRef.current) {
+        idxRef.current = best;
+        setIdx(best);
+      }
+    });
+    const removeResize = addThrottledResize(measure);
+    return () => {
+      removeScroll();
+      removeResize();
+    };
   }, [stories.length]);
 
   if (stories.length === 0) return null;
@@ -277,7 +306,7 @@ export default function WinnersTestimony({ winners }: { winners: WinnerSummary[]
             </>
           ) : null}
 
-          <div ref={trackRef} onScroll={onScroll} className="lp-noscroll flex overflow-x-auto snap-x snap-mandatory" style={{ gap: 20, scrollPadding: 16 }}>
+          <div ref={trackRef} className="lp-noscroll flex overflow-x-auto snap-x snap-mandatory" style={{ gap: 20, scrollPadding: 16 }}>
             {stories.map((w) => (
               <div key={w.id} className="snap-center shrink-0" style={{ flexBasis: "min(92%, 720px)" }}>
                 <CinematicCard w={w} onOpen={setOpenId} />

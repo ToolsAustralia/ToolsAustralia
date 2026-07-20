@@ -2,6 +2,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import useEmblaCarousel from "embla-carousel-react";
 import AutoScroll from "embla-carousel-auto-scroll";
+import { useReducedMotion } from "framer-motion";
 import { brandLogos, BrandLogo } from "@/data/brandLogos";
 import BrandLogoCard from "@/components/ui/BrandLogoCard";
 import { useInViewportAnimation } from "@/hooks/useInViewportAnimation";
@@ -45,6 +46,14 @@ export default function BrandScroller({
   const width = useViewportWidth();
   const rootRef = useRef<HTMLDivElement>(null);
   const inView = useInViewportAnimation(rootRef);
+  // Reduced-motion / Save-Data users get the static strip: skip the AutoScroll
+  // plugin entirely (no rAF loop at all) instead of paying for a running
+  // animation they shouldn't see. Same detection pattern as useDeviceProfile.
+  const prefersReducedMotion = useReducedMotion();
+  const saveData =
+    typeof navigator !== "undefined" &&
+    !!(navigator as unknown as { connection?: { saveData?: boolean } }).connection?.saveData;
+  const autoScrollDisabled = prefersReducedMotion === true || saveData;
 
   const currentSpeedSec =
     width < 640 && speedMobile !== undefined
@@ -71,16 +80,19 @@ export default function BrandScroller({
     []
   );
   const plugins = useMemo(
-    () => [
-      AutoScroll({
-        speed: initialPxPerSecRef.current!,
-        startDelay: 50,
-        stopOnInteraction: false,
-        stopOnMouseEnter: pauseOnHover,
-        stopOnFocusIn: pauseOnHover,
-      }),
-    ],
-    [pauseOnHover]
+    () =>
+      autoScrollDisabled
+        ? []
+        : [
+            AutoScroll({
+              speed: initialPxPerSecRef.current!,
+              startDelay: 50,
+              stopOnInteraction: false,
+              stopOnMouseEnter: pauseOnHover,
+              stopOnFocusIn: pauseOnHover,
+            }),
+          ],
+    [pauseOnHover, autoScrollDisabled]
   );
 
   const [emblaRef, emblaApi] = useEmblaCarousel(options, plugins);
