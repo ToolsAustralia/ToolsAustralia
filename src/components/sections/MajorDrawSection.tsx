@@ -387,9 +387,17 @@ function MajorDrawSectionInner({ className = "" }: MajorDrawSectionProps) {
   useEffect(() => {
     if (!isSpecsModalOpen || !specsSlug) return;
     let cancelled = false;
-    void import("@/config/prizes").then(({ getPrizeBySlug }) => {
-      if (!cancelled) setSpecsPrize(getPrizeBySlug(specsSlug) ?? null);
-    });
+    // Stale-specs guard: switching prizes then reopening must not flash the previous sheet.
+    setSpecsPrize((prev) => (prev && prev.slug !== specsSlug ? null : prev));
+    import("@/config/prizes")
+      .then(({ getPrizeBySlug }) => {
+        if (!cancelled) setSpecsPrize(getPrizeBySlug(specsSlug) ?? null);
+      })
+      .catch((error) => {
+        // Keep the null/loading state — the modal's "Prize information is loading. Please try
+        // again in a moment." copy covers it, and reopening re-runs this effect (chunk retry).
+        console.error("MajorDrawSection: failed to load deep prize catalog for specs modal", error);
+      });
     return () => {
       cancelled = true;
     };

@@ -666,9 +666,17 @@ function PrizeShowcaseInner({
   useEffect(() => {
     if (!isSpecsModalOpen || !activeSlug) return;
     let cancelled = false;
-    void import("@/config/prizes").then(({ getPrizeBySlug }) => {
-      if (!cancelled) setSpecsPrize(getPrizeBySlug(activeSlug) ?? null);
-    });
+    // Stale-specs guard: switching prizes then reopening must not flash the previous sheet.
+    setSpecsPrize((prev) => (prev && prev.slug !== activeSlug ? null : prev));
+    import("@/config/prizes")
+      .then(({ getPrizeBySlug }) => {
+        if (!cancelled) setSpecsPrize(getPrizeBySlug(activeSlug) ?? null);
+      })
+      .catch((error) => {
+        // Keep the null/loading state — the modal's "Prize information is loading. Please try
+        // again in a moment." copy covers it, and reopening re-runs this effect (chunk retry).
+        console.error("PrizeShowcase: failed to load deep prize catalog for specs modal", error);
+      });
     return () => {
       cancelled = true;
     };
