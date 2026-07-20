@@ -266,7 +266,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
 ```json
 {
   "version": 1,
-  "lastModified": "2026-07-19",
+  "lastModified": "2026-07-20",
   "domains": {
     "subscription": {
       "docs": "docs/subscription/",
@@ -699,7 +699,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/app/(site)/privacy/**",
         "src/app/lazy-motion-features.ts"
       ],
-      "lastVerified": "2026-07-19"
+      "lastVerified": "2026-07-20"
     },
     "client-state": {
       "docs": "docs/client-state/",

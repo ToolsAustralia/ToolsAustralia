@@ -754,6 +754,9 @@ export default function PromoBanner({
         {/* Outer stays overflow-visible so the multiplier badge (absolute) is not clipped; pill rounding + clip only on the bg/flame layer. */}
         <div className="relative w-full min-w-0 overflow-visible">
           <div
+            // Mobile fire animation stops while the banner is stuck/floating on scroll
+            // (globals.css `[data-banner-stuck]` gate) — repaint shouldn't fight scrolling.
+            data-banner-stuck={isScrolled ? "true" : undefined}
             className={`pointer-events-none absolute inset-0 z-0 min-h-full ${
               isScrolled ? "overflow-hidden rounded-[9999px]" : ""
             } ${bgColorClass}`}
@@ -775,11 +778,9 @@ export default function PromoBanner({
             }
             aria-hidden
           >
-            <div className="fire pointer-events-none absolute inset-0 min-h-full w-full">
-              {/* Second (parallax) glitter field of the fire effect — globals.css positions
-                  and animates it (transform-only); pseudo-elements carry the other two layers. */}
-              <div className="fire-glitter" />
-            </div>
+            {/* Fire effect — all layers are CSS pseudo-elements on `.fire` (globals.css);
+                the element itself needs no children. */}
+            <div className="fire pointer-events-none absolute inset-0 min-h-full w-full" />
           </div>
           <div
             className={`relative z-10 w-full overflow-visible ${
