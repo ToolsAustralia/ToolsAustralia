@@ -60,7 +60,15 @@ export function PackCard({
       {isVip && (
         <span
           className="pointer-events-none absolute inset-y-0 left-0 z-[1] w-1/2 animate-[vip-sheen_3.8s_ease-in-out_infinite]"
-          style={{ background: "linear-gradient(90deg,transparent,rgba(255,250,235,.5),transparent)" }}
+          // Base transform = the vip-sheen 0% rest state. When the tier gate (or
+          // reduced-motion) kills the animation, this parks the sheen off-screen
+          // left (clipped by the card's overflow-hidden) instead of leaving the
+          // gradient wash sitting over the left half of the card. The running
+          // animation overrides it, so the sweep is unchanged.
+          style={{
+            background: "linear-gradient(90deg,transparent,rgba(255,250,235,.5),transparent)",
+            transform: "translateX(-180%) skewX(-18deg)",
+          }}
         />
       )}
       {boosted &&
