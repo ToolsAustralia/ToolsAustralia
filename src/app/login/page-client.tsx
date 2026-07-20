@@ -9,7 +9,7 @@ import { useRouter } from "next/navigation";
 
 import Link from "next/link";
 
-import { Eye, EyeOff, Shield, Star, Gift, Zap, type LucideIcon } from "lucide-react";
+import { Eye, EyeOff, Shield, Star, Gift, Zap, Ticket, type LucideIcon } from "lucide-react";
 
 import Image from "next/image";
 
@@ -101,7 +101,7 @@ function SquareCheckbox({ checked, onChange }: { checked: boolean; onChange: (ch
 // Rotating Toolset Card — cycles Milwaukee → DeWalt → Makita → Ryobi every 3.5s.
 // Card surface tints to the active brand so Ryobi's lime brand never sits on white.
 
-const TOOLSETS = ["milwaukee", "dewalt", "makita", "ryobi"] as const;
+const TOOLSETS = ["milwaukee", "dewalt", "makita", "ryobi", "hikoki"] as const;
 type ToolsetKey = (typeof TOOLSETS)[number];
 
 const KIT_PIECE_COUNT_LABEL: Record<ToolsetKey, string> = {
@@ -109,6 +109,7 @@ const KIT_PIECE_COUNT_LABEL: Record<ToolsetKey, string> = {
   dewalt: "14 PIECE KIT",
   makita: "15 PIECE KIT",
   ryobi: "19 PIECE KIT",
+  hikoki: "15 PIECE KIT",
 };
 
 const TOOLSET_DISPLAY_NAME: Record<ToolsetKey, string> = {
@@ -116,6 +117,7 @@ const TOOLSET_DISPLAY_NAME: Record<ToolsetKey, string> = {
   dewalt: "DeWalt",
   makita: "Makita",
   ryobi: "Ryobi",
+  hikoki: "HiKOKI",
 };
 
 // Same color-key mapping the prize carousel uses (PowerToolsetCarousel.tsx).
@@ -123,6 +125,7 @@ function getToolsetColorKey(toolset: ToolsetKey): string {
   if (toolset === "milwaukee") return "milwaukee-red";
   if (toolset === "dewalt") return "dewalt-yellow";
   if (toolset === "makita") return "makita-teal";
+  if (toolset === "hikoki") return "hikoki-green";
   return "ryobi-green";
 }
 
@@ -132,12 +135,14 @@ const TINT_ALPHA_LIGHT: Record<ToolsetKey, number> = {
   dewalt: 0.1,
   makita: 0.1,
   ryobi: 0.12,
+  hikoki: 0.1,
 };
 const TINT_ALPHA_DARK: Record<ToolsetKey, number> = {
   milwaukee: 0.18,
   dewalt: 0.16,
   makita: 0.16,
   ryobi: 0.18,
+  hikoki: 0.16,
 };
 
 // Animated badge content paired 1:1 with each brand — chip swaps in sync with the toolset.
@@ -147,6 +152,7 @@ const BADGE_CONFIG: Record<ToolsetKey, { icon: LucideIcon; title: string; subtit
   dewalt: { icon: Star, title: "Members", subtitle: "Partner Discount Offers" },
   makita: { icon: Gift, title: "Membership", subtitle: "Exclusive Offers" },
   ryobi: { icon: Zap, title: "Major Draw", subtitle: "Live Every 27th" },
+  hikoki: { icon: Ticket, title: "Free Entries", subtitle: "Into Every Draw" },
 };
 
 const ROTATION_INTERVAL_MS = 3500;
