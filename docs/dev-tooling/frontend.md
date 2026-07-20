@@ -85,3 +85,10 @@ When a modal's props change, the gallery mount must follow. Note `ChargePastDueM
 
 - Direct `fetch()` is OK in dev pages (escape hatch for testing)
 - TanStack Query optional for dev tools
+
+## 2026-07-20 — sweep-font-poppins codemod
+
+`scripts/codemods/sweep-font-poppins.ts` (npm: `sweep:font-poppins` / `:dry`) rewrites the
+arbitrary `font-['[Poppins]']` Tailwind class → the real `font-poppins` utility across
+`src/**`. Dry-run by default, `--apply` to write; follows the `sweep-brand-red` conventions
+(codemod-runner + per-file replacement summary). What/why: docs/shared-ui/tailwind-conventions.md §10.

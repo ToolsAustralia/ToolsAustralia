@@ -53,7 +53,7 @@ export default function ExistingPartners() {
             Our Partners
           </div>
 
-          <h2 className="text-[28px] sm:text-[36px] lg:text-[48px] font-black leading-tight text-black font-['Poppins'] mb-6">
+          <h2 className="text-[28px] sm:text-[36px] lg:text-[48px] font-black leading-tight text-black font-poppins mb-6">
             Trusted by Australia&apos;s
             <span className="block text-red-600">Leading Brands</span>
           </h2>
@@ -66,7 +66,7 @@ export default function ExistingPartners() {
 
         {/* Partner Logos Grid */}
         <div className="mb-16">
-          <h3 className="text-[20px] sm:text-[24px] font-bold text-gray-800 dark:text-neutral-100 text-center mb-8 font-['Poppins']">
+          <h3 className="text-[20px] sm:text-[24px] font-bold text-gray-800 dark:text-neutral-100 text-center mb-8 font-poppins">
             Featured Partners
           </h3>
 
@@ -87,7 +87,7 @@ export default function ExistingPartners() {
                   />
                 </div>
                 <div className="text-center mt-3">
-                  <p className="text-sm font-medium text-gray-800 dark:text-neutral-100 font-['Poppins']">{brand.name}</p>
+                  <p className="text-sm font-medium text-gray-800 dark:text-neutral-100 font-poppins">{brand.name}</p>
                   <p className="text-xs text-gray-500 font-['Inter']">{brand.category}</p>
                 </div>
               </div>
@@ -112,7 +112,7 @@ export default function ExistingPartners() {
                     />
                   </div>
                   <div className="text-center mt-2">
-                    <p className="text-sm font-medium text-gray-800 dark:text-neutral-100 font-['Poppins']">{brand.name}</p>
+                    <p className="text-sm font-medium text-gray-800 dark:text-neutral-100 font-poppins">{brand.name}</p>
                     <p className="text-xs text-gray-500 font-['Inter']">{brand.category}</p>
                   </div>
                 </div>
@@ -123,7 +123,7 @@ export default function ExistingPartners() {
 
         {/* Partner Testimonials */}
         <div className="mb-16">
-          <h3 className="text-[20px] sm:text-[24px] font-bold text-gray-800 dark:text-neutral-100 text-center mb-8 font-['Poppins']">
+          <h3 className="text-[20px] sm:text-[24px] font-bold text-gray-800 dark:text-neutral-100 text-center mb-8 font-poppins">
             What Our Partners Say
           </h3>
 
@@ -166,7 +166,7 @@ export default function ExistingPartners() {
 
                 {/* Author */}
                 <div className="border-t pt-4">
-                  <p className="font-bold text-gray-800 dark:text-neutral-100 font-['Poppins']">{testimonial.representative}</p>
+                  <p className="font-bold text-gray-800 dark:text-neutral-100 font-poppins">{testimonial.representative}</p>
                   <p className="text-sm text-gray-500 font-['Inter']">{testimonial.position}</p>
                   <p className="text-sm font-medium text-red-600 font-['Inter']">{testimonial.company}</p>
                 </div>
@@ -178,7 +178,7 @@ export default function ExistingPartners() {
         {/* Partner Success Stats */}
         <div className="bg-gradient-to-r from-gray-50 to-gray-100 rounded-3xl p-8 lg:p-12">
           <div className="text-center mb-10">
-            <h3 className="text-[24px] sm:text-[28px] lg:text-[32px] font-bold text-gray-800 dark:text-neutral-100 mb-4 font-['Poppins']">
+            <h3 className="text-[24px] sm:text-[28px] lg:text-[32px] font-bold text-gray-800 dark:text-neutral-100 mb-4 font-poppins">
               Partnership Success by the Numbers
             </h3>
             <p className="text-gray-600 dark:text-neutral-400 font-['Inter'] max-w-2xl mx-auto">

@@ -92,7 +92,7 @@ export default function DashboardPromoBanner({
 
         <div className={cn("relative flex items-center", wide ? "gap-4 px-[22px] py-[15px]" : "gap-3 px-4 py-[13px]")}>
           <div className="min-w-0 flex-1">
-            <b className={cn("font-['Poppins'] font-extrabold leading-tight", wide ? "text-[15px]" : "text-[12.5px]")}>{heading}</b>
+            <b className={cn("font-poppins font-extrabold leading-tight", wide ? "text-[15px]" : "text-[12.5px]")}>{heading}</b>
           </div>
           {/* Offer badges live ON the CTA (50% off / n× entries) so the body text has
               room and doesn't wrap hard — a gold pill each, like the mini-draw sheet. */}

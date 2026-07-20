@@ -106,7 +106,7 @@ export default function PrizeCategories() {
       <div className="w-full px-2 sm:px-3 lg:px-8 lg:max-w-7xl lg:mx-auto">
         {/* Section Header */}
         <div className="text-center mb-8 sm:mb-10 lg:mb-12">
-          <h2 className="text-[20px] sm:text-[24px] lg:text-[48px] font-bold text-black font-['Poppins'] mb-2 sm:mb-3 lg:mb-4 leading-tight">
+          <h2 className="text-[20px] sm:text-[24px] lg:text-[48px] font-bold text-black font-poppins mb-2 sm:mb-3 lg:mb-4 leading-tight">
             BROWSE CATEGORIES
           </h2>
           <p className="text-[14px] sm:text-[16px] lg:text-[18px] text-gray-600 dark:text-neutral-400 max-w-3xl mx-auto">

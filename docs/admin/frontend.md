@@ -781,3 +781,10 @@ Presentation-only tweaks to four Overview section cards under `src/app/admin/com
   - `TopDrawsCard` — draw-name + entries cells gained `text-xs sm:text-sm`.
   - `UpcomingRenewalsCard` — member-name + amount values `text-sm` → `text-xs sm:text-sm`.
   - The shared `SectionTitle` (in `Card.tsx`), `DataTable`, and the `KpiGrid` Ad-Spend/ROAS tiles were **not** touched.
+
+## 2026-07-20 — Tier-2 perf: Poppins codemod
+
+Components in this domain were touched by the sitewide `font-'[Poppins]'` → `font-poppins`
+codemod (`npm run sweep:font-poppins`). Their Poppins-classed text now renders **real Poppins**
+instead of a browser fallback — an intended visual change. Details + rules:
+docs/shared-ui/tailwind-conventions.md §10.

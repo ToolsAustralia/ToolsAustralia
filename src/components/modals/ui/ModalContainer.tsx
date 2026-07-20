@@ -2,7 +2,7 @@
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { motion, useReducedMotion } from "framer-motion";
+import { m, useReducedMotion } from "framer-motion";
 import { Z_INDEX } from "@/constants/z-index";
 import { useHtmlDarkForUi } from "@/hooks/useHtmlDarkForUi";
 import {
@@ -515,7 +515,7 @@ const ModalContainer: React.FC<ModalContainerProps> = ({
       aria-modal="true"
       aria-labelledby="modal-title"
     >
-      <motion.div
+      <m.div
         className={cn("absolute inset-0 bg-black/85 backdrop-blur-md touch-none", isOpen ? "pointer-events-auto" : "pointer-events-none")}
         variants={backdropV}
         initial="closed"
@@ -525,7 +525,7 @@ const ModalContainer: React.FC<ModalContainerProps> = ({
         onClick={closeOnBackdrop ? onClose : undefined}
       />
 
-      <motion.div
+      <m.div
         ref={modalContentRef}
         className={`
         relative overflow-hidden flex flex-col ${isOpen ? "pointer-events-auto" : "pointer-events-none"} mx-auto
@@ -549,7 +549,7 @@ const ModalContainer: React.FC<ModalContainerProps> = ({
         }}
       >
         {children}
-      </motion.div>
+      </m.div>
     </div>
   );
 

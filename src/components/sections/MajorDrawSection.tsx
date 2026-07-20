@@ -794,7 +794,7 @@ function MajorDrawSectionInner({ className = "" }: MajorDrawSectionProps) {
 
     return (
       <div className={layout === "desktop" ? "mt-4 sm:mt-6 max-w-5xl mx-auto" : "mt-4 sm:mt-6"}>
-        <p className="text-lg sm:text-xl font-bold text-black dark:text-white font-['Poppins'] mb-2 sm:mb-3 text-center">
+        <p className="text-lg sm:text-xl font-bold text-black dark:text-white font-poppins mb-2 sm:mb-3 text-center">
           Pick Your Power Toolset / Storage System
         </p>
         {/* Toolbox type toggle - clickable, updates content only (no URL nav) */}
@@ -884,7 +884,7 @@ function MajorDrawSectionInner({ className = "" }: MajorDrawSectionProps) {
                       )}
                       <div className="relative z-10 w-full overflow-visible">
                         <div
-                          className={`text-base font-bold font-['Poppins'] leading-tight break-words text-center ${
+                          className={`text-base font-bold font-poppins leading-tight break-words text-center ${
                             isActive ? "text-white" : "text-gray-900 dark:text-neutral-100"
                           }`}
                         >
@@ -976,7 +976,7 @@ function MajorDrawSectionInner({ className = "" }: MajorDrawSectionProps) {
                       )}
                       <div className="relative z-10 w-full overflow-visible">
                         <div
-                          className={`text-base font-bold font-['Poppins'] leading-tight break-words text-center ${
+                          className={`text-base font-bold font-poppins leading-tight break-words text-center ${
                             isActive ? "text-white" : "text-gray-900 dark:text-neutral-100"
                           }`}
                         >
@@ -1020,7 +1020,7 @@ function MajorDrawSectionInner({ className = "" }: MajorDrawSectionProps) {
                 </div>
               )}
               <div className="relative z-10">
-                <div className={cn("text-base font-bold font-['Poppins'] leading-tight break-words text-center", isActive ? "text-white" : "text-gray-900 dark:text-neutral-100")}>
+                <div className={cn("text-base font-bold font-poppins leading-tight break-words text-center", isActive ? "text-white" : "text-gray-900 dark:text-neutral-100")}>
                   <div className="block">{formattedLabel.line1}</div>
                   {formattedLabel.line2 && <div className="block">{formattedLabel.line2}</div>}
                   {formattedLabel.line3 && <div className="block">{formattedLabel.line3}</div>}
@@ -1052,7 +1052,7 @@ function MajorDrawSectionInner({ className = "" }: MajorDrawSectionProps) {
               <Icon className={cn("w-3.5 h-3.5 sm:w-5 sm:h-5", brandColors.textColor)} />
             </div>
             <div className="flex-1 min-w-0 relative z-10">
-              <h3 className="text-xs sm:text-lg font-bold text-white font-['Poppins'] mb-0.5 sm:mb-1 drop-shadow-md leading-tight line-clamp-2 sm:line-clamp-none">
+              <h3 className="text-xs sm:text-lg font-bold text-white font-poppins mb-0.5 sm:mb-1 drop-shadow-md leading-tight line-clamp-2 sm:line-clamp-none">
                 {highlight.title}
               </h3>
               <p className="text-2xs sm:text-sm text-gray-300 font-['Inter'] leading-tight sm:leading-relaxed hidden lg:block">
@@ -1103,7 +1103,7 @@ function MajorDrawSectionInner({ className = "" }: MajorDrawSectionProps) {
             <div className="text-center space-y-2 px-4">
               {/* Mobile: Main Title */}
               <div className="flex items-center justify-center gap-2">
-                <h2 className="hidden lg:block text-[24px] font-bold text-black dark:text-white font-['Poppins'] leading-tight">
+                <h2 className="hidden lg:block text-[24px] font-bold text-black dark:text-white font-poppins leading-tight">
                   {prizeHeroHeading}
                 </h2>
               </div>
@@ -1523,7 +1523,7 @@ function MajorDrawSectionInner({ className = "" }: MajorDrawSectionProps) {
                               key={item.label}
                               className="bg-white/10 backdrop-blur-[var(--ta-blur)] rounded-2xl p-2 sm:p-3 text-center border border-white/20"
                             >
-                              <div className="text-lg sm:text-2xl font-bold text-white font-['Poppins']">
+                              <div className="text-lg sm:text-2xl font-bold text-white font-poppins">
                                 {String(item.value).padStart(2, "0")}
                               </div>
                               <div className="text-2xs sm:text-[12px] text-white/80 font-medium">{item.label}</div>
@@ -1572,7 +1572,7 @@ function MajorDrawSectionInner({ className = "" }: MajorDrawSectionProps) {
                       .replace("-500", "-400/30")} mb-2`}
                   >
                     <h2
-                      className={cn("text-4xl font-bold", brandColors.textColor, "font-['Poppins'] leading-tight drop-shadow-lg")}
+                      className={cn("text-4xl font-bold", brandColors.textColor, "font-poppins leading-tight drop-shadow-lg")}
                     >
                       {majorDraw?.name || activePrize?.heroHeading || "Major Draw"}
                     </h2>

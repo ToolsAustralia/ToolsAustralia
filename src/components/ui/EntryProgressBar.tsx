@@ -1,6 +1,6 @@
 "use client";
 
-import { motion, useReducedMotion } from "framer-motion";
+import { m, useReducedMotion } from "framer-motion";
 import { cn } from "@/utils/cn";
 
 interface EntryProgressBarProps {
@@ -69,7 +69,7 @@ export default function EntryProgressBar({
       )}
 
       <div className={cn("w-full bg-gray-200 dark:bg-neutral-700", trackRounding, trackHeight, "overflow-hidden")}>
-        <motion.div
+        <m.div
           className={cn(trackHeight, trackRounding, "bg-gradient-to-r", colorGradient)}
           initial={{ width: 0 }}
           animate={{ width: `${percentage}%` }}

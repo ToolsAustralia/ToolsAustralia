@@ -40,7 +40,7 @@ export default function MembershipCTA({
             <Crown className="w-12 h-12 text-yellow-300" />
           </div>
         </div>
-        <h2 className="text-2xl sm:text-3xl lg:text-4xl font-bold mb-3 sm:mb-4 font-['Poppins']">
+        <h2 className="text-2xl sm:text-3xl lg:text-4xl font-bold mb-3 sm:mb-4 font-poppins">
           {title} <span className="text-yellow-300">Winner</span>?
         </h2>
         <p className="text-base sm:text-lg lg:text-xl mb-6 sm:mb-8 text-white/90 leading-relaxed px-4">{subtitle}</p>

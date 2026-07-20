@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState, Suspense, type CSSProperties } from "react";
 import Image from "next/image";
 import dynamic from "next/dynamic";
-import { motion } from "framer-motion";
+import { m } from "framer-motion";
 import { useRouter } from "next/navigation";
 import useEmblaCarousel from "embla-carousel-react";
 import Fade from "embla-carousel-fade";
@@ -936,13 +936,13 @@ function PrizeShowcaseInner({
           </div>
 
           {(prizes.length > 1 || toolsetMode) && (
-            <motion.div
+            <m.div
               initial={{ opacity: 0, y: 24 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5, ease: "easeOut" }}
               className="mt-6 sm:mt-8 mb-10 sm:mb-12 lg:mb-14"
             >
-              <motion.div
+              <m.div
                 initial={{ opacity: 0, y: 12 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.1, duration: 0.4 }}
@@ -954,7 +954,7 @@ function PrizeShowcaseInner({
                 <p className="mt-1 text-xs sm:text-sm text-gray-600 dark:text-neutral-400 font-medium break-words whitespace-normal">
                   Milwaukee, Kincrome, or Sidchrome — plus power toolset & $5,000 cash
                 </p>
-              </motion.div>
+              </m.div>
 
               <ToolboxSelector
                 selectedType={
@@ -967,7 +967,7 @@ function PrizeShowcaseInner({
               />
 
               {toolsetMode && toolsetSlug ? (
-                <motion.p
+                <m.p
                   initial={{ opacity: 0, y: 12 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.2, duration: 0.4 }}
@@ -983,16 +983,16 @@ function PrizeShowcaseInner({
                           : "Makita"}{" "}
                   </span>
                   Power Toolset / Storage System
-                </motion.p>
+                </m.p>
               ) : (
-                <motion.p
+                <m.p
                   initial={{ opacity: 0, y: 12 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.2, duration: 0.4 }}
                   className="text-balance font-sans font-extrabold font-[950] uppercase text-black dark:text-white mb-3 sm:mb-4 text-center text-md sm:text-[32px] lg:text-agency-title leading-[1.08]"
                 >
                   Pick your <span style={{ color: theme.primary }}>Power Toolset / Storage System</span>
-                </motion.p>
+                </m.p>
               )}
 
               {toolsetMode && toolsetSlug ? (
@@ -1058,7 +1058,7 @@ function PrizeShowcaseInner({
 
                 
               </div>
-            </motion.div>
+            </m.div>
           )}
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 items-start">

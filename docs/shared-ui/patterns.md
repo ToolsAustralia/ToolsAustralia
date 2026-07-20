@@ -196,3 +196,35 @@ Most shared-ui components are server-component-friendly (no client-side state). 
 ## P6. Re-export through `index.ts`
 
 Clean imports: `import { Button, Modal } from "@/components"` instead of deep paths.
+
+## P7. framer-motion via LazyMotion — landing-path components use `m.*` (2026-07-20)
+
+`src/app/providers.tsx` wraps the app in **`<LazyMotion features={loadMotionFeatures}>`**,
+where `loadMotionFeatures = () => import("./lazy-motion-features")…` **async-loads** the
+feature bundle (`src/app/lazy-motion-features.ts` default-exports `domMax`). This code-splits
+framer-motion's features out of the shared/critical chunk into a **post-hydration async
+chunk** — landing routes (`/`, `/promotions/*`) dropped **~16 kB First Load JS**.
+
+Rules for animated components:
+
+- **Landing-path / shared components import the lean `m` renderer, not `motion`** — e.g.
+  `import { m, AnimatePresence } from "framer-motion"` and `<m.div>`. `m` has no built-in
+  features; it consumes whatever `LazyMotion` provides. Hooks (`useReducedMotion`,
+  `useMotionValue`, `useTransform`, `animate`, `useInView`) and `AnimatePresence` are
+  import-and-use as before. The 15 converted files: `PrizeShowcase`, `PowerToolsetCarousel`,
+  `StaticToolsetHighlight`, `ToolboxSelector`, `Carousel3D`, `FloatingCountdownBanner`,
+  `GiveawayCountdownTimer`, `FloatingGetEntriesButton`, `PromoBanner`,
+  `PromotionsAccountButton`, `EntryProgressBar`, `ModalContainer`, `PromoWelcomeModal`,
+  `RewardsFloatingWidget`, `MiniDrawCard`.
+- **`features={domMax}` (not `domAnimation`)** because live landing animations use framer
+  **`layout`/`layoutId`** (PowerToolsetCarousel FLIP, MiniDrawTabs indicator) which need the
+  max feature set. `domAnimation` would silently break them.
+- **Non-strict on purpose.** Under `strict`, any `motion.*` inside the tree throws at runtime
+  — a single missed importer among the 29 across the app (incl. admin, mini-draws, login)
+  would be a production crash for no landing-bundle gain (those are route-isolated chunks).
+  So **route-isolated components keep `motion.*`** (they self-load features in their own
+  chunk); only landing-path importers were converted to `m.*`. Verify coverage with
+  `grep -rn 'motion\.' <converted files>` → 0.
+- **Adding a new animated landing component?** Use `m.*` + the imports above. Adding one that
+  genuinely needs a feature beyond `domMax`, or one that's route-isolated? `motion.*` is fine
+  (non-strict allows it).

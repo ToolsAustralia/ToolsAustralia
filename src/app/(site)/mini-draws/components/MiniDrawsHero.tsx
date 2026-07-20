@@ -44,7 +44,7 @@ export default function MiniDrawsHero() {
 
           {/* Title */}
           <motion.h1
-            className="text-[36px] sm:text-[48px] lg:text-[60px] font-bold font-['Poppins'] leading-tight mb-4 sm:mb-5"
+            className="text-[36px] sm:text-[48px] lg:text-[60px] font-bold font-poppins leading-tight mb-4 sm:mb-5"
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration, delay: 0.2 }}

@@ -28,8 +28,8 @@ function MiniCard({ plan, metric }: { plan: MembershipPlan; metric: "price" | "a
         className="pointer-events-none absolute inset-0 rounded-[13px]"
         style={{ background: "linear-gradient(180deg,rgba(255,255,255,.2),transparent 30%,transparent 72%,rgba(0,0,0,.14))" }}
       />
-      <span className="relative z-[1] font-['Poppins'] text-[9.5px] font-black uppercase tracking-[0.1em]">{plan.name}</span>
-      <span className="relative z-[1] font-['Poppins'] text-[21px] font-black leading-none">
+      <span className="relative z-[1] font-poppins text-[9.5px] font-black uppercase tracking-[0.1em]">{plan.name}</span>
+      <span className="relative z-[1] font-poppins text-[21px] font-black leading-none">
         {metric === "price" ? `$${plan.price}` : access}
         <small className="ml-px text-[9.5px] font-bold opacity-65">{metric === "price" ? "/mo" : "%"}</small>
       </span>
@@ -76,7 +76,7 @@ export default function MembershipHowItWorks() {
           <span className="inline-flex items-center gap-2 rounded-full border border-amber-400/40 bg-amber-400/10 px-3 py-1.5 text-xs font-bold uppercase tracking-[0.16em] text-amber-300">
             <Sparkles className="h-3.5 w-3.5" /> How it works
           </span>
-          <h2 className="mt-4 font-['Poppins'] text-3xl font-black tracking-tight sm:text-4xl lg:text-5xl">
+          <h2 className="mt-4 font-poppins text-3xl font-black tracking-tight sm:text-4xl lg:text-5xl">
             Join once.{" "}
             <span style={{ background: "linear-gradient(92deg,#ffe066,#ffb300 70%,#ff8a00)", WebkitBackgroundClip: "text", backgroundClip: "text", color: "transparent" }}>
               It pays all month.
@@ -101,7 +101,7 @@ export default function MembershipHowItWorks() {
               >
                 <span className="absolute inset-x-0 top-0 h-[3px]" style={{ background: `linear-gradient(90deg,${ACCENTS[i]},${ACCENTS[i]}99)` }} />
                 <span
-                  className="pointer-events-none absolute bottom-3.5 right-[18px] font-['Poppins'] text-[48px] font-black leading-none tracking-[-0.04em]"
+                  className="pointer-events-none absolute bottom-3.5 right-[18px] font-poppins text-[48px] font-black leading-none tracking-[-0.04em]"
                   style={{ WebkitTextStroke: `2px ${ACCENTS[i]}`, WebkitTextFillColor: "transparent", color: "transparent", opacity: 0.85 }}
                   aria-hidden
                 >
@@ -119,13 +119,13 @@ export default function MembershipHowItWorks() {
                         <Trophy className="h-6 w-6" />
                       </span>
                       <div className="flex flex-col gap-1">
-                        <span className="font-['Poppins'] text-[25px] font-black leading-none text-white">$10,000</span>
+                        <span className="font-poppins text-[25px] font-black leading-none text-white">$10,000</span>
                         <span className="text-[9.5px] font-extrabold uppercase tracking-[0.14em] text-amber-300">won every 27th</span>
                       </div>
                     </div>
                   )}
                 </div>
-                <h3 className={cn("mt-[18px] font-['Poppins'] text-lg font-black leading-snug sm:text-[22px]")}>{s.title}</h3>
+                <h3 className={cn("mt-[18px] font-poppins text-lg font-black leading-snug sm:text-[22px]")}>{s.title}</h3>
                 <p className="mt-2 pr-14 text-[13.5px] leading-relaxed text-white/[0.64]">{s.body}</p>
               </div>
             </div>

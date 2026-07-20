@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { m, AnimatePresence } from "framer-motion";
 import { usePromoTheme, usePromoThemeStore } from "@/stores/usePromoThemeStore";
 import { addRAFScrollListener, addThrottledResize } from "@/utils/dom/listenerHelpers";
 
@@ -127,7 +127,7 @@ export default function FloatingGetEntriesButton() {
   return (
     <AnimatePresence>
       {isVisible && (
-        <motion.div
+        <m.div
           data-floating-widget="true"
           initial={{ opacity: 0, scale: 0, y: 100 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -140,7 +140,7 @@ export default function FloatingGetEntriesButton() {
           }}
           className="fixed bottom-[calc(env(safe-area-inset-bottom)+1rem)] left-0 right-0 flex justify-center z-50 pointer-events-none"
         >
-          <motion.button
+          <m.button
             onClick={handleGetEntries}
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
@@ -167,8 +167,8 @@ export default function FloatingGetEntriesButton() {
                 style={{ border: `1px solid ${theme.borderRgba}` }}
               />
             )}
-          </motion.button>
-        </motion.div>
+          </m.button>
+        </m.div>
       )}
     </AnimatePresence>
   );

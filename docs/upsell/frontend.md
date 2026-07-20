@@ -36,3 +36,10 @@ Upsell components use `cn()` from `@/utils/cn` for conditional class composition
 `UpsellSuccessClient.tsx` fires the browser Purchase pixel via `trackConversion(buildPurchaseEvent(...))` once the payment status resolves as processed, with `eventId = paymentIntentId` for browser↔server dedup. It passes `contentName: status.data.packageName` so the Purchase carries `content_name` on both the pixel and the server Events API/CAPI (same source as the server, so values match). Field-by-field reference: [docs/tracking/EVENT_PARAMETER_MATRIX.md](../tracking/EVENT_PARAMETER_MATRIX.md).
 
 **Re-fire guard (2026-07-08).** The fire is double-guarded: a per-mount `firedRef` **plus** a persistent localStorage flag via `shouldSuppressPurchasePixel` / `markPurchasePixelFired` from [src/utils/tracking/purchase-pixel-fired-storage.ts](../../src/utils/tracking/purchase-pixel-fired-storage.ts) (key `purchasePixelFired_${paymentIntentId}` holding the first-fire time, pruned after 30 days; only re-fires older than 46h are suppressed — younger ones are merged by Meta's dedup and double as delivery recovery). `firedRef` alone only survives one mount, and Meta's `event_id` dedup lasts ~48h — so revisiting the success URL later than that used to count as a brand-new conversion and inflate Meta-reported ROAS. The first legitimate fire is unchanged, and server CAPI redundancy is unchanged. See `gotchas.md` for details.
+
+## 2026-07-20 — Tier-2 perf: Poppins codemod
+
+Components in this domain were touched by the sitewide `font-'[Poppins]'` → `font-poppins`
+codemod (`npm run sweep:font-poppins`). Their Poppins-classed text now renders **real Poppins**
+instead of a browser fallback — an intended visual change. Details + rules:
+docs/shared-ui/tailwind-conventions.md §10.

@@ -135,13 +135,13 @@ export default function RewardsPartnerQueue() {
                     <span className="relative flex h-2 w-2"><span className="absolute inline-flex h-full w-full animate-ping rounded-full opacity-70" style={{ background: ink }} /><span className="relative inline-flex h-2 w-2 rounded-full" style={{ background: ink }} /></span>
                     Active now
                   </span>
-                  <div className="mt-1.5 truncate font-['Poppins'] text-[19px] font-extrabold leading-tight">{active.name}</div>
+                  <div className="mt-1.5 truncate font-poppins text-[19px] font-extrabold leading-tight">{active.name}</div>
                   <div className="mt-0.5 text-[12px] font-semibold" style={{ color: soft }}>
                     {active.pct}% catalogue · {SOURCE_LABEL[active.source] ?? "Pack"}
                   </div>
                 </div>
                 <AccessRing percent={active.pct} size={58} stroke={7} color={ink} trackColor={ink === "#0a0a0a" ? "rgba(0,0,0,.14)" : "rgba(255,255,255,.22)"}>
-                  <span className="num font-['Poppins'] text-sm font-extrabold" style={{ color: ink }}>{active.pct}%</span>
+                  <span className="num font-poppins text-sm font-extrabold" style={{ color: ink }}>{active.pct}%</span>
                 </AccessRing>
               </div>
               <div className="mt-3 inline-flex items-center gap-1.5 text-[12px] font-bold" style={{ color: soft }}>

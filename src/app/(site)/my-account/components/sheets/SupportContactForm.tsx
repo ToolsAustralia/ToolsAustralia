@@ -75,7 +75,7 @@ export default function SupportContactForm() {
         <span className="grid h-12 w-12 place-items-center rounded-full bg-emerald-500 text-white">
           <Check className="h-6 w-6" strokeWidth={3} />
         </span>
-        <p className="font-['Poppins'] text-base font-bold text-primary-token dark:text-white">Message sent</p>
+        <p className="font-poppins text-base font-bold text-primary-token dark:text-white">Message sent</p>
         <p className="text-sm text-muted-token">Thanks for reaching out — we&apos;ll get back to you soon.</p>
       </div>
     );

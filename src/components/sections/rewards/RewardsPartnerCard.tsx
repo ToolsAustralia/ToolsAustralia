@@ -76,12 +76,12 @@ export default function RewardsPartnerCard({
       <div className={cn("mt-3 rounded-[1.1rem] border bg-surface p-4 shadow-sm", pastdue ? "border-[#d97706]/45" : "border-token")}>
         <div className="flex items-center gap-4">
           <AccessRing percent={pct || 0.1} size={72} stroke={8} color={c} trackColor="rgba(0,0,0,0.08)">
-            <span className="num font-['Poppins'] text-base font-extrabold" style={{ color: c }}>
+            <span className="num font-poppins text-base font-extrabold" style={{ color: c }}>
               {locked ? <Lock className="h-5 w-5" /> : `${partnerAccessPct}%`}
             </span>
           </AccessRing>
           <div className="min-w-0 flex-1">
-            <div className="font-['Poppins'] text-[15px] font-extrabold text-primary-token dark:text-white">{headline}</div>
+            <div className="font-poppins text-[15px] font-extrabold text-primary-token dark:text-white">{headline}</div>
             <div className="mt-1 text-[11.5px] font-semibold leading-[1.4]" style={{ color: onetime || pastdue ? c : undefined }}>
               <span className={onetime || pastdue ? "" : "text-muted-token"}>{sub}</span>
             </div>
@@ -116,7 +116,7 @@ export default function RewardsPartnerCard({
               <Store className="h-[17px] w-[17px]" />
             </span>
             <span className="min-w-0 flex-1">
-              <b className="block font-['Poppins'] text-[13px] font-extrabold">{sso.isPending ? "Opening…" : "Open partner portal"}</b>
+              <b className="block font-poppins text-[13px] font-extrabold">{sso.isPending ? "Opening…" : "Open partner portal"}</b>
               <span className="text-[10px] font-semibold" style={{ color: inkOn(c) === "#ffffff" ? "rgba(255,255,255,.78)" : "rgba(0,0,0,.6)" }}>See every deal · signed in via SSO</span>
             </span>
             <ExternalLink className="h-4 w-4" />
@@ -128,7 +128,7 @@ export default function RewardsPartnerCard({
               <Store className="h-[17px] w-[17px]" />
             </span>
             <span className="min-w-0 flex-1">
-              <b className="block font-['Poppins'] text-[13px] font-extrabold text-primary-token dark:text-white">Partner portal</b>
+              <b className="block font-poppins text-[13px] font-extrabold text-primary-token dark:text-white">Partner portal</b>
               <span className="text-[10px] font-semibold text-muted-token">Coming soon</span>
             </span>
           </div>
@@ -150,7 +150,7 @@ export default function RewardsPartnerCard({
                 <span className="grid h-9 w-9 shrink-0 place-items-center overflow-hidden rounded-[10px] bg-white ring-1 ring-black/[.06]">
                   <Image src={b.logo} alt={b.name} width={30} height={30} className="h-7 w-7 object-contain" />
                 </span>
-                <span className="font-['Poppins'] text-xs font-black" style={{ color: bc }}>{b.discount}</span>
+                <span className="font-poppins text-xs font-black" style={{ color: bc }}>{b.discount}</span>
               </div>
               <div className="min-w-0">
                 <div className="flex items-center gap-1.5">

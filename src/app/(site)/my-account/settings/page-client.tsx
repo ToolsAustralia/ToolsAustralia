@@ -85,7 +85,7 @@ export default function SettingsPage() {
         <div className="flex items-center gap-4 rounded-3xl border border-token bg-surface p-5 shadow-sm">
           <Monogram firstName={user.firstName} lastName={user.lastName} tierHex={dash.subscriptionTierHex ?? "#ee0000"} onBrand size={52} radius={16} />
           <div className="min-w-0 flex-1">
-            <h2 className="truncate font-['Poppins'] text-base font-bold text-primary-token dark:text-white sm:text-lg">{displayName}</h2>
+            <h2 className="truncate font-poppins text-base font-bold text-primary-token dark:text-white sm:text-lg">{displayName}</h2>
             <p className="truncate text-xs text-muted-token sm:text-sm">{subtitle}</p>
           </div>
           {hasFailed ? (
@@ -118,7 +118,7 @@ export default function SettingsPage() {
               <Palette className="h-5 w-5" />
             </span>
             <div>
-              <p className="font-['Poppins'] text-base font-bold text-primary-token dark:text-white">Appearance</p>
+              <p className="font-poppins text-base font-bold text-primary-token dark:text-white">Appearance</p>
               <p className="text-xs text-muted-token">Choose how the dashboard looks</p>
             </div>
           </div>

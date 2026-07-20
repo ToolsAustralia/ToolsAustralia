@@ -738,3 +738,10 @@ follow-up.
 - `/my-account/draws` passes `entries.streak` into its `EntryWallet` mount (was omitted — undercounted the total vs the home wallet).
 - `deriveStreakCycleFuse` clamps month-end overflow (a 29–31st renewal minus one month, e.g. 31 Mar → "31 Feb" → 3 Mar, now clamps to the last day of the intended month).
 - Both streak flags (`loyaltyStreak`, `milestoneProgress`) ship **dark** until the launch runbook completes — see `src/config/dashboardFeatures.ts`.
+
+## 2026-07-20 — Tier-2 perf: Poppins codemod
+
+Components in this domain were touched by the sitewide `font-'[Poppins]'` → `font-poppins`
+codemod (`npm run sweep:font-poppins`). Their Poppins-classed text now renders **real Poppins**
+instead of a browser fallback — an intended visual change. Details + rules:
+docs/shared-ui/tailwind-conventions.md §10.

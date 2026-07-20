@@ -18,7 +18,7 @@ export default function MembershipBrandShowcase({ cta }: { cta: MembershipCardCt
     >
       <div className="relative z-[1] mx-auto max-w-7xl px-5 text-center sm:px-6">
         <span className="text-xs font-bold uppercase tracking-[0.18em] text-red-600">Partner discounts</span>
-        <h2 className="mx-auto mt-4 max-w-3xl font-['Poppins'] text-3xl font-black tracking-tight text-primary-token sm:text-4xl lg:text-5xl dark:text-white">
+        <h2 className="mx-auto mt-4 max-w-3xl font-poppins text-3xl font-black tracking-tight text-primary-token sm:text-4xl lg:text-5xl dark:text-white">
           Become a member,{" "}
           <span className="text-red-600">unlock partner discounts</span>
         </h2>

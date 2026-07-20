@@ -67,3 +67,11 @@ Don't mix. Common mistake: mirroring server-state into Zustand. Don't.
 `src/hooks/queries/usePackagesFocusBreakdown.ts` adds **`usePackagesFocusBreakdown(platform, startDate, endDate, { enabled? })`** — keyed `["admin","analytics","packages-focus", platform, startDate, endDate]`, hits `GET /api/admin/analytics/packages-focus`, enabled only when both dates are set. Response types (`PackagesFocusBreakdownResponse`, `PackagesFocusTotals`, campaign/adset/ad node types) are re-declared in the hook file per convention; `PackagesFocusAdNode.packagesFocus?` is a client-side-only field set by the prize modal's grouper. Consumed by `AdSpendFocusModal`, `PrizePerformanceAdsModal` (types only), `CampaignTreeTable`, and `SpendByUrlSection`'s focus strip (see `docs/admin/frontend.md`).
 
 `src/hooks/queries/useSpendByUrlAnalytics.ts` type extensions (byte-identical mirrors of the service shapes, per this file's re-declare convention): `SpendByUrlRow.packagesFocus?` — optional membership/one-time split (`SpendByUrlFocusTotals { spend; spendCents; revenue; revenueCents; conversions; roas }`; absent = pre-split data or `unknown://` row); `SpendByUrlDetailRow` gains optional `campaignId/campaignName/adsetId/adsetName` + required `packagesFocus: "membership" | "one-time" | "unclassified"`. Consumed by the Prize Performance modal's campaign tree and the Facebook Ads tab's focus chips/badges (see `docs/admin/frontend.md`).
+
+## 2026-07-20 — LazyMotion in providers
+
+`src/app/providers.tsx` now wraps the tree in `<LazyMotion features={loadMotionFeatures}>`
+(non-strict), where `loadMotionFeatures` async-imports `src/app/lazy-motion-features.ts`
+(default-exports `domMax`). This code-splits framer-motion features out of the shared chunk
+into a post-hydration async chunk (landing routes −~16 kB First Load JS). Pattern + rules:
+docs/shared-ui/patterns.md P7.

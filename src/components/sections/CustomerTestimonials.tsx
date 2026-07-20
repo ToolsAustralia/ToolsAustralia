@@ -107,7 +107,7 @@ export default function CustomerTestimonials() {
       <div className="w-full px-2 sm:px-3 lg:px-8 lg:max-w-7xl lg:mx-auto relative">
         {/* Section Header */}
         <div className="text-center mb-8 sm:mb-10 lg:mb-16">
-          <h2 className="text-[20px] sm:text-[24px] lg:text-[56px] font-bold text-gray-900 mb-2 sm:mb-3 lg:mb-4 font-['Poppins'] leading-tight">
+          <h2 className="text-[20px] sm:text-[24px] lg:text-[56px] font-bold text-gray-900 mb-2 sm:mb-3 lg:mb-4 font-poppins leading-tight">
             What Our <span className="text-red-600">Customers</span> Say
           </h2>
           <p className="text-[14px] sm:text-[16px] lg:text-[20px] text-gray-600 dark:text-neutral-400 max-w-4xl mx-auto leading-relaxed">

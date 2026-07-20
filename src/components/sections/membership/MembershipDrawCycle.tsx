@@ -91,7 +91,7 @@ function StageCard({ item, isActive, depth }: Carousel3DItemState<Stage>) {
         <Icon className="h-6 w-6" />
       </span>
       <div className="relative mt-4 text-xs font-bold uppercase tracking-wider text-muted-token">{item.t}</div>
-      <h3 className="relative mt-1 font-['Poppins'] text-xl font-extrabold text-primary-token dark:text-white">{item.h}</h3>
+      <h3 className="relative mt-1 font-poppins text-xl font-extrabold text-primary-token dark:text-white">{item.h}</h3>
       <p className="relative mt-2 text-sm leading-relaxed text-muted-token">{item.d}</p>
       {item.hot && (
         <span className="relative mt-3 inline-flex items-center gap-1.5 text-xs font-bold text-red-600 dark:text-red-400">
@@ -116,7 +116,7 @@ export default function MembershipDrawCycle() {
       <SectionContainer as="div" className="relative">
         <div className="text-center">
           <span className="text-xs font-bold uppercase tracking-[0.18em] text-red-600">The monthly rhythm</span>
-          <h2 className="mt-4 font-['Poppins'] text-3xl font-extrabold tracking-tight text-primary-token sm:text-4xl lg:text-5xl dark:text-white">
+          <h2 className="mt-4 font-poppins text-3xl font-extrabold tracking-tight text-primary-token sm:text-4xl lg:text-5xl dark:text-white">
             It&apos;s a cycle, on repeat every month.
           </h2>
           <p className="mx-auto mt-4 max-w-2xl text-base text-muted-token sm:text-lg">

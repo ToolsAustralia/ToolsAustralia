@@ -66,7 +66,7 @@ export function SheetHead({ title, sub, onClose, id }: { title: string; sub?: st
   return (
     <div className="flex shrink-0 items-start justify-between gap-3 px-5 pb-3 pt-3.5">
       <div className="min-w-0">
-        <div id={id} className="font-['Poppins'] text-[19px] font-extrabold leading-tight text-primary-token dark:text-white">{title}</div>
+        <div id={id} className="font-poppins text-[19px] font-extrabold leading-tight text-primary-token dark:text-white">{title}</div>
         {sub && <div className="mt-1.5 text-xs font-semibold text-muted-token">{sub}</div>}
       </div>
       <button

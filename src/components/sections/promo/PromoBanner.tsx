@@ -3,7 +3,7 @@
 import { Fragment, useState, useEffect, useLayoutEffect, useRef, useMemo, useCallback } from "react";
 import type { CSSProperties, ReactNode } from "react";
 import { useLeafTimer } from "@/hooks/useLeafTimer";
-import { motion, animate, useMotionValue, useReducedMotion } from "framer-motion";
+import { m, animate, useMotionValue, useReducedMotion } from "framer-motion";
 import { usePathname } from "next/navigation";
 import { usePromoByType, useEffectiveForBanner } from "@/hooks/queries/usePromoQueries";
 import { useSidebar } from "@/contexts/SidebarContext";
@@ -665,7 +665,7 @@ export default function PromoBanner({
         <div className="relative flex w-full items-center justify-center px-4 min-h-[5rem] sm:min-h-[8rem] lg:min-h-[8.25rem]">
           {/* White-text Tools Australia logo, gently breathing — reads as a branded
               loading state on the dark bar. */}
-          <motion.img
+          <m.img
             src="/images/Tools%20Australia%20Logo/White-Text%20Logo.webp"
             alt=""
             draggable={false}
@@ -712,7 +712,7 @@ export default function PromoBanner({
         />
       )}
 
-      <motion.div
+      <m.div
         ref={bannerRef}
         role="button"
         tabIndex={0}
@@ -806,7 +806,7 @@ export default function PromoBanner({
                 } ${isScrolled ? "max-sm:min-h-[3.5rem]" : ""}`}
               >
                 {isContentReady ? (
-                  <motion.div
+                  <m.div
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     transition={{ duration: 0.3, ease: "easeOut" }}
@@ -846,7 +846,7 @@ export default function PromoBanner({
                       onError={handleLeftImageError}
                       priority
                     />
-                  </motion.div>
+                  </m.div>
                 ) : (
                   <div
                     className={`${
@@ -913,7 +913,7 @@ export default function PromoBanner({
                   ? new Date(nextDraw.activationDate).getTime()
                   : null;
                 return (
-                  <motion.div
+                  <m.div
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     transition={{ duration: 0.3, ease: "easeOut", delay: 0.15 }}
@@ -950,7 +950,7 @@ export default function PromoBanner({
                         );
                       }}
                     />
-                  </motion.div>
+                  </m.div>
                 );
               }
 
@@ -996,7 +996,7 @@ export default function PromoBanner({
                 const labelClass = `${rightSectionLabelClass} font-medium text-2xs sm:text-2xs lg:text-sm`;
                 const endMs = countdownDisplay.endMs ?? null;
                 return (
-                  <motion.div
+                  <m.div
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     transition={{ duration: 0.3, ease: "easeOut", delay: 0.15 }}
@@ -1033,7 +1033,7 @@ export default function PromoBanner({
                         );
                       }}
                     />
-                  </motion.div>
+                  </m.div>
                 );
               }
 
@@ -1061,7 +1061,7 @@ export default function PromoBanner({
                   ? new Date(currentDraw.freezeEntriesAt).getTime()
                   : null;
                 return (
-                  <motion.div
+                  <m.div
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     transition={{ duration: 0.3, ease: "easeOut", delay: 0.15 }}
@@ -1088,7 +1088,7 @@ export default function PromoBanner({
                         );
                       }}
                     />
-                  </motion.div>
+                  </m.div>
                 );
               }
 
@@ -1111,7 +1111,7 @@ export default function PromoBanner({
               }
 
               return (
-                <motion.div
+                <m.div
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   transition={{ duration: 0.3, ease: "easeOut", delay: 0.15 }}
@@ -1151,7 +1151,7 @@ export default function PromoBanner({
                       );
                     }}
                   />
-                </motion.div>
+                </m.div>
               );
                     })()}
                   </div>
@@ -1160,7 +1160,7 @@ export default function PromoBanner({
             </div>
           </div>
         </div>
-      </motion.div>
+      </m.div>
       <PromoHolidayDevToolbar forcedSlot={holidayDevPreview} onForcedSlotChange={setHolidayDevPreview} />
     </>
   );

@@ -114,7 +114,7 @@ export default function EntryWallet({
         <div className="min-w-0">
           <span className="text-[11px] font-bold uppercase tracking-[0.18em] text-muted-token">{eyebrow ?? `Entries · ${drawName}`}</span>
           <div className="mt-2.5">
-            <AnimatedNumber value={total} className={cn("num font-['Poppins'] font-black leading-[.85] tracking-[-.02em] tabular-nums text-primary-token dark:text-white", stack ? "text-[44px]" : "text-[52px] lg:text-[60px]")} />
+            <AnimatedNumber value={total} className={cn("num font-poppins font-black leading-[.85] tracking-[-.02em] tabular-nums text-primary-token dark:text-white", stack ? "text-[44px]" : "text-[52px] lg:text-[60px]")} />
           </div>
         </div>
         {onGetPackage && (
@@ -174,7 +174,7 @@ export default function EntryWallet({
         <div className="mt-4 flex items-center gap-3 border-t border-token pt-3.5">
           <FreeEntriesChip value={entriesPerRenewal ?? 0} tone="gold" />
           <div className="min-w-0 text-[13px] leading-[1.38] text-muted-token">
-            <span className="mb-px block font-['Poppins'] text-[13.5px] font-bold text-primary-token dark:text-white">Land on your renewal</span>
+            <span className="mb-px block font-poppins text-[13.5px] font-bold text-primary-token dark:text-white">Land on your renewal</span>
             Your accumulated entries drop in on{" "}
             <b className="whitespace-nowrap font-semibold text-primary-token dark:text-white">{renewalDateLabel}</b>.
           </div>
@@ -184,7 +184,7 @@ export default function EntryWallet({
         <div className="mt-4 flex items-center gap-3 border-t border-token pt-3.5">
           <FreeEntriesChip value={pastDueRenewalEntries ?? 0} tone="amber" />
           <div className="min-w-0 text-[13px] leading-[1.38] text-muted-token">
-            <span className="mb-px block font-['Poppins'] text-[13.5px] font-bold text-primary-token dark:text-white">Waiting on your renewal</span>
+            <span className="mb-px block font-poppins text-[13.5px] font-bold text-primary-token dark:text-white">Waiting on your renewal</span>
             Settle <b className="whitespace-nowrap font-semibold text-primary-token dark:text-white">${pastDueRenewalCost}</b> and your free entries land as soon as it clears.
           </div>
         </div>

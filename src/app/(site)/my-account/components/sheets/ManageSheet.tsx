@@ -165,7 +165,7 @@ export default function ManageSheet() {
                 </span>
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className="font-['Poppins'] text-base font-extrabold text-primary-token dark:text-white">{tierName}</span>
+                    <span className="font-poppins text-base font-extrabold text-primary-token dark:text-white">{tierName}</span>
                     <span
                       className={cn(
                         "rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide",
@@ -181,7 +181,7 @@ export default function ManageSheet() {
                 </div>
                 {price != null && (
                   <div className="text-right">
-                    <div className="font-['Poppins'] text-lg font-black" style={{ color: tierHex }}>${price}</div>
+                    <div className="font-poppins text-lg font-black" style={{ color: tierHex }}>${price}</div>
                     <div className="text-[10px] font-semibold text-muted-token">/mo</div>
                   </div>
                 )}
@@ -241,7 +241,7 @@ export default function ManageSheet() {
             </>
           ) : (
             <div className="rounded-2xl border border-token bg-surface p-5 text-center shadow-sm">
-              <p className="font-['Poppins'] text-base font-extrabold text-primary-token dark:text-white">No active membership</p>
+              <p className="font-poppins text-base font-extrabold text-primary-token dark:text-white">No active membership</p>
               <p className="mt-1 text-sm text-muted-token">Become a member for monthly free entries and lasting partner access.</p>
               <button
                 type="button"

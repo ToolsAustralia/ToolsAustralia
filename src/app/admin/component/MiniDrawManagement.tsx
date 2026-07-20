@@ -419,8 +419,8 @@ export default function MiniDrawManagement() {
         {/* Header */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
-            <h1 className="text-4xl font-bold text-gray-900 dark:text-white mb-2 font-['Poppins']">Mini Draw Management</h1>
-            <p className="text-lg text-gray-600 dark:text-neutral-400 font-['Poppins']">
+            <h1 className="text-4xl font-bold text-gray-900 dark:text-white mb-2 font-poppins">Mini Draw Management</h1>
+            <p className="text-lg text-gray-600 dark:text-neutral-400 font-poppins">
               Create and manage mini draws — winner testimony and photos are edited on each card after a winner exists
             </p>
           </div>

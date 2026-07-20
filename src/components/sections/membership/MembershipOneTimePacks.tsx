@@ -95,14 +95,14 @@ export function PackCard({
           <span className="relative z-[2] inline-flex items-center gap-1.5">
             <Crown className="h-4 w-4" style={{ color: "#e8c75a" }} />
             <span
-              className="font-['Poppins'] text-[15px] font-black uppercase tracking-[0.2em]"
+              className="font-poppins text-[15px] font-black uppercase tracking-[0.2em]"
               style={{ background: "linear-gradient(180deg,#fff1c4,#e8c75a 48%,#c8a13a)", WebkitBackgroundClip: "text", backgroundClip: "text", color: "transparent" }}
             >
               {getPackageDisplayName(plan)}
             </span>
           </span>
         ) : (
-          <span className="font-['Poppins'] text-[13px] font-black uppercase leading-tight tracking-[0.06em]">{getPackageDisplayName(plan)}</span>
+          <span className="font-poppins text-[13px] font-black uppercase leading-tight tracking-[0.06em]">{getPackageDisplayName(plan)}</span>
         )}
         <AccessRing
           percent={access}
@@ -113,7 +113,7 @@ export function PackCard({
           glow={isVip ? "rgba(255,214,120,.9)" : undefined}
           pulse={isVip}
         >
-          <span className="font-['Poppins'] text-[14px] font-black" style={isVip ? { color: "#fff1c4", textShadow: "0 0 8px rgba(255,214,120,.7)" } : undefined}>
+          <span className="font-poppins text-[14px] font-black" style={isVip ? { color: "#fff1c4", textShadow: "0 0 8px rgba(255,214,120,.7)" } : undefined}>
             {access}%
           </span>
         </AccessRing>
@@ -122,7 +122,7 @@ export function PackCard({
         <span className="inline-flex items-center gap-1 text-[11.5px] font-extrabold">
           <Bolt className="h-3 w-3" /> {entries.toLocaleString()} free entries
         </span>
-        <div className="mt-0.5 font-['Poppins'] text-[20px] font-black">${plan.price}</div>
+        <div className="mt-0.5 font-poppins text-[20px] font-black">${plan.price}</div>
       </div>
     </button>
   );

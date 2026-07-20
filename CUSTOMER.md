@@ -556,3 +556,7 @@ Customer-unique terms are defined here. For shared draw/billing terms (Anchor, M
 | **Attribution cookie (`_ta_attr`)** | First-touch 90-day cookie holding campaign metadata only — no direct PII. Survives login/OAuth (§8a). |
 | **Converting platform** | The single resolved acquisition channel at purchase time, stored on `PaymentEvent` (not `User`) (§8b). |
 | **`entryWallet`** | Deprecated field on `User`, always 0 (§2e). |
+
+> _2026-07-20 note:_ the sitewide `font-['[Poppins]']` → `font-poppins` codemod touched some
+> `/my-account` components (their Poppins-classed text now renders real Poppins). This is a
+> presentation-only change — **no customer field, lifecycle state, flow, or captured data changed.**

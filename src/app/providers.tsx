@@ -19,7 +19,13 @@ import { defaultQueryOptions, defaultMutationOptions, retryConfig } from "@/lib/
 import UpgradeSuccessToast from "@/components/UpgradeSuccessToast";
 import { ToastProvider } from "@/components/ui/Toast";
 import { useState } from "react";
-import { MotionConfig } from "framer-motion";
+import { LazyMotion, MotionConfig } from "framer-motion";
+
+// Async loader (module scope so it's stable across renders): code-splits the
+// framer-motion feature bundle out of the shared/critical chunk — it's fetched
+// after hydration. Landing-path components use the lean `m.*` renderer that
+// consumes these features; see src/app/lazy-motion-features.ts + docs.
+const loadMotionFeatures = () => import("./lazy-motion-features").then((mod) => mod.default);
 import DeviceTierProvider from "@/components/system/DeviceTierProvider";
 import AffiliateTracker from "@/components/tracking/AffiliateTracker";
 import ReferralTracker from "@/components/tracking/ReferralTracker";
@@ -76,6 +82,14 @@ export function Providers({ children }: { children: React.ReactNode }) {
                   <CartProvider>
                     <LoadingProvider>
                       <ToastProvider>
+                        {/* LazyMotion (non-strict) lazy-loads framer-motion's feature
+                            bundle (via the async loader above) instead of shipping it
+                            eagerly in the shared chunk. Landing-path components use the
+                            lean `m.*` renderer (see docs/shared-ui/lazymotion.md);
+                            route-isolated components (admin, mini-draws, login) keep
+                            `motion.*`, which non-strict allows — they self-load features
+                            in their own route chunk. */}
+                        <LazyMotion features={loadMotionFeatures}>
                         <MotionConfig reducedMotion="user">
                           <DeviceTierProvider />
                           <AffiliateTracker />
@@ -87,6 +101,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
                           {children}
                           {process.env.NODE_ENV === "development" ? <MajorDrawTestControls /> : null}
                         </MotionConfig>
+                        </LazyMotion>
                       </ToastProvider>
                     </LoadingProvider>
                     {/* React Query DevTools - temporarily disabled */}

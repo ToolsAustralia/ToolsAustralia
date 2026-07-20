@@ -44,7 +44,7 @@ function brandFace(brandRaw?: string): { bg: string; mark: React.ReactNode } {
   if (brand === "visa") {
     return {
       bg: "linear-gradient(135deg,#141414 0%,#1b2140 48%,#0b1a3a 100%)",
-      mark: <span className="font-['Poppins'] text-xl font-black italic tracking-tight text-white">VISA</span>,
+      mark: <span className="font-poppins text-xl font-black italic tracking-tight text-white">VISA</span>,
     };
   }
   if (brand === "mastercard") {
@@ -61,12 +61,12 @@ function brandFace(brandRaw?: string): { bg: string; mark: React.ReactNode } {
   if (brand === "amex" || brand === "american express") {
     return {
       bg: "linear-gradient(135deg,#0a6896 0%,#0b4d77 50%,#062e49 100%)",
-      mark: <span className="font-['Poppins'] text-lg font-black tracking-wider text-white">AMEX</span>,
+      mark: <span className="font-poppins text-lg font-black tracking-wider text-white">AMEX</span>,
     };
   }
   return {
     bg: "linear-gradient(135deg,#111 0%,#2a2a2e 55%,#141416 100%)",
-    mark: <span className="font-['Poppins'] text-sm font-black uppercase tracking-wider text-white">{brandRaw || "Card"}</span>,
+    mark: <span className="font-poppins text-sm font-black uppercase tracking-wider text-white">{brandRaw || "Card"}</span>,
   };
 }
 
@@ -156,11 +156,11 @@ const SettingsRedesignPayment: React.FC<SettingsRedesignPaymentProps> = ({
                 <div className="flex items-end justify-between">
                   <div className="min-w-0">
                     <p className="text-[9px] font-bold uppercase tracking-[0.18em] text-white/60">Card holder</p>
-                    <p className="truncate font-['Poppins'] text-sm font-bold tracking-wide">{cardholderName || "Cardholder"}</p>
+                    <p className="truncate font-poppins text-sm font-bold tracking-wide">{cardholderName || "Cardholder"}</p>
                   </div>
                   <div className="text-right">
                     <p className="text-[9px] font-bold uppercase tracking-[0.18em] text-white/60">Expires</p>
-                    <p className="font-['Poppins'] text-sm font-bold tracking-wider">{expLabel(heroCard.card)}</p>
+                    <p className="font-poppins text-sm font-bold tracking-wider">{expLabel(heroCard.card)}</p>
                   </div>
                 </div>
               </div>

@@ -211,6 +211,8 @@
     "sync:klaviyo-past-due:dry": "tsx scripts/sync-klaviyo-past-due-profiles.ts --dry-run",
     "sweep:brand-red": "tsx scripts/codemods/sweep-brand-red.ts --apply",
     "sweep:brand-red:dry": "tsx scripts/codemods/sweep-brand-red.ts",
+    "sweep:font-poppins": "tsx scripts/codemods/sweep-font-poppins.ts --apply",
+    "sweep:font-poppins:dry": "tsx scripts/codemods/sweep-font-poppins.ts",
     "sweep:micro-text": "tsx scripts/codemods/sweep-micro-text.ts --apply",
     "sweep:micro-text:dry": "tsx scripts/codemods/sweep-micro-text.ts",
     "sweep:header-offsets": "tsx scripts/codemods/sweep-header-offsets.ts --apply",

@@ -88,7 +88,7 @@ export default function RedeemablesWallet({ userId, variant = "dashboard" }: Red
               <Gift className="w-5 h-5 text-red-600" />
             </div>
             <div>
-              <h3 className="text-lg sm:text-xl font-bold text-gray-900 font-['Poppins']">Redeemables Wallet</h3>
+              <h3 className="text-lg sm:text-xl font-bold text-gray-900 font-poppins">Redeemables Wallet</h3>
               <p className="text-xs sm:text-sm text-gray-600 dark:text-neutral-400">Manage stacked free-entry rewards and monthly codes</p>
             </div>
           </div>

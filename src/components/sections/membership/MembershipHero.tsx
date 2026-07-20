@@ -63,16 +63,16 @@ function DeckCard({ plan, cta }: { plan: LocalMembershipPlan; cta: MembershipCar
           style={{ background: "linear-gradient(90deg,transparent,rgba(255,255,255,.4),transparent)" }}
         />
         <div className="relative flex flex-col items-center gap-[13px] px-4 pb-[23px] pt-[22px] text-center">
-          <span className="font-['Poppins'] text-[15px] font-black uppercase tracking-[0.12em]">{plan.name}</span>
+          <span className="font-poppins text-[15px] font-black uppercase tracking-[0.12em]">{plan.name}</span>
           <AccessRing percent={access} size={84} stroke={8} color={ink} trackColor={trackFor(ink)}>
-            <span className="font-['Poppins'] text-[19px] font-extrabold">{access}%</span>
+            <span className="font-poppins text-[19px] font-extrabold">{access}%</span>
           </AccessRing>
           <span className="-mt-1 text-[9.5px] font-extrabold uppercase tracking-[0.14em] opacity-90">Partner access</span>
           <div className="text-xs leading-tight opacity-85">
-            <b className="block font-['Poppins'] text-[18px] font-extrabold leading-tight">{baseEntries(plan)}</b>
+            <b className="block font-poppins text-[18px] font-extrabold leading-tight">{baseEntries(plan)}</b>
             free entries / mo
           </div>
-          <div className="font-['Poppins'] text-[23px] font-black">
+          <div className="font-poppins text-[23px] font-black">
             ${plan.price}
             <span className="text-xs font-semibold opacity-60">/mo</span>
           </div>
@@ -112,7 +112,7 @@ export default function MembershipHero({ cta }: { cta: MembershipCardCta }) {
           >
             <Crown className="h-3.5 w-3.5" style={{ color: "#d4af37" }} /> Tools Australia Membership
           </span>
-          <h1 className="mt-5 font-['Poppins'] text-[48px] font-black leading-[0.95] tracking-[-0.03em] sm:text-7xl">
+          <h1 className="mt-5 font-poppins text-[48px] font-black leading-[0.95] tracking-[-0.03em] sm:text-7xl">
             Save big.
             <br />
             <span style={{ background: "linear-gradient(92deg,#ffe066,#ffb300 70%,#ff8a00)", WebkitBackgroundClip: "text", backgroundClip: "text", color: "transparent" }}>

@@ -81,7 +81,7 @@ export default function RewardsClaimables({ userId, onUnlock }: RewardsClaimable
           )}
         </span>
         <div className="min-w-0 flex-1">
-          <p className="font-['Poppins'] text-base font-extrabold text-primary-token dark:text-white">
+          <p className="font-poppins text-base font-extrabold text-primary-token dark:text-white">
             {hasClaimable ? `${claimableCount} reward${claimableCount > 1 ? "s" : ""} to claim` : "No rewards to claim"}
           </p>
           <p className="text-sm text-muted-token">

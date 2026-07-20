@@ -518,7 +518,12 @@
   h5,
   h6 {
     font-family: var(--font-poppins), "Poppins", system-ui, sans-serif;
-    font-weight: 800;
+    /* Poppins is loaded at 400/500/600/700/900 (see src/app/layout.tsx). With
+       `font-synthesis: none`, a requested 800 (not loaded) is font-matched to
+       the nearest loaded weight ABOVE it — 900 — so headings already render 900.
+       Pin it to the actually-loaded 900 so intent == render (no synthesis, no
+       silent fallback). */
+    font-weight: 900;
     font-synthesis: none;
   }
 
@@ -629,7 +634,7 @@
 @layer components {
   /* Form input utility class for consistent styling */
   .form-input {
-    @apply w-full py-3 px-4 pr-10 border-b focus:outline-none focus:ring-0 focus:ring-offset-0 focus:border-red-600 bg-transparent text-black dark:text-white font-['Poppins'] transition-all duration-300 placeholder-gray-500 dark:placeholder-gray-400;
+    @apply w-full py-3 px-4 pr-10 border-b focus:outline-none focus:ring-0 focus:ring-offset-0 focus:border-red-600 bg-transparent text-black dark:text-white font-poppins transition-all duration-300 placeholder-gray-500 dark:placeholder-gray-400;
   }
 
   .btn-primary {

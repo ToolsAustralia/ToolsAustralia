@@ -93,7 +93,7 @@ const SpecCard: React.FC<SpecCardProps> = ({ item, surface, brandIconClass, isDa
               className={cn(
                 "text-sm sm:text-xl font-bold",
                 surface.titleClass,
-                "font-['Poppins'] leading-tight tracking-tight"
+                "font-poppins leading-tight tracking-tight"
               )}
             >
               {item.name}
@@ -135,7 +135,7 @@ const SpecCard: React.FC<SpecCardProps> = ({ item, surface, brandIconClass, isDa
                 className={cn(
                   "text-xs sm:text-base font-semibold",
                   surface.titleClass,
-                  "mb-1.5 sm:mb-3 font-['Poppins'] flex items-center gap-1.5 sm:gap-2"
+                  "mb-1.5 sm:mb-3 font-poppins flex items-center gap-1.5 sm:gap-2"
                 )}
               >
                 <span
@@ -154,7 +154,7 @@ const SpecCard: React.FC<SpecCardProps> = ({ item, surface, brandIconClass, isDa
                 className={cn(
                   "text-xs sm:text-base font-semibold",
                   surface.titleClass,
-                  "mb-1.5 sm:mb-3 font-['Poppins'] flex items-center gap-1.5 sm:gap-2"
+                  "mb-1.5 sm:mb-3 font-poppins flex items-center gap-1.5 sm:gap-2"
                 )}
               >
                 <Package className={cn("h-3.5 w-3.5 sm:h-5 sm:w-5 shrink-0", brandIconClass)} />

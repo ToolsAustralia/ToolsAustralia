@@ -241,7 +241,7 @@ export default function AffiliateDashboardPage() {
             <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between pb-8 gap-6">
               {/* Welcome Section */}
               <div className="lg:text-left lg:flex-[2] lg:max-w-2xl px-4">
-                <h1 className="text-3xl sm:text-4xl lg:text-5xl xl:text-6xl font-bold font-['Poppins'] mb-4 text-white leading-tight">
+                <h1 className="text-3xl sm:text-4xl lg:text-5xl xl:text-6xl font-bold font-poppins mb-4 text-white leading-tight">
                   Welcome back,
                   <br />
                   <span className="bg-gradient-to-r from-yellow-400 to-orange-400 bg-clip-text text-transparent">
@@ -325,7 +325,7 @@ export default function AffiliateDashboardPage() {
         <div className="max-w-7xl mx-auto px-2 sm:px-4 lg:px-6">
           {/* Affiliate Link Card */}
           <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-4 sm:p-6 mb-6">
-            <h2 className="text-xl sm:text-2xl font-bold text-gray-900 mb-4 font-['Poppins']">Your Affiliate Link</h2>
+            <h2 className="text-xl sm:text-2xl font-bold text-gray-900 mb-4 font-poppins">Your Affiliate Link</h2>
             <div className="flex flex-col sm:flex-row gap-2">
               <input
                 type="text"
@@ -359,7 +359,7 @@ export default function AffiliateDashboardPage() {
           {/* Account Settings Section */}
           <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-4 sm:p-6 mb-6">
             <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl sm:text-2xl font-bold text-gray-900 font-['Poppins'] flex items-center gap-2">
+              <h2 className="text-xl sm:text-2xl font-bold text-gray-900 font-poppins flex items-center gap-2">
                 <Settings className="w-5 h-5" />
                 Account Settings
               </h2>
@@ -467,7 +467,7 @@ export default function AffiliateDashboardPage() {
           {/* Bank Details */}
           <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-4 sm:p-6 mb-6">
             <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl sm:text-2xl font-bold text-gray-900 font-['Poppins']">Bank Details</h2>
+              <h2 className="text-xl sm:text-2xl font-bold text-gray-900 font-poppins">Bank Details</h2>
               <button
                 onClick={() => setShowBankForm(!showBankForm)}
                 className="text-sm font-medium text-red-600 hover:text-red-675 transition-colors"
@@ -563,7 +563,7 @@ export default function AffiliateDashboardPage() {
 
           {/* Recent Commissions */}
           <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-4 sm:p-6 mb-14">
-            <h2 className="text-xl sm:text-2xl font-bold text-gray-900 mb-4 font-['Poppins']">
+            <h2 className="text-xl sm:text-2xl font-bold text-gray-900 mb-4 font-poppins">
               Recent Unpaid Commissions
             </h2>
             {dashboard.recentCommissions.length === 0 ? (
@@ -621,7 +621,7 @@ export default function AffiliateDashboardPage() {
           {/* Payout History */}
           {dashboard.payoutHistory.length > 0 && (
             <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-4 sm:p-6 mb-14">
-              <h2 className="text-xl sm:text-2xl font-bold text-gray-900 mb-4 font-['Poppins']">Payout History</h2>
+              <h2 className="text-xl sm:text-2xl font-bold text-gray-900 mb-4 font-poppins">Payout History</h2>
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead className="bg-gray-50 border-b border-gray-200">

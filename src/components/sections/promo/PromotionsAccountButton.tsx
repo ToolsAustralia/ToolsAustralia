@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect, type CSSProperties } from "react";
 import { usePromoTheme } from "@/stores/usePromoThemeStore";
 import Link from "next/link";
-import { motion, AnimatePresence } from "framer-motion";
+import { m, AnimatePresence } from "framer-motion";
 import { User, LayoutDashboard, Gift, Home } from "lucide-react";
 import { useUserContext } from "@/contexts/UserContext";
 import { useThemeStore } from "@/stores/useThemeStore";
@@ -71,7 +71,7 @@ export default function PromotionsAccountButton() {
   return (
     <AnimatePresence>
       {isVisible && (
-        <motion.div
+        <m.div
           key="promo-account-fab-stack"
           ref={fabStackRef}
           initial={{ opacity: 0, x: 40, scale: 0.9 }}
@@ -81,7 +81,7 @@ export default function PromotionsAccountButton() {
           className="fixed right-4 bottom-16 z-40 flex flex-col items-end gap-3 sm:bottom-4 transition-[bottom] duration-300 ease-out"
           style={dodgeBottom > 0 ? { bottom: dodgeBottom } : undefined}
         >
-          <motion.div
+          <m.div
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ type: "spring", stiffness: 400, damping: 30, delay: 0.03 }}
@@ -93,13 +93,13 @@ export default function PromotionsAccountButton() {
                 ...(!isLightSite ? { borderColor: promoTheme.borderRgba } : {}),
               }}
             />
-          </motion.div>
+          </m.div>
 
           {/* Menu is absolutely positioned so its height never stretches this row — theme toggle stays fixed. */}
           <div className="relative h-12 w-12 shrink-0 overflow-visible">
             <AnimatePresence>
               {isOpen && (
-                <motion.div
+                <m.div
                   initial={{ opacity: 0, x: 24 }}
                   animate={{ opacity: 1, x: 0 }}
                   exit={{ opacity: 0, x: 24 }}
@@ -133,11 +133,11 @@ export default function PromotionsAccountButton() {
                       </Link>
                     ))}
                   </div>
-                </motion.div>
+                </m.div>
               )}
             </AnimatePresence>
 
-            <motion.button
+            <m.button
               type="button"
               onClick={() => setIsOpen(!isOpen)}
               aria-label={isOpen ? "Close account menu" : "Open account menu"}
@@ -156,9 +156,9 @@ export default function PromotionsAccountButton() {
                 style={{ boxShadow: `inset 0 0 0 1px ${promoTheme.borderRgba}` }}
               />
               <User className="h-6 w-6 relative z-10 shrink-0" style={{ color: promoTheme.primary }} />
-            </motion.button>
+            </m.button>
           </div>
-        </motion.div>
+        </m.div>
       )}
     </AnimatePresence>
   );
