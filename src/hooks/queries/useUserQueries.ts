@@ -82,6 +82,8 @@ export interface UserData {
 
 export interface MyAccountData {
   user: UserData;
+  // Mirrors MY_ACCOUNT_MINI_DRAW_FIELDS — no `endDate` (phantom MiniDraw field; the model
+  // has no such path). Keep in lockstep with src/utils/dashboard/my-account-projection.ts.
   activeMiniDraws: Array<{
     _id: string;
     name: string;
@@ -92,22 +94,20 @@ export interface MyAccountData {
       value: number;
       images: string[];
     };
-    endDate: string;
     isActive: boolean;
   }>;
+  // Mirrors MY_ACCOUNT_ORDER_FIELDS — no `items` (phantom Order field; line items live under
+  // `products`/`tickets`). Keep in lockstep with src/utils/dashboard/my-account-projection.ts.
   recentOrders: Array<{
     _id: string;
     orderNumber: string;
     totalAmount: number;
     status: string;
     createdAt: string;
-    items: Array<{
-      productId: string;
-      quantity: number;
-      price: number;
-    }>;
   }>;
   insights: {
+    // NOTE: totalSpent sums `totalAmount` over the 10 most recent orders regardless of status
+    // (includes cancelled/pending) and is capped at 10 — it is NOT true lifetime spend.
     totalSpent: number;
     activeDrawsCount: number;
     memberSince: number;
