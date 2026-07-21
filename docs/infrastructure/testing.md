@@ -237,6 +237,15 @@ npm run test:mint-current-cycle        # pure unit test of the mint primitive (i
 npm run stripe:probe-member-resolve-mint  # MEMBER "Resolve" no_held_draft mint: a decline leaves the minted invoice still_chargeable (NOT stranded → no re-mint), and an add-a-card retry collects on the new default (gates the member mint-on-resolve; docs/FAILED_RENEWAL_PAY_NOW.md)
 npm run test:member-resolve-mint       # pure unit test of classifyMemberResolveMintOutcome (mint result → collected / retry_interactively / blocked)
 npm run test:force-charge-mint-map     # pure unit test: mint failure reason → ForceChargeResult reason (the force-charge/renew no_held_draft re-bill fallback)
+npm run test:rebill-classification     # pure unit test: isRebillPayment / effectiveBillingReasonForRebill (a past-due re-bill success is a RENEWAL, normalized to subscription_cycle everywhere)
+```
+
+A re-bill SUCCESS is `billing_reason: subscription_update` (same as an upgrade) but is a **renewal** — the webhook normalizes it to `subscription_cycle` so labels, revenue/ROAS, and conversion tracking treat it as one (see [docs/billing-stripe/gotchas.md](../billing-stripe/gotchas.md)). Historical events created before that shipped are corrected by the **dry-run-safe, Stripe-confirmed** backfill:
+
+```bash
+npx tsx scripts/backfill-rebill-payment-events.ts                 # DRY-RUN (no writes): confirm each candidate is a re-bill via live Stripe
+npx tsx scripts/backfill-rebill-payment-events.ts --since-hours=24
+npx tsx scripts/backfill-rebill-payment-events.ts --apply         # LIVE: flip confirmed re-bill PaymentEvents → subscription_cycle + isRenewal
 ```
 
 The `no_held_draft` re-bill mint is now wired into **every** past-due collection entry point: the member "Resolve" (`pay-failed-invoice`), the member "Pay overdue" + admin Force-Charge (`forceChargeCurrentCycle`), the member renew retry (`renew-subscription`), the per-user admin Charge (`chargeOrRecover`), and the bulk run — so no stranded member dead-ends at "no held draft" on any path.

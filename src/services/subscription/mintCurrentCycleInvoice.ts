@@ -60,10 +60,11 @@ function defaultDeps(): MintCurrentCycleDeps {
         pause_collection: "", // MUST unpause first — Stripe rejects invoice creation while paused.
         billing_cycle_anchor: "now",
         proration_behavior: "none",
-        // billing_anchor_rule: a durable AUDIT tag identifying this as a re-bill (not read by the webhook
-        // — the renewal-vs-upgrade split is driven by upgradeFrom below + the success-path entry
-        // normalization; the failure-side "Subscription Renewal Failed" event is driven by `isRebill`,
-        // i.e. a subscription_update failure while past_due/unpaid). ALSO blank any stale upgrade markers —
+        // billing_anchor_rule: a durable marker identifying this as a re-bill. The webhook READS it (with
+        // the upgradeFrom + past_due guards) to classify a subscription_update invoice as a RENEWAL — on
+        // SUCCESS it normalizes billing_reason → subscription_cycle so labels / revenue+ROAS / conversion
+        // tracking / isRenewal all treat it as a renewal (utils/billing/rebill-classification.ts), and on
+        // DECLINE it fires "Subscription Renewal Failed" (isRebill). ALSO blank any stale upgrade markers —
         // Stripe MERGES metadata, and a previously-upgraded member still carries upgradeFrom/upgradeType,
         // which would misclassify this re-bill as an upgrade (promo-inflated entries). "" deletes the key.
         metadata: {
