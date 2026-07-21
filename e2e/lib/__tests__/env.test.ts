@@ -64,6 +64,10 @@ t("resolveE2eEnv neuters third parties", () =>
     assert.equal(env.overlay.NEXT_PUBLIC_TIKTOK_PIXEL_ID, "");
     assert.equal(env.overlay.NEXT_PUBLIC_ENABLE_PIXEL_TESTING, "");
     assert.equal(env.overlay.NEXT_PUBLIC_KLAVIYO_COMPANY_ID, "");
+    assert.equal(env.overlay.NEXT_PUBLIC_ENABLE_GTM_TESTING, "");
+    assert.equal(env.overlay.NEXT_PUBLIC_GTM_ID, "");
+    assert.equal(env.overlay.NEXT_PUBLIC_GA_ID, "");
+    assert.equal(env.overlay.NEXT_PUBLIC_HOTJAR_ID, "");
   }));
 
 t("resolveE2eEnv threads webhook secret", () =>
