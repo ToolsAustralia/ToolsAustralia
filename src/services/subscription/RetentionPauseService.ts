@@ -11,7 +11,7 @@
  * | Trigger             | Failed renewal invoice          | Member accepts pause offer  |
  * | behavior            | keep_as_draft                   | void                        |
  * | metadata.pauseReason| (none set)                      | "retention"                 |
- * | resumes_at          | (none — manual resume)          | period_end + 30 days        |
+ * | resumes_at          | (none — manual resume)          | next cycle boundary (~1 mo) |
  * | Webhook handling    | Cleared on next paid invoice    | Flip→paused at period end   |
  *
  * ## The `paused` membership state (real DB state)
@@ -48,6 +48,7 @@
  * not a data-integrity failure.
  */
 
+import { addMonths } from "date-fns";
 import type { IUser } from "@/models/User";
 import { hasFailedRenewal } from "@/utils/subscription/subscription-helpers";
 
@@ -60,6 +61,11 @@ import { hasFailedRenewal } from "@/utils/subscription/subscription-helpers";
 // Constants
 // ---------------------------------------------------------------------------
 
+/**
+ * The retention pause is OFFERED as "30 days" (customer-facing copy). The ACTUAL resume is anchored
+ * to the member's next billing-cycle boundary (see `computeResumeAt`) — for a monthly membership that
+ * is ~30 days, but aligned to the cycle so exactly one cycle is skipped. Marketing/approx value only.
+ */
 export const RETENTION_PAUSE_DAYS = 30;
 
 // ---------------------------------------------------------------------------
@@ -67,14 +73,16 @@ export const RETENTION_PAUSE_DAYS = 30;
 // ---------------------------------------------------------------------------
 
 /**
- * Compute the Unix timestamp (seconds) at which the retention pause resumes:
- * `base + RETENTION_PAUSE_DAYS days`. Callers pass the member's PERIOD END as the base —
- * the pause begins when their paid period ends — so resume = period_end + 30d.
- *
- * Stripe's `resumes_at` field is Unix seconds (not milliseconds).
+ * Compute the Unix timestamp (seconds) at which the retention pause resumes: the member's NEXT
+ * billing-cycle boundary (`periodEnd + 1 month`, calendar-clamped via date-fns), so exactly ONE
+ * cycle is skipped. Callers pass the member's PERIOD END. Anchoring to the cycle boundary — NOT a
+ * fixed `+30 days` — is what makes the re-bill land ON the boundary AND avoids double-skipping short
+ * months (a Feb `+30d` reaches past the next boundary → 2 cycles voided). Verified on a Stripe Test
+ * Clock: `npm run stripe:probe-pause-lifecycle`. Assumes monthly billing (every membership tier is
+ * monthly). Stripe's `resumes_at` is Unix seconds (not milliseconds).
  */
-export function computeResumeAt(base: Date): number {
-  return Math.floor((base.getTime() + RETENTION_PAUSE_DAYS * 86_400_000) / 1000);
+export function computeResumeAt(periodEnd: Date): number {
+  return Math.floor(addMonths(periodEnd, 1).getTime() / 1000);
 }
 
 /**
@@ -125,7 +133,7 @@ export interface ApplyRetentionPauseResult {
  * 2. Runs eligibility guards (past-due / consumed / no subscription).
  * 3. Calls `stripe.subscriptions.update` with:
  *    - `pause_collection.behavior: "void"` (discard invoices during pause)
- *    - `pause_collection.resumes_at: <unix seconds, now + 30d>`
+ *    - `pause_collection.resumes_at: <unix seconds, next cycle boundary = period_end + 1 month>`
  *    - `metadata.pauseReason: "retention"` — the webhook guard key
  *    - `metadata.pauseResumesAt: <ISO string>` — human-readable audit field
  * 4. Persists `retentionOffersConsumed.pause30d = true` via atomic `updateOne`.
@@ -152,9 +160,10 @@ export async function applyRetentionPause(userId: string): Promise<ApplyRetentio
   // TypeScript narrowing: blockReason === null guarantees stripeSubscriptionId is set.
   const subscriptionId = user.stripeSubscriptionId as string;
 
-  // The 30-day freeze begins at the member's PERIOD END (they keep the paid period they already
-  // bought), so resume = period_end + 30d — NOT now + 30d. Prefer the DB endDate (synced from
-  // Stripe for active members); fall back to the live Stripe period end.
+  // The freeze begins at the member's PERIOD END (they keep the paid period they already bought) and
+  // resumes at the NEXT billing-cycle boundary (period_end + 1 month) so exactly ONE cycle is skipped
+  // — NOT a fixed +30 days. Prefer the DB endDate (synced from Stripe for active members); fall back
+  // to the live Stripe period end.
   const dbEndDate = user.subscription?.endDate ? new Date(user.subscription.endDate) : null;
   let periodEnd: Date;
   if (dbEndDate && !Number.isNaN(dbEndDate.getTime()) && dbEndDate.getTime() > Date.now()) {

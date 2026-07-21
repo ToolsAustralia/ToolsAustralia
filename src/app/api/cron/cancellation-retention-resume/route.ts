@@ -127,7 +127,7 @@ export async function GET(request: NextRequest) {
       processed += 1;
 
       try {
-        const subscription = await stripe.subscriptions.retrieve(subId);
+        const subscription = await stripe.subscriptions.retrieve(subId, { expand: ["latest_invoice"] });
 
         const pauseReason = subscription.metadata?.pauseReason;
         const pauseResumesAtIso = subscription.metadata?.pauseResumesAt;
@@ -156,21 +156,34 @@ export async function GET(request: NextRequest) {
           flipped += 1;
         }
         // (b) RESTORE from paused: DB still says paused but Stripe already resumed (pause_collection
-        //     gone). Mirror Stripe's status (active→active; a failed resume shows past_due/unpaid) and
-        //     clear the window. The primary restore is invoice.payment_succeeded.
+        //     gone). PAYMENT-GATED so "benefits only after a successful payment" holds even at the
+        //     boundary: restore to active ONLY when the resume charge is actually PAID. A failed/ended
+        //     resume (past_due/unpaid/canceled) is mirrored; an active-but-not-yet-settled sub is LEFT
+        //     paused for the invoice.payment_succeeded webhook (the primary restore) to handle.
         else if (transition === "restore_from_paused") {
-          const backToActive = subscription.status === "active" || subscription.status === "trialing";
-          await User.updateOne(
-            { _id: user._id },
-            {
-              $set: {
-                "subscription.status": backToActive ? "active" : subscription.status,
-                "subscription.isActive": backToActive,
-              },
-              $unset: { "subscription.pausedFrom": "", "subscription.pausedUntil": "" },
-            }
-          );
-          restored += 1;
+          const stripeStatus = subscription.status;
+          const latest = subscription.latest_invoice;
+          const latestPaid = typeof latest !== "string" && latest?.status === "paid";
+          if (stripeStatus === "past_due" || stripeStatus === "unpaid" || stripeStatus === "canceled") {
+            await User.updateOne(
+              { _id: user._id },
+              {
+                $set: { "subscription.status": stripeStatus, "subscription.isActive": false },
+                $unset: { "subscription.pausedFrom": "", "subscription.pausedUntil": "" },
+              }
+            );
+            restored += 1;
+          } else if ((stripeStatus === "active" || stripeStatus === "trialing") && latestPaid) {
+            await User.updateOne(
+              { _id: user._id },
+              {
+                $set: { "subscription.status": "active", "subscription.isActive": true },
+                $unset: { "subscription.pausedFrom": "", "subscription.pausedUntil": "" },
+              }
+            );
+            restored += 1;
+          }
+          // else: active but the resume bill hasn't settled — leave paused; the payment webhook restores.
         }
 
         if (

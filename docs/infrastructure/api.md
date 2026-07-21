@@ -14,7 +14,7 @@
 | Path | Schedule (UTC) | `maxDuration` | Purpose |
 |---|---|---|---|
 | `/api/cron/dashboard-stats-daily-snapshot` | `0 14 * * *` and `0 15 * * *` | 300s | Re-upserts 90-day sliding window of `DashboardStatsDailySnapshot` rows. Idempotent. Second fire heals first-run failures. |
-| `/api/cron/cancellation-retention-resume` | `0 16 * * *` | 300s | Backstop for the `paused` retention-pause state (flips `active→paused` at `pausedFrom`, restores `paused→active` when Stripe has resumed) + clears stale `pauseReason="retention"` metadata after the 30-day window elapses. Webhook is the primary driver; this catches missed events. See [architecture.md](./architecture.md#vercel-cron-schedules). |
+| `/api/cron/cancellation-retention-resume` | `0 16 * * *` | 300s | Backstop for the `paused` retention-pause state (flips `active→paused` at `pausedFrom`; **payment-gated** restore `paused→active` when Stripe has resumed — only restores to `active` on a confirmed PAID resume invoice, mirrors `past_due`/`unpaid`) + clears stale `pauseReason="retention"` metadata after the pause window (next cycle boundary) elapses. Webhook is the primary driver; this catches missed events. See [architecture.md](./architecture.md#vercel-cron-schedules). |
 | `/api/cron/cancellation-retention-maturity` | `0 17 * * *` | 300s | Matures saved cancellation-flow events ≥90 days old: sets `retention90` to `retained`/`churned` based on the member's CURRENT subscription state. Read-only on user/subscription. Idempotent. See [architecture.md](./architecture.md#vercel-cron-schedules). |
 | `/api/cron/reconcile-major-draw-entries` | `30 16 * * *` | 300s | Self-heals membership renewals that failed to credit the active `MajorDraw` (the swallowed-`addToMajorDraw` bug). Delegates to [`reconcileActiveMajorDrawEntries`](../../src/utils/draws/reconcile-major-draw-entries.ts). Heals only confirmed gaps (latest in-window renewal has empty `drawGrants` + active sub + not refunded + draw < actual grant), idempotent. Runs after the ~14:00–15:00 UTC anchor-billing spike. See `docs/draws/gotchas.md`. |
 | `/api/cron/sync-tiktok-ads` | `45 2 * * *` | 300s | Nightly re-sync of a trailing 8-day window of TikTok ad-level insights into `TikTokAdInsightsDaily` (delegates to `TikTokInsightsSyncService`; the TikTok analogue of `sync-meta-ads`). Bearer `CRON_SECRET` gate. No-ops (`200 { skipped: true, reason: "env" }`) when the TikTok Marketing-API env (`TIKTOK_ADVERTISER_ID` / `TIKTOK_MARKETING_ACCESS_TOKEN`) is unset. See below. |
@@ -28,7 +28,7 @@ See [architecture.md](./architecture.md#vercel-cron-schedules) for the full cron
 Two jobs, both **backstops** to the Stripe webhook (`handleSubscriptionUpdated` / `handleInvoicePaymentSucceeded`), which is the PRIMARY driver of the `active↔paused` flips for the 30-day `pause_30d` retention-pause membership state (see [subscription/backend.md → RetentionPauseService](../subscription/backend.md#retention-pause-the-paused-membership-state)):
 
 1. **Drive the `paused` membership state when the webhook misses an event.** Because Stripe keeps the subscription `status:"active"` during a `pause_collection`, the app owns the DB `paused` state (`subscription.status="paused"` + `isActive=false`). This cron flips `active→paused` once the freeze window has started and restores `paused→active` when Stripe has already resumed — idempotent + Stripe-truth-based.
-2. **Clear stale retention metadata.** Prevents a production bug: if `metadata.pauseReason="retention"` is left on a Stripe subscription after the 30-day pause ends, a later failed-renewal recovery pause on the same subscription would carry the stale `pauseReason`, and `decideClearPause` in `pauseCollectionPolicy.ts` would refuse to clear it — locking the member in an unrecoverable paused state that blocks billing recovery.
+2. **Clear stale retention metadata.** Prevents a production bug: if `metadata.pauseReason="retention"` is left on a Stripe subscription after the pause window (next cycle boundary) ends, a later failed-renewal recovery pause on the same subscription would carry the stale `pauseReason`, and `decideClearPause` in `pauseCollectionPolicy.ts` would refuse to clear it — locking the member in an unrecoverable paused state that blocks billing recovery.
 
 ### Auth
 
@@ -38,7 +38,7 @@ Two jobs, both **backstops** to the Stripe webhook (`handleSubscriptionUpdated` 
 
 Queries `User` collection for `{ "retentionOffersConsumed.pause30d": true, stripeSubscriptionId: { $exists: true, $ne: null } }`. Projects `_id`, `stripeSubscriptionId`, and the pause-state fields `subscription.status` / `subscription.pausedFrom` / `subscription.pausedUntil` (needed for the flip/restore decisions). This set is bounded by total members who have ever accepted the pause offer (a small subset of total users). No additional timestamp filter is applied; each candidate triggers one `stripe.subscriptions.retrieve` to check current state.
 
-**Future scale note:** if this population grows to 100k+, add a `retentionPausedAt` date field to `User` and filter `retentionPausedAt < (now - 30 days)` to skip users still within their pause window without a Stripe call.
+**Future scale note:** if this population grows to 100k+, add a `retentionPausedAt` date field to `User` and filter `retentionPausedAt < (now - 1 month)` to skip users still within their pause window without a Stripe call.
 
 ### Per-subscription decision (`shouldClearRetentionMarker`)
 
@@ -55,7 +55,7 @@ Pure exported helper (unit-tested in `src/app/api/cron/__tests__/cancellation-re
 Before the metadata-clear decision, each candidate is reconciled against live Stripe (both branches idempotent — the webhook is the primary driver):
 
 - **(a) Flip `active→paused`.** If the sub carries a live retention pause (`pauseReason==="retention"` + `pause_collection` present), the DB status is not yet `paused`, and the freeze window has started (`pausedFrom <= now < pausedUntil`): set `subscription.status="paused"` + `isActive=false` (`flipped++`).
-- **(b) Restore `paused→active`.** Else if the DB says `paused` but Stripe has already resumed (`pause_collection` gone): mirror Stripe's status (`active`/`trialing` → `active` + `isActive=true`; a failed resume shows `past_due`/`unpaid`) and unset `pausedFrom`/`pausedUntil` (`restored++`). The primary restore is still `invoice.payment_succeeded`.
+- **(b) Restore `paused→active` (payment-gated).** Else if the DB says `paused` but Stripe has already resumed (`pause_collection` gone): mirror Stripe's status — it only restores to `active` on a confirmed PAID resume invoice (`active`/`trialing` → `active` + `isActive=true`); a failed/unsettled resume mirrors `past_due`/`unpaid`/`canceled`, and an unsettled subscription is left `paused` for the payment webhook to finish. On restore it unsets `pausedFrom`/`pausedUntil` (`restored++`). The primary restore is still `invoice.payment_succeeded`.
 
 ### Actions taken when clearing
 

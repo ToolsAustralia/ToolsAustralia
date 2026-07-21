@@ -81,7 +81,12 @@ async function main() {
     check("P0.active", sub.status === "active", `sub status=${sub.status}`);
 
     const periodEnd = periodEndOf(sub)!;
-    const resumesAt = periodEnd + RETENTION_PAUSE_DAYS * 86400; // period_end + 30d — the feature's timing
+    // Skip exactly ONE cycle: resume at the NEXT billing boundary (period_end + 1 month), NOT
+    // period_end + 30 fixed days (which double-skips short months + misaligns the re-bill).
+    const boundaryDate = new Date(periodEnd * 1000);
+    boundaryDate.setUTCMonth(boundaryDate.getUTCMonth() + 1);
+    const nextBoundary = Math.floor(boundaryDate.getTime() / 1000); // P2 = next cycle boundary
+    const resumesAt = nextBoundary;
 
     // Apply the retention pause exactly as RetentionPauseService does on the Stripe side.
     await stripe.subscriptions.update(sub.id, {
@@ -105,16 +110,19 @@ async function main() {
     check("M1d.pause_present", frozenSub.pause_collection != null,
       `pause_collection present during freeze=${frozenSub.pause_collection != null}`);
 
-    // ── M2: advance to the resume date. Stripe AUTO-resumes (pause_collection null) and bills. ──
-    await advance(clock.id, resumesAt + 3600);
+    // ── M2: advance PAST the next boundary (P2). Stripe AUTO-resumes (pause_collection null) and bills
+    //    the next cycle there — the re-bill lands ON the boundary. ──
+    await advance(clock.id, nextBoundary + 2 * 86400);
     const resumedSub = await stripe.subscriptions.retrieve(sub.id);
     check("M2a.auto_resumed", resumedSub.pause_collection == null,
       `pause_collection cleared at resume=${resumedSub.pause_collection == null}`);
     check("M2b.stripe_active", resumedSub.status === "active", `Stripe status after resume=${resumedSub.status}`);
     const billedAtResume = (await stripe.invoices.list({ customer: customer.id, status: "paid", limit: 20 })).data
-      .filter((i) => (i.created ?? 0) >= resumesAt - 86400);
-    check("M2c.auto_billed_next_cycle", billedAtResume.length >= 1,
-      `paid cycle invoices at/after resume=${billedAtResume.length} (expect >=1)`);
+      .filter((i) => (i.created ?? 0) >= nextBoundary - 86400);
+    check("M2c.billed_next_cycle_at_boundary", billedAtResume.length >= 1,
+      `paid cycle invoices at/after the next boundary=${billedAtResume.length} (expect >=1)`);
+    const voidCount = (await stripe.invoices.list({ customer: customer.id, status: "void", limit: 20 })).data.length;
+    check("M2d.exactly_one_cycle_skipped", voidCount === 1, `total void invoices=${voidCount} (expect exactly 1 — one cycle skipped)`);
   } finally {
     if (!KEEP) {
       if (created.clock) await stripe.testHelpers.testClocks.del(created.clock).catch(() => {});
