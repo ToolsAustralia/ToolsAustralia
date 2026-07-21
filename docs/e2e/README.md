@@ -45,3 +45,30 @@ Orchestrator, fixtures, and an initial `@smoke`/`@demo` spec set (auth, marketin
 now exist (Tasks 4-6). Still to come: `@purchase` / `@a11y` / `@visual` spec suites, proof
 mode (narrated mp4s), and the full doc set (architecture, adding-a-spec, proof-mode,
 troubleshooting) promised in Task 13.
+
+## Orchestrator note — win32 arg quoting
+
+`e2e/run.ts` spawns playwright/tsx with `shell: true` on Windows; passthrough args
+containing whitespace (e.g. `--grep "lens self-tests"`) are quoted via a win32 helper
+before the spawn, otherwise the shell splits them mid-phrase. Multi-word greps must go
+through that path — do not hand-join args into a single string.
+
+## `@a11y` baseline — `e2e/specs/quality/a11y.spec.ts`
+
+`a11y.spec.ts` runs `AxeBuilder` (`wcag2a`/`wcag2aa`) + the `uiAudit` lens
+(`e2e/fixtures/ui-audit.ts`) against `/`, `/login`, `/membership`, filtered to
+serious/critical violations. Rather than asserting zero violations outright (which would
+be red today — see `.superpowers/sdd/task-9-report.md` for the full first-capture detail:
+rule ids, node targets, html, contrast ratios, helpUrls), the spec pins a
+`KNOWN_VIOLATIONS` baseline keyed by page path (`ruleId` + `targetPattern` regex + a
+one-line `bug` description). Every serious/critical violation node is checked against the
+baseline for its page; matched nodes are surfaced as `known-a11y-bug` test annotations
+(visible in the HTML/JSON report) instead of failing, so the real defect stays tracked and
+visible without blocking the suite. Any node that does NOT match an existing baseline
+entry fails the test as a genuine regression.
+
+**Burn-down rule:** this baseline is a list of real, currently-unfixed product bugs, not a
+suppression list. Remove an entry once the underlying `src/` fix lands (the suite goes
+stricter automatically). Never add a new entry to silence a fresh failure the suite
+surfaces — a new violation must be triaged and either fixed or explicitly signed off by
+the controller/user before it's added to `KNOWN_VIOLATIONS`.

@@ -22,6 +22,14 @@ export function getFlagValue(argv: string[], flag: string): string {
   return eq ? eq.slice(flag.length + 1) : "";
 }
 
+// Windows-only fix: spawnSync(cmd, args, { shell: true }) on win32 mis-quotes any arg
+// containing whitespace when invoking a .cmd shim like npx (a Node child_process
+// limitation) — e.g. `--grep "lens self-tests"` arrives at Playwright as two bare
+// tokens instead of one grep value, and it silently finds zero tests. Wrapping any
+// whitespace-containing arg in escaped quotes before the shell:true spawn fixes this
+// without touching non-Windows behavior (winq is a no-op there).
+const winq = (a: string): string => (/\s/.test(a) ? `"${a.replace(/"/g, '\\"')}"` : a);
+
 async function assertPortFree(port: number): Promise<void> {
   let busy = false;
   try {
@@ -98,7 +106,8 @@ async function main(): Promise<number> {
 
   // 7. Run the suite
   const pwEnv = { ...process.env, E2E_PORT: String(env.port), E2E_RUN_ID: runId, ...(proof ? { E2E_PROOF: "1" } : {}) };
-  const pw = spawnSync("npx", ["playwright", "test", ...passthrough], {
+  const pwArgs = ["playwright", "test", ...passthrough];
+  const pw = spawnSync("npx", process.platform === "win32" ? pwArgs.map(winq) : pwArgs, {
     env: pwEnv, stdio: "inherit", shell: process.platform === "win32",
   });
   if (pw.error) {
@@ -108,7 +117,8 @@ async function main(): Promise<number> {
 
   // 8. Proof post-processing
   if (proof) {
-    const post = spawnSync("npx", ["tsx", "e2e/proof/post.ts"], {
+    const postArgs = ["tsx", "e2e/proof/post.ts"];
+    const post = spawnSync("npx", process.platform === "win32" ? postArgs.map(winq) : postArgs, {
       env: pwEnv, stdio: "inherit", shell: process.platform === "win32",
     });
     if (post.error) {
