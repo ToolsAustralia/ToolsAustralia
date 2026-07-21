@@ -1,7 +1,10 @@
 import { spawnSync } from "node:child_process";
+import fs from "node:fs/promises";
+import path from "node:path";
 import { test as base, expect } from "../../fixtures/test";
 import { CARDS, fillPaymentElement, findBenefitsGrantedRef, uniqueMobile, waitForActiveMembership } from "../../helpers/payment";
 import { benefitsGrantedCount, connectE2eDb, disconnectE2eDb, entriesForUser } from "../../helpers/db";
+import { LOG_DIR } from "../../lib/paths";
 
 /**
  * This spec is the only purchase spec that keeps the page open well past the
@@ -131,18 +134,56 @@ test.describe("webhook replay safety @purchase", () => {
     });
     expect(r.status, `stripe events resend failed: ${r.stderr}`).toBe(0);
 
-    // Grant count must not move. NOTE: a Stripe resend carries a FRESH event.id
-    // (src/services/stripe-webhook-queue/processQueuedEvent.ts's own comment: "Stripe
-    // dashboard *resends* carry a fresh event.id and bypass enqueue idempotency") — so
-    // neither the queue's eventId-unique index nor the ProcessedStripeEvent eventId
-    // dedup (Layers 1-3) block a resend from re-entering handleInvoicePaymentSucceeded.
-    // The actual guard exercised here is Layer 4: the paymentevents unique `_id`
-    // ("BenefitsGranted-invoice_<invoice id>", keyed by the INVOICE, not the wrapping
-    // Stripe event) — handleInvoicePaymentSucceeded creates that doc FIRST via the
-    // unique constraint specifically so a second delivery of the same invoice can't
-    // grant twice, however it arrives.
+    // Positive-delivery proof: verify the resend actually round-tripped through the
+    // orchestrator's `stripe listen` forwarder to our server, BEFORE trusting the
+    // no-double-grant assertions below — otherwise an unchanged entries count is
+    // ambiguous: consistent with BOTH "the idempotency guard worked" and "the replay
+    // never arrived at all" (a routing failure would pass vacuously).
+    //
+    // CORRECTION (found live during this fix round, contradicts the original assumption):
+    // this test used to assume a resend mints a FRESH event.id and looked for a second,
+    // differently-`eventId`'d `stripewebhookqueue` row. That's true for a genuine Stripe
+    // DASHBOARD resend (per processQueuedEvent.ts's own comment), but NOT for the CLI's
+    // `stripe events resend` — verified with a live diagnostic session (`stripe-listen.log`
+    // showed the SAME `evt_...` id POSTed to /api/stripe/webhook TWICE, 5s apart, both 200).
+    // Because `enqueueStripeEvent`'s upsert is keyed on `eventId`, a same-id redelivery is a
+    // Layer-1 (queue-level) no-op — `created: false`, "already queued; skipping fan-out" — it
+    // never reaches `processQueuedEvent`/`handleInvoicePaymentSucceeded` again, so there is NO
+    // Mongo-observable side effect from the redelivery itself (no new queue row; no field on
+    // the existing row changes; Layer 4's `paymentevents` unique `_id` is never even
+    // re-exercised because the request is dropped before that point). The only direct evidence
+    // available that the resend reached our local pipeline is the forwarder's own relay log
+    // recording a SECOND delivery of the same event id — so this polls that log file instead.
+    const stripeListenLogPath = path.join(LOG_DIR, "stripe-listen.log");
+    const deliveryPattern = new RegExp(`POST .*/api/stripe/webhook \\[${eventId}\\]`, "g");
+    let deliveryCount = 0;
+    const logPollDeadline = Date.now() + 30_000;
+    while (Date.now() < logPollDeadline && deliveryCount < 2) {
+      const logText = await fs.readFile(stripeListenLogPath, "utf8").catch(() => "");
+      deliveryCount = (logText.match(deliveryPattern) ?? []).length;
+      if (deliveryCount < 2) await new Promise((res) => setTimeout(res, 1_000));
+    }
+    expect(
+      deliveryCount >= 2,
+      `resend did not reach the local forwarder: ${stripeListenLogPath} shows only ` +
+        `${deliveryCount} POST(s) for event ${eventId} after 30s (expected >=2 — the ` +
+        `original delivery plus the resend) — check that \`stripe listen\` is still ` +
+        `forwarding to /api/stripe/webhook.`
+    ).toBe(true);
+
+    // Grant count must not move. The guard actually exercised here is Layer 1 (queue-level
+    // eventId-unique dedup, proven above by the redelivery being a same-id no-op) — Layer 4,
+    // the paymentevents unique `_id` keyed by the invoice, is this suite's OTHER line of
+    // defense (see purchase-subscription.spec.ts) for deliveries that DO carry a fresh event
+    // id (a genuine Stripe retry after a timeout, or a dashboard resend).
     await page.waitForTimeout(10_000);
+    // entries === (pre-replay count): the double-grant detector — a broken guard shows up
+    // as entries climbing (e.g. 15 -> 30) on the SAME user.
     expect(await entriesForUser(userId)).toBe(entries);
+    // benefitsGrantedCount === 1: proves the guard doc still exists for THIS exact invoice id
+    // (catches a zero-count regression — the doc silently missing/deleted/mis-keyed — and a
+    // wrong-user regression, since findBenefitsGrantedRef resolved `ref` from THIS userId
+    // above) — a complementary check to the entries assertion, not a restatement of it.
     expect(await benefitsGrantedCount(ref.kind, ref.id)).toBe(1);
   });
 });

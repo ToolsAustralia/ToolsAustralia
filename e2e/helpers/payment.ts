@@ -97,6 +97,15 @@ export async function waitForOneTimeEntries(
  * `userId` on the doc is a Mongo ObjectId; matched here via string comparison
  * (mirrors the `entriesForUser` pattern in ../../helpers/db) rather than an
  * ObjectId-typed query filter, so this never depends on driver cast behavior.
+ *
+ * Callers pair this with `benefitsGrantedCount(kind, id) === 1` (../../helpers/db) as a
+ * two-part exactly-once proof: `entries === N` (the caller's own DB poll) is the
+ * DOUBLE-grant detector (a broken idempotency guard shows up as entries climbing, e.g.
+ * 15 -> 30); `benefitsGrantedCount === 1` is the complementary ZERO/WRONG-USER detector —
+ * it proves the specific `BenefitsGranted` guard doc still exists for exactly THIS id
+ * (this function already resolved `ref` from the caller's own userId, so a doc missing,
+ * deleted, or written under a different id/user fails here even when the entries count
+ * happens to look right).
  */
 export async function findBenefitsGrantedRef(
   userId: string,

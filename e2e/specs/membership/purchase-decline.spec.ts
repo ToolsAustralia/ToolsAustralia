@@ -105,6 +105,11 @@ test.describe("declined card @purchase", () => {
     // subscription or entries from a declined charge.
     await page.waitForTimeout(5_000); // grace for any stray async grant — must stay zero
     const user = await findUserByEmail(email);
+    // Guard against a vacuous pass: without this, a FAILED registration (user === null,
+    // e.g. the phone/email uniqueness broke, or /api/auth/register regressed) would make
+    // `user?.subscription?.status ?? "none"` read "none" (not "active") and skip the
+    // entries check entirely via `if (user)` — the test would pass having proven nothing.
+    expect(user).toBeTruthy();
     expect(user?.subscription?.status ?? "none").not.toBe("active");
     if (user) expect(await entriesForUser(String(user._id))).toBe(0);
   });

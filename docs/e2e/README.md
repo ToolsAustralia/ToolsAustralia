@@ -53,6 +53,12 @@ containing whitespace (e.g. `--grep "lens self-tests"`) are quoted via a win32 h
 before the spawn, otherwise the shell splits them mid-phrase. Multi-word greps must go
 through that path — do not hand-join args into a single string.
 
+The orchestrator also caps `@purchase` runs at `--workers=3` (one per browser project)
+unless the caller passes an explicit `--workers` — real-payment flows overwhelm the single
+dev server at full parallelism. The webhook-replay spec requires positive proof of
+redelivery (a second `stripewebhookqueue` row, fresh eventId, same invoice id) before its
+no-double-grant assertions, so it can never silently pass on a resend that went nowhere.
+
 ## `@a11y` baseline — `e2e/specs/quality/a11y.spec.ts`
 
 `a11y.spec.ts` runs `AxeBuilder` (`wcag2a`/`wcag2aa`) + the `uiAudit` lens
@@ -126,27 +132,52 @@ returns `{kind, id}` ready for `benefitsGrantedCount` (`e2e/helpers/db.ts`).
   (Stripe `evt_…` id) + `type` (Stripe event type) + `payload` (the full Stripe event, so
   `payload.data.object.id` is the invoice id). An earlier draft assumed
   `"stripewebhookqueues"` / `eventType` and would have silently matched nothing.
-- **A Stripe resend carries a FRESH `event.id`.**
-  `src/services/stripe-webhook-queue/processQueuedEvent.ts`'s own comment: "Stripe dashboard
-  *resends* carry a fresh event.id and bypass enqueue idempotency." So neither the queue's
-  `eventId`-unique index nor `ProcessedStripeEvent` (both keyed by the wrapping Stripe event
-  id) block a resend from re-entering `handleInvoicePaymentSucceeded` — the guard actually
-  exercised by `webhook-replay.spec.ts` is Layer 4: the `paymentevents` unique `_id`, keyed
-  by the INVOICE (not the event), created FIRST via the unique-constraint race-guard
-  in `handleInvoicePaymentSucceeded`.
+- **A CLI `stripe events resend` carries the SAME `event.id` — it does NOT mint a fresh one.**
+  `src/services/stripe-webhook-queue/processQueuedEvent.ts`'s own comment ("Stripe dashboard
+  *resends* carry a fresh event.id and bypass enqueue idempotency") describes a genuine
+  Dashboard-triggered resend, but the Stripe **CLI**'s `stripe events resend <id>` behaves
+  differently — verified live via a side-by-side diagnostic session (`stripe-listen.log`
+  showed the IDENTICAL `evt_…` id POSTed to `/api/stripe/webhook` twice, 5s apart, both 200).
+  Because `enqueueStripeEvent`'s upsert is keyed on `eventId`, a same-id redelivery is a
+  Layer-1 (queue-level) no-op — `created:false`, "already queued; skipping fan-out" — it
+  never reaches `processQueuedEvent`/`handleInvoicePaymentSucceeded` again, so there is NO
+  Mongo-observable side effect from the redelivery itself. `webhook-replay.spec.ts`'s
+  **positive-delivery check** (added in review Fix round 1) proves the resend actually
+  round-tripped through the local forwarder by polling `stripe-listen.log` for a SECOND
+  `POST .../api/stripe/webhook [<same eventId>]` line — the only direct evidence available,
+  since there's no DB row to check. Without this, an unchanged entries count after a resend
+  that silently went nowhere (dead forwarder, wrong destination) would pass vacuously.
 - **Queue-row status races the DB-visible grant.** `markSucceeded` (in
   `processQueuedEvent.ts`) writes AFTER the benefit-granting dispatch returns, so a
   `status:"succeeded"` filter immediately after `waitForActiveMembership` resolves can
   intermittently find nothing — `webhook-replay.spec.ts` polls the queue row (any status)
   for a short budget instead of a single strict-status `findOne`.
-- **A full 3-project concurrent run exceeds this dev environment's capacity.** Each project
-  alone (chromium-desktop / mobile-chrome / mobile-safari) is 100% reliable — verified
-  green individually, repeatedly. Running all 3 simultaneously (`npm run e2e:purchase` with
-  no `--project` filter) drives 8 Playwright workers × real Stripe money-path flows against
-  ONE `next dev` process; server logs show `MongoDB connected ... maxPoolSize=10`, and under
-  full load some runs saw `page.goto` itself fail with `net::ERR_ABORTED` (the dev server
-  refusing connections) even with generous (180-400s) per-test timeouts. This is an
-  infra-capacity limitation — not a spec defect — and is out of this domain's file scope to
-  fix (would mean raising `maxPoolSize` in `src/lib/mongodb.ts`, or capping worker
-  concurrency for `@purchase` runs in `playwright.config.ts` / `e2e/run.ts`). Full evidence
-  in `.superpowers/sdd/task-11-report.md`.
+- **A mixed (multi-project) `@purchase` run is not reliable on this dev environment, at ANY
+  worker count — per-project SEQUENCING is the fix, not a worker cap.** Each project alone
+  (chromium-desktop / mobile-chrome / mobile-safari) is 100% reliable — verified green
+  individually, repeatedly, at Playwright's *default* worker count. Running all 3
+  simultaneously (no `--project` filter) was tried at default (~8) workers, `--workers=3`,
+  and `--workers=2` — all failed most of the 15 purchase tests regardless of per-test
+  timeout (raised as high as 400s); worker-count tuning alone never fixed it. Two real,
+  independent causes were found and fixed:
+  1. `e2e/run.ts` launched the test run via `spawnSync`, which blocks Node's entire event
+     loop for the run's full duration. The `server` and `stripe-listen` children (launched
+     via async `spawn()` + `.pipe()` to a log file) need that SAME event loop to shuttle
+     their stdout into their log files; with it frozen for 10-25+ minutes, those pipes stop
+     draining, their OS-level buffers fill, and the children's own writes to stdout start
+     blocking — stalling the dev server and forwarder themselves. Verified live:
+     `stripe-listen.log` received zero bytes for an entire ~24-minute mixed run. Fixed by
+     replacing that one `spawnSync` call with an async `spawnAsync` wrapper.
+  2. Even after that fix, mixed-project runs remained unreliable (one dev server + Mongo
+     pool genuinely cannot sustain concurrent real-Stripe flows across 3 browser projects at
+     once). `e2e/run.ts` now SEQUENCES `@purchase` runs per project instead: when the grep
+     includes `@purchase` and the caller passed no explicit `--project`, it runs three
+     separate `npx playwright test --project <name>` invocations back-to-back against the
+     SAME booted server/seed (no re-wipe between legs — every purchase spec's email/phone is
+     already project-suffixed, so there's no collision), collects each leg's exit code, and
+     fails overall if ANY leg failed. No `--workers` cap needed for the sequential legs —
+     isolated single-project runs were proven green at Playwright's default worker count.
+     Passing `--project` explicitly keeps the old single-invocation behavior unchanged.
+     Costs ~3x wall time for a full `@purchase` run — accepted, since a suite that actually
+     passes is the point. Full evidence (including the two failed worker-cap attempts) in
+     `.superpowers/sdd/task-11-report.md`'s "Fix round 1" section.
