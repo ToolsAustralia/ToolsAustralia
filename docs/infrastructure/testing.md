@@ -223,6 +223,16 @@ npx tsx scripts/stripe-probe-reanchor.ts --full --keep  # leave test objects for
 
 Asserts: A1 no new charge after the `trial_end` update, A2 `status==='trialing'` & `items[0].current_period_end===trial_end`, A3 the paid invoice stays paid, A4 (`--full`) the recovery invoice carries `billing_reason==='subscription_cycle'` & `attempt_count>1`, A5 (`--full`) the clear-pause-then-set-`trial_end` ordering succeeds. Exits non-zero if any assertion fails.
 
+### Companion probes (2026-07-20)
+
+Two sibling test-mode probes gate the stranded-recovery billing changes (same `sk_test_`-only + auto-cleanup guarantees):
+
+```bash
+npm run stripe:probe-recovery-marker   # dunning_recovery metadata SURVIVES finalizeInvoice (gates the reanchor-on-recovery fix; docs/PAST_DUE_REANCHOR.md)
+npm run stripe:probe-rebill-cycle      # unpause + billing_cycle_anchor:'now' on a no_held_draft member → mintCurrentCycleInvoice collects the cycle, moves the renewal ~1mo out, voids the original (gates the no_held_draft re-bill; docs/CHARGE_PAST_DUE_CUSTOMERS.md)
+npm run test:mint-current-cycle        # pure unit test of the mint primitive (injected deps; claim/anchor/void/charge-failed branches)
+```
+
 ## Cleanup / backfill scripts
 
 ```bash

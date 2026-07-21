@@ -142,6 +142,8 @@
     "stripe:resume-active-paused-subscriptions:dry": "tsx scripts/list-active-paused-subscriptions.ts --limit=200",
     "stripe:probe-reanchor": "tsx scripts/stripe-probe-reanchor.ts",
     "stripe:probe-recovery-marker": "tsx scripts/stripe-probe-recovery-marker.ts",
+    "stripe:probe-rebill-cycle": "tsx scripts/stripe-probe-rebill-cycle.ts",
+    "test:mint-current-cycle": "tsx src/services/subscription/__tests__/mintCurrentCycleInvoice.test.ts",
     "stripe:probe-reanchor:dry": "tsx scripts/stripe-probe-reanchor.ts --dry-run",
     "find:direct-attribution": "tsx scripts/find-direct-attribution.ts",
     "find:duplicate-subscriptions": "tsx scripts/find-duplicate-stripe-subscriptions.ts",

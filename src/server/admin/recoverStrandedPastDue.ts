@@ -18,6 +18,7 @@ import {
 } from "./chargePastDueShared";
 import { buildAdminChargeIdempotencyKey, cutoffForRecentAttempt } from "./past-due-charge-idempotency";
 import { prepareRecoveredCycleInvoice } from "@/services/subscription/prepareRecoveredCycleInvoice";
+import { mintCurrentCycleInvoice } from "@/services/subscription/mintCurrentCycleInvoice";
 
 export type RecoverStrandedResult =
   | { ok: true; row: PastDueChargeResultRow; newInvoiceId: string }
@@ -229,6 +230,17 @@ export async function recoverStrandedPastDueInvoice(params: {
    * invoice id is never in the worklist. Per-user callers omit it (null).
    */
   chargeRunId?: mongoose.Types.ObjectId | null;
+  /**
+   * When true, fall back to `mintCurrentCycleInvoice` if the member is `no_held_draft`
+   * (stranded, but no held draft to finalize yet — their next cycle hasn't minted one).
+   * That force-collects the current cycle now (unpause + billing_cycle_anchor:'now',
+   * which auto-charges AND moves the renewal ~1 month out). **Only safe for callers that
+   * do NOT already hold the per-subscription `RecoveryClaim`** (the mint acquires its own):
+   * the per-user `chargeOrRecover` passes `true`; the BULK chunk (holds the ChargeJobLock
+   * AND a RecoveryClaim) passes `false`, so it keeps reporting these as skipped rather than
+   * auto-resetting ~hundreds of members' billing anchors in one unattended run.
+   */
+  mintCurrentCycleIfNoDraft?: boolean;
 }): Promise<RecoverStrandedResult> {
   const { userId, originalInvoiceId, adminId } = params;
 
@@ -293,6 +305,51 @@ export async function recoverStrandedPastDueInvoice(params: {
     },
   });
   if (!prepared.ok) {
+    // no_held_draft fallback: the member is stranded but has no held draft to finalize
+    // (their next cycle hasn't minted one). If the caller allows it, force-collect the
+    // current cycle now — unpause + billing_cycle_anchor:'now' auto-charges the card AND
+    // moves the renewal ~1 month out (so it doubles as the reanchor). See mintCurrentCycleInvoice.
+    if (prepared.reason === "no_held_draft" && params.mintCurrentCycleIfNoDraft) {
+      const mint = await mintCurrentCycleInvoice({
+        subscriptionId: user.stripeSubscriptionId,
+        originalInvoiceId,
+        claimedBy: `recover-mint:${adminId}`,
+      });
+      const mintInvoiceId = mint.ok ? mint.invoiceId : mint.invoiceId ?? originalInvoiceId;
+      await InvoiceChargeLog.create({
+        ...baseLogFields,
+        invoiceId: mintInvoiceId,
+        amount: mint.ok ? mint.amountPaid : expectedAmountCents,
+        status: mint.ok ? "success" : "failed",
+        attemptedAt: new Date(),
+        errorMessage: mint.ok
+          ? `Re-billed current cycle (was no_held_draft): minted+charged ${mint.invoiceId}; renewal moved out`
+          : `Re-bill mint failed (${mint.reason}): ${mint.message}`,
+        result: { recovery: { rebill: true, originalInvoiceId } },
+        ...(params.chargeRunId ? { chargeRunId: params.chargeRunId } : {}),
+      });
+      if (mint.ok) {
+        return {
+          ok: true,
+          row: {
+            invoiceId: mint.invoiceId,
+            customerId: user.stripeCustomerId,
+            userId,
+            userEmail: user.email ?? "N/A",
+            status: "success",
+            amount: mint.amountPaid,
+          },
+          newInvoiceId: mint.invoiceId,
+        };
+      }
+      // Map to a frozen RecoverStrandedResult reason: a claim conflict is "recent", the rest
+      // are mid-flight failures. (chargeOrRecover's exhaustive switch already handles both.)
+      return {
+        ok: false,
+        reason: mint.reason === "claim_held" ? "recent_recovery_attempt" : "finalize_failed",
+        message: `Re-bill mint failed (${mint.reason}): ${mint.message}`,
+      };
+    }
     return { ok: false, reason: prepared.reason, message: prepared.message };
   }
   const finalizedInvoice = prepared.finalizedInvoice;

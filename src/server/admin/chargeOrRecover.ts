@@ -62,6 +62,12 @@ export async function chargeOrRecover(params: {
     originalInvoiceId,
     adminId: params.adminId,
     bypassRecentRecoveryLock: true,
+    // Per-user admin action holds no RecoveryClaim, so the mint's own claim is conflict-free.
+    // A deliberate admin "Charge" on a no_held_draft stranded member force-collects the current
+    // cycle now (mint) instead of dead-ending — the member's card is charged and their renewal
+    // resets ~1 month out. The bulk run does NOT enable this (it holds a claim + would reset
+    // hundreds of anchors unattended).
+    mintCurrentCycleIfNoDraft: true,
   });
 
   if (result.ok) {
