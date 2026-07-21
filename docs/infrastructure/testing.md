@@ -233,7 +233,9 @@ Two sibling test-mode probes gate the stranded-recovery billing changes (same `s
 ```bash
 npm run stripe:probe-recovery-marker   # dunning_recovery metadata SURVIVES finalizeInvoice (gates the reanchor-on-recovery fix; docs/PAST_DUE_REANCHOR.md)
 npm run stripe:probe-rebill-cycle      # unpause + billing_cycle_anchor:'now' on a no_held_draft member → mintCurrentCycleInvoice collects the cycle, moves the renewal ~1mo out, voids the original (gates the no_held_draft re-bill; docs/CHARGE_PAST_DUE_CUSTOMERS.md)
-npm run test:mint-current-cycle        # pure unit test of the mint primitive (injected deps; claim/anchor/void/charge-failed branches)
+npm run test:mint-current-cycle        # pure unit test of the mint primitive (injected deps; claim/anchor/void/charge-failed/skipClaim branches)
+npm run stripe:probe-member-resolve-mint  # MEMBER "Resolve" no_held_draft mint: a decline leaves the minted invoice still_chargeable (NOT stranded → no re-mint), and an add-a-card retry collects on the new default (gates the member mint-on-resolve; docs/FAILED_RENEWAL_PAY_NOW.md)
+npm run test:member-resolve-mint       # pure unit test of classifyMemberResolveMintOutcome (mint result → collected / retry_interactively / blocked)
 ```
 
 ### Retention-pause (`paused` state) verification (2026-07-21)

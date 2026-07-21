@@ -43,6 +43,8 @@ import {
   deriveExpectedCycleAmountCents,
 } from "@/utils/payment/recovery/stranded-invoice-policy";
 import { prepareRecoveredCycleInvoice } from "@/services/subscription/prepareRecoveredCycleInvoice";
+import { mintCurrentCycleInvoice } from "@/services/subscription/mintCurrentCycleInvoice";
+import { classifyMemberResolveMintOutcome } from "@/utils/payment/recovery/member-resolve-mint-policy";
 import { acquireRecoveryClaim, releaseRecoveryClaim } from "@/utils/payment/recovery/recovery-claim";
 import { getPackageById } from "@/data/membershipPackages";
 
@@ -191,7 +193,70 @@ export async function POST(_request: NextRequest) {
         });
 
         if (!prepared.ok) {
-          // no_held_draft / finalize_failed — surface the terminal, member-safe error the modal
+          // no_held_draft: the member has NO held cycle draft to finalize (their next cycle hasn't
+          // minted one). Rather than dead-ending at "contact support", MINT a fresh current cycle and
+          // auto-charge their default card — the same primitive the admin per-user Charge + bulk run
+          // use. The route already holds the RecoveryClaim (above), so skipClaim. See mintCurrentCycleInvoice.
+          if (prepared.reason === "no_held_draft") {
+            const mint = await mintCurrentCycleInvoice({
+              subscriptionId,
+              originalInvoiceId: invoiceData.invoice.id,
+              claimedBy: "member",
+              skipClaim: true,
+            });
+            const outcome = classifyMemberResolveMintOutcome(mint);
+
+            if (outcome.kind === "collected") {
+              // Auto-charged on the default card (or a prior re-bill already made them active).
+              return NextResponse.json({
+                success: true,
+                message: "Invoice has been paid successfully",
+                data: { invoiceId: mint.ok ? mint.invoiceId : invoiceData.invoice.id, status: "paid" },
+              });
+            }
+
+            if (outcome.kind === "retry_interactively") {
+              // The off_session auto-charge on the default card didn't settle (a decline, OR a 3DS/SCA
+              // card off_session can't authenticate). The minted cycle is now a NORMAL open past-due
+              // invoice — while Stripe still has a retry scheduled it is `still_chargeable` (NOT
+              // stranded) — so prompt the member to add a working card (the existing InlineCardSetup
+              // flow); their retry re-enters via the normal open-invoice pay path and collects on the
+              // NEW default (no second charge on the card that just failed; a 3DS card is then
+              // authenticated interactively via the returned PaymentIntent). NOTE: if the member
+              // abandons and returns WEEKS later — after this minted invoice's own Stripe retries
+              // EXHAUST — it becomes stranded and a fresh Resolve mints again; that is a re-attempt, not
+              // a double-charge (no money moved on the decline) and the anchor resets (~1mo out) rather
+              // than accumulating. A "Subscription Renewal Failed" webhook already fired for the
+              // auto-charge decline (dunning), per the past-due notification design.
+              return NextResponse.json(
+                {
+                  success: false,
+                  requiresNewCardPreflight: true,
+                  error: "We couldn't take that card",
+                  details:
+                    "Your saved card couldn't be charged (it was declined or needs verification). Add a card here and we'll retry and reactivate your membership.",
+                },
+                { status: 400 }
+              );
+            }
+
+            // blocked: member is scheduled to cancel (re-billing would reverse that), the subscription is
+            // not collectible (canceled / incomplete / incomplete_expired → subscription_inactive), or a
+            // Stripe mint error — surface the terminal member-safe state (`failureCode: invoice_not_payable`
+            // → the modal's terminalCollectionFailure "contact support" screen). The amber force-charge
+            // "Pay overdue" CTA is gated on `!terminalCollectionFailure` client-side, so it can't co-render.
+            return NextResponse.json(
+              {
+                success: false,
+                error: "We couldn't reopen this renewal",
+                details: STRANDED_SUPPORT_DETAILS,
+                failureCode: "invoice_not_payable",
+              },
+              { status: 400 }
+            );
+          }
+
+          // draft_create_failed / finalize_failed — surface the terminal, member-safe error the modal
           // already handles (terminalCollectionFailure). Never fall through to invoices.pay().
           return NextResponse.json(
             {

@@ -357,7 +357,8 @@ export async function recoverStrandedPastDueInvoice(params: {
       const isSkip =
         mint.reason === "claim_held" ||
         mint.reason === "member_ending" ||
-        mint.reason === "already_collected";
+        mint.reason === "already_collected" ||
+        mint.reason === "subscription_inactive";
       if (!params.callerHoldsRecoveryClaim) {
         // See the success branch: the BULK caller writes its own single worklist-keyed summary row, so a
         // rebill row here (which for a guard-skip falls back to the worklist original invoice id) would
@@ -383,7 +384,9 @@ export async function recoverStrandedPastDueInvoice(params: {
             ? ("member_ending" as const)
             : mint.reason === "already_collected"
               ? ("not_past_due" as const)
-              : ("finalize_failed" as const);
+              : mint.reason === "subscription_inactive"
+                ? ("subscription_inactive" as const)
+                : ("finalize_failed" as const);
       return {
         ok: false,
         reason: mappedReason,

@@ -70,6 +70,18 @@ async function testAlreadyCollectedSkipsAndDoesNotAnchor() {
   assert.equal(calls.anchored, 0, "must NOT re-anchor once a prior re-bill made the sub active (no double-charge)");
 }
 
+async function testCanceledSubIsNotCollectible() {
+  // A non-past_due status that is NOT active/trialing (canceled / incomplete_expired) must NOT be
+  // reported as already_collected — else the member Resolve path shows a false "paid" for a dead sub.
+  const { deps, calls } = makeDeps({
+    liveSub: { id: "sub_1", status: "canceled", cancel_at_period_end: false } as Stripe.Subscription,
+  });
+  const res = await mint({ subscriptionId: "sub_1", claimedBy: "member" }, deps);
+  assert.equal(res.ok, false);
+  if (!res.ok) assert.equal(res.reason, "subscription_inactive");
+  assert.equal(calls.anchored, 0, "must NOT re-bill a canceled/dead subscription");
+}
+
 async function testClaimHeldSkipsAndDoesNotAnchor() {
   const { deps, calls } = makeDeps({ claim: false });
   const res = await mint({ subscriptionId: "sub_1", claimedBy: "admin:1" }, deps);
@@ -146,6 +158,7 @@ async function run() {
   await testSkipClaimBypassesAcquireAndRelease();
   await testMemberEndingSkipsAndDoesNotAnchor();
   await testAlreadyCollectedSkipsAndDoesNotAnchor();
+  await testCanceledSubIsNotCollectible();
   await testHappyPathPaysAndVoidsOriginalAndReleases();
   await testDoesNotVoidWhenOriginalEqualsMintedOrMissing();
   await testChargeFailedWhenMintedNotPaid();

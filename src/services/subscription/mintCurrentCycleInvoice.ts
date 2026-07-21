@@ -31,6 +31,7 @@ export type MintCurrentCycleResult =
         | "claim_held"
         | "member_ending"
         | "already_collected"
+        | "subscription_inactive"
         | "anchor_failed"
         | "no_minted_invoice"
         | "charge_failed";
@@ -59,10 +60,12 @@ function defaultDeps(): MintCurrentCycleDeps {
         pause_collection: "", // MUST unpause first — Stripe rejects invoice creation while paused.
         billing_cycle_anchor: "now",
         proration_behavior: "none",
-        // billing_anchor_rule: the webhook reads this to grant a plain RENEWAL (not an upgrade) and to
-        // fire "Subscription Renewal Failed" on a decline. ALSO blank any stale upgrade markers — Stripe
-        // MERGES metadata, and a previously-upgraded member still carries upgradeFrom/upgradeType, which
-        // would misclassify this re-bill as an upgrade (promo-inflated entries). "" deletes the key.
+        // billing_anchor_rule: a durable AUDIT tag identifying this as a re-bill (not read by the webhook
+        // — the renewal-vs-upgrade split is driven by upgradeFrom below + the success-path entry
+        // normalization; the failure-side "Subscription Renewal Failed" event is driven by `isRebill`,
+        // i.e. a subscription_update failure while past_due/unpaid). ALSO blank any stale upgrade markers —
+        // Stripe MERGES metadata, and a previously-upgraded member still carries upgradeFrom/upgradeType,
+        // which would misclassify this re-bill as an upgrade (promo-inflated entries). "" deletes the key.
         metadata: {
           billing_anchor_rule: "rebill_current_cycle",
           upgradeFrom: "",
@@ -116,14 +119,24 @@ export async function mintCurrentCycleInvoice(
     if (live.cancel_at_period_end === true) {
       return { ok: false, reason: "member_ending", message: "Member is scheduled to cancel — not re-billed." };
     }
-    // (A) Idempotency: a member whose prior re-bill already SUCCEEDED is `active` now, not past_due — refuse
-    // to re-anchor (a second charge). A FAILED prior mint leaves them past_due (+ unpaused), still retryable
-    // → correctly allowed. Live status (not DB) so webhook lag can't trick it into a double-charge.
+    // (A) Idempotency: a member whose prior re-bill already SUCCEEDED is `active`/`trialing` now, not
+    // past_due — refuse to re-anchor (a second charge). A FAILED prior mint leaves them past_due (+
+    // unpaused), still retryable → correctly allowed. Live status (not DB) so webhook lag can't trick it
+    // into a double-charge. Split OUT the terminal non-collectible statuses (canceled / incomplete /
+    // incomplete_expired): those are NOT "already collected", and a caller (member Resolve) must not
+    // report a false "paid" for a canceled member — surface a distinct `subscription_inactive` reason.
     if (live.status !== "past_due" && live.status !== "unpaid") {
+      if (live.status === "active" || live.status === "trialing") {
+        return {
+          ok: false,
+          reason: "already_collected",
+          message: `Subscription is "${live.status}" — a prior re-bill already collected this cycle.`,
+        };
+      }
       return {
         ok: false,
-        reason: "already_collected",
-        message: `Subscription is "${live.status}", not past_due — a prior re-bill already collected it.`,
+        reason: "subscription_inactive",
+        message: `Subscription is "${live.status}", not collectible — cannot re-bill.`,
       };
     }
 
