@@ -168,6 +168,8 @@ Tools Australia is an Australian **game-of-chance trade promotion**, **NOT gambl
 
 Enforcement: Cobber's FAQ corpus is guarded by `npm run test:chat-faqs` (bans these words) + a HARD RULE in `src/services/support-chat/systemPrompt.ts`; `BUSINESS.md §1` states the model. For the rest of the site this is a **judgment rule** (not hook-enforced) — `/review` should flag violations. Getting this wrong is a **legal exposure** for Tools Australia; treat it as non-negotiable.
 
+**Voice:** `docs/BRAND_VOICE.md` is the style layer on top of this rule — how customer-facing copy should *sound* (distilled from the ad scripts that ran), plus a say-this-not-that table of rule-11-safe rewrites. Read it before writing or reviewing customer strings. It is rule-11 clean; the raw ad-script PDFs it came from are **not** (they contain `odds` and pervasive "chance to win"), so quote from the doc, never from the PDFs.
+
 ## Commands
 
 Dev/build use **Turbopack**. Both `dev` and `build` first run `prebuild`/`predev` which regenerates the upsell image manifest via `scripts/build-upsell-image-manifest.ts` — if you add/change files under the upsell image directories, that script must succeed before the app will start.
