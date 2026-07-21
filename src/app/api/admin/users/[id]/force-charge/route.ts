@@ -59,6 +59,9 @@ export async function POST(
       userId,
       triggeredBy: "admin",
       adminId: session.user.id,
+      // Re-bill the no_held_draft cohort (mint a fresh cycle on the default card) instead of a 409
+      // dead-end — consistent with the per-user admin Charge (chargeOrRecover) and the bulk run.
+      mintCurrentCycleIfNoDraft: true,
     });
 
     if (!result.ok) {

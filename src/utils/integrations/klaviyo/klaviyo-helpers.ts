@@ -778,7 +778,7 @@ export function formatTimestampForKlaviyo(date?: Date): string {
 // the ads team's segments without engineering involvement per-flow.
 // ============================================================
 
-export type MembershipStatus = "active" | "past_due" | "canceled" | "never_subscribed";
+export type MembershipStatus = "active" | "past_due" | "canceled" | "paused" | "never_subscribed";
 
 /**
  * Coerce raw User/Stripe subscription state into the 4-value canonical
@@ -790,6 +790,7 @@ export type MembershipStatus = "active" | "past_due" | "canceled" | "never_subsc
  *   "past_due"                        → "past_due"
  *   "unpaid"                          → "past_due" (Stripe's continued-dunning state)
  *   "canceled"                        → "canceled"
+ *   "paused"                          → "paused"   (retention-pause freeze window)
  *   "incomplete" / "incomplete_expired" → "never_subscribed" (never became a member)
  *   (no subscription object)          → "never_subscribed"
  *   anything else                     → "never_subscribed" (safest default for segments)
@@ -804,6 +805,7 @@ export function deriveMembershipStatus(user: IUser): MembershipStatus {
   if (status === "active" || status === "trialing") return "active";
   if (status === "past_due" || status === "unpaid") return "past_due";
   if (status === "canceled") return "canceled";
+  if (status === "paused") return "paused";
   if (status === "incomplete" || status === "incomplete_expired") return "never_subscribed";
   return "never_subscribed";
 }

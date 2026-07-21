@@ -213,7 +213,7 @@ export default function PastDueResolvePanel({ onResolved }: PastDueResolvePanelP
       ) : null}
 
       {/* Pay Overdue CTA — shown when the pay-failed-invoice path reports "no payable invoice" */}
-      {r.isNoPayableInvoice && !r.forceChargeResult ? (
+      {r.isNoPayableInvoice && !r.terminalCollectionFailure && !r.forceChargeResult ? (
         <div className="mt-3 mb-3 flex flex-col gap-3 rounded-xl border border-amber-200 dark:border-amber-800/40 bg-amber-50 dark:bg-amber-950/30 p-3 sm:p-4">
           <p className="text-sm text-amber-900 dark:text-amber-200">
             We can settle your overdue cycle by finalizing your held cycle invoice. One-click recovery — no card update needed.

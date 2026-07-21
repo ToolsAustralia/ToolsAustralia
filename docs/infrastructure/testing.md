@@ -226,6 +226,31 @@ npx tsx scripts/stripe-probe-reanchor.ts --full --keep  # leave test objects for
 
 Asserts: A1 no new charge after the `trial_end` update, A2 `status==='trialing'` & `items[0].current_period_end===trial_end`, A3 the paid invoice stays paid, A4 (`--full`) the recovery invoice carries `billing_reason==='subscription_cycle'` & `attempt_count>1`, A5 (`--full`) the clear-pause-then-set-`trial_end` ordering succeeds. Exits non-zero if any assertion fails.
 
+### Companion probes (2026-07-20)
+
+Two sibling test-mode probes gate the stranded-recovery billing changes (same `sk_test_`-only + auto-cleanup guarantees):
+
+```bash
+npm run stripe:probe-recovery-marker   # dunning_recovery metadata SURVIVES finalizeInvoice (gates the reanchor-on-recovery fix; docs/PAST_DUE_REANCHOR.md)
+npm run stripe:probe-rebill-cycle      # unpause + billing_cycle_anchor:'now' on a no_held_draft member → mintCurrentCycleInvoice collects the cycle, moves the renewal ~1mo out, voids the original (gates the no_held_draft re-bill; docs/CHARGE_PAST_DUE_CUSTOMERS.md)
+npm run test:mint-current-cycle        # pure unit test of the mint primitive (injected deps; claim/anchor/void/charge-failed/skipClaim branches)
+npm run stripe:probe-member-resolve-mint  # MEMBER "Resolve" no_held_draft mint: a decline leaves the minted invoice still_chargeable (NOT stranded → no re-mint), and an add-a-card retry collects on the new default (gates the member mint-on-resolve; docs/FAILED_RENEWAL_PAY_NOW.md)
+npm run test:member-resolve-mint       # pure unit test of classifyMemberResolveMintOutcome (mint result → collected / retry_interactively / blocked)
+npm run test:force-charge-mint-map     # pure unit test: mint failure reason → ForceChargeResult reason (the force-charge/renew no_held_draft re-bill fallback)
+```
+
+The `no_held_draft` re-bill mint is now wired into **every** past-due collection entry point: the member "Resolve" (`pay-failed-invoice`), the member "Pay overdue" + admin Force-Charge (`forceChargeCurrentCycle`), the member renew retry (`renew-subscription`), the per-user admin Charge (`chargeOrRecover`), and the bulk run — so no stranded member dead-ends at "no held draft" on any path.
+
+### Retention-pause (`paused` state) verification (2026-07-21)
+
+The 30-day retention-`paused` membership state is covered by fast unit tests plus a Stripe-mechanism probe:
+
+```bash
+npm run test:pause-transition          # pure decidePauseTransition (flip/restore decision SHARED by the webhook + retention cron; 8 cases)
+npm run test:retention-pause           # computeResumeAt (period_end + 1 month, next-cycle-boundary timing) + retentionPauseBlockReason guards
+npx tsx scripts/stripe-probe-pause-lifecycle.ts   # sk_test only: void pause discards the cycle invoice during the freeze (no charge; Stripe stays "active"); Stripe auto-resumes + bills at resumes_at
+```
+
 ## Cleanup / backfill scripts
 
 ```bash

@@ -23,6 +23,7 @@ import {
   deriveExpectedCycleAmountCents,
 } from "@/utils/payment/recovery/stranded-invoice-policy";
 import { prepareRecoveredCycleInvoice } from "@/services/subscription/prepareRecoveredCycleInvoice";
+import { mintCurrentCycleInvoice } from "@/services/subscription/mintCurrentCycleInvoice";
 import { acquireRecoveryClaim, releaseRecoveryClaim } from "@/utils/payment/recovery/recovery-claim";
 import { resolveAttributionAtEdge } from "@/services/attribution/resolveAtEdge";
 
@@ -281,8 +282,73 @@ export async function POST(request: NextRequest) {
                 },
               });
             }
+
+            // No held draft to finalize → MINT a fresh current cycle on the member's ENTERED card
+            // (set it as the sub + customer default first — the mint auto-charges the default) instead
+            // of falling through to the legacy `invoices.pay()`, which Stripe REJECTS for a stranded
+            // invoice. The RecoveryClaim is held here, so `skipClaim: true`. NOTE: the mint charges
+            // off_session, so a card requiring 3DS/SCA can't be interactively authenticated on this path
+            // (it declines → member-safe error); a non-3DS card collects fine. Matches the member
+            // "Resolve" / "Pay overdue" and admin/bulk re-bill of the no_held_draft cohort.
+            // Gated on `no_held_draft` ONLY — deliberately: the other non-ok reason (`finalize_failed`)
+            // means a held draft EXISTS but finalize threw transiently, so minting a fresh cycle there
+            // would DUPLICATE it; that case stays on the existing path (the member retries the finalize).
+            if (!prepared.ok && prepared.reason === "no_held_draft") {
+              try {
+                await stripe.subscriptions.update(existingSubscription.id, {
+                  default_payment_method: paymentMethod.id,
+                });
+                if (customerId) {
+                  await stripe.customers.update(customerId, {
+                    invoice_settings: { default_payment_method: paymentMethod.id },
+                  });
+                }
+              } catch (pmErr) {
+                console.error(`[renew-subscription] could not set default PM before mint:`, pmErr);
+              }
+              const mint = await mintCurrentCycleInvoice({
+                subscriptionId: existingSubscription.id,
+                originalInvoiceId: strandedInvoice.id,
+                claimedBy: "renew-subscription",
+                skipClaim: true,
+              });
+              if (mint.ok) {
+                if (user.subscription) {
+                  user.subscription.isActive = true;
+                  user.subscription.status = "active";
+                  user.subscription.autoRenew = true;
+                  user.subscription.cancelledAt = undefined;
+                }
+                await user.save();
+                return NextResponse.json({
+                  success: true,
+                  message: `Payment successful! Your ${targetPackage.name} subscription is now active.`,
+                  data: {
+                    grantEntryRewardToast: true,
+                    subscription: {
+                      id: existingSubscription.id,
+                      packageId: targetPackage._id,
+                      packageName: targetPackage.name,
+                      price: targetPackage.price,
+                      status: "active",
+                    },
+                    payment: { invoiceId: mint.invoiceId, amount: mint.amountPaid / 100, status: "paid" },
+                  },
+                });
+              }
+              // Mint declined / guard-blocked → member-safe error (never the legacy stranded reject).
+              return NextResponse.json(
+                {
+                  success: false,
+                  error: "We couldn't complete your renewal",
+                  details:
+                    "Your card couldn't be charged (it was declined or needs verification). Please try a different card, or contact support.",
+                },
+                { status: 400 }
+              );
+            }
           }
-          // Recovery unavailable (no held draft / no PI) → fall through to the legacy pay path below.
+          // Recovery unavailable (expected amount <= 0, or prepared ok but no PI) → fall through below.
         } finally {
           await releaseRecoveryClaim(existingSubscription.id).catch(() => {});
         }

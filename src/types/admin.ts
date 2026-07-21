@@ -534,7 +534,6 @@ export interface AdminUserUpdatePayload {
     packageId?: string | null;
     status?: string;
     isActive?: boolean;
-    autoRenew?: boolean;
     startDate?: string;
     endDate?: string;
     cancelledAt?: string | null;

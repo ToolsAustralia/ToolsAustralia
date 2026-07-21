@@ -59,6 +59,53 @@ export function decideClearPause(i: ClearPauseInput): boolean {
   return i.pauseCollectionPresent;
 }
 
+/** Inputs for the retention-`paused` membership-state transition decision. Pure — no Stripe/DB. */
+export interface PauseTransitionInput {
+  /** `subscription.pause_collection != null` — Stripe still shows a pause. */
+  pauseCollectionPresent: boolean;
+  /** `subscription.metadata.pauseReason` — only a `"retention"` pause drives the `paused` state. */
+  pauseReason: string | undefined;
+  /** DB `subscription.status` BEFORE this event. */
+  dbStatus: string | undefined;
+  /** DB `subscription.pausedFrom` — the freeze start (member's period end). */
+  pausedFrom: Date | null | undefined;
+  /** DB `subscription.pausedUntil` — the auto-resume date. */
+  pausedUntil: Date | null | undefined;
+  now: Date;
+}
+
+export type PauseTransition = "flip_to_paused" | "restore_from_paused" | "none";
+
+/**
+ * Pure decision for the app-owned retention-`paused` membership state, shared by the webhook
+ * (`handleSubscriptionUpdated`) and the `cancellation-retention-resume` cron backstop so the two
+ * can never drift. Stripe keeps ITS status `"active"` during a `pause_collection`, so the app owns
+ * the DB `paused` value via this decision.
+ *
+ * - `flip_to_paused` — a live retention pause AND the freeze window has started (`now >= pausedFrom`)
+ *   AND is not yet over (`now < pausedUntil`) AND we have not flipped yet (`dbStatus !== "paused"`).
+ * - `restore_from_paused` — DB says `paused` but Stripe already resumed (`pause_collection` gone):
+ *   the pause is over; the caller mirrors Stripe's live status + clears the window.
+ * - `none` — no transition (incl. an already-`paused` member mid-window, who simply stays paused).
+ *
+ * NOTE: the webhook also restores on the paid resume invoice (`handleInvoicePaymentSucceeded`) —
+ * that payment-gated restore is separate; this helper's `restore_from_paused` is the no-Stripe-event
+ * safety net (cron) that mirrors Stripe once the pause has been lifted.
+ */
+export function decidePauseTransition(i: PauseTransitionInput): PauseTransition {
+  const isRetentionPause = i.pauseCollectionPresent && i.pauseReason === "retention";
+  const windowStarted = i.pausedFrom != null && new Date(i.pausedFrom).getTime() <= i.now.getTime();
+  const windowNotOver = i.pausedUntil == null || i.now.getTime() < new Date(i.pausedUntil).getTime();
+
+  if (isRetentionPause && i.dbStatus !== "paused" && windowStarted && windowNotOver) {
+    return "flip_to_paused";
+  }
+  if (i.dbStatus === "paused" && !i.pauseCollectionPresent) {
+    return "restore_from_paused";
+  }
+  return "none";
+}
+
 /** Inputs for the past-due reanchor trigger decision. Pure — no Stripe client. */
 export interface ReanchorGateInput {
   billingReason: string | undefined;

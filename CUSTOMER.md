@@ -60,7 +60,7 @@ The **highlighted** node is the codebase's most non-obvious rule: registering in
 
 ### Subscription lifecycle states
 
-The canonical 9-state enum lives on [`MembershipStatusHistory`](src/models/MembershipStatusHistory.ts); the full table + transition mechanics are [BUSINESS.md §10](BUSINESS.md). The picture:
+The canonical 10-state enum lives on [`MembershipStatusHistory`](src/models/MembershipStatusHistory.ts) — the nine Stripe/app states below plus the app-owned `paused` retention state; the full table + transition mechanics are [BUSINESS.md §10](BUSINESS.md). The picture:
 
 ```mermaid
 stateDiagram-v2
@@ -73,6 +73,9 @@ stateDiagram-v2
     active --> past_due: renewal fails
     past_due --> active: pay overdue or retry
     past_due --> unpaid: Stripe gives up
+    active --> paused: accept 30d pause offer
+    paused --> active: resume charge paid
+    paused --> past_due: resume charge fails
     active --> scheduled_cancel: cancel or autoRenew off
     scheduled_cancel --> active: resume / upgrade / downgrade
     scheduled_cancel --> canceled: cycle ends
@@ -97,7 +100,7 @@ Two **ghost states** ride on top of the enum without being in it: `pendingChange
 | Renewal (anchor-24) | Monthly renew; 25th–27th joiners anchored to the 24th | §5.2 · [BUSINESS.md §9b](BUSINESS.md) · [BILLING_ANCHOR_24.md](docs/BILLING_ANCHOR_24.md) |
 | Upgrade / Downgrade | Immediate charge + cycle reset vs. deferred with benefits preserved | §5.3, §5.4 · [BUSINESS.md §10c, §10d](BUSINESS.md) |
 | Auto-renew toggle | Soft-cancel shortcut (`cancel_at_period_end`) | §5.5 · [BUSINESS.md §10a](BUSINESS.md) |
-| Past-due recovery | Self-serve retry → 3DS → update card → pay overdue | §3a · [BUSINESS.md §10e](BUSINESS.md) · [FAILED_RENEWAL_PAY_NOW.md](docs/FAILED_RENEWAL_PAY_NOW.md) |
+| Past-due recovery | Self-serve retry → 3DS → update card → pay overdue. **Any failed renewal — including an admin re-bill of a stranded member — fires the "Subscription Renewal Failed" dunning email**, and leaves the member unpaused / in dunning rather than re-freezing them | §3a · [BUSINESS.md §9i, §10e](BUSINESS.md) · [FAILED_RENEWAL_PAY_NOW.md](docs/FAILED_RENEWAL_PAY_NOW.md) |
 | Cancellation & retention | CancellationFlowModal; five save-offers, seven reasons. **Streak-stakes step (2026-07-15, dark until streak launch):** non-past-due members see a Membership Streak stakes screen between reason and the offers — loss framing (streak ≥ 2: banked renewals + next milestone + pause-freezes-your-streak) or forward framing (streak 0/1: the ladder); "Continue cancelling" always visible; exit recorded as `stakesAction` with `streakMonthsAtStart` on the event. The pause offer card also states the streak freezes. | §5.6 · [BUSINESS.md §13c](BUSINESS.md) · [docs/subscription/cancellation-flow.md](docs/subscription/cancellation-flow.md) |
 | Reactivate vs Resubscribe | Grace-window reactivate vs. fully-expired win-back | §5.7 · [BUSINESS.md §10i](BUSINESS.md) |
 | Entries & eligibility | How entries are earned; 18+, SA/ACT excluded | §6, §6a · [BUSINESS.md §3](BUSINESS.md) |
@@ -164,7 +167,8 @@ Embedded subdocument `subscription` (one active membership at a time; [User.ts:2
 | `subscription.lastReanchoredInvoiceId` | string (opt) | Idempotency marker for past-due re-anchor ([User.ts:37](src/models/User.ts#L37)) | — |
 | `subscription.isActive` | boolean (def false) | Active membership flag ([User.ts:38](src/models/User.ts#L38)) | — |
 | `subscription.autoRenew` | boolean (opt, def true) | Auto-renew toggle (soft-cancel shortcut) ([User.ts:39](src/models/User.ts#L39)) | — |
-| `subscription.status` | string (def "incomplete") | Stripe status string — for the full state machine see [BUSINESS.md §10](BUSINESS.md) ([User.ts:40](src/models/User.ts#L40)) | — |
+| `subscription.status` | string (def "incomplete") | Stripe status string, plus the app-owned `"paused"` retention state — for the full state machine see [BUSINESS.md §10](BUSINESS.md) ([User.ts:40](src/models/User.ts#L40)) | — |
+| `subscription.pausedFrom` / `pausedUntil` | Date (opt) | **Retention-pause window** — set when a member accepts the 30-day `pause_30d` offer (§5.6). `pausedFrom` = the member's period end (freeze begins); `pausedUntil` = auto-resume date (`pausedFrom + 1 month`, the next billing-cycle boundary, calendar-clamped via `addMonths`). While `pausedFrom ≤ now < pausedUntil` the member is frozen (`status="paused"`, `isActive=false`); cleared on resume ([User.ts:50-51](src/models/User.ts#L50)). See [BUSINESS.md §10a](BUSINESS.md) | — |
 | `subscription.pendingStripeSubscriptionId` / `…RequestId` / `…CreatedAt` | string / string / Date | Non-canonical pending Stripe sub from initial checkout ([User.ts:43-45](src/models/User.ts#L43)) | — |
 | `subscription.previousSubscription` | subdoc (opt) | **Downgrade ghost state**: cached old `packageId`, `packageName`, `benefits{entriesPerMonth, discountPercentage}`, `startDate`, `endDate`, `downgradeDate` ([User.ts:49-59](src/models/User.ts#L49)) | — |
 | `subscription.pendingChange` | subdoc (opt) | **Upgrade ghost state**: `newPackageId`, `changeType: "upgrade"`, `stripeSubscriptionId?`, `paymentIntentId?`, `upgradeAmount?` ([User.ts:63-69](src/models/User.ts#L63)) | — |
@@ -257,9 +261,9 @@ These exist on the same collection but are RBAC / service-account machinery ([Us
 
 ## 3. Customer lifecycle & states
 
-`User.subscription.status` is a free-form `String` that defaults to `"incomplete"` and receives Stripe status values directly ([User.ts:493-496](src/models/User.ts#L493)). The **canonical enum** lives on `MembershipStatusHistory.membershipStatus` ([MembershipStatusHistory.ts:26-40](src/models/MembershipStatusHistory.ts#L26)) and is mirrored as `MembershipNormalizedStatus` ([membershipAnalytics.ts:15-24](src/types/admin/membershipAnalytics.ts#L15)).
+`User.subscription.status` is a free-form `String` that defaults to `"incomplete"` and receives Stripe status values directly — plus the app-owned `"paused"` retention state (§3b) ([User.ts:493-496](src/models/User.ts#L493)). The **canonical enum** lives on `MembershipStatusHistory.membershipStatus` ([MembershipStatusHistory.ts:29-45](src/models/MembershipStatusHistory.ts#L29)); it is the nine Stripe-derived `MembershipNormalizedStatus` values ([membershipAnalytics.ts:15-24](src/types/admin/membershipAnalytics.ts#L15)) **plus `paused`** (the app-owned retention state, which is not part of that shared analytics union).
 
-**For the full 9-state table and transition mechanics, see [BUSINESS.md §10](BUSINESS.md); for the visual lifecycle diagram, see the Journey map near the top of this doc.** What follows is the customer-OWNED field mapping and a customer's-eye summary.
+**For the full 10-state table and transition mechanics, see [BUSINESS.md §10](BUSINESS.md); for the visual lifecycle diagram, see the Journey map near the top of this doc.** What follows is the customer-OWNED field mapping and a customer's-eye summary.
 
 ### 3a. Field mapping
 
@@ -268,6 +272,7 @@ These exist on the same collection but are RBAC / service-account machinery ([Us
 | Subscription status (active, past_due, canceled, etc.) | `subscription.status` + `subscription.isActive` |
 | Scheduled cancellation (benefits-through-period) | `subscription.autoRenew: false` + `subscription.cancelledAt` + `subscription.endDate`; analytics label: `scheduled_cancel` |
 | Past-due recovery | `subscription.pastDueAt`; re-anchor marker: `subscription.lastReanchoredInvoiceId` |
+| Retention pause (30-day `pause_30d` freeze) | `subscription.status = "paused"` + `subscription.isActive = false`; window: `subscription.pausedFrom` / `pausedUntil`; one-time flag: `retentionOffersConsumed.pause30d` |
 | Downgrade ghost state (old benefits preserved through cycle) | `subscription.previousSubscription` ([User.ts:49-59](src/models/User.ts#L49)) |
 | Upgrade ghost state (charge in-flight) | `subscription.pendingChange` ([User.ts:63-69](src/models/User.ts#L63)) |
 
@@ -275,6 +280,7 @@ These exist on the same collection but are RBAC / service-account machinery ([Us
 
 - **`trialing`** — late-month joiners (25th/26th/27th AEST) sit here until the 24th anchor. They've **paid full price** — this is a billing-anchor artifact, not a free trial. See [BUSINESS.md §9b](BUSINESS.md).
 - **`scheduled_cancel`** — the customer requested cancellation; benefits stay live until `subscription.endDate`. The raw `status` string is NOT rewritten to `scheduled_cancel` — that is an analytics label only.
+- **`paused`** — the customer accepted the 30-day `pause_30d` retention offer (§5.6). They keep the paid period they already bought, then **freeze** for ~30 days (`status="paused"`, `isActive=false`): no charge and no member access/perks/new entries while frozen, but their **already-earned entries are untouched and still count in draws**. The freeze auto-resumes at `pausedUntil` (= period end + 1 month, the next billing-cycle boundary), when Stripe bills the next cycle — a successful charge returns them to `active`, a failed one to `past_due`. The customer (or an admin) can also **resume early**. See [BUSINESS.md §10a](BUSINESS.md).
 - **Ghost states** — `previousSubscription` (downgrade: old tier's benefits live until cycle end) and `pendingChange` (upgrade: desired package parked while charge is in-flight). See [BUSINESS.md §10b](BUSINESS.md).
 
 ---

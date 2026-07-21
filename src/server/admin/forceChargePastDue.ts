@@ -45,6 +45,7 @@ import {
 } from "./chargePastDueShared";
 import { pickHeldDraftForRecovery } from "@/utils/payment/recovery/stranded-invoice-policy";
 import { prepareRecoveredCycleInvoice } from "@/services/subscription/prepareRecoveredCycleInvoice";
+import { mintCurrentCycleInvoice, type MintCurrentCycleResult } from "@/services/subscription/mintCurrentCycleInvoice";
 import { acquireRecoveryClaim, releaseRecoveryClaim } from "@/utils/payment/recovery/recovery-claim";
 
 /** A read-only diagnostic of the user's force-charge eligibility. */
@@ -87,6 +88,34 @@ export type ForceChargeResult =
       reason: ForceChargeResultReason;
       message: string;
     };
+
+/**
+ * Map a NON-ok `mintCurrentCycleInvoice` reason onto the existing `ForceChargeResult` vocabulary, so
+ * the `no_held_draft` re-bill fallback surfaces through the reasons the routes already handle (no new
+ * reasons / status codes). Pure — unit-tested via `npm run test:force-charge-mint-map`.
+ */
+export function mapMintFailureToForceChargeReason(
+  reason: Exclude<MintCurrentCycleResult, { ok: true }>["reason"]
+): ForceChargeResultReason {
+  switch (reason) {
+    case "charge_failed":
+    case "anchor_failed":
+    case "no_minted_invoice":
+      return "pay_failed";
+    case "already_collected":
+      return "period_already_paid"; // a prior re-bill already collected → the member is current
+    case "subscription_inactive":
+    case "member_ending":
+      return "subscription_inactive"; // canceled/incomplete, or scheduled-to-cancel → don't re-bill
+    case "claim_held":
+      return "recent_charge_attempt"; // a concurrent recovery holds the claim → retry shortly
+    default: {
+      const _exhaustive: never = reason;
+      void _exhaustive;
+      return "pay_failed";
+    }
+  }
+}
 
 /**
  * Read-only check used by the test/diagnostic scripts and by the orchestrator
@@ -232,6 +261,12 @@ export async function forceChargeCurrentCycle(params: {
   triggeredBy: "admin" | "user";
   /** When triggeredBy === "admin", the admin's User._id. When "user", pass the user's own _id. */
   adminId: string;
+  /**
+   * When true, a stranded `no_held_draft` member is RE-BILLED (mint a fresh current cycle on their
+   * default card) instead of dead-ending at `no_held_draft` — matching the member "Resolve" button,
+   * the per-user admin Charge, and the bulk run. Both force-charge routes (member + admin) pass this.
+   */
+  mintCurrentCycleIfNoDraft?: boolean;
 }): Promise<ForceChargeResult> {
   const { userId, adminId } = params;
 
@@ -265,6 +300,57 @@ export async function forceChargeCurrentCycle(params: {
       // fall through to the no_held_draft guard
     }
     if (!draftForRecovery?.id) {
+      // No held cycle draft to finalize. If enabled, RE-BILL by minting a fresh current cycle on the
+      // default card (unpause + billing_cycle_anchor:'now' + reanchor) — the same primitive the member
+      // "Resolve", the per-user admin Charge, and the bulk run use — instead of dead-ending. No
+      // RecoveryClaim is held at this point, so the mint acquires its own (skipClaim omitted → false).
+      if (params.mintCurrentCycleIfNoDraft) {
+        const mintUser = await User.findById(userId).select("_id email stripeCustomerId").lean();
+        const mint = await mintCurrentCycleInvoice({
+          subscriptionId,
+          originalInvoiceId: strandedOriginal?.id ?? undefined,
+          claimedBy: `force-charge:${params.triggeredBy}`,
+        });
+        if (mint.ok) {
+          const row: PastDueChargeResultRow = {
+            invoiceId: mint.invoiceId,
+            customerId: mintUser?.stripeCustomerId ?? "",
+            userId,
+            userEmail: mintUser?.email ?? "N/A",
+            status: "success",
+            amount: mint.amountPaid,
+          };
+          await InvoiceChargeLog.create({
+            invoiceId: mint.invoiceId,
+            customerId: mintUser?.stripeCustomerId ?? "",
+            userId: new mongoose.Types.ObjectId(userId),
+            adminId: new mongoose.Types.ObjectId(adminId),
+            status: "success",
+            amount: mint.amountPaid,
+            attemptedAt: new Date(),
+            errorMessage: `Force-charge re-billed current cycle (was no_held_draft): minted+charged ${mint.invoiceId}`,
+            result: { forceCharge: { step: "pay", triggeredBy: params.triggeredBy, rebill: true }, subscriptionId },
+          });
+          return { ok: true, row, chargedInvoiceId: mint.invoiceId };
+        }
+        // Guard-skip or decline → an EXISTING ForceChargeResult reason (no new reasons). Log a failed
+        // row only for a real charge decline (`pay_failed`), so guard-skips stay out of decline analytics.
+        const mappedReason = mapMintFailureToForceChargeReason(mint.reason);
+        if (mappedReason === "pay_failed") {
+          await InvoiceChargeLog.create({
+            invoiceId: mint.invoiceId ?? strandedOriginal?.id ?? "",
+            customerId: mintUser?.stripeCustomerId ?? "",
+            userId: new mongoose.Types.ObjectId(userId),
+            adminId: new mongoose.Types.ObjectId(adminId),
+            status: "failed",
+            amount: expectedAmountCents,
+            attemptedAt: new Date(),
+            errorMessage: `Force-charge re-bill failed (${mint.reason}): ${mint.message}`,
+            result: { forceCharge: { step: "pay", triggeredBy: params.triggeredBy, rebill: true }, subscriptionId },
+          });
+        }
+        return { ok: false, reason: mappedReason, message: mint.message };
+      }
       return {
         ok: false,
         reason: "no_held_draft",

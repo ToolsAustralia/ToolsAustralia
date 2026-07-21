@@ -1208,6 +1208,8 @@ When `totalFailed` is `0`, `topCodes` is an empty array. Percentages are rounded
         noLongerPastDue: number,
         alreadyPaid: number,
         missingPaymentMethod: number,
+        noHeldDraft: number,        // stranded member, no re-billable held draft yet (self-heals next cycle)
+        awaitingRetry: number,      // no payable attempt now, but Stripe has a scheduled retry
         other: number
       },
       revenueCents: number                   // succeeded charge revenue, Stripe cents

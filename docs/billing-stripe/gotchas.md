@@ -157,6 +157,14 @@ See [subscription/gotchas.md](../subscription/gotchas.md#pause-collection-orphan
 
 Audit: `npx tsx scripts/list-active-paused-subscriptions.ts --limit=200` (CSV to stdout, dry-run by default).
 
+### Retention pause keeps Stripe `active` while the app owns `paused`
+
+The 30-day `pause_30d` retention offer (`RetentionPauseService`) applies `pause_collection: { behavior: "void", resumes_at }` + `metadata.pauseReason: "retention"`. **Stripe leaves the subscription's own `status` as `"active"` throughout a `pause_collection`** — it never emits a `"paused"` status on the object. So the app owns a **DB-only** `paused` state (`User.subscription.status = "paused"` + `isActive = false` across `[pausedFrom, pausedUntil)`), and the webhook must be careful not to let Stripe's still-`active` payload overwrite it:
+
+- **`handleSubscriptionUpdated`** sets `paused` only for a retention pause whose freeze window has begun (`now >= pausedFrom`) — via the pure `decidePauseTransition(...)` in `pauseCollectionPolicy.ts`, **shared with the retention cron** so the two can't drift (unit-tested: `npm run test:pause-transition`) — and its else-branch active-restore is guarded **`prevSubStatus !== "paused"`** so a routine `customer.subscription.updated` (which still says `status:"active"`) cannot un-freeze the member mid-window.
+- **`handleInvoicePaymentSucceeded`** restores `paused → active` and clears `pausedFrom`/`pausedUntil` when a paid invoice arrives while the DB status is `paused` — this is the resume charge (at `pausedUntil`, or an early `resumeRetentionPause`). Because the void pause discards every other invoice, a paid invoice in the paused state can only be the resume, so benefits come back only after a successful payment; a failed resume stays `past_due`.
+- **Do NOT** trust `subscription.status` to tell you a member is paused — check `metadata.pauseReason === "retention"` + the DB pause window. Full flow + the flip/backstop split: [subscription/backend.md → RetentionPauseService](../subscription/backend.md#retention-pause-the-paused-membership-state) and [subscription/gotchas.md](../subscription/gotchas.md#retention-pause--the-app-owns-the-paused-state-stripe-stays-active).
+
 ### Paid-invoice clear-pause decision is now centralized
 
 The webhook handler's `shouldClearPauseForCollection` decision (in
@@ -348,6 +356,22 @@ Key facts verified by live Stripe test-mode probe:
 - The `dunning_recovery` marker is set on the invoice at failure time and is not altered by subsequent payment success, subscription update, or pause-resume calls.
 
 See `docs/PAST_DUE_REANCHOR.md` for the full trigger-gate logic and recovery-channel analysis.
+
+## Stranded-member re-bill failure fires "Renewal Failed", not "Payment Failed" (Klaviyo)
+
+A stranded-member RE-BILL — the mint (`mintCurrentCycleInvoice`, `billing_cycle_anchor: 'now'`) that re-charges a past-due/unpaid member — fails with `billing_reason: "subscription_update"`, **not** `subscription_cycle`. Left unclassified it drops into the generic `else` and fires the wrong Klaviyo event ("Subscription Payment Failed") instead of the dunning "Subscription Renewal Failed". `handleInvoicePaymentFailed` (`src/services/stripe-webhook-handlers/index.ts`) classifies it:
+
+```ts
+const isRebill =
+  billingReason === "subscription_update" &&
+  (prevSubStatus === "past_due" || prevSubStatus === "unpaid");
+```
+
+The Klaviyo branch reads `if (isRenewal || isRebill)`, so a re-bill lands in the same **"Subscription Renewal Failed"** (dunning) flow as a true `subscription_cycle` renewal.
+
+**Why the signal is reliable:** a member upgrade is also `subscription_update`, but upgrades are **blocked while past_due** — so a `subscription_update` failure from a `past_due`/`unpaid` member is a re-bill, never an upgrade.
+
+**`isRebill` deliberately does NOT set `isRenewal`.** It only redirects the Klaviyo event; it never enters the `else if (isRenewal)` DB-status branch, so it neither calls `pauseAfterRenewalFailure` nor stamps `dunning_recovery` (both gated on `isRenewal` alone). The member stays **unpaused / in dunning** — intentional per the past-due notification design (the admin / recovery / bulk / member-resolve paths all converge on this same event).
 
 ## `handleInvoiceCreated` is dormant until `invoice.created` is enabled on the Stripe endpoint
 

@@ -61,7 +61,6 @@ const subscriptionSchema = z
       .optional(),
     status: z.string().min(1, "Subscription status is required").optional(),
     isActive: z.boolean().optional(),
-    autoRenew: z.boolean().optional(),
     startDate: z.string().datetime().optional(),
     endDate: z.string().datetime().optional(),
     lastDowngradeDate: z.string().datetime().optional(),

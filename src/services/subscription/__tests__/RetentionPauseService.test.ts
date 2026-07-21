@@ -1,31 +1,38 @@
 import assert from "node:assert/strict";
-import {
-  computeResumeAt,
-  retentionPauseBlockReason,
-  RETENTION_PAUSE_DAYS,
-} from "../RetentionPauseService";
+import { addMonths } from "date-fns";
+import { computeResumeAt, retentionPauseBlockReason } from "../RetentionPauseService";
 
 // ---------------------------------------------------------------------------
-// computeResumeAt
+// computeResumeAt — resume = the member's NEXT billing-cycle boundary (period_end + 1 month),
+// calendar-clamped, so exactly ONE cycle is skipped (NOT a fixed +30 days).
 // ---------------------------------------------------------------------------
 
-function testComputeResumeAtMath() {
-  const now = new Date("2026-05-18T12:00:00.000Z");
-  const expected = Math.floor((now.getTime() + RETENTION_PAUSE_DAYS * 86_400_000) / 1000);
-  const actual = computeResumeAt(now);
-  assert.strictEqual(actual, expected);
-  // Spot-check: 30 days = 2592000 seconds
-  assert.strictEqual(actual - Math.floor(now.getTime() / 1000), 30 * 86_400);
+function testComputeResumeAtNextBoundary() {
+  const periodEnd = new Date("2026-05-18T12:00:00.000Z");
+  assert.strictEqual(computeResumeAt(periodEnd), Math.floor(addMonths(periodEnd, 1).getTime() / 1000));
+  // 2026-05-18 + 1 month = 2026-06-18 (same day-of-month)
+  assert.strictEqual(
+    computeResumeAt(periodEnd),
+    Math.floor(new Date("2026-06-18T12:00:00.000Z").getTime() / 1000)
+  );
 }
 
 function testComputeResumeAtReturnValue() {
-  // Given a known input, verify the returned value is a Unix second (integer)
-  const now = new Date("2026-01-01T00:00:00.000Z");
-  const result = computeResumeAt(now);
+  const periodEnd = new Date("2026-01-01T00:00:00.000Z");
+  const result = computeResumeAt(periodEnd);
   assert.ok(Number.isInteger(result), "result must be an integer (unix seconds)");
-  // 2026-01-01 + 30 days = 2026-01-31T00:00:00.000Z
-  const expected = new Date("2026-01-31T00:00:00.000Z").getTime() / 1000;
-  assert.strictEqual(result, expected);
+  // 2026-01-01 + 1 month = 2026-02-01
+  assert.strictEqual(result, new Date("2026-02-01T00:00:00.000Z").getTime() / 1000);
+}
+
+// Month-end clamping: Jan 31 + 1 month → Feb 28 (2026 is not a leap year), NOT Mar 3 — the JS
+// Date.setMonth overflow bug this fix avoids by using date-fns addMonths.
+function testComputeResumeAtClampsShortMonth() {
+  const periodEnd = new Date("2026-01-31T00:00:00.000Z");
+  assert.strictEqual(
+    computeResumeAt(periodEnd),
+    Math.floor(new Date("2026-02-28T00:00:00.000Z").getTime() / 1000)
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -132,8 +139,9 @@ function testBlockReasonUndefinedConsumedFlag() {
 // ---------------------------------------------------------------------------
 
 function run() {
-  testComputeResumeAtMath();
+  testComputeResumeAtNextBoundary();
   testComputeResumeAtReturnValue();
+  testComputeResumeAtClampsShortMonth();
   testBlockReasonPastDue();
   testBlockReasonAlreadyConsumed();
   testBlockReasonNoSubscription();

@@ -64,6 +64,23 @@ function testSkippedBreakdown() {
   assert.equal(t.revenueCents, 0);
 }
 
+function testNamedSkipBucketsNoHeldDraftAndAwaitingRetry() {
+  const t = aggregateRunTotals([
+    row({ status: "skipped", skipReason: "no_held_draft" }),
+    row({ status: "skipped", skipReason: "no_held_draft" }),
+    row({ status: "skipped", skipReason: "awaiting_retry" }),
+    row({ status: "skipped", skipReason: "already_paid" }),
+    row({ status: "skipped", skipReason: "totally_unknown" }),
+  ]);
+  assert.equal(t.skipped.total, 5);
+  assert.equal(t.skipped.noHeldDraft, 2);
+  assert.equal(t.skipped.awaitingRetry, 1);
+  assert.equal(t.skipped.alreadyPaid, 1);
+  assert.equal(t.skipped.other, 1);
+  // Named buckets must not leak into the legacy "other" bucket.
+  assert.equal(t.skipped.recentlyAttempted, 0);
+}
+
 function testAttemptedExcludesSkipped() {
   const t = aggregateRunTotals([
     row({ status: "success", amount: 100 }),
@@ -102,6 +119,7 @@ function run() {
   testSucceededAndRevenueSum();
   testFailedExcludedFromRevenue();
   testSkippedBreakdown();
+  testNamedSkipBucketsNoHeldDraftAndAwaitingRetry();
   testAttemptedExcludesSkipped();
   testOrphanThresholdConstant();
   testIsOrphanRunPositive();

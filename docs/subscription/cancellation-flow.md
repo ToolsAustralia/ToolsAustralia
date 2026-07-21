@@ -178,7 +178,7 @@ Request body:
 ```
 
 `pause_30d` flow (`CancellationFlowService.acceptOffer`):
-1. `applyRetentionPause(userId)` — pauses the Stripe subscription 30 days (`behavior:"void"`, `metadata.pauseReason="retention"`).
+1. `applyRetentionPause(userId)` — pauses the Stripe subscription until the member's next billing-cycle boundary (`period_end + 1 month`; `behavior:"void"`, `metadata.pauseReason="retention"`).
 2. On success, `recordOutcome({ outcome:"saved", offerAccepted:"pause_30d" })` (the same idempotent terminal write used by `outcome`).
 3. Returns `{ ok: true, resumesAt: "<ISO-8601>" }`.
 
@@ -648,7 +648,8 @@ these paths — no manifest edit was required.
 `src/services/subscription/RetentionPauseService.ts`
 
 Applies the `pause_30d` retention offer: pauses the member's Stripe subscription
-for 30 days with `behavior: "void"` and stamps `metadata.pauseReason = "retention"`
+until the member's next billing-cycle boundary (`period_end + 1 month`, calendar-clamped
+via date-fns `addMonths`) with `behavior: "void"` and stamps `metadata.pauseReason = "retention"`
 so the webhook guard (`decideClearPause`) never clears it on a paid invoice.
 
 ### Stripe update parameters
@@ -657,7 +658,7 @@ so the webhook guard (`decideClearPause`) never clears it on a paid invoice.
 stripe.subscriptions.update(subscriptionId, {
   pause_collection: {
     behavior: "void",            // void (discard) invoices during pause window
-    resumes_at: resumesAtUnix,   // Unix seconds — now + 30 days
+    resumes_at: resumesAtUnix,   // Unix seconds — period end + 1 month (next cycle boundary)
   },
   metadata: {
     pauseReason: "retention",    // webhook guard key — matches decideClearPause check
@@ -677,11 +678,16 @@ existing metadata keys on the subscription are preserved.
 | `behavior` | `keep_as_draft` | `void` |
 | Effect on new invoices | Held as draft; collected when resumed | Voided and discarded |
 | `metadata.pauseReason` | (none) | `"retention"` |
-| `resumes_at` | (none — manual) | now + 30 d |
+| `resumes_at` | (none — manual) | period end + 1 month (next cycle boundary) |
 
 `void` is appropriate for a voluntary pause: the member is choosing not to be
-charged for 30 days. The subscription auto-resumes on `resumes_at`; no manual
-`resumeAfterSuccessfulRenewalPayment` call is needed.
+charged until their next billing-cycle boundary (`period_end + 1 month`). The
+subscription auto-resumes on `resumes_at` with no manual
+`resumeAfterSuccessfulRenewalPayment` call needed. A member or admin can also
+**resume early** — `resumeRetentionPause` via `POST /api/subscription/resume-pause`
+(dashboard "Resume now") or `POST /api/admin/users/[id]/resume-pause` (admin
+"Resume pause", `users.cancelSubscription` permission) — which lifts the pause and
+triggers the same payment-gated re-bill (paid → `active`, failed → `past_due`).
 
 ### Entry accrual during pause
 
@@ -905,7 +911,7 @@ service planning behavior (`unsubscribe_marketing` now surfacing) is covered by
 `src/app/api/cron/cancellation-retention-resume/route.ts`
 (`GET /api/cron/cancellation-retention-resume`, daily at 16:00 UTC)
 
-After the 30-day retention pause window expires, Stripe auto-resumes the subscription's billing (`pause_collection` returns to null). However, the **Stripe metadata keys** `pauseReason="retention"` and `pauseResumesAt=<ISO>` set by `RetentionPauseService` are never cleared automatically.
+After the retention pause window expires (at the member's next billing-cycle boundary, `period_end + 1 month`), Stripe auto-resumes the subscription's billing (`pause_collection` returns to null). However, the **Stripe metadata keys** `pauseReason="retention"` and `pauseResumesAt=<ISO>` set by `RetentionPauseService` are never cleared automatically.
 
 If left in place, these stale metadata keys create a production bug: a later failed-renewal recovery pause on the same subscription will still carry `pauseReason="retention"`, and `decideClearPause` (in `pauseCollectionPolicy.ts`) will refuse to clear `pause_collection` on a paid invoice — leaving the member stuck paused and never recovering billing.
 

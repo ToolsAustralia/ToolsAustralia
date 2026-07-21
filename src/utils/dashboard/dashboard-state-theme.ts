@@ -2,14 +2,14 @@
  * Dashboard hero theming by account state.
  *
  * Returns the header background gradient, readable ink, and accent color for
- * each of the four dashboard account states. Member (`active`) recolors to the
- * owned tier; the other three states use fixed palettes ported from the Claude
+ * each of the five dashboard account states. Member (`active`) recolors to the
+ * owned tier; the other four states use fixed palettes ported from the Claude
  * prototype (ConceptHub headers): teal (one-time), amber-brown (past-due),
- * neutral (guest/none).
+ * slate-sky (retention-paused), neutral (guest/none).
  */
 import { shade, inkOn, PAST_DUE_AMBER } from "@/utils/membership/tier-visuals";
 
-export type DashboardAccountState = "active" | "onetime" | "pastdue" | "none";
+export type DashboardAccountState = "active" | "onetime" | "pastdue" | "paused" | "none";
 
 export interface DashboardStateTheme {
   /** CSS gradient for the hero header background. */
@@ -31,6 +31,14 @@ const FIXED: Record<Exclude<DashboardAccountState, "active">, DashboardStateThem
     gradient: "linear-gradient(157deg,#3a2410,#1c1410 55%,#2a1c10)",
     ink: "#ffffff",
     accent: PAST_DUE_AMBER,
+  },
+  // Retention-paused (freeze window): a calm, cool slate-sky — deliberately low-energy
+  // (no red/amber alarm, no active-tier vibrancy) to read as "on hold, resuming soon".
+  // Accent is the same sky the admin paused badge uses so the state feels consistent.
+  paused: {
+    gradient: "linear-gradient(157deg,#1e3a4d,#12212e 56%,#1a3340)",
+    ink: "#ffffff",
+    accent: "#38bdf8",
   },
   none: {
     gradient: "linear-gradient(157deg,#26262b,#161619 60%,#202027)",
