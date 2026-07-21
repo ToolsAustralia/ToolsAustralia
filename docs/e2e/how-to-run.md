@@ -98,3 +98,11 @@ failed run).
 - **Proof bundles**: `e2e-artifacts/proof/<date>-<branch>/<test-slug>/` — see proof-mode.md.
 
 All of `e2e-artifacts/` is gitignored.
+
+### Full-run split — exclusions
+
+The bare `npm run e2e` split (parallel non-purchase phase + sequenced purchase legs)
+only engages when the caller passed no `--grep`, no `--grep-invert`, no explicit
+`--project`, and is not in proof or UI mode. An explicit `--grep-invert` keeps the
+caller's own filter authoritative (phase A must never append a conflicting invert);
+bare proof/UI runs keep single-invocation behavior under their own profiles.

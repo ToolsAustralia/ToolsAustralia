@@ -49,21 +49,37 @@ entirely through a single orchestrator (`e2e/run.ts`) — never a bare `npx play
 Full detail (including which `.env.local` client-side tracking vars get blanked and why) is in
 architecture.md's env-overlay section and gotchas.md's leak write-ups.
 
+## Current state: `npm run e2e` is green
+
+As of Task 13's final verification, a fresh, fully unscoped `npm run e2e` run passes end to end
+(exit 0) — the full-run split (architecture.md), its `isFullRun` hardening, and the a11y scoping
+decision below are all in place together. See the Task 13 report's Part C for the verbatim run.
+The two gaps below remain genuinely open (documented, not silently worked around) but neither
+currently blocks a normal `npm run e2e`.
+
 ## Known, currently-open gaps (tracked here, not silently worked around)
 
 - **The a11y baseline (`KNOWN_VIOLATIONS` in `e2e/specs/quality/a11y.spec.ts`) has only ever been
   verified against `chromium-desktop`.** Task 13's success-criteria gate ran `@a11y` across all
   three browser projects for the first time and found real, unbaselined axe violations on
   `mobile-chrome`/`mobile-safari`, **confirmed deterministic across two independent full-suite
-  runs** — this is a structural coverage gap, not a flake. Some are the *same* underlying bugs
-  rendering with different responsive-utility-class selectors at mobile breakpoints; at least one
+  runs** — a structural coverage gap, not a flake. Some are the *same* underlying bugs rendering
+  with different responsive-utility-class selectors at mobile breakpoints; at least one
   (`scrollable-region-focusable` on `/membership`) appears to be a genuinely different, mobile-only
-  node. See a11y-baseline.md's "known baseline gap" section and the Task 13 report for the verbatim
-  violations — these need triage/signoff before being added to the baseline, per the burn-down rule.
-- **An intermittent, low-to-moderate-frequency `/membership` hydration-mismatch race** can strike
-  any spec that visits the page (confirmed across specs, not tied to one file or to concurrent
-  purchase load — see gotchas.md). It doesn't always self-heal on Playwright's built-in retry.
-  Root cause not yet investigated; out of scope for a docs-only task.
+  node. `@a11y` is now **scoped to `chromium-desktop`** (`test.skip()` on the other two projects,
+  commit `cb5e6403`) so a full run no longer fails on this gap — the mobile violations remain
+  fully documented in a11y-baseline.md's "Known baseline gap" section and the Task 13 report as a
+  deferred, signed-off-scope-narrowing decision, not a silent suppression; they're candidates for
+  a future mobile a11y baseline expansion, still requiring triage/signoff before landing in
+  `KNOWN_VIOLATIONS` per the burn-down rule.
+- **An intermittent `/membership` hydration-mismatch race** can strike any spec that visits the
+  page (confirmed across specs — `legal-copy`, `a11y`, `visual`, `purchase-idempotency`,
+  `webhook-replay` have all hit it at least once — not tied to one file or to concurrent purchase
+  load; see gotchas.md). Across every full-suite run this session it struck 11 times; 9 self-healed
+  on Playwright's built-in retry, but 2 (both from earlier runs, before the a11y-scoping decision
+  and `isFullRun` hardening below existed) did not — both attempt and retry failed. Every
+  occurrence in the most recent, fully-fixed run self-healed, but that's a small sample; the race
+  itself is not resolved. Root cause not yet investigated; out of scope for a docs-only task.
 - **`next build` itself currently fails** (`E2E_BUILD=1` mode, i.e. Task 13's prod-build gate),
   before any Playwright test can run: `Error: <Html> should not be imported outside of
   pages/_document` while statically prerendering the `/500` error page. No direct `next/document`
@@ -73,6 +89,6 @@ architecture.md's env-overlay section and gotchas.md's leak write-ups.
   of `/500`, so it's invisible outside `E2E_BUILD=1`/a real `next build`). See gotchas.md and the
   Task 13 report for the full verbatim error.
 
-All three are genuine, currently-open findings — not something this doc set papers over. Fixing
-any of them requires a `src/` (or `e2e/specs/quality/a11y.spec.ts`) change, out of scope for a
-docs-only task; they're flagged here and in the Task 13 report for the controller/user to triage.
+Both are genuine, currently-open findings — not something this doc set papers over. Fixing either
+requires a `src/` change, out of scope for a docs-only task; they're flagged here and in the
+Task 13 report for the controller/user to triage.

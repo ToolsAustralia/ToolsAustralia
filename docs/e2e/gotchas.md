@@ -173,18 +173,18 @@ launch: it attempts a 2s-timeout `fetch` against `http://localhost:<port>/`; any
 resolves (a response) or times out (connection accepted but unresponsive) is treated as "busy"
 and throws `Port <N> is already in use — a stale server may be running. Kill it or set E2E_PORT
 to a free port.` A connection-refused-style rejection is the only "free" outcome. This check runs
-**after** `wipeAndSeed` but **before** any server process is spawned, so it fails fast without a
-wasted seed cycle... actually it fails after the seed (the seed itself is cheap and idempotent,
-so this ordering was accepted rather than reordered).
+**after** `wipeAndSeed` but **before** any server process is spawned — a port conflict still costs
+one wasted (but cheap and idempotent) database wipe-and-reseed, which was accepted rather than
+reordering the two checks, since the real cost this guard avoids is booting a server on top of a
+stale one and chasing confusing test failures against the wrong process.
 
 ## Open finding (not yet resolved) — intermittent `/membership` hydration mismatch, general and page-level
 
-First observed during Task 13's success-criteria gate, across two independent full-suite runs
-(`npm run e2e`, run twice back-to-back for the idempotence check) once the full-run split (see
-architecture.md) was in place — i.e. **not** a symptom of the mixed-purchase-load problem that
-split fixed, since it recurred even with `/membership`-visiting specs running under Playwright's
-normal (non-`@purchase`) parallelism, and once inside an isolated single-project `@purchase` leg
-with no other load at all. Symptom, every time:
+First observed during Task 13's success-criteria gate, across three independent full-suite runs
+(`npm run e2e`, all after the full-run split — see architecture.md — was in place) — i.e. **not**
+a symptom of the mixed-purchase-load problem that split fixed, since it recurred under
+Playwright's normal (non-`@purchase`) parallelism in phase A, and inside isolated single-project
+`@purchase` legs in phase B with no other load at all. Symptom, every time:
 
 ```
 console.error: A tree hydrated but some attributes of the server rendered HTML didn't match the
@@ -193,25 +193,27 @@ client properties. This won't be patched up. This can happen if a SSR-ed Client 
 - Variable input such as `Date.now()` or `Math.random()` wh[ich changes between the...]
 ```
 
-Observed hitting **any** spec that visits `/membership`, not one particular file: across the two
-runs it struck `legal-copy.spec.ts` (once), `a11y.spec.ts` (once, both attempt AND retry — the one
-case that did not self-heal), `visual.spec.ts`'s membership-tiers case (twice, manifesting as a
-screenshot diff rather than a console error, once self-healing on retry and once not), and
-`purchase-idempotency.spec.ts` (once, self-healed on retry). Frequency is low but not rare — roughly
-4-5 occurrences across ~2 dozen `/membership` page visits over the two runs — and **it does not
-reliably self-heal via Playwright's built-in retry**: 2 of those ~5 occurrences failed on both the
-original attempt and the retry within the same run. Per the acceptance criterion this task was
-given ("recovering on retry is acceptable; deterministic failures are not"): this is neither fully
-acceptable (not every occurrence self-heals) nor deterministic (most runs and most `/membership`
-visits are clean, including plenty in the very same runs where it did fire elsewhere) — it's a
-genuine, moderate-frequency intermittent race that hasn't been root-caused. No prior task in this
-branch's history ran the full unscoped suite at all (confirmed by grep across
-`.superpowers/sdd/task-*-report.md` — every earlier `@a11y`/`@demo`/`@purchase` run was project- or
-grep-scoped), so this wasn't previously visible. Root cause not yet investigated (would require
-reading React's hydration-mismatch context in an actual failing render — the `Date.now()`/
-`Math.random()` hint in React's own boilerplate warning is generic, not diagnostic — and is out of
-scope for a docs-only task); flagged here and in the Task 13 report rather than silently retried
-away or absorbed into a watchdog allowlist.
+Observed hitting **any** spec that visits `/membership`, not one particular file:
+`legal-copy.spec.ts`, `a11y.spec.ts`, `visual.spec.ts`'s membership-tiers case (manifesting as a
+screenshot diff rather than a console error), `purchase-idempotency.spec.ts`, and
+`webhook-replay.spec.ts` have all hit it at least once. Across all three full-suite runs, it fired
+**11 times total**; **9 self-healed on Playwright's built-in retry**, but **2 did not** — both
+attempt and retry failed within the same run (once in `a11y.spec.ts`, once in `visual.spec.ts`'s
+membership-tiers case, both on `chromium-desktop`, both in runs from before the a11y-scoping
+decision and the `isFullRun` hardening existed). The most recent full run (after both of those
+landed) saw the race fire 5 times and self-heal all 5 — encouraging, but a small sample, and not
+proof the race's underlying cause changed; it may simply not have gotten unlucky twice in the same
+run again yet. Per the acceptance criterion this task was given ("recovering on retry is
+acceptable; deterministic failures are not"): this is neither fully acceptable (not every
+occurrence self-heals) nor deterministic (most `/membership` visits, including plenty in the same
+runs where it did fire elsewhere, are clean) — it's a genuine, low-frequency intermittent race
+that hasn't been root-caused. No prior task in this branch's history ran the full unscoped suite
+at all before Task 13 (confirmed by grep across `.superpowers/sdd/task-*-report.md` — every
+earlier `@a11y`/`@demo`/`@purchase` run was project- or grep-scoped), so this wasn't previously
+visible. Root cause not yet investigated (would require reading React's hydration-mismatch context
+in an actual failing render — the `Date.now()`/`Math.random()` hint in React's own boilerplate
+warning is generic, not diagnostic — and is out of scope for a docs-only task); flagged here and
+in the Task 13 report rather than silently retried away or absorbed into a watchdog allowlist.
 
 ## Open finding — `next build` currently fails (prod-only, blocks `E2E_BUILD=1` entirely)
 

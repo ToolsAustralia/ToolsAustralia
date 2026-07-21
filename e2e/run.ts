@@ -166,7 +166,12 @@ async function main(): Promise<number> {
   // splitting it would pop a second (then third) UI window for the sequenced @purchase legs the
   // moment the first is closed — the original single-invocation behavior is what a human wants.
   const hasUi = argv.includes("--ui");
-  const isFullRun = !hasExplicitGrep && !hasExplicitProject && !hasUi;
+  // A caller-supplied --grep-invert must never be clobbered by phase A's own appended one.
+  const hasGrepInvert = argv.some((a) => a === "--grep-invert" || a.startsWith("--grep-invert="));
+  // Bare `npm run e2e:proof` (no --grep) keeps the old single-invocation path too — splitting
+  // would run phase A under the 1-worker proof profile then 3 more sequential legs, ballooning
+  // wall time for a mode meant for a quick narrated capture; scope proof runs via --grep instead.
+  const isFullRun = !hasExplicitGrep && !hasExplicitProject && !hasUi && !hasGrepInvert && !proof;
 
   // 1. Env + guards (throws on unsafe DB or live Stripe key)
   let env = resolveE2eEnv();

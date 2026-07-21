@@ -53,7 +53,7 @@ concurrently against the same database. Two helpers exist, pick the one that mat
   `testInfo.retry` into the email so a mixed multi-project run and a Playwright retry on the same
   worker both get distinct, deterministic identities (`uniqueMobile(email)` derives the matching
   mobile via a deterministic hash, always 8 digits after the `04` prefix). **Must** go through
-  the real register endpoint's email regex (`src/models/User.ts` — hyphen separators + a 2-char
+  the real register endpoint's email regex (`src/models/User.ts` — hyphen separators + a 2-3 char
   TLD only; `+` and `.local` both fail validation), which is why the format is
   `e2e-<tag>-<runId>-<project>-r<retry>@e2e.io`, not the `freshUser`-style `@e2e.local` address.
 

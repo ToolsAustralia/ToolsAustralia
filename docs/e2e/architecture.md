@@ -187,10 +187,29 @@ report) even in a run where the 15 purchase tests themselves happened to all pas
 mixed-parallel purchase failure mode is load-dependent, not deterministic — passing once doesn't
 mean it's safe).
 
-Fixed by splitting a full run (`isFullRun = !hasExplicitGrep && !hasExplicitProject && !hasUi` —
-`--ui`, i.e. `npm run e2e:ui`, is deliberately excluded: that's an interactive, human-driven
-session, not an automated run, and splitting it would pop a second/third UI window for the
-purchase legs the instant the first closes) into two sequential phases inside `main()`'s step 7:
+Fixed by splitting a full run into two sequential phases inside `main()`'s step 7:
+
+```ts
+const isFullRun = !hasExplicitGrep && !hasExplicitProject && !hasUi && !hasGrepInvert && !proof;
+```
+
+Four exclusions, each guarding against splitting something that isn't actually an unscoped full
+run:
+- `hasExplicitGrep` / `hasExplicitProject` — an explicit `--grep`/`--project` means the caller
+  already scoped the run themselves.
+- `hasUi` (`--ui`, i.e. `npm run e2e:ui`) — an interactive, human-driven Playwright UI session,
+  not an automated run; splitting it would pop a second/third UI window for the purchase legs the
+  instant the first closes.
+- `hasGrepInvert` (`--grep-invert`, literal or `=` form) — a caller-supplied invert filter must
+  never be clobbered by phase A's own appended `--grep-invert @purchase`.
+- `proof` (`--proof`, i.e. bare `npm run e2e:proof` with no `--grep`) — splitting would run phase
+  A under the 1-worker proof profile then 3 more sequential legs, ballooning wall time for a mode
+  meant for a quick narrated capture; scope proof runs via `--grep @demo` instead (how-to-run.md).
+
+Verified with a `--list`-level probe (boots the real orchestrator, appends `--list` so Playwright
+enumerates tests instead of running them) across all 5 relevant invocation shapes — bare,
+`--grep @smoke`, `--grep-invert @demo`, bare `--proof`, and `--ui` — confirming each takes the
+expected branch (full verbatim table in `.superpowers/sdd/task-13-report.md`).
 
 1. **Phase A** — one `runPlaywrightOnce([...passthrough, "--grep-invert", "@purchase"], pwEnv)`
    call: every spec EXCEPT `@purchase`, all three projects together, Playwright's normal
