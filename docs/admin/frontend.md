@@ -93,11 +93,14 @@ Three at-a-glance additions so an admin understands the account without digging:
   [`deriveMembershipDisplayStatus`](../../src/utils/subscription/subscription-helpers.ts) — states (labels):
   **Active** (incl. `trialing`, the anchor-day artifact — never shown as "trial") / **Cancels {endDate}**
   (active + `autoRenew: false`) / **Past Due** (`past_due`/`unpaid`; wins over cancelled-while-past-due) /
-  **Paused** (defensive arm — nothing writes a DB `paused` status today; retention pause lives on Stripe
-  `pause_collection`, so retention-paused members display as Active, same as every other admin surface) /
-  **Cancelled** / **Guest — no membership** (incomplete/none). The route now
+  **Paused** (retention `pause_30d` freeze window — `subscription.status === "paused"` + `isActive: false`;
+  sky/`PauseCircle` badge) / **Cancelled** / **Guest — no membership** (incomplete/none). The route now
   also projects `subscription.cancelledAt` (was declared on `AdminUserDetail` but never sent). Regression
   test: `npm run test:membership-display-status`.
+- **Users-list row badge** (`renderSubscriptionStateBadge`, the coarse per-row status): now also renders a
+  **Paused** badge (sky `info` / `PauseCircle`) for `status === "paused"` members — previously they fell
+  through to the red **Inactive** fallback. Matches the detail-header badge style above so the list and the
+  detail panel agree.
 - **No editable Auto-Renew checkbox.** The admin subscription editor (`UserDetailModal`) exposes `status`,
   `isActive`, and the dates, but **not** an `autoRenew` toggle — it was removed (2026-07) because it wrote
   the DB flag with **no Stripe call**, so an admin could flip it and silently desync from Stripe

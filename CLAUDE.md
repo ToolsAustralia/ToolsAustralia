@@ -589,6 +589,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/services/attribution/**",
         "src/types/attribution.ts",
         "src/types/tracking.ts",
+        "src/types/klaviyo.ts",
         "src/services/facebook-ads-health/**",
         "src/models/MetaAdDestination.ts",
         "src/models/MetaAdInsightsDaily.ts",

@@ -67,12 +67,14 @@ export default function ManageSheet() {
   const { showToast } = useToast();
 
   const [cancelOpen, setCancelOpen] = useState(false);
+  const [resuming, setResuming] = useState(false);
 
   const user = accountData?.user;
   const acct = dash.acct;
   const isActive = acct === "active";
   const isPastDue = acct === "pastdue";
-  const isMember = isActive || isPastDue;
+  const isPaused = acct === "paused";
+  const isMember = isActive || isPastDue || isPaused;
 
   const onSubscriptionUpdate = () => {
     const userId = session?.user?.id;
@@ -104,6 +106,34 @@ export default function ManageSheet() {
     }
   };
 
+  // Early resume from a 30-day retention pause — lifts the Stripe pause so collection resumes now
+  // (the member returns to active only after the resume charge succeeds). See /api/subscription/resume-pause.
+  const handleResumePause = async () => {
+    setResuming(true);
+    try {
+      const res = await fetch("/api/subscription/resume-pause", { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "Couldn't resume membership");
+      showToast({
+        type: "success",
+        title: "Resuming membership",
+        message: data?.message || "Your membership is resuming.",
+        duration: 8000,
+      });
+      onSubscriptionUpdate();
+      closeSheet();
+    } catch (err) {
+      showToast({
+        type: "error",
+        title: "Couldn't resume membership",
+        message: err instanceof Error ? err.message : "Please try again in a moment.",
+        duration: 8000,
+      });
+    } finally {
+      setResuming(false);
+    }
+  };
+
   // Plan summary — use the persisted SUBSCRIPTION tier. dash.tierKey/Hex/Label come from
   // getActivePackage and are null for a past-due member (isActive false), which would show a generic
   // Package icon + neutral colour next to the real tier name. subscriptionTier* survives past-due.
@@ -117,6 +147,9 @@ export default function ManageSheet() {
     if (!d || Number.isNaN(d.getTime())) return null;
     return d.toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" });
   })();
+  const pausedUntilLabel = dash.pausedUntil
+    ? new Date(dash.pausedUntil).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" })
+    : null;
   const autoRenew = sub?.autoRenew !== false;
   // Scheduled downgrade — mirror the Membership page's MembershipCurrentPlan card so both surfaces agree.
   const downgradePending = !!user && isActive && autoRenew && hasPendingDowngrade(user as unknown as Partial<IUser>);
@@ -129,7 +162,11 @@ export default function ManageSheet() {
     : null;
   const renewLabel = isPastDue
     ? "Payment failed — renew to resume"
-    : downgradePending && downgradeTarget && downgradeDateLabel
+    : isPaused
+      ? pausedUntilLabel
+        ? `Paused · resumes ${pausedUntilLabel}`
+        : "Paused"
+      : downgradePending && downgradeTarget && downgradeDateLabel
       ? `Downgrades to ${downgradeTarget.name} · ${downgradeDateLabel}`
       : renewDate
         ? `${autoRenew ? "Renews" : "Ends"} ${renewDate}${autoRenew ? " · auto-renews monthly" : ""}`
@@ -171,10 +208,12 @@ export default function ManageSheet() {
                         "rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide",
                         isPastDue
                           ? "bg-amber-100 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300"
-                          : "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300",
+                          : isPaused
+                            ? "bg-sky-100 text-sky-700 dark:bg-sky-950/50 dark:text-sky-300"
+                            : "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300",
                       )}
                     >
-                      {isPastDue ? "Past due" : "Active"}
+                      {isPastDue ? "Past due" : isPaused ? "Paused" : "Active"}
                     </span>
                   </div>
                   <p className="mt-0.5 text-xs text-muted-token">{renewLabel}</p>
@@ -195,6 +234,17 @@ export default function ManageSheet() {
                   style={{ background: "linear-gradient(180deg,#fbbf24,#d97706)" }}
                 >
                   <RefreshCw className="h-4 w-4" /> Update payment to resume
+                </button>
+              )}
+
+              {isPaused && (
+                <button
+                  type="button"
+                  onClick={() => void handleResumePause()}
+                  disabled={resuming}
+                  className="flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-b from-sky-500 to-sky-600 py-3.5 text-sm font-bold text-white transition-transform focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-600 motion-safe:active:translate-y-px disabled:opacity-60"
+                >
+                  <RefreshCw className="h-4 w-4" /> {resuming ? "Resuming…" : "Resume now"}
                 </button>
               )}
 
