@@ -16,6 +16,7 @@
 | Wipe-and-seed | `e2e/seed/` (`index.ts`, `users.ts`, `draw.ts`) | `wipeAndSeed()` re-runs the safety guard, drops the e2e DB, seeds: member (`e2e.member@e2e.local`, bcrypt cost-12, active display-only Tradie subscription with FAKE Stripe ids), admin, one active MajorDraw. CLI: `npx tsx e2e/seed/index.ts`. **Gotcha:** the seeded admin needs `userType: "admin"`, not just `role: "admin"` — the middleware and server layout accept the legacy role-only bridge, but the client-side `usePermissions.isStaff` gate on the `/admin` root page (`src/hooks/usePermissions.ts:26`) checks `userType` only and bounces legacy-only admins back to `/`. |
 | DB assertion helpers | `e2e/helpers/db.ts` | Direct Mongo reads for spec assertions: `entriesForUser`, `benefitsGrantedCount` (`BenefitsGranted-invoice_<id>` / `BenefitsGranted-<paymentIntentId>` — the `pi_` prefix comes from Stripe's own id), `createLoginableUser` (register API creates passwordless users, so login-capable users are created directly). |
 | Marketing/membership `@smoke` specs | `e2e/specs/marketing/landing.spec.ts`, `mini-draws.spec.ts`, `legal-copy.spec.ts`; `e2e/specs/membership/modal.spec.ts` | Landing hero + membership CTA render, `/mini-draws` renders, `/membership` shows the three tier CTAs + free-entry copy, and a CLAUDE.md §11 legal-copy guard (bans gambling/sold-entry vocabulary, asserts free-entry framing) across `/`, `/membership`, `/mini-draws`. |
+| Purchase (money-path) helper + specs | `e2e/helpers/payment.ts`; `e2e/specs/membership/{purchase-subscription,purchase-one-time,purchase-decline,purchase-idempotency,webhook-replay}.spec.ts` | Real Stripe TEST-MODE payments through the real UI + real webhook delivery, DB-level exactly-once assertions. See the `@purchase` section below. |
 
 **Resolved gotcha — `NEXT_PUBLIC_API_URL` now follows the e2e origin.** `.env.local` sets `NEXT_PUBLIC_API_URL=http://localhost:3000` for normal local dev. Until this fix, `resolveE2eEnv()`'s overlay remapped `NEXTAUTH_URL` to the dynamic e2e port but left `NEXT_PUBLIC_API_URL` unmapped, so `src/lib/queries.ts`'s `apiGet`/`apiRequest` (used by `useWinnersQueries.ts`, `useMajorDrawQueries.ts`, and other client hooks) built absolute URLs against the wrong port — every page rendering a winners/major-draw widget (`/`, `/membership`, `/mini-draws` via `MembershipSection`/`LatestWinnerHero`/`WinnerTestimoniesClient`) fired client XHRs at an unreachable `http://localhost:3000/...`. This surfaced as the QA watchdog catching real `net::ERR_CONNECTION_REFUSED` console errors on every run of `legal-copy.spec.ts` — confirmed via trace network logs to be **not** a legal-copy violation (zero `BANNED_COPY` hits in any run). Fixed by remapping `NEXT_PUBLIC_API_URL` alongside `NEXTAUTH_URL` in the overlay (see row above); regression-covered by `resolveE2eEnv builds the overlay` in `e2e/lib/__tests__/env.test.ts`.
 
@@ -41,10 +42,9 @@ see the env-overlay row above for the current list.
 
 ## Coming in later plan tasks
 
-Orchestrator, fixtures, and an initial `@smoke`/`@demo` spec set (auth, marketing, membership)
-now exist (Tasks 4-6). Still to come: `@purchase` / `@a11y` / `@visual` spec suites, proof
-mode (narrated mp4s), and the full doc set (architecture, adding-a-spec, proof-mode,
-troubleshooting) promised in Task 13.
+Orchestrator, fixtures, `@smoke`/`@demo`, `@a11y`, `@visual`, and `@purchase` spec suites
+now exist (Tasks 4-11). Still to come: proof mode (narrated mp4s) and the full doc set
+(architecture, adding-a-spec, proof-mode, troubleshooting) promised in Task 13.
 
 ## Orchestrator note — win32 arg quoting
 
@@ -77,3 +77,76 @@ Baseline `targetPattern` discipline: stable-DOM entries match the full axe targe
 (regex-escaped); only the rotating promo-banner entries may use a broader anchored pattern,
 each carrying a `DOCUMENTED EXCEPTION` comment. Loose utility-class fragments are not
 acceptable patterns — they can silently absorb future distinct violations.
+
+## `@purchase` suite — the money path
+
+`e2e/helpers/payment.ts` + `e2e/specs/membership/{purchase-subscription,purchase-one-time,
+purchase-decline,purchase-idempotency,webhook-replay}.spec.ts`. Real Stripe TEST-MODE
+payments through the real UI (`4242…` / `4000…0002` cards), webhook delivery via the
+orchestrator's `stripe listen` forwarder, DATABASE-level exactly-once assertions — never UI
+toasts — for the grant. Full task narrative: `.superpowers/sdd/task-11-report.md`.
+
+**Flow (all 5 specs mirror this):** `/membership` → "Choose Tradie" (or the "Not
+subscribing?" drawer's "Apprentice Pack" card for the one-time spec) → guest registration
+(step 1) → the modal jumps straight to billing (no "Continue to Billing" interstitial,
+per Task 7) → the unauthenticated submit button is exactly `"PURCHASE"` → fill the Stripe
+`PaymentElement` iframe (`fillPaymentElement`) → click → poll the DB (`waitForActiveMembership`
+/ `waitForOneTimeEntries`) rather than the UI, since webhook grant processing is in-process
+`after()`, not synchronous.
+
+**`paymentevents` `_id` shape (verified live, both branches):**
+- Membership (subscription), granted on `invoice.payment_succeeded`:
+  `BenefitsGranted-invoice_<stripe invoice id>` — e.g. `BenefitsGranted-invoice_in_1AbC…`.
+- One-time, granted on `payment_intent.succeeded`:
+  `BenefitsGranted-<stripe payment intent id>` — e.g. `BenefitsGranted-pi_1AbC…`.
+
+`payment.ts`'s `findBenefitsGrantedRef(userId, packageType)` locates the caller's own doc
+(scans `{eventType:"BenefitsGranted", packageType}` and filters by `String(userId)` client-side
+— mirrors `entriesForUser`'s pattern rather than relying on ObjectId-cast query filters) and
+returns `{kind, id}` ready for `benefitsGrantedCount` (`e2e/helpers/db.ts`).
+
+**Gotchas found only by running against the live app:**
+- **Shared hardcoded phone number collides across specs.** All 5 specs register a new guest
+  user; a single hardcoded `"0412345678"` (matching the brief's literal example) 400s the
+  moment two specs run against the same database — the `User` model unique-indexes `mobile`.
+  Fixed with `uniqueMobile(email)` (`payment.ts`) — a deterministic hash of the same per-test
+  `email` string every spec already builds, seeded through `/^(\+61|61|0)?[4-5]\d{8}$/`.
+- **Decline copy renders INSIDE the Stripe iframe, not as our app's toast.** Verified via
+  screenshot: "Your card was declined." is Stripe PaymentElement's own inline field-level
+  error, directly under the Card number field — `page.getByText()` (main frame only) never
+  finds it; `purchase-decline.spec.ts` asserts through the same `frameLocator`
+  `fillPaymentElement` uses. That decline also legitimately triggers browser-level noise
+  (`console.error("Stripe PaymentIntent error:", …)` from `CardFormSection.tsx`, and Chrome
+  auto-logging Stripe's own HTTP 402 for the decline) — `purchase-decline.spec.ts` shadows
+  the base `watchdog` fixture (Playwright's documented fixture-override pattern; base
+  `fixtures/test.ts` untouched) with the same pageerror/response checks plus a narrow,
+  evidenced allowlist for that specific noise.
+- **`stripewebhookqueue` is singular, and its type field is `type` not `eventType`.**
+  `src/models/StripeWebhookQueue.ts`: collection `"stripewebhookqueue"`, fields `eventId`
+  (Stripe `evt_…` id) + `type` (Stripe event type) + `payload` (the full Stripe event, so
+  `payload.data.object.id` is the invoice id). An earlier draft assumed
+  `"stripewebhookqueues"` / `eventType` and would have silently matched nothing.
+- **A Stripe resend carries a FRESH `event.id`.**
+  `src/services/stripe-webhook-queue/processQueuedEvent.ts`'s own comment: "Stripe dashboard
+  *resends* carry a fresh event.id and bypass enqueue idempotency." So neither the queue's
+  `eventId`-unique index nor `ProcessedStripeEvent` (both keyed by the wrapping Stripe event
+  id) block a resend from re-entering `handleInvoicePaymentSucceeded` — the guard actually
+  exercised by `webhook-replay.spec.ts` is Layer 4: the `paymentevents` unique `_id`, keyed
+  by the INVOICE (not the event), created FIRST via the unique-constraint race-guard
+  in `handleInvoicePaymentSucceeded`.
+- **Queue-row status races the DB-visible grant.** `markSucceeded` (in
+  `processQueuedEvent.ts`) writes AFTER the benefit-granting dispatch returns, so a
+  `status:"succeeded"` filter immediately after `waitForActiveMembership` resolves can
+  intermittently find nothing — `webhook-replay.spec.ts` polls the queue row (any status)
+  for a short budget instead of a single strict-status `findOne`.
+- **A full 3-project concurrent run exceeds this dev environment's capacity.** Each project
+  alone (chromium-desktop / mobile-chrome / mobile-safari) is 100% reliable — verified
+  green individually, repeatedly. Running all 3 simultaneously (`npm run e2e:purchase` with
+  no `--project` filter) drives 8 Playwright workers × real Stripe money-path flows against
+  ONE `next dev` process; server logs show `MongoDB connected ... maxPoolSize=10`, and under
+  full load some runs saw `page.goto` itself fail with `net::ERR_ABORTED` (the dev server
+  refusing connections) even with generous (180-400s) per-test timeouts. This is an
+  infra-capacity limitation — not a spec defect — and is out of this domain's file scope to
+  fix (would mean raising `maxPoolSize` in `src/lib/mongodb.ts`, or capping worker
+  concurrency for `@purchase` runs in `playwright.config.ts` / `e2e/run.ts`). Full evidence
+  in `.superpowers/sdd/task-11-report.md`.
