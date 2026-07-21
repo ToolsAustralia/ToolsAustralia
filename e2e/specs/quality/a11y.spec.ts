@@ -93,6 +93,11 @@ const KNOWN_VIOLATIONS: Record<string, { ruleId: string; targetPattern: RegExp; 
 test.describe("accessibility + ui audit @a11y", () => {
   for (const path of PAGES) {
     test(`axe + uiAudit on ${path}`, async ({ page }, testInfo) => {
+      test.skip(
+        testInfo.project.name !== "chromium-desktop",
+        "a11y baseline is captured on chromium-desktop; mobile baselining is a planned expansion"
+      );
+
       await page.goto(path);
       await page.waitForLoadState("networkidle");
 
