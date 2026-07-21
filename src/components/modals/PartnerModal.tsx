@@ -203,7 +203,7 @@ const PartnerModal: React.FC<PartnerModalProps> = ({ isOpen, onClose }) => {
             unoptimized={true}
             placeholder="empty"
           /> */}
-          <h2 className="text-sm sm:text-2xl font-bold font-['Poppins']">
+          <h2 className="text-sm sm:text-2xl font-bold font-poppins">
             {isSubmitted ? "Application Submitted!" : "Become a Partner"}
           </h2>
         </div>
@@ -216,7 +216,7 @@ const PartnerModal: React.FC<PartnerModalProps> = ({ isOpen, onClose }) => {
             <div className="inline-flex items-center justify-center w-16 h-16 sm:w-20 sm:h-20 bg-green-100 dark:bg-green-950/40 rounded-full mb-4 sm:mb-6">
               <CheckCircle className="w-8 h-8 sm:w-10 sm:h-10 text-green-600 dark:text-green-400" />
             </div>
-            <h3 className="text-lg sm:text-2xl font-bold text-gray-900 dark:text-neutral-100 font-['Poppins'] mb-2 sm:mb-4">Thank You!</h3>
+            <h3 className="text-lg sm:text-2xl font-bold text-gray-900 dark:text-neutral-100 font-poppins mb-2 sm:mb-4">Thank You!</h3>
             <p className="text-sm sm:text-base text-gray-600 dark:text-neutral-400 font-['Inter'] mb-4 sm:mb-6">
               Your partnership application has been submitted successfully. We&apos;ll be in touch within 24 hours to
               discuss your partnership opportunities.
@@ -247,7 +247,7 @@ const PartnerModal: React.FC<PartnerModalProps> = ({ isOpen, onClose }) => {
                   onChange={(e) => handleInputChange("firstName", e.target.value)}
                   placeholder="First name"
                   error={errors.firstName}
-                  className="font-['Poppins'] text-xs sm:text-sm px-2 py-1.5 sm:px-3 sm:py-2 h-8 sm:h-auto"
+                  className="font-poppins text-xs sm:text-sm px-2 py-1.5 sm:px-3 sm:py-2 h-8 sm:h-auto"
                 />
                 <Input
                   name="lastName"
@@ -255,7 +255,7 @@ const PartnerModal: React.FC<PartnerModalProps> = ({ isOpen, onClose }) => {
                   onChange={(e) => handleInputChange("lastName", e.target.value)}
                   placeholder="Last name"
                   error={errors.lastName}
-                  className="font-['Poppins'] text-xs sm:text-sm px-2 py-1.5 sm:px-3 sm:py-2 h-8 sm:h-auto"
+                  className="font-poppins text-xs sm:text-sm px-2 py-1.5 sm:px-3 sm:py-2 h-8 sm:h-auto"
                 />
               </div>
             </FormSection>
@@ -268,7 +268,7 @@ const PartnerModal: React.FC<PartnerModalProps> = ({ isOpen, onClose }) => {
                   onChange={(e) => handleInputChange("businessName", e.target.value)}
                   placeholder="Business name"
                   error={errors.businessName}
-                  className="font-['Poppins'] text-xs sm:text-sm px-2 py-1.5 sm:px-3 sm:py-2 h-8 sm:h-auto"
+                  className="font-poppins text-xs sm:text-sm px-2 py-1.5 sm:px-3 sm:py-2 h-8 sm:h-auto"
                 />
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 sm:gap-2">
                   <Input
@@ -277,7 +277,7 @@ const PartnerModal: React.FC<PartnerModalProps> = ({ isOpen, onClose }) => {
                     onChange={(e) => handleInputChange("abn", e.target.value)}
                     placeholder="ABN (Optional)"
                     error={errors.abn}
-                    className="font-['Poppins'] text-xs sm:text-sm px-2 py-1.5 sm:px-3 sm:py-2 h-8 sm:h-auto"
+                    className="font-poppins text-xs sm:text-sm px-2 py-1.5 sm:px-3 sm:py-2 h-8 sm:h-auto"
                   />
                   <Input
                     name="acn"
@@ -285,7 +285,7 @@ const PartnerModal: React.FC<PartnerModalProps> = ({ isOpen, onClose }) => {
                     onChange={(e) => handleInputChange("acn", e.target.value)}
                     placeholder="ACN (Optional)"
                     error={errors.acn}
-                    className="font-['Poppins'] text-xs sm:text-sm px-2 py-1.5 sm:px-3 sm:py-2 h-8 sm:h-auto"
+                    className="font-poppins text-xs sm:text-sm px-2 py-1.5 sm:px-3 sm:py-2 h-8 sm:h-auto"
                   />
                 </div>
               </div>
@@ -300,7 +300,7 @@ const PartnerModal: React.FC<PartnerModalProps> = ({ isOpen, onClose }) => {
                   onChange={(e) => handleInputChange("email", e.target.value)}
                   placeholder="Email address"
                   error={errors.email}
-                  className="font-['Poppins'] text-xs sm:text-sm px-2 py-1.5 sm:px-3 sm:py-2 h-8 sm:h-auto"
+                  className="font-poppins text-xs sm:text-sm px-2 py-1.5 sm:px-3 sm:py-2 h-8 sm:h-auto"
                 />
                 <Input
                   type="tel"
@@ -309,7 +309,7 @@ const PartnerModal: React.FC<PartnerModalProps> = ({ isOpen, onClose }) => {
                   onChange={(e) => handleInputChange("phone", e.target.value)}
                   placeholder="Phone number"
                   error={errors.phone}
-                  className="font-['Poppins'] text-xs sm:text-sm px-2 py-1.5 sm:px-3 sm:py-2 h-8 sm:h-auto"
+                  className="font-poppins text-xs sm:text-sm px-2 py-1.5 sm:px-3 sm:py-2 h-8 sm:h-auto"
                 />
               </div>
             </FormSection>
@@ -321,7 +321,7 @@ const PartnerModal: React.FC<PartnerModalProps> = ({ isOpen, onClose }) => {
                 onChange={(e) => handleInputChange("goals", e.target.value)}
                 placeholder="What are you hoping to achieve? (Optional)"
                 rows={2}
-                className="font-['Poppins'] text-xs sm:text-base px-2 py-1.5 sm:px-3 sm:py-2"
+                className="font-poppins text-xs sm:text-base px-2 py-1.5 sm:px-3 sm:py-2"
               />
             </FormSection>
 
@@ -332,7 +332,7 @@ const PartnerModal: React.FC<PartnerModalProps> = ({ isOpen, onClose }) => {
                 onClick={onClose}
                 variant="secondary"
                 fullWidth
-                className="font-['Poppins'] text-xs sm:text-sm py-1.5 sm:py-3 h-8 sm:h-auto"
+                className="font-poppins text-xs sm:text-sm py-1.5 sm:py-3 h-8 sm:h-auto"
               >
                 Cancel
               </Button>
@@ -343,7 +343,7 @@ const PartnerModal: React.FC<PartnerModalProps> = ({ isOpen, onClose }) => {
                 loading={isSubmitting}
                 icon={Send}
                 iconPosition="left"
-                className="font-['Poppins'] text-xs sm:text-sm py-1.5 sm:py-3 h-8 sm:h-auto"
+                className="font-poppins text-xs sm:text-sm py-1.5 sm:py-3 h-8 sm:h-auto"
               >
                 {isSubmitting ? "Submitting..." : "Submit Application"}
               </Button>

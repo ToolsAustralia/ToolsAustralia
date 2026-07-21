@@ -1,5 +1,14 @@
 # Promo — Frontend
 
+## Promo-banner surface: compositor-friendly animation stack (2026-07-20, perf Tier-2 Task 1)
+
+The always-on repaint stack on the promo-banner surface was rewritten to transform/opacity-only, tier-gated animations (full rule + `.fire` layer contract: [shared-ui/gotchas.md](../shared-ui/gotchas.md#always-on-animations-transformopacity-only-and-tier-gate-them)). Promo-side specifics:
+
+- **PromoBanner fire effect**: the `.fire` overlay div now renders one child — `<div className="fire-glitter" />` — which is the second (parallax) glitter field; `globals.css` positions/animates it and the two pseudo-elements. Don't remove the child or add other children to `.fire` (the old `.fire > *` z-index rule is gone). The glitter layers carry a 16px-per-edge blur bleed (`top: -16px`, height `+32px`) so the blur-feathered edges never enter the clip. The `--glitter` texture is now **first-party** (`public/images/effects/glitter.png`, 800×534 quantized PNG ~244KB) — it previously hotlinked a ~1.4MB image from `assets.codepen.io` (third-party SPOF on ad landing pages); `img-src 'self'` already covers it.
+- **UrgencyClockIcon** (rendered in PromoBanner's `static_urgency` right-tile): pure CSS now — subtle scale pulse + 60s `steps(60)` second hand, static on mobile/tablet/save-data. Note it does NOT hook into `PromoBannerCountdownTickLeaf` (the icon's render site is outside that leaf); the CSS tick costs one style update per second.
+- **FloatingCountdownBanner**: `backdrop-blur-[var(--ta-blur)]` **removed** from the pill — its `from-gray-900 via-gray-800 to-black` gradient is opaque, so the blur was invisible GPU cost. The collapsed pill's status dot is now **static** (no `animate-pulse`/`animate-ping` — the collapsed state persists for the whole scroll session). The mobile-expanded dots keep their ping/pulse but carry `ta-countdown-dot`, which the globals.css tier-gate cluster freezes on mobile/tablet/save-data (they still animate in narrow desktop-tier windows). Dismissed = unmounted, so nothing runs.
+- **Gallery filter bar + CTAs**: `GiveawayGalleryClient` filter bar, `PromoHero` CTA and `FloatingGetEntriesButton` swapped literal `backdrop-blur-xl|lg` for `backdrop-blur-[var(--ta-blur)]` (desktop 12px, tablet 4px, mobile 0px); the filter bar's bg opacity was raised (`bg-white/95`, `dark:bg-slate-950/95`) so mobile reads as a solid surface without blur.
+
 ## /promotions gallery filter — full-width sticky bar at `top-0` (2026-07-08)
 
 `GiveawayGalleryClient` filter dock was `sticky top-16 sm:top-20` inside a `SectionContainer` — the `top-16/20` was meant to clear a fixed PromoBanner, but on `/promotions` the PromoBanner is rendered **in-flow** (`followOnScroll={false}`, [page.tsx](../../src/app/promotions/page.tsx)) and there's **no fixed header** (the gallery is chrome-free), so that offset left a big empty gap above the filter once it stuck. Fixed: the dock is now a **full-width sticky bar** (`sticky top-0 w-full`, edge-to-edge glass + bottom border) pulled OUT of `SectionContainer` (rendered directly in the page's full-width `<main>`), with its content still in an inner `max-w-7xl` container. The grid sits in its own `SectionContainer` below. **Note:** `top-0` is correct only because nothing is fixed above the gallery here — do NOT copy this to the `[slug]` pages, where the PromoBanner IS a fixed scroll-follow pill.
@@ -61,7 +70,11 @@ brand-colored (`#c92a28`/`#FEBD17`/`#BFD730`…) so they read on both grounds wi
 **brand strip is a one-row marquee** (matches the `/membership` `MembershipBrandShowcase`:
 `animate-[marquee-scroll_45s_linear_infinite]`, masked edges, hover-pause, bigger white cards); the 5 toolset
 wordmarks are repeated **4×** so the keyframe's `-50%` animated half always exceeds the viewport for a seamless
-loop (2× isn't enough with only 5 brands on wide screens). **Grid is
+loop (2× isn't enough with only 5 brands on wide screens). Perf (2026-07-20): both marquees carry
+`[animation-play-state:var(--ta-marquee-state)]` (paused on Save-Data / reduced-motion) and
+`[content-visibility:auto]` + `[contain-intrinsic-size:auto_<h>px]` on the masked wrapper so the strip skips
+paint/animation work offscreen — pure CSS because this page is a Server Component (see
+[shared-ui/gotchas.md](../shared-ui/gotchas.md)). **Grid is
 `grid-cols-2` on mobile** (2-up — owner: "see in general what we're offering", small is fine), `lg:grid-cols-3`;
 card copy compacts on mobile (wordmark scaled, toolbox chip + full catalog-label description hidden `<sm`, "View"
 vs "View this combination"). **No value badge** (owner: "remove the price value") — and the **prize name is
@@ -83,14 +96,33 @@ landing brand** (its art shipped; the `getLandingHeroImagePaths` `hikoki` null-g
 removed and `hikoki-*` added to `LANDING_HERO_MAP`). Notes:
 - **No dark variants** — the new design has none, so the old `-dark`/`-dark-mobile` webps were
   deleted and `resolveLandingHeroImage` falls back to the light file (existing behaviour).
-- **mp4-only, drawn tier falls back to base (2026-06-27)** — only `.mp4` ships (H.264 plays in
-  every supported browser), so the `webm` `<source>` was **removed** from `LandingHeroVideo` (no
-  more base-clip 404s). `getLandingHeroVideoPaths` now returns an **ordered mp4 list** (`srcs:
-  string[]`): on the `drawn-tonight` / `drawn-tomorrow` tier the drawn clip is first with the
-  **base clip appended as a fallback**, so a brand that ships no drawn art (**HiKOKI** has only
-  base clips) still animates via its base clip instead of dropping to the still — the browser
-  advances to the next `<source>` natively when the drawn one 404s. This mirrors the image
-  resolver, which already drops a missing drawn still back to the base image.
+- **WebM-first, MP4 fallback; drawn tier falls back to base (2026-07-19, supersedes the
+  2026-06-27 mp4-only note below)** — every clip now ships **both** a `.webm` (VP9, ~25-40% of
+  the `.mp4` size in practice) and its `.mp4` twin (H.264, universal fallback). `getLandingHeroVideoPaths`
+  returns an **ordered `LandingVideoSource[]` list** (`{ sources: Array<{ src, type: "video/webm"
+  | "video/mp4" }> }`, was `{ srcs: string[] }`): for each clip tier, WebM precedes its MP4 twin;
+  on the `drawn-tonight` / `drawn-tomorrow` tier the drawn pair is first with the **base pair
+  appended as a fallback**, so a brand that ships no drawn art (**HiKOKI** has only base clips)
+  still animates via its base clip instead of dropping to the still — the browser advances to the
+  next `<source>` natively both when a format is unsupported AND when a drawn-tier file 404s. This
+  mirrors the image resolver, which already drops a missing drawn still back to the base image.
+  `LandingHeroVideo` renders `sources.sources.map(s => <source key={s.src} src={s.src}
+  type={s.type} />)` — the browser plays the first `<source>` it both supports and can load, so
+  WebM-capable browsers (Chrome/Firefox/Edge) never fetch the MP4 at all. **Regenerate a missing
+  WebM twin** with `ffmpeg -i <clip>.mp4 -c:v libvpx-vp9 -crf 36 -b:v 0 -an -row-mt 1 -deadline
+  good -cpu-used 4 <clip>.webm` (matches `scripts/convert-drawn-tonight-tomorrow-videos.ts`'s own
+  WebM encode step, which additionally handles the numbered art-team export layout for the drawn
+  tiers specifically — see that script's header comment before reusing it for a new asset drop).
+  Regression test: `npm run test:landing-video-resolver`.
+
+  <details><summary>Historical: mp4-only note (2026-06-27, no longer accurate)</summary>
+
+  Only `.mp4` shipped (H.264 plays in every supported browser), so the `webm` `<source>` was
+  removed from `LandingHeroVideo` to avoid base-clip 404s. `getLandingHeroVideoPaths` returned an
+  ordered mp4 list (`srcs: string[]`). Superseded by the WebM-first entry above — do not follow
+  this note for new work.
+
+  </details>
 - Source PNG statics were converted to webp (format only); manifest regenerated via
   `build:landing-manifest` (32 entries = 30 combos + all-prizes).
 
@@ -211,6 +243,16 @@ The floating "ENTRY BOOST ENDING SOON" promo banner (`FloatingPromoBanner` + its
 
 The promotions route group (`src/app/promotions/`) is **outside** `(site)`, so it never inherited the AI support widget mounted in `(site)/layout.tsx`. It is now mounted in [`src/app/promotions/layout.tsx`](../../src/app/promotions/layout.tsx) via `<SupportChatWidgetMount side="left" />` — **docked bottom-LEFT** because the promotions pages already use bottom-right for the guest theme toggle ([`PromotionsGuestThemeToggle`](../../src/components/ui/ThemeToggle.tsx), `fixed bottom-4 right-4`) and the account FAB. The widget bubble sits at `z-9000` (above the promo floating banner/toggle), so it floats over any `fixed bottom-0` promo banner rather than being hidden. Corner is controlled by the `SupportChatWidget` `side?: "left" | "right"` prop (default `"right"` everywhere else). See [ai-chatbot/README.md](../ai-chatbot/README.md) row 5.
 
+## PrizeShowcase — prize-summaries split + click-gated viewers (perf Tier-2, 2026-07-20)
+
+[`PrizeShowcase`](../../src/components/sections/promo/PrizeShowcase.tsx) no longer static-imports the ~170 KB deep catalog or the two click-only viewers; the landing graph carries only [`@/config/prize-summaries`](../../src/config/prize-summaries.ts) (see [config-and-data architecture](../config-and-data/architecture.md) "Prize catalog split"). Three mechanisms, all inside PrizeShowcase (mirrored in the currently-unmounted `MajorDrawSection`):
+
+1. **Summary catalog** — `getPrizeSummaryBySlug` / `listPrizeSummaries` / `usePrizeCatalog` all serve `PrizeSummary` (no `specSections` / `detailedDescription`). Everything the showcase renders (gallery, highlights, headings) lives on the summary.
+2. **Click-gated viewers** — `PrizeSpecificationsModal` and `FullscreenImageViewer` are `next/dynamic` (`ssr: false`) components rendered only after a `specsEverOpened` / `fullscreenEverOpened` **first-open latch** (the [LazyMembershipModal](../../src/components/modals/MembershipModal/LazyMembershipModal.tsx) pattern — rendering a `dynamic()` component fetches its chunk even with `isOpen=false`, so they render `null` until first open, then stay mounted for close animations). Because the canonical `FullscreenTriggerButton` shares a module with the heavy viewer (react-zoom-pan-pinch + embla), PrizeShowcase carries an **eager local stand-in** with identical markup — keep it in sync with `FullscreenImageViewer.tsx`.
+3. **Deep specs on demand** — an effect keyed on `isSpecsModalOpen && activeSlug` runs `await import("@/config/prizes")` (its own chunk, cached after first open) and resolves the full `PrizeCatalogEntry` into `specsPrize` state; the modal shows its built-in "Prize information is loading" placeholder until it lands. The `PrizeCatalogEntry` import in PrizeShowcase is **type-only** (erased at compile). The effect resets a stale `specsPrize` when the active slug changed (no previous-prize flash on reopen), and a chunk-load failure is caught + `console.error`-logged, leaving the loading state — reopening re-runs the effect, which retries the chunk.
+
+Chunk proof (cold build 2026-07-20): the deep-spec chunk (~139 KB) went from 27 prerendered pages (incl. `/`) to **zero** HTML references; `/` First Load JS 606 → 562 kB, `/promotions/*` 600 → 556 kB.
+
 ## PrizeShowcase gallery — Embla migration (Phase 1.5, 2026-05-10)
 
 [`PrizeShowcase`](../../src/components/sections/promo/PrizeShowcase.tsx) main image + thumbs gallery migrated from Swiper (`EffectFade` + `Grid` modules) to Embla (`embla-carousel-react`) with `embla-carousel-fade` and `embla-carousel-class-names` plugins. Two user-reported bugs fixed by the migration:
@@ -248,3 +290,12 @@ The cert item is **visible at every breakpoint** in the normal state. Mobile + t
 3. **Icons** (default & urgency): trust-item icons, the small icon inside the brass plaque, and the mobile standalone timer icon all use `theme.primary`. The cert link host stays white (readability over brand expression).
 
 Hazard yellow, brushed steel, brass rim, and rivets stay constant across themes — these define the workshop substrate and are not branded. Frozen overrides everything to red.
+
+## 2026-07-20 — Tier-2 perf: Poppins codemod
+
+Components in this domain were touched by the sitewide `font-'[Poppins]'` → `font-poppins`
+codemod (`npm run sweep:font-poppins`). Their Poppins-classed text now renders **real Poppins**
+instead of a browser fallback — an intended visual change. Details + rules:
+docs/shared-ui/tailwind-conventions.md §10.
+
+Also: `FloatingCountdownBanner` (a landing-path component) migrated framer-motion `motion.*` → LazyMotion `m.*`. See docs/shared-ui/patterns.md P7.

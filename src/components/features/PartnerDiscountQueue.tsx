@@ -550,7 +550,7 @@ export default function PartnerDiscountQueue({
       >
         <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
           <div className="min-w-0 flex-1 text-left">
-            <h2 className="text-base sm:text-lg lg:text-2xl font-bold text-white font-['Poppins'] truncate drop-shadow-lg">
+            <h2 className="text-base sm:text-lg lg:text-2xl font-bold text-white font-poppins truncate drop-shadow-lg">
               {queueHeading}
             </h2>
             <p

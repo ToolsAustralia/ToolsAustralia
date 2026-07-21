@@ -20,7 +20,7 @@ import VariantConfigEditor from "./VariantConfigEditor";
 import ExperimentResultsDashboard from "./ExperimentResultsDashboard";
 import { Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { DEFAULT_PRIZE_SLUG, listPrizes } from "@/config/prizes";
+import { DEFAULT_PRIZE_SLUG, listPrizeSummaries } from "@/config/prize-summaries";
 
 interface ExperimentDetailModalProps {
   isOpen: boolean;
@@ -117,7 +117,7 @@ export default function ExperimentDetailModal({
         previewSlug = experiment.slugTargets[0];
         
         // Validate that the slug exists in the prize catalog
-        const availablePrizes = listPrizes();
+        const availablePrizes = listPrizeSummaries();
         const isValidSlug = availablePrizes.some((prize) => prize.slug === previewSlug);
         
         if (!isValidSlug) {

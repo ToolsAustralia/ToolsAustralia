@@ -17,6 +17,10 @@ import { createCachedQuery } from "@/utils/database/queries/server-queries";
 import { getCachedSession, getUserMembershipData } from "@/utils/database/queries/detail-page-queries";
 import { getBrandMeta } from "@/utils/brand-utils";
 
+// nonce-CSP route class — must render per-request; never cache HTML with a baked nonce
+// (see docs/security-csp/architecture.md "Route classes").
+export const dynamic = "force-dynamic";
+
 interface MiniDrawDetailPageProps {
   params: Promise<{ id: string }>;
 }

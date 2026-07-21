@@ -1,5 +1,24 @@
 # Auth — Gotchas
 
+## User routes are include-list projected — new client fields silently vanish (2026-07-19)
+
+`GET /api/users/[id]` and `GET /api/users/[id]/my-account` no longer return the whole User document
+minus three fields — they select the **additive include-list** `MY_ACCOUNT_USER_FIELDS` from
+[src/utils/dashboard/my-account-projection.ts](../../src/utils/dashboard/my-account-projection.ts)
+(both the `findById` and the `findOne`-by-email branches). **If you add a new field to the User model
+that any client surface reads off `userData` / `accountData.user`, you MUST add it to
+`MY_ACCOUNT_USER_FIELDS` — otherwise the field is silently `undefined` on the client and the UI
+degrades without a type error** (`tsc` can't see a Mongo projection). Fields *inside* `subscription`
+are safe automatically (the whole subdocument is projected — that's how the streak fields ship).
+Deliberately excluded: wire bloat (`processedPayments`, `upsellHistory`, `upsellPurchases`,
+`redemptionHistory`, `cart`) and all auth secrets. `miniDrawParticipation` looks like bloat but is
+consumed (`/my-account/draws`) — it stays. When auditing consumers before changing the list, sweep
+cast patterns (`as unknown as { field }`) across `src/components/features` too, not just the
+my-account page tree — `MiniDrawCard.tsx` and `MiniDrawPackages.tsx` read `miniDrawParticipation`
+through such casts. Guard: `npm run test:my-account-projection`; details in [api.md](./api.md).
+
+**Related latent bugs fixed 2026-07-20** (in the same `my-account` route): `recentOrders` filtered `Order.find({ userId })` where the model owner field is `user` (phantom `userId` → always `[]` → `totalSpent` always `$0`), and `activeMiniDraws` filtered on a phantom `MiniDraw.endDate` (the model has no such path → always `[]`). Both restored (`Order.find({ user })`, `MiniDraw.find({ isActive: true })`). Also: the Account-settings `hasPassword` read moved off the my-account payload (which never carries the derived `hasPassword`) onto the `/api/users/[id]` payload — see [dashboard-account/gotchas.md](../dashboard-account/gotchas.md) for the full write-up + customer impact.
+
 ## Deactivated accounts are rejected AT login, not after (fixed 2026-07-09)
 
 `authorize()` used to check only user-exists + password — never `isActive` — so a deactivated account (`User.isActive: false`) **logged in successfully** and got a session; the jwt callback's subsequent-request guard ([auth.ts](../../src/lib/auth.ts) `!dbUser || dbUser.isActive === false` → `token.deleted`) then killed it on the first session refresh, seconds later. Result: an unexplained, endlessly-recurring login→auto-logout loop. Who hits it: removed staff (`DELETE /api/admin/staff/[id]` leaves `isActive:false` with the password intact), admin-deactivated users (`toggle_status` / `basicInfo.isActive` — neither guards `userType`), and invited staff who never completed `/staff-setup` but obtained a password via the public forgot-password flow (`reset-password` sets ONLY the password, never `isActive`).

@@ -1732,7 +1732,7 @@ export default function Header({ isFixed = true }: HeaderProps) {
                   <div className="text-gray-400 mb-6">
                     <Clock className="w-20 h-20 mx-auto text-gray-300" />
                   </div>
-                  <h3 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white mb-3 font-['Poppins']">
+                  <h3 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white mb-3 font-poppins">
                     Coming Soon
                   </h3>
                   <p className="text-sm sm:text-base text-gray-600 dark:text-neutral-300 mb-6 max-w-sm mx-auto font-['Inter']">

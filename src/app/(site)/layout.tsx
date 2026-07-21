@@ -5,9 +5,10 @@ import NewsletterSection from "@/components/sections/NewsletterSection";
 import UnifiedModalManager from "@/components/modals/UnifiedModalManager";
 import SupportChatWidgetMount from "@/components/support-chat/SupportChatWidgetMount";
 
-// Mark layout as dynamic to prevent static generation issues with useSearchParams
-export const dynamic = "force-dynamic";
-
+// NOTE (2026-07-19): this layout's force-dynamic (a workaround for useSearchParams during
+// prerender) was removed — the Suspense boundaries below are the documented fix, and a
+// layout-level force-dynamic would override the ISR the marketing pages declare. Pages in
+// the nonce-CSP class declare their own `export const dynamic = "force-dynamic"` instead.
 export default function SiteLayout({ children }: { children: React.ReactNode }) {
   return (
     <>

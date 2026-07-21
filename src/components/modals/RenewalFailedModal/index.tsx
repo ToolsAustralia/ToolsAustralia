@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useMemo } from "react";
 import { Elements } from "@stripe/react-stripe-js";
 import { Lock } from "lucide-react";
 
@@ -10,9 +10,10 @@ import PaymentMethodPicker from "./PaymentMethodPicker";
 import ActionButtons from "./ActionButtons";
 import InlineCardSetup from "./InlineCardSetup";
 import PaymentForm from "./PaymentForm";
-import { usePastDueResolve, stripePromise, renewalBillingSupportMailto } from "./usePastDueResolve";
+import { usePastDueResolve, renewalBillingSupportMailto } from "./usePastDueResolve";
 import RenewalPreviewNote from "./RenewalPreviewNote";
 import AccessRing from "@/components/ui/AccessRing";
+import { getStripePromise } from "@/lib/stripe-client";
 
 interface RenewalFailedModalProps {
   isOpen: boolean;
@@ -30,7 +31,7 @@ function PartnerHoldRing({ pct }: { pct: number }) {
       <div className="relative">
         <AccessRing percent={pct} size={72} stroke={7} color="#d97706" trackColor="rgba(217,119,6,.16)">
           <div className="flex flex-col items-center leading-none">
-            <span className="num font-['Poppins'] text-[18px] font-black text-amber-700 dark:text-amber-400">{pct}%</span>
+            <span className="num font-poppins text-[18px] font-black text-amber-700 dark:text-amber-400">{pct}%</span>
             <span className="text-[7px] font-extrabold uppercase tracking-[0.1em] text-amber-600">Partner</span>
           </div>
         </AccessRing>
@@ -50,6 +51,11 @@ function PartnerHoldRing({ pct }: { pct: number }) {
  */
 const RenewalFailedModal: React.FC<RenewalFailedModalProps> = ({ isOpen, onClose }) => {
   const r = usePastDueResolve({ isOpen, onClose });
+  // Lazy Stripe boot — getStripePromise() returns a module-level cached singleton
+  // (Stripe prohibits re-instantiation per render), so this identity is stable
+  // across renders; calling it here (not at module scope) avoids booting Stripe.js
+  // for every visitor who downloads this chunk (2026-07 perf audit).
+  const stripePromise = useMemo(() => getStripePromise(), []);
 
   /* ====== Success state ====== */
   if (r.isSuccess) {

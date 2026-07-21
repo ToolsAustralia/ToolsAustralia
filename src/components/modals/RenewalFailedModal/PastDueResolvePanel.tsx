@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useMemo } from "react";
 import { Elements } from "@stripe/react-stripe-js";
 import { AlertTriangle, CheckCircle2 } from "lucide-react";
 import { cn } from "@/utils/cn";
@@ -10,8 +10,9 @@ import PaymentMethodPicker from "./PaymentMethodPicker";
 import ActionButtons from "./ActionButtons";
 import InlineCardSetup from "./InlineCardSetup";
 import PaymentForm from "./PaymentForm";
-import { usePastDueResolve, stripePromise, renewalBillingSupportMailto } from "./usePastDueResolve";
+import { usePastDueResolve, renewalBillingSupportMailto } from "./usePastDueResolve";
 import RenewalPreviewNote from "./RenewalPreviewNote";
+import { getStripePromise } from "@/lib/stripe-client";
 
 interface PastDueResolvePanelProps {
   /** Called after a successful recovery (short delay) so the host sheet can close. */
@@ -64,7 +65,7 @@ function PanelHead({
         >
           {eyebrow}
         </div>
-        <div className="font-['Poppins'] text-[15px] font-extrabold text-primary-token dark:text-white">{title}</div>
+        <div className="font-poppins text-[15px] font-extrabold text-primary-token dark:text-white">{title}</div>
         <div className="mt-0.5 text-xs leading-[1.4] text-muted-token">{sub}</div>
       </div>
     </div>
@@ -81,6 +82,11 @@ function PanelHead({
 export default function PastDueResolvePanel({ onResolved }: PastDueResolvePanelProps) {
   const close = React.useCallback(() => onResolved?.(), [onResolved]);
   const r = usePastDueResolve({ isOpen: true, onClose: close });
+  // Lazy Stripe boot — getStripePromise() returns a module-level cached singleton
+  // (Stripe prohibits re-instantiation per render), so this identity is stable
+  // across renders; calling it here (not at module scope) avoids booting Stripe.js
+  // for every visitor who downloads this chunk (2026-07 perf audit).
+  const stripePromise = useMemo(() => getStripePromise(), []);
 
   /* ====== Success state ====== */
   if (r.isSuccess) {

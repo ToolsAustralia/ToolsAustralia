@@ -64,7 +64,7 @@ export default function PartnerPortalPhone({
 
           <div className="flex flex-col items-center gap-2">
             <AccessRing percent={accessPercent} size={110} stroke={10} color={accentHex} trackColor="rgba(255,255,255,0.08)">
-              <span className="font-['Poppins'] text-2xl font-extrabold" style={{ color: accentHex }}>
+              <span className="font-poppins text-2xl font-extrabold" style={{ color: accentHex }}>
                 {accessPercent}%
               </span>
             </AccessRing>
@@ -98,14 +98,14 @@ export default function PartnerPortalPhone({
                   className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-2.5 py-2"
                 >
                   <span
-                    className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-md font-['Poppins'] text-[9px] font-black"
+                    className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-md font-poppins text-[9px] font-black"
                     style={{ background: i === 0 ? accentHex : "rgba(255,255,255,0.12)", color: i === 0 ? "#000" : "#fff" }}
                   >
                     {chipOf(d.name)}
                   </span>
                   <span className="flex-1 truncate text-[11px] font-semibold text-white/90">{d.name}</span>
                   <span
-                    className="flex-shrink-0 font-['Poppins'] text-[11px] font-black"
+                    className="flex-shrink-0 font-poppins text-[11px] font-black"
                     style={i === 0 ? { background: accentHex, color: "#000", padding: "2px 7px", borderRadius: 7 } : { color: accentHex }}
                   >
                     {d.discount}

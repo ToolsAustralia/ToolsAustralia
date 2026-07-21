@@ -10,6 +10,10 @@ import { BreadcrumbJsonLd } from "@/components/seo/StructuredData";
 import { getNonce } from "@/utils/security/getNonce";
 import { cn } from "@/utils/cn";
 
+// nonce-CSP route class — must render per-request; never cache HTML with a baked nonce
+// (see docs/security-csp/architecture.md "Route classes").
+export const dynamic = "force-dynamic";
+
 const BRAND_DETAILS = {
   milwaukee: {
     name: "Milwaukee",
@@ -194,9 +198,10 @@ interface BrandPageProps {
   }>;
 }
 
-export async function generateStaticParams() {
-  return Object.keys(BRAND_DETAILS).map((brand) => ({ brand }));
-}
+// generateStaticParams removed (2026-07-19): it forced these pages to prerender even
+// alongside force-dynamic, and this is a nonce-CSP route class — prerendered HTML would
+// ship un-nonced inline scripts into a nonce-CSP response and every script would be
+// blocked. Params resolve per-request now. See docs/security-csp/architecture.md.
 
 export async function generateMetadata({ params }: BrandPageProps): Promise<Metadata> {
   const { brand: brandParam } = await params;

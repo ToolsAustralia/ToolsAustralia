@@ -1,13 +1,14 @@
 "use client";
 
-import { useEffect, useMemo, useState, type CSSProperties } from "react";
+import { useMemo, useState, type CSSProperties } from "react";
 import Link from "next/link";
 import { Archivo, Space_Mono } from "next/font/google";
 import { ArrowRight, ChevronDown } from "lucide-react";
 import WinnerBoardCard from "@/app/(site)/draw-results/components/WinnerBoardCard";
 import { Stagger } from "@/app/(site)/draw-results/components/Reveal";
-import { DEFAULT_PRIZE_SLUG } from "@/config/prizes";
+import { DEFAULT_PRIZE_SLUG } from "@/config/prize-summaries";
 import { usePromoTheme } from "@/stores/usePromoThemeStore";
+import { useWinnersFeed, WINNERS_FEED_LIMIT } from "@/hooks/queries/useWinnersQueries";
 import type { WinnerSummary } from "@/types/winner";
 import { cn } from "@/utils/cn";
 
@@ -25,6 +26,10 @@ const spaceMono = Space_Mono({ subsets: ["latin"], weight: ["400", "700"], varia
 
 // One page = 8 tiles → 2 rows on desktop (4 cols) / 4 rows on mobile (2 cols).
 const PAGE = 8;
+// The board is a teaser: cap at the most recent 16 (2 "See More" pages), then link
+// to /winners. We share the larger winners feed with the testimony carousel (one
+// fetch per page) and slice down to this here.
+const BOARD_MAX = 16;
 
 interface LatestWinnerHeroProps {
   className?: string;
@@ -39,28 +44,12 @@ function winnerHref(w: WinnerSummary): string {
 
 export default function LatestWinnerHero({ className = "", contentWrapperClassName }: LatestWinnerHeroProps) {
   const theme = usePromoTheme();
-  const [winners, setWinners] = useState<WinnerSummary[]>([]);
-  const [loading, setLoading] = useState(true);
   const [visible, setVisible] = useState(PAGE);
 
-  useEffect(() => {
-    const fetchWinners = async () => {
-      try {
-        const response = await fetch("/api/winners/all?limit=16");
-        const data = await response.json();
-
-        if (response.ok && data.success && Array.isArray(data.winners)) {
-          setWinners(data.winners);
-        }
-      } catch (error) {
-        console.error("Error fetching winners:", error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchWinners();
-  }, []);
+  // Shared winners feed (one fetch per page, reused by the testimony carousel).
+  // The board is a teaser, so cap at the most recent BOARD_MAX.
+  const { data: feed = [], isLoading: loading } = useWinnersFeed(WINNERS_FEED_LIMIT);
+  const winners = useMemo(() => feed.slice(0, BOARD_MAX), [feed]);
 
   const shown = useMemo(() => winners.slice(0, visible), [winners, visible]);
   const remaining = winners.length - visible;

@@ -2,6 +2,10 @@
 
 Real failure modes, surprising behaviours, and tribal knowledge from incidents. Most of these came from production bugs and have lessons attached.
 
+## Payment modals must not boot Stripe at module scope (2026-07)
+
+`StripePaymentModal/**` and `RenewalFailedModal/**` (the past-due renewal-recovery modal + `PastDueResolvePanel`) render Stripe Elements — same rule as every other payment surface: `getStripePromise()` must be called lazily inside the component (`useMemo(() => getStripePromise(), [])`), never at module scope. See [docs/payment/gotchas.md](../payment/gotchas.md) "Stripe boots on import" for the full incident + fix pattern. Lint-enforced by `eslint/rules/no-eager-stripe.js` (`internal-norm/no-eager-stripe`, severity `"error"`).
+
 ## Membership Streak counter — three invariants (2026-07-07, P1)
 
 The streak counter (`subscription.streakMonths`/`streakGeneration`, see [models.md](./models.md)) is written at exactly two webhook points; breaking any of these reintroduces a replay/staleness bug:
@@ -272,3 +276,7 @@ When a renewal fails, the app sets `pause_collection: { behavior: "keep_as_draft
 The reanchor gate (`shouldReanchorAfterRecovery` in `pauseCollectionPolicy.ts`) therefore does **not** rely on `attempt_count > 1` as its primary dunning signal — it is kept only as belt-and-suspenders for the rare no-pause edge. The **primary durable signal** for the `renew-subscription` recovery channel is the `invoice.metadata.dunning_recovery === '1'` marker, stamped on the invoice by `handleInvoicePaymentFailed` at the moment the renewal first fails. This marker survives channel-independently (it is set on the invoice object itself and is not cleared when DB status or `pause_collection` is updated).
 
 See `docs/PAST_DUE_REANCHOR.md` for the full trigger-gate logic and channel analysis.
+
+## /terms and /competition-term-majordraw are marketing-class static pages (2026-07-19)
+
+Both legal pages render static/ISR under the no-nonce CSP variant (see docs/security-csp/architecture.md "Route classes") — their `getNonce()` calls were removed (JSON-LD is non-executable data and needs no nonce). Do not add `headers()`/`cookies()`/session reads to them; that silently flips them dynamic.

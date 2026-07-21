@@ -103,10 +103,41 @@ The floating bubble mustn't overlap the site's OTHER bottom-anchored floaters (t
 - **Top-docked** banners (the scroll-follow `PromoBanner` flips to `top-4`) never intersect the bottom rect → ignored for free.
 
 **Two deliberate scoping choices:**
-- **Dodge only while the bubble is shown AND the panel is closed** (`enabled = !onDashboard && !open`). An open panel is `z-9000` and opaque — it already covers every obstacle (`z ≤ 50`), so lifting it would instead expose the banner *below* it. On `/my-account` the bubble is suppressed entirely (the "Ask Cobber" card is the entry), so no dodge there.
+- **Dodge only while the bubble is shown AND the panel is closed.** The launcher (`ChatBubbleButton`) passes `enabled = !open`; since the mount only renders the launcher OFF `/my-account` (the "Ask Cobber" card is the entry there), the old `!onDashboard` guard is now implicit. An open panel is `z-9000` and opaque — it already covers every obstacle (`z ≤ 50`), so lifting it would instead expose the banner *below* it.
 - **Corner selection stays the `side` prop** (right by default, `left` on promotions where the right corner holds the theme toggle + account FAB). The hook only decides how far UP to sit, not which corner.
 
 **Reactivity:** recomputes on scroll (rAF, banners collapse/appear), resize, and a `MutationObserver` (a banner dismissed via ✕ or mounted via AnimatePresence un-lifts the bubble immediately). When you add a NEW bottom-anchored floater, give it `data-floating-widget="true"` and the launcher dodges it automatically.
+
+---
+
+## First-click bubble split — launcher eager, panel lazy (perf Tier-2, 2026-07-20)
+
+The panel chunk (react-markdown + micromark + the AI SDK + hCaptcha) is heavy and was
+downloading on **every page view** — the old mount rendered the whole `SupportChatWidget`
+immediately via `next/dynamic(ssr:false)`, so its chunk fetched right after hydration even
+though most visitors never open chat. The widget is now split so that chunk loads on the
+**first open**:
+
+- **[`ChatBubbleButton`](../../src/components/support-chat/ChatBubbleButton.tsx) — EAGER.** A
+  dumb launcher with no chat machinery (only the accent + the obstacle dodge, both leaf
+  modules). Visually identical to the old inline launcher; lives in the always-loaded mount.
+- **[`SupportChatWidget`](../../src/components/support-chat/SupportChatWidget.tsx) — LAZY.** The
+  panel only. `SupportChatWidgetMount` owns `open`/`hasOpened` and `next/dynamic`-imports the
+  panel on the FIRST open (render-phase `hasOpened` latch — same pattern as
+  `LazyMembershipModal`). Once mounted it stays mounted, so chat state survives close/reopen.
+- **Shared visual primitives** live in
+  [`cobberAccent.ts`](../../src/components/support-chat/cobberAccent.ts) (`useCobberAccentVars`,
+  `COBBER_AVATAR`, `COBBER_ALT`) so the eager launcher themes itself WITHOUT pulling the heavy
+  panel module into the always-loaded chunk.
+- **Every open path must trip the lazy mount.** Both the bubble click and the
+  `OPEN_SUPPORT_CHAT_EVENT` window event (dashboard "Ask Cobber" card + any `openSupportChat()`
+  caller) funnel through the mount's `setOpen(true)`. The event listener moved from the panel
+  to the mount so it fires BEFORE the panel chunk exists.
+
+**Footgun:** if you add a proactive auto-open / greeting timer that fires on page load, it
+would force the panel chunk to download on a timer and defeat this split — gate any such
+behaviour on a real user signal instead. (Cobber has no such timer today: no auto-open, no
+unread badge — the launcher is inert until clicked.)
 
 ---
 
@@ -213,6 +244,8 @@ const SupportChatWidget = nextDynamic(
   { ssr: false }
 );
 export default function SupportChatWidgetMount() {
+  // (Tier-2: this now renders an eager launcher + a LAZY panel — see "First-click
+  //  bubble split" below. The ssr:false-in-a-client-wrapper rule is unchanged.)
   return <SupportChatWidget />;
 }
 ```

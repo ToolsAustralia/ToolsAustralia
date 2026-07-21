@@ -23,7 +23,16 @@ export async function GET() {
     const killed = await getChatKillSwitchEffective();
     return NextResponse.json(
       { data: { enabled: !killed }, meta: { timestamp: new Date().toISOString() } },
-      { status: 200 }
+      {
+        status: 200,
+        // Public on/off bit, no PII — cache at the CDN for 60s so the widget mount on every
+        // page load doesn't re-hit origin. The Pause/kill-switch toggle propagates within
+        // ≤60s (stale-while-revalidate keeps the bubble responsive during revalidation), and
+        // the paid path is independently blocked server-side, so a 60s-stale flag is safe.
+        headers: {
+          "Cache-Control": "public, s-maxage=60, stale-while-revalidate=300",
+        },
+      }
     );
   } catch (error) {
     return handleApiError(error);

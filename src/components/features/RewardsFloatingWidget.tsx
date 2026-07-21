@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, m } from "framer-motion";
 import { ArrowUpRight, Calendar, CheckCircle2, ChevronLeft, ChevronRight, Gift, History, Loader2, Sparkles, Tag, X } from "lucide-react";
 import { useToast } from "@/components/ui/Toast";
 import { useRedeemableRedemption, useRedeemablesWallet } from "@/hooks/queries";
@@ -256,7 +256,7 @@ export default function RewardsFloatingWidget({
       {/* Spotlight overlay: dark blurred background with radial cutout */}
       <AnimatePresence>
         {showSpotlightActive && fabRect && (
-          <motion.div
+          <m.div
             key="rewards-spotlight"
             className="fixed inset-0 z-[68] bg-black/80 backdrop-blur-[var(--ta-blur)] cursor-pointer"
             style={{
@@ -276,7 +276,7 @@ export default function RewardsFloatingWidget({
       {/* Tooltip callout above FAB */}
       <AnimatePresence>
         {showSpotlightActive && fabRect && (
-          <motion.div
+          <m.div
             key="rewards-spotlight-tooltip"
             className="fixed z-[69] max-w-[280px] px-4 py-3 rounded-2xl bg-gray-900/95 backdrop-blur-[var(--ta-blur)] border border-gray-700/50 shadow-2xl"
             style={{
@@ -309,13 +309,13 @@ export default function RewardsFloatingWidget({
               className="absolute left-1/2 -translate-x-1/2 -bottom-2 w-0 h-0 border-l-8 border-r-8 border-t-8 border-transparent border-t-gray-900/95"
               style={{ filter: "drop-shadow(0 1px 0 rgba(55,65,81,0.5))" }}
             />
-          </motion.div>
+          </m.div>
         )}
       </AnimatePresence>
 
       <AnimatePresence>
         {!isOpen && isReady && !isAnySidebarOpen && (
-          <motion.button
+          <m.button
             ref={fabRef}
             key="rewards-fab"
             onClick={handleFabClick}
@@ -336,7 +336,7 @@ export default function RewardsFloatingWidget({
           >
         <span className="pointer-events-none absolute inset-0 rounded-2xl bg-gradient-to-br from-white/22 via-transparent to-transparent" />
         <span className="relative flex items-center justify-center w-full h-full">
-          <motion.span
+          <m.span
             animate={hasUnclaimed && !prefersReducedMotion && fabInView ? { rotate: [0, 4, -4, 0] } : { rotate: 0 }}
             transition={
               hasUnclaimed && !prefersReducedMotion && fabInView
@@ -346,9 +346,9 @@ export default function RewardsFloatingWidget({
             className="inline-flex"
           >
             <Gift className="w-7 h-7 text-white drop-shadow-[0_2px_6px_rgba(0,0,0,0.35)] group-hover:scale-105 transition-transform" strokeWidth={2.4} />
-          </motion.span>
+          </m.span>
           {hasUnclaimed && (
-            <motion.span
+            <m.span
               className="absolute -top-1.5 -right-1.5 min-w-5 h-5 px-1 rounded-full bg-amber-300 text-2xs leading-5 font-black text-gray-900 shadow-[0_6px_14px_rgba(0,0,0,0.35)] ring-2 ring-white/75"
               animate={!prefersReducedMotion && fabInView ? { scale: [1, 1.1, 1] } : { scale: 1 }}
               transition={
@@ -358,16 +358,16 @@ export default function RewardsFloatingWidget({
               }
             >
               <AnimatedNumber value={claimableCount} format={claimableCountFormat} />
-            </motion.span>
+            </m.span>
           )}
         </span>
-      </motion.button>
+      </m.button>
         )}
       </AnimatePresence>
 
       <AnimatePresence>
         {isOpen && (
-          <motion.div
+          <m.div
             className="fixed inset-0 z-50 touch-none overscroll-none bg-black/50 backdrop-blur-[var(--ta-blur)]"
             style={{ touchAction: "none" }}
             initial={{ opacity: 0 }}
@@ -376,7 +376,7 @@ export default function RewardsFloatingWidget({
             transition={{ duration: MODAL_DURATION_ENTER_S, ease: "easeOut" }}
             onClick={() => setIsOpen(false)}
           >
-            <motion.div
+            <m.div
               className="absolute right-0 top-0 flex h-full w-full max-h-[100dvh] touch-auto flex-col bg-gradient-to-br from-gray-50 to-white shadow-[-8px_0_32px_rgba(0,0,0,0.12)] dark:from-neutral-950 dark:to-neutral-900 dark:shadow-[-8px_0_32px_rgba(0,0,0,0.45)] sm:w-[480px]"
               initial={{ x: "100%" }}
               animate={{ x: 0 }}
@@ -597,8 +597,8 @@ export default function RewardsFloatingWidget({
                   </button>
                 </div>
               )}
-            </motion.div>
-          </motion.div>
+            </m.div>
+          </m.div>
         )}
       </AnimatePresence>
     </>

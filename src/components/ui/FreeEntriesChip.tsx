@@ -32,7 +32,7 @@ export default function FreeEntriesChip({ value, tone }: { value: number; tone: 
       </span>
       <span
         className={cn(
-          "num font-['Poppins'] text-[20px] font-black leading-none tracking-[-.02em]",
+          "num font-poppins text-[20px] font-black leading-none tracking-[-.02em]",
           gold ? "[text-shadow:0_1px_1px_rgba(255,255,255,.25)]" : "[text-shadow:0_1px_1px_rgba(120,60,0,.3)]",
         )}
       >

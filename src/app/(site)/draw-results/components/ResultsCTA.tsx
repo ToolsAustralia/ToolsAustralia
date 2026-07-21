@@ -1,15 +1,12 @@
 "use client";
 
-import dynamic from "next/dynamic";
 import { BadgeCheck, Check, Facebook, Play, Ticket } from "lucide-react";
 import { useMembershipModal } from "@/hooks/useMembershipModal";
 import { useMajorDrawPurchaseGate } from "@/hooks/useMajorDrawPurchaseGate";
 import { useUserContext } from "@/contexts/UserContext";
 import { useModalPriorityStore } from "@/stores/useModalPriorityStore";
 import { Reveal } from "./Reveal";
-
-// MembershipModal bundles Stripe + payment forms — load it lazily, client-only.
-const MembershipModal = dynamic(() => import("@/components/modals/MembershipModal"), { ssr: false });
+import MembershipModal from "@/components/modals/MembershipModal/LazyMembershipModal";
 
 const FACEBOOK_URL = "https://www.facebook.com/toolsaust";
 

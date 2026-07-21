@@ -35,7 +35,7 @@ export default function DashboardGuestPanel({ drawName, onBecomeMember, onBuyPac
     <div className={className}>
       <section className="rounded-3xl border border-token bg-surface p-5 shadow-sm">
         <div className="flex items-center justify-between gap-3">
-          <h3 className="font-['Poppins'] text-lg font-extrabold text-primary-token dark:text-white">Enter the {drawName}</h3>
+          <h3 className="font-poppins text-lg font-extrabold text-primary-token dark:text-white">Enter the {drawName}</h3>
           {/* A guest holds no entries yet — give them a way to SEE the draw (prize showcase)
               before committing to a purchase. /promotions → the default promotions LANDING page
               (NOT /major-draw, which hard-redirects to /promotional/giveaway). */}

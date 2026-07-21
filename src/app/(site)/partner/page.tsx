@@ -4,6 +4,10 @@ import PartnershipFormSection from "./components/PartnershipFormSection";
 import AboutToolsAustralia from "@/components/sections/AboutToolsAustralia";
 // import PartnerBenefits from "./components/PartnerBenefits";
 
+// nonce-CSP route class — must render per-request; never cache HTML with a baked nonce
+// (see docs/security-csp/architecture.md "Route classes").
+export const dynamic = "force-dynamic";
+
 // SEO Metadata for Partner Page
 export const metadata: Metadata = {
   title: "Become a Partner | Tools Australia",

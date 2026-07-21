@@ -3,7 +3,7 @@
 import React from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { motion, useReducedMotion } from "framer-motion";
+import { m, useReducedMotion } from "framer-motion";
 import { Ticket, Flame, Zap } from "lucide-react";
 import { getBrandMeta, defaultBrandLogo } from "@/utils/brand-utils";
 import BrandLogoCard from "@/components/ui/BrandLogoCard";
@@ -148,7 +148,7 @@ export default function MiniDrawCard({
   /* ── List View ── */
   if (viewMode === "list") {
     return (
-      <motion.div variants={cardVariants} initial="hidden" animate="visible">
+      <m.div variants={cardVariants} initial="hidden" animate="visible">
         <CardShell onSelect={onSelect} href={detailHref} className="block">
           <div className="bg-white dark:bg-neutral-900 rounded-2xl border border-gray-100 dark:border-neutral-800 shadow-sm hover:shadow-md transition-all duration-300 overflow-hidden group">
             <div className="flex">
@@ -225,13 +225,13 @@ export default function MiniDrawCard({
             </div>
           </div>
         </CardShell>
-      </motion.div>
+      </m.div>
     );
   }
 
   /* ── Grid View ── */
   return (
-    <motion.div
+    <m.div
       variants={cardVariants}
       initial="hidden"
       animate="visible"
@@ -351,6 +351,6 @@ export default function MiniDrawCard({
           </div>
         </div>
       </CardShell>
-    </motion.div>
+    </m.div>
   );
 }

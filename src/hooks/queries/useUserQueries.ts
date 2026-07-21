@@ -4,6 +4,7 @@
  * This file contains all hooks for user data fetching and mutations.
  */
 
+import { useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "@/lib/queryKeys";
 import { apiGet, apiPut, apiPost } from "@/lib/queries";
@@ -81,6 +82,8 @@ export interface UserData {
 
 export interface MyAccountData {
   user: UserData;
+  // Mirrors MY_ACCOUNT_MINI_DRAW_FIELDS — no `endDate` (phantom MiniDraw field; the model
+  // has no such path). Keep in lockstep with src/utils/dashboard/my-account-projection.ts.
   activeMiniDraws: Array<{
     _id: string;
     name: string;
@@ -91,22 +94,20 @@ export interface MyAccountData {
       value: number;
       images: string[];
     };
-    endDate: string;
     isActive: boolean;
   }>;
+  // Mirrors MY_ACCOUNT_ORDER_FIELDS — no `items` (phantom Order field; line items live under
+  // `products`/`tickets`). Keep in lockstep with src/utils/dashboard/my-account-projection.ts.
   recentOrders: Array<{
     _id: string;
     orderNumber: string;
     totalAmount: number;
     status: string;
     createdAt: string;
-    items: Array<{
-      productId: string;
-      quantity: number;
-      price: number;
-    }>;
   }>;
   insights: {
+    // NOTE: totalSpent sums `totalAmount` over the 10 most recent orders regardless of status
+    // (includes cancelled/pending) and is capped at 10 — it is NOT true lifetime spend.
     totalSpent: number;
     activeDrawsCount: number;
     memberSince: number;
@@ -139,7 +140,7 @@ export const useUserData = (userId?: string) => {
   });
 };
 
-export const useMyAccountData = (userId?: string) => {
+export const useMyAccountData = (userId?: string, options?: { poll?: boolean }) => {
   return useQuery({
     queryKey: queryKeys.users.account(userId!),
     queryFn: async () => {
@@ -149,7 +150,10 @@ export const useMyAccountData = (userId?: string) => {
     enabled: !!userId,
     staleTime: 2 * 60 * 1000, // 2 minutes - reuse cache across my-account pages
     gcTime: 10 * 60 * 1000, // 10 minutes - keep in cache longer
-    refetchInterval: 2 * 60 * 1000, // Refetch every 2 minutes for real-time updates
+    // Polling is OPT-IN (page-scoped): only the UserProvider passes { poll: true },
+    // and only while the member is on /my-account. Every other caller shares the
+    // cache key and receives the polled data without its own interval.
+    refetchInterval: options?.poll ? 2 * 60 * 1000 : false,
     refetchIntervalInBackground: false, // Pause polling on hidden tabs; user-visible refetch resumes when tab is focused (refetchOnWindowFocus is false here, but refetchInterval ticks resume)
     refetchOnWindowFocus: false, // Avoid refetch on every tab switch when data is fresh
     refetchOnMount: true, // Refetch on mount only when data is stale
@@ -281,24 +285,33 @@ export const useCompleteUserSetup = () => {
 export const useUserMembership = (userId?: string) => {
   const { data: userData } = useUserData(userId);
 
-  return {
-    hasActiveSubscription: userData?.subscription?.isActive || false,
-    hasActiveOneTimePackages: userData?.oneTimePackages?.some((pkg) => pkg.isActive) || false,
-    membershipTier: userData?.subscriptionPackageData?.name || "None",
-    entryWallet: userData?.entryWallet || 0,
-    rewardsPoints: userData?.rewardsPoints || 0,
-    accumulatedEntries: userData?.accumulatedEntries || 0,
-  };
+  // Stable reference: consumed by the memoized UserContext value — a fresh object
+  // per render would defeat that memo and re-render every context consumer.
+  return useMemo(
+    () => ({
+      hasActiveSubscription: userData?.subscription?.isActive || false,
+      hasActiveOneTimePackages: userData?.oneTimePackages?.some((pkg) => pkg.isActive) || false,
+      membershipTier: userData?.subscriptionPackageData?.name || "None",
+      entryWallet: userData?.entryWallet || 0,
+      rewardsPoints: userData?.rewardsPoints || 0,
+      accumulatedEntries: userData?.accumulatedEntries || 0,
+    }),
+    [userData]
+  );
 };
 
 export const useUserStats = (userId?: string) => {
   const { data: accountData } = useMyAccountData(userId);
 
-  return {
-    totalSpent: accountData?.insights?.totalSpent || 0,
-    activeDrawsCount: accountData?.activeMiniDraws?.length || 0,
-    recentOrdersCount: accountData?.recentOrders?.length || 0,
-    memberSince: accountData?.insights?.memberSince || 0,
-    membershipTier: accountData?.insights?.membershipTier || "None",
-  };
+  // Stable reference: consumed by the memoized UserContext value (see above).
+  return useMemo(
+    () => ({
+      totalSpent: accountData?.insights?.totalSpent || 0,
+      activeDrawsCount: accountData?.activeMiniDraws?.length || 0,
+      recentOrdersCount: accountData?.recentOrders?.length || 0,
+      memberSince: accountData?.insights?.memberSince || 0,
+      membershipTier: accountData?.insights?.membershipTier || "None",
+    }),
+    [accountData]
+  );
 };

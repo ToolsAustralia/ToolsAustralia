@@ -7,7 +7,7 @@
  */
 
 import type { CSSProperties } from "react";
-import type { PrizeSlug } from "@/config/prizes";
+import type { PrizeSlug } from "@/config/prize-summaries";
 import { BRAND_THEMES, getBrandColors, slugToBrandKey } from "@/config/brand-theme";
 import {
   getLandingPageThemeFromSlug,

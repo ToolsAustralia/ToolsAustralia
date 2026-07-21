@@ -47,7 +47,7 @@ export function SupportSheetBody() {
           <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-white/15"><Headset className="h-6 w-6" /></span>
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2">
-              <h2 className="font-['Poppins'] text-lg font-extrabold">Ask Cobber</h2>
+              <h2 className="font-poppins text-lg font-extrabold">Ask Cobber</h2>
               {!cobberOn && <span className="rounded-full bg-white/20 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide">Coming soon</span>}
               {cobberOn && (
                 <span className="inline-flex items-center gap-1 text-xs font-semibold">
@@ -68,7 +68,7 @@ export function SupportSheetBody() {
         <div className="flex items-center gap-3">
           <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-black/[.05] text-primary-token dark:bg-white/[.08] dark:text-white"><Mail className="h-5 w-5" /></span>
           <div className="min-w-0 flex-1">
-            <h2 className="font-['Poppins'] text-base font-extrabold text-primary-token dark:text-white">Email us</h2>
+            <h2 className="font-poppins text-base font-extrabold text-primary-token dark:text-white">Email us</h2>
             <a href={`mailto:${contactEmail}`} className="text-sm font-semibold text-red-600 hover:underline dark:text-red-400">{contactEmail}</a>
             <p className="text-xs text-muted-token">Usually replies within 1–2 business days.</p>
           </div>
@@ -82,7 +82,7 @@ export function SupportSheetBody() {
 
       <section className="overflow-hidden rounded-3xl border border-token bg-surface shadow-sm">
         <div className="border-b border-token px-5 py-3">
-          <h2 className="font-['Poppins'] text-base font-extrabold text-primary-token dark:text-white">Send us a message</h2>
+          <h2 className="font-poppins text-base font-extrabold text-primary-token dark:text-white">Send us a message</h2>
         </div>
         <SupportContactForm />
       </section>

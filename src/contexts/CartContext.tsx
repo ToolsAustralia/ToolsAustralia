@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, ReactNode, useState, useCallback, useEffect } from "react";
+import React, { createContext, useContext, ReactNode, useState, useCallback, useEffect, useMemo } from "react";
 import { useSession } from "next-auth/react";
 import { CartSummary } from "@/hooks/queries/useCartQueries";
 import { usePixelTracking } from "@/hooks/usePixelTracking";
@@ -654,21 +654,39 @@ export function CartProvider({ children }: { children: ReactNode }) {
     [cartState.pendingOperations]
   );
 
-  const contextValue: CartContextType = {
-    ...cartState,
-    addToCart,
-    updateCartItem,
-    removeFromCart,
-    clearCart,
-    retryFailedOperation,
-    retryAllFailedOperations,
-    isLoading,
-    error,
-    hasFailedOperations: cartState.failedOperations.length > 0,
-    isAddingToCart,
-    isUpdatingCart,
-    isRemovingFromCart,
-  };
+  // Memoized: a fresh object per provider render re-rendered every cart consumer.
+  // Every constituent is either useState-held or useCallback-wrapped above.
+  const contextValue = useMemo<CartContextType>(
+    () => ({
+      ...cartState,
+      addToCart,
+      updateCartItem,
+      removeFromCart,
+      clearCart,
+      retryFailedOperation,
+      retryAllFailedOperations,
+      isLoading,
+      error,
+      hasFailedOperations: cartState.failedOperations.length > 0,
+      isAddingToCart,
+      isUpdatingCart,
+      isRemovingFromCart,
+    }),
+    [
+      cartState,
+      addToCart,
+      updateCartItem,
+      removeFromCart,
+      clearCart,
+      retryFailedOperation,
+      retryAllFailedOperations,
+      isLoading,
+      error,
+      isAddingToCart,
+      isUpdatingCart,
+      isRemovingFromCart,
+    ]
+  );
 
   return <CartContext.Provider value={contextValue}>{children}</CartContext.Provider>;
 }

@@ -1,5 +1,17 @@
 # Client State — Gotchas
 
+## Unmemoized context values fan out to every consumer (fixed 2026-07-19)
+
+`UserContext` built its `value` object inline on every provider render, so each render — including every
+2-minute my-account poll tick, which used to fire **site-wide** — produced a fresh object identity and
+re-rendered all 37 `useUserContext()` consumers (Header included), even when nothing changed.
+`CartContext` had the same shape. Both providers now wrap the value in `useMemo`, and the helper hooks
+feeding UserContext (`useUserMembership`, `useUserStats` in
+[useUserQueries.ts](../../src/hooks/queries/useUserQueries.ts)) memoize their return objects — a fresh
+object from a constituent hook silently defeats the provider's memo, so keep those stable when editing
+them. The poll itself is now page-scoped (see [rules.md](./rules.md) R7): `useMyAccountData` takes
+`options?: { poll?: boolean }` and only UserProvider passes `poll: pathname.startsWith("/my-account")`.
+
 ## `useOrder` must read `{ order }`, not `{ success, data }` (fixed 2026-07-08)
 
 `useOrder` ([useOrderQueries.ts](../../src/hooks/queries/useOrderQueries.ts)) previously typed the `GET /api/orders/[id]` response as `{ success, data }` while the route returns `{ order }` — so `data` was always `undefined`, `/checkout/success` rendered its error state, and the shop Purchase pixel (shop's only Meta signal) could never fire. Dormant while shop is "Coming Soon", but it would have shipped broken at launch. **The sibling order hooks are still aspirational**: `useOrders`/`useInfiniteOrders` expect a pagination shape `/api/orders` doesn't return (`{ orders }`), and `useRecentOrders`/`useOrderAnalytics` call endpoints that don't exist — none currently has a live consumer. Align them against the real routes as part of shop-launch work; don't trust the hook's declared response type without reading the route.
@@ -50,3 +62,7 @@ setTimeout(() => doSomething(useStore.getState().items), 1000);
 ## 403 no longer force-signs-out — only 401 / 404+USER_NOT_FOUND do (fixed 2026-07-09)
 
 `apiRequest` in [src/lib/queries.ts](../../src/lib/queries.ts) used to treat **any 401/403** as an invalid session and call `signOut()`. The 403 half was a bug: 403 means *authenticated but not allowed*, which is routine once staff roles hold partial permission sets — a staff member whose role lacked `miniDraws.view` was force-logged-out seconds after login because the admin Overview's `TopDrawsCard` auto-fired `/api/admin/mini-draw/list` through `apiGet`. The decision now lives in the exported pure predicate `shouldInvalidateSession(status, errorCode)` (regression test: `npm run test:session-invalidation`): only **401** and **404 + `USER_NOT_FOUND`** invalidate the session. Do not re-add 403 to it. The earlier per-call-site workaround (routing feature-gate-403 hooks like [`usePartnerDiscountSso`](../../src/hooks/queries/usePartnerDiscountSso.ts) through raw `fetch` instead of `apiPost`) is no longer *required*, though existing raw-fetch call sites are fine as-is. Still prefer not firing a guaranteed-403 request at all — gate the query with `usePermissions().has(...)` (see `TopDrawsCard`).
+
+## Banner-text hook: no client `cache:"no-store"` (2026-07-19)
+
+`useActivePromoBannerText` dropped its `cache: "no-store"` fetch option — the route serves `s-maxage=60` now and the CDN should absorb the polling. Don't re-add no-store to hooks whose endpoints are deliberately CDN-cached; React Query's staleTime/refetchInterval already governs client freshness.

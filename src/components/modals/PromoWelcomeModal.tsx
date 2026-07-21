@@ -2,7 +2,7 @@
 
 import React, { useCallback, useState } from "react";
 import { Check, Copy, Sparkles, Gift, Zap } from "lucide-react";
-import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
+import { m, AnimatePresence, useReducedMotion } from "framer-motion";
 import { useMajorDrawEntryCta } from "@/hooks/useMajorDrawEntryCta";
 import { useAutoConfetti } from "@/hooks/useConfetti";
 import type { PromoWelcomeData } from "@/hooks/usePromoWelcomeModal";
@@ -29,14 +29,14 @@ const PromoCodeBadge: React.FC<{ code: string }> = ({ code }) => {
   }, [code]);
 
   return (
-    <motion.div
+    <m.div
       initial={{ scale: 0.8, opacity: 0 }}
       animate={{ scale: 1, opacity: 1 }}
       transition={{ delay: 0.2, type: "spring", stiffness: 200, damping: 15 }}
       className="relative"
     >
       {/* Animated glow effect */}
-      <motion.div
+      <m.div
         className="absolute inset-0 bg-gradient-to-r from-red-500/30 via-orange-500/30 to-red-500/30 rounded-xl blur-xl"
         animate={
           prefersReducedMotion
@@ -70,7 +70,7 @@ const PromoCodeBadge: React.FC<{ code: string }> = ({ code }) => {
           </div>
           
           <div className="flex items-center justify-center gap-2 flex-wrap">
-            <motion.div
+            <m.div
               whileHover={{ scale: 1.02 }}
               className="relative inline-flex items-center justify-center font-mono text-xl sm:text-2xl font-bold tracking-[0.2em] px-4 py-2.5 rounded-lg bg-gradient-to-br from-red-50 to-orange-50 dark:from-red-950/30 dark:to-orange-950/30 text-red-700 dark:text-red-300 border-2 border-red-500/30 shadow-lg"
               data-testid="promo-welcome-code"
@@ -78,9 +78,9 @@ const PromoCodeBadge: React.FC<{ code: string }> = ({ code }) => {
               {/* Inner glow */}
               <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent rounded-lg" />
               <span className="relative">{code}</span>
-            </motion.div>
+            </m.div>
             
-            <motion.button
+            <m.button
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
               onClick={handleCopy}
@@ -88,7 +88,7 @@ const PromoCodeBadge: React.FC<{ code: string }> = ({ code }) => {
             >
               <AnimatePresence mode="wait">
                 {copied ? (
-                  <motion.span
+                  <m.span
                     key="check"
                     initial={{ scale: 0, rotate: -180 }}
                     animate={{ scale: 1, rotate: 0 }}
@@ -97,9 +97,9 @@ const PromoCodeBadge: React.FC<{ code: string }> = ({ code }) => {
                   >
                     <Check className="w-4 h-4" />
                     Copied!
-                  </motion.span>
+                  </m.span>
                 ) : (
-                  <motion.span
+                  <m.span
                     key="copy"
                     initial={{ scale: 0 }}
                     animate={{ scale: 1 }}
@@ -108,14 +108,14 @@ const PromoCodeBadge: React.FC<{ code: string }> = ({ code }) => {
                   >
                     <Copy className="w-4 h-4" />
                     Copy
-                  </motion.span>
+                  </m.span>
                 )}
               </AnimatePresence>
-            </motion.button>
+            </m.button>
           </div>
         </div>
       </div>
-    </motion.div>
+    </m.div>
   );
 };
 
@@ -158,7 +158,7 @@ const PromoWelcomeModal: React.FC<PromoWelcomeModalProps> = ({ isOpen, onClose, 
       <ModalContent className="p-4 sm:p-6 space-y-4 relative overflow-hidden">
         {/* Animated background gradients */}
         <div className="absolute inset-0 pointer-events-none">
-          <motion.div
+          <m.div
             className="absolute top-0 right-0 w-48 h-48 bg-gradient-to-bl from-red-500/10 via-orange-500/5 to-transparent rounded-full blur-3xl"
             animate={
               prefersReducedMotion
@@ -178,7 +178,7 @@ const PromoWelcomeModal: React.FC<PromoWelcomeModalProps> = ({ isOpen, onClose, 
                   }
             }
           />
-          <motion.div
+          <m.div
             className="absolute bottom-0 left-0 w-48 h-48 bg-gradient-to-tr from-orange-500/10 via-red-500/5 to-transparent rounded-full blur-3xl"
             animate={
               prefersReducedMotion
@@ -204,7 +204,7 @@ const PromoWelcomeModal: React.FC<PromoWelcomeModalProps> = ({ isOpen, onClose, 
         {/* Content */}
         <div className="relative z-10 space-y-4">
           {/* Body Text */}
-          <motion.div
+          <m.div
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.1 }}
@@ -212,14 +212,14 @@ const PromoWelcomeModal: React.FC<PromoWelcomeModalProps> = ({ isOpen, onClose, 
             <p className="text-sm sm:text-base text-gray-700 dark:text-gray-200 text-center leading-relaxed font-medium">
               {isComeback ? bodyComeback : bodyGeneral}
             </p>
-          </motion.div>
+          </m.div>
 
           {/* Code Badge */}
           <PromoCodeBadge code={campaignData.code} />
 
           {/* Bonus Entries Highlight */}
           {campaignData.bonusEntries > 0 && (
-            <motion.div
+            <m.div
               initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
               transition={{ delay: 0.3 }}
@@ -227,7 +227,7 @@ const PromoWelcomeModal: React.FC<PromoWelcomeModalProps> = ({ isOpen, onClose, 
             >
               <div className="relative bg-gradient-to-r from-red-50 via-orange-50 to-red-50 dark:from-red-950/30 dark:via-orange-950/30 dark:to-red-950/30 rounded-xl p-3 border border-red-200/50 dark:border-red-800/50 shadow-lg">
                 <div className="flex items-center justify-center gap-2 text-center">
-                  <motion.div
+                  <m.div
                     animate={
                       prefersReducedMotion
                         ? { scale: 1, rotate: 0 }
@@ -247,7 +247,7 @@ const PromoWelcomeModal: React.FC<PromoWelcomeModalProps> = ({ isOpen, onClose, 
                     }
                   >
                     <Zap className="w-5 h-5 text-orange-500 fill-orange-500" />
-                  </motion.div>
+                  </m.div>
                   <div>
                     <div className="text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">
                       Bonus Included
@@ -256,7 +256,7 @@ const PromoWelcomeModal: React.FC<PromoWelcomeModalProps> = ({ isOpen, onClose, 
                       {campaignData.bonusEntries} {campaignData.bonusEntries === 1 ? "free entry" : "free entries"}
                     </div>
                   </div>
-                  <motion.div
+                  <m.div
                     animate={
                       prefersReducedMotion
                         ? { scale: 1, rotate: 0 }
@@ -277,26 +277,26 @@ const PromoWelcomeModal: React.FC<PromoWelcomeModalProps> = ({ isOpen, onClose, 
                     }
                   >
                     <Zap className="w-5 h-5 text-orange-500 fill-orange-500" />
-                  </motion.div>
+                  </m.div>
                 </div>
               </div>
-            </motion.div>
+            </m.div>
           )}
 
           {/* CTA Button */}
-          <motion.div
+          <m.div
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.4 }}
             className="pt-1"
           >
-            <motion.button
+            <m.button
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
               onClick={handleEnterNow}
               className="w-full relative overflow-hidden px-6 py-3 rounded-xl bg-gradient-to-r from-red-600 via-red-700 to-orange-600 text-white font-bold text-base shadow-2xl shadow-red-500/50 border border-red-500/50 transition-all duration-300"
             >
-              <motion.div
+              <m.div
                 className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent"
                 animate={
                   prefersReducedMotion
@@ -315,7 +315,7 @@ const PromoWelcomeModal: React.FC<PromoWelcomeModalProps> = ({ isOpen, onClose, 
               />
               <span className="relative z-10 flex items-center justify-center gap-2">
                 {isComeback ? "Enter the Draw" : "Enter Now"}
-                <motion.span
+                <m.span
                   animate={
                     prefersReducedMotion ? { x: 0 } : { x: [0, 4, 0] }
                   }
@@ -330,10 +330,10 @@ const PromoWelcomeModal: React.FC<PromoWelcomeModalProps> = ({ isOpen, onClose, 
                   }
                 >
                   →
-                </motion.span>
+                </m.span>
               </span>
-            </motion.button>
-          </motion.div>
+            </m.button>
+          </m.div>
         </div>
       </ModalContent>
     </ModalContainer>

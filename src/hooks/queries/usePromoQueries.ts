@@ -96,9 +96,14 @@ export const useActivePromos = () => {
   return useQuery({
     queryKey: ["promos", "active"],
     queryFn: fetchActivePromos,
-    staleTime: 30000, // 30 seconds
-    refetchInterval: 30000, // Refetch every 30 seconds for countdown accuracy
-    refetchIntervalInBackground: false, // Pause polling on hidden tabs; refetchOnWindowFocus catches up on tab focus
+    // Perf Tier-2: dropped the 30s guest poll. A stationary guest no longer re-hits
+    // this endpoint every 30s; promo multiplier flips reach an ACTIVE guest within
+    // ≤120s via focus/navigation refetch once the 60s staleTime lapses (an idle guest
+    // who never refocuses is the accepted trade — the banner countdown ticks
+    // client-side from endDate, so nothing time-critical depends on this poll).
+    staleTime: 60_000, // 60 seconds
+    refetchOnWindowFocus: true,
+    refetchOnMount: true,
   });
 };
 
@@ -162,7 +167,10 @@ export const useResolvedMultiplier = (
 };
 
 const fetchEffectiveForBanner = async (): Promise<EffectiveForBannerResponse["data"]> => {
-  const response = await fetch("/api/promo/effective-for-banner", { cache: "no-store" });
+  // No cache:"no-store" — the route serves public s-maxage=60; let the browser/CDN honor
+  // it so an active guest's refetch is served fresh-within-60s. React Query's
+  // staleTime/focus-refetch still govern when the client asks.
+  const response = await fetch("/api/promo/effective-for-banner");
   if (!response.ok) throw new Error("Failed to fetch effective for banner");
   const result: EffectiveForBannerResponse = await response.json();
   return result.data;
@@ -176,9 +184,9 @@ export const useEffectiveForBanner = () => {
   return useQuery({
     queryKey: ["promo", "effective-for-banner"],
     queryFn: fetchEffectiveForBanner,
-    staleTime: 30 * 1000,
-    refetchInterval: 60 * 1000,
-    refetchIntervalInBackground: false, // Pause polling on hidden tabs; refetchOnWindowFocus catches up on tab focus
+    // Perf Tier-2: dropped the 60s poll; rely on s-maxage=60 + focus/navigation refetch
+    // (≤120s to an active guest). Banner countdown ticks client-side from endDate.
+    staleTime: 60 * 1000,
     refetchOnWindowFocus: true,
     refetchOnMount: true,
   });

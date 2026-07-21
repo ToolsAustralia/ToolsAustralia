@@ -332,7 +332,7 @@ export default function RewardsRedemption({ user, onPointsUpdate }: RewardsRedem
               <Package className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6 text-red-600" />
             </div>
             <div>
-              <h2 className="text-lg sm:text-xl md:text-2xl font-bold text-gray-900 font-['Poppins']">
+              <h2 className="text-lg sm:text-xl md:text-2xl font-bold text-gray-900 font-poppins">
                 Rewards Redemption Paused
               </h2>
               <p className="text-xs sm:text-sm text-gray-600 dark:text-neutral-400 hidden sm:block">{pauseMessage}</p>
@@ -357,7 +357,7 @@ export default function RewardsRedemption({ user, onPointsUpdate }: RewardsRedem
             <Package className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6 text-red-600" />
           </div>
           <div>
-            <h2 className="text-lg sm:text-xl md:text-2xl font-bold text-gray-900 font-['Poppins']">
+            <h2 className="text-lg sm:text-xl md:text-2xl font-bold text-gray-900 font-poppins">
               Claim Packages with Points
             </h2>
             <p className="text-xs sm:text-sm text-gray-600 dark:text-neutral-400 hidden sm:block">
@@ -414,7 +414,7 @@ export default function RewardsRedemption({ user, onPointsUpdate }: RewardsRedem
                     <div className="p-1 sm:p-1.5 bg-red-600/10 rounded-lg flex-shrink-0">{getIcon(option.type)}</div>
                     <div className="flex-1 min-h-0">
                       <div className="flex items-center gap-2 mb-1 sm:mb-2">
-                        <h3 className="text-sm sm:text-base md:text-lg font-bold text-gray-900 font-['Poppins'] line-clamp-2">
+                        <h3 className="text-sm sm:text-base md:text-lg font-bold text-gray-900 font-poppins line-clamp-2">
                           {option.name}
                         </h3>
                         {option.isPromoActive && option.promoMultiplier && (
@@ -431,7 +431,7 @@ export default function RewardsRedemption({ user, onPointsUpdate }: RewardsRedem
                 {/* Points Section */}
                 <div className="mb-3 sm:mb-4 min-h-[35px] sm:min-h-[40px]">
                   <div className="flex items-baseline gap-1 sm:gap-2">
-                    <span className="text-base sm:text-lg md:text-xl lg:text-2xl font-bold text-gray-900 font-['Poppins']">
+                    <span className="text-base sm:text-lg md:text-xl lg:text-2xl font-bold text-gray-900 font-poppins">
                       {option.pointsRequired.toLocaleString()}
                     </span>
                     <span className="text-xs sm:text-sm text-gray-500 font-medium">points</span>

@@ -552,7 +552,7 @@ Display-only `user.role` reads (e.g. the "Admin" badge on user rows in `UsersMan
 
 ### `sections/LatestWinnerHero` — homepage "Latest Winners" (Winners Board, 2026-07-13)
 
-[src/components/sections/LatestWinnerHero.tsx](../../src/components/sections/LatestWinnerHero.tsx) renders the homepage/promotions/my-account "Latest Winners" block. It fetches `/api/winners/all?limit=16`, then renders the shared **Winners Board** grid (`WinnerBoardCard` in a `.lw-grid`) — **2 columns on mobile, 4 on desktop, 8 tiles per page** (a "See More" button pages by 8; once exhausted it becomes a "View All Winners" → `/winners` link). It replaced the previous Embla carousel + `WinnerCard`.
+[src/components/sections/LatestWinnerHero.tsx](../../src/components/sections/LatestWinnerHero.tsx) renders the homepage/promotions/my-account "Latest Winners" block. As of perf Tier-2 (2026-07-20) it reads the **shared** [`useWinnersFeed(WINNERS_FEED_LIMIT)`](../../src/hooks/queries/useWinnersQueries.ts) React Query hook (instead of its own `useEffect` fetch of `/api/winners/all?limit=16`) and **slices the most recent 16 client-side** (`BOARD_MAX`). The same hook backs `WinnerTestimoniesClient`, so a page that shows both now makes **one** `/api/winners/all` request rather than two — see [draws/frontend.md § Winner testimony display](../draws/frontend.md#winner-testimony-display--winnerstestimony-the-one-hear-from-our-winners-section-2026-06-11). It then renders the shared **Winners Board** grid (`WinnerBoardCard` in a `.lw-grid`) — **2 columns on mobile, 4 on desktop, 8 tiles per page** (a "See More" button pages by 8; once exhausted it becomes a "View All Winners" → `/winners` link). It replaced the previous Embla carousel + `WinnerCard`.
 
 Because the board's `.lw-*` styles are scoped under `.ta-results`, the grid is wrapped in a `<div className="ta-results …">` that (a) self-loads the Archivo/Space-Mono font vars, (b) sets `background: transparent`, and (c) pipes the active promo accent into the board via inline `--accent` / `--accent-2` (so themed promotion pages keep their colour). The heading and the "Join our next giveaway" CTA stay **outside** that wrapper, so they keep their existing site styling. Cards are passed an `href` (major → `/promotions/${DEFAULT_PRIZE_SLUG}`, mini → `/mini-draws`) so the whole tile links to the giveaway.
 
@@ -732,11 +732,13 @@ All previous call sites now render `WinnersTestimony` directly: the homepage + p
 
 ### AdSpendFocusModal (admin, 2026-07-17)
 
-[`src/components/modals/AdSpendFocusModal.tsx`](../../src/components/modals/AdSpendFocusModal.tsx) — drill-down for the admin Overview's Ad Spend / ROAS KPI tiles: membership vs one-time landing-URL split with a campaign → ad-set → ad tree per bucket. Built on `ModalContainer` (`size="4xl" height="fixed" className="!max-w-[1100px]"`), query gated on `isOpen`, state reset on close, Meta/TikTok platform chips (TikTok = dashed awaiting box until its URL mapping ships). The tree itself is the admin-domain `CampaignTreeTable` (see `docs/admin/frontend.md` — "Packages-focus drill-downs"). `PrizePerformanceAdsModal` (same folder) was upgraded the same day to reuse that tree with focus chips — documented alongside it in `docs/admin/frontend.md`.
+[`src/components/modals/AdSpendFocusModal.tsx`](../../src/components/modals/AdSpendFocusModal.tsx) — drill-down for the admin Overview's Ad Spend / ROAS KPI tiles: membership vs one-time landing-URL split with a campaign → ad-set → ad tree per bucket. Built on `ModalContainer` (`size="4xl" height="fixed" className="!max-w-[1100px]"`), query gated on `isOpen`, state reset on close, Meta/TikTok platform chips (TikTok = dashed awaiting box until its URL mapping ships). Each `SummaryTile` shows its bucket's **share of total ad spend** (a `{n.n}%` badge beside the spend figure, 2026-07-20) — computed from `spendCents` across all three buckets to avoid float drift, one decimal so tiny buckets don't round to 0%. The tree itself is the admin-domain `CampaignTreeTable` (see `docs/admin/frontend.md` — "Packages-focus drill-downs"). `PrizePerformanceAdsModal` (same folder) was upgraded the same day to reuse that tree with focus chips — documented alongside it in `docs/admin/frontend.md`.
 
 ### PrizeSpecificationsModal
 
 [`src/components/modals/PrizeSpecificationsModal/`](../../src/components/modals/PrizeSpecificationsModal/) shows the full spec breakdown for a prize (`prize?: PrizeCatalogEntry`). Built on `ModalContainer` (`size="4xl"`).
+
+**Click-gated since perf Tier-2 (2026-07-20):** both hosts (`PrizeShowcase`, dead-code `MajorDrawSection`) mount it via `next/dynamic` behind a first-open latch and resolve the deep `PrizeCatalogEntry` with `await import("@/config/prizes")` at open time — the modal's `prize` prop is `null` until that lands (it renders its built-in "Prize information is loading" state). The modal's own `@/config/prizes` imports are **type-only**. See [promo frontend](../promo/frontend.md) "PrizeShowcase — prize-summaries split".
 
 **Responsive layout (2026-06-02):**
 - **Mobile (`<lg`)** — stacked: `Hero` landscape banner on top (wrapped in `lg:hidden`), then the scrollable specs below.
@@ -953,6 +955,8 @@ Fullpage modal for browsing a gallery of winner / prize / draw photos. Used by `
 
 `FullscreenTriggerButton` — small expand-icon button used by callsites to open the viewer.
 
+**Module-weight footgun (2026-07-20):** the trigger lives in the SAME module as the heavy viewer (react-zoom-pan-pinch + embla + ModalContainer), so a static import of just the button still pulls the whole viewer into the importer's chunk. `PrizeShowcase` therefore loads the viewer via `next/dynamic` behind a first-open latch and renders its own eager markup-identical trigger stand-in (kept in sync by comment). If another eager surface needs the trigger, split the button into its own file instead of static-importing this module.
+
 ## SubscriptionManagementModal / PaymentMethodsTab — settings redesign variant (2026-05-19)
 
 Both expose an opt-in `settingsRedesign?: boolean` prop (default false), set **only**
@@ -974,3 +978,7 @@ Design of record: `claudeDesign/Membership milestone streak design` (Build Kit).
 - **[StreakCelebrationToast.tsx](../../src/components/sections/dashboard/StreakCelebrationToast.tsx)** — the milestone moment is a **toast, not a modal** (spec §7b M2). Fired by `useStreakCelebration` (once per crossed rung, localStorage-keyed per user), names the receiving draw, `role="status"`. **Visibility is SELF-managed** (run-once 8s auto-hide + X only hide the toast): it takes no `onDismiss`, so dismissing never clears the shared `justHit` state that keeps the in-card banner alive for the session, and parent re-renders can't restart the timer. The rail's next-rung highlight is no longer capped at `months < 12` — year-2+ at-risk/paused members (rail visible, medallion not founding-hidden) get the correct annual-aware next-rung pulse + pill.
 - **[EntryWallet.tsx](../../src/components/sections/dashboard/EntryWallet.tsx)** — third **Streak** segment + legend (gold `#fbbf24→#d97706` gradient), rendered only when `entries.streak > 0`; total includes it. Streak entries are never folded into the one-time bucket.
 - **[RewardsMilestones.tsx](../../src/components/sections/rewards/RewardsMilestones.tsx)** — the placeholder `[3→+50, 6→+250]` figures are GONE; the track reads the real ladder from `config/streakMilestones.ts` (six nodes at level/12), shows year-cycle position (the ladder repeats annually — month 14 ≡ month 2), and the past-due variant uses the Build Kit's fixed red band + desaturated track.
+
+## (site) layout + homepage shell (2026-07-19)
+
+`src/app/(site)/layout.tsx` and `src/app/(site)/page.tsx` belong to this domain (composition shells over `src/components/sections/**`). The (site) layout no longer exports `force-dynamic` — its Suspense boundaries handle `useSearchParams`, and rendering-mode config in shared layouts is forbidden (it overrides every child page's `revalidate`; see docs/security-csp/architecture.md "Route classes").

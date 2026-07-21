@@ -1,42 +1,47 @@
 import { useMemo } from "react";
 import {
   DEFAULT_PRIZE_SLUG,
-  PRIZE_CATALOG,
-  type PrizeCatalogEntry,
+  PRIZE_SUMMARIES,
+  type PrizeSummary,
   type PrizeSlug,
-  getPrizeBySlug,
-  listPrizes,
-} from "@/config/prizes";
+  getPrizeSummaryBySlug,
+  listPrizeSummaries,
+} from "@/config/prize-summaries";
 
 interface UsePrizeCatalogOptions {
   slug?: string | null;
 }
 
 interface UsePrizeCatalogResult {
-  prizes: PrizeCatalogEntry[];
+  prizes: PrizeSummary[];
   defaultSlug: PrizeSlug;
-  activePrize: PrizeCatalogEntry;
+  activePrize: PrizeSummary;
   activeSlug: PrizeSlug;
-  resolvePrize: (slug: string) => PrizeCatalogEntry | undefined;
+  resolvePrize: (slug: string) => PrizeSummary | undefined;
 }
 
 /**
  * Helper hook that exposes the shared prize catalog to components.
  * Keeps the logic for slug resolution and default fallbacks in one place
  * so newer developers do not need to re-implement it.
+ *
+ * Serves `PrizeSummary` (the lightweight client catalog from
+ * `@/config/prize-summaries`) — NOT the deep spec-sheet entries. A component
+ * that needs `specSections` must lazily `await import("@/config/prizes")`
+ * at interaction time (see PrizeShowcase's specifications-modal handler).
  */
 export function usePrizeCatalog(options: UsePrizeCatalogOptions = {}): UsePrizeCatalogResult {
-  const prizes = useMemo(() => listPrizes(), []);
+  const prizes = useMemo(() => listPrizeSummaries(), []);
   const defaultSlug = DEFAULT_PRIZE_SLUG;
 
   const activePrize = useMemo(() => {
     if (options.slug) {
-      const match = getPrizeBySlug(options.slug);
+      const match = getPrizeSummaryBySlug(options.slug);
       if (match) {
         return match;
       }
     }
-    return getPrizeBySlug(defaultSlug) ?? PRIZE_CATALOG[0];
+    return getPrizeSummaryBySlug(defaultSlug) ?? PRIZE_SUMMARIES[0];
   }, [options.slug, defaultSlug]);
 
   return {
@@ -44,6 +49,6 @@ export function usePrizeCatalog(options: UsePrizeCatalogOptions = {}): UsePrizeC
     defaultSlug,
     activePrize,
     activeSlug: activePrize?.slug ?? defaultSlug,
-    resolvePrize: getPrizeBySlug,
+    resolvePrize: getPrizeSummaryBySlug,
   };
 }

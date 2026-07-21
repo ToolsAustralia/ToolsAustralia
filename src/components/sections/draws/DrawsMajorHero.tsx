@@ -40,7 +40,7 @@ export default function DrawsMajorHero() {
 
       <div className="relative text-center">
         <div className="text-[10px] font-bold uppercase tracking-[0.16em] text-white/55">{p.tagline}</div>
-        <div className="mt-2.5 text-balance font-['Poppins'] text-[27px] font-black leading-[1.05]">{p.title}</div>
+        <div className="mt-2.5 text-balance font-poppins text-[27px] font-black leading-[1.05]">{p.title}</div>
       </div>
 
       <div className="relative mt-4 flex gap-1.5 rounded-full border border-white/15 bg-white/[0.08] p-1">

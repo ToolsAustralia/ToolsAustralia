@@ -47,7 +47,7 @@ export default function DrawWinners() {
                   {w.imageUrl ? (
                     <Image src={w.imageUrl} alt={name} fill className="object-cover" sizes="44px" />
                   ) : (
-                    <span className="grid h-full w-full place-items-center font-['Poppins'] text-sm font-black text-white/90">
+                    <span className="grid h-full w-full place-items-center font-poppins text-sm font-black text-white/90">
                       {getInitials(w.winnerFirstName, w.winnerLastName)}
                     </span>
                   )}

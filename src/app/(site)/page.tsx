@@ -16,6 +16,11 @@ import WinnerTestimoniesClient from "./components/WinnerTestimoniesClient";
 import { SectionContainer } from "@/components/ui";
 import { LazyMount } from "@/components/ui/LazyMount";
 
+// Marketing route class: static + ISR (no-nonce CSP — see docs/security-csp/architecture.md).
+// All homepage data (winners, mini-draws, promos, user state) is client-fetched, so a 5-min
+// shell revalidate is safe.
+export const revalidate = 300;
+
 export const metadata: Metadata = {
   title: "Tools Australia | Professional Tools, Mini Draws & Partner Deals",
   description:
@@ -60,7 +65,7 @@ const winnerTestimoniesSkeleton = (
   >
     <SectionContainer>
       <div className="text-center">
-        <div className="text-[20px] sm:text-[24px] font-bold text-black dark:text-white mb-2 sm:mb-3 font-['Poppins']">
+        <div className="text-[20px] sm:text-[24px] font-bold text-black dark:text-white mb-2 sm:mb-3 font-poppins">
           Winner Testimonies
         </div>
         <div className="text-gray-500 dark:text-neutral-400">Loading testimonies...</div>
@@ -76,7 +81,7 @@ const miniDrawsSkeleton = (
   >
     <SectionContainer>
       <div className="text-center">
-        <div className="text-[20px] sm:text-[24px] font-bold text-black dark:text-white mb-2 sm:mb-3 font-['Poppins']">
+        <div className="text-[20px] sm:text-[24px] font-bold text-black dark:text-white mb-2 sm:mb-3 font-poppins">
           MINI DRAWS
         </div>
         <div className="text-gray-500 dark:text-neutral-400">Loading mini draws...</div>
@@ -92,7 +97,7 @@ const bestsellersSkeleton = (
   >
     <SectionContainer>
       <div className="text-center">
-        <div className="text-[20px] sm:text-[24px] font-bold text-black dark:text-white mb-2 sm:mb-3 font-['Poppins']">
+        <div className="text-[20px] sm:text-[24px] font-bold text-black dark:text-white mb-2 sm:mb-3 font-poppins">
           BEST SELLERS
         </div>
         <div className="text-gray-500 dark:text-neutral-400">Loading products...</div>
@@ -108,7 +113,7 @@ const newArrivalsSkeleton = (
   >
     <SectionContainer>
       <div className="text-center">
-        <div className="text-[20px] sm:text-[24px] font-bold text-black dark:text-white mb-2 sm:mb-3 font-['Poppins']">
+        <div className="text-[20px] sm:text-[24px] font-bold text-black dark:text-white mb-2 sm:mb-3 font-poppins">
           NEW ARRIVALS
         </div>
         <div className="text-gray-500 dark:text-neutral-400">Loading products...</div>
@@ -127,7 +132,7 @@ export default function HomePage() {
         <Hero />
         <SectionContainer>
           <MembershipSection padding="pt-8 pb-4" />
-          <PrizeShowcase />
+          <PrizeShowcase priorityFirstSlide={false} />
           {/* Latest Winner Hero Section */}
         <LatestWinnerHero className="mb-8" />
         </SectionContainer>

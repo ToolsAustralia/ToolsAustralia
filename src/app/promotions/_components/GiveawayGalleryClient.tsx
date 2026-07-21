@@ -169,7 +169,7 @@ export default function GiveawayGalleryClient({ cards, featuredSlug, brands, sto
           on /promotions the PromoBanner is IN-FLOW (followOnScroll={false}) and there is
           NO fixed header, so nothing sits above the gallery — the bar spans edge-to-edge
           and sticks flush to the viewport top. Content stays in the max-w-7xl container. ── */}
-      <div className="sticky top-0 z-30 mt-6 w-full border-b border-gray-200 bg-white/90 shadow-[0_8px_24px_-16px_rgba(0,0,0,0.25)] backdrop-blur-xl sm:mt-8 dark:border-white/10 dark:bg-slate-950/85 dark:shadow-[0_10px_28px_-16px_rgba(0,0,0,0.9)]">
+      <div className="sticky top-0 z-30 mt-6 w-full border-b border-gray-200 bg-white/95 shadow-[0_8px_24px_-16px_rgba(0,0,0,0.25)] backdrop-blur-[var(--ta-blur)] sm:mt-8 dark:border-white/10 dark:bg-slate-950/95 dark:shadow-[0_10px_28px_-16px_rgba(0,0,0,0.9)]">
         <div className="mx-auto w-full max-w-7xl px-4 py-3 sm:px-6 lg:px-8">
           <div className="flex flex-col gap-2.5">
             {/* Toolset brand row */}

@@ -1,6 +1,5 @@
 "use client";
 
-import dynamic from "next/dynamic";
 import { useMembershipCardCta } from "@/hooks/useMembershipCardCta";
 import MembershipHero from "@/components/sections/membership/MembershipHero";
 import MembershipTrustStrip from "@/components/sections/membership/MembershipTrustStrip";
@@ -12,11 +11,7 @@ import MembershipDrawCycle from "@/components/sections/membership/MembershipDraw
 import MembershipPrizeChooser from "@/components/sections/membership/MembershipPrizeChooser";
 import MembershipWinnersWall from "@/components/sections/membership/MembershipWinnersWall";
 import MembershipFinalCta from "@/components/sections/membership/MembershipFinalCta";
-
-// Lazy-loaded: MembershipModal bundles Stripe + payment forms.
-const MembershipModal = dynamic(() => import("@/components/modals/MembershipModal"), {
-  ssr: false,
-});
+import MembershipModal from "@/components/modals/MembershipModal/LazyMembershipModal";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // FLAGGED FOR DELETION (do NOT delete here — user review pending; see

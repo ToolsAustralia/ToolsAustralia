@@ -2,8 +2,8 @@
 
 import { useRef } from "react";
 import Image from "next/image";
-import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
-import type { PrizeCatalogEntry, PrizeSlug } from "@/config/prizes";
+import { m, AnimatePresence, useReducedMotion } from "framer-motion";
+import type { PrizeSlug, PrizeSummary } from "@/config/prize-summaries";
 import { getBrandGlowColor } from "@/utils/prize-brand-colors";
 import { getPackageColorScheme, getToolsetBadgeStyle } from "@/utils/package-colors/packageColorScheme";
 import { Carousel3D, type Carousel3DItemState } from "@/components/ui/Carousel3D";
@@ -15,7 +15,7 @@ import { useInViewportAnimation } from "@/hooks/useInViewportAnimation";
 
 interface PowerToolsetCarouselProps {
   /** All toolset options for the current toolbox type */
-  prizes: PrizeCatalogEntry[];
+  prizes: PrizeSummary[];
   /** Slug of the currently selected/active prize */
   activeSlug: string | null;
   /** Called when user selects a toolset */
@@ -170,7 +170,7 @@ export function PowerToolsetCarousel({
   const useCarousel = activeSlug != null && n >= 2;
 
   /** One toolset card for the Carousel3D ring — presentational; the ring applies the transform. */
-  const renderToolsetCard = ({ item, isActive }: Carousel3DItemState<PrizeCatalogEntry>) => {
+  const renderToolsetCard = ({ item, isActive }: Carousel3DItemState<PrizeSummary>) => {
     const toolset = getToolsetFromSlug(item.slug);
     const imgSrc = toolset ? POWERSET_IMAGES[toolset] : null;
     if (!imgSrc) return null;
@@ -199,7 +199,7 @@ export function PowerToolsetCarousel({
         {/* Uniform frame: every brand composite is object-contain + dead-centre, so each
             focused toolset sits centred regardless of the source artwork. The focused
             card bobs gently for a bit of life (matches the membership turntable feel). */}
-        <motion.div
+        <m.div
           className="relative mt-2 aspect-[5/4] w-full"
           animate={float ? { y: [0, -10, 0] } : { y: 0 }}
           transition={
@@ -222,7 +222,7 @@ export function PowerToolsetCarousel({
             className="select-none object-contain object-center drop-shadow-2xl"
             sizes="(max-width: 640px) 64vw, 320px"
           />
-        </motion.div>
+        </m.div>
         {label && scheme && badgeStyle && isActive && (() => {
           // Two balanced lines, break forced by us; the pill hugs the WIDER line
           // (w-max = max-content) so it's exactly two rows, full text, no truncation,
@@ -259,7 +259,7 @@ export function PowerToolsetCarousel({
 
   const renderActiveCenter = (outerClass: string, frameClass: string) => (
     <div className={outerClass}>
-      <motion.div
+      <m.div
         className="absolute inset-0 -m-8 rounded-3xl blur-3xl pointer-events-none"
         animate={
           allowInfiniteAnim
@@ -284,13 +284,13 @@ export function PowerToolsetCarousel({
       />
 
       {activeImgSrc && (
-        <motion.div
+        <m.div
           layout
           layoutDependency={activeSlug ?? ""}
           className={frameClass}
         >
           <AnimatePresence mode="wait">
-            <motion.div
+            <m.div
               key={activeSlug ?? activeImgSrc}
               variants={centerVariants}
               initial="enter"
@@ -298,7 +298,7 @@ export function PowerToolsetCarousel({
               exit="exit"
               className="relative w-full h-full"
             >
-              <motion.div
+              <m.div
                 animate={allowInfiniteAnim ? { y: [0, -6, 0] } : { y: 0 }}
                 transition={
                   allowInfiniteAnim
@@ -345,16 +345,16 @@ export function PowerToolsetCarousel({
                     </div>
                   );
                 })()}
-              </motion.div>
-            </motion.div>
+              </m.div>
+            </m.div>
           </AnimatePresence>
-        </motion.div>
+        </m.div>
       )}
     </div>
   );
 
   const renderSideImage = (
-    prizeOption: PrizeCatalogEntry,
+    prizeOption: PrizeSummary,
     index: number,
     fromLeft: boolean
   ) => {
@@ -366,7 +366,7 @@ export function PowerToolsetCarousel({
     const scheme = toolset ? getPackageColorScheme(getToolsetColorKey(toolset)) : null;
     const badgeStyle = toolset ? getToolsetBadgeStyle(toolset) : null;
     return (
-      <motion.div
+      <m.div
         key={prizeOption.slug}
         custom={{ i: index, fromLeft }}
         variants={sideItemVariants}
@@ -389,7 +389,7 @@ export function PowerToolsetCarousel({
             />
           </div>
         )}
-        <motion.button
+        <m.button
           type="button"
           onClick={() => onSelect(prizeOption.slug)}
           className="relative h-full w-full cursor-pointer overflow-hidden rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-400 focus-visible:ring-offset-2"
@@ -421,8 +421,8 @@ export function PowerToolsetCarousel({
             </div>
           </div>
         )}
-        </motion.button>
-      </motion.div>
+        </m.button>
+      </m.div>
     );
   };
 
@@ -432,7 +432,7 @@ export function PowerToolsetCarousel({
           own per-card wordmark, so only the non-carousel (single-toolset) state shows it. */}
       {!useCarousel && activeToolset && POWERSET_BRAND_TEXT[activeToolset] && (
         <AnimatePresence mode="wait">
-          <motion.div
+          <m.div
             key={activeToolset}
             initial={{ opacity: 0, y: -4 }}
             animate={{ opacity: 1, y: 0 }}
@@ -448,11 +448,11 @@ export function PowerToolsetCarousel({
               className="object-contain"
               sizes="(max-width: 640px) 160px, (max-width: 1024px) 208px, 240px"
             />
-          </motion.div>
+          </m.div>
         </AnimatePresence>
       )}
 
-      <motion.div
+      <m.div
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.4, ease: "easeOut" }}
@@ -482,7 +482,7 @@ export function PowerToolsetCarousel({
           // the focused card's description pill (which sits low in the wheel) so it never
           // overlaps the "OR / $10,000 cash" block below.
           <div className="overflow-x-clip pb-6 sm:pb-10">
-            <Carousel3D<PrizeCatalogEntry>
+            <Carousel3D<PrizeSummary>
               key={prizes.map((p) => p.slug).join("|")}
               items={prizes}
               getKey={(p) => p.slug}
@@ -522,7 +522,7 @@ export function PowerToolsetCarousel({
             )}
           </div>
         )}
-      </motion.div>
+      </m.div>
     </div>
   );
 }

@@ -76,7 +76,7 @@ export default function RecentWinnersCarousel({
             <div className="p-3 bg-gradient-to-br from-red-600 to-red-700 rounded-xl shadow-lg">
               <Trophy className="w-6 h-6 sm:w-8 sm:h-8 text-white" />
             </div>
-            <h2 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 font-['Poppins']">
+            <h2 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 font-poppins">
               {title}
             </h2>
           </div>
@@ -162,7 +162,7 @@ export default function RecentWinnersCarousel({
             <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-br from-gray-200 to-gray-300 rounded-full mb-4">
               <Trophy className="w-10 h-10 text-gray-500" />
             </div>
-            <h3 className="text-xl font-bold text-gray-900 font-['Poppins'] mb-2">
+            <h3 className="text-xl font-bold text-gray-900 font-poppins mb-2">
               No Winners Yet
             </h3>
             <p className="text-gray-600 dark:text-neutral-400 font-['Inter']">

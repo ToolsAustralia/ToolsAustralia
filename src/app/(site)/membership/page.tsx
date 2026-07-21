@@ -1,6 +1,10 @@
 import type { Metadata } from "next";
 import MembershipPageClient from "./components/MembershipPageClient";
 
+// nonce-CSP route class — must render per-request; never cache HTML with a baked nonce
+// (see docs/security-csp/architecture.md "Route classes").
+export const dynamic = "force-dynamic";
+
 export const metadata: Metadata = {
   title: "Membership | Tools Australia - Exclusive Perks & Member Deals",
   description:

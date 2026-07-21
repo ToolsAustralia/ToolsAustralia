@@ -14,7 +14,7 @@ export default function RelatedMiniDraws({ draws }: RelatedMiniDrawsProps) {
   return (
     <section className="mt-14 sm:mt-16">
       <div className="flex items-center justify-between mb-6 sm:mb-8">
-        <h2 className="text-lg sm:text-xl font-bold text-gray-900 dark:text-white font-['Poppins']">You May Also Like</h2>
+        <h2 className="text-lg sm:text-xl font-bold text-gray-900 dark:text-white font-poppins">You May Also Like</h2>
         <Link
           href="/mini-draws"
           className="text-red-600 dark:text-red-400 hover:text-red-675 dark:hover:text-red-300 font-medium flex items-center gap-1 text-sm transition-colors"

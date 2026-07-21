@@ -81,7 +81,7 @@ export default function MembershipEntriesStack() {
           >
             <Bolt className="h-3.5 w-3.5" style={{ color: "#d4af37" }} /> Why membership pays
           </span>
-          <h2 className="mt-5 font-['Poppins'] text-4xl font-black tracking-tight sm:text-5xl lg:text-6xl">
+          <h2 className="mt-5 font-poppins text-4xl font-black tracking-tight sm:text-5xl lg:text-6xl">
             Your entries don&apos;t reset. <span className="text-red-600">They stack.</span>
           </h2>
           <div className="mt-6 flex justify-center">
@@ -98,7 +98,7 @@ export default function MembershipEntriesStack() {
         <div className="mt-8 rounded-3xl border border-white/10 bg-white/[0.03] p-3 sm:p-8">
           <div className="mb-1 text-center">
             <span className="text-[11px] font-semibold uppercase tracking-wider text-white/55 sm:text-xs">Your standing entries</span>
-            <div className="font-['Poppins'] text-4xl font-extrabold sm:text-5xl" style={{ color: HEX[tier] }}>
+            <div className="font-poppins text-4xl font-extrabold sm:text-5xl" style={{ color: HEX[tier] }}>
               <AnimatedNumber value={total} />
             </div>
             <span className="text-[11px] text-white/55 sm:text-xs">
@@ -122,7 +122,7 @@ export default function MembershipEntriesStack() {
             activeTierIndex={selIdx}
           />
           <div>
-            <h3 className="font-['Poppins'] text-2xl font-extrabold">Your member discounts live in one rewards portal.</h3>
+            <h3 className="font-poppins text-2xl font-extrabold">Your member discounts live in one rewards portal.</h3>
             <p className="mt-3 text-white/70">
               Open it straight from your account — your tier sets how much of the partner catalogue you unlock.
             </p>

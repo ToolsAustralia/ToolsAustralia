@@ -32,7 +32,7 @@ export default function MiniDrawCountdown({ drawDate, freezeEntriesAt, status }:
       <div className="bg-gradient-to-br from-red-600 to-red-700 rounded-3xl p-4 sm:p-6 shadow-2xl border-2 border-white/20">
         <div className="text-center">
           <div className="mb-2">
-            <span className="text-lg font-bold text-white font-['Poppins']">Draw Ended</span>
+            <span className="text-lg font-bold text-white font-poppins">Draw Ended</span>
           </div>
           <p className="text-white/80 text-sm">This mini draw has concluded. Check the results page for winners!</p>
         </div>

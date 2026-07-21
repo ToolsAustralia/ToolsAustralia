@@ -16,17 +16,18 @@ export function useCurrentAlternatingMultipliers() {
   return useQuery<CurrentAlternatingMultipliersResponse>({
     queryKey: ["alternating-multiplier", "current"],
     queryFn: async () => {
-      const response = await fetch("/api/promo/alternating-multiplier/current", {
-        cache: "no-store", // Prevent browser caching
-      });
+      // No cache:"no-store" — the route serves public s-maxage=60; honor the CDN so an
+      // active guest's refetch is served fresh-within-60s. staleTime/focus govern the client.
+      const response = await fetch("/api/promo/alternating-multiplier/current");
       if (!response.ok) {
         throw new Error("Failed to fetch current alternating multipliers");
       }
       return response.json();
     },
-    staleTime: 30 * 1000, // 30 seconds
-    refetchInterval: 60 * 1000, // Refetch every 1 minute
-    refetchIntervalInBackground: false, // Pause polling on hidden tabs; refetchOnWindowFocus catches up on tab focus
+    // Perf Tier-2: dropped the 60s poll; multiplier flips reach an active guest within
+    // ≤120s via s-maxage=60 + focus/navigation refetch (idle-guest-on-focus is the
+    // accepted trade). Package price/multiplier badges refresh on focus/navigation.
+    staleTime: 60 * 1000, // 60 seconds
     refetchOnWindowFocus: true,
     refetchOnMount: true, // Ensure fresh data on mount
   });

@@ -3,7 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
-import { DEFAULT_PRIZE_SLUG } from "@/config/prizes";
+import { DEFAULT_PRIZE_SLUG } from "@/config/prize-summaries";
 import type { WinnerSummary } from "@/types/winner";
 import { usePromoTheme } from "@/stores/usePromoThemeStore";
 import { formatWinnerName } from "@/utils/winner-name-formatter";
@@ -94,7 +94,7 @@ export default function WinnerCard({
           </div>
 
           <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-2">
-            <h3 className="min-w-0 flex-1 text-[1.65rem] font-bold leading-tight tracking-tight font-['Poppins'] text-white sm:text-[1.8rem] lg:text-[1.25rem]">
+            <h3 className="min-w-0 flex-1 text-[1.65rem] font-bold leading-tight tracking-tight font-poppins text-white sm:text-[1.8rem] lg:text-[1.25rem]">
               {formattedName}
             </h3>
             <span

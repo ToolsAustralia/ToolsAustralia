@@ -124,3 +124,11 @@ Both routes return per-user fields (`userStats` on major-draw, `hasActiveMembers
 ## Terminology: `isAdditional` (was `isMemberOnly`) — 2026-07-01
 
 The package flag `isMemberOnly` was renamed to **`isAdditional`** across the codebase. It marks packages that require *additional-package access* — an **active subscription OR current major-draw entries** (see `hasAdditionalPackageAccess`), which is broader than subscribers; it was never truly "member-only". The internal `-member` UI id-suffix (a row disambiguator) is intentionally unchanged. Full rationale: [subscription/gotchas.md](../subscription/gotchas.md).
+
+## /winners and /draw-results are ISR (revalidate 300) as of 2026-07-19
+
+Both pages ran live Mongo queries per request for data that changes only when a draw completes. They are now static with a 5-minute revalidate (marketing CSP route class — see docs/security-csp/architecture.md). If you add per-request/server-session logic to these pages they silently flip to dynamic AND break the CSP route-class invariant — client-fetch instead.
+
+## WinnersTestimony carousel: rAF-throttled scroll + cached offsets (2026-07-20, perf Tier-2)
+
+[`WinnersTestimony`](../../src/app/(site)/winners/components/WinnersTestimony.tsx)'s active-dot tracking used a raw React `onScroll` that read `offsetLeft`/`clientWidth` of **every** card on **every** scroll event and called `setIdx` unconditionally. It now attaches [`addRAFScrollListener`](../../src/utils/dom/listenerHelpers.ts) to the track (passive + rAF-throttled; the helper passes `scrollTop`, ignored — this track scrolls horizontally, so the handler reads `scrollLeft` itself), caches the card centers + half-viewport once per layout (recomputed on [`addThrottledResize`](../../src/utils/dom/listenerHelpers.ts) — card widths are `%`/px-based so only viewport changes move them), and only calls `setIdx` when the nearest card actually changes (ref-guarded). Client-side behavior only — `/winners` stays ISR/static (see the route-class note above); don't reintroduce per-frame child measurement here.
