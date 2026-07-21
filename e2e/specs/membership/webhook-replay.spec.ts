@@ -2,7 +2,7 @@ import { spawnSync } from "node:child_process";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { test as base, expect } from "../../fixtures/test";
-import { CARDS, fillPaymentElement, findBenefitsGrantedRef, uniqueMobile, waitForActiveMembership } from "../../helpers/payment";
+import { CARDS, fillPaymentElement, findBenefitsGrantedRef, purchaseIdentity, waitForActiveMembership } from "../../helpers/payment";
 import { benefitsGrantedCount, connectE2eDb, disconnectE2eDb, entriesForUser } from "../../helpers/db";
 import { LOG_DIR } from "../../lib/paths";
 
@@ -67,8 +67,7 @@ test.describe("webhook replay safety @purchase", () => {
     // 3-project concurrent runs against one `next dev` server — this spec has the
     // most sequential steps of the five (purchase + queue poll + CLI resend + settle).
     test.setTimeout(400_000);
-    const runId = process.env.E2E_RUN_ID || "dev";
-    const email = `e2e-replay-${runId}-${test.info().project.name}@e2e.io`;
+    const { email, mobile } = purchaseIdentity("replay", test.info());
 
     // Complete a normal purchase first (same steps as purchase-subscription):
     await page.goto("/membership");
@@ -80,7 +79,7 @@ test.describe("webhook replay safety @purchase", () => {
     await page.locator('input[name="firstName"]').fill("E2E");
     await page.locator('input[name="lastName"]').fill("Replay");
     await page.locator('input[name="email"]').fill(email);
-    await page.locator('input[name="phone"]').fill(uniqueMobile(email));
+    await page.locator('input[name="phone"]').fill(mobile);
     await page.getByRole("button", { name: /register/i }).click();
 
     const purchaseButton = page.getByRole("button", { name: /^purchase$/i });

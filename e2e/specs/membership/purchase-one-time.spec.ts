@@ -1,5 +1,5 @@
 import { test, expect } from "../../fixtures/test";
-import { CARDS, fillPaymentElement, findBenefitsGrantedRef, uniqueMobile, waitForOneTimeEntries } from "../../helpers/payment";
+import { CARDS, fillPaymentElement, findBenefitsGrantedRef, purchaseIdentity, waitForOneTimeEntries } from "../../helpers/payment";
 import { benefitsGrantedCount, disconnectE2eDb } from "../../helpers/db";
 
 test.afterAll(async () => {
@@ -11,8 +11,7 @@ test.describe("one-time pack purchase @purchase", () => {
     // See purchase-subscription.spec.ts's identical note: generous budget for
     // full 3-project concurrent runs against one `next dev` server.
     test.setTimeout(300_000);
-    const runId = process.env.E2E_RUN_ID || "dev";
-    const email = `e2e-onetime-${runId}-${test.info().project.name}@e2e.io`;
+    const { email, mobile } = purchaseIdentity("onetime", test.info());
 
     // The public one-time pack ladder lives in the "Not subscribing?" drawer
     // (MembershipOneTimePacks.tsx), nested inside MembershipTierChooser, collapsed
@@ -27,7 +26,7 @@ test.describe("one-time pack purchase @purchase", () => {
     await page.locator('input[name="firstName"]').fill("E2E");
     await page.locator('input[name="lastName"]').fill("OneTime");
     await page.locator('input[name="email"]').fill(email);
-    await page.locator('input[name="phone"]').fill(uniqueMobile(email));
+    await page.locator('input[name="phone"]').fill(mobile);
     await page.getByRole("button", { name: /register/i }).click();
 
     const purchaseButton = page.getByRole("button", { name: /^purchase$/i });

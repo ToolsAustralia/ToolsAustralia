@@ -1,4 +1,4 @@
-import type { Page } from "@playwright/test";
+import type { Page, TestInfo } from "@playwright/test";
 import mongoose from "mongoose";
 import { connectE2eDb, entriesForUser, findUserByEmail } from "./db";
 
@@ -23,6 +23,21 @@ export function uniqueMobile(seed: string): string {
   for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) >>> 0;
   const eightDigits = 10_000_000 + (h % 90_000_000); // always 8 digits, no leading zero
   return `04${eightDigits}`;
+}
+
+/**
+ * Retry-safe unique identity: same run + project + tag gets a fresh email/mobile per retry attempt.
+ * The retry index is folded into the email seed so Playwright retries on the same worker
+ * reuse a different (yet deterministic) email/mobile pair, avoiding "Email already taken" /
+ * "Mobile number taken" collisions that break the `guestUserData` bridge.
+ *
+ * Email format: must match `src/models/User.ts:346` regex (hyphen separators + 2-char TLD only;
+ * "+" and ".local" fail validation).
+ */
+export function purchaseIdentity(tag: string, testInfo: TestInfo): { email: string; mobile: string } {
+  const runId = process.env.E2E_RUN_ID || "dev";
+  const email = `e2e-${tag}-${runId}-${testInfo.project.name}-r${testInfo.retry}@e2e.io`.toLowerCase();
+  return { email, mobile: uniqueMobile(email) };
 }
 
 /**

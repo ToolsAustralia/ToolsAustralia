@@ -1,5 +1,5 @@
 import { test, expect } from "../../fixtures/test";
-import { CARDS, fillPaymentElement, findBenefitsGrantedRef, uniqueMobile, waitForActiveMembership } from "../../helpers/payment";
+import { CARDS, fillPaymentElement, findBenefitsGrantedRef, purchaseIdentity, waitForActiveMembership } from "../../helpers/payment";
 import { benefitsGrantedCount, disconnectE2eDb } from "../../helpers/db";
 
 test.describe.configure({ mode: "serial" }); // one money-path flow at a time per project/worker
@@ -14,10 +14,7 @@ test.describe("subscription purchase @purchase @demo", () => {
     // runs finish in ~35s; the full 8-worker run needs much more headroom for the
     // same steps under contention).
     test.setTimeout(300_000);
-    const runId = process.env.E2E_RUN_ID || "dev";
-    // Email format verified in Task 7 (src/models/User.ts:346 regex requires hyphen
-    // separators + a 2-char TLD — "+" and ".local" both fail validation).
-    const email = `e2e-buy-${runId}-${test.info().project.name}@e2e.io`;
+    const { email, mobile } = purchaseIdentity("buy", test.info());
 
     // Register (step 1) — no "Continue to Billing" interstitial (verified Task 7):
     // a successful register batches setGuestUserData + setCurrentStep(2), so the modal
@@ -31,7 +28,7 @@ test.describe("subscription purchase @purchase @demo", () => {
     await page.locator('input[name="firstName"]').fill("E2E");
     await page.locator('input[name="lastName"]').fill("Buyer");
     await page.locator('input[name="email"]').fill(email);
-    await page.locator('input[name="phone"]').fill(uniqueMobile(email));
+    await page.locator('input[name="phone"]').fill(mobile);
     await page.getByRole("button", { name: /register/i }).click();
 
     // Billing step reached — unauthenticated submit button is exactly "PURCHASE"

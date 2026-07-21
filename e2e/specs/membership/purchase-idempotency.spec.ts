@@ -1,6 +1,6 @@
 import mongoose from "mongoose";
 import { test, expect } from "../../fixtures/test";
-import { CARDS, fillPaymentElement, findBenefitsGrantedRef, uniqueMobile, waitForActiveMembership } from "../../helpers/payment";
+import { CARDS, fillPaymentElement, findBenefitsGrantedRef, purchaseIdentity, waitForActiveMembership } from "../../helpers/payment";
 import { benefitsGrantedCount, connectE2eDb, disconnectE2eDb } from "../../helpers/db";
 
 test.afterAll(async () => {
@@ -12,8 +12,7 @@ test.describe("double-submit idempotency @purchase", () => {
     // See purchase-subscription.spec.ts's identical note: generous budget for
     // full 3-project concurrent runs against one `next dev` server.
     test.setTimeout(300_000);
-    const runId = process.env.E2E_RUN_ID || "dev";
-    const email = `e2e-dbl-${runId}-${test.info().project.name}@e2e.io`;
+    const { email, mobile } = purchaseIdentity("dbl", test.info());
 
     await page.goto("/membership");
     await page
@@ -24,7 +23,7 @@ test.describe("double-submit idempotency @purchase", () => {
     await page.locator('input[name="firstName"]').fill("E2E");
     await page.locator('input[name="lastName"]').fill("Double");
     await page.locator('input[name="email"]').fill(email);
-    await page.locator('input[name="phone"]').fill(uniqueMobile(email));
+    await page.locator('input[name="phone"]').fill(mobile);
     await page.getByRole("button", { name: /register/i }).click();
 
     const purchaseButton = page.getByRole("button", { name: /^purchase$/i });
