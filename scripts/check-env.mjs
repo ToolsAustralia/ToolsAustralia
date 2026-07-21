@@ -37,6 +37,8 @@ const LOCAL_ONLY = new Set([
   "PORT", // wt-new.sh assigns a unique dev port per worktree (3000, 3001, …)
   "E2E_TEST_USER_EMAIL", // branch-local end-to-end test credentials
   "E2E_TEST_USER_PASSWORD",
+  "E2E_MONGODB_URI", // per-folder e2e database (name must contain "e2e")
+  "E2E_PORT",
 ]);
 
 /** Uncommented `VAR=` declarations at column 0 (matches how .env files are written). */
