@@ -100,6 +100,26 @@ Clearing rule (returns true if any):
 - Previous DB status was `past_due` or `unpaid`.
 - `billingReason` is `subscription_cycle` | `subscription_threshold` | `subscription_update`.
 
+### `RetentionPauseService` — the `paused` membership state
+
+[RetentionPauseService.ts](../../src/services/subscription/RetentionPauseService.ts) — applies the 30-day `pause_30d` cancellation-flow retention offer. A member who accepts keeps the PAID period they already bought, then FREEZES for ~30 days. This introduces a real DB state: `subscription.status = "paused"` + `subscription.isActive = false` during the window `[subscription.pausedFrom, subscription.pausedUntil)` (the two new fields — see [models.md](./models.md#subscription-subdocument-fields)).
+
+**Frozen semantics.** While paused: no charge, and the existing `isActive=false` gates suspend partner discounts, member pages, additional-pack access, and NEW entry accrual (a `behavior:"void"` pause discards cycle invoices, so no paid renewal → no entry-grant webhook — no extra "freeze" code needed). **Existing accumulated entries are UNTOUCHED** — they were paid for, so a paused member's already-earned entries still count in draws. (No entry freezing/exclusion is applied.)
+
+```ts
+computeResumeAt(base: Date): number   // unix seconds = base + 30d
+applyRetentionPause(userId: string): Promise<{ resumesAt: string }>
+resumeRetentionPause(userId: string): Promise<{ resumed: true; wasFrozen: boolean }>
+retentionPauseBlockReason(user): string | null   // pure eligibility guard
+```
+
+- **Timing fix (period-end anchored).** `computeResumeAt(base)` takes the member's **period end** as the base, so resume = `period_end + 30d` — NOT `now + 30d` (the previous formula gave a just-renewed member ~0 pause benefit). `applyRetentionPause` sources the period end from `user.subscription.endDate` (synced from Stripe for active members; falls back to the live Stripe period end when the DB date is missing/past), sets `pausedFrom = period_end`, `pausedUntil = period_end + 30d`, applies the Stripe pause (`pause_collection.behavior:"void"`, `resumes_at`, `metadata.pauseReason:"retention"`), then atomically persists `retentionOffersConsumed.pause30d = true` + `pausedFrom` / `pausedUntil`. Stripe-first ordering (persist failure is non-fatal — the pause is live). Guards (`retentionPauseBlockReason`, most-critical first): past-due → scheduled-to-cancel → already-consumed → no subscription.
+- **Flip `active → paused`.** PRIMARY = the Stripe webhook `handleSubscriptionUpdated` — Stripe keeps the sub `status:"active"` during a `pause_collection`, so the **app owns** the DB `paused` state. When the update carries a retention pause AND `now >= pausedFrom`, it sets `status="paused"` / `isActive=false`; the else-branch active-restore is GUARDED (`prevSubStatus !== "paused"`) so it can't clobber `paused` back to `active`. BACKSTOP = the [`cancellation-retention-resume` cron](../infrastructure/api.md#cancellation-retention-resume-cron) (flips at `pausedFrom` if the webhook was missed, and restores if Stripe already resumed). See [gotchas.md](./gotchas.md#retention-pause--the-app-owns-the-paused-state-stripe-stays-active) + [billing-stripe/gotchas.md](../billing-stripe/gotchas.md#retention-pause-keeps-stripe-active-while-the-app-owns-paused).
+- **Auto-resume.** At `pausedUntil` Stripe auto-resumes collection and bills the next cycle. A SUCCESSFUL charge restores active — `handleInvoicePaymentSucceeded` flips `paused → active` and unsets `pausedFrom` / `pausedUntil` (a paused member's only paid invoice is their resume charge, since the void pause discards all others). A FAILED charge → `past_due` (benefits return ONLY after a successful payment — `handleInvoicePaymentFailed` keeps them past-due, never flickering active).
+- **Early resume.** `resumeRetentionPause(userId)` lifts the pause immediately — powers a member "Resume now" dashboard button AND an admin resume control (both still being wired). It clears the Stripe `pause_collection` + retention metadata and unsets the pause window; the return to active is the same payment-gated restore (if already past the period end, Stripe bills the next cycle now and `invoice.payment_succeeded` restores active; a failed charge → `past_due`).
+
+Pure helpers (`computeResumeAt`, `retentionPauseBlockReason`) are unit-tested without Stripe/DB (`npm run test:retention-pause`). `decideClearPause` in `pauseCollectionPolicy.ts` keys on `metadata.pauseReason === "retention"` to protect a retention pause from the recovery-clear path (see [billing-stripe/gotchas.md](../billing-stripe/gotchas.md#paid-invoice-clear-pause-decision-is-now-centralized)).
+
 ### `SubscriptionReferenceService` (Stripe-ref repair toolkit)
 
 [SubscriptionReferenceService.ts](../../src/services/subscription/SubscriptionReferenceService.ts)

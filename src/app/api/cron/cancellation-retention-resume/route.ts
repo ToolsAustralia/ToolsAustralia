@@ -105,12 +105,20 @@ export async function GET(request: NextRequest) {
         "retentionOffersConsumed.pause30d": true,
         stripeSubscriptionId: { $exists: true, $ne: null },
       },
-      { _id: 1, stripeSubscriptionId: 1 }
+      {
+        _id: 1,
+        stripeSubscriptionId: 1,
+        "subscription.status": 1,
+        "subscription.pausedFrom": 1,
+        "subscription.pausedUntil": 1,
+      }
     ).lean();
 
     const now = new Date();
     let processed = 0;
     let cleared = 0;
+    let flipped = 0;
+    let restored = 0;
     const errors: string[] = [];
 
     for (const user of candidates) {
@@ -123,6 +131,49 @@ export async function GET(request: NextRequest) {
         const pauseReason = subscription.metadata?.pauseReason;
         const pauseResumesAtIso = subscription.metadata?.pauseResumesAt;
         const pauseCollectionPresent = subscription.pause_collection != null;
+
+        // BACKSTOP for the DB `paused` membership state — the webhook (handleSubscriptionUpdated /
+        // handleInvoicePaymentSucceeded) is the PRIMARY driver; this catches missed events. Idempotent
+        // + Stripe-truth-based. See RetentionPauseService.
+        const pauseSub = user.subscription as
+          | { status?: string; pausedFrom?: Date; pausedUntil?: Date }
+          | undefined;
+        const dbSubStatus = pauseSub?.status;
+        const pausedFrom = pauseSub?.pausedFrom;
+        const pausedUntil = pauseSub?.pausedUntil;
+        // (a) FLIP active→paused: the freeze window has started + a retention pause is live on Stripe,
+        //     but the webhook flip was missed.
+        if (
+          pauseReason === "retention" &&
+          pauseCollectionPresent &&
+          dbSubStatus !== "paused" &&
+          pausedFrom != null &&
+          new Date(pausedFrom).getTime() <= now.getTime() &&
+          (pausedUntil == null || now.getTime() < new Date(pausedUntil).getTime())
+        ) {
+          await User.updateOne(
+            { _id: user._id },
+            { $set: { "subscription.status": "paused", "subscription.isActive": false } }
+          );
+          flipped += 1;
+        }
+        // (b) RESTORE from paused: DB still says paused but Stripe already resumed (pause_collection
+        //     gone). Mirror Stripe's status (active→active; a failed resume shows past_due/unpaid) and
+        //     clear the window. The primary restore is invoice.payment_succeeded.
+        else if (dbSubStatus === "paused" && !pauseCollectionPresent) {
+          const backToActive = subscription.status === "active" || subscription.status === "trialing";
+          await User.updateOne(
+            { _id: user._id },
+            {
+              $set: {
+                "subscription.status": backToActive ? "active" : subscription.status,
+                "subscription.isActive": backToActive,
+              },
+              $unset: { "subscription.pausedFrom": "", "subscription.pausedUntil": "" },
+            }
+          );
+          restored += 1;
+        }
 
         if (
           !shouldClearRetentionMarker({
@@ -166,9 +217,9 @@ export async function GET(request: NextRequest) {
 
     console.error(
       "[cron cancellation-retention-resume] done",
-      { processed, cleared, errorCount: errors.length }
+      { processed, cleared, flipped, restored, errorCount: errors.length }
     );
-    return NextResponse.json({ processed, cleared, errors });
+    return NextResponse.json({ processed, cleared, flipped, restored, errors });
   } catch (err) {
     console.error("[cron cancellation-retention-resume] fatal error:", err);
     return NextResponse.json(

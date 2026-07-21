@@ -11,8 +11,19 @@
  * | Trigger             | Failed renewal invoice          | Member accepts pause offer  |
  * | behavior            | keep_as_draft                   | void                        |
  * | metadata.pauseReason| (none set)                      | "retention"                 |
- * | resumes_at          | (none — manual resume)          | now + 30 days               |
- * | Webhook handling    | Cleared on next paid invoice    | Never auto-cleared (Task 11)|
+ * | resumes_at          | (none — manual resume)          | period_end + 30 days        |
+ * | Webhook handling    | Cleared on next paid invoice    | Flip→paused at period end   |
+ *
+ * ## The `paused` membership state (real DB state)
+ *
+ * The pause is TIMED to the member's period end: they keep the paid period they already bought,
+ * then freeze for ~30 days. During the window `[subscription.pausedFrom, subscription.pausedUntil)`
+ * the member is set `status="paused"` + `isActive=false` — no charge, no access/perks, no NEW entry
+ * accrual (existing accumulated entries are untouched; they were paid for). The active→paused flip
+ * is driven by the Stripe webhook (fires at the period roll) with the `cancellation-retention-resume`
+ * cron as the backstop. At `pausedUntil` Stripe AUTO-resumes + bills the next cycle; a successful
+ * charge restores `active`, a failed one → `past_due`. `resumeRetentionPause` lets a member (or admin)
+ * resume early.
  *
  * `decideClearPause` in `pauseCollectionPolicy.ts` uses `metadata.pauseReason === "retention"`
  * to distinguish and protect retention pauses from the recovery-clear path.
@@ -56,13 +67,14 @@ export const RETENTION_PAUSE_DAYS = 30;
 // ---------------------------------------------------------------------------
 
 /**
- * Compute the Unix timestamp (seconds) at which the retention pause should
- * resume: `now + RETENTION_PAUSE_DAYS days`.
+ * Compute the Unix timestamp (seconds) at which the retention pause resumes:
+ * `base + RETENTION_PAUSE_DAYS days`. Callers pass the member's PERIOD END as the base —
+ * the pause begins when their paid period ends — so resume = period_end + 30d.
  *
  * Stripe's `resumes_at` field is Unix seconds (not milliseconds).
  */
-export function computeResumeAt(now: Date): number {
-  return Math.floor((now.getTime() + RETENTION_PAUSE_DAYS * 86_400_000) / 1000);
+export function computeResumeAt(base: Date): number {
+  return Math.floor((base.getTime() + RETENTION_PAUSE_DAYS * 86_400_000) / 1000);
 }
 
 /**
@@ -140,11 +152,28 @@ export async function applyRetentionPause(userId: string): Promise<ApplyRetentio
   // TypeScript narrowing: blockReason === null guarantees stripeSubscriptionId is set.
   const subscriptionId = user.stripeSubscriptionId as string;
 
-  const now = new Date();
-  const resumesAtUnix = computeResumeAt(now);
-  const resumesAtIso = new Date(resumesAtUnix * 1000).toISOString();
+  // The 30-day freeze begins at the member's PERIOD END (they keep the paid period they already
+  // bought), so resume = period_end + 30d — NOT now + 30d. Prefer the DB endDate (synced from
+  // Stripe for active members); fall back to the live Stripe period end.
+  const dbEndDate = user.subscription?.endDate ? new Date(user.subscription.endDate) : null;
+  let periodEnd: Date;
+  if (dbEndDate && !Number.isNaN(dbEndDate.getTime()) && dbEndDate.getTime() > Date.now()) {
+    periodEnd = dbEndDate;
+  } else {
+    const { getSubscriptionPeriodEnd } = await import("@/utils/payment/stripe/subscription-period");
+    const sub = await stripe.subscriptions.retrieve(subscriptionId);
+    const periodEndUnix = getSubscriptionPeriodEnd(sub);
+    periodEnd = periodEndUnix ? new Date(periodEndUnix * 1000) : new Date();
+  }
 
-  // Step 3: Apply the pause on Stripe FIRST (see ordering rationale in file header).
+  const pausedFrom = periodEnd;
+  const resumesAtUnix = computeResumeAt(pausedFrom);
+  const pausedUntil = new Date(resumesAtUnix * 1000);
+  const resumesAtIso = pausedUntil.toISOString();
+
+  // Step 3: Apply the pause on Stripe FIRST (see ordering rationale in file header). resumes_at is
+  // when Stripe AUTO-resumes collection + bills the next cycle — the automatic un-pause the member
+  // gets if they don't resume early.
   await stripe.subscriptions.update(subscriptionId, {
     pause_collection: {
       behavior: "void",
@@ -156,15 +185,23 @@ export async function applyRetentionPause(userId: string): Promise<ApplyRetentio
     },
   });
 
-  // Step 4: Persist the consumed flag atomically. Failure is non-fatal (pause is live).
+  // Step 4: Persist the consumed flag + the pause window atomically. The window drives the
+  // active->paused flip (webhook + cron backstop) and the "Paused · resumes {date}" display.
+  // Failure is non-fatal (the Stripe pause IS live).
   try {
     await User.updateOne(
       { _id: user._id },
-      { $set: { "retentionOffersConsumed.pause30d": true } }
+      {
+        $set: {
+          "retentionOffersConsumed.pause30d": true,
+          "subscription.pausedFrom": pausedFrom,
+          "subscription.pausedUntil": pausedUntil,
+        },
+      }
     );
   } catch (err) {
     console.error(
-      "[RetentionPauseService] Stripe pause applied but failed to persist consumed flag for user",
+      "[RetentionPauseService] Stripe pause applied but failed to persist consumed flag / pause window for user",
       userId,
       err
     );
@@ -172,4 +209,65 @@ export async function applyRetentionPause(userId: string): Promise<ApplyRetentio
   }
 
   return { resumesAt: resumesAtIso };
+}
+
+// ---------------------------------------------------------------------------
+// Early / admin resume
+// ---------------------------------------------------------------------------
+
+export interface ResumeRetentionPauseResult {
+  resumed: true;
+  /** True when the member was already in the frozen window (an immediate bill follows). */
+  wasFrozen: boolean;
+}
+
+/**
+ * Resume a retention-paused member — powers the member's dashboard "Resume now" AND the admin
+ * resume control (when a member asks support to un-pause). Lifts the Stripe `pause_collection`
+ * so collection resumes immediately: if the member is already in the frozen window (past their
+ * period end) Stripe bills the next cycle NOW, and the restore to `active` follows the resulting
+ * `invoice.payment_succeeded` — a FAILED charge lands them in `past_due` (the same
+ * "benefits back only after a successful payment" rule as the natural resume). If they resume
+ * while still inside their paid period, it simply cancels the scheduled pause.
+ *
+ * Clears the pause window + retention metadata so the flip-cron won't re-pause. Throws
+ * `"no active pause"` when the member has no retention pause to resume.
+ */
+export async function resumeRetentionPause(userId: string): Promise<ResumeRetentionPauseResult> {
+  const { default: connectDB } = await import("@/lib/mongodb");
+  const { stripe } = await import("@/lib/stripe");
+  const { default: User } = await import("@/models/User");
+
+  await connectDB();
+
+  const user = await User.findById(userId);
+  if (!user) throw new Error("user not found");
+  if (!user.stripeSubscriptionId) throw new Error("no active subscription");
+
+  const sub = await stripe.subscriptions.retrieve(user.stripeSubscriptionId);
+  const hasPauseWindow = user.subscription?.pausedUntil != null;
+  const isRetentionPaused =
+    sub.pause_collection != null && (sub.metadata?.pauseReason === "retention" || hasPauseWindow);
+  if (!isRetentionPaused) {
+    throw new Error("no active pause");
+  }
+
+  const wasFrozen = user.subscription?.status === "paused";
+
+  // Lift the Stripe pause → collection resumes now (bills the next cycle if past period end).
+  // Clearing the retention metadata lets the webhook restore-branch treat the next update as a
+  // real resume (pause_collection == null → restore to active on the paid invoice).
+  await stripe.subscriptions.update(user.stripeSubscriptionId, {
+    pause_collection: "",
+    metadata: { pauseReason: "", pauseResumesAt: "" },
+  });
+
+  // Clear the pause window so the flip-cron won't re-pause. The active-restore itself is
+  // payment-driven (invoice.payment_succeeded → webhook), consistent with the natural resume.
+  await User.updateOne(
+    { _id: user._id },
+    { $unset: { "subscription.pausedFrom": "", "subscription.pausedUntil": "" } }
+  );
+
+  return { resumed: true, wasFrozen };
 }

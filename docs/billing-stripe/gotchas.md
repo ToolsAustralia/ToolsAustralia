@@ -157,6 +157,14 @@ See [subscription/gotchas.md](../subscription/gotchas.md#pause-collection-orphan
 
 Audit: `npx tsx scripts/list-active-paused-subscriptions.ts --limit=200` (CSV to stdout, dry-run by default).
 
+### Retention pause keeps Stripe `active` while the app owns `paused`
+
+The 30-day `pause_30d` retention offer (`RetentionPauseService`) applies `pause_collection: { behavior: "void", resumes_at }` + `metadata.pauseReason: "retention"`. **Stripe leaves the subscription's own `status` as `"active"` throughout a `pause_collection`** — it never emits a `"paused"` status on the object. So the app owns a **DB-only** `paused` state (`User.subscription.status = "paused"` + `isActive = false` across `[pausedFrom, pausedUntil)`), and the webhook must be careful not to let Stripe's still-`active` payload overwrite it:
+
+- **`handleSubscriptionUpdated`** sets `paused` only for a retention pause whose freeze window has begun (`now >= pausedFrom`), and its else-branch active-restore is guarded **`prevSubStatus !== "paused"`** so a routine `customer.subscription.updated` (which still says `status:"active"`) cannot un-freeze the member mid-window.
+- **`handleInvoicePaymentSucceeded`** restores `paused → active` and clears `pausedFrom`/`pausedUntil` when a paid invoice arrives while the DB status is `paused` — this is the resume charge (at `pausedUntil`, or an early `resumeRetentionPause`). Because the void pause discards every other invoice, a paid invoice in the paused state can only be the resume, so benefits come back only after a successful payment; a failed resume stays `past_due`.
+- **Do NOT** trust `subscription.status` to tell you a member is paused — check `metadata.pauseReason === "retention"` + the DB pause window. Full flow + the flip/backstop split: [subscription/backend.md → RetentionPauseService](../subscription/backend.md#retention-pause-the-paused-membership-state) and [subscription/gotchas.md](../subscription/gotchas.md#retention-pause--the-app-owns-the-paused-state-stripe-stays-active).
+
 ### Paid-invoice clear-pause decision is now centralized
 
 The webhook handler's `shouldClearPauseForCollection` decision (in

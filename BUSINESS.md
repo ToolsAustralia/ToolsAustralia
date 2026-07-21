@@ -382,11 +382,14 @@ Subscriptions are the load-bearing primitive of the business. Most other systems
 | `active`             | Stripe     | Paid and current.                                                                                    |
 | `past_due`           | Stripe     | Renewal failed; we still collect via §9d pause-and-recover.                                          |
 | `unpaid`             | Stripe     | Stripe gave up after retries.                                                                        |
+| `paused`             | **App**    | Retention `pause_30d` freeze: member keeps their paid period, then freezes ~30d; auto-bills on resume (§13c). |
 | `scheduled_cancel`   | **App**    | User has requested cancellation; benefits live until cycle end.                                      |
 | `canceled`           | Stripe     | Subscription ended.                                                                                  |
 | `none`               | **App**    | Never had a subscription, or fully cleared.                                                          |
 
 `MembershipStatusHistory` records every transition with `actor ∈ {user, admin, stripe, system}` and carries `pastDueAt`, `cancelledAt`, `endDate`, `autoRenew`.
+
+**The `paused` state (retention `pause_30d`).** A member who accepts the 30-day pause save-offer (§13c) keeps the paid period they already bought, then freezes for ~30 days. It is **period-end anchored**: the freeze runs `[subscription.pausedFrom, subscription.pausedUntil)` where `pausedFrom` = the member's period end and `pausedUntil` = `period_end + 30d` (so a just-renewed member gets the full pause, not ~0). While paused there is no charge and no member access/perks/new entries (`isActive=false`), but **already-earned entries are untouched — they were paid for and still count in draws**. Because Stripe keeps the subscription `active` under a `pause_collection`, the **app owns** the `paused` DB state (flipped by the Stripe webhook, backstopped by the `cancellation-retention-resume` cron). At `pausedUntil` Stripe auto-resumes and bills the next cycle — a successful charge returns the member to `active`, a failed one to `past_due` (benefits return only after a successful payment). A member (or admin) can also resume early. See [docs/subscription/backend.md](docs/subscription/backend.md).
 
 **The `autoRenew` toggle is a soft-cancel shortcut.** Turning it off via `PATCH /api/stripe/update-auto-renew` calls `stripe.subscriptions.update(id, { cancel_at_period_end: true })` — the same effect as completing the §13c cancellation flow: the user keeps benefits and entries through the current cycle, and can re-enable it any time to undo (which also clears `cancelledAt` / `endDate`). It's the path for "I want to cancel but don't want the retention modal right now."
 
@@ -693,6 +696,7 @@ The platform doesn't only ship transactional email through SendGrid — it also 
 - **Milestone** — a tier achievement (spend / entries / loyalty days) that issues entries when crossed.
 - **Rewards Points** — legacy balance on `User.rewardsPoints`. Accrues now, redemption gated by the pause flag.
 - **`scheduled_cancel`** — app-specific subscription state: user has requested cancellation, benefits live until cycle end. Not a Stripe-native status.
+- **`paused`** — app-owned subscription state for the 30-day `pause_30d` retention offer (§10a, §13c). Period-end-anchored freeze (`pausedFrom`/`pausedUntil` = period end / period end + 30d): no charge or access while frozen, but already-earned entries are kept; Stripe stays `active` under the `pause_collection`, so the app owns the state and auto-bills the next cycle on resume. Not a Stripe-native status.
 - **`previousSubscription`** — on-User cache holding the *old* package's benefits during a downgrade's grace period (until cycle end).
 - **`pendingChange`** — on-User cache holding the *new* package on an upgrade that's still awaiting payment confirmation.
 - **Past-due** — Stripe status `past_due`. The customer-facing recovery path is the `RenewalFailedModal` (§10e); the admin-side counterpart is the force-charge tool (§9e).
