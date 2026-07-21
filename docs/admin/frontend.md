@@ -98,6 +98,14 @@ Three at-a-glance additions so an admin understands the account without digging:
   **Cancelled** / **Guest — no membership** (incomplete/none). The route now
   also projects `subscription.cancelledAt` (was declared on `AdminUserDetail` but never sent). Regression
   test: `npm run test:membership-display-status`.
+- **No editable Auto-Renew checkbox.** The admin subscription editor (`UserDetailModal`) exposes `status`,
+  `isActive`, and the dates, but **not** an `autoRenew` toggle — it was removed (2026-07) because it wrote
+  the DB flag with **no Stripe call**, so an admin could flip it and silently desync from Stripe
+  `cancel_at_period_end` until a webhook re-synced. The read-only "Auto Renew: Enabled/Disabled" line stays;
+  to schedule (or undo) a cancellation an admin uses the Stripe-backed cancel modal
+  (`/api/admin/users/[id]/cancel-subscription`), which keeps DB + Stripe in lockstep. `autoRenew` was also
+  dropped from the admin user-update payload/schema (`admin-user-update.ts`, `types/admin.ts`) so no admin
+  save re-writes it; the list-filter (`autoRenew=true|false`) and export column are reads and remain.
 - **Partner-access ring**: the SAME instrument the member sees on the /my-account hero — percent ring while
   access is live ("{N} left" caption for one-time windows), amber `ShieldAlert` "Paused" ring while past-due
   (membership access pauses; a paid one-time window is kept). **Placement (2026-07-09):** on **desktop** (`sm+`)

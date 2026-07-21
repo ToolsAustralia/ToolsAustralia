@@ -245,7 +245,6 @@ const subscriptionFormSchema = z.object({
   packageId: z.string().optional(),
   status: z.string().optional(),
   isActive: z.boolean(),
-  autoRenew: z.boolean(),
   startDate: z.string().optional(),
   endDate: z.string().optional(),
   rewardsPoints: z.number().min(0),
@@ -511,7 +510,6 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
       packageId: user?.subscription?.packageId?.toString() ?? "",
       status: user?.subscription?.status ?? "",
       isActive: user?.subscription?.isActive ?? false,
-      autoRenew: user?.subscription?.autoRenew ?? false,
       startDate: coerceDateTimeInput(user?.subscription?.startDate ?? null),
       endDate: coerceDateTimeInput(user?.subscription?.endDate ?? null),
       rewardsPoints: user?.rewardsPoints ?? 0,
@@ -1108,7 +1106,6 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
         packageId: values.packageId && values.packageId.trim() ? values.packageId : null,
         status: values.status || undefined,
         isActive: values.isActive,
-        autoRenew: values.autoRenew,
         startDate: toISOStringOrUndefined(values.startDate),
         endDate: toISOStringOrUndefined(values.endDate),
       },
@@ -2335,20 +2332,6 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                                 checked={field.value}
                                 onChange={(e) => field.onChange(e.target.checked)}
                                 label="Subscription active"
-                                className="text-2xs sm:text-xs lg:text-sm"
-                              />
-                            </div>
-                          )}
-                        />
-                        <Controller
-                          control={subscriptionForm.control}
-                          name="autoRenew"
-                          render={({ field }) => (
-                            <div className="rounded-lg border-2 border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 px-2 sm:px-3 lg:px-4 py-2 sm:py-2.5 lg:py-3">
-                              <Checkbox
-                                checked={field.value}
-                                onChange={(e) => field.onChange(e.target.checked)}
-                                label="Auto renew enabled"
                                 className="text-2xs sm:text-xs lg:text-sm"
                               />
                             </div>
