@@ -103,7 +103,9 @@ export function summarizeBulkRecoveryOutcome(
         status: "success",
         amount,
         newInvoiceId: result.newInvoiceId,
-        errorMessage: `Recovered: stranded original voided; held draft ${result.newInvoiceId} finalized and paid`,
+        // Generic wording: recover either finalized+paid a held draft OR (no_held_draft cohort) minted+paid
+        // a fresh current cycle — both "collect the owed cycle now", so don't hard-code "held draft".
+        errorMessage: `Recovered: collected the owed cycle now (invoice ${result.newInvoiceId})`,
       };
     }
     if (row.status === "failed") {

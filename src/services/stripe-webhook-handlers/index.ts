@@ -2693,6 +2693,16 @@ async function handleInvoicePaymentFailed(invoice: Stripe.Invoice) {
     const isInitialPayment = billingReason === "subscription_create";
     const isRenewal = billingReason === "subscription_cycle";
     const prevSubStatus = user.subscription?.status;
+    // A stranded-member RE-BILL (mintCurrentCycleInvoice) fails as billing_reason "subscription_update"
+    // but is functionally a renewal charge on a past-due member, so it must fire the SAME
+    // "Subscription Renewal Failed" Klaviyo event (the dunning flow), NOT the generic "Payment Failed".
+    // Signal: a subscription_update failure while the member was past_due/unpaid — upgrades are BLOCKED
+    // while past_due, so a subscription_update from that state is a re-bill, not an upgrade. This does
+    // NOT flip `isRenewal`, so it never triggers pauseAfterRenewalFailure — the member stays unpaused /
+    // in dunning, per the past-due notification design (admin/recovery/bulk/member all converge here).
+    const isRebill =
+      billingReason === "subscription_update" &&
+      (prevSubStatus === "past_due" || prevSubStatus === "unpaid");
 
     webhookLog("info", `Invoice billing_reason: ${billingReason}, isRenewal: ${isRenewal}, isInitialPayment: ${isInitialPayment}, subscriptionId: ${subscriptionId || 'none'}`);
 
@@ -3247,8 +3257,9 @@ async function handleInvoicePaymentFailed(invoice: Stripe.Invoice) {
         }
       }
       
-      if (isRenewal) {
-        // ✅ BEST PRACTICE: Use renewal-specific event for subscription renewals
+      if (isRenewal || isRebill) {
+        // ✅ BEST PRACTICE: Use renewal-specific event for subscription renewals — AND for stranded-member
+        // re-bills (isRebill), which are functionally renewals so they must land in the same dunning flow.
         // This is the canonical event for renewal failures (invoice.payment_failed with billing_reason: subscription_cycle)
         
         const expectedEntries = getRenewalEntriesPreviewForProfile(user as IUser) ?? undefined;

@@ -235,13 +235,18 @@ export async function recoverStrandedPastDueInvoice(params: {
    * When true, fall back to `mintCurrentCycleInvoice` if the member is `no_held_draft`
    * (stranded, but no held draft to finalize yet — their next cycle hasn't minted one).
    * That force-collects the current cycle now (unpause + billing_cycle_anchor:'now',
-   * which auto-charges AND moves the renewal ~1 month out). **Only safe for callers that
-   * do NOT already hold the per-subscription `RecoveryClaim`** (the mint acquires its own):
-   * the per-user `chargeOrRecover` passes `true`; the BULK chunk (holds the ChargeJobLock
-   * AND a RecoveryClaim) passes `false`, so it keeps reporting these as skipped rather than
-   * auto-resetting ~hundreds of members' billing anchors in one unattended run.
+   * which auto-charges AND moves the renewal ~1 month out). Enabled by BOTH the per-user
+   * `chargeOrRecover` AND the bulk charge job — so a bulk run collects/notifies EVERY stranded
+   * member instead of skipping the no-draft cohort. The mint's own guards (double-charge,
+   * cancel_at_period_end, upgrade-entry) make it safe to run unattended.
    */
   mintCurrentCycleIfNoDraft?: boolean;
+  /**
+   * True when the CALLER already holds this subscription's `RecoveryClaim` (the bulk chunk acquires it
+   * per member). Threaded to the mint as `skipClaim` so it reuses the held claim instead of self-
+   * deadlocking to `claim_held`. The per-user path holds no claim → leaves this false (mint acquires its own).
+   */
+  callerHoldsRecoveryClaim?: boolean;
 }): Promise<RecoverStrandedResult> {
   const { userId, originalInvoiceId, adminId } = params;
 
@@ -315,18 +320,24 @@ export async function recoverStrandedPastDueInvoice(params: {
         subscriptionId: user.stripeSubscriptionId,
         originalInvoiceId,
         claimedBy: `recover-mint:${adminId}`,
+        skipClaim: params.callerHoldsRecoveryClaim === true,
       });
       if (mint.ok) {
-        await InvoiceChargeLog.create({
-          ...baseLogFields,
-          invoiceId: mint.invoiceId,
-          amount: mint.amountPaid,
-          status: "success",
-          attemptedAt: new Date(),
-          errorMessage: `Re-billed current cycle (was no_held_draft): minted+charged ${mint.invoiceId}; renewal moved out`,
-          result: { recovery: { rebill: true, originalInvoiceId } },
-          ...(params.chargeRunId ? { chargeRunId: params.chargeRunId } : {}),
-        });
+        // Per-user paths: this rebill row IS the audit. The BULK caller writes exactly ONE run-tagged
+        // summary row (item.invoiceId, worklist-keyed) via summarizeBulkRecoveryOutcome, so writing here
+        // too would double-count the outcome/revenue in the run totals — skip it when the caller owns it.
+        if (!params.callerHoldsRecoveryClaim) {
+          await InvoiceChargeLog.create({
+            ...baseLogFields,
+            invoiceId: mint.invoiceId,
+            amount: mint.amountPaid,
+            status: "success",
+            attemptedAt: new Date(),
+            errorMessage: `Re-billed current cycle (was no_held_draft): minted+charged ${mint.invoiceId}; renewal moved out`,
+            result: { recovery: { rebill: true, originalInvoiceId } },
+            ...(params.chargeRunId ? { chargeRunId: params.chargeRunId } : {}),
+          });
+        }
         return {
           ok: true,
           row: {
@@ -347,16 +358,21 @@ export async function recoverStrandedPastDueInvoice(params: {
         mint.reason === "claim_held" ||
         mint.reason === "member_ending" ||
         mint.reason === "already_collected";
-      await InvoiceChargeLog.create({
-        ...baseLogFields,
-        invoiceId: mint.invoiceId ?? originalInvoiceId,
-        amount: expectedAmountCents,
-        status: isSkip ? "skipped" : "failed",
-        attemptedAt: new Date(),
-        errorMessage: `Re-bill ${isSkip ? "skipped" : "failed"} (${mint.reason}): ${mint.message}`,
-        result: { recovery: { rebill: true, originalInvoiceId } },
-        ...(params.chargeRunId ? { chargeRunId: params.chargeRunId } : {}),
-      });
+      if (!params.callerHoldsRecoveryClaim) {
+        // See the success branch: the BULK caller writes its own single worklist-keyed summary row, so a
+        // rebill row here (which for a guard-skip falls back to the worklist original invoice id) would
+        // double-count in the run totals. Per-user paths keep it as their audit row.
+        await InvoiceChargeLog.create({
+          ...baseLogFields,
+          invoiceId: mint.invoiceId ?? originalInvoiceId,
+          amount: expectedAmountCents,
+          status: isSkip ? "skipped" : "failed",
+          attemptedAt: new Date(),
+          errorMessage: `Re-bill ${isSkip ? "skipped" : "failed"} (${mint.reason}): ${mint.message}`,
+          result: { recovery: { rebill: true, originalInvoiceId } },
+          ...(params.chargeRunId ? { chargeRunId: params.chargeRunId } : {}),
+        });
+      }
       // Map to a frozen RecoverStrandedResult reason (chargeOrRecover's exhaustive switch buckets
       // skip vs failed): claim conflict → recent_recovery_attempt; scheduled-to-cancel → member_ending;
       // already collected by a prior re-bill → not_past_due; real decline / mid-flight → finalize_failed.

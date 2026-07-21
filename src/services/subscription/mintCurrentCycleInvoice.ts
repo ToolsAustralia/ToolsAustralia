@@ -85,12 +85,16 @@ export async function mintCurrentCycleInvoice(
     originalInvoiceId?: string | null;
     /** For the RecoveryClaim audit — e.g. `"admin:<id>"` or `"member"`. */
     claimedBy: string;
+    /** When the CALLER already holds this subscription's RecoveryClaim (the BULK charge job), skip
+     *  acquiring + releasing it here — otherwise the mint would always self-deadlock to `claim_held`
+     *  under bulk. The per-user path holds no claim, so it leaves this false and the mint acquires its own. */
+    skipClaim?: boolean;
   },
   deps: MintCurrentCycleDeps = defaultDeps()
 ): Promise<MintCurrentCycleResult> {
   const { subscriptionId, originalInvoiceId, claimedBy } = params;
 
-  const claimed = await deps.acquireClaim(subscriptionId, claimedBy);
+  const claimed = params.skipClaim ? true : await deps.acquireClaim(subscriptionId, claimedBy);
   if (!claimed) {
     return {
       ok: false,
@@ -158,6 +162,6 @@ export async function mintCurrentCycleInvoice(
       invoiceId: invoice.id,
     };
   } finally {
-    await deps.releaseClaim(subscriptionId).catch(() => {});
+    if (!params.skipClaim) await deps.releaseClaim(subscriptionId).catch(() => {});
   }
 }

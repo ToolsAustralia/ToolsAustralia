@@ -79,6 +79,18 @@ async function testClaimHeldSkipsAndDoesNotAnchor() {
   assert.equal(calls.released, 0, "nothing to release when the claim was never acquired");
 }
 
+async function testSkipClaimBypassesAcquireAndRelease() {
+  // The BULK charge job already holds this subscription's RecoveryClaim, so it passes skipClaim.
+  // The mint must NOT acquire/release its own claim (that would self-deadlock to claim_held and
+  // skip every bulk member) yet must still collect the cycle under the caller's claim.
+  const { deps, calls } = makeDeps({ sub: subWithInvoice({ status: "paid", amount_paid: 2000 }) });
+  const res = await mint({ subscriptionId: "sub_1", claimedBy: "bulk:1", skipClaim: true }, deps);
+  assert.equal(res.ok, true, "mint still collects when the caller holds the claim");
+  assert.equal(calls.acquired, 0, "skipClaim must NOT acquire its own claim");
+  assert.equal(calls.released, 0, "skipClaim must NOT release a claim it never took");
+  assert.equal(calls.anchored, 1, "mint still proceeds under the caller's held claim");
+}
+
 async function testHappyPathPaysAndVoidsOriginalAndReleases() {
   const { deps, calls } = makeDeps({ sub: subWithInvoice({ status: "paid", amount_paid: 2000 }) });
   const res = await mint({ subscriptionId: "sub_1", originalInvoiceId: "in_orig", claimedBy: "admin:1" }, deps);
@@ -131,6 +143,7 @@ async function testVoidFailureIsNonFatal() {
 async function run() {
   ({ mintCurrentCycleInvoice: mint } = await import("../mintCurrentCycleInvoice"));
   await testClaimHeldSkipsAndDoesNotAnchor();
+  await testSkipClaimBypassesAcquireAndRelease();
   await testMemberEndingSkipsAndDoesNotAnchor();
   await testAlreadyCollectedSkipsAndDoesNotAnchor();
   await testHappyPathPaysAndVoidsOriginalAndReleases();

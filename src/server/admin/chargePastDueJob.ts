@@ -421,6 +421,11 @@ async function chargeWorklistItem(
         adminId,
         bypassRecentRecoveryLock: false,
         chargeRunId: runId,
+        // Enable the no_held_draft re-bill in the BULK run so every stranded member is collected (or
+        // gets a notifying decline) instead of being skipped. The bulk already holds this sub's
+        // RecoveryClaim (above), so the mint reuses it (skipClaim) rather than self-deadlocking.
+        mintCurrentCycleIfNoDraft: true,
+        callerHoldsRecoveryClaim: true,
       });
       await logRecoverySummary(
         summarizeBulkRecoveryOutcome(recovery, invoice.amount_remaining || item.amount)

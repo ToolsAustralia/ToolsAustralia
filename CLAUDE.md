@@ -330,7 +330,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/hooks/queries/admin/useAllowlistStats.ts",
         "src/utils/billing/declineCodeLabels.ts"
       ],
-      "lastVerified": "2026-07-17"
+      "lastVerified": "2026-07-21"
     },
     "payment": {
       "docs": "docs/payment/",
@@ -776,7 +776,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/models/DashboardStatsDailySnapshot.ts",
         "src/services/admin/dashboard-stats/**"
       ],
-      "lastVerified": "2026-07-20"
+      "lastVerified": "2026-07-21"
     },
     "dashboard-account": {
       "docs": "docs/dashboard-account/",

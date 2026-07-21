@@ -357,6 +357,22 @@ Key facts verified by live Stripe test-mode probe:
 
 See `docs/PAST_DUE_REANCHOR.md` for the full trigger-gate logic and recovery-channel analysis.
 
+## Stranded-member re-bill failure fires "Renewal Failed", not "Payment Failed" (Klaviyo)
+
+A stranded-member RE-BILL — the mint (`mintCurrentCycleInvoice`, `billing_cycle_anchor: 'now'`) that re-charges a past-due/unpaid member — fails with `billing_reason: "subscription_update"`, **not** `subscription_cycle`. Left unclassified it drops into the generic `else` and fires the wrong Klaviyo event ("Subscription Payment Failed") instead of the dunning "Subscription Renewal Failed". `handleInvoicePaymentFailed` (`src/services/stripe-webhook-handlers/index.ts`) classifies it:
+
+```ts
+const isRebill =
+  billingReason === "subscription_update" &&
+  (prevSubStatus === "past_due" || prevSubStatus === "unpaid");
+```
+
+The Klaviyo branch reads `if (isRenewal || isRebill)`, so a re-bill lands in the same **"Subscription Renewal Failed"** (dunning) flow as a true `subscription_cycle` renewal.
+
+**Why the signal is reliable:** a member upgrade is also `subscription_update`, but upgrades are **blocked while past_due** — so a `subscription_update` failure from a `past_due`/`unpaid` member is a re-bill, never an upgrade.
+
+**`isRebill` deliberately does NOT set `isRenewal`.** It only redirects the Klaviyo event; it never enters the `else if (isRenewal)` DB-status branch, so it neither calls `pauseAfterRenewalFailure` nor stamps `dunning_recovery` (both gated on `isRenewal` alone). The member stays **unpaused / in dunning** — intentional per the past-due notification design (the admin / recovery / bulk / member-resolve paths all converge on this same event).
+
 ## `handleInvoiceCreated` is dormant until `invoice.created` is enabled on the Stripe endpoint
 
 The renewal draft-stamp handler `handleInvoiceCreated` (`src/services/stripe-webhook-handlers/index.ts`) is wired into the dispatch switch (`case "invoice.created"`, right before `invoice.finalized`), but **the Stripe webhook endpoint is not currently subscribed to the `invoice.created` event** in the Stripe Dashboard. Until that event is added to the endpoint's enabled-events list, the handler never runs and **failed** renewals keep showing the bare join-time label (e.g. `"Tradie"`) in the Stripe payments list; successful renewals are still relabeled by the `handleInvoicePaymentSucceeded` fallback.
