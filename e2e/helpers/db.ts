@@ -36,12 +36,16 @@ export async function entriesForUser(userId: string): Promise<number> {
   return rows.reduce((sum: number, e: { totalEntries?: number }) => sum + (e.totalEntries ?? 0), 0);
 }
 
-/** Exactly-once proof: count of BenefitsGranted payment events for an invoice/pi id. */
+/** Exactly-once proof: count of BenefitsGranted payment events.
+ * For kind "invoice", pass raw invoice id (e.g. "inv_abc") — "invoice_" prefix added here.
+ * For kind "pi", pass full payment-intent id (e.g. "pi_abc") — used verbatim as namespace.
+ */
 export async function benefitsGrantedCount(kind: "invoice" | "pi", id: string): Promise<number> {
   const db = await connectE2eDb();
+  const docId = kind === "invoice" ? `BenefitsGranted-invoice_${id}` : `BenefitsGranted-${id}`;
   return db.connection
-    .collection("paymentevents")
-    .countDocuments({ _id: `BenefitsGranted-${kind}_${id}` as unknown as mongoose.Types.ObjectId });
+    .collection<{ _id: string }>("paymentevents")
+    .countDocuments({ _id: docId });
 }
 
 /** Creates a credentials-login-capable user directly (register API makes passwordless users). */
