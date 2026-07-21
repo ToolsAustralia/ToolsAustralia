@@ -46,6 +46,7 @@ import {
 import { handleSubscriptionQueueUpdate } from "@/utils/partner-discounts/partner-discount-queue";
 import { getSubscriptionPeriodEnd } from "@/utils/payment/stripe/subscription-period";
 import { isZeroAmountTrialUpdateInvoice } from "@/utils/billing/trial-invoice";
+import { isRebillPayment, effectiveBillingReasonForRebill } from "@/utils/billing/rebill-classification";
 import {
   pauseAfterRenewalFailure,
   resumeAfterSuccessfulRenewalPayment,
@@ -3783,6 +3784,20 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
         invoice.billing_reason !== "subscription_cycle" // ✅ CRITICAL: Renewals should NOT be treated as upgrades
     );
 
+    // A past-due RE-BILL (mintCurrentCycleInvoice, billing_cycle_anchor:'now') collects as billing_reason
+    // "subscription_update" — the SAME shape as an upgrade — but it is functionally a RENEWAL, not a new
+    // purchase. Classify it here so its EFFECTIVE billing_reason can be normalized to "subscription_cycle"
+    // for processPaymentBenefits, making the admin activity/history labels, the new-vs-renewal revenue +
+    // ROAS analytics, conversion (Meta/Klaviyo) tracking, and the isRenewal flag ALL treat it as a
+    // renewal (so a recovered renewal is never counted as new ad-driven acquisition). Upgrades are
+    // excluded, so a genuine tier change stays "subscription_update". See utils/billing/rebill-classification.ts.
+    const isRebill = isRebillPayment({
+      billingReason: expandedInvoice.billing_reason,
+      isUpgrade,
+      billingAnchorRule: subscription.metadata?.billing_anchor_rule,
+      previousSubscriptionStatus: previousSubscriptionDbStatus,
+    });
+
     // Membership Streak: start/continue/reset on subscription_create (upgrades excluded — continuity).
     // Renewal increments live beside the renewal-cycle upsert above. Idempotent per invoice id.
     try {
@@ -4170,7 +4185,10 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
         ...(facebookTrackingPaymentIntentId && { trackingOrderId: facebookTrackingPaymentIntentId }),
       },
       requestContext, // Pass request context if available (may be undefined for renewals)
-      expandedInvoice.billing_reason || undefined, // ✅ Pass billing_reason for accurate renewal tracking (e.g., "subscription_create", "subscription_cycle")
+      // A re-bill (past-due recovery mint) is a RENEWAL — normalize its "subscription_update" to
+      // "subscription_cycle" so every downstream consumer (admin labels, new-vs-renewal revenue/ROAS,
+      // Meta/Klaviyo conversion tracking, isRenewal) treats it as one, not a new-acquisition purchase.
+      effectiveBillingReasonForRebill(expandedInvoice.billing_reason, isRebill),
       sessionAttribution,
       {
         skipMembershipFirstCommission: recordMembershipRecurringAffiliate,
