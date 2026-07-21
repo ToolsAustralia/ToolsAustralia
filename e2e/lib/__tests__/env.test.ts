@@ -50,6 +50,7 @@ t("resolveE2eEnv builds the overlay", () =>
     assert.equal(env.overlay.MONGODB_URI, "mongodb://x/tools-e2e");
     assert.equal(env.overlay.PORT, "3799");
     assert.equal(env.overlay.NEXTAUTH_URL, env.baseUrl);
+    assert.equal(env.overlay.NEXT_PUBLIC_API_URL, "http://localhost:3799");
   }));
 
 t("resolveE2eEnv neuters third parties", () =>

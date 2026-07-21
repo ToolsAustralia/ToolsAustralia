@@ -48,6 +48,8 @@ export function resolveE2eEnv(opts: { webhookSecret?: string } = {}): E2eEnv {
     MONGODB_URI: e2eUri!,
     PORT: String(port),
     NEXTAUTH_URL: baseUrl,
+    // Client-side apiGet base (src/lib/queries.ts) — .env.local points it at the dev port, must follow the e2e port.
+    NEXT_PUBLIC_API_URL: baseUrl,
     // Third parties — all verified to no-op when disabled/blank:
     KLAVIYO_ENABLED: "false",
     SENDGRID_API_KEY: "",
