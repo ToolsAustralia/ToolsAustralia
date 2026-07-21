@@ -61,6 +61,54 @@ export function getFlagValue(argv: string[], flag: string): string {
 // without touching non-Windows behavior (winq is a no-op there).
 const winq = (a: string): string => (/\s/.test(a) ? `"${a.replace(/"/g, '\\"')}"` : a);
 
+/** One `npx playwright test <args>` invocation via spawnAsync (see its docstring for why). */
+async function runPlaywrightOnce(
+  args: string[],
+  env: NodeJS.ProcessEnv
+): Promise<{ status: number | null; error?: Error }> {
+  const pwArgs = ["playwright", "test", ...args];
+  return spawnAsync("npx", process.platform === "win32" ? pwArgs.map(winq) : pwArgs, {
+    env, stdio: "inherit", shell: process.platform === "win32",
+  });
+}
+
+/**
+ * Sequential per-project @purchase legs — the ONLY reliable way to run @purchase tests across
+ * more than one browser project (see the rationale above `isPurchaseRun`). One
+ * `npx playwright test` invocation per browser project, reusing the SAME booted server/seed for
+ * all three legs (every purchase spec builds its email/phone from `test.info().project.name`,
+ * so there's no collision running the same spec files three times against one un-rewiped
+ * database). `baseArgs` must already include whatever `--grep` is needed to scope to @purchase
+ * (the caller decides — an explicit `--grep @purchase` run passes its own passthrough args
+ * straight through; the full-run split below appends `--grep @purchase` itself). No `--workers`
+ * cap here — isolated single-project runs were proven green at Playwright's default worker
+ * count, so capping would only slow an already-reliable leg.
+ */
+async function runSequencedPurchaseLegs(
+  baseArgs: string[],
+  env: NodeJS.ProcessEnv
+): Promise<{ status: number; legResults: { project: string; status: number | null }[] }> {
+  const projects = ["chromium-desktop", "mobile-chrome", "mobile-safari"];
+  const legResults: { project: string; status: number | null }[] = [];
+  for (const project of projects) {
+    console.log(`[e2e] @purchase leg starting: --project ${project}`);
+    const leg = await runPlaywrightOnce([...baseArgs, "--project", project], env);
+    if (leg.error) {
+      console.error(`[e2e] failed to launch playwright test for --project ${project}: ${leg.error.message}`);
+      legResults.push({ project, status: 1 });
+      continue;
+    }
+    console.log(`[e2e] @purchase leg finished: --project ${project} -> exit ${leg.status ?? "null (error)"}`);
+    legResults.push({ project, status: leg.status });
+  }
+  console.log(
+    `[e2e] @purchase per-project summary: ${legResults
+      .map((r) => `${r.project}=${r.status === 0 ? "PASS" : "FAIL"}`)
+      .join(", ")}`
+  );
+  return { status: legResults.some((r) => r.status !== 0) ? 1 : 0, legResults };
+}
+
 async function assertPortFree(port: number): Promise<void> {
   let busy = false;
   try {
@@ -104,7 +152,21 @@ async function main(): Promise<number> {
   // problem, and per-project SEQUENCING (below), not parallelism, is the only reliable full
   // run mode.
   const isPurchaseRun = grep.includes("@purchase");
+  const hasExplicitGrep = argv.some((a) => a === "--grep" || a.startsWith("--grep="));
   const hasExplicitProject = argv.some((a) => a === "--project" || a.startsWith("--project="));
+  // A bare full run (`npm run e2e`, no --grep, no --project) used to take the plain
+  // single-invocation path below (isPurchaseRun requires an EXPLICIT --grep containing
+  // "@purchase" — an empty grep never matches), so @purchase specs ran mixed-parallel across
+  // all 3 projects during a real full run — exactly the configuration proven always-red above.
+  // (Found live: Task 13's first `npm run e2e` runs showed all 15 purchase tests passing
+  // (lucky — the mixed-parallel failure mode is load-dependent, not deterministic) but also
+  // destabilized `legal-copy`/`@a11y` specs via the same resource contention.) A full run now
+  // SPLITS into two sequential phases instead — see step 7. Excludes `--ui` (`npm run e2e:ui`):
+  // that's an interactive, human-driven Playwright UI session, not an automated full run, and
+  // splitting it would pop a second (then third) UI window for the sequenced @purchase legs the
+  // moment the first is closed — the original single-invocation behavior is what a human wants.
+  const hasUi = argv.includes("--ui");
+  const isFullRun = !hasExplicitGrep && !hasExplicitProject && !hasUi;
 
   // 1. Env + guards (throws on unsafe DB or live Stripe key)
   let env = resolveE2eEnv();
@@ -159,42 +221,36 @@ async function main(): Promise<number> {
   const pwEnv = { ...process.env, E2E_PORT: String(env.port), E2E_RUN_ID: runId, ...(proof ? { E2E_PROOF: "1" } : {}) };
   let pwStatus: number | null;
 
-  if (isPurchaseRun && !hasExplicitProject) {
-    // Sequential per-project legs — the ONLY reliable full @purchase run mode (see the note
-    // above). One `npx playwright test` invocation per browser project, reusing the SAME
-    // booted server/seed for all three legs (every purchase spec builds its email/phone from
-    // `test.info().project.name`, so there's no collision running the same spec files three
-    // times against one un-rewiped database). No --workers cap here — isolated single-project
-    // runs were proven green at Playwright's default worker count, so capping would only slow
-    // an already-reliable leg. Costs ~3x wall time versus a single (unreliable) mixed
-    // invocation — accepted, since a suite that actually passes is the point.
-    const projects = ["chromium-desktop", "mobile-chrome", "mobile-safari"];
-    const legResults: { project: string; status: number | null }[] = [];
-    for (const project of projects) {
-      const legArgs = ["playwright", "test", ...passthrough, "--project", project];
-      console.log(`[e2e] @purchase leg starting: --project ${project}`);
-      const leg = await spawnAsync("npx", process.platform === "win32" ? legArgs.map(winq) : legArgs, {
-        env: pwEnv, stdio: "inherit", shell: process.platform === "win32",
-      });
-      if (leg.error) {
-        console.error(`[e2e] failed to launch playwright test for --project ${project}: ${leg.error.message}`);
-        legResults.push({ project, status: 1 });
-        continue;
-      }
-      console.log(`[e2e] @purchase leg finished: --project ${project} -> exit ${leg.status ?? "null (error)"}`);
-      legResults.push({ project, status: leg.status });
+  if (isFullRun) {
+    // Full run, no --grep/--project from the caller: split into two sequential phases instead
+    // of one mixed invocation (see the isFullRun comment above for why the old single-invocation
+    // path was unsafe here). Phase A covers everything EXCEPT @purchase, all projects together,
+    // Playwright's normal parallelism (unaffected by the @purchase mixed-run problem — only
+    // @purchase specs drive the concurrent real-Stripe load that's unreliable). Phase B is the
+    // existing sequenced-per-project @purchase legs, scoped via an explicit `--grep @purchase`
+    // appended here. Overall status is non-zero if EITHER phase failed.
+    console.log("[e2e] full run: splitting into phase A (non-@purchase, parallel) + phase B (@purchase, sequenced per project)");
+
+    const phaseA = await runPlaywrightOnce([...passthrough, "--grep-invert", "@purchase"], pwEnv);
+    if (phaseA.error) {
+      console.error(`[e2e] failed to launch playwright test (phase A): ${phaseA.error.message}`);
+      return 1;
     }
-    console.log(
-      `[e2e] @purchase per-project summary: ${legResults
-        .map((r) => `${r.project}=${r.status === 0 ? "PASS" : "FAIL"}`)
-        .join(", ")}`
-    );
-    pwStatus = legResults.some((r) => r.status !== 0) ? 1 : 0;
+    console.log(`[e2e] phase A (non-@purchase, parallel) finished -> exit ${phaseA.status ?? "null (error)"}`);
+
+    const phaseB = await runSequencedPurchaseLegs([...passthrough, "--grep", "@purchase"], pwEnv);
+    console.log(`[e2e] phase B (@purchase, sequenced) finished -> exit ${phaseB.status}`);
+
+    pwStatus = phaseA.status !== 0 || phaseB.status !== 0 ? 1 : 0;
+  } else if (isPurchaseRun && !hasExplicitProject) {
+    // Explicit `--grep @purchase` (e.g. `npm run e2e:purchase`), no --project filter: same
+    // sequenced-legs strategy as phase B above, using the caller's own passthrough args
+    // (already contains `--grep @purchase`) unchanged from the original behavior.
+    const { status } = await runSequencedPurchaseLegs(passthrough, pwEnv);
+    pwStatus = status;
   } else {
-    const pwArgs = ["playwright", "test", ...passthrough];
-    const pw = await spawnAsync("npx", process.platform === "win32" ? pwArgs.map(winq) : pwArgs, {
-      env: pwEnv, stdio: "inherit", shell: process.platform === "win32",
-    });
+    // Explicit --grep (not @purchase) and/or explicit --project: single invocation, unchanged.
+    const pw = await runPlaywrightOnce(passthrough, pwEnv);
     if (pw.error) {
       console.error(`[e2e] failed to launch playwright test: ${pw.error.message}`);
       return 1;
