@@ -72,3 +72,8 @@ suppression list. Remove an entry once the underlying `src/` fix lands (the suit
 stricter automatically). Never add a new entry to silence a fresh failure the suite
 surfaces — a new violation must be triaged and either fixed or explicitly signed off by
 the controller/user before it's added to `KNOWN_VIOLATIONS`.
+
+Baseline `targetPattern` discipline: stable-DOM entries match the full axe target selector
+(regex-escaped); only the rotating promo-banner entries may use a broader anchored pattern,
+each carrying a `DOCUMENTED EXCEPTION` comment. Loose utility-class fragments are not
+acceptable patterns — they can silently absorb future distinct violations.

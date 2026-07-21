@@ -12,40 +12,79 @@ import { uiAudit } from "../../fixtures/ui-audit";
 
 const PAGES = ["/", "/login", "/membership"];
 
+/**
+ * Anchored, regex-escaped exact match against one literal axe target string (the
+ * verbatim `node.target.join(" ")` value captured from a real scan — see
+ * .superpowers/sdd/task-9-report.md). Anchoring with ^...$ means a longer/different
+ * future selector that merely CONTAINS this text (e.g. a fragment embedded in a bigger
+ * chain) will NOT match — only the exact same target string does.
+ */
+function exact(literalTarget: string): RegExp {
+  const escaped = literalTarget.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`^${escaped}$`);
+}
+
+/** Same as exact(), but matches any one of several literal target strings. */
+function exactAny(literalTargets: string[]): RegExp {
+  const escaped = literalTargets.map((t) => t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+  return new RegExp(`^(?:${escaped.join("|")})$`);
+}
+
 const KNOWN_VIOLATIONS: Record<string, { ruleId: string; targetPattern: RegExp; bug: string }[]> = {
   "/": [
     {
       ruleId: "color-contrast",
-      targetPattern: /corner-ribbon.*MOST POPULAR/,
+      // Full, stable axe target string for this node — static DOM path, no cycling
+      // content, unchanged across every capture.
+      targetPattern: exact(
+        String.raw`.md\:grid-cols-3 > .sm\:pt-12.px-1.pt-8:nth-child(2) > .transition-\[transform\,box-shadow\].hover\:scale-\[1\.02\].rounded-3xl > .corner-ribbon[role="img"][aria-label="MOST POPULAR"] > div:nth-child(3) > div > .whitespace-nowrap.font-black`
+      ),
       bug: "\"MOST POPULAR\" ribbon badge on the home membership card is white-on-gold (~2.19:1, needs 4.5:1) — src/components/sections/membership/ElectricPackageCard.tsx",
     },
     {
       ruleId: "color-contrast",
-      targetPattern: /text-3xs|\.underline/,
+      // DOCUMENTED EXCEPTION: this node is the rotating promo-banner's text/link. The
+      // visible copy and href cycle between several messages (confirmed across repeated
+      // scans on this page: "Monthly tool giveaway." vs "Join Tools Australia for
+      // exclusive benefits..." with hrefs /promotion or /membership), so the html/text
+      // is not stable — but the CSS target selector axe generates for it IS stable:
+      // every capture on this page returned exactly one of these 2 literal selectors,
+      // never a longer or different chain (Tailwind's shared utility classes give axe
+      // no unique wrapper/id to build a longer selector from, regardless of which
+      // message is showing). Anchored via exactAny() to only those 2 known literal
+      // strings — not a bare substring test — so a differently-shaped future violation
+      // elsewhere on the page cannot silently match.
+      targetPattern: exactAny([".text-3xs > .font-normal", ".underline"]),
       bug: "rotating promo-banner text/link is near-white-on-red (~4.36:1, needs 4.5:1) — src/components/promo or src/components/banners",
     },
   ],
   "/login": [
     {
       ruleId: "button-name",
-      targetPattern: /\.right-4/,
+      // Full, stable axe target string — the password show/hide toggle's DOM position.
+      targetPattern: exact(".right-4"),
       bug: "password show/hide toggle button has no accessible name (no text, aria-label, or title) — login form component",
     },
     {
       ruleId: "label",
-      targetPattern: /border-/,
+      // Full, stable axe target string (axe's CSS-escaped selector for the email input).
+      targetPattern: exact(String.raw`.border-\[1\.5px\]`),
       bug: "email input has an empty placeholder and no <label>/aria-label — login form component",
     },
     {
       ruleId: "label",
-      targetPattern: /input\[type="checkbox"\]/,
+      // Full, stable axe target string for the remember-me checkbox.
+      targetPattern: exact('input[type="checkbox"]'),
       bug: "remember-me checkbox has no <label>/aria-label — login form component",
     },
   ],
   "/membership": [
     {
       ruleId: "color-contrast",
-      targetPattern: /text-3xs|\.underline/,
+      // DOCUMENTED EXCEPTION: same rotating promo-banner as on "/" (see comment there)
+      // — same 2 literal target selectors recur across every capture on this page,
+      // exact-matched via exactAny(), never a bare substring test.
+      targetPattern: exactAny([".text-3xs > .font-normal", ".underline"]),
       bug: "rotating promo-banner text/link is near-red-on-red (~1.05:1, needs 4.5:1) — src/components/promo or src/components/banners",
     },
   ],
