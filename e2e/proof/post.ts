@@ -22,6 +22,21 @@ function subPath(p: string): string {
 }
 
 /**
+ * ffmpeg-static ships no ffprobe binary — duration comes from `ffmpeg -i <file>` stderr
+ * instead. ffmpeg always logs the input's `Duration: HH:MM:SS.cc` line there before
+ * complaining about the missing output, so this works even with no `-y`/output arg.
+ * Returns null if the line can't be parsed (e.g. a corrupt/incomplete recording) — callers
+ * must treat that as "duration unknown", not zero.
+ */
+function probeDurationMs(file: string): number | null {
+  const r = spawnSync(ffmpegPath as unknown as string, ["-i", file], { encoding: "utf8" });
+  const m = /Duration:\s*(\d{2}):(\d{2}):(\d{2})\.(\d{2})/.exec(r.stderr ?? "");
+  if (!m) return null;
+  const [, h, mi, s, cs] = m;
+  return (Number(h) * 3600 + Number(mi) * 60 + Number(s)) * 1000 + Number(cs) * 10;
+}
+
+/**
  * msedge-tts's `toFile(dirPath, input)` API (verified against
  * node_modules/msedge-tts/dist/MsEdgeTTS.js) treats its first argument as an existing
  * OUTPUT DIRECTORY, not a filename — internally it always writes `<dirPath>/audio.<ext>`
@@ -32,9 +47,10 @@ function subPath(p: string): string {
  * basename as `dirPath`.
  */
 async function synthVoice(cues: Cue[], dir: string): Promise<string[] | null> {
+  let tts: import("msedge-tts").MsEdgeTTS | undefined;
   try {
     const { MsEdgeTTS, OUTPUT_FORMAT } = await import("msedge-tts");
-    const tts = new MsEdgeTTS();
+    tts = new MsEdgeTTS();
     await tts.setMetadata(VOICE, OUTPUT_FORMAT.AUDIO_24KHZ_48KBITRATE_MONO_MP3);
     const files: string[] = [];
     for (let i = 0; i < cues.length; i++) {
@@ -43,11 +59,19 @@ async function synthVoice(cues: Cue[], dir: string): Promise<string[] | null> {
       const { audioFilePath } = await tts.toFile(cueDir, cues[i].title);
       files.push(audioFilePath);
     }
-    tts.close();
     return files;
   } catch (e) {
     console.warn(`[proof] AI voice unavailable (${(e as Error).message}) — emitting subtitled video only.`);
     return null;
+  } finally {
+    // A mid-loop `toFile` throw (e.g. cue 3 of 5 fails) must not leave the WebSocket open:
+    // `close()` is what releases the connection's open handle from Node's event loop, and
+    // post.ts is launched by run.ts's `spawnAsync` with no timeout — a leaked socket here
+    // means `npm run e2e:proof` hangs forever waiting for a process that will never exit
+    // on its own. Guarded because closing an already-errored/closed socket must never
+    // throw OUT of this finally (that would still leak the loop, just via a different
+    // path) — best-effort only.
+    try { tts?.close(); } catch { /* best-effort */ }
   }
 }
 
@@ -62,6 +86,18 @@ async function processOne(dir: string, dateBranchDir: string): Promise<void> {
     startMs: c.startMs,
     endMs: (meta.cues[i + 1]?.startMs ?? meta.endMs) - 200,
   }));
+
+  // The last cue's endMs is derived from `meta.endMs`, timestamped at the demo fixture's
+  // flush() — which runs after the test body returns (fixture teardown), and so can run
+  // past the actual recorded video length (measured overrun: srt ending 22.965s vs a
+  // 20.16s mp4). Clamp it to the real video duration so the .srt never asserts a cue past
+  // the mp4's last frame. `durationMs == null` (unparseable ffmpeg output) leaves the cue
+  // as-is rather than guessing.
+  const durationMs = probeDurationMs(webm);
+  if (durationMs != null && cues.length) {
+    const last = cues[cues.length - 1];
+    last.endMs = Math.max(last.startMs + 200, Math.min(last.endMs, durationMs - 100));
+  }
 
   const slug = meta.testTitle.toLowerCase().replace(/[^a-z0-9]+/g, "-").slice(0, 80);
   const outDir = path.join(dateBranchDir, slug);
@@ -83,7 +119,15 @@ async function processOne(dir: string, dateBranchDir: string): Promise<void> {
     const delays = clips.map((_, i) => `[${i + 1}:a]adelay=${cues[i].startMs}|${cues[i].startMs}[a${i}]`).join(";");
     const mix = clips.map((_, i) => `[a${i}]`).join("") + `amix=inputs=${clips.length}:normalize=0[aout]`;
     const voiced = path.join(outDir, `${slug}.voiced.mp4`);
-    if (ff(["-y", "-i", mp4, ...inputs, "-filter_complex", `${delays};${mix}`, "-map", "0:v", "-map", "[aout]", "-c:v", "copy", "-shortest", voiced])) {
+    // No `-shortest`: the synthesized voice-over mix (adelay'd clips, one per cue) almost
+    // always finishes well before the recorded video does — the video keeps rolling through
+    // test teardown after the last spoken line. `-shortest` truncates the OUTPUT to the
+    // shorter of the two mapped streams, which silently chopped the video (and the burned-in
+    // final caption's own display window — measured: caption ends at 23.449s, `-shortest`
+    // cut the shipped mp4 to 20.06s, discarding the last ~3.4s of video mid-caption) down to
+    // the voice track's length. Omitting it lets the video's own (longer, correct) length win;
+    // the mixed audio just plays out and then goes silent for the remaining frames.
+    if (ff(["-y", "-i", mp4, ...inputs, "-filter_complex", `${delays};${mix}`, "-map", "0:v", "-map", "[aout]", "-c:v", "copy", voiced])) {
       fs.renameSync(voiced, mp4);
     }
   }

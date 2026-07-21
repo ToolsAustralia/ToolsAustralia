@@ -231,3 +231,21 @@ returns `{kind, id}` ready for `benefitsGrantedCount` (`e2e/helpers/db.ts`).
      Costs ~3x wall time for a full `@purchase` run — accepted, since a suite that actually
      passes is the point. Full evidence (including the two failed worker-cap attempts) in
      `.superpowers/sdd/task-11-report.md`'s "Fix round 1" section.
+
+## Proof-mode post-processor notes
+
+The TTS WebSocket (msedge-tts) is closed in a `finally` covering the whole synth loop —
+a partial mid-run voice failure must release the event loop or `e2e:proof` hangs forever
+(run.ts's spawnAsync has no timeout by design). The final subtitle cue's end time is
+clamped to the probed video duration; the fixture's own clock includes post-step test
+code and can otherwise outrun the recording.
+
+The voice-mux ffmpeg step (`e2e/proof/post.ts`'s `processOne`) no longer passes
+`-shortest`. That flag truncates the OUTPUT to the shorter of its two mapped streams —
+since the synthesized voice-over mix almost always finishes well before the recorded
+video does (the video keeps rolling through test teardown after the last spoken line),
+`-shortest` was silently chopping the shipped mp4 down to the voice track's length,
+cutting off the tail of the recording mid-caption (measured: last caption's burned-in
+display window ended at 23.4s, `-shortest` truncated the shipped mp4 to 20.06s).
+Dropping it lets the video's own (longer, correct) length win; the mixed audio just
+plays out and then goes silent for the remaining frames.
