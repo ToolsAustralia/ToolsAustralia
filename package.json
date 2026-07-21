@@ -150,6 +150,7 @@
     "test:mint-current-cycle": "tsx src/services/subscription/__tests__/mintCurrentCycleInvoice.test.ts",
     "test:member-resolve-mint": "tsx src/utils/payment/recovery/__tests__/member-resolve-mint-policy.test.ts",
     "test:force-charge-mint-map": "tsx src/server/admin/__tests__/forceChargeMintMap.test.ts",
+    "test:rebill-classification": "tsx src/utils/billing/__tests__/rebill-classification.test.ts",
     "stripe:probe-reanchor:dry": "tsx scripts/stripe-probe-reanchor.ts --dry-run",
     "find:direct-attribution": "tsx scripts/find-direct-attribution.ts",
     "find:duplicate-subscriptions": "tsx scripts/find-duplicate-stripe-subscriptions.ts",
