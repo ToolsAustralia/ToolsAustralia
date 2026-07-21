@@ -27,12 +27,32 @@ const strandedOpen = {
   next_payment_attempt: null,
 } as Stripe.Invoice;
 
-const heldDraft = { id: "in_draft", status: "draft", amount_due: 4000, created: 100 } as Stripe.Invoice;
+const heldDraft = {
+  id: "in_draft",
+  status: "draft",
+  amount_due: 4000,
+  created: 100,
+  metadata: { packageId: "boss-subscription" },
+} as unknown as Stripe.Invoice;
 
-function makeDeps(opts: { drafts?: Stripe.Invoice[]; finalizeThrows?: boolean; voidThrows?: boolean }) {
-  const calls = { finalized: [] as string[], voided: [] as string[], recorded: [] as RecoveryStepRow[] };
+function makeDeps(opts: {
+  drafts?: Stripe.Invoice[];
+  finalizeThrows?: boolean;
+  voidThrows?: boolean;
+  markThrows?: boolean;
+}) {
+  const calls = {
+    finalized: [] as string[],
+    voided: [] as string[],
+    recorded: [] as RecoveryStepRow[],
+    marked: [] as Array<{ id: string; metadata: Record<string, string> }>,
+  };
   const deps: PrepareRecoveredCycleInvoiceDeps = {
     listDrafts: async () => opts.drafts ?? [],
+    markDunningRecovery: async (id, existingMetadata) => {
+      calls.marked.push({ id, metadata: { ...existingMetadata, dunning_recovery: "1" } });
+      if (opts.markThrows) throw new Error("mark boom");
+    },
     finalizeInvoice: async (id) => {
       calls.finalized.push(id);
       if (opts.finalizeThrows) throw new Error("finalize boom");
@@ -82,10 +102,44 @@ async function testHappyPathPicksFinalizesThenVoids() {
   assert.equal(res.ok, true);
   assert.deepEqual(calls.finalized, ["in_draft"], "finalize the held draft");
   assert.deepEqual(calls.voided, ["in_orig"], "void the stranded original (after finalize)");
+  // The dunning marker is stamped on the draft BEFORE finalize (so the paid invoice carries it
+  // and the past-due reanchor gate fires), merging existing draft metadata.
+  assert.deepEqual(
+    calls.marked,
+    [{ id: "in_draft", metadata: { packageId: "boss-subscription", dunning_recovery: "1" } }],
+    "dunning_recovery stamped on the draft (merged with existing metadata)"
+  );
   if (res.ok) {
     assert.equal(res.finalizedInvoice.id, "in_draft");
     assert.equal(res.paymentIntent?.id, "pi_1");
   }
+}
+
+async function testDunningMarkerStampedBeforeFinalize() {
+  // Ordering guard: the marker must be stamped BEFORE finalize, because finalizeInvoice turns the
+  // draft into the payable invoice whose metadata the webhook reads.
+  const order: string[] = [];
+  const { deps } = makeDeps({ drafts: [heldDraft] });
+  const origMark = deps.markDunningRecovery;
+  const origFinalize = deps.finalizeInvoice;
+  deps.markDunningRecovery = async (id, m) => { order.push("mark"); return origMark(id, m); };
+  deps.finalizeInvoice = async (id, k) => { order.push("finalize"); return origFinalize(id, k); };
+  await prepare(
+    { subscriptionId: "sub_1", strandedInvoice: strandedOpen, expectedAmountCents: 4000, audit: memberAudit },
+    deps
+  );
+  assert.deepEqual(order, ["mark", "finalize"], "stamp dunning marker BEFORE finalize");
+}
+
+async function testDunningStampFailureIsNonFatal() {
+  const { deps, calls } = makeDeps({ drafts: [heldDraft], markThrows: true });
+  const res = await prepare(
+    { subscriptionId: "sub_1", strandedInvoice: strandedOpen, expectedAmountCents: 4000, audit: memberAudit },
+    deps
+  );
+  assert.equal(res.ok, true, "a marker-stamp failure MUST NOT fail the recovery (collection still succeeds)");
+  assert.deepEqual(calls.finalized, ["in_draft"], "recovery proceeds to finalize despite stamp failure");
+  assert.deepEqual(calls.voided, ["in_orig"], "and voids the original");
 }
 
 async function testFinalizeFailureReturnsFinalizeFailedAndDoesNotVoid() {
@@ -133,6 +187,8 @@ async function run() {
   ({ prepareRecoveredCycleInvoice: prepare } = await import("../prepareRecoveredCycleInvoice"));
   await testNoDraftReturnsNoHeldDraftWithoutVoiding();
   await testHappyPathPicksFinalizesThenVoids();
+  await testDunningMarkerStampedBeforeFinalize();
+  await testDunningStampFailureIsNonFatal();
   await testFinalizeFailureReturnsFinalizeFailedAndDoesNotVoid();
   await testVoidFailureIsNonFatal();
   await testNoAuditCtxWritesNoRows();

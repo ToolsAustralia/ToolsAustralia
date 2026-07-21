@@ -4,7 +4,10 @@ import type { MembershipAnalyticsActor, MembershipNormalizedStatus } from "@/typ
 export interface IMembershipStatusHistory extends Document {
   userId: mongoose.Types.ObjectId;
   effectiveAt: Date;
-  membershipStatus: MembershipNormalizedStatus;
+  // `paused` is the app-owned retention-pause state (the 30-day `pause_30d` cancellation-flow
+  // offer). It is NOT part of the Stripe-derived `MembershipNormalizedStatus` union, so it is
+  // appended here rather than in that shared analytics type. See docs/subscription/models.md.
+  membershipStatus: MembershipNormalizedStatus | "paused";
   actor: MembershipAnalyticsActor;
   /** e.g. webhook_invoice_payment_failed_renewal, cancel_api_user, cancel_api_admin */
   source: string;
@@ -36,6 +39,8 @@ const MembershipStatusHistorySchema = new Schema<IMembershipStatusHistory>(
         "incomplete",
         "incomplete_expired",
         "none",
+        // Retention `pause_30d` freeze (app-owned; not a Stripe-native status). See RetentionPauseService.
+        "paused",
       ],
     },
     actor: {

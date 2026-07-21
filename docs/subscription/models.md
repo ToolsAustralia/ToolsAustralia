@@ -28,7 +28,9 @@ Top-level subscription-related fields on `IUser`:
 | `pastDueAt` | `Date?` | webhook (failed renewal) | When sub first entered `past_due`. Used for admin activity log and grace-period rules. |
 | `isActive` | `boolean` | cancel, webhook | Server-derived. **Don't compute client-side.** See [rules F3](./rules.md#f3-dont-compute-isactive-client-side). |
 | `autoRenew` | `boolean?` | cancel | False after any cancel. |
-| `status` | `string?` | webhook | Mirrors Stripe status (`active`/`past_due`/`canceled`/...). |
+| `status` | `string?` | webhook | Mirrors Stripe status (`active`/`past_due`/`canceled`/...), PLUS the app-owned `"paused"` value during a retention pause (Stripe itself stays `active` under `pause_collection` — the app owns `paused`; see [gotchas.md](./gotchas.md) + [billing-stripe/gotchas.md](../billing-stripe/gotchas.md)). |
+| `pausedFrom` | `Date?` | `applyRetentionPause`; cleared on resume | **Retention pause window START** — the member's period end, when the freeze begins. Set when a member accepts the 30-day `pause_30d` cancellation-flow offer. The `active→paused` flip fires once `now >= pausedFrom`. |
+| `pausedUntil` | `Date?` | `applyRetentionPause`; cleared on resume | **Retention pause window END** — the auto-resume date = `pausedFrom + 1 month` (the member's next billing-cycle boundary, calendar-clamped via date-fns `addMonths`). At `pausedUntil` Stripe auto-resumes collection (`pause_collection.resumes_at`) and bills the next cycle. Cleared (unset) when the member resumes (early or at auto-resume) — see [backend.md](./backend.md#retention-pause-the-paused-membership-state). |
 | `pendingStripeSubscriptionId` | `string?` | checkout creation | Non-canonical sub created during initial checkout. Promoted to `stripeSubscriptionId` once status becomes manageable. |
 | `pendingStripeSubscriptionRequestId` | `string?` | checkout | Idempotency key for the create call. |
 | `pendingStripeSubscriptionCreatedAt` | `Date?` | checkout | For TTL/cleanup of abandoned pending subs. |
@@ -150,7 +152,10 @@ type MembershipAnalyticsActor = "user" | "admin" | "stripe" | "system";
 interface IMembershipStatusHistory {
   userId: ObjectId;
   effectiveAt: Date;
-  membershipStatus: MembershipNormalizedStatus;
+  // `MembershipNormalizedStatus | "paused"` — the field/Mongoose enum additionally accepts the
+  // app-owned retention `"paused"` state (not part of the shared Stripe-derived union in
+  // membershipAnalytics.ts, which stays 9-value). See RetentionPauseService / backend.md.
+  membershipStatus: MembershipNormalizedStatus | "paused";
   actor: MembershipAnalyticsActor;
   source: string;                 // e.g. "webhook_invoice_payment_failed_renewal", "cancel_api_user", "cancel_api_admin"
   dedupeKey?: string;             // sparse-unique

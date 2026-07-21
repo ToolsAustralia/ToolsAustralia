@@ -51,7 +51,7 @@ import {
   resumeAfterSuccessfulRenewalPayment,
   reanchorAfterPastDueRecovery,
 } from "@/services/subscription/SubscriptionCollectionPauseService";
-import { decideClearPause, shouldReanchorAfterRecovery } from "@/services/subscription/pauseCollectionPolicy";
+import { decideClearPause, decidePauseTransition, shouldReanchorAfterRecovery } from "@/services/subscription/pauseCollectionPolicy";
 import { STRIPE_SUBSCRIPTION_METADATA_IS_RESUBSCRIBE } from "@/utils/payment/stripe-subscription-metadata";
 import { decideStreakOnSubscriptionCreate } from "@/utils/subscription/streak";
 import { trackPixelSubscriptionRenewal } from "@/utils/tracking/pixel-purchase-tracking";
@@ -2136,8 +2136,29 @@ async function handleSubscriptionUpdated(subscription: Stripe.Subscription) {
         }
       }
 
-      // Only update status for specific cases to avoid conflicts
-      if (wasActive && prevSubStatus === "active") {
+      // Only update status for specific cases to avoid conflicts.
+      //
+      // Retention pause: Stripe keeps the sub `status:"active"` during a `pause_collection`, so we own
+      // the DB "paused" state (decidePauseTransition — shared with the cron backstop so they can't
+      // drift). `flip_to_paused` fires once the freeze window has begun; we then skip the normal
+      // branches (which would clobber it back to active). Before the window (still in the paid period
+      // they bought) it returns "none" and we fall through to normal active handling. See
+      // RetentionPauseService / pauseCollectionPolicy.
+      const pauseTransition = decidePauseTransition({
+        pauseCollectionPresent: subscription.pause_collection != null,
+        pauseReason: subscription.metadata?.pauseReason,
+        dbStatus: prevSubStatus,
+        pausedFrom: user.subscription.pausedFrom,
+        pausedUntil: user.subscription.pausedUntil,
+        now: new Date(),
+      });
+      if (pauseTransition === "flip_to_paused") {
+        console.log(`⏸️ [SUBSCRIPTION UPDATED] Freezing ${user.email} → paused (retention pause window started)`);
+        user.subscription.isActive = false;
+        user.subscription.status = "paused";
+        user.subscription.autoRenew = !subscription.cancel_at_period_end;
+        user.markModified("subscription");
+      } else if (wasActive && prevSubStatus === "active") {
         // Subscription already processed as active, only update autoRenew
         user.subscription.autoRenew = !subscription.cancel_at_period_end;
         // If cancel_at_period_end is true and cancelledAt is not set, this is a new cancellation
@@ -2239,8 +2260,15 @@ async function handleSubscriptionUpdated(subscription: Stripe.Subscription) {
         user.markModified("subscription");
       } else {
         user.subscription.autoRenew = !subscription.cancel_at_period_end;
-        // Sync endDate for active/trialing even when DB had stale inactive state
-        if (subscription.status === "active" || subscription.status === "trialing") {
+        // Sync endDate for active/trialing even when DB had stale inactive state — BUT do not restore a
+        // member who was just retention-paused: their return to active is gated on the resume charge
+        // SUCCEEDING (handleInvoicePaymentSucceeded clears the window + sets active), so a FAILED resume
+        // stays in past_due rather than flickering active. `prevSubStatus === "paused"` is exactly the
+        // just-unpaused-but-payment-pending case.
+        if (
+          (subscription.status === "active" || subscription.status === "trialing") &&
+          prevSubStatus !== "paused"
+        ) {
           const periodEnd = getSubscriptionPeriodEnd(subscription);
           if (periodEnd != null) {
             user.subscription.endDate = new Date(periodEnd * 1000);
@@ -2665,6 +2693,16 @@ async function handleInvoicePaymentFailed(invoice: Stripe.Invoice) {
     const isInitialPayment = billingReason === "subscription_create";
     const isRenewal = billingReason === "subscription_cycle";
     const prevSubStatus = user.subscription?.status;
+    // A stranded-member RE-BILL (mintCurrentCycleInvoice) fails as billing_reason "subscription_update"
+    // but is functionally a renewal charge on a past-due member, so it must fire the SAME
+    // "Subscription Renewal Failed" Klaviyo event (the dunning flow), NOT the generic "Payment Failed".
+    // Signal: a subscription_update failure while the member was past_due/unpaid — upgrades are BLOCKED
+    // while past_due, so a subscription_update from that state is a re-bill, not an upgrade. This does
+    // NOT flip `isRenewal`, so it never triggers pauseAfterRenewalFailure — the member stays unpaused /
+    // in dunning, per the past-due notification design (admin/recovery/bulk/member all converge here).
+    const isRebill =
+      billingReason === "subscription_update" &&
+      (prevSubStatus === "past_due" || prevSubStatus === "unpaid");
 
     webhookLog("info", `Invoice billing_reason: ${billingReason}, isRenewal: ${isRenewal}, isInitialPayment: ${isInitialPayment}, subscriptionId: ${subscriptionId || 'none'}`);
 
@@ -3219,8 +3257,9 @@ async function handleInvoicePaymentFailed(invoice: Stripe.Invoice) {
         }
       }
       
-      if (isRenewal) {
-        // ✅ BEST PRACTICE: Use renewal-specific event for subscription renewals
+      if (isRenewal || isRebill) {
+        // ✅ BEST PRACTICE: Use renewal-specific event for subscription renewals — AND for stranded-member
+        // re-bills (isRebill), which are functionally renewals so they must land in the same dunning flow.
         // This is the canonical event for renewal failures (invoice.payment_failed with billing_reason: subscription_cycle)
         
         const expectedEntries = getRenewalEntriesPreviewForProfile(user as IUser) ?? undefined;
@@ -3388,6 +3427,35 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
 
     /** DB subscription status before this payment (e.g. past_due recovery vs regular renewal) */
     const previousSubscriptionDbStatus = user.subscription?.status;
+
+    // Retention pause → active. A paused member's ONLY paid invoice is their RESUME charge (the void
+    // pause discards every other invoice), so a paid invoice while status="paused" means the resume
+    // succeeded — restore active + clear the pause window. This is what makes "benefits back only after
+    // a successful payment" real: a FAILED resume stays past_due (handleInvoicePaymentFailed) and never
+    // reaches here. Covers the auto-resume at pausedUntil AND an early resume (resumeRetentionPause).
+    // Atomic write so it persists regardless of this handler's later save flow; in-memory doc kept in sync.
+    if (
+      previousSubscriptionDbStatus === "paused" &&
+      expandedInvoice.status === "paid" &&
+      (expandedInvoice.amount_paid ?? 0) > 0 &&
+      user.subscription
+    ) {
+      await User.updateOne(
+        { _id: user._id },
+        {
+          $set: { "subscription.isActive": true, "subscription.status": "active" },
+          $unset: { "subscription.pausedFrom": "", "subscription.pausedUntil": "" },
+        }
+      );
+      user.subscription.isActive = true;
+      user.subscription.status = "active";
+      user.subscription.pausedFrom = undefined;
+      user.subscription.pausedUntil = undefined;
+      webhookLog(
+        "info",
+        `▶️ Restored ${user.email} paused → active after successful resume payment (invoice ${expandedInvoice.id})`
+      );
+    }
 
     // ✅ PRORATION DETECTION: Check if this invoice contains proration items
     const hasProrationItems =

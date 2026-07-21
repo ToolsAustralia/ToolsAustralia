@@ -471,12 +471,24 @@ Ports the Claude member-dashboard prototype onto the home. Spec 1 of a sequenced
 ### State hook — [`useDashboardState`](../../src/hooks/useDashboardState.ts)
 Single source of home view-state. Resolves the account state via the pure
 [`deriveDashboardAccountState`](../../src/utils/dashboard/derive-dashboard-account-state.ts)
-(precedence **pastdue > active > onetime > none**, traced against `subscription.isActive`,
-`hasFailedRenewal`, `getActivePackage().source`), plus tier + [`getDashboardStateTheme`](../../src/utils/dashboard/dashboard-state-theme.ts)
+(precedence **pastdue > paused > active > onetime > none**, traced against `subscription.isActive`,
+`subscription.status`, `hasFailedRenewal`, `getActivePackage().source`), plus tier + [`getDashboardStateTheme`](../../src/utils/dashboard/dashboard-state-theme.ts)
 (hero gradient/ink/accent), promo multiplier, entry buckets (`useDashboardEntryDisplay`),
 partner access %/expiry, and streak months — all from existing cached queries. Section
 components stay dumb and consume this. Pure logic is `tsx`-tested
 (`test:dashboard-state-theme`, `test:dashboard-account-state`).
+
+> **Retention-paused is a first-class state (2026-07-21):** a member in the `pause_30d`
+> freeze window carries `subscription.status === "paused"` + `isActive === false`. Because
+> the freeze zeroes `isActive`, it would collapse to `none` ("No membership") without an
+> explicit arm — so `deriveDashboardAccountState` gains an `isPaused` input checked BEFORE
+> the active/none arms, and `useDashboardState` computes `isPaused`
+> (`subscription.status === "paused"`) and exposes **`pausedUntil`** (the `Date` from
+> `subscription.pausedUntil`, null otherwise) so surfaces can render "Paused · resumes
+> {date}". `getDashboardStateTheme("paused")` returns a calm slate-sky fixed palette
+> (`FIXED.paused`). Perks stay frozen during the pause: `partnerAccessPct`, `streakMonths`,
+> `renewalDateIso`, and `membershipEntriesPerRenewal` are all left at their non-member
+> defaults for `acct === "paused"` (no access/accrual until resume).
 
 ### Sections — `src/components/sections/dashboard/`
 `DashboardHero`, `EntryWallet` (entries hero — total/split-bar/countdown, extracted from the

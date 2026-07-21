@@ -138,13 +138,11 @@ export type MembershipDisplayStatus =
  * - Payment recovery first: `past_due` / `unpaid` win even when the member also
  *   cancelled while past due (the known combination `hasFailedRenewal` documents) —
  *   the payment problem is the actionable signal.
- * - `paused` is DEFENSIVE: nothing currently writes `subscription.status = "paused"`
- *   to the DB (retention pause lives on Stripe's `pause_collection`, which does not
- *   change the status — see MembershipAnalyticsService "There is no DB 'paused'
- *   flag"). The arm exists because `BLOCKING_SUBSCRIPTION_STATUSES` anticipates the
- *   Stripe `paused` status; a retention-paused member therefore currently displays
- *   as Active (matching every other admin surface) — a known limitation until a DB
- *   pause signal exists.
+ * - `paused` is a REAL app-owned state (2026-07): the 30-day `pause_30d` retention offer
+ *   freezes a member at their period end (`status="paused"` + `isActive=false`), written by
+ *   the Stripe webhook / retention cron. Stripe keeps ITS status `"active"` under
+ *   `pause_collection` (it does not have a matching status), so the app owns this DB value.
+ *   A retention-paused member therefore displays as "Paused". See RetentionPauseService.
  * - An active subscription with `autoRenew === false` is SCHEDULED TO CANCEL: it stays
  *   live until `endDate`, then lapses (no renewal). `trialing` here is a paid, active
  *   member (the 25-27th anchor-day artifact) — never surface "trial".

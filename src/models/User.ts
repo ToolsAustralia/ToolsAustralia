@@ -39,6 +39,17 @@ export interface IUser extends Document {
     autoRenew?: boolean;
     status?: string;
 
+    /**
+     * Retention-pause window — set when a member accepts the 30-day `pause_30d` offer.
+     * The pause begins at the member's period END (they keep the paid period they already
+     * bought) and runs ~30 days. While `pausedFrom <= now < pausedUntil` the member is
+     * FROZEN: `status="paused"` + `isActive=false` — no charge, no access/perks, no new
+     * entry accrual. Existing accumulated entries are UNTOUCHED (they were paid for).
+     * Cleared when the member resumes (early or at `pausedUntil` via the auto-billed cycle).
+     */
+    pausedFrom?: Date;
+    pausedUntil?: Date;
+
     /** Non-canonical Stripe subscription created during initial checkout. */
     pendingStripeSubscriptionId?: string;
     pendingStripeSubscriptionRequestId?: string;
@@ -501,6 +512,16 @@ const UserSchema = new Schema<IUser>(
       status: {
         type: String,
         default: "incomplete",
+      },
+      // Retention-pause window (see the subscription interface doc above). Set on pause_30d accept:
+      // pausedFrom = period end (freeze begins), pausedUntil = auto-resume date (~30d later). Cleared on resume.
+      pausedFrom: {
+        type: Date,
+        required: false,
+      },
+      pausedUntil: {
+        type: Date,
+        required: false,
       },
       pendingStripeSubscriptionId: {
         type: String,

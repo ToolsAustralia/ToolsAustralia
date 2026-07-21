@@ -12,6 +12,12 @@ import {
 import AttemptsBreakdown from "@/components/admin/AttemptsBreakdown";
 import BulkRecoverInvoicesModal, { type BulkRecoverItem } from "@/components/admin/BulkRecoverInvoicesModal";
 import { useQueryClient } from "@tanstack/react-query";
+import {
+  SKIP_BUCKET_LABELS,
+  SKIP_BUCKET_ORDER,
+  classifySkipBucketFromMessage,
+  type SkipBucketKey,
+} from "@/utils/admin/chargeSkipReasons";
 
 function formatCents(cents: number): string {
   return new Intl.NumberFormat("en-AU", {
@@ -105,10 +111,49 @@ export default function PastDueChargeHistoryDrawer({
   const [activeStatuses, setActiveStatuses] = useState<Set<AttemptStatus>>(
     () => new Set(ALL_STATUSES)
   );
+  // Decline-reason filter: when set, only user-groups with a failed attempt carrying
+  // this decline/error code are shown. Chips in the "Why charges declined" panel toggle it.
+  const [declineFilter, setDeclineFilter] = useState<string | null>(null);
   const [expandedKeys, setExpandedKeys] = useState<Set<string>>(new Set());
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
   const [bulkModalOpen, setBulkModalOpen] = useState(false);
   const queryClient = useQueryClient();
+
+  // Derive the canonical decline code for a failed attempt (same precedence as the
+  // Error cell + the server's summariseDeclineCodes).
+  const declineCodeOf = (r: { declineCode?: string; errorCode?: string }) =>
+    r.declineCode ?? r.errorCode ?? "unknown";
+
+  // Per-run SKIP BREAKDOWN, computed client-side from the run's rows so it is accurate
+  // for EVERY run (including historical runs whose persisted totals predate the named
+  // buckets and lumped everything into "Other").
+  const skipBreakdown = useMemo(() => {
+    const counts: Record<SkipBucketKey, number> = {
+      noHeldDraft: 0,
+      awaitingRetry: 0,
+      recentlyAttempted: 0,
+      noLongerPastDue: 0,
+      alreadyPaid: 0,
+      missingPaymentMethod: 0,
+      other: 0,
+    };
+    for (const r of detailQuery.data?.rows ?? []) {
+      if (r.status === "skipped") counts[classifySkipBucketFromMessage(r.errorMessage)] += 1;
+    }
+    return counts;
+  }, [detailQuery.data]);
+
+  // Per-run decline breakdown (failed attempts grouped by decline/error code), sorted desc.
+  const declineBreakdown = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const r of detailQuery.data?.rows ?? []) {
+      if (r.status === "failed") {
+        const code = declineCodeOf(r);
+        counts.set(code, (counts.get(code) ?? 0) + 1);
+      }
+    }
+    return [...counts.entries()].sort((a, b) => b[1] - a[1]);
+  }, [detailQuery.data]);
 
   // The drawer's per-row DTO has no `adminName` (one admin per run). Augment with the run's
   // admin so each row satisfies ChargeAttemptInput before grouping.
@@ -120,19 +165,29 @@ export default function PastDueChargeHistoryDrawer({
     const filtered = q
       ? augmented.filter((r) => (r.userEmail ?? "").toLowerCase().includes(q))
       : augmented;
+    // Decline-reason filter: keep only user-groups that have a failed attempt with the
+    // selected code. Applied at the group level below so a user with a mix still shows.
     const groups = groupChargeAttemptsByUser(filtered);
+    let result = groups;
+    if (declineFilter) {
+      result = result.filter((g) =>
+        g.attempts.some((a) => a.status === "failed" && declineCodeOf(a) === declineFilter)
+      );
+    }
     // Status filter ("any matching attempt"): keep a user if at least one of
     // their attempts has a status in the active set. An empty set is treated
     // as no filter so the list never goes mysteriously blank.
     const effective = activeStatuses.size === 0 ? new Set(ALL_STATUSES) : activeStatuses;
-    if (effective.size === ALL_STATUSES.length) return groups;
-    return groups.filter(
-      (g) =>
-        (effective.has("success") && g.successCount > 0) ||
-        (effective.has("failed") && g.failedCount > 0) ||
-        (effective.has("skipped") && g.skippedCount > 0)
-    );
-  }, [detailQuery.data, search, activeStatuses]);
+    if (effective.size !== ALL_STATUSES.length) {
+      result = result.filter(
+        (g) =>
+          (effective.has("success") && g.successCount > 0) ||
+          (effective.has("failed") && g.failedCount > 0) ||
+          (effective.has("skipped") && g.skippedCount > 0)
+      );
+    }
+    return result;
+  }, [detailQuery.data, search, activeStatuses, declineFilter]);
 
   const selectableItems = useMemo<BulkRecoverItem[]>(() => {
     const items: BulkRecoverItem[] = [];
@@ -264,36 +319,70 @@ export default function PastDueChargeHistoryDrawer({
                   Skip breakdown
                 </div>
                 <ul className="space-y-1 text-sm text-gray-700 dark:text-neutral-300">
-                  <li className="flex justify-between">
-                    <span>Recently attempted (24h)</span>
-                    <span className="font-medium">
-                      {detailQuery.data.run.totals.skipped.recentlyAttempted}
-                    </span>
-                  </li>
-                  <li className="flex justify-between">
-                    <span>No longer past_due</span>
-                    <span className="font-medium">
-                      {detailQuery.data.run.totals.skipped.noLongerPastDue}
-                    </span>
-                  </li>
-                  <li className="flex justify-between">
-                    <span>Already paid</span>
-                    <span className="font-medium">
-                      {detailQuery.data.run.totals.skipped.alreadyPaid}
-                    </span>
-                  </li>
-                  <li className="flex justify-between">
-                    <span>Missing payment method</span>
-                    <span className="font-medium">
-                      {detailQuery.data.run.totals.skipped.missingPaymentMethod}
-                    </span>
-                  </li>
-                  <li className="flex justify-between">
-                    <span>Other</span>
-                    <span className="font-medium">{detailQuery.data.run.totals.skipped.other}</span>
-                  </li>
+                  {SKIP_BUCKET_ORDER.filter((k) => skipBreakdown[k] > 0).map((k) => (
+                    <li key={k} className="flex justify-between">
+                      <span>
+                        {SKIP_BUCKET_LABELS[k]}
+                        {k === "noHeldDraft" && (
+                          <span className="ml-1 text-xs text-gray-400 dark:text-neutral-500">
+                            · self-heals next cycle
+                          </span>
+                        )}
+                        {k === "awaitingRetry" && (
+                          <span className="ml-1 text-xs text-gray-400 dark:text-neutral-500">
+                            · Stripe auto-retries
+                          </span>
+                        )}
+                      </span>
+                      <span className="font-medium">{skipBreakdown[k]}</span>
+                    </li>
+                  ))}
+                  {SKIP_BUCKET_ORDER.every((k) => skipBreakdown[k] === 0) && (
+                    <li className="text-gray-400 dark:text-neutral-500">No skips</li>
+                  )}
                 </ul>
               </div>
+
+              {declineBreakdown.length > 0 && (
+                <div className="mt-4 border-t border-gray-200 pt-3 dark:border-neutral-800">
+                  <div className="mb-2 flex items-center justify-between">
+                    <span className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-neutral-400">
+                      Why charges declined
+                    </span>
+                    {declineFilter && (
+                      <button
+                        type="button"
+                        onClick={() => setDeclineFilter(null)}
+                        className="text-xs font-medium text-amber-600 hover:text-amber-700 dark:text-amber-400"
+                      >
+                        Clear filter
+                      </button>
+                    )}
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {declineBreakdown.map(([code, count]) => {
+                      const on = declineFilter === code;
+                      return (
+                        <button
+                          key={code}
+                          type="button"
+                          onClick={() => setDeclineFilter(on ? null : code)}
+                          aria-pressed={on}
+                          title={`Filter to ${count} user(s) with ${code}`}
+                          className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium ring-1 transition-colors ${
+                            on
+                              ? "bg-red-100 text-red-800 ring-red-300 dark:bg-red-950/50 dark:text-red-200 dark:ring-red-800"
+                              : "bg-gray-50 text-gray-700 ring-gray-200 hover:bg-gray-100 dark:bg-neutral-800 dark:text-neutral-300 dark:ring-neutral-700 dark:hover:bg-neutral-700"
+                          }`}
+                        >
+                          <span className="font-mono">{code}</span>
+                          <span className="tabular-nums opacity-70">{count}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
             </section>
 
             <section className="rounded-xl border border-gray-200 bg-white shadow-sm dark:border-neutral-800 dark:bg-neutral-900 overflow-hidden">
@@ -339,6 +428,12 @@ export default function PastDueChargeHistoryDrawer({
                   <span className="text-xs text-gray-500 dark:text-neutral-400">
                     {groupedAttempts.length} users
                     {activeStatuses.size === 0 && " (no status filter)"}
+                    {declineFilter && (
+                      <>
+                        {" · "}
+                        <span className="font-mono text-red-600 dark:text-red-400">{declineFilter}</span>
+                      </>
+                    )}
                   </span>
                   {selectableItems.length > 0 && (
                     <button

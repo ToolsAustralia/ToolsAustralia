@@ -113,7 +113,7 @@ export interface KlaviyoProfileProperties {
   // existing Klaviyo flows / segments / templates wired against the legacy property
   // continue to work; new work uses these canonical names.
   /** Coerced membership lifecycle state for segment filters. Profile-only — not an event property. */
-  membership_status?: "active" | "past_due" | "canceled" | "never_subscribed";
+  membership_status?: "active" | "past_due" | "canceled" | "paused" | "never_subscribed";
   /** Lifetime entry count across all sources (member + one-time + upsell + mini-draw). */
   entries_purchased?: number;
   /** Count of distinct draws (Major + Mini) the user has at least one entry in. */

@@ -669,6 +669,42 @@ export async function payOpenInvoiceAsPastDueAdmin(params: {
       };
     }
 
+    // "This invoice can no longer be paid" / payment_intent_unexpected_state WHILE Stripe
+    // still has a retry scheduled (`invoice.next_payment_attempt` set): this is NOT a card
+    // decline — no charge was attempted, and Stripe's own Smart Retry will re-attempt on
+    // its schedule. Record it as a SKIP with an accurate message instead of a scary
+    // "consider voiding / mark uncollectible" failure (which is Stripe's dev-facing text,
+    // not an admin-actionable one). Distinct from the retries-EXHAUSTED stranded case
+    // (next_payment_attempt == null), which the bulk job routes to recovery upstream.
+    const strandedRetryScheduled =
+      invoice.next_payment_attempt != null &&
+      (stripeError.message?.toLowerCase().includes("no longer be paid") === true ||
+        stripeError.code === "payment_intent_unexpected_state");
+    if (strandedRetryScheduled) {
+      const retryAt = new Date((invoice.next_payment_attempt as number) * 1000);
+      await InvoiceChargeLog.create({
+        invoiceId,
+        customerId,
+        userId: new mongoose.Types.ObjectId(userIdStr),
+        adminId: new mongoose.Types.ObjectId(adminId),
+        status: "skipped",
+        amount,
+        attemptedAt: new Date(),
+        errorMessage: `Skipped: no payable attempt right now — Stripe has a payment retry scheduled for ${retryAt.toISOString()} (auto-retry pending)`,
+        result: sanitizeStripeResponse(stripeError),
+        chargeRunId,
+      });
+      return {
+        invoiceId,
+        customerId,
+        userId: userIdStr,
+        userEmail,
+        status: "skipped",
+        skipReason: "awaiting_retry",
+        amount,
+      };
+    }
+
     await InvoiceChargeLog.create({
       invoiceId: invoiceId,
       customerId: customerId,

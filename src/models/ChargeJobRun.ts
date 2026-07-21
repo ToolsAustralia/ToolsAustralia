@@ -8,6 +8,10 @@ export interface ChargeJobRunSkippedBreakdown {
   noLongerPastDue: number;
   alreadyPaid: number;
   missingPaymentMethod: number;
+  /** Stranded past-due member with no re-billable held draft yet (self-heals next cycle). */
+  noHeldDraft: number;
+  /** No payable attempt right now, but Stripe still has a scheduled retry (auto-retries). */
+  awaitingRetry: number;
   other: number;
 }
 
@@ -37,6 +41,8 @@ const SkippedBreakdownSchema = new Schema<ChargeJobRunSkippedBreakdown>(
     noLongerPastDue: { type: Number, required: true, default: 0 },
     alreadyPaid: { type: Number, required: true, default: 0 },
     missingPaymentMethod: { type: Number, required: true, default: 0 },
+    noHeldDraft: { type: Number, required: true, default: 0 },
+    awaitingRetry: { type: Number, required: true, default: 0 },
     other: { type: Number, required: true, default: 0 },
   },
   { _id: false }
