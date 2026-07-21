@@ -37,7 +37,7 @@ export async function entriesForUser(userId: string): Promise<number> {
 }
 
 /** Exactly-once proof: count of BenefitsGranted payment events.
- * For kind "invoice", pass raw invoice id (e.g. "inv_abc") — "invoice_" prefix added here.
+ * For kind "invoice", pass raw invoice id (e.g. "in_abc") — "invoice_" prefix added here.
  * For kind "pi", pass full payment-intent id (e.g. "pi_abc") — used verbatim as namespace.
  */
 export async function benefitsGrantedCount(kind: "invoice" | "pi", id: string): Promise<number> {
