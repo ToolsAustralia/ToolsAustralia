@@ -29,15 +29,21 @@ export const test = base.extend<Fixtures>({
   // QA watchdog — the automatic expert eye on console + network (spec §10).
   watchdog: [
     async ({ page, context, baseURL }, use) => {
-      // Primary fix now lives at the source: e2e/lib/env.ts blanks
-      // NEXT_PUBLIC_KLAVIYO_COMPANY_ID and NEXT_PUBLIC_ENABLE_PIXEL_TESTING in the
-      // server's env, so KlaviyoScriptLoader no-ops for every client (Playwright
-      // specs, e2e:env manual sessions, proof mode). This context.route is
-      // belt-and-suspenders for specs using this fixture: context-scoped (not
-      // page-scoped) so it also covers popups/page.context().newPage() opened
-      // from this same default context, fulfilled empty-but-successful so a
-      // script tag or XHR "succeeds" silently rather than erroring.
-      await context.route(/klaviyo\.com/, (route) =>
+      // Klaviyo/GTM/GA/Hotjar are all neutered at the source: e2e/lib/env.ts blanks
+      // NEXT_PUBLIC_KLAVIYO_COMPANY_ID, NEXT_PUBLIC_ENABLE_PIXEL_TESTING,
+      // NEXT_PUBLIC_GTM_ID, NEXT_PUBLIC_GA_ID, NEXT_PUBLIC_ENABLE_GTM_TESTING, and
+      // NEXT_PUBLIC_HOTJAR_ID in the server's env, so their loader components no-op for
+      // every client (Playwright specs, e2e:env manual sessions, proof mode).
+      // Contentsquare has no such gate — its <Script> in src/app/layout.tsx:132-136 is
+      // HARDCODED with a fixed src and no env-conditional `disabled` prop, so the env
+      // overlay cannot neuter it; a browser-edge block is the only fix available at
+      // e2e scope. This third-party blocklist is belt-and-suspenders for Klaviyo/GTM/GA
+      // (already neutered upstream) and the ONLY fix for Contentsquare/Hotjar-by-
+      // Contentsquare: context-scoped (not page-scoped) so it also covers popups/
+      // page.context().newPage() opened from this same default context, fulfilled
+      // empty-but-successful so a script tag or XHR "succeeds" silently rather than
+      // erroring.
+      await context.route(/klaviyo\.com|contentsquare\.net|hotjar\.(com|io)/, (route) =>
         route.fulfill({ status: 200, contentType: "application/javascript", body: "" })
       );
 
