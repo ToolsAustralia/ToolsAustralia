@@ -236,7 +236,10 @@ npm run stripe:probe-rebill-cycle      # unpause + billing_cycle_anchor:'now' on
 npm run test:mint-current-cycle        # pure unit test of the mint primitive (injected deps; claim/anchor/void/charge-failed/skipClaim branches)
 npm run stripe:probe-member-resolve-mint  # MEMBER "Resolve" no_held_draft mint: a decline leaves the minted invoice still_chargeable (NOT stranded → no re-mint), and an add-a-card retry collects on the new default (gates the member mint-on-resolve; docs/FAILED_RENEWAL_PAY_NOW.md)
 npm run test:member-resolve-mint       # pure unit test of classifyMemberResolveMintOutcome (mint result → collected / retry_interactively / blocked)
+npm run test:force-charge-mint-map     # pure unit test: mint failure reason → ForceChargeResult reason (the force-charge/renew no_held_draft re-bill fallback)
 ```
+
+The `no_held_draft` re-bill mint is now wired into **every** past-due collection entry point: the member "Resolve" (`pay-failed-invoice`), the member "Pay overdue" + admin Force-Charge (`forceChargeCurrentCycle`), the member renew retry (`renew-subscription`), the per-user admin Charge (`chargeOrRecover`), and the bulk run — so no stranded member dead-ends at "no held draft" on any path.
 
 ### Retention-pause (`paused` state) verification (2026-07-21)
 
