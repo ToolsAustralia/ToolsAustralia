@@ -23,11 +23,22 @@ function makeDeps(opts: {
   anchorThrows?: boolean;
   sub?: Stripe.Subscription;
   voidThrows?: boolean;
+  liveSub?: Stripe.Subscription;
+  getThrows?: boolean;
 }) {
-  const calls = { acquired: 0, released: 0, anchored: 0, voided: [] as string[] };
+  const calls = { acquired: 0, released: 0, anchored: 0, voided: [] as string[], got: 0 };
   const deps: MintCurrentCycleDeps = {
     acquireClaim: async () => { calls.acquired++; return opts.claim ?? true; },
     releaseClaim: async () => { calls.released++; },
+    getSubscription: async () => {
+      calls.got++;
+      if (opts.getThrows) throw new Error("get boom");
+      // Default live re-read: a genuine stranded past_due member — passes both guards (D + A).
+      return (
+        opts.liveSub ??
+        ({ id: "sub_1", status: "past_due", cancel_at_period_end: false } as Stripe.Subscription)
+      );
+    },
     unpauseAndAnchorNow: async () => {
       calls.anchored++;
       if (opts.anchorThrows) throw new Error("anchor boom");
@@ -36,6 +47,27 @@ function makeDeps(opts: {
     voidInvoice: async (id) => { calls.voided.push(id); if (opts.voidThrows) throw new Error("void boom"); },
   };
   return { deps, calls };
+}
+
+async function testMemberEndingSkipsAndDoesNotAnchor() {
+  const { deps, calls } = makeDeps({
+    liveSub: { id: "sub_1", status: "past_due", cancel_at_period_end: true } as Stripe.Subscription,
+  });
+  const res = await mint({ subscriptionId: "sub_1", claimedBy: "admin:1" }, deps);
+  assert.equal(res.ok, false);
+  if (!res.ok) assert.equal(res.reason, "member_ending");
+  assert.equal(calls.anchored, 0, "must NOT re-bill a member scheduled to cancel");
+  assert.equal(calls.released, 1, "claim released");
+}
+
+async function testAlreadyCollectedSkipsAndDoesNotAnchor() {
+  const { deps, calls } = makeDeps({
+    liveSub: { id: "sub_1", status: "active", cancel_at_period_end: false } as Stripe.Subscription,
+  });
+  const res = await mint({ subscriptionId: "sub_1", claimedBy: "admin:1" }, deps);
+  assert.equal(res.ok, false);
+  if (!res.ok) assert.equal(res.reason, "already_collected");
+  assert.equal(calls.anchored, 0, "must NOT re-anchor once a prior re-bill made the sub active (no double-charge)");
 }
 
 async function testClaimHeldSkipsAndDoesNotAnchor() {
@@ -99,6 +131,8 @@ async function testVoidFailureIsNonFatal() {
 async function run() {
   ({ mintCurrentCycleInvoice: mint } = await import("../mintCurrentCycleInvoice"));
   await testClaimHeldSkipsAndDoesNotAnchor();
+  await testMemberEndingSkipsAndDoesNotAnchor();
+  await testAlreadyCollectedSkipsAndDoesNotAnchor();
   await testHappyPathPaysAndVoidsOriginalAndReleases();
   await testDoesNotVoidWhenOriginalEqualsMintedOrMissing();
   await testChargeFailedWhenMintedNotPaid();

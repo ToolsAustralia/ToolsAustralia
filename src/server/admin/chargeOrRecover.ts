@@ -107,6 +107,7 @@ export async function chargeOrRecover(params: {
     case "invoice_already_paid":
     case "invoice_unknown_status":
     case "recent_recovery_attempt":
+    case "member_ending":
     case "no_held_draft":
     case "no_payment_method":
       return {

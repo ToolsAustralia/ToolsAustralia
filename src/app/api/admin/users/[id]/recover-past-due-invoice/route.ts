@@ -91,6 +91,7 @@ export async function POST(
         no_held_draft: 409,
         no_payment_method: 409,
         recent_recovery_attempt: 409,
+        member_ending: 409,
         void_failed: 502,
         draft_create_failed: 502,
         finalize_failed: 502,

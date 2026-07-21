@@ -36,6 +36,7 @@ export type RecoverStrandedResult =
         | "invoice_already_paid"
         | "invoice_unknown_status"
         | "recent_recovery_attempt"
+        | "member_ending"
         | "void_failed"
         | "draft_create_failed"
         | "no_held_draft"
@@ -315,20 +316,17 @@ export async function recoverStrandedPastDueInvoice(params: {
         originalInvoiceId,
         claimedBy: `recover-mint:${adminId}`,
       });
-      const mintInvoiceId = mint.ok ? mint.invoiceId : mint.invoiceId ?? originalInvoiceId;
-      await InvoiceChargeLog.create({
-        ...baseLogFields,
-        invoiceId: mintInvoiceId,
-        amount: mint.ok ? mint.amountPaid : expectedAmountCents,
-        status: mint.ok ? "success" : "failed",
-        attemptedAt: new Date(),
-        errorMessage: mint.ok
-          ? `Re-billed current cycle (was no_held_draft): minted+charged ${mint.invoiceId}; renewal moved out`
-          : `Re-bill mint failed (${mint.reason}): ${mint.message}`,
-        result: { recovery: { rebill: true, originalInvoiceId } },
-        ...(params.chargeRunId ? { chargeRunId: params.chargeRunId } : {}),
-      });
       if (mint.ok) {
+        await InvoiceChargeLog.create({
+          ...baseLogFields,
+          invoiceId: mint.invoiceId,
+          amount: mint.amountPaid,
+          status: "success",
+          attemptedAt: new Date(),
+          errorMessage: `Re-billed current cycle (was no_held_draft): minted+charged ${mint.invoiceId}; renewal moved out`,
+          result: { recovery: { rebill: true, originalInvoiceId } },
+          ...(params.chargeRunId ? { chargeRunId: params.chargeRunId } : {}),
+        });
         return {
           ok: true,
           row: {
@@ -342,12 +340,38 @@ export async function recoverStrandedPastDueInvoice(params: {
           newInvoiceId: mint.invoiceId,
         };
       }
-      // Map to a frozen RecoverStrandedResult reason: a claim conflict is "recent", the rest
-      // are mid-flight failures. (chargeOrRecover's exhaustive switch already handles both.)
+      // Non-ok: the guard/concurrency reasons (claim conflict, scheduled-to-cancel, already-collected)
+      // touched NO card, so log them as SKIPPED — keeps them out of the failed/decline analytics and
+      // shows the admin an accurate skip. A real charge decline or a mid-flight error is a FAILED row.
+      const isSkip =
+        mint.reason === "claim_held" ||
+        mint.reason === "member_ending" ||
+        mint.reason === "already_collected";
+      await InvoiceChargeLog.create({
+        ...baseLogFields,
+        invoiceId: mint.invoiceId ?? originalInvoiceId,
+        amount: expectedAmountCents,
+        status: isSkip ? "skipped" : "failed",
+        attemptedAt: new Date(),
+        errorMessage: `Re-bill ${isSkip ? "skipped" : "failed"} (${mint.reason}): ${mint.message}`,
+        result: { recovery: { rebill: true, originalInvoiceId } },
+        ...(params.chargeRunId ? { chargeRunId: params.chargeRunId } : {}),
+      });
+      // Map to a frozen RecoverStrandedResult reason (chargeOrRecover's exhaustive switch buckets
+      // skip vs failed): claim conflict → recent_recovery_attempt; scheduled-to-cancel → member_ending;
+      // already collected by a prior re-bill → not_past_due; real decline / mid-flight → finalize_failed.
+      const mappedReason =
+        mint.reason === "claim_held"
+          ? ("recent_recovery_attempt" as const)
+          : mint.reason === "member_ending"
+            ? ("member_ending" as const)
+            : mint.reason === "already_collected"
+              ? ("not_past_due" as const)
+              : ("finalize_failed" as const);
       return {
         ok: false,
-        reason: mint.reason === "claim_held" ? "recent_recovery_attempt" : "finalize_failed",
-        message: `Re-bill mint failed (${mint.reason}): ${mint.message}`,
+        reason: mappedReason,
+        message: `Re-bill ${isSkip ? "skipped" : "failed"} (${mint.reason}): ${mint.message}`,
       };
     }
     return { ok: false, reason: prepared.reason, message: prepared.message };

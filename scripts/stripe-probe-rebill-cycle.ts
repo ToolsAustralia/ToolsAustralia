@@ -105,6 +105,7 @@ async function main() {
       {
         acquireClaim: async () => true, // injected: no Mongo in a Stripe probe
         releaseClaim: async () => {},
+        getSubscription: (id) => stripe.subscriptions.retrieve(id),
         unpauseAndAnchorNow: (id) => stripe.subscriptions.update(id, {
           pause_collection: "", billing_cycle_anchor: "now", proration_behavior: "none",
           metadata: { billing_anchor_rule: "rebill_current_cycle" }, expand: ["latest_invoice"],
