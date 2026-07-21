@@ -41,8 +41,15 @@ export async function seedUsers(c: Connection): Promise<void> {
     password: hash,
     firstName: "E2E",
     lastName: "Admin",
-    role: "admin", // sufficient for middleware /admin gate (middleware.ts:95-105)
-    userType: "customer",
+    role: "admin",
+    // userType "admin" (not the legacy role:"admin"-only bridge) — matches what
+    // scripts/migrate-seed-staff-roles.ts backfills for real admins. Required:
+    // middleware.ts's isInternalUser() and admin/layout.tsx's server guard both
+    // accept the legacy role-only bridge, but src/hooks/usePermissions.ts's
+    // `isStaff` (gating the /admin root page, src/app/admin/page.tsx:38-39) does
+    // NOT — a legacy-only admin (role:"admin", userType:"customer") passes the
+    // route guards then gets client-side router.push("/")'d straight back out.
+    userType: "admin",
     isActive: true,
     isEmailVerified: true,
     profileSetupCompleted: true,
