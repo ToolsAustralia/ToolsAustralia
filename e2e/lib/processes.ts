@@ -22,7 +22,7 @@ export function launch(
   child.stdout?.pipe(log);
   child.stderr?.pipe(log);
   children.push(child);
-  console.log(`[e2e] started ${name} (pid ${child.pid}) — logs: e2e-artifacts/logs/${name}.log`);
+  console.log(`[e2e] started ${name} (pid ${child.pid}) — logs: ${path.join(logDir, `${name}.log`)}`);
   return child;
 }
 

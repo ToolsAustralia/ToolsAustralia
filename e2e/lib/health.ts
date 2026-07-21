@@ -1,7 +1,18 @@
-export async function waitForHttpOk(url: string, timeoutMs: number): Promise<void> {
+import type { ChildProcess } from "node:child_process";
+
+export async function waitForHttpOk(
+  url: string,
+  timeoutMs: number,
+  opts?: { child?: ChildProcess }
+): Promise<void> {
   const deadline = Date.now() + timeoutMs;
   let lastErr = "";
   while (Date.now() < deadline) {
+    if (opts?.child && opts.child.exitCode !== null) {
+      throw new Error(
+        `Server process exited (code ${opts.child.exitCode}) before becoming ready — check e2e-artifacts/logs/server.log`
+      );
+    }
     try {
       const res = await fetch(url);
       if (res.ok) return;

@@ -1,4 +1,4 @@
-import { spawnSync } from "node:child_process";
+import { spawnSync, type ChildProcess } from "node:child_process";
 import { resolveE2eEnv } from "./lib/env";
 import { launch, killAll } from "./lib/processes";
 import { waitForHttpOk } from "./lib/health";
@@ -15,13 +15,36 @@ function getStripeListenSecret(): string | null {
   return r.status === 0 && secret.startsWith("whsec_") ? secret : null;
 }
 
+export function getFlagValue(argv: string[], flag: string): string {
+  const i = argv.indexOf(flag);
+  if (i >= 0) return argv[i + 1] ?? "";
+  const eq = argv.find((a) => a.startsWith(flag + "="));
+  return eq ? eq.slice(flag.length + 1) : "";
+}
+
+async function assertPortFree(port: number): Promise<void> {
+  let busy = false;
+  try {
+    await fetch(`http://localhost:${port}/`, { signal: AbortSignal.timeout(2000) });
+    busy = true; // fetch resolved — something is listening and responded
+  } catch (e) {
+    const name = (e as { name?: string } | undefined)?.name;
+    if (name === "TimeoutError" || name === "AbortError") {
+      busy = true; // connection accepted but unresponsive
+    }
+    // otherwise: connection-refused-style rejection — port is free
+  }
+  if (busy) {
+    throw new Error(`Port ${port} is already in use — a stale server may be running. Kill it or set E2E_PORT to a free port.`);
+  }
+}
+
 async function main(): Promise<number> {
   const argv = process.argv.slice(2);
   const envOnly = argv.includes("--env-only");
   const proof = argv.includes("--proof");
   const isBuild = process.env.E2E_BUILD === "1";
-  const grepIdx = argv.indexOf("--grep");
-  const grep = grepIdx >= 0 ? argv[grepIdx + 1] : "";
+  const grep = getFlagValue(argv, "--grep");
   const smokeOnly = grep === "@smoke";
   const passthrough = argv.filter((a) => a !== "--env-only" && a !== "--proof");
   const runId = Date.now().toString(36);
@@ -44,16 +67,20 @@ async function main(): Promise<number> {
   // 3. Fresh data
   await wipeAndSeed(env.mongoUri);
 
+  // 3b. Pre-flight: refuse to boot on top of a stale/zombie server on this port
+  await assertPortFree(env.port);
+
   // 4. App server
+  let serverChild: ChildProcess;
   if (isBuild) {
     console.log("[e2e] E2E_BUILD=1 — building production bundle (this takes minutes)…");
     const b = spawnSync("npm", ["run", "build"], { env: env.overlay, stdio: "inherit", shell: process.platform === "win32" });
     if (b.status !== 0) throw new Error("next build failed");
-    launch("server", "npm", ["run", "start", "--", "-p", String(env.port)], env.overlay, LOG_DIR);
+    serverChild = launch("server", "npm", ["run", "start", "--", "-p", String(env.port)], env.overlay, LOG_DIR);
   } else {
-    launch("server", "npm", ["run", "dev", "--", "-p", String(env.port)], env.overlay, LOG_DIR);
+    serverChild = launch("server", "npm", ["run", "dev", "--", "-p", String(env.port)], env.overlay, LOG_DIR);
   }
-  await waitForHttpOk(`${env.baseUrl}/api/test-db`, isBuild ? 120_000 : 240_000);
+  await waitForHttpOk(`${env.baseUrl}/api/test-db`, isBuild ? 120_000 : 240_000, { child: serverChild });
   console.log(`[e2e] server ready at ${env.baseUrl} (db: e2e)`);
 
   // 5. Webhook forwarder
@@ -74,17 +101,27 @@ async function main(): Promise<number> {
   const pw = spawnSync("npx", ["playwright", "test", ...passthrough], {
     env: pwEnv, stdio: "inherit", shell: process.platform === "win32",
   });
+  if (pw.error) {
+    console.error(`[e2e] failed to launch playwright test: ${pw.error.message}`);
+    return 1;
+  }
 
   // 8. Proof post-processing
   if (proof) {
     const post = spawnSync("npx", ["tsx", "e2e/proof/post.ts"], {
       env: pwEnv, stdio: "inherit", shell: process.platform === "win32",
     });
+    if (post.error) {
+      console.error(`[e2e] failed to launch proof post-processing: ${post.error.message}`);
+      return 1;
+    }
     if (post.status !== 0) console.warn("[e2e] proof post-processing reported errors (see above)");
   }
   return pw.status ?? 1;
 }
 
-main()
-  .then((code) => { killAll(); process.exit(code); })
-  .catch((e) => { console.error(`[e2e] ${(e as Error).message}`); killAll(); process.exit(1); });
+if (require.main === module) {
+  main()
+    .then((code) => { killAll(); process.exit(code); })
+    .catch((e) => { console.error(`[e2e] ${String(e instanceof Error ? e.message : e)}`); killAll(); process.exit(1); });
+}
