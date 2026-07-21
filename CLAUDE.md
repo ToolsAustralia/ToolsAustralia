@@ -900,6 +900,14 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "scripts/calibrate-chat-deflection.ts"
       ],
       "lastVerified": "2026-07-10"
+    },
+    "e2e": {
+      "docs": "docs/e2e/",
+      "paths": [
+        "e2e/**",
+        "playwright.config.ts"
+      ],
+      "lastVerified": "2026-07-21"
     }
   }
 }
