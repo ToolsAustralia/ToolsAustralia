@@ -1,5 +1,6 @@
 import { test as base, expect } from "@playwright/test";
 import { createLoginableUser, disconnectE2eDb, MEMBER } from "../helpers/db";
+import { makeDemo, type Demo } from "./demo";
 
 /** Known-benign console noise (extend deliberately, never wildcard). */
 const CONSOLE_ALLOWLIST: RegExp[] = [
@@ -11,6 +12,7 @@ const CONSOLE_ALLOWLIST: RegExp[] = [
 type Fixtures = {
   watchdog: void;
   freshUser: () => Promise<{ id: string; email: string; password: string }>;
+  demo: Demo;
 };
 
 export const test = base.extend<Fixtures>({
@@ -78,6 +80,13 @@ export const test = base.extend<Fixtures>({
       return { ...created, password: MEMBER.password };
     });
     await disconnectE2eDb();
+  },
+
+  // Proof mode narration — plain `test.step` outside E2E_PROOF (zero overhead, see demo.ts).
+  demo: async ({ page }, use, testInfo) => {
+    const { demo, flush } = makeDemo(page, testInfo);
+    await use(demo);
+    flush();
   },
 });
 

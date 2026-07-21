@@ -17,6 +17,7 @@
 | DB assertion helpers | `e2e/helpers/db.ts` | Direct Mongo reads for spec assertions: `entriesForUser`, `benefitsGrantedCount` (`BenefitsGranted-invoice_<id>` / `BenefitsGranted-<paymentIntentId>` — the `pi_` prefix comes from Stripe's own id), `createLoginableUser` (register API creates passwordless users, so login-capable users are created directly). |
 | Marketing/membership `@smoke` specs | `e2e/specs/marketing/landing.spec.ts`, `mini-draws.spec.ts`, `legal-copy.spec.ts`; `e2e/specs/membership/modal.spec.ts` | Landing hero + membership CTA render, `/mini-draws` renders, `/membership` shows the three tier CTAs + free-entry copy, and a CLAUDE.md §11 legal-copy guard (bans gambling/sold-entry vocabulary, asserts free-entry framing) across `/`, `/membership`, `/mini-draws`. |
 | Purchase (money-path) helper + specs | `e2e/helpers/payment.ts`; `e2e/specs/membership/{purchase-subscription,purchase-one-time,purchase-decline,purchase-idempotency,webhook-replay}.spec.ts` | Real Stripe TEST-MODE payments through the real UI + real webhook delivery, DB-level exactly-once assertions. See the `@purchase` section below. |
+| Proof mode (narrated demo videos) | `e2e/fixtures/demo.ts`, `e2e/proof/srt.ts`, `e2e/proof/post.ts` | Paced, captioned, best-effort-voiced mp4s of the `@demo` specs for non-technical stakeholders. See the `Proof mode` section below. |
 
 **Resolved gotcha — `NEXT_PUBLIC_API_URL` now follows the e2e origin.** `.env.local` sets `NEXT_PUBLIC_API_URL=http://localhost:3000` for normal local dev. Until this fix, `resolveE2eEnv()`'s overlay remapped `NEXTAUTH_URL` to the dynamic e2e port but left `NEXT_PUBLIC_API_URL` unmapped, so `src/lib/queries.ts`'s `apiGet`/`apiRequest` (used by `useWinnersQueries.ts`, `useMajorDrawQueries.ts`, and other client hooks) built absolute URLs against the wrong port — every page rendering a winners/major-draw widget (`/`, `/membership`, `/mini-draws` via `MembershipSection`/`LatestWinnerHero`/`WinnerTestimoniesClient`) fired client XHRs at an unreachable `http://localhost:3000/...`. This surfaced as the QA watchdog catching real `net::ERR_CONNECTION_REFUSED` console errors on every run of `legal-copy.spec.ts` — confirmed via trace network logs to be **not** a legal-copy violation (zero `BANNED_COPY` hits in any run). Fixed by remapping `NEXT_PUBLIC_API_URL` alongside `NEXTAUTH_URL` in the overlay (see row above); regression-covered by `resolveE2eEnv builds the overlay` in `e2e/lib/__tests__/env.test.ts`.
 
@@ -42,9 +43,10 @@ see the env-overlay row above for the current list.
 
 ## Coming in later plan tasks
 
-Orchestrator, fixtures, `@smoke`/`@demo`, `@a11y`, `@visual`, and `@purchase` spec suites
-now exist (Tasks 4-11). Still to come: proof mode (narrated mp4s) and the full doc set
-(architecture, adding-a-spec, proof-mode, troubleshooting) promised in Task 13.
+Orchestrator, fixtures, `@smoke`/`@demo`, `@a11y`, `@visual`, `@purchase`, and proof mode
+(Tasks 4-12) now exist. Still to come: the full doc set (architecture, adding-a-spec,
+proof-mode, troubleshooting) promised in Task 13 — this README stays the interim source
+until then.
 
 ## Orchestrator note — win32 arg quoting
 
@@ -83,6 +85,54 @@ Baseline `targetPattern` discipline: stable-DOM entries match the full axe targe
 (regex-escaped); only the rotating promo-banner entries may use a broader anchored pattern,
 each carrying a `DOCUMENTED EXCEPTION` comment. Loose utility-class fragments are not
 acceptable patterns — they can silently absorb future distinct violations.
+
+## Proof mode — narrated demo videos
+
+`npm run e2e:proof` (= `tsx e2e/run.ts --proof`, sets `E2E_PROOF=1` and switches the
+`playwright.config.ts` profile to `workers: 1`, `retries: 0`, `video: "on"`,
+`launchOptions.slowMo: 200`) produces a human-watchable mp4 for every spec that narrates
+its own key moments with `demo.step(title, fn)` (the `demo` fixture, `e2e/fixtures/test.ts`).
+Today that's the three `@demo`-tagged flows referenced in the manifest row above:
+`landing.spec.ts`, `my-account.spec.ts`, `purchase-subscription.spec.ts`.
+
+**Mechanics:**
+- `demo.step` (`e2e/fixtures/demo.ts`) is a no-op passthrough to plain `test.step` outside
+  proof mode (`E2E_PROOF !== "1"`) — zero behavioral/console overhead for `@smoke`/`@purchase`
+  runs; verified live via `npm run e2e:smoke` (41/41, no new console noise from the fixture).
+  In proof mode it: shows a full-screen title card on the test's first step, injects an
+  in-page caption overlay per step, holds the frame for `holdFor(title)` ms (`e2e/proof/srt.ts`
+  — floors at 1800ms, scales ~300ms/word so captions are readable without pausing), runs the
+  step, and screenshots it (`step-N-<slug>.png`). All cues are recorded to a `narration.json`
+  sidecar next to Playwright's own `video.webm` in `test-results/<test>/`.
+- `e2e/proof/post.ts` (invoked by `e2e/run.ts` after the Playwright run, same `spawnAsync`
+  reasoning as the test run itself — the dev server/stripe-listen children are still logging
+  concurrently) walks `test-results/`, and for every dir with both `video.webm` +
+  `narration.json`: derives per-cue `{startMs, endMs}` windows (each cue ends 200ms before the
+  next starts, or at the recorded `endMs`), burns an `.srt` (via `toSrt`) into the video with
+  ffmpeg's `subtitles` filter, best-effort synthesizes AI voice per cue and muxes it in, copies
+  the step screenshots, and writes everything to
+  `e2e-artifacts/proof/<date>-<branch>/<test-slug>/`. The HTML report is copied alongside.
+- **AI voice (best-effort, never blocks the run):** `msedge-tts` wraps the Microsoft Edge
+  Read-Aloud API. Voice: `en-AU-NatashaNeural`. **API note (differs from a naive read of the
+  package README):** `MsEdgeTTS.toFile(dirPath, text)` treats its first argument as an
+  **existing output directory**, not a target filename — it always writes
+  `<dirPath>/audio.<ext>` internally (`joinPath(dirPath, "audio." + extension)` in
+  `dist/MsEdgeTTS.js`), and the directory must already exist (`fs.createWriteStream` does not
+  create it). `post.ts` therefore `mkdir`s a per-cue subdirectory (`.voice-tmp/cue-<i>/`) before
+  calling `toFile`, and uses the returned `audioFilePath` as-is. On any failure (offline,
+  Edge API unavailable, etc.) `synthVoice` catches, warns
+  (`[proof] AI voice unavailable (...) — emitting subtitled video only.`), and returns `null`
+  — the mp4 still ships with burned subtitles, just no voice track. The `.voice-tmp` scratch
+  directory is removed after each flow's mux step regardless of outcome.
+- `ffmpeg-static` ships only `ffmpeg` (no `ffprobe`); duration/stream inspection for any manual
+  QA of a proof bundle should read `ffmpeg -i <file>` stderr rather than reach for `ffprobe`.
+
+Verified live (`npm run e2e:proof -- --grep @demo --project chromium-desktop`): all three
+flows produced `.mp4` + `.srt` + step screenshots under
+`e2e-artifacts/proof/<date>-feature-playwright-e2e/`; the purchase flow mp4 is ~20s (3 paced
+steps); every mp4 carries an AAC 24kHz mono audio stream (voice synthesis succeeded, no
+fallback triggered in that run); an extracted mid-caption frame confirmed the burned subtitle
+is legible in-frame against the real page content.
 
 ## `@purchase` suite — the money path
 

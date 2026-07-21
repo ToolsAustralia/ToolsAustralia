@@ -4,12 +4,16 @@ import { MEMBER_STATE } from "../../lib/paths";
 test.describe("my-account @smoke @demo", () => {
   test.use({ storageState: MEMBER_STATE });
 
-  test("dashboard loads for the seeded active member", async ({ page }) => {
-    await page.goto("/my-account");
-    await expect(page).toHaveURL(/\/my-account/); // not bounced to /login
-    await expect(page.locator("main")).toBeVisible({ timeout: 20_000 });
-    // Seeded member firstName is displayed somewhere on the dashboard
-    await expect(page.locator("body")).toContainText(/e2e/i, { timeout: 20_000 });
+  test("dashboard loads for the seeded active member", async ({ page, demo }) => {
+    await demo.step("Opening the member dashboard", async () => {
+      await page.goto("/my-account");
+      await expect(page).toHaveURL(/\/my-account/); // not bounced to /login
+    });
+    await demo.step("The member's account and free entries are visible", async () => {
+      await expect(page.locator("main")).toBeVisible({ timeout: 20_000 });
+      // Seeded member firstName is displayed somewhere on the dashboard
+      await expect(page.locator("body")).toContainText(/e2e/i, { timeout: 20_000 });
+    });
   });
 });
 

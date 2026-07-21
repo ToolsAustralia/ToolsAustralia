@@ -8,7 +8,7 @@ test.afterAll(async () => {
 });
 
 test.describe("subscription purchase @purchase @demo", () => {
-  test("new user buys Tradie: payment → webhook → 15 entries exactly once", async ({ page }) => {
+  test("new user buys Tradie: payment → webhook → 15 entries exactly once", async ({ page, demo }) => {
     // Generous budget: full 3-project runs put ~15 real Stripe money-path flows
     // concurrently against a single `next dev` server (verified live — chromium-only
     // runs finish in ~35s; the full 8-worker run needs much more headroom for the
@@ -16,36 +16,46 @@ test.describe("subscription purchase @purchase @demo", () => {
     test.setTimeout(300_000);
     const { email, mobile } = purchaseIdentity("buy", test.info());
 
-    // Register (step 1) — no "Continue to Billing" interstitial (verified Task 7):
-    // a successful register batches setGuestUserData + setCurrentStep(2), so the modal
-    // jumps straight from the registration form to the billing/payment step.
-    await page.goto("/membership");
-    await page
-      .getByRole("button", { name: /choose tradie/i })
-      .or(page.getByRole("link", { name: /choose tradie/i }))
-      .first()
-      .click();
-    await page.locator('input[name="firstName"]').fill("E2E");
-    await page.locator('input[name="lastName"]').fill("Buyer");
-    await page.locator('input[name="email"]').fill(email);
-    await page.locator('input[name="phone"]').fill(mobile);
-    await page.getByRole("button", { name: /register/i }).click();
-
-    // Billing step reached — unauthenticated submit button is exactly "PURCHASE"
-    // (PaymentStep.tsx: isAuthenticated ? "PURCHASE & ENTER THE DRAW" : "PURCHASE").
+    // Unauthenticated billing-step submit button is exactly "PURCHASE" (PaymentStep.tsx:
+    // isAuthenticated ? "PURCHASE & ENTER THE DRAW" : "PURCHASE"). Locators are lazy in
+    // Playwright, so re-deriving this in each step (rather than threading a single Locator
+    // across the two demo.step closures) queries fresh each time with no extra cost.
     const purchaseButton = page.getByRole("button", { name: /^purchase$/i });
-    await expect(purchaseButton).toBeVisible({ timeout: 45_000 });
 
-    // Pay — Stripe test card via the PaymentElement iframe.
-    await fillPaymentElement(page, CARDS.ok);
-    await expect(purchaseButton).toBeEnabled({ timeout: 30_000 });
-    await purchaseButton.click();
+    await demo.step("Creating a new account", async () => {
+      // Register (step 1) — no "Continue to Billing" interstitial (verified Task 7):
+      // a successful register batches setGuestUserData + setCurrentStep(2), so the modal
+      // jumps straight from the registration form to the billing/payment step.
+      await page.goto("/membership");
+      await page
+        .getByRole("button", { name: /choose tradie/i })
+        .or(page.getByRole("link", { name: /choose tradie/i }))
+        .first()
+        .click();
+      await page.locator('input[name="firstName"]').fill("E2E");
+      await page.locator('input[name="lastName"]').fill("Buyer");
+      await page.locator('input[name="email"]').fill(email);
+      await page.locator('input[name="phone"]').fill(mobile);
+      await page.getByRole("button", { name: /register/i }).click();
+      await expect(purchaseButton).toBeVisible({ timeout: 45_000 });
+    });
 
-    // Outcome asserted at the DATABASE, not the pixels (spec §9) — webhook grant
-    // processing is in-process (`after()`), so this polls rather than expecting a
-    // synchronous UI transition.
-    const { userId, entries } = await waitForActiveMembership(email, 180_000);
-    expect(entries).toBe(15); // Tradie includes 15 free entries (membershipPackages.ts: entriesPerMonth 15)
+    await demo.step("Entering payment details with a test card", async () => {
+      // Pay — Stripe test card via the PaymentElement iframe.
+      await fillPaymentElement(page, CARDS.ok);
+      await expect(purchaseButton).toBeEnabled({ timeout: 30_000 });
+      await purchaseButton.click();
+    });
+
+    let userId = "";
+    await demo.step("Payment confirmed — free entries granted automatically", async () => {
+      // Outcome asserted at the DATABASE, not the pixels (spec §9) — webhook grant
+      // processing is in-process (`after()`), so this polls rather than expecting a
+      // synchronous UI transition.
+      const result = await waitForActiveMembership(email, 180_000);
+      userId = result.userId;
+      expect(result.entries).toBe(15); // Tradie includes 15 free entries (membershipPackages.ts: entriesPerMonth 15)
+    });
 
     // Exactly-once: precisely one BenefitsGranted event exists for this user's invoice.
     // Doc shape verified live (src/services/stripe-webhook-handlers/index.ts:3358-3359):
