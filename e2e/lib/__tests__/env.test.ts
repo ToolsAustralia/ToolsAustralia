@@ -61,6 +61,8 @@ t("resolveE2eEnv neuters third parties", () =>
     assert.equal(env.overlay.NEXT_PUBLIC_FACEBOOK_PIXEL_ID, "");
     assert.equal(env.overlay.TIKTOK_ACCESS_TOKEN, "");
     assert.equal(env.overlay.NEXT_PUBLIC_TIKTOK_PIXEL_ID, "");
+    assert.equal(env.overlay.NEXT_PUBLIC_ENABLE_PIXEL_TESTING, "");
+    assert.equal(env.overlay.NEXT_PUBLIC_KLAVIYO_COMPANY_ID, "");
   }));
 
 t("resolveE2eEnv threads webhook secret", () =>

@@ -55,6 +55,14 @@ export function resolveE2eEnv(opts: { webhookSecret?: string } = {}): E2eEnv {
     NEXT_PUBLIC_FACEBOOK_PIXEL_ID: "",
     TIKTOK_ACCESS_TOKEN: "",
     NEXT_PUBLIC_TIKTOK_PIXEL_ID: "",
+    // Client-side pixels: .env.local sets NEXT_PUBLIC_ENABLE_PIXEL_TESTING=true for
+    // manual local pixel testing, which force-enables KlaviyoScriptLoader AND
+    // ConversionPixels in dev (src/app/layout.tsx:147,151: `disabled={NODE_ENV ===
+    // "development" && !NEXT_PUBLIC_ENABLE_PIXEL_TESTING}`). Blank it here so e2e gets
+    // the normal dev-disabled behavior, and blank the Klaviyo company id too (belt and
+    // suspenders — KlaviyoScriptLoader also no-ops without a companyId).
+    NEXT_PUBLIC_ENABLE_PIXEL_TESTING: "",
+    NEXT_PUBLIC_KLAVIYO_COMPANY_ID: "",
   };
   if (opts.webhookSecret) overlay.STRIPE_WEBHOOK_SECRET = opts.webhookSecret;
   return { port, baseUrl, mongoUri: e2eUri!, overlay };

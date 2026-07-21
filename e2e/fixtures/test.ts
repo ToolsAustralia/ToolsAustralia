@@ -28,16 +28,18 @@ export const test = base.extend<Fixtures>({
 
   // QA watchdog — the automatic expert eye on console + network (spec §10).
   watchdog: [
-    async ({ page, baseURL }, use) => {
-      // NEXT_PUBLIC_ENABLE_PIXEL_TESTING=true in .env.local keeps Klaviyo's
-      // client script live even in dev (deliberate, for manual pixel testing —
-      // see src/app/layout.tsx:149-152), so it fires real XHRs to a.klaviyo.com
-      // in this environment and throws real CORS/pageerror noise. Neutralize the
-      // leak at the network layer (fulfill with an empty, successful response so
-      // window.klaviyo/_klOnsite never initialize and no downstream code path
-      // calls out) rather than allowlisting the resulting console/pageerror text
-      // — the watchdog is right to treat an unhandled leak as a real problem.
-      await page.route(/klaviyo\.com/, (route) => route.fulfill({ status: 200, contentType: "text/plain", body: "" }));
+    async ({ page, context, baseURL }, use) => {
+      // Primary fix now lives at the source: e2e/lib/env.ts blanks
+      // NEXT_PUBLIC_KLAVIYO_COMPANY_ID and NEXT_PUBLIC_ENABLE_PIXEL_TESTING in the
+      // server's env, so KlaviyoScriptLoader no-ops for every client (Playwright
+      // specs, e2e:env manual sessions, proof mode). This context.route is
+      // belt-and-suspenders for specs using this fixture: context-scoped (not
+      // page-scoped) so it also covers popups/page.context().newPage() opened
+      // from this same default context, fulfilled empty-but-successful so a
+      // script tag or XHR "succeeds" silently rather than erroring.
+      await context.route(/klaviyo\.com/, (route) =>
+        route.fulfill({ status: 200, contentType: "application/javascript", body: "" })
+      );
 
       const problems: string[] = [];
       page.on("pageerror", (e) => problems.push(`pageerror: ${e.message}`));
