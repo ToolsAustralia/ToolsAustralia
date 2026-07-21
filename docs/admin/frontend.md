@@ -109,6 +109,11 @@ Three at-a-glance additions so an admin understands the account without digging:
   (`/api/admin/users/[id]/cancel-subscription`), which keeps DB + Stripe in lockstep. `autoRenew` was also
   dropped from the admin user-update payload/schema (`admin-user-update.ts`, `types/admin.ts`) so no admin
   save re-writes it; the list-filter (`autoRenew=true|false`) and export column are reads and remain.
+- **Resume pause (admin).** When a member is retention-`paused`, the subscription actions row shows a sky
+  **"Resume pause"** button (`users.cancelSubscription` permission) → `POST /api/admin/users/[id]/resume-pause`
+  → lifts the Stripe pause immediately (bills the next cycle now if past the period end; a failed charge →
+  past_due). For support un-pausing a member who asked to come back early; mirrors the member's own dashboard
+  "Resume now".
 - **Partner-access ring**: the SAME instrument the member sees on the /my-account hero — percent ring while
   access is live ("{N} left" caption for one-time windows), amber `ShieldAlert` "Paused" ring while past-due
   (membership access pauses; a paid one-time window is kept). **Placement (2026-07-09):** on **desktop** (`sm+`)

@@ -322,6 +322,7 @@
     "test:cancellation-flow-service": "tsx src/services/subscription/__tests__/CancellationFlowService.test.ts",
     "test:cancellation-flow-hook": "tsx src/components/modals/CancellationFlowModal/__tests__/useCancellationFlow.test.ts",
     "test:retention-pause": "tsx src/services/subscription/__tests__/RetentionPauseService.test.ts",
+    "test:pause-transition": "tsx src/services/subscription/__tests__/decide-pause-transition.test.ts",
     "test:retention-discount": "tsx src/services/subscription/__tests__/RetentionDiscountService.test.ts",
     "test:retention-resume-cron": "tsx src/app/api/cron/__tests__/cancellation-retention-resume.test.ts",
     "test:cancellation-analytics": "tsx src/services/admin/__tests__/cancellationFlowAnalytics.test.ts",

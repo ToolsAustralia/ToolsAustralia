@@ -401,6 +401,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
   const userActions = useAdminUserActions();
   const updateUser = useAdminUpdateUser();
   const cancelSubscriptionMutation = useAdminCancelSubscription();
+  const [resumingPause, setResumingPause] = useState(false);
   const [activeEditTab, setActiveEditTab] = useState<EditTabType | null>(null);
   const isEditing = (tab: EditTabType) => activeEditTab === tab;
   const [showSendEmailModal, setShowSendEmailModal] = useState(false);
@@ -2420,6 +2421,36 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                                 Cancel Subscription
                               </button>
                             )}
+                          {/* Resume a retention-paused member early (e.g. they asked support to un-pause). */}
+                          {canCancelSubscription && user.subscription?.status === "paused" && userId && (
+                            <button
+                              type="button"
+                              disabled={resumingPause}
+                              onClick={async () => {
+                                setResumingPause(true);
+                                try {
+                                  const res = await fetch(`/api/admin/users/${userId}/resume-pause`, {
+                                    method: "POST",
+                                  });
+                                  if (!res.ok) {
+                                    const data = await res.json().catch(() => ({}));
+                                    throw new Error(data?.error || "Failed to resume the pause");
+                                  }
+                                  await queryClient.invalidateQueries({
+                                    queryKey: ["admin", "users", "detail", userId],
+                                  });
+                                  await queryClient.invalidateQueries({ queryKey: ["admin", "users", "list"] });
+                                } catch (e) {
+                                  alert(e instanceof Error ? e.message : "Failed to resume the pause");
+                                } finally {
+                                  setResumingPause(false);
+                                }
+                              }}
+                              className="rounded-lg border border-sky-300 px-3 py-1.5 text-xs sm:text-sm font-medium text-sky-700 hover:bg-sky-50 transition-colors disabled:opacity-60"
+                            >
+                              {resumingPause ? "Resuming…" : "Resume pause"}
+                            </button>
+                          )}
                           {canCharge && user.subscription?.status === "past_due" && userId && (
                             <button
                               type="button"

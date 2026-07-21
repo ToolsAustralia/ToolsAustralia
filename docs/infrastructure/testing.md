@@ -236,6 +236,16 @@ npm run stripe:probe-rebill-cycle      # unpause + billing_cycle_anchor:'now' on
 npm run test:mint-current-cycle        # pure unit test of the mint primitive (injected deps; claim/anchor/void/charge-failed branches)
 ```
 
+### Retention-pause (`paused` state) verification (2026-07-21)
+
+The 30-day retention-`paused` membership state is covered by fast unit tests plus a Stripe-mechanism probe:
+
+```bash
+npm run test:pause-transition          # pure decidePauseTransition (flip/restore decision SHARED by the webhook + retention cron; 8 cases)
+npm run test:retention-pause           # computeResumeAt (period_end + 30d timing) + retentionPauseBlockReason guards
+npx tsx scripts/stripe-probe-pause-lifecycle.ts   # sk_test only: void pause discards the cycle invoice during the freeze (no charge; Stripe stays "active"); Stripe auto-resumes + bills at resumes_at
+```
+
 ## Cleanup / backfill scripts
 
 ```bash

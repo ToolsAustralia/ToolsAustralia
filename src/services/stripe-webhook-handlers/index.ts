@@ -51,7 +51,7 @@ import {
   resumeAfterSuccessfulRenewalPayment,
   reanchorAfterPastDueRecovery,
 } from "@/services/subscription/SubscriptionCollectionPauseService";
-import { decideClearPause, shouldReanchorAfterRecovery } from "@/services/subscription/pauseCollectionPolicy";
+import { decideClearPause, decidePauseTransition, shouldReanchorAfterRecovery } from "@/services/subscription/pauseCollectionPolicy";
 import { STRIPE_SUBSCRIPTION_METADATA_IS_RESUBSCRIBE } from "@/utils/payment/stripe-subscription-metadata";
 import { decideStreakOnSubscriptionCreate } from "@/utils/subscription/streak";
 import { trackPixelSubscriptionRenewal } from "@/utils/tracking/pixel-purchase-tracking";
@@ -2139,18 +2139,21 @@ async function handleSubscriptionUpdated(subscription: Stripe.Subscription) {
       // Only update status for specific cases to avoid conflicts.
       //
       // Retention pause: Stripe keeps the sub `status:"active"` during a `pause_collection`, so we own
-      // the DB "paused" state. Once the member's freeze window has begun (now >= pausedFrom) set
-      // status="paused"/isActive=false and skip the normal branches (which would otherwise clobber it
-      // back to active). Before the window (still inside the paid period they bought) this is false, so
-      // we fall through to normal active handling. See RetentionPauseService.
-      const isRetentionPauseActive =
-        subscription.pause_collection != null && subscription.metadata?.pauseReason === "retention";
-      const pausedFromDate = user.subscription.pausedFrom ? new Date(user.subscription.pausedFrom) : null;
-      const inPauseWindow = pausedFromDate != null && pausedFromDate.getTime() <= Date.now();
-      if (isRetentionPauseActive && inPauseWindow) {
-        if (prevSubStatus !== "paused") {
-          console.log(`⏸️ [SUBSCRIPTION UPDATED] Freezing ${user.email} → paused (retention pause window started)`);
-        }
+      // the DB "paused" state (decidePauseTransition — shared with the cron backstop so they can't
+      // drift). `flip_to_paused` fires once the freeze window has begun; we then skip the normal
+      // branches (which would clobber it back to active). Before the window (still in the paid period
+      // they bought) it returns "none" and we fall through to normal active handling. See
+      // RetentionPauseService / pauseCollectionPolicy.
+      const pauseTransition = decidePauseTransition({
+        pauseCollectionPresent: subscription.pause_collection != null,
+        pauseReason: subscription.metadata?.pauseReason,
+        dbStatus: prevSubStatus,
+        pausedFrom: user.subscription.pausedFrom,
+        pausedUntil: user.subscription.pausedUntil,
+        now: new Date(),
+      });
+      if (pauseTransition === "flip_to_paused") {
+        console.log(`⏸️ [SUBSCRIPTION UPDATED] Freezing ${user.email} → paused (retention pause window started)`);
         user.subscription.isActive = false;
         user.subscription.status = "paused";
         user.subscription.autoRenew = !subscription.cancel_at_period_end;

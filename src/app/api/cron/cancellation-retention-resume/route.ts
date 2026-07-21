@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { decidePauseTransition } from "@/services/subscription/pauseCollectionPolicy";
 
 // Heavy server-side imports (stripe, mongodb, User) are deferred to the GET
 // handler body via dynamic import() so this module is safely importable in
@@ -132,25 +133,22 @@ export async function GET(request: NextRequest) {
         const pauseResumesAtIso = subscription.metadata?.pauseResumesAt;
         const pauseCollectionPresent = subscription.pause_collection != null;
 
-        // BACKSTOP for the DB `paused` membership state — the webhook (handleSubscriptionUpdated /
-        // handleInvoicePaymentSucceeded) is the PRIMARY driver; this catches missed events. Idempotent
-        // + Stripe-truth-based. See RetentionPauseService.
+        // BACKSTOP for the DB "paused" membership state — the webhook (handleSubscriptionUpdated /
+        // handleInvoicePaymentSucceeded) is the PRIMARY driver; this catches missed events. Uses the
+        // SAME pure decision as the webhook (decidePauseTransition) so the two can't drift. Idempotent.
         const pauseSub = user.subscription as
           | { status?: string; pausedFrom?: Date; pausedUntil?: Date }
           | undefined;
-        const dbSubStatus = pauseSub?.status;
-        const pausedFrom = pauseSub?.pausedFrom;
-        const pausedUntil = pauseSub?.pausedUntil;
-        // (a) FLIP active→paused: the freeze window has started + a retention pause is live on Stripe,
-        //     but the webhook flip was missed.
-        if (
-          pauseReason === "retention" &&
-          pauseCollectionPresent &&
-          dbSubStatus !== "paused" &&
-          pausedFrom != null &&
-          new Date(pausedFrom).getTime() <= now.getTime() &&
-          (pausedUntil == null || now.getTime() < new Date(pausedUntil).getTime())
-        ) {
+        const transition = decidePauseTransition({
+          pauseCollectionPresent,
+          pauseReason,
+          dbStatus: pauseSub?.status,
+          pausedFrom: pauseSub?.pausedFrom,
+          pausedUntil: pauseSub?.pausedUntil,
+          now,
+        });
+        // (a) FLIP active→paused: freeze window started + retention pause live, webhook flip missed.
+        if (transition === "flip_to_paused") {
           await User.updateOne(
             { _id: user._id },
             { $set: { "subscription.status": "paused", "subscription.isActive": false } }
@@ -160,7 +158,7 @@ export async function GET(request: NextRequest) {
         // (b) RESTORE from paused: DB still says paused but Stripe already resumed (pause_collection
         //     gone). Mirror Stripe's status (active→active; a failed resume shows past_due/unpaid) and
         //     clear the window. The primary restore is invoice.payment_succeeded.
-        else if (dbSubStatus === "paused" && !pauseCollectionPresent) {
+        else if (transition === "restore_from_paused") {
           const backToActive = subscription.status === "active" || subscription.status === "trialing";
           await User.updateOne(
             { _id: user._id },
