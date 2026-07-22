@@ -323,7 +323,9 @@ theory is disproven and the config change was not kept.
 **Why this doesn't block the target fix**: real production builds/deploys never remap
 `NEXTAUTH_URL` mid-build — Vercel sets it once to the canonical prod URL and it never changes
 between builds — so this specific trigger is unique to `E2E_BUILD=1`'s port-remapping overlay, not
-a production risk. Gate 1 (a plain `npm run build`/production build) is genuinely fixed. But
+a production risk. **Empirically verified** (2026-07-22): `NEXTAUTH_URL=https://toolsaustralia.com.au
+npm run build` on a clean tree exits 0 with the full page manifest — a production-style URL does
+NOT reproduce the failure; only the localhost port-variant does. Gate 1 (a plain `npm run build`/production build) is genuinely fixed. But
 `E2E_BUILD=1` mode itself remains not runnable until this deeper Turbopack/`@opentelemetry`
 fragility is understood further — flagged here for a follow-up task rather than guessed at with a
 second speculative `next.config.ts` change.
