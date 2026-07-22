@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import type { CSSProperties } from "react";
+import { BrandMark } from "./BrandMark";
 import type { ToolboxOption, ToolsetOption } from "./constants";
 
 /** Reel cards are ≤172px wide on every breakpoint — never ship a larger candidate. */
@@ -14,45 +14,6 @@ const TOOLSET_PHOTO_SCALE = 1.28;
 /** Per-lane drop shadows — the toolbox render sits slightly higher off the card. */
 const TOOLBOX_SHADOW = "drop-shadow(0 9px 13px rgba(0,0,0,.42))";
 const TOOLSET_SHADOW = "drop-shadow(0 8px 12px rgba(0,0,0,.45))";
-
-/**
- * Brand wordmark painted through a CSS mask.
- *
- * The toolbox marks in the repo are WHITE-on-transparent silhouettes; masking
- * lets one asset serve both themes at the brand's own colour instead of
- * disappearing on the light card. `--pbc-mark-l` / `--pbc-mark-d` are consumed
- * by `.pbc-brand-mark` in globals.css so the theme swap is pure CSS (no JS
- * theme read → no hydration flash on this always-visible section).
- */
-function BrandMark({
-  src,
-  color,
-  scale,
-  title,
-}: {
-  src: string;
-  color: { light: string; dark: string };
-  scale: number;
-  title: string;
-}) {
-  return (
-    <span
-      role="img"
-      aria-label={title}
-      className="pbc-brand-mark block"
-      style={
-        {
-          "--pbc-mark-l": color.light,
-          "--pbc-mark-d": color.dark,
-          width: `${scale * 100}%`,
-          height: `${scale * 100}%`,
-          WebkitMaskImage: `url("${src}")`,
-          maskImage: `url("${src}")`,
-        } as CSSProperties
-      }
-    />
-  );
-}
 
 /** Toolbox lane card: product render over piece-count eyebrow → brand mark → "TOOLBOX". */
 export function ToolboxReelCard({ toolbox }: { toolbox: ToolboxOption }) {

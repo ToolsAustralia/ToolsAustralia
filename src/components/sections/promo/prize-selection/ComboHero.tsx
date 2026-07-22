@@ -40,8 +40,11 @@ export function ComboHero({ combo, accent, drawLabel, priority = false, classNam
         }
       />
 
+      {/* Dark shell matches the reel cards' panel rather than staying white: the
+          combo renders are transparent, so a white slab was only ever a light-theme
+          studio plate and read as a hole punched in the dark page. */}
       <div
-        className="relative overflow-hidden rounded-2xl border border-black/10 bg-white p-[11px] dark:border-white/[0.14]"
+        className="relative overflow-hidden rounded-2xl border border-black/10 bg-white p-[11px] dark:border-white/[0.14] dark:bg-[var(--pbc-panel2)]"
         style={{
           boxShadow: `0 0 0 1px ${accent}44, 0 22px 54px -30px ${accent}, 0 8px 26px -18px rgba(0,0,0,.5)`,
         }}
@@ -50,7 +53,10 @@ export function ComboHero({ combo, accent, drawLabel, priority = false, classNam
           ✓ THIS IS WHAT YOU WIN
         </span>
 
-        <div className="relative flex aspect-[4/3] w-full items-center justify-center rounded-[10px] bg-gradient-to-b from-white to-[#f2f3f5] lg:aspect-[16/10]">
+        <div
+          className="ta-product-stage relative flex aspect-[4/3] w-full items-center justify-center rounded-[10px] lg:aspect-[16/10]"
+          style={{ ["--ta-stage-bloom" as string]: `${accent}30` } as CSSProperties}
+        >
           <Image
             key={combo.image}
             src={combo.image}

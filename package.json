@@ -108,6 +108,7 @@
     "test:prize-summaries": "tsx src/config/__tests__/prize-summaries.test.ts",
     "test:prize-builder": "tsx src/components/sections/promo/prize-selection/__tests__/prize-builder-model.test.ts",
     "test:prize-builder-card": "tsx --require ./src/components/sections/promo/prize-selection/__tests__/asset-stubs.cjs src/components/sections/promo/prize-selection/__tests__/PrizeBuilderCard.test.ts",
+    "test:prize-gallery": "tsx src/app/promotions/_components/__tests__/gallery-spotlight-model.test.ts",
     "test:promo-visit": "tsx src/utils/promo-analytics/__tests__/record-promo-visit.test.ts",
     "test:additional-pack-discount": "tsx src/utils/membership/__tests__/additional-pack-discount.test.ts",
     "test:partner-discount-queue": "tsx src/utils/partner-discounts/__tests__/partner-discount-queue.test.ts",

@@ -1,5 +1,59 @@
 # Shared UI — Frontend
 
+## Header / Footer — "Major Draw" vs the `/promotions` showroom (2026-07-22)
+
+`Header.tsx` declares **`MAJOR_DRAW_HREF`** (`/promotions/${DEFAULT_PRIZE_SLUG}`) once at module
+scope: the "Giveaways → Major Draw" item is rendered TWICE (desktop dropdown + mobile menu) and two
+literals would drift. The **footer's "Promotions" Quick Link is the only in-app link to the
+`/promotions` showroom** — it was repointed off the default slug for exactly that reason. Full
+routing table + rationale in [promo/frontend.md](../promo/frontend.md) "Entry points".
+
+## `.ta-product-stage` — the lit plate a prize render sits on (2026-07-22)
+
+The plate behind a combo render is **one shared class** in globals.css, used by the prize builder's
+[`ComboHero`](../../src/components/sections/promo/prize-selection/ComboHero.tsx), the /promotions
+showroom's case and its rail thumbs — so the same prize can never appear on two different surfaces.
+
+Light keeps the near-white studio plate. **Dark uses the same panel gradient the reel cards use, plus
+an accent bloom** (`--ta-stage-bloom`, set inline from the current selection) so the gear is lit by
+its own brand colour instead of floating on a white slab in an otherwise black page (owner).
+
+This is safe because the art allows it, and that was **verified, not assumed**: the combo renders
+(`majordraws/{set}-set/{set}-{box}.webp`) and the toolbox renders are **45–60% transparent with fully
+transparent corners**. The one opaque render is the cash art, which brings its own dark green
+background and sits on either plate unchanged. **The counter-example matters:** the prize gallery
+photos that feed `PrizeContentsStrip` are **0% transparent with baked light backgrounds** (corners
+≈ `#f5efea`), so those tiles must KEEP a light plate — putting them on `.ta-product-stage` would just
+frame a light photo in a dark box. Check an asset's alpha before moving it onto a dark surface.
+
+## `--pgs-*` — the /promotions showroom token layer (2026-07-22)
+
+`.prize-gallery` / `.dark .prize-gallery` in globals.css, the same contract as the `--pbc-*` prize
+builder block above it: surface palette keyed off the `.dark` html class rather than read from the
+Zustand theme store, so a page that IS the fold paints the right palette on the FIRST server-rendered
+frame. It is a SEPARATE layer from `--pbc-*` because the showroom has its own page ground, stage
+gradient and card colour — borrowing the builder's tokens would make a configurator tweak silently
+restyle the gallery. `--pgs-accent` is deliberately not declared there: it is set inline on the stage
+root from the selection. `--pgs-glow-alpha` carries the handoff's `<accent>22` / `<accent>34` hex
+alphas as an opacity so ONE gradient declaration serves both themes with any brand colour.
+
+## `BrandMark` + `accentInk` / `contrastRatio` (2026-07-22)
+
+- **[`BrandMark`](../../src/components/sections/promo/prize-selection/BrandMark.tsx)** was extracted
+  out of `ReelCards.tsx` when the showroom needed the same three toolbox wordmarks. One
+  implementation, one `.pbc-brand-mark` rule: the toolbox marks are WHITE-on-transparent silhouettes,
+  and masking is what lets one asset serve both themes at the brand's own colour. It sizes itself as
+  a **percentage of its plate**, so the registry's `markScale` levels the marks to a common LETTER
+  height — give it a fixed-height plate, don't override its width/height.
+- **`accentInk(hex, darkInk?)`** in [`prize-brand-colors.ts`](../../src/utils/prize-brand-colors.ts)
+  picks legible ink for text on a filled brand accent using **real WCAG 2.1 relative luminance**
+  (gamma-corrected), returning whichever of white / near-black actually has the better contrast.
+  `contrastRatio(a, b)` is exported alongside it. **Do not copy the naive
+  `(0.2126R + 0.7152G + 0.0722B)/255` form** still present in `WinnerCard`, `WinnerFilterToggle` and
+  `cobberAccent`: skipping sRGB gamma puts saturated mid-tones on the wrong side of the line and
+  returns white ink at 2.4–3.1:1 (Makita teal, HiKOKI green, cash green) — a WCAG AA failure. Those
+  three call sites still hold their own copies; fold them in when one is next touched.
+
 ## `data-floating-widget` — the bottom-floater coordination contract (2026-07-07)
 
 Any element that **fixes itself to the bottom of the viewport** (banners, sticky CTA bars, corner FABs) MUST carry **`data-floating-widget="true"`** on its outermost fixed node. This is the opt-in contract the Cobber support-chat launcher reads to avoid overlapping them: [`useDodgeFloatingObstacles`](../../src/components/support-chat/useDodgeFloatingObstacles.ts) scans `[data-floating-widget]` and lifts the bubble above any that collide with its corner (AABB test — see [ai-chatbot/gotchas.md § Launcher placement](../ai-chatbot/gotchas.md)). Current carriers: [`FloatingCountdownBanner`](../../src/components/banners/FloatingCountdownBanner.tsx), [`FloatingGetEntriesButton`](../../src/components/sections/promo/FloatingGetEntriesButton.tsx), [`FloatingGiftIcon`](../../src/components/ui/FloatingGiftIcon.tsx). **When you add a new bottom-anchored floater, add the attribute** and the launcher dodges it automatically — no other wiring. (The attribute is cheap and inert for anything that doesn't consume it.)

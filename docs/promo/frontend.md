@@ -1,5 +1,169 @@
 # Promo — Frontend
 
+## /promotions — "Spotlight" showroom (2026-07-22) — SUPERSEDES the filter-grid gallery
+
+Rewritten to the design handoff at `claudeDesign/design_handoff_prize_gallery_spotlight/`. The
+filter-pill grid is **gone**; `/promotions` is now a **cinematic configurator**: one large LIVE
+PREVIEW beside a grouped rail of every combination, and picking one recolours the whole stage.
+
+| File | Role |
+|---|---|
+| [`page.tsx`](../../src/app/promotions/page.tsx) | Server: metadata, promo chrome, permit fine print |
+| [`_components/PrizeGallerySpotlight.tsx`](../../src/app/promotions/_components/PrizeGallerySpotlight.tsx) | Client: the ONLY state on the page + stage layout |
+| [`_components/SpotlightPreview.tsx`](../../src/app/promotions/_components/SpotlightPreview.tsx) | Left column — eyebrow, H1, case, meta row, stat tiles |
+| [`_components/ComboRail.tsx`](../../src/app/promotions/_components/ComboRail.tsx) | Right column — toolset groups, thumbs, cash tile |
+| [`_components/GalleryDrawStamp.tsx`](../../src/app/promotions/_components/GalleryDrawStamp.tsx) | The case pill: live draw stamp + countdown |
+| [`_components/gallery-spotlight-model.ts`](../../src/app/promotions/_components/gallery-spotlight-model.ts) | All derivations, no React (`npm run test:prize-gallery`) |
+
+**Deleted:** `GiveawayGalleryClient.tsx` (filter pills + grid + `ComboCard`) and
+`GalleryCountdown.tsx` (the red countdown-chip row). The featured-lead card, the brand marquee, the
+sticky filter dock and the closing gold cash band went with them — the rail's cash tile is now the
+cash entry point.
+
+### Scales by data, never by layout
+Nothing in the gallery enumerates a brand. The rail's groups are `TOOLSETS` and each group's thumbs
+are `TOOLBOXES` from [`prize-selection/constants.ts`](../../src/components/sections/promo/prize-selection/constants.ts)
+— the SAME registries the prize builder turns — and the thumb grid's column count is
+`repeat(TOOLBOXES.length, …)`. Adding a brand is one record there plus its art; there is no edit in
+this folder and no grid rewrite. Combo art, alt text and the accent come from the builder's own
+`getComboPresentation` / `resolveAccent`, so the two surfaces can never point at different art for
+the same combination. `npm run test:prize-gallery` asserts every combination resolves to a real
+catalog prize, a render **on disk**, and a working `/promotions/<slug>` link.
+
+`ToolboxOption` gained **`brandName`** ("Milwaukee" / "Kincrome" / "Sidchrome") — the bare brand the
+`<Toolset> × <Toolbox>` title and the Storage stat need. `name` stays the full product name
+("Monster Milwaukee Toolbox") and `shortName` the chip form ("Milwaukee box").
+
+### Selection + links
+State is `{toolset, toolbox, isCash}` (the builder's `PrizeSelection`), opening on
+**`DEFAULT_PRIZE_SLUG`** via `fromPrizeSlug` — derived, so the showroom and the rest of the site
+always headline the same combination. **Deliberately NOT mirrored into the URL:** every option
+already deep-links to its own `/promotions/<toolset>-<toolbox>` prize page (the prerendered `[slug]`
+route, so the destination's hero art and OG metadata match exactly what was previewed), and cash to
+`/promotions/cash-prize`. A `?combo=` param would be a second, weaker address for the same thing.
+
+### Accent
+`--pgs-accent` is set inline **once** on the stage root from the selected toolset (cash green in
+cash mode) and inherited by the glow, case ring, CTA, active thumb border and check — so browsing to
+another brand recolours the column in one .5s transition from a single source. Everything else is
+the `.prize-gallery` token layer in globals.css (see [shared-ui/frontend.md](../shared-ui/frontend.md)).
+
+### Rail height — fills the preview, no fixed cap
+The handoff caps the rail at `max-height: 640px`, which stopped it well short of the taller preview
+column and left visible dead space (owner). The rail is now a grid item with **`lg:h-0
+lg:min-h-full`**: contributing ZERO intrinsic height lets the preview column size the row, then
+`min-height:100%` stretches the rail back to exactly that. Its scroll area is `flex-1 min-h-0
+overflow-y-auto` (the `min-h-0` is what allows a flex child to shrink below its content and actually
+scroll). Measured flush — rail bottom equals preview bottom at 1280/1440/1920. Below `lg` the rail
+is a plain stack so the page keeps ONE vertical scroll.
+
+### Mobile: the floating "Enter draw"
+Below `lg` the rail sits UNDER the preview, so by the time a visitor picks a combination the inline
+CTA has scrolled off and acting on it meant scrolling back up (owner). `SpotlightPreview` mounts a
+**floating twin** on `lg:hidden`, shown by an `IntersectionObserver` on the real CTA — when the
+inline one leaves the viewport the floating one fades in, and it carries the SAME accent, ink and
+live `href`, so it re-points as the selection changes. Same contract as the `[slug]` pages'
+`FloatingGetEntriesButton`: `data-floating-widget="true"` (so the Cobber launcher dodges it — see
+[shared-ui/frontend.md](../shared-ui/frontend.md)), `bottom-[calc(env(safe-area-inset-bottom)+1rem)]`,
+centered, `pointer-events-none` wrapper with a `pointer-events-auto` pill. It is a **CSS**
+transition, not framer — this page ships no motion library otherwise — and it takes `tabIndex={-1}`
+while hidden so it is never a phantom tab stop.
+
+### Accessibility
+The rail is ONE `role="radiogroup"` whose 16th option is the cash tile, with a **roving tabindex** —
+16 tab stops would bury the fine print, so Tab reaches the rail once and Left/Right walk the flat
+option order while Up/Down jump a whole toolbox row (matching the visual grouping). Focus follows
+selection. Each thumb carries an explicit `aria-label` ("Makita × Kincrome") with its art and
+wordmark `aria-hidden`, otherwise the accessible name assembled to "Makita Kincrome Kincrome". The
+preview's meta block is `aria-live="polite"` — the rail lives elsewhere in the DOM, so without it a
+screen-reader user hears only "checked" and never what the preview became.
+
+### CTA contrast — the handoff's ink list was wrong
+The handoff hard-codes dark CTA ink for "DeWalt/Ryobi/cash". Measured, that list is both incomplete
+and unnecessary: `accentInk()` in [`prize-brand-colors.ts`](../../src/utils/prize-brand-colors.ts)
+now picks whichever of white / near-black has the better **WCAG 2.1** contrast, using real
+gamma-corrected relative luminance. The naive `(0.2126R + 0.7152G + 0.0722B)/255` shortcut the older
+Winner components use skips sRGB gamma and puts saturated mid-tones on the wrong side of the line —
+it returns WHITE for Makita teal (2.4:1), HiKOKI green (2.9:1) and cash green (3.1:1), all of which
+fail AA. Derived means a future brand is covered with no code change; the test asserts **≥ 4.5:1 on
+every accent**, which is what caught it. `contrastRatio()` is exported alongside it.
+
+### Deliberate deviations from the handoff (all verified in-browser at 375/768/1440, both themes)
+- **No top bar.** The handoff opens with a wordmark + draw line + "Enter now" row; the page already
+  mounts `PromoBanner` as its header, so a second bar was duplicate chrome (owner). The draw line
+  moved INTO the case pill — `GalleryDrawStamp` replaces the static "Live preview" / "Cash option"
+  tag with "DRAWN 31 JUL · 9:59AM AEST · 08D 19H LEFT", falling back to that tag until the draw
+  resolves (it is a client query, and the pill has a fixed slot). The clock half is hidden on phones
+  where the full string overflows the pill. Ticks every 30s, not 1s — the line only resolves to days
+  and hours. Its date half is `formatMajorDrawChipUtc`, the same AEST/AEDT stamp the builder's hero
+  prints, so the two can never disagree.
+- **Thumb height** — the handoff's flat `106px` is kept at `lg`, but below it the rail is full-width
+  rather than a third of the stage, so 106px letterboxed the render into a 245×106 strip at 768px.
+  Under `lg` the thumb takes the handoff's own 128×106 **ratio** and scales with its column.
+- **Case aspect** — `4/3` (handoff phone framing) only under `md`; from `md` the single-column stage
+  is wide enough that 4/3 made the case taller than the viewport.
+- **H1** — 28px under `sm`. At the handoff's 32px, "YOU ACTUALLY WANT." needs ~370px and breaks to a
+  third line in a 375px viewport (the prototype's mobile frame is 440px).
+- **Meta row** — the text block is `flex-1` and drops its `max-w-[420px]` at `lg`. With plain
+  `justify-between` it sat at content width and the CTA at the far edge, leaving a wide gap while the
+  longest description wrapped to two lines (owner).
+- **Rail head + stat labels** stack / tighten under `sm`; at the handoff's spacing both wrap. The
+  head also carries a derived **"{n} combos"** count chip (owner), same vocabulary as the builder's
+  "{n} options" lane header.
+- **Group wordmarks** are sized by HEIGHT (a % of the plate) and pinned left-centre, reproducing the
+  prototype's `background-size: auto N%` + `background-position: left center`. `object-contain` plus
+  a `transform: scale()` instead scales a width-fitted mark about its centre, which let Milwaukee and
+  Ryobi creep out both sides of their plate and misaligned the five group headers.
+- **Low-contrast wordmarks** (DeWalt, Ryobi, Makita — under 3:1 on white) get a hairline shadow in
+  light mode via `needsMarkOutline()`, measured not listed. The handoff flagged this and suggested a
+  plate; a plate would box some brands and not others.
+- **Dark product stage** — see `.ta-product-stage` in [shared-ui/frontend.md](../shared-ui/frontend.md).
+  The handoff's white case is light-mode only.
+- **Permit** is `NTP_NUMBER` from `@/constants/legal` (NTP/17192), not the prototype's placeholder.
+  The handoff's "Open to Australian residents; not available in ACT or SA." sentence was dropped
+  (owner); the fine print is now "Government-certified draws · randomdraws.com.au · Permit NTP/…".
+
+**Chrome:** unchanged from the previous gallery, and it still matters — `PromoBanner` needs BOTH a
+`<Suspense>` (it reads `useSearchParams`) and a `<VariantProvider … isLoading={false}>` (with no
+provider the default context is `isLoading: true` forever and the banner sticks in its logo
+skeleton). `followOnScroll={false}` keeps it in-flow. `PromoThemeInitializer slug={DEFAULT_PRIZE_SLUG}`
+themes it like the `[slug]` pages. Ancestors use `overflow-x-clip`, never `overflow-hidden`. The
+fine print carries `pb-28 sm:pb-36 lg:pb-44` so the layout's absolutely-positioned
+`NewsletterSection` floats over empty ground.
+
+**Analytics caveat (unchanged):** the bare `/promotions` path has no promo slug, so
+`usePromoPageTracking` fires NO PromoAnalyticsVisit for gallery views; extend the validator +
+pageType deliberately if gallery tracking is wanted.
+
+### Entry points — the showroom is deliberately unlinked except from the footer (2026-07-22)
+Owner call, and it **reverses the 2026-07-08 routing**: the two prominent CTAs now land on the
+**default prize page**, which is the page that actually sells, and the showroom is a browse
+destination you opt into.
+
+| Entry | Goes to |
+|---|---|
+| Navbar → Giveaways → **Major Draw** | `/promotions/${DEFAULT_PRIZE_SLUG}` via `MAJOR_DRAW_HREF` in [`Header.tsx`](../../src/components/layout/Header.tsx) |
+| `FloatingCountdownBanner` **"Enter Now"** | `/promotions/${DEFAULT_PRIZE_SLUG}` (`?aff` still preserved) |
+| Footer → Quick Links → **Promotions** | `/promotions` — **the ONLY in-app link to the showroom** |
+
+`MAJOR_DRAW_HREF` is declared once at the top of `Header.tsx` because the desktop dropdown and the
+mobile menu both render that item — two literals would drift. `isGiveawaysActive()` still matches on
+`pathname.startsWith("/promotions")`, so the nav item highlights on the prize page, its siblings AND
+the showroom. **The footer link was repointed from the default slug to `/promotions` as part of this**
+— without that the showroom would have had zero in-app links. If you repoint it again, give the
+showroom an entry somewhere else first.
+
+### Route loader
+[`src/app/promotions/loading.tsx`](../../src/app/promotions/loading.tsx) renders the shared
+**`DashboardLoader`** — the same branded loader the member / admin / affiliate dashboards use — so
+navigating into any promotions page shows brand chrome instead of a blank frame. Sitting at the
+`promotions` segment it covers the showroom, `[slug]` and the per-toolset routes, including
+navigation between them. It passes an **explicit label**: with none, `DashboardLoader` cycles its
+dashboard-flavoured lines ("Counting your entries"), which read as nonsense to a visitor off an ad.
+Theme follows `html.dark`, so it matches the promotions guest theme toggle. (These routes are
+prerendered, so on a fast connection the boundary may not paint at all — that is the intended
+behaviour, not a bug.)
+
 ## Prize builder — "Build your prize" configurator (2026-07-21)
 
 The major-draw prize showcase was rewritten to the design handoff at
@@ -303,83 +467,7 @@ The always-on repaint stack on the promo-banner surface was rewritten to transfo
 - **PromoBanner fire effect**: the `.fire` overlay div now renders one child — `<div className="fire-glitter" />` — which is the second (parallax) glitter field; `globals.css` positions/animates it and the two pseudo-elements. Don't remove the child or add other children to `.fire` (the old `.fire > *` z-index rule is gone). The glitter layers carry a 16px-per-edge blur bleed (`top: -16px`, height `+32px`) so the blur-feathered edges never enter the clip. The `--glitter` texture is now **first-party** (`public/images/effects/glitter.png`, 800×534 quantized PNG ~244KB) — it previously hotlinked a ~1.4MB image from `assets.codepen.io` (third-party SPOF on ad landing pages); `img-src 'self'` already covers it.
 - **UrgencyClockIcon** (rendered in PromoBanner's `static_urgency` right-tile): pure CSS now — subtle scale pulse + 60s `steps(60)` second hand, static on mobile/tablet/save-data. Note it does NOT hook into `PromoBannerCountdownTickLeaf` (the icon's render site is outside that leaf); the CSS tick costs one style update per second.
 - **FloatingCountdownBanner**: `backdrop-blur-[var(--ta-blur)]` **removed** from the pill — its `from-gray-900 via-gray-800 to-black` gradient is opaque, so the blur was invisible GPU cost. The collapsed pill's status dot is now **static** (no `animate-pulse`/`animate-ping` — the collapsed state persists for the whole scroll session). The mobile-expanded dots keep their ping/pulse but carry `ta-countdown-dot`, which the globals.css tier-gate cluster freezes on mobile/tablet/save-data (they still animate in narrow desktop-tier windows). Dismissed = unmounted, so nothing runs.
-- **Gallery filter bar + CTAs**: `GiveawayGalleryClient` filter bar, `PromoHero` CTA and `FloatingGetEntriesButton` swapped literal `backdrop-blur-xl|lg` for `backdrop-blur-[var(--ta-blur)]` (desktop 12px, tablet 4px, mobile 0px); the filter bar's bg opacity was raised (`bg-white/95`, `dark:bg-slate-950/95`) so mobile reads as a solid surface without blur.
-
-## /promotions gallery filter — full-width sticky bar at `top-0` (2026-07-08)
-
-`GiveawayGalleryClient` filter dock was `sticky top-16 sm:top-20` inside a `SectionContainer` — the `top-16/20` was meant to clear a fixed PromoBanner, but on `/promotions` the PromoBanner is rendered **in-flow** (`followOnScroll={false}`, [page.tsx](../../src/app/promotions/page.tsx)) and there's **no fixed header** (the gallery is chrome-free), so that offset left a big empty gap above the filter once it stuck. Fixed: the dock is now a **full-width sticky bar** (`sticky top-0 w-full`, edge-to-edge glass + bottom border) pulled OUT of `SectionContainer` (rendered directly in the page's full-width `<main>`), with its content still in an inner `max-w-7xl` container. The grid sits in its own `SectionContainer` below. **Note:** `top-0` is correct only because nothing is fixed above the gallery here — do NOT copy this to the `[slug]` pages, where the PromoBanner IS a fixed scroll-follow pill.
-
-## FloatingCountdownBanner "Enter Now" → `/promotions` (2026-07-08)
-
-The floating countdown banner's `handleViewDetails` ("Enter Now" / "Visit Page") now navigates to the **`/promotions` gallery landing**, not `/promotions/${DEFAULT_PRIZE_SLUG}` (owner request). The `?aff` affiliate param is still preserved. Consistent with `/promotions` now being the real root gallery (it used to bare-redirect to `DEFAULT_PRIZE_SLUG`). The `DEFAULT_PRIZE_SLUG` import was dropped from the banner. Other default-slug links (Footer, WinnerCard, HorizontalCountdown, admin promo/affiliate link builders) were **left as-is** — only this banner was changed.
-
-## /promotions — prize-combinations gallery (2026-07-07, designed — pending owner rating)
-
-Editorial index of every major-draw prize combination, now the PROMOTIONS ROOT (owner call — the old bare
-/promotions was a redirect to DEFAULT_PRIZE_SLUG): `src/app/promotions/page.tsx` (server —
-static metadata, builds serializable cards) + `_components/GiveawayGalleryClient.tsx` (filter pills + grid).
-Page composition: **dark hero band** (combo count eyebrow, display heading) → **featured headline combo**
-(`DEFAULT_PRIZE_SLUG`, full-width art overlapping the hero, "This month's headline" badge, `priority` images
-— excluded from the grid only in the UNFILTERED view, so a filtered pair matching only the featured combo
-still shows it) → **sticky glass filter dock** (follows the scroll on every viewport — the promotions layout
-is chrome-free so `top` offsets are safe) with TWO independent dimensions: **toolset brand** (brand-dotted
-pills) × **toolbox brand** (Sidchrome / Milwaukee Toolbox / Kincrome) — combinable (AND) or single; tapping an
-active pill clears it; count + Clear live in the dock (sm+) / below it (mobile) → grid of **showroom
-`ComboCard`s** (extracted component; dark glass shell `from-white/[.07]`, pointer tilt via `useTilt(4)`
-(motion-safe), top hairline / value badge / hover border+glow in the brand's `BRAND_THEMES` primary; Milwaukee
-uses the TA site red per prize-brand-colors convention; badge ink via YIQ luminance so DeWalt/Ryobi yellows
-get dark ink; identity row renders the **brand wordmark SVG** (`wordmarkSrc`, `public/images/brands/<name>/`)
-when shipped, falling back to the text title, beside a "{storage} toolbox" chip) → **gold cash-alternative
-band** ("Rather have the cash?") closing the page. The hero also mounts **`GalleryCountdown`**
-(`_components/GalleryCountdown.tsx`) — a live major-draw countdown in the dashboard's red countdown-chip
-vocabulary via `useCurrentMajorDraw` (30s tick; renders nothing until the draw resolves and only while
-`status === "active"`, so the hero reserves no space for it). Filter pills are dark-theme-only styles now
-(the page ground is dark in both themes). Cards come from `listPrizes()`, each
-using the SAME manifest-verified landing hero art as its `/promotions/<slug>` page via
-`getLandingHeroImagePaths(slug)` — mobile asset `< lg`, desktop asset `≥ lg` (the promotions-wide 1024px
-art-direction split), `object-contain` on a **white art plate framed inside the dark shell** (rounded inset
-`m-2.5` — the art is composited for light backgrounds, so the plate reads as a lit display case). Combos with
-no shipped art are skipped, not broken. **Analytics caveat:** the bare `/promotions`
-path has no promo slug, so `usePromoPageTracking` fires NO PromoAnalyticsVisit for gallery views (harmless);
-extend the validator + pageType deliberately if gallery tracking is wanted.
-
-**Chrome parity + newsletter overlap (2026-07-07):** the gallery mounts the SAME top chrome the brand
-landing pages use — `PromoBanner` (the sticky site-wide promo/countdown strip that reads as the "navbar") and
-`PromotionsAccountButton` (floating account/nav menu, authed-only). **Both are `<Suspense>`-wrapped** (`PromoBanner`
-reads `useSearchParams`). **`PromoBanner` MUST also be wrapped in a `<VariantProvider … isLoading={false}>`**:
-it calls `useVariantContext()`, and with NO provider the default context is `isLoading: true` *forever* →
-`isPromoResolved` stays false → the banner is stuck in its centered-logo **loading skeleton** and never renders
-the promo strip (this was the "banner shows only a logo, no promos" bug). The `[slug]` pages get a real provider
-from `VariantAssignmentWrapper`; the gallery runs no experiment, so a resolved empty provider is correct.
-The gallery also passes **`followOnScroll={false}`** so the banner stays in-flow and never becomes the
-fixed scroll-follow pill (the gallery has its own sticky filter dock — two floating top elements would fight). The page is `async` and server-fetches `getEffectivePromosForDisplay()` to pass
-`initialMembershipPromo`/`initialOneTimePromo` to `PromoBanner`, AND mounts `<PromoThemeInitializer slug={DEFAULT_PRIZE_SLUG} />`
-— WITHOUT both, the banner rendered unthemed/empty and looked different from the `[slug]` pages (owner: "should
-be the same PromoBanner"). Fabricated "$XXXk+ prize-pool" stat row removed (owner). Overlap fix: the layout's
-`NewsletterSection` is `absolute … -translate-y-1/2`, tucking up half its height into the page end; the gold
-cash band carries `pb-28 sm:pb-36 lg:pb-44` so the newsletter floats over empty ground, not the band.
-
-**Theme-aware + mobile 2-up + sticky-dock fix (2026-07-07):** the gallery is now **light + dark** (`bg-white
-dark:bg-neutral-950`, follows the promotions guest theme toggle) — it was committed-dark; owner wanted light
-mode too. Cards, dock, hero, featured lead all carry light+dark pairs; the brand wordmark SVGs are
-brand-colored (`#c92a28`/`#FEBD17`/`#BFD730`…) so they read on both grounds without inverting. The hero
-**brand strip is a one-row marquee** (matches the `/membership` `MembershipBrandShowcase`:
-`animate-[marquee-scroll_45s_linear_infinite]`, masked edges, hover-pause, bigger white cards); the 5 toolset
-wordmarks are repeated **4×** so the keyframe's `-50%` animated half always exceeds the viewport for a seamless
-loop (2× isn't enough with only 5 brands on wide screens). Perf (2026-07-20): both marquees carry
-`[animation-play-state:var(--ta-marquee-state)]` (paused on Save-Data / reduced-motion) and
-`[content-visibility:auto]` + `[contain-intrinsic-size:auto_<h>px]` on the masked wrapper so the strip skips
-paint/animation work offscreen — pure CSS because this page is a Server Component (see
-[shared-ui/gotchas.md](../shared-ui/gotchas.md)). **Grid is
-`grid-cols-2` on mobile** (2-up — owner: "see in general what we're offering", small is fine), `lg:grid-cols-3`;
-card copy compacts on mobile (wordmark scaled, toolbox chip + full catalog-label description hidden `<sm`, "View"
-vs "View this combination"). **No value badge** (owner: "remove the price value") — and the **prize name is
-always shown**: the short combo title (`card.title`, e.g. "Milwaukee × Sidchrome", truncated) on mobile, the
-full catalog-label description from `sm`. The `accentInk`/`inkOn` YIQ helper was removed with the badge.
-**Sticky filter dock now actually sticks:** the page ancestors use `overflow-x-clip` (NOT
-`overflow-hidden`, which establishes a scroll container and silently breaks `position: sticky`); the dock's
-`top-16 sm:top-20` clears the `PromoBanner` (which goes `fixed z-50` when scrolled). The "This month's headline"
-badge on the featured combo was removed (owner).
+- **Gallery filter bar + CTAs**: `GiveawayGalleryClient` filter bar (**deleted 2026-07-22** with the Spotlight rewrite — the showroom has no blurred surface), `PromoHero` CTA and `FloatingGetEntriesButton` swapped literal `backdrop-blur-xl|lg` for `backdrop-blur-[var(--ta-blur)]` (desktop 12px, tablet 4px, mobile 0px).
 
 ## Landing page — new design assets, full replace (2026-06-23)
 
