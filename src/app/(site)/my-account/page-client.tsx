@@ -22,8 +22,8 @@ import { useMajorDrawEntryCta } from "@/hooks/useMajorDrawEntryCta";
 import { useMajorDrawPurchaseGate } from "@/hooks/useMajorDrawPurchaseGate";
 import dynamic from "next/dynamic";
 import MembershipModal from "@/components/modals/MembershipModal/LazyMembershipModal";
+import ReferFriendModal from "@/components/modals/ReferFriendModal/LazyReferFriendModal";
 // Lazy-loaded: dashboard modals only mount when opened — keep them out of the initial bundle.
-const ReferFriendModal = dynamic(() => import("@/components/modals/ReferFriendModal"), { ssr: false });
 const PastDrawsModal = dynamic(() => import("@/components/modals/PastDrawsModal"), { ssr: false });
 import { hasFailedRenewal } from "@/utils/subscription/subscription-helpers";
 import { hasSeenExplainer } from "@/utils/subscription-explainer-storage";

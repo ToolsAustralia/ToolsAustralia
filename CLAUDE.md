@@ -788,7 +788,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/hooks/useStreakCelebration.ts",
         "src/utils/dashboard/**"
       ],
-      "lastVerified": "2026-07-19"
+      "lastVerified": "2026-07-22"
     },
     "security-csp": {
       "docs": "docs/security-csp/",
@@ -907,7 +907,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "e2e/**",
         "playwright.config.ts"
       ],
-      "lastVerified": "2026-07-21"
+      "lastVerified": "2026-07-22"
     }
   }
 }

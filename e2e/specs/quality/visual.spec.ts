@@ -138,51 +138,6 @@ const renewalNote = (page: Page): Locator =>
 const cycleFuse = (page: Page): Locator =>
   page.getByText(/^Day \d+ of \d+$/).locator("..").locator("..");
 
-/**
- * my-account-only setup: two e2e-seed-data incompatibilities (confirmed by direct
- * reproduction, not assumed — see task-10-report.md) that make the dashboard's own
- * background fetches 500, which the QA watchdog then (correctly) treats as a real
- * failure. Both are pre-existing gaps in the e2e seed/read-only-member story, not
- * bugs introduced by this spec — stubbed here (test-side network interception only,
- * no src/ or e2e/seed/ changes) so the VISUAL capture isn't blocked by an unrelated,
- * already-flagged infra limitation.
- */
-async function stubMyAccountFlakyReads(page: Page): Promise<void> {
-  // /api/referrals/code: src/lib/referral.ts's getOrCreateReferralProfile() does a
-  // FULL-DOCUMENT `user.save()` to lazily create the referral code, which re-runs
-  // Mongoose schema validation on every field — including the email regex validator,
-  // which rejects the seeded "e2e.member@e2e.local" address (`.local` TLD). Confirmed
-  // directly: calling getOrCreateReferralProfile(seededUserId) outside the HTTP layer
-  // throws `ValidationError: email: Please enter a valid email address`. The raw
-  // `insertOne` seed (e2e/seed/users.ts) never goes through Mongoose validation, so
-  // this only surfaces the moment something calls `.save()` on the fetched document.
-  await page.route("**/api/referrals/code", (route) =>
-    route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify({
-        success: true,
-        data: { code: "E2EMEMBER", successfulConversions: 0, totalEntriesAwarded: 0 },
-      }),
-    })
-  );
-  // /api/stripe/payment-methods: the dashboard fetches this unconditionally on every
-  // /my-account load (not only when a payment-management flow is opened), and calls
-  // `stripe.paymentMethods.list({ customer: user.stripeCustomerId, ... })` with the
-  // seeded fake `stripeCustomerId: "cus_e2e_seeded_readonly"` (e2e/seed/users.ts),
-  // which doesn't exist in Stripe test mode. This is the seed file's own documented
-  // caveat ("read-only specs must NOT open flows that retrieve these ids from
-  // Stripe") — turns out the dashboard itself is such a flow, not just the
-  // subscription-management modal the comment named.
-  await page.route("**/api/stripe/payment-methods", (route) =>
-    route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify({ success: true, paymentMethods: [], subscriptionDefaultPaymentMethodId: null }),
-    })
-  );
-}
-
 test.describe("visual baselines @visual", () => {
   test("landing hero", async ({ page }) => {
     await page.goto("/");
@@ -227,7 +182,6 @@ test.describe("visual baselines @visual", () => {
     test.use({ storageState: MEMBER_STATE, contextOptions: { reducedMotion: "reduce" } });
 
     test("my-account dashboard", async ({ page }) => {
-      await stubMyAccountFlakyReads(page);
       await page.goto("/my-account");
       await page.waitForLoadState("networkidle");
       // The dashboard renders <main> immediately behind a loading skeleton

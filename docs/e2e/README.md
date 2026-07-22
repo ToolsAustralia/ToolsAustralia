@@ -92,3 +92,8 @@ currently blocks a normal `npm run e2e`.
 Both are genuine, currently-open findings — not something this doc set papers over. Fixing either
 requires a `src/` change, out of scope for a docs-only task; they're flagged here and in the
 Task 13 report for the controller/user to triage.
+
+Spec-maintenance note (2026-07-22): the visual spec's payment-methods/referral route stubs
+were removed — the underlying unconditional fetches were fixed at source (lazy-mounted
+modals), so closed-modal loads now genuinely make zero such requests; my-account.spec.ts
+gained a network assertion pinning that.

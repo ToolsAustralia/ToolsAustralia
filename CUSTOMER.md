@@ -563,3 +563,8 @@ Customer-unique terms are defined here. For shared draw/billing terms (Anchor, M
 > _2026-07-20 note:_ the sitewide `font-['[Poppins]']` → `font-poppins` codemod touched some
 > `/my-account` components (their Poppins-classed text now renders real Poppins). This is a
 > presentation-only change — **no customer field, lifecycle state, flow, or captured data changed.**
+
+> Clarifying note (2026-07-22): the `/my-account` dashboard's ManageSheet and Refer-a-Friend
+> modals are now lazily mounted — their payment-method and referral-profile fetches fire only
+> when the customer opens them, not on every dashboard load. Pure performance refactor; no
+> customer-visible behavior, data field, or lifecycle fact changed.
