@@ -1,5 +1,10 @@
 import assert from "node:assert/strict";
-import { shouldReanchorAfterRecovery, type ReanchorGateInput } from "../pauseCollectionPolicy";
+import {
+  shouldReanchorAfterRecovery,
+  shouldReanchorRebillToAnchor24,
+  type ReanchorGateInput,
+  type RebillReanchorGateInput,
+} from "../pauseCollectionPolicy";
 
 // Neutral base: only `previousSubscriptionDbStatus: "past_due"` is an active dunning signal;
 // pause is absent and attempt_count is the on-time value. Each test overrides exactly the field
@@ -56,7 +61,41 @@ function run() {
   assert.equal(t({ alreadyReanchoredInvoiceId: "in_OTHER" }), true, "different reanchored invoice does not block");
   assert.equal(t({ invoiceMetadataDunningRecovery: true, cancelAtPeriodEnd: true }), false, "cancel excludes even with the dunning_recovery marker");
 
+  runRebillClamp();
   console.log("reanchor-gate tests passed");
+}
+
+// shouldReanchorRebillToAnchor24 — clamps a mint RE-BILL (subscription_update) to the 24th, but ONLY when the
+// recovery landed on the 25/26/27 (the days where the clamp actually moves the renewal date).
+const rebillBase: RebillReanchorGateInput = {
+  isRebill: true,
+  invoiceIsPaid: true,
+  recoveryDayIsAnchorWindow: true, // recovery on 25/26/27
+  cancelAtPeriodEnd: false,
+  autoRenew: true,
+  alreadyReanchoredInvoiceId: undefined,
+  invoiceId: "in_rebill",
+};
+function r(over: Partial<RebillReanchorGateInput>): boolean {
+  return shouldReanchorRebillToAnchor24({ ...rebillBase, ...over });
+}
+function runRebillClamp() {
+  // Fires: a paid re-bill that landed in the 25/26/27 window.
+  assert.equal(r({}), true, "re-bill on 25/26/27 → clamp to 24th");
+
+  // The window gate is the whole point: a re-bill on any other day already anchors ~1mo out — no reanchor.
+  assert.equal(r({ recoveryDayIsAnchorWindow: false }), false, "re-bill outside 25/26/27 → no clamp (stays active)");
+  // Not a re-bill (normal renewal / held-draft recovery) → this gate never applies (that path uses shouldReanchorAfterRecovery).
+  assert.equal(r({ isRebill: false }), false, "non-rebill excluded");
+  // A failed mint (unpaid) never reanchors.
+  assert.equal(r({ invoiceIsPaid: false }), false, "unpaid re-bill excluded");
+  // Ending / autoRenew-off members are never silently extended (parity with shouldReanchorAfterRecovery).
+  assert.equal(r({ cancelAtPeriodEnd: true }), false, "cancel-at-period-end excluded despite 25/26/27");
+  assert.equal(r({ autoRenew: false }), false, "autoRenew off excluded despite 25/26/27");
+  assert.equal(r({ autoRenew: undefined }), true, "autoRenew undefined is allowed (only false excludes)");
+  // Idempotency pre-filter: same invoice already reanchored → skip (atomic claim is the authoritative backstop).
+  assert.equal(r({ alreadyReanchoredInvoiceId: "in_rebill" }), false, "already reanchored this invoice excluded");
+  assert.equal(r({ alreadyReanchoredInvoiceId: "in_OTHER" }), true, "different reanchored invoice does not block");
 }
 
 run();
