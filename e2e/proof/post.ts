@@ -107,7 +107,10 @@ async function processOne(dir: string, dateBranchDir: string): Promise<void> {
   fs.writeFileSync(srtFile, toSrt(cues));
 
   const mp4 = path.join(outDir, `${slug}.mp4`);
-  if (!ff(["-y", "-i", webm, "-vf", `subtitles='${subPath(srtFile)}'`, "-c:v", "libx264", "-pix_fmt", "yuv420p", mp4])) return;
+  // No burned-in subtitles: the in-page caption pill is already part of the recording,
+  // and burning the .srt as well doubled every line on screen (DJ review, 2026-07-22).
+  // The .srt ships as a sidecar next to the mp4 — players can toggle it for accessibility.
+  if (!ff(["-y", "-i", webm, "-c:v", "libx264", "-pix_fmt", "yuv420p", mp4])) return;
 
   // Voice synthesis writes into a scratch dir under outDir; cleaned up after muxing
   // regardless of success so a run never leaves per-cue audio.mp3/metadata.json litter

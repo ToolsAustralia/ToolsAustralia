@@ -20,7 +20,7 @@ test.describe("landing @smoke @demo", () => {
     // section. Anchor on its 8px kit sublabels — unique to the showcase cards.
     await demo.step("The Build-your-prize showcase presents the tool prizes", async () => {
       const showcaseLabel = page.locator('[class*="text-[8.5px]"], [class*="text-[8px]"]').first();
-      await showcaseLabel.scrollIntoViewIfNeeded();
+      await demo.smoothScrollTo(showcaseLabel); // human-paced glide in proof mode, instant otherwise
       await expect(showcaseLabel).toBeVisible({ timeout: 20_000 });
     });
   });

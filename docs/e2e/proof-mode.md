@@ -110,3 +110,13 @@ on the repo being checked out to view.
 Demo-moment note (2026-07-22): the landing `@demo` spec includes a third narrated step
 scrolling the "Build your prize" showcase into frame — added so proof videos capture the
 prize-showcase redesign; anchored on the showcase cards' 8px kit sublabels.
+
+Watchability round 2 (2026-07-22, after DJ's review of the first landing video):
+- Captions render TOP-center (below the header) — this app parks sticky promo/countdown
+  bars at the bottom of the viewport, and a bottom caption stacked on them reads as two
+  overlapping banners.
+- `demo.smoothScrollTo(locator)` glides in ~350px smooth increments in proof mode
+  (instant outside it) so videos show the page flowing instead of jump-cutting between
+  sections. Use it for any demo step that moves down a page.
+- Deliverable QA rule: extract frames from every produced mp4 (ffmpeg -ss ... -frames:v 1)
+  and visually verify caption placement + content BEFORE sharing a proof video.
