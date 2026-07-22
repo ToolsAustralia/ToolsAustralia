@@ -18,6 +18,12 @@ const BANNED_COPY: RegExp[] = [
   /\bgambl(e|ing)\b/i,
   /\bper entry\b/i,
   /\$\d+(\.\d+)?\s*(\/|per)\s*entr(y|ies)/i,
+  // Word-bounded so it does NOT match "better" (\bbet\b would still match "bet" inside
+  // "betting" only via the (s|ting)? suffix group, not "better" — "better" has no word
+  // boundary after "bet").
+  /\bbet(s|ting)?\b/i,
+  // Entries are a free inclusion, never sold — see CLAUDE.md §11.2.
+  /\b(buy|purchase|pay for)\s+(an? )?entr(y|ies)\b/i,
 ];
 
 const PAGES = ["/", "/membership", "/mini-draws"];

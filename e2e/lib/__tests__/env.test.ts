@@ -60,8 +60,12 @@ t("resolveE2eEnv neuters third parties", () =>
     assert.equal(env.overlay.SENDGRID_API_KEY, "");
     assert.equal(env.overlay.FACEBOOK_ACCESS_TOKEN, "");
     assert.equal(env.overlay.NEXT_PUBLIC_FACEBOOK_PIXEL_ID, "");
+    assert.equal(env.overlay.FACEBOOK_MARKETING_ACCESS_TOKEN, "");
+    assert.equal(env.overlay.FACEBOOK_AD_ACCOUNT_ID, "");
     assert.equal(env.overlay.TIKTOK_ACCESS_TOKEN, "");
     assert.equal(env.overlay.NEXT_PUBLIC_TIKTOK_PIXEL_ID, "");
+    assert.equal(env.overlay.TIKTOK_MARKETING_ACCESS_TOKEN, "");
+    assert.equal(env.overlay.TIKTOK_ADVERTISER_ID, "");
     assert.equal(env.overlay.NEXT_PUBLIC_ENABLE_PIXEL_TESTING, "");
     assert.equal(env.overlay.NEXT_PUBLIC_KLAVIYO_COMPANY_ID, "");
     assert.equal(env.overlay.NEXT_PUBLIC_ENABLE_GTM_TESTING, "");

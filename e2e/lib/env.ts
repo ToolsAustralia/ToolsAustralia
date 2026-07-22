@@ -55,8 +55,28 @@ export function resolveE2eEnv(opts: { webhookSecret?: string } = {}): E2eEnv {
     SENDGRID_API_KEY: "",
     FACEBOOK_ACCESS_TOKEN: "",
     NEXT_PUBLIC_FACEBOOK_PIXEL_ID: "",
+    // Facebook/Meta MARKETING API creds — distinct from FACEBOOK_ACCESS_TOKEN above (that
+    // one is the client-facing Conversions API token). These are read SERVER-SIDE by the
+    // admin dashboard's live "today" stats path (DashboardStatsSnapshotReader ->
+    // AD_CHANNEL_PROVIDERS -> adChannelProviders.ts's facebookAdChannelProvider ->
+    // fetchFacebookInsights) whenever an admin views a date range that includes today.
+    // A browser-side route blocklist (e2e/fixtures/test.ts) cannot intercept this — it's a
+    // server-to-server fetch to graph.facebook.com that never touches the Playwright
+    // browser context. Blanking the creds makes adChannelProviders.ts's own
+    // `if (!adAccountId || !accessToken)` guard (adChannelProviders.ts:55) short-circuit to
+    // status "error" (preserve-prior-value) before any network call is attempted.
+    FACEBOOK_MARKETING_ACCESS_TOKEN: "",
+    FACEBOOK_AD_ACCOUNT_ID: "",
+    // TikTok Marketing API sibling of the pair above — same server-side-only exposure.
+    // Read by src/services/admin/tiktok/tiktokHourlySpend.ts (hourly ad-spend used by
+    // src/services/admin/hourlyRevenueByPlatform.ts, behind
+    // /api/admin/analytics/hourly-revenue) and tiktokAdInsights.ts (behind
+    // /api/admin/tiktok-ads/insights). Both no-op on a blank advertiser id / token
+    // (tiktokHourlySpend.ts:36: `if (!advertiserId || !token) return null`).
     TIKTOK_ACCESS_TOKEN: "",
     NEXT_PUBLIC_TIKTOK_PIXEL_ID: "",
+    TIKTOK_MARKETING_ACCESS_TOKEN: "",
+    TIKTOK_ADVERTISER_ID: "",
     // Client-side pixels: .env.local sets NEXT_PUBLIC_ENABLE_PIXEL_TESTING=true for
     // manual local pixel testing, which force-enables KlaviyoScriptLoader AND
     // ConversionPixels in dev (src/app/layout.tsx:147,151: `disabled={NODE_ENV ===

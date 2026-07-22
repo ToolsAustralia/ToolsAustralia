@@ -188,11 +188,14 @@ async function main(): Promise<number> {
     env = resolveE2eEnv({ webhookSecret: secret });
   }
 
-  // 3. Fresh data
-  await wipeAndSeed(env.mongoUri);
-
-  // 3b. Pre-flight: refuse to boot on top of a stale/zombie server on this port
+  // 3. Pre-flight: refuse to boot on top of a stale/zombie server on this port. MUST run
+  // before wipeAndSeed below — a busy port likely means a DIFFERENT e2e session (e.g. a
+  // held-open `e2e:env` run) already owns this port/db pair, and aborting here must happen
+  // BEFORE that session's database gets wiped out from under it.
   await assertPortFree(env.port);
+
+  // 3b. Fresh data
+  await wipeAndSeed(env.mongoUri);
 
   // 4. App server
   let serverChild: ChildProcess;

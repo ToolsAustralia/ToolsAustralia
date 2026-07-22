@@ -81,13 +81,40 @@ the same sandboxed-iframe `console.error` as the GTM leak, caught unpredictably 
 specs. Fixed at the only layer available at e2e scope: the `watchdog` fixture
 (`e2e/fixtures/test.ts`) generalized its Klaviyo `context.route()` interception into a shared
 third-party blocklist — `/klaviyo\.com|contentsquare\.net|hotjar\.(com|io)/`, fulfilled
-empty-but-successful, context-scoped (covers popups too). **Residual, accepted**: `e2e:env`
-manual/MCP sessions and the `setup` project (`auth.setup.ts`) both bypass `fixtures/test.ts`
-entirely, so Contentsquare still loads unblocked there — accepted because a stray session
-recording of a local e2e browser carries no PII or business-metric pollution risk severe enough
-to justify extending the workaround to those paths. The complete fix (an env-conditional
-`disabled` gate on this `<Script>`, matching `GoogleTagManager`/`KlaviyoScriptLoader`'s pattern)
-requires a `src/**` change and has been flagged to the user separately, not applied inside `e2e/`.
+empty-but-successful, context-scoped (covers popups too). The `setup` project (`auth.setup.ts`)
+imports plain `@playwright/test`, not `../fixtures/test`, so this blocklist did not run there
+either — its 2 logins + `/admin` warm-up fetched live Contentsquare. Fixed by copying the same
+`context.route()` pattern into a `setup.beforeEach` in `auth.setup.ts` (comment there points back
+to `fixtures/test.ts` as the source of truth — keep the two in sync if the blocklist regex ever
+changes). **Residual, accepted**: `e2e:env` manual/MCP sessions still bypass both blocklists —
+accepted because a stray session recording of a local e2e browser carries no PII or
+business-metric pollution risk severe enough to justify extending the workaround to a
+human-driven, non-automated session. The complete fix (an env-conditional `disabled` gate on this
+`<Script>`, matching `GoogleTagManager`/`KlaviyoScriptLoader`'s pattern) requires a `src/**` change
+and has been flagged to the user separately, not applied inside `e2e/`.
+
+## Resolved gotcha — Facebook/TikTok Marketing API creds leak through server-side admin reads
+
+`e2e/lib/env.ts`'s overlay blanked the client-facing CAPI/pixel tokens (`FACEBOOK_ACCESS_TOKEN`,
+`TIKTOK_ACCESS_TOKEN`, pixel ids) but missed the separate **Marketing API** creds
+(`FACEBOOK_MARKETING_ACCESS_TOKEN` + `FACEBOOK_AD_ACCOUNT_ID`, `TIKTOK_MARKETING_ACCESS_TOKEN` +
+`TIKTOK_ADVERTISER_ID`) that the admin dashboard's live "today" stats path reads **server-side**:
+`DashboardStatsSnapshotReader` → `AD_CHANNEL_PROVIDERS` →
+`adChannelProviders.ts`'s `facebookAdChannelProvider` → `fetchFacebookInsights`, and separately
+`hourlyRevenueByPlatform.ts` / `tiktokAdInsights.ts` for TikTok. Because these are
+server-to-server fetches to `graph.facebook.com` / `business-api.tiktok.com` that never touch the
+Playwright browser context, the browser-edge blocklist above (Contentsquare fix) **cannot** reach
+them — a `.env.local` populated with real creds (as this repo's is, for manual admin-dashboard
+testing) would fire live Meta/TikTok Marketing API calls every time an e2e run visits `/admin`
+with a date range including today (the `setup` project's own `/admin` warm-up does this). Fixed by
+blanking all four vars in the overlay; each provider's own guard then short-circuits before any
+network call — verified via `server.log`: `[adChannel:facebook] FACEBOOK_AD_ACCOUNT_ID or
+FACEBOOK_MARKETING_ACCESS_TOKEN not set — preserving any prior snapshot value` fires on every
+admin-page hit, and no `graph.facebook.com`/`business-api.tiktok.com` line ever appears in the
+log. Audited for further siblings (`SNAPCHAT_ACCESS_TOKEN`): its only reader
+(`src/lib/tracking/providers/snapchat.ts`) is a checkout-flow CAPI token whose `capiSend` is a
+literal stub (`return false`, no fetch call implemented yet) — nothing to block, and not an admin
+path, so deliberately left unblanked.
 
 ## Resolved gotcha — rate-limit buckets collide across parallel workers
 
@@ -168,15 +195,17 @@ relevant if you're invoking `e2e/run.ts`'s underlying spawn some other way.
 
 Before this was added, a prior run that didn't tear down cleanly (or an unrelated process) could
 leave something listening on `E2E_PORT`, and the orchestrator would boot right past it, producing
-confusing failures against the wrong server. `assertPortFree(port)` now runs right before server
-launch: it attempts a 2s-timeout `fetch` against `http://localhost:<port>/`; anything that
-resolves (a response) or times out (connection accepted but unresponsive) is treated as "busy"
-and throws `Port <N> is already in use — a stale server may be running. Kill it or set E2E_PORT
-to a free port.` A connection-refused-style rejection is the only "free" outcome. This check runs
-**after** `wipeAndSeed` but **before** any server process is spawned — a port conflict still costs
-one wasted (but cheap and idempotent) database wipe-and-reseed, which was accepted rather than
-reordering the two checks, since the real cost this guard avoids is booting a server on top of a
-stale one and chasing confusing test failures against the wrong process.
+confusing failures against the wrong server. `assertPortFree(port)` attempts a 2s-timeout `fetch`
+against `http://localhost:<port>/`; anything that resolves (a response) or times out (connection
+accepted but unresponsive) is treated as "busy" and throws `Port <N> is already in use — a stale
+server may be running. Kill it or set E2E_PORT to a free port.` A connection-refused-style
+rejection is the only "free" outcome. This check now runs **before** `wipeAndSeed`, not after —
+originally it ran right before server launch (after the wipe), which meant a busy-port abort still
+cost one wasted database wipe. Worse than "wasted": if the busy port belongs to a **different**,
+still-running e2e session (e.g. a held-open `e2e:env` manual/MCP session sharing the same default
+port), that session's database got wiped out from under it by a run that then immediately refused
+to start — a stale-port collision destroying a live session's data instead of just failing fast.
+Reordered so the abort happens before any destructive action.
 
 ## Open finding (not yet resolved) — intermittent `/membership` hydration mismatch, general and page-level
 

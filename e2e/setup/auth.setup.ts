@@ -13,6 +13,18 @@ setup.use({ extraHTTPHeaders: { "x-forwarded-for": "10.77.250.1" } });
 
 setup.beforeAll(() => fs.mkdirSync(AUTH_DIR, { recursive: true }));
 
+// Third-party blocklist — this setup project imports plain @playwright/test (not
+// ../fixtures/test), so the `watchdog` fixture's context.route blocklist there never runs
+// here. Without it, the 2 logins below plus the /admin warm-up would fetch live
+// Contentsquare (hardcoded <Script>, not env-gated — see e2e/fixtures/test.ts's comment on
+// its own `watchdog` fixture for the full rationale). Copied verbatim from
+// e2e/fixtures/test.ts, which remains the source of truth — keep the two in sync.
+setup.beforeEach(async ({ context }) => {
+  await context.route(/klaviyo\.com|contentsquare\.net|hotjar\.(com|io)/, (route) =>
+    route.fulfill({ status: 200, contentType: "application/javascript", body: "" })
+  );
+});
+
 setup("authenticate member", async ({ page }) => {
   await loginViaUi(page, MEMBER.email, MEMBER.password);
   await page.context().storageState({ path: MEMBER_STATE });
