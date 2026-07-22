@@ -106,3 +106,7 @@ Each `e2e-artifacts/proof/<date>-<branch>/<test-slug>/` directory is self-contai
 step screenshots + a copy of the HTML report) — zip the whole `<date>-<branch>/` directory (or
 just the one `<test-slug>/` folder if sharing a single flow) and send it. Nothing inside depends
 on the repo being checked out to view.
+
+Demo-moment note (2026-07-22): the landing `@demo` spec includes a third narrated step
+scrolling the "Build your prize" showcase into frame — added so proof videos capture the
+prize-showcase redesign; anchored on the showcase cards' 8px kit sublabels.
