@@ -132,7 +132,7 @@ export default function HomePage() {
         <Hero />
         <SectionContainer>
           <MembershipSection padding="pt-8 pb-4" />
-          <PrizeShowcase priorityFirstSlide={false} />
+          <PrizeShowcase priorityHero={false} />
           {/* Latest Winner Hero Section */}
         <LatestWinnerHero className="mb-8" />
         </SectionContainer>

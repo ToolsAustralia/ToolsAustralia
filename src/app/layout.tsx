@@ -27,7 +27,10 @@ const inter = Inter({
 
 const poppins = Poppins({
   subsets: ["latin"],
-  weight: ["400", "500", "600", "700", "900"],
+  // 800 is loaded (not just 700/900) because the prize builder's card titles,
+  // CTA and chips are specified at 800 — without it, `font-synthesis: none` would
+  // font-match every 800 up to 900 and flatten the type hierarchy.
+  weight: ["400", "500", "600", "700", "800", "900"],
   variable: "--font-poppins",
 });
 

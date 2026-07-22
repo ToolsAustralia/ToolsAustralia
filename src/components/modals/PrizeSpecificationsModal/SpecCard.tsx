@@ -1,172 +1,144 @@
 "use client";
 
-import React from "react";
 import Image from "next/image";
-import { Package } from "lucide-react";
 import type { PrizeSpecItem } from "@/config/prizes";
-import type { PrizeSpecificationsModalTheme } from "@/utils/prize-brand-colors";
 import { cn } from "@/utils/cn";
 
 interface SpecCardProps {
   item: PrizeSpecItem;
-  surface: PrizeSpecificationsModalTheme;
-  /** Brand-tinted Tailwind text-color class (e.g. "text-red-600"). Applied to
-   *  the icon, "What's Included" header icon, and converted to a bg-class for
-   *  bullet dots. */
-  brandIconClass: string;
-  isDark: boolean;
+  /**
+   * True only for the injected "$5,000 Cash" section. Without it, the green `$5K` tile
+   * leaked onto every photo-less item — storage boxes, chargers, battery kits — which read
+   * as "this box is worth $5,000". Everything else gets a neutral no-photo placeholder.
+   */
+  isCash?: boolean;
 }
 
-/** Bullet list with brand-coloured dot markers (replaces the previous
- *  Check-icon markers used in the legacy modal). */
-const renderList = (
-  items: string[] | undefined,
-  surface: PrizeSpecificationsModalTheme,
-  brandIconClass: string
-) => {
-  if (!items || items.length === 0) return null;
-  const dotBg = brandIconClass.replace(/(^|\s|:)text-/g, "$1bg-");
-  return (
-    <ul className="space-y-1.5 sm:space-y-2.5">
-      {items.map((item, index) => (
-        <li key={index} className="flex items-start gap-2 sm:gap-3">
-          <span
-            aria-hidden
-            className={cn(
-              "mt-1.5 sm:mt-2 inline-block w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full shrink-0",
-              dotBg
-            )}
-          />
-          <span
-            className={cn(
-              "text-2xs sm:text-sm",
-              surface.bodyClass,
-              "leading-snug sm:leading-relaxed font-['Inter']"
-            )}
-          >
-            {item}
-          </span>
-        </li>
-      ))}
-    </ul>
-  );
-};
+/**
+ * One itemised entry of the spec sheet: photo, name, model, description, then
+ * "Specifications" and "In the Box" side by side (stacked on mobile).
+ *
+ * Every accent (model dot, column bars, bullets) reads `--pbc-accent`, so the
+ * whole sheet re-tints with the selected power toolset without a single prop
+ * being threaded down.
+ */
+export default function SpecCard({ item, isCash = false }: SpecCardProps) {
+  const specifications = item.specifications ?? [];
+  const includes = item.includes ?? [];
+  const hasColumns = specifications.length > 0 || includes.length > 0;
 
-const SpecCard: React.FC<SpecCardProps> = ({ item, surface, brandIconClass, isDark }) => {
   return (
-    <div
-      className={cn(
-        "group relative rounded-lg sm:rounded-xl",
-        surface.cardClass,
-        "p-3 sm:p-6 transition-all duration-300 hover:shadow-lg",
-        surface.cardHoverClass
-      )}
-      style={{
-        boxShadow: isDark ? "0 1px 0 rgba(255,255,255,0.04) inset" : undefined,
-      }}
-    >
-      <div className="mb-2 sm:mb-4">
-        <div className="flex items-start gap-2.5 sm:gap-3">
+    <article className="rounded-[14px] border border-[var(--pbc-border)] bg-[var(--pbc-tile-bg)] p-3.5 shadow-[0_1px_2px_rgba(0,0,0,.04)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,.04)]">
+      <div className="flex items-start gap-[13px]">
+        {/* Three tile states: the product photo, the cash section's green "$5K" plate, and
+            a neutral dashed placeholder for catalogue items that simply have no photo yet
+            (plenty of storage boxes, chargers and battery kits don't). */}
+        <div
+          className={cn(
+            "flex h-[84px] w-[84px] flex-none items-center justify-center overflow-hidden rounded-xl border",
+            item.image
+              ? "border-[var(--pbc-tile-border)] bg-white"
+              : isCash
+                ? "border-[#18a94d]/30 bg-[#18a94d]/[0.12]"
+                : "border-dashed border-[var(--pbc-border)] bg-[var(--pbc-chip-bg)]"
+          )}
+        >
           {item.image ? (
-            <div
-              className="relative w-16 h-16 sm:w-24 sm:h-24 rounded-lg sm:rounded-xl overflow-hidden shrink-0 border bg-white dark:bg-neutral-900"
-              style={{ borderColor: surface.cardAccentBorder }}
-            >
+            <span className="relative block h-full w-full">
               <Image
                 src={item.image.src}
                 alt={item.image.alt}
                 fill
-                className="object-contain p-1"
-                sizes="(max-width: 640px) 64px, 96px"
+                sizes="84px"
+                className="object-contain p-1.5"
               />
-            </div>
+            </span>
+          ) : isCash ? (
+            <span className="font-poppins text-[26px] font-black text-[#18a94d]">$5K</span>
           ) : (
-            <div
-              className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg sm:rounded-xl inline-flex items-center justify-center shrink-0 border bg-white dark:bg-neutral-900"
-              style={{ borderColor: surface.cardAccentBorder }}
-            >
-              <Package className={cn("h-4 w-4 sm:h-5 sm:w-5", brandIconClass)} />
-            </div>
+            <NoPhotoPlaceholder />
           )}
-          <div className="flex-1 min-w-0">
-            <h4
-              className={cn(
-                "text-sm sm:text-xl font-bold",
-                surface.titleClass,
-                "font-poppins leading-tight tracking-tight"
-              )}
-            >
-              {item.name}
-            </h4>
-            {item.model && (
-              <p
-                className={cn(
-                  "text-2xs sm:text-sm",
-                  surface.mutedClass,
-                  "font-medium mt-1 sm:mt-1.5 flex items-center gap-1.5"
-                )}
-              >
-                <span className={cn("inline-block w-1.5 h-1.5 rounded-full", surface.dotClass)} />
-                Model: {item.model}
-              </p>
-            )}
-          </div>
+        </div>
+
+        <div className="min-w-0 flex-1">
+          <h4 className="font-poppins text-sm font-bold leading-tight text-[var(--pbc-text)]">
+            {item.name}
+          </h4>
+          {item.model && (
+            <p className="mt-[5px] inline-flex items-center gap-[5px] font-poppins text-[10px] font-semibold leading-none text-[var(--pbc-sub)]">
+              <span
+                aria-hidden
+                className="inline-block h-1.5 w-1.5 rounded-full"
+                style={{ background: "var(--pbc-accent)" }}
+              />
+              Model: {item.model}
+            </p>
+          )}
+          {item.description && (
+            <p className="mt-[11px] text-[11.5px] leading-[1.5] text-[var(--pbc-body)]">
+              {item.description}
+            </p>
+          )}
         </div>
       </div>
 
-      {item.description && (
-        <p
-          className={cn(
-            "text-2xs sm:text-sm",
-            surface.bodyClass,
-            "mb-3 sm:mb-5 leading-snug sm:leading-relaxed font-['Inter']"
-          )}
-        >
-          {item.description}
-        </p>
-      )}
-
-      {((item.specifications && item.specifications.length > 0) ||
-        (item.includes && item.includes.length > 0)) && (
-        <div className="grid gap-3 sm:gap-5 sm:grid-cols-2">
-          {item.specifications && item.specifications.length > 0 && (
-            <div>
-              <h5
-                className={cn(
-                  "text-xs sm:text-base font-semibold",
-                  surface.titleClass,
-                  "mb-1.5 sm:mb-3 font-poppins flex items-center gap-1.5 sm:gap-2"
-                )}
-              >
-                <span
-                  className="inline-block w-0.5 sm:w-1 h-4 sm:h-5 shrink-0 rounded-full"
-                  style={surface.specBarStyle}
-                />
-                Specifications
-              </h5>
-              {renderList(item.specifications, surface, brandIconClass)}
-            </div>
-          )}
-
-          {item.includes && item.includes.length > 0 && (
-            <div>
-              <h5
-                className={cn(
-                  "text-xs sm:text-base font-semibold",
-                  surface.titleClass,
-                  "mb-1.5 sm:mb-3 font-poppins flex items-center gap-1.5 sm:gap-2"
-                )}
-              >
-                <Package className={cn("h-3.5 w-3.5 sm:h-5 sm:w-5 shrink-0", brandIconClass)} />
-                In the Box
-              </h5>
-              {renderList(item.includes, surface, brandIconClass)}
-            </div>
-          )}
+      {hasColumns && (
+        <div className="mt-3 grid grid-cols-1 gap-[14px] sm:grid-cols-2">
+          {specifications.length > 0 && <BulletColumn heading="Specifications" items={specifications} />}
+          {includes.length > 0 && <BulletColumn heading="In the Box" items={includes} />}
         </div>
       )}
+    </article>
+  );
+}
+
+/**
+ * Neutral "no photo for this item yet" tile: a muted crate glyph, no brand accent, so it
+ * reads as a missing image rather than as a feature of the prize.
+ */
+function NoPhotoPlaceholder() {
+  return (
+    <svg
+      width="28"
+      height="28"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="var(--pbc-sub)"
+      strokeWidth={1.5}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      role="img"
+      aria-label="Photo coming soon"
+    >
+      <path d="M3 7.5 12 3l9 4.5v9L12 21l-9-4.5z" />
+      <path d="M3 7.5 12 12l9-4.5M12 12v9" />
+    </svg>
+  );
+}
+
+function BulletColumn({ heading, items }: { heading: string; items: string[] }) {
+  return (
+    <div>
+      <h5 className="mb-[9px] flex items-center gap-[7px] font-poppins text-[11px] font-bold leading-none text-[var(--pbc-text)]">
+        <span
+          aria-hidden
+          className="inline-block h-3.5 w-[3px] rounded-full"
+          style={{ background: "var(--pbc-accent)" }}
+        />
+        {heading}
+      </h5>
+      <ul className="m-0 flex list-none flex-col gap-1.5 p-0">
+        {items.map((entry, index) => (
+          <li key={`${entry}-${index}`} className="flex items-start gap-2">
+            <span
+              aria-hidden
+              className="mt-1.5 h-1.5 w-1.5 flex-none rounded-full"
+              style={{ background: "var(--pbc-accent)" }}
+            />
+            <span className="text-[11.5px] leading-[1.4] text-[var(--pbc-body)]">{entry}</span>
+          </li>
+        ))}
+      </ul>
     </div>
   );
-};
-
-export default SpecCard;
+}

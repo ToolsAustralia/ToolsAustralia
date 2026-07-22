@@ -628,8 +628,11 @@ Rebuilds `/my-account/draws` to a **Major / Mini `Seg` toggle**. Spec:
 - **[`draws/page.tsx`](../../src/app/(site)/my-account/draws/page.tsx)** — thin composer fed by
   `useDashboardState`: `DashboardPageHeader` + `Seg` → **major** (`DrawsMajorHero` → reused
   `EntryWallet` → `DashboardPromoBanner` → "Get more entries" → `DrawHowItWorks` → `DrawWinners`) or
-  **mini** (`DrawsMini`). Flagged-for-deletion (kept, shared): `PrizeShowcase`, `MembershipSection`,
-  `LatestWinnerHero`, `WinnersTestimony`, `MajorDrawHeaderStrip`.
+  **mini** (`DrawsMini`). Removed from this page but kept (shared, used elsewhere):
+  `PrizeShowcase`, `MembershipSection`, `LatestWinnerHero`, `WinnersTestimony`,
+  `MajorDrawHeaderStrip`. _(`PrizeShowcase` is no longer "flagged for deletion" — it was rewritten
+  2026-07-21 into the "Build your prize" configurator and is live on `/` and `/promotions/*`; see
+  [promo/frontend.md](../promo/frontend.md#prize-builder--build-your-prize-configurator-2026-07-21).)_
   > _Update 2026-07-02:_ `DrawsMajorHero` dropped its "Live · {draw} · Drawn 8:30 PM AEST" status row
   > (redundant with the Draws toggle bar) and its `drawName`/`drawStatus` props; the draws page
   > dropped the entries card's `-mt-[34px]` overlap (→ `pt-4`) that had covered "View this promotion"

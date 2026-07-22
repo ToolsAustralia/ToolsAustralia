@@ -31,8 +31,15 @@ _(none)_
 - [src/components/sections/MajorDrawSection.tsx](../../src/components/sections/MajorDrawSection.tsx) — **score 4.5** — 1550 LOC
   - signals: loc>800 (1550 LOC); ternary-explosion (41 JSX ternaries); multiple-concerns (3 concern buckets: hooks, services, components); many-arbitraries (43 arbitrary-value classNames); long-className (longest className=702 chars); many-useState (11 useState slices)
 
-- [src/components/sections/promo/PrizeShowcase.tsx](../../src/components/sections/promo/PrizeShowcase.tsx) — **score 4.5** — 1429 LOC
-  - signals: loc>800 (1429 LOC); ternary-explosion (39 JSX ternaries); multiple-concerns (3 concern buckets: hooks, services, components); many-arbitraries (39 arbitrary-value classNames); long-className (longest className=538 chars); many-useState (18 useState slices)
+- ~~src/components/sections/promo/PrizeShowcase.tsx~~ — **RESOLVED 2026-07-21** (was score 4.5 / 1429 LOC).
+  Rewritten to the prize-builder design handoff: it is now a **399-LOC** owner that holds
+  `{toolbox, toolset, isCash}` + the catalog/URL/modal wiring and renders
+  [`PrizeBuilderCard`](../../src/components/sections/promo/prize-selection/PrizeBuilderCard.tsx).
+  The gallery, thumbs, Embla, `FullscreenImageViewer` and highlights grid are gone. The card
+  itself is decomposed into `SelectorReel` / `ReelCards` / `ComboHero` / `PrizeContentsStrip` /
+  `PrizeBuilderCta`, each under ~230 LOC, with every derivation in the React-free
+  `prize-builder-model.ts` (tested: `npm run test:prize-builder`). See
+  [promo/frontend.md](../promo/frontend.md#prize-builder--build-your-prize-configurator-2026-07-21).
 
 - [src/components/sections/promo/PromoBanner.tsx](../../src/components/sections/promo/PromoBanner.tsx) — **score 4.5** — 1116 LOC
   - signals: loc>800 (1116 LOC); ternary-explosion (18 JSX ternaries); multiple-concerns (3 concern buckets: hooks, services, components); many-arbitraries (219 arbitrary-value classNames); long-className (longest className=2334 chars); many-useState (12 useState slices)
@@ -353,7 +360,7 @@ _(none)_
 - [src/components/modals/PixelConsentModal.tsx](../../src/components/modals/PixelConsentModal.tsx) — **score 1.5** — 217 LOC
   - signals: ternary-explosion (4 JSX ternaries); long-className (longest className=307 chars)
 
-- ~~src/components/modals/PrizeSpecificationsModal.tsx~~ — **DECOMPOSED 2026-05-12** → folder at [src/components/modals/PrizeSpecificationsModal/](../../src/components/modals/PrizeSpecificationsModal/) (index/Hero/TabBar/TrustBar/SpecCard). SpecCard adopts an icon-badge header, brand-coloured dot bullets (replacing `Check` icons), and removes the left-rule accent + content indent; summary banner softened to a neutral fill with a thinner brand-tinted left rule. Public API preserved.
+- ~~src/components/modals/PrizeSpecificationsModal.tsx~~ — **DECOMPOSED 2026-05-12** → folder at [src/components/modals/PrizeSpecificationsModal/](../../src/components/modals/PrizeSpecificationsModal/). **Restyled 2026-07-21** to the prize-builder design handoff: the folder is now `index` / `FeaturePanel` / `TabBar` / `SpecCard` — `Hero.tsx` and `TrustBar.tsx` were deleted, the sheet adopts the `--pbc-*` token layer, and it gained optional `accent` / `comboImage` / `drawLabel` props. Public API otherwise preserved. See [frontend.md](./frontend.md#prizespecificationsmodal).
 
 - [src/components/modals/SavedPaymentMethodsModal.tsx](../../src/components/modals/SavedPaymentMethodsModal.tsx) — **score 1.5** — 254 LOC
   - signals: ternary-explosion (4 JSX ternaries); long-className (longest className=374 chars)
@@ -370,17 +377,15 @@ _(none)_
 - [src/components/modals/ui/Select.tsx](../../src/components/modals/ui/Select.tsx) — **score 1.5** — 363 LOC
   - signals: ternary-explosion (8 JSX ternaries); long-className (longest className=674 chars)
 
-- [src/components/sections/promo/GiveawayCountdownTimer.tsx](../../src/components/sections/promo/GiveawayCountdownTimer.tsx) — **score 1.5** — 419 LOC
+- ~~src/components/sections/promo/GiveawayCountdownTimer.tsx~~ — **DELETED 2026-07-22** (was score 1.5 / 419 LOC). The combo hero carries the draw stamp, so the separate countdown/date card was redundant.
   - signals: ternary-explosion (11 JSX ternaries); long-className (longest className=539 chars)
 
-- [src/components/sections/promo/prize-selection/OtherToolsetsCarousel.tsx](../../src/components/sections/promo/prize-selection/OtherToolsetsCarousel.tsx) — **score 1.5** — 243 LOC
+- ~~src/components/sections/promo/prize-selection/OtherToolsetsCarousel.tsx~~ — **DELETED 2026-07-22** (was score 1.5 / 243 LOC). The prize builder's power-toolset reel offers every brand on toolset landing pages, so the "explore other toolsets" strip below the card was redundant.
   - signals: multiple-concerns (3 concern buckets: hooks, services, components); long-className (longest className=352 chars)
 
-- [src/components/sections/promo/prize-selection/PowerToolsetCarousel.tsx](../../src/components/sections/promo/prize-selection/PowerToolsetCarousel.tsx) — **score 1.5** — 443 LOC
-  - signals: ternary-explosion (12 JSX ternaries); many-arbitraries (46 arbitrary-value classNames)
+- ~~src/components/sections/promo/prize-selection/PowerToolsetCarousel.tsx~~ — **DELETED 2026-07-21** (was score 1.5 / 443 LOC). Replaced by the generic [`SelectorReel`](../../src/components/sections/promo/prize-selection/SelectorReel.tsx) power-toolset lane of the prize builder. `StaticToolsetHighlight.tsx` (its single-toolset sibling on toolset landing pages) was deleted in the same change — the lane just filters to one card.
 
-- [src/components/sections/promo/prize-selection/ToolboxSelector.tsx](../../src/components/sections/promo/prize-selection/ToolboxSelector.tsx) — **score 1.5** — 176 LOC
-  - signals: ternary-explosion (4 JSX ternaries); long-className (longest className=409 chars)
+- ~~src/components/sections/promo/prize-selection/ToolboxSelector.tsx~~ — **DELETED 2026-07-21** (was score 1.5 / 176 LOC). Replaced by the `SelectorReel` toolbox lane + [`ToolboxReelCard`](../../src/components/sections/promo/prize-selection/ReelCards.tsx).
 
 - [src/components/ui/PromoBadge.tsx](../../src/components/ui/PromoBadge.tsx) — **score 1.5** — 162 LOC
   - signals: ternary-explosion (4 JSX ternaries); long-className (longest className=337 chars)

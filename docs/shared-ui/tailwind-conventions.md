@@ -132,11 +132,14 @@ sitewide visual change** (headings, buttons, labels, form inputs, chart labels, 
 - **Rule:** to apply Poppins, use `font-poppins` (or the `font-display` utility, also mapped
   to `--font-poppins`). Never `font-['Poppins']` / `font-['Poppins',sans-serif]` / `font-[Poppins]`.
 - **`.form-input`** (globals.css `@layer components`) and the global `h1–h6` rule use the
-  same `--font-poppins` var. `h1–h6` is pinned to `font-weight: 900` (a **loaded** weight;
-  Poppins loads 400/500/600/700/900 in `src/app/layout.tsx`) with `font-synthesis: none` —
-  previously it requested the **unloaded** 800, which font-matched up to 900 anyway, so this
-  is intent==render, not a visual change.
-- **Poppins weight set is NOT trimmable:** every loaded weight (400/500/600/700/900) has live
-  `font-poppins` consumers post-codemod — `font-normal`/`medium`/`semibold`/`bold`(=800→900)/
-  `black`(=900) plus the h1–h6 (900) and `.ta-loader-status` (700). Dropping any would
+  same `--font-poppins` var. `h1–h6` is pinned to `font-weight: 900` (a **loaded** weight)
+  with `font-synthesis: none` — previously it requested 800, which was unloaded at the time and
+  font-matched up to 900 anyway, so this is intent==render, not a visual change.
+- **Poppins loads 400/500/600/700/800/900** in [`src/app/layout.tsx`](../../src/app/layout.tsx).
+  **800 was added 2026-07-21** for the prize builder, whose card titles, CTA and chips are
+  specified at `font-extrabold` — without it, `font-synthesis: none` font-matched every 800 up to
+  900 and flattened the type hierarchy. The h1–h6 pin stays at 900 (unaffected).
+- **The weight set is NOT trimmable:** every loaded weight has live `font-poppins` consumers —
+  `font-normal`/`medium`/`semibold`/`bold`/`extrabold`(=800, prize builder + specs modal)/
+  `black`(=900), plus the h1–h6 (900) and `.ta-loader-status` (700). Dropping any would
   misweight real content.

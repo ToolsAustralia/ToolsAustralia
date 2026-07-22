@@ -1395,6 +1395,17 @@ const SPEC_ITEM_IMAGE_BY_NAME: Record<string, string> = {
   // full-system shot. Milwaukee PACKOUT and DeWalt ToughSystem have no storage photo on disk.
   "MAKITA MAKTRAK™ Rolling Tool Chest Storage": "/images/majordraws/makita-set/makita-maktrak.webp",
   "RYOBI LINK™ 3 Piece Rolling Storage Set": "/images/majordraws/ryobi-set/ryobi-link.webp",
+
+  // Toolboxes — the SAME renders the prize builder's toolbox reel shows
+  // (`TOOLBOXES[].image` in prize-selection/constants.ts). Without these the specs
+  // modal's Storage tab drew a "photo coming soon" placeholder for the headline item of
+  // the whole prize, while the identical art sat on screen one section above it.
+  'MILWAUKEE 56" High Capacity Combination Tool Storage':
+    "/images/majordraws/toolbox/milwaukeeTB.webp",
+  'KINCROME CONTOUR® Workshop Tool Kit 470pc 17 Drawer (42") — P1823':
+    "/images/majordraws/toolbox/kincromeTB.webp",
+  "Sidchrome SCMT11402 356 Piece Tool Kit & Storage":
+    "/images/majordraws/toolbox/sidchromeTB.webp",
 };
 
 /** Attach the mapped product photo (if any) to each spec item, in place. */
@@ -1417,6 +1428,13 @@ function applySpecItemImages(items: PrizeSpecItem[]): void {
   RYOBI_POWER_SYSTEM,
   HIKOKI_POWER_TOOLS,
   HIKOKI_POWER_SYSTEM,
+  // Toolbox / workshop-storage arrays. These were missing, so the three toolbox entries
+  // above could never be applied — the Storage tab showed a placeholder for the single
+  // biggest item in the prize. The modular-storage arrays (PACKOUT, ToughSystem, MAKTRAK,
+  // LINK, Multi Cruiser) are declared further down and are applied at their own site.
+  MILWAUKEE_WORKSHOP_STORAGE,
+  MILWAUKEE_TOOLBOX_STORAGE,
+  KINCROME_TOOLBOX_STORAGE,
 ].forEach(applySpecItemImages);
 
 // ============================================================================

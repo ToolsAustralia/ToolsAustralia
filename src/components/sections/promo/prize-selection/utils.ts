@@ -1,6 +1,9 @@
 /**
- * Prize selection utilities - slug parsing and filtering.
- * Shared between ToolboxSelector, PowerToolsetCarousel, and PrizeShowcase.
+ * Prize selection utilities — slug parsing, `?toolbox=` handling and catalog filtering.
+ *
+ * These are the URL/slug helpers only; the prize builder's presentation derivations live
+ * in `prize-builder-model.ts` and its brand data in `constants.ts`. Consumed by
+ * `PrizeShowcase` and `MajorDrawSection`.
  */
 
 import type { ToolboxType } from "./constants";
@@ -39,52 +42,7 @@ export function buildToolsetLandingHref(
   return qs ? `${pathname}?${qs}` : pathname;
 }
 
-/**
- * Navigate between `/promotions/{toolset}` pages while preserving the full query string (aff, toolbox, etc.).
- */
-export function buildPromotionsToolsetLandingHref(
-  toolsetSlug: string,
-  currentSearchParams: URLSearchParams
-): string {
-  const params = new URLSearchParams(currentSearchParams.toString());
-  const qs = params.toString();
-  const base = `/promotions/${toolsetSlug}`;
-  return qs ? `${base}?${qs}` : base;
-}
-
-/** Get toolbox type from prize slug */
-export function getToolboxTypeFromSlug(slug: string): ToolboxType {
-  if (slug === "cash-prize") return "cash";
-  const lower = slug.toLowerCase();
-  if (lower.endsWith("-sidchrome")) return "sidchrome";
-  if (lower.endsWith("-kincrome")) return "kincrome";
-  if (lower.endsWith("-milwaukee")) return "milwaukee";
-  return "sidchrome";
-}
-
-/** Get toolset (power toolset brand) from slug. Format: "{toolset}-{toolbox}" */
-export function getToolsetFromSlug(slug: string): string | null {
-  if (!slug || slug === "cash-prize") return null;
-  const toolset = slug.split("-")[0];
-  return toolset || null;
-}
-
-/** Filter prizes by toolbox type. Generic so both `PrizeSummary` (client) and `PrizeCatalogEntry` (server/lazy) lists flow through. */
-export function filterPrizesByToolboxType<T extends { slug: string }>(
-  prizes: T[],
-  toolboxType: ToolboxType
-): T[] {
-  if (toolboxType === "cash") {
-    return prizes.filter((p) => p.slug === "cash-prize");
-  }
-  if (toolboxType === "sidchrome") {
-    return prizes.filter((p) => p.slug.endsWith("-sidchrome"));
-  }
-  if (toolboxType === "kincrome") {
-    return prizes.filter((p) => p.slug.endsWith("-kincrome"));
-  }
-  if (toolboxType === "milwaukee") {
-    return prizes.filter((p) => p.slug.endsWith("-milwaukee"));
-  }
-  return prizes;
-}
+// `getToolboxTypeFromSlug`, `getToolsetFromSlug` and `filterPrizesByToolboxType` were
+// removed with the prize-builder rewrite: `fromPrizeSlug` in prize-builder-model.ts now
+// splits a slug into its two lanes, and nothing filters the flat prize list any more.
+// (`MajorDrawSection` has always carried its own local copies — it never imported these.)

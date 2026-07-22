@@ -80,13 +80,6 @@ export function isToolsetLandingSlug(slug: string): slug is ToolsetLandingSlug {
 }
 
 /**
- * Returns prize slugs for a toolset landing page: Sidchrome, Kincrome, Milwaukee.
- */
-export function getPrizesForToolsetSlug(slug: ToolsetLandingSlug): [PrizeSlug, PrizeSlug, PrizeSlug] {
-  return TOOLSET_TO_PRIZE_SLUGS[slug];
-}
-
-/**
  * Default prize slug for a toolset page.
  * Prefers Milwaukee toolbox first (Milwaukee stack + power toolset).
  */

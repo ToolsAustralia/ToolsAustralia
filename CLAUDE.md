@@ -607,7 +607,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/hooks/useAttribution.ts",
         "src/hooks/useUTMPersistence.ts"
       ],
-      "lastVerified": "2026-07-19"
+      "lastVerified": "2026-07-21"
     },
     "ab-testing": {
       "docs": "docs/ab-testing/",
@@ -702,7 +702,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/app/(site)/privacy/**",
         "src/app/lazy-motion-features.ts"
       ],
-      "lastVerified": "2026-07-20"
+      "lastVerified": "2026-07-22"
     },
     "client-state": {
       "docs": "docs/client-state/",
@@ -881,7 +881,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/constants/**",
         "src/data/**"
       ],
-      "lastVerified": "2026-07-08"
+      "lastVerified": "2026-07-22"
     },
     "support-chat": {
       "docs": "docs/ai-chatbot/",

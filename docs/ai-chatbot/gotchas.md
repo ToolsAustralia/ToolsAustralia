@@ -276,3 +276,22 @@ A green `type-check` + green `test:chat-*` is necessary but **not** sufficient f
 - FAQ ids **69–71** cover the streak (ladder + auto-grant, continuity rules, where to see it); the systemPrompt ACCOUNT SELF-SERVICE MAP has a matching "their Membership Streak" bullet (explain the mechanic, point to /my-account, never state a live streak/entry count). Keep BOTH in lockstep with the ladder config (`src/config/streakMilestones.ts`) — amounts recited by Cobber must match the seeded rungs.
 - **Launch-timing caveat:** the streak UI ships dark (`DASHBOARD_FEATURES.loyaltyStreak: false`). The FAQ copy describes the live mechanic; it becomes fully accurate at launch step 4 (flags flip on with grants already active). If launch is delayed long after merge, Cobber will describe a feature members can't see yet — acceptable (it names where it lives once visible), but don't "fix" it by deleting the entries right before launch.
 - CLAUDE.md **rule 5c** now requires every customer-facing change to check Cobber's corpus (FAQ + self-service map + knowledge-pack rebuild) in the same task.
+
+## FAQ id3 "What can I win?" — kept in step with the prize builder (2026-07-21)
+
+The prize showcase became the **"Build your prize"** configurator, and id3 in
+[`supportChatFaqs.ts`](../../src/data/supportChatFaqs.ts) was stale in two ways: it listed
+only four power-tool brands (HiKOKI shipped since) and described the storage half as a vague
+"their choice of professional workshop storage" rather than the three named toolboxes the
+winner actually picks between.
+
+It now states the real model — **any toolbox** (Monster Milwaukee / 470-piece Kincrome
+CONTOUR® / 356-piece Sidchrome) × **any power toolset** (Milwaukee / DeWalt / Makita / Ryobi /
+HiKOKI, each with its own brand storage), **plus $5,000 cash** — or the $10,000 tax-free cash
+option instead, and points at the home page where the combination can be built and previewed.
+
+**Maintenance rule (CLAUDE.md §5c):** the brand lists here mirror `TOOLBOXES` / `TOOLSETS` in
+[`prize-selection/constants.ts`](../../src/components/sections/promo/prize-selection/constants.ts).
+Adding a brand there is a one-line data change; **this answer does not update itself** — edit
+it in the same task, then re-run `npm run build:chat-knowledge-pack` and
+`npm run test:chat-faqs`. GearWrench is deliberately absent from both until draw 9.

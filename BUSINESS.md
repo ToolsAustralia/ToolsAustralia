@@ -152,6 +152,8 @@ The cash option lives as the 16th `PrizeCatalogEntry` (`slug: "cash-prize"`).
 
 > _Asset note (2026-06-22, no catalog change):_ the prize product photos in `prizes.ts` were optimized to webp with descriptive, product-accurate filenames. Each of the 15 tool combos also got a new composite "toolset + toolbox" card render (`{toolset}-set/{toolset}-{toolbox}.webp`, e.g. `milwaukee-sidchrome.webp`), wired into its `cardBackgroundImage` + first gallery image; the old `…Set-…Tb.webp` renders were retired and the HiKOKI hero (`hikoki-set/HIKOKI.webp`) was supplied. The combo + hero renders were normalised to uniform framing (so prize cards/carousel display at consistent size), and the HiKOKI per-tool spec photos were matched into `SPEC_ITEM_IMAGE_BY_NAME`. This is a presentational/asset change only — the prize catalog, combos, cash tiers, and copy are unchanged.
 
+> _Asset note (2026-07-22, no catalog change):_ the three toolbox renders already used by the prize picker (`toolbox/{milwaukee,kincrome,sidchrome}TB.webp`) were wired into `SPEC_ITEM_IMAGE_BY_NAME`, and the workshop/toolbox storage arrays were added to `applySpecItemImages` so the mapping actually reaches them. The specs modal Storage tab previously drew a "photo coming soon" placeholder for the toolbox — the single biggest item in the prize — while the same art sat on screen one section above. Presentational only: no combo, cash tier, price or copy changed.
+
 ### 3d. Anchor-day-24 alignment
 
 Subscriptions renew on **day 24** so renewals settle 3+ days before the 27th draw. This is intentional — see §6b.
