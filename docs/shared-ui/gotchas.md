@@ -1,5 +1,9 @@
 # Shared UI — Gotchas
 
+## `Carousel3D` hydration mismatch under reduced-motion — fixed via two-pass read (2026-07-22)
+
+[`Carousel3D`](../../src/components/ui/Carousel3D.tsx) fed framer-motion's `useReducedMotion()` directly into a render-path value (`geometry.maxBlur`, consumed by every card's blur `useTransform`). Framer-motion resolves `useReducedMotion()` from `matchMedia` **synchronously on the client's first render** (no effect gate — see its own source, `prefersReducedMotion` is a module-level ref lazily initialised the first time the hook runs), while SSR has no `window` and the ref stays `null` — so a real OS-level reduced-motion user's SSR pass rendered non-zero card blur and the client's very first hydration pass already read the true `matchMedia` value and rendered `none`, a genuine SSR/CSR attribute mismatch on every page hosting the carousel (`/`, `/membership`). Fixed the same way [`useDeviceProfile`](../../src/hooks/useDeviceProfile.ts) already handles this class of bug: keep the render-path `reduceMotion` state at its SSR-safe default (`false`) through hydration, and resolve the real preference only inside a `useEffect` — reduced-motion users lose card blur one frame after mount, which is imperceptible and hydration-safe. This traces back to the e2e-side finding in [docs/e2e/gotchas.md](../e2e/gotchas.md) ("`/membership`/`/` hydration mismatch under emulated `reducedMotion`").
+
 ## Always-on animations: transform/opacity only, and tier-gate them (2026-07-20, perf Tier-2 Task 1)
 
 Infinite/looping animations on customer surfaces must animate **`transform` and/or `opacity` only** — never `background-position`, `filter`, `box-shadow`, `width/height`, etc. A transform/opacity animation runs on the compositor from a once-rasterized texture; anything else repaints on the main thread every frame (and re-runs any `filter` on the layer), which was the single worst scroll-jank source on low-end devices per the 2026-07 perf audit.

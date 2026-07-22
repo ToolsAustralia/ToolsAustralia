@@ -455,7 +455,18 @@ export function Carousel3D<T>({
   hideControls = false,
 }: Carousel3DProps<T>) {
   const n = items.length;
-  const reduceMotion = useReducedMotion() ?? false;
+  // SSR-safe (two-pass), same shape as useDeviceProfile.ts: framer-motion's
+  // useReducedMotion() resolves synchronously from matchMedia on the CLIENT'S FIRST
+  // render (not inside an effect), while SSR has no `window` and falls back to null —
+  // so reading it directly here would make hydration's first pass disagree with the
+  // server-rendered blur styles. Keep state at the SSR-safe default (no reduced-motion
+  // styling) through hydration, then resolve the real preference in an effect; reduced-
+  // motion users lose card blur one frame after mount, which is imperceptible.
+  const reduceMotionPreference = useReducedMotion();
+  const [reduceMotion, setReduceMotion] = useState(false);
+  useEffect(() => {
+    setReduceMotion(reduceMotionPreference ?? false);
+  }, [reduceMotionPreference]);
   const baseId = useId();
   const stageId = `${baseId}-stage`;
   const isControlled = controlledIndex != null;

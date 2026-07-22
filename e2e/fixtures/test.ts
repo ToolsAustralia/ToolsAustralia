@@ -53,7 +53,13 @@ export const test = base.extend<Fixtures>({
       page.on("pageerror", (e) => problems.push(`pageerror: ${e.message}`));
       page.on("console", (m) => {
         if (m.type() === "error" && !CONSOLE_ALLOWLIST.some((rx) => rx.test(m.text()))) {
-          problems.push(`console.error: ${m.text().slice(0, 300)}`);
+          const text = m.text();
+          // Hydration errors get a longer cap: React 19's per-element diff (which names
+          // the mismatching element) runs past 300 chars, so the default cap was cutting
+          // it off before the culprit element ever showed up in failure output. Everything
+          // else keeps the 300-char cap so failure output stays readable.
+          const cap = /hydrat/i.test(text) ? 2000 : 300;
+          problems.push(`console.error: ${text.slice(0, cap)}`);
         }
       });
       page.on("response", (r) => {

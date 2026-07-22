@@ -150,6 +150,16 @@ one motion source it was protecting against (`BrandScroller`) directly in `visua
 `my-account` describe block **does** set `reducedMotion: "reduce"` (that page's tree doesn't hit
 this hook on first render — verified clean across all 3 projects).
 
+**Update (2026-07-22) — the concrete `/membership` source of this class fixed.** The specific
+consumer that was 100%-repro under `reducedMotion: "reduce"` was root-caused to
+[`Carousel3D`](../../src/components/ui/Carousel3D.tsx) (`/membership`'s `DrawCycle` section, and
+`/`'s `PowerToolsetCarousel`): it read `useReducedMotion()` straight into a render-path value
+(`geometry.maxBlur`) instead of gating it behind an effect like `useDeviceProfile` does. Fixed with
+the same two-pass pattern — see [docs/shared-ui/gotchas.md](../shared-ui/gotchas.md) for the
+mechanism and fix. This does not change the `e2e/`-side decision above (page-load media emulation
+still defaults to "no preference" — reduced-motion is now safe to enable per-page/per-spec since
+the source consumer no longer mismatches, but nothing in the suite currently needs it re-enabled).
+
 ## Resolved gotcha — `stripewebhookqueue` is singular, and its type field is `type` not `eventType`
 
 `src/models/StripeWebhookQueue.ts`: collection `"stripewebhookqueue"` (singular), fields
@@ -243,6 +253,47 @@ visible. Root cause not yet investigated (would require reading React's hydratio
 in an actual failing render — the `Date.now()`/`Math.random()` hint in React's own boilerplate
 warning is generic, not diagnostic — and is out of scope for a docs-only task); flagged here and
 in the Task 13 report rather than silently retried away or absorbed into a watchdog allowlist.
+
+**Update (2026-07-22) — instrumented, not fixed; this is a separate, still-open occurrence.**
+Confirmed this is genuinely a different manifestation from the `Carousel3D` finding fixed above
+(see [docs/shared-ui/gotchas.md](../shared-ui/gotchas.md)) — that fix is real but was 100%-repro
+only under explicit `reducedMotion: "reduce"` emulation, whereas this finding fires intermittently
+under Playwright's default ("no preference") emulation, so it isn't the same bug recurring. The
+actual blocker to root-causing it turned out to be **this file's own watchdog**: the
+`console.error` capture in the `watchdog` fixture below truncated every message to 300 characters,
+which cuts off before React 19's per-element diff (the part that actually names the mismatching
+element/prop) ever appears — the generic boilerplate paragraph quoted above alone is close to that
+limit. Fixed by widening the cap to 2000 characters for any message matching `/hydrat/i` (everything
+else keeps the 300-char cap, so failure output stays readable) — see the `watchdog` fixture comment
+in `e2e/fixtures/test.ts`. This is instrumentation, not a fix: the underlying intermittent mismatch
+is still open. Root-cause it from the full captured diff the next time it fires, do not re-truncate
+or allowlist it away.
+
+**The instrumentation immediately paid off** — the raised cap caught the mismatch **3 more times**
+in this same task's verification (`npm run e2e:smoke` × 4: 1 occurrence in run 1, 1 in run 2, 0 in
+run 3, 1 in run 4; see the fix-B task report for full logs), and every single occurrence, across
+different specs (`registration.spec.ts`, `legal-copy.spec.ts` on `/membership`) and different
+projects (`chromium-desktop`, `mobile-chrome`), diffs the **exact same element and attribute**:
+`Carousel3D`'s stage `<div id={stageId}>` (`stageId = ${baseId}-stage`, from `const baseId =
+useId()` — [src](../../src/components/ui/Carousel3D.tsx)), always the identical id string
+(`_R_2jlesndabn1cqlb_-stage` — expected, since `useId()` is deterministic per tree position, not
+random, so the same server request always derives the same id for the same tree slot). The captured
+diff still doesn't reach the actual `-` (server) value even at 2000 chars — it cuts off right after
+the `+` (client) line — so the two values being compared are still unconfirmed; only the **site** is
+now pinned down. This is **not** the `maxBlur`/`filter` bug fixed above (no `reducedMotion` emulation
+is active in these specs, and the diffed attribute is `id`, not `style`) — a distinct bug at the same
+component. A `useId()` SSR/CSR mismatch normally means the server and client disagree about the
+component's position in the tree, which is usually a symptom of a **dev-server-only** race (Turbopack
+recompiling the module graph while a request is in flight, so the SSR pass and the hydration pass
+run against slightly different compiled versions) rather than a `src/` logic bug — consistent with
+this firing only under concurrent multi-worker load and never in a targeted single-test run, and with
+the sibling Turbopack module-graph fragility already documented in the `E2E_BUILD=1` finding below.
+Unconfirmed, but the next person chasing this should start there rather than assuming a fresh cause.
+**Ruled out as a cause:** the fix-B task's own git-stash/pop cycling of `Carousel3D.tsx` against a
+*live* `e2e:env` dev server (to capture before/after evidence) left a stale `.next/cache` that
+produced a *worse* flake rate for two runs; clearing `.next` and re-running showed this same
+mismatch recur identically on a clean cache too, so it predates and is independent of that
+methodology artifact — just confirming it's real, not ruling out *what* causes it.
 
 ## Resolved gotcha — `next build` failed (prod-only, blocked `E2E_BUILD=1` entirely)
 
