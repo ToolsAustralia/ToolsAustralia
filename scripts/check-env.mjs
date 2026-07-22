@@ -39,6 +39,7 @@ const LOCAL_ONLY = new Set([
   "E2E_TEST_USER_PASSWORD",
   "E2E_MONGODB_URI", // per-folder e2e database (name must contain "e2e")
   "E2E_PORT",
+  "E2E_TARGET_URL", // per-invocation only (e.g. `E2E_TARGET_URL=... npm run e2e:smoke`) — never persisted to .env.local
 ]);
 
 /** Uncommented `VAR=` declarations at column 0 (matches how .env files are written). */

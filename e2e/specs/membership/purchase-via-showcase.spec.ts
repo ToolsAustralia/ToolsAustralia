@@ -8,6 +8,9 @@ test.afterAll(async () => {
 });
 
 test.describe("purchase via homepage prize showcase @purchase @demo", () => {
+  // EXTERNAL mode: belt-and-suspenders — run.ts's --grep-invert "@purchase|@admin" already excludes this tag; this guards a direct `playwright test` invocation that bypasses run.ts.
+  test.skip(process.env.E2E_EXTERNAL === "1", "needs the seeded isolated environment");
+
   test("guest enters through the Build-your-prize showcase: payment → webhook → 15 entries exactly once", async ({ page, demo }) => {
     // See purchase-subscription.spec.ts's identical note: generous budget for
     // full 3-project concurrent runs against one `next dev` server.
@@ -34,8 +37,22 @@ test.describe("purchase via homepage prize showcase @purchase @demo", () => {
     const enterNowButton = prizeBuilderSection.getByRole("button", { name: /enter now/i });
     const purchaseButton = page.getByRole("button", { name: /^purchase$/i });
 
-    await demo.step("A guest lands on the Tools Australia home page", async () => {
-      await page.goto("/");
+    // Warm the route BEFORE the first demo.step, not inside it: `demo.step` paints its
+    // caption overlay on whatever page is currently loaded the INSTANT it's called (see
+    // demo.ts's showCaption) — with the goto living inside the step body, the opening
+    // caption showed over the still-blank tab, before navigation had even started
+    // (video-review.md Judge R: "opening beat never captions over a blank page"). Doing
+    // the goto + waiting for real content here, silently, means the first caption always
+    // lands on an already-rendered homepage. `section.hero-section` is the single Hero
+    // wrapper (src/components/sections/Hero.tsx) — the largest, first-painted landmark on
+    // "/", present regardless of viewport (mobile/desktop layouts share the one section).
+    await page.goto("/");
+    await expect(page.locator("section.hero-section")).toBeVisible({ timeout: 45_000 });
+
+    await demo.step("A guest lands on the Tools Australia home page — every free-entry journey starts here", async () => {
+      // Page already warmed above — this beat just holds the caption over the rendered
+      // homepage (also re-asserts the hero didn't disappear, so this isn't a bare no-op).
+      await expect(page.locator("section.hero-section")).toBeVisible();
     });
 
     await demo.step("This is where a customer starts — the pack's free entries are already locked in, before checkout", async () => {
@@ -92,6 +109,14 @@ test.describe("purchase via homepage prize showcase @purchase @demo", () => {
       await demo.highlight(paymentFrame, "Stripe's secure form");
       await fillPaymentElement(page, CARDS.ok);
       await expect(purchaseButton).toBeEnabled({ timeout: 30_000 });
+      // Re-spotlight onto the actual click target before clicking it: the highlight above
+      // covers the Stripe iframe (what the viewer should watch while the card fills in),
+      // but PURCHASE is the app's own button, outside that iframe's box — without moving
+      // the ring here, this beat's click would land outside the highlighted region
+      // (video-review.md Judge H: "clicks land visibly inside the highlighted region").
+      // demo.highlight replaces the single fixed-id ring rather than stacking, so this
+      // just moves the spotlight, it doesn't leave two rings on screen.
+      await demo.highlight(purchaseButton, "Complete purchase");
       await purchaseButton.click();
     });
 
@@ -99,11 +124,16 @@ test.describe("purchase via homepage prize showcase @purchase @demo", () => {
     await demo.step("The moment payment clears, the free entries land automatically — nothing else for the member to do", async () => {
       // Outcome asserted at the DATABASE, not the pixels (spec §9) — webhook grant processing is
       // in-process (`after()`), so this polls rather than expecting a synchronous UI transition.
-      // The app's own success dialog ("Transaction complete") also renders client-side while this
-      // poll runs, which is what the proof video's final frame lands on.
       const result = await waitForActiveMembership(email, 180_000);
       userId = result.userId;
       expect(result.entries).toBe(15); // Tradie includes 15 free entries (membershipPackages.ts: entriesPerMonth 15)
+      // Continuity fix (video-review.md Judge R: "ending lands on a meaningful final state
+      // ... not mid-motion"): SuccessScreen.tsx (src/components/loading/SuccessScreen.tsx)
+      // always renders a fixed "Transaction complete" status strip regardless of which exact
+      // title fires for a brand-new guest ("Successful!" / "Account Created!" depending on
+      // whether MembershipModal's auto-login round-trip wins the race) — waiting for it here
+      // guarantees the recording ends on the app's own settled confirmation card, not mid-poll.
+      await expect(page.getByText(/transaction complete/i)).toBeVisible({ timeout: 20_000 });
     });
 
     // Exactly-once: precisely one BenefitsGranted event exists for this user's invoice.

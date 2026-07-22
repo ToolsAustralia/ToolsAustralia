@@ -59,7 +59,15 @@ export function getFlagValue(argv: string[], flag: string): string {
 // tokens instead of one grep value, and it silently finds zero tests. Wrapping any
 // whitespace-containing arg in escaped quotes before the shell:true spawn fixes this
 // without touching non-Windows behavior (winq is a no-op there).
-const winq = (a: string): string => (/\s/.test(a) ? `"${a.replace(/"/g, '\\"')}"` : a);
+//
+// Also quotes cmd.exe's OWN metacharacters (`|&<>^()`), not just whitespace — found live
+// (EXTERNAL mode work, 2026-07): an unquoted `--grep-invert @purchase|@admin` reached
+// cmd.exe (shell:true spawns via cmd on win32) with its `|` interpreted as a literal pipe
+// operator, splitting the one `npx playwright test ...` command into two ("...@purchase"
+// piped into a nonexistent "@admin ..." command) and failing with `'admin' is not
+// recognized as an internal or external command`. Same fix shape as the whitespace case:
+// quote before the arg ever reaches cmd's parser.
+const winq = (a: string): string => (/[\s|&<>^()]/.test(a) ? `"${a.replace(/"/g, '\\"')}"` : a);
 
 /** One `npx playwright test <args>` invocation via spawnAsync (see its docstring for why). */
 async function runPlaywrightOnce(
@@ -109,6 +117,71 @@ async function runSequencedPurchaseLegs(
   return { status: legResults.some((r) => r.status !== 0) ? 1 : 0, legResults };
 }
 
+/**
+ * EXTERNAL mode (E2E_TARGET_URL set): point read-only suites at a deployed environment
+ * (e.g. staging) instead of booting a local dev server against the seeded e2e database.
+ * Skips the DB guard/wipeAndSeed, server boot + port pre-flight, and the Stripe CLI
+ * webhook forwarder entirely — this mode makes NO Stripe calls and never touches a
+ * database. `baseURL` is read from `E2E_TARGET_URL` by playwright.config.ts;
+ * `E2E_EXTERNAL=1` is set in the Playwright env so the setup project
+ * (e2e/setup/auth.setup.ts, no seeded credentials to log in with) and the specs that
+ * depend on seeded state (login/registration/my-account/admin-gate/visual — see their
+ * describe-level `test.skip`) skip themselves with a visible reason instead of failing.
+ *
+ * Two refusals are hard-coded and not configurable via flags:
+ *  - `@purchase`/`@admin` can never be explicitly requested via --grep — those are
+ *    mutating/privileged suites and must never point at a shared/deployed environment.
+ *    `--grep-invert "@purchase|@admin"` is ALSO always appended after the caller's own
+ *    passthrough args — Playwright's CLI (commander) takes the LAST occurrence of a
+ *    repeated single-value option, so this wins even over a caller-supplied
+ *    --grep-invert, making the exclusion non-overridable.
+ *  - `--proof` is refused — narrated proof-mode runs assume the seeded local environment
+ *    (deterministic seed data, a known member email/password to demo with).
+ *  - `--env-only` is refused too (not in the original design note, added as a footgun
+ *    guard): there is no local server for it to boot and hold open against a deployed
+ *    target — without this check it would silently do nothing useful and hang forever.
+ */
+async function runExternal(targetUrl: string, argv: string[]): Promise<number> {
+  const proof = argv.includes("--proof");
+  const envOnly = argv.includes("--env-only");
+  const grep = getFlagValue(argv, "--grep");
+  const passthrough = argv.filter((a) => a !== "--env-only" && a !== "--proof");
+  const runId = Date.now().toString(36);
+
+  if (proof) {
+    throw new Error(
+      "Refusing: --proof is not supported in EXTERNAL mode (E2E_TARGET_URL is set) — narrated runs assume the seeded, isolated local environment. Unset E2E_TARGET_URL to run --proof locally."
+    );
+  }
+  if (envOnly) {
+    throw new Error(
+      "Refusing: --env-only is not supported in EXTERNAL mode (E2E_TARGET_URL is set) — there is no local server to boot/hold open against a deployed target. Unset E2E_TARGET_URL to use --env-only locally."
+    );
+  }
+  if (grep && (grep.includes("@purchase") || grep.includes("@admin"))) {
+    throw new Error(
+      `Refusing: --grep "${grep}" explicitly includes @purchase or @admin in EXTERNAL mode (E2E_TARGET_URL is set). Mutating/privileged suites must never run against a shared/deployed environment. Remove @purchase/@admin from --grep, or unset E2E_TARGET_URL to run locally.`
+    );
+  }
+
+  console.log(
+    `[e2e] EXTERNAL mode: target ${targetUrl} — no server boot, no DB wipe/seed, no Stripe. @purchase and @admin are hard-excluded.`
+  );
+
+  // Last occurrence wins in Playwright's CLI parsing — appending ours after the caller's
+  // own passthrough args (which may contain nothing, or may contain a caller --grep-invert
+  // for something else entirely) makes this the authoritative filter either way.
+  const finalArgs = [...passthrough, "--grep-invert", "@purchase|@admin"];
+  const pwEnv: NodeJS.ProcessEnv = { ...process.env, E2E_RUN_ID: runId, E2E_EXTERNAL: "1" };
+
+  const pw = await runPlaywrightOnce(finalArgs, pwEnv);
+  if (pw.error) {
+    console.error(`[e2e] failed to launch playwright test: ${pw.error.message}`);
+    return 1;
+  }
+  return pw.status ?? 1;
+}
+
 async function assertPortFree(port: number): Promise<void> {
   let busy = false;
   try {
@@ -128,6 +201,15 @@ async function assertPortFree(port: number): Promise<void> {
 
 async function main(): Promise<number> {
   const argv = process.argv.slice(2);
+
+  // EXTERNAL mode: E2E_TARGET_URL set means "point read-only suites at a deployed
+  // environment" — a completely separate, much simpler path than everything below (no
+  // local-mode DB guard/seed/server/Stripe concerns apply). See runExternal's docstring.
+  const targetUrl = process.env.E2E_TARGET_URL;
+  if (targetUrl) {
+    return runExternal(targetUrl, argv);
+  }
+
   const envOnly = argv.includes("--env-only");
   const proof = argv.includes("--proof");
   const isBuild = process.env.E2E_BUILD === "1";

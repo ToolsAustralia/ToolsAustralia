@@ -2,6 +2,9 @@ import { test, expect } from "../../fixtures/test";
 import { ADMIN_STATE, MEMBER_STATE } from "../../lib/paths";
 
 test.describe("admin gate @smoke @admin", () => {
+  // EXTERNAL mode: already hard-excluded via run.ts's --grep-invert "@purchase|@admin"; this is belt-and-suspenders for a direct `playwright test` invocation that bypasses run.ts.
+  test.skip(process.env.E2E_EXTERNAL === "1", "needs the seeded isolated environment");
+
   test.use({ storageState: ADMIN_STATE });
 
   test("admin reaches /admin", async ({ page }) => {
@@ -25,6 +28,9 @@ test.describe("admin gate @smoke @admin", () => {
 // full fixture coverage — QA watchdog, per-worker x-forwarded-for, third-party
 // blocklist — from e2e/fixtures/test.ts, same rationale as the admin block above.
 test.describe("admin gate — member blocked @smoke @admin", () => {
+  // EXTERNAL mode: already hard-excluded via run.ts's --grep-invert "@purchase|@admin"; this is belt-and-suspenders for a direct `playwright test` invocation that bypasses run.ts.
+  test.skip(process.env.E2E_EXTERNAL === "1", "needs the seeded isolated environment");
+
   test.use({ storageState: MEMBER_STATE });
 
   test("regular member is bounced from /admin to /", async ({ page }) => {

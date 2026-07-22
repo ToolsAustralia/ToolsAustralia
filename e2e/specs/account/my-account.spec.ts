@@ -2,6 +2,9 @@ import { test, expect } from "../../fixtures/test";
 import { MEMBER_STATE } from "../../lib/paths";
 
 test.describe("my-account @smoke @demo", () => {
+  // EXTERNAL mode has no seeded member storage state — see runExternal in e2e/run.ts.
+  test.skip(process.env.E2E_EXTERNAL === "1", "needs the seeded isolated environment");
+
   test.use({ storageState: MEMBER_STATE });
 
   test("dashboard loads for the seeded active member", async ({ page, demo }) => {
@@ -135,6 +138,9 @@ test.describe("my-account @smoke @demo", () => {
 // blocklist — from e2e/fixtures/test.ts. An empty storageState object is the
 // Playwright-supported way to opt a describe block out of the file's auth state.
 test.describe("my-account guest gate @smoke @demo", () => {
+  // EXTERNAL mode: keep this file's guard blanket (no seeded env for the sibling block above) — see runExternal in e2e/run.ts.
+  test.skip(process.env.E2E_EXTERNAL === "1", "needs the seeded isolated environment");
+
   test.use({ storageState: { cookies: [], origins: [] } });
 
   test("guest hitting /my-account is redirected to /login", async ({ page }) => {

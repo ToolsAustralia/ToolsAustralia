@@ -63,6 +63,9 @@ test.afterAll(async () => {
 });
 
 test.describe("declined card @purchase", () => {
+  // EXTERNAL mode: belt-and-suspenders — run.ts's --grep-invert "@purchase|@admin" already excludes this tag; this guards a direct `playwright test` invocation that bypasses run.ts.
+  test.skip(process.env.E2E_EXTERNAL === "1", "needs the seeded isolated environment");
+
   test("decline shows the error and grants NOTHING", async ({ page }) => {
     // See purchase-subscription.spec.ts's identical note: generous budget for
     // full 3-project concurrent runs against one `next dev` server.

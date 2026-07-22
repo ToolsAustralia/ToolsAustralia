@@ -62,6 +62,9 @@ test.afterAll(async () => {
 });
 
 test.describe("webhook replay safety @purchase", () => {
+  // EXTERNAL mode: belt-and-suspenders — run.ts's --grep-invert "@purchase|@admin" already excludes this tag; this guards a direct `playwright test` invocation that bypasses run.ts.
+  test.skip(process.env.E2E_EXTERNAL === "1", "needs the seeded isolated environment");
+
   test("resending the payment event does not double-grant", async ({ page }) => {
     // See purchase-subscription.spec.ts's identical note: generous budget for full
     // 3-project concurrent runs against one `next dev` server — this spec has the

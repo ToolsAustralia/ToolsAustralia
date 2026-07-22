@@ -6,6 +6,14 @@ import { AUTH_DIR, MEMBER_STATE, ADMIN_STATE } from "../lib/paths";
 
 setup.setTimeout(180_000);
 
+// EXTERNAL mode (e2e/run.ts's runExternal, E2E_TARGET_URL set): no seeded credentials
+// exist on a deployed environment, so this whole file skips itself rather than failing.
+// File-level test.skip keeps the "setup" project's own run marked skipped-not-failed, so
+// downstream projects' `dependencies: ["setup"]` chain still proceeds (see
+// playwright.config.ts) — the specs that actually NEED a storage state
+// (login/registration/my-account/admin-gate/visual) carry their own describe-level skip.
+setup.skip(process.env.E2E_EXTERNAL === "1", "external target — no seeded credentials");
+
 // Dedicated synthetic IP for the setup project's own bucket on the credentials
 // sign-in rate limiter (5/min per IP — see e2e/fixtures/test.ts for the full
 // rationale). Member + admin logins here total 2 requests, well under the cap.

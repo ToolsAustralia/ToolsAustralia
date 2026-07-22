@@ -1,6 +1,9 @@
 import { test, expect } from "../../fixtures/test";
 
 test.describe("registration bridge @smoke", () => {
+  // EXTERNAL mode: registering real accounts against a shared/deployed environment is mutating — see runExternal in e2e/run.ts.
+  test.skip(process.env.E2E_EXTERNAL === "1", "needs the seeded isolated environment");
+
   test("step-1 register creates account WITHOUT logging in (guestUserData bridge)", async ({ page }) => {
     const runId = process.env.E2E_RUN_ID || "dev";
     // NOTE: deviates from the brief's literal `e2e+reg-...@e2e.local` template.

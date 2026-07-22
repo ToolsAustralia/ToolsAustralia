@@ -74,6 +74,61 @@ $env:E2E_BUILD="1"; npm run e2e:smoke; Remove-Item Env:E2E_BUILD
 E2E_BUILD=1 npm run e2e:smoke
 ```
 
+## Testing a deployed environment (staging)
+
+Setting `E2E_TARGET_URL` flips the orchestrator into **EXTERNAL mode**: instead of wiping/
+seeding the local `e2e` database and booting `next dev`/`next start`, it points Playwright's
+`baseURL` straight at the deployed URL you give it. This is for read-only smoke coverage
+against a real deployed environment — it is **not** a replacement for the local suite, and it
+is deliberately narrow.
+
+```bash
+# bash
+E2E_TARGET_URL=https://staging.toolsaustralia.com.au npm run e2e:smoke
+```
+
+```powershell
+# PowerShell
+$env:E2E_TARGET_URL="https://staging.toolsaustralia.com.au"; npm run e2e:smoke; Remove-Item Env:E2E_TARGET_URL
+```
+
+Any of the `npm run e2e*` scripts accept it the same way (e.g. `E2E_TARGET_URL=... npm run e2e
+-- --grep "@a11y"`), with two hard exceptions below.
+
+**What runs:** marketing/landing, mini-draws, membership modal render, legal-copy guard, and
+`@a11y` (already desktop-scoped) — anything that only reads public pages.
+
+**What skips, and why:**
+- **`login`, `registration`, `my-account`, `admin-gate`, `visual`** — all `test.skip` themselves
+  at the describe level with reason `"needs the seeded isolated environment"`. There is no
+  local seed step in EXTERNAL mode, so there's no known member/admin account to sign in with,
+  and the `setup` project (storage-state capture) skips itself too (`external target — no
+  seeded credentials` in `e2e/setup/auth.setup.ts`) rather than failing — Playwright's
+  `dependencies: ["setup"]` chain proceeds normally past a *skipped* (not failed) dependency.
+  `visual`'s baselines were captured as PNGs against the local seeded environment, so even its
+  non-auth captures (landing hero, membership tiers) would never pixel-match a deployed build's
+  live content — skipped wholesale rather than half-skipped.
+- **`@purchase` and `@admin`** — refused outright, not just skipped. `e2e/run.ts` ALWAYS
+  appends a hard-coded `--grep-invert "@purchase|@admin"` in EXTERNAL mode (not overridable by
+  any passthrough flag), and REFUSES to start at all if your own `--grep` explicitly asks for
+  either tag. Mutating/privileged suites (real Stripe money paths, admin-gated pages) must
+  never point at a shared or deployed environment. The `@purchase` spec files also each carry
+  their own belt-and-suspenders `test.skip` for the case where someone bypasses `e2e/run.ts`
+  and invokes `playwright test` directly.
+- **No DB assertions anywhere** — EXTERNAL mode never opens `E2E_MONGODB_URI` and makes no
+  Stripe calls (no `stripe listen` forwarder either), so any spec that reaches into Mongo/Stripe
+  directly (helpers under `e2e/helpers/db.ts`, `e2e/helpers/payment.ts`) is out of scope by
+  construction, not just by tag.
+- **`--proof` and `--env-only` are refused with a clear error**, not silently ignored — narrated
+  proof-mode runs and the MCP/codegen hold-open bridge both assume the seeded local environment
+  (known creds to demo with, a local server to hold open); neither concept applies to a deployed
+  target.
+
+**Caveat:** staging's content is whatever's actually deployed there, not what's on your branch.
+A `legal-copy` hit or an `@a11y` violation from a staging run is a genuine finding about the
+**deployed build**, not your local changes — treat it accordingly (don't "fix" it by editing
+this branch unless the same code path exists here too).
+
 ## The `e2e:env` MCP/codegen authoring bridge
 
 `npm run e2e:env` boots the full stack (fresh seed, dev server, webhook forwarder) and holds it

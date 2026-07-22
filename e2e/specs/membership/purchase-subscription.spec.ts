@@ -8,6 +8,9 @@ test.afterAll(async () => {
 });
 
 test.describe("subscription purchase @purchase @demo", () => {
+  // EXTERNAL mode: belt-and-suspenders — run.ts's --grep-invert "@purchase|@admin" already excludes this tag; this guards a direct `playwright test` invocation that bypasses run.ts.
+  test.skip(process.env.E2E_EXTERNAL === "1", "needs the seeded isolated environment");
+
   test("new user buys Tradie: payment → webhook → 15 entries exactly once", async ({ page, demo }) => {
     // Generous budget: full 3-project runs put ~15 real Stripe money-path flows
     // concurrently against a single `next dev` server (verified live — chromium-only

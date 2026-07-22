@@ -1,6 +1,9 @@
 import { test, expect } from "../../fixtures/test";
 
 test.describe("login @smoke", () => {
+  // EXTERNAL mode has no seeded member credentials to sign in with — see runExternal in e2e/run.ts.
+  test.skip(process.env.E2E_EXTERNAL === "1", "needs the seeded isolated environment");
+
   test("member signs in and lands on my-account", async ({ page }) => {
     await page.goto("/login");
     await page.locator('input[name="email"]').fill(process.env.E2E_TEST_USER_EMAIL || "e2e.member@e2e.local");

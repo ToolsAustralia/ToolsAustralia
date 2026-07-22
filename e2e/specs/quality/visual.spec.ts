@@ -139,6 +139,9 @@ const cycleFuse = (page: Page): Locator =>
   page.getByText(/^Day \d+ of \d+$/).locator("..").locator("..");
 
 test.describe("visual baselines @visual", () => {
+  // EXTERNAL mode: every baseline PNG here was captured against the local seeded env — staging's live content/assets will never pixel-match — see runExternal in e2e/run.ts.
+  test.skip(process.env.E2E_EXTERNAL === "1", "needs the seeded isolated environment");
+
   test("landing hero", async ({ page }) => {
     await page.goto("/");
     await page.waitForLoadState("networkidle");
