@@ -129,6 +129,19 @@ A `legal-copy` hit or an `@a11y` violation from a staging run is a genuine findi
 **deployed build**, not your local changes — treat it accordingly (don't "fix" it by editing
 this branch unless the same code path exists here too).
 
+**Third-party CSP blocks are annotations, not failures.** A deployed build runs its real
+tracking config, and some third-party beacons are CSP-blocked *by design* — `csp.ts:55-58`
+documents the rotating `*.on.aws`/`*.run.app` Contentsquare-module collectors as deliberately
+not allowlisted. So in EXTERNAL mode only, the QA watchdog downgrades console errors matching
+`Content Security Policy` **whose blocked target is not our own origin** to per-test report
+annotations (`external-csp-block` — open the HTML report to see exactly what was blocked).
+Same-origin CSP violations still fail the test: our own script or asset being refused (e.g. a
+nonce regression) is a real bug in the deployed build. First live staging run (2026-07-22)
+surfaced one genuine gap this way: TikTok's SDK now beacons to `analytics-ipv6.tiktokw.us`
+(TikTok's US-entity domain) but `connect-src` only allowlists the stale
+`analytics-ipv6.tiktok.com` — recorded as an open product finding, owner's call whether to
+update the CSP.
+
 ## The `e2e:env` MCP/codegen authoring bridge
 
 `npm run e2e:env` boots the full stack (fresh seed, dev server, webhook forwarder) and holds it

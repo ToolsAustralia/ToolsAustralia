@@ -30,7 +30,7 @@ export const test = base.extend<Fixtures>({
 
   // QA watchdog — the automatic expert eye on console + network (spec §10).
   watchdog: [
-    async ({ page, context, baseURL }, use) => {
+    async ({ page, context, baseURL }, use, testInfo) => {
       // Klaviyo/GTM/GA/Hotjar are all neutered at the source: e2e/lib/env.ts blanks
       // NEXT_PUBLIC_KLAVIYO_COMPANY_ID, NEXT_PUBLIC_ENABLE_PIXEL_TESTING,
       // NEXT_PUBLIC_GTM_ID, NEXT_PUBLIC_GA_ID, NEXT_PUBLIC_ENABLE_GTM_TESTING, and
@@ -50,10 +50,29 @@ export const test = base.extend<Fixtures>({
       );
 
       const problems: string[] = [];
+      const externalCspBlocks: string[] = [];
+      const external = process.env.E2E_EXTERNAL === "1";
       page.on("pageerror", (e) => problems.push(`pageerror: ${e.message}`));
       page.on("console", (m) => {
         if (m.type() === "error" && !CONSOLE_ALLOWLIST.some((rx) => rx.test(m.text()))) {
           const text = m.text();
+          // EXTERNAL mode only: a deployed build runs its real tracking config, and some
+          // third-party beacons are CSP-blocked BY DESIGN — csp.ts:55-58 documents the
+          // *.on.aws/*.run.app Contentsquare-module collectors as deliberately NOT
+          // allowlisted. A blocked third-party collector is a product/config signal about
+          // the deployed site, not a failure of the page under test — record it as a
+          // report annotation (visible per-test in the HTML report, never silently
+          // dropped) instead of failing every page-loading spec. Same-origin CSP
+          // violations still fail: our own script/asset being refused (e.g. a nonce
+          // regression) is OUR bug, exactly what the watchdog exists to catch.
+          if (
+            external &&
+            /Content Security Policy/i.test(text) &&
+            !(baseURL && text.includes(new URL(baseURL).origin))
+          ) {
+            externalCspBlocks.push(text.slice(0, 300));
+            return;
+          }
           // Hydration errors get a longer cap: React 19's per-element diff (which names
           // the mismatching element) runs past 300 chars, so the default cap was cutting
           // it off before the culprit element ever showed up in failure output. Everything
@@ -68,6 +87,9 @@ export const test = base.extend<Fixtures>({
         }
       });
       await use();
+      for (const block of [...new Set(externalCspBlocks)]) {
+        testInfo.annotations.push({ type: "external-csp-block", description: block });
+      }
       if (problems.length) {
         throw new Error(`QA watchdog caught ${problems.length} problem(s):\n  ${problems.join("\n  ")}`);
       }
