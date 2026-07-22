@@ -67,7 +67,7 @@ const ContactSubmissionSchema = new Schema<IContactSubmission>({
     required: [true, 'Email is required'],
     trim: true,
     lowercase: true,
-    match: [/^\w+([.-]?\w+)*@\w+([.-]?\w+)*(\.\w{2,3})+$/, 'Please enter a valid email'],
+    match: [/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/, 'Please enter a valid email'],
   },
   phone: {
     type: String,

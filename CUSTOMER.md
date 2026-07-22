@@ -133,7 +133,7 @@ Every field below lives on the `User` Mongoose model ([src/models/User.ts](src/m
 
 | Field | Type | Meaning | PII |
 |---|---|---|---|
-| `email` | string (req, unique, lowercase) | Login + primary contact; regex-validated ([User.ts:7](src/models/User.ts#L7)) | **PII** |
+| `email` | string (req, unique, lowercase) | Login + primary contact; permissive regex-validated — `local@domain.tld` shape only (accepts `+` plus-addressing and any TLD length ≥2 chars), deliverability is the real check ([User.ts:346](src/models/User.ts#L346)) | **PII** |
 | `password` | string (opt, ≥6) | bcrypt hash; **optional** — passwordless customers have none ([User.ts:8](src/models/User.ts#L8)) | **Sensitive** |
 | `isEmailVerified` | boolean (def false) | Email verified flag ([User.ts:145](src/models/User.ts#L145)) | — |
 | `isMobileVerified` | boolean (opt, def false) | Mobile verified flag ([User.ts:146](src/models/User.ts#L146)) | — |

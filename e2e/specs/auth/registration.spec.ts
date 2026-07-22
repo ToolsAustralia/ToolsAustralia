@@ -43,4 +43,35 @@ test.describe("registration bridge @smoke", () => {
     const body = await session.json().catch(() => null);
     expect(body?.user ?? null).toBeNull();
   });
+
+  test("step-1 register accepts plus-addressed email (regex fix regression)", async ({ page }) => {
+    const runId = process.env.E2E_RUN_ID || "dev";
+    // Regression coverage for the fix to src/models/User.ts:346's email validator.
+    // The old `/^\w+([.-]?\w+)*@\w+([.-]?\w+)*(\.\w{2,3})+$/` pattern rejected "+"
+    // plus-addressing (\w excludes "+") — the sibling test above had to route
+    // around this by using "-" separators instead. The validator is now the
+    // permissive `/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/`, so a "+"-tagged address must
+    // now succeed through the real /api/auth/register → `new User().save()` path.
+    const email = `e2e.plus+tag-${runId}-${test.info().workerIndex}@e2e.io`;
+
+    await page.goto("/membership");
+    await page.getByRole("button", { name: /choose tradie/i }).or(page.getByRole("link", { name: /choose tradie/i })).first().click();
+
+    // Step-1 registration form inside MembershipModal
+    await page.locator('input[name="firstName"]').fill("E2E");
+    await page.locator('input[name="lastName"]').fill("Bridge");
+    await page.locator('input[name="email"]').fill(email);
+    await page.locator('input[name="phone"]').fill("0412345678");
+    await page.getByRole("button", { name: /register/i }).click();
+
+    // Bridge reached: registration succeeded and the modal advanced to the billing step
+    // (see the sibling test above for why "PURCHASE" — not "Continue to Billing" — is
+    // the stable signal).
+    await expect(page.getByRole("button", { name: /^purchase$/i })).toBeVisible({ timeout: 20_000 });
+
+    // …but the session is still unauthenticated (CLAUDE.md rule 6's documented behavior).
+    const session = await page.request.get("/api/auth/session");
+    const body = await session.json().catch(() => null);
+    expect(body?.user ?? null).toBeNull();
+  });
 });

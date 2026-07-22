@@ -52,7 +52,7 @@ const AffiliateSchema = new Schema<IAffiliate>(
       trim: true,
       validate: {
         validator: function (v: string) {
-          return /^\w+([.-]?\w+)*@\w+([.-]?\w+)*(\.\w{2,3})+$/.test(v);
+          return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(v);
         },
         message: "Please enter a valid email address",
       },

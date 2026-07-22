@@ -17,6 +17,8 @@ Top-level subscription-related fields on `IUser`:
 | `oneTimePackages` | `Array<{...}>` | Cross-cutting with this domain (one-time entry packs). |
 | `serviceAccount` | `boolean?` | True for non-human service accounts (e.g. Norm AI). Filters the user out of admin Settings → Staff. See [auth/roles.md](../auth/roles.md#user-model-additions). |
 
+> `User.email` validation uses the permissive standard `/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/` ([User.ts:346](../../src/models/User.ts#L346)) — deliverability, not the regex, is the real check. A stricter `\w`-based pattern previously rejected legitimate addresses (`+` plus-addressing, TLDs longer than 3 chars like `.info`/`.online`/`.agency`); any `user.save()` re-validation (e.g. `getOrCreateReferralProfile`) would 500 on those stored emails.
+
 ### `subscription` subdocument fields
 
 | Field | Type | Set by | Description |
