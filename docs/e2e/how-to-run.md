@@ -74,6 +74,38 @@ $env:E2E_BUILD="1"; npm run e2e:smoke; Remove-Item Env:E2E_BUILD
 E2E_BUILD=1 npm run e2e:smoke
 ```
 
+## The full-journey mode (`npm run e2e:journey`)
+
+The flagship flow — the longest single journey the platform supports, under a
+production-style promo, with TWO real Stripe test payments:
+
+```bash
+npm run e2e:journey         # run it as a test
+npm run e2e:journey:proof   # render it as the narrated flagship demo video
+```
+
+Both expand to `tsx e2e/run.ts --promo 10 --grep "full customer journey" --project
+chromium-desktop`. The `--promo <5|10>` flag sets `E2E_PROMO`, which makes wipe-and-seed
+insert an active {n}× membership promo (`e2e/seed/promo.ts` — the exact doc the admin
+promo-toggle route creates; the resolver reads it uncached, so it's live immediately).
+
+The journey (`e2e/specs/membership/full-journey.spec.ts`): stranger on "/" → prize-showcase
+→ ENTER NOW → register (guest bridge) → real payment → webhook grants 15×{promo} entries
+exactly-once → the app's own payment-proofed auto-login + router.push to /my-account → the
+post-purchase upsell offer opens with the PROMO-CORRECT artwork
+(`membership/apprentice-{promo×10}x.webp`, asserted present AND actually loaded — the
+broken-image guard born from finding #10) → ACCEPT one-click charges the saved card ($9.99)
+→ upsell webhook grants 3×10×{promo} more entries exactly-once → the dashboard EntryWallet
+displays the combined total (450 at 10×).
+
+**Why a dedicated mode:** an active membership promo multiplies EVERY subscription grant
+(webhook: base × promo), so a promo visible to a shared run breaks the sibling purchase
+specs' exact-count assertions (toBe(15)) and invalidates the /membership + /my-account
+visual baselines — and purchase legs run spec files in parallel within a leg, so a
+spec-scoped insert/delete can leak mid-purchase. The journey spec therefore self-skips
+unless `E2E_PROMO` is set (visible skip reason in every ordinary run), and journey mode
+scopes itself to this one spec on one browser.
+
 ## Testing a deployed environment (staging)
 
 Setting `E2E_TARGET_URL` flips the orchestrator into **EXTERNAL mode**: instead of wiping/

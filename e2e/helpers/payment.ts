@@ -52,14 +52,27 @@ export function purchaseIdentity(tag: string, testInfo: TestInfo): { email: stri
  */
 export async function fillPaymentElement(
   page: Page,
-  card: { number: string; expiry: string; cvc: string }
+  card: { number: string; expiry: string; cvc: string },
+  // Proof-mode option: per-keystroke delay so card entry is WATCHABLE in demo videos
+  // (video-review Judge R: typed, not pasted). Default stays the instant .fill() —
+  // functional purchase specs shouldn't pay the extra ~1.5s.
+  opts?: { delay?: number }
 ): Promise<void> {
   const frame = page
     .frameLocator('iframe[name^="__privateStripeFrame"], iframe[title*="payment" i]')
     .first();
-  await frame.getByRole("textbox", { name: /card number/i }).fill(card.number);
-  await frame.getByRole("textbox", { name: /expir/i }).fill(card.expiry);
-  await frame.getByRole("textbox", { name: /cvc|security code/i }).fill(card.cvc);
+  const cardNumber = frame.getByRole("textbox", { name: /card number/i });
+  const expiry = frame.getByRole("textbox", { name: /expir/i });
+  const cvc = frame.getByRole("textbox", { name: /cvc|security code/i });
+  if (opts?.delay) {
+    await cardNumber.pressSequentially(card.number, { delay: opts.delay });
+    await expiry.pressSequentially(card.expiry.replace(/\s/g, ""), { delay: opts.delay });
+    await cvc.pressSequentially(card.cvc, { delay: opts.delay });
+  } else {
+    await cardNumber.fill(card.number);
+    await expiry.fill(card.expiry);
+    await cvc.fill(card.cvc);
+  }
 }
 
 /** DB-level outcome poll: subscription active + entries present. */
@@ -109,6 +122,9 @@ export async function waitForOneTimeEntries(
  *   - "one-time" (granted on `payment_intent.succeeded`):
  *     `_id: "BenefitsGranted-<stripe payment intent id>"` — e.g.
  *     `BenefitsGranted-pi_1AbCdE...` (handleOneTimeWebhook → processPaymentBenefits(paymentIntent.id, ...)).
+ *   - "upsell" (post-purchase one-click offer, granted on `payment_intent.succeeded`
+ *     with metadata.type "upsell"): same pi-shaped id as "one-time"
+ *     (handleUpsellWebhook → processPaymentBenefits(packageType: "upsell", ...)).
  * `userId` on the doc is a Mongo ObjectId; matched here via string comparison
  * (mirrors the `entriesForUser` pattern in ../../helpers/db) rather than an
  * ObjectId-typed query filter, so this never depends on driver cast behavior.
@@ -124,7 +140,7 @@ export async function waitForOneTimeEntries(
  */
 export async function findBenefitsGrantedRef(
   userId: string,
-  packageType: "membership" | "one-time"
+  packageType: "membership" | "one-time" | "upsell"
 ): Promise<{ kind: "invoice" | "pi"; id: string }> {
   const db = await connectE2eDb();
   const docs = await db.connection

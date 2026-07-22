@@ -2,6 +2,7 @@ import mongoose from "mongoose";
 import { resolveE2eEnv, assertE2eSafety, dbNameOf } from "../lib/env";
 import { seedUsers } from "./users";
 import { seedMajorDraw } from "./draw";
+import { seedPromoIfRequested } from "./promo";
 
 export async function wipeAndSeed(mongoUri?: string): Promise<void> {
   const uri = mongoUri ?? resolveE2eEnv().mongoUri;
@@ -12,6 +13,7 @@ export async function wipeAndSeed(mongoUri?: string): Promise<void> {
     await conn.dropDatabase();
     await seedUsers(conn);
     await seedMajorDraw(conn);
+    await seedPromoIfRequested(conn); // no-op unless E2E_PROMO is set (journey mode)
     console.log("[e2e-seed] seeded: member, admin, active major draw");
   } finally {
     await conn.close();

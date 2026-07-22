@@ -215,7 +215,27 @@ async function main(): Promise<number> {
   const isBuild = process.env.E2E_BUILD === "1";
   const grep = getFlagValue(argv, "--grep");
   const smokeOnly = grep === "@smoke";
-  const passthrough = argv.filter((a) => a !== "--env-only" && a !== "--proof");
+
+  // --promo <5|10>: seed an active {n}x membership promo (e2e/seed/promo.ts) for the
+  // dedicated full-journey mode (`npm run e2e:journey`). Exposed as E2E_PROMO so both the
+  // seed (this process) and the journey spec (Playwright worker env, via the process.env
+  // spread into pwEnv) see it. NEVER part of ordinary runs: an active promo multiplies
+  // every subscription grant and would break sibling purchase specs' exact-count
+  // assertions and the /membership visual baselines — the journey spec self-skips unless
+  // this is set, and this flag should only be combined with a --grep that scopes the run
+  // to the journey spec.
+  const promoFlag = getFlagValue(argv, "--promo");
+  if (promoFlag) {
+    if (promoFlag !== "5" && promoFlag !== "10") {
+      throw new Error(`--promo must be 5 or 10 (got "${promoFlag}") — the two production promo tiers with on-disk upsell artwork variants.`);
+    }
+    process.env.E2E_PROMO = promoFlag;
+    console.log(`[e2e] PROMO mode: seeding an active ${promoFlag}x membership promo (journey spec only).`);
+  }
+
+  const passthrough = argv.filter(
+    (a, i) => a !== "--env-only" && a !== "--proof" && a !== "--promo" && !(argv[i - 1] === "--promo") && !a.startsWith("--promo=")
+  );
   const runId = Date.now().toString(36);
 
   // @purchase runs drive real Stripe money-path flows (registration → confirmPayment →

@@ -97,3 +97,13 @@ Running migration scripts in dev but not prod (or vice versa) leaves state diver
 ## Turbopack incremental builds can serve STALE route compilations (2026-07-20)
 
 Observed during the perf-tier1 verification: after several successive local `npm run build`s, a route handler's compiled chunk did not reflect its current source (an edited Cache-Control header was absent from the served response and from the compiled chunks; the pre-edit string was absent too). A cold build (`rm -rf .next` first) compiled and served the source correctly. Vercel builds are always cold, so production is unaffected — but when locally verifying a code change's runtime behavior via `next start`, wipe `.next` first if the result contradicts the source. Trust cold builds only.
+
+## `npm run e2e:journey` / `e2e:journey:proof` (package.json, 2026-07-22)
+
+Two dedicated scripts for the flagship full-journey e2e flow: `tsx e2e/run.ts --promo 10
+--grep "full customer journey" --project chromium-desktop` (plus the `--proof` variant for
+the narrated video). The `--promo <5|10>` orchestrator flag sets `E2E_PROMO`, which makes
+wipe-and-seed insert an active {n}× membership promo (`e2e/seed/promo.ts`) — the journey
+spec self-skips unless it's set, and no other run mode ever seeds a promo (an active promo
+multiplies every subscription grant and would break the sibling purchase specs' exact-count
+assertions). Full mechanics: `docs/e2e/how-to-run.md` "The full-journey mode".
