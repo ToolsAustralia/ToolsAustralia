@@ -1,5 +1,45 @@
 # Shared UI — Gotchas
 
+## Header top-bar rotating CTA: contrast fixed at its ANIMATION root cause, not just a color swap (fixed 2026-07-22)
+
+`TopBarPromoLeaf` (inside [`Header.tsx`](../../src/components/layout/Header.tsx)) renders the
+rotating "Join Tools Australia..." / "Monthly tool giveaway..." strip on `bg-red-600`. It was
+axe-baselined as a `color-contrast` failure with wildly different captured ratios on different
+pages/runs (~4.36:1 on `/`, ~1.05:1 on `/membership`) — investigated with a temporary axe debug
+capture rather than guessed: the reported `fgColor` (`#ef0a0a`/`#f01a1a`, near-identical to the
+`#ee0000` bg) proved the text was being sampled **mid-animation**, not at its static declared
+color (`text-white` / `#ffffff`). Root cause: `.animate-topbar-reappear[-once]`'s
+`topBarReappear` keyframes (`globals.css`) animated `opacity: 0 → 1 → 0` each 3s cycle (the
+"reappear" fade); axe's scan timing (relative to `waitForLoadState('networkidle')`) landed in
+that ramp often enough to alpha-blend the white text almost fully into the red background — no
+static color pair can pass when the real defect is transient opacity, since any foreground
+converges to the background at `opacity: 0`. Fixed at the root: `topBarReappear`'s keyframes
+now pin `opacity: 1` throughout (kept the `translateY` slide + `text-shadow` glow pulse — same
+visual "reappear" character, zero copy change). Defense-in-depth margin: the strip's background
+also moved `bg-red-600` (`#ee0000`, white text only ~4.53:1 — razor-thin over the 4.5:1
+threshold) → `bg-red-700` (`#b91c1c`, an existing brand-red shade in
+[`tailwind.config.ts`](../../tailwind.config.ts), white text ~6.47:1). Scoped to this one
+`data-top-bar` strip only — `bg-red-600` is untouched everywhere else (409 other sites per the
+tailwind config comment). Verified 2× green `@a11y` runs with the baseline entry removed.
+
+## "MOST POPULAR" corner ribbon: hardcoded white ink failed on light-toned tiers (fixed 2026-07-22)
+
+[`CornerRibbonBadge`](../../src/components/ui/CornerRibbonBadge.tsx) always rendered ribbon text
+in white except for the one `text-premium-gold` (VIP/black-tier) special case. For the
+"MOST POPULAR" ribbon on the dewalt-yellow (foreman) membership card, that's white-on-`#ffc517`
+gold — axe measured ~2.19:1 (needs 4.5:1; true math for white directly on that gold is ~1.6:1,
+even worse). The codebase already tracks per-tier ink via `colorScheme.text` (`"text-black"` for
+the light/bright tiers — dewalt-yellow, ryobi-green, mint-green — same signal
+`ElectricPackageCard.tsx`'s `blackText`/`lightInk` already reads); `CornerRibbonBadge` just
+wasn't consulting it. Fixed by generalizing the existing `usePremiumBlackRibbon` dark-ink branch
+into `useDarkRibbonInk` (`usePremiumBlackRibbon || colorScheme?.text?.includes("black")`), reusing
+the same `#141414` ink token already used for the VIP ribbon — no new color invented. Only
+flips ink for the 3 light-toned tiers; red/blue/teal/dark-green tiers (`text-white`) are
+unaffected. Computed contrast: white or `#141414` — `#141414` on `#ffc517` is ~11.6:1 (and
+~8.4:1 against axe's own pixel-sampled `#d9a814`, which reads slightly darker than the declared
+CSS value — likely anti-aliasing on the ribbon's `rotate(-45deg)` strip edge, not a distinct
+bug). Visual `@visual` baselines for the home membership grid were regenerated for this change.
+
 ## `Carousel3D` hydration mismatch under reduced-motion — fixed via two-pass read (2026-07-22)
 
 [`Carousel3D`](../../src/components/ui/Carousel3D.tsx) fed framer-motion's `useReducedMotion()` directly into a render-path value (`geometry.maxBlur`, consumed by every card's blur `useTransform`). Framer-motion resolves `useReducedMotion()` from `matchMedia` **synchronously on the client's first render** (no effect gate — see its own source, `prefersReducedMotion` is a module-level ref lazily initialised the first time the hook runs), while SSR has no `window` and the ref stays `null` — so a real OS-level reduced-motion user's SSR pass rendered non-zero card blur and the client's very first hydration pass already read the true `matchMedia` value and rendered `none`, a genuine SSR/CSR attribute mismatch on every page hosting the carousel (`/`, `/membership`). Fixed the same way [`useDeviceProfile`](../../src/hooks/useDeviceProfile.ts) already handles this class of bug: keep the render-path `reduceMotion` state at its SSR-safe default (`false`) through hydration, and resolve the real preference only inside a `useEffect` — reduced-motion users lose card blur one frame after mount, which is imperceptible and hydration-safe. This traces back to the e2e-side finding in [docs/e2e/gotchas.md](../e2e/gotchas.md) ("`/membership`/`/` hydration mismatch under emulated `reducedMotion`").

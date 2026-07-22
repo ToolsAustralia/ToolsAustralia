@@ -83,26 +83,34 @@ See the Task 13 report (`.superpowers/sdd/task-13-report.md`) for the full verba
 
 ## Current baseline — every entry is a real, open product bug
 
-### `/` (home)
+`KNOWN_VIOLATIONS` is currently **empty** — every entry captured to date has been fixed (see
+"Fixed" below). The map stays in the spec (not deleted) so the burn-down pattern is ready the
+next time a real, signed-off violation needs tracking.
 
-| Rule | Bug | Likely fix location |
+## Fixed
+
+### `/` (home) — fixed 2026-07-22
+
+| Rule | Bug | Fix location | Actual root cause (verified, not the original "likely" guess) |
+|---|---|---|---|
+| `color-contrast` | "MOST POPULAR" ribbon badge on the home membership card was white-on-gold (~2.19:1, needed 4.5:1) | [`src/components/ui/CornerRibbonBadge.tsx`](../../src/components/ui/CornerRibbonBadge.tsx) | Ribbon ink was hardcoded white for every tier except the VIP `text-premium-gold` special case; the dewalt-yellow gold fill needed dark ink too. Generalized to `useDarkRibbonInk` using the same `colorScheme.text.includes("black")` signal already used elsewhere. See [shared-ui/gotchas.md](../shared-ui/gotchas.md). |
+| `color-contrast` | Rotating promo-banner text/link was near-white-on-red (~4.36:1, needed 4.5:1) | [`src/components/layout/Header.tsx`](../../src/components/layout/Header.tsx) (`TopBarPromoLeaf`) + [`src/app/globals.css`](../../src/app/globals.css) (`topBarReappear` keyframes) | **Not** `src/components/promo`/`src/components/banners` as originally guessed — it's the Header's top-bar rotating CTA. Root cause was the `topBarReappear` CSS animation's `opacity: 0 → 1 → 0` cycle, sampled by axe mid-fade (confirmed via a temporary debug capture: reported `fgColor` was near-identical to `bgColor`, proving alpha-blending, not a static wrong color). Fixed by pinning `opacity: 1` throughout the keyframes + darkening the strip's bg `red-600` → `red-700` for margin. See [shared-ui/gotchas.md](../shared-ui/gotchas.md). |
+
+### `/login` — fixed 2026-07-22
+
+| Rule | Bug | Fix location |
 |---|---|---|
-| `color-contrast` | "MOST POPULAR" ribbon badge on the home membership card is white-on-gold (~2.19:1, needs 4.5:1) | `src/components/sections/membership/ElectricPackageCard.tsx` |
-| `color-contrast` | Rotating promo-banner text/link is near-white-on-red (~4.36:1, needs 4.5:1) | `src/components/promo` or `src/components/banners` |
+| `button-name` | Password show/hide toggle button had no accessible name (no text, `aria-label`, or `title`) | [`src/app/login/page-client.tsx`](../../src/app/login/page-client.tsx) — added `aria-label` ("Show password"/"Hide password", state-appropriate) |
+| `label` | Email input had an empty placeholder and no `<label>`/`aria-label` | same file — `id="login-email"` + matching `htmlFor` |
+| `label` | Remember-me checkbox had no `<label>`/`aria-label` | same file — `SquareCheckbox` gained an `id` prop, wired to `id="login-remember-me"` + matching `htmlFor` |
 
-### `/login`
+See [auth/gotchas.md](../auth/gotchas.md) for the full write-up.
 
-| Rule | Bug | Likely fix location |
+### `/membership` — fixed 2026-07-22
+
+| Rule | Bug | Fix location |
 |---|---|---|
-| `button-name` | Password show/hide toggle button has no accessible name (no text, `aria-label`, or `title`) | login form component |
-| `label` | Email input has an empty placeholder and no `<label>`/`aria-label` | login form component |
-| `label` | Remember-me checkbox has no `<label>`/`aria-label` | login form component |
-
-### `/membership`
-
-| Rule | Bug | Likely fix location |
-|---|---|---|
-| `color-contrast` | Rotating promo-banner text/link is near-red-on-red (~1.05:1, needs 4.5:1) | `src/components/promo` or `src/components/banners` |
+| `color-contrast` | Rotating promo-banner text/link was near-red-on-red (~1.05:1, needed 4.5:1) | Same root cause and fix as the `/` entry above (same shared `Header.tsx`/`globals.css` component) |
 
 ## Fixing one of these
 

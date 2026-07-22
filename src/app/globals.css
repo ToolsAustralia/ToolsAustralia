@@ -1092,10 +1092,18 @@
   animation: fadeIn 0.5s ease-in-out;
 }
 
-/* Unified text and action button reappearing animation */
+/* Unified text and action button reappearing animation.
+   a11y fix (2026-07): opacity used to animate 0 -> 1 -> 0 across this cycle. Axe's
+   color-contrast check samples the DOM's live computed pixel color, and a scan landing
+   in the 0-20%/80-100% ramp (or exactly at 0%/100%, opacity:0) alpha-blends the white
+   topbar text down toward the red bg — measured as low as ~1.05:1 (near-invisible),
+   failing WCAG regardless of which text/bg color pair is chosen, since any foreground
+   converges to the background at opacity 0. Pinning opacity to 1 for the whole cycle
+   keeps the slide + glow-pulse flourish while guaranteeing full-strength text at every
+   frame — see src/components/layout/Header.tsx's `.animate-topbar-reappear[-once]`. */
 @keyframes topBarReappear {
   0% {
-    opacity: 0;
+    opacity: 1;
     transform: translateY(-10px);
     text-shadow: 0 0 0px rgba(255, 255, 255, 0);
   }
@@ -1115,7 +1123,7 @@
     text-shadow: 0 0 5px rgba(255, 255, 255, 0.3);
   }
   100% {
-    opacity: 0;
+    opacity: 1;
     transform: translateY(10px);
     text-shadow: 0 0 0px rgba(255, 255, 255, 0);
   }

@@ -1,5 +1,18 @@
 # Auth — Gotchas
 
+## `/login` form controls had no accessible name/label (fixed 2026-07-22)
+
+`src/app/login/page-client.tsx`: the password show/hide toggle button had an icon only (no
+text/`aria-label`/`title`) — axe `button-name` violation. The floating-label email input and
+the `SquareCheckbox` "Keep me logged in" checkbox both used a bare `<label>` with no
+`htmlFor`/`id` pairing (the label text sat next to the control but wasn't programmatically
+associated) — axe `label` violations ×2. Fixed by adding `aria-label={showPassword ? "Hide
+password" : "Show password"}` to the toggle button (state-appropriate), `id="login-email"` +
+matching `htmlFor` on the email input/label, and a new optional `id` prop on the local
+`SquareCheckbox` component wired to `id="login-remember-me"` + matching `htmlFor` on its
+label. See [docs/e2e/a11y-baseline.md](../e2e/a11y-baseline.md) for the axe target detail;
+`e2e/specs/quality/a11y.spec.ts`'s `@a11y` baseline entries for these three were removed.
+
 ## User routes are include-list projected — new client fields silently vanish (2026-07-19)
 
 `GET /api/users/[id]` and `GET /api/users/[id]/my-account` no longer return the whole User document
