@@ -266,7 +266,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
 ```json
 {
   "version": 1,
-  "lastModified": "2026-07-21",
+  "lastModified": "2026-07-22",
   "domains": {
     "subscription": {
       "docs": "docs/subscription/",
@@ -799,7 +799,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/models/RateLimit.ts",
         "next.config.ts"
       ],
-      "lastVerified": "2026-07-19"
+      "lastVerified": "2026-07-22"
     },
     "mongodb": {
       "docs": "docs/mongodb/",

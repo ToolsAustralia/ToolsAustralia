@@ -50,9 +50,21 @@ then `next start -- -p <port>` instead of `next dev`. Any failure that occurs ON
 and not in normal dev mode is a real prod-only bug (CSP route class, `removeConsole` stripping a
 `console.log` the app or a spec depends on, etc.) — see gotchas.md and troubleshooting.
 
-**Currently blocked**: as of Task 13's gate, `E2E_BUILD=1` fails at the `next build` step itself
-(a `<Html>` import error prerendering `/500`) — no test can run until this is fixed. See
-gotchas.md's "`next build` currently fails" open finding.
+**`npm run build` fixed (2026-07-21), `E2E_BUILD=1` still blocked**: a plain `npm run build` (or
+`next build`) previously failed outright (a `<Html>` import error prerendering `/500`) —
+root-caused to Turbopack bundling the `ai` package's transitive `@opentelemetry/api` dependency
+into server chunks and mismatching Next's built-in error-page fallback. Fixed by adding
+`"@opentelemetry/api"` to `serverExternalPackages` in `next.config.ts`; a plain `npm run build`
+now completes cleanly (359/359 pages, verified repeatedly on a fully clean `.next`). **However**,
+`E2E_BUILD=1` mode specifically remains blocked: the harness's env overlay (`e2e/lib/env.ts`)
+remaps `NEXTAUTH_URL`/`NEXT_PUBLIC_API_URL` to `http://localhost:<E2E_PORT>`, and that remap alone
+(verified in isolation, no other var involved) deterministically reproduces the **same failure
+class** on a different route (`/404` instead of `/500`) — i.e. the underlying Turbopack
+module-graph fragility around `@opentelemetry/api` isn't fully eliminated, just no longer
+triggered by the *default* env's chunk-splitting order. This does not affect real production
+deploys (Vercel's `NEXTAUTH_URL` is fixed to the canonical prod URL and never remapped mid-build),
+but it does mean `E2E_BUILD=1` cannot currently complete a build. See gotchas.md's "`next build`"
+entries for the full repro matrix.
 
 ```bash
 # PowerShell

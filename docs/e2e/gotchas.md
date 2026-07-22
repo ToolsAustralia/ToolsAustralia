@@ -15,7 +15,7 @@
 | A webhook-dependent assertion times out (`No active membership + entries for ... within Ns`). | Webhook forwarding never reached the app, or processing lagged. | Check `e2e-artifacts/logs/stripe-listen.log` for the POST; check `server.log` for the handler. See "webhook timing" below. |
 | A visual baseline (`@visual`) fails after a real, intentional UI change. | Expected — baselines are point-in-time. | Update via Playwright's standard `--update-snapshots` flag, review the diff, commit the new PNGs deliberately (never blanket-regenerate without reviewing what changed). |
 | A prod-only (`E2E_BUILD=1`) failure that doesn't reproduce in dev mode. | A real prod-mode difference — CSP route class, `next.config.ts`'s `removeConsole`, etc. | This is a genuine finding, not an e2e infra bug — do not paper over it; see CLAUDE.md's Performance footguns §(7) and Security headers/CSP section. |
-| `E2E_BUILD=1` mode: `next build` itself fails before any test runs. | Currently reproducing — see "Open finding — `next build` fails" below. | Not an e2e-harness bug; escalate, don't retry. |
+| `E2E_BUILD=1` mode: `next build` itself fails before any test runs. | A plain `npm run build` is fixed (2026-07-21, `serverExternalPackages`) — but `E2E_BUILD=1` specifically still fails, a **different, related** finding. See "Open finding — `E2E_BUILD=1`'s `next build` still fails" below. | Not an e2e-harness bug; escalate, don't retry. |
 
 ## Resolved gotcha — seeded admin needs `userType: "admin"`, not just `role: "admin"`
 
@@ -244,11 +244,11 @@ in an actual failing render — the `Date.now()`/`Math.random()` hint in React's
 warning is generic, not diagnostic — and is out of scope for a docs-only task); flagged here and
 in the Task 13 report rather than silently retried away or absorbed into a watchdog allowlist.
 
-## Open finding — `next build` currently fails (prod-only, blocks `E2E_BUILD=1` entirely)
+## Resolved gotcha — `next build` failed (prod-only, blocked `E2E_BUILD=1` entirely)
 
 Found running Task 13's prod-build success-criteria gate (`E2E_BUILD=1 npm run e2e:smoke`). The
-orchestrator's own `next build` step (`e2e/run.ts` step 4) fails outright, before the app server
-ever boots and before any Playwright test can run:
+orchestrator's own `next build` step (`e2e/run.ts` step 4) failed outright, before the app server
+ever booted and before any Playwright test could run:
 
 ```
 Generating static pages (0/359) ...
@@ -261,17 +261,72 @@ Export encountered an error on /_error: /500, exiting the build.
 ```
 
 `grep -rl "next/document" src/` returns nothing — there is no direct `<Html>`/`next/document`
-import anywhere in application code, so this is a **transitive** failure: either a dependency
-pulls in `next/document`, or something in the App Router tree (a page, layout, or the custom
-`not-found.tsx`) is getting bundled into Next's auto-generated Pages-Router-style `/500` fallback
-in a way that breaks it. `next.config.ts` has no unusual `output`/export setting that would
-explain it. This is **not an e2e-harness artifact** — `next dev` never statically prerenders
-`/500` at all, so the bug is invisible outside `E2E_BUILD=1` or a real `npm run build`, but it
-would reproduce with a plain `npm run build` too (not separately re-verified outside the e2e
-overlay, for time). Per this task's explicit instruction, this is reported as a genuine prod-only
-finding, not papered over or retried away — **`E2E_BUILD=1` mode is currently fully blocked** by
-this until it's fixed in `src/` (out of scope for a docs-only task). See the Task 13 report for
-the verbatim capture.
+import anywhere in application code, so this was a **transitive** failure. Root-caused: Next's own
+tracer (`next/dist/server/lib/trace/tracer.js`) prefers a user-installed `@opentelemetry/api` over
+its bundled compiled shim when one is resolvable; the `ai` package (`^6.0.209`) depends on the
+real `@opentelemetry/api`, and Turbopack was bundling it into server chunks, which altered the
+module graph enough that the auto-generated `/500` fallback resolved a mismatched `HtmlContext`.
+This was **not an e2e-harness artifact** — `next dev` never statically prerenders `/500` at all,
+so the bug was invisible outside `E2E_BUILD=1` or a real `npm run build`, but reproduced with a
+plain `npm run build` too. **Fixed (2026-07-21)** by adding `"@opentelemetry/api"` to
+`serverExternalPackages` in `next.config.ts`, forcing Next's tracer back onto its own compiled
+shim instead of the bundled real package — see `docs/security-csp/gotchas.md` for the mirrored
+entry (the file itself is in that domain's manifest paths). Verified repeatedly: a plain
+`npm run build` now completes 359/359 pages cleanly on a fully clean `.next`, no `<Html>` error.
+See the Task 13 report for the original verbatim capture.
+
+## Open finding (not yet resolved) — `E2E_BUILD=1`'s `next build` still fails, a related but distinct manifestation
+
+Found immediately after verifying the fix above: `E2E_BUILD=1 npm run e2e:smoke` still fails at
+`e2e/run.ts`'s own `next build` step (`spawnSync("npm", ["run", "build"], { env: env.overlay, ... })`),
+before the server ever boots — so `E2E_BUILD=1` mode is **still fully blocked**, just by a
+narrower trigger than before. The `@opentelemetry/api` fix is real and does not regress; this is
+new information the fix's own verification surfaced, not evidence the fix is wrong.
+
+**Isolated by direct bisection** (setting each env var individually and re-running `npm run build`
+outside the orchestrator, each on a fully clean `.next`):
+
+- Plain `.env.local` env (`NEXTAUTH_URL=http://localhost:3000`) → succeeds, 4/4 clean-build runs.
+- `e2e/lib/env.ts`'s full overlay (Mongo URI swap + port + URL remap + tracking-var blanking) →
+  fails, 3/3 runs, always the same signature.
+- Overlay minus the tracking-var blanking (Mongo/port/URL only) → still fails.
+- Overlay minus the Mongo URI swap (just `PORT`/`NEXTAUTH_URL`/`NEXT_PUBLIC_API_URL`) → still fails.
+- **`NEXTAUTH_URL=http://localhost:3799` alone, nothing else changed** → fails, 2/2 clean-build
+  runs. This is the minimal reproducer.
+
+The failure signature is the **same error class** as the resolved finding above, just on a
+different route:
+
+```
+Error: <Html> should not be imported outside of pages/_document.
+Read more: https://nextjs.org/docs/messages/no-document-import-in-page
+Export encountered an error on /_error: /404, exiting the build.
+ ⨯ Next.js build worker exited with code: 1 and signal: null
+```
+
+(A separate, one-off `TypeError: Cannot read properties of null (reading 'useContext')` prerendering
+`/competition-term-majordraw` was also observed once, in the very first `E2E_BUILD=1` attempt, but
+did **not** reproduce in any of the 4 subsequent bisection runs — treated as an unrelated,
+non-reproducing flake, not part of this finding.)
+
+**Interpretation**: the `@opentelemetry/api` fix eliminates the specific chunk-splitting order
+that broke `/500` under the *default* env, but doesn't eliminate the underlying Turbopack
+module-graph fragility — a different env (specifically a non-default `NEXTAUTH_URL`) produces a
+different chunk-splitting order that can still trip the same latent bug, just on a different
+auto-generated error route (`/404` this time). **Ruled out**: Next's own "multiple lockfiles ...
+selected `C:\Codes\ToolsAustralia\package-lock.json` as the root directory" warning (this worktree
+nests under the main repo, so Turbopack's root inference sees the parent's lockfile too) looked
+like a plausible unifying cause — pinning `turbopack.root` to this folder silences the warning
+cleanly but does **not** fix the `NEXTAUTH_URL`-triggered failure (tested directly), so that
+theory is disproven and the config change was not kept.
+
+**Why this doesn't block the target fix**: real production builds/deploys never remap
+`NEXTAUTH_URL` mid-build — Vercel sets it once to the canonical prod URL and it never changes
+between builds — so this specific trigger is unique to `E2E_BUILD=1`'s port-remapping overlay, not
+a production risk. Gate 1 (a plain `npm run build`/production build) is genuinely fixed. But
+`E2E_BUILD=1` mode itself remains not runnable until this deeper Turbopack/`@opentelemetry`
+fragility is understood further — flagged here for a follow-up task rather than guessed at with a
+second speculative `next.config.ts` change.
 
 ## Webhook timing — what "slow" looks like and how to tell it apart from "broken"
 

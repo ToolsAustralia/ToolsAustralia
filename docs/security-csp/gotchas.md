@@ -1,5 +1,9 @@
 # Security & CSP — Gotchas
 
+## `serverExternalPackages` must externalize `@opentelemetry/api` — Turbopack bundling it broke the `/500` prerender (2026-07-21)
+
+`next.config.ts`'s `serverExternalPackages` now lists `"@opentelemetry/api"` alongside `"mongoose"`. Root cause: the `ai` package (`^6.0.209`) depends on the real `@opentelemetry/api`, and Next's own tracer (`next/dist/server/lib/trace/tracer.js`) prefers a user-installed `@opentelemetry/api` over its bundled compiled shim (`next/dist/compiled/@opentelemetry/api`) when one is resolvable. Under Turbopack, leaving it non-external let it get bundled into server chunks, which altered the module graph enough that Next's auto-generated `/500` fallback page resolved a mismatched `HtmlContext` and failed `next build` outright with `Error: <Html> should not be imported outside of pages/_document` — even though `grep -rl "next/document" src/` finds nothing (the import is transitive, not application code). This has nothing to do with CSP/headers directly, but `next.config.ts` lives in this domain's manifest paths — noted here so a future `serverExternalPackages` edit doesn't drop this entry. Not a CSP/middleware behavior change; `buildSecurityHeaders()`/nonce injection are unaffected.
+
 ## `next.config.ts` `devIndicators` is dev-only — NOT a security/CSP setting (2026-06-26)
 
 `next.config.ts` now sets `devIndicators: { position: "top-left" }`. This only moves Next's dev build/route indicator (the "N" pill) off the bottom floating widgets (Cobber support bubble, promotions theme toggle + account FAB). It is **development-only** (never rendered in production) and has **zero effect on CSP, security headers, or middleware**. Next supports only the 4 corners here (no mid-height); `false` hides it. Mentioned because `next.config.ts` lives in this domain — don't mistake it for a header change.
