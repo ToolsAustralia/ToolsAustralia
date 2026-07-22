@@ -84,3 +84,14 @@ The staging console showed 5 error classes; disposition of each:
 - **`static.hotjar.com/c/hotjar-*.js`** — the dead legacy Hotjar tag inside GTM container GTM-TBCCQQVZ; NOW ALSO neutralized in code via gtm.blocklist:['html'] in GTM_INIT_SNIPPET (2026-07-20, see docs/tracking/gotchas.md); deleting the tag in the GTM UI remains the clean end-state, NOT allowlisting — loading a second session recorder was explicitly rejected in the 2026-07 audit.
 - **`*.on.aws` / `*.run.app` `events?cee=no` beacons** — emitted by the Hotjar-by-Contentsquare module embedded in the CS bundle. Neither Contentsquare's CSP docs (`*.contentsquare.net/.com` — already allowlisted) nor Hotjar's (`*.hotjar.com/.io` — already allowlisted) document these endpoints. DELIBERATELY NOT allowlisted: wildcarding generic cloud hosts in connect-src opens a data-exfiltration channel. Resolution path: ask Contentsquare support to serve collection from their documented domains, or disable the Hotjar module in the CS admin.
 - **Acumin font 404** — placeholder @font-face url() for a file never shipped; url() source removed (local()-only) in globals.css.
+
+## `analytics-ipv6.tiktokw.us` added to connect-src (2026-07-22, first e2e staging run)
+
+The e2e suite's first EXTERNAL-mode run against staging (where the TikTok pixel is actually
+live — local e2e blanks its env vars) surfaced that TikTok's SDK now sends its IPv6
+enrichment beacon (`/ipv6/enrich_ipv6`) to `analytics-ipv6.tiktokw.us` (TikTok's US-entity
+domain), while connect-src only listed the older `analytics-ipv6.tiktok.com` — so the beacon
+was silently blocked on every deployed environment. ADDED (DJ-approved): a single named
+vendor host, not a generic-cloud wildcard, so the `*.on.aws`/`*.run.app` exfiltration
+objection above doesn't apply. The main event beacons to `analytics.tiktok.com` were never
+affected.

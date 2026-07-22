@@ -56,7 +56,13 @@ export function buildContentSecurityPolicy(nonce?: string): string {
     // Hotjar-by-Contentsquare module — neither vendor's CSP docs list them, and
     // wildcarding generic cloud hosts in connect-src would open an exfiltration
     // channel; see docs/security-csp/gotchas.md "Console-cleanup decisions".
-    `connect-src 'self' https://www.facebook.com https://graph.facebook.com https://connect.facebook.net https://api.stripe.com https://r.stripe.com https://b.stripecdn.com https://q.stripe.com https://m.stripe.com https://api.hcaptcha.com https://hcaptcha.com https://*.hcaptcha.com https://pay.google.com https://paymentrelayservice.apple.com https://fast.a.klaviyo.com https://a.klaviyo.com https://static-tracking.klaviyo.com https://static-forms.klaviyo.com https://static-app.klaviyo.com https://atlas-app.services.klaviyo.com https://analytics.tiktok.com https://analytics-ipv6.tiktok.com https://www.googletagmanager.com https://www.google-analytics.com https://vc.hotjar.io https://*.hotjar.io https://*.hotjar.com https://t.contentsquare.net https://*.contentsquare.net https://tcvsapi.contentsquare.com https://*.contentsquare.com${vercelToolbarConnect}`,
+    // analytics-ipv6.tiktokw.us added 2026-07-22: TikTok's SDK migrated its IPv6
+    // enrichment beacon (/ipv6/enrich_ipv6) to the tiktokw.us US-entity domain —
+    // the older analytics-ipv6.tiktok.com entry alone left it CSP-blocked on every
+    // deployed environment (caught by the e2e suite's first staging run). A single
+    // named vendor host, not a generic-cloud wildcard, so the exfiltration concern
+    // above doesn't apply.
+    `connect-src 'self' https://www.facebook.com https://graph.facebook.com https://connect.facebook.net https://api.stripe.com https://r.stripe.com https://b.stripecdn.com https://q.stripe.com https://m.stripe.com https://api.hcaptcha.com https://hcaptcha.com https://*.hcaptcha.com https://pay.google.com https://paymentrelayservice.apple.com https://fast.a.klaviyo.com https://a.klaviyo.com https://static-tracking.klaviyo.com https://static-forms.klaviyo.com https://static-app.klaviyo.com https://atlas-app.services.klaviyo.com https://analytics.tiktok.com https://analytics-ipv6.tiktok.com https://analytics-ipv6.tiktokw.us https://www.googletagmanager.com https://www.google-analytics.com https://vc.hotjar.io https://*.hotjar.io https://*.hotjar.com https://t.contentsquare.net https://*.contentsquare.net https://tcvsapi.contentsquare.com https://*.contentsquare.com${vercelToolbarConnect}`,
     "font-src 'self' https: data: https://applepay.cdn-apple.com",
     // Form submissions: Facebook Pixel fallback tracking
     "form-action 'self' https://www.facebook.com",
