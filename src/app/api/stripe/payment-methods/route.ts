@@ -17,6 +17,16 @@ const savePaymentMethodSchema = z.object({
   setAsDefault: z.boolean().optional().default(false),
 });
 
+/** True for a Stripe "this customer does not exist" error (404 / resource_missing) — a
+ * dangling `stripeCustomerId` (fake/seeded id, or a customer deleted in Stripe). Same
+ * classification convention as RetentionDiscountService/SubscriptionReferenceService. */
+function isStripeCustomerMissing(e: unknown): boolean {
+  const code = e && typeof e === "object" && "code" in e ? String((e as { code?: string }).code) : "";
+  const statusCode =
+    e && typeof e === "object" && "statusCode" in e ? (e as { statusCode?: number }).statusCode : undefined;
+  return code === "resource_missing" || code === "resource_missing_deleted" || statusCode === 404;
+}
+
 /**
  * GET /api/stripe/payment-methods
  * Get user's saved payment methods
@@ -45,13 +55,30 @@ export async function GET() {
     }
     const uniquePaymentMethods = Array.from(uniquePaymentMethodsMap.values());
 
-    const stripeCards = user.stripeCustomerId
-      ? await stripe.paymentMethods.list({
+    let stripeCards: { data: Stripe.PaymentMethod[] };
+    if (user.stripeCustomerId) {
+      try {
+        stripeCards = await stripe.paymentMethods.list({
           customer: user.stripeCustomerId,
           type: "card",
           limit: 20,
-        })
-      : { data: [] as Stripe.PaymentMethod[] };
+        });
+      } catch (error) {
+        if (isStripeCustomerMissing(error)) {
+          // A dangling stripeCustomerId (Stripe customer never existed, or was deleted
+          // out-of-band) has no saved methods — that's the truthful empty state, not a
+          // server error. Any other Stripe failure still falls through to the outer
+          // catch's 500 below.
+          return NextResponse.json(
+            { success: true, paymentMethods: [], subscriptionDefaultPaymentMethodId: null },
+            { headers: { "Cache-Control": "private, max-age=10" } }
+          );
+        }
+        throw error;
+      }
+    } else {
+      stripeCards = { data: [] };
+    }
 
     const cardById = new Map(stripeCards.data.map((c) => [c.id, c]));
 

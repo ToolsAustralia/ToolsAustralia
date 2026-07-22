@@ -95,5 +95,12 @@ Task 13 report for the controller/user to triage.
 
 Spec-maintenance note (2026-07-22): the visual spec's payment-methods/referral route stubs
 were removed — the underlying unconditional fetches were fixed at source (lazy-mounted
-modals), so closed-modal loads now genuinely make zero such requests; my-account.spec.ts
-gained a network assertion pinning that.
+modals). `my-account.spec.ts`'s regression guard pins the **chunk download**, not the network
+request, for "closed sheet/modal never fires its query": `usePaymentMethodPrefetch` (wired
+through `src/hooks/usePrefetching.ts`) legitimately prefetches payment methods on several
+route-intent/idle paths independent of ManageSheet ever opening, so a network-timing assertion
+raced that prefetcher. A component that hasn't mounted can't have its own JS chunk requested,
+so asserting no `ManageSheet`/`ReferFriendModal` chunk URL appears before first open is the
+timing-independent version of the same guarantee. `/api/stripe/payment-methods` itself is
+exercised unstubbed once ManageSheet opens (see billing-stripe/gotchas.md for the dangling-
+`stripeCustomerId` → 200-empty hardening that makes that safe against the seeded member).

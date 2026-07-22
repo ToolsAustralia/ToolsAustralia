@@ -375,6 +375,10 @@ the priority rule there if you ever add another attribution code path.
 
 The package flag `isMemberOnly` was renamed to **`isAdditional`** across the codebase. It marks packages that require *additional-package access* — an **active subscription OR current major-draw entries** (see `hasAdditionalPackageAccess`), which is broader than subscribers; it was never truly "member-only". The internal `-member` UI id-suffix (a row disambiguator) is intentionally unchanged. Full rationale: [subscription/gotchas.md](../subscription/gotchas.md).
 
+## `GET /api/stripe/payment-methods` treats a dangling `stripeCustomerId` as "no saved methods", not a 500 (2026-07-22)
+
+`stripe.paymentMethods.list({ customer: user.stripeCustomerId })` throws a `resource_missing` `StripeInvalidRequestError` when `stripeCustomerId` points at a Stripe customer that doesn't exist — a fake/seeded id (e2e fixtures use `cus_e2e_seeded_readonly`), or a real customer deleted out-of-band in the Stripe dashboard. The route's `try/catch` classifies this with `isStripeCustomerMissing()` (same `resource_missing`/`resource_missing_deleted`/404 check as `RetentionDiscountService`/`SubscriptionReferenceService`) and short-circuits to the normal success shape — `{ success: true, paymentMethods: [], subscriptionDefaultPaymentMethodId: null }` — instead of a 500. A dangling customer genuinely has no saved methods; that's the truthful empty state, not a server error. Every other Stripe failure (rate limit, network, auth) still falls through to the route's outer catch and 500s as before.
+
 ## Stripe.js loads via `@stripe/stripe-js/pure` only (2026-07-19)
 
 `src/lib/stripe-client.ts` imports `loadStripe` from the `/pure` entry — the DEFAULT `@stripe/stripe-js` entry injects https://js.stripe.com on mere import, which shipped Stripe to 100 % of guests when the modal chunk evaluated. Import `loadStripe` nowhere else (lint: `internal-norm/no-eager-stripe`); call `getStripePromise()` lazily inside components/handlers. Note: with `/pure`, Stripe's fraud-signal collection starts at first `getStripePromise()` call (payment-surface mount) instead of page load — intended.
