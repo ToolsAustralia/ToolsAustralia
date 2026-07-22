@@ -43,6 +43,8 @@ export interface ToolboxOption {
   id: ToolboxBrand;
   /** Full display name, e.g. shown in the hero caption. */
   name: string;
+  /** Bare brand, e.g. "Kincrome" — the `<toolset> × <toolbox>` gallery title and stat tiles. */
+  brandName: string;
   /** Short form for chips, e.g. "Kincrome box". */
   shortName: string;
   /** Small caps line above the brand mark on the card, e.g. "470 PIECE". */
@@ -114,6 +116,7 @@ export const TOOLBOXES: readonly ToolboxOption[] = [
   {
     id: "milwaukee",
     name: "Monster Milwaukee Toolbox",
+    brandName: "Milwaukee",
     shortName: "Milwaukee box",
     eyebrow: "MONSTER",
     accent: "#ee0000",
@@ -128,6 +131,7 @@ export const TOOLBOXES: readonly ToolboxOption[] = [
   {
     id: "kincrome",
     name: "470 Piece Kincrome Toolbox",
+    brandName: "Kincrome",
     shortName: "Kincrome box",
     eyebrow: "470 PIECE",
     accent: "#0a63c2",
@@ -144,6 +148,7 @@ export const TOOLBOXES: readonly ToolboxOption[] = [
   {
     id: "sidchrome",
     name: "356 Piece Sidchrome Toolbox",
+    brandName: "Sidchrome",
     shortName: "Sidchrome box",
     eyebrow: "356 PIECE",
     accent: "#d21f2a",

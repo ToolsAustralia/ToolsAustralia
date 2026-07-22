@@ -13,6 +13,7 @@ export { ComboHero } from "./ComboHero";
 export { PrizeContentsStrip } from "./PrizeContentsStrip";
 export { PrizeBuilderCta } from "./PrizeBuilderCta";
 export { ToolboxReelCard, ToolsetReelCard } from "./ReelCards";
+export { BrandMark } from "./BrandMark";
 
 export {
   TOOLBOX_QUERY_PARAM,

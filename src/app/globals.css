@@ -517,6 +517,103 @@
 }
 
 /* ---------------------------------------------------------------------------
+ * Prize gallery ("Spotlight" showroom, /promotions) design tokens
+ * ---------------------------------------------------------------------------
+ * Same contract as the prize-builder block above: surface palette keyed off the
+ * `.dark` html class so the showroom paints the right theme on the FIRST
+ * server-rendered frame (a Zustand theme read would flash light-on-dark on a
+ * page that IS the fold). The gallery is a SEPARATE surface from the builder —
+ * it has its own page ground, stage gradient and card colour — so it carries
+ * its own tokens rather than borrowing `--pbc-*` and silently inheriting a
+ * change meant for the configurator.
+ *
+ * `--pgs-accent` is deliberately NOT declared here: it is the SELECTED
+ * TOOLSET's brand colour (green in cash mode), set inline on the section root,
+ * and drives the glow, case ring, CTA, active thumb border and check. Adding a
+ * brand never touches this block.
+ * ------------------------------------------------------------------------- */
+.prize-gallery {
+  --pgs-page: #f3f2ee;
+  --pgs-stage: linear-gradient(180deg, #ffffff, #f0efea);
+  --pgs-text: #0c0d10;
+  --pgs-sub: #5c626b;
+  --pgs-border: rgba(0, 0, 0, 0.1);
+  --pgs-card: #ffffff;
+  --pgs-shadow: 0 16px 40px -22px rgba(0, 0, 0, 0.25);
+  --pgs-case-border: rgba(0, 0, 0, 0.1);
+  --pgs-eyebrow: #c40000;
+  --pgs-link: #c40000;
+  /* Cash green reads darker on the light ground so the stat value keeps its contrast. */
+  --pgs-cash-ink: #0f7a37;
+  /* Accent bloom strength — the design's `<accent>22` / `<accent>34` hex alphas as
+     opacity, so ONE gradient declaration serves both themes with any brand colour. */
+  --pgs-glow-alpha: 0.13;
+}
+
+.dark .prize-gallery {
+  --pgs-page: #08090b;
+  --pgs-stage: linear-gradient(180deg, #0f1116, #08090b);
+  --pgs-text: #ffffff;
+  --pgs-sub: rgba(255, 255, 255, 0.6);
+  --pgs-border: rgba(255, 255, 255, 0.1);
+  --pgs-card: #101217;
+  --pgs-shadow: 0 22px 50px -26px #000000;
+  --pgs-case-border: rgba(255, 255, 255, 0.12);
+  --pgs-eyebrow: #ff5a5a;
+  --pgs-link: #ff7a7a;
+  --pgs-cash-ink: #3ddc84;
+  --pgs-glow-alpha: 0.2;
+}
+
+/* Soft accent bloom bleeding in from the left of the stage. Transitioning
+   `background` interpolates the gradient's colour stop, which is what recolours
+   the bloom over .5s when the selection changes. */
+.pgs-glow {
+  background: radial-gradient(45% 45% at 50% 50%, var(--pgs-accent), transparent 70%);
+  opacity: var(--pgs-glow-alpha);
+  filter: blur(10px);
+  transition: background 0.5s ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pgs-glow {
+    transition: none;
+  }
+}
+
+/* Low-contrast brand wordmarks (DeWalt yellow, Ryobi lime, Makita teal) on the
+   near-white light stage. A hairline shadow rather than a plate — it keeps the
+   marks legible without boxing some brands and not others. Which brands get it
+   is decided by `needsMarkOutline`, not this rule. Dark mode needs none. */
+.pgs-mark-outline {
+  filter: drop-shadow(0 0 0.6px rgba(0, 0, 0, 0.75)) drop-shadow(0 1px 1px rgba(0, 0, 0, 0.2));
+}
+
+.dark .pgs-mark-outline {
+  filter: none;
+}
+
+/* Rail scrollbar — a neutral 8px thumb on a transparent track, so the rail reads
+   as an inner scroll region without the page's red brand scrollbar competing. */
+.pgs-rail {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(128, 128, 128, 0.35) transparent;
+}
+
+.pgs-rail::-webkit-scrollbar {
+  width: 8px;
+}
+
+.pgs-rail::-webkit-scrollbar-thumb {
+  background: rgba(128, 128, 128, 0.35);
+  border-radius: 4px;
+}
+
+.pgs-rail::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* ---------------------------------------------------------------------------
  * Prize builder — coverflow reel geometry
  * ---------------------------------------------------------------------------
  * The reel's per-breakpoint tuning lives in CSS variables (not a JS media-query
@@ -617,8 +714,9 @@
   background: radial-gradient(var(--pbc-glow-shape), var(--pbc-glow-dark), transparent 72%);
 }
 
-/* Brand wordmark painted through a CSS mask (see ReelCards.tsx BrandMark).
-   One white silhouette asset serves both themes at the brand's own colour. */
+/* Brand wordmark painted through a CSS mask (see prize-selection/BrandMark.tsx).
+   One white silhouette asset serves both themes at the brand's own colour.
+   Shared: the prize-builder reel cards AND the /promotions gallery thumbs. */
 .pbc-brand-mark {
   background-color: var(--pbc-mark-l);
   -webkit-mask-repeat: no-repeat;
@@ -631,6 +729,40 @@
 
 .dark .pbc-brand-mark {
   background-color: var(--pbc-mark-d);
+}
+
+/* ---------------------------------------------------------------------------
+ * Product stage — the lit plate a combo render sits on
+ * ---------------------------------------------------------------------------
+ * Shared by the prize-builder combo hero AND the /promotions gallery case, so
+ * the same prize never appears on two different surfaces.
+ *
+ * The combo renders (`majordraws/{set}-set/{set}-{box}.webp`) and the toolbox
+ * renders are 45-60% TRANSPARENT with fully transparent corners — verified, not
+ * assumed — so the plate colour is a free choice, not a constraint of the art.
+ * Light keeps the near-white studio plate. Dark uses the SAME panel gradient the
+ * reel cards use, plus an accent bloom (`--ta-stage-bloom`, set inline from the
+ * current selection) so the gear is lit by its own brand colour instead of
+ * floating on a white slab in an otherwise black page.
+ *
+ * The one opaque render is the cash art, which brings its own dark green
+ * background and sits on either plate unchanged.
+ * ------------------------------------------------------------------------- */
+.ta-product-stage {
+  background: linear-gradient(180deg, #ffffff, #eef0f2);
+}
+
+.dark .ta-product-stage {
+  background:
+    radial-gradient(72% 62% at 50% 42%, var(--ta-stage-bloom, transparent), transparent 72%),
+    linear-gradient(180deg, #191b21, #0f1115);
+  transition: background 0.5s ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dark .ta-product-stage {
+    transition: none;
+  }
 }
 
 /* Combo-image cross-fade when the selected combination changes. */

@@ -3,7 +3,6 @@
 import Link from "next/link";
 import Image from "next/image";
 import { Facebook, Instagram } from "lucide-react";
-import { DEFAULT_PRIZE_SLUG } from "@/config/prize-summaries";
 import { MAJOR_GIVEAWAY_NOTIFICATION, NSW_LICENSE } from "@/constants/legal";
 
 export default function Footer() {
@@ -73,8 +72,12 @@ export default function Footer() {
                   >
                     My Account
                   </Link>
+                  {/* The ONLY in-app link to the `/promotions` showroom (owner, 2026-07-22):
+                      the navbar's "Major Draw" and the floating countdown CTA both point at
+                      the default prize page instead, so the showroom is reached from here or
+                      a typed URL. Don't repoint this without moving that entry somewhere. */}
                   <Link
-                    href={`/promotions/${DEFAULT_PRIZE_SLUG}`}
+                    href="/promotions"
                     className="block text-gray-300 hover:text-white transition-colors duration-200 text-xs sm:text-sm lg:text-[15px] text-center md:text-left"
                   >
                     Promotions
