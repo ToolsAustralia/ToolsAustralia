@@ -108,7 +108,7 @@ When a user converts, `PaymentEvent.data` includes promo attribution from `User.
 - **Flow:**
   1. On `/promotions/*`, extracts `pageType` and `slug` from pathname
   2. Stores attribution in sessionStorage (`tools-aus:promo-attribution`) for checkout
-  3. Reads `tools-aus:from-promo-slug` from sessionStorage when set (user navigated from another toolset via "Explore other toolsets" carousel)
+  3. Reads `tools-aus:from-promo-slug` from sessionStorage when set. **NOTE (2026-07-22): nothing writes this key any more** — its only writer was the "Explore other toolsets" carousel, which was deleted when the prize builder's power-toolset reel took over that job (a visitor now switches brand in place instead of navigating between toolset pages). The reader is retained so the field still populates if a writer is reintroduced; until then `fromPromoSlug` is always null.
   4. Sends `POST /api/tracking/promo-page-visit` with UTM params and optional `referrerSlug`
 
 ### 2. Signup Attribution

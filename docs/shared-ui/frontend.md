@@ -492,13 +492,16 @@ Two follow-ups after the HiKOKI launch:
   `milwaukee-red` default and the HiKOKI toolset label badge rendered red. Fixed by adding
   `"hikoki-green": "hikoki-green"` to that block. **When adding a new `COLOR_KEYS` value, add its
   identity entry to `PLAN_ID_TO_COLOR_KEY` too**, not just the `Record<COLOR_KEYS>` tables.
-- **Prize combo cards displayed at inconsistent zoom.** `PrizeShowcase`'s
-  `getPrizeGalleryImageLayout` now intercepts the new combo renders
-  (`<toolset>-<toolbox>.webp`) with a uniform layout (`object-contain`, no per-image scale)
-  *before* the legacy `*-set` rule that was zooming dewalt/milwaukee combos to `scale-150`. The
-  15 combo source images were also normalised to a single **1600×1200 (4:3)** canvas with the
-  subject trimmed, scaled to a common inner frame, and **bottom-anchored + centred**, so every
-  prize card shows the setup at the same size without cut-off.
+- **Prize combo cards displayed at inconsistent zoom.** The 15 combo source images were
+  normalised to a single **1600×1200 (4:3)** canvas with the subject trimmed, scaled to a common
+  inner frame, and **bottom-anchored + centred**, so every combination shows the setup at the
+  same size without cut-off. `PrizeShowcase`'s `getPrizeGalleryImageLayout` also intercepted the
+  new combo renders with a uniform `object-contain` layout, *before* the legacy `*-set` rule that
+  was zooming dewalt/milwaukee combos to `scale-150`.
+  > **2026-07-21:** `getPrizeGalleryImageLayout` was **removed** with the prize gallery. The
+  > prize builder's combo hero renders every combination in one fixed `object-contain` stage, so
+  > there is no per-image layout table any more. The canvas normalisation above still stands and
+  > is what makes that single stage work.
 
 ## `hikoki-green` brand color key added (2026-06-22)
 
@@ -508,11 +511,20 @@ new HiKOKI toolset. In `packageColorScheme.ts` it's added to the `COLOR_KEYS` un
 `LANDING_PAGE_BRAND`, `SCHEMES`, `COLOR_KEY_TO_BRAND_GRADIENT`), plus `slugToPromoTierPlanId`
 (hikoki* → hikoki-green) and the `getPackageGlowColor` switch — the `SCHEMES["hikoki-green"]`
 entry mirrors `makita-teal` (white text on the dark brand colour) with green substitutions.
-`prize-brand-colors.ts` gained `POWER_SPEC_CHROME["hikoki-green"]` (emerald tints), a `hikoki`
-case in `getPrizeSpecificationsModalHeaderSolidFill` (`#007749`), and `hikoki-*` cases in
-`getPrizeBrandColors` / `getBrandGlowClass` (`glow-hikoki`). `globals.css` adds `.glow-hikoki`
-and `animate-border-glow-hikoki`. **Pattern when adding a brand:** mirror an existing key of
-the same polarity — light-text-on-bright (ryobi) vs white-text-on-dark (makita/hikoki).
+`prize-brand-colors.ts` gained `hikoki-*` cases in `getPrizeBrandColors`. `globals.css` adds
+`.glow-hikoki` and `animate-border-glow-hikoki`. **Pattern when adding a brand:** mirror an
+existing key of the same polarity — light-text-on-bright (ryobi) vs white-text-on-dark
+(makita/hikoki).
+
+> **Pruned 2026-07-21.** The prize-builder rewrite deleted the last consumers of several
+> `prize-brand-colors.ts` exports, and they were removed with it: `PrizeSpecificationsModalTheme`
+> / `getPrizeSpecificationsModalTheme`, `getPrizeSpecificationsModalHeaderSolidFill`,
+> `getPowerToolModalPrimaries`, `getBrandGlowClass`, and the `POWER_SPEC_CHROME` map (including
+> its `hikoki-green` entry). The module's surviving surface is `PrizeBrandColors` /
+> `getPrizeBrandColors` / `getBrandBorderColor` / `getBrandGlowColor`. The specs modal now takes
+> its colour as a single `accent` prop → `--pbc-accent`, and the builder's reel cards read each
+> brand's own `accent` off the `TOOLBOXES` / `TOOLSETS` record — so a new brand no longer needs a
+> case added to a chrome table.
 
 ## MajorDrawSection — brand watermark now SVG (2026-06-22)
 
@@ -677,11 +689,22 @@ Outside that 72h window, or once `now ≥ drawDate + 12h` (cycle has flipped to 
 - **Image dims:** native `450×150`, rendered with `next/image` and `style={{ height: "clamp(40px, 8vw, 72px)" }}` so it scales with viewport while preserving aspect ratio. `priority` so it doesn't pop in.
 - **Theme:** the timer icon picks up `usePromoTheme().primary`, so per-slug brand themes (RYOBI green, DEWALT yellow, etc.) tint it automatically. The frozen state forces red (`#dc2626`) regardless of theme.
 
-### PrizeShowcase — landing hero is NOT repeated as the gallery's first slide on `/promotions/*` (2026-06-12)
+### PrizeShowcase — landing hero is NOT repeated as the gallery's first slide on `/promotions/*` (2026-06-12) — HISTORICAL
 
-[`PrizeShowcase`](../../src/components/sections/promo/PrizeShowcase.tsx) builds an `enhancedGallery` that normally injects the mobile landing-hero art (`getLandingHeroImagePaths(activeSlug)`) as the **first** carousel slide. On `/promotions/*` that would double up the hero — [`PromoHero`](../../src/components/sections/promo/PromoHero.tsx) already renders the same landing art directly above the showcase. So when `isPromotionsPage`, `enhancedGallery` early-returns `activePrize.gallery` untouched and the carousel starts on the real product photos. Same "don't duplicate what `PromoHero` renders" rule as the PromoTrustBar ENTER NOW note above.
+> **Superseded 2026-07-21.** `PrizeShowcase` no longer renders an image gallery, so there is no
+> `enhancedGallery`, no first slide, and no landing-hero injection to suppress. The
+> [prize builder](../promo/frontend.md#prize-builder--build-your-prize-configurator-2026-07-21)
+> shows one combo hero (`{toolset}-set/{toolset}-{toolbox}.webp`), which is a different asset from
+> the landing art `PromoHero` renders — so the duplication this note guarded against can't occur.
+> The underlying *rule* still holds for new work: don't repeat what `PromoHero` already renders.
 
-Evergreen surfaces (home, my-account) have **no** hero above the showcase, so they still get the landing art injected as slide one — the early return is gated on `isPromotionsPage` only. New light-variant `sidTB` toolset images (`{brand}-sidTB.webp` / `-sidTB-mobile.webp` for dewalt/makita/milwaukee/ryobi) were added to the [landing image manifest](../../src/generated/landingImageManifest.ts) in the same change so the dark/light hero pairs are complete.
+<details><summary>Original note</summary>
+
+`PrizeShowcase` built an `enhancedGallery` that normally injected the mobile landing-hero art (`getLandingHeroImagePaths(activeSlug)`) as the **first** carousel slide. On `/promotions/*` that would double up the hero — [`PromoHero`](../../src/components/sections/promo/PromoHero.tsx) already renders the same landing art directly above the showcase. So when `isPromotionsPage`, `enhancedGallery` early-returned `activePrize.gallery` untouched. Evergreen surfaces (home, my-account) had **no** hero above the showcase, so they still got the landing art injected as slide one.
+
+</details>
+
+New light-variant `sidTB` toolset images (`{brand}-sidTB.webp` / `-sidTB-mobile.webp` for dewalt/makita/milwaukee/ryobi) were added to the [landing image manifest](../../src/generated/landingImageManifest.ts) in the same 2026-06-12 change so the dark/light hero pairs are complete — that part is still live.
 
 ### PromoHero — hero video gating + A/B `disableVideo` (2026-06-12)
 
@@ -714,19 +737,58 @@ The old `src/components/sections/winner-testimony/` folder and its `src/componen
 
 All previous call sites now render `WinnersTestimony` directly: the homepage + promotions via [src/app/(site)/components/WinnerTestimoniesClient.tsx](../../src/app/(site)/components/WinnerTestimoniesClient.tsx), and the account draws tab via [src/app/(site)/my-account/draws/page.tsx](../../src/app/(site)/my-account/draws/page.tsx). The old brand-theme/Embla machinery (`usePromoTheme`, `theme.ts`, cinematic photo hero) is gone — the new section uses the fixed brand-red `.ta-results` tokens and a native scroll-snap carousel.
 
-### `OtherToolsetsCarousel` — Explore other toolsets cards
+### `PrizeShowcase` / `PrizeBuilderCard` — "Build your prize" (2026-07-21)
 
-[`src/components/sections/promo/prize-selection/OtherToolsetsCarousel.tsx`](../../src/components/sections/promo/prize-selection/OtherToolsetsCarousel.tsx) renders the "Explore other toolsets" strip beneath toolset / evergreen promo pages. Each card has a **brand wordmark on top** (`POWERSET_BRAND_TEXT[slug]` → `/images/brands/name/{brand}Text.svg`) followed by the product image filling the rest of the 3:4 frame. The card keeps a brand-coloured border/shadow from [`getToolsetBadgeStyle`](../../src/utils/package-colors/packageColorScheme.ts); no text label is rendered visually — the SR-only announcement comes from the button's `aria-label` driven by `POWERSET_LABELS` (e.g. `"RYOBI 19PC KIT AND LINK STORAGE"`).
+Lives in this domain by the manifest (`src/components/sections/**`), but the **architecture
+write-up is in [promo/frontend.md](../promo/frontend.md#prize-builder--build-your-prize-configurator-2026-07-21)**
+alongside the rest of the prize/promo surface — two independent coverflow lanes off the
+`TOOLBOXES` / `TOOLSETS` registries, `--pbc-accent` = the selected power toolset, the CSS-variable
+reel geometry, the `.pbc-brand-mark` mask technique, and the `/promotions/*` in-place-selection
+behaviour change. Read it before touching any of the `prize-selection/*` files. Shared-ui-side
+consequences documented here: the [`.prize-builder` token block](#prize-builder-tokens-in-globalscss)
+below, the [PrizeSpecificationsModal](#prizespecificationsmodal) restyle, the pruned
+`prize-brand-colors.ts` exports, and the deleted `ToolboxSelector` / `PowerToolsetCarousel` /
+`StaticToolsetHighlight` entries in [decomposition-backlog.md](./decomposition-backlog.md).
 
-**Layout — 4-up endless loop (2026-06-27).** `ALL_TOOLSETS` now includes **`hikoki`** (5 toolsets), so a toolset page consistently shows the **4 other** brands (HiKOKI previously couldn't appear, and non-HiKOKI pages only had 3 others). The strip is a single embla carousel at every breakpoint: the viewport now has **`overflow-hidden`** (it was missing, so the track spilled across the page — the bug behind the visible duplicate cards), and the slides are rendered **once** — the old **manual ×2 duplication was removed**. Embla's own `loop: true` provides the seamless endless wrap (clones sit at the boundary, so the visible row never shows adjacent repeats). Slides are sized `basis-[62%] sm:[42%] md:[30%] lg:[23%]`, so **desktop shows 4 full cards + a sliver of the next** — the sliver keeps the track overflowing the viewport so the loop and prev/next arrows always engage. The old `needsCarousel` static-flex-wrap branch and its resize measurement (`SLIDE_WIDTH`/`SLIDE_GAP`) were dropped.
+#### Prize-builder tokens in globals.css
 
-**`POWERSET_LABELS` carry the descriptive kit + storage system** ([`prize-selection/constants.ts`](../../src/components/sections/promo/prize-selection/constants.ts)). Each label spells out its brand storage — `MILWAUKEE 13PC KIT AND 8PC PACKOUT SYSTEM`, `DEWALT 14PC KIT AND TOUGHSYSTEM STORAGE`, `MAKITA 15PC KIT AND 7PC MAKTRAK SYSTEM`, `RYOBI 19PC KIT AND LINK STORAGE` — so every consumer (`PowerToolsetCarousel`, `StaticToolsetHighlight`, `OtherToolsetsCarousel`) renders `"{kit} AND {storage} + $5000 CASH"` from one source (the `+ $5000 CASH` suffix is component-added). The PrizeShowcase/MajorDrawSection picker heading reads **"Pick your Power Toolset / Storage System"** to match.
+[`globals.css`](../../src/app/globals.css) gained a `.prize-builder` block (+ a `.dark
+.prize-builder` override) declaring the card's whole surface palette — `--pbc-panel`,
+`--pbc-panel2`, `--pbc-text`, `--pbc-sub`, `--pbc-body`, `--pbc-border`, `--pbc-box-bg`,
+`--pbc-tile-*`, `--pbc-chip-*`, `--pbc-rule`, `--pbc-heading`, `--pbc-aside-bg`, `--pbc-foot-bg`,
+the payment-mark inks (`--pbc-visa` / `--pbc-stripe` / `--pbc-gpay` / `--pbc-ink-strong`) and the
+theme-independent `--pbc-cash` / `--pbc-cash-dark` — plus the reel geometry variables (with a
+`@media (min-width: 768px)` desktop block), `.pbc-reel-card`, `.pbc-brand-mark` and `.pbc-fade`.
 
-**`TOOLBOX_LABELS`** (same file) were renamed to descriptive all-caps names — `MONSTER MILWAUKEE TOOLBOX`, `470 PIECE KINCROME TOOLBOX`, `356 PIECE SIDCHROME TOOLBOX` — rendered by [`ToolboxSelector`](../../src/components/sections/promo/prize-selection/ToolboxSelector.tsx); the equivalent inline toggle in `MajorDrawSection` was updated to the same strings. (The two-line combo-summary labels and the `prizes.ts` prize `label`/`heroHeading` strings still say "Milwaukee Toolbox" etc. — a different surface, left unchanged.)
+Three rules for anyone editing it:
+1. **It is keyed off the `html.dark` class, not the Zustand theme store**, so the right palette is
+   in the first server-rendered frame — this section is above the fold on `/` and every promo
+   page, and a JS theme read would flash. Don't "simplify" it into a `useTheme()` read.
+2. **`--pbc-accent` is deliberately absent from the block.** It is per-selection (the chosen power
+   toolset's brand colour, cash green in cash mode) and is set inline on the card root and on the
+   specs-modal root. Adding a brand must never touch this CSS.
+3. **The reel variables are mirrored by `REEL_METRICS`** in `prize-builder-model.ts` for the unit
+   tests. Change one, change the other — `npm run test:prize-builder` cannot see the CSS.
+
+Two blocks were **removed** from `globals.css` in the same change: `.main-swiper` and
+`.thumbs-swiper` (the per-brand Swiper nav/pagination/thumb chrome for the deleted prize gallery).
+The `.glow-*` brand utilities and `.other-toolsets-swiper` are untouched.
+
+### ~~`OtherToolsetsCarousel` — Explore other toolsets cards~~ (DELETED 2026-07-22)
+
+The "Explore other toolsets" strip beneath toolset / evergreen promo pages was **deleted**: the
+prize builder's power-toolset reel now offers every brand on those pages, so the strip duplicated
+it one scroll further down. Its supporting exports went with it — `POWERSET_LABELS` (its
+`aria-label` source) and `buildPromotionsToolsetLandingHref` are gone, as is the
+`.other-toolsets-swiper` CSS block. `POWERSET_IMAGES` and `POWERSET_BRAND_TEXT` survive as derived
+maps for the login page's decorative toolset rotator; everything else reads the `TOOLSETS`
+registry directly. See [promo/frontend.md](../promo/frontend.md) for the reel that replaced it.
+
+**`TOOLBOX_LABELS`** (same file) are the descriptive all-caps names — `MONSTER MILWAUKEE TOOLBOX`, `470 PIECE KINCROME TOOLBOX`, `356 PIECE SIDCHROME TOOLBOX` — now also derived (`name.toUpperCase()`). Their renderer, `ToolboxSelector`, was deleted in the rewrite; the prize builder's toolbox reel card composes the same information from the record's `eyebrow` + masked brand mark + the literal `TOOLBOX`, and the combo hero caption uses the full `name`. (The `prizes.ts` prize `label`/`heroHeading` strings still say "Milwaukee Toolbox" etc. — a different surface, left unchanged.)
 
 **PromoHero — landing hero video (2026-06-12):** [`PromoHero`](../../src/components/sections/promo/PromoHero.tsx) now overlays a muted hero **video** on the landing image for brand slugs. It **plays through once (no loop)** and holds on its last frame — a new clip only plays when the slug changes (the `key` remounts it). The `.webp` hero stays the **LCP element and `poster`/fallback**; [`LandingHeroVideo`](../../src/components/sections/promo/LandingHeroVideo.tsx) fades in over it (`onPlaying` → opacity) once playback starts. Paths come from [`getLandingHeroVideoPaths`](../../src/utils/promo/landing-video-resolver.ts) (`null` for `cash-prize` / evergreen → image only). Gating — the video mounts **only** when all hold: client-mounted (`isMounted`, avoids SSR/hydration mismatch and guarantees autoplay), not `imageError`, **not** `flags.saveData`, **not** `flags.reducedMotion` (both from [`useDeviceProfile`](../../src/hooks/useDeviceProfile.ts)), and no per-slug A/B image override is pinned. Only the **active viewport's** clip mounts (`useMediaQuery("(min-width: 1024px)")` → desktop `2560×1044` vs mobile `1080×1164`), so it never double-loads. `<video>` is `autoPlay muted loop playsInline preload="auto"` with `<source>` WebM→MP4; same-origin under CSP `media-src 'self'`.
 
-**PrizeShowcase gallery — landing hero injection (2026-06-12):** [`PrizeShowcase`](../../src/components/sections/promo/PrizeShowcase.tsx) normally prepends the active slug's landing hero (`getLandingHeroImagePaths` / A/B `variantHeroOverride`) as the carousel's first slide (`enhancedGallery`, flagged `isLandingImage`). On **`/promotions/*`** this injection is now skipped (gated by `isPromotionsPage`) because `PromoHero` already renders that same hero directly above the showcase, so repeating it as slide 1 was redundant. Evergreen hosts that have no hero above — the homepage `/` and `/my-account` — still get the landing image injected.
+**PrizeShowcase gallery — landing hero injection (2026-06-12) — REMOVED 2026-07-21:** `PrizeShowcase` used to prepend the active slug's landing hero (`getLandingHeroImagePaths` / A/B `variantHeroOverride`) as the carousel's first slide (`enhancedGallery`, flagged `isLandingImage`), skipping it on `/promotions/*`. The carousel and `enhancedGallery` are gone with the prize-builder rewrite — the component renders no landing-hero art at all now. Full note above.
 
 ## Modals
 
@@ -736,21 +798,66 @@ All previous call sites now render `WinnersTestimony` directly: the homepage + p
 
 ### PrizeSpecificationsModal
 
-[`src/components/modals/PrizeSpecificationsModal/`](../../src/components/modals/PrizeSpecificationsModal/) shows the full spec breakdown for a prize (`prize?: PrizeCatalogEntry`). Built on `ModalContainer` (`size="4xl"`).
+[`src/components/modals/PrizeSpecificationsModal/`](../../src/components/modals/PrizeSpecificationsModal/) shows the full spec breakdown for a prize (`prize?: PrizeCatalogEntry`). Built on `ModalContainer` (`size="4xl" height="auto" mobileFullBleed`).
 
-**Click-gated since perf Tier-2 (2026-07-20):** both hosts (`PrizeShowcase`, dead-code `MajorDrawSection`) mount it via `next/dynamic` behind a first-open latch and resolve the deep `PrizeCatalogEntry` with `await import("@/config/prizes")` at open time — the modal's `prize` prop is `null` until that lands (it renders its built-in "Prize information is loading" state). The modal's own `@/config/prizes` imports are **type-only**. See [promo frontend](../promo/frontend.md) "PrizeShowcase — prize-summaries split".
+**Restyled to the prize-builder handoff (2026-07-21).** It is now the details sheet *behind* the
+[prize builder](../promo/frontend.md#prize-builder--build-your-prize-configurator-2026-07-21) and
+shares its visual system: the modal root carries the **`prize-builder` className**, so the whole
+`--pbc-*` token layer in [`globals.css`](../../src/app/globals.css) applies, and the sheet
+re-tints with whatever combination the card is showing.
 
-**Responsive layout (2026-06-02):**
-- **Mobile (`<lg`)** — stacked: `Hero` landscape banner on top (wrapped in `lg:hidden`), then the scrollable specs below.
-- **Desktop (`lg+`)** — two columns inside a `flex lg:flex-row` body: [`FeaturePanel`](../../src/components/modals/PrizeSpecificationsModal/FeaturePanel.tsx) on the left (`lg:w-[38%]`, sticky-feeling, non-scrolling) and the specs (`TabBar` + `SpecCard` list) scrolling on the right via `ModalContent`. The top `Hero` is hidden at `lg`.
+**Props** — `{ isOpen, onClose, prize }` plus three optional additions:
 
-**`FeaturePanel`** resolves the **portrait (mobile) landing image** (`getImageForMode(paths, "dark", "mobile")`, falling back to `gallery[0].mobileSrc ?? .src`) because the narrow/tall left column would letterbox the landscape desktop hero. Renders eyebrow + image + `heroHeading` + `summary` on a dark gradient. The dollar `prizeValueLabel` badge is **deliberately not shown** here (2026-06-02) — surfacing the prize's cash value was judged to risk putting entrants off. `prizeValueLabel` data is kept for the admin `MajorDrawManagement` surface.
+| Prop | Purpose |
+|---|---|
+| `accent?: string` | The configured combination's accent (the selected **power toolset**'s brand colour, or cash green). Set inline as `--pbc-accent` on the sheet's root; drives the active tab pill, the summary banner's left rule, stat dots, focus rings and the "Got it" button. Defaults to Tools Australia red `#ee0000` for callers outside the builder (e.g. the dev modal gallery). |
+| `comboImage?: string` | The composite `{toolset}-{toolbox}.webp` the card is showing; falls back to `prize.gallery[0].src`. |
+| `drawLabel?: string \| null` | `"27 JUL · 8PM AEST"` from `formatMajorDrawChipUtc`; appended to the footer permit line, omitted when null. |
 
-**Per-tool photos** — `SpecCard` renders `item.image` (a `PrizeMedia`) as a `w-16 sm:w-24` `object-contain` thumbnail in the card header, replacing the generic `Package` icon when present. Photos are wired in [`prizes.ts`](../../src/config/prizes.ts) (see config-and-data domain) — items with no matched photo keep the icon. Storage sections lead with the composite system photo on the primary (rolling-base) piece (Makita MAKTRAK, Ryobi LINK); Milwaukee PACKOUT / DeWalt ToughSystem have no storage photo on disk yet.
+**Structure** — `index.tsx` (orchestrator) + `FeaturePanel` + `TabBar` + `SpecCard`.
+`Hero.tsx` and `TrustBar.tsx` were **deleted**; the sheet no longer reuses the `upsell-shell`
+primitives, and it no longer resolves a landing-hero image or reads
+`getPrizeSpecificationsModalTheme` (that helper and its siblings were removed from
+`prize-brand-colors.ts` — see below).
 
-**Tabs** — `TabBar` is horizontally scrollable at every viewport (`overflow-x-auto`). It carries `lg:pr-14` so that in the desktop 2-col layout the absolute modal close button (top-right) never sits over the last tab; the user can scroll the strip to reach every section.
+- **Desktop (`lg+`)** — two columns: a **feature rail** on the left (`lg:w-[34%]`,
+  `--pbc-aside-bg`, non-scrolling) and the spec pane scrolling on the right.
+- **Mobile (`<lg`)** — single column: the **same** `FeaturePanel` renders inline at the top and
+  scrolls away behind the sticky tab row. One component both times, so the two can't drift.
 
-**Scroll-finder footgun:** `ModalContainer.findScrollableElement` matches the first descendant whose class string *contains* `overflow-y-auto`. The `FeaturePanel` therefore uses `lg:overflow-auto` (not `lg:overflow-y-auto`) so the boundary-overscroll handler still binds to the specs `ModalContent`, not the panel — otherwise on mobile (panel `display:none`/`overflow:visible`) the finder falls through to the overflow-hidden panel and `preventDefault`s all touch scrolling.
+**`FeaturePanel`** ("EVERYTHING YOU'D WIN") shows the combination composite on a light plate
+(`aspect-[16/7]`, `lg:aspect-[4/3]`) with a `+ $5,000 CASH` flag, the combination title, and stat
+rows (`Power tools` / `Storage` / `Cash bonus`). The tools + storage strings come from
+`getContentsChips()` in `prize-builder-model.ts`, and the title from the slug via `fromPrizeSlug`,
+so the sheet and the card always describe the same thing. The dollar `prizeValueLabel` badge is
+still **deliberately not shown** (2026-06-02) — surfacing the prize's cash value was judged to
+risk putting entrants off; the data is kept for the admin `MajorDrawManagement` surface.
+
+**Import boundary:** `index.tsx` imports `constants.ts` and `prize-builder-model.ts` as **leaf
+modules**, not through the `prize-selection` barrel — both are pure data / pure derivations, so
+the sheet shares the builder's vocabulary without dragging the card's component tree into this
+click-gated chunk.
+
+**Tabs** — `TabBar` is a sticky (`top-0`), single-row, horizontally scrollable `role="tablist"`
+wired to the pane's `role="tabpanel"`. Each pill shows its section's **item count badge**; the
+active pill is filled with `--pbc-accent`. It carries `lg:pr-14` so the absolute modal close
+button never sits over the last tab. A `$5,000 Cash` section is appended to `prize.specSections`
+for every non-cash prize.
+
+**`SpecCard`** — an **84×84** `object-contain` thumbnail (`item.image`, a `PrizeMedia`) beside the
+item name, then a two-column **Specifications / In the Box** body. Photos are wired in
+[`prizes.ts`](../../src/config/prizes.ts) (see config-and-data domain) — items with no matched
+photo fall back to a placeholder glyph. Storage sections lead with the composite system photo on
+the primary (rolling-base) piece (Makita MAKTRAK, Ryobi LINK); Milwaukee PACKOUT / DeWalt
+ToughSystem / HiKOKI Multi Cruiser have no storage photo on disk.
+
+**Footer** — the NTP permit line (`NTP_NUMBER` from [`src/constants/legal.ts`](../../src/constants/legal.ts))
++ the randomdraws.com.au attribution + the optional draw stamp, with a `--pbc-accent` **"Got it"**
+button. This replaced the old 3-cell `TrustBar`.
+
+**Click-gated since perf Tier-2 (2026-07-20):** `PrizeShowcase` mounts it via `next/dynamic` behind a first-open latch and resolves the deep `PrizeCatalogEntry` with `await import("@/config/prizes")` at open time — the modal's `prize` prop is `null` until that lands (it renders its built-in "Prize information is loading" state). The modal's own `@/config/prizes` imports are **type-only**. See [promo frontend](../promo/frontend.md) "PrizeShowcase — prize-summaries split".
+
+**Scroll-finder footgun:** `ModalContainer.findScrollableElement` matches the first descendant whose class string *contains* `overflow-y-auto`. The desktop feature rail is an `<aside>` with **no** overflow class (its content fits), and the spec pane is the only `overflow-y-auto` descendant, so the boundary-overscroll handler binds where it should. If the rail ever needs to scroll, give it `lg:overflow-auto` (never `lg:overflow-y-auto`) — otherwise on mobile, where the rail is `display:none`, the finder falls through to it and `preventDefault`s all touch scrolling.
 
 ### RenewalFailedModal
 
@@ -920,7 +1027,7 @@ Twelve flat-file modals were decomposed into the canonical orchestrator-folder p
 
 `utils/motion/` — Framer Motion presets and helpers.
 
-**Updated 2026-05-04**: bumped `ToolboxSelector` unselected text to full white for legibility across brand themes; switched `LatestWinnerHero` CTA arrow to inherit `currentColor` so it stays visible in dark mode for light-primary brands.
+**Updated 2026-05-04**: bumped `ToolboxSelector` unselected text to full white for legibility across brand themes; switched `LatestWinnerHero` CTA arrow to inherit `currentColor` so it stays visible in dark mode for light-primary brands. (`ToolboxSelector` was **deleted** on 2026-07-21 — its replacement, the prize builder's toolbox reel, gets its legibility from the `--pbc-*` token layer plus per-theme `markColor` on each `TOOLBOXES` record, so there is no hardcoded white left to bump.)
 
 ## Overlays
 
@@ -928,7 +1035,7 @@ Twelve flat-file modals were decomposed into the canonical orchestrator-folder p
 
 [src/components/ui/FullscreenImageViewer.tsx](../../src/components/ui/FullscreenImageViewer.tsx)
 
-Fullpage modal for browsing a gallery of winner / prize / draw photos. Used by `MembershipModal`, `WinnerStrip`, `MiniDrawImageGallery`, `PrizeShowcase`, and the dev modals gallery.
+Fullpage modal for browsing a gallery of winner / prize / draw photos. Used by `MembershipModal`, `WinnerStrip`, `MiniDrawImageGallery`, and the dev modals gallery. (`PrizeShowcase` was a consumer until 2026-07-21 — the prize-builder rewrite deleted its image gallery, so it no longer opens the viewer.)
 
 #### Layout
 
@@ -955,7 +1062,7 @@ Fullpage modal for browsing a gallery of winner / prize / draw photos. Used by `
 
 `FullscreenTriggerButton` — small expand-icon button used by callsites to open the viewer.
 
-**Module-weight footgun (2026-07-20):** the trigger lives in the SAME module as the heavy viewer (react-zoom-pan-pinch + embla + ModalContainer), so a static import of just the button still pulls the whole viewer into the importer's chunk. `PrizeShowcase` therefore loads the viewer via `next/dynamic` behind a first-open latch and renders its own eager markup-identical trigger stand-in (kept in sync by comment). If another eager surface needs the trigger, split the button into its own file instead of static-importing this module.
+**Module-weight footgun (2026-07-20):** the trigger lives in the SAME module as the heavy viewer (react-zoom-pan-pinch + embla + ModalContainer), so a static import of just the button still pulls the whole viewer into the importer's chunk. `PrizeShowcase` used to work around this with a `next/dynamic` first-open latch plus its own eager markup-identical trigger stand-in; that whole arrangement went with its gallery on 2026-07-21. **The rule still stands for the remaining consumers:** if an eager surface needs the trigger, split the button into its own file instead of static-importing this module.
 
 ## SubscriptionManagementModal / PaymentMethodsTab — settings redesign variant (2026-05-19)
 

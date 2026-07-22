@@ -120,7 +120,7 @@ const TOOLSET_DISPLAY_NAME: Record<ToolsetKey, string> = {
   hikoki: "HiKOKI",
 };
 
-// Same color-key mapping the prize carousel uses (PowerToolsetCarousel.tsx).
+// Same brand color-key mapping the prize builder uses (prize-selection/constants.ts).
 function getToolsetColorKey(toolset: ToolsetKey): string {
   if (toolset === "milwaukee") return "milwaukee-red";
   if (toolset === "dewalt") return "dewalt-yellow";

@@ -45,6 +45,10 @@ Tracking/pixel components use `cn()` from `@/utils/cn` for conditional class com
 
 Pixel `<Script>` tags are tagged with `data-tracking-pixel="true"` (`GoogleTagManager`, `KlaviyoScriptLoader`, the Contentsquare loader in `app/layout.tsx`). The print stylesheet in [src/app/globals.css](../../src/app/globals.css) hides any `[data-tracking-pixel]` element so they don't leak into printed pages. When wiring a new pixel script, add the same attribute. See [shared-ui/patterns.md](../shared-ui/patterns.md#print-stylesheet) for the full set of print-hidden markers.
 
+## Poppins now loads weight 800 (2026-07-21)
+
+The `next/font/google` Poppins call in [src/app/layout.tsx](../../src/app/layout.tsx) added `"800"` to its `weight` array (now `400/500/600/700/800/900`) for the prize builder's `font-extrabold` type. No tracking behavior is affected; noted here only because `layout.tsx` is a tracking-domain file. Rationale + the "weight set is not trimmable" rule: [shared-ui/tailwind-conventions.md §10](../shared-ui/tailwind-conventions.md).
+
 ## Global `.ta-results` stylesheet import (2026-06-11)
 
 [src/app/layout.tsx](../../src/app/layout.tsx) now imports `./(site)/draw-results/draw-results.css` globally (alongside `globals.css`). Every selector in that file is scoped under `.ta-results`, so the global import is inert on pages that don't use the class — it exists so the portable `WinnersTestimony` "Hear from our winners" section (draws domain) renders correctly on any host page (homepage, promotions, my-account). No tracking behavior is affected; noted here only because `layout.tsx` is a tracking-domain file.

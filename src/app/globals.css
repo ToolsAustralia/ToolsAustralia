@@ -437,6 +437,224 @@
   }
 }
 
+/* ---------------------------------------------------------------------------
+ * Prize builder ("Build your prize") design tokens
+ * ---------------------------------------------------------------------------
+ * Surface palette for the major-draw prize configurator (PrizeBuilderCard) and
+ * its details modal (PrizeSpecificationsModal). Declared as CSS variables keyed
+ * off the `.dark` html class rather than read from the Zustand theme store, so
+ * the card paints the right palette on the FIRST server-rendered frame — a JS
+ * theme read would flash light-on-dark during hydration on this always-visible
+ * section.
+ *
+ * `--pbc-accent` is deliberately NOT declared here: it is the SELECTED POWER
+ * TOOLSET's brand colour (green in cash mode) and is set inline on the card /
+ * modal root, so a single variable drives the CTA, focus rings, glows, chips
+ * and modal tabs. Adding a brand never touches this block.
+ * ------------------------------------------------------------------------- */
+.prize-builder {
+  --pbc-panel: #ffffff;
+  --pbc-panel2: #f4f3f0;
+  --pbc-text: #0c0d10;
+  --pbc-sub: #5c626b;
+  --pbc-body: #4a505a;
+  --pbc-border: rgba(0, 0, 0, 0.1);
+  --pbc-box-bg: #f6f5f2;
+  --pbc-tile-bg: #faf9f6;
+  --pbc-tile-border: rgba(0, 0, 0, 0.08);
+  --pbc-chip-bg: rgba(0, 0, 0, 0.05);
+  --pbc-chip-strong-bg: rgba(0, 0, 0, 0.06);
+  --pbc-chip-strong-text: #4a505a;
+  /* Circular reel arrows and the "+N MORE" tile — a hair stronger than a chip. */
+  --pbc-control-bg: rgba(0, 0, 0, 0.05);
+  /* Pressed "Toolbox bundle" wash — lighter than a chip so the accent underline leads. */
+  --pbc-toggle-active-bg: rgba(0, 0, 0, 0.03);
+  /* Modal tab row: inactive pill fill + its count badge. */
+  --pbc-tab-inactive-bg: #f4f3f0;
+  --pbc-tab-badge-bg: rgba(0, 0, 0, 0.08);
+  --pbc-rule: rgba(0, 0, 0, 0.14);
+  /* Divider above the payment marks — softer than `--pbc-rule`. */
+  --pbc-pay-rule: rgba(0, 0, 0, 0.08);
+  --pbc-heading: #1a1d22;
+  --pbc-aside-bg: linear-gradient(180deg, #f4f3f0, #eceae6);
+  --pbc-foot-bg: #faf9f6;
+  /* Payment marks — the ink that flips with the theme (brand colours stay fixed) */
+  --pbc-visa: #1434cb;
+  --pbc-stripe: #635bff;
+  --pbc-gpay: #5f6368;
+  --pbc-ink-strong: #0b0b0b;
+  /* Cash green is theme-independent (semantic, not surface) */
+  --pbc-cash: #18a94d;
+  --pbc-cash-dark: #0f7a37;
+}
+
+.dark .prize-builder {
+  --pbc-panel: #0f1014;
+  --pbc-panel2: #15171c;
+  --pbc-text: #ffffff;
+  --pbc-sub: rgba(255, 255, 255, 0.55);
+  --pbc-body: rgba(255, 255, 255, 0.62);
+  --pbc-border: rgba(255, 255, 255, 0.09);
+  --pbc-box-bg: linear-gradient(180deg, #191b21, #0f1115);
+  --pbc-tile-bg: rgba(255, 255, 255, 0.04);
+  --pbc-tile-border: rgba(255, 255, 255, 0.12);
+  --pbc-chip-bg: rgba(255, 255, 255, 0.06);
+  --pbc-chip-strong-bg: rgba(255, 255, 255, 0.07);
+  --pbc-chip-strong-text: rgba(255, 255, 255, 0.62);
+  --pbc-control-bg: rgba(255, 255, 255, 0.07);
+  --pbc-toggle-active-bg: rgba(255, 255, 255, 0.06);
+  --pbc-tab-inactive-bg: rgba(255, 255, 255, 0.05);
+  --pbc-tab-badge-bg: rgba(255, 255, 255, 0.12);
+  --pbc-rule: rgba(255, 255, 255, 0.16);
+  --pbc-pay-rule: rgba(255, 255, 255, 0.1);
+  --pbc-heading: rgba(255, 255, 255, 0.82);
+  --pbc-aside-bg: linear-gradient(180deg, #141519, #0b0c0f);
+  --pbc-foot-bg: #0b0c0f;
+  --pbc-visa: #ffffff;
+  --pbc-stripe: #a9a4ff;
+  --pbc-gpay: #e3e6ea;
+  --pbc-ink-strong: #ffffff;
+}
+
+/* ---------------------------------------------------------------------------
+ * Prize builder — coverflow reel geometry
+ * ---------------------------------------------------------------------------
+ * The reel's per-breakpoint tuning lives in CSS variables (not a JS media-query
+ * hook) so the FIRST paint is already correct: a `useMediaQuery` would render
+ * mobile geometry on the server and snap to desktop after hydration, which on
+ * a 3D stage reads as the whole reel jumping. Each card only supplies its own
+ * `--pbc-off` (signed distance from focus) and `--pbc-scale`; the math is CSS.
+ * Keep these in sync with `REEL_METRICS` in prize-builder-model.ts — that
+ * module owns the same numbers for the unit tests and for stage sizing.
+ * ------------------------------------------------------------------------- */
+.prize-builder {
+  /* Mobile is TIGHTER than the handoff's 138×168/192: on a promotions page both reels
+     plus the combo hero have to clear one phone viewport, and the handoff's canvas had no
+     page chrome above it. `--pbc-mark-h` shrinks with the card so the brand plate keeps
+     its share of a shorter card instead of squeezing the product render. */
+  --pbc-reel-card-w: 124px;
+  --pbc-reel-card-h: 140px;
+  --pbc-reel-stage-h: 156px;
+  --pbc-reel-step: 112px;
+  --pbc-reel-depth: 84px;
+  --pbc-reel-rotate: 17deg;
+  --pbc-reel-side-scale: 0.84;
+  --pbc-reel-side-opacity: 0.68;
+  --pbc-reel-side-filter: brightness(0.82) saturate(0.9);
+  --pbc-mark-h: 22px;
+}
+
+@media (min-width: 768px) {
+  .prize-builder {
+    --pbc-reel-card-w: 172px;
+    --pbc-reel-card-h: 172px;
+    --pbc-reel-stage-h: 194px;
+    --pbc-reel-step: 142px;
+    --pbc-reel-depth: 150px;
+    --pbc-reel-rotate: 26deg;
+    --pbc-reel-side-scale: 0.82;
+    --pbc-reel-side-opacity: 0.5;
+    --pbc-reel-side-filter: brightness(0.72) saturate(0.85);
+    --pbc-mark-h: 30px;
+  }
+}
+
+.pbc-reel-card {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: var(--pbc-reel-card-w);
+  height: var(--pbc-reel-card-h);
+  margin-left: calc(var(--pbc-reel-card-w) / -2);
+  margin-top: calc(var(--pbc-reel-card-h) / -2);
+  transform: translateX(calc(var(--pbc-off) * var(--pbc-reel-step)))
+    translateZ(calc(var(--pbc-off-abs) * var(--pbc-reel-depth) * -1))
+    rotateY(calc(var(--pbc-off) * var(--pbc-reel-rotate) * -1)) scale(var(--pbc-scale));
+  z-index: calc(100 - var(--pbc-off-abs) * 10);
+  opacity: var(--pbc-reel-side-opacity);
+  filter: var(--pbc-reel-side-filter);
+  transition: transform 0.5s cubic-bezier(0.2, 0.7, 0.2, 1),
+    opacity 0.5s cubic-bezier(0.2, 0.7, 0.2, 1), filter 0.5s cubic-bezier(0.2, 0.7, 0.2, 1),
+    border-color 0.3s ease, box-shadow 0.3s ease;
+}
+
+.pbc-reel-card[data-focused="true"] {
+  opacity: 1;
+  filter: none;
+}
+
+/* Beyond the visible window: invisible AND inert, so an off-stage card can
+   never steal a tap or a Tab stop. */
+.pbc-reel-card[data-offstage="true"] {
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* Cash mode: the reels fade back but stay live — picking a brand is exactly how
+   the winner leaves cash mode. */
+.pbc-reel[data-dimmed="true"] .pbc-reel-card {
+  opacity: 0.4;
+}
+
+.pbc-reel[data-dimmed="true"] .pbc-reel-card[data-offstage="true"] {
+  opacity: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pbc-reel-card {
+    transition: none;
+  }
+}
+
+/* Accent bloom behind a focused reel card / the combo hero stage. The alpha differs by
+   theme (a dark card can carry a much stronger glow before it reads as haze), so the two
+   stops are supplied as variables and the swap stays in CSS. */
+.pbc-glow {
+  background: radial-gradient(var(--pbc-glow-shape), var(--pbc-glow-light), transparent 72%);
+}
+
+.dark .pbc-glow {
+  background: radial-gradient(var(--pbc-glow-shape), var(--pbc-glow-dark), transparent 72%);
+}
+
+/* Brand wordmark painted through a CSS mask (see ReelCards.tsx BrandMark).
+   One white silhouette asset serves both themes at the brand's own colour. */
+.pbc-brand-mark {
+  background-color: var(--pbc-mark-l);
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  mask-position: center;
+  -webkit-mask-size: contain;
+  mask-size: contain;
+}
+
+.dark .pbc-brand-mark {
+  background-color: var(--pbc-mark-d);
+}
+
+/* Combo-image cross-fade when the selected combination changes. */
+@keyframes pbcFade {
+  from {
+    opacity: 0;
+    transform: scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.pbc-fade {
+  animation: pbcFade 0.35s ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pbc-fade {
+    animation: none;
+  }
+}
+
 @layer base {
   /* Viewport: only the thumb is visible (track/corner transparent) — read as scroll position, not a full rail */
   html {
@@ -518,11 +736,9 @@
   h5,
   h6 {
     font-family: var(--font-poppins), "Poppins", system-ui, sans-serif;
-    /* Poppins is loaded at 400/500/600/700/900 (see src/app/layout.tsx). With
-       `font-synthesis: none`, a requested 800 (not loaded) is font-matched to
-       the nearest loaded weight ABOVE it — 900 — so headings already render 900.
-       Pin it to the actually-loaded 900 so intent == render (no synthesis, no
-       silent fallback). */
+    /* Poppins is loaded at 400/500/600/700/800/900 (see src/app/layout.tsx).
+       Headings pin to 900 so intent == render (no synthesis, no silent
+       fallback) — `font-synthesis: none` is set below. */
     font-weight: 900;
     font-synthesis: none;
   }
@@ -1212,169 +1428,6 @@
     transform: translateY(0);
   }
 }
-/* Dynamic Brand-Colored Swiper Customization for Prize Showcase */
-/* Hide navigation buttons on mobile */
-@media (max-width: 640px) {
-  .main-swiper .swiper-button-next,
-  .main-swiper .swiper-button-prev {
-    display: none !important;
-  }
-}
-
-.main-swiper .swiper-button-next,
-.main-swiper .swiper-button-prev {
-  background: none !important;
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  border: none !important;
-  box-shadow: none !important;
-  transition: all 0.3s ease;
-  opacity: 0.8;
-}
-
-/* Default/Milwaukee (Red) */
-.main-swiper .swiper-button-next,
-.main-swiper .swiper-button-prev {
-  color: #ef4444;
-}
-
-.main-swiper .swiper-button-next:hover,
-.main-swiper .swiper-button-prev:hover {
-  color: #dc2626;
-  opacity: 1;
-  transform: scale(1.2);
-}
-
-/* DeWalt (Yellow/Amber) */
-.main-swiper[data-brand-slug="dewalt-sidchrome"] .swiper-button-next,
-.main-swiper[data-brand-slug="dewalt-sidchrome"] .swiper-button-prev,
-.main-swiper[data-brand-slug="dewalt-milwaukee"] .swiper-button-next,
-.main-swiper[data-brand-slug="dewalt-milwaukee"] .swiper-button-prev {
-  color: #eab308;
-}
-
-.main-swiper[data-brand-slug="dewalt-sidchrome"] .swiper-button-next:hover,
-.main-swiper[data-brand-slug="dewalt-sidchrome"] .swiper-button-prev:hover,
-.main-swiper[data-brand-slug="dewalt-milwaukee"] .swiper-button-next:hover,
-.main-swiper[data-brand-slug="dewalt-milwaukee"] .swiper-button-prev:hover {
-  color: #ca8a04;
-}
-
-/* Makita (cyan / sky blue — BRAND_THEMES.makita) */
-.main-swiper[data-brand-slug="makita-sidchrome"] .swiper-button-next,
-.main-swiper[data-brand-slug="makita-sidchrome"] .swiper-button-prev,
-.main-swiper[data-brand-slug="makita-milwaukee"] .swiper-button-next,
-.main-swiper[data-brand-slug="makita-milwaukee"] .swiper-button-prev {
-  color: #00c2ed;
-}
-
-.main-swiper[data-brand-slug="makita-sidchrome"] .swiper-button-next:hover,
-.main-swiper[data-brand-slug="makita-sidchrome"] .swiper-button-prev:hover,
-.main-swiper[data-brand-slug="makita-milwaukee"] .swiper-button-next:hover,
-.main-swiper[data-brand-slug="makita-milwaukee"] .swiper-button-prev:hover {
-  color: #5ca9ec;
-}
-
-/* Ryobi (neon chartreuse) */
-.main-swiper[data-brand-slug="ryobi-sidchrome"] .swiper-button-next,
-.main-swiper[data-brand-slug="ryobi-sidchrome"] .swiper-button-prev,
-.main-swiper[data-brand-slug="ryobi-milwaukee"] .swiper-button-next,
-.main-swiper[data-brand-slug="ryobi-milwaukee"] .swiper-button-prev {
-  color: #e0ff00;
-}
-
-.main-swiper[data-brand-slug="ryobi-sidchrome"] .swiper-button-next:hover,
-.main-swiper[data-brand-slug="ryobi-sidchrome"] .swiper-button-prev:hover,
-.main-swiper[data-brand-slug="ryobi-milwaukee"] .swiper-button-next:hover,
-.main-swiper[data-brand-slug="ryobi-milwaukee"] .swiper-button-prev:hover {
-  color: #f5ff4a;
-}
-
-.main-swiper .swiper-button-next:active,
-.main-swiper .swiper-button-prev:active {
-  transform: scale(1.1);
-}
-
-.main-swiper .swiper-button-next::after,
-.main-swiper .swiper-button-prev::after {
-  font-size: 16px;
-  font-weight: bold;
-}
-
-/* Pagination Bullets - Default/Milwaukee (Red) */
-.main-swiper .swiper-pagination-bullet {
-  background: rgba(148, 163, 184, 0.5);
-  border: 2px solid rgba(248, 113, 113, 0.3);
-}
-
-.main-swiper .swiper-pagination-bullet-active {
-  background: #ef4444;
-  box-shadow: 0 0 20px rgba(239, 68, 68, 0.6);
-}
-
-/* DeWalt Pagination (Yellow/Amber) */
-.main-swiper[data-brand-slug="dewalt-sidchrome"] .swiper-pagination-bullet,
-.main-swiper[data-brand-slug="dewalt-milwaukee"] .swiper-pagination-bullet {
-  border: 2px solid rgba(234, 179, 8, 0.3);
-}
-
-.main-swiper[data-brand-slug="dewalt-sidchrome"] .swiper-pagination-bullet-active,
-.main-swiper[data-brand-slug="dewalt-milwaukee"] .swiper-pagination-bullet-active {
-  background: #eab308;
-  box-shadow: 0 0 20px rgba(234, 179, 8, 0.6);
-}
-
-/* Makita Pagination */
-.main-swiper[data-brand-slug="makita-sidchrome"] .swiper-pagination-bullet,
-.main-swiper[data-brand-slug="makita-milwaukee"] .swiper-pagination-bullet {
-  border: 2px solid rgba(0, 194, 237, 0.35);
-}
-
-.main-swiper[data-brand-slug="makita-sidchrome"] .swiper-pagination-bullet-active,
-.main-swiper[data-brand-slug="makita-milwaukee"] .swiper-pagination-bullet-active {
-  background: #00c2ed;
-  box-shadow: 0 0 20px rgba(0, 194, 237, 0.55);
-}
-
-/* Ryobi pagination */
-.main-swiper[data-brand-slug="ryobi-sidchrome"] .swiper-pagination-bullet,
-.main-swiper[data-brand-slug="ryobi-milwaukee"] .swiper-pagination-bullet {
-  border: 2px solid rgba(224, 255, 0, 0.45);
-}
-
-.main-swiper[data-brand-slug="ryobi-sidchrome"] .swiper-pagination-bullet-active,
-.main-swiper[data-brand-slug="ryobi-milwaukee"] .swiper-pagination-bullet-active {
-  background: #e0ff00;
-  box-shadow: 0 0 22px rgba(224, 255, 0, 0.85), 0 0 40px rgba(242, 255, 77, 0.35);
-}
-
-/* Thumbnail Swiper - Default/Milwaukee (Red) */
-.thumbs-swiper .swiper-slide-thumb-active > div {
-  border-color: #ef4444 !important;
-  box-shadow: 0 0 20px rgba(239, 68, 68, 0.6);
-}
-
-/* DeWalt Thumbnails (Yellow/Amber) */
-.thumbs-swiper[data-brand-slug="dewalt-sidchrome"] .swiper-slide-thumb-active > div,
-.thumbs-swiper[data-brand-slug="dewalt-milwaukee"] .swiper-slide-thumb-active > div {
-  border-color: #eab308 !important;
-  box-shadow: 0 0 20px rgba(234, 179, 8, 0.6);
-}
-
-/* Makita thumbnails */
-.thumbs-swiper[data-brand-slug="makita-sidchrome"] .swiper-slide-thumb-active > div,
-.thumbs-swiper[data-brand-slug="makita-milwaukee"] .swiper-slide-thumb-active > div {
-  border-color: #00c2ed !important;
-  box-shadow: 0 0 20px rgba(0, 194, 237, 0.55);
-}
-
-/* Ryobi thumbnails */
-.thumbs-swiper[data-brand-slug="ryobi-sidchrome"] .swiper-slide-thumb-active > div,
-.thumbs-swiper[data-brand-slug="ryobi-milwaukee"] .swiper-slide-thumb-active > div {
-  border-color: #e0ff00 !important;
-  box-shadow: 0 0 22px rgba(224, 255, 0, 0.75), 0 0 36px rgba(242, 255, 77, 0.35);
-}
 
 /* Brand-specific glow utilities */
 .glow-milwaukee {
@@ -1401,25 +1454,6 @@
   box-shadow: 0 0 20px rgba(34, 197, 94, 0.6), 0 8px 32px rgba(0, 0, 0, 0.4);
 }
 
-/* Hide scrollbar for thumbs swiper */
-.thumbs-swiper {
-  overflow: hidden;
-}
-
-/* Other toolsets carousel - mobile touch scroll fix */
-.other-toolsets-swiper {
-  -webkit-overflow-scrolling: touch;
-  touch-action: pan-y pan-x;
-  overflow: hidden;
-}
-
-/* Other toolsets carousel - we use custom icon (GripVertical), remove Swiper's default ::after arrow */
-.other-toolsets-swiper + button#other-toolsets-prev::after,
-.other-toolsets-swiper + button#other-toolsets-next::after,
-#other-toolsets-prev::after,
-#other-toolsets-next::after {
-  content: none !important;
-}
 /* Metallic shimmer animation for promo badges */
 @keyframes shimmer {
   0% {
