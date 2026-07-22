@@ -151,3 +151,5 @@ can extend to make a new failure pass.
 Wrap the meaningful steps of a `@demo`-tagged spec in `demo.step(title, fn)` instead of plain
 inline code — see proof-mode.md for the full mechanics. `demo.step` is a zero-overhead passthrough
 to plain `test.step` outside `E2E_PROOF=1`, so adding it never affects `@smoke`/`@purchase` runs.
+
+Registration coverage note (2026-07-22): `e2e/specs/auth/registration.spec.ts` includes a plus-addressed-email regression test (old User regex rejected `+`; guards the permissive-validation fix).
