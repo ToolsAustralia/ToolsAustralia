@@ -165,11 +165,31 @@ export function makeDemo(page: Page, testInfo: TestInfo): { demo: Demo; flush: (
   const cues: { title: string; startMs: number }[] = [];
   const t0 = Date.now();
   let started = false;
+  let titleCardAtMs: number | undefined;
+
+  // Client-facing display title: a spec can push a `demo-title` annotation
+  // (test.info().annotations.push({ type: "demo-title", description: "..." })) to give the
+  // opening card human copy. Without it the card falls back to testInfo.title — which is a
+  // SPEC id ("payment → webhook → 15 entries exactly once"), fine for engineers, jargon for
+  // the client audience proof mode exists for (video-review.md Judge N: explains, not labels).
+  // MUST be resolved lazily (at first demo.step, not here): makeDemo runs during FIXTURE
+  // setup, before the test body executes — an eager lookup always misses the annotation the
+  // body pushes (frame-verified: the card kept the spec id on the first eager attempt).
+  const displayTitle = () =>
+    testInfo.annotations.find((a) => a.type === "demo-title")?.description ?? testInfo.title;
 
   const demo: Demo = {
     async step(title, fn) {
       if (!PROOF) return base.step(title, fn);
-      if (!started) { started = true; await showTitleCard(page, testInfo.title); }
+      if (!started) {
+        started = true;
+        // Timestamp BEFORE the card renders: post.ts trims the shipped mp4 to start here,
+        // cutting the white page-load lead-in that Playwright's context-wide recording
+        // otherwise opens with (frame-verified defect, 2026-07-22: ~2.2s of blank white
+        // before the card — the author panel's cue-midpoint frame set never looked there).
+        titleCardAtMs = Date.now() - t0;
+        await showTitleCard(page, displayTitle());
+      }
       await clearHighlight(page); // stale spotlight from the previous beat must not bleed into this one's caption
       cues.push({ title, startMs: Date.now() - t0 });
       await showCaption(page, title);
@@ -206,7 +226,11 @@ export function makeDemo(page: Page, testInfo: TestInfo): { demo: Demo; flush: (
     if (PROOF && cues.length) {
       fs.writeFileSync(
         testInfo.outputPath("narration.json"),
-        JSON.stringify({ testTitle: testInfo.title, cues, endMs: Date.now() - t0 }, null, 2)
+        JSON.stringify(
+          { testTitle: testInfo.title, displayTitle: displayTitle(), titleCardAtMs, cues, endMs: Date.now() - t0 },
+          null,
+          2
+        )
       );
     }
   };

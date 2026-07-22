@@ -162,3 +162,27 @@ Judge-panel polish round (2026-07-22, chasing a stricter shipping bar — no cri
   (e.g. `SuccessScreen.tsx`'s fixed "Transaction complete" status strip) at the end of the last
   step so the recording's final frames land on a meaningful result, not an in-flight state
   (Judge R: "ending lands on a meaningful final state ... not mid-motion").
+
+## Watchability round 3 — open on the title card, speak the client's language (2026-07-22)
+
+Frame-verifying the "SHIP"-rated showcase video at t<2s (a region the judge panel's
+cue-midpoint frame set never sampled) found two defects the panel missed:
+
+1. **~2.2s of pure white at the start.** Playwright records the whole browser context, so
+   the raw webm opens with the pre-navigation blank tab. Fix is in the pipeline, not per
+   spec: `demo.ts` stamps `titleCardAtMs` into `narration.json`, and `post.ts` trims the
+   shipped mp4 to start there (`-ss` before `-i` + re-encode = frame-accurate), shifting
+   every cue and voice-clip delay by the same amount so the sidecar `.srt` and narration
+   stay in sync. Videos now open ON the title card. Older `narration.json` files without
+   the field get a zero trim.
+2. **The title card showed the spec id** ("payment → webhook → 15 entries exactly once") —
+   engineer jargon for a client-facing demo. A spec can now push
+   `test.info().annotations.push({ type: "demo-title", description: "..." })` and the card
+   (plus `narration.json.displayTitle`) uses that copy; fallback is still `testInfo.title`.
+   The annotation MUST be read lazily at the first `demo.step` — `makeDemo` runs during
+   fixture setup, before the test body pushes the annotation (the eager version shipped the
+   old title; caught by frame-reading the re-render, kept as a warning here).
+
+Rule reaffirmed by both catches: **extract frames where nobody looked, not just where the
+cues point** — opening/closing seconds are now part of the standard verification set in
+`.claude/commands/video-review.md` runs.

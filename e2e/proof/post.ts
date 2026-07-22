@@ -80,37 +80,54 @@ async function processOne(dir: string, dateBranchDir: string): Promise<void> {
   const narration = path.join(dir, "narration.json");
   if (!fs.existsSync(webm) || !fs.existsSync(narration)) return;
 
-  const meta = JSON.parse(fs.readFileSync(narration, "utf8")) as { testTitle: string; cues: { title: string; startMs: number }[]; endMs: number };
+  const meta = JSON.parse(fs.readFileSync(narration, "utf8")) as {
+    testTitle: string;
+    displayTitle?: string;
+    titleCardAtMs?: number;
+    cues: { title: string; startMs: number }[];
+    endMs: number;
+  };
+
+  // Trim the shipped mp4 to open ON the title card. Playwright records the whole browser
+  // context, so the raw webm opens with the pre-title white page-load lead-in (~2s of blank
+  // frames, frame-verified 2026-07-22) — a client demo must never open on a white screen.
+  // Every cue timestamp below is shifted by the same amount so the sidecar .srt and the
+  // adelay'd voice clips stay in sync with the trimmed video. Older narration.json files
+  // without titleCardAtMs get trimMs 0 (identical to the previous behavior).
+  const trimMs = Math.max(0, meta.titleCardAtMs ?? 0);
   const cues: Cue[] = meta.cues.map((c, i) => ({
     title: c.title,
-    startMs: c.startMs,
-    endMs: (meta.cues[i + 1]?.startMs ?? meta.endMs) - 200,
+    startMs: Math.max(0, c.startMs - trimMs),
+    endMs: Math.max(0, ((meta.cues[i + 1]?.startMs ?? meta.endMs) - 200) - trimMs),
   }));
-
-  // The last cue's endMs is derived from `meta.endMs`, timestamped at the demo fixture's
-  // flush() — which runs after the test body returns (fixture teardown), and so can run
-  // past the actual recorded video length (measured overrun: srt ending 22.965s vs a
-  // 20.16s mp4). Clamp it to the real video duration so the .srt never asserts a cue past
-  // the mp4's last frame. `durationMs == null` (unparseable ffmpeg output) leaves the cue
-  // as-is rather than guessing.
-  const durationMs = probeDurationMs(webm);
-  if (durationMs != null && cues.length) {
-    const last = cues[cues.length - 1];
-    last.endMs = Math.max(last.startMs + 200, Math.min(last.endMs, durationMs - 100));
-  }
 
   const slug = meta.testTitle.toLowerCase().replace(/[^a-z0-9]+/g, "-").slice(0, 80);
   const outDir = path.join(dateBranchDir, slug);
   fs.mkdirSync(outDir, { recursive: true });
 
-  const srtFile = path.join(outDir, `${slug}.srt`);
-  fs.writeFileSync(srtFile, toSrt(cues));
-
   const mp4 = path.join(outDir, `${slug}.mp4`);
   // No burned-in subtitles: the in-page caption pill is already part of the recording,
   // and burning the .srt as well doubled every line on screen (DJ review, 2026-07-22).
   // The .srt ships as a sidecar next to the mp4 — players can toggle it for accessibility.
-  if (!ff(["-y", "-i", webm, "-c:v", "libx264", "-pix_fmt", "yuv420p", mp4])) return;
+  // `-ss` BEFORE `-i` + full re-encode = frame-accurate trim (ffmpeg decodes from the
+  // nearest keyframe and drops frames up to the seek point; output timestamps restart at 0).
+  const trimArgs = trimMs > 0 ? ["-ss", (trimMs / 1000).toFixed(3)] : [];
+  if (!ff(["-y", ...trimArgs, "-i", webm, "-c:v", "libx264", "-pix_fmt", "yuv420p", mp4])) return;
+
+  // The last cue's endMs is derived from `meta.endMs`, timestamped at the demo fixture's
+  // flush() — which runs after the test body returns (fixture teardown), and so can run
+  // past the actual recorded video length (measured overrun: srt ending 22.965s vs a
+  // 20.16s mp4). Clamp it to the real duration of the (already trimmed) OUTPUT mp4 so the
+  // .srt never asserts a cue past the shipped file's last frame. `durationMs == null`
+  // (unparseable ffmpeg output) leaves the cue as-is rather than guessing.
+  const durationMs = probeDurationMs(mp4);
+  if (durationMs != null && cues.length) {
+    const last = cues[cues.length - 1];
+    last.endMs = Math.max(last.startMs + 200, Math.min(last.endMs, durationMs - 100));
+  }
+
+  const srtFile = path.join(outDir, `${slug}.srt`);
+  fs.writeFileSync(srtFile, toSrt(cues));
 
   // Voice synthesis writes into a scratch dir under outDir; cleaned up after muxing
   // regardless of success so a run never leaves per-cue audio.mp3/metadata.json litter

@@ -15,6 +15,12 @@ test.describe("purchase via homepage prize showcase @purchase @demo", () => {
     // See purchase-subscription.spec.ts's identical note: generous budget for
     // full 3-project concurrent runs against one `next dev` server.
     test.setTimeout(300_000);
+    // Client-facing opening card (demo.ts reads this annotation): the test title above is a
+    // spec id — "webhook"/"exactly once" is engineer language, wrong audience for proof videos.
+    test.info().annotations.push({
+      type: "demo-title",
+      description: "Becoming a Tools Australia member — 15 free entries included",
+    });
     const { email, mobile } = purchaseIdentity("showcase", test.info());
 
     // FLOW VERIFIED LIVE (npm run e2e:env + a Playwright probe script, chromium-desktop, 2026-07):

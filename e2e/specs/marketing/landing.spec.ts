@@ -2,6 +2,11 @@ import { test, expect } from "../../fixtures/test";
 
 test.describe("landing @smoke @demo", () => {
   test("renders hero and membership CTAs", async ({ page, demo }) => {
+    // Client-facing opening card for proof mode (demo.ts reads this annotation).
+    test.info().annotations.push({
+      type: "demo-title",
+      description: "A tour of the Tools Australia home page",
+    });
     // Warm the route BEFORE the first demo.step, not inside it — see the identical
     // comment in purchase-via-showcase.spec.ts / demo.ts's showCaption: the caption
     // overlay paints on whatever page is currently loaded the instant demo.step is
