@@ -151,5 +151,14 @@ can extend to make a new failure pass.
 Wrap the meaningful steps of a `@demo`-tagged spec in `demo.step(title, fn)` instead of plain
 inline code — see proof-mode.md for the full mechanics. `demo.step` is a zero-overhead passthrough
 to plain `test.step` outside `E2E_PROOF=1`, so adding it never affects `@smoke`/`@purchase` runs.
+When a caption talks about a specific element, call `demo.highlight(locator, note?)` (also in
+`e2e/fixtures/demo.ts`, also a no-op outside proof mode) right before acting on it — a caption
+naming a button nobody can spot on screen fails video-review.md's Judge H.
 
 Registration coverage note (2026-07-22): `e2e/specs/auth/registration.spec.ts` includes a plus-addressed-email regression test (old User regex rejected `+`; guards the permissive-validation fix).
+
+Showcase entry point (2026-07-22): `e2e/specs/membership/purchase-via-showcase.spec.ts` drives the
+same subscription purchase as `purchase-subscription.spec.ts`, entered via the homepage's
+"Build your prize" configurator instead of `/membership` — see its inline comment for the
+verified event-dispatch chain (`useMajorDrawEntryCta.openEntryFlow` → `openMembershipModal`
+window event → `MembershipSection`'s listener).

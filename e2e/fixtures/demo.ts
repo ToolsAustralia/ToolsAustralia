@@ -1,12 +1,19 @@
 import fs from "node:fs";
-import type { Page, TestInfo } from "@playwright/test";
+import type { Locator, Page, TestInfo } from "@playwright/test";
 import { test as base } from "@playwright/test";
 import { holdFor } from "../proof/srt";
 
 export interface Demo {
   step: (title: string, fn: () => Promise<void>) => Promise<void>;
   /** Proof-mode human-paced scroll to an element (instant jump outside proof mode). */
-  smoothScrollTo: (target: import("@playwright/test").Locator) => Promise<void>;
+  smoothScrollTo: (target: Locator) => Promise<void>;
+  /**
+   * Proof-mode visual spotlight: draws a bright ring (+ optional note label) around
+   * `target`'s current boundingBox so a viewer knows WHERE to look (video-review.md
+   * Judge H). No-op outside proof mode. See implementation comment for the
+   * "highlight after scroll settles" constraint.
+   */
+  highlight: (target: Locator, note?: string) => Promise<void>;
 }
 
 const PROOF = process.env.E2E_PROOF === "1";
@@ -29,6 +36,93 @@ async function showCaption(page: Page, text: string): Promise<void> {
     }
     el.textContent = t;
   }, text).catch(() => { /* page may be navigating — caption is best-effort */ });
+}
+
+/**
+ * Draws (or replaces) a spotlight ring around `target`'s current boundingBox: a fixed
+ * full-viewport-positioned `#__e2eHighlight` div with a bright outline + pulsing glow,
+ * plus an optional small note label pinned to its top-left corner (or bottom-left if
+ * there isn't room above). One fixed id — a second call REPLACES the ring rather than
+ * stacking a new one, so a step never accidentally leaves two spotlights on screen.
+ *
+ * CONSTRAINT (documented, not a bug): this reads the boundingBox ONCE and does not
+ * track scroll/resize afterward — there is no `scroll`/`ResizeObserver` listener
+ * keeping the ring glued to a moving target. That's fine for this app's demo specs
+ * because every call site scrolls (`demo.smoothScrollTo`) and lets the glide finish
+ * BEFORE calling `highlight` — by the time the ring is drawn the page is static for
+ * the rest of that beat. If a future spec calls `highlight` and then scrolls again
+ * within the same beat, the ring will visibly drift from its subject; re-call
+ * `highlight` after the new scroll settles instead of expecting it to follow.
+ *
+ * The same constraint bites when the TARGET ITSELF changes size mid-beat, not just when
+ * the page scrolls — e.g. highlighting a modal panel and then triggering an action that
+ * makes that panel grow (a wizard step transition adding content). The ring keeps its
+ * original, now-too-small box. Prefer highlighting something that stays a fixed size for
+ * the rest of the beat, or end the beat before the resizing action's effect lands on
+ * screen (`demo.step` clears any highlight automatically at the start of the NEXT beat,
+ * so a stale ring is at worst visible for the tail of the current one, never longer).
+ */
+async function showHighlight(page: Page, target: Locator, note?: string): Promise<void> {
+  // Safety net, not the primary motion: smoothScrollTo already did the human-paced
+  // glide; this just guards against a caller forgetting to scroll at all (which would
+  // otherwise draw the ring at an off-screen boundingBox — invisible in the video).
+  await target.scrollIntoViewIfNeeded().catch(() => {});
+  // Some subjects (a Stripe PaymentElement iframe behind a "preparing checkout" loading
+  // state, content gated behind an API round-trip) aren't attached/visible the instant a
+  // step reaches for them — a single boundingBox() attempt would silently no-op. Give the
+  // target a real chance to show up first; boundingBox() below still tolerates a timeout.
+  await target.waitFor({ state: "visible", timeout: 5_000 }).catch(() => {});
+  const box = await target.boundingBox().catch(() => null);
+  if (!box) return; // target not visible/attached — nothing sane to draw
+  await page
+    .evaluate(
+      ({ box, note }) => {
+        if (!document.getElementById("__e2eHighlightStyle")) {
+          const style = document.createElement("style");
+          style.id = "__e2eHighlightStyle";
+          // Cyan/blue, not this app's own brand red: nearly every CTA and active-state
+          // border on this site is already red (verified live in the showcase spec's
+          // first render — a red ring on a red "Enter now" button was barely visible),
+          // so the spotlight needs a colour that contrasts with the app's OWN palette,
+          // not just with light/dark page backgrounds.
+          style.textContent =
+            "@keyframes __e2eHighlightPulse{0%,100%{box-shadow:0 0 0 6px rgba(0,194,255,.35)}50%{box-shadow:0 0 0 10px rgba(0,194,255,.16)}}";
+          document.head.appendChild(style);
+        }
+        let el = document.getElementById("__e2eHighlight");
+        if (!el) {
+          el = document.createElement("div");
+          el.id = "__e2eHighlight";
+          document.body.appendChild(el);
+        }
+        el.innerHTML = ""; // drop any previous note label before redrawing
+        el.style.cssText =
+          `position:fixed;left:${box.x}px;top:${box.y}px;width:${box.width}px;height:${box.height}px;` +
+          "z-index:2147483646;pointer-events:none;border-radius:10px;box-sizing:border-box;" +
+          "border:3px solid #00c2ff;animation:__e2eHighlightPulse 1.1s ease-in-out infinite;";
+        if (note) {
+          const label = document.createElement("div");
+          label.textContent = note;
+          const roomAbove = box.y > 34;
+          label.style.cssText =
+            `position:absolute;left:0;${roomAbove ? "top:-30px" : `top:${box.height + 6}px`};` +
+            "background:#00a8e0;color:#fff;font:600 12px/1.3 system-ui,sans-serif;" +
+            "padding:4px 9px;border-radius:6px;white-space:nowrap;pointer-events:none;";
+          el.appendChild(label);
+        }
+      },
+      { box, note }
+    )
+    .catch(() => { /* page may be navigating — highlight is best-effort, like the caption */ });
+  // Guaranteed minimum dwell so the ring is actually watchable before the caller's next
+  // action (a click, a fill) moves on — without this, a highlight immediately followed by
+  // a fast action could be on screen for only a couple of video frames. No-op cost outside
+  // proof mode: `demo.highlight` (the only caller) already short-circuits before this runs.
+  await page.waitForTimeout(500);
+}
+
+async function clearHighlight(page: Page): Promise<void> {
+  await page.evaluate(() => document.getElementById("__e2eHighlight")?.remove()).catch(() => {});
 }
 
 async function showTitleCard(page: Page, title: string): Promise<void> {
@@ -55,6 +149,7 @@ export function makeDemo(page: Page, testInfo: TestInfo): { demo: Demo; flush: (
     async step(title, fn) {
       if (!PROOF) return base.step(title, fn);
       if (!started) { started = true; await showTitleCard(page, testInfo.title); }
+      await clearHighlight(page); // stale spotlight from the previous beat must not bleed into this one's caption
       cues.push({ title, startMs: Date.now() - t0 });
       await showCaption(page, title);
       await page.waitForTimeout(holdFor(title));
@@ -78,6 +173,11 @@ export function makeDemo(page: Page, testInfo: TestInfo): { demo: Demo; flush: (
         }
       }, targetY);
       await page.waitForTimeout(400);
+    },
+
+    async highlight(target, note) {
+      if (!PROOF) return; // zero overhead outside proof mode, same contract as every other demo method
+      await showHighlight(page, target, note);
     },
   };
 

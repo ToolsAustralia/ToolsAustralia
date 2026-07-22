@@ -17,7 +17,8 @@ you only need one for a demo.
 `npm run e2e:proof` = `tsx e2e/run.ts --proof`, which sets `E2E_PROOF=1` and switches
 `playwright.config.ts`'s profile to `retries: 0`, `workers: 1`, `video: "on"`,
 `launchOptions.slowMo: 200` (see `playwright.config.ts`). Today's `@demo` flows:
-`landing.spec.ts`, `my-account.spec.ts`, `purchase-subscription.spec.ts`.
+`landing.spec.ts`, `my-account.spec.ts`, `purchase-subscription.spec.ts`,
+`purchase-via-showcase.spec.ts`.
 
 ## What it produces
 
@@ -120,3 +121,10 @@ Watchability round 2 (2026-07-22, after DJ's review of the first landing video):
   sections. Use it for any demo step that moves down a page.
 - Deliverable QA rule: extract frames from every produced mp4 (ffmpeg -ss ... -frames:v 1)
   and visually verify caption placement + content BEFORE sharing a proof video.
+
+Visual guidance (2026-07-22, `purchase-via-showcase.spec.ts`): `demo.highlight(locator, note?)`
+draws a pulsing red ring (+ optional corner note label) around a target's current boundingBox
+so a viewer knows WHERE to look (video-review.md Judge H) — call it AFTER a scroll settles
+(it reads the boundingBox once and doesn't track further scrolling), and it's cleared
+automatically at the start of the next `demo.step` so a spotlight never bleeds into the
+following caption; no-op outside proof mode like every other `demo` method.
