@@ -2,8 +2,18 @@ import { test, expect } from "../../fixtures/test";
 
 test.describe("landing @smoke @demo", () => {
   test("renders hero and membership CTAs", async ({ page, demo }) => {
+    // Warm the route BEFORE the first demo.step, not inside it — see the identical
+    // comment in purchase-via-showcase.spec.ts / demo.ts's showCaption: the caption
+    // overlay paints on whatever page is currently loaded the instant demo.step is
+    // called, so navigating INSIDE the first step showed the opening caption over the
+    // still-blank tab (video-review.md Judge R: "opening beat never captions over a
+    // blank page"). `section.hero-section` is the single Hero wrapper — the largest,
+    // first-painted landmark on "/".
+    await page.goto("/");
+    await expect(page.locator("section.hero-section")).toBeVisible({ timeout: 45_000 });
+
     await demo.step("Opening the Tools Australia home page", async () => {
-      await page.goto("/");
+      await expect(page.locator("section.hero-section")).toBeVisible();
     });
     // Deviation from brief (documented in task-6-report.md): the landing page renders
     // membership tier cards via the shared MembershipSection/ElectricPackageCard, whose

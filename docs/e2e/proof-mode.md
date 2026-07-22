@@ -68,8 +68,13 @@ server/stripe-listen children are still logging concurrently — see architectur
    actual recorded video length — `post.ts` clamps it to the video's real duration (probed from
    `ffmpeg -i <file>` stderr — `ffmpeg-static` ships no `ffprobe` binary, so duration comes from
    parsing ffmpeg's own `Duration: HH:MM:SS.cc` line instead).
-2. **Burns subtitles** — `toSrt(cues)` (`e2e/proof/srt.ts`) writes the `.srt`, then ffmpeg's
-   `subtitles` filter burns it into the video (`libx264`/`yuv420p`).
+2. **Writes the `.srt` sidecar, does NOT burn it into the video** — `toSrt(cues)`
+   (`e2e/proof/srt.ts`) writes the `.srt`, and the webm is re-muxed to `libx264`/`yuv420p` for
+   the mp4, but the subtitles are deliberately never burned into the frame: the in-page caption
+   pill (`showCaption`, see above) is already part of the recording, and burning the `.srt` too
+   doubled every line on screen (DJ review, 2026-07-22 — also what video-review.md Judge N's "no
+   caption text duplicated by burned subtitles" criterion is checking for). The `.srt` ships as a
+   sidecar next to the mp4 purely for accessibility (players can toggle it).
 3. **Synthesizes voice** (best-effort — see below) and muxes it in.
 4. **Copies step screenshots** and the HTML report alongside the mp4/srt in the dated output
    directory.
@@ -123,8 +128,37 @@ Watchability round 2 (2026-07-22, after DJ's review of the first landing video):
   and visually verify caption placement + content BEFORE sharing a proof video.
 
 Visual guidance (2026-07-22, `purchase-via-showcase.spec.ts`): `demo.highlight(locator, note?)`
-draws a pulsing red ring (+ optional corner note label) around a target's current boundingBox
-so a viewer knows WHERE to look (video-review.md Judge H) — call it AFTER a scroll settles
-(it reads the boundingBox once and doesn't track further scrolling), and it's cleared
-automatically at the start of the next `demo.step` so a spotlight never bleeds into the
+draws a pulsing cyan/blue ring (`#00c2ff` — NOT this app's own brand red, which several of its
+own CTAs and active-state borders already use) + optional corner note label around a target's
+current boundingBox so a viewer knows WHERE to look (video-review.md Judge H) — call it AFTER a
+scroll settles (it reads the boundingBox once and doesn't track further scrolling), and it's
+cleared automatically at the start of the next `demo.step` so a spotlight never bleeds into the
 following caption; no-op outside proof mode like every other `demo` method.
+
+Judge-panel polish round (2026-07-22, chasing a stricter shipping bar — no criterion <4, average
+≥4.5, zero disclosed cosmetic defects):
+- **Warm the route before the first `demo.step`, never inside it.** `demo.step`'s caption/title
+  card paints on whatever page is CURRENTLY loaded the instant it's called — with `page.goto`
+  living inside the first step's body, the opening caption showed over the still-blank tab,
+  before navigation had even started (Judge R: "opening beat never captions over a blank page").
+  Every `@demo` spec's opening beat now does `await page.goto(...)` + waits for a real landmark
+  (e.g. `section.hero-section`, the Hero wrapper) to be visible BEFORE calling `demo.step` at
+  all — a silent warm — so the first caption always lands on an already-rendered page.
+- **`demo.highlight`'s ring now dims everything else on screen** (a huge-spread second
+  box-shadow — the standard "spotlight cutout" trick, see the doc comment in `demo.ts`), not
+  just outlining the target. This satisfies "ring/glow + dimmed surroundings" AND removes
+  competing noise for free: a sticky site widget (promo banner, countdown) sharing the frame
+  with a highlighted CTA now dims along with the rest of the page instead of fighting it for
+  attention.
+- **Call `demo.highlight` again within the SAME beat to move the spotlight onto a later click
+  target.** It replaces the single fixed-id ring, not stacks — so if a beat highlights element A
+  (e.g. the Stripe iframe, to show what's being typed) and then clicks a DIFFERENT element B
+  outside A's box (e.g. a submit button below the iframe), re-call `demo.highlight(B, ...)` right
+  before the click so the click always lands inside the currently-highlighted region (Judge H:
+  "clicks land visibly inside the highlighted region").
+- **Land the final beat on the app's own settled confirmation state, not mid-poll.** Purchase
+  specs assert the outcome at the database (webhook-granted benefits), which can resolve before
+  the client's own success UI has caught up. Explicitly wait for that UI's confirmation text
+  (e.g. `SuccessScreen.tsx`'s fixed "Transaction complete" status strip) at the end of the last
+  step so the recording's final frames land on a meaningful result, not an in-flight state
+  (Judge R: "ending lands on a meaningful final state ... not mid-motion").

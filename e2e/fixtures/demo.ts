@@ -8,10 +8,13 @@ export interface Demo {
   /** Proof-mode human-paced scroll to an element (instant jump outside proof mode). */
   smoothScrollTo: (target: Locator) => Promise<void>;
   /**
-   * Proof-mode visual spotlight: draws a bright ring (+ optional note label) around
-   * `target`'s current boundingBox so a viewer knows WHERE to look (video-review.md
-   * Judge H). No-op outside proof mode. See implementation comment for the
-   * "highlight after scroll settles" constraint.
+   * Proof-mode visual spotlight: draws a bright ring + dimmed backdrop (+ optional note
+   * label) around `target`'s current boundingBox so a viewer knows WHERE to look
+   * (video-review.md Judge H — "ring/glow + dimmed surroundings"; also what kills
+   * "no competing noise" deductions, since the site's own attention magnets dim along
+   * with everything else outside the ring). No-op outside proof mode. Safe to call
+   * again within the SAME beat to move the spotlight onto a later click target — see
+   * implementation comment for the "highlight after scroll settles" constraint.
    */
   highlight: (target: Locator, note?: string) => Promise<void>;
 }
@@ -61,6 +64,18 @@ async function showCaption(page: Page, text: string): Promise<void> {
  * the rest of the beat, or end the beat before the resizing action's effect lands on
  * screen (`demo.step` clears any highlight automatically at the start of the NEXT beat,
  * so a stale ring is at worst visible for the tail of the current one, never longer).
+ *
+ * DIMMED BACKDROP (video-review.md polish round, 2026-07-22): the ring's box-shadow
+ * includes a second, huge-spread shadow (`0 0 0 9999px rgba(0,0,0,.55)`) — the standard
+ * "spotlight cutout" CSS trick (same technique onboarding-tour libraries use): because
+ * the ring div is sized exactly to the target's boundingBox with a transparent interior,
+ * the far-spread shadow darkens the ENTIRE rest of the viewport while leaving the target
+ * itself untouched. This both satisfies Judge H's "ring/glow + dimmed surroundings" and
+ * removes competing noise for free — a sticky site widget sharing the frame with a
+ * highlight now dims along with everything else instead of fighting the ring for
+ * attention. If a beat needs to highlight a SECOND element before its own click (e.g.
+ * the click target lives outside the first highlighted box), call `demo.highlight` again
+ * with the new target — it replaces the single fixed-id ring/dim rather than stacking.
  */
 async function showHighlight(page: Page, target: Locator, note?: string): Promise<void> {
   // Safety net, not the primary motion: smoothScrollTo already did the human-paced
@@ -85,8 +100,14 @@ async function showHighlight(page: Page, target: Locator, note?: string): Promis
           // first render — a red ring on a red "Enter now" button was barely visible),
           // so the spotlight needs a colour that contrasts with the app's OWN palette,
           // not just with light/dark page backgrounds.
+          // Each keyframe pairs the small pulsing cyan glow with a fixed, huge-spread
+          // dark shadow (the dimmed-backdrop "spotlight cutout" — see the doc comment
+          // above showHighlight) so the dim never itself pulses/flickers, only the ring.
           style.textContent =
-            "@keyframes __e2eHighlightPulse{0%,100%{box-shadow:0 0 0 6px rgba(0,194,255,.35)}50%{box-shadow:0 0 0 10px rgba(0,194,255,.16)}}";
+            "@keyframes __e2eHighlightPulse{" +
+            "0%,100%{box-shadow:0 0 0 6px rgba(0,194,255,.35),0 0 0 9999px rgba(0,0,0,.55)}" +
+            "50%{box-shadow:0 0 0 10px rgba(0,194,255,.16),0 0 0 9999px rgba(0,0,0,.55)}" +
+            "}";
           document.head.appendChild(style);
         }
         let el = document.getElementById("__e2eHighlight");

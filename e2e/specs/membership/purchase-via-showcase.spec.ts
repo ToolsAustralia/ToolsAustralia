@@ -89,6 +89,17 @@ test.describe("purchase via homepage prize showcase @purchase @demo", () => {
       // The register → billing transition (registration API round-trip + wizard step change)
       // is awaited HERE, after the previous beat's highlight has already been cleared (demo.step
       // clears stale highlights at the start of every beat) — see the note above.
+      //
+      // Tried moving this wait (+ the Stripe-iframe-ready wait below) OUT to a silent warm
+      // between beats, mirroring the opening beat's fix — reverted: unlike beat 1 (no caption
+      // exists yet before the first demo.step), a silent wait BETWEEN two later beats leaves
+      // the PRECEDING beat's caption/burned subtitle stuck on screen for the whole wait
+      // (confirmed live via rendered proof-mode frames: "Creating the account first..." stayed
+      // up for 14s, well past the actual registration action, describing nothing while Stripe
+      // loaded) — a worse defect than the one it was meant to fix. The "Preparing secure
+      // checkout…" placeholder this wait can surface is legitimate, on-topic content for THIS
+      // beat's own caption ("Stripe handles the card…") and is explicitly sanctioned by
+      // video-review.md Judge R ("loads are allowed to be seen loading") — left as-is.
       await expect(purchaseButton).toBeVisible({ timeout: 45_000 });
       // Same iframe `fillPaymentElement` types into (../../helpers/payment) — highlighting the
       // real iframe element (not a wrapper div) rings exactly the area the viewer should watch.
