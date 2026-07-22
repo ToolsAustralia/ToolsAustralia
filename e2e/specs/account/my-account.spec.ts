@@ -1,21 +1,50 @@
 import { test, expect } from "../../fixtures/test";
 import { MEMBER_STATE } from "../../lib/paths";
 
-test.describe("my-account @smoke @demo", () => {
+// @demo moved OFF this describe (2026-07-22 bundle review): the chunk-gating test below is an
+// engineering regression guard — its narrated video is not client-demo material. Only the
+// dashboard test keeps the tag, on its own title.
+test.describe("my-account @smoke", () => {
   // EXTERNAL mode has no seeded member storage state — see runExternal in e2e/run.ts.
   test.skip(process.env.E2E_EXTERNAL === "1", "needs the seeded isolated environment");
 
   test.use({ storageState: MEMBER_STATE });
 
-  test("dashboard loads for the seeded active member", async ({ page, demo }) => {
-    await demo.step("Opening the member dashboard", async () => {
-      await page.goto("/my-account");
-      await expect(page).toHaveURL(/\/my-account/); // not bounced to /login
+  test("dashboard loads for the seeded active member @demo", async ({ page, demo }) => {
+    // Client-facing opening card (demo.ts reads this annotation lazily at the first step).
+    test.info().annotations.push({
+      type: "demo-title",
+      description: "Inside a member's dashboard",
     });
-    await demo.step("The member's account and free entries are visible", async () => {
+
+    // EntryWallet's hero figure — provable-unique selector: within the wallet, only the
+    // hero total span carries BOTH font-poppins AND tabular-nums (EntryWallet.tsx:117;
+    // countdown digits lack font-poppins, legend values lack both, FreeEntriesChip lacks
+    // tabular-nums and renders "+N"). Scoped by the wallet's "Entries ·" eyebrow.
+    const wallet = page.locator("section").filter({ hasText: "Entries ·" }).first();
+    const walletTotal = wallet.locator("span.num.font-poppins.tabular-nums");
+
+    // Warm the route BEFORE the first beat (proof-mode round-3 rule): the full-screen
+    // DashboardLoader (page-client.tsx:247-249) stays up until all dashboard queries
+    // resolve — the old beat captioned "entries are visible" over that loader
+    // (frame-verified defect, 2026-07-22 bundle review). Waiting for the wallet eyebrow
+    // guarantees the loader is gone and real content painted before any caption shows.
+    await page.goto("/my-account");
+    await expect(page).toHaveURL(/\/my-account/); // not bounced to /login
+    await expect(wallet).toBeVisible({ timeout: 30_000 });
+
+    await demo.step("The member's dashboard — entries, draws and account in one place", async () => {
       await expect(page.locator("main")).toBeVisible({ timeout: 20_000 });
-      // Seeded member firstName is displayed somewhere on the dashboard
-      await expect(page.locator("body")).toContainText(/e2e/i, { timeout: 20_000 });
+      await expect(page.locator("body")).toContainText(/e2e/i, { timeout: 20_000 }); // seeded firstName
+    });
+
+    await demo.step("Their free entries for the current draw, front and centre", async () => {
+      // The seed gives the member a real 15-entry position (e2e/seed/draw.ts) — assert
+      // the actual figure, not just presence. toHaveText tolerates the subscription
+      // explainer overlay (element stays in DOM); the highlight makes the wallet the
+      // video's subject.
+      await expect(walletTotal).toHaveText("15", { timeout: 20_000 });
+      await demo.highlight(wallet, "15 free entries in the current draw");
     });
   });
 
@@ -137,7 +166,7 @@ test.describe("my-account @smoke @demo", () => {
 // full fixture coverage — QA watchdog, per-worker x-forwarded-for, third-party
 // blocklist — from e2e/fixtures/test.ts. An empty storageState object is the
 // Playwright-supported way to opt a describe block out of the file's auth state.
-test.describe("my-account guest gate @smoke @demo", () => {
+test.describe("my-account guest gate @smoke", () => {
   // EXTERNAL mode: keep this file's guard blanket (no seeded env for the sibling block above) — see runExternal in e2e/run.ts.
   test.skip(process.env.E2E_EXTERNAL === "1", "needs the seeded isolated environment");
 

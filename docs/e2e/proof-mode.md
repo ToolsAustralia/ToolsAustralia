@@ -186,3 +186,33 @@ cue-midpoint frame set never sampled) found two defects the panel missed:
 Rule reaffirmed by both catches: **extract frames where nobody looked, not just where the
 cues point** — opening/closing seconds are now part of the standard verification set in
 `.claude/commands/video-review.md` runs.
+
+## Round 4 — settle overlays BEFORE the beat, never inside it (2026-07-22, flagship)
+
+Same failure class as the warm-route rule, at the other end of the flow: `demo.step` paints
+its caption the INSTANT it's called, so any settling work inside the beat body (waiting out
+auto-modals, dismissing an onboarding wizard) runs UNDER the beat's caption — the first
+flagship render captioned "their wallet shows all 450 free entries" over the new member's
+force-opened SET PASSWORD wizard for ~5s (frame-verified at t=61.4s). The rule generalizes:
+
+> A beat's caption must open ON its subject. Anything that must happen first — navigation,
+> loading, modal dismissal — happens BEFORE `demo.step` is called, silently, under the
+> previous beat's (still-relevant) caption or none.
+
+The full-journey spec's final beat is the reference: success-screen auto-close + wizard
+dismissal + wallet-visible wait all precede the `demo.step` call.
+
+## `@demo` is a CLIENT-FACING curation tag (2026-07-22 full-bundle review)
+
+`@demo` means "this flow's narrated video is client-demo material" — it is not a synonym for
+"has `demo.step` calls". The first full `--grep "@demo"` bundle render surfaced the drift:
+the my-account **chunk-gating regression guard** and the **guest-gate redirect** carried the
+tag from the foundation build and produced engineer-facing videos (spec-id title cards, a
+26s chunk-download narration). Both lost the tag; `demo.step` calls may remain in untagged
+tests (they're plain `test.step` outside proof mode and still caption correctly if a bare
+unscoped proof run ever renders them). The curated client bundle is exactly
+`npx tsx e2e/run.ts --proof --grep "@demo" --project chromium-desktop`.
+
+Checklist for tagging a test `@demo`: client-meaningful story, `demo-title` annotation,
+route warmed before the first beat, captions explain (never label), and the video passes
+the `/video-review` panel once rendered.

@@ -17,6 +17,11 @@ test.describe("subscription purchase @purchase @demo", () => {
     // runs finish in ~35s; the full 8-worker run needs much more headroom for the
     // same steps under contention).
     test.setTimeout(300_000);
+    // Client-facing opening card (demo.ts reads this annotation lazily at the first step).
+    test.info().annotations.push({
+      type: "demo-title",
+      description: "Joining as a Tradie member — 15 free entries included",
+    });
     const { email, mobile } = purchaseIdentity("buy", test.info());
 
     // Unauthenticated billing-step submit button is exactly "PURCHASE" (PaymentStep.tsx:
@@ -24,17 +29,27 @@ test.describe("subscription purchase @purchase @demo", () => {
     // Playwright, so re-deriving this in each step (rather than threading a single Locator
     // across the two demo.step closures) queries fresh each time with no extra cost.
     const purchaseButton = page.getByRole("button", { name: /^purchase$/i });
+    const chooseTradie = page
+      .getByRole("button", { name: /choose tradie/i })
+      .or(page.getByRole("link", { name: /choose tradie/i }))
+      .first();
+
+    // Warm the route BEFORE the first demo.step (same rule as purchase-via-showcase /
+    // landing): the caption overlay paints the instant demo.step is called, so a goto
+    // inside the first beat put the opening caption + title card over a blank tab
+    // (frame-verified in the 2026-07-22 full-bundle review).
+    await page.goto("/membership");
+    await expect(chooseTradie).toBeVisible({ timeout: 45_000 });
+
+    await demo.step("Choosing the Tradie membership from the tiers", async () => {
+      await demo.highlight(chooseTradie, "15 free entries / month");
+      await chooseTradie.click();
+    });
 
     await demo.step("Creating a new account", async () => {
       // Register (step 1) — no "Continue to Billing" interstitial (verified Task 7):
       // a successful register batches setGuestUserData + setCurrentStep(2), so the modal
       // jumps straight from the registration form to the billing/payment step.
-      await page.goto("/membership");
-      await page
-        .getByRole("button", { name: /choose tradie/i })
-        .or(page.getByRole("link", { name: /choose tradie/i }))
-        .first()
-        .click();
       await page.locator('input[name="firstName"]').fill("E2E");
       await page.locator('input[name="lastName"]').fill("Buyer");
       await page.locator('input[name="email"]').fill(email);
