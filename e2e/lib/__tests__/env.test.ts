@@ -72,6 +72,7 @@ t("resolveE2eEnv neuters third parties", () =>
     assert.equal(env.overlay.NEXT_PUBLIC_GTM_ID, "");
     assert.equal(env.overlay.NEXT_PUBLIC_GA_ID, "");
     assert.equal(env.overlay.NEXT_PUBLIC_HOTJAR_ID, "");
+    assert.equal(env.overlay.NEXT_PUBLIC_CONTENTSQUARE_ID, "");
   }));
 
 t("resolveE2eEnv threads webhook secret", () =>

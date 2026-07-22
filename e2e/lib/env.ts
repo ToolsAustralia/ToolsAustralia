@@ -102,6 +102,12 @@ export function resolveE2eEnv(opts: { webhookSecret?: string } = {}): E2eEnv {
     // itself is blanked above). Blanked here anyway as registry hygiene — a session
     // recorder must never run against e2e traffic if a loader is added later.
     NEXT_PUBLIC_HOTJAR_ID: "",
+    // Contentsquare: now env-gated at the source (src/app/layout.tsx no-ops on a blank
+    // NEXT_PUBLIC_CONTENTSQUARE_ID, same pattern as GoogleTagManager). Blanked here too —
+    // belt-and-suspenders with the source gate, same as every other pair above — even
+    // though the browser-edge blocklist (e2e/fixtures/test.ts, e2e/setup/auth.setup.ts)
+    // already blocks its requests independently; see docs/e2e/gotchas.md.
+    NEXT_PUBLIC_CONTENTSQUARE_ID: "",
   };
   if (opts.webhookSecret) overlay.STRIPE_WEBHOOK_SECRET = opts.webhookSecret;
   return { port, baseUrl, mongoUri: e2eUri!, overlay };

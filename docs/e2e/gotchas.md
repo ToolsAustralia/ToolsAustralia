@@ -73,12 +73,23 @@ suspenders).
 
 ## Resolved gotcha — Contentsquare has no env gate; blocked at the browser edge instead
 
-Unlike Klaviyo/GTM/GA/Hotjar, Contentsquare's `<Script>` in `src/app/layout.tsx` is
+**Update (2026-07-22): fixed at the source.** Contentsquare's `<Script>` in `src/app/layout.tsx`
+is no longer hardcoded — the tag id was extracted to `NEXT_PUBLIC_CONTENTSQUARE_ID` and the
+`<Script>` only renders when it's non-empty (mirrors `GoogleTagManager`'s `!gtmId` no-op). `e2e/lib/env.ts`
+blanks it in the overlay (belt-and-suspenders, same as every other tracker var), so the script
+no longer renders — and therefore never requests — for any e2e session, including `e2e:env`
+manual/MCP sessions that previously bypassed the workaround below. The browser-edge blocklist
+(`context.route()` in `e2e/fixtures/test.ts` and `e2e/setup/auth.setup.ts`) is **kept as
+defense-in-depth** (it also still covers Klaviyo/GTM/GA/Hotjar, and a stray manual `.env.local`
+with a real id set would otherwise leak) but is no longer load-bearing for Contentsquare — the
+original incident this section describes is closed at the root cause. History follows.
+
+Unlike Klaviyo/GTM/GA/Hotjar, Contentsquare's `<Script>` in `src/app/layout.tsx` was
 **hardcoded** — a fixed `src` with `strategy="lazyOnload"` and no `disabled`/env-conditional
-prop — so the env overlay has no variable to blank. `strategy="lazyOnload"` fires it after every
+prop — so the env overlay had no variable to blank. `strategy="lazyOnload"` fires it after every
 page's `load` event regardless of route, and its session-recording iframe intermittently produced
 the same sandboxed-iframe `console.error` as the GTM leak, caught unpredictably across different
-specs. Fixed at the only layer available at e2e scope: the `watchdog` fixture
+specs. Fixed (at the time) at the only layer available at e2e scope: the `watchdog` fixture
 (`e2e/fixtures/test.ts`) generalized its Klaviyo `context.route()` interception into a shared
 third-party blocklist — `/klaviyo\.com|contentsquare\.net|hotjar\.(com|io)/`, fulfilled
 empty-but-successful, context-scoped (covers popups too). The `setup` project (`auth.setup.ts`)
@@ -86,12 +97,11 @@ imports plain `@playwright/test`, not `../fixtures/test`, so this blocklist did 
 either — its 2 logins + `/admin` warm-up fetched live Contentsquare. Fixed by copying the same
 `context.route()` pattern into a `setup.beforeEach` in `auth.setup.ts` (comment there points back
 to `fixtures/test.ts` as the source of truth — keep the two in sync if the blocklist regex ever
-changes). **Residual, accepted**: `e2e:env` manual/MCP sessions still bypass both blocklists —
-accepted because a stray session recording of a local e2e browser carries no PII or
-business-metric pollution risk severe enough to justify extending the workaround to a
-human-driven, non-automated session. The complete fix (an env-conditional `disabled` gate on this
-`<Script>`, matching `GoogleTagManager`/`KlaviyoScriptLoader`'s pattern) requires a `src/**` change
-and has been flagged to the user separately, not applied inside `e2e/`.
+changes). **Previously residual, now closed**: `e2e:env` manual/MCP sessions used to bypass both
+blocklists (accepted at the time because a stray session recording of a local e2e browser carries
+no PII or business-metric pollution risk severe enough to justify extending the browser-edge
+workaround to a human-driven, non-automated session) — the source-level env gate above closes this
+gap for free, since a blank id means there is nothing to bypass.
 
 ## Resolved gotcha — Facebook/TikTok Marketing API creds leak through server-side admin reads
 
