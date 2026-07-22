@@ -9,6 +9,7 @@ import {
   backdropVariants,
   dialogNestedPanelVariants,
   dialogPanelVariants,
+  drawerPanelVariants,
   MODAL_DURATION_EXIT_S,
   reducedBackdropVariants,
   reducedPanelVariants,
@@ -17,7 +18,7 @@ import {
 import { getViewportScrollbarWidthPx } from "@/utils/dom/getScrollbarWidth";
 import { cn } from "@/utils/cn";
 
-export type ModalPresentation = "dialog" | "sheet";
+export type ModalPresentation = "dialog" | "sheet" | "drawer";
 
 export interface ModalContainerProps {
   isOpen: boolean;
@@ -49,7 +50,9 @@ export interface ModalContainerProps {
    */
   zIndex?: number;
   /**
-   * `dialog` = centered scale/fade. `sheet` = slide from bottom (e.g. mobile package picker).
+   * `dialog` = centered scale/fade. `sheet` = slide up from the bottom (e.g. mobile package
+   * picker). `drawer` = full-height panel sliding in from the RIGHT below `lg`, reverting to a
+   * centered dialog at `lg`+ (the prize details sheet).
    */
   presentation?: ModalPresentation;
   /**
@@ -148,6 +151,24 @@ const ModalContainer: React.FC<ModalContainerProps> = ({
     full: "max-w-full",
   };
 
+  /**
+   * `mobileFullBleed` needs the `lg:`-prefixed form of the same widths. These MUST be
+   * written out as literal strings: Tailwind scans source text, so an interpolated
+   * `` `lg:${sizeStyles[size]}` `` only works when that exact class happens to appear
+   * literally somewhere else in the codebase — which silently left `lg:max-w-4xl`
+   * ungenerated and stretched full-bleed panels edge-to-edge on desktop.
+   */
+  const lgSizeStyles = {
+    sm: "lg:max-w-sm",
+    md: "lg:max-w-md",
+    lg: "lg:max-w-lg",
+    xl: "lg:max-w-xl",
+    "2xl": "lg:max-w-2xl",
+    "3xl": "lg:max-w-3xl",
+    "4xl": "lg:max-w-4xl",
+    full: "lg:max-w-full",
+  };
+
   // Size modal content with `svh` (stable smallest viewport) rather than `dvh`,
   // which is throttled and janks/clips as the browser chrome shows/hides on
   // iOS Safari + Android Chrome (WebKit bug 266835). Tall content scrolls inside
@@ -159,15 +180,18 @@ const ModalContainer: React.FC<ModalContainerProps> = ({
   };
 
   const isSheet = presentation === "sheet";
+  const isDrawer = presentation === "drawer";
 
   const backdropV = reduceMotion ? reducedBackdropVariants : backdropVariants;
   const panelV = reduceMotion
     ? reducedPanelVariants
-    : isSheet
-      ? sheetPanelVariants
-      : nested
-        ? dialogNestedPanelVariants
-        : dialogPanelVariants;
+    : isDrawer
+      ? drawerPanelVariants
+      : isSheet
+        ? sheetPanelVariants
+        : nested
+          ? dialogNestedPanelVariants
+          : dialogPanelVariants;
 
   const resolveZIndex = () => {
     if (zIndex !== undefined) return zIndex;
@@ -489,23 +513,29 @@ const ModalContainer: React.FC<ModalContainerProps> = ({
 
   const modalZIndex = resolveZIndex();
 
-  const outerFlex = mobileFullBleed
-    ? "items-end justify-center p-0 lg:items-center lg:justify-center lg:p-2"
-    : isSheet
-      ? "items-end justify-center pt-2 px-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] sm:items-center sm:p-2 sm:pb-2"
-      : "items-center justify-center p-2";
+  const outerFlex = isDrawer
+    ? "items-stretch justify-end p-0 lg:items-center lg:justify-center lg:p-2"
+    : mobileFullBleed
+      ? "items-end justify-center p-0 lg:items-center lg:justify-center lg:p-2"
+      : isSheet
+        ? "items-end justify-center pt-2 px-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] sm:items-center sm:p-2 sm:pb-2"
+        : "items-center justify-center p-2";
 
-  const panelShape = mobileFullBleed
-    ? `w-full max-w-none rounded-t-2xl rounded-b-none lg:${sizeStyles[size]} lg:rounded-2xl`
+  const panelShape = isDrawer
+    ? `w-full max-w-none rounded-none ${lgSizeStyles[size]} lg:rounded-2xl`
+    : mobileFullBleed
+    ? `w-full max-w-none rounded-t-2xl rounded-b-none ${lgSizeStyles[size]} lg:rounded-2xl`
     : isSheet
       ? `rounded-t-2xl rounded-b-none sm:rounded-2xl sm:rounded-b-2xl w-full ${sizeStyles[size]}`
       : `rounded-2xl w-full ${sizeStyles[size]}`;
 
   // Full-bleed below lg = 95svh (5% top gap, bottom-flush); normal at lg+.
   // svh (not dvh) so the panel doesn't resize/clip as the mobile chrome toggles.
-  const panelHeight = mobileFullBleed
-    ? "h-[95svh] lg:h-auto lg:max-h-[88svh]"
-    : heightStyles[height];
+  const panelHeight = isDrawer
+    ? "h-full lg:h-auto lg:max-h-[88svh]"
+    : mobileFullBleed
+      ? "h-[95svh] lg:h-auto lg:max-h-[88svh]"
+      : heightStyles[height];
 
   const modalContent = (
     <div
@@ -546,6 +576,12 @@ const ModalContainer: React.FC<ModalContainerProps> = ({
         onAnimationComplete={handlePanelAnimationComplete}
         style={{
           minHeight: 0,
+          // Drawers translate a full-height, image-heavy subtree across the whole viewport
+          // while a `backdrop-blur` backdrop fades behind them. Promoting the panel to its
+          // own compositor layer keeps that a pure GPU transform instead of a per-frame
+          // repaint of the subtree. Bounded cost: the portal only stays mounted while the
+          // modal is open or mid-exit (`isLocked`), so `will-change` is never left standing.
+          ...(isDrawer ? { willChange: "transform", backfaceVisibility: "hidden" as const } : {}),
         }}
       >
         {children}

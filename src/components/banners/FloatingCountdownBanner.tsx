@@ -4,6 +4,7 @@ import React, { useState, useEffect, Suspense, type ReactNode } from "react";
 import { m, AnimatePresence } from "framer-motion";
 import { X, Lock } from "lucide-react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
+import { DEFAULT_PRIZE_SLUG } from "@/config/prize-summaries";
 import { useCurrentMajorDraw, useNextDraw } from "@/hooks/queries/useMajorDrawQueries";
 import { useLeafTimer } from "@/hooks/useLeafTimer";
 import { cn } from "@/utils/cn";
@@ -132,12 +133,14 @@ const FloatingCountdownBannerInner: React.FC<FloatingCountdownBannerProps> = ({ 
     setIsDismissed(true);
   };
 
-  // Navigate to the promotions gallery landing (not a specific prize slug).
+  // Navigate to the DEFAULT prize page, not the `/promotions` showroom (owner,
+  // 2026-07-22 — reverses the 2026-07-08 change): the entry CTA should land on a page
+  // that sells, and the showroom is now reachable only from the footer Quick Links.
   const handleViewDetails = () => {
     // Preserve affiliate code from URL if present (App Router compatible)
     const affiliateCode = searchParams.get("aff");
-    const newUrl = affiliateCode ? `/promotions?aff=${affiliateCode}` : "/promotions";
-    router.push(newUrl);
+    const target = `/promotions/${DEFAULT_PRIZE_SLUG}`;
+    router.push(affiliateCode ? `${target}?aff=${affiliateCode}` : target);
   };
 
   // Don't render if dismissed or not ready

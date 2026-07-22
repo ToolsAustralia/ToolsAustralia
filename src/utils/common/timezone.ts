@@ -68,37 +68,25 @@ export function formatDateInAEST(utcDate: Date, formatString: string = "yyyy-MM-
   return formatInTimeZone(utcDate, AEST_TIMEZONE, formatString);
 }
 
-function getOrdinalSuffixEn(day: number): string {
-  if (day > 3 && day < 21) return "th";
-  switch (day % 10) {
-    case 1:
-      return "st";
-    case 2:
-      return "nd";
-    case 3:
-      return "rd";
-    default:
-      return "th";
-  }
-}
-
 /**
- * One-line label for major draw live moment: weekday, ordinal date, month, 12h time, and AEST or AEDT.
- * Uses Australia/Sydney so daylight saving is correct. `utcDate` is the instant stored in UTC (e.g. from API).
+ * Compact all-caps draw stamp for tight chips (prize builder hero, share cards).
+ * Drops the weekday, minutes when they are `:00`, and the year — the verbose
+ * "Friday, 31st July 9:59am AEST" form it replaced does not fit an 8px pill.
  *
- * Example: "Friday, 27th March 3:00pm AEDT"
+ * Example: "27 JUL · 8PM AEST" (or "27 JUL · 8:30PM AEDT" during daylight saving)
  */
-export function formatMajorDrawLiveDateLineUtc(utcDate: Date): string {
+export function formatMajorDrawChipUtc(utcDate: Date): string {
   const tz = AEST_TIMEZONE;
-  const weekday = formatInTimeZone(utcDate, tz, "EEEE");
-  const dayNum = parseInt(formatInTimeZone(utcDate, tz, "d"), 10);
-  const month = formatInTimeZone(utcDate, tz, "MMMM");
-  const clock = `${formatInTimeZone(utcDate, tz, "h:mm")}${formatInTimeZone(utcDate, tz, "a").toLowerCase()}`;
+  const day = parseInt(formatInTimeZone(utcDate, tz, "d"), 10);
+  const month = formatInTimeZone(utcDate, tz, "MMM").toUpperCase();
+  const minutes = formatInTimeZone(utcDate, tz, "mm");
+  const clock = minutes === "00" ? formatInTimeZone(utcDate, tz, "h") : formatInTimeZone(utcDate, tz, "h:mm");
+  const meridiem = formatInTimeZone(utcDate, tz, "a").toUpperCase();
   const tzAbbr =
     new Intl.DateTimeFormat("en-AU", { timeZone: tz, timeZoneName: "short" })
       .formatToParts(utcDate)
       .find((p) => p.type === "timeZoneName")?.value ?? "AEST";
-  return `${weekday}, ${dayNum}${getOrdinalSuffixEn(dayNum)} ${month} ${clock} ${tzAbbr}`;
+  return `${day} ${month} · ${clock}${meridiem} ${tzAbbr}`;
 }
 
 /**

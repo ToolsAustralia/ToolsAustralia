@@ -47,22 +47,25 @@ when no experiment is active / no override is set). It exists so non-hero
 components that also render the brand-specific landing image stay visually
 consistent with `PromoHero` for an A/B-bucketed visitor. Current consumers:
 
-- [`PrizeShowcase`](../../src/components/sections/promo/PrizeShowcase.tsx) — first
-  carousel slide. Uses the override's `mobile` slot (per product, this slide
-  uses mobile art on both viewports).
-- [`PrizeSpecificationsModal/Hero`](../../src/components/modals/PrizeSpecificationsModal/Hero.tsx)
-  — modal hero strip. Uses the override's `desktop` slot. When no override is
-  set, falls back to the legacy "dark desktop" pick.
-- [`DrawResultsHero`](../../src/app/(site)/draw-results/components/DrawResultsHero.tsx)
-  and [`/login`](../../src/app/login/page.tsx) — use the `"cash-prize"` slug
+- [`/login`](../../src/app/login/page-client.tsx) — uses the `"cash-prize"` slug
   key (the canonical slug for the evergreen `all-prizes` collage; see
   `LANDING_HERO_MAP` in [`promo-landing-slugs.ts`](../../src/config/promo-landing-slugs.ts)).
-  Forward-wired only — these pages don't currently sit under a
+  Forward-wired only — this page doesn't currently sit under a
   `VariantAssignmentWrapper`, and `variation{1,2}-{desktop,mobile}/all-prizes.webp`
   assets don't exist yet, so the override is a no-op today. To activate later:
   (a) deliver those assets, (b) add a `cash-prize` row to each variant's
   `imageSrcBySlug`, (c) wrap the pages in a variant context that does a
   read-only lookup of the visitor's existing experiment assignment.
+
+> **Removed 2026-07-21.** `PrizeShowcase` (which consumed the `mobile` slot for its first
+> carousel slide) and `PrizeSpecificationsModal/Hero` (the `desktop` slot, falling back to the
+> legacy "dark desktop" pick) were both consumers until the prize-showcase rewrite. The showcase
+> is now the [prize builder](../promo/frontend.md#prize-builder--build-your-prize-configurator-2026-07-21)
+> and renders the combination composite `{toolset}-set/{toolset}-{toolbox}.webp`, not
+> landing-hero art; the modal's `Hero.tsx` was deleted outright. Neither surface has a
+> landing-image path left to override, so no replacement wiring is needed — but note the
+> per-slug map now reaches **fewer** surfaces than when an experiment was last designed against
+> it.
 
 When adding a new component that renders a landing-image-resolver path, call
 `usePerSlugHeroOverride` first and prefer its slot before the default resolver.

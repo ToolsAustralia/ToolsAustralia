@@ -10,7 +10,7 @@ Rewritten under this rule (all previously always-on repaint stacks):
 
 - **`.fire`** (PromoBanner background): was ONE pseudo-element animating `background-position` across a 3-deep `background-image` stack with `brightness/blur/contrast` re-running per frame. Now three layers — `::before` = static warm gradient; `.fire > .fire-glitter` (child div rendered by PromoBanner, the only `.fire` consumer) = 400×650 glitter tile rising 650px/8s; `::after` = 350×500 tile rising 500px/8s — each animated with transform-only keyframes (`fire-rise-650`/`fire-rise-500`), `mix-blend-mode: overlay` replacing the old `background-blend-mode`, `opacity: 0.7` on `.fire` providing the composite weight AND the stacking context that contains the blending. **Loop contract:** each glitter layer is `calc(100% + <tile-height>)` tall and translates up exactly one tile per iteration — if you change a `background-size` tile height you must change the matching layer height + keyframe distance or the loop visibly snaps. The old `.fire > * { z-index: 1 }` rule was removed (no `.fire` element has content children).
 - **`UrgencyClockIcon`** ([src](../../src/components/ui/UrgencyClockIcon.tsx)): was 4 infinite framer-motion tracks + a blurred glow span + a smooth 2s SVG second-hand sweep. Now zero framer: `.ta-clock-pulse` (scale 1→1.08→1, 1.2s) on the wrapper + `.ta-clock-second-hand` (`ta-clock-tick 60s steps(60)` — one style update per second) on the SVG group. Props/API unchanged (`animated={false}` still renders fully static). Do not reintroduce a rAF/framer loop here.
-- **Backdrop-blur literals**: `backdrop-blur-xl`/`-lg` bypass the `--ta-blur` device-tier token (mobile 0px / tablet 4px / desktop 12px). Landing-path surfaces must use `backdrop-blur-[var(--ta-blur)]` — swapped in `GiveawayGalleryClient` (filter bar; bg opacity raised `/90→/95`, `dark /85→/95` so mobile's 0px blur still reads solid), `PromoHero` CTA, and `FloatingGetEntriesButton`. If the element's own background is **opaque**, backdrop blur is pure invisible GPU cost — delete it instead (done on `FloatingCountdownBanner`'s opaque gradient pill). Known remaining literal: `src/app/(site)/affiliate/page-client.tsx` (not a landing path, out of that task's scope).
+- **Backdrop-blur literals**: `backdrop-blur-xl`/`-lg` bypass the `--ta-blur` device-tier token (mobile 0px / tablet 4px / desktop 12px). Landing-path surfaces must use `backdrop-blur-[var(--ta-blur)]` — swapped in `GiveawayGalleryClient` (filter bar; **that component was deleted 2026-07-22** with the /promotions Spotlight rewrite, which has no blurred surface), `PromoHero` CTA, and `FloatingGetEntriesButton`. If the element's own background is **opaque**, backdrop blur is pure invisible GPU cost — delete it instead (done on `FloatingCountdownBanner`'s opaque gradient pill). Known remaining literal: `src/app/(site)/affiliate/page-client.tsx` (not a landing path, out of that task's scope).
 
 ## Marquee gating, tier-gate holes, scroll-frame work (2026-07-20, perf Tier-2 Task 2)
 
@@ -120,7 +120,7 @@ const desktopBg = getImageProps({ src: "...", alt: "...", fill: true, sizes: "10
 If the two viewport variants also need different container geometry (e.g. a different `aspect-[...]` per viewport, not just a different image source — see the `/promotions` featured card), put the RESPONSIVE variant on the SAME wrapper div via Tailwind breakpoint classes (`aspect-[1080/1164] lg:aspect-[2560/1044]`) rather than two conditionally-hidden divs — one div, one `<picture>`, one `<img>` in the DOM at a time.
 
 - Still add your OWN single, **media-scoped** preload `<link>` pair via the SAME `getImageProps` result (`<link rel="preload" as="image" media="(max-width: 1023px)" imageSrcSet={mobileProps.srcSet} imageSizes="100vw" />` + the `(min-width: 1024px)` desktop twin) so the browser starts the request before it even parses the `<picture>`. Raw-path `href` preloads don't work here — see [promo/gotchas.md](../promo/gotchas.md) "Raw-path image preloads never match `/_next/image` URLs."
-- **Components rendered at multiple call sites** (e.g. `PrizeShowcase`'s first-gallery-slide `priority`): if one call site already sits below another `priority` hero on the same page, add an opt-out prop (e.g. `priorityFirstSlide?: boolean`, default `true`) rather than hardcoding `priority` — two competing `priority` images on one page fight for the browser's preload attention, and the lower one never needed it anyway. (Correction 2026-07-20: PrizeShowcase's main slide DOES also render a mobile/desktop pair in places — the opt-out prop is still the right tool for the *priority* question, but don't cite this component as "no hidden pair"; check the actual markup per call site.)
+- **Components rendered at multiple call sites** (e.g. `PrizeShowcase`'s combo hero `priority`): if one call site already sits below another `priority` hero on the same page, add an opt-out prop rather than hardcoding `priority` — two competing `priority` images on one page fight for the browser's preload attention, and the lower one never needed it anyway. `PrizeShowcase` does this with **`priorityHero?: boolean`** (default `true`; renamed from `priorityFirstSlide` on 2026-07-21 when the gallery became a single combo hero), and the homepage passes `priorityHero={false}` because `Hero` + `MembershipSection` already sit above it. Always check the actual markup per call site — a component may render a mobile/desktop `<Image>` pair.
 - **When only ONE of the two variants needs `priority`-style urgency and the other is a non-visual fallback** (e.g. `PromoHero`'s still-image fallback, which is itself gated behind `showVideo`/`viewport` JS state rather than pure CSS `hidden`), `loading="eager"` on the still (not `priority`) is correct — the JS gate, not CSS, is what prevents the *other* viewport's branch from mounting at all.
 
 ## Z-index conflicts
@@ -251,7 +251,7 @@ New `drawn-tomorrow` / `drawn-tonight` brand art is a tall clock lockup (replaci
 
 - **PromoBanner load state shows the brand logo, not pulse blocks.** The `!isPromoResolved` skeleton (item 4) renders the white-text Tools Australia logo (`/images/Tools Australia Logo/White-Text Logo.webp`) centered on the dark bar with a gentle breathe (opacity + scale via Framer, gated by `prefersReducedMotion`). Still reserves the same `min-h` so there's no CLS.
 - **`MultiplierBannerImage` has its own loader.** [`MultiplierBannerImage.tsx`](../../src/components/ui/MultiplierBannerImage.tsx) now tracks `loaded` (`onLoad`), fades the art in (`opacity-0`→`opacity-100`), and overlays a branded loader **inside the image's reserved box** (next/Image keeps the aspect-ratio, so no shift): social-profile logo (`Social_Media_Profile_Primary-removebg-preview.webp`) + `.animate-shimmer-horizontal-fast` sweep + gradient "Gearing up your multipliers…" text. Used by MembershipSection + PrizeShowcase (both multiplier banners). The passed `className` now sizes the wrapper `<div>`; the `<Image>` is `w-full h-auto`.
-- **`GiveawayCountdownTimer` hides on TBA.** [`GiveawayCountdownTimer.tsx`](../../src/components/sections/promo/GiveawayCountdownTimer.tsx) returns `null` when `!currentMajorDraw?.drawDate` — no more "Major draw / Draw date TBA" placeholder card. It only renders once a real `drawDate` exists (countdown within 3 days, else the date card).
+- ~~**`GiveawayCountdownTimer` hides on TBA.**~~ **DELETED 2026-07-22** — the prize builder's combo hero carries the draw stamp (`DRAWN 27 JUL · 8PM AEST`), so the separate countdown/date card above the card was redundant. `PrizeShowcase` was its only consumer; the `showCountdown` prop and the verbose `formatMajorDrawLiveDateLineUtc` formatter went with it.
 
 ## UpsellModal: `isProcessing` does NOT guard the post-success window — a `purchaseComplete` latch does (2026-06-02)
 
@@ -270,3 +270,68 @@ Fix: a `purchaseComplete` state latch set to `true` in the success branch (befor
 ## Acumin @font-face is local()-only (2026-07-20)
 
 The url() source 404'd on every page (file never added to public/fonts/). If the licensed woff2 is ever obtained, re-add the url() source per the comment in globals.css.
+
+## ModalContainer: `mobileFullBleed` silently dropped its desktop max-width (2026-07-21)
+
+[`ModalContainer`](../../src/components/modals/ui/ModalContainer.tsx) built the full-bleed
+panel shape with an **interpolated** class — `` `w-full max-w-none … lg:${sizeStyles[size]}` ``
+→ `lg:max-w-4xl`. Tailwind scans *source text*, so an interpolated class only survives if that
+exact string happens to appear literally somewhere else in the repo. `lg:max-w-2xl` did (in
+[`affiliate/page-client.tsx`](../../src/app/(site)/affiliate/page-client.tsx)), which is why
+`CancellationFlowModal` (`size="2xl"`) worked **by accident**; `lg:max-w-4xl` did not, so the
+first `size="4xl" + mobileFullBleed` modal rendered edge-to-edge on desktop (`max-w-none` never
+being overridden) — a ~1900px sheet on a 1920px screen.
+
+Fixed with a literal `lgSizeStyles` map alongside `sizeStyles`. **Never interpolate a Tailwind
+class name from a variable** — see [tailwind-conventions §8](tailwind-conventions.md). If you
+add a `size` key, add it to *both* maps.
+
+## Prize builder reels are an ARIA radiogroup, not a set of toggle buttons (2026-07-21)
+
+[`SelectorReel`](../../src/components/sections/promo/prize-selection/SelectorReel.tsx) is
+`role="radiogroup"` with `role="radio"` cards and a **roving tabindex**: only the selected card
+is `tabIndex={0}`, so Tab reaches each lane once and Left/Right/Home/End move the selection —
+and `selectAndFocus` moves DOM focus with it, so the ring never desynchronises from the choice.
+Two consequences to preserve if you touch it:
+
+- The focus ring is `ring-inset`. The 3D stage is `overflow-hidden`, so an offset ring on a side
+  card is sliced in half at the stage bounds.
+- Cards outside the visible window get `aria-hidden` **and** `tabIndex={-1}` together. Setting
+  only one of the two either strands a Tab stop on an invisible card or hides a focusable one.
+
+Guarded by `npm run test:prize-builder-card` (radiogroup/radio/checked counts and the tab-stop
+count).
+
+## ModalContainer gained a `drawer` presentation (2026-07-22)
+
+`presentation="drawer"` renders a **full-height panel sliding in from the right edge** below
+`lg`, reverting to the normal centered dialog at `lg`+. It exists because the prize-details
+handoff specifies exactly that (its `pbcdrawer` keyframe animates `translateX(100%) → 0`), and
+neither `sheet` (slides up from the bottom) nor `mobileFullBleed` (bottom-anchored 95svh) is
+that shape.
+
+Three coordinated pieces, all in [`ModalContainer`](../../src/components/modals/ui/ModalContainer.tsx):
+`outerFlex` (`items-stretch justify-end`), `panelShape` (`rounded-none` + the `lg:` size), and
+`panelHeight` (`h-full`), plus `drawerPanelVariants` in
+[`modalPresets`](../../src/utils/motion/modalPresets.ts). Reduced motion still falls through to
+the shared fade. `drawer` and `mobileFullBleed` are mutually exclusive — `drawer` wins.
+
+## Prize spec cards: the green `$5K` tile is CASH-ONLY (2026-07-22)
+
+`SpecCard`'s photo-less branch originally rendered the green `$5K` plate, on the assumption
+that the injected cash item was the only entry without an image. It is not — plenty of real
+catalogue items have no photo (`dewalt-kincrome` alone has 8: the whole TOUGHSYSTEM® storage
+section plus the workshop-storage item). Every one of them rendered a green `$5K` tile, which
+reads as "this storage box is worth $5,000".
+
+There are now three tile states, and the cash one is gated on an explicit `isCash` prop set
+from `activeSection.id === CASH_SECTION_ID` — never inferred from a missing image:
+
+| state | tile |
+|---|---|
+| `item.image` | white plate + `next/image` |
+| `isCash` | green-tinted plate + `$5K` |
+| neither | dashed neutral tile + a muted crate glyph ("Photo coming soon") |
+
+When adding a spec section, don't reuse the id `cash-prize` for anything that isn't the cash
+bonus, or its items will inherit the `$5K` treatment.
