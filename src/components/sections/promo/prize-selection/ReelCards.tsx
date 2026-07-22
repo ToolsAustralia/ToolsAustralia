@@ -19,7 +19,7 @@ const TOOLSET_SHADOW = "drop-shadow(0 8px 12px rgba(0,0,0,.45))";
 export function ToolboxReelCard({ toolbox }: { toolbox: ToolboxOption }) {
   return (
     <>
-      <span className="relative my-[4px] mb-[6px] flex flex-[1.3] items-center justify-center">
+      <span className="pbc-card-art relative my-[4px] mb-[6px] flex flex-[1.3] items-center justify-center">
         <span className="relative block h-full w-full">
           <Image
             src={toolbox.image}
@@ -40,7 +40,7 @@ export function ToolboxReelCard({ toolbox }: { toolbox: ToolboxOption }) {
         </span>
         {/* Plate height tracks the card height (24px mobile / 30px desktop) so the brand
             mark keeps its proportion instead of eating the product render on a short card. */}
-        <span className="flex h-[var(--pbc-mark-h)] w-full items-center justify-center">
+        <span className="pbc-card-art flex h-[var(--pbc-mark-h)] w-full items-center justify-center">
           <BrandMark
             src={toolbox.markImage}
             color={toolbox.markColor}
@@ -62,7 +62,7 @@ export function ToolboxReelCard({ toolbox }: { toolbox: ToolboxOption }) {
 export function ToolsetReelCard({ toolset }: { toolset: ToolsetOption }) {
   return (
     <>
-      <span className="relative mb-[3px] flex w-full flex-1 items-center justify-center">
+      <span className="pbc-card-art relative mb-[3px] flex w-full flex-1 items-center justify-center">
         <span className="relative block h-full w-full">
           <Image
             src={toolset.image}
@@ -77,7 +77,7 @@ export function ToolsetReelCard({ toolset }: { toolset: ToolsetOption }) {
         </span>
       </span>
 
-      <span className="relative flex h-5 items-center justify-center">
+      <span className="pbc-card-art relative flex h-5 items-center justify-center">
         <span className="relative block h-full w-full">
           <Image
             src={toolset.wordmark}

@@ -381,3 +381,20 @@ from `activeSection.id === CASH_SECTION_ID` — never inferred from a missing im
 
 When adding a spec section, don't reuse the id `cash-prize` for anything that isn't the cash
 bonus, or its items will inherit the `$5K` treatment.
+
+## Prize-builder reel: never fade card TEXT with card-level opacity (2026-07-22)
+
+The coverflow reel's side-card recede was `opacity: var(--pbc-reel-side-opacity)` (0.5 on
+desktop) + a brightness/saturate filter on the WHOLE `.pbc-reel-card` — which composited the
+`--pbc-sub` labels down to ~2:1 and produced 12 serious axe `color-contrast` violations on `/`
+(plus an illegible NEW badge). The recede now lives on `.pbc-card-art` (a wrapper class on the
+product render / brand mark / wordmark spans in `ReelCards.tsx`) so text and badges stay
+full-opacity; the scale/rotate/border/shadow differences plus the dimmed artwork still read as
+"not selected". Cash-mode's deeper `data-dimmed` fade follows the same artwork-only rule.
+If you add a new visual element to a reel card, put it INSIDE a `.pbc-card-art` wrapper if it
+should recede — and leave any text OUTSIDE it.
+
+Cash-green ink pairs with this: small cash-coloured text must use `--pbc-cash-ink`
+(#0e7434 light / #3ddc84 dark — same contract and value as `--pgs-cash-ink`), never raw
+`--pbc-cash`/#18a94d (3.08:1 on light surfaces). White-on-green pills use `--pbc-cash-dark`
+as the fill. Full node-by-node table: docs/e2e/a11y-baseline.md "redesigned prize-showcase".

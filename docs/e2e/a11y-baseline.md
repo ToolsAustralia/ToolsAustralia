@@ -89,6 +89,21 @@ next time a real, signed-off violation needs tracking.
 
 ## Fixed
 
+### `/` (home) redesigned prize-showcase — fixed 2026-07-22 (12 `color-contrast` nodes)
+
+The post-merge redesign of the Build-your-prize showcase introduced 12 serious
+`color-contrast` nodes, all fixed at the token/structure level (DJ-approved fix, not baselined):
+
+| Cluster | Bug | Fix |
+|---|---|---|
+| 8× unfocused reel-card labels (toolbox eyebrow/"TOOLBOX", toolset kit labels) + the NEW badge | Card-level `opacity: var(--pbc-reel-side-opacity)` (0.5 desktop) composited `--pbc-sub` #5c626b down to ~2:1 | Fade moved off the card root onto a new `.pbc-card-art` wrapper (product render, brand mark, wordmark only) in `globals.css` + `ReelCards.tsx` — text and badges stay full-opacity; scale/rotate/border/dimmed-art still convey "not selected". Cash-mode (`data-dimmed`) got the same artwork-only treatment. |
+| `strong` "$5,000", contents-strip chip text | Cash green `#18a94d` is 3.08:1 on light surfaces | New theme-flipping token `--pbc-cash-ink` (#0e7434 light / #3ddc84 dark), mirroring the existing `--pgs-cash-ink` contract (kept in lockstep at #0e7434 — #0f7a37 measured ~4.4:1 over the chip's 12% green tint) |
+| ComboHero "+$5,000 CASH INCLUDED" pill, "THIS IS WHAT YOU WIN" chip | White 8.5px on `#18a94d` = 3.08:1; `#0f8a3f` ink on white/90 = 4.45:1 | Pill bg → `--pbc-cash-dark`; chip ink → `--pbc-cash-dark` (fixed, since its white/90 bg doesn't flip with theme) |
+
+Verified: `@a11y` chromium-desktop run green on all three pages; prize-builder/gallery/card
+unit suites green; visual recede confirmed via the landing demo's step screenshot.
+See [shared-ui/gotchas.md](../shared-ui/gotchas.md).
+
 ### `/` (home) — fixed 2026-07-22
 
 | Rule | Bug | Fix location | Actual root cause (verified, not the original "likely" guess) |

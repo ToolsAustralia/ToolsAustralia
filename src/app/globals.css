@@ -486,6 +486,12 @@
   /* Cash green is theme-independent (semantic, not surface) */
   --pbc-cash: #18a94d;
   --pbc-cash-dark: #0f7a37;
+  /* Cash green as TEXT ink — same contract as --pgs-cash-ink: reads darker on the light
+     ground so small cash copy keeps ≥4.5:1 (#18a94d is only 3.08:1 on white), flips
+     bright in dark mode. Use for cash-coloured text; --pbc-cash stays for fills/borders.
+     #0e7434, not --pbc-cash-dark's #0f7a37: the PrizeContentsStrip chip reads over a 12%
+     cash-green tint on --pbc-box-bg, where #0f7a37 measures ~4.4:1 — just under the bar. */
+  --pbc-cash-ink: #0e7434;
 }
 
 .dark .prize-builder {
@@ -514,6 +520,7 @@
   --pbc-stripe: #a9a4ff;
   --pbc-gpay: #e3e6ea;
   --pbc-ink-strong: #ffffff;
+  --pbc-cash-ink: #3ddc84;
 }
 
 /* ---------------------------------------------------------------------------
@@ -543,8 +550,9 @@
   --pgs-case-border: rgba(0, 0, 0, 0.1);
   --pgs-eyebrow: #c40000;
   --pgs-link: #c40000;
-  /* Cash green reads darker on the light ground so the stat value keeps its contrast. */
-  --pgs-cash-ink: #0f7a37;
+  /* Cash green reads darker on the light ground so the stat value keeps its contrast.
+     Kept in lockstep with --pbc-cash-ink (one concept, one value). */
+  --pgs-cash-ink: #0e7434;
   /* Accent bloom strength — the design's `<accent>22` / `<accent>34` hex alphas as
      opacity, so ONE gradient declaration serves both themes with any brand colour. */
   --pgs-glow-alpha: 0.13;
@@ -668,28 +676,41 @@
     translateZ(calc(var(--pbc-off-abs) * var(--pbc-reel-depth) * -1))
     rotateY(calc(var(--pbc-off) * var(--pbc-reel-rotate) * -1)) scale(var(--pbc-scale));
   z-index: calc(100 - var(--pbc-off-abs) * 10);
-  opacity: var(--pbc-reel-side-opacity);
-  filter: var(--pbc-reel-side-filter);
   transition: transform 0.5s cubic-bezier(0.2, 0.7, 0.2, 1),
-    opacity 0.5s cubic-bezier(0.2, 0.7, 0.2, 1), filter 0.5s cubic-bezier(0.2, 0.7, 0.2, 1),
+    opacity 0.5s cubic-bezier(0.2, 0.7, 0.2, 1),
     border-color 0.3s ease, box-shadow 0.3s ease;
 }
 
-.pbc-reel-card[data-focused="true"] {
+/* Side-card recede applies to the ARTWORK ONLY (.pbc-card-art wraps the product render,
+   brand mark and wordmark in ReelCards.tsx) — never to the card's text. Compositing the
+   labels through a card-level opacity fade dropped #5c626b to ~2:1 against the card bg
+   (12 axe color-contrast violations on "/", fixed 2026-07-22). Full-opacity --pbc-sub
+   still reads as muted grey, and the scale/rotate/border/shadow differences plus the
+   dimmed artwork keep the unselected cards visually receded. */
+.pbc-reel-card .pbc-card-art {
+  opacity: var(--pbc-reel-side-opacity);
+  filter: var(--pbc-reel-side-filter);
+  transition: opacity 0.5s cubic-bezier(0.2, 0.7, 0.2, 1),
+    filter 0.5s cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+.pbc-reel-card[data-focused="true"] .pbc-card-art {
   opacity: 1;
   filter: none;
 }
 
 /* Beyond the visible window: invisible AND inert, so an off-stage card can
-   never steal a tap or a Tab stop. */
+   never steal a tap or a Tab stop. (Root-level opacity is fine here — the whole
+   card is hidden AND aria-hidden, so there is no text left to keep legible.) */
 .pbc-reel-card[data-offstage="true"] {
   opacity: 0;
   pointer-events: none;
 }
 
 /* Cash mode: the reels fade back but stay live — picking a brand is exactly how
-   the winner leaves cash mode. */
-.pbc-reel[data-dimmed="true"] .pbc-reel-card {
+   the winner leaves cash mode. Same artwork-only rule: the labels stay legible
+   while the renders recede deeper than the normal side-card fade. */
+.pbc-reel[data-dimmed="true"] .pbc-reel-card .pbc-card-art {
   opacity: 0.4;
 }
 
@@ -698,7 +719,8 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .pbc-reel-card {
+  .pbc-reel-card,
+  .pbc-reel-card .pbc-card-art {
     transition: none;
   }
 }
