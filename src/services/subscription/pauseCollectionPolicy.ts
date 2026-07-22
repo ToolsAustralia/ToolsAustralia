@@ -155,6 +155,47 @@ export function shouldReanchorAfterRecovery(i: ReanchorGateInput): boolean {
   );
 }
 
+/** Inputs for the re-bill anchor-24 clamp decision. Pure — no Stripe client, no date/timezone math. */
+export interface RebillReanchorGateInput {
+  /** The paid invoice is a mint RE-BILL (isRebillPayment): subscription_update, not an upgrade, past-due. */
+  isRebill: boolean;
+  invoiceIsPaid: boolean;
+  /** `isJoinDateAnchoredTo24(recoveryDate)` — recovery landed on the 25th/26th/27th (AEST). Computed by the
+   *  caller so this predicate stays pure/date-free. */
+  recoveryDayIsAnchorWindow: boolean;
+  cancelAtPeriodEnd: boolean;
+  autoRenew: boolean | undefined;
+  /** `user.subscription.lastReanchoredInvoiceId` — cheap pre-filter (the atomic claim is authoritative). */
+  alreadyReanchoredInvoiceId: string | undefined;
+  invoiceId: string;
+}
+
+/**
+ * Whether a paid past-due RE-BILL (`mintCurrentCycleInvoice`, `billing_reason "subscription_update"`)
+ * should additionally be clamped to the anchor-24 renewal day.
+ *
+ * The held-draft recovery path (`subscription_cycle`) reanchors via {@link shouldReanchorAfterRecovery},
+ * which pulls a 25/26/27 recovery back to the 24th (≥3-day buffer before the 27th major draw). A mint
+ * re-bill is `subscription_update`, so it SKIPS that gate — its own `billing_cycle_anchor:'now'` moves the
+ * renewal ~1 month out but does NOT apply the clamp, so a re-bill collected on the 25/26/27 would renew on
+ * that very day (0–2 days before the draw). This predicate re-applies the SAME clamp via the SAME
+ * `reanchorAfterPastDueRecovery`.
+ *
+ * ONLY fires when the clamp actually changes the date (`recoveryDayIsAnchorWindow`). On every other day the
+ * mint's anchor already lands the renewal a clean ~1 month out, so a reanchor would only add a needless $0
+ * trial invoice + flip the member to "trialing" for no date benefit. Mirrors the ending / autoRenew-off
+ * guards of `shouldReanchorAfterRecovery` so a member who is cancelling is never silently extended.
+ */
+export function shouldReanchorRebillToAnchor24(i: RebillReanchorGateInput): boolean {
+  if (!i.isRebill) return false;
+  if (!i.invoiceIsPaid) return false;
+  if (!i.recoveryDayIsAnchorWindow) return false; // 25/26/27 only — where the clamp moves the date
+  if (i.cancelAtPeriodEnd === true) return false; // member is ending — do not extend
+  if (i.autoRenew === false) return false;
+  if (i.alreadyReanchoredInvoiceId === i.invoiceId) return false;
+  return true;
+}
+
 /**
  * Human-readable label for `pause_collection` on a Stripe subscription (for logs/scripts).
  */

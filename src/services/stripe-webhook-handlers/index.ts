@@ -52,7 +52,8 @@ import {
   resumeAfterSuccessfulRenewalPayment,
   reanchorAfterPastDueRecovery,
 } from "@/services/subscription/SubscriptionCollectionPauseService";
-import { decideClearPause, decidePauseTransition, shouldReanchorAfterRecovery } from "@/services/subscription/pauseCollectionPolicy";
+import { decideClearPause, decidePauseTransition, shouldReanchorAfterRecovery, shouldReanchorRebillToAnchor24 } from "@/services/subscription/pauseCollectionPolicy";
+import { isJoinDateAnchoredTo24 } from "@/utils/billing/anchor-billing";
 import { STRIPE_SUBSCRIPTION_METADATA_IS_RESUBSCRIBE } from "@/utils/payment/stripe-subscription-metadata";
 import { decideStreakOnSubscriptionCreate } from "@/utils/subscription/streak";
 import { trackPixelSubscriptionRenewal } from "@/utils/tracking/pixel-purchase-tracking";
@@ -3797,6 +3798,46 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
       billingAnchorRule: subscription.metadata?.billing_anchor_rule,
       previousSubscriptionStatus: previousSubscriptionDbStatus,
     });
+
+    // --- Anchor-24 clamp for a past-due RE-BILL (parity with the held-draft reanchor block above) ---
+    // The held-draft recovery (subscription_cycle) reanchors via shouldReanchorAfterRecovery, which clamps a
+    // 25/26/27 recovery to the 24th (≥3-day buffer before the 27th major draw). A mint RE-BILL is
+    // subscription_update, so it skips that gate and its own billing_cycle_anchor:'now' would renew on the
+    // 25/26/27 itself. Re-apply the SAME clamp via the SAME reanchorAfterPastDueRecovery — but ONLY when the
+    // recovery day is in the 25/26/27 window, so other-day re-bills keep their "active" state (a reanchor on
+    // any other day only spawns a needless $0 trial invoice for no date change). Safe by construction: the $0
+    // trial invoice this spawns is skipped at the top of this handler (isZeroAmountTrialUpdateInvoice returns
+    // early), so it never re-enters here; reanchorAfterPastDueRecovery is idempotent (lastReanchoredInvoiceId)
+    // and overwrites the marker to "past_due_reanchor". Runs AFTER isRebill is read (so the grant below still
+    // sees the live "rebill_current_cycle" marker) and BEFORE processPaymentBenefits, exactly like the
+    // held-draft block. See docs/PAST_DUE_REANCHOR.md and utils/billing/rebill-classification.ts.
+    if (invoiceIsPaid && expandedInvoice.id) {
+      const rebillRecoveryDate = paidAtDateFromStripeInvoice(expandedInvoice) ?? new Date();
+      const clampRebillToAnchor24 = shouldReanchorRebillToAnchor24({
+        isRebill,
+        invoiceIsPaid,
+        recoveryDayIsAnchorWindow: isJoinDateAnchoredTo24(rebillRecoveryDate),
+        cancelAtPeriodEnd: subscription.cancel_at_period_end === true,
+        autoRenew: user.subscription?.autoRenew,
+        alreadyReanchoredInvoiceId: user.subscription?.lastReanchoredInvoiceId,
+        invoiceId: expandedInvoice.id,
+      });
+      if (clampRebillToAnchor24) {
+        const rebillReanchorResult = await reanchorAfterPastDueRecovery({
+          subscriptionId: subscription.id,
+          userId: new mongoose.Types.ObjectId(String(user._id)),
+          recoveryDate: rebillRecoveryDate,
+          invoiceId: expandedInvoice.id,
+          packageId: user.subscription?.packageId ?? undefined,
+        });
+        if (rebillReanchorResult.reanchored) {
+          webhookLog(
+            "info",
+            `Reanchored re-bill to anchor-24 (recovery day 25/26/27) for subscription ${subscription.id} invoice ${expandedInvoice.id}`
+          );
+        }
+      }
+    }
 
     // Membership Streak: start/continue/reset on subscription_create (upgrades excluded — continuity).
     // Renewal increments live beside the renewal-cycle upsert above. Idempotent per invoice id.

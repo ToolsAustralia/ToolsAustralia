@@ -9,10 +9,16 @@
  *   unpause (Stripe REJECTS invoice creation on a paused sub) → `billing_cycle_anchor: 'now'`
  *   + `proration_behavior: 'none'` → Stripe immediately creates AND auto-charges a fresh cycle
  *   invoice on the customer's default card, AND moves the next renewal ~1 month out (so this
- *   call doubles as the reanchor — no separate `trial_end` step). The minted invoice's
+ *   call doubles as the reanchor — no separate `trial_end` step here). The minted invoice's
  *   `billing_reason` is **`subscription_update`** (NOT `subscription_cycle`); the entry-grant
  *   webhook normalizes that to a full renewal-size grant off the subscription's LIVE metadata,
  *   which is correct for a straight re-bill (no tier change). The dead original is voided last.
+ *
+ * Anchor-24 caveat: `billing_cycle_anchor:'now'` renews on the recovery day itself, NOT clamped to
+ * the 24th. When the recovery lands on the 25th/26th/27th (AEST), the entry-grant webhook re-applies
+ * the anchor-24 clamp (`shouldReanchorRebillToAnchor24` → `reanchorAfterPastDueRecovery`, `trial_end`
+ * to the next 24th) so the renewal keeps its ≥3-day buffer before the 27th major draw — parity with
+ * the held-draft recovery path. On any other day the ~1-month anchor above already suffices.
  *
  * Serialized by the per-subscription `RecoveryClaim` so it can never run concurrently with the
  * member Pay-Now / Force-Charge / other recovery flows (the double-charge guard). A SUCCESSFUL
