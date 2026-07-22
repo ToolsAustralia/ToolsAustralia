@@ -471,12 +471,24 @@ Ports the Claude member-dashboard prototype onto the home. Spec 1 of a sequenced
 ### State hook — [`useDashboardState`](../../src/hooks/useDashboardState.ts)
 Single source of home view-state. Resolves the account state via the pure
 [`deriveDashboardAccountState`](../../src/utils/dashboard/derive-dashboard-account-state.ts)
-(precedence **pastdue > active > onetime > none**, traced against `subscription.isActive`,
-`hasFailedRenewal`, `getActivePackage().source`), plus tier + [`getDashboardStateTheme`](../../src/utils/dashboard/dashboard-state-theme.ts)
+(precedence **pastdue > paused > active > onetime > none**, traced against `subscription.isActive`,
+`subscription.status`, `hasFailedRenewal`, `getActivePackage().source`), plus tier + [`getDashboardStateTheme`](../../src/utils/dashboard/dashboard-state-theme.ts)
 (hero gradient/ink/accent), promo multiplier, entry buckets (`useDashboardEntryDisplay`),
 partner access %/expiry, and streak months — all from existing cached queries. Section
 components stay dumb and consume this. Pure logic is `tsx`-tested
 (`test:dashboard-state-theme`, `test:dashboard-account-state`).
+
+> **Retention-paused is a first-class state (2026-07-21):** a member in the `pause_30d`
+> freeze window carries `subscription.status === "paused"` + `isActive === false`. Because
+> the freeze zeroes `isActive`, it would collapse to `none` ("No membership") without an
+> explicit arm — so `deriveDashboardAccountState` gains an `isPaused` input checked BEFORE
+> the active/none arms, and `useDashboardState` computes `isPaused`
+> (`subscription.status === "paused"`) and exposes **`pausedUntil`** (the `Date` from
+> `subscription.pausedUntil`, null otherwise) so surfaces can render "Paused · resumes
+> {date}". `getDashboardStateTheme("paused")` returns a calm slate-sky fixed palette
+> (`FIXED.paused`). Perks stay frozen during the pause: `partnerAccessPct`, `streakMonths`,
+> `renewalDateIso`, and `membershipEntriesPerRenewal` are all left at their non-member
+> defaults for `acct === "paused"` (no access/accrual until resume).
 
 ### Sections — `src/components/sections/dashboard/`
 `DashboardHero`, `EntryWallet` (entries hero — total/split-bar/countdown, extracted from the
@@ -616,8 +628,11 @@ Rebuilds `/my-account/draws` to a **Major / Mini `Seg` toggle**. Spec:
 - **[`draws/page.tsx`](../../src/app/(site)/my-account/draws/page.tsx)** — thin composer fed by
   `useDashboardState`: `DashboardPageHeader` + `Seg` → **major** (`DrawsMajorHero` → reused
   `EntryWallet` → `DashboardPromoBanner` → "Get more entries" → `DrawHowItWorks` → `DrawWinners`) or
-  **mini** (`DrawsMini`). Flagged-for-deletion (kept, shared): `PrizeShowcase`, `MembershipSection`,
-  `LatestWinnerHero`, `WinnersTestimony`, `MajorDrawHeaderStrip`.
+  **mini** (`DrawsMini`). Removed from this page but kept (shared, used elsewhere):
+  `PrizeShowcase`, `MembershipSection`, `LatestWinnerHero`, `WinnersTestimony`,
+  `MajorDrawHeaderStrip`. _(`PrizeShowcase` is no longer "flagged for deletion" — it was rewritten
+  2026-07-21 into the "Build your prize" configurator and is live on `/` and `/promotions/*`; see
+  [promo/frontend.md](../promo/frontend.md#prize-builder--build-your-prize-configurator-2026-07-21).)_
   > _Update 2026-07-02:_ `DrawsMajorHero` dropped its "Live · {draw} · Drawn 8:30 PM AEST" status row
   > (redundant with the Draws toggle bar) and its `drawName`/`drawStatus` props; the draws page
   > dropped the entries card's `-mt-[34px]` overlap (→ `pt-4`) that had covered "View this promotion"

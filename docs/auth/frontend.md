@@ -70,7 +70,7 @@ Auth components use `cn()` from `@/utils/cn` for conditional class composition. 
 
 The "Sign in" h1 and "Please login to continue to your account." sub-copy render inline (baseline-aligned, `flex-wrap`) below `lg` and stack vertically on desktop, so the form header doesn't dominate small viewports.
 
-`RotatingToolsetCard` is defined inline in `src/app/login/page.tsx` because it has a single consumer. It reuses shared brand assets (`POWERSET_IMAGES`, `POWERSET_BRAND_TEXT` from `src/components/sections/promo/prize-selection/constants.ts`) and brand color helpers (`getToolsetBadgeStyle`, `getPackageColorScheme`, `getLandingPageThemeFromSlug`, `hexToRgbaString` from `src/utils/package-colors/packageColorScheme.ts`) — the same module that powers the prize selection carousel, so Ryobi's lime-on-dark-green pill treatment is identical across the site. Auto-rotation respects `prefers-reduced-motion`.
+`RotatingToolsetCard` is defined inline in `src/app/login/page-client.tsx` because it has a single consumer. It reuses shared brand assets (`POWERSET_IMAGES`, `POWERSET_BRAND_TEXT` from `src/components/sections/promo/prize-selection/constants.ts`) and brand color helpers (`getToolsetBadgeStyle`, `getPackageColorScheme`, `getLandingPageThemeFromSlug`, `hexToRgbaString` from `src/utils/package-colors/packageColorScheme.ts`), so Ryobi's lime-on-dark-green pill treatment is identical across the site. **Those two maps are now DERIVED from the `TOOLSETS` registry** (2026-07-21) — this page is their only remaining consumer besides the registry itself, since the prize picker reads `TOOLSETS` directly. Do not hand-write entries into them. Auto-rotation respects `prefers-reduced-motion`.
 
 ## Sign-out storage clear — streak celebration marker (2026-07-07)
 

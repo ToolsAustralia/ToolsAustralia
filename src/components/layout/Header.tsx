@@ -7,6 +7,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { totalSignOut } from "@/utils/auth/total-sign-out";
 import { useSidebar } from "@/contexts/SidebarContext";
 import { useUserContext } from "@/contexts/UserContext";
+import { DEFAULT_PRIZE_SLUG } from "@/config/prize-summaries";
 import { useUserMajorDrawStats } from "@/hooks/queries/useMajorDrawQueries";
 import { hasAdditionalPackageAccess } from "@/utils/membership/has-additional-package-access";
 import { useModalPriorityStore } from "@/stores/useModalPriorityStore";
@@ -57,6 +58,14 @@ import {
 import { cn } from "@/utils/cn";
 
 /** Full wordmark: light UI uses default PNG; dark UI uses high-contrast white artwork */
+/**
+ * Where "Giveaways → Major Draw" goes: the DEFAULT prize page, not the `/promotions`
+ * showroom (owner, 2026-07-22). The showroom is deliberately reachable only from the
+ * footer Quick Links and a typed URL for now — declared once here so the desktop
+ * dropdown and the mobile menu can never drift apart.
+ */
+const MAJOR_DRAW_HREF = `/promotions/${DEFAULT_PRIZE_SLUG}`;
+
 const HEADER_LOGO_LIGHT_SRC = "/images/logo.webp";
 const HEADER_LOGO_DARK_SRC = "/images/Tools Australia Logo/White-Text Logo.webp";
 
@@ -497,7 +506,8 @@ export default function Header({ isFixed = true }: HeaderProps) {
     return pathname.startsWith("/draw-results");
   };
 
-  // Giveaways dropdown is active on either the major-draw gallery (/promotions) or mini draws.
+  // Giveaways dropdown stays active anywhere under /promotions (the default prize page
+  // it links to, its siblings, AND the showroom) or on mini draws.
   const isGiveawaysActive = () => {
     return pathname.startsWith("/promotions") || pathname.startsWith("/mini-draws");
   };
@@ -655,7 +665,7 @@ export default function Header({ isFixed = true }: HeaderProps) {
               {isGiveawaysMenuOpen && (
                 <div className="absolute top-full left-0 mt-2 w-48 bg-white dark:bg-neutral-900 rounded-xl shadow-xl border border-gray-200 dark:border-neutral-700 py-2 z-[75] animate-fade-in">
                   <Link
-                    href="/promotions"
+                    href={MAJOR_DRAW_HREF}
                     className="flex items-center gap-3 px-4 py-3 text-sm text-gray-700 dark:text-neutral-200 hover:bg-gray-50 dark:hover:bg-neutral-800 transition-colors duration-150"
                     onClick={() => setIsGiveawaysMenuOpen(false)}
                   >
@@ -1406,9 +1416,9 @@ export default function Header({ isFixed = true }: HeaderProps) {
                   {isMobileGiveawaysOpen && (
                     <div className="ml-8 mt-2 space-y-1">
                       <Link
-                        href="/promotions"
+                        href={MAJOR_DRAW_HREF}
                         className={`sidebar-item flex items-center gap-3 py-2 px-3 transition-[colors,transform,opacity] duration-[var(--ta-transition-dur)] rounded-xl text-sm font-medium ${
-                          isActiveLink("/promotions")
+                          isActiveLink(MAJOR_DRAW_HREF)
                             ? "text-white bg-red-600"
                             : "text-gray-600 dark:text-neutral-400 hover:text-red-600 hover:bg-gray-50"
                         }`}

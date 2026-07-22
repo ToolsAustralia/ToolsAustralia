@@ -7,7 +7,7 @@ import { domMax } from "framer-motion";
  * the shared/critical bundle.
  *
  * `domMax` (not `domAnimation`) because live landing animations use framer
- * `layout`/`layoutId` (PowerToolsetCarousel FLIP, MiniDrawTabs indicator), which
+ * `layout`/`layoutId` (MembershipDrawCycle ring, MiniDrawTabs indicator), which
  * need the max feature set. Importing ONLY `domMax` here (not `motion`) keeps the
  * async chunk to the feature implementations, tree-shaking out the full
  * `motion.*` renderer. See docs/shared-ui/lazymotion.md.

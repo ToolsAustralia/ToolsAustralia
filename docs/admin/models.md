@@ -88,6 +88,8 @@ One document per bulk past-due charge run. Created by the `start` action of `POS
     noLongerPastDue: number; // late re-check: status flipped mid-run
     alreadyPaid: number;
     missingPaymentMethod: number;
+    noHeldDraft: number;      // stranded past-due member with no re-billable held draft yet (self-heals next cycle)
+    awaitingRetry: number;    // invoices.pay had no payable attempt but Stripe has a scheduled retry (auto-retries)
     other: number;
   };
 }

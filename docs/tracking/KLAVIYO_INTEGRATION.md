@@ -203,7 +203,7 @@ This is intentional drift containment — we accept the legacy schema as paid co
 | Entries change on a single event | `entries_granted` | number | Not `entries_added` / `entries` / `entries_gained`. Use for grants on purchase / renewal / upgrade events. |
 | Lifetime entry count on profile | `entries_purchased` | number | Profile property only — not an event property. Aggregates across all sources. |
 | Forecast entries (pre-purchase) | `num_entries` | number | Distinct from `entries_granted` — used on funnel events like `Started Checkout` where the entries haven't been granted yet (the purchase hasn't happened). |
-| Membership lifecycle state | `membership_status` | enum string | Profile property only. One of `"active"` / `"past_due"` / `"canceled"` / `"never_subscribed"`. Coerced from raw Stripe state via `deriveMembershipStatus()`. Coexists with legacy `subscription_status` (which keeps the raw Stripe value). |
+| Membership lifecycle state | `membership_status` | enum string | Profile property only. One of `"active"` / `"past_due"` / `"canceled"` / `"paused"` / `"never_subscribed"`. Coerced from raw Stripe state via `deriveMembershipStatus()`. Coexists with legacy `subscription_status` (which keeps the raw Stripe value). |
 | Funnel-step discriminator | `step` | string | Used on multi-fire events like `Started Checkout` (`"viewed"` vs `"registered"`). Lets flow templates differentiate funnel position. |
 | User ID | `user_id` | string | MongoDB `_id.toString()`. |
 | Payment intent | `payment_intent_id` | string | **Omit the key entirely when absent** — no `""` or `"unknown"` sentinels. Klaviyo's `is set` filter cannot distinguish a sentinel from a real value. |
@@ -218,7 +218,7 @@ These five canonical profile properties land on every user's Klaviyo profile via
 
 | Property | Type | Computed how |
 |---|---|---|
-| `membership_status` | enum string (`"active"` / `"past_due"` / `"canceled"` / `"never_subscribed"`) | `deriveMembershipStatus(user)` in [klaviyo-helpers.ts](../../src/utils/integrations/klaviyo/klaviyo-helpers.ts). Coerced from raw Stripe state — see coercion table in [patterns.md P7](./patterns.md). `"trialing"` → `"active"`, `"unpaid"` → `"past_due"`, `"incomplete"` → `"never_subscribed"`. |
+| `membership_status` | enum string (`"active"` / `"past_due"` / `"canceled"` / `"paused"` / `"never_subscribed"`) | `deriveMembershipStatus(user)` in [klaviyo-helpers.ts](../../src/utils/integrations/klaviyo/klaviyo-helpers.ts). Coerced from raw Stripe state — see coercion table in [patterns.md P7](./patterns.md). `"trialing"` → `"active"`, `"unpaid"` → `"past_due"`, `"paused"` → `"paused"` (retention-pause freeze window), `"incomplete"` → `"never_subscribed"`. |
 | `entries_purchased` | number | Lifetime total: `member + one-time + upsell + mini-draw` entries. Sum of existing `entryBreakdown` counters — no new query. |
 | `giveaways_entered` | number | Distinct draws (Major + Mini) the user has at least one entry in. Two parallel queries via `Promise.all` because Major Draw entries live as embedded subdocs on `MajorDraw.entries[]` (indexed at [MajorDraw.ts:269](../../src/models/MajorDraw.ts#L269)) and Mini Draw entries live in the flat `TicketEntry` collection (indexed at [TicketEntry.ts:58](../../src/models/TicketEntry.ts#L58)). |
 | `membership_active_duration_months` | number \| null | `differenceInMonths(now, user.subscription.startDate)` from `date-fns`. Calendar-aware, DST-safe (no `30.4375 * 86400000` averaging). `null` when never subscribed. |

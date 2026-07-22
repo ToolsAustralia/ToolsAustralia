@@ -7,6 +7,7 @@
  * past-due/warning semantics. Values are verbatim from the Build Kit.
  */
 import type { TierKey } from "@/utils/membership/tier-visuals";
+import type { DashboardAccountState } from "@/utils/dashboard/dashboard-state-theme";
 
 export type StreakAccentVars = Record<
   "--s-core" | "--s-hi" | "--s-b" | "--s-em" | "--s-ring" | "--s-sh" | "--s-glow",
@@ -61,9 +62,17 @@ export function streakAccentVars(tierKey: TierKey | null | undefined): StreakAcc
 
 export type StreakCardState = "fresh" | "active" | "atrisk" | "paused" | "founding";
 
-/** Card state per the Build Kit table (paused is prop-driven — no live pause signal in the payload yet). */
+/**
+ * Card state per the Build Kit table. The `paused` boolean drives the "paused" CARD variant
+ * for an otherwise-active member (an early-return before the active/pastdue tiers).
+ *
+ * `acct` is the canonical {@link DashboardAccountState}. A retention-paused member
+ * (`acct === "paused"`, isActive false) falls through the `active`/`pastdue` guard and
+ * yields `null` (no streak card) — the streak is frozen during the pause and
+ * `useDashboardState` leaves `streakMonths` null for that state.
+ */
 export function deriveStreakCardState(
-  acct: "active" | "onetime" | "pastdue" | "none",
+  acct: DashboardAccountState,
   streakMonths: number,
   paused = false
 ): StreakCardState | null {

@@ -18,6 +18,7 @@ import {
 } from "./chargePastDueShared";
 import { buildAdminChargeIdempotencyKey, cutoffForRecentAttempt } from "./past-due-charge-idempotency";
 import { prepareRecoveredCycleInvoice } from "@/services/subscription/prepareRecoveredCycleInvoice";
+import { mintCurrentCycleInvoice } from "@/services/subscription/mintCurrentCycleInvoice";
 
 export type RecoverStrandedResult =
   | { ok: true; row: PastDueChargeResultRow; newInvoiceId: string }
@@ -35,6 +36,7 @@ export type RecoverStrandedResult =
         | "invoice_already_paid"
         | "invoice_unknown_status"
         | "recent_recovery_attempt"
+        | "member_ending"
         | "void_failed"
         | "draft_create_failed"
         | "no_held_draft"
@@ -229,6 +231,22 @@ export async function recoverStrandedPastDueInvoice(params: {
    * invoice id is never in the worklist. Per-user callers omit it (null).
    */
   chargeRunId?: mongoose.Types.ObjectId | null;
+  /**
+   * When true, fall back to `mintCurrentCycleInvoice` if the member is `no_held_draft`
+   * (stranded, but no held draft to finalize yet — their next cycle hasn't minted one).
+   * That force-collects the current cycle now (unpause + billing_cycle_anchor:'now',
+   * which auto-charges AND moves the renewal ~1 month out). Enabled by BOTH the per-user
+   * `chargeOrRecover` AND the bulk charge job — so a bulk run collects/notifies EVERY stranded
+   * member instead of skipping the no-draft cohort. The mint's own guards (double-charge,
+   * cancel_at_period_end, upgrade-entry) make it safe to run unattended.
+   */
+  mintCurrentCycleIfNoDraft?: boolean;
+  /**
+   * True when the CALLER already holds this subscription's `RecoveryClaim` (the bulk chunk acquires it
+   * per member). Threaded to the mint as `skipClaim` so it reuses the held claim instead of self-
+   * deadlocking to `claim_held`. The per-user path holds no claim → leaves this false (mint acquires its own).
+   */
+  callerHoldsRecoveryClaim?: boolean;
 }): Promise<RecoverStrandedResult> {
   const { userId, originalInvoiceId, adminId } = params;
 
@@ -293,6 +311,88 @@ export async function recoverStrandedPastDueInvoice(params: {
     },
   });
   if (!prepared.ok) {
+    // no_held_draft fallback: the member is stranded but has no held draft to finalize
+    // (their next cycle hasn't minted one). If the caller allows it, force-collect the
+    // current cycle now — unpause + billing_cycle_anchor:'now' auto-charges the card AND
+    // moves the renewal ~1 month out (so it doubles as the reanchor). See mintCurrentCycleInvoice.
+    if (prepared.reason === "no_held_draft" && params.mintCurrentCycleIfNoDraft) {
+      const mint = await mintCurrentCycleInvoice({
+        subscriptionId: user.stripeSubscriptionId,
+        originalInvoiceId,
+        claimedBy: `recover-mint:${adminId}`,
+        skipClaim: params.callerHoldsRecoveryClaim === true,
+      });
+      if (mint.ok) {
+        // Per-user paths: this rebill row IS the audit. The BULK caller writes exactly ONE run-tagged
+        // summary row (item.invoiceId, worklist-keyed) via summarizeBulkRecoveryOutcome, so writing here
+        // too would double-count the outcome/revenue in the run totals — skip it when the caller owns it.
+        if (!params.callerHoldsRecoveryClaim) {
+          await InvoiceChargeLog.create({
+            ...baseLogFields,
+            invoiceId: mint.invoiceId,
+            amount: mint.amountPaid,
+            status: "success",
+            attemptedAt: new Date(),
+            errorMessage: `Re-billed current cycle (was no_held_draft): minted+charged ${mint.invoiceId}; renewal moved out`,
+            result: { recovery: { rebill: true, originalInvoiceId } },
+            ...(params.chargeRunId ? { chargeRunId: params.chargeRunId } : {}),
+          });
+        }
+        return {
+          ok: true,
+          row: {
+            invoiceId: mint.invoiceId,
+            customerId: user.stripeCustomerId,
+            userId,
+            userEmail: user.email ?? "N/A",
+            status: "success",
+            amount: mint.amountPaid,
+          },
+          newInvoiceId: mint.invoiceId,
+        };
+      }
+      // Non-ok: the guard/concurrency reasons (claim conflict, scheduled-to-cancel, already-collected)
+      // touched NO card, so log them as SKIPPED — keeps them out of the failed/decline analytics and
+      // shows the admin an accurate skip. A real charge decline or a mid-flight error is a FAILED row.
+      const isSkip =
+        mint.reason === "claim_held" ||
+        mint.reason === "member_ending" ||
+        mint.reason === "already_collected" ||
+        mint.reason === "subscription_inactive";
+      if (!params.callerHoldsRecoveryClaim) {
+        // See the success branch: the BULK caller writes its own single worklist-keyed summary row, so a
+        // rebill row here (which for a guard-skip falls back to the worklist original invoice id) would
+        // double-count in the run totals. Per-user paths keep it as their audit row.
+        await InvoiceChargeLog.create({
+          ...baseLogFields,
+          invoiceId: mint.invoiceId ?? originalInvoiceId,
+          amount: expectedAmountCents,
+          status: isSkip ? "skipped" : "failed",
+          attemptedAt: new Date(),
+          errorMessage: `Re-bill ${isSkip ? "skipped" : "failed"} (${mint.reason}): ${mint.message}`,
+          result: { recovery: { rebill: true, originalInvoiceId } },
+          ...(params.chargeRunId ? { chargeRunId: params.chargeRunId } : {}),
+        });
+      }
+      // Map to a frozen RecoverStrandedResult reason (chargeOrRecover's exhaustive switch buckets
+      // skip vs failed): claim conflict → recent_recovery_attempt; scheduled-to-cancel → member_ending;
+      // already collected by a prior re-bill → not_past_due; real decline / mid-flight → finalize_failed.
+      const mappedReason =
+        mint.reason === "claim_held"
+          ? ("recent_recovery_attempt" as const)
+          : mint.reason === "member_ending"
+            ? ("member_ending" as const)
+            : mint.reason === "already_collected"
+              ? ("not_past_due" as const)
+              : mint.reason === "subscription_inactive"
+                ? ("subscription_inactive" as const)
+                : ("finalize_failed" as const);
+      return {
+        ok: false,
+        reason: mappedReason,
+        message: `Re-bill ${isSkip ? "skipped" : "failed"} (${mint.reason}): ${mint.message}`,
+      };
+    }
     return { ok: false, reason: prepared.reason, message: prepared.message };
   }
   const finalizedInvoice = prepared.finalizedInvoice;

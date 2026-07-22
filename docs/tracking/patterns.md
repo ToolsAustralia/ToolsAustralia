@@ -40,9 +40,9 @@ Events defined in [klaviyo-events.ts](../../src/utils/integrations/klaviyo/klavi
 
 See [docs/tracking/KLAVIYO_INTEGRATION.md](./KLAVIYO_INTEGRATION.md) — section "Canonical property names — new events only (drift containment)" — for the full table and the no-refactor policy.
 
-## P8. `membership_status` coercion: raw Stripe states → 4-value Klaviyo enum
+## P8. `membership_status` coercion: raw Stripe states → 5-value Klaviyo enum
 
-The canonical Klaviyo profile property `membership_status` exposes a small, stable enum (`"active"` / `"past_due"` / `"canceled"` / `"never_subscribed"`) to make ads-team segments easy to reason about. The `User.subscription.status` field that powers it accepts any Stripe-issued status string — currently observed: `"active"`, `"past_due"`, `"canceled"`, `"unpaid"`, `"incomplete"`, `"incomplete_expired"`, `"trialing"`. Coercion in `deriveMembershipStatus(user)` ([klaviyo-helpers.ts](../../src/utils/integrations/klaviyo/klaviyo-helpers.ts)):
+The canonical Klaviyo profile property `membership_status` exposes a small, stable enum (`"active"` / `"past_due"` / `"canceled"` / `"paused"` / `"never_subscribed"`) to make ads-team segments easy to reason about. The `User.subscription.status` field that powers it accepts any Stripe-issued status string — currently observed: `"active"`, `"past_due"`, `"canceled"`, `"unpaid"`, `"incomplete"`, `"incomplete_expired"`, `"trialing"`, `"paused"`. Coercion in `deriveMembershipStatus(user)` ([klaviyo-helpers.ts](../../src/utils/integrations/klaviyo/klaviyo-helpers.ts)):
 
 | Raw Stripe / User state | Coerces to | Why |
 |---|---|---|
@@ -51,6 +51,7 @@ The canonical Klaviyo profile property `membership_status` exposes a small, stab
 | `"past_due"` | `"past_due"` | Direct dunning state |
 | `"unpaid"` | `"past_due"` | Stripe's continued-dunning state — same lifecycle bucket from a flow-trigger perspective |
 | `"canceled"` | `"canceled"` | Direct |
+| `"paused"` | `"paused"` | Retention `pause_30d` freeze window — frozen member, own segment bucket (distinct from cancelled/past-due) |
 | `"incomplete"` / `"incomplete_expired"` | `"never_subscribed"` | Initial-payment-never-completed — never actually became a member |
 | (no subscription object) | `"never_subscribed"` | Direct |
 | Anything else (defensive) | `"never_subscribed"` | Safest default — won't accidentally classify someone as `"active"` |

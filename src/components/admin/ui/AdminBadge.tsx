@@ -122,6 +122,16 @@ export function renderSubscriptionStateBadge(
     );
   }
 
+  // Retention-paused (freeze window): status "paused" + isActive false. Match the detail-header
+  // badge (renderMembershipStatusBadge) so a paused member isn't mislabelled "Inactive" in the list.
+  if (status === "paused") {
+    return (
+      <AdminBadge variant="info" icon={PauseCircle} iconClassName="text-sky-600 dark:text-sky-400">
+        Paused
+      </AdminBadge>
+    );
+  }
+
   return (
     <AdminBadge variant="danger" icon={PauseCircle} iconClassName="text-red-600 dark:text-red-400">
       Inactive

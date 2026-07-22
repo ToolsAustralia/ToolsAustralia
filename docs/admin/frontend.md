@@ -93,11 +93,27 @@ Three at-a-glance additions so an admin understands the account without digging:
   [`deriveMembershipDisplayStatus`](../../src/utils/subscription/subscription-helpers.ts) — states (labels):
   **Active** (incl. `trialing`, the anchor-day artifact — never shown as "trial") / **Cancels {endDate}**
   (active + `autoRenew: false`) / **Past Due** (`past_due`/`unpaid`; wins over cancelled-while-past-due) /
-  **Paused** (defensive arm — nothing writes a DB `paused` status today; retention pause lives on Stripe
-  `pause_collection`, so retention-paused members display as Active, same as every other admin surface) /
-  **Cancelled** / **Guest — no membership** (incomplete/none). The route now
+  **Paused** (retention `pause_30d` freeze window — `subscription.status === "paused"` + `isActive: false`;
+  sky/`PauseCircle` badge) / **Cancelled** / **Guest — no membership** (incomplete/none). The route now
   also projects `subscription.cancelledAt` (was declared on `AdminUserDetail` but never sent). Regression
   test: `npm run test:membership-display-status`.
+- **Users-list row badge** (`renderSubscriptionStateBadge`, the coarse per-row status): now also renders a
+  **Paused** badge (sky `info` / `PauseCircle`) for `status === "paused"` members — previously they fell
+  through to the red **Inactive** fallback. Matches the detail-header badge style above so the list and the
+  detail panel agree.
+- **No editable Auto-Renew checkbox.** The admin subscription editor (`UserDetailModal`) exposes `status`,
+  `isActive`, and the dates, but **not** an `autoRenew` toggle — it was removed (2026-07) because it wrote
+  the DB flag with **no Stripe call**, so an admin could flip it and silently desync from Stripe
+  `cancel_at_period_end` until a webhook re-synced. The read-only "Auto Renew: Enabled/Disabled" line stays;
+  to schedule (or undo) a cancellation an admin uses the Stripe-backed cancel modal
+  (`/api/admin/users/[id]/cancel-subscription`), which keeps DB + Stripe in lockstep. `autoRenew` was also
+  dropped from the admin user-update payload/schema (`admin-user-update.ts`, `types/admin.ts`) so no admin
+  save re-writes it; the list-filter (`autoRenew=true|false`) and export column are reads and remain.
+- **Resume pause (admin).** When a member is retention-`paused`, the subscription actions row shows a sky
+  **"Resume pause"** button (`users.cancelSubscription` permission) → `POST /api/admin/users/[id]/resume-pause`
+  → lifts the Stripe pause immediately (bills the next cycle now if past the period end; a failed charge →
+  past_due). For support un-pausing a member who asked to come back early; mirrors the member's own dashboard
+  "Resume now".
 - **Partner-access ring**: the SAME instrument the member sees on the /my-account hero — percent ring while
   access is live ("{N} left" caption for one-time windows), amber `ShieldAlert` "Paused" ring while past-due
   (membership access pauses; a paid one-time window is kept). **Placement (2026-07-09):** on **desktop** (`sm+`)

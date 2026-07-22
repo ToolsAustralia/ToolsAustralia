@@ -67,6 +67,16 @@ export interface RecoveryStepRow {
 /** Injectable side-effecting deps (default to the real Stripe client + InvoiceChargeLog). */
 export interface PrepareRecoveredCycleInvoiceDeps {
   listDrafts: (subscriptionId: string) => Promise<Stripe.Invoice[]>;
+  /**
+   * Stamp `dunning_recovery: "1"` onto the held draft (merging existing metadata) BEFORE it
+   * is finalized + paid, so the paid invoice carries the durable dunning marker the past-due
+   * reanchor gate reads (`invoiceMetadataDunningRecovery`). Without it, recovery drafts reach
+   * the webhook with no marker, attempt_count=1, and pause already cleared — so the reanchor
+   * silently skips and the member gets re-billed on their old anchor days later
+   * (see docs/PAST_DUE_REANCHOR.md; observed live 2026-07). Best-effort: a failure here must
+   * NOT abort the recovery (collection succeeds either way — the member just misses one reanchor).
+   */
+  markDunningRecovery: (draftId: string, existingMetadata: Record<string, string>) => Promise<void>;
   finalizeInvoice: (draftId: string, idempotencyKey: string) => Promise<Stripe.Invoice>;
   voidInvoice: (originalId: string, idempotencyKey: string) => Promise<void>;
   retrievePaymentIntent: (id: string) => Promise<Stripe.PaymentIntent>;
@@ -78,6 +88,11 @@ function defaultDeps(): PrepareRecoveredCycleInvoiceDeps {
     listDrafts: async (subscriptionId) => {
       const page = await stripe.invoices.list({ subscription: subscriptionId, status: "draft", limit: 10 });
       return page.data;
+    },
+    markDunningRecovery: async (draftId, existingMetadata) => {
+      await stripe.invoices.update(draftId, {
+        metadata: { ...existingMetadata, dunning_recovery: "1" },
+      });
     },
     finalizeInvoice: (draftId, idempotencyKey) =>
       stripe.invoices.finalizeInvoice(
@@ -161,6 +176,24 @@ export async function prepareRecoveredCycleInvoice(
   }
   const newInvoiceId = draft.id;
   await record("create", newInvoiceId, "skipped", `Using held draft ${newInvoiceId}`, newInvoiceId);
+
+  // ── 1b. Stamp the dunning marker on the draft BEFORE finalize, so the paid invoice carries
+  //        it and the past-due reanchor gate fires (the original marker-bearing invoice is voided
+  //        below). Best-effort — never abort recovery if the stamp fails. ──
+  try {
+    await deps.markDunningRecovery(
+      newInvoiceId,
+      (draft.metadata as Record<string, string> | null) ?? {}
+    );
+  } catch (err) {
+    await record(
+      "create",
+      newInvoiceId,
+      "skipped",
+      `dunning marker stamp failed (non-fatal; reanchor may be missed): ${err instanceof Error ? err.message : String(err)}`,
+      newInvoiceId
+    );
+  }
 
   // ── 2. Finalize the draft (creates the payable invoice + PaymentIntent) ──
   let finalizedInvoice: Stripe.Invoice;

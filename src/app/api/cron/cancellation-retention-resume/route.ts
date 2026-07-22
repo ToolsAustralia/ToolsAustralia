@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { decidePauseTransition } from "@/services/subscription/pauseCollectionPolicy";
 
 // Heavy server-side imports (stripe, mongodb, User) are deferred to the GET
 // handler body via dynamic import() so this module is safely importable in
@@ -105,12 +106,20 @@ export async function GET(request: NextRequest) {
         "retentionOffersConsumed.pause30d": true,
         stripeSubscriptionId: { $exists: true, $ne: null },
       },
-      { _id: 1, stripeSubscriptionId: 1 }
+      {
+        _id: 1,
+        stripeSubscriptionId: 1,
+        "subscription.status": 1,
+        "subscription.pausedFrom": 1,
+        "subscription.pausedUntil": 1,
+      }
     ).lean();
 
     const now = new Date();
     let processed = 0;
     let cleared = 0;
+    let flipped = 0;
+    let restored = 0;
     const errors: string[] = [];
 
     for (const user of candidates) {
@@ -118,11 +127,64 @@ export async function GET(request: NextRequest) {
       processed += 1;
 
       try {
-        const subscription = await stripe.subscriptions.retrieve(subId);
+        const subscription = await stripe.subscriptions.retrieve(subId, { expand: ["latest_invoice"] });
 
         const pauseReason = subscription.metadata?.pauseReason;
         const pauseResumesAtIso = subscription.metadata?.pauseResumesAt;
         const pauseCollectionPresent = subscription.pause_collection != null;
+
+        // BACKSTOP for the DB "paused" membership state — the webhook (handleSubscriptionUpdated /
+        // handleInvoicePaymentSucceeded) is the PRIMARY driver; this catches missed events. Uses the
+        // SAME pure decision as the webhook (decidePauseTransition) so the two can't drift. Idempotent.
+        const pauseSub = user.subscription as
+          | { status?: string; pausedFrom?: Date; pausedUntil?: Date }
+          | undefined;
+        const transition = decidePauseTransition({
+          pauseCollectionPresent,
+          pauseReason,
+          dbStatus: pauseSub?.status,
+          pausedFrom: pauseSub?.pausedFrom,
+          pausedUntil: pauseSub?.pausedUntil,
+          now,
+        });
+        // (a) FLIP active→paused: freeze window started + retention pause live, webhook flip missed.
+        if (transition === "flip_to_paused") {
+          await User.updateOne(
+            { _id: user._id },
+            { $set: { "subscription.status": "paused", "subscription.isActive": false } }
+          );
+          flipped += 1;
+        }
+        // (b) RESTORE from paused: DB still says paused but Stripe already resumed (pause_collection
+        //     gone). PAYMENT-GATED so "benefits only after a successful payment" holds even at the
+        //     boundary: restore to active ONLY when the resume charge is actually PAID. A failed/ended
+        //     resume (past_due/unpaid/canceled) is mirrored; an active-but-not-yet-settled sub is LEFT
+        //     paused for the invoice.payment_succeeded webhook (the primary restore) to handle.
+        else if (transition === "restore_from_paused") {
+          const stripeStatus = subscription.status;
+          const latest = subscription.latest_invoice;
+          const latestPaid = typeof latest !== "string" && latest?.status === "paid";
+          if (stripeStatus === "past_due" || stripeStatus === "unpaid" || stripeStatus === "canceled") {
+            await User.updateOne(
+              { _id: user._id },
+              {
+                $set: { "subscription.status": stripeStatus, "subscription.isActive": false },
+                $unset: { "subscription.pausedFrom": "", "subscription.pausedUntil": "" },
+              }
+            );
+            restored += 1;
+          } else if ((stripeStatus === "active" || stripeStatus === "trialing") && latestPaid) {
+            await User.updateOne(
+              { _id: user._id },
+              {
+                $set: { "subscription.status": "active", "subscription.isActive": true },
+                $unset: { "subscription.pausedFrom": "", "subscription.pausedUntil": "" },
+              }
+            );
+            restored += 1;
+          }
+          // else: active but the resume bill hasn't settled — leave paused; the payment webhook restores.
+        }
 
         if (
           !shouldClearRetentionMarker({
@@ -166,9 +228,9 @@ export async function GET(request: NextRequest) {
 
     console.error(
       "[cron cancellation-retention-resume] done",
-      { processed, cleared, errorCount: errors.length }
+      { processed, cleared, flipped, restored, errorCount: errors.length }
     );
-    return NextResponse.json({ processed, cleared, errors });
+    return NextResponse.json({ processed, cleared, flipped, restored, errors });
   } catch (err) {
     console.error("[cron cancellation-retention-resume] fatal error:", err);
     return NextResponse.json(

@@ -54,6 +54,9 @@ export interface DashboardStateResult {
    *  derived from startDate, which upgrades reset). Null for non-members. */
   streakMonths: number | null;
   isPastDue: boolean;
+  /** Resume date for a retention-PAUSED member (`subscription.pausedUntil`) — lets surfaces render
+   *  "Paused · resumes {date}". Null unless `acct === "paused"` with a valid pausedUntil. */
+  pausedUntil: Date | null;
   /** Entries a PAST-DUE member unlocks once they settle their failed renewal (base + carry-over). Null otherwise. */
   pastDueRenewalEntries: number | null;
   /** The renewal charge a PAST-DUE member settles (their tier's monthly price). Null otherwise. */
@@ -117,6 +120,7 @@ export function useDashboardState(): DashboardStateResult {
         partnerAccessExpiryLabel: null,
         streakMonths: null,
         isPastDue: false,
+        pausedUntil: null,
         pastDueRenewalEntries: null,
         pastDueRenewalCost: null,
         renewalDateIso: null,
@@ -134,7 +138,18 @@ export function useDashboardState(): DashboardStateResult {
     const isPastDue = hasFailedRenewal(iUser);
     const hasActiveOneTime = activePackage.source === "one-time" && activePackage.isActive;
 
-    const acct = deriveDashboardAccountState({ hasActiveMembership, isPastDue, hasActiveOneTime });
+    // Retention pause: during the freeze window the member carries `status: "paused"` +
+    // `isActive: false`. Surface it as its own state (else it collapses to "none"), and expose
+    // the auto-resume date (subscription.pausedUntil) so the hero can render "resumes {date}".
+    const sub = user.subscription as { status?: string; pausedUntil?: string | Date } | undefined;
+    const isPaused = sub?.status === "paused";
+    let pausedUntil: Date | null = null;
+    if (isPaused && sub?.pausedUntil) {
+      const d = new Date(sub.pausedUntil);
+      if (!Number.isNaN(d.getTime())) pausedUntil = d;
+    }
+
+    const acct = deriveDashboardAccountState({ hasActiveMembership, isPastDue, isPaused, hasActiveOneTime });
 
     // Additional-package (50%-off) access = active sub OR current-draw entries.
     const hasAdditionalAccess = hasAdditionalPackageAccess(user, majorDrawStats ?? undefined);
@@ -246,6 +261,7 @@ export function useDashboardState(): DashboardStateResult {
       partnerAccessExpiryLabel,
       streakMonths,
       isPastDue,
+      pausedUntil,
       pastDueRenewalEntries: pastDuePreview.entries,
       pastDueRenewalCost: pastDuePreview.cost,
       renewalDateIso,

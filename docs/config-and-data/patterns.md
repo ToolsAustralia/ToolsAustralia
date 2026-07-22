@@ -17,9 +17,10 @@ prize's `cardBackgroundImage` + first gallery image. These replaced the old
 `<toolset>Set-<toolbox>Tb.webp` renders (now deleted), and the kincrome combos — which
 previously fell back to the bare toolbox photo — now have real combo art too. Source PNGs
 were delivered in a `newstatic/` folder that was converted to webp and removed. The combo
-renders and the per-brand `POWERSET_IMAGES` hero renders were also normalised to a uniform
-canvas (subject trimmed, scaled to a common frame, bottom-anchored) for consistent carousel /
-prize-card sizing. The **HiKOKI per-tool spec photos** (`hikoki-gallery-NN.webp`) were matched
+renders and the per-brand toolset hero renders (exposed as `POWERSET_IMAGES`, derived from
+`TOOLSETS[].image`) were also normalised to a uniform canvas (subject trimmed, scaled to a common
+frame, bottom-anchored) for consistent sizing — this is what lets the prize builder show every
+combination in one fixed `object-contain` stage. The **HiKOKI per-tool spec photos** (`hikoki-gallery-NN.webp`) were matched
 to each tool and added to `SPEC_ITEM_IMAGE_BY_NAME` (the modal spec cards showed placeholder
 icons before).
 
@@ -41,8 +42,9 @@ toolset, so the prize grid is `5 × 3 = 15` tool combos + cash:
   402094 site bag; `HIKOKI_CRUISER_STORAGE` = Multi Cruiser 3-piece set), all registered in
   the `applySpecItemImages` passes. Three catalog entries (`hikoki-sidchrome` /
   `hikoki-milwaukee` / `hikoki-kincrome`) added to `PRIZE_CATALOG`, the `PrizeSlug` union, and
-  `getPrizeLabel`. Gallery uses converted `hikoki-set/hikoki-gallery-NN.webp` photos; the
-  HiKOKI hero image in `POWERSET_IMAGES` is still a **placeholder**.
+  `getPrizeLabel`. Gallery uses converted `hikoki-set/hikoki-gallery-NN.webp` photos. _(The
+  "HiKOKI hero image is still a placeholder" caveat is resolved — `hikoki-set/HIKOKI.webp` is the
+  real composite; see `docs/promo/frontend.md` "HiKOKI — 5th power toolset".)_
 - `promo-landing-slugs.ts` — `hikoki` added to `TOOLSET_LANDING_SLUGS` and
   `TOOLSET_TO_PRIZE_SLUGS` (`["hikoki-sidchrome","hikoki-kincrome","hikoki-milwaukee"]`).
   `getLandingHeroImagePaths` returns `null` for `brand === "hikoki"` (no bespoke landing hero
@@ -70,7 +72,8 @@ from `TOOLSET_LANDING_SLUGS`) and per-prize **evergreen URLs** `/promotions/<bra
 1. Ship the wordmark `public/images/brands/name/<slug>Text.svg` (used by the ROAS card + promo carousel).
 2. Add the `/promotions/<slug>` static route (`src/app/promotions/<slug>/page.tsx`).
 3. Add a `BRAND_DISPLAY_NAME[slug]` entry in `PrizePerformanceCard.tsx` — **compile-enforced** (typed `Record<ToolsetLandingSlug, string>`, so `tsc` fails until you add it; this is the guardrail that replaced the silent fork).
-4. Add the public-carousel maps in `prize-selection/constants.ts` (`POWERSET_IMAGES` / `POWERSET_BRAND_TEXT` / `POWERSET_LABELS`, keyed by `ToolsetType`).
+4. Add **one `TOOLSETS` record** in [`prize-selection/constants.ts`](../../src/components/sections/promo/prize-selection/constants.ts) (add the id to `ToolsetType` first). One entry carries everything the public surfaces need — display name, `kitLabel` / `storageLabel` / `cardLabel`, `toolCount`, brand `accent`, kit `image`, `wordmark` (+ `wordmarkScale`), and `isNew: true` for the brand's first draw. (Storage copy is NOT held here — the details modal reads the catalog's own `specSections`, so `storeName`/`storeSpec`/`storeImage` were removed as duplicated data.) Array order **is** the prize-builder reel order. **Do not hand-write `POWERSET_IMAGES` / `POWERSET_BRAND_TEXT` / `POWERSET_LABELS`** — since 2026-07-21 those are *derived* from `TOOLSETS` and adding a row to them would fork the vocabulary. Ship the combination composites at `{toolset}-set/{toolset}-{toolbox}.webp` (one per toolbox) and the reel/hero art needs no further code. Guard: `npm run test:prize-builder` asserts the derived maps stay in step with the registry.
+   - **Toolboxes work the same way** via `TOOLBOXES` in the same file (`TOOLBOX_IMAGES` / `TOOLBOX_LABELS` derived). A toolbox record also needs a **white-on-transparent silhouette** `markImage` plus a light/dark `markColor` pair — the reel card paints it through a CSS mask (see [promo/frontend.md](../promo/frontend.md#prize-builder--build-your-prize-configurator-2026-07-21)). GearWrench is intentionally absent until draw 9.
 
 **Cosmetic-only, NOT consistency-critical** (safe to skip; not part of admin tracking): the decorative login-page toolset rotator (`src/app/login/page.tsx` `TOOLSETS`) and the one-off `scripts/convert-drawn-tonight-tomorrow-*` asset converters.
 

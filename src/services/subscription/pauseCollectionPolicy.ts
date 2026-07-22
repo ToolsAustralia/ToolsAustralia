@@ -59,6 +59,53 @@ export function decideClearPause(i: ClearPauseInput): boolean {
   return i.pauseCollectionPresent;
 }
 
+/** Inputs for the retention-`paused` membership-state transition decision. Pure — no Stripe/DB. */
+export interface PauseTransitionInput {
+  /** `subscription.pause_collection != null` — Stripe still shows a pause. */
+  pauseCollectionPresent: boolean;
+  /** `subscription.metadata.pauseReason` — only a `"retention"` pause drives the `paused` state. */
+  pauseReason: string | undefined;
+  /** DB `subscription.status` BEFORE this event. */
+  dbStatus: string | undefined;
+  /** DB `subscription.pausedFrom` — the freeze start (member's period end). */
+  pausedFrom: Date | null | undefined;
+  /** DB `subscription.pausedUntil` — the auto-resume date. */
+  pausedUntil: Date | null | undefined;
+  now: Date;
+}
+
+export type PauseTransition = "flip_to_paused" | "restore_from_paused" | "none";
+
+/**
+ * Pure decision for the app-owned retention-`paused` membership state, shared by the webhook
+ * (`handleSubscriptionUpdated`) and the `cancellation-retention-resume` cron backstop so the two
+ * can never drift. Stripe keeps ITS status `"active"` during a `pause_collection`, so the app owns
+ * the DB `paused` value via this decision.
+ *
+ * - `flip_to_paused` — a live retention pause AND the freeze window has started (`now >= pausedFrom`)
+ *   AND is not yet over (`now < pausedUntil`) AND we have not flipped yet (`dbStatus !== "paused"`).
+ * - `restore_from_paused` — DB says `paused` but Stripe already resumed (`pause_collection` gone):
+ *   the pause is over; the caller mirrors Stripe's live status + clears the window.
+ * - `none` — no transition (incl. an already-`paused` member mid-window, who simply stays paused).
+ *
+ * NOTE: the webhook also restores on the paid resume invoice (`handleInvoicePaymentSucceeded`) —
+ * that payment-gated restore is separate; this helper's `restore_from_paused` is the no-Stripe-event
+ * safety net (cron) that mirrors Stripe once the pause has been lifted.
+ */
+export function decidePauseTransition(i: PauseTransitionInput): PauseTransition {
+  const isRetentionPause = i.pauseCollectionPresent && i.pauseReason === "retention";
+  const windowStarted = i.pausedFrom != null && new Date(i.pausedFrom).getTime() <= i.now.getTime();
+  const windowNotOver = i.pausedUntil == null || i.now.getTime() < new Date(i.pausedUntil).getTime();
+
+  if (isRetentionPause && i.dbStatus !== "paused" && windowStarted && windowNotOver) {
+    return "flip_to_paused";
+  }
+  if (i.dbStatus === "paused" && !i.pauseCollectionPresent) {
+    return "restore_from_paused";
+  }
+  return "none";
+}
+
 /** Inputs for the past-due reanchor trigger decision. Pure — no Stripe client. */
 export interface ReanchorGateInput {
   billingReason: string | undefined;
@@ -106,6 +153,47 @@ export function shouldReanchorAfterRecovery(i: ReanchorGateInput): boolean {
     // Secondary/weak: only fires if pause was somehow not set (pause blocks the retries that bump this).
     (typeof i.invoiceAttemptCount === "number" && i.invoiceAttemptCount > 1)
   );
+}
+
+/** Inputs for the re-bill anchor-24 clamp decision. Pure — no Stripe client, no date/timezone math. */
+export interface RebillReanchorGateInput {
+  /** The paid invoice is a mint RE-BILL (isRebillPayment): subscription_update, not an upgrade, past-due. */
+  isRebill: boolean;
+  invoiceIsPaid: boolean;
+  /** `isJoinDateAnchoredTo24(recoveryDate)` — recovery landed on the 25th/26th/27th (AEST). Computed by the
+   *  caller so this predicate stays pure/date-free. */
+  recoveryDayIsAnchorWindow: boolean;
+  cancelAtPeriodEnd: boolean;
+  autoRenew: boolean | undefined;
+  /** `user.subscription.lastReanchoredInvoiceId` — cheap pre-filter (the atomic claim is authoritative). */
+  alreadyReanchoredInvoiceId: string | undefined;
+  invoiceId: string;
+}
+
+/**
+ * Whether a paid past-due RE-BILL (`mintCurrentCycleInvoice`, `billing_reason "subscription_update"`)
+ * should additionally be clamped to the anchor-24 renewal day.
+ *
+ * The held-draft recovery path (`subscription_cycle`) reanchors via {@link shouldReanchorAfterRecovery},
+ * which pulls a 25/26/27 recovery back to the 24th (≥3-day buffer before the 27th major draw). A mint
+ * re-bill is `subscription_update`, so it SKIPS that gate — its own `billing_cycle_anchor:'now'` moves the
+ * renewal ~1 month out but does NOT apply the clamp, so a re-bill collected on the 25/26/27 would renew on
+ * that very day (0–2 days before the draw). This predicate re-applies the SAME clamp via the SAME
+ * `reanchorAfterPastDueRecovery`.
+ *
+ * ONLY fires when the clamp actually changes the date (`recoveryDayIsAnchorWindow`). On every other day the
+ * mint's anchor already lands the renewal a clean ~1 month out, so a reanchor would only add a needless $0
+ * trial invoice + flip the member to "trialing" for no date benefit. Mirrors the ending / autoRenew-off
+ * guards of `shouldReanchorAfterRecovery` so a member who is cancelling is never silently extended.
+ */
+export function shouldReanchorRebillToAnchor24(i: RebillReanchorGateInput): boolean {
+  if (!i.isRebill) return false;
+  if (!i.invoiceIsPaid) return false;
+  if (!i.recoveryDayIsAnchorWindow) return false; // 25/26/27 only — where the clamp moves the date
+  if (i.cancelAtPeriodEnd === true) return false; // member is ending — do not extend
+  if (i.autoRenew === false) return false;
+  if (i.alreadyReanchoredInvoiceId === i.invoiceId) return false;
+  return true;
 }
 
 /**

@@ -138,7 +138,12 @@ The member paths (`pay-failed-invoice`, `force-charge-overdue`, `renew-subscript
 2. **Finalize** the pre-existing **held cycle draft** (`pause_collection: keep_as_draft` leaves one per missed cycle) — this is a Stripe-created `subscription_cycle` invoice, **not** a manually-created one, so `billing_reason` stays `subscription_cycle` and the webhook renewal pipeline + reanchor run normally.
 3. Interactive paths return that finalized draft's PaymentIntent `client_secret` through the existing `requiresPaymentConfirmation` shape; off_session Force-Charge pays it directly.
 
-If no held draft exists, recovery returns a terminal, member-safe error (never creates a manual invoice). Expected cycle amount is single-sourced from the live subscription price (`deriveExpectedCycleAmountCents`), surviving a past-due tier switch.
+If **no held draft exists** (`no_held_draft`), the behaviour now depends on the caller:
+
+- **`pay-failed-invoice` (the member "Resolve payment" button) MINTS a fresh current cycle** on the member's default card via [`mintCurrentCycleInvoice`](..\src\services\subscription\mintCurrentCycleInvoice.ts) (`skipClaim: true` — the route already holds the `RecoveryClaim`), classified by [`classifyMemberResolveMintOutcome`](..\src\utils\payment\recovery\member-resolve-mint-policy.ts): the auto-charge succeeding (or a prior re-bill already having collected) reactivates the member (`success`); a **decline** returns `requiresNewCardPreflight` so the member adds a working card via the existing InlineCardSetup flow and their retry collects on the new default (the minted invoice is left `open`/`still_chargeable`, so the retry routes to the normal open-invoice pay path — it does **not** re-mint a second cycle, and the failed card is not re-charged); a scheduled-to-cancel / Stripe-error state returns a terminal member-safe error. A declined mint fires "Subscription Renewal Failed" (dunning) via the webhook `isRebill` path. Verified on a test clock: `npm run stripe:probe-member-resolve-mint`.
+- The off_session `force-charge-overdue` + `renew-subscription` paths still return a terminal error for `no_held_draft` (a manual invoice is never created).
+
+Expected cycle amount is single-sourced from the live subscription price (`deriveExpectedCycleAmountCents`), surviving a past-due tier switch.
 
 ### Stripe Retry Behavior
 

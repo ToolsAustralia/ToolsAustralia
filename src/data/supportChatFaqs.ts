@@ -51,7 +51,7 @@ export function getSupportChatFaqEntries(): FaqEntry[] {
       id: "3",
       question: "What can I win?",
       answer:
-        "Each month's Grand Winner can customise their prize. They choose either: (A) a power tool brand (Milwaukee, DeWalt, Makita, or Ryobi) plus their choice of professional workshop storage, bundled with a $5,000 cash bonus; or (B) a single $10,000 AUD cash prize instead of tools — no hassle, just cash straight to their bank account.",
+        "Each month's Grand Winner builds their own prize. They match any toolbox (Monster Milwaukee, 470-piece Kincrome CONTOUR®, or 356-piece Sidchrome) with any power toolset (Milwaukee, DeWalt, Makita, Ryobi, or HiKOKI — each kit ships with its own brand storage system), and we add a $5,000 cash bonus on top. Or they skip the gear entirely and take a single $10,000 AUD tax-free cash prize straight to their bank account. You can build and preview any combination on the prize showcase on our [home page](/).",
       category: "SHOPPING",
     },
     {

@@ -245,7 +245,6 @@ const subscriptionFormSchema = z.object({
   packageId: z.string().optional(),
   status: z.string().optional(),
   isActive: z.boolean(),
-  autoRenew: z.boolean(),
   startDate: z.string().optional(),
   endDate: z.string().optional(),
   rewardsPoints: z.number().min(0),
@@ -402,6 +401,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
   const userActions = useAdminUserActions();
   const updateUser = useAdminUpdateUser();
   const cancelSubscriptionMutation = useAdminCancelSubscription();
+  const [resumingPause, setResumingPause] = useState(false);
   const [activeEditTab, setActiveEditTab] = useState<EditTabType | null>(null);
   const isEditing = (tab: EditTabType) => activeEditTab === tab;
   const [showSendEmailModal, setShowSendEmailModal] = useState(false);
@@ -511,7 +511,6 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
       packageId: user?.subscription?.packageId?.toString() ?? "",
       status: user?.subscription?.status ?? "",
       isActive: user?.subscription?.isActive ?? false,
-      autoRenew: user?.subscription?.autoRenew ?? false,
       startDate: coerceDateTimeInput(user?.subscription?.startDate ?? null),
       endDate: coerceDateTimeInput(user?.subscription?.endDate ?? null),
       rewardsPoints: user?.rewardsPoints ?? 0,
@@ -1108,7 +1107,6 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
         packageId: values.packageId && values.packageId.trim() ? values.packageId : null,
         status: values.status || undefined,
         isActive: values.isActive,
-        autoRenew: values.autoRenew,
         startDate: toISOStringOrUndefined(values.startDate),
         endDate: toISOStringOrUndefined(values.endDate),
       },
@@ -2340,20 +2338,6 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                             </div>
                           )}
                         />
-                        <Controller
-                          control={subscriptionForm.control}
-                          name="autoRenew"
-                          render={({ field }) => (
-                            <div className="rounded-lg border-2 border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 px-2 sm:px-3 lg:px-4 py-2 sm:py-2.5 lg:py-3">
-                              <Checkbox
-                                checked={field.value}
-                                onChange={(e) => field.onChange(e.target.checked)}
-                                label="Auto renew enabled"
-                                className="text-2xs sm:text-xs lg:text-sm"
-                              />
-                            </div>
-                          )}
-                        />
                       </div>
 
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-2 sm:gap-3 lg:gap-4">
@@ -2437,6 +2421,36 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                                 Cancel Subscription
                               </button>
                             )}
+                          {/* Resume a retention-paused member early (e.g. they asked support to un-pause). */}
+                          {canCancelSubscription && user.subscription?.status === "paused" && userId && (
+                            <button
+                              type="button"
+                              disabled={resumingPause}
+                              onClick={async () => {
+                                setResumingPause(true);
+                                try {
+                                  const res = await fetch(`/api/admin/users/${userId}/resume-pause`, {
+                                    method: "POST",
+                                  });
+                                  if (!res.ok) {
+                                    const data = await res.json().catch(() => ({}));
+                                    throw new Error(data?.error || "Failed to resume the pause");
+                                  }
+                                  await queryClient.invalidateQueries({
+                                    queryKey: ["admin", "users", "detail", userId],
+                                  });
+                                  await queryClient.invalidateQueries({ queryKey: ["admin", "users", "list"] });
+                                } catch (e) {
+                                  alert(e instanceof Error ? e.message : "Failed to resume the pause");
+                                } finally {
+                                  setResumingPause(false);
+                                }
+                              }}
+                              className="rounded-lg border border-sky-300 px-3 py-1.5 text-xs sm:text-sm font-medium text-sky-700 hover:bg-sky-50 transition-colors disabled:opacity-60"
+                            >
+                              {resumingPause ? "Resuming…" : "Resume pause"}
+                            </button>
+                          )}
                           {canCharge && user.subscription?.status === "past_due" && userId && (
                             <button
                               type="button"

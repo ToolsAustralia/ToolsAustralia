@@ -157,6 +157,14 @@ See [subscription/gotchas.md](../subscription/gotchas.md#pause-collection-orphan
 
 Audit: `npx tsx scripts/list-active-paused-subscriptions.ts --limit=200` (CSV to stdout, dry-run by default).
 
+### Retention pause keeps Stripe `active` while the app owns `paused`
+
+The 30-day `pause_30d` retention offer (`RetentionPauseService`) applies `pause_collection: { behavior: "void", resumes_at }` + `metadata.pauseReason: "retention"`. **Stripe leaves the subscription's own `status` as `"active"` throughout a `pause_collection`** — it never emits a `"paused"` status on the object. So the app owns a **DB-only** `paused` state (`User.subscription.status = "paused"` + `isActive = false` across `[pausedFrom, pausedUntil)`), and the webhook must be careful not to let Stripe's still-`active` payload overwrite it:
+
+- **`handleSubscriptionUpdated`** sets `paused` only for a retention pause whose freeze window has begun (`now >= pausedFrom`) — via the pure `decidePauseTransition(...)` in `pauseCollectionPolicy.ts`, **shared with the retention cron** so the two can't drift (unit-tested: `npm run test:pause-transition`) — and its else-branch active-restore is guarded **`prevSubStatus !== "paused"`** so a routine `customer.subscription.updated` (which still says `status:"active"`) cannot un-freeze the member mid-window.
+- **`handleInvoicePaymentSucceeded`** restores `paused → active` and clears `pausedFrom`/`pausedUntil` when a paid invoice arrives while the DB status is `paused` — this is the resume charge (at `pausedUntil`, or an early `resumeRetentionPause`). Because the void pause discards every other invoice, a paid invoice in the paused state can only be the resume, so benefits come back only after a successful payment; a failed resume stays `past_due`.
+- **Do NOT** trust `subscription.status` to tell you a member is paused — check `metadata.pauseReason === "retention"` + the DB pause window. Full flow + the flip/backstop split: [subscription/backend.md → RetentionPauseService](../subscription/backend.md#retention-pause-the-paused-membership-state) and [subscription/gotchas.md](../subscription/gotchas.md#retention-pause--the-app-owns-the-paused-state-stripe-stays-active).
+
 ### Paid-invoice clear-pause decision is now centralized
 
 The webhook handler's `shouldClearPauseForCollection` decision (in
@@ -348,6 +356,34 @@ Key facts verified by live Stripe test-mode probe:
 - The `dunning_recovery` marker is set on the invoice at failure time and is not altered by subsequent payment success, subscription update, or pause-resume calls.
 
 See `docs/PAST_DUE_REANCHOR.md` for the full trigger-gate logic and recovery-channel analysis.
+
+## Stranded-member re-bill failure fires "Renewal Failed", not "Payment Failed" (Klaviyo)
+
+A stranded-member RE-BILL — the mint (`mintCurrentCycleInvoice`, `billing_cycle_anchor: 'now'`) that re-charges a past-due/unpaid member — fails with `billing_reason: "subscription_update"`, **not** `subscription_cycle`. Left unclassified it drops into the generic `else` and fires the wrong Klaviyo event ("Subscription Payment Failed") instead of the dunning "Subscription Renewal Failed". `handleInvoicePaymentFailed` (`src/services/stripe-webhook-handlers/index.ts`) classifies it:
+
+```ts
+const isRebill =
+  billingReason === "subscription_update" &&
+  (prevSubStatus === "past_due" || prevSubStatus === "unpaid");
+```
+
+The Klaviyo branch reads `if (isRenewal || isRebill)`, so a re-bill lands in the same **"Subscription Renewal Failed"** (dunning) flow as a true `subscription_cycle` renewal.
+
+**Why the signal is reliable:** a member upgrade is also `subscription_update`, but upgrades are **blocked while past_due** — so a `subscription_update` failure from a `past_due`/`unpaid` member is a re-bill, never an upgrade.
+
+**`isRebill` deliberately does NOT set `isRenewal`.** It only redirects the Klaviyo event; it never enters the `else if (isRenewal)` DB-status branch, so it neither calls `pauseAfterRenewalFailure` nor stamps `dunning_recovery` (both gated on `isRenewal` alone). The member stays **unpaused / in dunning** — intentional per the past-due notification design (the admin / recovery / bulk / member-resolve paths all converge on this same event).
+
+## Stranded-member re-bill SUCCESS is normalized to a renewal (labels, revenue/ROAS, tracking)
+
+The same mint re-bill **SUCCEEDS** with `billing_reason: "subscription_update"` too — the identical shape a tier UPGRADE gets. But a re-bill is a **RENEWAL** (recovering a missed cycle), not a new purchase. Left raw, every consumer of `billing_reason` mislabeled it: the admin activity feed ("Subscribed to X Membership Package"), the user-detail Subscription History ("Subscription update"), the dashboard activity slice, **and** the new-vs-renewal **revenue/ROAS** analytics (a recovered renewal counted as new ad-driven acquisition), plus the Meta/Klaviyo conversion gate.
+
+Fix (2026-07-21): `handleInvoicePaymentSucceeded` computes `isRebill` via [`isRebillPayment`](../../src/utils/billing/rebill-classification.ts) — `subscription_update` **&&** `!isUpgrade` **&&** (subscription `metadata.billing_anchor_rule === "rebill_current_cycle"` OR the member was `past_due`/`unpaid`) — then passes `effectiveBillingReasonForRebill(billing_reason, isRebill)` (→ `"subscription_cycle"` for a re-bill) as the `billingReason` **arg** to `processPaymentBenefits`. That single normalization makes the stored `data.billingReason`, the `isRenewal` field, every admin label, the revenue/ROAS split, and conversion tracking treat the re-bill as a renewal. **Upgrades are excluded** (`!isUpgrade`), so a genuine tier change stays `subscription_update`. Entry counts are unaffected (they use the separate `billingReasonForEntries`); the only entry-adjacent effect is that a re-bill now correctly **skips the new-purchase major-draw freeze gate** (`isSubscriptionRenewal`), which is correct — a renewal shouldn't be freeze-blocked. Unit-tested: `npm run test:rebill-classification`. Historical events are corrected by `scripts/backfill-rebill-payment-events.ts` (Stripe-confirms each candidate is a re-bill; dry-run by default).
+
+## Re-bill on the 25th/26th/27th is clamped to the anchor-24 renewal day
+
+The held-draft recovery path (`subscription_cycle`) reanchors a 25/26/27 recovery to the **24th** via [`shouldReanchorAfterRecovery`](../../src/services/subscription/pauseCollectionPolicy.ts) → `reanchorAfterPastDueRecovery` — the ≥3-day buffer before the 27th major draw (see [PAST_DUE_REANCHOR.md](../PAST_DUE_REANCHOR.md) and `anchor-billing.ts`). A **mint re-bill** is `subscription_update`, so it **skips** that gate; its own `billing_cycle_anchor:'now'` moves the renewal ~1 month out but does **not** clamp — a re-bill collected on the 25/26/27 would otherwise renew on that very day (0–2 days before the draw).
+
+Fix (2026-07-22): after `isRebill` is computed, `handleInvoicePaymentSucceeded` calls [`shouldReanchorRebillToAnchor24`](../../src/services/subscription/pauseCollectionPolicy.ts) — `isRebill` **&&** paid **&&** the recovery day is in the 25/26/27 window (`isJoinDateAnchoredTo24`) **&&** not cancelling / `autoRenew !== false` **&&** not already reanchored — and, when true, re-applies the SAME `reanchorAfterPastDueRecovery` (→ `trial_end` to the next 24th, member → `trialing`). **Gated to 25/26/27 only** because on any other day the mint's anchor already lands the renewal a clean ~1 month out, so a reanchor would only add a needless $0 trial invoice + trialing flip. Safe by construction: the $0 trial invoice it spawns is skipped at the top of the handler ([`isZeroAmountTrialUpdateInvoice`](#stripes-0-trial-period-invoice-double-grants-entries--guard-it)) so it never re-enters this path, `reanchorAfterPastDueRecovery` is idempotent (`lastReanchoredInvoiceId`) and overwrites the marker to `past_due_reanchor`, and the block runs **after** `isRebill` is read (so the renewal grant still sees the live `rebill_current_cycle` marker) and **before** `processPaymentBenefits` — exactly like the held-draft reanchor block. Only affects FUTURE re-bills collected on the 25/26/27 (no backfill — the anchor is a forward-looking date). Unit-tested: `npm run test:reanchor-gate` (`shouldReanchorRebillToAnchor24` cases).
 
 ## `handleInvoiceCreated` is dormant until `invoice.created` is enabled on the Stripe endpoint
 

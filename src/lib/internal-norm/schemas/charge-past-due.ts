@@ -10,6 +10,10 @@ const SkippedBreakdownSchema = z.object({
   noLongerPastDue: z.number().int().nonnegative(),
   alreadyPaid: z.number().int().nonnegative(),
   missingPaymentMethod: z.number().int().nonnegative(),
+  // Stranded member with no re-billable held draft yet (self-heals next cycle).
+  noHeldDraft: z.number().int().nonnegative(),
+  // No payable attempt right now, but Stripe still has a scheduled retry.
+  awaitingRetry: z.number().int().nonnegative(),
   other: z.number().int().nonnegative(),
 });
 

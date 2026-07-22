@@ -2,7 +2,16 @@
 
 ## Site-wide interaction smoothness — Phase 2 (2026-05-10)
 
-Promo-domain components now consume the shared device-tier CSS tokens introduced in [shared-ui patterns](../shared-ui/patterns.md). `PrizeShowcase`, `WinnersShowcase`, `GiveawayCountdownTimer`, `PromoBanner`, `PartnerBenefitsPromoSection`, and `FloatingCountdownBanner` swapped fixed `backdrop-blur-*` / `transition-all` / inline card shadows for `var(--ta-blur)`, `var(--ta-transition-dur)`, `var(--ta-shadow-card)` and friends — desktop visual unchanged, mobile and tablet render lighter without a JS branch. `PowerToolsetCarousel` reads `useDeviceProfile()` so its radial pulse glow and Y-bob loops only run when `tier === "desktop"` (and stay disabled under reduced motion). `GiveawayCountdownTimer` switched its `<AnimatePresence>` digit transition to `mode="popLayout"` so the leaving and entering digits can overlap on slow devices. The gallery section of `PrizeShowcase` (Embla-migrated in Phase 1.5) was deliberately left untouched.
+Promo-domain components now consume the shared device-tier CSS tokens introduced in [shared-ui patterns](../shared-ui/patterns.md). `PrizeShowcase`, `WinnersShowcase`, `PromoBanner`, `PartnerBenefitsPromoSection`, and `FloatingCountdownBanner` swapped fixed `backdrop-blur-*` / `transition-all` / inline card shadows for `var(--ta-blur)`, `var(--ta-transition-dur)`, `var(--ta-shadow-card)` and friends — desktop visual unchanged, mobile and tablet render lighter without a JS branch. (`GiveawayCountdownTimer` carried the same treatment until it was deleted on 2026-07-22.)
+
+> **Updated 2026-07-21.** The two Phase-2 notes about `PrizeShowcase` are historical: the
+> `PowerToolsetCarousel` sentence described a component that no longer exists (its
+> `useDeviceProfile()` `tier === "desktop"` gate on the radial pulse + Y-bob went with it), and
+> the "gallery section left untouched" caveat describes a gallery that was deleted. The
+> replacement **prize builder** has no infinite framer-motion loops at all — its only motion is
+> CSS (`.pbc-reel-card` transitions + the `.pbc-fade` combo cross-fade), both disabled under
+> `prefers-reduced-motion`, so there is nothing to tier-gate. See
+> [promo/frontend.md](./frontend.md#prize-builder--build-your-prize-configurator-2026-07-21).
 
 ## P1. Schedule-driven activation
 

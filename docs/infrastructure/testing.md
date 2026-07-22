@@ -170,6 +170,9 @@ npm run test:mer                     # pure computeDrawMerRow: blended New Reven
 npm run test:platform-revenue-breakdown # covers the per-platform acquisition-revenue-by-category breakdown service (src/services/admin/__tests__/platformRevenueBreakdown.test.ts) backing /api/admin/dashboard/revenue-details/by-platform (the per-platform drill-down hover/expand).
 npm run test:landing-draw-day-urgency # pure unit test for the landing draw-day urgency resolver (src/utils/promo/__tests__/landing-draw-day-urgency.test.ts). No DB/env needed.
 npm run test:landing-video-resolver  # pure unit test for the landing hero video resolver (src/utils/promo/__tests__/landing-video-resolver.test.ts) — WebM precedes MP4 for every clip tier, drawn tier precedes base fallback. No DB/env needed. See docs/promo/frontend.md "WebM-first, MP4 fallback".
+npm run test:prize-builder           # pure presentation model behind the "Build your prize" configurator (src/components/sections/promo/prize-selection/__tests__/prize-builder-model.test.ts): coverflow wrap-around + card geometry (hidden/dimmed/focused), {toolset}-{toolbox} slug round-trip, accent = selected TOOLSET (cash = green), darken(), combo hero copy, the derived POWERSET_*/TOOLBOX_* maps matching the TOOLBOXES/TOOLSETS registries, and the 6x2 contents-preview cap + "+N more" count. It also PARSES src/app/globals.css and asserts the `.prize-builder` reel variables match REEL_METRICS in both breakpoint blocks, so the hand-mirrored numbers cannot drift silently. No DB/env needed. See docs/promo/frontend.md "Prize builder".
+npm run test:prize-builder-card      # renderToStaticMarkup smoke test of PrizeBuilderCard (src/components/sections/promo/prize-selection/__tests__/PrizeBuilderCard.test.ts): renders EVERY toolbox x toolset combination, then asserts markup invariants a browser-only bug would break - one focused card per lane, the --pbc-off/-abs/-scale custom properties present on every card, radiogroup/radio + roving-tabindex a11y, no nested or block-content <button>, every <img> has alt, cash mode drops the contents strip and the $5,000 flag, the locked (toolset-landing) lane, all five payment marks, and CLAUDE.md 11 copy safety. Needs the asset stubs: run via the npm script, not tsx directly.
+npm run test:prize-gallery           # pure presentation model behind the /promotions "Spotlight" showroom (src/app/promotions/_components/__tests__/gallery-spotlight-model.test.ts): every TOOLSETS x TOOLBOXES combination resolves to a real catalog prize, a combo render that EXISTS ON DISK and a `/promotions/<slug>` link; the opening selection tracks DEFAULT_PRIZE_SLUG rather than a hard-coded pair; cash mode blanks the gear stats and links at cash-prize; every option has a distinct cross-fade key; and the CTA clears **WCAG AA (>= 4.5:1) on every brand accent** — that assertion is what caught white-on-Ryobi-lime at 2.9:1, and it guards a future brand automatically. Also pins `needsMarkOutline` to measured contrast, not a brand list, plus CLAUDE.md 11 copy safety. No DB/env needed. See docs/promo/frontend.md "/promotions Spotlight showroom".
 npm run test:my-account-projection   # fences the /api/users/[id](/my-account) wire projections (src/utils/dashboard/my-account-projection.ts): MiniDraw entries[]/winner never ship (the MB-scale 2026-07 leak), wire-bloat + auth-secret User fields stay out, client-consumed fields (subscription, miniDrawParticipation, partnerDiscountQueue, …) stay in, and the lists remain include-lists. No DB/env needed. See docs/auth/gotchas.md.
 npm run test:reconcile-attribution   # pure reconciler (src/services/attribution/__tests__/reconcilePersistedAttribution.test.ts): when the cookie-only edge decision is `direct`/absent, recovers an OWNED-channel (klaviyo_email/sms) platform leniently, and (2026-07-19) a PAID platform strictly — only signup-anchored touches affirmatively within the 7d click window; undatable/stale paid UTMs stay `direct`. Locks the live path to the same logic as scripts/backfill-klaviyo-attribution-cycle.ts and scripts/backfill-paid-attribution-recovery.ts. No DB/env needed.
 npm run test:decline-guidance        # card-decline guidance pipeline (src/utils/payment/stripe/__tests__/payment-error-decline-guidance.test.ts): formatPaymentError / getCardDeclineGuidance / isStripeCardError / extractPaymentErrorCodes.
@@ -225,6 +228,40 @@ npx tsx scripts/stripe-probe-reanchor.ts --full --keep  # leave test objects for
 ```
 
 Asserts: A1 no new charge after the `trial_end` update, A2 `status==='trialing'` & `items[0].current_period_end===trial_end`, A3 the paid invoice stays paid, A4 (`--full`) the recovery invoice carries `billing_reason==='subscription_cycle'` & `attempt_count>1`, A5 (`--full`) the clear-pause-then-set-`trial_end` ordering succeeds. Exits non-zero if any assertion fails.
+
+### Companion probes (2026-07-20)
+
+Two sibling test-mode probes gate the stranded-recovery billing changes (same `sk_test_`-only + auto-cleanup guarantees):
+
+```bash
+npm run stripe:probe-recovery-marker   # dunning_recovery metadata SURVIVES finalizeInvoice (gates the reanchor-on-recovery fix; docs/PAST_DUE_REANCHOR.md)
+npm run stripe:probe-rebill-cycle      # unpause + billing_cycle_anchor:'now' on a no_held_draft member → mintCurrentCycleInvoice collects the cycle, moves the renewal ~1mo out, voids the original (gates the no_held_draft re-bill; docs/CHARGE_PAST_DUE_CUSTOMERS.md)
+npm run test:mint-current-cycle        # pure unit test of the mint primitive (injected deps; claim/anchor/void/charge-failed/skipClaim branches)
+npm run stripe:probe-member-resolve-mint  # MEMBER "Resolve" no_held_draft mint: a decline leaves the minted invoice still_chargeable (NOT stranded → no re-mint), and an add-a-card retry collects on the new default (gates the member mint-on-resolve; docs/FAILED_RENEWAL_PAY_NOW.md)
+npm run test:member-resolve-mint       # pure unit test of classifyMemberResolveMintOutcome (mint result → collected / retry_interactively / blocked)
+npm run test:force-charge-mint-map     # pure unit test: mint failure reason → ForceChargeResult reason (the force-charge/renew no_held_draft re-bill fallback)
+npm run test:rebill-classification     # pure unit test: isRebillPayment / effectiveBillingReasonForRebill (a past-due re-bill success is a RENEWAL, normalized to subscription_cycle everywhere)
+```
+
+A re-bill SUCCESS is `billing_reason: subscription_update` (same as an upgrade) but is a **renewal** — the webhook normalizes it to `subscription_cycle` so labels, revenue/ROAS, and conversion tracking treat it as one (see [docs/billing-stripe/gotchas.md](../billing-stripe/gotchas.md)). Historical events created before that shipped are corrected by the **dry-run-safe, Stripe-confirmed** backfill:
+
+```bash
+npx tsx scripts/backfill-rebill-payment-events.ts                 # DRY-RUN (no writes): confirm each candidate is a re-bill via live Stripe
+npx tsx scripts/backfill-rebill-payment-events.ts --since-hours=24
+npx tsx scripts/backfill-rebill-payment-events.ts --apply         # LIVE: flip confirmed re-bill PaymentEvents → subscription_cycle + isRenewal
+```
+
+The `no_held_draft` re-bill mint is now wired into **every** past-due collection entry point: the member "Resolve" (`pay-failed-invoice`), the member "Pay overdue" + admin Force-Charge (`forceChargeCurrentCycle`), the member renew retry (`renew-subscription`), the per-user admin Charge (`chargeOrRecover`), and the bulk run — so no stranded member dead-ends at "no held draft" on any path.
+
+### Retention-pause (`paused` state) verification (2026-07-21)
+
+The 30-day retention-`paused` membership state is covered by fast unit tests plus a Stripe-mechanism probe:
+
+```bash
+npm run test:pause-transition          # pure decidePauseTransition (flip/restore decision SHARED by the webhook + retention cron; 8 cases)
+npm run test:retention-pause           # computeResumeAt (period_end + 1 month, next-cycle-boundary timing) + retentionPauseBlockReason guards
+npx tsx scripts/stripe-probe-pause-lifecycle.ts   # sk_test only: void pause discards the cycle invoice during the freeze (no charge; Stripe stays "active"); Stripe auto-resumes + bills at resumes_at
+```
 
 ## Cleanup / backfill scripts
 

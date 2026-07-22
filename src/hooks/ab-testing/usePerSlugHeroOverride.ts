@@ -9,8 +9,12 @@ import { useVariantContext } from "@/components/ab-testing/VariantProvider";
  *  Consumers:
  *    - {@link PromoHero} — composes both desktop + mobile (inline, since it has
  *      direct access to useVariantContext).
- *    - {@link PrizeShowcase} — composes the mobile slot (first carousel slide).
- *    - {@link PrizeSpecificationsModal} `Hero` — composes the desktop slot.
+ *    - the login page's rotating toolset card.
+ *
+ *  NOT a consumer: the prize builder. `PrizeShowcase` and `PrizeSpecificationsModal`
+ *  used to compose hero overrides into the (now removed) gallery and modal hero; the
+ *  builder shows the `{toolset}-{toolbox}` composite render, which is the prize itself
+ *  rather than campaign art, so a per-slug hero override does not apply to it.
  *
  *  Any other landing-image consumer rendered inside `VariantAssignmentWrapper`
  *  should call this hook to stay consistent with the active A/B variant. Outside

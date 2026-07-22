@@ -107,7 +107,7 @@ function applySubscriptionUpdate(user: IUser, subscription?: AdminUserUpdatePayl
       startDate: subscription.startDate ? new Date(subscription.startDate) : new Date(),
       endDate: subscription.endDate ? new Date(subscription.endDate) : undefined,
       isActive: subscription.isActive ?? false,
-      autoRenew: subscription.autoRenew ?? true,
+      autoRenew: true,
       status: subscription.status ?? "incomplete",
     };
     return;
@@ -125,10 +125,6 @@ function applySubscriptionUpdate(user: IUser, subscription?: AdminUserUpdatePayl
 
   if (subscription.isActive !== undefined) {
     user.subscription.isActive = subscription.isActive;
-  }
-
-  if (subscription.autoRenew !== undefined) {
-    user.subscription.autoRenew = subscription.autoRenew;
   }
 
   if (subscription.startDate !== undefined) {
