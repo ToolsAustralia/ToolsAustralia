@@ -37,6 +37,44 @@ entirely through a single orchestrator (`e2e/run.ts`) — never a bare `npx play
 | Quality lenses | `e2e/specs/quality/{a11y,visual,lenses-selftest}.spec.ts` | axe + `uiAudit` a11y burn-down baseline, visual regression baselines, and self-tests proving the watchdog/axe lenses actually bite. |
 | Proof mode | `e2e/fixtures/demo.ts`, `e2e/proof/{srt,post}.ts` | Paced, captioned, best-effort-voiced mp4s of `@demo`-tagged specs for non-technical stakeholders. |
 
+## Project-lead workflow (the playbook)
+
+How the pieces compose across day-to-day work, worktrees, PRs and releases. Command detail
+lives in [how-to-run.md](./how-to-run.md); this is the *when-to-use-what* layer.
+
+| Situation | What runs |
+|---|---|
+| Mid-feature quick check | A Claude session runs the grep'd slice (`npx tsx e2e/run.ts --grep "<feature>" --project chromium-desktop`) and returns verified screenshots/video |
+| Finishing a feature | `npm run e2e:smoke` (~12 min); anything money-touching also gets `npm run e2e:purchase` |
+| Reviewing a PR | `/panel-review <PR#>` (Claude command) → six-reviewer report with screenshots, videos, F-numbered findings + suggested fixes; `/panel-fix` applies approved ones |
+| PR touches payments | Check out the PR branch (worktree) and run the purchase suite locally — full webhook loop + DB-level exactly-once assertions against *their* code |
+| PR's deployed behavior | `E2E_TARGET_URL=<vercel-preview-url> npm run e2e:smoke` (read-only EXTERNAL mode; purchase/admin hard-blocked) |
+| After a staging deploy | Same EXTERNAL command against staging — catches the CSP/prod-build class of bug local dev can't show |
+| Before merging to main | Full `npm run e2e` (~40 min, phased) + the `E2E_BUILD=1` prod-build gate |
+| Client/stakeholder evidence | `npm run e2e:proof` → panel-judged narrated mp4s (see proof-mode.md) |
+
+**Worktrees:** the harness runs identically in any worktree (repo convention:
+`.worktrees/<branch>`, created with `wt-new.sh`). Run **one e2e run at a time** — worktrees
+share the `e2e` database by default. For two simultaneous runs, give the second worktree its
+own `E2E_PORT` + `E2E_MONGODB_URI` (both deliberately per-folder allowlisted in `check-env`).
+
+**Claude vs terminal:** the suite and proof videos are plain npm/Playwright — any developer
+or CI runs them with no Claude involved. The judgment layers (panel reviews, video rating,
+findings write-ups) run in a Claude session via the `.claude/commands/` suite
+(`panel-review`, `panel-fix`, `video-review`).
+
+**Purchase tests never run against deployed URLs** (preview or staging): Stripe's webhooks
+only reach registered endpoints, the harness can't safely assert against a shared database,
+and cross-environment webhook pollution is worse than no coverage. Deployed targets get the
+read-only suites; the money path is covered by the local run on the same branch. If deployed
+purchase coverage ever becomes a real need, the shape is a dedicated fixed-URL e2e
+environment with its own DB + permanently-registered webhook endpoint — not preview URLs.
+
+**Co-developer rhythm:** contributor self-checks with `e2e:smoke` before pushing (no Claude
+needed) → lead runs `/panel-review <PR#>` for the evidence package → payments-touching PRs
+get the local purchase run → merge after the full suite. Natural future addition at that
+point: a GitHub Action running the non-purchase suite on every PR.
+
 ## Env vars (per-folder, allowlisted in `check-env` — NOT declared in `.env.example`)
 
 - `E2E_MONGODB_URI` — dedicated e2e database; name must contain `e2e`; **wiped every run**.
@@ -72,26 +110,18 @@ currently blocks a normal `npm run e2e`.
   deferred, signed-off-scope-narrowing decision, not a silent suppression; they're candidates for
   a future mobile a11y baseline expansion, still requiring triage/signoff before landing in
   `KNOWN_VIOLATIONS` per the burn-down rule.
-- **An intermittent `/membership` hydration-mismatch race** can strike any spec that visits the
-  page (confirmed across specs — `legal-copy`, `a11y`, `visual`, `purchase-idempotency`,
-  `webhook-replay` have all hit it at least once — not tied to one file or to concurrent purchase
-  load; see gotchas.md). Across every full-suite run this session it struck 11 times; 9 self-healed
-  on Playwright's built-in retry, but 2 (both from earlier runs, before the a11y-scoping decision
-  and `isFullRun` hardening below existed) did not — both attempt and retry failed. Every
-  occurrence in the most recent, fully-fixed run self-healed, but that's a small sample; the race
-  itself is not resolved. Root cause not yet investigated; out of scope for a docs-only task.
-- **`next build` itself currently fails** (`E2E_BUILD=1` mode, i.e. Task 13's prod-build gate),
-  before any Playwright test can run: `Error: <Html> should not be imported outside of
-  pages/_document` while statically prerendering the `/500` error page. No direct `next/document`
-  import exists anywhere under `src/`, so this is a transitive issue (a dependency, or an
-  App-Router/auto-generated-error-page interaction) — **this is a genuine, deterministic,
-  prod-only regression**, not an e2e harness artifact (dev mode never triggers static prerendering
-  of `/500`, so it's invisible outside `E2E_BUILD=1`/a real `next build`). See gotchas.md and the
-  Task 13 report for the full verbatim error.
-
-Both are genuine, currently-open findings — not something this doc set papers over. Fixing either
-requires a `src/` change, out of scope for a docs-only task; they're flagged here and in the
-Task 13 report for the controller/user to triage.
+- **The `/membership` hydration-mismatch race is PARTIALLY fixed.** The dominant class
+  (Carousel3D's `useReducedMotion` SSR/CSR divergence) was fixed at source with a two-pass
+  render (see gotchas.md). A rarer `useId`-based `stageId` variant remains open — instrumented
+  (the watchdog's 2000-char hydration capture names the mismatching element) but not yet
+  root-caused; it intermittently trips the watchdog and has self-healed on retry in recent runs.
+- **`next build` (`E2E_BUILD=1` prod-build gate): FIXED.** The `/500` prerender failure was a
+  transitive `@opentelemetry/api`/Turbopack bundling issue, resolved by adding
+  `@opentelemetry/api` to `serverExternalPackages` in `next.config.ts` — the prod-build gate
+  now passes. One harness-side quirk remains open: building with a `localhost`-port
+  `NEXTAUTH_URL` still reproduces the old error class, so `E2E_BUILD=1` builds with the
+  original prod-style URL and remaps only at `next start` (see gotchas.md "resolved gotchas"
+  for the empirical matrix).
 
 Spec-maintenance note (2026-07-22): the visual spec's payment-methods/referral route stubs
 were removed — the underlying unconditional fetches were fixed at source (lazy-mounted
