@@ -93,7 +93,7 @@ test.describe("my-account @smoke @demo", () => {
           }),
         })
       );
-      const referralResponse = page.waitForResponse((res) => res.url().includes("/api/referrals/code"), { timeout: 20_000 });
+      const referralResponse = page.waitForResponse((res) => res.url().includes("/api/referrals/code"), { timeout: 45_000 }); // 45s: dev-server contention under full smoke load (same accommodation as login.spec)
       const referButton = page.getByRole("button", { name: /refer/i });
       await expect(referButton).toBeVisible({ timeout: 20_000 });
       await referButton.click();
@@ -115,7 +115,7 @@ test.describe("my-account @smoke @demo", () => {
       // FIRST and only one, giving an unambiguous signal. Unstubbed on purpose: this exercises
       // the real, now-hardened route end-to-end against the seeded member's dangling
       // stripeCustomerId — a 500 here would trip the QA watchdog and fail the test.
-      const paymentMethodsResponse = page.waitForResponse((res) => res.url().includes("/api/stripe/payment-methods"), { timeout: 20_000 });
+      const paymentMethodsResponse = page.waitForResponse((res) => res.url().includes("/api/stripe/payment-methods"), { timeout: 45_000 }); // 45s: dev-server contention under full smoke load (same accommodation as login.spec)
       await page.goto("/my-account?open=subscription");
       // Fresh navigation remounts page-client.tsx, so the explainer's 2.5s timer restarts —
       // same guard as above.
