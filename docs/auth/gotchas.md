@@ -42,9 +42,15 @@ non-null `roleId` and `userType: "staff"` — only the legacy super-admin has `r
 naive `role !== "user"` guard would have missed 2 of the 3 real staff accounts. Regression test:
 `npm run test:privileged-account`. See [roles.md](./roles.md).
 
-*Residual (separate, lower-severity):* the mobile-match branch can still rebind the `email` of a
-non-staff **plain customer** — a narrower takeover primitive for a customer who has verified
-their email but not yet purchased. Not addressed here; tracked as a follow-up.
+*Residual (accepted, won't-fix):* the mobile-match branch can still rebind the `email` of a
+non-staff **plain customer**, but this is the **intended** guest-re-entry behaviour — a returning
+guest who registered (passwordless, not logged in) but didn't pay must be able to correct a
+typo'd email while keeping their mobile, so the overwrite must NOT be removed. The target is
+zero-value (0 entries, no purchase, no card, no membership); staff & converted accounts already
+reject; and the one mitigation (reset `isEmailVerified` on change) is only a speed bump
+(`send-email-verification`/`verify-email` are unauthenticated). Documented as an accepted residual
+— see `docs/tech-debt/panel-review-feature-winner-testimonies.md` (F-004). **Do not "fix" by
+blocking the overwrite — that is a conversion bug.**
 
 ## `/login` form controls had no accessible name/label (fixed 2026-07-22)
 
