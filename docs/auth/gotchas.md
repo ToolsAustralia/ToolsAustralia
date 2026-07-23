@@ -1,5 +1,33 @@
 # Auth — Gotchas
 
+## Public registration must never touch a STAFF/ADMIN account (fixed 2026-07-23)
+
+`POST /api/auth/register` treats an existing account as "plain / safe to overwrite" when it has
+`accumulatedEntries === 0` and no saved payment methods ([`isPlainAccount`](../../src/app/api/auth/register/route.ts)),
+and on a match it **overwrites `firstName` / `lastName` / `mobile` — and, on a *mobile* match,
+the account's `email`** (see the "only mobile matches a plain account" path). Every staff/admin
+account is created with 0 entries and no saved cards, so it looked "plain" — meaning an
+**unauthenticated** request could rebind a privileged account's contact fields, and by
+registering with *their own email + a staff member's mobile* could move that staff account's
+login email onto an attacker-controlled address **while keeping the admin `role`/`roleId`** →
+account-takeover / privilege escalation (login is email-code based: `send-login-code` looks up
+by email). All 3 production staff accounts were exposed.
+
+**Fix:** [`isPrivilegedAccount()`](../../src/utils/auth/privileged-account.ts) + an up-front
+reject in the register route — if the matched-by-email OR matched-by-mobile account is
+privileged, return `400` ("please log in") and never fall through to an update path.
+`isPlainAccount()` also calls it defensively so no future update path can reach a staff account.
+
+**The subtle part (the accurate fix):** the staff marker is the RBAC **`roleId` / `userType`**,
+**NOT** the legacy `role` string. Manager and Customer Support staff carry `role: "user"` with a
+non-null `roleId` and `userType: "staff"` — only the legacy super-admin has `role: "admin"`. A
+naive `role !== "user"` guard would have missed 2 of the 3 real staff accounts. Regression test:
+`npm run test:privileged-account`. See [roles.md](./roles.md).
+
+*Residual (separate, lower-severity):* the mobile-match branch can still rebind the `email` of a
+non-staff **plain customer** — a narrower takeover primitive for a customer who has verified
+their email but not yet purchased. Not addressed here; tracked as a follow-up.
+
 ## `/login` form controls had no accessible name/label (fixed 2026-07-22)
 
 `src/app/login/page-client.tsx`: the password show/hide toggle button had an icon only (no
