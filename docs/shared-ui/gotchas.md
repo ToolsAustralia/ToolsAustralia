@@ -1,5 +1,22 @@
 # Shared UI — Gotchas
 
+## `getBaseUrl()` must strip a trailing slash — `NEXT_PUBLIC_APP_URL` may end in `/` (fixed 2026-07-23)
+
+[`getBaseUrl()`](../../src/utils/url/get-base-url.ts) returned `process.env.NEXT_PUBLIC_APP_URL`
+verbatim, while every sibling base-URL reader ([`layout.tsx`](../../src/app/layout.tsx),
+[`sitemap.ts`](../../src/app/sitemap.ts), `requireSameOrigin.ts`) normalizes with
+`.replace(/\/$/, "")`. Because the Vercel **Production** and **Preview** `NEXT_PUBLIC_APP_URL`
+values were set with a trailing slash (`https://toolsaustralia.com.au/`), every
+`` `${getBaseUrl()}/path` `` concatenation produced a double slash — surfaced during a Playwright
+payment-endpoint check as `//api/major-draw`, `//api/winners/all` etc. returning `308` redirects
+on staging (local was clean: `http://localhost:3000`, no trailing slash). The same value builds
+Stripe **`return_url`s** ([`payment-intent-config.ts`](../../src/utils/payment/stripe/payment-intent-config.ts)
+and the one-time-purchase / upsell-purchase routes), so a `//` there is harmless in test mode
+(the redirect resolves) but undesirable for a live 3-D Secure return. Fixed defensively in the
+helper (`.replace(/\/$/, "")`); the env vars themselves should also be set without the trailing
+slash (remember `NEXT_PUBLIC_*` is inlined at **build time** — the fix needs a redeploy to take
+effect, and must be applied in every environment, not just Production).
+
 ## Header top-bar rotating CTA: contrast fixed at its ANIMATION root cause, not just a color swap (fixed 2026-07-22)
 
 `TopBarPromoLeaf` (inside [`Header.tsx`](../../src/components/layout/Header.tsx)) renders the
