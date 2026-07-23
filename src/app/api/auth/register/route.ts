@@ -416,7 +416,11 @@ export async function POST(request: NextRequest) {
           message:
             "This mobile number is already associated with an account that has made purchases. Please log in or use a different mobile number.",
           isExistingAccount: true,
-          existingAccountEmail: existingUserByMobile.email, // Return the actual email associated with this mobile number
+          // No `existingAccountEmail` on a MOBILE match: it would disclose the matched
+          // account's email to a caller who only supplied the mobile. The client falls
+          // back to the email the user typed (MembershipModal `formData.email`), so a
+          // legit returning customer still gets a correct login prefill. Mirrors the
+          // privileged-account fix — see docs/auth/gotchas.md.
         },
         { status: 400 }
       );
@@ -457,7 +461,8 @@ export async function POST(request: NextRequest) {
           message:
             "This mobile number is already associated with an account that has saved payment methods. Please log in or use a different mobile number.",
           isExistingAccount: true,
-          existingAccountEmail: existingUserByMobile.email,
+          // No `existingAccountEmail` on a MOBILE match — see the converted-account
+          // branch above; the client falls back to the typed email.
         },
         { status: 400 }
       );
