@@ -352,7 +352,12 @@ export async function POST(request: NextRequest) {
             );
           }
 
-          // Calculate: categoryMultiplier × baseEntries (promo does not stack)
+          // Calculate: promoMultiplier × categoryMultiplier × baseEntries. The promo DOES
+          // stack with the upsell category multiplier — confirmed intended business
+          // behavior (owner, 2026-07-22): a 10× membership promo × 10× category × 3 base
+          // = 300 entries, matching the 100× artwork variants shipped for exactly this
+          // case (public/images/upsells/membership/*-100x.webp). An earlier version of
+          // this comment claimed the opposite of what the calculator does.
           if (triggeringPackageId) {
             calculatedEntriesCount = await calculateUpsellEntriesFromContext(
               {
@@ -369,7 +374,7 @@ export async function POST(request: NextRequest) {
           }
 
           console.log(
-            `🎯 Calculated upsell entries: ${calculatedEntriesCount} (categoryMultiplier × base, promo not stacked; fallback: ${offer.entriesCount})`
+            `🎯 Calculated upsell entries: ${calculatedEntriesCount} (promo × categoryMultiplier × base; fallback: ${offer.entriesCount})`
           );
         } else {
           console.warn(
