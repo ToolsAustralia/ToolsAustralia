@@ -6,6 +6,9 @@
 
 Detect discrepancies with **`npm run check:env`** (current folder; exits 1 if a declared var is unset) / **`npm run check:env:all`** (main + every git worktree) — `scripts/check-env.mjs`, read-only, prints **names only** (no secret leakage). It diffs each folder's `.env.local` against `.env.example`: **MISSING** = declared in example but not set here; **EXTRA** = set locally but not registered in example. Per-folder vars (`PORT` from `wt-new.sh`, `E2E_*` test creds) are allowlisted. A quiet `--warn` is wired into `predev`, so drift surfaces on every `npm run dev`.
 
+- **E2E_MONGODB_URI + E2E_PORT are allowlisted as per-folder vars** (like the other `E2E_*` test credentials) — `check-env.mjs` will not report them as EXTRA or MISSING when set locally.
+- **`E2E_TARGET_URL` is allowlisted too, but for a different reason** — it's per-invocation, not per-folder (`E2E_TARGET_URL=https://staging.toolsaustralia.com.au npm run e2e:smoke`), so it never belongs in a persisted `.env.local` at all. Setting it flips `e2e/run.ts` into EXTERNAL mode — see `docs/e2e/how-to-run.md`'s "Testing a deployed environment (staging)" section.
+
 **Known gap (2026-07-09):** `.env.example` is currently **incomplete** (~25 of ~93 real vars) and **inconsistent across branches** (main 25, staging 11, origin/main effectively empty). Completing it to a full canonical registry (safe placeholders, no secret values) is the real fix; the drift-detection tooling above is the ongoing guard.
 
 ## `CHAT_KILL_SWITCH` is now the *override* for the admin pause toggle (2026-07-08)
@@ -94,3 +97,13 @@ Running migration scripts in dev but not prod (or vice versa) leaves state diver
 ## Turbopack incremental builds can serve STALE route compilations (2026-07-20)
 
 Observed during the perf-tier1 verification: after several successive local `npm run build`s, a route handler's compiled chunk did not reflect its current source (an edited Cache-Control header was absent from the served response and from the compiled chunks; the pre-edit string was absent too). A cold build (`rm -rf .next` first) compiled and served the source correctly. Vercel builds are always cold, so production is unaffected — but when locally verifying a code change's runtime behavior via `next start`, wipe `.next` first if the result contradicts the source. Trust cold builds only.
+
+## `npm run e2e:journey` / `e2e:journey:proof` (package.json, 2026-07-22)
+
+Two dedicated scripts for the flagship full-journey e2e flow: `tsx e2e/run.ts --promo 10
+--grep "full customer journey" --project chromium-desktop` (plus the `--proof` variant for
+the narrated video). The `--promo <5|10>` orchestrator flag sets `E2E_PROMO`, which makes
+wipe-and-seed insert an active {n}× membership promo (`e2e/seed/promo.ts`) — the journey
+spec self-skips unless it's set, and no other run mode ever seeds a promo (an active promo
+multiplies every subscription grant and would break the sibling purchase specs' exact-count
+assertions). Full mechanics: `docs/e2e/how-to-run.md` "The full-journey mode".

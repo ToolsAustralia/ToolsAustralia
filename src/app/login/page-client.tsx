@@ -67,11 +67,20 @@ function GoogleIcon() {
 
 // Square Checkbox Component
 
-function SquareCheckbox({ checked, onChange }: { checked: boolean; onChange: (checked: boolean) => void }) {
+function SquareCheckbox({
+  checked,
+  onChange,
+  id,
+}: {
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+  id?: string;
+}) {
   return (
     <div className="relative w-6 h-6">
       <input
         type="checkbox"
+        id={id}
         checked={checked}
         onChange={(e) => onChange(e.target.checked)}
         className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
@@ -734,6 +743,7 @@ function LoginPageContent() {
               <div className="relative">
                 <input
                   type="email"
+                  id="login-email"
                   name="email"
                   value={formData.email}
                   onChange={handleInputChange}
@@ -742,7 +752,7 @@ function LoginPageContent() {
                   required
                 />
 
-                <label className="absolute -top-[10.5px] left-3 bg-white dark:bg-neutral-950 px-1 text-2xs sm:text-[12px] lg:text-[14px] font-medium text-neutral-500 dark:text-neutral-400">
+                <label htmlFor="login-email" className="absolute -top-[10.5px] left-3 bg-white dark:bg-neutral-950 px-1 text-2xs sm:text-[12px] lg:text-[14px] font-medium text-neutral-500 dark:text-neutral-400">
                   Email
                 </label>
               </div>
@@ -765,6 +775,7 @@ function LoginPageContent() {
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
+                  aria-label={showPassword ? "Hide password" : "Show password"}
                   className="absolute right-4 top-1/2 transform -translate-y-1/2 text-neutral-500 hover:text-neutral-700 dark:text-neutral-400 dark:hover:text-neutral-200"
                 >
                   {showPassword ? (
@@ -780,11 +791,12 @@ function LoginPageContent() {
             <div className="flex items-center justify-between gap-4">
               <div className="flex items-center gap-2.5">
                 <SquareCheckbox
+                  id="login-remember-me"
                   checked={formData.rememberMe}
                   onChange={(checked) => setFormData((prev) => ({ ...prev, rememberMe: checked }))}
                 />
 
-                <label className="text-[12px] sm:text-[14px] lg:text-[16px] font-medium text-neutral-800 dark:text-neutral-200">
+                <label htmlFor="login-remember-me" className="text-[12px] sm:text-[14px] lg:text-[16px] font-medium text-neutral-800 dark:text-neutral-200">
                   Keep me logged in
                 </label>
               </div>

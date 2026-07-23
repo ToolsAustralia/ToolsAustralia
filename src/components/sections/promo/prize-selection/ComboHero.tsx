@@ -49,7 +49,10 @@ export function ComboHero({ combo, accent, drawLabel, priority = false, classNam
           boxShadow: `0 0 0 1px ${accent}44, 0 22px 54px -30px ${accent}, 0 8px 26px -18px rgba(0,0,0,.5)`,
         }}
       >
-        <span className="absolute left-[11px] top-[11px] z-[2] inline-block whitespace-nowrap rounded-full border border-[#18a94d]/50 bg-white/90 px-2.5 py-[5px] font-poppins text-[8px] font-bold leading-none tracking-[0.14em] text-[#0f8a3f] shadow-[0_4px_12px_-4px_rgba(0,0,0,.3)]">
+        {/* Fixed --pbc-cash-dark ink, NOT the theme-flipping --pbc-cash-ink: this chip's
+            bg is white/90 in BOTH themes, and the previous #0f8a3f was 4.45:1 — a hair
+            under the 4.5:1 small-text bar. */}
+        <span className="absolute left-[11px] top-[11px] z-[2] inline-block whitespace-nowrap rounded-full border border-[#18a94d]/50 bg-white/90 px-2.5 py-[5px] font-poppins text-[8px] font-bold leading-none tracking-[0.14em] text-[var(--pbc-cash-dark)] shadow-[0_4px_12px_-4px_rgba(0,0,0,.3)]">
           ✓ THIS IS WHAT YOU WIN
         </span>
 
@@ -68,8 +71,11 @@ export function ComboHero({ combo, accent, drawLabel, priority = false, classNam
           />
         </div>
 
+        {/* Pill bg is --pbc-cash-dark, not --pbc-cash: white 8.5px text on #18a94d is
+            3.08:1 (axe violation); on the dark cash green it's 5.4:1. The shadow keeps
+            the vivid brand green — it's decorative. */}
         {combo.showCashFlag && (
-          <span className="absolute bottom-[11px] right-[11px] z-[2] inline-block rounded-full bg-[#18a94d] px-[11px] py-1.5 font-poppins text-[8.5px] font-extrabold leading-none tracking-[0.1em] text-white shadow-[0_8px_20px_-8px_#18a94d]">
+          <span className="absolute bottom-[11px] right-[11px] z-[2] inline-block rounded-full bg-[var(--pbc-cash-dark)] px-[11px] py-1.5 font-poppins text-[8.5px] font-extrabold leading-none tracking-[0.1em] text-white shadow-[0_8px_20px_-8px_#18a94d]">
             + $5,000 CASH INCLUDED
           </span>
         )}

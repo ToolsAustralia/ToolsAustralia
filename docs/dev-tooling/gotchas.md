@@ -19,3 +19,16 @@ If a feature component imports `src/components/dev/Foo`, the dev component ships
 ## `console.log` confusion
 
 Dev tooling can use `console.log` freely (stripped in prod). Production code must use `console.error` for error logs. Mixing the two leads to surprise: "why isn't my log appearing in prod?" — because it's `console.log`.
+
+## Playwright MCP (`.mcp.json`, added 2026-07-22)
+
+`@playwright/mcp` is registered PROJECT-scoped in `.mcp.json` (root) so every Claude Code
+session in this repo — any developer, any worktree after merge — can drive a live browser
+interactively: spec authoring (live DOM/selector discovery instead of throwaway probe
+scripts), conversational QA sessions, and visual bug reproduction. Windows note: the
+`cmd /c npx` wrapper is REQUIRED — bare `npx` stdio servers fail to spawn on win32.
+
+Pair it with the e2e harness, not your real dev data: `npm run e2e:env` boots the wiped-
+and-seeded stack (tracking neutered, Stripe test keys) and holds it open — point the MCP
+browser at the printed localhost URL. New MCP servers load at session START; a session
+running when `.mcp.json` changed must restart to see it.
