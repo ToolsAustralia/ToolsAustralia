@@ -622,6 +622,188 @@
 }
 
 /* ---------------------------------------------------------------------------
+ * Winner testimonies — "speech bubble" testimonial section (WinnersTestimony)
+ * ---------------------------------------------------------------------------
+ * Self-contained token scope keyed off the global `.dark` class (the same class
+ * the promo guest theme toggle AND the sitewide toggle flip), NOT `.prize-gallery`
+ * — so the section renders correctly on ANY host page (home, /winners, the promo
+ * gallery + brand pages) with no JS theme read and no hydration flash (same
+ * rationale as `--pbc-*` on the prize builder). The card bubble is theme-INVARIANT
+ * (#1c1f28 in both themes); only the section chrome + modal switch on `.dark`.
+ * ------------------------------------------------------------------------- */
+.winner-testimonies {
+  --wt-base: #f3f2ee; /* section background */
+  --wt-avatar-bg: #ffffff; /* avatar disc behind the ring / photo */
+  --wt-eyebrow: #c40000;
+  --wt-heading: #0c0d10; /* "testimonial" title on the section base */
+  --wt-heading-muted: #5c626b; /* "Winners" kicker */
+  --wt-border: rgba(0, 0, 0, 0.1);
+  --wt-nav-bg: rgba(0, 0, 0, 0.05);
+  --wt-nav-border: rgba(0, 0, 0, 0.14);
+  --wt-nav-fg: #141414;
+  --wt-dot-off: rgba(0, 0, 0, 0.2);
+  --wt-green: #0f9d58; /* prize trophy + text */
+}
+
+.dark .winner-testimonies {
+  --wt-base: #0b0c10;
+  --wt-avatar-bg: #14161c;
+  --wt-eyebrow: #ff5a5a;
+  --wt-heading: #ffffff;
+  --wt-heading-muted: rgba(255, 255, 255, 0.6);
+  --wt-border: rgba(255, 255, 255, 0.1);
+  --wt-nav-bg: rgba(255, 255, 255, 0.06);
+  --wt-nav-border: rgba(255, 255, 255, 0.16);
+  --wt-nav-fg: #ffffff;
+  --wt-dot-off: rgba(255, 255, 255, 0.24);
+  --wt-green: #5fe39a;
+}
+
+/* Section header — centred "Winners / testimonial" framed by red quote marks
+   (design sample). Text colours are theme-adaptive; the quote glyphs use a serif
+   stack for the classic curl, brand red in both themes. */
+.wt-header {
+  position: relative;
+  margin: 0 auto 26px;
+  max-width: 560px;
+  padding: 0 clamp(28px, 8vw, 68px);
+  text-align: center;
+}
+.wt-kicker {
+  margin: 0;
+  font-style: italic;
+  font-weight: 500;
+  font-size: clamp(15px, 2.4vw, 21px);
+  letter-spacing: 0.01em;
+  color: var(--wt-heading-muted);
+}
+.wt-title {
+  margin: 2px 0 0;
+  font-weight: 800;
+  font-size: clamp(30px, 7vw, 56px);
+  line-height: 1.02;
+  letter-spacing: -0.015em;
+  color: var(--wt-heading);
+}
+.wt-quote {
+  position: absolute;
+  font-family: Georgia, "Times New Roman", serif;
+  font-weight: 700;
+  line-height: 1;
+  color: #ee0000;
+  font-size: clamp(46px, 10vw, 86px);
+  pointer-events: none;
+}
+.wt-quote-open {
+  top: -0.34em;
+  left: 0;
+}
+.wt-quote-close {
+  bottom: -0.42em;
+  right: 0;
+}
+
+/* Modal token scope — carried on the portal root (rendered under document.body,
+   OUTSIDE .winner-testimonies), so it reads `.dark` (on <html>, an ancestor of
+   body) directly rather than inheriting the section scope. */
+.winner-testimonies-modal {
+  --wtm-card: #ffffff;
+  --wtm-text: #141414;
+  --wtm-sub: #5c626b;
+  --wtm-panel: #faf9f6;
+  --wtm-chip: rgba(0, 0, 0, 0.05);
+  --wtm-chip-hover: rgba(0, 0, 0, 0.08);
+  --wtm-border: rgba(0, 0, 0, 0.1);
+  --wtm-green: #0f9d58;
+  --wtm-overlay: rgba(20, 18, 15, 0.5);
+  --wtm-badge-fg: #c40000;
+  --wtm-shadow: 0 40px 100px -30px rgba(0, 0, 0, 0.45);
+}
+
+.dark .winner-testimonies-modal {
+  --wtm-card: #14161c;
+  --wtm-text: #ffffff;
+  --wtm-sub: rgba(255, 255, 255, 0.6);
+  --wtm-panel: #101216;
+  --wtm-chip: rgba(255, 255, 255, 0.07);
+  --wtm-chip-hover: rgba(255, 255, 255, 0.14);
+  --wtm-border: rgba(255, 255, 255, 0.1);
+  --wtm-green: #5fe39a;
+  --wtm-overlay: rgba(0, 0, 0, 0.72);
+  --wtm-badge-fg: #ff5a5a;
+  --wtm-shadow: 0 40px 120px -30px #000000;
+}
+
+/* Card: entrance/swap animation + hover lift. On mobile the single card is
+   re-keyed by index, so this animation replays as the carousel "swap". */
+.wt-card {
+  animation: wt-swap 0.3s ease;
+  transition: transform 0.25s ease, box-shadow 0.25s ease;
+}
+.wt-card:hover {
+  transform: translateY(-3px);
+}
+.wt-nav {
+  transition: transform 0.2s ease, background 0.2s ease;
+}
+.wt-nav:hover {
+  transform: scale(1.08);
+}
+/* Read full story → gap widens + slight fade on hover. */
+.wt-readmore {
+  transition: gap 0.2s ease, opacity 0.2s ease;
+}
+.wt-readmore:hover {
+  gap: 10px;
+  opacity: 0.8;
+}
+
+@keyframes wt-overlay {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes wt-panel {
+  from {
+    opacity: 0;
+    transform: translateY(14px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes wt-swap {
+  from {
+    opacity: 0;
+    transform: translateX(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Respect reduced-motion: no entrance/swap, no hover lift, no modal in/out. */
+@media (prefers-reduced-motion: reduce) {
+  .wt-card,
+  .wt-overlay,
+  .wt-panel {
+    animation: none !important;
+  }
+  .wt-card {
+    transition: none !important;
+  }
+  .wt-card:hover,
+  .wt-nav:hover {
+    transform: none !important;
+  }
+}
+
+/* ---------------------------------------------------------------------------
  * Prize builder — coverflow reel geometry
  * ---------------------------------------------------------------------------
  * The reel's per-breakpoint tuning lives in CSS variables (not a JS media-query
