@@ -120,7 +120,7 @@ export function PrizeBuilderCard({
               free choice, the bundled cash, the cash-instead option. */}
           <p className="m-0 max-w-[440px] text-xs leading-[1.5] text-[var(--pbc-sub)]">
             Any toolbox. Any power toolset. Plus{" "}
-            <strong className="text-[#18a94d]">$5,000</strong> cash — or skip the gear and take{" "}
+            <strong className="text-[var(--pbc-cash-ink)]">$5,000</strong> cash — or skip the gear and take{" "}
             <strong className="text-[var(--pbc-text)]">$10,000, tax free</strong>.
           </p>
         </div>

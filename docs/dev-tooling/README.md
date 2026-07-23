@@ -18,3 +18,14 @@ Dev-only routes, test pages, debug endpoints, examples, test scripts.
 ## Cancellation-flow harness — stakes panels (2026-07-15)
 
 `/dev/cancellation-flow` gained four panels: the streak-stakes screen in LOSS framing (streak 7), FORWARD framing (streak 0 and streak 1 — the "ONE renewal from +100" callout), and the pause card with a 7-renewal streak (shows the streak-freeze reframe row).
+
+## Panel-review command suite (2026-07-22)
+
+Four Claude Code slash commands under `.claude/commands/` implement a multi-reviewer PR review workflow, adapted from a stack-agnostic canonical template:
+
+- **`.claude/commands/global-panel-review.md`** — the vendored, stack-agnostic canonical template (5 reviewer hats: Principal Engineer, UI/UX, First-time user, QA, Architect). Runs standalone in any repo; kept as the source of truth to re-tailor from.
+- **`.claude/commands/init-panel-review.md`** — the generator. Regenerates `panel-review.md` from the canonical template when the stack/conventions change (new base branch, new test runner, reworked `CLAUDE.md` rules). Does not itself run a review.
+- **`.claude/commands/panel-review.md`** — the tailored review command for this repo (`/panel-review`). Six hats (adds a QA hat back in, since this repo's `test:*`/`e2e:smoke` suites are safe to run — see `docs/e2e/`). Diffs `origin/main`, reviews code + a GitHub PR's description/comments as the acceptance spec (no external ticket tracker), captures UI evidence via `npm run e2e:env` + the Playwright Node API, and optionally attaches `npm run e2e:proof` step-screenshots/mp4 references for flows covered by an `@demo` spec. Publishes a private Artifact and writes/updates `docs/tech-debt/panel-review-<branch>.md` with stable `F-NNN` finding ids.
+- **`.claude/commands/panel-fix.md`** — the executor half (`/panel-fix`). Reads a `panel-review` doc's "Now" batch, applies fixes one at a time, re-verifies (`type-check`/`lint` against the known baseline + targeted `test:*`/`e2e:smoke` slices), and ticks the checkboxes. Never commits — same hard rule as the rest of this repo's tooling.
+
+Both commands are **explicit-invocation only** — never wired to a hook or run automatically. `docs/tech-debt/panel-review-<branch>.md` sits outside the Domain Manifest by design (it's a review artifact, not domain documentation), so writing it never trips the `doc-sync` Stop hook. See `docs/e2e/` for the harness details these commands lean on (`how-to-run.md`, `proof-mode.md`, `gotchas.md`).

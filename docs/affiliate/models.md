@@ -36,3 +36,5 @@ To migrate an existing DB off the legacy sparse indexes, run
 `migrate:affiliate-commission-pi-index` (see
 [docs/infrastructure/testing.md](../infrastructure/testing.md)) — it drops both legacy
 named indexes and `syncIndexes()` rebuilds the partials.
+
+Email validation (2026-07-22): the model's email field uses the shared permissive pattern `/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/` (plus-addressing and modern TLDs accepted; aligned across User/Affiliate/ContactSubmission/PartnerApplication in the same change).

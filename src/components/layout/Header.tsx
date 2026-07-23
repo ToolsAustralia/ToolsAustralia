@@ -528,7 +528,11 @@ export default function Header({ isFixed = true }: HeaderProps) {
           className={`w-full flex items-center justify-center relative z-[1] animate-slideDown shadow-[0_4px_14px_rgba(0,0,0,0.18)] ${
             isAuthenticated && isSetupRequired
               ? "bg-blue-600 h-[24px] sm:h-[28px]" // Blue for setup reminder
-              : "bg-red-600 h-[24px] sm:h-[28px]" // Red for promotional — single line, rotating CTAs
+              // a11y fix (2026-07): red-600 (#ee0000) put white topbar text at only ~4.53:1
+              // (barely above 4.5:1, no headroom against font anti-aliasing/rounding).
+              // red-700 (#b91c1c, same brand-red family, tailwind.config.ts) gives white
+              // text ~6.47:1 — comfortable margin. Scoped to this strip only.
+              : "bg-red-700 h-[24px] sm:h-[28px]" // Red for promotional — single line, rotating CTAs
           }`}
         >
           <div

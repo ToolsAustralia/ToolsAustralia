@@ -96,6 +96,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   const siteUrl = (process.env.NEXT_PUBLIC_APP_URL || "https://toolsaustralia.com.au").replace(/\/$/, "");
   const googleVerify = process.env.NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION;
   const bingVerify = process.env.NEXT_PUBLIC_BING_SITE_VERIFICATION;
+  const contentsquareId = process.env.NEXT_PUBLIC_CONTENTSQUARE_ID;
 
   return (
     <html lang="en-AU" className={cn(inter.variable, poppins.variable)} suppressHydrationWarning>
@@ -131,12 +132,17 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             (2026-07-19 perf: it's the single heaviest third-party script, ~157 KB gz / 520 KB raw;
             at afterInteractive it competed with hydration on low-end phones). Trade-off accepted
             by DJ: session recordings miss the first ~2-4 s of a visit. Conversion pixels
-            (GTM / Meta / TikTok) intentionally stay at afterInteractive — see docs/tracking/rules.md. */}
-        <Script
-          src="https://t.contentsquare.net/uxa/80b94ffdd640f.js"
-          strategy="lazyOnload"
-          data-tracking-pixel="true"
-        />
+            (GTM / Meta / TikTok) intentionally stay at afterInteractive — see docs/tracking/rules.md.
+            Env-gated like every other tracker (mirrors GoogleTagManager.tsx's `!gtmId` no-op):
+            blank NEXT_PUBLIC_CONTENTSQUARE_ID (the dev/e2e default) renders nothing, so session
+            replay only runs where the id is set (production) — see docs/tracking/rules.md. */}
+        {contentsquareId ? (
+          <Script
+            src={`https://t.contentsquare.net/uxa/${contentsquareId}.js`}
+            strategy="lazyOnload"
+            data-tracking-pixel="true"
+          />
+        ) : null}
       </head>
       <body
         className={cn(inter.className, "antialiased bg-white dark:bg-neutral-950 text-gray-900 dark:text-neutral-100")}

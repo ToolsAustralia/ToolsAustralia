@@ -1,5 +1,49 @@
 # Shared UI — Gotchas
 
+## Header top-bar rotating CTA: contrast fixed at its ANIMATION root cause, not just a color swap (fixed 2026-07-22)
+
+`TopBarPromoLeaf` (inside [`Header.tsx`](../../src/components/layout/Header.tsx)) renders the
+rotating "Join Tools Australia..." / "Monthly tool giveaway..." strip on `bg-red-600`. It was
+axe-baselined as a `color-contrast` failure with wildly different captured ratios on different
+pages/runs (~4.36:1 on `/`, ~1.05:1 on `/membership`) — investigated with a temporary axe debug
+capture rather than guessed: the reported `fgColor` (`#ef0a0a`/`#f01a1a`, near-identical to the
+`#ee0000` bg) proved the text was being sampled **mid-animation**, not at its static declared
+color (`text-white` / `#ffffff`). Root cause: `.animate-topbar-reappear[-once]`'s
+`topBarReappear` keyframes (`globals.css`) animated `opacity: 0 → 1 → 0` each 3s cycle (the
+"reappear" fade); axe's scan timing (relative to `waitForLoadState('networkidle')`) landed in
+that ramp often enough to alpha-blend the white text almost fully into the red background — no
+static color pair can pass when the real defect is transient opacity, since any foreground
+converges to the background at `opacity: 0`. Fixed at the root: `topBarReappear`'s keyframes
+now pin `opacity: 1` throughout (kept the `translateY` slide + `text-shadow` glow pulse — same
+visual "reappear" character, zero copy change). Defense-in-depth margin: the strip's background
+also moved `bg-red-600` (`#ee0000`, white text only ~4.53:1 — razor-thin over the 4.5:1
+threshold) → `bg-red-700` (`#b91c1c`, an existing brand-red shade in
+[`tailwind.config.ts`](../../tailwind.config.ts), white text ~6.47:1). Scoped to this one
+`data-top-bar` strip only — `bg-red-600` is untouched everywhere else (409 other sites per the
+tailwind config comment). Verified 2× green `@a11y` runs with the baseline entry removed.
+
+## "MOST POPULAR" corner ribbon: hardcoded white ink failed on light-toned tiers (fixed 2026-07-22)
+
+[`CornerRibbonBadge`](../../src/components/ui/CornerRibbonBadge.tsx) always rendered ribbon text
+in white except for the one `text-premium-gold` (VIP/black-tier) special case. For the
+"MOST POPULAR" ribbon on the dewalt-yellow (foreman) membership card, that's white-on-`#ffc517`
+gold — axe measured ~2.19:1 (needs 4.5:1; true math for white directly on that gold is ~1.6:1,
+even worse). The codebase already tracks per-tier ink via `colorScheme.text` (`"text-black"` for
+the light/bright tiers — dewalt-yellow, ryobi-green, mint-green — same signal
+`ElectricPackageCard.tsx`'s `blackText`/`lightInk` already reads); `CornerRibbonBadge` just
+wasn't consulting it. Fixed by generalizing the existing `usePremiumBlackRibbon` dark-ink branch
+into `useDarkRibbonInk` (`usePremiumBlackRibbon || colorScheme?.text?.includes("black")`), reusing
+the same `#141414` ink token already used for the VIP ribbon — no new color invented. Only
+flips ink for the 3 light-toned tiers; red/blue/teal/dark-green tiers (`text-white`) are
+unaffected. Computed contrast: white or `#141414` — `#141414` on `#ffc517` is ~11.6:1 (and
+~8.4:1 against axe's own pixel-sampled `#d9a814`, which reads slightly darker than the declared
+CSS value — likely anti-aliasing on the ribbon's `rotate(-45deg)` strip edge, not a distinct
+bug). Visual `@visual` baselines for the home membership grid were regenerated for this change.
+
+## `Carousel3D` hydration mismatch under reduced-motion — fixed via two-pass read (2026-07-22)
+
+[`Carousel3D`](../../src/components/ui/Carousel3D.tsx) fed framer-motion's `useReducedMotion()` directly into a render-path value (`geometry.maxBlur`, consumed by every card's blur `useTransform`). Framer-motion resolves `useReducedMotion()` from `matchMedia` **synchronously on the client's first render** (no effect gate — see its own source, `prefersReducedMotion` is a module-level ref lazily initialised the first time the hook runs), while SSR has no `window` and the ref stays `null` — so a real OS-level reduced-motion user's SSR pass rendered non-zero card blur and the client's very first hydration pass already read the true `matchMedia` value and rendered `none`, a genuine SSR/CSR attribute mismatch on every page hosting the carousel (`/`, `/membership`). Fixed the same way [`useDeviceProfile`](../../src/hooks/useDeviceProfile.ts) already handles this class of bug: keep the render-path `reduceMotion` state at its SSR-safe default (`false`) through hydration, and resolve the real preference only inside a `useEffect` — reduced-motion users lose card blur one frame after mount, which is imperceptible and hydration-safe. This traces back to the e2e-side finding in [docs/e2e/gotchas.md](../e2e/gotchas.md) ("`/membership`/`/` hydration mismatch under emulated `reducedMotion`").
+
 ## Always-on animations: transform/opacity only, and tier-gate them (2026-07-20, perf Tier-2 Task 1)
 
 Infinite/looping animations on customer surfaces must animate **`transform` and/or `opacity` only** — never `background-position`, `filter`, `box-shadow`, `width/height`, etc. A transform/opacity animation runs on the compositor from a once-rasterized texture; anything else repaints on the main thread every frame (and re-runs any `filter` on the layer), which was the single worst scroll-jank source on low-end devices per the 2026-07 perf audit.
@@ -99,6 +143,8 @@ If the `packageId` from the URL no longer resolves to a known package (e.g. the 
 `next/dynamic(() => import(...), { ssr: false })` only defers **when** the chunk loads relative to SSR — it does NOT defer loading until the component is actually shown. A `<DynamicModal isOpen={false} .../>` mount still triggers the `import()` and downloads/evaluates the chunk on render, even though nothing is visible. This shipped Stripe.js + the entire ~7k-line `MembershipModal` payment chunk to every guest who merely landed on a page containing a `<MembershipModal>` mount point (homepage, `/membership`, draw pages, dashboard) — the 2026-07 perf audit finding.
 
 **Fix pattern:** gate the render itself, not just the import — see [`LazyMembershipModal`](../../src/components/modals/MembershipModal/LazyMembershipModal.tsx): a small wrapper that renders `null` until the first `isOpen === true`, then mounts the real `dynamic()` component and keeps it mounted for the rest of the session (so close/reopen animation and internal state behave like an always-mounted modal). Any heavy modal that's conditionally rendered from a page-level mount point (not user-triggered open) should use this pattern, not a bare `dynamic()` call. See [payment/frontend.md](../payment/frontend.md) for the full write-up and [payment/gotchas.md](../payment/gotchas.md) for the companion "Stripe boots on import" fix.
+
+**Second confirmed instance (2026-07-21): `ReferFriendModal`.** `page-client.tsx` already wrapped it in a bare `dynamic()` call, but rendered it unconditionally with `isOpen={false}` on every `/my-account` load — downloading its chunk AND running `useReferralProfile(userId)` (the hook sits above `Shell`'s `if (!isOpen) return null`, so it always fires) on mount, hitting `/api/referrals/code` for every member who never opened the modal. Fixed with [`LazyReferFriendModal`](../../src/components/modals/ReferFriendModal/LazyReferFriendModal.tsx), the same first-open latch. See [dashboard-account/gotchas.md](../dashboard-account/gotchas.md) for the companion `ManageSheet` fix (same bug shape, a query instead of a chunk).
 
 ## Viewport-correct `priority`/preload — a CSS-hidden `<img>` (even `loading="eager"`, not just `priority`) still downloads (2026-07-19, corrected 2026-07-19)
 
@@ -335,3 +381,20 @@ from `activeSection.id === CASH_SECTION_ID` — never inferred from a missing im
 
 When adding a spec section, don't reuse the id `cash-prize` for anything that isn't the cash
 bonus, or its items will inherit the `$5K` treatment.
+
+## Prize-builder reel: never fade card TEXT with card-level opacity (2026-07-22)
+
+The coverflow reel's side-card recede was `opacity: var(--pbc-reel-side-opacity)` (0.5 on
+desktop) + a brightness/saturate filter on the WHOLE `.pbc-reel-card` — which composited the
+`--pbc-sub` labels down to ~2:1 and produced 12 serious axe `color-contrast` violations on `/`
+(plus an illegible NEW badge). The recede now lives on `.pbc-card-art` (a wrapper class on the
+product render / brand mark / wordmark spans in `ReelCards.tsx`) so text and badges stay
+full-opacity; the scale/rotate/border/shadow differences plus the dimmed artwork still read as
+"not selected". Cash-mode's deeper `data-dimmed` fade follows the same artwork-only rule.
+If you add a new visual element to a reel card, put it INSIDE a `.pbc-card-art` wrapper if it
+should recede — and leave any text OUTSIDE it.
+
+Cash-green ink pairs with this: small cash-coloured text must use `--pbc-cash-ink`
+(#0e7434 light / #3ddc84 dark — same contract and value as `--pgs-cash-ink`), never raw
+`--pbc-cash`/#18a94d (3.08:1 on light surfaces). White-on-green pills use `--pbc-cash-dark`
+as the fill. Full node-by-node table: docs/e2e/a11y-baseline.md "redesigned prize-showcase".

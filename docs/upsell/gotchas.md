@@ -43,3 +43,15 @@ The active promo (Scheduled > Toggle > Alternating, resolved via [PromoMultiplie
 **Mini upsells.** Mini upsells have a hardcoded `1×` category multiplier (no admin knob), so the formula reduces to `activePromoMultiplier × baseEntries` — they still benefit from the mini-packages promo when one is active.
 
 **`upsell-promo-multiplier.ts`.** That helper is used both for **hero image selection** (which `Nx-*.webp` variant to load) **and** as the `activePromoMultiplier` factor inside the calculator. Different name, same source.
+
+## Promo DOES stack on the upsell category multiplier (ratified 2026-07-22)
+
+`calculateUpsellEntriesForOffer` / `calculateUpsellEntriesFromContext` compute
+`promoMultiplier × categoryMultiplier × baseEntries` — a 10× membership promo makes the
+Apprentice membership upsell grant 3 × 10 × 10 = **300** entries. A comment in
+`src/app/api/upsell/purchase/route.ts` (and its log line) claimed "promo does not stack"
+— the OPPOSITE of the code's behavior. Surfaced by the e2e full-journey spec's exact-count
+assertion; the owner ratified stacking as intended (the `membership/*-50x.webp` /
+`*-100x.webp` artwork variants exist precisely for the stacked 5×/10× promo cases). The
+stale comment is fixed; if stacking policy ever changes, `full-journey.spec.ts`'s
+`upsellEntries = 3 × 10 × promo` expectation is the tripwire.

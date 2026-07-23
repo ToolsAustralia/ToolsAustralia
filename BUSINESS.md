@@ -206,7 +206,7 @@ Source of truth: [src/data/upsellPackages.ts](src/data/upsellPackages.ts), [docs
 After most purchases, the platform offers a single upsell. The pattern across all 22 upsell records:
 
 - **Price**: 50% off the base pack price (60% off for membership upsells).
-- **Entries**: a **category-specific multiplier** on the base pack's entries — **one-time 2×** and **Additional 2×** (e.g. one-time Tradie pack 15 entries → upsell grants 30), **membership 10×** (Apprentice base 3 → 30, Tradie 15 → 150, Foreman 30 → 300), and **mini fixed 1×**. The membership/one-time/additional multipliers are admin-configurable (defaults 10/2/2 in `UpsellMultiplierConfig`); mini has no admin knob. See §6c.
+- **Entries**: a **category-specific multiplier** on the base pack's entries — **one-time 2×** and **Additional 2×** (e.g. one-time Tradie pack 15 entries → upsell grants 30), **membership 10×** (Apprentice base 3 → 30, Tradie 15 → 150, Foreman 30 → 300), and **mini fixed 1×**. The membership/one-time/additional multipliers are admin-configurable (defaults 10/2/2 in `UpsellMultiplierConfig`); mini has no admin knob. See §6c. **A live §6 promo STACKS on top** (promo × category × base — e.g. a 10× membership promo makes the Apprentice membership upsell 3 → 300): confirmed intended behavior (owner, 2026-07-22), and it's why the 50×/100× upsell artwork variants exist. The e2e flagship (`npm run e2e:journey`) asserts the 300-entry grant and the 100× artwork end-to-end.
 - **Partner benefits**: same percentage and days as the base pack.
 - **Display rules**: `maxShowsPerUser`, `cooldownHours`, `showAfterDelay` (typically 2–3s after the success state).
 

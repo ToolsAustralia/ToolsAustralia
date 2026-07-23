@@ -8,6 +8,8 @@ Cross-cutting infra: health checks, cron, upload, Cloudinary, environment, Zod h
 
 > `.env.example` — `NEXT_PUBLIC_DASHBOARD_STREAK_PREVIEW` is **local-dev only**: lights the Membership Streak dashboard surfaces while git ships their flags dark (`src/config/dashboardFeatures.ts` reads it via `STREAK_PREVIEW`). Never set in Vercel — production launches by flipping the committed flags (streak launch runbook step 4).
 
+> `.env.example` — `NEXT_PUBLIC_CONTENTSQUARE_ID` (added 2026-07-22) is the **inverse** of the streak flag above: production-only, blank everywhere else. It replaces a tag id previously hardcoded into `src/app/layout.tsx`'s Contentsquare `<Script>` (no env gate — loaded for every visitor in every environment); blank now renders nothing (mirrors `GoogleTagManager`'s `!gtmId` no-op). See [docs/tracking/rules.md R8](../tracking/rules.md).
+
 ## Index
 
 - [architecture.md](./architecture.md) — what lives here vs other domains

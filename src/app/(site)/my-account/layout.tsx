@@ -8,7 +8,7 @@ import { TIER_HEX, tierKeyFromName } from "@/utils/membership/tier-visuals";
 import BottomNav from "./components/BottomNav";
 import DeskNav from "./components/DeskNav";
 import SupportSheet from "./components/sheets/SupportSheet";
-import ManageSheet from "./components/sheets/ManageSheet";
+import LazyManageSheet from "./components/sheets/LazyManageSheet";
 import PaymentSheet from "./components/sheets/PaymentSheet";
 
 export default function MyAccountLayout({ children }: { children: React.ReactNode }) {
@@ -49,7 +49,7 @@ export default function MyAccountLayout({ children }: { children: React.ReactNod
 
       {/* Global overlay sheets (Support / Manage / Payment) — prototype sheet↔modal host. */}
       <SupportSheet />
-      <ManageSheet />
+      <LazyManageSheet />
       <PaymentSheet />
     </div>
   );

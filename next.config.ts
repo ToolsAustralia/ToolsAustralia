@@ -32,7 +32,12 @@ const webhookHeaders = buildSecurityHeadersForWebhook(); // Excludes COEP to all
 
 const nextConfig: NextConfig = {
   // External packages for server components
-  serverExternalPackages: ["mongoose"],
+  // "@opentelemetry/api": the `ai` package pulls in the real @opentelemetry/api; if Turbopack
+  // bundles it into server chunks it alters the module graph enough that Next's built-in /500
+  // prerender resolves a mismatched HtmlContext and fails with "<Html> should not be imported
+  // outside of pages/_document". Keeping it external forces Next's tracer back onto its own
+  // compiled shim (next/dist/compiled/@opentelemetry/api) instead.
+  serverExternalPackages: ["mongoose", "@opentelemetry/api"],
 
   // Dev-only build/route indicator (the "N" pill). Moved to top-left so it no
   // longer overlaps the bottom floating widgets (Cobber support bubble, the

@@ -607,7 +607,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/hooks/useAttribution.ts",
         "src/hooks/useUTMPersistence.ts"
       ],
-      "lastVerified": "2026-07-21"
+      "lastVerified": "2026-07-22"
     },
     "ab-testing": {
       "docs": "docs/ab-testing/",
@@ -791,7 +791,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/hooks/useStreakCelebration.ts",
         "src/utils/dashboard/**"
       ],
-      "lastVerified": "2026-07-19"
+      "lastVerified": "2026-07-22"
     },
     "security-csp": {
       "docs": "docs/security-csp/",
@@ -802,7 +802,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/models/RateLimit.ts",
         "next.config.ts"
       ],
-      "lastVerified": "2026-07-19"
+      "lastVerified": "2026-07-22"
     },
     "mongodb": {
       "docs": "docs/mongodb/",
@@ -860,6 +860,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
     "dev-tooling": {
       "docs": "docs/dev-tooling/",
       "paths": [
+        ".mcp.json",
         "src/app/api/debug/**",
         "src/app/api/dev/**",
         "src/app/api/test/**",
@@ -903,6 +904,14 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "scripts/calibrate-chat-deflection.ts"
       ],
       "lastVerified": "2026-07-10"
+    },
+    "e2e": {
+      "docs": "docs/e2e/",
+      "paths": [
+        "e2e/**",
+        "playwright.config.ts"
+      ],
+      "lastVerified": "2026-07-22"
     }
   }
 }

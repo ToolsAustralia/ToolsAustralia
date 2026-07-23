@@ -65,6 +65,13 @@ const CornerRibbonBadge: React.FC<CornerRibbonBadgeProps> = ({
   const usePremiumBlackRibbon = colorScheme?.text === "text-premium-gold";
   const ribbonFill = usePremiumBlackRibbon ? PREMIUM_BLACK_CARD_RIBBON_STYLE : base;
   const foldColor = getFoldColor(ribbonFill.background);
+  /** Tiers whose own ink is already dark (dewalt-yellow/ryobi-green/mint-green — bright,
+   *  light-toned badge fills; see `colorScheme.text` in packageColorScheme.ts, same signal
+   *  ElectricPackageCard uses for `blackText`/`lightInk`) need dark ribbon text too — the
+   *  hardcoded white ink below fails contrast on those fills (e.g. white-on-#ffc517 gold
+   *  is ~1.6:1). Reuses the existing premium-gold dark ink token (#141414) rather than a
+   *  new color. */
+  const useDarkRibbonInk = usePremiumBlackRibbon || colorScheme?.text?.includes("black") === true;
 
   const stripW = Math.round(box * 1.5);
   const containerOff = Math.round(box * -0.1);
@@ -115,7 +122,7 @@ const CornerRibbonBadge: React.FC<CornerRibbonBadgeProps> = ({
     lineHeight: 1,
     textTransform: "uppercase",
     letterSpacing: "0.04em",
-    ...(usePremiumBlackRibbon
+    ...(useDarkRibbonInk
       ? {
           color: "#141414",
           textShadow: "0 1px 0 rgba(255,255,255,0.35)",

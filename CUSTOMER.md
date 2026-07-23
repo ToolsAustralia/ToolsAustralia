@@ -136,7 +136,7 @@ Every field below lives on the `User` Mongoose model ([src/models/User.ts](src/m
 
 | Field | Type | Meaning | PII |
 |---|---|---|---|
-| `email` | string (req, unique, lowercase) | Login + primary contact; regex-validated ([User.ts:7](src/models/User.ts#L7)) | **PII** |
+| `email` | string (req, unique, lowercase) | Login + primary contact; permissive regex-validated — `local@domain.tld` shape only (accepts `+` plus-addressing and any TLD length ≥2 chars), deliverability is the real check ([User.ts:346](src/models/User.ts#L346)) | **PII** |
 | `password` | string (opt, ≥6) | bcrypt hash; **optional** — passwordless customers have none ([User.ts:8](src/models/User.ts#L8)) | **Sensitive** |
 | `isEmailVerified` | boolean (def false) | Email verified flag ([User.ts:145](src/models/User.ts#L145)) | — |
 | `isMobileVerified` | boolean (opt, def false) | Mobile verified flag ([User.ts:146](src/models/User.ts#L146)) | — |
@@ -503,6 +503,7 @@ Hashing is plain SHA-256 of lowercased+trimmed input; **phones are first normali
 - **Klaviyo receives raw, unhashed PII** — email, first/last name, mobile (E.164), state, profession, plus the full behavioral/spend profile. **This is the largest clear-text PII export.**
 - **Meta/TikTok/Snapchat receive PII only as SHA-256 hashes** (email, phone, name, location, DOB, user `_id`), but **raw** click IDs, browser IDs, IP, and user agent. A SHA-256 email is a stable pseudonymous identifier, **not** anonymization.
 - **The first-touch `_ta_attr` cookie persists 90 days** and survives login/OAuth; it holds only campaign metadata, no direct PII.
+- **Contentsquare session-replay capture is env-gated, prod-only** (`NEXT_PUBLIC_CONTENTSQUARE_ID`, blank ⇒ disabled — [docs/tracking/rules.md R8](docs/tracking/rules.md)): dev/e2e/staging never record a session unless the id is explicitly set.
 
 ---
 
@@ -569,3 +570,8 @@ Customer-unique terms are defined here. For shared draw/billing terms (Anchor, M
 > _2026-07-20 note:_ the sitewide `font-['[Poppins]']` → `font-poppins` codemod touched some
 > `/my-account` components (their Poppins-classed text now renders real Poppins). This is a
 > presentation-only change — **no customer field, lifecycle state, flow, or captured data changed.**
+
+> Clarifying note (2026-07-22): the `/my-account` dashboard's ManageSheet and Refer-a-Friend
+> modals are now lazily mounted — their payment-method and referral-profile fetches fire only
+> when the customer opens them, not on every dashboard load. Pure performance refactor; no
+> customer-visible behavior, data field, or lifecycle fact changed.

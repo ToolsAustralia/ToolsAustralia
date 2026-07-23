@@ -354,7 +354,7 @@ const UserSchema = new Schema<IUser>(
       validate: {
         validator: function (v: string) {
           if (!v || v === "") return false; // Email is required
-          return /^\w+([.-]?\w+)*@\w+([.-]?\w+)*(\.\w{2,3})+$/.test(v);
+          return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(v);
         },
         message: "Please enter a valid email address",
       },

@@ -106,7 +106,7 @@ export function PrizeContentsStrip({
         <div className="mt-2.5 flex flex-wrap gap-1.5">
           <Chip>{chips.tools}</Chip>
           <Chip>{chips.storage}</Chip>
-          <span className="rounded-full border border-[#18a94d]/35 bg-[#18a94d]/[0.12] px-[9px] py-[5px] font-poppins text-[9.5px] font-bold leading-none text-[#18a94d]">
+          <span className="rounded-full border border-[#18a94d]/35 bg-[#18a94d]/[0.12] px-[9px] py-[5px] font-poppins text-[9.5px] font-bold leading-none text-[var(--pbc-cash-ink)]">
             $5,000 cash
           </span>
         </div>
