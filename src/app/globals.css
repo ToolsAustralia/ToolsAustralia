@@ -704,8 +704,9 @@
 }
 
 /* Modal token scope — carried on the portal root (rendered under document.body,
-   OUTSIDE .winner-testimonies), so it reads `.dark` (on <html>, an ancestor of
-   body) directly rather than inheriting the section scope. */
+   OUTSIDE .winner-testimonies). The component wraps the portal in a `.dark` div
+   mirroring the launching section's theme, so these `.dark`-keyed tokens resolve
+   even on hosts that put `.dark` on a wrapper the portal escapes (Ryobi force-dark). */
 .winner-testimonies-modal {
   --wtm-card: #ffffff;
   --wtm-text: #141414;
@@ -794,12 +795,17 @@
   .wt-panel {
     animation: none !important;
   }
-  .wt-card {
+  .wt-card,
+  .wt-dot span,
+  .wt-readmore {
     transition: none !important;
   }
   .wt-card:hover,
   .wt-nav:hover {
     transform: none !important;
+  }
+  .wt-readmore:hover {
+    gap: 7px !important;
   }
 }
 
