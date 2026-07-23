@@ -9,7 +9,9 @@
  */
 export function getBaseUrl(): string {
   if (process.env.NEXT_PUBLIC_APP_URL) {
-    return process.env.NEXT_PUBLIC_APP_URL;
+    // Normalize away any trailing slash so callers can safely append `/path`
+    // without producing `//path` (matches layout.tsx / sitemap.ts / requireSameOrigin.ts).
+    return process.env.NEXT_PUBLIC_APP_URL.replace(/\/$/, "");
   }
 
   if (process.env.NODE_ENV === "production") {

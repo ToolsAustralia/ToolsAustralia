@@ -27,6 +27,7 @@ import { trackAffiliateSignup } from "@/lib/affiliate";
 import { extractBrandFromSlug } from "@/utils/integrations/klaviyo/brand-extraction";
 import { isValidPromoSlug, getPageTypeFromSlug } from "@/utils/promo-analytics/validate-promo-slug";
 import { IUser } from "@/models/User";
+import { isPrivilegedAccount } from "@/utils/auth/privileged-account";
 import type { AttributionParams } from "@/types/tracking";
 import { stripe } from "@/lib/stripe";
 import { createDistributedRateLimiter, getClientIdentifier } from "@/utils/security/rateLimiter";
@@ -95,6 +96,10 @@ const registerSchema = z.object({
  */
 function isPlainAccount(user: IUser | null): boolean {
   if (!user) return false;
+  // Staff/admin accounts are NEVER "plain" — they carry 0 entries by nature but
+  // must not be overwritten by a public registration. Guard here too so no future
+  // update path can reach a privileged account even if a caller forgets the check.
+  if (isPrivilegedAccount(user)) return false;
   return !user.accumulatedEntries || user.accumulatedEntries === 0;
 }
 
@@ -341,6 +346,43 @@ export async function POST(request: NextRequest) {
     const existingUserByEmail = await User.findOne({ email: validatedData.email.toLowerCase() });
     const existingUserByMobile = await User.findOne({ mobile: cleanedMobile });
 
+    // ✅ SECURITY (privileged-account guard): a STAFF/ADMIN account must never be
+    // mutated by the public registration path. Staff accounts have 0 entries and no
+    // saved payment methods, so the "plain account" update paths below would treat
+    // them as safe to overwrite — letting an unauthenticated request rebind a
+    // privileged account's name/mobile, and (on a mobile match) move its login email
+    // onto an attacker-controlled address, keeping the admin role. Reject up front.
+    // The staff marker is roleId/userType, NOT the legacy `role` string.
+    if (existingUserByEmail && isPrivilegedAccount(existingUserByEmail)) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Email already taken",
+          field: "email",
+          message: "This email address is already associated with an existing account. Please log in instead.",
+          isExistingAccount: true,
+          existingAccountEmail: existingUserByEmail.email,
+        },
+        { status: 400 }
+      );
+    }
+    if (existingUserByMobile && isPrivilegedAccount(existingUserByMobile)) {
+      // Do NOT echo `existingAccountEmail` here: unlike the email-match branch (where the
+      // caller already supplied the email), on a MOBILE match that value is the matched
+      // account's login email — returning it would disclose a staff/admin email to an
+      // anonymous caller who only supplied the mobile (enumeration → feeds email-code login).
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Mobile number taken",
+          field: "mobile",
+          message: "This mobile number is already associated with an existing account. Please log in instead.",
+          isExistingAccount: true,
+        },
+        { status: 400 }
+      );
+    }
+
     // ✅ CRITICAL: Check for converted accounts first (security priority)
     // If email belongs to a converted account, reject immediately
     if (existingUserByEmail && !isPlainAccount(existingUserByEmail)) {
@@ -374,7 +416,11 @@ export async function POST(request: NextRequest) {
           message:
             "This mobile number is already associated with an account that has made purchases. Please log in or use a different mobile number.",
           isExistingAccount: true,
-          existingAccountEmail: existingUserByMobile.email, // Return the actual email associated with this mobile number
+          // No `existingAccountEmail` on a MOBILE match: it would disclose the matched
+          // account's email to a caller who only supplied the mobile. The client falls
+          // back to the email the user typed (MembershipModal `formData.email`), so a
+          // legit returning customer still gets a correct login prefill. Mirrors the
+          // privileged-account fix — see docs/auth/gotchas.md.
         },
         { status: 400 }
       );
@@ -415,7 +461,8 @@ export async function POST(request: NextRequest) {
           message:
             "This mobile number is already associated with an account that has saved payment methods. Please log in or use a different mobile number.",
           isExistingAccount: true,
-          existingAccountEmail: existingUserByMobile.email,
+          // No `existingAccountEmail` on a MOBILE match — see the converted-account
+          // branch above; the client falls back to the typed email.
         },
         { status: 400 }
       );
