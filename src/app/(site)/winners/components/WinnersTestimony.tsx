@@ -246,7 +246,15 @@ function TestimonyCard({ winner, onOpen }: { winner: WinnerSummary; onOpen: (id:
  * `.winner-testimonies-modal` token scope (keyed off `.dark` on <html>). Adds Esc,
  * a Tab focus-trap, and return-focus on close (ModalContainer has none of these).
  */
-function WinnerStoryModal({ winner, onClose }: { winner: WinnerSummary | null; onClose: () => void }) {
+function WinnerStoryModal({
+  winner,
+  onClose,
+  dark,
+}: {
+  winner: WinnerSummary | null;
+  onClose: () => void;
+  dark: boolean;
+}) {
   const [mounted, setMounted] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
@@ -310,9 +318,13 @@ function WinnerStoryModal({ winner, onClose }: { winner: WinnerSummary | null; o
     .filter(Boolean);
 
   return createPortal(
-    <div
-      className="winner-testimonies-modal wt-overlay"
-      role="presentation"
+    // `.dark` wrapper so the modal's dark tokens resolve inside the portal even when the
+    // host carries `.dark` on a wrapper the portal escapes (e.g. force-dark Ryobi pages).
+    // display:contents keeps it a pure ancestor for selector matching, with no layout box.
+    <div className={dark ? "dark" : undefined} style={{ display: "contents" }}>
+      <div
+        className="winner-testimonies-modal wt-overlay"
+        role="presentation"
       onClick={onClose}
       style={{
         position: "fixed",
@@ -518,6 +530,7 @@ function WinnerStoryModal({ winner, onClose }: { winner: WinnerSummary | null; o
           ) : null}
         </div>
       </div>
+    </div>
     </div>,
     document.body
   );
@@ -540,6 +553,7 @@ export default function WinnersTestimony({ winners }: { winners: WinnerSummary[]
   const n = stories.length;
   const [idx, setIdx] = useState(0);
   const [openId, setOpenId] = useState<string | null>(null);
+  const sectionRef = useRef<HTMLElement>(null);
 
   const go = useCallback((delta: number) => setIdx((i) => (n === 0 ? 0 : (i + delta + n) % n)), [n]);
 
@@ -553,9 +567,13 @@ export default function WinnersTestimony({ winners }: { winners: WinnerSummary[]
   const current = stories[Math.min(idx, n - 1)];
   const openWinner = stories.find((w) => w.id === openId) ?? null;
   const multi = n > 1;
+  // Theme the portalled modal to match the section it launched from — covers html.dark
+  // AND a `.dark` wrapper div (Ryobi force-dark pages), which a document.body portal escapes.
+  const modalDark = openWinner != null && sectionRef.current?.closest(".dark") != null;
 
   return (
     <section
+      ref={sectionRef}
       className="winner-testimonies font-poppins overflow-x-clip"
       aria-label="Real winner testimonies"
       style={{ background: "var(--wt-base)" }}
@@ -598,7 +616,7 @@ export default function WinnersTestimony({ winners }: { winners: WinnerSummary[]
               <button type="button" aria-label="Previous winner" onClick={() => go(-1)} className="wt-nav" style={NAV_STYLE}>
                 <ChevronLeft size={16} strokeWidth={2.4} aria-hidden />
               </button>
-              <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 2 }}>
                 {stories.map((w, i) => (
                   <button
                     key={w.id}
@@ -606,17 +624,31 @@ export default function WinnersTestimony({ winners }: { winners: WinnerSummary[]
                     aria-label={`Go to winner ${i + 1}`}
                     aria-current={i === idx ? "true" : undefined}
                     onClick={() => setIdx(i)}
+                    className="wt-dot"
                     style={{
-                      width: i === idx ? 22 : 7,
-                      height: 7,
-                      borderRadius: 100,
-                      border: "none",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      height: 44,
+                      minWidth: 24,
                       padding: 0,
+                      border: "none",
+                      background: "none",
                       cursor: "pointer",
-                      transition: "width .25s ease, background .25s ease",
-                      background: i === idx ? RED : "var(--wt-dot-off)",
                     }}
-                  />
+                  >
+                    {/* Small visual pill; the button itself is the ≥44×24 tap target. */}
+                    <span
+                      aria-hidden
+                      style={{
+                        width: i === idx ? 22 : 7,
+                        height: 7,
+                        borderRadius: 100,
+                        transition: "width .25s ease, background .25s ease",
+                        background: i === idx ? RED : "var(--wt-dot-off)",
+                      }}
+                    />
+                  </button>
                 ))}
               </div>
               <button type="button" aria-label="Next winner" onClick={() => go(1)} className="wt-nav" style={NAV_STYLE}>
@@ -627,7 +659,7 @@ export default function WinnersTestimony({ winners }: { winners: WinnerSummary[]
         </div>
       </div>
 
-      <WinnerStoryModal winner={openWinner} onClose={() => setOpenId(null)} />
+      <WinnerStoryModal winner={openWinner} onClose={() => setOpenId(null)} dark={modalDark} />
     </section>
   );
 }
