@@ -8,7 +8,7 @@ PREVIEW beside a grouped rail of every combination, and picking one recolours th
 
 | File | Role |
 |---|---|
-| [`page.tsx`](../../src/app/promotions/page.tsx) | Server: metadata, promo chrome, permit fine print |
+| [`page.tsx`](../../src/app/promotions/page.tsx) | Server: metadata, promo chrome, stage, winner testimonies, permit fine print |
 | [`_components/PrizeGallerySpotlight.tsx`](../../src/app/promotions/_components/PrizeGallerySpotlight.tsx) | Client: the ONLY state on the page + stage layout |
 | [`_components/SpotlightPreview.tsx`](../../src/app/promotions/_components/SpotlightPreview.tsx) | Left column — eyebrow, H1, case, meta row, stat tiles |
 | [`_components/ComboRail.tsx`](../../src/app/promotions/_components/ComboRail.tsx) | Right column — toolset groups, thumbs, cash tile |
@@ -19,6 +19,17 @@ PREVIEW beside a grouped rail of every combination, and picking one recolours th
 `GalleryCountdown.tsx` (the red countdown-chip row). The featured-lead card, the brand marquee, the
 sticky filter dock and the closing gold cash band went with them — the rail's cash tile is now the
 cash entry point.
+
+### Winner testimonies (added 2026-07-23)
+Directly below the configurator stage (and above the permit fine print), `page.tsx` mounts the shared
+winner-testimonies section via `<Suspense><WinnerTestimoniesClientLazy /></Suspense>` — the exact
+self-fetching, near-viewport-deferred pattern the `/promotions/[slug]` brand pages use. It is the
+**draws-domain** `WinnersTestimony` component (the "speech bubble" redesign — see
+[docs/draws/frontend.md](../draws/frontend.md#winner-testimony-display--winnerstestimony-the-one-hear-from-our-winners-section)),
+which self-fetches `useWinnersFeed` **client-side** and returns null when there are no winners — so it
+never makes this ISR page dynamic and never blocks render on an empty feed. It auto-themes with the
+promo guest light/dark toggle through its own `.winner-testimonies` `.dark`-keyed token scope (no JS
+theme read), independent of the page's `--pgs-*` layer.
 
 ### Scales by data, never by layout
 Nothing in the gallery enumerates a brand. The rail's groups are `TOOLSETS` and each group's thumbs

@@ -103,14 +103,21 @@ because it runs inside a click handler.
 
 ## Cross-domain notes
 
-### Winner testimony display — `WinnersTestimony` (the one Hear-From-Our-Winners section, 2026-06-11)
+### Winner testimony display — `WinnersTestimony` (the one Hear-From-Our-Winners section)
 
-The "Hear from our winners" section is now a single **draws-domain** component, [src/app/(site)/winners/components/WinnersTestimony.tsx](../../src/app/(site)/winners/components/WinnersTestimony.tsx), built in the page-scoped `.ta-results` design system (`CinematicCard` carousel + `StoryModal`). It replaces the deleted `src/components/sections/winner-testimony/` folder entirely.
+**Redesigned to the "speech bubble" testimonial design (2026-07-23).** The single **draws-domain** component [src/app/(site)/winners/components/WinnersTestimony.tsx](../../src/app/(site)/winners/components/WinnersTestimony.tsx) now renders the Claude design-handoff look, replacing the prior `.ta-results` `CinematicCard` carousel + `StoryModal`:
 
-It is **portable**: it self-loads its fonts (Archivo / Space Mono / Newsreader) and wraps its output in `.ta-results`, and the shared stylesheet [src/app/(site)/draw-results/draw-results.css](../../src/app/(site)/draw-results/draw-results.css) is imported globally in [src/app/layout.tsx](../../src/app/layout.tsx). So it renders identically on every host page. Call sites:
+- **Header** (`.wt-header`) — a centred two-line title, `Winners` (italic muted kicker) over a large bold `testimonial`, framed by big **red** serif quote glyphs (`.wt-quote-open` top-left / `.wt-quote-close` right). Adapted from a supplied sample; replaces the earlier eyebrow-only treatment. Text colours are theme-adaptive tokens (`--wt-heading` / `--wt-heading-muted`).
+- **Card** (`TestimonyCard`) — a dark-navy "speech bubble" (`#1c1f28`, theme-INVARIANT) with the winner avatar (`next/image`, or a person glyph) straddling the top edge inside a red ring, name, a `STATE · MONTH` meta row with 5 decorative stars, a 3-line-clamped italic quote, and a footer with **Read full story** + the prize line (green trophy + `selectedPrize || prize.name`).
+- **Two layouts** off a Tailwind `md:` breakpoint — desktop: an auto-fitting, width-capped centred grid (`repeat(auto-fit, minmax(280px, 360px))`); mobile: a **one-at-a-time** carousel (prev/next + dot indicators; the single card is re-keyed by id so the `wt-swap` animation replays as the "swap").
+- **Modal** (`WinnerStoryModal`) — theme-aware, **portalled to `document.body`** (mounted-gated) so `position:fixed` is viewport-correct under the promo stage's transforms. Adds Esc, a Tab **focus-trap**, and **return-focus** on close (the shared `ModalContainer` has none of these). Shows the id row (avatar · name · state · `{drawName} · certified` linking `drawResultUrl` · month badge), stars, the full testimony, and a footer with the prize + the optional **"Watch the draw"** link (`watchUrl`, major draws only — preserved from the prior modal; not in the handoff mock).
+
+**Theming is CSS-driven, not a JS theme read.** Colours come from the self-contained `.winner-testimonies` / `.winner-testimonies-modal` token scopes in [globals.css](../../src/app/globals.css) (keyed off the global `.dark` class — the same class the promo guest toggle and the sitewide toggle flip). Only the section chrome + modal switch on theme; the card bubble is identical in light/dark. This avoids the SSR light→dark hydration flash a JS `isDark` read would cause (same rationale as the prize-builder `--pbc-*` tokens). Fonts: `font-poppins` (global `--font-poppins`) + `font-mono` for the draw ref — the section no longer loads Archivo/Space Mono/Newsreader or uses `.ta-results`.
+
+It is **portable** — the token scope + fonts are self-contained, so it renders identically on every host page. Call sites:
 
 - `/winners` page (SSR) — rendered inline by `WinnersBrowser`.
-- Homepage + promotions — via [src/app/(site)/components/WinnerTestimoniesClient.tsx](../../src/app/(site)/components/WinnerTestimoniesClient.tsx) (and its lazy wrapper `WinnerTestimoniesClientLazy`, which as of 2026-07-20 wraps the dynamic import in `LazyMount` so the chunk + fetch defer until near-viewport, matching the homepage).
+- Homepage, the `/promotions` **index gallery** (added 2026-07-23, after `PrizeGallerySpotlight`), and the `/promotions/[slug]` brand pages — via [src/app/(site)/components/WinnerTestimoniesClient.tsx](../../src/app/(site)/components/WinnerTestimoniesClient.tsx) (and its lazy wrapper `WinnerTestimoniesClientLazy`, which wraps the dynamic import in `LazyMount` so the chunk + fetch defer until near-viewport).
 - Account draws tab — [src/app/(site)/my-account/draws/page.tsx](../../src/app/(site)/my-account/draws/page.tsx).
 
 > **Shared winners feed (perf Tier-2, 2026-07-20):** `WinnerTestimoniesClient` and the homepage/promotions
@@ -120,7 +127,7 @@ It is **portable**: it self-loads its fonts (Archivo / Space Mono / Newsreader) 
 > reused; the board slices the most recent 16 client-side. Both consumers MUST pass the same exported
 > `WINNERS_FEED_LIMIT` so they collapse onto one key/URL.
 
-It filters to winners with a testimony (`hasWinnerTestimony`), shows a cleaned excerpt (`getWinnerTestimonyExcerpt`), and the modal strips rich-text HTML to clean paragraphs (`stripRichTextHtml`) — all from [src/utils/winners.ts](../../src/utils/winners.ts). The modal's "Watch the draw" link uses `watchUrl` (the Facebook link — see "Draw-level result & watch links" below) when present.
+It filters to winners with a testimony (`hasWinnerTestimony`) and returns null when none exist; card and modal strip rich-text HTML (`stripRichTextHtml`) — from [src/utils/winners.ts](../../src/utils/winners.ts) — and the card CSS-clamps the quote to 3 lines. The draw month is formatted via the UTC-deterministic `auDateParts` (no hydration mismatch). **Data adapted to real fields:** the handoff mock's `suburb`, per-winner star rating, and `#TA-XXXX` draw-ref have no backing fields, so the card shows `winnerState` only, 5 fixed decorative stars, and the real `drawName` + certified `drawResultUrl` link.
 
 ### Draw-level result & watch links (2026-06-11)
 
