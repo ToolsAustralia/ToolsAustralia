@@ -1,4 +1,6 @@
 import { test, expect } from "../../fixtures/test";
+import { connectE2eDb } from "../../helpers/db";
+import { ObjectId } from "mongodb";
 
 test.describe("registration bridge @smoke", () => {
   // EXTERNAL mode: registering real accounts against a shared/deployed environment is mutating — see runExternal in e2e/run.ts.
@@ -76,5 +78,122 @@ test.describe("registration bridge @smoke", () => {
     const session = await page.request.get("/api/auth/session");
     const body = await session.json().catch(() => null);
     expect(body?.user ?? null).toBeNull();
+  });
+});
+
+// Regression net for the 2026-07-23 privileged-account-overwrite fix
+// (src/utils/auth/privileged-account.ts + register/route.ts). The public register
+// path must never create or overwrite a STAFF/ADMIN account, must not rebind a staff
+// account's login email, and must not disclose it — while the intended plain-guest
+// re-entry (typo correction) still works. Unit test `test:privileged-account` covers
+// the predicate in isolation; these cover the ROUTE wiring end-to-end.
+test.describe("registration privileged-account guard @smoke", () => {
+  // Mutating (creates/looks up real accounts) — needs the seeded isolated env.
+  test.skip(process.env.E2E_EXTERNAL === "1", "needs the seeded isolated environment");
+
+  // A Customer-Support-shaped staff account: `role` stays "user" — the exact shape a
+  // naive `role !== "user"` guard would MISS (the real markers are roleId / userType).
+  // Deliberately "plain" (0 entries, no saved cards) to prove the guard catches it even
+  // though it looks like a safe-to-overwrite guest. Scoped per worker (email is unique-indexed).
+  let staff: { email: string; mobileStored: string; mobileTyped: string; firstName: string; lastName: string };
+  let staffId: ObjectId;
+  let guestMobileStored: string;
+  let guestMobileTyped: string;
+
+  test.beforeAll(async ({}, testInfo) => {
+    const w = testInfo.parallelIndex;
+    const staffSub = `4700${String(10000 + w).slice(-5)}`; // 9-digit AU subscriber, unique per worker
+    const guestSub = `4700${String(20000 + w).slice(-5)}`;
+    staff = {
+      email: `e2e-staff-guard-${w}@e2e.io`,
+      mobileStored: `+61${staffSub}`,
+      mobileTyped: `0${staffSub}`, // normalizes to mobileStored
+      firstName: "E2E",
+      lastName: "StaffGuard",
+    };
+    guestMobileStored = `+61${guestSub}`;
+    guestMobileTyped = `0${guestSub}`;
+
+    const db = await connectE2eDb();
+    const users = db.connection.collection("users");
+    await users.deleteMany({ email: staff.email });
+    const res = await users.insertOne({
+      email: staff.email,
+      firstName: staff.firstName,
+      lastName: staff.lastName,
+      mobile: staff.mobileStored,
+      role: "user",
+      userType: "staff",
+      roleId: new ObjectId(),
+      accumulatedEntries: 0,
+      savedPaymentMethods: [],
+      isActive: true,
+      isEmailVerified: true,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+    staffId = res.insertedId;
+  });
+
+  test.afterAll(async () => {
+    const db = await connectE2eDb();
+    await db.connection.collection("users").deleteMany({
+      $or: [{ _id: staffId }, { mobile: guestMobileStored }],
+    });
+  });
+
+  test("registering with a STAFF member's email is rejected and does not mutate the account", async ({ page }) => {
+    const res = await page.request.post("/api/auth/register", {
+      data: { firstName: "Attacker", lastName: "One", email: staff.email, mobile: "0499000001" },
+    });
+    expect(res.status()).toBe(400);
+    const body = await res.json();
+    expect(body.success).toBe(false);
+    expect(body.field).toBe("email");
+
+    const db = await connectE2eDb();
+    const after = await db.connection.collection("users").findOne({ _id: staffId });
+    expect(after?.firstName).toBe(staff.firstName); // name NOT overwritten
+    expect(after?.userType).toBe("staff"); // still staff
+    expect(after?.mobile).toBe(staff.mobileStored); // mobile NOT overwritten
+  });
+
+  test("registering with a STAFF member's mobile is rejected, does NOT rebind the email, and does not leak it", async ({ page }) => {
+    const attackerEmail = `attacker-${Date.now()}@e2e.io`;
+    const res = await page.request.post("/api/auth/register", {
+      data: { firstName: "Attacker", lastName: "Two", email: attackerEmail, mobile: staff.mobileTyped },
+    });
+    expect(res.status()).toBe(400);
+    const body = await res.json();
+    expect(body.field).toBe("mobile");
+    expect(body.existingAccountEmail).toBeUndefined(); // F-005: no email disclosure on a mobile match
+
+    const db = await connectE2eDb();
+    const after = await db.connection.collection("users").findOne({ _id: staffId });
+    expect(after?.email).toBe(staff.email); // the takeover primitive: email NOT rebound
+    expect(after?.userType).toBe("staff");
+  });
+
+  test("a plain guest can still re-register and correct their email (intended overwrite preserved)", async ({ page }) => {
+    const emailA = `guest-a-${Date.now()}@e2e.io`;
+    const emailB = `guest-b-${Date.now()}@e2e.io`;
+
+    const r1 = await page.request.post("/api/auth/register", {
+      data: { firstName: "Guest", lastName: "One", email: emailA, mobile: guestMobileTyped },
+    });
+    expect(r1.status()).toBe(200);
+
+    // Re-register with a CORRECTED email, SAME mobile → the plain account is updated in
+    // place (the intended guest re-entry / typo-correction flow — must NOT be broken by
+    // the staff guard).
+    const r2 = await page.request.post("/api/auth/register", {
+      data: { firstName: "Guest", lastName: "Fixed", email: emailB, mobile: guestMobileTyped },
+    });
+    expect(r2.status()).toBe(200);
+
+    const db = await connectE2eDb();
+    const acct = await db.connection.collection("users").findOne({ mobile: guestMobileStored });
+    expect(acct?.email).toBe(emailB.toLowerCase()); // email was corrected
+    expect(acct?.firstName).toBe("Guest");
   });
 });

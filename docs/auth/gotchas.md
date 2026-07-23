@@ -1,5 +1,57 @@
 # Auth — Gotchas
 
+## `send-otp` must deliver the code to the STORED mobile, never a request-supplied one (fixed 2026-07-23)
+
+`POST /api/auth/send-otp` resolved the account by **email**, then sent the SMS login code to
+`validatedData.mobile` — the number in the **request body**, not the account's stored
+`user.mobile`. Anyone who knew a member's email could POST `{email: victim, mobile: attackerPhone}`
+and receive that member's login code on their own phone → account takeover (gated only on the
+victim having an active membership). **Fix:** removed `mobile` from `sendOTPSchema` entirely and
+now deliver only to `user.mobile` (400 if none/invalid on file) — see the delivery block in
+[`send-otp/route.ts`](../../src/app/api/auth/send-otp/route.ts). The client
+([`PasswordlessLoginModal.tsx`](../../src/components/auth/PasswordlessLoginModal.tsx)) may still
+send a `mobile` field; Zod strips it, so there is no break.
+
+**Not live today** (no `TWILIO_*` configured, and `verify-otp` issues no session), so this was a
+*latent* takeover — but the fix lands now so enabling SMS-OTP login can't ship the hole. **Pre-launch
+UX follow-up:** `PasswordlessLoginModal` still renders a mobile input that is now ignored — drop it
+(or show the masked stored number) when SMS-OTP is switched on. See
+`docs/tech-debt/panel-review-feature-winner-testimonies.md` (F-001).
+
+## Public registration must never touch a STAFF/ADMIN account (fixed 2026-07-23)
+
+`POST /api/auth/register` treats an existing account as "plain / safe to overwrite" when it has
+`accumulatedEntries === 0` and no saved payment methods ([`isPlainAccount`](../../src/app/api/auth/register/route.ts)),
+and on a match it **overwrites `firstName` / `lastName` / `mobile` — and, on a *mobile* match,
+the account's `email`** (see the "only mobile matches a plain account" path). Every staff/admin
+account is created with 0 entries and no saved cards, so it looked "plain" — meaning an
+**unauthenticated** request could rebind a privileged account's contact fields, and by
+registering with *their own email + a staff member's mobile* could move that staff account's
+login email onto an attacker-controlled address **while keeping the admin `role`/`roleId`** →
+account-takeover / privilege escalation (login is email-code based: `send-login-code` looks up
+by email). All 3 production staff accounts were exposed.
+
+**Fix:** [`isPrivilegedAccount()`](../../src/utils/auth/privileged-account.ts) + an up-front
+reject in the register route — if the matched-by-email OR matched-by-mobile account is
+privileged, return `400` ("please log in") and never fall through to an update path.
+`isPlainAccount()` also calls it defensively so no future update path can reach a staff account.
+
+**The subtle part (the accurate fix):** the staff marker is the RBAC **`roleId` / `userType`**,
+**NOT** the legacy `role` string. Manager and Customer Support staff carry `role: "user"` with a
+non-null `roleId` and `userType: "staff"` — only the legacy super-admin has `role: "admin"`. A
+naive `role !== "user"` guard would have missed 2 of the 3 real staff accounts. Regression test:
+`npm run test:privileged-account`. See [roles.md](./roles.md).
+
+*Residual (accepted, won't-fix):* the mobile-match branch can still rebind the `email` of a
+non-staff **plain customer**, but this is the **intended** guest-re-entry behaviour — a returning
+guest who registered (passwordless, not logged in) but didn't pay must be able to correct a
+typo'd email while keeping their mobile, so the overwrite must NOT be removed. The target is
+zero-value (0 entries, no purchase, no card, no membership); staff & converted accounts already
+reject; and the one mitigation (reset `isEmailVerified` on change) is only a speed bump
+(`send-email-verification`/`verify-email` are unauthenticated). Documented as an accepted residual
+— see `docs/tech-debt/panel-review-feature-winner-testimonies.md` (F-004). **Do not "fix" by
+blocking the overwrite — that is a conversion bug.**
+
 ## `/login` form controls had no accessible name/label (fixed 2026-07-22)
 
 `src/app/login/page-client.tsx`: the password show/hide toggle button had an icon only (no
