@@ -6,7 +6,10 @@ import { sendSMSOTP, generateOTP, checkRateLimit, validateMobileNumber } from "@
 
 const sendOTPSchema = z.object({
   email: z.string().email("Invalid email address"),
-  mobile: z.string().min(1, "Mobile number is required"),
+  // NOTE: no `mobile` field — the code is ALWAYS delivered to the number on file
+  // for the account (see below). Accepting a caller-supplied delivery number would
+  // let anyone who knows an account's email redirect its login code to their own
+  // phone (account takeover). See docs/auth/gotchas.md.
 });
 
 /**
@@ -22,17 +25,6 @@ export async function POST(request: NextRequest) {
     const validatedData = sendOTPSchema.parse(body);
 
     console.log("✅ Request validation successful");
-
-    // Validate mobile number format
-    if (!validateMobileNumber(validatedData.mobile)) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Invalid Australian mobile number format",
-        },
-        { status: 400 }
-      );
-    }
 
     // Check rate limiting
     const rateLimitResult = checkRateLimit(validatedData.email);
@@ -80,6 +72,19 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // SECURITY: deliver the code ONLY to the mobile stored on the account — never a
+    // number supplied in the request. Otherwise a caller who knows just the account
+    // email could redirect the login code to their own phone (account takeover).
+    if (!user.mobile || !validateMobileNumber(user.mobile)) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "No valid mobile number is on file for this account.",
+        },
+        { status: 400 }
+      );
+    }
+
     // Generate OTP code
     const otpCode = generateOTP();
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
@@ -92,8 +97,8 @@ export async function POST(request: NextRequest) {
 
     console.log(`✅ OTP code generated for user: ${user.email}`);
 
-    // Send SMS OTP
-    const smsResult = await sendSMSOTP(validatedData.mobile, otpCode, user.firstName);
+    // Send SMS OTP to the stored number only
+    const smsResult = await sendSMSOTP(user.mobile, otpCode, user.firstName);
 
     if (!smsResult.success) {
       // Clear OTP from database if SMS failed
@@ -110,7 +115,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    console.log(`✅ SMS OTP sent successfully to ${validatedData.mobile}`);
+    console.log(`✅ SMS OTP sent successfully for user: ${user.email}`);
 
     return NextResponse.json({
       success: true,

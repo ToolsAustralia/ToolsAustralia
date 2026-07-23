@@ -1,5 +1,23 @@
 # Auth — Gotchas
 
+## `send-otp` must deliver the code to the STORED mobile, never a request-supplied one (fixed 2026-07-23)
+
+`POST /api/auth/send-otp` resolved the account by **email**, then sent the SMS login code to
+`validatedData.mobile` — the number in the **request body**, not the account's stored
+`user.mobile`. Anyone who knew a member's email could POST `{email: victim, mobile: attackerPhone}`
+and receive that member's login code on their own phone → account takeover (gated only on the
+victim having an active membership). **Fix:** removed `mobile` from `sendOTPSchema` entirely and
+now deliver only to `user.mobile` (400 if none/invalid on file) — see the delivery block in
+[`send-otp/route.ts`](../../src/app/api/auth/send-otp/route.ts). The client
+([`PasswordlessLoginModal.tsx`](../../src/components/auth/PasswordlessLoginModal.tsx)) may still
+send a `mobile` field; Zod strips it, so there is no break.
+
+**Not live today** (no `TWILIO_*` configured, and `verify-otp` issues no session), so this was a
+*latent* takeover — but the fix lands now so enabling SMS-OTP login can't ship the hole. **Pre-launch
+UX follow-up:** `PasswordlessLoginModal` still renders a mobile input that is now ignored — drop it
+(or show the masked stored number) when SMS-OTP is switched on. See
+`docs/tech-debt/panel-review-feature-winner-testimonies.md` (F-001).
+
 ## Public registration must never touch a STAFF/ADMIN account (fixed 2026-07-23)
 
 `POST /api/auth/register` treats an existing account as "plain / safe to overwrite" when it has
