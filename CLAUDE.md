@@ -860,6 +860,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
     "dev-tooling": {
       "docs": "docs/dev-tooling/",
       "paths": [
+        ".mcp.json",
         "src/app/api/debug/**",
         "src/app/api/dev/**",
         "src/app/api/test/**",
