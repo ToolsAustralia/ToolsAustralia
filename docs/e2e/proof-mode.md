@@ -17,8 +17,26 @@ you only need one for a demo.
 `npm run e2e:proof` = `tsx e2e/run.ts --proof`, which sets `E2E_PROOF=1` and switches
 `playwright.config.ts`'s profile to `retries: 0`, `workers: 1`, `video: "on"`,
 `launchOptions.slowMo: 200` (see `playwright.config.ts`). Today's `@demo` flows:
-`landing.spec.ts`, `my-account.spec.ts`, `purchase-subscription.spec.ts`,
-`purchase-via-showcase.spec.ts`.
+`landing.spec.ts`, `landing-drawn-states.spec.ts`, `my-account.spec.ts`,
+`purchase-subscription.spec.ts`, `purchase-via-showcase.spec.ts`.
+
+### Two rules learned recording `landing-drawn-states.spec.ts` (2026-07-24)
+
+Both bite **only in proof mode**, so a spec that is green locally can still fail or record badly.
+
+1. **Prepare each beat's page state BEFORE its `demo.step`, never inside it.** `demo.step`
+   paints the caption and holds for `holdFor(title)` (~1.8-4s) *before* running the body, so a
+   beat that mutates state and reloads inside its own body narrates a change the viewer cannot
+   see yet. The first recording of this spec ran a full state ahead of the hero for its whole
+   length. Mutate + reload first, then narrate what is already on screen.
+2. **Never hand `demo.highlight` a locator that might be hidden.** `showHighlight` calls
+   `scrollIntoViewIfNeeded()`, an actionability wait — and with no `actionTimeout` set in
+   `playwright.config.ts` that wait never expires, so the test hangs to its own timeout with no
+   useful error. This is easy to hit on the promo hero, where `PromoHero` renders a mobile AND
+   a desktop copy and hides one by breakpoint, making `.first()` a coin flip. Resolve the
+   visible one first (see the spec's `visibleHero` helper). `demo.ts` now bounds both
+   `scrollIntoViewIfNeeded` and `boundingBox` at 5s so a bad target degrades to "no ring drawn"
+   instead of killing the run, but passing a visible locator is still the caller's job.
 
 ## What it produces
 

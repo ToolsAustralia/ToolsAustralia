@@ -77,3 +77,29 @@ on focus — this is the **accepted trade** for eliminating the every-30/60 s po
 banner **countdown ticks client-side from `endDate`** (`useLeafTimer` leaf tickers in `PromoBanner` /
 `FloatingCountdownBanner`) — no on-screen clock depends on the poll; only the multiplier/banner-text *values*
 do. See [client-state/rules.md R8](../client-state/rules.md#r8-prefer-cdn-s-maxage--focusnavigation-refetch-over-a-guest-refetchinterval).
+
+## Drawn-tier stills were redesigned but the drawn CLIPS were not — motion users still see the old art (2026-07-24)
+
+The 2026-07 export re-shipped every `drawn-tomorrow` / `drawn-tonight` **still** in the new
+brand-coloured "WIN A …" design and added HiKOKI. The drawn **video clips** under
+`public/videos/landing/{brand}/` were **not** part of that drop — they are still the previous dark
+"WIN THE ULTIMATE" design for the four original brands, and HiKOKI has no drawn clip at all.
+
+This matters because `PromoHero` is **video-first**: `showVideo = heroVideoPaths != null &&
+!videoFailed`, and the still is rendered alongside but CSS-hidden (`motion-reduce:hidden` on the
+`<video>`, `hidden … motion-reduce:block` on the `<Image>`). So on the drawn tier today:
+
+| Brand | Motion on (default) | Reduced motion |
+|---|---|---|
+| milwaukee / dewalt / makita / ryobi | **old** dark drawn clip | **new** drawn still |
+| hikoki | base clip (no drawn clip exists) | **new** drawn still |
+
+So the redesign is only visible to reduced-motion users until the matching drawn clips land. Nothing
+is broken — every path resolves to real art — but the animated and still heroes are **different
+designs** in the meantime. When the new clips arrive, run
+`npm run convert:drawn-tonight-tomorrow-videos` (re-verify its numbering mapping first — see
+[architecture.md](architecture.md), the numbering scheme changed between drops) and the two agree again.
+
+To *see* a drawn still in a browser without waiting for the clips, emulate reduced motion
+(DevTools → Rendering → "Emulate CSS prefers-reduced-motion") — that is exactly what the
+`landing drawn-state` demo spec does.

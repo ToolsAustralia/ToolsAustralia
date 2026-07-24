@@ -81,13 +81,22 @@ async function showHighlight(page: Page, target: Locator, note?: string): Promis
   // Safety net, not the primary motion: smoothScrollTo already did the human-paced
   // glide; this just guards against a caller forgetting to scroll at all (which would
   // otherwise draw the ring at an off-screen boundingBox — invisible in the video).
-  await target.scrollIntoViewIfNeeded().catch(() => {});
+  //
+  // The explicit timeout matters: `scrollIntoViewIfNeeded()` runs an actionability wait, and
+  // with no `actionTimeout` configured in playwright.config.ts that wait NEVER expires. Hand
+  // it a permanently-hidden locator — easy to do here, since PromoHero renders a mobile AND a
+  // desktop hero and hides one by breakpoint, so `.first()` is a coin flip — and the whole
+  // test hangs to its own timeout with no useful error. It also only bites in PROOF mode
+  // (`demo.highlight` is a no-op otherwise), so it passes locally and fails in the recording.
+  // Bounded here so a bad target degrades to "no ring drawn", matching the best-effort
+  // contract of every other step in this function.
+  await target.scrollIntoViewIfNeeded({ timeout: 5_000 }).catch(() => {});
   // Some subjects (a Stripe PaymentElement iframe behind a "preparing checkout" loading
   // state, content gated behind an API round-trip) aren't attached/visible the instant a
   // step reaches for them — a single boundingBox() attempt would silently no-op. Give the
   // target a real chance to show up first; boundingBox() below still tolerates a timeout.
   await target.waitFor({ state: "visible", timeout: 5_000 }).catch(() => {});
-  const box = await target.boundingBox().catch(() => null);
+  const box = await target.boundingBox({ timeout: 5_000 }).catch(() => null);
   if (!box) return; // target not visible/attached — nothing sane to draw
   await page
     .evaluate(
