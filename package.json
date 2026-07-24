@@ -363,6 +363,7 @@
     "e2e:smoke": "tsx e2e/run.ts --grep @smoke",
     "e2e:purchase": "tsx e2e/run.ts --grep @purchase",
     "e2e:proof": "tsx e2e/run.ts --proof",
+    "e2e:proof:join": "tsx e2e/proof/join.ts",
     "e2e:journey": "tsx e2e/run.ts --promo 10 --grep \"full customer journey\" --project chromium-desktop",
     "e2e:journey:proof": "tsx e2e/run.ts --proof --promo 10 --grep \"full customer journey\" --project chromium-desktop",
     "e2e:env": "tsx e2e/run.ts --env-only",

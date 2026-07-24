@@ -27,16 +27,30 @@ async function showCaption(page: Page, text: string): Promise<void> {
     if (!el) {
       el = document.createElement("div");
       el.id = "__e2eCaption";
-      // Top-center, below the site header: the bottom of the viewport is where this
-      // app parks its own sticky promo/countdown bars — a bottom-anchored caption
-      // stacked on those read as "two banners" in DJ's review of the first video.
-      el.style.cssText =
-        "position:fixed;left:50%;top:96px;transform:translateX(-50%);z-index:2147483647;" +
-        "background:rgba(0,0,0,.82);color:#fff;padding:10px 22px;border-radius:10px;" +
-        "font:600 18px/1.4 system-ui,sans-serif;max-width:80vw;text-align:center;pointer-events:none;" +
-        "box-shadow:0 4px 18px rgba(0,0,0,.35);";
       document.body.appendChild(el);
     }
+    /**
+     * Placement is viewport-dependent, and re-derived on every repaint so it stays correct
+     * across the mid-beat navigations and project sizes a spec may run under.
+     *
+     * Desktop: top-centre BELOW the site header — the bottom of the viewport is where this
+     * app parks its sticky promo/countdown bars, and a bottom-anchored caption stacked on
+     * those read as "two banners" in DJ's review of the first video.
+     *
+     * Phone (<700px): the desktop offset lands the caption squarely on the hero headline and
+     * hides the prize copy the video exists to show — frame-verified on the first mobile
+     * recording, where "470 PIECE KINCROME TOOLBOX" sat behind four lines of caption. Pin it
+     * to the very top instead, over the site chrome (a logo bar, not content), and tighten
+     * the type so a long beat costs two or three short lines rather than four wide ones.
+     */
+    const narrow = window.innerWidth < 700;
+    el.style.cssText =
+      `position:fixed;left:50%;top:${narrow ? 6 : 96}px;transform:translateX(-50%);z-index:2147483647;` +
+      "background:rgba(0,0,0,.82);color:#fff;border-radius:10px;text-align:center;pointer-events:none;" +
+      "box-shadow:0 4px 18px rgba(0,0,0,.35);" +
+      (narrow
+        ? "padding:6px 12px;font:600 13px/1.35 system-ui,sans-serif;max-width:94vw;"
+        : "padding:10px 22px;font:600 18px/1.4 system-ui,sans-serif;max-width:80vw;");
     el.textContent = t;
   }, text).catch(() => { /* page may be navigating — caption is best-effort */ });
 }
@@ -176,6 +190,27 @@ export function makeDemo(page: Page, testInfo: TestInfo): { demo: Demo; flush: (
   let started = false;
   let titleCardAtMs: number | undefined;
 
+  /**
+   * Repaint the current caption after every navigation.
+   *
+   * `showCaption` appends its div to `document.body`, so ANY navigation destroys it. A beat
+   * that narrates one page and then stays put is unaffected, but a beat that walks several
+   * URLs (landing-drawn-states.spec.ts steps through all 15 prize combinations inside a
+   * single step) would show its caption on the first page only and run the remaining
+   * screens silent — the on-screen text would also drift out of sync with the SRT/voice-over,
+   * which are both derived from the cue that is still notionally active.
+   *
+   * Re-applying on `domcontentloaded` keeps the caption pinned to the BEAT rather than to the
+   * document, which is what every caller already assumes. Best-effort like the caption itself:
+   * a failed repaint (page mid-navigation, context closing) is swallowed.
+   */
+  let currentCaption: string | null = null;
+  if (PROOF) {
+    page.on("domcontentloaded", () => {
+      if (currentCaption) void showCaption(page, currentCaption);
+    });
+  }
+
   // Client-facing display title: a spec can push a `demo-title` annotation
   // (test.info().annotations.push({ type: "demo-title", description: "..." })) to give the
   // opening card human copy. Without it the card falls back to testInfo.title — which is a
@@ -201,6 +236,7 @@ export function makeDemo(page: Page, testInfo: TestInfo): { demo: Demo; flush: (
       }
       await clearHighlight(page); // stale spotlight from the previous beat must not bleed into this one's caption
       cues.push({ title, startMs: Date.now() - t0 });
+      currentCaption = title; // survives the navigations a multi-page beat performs
       await showCaption(page, title);
       await page.waitForTimeout(holdFor(title));
       await base.step(title, fn);

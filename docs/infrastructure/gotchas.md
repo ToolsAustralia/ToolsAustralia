@@ -107,3 +107,16 @@ wipe-and-seed insert an active {n}× membership promo (`e2e/seed/promo.ts`) — 
 spec self-skips unless it's set, and no other run mode ever seeds a promo (an active promo
 multiplies every subscription grant and would break the sibling purchase specs' exact-count
 assertions). Full mechanics: `docs/e2e/how-to-run.md` "The full-journey mode".
+
+## `npm run e2e:proof:join` (package.json, 2026-07-24)
+
+`tsx e2e/proof/join.ts <out-name> <clipA.mp4> <clipB.mp4> …` — joins several finished proof
+clips into one deliverable (video + narration + subtitles). It exists because Playwright fixes
+a context's video canvas at context creation and never rescales it, so one test that calls
+`setViewportSize` mid-recording composites into a small top-left strip: a spec that must prove
+BOTH a phone and a desktop viewport has to be **two tests, one per project**, which yields one
+clip each. This joins them back. Unlike the sibling `e2e:*` scripts it does **not** go through
+`e2e/run.ts` — it is a post-processing step over files already on disk, so it takes raw paths
+rather than orchestrator flags and never touches the DB or a browser. Its only binary
+dependency is the already-installed `ffmpeg-static` (no system ffmpeg, no ffprobe — durations
+are parsed from `ffmpeg -i` stderr). Full mechanics: `docs/e2e/proof-mode.md` rule 4.

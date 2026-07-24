@@ -17,9 +17,20 @@ stage backgrounds). It models light-only, `final-hours`-free reality — see
 ## End-to-end
 
 `e2e/specs/marketing/landing-drawn-states.spec.ts` (`@demo`) drives the real pages: it moves the
-active major draw's `drawDate` and reloads to prove each brand landing page swaps to its own
-countdown hero. Record it narrated with
-`npx tsx e2e/run.ts --proof --grep "drawn-state" --project chromium-desktop`.
+active major draw's `drawDate` and reloads to prove every one of the 15 prize combinations
+(5 brands x 3 toolboxes) swaps to its own countdown hero, in both states and both viewports —
+60 hero resolutions. It is **two tests, one per Playwright project**, because a video canvas
+cannot be rescaled mid-recording (docs/e2e/proof-mode.md rule 4). Record and join with:
+
+```bash
+npm run e2e:proof -- --grep "on mobile, every prize combination"  --project mobile-chrome
+npm run e2e:proof -- --grep "on desktop, every prize combination" --project chromium-desktop
+npm run e2e:proof:join -- drawn-states-all-prize-combinations <mobile>.mp4 <desktop>.mp4
+```
+
+Note the mobile leg necessarily shows the PREVIOUS Kincrome art for Milwaukee / DeWalt / Makita /
+Ryobi — those exports are held back (see [architecture.md](architecture.md)) — and the spec
+narrates that rather than glossing over it.
 
 ## Manual smoke
 
