@@ -68,3 +68,6 @@ dev.log
 
 # Playwright e2e artifacts (reports, videos, auth states, proof output)
 e2e-artifacts/
+# Playwright MCP server scratch output (console logs + page snapshots), written into the repo
+# root whenever a session drives a browser through the MCP tools.
+.playwright-mcp/

@@ -497,8 +497,8 @@ removed and `hikoki-*` added to `LANDING_HERO_MAP`). Notes:
   returns an **ordered `LandingVideoSource[]` list** (`{ sources: Array<{ src, type: "video/webm"
   | "video/mp4" }> }`, was `{ srcs: string[] }`): for each clip tier, WebM precedes its MP4 twin;
   on the `drawn-tonight` / `drawn-tomorrow` tier the drawn pair is first with the **base pair
-  appended as a fallback**, so a brand that ships no drawn art (**HiKOKI** has only base clips)
-  still animates via its base clip instead of dropping to the still — the browser advances to the
+  appended as a fallback**, so a brand that ships no drawn *clip* still animates via its base clip
+  instead of dropping to the still — the browser advances to the
   next `<source>` natively both when a format is unsupported AND when a drawn-tier file 404s. This
   mirrors the image resolver, which already drops a missing drawn still back to the base image.
   `LandingHeroVideo` renders `sources.sources.map(s => <source key={s.src} src={s.src}

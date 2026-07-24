@@ -1,6 +1,24 @@
 /**
  * Verify all expected promo landing hero WebP assets exist.
- * Run: node scripts/check-landing-hero-assets.mjs
+ * Run: node scripts/check-landing-hero-assets.mjs   (npm run check:promo-landing-assets)
+ *
+ * The expected set models what the art team ACTUALLY ships, which the resolver
+ * (src/utils/promo/landing-image-resolver.ts) is built around:
+ *
+ *  - LIGHT ONLY. No `*-dark.webp` has ever shipped for any brand; the resolver's
+ *    light↔dark fallback exists precisely to absorb that.
+ *  - NO `final-hours` tier. No landing toolbox ships it; the resolver drops the tier
+ *    and serves the base hero.
+ *  - Three countdown tiers per brand × toolbox: base, drawn-tomorrow, drawn-tonight —
+ *    for BOTH viewports, across all five brands (HiKOKI completed the set in the
+ *    2026-07 export; it was base-only before).
+ *  - Evergreen (all-prizes) ships base desktop + mobile only, no countdown art.
+ *
+ * Before 2026-07 this script asserted dark variants and final-hours art that do not and
+ * never did exist, omitted HiKOKI, and skipped the kinTB drawn tiers that DO exist — so
+ * it reported ~94 phantom "missing" files and exited 1 on a perfectly healthy tree,
+ * which made it useless as a guard. It now matches the shipped reality; a real failure
+ * here means an asset genuinely went missing.
  */
 
 import fs from "node:fs";
@@ -12,50 +30,43 @@ const ROOT = path.join(__dirname, "..");
 const PUBLIC = path.join(ROOT, "public");
 const LANDING_BASE = "/images/background/promo/landing";
 
-const BRANDS = ["dewalt", "makita", "milwaukee", "ryobi"];
+const BRANDS = ["dewalt", "makita", "milwaukee", "ryobi", "hikoki"];
 const TOOLBOX = ["milTB", "sidTB", "kinTB"];
-const URGENCIES = [null, "final-hours", "drawn-tomorrow", "drawn-tonight"];
+/** Tiers that ship as real art. `final-hours` is intentionally absent — see header. */
+const URGENCIES = [null, "drawn-tomorrow", "drawn-tonight"];
+const VIEWPORTS = ["desktop", "mobile"];
 
 function landingPath(rel) {
   return path.join(PUBLIC, rel.replace(/^\//, ""));
 }
 
-function brandFile(brand, tb, mode, viewport, urgency) {
-  const dark = mode === "dark" ? "-dark" : "";
+function brandFile(brand, tb, viewport, urgency) {
   const mobile = viewport === "mobile" ? "-mobile" : "";
   const u = urgency ? `-${urgency}` : "";
-  const name = `${brand}-${tb}${dark}${mobile}${u}.webp`;
-  return `${LANDING_BASE}/${brand}/${name}`;
+  return `${LANDING_BASE}/${brand}/${brand}-${tb}${mobile}${u}.webp`;
 }
 
-function evergreenFile(viewport, urgency) {
+function evergreenFile(viewport) {
   const mobile = viewport === "mobile" ? "-mobile" : "";
-  const u = urgency ? `-${urgency}` : "";
-  return `${LANDING_BASE}/all-prizes/all-prizes${mobile}${u}.webp`;
+  return `${LANDING_BASE}/all-prizes/all-prizes${mobile}.webp`;
 }
 
-const variants = [
-  ["light", "desktop"],
-  ["light", "mobile"],
-  ["dark", "desktop"],
-  ["dark", "mobile"],
-];
+/** Hero "stage" background rendered in place of the skeleton while hero data loads. */
+function backgroundFile(brand, viewport) {
+  const name = brand ? `bg-${brand}-${viewport}` : `bg-${viewport}`;
+  return `${LANDING_BASE}/background/${name}.webp`;
+}
 
 const expected = new Set();
 
-for (const urgency of URGENCIES) {
-  expected.add(evergreenFile("desktop", urgency));
-  expected.add(evergreenFile("mobile", urgency));
-}
-
-for (const brand of BRANDS) {
-  for (const tb of TOOLBOX) {
-    for (const urgency of URGENCIES) {
-      for (const [mode, viewport] of variants) {
-        if (tb === "kinTB" && urgency !== null) {
-          continue;
-        }
-        expected.add(brandFile(brand, tb, mode, viewport, urgency));
+for (const viewport of VIEWPORTS) {
+  expected.add(evergreenFile(viewport));
+  expected.add(backgroundFile(null, viewport));
+  for (const brand of BRANDS) {
+    expected.add(backgroundFile(brand, viewport));
+    for (const tb of TOOLBOX) {
+      for (const urgency of URGENCIES) {
+        expected.add(brandFile(brand, tb, viewport, urgency));
       }
     }
   }
@@ -63,8 +74,7 @@ for (const brand of BRANDS) {
 
 const missing = [];
 for (const rel of expected) {
-  const abs = landingPath(rel);
-  if (!fs.existsSync(abs)) missing.push(rel);
+  if (!fs.existsSync(landingPath(rel))) missing.push(rel);
 }
 
 if (missing.length) {
