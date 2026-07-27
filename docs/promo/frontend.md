@@ -8,7 +8,7 @@ PREVIEW beside a grouped rail of every combination, and picking one recolours th
 
 | File | Role |
 |---|---|
-| [`page.tsx`](../../src/app/promotions/page.tsx) | Server: metadata, promo chrome, permit fine print |
+| [`page.tsx`](../../src/app/promotions/page.tsx) | Server: metadata, promo chrome, stage, winner testimonies, permit fine print |
 | [`_components/PrizeGallerySpotlight.tsx`](../../src/app/promotions/_components/PrizeGallerySpotlight.tsx) | Client: the ONLY state on the page + stage layout |
 | [`_components/SpotlightPreview.tsx`](../../src/app/promotions/_components/SpotlightPreview.tsx) | Left column — eyebrow, H1, case, meta row, stat tiles |
 | [`_components/ComboRail.tsx`](../../src/app/promotions/_components/ComboRail.tsx) | Right column — toolset groups, thumbs, cash tile |
@@ -19,6 +19,17 @@ PREVIEW beside a grouped rail of every combination, and picking one recolours th
 `GalleryCountdown.tsx` (the red countdown-chip row). The featured-lead card, the brand marquee, the
 sticky filter dock and the closing gold cash band went with them — the rail's cash tile is now the
 cash entry point.
+
+### Winner testimonies (added 2026-07-23)
+Directly below the configurator stage (and above the permit fine print), `page.tsx` mounts the shared
+winner-testimonies section via `<Suspense><WinnerTestimoniesClientLazy /></Suspense>` — the exact
+self-fetching, near-viewport-deferred pattern the `/promotions/[slug]` brand pages use. It is the
+**draws-domain** `WinnersTestimony` component (the "speech bubble" redesign — see
+[docs/draws/frontend.md](../draws/frontend.md#winner-testimony-display--winnerstestimony-the-one-hear-from-our-winners-section)),
+which self-fetches `useWinnersFeed` **client-side** and returns null when there are no winners — so it
+never makes this ISR page dynamic and never blocks render on an empty feed. It auto-themes with the
+promo guest light/dark toggle through its own `.winner-testimonies` `.dark`-keyed token scope (no JS
+theme read), independent of the page's `--pgs-*` layer.
 
 ### Scales by data, never by layout
 Nothing in the gallery enumerates a brand. The rail's groups are `TOOLSETS` and each group's thumbs
@@ -486,8 +497,8 @@ removed and `hikoki-*` added to `LANDING_HERO_MAP`). Notes:
   returns an **ordered `LandingVideoSource[]` list** (`{ sources: Array<{ src, type: "video/webm"
   | "video/mp4" }> }`, was `{ srcs: string[] }`): for each clip tier, WebM precedes its MP4 twin;
   on the `drawn-tonight` / `drawn-tomorrow` tier the drawn pair is first with the **base pair
-  appended as a fallback**, so a brand that ships no drawn art (**HiKOKI** has only base clips)
-  still animates via its base clip instead of dropping to the still — the browser advances to the
+  appended as a fallback**, so a brand that ships no drawn *clip* still animates via its base clip
+  instead of dropping to the still — the browser advances to the
   next `<source>` natively both when a format is unsupported AND when a drawn-tier file 404s. This
   mirrors the image resolver, which already drops a missing drawn still back to the base image.
   `LandingHeroVideo` renders `sources.sources.map(s => <source key={s.src} src={s.src}

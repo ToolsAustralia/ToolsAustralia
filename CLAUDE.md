@@ -268,7 +268,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
 ```json
 {
   "version": 1,
-  "lastModified": "2026-07-23",
+  "lastModified": "2026-07-27",
   "domains": {
     "subscription": {
       "docs": "docs/subscription/",
@@ -297,11 +297,12 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/hooks/useMemberships.ts",
         "src/hooks/useActivePackage.ts",
         "src/hooks/useMembershipModal.ts",
+        "src/hooks/useMembershipModalDeepLink.ts",
         "src/hooks/useMembershipCardCta.ts",
         "src/hooks/useOpenMembershipModalListener.ts",
         "src/app/(site)/membership/**"
       ],
-      "lastVerified": "2026-07-22"
+      "lastVerified": "2026-07-27"
     },
     "billing-stripe": {
       "docs": "docs/billing-stripe/",
@@ -381,7 +382,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/hooks/useMiniDrawPurchase.ts",
         "src/hooks/usePastDrawsData.ts"
       ],
-      "lastVerified": "2026-07-19"
+      "lastVerified": "2026-07-23"
     },
     "rewards-redeemables": {
       "docs": "docs/rewards-redeemables/",
@@ -432,7 +433,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "scripts/convert-drawn-tonight-tomorrow-to-webp.ts",
         "scripts/convert-drawn-tonight-tomorrow-videos.ts"
       ],
-      "lastVerified": "2026-07-22"
+      "lastVerified": "2026-07-24"
     },
     "affiliate": {
       "docs": "docs/affiliate/",
@@ -702,7 +703,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/app/(site)/privacy/**",
         "src/app/lazy-motion-features.ts"
       ],
-      "lastVerified": "2026-07-23"
+      "lastVerified": "2026-07-27"
     },
     "client-state": {
       "docs": "docs/client-state/",
@@ -911,7 +912,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "e2e/**",
         "playwright.config.ts"
       ],
-      "lastVerified": "2026-07-22"
+      "lastVerified": "2026-07-24"
     }
   }
 }

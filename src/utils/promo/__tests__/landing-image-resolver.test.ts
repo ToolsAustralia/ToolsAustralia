@@ -9,13 +9,20 @@ import {
 import { LANDING_IMAGE_MANIFEST } from "@/generated/landingImageManifest";
 
 /**
+ * Every brand that ships landing art. HiKOKI joined the drawn-art set in the 2026-07
+ * export (previously base-only), so it now belongs in the same loops as the other four
+ * rather than being excluded from the drawn/urgency assertions.
+ */
+const LANDING_BRANDS = ["ryobi", "milwaukee", "dewalt", "makita", "hikoki"] as const;
+
+/**
  * Light sidTB base files NOW ship for every brand (2026-06-12 — the winning A/B
  * hero, variation 2, replaced the per-brand defaults and added the previously
  * missing `{brand}-sidTB.webp` / `{brand}-sidTB-mobile.webp` light bases). The
  * resolver must return the light base directly — no dark fallback.
  */
 function testLightSidTbReturnsLightBase() {
-  for (const brand of ["ryobi", "milwaukee", "dewalt", "makita"] as const) {
+  for (const brand of LANDING_BRANDS) {
     const desktop = resolveLandingHeroImage(brand, "light", "desktop", "sidTB", null);
     const mobile = resolveLandingHeroImage(brand, "light", "mobile", "sidTB", null);
     assert.ok(
@@ -43,13 +50,13 @@ function testLightSidTbReturnsLightBase() {
  */
 function testExistingComboReturnsAsIs() {
   // milTB light desktop (base) is present on disk for all brands
-  for (const brand of ["ryobi", "milwaukee", "dewalt", "makita"] as const) {
+  for (const brand of LANDING_BRANDS) {
     const url = resolveLandingHeroImage(brand, "light", "desktop", "milTB", null);
     assert.ok(!url.includes("-dark"), `${brand} milTB light should NOT swap to dark, got ${url}`);
     assert.ok(LANDING_IMAGE_MANIFEST.has(url), `${url} must exist in manifest`);
   }
   // No landing toolbox ships final-hours art — the tier collapses to the base hero.
-  for (const brand of ["ryobi", "milwaukee", "dewalt", "makita"] as const) {
+  for (const brand of LANDING_BRANDS) {
     const url = resolveLandingHeroImage(brand, "light", "desktop", "sidTB", "final-hours");
     assert.ok(!url.includes("final-hours"), `${brand} sidTB final-hours should collapse to base, got ${url}`);
     assert.ok(LANDING_IMAGE_MANIFEST.has(url), `${url} must exist in manifest`);
@@ -64,7 +71,7 @@ function testExistingComboReturnsAsIs() {
  * a `-dark` URL — stale since 2026-06-12, which left `test:landing-image-resolver` red.)
  */
 function testDarkSidTbFallsBackToLightBase() {
-  for (const brand of ["ryobi", "milwaukee", "dewalt", "makita"] as const) {
+  for (const brand of LANDING_BRANDS) {
     const url = resolveLandingHeroImage(brand, "dark", "desktop", "sidTB", null);
     assert.ok(!url.includes("-dark"), `${brand} sidTB dark should fall back to light base, got ${url}`);
     assert.ok(LANDING_IMAGE_MANIFEST.has(url), `${url} must exist in manifest`);
@@ -76,7 +83,7 @@ function testDarkSidTbFallsBackToLightBase() {
  * -final-hours tier (collapses to the base kinTB hero).
  */
 function testKinTbDrawnTiersResolveAndFinalHoursCollapses() {
-  for (const brand of ["ryobi", "milwaukee", "dewalt", "makita"] as const) {
+  for (const brand of LANDING_BRANDS) {
     for (const urgency of ["drawn-tomorrow", "drawn-tonight"] as const) {
       const url = resolveLandingHeroImage(brand, "light", "desktop", "kinTB", urgency);
       assert.ok(url.includes(urgency), `${brand} kinTB ${urgency} should resolve to real art, got ${url}`);
@@ -93,7 +100,7 @@ function testKinTbDrawnTiersResolveAndFinalHoursCollapses() {
  * in the manifest after the fallback applies — no broken URLs reach SSR.
  */
 function testAllVariantsExistInManifest() {
-  for (const brand of ["ryobi", "milwaukee", "dewalt", "makita"] as const) {
+  for (const brand of LANDING_BRANDS) {
     for (const suffix of ["milTB", "sidTB", "kinTB"] as const) {
       for (const urgency of [null, "final-hours", "drawn-tomorrow", "drawn-tonight"] as const) {
         const paths = resolveLandingHeroImagesWithUrgency(brand, suffix, urgency);
@@ -102,6 +109,33 @@ function testAllVariantsExistInManifest() {
             LANDING_IMAGE_MANIFEST.has(url),
             `${brand}/${suffix}/${urgency ?? "base"}/${key} -> ${url} not in manifest`
           );
+        }
+      }
+    }
+  }
+}
+
+/**
+ * Every brand × toolbox × viewport now ships REAL drawn-tomorrow / drawn-tonight art
+ * (2026-07 export completed the set: HiKOKI gained drawn art, and milTB/sidTB/kinTB all
+ * carry both tiers).
+ *
+ * This is deliberately stronger than {@link testAllVariantsExistInManifest}, which only
+ * asserts the returned URL is in the manifest — that assertion still passes when a tier
+ * silently collapses to the base hero via the resolver's urgency fallback. Asserting the
+ * suffix SURVIVES is what actually catches a missing/misnamed drawn asset.
+ */
+function testDrawnTiersResolveToRealArtEverywhere() {
+  for (const brand of LANDING_BRANDS) {
+    for (const suffix of ["milTB", "sidTB", "kinTB"] as const) {
+      for (const viewport of ["desktop", "mobile"] as const) {
+        for (const urgency of ["drawn-tomorrow", "drawn-tonight"] as const) {
+          const url = resolveLandingHeroImage(brand, "light", viewport, suffix, urgency);
+          assert.ok(
+            url.includes(urgency),
+            `${brand}/${suffix}/${viewport} ${urgency} collapsed to base — drawn art missing, got ${url}`
+          );
+          assert.ok(LANDING_IMAGE_MANIFEST.has(url), `${url} must exist in manifest`);
         }
       }
     }
@@ -160,6 +194,7 @@ function run() {
   testDarkSidTbFallsBackToLightBase();
   testKinTbDrawnTiersResolveAndFinalHoursCollapses();
   testAllVariantsExistInManifest();
+  testDrawnTiersResolveToRealArtEverywhere();
   testEvergreenAllVariantsExist();
   testLoaderBackgroundResolvesPerBrand();
   testLoaderBackgroundFallsBackForNonBrand();

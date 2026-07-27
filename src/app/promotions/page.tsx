@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
+import dynamic from "next/dynamic";
 import { DEFAULT_PRIZE_SLUG } from "@/config/prize-summaries";
 import { NTP_NUMBER } from "@/constants/legal";
 import { getEffectivePromosForDisplay } from "@/utils/database/queries/promo-queries";
@@ -8,6 +9,14 @@ import { VariantProvider } from "@/components/ab-testing/VariantProvider";
 import PromoBanner from "@/components/sections/promo/PromoBanner";
 import PromotionsAccountButton from "@/components/sections/promo/PromotionsAccountButton";
 import PrizeGallerySpotlight from "./_components/PrizeGallerySpotlight";
+
+// Winner testimonies — same self-fetching, near-viewport-deferred mount the brand
+// [slug] pages use (WinnerTestimoniesClientLazy → useWinnersFeed). Keeps this ISR
+// page static/anonymous: the winners data is fetched CLIENT-side, never on render.
+const WinnerTestimoniesClientLazy = dynamic(
+  () => import("@/components/sections/WinnerTestimoniesClientLazy"),
+  { ssr: true }
+);
 
 const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://toolsaustralia.com.au";
 
@@ -94,6 +103,12 @@ export default async function GiveawayGalleryPage() {
 
       <main className="w-full overflow-x-clip">
         <PrizeGallerySpotlight />
+
+        {/* Real winners, directly below the configurator stage. Self-fetches its own
+            winners feed and renders null when there are none, so it never blocks the page. */}
+        <Suspense fallback={<div className="min-h-[200px]" />}>
+          <WinnerTestimoniesClientLazy />
+        </Suspense>
 
         {/* Extra bottom padding clears the layout's NewsletterSection, which is absolutely
             positioned + `-translate-y-1/2` so it tucks up by half its height into the page's end. */}
