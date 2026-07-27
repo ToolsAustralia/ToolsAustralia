@@ -2,6 +2,26 @@
 
 Real failure modes, surprising behaviours, and tribal knowledge from incidents. Most of these came from production bugs and have lessons attached.
 
+## `useMembershipModalDeepLink` must not use `useSearchParams()` (2026-07-27)
+
+The Klaviyo abandoned-checkout deep-link hook
+([`useMembershipModalDeepLink`](../../src/hooks/useMembershipModalDeepLink.ts), reads
+`?openMembership=1&packageId=…`) is called from
+[`MembershipSection`](../../src/components/sections/MembershipSection.tsx), which renders on the
+PRERENDERED `/` and `/promotions/*` routes. Its `useSearchParams()` call de-opted the whole
+packages grid to client-only rendering, so the section shipped as an empty `<section>` and only
+appeared after hydration — half of a measured **CLS 0.4352 → 0.0566** on `/promotions/*`.
+
+The hook now reads `window.location.search` inside its effect. Nothing is lost: the params only
+ever arrive on a fresh landing from the email CTA, the effect is client-only regardless, and the
+URL cleanup already used `window.history.replaceState` rather than the router. The `firedRef`
+single-fire latch is unchanged.
+
+**A hook that calls `useSearchParams()` de-opts every caller.** Before adding one to anything that
+`MembershipSection`, `PrizeShowcase` or another prerendered-page section calls, read
+[shared-ui/rules.md R7](../shared-ui/rules.md) and the full incident writeup in
+[shared-ui/gotchas.md](../shared-ui/gotchas.md).
+
 ## Payment modals must not boot Stripe at module scope (2026-07)
 
 `StripePaymentModal/**` and `RenewalFailedModal/**` (the past-due renewal-recovery modal + `PastDueResolvePanel`) render Stripe Elements — same rule as every other payment surface: `getStripePromise()` must be called lazily inside the component (`useMemo(() => getStripePromise(), [])`), never at module scope. See [docs/payment/gotchas.md](../payment/gotchas.md) "Stripe boots on import" for the full incident + fix pattern. Lint-enforced by `eslint/rules/no-eager-stripe.js` (`internal-norm/no-eager-stripe`, severity `"error"`).

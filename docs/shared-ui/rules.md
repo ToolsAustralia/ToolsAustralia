@@ -23,3 +23,21 @@ ARIA labels, keyboard navigation, focus rings. Use the primitives in `components
 ## R6. No raw colours
 
 Use Tailwind theme tokens or the brand-color helpers. Don't write `#FF5733` — use `text-brand-red` or similar.
+
+## R7. Never reach for `useSearchParams()` in a section that renders on a prerendered page (2026-07-27)
+
+On `revalidate`-backed marketing routes (`/`, `/promotions/*` — see
+[security-csp/rules.md R8](../security-csp/rules.md)), `useSearchParams()` de-opts the client subtree
+up to the nearest Suspense boundary to **client-only rendering**, so Next puts the *fallback* in the
+static HTML. That silently removes the section from first paint and from the crawled HTML.
+
+- Read the query with `window.location.search` inside an effect (or a client-guarded helper) —
+  `PromoBanner`, `MembershipSection`, `PrizeShowcase` and `useMembershipModalDeepLink` all do this.
+  The server then renders the default state and the param applies post-mount.
+- This applies **transitively** — a custom hook that calls `useSearchParams()` de-opts its caller.
+- Never "fix" the resulting build error with `<Suspense fallback={null}>`. If a boundary really is
+  unavoidable, its fallback must reserve the section's real height.
+- Anything that appears only after hydration must occupy the same box beforehand. Reserve it
+  (`min-h-*`, `aspect-*`) — see `ComboHero`'s drawn-date chip and `PromoHero`'s CTA spacer.
+
+See [gotchas.md](./gotchas.md) for the measured 0.4352 → 0.0566 CLS case this came from.

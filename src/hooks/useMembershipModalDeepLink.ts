@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { useSearchParams, usePathname } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { useMemberships } from "@/hooks/useMemberships";
 import {
   convertToLocalPlan,
@@ -21,10 +21,18 @@ import {
  * different hosts need different gate logic (e.g. MembershipSection wraps the
  * open in `whenGatesOpenElseGateModal`, while /membership opens directly).
  *
+ * The URL is read from `window.location.search` inside the effect, NOT via
+ * `useSearchParams()`. Callers (MembershipSection) render on PRERENDERED
+ * marketing-class pages, where `useSearchParams()` de-opts the whole client
+ * subtree up to the nearest Suspense boundary to client-only rendering — the
+ * section then vanishes from the static HTML and pops in after hydration,
+ * shoving the page down (CLS 0.38 measured on /promotions/*, 2026-07-27).
+ * Reading in an effect is client-only, so it costs nothing here: the params
+ * only ever matter on a fresh landing from the email CTA.
+ *
  * **Single-fire guarantee (fixed 2026-05-29):** even though `onOpen` is
  * typically passed as an inline arrow function (new reference every render)
- * and `useSearchParams` may not propagate the post-`router.replace` URL
- * change before the next effect tick, this hook fires `onOpen` AT MOST ONCE
+ * and the URL update is applied via `history.replaceState`, this hook fires `onOpen` AT MOST ONCE
  * per mount. A `useRef` flag latches after the first dispatch and short-
  * circuits all subsequent effect runs. Without this lock, the inline-
  * callback re-render cascade combined with the async URL update caused the
@@ -51,13 +59,11 @@ import {
 export function useMembershipModalDeepLink(
   onOpen: (plan: LocalMembershipPlan) => void,
 ): void {
-  const searchParams = useSearchParams();
   const pathname = usePathname();
   const { subscriptionPackages, oneTimePackages, loading } = useMemberships();
 
   // Latch: once we have dispatched (or skipped due to stale link), don't
-  // re-evaluate this mount cycle, regardless of how many times deps change
-  // or how slowly the URL update propagates through useSearchParams.
+  // re-evaluate this mount cycle, regardless of how many times deps change.
   const firedRef = useRef(false);
 
   // Hold the latest onOpen in a ref so the effect can call the freshest
@@ -71,9 +77,11 @@ export function useMembershipModalDeepLink(
   useEffect(() => {
     if (loading) return;
     if (firedRef.current) return;
+    if (typeof window === "undefined") return;
 
-    const openFlag = searchParams?.get("openMembership");
-    const packageId = searchParams?.get("packageId");
+    const currentParams = new URLSearchParams(window.location.search);
+    const openFlag = currentParams.get("openMembership");
+    const packageId = currentParams.get("packageId");
     if (openFlag !== "1" || !packageId) return;
 
     // Latch immediately — before any side effect — so a re-render triggered
@@ -97,20 +105,16 @@ export function useMembershipModalDeepLink(
     //
     // `history.replaceState` updates the URL bar WITHOUT touching the router
     // — no RSC refetch, no log spam, no chance of cascading re-renders. The
-    // `useSearchParams` hook won't see the change until React's next render
-    // pass, but we don't care: the `firedRef` latch above ensures this effect
-    // can't re-enter regardless of what `useSearchParams` returns.
-    if (typeof window !== "undefined") {
-      const next = new URLSearchParams(searchParams?.toString() ?? "");
-      next.delete("openMembership");
-      next.delete("packageId");
-      const nextSearch = next.toString();
-      window.history.replaceState(
-        null,
-        "",
-        `${pathname}${nextSearch ? `?${nextSearch}` : ""}`,
-      );
-    }
+    // `firedRef` latch above ensures this effect can't re-enter afterwards.
+    const next = new URLSearchParams(currentParams);
+    next.delete("openMembership");
+    next.delete("packageId");
+    const nextSearch = next.toString();
+    window.history.replaceState(
+      null,
+      "",
+      `${pathname}${nextSearch ? `?${nextSearch}` : ""}`,
+    );
 
     if (!apiPlan) {
       if (process.env.NODE_ENV === "development") {
@@ -129,6 +133,5 @@ export function useMembershipModalDeepLink(
 
     return () => clearTimeout(timer);
     // onOpen intentionally NOT in deps — read from ref above.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchParams, subscriptionPackages, oneTimePackages, loading, pathname]);
+  }, [subscriptionPackages, oneTimePackages, loading, pathname]);
 }

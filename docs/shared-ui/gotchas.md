@@ -1,5 +1,77 @@
 # Shared UI — Gotchas
 
+## `useSearchParams()` + `<Suspense fallback={null}>` = a section that ships as zero height (fixed 2026-07-27)
+
+`/promotions/*` measured **CLS 0.4352** on a 390×844 viewport — ~4× the 0.1 "good" threshold, and
+the single biggest input to the Speed Insights score on those pages. Root cause was NOT a slow
+image or a late font: two of the page's largest sections were **absent from the prerendered HTML
+entirely** and only appeared after hydration.
+
+Both [`MembershipSection`](../../src/components/sections/MembershipSection.tsx) and
+[`PrizeShowcase`](../../src/components/sections/promo/PrizeShowcase.tsx) called `useSearchParams()`
+and each "solved" the resulting Next build error by self-wrapping in `<Suspense fallback={null}>`.
+On a **prerendered** route (these pages are `revalidate = 60`; see
+[security-csp/rules.md R8](../security-csp/rules.md)) `useSearchParams()` de-opts the client subtree
+up to the nearest Suspense boundary to **client-only rendering** — Next renders the *fallback* into
+the static HTML. A `null` fallback means the section is rendered as **nothing**: no element, no
+reserved space. The page-level `<Suspense fallback={<div className="min-h-[600px]" />}>` in
+[`[slug]/page.tsx`](../../src/app/promotions/[slug]/page.tsx) never got a chance to help — the inner
+boundary is the closer one, so its `null` won.
+
+Measured on `/promotions/milwaukee` (390×844), before → after hydration:
+
+| Section | in static HTML | after hydration |
+| --- | --- | --- |
+| `#packages` (MembershipSection) | ~2px (empty `<section>`) | 1,265px |
+| `.prize-builder` (PrizeShowcase, "Build your prize") | absent, 0px | 1,115px |
+
+`#how-it-works` (GiveawayDetails) started at `y=522` — inside the 844px viewport — and was shoved to
+`y=2913`. That one element accounted for **0.38152 of the 0.4352** total.
+
+Measured A/B, same machine / port / viewport / build config, `next start` on the port matching
+`NEXT_PUBLIC_APP_URL` (otherwise CSP blocks every client query and the numbers are meaningless):
+
+| | before | after |
+| --- | --- | --- |
+| total CLS | **0.4352** | **0.0566** |
+| `#how-it-works` shift | 0.38152 | — gone |
+| packages-card shift | 0.05364 | 0.05364 (untouched, see below) |
+
+Final laid-out geometry is **identical** either way (`#packages` 520/1265, `.prize-builder`
+1784/1128, `#how-it-works` 2913/733) — the fix changes only *when* those sections exist, never how
+they look.
+
+**Still open (0.05364):** `MembershipSection`'s promo multiplier banner is gated on
+`useResolvedMultiplier(...)`, a client query, so when a promo is active the banner appears ~113px
+tall above the packages grid after the query resolves. Reserving a fixed height would just trade an
+expand-shift for a collapse-shift on no-promo pages; the real fix is to thread the page's
+already-server-fetched `getEffectivePromosForDisplay()` result down through `PromoPackages` so the
+banner renders in the static HTML. That crosses several call sites of a shared component and was
+left out of the CLS pass deliberately.
+
+**The fix is to remove the hook, not to grow the fallback.** Both query reads were client-only
+anyway, so they moved to `window.location.search` behind a small local helper
+(`readForcedPackagesTab()` / `readCurrentSearchParams()`), matching what
+[`PromoBanner`](../../src/components/sections/promo/PromoBanner.tsx) already does for the same
+`?packages=` param. Both sections now server-render in full — which also puts the prize card and the
+package grid back into the crawled HTML.
+
+The self-wrapping `<Suspense>` was then **deleted**, deliberately: the homepage renders both
+components with no boundary of its own, so re-introducing `useSearchParams()` (directly, or via a
+hook like [`useMembershipModalDeepLink`](../../src/hooks/useMembershipModalDeepLink.ts)) now fails
+`npm run build` loudly instead of silently reinstating the collapse. Keep it that way.
+
+**Rules of thumb**
+
+- A Suspense fallback of `null` around anything with height is a CLS bug waiting to happen. If a
+  boundary is genuinely needed, the fallback must reserve the real height.
+- Check the hook's whole *transitive* subtree, not just the component: `MembershipSection` itself
+  was only half the problem — `useMembershipModalDeepLink()` called `useSearchParams()` too, and
+  either one alone keeps the de-opt alive.
+- Verify against the built output, not the dev server:
+  `npm run build && grep -c "Build your prize" .next/server/app/promotions/milwaukee.html`.
+  Dev mode renders these routes dynamically and hides the whole class of bug.
+
 ## `getBaseUrl()` must strip a trailing slash — `NEXT_PUBLIC_APP_URL` may end in `/` (fixed 2026-07-23)
 
 [`getBaseUrl()`](../../src/utils/url/get-base-url.ts) returned `process.env.NEXT_PUBLIC_APP_URL`
@@ -149,7 +221,7 @@ The error-throw path is still intact for genuinely unexpected purchase errors (n
 
 ### Klaviyo abandoned-checkout deep-link auto-opens MembershipModal (Phase 8, 2026-05-29)
 
-The abandoned-checkout email CTA built by `buildCheckoutResumeUrl` lands the user on either `/membership` or `/promotions/<slug>` with `?openMembership=1&packageId=<canonical-id>` in the query string. The new [`useMembershipModalDeepLink`](../../src/hooks/useMembershipModalDeepLink.ts) hook is wired into `MembershipSection` — on mount it reads those params, resolves the canonical `packageId` via `useMemberships()`, fires the host's `onOpen(plan)` callback (which wraps in the major-draw purchase gate), then **cleans the URL params** so a page refresh doesn't loop back into the modal.
+The abandoned-checkout email CTA built by `buildCheckoutResumeUrl` lands the user on either `/membership` or `/promotions/<slug>` with `?openMembership=1&packageId=<canonical-id>` in the query string. The new [`useMembershipModalDeepLink`](../../src/hooks/useMembershipModalDeepLink.ts) hook is wired into `MembershipSection` — on mount it reads those params **from `window.location.search`** (never `useSearchParams()` — see the CLS entry at the top of this file), resolves the canonical `packageId` via `useMemberships()`, fires the host's `onOpen(plan)` callback (which wraps in the major-draw purchase gate), then **cleans the URL params** so a page refresh doesn't loop back into the modal.
 
 `MembershipSection` is mounted on both landing destinations (directly on `/promotions/<slug>` and indirectly via `MembershipPageClient → MembershipSection` on `/membership`), so a single hook integration covers both URLs. The deep-link does NOT re-fire `Started Checkout` — the original "Enter Now" click already fired it; this is funnel resumption, not a new entry.
 
