@@ -58,22 +58,29 @@ function buildLandingUrl(
   return `${LANDING_IMAGE_BASE}/${brand}/${brand}-${toolboxSuffix}${darkSuffix}${mobileSuffix}${urgencySuffix}.webp`;
 }
 
-/** Filename segment: Sidchrome, Kincrome, or Milwaukee stack toolbox under `landing/{brand}/`. */
-export type LandingHeroToolboxSuffix = "milTB" | "sidTB" | "kinTB";
+/** Filename segment: Milwaukee, Sidchrome, Kincrome or GearWrench toolbox under `landing/{brand}/`. */
+export type LandingHeroToolboxSuffix = "milTB" | "sidTB" | "kinTB" | "gwTB";
 
 /**
  * Image naming conventions for landing pages:
- * - Desktop light: {brand}-{milTB|sidTB|kinTB}.webp
- * - Desktop dark: {brand}-{milTB|sidTB|kinTB}-dark.webp
- * - Mobile light: {brand}-{milTB|sidTB|kinTB}-mobile.webp
- * - Mobile dark: {brand}-{milTB|sidTB|kinTB}-dark-mobile.webp
+ * - Desktop light: {brand}-{milTB|sidTB|kinTB|gwTB}.webp
+ * - Desktop dark: {brand}-{milTB|sidTB|kinTB|gwTB}-dark.webp
+ * - Mobile light: {brand}-{milTB|sidTB|kinTB|gwTB}-mobile.webp
+ * - Mobile dark: {brand}-{milTB|sidTB|kinTB|gwTB}-dark-mobile.webp
  * - Urgency (after dark/mobile): -final-hours | -drawn-tomorrow | -drawn-tonight
  *
  * Evergreen (all-prizes): no separate dark filenames — dark mode uses the same file as light.
  *
- * Kincrome (`kinTB`): dedicated toolbox art for all viewports. It ships `-drawn-tomorrow` /
- * `-drawn-tonight` countdown art like the other toolboxes, but no `-final-hours` tier — so a
- * `final-hours` kinTB request reuses the base kinTB asset.
+ * No toolbox ships a `-final-hours` tier, so a `final-hours` request drops the tier and
+ * resolves the base hero (see resolveLandingHeroImage).
+ *
+ * **Dark art is real as of the Draw 9 export (2026-07-27).** Before it, no `*-dark.webp` had
+ * ever shipped and the light↔dark fallback below silently served the light file to dark-mode
+ * users. Every brand × toolbox now ships all 12 variants (3 tiers × 2 viewports × 2 modes),
+ * so that fallback is now a genuine safety net rather than the normal path.
+ *
+ * GearWrench (`gwTB`) joined in Draw 9. It has **no Ryobi pairing** — that artwork was not
+ * produced — so `ryobi-gwTB` resolves through the fallback chain rather than to a real file.
  */
 
 /**
@@ -110,8 +117,18 @@ export function resolveLandingHeroImage(
    */
   if (urgency != null) return resolveLandingHeroImage(brand, mode, viewport, toolboxSuffix, null);
 
-  /** Neither mode shipped for the base — return the desired URL anyway so the failure is visible. */
-  return desired;
+  /**
+   * Nothing exists for this brand × toolbox in EITHER mode at ANY tier — the whole
+   * combination was never produced. Draw 9 created the first real instance of this:
+   * GearWrench shipped for four toolsets but never for Ryobi.
+   *
+   * This used to `return desired` "so the failure is visible", which was fine while it could
+   * not actually happen. It can now, and the failure it produces is not a visible placeholder
+   * but a **400 from `/_next/image`** — a blank hero plus a console error, on a real customer
+   * page. Fall back to the evergreen collage instead: it is a genuine, shipped image and an
+   * honest "here is the prize range" answer, rather than showing the wrong toolbox.
+   */
+  return resolveEvergreenHeroImage(mode, viewport, null);
 }
 
 /**
@@ -228,11 +245,13 @@ export function getFallbackImagePath(): string {
 }
 
 /**
- * Map prize slug to landing asset toolbox segment (`*-sidchrome` → sidTB, `*-kincrome` → kinTB, else milTB).
+ * Map prize slug to landing asset toolbox segment (`*-sidchrome` → sidTB, `*-kincrome` → kinTB,
+ * `*-gearwrench` → gwTB, else milTB).
  */
 export function landingToolboxSuffixFromPrizeSlug(prizeSlug: string): LandingHeroToolboxSuffix {
   const lower = prizeSlug.toLowerCase();
   if (lower.endsWith("-sidchrome")) return "sidTB";
   if (lower.endsWith("-kincrome")) return "kinTB";
+  if (lower.endsWith("-gearwrench")) return "gwTB";
   return "milTB";
 }

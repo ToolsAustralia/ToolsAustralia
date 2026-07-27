@@ -7,11 +7,22 @@
  */
 
 import type { ToolboxType } from "./constants";
+import { TOOLBOXES } from "./constants";
 
 /** Query key for toolset promo landing pages (`/promotions/makita` etc.) — persists toolbox/cash selection on refresh. */
 export const TOOLBOX_QUERY_PARAM = "toolbox";
 
-const VALID_TOOLBOX_QUERY_VALUES = new Set<string>(["cash", "kincrome", "milwaukee", "sidchrome"]);
+/**
+ * DERIVED from the toolbox registry, never hand-listed.
+ *
+ * This was a hardcoded set of three ids, which silently forked from `TOOLBOXES` the moment
+ * GearWrench was added in draw 9: the box appeared in the reel and wrote `?toolbox=gearwrench`
+ * to the URL, but the value failed to parse on the way back in — so a refresh or a shared link
+ * dropped the visitor's choice back to the default. Deriving it means the registry stays the
+ * single source of truth the prize builder was designed around, and the next toolbox needs no
+ * change here at all. `cash` is added explicitly because it is the opt-out, not a toolbox.
+ */
+const VALID_TOOLBOX_QUERY_VALUES = new Set<string>(["cash", ...TOOLBOXES.map((b) => b.id)]);
 
 /**
  * Parses `?toolbox=` for toolset landing URLs. Invalid or empty values return null (caller should use default Milwaukee).

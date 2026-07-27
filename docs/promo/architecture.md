@@ -83,6 +83,56 @@ Assets: each `.mp4` (H.264, no audio, 5 s loop — desktop 2560×1044, mobile 10
 
 Consumed by [`PromoHero`](../../src/components/sections/promo/PromoHero.tsx) via [`LandingHeroVideo`](../../src/components/sections/promo/LandingHeroVideo.tsx) — see [docs/shared-ui/frontend.md](../shared-ui/frontend.md) for the poster / gating behaviour.
 
+## Draw 9 — light/dark heroes and the fourth toolbox (2026-07-27)
+
+The largest asset change the landing heroes have had. Three things became true at once.
+
+**1. Dark art exists.** Before this, no `*-dark.webp` had ever shipped for any brand. The
+resolver's light↔dark fallback had been silently serving the LIGHT hero to dark-mode
+visitors since it was written — invisible in a light-mode screenshot, which is why it
+survived so long. Draw 9 ships all **12 variants per combination** (3 tiers × 2 viewports ×
+2 modes), so `mode` now selects real art and the fallback is a genuine safety net.
+
+**2. GearWrench is the fourth toolbox** (`gwTB`), joining `milTB` / `sidTB` / `kinTB`.
+It pairs with four toolsets — **there is no `ryobi-gwTB` art**; that combination was never
+produced. See the fallback note below.
+
+**3. The clips gained the same two dimensions**, so `landing-video-resolver` grew a `mode`
+argument and a manifest. See "Landing hero video" above.
+
+Net on disk: **228 stills** (`landing/{brand}/`) and **456 clips** (`videos/landing/{brand}/`,
+mp4 + webm each).
+
+### Ingest — and why it is not a filename parse
+
+`scripts/convert-draw9-landing-to-webp.ts` (+ `-videos.ts`) map the art team's export into the
+resolver's naming. Two decoding rules that are the opposite of the obvious reading:
+
+- The **toolbox comes FIRST** in the source name and SECOND in our slugs. `GW-Dew` is the
+  DeWalt toolset in the GearWrench box → `dewalt/dewalt-gwTB…`.
+- **`A` = dark, `B` = light.** Verified numerically over all 230 stills (dark luminance
+  46.9–71.0, light 168.3–201.2 — a clean split).
+
+**Nine desktop files carried a name that disagreed with their artwork**, so the scripts hold
+an explicit `EXCEPTIONS` table keyed by what each file actually shows. Deriving the mapping
+from filenames would have shipped 3 Ryobi banners onto HiKOKI pages, a Kincrome banner onto a
+GearWrench page, and a reversed tonight/tomorrow pair. The video script **imports** that table
+rather than copying it — the clips were proven artwork-identical to the stills file-for-file
+(whole-frame compare for brand/toolbox/mode, plus a badge-region compare for the tier, each
+with a control showing the test actually separates a mismatch from a true match).
+
+### `ryobi × gwTB` — the one gap, and what it renders
+
+No art in any mode, viewport or tier. Both resolvers degrade rather than 404:
+
+- **Image:** `resolveLandingHeroImage` falls through to the **evergreen collage**. It used to
+  `return desired` "so the failure is visible" — harmless while the case could not occur, but
+  once it could, the visible failure was a **400 from `/_next/image`** and a blank hero on a
+  live page. Caught by the e2e watchdog during the proof run, not by any unit test.
+- **Video:** `getLandingHeroVideoPaths` returns `null`, so the caller keeps the still hero.
+
+Delete `KNOWN_GAPS` in `scripts/check-landing-hero-assets.mjs` when that art ships.
+
 ## Banner behaviour
 
 (Migrated from `docs/PROMO_BANNER_BEHAVIOUR.md`.)

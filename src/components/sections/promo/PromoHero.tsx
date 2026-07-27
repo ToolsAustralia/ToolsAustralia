@@ -141,7 +141,7 @@ export default function PromoHero({
   // tier the resolver returns the animated badge clip.
   const heroVideoPaths =
     effectiveSlug && !perSlugVariantImage && !variantConfig?.hero?.disableVideo
-      ? getLandingHeroVideoPaths(effectiveSlug, landingDrawDayUrgency)
+      ? getLandingHeroVideoPaths(effectiveSlug, landingDrawDayUrgency, themeMode)
       : null;
 
   // Video-first: once mounted, the clip is the PRIMARY hero for its viewport (the still never
