@@ -35,12 +35,11 @@ import { connectE2eDb } from "../../helpers/db";
  * It's set via `emulateMedia` rather than `test.use({ reducedMotion })` because the extended
  * `test` in fixtures/test.ts types `use()` against its own Fixtures, not Playwright's options.
  *
- * MOBILE kinTB CAVEAT: Milwaukee / DeWalt / Makita / Ryobi still serve their PREVIOUS mobile
- * kinTB art — the 2026-07 mobile exports 21-28 arrived with HiKOKI's sub-headline pasted over
- * those brands' artwork and were held back (`SKIP_SOURCES`, docs/promo/architecture.md). The
- * held-back files kept their FILENAMES, so the URL still carries `-drawn-{state}` and these
- * assertions are uniform across all 15 — only the pixels are the older export. The spec
- * narrates that rather than asserting it, so the video stays honest about what's on screen.
+ * All 15 combinations now serve the current 2026-07 design in both viewports: the mobile kinTB
+ * exports 21-28 that first arrived with HiKOKI's sub-headline over Milwaukee / DeWalt / Makita /
+ * Ryobi artwork were re-exported and shipped on 2026-07-27 (docs/promo/architecture.md). Because
+ * the held-back files had kept their FILENAMES, these assertions did not change when the pixels
+ * did — which is exactly why they are written against the URL grammar rather than the artwork.
  *
  * SERIAL + restores `drawDate` in afterAll: this mutates the single shared seeded draw,
  * so it must not interleave with other specs reading draw state.
@@ -145,15 +144,30 @@ async function setDrawDate(when: Date): Promise<void> {
 async function visibleHero(page: import("@playwright/test").Page) {
   const imgs = page.locator('img[alt^="Promo Hero"]');
   await expect(imgs.first()).toBeAttached({ timeout: 30_000 });
-  const count = await imgs.count();
-  for (let i = 0; i < count; i++) {
-    const img = imgs.nth(i);
-    if (await img.isVisible()) {
-      await awaitHeroPainted(img); // every caller wants the artwork, not the loader
-      return img;
+
+  /**
+   * POLL, don't one-shot. Waiting for the FIRST hero to attach does not mean the VISIBLE one
+   * has: `PromoHero` renders a mobile and a desktop copy and hides one by breakpoint, so right
+   * after `domcontentloaded` the attached copy can be the hidden twin while its visible
+   * counterpart is still hydrating. Scanning once at that instant finds nothing visible and
+   * throws immediately — observed as a 1-in-3 flake on this spec's 60 navigations, where the
+   * cost of losing a 3-minute recording to a 250ms race is high and the retry is nearly free.
+   */
+  const deadline = Date.now() + 30_000;
+  for (;;) {
+    const count = await imgs.count();
+    for (let i = 0; i < count; i++) {
+      const img = imgs.nth(i);
+      if (await img.isVisible()) {
+        await awaitHeroPainted(img); // every caller wants the artwork, not the loader
+        return img;
+      }
     }
+    if (Date.now() > deadline) {
+      throw new Error(`no visible "Promo Hero" image among ${count} candidates after 30s`);
+    }
+    await page.waitForTimeout(250);
   }
-  throw new Error(`no visible "Promo Hero" image among ${count} candidates`);
 }
 
 /** Decoded `src` of a hero locator (Next/Image wraps the path in /_next/image?url=…). */
@@ -208,8 +222,8 @@ async function walkAllCombos(
     const hero = await visibleHero(page);
     const src = await heroSrc(hero);
 
-    // Brand + toolbox + countdown tier, and the mobile art on mobile. All 15 assert
-    // identically — the held-back mobile kinTB files kept their names (see file header).
+    // Brand + toolbox + countdown tier, and the mobile art on mobile — uniform across all 15
+    // because the assertions are written against the URL grammar, not the artwork.
     expect(src, `${viewport} ${state} ${combo.slug}`).toContain(`${combo.asset}-`);
     expect(src, `${viewport} ${state} ${combo.slug}`).toContain(state);
     if (viewport === "mobile") {
@@ -306,14 +320,31 @@ test.describe("landing drawn-state @demo", () => {
       await walkAllCombos(page, demo, "mobile", "drawn-tonight");
     });
 
+    /**
+     * Closing beat on the four mobile Kincrome pages whose first export described the wrong
+     * prize (HiKOKI's kit over Milwaukee / DeWalt / Makita / Ryobi art) and was held back.
+     * The re-export shipped 2026-07-27, so this re-walks them to show the corrected copy —
+     * the part of this batch a reviewer most wants to see. Page prepared before the beat, per
+     * the convention above; the caption then covers all four via demo.ts's navigation repaint.
+     */
     await page.goto("/promotions/milwaukee-kincrome", { waitUntil: "domcontentloaded" });
 
     await demo.step(
-      "One honest note: on mobile the four Kincrome pages still show the previous artwork, because the new export described the wrong prize",
+      "And the four Kincrome pages whose first export described the wrong prize have been re-exported — each now names its own kit",
       async () => {
-        const hero = await visibleHero(page);
-        expect(await heroSrc(hero)).toContain("milwaukee-kinTB-mobile-drawn-tonight");
-        await demo.highlight(hero, "Previous art — new export held back");
+        for (const [brand, label] of [
+          ["milwaukee", "Milwaukee"],
+          ["dewalt", "DeWalt"],
+          ["makita", "Makita"],
+          ["ryobi", "Ryobi"],
+        ] as const) {
+          if (brand !== "milwaukee") {
+            await page.goto(`/promotions/${brand}-kincrome`, { waitUntil: "domcontentloaded" });
+          }
+          const hero = await visibleHero(page);
+          expect(await heroSrc(hero)).toContain(`${brand}-kinTB-mobile-drawn-tonight`);
+          await demo.highlight(hero, `${label} · corrected copy`);
+        }
       }
     );
   });
