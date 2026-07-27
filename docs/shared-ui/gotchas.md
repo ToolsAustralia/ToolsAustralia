@@ -2,10 +2,10 @@
 
 ## `useSearchParams()` + `<Suspense fallback={null}>` = a section that ships as zero height (fixed 2026-07-27)
 
-`/promotions/*` measured **CLS 0.4352** on a 390×844 viewport — ~4× the 0.1 "good" threshold, and
-the single biggest input to the Speed Insights score on those pages. Root cause was NOT a slow
-image or a late font: two of the page's largest sections were **absent from the prerendered HTML
-entirely** and only appeared after hydration.
+`/promotions/*` measured **CLS 1.1689** on a throttled 390×844 phone profile (0.4352 unthrottled) —
+far past the 0.1 "good" threshold. Root cause of the part fixed here was NOT a slow image or a late
+font: two of the page's largest sections were **absent from the prerendered HTML entirely** and only
+appeared after hydration.
 
 Both [`MembershipSection`](../../src/components/sections/MembershipSection.tsx) and
 [`PrizeShowcase`](../../src/components/sections/promo/PrizeShowcase.tsx) called `useSearchParams()`
@@ -26,28 +26,50 @@ Measured on `/promotions/milwaukee` (390×844), before → after hydration:
 | `.prize-builder` (PrizeShowcase, "Build your prize") | absent, 0px | 1,115px |
 
 `#how-it-works` (GiveawayDetails) started at `y=522` — inside the 844px viewport — and was shoved to
-`y=2913`. That one element accounted for **0.38152 of the 0.4352** total.
+`y=2913`. That single element is **0.3717** of the total on its own.
 
 Measured A/B, same machine / port / viewport / build config, `next start` on the port matching
-`NEXT_PUBLIC_APP_URL` (otherwise CSP blocks every client query and the numbers are meaningless):
+`NEXT_PUBLIC_APP_URL` (otherwise CSP blocks every client query and the numbers are meaningless).
+Per-shift breakdown, 390×844, **4× CPU throttle + 1.6Mbps/150ms** — Speed Insights reports FIELD
+data from real phones, so the throttled column is the one that matches what it scores:
 
-| | before | after |
-| --- | --- | --- |
-| total CLS | **0.4352** | **0.0566** |
-| `#how-it-works` shift | 0.38152 | — gone |
-| packages-card shift | 0.05364 | 0.05364 (untouched, see below) |
+| shift | before | after | what it is |
+| --- | --- | --- | --- |
+| 0.0020 @3.0s | ✓ | ✓ | promo-banner text reflow |
+| **0.7458 @3.2s** | ✓ | ✓ | **the `<footer>`** — see below, NOT this fix's problem |
+| **0.3717 @8.7s** | ✓ | **gone** | `#how-it-works` shoved off-screen — **this fix** |
+| 0.0401 @9.0s | ✓ | ✓ | packages promo-multiplier banner |
+| 0.0093 @9.9s | ✓ | ✓ | packages promo badge |
+| **total** | **1.1689** | **0.7970** | |
+
+Unthrottled on localhost the same A/B reads **0.4352 → 0.0566**, because the whole load resolves in
+under a second and the footer shift never happens. Do not quote the unthrottled number as the field
+result — it flatters the page and hides the biggest contributor.
 
 Final laid-out geometry is **identical** either way (`#packages` 520/1265, `.prize-builder`
 1784/1128, `#how-it-works` 2913/733) — the fix changes only *when* those sections exist, never how
 they look.
 
-**Still open (0.05364):** `MembershipSection`'s promo multiplier banner is gated on
-`useResolvedMultiplier(...)`, a client query, so when a promo is active the banner appears ~113px
-tall above the packages grid after the query resolves. Reserving a fixed height would just trade an
-expand-shift for a collapse-shift on no-promo pages; the real fix is to thread the page's
-already-server-fetched `getEffectivePromosForDisplay()` result down through `PromoPackages` so the
-banner renders in the static HTML. That crosses several call sites of a shared component and was
-left out of the CLS pass deliberately.
+Video proof of the pair (side-by-side, live CLS read-out, shifted regions flashed):
+`npm run` nothing — it was a one-off harness; the artifact is
+`e2e-artifacts/proof/2026-07-27-cls-fix/cls-promotions-before-after.mp4`.
+
+### Still open — two shifts this pass did NOT fix
+
+**0.7458 — the footer, on slow connections only.** The page-level boundaries in
+[`[slug]/page.tsx`](../../src/app/promotions/[slug]/page.tsx) reserve `min-h-[600px]` /
+`min-h-[400px]` / `min-h-[300px]`, but the real sections are 1,265px and 1,128px. While the RSC
+payload streams, those short fallbacks let `<footer>` (`promotions/layout.tsx`) sit **inside** the
+844px viewport; when the real content swaps in, the footer is shoved out — a 0.75 shift on its own,
+identical in both builds. This is the same "fallback must reserve the real height" rule as above,
+one level up. It is now the single largest CLS contributor on `/promotions/*`.
+
+**0.0401 — the promo multiplier banner.** `MembershipSection`'s banner is gated on
+`useResolvedMultiplier(...)`, a client query, so with a promo active it appears ~113px tall above
+the packages grid on resolve. Reserving a fixed height just trades an expand-shift for a
+collapse-shift on no-promo pages; the real fix is threading the page's already-server-fetched
+`getEffectivePromosForDisplay()` down through `PromoPackages` so it renders in the static HTML.
+That crosses several call sites of a shared component and was left out deliberately.
 
 **The fix is to remove the hook, not to grow the fallback.** Both query reads were client-only
 anyway, so they moved to `window.location.search` behind a small local helper

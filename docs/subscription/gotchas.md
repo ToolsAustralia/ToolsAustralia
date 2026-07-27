@@ -10,7 +10,7 @@ The Klaviyo abandoned-checkout deep-link hook
 [`MembershipSection`](../../src/components/sections/MembershipSection.tsx), which renders on the
 PRERENDERED `/` and `/promotions/*` routes. Its `useSearchParams()` call de-opted the whole
 packages grid to client-only rendering, so the section shipped as an empty `<section>` and only
-appeared after hydration — half of a measured **CLS 0.4352 → 0.0566** on `/promotions/*`.
+appeared after hydration — part of a measured **CLS 1.1689 → 0.7970** on `/promotions/*` (throttled phone profile).
 
 The hook now reads `window.location.search` inside its effect. Nothing is lost: the params only
 ever arrive on a fresh landing from the email CTA, the effect is client-only regardless, and the

@@ -40,4 +40,4 @@ static HTML. That silently removes the section from first paint and from the cra
 - Anything that appears only after hydration must occupy the same box beforehand. Reserve it
   (`min-h-*`, `aspect-*`) — see `ComboHero`'s drawn-date chip and `PromoHero`'s CTA spacer.
 
-See [gotchas.md](./gotchas.md) for the measured 0.4352 → 0.0566 CLS case this came from.
+See [gotchas.md](./gotchas.md) for the measured CLS case this came from (1.1689 → 0.7970 on a throttled phone profile; the residual is a separate footer/streaming shift documented there).
