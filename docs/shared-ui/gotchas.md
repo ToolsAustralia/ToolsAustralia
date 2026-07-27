@@ -50,19 +50,44 @@ Final laid-out geometry is **identical** either way (`#packages` 520/1265, `.pri
 1784/1128, `#how-it-works` 2913/733) — the fix changes only *when* those sections exist, never how
 they look.
 
-Video proof of the pair (side-by-side, live CLS read-out, shifted regions flashed):
-`npm run` nothing — it was a one-off harness; the artifact is
-`e2e-artifacts/proof/2026-07-27-cls-fix/cls-promotions-before-after.mp4`.
+Video proof of the pair (side-by-side, live CLS read-out, shifted regions flashed) — one-off
+harness, artifact at `e2e-artifacts/proof/2026-07-27-cls-fix/cls-promotions-before-after.mp4`.
+
+**Confirmed against LIVE production** (2026-07-27, pre-deploy, throttled 390×844): CLS **1.0815**,
+carrying both the 0.7458 footer shift and a 0.3279 `#how-it-works` shift — so neither number is a
+localhost artifact. The served production HTML is 206,911 bytes with a 56,765-char `<main>`, and
+grepping it shows the de-opt exactly as diagnosed: `how-it-works` ×1 and `min-h-[400px]` ×2 present,
+but **zero** occurrences of `Build your prize`, `prize-builder`, `Tradie`, `id="membership"`,
+`min-h-[600px]` or `ENTER NOW`. Note when re-running this: a plain `curl` gets an
+`X-Vercel-Mitigated: challenge` 429 bot-challenge page (an Astro interstitial, `data-astro-cid-*`) —
+measure with a real browser, and assert the challenge markers are absent before trusting a sample.
 
 ### Still open — two shifts this pass did NOT fix
 
-**0.7458 — the footer, on slow connections only.** The page-level boundaries in
-[`[slug]/page.tsx`](../../src/app/promotions/[slug]/page.tsx) reserve `min-h-[600px]` /
-`min-h-[400px]` / `min-h-[300px]`, but the real sections are 1,265px and 1,128px. While the RSC
-payload streams, those short fallbacks let `<footer>` (`promotions/layout.tsx`) sit **inside** the
-844px viewport; when the real content swaps in, the footer is shoved out — a 0.75 shift on its own,
-identical in both builds. This is the same "fallback must reserve the real height" rule as above,
-one level up. It is now the single largest CLS contributor on `/promotions/*`.
+**0.7458 — the footer. Cause NOT yet isolated; do not repeat the first guess.** An earlier revision
+of this entry blamed the page-level `min-h-[600px]`/`[400px]`/`[300px]` fallbacks in
+[`[slug]/page.tsx`](../../src/app/promotions/[slug]/page.tsx) under-reserving against the real
+1,265px / 1,128px sections. **The measurements contradict that** and it should not be quoted.
+
+What is actually measured, sampling layout every 150ms through the load (throttled 390×844, live
+production, reproduced across runs at CLS 1.0815 / 1.0816):
+
+```
+ 1178ms  doc=844   main not in DOM yet
+ 3520ms  doc=844   mainH=0     footerTop=0      <- <main> is ZERO px; footer fills the viewport
+ 3789ms  doc=4311  mainH=3584  footerTop=3666   <- main expands; footer shoved 3,666px  = 0.7458
+ 8340ms                                          <- #how-it-works shift 0.3279 (the part fixed here)
+```
+
+At the instant of the shift `<main>` is **0px**, not the ~2,400px those fallbacks would occupy — so
+the fallbacks are not what is holding the page open, and resizing them would not have fixed it.
+In an earlier run that also sampled `document.styleSheets.length`, `main` gained its height in the
+same 150ms window that the **5th stylesheet** finished loading, which makes a late, non-render-
+blocking CSS chunk the leading hypothesis — but that is a correlation from one run, not a
+conclusion. Root-cause it before changing anything.
+
+It is present identically in the before AND after builds (byte-identical 0.7458), so it is
+independent of this fix, and it is now the single largest CLS contributor on `/promotions/*`.
 
 **0.0401 — the promo multiplier banner.** `MembershipSection`'s banner is gated on
 `useResolvedMultiplier(...)`, a client query, so with a promo active it appears ~113px tall above
