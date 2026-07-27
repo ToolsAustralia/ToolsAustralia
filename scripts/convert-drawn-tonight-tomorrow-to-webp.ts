@@ -44,28 +44,20 @@ const STATES = ["drawn-tomorrow", "drawn-tonight"] as const; // odd, even within
 const EXPORTS_PER_VIEWPORT = TOOLBOXES.length * BRANDS.length * STATES.length; // 30
 
 /**
- * Defective source files to skip, keyed `${viewport}/${n}`.
+ * Defective source files to skip, keyed `${viewport}/${n}`. Empty — nothing is held back.
  *
- * 2026-07 batch: the MOBILE kinTB exports 21-28 carry HiKOKI's sub-headline
- * ("A 15 PIECE HIKOKI POWER TOOL KIT & STORAGE SYSTEM COMBO & $5K CASH.") over
- * Milwaukee / DeWalt / Makita / Ryobi artwork — the copy contradicts both its own imagery
- * and its desktop twin, which names the correct brand. 29/30 (the real HiKOKI pair) are
- * fine, and every desktop export is fine.
+ * Kept (rather than deleted) because a drop CAN arrive defective and this is the lever: add
+ * the keys, and those targets retain their previously shipped art instead of regressing
+ * customer-facing copy, while the rest of the batch still converts.
  *
- * Skipping leaves the previously shipped, copy-correct mobile kinTB art in place rather
- * than regressing customer-facing prize copy. Clear this set once the art team re-exports
- * mobile 21-28.
+ * History — 2026-07: mobile kinTB 21-28 first arrived carrying HiKOKI's sub-headline
+ * ("A 15 PIECE HIKOKI POWER TOOL KIT & STORAGE SYSTEM COMBO & $5K CASH.") over Milwaukee /
+ * DeWalt / Makita / Ryobi artwork — copy that contradicted both its own imagery and its
+ * desktop twin. They were held back and re-exported on 2026-07-27; the replacements were
+ * re-verified (sub-headline now names each file's OWN brand, hue-histogram brand match
+ * against the desktop twins, badge re-read for the drawn tier) and converted normally.
  */
-const SKIP_SOURCES = new Set<string>([
-  "mobile/21",
-  "mobile/22",
-  "mobile/23",
-  "mobile/24",
-  "mobile/25",
-  "mobile/26",
-  "mobile/27",
-  "mobile/28",
-]);
+const SKIP_SOURCES = new Set<string>([]);
 
 interface DrawnTarget {
   brand: (typeof BRANDS)[number];

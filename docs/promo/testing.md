@@ -28,9 +28,8 @@ npm run e2e:proof -- --grep "on desktop, every prize combination" --project chro
 npm run e2e:proof:join -- drawn-states-all-prize-combinations <mobile>.mp4 <desktop>.mp4
 ```
 
-Note the mobile leg necessarily shows the PREVIOUS Kincrome art for Milwaukee / DeWalt / Makita /
-Ryobi — those exports are held back (see [architecture.md](architecture.md)) — and the spec
-narrates that rather than glossing over it.
+Since the 2026-07-27 mobile `kinTB` re-export, every one of the 60 heroes is the current design —
+there is no held-back combination left to caveat (see [architecture.md](architecture.md)).
 
 ## Manual smoke
 
