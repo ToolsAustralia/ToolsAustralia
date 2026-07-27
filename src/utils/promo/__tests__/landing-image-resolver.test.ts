@@ -198,34 +198,28 @@ function testEvergreenAllVariantsExist() {
 }
 
 /**
- * Brand-aware loader stage background: a brand slug resolves to its own
- * bg-{brand}-{viewport}.webp (all five brands ship), and every returned URL is in
- * the manifest. The brand prefix is what `slugToBrandKey` keys on.
+ * Loader stage background is keyed on THEME since draw 9, not brand.
+ *
+ * Was `testLoaderBackgroundResolvesPerBrand` — ten `bg-{brand}-{viewport}.webp` files that
+ * all showed the same backdrop, and could not express the one thing that actually varies.
+ * Dark mode used to get the light backdrop with a dark hero painted over it.
  */
-function testLoaderBackgroundResolvesPerBrand() {
-  for (const brand of ["dewalt", "makita", "milwaukee", "ryobi", "hikoki"] as const) {
-    const bg = resolveLandingHeroBackground(`${brand}-sidchrome`);
-    assert.ok(bg.desktop.includes(`bg-${brand}-desktop`), `${brand} → brand desktop bg, got ${bg.desktop}`);
-    assert.ok(bg.mobile.includes(`bg-${brand}-mobile`), `${brand} → brand mobile bg, got ${bg.mobile}`);
+function testLoaderBackgroundResolvesPerMode() {
+  for (const mode of ["light", "dark"] as const) {
+    const bg = resolveLandingHeroBackground(mode);
+    const wantsDark = mode === "dark";
+    assert.equal(bg.desktop.includes("-dark"), wantsDark, `${mode} desktop bg, got ${bg.desktop}`);
+    assert.equal(bg.mobile.includes("-dark"), wantsDark, `${mode} mobile bg, got ${bg.mobile}`);
     assert.ok(LANDING_IMAGE_MANIFEST.has(bg.desktop), `${bg.desktop} must be in manifest`);
     assert.ok(LANDING_IMAGE_MANIFEST.has(bg.mobile), `${bg.mobile} must be in manifest`);
   }
 }
 
-/**
- * Cash / evergreen / unknown / empty slugs have no brand → fall back to the shared
- * stage background (so non-brand promo pages keep the generic loader).
- */
-function testLoaderBackgroundFallsBackForNonBrand() {
-  const nonBrand: Array<string | null | undefined> = [null, undefined, "", "cash-10k", "all-prizes"];
-  for (const slug of nonBrand) {
-    const bg = resolveLandingHeroBackground(slug);
-    assert.deepEqual(
-      bg,
-      { desktop: LANDING_HERO_BACKGROUND.desktop, mobile: LANDING_HERO_BACKGROUND.mobile },
-      `non-brand slug ${String(slug)} should use the shared stage background`
-    );
-  }
+/** No argument = light, and the shared constant still points at real files. */
+function testLoaderBackgroundDefaultsToLight() {
+  assert.deepEqual(resolveLandingHeroBackground(), resolveLandingHeroBackground("light"));
+  assert.ok(LANDING_IMAGE_MANIFEST.has(LANDING_HERO_BACKGROUND.desktop));
+  assert.ok(LANDING_IMAGE_MANIFEST.has(LANDING_HERO_BACKGROUND.mobile));
 }
 
 function run() {
@@ -237,8 +231,8 @@ function run() {
   testAllVariantsExistInManifest();
   testDrawnTiersResolveToRealArtEverywhere();
   testEvergreenAllVariantsExist();
-  testLoaderBackgroundResolvesPerBrand();
-  testLoaderBackgroundFallsBackForNonBrand();
+  testLoaderBackgroundResolvesPerMode();
+  testLoaderBackgroundDefaultsToLight();
   console.log("landing-image-resolver tests passed");
 }
 

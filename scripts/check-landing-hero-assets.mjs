@@ -62,19 +62,24 @@ function evergreenFile(viewport) {
   return `${LANDING_BASE}/all-prizes/all-prizes${mobile}.webp`;
 }
 
-/** Hero "stage" background rendered in place of the skeleton while hero data loads. */
-function backgroundFile(brand, viewport) {
-  const name = brand ? `bg-${brand}-${viewport}` : `bg-${viewport}`;
-  return `${LANDING_BASE}/background/${name}.webp`;
+/**
+ * Hero "stage" background rendered in place of the skeleton while hero data loads.
+ *
+ * Keyed on THEME since draw 9 — four files, `bg-{viewport}[-dark].webp`. This replaced ten
+ * per-brand files (`bg-{brand}-{viewport}.webp`) that all showed the same backdrop and could
+ * not express the one thing that varies; dark mode used to get the light backdrop.
+ */
+function backgroundFile(viewport, mode) {
+  const dark = mode === "dark" ? "-dark" : "";
+  return `${LANDING_BASE}/background/bg-${viewport}${dark}.webp`;
 }
 
 const expected = new Set();
 
 for (const viewport of VIEWPORTS) {
   expected.add(evergreenFile(viewport));
-  expected.add(backgroundFile(null, viewport));
+  for (const mode of MODES) expected.add(backgroundFile(viewport, mode));
   for (const brand of BRANDS) {
-    expected.add(backgroundFile(brand, viewport));
     for (const tb of TOOLBOX) {
       if (KNOWN_GAPS.has(`${brand}|${tb}`)) continue;
       for (const urgency of URGENCIES) {

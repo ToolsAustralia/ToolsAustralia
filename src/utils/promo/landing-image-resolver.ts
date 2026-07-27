@@ -23,21 +23,24 @@ export const LANDING_HERO_BACKGROUND = {
 } as const;
 
 /**
- * Brand-aware hero "stage" background for the loader, resolved from the promo slug.
- * When the slug maps to a brand with a shipped `bg-{brand}-{viewport}.webp`, that brand
- * background loads in place of the skeleton; otherwise (cash / evergreen / unknown slug,
- * or a brand whose asset isn't in the manifest) it falls back to the shared
- * `LANDING_HERO_BACKGROUND`. Each viewport falls back independently so a brand that
- * ships only one viewport still renders.
+ * Hero "stage" background for the loader, by THEME and viewport (draw 9, 2026-07-27).
+ *
+ * Four assets total: `bg-{desktop,mobile}[-dark].webp` — the bare backdrop the hero art is
+ * composited onto, shown while the draw query resolves so the load-in is seamless rather
+ * than a grey skeleton.
+ *
+ * This replaced a PER-BRAND scheme (`bg-{brand}-{viewport}.webp`, 10 files) that predated
+ * dark mode. The backdrop is the same slat wall / diamond plate behind every brand's shoot,
+ * so ten near-identical files bought nothing; what actually varies is the THEME, which the
+ * old scheme could not express at all — a dark-mode visitor got the light backdrop and then
+ * a dark hero painted over it. Brand is no longer an input, so the slug argument is gone.
  */
 export function resolveLandingHeroBackground(
-  slug: string | null | undefined
+  mode: "light" | "dark" = "light"
 ): { desktop: string; mobile: string } {
-  const brand = slug ? slugToBrandKey(slug) : null;
-  if (!brand) return LANDING_HERO_BACKGROUND;
-
-  const desktop = `${LANDING_IMAGE_BASE}/background/bg-${brand}-desktop.webp`;
-  const mobile = `${LANDING_IMAGE_BASE}/background/bg-${brand}-mobile.webp`;
+  const darkSuffix = mode === "dark" ? "-dark" : "";
+  const desktop = `${LANDING_IMAGE_BASE}/background/bg-desktop${darkSuffix}.webp`;
+  const mobile = `${LANDING_IMAGE_BASE}/background/bg-mobile${darkSuffix}.webp`;
   return {
     desktop: LANDING_IMAGE_MANIFEST.has(desktop) ? desktop : LANDING_HERO_BACKGROUND.desktop,
     mobile: LANDING_IMAGE_MANIFEST.has(mobile) ? mobile : LANDING_HERO_BACKGROUND.mobile,
