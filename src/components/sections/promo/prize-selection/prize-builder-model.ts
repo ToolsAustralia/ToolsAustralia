@@ -227,11 +227,27 @@ export interface ComboPresentation {
 }
 
 /**
+ * Toolboxes with no `{toolset}-{toolbox}.webp` composite photographed yet.
+ *
+ * GearWrench joined in draw 9 with its landing art but without the five combo shots. The
+ * Prize Showcase handoff designs for exactly this rather than leaving a broken image: show
+ * the standalone toolbox render and let the caller badge it "combo photo coming". Delete the
+ * entry the day the shoot lands — nothing else needs to change.
+ */
+const TOOLBOXES_AWAITING_COMBO_ART = new Set<string>(["gearwrench"]);
+
+/** True when this combination has no composite shot and is showing the standalone box. */
+export function isComboArtPending(toolbox: ToolboxOption): boolean {
+  return TOOLBOXES_AWAITING_COMBO_ART.has(toolbox.id);
+}
+
+/**
  * Everything the combo hero renders for the current selection.
  *
  * The composite render lives beside the toolset's own art
  * (`{toolset}-set/{toolset}-{toolbox}.webp`) — one per combination, so a new
- * brand ships art without a code change.
+ * brand ships art without a code change. A toolbox still awaiting those shots falls back to
+ * its own standalone render rather than pointing at a file that does not exist.
  */
 export function getComboPresentation(
   toolbox: ToolboxOption,
@@ -249,9 +265,15 @@ export function getComboPresentation(
     };
   }
 
+  const comboArtPending = isComboArtPending(toolbox);
+
   return {
-    image: `/images/majordraws/${toolset.id}-set/${toolset.id}-${toolbox.id}.webp`,
-    imageAlt: `${toolset.name} power toolset with the ${toolbox.name}`,
+    image: comboArtPending
+      ? toolbox.image
+      : `/images/majordraws/${toolset.id}-set/${toolset.id}-${toolbox.id}.webp`,
+    imageAlt: comboArtPending
+      ? `${toolbox.name} — combination photo with the ${toolset.name} toolset coming soon`
+      : `${toolset.name} power toolset with the ${toolbox.name}`,
     eyebrow: "YOUR COMBINATION",
     title: `${toolset.name} + ${toolbox.name}`,
     sub: `${toolset.kitLabel} · ${toolset.storageLabel} storage · plus $5,000 cash`,

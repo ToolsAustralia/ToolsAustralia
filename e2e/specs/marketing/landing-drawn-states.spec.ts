@@ -189,13 +189,25 @@ async function heroSrc(img: ReturnType<typeof visibleHero> extends Promise<infer
  * on the src assertions with a useful message, not time out here with a vague one.
  */
 async function awaitHeroPainted(img: import("@playwright/test").Locator): Promise<void> {
+  /**
+   * The in-page promise MUST race a timer.
+   *
+   * `locator.evaluate`'s `timeout` bounds resolving the LOCATOR — it does NOT bound a promise
+   * running inside the page. An image the browser never requests (or one whose combination has
+   * no art) is never `complete` and fires neither `load` nor `error`, so without the timer this
+   * waits forever: no error, no progress, the run just dies. That is not hypothetical — it cost
+   * two dead recordings on `draw9-assets.spec.ts` (2026-07-27), which walks a combination with
+   * no artwork. This spec only escapes it because every hero it walks currently has art.
+   */
   await img.evaluate(
     (el: HTMLImageElement) =>
       el.complete && el.naturalWidth > 0
         ? true
         : new Promise<boolean>((resolve) => {
-            el.addEventListener("load", () => resolve(true), { once: true });
-            el.addEventListener("error", () => resolve(true), { once: true });
+            const done = () => resolve(true);
+            el.addEventListener("load", done, { once: true });
+            el.addEventListener("error", done, { once: true });
+            setTimeout(done, 8_000);
           }),
     undefined,
     { timeout: 20_000 }

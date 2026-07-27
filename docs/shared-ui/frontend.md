@@ -959,7 +959,26 @@ button. This replaced the old 3-cell `TrustBar`.
 - **`Banner.tsx`** — amber encouragement banner ("Someone's name gets called next draw")
 - **`ActionRow.tsx`** — primary CTAs ("Keep me in the draw" / "Resolve payment" / "No thanks, cancel anyway")
 - **`DowngradeCard.tsx`** — tier-coloured "Switch to X" card (Tradie/Foreman/Boss)
-- **`TrustBar.tsx`** — footer trust cells (SSL secure / NTP/17192 — sourced from `NTP_NUMBER` in `src/constants/legal.ts` / Cancel anytime)
+- **`TrustBar.tsx`** — footer trust cells (SSL secure / NTP/17494 — sourced from `NTP_NUMBER` in `src/constants/legal.ts` / Cancel anytime)
+
+### `BrandMark` — mask mode vs duo mode (2026-07-27)
+
+`prize-selection/BrandMark.tsx` renders a toolbox wordmark two ways, and which one it uses is
+decided by whether `ToolboxOption.markImageLight` is set.
+
+**Mask mode (default, Milwaukee / Kincrome / Sidchrome).** One white-on-transparent silhouette
+SVG painted through a CSS mask (`.pbc-brand-mark` in globals.css), tinted per theme from
+`markColor`. One asset serves both themes at the brand's own colour.
+
+**Duo mode (GearWrench only).** A mask paints ONE flat colour and therefore physically cannot
+render GearWrench's lockup — "GEAR" in theme ink, "WRENCH" in Molten Orange `#EB8900`, and an
+orange gear badge holding a black "GW". So it ships one FINISHED SVG per theme
+(`gearwrenchText.svg` / `gearwrenchText-light.svg`), stacked and swapped by `.pbc-brand-mark-duo`
+using the same `.dark` ancestor class the mask path uses — pure CSS, no JS theme read, no
+hydration flash. Rendered plateless per the Prize Showcase handoff. `markColor` is ignored.
+
+Both consumers (`ReelCards` and `/promotions` `ComboRail`) pass `lightSrc` through, so the reel
+card and the gallery thumb can never diverge.
 - **`hero.module.css`** — composite gradients, scrollbar chrome, and stripe overlay that don't translate to single Tailwind utilities
 
 Layout is an infographic-style three-band frame: dark hero → white lose grid → light slate trust footer. Layout structure stays identical at every viewport size; the `max-xs:` breakpoint shrinks sizes only (no column collapse). Styles migrated from `<style jsx>` to Tailwind + CSS Modules.

@@ -244,11 +244,15 @@ export default function ComboRail({ selection, onSelectCombo, onSelectCash }: Co
                       className="flex h-[34px] items-center justify-center border-t border-[var(--pgs-border)] px-2.5"
                     >
                       {/* Fixed 22px plate: `BrandMark` sizes itself as a PERCENTAGE of its
-                          plate, so the registry's `markScale` levels the three wordmarks
-                          to a common letter height exactly as it does on the reel cards. */}
+                          plate, so the registry's `markScale` levels the wordmarks
+                          to a common letter height exactly as it does on the reel cards.
+                          `markImageLight` is passed through so GearWrench's two-tone mark
+                          renders here identically to the reel card — this rail and the reel
+                          show the same brands and must never diverge. */}
                       <span className="flex h-[22px] w-full items-center justify-center">
                         <BrandMark
                           src={toolbox.markImage}
+                          lightSrc={toolbox.markImageLight}
                           color={toolbox.markColor}
                           scale={toolbox.markScale}
                           title={toolbox.brandName}

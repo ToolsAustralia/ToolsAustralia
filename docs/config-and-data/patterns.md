@@ -50,6 +50,34 @@ toolset, so the prize grid is `5 × 3 = 15` tool combos + cash:
   `getLandingHeroImagePaths` returns `null` for `brand === "hikoki"` (no bespoke landing hero
   art yet → standard promo hero).
 
+## P0d. GearWrench — 4th toolbox prize (2026-07-27, draw 9)
+
+Grid went 5×3 = 15 → **5×4 = 20** combos; `PRIZE_CATALOG` / `PRIZE_SUMMARIES` 16 → 21 entries.
+Business detail is in BUSINESS.md §3c. What matters for this domain:
+
+**The five catalog entries are DERIVED, not restated.** `fromSummary(slug, deep)` in
+`prizes.ts` takes every shared field straight from `PRIZE_SUMMARIES` and adds only
+`detailedDescription` + `specSections`. The rest of the catalog restates shared fields
+longhand — which is exactly why `npm run test:prize-summaries` exists as a drift guard. For
+these five, that class of drift is impossible rather than merely detected. **Prefer
+`fromSummary` for new entries.** (The longhand entries were left alone rather than churned
+during an asset change.)
+
+**Source-size budget raised 40 KB → 48 KB.** It is a tripwire against heavy DEEP data
+creeping into the client half, not a cap on prize count — the picker was designed so "adding
+a brand is one more data entry". A prize costs ~1.2 KB. Raise it only for MORE PRIZES; if it
+trips because per-entry cost grew, that is the leak it is watching for.
+
+**`cardBackgroundImage` is deliberately omitted** on all five — the `{toolset}-gearwrench.webp`
+composites have not been photographed. `getComboPresentation` falls back to the standalone
+`toolbox/gearwrenchTB.webp`; `TOOLBOXES_AWAITING_COMBO_ART` in `prize-builder-model.ts` is the
+one place to delete when the shoot lands.
+
+**Derive query-param allowlists from the registry.** `parseToolboxQueryParam` held a
+hand-written set of three ids. Adding GearWrench to `TOOLBOXES` silently forked it: the card
+wrote `?toolbox=gearwrench` but the value failed to parse on the way back, so a refresh or a
+shared link dropped the visitor's choice. It now derives from `TOOLBOXES`.
+
 ## P0c. Adding a promotion brand — source of truth & the lists that derive from it
 
 A "promotion brand" (Ryobi / Milwaukee / Dewalt / Makita / HiKOKI) surfaces under `/promotions/`

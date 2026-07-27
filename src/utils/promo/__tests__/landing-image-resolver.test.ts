@@ -64,17 +64,57 @@ function testExistingComboReturnsAsIs() {
 }
 
 /**
- * sidTB dark bases no longer ship (2026-06-12 — the variation-2 promotion replaced the
- * per-brand defaults with light-only sidTB bases; no `*-sidTB-dark.webp` exists in the
- * manifest for any brand). A dark sidTB request must therefore fall back to the LIGHT
- * base: the returned URL has no `-dark` and is in the manifest. (Was previously asserting
- * a `-dark` URL — stale since 2026-06-12, which left `test:landing-image-resolver` red.)
+ * Dark art is REAL as of the draw 9 export (2026-07-27).
+ *
+ * History worth keeping, because this assertion has now been inverted twice: before draw 9
+ * no `*-dark.webp` had ever shipped for any brand, so a dark request fell through to the
+ * light file and this test asserted the ABSENCE of `-dark`. Draw 9 shipped all 12 variants
+ * (3 tiers × 2 viewports × 2 modes) for every brand × toolbox, so a dark request must now
+ * resolve to genuinely dark art — and dark-mode visitors finally stop being served the light
+ * hero. Asserting the real file also means a regression in the ingest shows up here rather
+ * than silently degrading back to the light fallback, which is invisible to the eye in a
+ * light-mode screenshot.
  */
-function testDarkSidTbFallsBackToLightBase() {
+function testDarkVariantsResolveToRealDarkArt() {
   for (const brand of LANDING_BRANDS) {
-    const url = resolveLandingHeroImage(brand, "dark", "desktop", "sidTB", null);
-    assert.ok(!url.includes("-dark"), `${brand} sidTB dark should fall back to light base, got ${url}`);
-    assert.ok(LANDING_IMAGE_MANIFEST.has(url), `${url} must exist in manifest`);
+    for (const suffix of ["milTB", "sidTB", "kinTB"] as const) {
+      const url = resolveLandingHeroImage(brand, "dark", "desktop", suffix, null);
+      assert.ok(url.includes("-dark"), `${brand} ${suffix} dark must resolve to dark art, got ${url}`);
+      assert.ok(LANDING_IMAGE_MANIFEST.has(url), `${url} must exist in manifest`);
+    }
+  }
+}
+
+/**
+ * GearWrench (`gwTB`) is the fourth toolbox, added in draw 9 — but its RYOBI pairing was
+ * never produced. The four brands that do have art must resolve to real `gwTB` files in both
+ * modes; Ryobi must degrade through the fallback chain to something that actually exists
+ * rather than emitting a URL that 404s.
+ */
+function testGwTbResolvesWhereArtExistsAndDegradesForRyobi() {
+  for (const brand of ["dewalt", "makita", "milwaukee", "hikoki"] as const) {
+    for (const mode of ["light", "dark"] as const) {
+      const url = resolveLandingHeroImage(brand, mode, "desktop", "gwTB", null);
+      assert.ok(url.includes("gwTB"), `${brand} gwTB ${mode} should resolve to gwTB art, got ${url}`);
+      assert.ok(LANDING_IMAGE_MANIFEST.has(url), `${url} must exist in manifest`);
+    }
+  }
+  /**
+   * Ryobi × gwTB has no art in any mode, viewport or tier. Whatever the resolver returns for
+   * it must still be a REAL file: returning the desired-but-absent URL makes `/_next/image`
+   * answer 400, which is a blank hero and a console error on a live page — caught by the
+   * e2e QA watchdog during the draw 9 proof run, not by any unit test before it.
+   */
+  for (const viewport of ["desktop", "mobile"] as const) {
+    for (const mode of ["light", "dark"] as const) {
+      for (const urgency of [null, "drawn-tomorrow", "drawn-tonight"] as const) {
+        const url = resolveLandingHeroImage("ryobi", mode, viewport, "gwTB", urgency);
+        assert.ok(
+          LANDING_IMAGE_MANIFEST.has(url),
+          `ryobi gwTB ${mode} ${viewport} ${urgency ?? "base"} must fall back to a real file, got ${url}`
+        );
+      }
+    }
   }
 }
 
@@ -191,7 +231,8 @@ function testLoaderBackgroundFallsBackForNonBrand() {
 function run() {
   testLightSidTbReturnsLightBase();
   testExistingComboReturnsAsIs();
-  testDarkSidTbFallsBackToLightBase();
+  testDarkVariantsResolveToRealDarkArt();
+  testGwTbResolvesWhereArtExistsAndDegradesForRyobi();
   testKinTbDrawnTiersResolveAndFinalHoursCollapses();
   testAllVariantsExistInManifest();
   testDrawnTiersResolveToRealArtEverywhere();
