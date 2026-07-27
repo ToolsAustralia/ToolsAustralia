@@ -58,7 +58,7 @@ Resolution order inside [`resolveLandingHeroImage`](../../src/utils/promo/landin
 
 `kinTB` now ships its own `-drawn-tomorrow` / `-drawn-tonight` countdown art like the other toolboxes (only `-final-hours` collapses to base). Evergreen (`all-prizes/`) uses the same path for both modes by design and ships **no countdown art** — [`resolveEvergreenHeroImage`](../../src/utils/promo/landing-image-resolver.ts) falls back to the base all-prizes collage when an urgency variant is absent from the manifest.
 
-**Stage background (loader).** The empty hero "stage" rendered in place of the gray skeleton while hero data loads. [`resolveLandingHeroBackground(slug)`](../../src/utils/promo/landing-image-resolver.ts) returns `{ desktop, mobile }`: when the slug maps to a brand (`slugToBrandKey`) that ships `landing/background/bg-{brand}-{desktop,mobile}.webp`, the **brand-specific** background loads; otherwise (cash / evergreen / unknown slug, or a brand whose asset isn't in the manifest) it falls back per-viewport to the shared `LANDING_HERO_BACKGROUND` (`bg-{desktop,mobile}.webp`). `PromoHero` calls it with `effectiveSlug`, which is set on first paint (the `prizeSlug` prop), so the right background shows immediately. Brand assets ship as PNG and are converted to WebP by `npm run convert:drawn-tonight-tomorrow-webp` (its `bg-*.png` pass globs every background, so new brands need no script change), then picked up by the manifest build.
+**Stage background (loader).** The empty hero "stage" rendered in place of the gray skeleton while hero data loads. [`resolveLandingHeroBackground(mode)`](../../src/utils/promo/landing-image-resolver.ts) returns `{ desktop, mobile }` for the current THEME — four files, `background/bg-{desktop,mobile}[-dark].webp`. Keyed on theme rather than brand since draw 9 (2026-07-27); see "Loader stage background" below for why the ten per-brand files went.
 
 Regenerate the manifest after dropping in new assets:
 
@@ -102,6 +102,18 @@ argument and a manifest. See "Landing hero video" above.
 
 Net on disk: **228 stills** (`landing/{brand}/`) and **456 clips** (`videos/landing/{brand}/`,
 mp4 + webm each).
+
+### Loader stage background — now by theme, not brand
+
+`resolveLandingHeroBackground(mode)` returns the bare backdrop shown while the draw query
+resolves, so the load-in is seamless instead of a grey skeleton. **Four files:**
+`background/bg-{desktop,mobile}[-dark].webp`.
+
+This replaced ten per-brand files (`bg-{brand}-{viewport}.webp`). They all showed the same
+slat wall / diamond plate — the backdrop behind every brand's shoot is identical — so the
+per-brand split bought nothing, and it could not express the one thing that genuinely varies:
+**theme**. A dark-mode visitor was served the light backdrop and then a dark hero painted over
+it. Brand is no longer an input, so the function takes `mode` instead of a slug.
 
 ### Ingest — and why it is not a filename parse
 

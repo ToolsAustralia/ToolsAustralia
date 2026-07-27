@@ -167,11 +167,12 @@ export default function PromoHero({
   const shouldUseBlackText = preferDark || isDewaltTheme;
 
   if (isLoading) {
-    // Brand-aware stage background: when the slug maps to a brand with a shipped
-    // bg-{brand} asset, that brand background stands in for the skeleton; otherwise the
-    // shared generic background. effectiveSlug is set on first paint (prizeSlug prop),
-    // so the right background shows immediately even while the draw query loads.
-    const loaderBackground = resolveLandingHeroBackground(effectiveSlug);
+    // Theme-aware stage background standing in for the skeleton. Keyed on THEME rather than
+    // brand since draw 9: the backdrop is the same wall behind every brand's shoot, but a
+    // dark-mode visitor used to get the light backdrop and then a dark hero painted over it.
+    // `themeMode` is available on first paint, so the right backdrop shows immediately even
+    // while the draw query is still loading.
+    const loaderBackground = resolveLandingHeroBackground(themeMode);
     return (
       <section className="relative flex flex-col items-center overflow-visible pt-20 sm:pt-40 aspect-[1080/1164] min-h-[clamp(380px,228px+38vw,520px)] lg:aspect-[2560/1044] lg:min-h-0">
         {/* Hero "stage" background stands in for the skeleton so the load-in is seamless. */}
