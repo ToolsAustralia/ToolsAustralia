@@ -82,7 +82,11 @@ export function ComboHero({ combo, accent, drawLabel, priority = false, classNam
       </div>
 
       <div className="px-0.5 pt-3">
-        <div className="flex items-center justify-between gap-2.5">
+        {/* `min-h-[20px]` = the drawn-date chip's own height (8px text + 2×5px padding + 2×1px
+            border). The chip only appears once the live major draw resolves CLIENT-side, and
+            without the reserve this row is just the 8px eyebrow until then — so the chip landing
+            pushed the title, contents strip and CTA (and everything below the card) down 12px. */}
+        <div className="flex min-h-[20px] items-center justify-between gap-2.5">
           <span className="font-poppins text-[8px] font-bold leading-none tracking-[0.18em] text-[var(--pbc-sub)]">
             {combo.eyebrow}
           </span>

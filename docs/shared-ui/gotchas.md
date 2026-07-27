@@ -1,5 +1,124 @@
 # Shared UI — Gotchas
 
+## `useSearchParams()` + `<Suspense fallback={null}>` = a section that ships as zero height (fixed 2026-07-27)
+
+`/promotions/*` measured **CLS 1.1689** on a throttled 390×844 phone profile (0.4352 unthrottled) —
+far past the 0.1 "good" threshold. Root cause of the part fixed here was NOT a slow image or a late
+font: two of the page's largest sections were **absent from the prerendered HTML entirely** and only
+appeared after hydration.
+
+Both [`MembershipSection`](../../src/components/sections/MembershipSection.tsx) and
+[`PrizeShowcase`](../../src/components/sections/promo/PrizeShowcase.tsx) called `useSearchParams()`
+and each "solved" the resulting Next build error by self-wrapping in `<Suspense fallback={null}>`.
+On a **prerendered** route (these pages are `revalidate = 60`; see
+[security-csp/rules.md R8](../security-csp/rules.md)) `useSearchParams()` de-opts the client subtree
+up to the nearest Suspense boundary to **client-only rendering** — Next renders the *fallback* into
+the static HTML. A `null` fallback means the section is rendered as **nothing**: no element, no
+reserved space. The page-level `<Suspense fallback={<div className="min-h-[600px]" />}>` in
+[`[slug]/page.tsx`](../../src/app/promotions/[slug]/page.tsx) never got a chance to help — the inner
+boundary is the closer one, so its `null` won.
+
+Measured on `/promotions/milwaukee` (390×844), before → after hydration:
+
+| Section | in static HTML | after hydration |
+| --- | --- | --- |
+| `#packages` (MembershipSection) | ~2px (empty `<section>`) | 1,265px |
+| `.prize-builder` (PrizeShowcase, "Build your prize") | absent, 0px | 1,115px |
+
+`#how-it-works` (GiveawayDetails) started at `y=522` — inside the 844px viewport — and was shoved to
+`y=2913`. That single element is **0.3717** of the total on its own.
+
+Measured A/B, same machine / port / viewport / build config, `next start` on the port matching
+`NEXT_PUBLIC_APP_URL` (otherwise CSP blocks every client query and the numbers are meaningless).
+Per-shift breakdown, 390×844, **4× CPU throttle + 1.6Mbps/150ms** — Speed Insights reports FIELD
+data from real phones, so the throttled column is the one that matches what it scores:
+
+| shift | before | after | what it is |
+| --- | --- | --- | --- |
+| 0.0020 @3.0s | ✓ | ✓ | promo-banner text reflow |
+| **0.7458 @3.2s** | ✓ | ✓ | **the `<footer>`** — see below, NOT this fix's problem |
+| **0.3717 @8.7s** | ✓ | **gone** | `#how-it-works` shoved off-screen — **this fix** |
+| 0.0401 @9.0s | ✓ | ✓ | packages promo-multiplier banner |
+| 0.0093 @9.9s | ✓ | ✓ | packages promo badge |
+| **total** | **1.1689** | **0.7970** | |
+
+Unthrottled on localhost the same A/B reads **0.4352 → 0.0566**, because the whole load resolves in
+under a second and the footer shift never happens. Do not quote the unthrottled number as the field
+result — it flatters the page and hides the biggest contributor.
+
+Final laid-out geometry is **identical** either way (`#packages` 520/1265, `.prize-builder`
+1784/1128, `#how-it-works` 2913/733) — the fix changes only *when* those sections exist, never how
+they look.
+
+Video proof of the pair (side-by-side, live CLS read-out, shifted regions flashed) — one-off
+harness, artifact at `e2e-artifacts/proof/2026-07-27-cls-fix/cls-promotions-before-after.mp4`.
+
+**Confirmed against LIVE production** (2026-07-27, pre-deploy, throttled 390×844): CLS **1.0815**,
+carrying both the 0.7458 footer shift and a 0.3279 `#how-it-works` shift — so neither number is a
+localhost artifact. The served production HTML is 206,911 bytes with a 56,765-char `<main>`, and
+grepping it shows the de-opt exactly as diagnosed: `how-it-works` ×1 and `min-h-[400px]` ×2 present,
+but **zero** occurrences of `Build your prize`, `prize-builder`, `Tradie`, `id="membership"`,
+`min-h-[600px]` or `ENTER NOW`. Note when re-running this: a plain `curl` gets an
+`X-Vercel-Mitigated: challenge` 429 bot-challenge page (an Astro interstitial, `data-astro-cid-*`) —
+measure with a real browser, and assert the challenge markers are absent before trusting a sample.
+
+### Still open — two shifts this pass did NOT fix
+
+**0.7458 — the footer. Cause NOT yet isolated; do not repeat the first guess.** An earlier revision
+of this entry blamed the page-level `min-h-[600px]`/`[400px]`/`[300px]` fallbacks in
+[`[slug]/page.tsx`](../../src/app/promotions/[slug]/page.tsx) under-reserving against the real
+1,265px / 1,128px sections. **The measurements contradict that** and it should not be quoted.
+
+What is actually measured, sampling layout every 150ms through the load (throttled 390×844, live
+production, reproduced across runs at CLS 1.0815 / 1.0816):
+
+```
+ 1178ms  doc=844   main not in DOM yet
+ 3520ms  doc=844   mainH=0     footerTop=0      <- <main> is ZERO px; footer fills the viewport
+ 3789ms  doc=4311  mainH=3584  footerTop=3666   <- main expands; footer shoved 3,666px  = 0.7458
+ 8340ms                                          <- #how-it-works shift 0.3279 (the part fixed here)
+```
+
+At the instant of the shift `<main>` is **0px**, not the ~2,400px those fallbacks would occupy — so
+the fallbacks are not what is holding the page open, and resizing them would not have fixed it.
+In an earlier run that also sampled `document.styleSheets.length`, `main` gained its height in the
+same 150ms window that the **5th stylesheet** finished loading, which makes a late, non-render-
+blocking CSS chunk the leading hypothesis — but that is a correlation from one run, not a
+conclusion. Root-cause it before changing anything.
+
+It is present identically in the before AND after builds (byte-identical 0.7458), so it is
+independent of this fix, and it is now the single largest CLS contributor on `/promotions/*`.
+
+**0.0401 — the promo multiplier banner.** `MembershipSection`'s banner is gated on
+`useResolvedMultiplier(...)`, a client query, so with a promo active it appears ~113px tall above
+the packages grid on resolve. Reserving a fixed height just trades an expand-shift for a
+collapse-shift on no-promo pages; the real fix is threading the page's already-server-fetched
+`getEffectivePromosForDisplay()` down through `PromoPackages` so it renders in the static HTML.
+That crosses several call sites of a shared component and was left out deliberately.
+
+**The fix is to remove the hook, not to grow the fallback.** Both query reads were client-only
+anyway, so they moved to `window.location.search` behind a small local helper
+(`readForcedPackagesTab()` / `readCurrentSearchParams()`), matching what
+[`PromoBanner`](../../src/components/sections/promo/PromoBanner.tsx) already does for the same
+`?packages=` param. Both sections now server-render in full — which also puts the prize card and the
+package grid back into the crawled HTML.
+
+The self-wrapping `<Suspense>` was then **deleted**, deliberately: the homepage renders both
+components with no boundary of its own, so re-introducing `useSearchParams()` (directly, or via a
+hook like [`useMembershipModalDeepLink`](../../src/hooks/useMembershipModalDeepLink.ts)) now fails
+`npm run build` loudly instead of silently reinstating the collapse. Keep it that way.
+
+**Rules of thumb**
+
+- A Suspense fallback of `null` around anything with height is a CLS bug waiting to happen. If a
+  boundary is genuinely needed, the fallback must reserve the real height.
+- Check the hook's whole *transitive* subtree, not just the component: `MembershipSection` itself
+  was only half the problem — `useMembershipModalDeepLink()` called `useSearchParams()` too, and
+  either one alone keeps the de-opt alive.
+- Verify against the built output, not the dev server:
+  `npm run build && grep -c "Build your prize" .next/server/app/promotions/milwaukee.html`.
+  Dev mode renders these routes dynamically and hides the whole class of bug.
+
 ## `getBaseUrl()` must strip a trailing slash — `NEXT_PUBLIC_APP_URL` may end in `/` (fixed 2026-07-23)
 
 [`getBaseUrl()`](../../src/utils/url/get-base-url.ts) returned `process.env.NEXT_PUBLIC_APP_URL`
@@ -149,7 +268,7 @@ The error-throw path is still intact for genuinely unexpected purchase errors (n
 
 ### Klaviyo abandoned-checkout deep-link auto-opens MembershipModal (Phase 8, 2026-05-29)
 
-The abandoned-checkout email CTA built by `buildCheckoutResumeUrl` lands the user on either `/membership` or `/promotions/<slug>` with `?openMembership=1&packageId=<canonical-id>` in the query string. The new [`useMembershipModalDeepLink`](../../src/hooks/useMembershipModalDeepLink.ts) hook is wired into `MembershipSection` — on mount it reads those params, resolves the canonical `packageId` via `useMemberships()`, fires the host's `onOpen(plan)` callback (which wraps in the major-draw purchase gate), then **cleans the URL params** so a page refresh doesn't loop back into the modal.
+The abandoned-checkout email CTA built by `buildCheckoutResumeUrl` lands the user on either `/membership` or `/promotions/<slug>` with `?openMembership=1&packageId=<canonical-id>` in the query string. The new [`useMembershipModalDeepLink`](../../src/hooks/useMembershipModalDeepLink.ts) hook is wired into `MembershipSection` — on mount it reads those params **from `window.location.search`** (never `useSearchParams()` — see the CLS entry at the top of this file), resolves the canonical `packageId` via `useMemberships()`, fires the host's `onOpen(plan)` callback (which wraps in the major-draw purchase gate), then **cleans the URL params** so a page refresh doesn't loop back into the modal.
 
 `MembershipSection` is mounted on both landing destinations (directly on `/promotions/<slug>` and indirectly via `MembershipPageClient → MembershipSection` on `/membership`), so a single hook integration covers both URLs. The deep-link does NOT re-fire `Started Checkout` — the original "Enter Now" click already fired it; this is funnel resumption, not a new entry.
 
