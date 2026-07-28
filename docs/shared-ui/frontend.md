@@ -518,10 +518,13 @@ the existing `AccessRing`. See [dashboard-account/frontend.md](../dashboard-acco
 
 **Section refinements (2026-07-02):**
 - `DashboardHero` — active-member tier chip renders the real **tier package icon**
-  (`getPackageIcon(\`${tierKey}-subscription\`)`) not a crown; the "Reward portal" button is a
-  **chip-sized premium gold** pill that **triggers the partner-discount SSO** (`onRewardPortal` →
-  `usePartnerDiscountSso().mutate()` in the home page), not a route; a **"Complete your profile"**
-  nudge shows when `profileComplete === false` (new `tierKey` / `profileComplete` / `onCompleteProfile` props).
+  (`getPackageIcon(\`${tierKey}-subscription\`)`) not a crown; the **"Partner portal"** button
+  (renamed from "Reward portal" 2026-07-24 — it opens the *partner-discount* portal, and the old
+  label collided with the unrelated `/rewards` points page; now matches RewardsPartnerCard's
+  "Open partner portal") is a **chip-sized premium gold** pill that **triggers the partner-discount
+  SSO** (`onPartnerPortal` → `usePartnerDiscountSso().mutate()` in the home page), not a route; a
+  **"Complete your profile"** nudge shows when `profileComplete === false` (new `tierKey` /
+  `profileComplete` / `onCompleteProfile` props).
 - `DashboardPromoBanner` — the left icon is now the **container-less multiplier badge image**
   (`multiplierBadgeSrc`, shown large like the special-packages modal), falling back to a ticket glyph
   only when no multiplier is live; the redundant button-corner badge was dropped.
@@ -704,6 +707,34 @@ The `/membership` page passes no `sectionId`, so its `id="membership"` anchor is
 ### Promo treatment layout — removed (packages-design A/B concluded, control won)
 
 Historical: the 2026-07 packages-design experiment's treatment arm, `PromoMembershipDesign`, recomposed `TierCard`/`PackCard` into a promo-specific layout. The experiment concluded 2026-07-06 with the **control** (`MembershipSection` on promotions pages) winning, and the treatment component was deleted — along with `TierCard`'s named export and `PackCard`'s treatment-only `ctaLabel`/`colorHex` props (the CTA-footer render block is gone; PackCard renders as it does on `/membership`). The shared `getPackageColorScheme` palette was never changed by the experiment.
+
+### `sections/membership/MembershipPortalReturnBanner` — rewards-return strip (2026-07-24)
+
+[`src/components/sections/membership/MembershipPortalReturnBanner.tsx`](../../src/components/sections/membership/MembershipPortalReturnBanner.tsx) — a compact dark strip rendered **above the `/membership` hero** for visitors bouncing back from the iGoDirect partner portal (`utm_campaign=rewards-return`). Mounted by `MembershipPageClient` only when `page.tsx` resolved a `portalReturn` context server-side (funnel + data layer: [docs/partner/igodirect-integration-playbook.md §10](../partner/igodirect-integration-playbook.md); page wiring: [subscription/frontend.md](../subscription/frontend.md)). Normal visits render nothing.
+
+**Props:**
+- `portalReturn?: PortalReturn` — `{ offerName?, requiredPct?, generic? }`, resolved server-side against the committed catalogue (URL params never rendered raw).
+- `onSelectPlan: (plan) => void` — the `useMembershipCardCta().onSelect` path (purchase gate + Klaviyo Started Checkout — correct here: the banner CTA starts a genuine NEW checkout, unlike the Klaviyo-free deep-link).
+- `plans: LocalMembershipPlan[]` — promo-applied `[...membershipPlans, ...oneTimePlans]`, so the modal opens with the same entries a card tap would show.
+
+**State source:** `useDashboardState` (queue-reconciled `partnerAccessPct` + `acct` — NOT `UserContext.userData`). **Panel-fix updates (2026-07-24, F-001/F-003/F-004/F-005):** while account state loads the banner renders a same-height **skeleton shell** (eyebrow + pulse bars, `motion-safe:animate-pulse`, `aria-busy`) instead of `null` — the section reserves its space at first paint, so the late-mount 238–364px layout shift is gone and only copy/CTA swap in place. The six-state copy/CTA matrix is a **pure function** — `resolvePortalBannerView` in `src/utils/partner-discounts/portal-return.ts` (tested via `npm run test:portal-return`); the component only renders the returned view. Guest states additionally render "Already a member? **Log in to check your access**" → `/login` (expired-session members must never be pushed to re-purchase). The unlock CTA routes an **active subscriber choosing a subscription plan** (an upgrade) to `/my-account?open=subscription` (the ManageSheet, whose tier taps open the upgrade/downgrade confirm) instead of `cta.onSelect` — which would bounce them to the bare dashboard; all other visitors still open the purchase modal via `onSelectPlan`. The recommended CTA plan is the cheapest package covering `requiredPct` (`resolveUnlockPackagesForLevel`), mapped back to a `LocalMembershipPlan` via `getPackageId`. Catalogue numbers come from the client-safe `partnerCatalogPreview` aggregates (`PARTNER_CATALOG_TOTAL` / `PARTNER_CATALOG_TIER_COUNTS`) — never the server-only offers map. **Round-2 panel fixes (2026-07-28, F-027/F-028/F-029/F-031, then F-043/F-046/F-047/F-048):** a signed-OUT visitor now skips the skeleton entirely — their state is fully server-resolved and `isLoading` for them tracked only `/api/major-draw`, a query the banner never reads (F-047); the paused state names the offer the member came for and its CTA reads **"Resume membership"** (matching the real control in ManageSheet) rather than the vaguer "Manage membership" (F-048); and `PortalBannerAcct` is now `= DashboardAccountState` with no cast, so adding a dashboard state is a compile error here instead of a silent fall-through (F-046). the skeleton is now sized to the **tallest settled variant** (headline `h-[50px] sm:h-[56px]`, sub `h-[62px]`) and mirrors the CTA column's meta line + link when an offer is known — the first pass reserved 24/16px and the hero still dropped up to 114.5px when copy swapped in. The login hint keys on the **session** (`useSession().status === "authenticated"` → `isAuthenticated`), never on `acct === "none"` alone, because that state also covers authenticated users with no active benefits and `/login` would bounce them to `/my-account`. A **past-due member with a live one-time pack** no longer sees "your discounts are off": with `partnerAccessPct > 0` they get "Your pack access is still running" + the payment CTA, and when the pack covers the offer they fall through to the covered state and are sent to redeem it. `offer_name` resolution drops **ambiguous** names (the catalogue has 6 names that exist at two different percents) so they degrade to the generic banner rather than reporting an arbitrary tier.
+
+**Hero spacing when the banner is present (2026-07-28, F-022):** `MembershipHero` takes `hasPortalBanner?: boolean` (passed from `MembershipPageClient` as `Boolean(portalReturn)`). The hero normally carries the fixed-header offset itself, but the banner already clears the header when it renders above — keeping both left a full header-height band of empty gradient between them (measured 86px at 390 / 106px at 1280). With the banner present the hero switches to `pt-8 lg:pt-10` (measured 32px / 40px); the control page is byte-identical to before. **Polish batch (2026-07-28, F-011–F-013):** the catalogue meta line reads "Unlocks **all** 1,833 partner offers" when the recommended plan covers everything (no X-of-X tautology); "See all packages" carries a 44px touch target (`py-[13px] -my-1`); vendor run-on names ("World Heritage Cruises  Strahan  TAS") display comma-joined via `displayName` in `portal-return.ts` — the generated catalogue file stays vendor-faithful. **Second panel-fix batch (2026-07-28, F-006/F-008/F-009):** the covered state's flag-off fallback sub names the member's still-open portal tab (no dead end while SSO is dark); a dedicated **paused** branch shows "Your membership is paused." + resume date (`useDashboardState.pausedUntil`) + a "Manage membership" link to `/my-account?open=subscription` (never an upsell); and the `offer_name` URL fallback is **allowlisted against the catalogue** in `resolvePortalReturn` — only catalogue-matched names resolve (case/whitespace-insensitive) and the catalogue's own name+pct render, so crafted links can no longer put arbitrary text in the banner.
+
+**State matrix (headline + CTA):**
+| State | Behaviour |
+|---|---|
+| Past-due · no live access | "Your membership payment needs attention." + amber **Update payment** link → `/my-account?open=payment` |
+| Past-due · live pack, offer NOT covered | "Your pack access is still running." + the same **Update payment** link — never claims the discounts are gone (F-031) |
+| Past-due · live pack that COVERS the offer | falls through to the covered state below, so they are sent to redeem it |
+| Paused (any) | "Your membership is paused." + resume date when known + **Manage membership** → `/my-account?open=subscription` (never an upsell — access returns on resume) |
+| Offer known · guest | "{offer} unlocks at {pct}% access." + **Unlock with the {plan}** (falls back to a scroll-to-`#membership` CTA if no plan resolves) |
+| Offer known · authed, short | "You're at {X}% — {offer} needs {pct}%." + unlock CTA + meta line "Unlocks {n} of 1,833 partner offers" + "See all packages" |
+| Offer known · authed, covered | "You're set — your {X}% access covers {offer}." + **Open partner portal** SSO button (`usePartnerDiscountSso`), only when `partnerDiscountSsoEnabled()`; flag off → text only |
+| Generic · guest | "Unlock the partner catalogue" + scroll CTA |
+| Generic · authed | "Back from the partner portal?" (current % + total) + scroll CTA |
+
+**Layout note:** when present, the banner becomes the page's first section and takes the fixed-header offset (`pt-[var(--app-header-h)]`); the hero then **drops its own offset** for `pt-8 lg:pt-10` via `hasPortalBanner`, so there is no duplicate header-height band between them (F-022 — measured 32/40px with the banner vs 86/106px on the control page).
 
 ### `features/PartnerDiscountQueue` — tier-themed partner discount card
 

@@ -23,7 +23,7 @@ export function usePurchaseInvalidation() {
         queryKeys.memberships.packages,
         queryKeys.orders.recent(userId),
         queryKeys.orders.all(userId),
-        ["partner-discount-queue", userId],
+        queryKeys.partnerDiscounts.queue,
         queryKeys.rewards.user(userId),
       ];
 

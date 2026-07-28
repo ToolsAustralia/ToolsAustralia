@@ -477,7 +477,11 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/models/PartnerDiscountSsoIssuance.ts",
         "src/app/api/partner-applications/**",
         "src/app/api/partner-discount/**",
-        "src/app/(site)/partner/**"
+        "src/app/(site)/partner/**",
+        "src/data/partner-catalog/**",
+        "scripts/build-partner-catalog-preview.ts",
+        "src/generated/partnerCatalogPreview.ts",
+        "src/generated/partnerCatalogOffers.ts"
       ],
       "lastVerified": "2026-07-19"
     },
@@ -510,7 +514,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/contexts/CartContext.tsx",
         "src/hooks/usePurchaseInvalidation.ts"
       ],
-      "lastVerified": "2026-07-19"
+      "lastVerified": "2026-07-24"
     },
     "error-reporting": {
       "docs": "docs/error-reporting/",
@@ -860,7 +864,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "scripts/connect-ops-db.ts",
         "scripts/check-env.mjs"
       ],
-      "lastVerified": "2026-07-22"
+      "lastVerified": "2026-07-24"
     },
     "dev-tooling": {
       "docs": "docs/dev-tooling/",

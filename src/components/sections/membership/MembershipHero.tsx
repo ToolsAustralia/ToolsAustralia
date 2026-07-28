@@ -82,12 +82,26 @@ function DeckCard({ plan, cta }: { plan: LocalMembershipPlan; cta: MembershipCar
   );
 }
 
-export default function MembershipHero({ cta }: { cta: MembershipCardCta }) {
+/**
+ * @param hasPortalBanner true when the rewards-return banner renders ABOVE this hero
+ *   (panel F-022). The hero normally carries the fixed-header offset itself, but the
+ *   banner already clears the header when present — keeping both stacks a full
+ *   header-height (86-106px measured) band of empty gradient between them.
+ */
+export default function MembershipHero({
+  cta,
+  hasPortalBanner = false,
+}: {
+  cta: MembershipCardCta;
+  hasPortalBanner?: boolean;
+}) {
   const plans = cta.membershipPlans;
   const tradie = plans.find((p) => tierKeyFromName(p.name) === "tradie") ?? plans[0];
   return (
     <section
-      className="relative overflow-hidden pt-[var(--app-header-h)] text-white lg:pt-[var(--app-header-h-lg)]"
+      className={`relative overflow-hidden text-white ${
+        hasPortalBanner ? "pt-8 lg:pt-10" : "pt-[var(--app-header-h)] lg:pt-[var(--app-header-h-lg)]"
+      }`}
       style={{
         background:
           "radial-gradient(1000px 640px at 82% -12%, rgba(238,0,0,.55), transparent 60%),radial-gradient(760px 560px at 6% 116%, rgba(212,175,55,.28), transparent 60%),linear-gradient(155deg,#1c0e0e 0%,#0b0a0d 52%,#170d18 100%)",

@@ -578,7 +578,7 @@ export default function PartnerDiscountQueue({
                   : { background: "linear-gradient(135deg,#facc15,#f97316)", color: "#1a1205" }
               }
             >
-              {partnerCatalogPct}% partner catalog
+              {partnerCatalogPct}% partner catalogue
             </span>
           )}
           {shopDiscountPercent > 0 && (

@@ -11,6 +11,18 @@
 
 Mints a MyRewards/iGoDirect SSO token and returns the portal redirect URL. Identity comes from the NextAuth session (no request body). Thin handler ([route](../../src/app/api/partner-discount/sso/route.ts)); logic in [utils/partner-discounts/sso-access.ts](../../src/utils/partner-discounts/sso-access.ts) + [sso-flow.ts](../../src/utils/partner-discounts/sso-flow.ts).
 
+> **Error bodies are customer copy, and they live in ONE place (2026-07-28, panels F-014/F-044/F-048):**
+> every failure string comes from **`PARTNER_SSO_ERRORS`** in
+> [utils/partner-discounts/sso-access.ts](../../src/utils/partner-discounts/sso-access.ts) — 404 (flag
+> dark) / 429 / 403 (no active access) / 502 / 500, plus the hook's client-side fallback. They render
+> **verbatim and inline** under the "Open partner portal" buttons on /membership, /purchase-success
+> and the Rewards card, so they are customer copy subject to rule 11 + BRAND_VOICE. Add a new error
+> path by adding a key to that constant — never an inline string — and `npm run test:sso-access` will
+> hold it to the bar (no HTTP status names, no raw codes, no banned vocabulary, a full sentence that
+> names the partner portal). The 403 is deliberately **surface-neutral**: it also renders ON the
+> Rewards page, so it must not point anyone at the page they are already on, nor contradict a banner
+> that just said "You're set".
+
 Flow: `requireSameOrigin` → distributed rate-limit (`partner-discount-sso`, fail-open courtesy cap) → `requireAuthenticatedUserDoc` → **reconcile-then-read** (`reconcilePartnerDiscountAccess`) → **403 if no active access** → `generatePortalSso` signs + POSTs `/generatetoken` → best-effort `PartnerDiscountSsoIssuance` log → `{ success: true, data: { redirectUrl } }`.
 
 Statuses: 401 unauth · 403 no-access / cross-origin · 429 rate · 502 vendor unavailable · 500.

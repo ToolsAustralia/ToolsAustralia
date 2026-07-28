@@ -61,3 +61,37 @@ export async function reconcilePartnerDiscountAccess(user: IUser): Promise<SsoAc
   }
   return buildSsoAccessDecision(user);
 }
+
+/**
+ * Customer-facing copy for every way the SSO hand-off can fail (panel F-044).
+ *
+ * These strings are rendered VERBATIM and INLINE to members — `usePartnerDiscountSso`
+ * surfaces the route's `error` body under the "Open partner portal" buttons on
+ * /membership, /purchase-success and the Rewards card. They had no coverage in any
+ * layer: the route is a Next handler (this repo has no route-handler tests), the hook
+ * fallback is inline in a fetch wrapper, and both render sites sit behind conditionals.
+ * A refactor reverting one to "Forbidden" would have been invisible to every gate.
+ *
+ * `noAccess` is load-bearing: the hook deliberately bypasses `apiPost` (which force
+ * signs-out on 401/403) so that a partner-access miss never logs a member out of the
+ * whole site. Keep it a customer-facing sentence, never API-speak.
+ *
+ * Pinned by `npm run test:sso-access`.
+ */
+export const PARTNER_SSO_ERRORS = {
+  /** 404 — the go-live flag is dark, so the route is deliberately hidden. */
+  flagDark: "The partner portal isn't available right now.",
+  /** 429 — courtesy rate limiter. */
+  rateLimited: "Too many attempts. Please wait a moment and try again.",
+  /** 403 — reconcile-then-read found no live access. Surface-neutral by design: it also
+   *  renders on the Rewards page itself, so it must not send anyone to the page they
+   *  are already on, nor contradict a banner that just said "You're set". */
+  noAccess:
+    "Your partner access isn't active right now — it may have just expired. Refresh and try again, or contact us if it looks wrong.",
+  /** 502 — the vendor's /generatetoken refused or failed. */
+  providerDown: "The partner portal is temporarily unavailable. Please try again shortly.",
+  /** 500 — anything unhandled. */
+  unknown: "Something went wrong opening the partner portal. Please try again.",
+  /** Client-side fallback when the response body carries no usable error. */
+  clientFallback: "Could not open the partner portal. Please try again.",
+} as const;

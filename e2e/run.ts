@@ -1,4 +1,6 @@
 import { spawn, spawnSync, type ChildProcess, type SpawnOptions } from "node:child_process";
+import { existsSync, readFileSync } from "node:fs";
+import { join } from "node:path";
 import { resolveE2eEnv } from "./lib/env";
 import { launch, killAll } from "./lib/processes";
 import { waitForHttpOk } from "./lib/health";
@@ -182,6 +184,40 @@ async function runExternal(targetUrl: string, argv: string[]): Promise<number> {
   return pw.status ?? 1;
 }
 
+/**
+ * Fail loudly when the app answering our port is NOT the server we launched.
+ *
+ * `assertPortFree` runs BEFORE the spawn, so it loses a race: another worktree's dev
+ * server can take the port in between. When that happens the inner `next dev` dies with
+ * `EADDRINUSE` but the `npm run dev` WRAPPER survives, so `waitForHttpOk`'s
+ * `child.exitCode !== null` guard never trips — and its fetch succeeds because the
+ * SQUATTER answers. The run then prints "server ready" and silently tests another
+ * branch's code against our freshly seeded database.
+ *
+ * This is not hypothetical: it produced a full set of plausible-but-fictional
+ * measurements during a 2026-07-28 panel review (banner absent, pre-branch strings) that
+ * were nearly filed as regressions. The bind failure is the one reliable signal, and it
+ * lands in the server log — so read it (panel finding F-034).
+ */
+function assertServerIsOurs(port: number): void {
+  const logPath = join(LOG_DIR, "server.log");
+  if (!existsSync(logPath)) return;
+  let log = "";
+  try {
+    log = readFileSync(logPath, "utf8");
+  } catch {
+    return; // unreadable log is not evidence of a squatter
+  }
+  if (!log.includes("EADDRINUSE")) return;
+  throw new Error(
+    `Port ${port} is owned by ANOTHER process — our server failed to bind (EADDRINUSE in ` +
+      `${logPath}), so the app answering ${port} is not this worktree. Any screenshots, ` +
+      `measurements or test results from this run would be about someone else's code.\n` +
+      `Find the owner:  netstat -ano | findstr :${port}\n` +
+      `Then kill it, or run with a different port:  E2E_PORT=<free port> npm run e2e:env`
+  );
+}
+
 async function assertPortFree(port: number): Promise<void> {
   let busy = false;
   try {
@@ -310,6 +346,7 @@ async function main(): Promise<number> {
     serverChild = launch("server", "npm", ["run", "dev", "--", "-p", String(env.port)], env.overlay, LOG_DIR);
   }
   await waitForHttpOk(`${env.baseUrl}/api/test-db`, isBuild ? 120_000 : 240_000, { child: serverChild });
+  assertServerIsOurs(env.port);
   console.log(`[e2e] server ready at ${env.baseUrl} (db: e2e)`);
 
   // 5. Webhook forwarder
