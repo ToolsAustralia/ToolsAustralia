@@ -38,7 +38,24 @@ export async function setNonMember(): Promise<void> {
   );
 }
 
-/** Beat 2 — one-time pack holder, no subscription (acct: "onetime"). */
+/**
+ * Beat 2 — one-time pack holder, no subscription (acct: "onetime").
+ *
+ * Task-4 fix (round 4, Finding 3): also zero the draw's membership bucket and set the
+ * one-time bucket to the Apprentice Pack's real grant (totalEntries: 3 —
+ * src/data/membershipPackages.ts "apprentice-pack"). Without this the entries doc still
+ * carried the seed baseline `{membership: 15}` (e2e/seed/draw.ts — meant for an ACTIVE
+ * subscriber) straight through the guest/onetime beats: EntryWallet.tsx computes
+ * `total = membership + oneTime + streak` from the RAW entries.membership prop even
+ * though `isOneTime` only swaps the membership row's DISPLAY to "—" — it never zeroes
+ * the number feeding the total. That's how the wallet read total "15" while its own
+ * breakdown showed Membership "—" and One-time "0" (summing to zero) — total and
+ * breakdown were reading two different membership values. Verified against
+ * src/components/sections/dashboard/EntryWallet.tsx (`const membership = isCompleted ? 0
+ * : entries.membership;` — no isOneTime guard) before changing seed data, per the task
+ * brief. `setEntryBuckets` fully replaces entriesBySource (not a partial merge), so this
+ * also clears anything a PRIOR beat may have left behind.
+ */
 export async function setOneTimeHolder(): Promise<void> {
   await (await users()).updateOne(
     { email: MEMBER.email },
@@ -47,6 +64,7 @@ export async function setOneTimeHolder(): Promise<void> {
       $set: { oneTimePackages: [{ packageId: "apprentice-pack", isActive: true, purchaseDate: new Date() }] },
     }
   );
+  await setEntryBuckets({ oneTime: 3 });
 }
 
 /** Active Tradie subscription at `months` consecutive renewals (acct: "active"). */
@@ -99,26 +117,38 @@ export async function setPastDue(months: number, opts: { streakEntries?: number 
 }
 
 /**
- * Writes the member's streak entry bucket on the active draw. totalEntries is kept
- * equal to the bucket sum — EntryWallet renders the buckets while e2e/helpers/db.ts
- * entriesForUser() reads totalEntries, and a mismatch makes the two disagree on camera.
+ * Writes the member's entry buckets on the active draw. totalEntries is kept equal to
+ * the bucket sum — EntryWallet computes `total = membership + oneTime + streak` from
+ * these same three numbers (src/components/sections/dashboard/EntryWallet.tsx) while
+ * e2e/helpers/db.ts entriesForUser() reads totalEntries, and a mismatch makes the two
+ * disagree on camera. Fully REPLACES entriesBySource (not a partial $set merge), so
+ * whatever a prior beat left in an untouched bucket (e.g. a one-time holder's `oneTime`)
+ * cannot bleed into a later beat that forgets to restate it.
  */
-async function setStreakEntries(streakEntries: number): Promise<void> {
+async function setEntryBuckets(buckets: { membership?: number; oneTime?: number; streak?: number }): Promise<void> {
   const db = await connectE2eDb();
-  const membership = 15; // the seeded Tradie position (e2e/seed/draw.ts)
+  const membership = buckets.membership ?? 0;
+  const oneTime = buckets.oneTime ?? 0;
+  const streak = buckets.streak ?? 0;
+  const total = membership + oneTime + streak;
   const userId = new mongoose.Types.ObjectId(await memberUserId());
   await db.connection.collection("majordraws").updateOne(
     { status: "active" },
     {
       $set: {
-        "entries.$[row].entriesBySource": { membership, streak: streakEntries },
-        "entries.$[row].totalEntries": membership + streakEntries,
+        "entries.$[row].entriesBySource": { membership, oneTime, streak },
+        "entries.$[row].totalEntries": total,
         "entries.$[row].lastUpdatedDate": new Date(),
-        totalEntries: membership + streakEntries,
+        totalEntries: total,
       },
     },
     { arrayFilters: [{ "row.userId": userId }] }
   );
+}
+
+/** Streak-only convenience wrapper — always the seeded Tradie membership grant (15, e2e/seed/draw.ts). */
+async function setStreakEntries(streakEntries: number): Promise<void> {
+  await setEntryBuckets({ membership: 15, streak: streakEntries });
 }
 
 /**

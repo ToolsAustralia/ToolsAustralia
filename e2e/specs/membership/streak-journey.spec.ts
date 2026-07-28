@@ -126,12 +126,29 @@ async function runStreakJourney(page: Page, demo: Demo, testInfo: TestInfo): Pro
   await page.goto("/my-account");
   const guestCta = page.locator("section").filter({ hasText: "Buy a package" }).getByRole("button", { name: /Become a member/i });
   await expect(guestCta).toBeVisible({ timeout: 30_000 });
+  // Task-4 fix (round 4, Finding 1 + Finding 4): hoisted BEFORE demo.step, mirroring Beat 6's
+  // already-proven fix. Instrumented live (mobile-chrome, normal mode): streakCard sits inside
+  // DashboardGuestPanel's stacked single-column layout — well below the fold on mobile at
+  // scroll=0 (boxBefore.y=643 against an 839px-tall viewport). Relying on demo.highlight's own
+  // scrollIntoViewIfNeeded safety net (called INSIDE the step body, i.e. only after demo.step's
+  // caption hold) is exactly round 3's established failure mode: the scroll — and the ring it
+  // gates — doesn't happen until after the hold, which can land past the cue's geometric
+  // midpoint on a short cue, reading as "no ring at all" on the recording. Same instrumentation
+  // ALSO explains Finding 4's mobile heading collision as a side effect of the SAME missing
+  // hoist: at scroll=0 "Enter the July Major Draw" (DashboardGuestPanel's own H3) sits at
+  // y=212, clear of the caption's y:[6,71] band — but once the highlight's internal scroll ran
+  // (mid-body, minimal scrollIntoViewIfNeeded distance), the heading moved to y=47, squarely
+  // inside that band. demo.smoothScrollTo's larger 35%-from-top glide (matching Beat 6, not a
+  // bespoke offset) clears the heading much further (measured: scrolls to ~350px on mobile,
+  // ~286px on desktop, pushing the heading to y<-127 on both — fully off-screen) while landing
+  // streakCard comfortably inside the viewport on both viewports (no more of the 1-2px bottom-
+  // edge clipping the minimal scrollIntoViewIfNeeded produced). One fix closes both findings.
+  await demo.smoothScrollTo(streakCard);
 
   await demo.step("Someone with an account but no membership sees what they're missing", async () => {
-    // Task-4 fix (Finding 2): highlight FIRST — demo.step already held the caption on screen
-    // before running this body, and streakCard is already visible (asserted above via
-    // guestCta), so there's nothing left to wait on before drawing the ring. The trailing
-    // assertion is unaffected by the reorder — it targets an unrelated locator.
+    // highlight is the FIRST statement — the page is already settled (scrolled above), so the
+    // ring draws immediately at body start instead of racing the hold+scroll. The trailing
+    // assertion is unaffected — it targets an unrelated locator inside the same, now-visible card.
     await demo.highlight(streakCard, "The full reward ladder — the reason to join");
     await expect(page.getByText(/Members only/i).first()).toBeVisible({ timeout: 20_000 });
   });
@@ -140,6 +157,16 @@ async function runStreakJourney(page: Page, demo: Demo, testInfo: TestInfo): Pro
   await setOneTimeHolder();
   await page.reload();
   await expect(page.getByText(/Members only/i).first()).toBeVisible({ timeout: 30_000 });
+  // Task-4 fix (round 4, Finding 1): hoisted before demo.step — same mechanism and same
+  // live-instrumented mobile evidence as Beat 1 above (streakCard sits below the fold at
+  // scroll=0 in this stacked single-column state too; the member/onetime dashboard's aside
+  // column renders AFTER the main column in DOM order on every viewport — desktop only
+  // avoids scrolling because its lg:grid places that column beside the main one instead of
+  // below it). Audited the whole journey for this same shape (round 4 brief's instruction to
+  // check every beat, not just the ones a reviewer happened to flag) — every remaining
+  // streakCard highlight below (Beats 3, 4, 5, 7, 8) gets the identical hoist for the same
+  // proven reason; Beat 6 (the wallet) already had it from round 3.
+  await demo.smoothScrollTo(streakCard);
 
   await demo.step("One-time buyers see it too — members-only", async () => {
     // Task-4 fix (Finding 3, round 1): shortened so the note fits at the desktop render
@@ -151,34 +178,56 @@ async function runStreakJourney(page: Page, demo: Demo, testInfo: TestInfo): Pro
     // only 7.3s: the hold alone ate essentially half the span, so the ring drew right at the
     // frame-audit's geometric midpoint or a hair past it, a coin flip a live render lost).
     // Live-measured (task-4, round 3): 12 tokens -> holdFor 3600ms against this cue's ~7.3s
-    // span left under 70ms of margin before the midpoint; this beat has no scroll and no
-    // extra dwell, so the hold IS the entire "dead window" before the ring appears — cutting
-    // it to 7 tokens (holdFor 2100ms) gives ~1.5s of real margin instead.
+    // span left under 70ms of margin before the midpoint; with the scroll now hoisted above,
+    // the hold is no longer the only dead window either way — cutting it to 7 tokens (holdFor
+    // 2100ms) still keeps a healthy margin.
     await demo.highlight(streakCard, "Locked — membership starts the streak");
   });
 
   // ── Beat 3 — day one ────────────────────────────────────────────────────
-  await setStreak(0);
+  // Task-4 fix (round 4, Finding 3): explicit streakEntries: 0 — Beat 2 now writes a real
+  // one-time bucket (oneTime: 3, membership: 0). setStreak() only calls setStreakEntries
+  // (which fully replaces entriesBySource) when opts.streakEntries is passed; without this,
+  // Beat 2's bucket would bleed forward into this beat (a fresh active member showing
+  // "Membership 0 / One-time 3" instead of the real 15-entry Tradie grant). Explicit here
+  // restores the seeded baseline (membership: 15, streak: 0, oneTime dropped) — matches
+  // e2e/seed/draw.ts and what this beat always rendered before Beat 2's fix existed.
+  await setStreak(0, { streakEntries: 0 });
   await page.reload();
   await dismissSubscriptionExplainerIfItOpens();
   await expect(page.getByText(/New streak/i).first()).toBeVisible({ timeout: 30_000 });
+  // Task-4 fix (round 4, Finding 1): hoisted — same proven reason as Beats 1-2 above.
+  await demo.smoothScrollTo(streakCard);
 
   await demo.step("They join. Day one — the streak starts at zero", async () => {
-    // Task-4 fix (Finding 2): highlight first — "New streak" was already asserted before this
-    // step opened, so streakCard (and its "Fresh steel" copy) is already rendered.
+    // highlight first — "New streak" was already asserted before this step opened, and the
+    // scroll above already settled, so streakCard (and its "Fresh steel" copy) is already
+    // rendered and in view.
     await demo.highlight(streakCard, "+100 free entries at their 2nd renewal");
     await expect(page.getByText(/Fresh steel/i).first()).toBeVisible({ timeout: 20_000 });
   });
 
   // ── Beat 4 — building ───────────────────────────────────────────────────
-  await setStreak(3);
+  // Task-4 fix (round 4, Finding 2): explicit streakEntries: 100. useStreakCelebration
+  // (src/hooks/useStreakCelebration.ts) seeds its marker SILENTLY on the first-ever active-
+  // member visit (Beat 3, lastSeen=null -> seeded to 0, no toast) — so THIS beat is the
+  // SECOND active-member visit, and streakMonths crossing 0->3 crosses the Lv.2 rung
+  // (verified against src/config/streakMilestones.ts: rungs at 2/4/6/8/10/12), firing the
+  // "+100 free entries — Lv.2 milestone" celebration toast + in-card banner. Leaving the
+  // entries bucket at its Beat-3 baseline (0) meant the toast claimed a grant the wallet
+  // directly below didn't reflect (still 15, no Streak line) — same defect class as the
+  // Beats 8/9/10 fix. At 3 renewals only Lv.2 (+100) has actually fired (3 < 4, so Lv.4 has
+  // not), so the earned total is 100 — wallet reads 115 with a Streak line of 100.
+  await setStreak(3, { streakEntries: 100 });
   await page.reload();
   await dismissSubscriptionExplainerIfItOpens();
   await expect(streakCard).toBeVisible({ timeout: 30_000 });
+  // Task-4 fix (round 4, Finding 1): hoisted — same proven reason as Beats 1-3 above.
+  await demo.smoothScrollTo(streakCard);
 
   await demo.step("Three renewals in — level 2 is banked, level 4 is next", async () => {
-    // Task-4 fix (Finding 2): highlight first — streakCard (and its "+200 free entries"
-    // pill) is already visible per the assertion above, before this step opened.
+    // highlight first — streakCard (and its "+200 free entries" pill) is already visible
+    // and in view, per the assertion + scroll above, before this step opened.
     await demo.highlight(streakCard, "One more renewal for +200 free entries");
     // The "next rung" reward pill renders TWICE (a persistent copy + a hover-reveal
     // copy hidden via CSS `hidden`, both real DOM text) — .first() avoids a strict-mode
@@ -204,13 +253,14 @@ async function runStreakJourney(page: Page, demo: Demo, testInfo: TestInfo): Pro
   await expect(streakCard).toContainText(/LEVEL|FOUNDING/i); // positive: really is the streak card
   await expect(streakCard).not.toContainText("Entries ·"); // negative: NOT the wallet
   await expect(wallet).not.toContainText(/LEVEL|FOUNDING/i); // mirror-image check
+  // Task-4 fix (round 4, Finding 1): hoisted — same proven reason as Beats 1-4 above.
+  await demo.smoothScrollTo(streakCard);
 
   await demo.step("Their 4th renewal — 200 free entries, automatic", async () => {
-    // Task-4 fix (Finding 2): highlight first — the regression guard above already proved
-    // streakCard is the right, visible card before this step opened. The caption already
-    // says "200 free entries, automatic"; the note just adds which draw (Finding 3: shortened
-    // so it fits at the desktop render width, no longer repeating the entry count the
-    // caption already gave).
+    // highlight first — the regression guard + scroll above already proved streakCard is the
+    // right, visible, in-view card before this step opened. The caption already says "200 free
+    // entries, automatic"; the note just adds which draw (Finding 3: shortened so it fits at
+    // the desktop render width, no longer repeating the entry count the caption already gave).
     //
     // Task-4 fix (round 3, frame-audit): caption shortened (was "...lands — 200 free
     // entries, granted automatically", 10 tokens, holdFor 3000ms) — same class of fix as
@@ -269,6 +319,12 @@ async function runStreakJourney(page: Page, demo: Demo, testInfo: TestInfo): Pro
   await page.goto("/my-account");
   await dismissSubscriptionExplainerIfItOpens();
   await expect(page.getByText(/Founding member/i).first()).toBeVisible({ timeout: 30_000 });
+  // Task-4 fix (round 4, Finding 1): hoisted — same proven reason as Beats 1-5 above. Round 3's
+  // frame-audit already found the ring draws in good time on the render it checked, but the
+  // round-4 instrumentation (mobile-chrome, normal mode) still measured streakCard partially
+  // below the fold at scroll=0 here too (boxBefore.y=564 against an 839px viewport) — hoisting
+  // removes the risk instead of relying on it staying lucky.
+  await demo.smoothScrollTo(streakCard);
 
   await demo.step("Twelve renewals — the permanent Founding member badge", async () => {
     // Task-4 fix (Finding 3): shortened so the note fits at the desktop render width.
@@ -338,10 +394,15 @@ async function runStreakJourney(page: Page, demo: Demo, testInfo: TestInfo): Pro
     await page.keyboard.press("Escape");
     await dialog.waitFor({ state: "hidden", timeout: 5_000 }).catch(() => {});
   }
+  // Task-4 fix (round 4, Finding 1): hoisted — same proven reason as Beats 1-5/7 above. Placed
+  // after the RenewalFailedModal dismissal, not before — the card's boundingBox() is correct
+  // even while the modal covers it (see comment above), but scrolling only matters once there's
+  // nothing left to interrupt it for the rest of the beat.
+  await demo.smoothScrollTo(streakCard);
 
   await demo.step("A failed payment doesn't burn the streak — fixing the card carries it on", async () => {
-    // Task-4 fix (Finding 2): highlight first — streakCard is already on screen (asserted via
-    // "Payment issue" above). Finding 3: note shortened so it fits at the desktop render width.
+    // highlight first — streakCard is already on screen and in view (asserted + scrolled
+    // above). Finding 3 (round 1): note shortened so it fits at the desktop render width.
     await demo.highlight(streakCard, "Nothing lost");
     // This caption is one of the longest in the journey (holdFor ≈ 4.2s), which pushed the
     // ring's actual draw time past this cue's own geometric midpoint in a proof-mode
@@ -445,10 +506,21 @@ async function runStreakJourney(page: Page, demo: Demo, testInfo: TestInfo): Pro
   });
 
   await demo.step("Pausing freezes the streak instead of ending it — the strongest save we have", async () => {
-    // Task-4 fix (Finding 2): highlight first — this is the same stakes screen the previous
-    // step already asserted onto ("+400 free entries"), no click happened in between, so the
-    // "Keep my streak" button is already rendered.
-    await demo.highlight(page.getByRole("button", { name: /Keep my streak/i }), "One tap keeps it alive");
+    // Task-4 fix (round 4, Finding 5): ring moved off the generic "Keep my streak" CTA onto the
+    // specific bullet the caption is actually about. StepStakes.tsx (lossFraming branch) renders
+    // three FeatureRow bullets in its ValueCard; the third is "Rather take a break? Pausing
+    // freezes your streak — it carries straight on when you're back" — the exact supporting line
+    // for this caption. `getByText` on "Pausing freezes your streak" resolves to the <b> (its own
+    // text is fully self-contained there, per Playwright's smallest-containing-element rule);
+    // walking up to its nearest ancestor <div> lands on FeatureRow's own row div (icon + full
+    // sentence — verified against src/components/modals/CancellationFlowModal/primitives.tsx:
+    // FeatureRow renders `<div><span>icon</span><span>{children}</span></div>`, so
+    // `ancestor::div[1]` from the <b> skips the intermediate <span> and resolves to that outer
+    // div), giving a ring around the whole bullet rather than just the bolded phrase. This is
+    // the same stakes screen the previous step already asserted onto ("+400 free entries"), no
+    // click happened in between, so the bullet is already rendered and in view.
+    const pauseBullet = page.getByText(/Pausing freezes your streak/i).first().locator("xpath=ancestor::div[1]");
+    await demo.highlight(pauseBullet, "Freezes it — doesn't end it");
     await expect(page.getByText(/Pausing freezes your streak/i).first()).toBeVisible({ timeout: 20_000 });
   });
 
@@ -468,10 +540,23 @@ async function runStreakJourney(page: Page, demo: Demo, testInfo: TestInfo): Pro
   await expect(page.getByText(/what.{0,3}s making you leave/i).first()).toBeVisible({ timeout: 20_000 });
   await chooseTooExpensiveAndContinue();
   await expect(page.getByText(/just.{0,10}getting started/i).first()).toBeVisible({ timeout: 20_000 });
+  // Task-4 fix (round 4, Finding 4): settle wait before demo.step opens. StepStakes' forward-
+  // framing screen enters via a Framer Motion transition (MODAL_DURATION_ENTER_S = 0.26s,
+  // src/utils/motion/modalPresets.ts — animates opacity + y, so it's a transform, not a layout
+  // change: getBoundingClientRect() reflects wherever the element is mid-glide). Playwright's
+  // `toBeVisible()` above can resolve as soon as the transition starts (non-zero opacity + a
+  // box), not once it's settled — instrumented live: the Headline's measured y varied by ~32px
+  // between two otherwise-identical runs (134 vs 166), consistent with catching it at different
+  // points in that glide. The caption paints immediately once demo.step opens and holds for
+  // several seconds, so if it happens to paint mid-transition it can end up landing on top of
+  // wherever the heading is passing through — a genuine, if intermittent, collision, not
+  // something a static one-time offset could fix. 400ms (comfortably past the 260ms transition)
+  // guarantees the page is geometrically final before the caption ever appears.
+  await page.waitForTimeout(400);
 
   await demo.step("A newer member sees the other side of it — the ladder ahead, not the loss", async () => {
-    // Task-4 fix (Finding 2): highlight first — "just...getting started" was already
-    // asserted before this step opened, on the same screen that also renders "2nd renewal".
+    // highlight first — "just...getting started" was already asserted (and the transition
+    // settled) before this step opened, on the same screen that also renders "2nd renewal".
     await demo.highlight(page.getByText(/2nd renewal/i).first(), "One renewal from their first +100");
     await expect(page.getByText(/ONE renewal away/i).first()).toBeVisible({ timeout: 20_000 });
   });
