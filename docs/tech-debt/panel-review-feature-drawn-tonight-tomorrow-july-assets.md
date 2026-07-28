@@ -27,8 +27,10 @@
   ×2, a klaviyo migration ×1) — untouched by this diff.
 - **Suites run:** `test:prize-builder` 39/39 · `test:prize-builder-card` 22/22 ·
   `test:prize-build` 9/9 · `test:promo-visit` pass · `test:prize-summaries` pass ·
-  `test:anchor-billing` pass · `test:refund-reversal` pass. `e2e:smoke` not run (no e2e spec covers
-  this surface — that absence is F-008). `e2e:purchase` not run (recommended follow-up).
+  `test:anchor-billing` pass · `test:refund-reversal` pass. `e2e:smoke` not run at review time (no
+  e2e spec covered this surface — that absence was F-008). **Since closed:**
+  `e2e/specs/marketing/prize-build-url-params.spec.ts` now covers it, green on all three projects
+  (20 passed, 0 flaky, 2026-07-28). `e2e:purchase` not run (recommended follow-up).
 - **Evidence:** live browser passes against the running dev server (Playwright, direct Node API) at
   390/1280 in both themes; live MongoDB `.explain()` query-plan analysis; live `norm:smoke` against
   the real endpoint; mutation testing of the existing repository guard.
@@ -54,22 +56,27 @@
 Fresh session? Run `/panel-fix` on this branch, or paste:
 
 > Read `docs/tech-debt/panel-review-feature-drawn-tonight-tomorrow-july-assets.md`. Fix ONLY the Now
-> items: F-001, F-002, F-004, F-005.
+> item: F-014.
 > Findings were written against `99f4739f` — re-grep each `file:line`, they may have moved.
+> (F-014 and F-015 were raised later, on 2026-07-28, against the post-fix tree.)
 > One commit-worthy change per finding. Do NOT commit. When a finding is done, tick its box
 > and fill `_Handled:_` with the date. If a fix turns out to be wrong, mark it Overridden with
 > a reason instead of silently skipping it.
 
-**Now:** none — all five Now items were closed 2026-07-28 (F-001, F-002, F-004, F-005, F-011),
-and the three Next items the same day (F-003, F-006, F-007).
+**Now:** **F-014** — promo visitor identity. It is the only open item that affects data already
+being collected, and it is P1: 38% of promo visits are recorded against nobody.
 
-**Remaining: 1 open + 1 deferred.** (F-013 was found on staging after the panel and is already closed.)
-- **F-008** (M) — an e2e spec covering the B1–B8 behaviour matrix. Not blocked on anything; simply
-  not written. The assertions are already known-good from manual runs, so it is mostly transcription.
+**Everything from the original panel is closed.** F-013 (found on staging) and F-008 (the e2e spec)
+are closed too. What remains was all raised *after* the panel:
+- **F-014** (P1, open) — `ta_anon_id` is only ever set by the A/B assign route, so 92 of 241 promo
+  visits in the last 30 days carry no visitor identity at all. Measured, not estimated. Affects
+  unique-visitor counts and disables the per-visitor visit dedup for those rows.
+- **F-015** (P2, open) — `/api/major-draw` intermittently 404s under load despite an active draw.
+  Not root-caused; reproducible in the e2e run. Would make the draw vanish from a live promo page.
 - **F-009** — deferred with measurements (see its entry): the collection is 1.1 MB and no row carries
   the field yet, so the index would be premature.
 
-Everything else (F-001 … F-007, F-010, F-011, F-012) is closed.
+Everything else (F-001 … F-008, F-010 … F-013) is closed.
 
 ---
 
@@ -143,11 +150,12 @@ Everything else (F-001 … F-007, F-010, F-011, F-012) is closed.
 
 ### P2
 
-- [ ] **F-008** · P2 · Test · no file — an absence — **The exact bug this branch fixes has no automated guard against coming back.**
+- [x] **F-008** · P2 · Test · `e2e/specs/marketing/prize-build-url-params.spec.ts` — **The exact bug this branch fixes has no automated guard against coming back.**
       _What:_ Spec §7's B1–B8 matrix was verified once, by hand. No e2e spec touches `/promotions/*` query-param behaviour (`grep` over `e2e/specs/` returns nothing for `toolbox=`/`toolset=`/`PrizeShowcase`). The scroll-reset bug already reached production once; nothing stops a future edit reintroducing it or silently regressing the debounced beacon.
       _Fix:_ Add `e2e/specs/marketing/prize-build-url-params.spec.ts` per `docs/e2e/adding-a-spec.md` (import from `../../fixtures/test`, tag `@smoke`) asserting: B1 scroll delta 0 on a reel click; B5 `history.length` unchanged after 4 clicks; B4 a direct `?toolset=milwaukee&toolbox=kincrome` load selects the matching cards; and the beacon debounce — intercept `POST /api/tracking/promo-prize-build`, switch 3× rapidly, wait >1s, assert exactly one request with cumulative counters.
       _Raised by:_ Reviewer D.
-      _Shot:_ code-only  _Handled:_ —
+      _Shot:_ code-only  _Handled:_ **2026-07-28** — spec written and **green on all three projects (20 passed, 0 failed, 0 flaky; `EADDRINUSE: 0`, so the results are the harness's own server)**. Six tests: B1 (scroll delta 0 + `aff` preserved + untouched URL stays clean), B5 (`history.length` unchanged over 4 selections, plus cross-lane cumulative counters), B4 (deep link hydrates both lanes), B8 (garbage params fall back), the debounce (a 3-step burst → exactly one write), and one addition beyond the finding: **one visitor producing three distinct builds across three page loads** — the F-013 shape, which every unit test missed because they all used one row per visitor.
+      **Four things the writing surfaced, none of them in the original fix line:** (1) `?toolbox=`/`?toolset=` deep-link hydration and the no-scroll contract both hold on WebKit and both mobile viewports, not just desktop; (2) three `click()`s are **not** a burst — Playwright's per-click actionability checks exceeded the 1000ms debounce under parallel load, so an early draft failed on all three projects with 3 beacons; the burst now uses the component's ARIA keyboard path, and the assertion measures the product instead of the machine; (3) crossing reel lanes mid-burst is unsafe on WebKit — `selectAndFocus`'s `requestAnimationFrame` stole a key press back into the previous lane (read `toolboxSwitches: 3, toolsetSwitches: 0` instead of 2/1), so cross-lane counting is asserted in the history test where timing cannot interfere; (4) two new findings below, F-014 and F-015.
 
 - [ ] **F-009** · P2 · Perf · `src/repositories/PromoAnalyticsRepository.ts:596-617` — **The admin analytics page now runs two unindexed full scans of the payments collection instead of one.**
       _What:_ `PaymentEvent` has no index on any `data.*` path (confirmed: five indexes, none matching). The existing `data.promotionSlug` query already full-scans this always-growing, non-TTL'd collection — inherited debt. This branch adds a second full scan on `data.builtPrizeSlug`, run concurrently via `Promise.all` in the same admin route.
@@ -161,6 +169,19 @@ Everything else (F-001 … F-007, F-010, F-011, F-012) is closed.
       _Raised by:_ Reviewer A · _Verified by controller:_ asymmetry confirmed by reading both handlers.
       _Shot:_ code-only  _Handled:_ **2026-07-28** — **owner ruled (b): the counters mean reel touches.** So the bump was REMOVED from `handleSelectCash` (a cash toggle is not a reel card) and nothing was added to `handleSelectToolset`.
       **This would have caused a regression, caught before implementing:** the beacon gated on `tb === 0 && ts === 0`, so once cash stopped bumping a counter, a visitor who clicked ONLY "take the $10,000 cash" would have had both counters at 0 and their choice would never have been recorded — despite `cash-prize` being a real build choice. Fixed by separating the two concepts: an explicit `hasInteracted` flag (set by all three handlers) now gates the beacon, while the counters stay pure reel-touch counts. **Proven live:** clicking only the cash CTA fires exactly one beacon with `{"builtPrizeSlug":"cash-prize","toolboxSwitches":0,"toolsetSwitches":0}`, scroll delta 0.
+
+- [ ] **F-014** · P1 · Bug · `src/services/ab-testing/AnonymousIdService.ts` + `src/app/api/tracking/promo-page-visit/route.ts:89` — **Nearly 4 in 10 promo-page visits are recorded against nobody, so "unique visitors" undercounts and the per-visitor dedup silently does not apply to them.**
+      _What:_ Promo analytics keys a visitor on the `ta_anon_id` cookie. That cookie's **only writer is `/api/ab-testing/assign`** — it is the sole caller of `getOrCreateAnonymousId`, and `AnonymousIdService` itself never sets it (its own comment says "the cookie will be set by the API route that calls this service"). A visitor who lands on `/promotions/*` and never triggers an experiment assignment therefore has no id, and their visit row stores `anonymousId: undefined`. Found while writing F-008's spec: an assertion that the cookie existed failed outright in the e2e environment. **Measured against the real database on 2026-07-28** — of **241** promo visits in the preceding 30 days, **149 (61.8%)** carried an `anonymousId`, **0** carried a `userId`, and **92 (38.2%) carried neither**. Two consequences: the admin's unique-visitor counts are computed over the 62% that can be grouped, and `promo-page-visit`'s "one visit per slug per anonymousId per minute" dedup cannot fire for the other 38%, so their reloads each create a fresh row.
+      _Fix:_ Decide where the id is minted, then do it in one place. The lean option: set the cookie in `src/middleware.ts` for public page requests when absent (it already runs per-request and injects the CSP nonce), so identity no longer depends on an unrelated A/B feature being live. Do **not** paper over it in the e2e spec — the spec deliberately documents the gap instead of seeding the cookie.
+      _Raised by:_ controller, while writing the F-008 spec. _Verified:_ counts above are a direct read of `promoanalyticsvisits`.
+      _Shot:_ code-only  _Handled:_ —
+
+- [ ] **F-015** · P2 · Bug · `src/app/api/major-draw/route.ts:59` (via `getCurrentMajorDrawForDisplay`) — **`/api/major-draw` intermittently answers "No active major draw found" while an active draw plainly exists.**
+      _What:_ Under a three-project concurrent e2e run, `/promotions/makita` occasionally logged `ApiError: No active major draw found` plus its companion 404. The e2e seed creates exactly one draw — `status: "active"`, `activationDate` −1 day, `drawDate` +20 days (`e2e/seed/draw.ts:19-39`) — which `getCurrentMajorDrawForDisplay`'s step-1 query matches unambiguously, so this is not seed state and not a missing-draw condition. It is intermittent and load-correlated, which points at `transitionMajorDrawsIfNeeded()` (called first, described as "debounced and idempotent") or a connection-pool failure being swallowed into a `null`. Not root-caused — it is orthogonal to the prize-build work and was not worth widening that task to chase.
+      _Why it matters beyond e2e:_ a customer hitting this on a live promo page sees the draw disappear from the page. The e2e run is simply the first place it was reproducible.
+      _Fix:_ Needs investigation before a fix can be named. Start by logging the branch taken inside `getCurrentMajorDrawForDisplay` when it returns `null`, and check whether `transitionMajorDrawsIfNeeded` can transiently move a draw out of `active`/`frozen` under concurrent calls.
+      _Raised by:_ controller, while writing the F-008 spec. _Verified:_ seed values read from `e2e/seed/draw.ts`; the failure is recorded in the run logs and is allowlisted **only** in that spec's one navigation-heavy test — the other five tests load the same route under the strict watchdog, so a frequent recurrence still fails the file.
+      _Shot:_ code-only  _Handled:_ —
 
 ---
 
