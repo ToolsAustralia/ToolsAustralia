@@ -138,6 +138,96 @@ snippet, so what they may briefly see is a loader in their **correct** theme, no
 light→dark snap. Do not try to fix this with a second inline snippet; the CSP hash
 allowlist makes that far more expensive than the symptom warrants.
 
+## A Server Component cannot import a constant from a `"use client"` module
+
+A Server Component cannot import a constant from a `"use client"` module — it receives a
+client reference, not the value. Symptom: the value silently reads as non-string/undefined
+with NO error, so a lookup keyed on it returns null and the feature goes inert while
+everything still compiles and type-checks. Put shared constants in a boundary-neutral module.
+
+**How this bit `PROMO_THEME_SLUG` (found + fixed 2026-07-28, Task 12 verification).**
+`/promotions/[slug]/page.tsx` and `ToolsetLandingPage.tsx` (both Server Components) imported
+`PROMO_THEME_SLUG` from `src/hooks/ab-testing/usePromoThemeExperiment.ts` — a `"use client"`
+file. `ExperimentService.getActiveExperimentForSentinelSlug(PROMO_THEME_SLUG)` was therefore
+called with a client reference instead of the string `"__promo-theme__"`, matched no document,
+and `themeExperimentId` was always `null`. No thrown error anywhere — `.catch(() => null)` on
+the `Promise.all` entry swallowed whatever the mismatch actually produced. Effect: the gate's
+`experimentId` prop was always `null`, so `usePromoThemeExperiment` short-circuited to
+`settled: true` synchronously and never called `POST /api/ab-testing/assign` at all — the
+entire default-theme A/B test (Tasks 1–11) was inert for every visitor, silently.
+
+**Diagnostic signature to recognize this class of bug fast next time:** a *different* sentinel
+lookup through a live route, or a standalone script calling the same service method directly
+with the literal string, resolves correctly — only the Server-Component call site fails. That
+asymmetry (same function, same query builder, different caller) is the tell that the value
+crossing into the Server Component isn't what it looks like in the source, not that the query
+logic is wrong. Reach for this gotcha before re-auditing the DB query.
+
+**The fix:** moved the constant (and its co-located `promoThemeMarkerKey` derived-key helper —
+a pure string function with no client-only dependency, so it belongs alongside the sentinel it
+derives from) into `src/lib/ab-testing/promo-theme-slug.ts`, a plain module with no `"use
+client"` directive. `usePromoThemeExperiment.ts` now imports from there and re-exports both
+names so existing client-side importers of the hook module are unaffected. Both Server
+Components import the constant directly from the new `src/lib/ab-testing/` module, never from
+the hook. The sibling `__membership-theme__` feature never had this problem because it
+hand-duplicates its literal sentinel string on each side of the boundary instead of sharing one
+export — either pattern (a boundary-neutral shared module, or duplicated literals) avoids the
+bug; sharing an export FROM a `"use client"` file INTO a Server Component is the one shape that
+doesn't work.
+
+## `ranRef` + `AbortController` single-shot effects can permanently strand in dev (React Strict Mode)
+
+**Found 2026-07-28, while re-verifying `promo-theme-split.spec.ts` after the fix above.** Fixing
+the client-boundary bug made `usePromoThemeExperiment`'s effect actually fire for the first time
+— which exposed a SECOND, previously-masked bug that independently keeps
+`e2e/specs/marketing/promo-theme-split.spec.ts`'s "dark arm never paints light before dark" test
+failing under `npm run dev`.
+
+This app's `next.config.ts` does not set `reactStrictMode`, so Next's App Router default applies
+— confirmed by reading `node_modules/next/dist/build/define-env.js`: `__NEXT_STRICT_MODE_APP` is
+`true` whenever `reactStrictMode` is `null` (unset) in config. React Strict Mode double-invokes
+effects in development ONLY (mount → effect → synthetic cleanup → effect again), specifically to
+surface exactly this class of bug.
+
+`usePromoThemeExperiment`'s single-shot effect guards against re-firing with a `ranRef`:
+
+```ts
+useEffect(() => {
+  if (ranRef.current) return;
+  ranRef.current = true;
+  // ...fetch, with an AbortController...
+  return () => { aborted = true; controller.abort(); };
+}, [experimentId]);
+```
+
+Strict Mode's FIRST invocation sets `ranRef.current = true` and starts the `/assign` fetch, then
+its synthetic cleanup fires immediately and calls `controller.abort()` on that in-flight
+request. The SECOND (real) invocation checks `ranRef.current`, sees it's already `true`, and
+returns early — so the aborted request is never retried. Verified directly (Playwright MCP
+browser session against the running dev server, a real seeded active `__promo-theme__`
+experiment, two independent fresh page loads): exactly one `POST /api/ab-testing/assign` per
+load, always `net::ERR_ABORTED`, no follow-up request, ever — the hook is permanently stranded
+at `{ settled: false, theme: null }` and `<html>` never gains the `dark` class. Corroborating
+signal: this app's other client components with debug `console.log`s (e.g.
+`MembershipSection Debug`) visibly double-fire on every load, consistent with Strict Mode being
+active.
+
+**This is dev-only.** Strict Mode's double-invoke never happens in a production build — a real
+visitor hitting a production deploy would see the effect run once, fetch once, and resolve
+normally. So the default-theme A/B feature likely DOES work correctly in production even with
+this bug present; it's local dev testing (including any e2e run against `npm run dev`, not
+`E2E_BUILD=1`) that's blocked. This is unverified against a real `next build` — nobody has run
+one against this specific code path yet.
+
+**Not fixed as part of Task 12** — it's a second, independent bug outside that task's prescribed
+scope (a single shared-constant move), and the task's own instructions were explicit: stop and
+report rather than keep patching `src/` once the prescribed fix doesn't make the spec pass.
+Flagged here for whoever picks it up. Candidate fix shapes (not evaluated in depth): don't let
+the cleanup abort a request that a persistent ref-guard prevents retrying (e.g., drop the
+`ranRef` guard and instead dedupe via the `AbortController` itself finishing before Strict
+Mode's second invocation runs), or use a Strict-Mode-safe request pattern (an effect that always
+re-runs and lets the *response*, not the ref, decide whether to apply stale results).
+
 ## Migrated stubs
 
 Read all five `docs/AB_TESTING_*.md` root files and merge in next refresh:

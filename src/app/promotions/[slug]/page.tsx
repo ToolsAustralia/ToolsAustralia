@@ -55,7 +55,7 @@ import mongoose from "mongoose";
 import ExperimentService from "@/services/ab-testing/ExperimentService";
 import { VariantAssignmentWrapper } from "@/components/ab-testing/VariantAssignmentWrapper";
 import { PromoThemeExperimentGate } from "@/components/ab-testing/PromoThemeExperimentGate";
-import { PROMO_THEME_SLUG } from "@/hooks/ab-testing/usePromoThemeExperiment";
+import { PROMO_THEME_SLUG } from "@/lib/ab-testing/promo-theme-slug";
 import type { PromoImagePaths } from "@/utils/promo/promo-hero-types";
 import { resolveEvergreenHeroImages } from "@/utils/promo/landing-image-resolver";
 import { getLandingHeroImagePaths } from "@/config/promo-landing-slugs";

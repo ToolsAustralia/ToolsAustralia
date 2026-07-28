@@ -2,14 +2,13 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { VariantConfig } from "@/models/ab-testing/Variant";
+import { PROMO_THEME_SLUG, promoThemeMarkerKey } from "@/lib/ab-testing/promo-theme-slug";
 
-/** Sentinel slug target. Must match the experiment's slugTargets and the seed script. */
-export const PROMO_THEME_SLUG = "__promo-theme__";
-
-/** Device-scoped marker: this device already resolved this experiment. */
-export function promoThemeMarkerKey(experimentId: string): string {
-  return `ta_promo_theme_${experimentId}`;
-}
+// Re-exported so existing client-side importers of this hook module keep working. The
+// DEFINITION site is now `@/lib/ab-testing/promo-theme-slug` — a boundary-neutral module —
+// because a Server Component cannot read a value from a `"use client"` module (see that
+// file's header comment). Server Components must import directly from there, not from here.
+export { PROMO_THEME_SLUG, promoThemeMarkerKey };
 
 interface Resolved {
   settled: boolean;

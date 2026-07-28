@@ -22,7 +22,7 @@ import { getCurrentMajorDrawServer } from "@/utils/database/queries/major-draw-s
 import ExperimentService from "@/services/ab-testing/ExperimentService";
 import { VariantAssignmentWrapper } from "@/components/ab-testing/VariantAssignmentWrapper";
 import { PromoThemeExperimentGate } from "@/components/ab-testing/PromoThemeExperimentGate";
-import { PROMO_THEME_SLUG } from "@/hooks/ab-testing/usePromoThemeExperiment";
+import { PROMO_THEME_SLUG } from "@/lib/ab-testing/promo-theme-slug";
 import {
   getLandingHeroUrgencyFromDrawDay,
   getMajorDrawHeroUrgencyFromMajorDraw,

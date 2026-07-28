@@ -23,11 +23,20 @@ on SSR/loading/error/admin. Consumed only by `MembershipSection`.
 
 `src/hooks/ab-testing/usePromoThemeExperiment.ts`. Resolves the promo-landing
 default-theme A/B arm for the current visitor. Returns
-`{ settled: boolean; theme: "light" | "dark" | null }`. Also exports
+`{ settled: boolean; theme: "light" | "dark" | null }`. Also re-exports
 `PROMO_THEME_SLUG = "__promo-theme__"` (the constant slug target — must match
 the experiment's `slugTargets` and the seed script) and
 `promoThemeMarkerKey(experimentId)` (the device-scoped localStorage key,
-`ta_promo_theme_<experimentId>`).
+`ta_promo_theme_<experimentId>`) — **defined** in
+`src/lib/ab-testing/promo-theme-slug.ts`, not here. That module has no
+`"use client"` directive, so it's the correct import source for the two
+Server Components (`/promotions/[slug]/page.tsx`, `ToolsetLandingPage.tsx`)
+that need the sentinel slug to resolve `themeExperimentId` server-side — a
+Server Component that imported it from this hook's `"use client"` module
+instead would get a client reference, not the string value. See
+[gotchas.md](./gotchas.md#a-server-component-cannot-import-a-constant-from-a-use-client-module)
+for the incident this fixed. The re-export here exists only so existing
+client-side importers of this hook module keep working.
 
 **Three synchronous short-circuits.** `settled` is computed inside the
 `useState` initializer — synchronously, before any effect runs — and is `true`
