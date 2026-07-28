@@ -35,35 +35,32 @@ function testPrototypeKeysRejected(): void {
 
 function testUnknownIdFallsToGeneric(): void {
   assert.deepEqual(resolvePortalReturn({ offer_id: "999999" }, OFFERS), { generic: true });
-  // …but a valid name+level fallback still works when the id is unknown.
+  // F-008: with an unknown id, a CATALOGUE-MATCHED name still resolves —
+  // catalogue values win, the URL `level` is ignored entirely.
   const r = resolvePortalReturn(
-    { offer_id: "999999", offer_name: "Test Offer", level: "70" },
+    { offer_id: "999999", offer_name: "witchery egift card", level: "70" },
     OFFERS
   );
-  assert.deepEqual(r, { offerName: "Test Offer", requiredPct: 70 });
+  assert.deepEqual(r, { offerName: "Witchery eGift Card", requiredPct: 40 });
 }
 
-function testNameSanitisation(): void {
-  const r = resolvePortalReturn(
-    { offer_name: "<script>alert(1)</script>", level: "50" },
-    OFFERS
-  );
-  // <>& stripped; the residue still renders as harmless text.
-  assert.equal(r?.offerName, "scriptalert(1)/script");
-  assert.equal(r?.requiredPct, 50);
-}
-
-function testNameCapAt60(): void {
-  const long = "A".repeat(80);
-  const r = resolvePortalReturn({ offer_name: long, level: "25" }, OFFERS);
-  assert.equal(r?.offerName?.length, 60);
-}
-
-function testInvalidLevelsFallToGeneric(): void {
-  for (const level of ["999", "40.5", "abc", "", "0", "-25", "101"]) {
-    const r = resolvePortalReturn({ offer_name: "Test Offer", level }, OFFERS);
-    assert.deepEqual(r, { generic: true }, `level=${JSON.stringify(level)} must be discarded`);
+function testNameAllowlistRejectsArbitraryText(): void {
+  // F-008: names not in the catalogue NEVER render — spoofing/banned-vocabulary
+  // injection via crafted links is dead. Level validity is irrelevant.
+  for (const name of ["<script>alert(1)</script>", "Free $500 Cash Bonus", "lottery jackpot"]) {
+    const r = resolvePortalReturn({ offer_name: name, level: "50" }, OFFERS);
+    assert.deepEqual(r, { generic: true }, `offer_name=${JSON.stringify(name)} must not render`);
   }
+}
+
+function testNameAllowlistNormalises(): void {
+  // Case-insensitive + whitespace-collapsing (vendor names carry double spaces);
+  // the CATALOGUE's canonical name + pct come back, never the URL's spelling.
+  const r = resolvePortalReturn({ offer_name: "  WITCHERY   eGift   CARD " }, OFFERS);
+  assert.deepEqual(r, { offerName: "Witchery eGift Card", requiredPct: 40 });
+  // URL level (even a valid ladder value) is ignored on a name match.
+  const r2 = resolvePortalReturn({ offer_name: "Witchery eGift Card", level: "100" }, OFFERS);
+  assert.equal(r2?.requiredPct, 40);
 }
 
 function testArrayParamsUseFirst(): void {
@@ -146,7 +143,12 @@ function testViewCoveredFlagOffHasNoCta(): void {
     ssoEnabled: false,
     portalReturn: { offerName: "Witchery eGift Card", requiredPct: 40 },
   });
-  assert.equal(v.cta, null); // flag off → sub only (F-006 will refine the sub copy)
+  assert.equal(v.cta, null); // flag off → sub only
+  // F-006: with no button, the sub must name the one path that works.
+  assert.equal(
+    v.sub,
+    "Head back to the partner portal tab you came from — this offer is ready to redeem."
+  );
 }
 
 function testViewGenericGuestAndMember(): void {
@@ -164,26 +166,35 @@ function testViewNoRecommendationFallsToScroll(): void {
   assert.deepEqual(v.cta, { kind: "scroll", label: "See all packages" });
 }
 
-function testViewPausedCurrentBehaviourPinned(): void {
-  // PINNED CURRENT BEHAVIOUR: paused members fall through to the generic member
-  // branch with pct 0 (no dedicated branch yet). Panel-review F-009 will add a
-  // paused branch — update this pin when it lands.
-  const v = resolvePortalBannerView({
+function testViewPausedBranch(): void {
+  // F-009: paused members are never upsold — resume guidance + manage CTA,
+  // regardless of whether an offer was resolved.
+  const withDate = resolvePortalBannerView({
+    ...base,
+    acct: "paused",
+    partnerAccessPct: 0,
+    pausedUntilLabel: "12 August",
+  });
+  assert.equal(withDate.headline, "Your membership is paused.");
+  assert.equal(withDate.sub, "It resumes 12 August — resume now to restore your discounts.");
+  assert.equal(withDate.cta?.kind, "manage");
+
+  const noDate = resolvePortalBannerView({
     ...base,
     acct: "paused",
     partnerAccessPct: 0,
     portalReturn: { generic: true },
   });
-  assert.equal(v.headline, "Back from the partner portal?");
+  assert.equal(noDate.sub, "Resume your membership to restore your discounts.");
+  assert.equal(noDate.cta?.kind, "manage");
 }
 
 const tests = [
   testOfferIdResolvesFromCatalogue,
   testPrototypeKeysRejected,
   testUnknownIdFallsToGeneric,
-  testNameSanitisation,
-  testNameCapAt60,
-  testInvalidLevelsFallToGeneric,
+  testNameAllowlistRejectsArbitraryText,
+  testNameAllowlistNormalises,
   testArrayParamsUseFirst,
   testNoParamsIsNotAReturnVisit,
   testCampaignAloneIsGeneric,
@@ -195,7 +206,7 @@ const tests = [
   testViewCoveredFlagOffHasNoCta,
   testViewGenericGuestAndMember,
   testViewNoRecommendationFallsToScroll,
-  testViewPausedCurrentBehaviourPinned,
+  testViewPausedBranch,
 ];
 
 for (const t of tests) t();

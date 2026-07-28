@@ -65,7 +65,7 @@ export default function MembershipPortalReturnBanner({
   plans,
 }: MembershipPortalReturnBannerProps) {
   const router = useRouter();
-  const { acct, partnerAccessPct, isLoading } = useDashboardState();
+  const { acct, partnerAccessPct, isLoading, pausedUntil } = useDashboardState();
   const { subscriptionPackages, oneTimePackages } = useMemberships();
   const sso = usePartnerDiscountSso();
   const ssoEnabled = partnerDiscountSsoEnabled();
@@ -129,6 +129,9 @@ export default function MembershipPortalReturnBanner({
         }
       : null,
     catalogTotal: PARTNER_CATALOG_TOTAL,
+    pausedUntilLabel: pausedUntil
+      ? pausedUntil.toLocaleDateString("en-AU", { day: "numeric", month: "long" })
+      : null,
   });
 
   const total = fmt(PARTNER_CATALOG_TOTAL);
@@ -211,6 +214,15 @@ export default function MembershipPortalReturnBanner({
               {sso.isPending ? "Opening…" : "Open partner portal"}
               <ExternalLink className="h-4 w-4" />
             </button>
+          )}
+
+          {view.cta?.kind === "manage" && (
+            <Link
+              href="/my-account?open=subscription"
+              className="flex items-center justify-center gap-2 rounded-xl border border-white/25 px-5 py-3 text-[13.5px] font-extrabold text-white transition-colors hover:border-white/50 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-600 focus-visible:ring-offset-2 focus-visible:ring-offset-black"
+            >
+              Manage membership <ArrowRight className="h-4 w-4" />
+            </Link>
           )}
 
           {view.cta?.kind === "payment" && (

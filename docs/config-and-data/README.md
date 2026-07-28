@@ -69,6 +69,17 @@ Entries 18–21 are the premeditated answers for the top-volume support inbox qu
 
 **Local preview:** set `NEXT_PUBLIC_DASHBOARD_STREAK_PREVIEW=true` in `.env.local` (registered in `.env.example`; never set in Vercel). Both flags read the override via the `STREAK_PREVIEW` const, so git stays dark with a clean working tree — no uncommitted code flip needed. Only meaningful once the runbook has run against the DB your `.env.local` points at (the owner's dev DB completed a full rehearsal 2026-07-15: rungs active + 548 markers, zero stray grants). At production launch (step 4) replace `STREAK_PREVIEW` with `true` on both flags and deploy.
 
+## Cobber partner-portal redemption model (2026-07-28, panel-fix F-007)
+
+FAQ **16** no longer says "mention Tools Australia when dealing with the partner brand" (the pre-portal
+redemption model) and no longer links `/partner` (that page is the **B2B become-a-partner form**, not a
+discount list — latent bug). Both FAQ 16 and FAQ 72 now describe the ONE redemption model: open the
+partner portal from **My Account → Rewards** (signed in automatically), each offer shows its steps in
+the portal; tier wording disambiguated ("the Tradie **membership** unlocks 50%…" — the Tradie *Pack* is
+40%) and Mini Packs' smaller time-limited slice named. **Launch coupling (CLAUDE.md 5c):** this copy
+describes the portal-live world — it ships in the same branch as the portal experience and MUST go
+live together with the SSO flag flip at vendor go-live; corpus count stays 72.
+
 ## Cobber streak FAQs (2026-07-15)
 
 `src/data/supportChatFaqs.ts` ids **69–71** (REWARDS): what the Membership Streak is + the ladder, continuity rules (failed payment / pause / 30-day rejoin grace / reset), and where to see it.

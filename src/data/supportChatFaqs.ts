@@ -147,7 +147,7 @@ export function getSupportChatFaqEntries(): FaqEntry[] {
       id: "16",
       question: "What partner discounts do members get?",
       answer:
-        "Active members unlock exclusive discounts with our partner brands — real savings on tools, equipment, and trade services. How much of the catalog you can see depends on your tier: Tradie members unlock 50% of the catalog, Foreman 75%, and Boss 100%. One-time pack buyers receive a time-limited window of partner access based on the pack they purchased. To redeem a partner discount, simply mention Tools Australia when dealing with the partner brand — there is no code to enter. Browse the full list on the [Partner discounts](/partner) page.",
+        "Active members unlock exclusive discounts with our partner brands — real savings on tools, equipment, and trade services. How much of the catalogue you can see depends on your tier: the Tradie membership unlocks 50% of the catalogue, Foreman 75%, and Boss 100%, while one-time packs open their own share for a set number of days. To redeem an offer, open the partner portal from [My Account → Rewards](/my-account/rewards) — you're signed in automatically, and each offer shows its redemption steps in the portal.",
       category: "PARTNERSHIPS",
     },
     {
@@ -567,7 +567,7 @@ export function getSupportChatFaqEntries(): FaqEntry[] {
       id: "72",
       question: "Why can't I redeem an offer in the partner portal?",
       answer:
-        "Each offer in the partner catalogue unlocks at a set access percentage, and your access level comes from your membership tier or an active one-time pack — Tradie unlocks 50% of the catalogue, Foreman 75%, and Boss 100%. If an offer shows as locked in the partner portal, your current access level doesn't cover it yet. Upgrading your membership or grabbing a one-time pack on the [membership page](/membership) unlocks it straight away — then head back to the portal to redeem it.",
+        "Each offer in the partner catalogue unlocks at a set access percentage, and your access comes from your membership tier or an active one-time pack — the Tradie membership unlocks 50% of the catalogue, Foreman 75%, and Boss 100%, while one-time packs open their own share for a set number of days and Mini Packs include a smaller time-limited slice. If an offer shows as locked in the partner portal, your current access level doesn't cover it yet. Upgrading your membership or grabbing a one-time pack on the [membership page](/membership) unlocks it straight away — then head back to the portal to redeem it.",
       category: "REWARDS",
     },
   ];

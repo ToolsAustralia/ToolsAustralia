@@ -49,12 +49,35 @@ export type PortalSearchParams = { [key: string]: string | string[] | undefined 
 export const firstParam = (value: string | string[] | undefined): string | undefined =>
   Array.isArray(value) ? value[0] : value;
 
+/** Normalise a name for allowlist matching: strip markup chars, collapse whitespace
+ *  (vendor names carry double-space location suffixes), lowercase. */
+const normName = (s: string): string =>
+  s.replace(/[<>&]/g, "").replace(/\s+/g, " ").trim().toLowerCase();
+
+/** Per-map memo of the name→offer allowlist index (the offers map is a stable module
+ *  const on the server, so this builds once per process, not per request). */
+const nameIndexCache = new WeakMap<object, Map<string, PortalReturnOffer>>();
+function nameIndex(
+  offersById: Readonly<Record<string, PortalReturnOffer>>
+): Map<string, PortalReturnOffer> {
+  let idx = nameIndexCache.get(offersById);
+  if (!idx) {
+    idx = new Map();
+    for (const offer of Object.values(offersById)) idx.set(normName(offer.name), offer);
+    nameIndexCache.set(offersById, idx);
+  }
+  return idx;
+}
+
 /**
  * Resolve the rewards-return context from the portal's redirect URL. URL params are
- * UNTRUSTED display strings: when `offer_id` matches the injected catalogue map,
- * name + percent come from OUR data; the `offer_name`/`level` fallback only survives
- * full sanitisation + a real ladder percent. A recognised return with nothing
- * resolvable still gets the generic banner.
+ * UNTRUSTED: when `offer_id` matches the injected catalogue map, name + percent come
+ * from OUR data. The `offer_name` fallback (panel F-008) is ALLOWLISTED — it resolves
+ * only when the name matches a real catalogue offer (whitespace/case-insensitive),
+ * and then the CATALOGUE's name + percent are used; the URL `level` param is ignored
+ * entirely. Nothing user-typed is ever rendered — a crafted link can no longer put
+ * arbitrary text (or banned vocabulary) into the banner. A recognised return with
+ * nothing resolvable still gets the generic banner.
  *
  * The id lookup is guarded against prototype-chain keys (`?offer_id=__proto__` /
  * `constructor`): ids must be all-digits (the build script's invariant) AND an own
@@ -78,12 +101,8 @@ export function resolvePortalReturn(
   }
 
   if (offerNameRaw) {
-    const offerName = offerNameRaw.replace(/[<>&]/g, "").trim().slice(0, 60).trim();
-    const levelRaw = firstParam(params.level);
-    const level = levelRaw != null && levelRaw !== "" ? Number(levelRaw) : Number.NaN;
-    if (offerName && Number.isInteger(level) && PARTNER_CATALOG_LADDER_PCTS.has(level)) {
-      return { offerName, requiredPct: level };
-    }
+    const match = nameIndex(offersById).get(normName(offerNameRaw));
+    if (match) return { offerName: match.name, requiredPct: match.pct };
   }
 
   return { generic: true };
@@ -113,6 +132,7 @@ export type PortalBannerCta =
     }
   | { kind: "sso" }
   | { kind: "payment" }
+  | { kind: "manage" }
   | { kind: "scroll"; label: string };
 
 export interface PortalBannerView {
@@ -137,8 +157,19 @@ export function resolvePortalBannerView(input: {
   ssoEnabled: boolean;
   recommended: PortalBannerRecommendation | null;
   catalogTotal: number;
+  /** Pre-formatted resume date for a retention-paused member (e.g. "12 August"),
+   *  or null when unknown — drives the F-009 paused branch. */
+  pausedUntilLabel?: string | null;
 }): PortalBannerView {
-  const { portalReturn, acct, partnerAccessPct, ssoEnabled, recommended, catalogTotal } = input;
+  const {
+    portalReturn,
+    acct,
+    partnerAccessPct,
+    ssoEnabled,
+    recommended,
+    catalogTotal,
+    pausedUntilLabel = null,
+  } = input;
   const offerName = portalReturn.offerName;
   const requiredPct = portalReturn.requiredPct ?? null;
   const offerKnown = Boolean(offerName) && requiredPct != null;
@@ -165,6 +196,19 @@ export function resolvePortalBannerView(input: {
     };
   }
 
+  // F-009: a retention-paused member's access returns on resume — never upsell them
+  // a package they already own; point at the manage sheet (resume lives there).
+  if (acct === "paused") {
+    return {
+      headline: "Your membership is paused.",
+      sub: pausedUntilLabel
+        ? `It resumes ${pausedUntilLabel} — resume now to restore your discounts.`
+        : "Resume your membership to restore your discounts.",
+      cta: { kind: "manage" },
+      showLoginHint: false,
+    };
+  }
+
   if (offerKnown && offerName && requiredPct != null) {
     if (guest) {
       return {
@@ -177,7 +221,11 @@ export function resolvePortalBannerView(input: {
     if (partnerAccessPct >= requiredPct) {
       return {
         headline: `You're set — your ${partnerAccessPct}% access covers ${offerName}.`,
-        sub: "Head back to the portal to redeem it.",
+        // F-006: with SSO dark there is no button — name the one path that works
+        // (their still-open portal tab) instead of pointing at a door we can't open.
+        sub: ssoEnabled
+          ? "Head back to the portal to redeem it."
+          : "Head back to the partner portal tab you came from — this offer is ready to redeem.",
         cta: ssoEnabled ? { kind: "sso" } : null, // flag off → sub only
         showLoginHint: false,
       };
