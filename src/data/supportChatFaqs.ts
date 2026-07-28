@@ -58,7 +58,7 @@ export function getSupportChatFaqEntries(): FaqEntry[] {
       id: "4",
       question: "What are my membership options and how many entries do I get?",
       answer:
-        "We have three monthly membership tiers (all prices in AUD): Tradie at $20/month includes 15 free entries per month; Foreman at $40/month includes 40 free entries; Boss at $80/month includes 100 free entries. Higher tiers also unlock a larger slice of our partner-discount catalog. Membership entries accumulate and carry forward each month while your membership stays active. You can join on the [membership page](/membership).",
+        "We have three monthly membership tiers (all prices in AUD): Tradie at $20/month includes 15 free entries per month; Foreman at $40/month includes 40 free entries; Boss at $80/month includes 100 free entries. Higher tiers also unlock a larger slice of our partner-discount catalogue. Membership entries accumulate and carry forward each month while your membership stays active. You can join on the [membership page](/membership).",
       category: "SHOPPING",
     },
     {
@@ -147,7 +147,7 @@ export function getSupportChatFaqEntries(): FaqEntry[] {
       id: "16",
       question: "What partner discounts do members get?",
       answer:
-        "Active members unlock exclusive discounts with our partner brands — real savings on tools, equipment, and trade services. How much of the catalog you can see depends on your tier: Tradie members unlock 50% of the catalog, Foreman 75%, and Boss 100%. One-time pack buyers receive a time-limited window of partner access based on the pack they purchased. To redeem a partner discount, simply mention Tools Australia when dealing with the partner brand — there is no code to enter. Browse the full list on the [Partner discounts](/partner) page.",
+        "Active members unlock exclusive discounts with our partner brands — real savings on tools, equipment, and trade services. How much of the catalogue you can see depends on your tier: the Tradie membership unlocks 50% of the catalogue, Foreman 75%, and Boss 100%, while one-time packs open their own share for a set number of days. To redeem an offer, open the partner portal from [My Account → Rewards](/my-account/rewards) — you're signed in automatically, and each offer shows its redemption steps in the portal.",
       category: "PARTNERSHIPS",
     },
     {
@@ -239,7 +239,7 @@ export function getSupportChatFaqEntries(): FaqEntry[] {
       id: "28",
       question: "How do I become a member and how does membership work?",
       answer:
-        "Becoming a member is simple: choose a monthly membership tier — Tradie ($20/month, 15 free entries), Foreman ($40/month, 40 free entries), or Boss ($80/month, 100 free entries) — and sign up on the [membership page](/membership) (or from [My Account](/my-account)). Your entries go into the monthly Major Draw straight away and accumulate each month while your membership stays active, and higher tiers unlock more of our partner-discount catalog. Membership renews monthly and you can cancel anytime. Prefer no monthly commitment? You can also enter with one-time tool packs instead.",
+        "Becoming a member is simple: choose a monthly membership tier — Tradie ($20/month, 15 free entries), Foreman ($40/month, 40 free entries), or Boss ($80/month, 100 free entries) — and sign up on the [membership page](/membership) (or from [My Account](/my-account)). Your entries go into the monthly Major Draw straight away and accumulate each month while your membership stays active, and higher tiers unlock more of our partner-discount catalogue. Membership renews monthly and you can cancel anytime. Prefer no monthly commitment? You can also enter with one-time tool packs instead.",
       category: "SHOPPING",
     },
 
@@ -559,6 +559,15 @@ export function getSupportChatFaqEntries(): FaqEntry[] {
       question: "Where do I see my streak and the free entries my streak milestones gave me?",
       answer:
         "Your streak lives on your [My Account](/my-account) dashboard — the Streak card shows your current streak, your next milestone, and the free entries it will include. When a milestone lands, its free entries appear as their own \"Streak\" portion of your entry total and are already in that month's Major Draw — no claiming needed. I can't see your account from here, so I can't read your live streak or entry count; if a milestone renewal has gone through and the free entries haven't appeared, [contact us](/contact) and we'll take a look.",
+      category: "REWARDS",
+    },
+
+    // ── PARTNER PORTAL — LOCKED OFFERS ───────────────────────────────────────
+    {
+      id: "72",
+      question: "Why can't I redeem an offer in the partner portal?",
+      answer:
+        "Each offer in the partner catalogue unlocks at a set access percentage, and your access comes from your membership tier or an active one-time pack — the Tradie membership unlocks 50% of the catalogue, Foreman 75%, and Boss 100%, while one-time packs open their own share for a set number of days and Mini Packs include a smaller time-limited slice. If an offer shows as locked in the partner portal, your partner access doesn't reach it yet. Upgrading your membership or grabbing a one-time pack on the [membership page](/membership) unlocks it straight away — then head back to the portal to redeem it.",
       category: "REWARDS",
     },
   ];

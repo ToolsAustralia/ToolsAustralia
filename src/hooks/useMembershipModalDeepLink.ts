@@ -17,9 +17,9 @@ import {
  * `buildCheckoutResumeUrl` in `src/utils/integrations/klaviyo/checkout-resume-url.ts`.
  *
  * Call this from any host page that renders `<MembershipModal>` with its own
- * `openModal` callback wired in. The callback is host-controlled because
- * different hosts need different gate logic (e.g. MembershipSection wraps the
- * open in `whenGatesOpenElseGateModal`, while /membership opens directly).
+ * `openModal` callback wired in. The callback is host-controlled because each host
+ * owns its gate logic — today both hosts (MembershipSection and /membership's
+ * MembershipPageClient) wrap the open in `whenGatesOpenElseGateModal`.
  *
  * The URL is read from `window.location.search` inside the effect, NOT via
  * `useSearchParams()`. Callers (MembershipSection) render on PRERENDERED

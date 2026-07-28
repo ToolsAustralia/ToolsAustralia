@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireSameOrigin } from "@/utils/security/requireSameOrigin";
 import { createDistributedRateLimiter, getClientIdentifier } from "@/utils/security/rateLimiter";
 import { requireAuthenticatedUserDoc } from "@/lib/api-auth";
-import { reconcilePartnerDiscountAccess } from "@/utils/partner-discounts/sso-access";
+import { reconcilePartnerDiscountAccess, PARTNER_SSO_ERRORS } from "@/utils/partner-discounts/sso-access";
 import { generatePortalSso, logSsoIssuance } from "@/utils/partner-discounts/sso-flow";
 
 /**
@@ -31,7 +31,12 @@ export async function POST(request: NextRequest) {
     // dev so the /dev/rewards-sso harness works. DEFAULT-SAFE by design: prod stays a 404 even
     // if everyone forgets — that's the whole point.
     if (process.env.NODE_ENV !== "development" && process.env.PARTNER_DISCOUNT_SSO_ENABLED !== "true") {
-      return NextResponse.json({ success: false, error: "Not found" }, { status: 404 });
+      // Body copy is customer-facing (surfaced inline by usePartnerDiscountSso consumers);
+      // status stays 404 — the route is deliberately hidden while the flag is dark.
+      return NextResponse.json(
+        { success: false, error: PARTNER_SSO_ERRORS.flagDark },
+        { status: 404 }
+      );
     }
 
     const csrf = requireSameOrigin(request);
@@ -44,7 +49,7 @@ export async function POST(request: NextRequest) {
     const rateCheck = await ssoRateLimiter.check(identifier);
     if (!rateCheck.success) {
       return NextResponse.json(
-        { success: false, error: "Too many attempts. Please wait a moment and try again." },
+        { success: false, error: PARTNER_SSO_ERRORS.rateLimited },
         { status: 429, headers: { "Retry-After": rateCheck.retryAfterSeconds.toString() } }
       );
     }
@@ -57,7 +62,15 @@ export async function POST(request: NextRequest) {
     const decision = await reconcilePartnerDiscountAccess(user);
     if (!decision.hasAccess) {
       return NextResponse.json(
-        { success: false, error: "No active partner-discount access" },
+        {
+          success: false,
+          // Surface-neutral wording (F-048): this renders on /membership (where the
+          // banner may have just said "You're set"), on purchase-success, AND on the
+          // Rewards page itself — so it must not contradict the banner above it or send
+          // someone to the page they are already on. The client percent and this
+          // server-side reconcile can legitimately diverge by a moment.
+          error: PARTNER_SSO_ERRORS.noAccess,
+        },
         { status: 403 }
       );
     }
@@ -80,7 +93,7 @@ export async function POST(request: NextRequest) {
 
     if (!sso.ok) {
       return NextResponse.json(
-        { success: false, error: "Rewards portal is temporarily unavailable" },
+        { success: false, error: PARTNER_SSO_ERRORS.providerDown },
         { status: 502 }
       );
     }
@@ -88,6 +101,9 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ success: true, data: { redirectUrl: sso.redirectUrl } });
   } catch (error) {
     console.error("[partner-discount/sso] error:", error);
-    return NextResponse.json({ success: false, error: "Internal server error" }, { status: 500 });
+    return NextResponse.json(
+      { success: false, error: PARTNER_SSO_ERRORS.unknown },
+      { status: 500 }
+    );
   }
 }

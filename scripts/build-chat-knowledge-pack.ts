@@ -71,7 +71,7 @@ function buildMembershipSection(): string {
     .map((t) => {
       const partnerPct = partnerPercentFromFeatures(t.features) ?? "—";
       const shop = t.shopDiscountPercent != null ? `${t.shopDiscountPercent}% (coming soon)` : "—";
-      return `| ${t.name} | $${t.price}/month | ${t.entriesPerMonth} entries/month | ${partnerPct} of catalog | ${shop} |`;
+      return `| ${t.name} | $${t.price}/month | ${t.entriesPerMonth} entries/month | ${partnerPct} of catalogue | ${shop} |`;
     })
     .join("\n");
 
@@ -80,7 +80,7 @@ function buildMembershipSection(): string {
 Subscription entries **accumulate and carry forward** each month while the subscription stays active.
 Partner access is **lifecycle-gated** — active for the full duration of an active subscription; it re-enables immediately when a paused or past-due subscription returns to good standing. [from BUSINESS.md]
 
-| Tier | Price | Entries/month | Partner catalog access | Shop discount |
+| Tier | Price | Entries/month | Partner catalogue access | Shop discount |
 |---|---|---|---|---|
 ${rows}
 
@@ -165,7 +165,7 @@ function buildPartnerDiscountsSection(): string {
   const tierLines = subs
     .map((t) => {
       const pct = partnerPercentFromFeatures(t.features) ?? "—";
-      return `- **${t.name}:** ${pct} of the partner catalog`;
+      return `- **${t.name}:** ${pct} of the partner catalogue`;
     })
     .join("\n");
 
@@ -173,7 +173,7 @@ function buildPartnerDiscountsSection(): string {
 
   return `## [partner-discounts] Partner Discounts
 
-Active subscribers unlock exclusive discounts with our partner brands. How much of the catalog you see depends on your subscription tier:
+Active subscribers unlock exclusive discounts with our partner brands. How much of the catalogue you see depends on your subscription tier:
 
 ${tierLines}
 
@@ -184,7 +184,7 @@ One-time pack buyers receive a time-limited partner access window depending on t
 ### Current partner brands (${PARTNER_BRAND_OFFERS.length} active)
 ${brandList}
 
-*The catalog is planned to expand to 1,000+ brands once the partner API launches.* [from BUSINESS.md]`;
+*The catalogue is planned to expand to 1,000+ brands once the partner API launches.* [from BUSINESS.md]`;
 }
 
 function buildPrizesSection(): string {

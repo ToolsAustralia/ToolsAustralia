@@ -24,6 +24,14 @@ Cart is localStorage per-browser. Multi-device users see different carts. Accept
 
 After purchase success, `usePurchaseInvalidation` clears the cart via `CartContext.clear()`. If you bypass it, cart can show items that were already paid for.
 
+## Dead invalidation key: partner-discount queue (fixed 2026-07-24)
+
+`usePurchaseInvalidation` invalidated `["partner-discount-queue", userId]` — but the live query key in
+`usePartnerDiscountQueue` is `["partnerDiscountQueue"]` (no userId segment). Result: **no purchase ever
+refreshed the partner-discount queue cache**; freshness came only from window-focus/remount. Fixed to
+the matching key. Lesson: query keys are stringly-typed contracts — when adding an invalidation, copy
+the key from the hook that owns the query (or `src/lib/queryKeys.ts`), never retype it from memory.
+
 ## Member status changes mid-checkout
 
 If a user's subscription cancels between adding to cart and checkout, their member discount may evaporate. Server-side recalculation at PI creation handles this — just don't trust the client total.

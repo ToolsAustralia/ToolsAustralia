@@ -74,6 +74,22 @@ from user state.)
 
 The param only sets the **initial** tab — the visitor can still toggle manually afterwards.
 
+**Rewards-return arrival (2026-07-24):** `/membership` is the permanent redirect target for iGoDirect's
+MyRewards portal blocked-offer state (`?utm_source=partner_portal&utm_medium=referral&utm_campaign=rewards-return`,
+optionally `&offer_id=` / `&offer_name=` / `&level=` when the vendor templates them). `page.tsx` parses
+these **server-side** (Next 15 async `searchParams`) via `resolvePortalReturn` in
+`src/utils/partner-discounts/portal-return.ts` (panel-fix F-003 — the offers map is dependency-injected
+so the client-shared util never imports the server-only 1,833-row module; tested via
+`npm run test:portal-return`), resolves `offer_id` against the committed partner
+catalogue (`src/generated/partnerCatalogOffers.ts` — server-only import stays in page.tsx; URL params
+are untrusted display strings), and passes a compact `portalReturn` prop into `MembershipPageClient`, which renders
+`MembershipPortalReturnBanner` above the hero (states + copy: see shared-ui/frontend.md). Normal visitors
+(no params) see an unchanged page. `MembershipPageClient` also now wires `useMembershipModalDeepLink`
+(`?openMembership=1&packageId=`) — **gated via `useMajorDrawPurchaseGate`, Klaviyo-free** per the hook's
+contract (the link arrives from the abandoned-checkout email; re-firing Started Checkout would pollute
+the flow). This closes the long-standing gap where those emails targeted `/membership` but only
+`MembershipSection` pages had the listener.
+
 ## Pages and routes
 
 The user-facing membership UI is split between:

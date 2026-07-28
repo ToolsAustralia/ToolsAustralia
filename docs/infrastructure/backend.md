@@ -27,6 +27,17 @@ Cloudinary client lives at [src/lib/cloudinary.ts](../../src/lib/cloudinary.ts).
 
 These back the draws-domain prize-image cleanup-on-save — when a draw's prize image is removed and saved, its Cloudinary asset is permanently deleted to reclaim storage, guarded so images still referenced by a `Winner` record are kept (see [docs/admin/architecture.md](../admin/architecture.md)).
 
+## Package scripts — partner catalogue (2026-07-24)
+
+Entries added for the rewards-return feature (partner domain — full docs in
+[docs/partner/](../partner/)): `build:partner-catalog` (regenerates
+`src/generated/partnerCatalog{Offers,Preview}.ts` from the committed vendor CSV at
+`src/data/partner-catalog/offers-list-breakdown.csv`; **wired into `prebuild`/`predev`** like the
+sibling generators — the output is committed, so a CSV edit without regeneration fails the next
+build via the script's pinned totals; a genuine catalogue update means consciously re-pinning
+`EXPECTED_TOTAL`/`EXPECTED_CUMULATIVE`), `test:unlock-packages`, and `test:portal-return` (tsx
+regression tests for `src/utils/partner-discounts/{unlock-packages,portal-return}.ts`).
+
 ## Zod helpers
 
 [src/lib/zod/](../../src/lib/zod/) — shared schemas (e.g. ObjectId validator, common request shapes). Use these instead of duplicating validation logic across handlers.

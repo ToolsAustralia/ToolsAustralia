@@ -31,7 +31,15 @@ interface CartContextValue {
 
 | Hook | Purpose |
 |---|---|
-| `usePurchaseInvalidation()` | Invalidates queries (orders, user) after purchase |
+| `usePurchaseInvalidation()` | Invalidates queries (orders, user, partner-discount queue) after purchase |
+
+**Purchase-success portal CTA (2026-07-24, rewards-return):** `PurchaseSuccessClient` gained a third
+CTA — **"Open partner portal" (renamed from "Back to the partner portal" — panel F-015: the CTA shows for every partner-bearing purchase, incl. buyers who never came from the portal, so "Back" presumed a journey many never took)** — rendered only when the webhook grant is confirmed
+(`usePaymentStatus(...).data.processed === true`) AND `partnerDiscountSsoEnabled()` (the
+`NEXT_PUBLIC_PARTNER_DISCOUNT_SSO_ENABLED` client flag). It triggers `usePartnerDiscountSso().mutate()`
+(same SSO hand-off as RewardsPartnerCard) and, unlike that card, **renders `sso.error` inline** instead
+of swallowing it. Gating on `processed` matters: access is granted by the async Stripe webhook, so the
+CTA must not appear before the member could actually enter the portal at their new level.
 
 ## State conventions
 

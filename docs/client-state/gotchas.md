@@ -40,9 +40,20 @@ Pattern: scoped to a tree → Context. Cross-cutting → Zustand. Mistake: putti
 
 If server-render produces "light theme" but client first-paint sees "dark theme" (cookie says dark), React warns about mismatch. Bootstrap script in [theme](../theme/) handles this; verify when adding similar concerns.
 
+## usePartnerDiscountSso error copy is customer-facing (2026-07-28)
+
+`usePartnerDiscountSso` surfaces the SSO route's JSON `error` string **verbatim, inline** (banner +
+purchase-success render `sso.error.message`). Those strings are therefore customer copy — panel-fix
+F-014 rewrote the hook fallback and all four route bodies to "partner portal" vocabulary with a next
+step ("Your partner access isn't active right now. You can check it on My Account → Rewards."). If
+you add/change an error path in `src/app/api/partner-discount/sso/route.ts`, write the body as
+customer-facing copy (rule 11 + BRAND_VOICE), never API-speak.
+
 ## Query key drift
 
 If you inline `["user", userId]` in one place and `["user", userId, "detail"]` in another, invalidation breaks. Always go through the key factory.
+
+**Live instance (fixed 2026-07-24):** `usePurchaseInvalidation` invalidated `["partner-discount-queue", userId]`, but the query `usePartnerDiscountQueue` actually registers is `["partnerDiscountQueue"]` (no userId segment) — so no purchase ever refreshed the partner-discount queue cache. An invalidation key **must match the key the owning hook registers** — copy it from that hook (or `src/lib/queryKeys.ts`), never retype it from memory. Full note: [cart-shop-products/gotchas.md](../cart-shop-products/gotchas.md#dead-invalidation-key-partner-discount-queue-fixed-2026-07-24).
 
 ## Modal stacking
 

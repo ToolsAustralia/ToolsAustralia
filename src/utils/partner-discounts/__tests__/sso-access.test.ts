@@ -7,7 +7,7 @@
  */
 import assert from "node:assert/strict";
 import type { IUser } from "@/models/User";
-import { buildSsoAccessDecision } from "../sso-access";
+import { buildSsoAccessDecision, PARTNER_SSO_ERRORS } from "../sso-access";
 
 const asUser = (o: object): IUser => o as unknown as IUser;
 const DAY = 24 * 60 * 60 * 1000;
@@ -46,10 +46,48 @@ function testNoAccessFailsClosed() {
   assert.equal(d.memberLevel, null, "no access → memberLevel null (tier not resolved when denied)");
 }
 
+/**
+ * The SSO failure strings are rendered VERBATIM to members (panel F-044). Nothing else
+ * pins them: the route is a Next handler, the hook fallback is inline in a fetch wrapper,
+ * and both render sites sit behind conditionals. Without this, a refactor reverting one
+ * to "Forbidden" — the exact regression F-014 fixed — would pass every gate.
+ */
+function testErrorCopyIsCustomerFacing(): void {
+  const BANNED: Array<[RegExp, string]> = [
+    [/forbidden/i, "HTTP status name"],
+    [/unauthori[sz]ed/i, "HTTP status name"],
+    [/\b[45]\d\d\b/, "raw status code"],
+    [/internal server/i, "server-speak"],
+    [/\bnull\b|undefined/i, "leaked value"],
+    // CLAUDE.md rule 11 — these strings are customer-facing copy like any other.
+    [/\bodds\b|lotter|raffle|sweepstake|gambl|\bwager\b/i, "rule-11 banned vocabulary"],
+  ];
+  const entries = Object.entries(PARTNER_SSO_ERRORS);
+  assert.equal(entries.length, 6, "all six failure paths must have copy");
+  for (const [key, msg] of entries) {
+    for (const [rx, why] of BANNED) {
+      assert.ok(!rx.test(msg), `PARTNER_SSO_ERRORS.${key} leaks ${why}: "${msg}"`);
+    }
+    assert.ok(/[.!]$/.test(msg), `PARTNER_SSO_ERRORS.${key} must be a full sentence: "${msg}"`);
+    assert.ok(msg.length >= 25, `PARTNER_SSO_ERRORS.${key} is too terse to help: "${msg}"`);
+    assert.ok(
+      /partner (portal|access)/i.test(msg) || key === "rateLimited",
+      `PARTNER_SSO_ERRORS.${key} should name the partner portal/access so the member knows what failed`
+    );
+  }
+  // The 403 must stay surface-neutral: it also renders ON the Rewards page, so telling
+  // members to go there would loop them back to where they already are (F-048).
+  assert.ok(
+    !/my account\s*→\s*rewards/i.test(PARTNER_SSO_ERRORS.noAccess),
+    "the no-access string must not point at a page it can itself be rendered on"
+  );
+}
+
 function run() {
   testActiveSubscriptionPasses();
   testActiveOneTimePasses();
   testNoAccessFailsClosed();
+  testErrorCopyIsCustomerFacing();
   console.log("sso-access (partner SSO gate) tests passed");
 }
 
