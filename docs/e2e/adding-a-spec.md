@@ -162,3 +162,11 @@ same subscription purchase as `purchase-subscription.spec.ts`, entered via the h
 "Build your prize" configurator instead of `/membership` — see its inline comment for the
 verified event-dispatch chain (`useMajorDrawEntryCta.openEntryFlow` → `openMembershipModal`
 window event → `MembershipSection`'s listener).
+
+Rewards-return demo (2026-07-24): `e2e/specs/membership/portal-return-demo.spec.ts` is the
+narrated `@demo` walkthrough of the partner-portal rewards-return banner (blocked offer →
+recommendation → covered state → dashboard chip). **Never click "Open partner portal" in a
+spec** — the SSO route POSTs to the real iGoDirect production tenant and auto-creates a
+permanent MyRewards record for the seeded fake member; highlight only. The assertion-focused
+`@smoke` coverage for this surface is tracked as panel-review finding F-023
+(`docs/tech-debt/panel-review-feature-igodirect-rewards-return.md`).

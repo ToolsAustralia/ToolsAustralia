@@ -518,10 +518,13 @@ the existing `AccessRing`. See [dashboard-account/frontend.md](../dashboard-acco
 
 **Section refinements (2026-07-02):**
 - `DashboardHero` — active-member tier chip renders the real **tier package icon**
-  (`getPackageIcon(\`${tierKey}-subscription\`)`) not a crown; the "Reward portal" button is a
-  **chip-sized premium gold** pill that **triggers the partner-discount SSO** (`onRewardPortal` →
-  `usePartnerDiscountSso().mutate()` in the home page), not a route; a **"Complete your profile"**
-  nudge shows when `profileComplete === false` (new `tierKey` / `profileComplete` / `onCompleteProfile` props).
+  (`getPackageIcon(\`${tierKey}-subscription\`)`) not a crown; the **"Partner portal"** button
+  (renamed from "Reward portal" 2026-07-24 — it opens the *partner-discount* portal, and the old
+  label collided with the unrelated `/rewards` points page; now matches RewardsPartnerCard's
+  "Open partner portal") is a **chip-sized premium gold** pill that **triggers the partner-discount
+  SSO** (`onRewardPortal` → `usePartnerDiscountSso().mutate()` in the home page), not a route; a
+  **"Complete your profile"** nudge shows when `profileComplete === false` (new `tierKey` /
+  `profileComplete` / `onCompleteProfile` props).
 - `DashboardPromoBanner` — the left icon is now the **container-less multiplier badge image**
   (`multiplierBadgeSrc`, shown large like the special-packages modal), falling back to a ticket glyph
   only when no multiplier is live; the redundant button-corner badge was dropped.
@@ -704,6 +707,29 @@ The `/membership` page passes no `sectionId`, so its `id="membership"` anchor is
 ### Promo treatment layout — removed (packages-design A/B concluded, control won)
 
 Historical: the 2026-07 packages-design experiment's treatment arm, `PromoMembershipDesign`, recomposed `TierCard`/`PackCard` into a promo-specific layout. The experiment concluded 2026-07-06 with the **control** (`MembershipSection` on promotions pages) winning, and the treatment component was deleted — along with `TierCard`'s named export and `PackCard`'s treatment-only `ctaLabel`/`colorHex` props (the CTA-footer render block is gone; PackCard renders as it does on `/membership`). The shared `getPackageColorScheme` palette was never changed by the experiment.
+
+### `sections/membership/MembershipPortalReturnBanner` — rewards-return strip (2026-07-24)
+
+[`src/components/sections/membership/MembershipPortalReturnBanner.tsx`](../../src/components/sections/membership/MembershipPortalReturnBanner.tsx) — a compact dark strip rendered **above the `/membership` hero** for visitors bouncing back from the iGoDirect partner portal (`utm_campaign=rewards-return`). Mounted by `MembershipPageClient` only when `page.tsx` resolved a `portalReturn` context server-side (funnel + data layer: [docs/partner/igodirect-integration-playbook.md §10](../partner/igodirect-integration-playbook.md); page wiring: [subscription/frontend.md](../subscription/frontend.md)). Normal visits render nothing.
+
+**Props:**
+- `portalReturn?: PortalReturn` — `{ offerName?, requiredPct?, generic? }`, resolved server-side against the committed catalogue (URL params never rendered raw).
+- `onSelectPlan: (plan) => void` — the `useMembershipCardCta().onSelect` path (purchase gate + Klaviyo Started Checkout — correct here: the banner CTA starts a genuine NEW checkout, unlike the Klaviyo-free deep-link).
+- `plans: LocalMembershipPlan[]` — promo-applied `[...membershipPlans, ...oneTimePlans]`, so the modal opens with the same entries a card tap would show.
+
+**State source:** `useDashboardState` (queue-reconciled `partnerAccessPct` + `acct` — NOT `UserContext.userData`). **Panel-fix updates (2026-07-24, F-001/F-003/F-004/F-005):** while account state loads the banner renders a same-height **skeleton shell** (eyebrow + pulse bars, `motion-safe:animate-pulse`, `aria-busy`) instead of `null` — the section reserves its space at first paint, so the late-mount 238–364px layout shift is gone and only copy/CTA swap in place. The six-state copy/CTA matrix is a **pure function** — `resolvePortalBannerView` in `src/utils/partner-discounts/portal-return.ts` (tested via `npm run test:portal-return`); the component only renders the returned view. Guest states additionally render "Already a member? **Log in to check your access**" → `/login` (expired-session members must never be pushed to re-purchase). The unlock CTA routes an **active subscriber choosing a subscription plan** (an upgrade) to `/my-account?open=subscription` (the ManageSheet, whose tier taps open the upgrade/downgrade confirm) instead of `cta.onSelect` — which would bounce them to the bare dashboard; all other visitors still open the purchase modal via `onSelectPlan`. The recommended CTA plan is the cheapest package covering `requiredPct` (`resolveUnlockPackagesForLevel`), mapped back to a `LocalMembershipPlan` via `getPackageId`. Catalogue numbers come from the client-safe `partnerCatalogPreview` aggregates (`PARTNER_CATALOG_TOTAL` / `PARTNER_CATALOG_TIER_COUNTS`) — never the server-only offers map.
+
+**State matrix (headline + CTA):**
+| State | Behaviour |
+|---|---|
+| Past-due (any) | "Your membership payment needs attention." + amber **Update payment** link → `/my-account?open=payment` |
+| Offer known · guest | "{offer} unlocks at {pct}% access." + **Unlock with the {plan}** (falls back to a scroll-to-`#membership` CTA if no plan resolves) |
+| Offer known · authed, short | "You're at {X}% — {offer} needs {pct}%." + unlock CTA + meta line "Unlocks {n} of 1,833 partner offers" + "See all packages" |
+| Offer known · authed, covered | "You're set — your {X}% access covers {offer}." + **Open partner portal** SSO button (`usePartnerDiscountSso`), only when `partnerDiscountSsoEnabled()`; flag off → text only |
+| Generic · guest | "Unlock the partner catalogue" + scroll CTA |
+| Generic · authed | "Back from the partner portal?" (current % + total) + scroll CTA |
+
+**Layout note:** when present, the banner becomes the page's first section and takes the fixed-header offset (`pt-[var(--app-header-h)]`); the hero keeps its own offset, which then reads as hero top padding.
 
 ### `features/PartnerDiscountQueue` — tier-themed partner discount card
 

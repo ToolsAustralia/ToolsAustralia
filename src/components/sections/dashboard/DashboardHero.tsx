@@ -110,7 +110,7 @@ export default function DashboardHero({
         className="inline-flex items-center gap-1.5 rounded-full px-[11px] py-[7px] text-[10px] font-extrabold shadow-[0_6px_14px_-8px_rgba(120,82,10,.7)] transition-transform focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70 motion-safe:active:translate-y-px"
         style={{ background: "linear-gradient(135deg,#fbe9ad 0%,#e6c455 42%,#c99a2e 100%)", color: "#2a1e02", border: "1px solid rgba(120,82,10,.5)" }}
       >
-        <Gift className="h-3 w-3" /> Reward portal <ChevronRight className="h-3 w-3" />
+        <Gift className="h-3 w-3" /> Partner portal <ChevronRight className="h-3 w-3" />
       </button>
     ) : acct === "pastdue" && onUpdatePayment ? (
       // Chip-sized — matches the "· past due" badge footprint. Opens the Manage-

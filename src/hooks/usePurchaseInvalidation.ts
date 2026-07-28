@@ -23,7 +23,8 @@ export function usePurchaseInvalidation() {
         queryKeys.memberships.packages,
         queryKeys.orders.recent(userId),
         queryKeys.orders.all(userId),
-        ["partner-discount-queue", userId],
+        // Must match the live key in usePartnerDiscountQueue (no userId segment).
+        ["partnerDiscountQueue"],
         queryKeys.rewards.user(userId),
       ];
 

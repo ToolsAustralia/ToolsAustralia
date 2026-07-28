@@ -44,6 +44,8 @@ If server-render produces "light theme" but client first-paint sees "dark theme"
 
 If you inline `["user", userId]` in one place and `["user", userId, "detail"]` in another, invalidation breaks. Always go through the key factory.
 
+**Live instance (fixed 2026-07-24):** `usePurchaseInvalidation` invalidated `["partner-discount-queue", userId]`, but the query `usePartnerDiscountQueue` actually registers is `["partnerDiscountQueue"]` (no userId segment) — so no purchase ever refreshed the partner-discount queue cache. An invalidation key **must match the key the owning hook registers** — copy it from that hook (or `src/lib/queryKeys.ts`), never retype it from memory. Full note: [cart-shop-products/gotchas.md](../cart-shop-products/gotchas.md#dead-invalidation-key-partner-discount-queue-fixed-2026-07-24).
+
 ## Modal stacking
 
 If modal A is open and modal B fires, the priority store decides. If both have the same priority, the order is undefined. Always set explicit priorities.

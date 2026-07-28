@@ -1,0 +1,100 @@
+# Panel review — feature/igodirect-rewards-return (rewards-return Phase 1)
+
+- **Branch:** `feature/igodirect-rewards-return` · reviewed **2026-07-24** against `origin/main` (`git diff origin/main` — working tree, **uncommitted at review time**; line numbers will move once committed — re-grep each `file:line`).
+- **PR:** none yet. **Acceptance:** graded against the session-approved Phase 1 plan (12 criteria) — **12/12 MET**; two deviations judged justified (SSO button flag-gated in the covered state; extra guest unlock CTA). No spec was invented.
+- **Domains touched:** partner, subscription, shared-ui, cart-shop-products, client-state, config-and-data, support-chat, infrastructure.
+- **Artifact:** https://claude.ai/code/artifact/05b4c345-b2aa-47c3-a10b-1270e3d6aa09 (private by default — share from the page's Share menu).
+- **Gates:** type-check ✓ · lint ✓ vs baseline (6 pre-existing errors on main; +2 warning drift proven inherited from main `b89a9e5b`) · `test:unlock-packages` ✓ · `test:chat-faqs` ✓ (72) · `test:member-level` ✓ · `test:member-status` ✓ · `build:partner-catalog` deterministic (byte-identical twice) · e2e suites NOT run (evidence server held port 3799) — see F-023.
+- **Evidence:** seeded e2e server (`npm run e2e:env`), Playwright-measured captures at 390/1280, guest + seeded Tradie member, 16 states; crops in session scratchpad `reviewer-b/`; demo video `C:\Users\Genesis\Downloads\rewards-return-phase1-demo.mp4`. SSO flag was ON in the e2e env (prod stays dark). Unevidenced: purchase-success CTA render (needs real payment intent), past-due/paused banner states (no seeded user), real devices, emitted client-chunk contents.
+
+## Handoff
+
+Fresh session? Run `/panel-fix` on this branch, or paste:
+
+> Read `docs/tech-debt/panel-review-feature-igodirect-rewards-return.md`. Fix ONLY the Now items: F-001, F-002, F-003, F-004, F-005.
+> Findings were written against the UNCOMMITTED working tree of 2026-07-24 — re-grep each `file:line`, they may have moved.
+> One commit-worthy change per finding. Do NOT commit. When a finding is done, tick its box
+> and fill `_Handled:_` with the date. If a fix turns out to be wrong, mark it Overridden with
+> a reason instead of silently skipping it.
+
+**Now (do these):** F-006 (flag-off copy), F-007 (Cobber FAQ contradiction — LAUNCH GATE), F-008 (offer_name allowlist), F-009 (paused branch), F-010 (norm manifest revert — AT COMMIT TIME)
+**Next:** F-011–F-015
+**Later:** F-016–F-025 (F-016's page.tsx copy already consolidated into portal-return.ts by F-003; unlock-packages + build-script copies remain)
+
+_2026-07-24 panel-fix pass 1: F-001–F-005 done in the working tree (uncommitted). Verified: type-check ✓, targeted lint ✓, `test:portal-return` (18 cases, new) ✓, `test:unlock-packages` ✓, `build:partner-catalog` via new prebuild wiring ✓, bundle boundary re-grepped (map imported only by the server page; util mentions it in a comment only) ✓, `@demo` e2e spec re-run green against the fixed banner ✓. **Correction recorded on F-001:** reviewer A's "CTA flickers between two labels" sub-claim was DISPROVED — `useMemberships` is fully static (`loading` hardcoded false), so the recommendation resolves on the banner's first render; no plans-loading gate was needed or added. **F-004 implemented as an additive login-hint line** (kept the approved sub copy) rather than reviewer C's sub-replacement._
+
+## Findings
+
+### Now
+
+- [x] **F-001** · P1 · UI/Eng/Arch (3-way convergence) · `src/components/sections/membership/MembershipPortalReturnBanner.tsx:95` — Banner mounts 1.5–2.7s late and shifts the page 238–364px; ~~CTA label flickers~~ (flicker sub-claim DISPROVED — useMemberships is static/synchronous; no plans gate needed).
+      _What:_ `if (!portalReturn || isLoading) return null;` gates the whole section on client queries although `portalReturn` is server-resolved; `useCurrentMajorDraw` has no guest gate so even guests wait. Once mounted, the CTA renders the scroll fallback then swaps to "Unlock with the {plan}" when `useMemberships` settles.
+      _Fix:_ split the guard: `if (!portalReturn) return null;` then while `isLoading` render the same `<section>` shell (identical bg/padding classes) with the "Partner catalogue" badge row + skeletons (`motion-safe:animate-pulse`, `aria-busy`). Swap copy in place; never unmount.  _Shot:_ scratchpad `reviewer-b/ev-cls-late-mount-390.webp`  _Handled:_ 2026-07-24, working tree (uncommitted)
+- [x] **F-002** · P1 · Eng/QA/Arch (3-way convergence) · `package.json:25-26` — CSV can be edited without regenerating the two generated catalog files; nothing fails.
+      _What:_ `build:partner-catalog` is manual-only, unlike all four sibling generated artifacts (incl. the also-committed chatKnowledgePack). Stale `PARTNER_CATALOG_OFFERS`/`TIER_COUNTS` would serve customers wrong names/counts silently.
+      _Fix:_ append `&& npm run build:partner-catalog` to BOTH `prebuild` and `predev`; delete the "deliberately NOT wired into prebuild" sentences from `docs/infrastructure/backend.md` and `docs/partner/igodirect-integration-playbook.md` §10; note in the script header that a legit CSV update must re-pin `EXPECTED_TOTAL`/`EXPECTED_CUMULATIVE` (fail-loud is the point).  _Shot:_ code-only  _Handled:_ 2026-07-24, working tree (uncommitted)
+- [x] **F-003** · P1 · QA/Eng (convergence; folds in Arch guard) · `src/app/(site)/membership/page.tsx:44-72` + `MembershipPortalReturnBanner.tsx:95-136` — The untrusted-URL parser and the banner state matrix have zero tests and live in the wrong layers.
+      _What:_ `resolvePortalReturn` (XSS strip, 60-char cap, ladder validation, precedence) is module-private in a page file; the 6-state matrix is inline in a hook-wired component this repo can't unit-test; `PortalReturn` type lives in a component that the server page imports. Also `PARTNER_CATALOG_OFFERS[offerId]` resolves prototype keys (`?offer_id=__proto__`) — safe today only by accident.
+      _Fix:_ create `src/utils/partner-discounts/portal-return.ts` holding `PortalReturn`, `firstParam`, `resolvePortalReturn`, and a new pure `resolvePortalBannerView({acct, partnerAccessPct, portalReturn, ssoEnabled, recommended})` → `{headline, sub, cta}`; import from page + banner. Guard the id lookup with `/^\d+$/.test(offerId) && Object.hasOwn(...)`. IMPLEMENTATION NOTE: the offers map is DEPENDENCY-INJECTED into `resolvePortalReturn` (never imported by the util) — the client banner imports this module for its types/view resolver, so a direct map import would drag the 1,833-row file into the client bundle. Tests: 18 cases in `__tests__/portal-return.test.ts`, wired as `test:portal-return`.  _Shot:_ code-only  _Handled:_ 2026-07-24, working tree (uncommitted)
+- [x] **F-004** · P1 · UX-C · `src/components/sections/membership/MembershipPortalReturnBanner.tsx:111-116, 128-131` — Expired-session members are told to buy a membership they already own; no login path in any guest state.
+      _What:_ Portal sessions outlive our cookies; a lapsed-cookie member lands as `acct === "none"` and both guest states push purchase with no sign-in link.
+      _Fix (as implemented — additive, approved sub copy kept):_ both guest states render an extra line `Already a member? <Link href="/login">Log in to check your access</Link>` under the sub (`showLoginHint` in the view resolver; pinned by `test:portal-return`).  _Shot:_ code-only  _Handled:_ 2026-07-24, working tree (uncommitted)
+- [x] **F-005** · P1 · Orchestrator (demo-recording evidence) · banner `onSelectPlan` → `src/hooks/useMembershipCardCta.ts:156-159` — Active subscriber clicking "Unlock with the Boss" lands on the my-account dashboard with no upgrade context.
+      _What:_ `cta.onSelect` routes existing subscribers to `/my-account` (dashboard home). The flagship persona (active member upgrading) must rediscover the Membership tab on their own.
+      _Fix (as implemented — inside the banner, not MembershipPageClient):_ the banner's `handleUnlock` routes `acct === "active"` + subscription-plan recommendations to `/my-account?open=subscription` (ManageSheet — verified its tier taps open the upgrade/downgrade confirm, `ManageSheet.tsx:53`); everyone else falls through to `onSelectPlan` (modal + Klaviyo). Grids' `cta.onSelect` untouched.  _Shot:_ scratchpad `panel-artifact/ev-cta-routes-dashboard.webp` + `Downloads/rewards-return-phase1-demo.mp4` @~0:35  _Handled:_ 2026-07-24, working tree (uncommitted)
+
+### Next
+
+- [ ] **F-006** · P1 · UX-C · `MembershipPortalReturnBanner.tsx:118-120` — Flag-off "You're set" state is a dead end contradicting the Rewards page's "Coming soon".
+      _What:_ With `partnerDiscountSsoEnabled()` false, `cta = null`: told to "head back to the portal" with no path.
+      _Fix:_ when `!ssoEnabled` in the covered state, sub → `"Head back to the partner portal tab you came from — this offer is ready to redeem."`  _Shot:_ code-only  _Handled:_ —
+- [ ] **F-007** · P1 · UX-C/Eng (merge) · `src/data/supportChatFaqs.ts:147-152` (id 16) + `:565-573` (id 72) — **LAUNCH GATE:** Cobber holds two contradictory redemption models; FAQ 72 ambiguous for pack holders and silent on Mini Packs.
+      _What:_ FAQ 16 still says "mention Tools Australia when dealing with the partner brand — no code to enter"; FAQ 72 describes the portal. "Tradie unlocks 50%" is wrong for the Tradie Pack (40%).
+      _Fix:_ FAQ 16 redemption sentence → `"To redeem an offer, open the partner portal from [My Account → Rewards](/my-account/rewards) — you're signed in automatically, and each offer shows its redemption steps in the portal."` FAQ 72 first sentence → `"Each offer in the partner catalogue unlocks at a set access percentage, and your access comes from your membership tier or an active one-time pack — the Tradie membership unlocks 50% of the catalogue, Foreman 75%, and Boss 100%, while one-time packs open their own share for a set number of days."` Add after: `"Mini Packs include a smaller time-limited slice."` Then `npm run build:chat-knowledge-pack` + `npm run test:chat-faqs` (count stays 72). MUST be live by portal go-live (CLAUDE.md 5c timing).  _Shot:_ code-only  _Handled:_ —
+- [ ] **F-008** · P2 · Arch/Eng (ruling: allowlist over delete) · `src/app/(site)/membership/page.tsx:70-77` — `offer_name` fallback reflects attacker-chosen text (incl. rule-11 vocabulary) into the trusted banner.
+      _What:_ Any crafted `?offer_name=…&level=25` link renders up to 60 chars of arbitrary text as our headline. XSS is blocked; content spoofing is not.
+      _Fix:_ build module-scope `const OFFER_NAMES = new Map(Object.values(PARTNER_CATALOG_OFFERS).map(o => [o.name.toLowerCase(), o]))` (server-only file); accept `offer_name` only on a map hit and return the CATALOGUE's name+pct (ignore URL `level`); otherwise `{ generic: true }`. (Alternative recorded: delete the fallback entirely — reviewer A's preference — if vendor confirms `offer_id` templating.)  _Shot:_ code-only  _Handled:_ —
+- [ ] **F-009** · P2 · Eng/UX-C (merge) · `MembershipPortalReturnBanner.tsx:106-136` — Paused members see "You're at 0%" + a buy push instead of resume guidance.
+      _What:_ No `paused` branch; `partnerAccessPct` is 0 for paused, so they're upsold a pack while their access returns on resume.
+      _Fix:_ add branch beside `pastdue`: headline `"Your membership is paused."` sub `"It resumes {pausedUntil} — resume now to restore your discounts."` CTA `<Link href="/my-account?open=subscription">Manage membership</Link>`; take `pausedUntil` from `useDashboardState` (already exposed).  _Shot:_ code-only  _Handled:_ —
+- [ ] **F-010** · P2 · Eng · `src/generated/normToolsManifest.json` — Timestamp-only regeneration committed in a branch with zero Norm changes.
+      _Fix:_ at commit time: `git checkout origin/main -- src/generated/normToolsManifest.json`.  _Shot:_ code-only  _Handled:_ —
+- [ ] **F-011** · P2 · UI-B · `MembershipPortalReturnBanner.tsx:181-183` — "Unlocks 1,833 of 1,833 partner offers" tautology.
+      _Fix:_ `view.cumulativeCount === PARTNER_CATALOG_TOTAL ? \`Unlocks all ${total} partner offers\` : …`  _Shot:_ scratchpad `reviewer-b/ev-meta-tautology-1280.webp`  _Handled:_ —
+- [ ] **F-012** · P2 · UI-B · `MembershipPortalReturnBanner.tsx:184-189` — "See all packages" tap target is 340×18px (44px minimum).
+      _Fix:_ add `py-[13px] -my-1` to the link className. The `kind:"scroll"` anchor already measures 46px — leave it.  _Shot:_ scratchpad `reviewer-b/ev-seeall-tap-390.webp`  _Handled:_ —
+- [ ] **F-013** · P2 · UI-B · `src/app/(site)/membership/page.tsx:56` — 329 vendor names render as run-ons ("World Heritage Cruises Strahan TAS").
+      _Fix:_ display-only `offer.name.replace(/\s{2,}/g, ", ")` before returning (generated file stays vendor-faithful).  _Shot:_ scratchpad `reviewer-b/ev-offer-name-runon-390.webp`  _Handled:_ —
+- [ ] **F-014** · P2 · UX-C · `src/hooks/queries/usePartnerDiscountSso.ts:32` + `src/app/api/partner-discount/sso/route.ts:34,60,83,91` — SSO failures print raw API-speak under a "partner portal" button.
+      _Fix (exact strings):_ hook fallback → `"Could not open the partner portal. Please try again."` · 502 → `"The partner portal is temporarily unavailable. Please try again shortly."` · 403 → `"Your partner access isn't active right now. You can check it on My Account → Rewards."` · 500 → `"Something went wrong opening the partner portal. Please try again."` · 404 (flag off) → `"The partner portal isn't available right now."`  _Shot:_ code-only  _Handled:_ —
+- [ ] **F-015** · P2 · UX-C · `src/app/(site)/purchase-success/components/PurchaseSuccessClient.tsx:123-131` — "Back to the partner portal" shown to buyers who were never in it.
+      _Fix:_ label → `"Open partner portal"` (matches banner + Rewards card).  _Shot:_ code-only  _Handled:_ —
+
+### Later
+
+- [ ] **F-016** · P2 · Eng · `page.tsx:42` + `unlock-packages.ts:49` + `build-partner-catalog-preview.ts:21` — Percent ladder defined in three lockstep copies.
+      _Fix:_ export `PARTNER_CATALOG_LADDER_PCTS` from `src/utils/partner-discounts/unlock-packages.ts`; import in the other two; delete local copies. (If F-003 landed, put it in `portal-return.ts` instead.)  _Shot:_ code-only  _Handled:_ —
+- [ ] **F-017** · P2 · Eng · `src/components/sections/dashboard/DashboardHero.tsx:24,48,104,109` + `my-account/page-client.tsx:317` — "Partner portal" button still wired through `onRewardPortal` prop.
+      _Fix:_ rename prop to `onPartnerPortal` at declaration + call site; update the mention in `docs/shared-ui/frontend.md`.  _Shot:_ code-only  _Handled:_ —
+- [ ] **F-018** · P2 · Eng/QA/UI (merge) · `src/config/featureFlags.ts:45` + `src/hooks/useMembershipModalDeepLink.ts:20-22` — Two stale comments assert the pre-branch world.
+      _Fix:_ featureFlags comment `"Reward portal"` → `"Partner portal"`; deep-link hook parenthetical → `"(both MembershipSection and /membership's MembershipPageClient wrap the open in whenGatesOpenElseGateModal)"`.  _Shot:_ code-only  _Handled:_ —
+- [ ] **F-019** · P2 · QA · `src/lib/queryKeys.ts` (absent) + `usePurchaseInvalidation.ts:27` + `usePartnerDiscountQueue.ts:74,86,109` — Fixed invalidation key is still a hand-copied literal.
+      _Fix:_ add `partnerDiscounts: { queue: ["partnerDiscountQueue"] as const }` to queryKeys; import at all four sites.  _Shot:_ code-only  _Handled:_ —
+- [ ] **F-020** · P2 · QA · `src/utils/partner-discounts/__tests__/unlock-packages.test.ts:87-94` — Exact cheapest-package assertions missing for tiers 40/55/75/85.
+      _Fix:_ add `testRequired40` (tradie-subscription + the 40% pack), `testRequired55` (foreman-pack), `testRequired75` (foreman-subscription at exact equality), `testRequired85` (the 85% pack); derive ids/prices from `src/data/membershipPackages.ts`.  _Shot:_ code-only  _Handled:_ —
+- [ ] **F-021** · P2 · Arch · `eslint/rules/no-models-in-client.js` — Server-only boundary of the 1,833-row map is a comment, not a guard.
+      _Fix:_ add branch to `classify()`: `if (spec === "@/generated/partnerCatalogOffers") return "the server-only partner catalog map (bundle-size)";`; name the rule in the generated header comment.  _Shot:_ code-only  _Handled:_ —
+- [ ] **F-022** · P2 · UI-B (owner to rule; docstring says intentional) · `MembershipPortalReturnBanner.tsx:145` + `MembershipHero.tsx:90` — 86–106px header-height dead band between banner and hero.
+      _Fix (if ruled):_ pass `hasPortalBanner` into `MembershipHero`; swap its offset to `pt-8 lg:pt-10` when true.  _Shot:_ scratchpad `reviewer-b/ev-hero-gap-390.webp`  _Handled:_ —
+- [ ] **F-023** · P2 · QA · `e2e/specs/` — No e2e coverage of the banner, the legal-copy scan misses the param-gated copy, purchase CTA unasserted.
+      _Fix:_ (1) new `e2e/specs/membership/portal-return-banner.spec.ts` `@smoke`: generic guest → "Unlock the partner catalogue"; `?offer_id=<real id>` → server-resolved name; XSS URL → generic + no pageerror; `?offer_name=Test Offer&level=50` → "Test Offer unlocks at 50% access."; bare `/membership` → banner absent; member states via storageState. (2) add `"/membership?utm_campaign=rewards-return"` to `legal-copy.spec.ts` PAGES (line 29). (3) append to `purchase-one-time.spec.ts` `@purchase`: flag-on → portal CTA visible post-webhook; flag-off → count 0.  _Shot:_ code-only  _Handled:_ —
+- [ ] **F-024** · P2 · UX-C (merge; pre-existing debt) · `MembershipEntriesStack.tsx:125` + `PartnerPortalPhone.tsx:123` + `MiniDrawPackages.tsx:203,313` + `PartnerDiscountQueue.tsx:581` + `MiniDrawPackageModal.tsx:121` + `RewardsPartnerCard.tsx:122` — Portal naming/spelling sweep.
+      _Fix:_ "rewards portal" strings → "partner portal" (×2 on /membership); "partner catalog" → "partner catalogue" (×4 rendered strings); "signed in via SSO" → "signed in automatically".  _Shot:_ code-only  _Handled:_ —
+- [ ] **F-025** · P2 · UX-C · `MembershipPortalReturnBanner.tsx:130` — Guest generic sub implies all 1,833 offers come with any purchase.
+      _Fix:_ sub → `` `Up to ${total} offers from Australia's top brands — your membership or one-time pack sets how much of the catalogue you unlock.` ``  _Shot:_ code-only  _Handled:_ —
+
+## Accepted deviations (recorded, no action)
+
+- SSO button flag-gated even in the covered state — matches platform-wide dark launch; becomes spec-conformant when the flag flips at vendor go-live.
+- Guest+offer state carries an unlock CTA the spec didn't enumerate — additive, consistent, kept.
+- Vendor CSV contains merchant "Royal Casino Events Eltham VIC" (legit events-hire business) — its name would render verbatim via offer_id; awareness only, no banned-word scan hit (proper noun), revisit only if marketing objects.

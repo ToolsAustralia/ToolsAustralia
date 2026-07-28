@@ -71,4 +71,8 @@ Entries 18–21 are the premeditated answers for the top-volume support inbox qu
 
 ## Cobber streak FAQs (2026-07-15)
 
-`src/data/supportChatFaqs.ts` ids **69–71** (REWARDS): what the Membership Streak is + the ladder, continuity rules (failed payment / pause / 30-day rejoin grace / reset), and where to see it. The corpus-size assertion in `src/data/__tests__/faqs.test.ts` is pinned at 71 — bump it deliberately when adding entries (CLAUDE.md rule 5c).
+`src/data/supportChatFaqs.ts` ids **69–71** (REWARDS): what the Membership Streak is + the ladder, continuity rules (failed payment / pause / 30-day rejoin grace / reset), and where to see it.
+
+## Cobber partner-portal locked-offer FAQ (2026-07-24)
+
+`src/data/supportChatFaqs.ts` id **72** (REWARDS, "PARTNER PORTAL — LOCKED OFFERS" section): why an offer in the partner portal shows as locked — each offer unlocks at an access percentage from the member's membership tier or active one-time pack (Tradie 50 / Foreman 75 / Boss 100); upgrading or grabbing a pack on `/membership` unlocks it straight away. Added with the rewards-return funnel (see `docs/partner/igodirect-integration-playbook.md` §10); rule-11 safe (no entries mention). The corpus-size assertion in `src/data/__tests__/faqs.test.ts` is now pinned at **72** — bump it deliberately when adding entries (CLAUDE.md rule 5c).

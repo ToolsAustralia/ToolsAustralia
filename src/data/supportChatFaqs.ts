@@ -561,5 +561,14 @@ export function getSupportChatFaqEntries(): FaqEntry[] {
         "Your streak lives on your [My Account](/my-account) dashboard — the Streak card shows your current streak, your next milestone, and the free entries it will include. When a milestone lands, its free entries appear as their own \"Streak\" portion of your entry total and are already in that month's Major Draw — no claiming needed. I can't see your account from here, so I can't read your live streak or entry count; if a milestone renewal has gone through and the free entries haven't appeared, [contact us](/contact) and we'll take a look.",
       category: "REWARDS",
     },
+
+    // ── PARTNER PORTAL — LOCKED OFFERS ───────────────────────────────────────
+    {
+      id: "72",
+      question: "Why can't I redeem an offer in the partner portal?",
+      answer:
+        "Each offer in the partner catalogue unlocks at a set access percentage, and your access level comes from your membership tier or an active one-time pack — Tradie unlocks 50% of the catalogue, Foreman 75%, and Boss 100%. If an offer shows as locked in the partner portal, your current access level doesn't cover it yet. Upgrading your membership or grabbing a one-time pack on the [membership page](/membership) unlocks it straight away — then head back to the portal to redeem it.",
+      category: "REWARDS",
+    },
   ];
 }
