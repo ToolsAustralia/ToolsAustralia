@@ -201,17 +201,30 @@ run("every combination resolves to a render that exists on disk", () => {
   }
 });
 
-run("a toolbox awaiting combo art falls back to its standalone render, not a broken path", () => {
-  // GearWrench shipped in draw 9 with landing art but no {toolset}-gearwrench composites.
-  // The hero must show the standalone box (the handoff's designed state) rather than 404.
+run("combo-art fallback is per COMBINATION, not per toolbox", () => {
+  // The GearWrench shoot delivered four of five: Milwaukee, DeWalt, Makita and HiKOKI have
+  // composites; Ryobi does not — the same combination missing from the rest of the draw 9
+  // drop. A toolbox-level flag (which this briefly was) would wrongly send the four that DO
+  // have art back to the standalone render.
   const gw = getToolbox("gearwrench")!;
-  const kincrome = getToolbox("kincrome")!;
+
   for (const set of TOOLSETS) {
     const combo = getComboPresentation(gw, set, false);
-    assert.equal(combo.image, gw.image, `${set.id} × gearwrench must fall back to the standalone render`);
-    assert.match(combo.imageAlt, /coming soon/i, "alt text must not claim to show a combination it isn't showing");
+    if (set.id === "ryobi") {
+      assert.equal(combo.image, gw.image, "ryobi × gearwrench has no composite — must show the standalone box");
+      assert.match(combo.imageAlt, /coming soon/i, "alt must not claim to show a combination it isn't showing");
+    } else {
+      assert.equal(
+        combo.image,
+        `/images/majordraws/${set.id}-set/${set.id}-gearwrench.webp`,
+        `${set.id} × gearwrench has a composite and must use it`
+      );
+      assert.doesNotMatch(combo.imageAlt, /coming soon/i, `${set.id} × gearwrench art exists — alt must not say coming soon`);
+    }
   }
-  // A toolbox that DOES have composites must still use them — the fallback is not global.
+
+  // A different toolbox is unaffected either way.
+  const kincrome = getToolbox("kincrome")!;
   const withArt = getComboPresentation(kincrome, TOOLSETS[0], false);
   assert.equal(withArt.image, `/images/majordraws/${TOOLSETS[0].id}-set/${TOOLSETS[0].id}-kincrome.webp`);
 });
