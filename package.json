@@ -35,6 +35,8 @@
     "seed:static-vs-video-hero:dry": "tsx scripts/seed-static-vs-video-hero-experiment.ts --dry-run",
     "seed:static-vs-video-hero:prod:dry": "tsx scripts/seed-static-vs-video-hero-experiment.ts --dry-run --prod",
     "seed:static-vs-video-hero:prod": "tsx scripts/seed-static-vs-video-hero-experiment.ts --prod",
+    "seed:promo-theme": "tsx scripts/seed-promo-theme-experiment.ts",
+    "seed:promo-theme:dry": "tsx scripts/seed-promo-theme-experiment.ts --dry-run",
     "seed:past-due-member": "tsx scripts/seed-past-due-member.ts",
     "seed:past-due-member:dry": "tsx scripts/seed-past-due-member.ts --dry-run",
     "seed:active-member": "tsx scripts/seed-active-member.ts",
