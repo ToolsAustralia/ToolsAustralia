@@ -18,7 +18,7 @@ you only need one for a demo.
 `playwright.config.ts`'s profile to `retries: 0`, `workers: 1`, `video: "on"`,
 `launchOptions.slowMo: 200` (see `playwright.config.ts`). Today's `@demo` flows:
 `landing.spec.ts`, `landing-drawn-states.spec.ts`, `my-account.spec.ts`,
-`purchase-subscription.spec.ts`, `purchase-via-showcase.spec.ts`.
+`purchase-subscription.spec.ts`, `purchase-via-showcase.spec.ts`, `streak-journey.spec.ts`.
 
 ### Rules learned recording `landing-drawn-states.spec.ts` (2026-07-24)
 
@@ -83,6 +83,49 @@ plain `npm run build` passes. Dev mode is fine once the run isn't provoking serv
 which is the real lesson: the first dev-mode attempt died mid-walk right after Next's image
 optimizer logged a 400 for a genuinely missing asset. **Fix the 404s before blaming the
 server.** The QA watchdog reporting a `400 Bad Request` is a real product bug, not test noise.
+
+### Rules learned recording `streak-journey.spec.ts` (2026-07-28)
+
+The seed helpers this spec drives (`e2e/seed/streak.ts`) are documented in architecture.md — this
+is what broke specifically in proof mode getting them on camera.
+
+**The feature flag gate isn't optional set-dressing — it's the difference between a card and
+nothing.** The streak surfaces ship dark behind `DASHBOARD_FEATURES.loyaltyStreak` /
+`.milestoneProgress`, which read `NEXT_PUBLIC_DASHBOARD_STREAK_PREVIEW`. That var is now in the
+`e2e/lib/env.ts` overlay; without it every streak beat records a blank card, not a missing one —
+easy to miss in a quick local review of a single frame.
+
+**The whole spec is one device: mutate Mongo, reload, narrate what's already true.** The demo
+walks ONE member through their entire lifecycle by writing state to Mongo between beats and
+reloading — months of real membership compress into seconds of video while every number on
+screen (streak count, entry totals, draw name) stays the real counter the app itself computed,
+never a mocked value.
+
+**A page-scoped `addInitScript` cannot be unregistered — plan the whole spec around that, not
+just the one call.** `seedCelebrationMarker` uses `page.addInitScript` to plant the "last seen"
+milestone marker before load (required — see architecture.md). Left alone it re-plants that same
+value before every later navigation for the rest of the test, re-arming a celebration on every
+reload from then on — and the celebration's `justHit` banner outranks the Founding chip in
+`LoyaltyStreak.tsx`, which would silently break the Founding beat several beats later. Resolved
+by registering a second marker, once, with a value no later streak in the test will ever cross —
+later-registered init scripts run last, so it permanently wins.
+
+**A locator that's unique today can stop being unique as the demo mutates state — anchor on text
+one component structurally cannot render, and add a guard that fails loudly if it drifts.** A
+`section` filtered on `hasText: "Streak"` silently began resolving to `EntryWallet` from the
+milestone beat onward, because granting streak entries makes the wallet render its own
+"Streak {n}" legend row — and on mobile the wallet precedes the streak card in DOM order. Every
+test still passed (`toBeVisible()` was true either way); only the spotlight ring landed on the
+wrong card while the caption narrated the other one. Fixed by anchoring on `/LEVEL|FOUNDING/i` —
+grepped unique to the streak card's own medallion label across the whole `src/` tree — plus a
+positive/negative guard assertion (`toContainText`/`not.toContainText`) that fails the test the
+moment the two locators' containment relationship changes again.
+
+**Scope proof runs by FULL test title, not just `--grep` on a substring.** `--grep "on mobile"`
+also matches `draw9-assets.spec.ts` and `landing-drawn-states.spec.ts` — the former mutates the
+shared seeded draw and is `mode: "serial"` specifically because of that, so a broad grep at
+multiple workers contaminates it. Proof mode itself forces `workers: 1`, so the curated `@demo`
+bundle (`--grep @demo`) is safe from this; it only bites a broader, non-proof `--grep` run.
 
 ## Joining clips into one deliverable (`e2e/proof/join.ts`)
 
