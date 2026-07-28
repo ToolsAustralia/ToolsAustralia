@@ -162,9 +162,33 @@ message rather than a bare header, matching the sibling tables. **8 `<th>` / 8 `
 Full-file count after this addition: **35 `<th>` / 35 `<td>`** across all four tables (UTM Channel
 Attribution 8/8 + per-page 11/11 + By Built Prize 8/8 + By Toolbox 8/8).
 
-> **Not visually verified.** No admin session was available in the session that added this, so the
-> structure was confirmed by `<th>`/`<td>` parity and type-check only. Confirm the rendered table
-> before trusting the layout.
+> **Now visually verified (2026-07-28).** Rendered on staging with a temporarily-promoted throwaway
+> account. All four tables display correctly, and the By Toolbox rollup correctly attributed a real
+> test purchase: `GearWrench · 2 builders · 1 registration · 1 conversion · $20.00`.
+
+## Switched-away % — the denominator must come from the distribution (2026-07-28, F-013)
+
+Staging showed **250%** in this column. The cause is worth remembering, because it is easy to
+reintroduce: `row.builds` and `buildDistribution` count **different units**.
+
+| | Counts |
+|---|---|
+| `row.builds` | unique **visitors** who built anything, deduped across the page |
+| `buildDistribution[].visitors` | unique visitors **per combination** |
+
+A visitor gets one visit row per page load, and each row keeps its own final build. So one person
+who lands four times and settles on a different combination each time contributes **1** to `builds`
+but **4** to the distribution. Summing distribution entries for the numerator and dividing by
+`builds` therefore lets the ratio exceed 100%. Real data: `makita` on 2026-07-28 had 5 recorded
+builds from 2 unique visitors — 5 ÷ 2 = 250%.
+
+`getSwitchAwayRate` now divides the distribution by **its own total**, so both sides are in the
+same unit and the value is bounded at 100%. The column reads "% of builds" — **records, not
+people** — and the tooltip states that explicitly.
+
+> Every automated test missed this. The unit suite, the seeded accuracy proof and the local browser
+> runs all used **one row per visitor**, which is the one shape that cannot reproduce it. If you add
+> coverage here, make a single visitor produce several different builds.
 
 **Norm lockstep (CLAUDE.md rule 10).** `buildDistribution` and `byBuiltPrize` are now mirrored to
 Norm — see

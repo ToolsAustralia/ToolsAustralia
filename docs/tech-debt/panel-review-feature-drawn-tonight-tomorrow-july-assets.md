@@ -63,7 +63,7 @@ Fresh session? Run `/panel-fix` on this branch, or paste:
 **Now:** none — all five Now items were closed 2026-07-28 (F-001, F-002, F-004, F-005, F-011),
 and the three Next items the same day (F-003, F-006, F-007).
 
-**Remaining: 1 open + 1 deferred.**
+**Remaining: 1 open + 1 deferred.** (F-013 was found on staging after the panel and is already closed.)
 - **F-008** (M) — an e2e spec covering the B1–B8 behaviour matrix. Not blocked on anything; simply
   not written. The assertions are already known-good from manual runs, so it is mostly transcription.
 - **F-009** — deferred with measurements (see its entry): the collection is 1.1 MB and no row carries
@@ -76,6 +76,13 @@ Everything else (F-001 … F-007, F-010, F-011, F-012) is closed.
 ## Findings
 
 ### P1
+
+- [x] **F-013** · P1 · Bug · `src/components/admin/PromoAnalyticsManagement.tsx:123-141` — **The "Switched away %" column showed 250%, which is impossible.**
+      _What:_ Found on STAGING with real traffic, after a full purchase run. The numerator summed `buildDistribution` (unique visitors **per combination**) while the denominator was `row.builds` (unique visitors **across the page**). A visitor gets one visit row per page load and each row keeps its own final build, so one person landing four times and settling on a different combination each time contributes 1 to `builds` but 4 to the distribution. Real data: `makita` on 2026-07-28 had 5 recorded builds from 2 unique visitors → 5/2 = 250%.
+      _Why every test missed it:_ the unit suite, the seeded accuracy proof and the local browser runs all used **one row per visitor** — the single shape that cannot reproduce it. Only genuine multi-page-load behaviour does.
+      _Fix:_ divide the distribution by **its own total** so both sides count the same unit, and relabel to "% of builds" (records, not people) with a tooltip saying so. Applied to the header, the per-row tooltip and the rate helper.
+      _Raised by:_ controller, during staging verification · _Proven:_ replaying the exact real row gives 250% → 100%; 3 default + 1 switched → 25%; all-default → 0%; no builds → null (em dash).
+      _Shot:_ code-only  _Handled:_ **2026-07-28**
 
 - [x] **F-001** · P1 · Arch · `src/app/api/tracking/promo-prize-build/route.ts:32-84` — **Anyone with `curl` can silently corrupt the prize-build analytics, and a row-count check would never show it.**
       _What:_ The endpoint is unauthenticated and keyed only by the `ta_anon_id` cookie, whose validation is a *format* check — `id.startsWith("anon_") && id.length > 5 && id.length < 100` (`src/services/ab-testing/AnonymousIdService.ts:23-25`) — not a signature. HttpOnly stops browser JS, not a raw HTTP request. Unlike its sibling visit beacon, which only ever **creates** rows, this one **updates** an existing row's `builtPrizeSlug` / `toolboxSwitches` / `toolsetSwitches` via `$set`. So an attacker can overwrite build attribution at unlimited volume with **zero row growth**, poisoning `topBuiltPrize`, `buildDistribution` and the builder→signup→conversion funnel while every visit-count sanity check stays green.
