@@ -114,6 +114,87 @@ Does not import `readThemeFromPersistStorage` (`src/utils/themeBootstrap.ts`):
 that helper deliberately returns only the resolved theme, not the
 `userManualOverride` flag this hook needs to detect a manual choice.
 
+### PromoThemeExperimentGate
+
+`src/components/ab-testing/PromoThemeExperimentGate.tsx`. Wraps the promo
+landing's rendered content in
+`<PromoThemeExperimentGate experimentId={string | null}>{children}</...>`,
+holding it behind a full-screen `DashboardLoader` until
+`usePromoThemeExperiment` reports `settled`, then reveals it with the final
+theme already applied to `<html>`. This is the piece that turns the hook's
+synchronous short-circuits and network resolution into a visible (or
+invisible) hold on the page.
+
+**Overlay, not replacement — and why.** `/promotions/[slug]` is
+ISR-prerendered and deliberately server-renders eight sections for SEO and
+for the shared CDN document every visitor and every crawler receives. If the
+gate returned the loader *instead of* `children` while unsettled, that shared
+document would be a spinner for everyone, not just the bucketed minority
+still resolving. So `children` always render, unconditionally, and the loader
+is layered on top as a sibling — never an early return. `.ta-loader-root`
+(the loader's own wrapper, `src/components/loading/DashboardLoader.tsx`) is
+already `fixed inset-0 z-[100]` with an opaque `background: var(--lo-bg)`
+(`src/app/globals.css`), confirmed before writing this component — so no
+extra wrapper container was needed.
+
+**`revealed` initializes from `settled`, not `false`.** `useState(() =>
+settled)` means that when the hook resolves synchronously (no experiment,
+manual theme choice, already-resolved device — see the three short-circuits
+above), the overlay never enters the DOM at all: it mounts already revealed.
+Only a visitor who is genuinely mid-resolution (a fresh bucketing, requiring
+the network round-trip) ever sees the loader mount.
+
+**The apply-once effect's three-step order is load-bearing — do not
+reorder.** Nothing in this app applies the `.dark` class to `<html>`
+synchronously in response to a theme change: `ThemeContext` does it inside a
+`useLayoutEffect` keyed on `[theme]`, and a `useThemeStore.setState` call
+lands on a different React lane than a sibling `setState` in this component.
+Left to normal React scheduling, the dark arm would show a visible
+loader-teardown-then-snap-to-dark on every load — exactly the defect this
+feature exists to prevent. The effect (guarded by an `appliedRef` so it can
+only ever run once) instead does, in this exact order:
+
+1. **Write the DOM class by hand, synchronously.** `resolved` is `theme` when
+   the hook produced a fresh assignment, or — when `theme` is `null` (already
+   correct; see below) — read back off the current `<html>` class so the
+   effect doesn't need to trust an implicit invariant. Then
+   `document.documentElement.classList.toggle("dark", resolved === "dark")`
+   and `style.colorScheme = resolved` are set directly, bypassing React and
+   `ThemeContext` entirely.
+2. **`flushSync(() => setRevealed(true))`.** Forces React to commit the
+   reveal synchronously, in the same tick as step 1's DOM write, so the
+   content becomes visible and the loader unmounts in one paint that already
+   has the correct theme on `<html>` — no intermediate frame.
+3. **`useThemeStore.setState({ theme })` last, and only when `theme !==
+   null`.** This is persistence bookkeeping for future visits, not the
+   mechanism that makes the reveal flicker-free — the DOM was already correct
+   after step 1. `setState` (not `setTheme`/`toggleTheme`) is used
+   deliberately: it does not set `userManualOverride`, so an experiment
+   assignment is never mistaken for a real user choice on a later visit. When
+   `theme === null` (the hook's "nothing new to apply" case — a returning
+   already-bucketed device, a non-experiment visitor, or a manual override),
+   this write is skipped entirely: there is nothing to persist, and calling
+   `setState` here would risk overwriting `userManualOverride` bookkeeping
+   for no reason.
+
+**`inert` for the occluded page.** While `!revealed`, the wrapper `div`
+around `children` gets `inert={!revealed}` so the server-rendered content
+behind the loader cannot receive keyboard focus or be reached by
+assistive tech while it is visually covered — an opaque overlay alone is not
+enough for accessibility. This repo's installed `@types/react` (19.x) types
+`inert` as `boolean | undefined` (not the string-attribute form some docs
+show), so the boolean expression type-checks directly with no extra casts
+needed. `aria-hidden={!revealed ? true : undefined}` on the same node
+backs this up for AT that doesn't yet honour `inert`.
+
+**`usePromoThemeSettled()` context, default `true`.** The gate provides
+`revealed` through `PromoThemeSettledContext`. Consumers — starting with
+`PromoHero` in a later task — call `usePromoThemeSettled()` to know whether
+it's safe to run theme-sensitive entrance work. The context's default value
+(used by anything rendered *outside* a gate, e.g. in a codepath that doesn't
+wrap children in the experiment) is `true`, so an un-gated consumer behaves
+exactly as it does today — the gate is additive, never a required wrapper.
+
 ## Server-resolved variants
 
 To avoid flicker (showing variant A then snapping to variant B), variants are resolved server-side and the page renders the right variant on first paint. See [rules.md](./rules.md#r1-no-client-side-flicker).
