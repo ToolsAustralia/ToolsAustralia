@@ -141,6 +141,35 @@ rows age out on their own; the column will read all-zero once the last one expir
 2026), at which point dropping it is a one-line change. See
 [docs/admin/frontend.md](../admin/frontend.md#promo-analytics-table--builds-column-added-cross-visits-deliberately-kept-2026-07-28).
 
+### `PromoAnalyticsRepository` aggregation tests — F-002 closure (2026-07-28)
+
+The "verified with a mocked-aggregate probe" claims in the two sections above (`buildDistribution`
+tie-break, `getAggregatedByBuiltPrize` sort/merge) originally referred to throwaway scripts written
+during implementation and then deleted — leaving zero regression coverage for maths that feeds the
+admin dashboard *and* the Norm external API (panel review finding F-002). That gap is now closed by
+`src/repositories/__tests__/PromoAnalyticsRepository-aggregation.test.ts` (`npm run
+test:promo-analytics-aggregation`), which stubs `PromoAnalyticsVisit.aggregate` /
+`User.aggregate` / `PaymentEvent.aggregate` by call order (mirroring the pattern in
+`src/utils/promo-analytics/__tests__/record-prize-build.test.ts`) and calls the **real**
+`getAggregatedByPage` / `getAggregatedByBuiltPrize` methods against canned, known inputs — asserting
+hard-coded expected outputs, not just that the code runs:
+
+- Two `builtPrizeSlug` rows on the same page both survive `buildDistribution`'s merge, each keeping
+  its own visitor count (guards against an overwrite bug collapsing one combination into another).
+- An equal-visitors tie sorts `builtPrizeSlug` ascending, and `topBuiltPrize` is always
+  `buildDistribution[0]` (the single-source-of-truth relationship the code comment claims).
+- A page with no build rows reports `builds: 0`, `buildDistribution: []`, `topBuiltPrize: null`.
+- A slug present in the signup aggregation but absent from the build aggregation reports
+  `builders: 0` and every builder-denominated rate as `0` — never `NaN`/`Infinity` (the exact
+  regression the finding names: a `builders > 0` guard weakened to `>= 0`).
+- Exact arithmetic: `builders: 10, signups: 4, conversions: 2` → `40 / 50 / 20`, hard-coded.
+- Final `byBuiltPrize` sort: builders descending, `builtPrizeSlug` ascending as tie-break.
+
+Mutation-tested against the real repository file (each change applied, confirmed to fail the
+suite, then reverted — verified byte-identical via `git diff --stat`): flipping the tie-break
+comparator direction, weakening `builders > 0` to `>= 0`, and breaking the distribution merge into
+an overwrite were each caught.
+
 ## Jobs / locks
 
 `ChargeJobLock` (in [subscription models](../subscription/models.md#chargejoblock)) is a distributed lock pattern using a Mongo doc with TTL.
