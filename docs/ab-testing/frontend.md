@@ -52,6 +52,35 @@ overlay over the page and then unmount it on the next tick — a visible flash
 on every promo page load, for everyone, forever. Computing all three checks
 synchronously means the overlay never enters the DOM for the common case.
 
+**Ordering constraint: `!experimentId` must be checked BEFORE the
+`typeof window === "undefined"` guard.** `/promotions/[slug]` is
+ISR-prerendered and the resulting HTML is CDN-cached and shared by every
+visitor of that snapshot. `experimentId` is resolved server-side and baked
+into the page, so it is identical for every visitor of a given snapshot and
+the check needs neither `window` nor `localStorage` — it can and must run
+during the server pass. If the environment guard ran first, the server pass
+(where `window` is always undefined) would bake `settled: false` into the
+shared HTML even when no experiment is active, and the gate would render a
+full-screen overlay for every visitor of that cached snapshot, including
+search-engine crawlers — exactly the flash this ordering exists to prevent.
+The other two short-circuits (manual choice, device marker) genuinely need
+`localStorage` and correctly stay after the environment guard, resolving only
+on the client.
+
+**Residual limitation while the experiment IS active.** A returning visitor
+who already carries the device marker (case 3) cannot be identified as such
+during the ISR server pass — that check needs `localStorage`, which doesn't
+exist server-side. So for the lifetime of an active experiment, that
+visitor's prerendered HTML still carries `settled: false`, and the gate's
+overlay will exist in the shared markup until the client effect resolves it
+post-hydration. This is not a visible theme snap, though: their theme is
+already applied pre-paint by the CSP-hashed bootstrap snippet
+(`src/utils/security/inline-snippets.ts`), so what they may briefly see is a
+loader in their *already-correct* theme, not a light-to-dark flash. This
+limitation disappears once the experiment is deactivated (`experimentId`
+becomes `null`, which is checked first and resolves server-side for
+everyone).
+
 `theme` is `null` whenever no *new* decision needs applying — that includes
 case 3 above (a returning already-bucketed device): the resolved theme is
 already persisted in `ta-theme`, and the CSP-hashed inline head script

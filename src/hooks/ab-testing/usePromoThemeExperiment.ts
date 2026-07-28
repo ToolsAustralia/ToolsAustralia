@@ -44,8 +44,17 @@ function hasManualThemeChoice(): boolean {
  */
 export function usePromoThemeExperiment(experimentId: string | null): Resolved {
   const [state, setState] = useState<Resolved>(() => {
-    if (typeof window === "undefined") return { settled: false, theme: null };
+    // `experimentId` is resolved server-side and baked into the prerendered,
+    // CDN-shared HTML — it is the same for every visitor of a given ISR
+    // snapshot, so this check needs neither `window` nor `localStorage` and
+    // MUST run before the environment guard below. If the order were
+    // flipped, the server pass (where `window` is always undefined) would
+    // bake `settled: false` into the shared HTML even when no experiment is
+    // active, and the later gate would render a full-screen overlay for
+    // every visitor of that snapshot — including crawlers. Do not "tidy"
+    // this back to environment-check-first.
     if (!experimentId) return { settled: true, theme: null };
+    if (typeof window === "undefined") return { settled: false, theme: null };
     if (hasManualThemeChoice()) return { settled: true, theme: null };
     try {
       if (localStorage.getItem(promoThemeMarkerKey(experimentId))) {
