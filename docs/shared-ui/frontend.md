@@ -724,14 +724,17 @@ Historical: the 2026-07 packages-design experiment's treatment arm, `PromoMember
 **State matrix (headline + CTA):**
 | State | Behaviour |
 |---|---|
-| Past-due (any) | "Your membership payment needs attention." + amber **Update payment** link → `/my-account?open=payment` |
+| Past-due · no live access | "Your membership payment needs attention." + amber **Update payment** link → `/my-account?open=payment` |
+| Past-due · live pack, offer NOT covered | "Your pack access is still running." + the same **Update payment** link — never claims the discounts are gone (F-031) |
+| Past-due · live pack that COVERS the offer | falls through to the covered state below, so they are sent to redeem it |
+| Paused (any) | "Your membership is paused." + resume date when known + **Manage membership** → `/my-account?open=subscription` (never an upsell — access returns on resume) |
 | Offer known · guest | "{offer} unlocks at {pct}% access." + **Unlock with the {plan}** (falls back to a scroll-to-`#membership` CTA if no plan resolves) |
 | Offer known · authed, short | "You're at {X}% — {offer} needs {pct}%." + unlock CTA + meta line "Unlocks {n} of 1,833 partner offers" + "See all packages" |
 | Offer known · authed, covered | "You're set — your {X}% access covers {offer}." + **Open partner portal** SSO button (`usePartnerDiscountSso`), only when `partnerDiscountSsoEnabled()`; flag off → text only |
 | Generic · guest | "Unlock the partner catalogue" + scroll CTA |
 | Generic · authed | "Back from the partner portal?" (current % + total) + scroll CTA |
 
-**Layout note:** when present, the banner becomes the page's first section and takes the fixed-header offset (`pt-[var(--app-header-h)]`); the hero keeps its own offset, which then reads as hero top padding.
+**Layout note:** when present, the banner becomes the page's first section and takes the fixed-header offset (`pt-[var(--app-header-h)]`); the hero then **drops its own offset** for `pt-8 lg:pt-10` via `hasPortalBanner`, so there is no duplicate header-height band between them (F-022 — measured 32/40px with the banner vs 86/106px on the control page).
 
 ### `features/PartnerDiscountQueue` — tier-themed partner discount card
 

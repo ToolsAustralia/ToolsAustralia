@@ -9,7 +9,8 @@
 // sections/dashboard/EntryWallet; the hero/countdown in DrawsMajorHero.
 // ─────────────────────────────────────────────────────────────────────────────
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
+import { useToast } from "@/components/ui/Toast";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -78,7 +79,15 @@ export default function MyAccountPage() {
     dash.drawStatus === "frozen" || dash.drawStatus === "completed" ? "next Major Draw" : dash.drawName;
   const openSheet = useDashboardSheetStore((s) => s.openSheet);
   const searchParams = useSearchParams();
+  const { showToast } = useToast();
   const partnerSso = usePartnerDiscountSso();
+  // The SSO route's error bodies are customer copy; the hero chip has nowhere inline to
+  // render them, so surface them as a toast rather than swallowing them (panel F-033).
+  const partnerSsoError = partnerSso.error?.message;
+  useEffect(() => {
+    if (!partnerSsoError) return;
+    showToast({ type: "error", title: "Partner portal", message: partnerSsoError });
+  }, [partnerSsoError, showToast]);
 
   const { requestModal } = useModalPriorityStore();
   const { allowSecondaryModals } = useDashboardLandingOrchestration(

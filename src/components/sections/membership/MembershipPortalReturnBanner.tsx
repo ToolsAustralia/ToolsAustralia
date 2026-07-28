@@ -41,8 +41,11 @@ const SECTION_STYLE = {
   background:
     "radial-gradient(640px 300px at 88% 0%, rgba(238,0,0,.4), transparent 60%),linear-gradient(150deg,#1c0e0e 0%,#0b0a0d 55%,#140d14 100%)",
 } as const;
+/** The light gradient stop is #e02424, not #ff5a5a: white 13.5px/900 measured only
+ *  3.06-3.13:1 against #ff5a5a at its lightest pixel and 13.5px bold does NOT qualify as
+ *  WCAG "large text", so it failed AA. #e02424 measures 4.72:1 (panel F-035). */
 const CTA_CLASS =
-  "flex items-center justify-center gap-2 rounded-xl bg-gradient-to-br from-[#ff5a5a] to-[#c40d0d] px-5 py-3 text-[13.5px] font-extrabold text-white transition-[filter] hover:brightness-110 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-600 focus-visible:ring-offset-2 focus-visible:ring-offset-black";
+  "flex items-center justify-center gap-2 rounded-xl bg-gradient-to-br from-[#e02424] to-[#c40d0d] px-5 py-3 text-[13.5px] font-extrabold text-white transition-[filter] hover:brightness-110 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-600 focus-visible:ring-offset-2 focus-visible:ring-offset-black";
 
 /**
  * Compact strip above the /membership hero for visitors bouncing back from the
@@ -57,8 +60,9 @@ const CTA_CLASS =
  * no late mount pushing the whole page down.
  *
  * The banner takes the fixed-header offset (pt-[var(--app-header-h)]) since it
- * becomes the page's first section when present; the hero keeps its own offset,
- * which then reads as hero top padding.
+ * becomes the page's first section when present; the hero then DROPS its own offset
+ * for pt-8/lg:pt-10 via `hasPortalBanner`, so the two don't stack a duplicate
+ * header-height band (F-022).
  */
 export default function MembershipPortalReturnBanner({
   portalReturn,

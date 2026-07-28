@@ -19,9 +19,18 @@ Fresh session? Run `/panel-fix` on this branch, or paste:
 
 **F-001…F-025: 24 verified genuinely closed** by the 2026-07-28 verification panel (pass 1 = 996557d0 · batch 2 = 7e584e6a · polish = 80548fcb · Later = 6e84bbfd · final = 78c8cbbe). **F-023 re-opened** — one third of its fix was never written.
 
-**Now:** — round-2 Now batch DONE (F-027, F-028, F-029, F-030, F-031 + F-023 closed). Next up: F-032, F-033, F-034, F-035, F-050.
+**Now:** — clear. Rounds 1 and 2 both drained except the Later set.
+**Later / own PR:** F-026 (focus visibility — site-wide globals.css, needs its own regression sweep), F-037-F-049 (test hardening, type-safety, copy nits).
 **Next:** F-032, F-033, F-034, F-035, F-050
 **Later / own PR:** F-026 (focus visibility — site-wide CSS), F-037…F-049
+
+
+_2026-07-28 panel-fix pass 6: **F-032, F-033, F-034, F-035, F-050 done.**_
+- **F-035 verified arithmetically, not taken on trust:** white on `#ff5a5a` computes to **3.06:1** (fails the 4.5 AA floor for 13.5px bold), `#e02424` to **4.72:1**, and the dark stop was already 6.16:1. Changed in both the banner CTA and the Rewards card.
+- **F-034's guard was proven to fire:** planted `EADDRINUSE` in a scratch `server.log` → the guard threw; clean log → silent. It runs immediately after `waitForHttpOk` and names the `netstat` command plus the `E2E_PORT` escape hatch in its message.
+- **F-033** renders `sso.error.message` with `role="alert"` under the Rewards card's SSO button and, for the dashboard chip (which has no inline slot), routes it through the repo's existing globally-mounted `useToast`.
+- **F-050** also corrected two things the panel had not itemised: the generated catalogue header now interpolates the real row count instead of a hard-coded 1,833 **and** names the enforcing lint rule (F-021's missing half), and the banner's own JSDoc no longer contradicts F-022's hero-offset change.
+- Gates: type-check ✓ · `test:portal-return` ✓ · `test:unlock-packages` ✓ · `test:chat-faqs` ✓ · `build:partner-catalog` deterministic ✓ · lint **exactly** at the 6-error/33-warning baseline.
 
 _2026-07-28 panel-fix pass 5 (round-2 Now batch): **F-027, F-028, F-029, F-030, F-031 done** — and F-023 closed with them, since F-030 was its missing third part._
 
@@ -164,18 +173,18 @@ A reviewer reported as P0 that the banner's `#membership` CTA is inert because n
 
 ### Next
 
-- [ ] **F-032** · P1 · UX · `src/components/sections/membership/PartnerPortalPhone.tsx:50` — The vendor's brand name "My Rewards" is printed on `/membership`, directly above a button reading "Open partner portal". The F-024 sweep edited line 123 of this same file and missed line 50.
+- [x] **F-032** · P1 · UX · `src/components/sections/membership/PartnerPortalPhone.tsx:50` — The vendor's brand name "My Rewards" is printed on `/membership`, directly above a button reading "Open partner portal". The F-024 sweep edited line 123 of this same file and missed line 50.
       _Fix:_ change the mock's title to `Partner portal`.  _Shot:_ code-only  _Handled:_ —
-- [ ] **F-033** · P1 · UX · `RewardsPartnerCard.tsx:110-119` + `src/app/(site)/my-account/page-client.tsx:81,317` — Two of the four portal buttons swallow every SSO error silently.
+- [x] **F-033** · P1 · UX · `RewardsPartnerCard.tsx:110-119` + `src/app/(site)/my-account/page-client.tsx:81,317` — Two of the four portal buttons swallow every SSO error silently.
       _What:_ Both call `sso.mutate()` but never read `sso.error`, so F-014's four strings never reach members on the Rewards page — the exact surface Cobber's FAQ 16 sends them to. The label flicks to "Opening…" and back with no explanation.
       _Fix:_ render `sso.error.message` with `role="alert"` under the Rewards card's SSO button; surface `partnerSso.error?.message` as a toast from the dashboard chip.  _Shot:_ code-only  _Handled:_ —
-- [ ] **F-034** · P1 · QA tooling · `e2e/run.ts:297,313` + `e2e/lib/health.ts:10-14` — The harness reports "server ready" when a different app owns the port.
+- [x] **F-034** · P1 · QA tooling · `e2e/run.ts:297,313` + `e2e/lib/health.ts:10-14` — The harness reports "server ready" when a different app owns the port.
       _What:_ With port 3799 held by another worktree, `next dev` dies with `EADDRINUSE` but the `npm run dev` wrapper survives, so the child-exit guard never fires and the health check is satisfied by the squatter — the review then runs against another branch's code. This produced roughly 15 minutes of phantom results in this panel (banner absent, pre-branch strings) that were nearly reported as regressions. `assertPortFree` cannot cover it — the squatter can arrive after the check.
       _Fix:_ after `waitForHttpOk` in step 4, read `e2e-artifacts/logs/server.log` and throw if it contains `EADDRINUSE`, naming the port and the `netstat` command to find the owner.  _Shot:_ scratchpad `reviewer-b2/env4.log`, `env5.log`  _Handled:_ —
-- [ ] **F-035** · P2 · UI (measured) · `MembershipPortalReturnBanner.tsx:44` + `RewardsPartnerCard.tsx:93` — The primary CTA label fails WCAG AA on the light end of its gradient.
+- [x] **F-035** · P2 · UI (measured) · `MembershipPortalReturnBanner.tsx:44` + `RewardsPartnerCard.tsx:93` — The primary CTA label fails WCAG AA on the light end of its gradient.
       _What:_ White 13.5px/900 on `from-[#ff5a5a]` measures 4.46–4.49:1 averaged and **3.06–3.13:1 at the lightest pixel**; 4.5:1 is required (13.5px bold is not "large text"). Affects every state's primary action at both widths.
       _Fix:_ change `from-[#ff5a5a]` to `from-[#e02424]` in both files (white on `#e02424` = 4.72:1; the `to-[#c40d0d]` end is already 6.15:1). Re-sample and assert the worst-pixel ratio is at least 4.5.  _Shot:_ scratchpad `reviewer-b2/evidence/f011-f012-meta-cta-390.webp`  _Handled:_ —
-- [ ] **F-050** · P2 · Docs (merged drift set; 3 reviewers) — Seven docs assert things this branch changed.
+- [x] **F-050** · P2 · Docs (merged drift set; 3 reviewers) — Seven docs assert things this branch changed.
       _Fix:_ (a) **`docs/partner/igodirect-integration-playbook.md:263,371` — highest value, it is the row we hand iGoDirect:** replace the `offer_name`/`level` contract with "`offer_name` resolves ONLY on an exact catalogue-name match (case/whitespace-insensitive); URL `level` is ignored entirely — `offer_id` is the reliable templating key"; add `paused` to the state-matrix list; rename the CTA to "Open partner portal"; fix vendor ask #1 the same way. (b) `CUSTOMER.md:425` — "Back to the partner portal" becomes "Open partner portal". (c) `docs/dashboard-account/frontend.md:190,540` + `docs/config-and-data/architecture.md:25` — "Reward portal" becomes "Partner portal". (d) `docs/shared-ui/frontend.md` — add the paused row to the state-matrix table, and fix the "Layout note" (plus the banner's own JSDoc at `MembershipPortalReturnBanner.tsx:58-60`) which still says the hero keeps its own offset; F-022 changed that. (e) `docs/internal-norm/backend.md:27` — the script does NOT call `zod-to-json-schema`; it emits `registryKey/tier/path/method/summary` only and the manifest publishes no schemas. (f) `scripts/build-partner-catalog-preview.ts:153` — emit the parsed `total` rather than a hard-coded 1,833 and name the `local/no-models-in-client` rule in the generated header (F-021's second half).  _Shot:_ code-only  _Handled:_ —
 
 ### Later / own PR

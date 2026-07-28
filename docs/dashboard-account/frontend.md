@@ -187,7 +187,7 @@
 
 > **Rewards portal + streak gating (2026-07-03):** the dashboard home passes `onPartnerPortal` only when
 > [`partnerDiscountSsoEnabled()`](../../src/config/featureFlags.ts) is on (default off until partner-portal SSO
-> ships) — so the hero "Reward portal" button doesn't render meanwhile. The home `LoyaltyStreak` card is
+> ships) — so the hero "Partner portal" button doesn't render meanwhile. The home `LoyaltyStreak` card is
 > gated on `isDashboardFeatureOn("loyaltyStreak")` (`DASHBOARD_FEATURES.loyaltyStreak: false`) — hidden as
 > **coming soon** until the 6-month milestone-reward figures are confirmed and it's re-flagged.
 
@@ -537,7 +537,7 @@ Rebuilds the Rewards destination (`/my-account/benefits`, nav-labelled "Rewards"
 
 - **`DashboardHero`** now takes `tierKey` / `profileComplete` / `onCompleteProfile`. Active members'
   tier chip shows the real **tier package icon** (`getPackageIcon(\`${tierKey}-subscription\`)`), not a
-  generic crown. The member "Reward portal" button is a **chip-sized premium gold** pill (matches the
+  generic crown. The member "Partner portal" button is a **chip-sized premium gold** pill (matches the
   tier chip) and **triggers the partner-discount SSO** (`usePartnerDiscountSso().mutate()` → MyRewards
   portal via `POST /api/partner-discount/sso`), NOT a route to `/my-account/benefits`. When
   `profileComplete === false` a high-contrast

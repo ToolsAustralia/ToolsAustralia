@@ -90,7 +90,9 @@ export default function RewardsPartnerCard({
 
         {guest ? (
           <div className="mt-3.5 flex gap-2.5">
-            <button type="button" onClick={onBecomeMember} className="flex flex-1 items-center justify-center rounded-[10px] bg-gradient-to-br from-[#ff5a5a] to-[#c40d0d] px-3 py-3 text-[12.5px] font-extrabold text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-red-600">
+            {/* #e02424, not #ff5a5a — white on the lighter stop measured 3.06:1, below the
+                4.5:1 AA floor for 12.5px bold text (panel F-035). */}
+            <button type="button" onClick={onBecomeMember} className="flex flex-1 items-center justify-center rounded-[10px] bg-gradient-to-br from-[#e02424] to-[#c40d0d] px-3 py-3 text-[12.5px] font-extrabold text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-red-600">
               Become a member
             </button>
             <button type="button" onClick={onBuyPackage} className="flex flex-1 items-center justify-center gap-1.5 rounded-[10px] border border-token px-3 py-3 text-[12.5px] font-extrabold text-primary-token focus:outline-none focus-visible:ring-2 focus-visible:ring-red-600 dark:text-white">
@@ -105,6 +107,7 @@ export default function RewardsPartnerCard({
             {pastDueWithPack ? "Update payment to restore membership" : "Update payment"} <ArrowRight className="h-4 w-4" />
           </button>
         ) : partnerDiscountSsoEnabled() ? (
+          <>
           <button
             type="button"
             onClick={() => sso.mutate()}
@@ -121,6 +124,15 @@ export default function RewardsPartnerCard({
             </span>
             <ExternalLink className="h-4 w-4" />
           </button>
+          {/* The SSO route's error bodies are customer copy and this is the surface
+              Cobber's FAQ points members at — swallowing them left the button flicking
+              "Opening…" and back with no explanation (panel F-033). */}
+          {sso.error?.message && (
+            <p className="mt-2 text-[11.5px] font-semibold text-[#c40d0d] dark:text-[#ff6b6b]" role="alert">
+              {sso.error.message}
+            </p>
+          )}
+          </>
         ) : (
           // Partner portal (SSO) not shipped yet — see partnerDiscountSsoEnabled().
           <div className="mt-3.5 flex w-full items-center gap-3 rounded-[10px] border border-token px-4 py-3">

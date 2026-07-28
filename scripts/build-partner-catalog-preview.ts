@@ -150,7 +150,10 @@ async function main() {
   const offersFile = `${GENERATED_HEADER}
 
 /**
- * Server-only — 1,833 rows; never import from client components (bundle size).
+ * Server-only — ${rows.length} rows; never import from a "use client" file (bundle size).
+ * Enforced by the eslint rule \`local/no-models-in-client\` (message \`serverOnlyData\`);
+ * client code imports the aggregates from \`@/generated/partnerCatalogPreview\` instead,
+ * and a server page injects this map (see resolvePortalReturn).
  * The curated Offers List Breakdown is the DISPLAY ALLOWLIST — the vendor feed
  * contains offers outside it.
  */
