@@ -480,8 +480,7 @@ and the preview-grid cap/overflow. Pure — no DB, no env. See also the details-
 
 ### Build tracking beacon — `usePrizeBuildTracking` (2026-07-27)
 
-`PrizeShowcase` counts reel switches (`toolboxSwitches` / `toolsetSwitches` — cash counts against
-the toolbox lane, since it is that lane's opt-out) and hands them to
+`PrizeShowcase` counts reel switches (`toolboxSwitches` / `toolsetSwitches`) and hands them to
 [`usePrizeBuildTracking`](../../src/hooks/usePrizeBuildTracking.ts), which POSTs
 `/api/tracking/promo-prize-build` (see [tracking/api.md](../tracking/api.md)) to attach the
 assembled prize to the visit row `usePromoPageTracking` already created on landing. The component
@@ -495,10 +494,22 @@ itself never calls the API — that would violate the components-don't-call-APIs
   the debounce path uses `fetch` so the request is visible in the network tab during dev.
 - **Counts are CUMULATIVE**, and the server `$set`s them (never `$inc`), so a double delivery — the
   debounce landing and then a `pagehide` flush — is idempotent.
-- **Sends nothing until the visitor has switched something.** An untouched page already has a
-  correct visit row from the landing beacon; a zero-switch write would be pure noise. `send()` also
-  no-ops on an unchanged payload (`lastSent` ref), so the debounce and the unload flush don't double
-  the beacon when nothing changed since the last report.
+- **Counters are strictly per-reel touch counts (F-010).** `toolboxSwitches` / `toolsetSwitches`
+  mean "how many times did they touch THIS REEL" — a toolbox card click bumps `toolboxSwitches`, a
+  toolset card click bumps `toolsetSwitches`, and neither bumps when the visitor uses the **cash**
+  toggle, because cash is a button, not a reel card. (An earlier version bumped `toolboxSwitches`
+  from `handleSelectCash` on the theory that cash was "the toolbox lane's opt-out" — reverted; see
+  the panel-review tech-debt doc, F-010.)
+- **The beacon gates on an explicit `hasInteracted` flag, NOT on the counters.** `PrizeShowcase`
+  sets `hasInteracted` to `true` in all three handlers (toolbox, toolset, **and** cash), and
+  `usePrizeBuildTracking`'s `send()` no-ops unless `hasInteracted` is true. This has to be a
+  separate flag: since cash never bumps a counter, gating on `toolboxSwitches === 0 &&
+  toolsetSwitches === 0` would make a cash-only visitor (who touches no reel at all) look
+  "never engaged" and their build choice — which does resolve to a real prize, `cash-prize` — would
+  never reach the visit row. An untouched page still sends nothing (`hasInteracted` stays `false`);
+  the landing beacon's visit row is already correct for that visitor. `send()` also no-ops on an
+  unchanged payload (`lastSent` ref), so the debounce and the unload flush don't double the beacon
+  when nothing changed since the last report.
 - **`builtPrizeSlug` is `activeSlug`** (the catalog-RESOLVED prize from `usePrizeCatalog`, which
   falls back when a combination has no entry), never the raw requested combination — so the
   endpoint can never be asked to persist a slug the catalog doesn't have.

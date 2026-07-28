@@ -157,11 +157,17 @@ function PrizeShowcase({
   const [selection, setSelection] = useState(initial.selection);
   const [isCash, setIsCash] = useState(initial.isCash);
 
-  // Engagement counters — how much the visitor played with each lane on this page.
-  // Absent/zero on the visit row means "never touched the reels", which is the thing the
-  // always-write-both-params rule exists to keep distinguishable.
+  // Engagement counters — how much the visitor played with EACH REEL on this page (a reel
+  // touch, not a lane-state change). Cash is a toggle button, not a reel card, so it does not
+  // bump either counter (F-010). Absent/zero on the visit row means "never touched that reel".
   const [toolboxSwitches, setToolboxSwitches] = useState(0);
   const [toolsetSwitches, setToolsetSwitches] = useState(0);
+  // Separate from the counters above: "did the visitor interact AT ALL", set by all three
+  // handlers including cash. A cash-only visitor has tb === 0 && ts === 0 forever (cash isn't a
+  // reel touch) but DID make a real build choice (it resolves to `cash-prize`) that must still
+  // reach the beacon — see the gate in usePrizeBuildTracking. Do not fold this back into a
+  // counter check; that silently drops cash-only visitors again (F-010).
+  const [hasInteracted, setHasInteracted] = useState(false);
 
   // `requestedSlug` is what the two lanes add up to; `activeSlug` is what the catalog
   // actually has (it falls back to the default prize if a combination has no entry yet),
@@ -228,6 +234,7 @@ function PrizeShowcase({
     builtPrizeSlug: activeSlug,
     toolboxSwitches,
     toolsetSwitches,
+    hasInteracted,
   });
 
   /**
@@ -338,6 +345,7 @@ function PrizeShowcase({
     rememberToolbox(id);
     syncSelectionQuery({ toolbox: id, toolset: selection.toolset, isCash: false });
     setToolboxSwitches((n) => n + 1);
+    setHasInteracted(true);
   };
 
   const handleSelectToolset = (id: ToolsetType) => {
@@ -346,13 +354,16 @@ function PrizeShowcase({
     // Picking from EITHER reel leaves cash mode, so this path must clear `?toolbox=cash` too.
     syncSelectionQuery({ toolbox: selection.toolbox, toolset: id, isCash: false });
     setToolsetSwitches((n) => n + 1);
+    setHasInteracted(true);
   };
 
   const handleSelectCash = (next: boolean) => {
     setIsCash(next);
     syncSelectionQuery({ ...selection, isCash: next });
-    // Cash is the toolbox lane's opt-out.
-    setToolboxSwitches((n) => n + 1);
+    // Not a reel touch, so neither counter bumps here (F-010) — but it IS a real interaction,
+    // so hasInteracted still flips, or a cash-only visitor's build choice would never reach
+    // the beacon (see usePrizeBuildTracking's gate).
+    setHasInteracted(true);
   };
 
   /* ------------------------------------------------------------------ */

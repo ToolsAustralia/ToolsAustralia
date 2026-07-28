@@ -5,6 +5,7 @@ import PromoAnalyticsService from "@/services/promo-analytics/PromoAnalyticsServ
 import PromoAnalyticsVisit from "@/models/PromoAnalyticsVisit";
 import connectDB from "@/lib/mongodb";
 import { recordPromoVisit } from "@/utils/promo-analytics/record-promo-visit";
+import { createRateLimiter, getClientIdentifier } from "@/utils/security/rateLimiter";
 
 const promoPageVisitSchema = z.object({
   pageType: z.enum(["evergreen", "toolset"]),
@@ -15,12 +16,29 @@ const promoPageVisitSchema = z.object({
   utmCampaign: z.string().optional(),
 });
 
+// Unauthenticated + keyed only on a format-checked cookie (same gap as the sibling
+// promo-prize-build beacon — see F-012). This route only ever INSERTS a new visit row, so
+// abuse here is less dangerous than the sibling's in-place $set (it shows up as inflated
+// visit counts rather than silently rewritten attribution), but it is still a free-write
+// primitive worth capping. A real visitor fires this once per page view (there is already a
+// 60s server-side dedup window below), so 20/5min leaves large headroom for genuine use.
+// Distinct bucket key from "promo-prize-build" so the two beacons have independent budgets.
+// See docs/tech-debt/panel-review-feature-drawn-tonight-tomorrow-july-assets.md F-012.
+const promoPageVisitRateLimiter = createRateLimiter("promo-page-visit", {
+  windowMs: 5 * 60 * 1000,
+  maxRequests: 20,
+});
+
 /**
  * POST /api/tracking/promo-page-visit
  *
  * Track promotion page visits for analytics attribution.
  * No auth required. Uses anonymousId cookie for session attribution.
  * Deduplication: one visit per slug per anonymousId within 1 minute.
+ *
+ * Rate limited (20 req / 5 min per identifier, checked synchronously before the Zod parse and
+ * before `after()` is scheduled) — distinct bucket key from the sibling `promo-prize-build`
+ * beacon so traffic on one can't exhaust the other's budget. See F-012.
  *
  * Why the DB work runs in `after()`:
  *   This beacon fires from promo/ad-landing pages — the highest-traffic path.
@@ -42,6 +60,16 @@ const promoPageVisitSchema = z.object({
  * @see docs/PROMO_PAGE_ANALYTICS.md
  */
 export async function POST(request: NextRequest) {
+  const clientIp = request.headers.get("x-forwarded-for") ?? request.headers.get("x-real-ip") ?? null;
+  const identifier = getClientIdentifier(clientIp, request.headers.get("x-forwarded-for"));
+  const rateLimitResult = promoPageVisitRateLimiter.check(identifier);
+  if (!rateLimitResult.success) {
+    return NextResponse.json(
+      { success: false, error: "Too many requests", retryAfterSeconds: rateLimitResult.retryAfterSeconds },
+      { status: 429, headers: { "Retry-After": String(rateLimitResult.retryAfterSeconds) } }
+    );
+  }
+
   let validatedData: z.infer<typeof promoPageVisitSchema>;
   try {
     const body = await request.json();

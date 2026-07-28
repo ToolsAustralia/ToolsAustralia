@@ -63,9 +63,13 @@ Fresh session? Run `/panel-fix` on this branch, or paste:
 **Now:** none — all five Now items were closed 2026-07-28 (F-001, F-002, F-004, F-005, F-011),
 and the three Next items the same day (F-003, F-006, F-007).
 
-**Remaining:** F-008 (M — e2e spec covering the B1–B8 matrix) · F-009 (S — `PaymentEvent`
-`data.*` index) · F-010 (S — needs an owner decision on counter semantics first) · F-012 (S —
-rate-limit the sibling visit beacon, surfaced while fixing F-001).
+**Remaining: 1 open + 1 deferred.**
+- **F-008** (M) — an e2e spec covering the B1–B8 behaviour matrix. Not blocked on anything; simply
+  not written. The assertions are already known-good from manual runs, so it is mostly transcription.
+- **F-009** — deferred with measurements (see its entry): the collection is 1.1 MB and no row carries
+  the field yet, so the index would be premature.
+
+Everything else (F-001 … F-007, F-010, F-011, F-012) is closed.
 
 ---
 
@@ -124,11 +128,11 @@ rate-limit the sibling visit beacon, surfaced while fixing F-001).
       _Raised by:_ Reviewer A · _Verified by controller:_ a manifest-resolution script over all 21 changed source files reports exactly one orphan — this file. Pre-existing debt (the file predates the branch), but this is the natural place to close it.
       _Shot:_ code-only  _Handled:_ **2026-07-28, working tree (uncommitted at time of writing)** — added to the `promo` domain `paths` (now 32 entries). Manifest re-parsed cleanly (31 domains) and `usePrizeBuildTracking.ts` confirmed still present, so nothing was lost in the edit.
 
-- [ ] **F-012** · P1 · Arch · `src/app/api/tracking/promo-page-visit/route.ts` — **The sibling visit beacon is still unauthenticated and unrate-limited.**
+- [x] **F-012** · P1 · Arch · `src/app/api/tracking/promo-page-visit/route.ts` — **The sibling visit beacon is still unauthenticated and unrate-limited.**
       _What:_ Surfaced while fixing F-001. The same format-only cookie check guards this endpoint, and it has no rate limit either. It is **less** dangerous than F-001's target because it only ever INSERTS — abuse shows up as visibly inflated visit counts rather than silently rewritten attribution — but it is the same free-write primitive, and F-001 has now made the asymmetry obvious: one tracking beacon is guarded and its twin is not.
       _Fix:_ Apply the identical guard now proven on F-001 — `createRateLimiter("promo-page-visit", { windowMs: 5 * 60 * 1000, maxRequests: 20 })` from `src/utils/security/rateLimiter.ts`, checked synchronously as the first statement in `POST`, before `after()` is scheduled. Update `docs/tracking/api.md` in the same change.
       _Raised by:_ the F-001 implementer, correctly flagged rather than drive-by fixed (it was outside that finding's scope). Pre-dates this branch.
-      _Shot:_ code-only  _Handled:_ —
+      _Shot:_ code-only  _Handled:_ **2026-07-28** — `createRateLimiter("promo-page-visit", { windowMs: 5*60*1000, maxRequests: 20 })`, checked synchronously before the Zod parse and before `after()`. **Proven live: 20× `200` then 5× `429`**, cutoff exactly at the budget, returning a clean JSON body with `retryAfterSeconds` and a `Retry-After` header. **Bucket independence also proven** — with the visit beacon's budget exhausted, the build beacon still returned `200`, confirming the two keys do not share a budget (sharing one would have let traffic on either starve the other).
 
 ### P2
 
@@ -142,13 +146,14 @@ rate-limit the sibling visit beacon, surfaced while fixing F-001).
       _What:_ `PaymentEvent` has no index on any `data.*` path (confirmed: five indexes, none matching). The existing `data.promotionSlug` query already full-scans this always-growing, non-TTL'd collection — inherited debt. This branch adds a second full scan on `data.builtPrizeSlug`, run concurrently via `Promise.all` in the same admin route.
       _Fix:_ Add `PaymentEventSchema.index({ eventType: 1, "data.builtPrizeSlug": 1, timestamp: -1 })` in `src/models/PaymentEvent.ts`, matching the `$match` shape at `:602-606`.
       _Raised by:_ Reviewer E.
-      _Shot:_ code-only  _Handled:_ —
+      _Shot:_ code-only  _Handled:_ **DEFERRED **2026-07-28**, with evidence** — measured before deciding: `PaymentEvent` holds **2,313 documents / 1.1 MB** with 11 indexes, and **0 rows currently carry `data.builtPrizeSlug`** (the feature only just shipped). A "full collection scan" of 1.1 MB is negligible, and a 12th index would index nothing yet — adding it now is the speculative infrastructure CLAUDE.md rule 4 warns against. Revisit if that collection grows an order of magnitude; the fix line above stays valid. Recorded so the next reader does not re-derive these numbers.
 
-- [ ] **F-010** · P2 · Eng · `src/components/sections/promo/PrizeShowcase.tsx:342-349` — **Leaving the cash option by clicking a toolset doesn't count as a toolbox change, so engagement is under-reported on that path.**
+- [x] **F-010** · P2 · Eng · `src/components/sections/promo/PrizeShowcase.tsx:342-349` — **Leaving the cash option by clicking a toolset doesn't count as a toolbox change, so engagement is under-reported on that path.**
       _What:_ `handleSelectCash` bumps `toolboxSwitches` because cash is modelled as the toolbox lane's opt-out. But `handleSelectToolset` **also** exits cash mode and does not bump it. A visitor who picks cash then clicks a different toolset changes the toolbox lane's state without it being counted.
       _Fix:_ **Decision needed before coding.** Two defensible readings: (a) the counters measure *lane state changes* → capture `isCash` before the state updates and add `if (isCash) setToolboxSwitches((n) => n + 1);` in `handleSelectToolset`; or (b) they measure *reel interactions* → the current behaviour is right and `handleSelectCash`'s bump is the odd one out. Pick one and make both handlers consistent with it.
       _Raised by:_ Reviewer A · _Verified by controller:_ asymmetry confirmed by reading both handlers.
-      _Shot:_ code-only  _Handled:_ —
+      _Shot:_ code-only  _Handled:_ **2026-07-28** — **owner ruled (b): the counters mean reel touches.** So the bump was REMOVED from `handleSelectCash` (a cash toggle is not a reel card) and nothing was added to `handleSelectToolset`.
+      **This would have caused a regression, caught before implementing:** the beacon gated on `tb === 0 && ts === 0`, so once cash stopped bumping a counter, a visitor who clicked ONLY "take the $10,000 cash" would have had both counters at 0 and their choice would never have been recorded — despite `cash-prize` being a real build choice. Fixed by separating the two concepts: an explicit `hasInteracted` flag (set by all three handlers) now gates the beacon, while the counters stay pure reel-touch counts. **Proven live:** clicking only the cash CTA fires exactly one beacon with `{"builtPrizeSlug":"cash-prize","toolboxSwitches":0,"toolsetSwitches":0}`, scroll delta 0.
 
 ---
 

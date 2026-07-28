@@ -14,6 +14,16 @@ interface UsePrizeBuildTrackingArgs {
   builtPrizeSlug: string;
   toolboxSwitches: number;
   toolsetSwitches: number;
+  /**
+   * Did the visitor touch ANYTHING (toolbox reel, toolset reel, OR the cash toggle) — distinct
+   * from the two counters above, which count only REEL touches. Cash is not a reel card, so
+   * selecting it never bumps `toolboxSwitches`/`toolsetSwitches` (F-010), but it IS a build
+   * choice worth reporting. Gate the beacon on this flag, not on the counters — gating on
+   * `toolboxSwitches === 0 && toolsetSwitches === 0` would silently drop every cash-only
+   * visitor (their build choice would never reach the visit row). Do not simplify this back
+   * into a counter check.
+   */
+  hasInteracted: boolean;
 }
 
 /**
@@ -37,12 +47,13 @@ export function usePrizeBuildTracking({
   builtPrizeSlug,
   toolboxSwitches,
   toolsetSwitches,
+  hasInteracted,
 }: UsePrizeBuildTrackingArgs): void {
   // Latest values, so the unload listeners never send a stale build. Written in an effect
   // rather than during render — a render-phase write is impure and can be discarded.
-  const latest = useRef({ landingSlug, builtPrizeSlug, toolboxSwitches, toolsetSwitches });
+  const latest = useRef({ landingSlug, builtPrizeSlug, toolboxSwitches, toolsetSwitches, hasInteracted });
   useEffect(() => {
-    latest.current = { landingSlug, builtPrizeSlug, toolboxSwitches, toolsetSwitches };
+    latest.current = { landingSlug, builtPrizeSlug, toolboxSwitches, toolsetSwitches, hasInteracted };
   });
 
   const lastSent = useRef<string | null>(null);
@@ -53,10 +64,18 @@ export function usePrizeBuildTracking({
    * reel switch.
    */
   const send = useCallback((useBeacon: boolean) => {
-    const { landingSlug: slug, builtPrizeSlug: built, toolboxSwitches: tb, toolsetSwitches: ts } =
-      latest.current;
+    const {
+      landingSlug: slug,
+      builtPrizeSlug: built,
+      toolboxSwitches: tb,
+      toolsetSwitches: ts,
+      hasInteracted: interacted,
+    } = latest.current;
     if (!slug || !built) return;
-    if (tb === 0 && ts === 0) return; // never engaged — the visit row is already correct
+    // Gate on INTERACTION, not on the reel counters: cash is a toggle, not a reel touch, so a
+    // cash-only visitor has tb === 0 && ts === 0 forever yet still made a real build choice.
+    // Gating on the counters would silently drop that visitor's build from the visit row (F-010).
+    if (!interacted) return; // never touched anything — the visit row is already correct
     const payload = JSON.stringify({
       slug,
       builtPrizeSlug: built,
@@ -83,12 +102,15 @@ export function usePrizeBuildTracking({
     });
   }, []);
 
-  // Debounce: restarted on every change, so five quick switches are one write.
+  // Debounce: restarted on every change, so five quick switches are one write. `hasInteracted`
+  // is included so a redundant cash click (already-selected cash re-clicked on a cash landing
+  // page, where neither the slug nor the counters move) still schedules a send instead of
+  // relying solely on the unload flush.
   useEffect(() => {
     if (!enabled) return;
     const timer = setTimeout(() => send(false), DEBOUNCE_MS);
     return () => clearTimeout(timer);
-  }, [enabled, builtPrizeSlug, toolboxSwitches, toolsetSwitches, send]);
+  }, [enabled, builtPrizeSlug, toolboxSwitches, toolsetSwitches, hasInteracted, send]);
 
   /**
    * Unload flush, registered ONCE per mount.

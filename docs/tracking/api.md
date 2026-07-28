@@ -4,7 +4,22 @@
 
 - **`POST /api/tracking/conversion`** — funnel-event mirror (unauthenticated — it must accept guest traffic). Body is `CanonicalEvent`-shaped, but `eventName` is validated with `mirrorEventNameSchema` from [`src/utils/tracking/mirror-event-names.ts`](../../src/utils/tracking/mirror-event-names.ts) — only `ViewContent` / `AddToCart` / `InitiateCheckout` / `AddPaymentInfo` / `Lead` / `Search`. Value-bearing events (Purchase, Subscribe, …) are **not constructible** here — a forged Purchase would inflate Meta-only revenue; Purchases reach CAPI solely via the Stripe webhook. Client-supplied `eventTime` is untrusted: normalized via `normalizeEpochToUnixSeconds` (ms vs seconds) then clamped by `resolveEventTime` to Meta's accepted window (an out-of-range `event_time` rejects Meta's **entire** `/events` request). Response: `{ ok, results: { facebook, tiktok, snapchat } }`. See [`src/app/api/tracking/conversion/route.ts`](../../src/app/api/tracking/conversion/route.ts). The handler enriches `userData` server-side: session PII (when logged in), Meta `fbc`/`fbp`, TikTok `ttclid`/`ttp` (from cookies via `extractTikTokContext`), and IP/UA from request headers — so the browser mirror doesn't have to ship raw identifiers.
 - ~~`POST /api/facebook/track`~~ — **removed 2026-05-12**. Use `POST /api/tracking/conversion`.
-- `POST /api/tracking/promo-page-visit` — unchanged.
+- `POST /api/tracking/promo-page-visit` — **rate limited: 20 requests / 5 minutes per identifier**
+  (added 2026-07-28, `createRateLimiter("promo-page-visit", …)` + `getClientIdentifier` from
+  [`src/utils/security/rateLimiter.ts`](../../src/utils/security/rateLimiter.ts)), checked
+  **synchronously as the first thing in the handler** — before the Zod parse and before `after()`
+  is scheduled — so an over-limit caller never reaches the DB write. Over-limit responses match the
+  sibling: `{ success: false, error: "Too many requests", retryAfterSeconds }` with `429` +
+  `Retry-After`. Uses a **distinct bucket key** (`"promo-page-visit"`, not
+  `"promo-prize-build"`) so the two beacons have independent budgets — traffic hammering one
+  cannot exhaust the other's headroom. This endpoint only ever **inserts** a new visit row (never
+  `$set`-updates an existing one), so it matters slightly less than the sibling: abuse still shows
+  up as visibly inflated visit counts, whereas the sibling's in-place update left zero row growth
+  for a row-count sanity check to catch (see F-001 above). It was still the same free-write
+  primitive — unauthenticated, keyed only on the format-checked `ta_anon_id` cookie — so it got the
+  identical guard. See
+  [`docs/tech-debt/panel-review-feature-drawn-tonight-tomorrow-july-assets.md`](../tech-debt/panel-review-feature-drawn-tonight-tomorrow-july-assets.md)
+  F-012.
 - **`POST /api/tracking/promo-prize-build`** (added 2026-07-27) — attaches the prize a visitor
   assembled in "Build your prize" (`PrizeShowcase`, via the
   [`usePrizeBuildTracking`](../../src/hooks/usePrizeBuildTracking.ts) beacon — see
@@ -43,9 +58,10 @@
     **synchronously as the first thing in the handler** — before the Zod parse and before `after()`
     is scheduled — so an over-limit caller never reaches the DB write. Over-limit responses are
     `{ success: false, error: "Too many requests", retryAfterSeconds }` with `429` + `Retry-After`.
-    This matters more here than on the sibling `promo-page-visit` beacon (which is **not**
-    rate-limited as of this writing): that endpoint only ever inserts a new row, so abuse at least
-    shows up as inflated visit counts. This endpoint **updates an existing row in place via
+    This mattered more here than on the sibling `promo-page-visit` beacon (which now carries the
+    identical guard under its own bucket key — see F-012 below): that endpoint only ever inserts a
+    new row, so abuse at least shows up as inflated visit counts. This endpoint **updates an
+    existing row in place via
     `$set`**, so unlimited-volume abuse rewrites `builtPrizeSlug` / `toolboxSwitches` /
     `toolsetSwitches` attribution with **zero row growth** — every visit-count sanity check stays
     green while `topBuiltPrize`, `buildDistribution`, and the builder→signup→conversion funnel
