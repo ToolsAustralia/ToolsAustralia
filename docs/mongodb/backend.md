@@ -27,6 +27,39 @@ Attaches the "build your prize" configurator's result (`builtPrizeSlug`, `toolbo
 `toolboxSwitches`, `toolsetSwitches`) plus an index on `{ builtPrizeSlug: 1, timestamp: -1 }`.
 All three are optional, so existing documents stay valid — no migration or backfill required.
 
+### `PromoAnalyticsRepository.getAggregatedByPage` — `builds` / `topBuiltPrize` aggregation (2026-07-28)
+
+A third per-page aggregation block (`1c`, alongside the existing `1` visits and `1b` cross-visits
+blocks) computes built-prize engagement from the same `PromoAnalyticsVisit` collection:
+
+- **`$match`** on the same `timestamp` date-range window plus `builtPrizeSlug: { $exists: true, $ne: "" }`
+  — visitors who never touched the "build your prize" reels have no `builtPrizeSlug`, so they are
+  excluded from the numerator by construction, not by a post-filter. Backed by the
+  `{ builtPrizeSlug: 1, timestamp: -1 }` index already added for `updateVisitBuild`.
+- **`$group`** by `{ pageType, slug, builtPrizeSlug }` with `visitorIds: { $addToSet: VISITOR_ID_EXPR }`
+  — the SAME dedupe expression the `visits` and `crossVisits` blocks use (userId if set, else
+  anonymousId, else a synthetic per-row id), so `builds` is directly comparable to `visits` as a
+  ratio (both are unique-visitor counts, never raw row counts).
+- In application code, the per-`{pageType, slug}` visitor-id sets from every `builtPrizeSlug`
+  bucket are unioned into `buildVisitorIds` (→ `builds = size of the union`), while `topBuild`
+  tracks the single `builtPrizeSlug` bucket with the largest visitor-id-set size per page
+  (→ `topBuiltPrize`, or `null` when the page has no build rows at all).
+- Adds `builds: number` and `topBuiltPrize: string | null` to `PromoPageMetrics`, alongside
+  (not replacing) `crossVisits`. Does not touch the `visits` / `crossVisits` / `signups` /
+  `conversions` / `revenue` maps or the `totalVisits`/`totalSignups`/`totalConversions`/
+  `totalRevenue` accumulators — verified with a before/after `git stash` A/B run against the live
+  dev DB (identical totals both sides: `totalVisits: 84, totalSignups: 53, totalConversions: 64,
+  totalRevenue: 3249.89`).
+
+**Cross-visits was NOT replaced.** An earlier draft of this feature assumed the `crossVisits`
+aggregation (keyed on `referrerSlug`) was dead because nothing has written a new `referrerSlug`
+since 2026-07-24. Live-DB re-verification found 174 of 712 visit rows (~24%) still carry
+`referrerSlug`, so the column still renders real historical numbers for June/July date ranges —
+removing it would have deleted a live view. `PromoAnalyticsVisit`'s 90-day TTL index means those
+rows age out on their own; the column will read all-zero once the last one expires (~late October
+2026), at which point dropping it is a one-line change. See
+[docs/admin/frontend.md](../admin/frontend.md#promo-analytics-table--builds-column-added-cross-visits-deliberately-kept-2026-07-28).
+
 ## Jobs / locks
 
 `ChargeJobLock` (in [subscription models](../subscription/models.md#chargejoblock)) is a distributed lock pattern using a Mongo doc with TTL.

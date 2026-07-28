@@ -68,6 +68,33 @@ The write itself (`PromoAnalyticsRepository.updateVisitBuild`) never creates a r
 for why: an insert here would corrupt the promo visit count, the one metric this feature must
 leave untouched.
 
+## Prize-build admin surfacing — `builds` / `topBuiltPrize` (2026-07-28)
+
+`PromoAnalyticsRepository.getAggregatedByPage` now also returns, per page, `builds` (unique
+visitors who assembled a prize on that page) and `topBuiltPrize` (the combination built by the
+most visitors there, or `null`). Rendered as a new **Builds** column in
+[`PromoAnalyticsManagement`](../../src/components/admin/PromoAnalyticsManagement.tsx), inserted
+immediately after the existing **Cross-visits** column (kept, not replaced — see below). Full
+aggregation shape and dedupe proof: [docs/mongodb/backend.md](../mongodb/backend.md#promoanalyticsrepositorygetaggregatedbypage--builds--topbuiltprize-aggregation-2026-07-28).
+
+**Cross-visits (`referrerSlug`) is deliberately kept alongside, not replaced.** It was assumed
+structurally dead (nothing has written a new `referrerSlug` since 2026-07-24 — the "Explore other
+toolsets" carousel that wrote it was removed when the prize builder's toolset reel took over that
+job, see `src/docs/PROMOTION_ANALYTICS.md`). Live-DB re-check found 174/712 visit rows (~24%)
+still carry `referrerSlug`, spanning June–July, inside the 90-day TTL — so the column still shows
+real numbers for those date ranges today. It will read zero once the TTL clears the last row
+(~late October 2026); only then is dropping it a safe one-line change.
+
+**Mirrored to Norm.** `NormPromoAnalyticsSummarySchema`
+([src/lib/internal-norm/schemas/promo-analytics.ts](../../src/lib/internal-norm/schemas/promo-analytics.ts))
+now declares both fields — `builds` as a plain non-negative int, `topBuiltPrize` declared
+`.nullable()`, not `.optional()`, since the repository always sets the key, sometimes to `null`;
+a bare `z.string()` there would 500 at runtime on every zero-build page, a mismatch `tsc` cannot
+catch. Only the summary route (`/v1/promo-analytics`) carries these fields — `page-detail` and
+`channel-detail` project a different row shape and were correctly left alone. Verified live with
+`npm run norm:smoke` (both a real slug and `null` came back correctly in the same response). Full
+field docs and changelog: [docs/internal-norm/norm-context.md](../internal-norm/norm-context.md).
+
 ## Cross-domain payment integration
 
 `src/utils/payment/upsell-promo-multiplier.ts` resolves the promo factor used by **both** the hero image selector (`Nx-*.webp` variant) **and** the entry calculator (as `activePromoMultiplier` in the formula above). Single source of truth, dual consumer.

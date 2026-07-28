@@ -40,6 +40,10 @@ interface PromoPageMetrics {
   slug: string;
   visits: number;
   crossVisits: number;
+  /** Unique visitors who assembled a prize on this page (touched at least one reel). */
+  builds: number;
+  /** The combination built by the most visitors on this page, or null if nobody built one. */
+  topBuiltPrize: string | null;
   signups: number;
   conversions: number;
   revenue: number;
@@ -555,6 +559,15 @@ export default function PromoAnalyticsManagement() {
                       Cross-visits {getSortIcon("crossVisits")}
                     </button>
                   </th>
+                  <th className="text-right p-3 font-semibold text-gray-800 dark:text-neutral-100">
+                    <button
+                      onClick={() => handleSort("builds")}
+                      className="flex items-center justify-end gap-1 w-full hover:text-red-600 dark:hover:text-red-400"
+                      title="Visitors who assembled a prize in Build your prize"
+                    >
+                      Builds {getSortIcon("builds")}
+                    </button>
+                  </th>
                   <th
                     className="text-right p-3 font-semibold text-gray-800 dark:text-neutral-100"
                     title="New user accounts with this promo attribution"
@@ -631,6 +644,21 @@ export default function PromoAnalyticsManagement() {
                       title="From other toolset pages"
                     >
                       {formatNumber(row.crossVisits ?? 0)}
+                    </td>
+                    <td
+                      className="p-3 text-right font-mono text-gray-900 dark:text-white tabular-nums"
+                      title={
+                        row.topBuiltPrize
+                          ? `Most built here: ${getPrizeLabel(row.topBuiltPrize) ?? row.topBuiltPrize}`
+                          : "Nobody built a prize on this page in this period"
+                      }
+                    >
+                      {formatNumber(row.builds ?? 0)}
+                      {row.topBuiltPrize && (
+                        <span className="block text-[10px] font-sans text-gray-500 dark:text-neutral-400">
+                          {getPrizeLabel(row.topBuiltPrize) ?? row.topBuiltPrize}
+                        </span>
+                      )}
                     </td>
                     <td className="p-3 text-right font-mono text-gray-900 dark:text-white tabular-nums">
                       {formatNumber(row.signups)}

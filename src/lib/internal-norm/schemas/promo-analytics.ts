@@ -16,6 +16,15 @@ const PromoPageMetricsSchema = z.object({
     .int()
     .nonnegative()
     .describe("Visitors who arrived from another toolset landing page"),
+  builds: z
+    .number()
+    .int()
+    .nonnegative()
+    .describe("Unique visitors who assembled a prize in the Build your prize configurator (same dedup as visits)"),
+  topBuiltPrize: z
+    .string()
+    .nullable()
+    .describe("Slug of the most-built combination on this page, or null if nobody built one"),
   signups: z.number().int().nonnegative(),
   conversions: z.number().int().nonnegative(),
   revenue: z.number().nonnegative().describe("AUD dollars"),

@@ -21,6 +21,10 @@ export interface PromoPageMetrics {
   slug: string;
   visits: number;
   crossVisits: number;
+  /** Unique visitors who assembled a prize on this page (touched at least one reel). */
+  builds: number;
+  /** The combination built by the most visitors on this page, or null if nobody built one. */
+  topBuiltPrize: string | null;
   signups: number;
   conversions: number;
   revenue: number;
@@ -200,6 +204,40 @@ export class PromoAnalyticsRepository {
       crossVisitMap.set(`${r._id.pageType}:${r._id.slug}`, r.crossVisits);
     }
 
+    // 1c. Built-prize engagement - unique visitors who actually assembled something, plus the
+    // most-built combination per landing page. Visitors who never touched the reels have no
+    // `builtPrizeSlug`, so they are correctly excluded from the numerator.
+    const buildAgg = await PromoAnalyticsVisit.aggregate<
+      { _id: { pageType: string; slug: string; builtPrizeSlug: string }; visitorIds: string[] }
+    >([
+      {
+        $match: {
+          timestamp: { $gte: startDate, $lte: endDate },
+          builtPrizeSlug: { $exists: true, $ne: "" },
+        },
+      },
+      {
+        $group: {
+          _id: { pageType: "$pageType", slug: "$slug", builtPrizeSlug: "$builtPrizeSlug" },
+          visitorIds: { $addToSet: VISITOR_ID_EXPR },
+        },
+      },
+    ]).exec();
+
+    const buildVisitorIds = new Map<string, Set<string>>();
+    const topBuild = new Map<string, { slug: string; count: number }>();
+    for (const r of buildAgg) {
+      const key = `${r._id.pageType}:${r._id.slug}`;
+      const ids = buildVisitorIds.get(key) ?? new Set<string>();
+      for (const id of r.visitorIds) ids.add(id);
+      buildVisitorIds.set(key, ids);
+
+      const current = topBuild.get(key);
+      if (!current || r.visitorIds.length > current.count) {
+        topBuild.set(key, { slug: r._id.builtPrizeSlug, count: r.visitorIds.length });
+      }
+    }
+
     // 2. Aggregate signups from User (signupAttribution.promotionSlug + createdAt)
     const signupAgg = await User.aggregate<
       { _id: { promotionSlug: string; promotionPageType: string }; signups: number }
@@ -276,6 +314,8 @@ export class PromoAnalyticsRepository {
       const key = `${pageType}:${slug}`;
       const visits = visitMap.get(key) ?? 0;
       const crossVisits = crossVisitMap.get(key) ?? 0;
+      const builds = buildVisitorIds.get(key)?.size ?? 0;
+      const topBuiltPrize = topBuild.get(key)?.slug ?? null;
       const signups = signupMap.get(key) ?? 0;
       const conv = conversionMap.get(key);
       const conversions = conv?.conversions ?? 0;
@@ -295,6 +335,8 @@ export class PromoAnalyticsRepository {
         slug,
         visits,
         crossVisits,
+        builds,
+        topBuiltPrize,
         signups,
         conversions,
         revenue,

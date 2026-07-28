@@ -1330,6 +1330,8 @@ Filter is fixed to `chargeRunId == null` — entries from batch runs are exclude
     slug: string,
     visits: number,                          // unique visitors per page
     crossVisits: number,                     // visitors who arrived via another toolset landing page
+    builds: number,                          // unique visitors who assembled a prize in Build your prize (same visitor dedup as `visits`, so the two are directly comparable)
+    topBuiltPrize: string | null,            // slug of the combination built by the most visitors on this page; null if nobody built one in range
     signups: number,
     conversions: number,
     revenue: number,                         // AUD
@@ -1349,7 +1351,7 @@ Filter is fixed to `chargeRunId == null` — entries from batch runs are exclude
   }>
 }
 ```
-`byPage` covers every valid promo slug (evergreen prize landing pages + toolset landing pages) — pages with zero activity still appear with zero counters. `byPage` is sorted by `visits` descending.
+`byPage` covers every valid promo slug (evergreen prize landing pages + toolset landing pages) — pages with zero activity still appear with zero counters (`builds: 0, topBuiltPrize: null`). `byPage` is sorted by `visits` descending.
 
 **Inputs (query params)**:
 | Param | Required | Default | Notes |
@@ -1358,7 +1360,7 @@ Filter is fixed to `chargeRunId == null` — entries from batch runs are exclude
 | `startDate` | only if `dateRange=custom` | — | `YYYY-MM-DD`, AEST-anchored |
 | `endDate` | only if `dateRange=custom` | — | `YYYY-MM-DD`, AEST-anchored (inclusive end-of-day) |
 
-**Data source**: `PromoAnalyticsVisit` (visits + UTM source), `User.signupAttribution.promotionSlug` (signups), `PaymentEvent.eventType="BenefitsGranted"` filtered to non-refunded stages (conversions + revenue). Orchestrated by `PromoAnalyticsService.getAggregatedMetrics` + `getAggregatedByUTMSource` in `src/services/promo-analytics/PromoAnalyticsService.ts`, backed by `PromoAnalyticsRepository`.
+**Data source**: `PromoAnalyticsVisit` (visits + UTM source; `builtPrizeSlug` for `builds`/`topBuiltPrize`), `User.signupAttribution.promotionSlug` (signups), `PaymentEvent.eventType="BenefitsGranted"` filtered to non-refunded stages (conversions + revenue). Orchestrated by `PromoAnalyticsService.getAggregatedMetrics` + `getAggregatedByUTMSource` in `src/services/promo-analytics/PromoAnalyticsService.ts`, backed by `PromoAnalyticsRepository`.
 
 **Constraints**: `read` tier. `requiredPermission: promos.view`. Read-only. Note: the date range available is narrower than the dashboard endpoints — only `today | yesterday | custom`, no draw-anchored options.
 
@@ -4054,6 +4056,8 @@ If an operator requests a capability not in this document and not in the current
 ---
 
 ## Last updated
+
+`2026-07-28` — **Extended `/v1/promo-analytics` `byPage` row shape (additive; no count change).** Rows gained `builds` (unique visitors who assembled a prize in the "Build your prize" configurator on that page, deduped identically to `visits` — the two are directly comparable) and `topBuiltPrize` (the combination slug built by the most visitors on that page, or `null` when nobody built one in the range). Sourced from the same `PromoAnalyticsVisit.builtPrizeSlug` field the admin dashboard reads; no new collection, no new service call. `topBuiltPrize` is `nullable()`, not optional — it is present and `null` (not absent) on every zero-build page, matching the repository's `string | null` return type. No PII (a count and a prize-catalog slug).
 
 `2026-07-17` — **On-read freshness for spend-by-url reads (behavioral; no shape/count change).** `/v1/analytics/spend-by-url`, `/detail`, and `/v1/analytics/packages-focus` (and their admin twins) now self-refresh: a read touching the trailing 1–2 AEST days with materialized data >5 min old triggers a minimal Meta sync for just that window (insights page → missing-only destination resolve → per-day aggregate rebuild) behind a hard 12s time budget — stale-but-consistent data is served if Meta is slow, and failures never fail the read. Intraday figures therefore track Meta closely instead of lagging up to ~3h behind the sync cron (now the history/restatement backstop). Expect these calls to occasionally take a few seconds longer when they land on a stale window. Note the mental-model shift: these `read`-tier calls may now trigger WRITES to the analytics materialization itself (insights/destination upserts + aggregate rebuild — the same idempotent writes the sync cron performs); the gateway remains read-only with respect to business data, and no Norm-controllable input changes what gets written.
 

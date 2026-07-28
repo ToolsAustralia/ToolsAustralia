@@ -48,6 +48,32 @@ missing here while every other surface already had it. Logo path is derived by c
 are pre-normalised to a uniform frame, so all brand logos read at equal size in the table
 without compensation. See `docs/promo/frontend.md` for the asset normalisation details.
 
+## Promo Analytics table — Builds column added; Cross-visits deliberately kept (2026-07-28)
+
+[`PromoAnalyticsManagement`](../../src/components/admin/PromoAnalyticsManagement.tsx)'s per-page
+table gained a **Builds** column, inserted immediately after the existing **Cross-visits** column
+(same order in both the `<thead>` and each `<tbody>` row, so header and cell stay aligned). Cell
+shows `formatNumber(row.builds)` with a small sub-label line rendering the top combination
+(`getPrizeLabel(row.topBuiltPrize) ?? row.topBuiltPrize`) when one exists; the cell/header `title`
+attributes explain both states ("Nobody built a prize on this page in this period" when
+`topBuiltPrize` is `null` — never rendered as the literal string "null"). Sortable via the same
+`handleSort` / `getSortIcon` pair as every other numeric column — no separate `SortKey` type
+exists; both take `keyof PromoPageMetrics` directly, and `"builds"` is now a valid value of that
+union automatically since `builds` was added to the `PromoPageMetrics` interface. Data comes from the
+new `builds` / `topBuiltPrize` fields on `PromoPageMetrics` — see
+[docs/promo/backend.md](../promo/backend.md#prize-build-admin-surfacing--builds--topbuiltprize-2026-07-28)
+for the aggregation.
+
+**Cross-visits was NOT removed.** An earlier draft of this task assumed the column (reads
+`referrerSlug`) was structurally dead, since nothing has written a new `referrerSlug` since
+2026-07-24 (its only writer, the "Explore other toolsets" carousel, was removed when the prize
+builder's toolset reel took over that job). That premise was re-tested against the live DB and
+found false: 174 of 712 visit rows (~24%) still carry `referrerSlug`, spanning June–July, and
+remain inside the 90-day TTL — the column still renders real numbers for those date ranges. It
+will decay to all-zero on its own as those rows age out (~late October 2026), at which point
+dropping it becomes a safe one-line change. Until then it stays exactly as it was: same header,
+same cell, same `crossVisits` sort key, same `crossVisitMap` aggregation in the repository.
+
 ## Pages
 
 - `src/app/admin/page.tsx` — entry. Auth guard uses `usePermissions().isStaff` (Task 12, 2026-05-20). The legacy `useEffect` redirect and `session.user?.role !== "admin"` early-return have been removed; the component now checks `isLoading` / `isStaff` directly and calls `router.push("/")` when not staff. The admin layout's server-side guard (Task 14) is the primary gating mechanism; this is belt-and-suspenders for the client render.

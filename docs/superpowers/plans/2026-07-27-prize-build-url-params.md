@@ -1576,23 +1576,29 @@ Then complete a real purchase in Stripe test mode from a build URL and confirm
 - Produces: `PromoPageMetrics.builds: number` (unique visitors who built something) and
   `PromoPageMetrics.topBuiltPrize: string | null`.
 
-**Context — why this replaces rather than adds a column:** the table already has a
-**Cross-visits** column (`PromoAnalyticsManagement.tsx:553`, *"Visits from other toolset landing
-pages"*) reading `referrerSlug`. Per `docs/promo/frontend.md` and `src/docs/PROMOTION_ANALYTICS.md:111`,
-**nothing has written that key** since the "explore other toolsets" carousel was deleted — the
-column measures exactly the cross-page prize navigation this redesign removed. Replacing it puts
-a live number where a structurally dead one sits.
+**Context — ADD alongside, do NOT replace (corrected 2026-07-28).** An earlier draft of this task
+assumed the existing **Cross-visits** column (`PromoAnalyticsManagement.tsx:553`, reading
+`referrerSlug`) was structurally dead and could be replaced, on the strength of
+`docs/promo/frontend.md` and `src/docs/PROMOTION_ANALYTICS.md:111` saying nothing writes that key
+any more.
 
-- [ ] **Step 1: Confirm the column really is dead before removing it**
+**That premise was tested against the live database and is false.** Of 712 visit rows, **174
+(~24%) carry a `referrerSlug`** — 55 on 2026-06-22, 24 on 06-30, 22 on 07-01, trailing to 1–4/day,
+last written **2026-07-24**, none since. So writes have indeed stopped, but ~90 days of history
+remain inside the collection's TTL, and the column still renders real numbers for any June/July
+date range. Removing it would delete a live historical view.
 
-Run against production data:
+**User ruling (2026-07-28): add `Builds` alongside; keep `Cross-visits`.** It will drift to zero on
+its own as rows age out (around late October), and can be dropped later in a one-line change.
+
+- [ ] **Step 1: Re-confirm the current state before touching the table**
 
 ```js
 db.promoanalyticsvisits.countDocuments({ referrerSlug: { $exists: true, $ne: "" } })
 ```
 
-Expected: 0 for any period after the carousel's deletion. **If it is non-zero, stop** and ask the
-user whether to keep the column — do not delete a column that still carries data.
+If this now returns **0**, note it in your report — but still do NOT remove the column; the ruling
+above stands regardless. If it returns non-zero (expected), proceed with the additive change.
 
 - [ ] **Step 2: Add the aggregation**
 
@@ -1641,9 +1647,9 @@ In the per-page assembly loop (~line 238, beside `const crossVisits = …`) add:
       const topBuiltPrize = topBuild.get(key)?.slug ?? null;
 ```
 
-and include `builds` and `topBuiltPrize` in the pushed `PromoPageMetrics` object (~line 257,
-replacing `crossVisits`). Update the `PromoPageMetrics` interface (line ~23): remove
-`crossVisits: number;` and add:
+and include `builds` and `topBuiltPrize` in the pushed `PromoPageMetrics` object (~line 257)
+**alongside the existing `crossVisits`** — do not remove it. Add to the `PromoPageMetrics`
+interface (line ~23), keeping `crossVisits: number;` exactly as it is:
 
 ```ts
   /** Unique visitors who assembled a prize on this page (touched at least one reel). */
@@ -1652,11 +1658,12 @@ replacing `crossVisits`). Update the `PromoPageMetrics` interface (line ~23): re
   topBuiltPrize: string | null;
 ```
 
-Delete the now-unused cross-visit aggregation block and `crossVisitMap`.
+**Keep** the existing cross-visit aggregation block and `crossVisitMap` exactly as they are — the
+new build aggregation sits beside them, it does not replace them.
 
-- [ ] **Step 3: Swap the table column**
+- [ ] **Step 3: ADD the Builds column (leave Cross-visits in place)**
 
-Replace the Cross-visits header (lines 549-557) with:
+Insert a new header immediately AFTER the existing Cross-visits header (which ends at line ~557):
 
 ```tsx
                   <th className="text-right p-3 font-semibold text-gray-800 dark:text-neutral-100">
@@ -1670,7 +1677,8 @@ Replace the Cross-visits header (lines 549-557) with:
                   </th>
 ```
 
-and the cell (lines 626-633) with:
+and insert a new cell immediately AFTER the existing Cross-visits cell (which ends at line ~633),
+so header and cell order stay aligned:
 
 ```tsx
                     <td
@@ -1690,9 +1698,8 @@ and the cell (lines 626-633) with:
                     </td>
 ```
 
-Update the `handleSort` union type and any `SortKey` definition: replace `"crossVisits"` with
-`"builds"`. Search the file for every remaining `crossVisits` reference and remove it —
-`npm run type-check` will fail until they are all gone.
+Update the `handleSort` union type and any `SortKey` definition to **add** `"builds"` beside the
+existing `"crossVisits"` — do not remove `"crossVisits"`. Confirm sorting works on both columns.
 
 - [ ] **Step 4: Type-check, lint, verify**
 
@@ -1703,9 +1710,10 @@ the sub-label shows the top combination, and Visits / Signups / Conversions / Re
 
 - [ ] **Step 5: Docs + commit (ASK FIRST)**
 
-Update `docs/admin/frontend.md` (the column swap and why Cross-visits was retired),
-`docs/promo/backend.md` (the new aggregation), and the `mongodb` domain docs. Ask before
-committing.
+Update `docs/admin/frontend.md` (the NEW Builds column, and that Cross-visits was deliberately
+KEPT because ~174 historical rows remain inside the 90-day TTL — it will reach zero around late
+October, at which point it can be dropped), `docs/promo/backend.md` (the new aggregation), and the
+`mongodb` domain docs. Ask before committing.
 
 ---
 
