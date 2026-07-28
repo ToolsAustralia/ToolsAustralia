@@ -17,12 +17,14 @@ import {
   ArrowDown,
   Hash,
   HelpCircle,
+  Layers,
 } from "lucide-react";
 import { MetricCard } from "@/components/admin/metrics/shared/MetricCard";
 import { formatNumber, formatPercentage } from "@/utils/metrics/formatters";
 import { formatCurrency } from "@/utils/metrics/formatters";
 import { queryKeys } from "@/lib/queryKeys";
 import { getPrizeLabel } from "@/config/prize-summaries";
+import { isToolsetLandingSlug, getDefaultPrizeForToolsetSlug } from "@/config/promo-landing-slugs";
 import { DateRange } from "@/components/admin/DateRangeToggle";
 import { DateRangeDropdown } from "@/components/admin/overview/DateRangeDropdown";
 import { AdminMobileLayoutDateRangeShell } from "@/app/admin/component/AdminMobileLayoutDateRangeShell";
@@ -44,10 +46,24 @@ interface PromoPageMetrics {
   builds: number;
   /** The combination built by the most visitors on this page, or null if nobody built one. */
   topBuiltPrize: string | null;
+  /** Every combination built on this page, most-built first. Empty when nobody built one. */
+  buildDistribution: Array<{ builtPrizeSlug: string; visitors: number }>;
   signups: number;
   conversions: number;
   revenue: number;
   visitToSignupRate: number;
+  signupToConversionRate: number;
+  overallConversionRate: number;
+}
+
+/** Grouped by the BUILT combination itself, across every landing page (not per-page). */
+interface BuiltPrizeMetrics {
+  builtPrizeSlug: string;
+  builders: number;
+  signups: number;
+  conversions: number;
+  revenue: number;
+  builderToSignupRate: number;
   signupToConversionRate: number;
   overallConversionRate: number;
 }
@@ -72,8 +88,38 @@ interface PromoAnalyticsResponse {
     totalRevenue: number;
     byPage: PromoPageMetrics[];
     byUTMSource?: UTMSourceMetrics[];
+    byBuiltPrize?: BuiltPrizeMetrics[];
     dateRange: { start: string; end: string };
   };
+}
+
+/**
+ * The page's OWN default combination — what a visitor sees if they never touch a reel.
+ * Toolset landing slugs (ryobi/milwaukee/dewalt/makita/hikoki) resolve via
+ * getDefaultPrizeForToolsetSlug; evergreen pages' `slug` already IS the prize slug.
+ */
+function getPageDefaultPrizeSlug(slug: string): string {
+  return isToolsetLandingSlug(slug) ? getDefaultPrizeForToolsetSlug(slug) : slug;
+}
+
+/**
+ * "Switched away" = builders whose built combination differs from the page's own default.
+ * Percentage is of `builds` (visitors who built anything), not `visits` — builds is the
+ * meaningful denominator ("of the people who built something, how many picked something
+ * other than the default"). Returns `switchAwayPct: null` when `builds` is 0 so the caller
+ * can render an em dash instead of a misleading "0%".
+ */
+function getSwitchAwayRate(row: PromoPageMetrics): {
+  defaultSlug: string;
+  switchAwayCount: number;
+  switchAwayPct: number | null;
+} {
+  const defaultSlug = getPageDefaultPrizeSlug(row.slug);
+  const switchAwayCount = (row.buildDistribution ?? [])
+    .filter((d) => d.builtPrizeSlug !== defaultSlug)
+    .reduce((sum, d) => sum + d.visitors, 0);
+  const switchAwayPct = row.builds > 0 ? (switchAwayCount / row.builds) * 100 : null;
+  return { defaultSlug, switchAwayCount, switchAwayPct };
 }
 
 async function fetchPromoAnalytics(params: {
@@ -604,10 +650,18 @@ export default function PromoAnalyticsManagement() {
                   <th className="hidden md:table-cell text-right p-3 font-semibold text-gray-800 dark:text-neutral-100">
                     Conv %
                   </th>
+                  <th
+                    className="hidden md:table-cell text-right p-3 font-semibold text-gray-800 dark:text-neutral-100"
+                    title="Share of builders who assembled a different combination than this page's own default build"
+                  >
+                    Switched away %
+                  </th>
                 </tr>
               </thead>
               <tbody>
-                {sortedPages.map((row) => (
+                {sortedPages.map((row) => {
+                  const { defaultSlug, switchAwayCount, switchAwayPct } = getSwitchAwayRate(row);
+                  return (
                   <tr
                     key={`${row.pageType}-${row.slug}`}
                     className="border-t border-gray-100 dark:border-neutral-800 hover:bg-gray-50 dark:hover:bg-neutral-800/60 cursor-pointer transition-colors"
@@ -672,11 +726,108 @@ export default function PromoAnalyticsManagement() {
                     <td className="hidden md:table-cell p-3 text-right text-gray-600 dark:text-neutral-400">{formatPercentage(row.visitToSignupRate)}</td>
                     <td className="hidden md:table-cell p-3 text-right text-gray-600 dark:text-neutral-400">{formatPercentage(row.signupToConversionRate)}</td>
                     <td className="hidden md:table-cell p-3 text-right text-gray-600 dark:text-neutral-400">{formatPercentage(row.overallConversionRate)}</td>
+                    <td
+                      className="hidden md:table-cell p-3 text-right text-gray-600 dark:text-neutral-400"
+                      title={
+                        row.builds > 0
+                          ? `${formatNumber(switchAwayCount)} of ${formatNumber(row.builds)} builders picked a different combination than this page's default (${getPrizeLabel(defaultSlug) ?? defaultSlug})`
+                          : "Nobody built a prize on this page in this period"
+                      }
+                    >
+                      {switchAwayPct === null ? "—" : formatPercentage(switchAwayPct)}
+                    </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           )}
+        </div>
+      </div>
+
+      {/* By Built Prize breakdown */}
+      <div className="bg-white dark:bg-neutral-900 rounded-lg sm:rounded-xl shadow-sm dark:shadow-none border border-gray-200 dark:border-neutral-700 overflow-hidden">
+        <h3 className="text-lg font-semibold text-gray-900 dark:text-white p-4 border-b border-gray-200 dark:border-neutral-700 flex items-center gap-2">
+          <Layers className="w-5 h-5 text-indigo-500 dark:text-indigo-400" />
+          By Built Prize
+        </h3>
+        <p className="text-sm text-gray-500 dark:text-neutral-400 px-4 pt-2 pb-1">
+          Builders, registrations, conversions and revenue grouped by the exact combination
+          assembled in Build your prize, across every landing page — do Kincrome-box builders
+          convert better than Milwaukee-box builders?
+        </p>
+        <div className="overflow-x-auto">
+          {isLoading ? (
+            <div className="p-8 text-center text-gray-500 dark:text-neutral-400">Loading…</div>
+          ) : (() => {
+            const rows = data?.byBuiltPrize ?? [];
+            if (rows.length === 0) {
+              return (
+                <div className="p-8 text-center text-gray-500 dark:text-neutral-400">
+                  No builds recorded for this period.
+                </div>
+              );
+            }
+            return (
+              <table className="w-full text-sm">
+                <thead className="bg-gray-50 dark:bg-neutral-800 border-b border-gray-200 dark:border-neutral-700">
+                  <tr>
+                    <th className="text-left p-3 font-semibold text-gray-800 dark:text-neutral-100">Built prize</th>
+                    <th
+                      className="text-right p-3 font-semibold text-gray-800 dark:text-neutral-100"
+                      title="Unique visitors who assembled this combination, on any landing page"
+                    >
+                      Builders
+                    </th>
+                    <th
+                      className="text-right p-3 font-semibold text-gray-800 dark:text-neutral-100"
+                      title="New accounts whose signup carried this built combination"
+                    >
+                      Registrations
+                    </th>
+                    <th className="text-right p-3 font-semibold text-gray-800 dark:text-neutral-100">Conversions</th>
+                    <th className="text-right p-3 font-semibold text-gray-800 dark:text-neutral-100">Revenue</th>
+                    <th className="hidden md:table-cell text-right p-3 font-semibold text-gray-800 dark:text-neutral-100">
+                      B→S %
+                    </th>
+                    <th className="hidden md:table-cell text-right p-3 font-semibold text-gray-800 dark:text-neutral-100">
+                      S→C %
+                    </th>
+                    <th className="hidden md:table-cell text-right p-3 font-semibold text-gray-800 dark:text-neutral-100">
+                      Conv %
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map((row) => (
+                    <tr
+                      key={row.builtPrizeSlug}
+                      className="border-t border-gray-100 dark:border-neutral-800 hover:bg-gray-50 dark:hover:bg-neutral-800/60 transition-colors"
+                    >
+                      <td className="p-3 font-medium text-gray-900 dark:text-white">
+                        {getPrizeLabel(row.builtPrizeSlug) ?? row.builtPrizeSlug}
+                      </td>
+                      <td className="p-3 text-right font-mono text-gray-900 dark:text-white tabular-nums">
+                        {formatNumber(row.builders)}
+                      </td>
+                      <td className="p-3 text-right font-mono text-gray-900 dark:text-white tabular-nums">
+                        {formatNumber(row.signups)}
+                      </td>
+                      <td className="p-3 text-right font-mono text-gray-900 dark:text-white tabular-nums">
+                        {formatNumber(row.conversions)}
+                      </td>
+                      <td className="p-3 text-right font-mono text-gray-900 dark:text-white tabular-nums">
+                        {formatCurrency(row.revenue)}
+                      </td>
+                      <td className="hidden md:table-cell p-3 text-right text-gray-600 dark:text-neutral-400">{formatPercentage(row.builderToSignupRate)}</td>
+                      <td className="hidden md:table-cell p-3 text-right text-gray-600 dark:text-neutral-400">{formatPercentage(row.signupToConversionRate)}</td>
+                      <td className="hidden md:table-cell p-3 text-right text-gray-600 dark:text-neutral-400">{formatPercentage(row.overallConversionRate)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            );
+          })()}
         </div>
       </div>
 

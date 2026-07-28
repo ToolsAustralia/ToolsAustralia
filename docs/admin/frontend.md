@@ -74,6 +74,61 @@ will decay to all-zero on its own as those rows age out (~late October 2026), at
 dropping it becomes a safe one-line change. Until then it stays exactly as it was: same header,
 same cell, same `crossVisits` sort key, same `crossVisitMap` aggregation in the repository.
 
+## Promo Analytics — Switched-away % column + By Built Prize table (2026-07-28)
+
+Surfaces the two read-side additions from
+[docs/promo/backend.md](../promo/backend.md#read-side-gap-closure--builddistribution--getaggregatedbybuiltprize-2026-07-28)
+(`buildDistribution` on `PromoPageMetrics`, `PromoAnalyticsService.getAggregatedByBuiltPrize` /
+`data.byBuiltPrize` on `GET /api/admin/promo-analytics`) in the admin UI. Both additions are
+in [`PromoAnalyticsManagement.tsx`](../../src/components/admin/PromoAnalyticsManagement.tsx).
+
+**a) "Switched away %" column** — new trailing column on the existing per-page table (after
+`Conv %`; same `hidden md:table-cell` treatment and non-sortable static-text style as the other
+three rate columns — it isn't a stored field on `PromoPageMetrics`, it's derived client-side, so
+it follows the convention already used by `visitToSignupRate` et al. of never getting a sort
+button). Header + cell count: **11 `<th>` / 11 `<td>`** (was 10/10 before this task).
+
+Derivation (`getSwitchAwayRate` + `getPageDefaultPrizeSlug`, both module-level pure functions
+above the component): the page's OWN default combination is what a visitor sees without
+touching a reel — `getDefaultPrizeForToolsetSlug(row.slug)` for a toolset landing slug,
+`row.slug` itself when `isToolsetLandingSlug(row.slug)` is false (evergreen pages' `slug` already
+IS a prize slug). "Switched away" sums `buildDistribution` visitor counts for every entry whose
+`builtPrizeSlug` differs from that default, as a percentage of `builds` (NOT `visits` — `builds`
+is the meaningful denominator: "of the people who built something, how many picked something
+other than the default"). **`builds === 0` renders an em dash** (`—`), never `"0%"` or `"NaN%"` —
+those would misleadingly read as "nobody switches" rather than "nobody built anything to measure
+switching on." The `title` tooltip on the non-zero-builds cell spells out the raw counts (e.g.
+"3 of 8 builders picked a different combination than this page's default (Milwaukee Kincrome)");
+the zero-builds cell's tooltip reads "Nobody built a prize on this page in this period", matching
+the existing Builds-column tooltip idiom.
+
+**b) "By Built Prize" table** — new table rendered below the per-page table, from
+`data?.byBuiltPrize ?? []` (optional-chained the same way `data?.byUTMSource` already is in this
+file, even though the API always includes the key — matches existing sibling-field convention).
+Mirrors the Channel Attribution table's structure (static IIFE-computed `rows`, explicit
+empty-state div — "No builds recorded for this period." — never a bare header with an empty
+`<tbody>`, non-sortable, `hidden md:table-cell` on the three rate columns). Columns: Built prize
+(via `getPrizeLabel(row.builtPrizeSlug) ?? row.builtPrizeSlug`, matching every other slug→label
+cell in this file), Builders, Registrations, Conversions, Revenue, B→S %, S→C %, Conv %. **8
+`<th>` / 8 `<td>`**. No row click / detail modal — not requested, and `byBuiltPrize` rows don't
+map to a single landing page the way `PromoPageDetailModal` expects.
+
+Full-file count after this task: **27 `<th>` / 27 `<td>`** across all three tables (UTM Channel
+Attribution 8/8 + per-page 11/11 + By Built Prize 8/8) — verified by direct regex count, not by
+inspection.
+
+**Norm lockstep (CLAUDE.md rule 10).** `buildDistribution` and `byBuiltPrize` are now mirrored to
+Norm — see
+[docs/internal-norm/norm-context.md](../internal-norm/norm-context.md#get-v1promo-analytics),
+which closes the "Not yet mirrored to Norm" gap flagged in the backend task's note. Wiring
+`byBuiltPrize` into the Norm response required a small addition to
+[`src/app/api/internal/norm/v1/promo-analytics/route.ts`](../../src/app/api/internal/norm/v1/promo-analytics/route.ts)
+(a third parallel `PromoAnalyticsService.getAggregatedByBuiltPrize` call + one field on the
+response, mirroring the admin route's own already-verified wiring three lines above it) —
+without it, declaring `byBuiltPrize` as a required schema field while the route never returned it
+would have made `withNorm`'s `responseSchema` validation genuinely 500 on every call to this
+previously-working endpoint.
+
 ## Pages
 
 - `src/app/admin/page.tsx` — entry. Auth guard uses `usePermissions().isStaff` (Task 12, 2026-05-20). The legacy `useEffect` redirect and `session.user?.role !== "admin"` early-return have been removed; the component now checks `isLoading` / `isStaff` directly and calls `router.push("/")` when not staff. The admin layout's server-side guard (Task 14) is the primary gating mechanism; this is belt-and-suspenders for the client render.
@@ -201,10 +256,12 @@ stays side-effect-free (the clone is never persisted — the canonical sweep is 
 own `/api/partner-discount/queue`). The raw `partnerDiscountQueue` is still in the payload for full
 history, but the card uses the reconciled summary.
 
-> Not yet mirrored to Norm: `partnerDiscountSummary` is on the admin `buildAdminUserProfile` shape,
-> which Norm's `users.get` does not consume (Norm uses a separate projection). It could be exposed to
-> Norm (counts + dates are PII-safe) — flagged, not wired. The same applies to the 2026-07-09 additions
-> (`partnerAccessRing`, `subscription.nextRenewalEntries`, `subscription.cancelledAt`).
+> **Partially mirrored to Norm.** The 2026-07-09 additions `partnerAccessRing`,
+> `subscription.nextRenewalEntries`, and `subscription.cancelledAt` are now on Norm's
+> `/v1/users/{id}` — see [docs/internal-norm/norm-context.md](../internal-norm/norm-context.md).
+> `partnerDiscountSummary` itself is still **not** mirrored: it's on the admin
+> `buildAdminUserProfile` shape, which Norm's `users.get` does not consume (Norm uses a separate
+> projection). It could be exposed to Norm (counts + dates are PII-safe) — flagged, not wired.
 
 ## A/B VariantConfigEditor — "Static hero image only (disable hero video)" (2026-06-15)
 

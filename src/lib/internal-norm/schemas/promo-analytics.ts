@@ -25,10 +25,35 @@ const PromoPageMetricsSchema = z.object({
     .string()
     .nullable()
     .describe("Slug of the most-built combination on this page, or null if nobody built one"),
+  buildDistribution: z
+    .array(
+      z.object({
+        builtPrizeSlug: z.string(),
+        visitors: z.number().int().nonnegative(),
+      })
+    )
+    .describe(
+      "Every combination built on this page, most-built first. Always present (an array), empty when nobody built one — do not confuse with topBuiltPrize's nullable single value."
+    ),
   signups: z.number().int().nonnegative(),
   conversions: z.number().int().nonnegative(),
   revenue: z.number().nonnegative().describe("AUD dollars"),
   visitToSignupRate: z.number().describe("Percent (0-100)"),
+  signupToConversionRate: z.number().describe("Percent (0-100)"),
+  overallConversionRate: z.number().describe("Percent (0-100)"),
+});
+
+const BuiltPrizeMetricsSchema = z.object({
+  builtPrizeSlug: z.string(),
+  builders: z
+    .number()
+    .int()
+    .nonnegative()
+    .describe("Unique visitors who assembled this combination, on any landing page"),
+  signups: z.number().int().nonnegative().describe("New accounts whose signupAttribution.builtPrizeSlug is this combination"),
+  conversions: z.number().int().nonnegative().describe("Purchases whose PaymentEvent.data.builtPrizeSlug is this combination"),
+  revenue: z.number().nonnegative().describe("AUD dollars"),
+  builderToSignupRate: z.number().describe("Percent (0-100)"),
   signupToConversionRate: z.number().describe("Percent (0-100)"),
   overallConversionRate: z.number().describe("Percent (0-100)"),
 });
@@ -52,6 +77,7 @@ export const NormPromoAnalyticsSummarySchema = z.object({
   totalRevenue: z.number().nonnegative().describe("AUD dollars"),
   byPage: z.array(PromoPageMetricsSchema),
   byUTMSource: z.array(UTMSourceMetricsSchema),
+  byBuiltPrize: z.array(BuiltPrizeMetricsSchema),
 });
 
 const UTMCampaignMetricsSchema = z.object({

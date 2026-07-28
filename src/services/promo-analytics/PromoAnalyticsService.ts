@@ -11,6 +11,7 @@ import PromoAnalyticsRepository, {
   type PromoAnalyticsSummary,
   type PromoPageMetrics,
   type PromoAnalyticsByUTMSummary,
+  type PromoAnalyticsByBuiltPrizeSummary,
 } from "@/repositories/PromoAnalyticsRepository";
 import { isValidPromoSlug, getPageTypeFromSlug } from "@/utils/promo-analytics/validate-promo-slug";
 import type { PromoPageType } from "@/models/PromoAnalyticsVisit";
@@ -146,6 +147,18 @@ export class PromoAnalyticsService {
     endDate: Date
   ): Promise<PromoAnalyticsByUTMSummary> {
     return PromoAnalyticsRepository.getAggregatedByUTMSource(startDate, endDate);
+  }
+
+  /**
+   * Get aggregated metrics by BUILT PRIZE (e.g. makita-kincrome) across every landing page.
+   * Answers "which combinations get built more than landed on?" and "do builders of one
+   * combination convert better than builders of another?"
+   */
+  async getAggregatedByBuiltPrize(
+    startDate: Date,
+    endDate: Date
+  ): Promise<PromoAnalyticsByBuiltPrizeSummary> {
+    return PromoAnalyticsRepository.getAggregatedByBuiltPrize(startDate, endDate);
   }
 
   /**

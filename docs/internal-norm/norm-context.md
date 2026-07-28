@@ -1332,6 +1332,10 @@ Filter is fixed to `chargeRunId == null` — entries from batch runs are exclude
     crossVisits: number,                     // visitors who arrived via another toolset landing page
     builds: number,                          // unique visitors who assembled a prize in Build your prize (same visitor dedup as `visits`, so the two are directly comparable)
     topBuiltPrize: string | null,            // slug of the combination built by the most visitors on this page; null if nobody built one in range
+    buildDistribution: Array<{               // EVERY combination built on this page, most-built first (visitors desc, builtPrizeSlug asc tie-break). ALWAYS an array — [] when nobody built one. `topBuiltPrize` is derived from buildDistribution[0]?.builtPrizeSlug, so the two can never disagree on a tie.
+      builtPrizeSlug: string,
+      visitors: number                       // unique visitors who built THIS combination on THIS page
+    }>,
     signups: number,
     conversions: number,
     revenue: number,                         // AUD
@@ -1348,10 +1352,20 @@ Filter is fixed to `chargeRunId == null` — entries from batch runs are exclude
     visitToSignupRate: number,               // percent
     signupToConversionRate: number,          // percent
     overallConversionRate: number            // percent
+  }>,
+  byBuiltPrize: Array<{                      // grouped by the BUILT combination itself, across EVERY landing page (not per-page) — answers "which combinations get built more than landed on" and "do Kincrome-box builders convert better than Milwaukee-box builders"
+    builtPrizeSlug: string,
+    builders: number,                        // unique visitors who assembled this combination, on any landing page
+    signups: number,                         // new accounts whose signupAttribution.builtPrizeSlug is this combination
+    conversions: number,                     // purchases whose PaymentEvent.data.builtPrizeSlug is this combination
+    revenue: number,                         // AUD
+    builderToSignupRate: number,             // percent (0-100)
+    signupToConversionRate: number,          // percent (0-100)
+    overallConversionRate: number            // percent (0-100)
   }>
 }
 ```
-`byPage` covers every valid promo slug (evergreen prize landing pages + toolset landing pages) — pages with zero activity still appear with zero counters (`builds: 0, topBuiltPrize: null`). `byPage` is sorted by `visits` descending.
+`byPage` covers every valid promo slug (evergreen prize landing pages + toolset landing pages) — pages with zero activity still appear with zero counters (`builds: 0, topBuiltPrize: null, buildDistribution: []`). `byPage` is sorted by `visits` descending. `byBuiltPrize` covers the union of every combination seen anywhere in the range via a builder row, a signup, or a conversion (a combination can appear with `builders: 0` if it was built before the window but converted inside it), sorted by `builders` descending with `builtPrizeSlug` ascending as a deterministic tie-break.
 
 **Inputs (query params)**:
 | Param | Required | Default | Notes |
@@ -1360,7 +1374,7 @@ Filter is fixed to `chargeRunId == null` — entries from batch runs are exclude
 | `startDate` | only if `dateRange=custom` | — | `YYYY-MM-DD`, AEST-anchored |
 | `endDate` | only if `dateRange=custom` | — | `YYYY-MM-DD`, AEST-anchored (inclusive end-of-day) |
 
-**Data source**: `PromoAnalyticsVisit` (visits + UTM source; `builtPrizeSlug` for `builds`/`topBuiltPrize`), `User.signupAttribution.promotionSlug` (signups), `PaymentEvent.eventType="BenefitsGranted"` filtered to non-refunded stages (conversions + revenue). Orchestrated by `PromoAnalyticsService.getAggregatedMetrics` + `getAggregatedByUTMSource` in `src/services/promo-analytics/PromoAnalyticsService.ts`, backed by `PromoAnalyticsRepository`.
+**Data source**: `PromoAnalyticsVisit` (visits + UTM source; `builtPrizeSlug` for `builds`/`topBuiltPrize`/`buildDistribution`/`byBuiltPrize.builders`), `User.signupAttribution.promotionSlug` / `.builtPrizeSlug` (signups), `PaymentEvent.eventType="BenefitsGranted"` filtered to non-refunded stages (conversions + revenue), matched by `PaymentEvent.data.builtPrizeSlug` for `byBuiltPrize`. Orchestrated by `PromoAnalyticsService.getAggregatedMetrics` + `getAggregatedByUTMSource` + `getAggregatedByBuiltPrize` in `src/services/promo-analytics/PromoAnalyticsService.ts`, backed by `PromoAnalyticsRepository`.
 
 **Constraints**: `read` tier. `requiredPermission: promos.view`. Read-only. Note: the date range available is narrower than the dashboard endpoints — only `today | yesterday | custom`, no draw-anchored options.
 
@@ -4056,6 +4070,36 @@ If an operator requests a capability not in this document and not in the current
 ---
 
 ## Last updated
+
+`2026-07-28` — **Closed the `/v1/promo-analytics` mirroring gap: `buildDistribution` + `byBuiltPrize` (additive; no endpoint-count change).** The prior entry on this date wired `builds`/`topBuiltPrize`
+but explicitly deferred `buildDistribution` and `byBuiltPrize` as "next-task work per CLAUDE.md rule
+10" (see `docs/promo/backend.md`) — this entry closes that. `byPage` rows gained
+`buildDistribution: Array<{builtPrizeSlug, visitors}>` (the FULL per-page build breakdown,
+most-built first, `[]` when nobody built one — `NormPromoAnalyticsSummarySchema`'s
+`PromoPageMetricsSchema` field is a plain `z.array(...)`, always present, same non-optional
+treatment as `byPage`/`byUTMSource` themselves; do not confuse with `topBuiltPrize`'s
+`.nullable()` single-value field two lines above it in the schema — different presence
+semantics for a reason: `topBuiltPrize` is one nullable slug, `buildDistribution` is always an
+array, just sometimes empty). The summary also gained a new top-level `byBuiltPrize` array (new
+`BuiltPrizeMetricsSchema`) — the same `PromoAnalyticsService.getAggregatedByBuiltPrize` aggregation
+the admin `/api/admin/promo-analytics` route already exposes, grouped by the BUILT combination
+across every landing page instead of per-page: `builders` / `signups` / `conversions` / `revenue`
+/ three rate fields, all plain non-negative numbers — no nullable/optional fields on this shape,
+every field is always computed and present (a combination that appears via a Set union of
+builder-rows/signups/conversions can legitimately have `builders: 0`, but the FIELD itself is
+never absent). Wiring this into the actual Norm route
+(`src/app/api/internal/norm/v1/promo-analytics/route.ts`) required adding a third parallel
+`getAggregatedByBuiltPrize` call alongside the two calls already there — the admin route had
+already been doing this three-way `Promise.all` since the backend task; the Norm route had not.
+Declaring `byBuiltPrize` as a required schema field without that route change would have made
+`withNorm`'s `responseSchema` validation 500 on every call to this previously-working endpoint —
+verified live via `npm run norm:smoke` (real DB, not a mock): a `custom`-range call returned
+`byBuiltPrize:[{"builtPrizeSlug":"milwaukee-milwaukee","builders":1,...}]` and a `byPage` row with
+a populated `buildDistribution`, confirming schema and route now agree end-to-end. Also surfaced
+in the admin UI in the same task — see
+[docs/admin/frontend.md](../admin/frontend.md#promo-analytics--switched-away--column--by-built-prize-table-2026-07-28).
+No PII in either new shape — prize-catalog slugs and counts only, same as every other field on
+this endpoint.
 
 `2026-07-28` — **Extended `/v1/promo-analytics` `byPage` row shape (additive; no count change).** Rows gained `builds` (unique visitors who assembled a prize in the "Build your prize" configurator on that page, deduped identically to `visits` — the two are directly comparable) and `topBuiltPrize` (the combination slug built by the most visitors on that page, or `null` when nobody built one in the range). Sourced from the same `PromoAnalyticsVisit.builtPrizeSlug` field the admin dashboard reads; no new collection, no new service call. `topBuiltPrize` is `nullable()`, not optional — it is present and `null` (not absent) on every zero-build page, matching the repository's `string | null` return type. No PII (a count and a prize-catalog slug).
 

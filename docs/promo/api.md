@@ -23,3 +23,10 @@ Under `/api/admin/**` (in [admin](../admin/)):
 - Promo creation / scheduling
 - Banner text management
 - Analytics dashboards
+
+`GET /api/admin/promo-analytics` (route lives under the `admin` domain, see
+[docs/admin/api.md](../admin/api.md)) returns, as of 2026-07-28: `byPage` (each row now also
+carrying `buildDistribution`, the full built-prize distribution for that page — see
+[backend.md](backend.md#read-side-gap-closure--builddistribution--getaggregatedbybuiltprize-2026-07-28)),
+`byUTMSource`, and the new `byBuiltPrize` (cross-page, grouped by the combination actually built,
+not by landing page).

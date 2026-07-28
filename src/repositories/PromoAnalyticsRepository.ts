@@ -25,6 +25,8 @@ export interface PromoPageMetrics {
   builds: number;
   /** The combination built by the most visitors on this page, or null if nobody built one. */
   topBuiltPrize: string | null;
+  /** Every combination built on this page, most-built first. Empty when nobody built one. */
+  buildDistribution: Array<{ builtPrizeSlug: string; visitors: number }>;
   signups: number;
   conversions: number;
   revenue: number;
@@ -54,6 +56,25 @@ export interface UTMSourceMetrics {
 
 export interface PromoAnalyticsByUTMSummary {
   byUTMSource: UTMSourceMetrics[];
+}
+
+export interface BuiltPrizeMetrics {
+  builtPrizeSlug: string;
+  /** Unique visitors who built this combination, across every landing page. */
+  builders: number;
+  /** New accounts whose signupAttribution.builtPrizeSlug is this combination. */
+  signups: number;
+  /** Purchases whose PaymentEvent.data.builtPrizeSlug is this combination. */
+  conversions: number;
+  /** AUD dollars from those purchases. */
+  revenue: number;
+  builderToSignupRate: number;
+  signupToConversionRate: number;
+  overallConversionRate: number;
+}
+
+export interface PromoAnalyticsByBuiltPrizeSummary {
+  byBuiltPrize: BuiltPrizeMetrics[];
 }
 
 /**
@@ -225,17 +246,24 @@ export class PromoAnalyticsRepository {
     ]).exec();
 
     const buildVisitorIds = new Map<string, Set<string>>();
-    const topBuild = new Map<string, { slug: string; count: number }>();
+    const buildDistributionMap = new Map<string, Array<{ builtPrizeSlug: string; visitors: number }>>();
     for (const r of buildAgg) {
       const key = `${r._id.pageType}:${r._id.slug}`;
       const ids = buildVisitorIds.get(key) ?? new Set<string>();
       for (const id of r.visitorIds) ids.add(id);
       buildVisitorIds.set(key, ids);
 
-      const current = topBuild.get(key);
-      if (!current || r.visitorIds.length > current.count) {
-        topBuild.set(key, { slug: r._id.builtPrizeSlug, count: r.visitorIds.length });
-      }
+      const distribution = buildDistributionMap.get(key) ?? [];
+      distribution.push({ builtPrizeSlug: r._id.builtPrizeSlug, visitors: r.visitorIds.length });
+      buildDistributionMap.set(key, distribution);
+    }
+    // Deterministic order: visitors descending, builtPrizeSlug ascending as a tie-break.
+    // `topBuiltPrize` below is derived from this same sorted list (single source of truth),
+    // so it can no longer disagree with `buildDistribution[0]` on a tie.
+    for (const distribution of buildDistributionMap.values()) {
+      distribution.sort(
+        (a, b) => b.visitors - a.visitors || (a.builtPrizeSlug < b.builtPrizeSlug ? -1 : 1)
+      );
     }
 
     // 2. Aggregate signups from User (signupAttribution.promotionSlug + createdAt)
@@ -315,7 +343,8 @@ export class PromoAnalyticsRepository {
       const visits = visitMap.get(key) ?? 0;
       const crossVisits = crossVisitMap.get(key) ?? 0;
       const builds = buildVisitorIds.get(key)?.size ?? 0;
-      const topBuiltPrize = topBuild.get(key)?.slug ?? null;
+      const buildDistribution = buildDistributionMap.get(key) ?? [];
+      const topBuiltPrize = buildDistribution[0]?.builtPrizeSlug ?? null;
       const signups = signupMap.get(key) ?? 0;
       const conv = conversionMap.get(key);
       const conversions = conv?.conversions ?? 0;
@@ -337,6 +366,7 @@ export class PromoAnalyticsRepository {
         crossVisits,
         builds,
         topBuiltPrize,
+        buildDistribution,
         signups,
         conversions,
         revenue,
@@ -521,6 +551,104 @@ export class PromoAnalyticsRepository {
     byUTMSource.sort((a, b) => b.signups - a.signups);
 
     return { byUTMSource };
+  }
+
+  /**
+   * Aggregate metrics by BUILT PRIZE (e.g. makita-kincrome) across every landing page.
+   * Answers: which combinations get built more than they get landed on, and do builders
+   * of one combination convert better than builders of another? Visitors from
+   * PromoAnalyticsVisit.builtPrizeSlug, signups from User.signupAttribution.builtPrizeSlug,
+   * conversions/revenue from PaymentEvent.data.builtPrizeSlug.
+   */
+  async getAggregatedByBuiltPrize(startDate: Date, endDate: Date): Promise<PromoAnalyticsByBuiltPrizeSummary> {
+    await connectDB();
+
+    // 1. Builders - unique visitors who assembled this combination, on ANY landing page.
+    const buildAgg = await PromoAnalyticsVisit.aggregate<{ _id: string; builders: number }>([
+      {
+        $match: {
+          timestamp: { $gte: startDate, $lte: endDate },
+          builtPrizeSlug: { $exists: true, $ne: "" },
+        },
+      },
+      { $group: { _id: "$builtPrizeSlug", visitorIds: { $addToSet: VISITOR_ID_EXPR } } },
+      { $project: { _id: 1, builders: { $size: "$visitorIds" } } },
+    ]).exec();
+
+    const buildersMap = new Map<string, number>();
+    for (const r of buildAgg) buildersMap.set(r._id, r.builders);
+
+    // 2. Signups from User.signupAttribution.builtPrizeSlug
+    const signupAgg = await User.aggregate<{ _id: string; signups: number }>([
+      {
+        $match: {
+          "signupAttribution.builtPrizeSlug": { $exists: true, $ne: "" },
+          createdAt: { $gte: startDate, $lte: endDate },
+        },
+      },
+      { $group: { _id: "$signupAttribution.builtPrizeSlug", signups: { $sum: 1 } } },
+    ]).exec();
+
+    const signupMap = new Map<string, number>();
+    for (const r of signupAgg) signupMap.set(r._id, r.signups);
+
+    // 3. Conversions and revenue from PaymentEvent.data.builtPrizeSlug
+    const conversionAgg = await PaymentEvent.aggregate<{
+      _id: string;
+      conversions: number;
+      revenue: number;
+    }>([
+      {
+        $match: {
+          eventType: "BenefitsGranted",
+          timestamp: { $gte: startDate, $lte: endDate },
+          "data.builtPrizeSlug": { $exists: true, $ne: "" },
+          $nor: [{ packageType: "membership", "data.billingReason": "subscription_cycle" }],
+        },
+      },
+      ...excludeRefundedBenefitsGrantedStages(),
+      {
+        $group: {
+          _id: "$data.builtPrizeSlug",
+          conversions: { $sum: 1 },
+          revenue: { $sum: { $ifNull: ["$data.price", 0] } },
+        },
+      },
+    ]).exec();
+
+    const conversionMap = new Map<string, { conversions: number; revenue: number }>();
+    for (const r of conversionAgg) {
+      conversionMap.set(r._id, { conversions: r.conversions ?? 0, revenue: r.revenue ?? 0 });
+    }
+
+    // 4. Union of every combination seen anywhere in the range - a combination can have
+    // signups/conversions without a builder row in THIS window (built earlier, signed up now).
+    const allSlugs = new Set<string>([...buildersMap.keys(), ...signupMap.keys(), ...conversionMap.keys()]);
+
+    const byBuiltPrize: BuiltPrizeMetrics[] = [];
+    for (const builtPrizeSlug of allSlugs) {
+      const builders = buildersMap.get(builtPrizeSlug) ?? 0;
+      const signups = signupMap.get(builtPrizeSlug) ?? 0;
+      const conv = conversionMap.get(builtPrizeSlug);
+      const conversions = conv?.conversions ?? 0;
+      const revenue = conv?.revenue ?? 0;
+
+      byBuiltPrize.push({
+        builtPrizeSlug,
+        builders,
+        signups,
+        conversions,
+        revenue,
+        builderToSignupRate: builders > 0 ? (signups / builders) * 100 : 0,
+        signupToConversionRate: signups > 0 ? (conversions / signups) * 100 : 0,
+        overallConversionRate: builders > 0 ? (conversions / builders) * 100 : 0,
+      });
+    }
+
+    // Deterministic order: builders descending, builtPrizeSlug ascending as a tie-break.
+    byBuiltPrize.sort((a, b) => b.builders - a.builders || (a.builtPrizeSlug < b.builtPrizeSlug ? -1 : 1));
+
+    return { byBuiltPrize };
   }
 
   /**

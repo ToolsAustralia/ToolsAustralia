@@ -41,15 +41,96 @@ blocks) computes built-prize engagement from the same `PromoAnalyticsVisit` coll
   anonymousId, else a synthetic per-row id), so `builds` is directly comparable to `visits` as a
   ratio (both are unique-visitor counts, never raw row counts).
 - In application code, the per-`{pageType, slug}` visitor-id sets from every `builtPrizeSlug`
-  bucket are unioned into `buildVisitorIds` (→ `builds = size of the union`), while `topBuild`
-  tracks the single `builtPrizeSlug` bucket with the largest visitor-id-set size per page
-  (→ `topBuiltPrize`, or `null` when the page has no build rows at all).
+  bucket are unioned into `buildVisitorIds` (→ `builds = size of the union`).
 - Adds `builds: number` and `topBuiltPrize: string | null` to `PromoPageMetrics`, alongside
   (not replacing) `crossVisits`. Does not touch the `visits` / `crossVisits` / `signups` /
   `conversions` / `revenue` maps or the `totalVisits`/`totalSignups`/`totalConversions`/
   `totalRevenue` accumulators — verified with a before/after `git stash` A/B run against the live
   dev DB (identical totals both sides: `totalVisits: 84, totalSignups: 53, totalConversions: 64,
   totalRevenue: 3249.89`).
+
+#### `buildDistribution` + deterministic `topBuiltPrize` (2026-07-28 gap closure)
+
+The `1c` block's per-`builtPrizeSlug` bucket counts were computed and then **discarded** — only
+the single largest bucket survived, as `topBuiltPrize`. A review of the read-side found this threw
+away the exact data needed to answer "what % of Makita landers switch away from the page's default
+build?" (needs the full per-page *distribution*, not just its mode). Fix: every bucket is now kept
+in `buildDistributionMap: Map<pageKey, Array<{ builtPrizeSlug, visitors }>>` and exposed as
+`buildDistribution: Array<{ builtPrizeSlug: string; visitors: number }>` on `PromoPageMetrics`
+(most-built first, `[]` when nobody built anything on that page).
+
+- **Sort is deterministic: `visitors` descending, `builtPrizeSlug` ascending as a tie-break.** The
+  prior code derived `topBuiltPrize` with a bare `count1 > count2` comparison while iterating
+  `buildAgg` results in whatever order MongoDB's `$group` happened to return them — on an exact
+  tie between two combinations, the winner depended on aggregation-internal doc order, not on any
+  meaningful signal. `topBuiltPrize` is now simply `buildDistribution[0]?.builtPrizeSlug ?? null`
+  — a single source of truth, so it can no longer disagree with the distribution's own head.
+  Verified with a mocked-aggregate probe forcing an exact 4-vs-4 tie between two combinations on
+  one page: old logic's outcome depended on mock ordering, new logic always resolves to the
+  alphabetically-first slug regardless of input order.
+- Does not change `builds` (still the union-of-all-buckets size) or any other existing field.
+  Empirically verified byte-identical against live dev DB before/after (see below).
+
+### `PromoAnalyticsRepository.getAggregatedByBuiltPrize` — cross-page built-prize aggregation (2026-07-28)
+
+New method, added alongside (not replacing) `getAggregatedByPage`. Where `getAggregatedByPage`
+groups by *landing page*, this groups by the *combination actually built*, across every landing
+page — the two other read-side gaps from the same review: "which brands get BUILT more often than
+they get LANDED on?" and "do Kincrome-box builders convert better than Milwaukee-box builders?"
+(both need volume/signups/conversions/revenue keyed on `builtPrizeSlug`, not on the page slug).
+
+Modeled directly on `getAggregatedByPage`'s idioms, reused exactly:
+
+- **Builders** — `PromoAnalyticsVisit.aggregate`, same `$match` (`timestamp` range +
+  `builtPrizeSlug: { $exists: true, $ne: "" }`), `$group` by `builtPrizeSlug` ALONE (not
+  `{ pageType, slug, builtPrizeSlug }` — a visitor who built the same combination on two different
+  landing pages, or re-visited, counts once), `$addToSet: VISITOR_ID_EXPR`, `$project` to
+  `{ builders: { $size: "$visitorIds" } }`. Same dedupe expression as `visits`/`builds`, so
+  `builders` is a true unique-visitor count.
+- **Signups** — `User.aggregate`, `$match` on `signupAttribution.builtPrizeSlug` exists/non-empty +
+  `createdAt` range (the field + its supporting index, `{ "signupAttribution.builtPrizeSlug": 1,
+  createdAt: 1 }`, already existed — written by `/api/auth/register`, unread until now), `$group`
+  by that field, `$sum: 1`.
+- **Conversions + revenue** — `PaymentEvent.aggregate`, same `eventType: "BenefitsGranted"` +
+  `timestamp` range + subscription-renewal `$nor` exclusion + `excludeRefundedBenefitsGrantedStages()`
+  as `getAggregatedByPage`'s conversion block, but matched on `data.builtPrizeSlug` (exists/non-empty)
+  instead of `data.promotionSlug`. `revenue: { $sum: { $ifNull: ["$data.price", 0] } }` — same
+  field, same units (AUD dollars, not cents; `data.price` is `packageData.price` as written by
+  `payment-processing.ts`, never a cents-multiplied value anywhere in this pipeline).
+  `data.builtPrizeSlug` is written by `payment-processing.ts` from
+  `user.signupAttribution.builtPrizeSlug` ONLY when `signupAttribution.promotionSlug` is also set —
+  so every row this aggregation reads is a strict subset of what the existing `promotionSlug`
+  conversion query already reads; no new field-existence edge case.
+- **Merge — union of keys, not a fixed page list.** Unlike `getAggregatedByPage` (which iterates a
+  fixed `getAllPromoSlugs()` catalog because every landing page slug is known ahead of time),
+  `builtPrizeSlug` values are toolbox×toolset *combinations* with no equivalent fixed enumeration
+  in this repository, and a combination can have signups/conversions in the window with zero
+  builder rows in that same window (built earlier, signed up later). So the merge follows
+  `getAggregatedByUTMSource`'s idiom instead: `new Set([...buildersMap.keys(), ...signupMap.keys(),
+  ...conversionMap.keys()])`, one row per key in the union, missing values default to `0` (never
+  `undefined`, never `NaN`/`Infinity` — every rate guards its denominator).
+- **Sort: `builders` descending, `builtPrizeSlug` ascending as a tie-break** — same deterministic
+  pattern used for `buildDistribution` above.
+- Returns `{ byBuiltPrize: BuiltPrizeMetrics[] }`, mirroring the `{ byUTMSource: [...] }` wrapper
+  shape `getAggregatedByUTMSource` already returns. Zero-data range → `{ byBuiltPrize: [] }`,
+  never `null` or a thrown error (verified against the real dev DB with a 2099 date range).
+
+**No new index added.** `PromoAnalyticsVisit` and `User` already carry the indexes this query
+needs (`{ builtPrizeSlug: 1, timestamp: -1 }` and `{ "signupAttribution.builtPrizeSlug": 1,
+createdAt: 1 }` respectively — both added in the 2026-07-27 prize-build feature, unread by any
+query until this one). `PaymentEvent` has **no** index touching `data.*` at all (`data` is
+`Schema.Types.Mixed`) — the `data.builtPrizeSlug` match here has the identical performance profile
+as the already-shipped `data.promotionSlug` match in `getAggregatedByPage`'s conversion block
+(both rely on the top-level `timestamp` index to narrow the range, then filter `data.*` and
+`eventType` in memory). This is a **pre-existing** characteristic, not a new gap introduced here —
+flagged for awareness, not fixed, since `src/models/**` is out of scope for this change; if
+`PaymentEvent` volume ever makes that scan slow, `{ "data.promotionSlug": 1, timestamp: -1 }` and
+`{ "data.builtPrizeSlug": 1, timestamp: -1 }` would both need adding together.
+
+**Mirrored to Norm (2026-07-28, follow-up task).** `byBuiltPrize` and `buildDistribution` are now
+both declared on `NormPromoAnalyticsSummarySchema`, and `/v1/promo-analytics` was wired to supply
+`byBuiltPrize` — verified live with `npm run norm:smoke`. Full details:
+[docs/internal-norm/norm-context.md](../internal-norm/norm-context.md#get-v1promo-analytics).
 
 **Cross-visits was NOT replaced.** An earlier draft of this feature assumed the `crossVisits`
 aggregation (keyed on `referrerSlug`) was dead because nothing has written a new `referrerSlug`

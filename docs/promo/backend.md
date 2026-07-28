@@ -95,6 +95,41 @@ catch. Only the summary route (`/v1/promo-analytics`) carries these fields — `
 `npm run norm:smoke` (both a real slug and `null` came back correctly in the same response). Full
 field docs and changelog: [docs/internal-norm/norm-context.md](../internal-norm/norm-context.md).
 
+## Read-side gap closure — `buildDistribution` + `getAggregatedByBuiltPrize` (2026-07-28)
+
+The `builds` / `topBuiltPrize` scalars above only surface a page's single most-built combination.
+A follow-up review found that left 4 of 5 promised analysis questions unanswerable, and that
+`PaymentEvent.data.builtPrizeSlug` — written on every conversion whose signup had a build — was
+never read anywhere. Two additions close it, both pure read-side (no migration, no new write, no
+schema change):
+
+- **`buildDistribution: Array<{ builtPrizeSlug: string; visitors: number }>`** — added to
+  `PromoPageMetrics` alongside `builds`/`topBuiltPrize` (kept unchanged). The FULL per-page
+  distribution, most-built first, `[]` when nobody built anything. Answers "what % of Makita
+  landers switch away from the page's default build?" — divide any non-default entry's `visitors`
+  by the page's `visits`. `topBuiltPrize` is now derived from this same sorted list
+  (`buildDistribution[0]?.builtPrizeSlug`), fixing a non-deterministic tie-break the prior
+  implementation had on an exact visitor-count tie between two combinations.
+- **`PromoAnalyticsRepository.getAggregatedByBuiltPrize(startDate, endDate)`** — new
+  cross-page aggregation, grouped by the BUILT combination instead of the landing page. Exposed on
+  `PromoAnalyticsService.getAggregatedByBuiltPrize` (mirrors how `getAggregatedByUTMSource` is
+  exposed) and wired into `GET /api/admin/promo-analytics`'s response as `data.byBuiltPrize`,
+  alongside the existing `data.byUTMSource`. Answers "which brands get BUILT more often than they
+  get LANDED on?" (compare `builders` here against `visits` in `byPage`) and "do Kincrome-box
+  builders convert better than Milwaukee-box builders?" (`signups`/`conversions`/`revenue`/rates
+  are all keyed on `builtPrizeSlug`). Full aggregation-stage reasoning:
+  [docs/mongodb/backend.md](../mongodb/backend.md#promoanalyticsrepositorygetaggregatedbybuiltprize--cross-page-built-prize-aggregation-2026-07-28).
+
+**Mirrored to Norm (2026-07-28, follow-up task).** `NormPromoAnalyticsSummarySchema` now declares
+both `buildDistribution` (on `PromoPageMetricsSchema`) and `byBuiltPrize` (new
+`BuiltPrizeMetricsSchema`), and the Norm route
+(`src/app/api/internal/norm/v1/promo-analytics/route.ts`) now calls `getAggregatedByBuiltPrize`
+alongside its existing two calls so the field is actually populated, not just declared. Also
+surfaced in the admin UI (`PromoAnalyticsManagement.tsx`: a "Switched away %" column + a "By Built
+Prize" table). Full details:
+[docs/internal-norm/norm-context.md](../internal-norm/norm-context.md#get-v1promo-analytics),
+[docs/admin/frontend.md](../admin/frontend.md#promo-analytics--switched-away--column--by-built-prize-table-2026-07-28).
+
 ## Cross-domain payment integration
 
 `src/utils/payment/upsell-promo-multiplier.ts` resolves the promo factor used by **both** the hero image selector (`Nx-*.webp` variant) **and** the entry calculator (as `activePromoMultiplier` in the formula above). Single source of truth, dual consumer.
