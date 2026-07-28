@@ -76,9 +76,12 @@ redemption model) and no longer links `/partner` (that page is the **B2B become-
 discount list — latent bug). Both FAQ 16 and FAQ 72 now describe the ONE redemption model: open the
 partner portal from **My Account → Rewards** (signed in automatically), each offer shows its steps in
 the portal; tier wording disambiguated ("the Tradie **membership** unlocks 50%…" — the Tradie *Pack* is
-40%) and Mini Packs' smaller time-limited slice named. **Launch coupling (CLAUDE.md 5c):** this copy
-describes the portal-live world — it ships in the same branch as the portal experience and MUST go
-live together with the SSO flag flip at vendor go-live; corpus count stays 72.
+40%) and Mini Packs' smaller time-limited slice named. **Launch coupling (CLAUDE.md 5c) — a SEQUENCING note, NOT a code task.** This copy describes the
+portal-live world, so ideally the merge and the SSO flag flip land close together. **Do not build
+anything for this** — no flag-gated FAQ copy, no conditional answers (owner call, 2026-07-28: the
+vendor portal goes live ~2026-07-31, so any gap is a few days of a slightly early FAQ answer and
+self-resolves). If a future session finds this note, the correct action is to check whether the flag
+is already on, not to add machinery. Corpus count stays 72.
 
 ## Cobber speaks ONE spelling: "catalogue" (2026-07-28, panel F-049)
 
