@@ -60,11 +60,21 @@ discloses it on request)" — a member who lapses and rejoins within 30 days kee
 (`src/utils/subscription/streak.ts:63-66`, `RESUBSCRIBE_GRACE_DAYS = 30`), but retention copy
 never says so. A governing terms document is a different risk class than an omission on a sales
 screen, so the clause above states the window rather than repeating that omission in a binding
-document. If you'd rather not put "30 days" in the terms, the alternative below states the same
-rule without the figure — pick one:
+document. If you'd rather not repeat "30 days" inline, the alternative below still states the
+figure but as a **defined term** instead — pick one:
 
-> Alternative (no figure disclosed): A membership that lapses and is not reinstated within Tools
-> Australia's standard rejoin period resets the streak to zero and the milestone ladder restarts.
+> Alternative (defined term): add a definition — **"Rejoin Period" means the 30-day window
+> immediately following a membership's lapse** — then reference it in 5.1(e): "A membership that
+> lapses and is not reinstated within the Rejoin Period resets the streak to zero and the
+> milestone ladder restarts."
+
+An earlier draft of this alternative used an undefined adjective ("Tools Australia's standard
+rejoin period") instead of a number. That was rejected: the phrase has no anchor anywhere — not
+in the terms, not in the codebase, not on any customer-facing surface — which is worse practice
+than stating the figure, since it gives a member or a dispute resolver nothing fixed to check
+against and can drift silently if the operational window ever changes without anyone touching
+the terms. The real choice is between stating "30 days" inline or defining it once as "Rejoin
+Period" and referencing it — both fixed, neither vague.
 
 ## Adopting this
 
