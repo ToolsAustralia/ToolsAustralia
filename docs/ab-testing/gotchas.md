@@ -175,13 +175,41 @@ export — either pattern (a boundary-neutral shared module, or duplicated liter
 bug; sharing an export FROM a `"use client"` file INTO a Server Component is the one shape that
 doesn't work.
 
-## `ranRef` + `AbortController` single-shot effects can permanently strand in dev (React Strict Mode)
+## `ranRef` + `AbortController` single-shot effects can permanently strand in dev (React Strict Mode) — FIXED
 
-**Found 2026-07-28, while re-verifying `promo-theme-split.spec.ts` after the fix above.** Fixing
-the client-boundary bug made `usePromoThemeExperiment`'s effect actually fire for the first time
-— which exposed a SECOND, previously-masked bug that independently keeps
-`e2e/specs/marketing/promo-theme-split.spec.ts`'s "dark arm never paints light before dark" test
-failing under `npm run dev`.
+**Rule:** a single-shot `useEffect` fetch guarded by a `useRef` must NOT abort in its cleanup.
+React Strict Mode runs mount → cleanup → mount on the SAME component instance with refs
+preserved, so the abort kills the only request the guard will ever allow, and the component
+hangs in its pending state with no error anywhere. Keep the ref guard (it prevents duplicate
+exposure rows) and drop the abort.
+
+**Second-order trap, found while implementing this exact fix:** dropping the abort is not
+enough on its own. The "avoid a post-unmount `setState`" guard is usually written as a plain
+`let aborted = false` closure local, flipped to `true` in the cleanup. Under the SAME Strict
+Mode double-invoke, that cleanup still runs synthetically — and because `ranRef` guarantees
+only the FIRST mount's closure ever holds the live fetch, that closure's `aborted` gets flipped
+`true` almost immediately, and stays `true` for the closure's entire lifetime. When the fetch
+later resolves, `if (!aborted) setState(...)` is now permanently false, so the result is
+silently discarded — no error, no abort, just a dropped `setState` — and the component hangs
+exactly as before, for a different reason. Verified empirically with temporary
+`console.error` instrumentation: `cleanup ran, setting aborted=true` fired immediately after
+`effect body ran, fetch kicked off`, then minutes later `fetch resolved, aborted= true theme=
+dark` — the correct theme arrived and was thrown away.
+
+**The fix:** move the flag into a `useRef` (`abortedRef`) and reset it to `false` at the TOP of
+the effect, before the `ranRef` early-return. Strict Mode's second (real) invocation re-enters
+the effect body and un-poisons the ref before hitting the `ranRef` guard, so the still-in-flight
+fetch from the first mount is allowed to settle state normally. A genuine final unmount never
+re-enters the effect at all, so the flag its cleanup sets stays `true` for good and the
+eventual `setState` is correctly skipped. A closure-local boolean cannot do this — only a ref
+persists correctly across the synthetic double-invoke while still being reachable from the
+async callback.
+
+**Found 2026-07-28, while re-verifying `promo-theme-split.spec.ts` after the client-boundary fix
+above; fixed the same day.** Fixing the client-boundary bug made `usePromoThemeExperiment`'s
+effect actually fire for the first time — which exposed a SECOND, previously-masked bug that
+independently kept `e2e/specs/marketing/promo-theme-split.spec.ts`'s "dark arm never paints
+light before dark" test failing under `npm run dev`.
 
 This app's `next.config.ts` does not set `reactStrictMode`, so Next's App Router default applies
 — confirmed by reading `node_modules/next/dist/build/define-env.js`: `__NEXT_STRICT_MODE_APP` is
@@ -219,14 +247,41 @@ this bug present; it's local dev testing (including any e2e run against `npm run
 `E2E_BUILD=1`) that's blocked. This is unverified against a real `next build` — nobody has run
 one against this specific code path yet.
 
-**Not fixed as part of Task 12** — it's a second, independent bug outside that task's prescribed
-scope (a single shared-constant move), and the task's own instructions were explicit: stop and
-report rather than keep patching `src/` once the prescribed fix doesn't make the spec pass.
-Flagged here for whoever picks it up. Candidate fix shapes (not evaluated in depth): don't let
-the cleanup abort a request that a persistent ref-guard prevents retrying (e.g., drop the
-`ranRef` guard and instead dedupe via the `AbortController` itself finishing before Strict
-Mode's second invocation runs), or use a Strict-Mode-safe request pattern (an effect that always
-re-runs and lets the *response*, not the ref, decide whether to apply stale results).
+**Fixed 2026-07-28 (follow-up task), in two steps.** First, `usePromoThemeExperiment`'s cleanup
+stopped calling `controller.abort()` — the `AbortController`/`signal` were removed entirely
+since nothing else needed them. This alone was NOT sufficient (see the second-order trap above):
+re-running the e2e spec still failed identically, and a temporary `console.error` trace proved
+why — the closure-local `aborted` boolean was itself flipped by Strict Mode's synthetic cleanup
+and stayed flipped, silently dropping the eventual `setState`. Second, that flag was promoted to
+a `useRef` (`abortedRef`) reset to `false` at the top of every effect invocation (see code below)
+so Strict Mode's second, real invocation un-poisons it before hitting the `ranRef` guard.
+
+The `ranRef` single-shot guard itself was never touched: it still prevents Strict Mode (or any
+re-render) from firing a second real `/assign` request, which would create a duplicate exposure
+row — the reason `ta_anon_id` is now minted in middleware, so concurrent assigns can share one
+identity. The net effect of both steps together: the in-flight fetch is now allowed to complete
+AND its result is now allowed to actually update state. This is also the objectively correct
+behavior independent of Strict Mode: `/api/ab-testing/assign` persists the `VariantAssignment`
+row server-side before it builds the response, so a client-side abort never undoes the
+assignment — it only throws away a result the server already recorded, which is strictly worse
+than letting it land.
+
+```ts
+const ranRef = useRef(false);
+const abortedRef = useRef(false); // ref, not a closure local — see above
+
+useEffect(() => {
+  abortedRef.current = false; // un-poison on every entry, including Strict Mode's 2nd mount
+  if (ranRef.current) return;
+  ranRef.current = true;
+  // ...fetch, no AbortController...
+  // in the async callback: if (!abortedRef.current) setState(...)
+  return () => { abortedRef.current = true; };
+}, [experimentId]);
+```
+
+Verified end to end: `npx playwright test e2e/specs/marketing/promo-theme-split.spec.ts
+--project=chromium-desktop` passes both tests, reproduced on two consecutive runs.
 
 ## Migrated stubs
 

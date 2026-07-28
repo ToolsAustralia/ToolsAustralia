@@ -66,8 +66,24 @@ export function usePromoThemeExperiment(experimentId: string | null): Resolved {
   });
 
   const ranRef = useRef(false);
+  // Ref, not a per-invocation closure local: see the reset line at the top of
+  // the effect below for why a plain `let aborted = false` inside the effect
+  // body is NOT equivalent here and silently strands the hook.
+  const abortedRef = useRef(false);
 
   useEffect(() => {
+    // Strict Mode (dev-only) runs mount -> cleanup -> mount on the SAME
+    // component instance, refs preserved. `ranRef` makes the FIRST mount the
+    // only one that ever starts a fetch; the synthetic cleanup from that
+    // first mount still runs, and it flips `abortedRef.current = true` (see
+    // below). Un-poisoning it here, on every entry to this effect, cancels
+    // that out on the second (real) mount, so the in-flight fetch from the
+    // first mount is still allowed to settle state when it resolves. A
+    // genuine final unmount never re-enters this effect, so the flag it set
+    // in cleanup sticks for good and the eventual `setState` is correctly
+    // skipped.
+    abortedRef.current = false;
+
     if (ranRef.current) return;
     ranRef.current = true;
     if (state.settled) return;
@@ -76,16 +92,12 @@ export function usePromoThemeExperiment(experimentId: string | null): Resolved {
       return;
     }
 
-    let aborted = false;
-    const controller = new AbortController();
-
     (async () => {
       try {
         const res = await fetch("/api/ab-testing/assign", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ experimentId, slug: PROMO_THEME_SLUG }),
-          signal: controller.signal,
         });
         if (!res.ok) throw new Error(`assign ${res.status}`);
         const data = (await res.json()) as { variantConfig: VariantConfig | null };
@@ -96,17 +108,27 @@ export function usePromoThemeExperiment(experimentId: string | null): Resolved {
         } catch {
           /* ignore quota errors — worst case the hold recurs next session */
         }
-        if (!aborted) setState({ settled: true, theme });
+        if (!abortedRef.current) setState({ settled: true, theme });
       } catch {
         // Network/abort/admin-excluded -> control. Reveal in light rather than
         // holding the page: a stuck loader is worse than a control impression.
-        if (!aborted) setState({ settled: true, theme: "light" });
+        if (!abortedRef.current) setState({ settled: true, theme: "light" });
       }
     })();
 
+    // Deliberately NOT aborting the in-flight request here. Two reasons:
+    // 1. React Strict Mode's ref-preserving double-invoke (see above) would
+    //    strand the request: the `ranRef` guard means only the FIRST mount
+    //    ever starts a fetch, so cancelling it in cleanup would leave nothing
+    //    for the second (real) mount to use, and the hook would never settle.
+    // 2. Even outside Strict Mode, aborting buys nothing: `/api/ab-testing/assign`
+    //    writes the VariantAssignment row server-side before it builds the
+    //    response, so a client-side abort can't undo the assignment — it can
+    //    only discard a result the server already persisted. Letting the
+    //    fetch finish is strictly better than cancelling it.
+    // `abortedRef` alone is sufficient to skip a setState after a REAL unmount.
     return () => {
-      aborted = true;
-      controller.abort();
+      abortedRef.current = true;
     };
     // `state.settled` is read once for the early-out; re-running on its change
     // would re-fire the request. The ranRef guard makes this effect single-shot.
