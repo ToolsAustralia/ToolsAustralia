@@ -83,8 +83,17 @@ Targets the membership section site-wide without a global VariantProvider:
   `ExperimentRepository.findActiveBySlug` matches `slugTargets: { $in: [slug, "*"] }`;
   `*` would also resolve on `/promotions/[slug]` and collide with promo
   experiments (newest `createdAt` wins). The sentinel can never match a real
-  prize slug, so there is zero collision and zero change to ExperimentService /
-  ExperimentRepository / the promo page.
+  prize slug, so a page-targeted promo experiment can never shadow it — but
+  that is only a **prize-slug → sentinel** guarantee, not zero collision
+  overall: `findActiveBySlug` still matches `$in: [slug, "*"]`, so an active
+  **wildcard** ("All Pages") experiment created after the sentinel one would
+  still be the newest match and hijack the sentinel lookup. Site-wide sentinel
+  lookups (e.g. `__membership-theme__`, `__promo-theme__`) MUST go through
+  `ExperimentRepository.findActiveBySentinelSlug` /
+  `ExperimentService.getActiveExperimentForSentinelSlug`, which use
+  `buildActiveExperimentQuery(slug, { allowWildcard: false }, now)` — an exact
+  match on `slugTargets` that never matches `"*"`. `findActiveBySlug` (used by
+  page-targeted lookups) is unchanged and still legitimately matches `"*"`.
 - `GET /api/ab-testing/membership-theme-experiment` — read-only discovery,
   returns `{ experimentId | null }`, no DB writes.
 - `useMembershipThemeExperiment()` discovers the id then POSTs the existing

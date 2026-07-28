@@ -31,6 +31,19 @@ Historical notes (still apply for anyone reviving this pattern):
 - Never reuse the `__membership-theme__` sentinel slug for an unrelated
   experiment, and never give the membership dark-mode experiment `slugTargets`
   of a real prize slug or `*` (`*` collides with promo experiments).
+- The sentinel slug only guarantees a real prize slug can never collide with
+  it — it is NOT zero collision overall. `ExperimentRepository.findActiveBySlug`
+  matches `slugTargets: { $in: [slug, "*"] }` and returns a single `findOne`
+  newest-`createdAt` document, so an active **wildcard** ("All Pages")
+  experiment created after the sentinel one would still be returned for
+  `__membership-theme__` (or `__promo-theme__`) and silently hijack it — no
+  amount of post-filtering can recover once `findOne` has already picked the
+  wrong document. Site-wide sentinel lookups MUST use
+  `ExperimentRepository.findActiveBySentinelSlug` /
+  `ExperimentService.getActiveExperimentForSentinelSlug` instead of the
+  `*Slug` variants — those build their query with
+  `buildActiveExperimentQuery(slug, { allowWildcard: false }, now)`, an exact
+  match that never matches `"*"`.
 - The membership dark-mode test is diluted, not biased: control differs from
   treatment only during dark hours, so it needs more samples for significance.
   This was an accepted product trade-off.

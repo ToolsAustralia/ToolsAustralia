@@ -91,6 +91,7 @@
     "test:redeemables-purchase-gate": "tsx src/utils/redeemables/__tests__/purchase-eligibility.test.ts",
     "test:climb-series": "tsx src/utils/membership/__tests__/climb-series.test.ts",
     "test:dashboard-state-theme": "tsx src/utils/dashboard/__tests__/dashboard-state-theme.test.ts",
+    "test:experiment-query": "tsx src/repositories/ab-testing/__tests__/experimentQuery.test.ts",
     "test:dashboard-account-state": "tsx src/utils/dashboard/__tests__/derive-dashboard-account-state.test.ts",
     "test:my-account-projection": "tsx src/utils/dashboard/__tests__/my-account-projection.test.ts",
     "test:one-time-drawer-packages": "tsx src/utils/membership/__tests__/select-one-time-drawer-packages.test.ts",
