@@ -163,6 +163,19 @@ same subscription purchase as `purchase-subscription.spec.ts`, entered via the h
 verified event-dispatch chain (`useMajorDrawEntryCta.openEntryFlow` → `openMembershipModal`
 window event → `MembershipSection`'s listener).
 
+Flag-gated UI belongs in the `@purchase` spec too (2026-07-28): `purchase-one-time.spec.ts` now asserts
+the `/purchase-success` partner-portal CTA after the benefits-granted check — visible when
+`NEXT_PUBLIC_PARTNER_DISCOUNT_SSO_ENABLED === "true"`, `toHaveCount(0)` otherwise. **Asserting the
+ABSENCE is the point** while a feature is dark: it pins today's production behaviour so an early flag
+flip or a `status.processed` shape drift fails loudly. Never CLICK that CTA in a spec — the SSO route
+POSTs the real iGoDirect production tenant.
+
+⚠ **Verify the server is YOURS before trusting any e2e measurement** (2026-07-28): if another worktree
+holds port 3799, `next dev` dies with `EADDRINUSE` but the wrapper survives, so the orchestrator still
+prints "server ready" and your run silently targets a foreign app. This produced a full set of
+plausible-but-fictional measurements during a panel review. Until the harness guards it (panel F-034),
+run `grep -c EADDRINUSE e2e-artifacts/logs/server.log` — anything but `0` means your results are void.
+
 Cold-server compile budget (2026-07-28): a spec asserting client-state-dependent UI on a HEAVY
 route (`/membership` is the worst case — modal + every section) must warm that route with a real
 **browser** navigation in `beforeAll`, not just `request.get()`. An HTML fetch compiles the server

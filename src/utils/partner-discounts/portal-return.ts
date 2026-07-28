@@ -58,8 +58,19 @@ const normName = (s: string): string =>
  *  vendor-faithful; only the rendered string changes. */
 const displayName = (s: string): string => s.replace(/\s{2,}/g, ", ");
 
-/** Per-map memo of the name→offer allowlist index (the offers map is a stable module
- *  const on the server, so this builds once per process, not per request). */
+/**
+ * Per-map memo of the name→offer allowlist index (the offers map is a stable module
+ * const on the server, so this builds once per process, not per request).
+ *
+ * AMBIGUOUS NAMES ARE EXCLUDED (panel F-029). 11 catalogue names normalise
+ * identically and 6 of those pairs carry DIFFERENT access percents (e.g. "Get Wines
+ * Direct" exists at both 100% and 50%). A last-write-wins `Map.set` would resolve
+ * those to whichever id happened to iterate last, so a 50% member could be told
+ * "you're covered" for a 100% offer and then refused at the merchant. A name that
+ * cannot identify one percent is dropped, degrading to the generic banner — the same
+ * graceful outcome as a name that misses the allowlist entirely. `offer_id` is
+ * unaffected: it is exact and remains the reliable templating key for the vendor.
+ */
 const nameIndexCache = new WeakMap<object, Map<string, PortalReturnOffer>>();
 function nameIndex(
   offersById: Readonly<Record<string, PortalReturnOffer>>
@@ -67,7 +78,14 @@ function nameIndex(
   let idx = nameIndexCache.get(offersById);
   if (!idx) {
     idx = new Map();
-    for (const offer of Object.values(offersById)) idx.set(normName(offer.name), offer);
+    const ambiguous = new Set<string>();
+    for (const offer of Object.values(offersById)) {
+      const key = normName(offer.name);
+      const seen = idx.get(key);
+      if (seen && seen.pct !== offer.pct) ambiguous.add(key);
+      else if (!seen) idx.set(key, offer);
+    }
+    for (const key of ambiguous) idx.delete(key);
     nameIndexCache.set(offersById, idx);
   }
   return idx;
@@ -164,6 +182,10 @@ export function resolvePortalBannerView(input: {
   /** Pre-formatted resume date for a retention-paused member (e.g. "12 August"),
    *  or null when unknown — drives the F-009 paused branch. */
   pausedUntilLabel?: string | null;
+  /** Whether a session exists (panel F-028). `acct === "none"` is NOT "signed out" —
+   *  it is also every authenticated user without an active membership or pack, so the
+   *  login hint must key on the SESSION, never on acct alone. */
+  isAuthenticated?: boolean;
 }): PortalBannerView {
   const {
     portalReturn,
@@ -173,11 +195,16 @@ export function resolvePortalBannerView(input: {
     recommended,
     catalogTotal,
     pausedUntilLabel = null,
+    isAuthenticated = false,
   } = input;
   const offerName = portalReturn.offerName;
   const requiredPct = portalReturn.requiredPct ?? null;
   const offerKnown = Boolean(offerName) && requiredPct != null;
   const guest = acct === "none";
+  /** Only a genuinely signed-out visitor is offered /login — an authenticated user
+   *  with no active benefits would be bounced straight back to /my-account, out of
+   *  the funnel (F-028). */
+  const showLoginHint = guest && !isAuthenticated;
   const total = fmtAu(catalogTotal);
 
   const unlockCta = (showCatalogueMeta: boolean): PortalBannerCta =>
@@ -191,7 +218,13 @@ export function resolvePortalBannerView(input: {
         }
       : { kind: "scroll", label: "See all packages" };
 
-  if (acct === "pastdue") {
+  // F-031: a past-due member KEEPS any one-time pack access they paid for
+  // (useDashboardState preserves partnerAccessPct for exactly this case, and the
+  // Rewards card renders "Active from your pack"). Telling them their discounts are
+  // gone would be false — and if the pack covers the offer they came for, they should
+  // fall through to the covered state and go redeem it. Only a past-due member with NO
+  // live access gets the plain payment prompt.
+  if (acct === "pastdue" && partnerAccessPct === 0) {
     return {
       headline: "Your membership payment needs attention.",
       sub: "Update payment to restore your discounts.",
@@ -199,6 +232,17 @@ export function resolvePortalBannerView(input: {
       showLoginHint: false,
     };
   }
+  if (acct === "pastdue" && !(offerKnown && partnerAccessPct >= (requiredPct ?? 0))) {
+    // Live pack, but it does not cover this offer (or no offer resolved): say what is
+    // actually true — the pack still works — while still surfacing the billing fix.
+    return {
+      headline: "Your pack access is still running.",
+      sub: "Update payment to bring your membership discounts back on top of it.",
+      cta: { kind: "payment" },
+      showLoginHint: false,
+    };
+  }
+  // Past-due WITH a pack that covers this offer falls through to the covered state below.
 
   // F-009: a retention-paused member's access returns on resume — never upsell them
   // a package they already own; point at the manage sheet (resume lives there).
@@ -219,7 +263,7 @@ export function resolvePortalBannerView(input: {
         headline: `${offerName} unlocks at ${requiredPct}% access.`,
         sub: "Grab a membership or a one-time pack to unlock it — it takes about a minute.",
         cta: unlockCta(false),
-        showLoginHint: true,
+        showLoginHint,
       };
     }
     if (partnerAccessPct >= requiredPct) {
@@ -249,7 +293,7 @@ export function resolvePortalBannerView(input: {
       // Apprentice Pack opens 459. Name the variance instead of implying the lot.
       sub: `Up to ${total} offers from Australia's top brands — your membership or one-time pack sets how much of the catalogue you unlock.`,
       cta: { kind: "scroll", label: "See packages" },
-      showLoginHint: true,
+      showLoginHint,
     };
   }
 

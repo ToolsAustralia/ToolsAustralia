@@ -55,6 +55,37 @@ function testNameAllowlistRejectsArbitraryText(): void {
   }
 }
 
+function testAmbiguousNamesAreDropped(): void {
+  // F-029: the real catalogue has 6 names that exist at two DIFFERENT percents.
+  // A last-write-wins index would answer with an arbitrary one — potentially telling a
+  // member they're covered for an offer they aren't. Ambiguous names must not resolve.
+  const AMBIGUOUS: Readonly<Record<string, PortalReturnOffer>> = {
+    "1047559": { name: "Get Wines Direct", pct: 100 },
+    "1047907": { name: "Get Wines Direct", pct: 50 },
+    "1000001": { name: "Unique Brand", pct: 25 },
+  };
+  assert.deepEqual(
+    resolvePortalReturn({ offer_name: "Get Wines Direct" }, AMBIGUOUS),
+    { generic: true },
+    "a name that maps to two different percents must degrade to the generic banner"
+  );
+  // Unambiguous neighbours in the same map still resolve…
+  assert.deepEqual(resolvePortalReturn({ offer_name: "Unique Brand" }, AMBIGUOUS), {
+    offerName: "Unique Brand",
+    requiredPct: 25,
+  });
+  // …and offer_id is unaffected — it is exact, so both ids still resolve correctly.
+  assert.equal(resolvePortalReturn({ offer_id: "1047559" }, AMBIGUOUS)?.requiredPct, 100);
+  assert.equal(resolvePortalReturn({ offer_id: "1047907" }, AMBIGUOUS)?.requiredPct, 50);
+
+  // A duplicate name with the SAME percent is not ambiguous — it still resolves.
+  const SAME_PCT: Readonly<Record<string, PortalReturnOffer>> = {
+    "2000001": { name: "Twin Offer", pct: 70 },
+    "2000002": { name: "Twin Offer", pct: 70 },
+  };
+  assert.equal(resolvePortalReturn({ offer_name: "Twin Offer" }, SAME_PCT)?.requiredPct, 70);
+}
+
 function testNameAllowlistNormalises(): void {
   // Case-insensitive + whitespace-collapsing (vendor names carry double spaces);
   // the CATALOGUE's canonical name + pct come back, never the URL's spelling.
@@ -114,10 +145,76 @@ const base = {
 } as const;
 
 function testViewPastdueWinsOverOffer(): void {
-  const v = resolvePortalBannerView({ ...base, acct: "pastdue" });
+  // No live access → the plain payment prompt still wins over the offer states.
+  const v = resolvePortalBannerView({ ...base, acct: "pastdue", partnerAccessPct: 0 });
   assert.equal(v.headline, "Your membership payment needs attention.");
   assert.equal(v.cta?.kind, "payment");
   assert.equal(v.showLoginHint, false);
+}
+
+function testViewPastdueWithLivePack(): void {
+  // F-031: a past-due member KEEPS a paid one-time pack. Never tell them their
+  // discounts are gone when the pack is live.
+  const uncovered = resolvePortalBannerView({
+    ...base,
+    acct: "pastdue",
+    partnerAccessPct: 40, // live pack, but the offer needs 100
+  });
+  assert.equal(uncovered.headline, "Your pack access is still running.");
+  assert.equal(uncovered.cta?.kind, "payment");
+
+  // …and when the pack DOES cover the offer, they should be sent to redeem it.
+  const covered = resolvePortalBannerView({
+    ...base,
+    acct: "pastdue",
+    partnerAccessPct: 70,
+    portalReturn: { offerName: "Witchery eGift Card", requiredPct: 40 },
+  });
+  assert.equal(covered.headline, "You're set — your 70% access covers Witchery eGift Card.");
+  assert.equal(covered.cta?.kind, "sso");
+}
+
+function testLoginHintOnlyForSignedOut(): void {
+  // F-028: acct "none" is ALSO every authenticated user with no active benefits —
+  // offering them /login bounces them to /my-account, out of the funnel.
+  const signedOut = resolvePortalBannerView({ ...base, acct: "none", isAuthenticated: false });
+  assert.equal(signedOut.showLoginHint, true, "a genuinely signed-out visitor gets the hint");
+
+  const signedInNoBenefits = resolvePortalBannerView({ ...base, acct: "none", isAuthenticated: true });
+  assert.equal(signedInNoBenefits.showLoginHint, false, "an authenticated user must NOT be told to log in");
+  // Copy itself is unchanged — only the hint is suppressed.
+  assert.equal(signedInNoBenefits.headline, signedOut.headline);
+
+  // Same on the generic arm.
+  const genericAuthed = resolvePortalBannerView({
+    ...base,
+    acct: "none",
+    isAuthenticated: true,
+    portalReturn: { generic: true },
+  });
+  assert.equal(genericAuthed.showLoginHint, false);
+}
+
+function testViewCoveredAtExactEquality(): void {
+  // F-036-adjacent boundary pin: 183 catalogue offers sit at exactly 50%, and 50% is
+  // the entry subscription tier — the highest-traffic member/offer pairing. Pins `>=`.
+  const equal = resolvePortalBannerView({
+    ...base,
+    acct: "active",
+    partnerAccessPct: 50,
+    portalReturn: { offerName: "Witchery eGift Card", requiredPct: 50 },
+  });
+  assert.equal(equal.headline, "You're set — your 50% access covers Witchery eGift Card.");
+  assert.equal(equal.cta?.kind, "sso", "equality must count as covered, never fall through to an upsell");
+
+  const under = resolvePortalBannerView({
+    ...base,
+    acct: "active",
+    partnerAccessPct: 50,
+    portalReturn: { offerName: "Witchery eGift Card", requiredPct: 55 },
+  });
+  assert.equal(under.headline, "You're at 50% — Witchery eGift Card needs 55%.");
+  assert.equal(under.cta?.kind, "unlock");
 }
 
 function testViewGuestWithOffer(): void {
@@ -207,6 +304,7 @@ const tests = [
   testPrototypeKeysRejected,
   testUnknownIdFallsToGeneric,
   testNameAllowlistRejectsArbitraryText,
+  testAmbiguousNamesAreDropped,
   testNameAllowlistNormalises,
   testVendorRunOnNamesDisplayWithCommas,
   testArrayParamsUseFirst,
@@ -214,6 +312,9 @@ const tests = [
   testCampaignAloneIsGeneric,
   testLadderMatchesElevenTiers,
   testViewPastdueWinsOverOffer,
+  testViewPastdueWithLivePack,
+  testLoginHintOnlyForSignedOut,
+  testViewCoveredAtExactEquality,
   testViewGuestWithOffer,
   testViewAuthedShortOfOffer,
   testViewAuthedCovered,

@@ -3,6 +3,7 @@
 import { useMemo } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useSession } from "next-auth/react";
 import { ArrowRight, ExternalLink, Store } from "lucide-react";
 import { useDashboardState } from "@/hooks/useDashboardState";
 import { useMemberships } from "@/hooks/useMemberships";
@@ -65,6 +66,10 @@ export default function MembershipPortalReturnBanner({
   plans,
 }: MembershipPortalReturnBannerProps) {
   const router = useRouter();
+  // Session status, NOT `acct`, decides whether to offer /login (F-028): `acct === "none"`
+  // also covers authenticated users with no active benefits, and /login would bounce them
+  // to /my-account — out of the funnel.
+  const { status: sessionStatus } = useSession();
   const { acct, partnerAccessPct, isLoading, pausedUntil } = useDashboardState();
   const { subscriptionPackages, oneTimePackages } = useMemberships();
   const sso = usePartnerDiscountSso();
@@ -102,11 +107,21 @@ export default function MembershipPortalReturnBanner({
             <span className="inline-flex items-center gap-2 text-[11px] font-extrabold uppercase tracking-[0.16em] text-[#ff6b6b]">
               <Store className="h-3.5 w-3.5" /> Partner catalogue
             </span>
+            {/* Sized to the TALLEST settled variant, not to a guess (panel F-027):
+                the first pass reserved 24px/16px for a wrapping h2 + sub and the hero
+                still dropped up to 114.5px when the copy swapped in. Headline ≈50px
+                (two lines at text-lg, 56px at sm), sub ≈62px. */}
             <div aria-hidden="true">
-              <div className="mt-2 h-6 w-64 max-w-full rounded bg-white/10 motion-safe:animate-pulse" />
-              <div className="mt-2 h-4 w-80 max-w-full rounded bg-white/10 motion-safe:animate-pulse" />
+              <div className="mt-1.5 h-[50px] w-64 max-w-full rounded bg-white/10 motion-safe:animate-pulse sm:h-[56px] lg:h-[44px]" />
+              <div className="mt-1 h-[62px] w-80 max-w-full rounded bg-white/10 motion-safe:animate-pulse lg:h-[40px]" />
             </div>
           </div>
+          {/* One CTA block only. Reserving the meta line + "See all packages" as well
+              OVERSHOT (measured: skeleton 409px vs settled 337px → a 72px upward jump):
+              those two only render for an authed member short of the offer, and at first
+              paint the account state is still unknown. Reserving the shared minimum keeps
+              every guest state within a few px; the authed short-of state still grows,
+              which is the one case whose data genuinely has not arrived yet. */}
           <div
             aria-hidden="true"
             className="h-[44px] w-full shrink-0 rounded-xl bg-white/10 motion-safe:animate-pulse lg:w-[240px]"
@@ -132,6 +147,7 @@ export default function MembershipPortalReturnBanner({
     pausedUntilLabel: pausedUntil
       ? pausedUntil.toLocaleDateString("en-AU", { day: "numeric", month: "long" })
       : null,
+    isAuthenticated: sessionStatus === "authenticated",
   });
 
   const total = fmt(PARTNER_CATALOG_TOTAL);
