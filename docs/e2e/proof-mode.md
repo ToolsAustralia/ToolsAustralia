@@ -349,3 +349,34 @@ unscoped proof run ever renders them). The curated client bundle is exactly
 Checklist for tagging a test `@demo`: client-meaningful story, `demo-title` annotation,
 route warmed before the first beat, captions explain (never label), and the video passes
 the `/video-review` panel once rendered.
+
+## Round 5 — the spotlight can be real and still invisible (2026-07-28, streak-journey)
+
+**A beat that scrolls inside its own body draws its spotlight too late to be seen.**
+`demo.step` paints the caption and holds `holdFor(title)` ms BEFORE running the body, and
+`demo.smoothScrollTo` then glides in ~350px increments taking seconds more — so a body shaped
+`smoothScrollTo(x); highlight(x)` puts the ring on screen well past that beat's own midpoint,
+which is exactly where a `/video-review` panel samples.
+
+The panel reported this as "no ring at all" and hypothesised a selector resolving to null.
+Instrumenting the beat disproved that: the ring existed, and its box was *pixel-identical* to
+the target's, fully inside the viewport —
+`ringRect == walletRect == {x:18,y:156,w:376,h:280}`, `matchCount:1`, `scrollY:0`. The
+spotlight was real and simply late.
+
+**Fix: scroll BEFORE `demo.step`; call `demo.highlight` as the first statement in the body.**
+The page is then settled when the beat opens, which also keeps `highlight`'s read-the-box-once
+behaviour correct. Any beat that scrolls inside its own body carries this defect latently — it
+does not surface until someone samples cue midpoints rather than convenient timestamps.
+
+**Corollary for reading a `/video-review` report:** a judge's stated *mechanism* is a lead, not
+a finding. The observation ("no ring in this frame") was correct and valuable; the cause it
+proposed was wrong, and fixing that proposed cause would have chased a selector that was never
+broken. Instrument before you believe it.
+
+**Re-framing a shot to keep something off-camera is viewport-specific.** The closing beat
+scrolls `/terms` so §5.1 is centred. A scroll correction that successfully hid §5.2's
+"Mini Pack entries sold" line at 392x800 still left it on screen at 800x450 — the shorter,
+wider canvas exposes more vertical content from the same offset, and the caption above it reads
+"free entries, never sold". Any "scroll so X is out of frame" fix must be verified on EVERY
+viewport it ships to, from a frame rather than from the scroll arithmetic.
