@@ -117,7 +117,7 @@ export default function RewardsPartnerCard({
             </span>
             <span className="min-w-0 flex-1">
               <b className="block font-poppins text-[13px] font-extrabold">{sso.isPending ? "Opening…" : "Open partner portal"}</b>
-              <span className="text-[10px] font-semibold" style={{ color: inkOn(c) === "#ffffff" ? "rgba(255,255,255,.78)" : "rgba(0,0,0,.6)" }}>See every deal · signed in via SSO</span>
+              <span className="text-[10px] font-semibold" style={{ color: inkOn(c) === "#ffffff" ? "rgba(255,255,255,.78)" : "rgba(0,0,0,.6)" }}>See every deal · signed in automatically</span>
             </span>
             <ExternalLink className="h-4 w-4" />
           </button>

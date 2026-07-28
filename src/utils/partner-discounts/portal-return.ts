@@ -18,12 +18,9 @@
  * @module utils/partner-discounts/portal-return
  */
 
-/** The partner-catalogue percent ladder — a URL `level` outside it is discarded.
- *  (Mirrors VALID_REQUIRED_PCTS in unlock-packages.ts and ALLOWED_PERCENTS in the
- *  build script — consolidation tracked as panel-review F-016.) */
-export const PARTNER_CATALOG_LADDER_PCTS: ReadonlySet<number> = new Set([
-  5, 10, 15, 25, 40, 50, 55, 70, 75, 85, 100,
-]);
+// The percent ladder is single-sourced in partner-catalog-visibility (panel F-016);
+// re-exported here because this module's tests + callers validate against it.
+export { PARTNER_CATALOG_LADDER_PCTS } from "@/utils/partner-discounts/partner-catalog-visibility";
 
 /**
  * Resolved return-visit context, built SERVER-SIDE from the rewards-return URL
@@ -248,7 +245,9 @@ export function resolvePortalBannerView(input: {
   if (guest) {
     return {
       headline: "Unlock the partner catalogue",
-      sub: `Up to ${total} offers from Australia's top brands — included with any membership or one-time pack.`,
+      // F-025: "included with any…" read as "all 1,833 with any purchase" — an
+      // Apprentice Pack opens 459. Name the variance instead of implying the lot.
+      sub: `Up to ${total} offers from Australia's top brands — your membership or one-time pack sets how much of the catalogue you unlock.`,
       cta: { kind: "scroll", label: "See packages" },
       showLoginHint: true,
     };

@@ -25,7 +25,10 @@
  */
 
 import { getPackagesByType, type StaticMembershipPackage } from "@/data/membershipPackages";
-import { getPartnerCatalogAccessPercentForMembershipPackageId } from "@/utils/partner-discounts/partner-catalog-visibility";
+import {
+  getPartnerCatalogAccessPercentForMembershipPackageId,
+  PARTNER_CATALOG_LADDER_PCTS,
+} from "@/utils/partner-discounts/partner-catalog-visibility";
 
 /** One recommended package: the cheapest in its family covering the required percent. */
 export interface UnlockPackageOption {
@@ -40,13 +43,6 @@ export interface UnlockPackagesForLevel {
   subscription: UnlockPackageOption | null;
   oneTime: UnlockPackageOption | null;
 }
-
-/**
- * The full partner-catalogue percent ladder (mini 5/10/15, one-time 25/40/55/70/85/100,
- * subscription 50/75/100). Any other input is invalid — fail-closed to nulls rather
- * than guessing a tier (mirrors the fail-closed stance in member-level.ts).
- */
-const VALID_REQUIRED_PCTS = new Set([5, 10, 15, 25, 40, 50, 55, 70, 75, 85, 100]);
 
 function cheapestCovering(
   packages: StaticMembershipPackage[],
@@ -67,11 +63,12 @@ function cheapestCovering(
  * Resolve the cheapest active subscription and cheapest active public one-time pack
  * whose partner-catalogue percent covers `requiredPct`.
  *
- * @param requiredPct one of the ladder percents (see {@link VALID_REQUIRED_PCTS});
- *   anything else (0, NaN, in-between values) returns `{ subscription: null, oneTime: null }`.
+ * @param requiredPct one of the ladder percents ({@link PARTNER_CATALOG_LADDER_PCTS});
+ *   anything else (0, NaN, in-between values) returns `{ subscription: null, oneTime: null }`
+ *   — fail-closed rather than guessing a tier (mirrors member-level.ts).
  */
 export function resolveUnlockPackagesForLevel(requiredPct: number): UnlockPackagesForLevel {
-  if (!VALID_REQUIRED_PCTS.has(requiredPct)) {
+  if (!PARTNER_CATALOG_LADDER_PCTS.has(requiredPct)) {
     return { subscription: null, oneTime: null };
   }
 

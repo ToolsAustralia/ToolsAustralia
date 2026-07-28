@@ -120,7 +120,7 @@ export default function PartnerPortalPhone({
             className="mt-4 inline-flex w-full items-center justify-center gap-1.5 rounded-xl px-3 py-2.5 text-xs font-extrabold"
             style={{ background: accentHex, color: "#000" }}
           >
-            Open rewards portal <ArrowRight className="h-3 w-3" />
+            Open partner portal <ArrowRight className="h-3 w-3" />
           </button>
         </div>
       </div>

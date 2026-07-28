@@ -522,7 +522,7 @@ the existing `AccessRing`. See [dashboard-account/frontend.md](../dashboard-acco
   (renamed from "Reward portal" 2026-07-24 — it opens the *partner-discount* portal, and the old
   label collided with the unrelated `/rewards` points page; now matches RewardsPartnerCard's
   "Open partner portal") is a **chip-sized premium gold** pill that **triggers the partner-discount
-  SSO** (`onRewardPortal` → `usePartnerDiscountSso().mutate()` in the home page), not a route; a
+  SSO** (`onPartnerPortal` → `usePartnerDiscountSso().mutate()` in the home page), not a route; a
   **"Complete your profile"** nudge shows when `profileComplete === false` (new `tierKey` /
   `profileComplete` / `onCompleteProfile` props).
 - `DashboardPromoBanner` — the left icon is now the **container-less multiplier badge image**

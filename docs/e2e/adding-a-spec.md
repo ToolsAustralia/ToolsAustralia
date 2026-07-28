@@ -163,6 +163,15 @@ same subscription purchase as `purchase-subscription.spec.ts`, entered via the h
 verified event-dispatch chain (`useMajorDrawEntryCta.openEntryFlow` → `openMembershipModal`
 window event → `MembershipSection`'s listener).
 
+Cold-server compile budget (2026-07-28): a spec asserting client-state-dependent UI on a HEAVY
+route (`/membership` is the worst case — modal + every section) must warm that route with a real
+**browser** navigation in `beforeAll`, not just `request.get()`. An HTML fetch compiles the server
+route but not the client chunks, and it is those Turbopack compiles on the first browser hit —
+until they land, client-gated UI sits in its loading state. Measured under identical fixture
+conditions: warm ≈ 3-8s to settle, cold ≫ 60s. Precedent + the full note:
+`e2e/specs/membership/portal-return-banner.spec.ts`. Prefer waiting on a deterministic settle
+signal (e.g. `aria-busy` clearing) over inflating timeouts.
+
 Rewards-return demo (2026-07-24): `e2e/specs/membership/portal-return-demo.spec.ts` is the
 narrated `@demo` walkthrough of the partner-portal rewards-return banner (blocked offer →
 recommendation → covered state → dashboard chip). **Never click "Open partner portal" in a

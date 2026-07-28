@@ -122,7 +122,7 @@ export default function MembershipEntriesStack() {
             activeTierIndex={selIdx}
           />
           <div>
-            <h3 className="font-poppins text-2xl font-extrabold">Your member discounts live in one rewards portal.</h3>
+            <h3 className="font-poppins text-2xl font-extrabold">Your member discounts live in one partner portal.</h3>
             <p className="mt-3 text-white/70">
               Open it straight from your account — your tier sets how much of the partner catalogue you unlock.
             </p>

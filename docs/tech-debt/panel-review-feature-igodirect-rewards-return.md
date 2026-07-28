@@ -17,10 +17,11 @@ Fresh session? Run `/panel-fix` on this branch, or paste:
 > and fill `_Handled:_` with the date. If a fix turns out to be wrong, mark it Overridden with
 > a reason instead of silently skipping it.
 
-**Now (do these):** F-016 (ladder single-source), F-017 (onRewardPortal prop rename), F-018 (stale comments ×2), F-019 (queryKeys registration), F-020 (tier-boundary test assertions)
-**Next:** F-021 (server-only lint guard), F-023 (e2e specs), F-024 (naming/spelling sweep), F-025 (guest copy overpromise)
-**Owner decision needed:** F-022 (hero dead band — docstring says intentional; fix supplied if DJ rules against it)
-**Done:** F-001–F-015 (F-010 at the 996557d0 commit; batch 2 = 7e584e6a; polish batch F-011–F-015 = this tree)
+**Now:** — nothing outstanding.
+**Owner decision needed:** F-022 (hero dead band — the component docstring calls the doubled header offset intentional; measured 86-106px; one-prop fix supplied if DJ rules against it). F-010 stays unticked by design: it is a per-commit hygiene step (revert any timestamp-only `normToolsManifest.json` churn before each commit), done at 996557d0 and to be repeated, not a one-off.
+**Done:** F-001–F-021 + F-023–F-025 (pass 1 = 996557d0 · batch 2 = 7e584e6a · polish = 80548fcb · Later batch = this tree)
+
+_2026-07-28 panel-fix pass 4 (Later batch): F-016–F-021, F-023–F-025 done. **F-016 landed the ladder in `partner-catalog-visibility.ts`** (the module that owns the percent concept) with `portal-return.ts` re-exporting and the build script importing it — verified the script still runs and emits byte-identical output. **F-023 cost the most:** the new `@smoke` spec appeared to fail hard (banner stuck in its skeleton for 60s), so it was investigated as a suspected regression from this batch. It is NOT: under identical fixture conditions (pinned `x-forwarded-for` + third-party route blocking) a warm server settles the banner in 3-8s with every `/api/*` 200 and zero page errors; a COLD Turbopack dev server can hold the skeleton past 60s because `/membership`'s client chunks compile on the first browser hit. Ruled out along the way: rate limiting (12 rapid `/api/major-draw` calls with the fixture IP → all 200), TanStack disabled-query semantics (repo is v5, so disabled queries do not pin `isLoading`), and a bundle-weight regression from F-016 (`partner-catalog-visibility` was already in the banner's import graph). Mitigations: a real-navigation `beforeAll` warm-up + a deterministic `aria-busy` settle helper; the characteristic is documented in the spec header and `docs/e2e/adding-a-spec.md`. Gates: type-check ✓, lint ✓ **exactly at the 6-error/33-warning baseline** (a 188-error run was traced to eslint walking the gitignored `e2e-artifacts/report/` bundle produced by these very e2e runs — not source), `test:portal-return` ✓, `test:unlock-packages` ✓ (now pins all 11 tiers), `test:chat-faqs` ✓, `test:member-level` ✓, `build:partner-catalog` ✓. e2e: all rewards-return specs pass (some need Playwright's retry on a cold server — see above)._
 
 _2026-07-28 panel-fix pass 3 (polish): F-011–F-015 done. Verified: `test:portal-return` (18 cases incl. the new run-on-name pin) ✓, type-check ✓, targeted lint ✓, rule-11 grep over every changed string ✓ clean._
 
@@ -77,25 +78,25 @@ _2026-07-24 panel-fix pass 1: F-001–F-005 done in the working tree (uncommitte
 
 ### Later
 
-- [ ] **F-016** · P2 · Eng · `page.tsx:42` + `unlock-packages.ts:49` + `build-partner-catalog-preview.ts:21` — Percent ladder defined in three lockstep copies.
+- [x] **F-016** · P2 · Eng · `page.tsx:42` + `unlock-packages.ts:49` + `build-partner-catalog-preview.ts:21` — Percent ladder defined in three lockstep copies.
       _Fix:_ export `PARTNER_CATALOG_LADDER_PCTS` from `src/utils/partner-discounts/unlock-packages.ts`; import in the other two; delete local copies. (If F-003 landed, put it in `portal-return.ts` instead.)  _Shot:_ code-only  _Handled:_ —
-- [ ] **F-017** · P2 · Eng · `src/components/sections/dashboard/DashboardHero.tsx:24,48,104,109` + `my-account/page-client.tsx:317` — "Partner portal" button still wired through `onRewardPortal` prop.
+- [x] **F-017** · P2 · Eng · `src/components/sections/dashboard/DashboardHero.tsx:24,48,104,109` + `my-account/page-client.tsx:317` — "Partner portal" button still wired through `onRewardPortal` prop.
       _Fix:_ rename prop to `onPartnerPortal` at declaration + call site; update the mention in `docs/shared-ui/frontend.md`.  _Shot:_ code-only  _Handled:_ —
-- [ ] **F-018** · P2 · Eng/QA/UI (merge) · `src/config/featureFlags.ts:45` + `src/hooks/useMembershipModalDeepLink.ts:20-22` — Two stale comments assert the pre-branch world.
+- [x] **F-018** · P2 · Eng/QA/UI (merge) · `src/config/featureFlags.ts:45` + `src/hooks/useMembershipModalDeepLink.ts:20-22` — Two stale comments assert the pre-branch world.
       _Fix:_ featureFlags comment `"Reward portal"` → `"Partner portal"`; deep-link hook parenthetical → `"(both MembershipSection and /membership's MembershipPageClient wrap the open in whenGatesOpenElseGateModal)"`.  _Shot:_ code-only  _Handled:_ —
-- [ ] **F-019** · P2 · QA · `src/lib/queryKeys.ts` (absent) + `usePurchaseInvalidation.ts:27` + `usePartnerDiscountQueue.ts:74,86,109` — Fixed invalidation key is still a hand-copied literal.
+- [x] **F-019** · P2 · QA · `src/lib/queryKeys.ts` (absent) + `usePurchaseInvalidation.ts:27` + `usePartnerDiscountQueue.ts:74,86,109` — Fixed invalidation key is still a hand-copied literal.
       _Fix:_ add `partnerDiscounts: { queue: ["partnerDiscountQueue"] as const }` to queryKeys; import at all four sites.  _Shot:_ code-only  _Handled:_ —
-- [ ] **F-020** · P2 · QA · `src/utils/partner-discounts/__tests__/unlock-packages.test.ts:87-94` — Exact cheapest-package assertions missing for tiers 40/55/75/85.
+- [x] **F-020** · P2 · QA · `src/utils/partner-discounts/__tests__/unlock-packages.test.ts:87-94` — Exact cheapest-package assertions missing for tiers 40/55/75/85.
       _Fix:_ add `testRequired40` (tradie-subscription + the 40% pack), `testRequired55` (foreman-pack), `testRequired75` (foreman-subscription at exact equality), `testRequired85` (the 85% pack); derive ids/prices from `src/data/membershipPackages.ts`.  _Shot:_ code-only  _Handled:_ —
-- [ ] **F-021** · P2 · Arch · `eslint/rules/no-models-in-client.js` — Server-only boundary of the 1,833-row map is a comment, not a guard.
+- [x] **F-021** · P2 · Arch · `eslint/rules/no-models-in-client.js` — Server-only boundary of the 1,833-row map is a comment, not a guard.
       _Fix:_ add branch to `classify()`: `if (spec === "@/generated/partnerCatalogOffers") return "the server-only partner catalog map (bundle-size)";`; name the rule in the generated header comment.  _Shot:_ code-only  _Handled:_ —
 - [ ] **F-022** · P2 · UI-B (owner to rule; docstring says intentional) · `MembershipPortalReturnBanner.tsx:145` + `MembershipHero.tsx:90` — 86–106px header-height dead band between banner and hero.
       _Fix (if ruled):_ pass `hasPortalBanner` into `MembershipHero`; swap its offset to `pt-8 lg:pt-10` when true.  _Shot:_ scratchpad `reviewer-b/ev-hero-gap-390.webp`  _Handled:_ —
-- [ ] **F-023** · P2 · QA · `e2e/specs/` — No e2e coverage of the banner, the legal-copy scan misses the param-gated copy, purchase CTA unasserted.
+- [x] **F-023** · P2 · QA · `e2e/specs/` — No e2e coverage of the banner, the legal-copy scan misses the param-gated copy, purchase CTA unasserted.
       _Fix:_ (1) new `e2e/specs/membership/portal-return-banner.spec.ts` `@smoke`: generic guest → "Unlock the partner catalogue"; `?offer_id=<real id>` → server-resolved name; XSS URL → generic + no pageerror; `?offer_name=Test Offer&level=50` → "Test Offer unlocks at 50% access."; bare `/membership` → banner absent; member states via storageState. (2) add `"/membership?utm_campaign=rewards-return"` to `legal-copy.spec.ts` PAGES (line 29). (3) append to `purchase-one-time.spec.ts` `@purchase`: flag-on → portal CTA visible post-webhook; flag-off → count 0.  _Shot:_ code-only  _Handled:_ —
-- [ ] **F-024** · P2 · UX-C (merge; pre-existing debt) · `MembershipEntriesStack.tsx:125` + `PartnerPortalPhone.tsx:123` + `MiniDrawPackages.tsx:203,313` + `PartnerDiscountQueue.tsx:581` + `MiniDrawPackageModal.tsx:121` + `RewardsPartnerCard.tsx:122` — Portal naming/spelling sweep.
+- [x] **F-024** · P2 · UX-C (merge; pre-existing debt) · `MembershipEntriesStack.tsx:125` + `PartnerPortalPhone.tsx:123` + `MiniDrawPackages.tsx:203,313` + `PartnerDiscountQueue.tsx:581` + `MiniDrawPackageModal.tsx:121` + `RewardsPartnerCard.tsx:122` — Portal naming/spelling sweep.
       _Fix:_ "rewards portal" strings → "partner portal" (×2 on /membership); "partner catalog" → "partner catalogue" (×4 rendered strings); "signed in via SSO" → "signed in automatically".  _Shot:_ code-only  _Handled:_ —
-- [ ] **F-025** · P2 · UX-C · `MembershipPortalReturnBanner.tsx:130` — Guest generic sub implies all 1,833 offers come with any purchase.
+- [x] **F-025** · P2 · UX-C · `MembershipPortalReturnBanner.tsx:130` — Guest generic sub implies all 1,833 offers come with any purchase.
       _Fix:_ sub → `` `Up to ${total} offers from Australia's top brands — your membership or one-time pack sets how much of the catalogue you unlock.` ``  _Shot:_ code-only  _Handled:_ —
 
 ## Accepted deviations (recorded, no action)

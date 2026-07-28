@@ -314,7 +314,7 @@ export default function MyAccountPage() {
         partnerAccessExpiryLabel={dash.partnerAccessExpiryLabel}
         profileComplete={Boolean(user.profileSetupCompleted && user.birthdate)}
         onOpenSettings={() => router.push("/my-account/settings")}
-        onRewardPortal={partnerDiscountSsoEnabled() ? () => partnerSso.mutate() : undefined}
+        onPartnerPortal={partnerDiscountSsoEnabled() ? () => partnerSso.mutate() : undefined}
         onBecomeMember={() => router.push("/my-account/membership")}
         onUpdatePayment={onResolvePayment}
         onCompleteProfile={() => requestModal("user-setup", true)}

@@ -200,7 +200,7 @@ export default function MiniDrawPackages({
                   }}
                   onClick={() => setSelectedPackageId(pkg._id)}
                   disabled={disabled}
-                  title={`${partnerCatalogPct}% partner catalog · ${pkg.entries} free entries · $${pkg.price}`}
+                  title={`${partnerCatalogPct}% partner catalogue · ${pkg.entries} free entries · $${pkg.price}`}
                   className={`
                     w-full relative overflow-hidden rounded-xl sm:rounded-2xl transition-all duration-300
                     ${disabled
@@ -310,7 +310,7 @@ export default function MiniDrawPackages({
                     </div>
                     <div className="text-cyan-300 text-xs mt-1.5 flex items-center gap-1">
                       <span className="w-1 h-1 rounded-full bg-cyan-300 inline-block shrink-0" />
-                      {partnerCatalogPct}% of partner catalog
+                      {partnerCatalogPct}% of partner catalogue
                     </div>
                     {(pkg.partnerDiscountDays > 0 || pkg.partnerDiscountHours > 0) && (
                       <div className="text-green-400 text-xs mt-1.5 flex items-center gap-1">

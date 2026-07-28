@@ -46,6 +46,42 @@ function testRequired25() {
   assert.equal(r.oneTime?.price, 25, "Apprentice Pack is $25");
 }
 
+/**
+ * The four ladder tiers the original suite left to invariant-only coverage
+ * (panel F-020). Each pins the EXACT cheapest package per family, so a
+ * cheapest-selection or tier-resolution regression at these boundaries fails
+ * loudly instead of passing the "non-null and >= required" invariant.
+ * 75 and 85 are the equality boundaries (Foreman sub == 75, Power Pack == 85).
+ */
+function testRequired40() {
+  const r = resolveUnlockPackagesForLevel(40);
+  assert.equal(r.subscription?.packageId, "tradie-subscription", "40 → Tradie subscription ($20, 50%)");
+  assert.equal(r.oneTime?.packageId, "tradie-pack", "40 → Tradie Pack ($50, 40% — exact boundary)");
+  assert.equal(r.oneTime?.pct, 40, "Tradie PACK grants 40% (not the subscription's 50%)");
+}
+
+function testRequired55() {
+  const r = resolveUnlockPackagesForLevel(55);
+  // Tradie sub (50%) falls short → the cheapest covering sub is Foreman.
+  assert.equal(r.subscription?.packageId, "foreman-subscription", "55 → Foreman subscription ($40, 75%)");
+  assert.equal(r.oneTime?.packageId, "foreman-pack", "55 → Foreman Pack ($100, 55% — exact boundary)");
+  assert.equal(r.oneTime?.pct, 55, "Foreman Pack grants 55%");
+}
+
+function testRequired75() {
+  const r = resolveUnlockPackagesForLevel(75);
+  assert.equal(r.subscription?.packageId, "foreman-subscription", "75 → Foreman subscription (exact 75% equality)");
+  assert.equal(r.subscription?.pct, 75, "equality must qualify, not fall through to Boss");
+  assert.equal(r.oneTime?.packageId, "power-pack", "75 → Power Pack ($500, 85%; Boss Pack's 70% falls short)");
+}
+
+function testRequired85() {
+  const r = resolveUnlockPackagesForLevel(85);
+  assert.equal(r.subscription?.packageId, "boss-subscription", "85 → Boss subscription ($80, 100%)");
+  assert.equal(r.oneTime?.packageId, "power-pack", "85 → Power Pack ($500, 85% — exact boundary)");
+  assert.equal(r.oneTime?.pct, 85, "Power Pack grants 85%");
+}
+
 function testMiniTierPercents() {
   // Mini-tier percents (5/10/15) are valid inputs even though no mini pack lives in
   // the static catalog — the cheapest covering packages are the entry-level ones.
@@ -86,8 +122,12 @@ function testNeverReturnsMemberOnlyOrMiniPacks() {
 
 function run() {
   testRequired100();
+  testRequired85();
+  testRequired75();
   testRequired70();
+  testRequired55();
   testRequired50();
+  testRequired40();
   testRequired25();
   testMiniTierPercents();
   testInvalidInputs();

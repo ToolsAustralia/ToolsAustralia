@@ -118,7 +118,7 @@ const MiniDrawPackageModal: React.FC<MiniDrawPackageModalProps> = ({
                   className="flex items-center justify-between border-b py-1.5"
                   style={{ borderColor: "rgba(255,255,255,0.08)" }}
                 >
-                  <span className="text-white/55 text-sm sm:text-base">Partner catalog:</span>
+                  <span className="text-white/55 text-sm sm:text-base">Partner catalogue:</span>
                   <span className="ml-2 text-right font-semibold text-cyan-300 text-sm sm:text-base">
                     {partnerCatalogPct}% of offers
                   </span>

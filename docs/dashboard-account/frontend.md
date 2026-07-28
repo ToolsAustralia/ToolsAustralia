@@ -185,7 +185,7 @@
 > non-clickable "Become a member · Unlock exclusive rewards & free entries" advert (the join path is the
 > "Choose a membership" list below).
 
-> **Rewards portal + streak gating (2026-07-03):** the dashboard home passes `onRewardPortal` only when
+> **Rewards portal + streak gating (2026-07-03):** the dashboard home passes `onPartnerPortal` only when
 > [`partnerDiscountSsoEnabled()`](../../src/config/featureFlags.ts) is on (default off until partner-portal SSO
 > ships) — so the hero "Reward portal" button doesn't render meanwhile. The home `LoyaltyStreak` card is
 > gated on `isDashboardFeatureOn("loyaltyStreak")` (`DASHBOARD_FEATURES.loyaltyStreak: false`) — hidden as

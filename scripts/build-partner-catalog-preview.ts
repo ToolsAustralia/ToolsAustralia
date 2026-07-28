@@ -18,13 +18,16 @@
 
 import fs from "node:fs/promises";
 import path from "node:path";
+import { PARTNER_CATALOG_LADDER_PCTS } from "@/utils/partner-discounts/partner-catalog-visibility";
 
 const CSV_PATH = path.join(process.cwd(), "src", "data", "partner-catalog", "offers-list-breakdown.csv");
 const OFFERS_OUT = path.join(process.cwd(), "src", "generated", "partnerCatalogOffers.ts");
 const PREVIEW_OUT = path.join(process.cwd(), "src", "generated", "partnerCatalogPreview.ts");
 
 const HEADER = ["ID", "Category", "Offer", "Highlight", "Product.terms_and_conditions", "Supplier", "AccessPercent"];
-const ALLOWED_PERCENTS = [5, 10, 15, 25, 40, 50, 55, 70, 75, 85, 100];
+/** Ascending ladder, derived from the single source (panel F-016) — also the emit order
+ *  for the generated cumulative-tier table. */
+const ALLOWED_PERCENTS = [...PARTNER_CATALOG_LADDER_PCTS].sort((a, b) => a - b);
 
 /** Expected aggregates — fail loud if the CSV drifts from the curated snapshot. */
 const EXPECTED_TOTAL = 1833;

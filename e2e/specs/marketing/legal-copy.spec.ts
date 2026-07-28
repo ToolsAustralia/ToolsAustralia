@@ -26,7 +26,15 @@ const BANNED_COPY: RegExp[] = [
   /\b(buy|purchase|pay for)\s+(an? )?entr(y|ies)\b/i,
 ];
 
-const PAGES = ["/", "/membership", "/mini-draws"];
+// The rewards-return banner's copy renders ONLY with the portal params, so the bare
+// /membership entry never scans it (panel F-023). offer_id 1064993 = Amazon.com.au
+// eGift Card (100%) — a guest hits the "unlocks at 100% access" state.
+const PAGES = [
+  "/",
+  "/membership",
+  "/membership?utm_campaign=rewards-return&offer_id=1064993",
+  "/mini-draws",
+];
 
 test.describe("legal copy guard @smoke", () => {
   for (const path of PAGES) {

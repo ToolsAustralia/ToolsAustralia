@@ -21,7 +21,7 @@ interface DashboardHeroProps {
   /** False → show a "complete your profile" nudge in the hero. */
   profileComplete?: boolean;
   onOpenSettings: () => void;
-  onRewardPortal?: () => void;
+  onPartnerPortal?: () => void;
   onBecomeMember?: () => void;
   onUpdatePayment?: () => void;
   onCompleteProfile?: () => void;
@@ -45,7 +45,7 @@ export default function DashboardHero({
   partnerAccessExpiryLabel,
   profileComplete,
   onOpenSettings,
-  onRewardPortal,
+  onPartnerPortal,
   onBecomeMember,
   onUpdatePayment,
   onCompleteProfile,
@@ -101,12 +101,12 @@ export default function DashboardHero({
     ) : null;
 
   const primaryBtn =
-    acct === "active" && onRewardPortal ? (
+    acct === "active" && onPartnerPortal ? (
       // Premium gold "rewards" treatment — distinct from foreman-yellow / boss-red
       // tier hues, reads unmistakably as the rewards entry point.
       <button
         type="button"
-        onClick={onRewardPortal}
+        onClick={onPartnerPortal}
         className="inline-flex items-center gap-1.5 rounded-full px-[11px] py-[7px] text-[10px] font-extrabold shadow-[0_6px_14px_-8px_rgba(120,82,10,.7)] transition-transform focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70 motion-safe:active:translate-y-px"
         style={{ background: "linear-gradient(135deg,#fbe9ad 0%,#e6c455 42%,#c99a2e 100%)", color: "#2a1e02", border: "1px solid rgba(120,82,10,.5)" }}
       >

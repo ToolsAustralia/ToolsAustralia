@@ -3,12 +3,14 @@ module.exports = {
     type: "problem",
     docs: {
       description:
-        'Disallow importing server-only Mongoose models / the mongoose package / the Mongo connection helper from a client component (a file with a "use client" directive).',
+        'Disallow importing server-only modules — Mongoose models / the mongoose package / the Mongo connection helper / the generated partner-catalog offers map — from a client component (a file with a "use client" directive).',
     },
     schema: [],
     messages: {
       serverOnly:
         'Client component ("use client") must not import {{what}}. Mongoose models are server-only ("mongoose" is a serverExternalPackage); importing them into client code crashes at runtime or bundles the data layer. Fetch the data in a server component / route handler / service and pass plain serializable data down.',
+      serverOnlyData:
+        'Client component ("use client") must not import {{what}}. It would ship the whole 1,833-row catalogue in the client bundle. Resolve offers SERVER-side (see src/app/(site)/membership/page.tsx, which injects the map into resolvePortalReturn) and pass the resolved values down, or import the client-safe aggregates from @/generated/partnerCatalogPreview.',
     },
   },
   create(context) {
@@ -40,9 +42,23 @@ module.exports = {
       return null;
     }
 
+    /** Server-only GENERATED data whose only sin is bundle size (panel F-021) — a
+     *  different message, since the fix is "resolve it server-side", not "it crashes". */
+    function classifyServerOnlyData(spec) {
+      if (typeof spec !== "string") return null;
+      if (spec === "@/generated/partnerCatalogOffers" || /(^|\/)generated\/partnerCatalogOffers$/.test(spec))
+        return "the server-only partner-catalog offers map (@/generated/partnerCatalogOffers)";
+      return null;
+    }
+
     function check(node, spec) {
       const what = classify(spec);
-      if (what) context.report({ node, messageId: "serverOnly", data: { what } });
+      if (what) {
+        context.report({ node, messageId: "serverOnly", data: { what } });
+        return;
+      }
+      const data = classifyServerOnlyData(spec);
+      if (data) context.report({ node, messageId: "serverOnlyData", data: { what: data } });
     }
 
     // Type-only imports/exports are ERASED at build — they never bundle the data layer, so they are

@@ -20,6 +20,20 @@ type UserWithPartnerCatalogContext = (Partial<UserData> | Partial<IUser>) & {
 };
 
 /**
+ * THE partner-catalogue percent ladder — the complete set of values
+ * {@link getPartnerCatalogAccessPercentForPlanId} can return (mini 5/10/15, one-time
+ * 25/40/55/70/85/100, subscription 50/75/100).
+ *
+ * SINGLE SOURCE (panel F-016): previously duplicated three times (URL validation in
+ * /membership's page, the unlock recommender, and the catalog build script's CSV
+ * validation) — a ladder change that missed one copy silently desynced them. Everything
+ * that validates a percent imports THIS constant.
+ */
+export const PARTNER_CATALOG_LADDER_PCTS: ReadonlySet<number> = new Set([
+  5, 10, 15, 25, 40, 50, 55, 70, 75, 85, 100,
+]);
+
+/**
  * Partner catalog access percent for a package/plan id (subscriptions, one-time, plus upsells).
  * Subscriptions: Tradie 50%, Foreman 75%, Boss 100%.
  * One-time ladder (6 tiers): VIP 100%, Power 85%, Boss 70%, Foreman 55%, Tradie 40%, Apprentice 25%.
