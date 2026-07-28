@@ -33,7 +33,7 @@ entirely through a single orchestrator (`e2e/run.ts`) — never a bare `npx play
 | Fixtures | `e2e/fixtures/test.ts`, `demo.ts`, `ui-audit.ts` | Extended `test`/`expect`: auto QA `watchdog` (console/network/third-party blocking), per-worker rate-limit-safe IP, `freshUser` factory, `demo` proof-mode narration, `uiAudit` lens. |
 | Marketing/membership `@smoke` specs | `e2e/specs/marketing/*.spec.ts`, `e2e/specs/membership/modal.spec.ts` | Landing hero + membership CTAs, `/mini-draws`, `/membership` tier display, and the CLAUDE.md §11 legal-copy guard (bans gambling/sold-entry vocabulary, asserts free-entry framing). |
 | Landing countdown tiers (`@demo`) | `e2e/specs/marketing/landing-drawn-states.spec.ts` | Moves the active major draw's `drawDate` and reloads to prove every one of the 15 prize combinations (5 brands x 3 toolboxes) swaps to its own `drawn-tomorrow` / `drawn-tonight` hero still. The mobile test closes on the four Kincrome pages whose first export described the wrong prize, re-walking them to show the 2026-07-27 corrected copy. **Two tests, one per viewport** — a mobile test pinned to `mobile-chrome` and a desktop test pinned to `chromium-desktop`, because Playwright cannot rescale a video canvas mid-recording (see proof-mode.md rule 4); join the clips with `npm run e2e:proof:join`. **Serial** — it mutates the shared seeded draw and restores it in `afterAll`. |
-| Promo default-theme A/B split (`@smoke`) | `e2e/specs/marketing/promo-theme-split.spec.ts` | Two tests guarding the promo-landing default-theme experiment (light vs dark, see `docs/promo/frontend.md#default-theme-ab-gate-wired-into-both-promo-landing-pages-2026-07-28`): (1) stubs `POST /api/ab-testing/assign` for a deterministic dark arm and samples `<html>`'s class every animation frame from first paint, asserting no dark→light regression once the theme resolves; (2) asserts the control-arm SSR HTML is substantial (`>20_000` chars), guarding the "overlay, not replacement" architecture. **Serial** — `beforeAll` inserts a real active `Experiment` doc (`slugTargets: ["__promo-theme__"]`) directly into the e2e DB (same pattern as `landing-drawn-states.spec.ts`'s `majordraws` mutation) because `PromoThemeExperimentGate`'s `experimentId` prop is resolved server-side per request and the client hook makes no request at all when it's null; `afterAll` deletes it. Test (2) passes. Test (1) is **currently BLOCKED under `npm run dev` — see the "Known, currently-open gaps" entry below** by a second, independent dev-only bug (React Strict Mode double-invoke + a `ranRef`/`AbortController` interaction in `usePromoThemeExperiment`), discovered only after Task 12's client-boundary fix made the gate activate for the first time. |
+| Promo default-theme A/B split (`@smoke`) | `e2e/specs/marketing/promo-theme-split.spec.ts` | Two tests guarding the promo-landing default-theme experiment (light vs dark, see `docs/promo/frontend.md#default-theme-ab-gate-wired-into-both-promo-landing-pages-2026-07-28`): (1) stubs `POST /api/ab-testing/assign` for a deterministic dark arm and samples `<html>`'s class every animation frame from first paint, asserting no dark→light regression once the theme resolves; (2) asserts the control-arm SSR HTML is substantial (`>20_000` chars), guarding the "overlay, not replacement" architecture. **Serial** — `beforeAll` inserts a real active `Experiment` doc (`slugTargets: ["__promo-theme__"]`) directly into the e2e DB (same pattern as `landing-drawn-states.spec.ts`'s `majordraws` mutation) because `PromoThemeExperimentGate`'s `experimentId` prop is resolved server-side per request and the client hook makes no request at all when it's null; `afterAll` deletes it. Both tests pass. |
 | Auth/account/admin `@smoke` specs | `e2e/specs/auth/*.spec.ts`, `e2e/specs/account/*.spec.ts`, `e2e/specs/admin/*.spec.ts` | Login, the registration guest-bridge (no auto-login), `/my-account` gate, `/admin` gate + member-blocked boundary. |
 | Purchase (money-path) `@purchase` specs | `e2e/helpers/payment.ts`; `e2e/specs/membership/{purchase-subscription,purchase-one-time,purchase-decline,purchase-idempotency,webhook-replay,purchase-via-showcase}.spec.ts` | Real Stripe TEST-MODE payments through the real UI + real webhook delivery, DB-level exactly-once assertions. |
 | Flagship full-journey (`npm run e2e:journey`) | `e2e/specs/membership/full-journey.spec.ts`, `e2e/seed/promo.ts`, run.ts `--promo` | The longest single flow, under a seeded production-style 10× promo: showcase entry → register → pay (150 entries exactly-once) → auto-login → upsell accepted one-click with the promo-correct artwork asserted loaded (300 entries exactly-once) → dashboard EntryWallet shows 450. Self-skips outside journey mode — see how-to-run.md. |
@@ -96,8 +96,9 @@ As of Task 13's final verification, a fresh, fully unscoped `npm run e2e` run pa
 (exit 0) — the full-run split (architecture.md), its `isFullRun` hardening, and the a11y scoping
 decision below are all in place together. See the Task 13 report's Part C for the verbatim run.
 The gaps below remain genuinely open (documented, not silently worked around) but none of them
-currently blocks a normal `npm run e2e` — `promo-theme-split.spec.ts` is `@smoke`-tagged but its
-one still-failing test was never part of a green baseline to begin with (see below).
+currently blocks a normal `npm run e2e` — the promo-theme A/B test spec's Strict Mode and
+client-boundary bugs were both fixed (2026-07-28), and both tests in `promo-theme-split.spec.ts`
+now pass end to end.
 
 ## Known, currently-open gaps (tracked here, not silently worked around)
 
@@ -114,30 +115,22 @@ one still-failing test was never part of a green baseline to begin with (see bel
   `"use client"` module") for the full incident writeup, and the task-12 report
   (`.superpowers/sdd/2026-07-28-promo-theme-split/task-12-report.md`) for the original
   diagnosis and the fix's verification trail.
-- **NEW, still open: a second, independent dev-only bug blocks `promo-theme-split.spec.ts`'s
-  "dark arm never paints light before dark" test even after the fix above.** Fixing the
-  client-boundary bug made the gate's `experimentId` resolve correctly for the first time —
-  which exposed that `usePromoThemeExperiment`'s single-shot effect (a `ranRef` guard +
-  `AbortController`) cannot survive React Strict Mode's dev-only double-effect-invocation
-  (confirmed active by default for this app's App Router — `reactStrictMode` is unset in
-  `next.config.ts`, and Next resolves that to `__NEXT_STRICT_MODE_APP = true`). Strict Mode's
-  first effect invocation starts the `/assign` fetch; its synthetic cleanup aborts it
-  immediately; the second (real) invocation sees `ranRef.current` already `true` and never
-  retries — the request is permanently stranded as `net::ERR_ABORTED` with no follow-up,
-  confirmed via a Playwright MCP browser session against the running dev server on two
-  independent fresh page loads. **This is dev-only** — Strict Mode never double-invokes in a
-  production build, so the feature likely works correctly for real production visitors; it's
-  local dev testing (any `npm run dev`-backed e2e run, not `E2E_BUILD=1`) that's blocked. Not
-  verified against a real `next build`. Full detail and candidate fixes in
-  `docs/ab-testing/gotchas.md` ("`ranRef` + `AbortController` single-shot effects can
-  permanently strand in dev"). Not fixed as part of Task 12 — outside that task's prescribed
-  one-fix scope; the task's own instructions were to stop and report rather than keep
-  patching `src/` once the prescribed fix didn't make the spec pass. Candidate fixes for
-  whoever picks this up (not evaluated in depth): don't let the effect's cleanup abort a
-  request that a persistent ref-guard then prevents retrying, or switch to a Strict-Mode-safe
-  request pattern (an effect that's allowed to re-run, with the response — not the ref —
-  deciding whether to apply a stale result). Re-run `promo-theme-split.spec.ts` against
-  `npm run dev` to confirm once a fix lands.
+- **FIXED (2026-07-28, Task 12 re-verification): React Strict Mode double-invoke blocked the
+  test's "dark arm never paints light before dark" check.** Strict Mode's dev-only effect
+  double-invocation interacted with `usePromoThemeExperiment`'s single-shot `ranRef` guard:
+  the first mount started the `/api/ab-testing/assign` fetch and aborted it in cleanup via
+  an `AbortController`; the second mount saw `ranRef.current = true` and returned early,
+  leaving the request permanently stranded with no retry. A closure-local `aborted` boolean
+  was itself flipped by Strict Mode's cleanup and never un-flipped, causing a silent drop of
+  the eventual `setState` even after the fetch resolved. **The fix (verified 2026-07-28):**
+  promoted the `aborted` flag to `abortedRef` (a `useRef` that resets to `false` at the
+  **top** of every effect invocation, before the `ranRef` guard), allowing Strict Mode's
+  second mount to un-poison it so the in-flight request can settle normally; removed the
+  `AbortController` entirely (unnecessary since `ranRef` alone prevents duplicate requests,
+  and aborting buys nothing — the `/assign` endpoint persists server-side before building
+  the response). See `docs/ab-testing/gotchas.md` ("`ranRef` + `AbortController` single-shot
+  effects can permanently strand in dev — FIXED") for the full account, including the
+  second-order trap and the empirical verification against two consecutive test runs.
 - **The a11y baseline (`KNOWN_VIOLATIONS` in `e2e/specs/quality/a11y.spec.ts`) has only ever been
   verified against `chromium-desktop`.** Task 13's success-criteria gate ran `@a11y` across all
   three browser projects for the first time and found real, unbaselined axe violations on
