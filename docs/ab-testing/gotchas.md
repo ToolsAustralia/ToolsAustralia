@@ -65,6 +65,17 @@ purchase attribution. See `NON_CONVERSION_SENTINEL_SLUGS` in
 `src/utils/ab-testing/get-user-experiment-assignment.ts`. If you ever add a
 new site-wide cosmetic experiment, add its sentinel slug to that set.
 
+### Promo theme experiment (`__promo-theme__`)
+
+`__promo-theme__` is registered as a non-conversion sentinel, so **score it from the
+Bayesian / `ExperimentMetricsService` card only — its legacy event-count conversion and
+revenue panels read zero by design.** This does not blind the test because
+`ExperimentMetricsService` finds purchases via `$or: [{experimentId}, {userId: {$in: assignedUserObjIds}}]`,
+attributes by assignment authority, and anonymous assignments are merged to `userId` at
+purchase time before attribution. The sentinel registration only excludes it from the
+single-purchase stamp when multiple experiments compete; the Bayesian card still sees all
+assigned users' conversions, even anonymous ones converted later.
+
 ## Subscription-renewal attribution
 
 The legacy guard (`isInitialSubscriptionInvoice` in

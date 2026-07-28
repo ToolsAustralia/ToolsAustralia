@@ -3,7 +3,10 @@ import VariantAssignmentRepository from "@/repositories/ab-testing/VariantAssign
 import ExperimentRepository from "@/repositories/ab-testing/ExperimentRepository";
 
 /** Cosmetic site-wide experiments that must never be credited with purchases. */
-export const NON_CONVERSION_SENTINEL_SLUGS = new Set(["__membership-theme__"]);
+export const NON_CONVERSION_SENTINEL_SLUGS = new Set([
+  "__membership-theme__",
+  "__promo-theme__",
+]);
 
 /**
  * Rank experiments for purchase attribution when no slug is provided.

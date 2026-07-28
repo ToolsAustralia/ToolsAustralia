@@ -86,6 +86,7 @@
     "test:variant-config-membership-theme": "tsx src/services/ab-testing/__tests__/variantConfigService.membershipTheme.test.ts",
     "test:experiment-metrics": "tsx src/utils/ab-testing/__tests__/experiment-metrics-core.test.ts",
     "test:bayesian": "tsx src/utils/ab-testing/__tests__/bayesian-test.test.ts",
+    "test:attribution-rank": "tsx src/utils/ab-testing/__tests__/attributionRank.test.ts",
     "test:affiliate-reversal": "tsx src/utils/affiliate/__tests__/reverse-commission.test.ts",
     "test:redeemables": "tsx src/services/redeemables/__tests__/redeemables.test.ts",
     "test:redeemables-purchase-gate": "tsx src/utils/redeemables/__tests__/purchase-eligibility.test.ts",
