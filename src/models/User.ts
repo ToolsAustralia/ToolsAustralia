@@ -260,6 +260,8 @@ export interface IUser extends Document {
   signupAttribution?: {
     promotionPageType?: "evergreen" | "toolset";
     promotionSlug?: string;
+    /** Prize the visitor had assembled in "Build your prize" when they registered. */
+    builtPrizeSlug?: string;
     visitedAt: Date;
     anonymousId?: string;
     // UTM snapshot at signup (e.g. klaviyo, facebook for channel attribution)
@@ -1043,6 +1045,11 @@ const UserSchema = new Schema<IUser>(
         trim: true,
         lowercase: true,
       },
+      builtPrizeSlug: {
+        type: String,
+        trim: true,
+        lowercase: true,
+      },
       visitedAt: {
         type: Date,
       },
@@ -1269,6 +1276,7 @@ UserSchema.index({ createdAt: -1 });
 UserSchema.index({ "referral.code": 1 }, { unique: true, sparse: true });
 UserSchema.index({ stripeCustomerId: 1 }, { sparse: true });
 UserSchema.index({ "signupAttribution.promotionSlug": 1, createdAt: 1 });
+UserSchema.index({ "signupAttribution.builtPrizeSlug": 1, createdAt: 1 });
 // ✅ OPTION 1: Major Draw Entries index removed - using single source of truth
 
 // MiniDraw participation indexes

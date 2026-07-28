@@ -220,9 +220,11 @@ Embedded subdocument `subscription` (one active membership at a time; [User.ts:2
 
 | Field | Type | Meaning | PII |
 |---|---|---|---|
-| `signupAttribution` | subdoc (opt) | Promo page + UTM/ad context at signup: `promotionPageType("evergreen"\|"toolset"), promotionSlug, visitedAt, anonymousId, utmSource, utmMedium, utmCampaign, utmContent, utmTerm, campaignId, adsetId, adId` ([User.ts:241-256](src/models/User.ts#L241)) | — |
+| `signupAttribution` | subdoc (opt) | Promo page + UTM/ad context at signup: `promotionPageType("evergreen"\|"toolset"), promotionSlug, builtPrizeSlug, visitedAt, anonymousId, utmSource, utmMedium, utmCampaign, utmContent, utmTerm, campaignId, adsetId, adId` ([User.ts:260-277](src/models/User.ts#L260)) | — |
 
 > The resolved **`convertingPlatform`** is **not** on `User` — it lives on the `PaymentEvent` record (see §8).
+
+> **`promotionSlug` vs `builtPrizeSlug`:** the promo pages' "Build your prize" reels let a visitor assemble the toolset/toolbox combo they'd want to win (or pick the cash option), mirrored into the URL as `?toolset=`/`?toolbox=`. `promotionSlug` records **which page they landed on**; `builtPrizeSlug` records **the prize they had on screen when they registered** — either what they assembled, or, if they never touched the reels, the landing page's own default build (e.g. `makita-milwaukee` for `/promotions/makita`, never the bare `makita` landing slug). Both are indexed ([User.ts:1278-1279](src/models/User.ts#L1278)).
 
 ### 2i. Preferences, flags & engagement history
 
@@ -303,7 +305,7 @@ The register route even hard-codes `isAuthenticated: false` in its Klaviyo "Star
 
 ### 4b. Registration internals (guest account creation)
 
-`POST /api/auth/register` validates `firstName`, `lastName`, `email`, Australian `mobile` (normalised to `+61…`), plus optional `affiliateCode`, `promotionSlug`, `packageId`, and UTM/click-ID fields ([register/route.ts:56-86](src/app/api/auth/register/route.ts#L56)). Rate limited at 20/min/IP. A **"plain account"** = `!accumulatedEntries || accumulatedEntries === 0`.
+`POST /api/auth/register` validates `firstName`, `lastName`, `email`, Australian `mobile` (normalised to `+61…`), plus optional `affiliateCode`, `promotionSlug`, `builtPrizeSlug` (validated the same way as `promotionSlug`), `packageId`, and UTM/click-ID fields ([register/route.ts:56-86](src/app/api/auth/register/route.ts#L56)). Rate limited at 20/min/IP. A **"plain account"** = `!accumulatedEntries || accumulatedEntries === 0`. `builtPrizeSlug` is captured on all four outcomes below (matched-account update, mobile/email-only update, and new-account creation) via `buildSignupAttribution` — see §2h.
 
 | Case | Behaviour |
 |------|-----------|

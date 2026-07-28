@@ -352,10 +352,45 @@ run("cash wins over both lanes", () => {
   );
 });
 
-run("a toolset landing fallback that is not a composite still resolves", () => {
-  // `/promotions/makita` passes its DEFAULT PRIZE slug (makita-milwaukee), never the bare
-  // brand — but guard the bare form so a caller mistake degrades instead of composing junk.
-  assert.equal(resolveBuiltPrizeSlug(new URLSearchParams(), "makita"), "makita");
+run("a bare toolset LANDING fallback resolves to that page's default PRIZE, not the landing slug itself", () => {
+  // `/promotions/makita` names itself with the bare toolset slug ("makita"), which is not a
+  // prize — it has no toolbox lane. An untouched page must record the page's actual default
+  // BUILD ("makita-milwaukee"), not the landing slug — "makita" is already recorded separately
+  // as `promotionSlug`; recording it again here would make the field polymorphic (sometimes a
+  // real prize, sometimes a landing page) and defeat the point of the field. Regression guard
+  // for a bug shipped 2026-07-28: this assertion previously read `=== "makita"`.
+  assert.equal(resolveBuiltPrizeSlug(new URLSearchParams(), "makita"), "makita-milwaukee");
+});
+
+run("a fallback that is already a real prize slug (not a landing slug) passes through unchanged", () => {
+  assert.equal(
+    resolveBuiltPrizeSlug(new URLSearchParams(), "milwaukee-kincrome"),
+    "milwaukee-kincrome"
+  );
+});
+
+run("both lanes present with a LANDING-slug fallback compose from the params, ignoring the fallback entirely", () => {
+  assert.equal(
+    resolveBuiltPrizeSlug(new URLSearchParams("toolset=ryobi&toolbox=kincrome"), "makita"),
+    "ryobi-kincrome"
+  );
+});
+
+run("one lane only, with a LANDING-slug fallback — the missing lane comes from the RESOLVED default, not the bare landing slug", () => {
+  // The subtle case: "makita" has no toolbox lane of its own to fall back on. The missing
+  // toolbox lane must be filled from makita's RESOLVED default prize (makita-milwaukee's
+  // "milwaukee"), not left unresolved.
+  assert.equal(
+    resolveBuiltPrizeSlug(new URLSearchParams("toolset=ryobi"), "makita"),
+    "ryobi-milwaukee"
+  );
+});
+
+run("cash opt-out with a LANDING-slug fallback still short-circuits to cash", () => {
+  assert.equal(
+    resolveBuiltPrizeSlug(new URLSearchParams("toolbox=cash"), "makita"),
+    CASH_OPTION.slug
+  );
 });
 
 run("every resolvable build is a real catalog prize", () => {

@@ -81,6 +81,38 @@ reporting (capture pipeline documented in [docs/tracking/backend.md](../tracking
   blob only when present. Subscriptions/renewals inherit the decision from `subscription.metadata`
   (sticky), so the converting platform stays constant across the membership lifetime.
 
+#### Built-prize slug in the `data` blob — signup-sourced only (added 2026-07-27)
+
+Inside the existing promotion-fields branch (`if (signupAttr?.promotionSlug)`), `processPaymentBenefits`
+also copies `signupAttr.builtPrizeSlug` onto `data.builtPrizeSlug` on the `BenefitsGranted` row, guarded
+by its own `if` so it is only ever set when present:
+
+```ts
+if (signupAttr?.promotionSlug) {
+  attributionData.promotionPageType = signupAttr.promotionPageType;
+  attributionData.promotionSlug = signupAttr.promotionSlug;
+  if (signupAttr.builtPrizeSlug) {
+    attributionData.builtPrizeSlug = signupAttr.builtPrizeSlug;
+  }
+}
+```
+
+- **Source: `User.signupAttribution.builtPrizeSlug` only** — the prize the customer had assembled in
+  "Build your prize" (`?toolset=`/`?toolbox=`) at the moment they registered, persisted at signup (see
+  [docs/auth/api.md](../auth/api.md), [docs/subscription/models.md](../subscription/models.md)). It is
+  **never** read from the live/current session or from `sessionAttribution` — a member who rebuilds a
+  different prize post-signup does not retroactively change past or future `PaymentEvent` rows; the
+  field always reflects the prize at signup time, same as `promotionSlug`/`promotionPageType`.
+- **Absent for pre-feature users.** Every user who registered before this feature shipped has
+  `signupAttribution.promotionSlug` but no `builtPrizeSlug`. The inner `if` prevents writing
+  `builtPrizeSlug: undefined` into the Mixed `data` blob for those rows.
+- **No `PaymentEvent` schema change.** `PaymentEvent.data` is `Schema.Types.Mixed` with an index
+  signature `[key: string]: string | number | boolean | undefined` (`src/models/PaymentEvent.ts:19-24,
+  86-90`), so the new string key flows through with no model edit.
+- Purpose: lets revenue reporting follow the specific prize BUILD a customer configured, not just the
+  landing page they arrived on (`promotionSlug`) — the same rationale as the promo build → beacon →
+  signup chain documented in [docs/promo/frontend.md](../promo/frontend.md).
+
 #### Server-side "Invoice Generated" receipt
 
 `trackKlaviyoEvent()` (in `payment-processing.ts`) is the single source of truth for the Klaviyo

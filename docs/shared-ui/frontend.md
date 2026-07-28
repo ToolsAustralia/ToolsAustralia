@@ -1,5 +1,64 @@
 # Shared UI — Frontend
 
+## MembershipModal sends the visitor's built prize at signup (2026-07-28)
+
+`handleRegistration` derives `builtPrizeSlug` directly after the existing `promotionSlug`
+extraction (pathname `/promotions/<slug>`) and sends it in the register POST body
+(`...(builtPrizeSlug ? { builtPrizeSlug } : {})`). It calls the exported pure function
+**`resolveBuiltPrizeSlug(params, fallbackSlug)`** over `new URLSearchParams(window.location.search)`
+with `promotionSlug` as the fallback. **Why the shared helper matters:** two independent
+derivations of "what prize is on screen" would drift, and the signup row would stop agreeing with
+the visit row it's meant to corroborate — the whole point of carrying the build to signup is so a
+registration can be attributed to the prize the visitor actually assembled, not just the landing
+page.
+
+**Not literally the same call site as the visit-side beacon** — worth knowing if you touch either:
+[`PrizeShowcase`](../../src/components/sections/promo/PrizeShowcase.tsx) (the prize card's host)
+does not call `resolveBuiltPrizeSlug` itself. It hydrates `?toolset=`/`?toolbox=` into React state
+via `parseToolboxQueryParam`/`parseToolsetQueryParam` directly, then derives the beacon's
+`builtPrizeSlug` through `toPrizeSlug` + catalog resolution (`usePrizeCatalog`'s `activeSlug`) —
+a second, catalog-aware path, because the reel's live selection lives in component state, not in
+a one-shot URL read. The modal has no such state, so it calls `resolveBuiltPrizeSlug` — the
+pure, catalog-free equivalent — directly. The two paths are proven to agree for every real
+combination by the `prize-builder-model.test.ts` "every resolvable build is a real catalog prize"
+assertion (every `TOOLBOXES × TOOLSETS` pair resolves to a slug present in `PRIZE_SUMMARIES`), so
+today they can't drift — but if that registry-completeness invariant is ever relaxed, re-verify
+this parity.
+
+Imported from **`@/components/sections/promo/prize-selection/utils`** directly, not the
+`prize-selection` barrel (`index.ts`) — the barrel also re-exports `PrizeBuilderCard` /
+`SelectorReel` / `ComboHero` (heavy client UI with their own animation/asset deps), while
+`utils.ts` imports only `constants.ts` + `prize-builder-model.ts` + (as of the fix below)
+`@/config/promo-landing-slugs`, itself a lightweight data/config module (no React, no reel UI —
+verified transitively: it pulls in only `brand-theme.ts`, `promo-hero-types.ts`, the generated
+`landingImageManifest.ts`, and a type-only import from `config/prizes.ts` that TypeScript erases
+at compile time). Importing the barrel into a modal that's already a large client bundle risked
+pulling the reel components along for the ride; the direct module path keeps the modal's import
+graph to just the slug/query math plus this small config lookup.
+
+Derivation is wrapped in its own try/catch (mirroring the `promotionSlug` extraction immediately
+above it) so a throw here can never block registration — attribution is best-effort.
+
+**Untouched-landing-page fallback fix (2026-07-28, fix round 1):** on an untouched
+`/promotions/<slug>` page (no `?toolset=`/`?toolbox=`), `resolveBuiltPrizeSlug` resolves the
+fallback slug to that page's **default prize**, not the bare landing slug. The first cut of this
+task returned the `promotionSlug` fallback unchanged (`"makita"` on `/promotions/makita`) — but
+`"makita"` is a LANDING slug, not a prize (no toolbox lane), and `promotionSlug` already records
+it, so passing it through again as `builtPrizeSlug` made the field polymorphic (sometimes a real
+prize, sometimes a landing page) and defeated the field's purpose. Fixed **in the shared helper**
+(not the modal, so every caller stays in lockstep): `resolveBuiltPrizeSlug` now resolves a bare
+toolset-landing `fallbackSlug` via `isToolsetLandingSlug` + `getDefaultPrizeForToolsetSlug` (both
+from `@/config/promo-landing-slugs`) to the page's real default prize (`"makita-milwaukee"`)
+*before* using it — both for the "no params" short-circuit and for filling a missing lane when
+only one of `?toolset=`/`?toolbox=` is present (e.g. `?toolset=ryobi` on `/promotions/makita` now
+correctly resolves to `"ryobi-milwaukee"`, taking the toolbox lane from Makita's resolved default
+rather than being left unresolved). A fallback that is already a real prize slug (not a landing
+slug) passes through unaffected. See the "Built prize slug resolution" test group in
+`prize-builder-model.test.ts` for the full input/output table this now guarantees. See
+[auth/api.md](../auth/api.md#post-apiauthregister--builtprizeslug-attribution-2026-07-28) for the
+server side and [subscription/models.md](../subscription/models.md#signupattributionbuiltprizeslug-2026-07-28)
+for the persisted field.
+
 ## Header / Footer — "Major Draw" vs the `/promotions` showroom (2026-07-22)
 
 `Header.tsx` declares **`MAJOR_DRAW_HREF`** (`/promotions/${DEFAULT_PRIZE_SLUG}`) once at module
@@ -812,6 +871,14 @@ as the CLS fix documented in [shared-ui/gotchas.md](./gotchas.md): `useSearchPar
 prerendered section de-opts it to client-only rendering. `router.replace` is avoided for a
 separate reason — it resets scroll on this page even with `{ scroll: false }` (see
 [promo/gotchas.md](../promo/gotchas.md)). Full narrative in promo/frontend.md above.
+
+**Component-level note: build tracking (2026-07-27).** `PrizeShowcase` counts toolbox/toolset reel
+switches (state only — `toolboxSwitches` / `toolsetSwitches`) and hands the counts, plus the
+catalog-resolved `activeSlug`, to [`usePrizeBuildTracking`](../../src/hooks/usePrizeBuildTracking.ts).
+The component itself makes no API call — counting and reporting are split so the component stays
+UI-only, per the components-don't-call-APIs layering rule. Full beacon behaviour (debounce,
+`pagehide` flush, cumulative counts) is documented in
+[promo/frontend.md](../promo/frontend.md#build-tracking-beacon--useprizebuildtracking-2026-07-27).
 
 #### Prize-builder tokens in globals.css
 
