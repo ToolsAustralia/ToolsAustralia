@@ -20,6 +20,10 @@
 # backfill/seed audit logs (one-off ops scripts write CSV audit trails to cwd)
 backfill-*.csv
 seed-*.csv
+# Same convention for the asset-ingest converters (convert-draw9-landing-*). Their rows carry
+# ABSOLUTE source paths from whoever ran them, so they are machine-local run records, not
+# repo content.
+*-audit.csv
 
 # scratch / read-only probe scripts + ops CSV audit output (may contain PII) — never commit/build
 /temp

@@ -16,9 +16,21 @@ export const TOOLBOX_QUERY_PARAM = "toolbox";
 /** Query key for the power-toolset lane, e.g. `?toolset=makita`. */
 export const TOOLSET_QUERY_PARAM = "toolset";
 
-// Derived from the registries, NOT hand-written: a hard-coded set silently rejects a newly
-// added brand until someone remembers to edit it here too.
-const VALID_TOOLBOX_QUERY_VALUES = new Set<string>([...TOOLBOXES.map((b) => b.id), "cash"]);
+/**
+ * DERIVED from the registries, never hand-listed.
+ *
+ * The toolbox set was a hardcoded list of three ids, which silently forked from `TOOLBOXES` the
+ * moment GearWrench was added in draw 9: the box appeared in the reel and wrote
+ * `?toolbox=gearwrench` to the URL, but the value failed to parse on the way back in — so a
+ * refresh or a shared link dropped the visitor's choice back to the default. Deriving both sets
+ * means the registries stay the single source of truth the prize builder was designed around,
+ * and the next brand needs no change here at all. `cash` is added explicitly because it is the
+ * opt-out, not a toolbox.
+ *
+ * (Draw 9 and the prize-build URL work landed on separate branches and arrived at this same fix
+ * independently — this is the merged form, keeping draw 9's account of the incident.)
+ */
+const VALID_TOOLBOX_QUERY_VALUES = new Set<string>(["cash", ...TOOLBOXES.map((b) => b.id)]);
 const VALID_TOOLSET_QUERY_VALUES = new Set<string>(TOOLSETS.map((s) => s.id));
 
 /** Parses `?toolbox=`. Invalid or empty values return null (caller falls back to its default). */

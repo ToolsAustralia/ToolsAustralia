@@ -130,7 +130,7 @@ every accent**, which is what caught it. `contrastRatio()` is exported alongside
   plate; a plate would box some brands and not others.
 - **Dark product stage** — see `.ta-product-stage` in [shared-ui/frontend.md](../shared-ui/frontend.md).
   The handoff's white case is light-mode only.
-- **Permit** is `NTP_NUMBER` from `@/constants/legal` (NTP/17192), not the prototype's placeholder.
+- **Permit** is `NTP_NUMBER` from `@/constants/legal` (NTP/17494 for draw 9), not the prototype's placeholder.
   The handoff's "Open to Australian residents; not available in ACT or SA." sentence was dropped
   (owner); the fine print is now "Government-certified draws · randomdraws.com.au · Permit NTP/…".
 

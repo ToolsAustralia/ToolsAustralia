@@ -36,13 +36,13 @@ export const TOOLSET_LANDING_SLUGS = [
 
 export type ToolsetLandingSlug = (typeof TOOLSET_LANDING_SLUGS)[number];
 
-/** Map toolset slug to prize slugs: Sidchrome, Kincrome (centre), Milwaukee */
-const TOOLSET_TO_PRIZE_SLUGS: Record<ToolsetLandingSlug, [PrizeSlug, PrizeSlug, PrizeSlug]> = {
-  ryobi: ["ryobi-sidchrome", "ryobi-kincrome", "ryobi-milwaukee"],
-  milwaukee: ["milwaukee-sidchrome", "milwaukee-kincrome", "milwaukee-milwaukee"],
-  dewalt: ["dewalt-sidchrome", "dewalt-kincrome", "dewalt-milwaukee"],
-  makita: ["makita-sidchrome", "makita-kincrome", "makita-milwaukee"],
-  hikoki: ["hikoki-sidchrome", "hikoki-kincrome", "hikoki-milwaukee"],
+/** Map toolset slug to its prize slugs: Sidchrome, Kincrome, Milwaukee, GearWrench (draw 9). */
+const TOOLSET_TO_PRIZE_SLUGS: Record<ToolsetLandingSlug, [PrizeSlug, PrizeSlug, PrizeSlug, PrizeSlug]> = {
+  ryobi: ["ryobi-sidchrome", "ryobi-kincrome", "ryobi-milwaukee", "ryobi-gearwrench"],
+  milwaukee: ["milwaukee-sidchrome", "milwaukee-kincrome", "milwaukee-milwaukee", "milwaukee-gearwrench"],
+  dewalt: ["dewalt-sidchrome", "dewalt-kincrome", "dewalt-milwaukee", "dewalt-gearwrench"],
+  makita: ["makita-sidchrome", "makita-kincrome", "makita-milwaukee", "makita-gearwrench"],
+  hikoki: ["hikoki-sidchrome", "hikoki-kincrome", "hikoki-milwaukee", "hikoki-gearwrench"],
 };
 
 /**
@@ -73,6 +73,14 @@ const LANDING_HERO_MAP: Partial<Record<PrizeSlug, ExtendedPromoImagePaths>> = {
   // HiKOKI prizes (landing art shipped 2026-06-23)
   "hikoki-sidchrome": resolveLandingHeroImages("hikoki", "sidTB"),
   "hikoki-milwaukee": resolveLandingHeroImages("hikoki", "milTB"),
+
+  // GearWrench prizes — the fourth toolbox, landing art shipped with draw 9 (2026-07-27).
+  // `ryobi-gearwrench` is deliberately absent: that artwork was never produced, so it has no
+  // hero of its own and resolves through the resolver's fallback chain like any other gap.
+  "milwaukee-gearwrench": resolveLandingHeroImages("milwaukee", "gwTB"),
+  "dewalt-gearwrench": resolveLandingHeroImages("dewalt", "gwTB"),
+  "makita-gearwrench": resolveLandingHeroImages("makita", "gwTB"),
+  "hikoki-gearwrench": resolveLandingHeroImages("hikoki", "gwTB"),
 };
 
 export function isToolsetLandingSlug(slug: string): slug is ToolsetLandingSlug {

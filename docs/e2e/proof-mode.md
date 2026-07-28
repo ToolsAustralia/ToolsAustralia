@@ -50,6 +50,40 @@ These bite **only in proof mode**, so a spec that is green locally can still fai
    and a desktop test (`chromium-desktop`), assert `testInfo.project.name` in each so neither can
    run in the wrong one, and join the two clips afterwards (below).
 
+### Rules learned recording `draw9-assets.spec.ts` (2026-07-27)
+
+The biggest proof run so far — 20 combinations × 3 countdown tiers × 2 themes × 2 viewports
+= **240 hero states**. Four things cost a re-run each; none are obvious.
+
+**Scope by TEST TITLE, not just `--project`.** `--project chromium-desktop` still collects
+both tests in the file, so the mobile test runs under the desktop project and its own
+viewport guard fails it — and because the describe is `mode: "serial"`, that failure SKIPS
+the desktop test that was the point of the run. Always:
+
+```bash
+npx tsx e2e/run.ts --proof --grep "on desktop, every draw 9 hero state" --project chromium-desktop
+npx tsx e2e/run.ts --proof --grep "on mobile, every draw 9 hero state"  --project mobile-chrome
+```
+
+**Theme comes from the app's own store, not `prefers-color-scheme`.**
+`page.emulateMedia({ colorScheme })` does nothing here — `useThemeStore` reads the Zustand
+persist key `ta-theme`. Set it in an `addInitScript` before navigating, and include
+`userManualOverride: true` or `readThemeFromPersistStorage` resolves a stored "dark" back to
+light.
+
+**Assert the URL grammar, and mind the base tier's missing hyphen.** `{asset}-` matches every
+drawn/dark/mobile variant but NOT the base hero (`milwaukee-milTB.webp`), which has no suffix
+at all. Match `{brand}-{toolbox}` and let the separate mode/tier/viewport assertions pin the
+rest.
+
+**`E2E_BUILD=1` is not a drop-in for a long run here.** It is tempting (a production server is
+steadier than `next dev` across 120 page loads) but the e2e env overlay makes the error-page
+prerender fail with `<Html> should not be imported outside of pages/_document`, even though a
+plain `npm run build` passes. Dev mode is fine once the run isn't provoking server errors —
+which is the real lesson: the first dev-mode attempt died mid-walk right after Next's image
+optimizer logged a 400 for a genuinely missing asset. **Fix the 404s before blaming the
+server.** The QA watchdog reporting a `400 Bad Request` is a real product bug, not test noise.
+
 ## Joining clips into one deliverable (`e2e/proof/join.ts`)
 
 Rule 4 yields one clip per viewport, but a reviewer wants a single video. `npm run e2e:proof:join`
