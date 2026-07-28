@@ -26,6 +26,8 @@
 
 `npm run build:norm-manifest` ([scripts/build-norm-manifest.ts](../../scripts/build-norm-manifest.ts)) walks the registry, calls `zod-to-json-schema` on each request/response schema, and writes [src/generated/normToolsManifest.json](../../src/generated/normToolsManifest.json). This runs automatically in `prebuild` and `predev` (see `package.json`) alongside the upsell + landing manifests, so any registry edit is reflected on the next dev or deploy.
 
+**Write guard — `generatedAt` means "last actually changed" (2026-07-28, panel F-010).** Because the script runs on every dev boot and build, a bare write re-stamped `generatedAt` constantly: every branch picked up a one-line diff of a committed generated file, which is merge-conflict noise AND implies a Norm-surface change that never happened. The script now compares the freshly-built **endpoint set** against the existing file and skips the write when they match (logging `unchanged → kept …`), so the timestamp only advances when the manifest genuinely changes. A corrupt/unreadable existing file falls through to a rewrite. Nothing about the manifest's published shape or the endpoints it lists changed — this is write behaviour only.
+
 `GET /v1/manifest` reads from the generated file. Adding a new wired endpoint to the registry auto-publishes it to Norm. Zero manual sync.
 
 ## `withNorm` HOF

@@ -56,7 +56,7 @@ export default function MembershipPageClient({
           plans={[...cta.membershipPlans, ...cta.oneTimePlans]}
         />
       )}
-      <MembershipHero cta={cta} />
+      <MembershipHero cta={cta} hasPortalBanner={Boolean(portalReturn)} />
       <MembershipTrustStrip />
       <MembershipBrandShowcase cta={cta} />
       <MembershipHowItWorks />
