@@ -190,11 +190,14 @@ export default function MembershipPortalReturnBanner({
               {view.cta.showCatalogueMeta && (
                 <>
                   <span className="text-center text-[11px] font-semibold text-white/60">
-                    Unlocks {fmt(view.cta.cumulativeCount)} of {total} partner offers
+                    {view.cta.cumulativeCount === PARTNER_CATALOG_TOTAL
+                      ? `Unlocks all ${total} partner offers`
+                      : `Unlocks ${fmt(view.cta.cumulativeCount)} of ${total} partner offers`}
                   </span>
+                  {/* py+negative-margin = 44px touch target without changing the visual rhythm (F-012). */}
                   <a
                     href="#membership"
-                    className="text-center text-[12px] font-bold text-white/80 underline underline-offset-4 hover:text-white"
+                    className="-my-1 py-[13px] text-center text-[12px] font-bold text-white/80 underline underline-offset-4 hover:text-white"
                   >
                     See all packages
                   </a>

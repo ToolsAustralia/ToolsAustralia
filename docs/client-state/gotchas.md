@@ -40,6 +40,15 @@ Pattern: scoped to a tree → Context. Cross-cutting → Zustand. Mistake: putti
 
 If server-render produces "light theme" but client first-paint sees "dark theme" (cookie says dark), React warns about mismatch. Bootstrap script in [theme](../theme/) handles this; verify when adding similar concerns.
 
+## usePartnerDiscountSso error copy is customer-facing (2026-07-28)
+
+`usePartnerDiscountSso` surfaces the SSO route's JSON `error` string **verbatim, inline** (banner +
+purchase-success render `sso.error.message`). Those strings are therefore customer copy — panel-fix
+F-014 rewrote the hook fallback and all four route bodies to "partner portal" vocabulary with a next
+step ("Your partner access isn't active right now. You can check it on My Account → Rewards."). If
+you add/change an error path in `src/app/api/partner-discount/sso/route.ts`, write the body as
+customer-facing copy (rule 11 + BRAND_VOICE), never API-speak.
+
 ## Query key drift
 
 If you inline `["user", userId]` in one place and `["user", userId, "detail"]` in another, invalidation breaks. Always go through the key factory.

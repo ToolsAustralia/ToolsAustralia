@@ -54,6 +54,13 @@ export const firstParam = (value: string | string[] | undefined): string | undef
 const normName = (s: string): string =>
   s.replace(/[<>&]/g, "").replace(/\s+/g, " ").trim().toLowerCase();
 
+/** Display form of a vendor offer name (F-013): 329 catalogue names embed
+ *  double-space location suffixes ("World Heritage Cruises  Strahan  TAS") that
+ *  collapse into an unpunctuated run-on in HTML — join them with commas for
+ *  display ("World Heritage Cruises, Strahan, TAS"). The generated file stays
+ *  vendor-faithful; only the rendered string changes. */
+const displayName = (s: string): string => s.replace(/\s{2,}/g, ", ");
+
 /** Per-map memo of the name→offer allowlist index (the offers map is a stable module
  *  const on the server, so this builds once per process, not per request). */
 const nameIndexCache = new WeakMap<object, Map<string, PortalReturnOffer>>();
@@ -97,12 +104,12 @@ export function resolvePortalReturn(
 
   if (offerId && /^\d+$/.test(offerId) && Object.hasOwn(offersById, offerId)) {
     const offer = offersById[offerId];
-    return { offerName: offer.name, requiredPct: offer.pct };
+    return { offerName: displayName(offer.name), requiredPct: offer.pct };
   }
 
   if (offerNameRaw) {
     const match = nameIndex(offersById).get(normName(offerNameRaw));
-    if (match) return { offerName: match.name, requiredPct: match.pct };
+    if (match) return { offerName: displayName(match.name), requiredPct: match.pct };
   }
 
   return { generic: true };

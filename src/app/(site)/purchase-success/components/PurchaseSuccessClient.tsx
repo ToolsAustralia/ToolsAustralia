@@ -127,7 +127,7 @@ export default function PurchaseSuccessClient({ searchParams }: PurchaseSuccessC
                     disabled={sso.isPending}
                     className="inline-flex items-center justify-center px-6 py-3 bg-gray-200 text-gray-900 font-medium rounded-lg hover:bg-gray-300 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
                   >
-                    {sso.isPending ? "Opening…" : "Back to the partner portal"}
+                    {sso.isPending ? "Opening…" : "Open partner portal"}
                   </button>
                 )}
               </div>

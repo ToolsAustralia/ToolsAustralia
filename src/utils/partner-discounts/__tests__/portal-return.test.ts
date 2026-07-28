@@ -18,6 +18,8 @@ import {
 const OFFERS: Readonly<Record<string, PortalReturnOffer>> = {
   "1064993": { name: "Amazon.com.au eGift Card", pct: 100 },
   "1066574": { name: "Witchery eGift Card", pct: 40 },
+  // Real vendor-name shape: double-space location suffixes (329 such names in the catalogue).
+  "1067890": { name: "World Heritage Cruises  Strahan  TAS", pct: 70 },
 };
 
 function testOfferIdResolvesFromCatalogue(): void {
@@ -61,6 +63,17 @@ function testNameAllowlistNormalises(): void {
   // URL level (even a valid ladder value) is ignored on a name match.
   const r2 = resolvePortalReturn({ offer_name: "Witchery eGift Card", level: "100" }, OFFERS);
   assert.equal(r2?.requiredPct, 40);
+}
+
+function testVendorRunOnNamesDisplayWithCommas(): void {
+  // F-013: double-space location suffixes render comma-joined, via BOTH resolution paths.
+  const byId = resolvePortalReturn({ offer_id: "1067890" }, OFFERS);
+  assert.equal(byId?.offerName, "World Heritage Cruises, Strahan, TAS");
+  const byName = resolvePortalReturn(
+    { offer_name: "world heritage cruises strahan tas" },
+    OFFERS
+  );
+  assert.deepEqual(byName, { offerName: "World Heritage Cruises, Strahan, TAS", requiredPct: 70 });
 }
 
 function testArrayParamsUseFirst(): void {
@@ -195,6 +208,7 @@ const tests = [
   testUnknownIdFallsToGeneric,
   testNameAllowlistRejectsArbitraryText,
   testNameAllowlistNormalises,
+  testVendorRunOnNamesDisplayWithCommas,
   testArrayParamsUseFirst,
   testNoParamsIsNotAReturnVisit,
   testCampaignAloneIsGeneric,

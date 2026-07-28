@@ -34,7 +34,7 @@ interface CartContextValue {
 | `usePurchaseInvalidation()` | Invalidates queries (orders, user, partner-discount queue) after purchase |
 
 **Purchase-success portal CTA (2026-07-24, rewards-return):** `PurchaseSuccessClient` gained a third
-CTA — **"Back to the partner portal"** — rendered only when the webhook grant is confirmed
+CTA — **"Open partner portal" (renamed from "Back to the partner portal" — panel F-015: the CTA shows for every partner-bearing purchase, incl. buyers who never came from the portal, so "Back" presumed a journey many never took)** — rendered only when the webhook grant is confirmed
 (`usePaymentStatus(...).data.processed === true`) AND `partnerDiscountSsoEnabled()` (the
 `NEXT_PUBLIC_PARTNER_DISCOUNT_SSO_ENABLED` client flag). It triggers `usePartnerDiscountSso().mutate()`
 (same SSO hand-off as RewardsPartnerCard) and, unlike that card, **renders `sso.error` inline** instead

@@ -29,7 +29,7 @@ async function requestPortalSso(): Promise<{ redirectUrl: string }> {
   const body = (await res.json().catch(() => null)) as SsoSuccessResponse | SsoFailureResponse | null;
   if (!res.ok || !body?.success) {
     throw new Error(
-      body && body.success === false ? body.error : "Could not open the rewards portal. Please try again."
+      body && body.success === false ? body.error : "Could not open the partner portal. Please try again."
     );
   }
   return body.data;

@@ -17,9 +17,12 @@ Fresh session? Run `/panel-fix` on this branch, or paste:
 > and fill `_Handled:_` with the date. If a fix turns out to be wrong, mark it Overridden with
 > a reason instead of silently skipping it.
 
-**Now (do these):** F-011 (X-of-X tautology), F-012 (tap target), F-013 (run-on names), F-014 (SSO error copy set), F-015 ("Back to" → "Open partner portal")
-**Next:** F-016–F-025
-**Done:** F-001–F-010 (F-010 handled at the 996557d0 commit — norm manifest churn reverted before committing)
+**Now (do these):** F-016 (ladder single-source), F-017 (onRewardPortal prop rename), F-018 (stale comments ×2), F-019 (queryKeys registration), F-020 (tier-boundary test assertions)
+**Next:** F-021 (server-only lint guard), F-023 (e2e specs), F-024 (naming/spelling sweep), F-025 (guest copy overpromise)
+**Owner decision needed:** F-022 (hero dead band — docstring says intentional; fix supplied if DJ rules against it)
+**Done:** F-001–F-015 (F-010 at the 996557d0 commit; batch 2 = 7e584e6a; polish batch F-011–F-015 = this tree)
+
+_2026-07-28 panel-fix pass 3 (polish): F-011–F-015 done. Verified: `test:portal-return` (18 cases incl. the new run-on-name pin) ✓, type-check ✓, targeted lint ✓, rule-11 grep over every changed string ✓ clean._
 
 _2026-07-28 panel-fix pass 2: F-006–F-009 done in the working tree (uncommitted; F-010 was completed at commit time in pass 1's commit). Verified: `test:portal-return` (17 cases, updated for the allowlist + paused branch) ✓, `test:chat-faqs` ✓ (72), `build:chat-knowledge-pack` rebuilt ✓, type-check ✓, targeted lint ✓. F-008 note: `level` URL param is now fully ignored (allowlist supersedes it); FAQ 16's `/partner` link removal also fixed a latent bug (that page is the B2B application form, not a discount list)._
 
@@ -61,16 +64,16 @@ _2026-07-24 panel-fix pass 1: F-001–F-005 done in the working tree (uncommitte
       _Fix:_ `paused` branch in `resolvePortalBannerView` (wins over offer states, like pastdue): "Your membership is paused." + "It resumes {date} — resume now to restore your discounts." (date-less fallback when pausedUntil unknown) + new `manage` CTA kind → `/my-account?open=subscription`; `pausedUntil: Date|null` from `useDashboardState` formatted en-AU in the banner. Pinned by `test:portal-return`.  _Shot:_ code-only  _Handled:_ 2026-07-28, working tree (uncommitted)
 - [ ] **F-010** · P2 · Eng · `src/generated/normToolsManifest.json` — Timestamp-only regeneration committed in a branch with zero Norm changes.
       _Fix:_ at commit time: `git checkout origin/main -- src/generated/normToolsManifest.json`.  _Shot:_ code-only  _Handled:_ —
-- [ ] **F-011** · P2 · UI-B · `MembershipPortalReturnBanner.tsx:181-183` — "Unlocks 1,833 of 1,833 partner offers" tautology.
-      _Fix:_ `view.cumulativeCount === PARTNER_CATALOG_TOTAL ? \`Unlocks all ${total} partner offers\` : …`  _Shot:_ scratchpad `reviewer-b/ev-meta-tautology-1280.webp`  _Handled:_ —
-- [ ] **F-012** · P2 · UI-B · `MembershipPortalReturnBanner.tsx:184-189` — "See all packages" tap target is 340×18px (44px minimum).
-      _Fix:_ add `py-[13px] -my-1` to the link className. The `kind:"scroll"` anchor already measures 46px — leave it.  _Shot:_ scratchpad `reviewer-b/ev-seeall-tap-390.webp`  _Handled:_ —
-- [ ] **F-013** · P2 · UI-B · `src/app/(site)/membership/page.tsx:56` — 329 vendor names render as run-ons ("World Heritage Cruises Strahan TAS").
-      _Fix:_ display-only `offer.name.replace(/\s{2,}/g, ", ")` before returning (generated file stays vendor-faithful).  _Shot:_ scratchpad `reviewer-b/ev-offer-name-runon-390.webp`  _Handled:_ —
-- [ ] **F-014** · P2 · UX-C · `src/hooks/queries/usePartnerDiscountSso.ts:32` + `src/app/api/partner-discount/sso/route.ts:34,60,83,91` — SSO failures print raw API-speak under a "partner portal" button.
-      _Fix (exact strings):_ hook fallback → `"Could not open the partner portal. Please try again."` · 502 → `"The partner portal is temporarily unavailable. Please try again shortly."` · 403 → `"Your partner access isn't active right now. You can check it on My Account → Rewards."` · 500 → `"Something went wrong opening the partner portal. Please try again."` · 404 (flag off) → `"The partner portal isn't available right now."`  _Shot:_ code-only  _Handled:_ —
-- [ ] **F-015** · P2 · UX-C · `src/app/(site)/purchase-success/components/PurchaseSuccessClient.tsx:123-131` — "Back to the partner portal" shown to buyers who were never in it.
-      _Fix:_ label → `"Open partner portal"` (matches banner + Rewards card).  _Shot:_ code-only  _Handled:_ —
+- [x] **F-011** · P2 · UI-B · `MembershipPortalReturnBanner.tsx:181-183` — "Unlocks 1,833 of 1,833 partner offers" tautology.
+      _Fix:_ `view.cta.cumulativeCount === PARTNER_CATALOG_TOTAL ? \`Unlocks all ${total} partner offers\` : …`  _Shot:_ scratchpad `reviewer-b/ev-meta-tautology-1280.webp`  _Handled:_ 2026-07-28, working tree (uncommitted)
+- [x] **F-012** · P2 · UI-B · `MembershipPortalReturnBanner.tsx:184-189` — "See all packages" tap target is 340×18px (44px minimum).
+      _Fix:_ add `py-[13px] -my-1` to the link className. The `kind:"scroll"` anchor already measures 46px — leave it.  _Shot:_ scratchpad `reviewer-b/ev-seeall-tap-390.webp`  _Handled:_ 2026-07-28, working tree (uncommitted)
+- [x] **F-013** · P2 · UI-B · `src/app/(site)/membership/page.tsx:56` — 329 vendor names render as run-ons ("World Heritage Cruises Strahan TAS").
+      _Fix (as implemented, post-F-003 locus):_ `displayName()` in `portal-return.ts` comma-joins `\s{2,}` on BOTH resolution paths (generated file stays vendor-faithful); pinned by `test:portal-return`.  _Shot:_ scratchpad `reviewer-b/ev-offer-name-runon-390.webp`  _Handled:_ 2026-07-28, working tree (uncommitted)
+- [x] **F-014** · P2 · UX-C · `src/hooks/queries/usePartnerDiscountSso.ts:32` + `src/app/api/partner-discount/sso/route.ts:34,60,83,91` — SSO failures print raw API-speak under a "partner portal" button.
+      _Fix (exact strings, all implemented):_ hook fallback → `"Could not open the partner portal. Please try again."` · 502 → `"The partner portal is temporarily unavailable. Please try again shortly."` · 403 → `"Your partner access isn't active right now. You can check it on My Account → Rewards."` · 500 → `"Something went wrong opening the partner portal. Please try again."` · 404 (flag off) → `"The partner portal isn't available right now."` (status codes unchanged; guidance recorded in docs/partner/api.md + docs/client-state/gotchas.md)  _Shot:_ code-only  _Handled:_ 2026-07-28, working tree (uncommitted)
+- [x] **F-015** · P2 · UX-C · `src/app/(site)/purchase-success/components/PurchaseSuccessClient.tsx:123-131` — "Back to the partner portal" shown to buyers who were never in it.
+      _Fix:_ label → `"Open partner portal"` (matches banner + Rewards card).  _Shot:_ code-only  _Handled:_ 2026-07-28, working tree (uncommitted)
 
 ### Later
 

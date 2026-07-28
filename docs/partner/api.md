@@ -11,6 +11,12 @@
 
 Mints a MyRewards/iGoDirect SSO token and returns the portal redirect URL. Identity comes from the NextAuth session (no request body). Thin handler ([route](../../src/app/api/partner-discount/sso/route.ts)); logic in [utils/partner-discounts/sso-access.ts](../../src/utils/partner-discounts/sso-access.ts) + [sso-flow.ts](../../src/utils/partner-discounts/sso-flow.ts).
 
+> **Error bodies are customer copy (2026-07-28, panel F-014):** the JSON `error` strings render
+> inline under the "Open partner portal" buttons via `usePartnerDiscountSso` — 404 (flag dark) /
+> 403 (no active access → points at My Account → Rewards) / 502 / 500 all carry customer-facing
+> "partner portal" wording, not API-speak. Write any new error path in that voice (rule 11 +
+> BRAND_VOICE).
+
 Flow: `requireSameOrigin` → distributed rate-limit (`partner-discount-sso`, fail-open courtesy cap) → `requireAuthenticatedUserDoc` → **reconcile-then-read** (`reconcilePartnerDiscountAccess`) → **403 if no active access** → `generatePortalSso` signs + POSTs `/generatetoken` → best-effort `PartnerDiscountSsoIssuance` log → `{ success: true, data: { redirectUrl } }`.
 
 Statuses: 401 unauth · 403 no-access / cross-origin · 429 rate · 502 vendor unavailable · 500.

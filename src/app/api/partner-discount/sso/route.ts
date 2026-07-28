@@ -31,7 +31,12 @@ export async function POST(request: NextRequest) {
     // dev so the /dev/rewards-sso harness works. DEFAULT-SAFE by design: prod stays a 404 even
     // if everyone forgets — that's the whole point.
     if (process.env.NODE_ENV !== "development" && process.env.PARTNER_DISCOUNT_SSO_ENABLED !== "true") {
-      return NextResponse.json({ success: false, error: "Not found" }, { status: 404 });
+      // Body copy is customer-facing (surfaced inline by usePartnerDiscountSso consumers);
+      // status stays 404 — the route is deliberately hidden while the flag is dark.
+      return NextResponse.json(
+        { success: false, error: "The partner portal isn't available right now." },
+        { status: 404 }
+      );
     }
 
     const csrf = requireSameOrigin(request);
@@ -57,7 +62,10 @@ export async function POST(request: NextRequest) {
     const decision = await reconcilePartnerDiscountAccess(user);
     if (!decision.hasAccess) {
       return NextResponse.json(
-        { success: false, error: "No active partner-discount access" },
+        {
+          success: false,
+          error: "Your partner access isn't active right now. You can check it on My Account → Rewards.",
+        },
         { status: 403 }
       );
     }
@@ -80,7 +88,7 @@ export async function POST(request: NextRequest) {
 
     if (!sso.ok) {
       return NextResponse.json(
-        { success: false, error: "Rewards portal is temporarily unavailable" },
+        { success: false, error: "The partner portal is temporarily unavailable. Please try again shortly." },
         { status: 502 }
       );
     }
@@ -88,6 +96,9 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ success: true, data: { redirectUrl: sso.redirectUrl } });
   } catch (error) {
     console.error("[partner-discount/sso] error:", error);
-    return NextResponse.json({ success: false, error: "Internal server error" }, { status: 500 });
+    return NextResponse.json(
+      { success: false, error: "Something went wrong opening the partner portal. Please try again." },
+      { status: 500 }
+    );
   }
 }
