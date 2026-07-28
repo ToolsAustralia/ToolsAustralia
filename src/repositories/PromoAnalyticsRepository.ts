@@ -21,6 +21,12 @@ export interface PromoPageMetrics {
   slug: string;
   visits: number;
   crossVisits: number;
+  /** Unique visitors who assembled a prize on this page (touched at least one reel). */
+  builds: number;
+  /** The combination built by the most visitors on this page, or null if nobody built one. */
+  topBuiltPrize: string | null;
+  /** Every combination built on this page, most-built first. Empty when nobody built one. */
+  buildDistribution: Array<{ builtPrizeSlug: string; visitors: number }>;
   signups: number;
   conversions: number;
   revenue: number;
@@ -50,6 +56,25 @@ export interface UTMSourceMetrics {
 
 export interface PromoAnalyticsByUTMSummary {
   byUTMSource: UTMSourceMetrics[];
+}
+
+export interface BuiltPrizeMetrics {
+  builtPrizeSlug: string;
+  /** Unique visitors who built this combination, across every landing page. */
+  builders: number;
+  /** New accounts whose signupAttribution.builtPrizeSlug is this combination. */
+  signups: number;
+  /** Purchases whose PaymentEvent.data.builtPrizeSlug is this combination. */
+  conversions: number;
+  /** AUD dollars from those purchases. */
+  revenue: number;
+  builderToSignupRate: number;
+  signupToConversionRate: number;
+  overallConversionRate: number;
+}
+
+export interface PromoAnalyticsByBuiltPrizeSummary {
+  byBuiltPrize: BuiltPrizeMetrics[];
 }
 
 /**
@@ -107,6 +132,46 @@ export class PromoAnalyticsRepository {
     });
   }
 
+  /**
+   * Attach the built prize + engagement counters to a visitor's most recent visit row.
+   *
+   * `upsert: false` and sorted newest-first: this must NEVER create a row. The visit row is
+   * created once on landing; creating another here would double-count visits, which is the one
+   * number this whole feature must leave untouched. Returns false when there is nothing to
+   * update (dedup race, expired TTL, or a visitor whose landing beacon never landed).
+   *
+   * `$set` with absolute totals, not `$inc`: the client sends cumulative counts, so a retry or
+   * a double flush (debounce + pagehide) is harmless.
+   */
+  async updateVisitBuild(args: {
+    anonymousId: string;
+    slug: string;
+    pageType: PromoPageType;
+    builtPrizeSlug: string;
+    toolboxSwitches: number;
+    toolsetSwitches: number;
+  }): Promise<boolean> {
+    await connectDB();
+    const result = await PromoAnalyticsVisit.findOneAndUpdate(
+      {
+        anonymousId: args.anonymousId,
+        slug: args.slug.toLowerCase().trim(),
+        pageType: args.pageType,
+      },
+      {
+        $set: {
+          builtPrizeSlug: args.builtPrizeSlug.toLowerCase().trim(),
+          toolboxSwitches: args.toolboxSwitches,
+          toolsetSwitches: args.toolsetSwitches,
+        },
+      },
+      { sort: { timestamp: -1 }, new: false, upsert: false }
+    )
+      .maxTimeMS(5000)
+      .lean();
+    return result != null;
+  }
+
   async linkVisitToUser(anonymousId: string, userId: string): Promise<number> {
     await connectDB();
     const result = await PromoAnalyticsVisit.updateMany(
@@ -158,6 +223,53 @@ export class PromoAnalyticsRepository {
     const crossVisitMap = new Map<string, number>();
     for (const r of crossVisitAgg) {
       crossVisitMap.set(`${r._id.pageType}:${r._id.slug}`, r.crossVisits);
+    }
+
+    // 1c. Built-prize engagement - unique visitors who actually assembled something, plus the
+    // most-built combination per landing page. Visitors who never touched the reels have no
+    // `builtPrizeSlug`, so they are correctly excluded from the numerator.
+    // Hint forces the index built for this query ({builtPrizeSlug:1, timestamp:-1}). Without it,
+    // the planner picks the TTL index ({timestamp:1}) at current data volume and FETCHes the
+    // whole 90-day window instead of the ~0.4% of rows carrying a build (F-003, panel review).
+    const buildAgg = await PromoAnalyticsVisit.aggregate<
+      { _id: { pageType: string; slug: string; builtPrizeSlug: string }; visitorIds: string[] }
+    >(
+      [
+        {
+          $match: {
+            timestamp: { $gte: startDate, $lte: endDate },
+            builtPrizeSlug: { $exists: true, $ne: "" },
+          },
+        },
+        {
+          $group: {
+            _id: { pageType: "$pageType", slug: "$slug", builtPrizeSlug: "$builtPrizeSlug" },
+            visitorIds: { $addToSet: VISITOR_ID_EXPR },
+          },
+        },
+      ],
+      { hint: { builtPrizeSlug: 1, timestamp: -1 } }
+    ).exec();
+
+    const buildVisitorIds = new Map<string, Set<string>>();
+    const buildDistributionMap = new Map<string, Array<{ builtPrizeSlug: string; visitors: number }>>();
+    for (const r of buildAgg) {
+      const key = `${r._id.pageType}:${r._id.slug}`;
+      const ids = buildVisitorIds.get(key) ?? new Set<string>();
+      for (const id of r.visitorIds) ids.add(id);
+      buildVisitorIds.set(key, ids);
+
+      const distribution = buildDistributionMap.get(key) ?? [];
+      distribution.push({ builtPrizeSlug: r._id.builtPrizeSlug, visitors: r.visitorIds.length });
+      buildDistributionMap.set(key, distribution);
+    }
+    // Deterministic order: visitors descending, builtPrizeSlug ascending as a tie-break.
+    // `topBuiltPrize` below is derived from this same sorted list (single source of truth),
+    // so it can no longer disagree with `buildDistribution[0]` on a tie.
+    for (const distribution of buildDistributionMap.values()) {
+      distribution.sort(
+        (a, b) => b.visitors - a.visitors || (a.builtPrizeSlug < b.builtPrizeSlug ? -1 : 1)
+      );
     }
 
     // 2. Aggregate signups from User (signupAttribution.promotionSlug + createdAt)
@@ -236,6 +348,9 @@ export class PromoAnalyticsRepository {
       const key = `${pageType}:${slug}`;
       const visits = visitMap.get(key) ?? 0;
       const crossVisits = crossVisitMap.get(key) ?? 0;
+      const builds = buildVisitorIds.get(key)?.size ?? 0;
+      const buildDistribution = buildDistributionMap.get(key) ?? [];
+      const topBuiltPrize = buildDistribution[0]?.builtPrizeSlug ?? null;
       const signups = signupMap.get(key) ?? 0;
       const conv = conversionMap.get(key);
       const conversions = conv?.conversions ?? 0;
@@ -255,6 +370,9 @@ export class PromoAnalyticsRepository {
         slug,
         visits,
         crossVisits,
+        builds,
+        topBuiltPrize,
+        buildDistribution,
         signups,
         conversions,
         revenue,
@@ -439,6 +557,110 @@ export class PromoAnalyticsRepository {
     byUTMSource.sort((a, b) => b.signups - a.signups);
 
     return { byUTMSource };
+  }
+
+  /**
+   * Aggregate metrics by BUILT PRIZE (e.g. makita-kincrome) across every landing page.
+   * Answers: which combinations get built more than they get landed on, and do builders
+   * of one combination convert better than builders of another? Visitors from
+   * PromoAnalyticsVisit.builtPrizeSlug, signups from User.signupAttribution.builtPrizeSlug,
+   * conversions/revenue from PaymentEvent.data.builtPrizeSlug.
+   */
+  async getAggregatedByBuiltPrize(startDate: Date, endDate: Date): Promise<PromoAnalyticsByBuiltPrizeSummary> {
+    await connectDB();
+
+    // 1. Builders - unique visitors who assembled this combination, on ANY landing page.
+    // Hint forces the index built for this query ({builtPrizeSlug:1, timestamp:-1}). Without it,
+    // the planner picks the TTL index ({timestamp:1}) at current data volume and FETCHes the
+    // whole 90-day window instead of the ~0.4% of rows carrying a build (F-003, panel review).
+    const buildAgg = await PromoAnalyticsVisit.aggregate<{ _id: string; builders: number }>(
+      [
+        {
+          $match: {
+            timestamp: { $gte: startDate, $lte: endDate },
+            builtPrizeSlug: { $exists: true, $ne: "" },
+          },
+        },
+        { $group: { _id: "$builtPrizeSlug", visitorIds: { $addToSet: VISITOR_ID_EXPR } } },
+        { $project: { _id: 1, builders: { $size: "$visitorIds" } } },
+      ],
+      { hint: { builtPrizeSlug: 1, timestamp: -1 } }
+    ).exec();
+
+    const buildersMap = new Map<string, number>();
+    for (const r of buildAgg) buildersMap.set(r._id, r.builders);
+
+    // 2. Signups from User.signupAttribution.builtPrizeSlug
+    const signupAgg = await User.aggregate<{ _id: string; signups: number }>([
+      {
+        $match: {
+          "signupAttribution.builtPrizeSlug": { $exists: true, $ne: "" },
+          createdAt: { $gte: startDate, $lte: endDate },
+        },
+      },
+      { $group: { _id: "$signupAttribution.builtPrizeSlug", signups: { $sum: 1 } } },
+    ]).exec();
+
+    const signupMap = new Map<string, number>();
+    for (const r of signupAgg) signupMap.set(r._id, r.signups);
+
+    // 3. Conversions and revenue from PaymentEvent.data.builtPrizeSlug
+    const conversionAgg = await PaymentEvent.aggregate<{
+      _id: string;
+      conversions: number;
+      revenue: number;
+    }>([
+      {
+        $match: {
+          eventType: "BenefitsGranted",
+          timestamp: { $gte: startDate, $lte: endDate },
+          "data.builtPrizeSlug": { $exists: true, $ne: "" },
+          $nor: [{ packageType: "membership", "data.billingReason": "subscription_cycle" }],
+        },
+      },
+      ...excludeRefundedBenefitsGrantedStages(),
+      {
+        $group: {
+          _id: "$data.builtPrizeSlug",
+          conversions: { $sum: 1 },
+          revenue: { $sum: { $ifNull: ["$data.price", 0] } },
+        },
+      },
+    ]).exec();
+
+    const conversionMap = new Map<string, { conversions: number; revenue: number }>();
+    for (const r of conversionAgg) {
+      conversionMap.set(r._id, { conversions: r.conversions ?? 0, revenue: r.revenue ?? 0 });
+    }
+
+    // 4. Union of every combination seen anywhere in the range - a combination can have
+    // signups/conversions without a builder row in THIS window (built earlier, signed up now).
+    const allSlugs = new Set<string>([...buildersMap.keys(), ...signupMap.keys(), ...conversionMap.keys()]);
+
+    const byBuiltPrize: BuiltPrizeMetrics[] = [];
+    for (const builtPrizeSlug of allSlugs) {
+      const builders = buildersMap.get(builtPrizeSlug) ?? 0;
+      const signups = signupMap.get(builtPrizeSlug) ?? 0;
+      const conv = conversionMap.get(builtPrizeSlug);
+      const conversions = conv?.conversions ?? 0;
+      const revenue = conv?.revenue ?? 0;
+
+      byBuiltPrize.push({
+        builtPrizeSlug,
+        builders,
+        signups,
+        conversions,
+        revenue,
+        builderToSignupRate: builders > 0 ? (signups / builders) * 100 : 0,
+        signupToConversionRate: signups > 0 ? (conversions / signups) * 100 : 0,
+        overallConversionRate: builders > 0 ? (conversions / builders) * 100 : 0,
+      });
+    }
+
+    // Deterministic order: builders descending, builtPrizeSlug ascending as a tie-break.
+    byBuiltPrize.sort((a, b) => b.builders - a.builders || (a.builtPrizeSlug < b.builtPrizeSlug ? -1 : 1));
+
+    return { byBuiltPrize };
   }
 
   /**

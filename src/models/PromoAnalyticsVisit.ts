@@ -17,6 +17,12 @@ export interface IPromoAnalyticsVisit extends Document {
   slug: string;
   /** Toolset slug user was on before visiting this page (e.g. from Other Toolsets carousel) */
   referrerSlug?: string;
+  /** Prize the visitor assembled in "Build your prize" (e.g. "makita-kincrome", "cash-prize"). */
+  builtPrizeSlug?: string;
+  /** How many times they changed the toolbox lane on this page. 0/absent = never engaged. */
+  toolboxSwitches?: number;
+  /** How many times they changed the power-toolset lane on this page. */
+  toolsetSwitches?: number;
   anonymousId?: string;
   userId?: mongoose.Types.ObjectId;
   referrer?: string;
@@ -44,6 +50,22 @@ const PromoAnalyticsVisitSchema = new Schema<IPromoAnalyticsVisit>(
       required: false,
       trim: true,
       lowercase: true,
+    },
+    builtPrizeSlug: {
+      type: String,
+      required: false,
+      trim: true,
+      lowercase: true,
+    },
+    toolboxSwitches: {
+      type: Number,
+      required: false,
+      min: 0,
+    },
+    toolsetSwitches: {
+      type: Number,
+      required: false,
+      min: 0,
     },
     anonymousId: {
       type: String,
@@ -91,6 +113,7 @@ PromoAnalyticsVisitSchema.index({ pageType: 1, slug: 1, timestamp: -1 });
 PromoAnalyticsVisitSchema.index({ referrerSlug: 1, slug: 1, timestamp: -1 });
 PromoAnalyticsVisitSchema.index({ anonymousId: 1, timestamp: -1 });
 PromoAnalyticsVisitSchema.index({ userId: 1, timestamp: -1 });
+PromoAnalyticsVisitSchema.index({ builtPrizeSlug: 1, timestamp: -1 });
 
 // TTL index: auto-delete visits older than 90 days to manage growth
 PromoAnalyticsVisitSchema.index(

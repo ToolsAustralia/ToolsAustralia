@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import dynamic from "next/dynamic";
 import { m } from "framer-motion";
-import { useRouter, usePathname } from "next/navigation";
+import { usePathname } from "next/navigation";
 
 // Click-gated heavy chunk (LazyMembershipModal latch pattern —
 // src/components/modals/MembershipModal/LazyMembershipModal.tsx): rendering a dynamic()
@@ -16,6 +16,7 @@ const PrizeSpecificationsModal = dynamic(() => import("@/components/modals/Prize
 import { useScrollAnimation } from "@/hooks/useScrollAnimation";
 import { useMajorDrawEntryCta } from "@/hooks/useMajorDrawEntryCta";
 import { usePrizeCatalog } from "@/hooks/usePrizeCatalog";
+import { usePrizeBuildTracking } from "@/hooks/usePrizeBuildTracking";
 import { useCurrentMajorDraw } from "@/hooks/queries/useMajorDrawQueries";
 import { formatMajorDrawChipUtc } from "@/utils/common/timezone";
 import { usePromoThemeStore } from "@/stores/usePromoThemeStore";
@@ -32,13 +33,15 @@ import {
   TOOLBOXES,
   TOOLSETS,
   TOOLBOX_QUERY_PARAM,
-  buildToolsetLandingHref,
+  TOOLSET_QUERY_PARAM,
+  buildPrizeSelectionHref,
   fromPrizeSlug,
   getComboPresentation,
   getContentsChips,
   getToolbox,
   getToolset,
   parseToolboxQueryParam,
+  parseToolsetQueryParam,
   resolveAccent,
   toPrizeSlug,
   type ToolboxBrand,
@@ -52,23 +55,18 @@ import MultiplierBannerImage from "@/components/ui/MultiplierBannerImage";
 const TOOLBOX_PREFERENCE_KEY = "prizeToolboxType";
 
 /**
- * Client-only read of the current query string. Returns empty params during SSR.
+ * This component never calls `useSearchParams()` — every query read below goes straight to
+ * `window.location.search`. This section renders on PRERENDERED marketing-class pages (`/`,
+ * `/promotions/*` — see docs/security-csp/rules.md R8), and `useSearchParams()` there de-opts
+ * the whole client subtree up to the nearest Suspense boundary to CLIENT-ONLY rendering. The
+ * entire 1,115px "Build your prize" card then ships as NOTHING in the static HTML — no
+ * fallback, no reserved space — and appears only after hydration, shoving every section below
+ * it down the page (with MembershipSection, a measured CLS 0.4352 → 0.0566 on /promotions/*,
+ * 2026-07-27). It also kept the card out of the crawled HTML entirely.
  *
- * Deliberately NOT `useSearchParams()`: this section renders on PRERENDERED marketing-class
- * pages (`/`, `/promotions/*` — see docs/security-csp/rules.md R8), and `useSearchParams()`
- * there de-opts the whole client subtree up to the nearest Suspense boundary to CLIENT-ONLY
- * rendering. The entire 1,115px "Build your prize" card then ships as NOTHING in the static
- * HTML — no fallback, no reserved space — and appears only after hydration, shoving every
- * section below it down the page (with MembershipSection, a measured CLS 0.4352 → 0.0566 on
- * /promotions/*, 2026-07-27). It also kept the card out of the crawled HTML entirely.
- *
- * `?toolbox=` only ever matters on the client (it is written by `router.replace` from this
- * component's own handlers), so reading the live URL loses nothing.
+ * `?toolbox=`/`?toolset=` only ever matter on the client (they are written by this component's
+ * own handlers via `window.history.replaceState`), so reading the live URL loses nothing.
  */
-function readCurrentSearchParams(): URLSearchParams {
-  if (typeof window === "undefined") return new URLSearchParams();
-  return new URLSearchParams(window.location.search);
-}
 
 interface PrizeShowcaseProps {
   /** Prize slug this instance opens on (e.g. the `/promotions/{slug}` page's prize). */
@@ -152,13 +150,24 @@ function PrizeShowcase({
   const themeMode = useThemeStore((s) => s.theme);
   const setStoreSlug = usePromoThemeStore((s) => s.setSlug);
   const { openEntryFlow } = useMajorDrawEntryCta();
-  const router = useRouter();
   const pathname = usePathname();
   const useParentContainer = pathname === "/" || pathname === "/my-account";
 
   const [initial] = useState(() => resolveStateForSlug(slugProp));
   const [selection, setSelection] = useState(initial.selection);
   const [isCash, setIsCash] = useState(initial.isCash);
+
+  // Engagement counters — how much the visitor played with EACH REEL on this page (a reel
+  // touch, not a lane-state change). Cash is a toggle button, not a reel card, so it does not
+  // bump either counter (F-010). Absent/zero on the visit row means "never touched that reel".
+  const [toolboxSwitches, setToolboxSwitches] = useState(0);
+  const [toolsetSwitches, setToolsetSwitches] = useState(0);
+  // Separate from the counters above: "did the visitor interact AT ALL", set by all three
+  // handlers including cash. A cash-only visitor has tb === 0 && ts === 0 forever (cash isn't a
+  // reel touch) but DID make a real build choice (it resolves to `cash-prize`) that must still
+  // reach the beacon — see the gate in usePrizeBuildTracking. Do not fold this back into a
+  // counter check; that silently drops cash-only visitors again (F-010).
+  const [hasInteracted, setHasInteracted] = useState(false);
 
   // `requestedSlug` is what the two lanes add up to; `activeSlug` is what the catalog
   // actually has (it falls back to the default prize if a combination has no entry yet),
@@ -213,31 +222,69 @@ function PrizeShowcase({
   /* ------------------------------------------------------------------ */
   /* Selection ⇄ URL / storage                                           */
   /* ------------------------------------------------------------------ */
-  /** Toolset landing pages persist the toolbox (and the cash opt-out) in `?toolbox=`. */
-  const syncToolboxQuery = useCallback(
-    (value: ToolboxBrand | "cash") => {
-      if (!toolsetMode || !pathname?.startsWith("/promotions/")) return;
-      router.replace(buildToolsetLandingHref(pathname, readCurrentSearchParams(), value), {
-        scroll: false,
-      });
+  const isPromoPage = pathname?.startsWith("/promotions/") ?? false;
+
+  // `activeSlug` is the CATALOG-RESOLVED prize, so we never report a combination that has no
+  // entry (`usePrizeCatalog` falls back). `slugProp` is the page's own prize; the landing slug
+  // for attribution is the pathname segment, which is what the visit row was keyed on.
+  const landingSlug = isPromoPage ? pathname?.split("/")[2] : undefined;
+  usePrizeBuildTracking({
+    enabled: isPromoPage,
+    landingSlug,
+    builtPrizeSlug: activeSlug,
+    toolboxSwitches,
+    toolsetSwitches,
+    hasInteracted,
+  });
+
+  /**
+   * Mirror the current build into the URL.
+   *
+   * `window.history.replaceState`, NOT `router.replace`: the router resets scroll to the top
+   * even with `{ scroll: false }` — measured on production 2026-07-27, scrollY 2769 -> 0 about
+   * 100ms after a reel click, with the page height unchanged and no route loader. The same
+   * finding (an RSC refetch on every `router.replace`) is documented at
+   * `useMembershipModalDeepLink.ts:97-107`. `replaceState` cannot scroll and adds no history
+   * entry, so Back still leaves the page instead of undoing one reel spin at a time.
+   *
+   * Reads `window.location.search` rather than the `searchParams` snapshot: successive writes
+   * must build on the URL as it actually is now, and `replaceState` does not refresh that hook.
+   */
+  const syncSelectionQuery = useCallback(
+    (next: { toolbox: ToolboxBrand; toolset: ToolsetType; isCash: boolean }) => {
+      if (!isPromoPage || !pathname) return;
+      window.history.replaceState(
+        null,
+        "",
+        buildPrizeSelectionHref(pathname, new URLSearchParams(window.location.search), next)
+      );
     },
-    [toolsetMode, pathname, router]
+    [isPromoPage, pathname]
   );
 
-  // Toolset landing pages: hydrate the toolbox lane (and cash mode) from `?toolbox=`.
-  // Invalid or missing values fall back to the first toolbox. Runs per pathname rather than
-  // per query change — the only writer of `?toolbox=` is `syncToolboxQuery` above, called from
-  // handlers that already set this state directly, so there is nothing to reconcile afterwards.
+  /**
+   * Mount-only URL hydration. Params WIN over the page's own prize, so a refresh, a Back, or a
+   * shared link reopens the exact build.
+   *
+   * Deliberately one-shot. The previous version re-read `?toolbox=` on every change, creating a
+   * URL -> state -> URL round trip; React state is the single owner and the URL is a
+   * write-mostly mirror. On statically prerendered promo pages the first paint uses the page
+   * default and this applies on hydration — the same accepted flip as `?packages=`.
+   */
+  const hydratedFromUrl = useRef(false);
   useEffect(() => {
-    if (!toolsetMode) return;
-    const fromUrl = parseToolboxQueryParam(readCurrentSearchParams().get(TOOLBOX_QUERY_PARAM));
-    setIsCash(fromUrl === "cash");
-    if (fromUrl && fromUrl !== "cash") {
-      // Only the TOOLBOX lane is persisted in the query — the toolset comes from the
-      // page's own slug and is then the visitor's to change in the reel.
-      setSelection((prev) => ({ ...prev, toolbox: fromUrl }));
-    }
-  }, [toolsetMode, pathname]);
+    if (hydratedFromUrl.current || !isPromoPage) return;
+    hydratedFromUrl.current = true;
+    const params = new URLSearchParams(window.location.search);
+    const toolboxFromUrl = parseToolboxQueryParam(params.get(TOOLBOX_QUERY_PARAM));
+    const toolsetFromUrl = parseToolsetQueryParam(params.get(TOOLSET_QUERY_PARAM));
+    if (!toolboxFromUrl && !toolsetFromUrl) return;
+    setIsCash(toolboxFromUrl === "cash");
+    setSelection((prev) => ({
+      toolbox: toolboxFromUrl && toolboxFromUrl !== "cash" ? toolboxFromUrl : prev.toolbox,
+      toolset: toolsetFromUrl ?? prev.toolset,
+    }));
+  }, [isPromoPage]);
 
   // `/promotions/{prize-slug}` → `/promotions/{other-prize-slug}` is a client transition
   // WITHIN the same `[slug]` route segment, so this component is reused rather than
@@ -251,7 +298,19 @@ function PrizeShowcase({
     const next = resolveStateForSlug(slugProp);
     setSelection(next.selection);
     setIsCash(next.isCash);
-  }, [slugProp]);
+    // The page's own prize changed under us (a client transition inside `[slug]` reuses this
+    // component). Any build params still in the URL describe the PREVIOUS page, so drop them —
+    // otherwise page A's build leaks onto page B and is attributed there.
+    if (isPromoPage && pathname) {
+      const params = new URLSearchParams(window.location.search);
+      if (params.has(TOOLBOX_QUERY_PARAM) || params.has(TOOLSET_QUERY_PARAM)) {
+        params.delete(TOOLBOX_QUERY_PARAM);
+        params.delete(TOOLSET_QUERY_PARAM);
+        const qs = params.toString();
+        window.history.replaceState(null, "", qs ? `${pathname}?${qs}` : pathname);
+      }
+    }
+  }, [slugProp, isPromoPage, pathname]);
 
   // Evergreen surfaces (home, /my-account): reopen on the toolbox the visitor last chose.
   // Skipped where the page itself names the prize (`/promotions/*`) or locks the toolset.
@@ -284,20 +343,27 @@ function PrizeShowcase({
     setSelection((prev) => ({ ...prev, toolbox: id }));
     setIsCash(false);
     rememberToolbox(id);
-    syncToolboxQuery(id);
+    syncSelectionQuery({ toolbox: id, toolset: selection.toolset, isCash: false });
+    setToolboxSwitches((n) => n + 1);
+    setHasInteracted(true);
   };
 
   const handleSelectToolset = (id: ToolsetType) => {
     setSelection((prev) => ({ ...prev, toolset: id }));
     setIsCash(false);
-    // Picking from EITHER reel leaves cash mode, so this path must clear `?toolbox=cash`
-    // too — otherwise a reload on a toolset landing page drops the visitor back into it.
-    syncToolboxQuery(selection.toolbox);
+    // Picking from EITHER reel leaves cash mode, so this path must clear `?toolbox=cash` too.
+    syncSelectionQuery({ toolbox: selection.toolbox, toolset: id, isCash: false });
+    setToolsetSwitches((n) => n + 1);
+    setHasInteracted(true);
   };
 
   const handleSelectCash = (next: boolean) => {
     setIsCash(next);
-    syncToolboxQuery(next ? "cash" : selection.toolbox);
+    syncSelectionQuery({ ...selection, isCash: next });
+    // Not a reel touch, so neither counter bumps here (F-010) — but it IS a real interaction,
+    // so hasInteracted still flips, or a cash-only visitor's build choice would never reach
+    // the beacon (see usePrizeBuildTracking's gate).
+    setHasInteracted(true);
   };
 
   /* ------------------------------------------------------------------ */
@@ -431,7 +497,7 @@ function PrizeShowcase({
 // No Suspense self-wrap: the old `<Suspense fallback={null}>` existed only to satisfy
 // `useSearchParams()` on prerendered pages (docs/security-csp/rules.md R8) — and a null fallback
 // is exactly what made the CSR de-opt silent, collapsing this whole card to zero height in the
-// static HTML. With the query read moved to `readCurrentSearchParams()`, nothing here suspends,
-// so re-introducing `useSearchParams()` (directly or via a hook) now FAILS THE BUILD on `/` —
-// a loud error instead of a silent CLS regression. Keep it that way.
+// static HTML. With every query read going straight to `window.location.search`, nothing here
+// suspends, so re-introducing `useSearchParams()` (directly or via a hook) now FAILS THE BUILD
+// on `/` — a loud error instead of a silent CLS regression. Keep it that way.
 export default PrizeShowcase;

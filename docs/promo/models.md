@@ -14,6 +14,21 @@
 
 > _TODO: pull exact schemas (fields, indexes, relationships) for each from source files. Currently inventoried only._
 
+## `PromoAnalyticsVisit` — prize-build fields (2026-07-27)
+
+Three optional fields record the "build your prize" configurator's result on top of the existing
+visit row: `builtPrizeSlug` (the assembled prize, e.g. `makita-kincrome`), `toolboxSwitches` /
+`toolsetSwitches` (reel-engagement counts). `slug` is unchanged and still means the **landing
+page** the visitor arrived on — `builtPrizeSlug` is additive, not a replacement, and the two can
+name different brands (e.g. landed on `/promotions/makita`, built the DeWalt combo). All three
+are optional, so the change needed **no migration and no backfill**: pre-existing rows stay valid
+with the fields simply absent.
+
+Indexed by `{ builtPrizeSlug: 1, timestamp: -1 }` for the Phase 4 prize-popularity breakdown. See
+[backend.md](backend.md#prize-build-core--recordprizebuild-2026-07-27) for how the fields get written, and
+[docs/mongodb/backend.md](../mongodb/backend.md#promoanalyticsrepositoryupdatevisitbuild--never-insert-update)
+for the never-insert update that persists them.
+
 ## Relationships
 
 ```

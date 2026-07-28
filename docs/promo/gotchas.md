@@ -132,3 +132,20 @@ designs** in the meantime. When the new clips arrive, run
 To *see* a drawn still in a browser without waiting for the clips, emulate reduced motion
 (DevTools → Rendering → "Emulate CSS prefers-reduced-motion") — that is exactly what the
 `landing drawn-state` demo spec does.
+
+## `router.replace` resets scroll on the prize builder — use `history.replaceState`
+
+Picking a toolbox on `/promotions/makita` used to snap the visitor to the top of the page.
+Measured on production 2026-07-27: `scrollY` 2769 -> 0 roughly 100ms after the click, with
+`document.scrollHeight` unchanged (9122) and no route loader — so not a re-render collapse and
+not a navigation. It is the App Router resetting scroll **despite** `{ scroll: false }`.
+
+`PrizeShowcase` therefore mirrors the build with `window.history.replaceState`, which cannot
+scroll and triggers no RSC refetch. Same root cause and same fix as the note at
+`useMembershipModalDeepLink.ts:97-107`.
+
+**Only the lanes that wrote to the URL ever jumped** — the toolbox lane and the cash opt-out.
+The toolset lane wrote nothing, which is why it never jumped and also why the chosen brand was
+invisible to analytics until the build params landed.
+
+Use `replaceState`, never `pushState`: Back must leave the page, not step back through builds.

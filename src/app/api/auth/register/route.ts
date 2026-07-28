@@ -70,6 +70,7 @@ const registerSchema = z.object({
     }, "Please enter a valid Australian mobile number (e.g., 0412345678 or +61412345678)"),
   affiliateCode: z.string().optional(),
   promotionSlug: z.string().optional(), // Optional promotion slug for brand interest tracking
+  builtPrizeSlug: z.string().optional(), // Prize assembled in "Build your prize" at signup
   utm_source: z.string().optional(),
   utm_medium: z.string().optional(),
   utm_campaign: z.string().optional(),
@@ -210,10 +211,12 @@ function getAttributionFromRequest(
  */
 function buildSignupAttribution(
   promotionSlug?: string,
-  attribution?: AttributionParams
+  attribution?: AttributionParams,
+  builtPrizeSlug?: string
 ): {
   promotionPageType?: "evergreen" | "toolset";
   promotionSlug?: string;
+  builtPrizeSlug?: string;
   visitedAt: Date;
   utmSource?: string;
   utmMedium?: string;
@@ -230,12 +233,16 @@ function buildSignupAttribution(
     (attribution.utm_source || attribution.utm_medium || attribution.utm_campaign ||
      attribution.campaign_id || attribution.adset_id || attribution.ad_id)
   );
+  // Validated exactly like promotionSlug — a hand-edited URL or a crawler must not be able to
+  // write an arbitrary string into attribution.
+  const hasBuiltPrize = !!builtPrizeSlug && isValidPromoSlug(builtPrizeSlug);
   if (!hasPromo && !hasAttribution) return undefined;
   return {
     ...(hasPromo && {
       promotionPageType: getPageTypeFromSlug(promotionSlug!),
       promotionSlug: promotionSlug!.toLowerCase().trim(),
     }),
+    ...(hasBuiltPrize && { builtPrizeSlug: builtPrizeSlug!.toLowerCase().trim() }),
     visitedAt: new Date(),
     ...(attribution?.utm_source && { utmSource: attribution.utm_source }),
     ...(attribution?.utm_medium && { utmMedium: attribution.utm_medium }),
@@ -484,7 +491,7 @@ export async function POST(request: NextRequest) {
           existingUser.email = validatedData.email.toLowerCase().trim();
           existingUser.mobile = cleanedMobile;
 
-          const signupAttr = buildSignupAttribution(validatedData.promotionSlug, attribution);
+          const signupAttr = buildSignupAttribution(validatedData.promotionSlug, attribution, validatedData.builtPrizeSlug);
           if (signupAttr) existingUser.signupAttribution = signupAttr;
 
           // Handle affiliate code update (only if provided and not already set)
@@ -624,7 +631,7 @@ export async function POST(request: NextRequest) {
       existingUser.email = validatedData.email.toLowerCase().trim();
       existingUser.mobile = cleanedMobile;
 
-      const signupAttrEmail = buildSignupAttribution(validatedData.promotionSlug, attribution);
+      const signupAttrEmail = buildSignupAttribution(validatedData.promotionSlug, attribution, validatedData.builtPrizeSlug);
       if (signupAttrEmail) existingUser.signupAttribution = signupAttrEmail;
 
       // Handle affiliate code update (only if provided and not already set)
@@ -717,7 +724,7 @@ export async function POST(request: NextRequest) {
       existingUser.email = validatedData.email.toLowerCase().trim();
       existingUser.mobile = cleanedMobile;
 
-      const signupAttrMobile = buildSignupAttribution(validatedData.promotionSlug, attribution);
+      const signupAttrMobile = buildSignupAttribution(validatedData.promotionSlug, attribution, validatedData.builtPrizeSlug);
       if (signupAttrMobile) existingUser.signupAttribution = signupAttrMobile;
 
       // Handle affiliate code update (only if provided and not already set)
@@ -800,7 +807,7 @@ export async function POST(request: NextRequest) {
     }
 
     // No existing accounts found - create new user account (passwordless)
-    const signupAttr = buildSignupAttribution(validatedData.promotionSlug, attribution);
+    const signupAttr = buildSignupAttribution(validatedData.promotionSlug, attribution, validatedData.builtPrizeSlug);
     const newUser = new User({
       firstName: validatedData.firstName.trim(),
       lastName: validatedData.lastName.trim(),

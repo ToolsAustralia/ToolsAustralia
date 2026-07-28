@@ -77,6 +77,11 @@ import { useAffiliateLink } from "@/hooks/useAffiliateLink";
 import { usePromoLink } from "@/hooks/usePromoLink";
 import { extractAttributionParams } from "@/utils/tracking/utm-helpers";
 import { getStoredUTMParams } from "@/utils/tracking/utm-storage";
+// Direct module import (not the `prize-selection` barrel) — the barrel also re-exports
+// PrizeBuilderCard/SelectorReel/ComboHero (heavy client UI); `utils.ts` imports only
+// `constants` + `prize-builder-model`, so this keeps the reel components out of the
+// modal's bundle graph.
+import { resolveBuiltPrizeSlug } from "@/components/sections/promo/prize-selection/utils";
 import { getFBCFromURL, getFBPFromCookie } from "@/utils/tracking/facebook-helpers";
 import { formatWinnerName } from "@/utils/winner-name-formatter";
 import { useUserMajorDrawStats } from "@/hooks/queries/useMajorDrawQueries";
@@ -1451,6 +1456,21 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
       // Non-blocking
     }
 
+    // The build the visitor had on screen. Derived with the SAME helper the prize card uses —
+    // two independent derivations would drift and the signup rows would stop agreeing with the
+    // visit rows. Falls back to the page's own prize when they never touched the reels.
+    let builtPrizeSlug: string | undefined;
+    try {
+      if (promotionSlug && typeof window !== "undefined") {
+        builtPrizeSlug = resolveBuiltPrizeSlug(
+          new URLSearchParams(window.location.search),
+          promotionSlug
+        );
+      }
+    } catch {
+      // Non-blocking — never fail registration on attribution derivation.
+    }
+
     let attributionParams: {
       utm_source?: string;
       utm_medium?: string;
@@ -1495,6 +1515,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
           mobile: formData.phone,
           affiliateCode: affiliateCode || undefined,
           promotionSlug: promotionSlug,
+          ...(builtPrizeSlug ? { builtPrizeSlug } : {}),
           ...(selectedPackageId ? { packageId: selectedPackageId } : {}),
           ...(attributionParams.utm_source && { utm_source: attributionParams.utm_source }),
           ...(attributionParams.utm_medium && { utm_medium: attributionParams.utm_medium }),

@@ -293,6 +293,21 @@ The `signupAttribution` subdocument on `User` captures the marketing context at 
 
 Any code reading `user.signupAttribution.promotionSlug` must guard for `undefined`. The attribution resolver (`src/services/attribution/`) treats the absence of a promo slug as a normal non-promo registration — it does not treat it as missing attribution.
 
+### `signupAttribution.builtPrizeSlug` (2026-07-28)
+
+Optional `string`, `trim`/`lowercase` like `promotionSlug`. Carries the prize the visitor had
+assembled in "Build your prize" (e.g. `ryobi-kincrome`, `cash-prize`) forward from the visit onto
+the resulting user, so a signup can be attributed to the exact build the visitor configured — not
+just the landing page they arrived on. Set by all four `POST /api/auth/register` branches via
+`buildSignupAttribution`'s third argument — see [auth/api.md](../auth/api.md#post-apiauthregister--builtprizeslug-attribution-2026-07-28).
+
+Only ever set **alongside** `promotionSlug` — it comes from the same `?toolset=`/`?toolbox=` params
+`resolveBuiltPrizeSlug` uses to attach a build to the promo-VISIT row
+([promo/models.md](../promo/models.md)), and is validated with `isValidPromoSlug` at the register
+boundary before being persisted. Indexed: `{ "signupAttribution.builtPrizeSlug": 1, createdAt: 1 }`
+(beside the existing `signupAttribution.promotionSlug` index) for funnel queries that slice signups
+by the prize actually built rather than the page visited.
+
 ## `User.retentionOffersConsumed` (top-level flags on `User`)
 
 Two boolean flags that gate the new cancellation-flow one-time retention offers. Both default to `false`. Set to `true` when the user successfully redeems the corresponding offer — prevents repeat redemption across sessions.
