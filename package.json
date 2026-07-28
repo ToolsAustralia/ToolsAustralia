@@ -375,6 +375,7 @@
     "e2e:report": "playwright show-report e2e-artifacts/report",
     "test:unlock-packages": "tsx src/utils/partner-discounts/__tests__/unlock-packages.test.ts",
     "test:portal-return": "tsx src/utils/partner-discounts/__tests__/portal-return.test.ts",
+    "test:partner-catalog-drift": "tsx src/utils/partner-discounts/__tests__/partner-catalog-drift.test.ts",
     "test:e2e-env": "tsx e2e/lib/__tests__/env.test.ts",
     "test:e2e-srt": "tsx e2e/proof/__tests__/srt.test.ts"
   },

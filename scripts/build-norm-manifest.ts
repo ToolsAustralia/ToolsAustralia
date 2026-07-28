@@ -37,9 +37,13 @@ let unchanged = false;
 if (fs.existsSync(outPath)) {
   try {
     const prev = JSON.parse(fs.readFileSync(outPath, "utf8")) as typeof out;
-    unchanged =
-      prev.version === out.version &&
-      JSON.stringify(prev.endpoints) === JSON.stringify(out.endpoints);
+    // Compare EVERYTHING except the timestamp (panel F-045). Naming the fields
+    // individually was correct only while the file had exactly two of them — any field
+    // added to `out` later would have been computed and then silently discarded on every
+    // unchanged run. Excluding `generatedAt` keeps the guard right by construction.
+    const { generatedAt: _prevStamp, ...prevRest } = prev;
+    const { generatedAt: _nextStamp, ...nextRest } = out;
+    unchanged = JSON.stringify(prevRest) === JSON.stringify(nextRest);
   } catch {
     unchanged = false; // unreadable/corrupt → rewrite
   }

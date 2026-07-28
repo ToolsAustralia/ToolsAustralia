@@ -18,6 +18,8 @@
  * @module utils/partner-discounts/portal-return
  */
 
+import type { DashboardAccountState } from "@/utils/dashboard/dashboard-state-theme";
+
 // The percent ladder is single-sourced in partner-catalog-visibility (panel F-016);
 // re-exported here because this module's tests + callers validate against it.
 export { PARTNER_CATALOG_LADDER_PCTS } from "@/utils/partner-discounts/partner-catalog-visibility";
@@ -132,8 +134,15 @@ export function resolvePortalReturn(
 
 // ─── Banner view resolution (the six-state matrix) ────────────────────────────
 
-/** Account states the banner distinguishes (subset of DashboardAccountState). */
-export type PortalBannerAcct = "active" | "onetime" | "pastdue" | "paused" | "none";
+/**
+ * Account states the banner distinguishes — structurally TIED to the dashboard's own
+ * union rather than hand-duplicated (panel F-046). The duplicate meant a caller had to
+ * cast, which silenced the one compile-time signal that matters: add a 6th state to
+ * `DashboardAccountState` and it would have fallen silently into the generic arm,
+ * skipping the pastdue/paused special-casing — exactly the bug class F-009 was filed
+ * for. Type-only import, so it is erased and cannot reach the client bundle.
+ */
+export type PortalBannerAcct = DashboardAccountState;
 
 /** The recommendation input: cheapest covering plan, pre-mapped by the caller. */
 export interface PortalBannerRecommendation {
@@ -247,11 +256,14 @@ export function resolvePortalBannerView(input: {
   // F-009: a retention-paused member's access returns on resume — never upsell them
   // a package they already own; point at the manage sheet (resume lives there).
   if (acct === "paused") {
+    // Name the offer they came for when we know it (F-048): otherwise the banner talks
+    // only about billing and the member cannot tell whether resuming unlocks THAT offer.
+    const thenCheck = offerName ? `, then check ${offerName} again` : "";
     return {
       headline: "Your membership is paused.",
       sub: pausedUntilLabel
-        ? `It resumes ${pausedUntilLabel} — resume now to restore your discounts.`
-        : "Resume your membership to restore your discounts.",
+        ? `It resumes ${pausedUntilLabel} — resume now to get your discounts back${thenCheck}.`
+        : `Resume your membership to get your discounts back${thenCheck}.`,
       cta: { kind: "manage" },
       showLoginHint: false,
     };

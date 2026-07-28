@@ -12,7 +12,6 @@ import { partnerDiscountSsoEnabled } from "@/config/featureFlags";
 import { resolveUnlockPackagesForLevel } from "@/utils/partner-discounts/unlock-packages";
 import {
   resolvePortalBannerView,
-  type PortalBannerAcct,
   type PortalReturn,
 } from "@/utils/partner-discounts/portal-return";
 import {
@@ -103,7 +102,12 @@ export default function MembershipPortalReturnBanner({
   if (!portalReturn) return null;
 
   // ── Loading shell (F-001): same section, space reserved, no copy yet ─────────
-  if (isLoading) {
+  // A signed-OUT visitor skips it entirely (F-047): their state is fully resolved
+  // server-side (`portalReturn` + acct "none" + 0%), and `isLoading` for them tracks
+  // only `/api/major-draw` — a query this banner never reads. Waiting on it withheld
+  // the funnel's primary landing copy (and its LCP text) for 3-8s. Signed-in visitors
+  // still see the shell, because their percent genuinely needs the account fetch.
+  if (isLoading && sessionStatus !== "unauthenticated") {
     return (
       <section className={SECTION_CLASS} style={SECTION_STYLE} aria-busy="true">
         <div className="mx-auto flex max-w-7xl flex-col gap-4 px-5 py-5 sm:px-6 lg:flex-row lg:items-center lg:justify-between lg:gap-8 lg:py-6">
@@ -137,7 +141,9 @@ export default function MembershipPortalReturnBanner({
 
   const view = resolvePortalBannerView({
     portalReturn,
-    acct: acct as PortalBannerAcct,
+    // No cast (F-046): PortalBannerAcct IS DashboardAccountState, so a new dashboard
+    // state now fails type-check here until this matrix handles it.
+    acct,
     partnerAccessPct,
     ssoEnabled,
     recommended: recommended
@@ -244,7 +250,10 @@ export default function MembershipPortalReturnBanner({
               href="/my-account?open=subscription"
               className="flex items-center justify-center gap-2 rounded-xl border border-white/25 px-5 py-3 text-[13.5px] font-extrabold text-white transition-colors hover:border-white/50 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-600 focus-visible:ring-offset-2 focus-visible:ring-offset-black"
             >
-              Manage membership <ArrowRight className="h-4 w-4" />
+              {/* "Resume membership", not "Manage membership" (F-048): the sub tells them
+                  to resume, and ManageSheet renders a real "Resume now" control — a
+                  vaguer label adds hesitation at exactly the wrong moment. */}
+              Resume membership <ArrowRight className="h-4 w-4" />
             </Link>
           )}
 

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireSameOrigin } from "@/utils/security/requireSameOrigin";
 import { createDistributedRateLimiter, getClientIdentifier } from "@/utils/security/rateLimiter";
 import { requireAuthenticatedUserDoc } from "@/lib/api-auth";
-import { reconcilePartnerDiscountAccess } from "@/utils/partner-discounts/sso-access";
+import { reconcilePartnerDiscountAccess, PARTNER_SSO_ERRORS } from "@/utils/partner-discounts/sso-access";
 import { generatePortalSso, logSsoIssuance } from "@/utils/partner-discounts/sso-flow";
 
 /**
@@ -34,7 +34,7 @@ export async function POST(request: NextRequest) {
       // Body copy is customer-facing (surfaced inline by usePartnerDiscountSso consumers);
       // status stays 404 — the route is deliberately hidden while the flag is dark.
       return NextResponse.json(
-        { success: false, error: "The partner portal isn't available right now." },
+        { success: false, error: PARTNER_SSO_ERRORS.flagDark },
         { status: 404 }
       );
     }
@@ -49,7 +49,7 @@ export async function POST(request: NextRequest) {
     const rateCheck = await ssoRateLimiter.check(identifier);
     if (!rateCheck.success) {
       return NextResponse.json(
-        { success: false, error: "Too many attempts. Please wait a moment and try again." },
+        { success: false, error: PARTNER_SSO_ERRORS.rateLimited },
         { status: 429, headers: { "Retry-After": rateCheck.retryAfterSeconds.toString() } }
       );
     }
@@ -64,7 +64,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         {
           success: false,
-          error: "Your partner access isn't active right now. You can check it on My Account → Rewards.",
+          // Surface-neutral wording (F-048): this renders on /membership (where the
+          // banner may have just said "You're set"), on purchase-success, AND on the
+          // Rewards page itself — so it must not contradict the banner above it or send
+          // someone to the page they are already on. The client percent and this
+          // server-side reconcile can legitimately diverge by a moment.
+          error: PARTNER_SSO_ERRORS.noAccess,
         },
         { status: 403 }
       );
@@ -88,7 +93,7 @@ export async function POST(request: NextRequest) {
 
     if (!sso.ok) {
       return NextResponse.json(
-        { success: false, error: "The partner portal is temporarily unavailable. Please try again shortly." },
+        { success: false, error: PARTNER_SSO_ERRORS.providerDown },
         { status: 502 }
       );
     }
@@ -97,7 +102,7 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error("[partner-discount/sso] error:", error);
     return NextResponse.json(
-      { success: false, error: "Something went wrong opening the partner portal. Please try again." },
+      { success: false, error: PARTNER_SSO_ERRORS.unknown },
       { status: 500 }
     );
   }

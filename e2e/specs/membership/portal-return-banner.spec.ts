@@ -38,8 +38,12 @@ const BANNER_EYEBROW = "Partner catalogue";
  * queries settle. Asserting a headline without waiting for that swap races the
  * skeleton and fails with "element not found" even though the feature is healthy —
  * which is exactly how this spec flaked before the helper existed. Waiting on
- * `aria-busy` (set only by the skeleton) is deterministic, and doubles as coverage
- * that the skeleton exists and clears.
+ * `aria-busy` (set only by the skeleton) is deterministic.
+ *
+ * NOT skeleton coverage (panel F-043): `not.toHaveAttribute` also passes when the
+ * attribute is ABSENT, so this helper would stay green if the skeleton regressed to
+ * `return null` — the 238-364px layout-shift bug it was built to prevent. The
+ * "reserves its space" test below asserts the skeleton's PRESENCE; this only gates.
  */
 async function bannerSettled(page: import("@playwright/test").Page) {
   const banner = page.locator("section", { hasText: BANNER_EYEBROW }).first();
@@ -147,6 +151,20 @@ test.describe("rewards-return banner @smoke", () => {
 
   test.describe("seeded member (Tradie, 50%)", () => {
     test.use({ storageState: MEMBER_STATE });
+
+    test("banner reserves its space with an aria-busy skeleton before copy resolves", async ({ page }) => {
+      // F-043: pins the skeleton's PRESENCE, which bannerSettled cannot — an absent
+      // aria-busy satisfies `not.toHaveAttribute` just as well as a cleared one, so a
+      // regression to `return null` (the original 238-364px layout shift) would pass
+      // silently. Must run SIGNED IN: a guest deliberately skips the skeleton (F-047)
+      // because their state is fully resolved server-side.
+      await page.goto(`/membership?utm_campaign=rewards-return&offer_id=${AMAZON.id}`, {
+        waitUntil: "commit",
+      });
+      const banner = page.locator("section", { hasText: BANNER_EYEBROW }).first();
+      await expect(banner).toHaveAttribute("aria-busy", "true", { timeout: 60_000 });
+      await expect(banner).not.toHaveAttribute("aria-busy", "true", { timeout: 60_000 });
+    });
 
     test("offer above their tier → gap headline + unlock recommendation", async ({ page }) => {
       await page.goto(`/membership?utm_campaign=rewards-return&offer_id=${AMAZON.id}`);

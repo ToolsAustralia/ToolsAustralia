@@ -1,4 +1,5 @@
 import { useMutation } from "@tanstack/react-query";
+import { PARTNER_SSO_ERRORS } from "@/utils/partner-discounts/sso-access";
 
 /**
  * usePartnerDiscountSso — open the MyRewards portal via the gated SSO hand-off.
@@ -29,7 +30,7 @@ async function requestPortalSso(): Promise<{ redirectUrl: string }> {
   const body = (await res.json().catch(() => null)) as SsoSuccessResponse | SsoFailureResponse | null;
   if (!res.ok || !body?.success) {
     throw new Error(
-      body && body.success === false ? body.error : "Could not open the partner portal. Please try again."
+      body && body.success === false ? body.error : PARTNER_SSO_ERRORS.clientFallback
     );
   }
   return body.data;

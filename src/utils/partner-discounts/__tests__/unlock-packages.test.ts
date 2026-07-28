@@ -83,11 +83,18 @@ function testRequired85() {
 }
 
 function testMiniTierPercents() {
-  // Mini-tier percents (5/10/15) are valid inputs even though no mini pack lives in
-  // the static catalog — the cheapest covering packages are the entry-level ones.
-  const r = resolveUnlockPackagesForLevel(5);
-  assert.equal(r.subscription?.packageId, "tradie-subscription", "5 → Tradie subscription");
-  assert.equal(r.oneTime?.packageId, "apprentice-pack", "5 → Apprentice Pack");
+  // ALL THREE mini tiers (panel F-040): the docstring always said 5/10/15 but the body
+  // only exercised 5, leaving 10 and 15 — 367 catalogue offers — on the generic
+  // "non-null and covers" invariant, which would pass for any covering package at any
+  // price. No mini pack lives in the static catalog, so the cheapest covering options
+  // are the entry-level public ones. Pinned exactly, per tier.
+  for (const pct of [5, 10, 15]) {
+    const r = resolveUnlockPackagesForLevel(pct);
+    assert.equal(r.subscription?.packageId, "tradie-subscription", `${pct} → Tradie subscription`);
+    assert.equal(r.subscription?.price, 20, `${pct} → cheapest sub is $20`);
+    assert.equal(r.oneTime?.packageId, "apprentice-pack", `${pct} → Apprentice Pack`);
+    assert.equal(r.oneTime?.price, 25, `${pct} → cheapest public pack is $25`);
+  }
 }
 
 function testInvalidInputs() {

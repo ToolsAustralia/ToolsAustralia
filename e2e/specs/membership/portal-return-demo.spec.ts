@@ -26,6 +26,31 @@ test.describe("rewards-return portal journey", () => {
 
   test.use({ storageState: MEMBER_STATE });
 
+  // Same cold-Turbopack characteristic as portal-return-banner.spec.ts (see its header
+  // for the measurements). This spec had the identical dependency but a TIGHTER 30s
+  // budget and no warm-up (panel F-042) — and a timeout here is worse than a flake,
+  // because a proof-mode run is recording: it burns the take mid-narration.
+  test.describe.configure({ timeout: 150_000 });
+
+  test.beforeAll(async ({ browser }) => {
+    const warm = await browser.newPage();
+    try {
+      await warm.goto("/membership?utm_campaign=rewards-return&offer_id=1064993", {
+        waitUntil: "networkidle",
+        timeout: 120_000,
+      });
+      await warm
+        .locator("section", { hasText: "Partner catalogue" })
+        .first()
+        .and(warm.locator(':not([aria-busy="true"])'))
+        .waitFor({ state: "visible", timeout: 120_000 });
+    } catch {
+      // Best-effort: a warm-up failure must never mask a real assertion below.
+    } finally {
+      await warm.close();
+    }
+  });
+
   test("locked offer to unlocked — the rewards-return banner @demo", async ({ page, demo }) => {
     test.info().annotations.push({
       type: "demo-title",
@@ -38,7 +63,7 @@ test.describe("rewards-return portal journey", () => {
     // so wait for the offer headline itself.
     await page.goto("/membership?utm_campaign=rewards-return&offer_id=1064993");
     const blockedHeadline = page.getByText(/Amazon\.com\.au eGift Card needs 100%/);
-    await expect(blockedHeadline).toBeVisible({ timeout: 30_000 });
+    await expect(blockedHeadline).toBeVisible({ timeout: 60_000 });
 
     await demo.step(
       "A member taps a locked offer in the partner portal — and lands right here, with that offer front and centre",
@@ -76,7 +101,7 @@ test.describe("rewards-return portal journey", () => {
     // ── Beat 3: the covered state (Witchery eGift = 40%, member = 50%) ────────
     await page.goto("/membership?utm_campaign=rewards-return&offer_id=1066574");
     const coveredHeadline = page.getByText(/your 50% access covers Witchery eGift Card/);
-    await expect(coveredHeadline).toBeVisible({ timeout: 30_000 });
+    await expect(coveredHeadline).toBeVisible({ timeout: 60_000 });
 
     await demo.step(
       "Already covered? Then the banner says so — and points the member straight back to the portal to redeem",
@@ -94,7 +119,7 @@ test.describe("rewards-return portal journey", () => {
     // Same loader rule as my-account.spec.ts: wait for the entries wallet before captioning.
     await expect(
       page.locator("section").filter({ hasText: "Entries ·" }).first()
-    ).toBeVisible({ timeout: 30_000 });
+    ).toBeVisible({ timeout: 60_000 });
 
     await demo.step(
       "And the partner portal stays one tap away, right from the member's dashboard",

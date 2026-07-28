@@ -286,7 +286,11 @@ function testViewPausedBranch(): void {
     pausedUntilLabel: "12 August",
   });
   assert.equal(withDate.headline, "Your membership is paused.");
-  assert.equal(withDate.sub, "It resumes 12 August — resume now to restore your discounts.");
+  // F-048: the offer they came for is named when known, so resuming has a visible point.
+  assert.equal(
+    withDate.sub,
+    "It resumes 12 August — resume now to get your discounts back, then check Amazon.com.au eGift Card again."
+  );
   assert.equal(withDate.cta?.kind, "manage");
 
   const noDate = resolvePortalBannerView({
@@ -295,7 +299,8 @@ function testViewPausedBranch(): void {
     partnerAccessPct: 0,
     portalReturn: { generic: true },
   });
-  assert.equal(noDate.sub, "Resume your membership to restore your discounts.");
+  // No resume date AND no resolved offer → the plain form, with nothing invented.
+  assert.equal(noDate.sub, "Resume your membership to get your discounts back.");
   assert.equal(noDate.cta?.kind, "manage");
 }
 

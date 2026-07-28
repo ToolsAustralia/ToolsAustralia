@@ -41,6 +41,18 @@ test.describe("legal copy guard @smoke", () => {
     test(`no gambling/sold-entry framing on ${path}`, async ({ page }) => {
       await page.goto(path);
       await page.waitForLoadState("networkidle");
+      // The rewards-return banner paints a SKELETON first and its copy only exists once
+      // useDashboardState settles — `networkidle` can land before that, in which case the
+      // scan reads no banner text at all, still finds "free entries" elsewhere on the
+      // page, and passes green having covered nothing (panel F-037: a silent pass, never
+      // red, so nobody notices). Gate on the skeleton clearing AND on the headline being
+      // present, so an empty scan fails loudly instead.
+      if (path.includes("utm_campaign=rewards-return")) {
+        const banner = page.locator("section", { hasText: "Partner catalogue" }).first();
+        await expect(banner).toBeVisible({ timeout: 60_000 });
+        await expect(banner).not.toHaveAttribute("aria-busy", "true", { timeout: 60_000 });
+        await expect(page.getByText(/unlocks at \d+% access\./)).toBeVisible({ timeout: 30_000 });
+      }
       const text = await page.locator("body").innerText();
       const hits = BANNED_COPY.filter((rx) => rx.test(text)).map(String);
       expect(hits, `Banned copy found on ${path}: ${hits.join(", ")}`).toEqual([]);

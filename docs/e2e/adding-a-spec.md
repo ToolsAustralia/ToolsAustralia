@@ -163,6 +163,20 @@ same subscription purchase as `purchase-subscription.spec.ts`, entered via the h
 verified event-dispatch chain (`useMajorDrawEntryCta.openEntryFlow` → `openMembershipModal`
 window event → `MembershipSection`'s listener).
 
+Assert the LOADING state, not just the settled one (2026-07-28, panel F-043): `not.toHaveAttribute`
+passes when the attribute is **absent**, so a settle-gate like `bannerSettled` stays green even if the
+skeleton it waits on disappears entirely — which is the anti-layout-shift fix regressing. If a
+component has a deliberate loading shell, one test should navigate with `waitUntil: "commit"` and
+assert the marker is **present** before asserting it clears. See
+`portal-return-banner.spec.ts` ("banner reserves its space…"), which must run signed-in because guests
+deliberately skip that shell.
+
+A scan spec must prove it scanned something (2026-07-28, panel F-037): `legal-copy.spec.ts` reads
+`body.innerText()` after `networkidle`, but param-gated copy that arrives with a client query may not
+exist yet — the scan then passes having covered nothing and never goes red. Where a PAGES entry exists
+for such copy, gate the read on the copy being present (`aria-busy` cleared + an explicit headline
+assertion), so an empty scan fails loudly.
+
 Flag-gated UI belongs in the `@purchase` spec too (2026-07-28): `purchase-one-time.spec.ts` now asserts
 the `/purchase-success` partner-portal CTA after the benefits-granted check — visible when
 `NEXT_PUBLIC_PARTNER_DISCOUNT_SSO_ENABLED === "true"`, `toHaveCount(0)` otherwise. **Asserting the

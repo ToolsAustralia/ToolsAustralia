@@ -58,7 +58,7 @@ export function getSupportChatFaqEntries(): FaqEntry[] {
       id: "4",
       question: "What are my membership options and how many entries do I get?",
       answer:
-        "We have three monthly membership tiers (all prices in AUD): Tradie at $20/month includes 15 free entries per month; Foreman at $40/month includes 40 free entries; Boss at $80/month includes 100 free entries. Higher tiers also unlock a larger slice of our partner-discount catalog. Membership entries accumulate and carry forward each month while your membership stays active. You can join on the [membership page](/membership).",
+        "We have three monthly membership tiers (all prices in AUD): Tradie at $20/month includes 15 free entries per month; Foreman at $40/month includes 40 free entries; Boss at $80/month includes 100 free entries. Higher tiers also unlock a larger slice of our partner-discount catalogue. Membership entries accumulate and carry forward each month while your membership stays active. You can join on the [membership page](/membership).",
       category: "SHOPPING",
     },
     {
@@ -239,7 +239,7 @@ export function getSupportChatFaqEntries(): FaqEntry[] {
       id: "28",
       question: "How do I become a member and how does membership work?",
       answer:
-        "Becoming a member is simple: choose a monthly membership tier — Tradie ($20/month, 15 free entries), Foreman ($40/month, 40 free entries), or Boss ($80/month, 100 free entries) — and sign up on the [membership page](/membership) (or from [My Account](/my-account)). Your entries go into the monthly Major Draw straight away and accumulate each month while your membership stays active, and higher tiers unlock more of our partner-discount catalog. Membership renews monthly and you can cancel anytime. Prefer no monthly commitment? You can also enter with one-time tool packs instead.",
+        "Becoming a member is simple: choose a monthly membership tier — Tradie ($20/month, 15 free entries), Foreman ($40/month, 40 free entries), or Boss ($80/month, 100 free entries) — and sign up on the [membership page](/membership) (or from [My Account](/my-account)). Your entries go into the monthly Major Draw straight away and accumulate each month while your membership stays active, and higher tiers unlock more of our partner-discount catalogue. Membership renews monthly and you can cancel anytime. Prefer no monthly commitment? You can also enter with one-time tool packs instead.",
       category: "SHOPPING",
     },
 
@@ -567,7 +567,7 @@ export function getSupportChatFaqEntries(): FaqEntry[] {
       id: "72",
       question: "Why can't I redeem an offer in the partner portal?",
       answer:
-        "Each offer in the partner catalogue unlocks at a set access percentage, and your access comes from your membership tier or an active one-time pack — the Tradie membership unlocks 50% of the catalogue, Foreman 75%, and Boss 100%, while one-time packs open their own share for a set number of days and Mini Packs include a smaller time-limited slice. If an offer shows as locked in the partner portal, your current access level doesn't cover it yet. Upgrading your membership or grabbing a one-time pack on the [membership page](/membership) unlocks it straight away — then head back to the portal to redeem it.",
+        "Each offer in the partner catalogue unlocks at a set access percentage, and your access comes from your membership tier or an active one-time pack — the Tradie membership unlocks 50% of the catalogue, Foreman 75%, and Boss 100%, while one-time packs open their own share for a set number of days and Mini Packs include a smaller time-limited slice. If an offer shows as locked in the partner portal, your partner access doesn't reach it yet. Upgrading your membership or grabbing a one-time pack on the [membership page](/membership) unlocks it straight away — then head back to the portal to redeem it.",
       category: "REWARDS",
     },
   ];

@@ -28,7 +28,16 @@ module.exports = {
       if (!isDirective) break; // prologue ends at the first non-string-literal statement
       if (stmt.expression.value === "use client") isClient = true;
     }
-    if (!isClient) return {};
+    // Client-SHARED utils carry no "use client" of their own but ARE imported by client
+    // components, so a server-only import here lands in the client bundle just the same.
+    // That is precisely the case the rule was added for (panel F-038): the whole
+    // dependency-injection design in portal-return.ts exists because it is imported by
+    // MembershipPortalReturnBanner, and without this the guard could only catch the
+    // mistake nobody would make.
+    const CLIENT_SHARED =
+      /[\\/]src[\\/]utils[\\/]partner-discounts[\\/](portal-return|unlock-packages|partner-catalog-visibility)\.ts$/;
+    const filename = context.filename ?? context.getFilename?.() ?? "";
+    if (!isClient && !CLIENT_SHARED.test(filename)) return {};
 
     function classify(spec) {
       if (typeof spec !== "string") return null;

@@ -80,6 +80,14 @@ the portal; tier wording disambiguated ("the Tradie **membership** unlocks 50%�
 describes the portal-live world — it ships in the same branch as the portal experience and MUST go
 live together with the SSO flag flip at vendor go-live; corpus count stays 72.
 
+## Cobber speaks ONE spelling: "catalogue" (2026-07-28, panel F-049)
+
+The FAQ 16/72 rewrite introduced British "catalogue" while the older entries and the pack builder still
+said US "catalog", so a single conversation could contain both. FAQ 4 and 28 plus five lines in
+`scripts/build-chat-knowledge-pack.ts` were converted; the generated pack now holds **17 "catalogue"
+and 0 US "catalog"**, matching every rendered UI string. Keep new copy British — the pack is generated,
+so fixing prose in the builder is as load-bearing as fixing it in the corpus.
+
 ## Cobber streak FAQs (2026-07-15)
 
 `src/data/supportChatFaqs.ts` ids **69–71** (REWARDS): what the Membership Streak is + the ladder, continuity rules (failed payment / pause / 30-day rejoin grace / reset), and where to see it.

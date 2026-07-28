@@ -124,6 +124,31 @@ async function main() {
     rows.push({ id, category, offer, pct });
   }
 
+  // Vendor names become OUR customer-facing headline verbatim ("{offer} unlocks at N%
+  // access."), and the CSV is refreshed by a third party — so the rule-11 vocabulary has
+  // to be checked at build time, not hoped about (panel F-039). A refreshed CSV that
+  // introduces a Sportsbet/Lottoland/TAB/Keno merchant would otherwise ship a hard-banned
+  // word into customer copy with nothing failing.
+  const HARD_BANNED = /\b(odds|lotter(y|ies)|lotto|raffles?|sweepstakes?|gambl(e|ing)|bets?|betting|wager|keno|pokies)\b/i;
+  const SOFT_FLAGGED = /\b(lucky|casino|jackpot)\b/i;
+  const hardHits = rows.filter((r) => HARD_BANNED.test(r.offer));
+  if (hardHits.length > 0) {
+    fail(
+      `${hardHits.length} offer name(s) contain rule-11 banned vocabulary and would render in ` +
+        `customer copy:\n` +
+        hardHits.map((r) => `  ${r.id}  ${r.offer}`).join("\n") +
+        `\nIf a name is a legitimate merchant, add it to a reviewed allowlist in this script ` +
+        `deliberately — do NOT weaken the regex (CLAUDE.md rule 11 is a legal line).`
+    );
+  }
+  const softHits = rows.filter((r) => SOFT_FLAGGED.test(r.offer));
+  if (softHits.length > 0) {
+    console.log(
+      `⚠ ${softHits.length} offer name(s) carry gambling-adjacent words (allowed — proper nouns, ` +
+        `but review if marketing objects): ${softHits.map((r) => r.offer.replace(/\s{2,}/g, ", ")).join(" · ")}`
+    );
+  }
+
   // Deterministic output order regardless of CSV row order.
   rows.sort((a, b) => Number(a.id) - Number(b.id));
 
