@@ -44,14 +44,40 @@ async function showCaption(page: Page, text: string): Promise<void> {
      * the type so a long beat costs two or three short lines rather than four wide ones.
      */
     const narrow = window.innerWidth < 700;
-    el.style.cssText =
-      `position:fixed;left:50%;top:${narrow ? 6 : 96}px;transform:translateX(-50%);z-index:2147483647;` +
+    const wideCss =
+      "position:fixed;left:50%;top:96px;transform:translateX(-50%);z-index:2147483647;" +
       "background:rgba(0,0,0,.82);color:#fff;border-radius:10px;text-align:center;pointer-events:none;" +
-      "box-shadow:0 4px 18px rgba(0,0,0,.35);" +
-      (narrow
-        ? "padding:6px 12px;font:600 13px/1.35 system-ui,sans-serif;max-width:94vw;"
-        : "padding:10px 22px;font:600 18px/1.4 system-ui,sans-serif;max-width:80vw;");
+      "box-shadow:0 4px 18px rgba(0,0,0,.35);padding:10px 22px;font:600 18px/1.4 system-ui,sans-serif;max-width:80vw;";
+    const narrowCss =
+      "position:fixed;left:50%;top:6px;transform:translateX(-50%);z-index:2147483647;" +
+      "background:rgba(0,0,0,.82);color:#fff;border-radius:10px;text-align:center;pointer-events:none;" +
+      "box-shadow:0 4px 18px rgba(0,0,0,.35);padding:6px 12px;font:600 13px/1.35 system-ui,sans-serif;max-width:94vw;";
+    el.style.cssText = narrow ? narrowCss : wideCss;
     el.textContent = t;
+    /**
+     * Task-5 fix (streak-journey.spec.ts Finding 2, desktop cue-12): the WIDE (desktop) top:96
+     * offset is a fixed constant that assumes normal page content below the site header — it
+     * has no idea a `position:fixed` centered dialog (ModalContainer.tsx) can independently put
+     * its OWN heading in that same band on a short viewport. `streak-journey.spec.ts` hit this
+     * live: CancellationFlowModal's forward-framing StepStakes screen lists all 6
+     * STREAK_MILESTONES rungs, tall enough to hit ModalContainer's `max-h-[88svh]` cap on
+     * chromium-desktop's 720px viewport, pushing its Headline up into y:[96,166] — this exact
+     * band. A page-scroll correction (the fix already used elsewhere in that spec for normal,
+     * in-flow content) cannot reach a `position:fixed` dialog; the caption itself has to steer
+     * around it. Measure a REAL collision against any on-screen dialog heading (not "a dialog is
+     * open" — the file's OTHER cues in the same modal family have shorter content and their
+     * heading sits well clear, live-verified) and fall back to the narrow/compact caption style
+     * ONLY then — that style is already proven safe over a dialog (mobile uses it universally,
+     * confirmed clean). Every other desktop beat (no dialog, or a shorter one) is unaffected:
+     * this whole branch is a no-op unless an overlap is actually measured.
+     */
+    if (!narrow) {
+      const rect = el.getBoundingClientRect();
+      const heading = document.querySelector('[role="dialog"] h1, [role="dialog"] h2');
+      const hRect = heading ? heading.getBoundingClientRect() : null;
+      const overlaps = !!hRect && rect.bottom > hRect.top && rect.top < hRect.bottom;
+      if (overlaps) el.style.cssText = narrowCss;
+    }
   }, text).catch(() => { /* page may be navigating — caption is best-effort */ });
 }
 

@@ -25,7 +25,10 @@ const DRAW_NAME = "July Major Draw";
  * or navigation even begins.
  */
 async function runStreakJourney(page: Page, demo: Demo, testInfo: TestInfo): Promise<void> {
-  void testInfo; // not read directly by the journey — demo.step()/demo fixture already close over it
+  // Task-5 fix (Finding 2): read once here for the desktop-only corrective scroll below
+  // (Beat 1) — every other use of `testInfo` stays inside demo.step()/the demo fixture,
+  // which already close over it.
+  const isDesktop = testInfo.project.name === "chromium-desktop";
 
   const userId = await memberUserId();
   await renameDemoDraw(DRAW_NAME);
@@ -144,6 +147,51 @@ async function runStreakJourney(page: Page, demo: Demo, testInfo: TestInfo): Pro
   // streakCard comfortably inside the viewport on both viewports (no more of the 1-2px bottom-
   // edge clipping the minimal scrollIntoViewIfNeeded produced). One fix closes both findings.
   await demo.smoothScrollTo(streakCard);
+  // Task-5 fix (Finding 2, desktop cue1): the round-4 fix above (comment block ending line
+  // 145) only checked DashboardGuestPanel's own H3 ("Enter the {DRAW_NAME}") and confirmed
+  // it clears the caption band on both viewports. It never checked the SECOND section that
+  // also sits above streakCard — "What members get" (DashboardGuestPanel.tsx MEMBER_BENEFITS)
+  // — whose first row is "Free entries into every major draw". Live-measured on
+  // chromium-desktop (1280x720): under proof mode's real 35%-from-top glide the bullet lands
+  // at y:[90.5, 110.5], overlapping the desktop caption's own fixed top:96 offset
+  // (demo.ts showCaption); under this test's own normal-mode scroll (a plain
+  // scrollIntoViewIfNeeded, less aggressive) it lands at y:[216.5, 236.5] — still overlapping
+  // once the caption wraps past one line. Mobile does NOT have this defect: DashboardGuestPanel
+  // is single-column on every viewport, but mobile's caption band is tiny (top:6, 13px font)
+  // and clears this same bullet with room to spare — so this fix must not run there.
+  //
+  // The page-scroll trick Beat 11 uses below (push the offending text fully OFF-SCREEN) does
+  // NOT fit here: live-measured, this guest-panel page is short enough (scrollHeight ~1045px
+  // against a 720px viewport) that a normal-mode "push fully off-screen" correction gets
+  // silently CLAMPED by the browser at the page's real scroll limit, before the bullet ever
+  // clears the viewport — confirmed live (an uncapped attempt landed the bullet's bottom at
+  // 88px, still on-screen, "in viewport" ratio 1). The fix needed is narrower: only clear the
+  // bullet from the caption's fixed top:96 offset (a stable constant regardless of how many
+  // lines this cue's own caption text wraps to, since the bullet only needs to sit ABOVE the
+  // band's top — not below its bottom), which needs far less scroll room and IS available on
+  // both the proof-mode and normal-mode starting positions measured above. Capped at the
+  // page's own actual remaining scroll room (mirrors Beat 11's "never ask for more than is
+  // really available" bound below) so a future, taller page can't silently under-deliver here
+  // either.
+  if (isDesktop) {
+    const DESKTOP_CAPTION_TOP = 96; // demo.ts showCaption's own fixed desktop top offset
+    const membersGetBullet = page.getByText(/Free entries into every major draw/i).first();
+    const bulletBox = await membersGetBullet.boundingBox();
+    if (bulletBox && bulletBox.y + bulletBox.height > DESKTOP_CAPTION_TOP) {
+      const wanted = bulletBox.y + bulletBox.height - DESKTOP_CAPTION_TOP + 8; // clear the band's top, 8px margin
+      const { scrollY, maxScrollY } = await page.evaluate(() => ({
+        scrollY: window.scrollY,
+        maxScrollY: Math.max(0, document.documentElement.scrollHeight - window.innerHeight),
+      }));
+      const capped = Math.min(wanted, Math.max(0, maxScrollY - scrollY));
+      if (capped > 0) {
+        await page.evaluate((delta) => window.scrollBy(0, delta), capped);
+      }
+    }
+    const afterBox = await membersGetBullet.boundingBox();
+    if (!afterBox) throw new Error("membersGetBullet unexpectedly detached after Beat 1's corrective scroll");
+    expect(afterBox.y + afterBox.height).toBeLessThanOrEqual(DESKTOP_CAPTION_TOP);
+  }
 
   await demo.step("Someone with an account but no membership sees what they're missing", async () => {
     // highlight is the FIRST statement — the page is already settled (scrolled above), so the
@@ -522,6 +570,35 @@ async function runStreakJourney(page: Page, demo: Demo, testInfo: TestInfo): Pro
     const pauseBullet = page.getByText(/Pausing freezes your streak/i).first().locator("xpath=ancestor::div[1]");
     await demo.highlight(pauseBullet, "Freezes it — doesn't end it");
     await expect(page.getByText(/Pausing freezes your streak/i).first()).toBeVisible({ timeout: 20_000 });
+    // Task-5 fix (Finding 1, desktop cue-11 spinner) — root cause, established via live
+    // instrumentation (normal mode, no proof): per e2e/proof/post.ts, a cue's declared
+    // on-screen SPAN runs from its own demo.step call to the NEXT cue's demo.step call
+    // minus 200ms — it always includes whatever setup work the FOLLOWING beat performs
+    // before its own step opens (the same mechanism already fixed at Beats 7/8 above, and
+    // already measured for this exact beat boundary in task-4-rerender-report.md: "cue 11 →
+    // 12's span... 10.5s (final verified run)... Beat 10's real, necessary work"). Beat 10's
+    // own setup (below) re-navigates to `/my-account?open=subscription` — a FULL page
+    // navigation that re-mounts the dashboard shell and briefly shows the ROOT
+    // DashboardLoader ("Loading your dashboard", src/components/loading/DashboardLoader.tsx)
+    // before the reopened ManageSheet/CancellationFlowModal mounts — then re-clicks Cancel,
+    // re-selects a reason, and waits for the forward-framing stakes screen. Live-measured
+    // (normal mode, chromium-desktop, no slowMo): that setup alone took 4.5-4.9s wall-clock,
+    // and a `waitForSelector` watcher confirmed the DashboardLoader spinner text DID appear
+    // during it. This cue's own on-screen "good" duration (the 4.2s caption hold + the
+    // highlight/assert above) is roughly the SAME order of magnitude as that trailing setup
+    // even before accounting for proof mode's slowMo:200 on every click/check in Beat 10's
+    // re-interaction (which only lengthens the trailing setup further) — so a
+    // representative sample within cue 11's full declared span has a real chance of landing
+    // in Beat 10's reload/spinner window instead of in this beat's own correct content,
+    // exactly matching the reported desktop capture (a bare loading spinner, nothing related
+    // to the "Pausing freezes..." caption). Fix: extend this beat's own on-screen "good" time
+    // the SAME sanctioned way Beats 7 and 8 already do in this file (a short explicit dwell
+    // after highlight, once the ring itself is proven to draw correctly — demo.ts's own
+    // contract) so the good fraction of cue 11's span comfortably exceeds Beat 10's trailing
+    // setup instead of trailing it. Sized larger than Beats 7/8's 1.5s because this trailing
+    // gap is a full re-navigation + re-interaction (reopen sheet, click Cancel, re-pick a
+    // reason), not just a single reload.
+    await page.waitForTimeout(3_500);
   });
 
   // ── Beat 10 — forward framing ───────────────────────────────────────────
@@ -553,7 +630,28 @@ async function runStreakJourney(page: Page, demo: Demo, testInfo: TestInfo): Pro
   // something a static one-time offset could fix. 400ms (comfortably past the 260ms transition)
   // guarantees the page is geometrically final before the caption ever appears.
   await page.waitForTimeout(400);
-
+  // Task-5 fix (Finding 2, desktop cue-12 heading collision) — the 400ms settle wait above
+  // (round 4) fixed WHICH of two candidate positions this transition lands on, but not that
+  // BOTH candidates sit dangerously close to (or inside) demo.ts's fixed desktop caption band.
+  // Live-measured (normal mode, chromium-desktop, post-settle): the forward-framing Headline
+  // ("Your streak is just / getting started") renders at y=166.2 — the round-4 comment above
+  // already recorded a 134-166 spread across runs — while THIS cue's own caption band is
+  // y:[96, 166.375]. That is a genuine steady-state geometry collision, not just leftover
+  // transition jitter: StepStakes' forward-framing ValueCard lists all 6 STREAK_MILESTONES
+  // rungs (vs. the loss-framing branch's 3 FeatureRows), making this variant of the modal tall
+  // enough to hit ModalContainer's `max-h-[88svh]` cap on chromium-desktop's short 720px
+  // viewport — so it renders near the TOP of the (centered, capped) dialog, right where the
+  // desktop caption is pinned. The loss-framing beats (cues 9-11 above) don't have this
+  // problem: same live probe found their (shorter) Headline at y=191.6, clear of even cue 11's
+  // own 2-line caption band (bottom 166.4) by ~25px — confirming this is specific to the
+  // forward-framing screen's height, not every StepStakes beat. Because CancellationFlowModal
+  // is `position:fixed` (ModalContainer.tsx) and centers independently of page scroll, none of
+  // the page-scroll corrections used elsewhere in this file (Beats 1, 11) can reach it. Fixed
+  // in e2e/fixtures/demo.ts instead (see its own comment): showCaption now measures a REAL,
+  // rendered overlap against any on-screen `[role="dialog"]` heading and falls back to the
+  // already-proven compact/mobile-style caption only when one is detected — verified via the
+  // same live probe that cues 9-11's non-overlapping headline does NOT trigger the fallback,
+  // and mobile (always on the compact style already) takes an entirely different code path.
   await demo.step("A newer member sees the other side of it — the ladder ahead, not the loss", async () => {
     // highlight first — "just...getting started" was already asserted (and the transition
     // settled) before this step opened, on the same screen that also renders "2nd renewal".
