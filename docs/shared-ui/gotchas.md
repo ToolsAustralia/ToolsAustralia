@@ -119,6 +119,12 @@ hook like [`useMembershipModalDeepLink`](../../src/hooks/useMembershipModalDeepL
   `npm run build && grep -c "Build your prize" .next/server/app/promotions/milwaukee.html`.
   Dev mode renders these routes dynamically and hides the whole class of bug.
 
+**See also:** `PrizeShowcase`'s `?toolset=`/`?toolbox=` URL sync (added 2026-07-27, after this
+fix) reads and writes via `window.location.search` / `window.history.replaceState` for the same
+reason — never `useSearchParams()`, and separately never `router.replace` (it resets scroll on
+this page). See [promo/gotchas.md](../promo/gotchas.md) "`router.replace` resets scroll on the
+prize builder".
+
 ## `getBaseUrl()` must strip a trailing slash — `NEXT_PUBLIC_APP_URL` may end in `/` (fixed 2026-07-23)
 
 [`getBaseUrl()`](../../src/utils/url/get-base-url.ts) returned `process.env.NEXT_PUBLIC_APP_URL`

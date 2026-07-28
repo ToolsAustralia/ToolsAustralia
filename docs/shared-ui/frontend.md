@@ -798,11 +798,20 @@ write-up is in [promo/frontend.md](../promo/frontend.md#prize-builder--build-you
 alongside the rest of the prize/promo surface — two independent coverflow lanes off the
 `TOOLBOXES` / `TOOLSETS` registries, `--pbc-accent` = the selected power toolset, the CSS-variable
 reel geometry, the `.pbc-brand-mark` mask technique, and the `/promotions/*` in-place-selection
-behaviour change. Read it before touching any of the `prize-selection/*` files. Shared-ui-side
-consequences documented here: the [`.prize-builder` token block](#prize-builder-tokens-in-globalscss)
-below, the [PrizeSpecificationsModal](#prizespecificationsmodal) restyle, the pruned
-`prize-brand-colors.ts` exports, and the deleted `ToolboxSelector` / `PowerToolsetCarousel` /
-`StaticToolsetHighlight` entries in [decomposition-backlog.md](./decomposition-backlog.md).
+behaviour (including the `?toolset=`/`?toolbox=` URL sync, 2026-07-27). Read it before touching
+any of the `prize-selection/*` files. Shared-ui-side consequences documented here: the
+[`.prize-builder` token block](#prize-builder-tokens-in-globalscss) below, the
+[PrizeSpecificationsModal](#prizespecificationsmodal) restyle, the pruned `prize-brand-colors.ts`
+exports, and the deleted `ToolboxSelector` / `PowerToolsetCarousel` / `StaticToolsetHighlight`
+entries in [decomposition-backlog.md](./decomposition-backlog.md).
+
+**Component-level note: the URL sync never uses `router.replace` or `useSearchParams()`.** It
+writes with `window.history.replaceState` (via `buildPrizeSelectionHref`) and reads once on mount
+from `window.location.search` (via `parseToolsetQueryParam`/`parseToolboxQueryParam`) — same rule
+as the CLS fix documented in [shared-ui/gotchas.md](./gotchas.md): `useSearchParams()` on this
+prerendered section de-opts it to client-only rendering. `router.replace` is avoided for a
+separate reason — it resets scroll on this page even with `{ scroll: false }` (see
+[promo/gotchas.md](../promo/gotchas.md)). Full narrative in promo/frontend.md above.
 
 #### Prize-builder tokens in globals.css
 

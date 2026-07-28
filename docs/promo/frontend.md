@@ -400,11 +400,18 @@ Previously, picking a combination on an evergreen `/promotions/{prize-slug}` pag
 another prize page (and `PromotionsLayoutShell` scrolled to top). It no longer does — the card
 updates in place on every surface. What is retained:
 
-- **`?toolbox=` sync on toolset landing pages** (`/promotions/makita` etc., i.e. `toolsetMode`).
-  The toolbox lane and the cash opt-out are persisted to the query string via
-  `buildToolsetLandingHref` (a `router.replace(…, { scroll: false })`) and hydrated back from
-  `parseToolboxQueryParam`, so a refresh or a shared link keeps the choice. Milwaukee (the
-  default) omits the param for a clean canonical URL.
+- **`?toolset=` + `?toolbox=` sync on every `/promotions/*` page** (both brand landing pages and
+  evergreen prize pages). Written with `window.history.replaceState` via
+  `buildPrizeSelectionHref`, read back **once on mount** by `parseToolsetQueryParam` /
+  `parseToolboxQueryParam`. Params win over the page's own prize, so a refresh or a shared link
+  restores the exact build.
+  - **Both lanes are always written, including the page default.** The old behaviour omitted
+    `?toolbox=milwaukee` for a clean canonical URL, which made "tried another brand and switched
+    back" indistinguishable from "never touched the reels". The URL stays clean until the first
+    interaction instead — nothing is written until then.
+  - **Never `router.replace`.** It resets scroll even with `{ scroll: false }` (see gotchas).
+  - **Mount-only read.** Re-reading the URL on every change created a URL -> state -> URL round
+    trip. React state owns the selection; the URL mirrors it.
 - **`toolsetMode` no longer locks the power-toolset lane.** A toolset landing page OPENS on its
   brand (via `slug={defaultPrizeSlug}`) but the reel still offers all five, so the visitor can
   switch brand in place. This replaced BOTH the deleted `StaticToolsetHighlight` **and** the
