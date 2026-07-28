@@ -130,7 +130,7 @@ every accent**, which is what caught it. `contrastRatio()` is exported alongside
   plate; a plate would box some brands and not others.
 - **Dark product stage** — see `.ta-product-stage` in [shared-ui/frontend.md](../shared-ui/frontend.md).
   The handoff's white case is light-mode only.
-- **Permit** is `NTP_NUMBER` from `@/constants/legal` (NTP/17192), not the prototype's placeholder.
+- **Permit** is `NTP_NUMBER` from `@/constants/legal` (NTP/17494 for draw 9), not the prototype's placeholder.
   The handoff's "Open to Australian residents; not available in ACT or SA." sentence was dropped
   (owner); the fine print is now "Government-certified draws · randomdraws.com.au · Permit NTP/…".
 
@@ -497,8 +497,8 @@ removed and `hikoki-*` added to `LANDING_HERO_MAP`). Notes:
   returns an **ordered `LandingVideoSource[]` list** (`{ sources: Array<{ src, type: "video/webm"
   | "video/mp4" }> }`, was `{ srcs: string[] }`): for each clip tier, WebM precedes its MP4 twin;
   on the `drawn-tonight` / `drawn-tomorrow` tier the drawn pair is first with the **base pair
-  appended as a fallback**, so a brand that ships no drawn art (**HiKOKI** has only base clips)
-  still animates via its base clip instead of dropping to the still — the browser advances to the
+  appended as a fallback**, so a brand that ships no drawn *clip* still animates via its base clip
+  instead of dropping to the still — the browser advances to the
   next `<source>` natively both when a format is unsupported AND when a drawn-tier file 404s. This
   mirrors the image resolver, which already drops a missing drawn still back to the base image.
   `LandingHeroVideo` renders `sources.sources.map(s => <source key={s.src} src={s.src}

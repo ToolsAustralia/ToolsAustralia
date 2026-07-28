@@ -17,8 +17,91 @@ you only need one for a demo.
 `npm run e2e:proof` = `tsx e2e/run.ts --proof`, which sets `E2E_PROOF=1` and switches
 `playwright.config.ts`'s profile to `retries: 0`, `workers: 1`, `video: "on"`,
 `launchOptions.slowMo: 200` (see `playwright.config.ts`). Today's `@demo` flows:
-`landing.spec.ts`, `my-account.spec.ts`, `purchase-subscription.spec.ts`,
-`purchase-via-showcase.spec.ts`.
+`landing.spec.ts`, `landing-drawn-states.spec.ts`, `my-account.spec.ts`,
+`purchase-subscription.spec.ts`, `purchase-via-showcase.spec.ts`.
+
+### Rules learned recording `landing-drawn-states.spec.ts` (2026-07-24)
+
+These bite **only in proof mode**, so a spec that is green locally can still fail or record badly.
+
+1. **Prepare each beat's page state BEFORE its `demo.step`, never inside it.** `demo.step`
+   paints the caption and holds for `holdFor(title)` (~1.8-4s) *before* running the body, so a
+   beat that mutates state and reloads inside its own body narrates a change the viewer cannot
+   see yet. The first recording of this spec ran a full state ahead of the hero for its whole
+   length. Mutate + reload first, then narrate what is already on screen.
+2. **Never hand `demo.highlight` a locator that might be hidden.** `showHighlight` calls
+   `scrollIntoViewIfNeeded()`, an actionability wait — and with no `actionTimeout` set in
+   `playwright.config.ts` that wait never expires, so the test hangs to its own timeout with no
+   useful error. This is easy to hit on the promo hero, where `PromoHero` renders a mobile AND
+   a desktop copy and hides one by breakpoint, making `.first()` a coin flip. Resolve the
+   visible one first (see the spec's `visibleHero` helper). `demo.ts` now bounds both
+   `scrollIntoViewIfNeeded` and `boundingBox` at 5s so a bad target degrades to "no ring drawn"
+   instead of killing the run, but passing a visible locator is still the caller's job.
+3. **Wait for the hero BITMAP, not just a visible `<img>`.** `PromoHero` shows a brand "stage"
+   background while the draw query resolves, so an attached-and-visible hero can still be a
+   placeholder. Highlighting there spotlights the loader: on the first mobile recording BOTH
+   sampled frames landed on it and roughly half the run showed no artwork at all. The spec's
+   `awaitHeroPainted` blocks on `complete && naturalWidth > 0` (resolving on `error` too, so a
+   genuinely broken asset fails the src assertion with a useful message rather than timing out).
+4. **One test per Playwright project — never one test that resizes.** Playwright fixes the video
+   canvas when the context is created and never rescales it, so `setViewportSize` to a phone
+   mid-recording composites the page into a ~208x450 strip anchored top-left of the 800x450
+   canvas with the rest dead grey. To cover both viewports, write a mobile test (`mobile-chrome`)
+   and a desktop test (`chromium-desktop`), assert `testInfo.project.name` in each so neither can
+   run in the wrong one, and join the two clips afterwards (below).
+
+### Rules learned recording `draw9-assets.spec.ts` (2026-07-27)
+
+The biggest proof run so far — 20 combinations × 3 countdown tiers × 2 themes × 2 viewports
+= **240 hero states**. Four things cost a re-run each; none are obvious.
+
+**Scope by TEST TITLE, not just `--project`.** `--project chromium-desktop` still collects
+both tests in the file, so the mobile test runs under the desktop project and its own
+viewport guard fails it — and because the describe is `mode: "serial"`, that failure SKIPS
+the desktop test that was the point of the run. Always:
+
+```bash
+npx tsx e2e/run.ts --proof --grep "on desktop, every draw 9 hero state" --project chromium-desktop
+npx tsx e2e/run.ts --proof --grep "on mobile, every draw 9 hero state"  --project mobile-chrome
+```
+
+**Theme comes from the app's own store, not `prefers-color-scheme`.**
+`page.emulateMedia({ colorScheme })` does nothing here — `useThemeStore` reads the Zustand
+persist key `ta-theme`. Set it in an `addInitScript` before navigating, and include
+`userManualOverride: true` or `readThemeFromPersistStorage` resolves a stored "dark" back to
+light.
+
+**Assert the URL grammar, and mind the base tier's missing hyphen.** `{asset}-` matches every
+drawn/dark/mobile variant but NOT the base hero (`milwaukee-milTB.webp`), which has no suffix
+at all. Match `{brand}-{toolbox}` and let the separate mode/tier/viewport assertions pin the
+rest.
+
+**`E2E_BUILD=1` is not a drop-in for a long run here.** It is tempting (a production server is
+steadier than `next dev` across 120 page loads) but the e2e env overlay makes the error-page
+prerender fail with `<Html> should not be imported outside of pages/_document`, even though a
+plain `npm run build` passes. Dev mode is fine once the run isn't provoking server errors —
+which is the real lesson: the first dev-mode attempt died mid-walk right after Next's image
+optimizer logged a 400 for a genuinely missing asset. **Fix the 404s before blaming the
+server.** The QA watchdog reporting a `400 Bad Request` is a real product bug, not test noise.
+
+## Joining clips into one deliverable (`e2e/proof/join.ts`)
+
+Rule 4 yields one clip per viewport, but a reviewer wants a single video. `npm run e2e:proof:join`
+takes an output name and two or more clips, in playback order:
+
+```bash
+npm run e2e:proof:join -- drawn-states-all-prize-combinations \
+  e2e-artifacts/proof/<date>-<branch>/on-mobile-.../on-mobile-....mp4 \
+  e2e-artifacts/proof/<date>-<branch>/on-desktop-.../on-desktop-....mp4
+```
+
+Each input is scaled to fit a common 1280x720 canvas and padded in the title card's `#0b0b0e`,
+so a portrait phone clip sits pillarboxed and centred rather than stretched, and the bars read as
+deliberate. Frame rate, SAR and audio rate are normalised first — the concat filter rejects inputs
+that differ, which is exactly the portrait-beside-landscape case. A clip whose voice synthesis
+failed gets silent audio substituted so the audio leg stays balanced. Sibling `.srt` files are
+concatenated with each clip's start offset applied and renumbered, so subtitles stay in sync
+across the seam. Output lands beside the per-test bundle dirs as `<out-name>.mp4` / `.srt`.
 
 ## What it produces
 
@@ -120,7 +203,16 @@ prize-showcase redesign; anchored on the showcase cards' 8px kit sublabels.
 Watchability round 2 (2026-07-22, after DJ's review of the first landing video):
 - Captions render TOP-center (below the header) — this app parks sticky promo/countdown
   bars at the bottom of the viewport, and a bottom caption stacked on them reads as two
-  overlapping banners.
+  overlapping banners. On viewports under 700px that 96px offset lands the caption squarely on
+  the hero headline and hides the prize copy the video exists to show, so `showCaption`
+  re-derives placement on every paint: phones pin it to the very top (over the logo bar, which
+  is chrome rather than content) with tighter type, desktops keep the 96px offset.
+- Captions survive navigation. `showCaption` appends to `document.body`, so any `page.goto`
+  destroys it — a beat that walks several URLs (as `landing-drawn-states.spec.ts` does, stepping
+  through all 15 prize combinations inside one step) would caption only its first page and run
+  the rest silent, drifting out of sync with the SRT and voice-over that are still on that cue.
+  `makeDemo` repaints the active caption on every `domcontentloaded`, pinning it to the BEAT
+  rather than the document.
 - `demo.smoothScrollTo(locator)` glides in ~350px smooth increments in proof mode
   (instant outside it) so videos show the page flowing instead of jump-cutting between
   sections. Use it for any demo step that moves down a page.

@@ -268,7 +268,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
 ```json
 {
   "version": 1,
-  "lastModified": "2026-07-24",
+  "lastModified": "2026-07-27",
   "domains": {
     "subscription": {
       "docs": "docs/subscription/",
@@ -297,11 +297,12 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/hooks/useMemberships.ts",
         "src/hooks/useActivePackage.ts",
         "src/hooks/useMembershipModal.ts",
+        "src/hooks/useMembershipModalDeepLink.ts",
         "src/hooks/useMembershipCardCta.ts",
         "src/hooks/useOpenMembershipModalListener.ts",
         "src/app/(site)/membership/**"
       ],
-      "lastVerified": "2026-07-24"
+      "lastVerified": "2026-07-27"
     },
     "billing-stripe": {
       "docs": "docs/billing-stripe/",
@@ -427,12 +428,16 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/hooks/usePromoPageTracking.ts",
         "src/hooks/usePromoWelcomeModal.ts",
         "src/generated/landingImageManifest.ts",
+        "src/generated/landingVideoManifest.ts",
         "scripts/build-landing-image-manifest.ts",
+        "scripts/build-landing-video-manifest.ts",
         "scripts/check-landing-hero-assets.mjs",
         "scripts/convert-drawn-tonight-tomorrow-to-webp.ts",
-        "scripts/convert-drawn-tonight-tomorrow-videos.ts"
+        "scripts/convert-drawn-tonight-tomorrow-videos.ts",
+        "scripts/convert-draw9-landing-to-webp.ts",
+        "scripts/convert-draw9-landing-videos.ts"
       ],
-      "lastVerified": "2026-07-23"
+      "lastVerified": "2026-07-27"
     },
     "affiliate": {
       "docs": "docs/affiliate/",
@@ -706,7 +711,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/app/(site)/privacy/**",
         "src/app/lazy-motion-features.ts"
       ],
-      "lastVerified": "2026-07-24"
+      "lastVerified": "2026-07-27"
     },
     "client-state": {
       "docs": "docs/client-state/",
@@ -886,7 +891,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/constants/**",
         "src/data/**"
       ],
-      "lastVerified": "2026-07-24"
+      "lastVerified": "2026-07-27"
     },
     "support-chat": {
       "docs": "docs/ai-chatbot/",
@@ -915,7 +920,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "e2e/**",
         "playwright.config.ts"
       ],
-      "lastVerified": "2026-07-22"
+      "lastVerified": "2026-07-24"
     }
   }
 }

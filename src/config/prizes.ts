@@ -13,6 +13,7 @@
  * slugs and every shared field. Edit prize data in BOTH files.
  */
 import type { PrizeMedia, PrizeSlug, PrizeSummary } from "./prize-summaries";
+import { PRIZE_SUMMARIES } from "./prize-summaries";
 
 export type { LucideIconName, PrizeHighlight, PrizeMedia, PrizeSlug, PrizeSummary } from "./prize-summaries";
 export { DEFAULT_PRIZE_SLUG, getPrizeLabel } from "./prize-summaries";
@@ -365,6 +366,107 @@ export const KINCROME_CONTOUR_TOOLBOX: PrizeSpecItem = {
 };
 
 export const KINCROME_TOOLBOX_STORAGE: PrizeSpecItem[] = [KINCROME_CONTOUR_TOOLBOX];
+
+/** GearWrench 288pc mobile workstation — the fourth toolbox, added for draw 9. */
+export const GEARWRENCH_288PC_TOOLBOX: PrizeSpecItem = {
+  name: "GEARWRENCH 288 Piece Tool Set & Mobile Workstation",
+  description:
+    "A 288-piece GEARWRENCH hand-tool set laid into a wide mobile workstation, with foam-organised drawers, a solid work top and heavy-duty castors. Built around GEARWRENCH's 84-tooth ratcheting system for tight-access work.",
+  specifications: [
+    "288 pieces across sockets, ratchets, combination spanners, screwdrivers, pliers and bit drivers",
+    "Foam-inlaid drawers so every tool has a home and a missing one is obvious at a glance",
+    "Full-width work top over a multi-drawer mobile base with extra-deep lower storage",
+    "Heavy-duty castors with brakes for workshop mobility",
+  ],
+};
+
+/**
+ * What's actually in the 288 pieces — one card per tray, each with its own photo.
+ *
+ * Model numbers and piece counts are transcribed from the "Includes" caption printed on each
+ * supplied product photo, NOT from the source filenames. Two of those filenames were both
+ * called "allenheads": one is a hex BIT SOCKET set and the other is TORX. Naming from the
+ * filename would have put the wrong tool name under both photos in the specs modal.
+ */
+export const GEARWRENCH_TOOLBOX_CONTENTS: PrizeSpecItem[] = [
+  {
+    name: '90pc 1/4", 3/8" & 1/2" Drive Metric & SAE Socket Set in EVA Tray',
+    model: "83992",
+    description: "The main socket tray — metric and SAE across all three drive sizes, laid into a moulded EVA insert so a missing socket is obvious at a glance.",
+  },
+  {
+    name: '25pc 3/8" Drive 6-Point Deep Socket Metric & SAE Set in EVA Tray',
+    model: "83996",
+    description: "Deep sockets for reaching studs and recessed fasteners, metric and SAE together in one tray.",
+  },
+  {
+    name: '18pc 1/2" Drive 6-Point Deep Socket Metric & SAE Set in EVA Tray',
+    model: "83995",
+    description: 'Heavier 1/2" drive deep sockets for suspension and chassis work.',
+  },
+  {
+    name: '12pc 1/2" Drive 6-Point Standard Impact Metric Socket Set',
+    model: "84930N",
+    description: "Impact-rated sockets in a blow-moulded case, 8mm through 19mm.",
+    specifications: ["8mm, 10mm, 11mm, 12mm, 13mm, 14mm, 15mm, 16mm, 17mm, 18mm, 19mm"],
+  },
+  {
+    name: "24pc Metric/SAE 90-Tooth Ratcheting Wrench Set in EVA Tray",
+    model: "83990N",
+    description: "GEARWRENCH's signature 90-tooth ratcheting combination wrenches — a 4° swing arc for tight-access work, metric and SAE.",
+  },
+  {
+    name: "26pc SAE/Metric Ball-End Long-Arm Hex Key Set",
+    model: "83505",
+    description: "Long-arm hex keys with ball ends for angled access, in SAE and metric holders.",
+    specifications: [
+      'SAE: 0.05", 1/16", 5/64", 3/32", 7/64", 1/8", 9/64", 5/32", 3/16", 7/32", 1/4", 5/16", 3/8"',
+      "Metric: 1.5mm, 2mm, 2.5mm, 3mm, 4mm, 4.5mm, 5mm, 5.5mm, 6mm, 7mm, 8mm, 9mm, 10mm",
+    ],
+  },
+  {
+    name: '12pc 3/8" Drive Hex Bit Metric Socket Set',
+    model: "80580",
+    description: "Hex bit sockets on a rail, 2mm through 12mm.",
+    specifications: ["2mm, 2.5mm, 3mm, 4mm, 5mm, 6mm, 7mm, 8mm, 9mm, 10mm, 11mm, 12mm"],
+  },
+  {
+    name: '13pc 1/4", 3/8" & 1/2" Drive Torx Bit Socket Set',
+    model: "80723",
+    description: "Torx bit sockets across three drive sizes, T8 through T60.",
+    specifications: ["T8, T10, T15, T20, T25, T27, T30, T40, T45, T47, T50, T55, T60"],
+  },
+  {
+    name: '41pc 1/4" Drive MicroDriver Set',
+    model: "GWMBS41",
+    description: "Precision driver and bit set in a clear-lid case for electronics and fine assembly work.",
+  },
+  {
+    name: "10pc Phillips/Slotted/Pozidriv Dual-Material Screwdriver Set",
+    model: "80060H",
+    description: "Dual-material handles for grip under load, across Phillips, slotted and Pozidriv.",
+  },
+  {
+    name: "4pc Mini Hook & Pick Set",
+    model: "84040H",
+    description: "Mini full hook, 90° mini hook, mini straight hook and mini offset hook — for seals, o-rings and clips.",
+  },
+  {
+    name: "12pc Punch and Chisel Set",
+    model: "82305",
+    description: "Punches and cold chisels in a roll pouch.",
+  },
+  {
+    name: "24oz (0.6kg) Ball Pein Hammer — Fibreglass",
+    model: "82252",
+    description: "Fibreglass-handled ball pein hammer for shock absorption.",
+  },
+];
+
+export const GEARWRENCH_TOOLBOX_STORAGE: PrizeSpecItem[] = [
+  GEARWRENCH_288PC_TOOLBOX,
+  ...GEARWRENCH_TOOLBOX_CONTENTS,
+];
 
 export const DEWALT_SIDCHROME_POWER_TOOLS: PrizeSpecItem[] = [
   {
@@ -1311,7 +1413,25 @@ export const HIKOKI_POWER_SYSTEM: PrizeSpecItem[] = [
 // spec arrays at module load, so every prize combo that reuses an array inherits
 // the images. To re-point a photo, edit one entry here.
 // ============================================================================
+const GEARWRENCH_CONTENTS_DIR = "/images/majordraws/toolbox/gearwrench";
+
 const SPEC_ITEM_IMAGE_BY_NAME: Record<string, string> = {
+  // GearWrench toolbox + what's inside it — /images/majordraws/toolbox/ and .../toolbox/gearwrench/
+  "GEARWRENCH 288 Piece Tool Set & Mobile Workstation": "/images/majordraws/toolbox/gearwrenchTB.webp",
+  '90pc 1/4", 3/8" & 1/2" Drive Metric & SAE Socket Set in EVA Tray': `${GEARWRENCH_CONTENTS_DIR}/gearwrench-metric-and-sae-socket-set-eva-tray.webp`,
+  '25pc 3/8" Drive 6-Point Deep Socket Metric & SAE Set in EVA Tray': `${GEARWRENCH_CONTENTS_DIR}/gearwrench-6-point-deep-socket-set.webp`,
+  '18pc 1/2" Drive 6-Point Deep Socket Metric & SAE Set in EVA Tray': `${GEARWRENCH_CONTENTS_DIR}/gearwrench-18pc-6-point-deep-socket-metric-set.webp`,
+  '12pc 1/2" Drive 6-Point Standard Impact Metric Socket Set': `${GEARWRENCH_CONTENTS_DIR}/gearwrench-12pc-6-point-standard-impact-metric-socket-set.webp`,
+  "24pc Metric/SAE 90-Tooth Ratcheting Wrench Set in EVA Tray": `${GEARWRENCH_CONTENTS_DIR}/gearwrench-sae-90t-ratchet-wrench-set-eva-tray.webp`,
+  "26pc SAE/Metric Ball-End Long-Arm Hex Key Set": `${GEARWRENCH_CONTENTS_DIR}/gearwrench-sae-metric-ball-end-long-arm-hex-key-set.webp`,
+  '12pc 3/8" Drive Hex Bit Metric Socket Set': `${GEARWRENCH_CONTENTS_DIR}/gearwrench-12pc-hex-bit-metric-socket-set.webp`,
+  '13pc 1/4", 3/8" & 1/2" Drive Torx Bit Socket Set': `${GEARWRENCH_CONTENTS_DIR}/gearwrench-13pc-torx-bit-socket-set.webp`,
+  '41pc 1/4" Drive MicroDriver Set': `${GEARWRENCH_CONTENTS_DIR}/gearwrench-41pc-microdriver-set.webp`,
+  "10pc Phillips/Slotted/Pozidriv Dual-Material Screwdriver Set": `${GEARWRENCH_CONTENTS_DIR}/gearwrench-screwdriver-set.webp`,
+  "4pc Mini Hook & Pick Set": `${GEARWRENCH_CONTENTS_DIR}/gearwrench-4pc-mini-hook-and-pick-set.webp`,
+  "12pc Punch and Chisel Set": `${GEARWRENCH_CONTENTS_DIR}/gearwrench-punch-and-chisel-set.webp`,
+  "24oz (0.6kg) Ball Pein Hammer — Fibreglass": `${GEARWRENCH_CONTENTS_DIR}/gearwrench-hammer.webp`,
+
   // Milwaukee — /images/majordraws/milwaukee-set/
   "MILWAUKEE 18V FUEL™ 13mm Hammer Drill/Driver": "/images/majordraws/milwaukee-set/milwaukee-18v-fuel-13mm-hammer-drill-driver.webp",
   "MILWAUKEE 18V FUEL™ 1/4inch Hex Impact Driver": "/images/majordraws/milwaukee-set/milwaukee-18v-fuel-1-4inch-hex-impact-driver.webp",
@@ -1435,6 +1555,9 @@ function applySpecItemImages(items: PrizeSpecItem[]): void {
   MILWAUKEE_WORKSHOP_STORAGE,
   MILWAUKEE_TOOLBOX_STORAGE,
   KINCROME_TOOLBOX_STORAGE,
+  // GearWrench (draw 9) — the toolbox itself PLUS its 13 trays, so the Storage tab shows
+  // what's actually inside the 288 pieces rather than one card for the whole box.
+  GEARWRENCH_TOOLBOX_STORAGE,
 ].forEach(applySpecItemImages);
 
 // ============================================================================
@@ -1851,6 +1974,25 @@ export const HIKOKI_CRUISER_STORAGE: PrizeSpecItem[] = [
  * Prize catalog entries are the single source of truth for prize imagery/copy.
  * Add new prize packs here – frontend components resolve everything dynamically.
  */
+/**
+ * Build a catalog entry by taking every SHARED field straight from the client summary and
+ * adding only the deep half here.
+ *
+ * The rest of this catalog restates the shared fields longhand, which is why
+ * `npm run test:prize-summaries` exists at all — two hand-maintained copies drift. The five
+ * GearWrench entries added in draw 9 take the shared half from the single source instead, so
+ * for them that whole class of drift is impossible rather than merely detected. Prefer this
+ * for new entries; the longhand ones are left alone rather than churned in an asset change.
+ */
+function fromSummary(
+  slug: PrizeSlug,
+  deep: { detailedDescription: string; specSections: PrizeSpecSection[] }
+): PrizeCatalogEntry {
+  const summary = PRIZE_SUMMARIES.find((p) => p.slug === slug);
+  if (!summary) throw new Error(`No PrizeSummary for slug "${slug}" — add it to prize-summaries.ts first.`);
+  return { ...summary, ...deep };
+}
+
 export const PRIZE_CATALOG: PrizeCatalogEntry[] = [
   {
     slug: "milwaukee-sidchrome",
@@ -3020,6 +3162,59 @@ export const PRIZE_CATALOG: PrizeCatalogEntry[] = [
       },
     ],
   },
+  // ── GearWrench, the fourth toolbox (draw 9) ────────────────────────────────────────────
+  // Shared fields come from prize-summaries via fromSummary(); only the deep half lives here.
+  // Order matters: the drift guard asserts both catalogs list slugs in the SAME order.
+  fromSummary("milwaukee-gearwrench", {
+    detailedDescription:
+      "Win the complete Milwaukee 18V FUEL™ 13-piece professional kit — hammer drill/driver, impact driver, angle grinder, jigsaw, HACKZALL™, circular saw, multi-tool, mid-torque impact wrench, orbital sander, HATCHET™ pruning saw, blower, jobsite speaker and work light — running on the REDLITHIUM™ battery system, with the Milwaukee PACKOUT™ 8-piece modular storage system. Paired with the GEARWRENCH 288-piece tool set in its wide mobile workstation: foam-organised drawers, a full work top and heavy-duty castors. Plus $5000 cold hard cash.",
+    specSections: [
+      { id: "power-tools", label: "Power Tools", summary: "13-piece Milwaukee 18V FUEL™ brushless collection.", items: MILWAUKEE_POWER_TOOLS },
+      { id: "power-system", label: "Power System", summary: "REDLITHIUM™ 5.0Ah packs keep every skin running.", items: MILWAUKEE_POWER_SYSTEM },
+      { id: "modular-storage", label: "PACKOUT™ Storage", summary: "8-piece modular rolling storage system.", items: MILWAUKEE_PACKOUT_STORAGE },
+      { id: "storage", label: "Tool Storage", summary: "GEARWRENCH 288-piece tool set & mobile workstation.", items: GEARWRENCH_TOOLBOX_STORAGE },
+    ],
+  }),
+  fromSummary("dewalt-gearwrench", {
+    detailedDescription:
+      "Win the heavy-duty DeWalt 14-piece cordless lineup spanning the 18V XR and 54V FlexVolt platforms — premium hammer drill, 3-speed impact driver, high-torque impact wrench, planer, jigsaw, multi-tool, circular saw, angle grinder, SDS-Plus rotary hammer, reciprocating saw, TSTAK jobsite radio, blower, L-class vacuum and orbital sander — with FlexVolt and XR batteries, dual-port fast charging and TOUGHSYSTEM® 2.0 mobile storage. Paired with the GEARWRENCH 288-piece tool set in its wide mobile workstation. Plus $5000 cold hard cash.",
+    specSections: [
+      { id: "power-tools", label: "Power Tools", summary: "14-piece DeWalt XR + FlexVolt cordless lineup.", items: DEWALT_SIDCHROME_POWER_TOOLS },
+      { id: "power-system", label: "Power System", summary: "FlexVolt 9.0Ah + XR 5.0Ah packs with dual-port fast charging.", items: DEWALT_SIDCHROME_POWER_SYSTEM },
+      { id: "modular-storage", label: "TOUGHSYSTEM® Storage", summary: "TOUGHSYSTEM® 2.0 mobile storage.", items: DEWALT_TOUGHSYSTEM_STORAGE },
+      { id: "storage", label: "Tool Storage", summary: "GEARWRENCH 288-piece tool set & mobile workstation.", items: GEARWRENCH_TOOLBOX_STORAGE },
+    ],
+  }),
+  fromSummary("makita-gearwrench", {
+    detailedDescription:
+      "Win the complete Makita 18V LXT brushless 15-piece kit — heavy-duty hammer driver drill, 4-stage impact driver, paddle-switch angle grinder, SDS-Plus rotary hammer, circular saw, recipro saw, multi-tool, 1/2\" impact wrench, orbital sander, stick vacuum, jigsaw, AWS planer and more — on the LXT power system with rapid dual-port charging, plus the MAKTRAK™ 7-piece mobile storage system. Paired with the GEARWRENCH 288-piece tool set in its wide mobile workstation. Plus $5000 cold hard cash.",
+    specSections: [
+      { id: "power-tools", label: "Power Tools", summary: "15-piece Makita 18V LXT brushless collection.", items: MAKITA_SIDCHROME_POWER_TOOLS },
+      { id: "power-system", label: "Power System", summary: "High-capacity LXT 5.0Ah packs with rapid dual-port charging.", items: MAKITA_SIDCHROME_POWER_SYSTEM },
+      { id: "modular-storage", label: "MAKTRAK™ Storage", summary: "MAKTRAK™ 7-piece mobile storage system.", items: MAKITA_MAKTRAK_STORAGE },
+      { id: "storage", label: "Tool Storage", summary: "GEARWRENCH 288-piece tool set & mobile workstation.", items: GEARWRENCH_TOOLBOX_STORAGE },
+    ],
+  }),
+  fromSummary("ryobi-gearwrench", {
+    detailedDescription:
+      "Win the custom Ryobi 18V ONE+ 19-piece kit — a 12-piece 4.0Ah power tool combo plus a 36V brushless lawn mower, line trimmer, blower, hedge trimmer, sliding mitre saw, jigsaw, caulking gun, Bluetooth radio and compact fan — all on the ONE+ battery platform that powers 200+ tools, with LINK™ modular wall storage. Paired with the GEARWRENCH 288-piece tool set in its wide mobile workstation. Plus $5000 cold hard cash.",
+    specSections: [
+      { id: "power-tools", label: "Power Tools", summary: "19-piece Ryobi 18V ONE+ power and garden collection.", items: RYOBI_POWER_TOOLS },
+      { id: "power-system", label: "Power System", summary: "ONE+ batteries and chargers across the 200+ tool range.", items: RYOBI_POWER_SYSTEM },
+      { id: "modular-storage", label: "LINK™ Storage", summary: "LINK™ modular wall and box storage.", items: RYOBI_LINK_STORAGE },
+      { id: "storage", label: "Tool Storage", summary: "GEARWRENCH 288-piece tool set & mobile workstation.", items: GEARWRENCH_TOOLBOX_STORAGE },
+    ],
+  }),
+  fromSummary("hikoki-gearwrench", {
+    detailedDescription:
+      "Win the complete HiKOKI 15-piece cordless kit on the 36V/18V MultiVolt platform — a 13-piece Mega Combo (driver drill, impact driver, two impact wrenches, recipro saw, circular saw, rotary hammer, angle grinder, multi-tool, jigsaw, blower/vacuum, grease gun and DAB+ jobsite radio) plus framing and finishing nailers — powered by five BSL36A18X batteries with two rapid chargers, stored in the IP65 Multi Cruiser 3-piece set. Paired with the GEARWRENCH 288-piece tool set in its wide mobile workstation. Plus $5000 cold hard cash.",
+    specSections: [
+      { id: "power-tools", label: "Power Tools", summary: "13pc MultiVolt Mega Combo plus framing and finishing nailers.", items: HIKOKI_POWER_TOOLS },
+      { id: "power-system", label: "Power System", summary: "Five BSL36A18X MultiVolt batteries and two UC18YSL3 rapid chargers.", items: HIKOKI_POWER_SYSTEM },
+      { id: "modular-storage", label: "Multi Cruiser Storage", summary: "IP65 3-piece stackable rolling tool box set.", items: HIKOKI_CRUISER_STORAGE },
+      { id: "storage", label: "Tool Storage", summary: "GEARWRENCH 288-piece tool set & mobile workstation.", items: GEARWRENCH_TOOLBOX_STORAGE },
+    ],
+  }),
   {
     slug: "cash-prize",
     label: "$10,000 Tax Free Cash",

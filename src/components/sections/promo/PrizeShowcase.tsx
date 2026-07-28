@@ -1,10 +1,10 @@
 "use client";
 
-import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import dynamic from "next/dynamic";
 import { m } from "framer-motion";
-import { useRouter, useSearchParams, usePathname } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 
 // Click-gated heavy chunk (LazyMembershipModal latch pattern —
 // src/components/modals/MembershipModal/LazyMembershipModal.tsx): rendering a dynamic()
@@ -50,6 +50,25 @@ import MultiplierBannerImage from "@/components/ui/MultiplierBannerImage";
 
 /** Remembers the last toolbox a visitor picked, so the card opens on their choice next visit. */
 const TOOLBOX_PREFERENCE_KEY = "prizeToolboxType";
+
+/**
+ * Client-only read of the current query string. Returns empty params during SSR.
+ *
+ * Deliberately NOT `useSearchParams()`: this section renders on PRERENDERED marketing-class
+ * pages (`/`, `/promotions/*` — see docs/security-csp/rules.md R8), and `useSearchParams()`
+ * there de-opts the whole client subtree up to the nearest Suspense boundary to CLIENT-ONLY
+ * rendering. The entire 1,115px "Build your prize" card then ships as NOTHING in the static
+ * HTML — no fallback, no reserved space — and appears only after hydration, shoving every
+ * section below it down the page (with MembershipSection, a measured CLS 0.4352 → 0.0566 on
+ * /promotions/*, 2026-07-27). It also kept the card out of the crawled HTML entirely.
+ *
+ * `?toolbox=` only ever matters on the client (it is written by `router.replace` from this
+ * component's own handlers), so reading the live URL loses nothing.
+ */
+function readCurrentSearchParams(): URLSearchParams {
+  if (typeof window === "undefined") return new URLSearchParams();
+  return new URLSearchParams(window.location.search);
+}
 
 interface PrizeShowcaseProps {
   /** Prize slug this instance opens on (e.g. the `/promotions/{slug}` page's prize). */
@@ -117,7 +136,7 @@ function resolveStateForSlug(slug: string | undefined): {
   };
 }
 
-function PrizeShowcaseInner({
+function PrizeShowcase({
   slug: slugProp,
   toolsetMode = false,
   toolsetSlug,
@@ -134,7 +153,6 @@ function PrizeShowcaseInner({
   const setStoreSlug = usePromoThemeStore((s) => s.setSlug);
   const { openEntryFlow } = useMajorDrawEntryCta();
   const router = useRouter();
-  const searchParams = useSearchParams();
   const pathname = usePathname();
   const useParentContainer = pathname === "/" || pathname === "/my-account";
 
@@ -195,29 +213,31 @@ function PrizeShowcaseInner({
   /* ------------------------------------------------------------------ */
   /* Selection ⇄ URL / storage                                           */
   /* ------------------------------------------------------------------ */
-  const toolboxQueryValue = searchParams.get(TOOLBOX_QUERY_PARAM);
-
   /** Toolset landing pages persist the toolbox (and the cash opt-out) in `?toolbox=`. */
   const syncToolboxQuery = useCallback(
     (value: ToolboxBrand | "cash") => {
       if (!toolsetMode || !pathname?.startsWith("/promotions/")) return;
-      router.replace(buildToolsetLandingHref(pathname, searchParams, value), { scroll: false });
+      router.replace(buildToolsetLandingHref(pathname, readCurrentSearchParams(), value), {
+        scroll: false,
+      });
     },
-    [toolsetMode, pathname, router, searchParams]
+    [toolsetMode, pathname, router]
   );
 
   // Toolset landing pages: hydrate the toolbox lane (and cash mode) from `?toolbox=`.
-  // Invalid or missing values fall back to the first toolbox.
+  // Invalid or missing values fall back to the first toolbox. Runs per pathname rather than
+  // per query change — the only writer of `?toolbox=` is `syncToolboxQuery` above, called from
+  // handlers that already set this state directly, so there is nothing to reconcile afterwards.
   useEffect(() => {
     if (!toolsetMode) return;
-    const fromUrl = parseToolboxQueryParam(toolboxQueryValue);
+    const fromUrl = parseToolboxQueryParam(readCurrentSearchParams().get(TOOLBOX_QUERY_PARAM));
     setIsCash(fromUrl === "cash");
     if (fromUrl && fromUrl !== "cash") {
       // Only the TOOLBOX lane is persisted in the query — the toolset comes from the
       // page's own slug and is then the visitor's to change in the reel.
       setSelection((prev) => ({ ...prev, toolbox: fromUrl }));
     }
-  }, [toolsetMode, toolboxQueryValue]);
+  }, [toolsetMode, pathname]);
 
   // `/promotions/{prize-slug}` → `/promotions/{other-prize-slug}` is a client transition
   // WITHIN the same `[slug]` route segment, so this component is reused rather than
@@ -408,11 +428,10 @@ function PrizeShowcaseInner({
   );
 }
 
-// Suspense self-wrap: useSearchParams requires a boundary for prerendered (marketing-class) pages — docs/security-csp/rules.md R8.
-export default function PrizeShowcase(props: PrizeShowcaseProps = {}) {
-  return (
-    <Suspense fallback={null}>
-      <PrizeShowcaseInner {...props} />
-    </Suspense>
-  );
-}
+// No Suspense self-wrap: the old `<Suspense fallback={null}>` existed only to satisfy
+// `useSearchParams()` on prerendered pages (docs/security-csp/rules.md R8) — and a null fallback
+// is exactly what made the CSR de-opt silent, collapsing this whole card to zero height in the
+// static HTML. With the query read moved to `readCurrentSearchParams()`, nothing here suspends,
+// so re-introducing `useSearchParams()` (directly or via a hook) now FAILS THE BUILD on `/` —
+// a loud error instead of a silent CLS regression. Keep it that way.
+export default PrizeShowcase;
