@@ -40,6 +40,17 @@ const PROMO_THEME_SLUG = "__promo-theme__";
 const LIGHT_CONFIG = { promoTheme: { defaultTheme: "light" } };
 const DARK_CONFIG = { promoTheme: { defaultTheme: "dark" } };
 
+/** Printed on EVERY path that leaves a populated draft ready to activate — see the pre-activation
+ * probe in docs/infrastructure/testing.md ("A/B seed: promo landing default theme (light vs dark)"). */
+function logPreActivationWarning(): void {
+  console.log(`\n⚠️  Before activating: POST /api/ab-testing/assign for each variant id and assert`);
+  console.log(`   variantConfig.promoTheme.defaultTheme is present. mergeVariantConfig is a key`);
+  console.log(`   whitelist — if promoTheme is not wired there, both arms render light while the`);
+  console.log(`   admin dashboard still shows a healthy, evenly-split experiment (a silent A/A).`);
+  console.log(`   A bare unauthenticated curl CANNOT target a chosen arm — use the admin preview`);
+  console.log(`   cookie flow documented in docs/infrastructure/testing.md.`);
+}
+
 async function main(): Promise<void> {
   await connectOpsDb(`Seed promo default theme — ${DRY_RUN ? "DRY-RUN" : "APPLY"}`);
 
@@ -80,6 +91,7 @@ async function main(): Promise<void> {
     await existing.save();
     await Variant.create(variants.map((v) => ({ ...v, experimentId: existing._id })));
     console.log(`✅ Populated draft "${EXPERIMENT_NAME}" (id=${existing._id}) with 2 variants.`);
+    logPreActivationWarning();
     process.exit(0);
   }
 
@@ -112,10 +124,7 @@ async function main(): Promise<void> {
   console.log(`   status      : draft (activate in admin → A/B Testing)`);
   console.log(`   slugTargets : [${PROMO_THEME_SLUG}]`);
   console.log(`   variants    : Light (control, 50%) · Dark (50%)`);
-  console.log(`\n⚠️  Before activating: POST /api/ab-testing/assign for each variant id and assert`);
-  console.log(`   variantConfig.promoTheme.defaultTheme is present. mergeVariantConfig is a key`);
-  console.log(`   whitelist — if promoTheme is not wired there, both arms render light while the`);
-  console.log(`   admin dashboard still shows a healthy, evenly-split experiment (a silent A/A).`);
+  logPreActivationWarning();
   process.exit(0);
 }
 

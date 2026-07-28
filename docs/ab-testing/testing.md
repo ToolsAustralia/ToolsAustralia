@@ -19,21 +19,13 @@ Run these directly via the `test:<scope>` entries in `package.json` (see [infras
 
 ## Seed scripts
 
-- `npm run seed:promo-theme:dry` — preview the "Promo landing — default theme (light vs dark)" experiment seed. Writes nothing.
-- `npm run seed:promo-theme` — create the draft Experiment + two Variants (`Light (control)` 50%, `Dark` 50%), targeting the sentinel slug `__promo-theme__` (never a real prize slug, so it cannot shadow a slug-targeted promo experiment — `findActiveBySlug` is a `findOne`). Status is always `draft`; activation is a separate, deliberate step in admin → A/B Testing.
-- `npm run seed:promo-theme -- --force` — repopulate an existing draft's variants (deletes and recreates them). Re-running without `--force` on a draft that already has variants is a no-op skip. If the experiment exists in any status other than `draft` (active/paused/ended), the script refuses to touch it and exits 0.
-
-### Pre-activation check — do not skip
-
-Before flipping this experiment to `active` in the admin UI, POST to `/api/ab-testing/assign` for each of the two variant ids and assert the response's `variantConfig.promoTheme.defaultTheme` is present (`"light"` / `"dark"`):
-
-```bash
-curl -X POST /api/ab-testing/assign \
-  -H "Content-Type: application/json" \
-  -d '{"experimentId":"<id>","slug":"__promo-theme__"}'
-```
-
-`VariantConfigService.mergeVariantConfig` rebuilds variant config from an explicit key whitelist. If `promoTheme` were ever dropped from that whitelist, the config would be silently stripped between MongoDB and the browser — both arms would render light while the admin dashboard still shows a healthy, evenly-split experiment. That's a silent A/A producing confident, wrong conclusions, so this probe is mandatory before every activation, not just the first.
+`npm run seed:promo-theme[:dry]` seeds the "Promo landing — default theme (light
+vs dark)" draft experiment (sentinel slug `__promo-theme__`). Full details,
+including the mandatory pre-activation `/assign` probe (which requires the admin
+**preview cookie** — a bare unauthenticated `curl` cannot target a specific arm),
+live under [infrastructure/testing.md](../infrastructure/testing.md#ab-seed-promo-landing-default-theme-light-vs-dark)
+per the seed-script documentation precedent (see also
+[seed-static-vs-video-hero-experiment](../infrastructure/testing.md#ab-seed-static-image-vs-video-hero-experiment)).
 
 ## What's NOT well tested
 
