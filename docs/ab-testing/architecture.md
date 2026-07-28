@@ -98,6 +98,39 @@ Targets the membership section site-wide without a global VariantProvider:
 - Conversion = membership purchase, attributed via the existing
   pixel-purchase-tracking cookie path. No new tracking code.
 
+## Promo landing default-theme experiment
+
+`VariantConfig.promoTheme.defaultTheme` (`"light" | "dark"`) is the theme a
+bucketed visitor is defaulted into on promo landing pages. It is applied only
+when the visitor has never used the theme toggle — a manual toggle wins
+permanently. Control carries `defaultTheme: "light"` **explicitly** (not an
+absent key) so the admin config UI and `getDefaultConfig()` read
+unambiguously. Conversion + wiring for this experiment are covered by later
+tasks in this plan; this section documents the config field itself.
+
+### The merge-whitelist footgun
+
+`VariantConfigService.mergeVariantConfig` does **not** spread `baseConfig`/
+`variantConfig` wholesale — it rebuilds the returned object key-by-key from a
+hard-coded literal. `getDefaultConfig()` and `validateVariantConfig()` are
+built the same explicit way. This means:
+
+> Any new `VariantConfig` key **must** be added to all three of
+> `mergeVariantConfig`, `getDefaultConfig`, and `validateVariantConfig`, or it
+> is **silently stripped** between MongoDB and the browser on every
+> `POST /api/ab-testing/assign` response.
+
+`tsc` cannot catch this — every `VariantConfig` field is optional, so a
+variant config carrying a key that `mergeVariantConfig` doesn't know about
+still type-checks fine and simply vanishes at runtime. The practical failure
+mode is worse than a crash: assignments and page views still record
+normally, the admin dashboard still shows a healthy 50/50 split, but every
+arm renders identically — a silent A/A test producing confident, wrong
+conclusions. When adding a new experiment config field, add it to all three
+functions in the same change, and cover it with an assertion (see
+`variantConfigService.membershipTheme.test.ts` for the `promoTheme` guard
+pattern) rather than relying on type-checking alone.
+
 ## Migrated from `docs/AB_TESTING_*.md`
 
 > _TODO: read all five root files and merge full content. Brief outline:_

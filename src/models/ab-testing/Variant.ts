@@ -97,6 +97,19 @@ export interface VariantConfig {
   membershipTheme?: {
     forceLight?: boolean;
   };
+  /**
+   * A/B test: the theme a bucketed visitor is defaulted into on promo landings.
+   * Applied only when the visitor has never used the theme toggle; a manual
+   * toggle wins permanently. Control carries "light" explicitly so the admin
+   * UI reads unambiguously rather than relying on an absent key.
+   *
+   * NOTE: `config` is Schema.Types.Mixed, so there is no schema-side change —
+   * but this key MUST also be added to VariantConfigService (merge + default +
+   * validate) or it is stripped before it reaches the client.
+   */
+  promoTheme?: {
+    defaultTheme?: "light" | "dark";
+  };
 }
 
 /**
