@@ -779,7 +779,7 @@ Two related changes to [`PromoHero`](../../src/components/sections/promo/PromoHe
 
 - **Calendar-day urgency tier.** It computes `getLandingHeroUrgencyFromDrawDay(majorDraw)` (a calendar-day AEST tier, distinct from the existing `getMajorDrawHeroUrgencyFromMajorDraw`) and threads it into **both** `getLandingHeroImagePaths(slug, urgency)` and `getLandingHeroVideoPaths(slug, urgency)`. So on the day-before / draw-day the brand hero swaps to its **"drawn tomorrow" / "drawn tonight"** still, and the resolver returns the animated **badge clip** (its drawn still is the poster, so the badge animates in rather than being painted over). Same parity behaviour the PromoBanner left-art got in the 2026-06-12 pass.
 - **Video-first hero (no static-first flash).** The clip is the **primary** hero, rendered from the **first paint** (server + client) — not gated behind an `isMounted`/`useDeviceProfile` swap. The old gate rendered the still (the finished art) first and swapped to the video after mount, so users saw the full image *then* the clip restart its build-from-blank intro (the reported "full image → snap to animation" bug). Now `showVideo = heroVideoPaths != null && !videoFailed` decides per render, each viewport renders `<LandingHeroVideo>` (opaque, **no `poster`** — the clips open on a blank frame, so the end-state still is never shown up front) and the still only renders when there's **no clip / the clip failed** (`onUnavailable` → `videoFailed`, reset when the slug/tier changes) or — purely in **CSS** via `motion-reduce:` — for reduced-motion users (a sibling `<Image className="hidden … motion-reduce:block">`; the video carries `motion-reduce:hidden`). This drops the `isMounted` / `isLgUp` / `useDeviceProfile` / `useMediaQuery` gating entirely; reduced-motion is CSS-driven (per `useDeviceProfile`'s own convention) so there is no SSR→client swap. Trade-off: the previous JS Save-Data suppression is gone (no reliable CSS signal); reduced-motion is preserved.
-- **Seamless loading skeleton (brand-aware).** The `if (isLoading)` branch no longer renders a gray `bg-gradient-to-br from-gray-200 to-gray-300 animate-pulse` placeholder. It renders the hero **"stage" background** via `resolveLandingHeroBackground(effectiveSlug)` from [landing-image-resolver](../../src/utils/promo/landing-image-resolver.ts): a brand-themed slug loads its own `bg-{brand}-{mobile,desktop}.webp`, and cash/evergreen/unknown slugs fall back to the shared `bg-{mobile,desktop}.webp` (per-viewport, manifest-checked). It uses the **same** `object-contain object-top` layout as the loaded hero, so the load-in is seamless with no gray flash. `effectiveSlug` is set on first paint (the `prizeSlug` prop), so the brand background shows immediately even while the draw query loads. The CTA pill still shows a `bg-gray-400/70 animate-pulse` placeholder, and the in-flow CTA-band reserve keeps layout below from jumping.
+- **Seamless loading skeleton (theme-aware).** The `if (isLoading)` branch no longer renders a gray `bg-gradient-to-br from-gray-200 to-gray-300 animate-pulse` placeholder. It renders the hero **"stage" background** via `resolveLandingHeroBackground(themeMode)` — the bare backdrop the hero art is composited onto, so the load-in is seamless. Keyed on THEME since draw 9; it was per-brand, which served dark-mode visitors the light backdrop with a dark hero painted over it.
 
 ### LandingHeroVideo — mp4-only ordered sources, drawn tier falls back to base (2026-06-27)
 
@@ -959,7 +959,26 @@ button. This replaced the old 3-cell `TrustBar`.
 - **`Banner.tsx`** — amber encouragement banner ("Someone's name gets called next draw")
 - **`ActionRow.tsx`** — primary CTAs ("Keep me in the draw" / "Resolve payment" / "No thanks, cancel anyway")
 - **`DowngradeCard.tsx`** — tier-coloured "Switch to X" card (Tradie/Foreman/Boss)
-- **`TrustBar.tsx`** — footer trust cells (SSL secure / NTP/17192 — sourced from `NTP_NUMBER` in `src/constants/legal.ts` / Cancel anytime)
+- **`TrustBar.tsx`** — footer trust cells (SSL secure / NTP/17494 — sourced from `NTP_NUMBER` in `src/constants/legal.ts` / Cancel anytime)
+
+### `BrandMark` — mask mode vs duo mode (2026-07-27)
+
+`prize-selection/BrandMark.tsx` renders a toolbox wordmark two ways, and which one it uses is
+decided by whether `ToolboxOption.markImageLight` is set.
+
+**Mask mode (default, Milwaukee / Kincrome / Sidchrome).** One white-on-transparent silhouette
+SVG painted through a CSS mask (`.pbc-brand-mark` in globals.css), tinted per theme from
+`markColor`. One asset serves both themes at the brand's own colour.
+
+**Duo mode (GearWrench only).** A mask paints ONE flat colour and therefore physically cannot
+render GearWrench's lockup — "GEAR" in theme ink, "WRENCH" in Molten Orange `#EB8900`, and an
+orange gear badge holding a black "GW". So it ships one FINISHED SVG per theme
+(`gearwrenchText.svg` / `gearwrenchText-light.svg`), stacked and swapped by `.pbc-brand-mark-duo`
+using the same `.dark` ancestor class the mask path uses — pure CSS, no JS theme read, no
+hydration flash. Rendered plateless per the Prize Showcase handoff. `markColor` is ignored.
+
+Both consumers (`ReelCards` and `/promotions` `ComboRail`) pass `lightSrc` through, so the reel
+card and the gallery thumb can never diverge.
 - **`hero.module.css`** — composite gradients, scrollbar chrome, and stripe overlay that don't translate to single Tailwind utilities
 
 Layout is an infographic-style three-band frame: dark hero → white lose grid → light slate trust footer. Layout structure stays identical at every viewport size; the `max-xs:` breakpoint shrinks sizes only (no column collapse). Styles migrated from `<style jsx>` to Tailwind + CSS Modules.

@@ -15,7 +15,7 @@
  */
 
 /** Toolbox brand keys that can actually be won this draw (`cash` is the opt-out, not a toolbox). */
-export type ToolboxBrand = "milwaukee" | "kincrome" | "sidchrome";
+export type ToolboxBrand = "milwaukee" | "kincrome" | "sidchrome" | "gearwrench";
 
 /** Toolbox type keys — the brands plus the cash opt-out. Used by slug/query helpers. */
 export type ToolboxType = ToolboxBrand | "cash";
@@ -55,6 +55,15 @@ export interface ToolboxOption {
   image: string;
   /** White silhouette wordmark used as a CSS mask (see interface note). */
   markImage: string;
+  /**
+   * Light-theme wordmark. Supplying it switches `BrandMark` out of mask mode and renders
+   * `markImage` / `markImageLight` as finished art, swapped by theme.
+   *
+   * Only for marks a mask CANNOT express. A mask paints one flat colour, so GearWrench's
+   * two-tone lockup needs a finished file per theme; the other three are single-colour
+   * wordmarks and stay on the cheaper mask path.
+   */
+  markImageLight?: string;
   /** Mask paint colour per theme so the wordmark reads on both card surfaces. */
   markColor: { light: string; dark: string };
   /**
@@ -107,10 +116,13 @@ export interface ToolsetOption {
 /**
  * Reel 1 — toolboxes, in reel order.
  *
- * GearWrench is deliberately ABSENT: it is slated for draw 9 and has no product
- * render, composite art or catalog entry yet. Adding it later is one record here
- * plus its `{toolset}-gearwrench` catalog entries — `isNew: true` lights the
- * badge the design specifies.
+ * GearWrench joined in draw 9 (2026-07-27) — the fourth box the original design always
+ * anticipated, added as one record here exactly as planned. It is the one entry that does
+ * NOT use the mask path: see `markImageLight`.
+ *
+ * Its `{toolset}-gearwrench` art exists for DeWalt, HiKOKI, Makita and Milwaukee but **not
+ * Ryobi** — that combination was never produced. The landing resolver degrades through its
+ * fallback chain for `ryobi-gearwrench`; nothing here needs to special-case it.
  */
 export const TOOLBOXES: readonly ToolboxOption[] = [
   {
@@ -160,6 +172,29 @@ export const TOOLBOXES: readonly ToolboxOption[] = [
     // sit consistently beside each other, and the card's ring/glow/wordmark all agree.
     markColor: { light: "#d21f2a", dark: "#d21f2a" },
     markScale: 0.72,
+  },
+  {
+    id: "gearwrench",
+    name: "GearWrench Toolbox",
+    brandName: "GearWrench",
+    shortName: "GearWrench box",
+    eyebrow: "288 PIECE",
+    accent: "#f0a500",
+    image: "/images/majordraws/toolbox/gearwrenchTB.webp",
+    // The ONLY two-tone mark: "GEAR" in theme ink, "WRENCH" in Molten Orange, and an orange
+    // gear badge holding a black "GW". A CSS mask paints one flat colour and physically
+    // cannot render that, so this pair bypasses the mask path (see `markImageLight`).
+    markImage: "/images/brands/name/gearwrenchText.svg",
+    markImageLight: "/images/brands/name/gearwrenchText-light.svg",
+    // Unused in duo mode — the files carry their own colour. Kept to satisfy the shared
+    // shape, set to the brand accent so nothing reads as a placeholder.
+    markColor: { light: "#f0a500", dark: "#f0a500" },
+    // The other three are levelled DOWN to Milwaukee's letter height inside the mark plate.
+    // GearWrench renders PLATELESS and its cropped lockup is 9.6:1 — far wider than
+    // Kincrome's 5.76:1 — so that levelling maths doesn't carry over. This is the handoff's
+    // value, confirmed against the rendered card rather than derived.
+    markScale: 0.9,
+    isNew: true,
   },
 ] as const;
 

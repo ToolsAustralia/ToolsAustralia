@@ -38,6 +38,35 @@ ScheduledPromo dates: are they stored as UTC or AEST? _TODO: confirm and documen
 
 The package flag `isMemberOnly` was renamed to **`isAdditional`** across the codebase. It marks packages that require *additional-package access* — an **active subscription OR current major-draw entries** (see `hasAdditionalPackageAccess`), which is broader than subscribers; it was never truly "member-only". The internal `-member` UI id-suffix (a row disambiguator) is intentionally unchanged. Full rationale: [subscription/gotchas.md](../subscription/gotchas.md).
 
+## Never derive the landing-asset mapping from the art team's filenames (2026-07-27)
+
+The draw 9 export shipped **nine desktop files whose name disagreed with their artwork** —
+three Ryobi banners named as HiKOKI, a Kincrome banner named as GearWrench, three files whose
+bare name was `drawn-tonight` when the convention says bare = `drawn-tomorrow`, and one
+tonight/tomorrow pair that was simply reversed. Every one was a clean, finished banner; only
+the label was wrong, and each was the ONLY copy of that combination + tier.
+
+A filename-derived ingest would have passed lint, types, the manifest check and every URL
+assertion while shipping the wrong prize on live pages. **Nothing automated catches this** —
+`dewalt-gwTB.webp` containing Makita art satisfies all of them. The only defences are reading
+the artwork before renaming, and a proof recording afterwards.
+
+So: `EXCEPTIONS` in `scripts/convert-draw9-landing-to-webp.ts` records what each file
+ACTUALLY shows, with the reason. Do not add an entry from a guess, and do not assume a new
+drop repeats the last one's ordering — the 2026-07 export already differed from 2026-06.
+
+## A resolver's "return the broken URL so the failure is visible" stops being safe once the case is reachable (2026-07-27)
+
+`resolveLandingHeroImage` ended with `return desired` when nothing existed for a
+brand × toolbox — deliberate, so a missing asset would show up. That was fine while every
+combination had art. Draw 9 shipped GearWrench without its Ryobi pairing, making the branch
+reachable for the first time, and the "visible failure" turned out to be a **400 from
+`/_next/image`**: a blank hero plus a console error on a real customer page, not a placeholder.
+
+It now falls back to the evergreen collage. Caught by the e2e QA watchdog mid-recording —
+worth remembering that a unit test asserting "this URL is not in the manifest" happily
+documented the gap without noticing it rendered as a 400.
+
 ## CSS-hidden `<video preload="auto">` still downloads — mount per-viewport, don't just hide with CSS (2026-07-19)
 
 `lg:hidden` / `hidden lg:block` (or any `display:none`) does **not** stop a `<video preload="auto">` from fetching — the browser starts the network request as soon as the `<video>`/`<source>` elements are in the DOM, regardless of visibility. `PromoHero` used to render BOTH the mobile and desktop `<LandingHeroVideo>` unconditionally (gated only by `showVideo`, not by which one was actually visible), so every promo landing visit downloaded two full hero clips — one hidden, one shown. Fixed by adding a client-only `viewport: "mobile" | "desktop" | null` state (`null` until mount, resolved via `matchMedia("(min-width: 1024px)")`) and gating each container's video branch on `viewport === "mobile"` / `viewport === "desktop"` so only the on-screen container ever mounts a `<video>`. **Don't reach for `useIsLgUp`** for this: its SSR/first-paint snapshot is `false` (not `null`), which would mount the MOBILE branch during SSR on every request including desktop — a tri-state local `viewport` is required to render zero videos before mount (see `PromoHero.tsx`). This is the same class of bug documented for images in [shared-ui/gotchas.md](../shared-ui/gotchas.md) "viewport-correct `priority`/preload" — same rule applies to `<video>`, just with a bigger payload.

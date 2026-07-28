@@ -11,7 +11,9 @@
  * - NEVER import from "./prizes" (that would pull the deep catalog back into the client graph).
  *
  * Drift guard: `npm run test:prize-summaries` asserts slug-set + shared-field equality
- * against PRIZE_CATALOG and a ≤40 KB source-size budget. Edit prize data in BOTH files.
+ * against PRIZE_CATALOG and a source-size budget (see that test for the current number and
+ * why it moves). Edit prize data in BOTH files — or use `fromSummary()` in `prizes.ts`, which
+ * takes the shared half from here so it cannot drift at all.
  */
 
 /**
@@ -49,6 +51,11 @@ export type PrizeSlug =
   | "hikoki-sidchrome"
   | "hikoki-milwaukee"
   | "hikoki-kincrome"
+  | "milwaukee-gearwrench"
+  | "dewalt-gearwrench"
+  | "makita-gearwrench"
+  | "ryobi-gearwrench"
+  | "hikoki-gearwrench"
   | "cash-prize";
 
 /** The client-needed subset of a prize entry — everything except the deep spec sheets. */
@@ -145,6 +152,32 @@ const RYOBI_GALLERY_SHOTS: PrizeMedia[] = [
   { src: "/images/majordraws/ryobi-set/ryobi-18v-one-hp-brushless-254mm-sliding-mitre-saw.webp", alt: "Ryobi chargers" },
   { src: "/images/majordraws/ryobi-set/ryobi-gallery-13.webp", alt: "Ryobi ONE+ system" },
   { src: "/images/majordraws/ryobi-set/ryobi-36v-brushless-46cm-lawn-mower-4ah-kit.webp", alt: "Ryobi toolset" },
+];
+
+/**
+ * The GearWrench toolbox and what's inside it (draw 9).
+ *
+ * Unlike the toolset galleries above — which show the POWER TOOLS — these are the toolbox's
+ * own trays, so they are spread into all five `*-gearwrench` galleries AFTER that combo's
+ * toolset shots. Every name is transcribed from the "Includes" caption printed on the
+ * supplied photo, not from its filename: two source files were both called "allenheads" and
+ * are in fact a hex bit socket set and a Torx set.
+ */
+const GEARWRENCH_TOOLBOX_SHOTS: PrizeMedia[] = [
+  { src: "/images/majordraws/toolbox/gearwrench/gearwrench-toolbox-drawers-open.webp", alt: "GearWrench toolbox with drawers open" },
+  { src: "/images/majordraws/toolbox/gearwrench/gearwrench-metric-and-sae-socket-set-eva-tray.webp", alt: "GearWrench 90pc metric and SAE socket set in EVA tray" },
+  { src: "/images/majordraws/toolbox/gearwrench/gearwrench-sae-90t-ratchet-wrench-set-eva-tray.webp", alt: "GearWrench 24pc 90-tooth ratcheting wrench set in EVA tray" },
+  { src: "/images/majordraws/toolbox/gearwrench/gearwrench-6-point-deep-socket-set.webp", alt: "GearWrench 25pc 3/8 inch drive deep socket set" },
+  { src: "/images/majordraws/toolbox/gearwrench/gearwrench-18pc-6-point-deep-socket-metric-set.webp", alt: "GearWrench 18pc 1/2 inch drive deep socket set" },
+  { src: "/images/majordraws/toolbox/gearwrench/gearwrench-12pc-6-point-standard-impact-metric-socket-set.webp", alt: "GearWrench 12pc impact socket set" },
+  { src: "/images/majordraws/toolbox/gearwrench/gearwrench-sae-metric-ball-end-long-arm-hex-key-set.webp", alt: "GearWrench 26pc ball-end long-arm hex key set" },
+  { src: "/images/majordraws/toolbox/gearwrench/gearwrench-12pc-hex-bit-metric-socket-set.webp", alt: "GearWrench 12pc hex bit metric socket set" },
+  { src: "/images/majordraws/toolbox/gearwrench/gearwrench-13pc-torx-bit-socket-set.webp", alt: "GearWrench 13pc Torx bit socket set" },
+  { src: "/images/majordraws/toolbox/gearwrench/gearwrench-41pc-microdriver-set.webp", alt: "GearWrench 41pc MicroDriver set" },
+  { src: "/images/majordraws/toolbox/gearwrench/gearwrench-screwdriver-set.webp", alt: "GearWrench 10pc dual-material screwdriver set" },
+  { src: "/images/majordraws/toolbox/gearwrench/gearwrench-4pc-mini-hook-and-pick-set.webp", alt: "GearWrench 4pc mini hook and pick set" },
+  { src: "/images/majordraws/toolbox/gearwrench/gearwrench-punch-and-chisel-set.webp", alt: "GearWrench 12pc punch and chisel set" },
+  { src: "/images/majordraws/toolbox/gearwrench/gearwrench-hammer.webp", alt: "GearWrench 24oz fibreglass ball pein hammer" },
 ];
 
 const HIKOKI_GALLERY_SHOTS: PrizeMedia[] = [
@@ -453,6 +486,114 @@ export const PRIZE_SUMMARIES: PrizeSummary[] = [
       { icon: "Wrench", title: "Kincrome 470pc Kit", description: "CONTOUR® 17-drawer workshop chest & trolley." },
     ],
   },
+  /**
+   * GearWrench — the fourth toolbox, added for draw 9.
+   *
+   * `cardBackgroundImage` is deliberately OMITTED on all five: the `{toolset}-gearwrench.webp`
+   * composite shots have not been photographed. The field is optional, and the Prize Showcase
+   * handoff designs for exactly this — the combo hero falls back to the standalone toolbox
+   * render behind a "combo photo coming" state rather than showing a wrong or invented image.
+   * Add the composites and this field together when the shoot lands.
+   */
+  {
+    slug: "milwaukee-gearwrench",
+    label: "GearWrench 288pc Toolbox, Milwaukee 13pc Power Tool Kit + Milwaukee Packout 8pc Modular System, $5000 cash",
+    heroHeading: "GearWrench 288pc Toolbox, Milwaukee 13pc Power Tool Kit + Milwaukee Packout 8pc Modular System, $5000 cash",
+    heroSubheading: "Complete Milwaukee 18V FUEL™ professional toolkit with Milwaukee PACKOUT™ 8pc modular storage and the GearWrench 288-piece mobile workstation plus $5000 cash.",
+    summary: "Milwaukee 18V FUEL™ power tools, REDLITHIUM™ battery ecosystem, Milwaukee PACKOUT™ 8pc modular storage, and the GearWrench 288-piece tool set & mobile workstation plus $5000 cash.",
+    prizeValueLabel: "$35,000+ Value",
+    cardBackgroundImage: "/images/majordraws/milwaukee-set/milwaukee-gearwrench.webp",
+    gallery: [
+      { src: "/images/majordraws/milwaukee-set/milwaukee-gearwrench.webp", alt: "Milwaukee power toolset with the GearWrench 288-piece mobile workstation" },
+      ...MILWAUKEE_GALLERY_SHOTS,
+      ...GEARWRENCH_TOOLBOX_SHOTS,
+    ],
+    highlights: [
+      { icon: "Zap", title: "13 Power Tools", description: "Complete Milwaukee 18V FUEL™ collection." },
+      { icon: "Package", title: "PACKOUT™ + GearWrench", description: "8-piece modular storage plus the GearWrench 288pc mobile workstation." },
+      { icon: "Battery", title: "REDLITHIUM™ Power System", description: "High-output 5.0Ah packs keep every skin running." },
+      { icon: "DollarSign", title: "$5000 Cash Bonus", description: "Cold hard cash included with your prize." },
+    ],
+  },
+  {
+    slug: "dewalt-gearwrench",
+    label: "GearWrench 288pc Toolbox, DeWalt 14pc Power Tool Kit + DeWalt Tough System 2.0 Mobile Storage, $5000 cash",
+    heroHeading: "GearWrench 288pc Toolbox, DeWalt 14pc Power Tool Kit + DeWalt Tough System 2.0 Mobile Storage, $5000 cash",
+    heroSubheading: "Heavy-duty DeWalt FlexVolt and XR cordless range with DeWalt TOUGHSYSTEM® 2.0 mobile storage and the GearWrench 288-piece mobile workstation plus $5000 cash.",
+    summary: "Heavy-duty DeWalt FlexVolt cordless lineup, TOUGHSYSTEM® 2.0 mobile storage, and the GearWrench 288-piece tool set & mobile workstation plus $5000 cash.",
+    prizeValueLabel: "$30,000+ Value",
+    cardBackgroundImage: "/images/majordraws/dewalt-set/dewalt-gearwrench.webp",
+    gallery: [
+      { src: "/images/majordraws/dewalt-set/dewalt-gearwrench.webp", alt: "DeWalt power toolset with the GearWrench 288-piece mobile workstation" },
+      ...DEWALT_GALLERY_SHOTS,
+      ...GEARWRENCH_TOOLBOX_SHOTS,
+    ],
+    highlights: [
+      { icon: "Zap", title: "FlexVolt Muscle", description: "54V tools for circular, rotary, and reciprocating power." },
+      { icon: "Package", title: "TOUGHSYSTEM® 2.0 + GearWrench", description: "Mobile storage plus the GearWrench 288pc mobile workstation." },
+      { icon: "Battery", title: "High-Capacity Power", description: "FlexVolt + XR batteries with twin-port fast charging." },
+      { icon: "DollarSign", title: "$5000 Cash Bonus", description: "Cold hard cash included with your prize." },
+    ],
+  },
+  {
+    slug: "makita-gearwrench",
+    label: "GearWrench 288pc Toolbox, Makita 15pc Power Tool Kit + Makita MAKTRAK 7pc Mobile Storage, $5000 cash",
+    heroHeading: "GearWrench 288pc Toolbox, Makita 15pc Power Tool Kit + Makita MAKTRAK 7pc Mobile Storage, $5000 cash",
+    heroSubheading: "Complete Makita 18V LXT brushless professional toolkit with Makita MAKTRAK™ 7pc mobile storage and the GearWrench 288-piece mobile workstation plus $5000 cash.",
+    summary: "Makita 18V LXT brushless power tools, MAKTRAK™ 7pc mobile storage system, and the GearWrench 288-piece tool set & mobile workstation plus $5000 cash.",
+    prizeValueLabel: "$30,000+ Value",
+    cardBackgroundImage: "/images/majordraws/makita-set/makita-gearwrench.webp",
+    gallery: [
+      { src: "/images/majordraws/makita-set/makita-gearwrench.webp", alt: "Makita power toolset with the GearWrench 288-piece mobile workstation" },
+      ...MAKITA_GALLERY_SHOTS,
+      ...GEARWRENCH_TOOLBOX_SHOTS,
+    ],
+    highlights: [
+      { icon: "Zap", title: "15 Power Tools", description: "Complete Makita 18V LXT brushless collection." },
+      { icon: "Package", title: "MAKTRAK™ + GearWrench", description: "7-piece mobile storage plus the GearWrench 288pc mobile workstation." },
+      { icon: "Battery", title: "LXT Power System", description: "High-capacity 5.0Ah packs with rapid dual-port charging." },
+      { icon: "DollarSign", title: "$5000 Cash Bonus", description: "Cold hard cash included with your prize." },
+    ],
+  },
+  {
+    slug: "ryobi-gearwrench",
+    label: "GearWrench 288pc Toolbox, Ryobi 19pc Power Tool Kit + Ryobi LINK Storage Units, $5000 cash",
+    heroHeading: "GearWrench 288pc Toolbox, Ryobi 19pc Power Tool Kit + Ryobi LINK Storage Units, $5000 cash",
+    heroSubheading: "Complete Ryobi 18V ONE+ toolkit with Ryobi LINK™ modular storage system and the GearWrench 288-piece mobile workstation plus $5000 cash.",
+    summary: "Ryobi 18V ONE+ power and garden tools, LINK™ modular storage system, and the GearWrench 288-piece tool set & mobile workstation plus $5000 cash.",
+    prizeValueLabel: "$25,000+ Value",
+    gallery: [
+      { src: "/images/majordraws/toolbox/gearwrenchTB.webp", alt: "GearWrench 288-piece tool set and mobile workstation" },
+      ...RYOBI_GALLERY_SHOTS,
+      ...GEARWRENCH_TOOLBOX_SHOTS,
+    ],
+    highlights: [
+      { icon: "Zap", title: "19 Power & Garden Tools", description: "18V ONE+ 12-piece kit plus lawn mower and garden tools." },
+      { icon: "Package", title: "LINK™ + GearWrench", description: "Modular LINK™ storage plus the GearWrench 288pc mobile workstation." },
+      { icon: "Battery", title: "ONE+ Power System", description: "18V ONE+ batteries power 200+ tools across the range." },
+      { icon: "DollarSign", title: "$5000 Cash Bonus", description: "Cold hard cash included with your prize." },
+    ],
+  },
+  {
+    slug: "hikoki-gearwrench",
+    label: "GearWrench 288pc Toolbox, HiKOKI 15pc Power Tool Kit + HiKOKI Multi Cruiser Storage, $5000 cash",
+    heroHeading: "GearWrench 288pc Toolbox, HiKOKI 15pc Power Tool Kit + HiKOKI Multi Cruiser Storage, $5000 cash",
+    heroSubheading: "Complete HiKOKI 36V/18V MultiVolt 15-piece cordless kit with the HiKOKI Multi Cruiser 3-piece storage set and the GearWrench 288-piece mobile workstation plus $5000 cash.",
+    summary: "HiKOKI MultiVolt brushless power tools and nailers, the IP65 Multi Cruiser storage system, and the GearWrench 288-piece tool set & mobile workstation plus $5000 cash.",
+    prizeValueLabel: "$30,000+ Value",
+    cardBackgroundImage: "/images/majordraws/hikoki-set/hikoki-gearwrench.webp",
+    gallery: [
+      { src: "/images/majordraws/hikoki-set/hikoki-gearwrench.webp", alt: "HiKOKI power toolset with the GearWrench 288-piece mobile workstation" },
+      ...HIKOKI_GALLERY_SHOTS,
+      ...GEARWRENCH_TOOLBOX_SHOTS,
+    ],
+    highlights: [
+      { icon: "Zap", title: "15 MultiVolt Tools", description: "13pc Mega Combo plus framing & finishing nailers." },
+      { icon: "Package", title: "Multi Cruiser + GearWrench", description: "IP65 rolling tool boxes plus the GearWrench 288pc mobile workstation." },
+      { icon: "Battery", title: "MultiVolt Power System", description: "5x BSL36A18X 18V/36V batteries + 2 rapid chargers." },
+      { icon: "DollarSign", title: "$5000 Cash Bonus", description: "Cold hard cash included with your prize." },
+    ],
+  },
   {
     slug: "cash-prize",
     label: "$10,000 Tax Free Cash",
@@ -499,6 +640,11 @@ const SHORT_PRIZE_LABELS: Record<PrizeSlug, string> = {
   "hikoki-sidchrome": "Sidchrome + HiKOKI 15pc + Multi Cruiser + $5,000 Cash",
   "hikoki-milwaukee": "Milwaukee Toolbox + HiKOKI 15pc + Multi Cruiser + $5,000 Cash",
   "hikoki-kincrome": "Kincrome CONTOUR® + HiKOKI 15pc + Multi Cruiser + $5,000 Cash",
+  "milwaukee-gearwrench": "GearWrench 288pc + Milwaukee 13pc + PACKOUT + $5,000 Cash",
+  "dewalt-gearwrench": "GearWrench 288pc + DeWalt 14pc + ToughSystem + $5,000 Cash",
+  "makita-gearwrench": "GearWrench 288pc + Makita 15pc + MAKTRAK + $5,000 Cash",
+  "ryobi-gearwrench": "GearWrench 288pc + Ryobi 19pc + LINK + $5,000 Cash",
+  "hikoki-gearwrench": "GearWrench 288pc + HiKOKI 15pc + Multi Cruiser + $5,000 Cash",
   "cash-prize": "$10,000 Cash",
 };
 

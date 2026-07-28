@@ -227,11 +227,32 @@ export interface ComboPresentation {
 }
 
 /**
+ * Combinations with no `{toolset}-{toolbox}.webp` composite photographed yet.
+ *
+ * Keyed per COMBINATION, not per toolbox. GearWrench arrived in draw 9 with no combo shots at
+ * all, so this was briefly a toolbox-level set; the shoot then delivered four of the five
+ * (Milwaukee, DeWalt, Makita, HiKOKI) and left Ryobi out — the same combination missing from
+ * every other part of the draw 9 drop. A toolbox-level flag would now wrongly send four
+ * combinations that HAVE their art back to the standalone render.
+ *
+ * The Prize Showcase handoff designs for this rather than leaving a broken image: show the
+ * standalone toolbox render and let the caller badge it "combo photo coming". Delete the
+ * entry when the shoot lands — nothing else needs to change.
+ */
+const COMBOS_AWAITING_COMBO_ART = new Set<string>(["ryobi-gearwrench"]);
+
+/** True when this combination has no composite shot and is showing the standalone box. */
+export function isComboArtPending(toolbox: ToolboxOption, toolset: ToolsetOption): boolean {
+  return COMBOS_AWAITING_COMBO_ART.has(`${toolset.id}-${toolbox.id}`);
+}
+
+/**
  * Everything the combo hero renders for the current selection.
  *
  * The composite render lives beside the toolset's own art
  * (`{toolset}-set/{toolset}-{toolbox}.webp`) — one per combination, so a new
- * brand ships art without a code change.
+ * brand ships art without a code change. A toolbox still awaiting those shots falls back to
+ * its own standalone render rather than pointing at a file that does not exist.
  */
 export function getComboPresentation(
   toolbox: ToolboxOption,
@@ -249,9 +270,15 @@ export function getComboPresentation(
     };
   }
 
+  const comboArtPending = isComboArtPending(toolbox, toolset);
+
   return {
-    image: `/images/majordraws/${toolset.id}-set/${toolset.id}-${toolbox.id}.webp`,
-    imageAlt: `${toolset.name} power toolset with the ${toolbox.name}`,
+    image: comboArtPending
+      ? toolbox.image
+      : `/images/majordraws/${toolset.id}-set/${toolset.id}-${toolbox.id}.webp`,
+    imageAlt: comboArtPending
+      ? `${toolbox.name} — combination photo with the ${toolset.name} toolset coming soon`
+      : `${toolset.name} power toolset with the ${toolbox.name}`,
     eyebrow: "YOUR COMBINATION",
     title: `${toolset.name} + ${toolbox.name}`,
     sub: `${toolset.kitLabel} · ${toolset.storageLabel} storage · plus $5,000 cash`,

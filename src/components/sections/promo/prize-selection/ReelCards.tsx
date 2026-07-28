@@ -43,6 +43,7 @@ export function ToolboxReelCard({ toolbox }: { toolbox: ToolboxOption }) {
         <span className="pbc-card-art flex h-[var(--pbc-mark-h)] w-full items-center justify-center">
           <BrandMark
             src={toolbox.markImage}
+            lightSrc={toolbox.markImageLight}
             color={toolbox.markColor}
             scale={toolbox.markScale}
             title={toolbox.name}
