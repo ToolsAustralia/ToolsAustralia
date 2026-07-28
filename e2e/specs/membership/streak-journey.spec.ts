@@ -289,7 +289,12 @@ async function runStreakJourney(page: Page, demo: Demo, testInfo: TestInfo): Pro
   });
 
   // ── Beat 8 — forgiving ──────────────────────────────────────────────────
-  await setPastDue(7);
+  // Task-4 fix (round 2, wallet/medallion consistency): explicit streakEntries — at 7
+  // renewals only rungs Lv.2/4/6 (+100/+200/+300 = 600) are earned; Lv.8 (+400, this
+  // beat's own "pending" figure) hasn't fired. Without this, the wallet kept Beat 7's
+  // 2,100 (the 12-renewal total) while the medallion read Level 7 — two contradictory
+  // numbers in the same frame. See src/config/streakMilestones.ts for the ladder.
+  await setPastDue(7, { streakEntries: 600 });
   await page.goto("/my-account");
   await dismissSubscriptionExplainerIfItOpens();
   await expect(page.getByText(/Payment issue/i).first()).toBeVisible({ timeout: 30_000 });
@@ -410,7 +415,15 @@ async function runStreakJourney(page: Page, demo: Demo, testInfo: TestInfo): Pro
   };
 
   // ── Beat 9 — the save ───────────────────────────────────────────────────
-  await setStreak(7);
+  // Task-4 fix (round 2): explicit streakEntries, not left to inherit Beat 8's residual
+  // value. It's the same 7-renewal total (600 — see Beat 8's comment above) so this was
+  // already numerically correct by coincidence, but stating it here removes the implicit
+  // dependency on Beat 8 leaving the right number behind. Not screen-visible either way —
+  // StepStakes (src/components/modals/CancellationFlowModal/StepStakes.tsx) computes its
+  // "+400 free entries" / ladder copy from state.streakMonths via nextStreakMilestone,
+  // never from the persisted entries bucket, and the dashboard wallet/medallion sit behind
+  // ManageSheet + CancellationFlowModal's full-viewport overlay for the rest of this beat.
+  await setStreak(7, { streakEntries: 600 });
   const cancelButton = await openManageSheetAndGetCancelButton();
 
   await demo.step("Now a member with a 7-renewal streak tries to cancel", async () => {
@@ -444,7 +457,12 @@ async function runStreakJourney(page: Page, demo: Demo, testInfo: TestInfo): Pro
   // screen pivots to the ladder ahead (StepStakes.tsx — lossFraming = streak >= 2). Same
   // ManageSheet → Cancel → reason → stakes path as Beat 9; the earlier flow never
   // completed an actual cancellation, so the subscription is still active to re-enter.
-  await setStreak(1);
+  // Task-4 fix (round 2): explicit streakEntries=0 — without it the bucket would keep
+  // Beat 9's 600 while streakMonths dropped to 1 (no rung earned yet at 1 renewal, the
+  // first fires at Lv.2). Same not-currently-screen-visible reasoning as Beat 9's comment
+  // above (StepStakes reads streakMonths only; the overlay stack covers the dashboard),
+  // but this one IS a genuine data mismatch, not a coincidentally-correct inherited value.
+  await setStreak(1, { streakEntries: 0 });
   const cancelButtonAgain = await openManageSheetAndGetCancelButton();
   await cancelButtonAgain.click();
   await expect(page.getByText(/what.{0,3}s making you leave/i).first()).toBeVisible({ timeout: 20_000 });

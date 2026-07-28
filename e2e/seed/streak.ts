@@ -75,7 +75,7 @@ export async function setStreak(months: number, opts: { streakEntries?: number }
 }
 
 /** Beat 8 — failed renewal (acct: "pastdue" → the at-risk card). */
-export async function setPastDue(months: number): Promise<void> {
+export async function setPastDue(months: number, opts: { streakEntries?: number } = {}): Promise<void> {
   const now = new Date();
   await (await users()).updateOne(
     { email: MEMBER.email },
@@ -95,6 +95,7 @@ export async function setPastDue(months: number): Promise<void> {
       },
     }
   );
+  if (opts.streakEntries !== undefined) await setStreakEntries(opts.streakEntries);
 }
 
 /**
