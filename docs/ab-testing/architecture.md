@@ -140,6 +140,34 @@ functions in the same change, and cover it with an assertion (see
 `variantConfigService.membershipTheme.test.ts` for the `promoTheme` guard
 pattern) rather than relying on type-checking alone.
 
+## Anonymous visitor identity (`ta_anon_id`) — minted in middleware (2026-07-28)
+
+A promo landing page can fire **two concurrent** `POST /api/ab-testing/assign`
+calls in the same effect flush — one for the page's slug-targeted experiment,
+one for the site-wide theme experiment (`__promo-theme__`, see above).
+`AnonymousIdService.getOrCreateAnonymousId` mints a fresh `anon_<uuid>` **per
+request** and cannot persist it (it runs inside a route handler, which can
+only `Set-Cookie` its own response) — so with no shared mint, each handler
+would generate its own id and Set-Cookie it, last write wins. The
+`VariantAssignment` unique index is `(experimentId, anonymousId)`, so **both**
+resulting rows are legal: the visitor is silently counted as two exposures
+and gets re-bucketed on a later visit when the surviving cookie doesn't match
+either assignment.
+
+Fix: `src/middleware.ts` mints the `ta_anon_id` cookie **once**, before either
+`/assign` handler runs, immediately after `const response = NextResponse.next();`
+in the "all other routes" path. Both concurrent `/assign` calls then read the
+same already-set cookie via `AnonymousIdService.extractAnonymousId` /
+`getOrCreateAnonymousId` and agree on one identity. The cookie contract (name,
+90-day TTL, `anon_` + length validation) is duplicated — not re-exported —
+in the edge-safe [`src/lib/ab-testing/anon-id-cookie.ts`](../../src/lib/ab-testing/anon-id-cookie.ts),
+because `AnonymousIdService` imports `next/headers` and node `crypto`, neither
+of which is available in middleware's edge runtime (see
+[docs/security-csp/architecture.md](../security-csp/architecture.md)). Keep
+the two modules' cookie name/TTL/validation rule identical by hand — if they
+drift, assignments split across two ids for the same visitor again, which is
+exactly the bug this fixes.
+
 ## Migrated from `docs/AB_TESTING_*.md`
 
 > _TODO: read all five root files and merge full content. Brief outline:_

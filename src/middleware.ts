@@ -3,6 +3,12 @@ import { NextResponse } from "next/server";
 import type { JWT } from "next-auth/jwt";
 import { generateNonce } from "@/utils/security/nonce";
 import { buildSecurityHeaders } from "@/utils/security/csp";
+import {
+  ANON_ID_COOKIE_NAME,
+  ANON_ID_MAX_AGE,
+  generateAnonymousId,
+  isValidAnonymousId,
+} from "@/lib/ab-testing/anon-id-cookie";
 
 // Internal users = staff/admin userType, or the legacy role:"admin" bridge
 // (kept until the Phase-5 migration drops the legacy field). Single definition so
@@ -106,6 +112,24 @@ export default withAuth(
 
     // For all other routes, create a response and apply security headers
     const response = NextResponse.next();
+
+    // Mint the A/B anonymous id ONCE per visitor, here, so that concurrent
+    // /assign calls on the same page share one identity. Each API handler
+    // otherwise generates its own `anon_<uuid>` and Set-Cookies it (last write
+    // wins), which produces two legal VariantAssignment rows — the unique index
+    // is (experimentId, anonymousId) — and counts one visitor as two exposures.
+    const existingAnonId = req.cookies.get(ANON_ID_COOKIE_NAME)?.value;
+    if (!existingAnonId || !isValidAnonymousId(existingAnonId)) {
+      response.cookies.set({
+        name: ANON_ID_COOKIE_NAME,
+        value: generateAnonymousId(),
+        httpOnly: true,
+        sameSite: "lax",
+        secure: process.env.NODE_ENV === "production",
+        maxAge: ANON_ID_MAX_AGE,
+        path: "/",
+      });
+    }
 
     // In production, set CSP with nonce and attach nonce to request headers
     if (isProduction && nonce) {
