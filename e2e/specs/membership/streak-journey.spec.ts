@@ -44,7 +44,22 @@ test.describe("Membership Streak demo @demo", () => {
     const userId = await memberUserId();
     await renameDemoDraw(DRAW_NAME);
 
-    const streakCard = page.locator("section").filter({ hasText: "Streak" }).first();
+    // Provably unique to LoyaltyStreak: "LEVEL"/"FOUNDING" is the medallion's own label
+    // text (LoyaltyStreak.tsx:132, `{isMax ? "FOUNDING" : "LEVEL"}`) — grepped across the
+    // whole src tree, it appears NOWHERE else on /my-account, not even in EntryWallet.tsx.
+    // A bare `hasText: "Streak"` filter was NOT unique: from Beat 5 on, entriesBySource.streak
+    // > 0 makes EntryWallet ALSO render a "Streak <n>" legend row (EntryWallet.tsx:162-167),
+    // and on mobile-chrome the `lg:grid` never activates, so EntryWallet (page-client.tsx:346)
+    // precedes LoyaltyStreak (page-client.tsx:368) in plain DOM order — `.first()` silently
+    // resolved to the wallet's <section>, and every highlight() from Beat 5 on drew the
+    // spotlight ring around the wrong card while the caption narrated the streak card. Tests
+    // still passed because `expect(streakCard).toBeVisible()` is true either way — the wallet
+    // genuinely is visible. See the cross-containment regression guard right before Beat 5.
+    const streakCard = page.locator("section").filter({ hasText: /LEVEL|FOUNDING/i }).first();
+    // Mirror-image check: "Entries ·" (the wallet's eyebrow, EntryWallet.tsx:115) is grepped
+    // unique to EntryWallet.tsx across the whole src tree — LoyaltyStreak never renders it,
+    // in any state (teaser, fresh, active, atrisk, paused, founding), so this locator cannot
+    // resolve to the streak card the way the old `streakCard` filter could resolve to the wallet.
     const wallet = page.locator("section").filter({ hasText: "Entries ·" }).first();
 
     // The dashboard's subscription-explainer overlay (src/app/(site)/my-account/page-client.tsx)
@@ -131,6 +146,17 @@ test.describe("Membership Streak demo @demo", () => {
     await page.reload();
     await expect(page.getByText(/free entries landed/i).first()).toBeVisible({ timeout: 30_000 });
 
+    // Regression guard (review round 2): from here on entriesBySource.streak > 0, which is
+    // exactly the condition that made the OLD `hasText: "Streak"` streakCard locator
+    // ambiguous with EntryWallet (see the comment above its declaration). Prove each locator
+    // still resolves to its OWN, correct <section> — content one component structurally
+    // cannot render — before trusting either for a highlight(). This is the assertion that
+    // would have failed under the old bug: back then `streakCard` WAS the wallet, so it DID
+    // contain "Entries ·".
+    await expect(streakCard).toContainText(/LEVEL|FOUNDING/i); // positive: really is the streak card
+    await expect(streakCard).not.toContainText("Entries ·"); // negative: NOT the wallet
+    await expect(wallet).not.toContainText(/LEVEL|FOUNDING/i); // mirror-image check
+
     await demo.step("Their 4th renewal lands — 200 free entries, granted automatically", async () => {
       await expect(page.getByText(new RegExp(DRAW_NAME, "i")).first()).toBeVisible({ timeout: 20_000 });
       await demo.highlight(streakCard, `+200 free entries, straight into the ${DRAW_NAME}`);
@@ -179,18 +205,36 @@ test.describe("Membership Streak demo @demo", () => {
       await demo.highlight(streakCard, "Nothing banked is lost");
     });
 
+    // Beats 9 & 10 share this exact cancel-flow entry — extracted so the two can't drift out
+    // of sync the way they did before this review round (see task-2-report.md, review round
+    // 2, Important 2). The Cancel button lives inside ManageSheet, which LazyManageSheet
+    // mounts only once the "manage" sheet is opened (src/app/(site)/my-account/components/
+    // sheets/LazyManageSheet.tsx + ManageSheet.tsx) — it does NOT exist on a bare
+    // /my-account/membership load. The ?open=subscription deep-link (page-client.tsx) opens
+    // it directly on the root dashboard — same proven pattern as
+    // e2e/specs/account/my-account.spec.ts's ManageSheet coverage. Returns the (asserted
+    // visible) Cancel button locator; deliberately does NOT click it — beat 9 clicks it
+    // inside a narrated demo.step (its "tries to cancel" moment), beat 10 doesn't narrate
+    // that part at all, so the click stays with each caller.
+    const openManageSheetAndGetCancelButton = async () => {
+      await page.goto("/my-account?open=subscription");
+      await expect(page.getByText("Manage membership")).toBeVisible({ timeout: 30_000 });
+      const cancelButton = page.getByRole("button", { name: /cancel membership/i });
+      await expect(cancelButton).toBeVisible({ timeout: 20_000 });
+      return cancelButton;
+    };
+
+    // Reason step: pick "Too expensive right now" and continue — identical in both beats,
+    // only the SCREEN it reveals afterward (and whether that reveal happens before or inside
+    // the next demo.step) differs per beat.
+    const chooseTooExpensiveAndContinue = async () => {
+      await page.getByText(/too expensive/i).first().click();
+      await page.getByRole("button", { name: /continue|next/i }).first().click();
+    };
+
     // ── Beat 9 — the save ───────────────────────────────────────────────────
-    // The Cancel button lives inside ManageSheet, which LazyManageSheet mounts only once
-    // the "manage" sheet is opened (src/app/(site)/my-account/components/sheets/
-    // LazyManageSheet.tsx + ManageSheet.tsx) — it does NOT exist on a bare
-    // /my-account/membership load. The ?open=subscription deep-link (page-client.tsx)
-    // opens it directly on the root dashboard — same proven pattern as
-    // e2e/specs/account/my-account.spec.ts's ManageSheet coverage.
     await setStreak(7);
-    await page.goto("/my-account?open=subscription");
-    await expect(page.getByText("Manage membership")).toBeVisible({ timeout: 30_000 });
-    const cancelButton = page.getByRole("button", { name: /cancel membership/i });
-    await expect(cancelButton).toBeVisible({ timeout: 20_000 });
+    const cancelButton = await openManageSheetAndGetCancelButton();
 
     await demo.step("Now a member with a 7-renewal streak tries to cancel", async () => {
       await cancelButton.click();
@@ -199,10 +243,14 @@ test.describe("Membership Streak demo @demo", () => {
       await expect(page.getByText(/what.{0,3}s making you leave/i).first()).toBeVisible({ timeout: 20_000 });
     });
 
+    // Reason selection happens BEFORE the next demo.step opens, not inside it (review round 2,
+    // Important 2 fix): the caption below promises "what's at stake" — the stakes screen must
+    // already be on screen when the caption paints and holds, not revealed partway through
+    // that hold by a click still to come. Mirrors Beat 10's already-correct shape below.
+    await chooseTooExpensiveAndContinue();
+    await expect(page.getByText(/on the line/i).first()).toBeVisible({ timeout: 20_000 });
+
     await demo.step("The cancellation flow shows exactly what's at stake", async () => {
-      await page.getByText(/too expensive/i).first().click();
-      await page.getByRole("button", { name: /continue|next/i }).first().click();
-      await expect(page.getByText(/on the line/i).first()).toBeVisible({ timeout: 20_000 });
       await expect(page.getByText(/\+400 free entries/i).first()).toBeVisible({ timeout: 20_000 });
     });
 
@@ -217,14 +265,10 @@ test.describe("Membership Streak demo @demo", () => {
     // ManageSheet → Cancel → reason → stakes path as Beat 9; the earlier flow never
     // completed an actual cancellation, so the subscription is still active to re-enter.
     await setStreak(1);
-    await page.goto("/my-account?open=subscription");
-    await expect(page.getByText("Manage membership")).toBeVisible({ timeout: 30_000 });
-    const cancelButtonAgain = page.getByRole("button", { name: /cancel membership/i });
-    await expect(cancelButtonAgain).toBeVisible({ timeout: 20_000 });
+    const cancelButtonAgain = await openManageSheetAndGetCancelButton();
     await cancelButtonAgain.click();
     await expect(page.getByText(/what.{0,3}s making you leave/i).first()).toBeVisible({ timeout: 20_000 });
-    await page.getByText(/too expensive/i).first().click();
-    await page.getByRole("button", { name: /continue|next/i }).first().click();
+    await chooseTooExpensiveAndContinue();
     await expect(page.getByText(/just.{0,10}getting started/i).first()).toBeVisible({ timeout: 20_000 });
 
     await demo.step("A newer member sees the other side of it — the ladder ahead, not the loss", async () => {
