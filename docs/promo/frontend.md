@@ -478,6 +478,37 @@ slug round-tripping, accent resolution, `darken`, combo copy, the derived-map �
 and the preview-grid cap/overflow. Pure — no DB, no env. See also the details-modal write-up in
 [shared-ui/frontend.md](../shared-ui/frontend.md#prizespecificationsmodal).
 
+### Build tracking beacon — `usePrizeBuildTracking` (2026-07-27)
+
+`PrizeShowcase` counts reel switches (`toolboxSwitches` / `toolsetSwitches` — cash counts against
+the toolbox lane, since it is that lane's opt-out) and hands them to
+[`usePrizeBuildTracking`](../../src/hooks/usePrizeBuildTracking.ts), which POSTs
+`/api/tracking/promo-prize-build` (see [tracking/api.md](../tracking/api.md)) to attach the
+assembled prize to the visit row `usePromoPageTracking` already created on landing. The component
+itself never calls the API — that would violate the components-don't-call-APIs layering rule.
+
+- **Debounced 1s**, restarted on every switch, so flicking through five brands is one write, not
+  five. A second effect registers `pagehide` / `visibilitychange` listeners **once per mount** (not
+  inside the debounce effect) so a fast bouncer is still captured; combining the two effects would
+  re-register the listeners on every switch and leak one per switch, since an inline-arrow handler
+  can never be removed. Both unload paths use `navigator.sendBeacon` (survives the page going away);
+  the debounce path uses `fetch` so the request is visible in the network tab during dev.
+- **Counts are CUMULATIVE**, and the server `$set`s them (never `$inc`), so a double delivery — the
+  debounce landing and then a `pagehide` flush — is idempotent.
+- **Sends nothing until the visitor has switched something.** An untouched page already has a
+  correct visit row from the landing beacon; a zero-switch write would be pure noise. `send()` also
+  no-ops on an unchanged payload (`lastSent` ref), so the debounce and the unload flush don't double
+  the beacon when nothing changed since the last report.
+- **`builtPrizeSlug` is `activeSlug`** (the catalog-RESOLVED prize from `usePrizeCatalog`, which
+  falls back when a combination has no entry), never the raw requested combination — so the
+  endpoint can never be asked to persist a slug the catalog doesn't have.
+- **`landingSlug` is the pathname segment** (`pathname.split("/")[2]`), not the page's own default
+  prize slug — it must match what `usePromoPageTracking` keyed the visit row on, or the update finds
+  no row (`no_visit_row`, a silent no-op — see [tracking/api.md](../tracking/api.md)).
+- **No `useSearchParams()`.** Like the rest of `PrizeShowcase`, the hook takes its inputs as plain
+  props/state — reintroducing `useSearchParams()` anywhere in this component tree fails the build on
+  `/` (see the file-header comment in `PrizeShowcase.tsx`).
+
 ## Promo-banner surface: compositor-friendly animation stack (2026-07-20, perf Tier-2 Task 1)
 
 The always-on repaint stack on the promo-banner surface was rewritten to transform/opacity-only, tier-gated animations (full rule + `.fire` layer contract: [shared-ui/gotchas.md](../shared-ui/gotchas.md#always-on-animations-transformopacity-only-and-tier-gate-them)). Promo-side specifics:
@@ -621,6 +652,7 @@ Both mounts pass the resolved `prize` from [src/config/prizes.ts](../../src/conf
 |---|---|
 | `usePromoLink()` | Resolve a `PromoLink` from URL params |
 | `usePromoPageTracking()` | Write `PromoAnalyticsVisit` rows on promo-page visits |
+| `usePrizeBuildTracking()` | Debounced beacon that attaches the assembled prize + reel-switch counts to the existing visit row — see "Build tracking beacon" above |
 | `usePromoWelcomeModal()` | Welcome modal for first-time promo visitors |
 
 ## Stores

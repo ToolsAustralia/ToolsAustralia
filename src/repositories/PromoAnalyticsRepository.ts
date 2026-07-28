@@ -107,6 +107,46 @@ export class PromoAnalyticsRepository {
     });
   }
 
+  /**
+   * Attach the built prize + engagement counters to a visitor's most recent visit row.
+   *
+   * `upsert: false` and sorted newest-first: this must NEVER create a row. The visit row is
+   * created once on landing; creating another here would double-count visits, which is the one
+   * number this whole feature must leave untouched. Returns false when there is nothing to
+   * update (dedup race, expired TTL, or a visitor whose landing beacon never landed).
+   *
+   * `$set` with absolute totals, not `$inc`: the client sends cumulative counts, so a retry or
+   * a double flush (debounce + pagehide) is harmless.
+   */
+  async updateVisitBuild(args: {
+    anonymousId: string;
+    slug: string;
+    pageType: PromoPageType;
+    builtPrizeSlug: string;
+    toolboxSwitches: number;
+    toolsetSwitches: number;
+  }): Promise<boolean> {
+    await connectDB();
+    const result = await PromoAnalyticsVisit.findOneAndUpdate(
+      {
+        anonymousId: args.anonymousId,
+        slug: args.slug.toLowerCase().trim(),
+        pageType: args.pageType,
+      },
+      {
+        $set: {
+          builtPrizeSlug: args.builtPrizeSlug.toLowerCase().trim(),
+          toolboxSwitches: args.toolboxSwitches,
+          toolsetSwitches: args.toolsetSwitches,
+        },
+      },
+      { sort: { timestamp: -1 }, new: false, upsert: false }
+    )
+      .maxTimeMS(5000)
+      .lean();
+    return result != null;
+  }
+
   async linkVisitToUser(anonymousId: string, userId: string): Promise<number> {
     await connectDB();
     const result = await PromoAnalyticsVisit.updateMany(

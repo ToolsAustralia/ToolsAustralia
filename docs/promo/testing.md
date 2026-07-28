@@ -31,6 +31,15 @@ npm run e2e:proof:join -- drawn-states-all-prize-combinations <mobile>.mp4 <desk
 Since the 2026-07-27 mobile `kinTB` re-export, every one of the 60 heroes is the current design —
 there is no held-back combination left to caveat (see [architecture.md](architecture.md)).
 
+## Analytics beacon regression tests
+
+| npm script | Covers |
+|---|---|
+| `npm run test:promo-visit` | `recordPromoVisit` orchestration with injected `hasRecentVisit`/`recordVisit` deps — see [gotchas.md](gotchas.md#promo-visit-recording-is-a-dep-injected-functional-core). |
+| `npm run test:prize-build` | `recordPrizeBuild` orchestration — bogus landing/built slugs rejected before any write, no-op on a missing `anonymousId` or visit row, switch-count clamping — plus a repository-level guard that fails if `updateVisitBuild` is ever flipped to `upsert: true` or `$inc`. See [backend.md](backend.md#prize-build-core--recordprizebuild-2026-07-27) and [docs/mongodb/backend.md](../mongodb/backend.md#promoanalyticsrepositoryupdatevisitbuild--never-insert-update). |
+
+Both are pure (deps injected, no live DB/env) — see [docs/infrastructure/testing.md](../infrastructure/testing.md).
+
 ## Manual smoke
 
 - Visit a `/promotion/<slug>` page; verify a `PromoAnalyticsVisit` row is written.

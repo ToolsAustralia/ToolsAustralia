@@ -94,6 +94,34 @@ export class PromoAnalyticsService {
   }
 
   /**
+   * Attach a built prize + engagement counters to an existing visit row.
+   * Validates BOTH slugs — the landing page and the built prize must be real.
+   */
+  async recordPrizeBuild(data: {
+    anonymousId: string;
+    slug: string;
+    builtPrizeSlug: string;
+    toolboxSwitches: number;
+    toolsetSwitches: number;
+  }): Promise<{ success: boolean; error?: string }> {
+    if (!isValidPromoSlug(data.slug)) {
+      return { success: false, error: "Invalid promotion slug" };
+    }
+    if (!isValidPromoSlug(data.builtPrizeSlug)) {
+      return { success: false, error: "Invalid built prize slug" };
+    }
+    const updated = await PromoAnalyticsRepository.updateVisitBuild({
+      anonymousId: data.anonymousId,
+      slug: data.slug.toLowerCase().trim(),
+      pageType: getPageTypeFromSlug(data.slug),
+      builtPrizeSlug: data.builtPrizeSlug.toLowerCase().trim(),
+      toolboxSwitches: data.toolboxSwitches,
+      toolsetSwitches: data.toolsetSwitches,
+    });
+    return updated ? { success: true } : { success: false, error: "no_visit_row" };
+  }
+
+  /**
    * Link anonymous visits to a user when they register.
    */
   async linkVisitsToUser(anonymousId: string, userId: string): Promise<number> {

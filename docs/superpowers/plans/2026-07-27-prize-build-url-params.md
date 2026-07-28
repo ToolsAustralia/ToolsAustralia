@@ -1007,7 +1007,13 @@ as an orphan. In `CLAUDE.md`'s Domain Manifest, in the `promo` domain's `paths` 
         "src/hooks/usePrizeBuildTracking.ts",
 ```
 
-Do this in **both** `CLAUDE.md` files if the worktree root and repo root differ.
+Edit **only this worktree's** `CLAUDE.md`.
+
+> **Corrected 2026-07-28.** An earlier draft of this step said to edit "both `CLAUDE.md` files".
+> That was wrong. `C:/Codes/ToolsAustralia` is the **main-branch checkout of this same repo**
+> (`git worktree list`), and `CLAUDE.md` is a tracked file — so editing it there would dirty
+> main's working tree with a redundant uncommitted change that merging this branch makes anyway.
+> One edit, in the branch, is correct and sufficient.
 
 - [ ] **Step 2: Write the route (thin shell)**
 
@@ -1402,8 +1408,24 @@ and in the returned object, immediately after the `...(hasPromo && { … })` spr
     ...(hasBuiltPrize && { builtPrizeSlug: builtPrizeSlug!.toLowerCase().trim() }),
 ```
 
-Update the call site (`route.ts:487`) to
+Update **ALL FOUR** call sites to pass the third argument:
 `buildSignupAttribution(validatedData.promotionSlug, attribution, validatedData.builtPrizeSlug)`.
+
+> **Corrected 2026-07-28.** An earlier draft named only `route.ts:487`. There are **four**
+> distinct registration paths, each writing `signupAttribution`, and missing any one silently
+> drops the build for that class of visitor (exactly the "walk through every possible user path"
+> trap in CLAUDE.md rule 6):
+>
+> | Line | Path |
+> |---|---|
+> | 487 | existing **plain account**, matched on email AND mobile → update |
+> | 627 | existing plain account, **email-only** match → update |
+> | 720 | existing plain account, **mobile-only** match → update |
+> | 803 | **no existing account** → create new user (the main new-visitor path) |
+>
+> Verify with `grep -n "buildSignupAttribution(" src/app/api/auth/register/route.ts` that exactly
+> four call sites exist and all four were updated. If the count differs from four, stop and report
+> — the file has changed since this plan was written.
 
 > `hasBuiltPrize` deliberately does **not** join the `if (!hasPromo && !hasAttribution) return undefined;`
 > guard: a built prize only ever exists alongside a promo slug, and widening that guard could

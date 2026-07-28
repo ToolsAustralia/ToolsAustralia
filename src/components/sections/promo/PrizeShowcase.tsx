@@ -16,6 +16,7 @@ const PrizeSpecificationsModal = dynamic(() => import("@/components/modals/Prize
 import { useScrollAnimation } from "@/hooks/useScrollAnimation";
 import { useMajorDrawEntryCta } from "@/hooks/useMajorDrawEntryCta";
 import { usePrizeCatalog } from "@/hooks/usePrizeCatalog";
+import { usePrizeBuildTracking } from "@/hooks/usePrizeBuildTracking";
 import { useCurrentMajorDraw } from "@/hooks/queries/useMajorDrawQueries";
 import { formatMajorDrawChipUtc } from "@/utils/common/timezone";
 import { usePromoThemeStore } from "@/stores/usePromoThemeStore";
@@ -156,6 +157,12 @@ function PrizeShowcase({
   const [selection, setSelection] = useState(initial.selection);
   const [isCash, setIsCash] = useState(initial.isCash);
 
+  // Engagement counters — how much the visitor played with each lane on this page.
+  // Absent/zero on the visit row means "never touched the reels", which is the thing the
+  // always-write-both-params rule exists to keep distinguishable.
+  const [toolboxSwitches, setToolboxSwitches] = useState(0);
+  const [toolsetSwitches, setToolsetSwitches] = useState(0);
+
   // `requestedSlug` is what the two lanes add up to; `activeSlug` is what the catalog
   // actually has (it falls back to the default prize if a combination has no entry yet),
   // so every downstream consumer gets a slug that is guaranteed to resolve.
@@ -210,6 +217,18 @@ function PrizeShowcase({
   /* Selection ⇄ URL / storage                                           */
   /* ------------------------------------------------------------------ */
   const isPromoPage = pathname?.startsWith("/promotions/") ?? false;
+
+  // `activeSlug` is the CATALOG-RESOLVED prize, so we never report a combination that has no
+  // entry (`usePrizeCatalog` falls back). `slugProp` is the page's own prize; the landing slug
+  // for attribution is the pathname segment, which is what the visit row was keyed on.
+  const landingSlug = isPromoPage ? pathname?.split("/")[2] : undefined;
+  usePrizeBuildTracking({
+    enabled: isPromoPage,
+    landingSlug,
+    builtPrizeSlug: activeSlug,
+    toolboxSwitches,
+    toolsetSwitches,
+  });
 
   /**
    * Mirror the current build into the URL.
@@ -318,6 +337,7 @@ function PrizeShowcase({
     setIsCash(false);
     rememberToolbox(id);
     syncSelectionQuery({ toolbox: id, toolset: selection.toolset, isCash: false });
+    setToolboxSwitches((n) => n + 1);
   };
 
   const handleSelectToolset = (id: ToolsetType) => {
@@ -325,11 +345,14 @@ function PrizeShowcase({
     setIsCash(false);
     // Picking from EITHER reel leaves cash mode, so this path must clear `?toolbox=cash` too.
     syncSelectionQuery({ toolbox: selection.toolbox, toolset: id, isCash: false });
+    setToolsetSwitches((n) => n + 1);
   };
 
   const handleSelectCash = (next: boolean) => {
     setIsCash(next);
     syncSelectionQuery({ ...selection, isCash: next });
+    // Cash is the toolbox lane's opt-out.
+    setToolboxSwitches((n) => n + 1);
   };
 
   /* ------------------------------------------------------------------ */

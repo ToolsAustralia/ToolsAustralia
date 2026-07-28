@@ -42,6 +42,32 @@ upsellEntries = activePromoMultiplier × upsellCategoryMultiplier × baseEntries
 
 > Prior to 2026-05-15 this was a "no stacking" system (upsell ignored promo). The change was made on user request so promo seasons amplify upsell value automatically. Watch for stale docs / code that still claim "do not stack" — those are bugs.
 
+## Prize-build core — `recordPrizeBuild` (2026-07-27)
+
+[src/utils/promo-analytics/record-prize-build.ts](../../src/utils/promo-analytics/record-prize-build.ts)
+is the functional core behind the "build your prize" beacon (`POST
+/api/tracking/promo-prize-build`, see [docs/tracking/api.md](../tracking/api.md)). Its side effect
+(`updateVisitBuild`) is injected, so it's unit-testable with no DB — same dep-injection pattern as
+`record-promo-visit.ts` (see [gotchas.md](gotchas.md#promo-visit-recording-is-a-dep-injected-functional-core)).
+
+- **Validates BOTH slugs.** The landing `slug` and the `builtPrizeSlug` each pass
+  `isValidPromoSlug` independently; a bogus value on either side is rejected before any write.
+- **`pageType` is derived from the landing `slug`, never accepted as input.**
+  `PrizeBuildCapture` deliberately has no `pageType` field — deriving it via
+  `getPageTypeFromSlug(slug)` means the two can never disagree. This matters because
+  `PromoAnalyticsRepository.updateVisitBuild` matches the visit row on
+  `{ anonymousId, slug, pageType }`; a caller-supplied `pageType` that drifted from the slug would
+  silently miss the row instead of erroring.
+- **Switch counts are clamped, not trusted as-is.** `clamp()` maps non-finite/negative values to
+  `0` and ceilings at `1000` (`MAX_SWITCHES`) before the value ever reaches the database.
+- **No `anonymousId` is a no-op, not an error** (`reason: "no_anonymous_id"`) — there is no visit
+  row to attach a build to without one.
+
+The write itself (`PromoAnalyticsRepository.updateVisitBuild`) never creates a row — see
+[docs/mongodb/backend.md](../mongodb/backend.md#promoanalyticsrepositoryupdatevisitbuild--never-insert-update)
+for why: an insert here would corrupt the promo visit count, the one metric this feature must
+leave untouched.
+
 ## Cross-domain payment integration
 
 `src/utils/payment/upsell-promo-multiplier.ts` resolves the promo factor used by **both** the hero image selector (`Nx-*.webp` variant) **and** the entry calculator (as `activePromoMultiplier` in the formula above). Single source of truth, dual consumer.
