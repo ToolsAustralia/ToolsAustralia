@@ -227,18 +227,23 @@ export interface ComboPresentation {
 }
 
 /**
- * Toolboxes with no `{toolset}-{toolbox}.webp` composite photographed yet.
+ * Combinations with no `{toolset}-{toolbox}.webp` composite photographed yet.
  *
- * GearWrench joined in draw 9 with its landing art but without the five combo shots. The
- * Prize Showcase handoff designs for exactly this rather than leaving a broken image: show
- * the standalone toolbox render and let the caller badge it "combo photo coming". Delete the
- * entry the day the shoot lands — nothing else needs to change.
+ * Keyed per COMBINATION, not per toolbox. GearWrench arrived in draw 9 with no combo shots at
+ * all, so this was briefly a toolbox-level set; the shoot then delivered four of the five
+ * (Milwaukee, DeWalt, Makita, HiKOKI) and left Ryobi out — the same combination missing from
+ * every other part of the draw 9 drop. A toolbox-level flag would now wrongly send four
+ * combinations that HAVE their art back to the standalone render.
+ *
+ * The Prize Showcase handoff designs for this rather than leaving a broken image: show the
+ * standalone toolbox render and let the caller badge it "combo photo coming". Delete the
+ * entry when the shoot lands — nothing else needs to change.
  */
-const TOOLBOXES_AWAITING_COMBO_ART = new Set<string>(["gearwrench"]);
+const COMBOS_AWAITING_COMBO_ART = new Set<string>(["ryobi-gearwrench"]);
 
 /** True when this combination has no composite shot and is showing the standalone box. */
-export function isComboArtPending(toolbox: ToolboxOption): boolean {
-  return TOOLBOXES_AWAITING_COMBO_ART.has(toolbox.id);
+export function isComboArtPending(toolbox: ToolboxOption, toolset: ToolsetOption): boolean {
+  return COMBOS_AWAITING_COMBO_ART.has(`${toolset.id}-${toolbox.id}`);
 }
 
 /**
@@ -265,7 +270,7 @@ export function getComboPresentation(
     };
   }
 
-  const comboArtPending = isComboArtPending(toolbox);
+  const comboArtPending = isComboArtPending(toolbox, toolset);
 
   return {
     image: comboArtPending
