@@ -276,7 +276,11 @@ async function runStreakJourney(page: Page, demo: Demo, testInfo: TestInfo): Pro
 test.describe("Membership Streak demo @demo", () => {
   test.skip(process.env.E2E_EXTERNAL === "1", "needs the seeded isolated environment");
   test.use({ storageState: MEMBER_STATE });
-  test.setTimeout(300_000); // proof mode holds every caption before running its body
+  // Proof mode holds every caption (holdFor: max(1800, 300×words) ms) BEFORE running its
+  // body AND adds slowMo:200 to every action, so a recording of this 12-beat journey runs
+  // several times longer than a normal pass (~2.5m). A 300s budget timed out mid-render.
+  // Normal runs keep the tighter budget so a real hang still fails fast.
+  test.setTimeout(process.env.E2E_PROOF === "1" ? 1_200_000 : 300_000);
 
   // This spec drives the ONE shared seeded member (e2e/helpers/db.ts MEMBER) through
   // eleven different lifecycle states via direct DB writes (e2e/seed/streak.ts) — the
