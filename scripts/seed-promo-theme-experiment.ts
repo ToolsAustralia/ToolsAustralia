@@ -35,6 +35,11 @@ const DRY_RUN = process.argv.includes("--dry-run");
 const FORCE = process.argv.includes("--force");
 
 const EXPERIMENT_NAME = "Promo landing — default theme (light vs dark)";
+// Deliberately a bare literal, not an import of `PROMO_THEME_SLUG` from
+// `src/lib/ab-testing/promo-theme-slug.ts` — this repo's convention is that `scripts/`
+// stays free of `src/` client-module imports (see the plan's self-review note under
+// Task 11), even though this particular module has no `"use client"` directive.
+// Keep this value in sync with that module's constant by hand.
 const PROMO_THEME_SLUG = "__promo-theme__";
 
 const LIGHT_CONFIG = { promoTheme: { defaultTheme: "light" } };

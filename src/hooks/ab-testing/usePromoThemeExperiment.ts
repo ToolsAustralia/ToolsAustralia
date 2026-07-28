@@ -4,11 +4,21 @@ import { useEffect, useRef, useState } from "react";
 import type { VariantConfig } from "@/models/ab-testing/Variant";
 import { PROMO_THEME_SLUG, promoThemeMarkerKey } from "@/lib/ab-testing/promo-theme-slug";
 
-// Re-exported so existing client-side importers of this hook module keep working. The
-// DEFINITION site is now `@/lib/ab-testing/promo-theme-slug` — a boundary-neutral module —
-// because a Server Component cannot read a value from a `"use client"` module (see that
-// file's header comment). Server Components must import directly from there, not from here.
-export { PROMO_THEME_SLUG, promoThemeMarkerKey };
+/**
+ * SAFETY NET, not a measurement device. A normal `/api/ab-testing/assign` call
+ * completes in well under a second; at ~10x that this should essentially never
+ * fire. It exists only so a server that accepts the connection and then stalls
+ * (which `fetch` neither resolves nor rejects for) cannot leave the promo
+ * landing behind the full-screen loader indefinitely — a paid-traffic page
+ * stuck on a spinner is worse than an occasional early control reveal.
+ *
+ * If this fires with any regularity in production, treat the run as
+ * CONTAMINATED, not as normal operation: re-tune this value from a measured
+ * p99 of `POST /api/ab-testing/assign` (see the rollout runbook in
+ * docs/superpowers/plans/2026-07-28-promo-theme-split.md and the caveat in
+ * docs/ab-testing/frontend.md).
+ */
+const ASSIGN_BACKSTOP_MS = 6000;
 
 interface Resolved {
   settled: boolean;
@@ -16,16 +26,58 @@ interface Resolved {
 }
 
 /** True when the visitor has picked a theme themselves — they are not in the test. */
-function hasManualThemeChoice(): boolean {
-  if (typeof window === "undefined") return false;
+function hasManualThemeChoiceFromStorage(storage: Storage): boolean {
   try {
-    const raw = localStorage.getItem("ta-theme");
+    const raw = storage.getItem("ta-theme");
     if (!raw) return false;
     const parsed = JSON.parse(raw) as { state?: { userManualOverride?: unknown } } | null;
     return parsed?.state?.userManualOverride === true;
   } catch {
     return false;
   }
+}
+
+/** Render-time convenience wrapper over `hasManualThemeChoiceFromStorage` for the
+ * real browser `localStorage`. Server-safe: `typeof window === "undefined"` short-circuits. */
+function hasManualThemeChoice(): boolean {
+  if (typeof window === "undefined") return false;
+  return hasManualThemeChoiceFromStorage(localStorage);
+}
+
+/**
+ * Pure resolver for `usePromoThemeExperiment`'s `useState` initializer — extracted
+ * so the ordering invariant below is unit-testable without a DOM (see
+ * `src/hooks/ab-testing/__tests__/promoThemeInitialState.test.ts`, which is the
+ * regression guard for the bug this ordering fixed).
+ *
+ * `storage` is the caller's `localStorage` on the client, or `null` to represent
+ * "no window" (the server pass, or a client with storage genuinely unavailable).
+ *
+ * **Ordering constraint: `!experimentId` MUST be checked BEFORE `storage === null`.**
+ * `experimentId` is resolved server-side and baked into the prerendered,
+ * CDN-shared ISR HTML — it is identical for every visitor of a given snapshot, so
+ * this check needs neither `window` nor `localStorage` and can safely run during
+ * the server pass. If the order were flipped, the server pass (where `storage` is
+ * always `null`) would bake `settled: false` into the shared HTML even when no
+ * experiment is active, and the gate would render a full-screen overlay for every
+ * visitor of that snapshot — including search-engine crawlers. Do not "tidy" this
+ * back to storage-check-first.
+ */
+export function resolveInitialPromoThemeState(
+  experimentId: string | null,
+  storage: Storage | null,
+): Resolved {
+  if (!experimentId) return { settled: true, theme: null };
+  if (!storage) return { settled: false, theme: null };
+  if (hasManualThemeChoiceFromStorage(storage)) return { settled: true, theme: null };
+  try {
+    if (storage.getItem(promoThemeMarkerKey(experimentId))) {
+      return { settled: true, theme: null };
+    }
+  } catch {
+    /* storage unavailable — fall through and resolve over the network */
+  }
+  return { settled: false, theme: null };
 }
 
 /**
@@ -42,28 +94,9 @@ function hasManualThemeChoice(): boolean {
  * CSP-hashed bootstrap snippet applied it before paint.
  */
 export function usePromoThemeExperiment(experimentId: string | null): Resolved {
-  const [state, setState] = useState<Resolved>(() => {
-    // `experimentId` is resolved server-side and baked into the prerendered,
-    // CDN-shared HTML — it is the same for every visitor of a given ISR
-    // snapshot, so this check needs neither `window` nor `localStorage` and
-    // MUST run before the environment guard below. If the order were
-    // flipped, the server pass (where `window` is always undefined) would
-    // bake `settled: false` into the shared HTML even when no experiment is
-    // active, and the later gate would render a full-screen overlay for
-    // every visitor of that snapshot — including crawlers. Do not "tidy"
-    // this back to environment-check-first.
-    if (!experimentId) return { settled: true, theme: null };
-    if (typeof window === "undefined") return { settled: false, theme: null };
-    if (hasManualThemeChoice()) return { settled: true, theme: null };
-    try {
-      if (localStorage.getItem(promoThemeMarkerKey(experimentId))) {
-        return { settled: true, theme: null };
-      }
-    } catch {
-      /* storage unavailable — fall through and resolve over the network */
-    }
-    return { settled: false, theme: null };
-  });
+  const [state, setState] = useState<Resolved>(() =>
+    resolveInitialPromoThemeState(experimentId, typeof window === "undefined" ? null : localStorage),
+  );
 
   const ranRef = useRef(false);
   // Ref, not a per-invocation closure local: see the reset line at the top of
@@ -93,26 +126,70 @@ export function usePromoThemeExperiment(experimentId: string | null): Resolved {
     }
 
     (async () => {
+      // `fetch` only rejects on a network error — a server that accepts the
+      // connection and then stalls never resolves and never rejects, so a
+      // timer is the only real backstop against sitting behind the loader
+      // forever. `Promise.race` against a plain timeout, not an
+      // `AbortController`: see the note below the effect for why this hook
+      // deliberately never aborts the request.
+      let backstopTimer: ReturnType<typeof setTimeout> | undefined;
+      const backstop = new Promise<"backstop">((resolve) => {
+        backstopTimer = setTimeout(() => resolve("backstop"), ASSIGN_BACKSTOP_MS);
+      });
+
       try {
-        const res = await fetch("/api/ab-testing/assign", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ experimentId, slug: PROMO_THEME_SLUG }),
-        });
+        const outcome = await Promise.race([
+          fetch("/api/ab-testing/assign", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ experimentId, slug: PROMO_THEME_SLUG }),
+          }),
+          backstop,
+        ]);
+
+        if (outcome === "backstop") {
+          // The request is still in flight. `/api/ab-testing/assign` persists
+          // the VariantAssignment row server-side before it builds the
+          // response (see the no-abort note below), so this device's real
+          // arm is already recorded and counted — reveal in light rather
+          // than holding the page, and do NOT write the device marker: with
+          // no theme known here, the next visit is free to retry.
+          if (!abortedRef.current) setState({ settled: true, theme: "light" });
+          return;
+        }
+
+        // The fetch won the race — no stray timer should fire later.
+        clearTimeout(backstopTimer);
+
+        const res = outcome;
         if (!res.ok) throw new Error(`assign ${res.status}`);
         const data = (await res.json()) as { variantConfig: VariantConfig | null };
         const assigned = data.variantConfig?.promoTheme?.defaultTheme;
         const theme = assigned === "dark" ? "dark" : "light";
-        try {
-          localStorage.setItem(promoThemeMarkerKey(experimentId), theme);
-        } catch {
-          /* ignore quota errors — worst case the hold recurs next session */
+        // Only mark this device as resolved when the server returned a USABLE
+        // assignment. `variantConfig: null` (an admin-excluded visitor, or an
+        // experiment activated with zero variants — a bad-state activation)
+        // must not permanently pin this device to "light, no exposure" for
+        // the life of the experiment: leaving the marker unwritten lets a
+        // later visit retry once the bad state is fixed. Reveal in light
+        // either way — there is nothing to apply without a real assignment.
+        if (data.variantConfig) {
+          try {
+            localStorage.setItem(promoThemeMarkerKey(experimentId), theme);
+          } catch {
+            /* ignore quota errors — worst case the hold recurs next session */
+          }
         }
         if (!abortedRef.current) setState({ settled: true, theme });
       } catch {
-        // Network/abort/admin-excluded -> control. Reveal in light rather than
-        // holding the page: a stuck loader is worse than a control impression.
+        // Network/abort/non-OK response -> control. Reveal in light rather
+        // than holding the page: a stuck loader is worse than a control
+        // impression.
         if (!abortedRef.current) setState({ settled: true, theme: "light" });
+      } finally {
+        // Defensive: covers the backstop-won early return (already fired,
+        // so this is a no-op) and any throw before the explicit clear above.
+        clearTimeout(backstopTimer);
       }
     })();
 
@@ -125,7 +202,9 @@ export function usePromoThemeExperiment(experimentId: string | null): Resolved {
     //    writes the VariantAssignment row server-side before it builds the
     //    response, so a client-side abort can't undo the assignment — it can
     //    only discard a result the server already persisted. Letting the
-    //    fetch finish is strictly better than cancelling it.
+    //    fetch finish is strictly better than cancelling it. The same reasoning
+    //    is why the backstop above is a plain timer racing the fetch, not an
+    //    `AbortController` — do not reintroduce one.
     // `abortedRef` alone is sufficient to skip a setState after a REAL unmount.
     return () => {
       abortedRef.current = true;

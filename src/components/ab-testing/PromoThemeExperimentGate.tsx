@@ -6,7 +6,19 @@ import DashboardLoader from "@/components/loading/DashboardLoader";
 import { useThemeStore } from "@/stores/useThemeStore";
 import { usePromoThemeExperiment } from "@/hooks/ab-testing/usePromoThemeExperiment";
 
-/** True once the theme decision is final and promo content may paint. */
+/**
+ * True once the theme decision is final and promo content may paint.
+ *
+ * **Carries the gate's `revealed`, NOT the hook's `settled`.** The two differ
+ * for exactly one frame: `usePromoThemeExperiment` reports `settled: true` as
+ * soon as it has a decision, but this context only flips once the apply-once
+ * effect below has written the DOM class AND committed the reveal via
+ * `flushSync` — see that effect's comment for why the two can't be collapsed
+ * into one flag. A consumer that needs "is the FINAL theme decided" wants
+ * `settled`; a consumer that needs "is it now safe to run paint-affecting
+ * work because the loader is gone and the theme is already on `<html>`"
+ * wants this context's `revealed`.
+ */
 const PromoThemeSettledContext = createContext(true);
 export function usePromoThemeSettled(): boolean {
   return useContext(PromoThemeSettledContext);

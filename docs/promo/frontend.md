@@ -620,9 +620,14 @@ ExperimentService.getActiveExperimentForSentinelSlug(PROMO_THEME_SLUG).catch(() 
 ```
 
 This is the **sentinel** method, not `getActiveExperimentForSlug` — it exact-matches
-`PROMO_THEME_SLUG` (`"__promo-theme__"`, exported from
-[`usePromoThemeExperiment.ts`](../../src/hooks/ab-testing/usePromoThemeExperiment.ts)) and
-never matches a `"*"` wildcard experiment. `themeExperimentId` is derived from the result
+`PROMO_THEME_SLUG` (`"__promo-theme__"`, defined in and imported from
+[`src/lib/ab-testing/promo-theme-slug.ts`](../../src/lib/ab-testing/promo-theme-slug.ts))
+and never matches a `"*"` wildcard experiment. **Do not import `PROMO_THEME_SLUG` from
+`usePromoThemeExperiment.ts` in server code** — that hook is `"use client"`, and a Server
+Component that imports a plain constant from a client module gets a client reference, not
+the string value; this is exactly the bug that made the whole feature silently inert (see
+[ab-testing/frontend.md](../ab-testing/frontend.md#usepromothemeexperimentexperimentid)).
+`themeExperimentId` is derived from the result
 with the same ObjectId-vs-string dance as the existing `experimentId`, and is baked into the
 ISR snapshot — identical for every visitor of the current 60s window, same as
 `experimentId`. It's derived earlier in the function than `experimentId` (right after the

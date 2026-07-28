@@ -424,6 +424,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/app/(site)/promotion/**",
         "src/components/promo/**",
         "src/components/banners/**",
+        "src/components/sections/promo/**",
         "src/hooks/usePromoLink.ts",
         "src/hooks/usePromoPageTracking.ts",
         "src/hooks/usePromoWelcomeModal.ts",
@@ -665,7 +666,8 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/contexts/ThemeContext.tsx",
         "src/contexts/AdminThemeContext.tsx",
         "src/stores/useThemeStore.ts",
-        "src/stores/usePromoThemeStore.ts"
+        "src/stores/usePromoThemeStore.ts",
+        "src/stores/__tests__/**"
       ],
       "lastVerified": "2026-04-28"
     },

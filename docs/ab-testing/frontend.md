@@ -23,20 +23,24 @@ on SSR/loading/error/admin. Consumed only by `MembershipSection`.
 
 `src/hooks/ab-testing/usePromoThemeExperiment.ts`. Resolves the promo-landing
 default-theme A/B arm for the current visitor. Returns
-`{ settled: boolean; theme: "light" | "dark" | null }`. Also re-exports
-`PROMO_THEME_SLUG = "__promo-theme__"` (the constant slug target — must match
-the experiment's `slugTargets` and the seed script) and
-`promoThemeMarkerKey(experimentId)` (the device-scoped localStorage key,
-`ta_promo_theme_<experimentId>`) — **defined** in
-`src/lib/ab-testing/promo-theme-slug.ts`, not here. That module has no
-`"use client"` directive, so it's the correct import source for the two
-Server Components (`/promotions/[slug]/page.tsx`, `ToolsetLandingPage.tsx`)
-that need the sentinel slug to resolve `themeExperimentId` server-side — a
-Server Component that imported it from this hook's `"use client"` module
-instead would get a client reference, not the string value. See
+`{ settled: boolean; theme: "light" | "dark" | null }`. `PROMO_THEME_SLUG =
+"__promo-theme__"` (the constant slug target — must match the experiment's
+`slugTargets` and the seed script) and `promoThemeMarkerKey(experimentId)`
+(the device-scoped localStorage key, `ta_promo_theme_<experimentId>`) are
+**defined** in `src/lib/ab-testing/promo-theme-slug.ts`, not here — and
+**must be imported from there**, never re-exported from this hook. That
+module has no `"use client"` directive, so it's the correct import source
+for the two Server Components (`/promotions/[slug]/page.tsx`,
+`ToolsetLandingPage.tsx`) that need the sentinel slug to resolve
+`themeExperimentId` server-side — a Server Component that imported it from
+this hook's `"use client"` module instead would get a client reference, not
+the string value. See
 [gotchas.md](./gotchas.md#a-server-component-cannot-import-a-constant-from-a-use-client-module)
-for the incident this fixed. The re-export here exists only so existing
-client-side importers of this hook module keep working.
+for the incident this fixed. This hook previously re-exported both names
+"for existing client importers"; that re-export was removed (nothing
+imported it — grep-verified) because keeping two valid import paths for the
+same constant is exactly the ambiguity that caused the incident in the
+first place.
 
 **Three synchronous short-circuits.** `settled` is computed inside the
 `useState` initializer — synchronously, before any effect runs — and is `true`
@@ -103,15 +107,70 @@ on the dependency array — re-running when `state.settled` changes would
 re-fire the network request) calls `POST /api/ab-testing/assign` with
 `{ experimentId, slug: PROMO_THEME_SLUG }`. On success, the assigned
 `variantConfig.promoTheme.defaultTheme` (defaulting to `"light"` if the
-variant didn't set one) is written to the device marker and returned as
-`theme`. Every localStorage access is wrapped in try/catch — storage can
-throw in private browsing, under quota pressure, or with storage disabled —
-and a throw there degrades gracefully rather than breaking the page.
+variant didn't set one) is returned as `theme`. Every localStorage access is
+wrapped in try/catch — storage can throw in private browsing, under quota
+pressure, or with storage disabled — and a throw there degrades gracefully
+rather than breaking the page.
 
-**Error/timeout behaviour.** Any network failure, abort, or non-OK response
-resolves to `{ settled: true, theme: "light" }` — the visitor reveals in
-control rather than the page holding on a loader indefinitely. A stuck
-loading state is worse than an unnecessary control impression.
+**The device marker is only written when the response carries a usable
+assignment (`variantConfig` is non-null).** A `null` `variantConfig` happens
+for an admin-excluded visitor, or for an experiment activated with zero
+variants (a bad-state activation) — `VariantAssignmentService.assignVariant`
+returns `null` rather than throwing in that case, and the route still
+answers `200` with `variantConfig: null`. The hook still resolves and
+reveals in light either way (there is nothing to apply without a real
+assignment), but it does **not** persist the device marker for a `null`
+response — doing so would permanently pin that device to "light, no
+exposure" for the rest of the experiment's life, even after the bad state
+(e.g. missing variants) is fixed. Leaving the marker unwritten lets a later,
+healthy visit retry.
+
+**Error behaviour.** Any network failure or non-OK response resolves to
+`{ settled: true, theme: "light" }` — the visitor reveals in control rather
+than the page holding on a loader indefinitely. A stuck loading state is
+worse than an unnecessary control impression.
+
+**Timeout backstop — `ASSIGN_BACKSTOP_MS = 6000`.** `fetch` only *rejects* on
+a network error; a server that accepts the connection and then stalls never
+resolves and never rejects, so the error handling above is not sufficient by
+itself — without a timer, that stall holds the page behind the full-screen
+loader indefinitely. The single-shot effect races
+`POST /api/ab-testing/assign` against a plain `setTimeout` via `Promise.race`;
+if the timer wins, the hook resolves `{ settled: true, theme: "light" }`
+through the same `abortedRef` guard as the other paths, and does **not**
+write the device marker (nothing new was learned about this device, so a
+later visit is free to retry). The timer is cleared as soon as the fetch
+wins so it can never fire late.
+
+This is a **safety net, not a measurement device**, and deliberately does
+**not** use an `AbortController` — the hook never cancels the in-flight
+request (see the no-abort comment in the source: Strict Mode's `ranRef`
+guard would strand a cancelled request, and the server has already persisted
+the `VariantAssignment` row before it builds the response, so a client-side
+abort can't undo the assignment anyway). `6000`ms is a **generous
+provisional value**, not a tuned one: a normal `/assign` call completes in
+well under a second, so at ~10x that this should essentially never fire in
+healthy operation. Per the rollout runbook
+(`docs/superpowers/plans/2026-07-28-promo-theme-split.md`), measure the p99
+of `POST /api/ab-testing/assign` in production before/while activating and
+re-tune this constant from that measurement. **If the backstop fires with
+any regularity, treat the run as contaminated, not as normal operation** —
+the exposure row is already written server-side and counts in its assigned
+arm (see the spec's edge-case table), so a non-trivial firing rate means a
+real fraction of one arm's visitors are being scored as the other ("dark"
+assigned server-side, "light" experienced and reported) — a one-directional
+skew that biases the comparison, not random noise that averages out.
+
+**Caveat: while this experiment runs, the "control" arm is not identical to
+pre-experiment behaviour.** Both arms pay the cost of this feature:
+`heroImagePreload` is skipped for both arms while `themeExperimentId` is
+non-null (see the preload-fairness rule in
+[docs/promo/frontend.md](../promo/frontend.md)), and both arms wait behind
+`PromoThemeExperimentGate`'s loader until `settled`. So a relative
+light-vs-dark comparison between the two arms is valid, but comparing either
+arm's absolute conversion rate against a historical, pre-experiment baseline
+is not — some of any observed movement is the preload/loader cost applied
+uniformly to both arms, not the theme itself.
 
 **Cross-tab guard.** After the network resolution, if the visitor toggled the
 theme in another tab while the request was in flight, the hook re-checks
@@ -252,6 +311,17 @@ it's safe to run theme-sensitive entrance work. The context's default value
 (used by anything rendered *outside* a gate, e.g. in a codepath that doesn't
 wrap children in the experiment) is `true`, so an un-gated consumer behaves
 exactly as it does today — the gate is additive, never a required wrapper.
+
+**Naming note: the context carries `revealed`, not the hook's `settled`.**
+The two differ for one frame — `usePromoThemeExperiment` reports
+`settled: true` as soon as it has a decision, but `PromoThemeSettledContext`
+only flips once the apply-once effect above has actually written the DOM
+class and committed the reveal via `flushSync`. The public hook name
+(`usePromoThemeSettled`) is kept as-is rather than renamed to something like
+`usePromoThemeRevealed` — it's consumed by `PromoHero` and a rename would
+ripple — but the context definition in the source carries an explicit
+comment stating which value it holds and why the two aren't collapsed into
+one flag.
 
 ## Server-resolved variants
 

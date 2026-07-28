@@ -1,6 +1,7 @@
 import mongoose from "mongoose";
 import { test, expect } from "../../fixtures/test";
 import { connectE2eDb } from "../../helpers/db";
+import { PROMO_THEME_SLUG } from "@/lib/ab-testing/promo-theme-slug";
 
 /**
  * Verifies the promo-landing default-theme A/B gate (`PromoThemeExperimentGate` +
@@ -36,7 +37,6 @@ import { connectE2eDb } from "../../helpers/db";
  */
 
 const SLUG = "milwaukee-gearwrench";
-const PROMO_THEME_SENTINEL_SLUG = "__promo-theme__";
 const EXPERIMENT_NAME = "[e2e] promo-theme-split verification";
 
 test.describe.configure({ mode: "serial" });
@@ -54,7 +54,7 @@ test.describe("promo theme split @smoke", () => {
     const { insertedId } = await experiments.insertOne({
       name: EXPERIMENT_NAME,
       status: "active",
-      slugTargets: [PROMO_THEME_SENTINEL_SLUG],
+      slugTargets: [PROMO_THEME_SLUG],
       createdBy: new mongoose.Types.ObjectId(),
       archived: false,
       createdAt: new Date(),
@@ -77,7 +77,7 @@ test.describe("promo theme split @smoke", () => {
   test("dark arm never paints light before dark", async ({ page }) => {
     await page.route("**/api/ab-testing/assign", async (route) => {
       const body = route.request().postDataJSON() as { slug?: string };
-      if (body?.slug !== PROMO_THEME_SENTINEL_SLUG) return route.continue();
+      if (body?.slug !== PROMO_THEME_SLUG) return route.continue();
       await new Promise((r) => setTimeout(r, 250)); // realistic latency
       return route.fulfill({
         status: 200,

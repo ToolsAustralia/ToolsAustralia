@@ -228,13 +228,23 @@ attenuation. And the promised "correct arm from their next page onward" is false
 promo funnel, which is a **same-document** navigation (`MembershipSection` → `MembershipModal`);
 nothing re-reads `ta-theme` on a soft navigation.
 
-Decision: **do not ship a fixed 1200 ms cut.** Measure the p99 of
-`POST /api/ab-testing/assign` first, set the backstop above it, and treat a non-trivial
-backstop-firing rate as *the run is contaminated* rather than as normal operation. This
-avoids adding a `deliveredAt` field plus a per-experiment metrics filter for a path that
-should be rare. If the backstop fires often in practice, escalate to recording
-`deliveredAt` on `VariantAssignment` with an opt-in `requireDelivered` filter — which must
-be per-experiment, since a global filter would zero every historical denominator.
+Decision: **do not ship a *tuned* fixed-ms cut derived from a guess.** `fetch` only
+*rejects* on a network error — a server that accepts the connection and stalls never
+resolves and never rejects — so shipping with *no* backstop at all is not an option either:
+that is a stuck full-screen loader on a paid-traffic page for as long as the connection
+stays open. **Implemented:** `ASSIGN_BACKSTOP_MS = 6000` in
+`usePromoThemeExperiment.ts`, a `Promise.race` between the `/assign` fetch and a plain
+timer (no `AbortController` — see that file's no-abort comment) — a deliberately
+**generous, provisional** value, not a measured one: a normal `/assign` call completes in
+well under a second, so ~10x that should essentially never fire in healthy operation.
+Treat a non-trivial backstop-firing rate as *the run is contaminated* rather than as
+normal operation. This avoids adding a `deliveredAt` field plus a per-experiment metrics
+filter for a path that should be rare. **Before/while activating, measure the p99 of
+`POST /api/ab-testing/assign` in production and re-tune `ASSIGN_BACKSTOP_MS` from that
+measurement** — 6000ms is a starting backstop, not a final one. If the backstop fires often
+in practice even after re-tuning, escalate to recording `deliveredAt` on
+`VariantAssignment` with an opt-in `requireDelivered` filter — which must be per-experiment,
+since a global filter would zero every historical denominator.
 
 If a late value is written to `ta-theme` directly it **must** use the exact envelope
 `{ state: { theme }, version: 2 }` (both readers require `.state`) and must **never**
@@ -363,8 +373,22 @@ draft status, `slugTargets: ["__promo-theme__"]`, two variants (`Light (control)
 
 **Docs corrections owed:** `docs/ab-testing/architecture.md` ("zero collision") and
 `docs/ab-testing/gotchas.md` both assert the one-directional guarantee only.
-`docs/theme/rules.md` R3 ("Don't make promo themes sticky") needs a clarifying sentence —
-this design uses `useThemeStore`, not `usePromoThemeStore`, so R3 is not reversed.
+`docs/theme/rules.md` needs amending on two rules, not just one:
+- **R3** ("Don't make promo themes sticky") needs a clarifying sentence — this design
+  writes the GLOBAL `useThemeStore` (`ta-theme`), not `usePromoThemeStore`, so R3 (which
+  is about the promo *brand*-theme store) is not reversed.
+- **R2** ("Light is the default; only the user toggle changes it") is now literally false
+  as written — this design is a *second*, non-user writer of the default theme. R2 must
+  be amended to acknowledge the experiment as a second writer while preserving its real
+  invariant: a manual toggle still wins permanently (`userManualOverride: true`, written
+  by `setTheme`/`toggleTheme` only, and never persisted as `false`).
+
+**Runbook caveat owed (record wherever the activation runbook lives):** while this
+experiment is active, the CONTROL arm is not equivalent to pre-experiment "today" —
+both arms lose the hero preload (see "Preload fairness" above) and both wait behind
+`PromoThemeExperimentGate`'s loader until settled. The light-vs-dark comparison *between*
+the two arms is valid; comparing either arm's absolute conversion rate against a
+historical, pre-experiment baseline is not.
 
 ## Out of scope
 
@@ -393,9 +417,15 @@ Ordering is load-bearing — each step makes the next observable.
    slug-targeted promo experiment. If it slips, do not activate both at once.
 6. Seed as draft; review in admin.
 7. **Pre-activation probe:** assert `promoTheme` survives the merge for both arms.
-8. Measure `POST /api/ab-testing/assign` p99; set the backstop above it.
+8. Measure `POST /api/ab-testing/assign` p99 in production; the hook already ships a
+   provisional `ASSIGN_BACKSTOP_MS = 6000` — re-tune that constant from the measured p99
+   rather than leaving the provisional value in place indefinitely.
 9. Activate. Watch the backstop-firing rate against a pre-registered threshold, above which
-   the arms are not comparable.
+   the arms are not comparable — and note for the record that neither arm is directly
+   comparable to pre-experiment baseline conversion while the test runs (see "Docs
+   corrections owed" below): both arms lose the hero preload and both wait behind the
+   loader, so only the light-vs-dark comparison between arms is valid, not either arm's
+   absolute rate against history.
 10. On conclusion: ship the winner as the unconditional default, set the experiment to
     `ended`, and record the outcome as a runbook in `docs/ab-testing/`, matching
     `promo-packages-design-runbook.md`.
