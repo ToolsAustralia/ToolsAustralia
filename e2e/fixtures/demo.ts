@@ -147,7 +147,33 @@ async function showHighlight(page: Page, target: Locator, note?: string): Promis
         if (note) {
           const label = document.createElement("div");
           label.textContent = note;
-          const roomAbove = box.y > 34;
+          // Task-4 fix (Finding 4, round 3): the label is a CHILD of `el` (`#__e2eHighlight`,
+          // position:fixed + z-index:2147483646 — a positioned element with a z-index always
+          // establishes its own stacking context), so the label's paint order against OTHER
+          // top-level siblings is governed by `el`'s z-index, NOT the label's own position —
+          // even though `position:absolute;left:0` lets it visually overflow `el`'s box, it
+          // can never out-stack a SIBLING of `el` (this is CSS stacking-context law, not a
+          // clipping bug: a descendant cannot escape its ancestor's slot in the parent
+          // stacking order). `#__e2eCaption` (showCaption above) is exactly such a sibling, at
+          // z-index:2147483647 — one higher — with a near-opaque backdrop. So whenever the
+          // label's screen position happens to land inside the caption pill's own rendered
+          // band, the caption's backdrop wins and silently swallows whatever part of the note
+          // falls under it — this is INDEPENDENT of the note's text length (round 2 tried
+          // shortening the strings; that couldn't have worked, since the collision is about Y
+          // position, not width) and independent of which target is being highlighted (it's a
+          // property of demo.ts's own two-overlay z-order, so any @demo spec's highlight() can
+          // hit it whenever a target sits close enough to the top of the frame that the
+          // "above" placement's ~30px lift lands inside the caption's band). Fix: measure the
+          // caption's REAL rendered band (not a hardcoded guess — it already varies by
+          // viewport and by how many lines the current cue's text wraps to) and steer the
+          // label away from it, instead of assuming "above" is always safe.
+          const caption = document.getElementById("__e2eCaption");
+          const captionRect = caption ? caption.getBoundingClientRect() : null;
+          const LABEL_HEIGHT = 30; // ~24px pill (12px font, 4px×2 padding) + the 6px gap below it
+          const aboveTop = box.y - LABEL_HEIGHT;
+          const aboveOverlapsCaption =
+            !!captionRect && aboveTop < captionRect.bottom && box.y > captionRect.top;
+          const roomAbove = box.y > 34 && !aboveOverlapsCaption;
           label.style.cssText =
             `position:absolute;left:0;${roomAbove ? "top:-30px" : `top:${box.height + 6}px`};` +
             "background:#00a8e0;color:#fff;font:600 12px/1.3 system-ui,sans-serif;" +

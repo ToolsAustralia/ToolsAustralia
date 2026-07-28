@@ -141,9 +141,19 @@ async function runStreakJourney(page: Page, demo: Demo, testInfo: TestInfo): Pro
   await page.reload();
   await expect(page.getByText(/Members only/i).first()).toBeVisible({ timeout: 30_000 });
 
-  await demo.step("A one-time pack buyer sees it too — the ladder is members-only", async () => {
-    // Task-4 fix (Finding 3): shortened so the note fits at the desktop render width — it's
-    // supplementary to the caption above, not a second caption.
+  await demo.step("One-time buyers see it too — members-only", async () => {
+    // Task-4 fix (Finding 3, round 1): shortened so the note fits at the desktop render
+    // width — it's supplementary to the caption above, not a second caption.
+    //
+    // Task-4 fix (round 3, frame-audit): the CAPTION itself is also shortened here (was "A
+    // one-time pack buyer sees it too — the ladder is members-only", 12 tokens counting the
+    // em-dash — holdFor's own word-split counts it — for a 3.6s hold against a cue span of
+    // only 7.3s: the hold alone ate essentially half the span, so the ring drew right at the
+    // frame-audit's geometric midpoint or a hair past it, a coin flip a live render lost).
+    // Live-measured (task-4, round 3): 12 tokens -> holdFor 3600ms against this cue's ~7.3s
+    // span left under 70ms of margin before the midpoint; this beat has no scroll and no
+    // extra dwell, so the hold IS the entire "dead window" before the ring appears — cutting
+    // it to 7 tokens (holdFor 2100ms) gives ~1.5s of real margin instead.
     await demo.highlight(streakCard, "Locked — membership starts the streak");
   });
 
@@ -195,12 +205,18 @@ async function runStreakJourney(page: Page, demo: Demo, testInfo: TestInfo): Pro
   await expect(streakCard).not.toContainText("Entries ·"); // negative: NOT the wallet
   await expect(wallet).not.toContainText(/LEVEL|FOUNDING/i); // mirror-image check
 
-  await demo.step("Their 4th renewal lands — 200 free entries, granted automatically", async () => {
+  await demo.step("Their 4th renewal — 200 free entries, automatic", async () => {
     // Task-4 fix (Finding 2): highlight first — the regression guard above already proved
     // streakCard is the right, visible card before this step opened. The caption already
-    // says "200 free entries, granted automatically"; the note just adds which draw (Finding
-    // 3: shortened so it fits at the desktop render width, no longer repeating the entry
-    // count the caption already gave).
+    // says "200 free entries, automatic"; the note just adds which draw (Finding 3: shortened
+    // so it fits at the desktop render width, no longer repeating the entry count the
+    // caption already gave).
+    //
+    // Task-4 fix (round 3, frame-audit): caption shortened (was "...lands — 200 free
+    // entries, granted automatically", 10 tokens, holdFor 3000ms) — same class of fix as
+    // Beat 2 above, same live measurement method: this cue's ~6.6s span left only ~300ms of
+    // margin before the geometric midpoint, and the frame-audit caught the ring not yet
+    // drawn there. 8 tokens (holdFor 2400ms) restores ~900ms of margin.
     await demo.highlight(streakCard, `Straight into the ${DRAW_NAME}`);
     await expect(page.getByText(new RegExp(DRAW_NAME, "i")).first()).toBeVisible({ timeout: 20_000 });
   });
@@ -221,12 +237,29 @@ async function runStreakJourney(page: Page, demo: Demo, testInfo: TestInfo): Pro
   await page.reload();
   await dismissSubscriptionExplainerIfItOpens();
   await expect(wallet).toBeVisible({ timeout: 30_000 });
+  // Task-4 fix (Finding 2, round 3): moved OUT of the step body and to BEFORE demo.step opens.
+  // Diagnosed live (task-4, round 3): the ring genuinely draws — a beat-body dump showed
+  // `ringExists: true` with the ring's rect pixel-identical to the wallet's own, fully inside
+  // the viewport. The defect is timing, not resolution: demo.step paints the caption and holds
+  // for `holdFor(title)` BEFORE running the body, so with the glide INSIDE the body (as this
+  // beat used to have it), the human-paced multi-second smoothScrollTo only started AFTER that
+  // hold — pushing the ring's actual draw well past the cue's geometric midpoint, which is
+  // exactly where a frame-audit samples. Every other beat in this journey highlights a target
+  // that's already on screen without scrolling (relying on demo.highlight's own
+  // scrollIntoViewIfNeeded safety net); this is the one beat where the target isn't, so it's
+  // the one that needs the settle to happen before the step (and its caption hold) starts.
+  await demo.smoothScrollTo(wallet);
 
-  await demo.step("Six renewals in — 600 free entries banked from the streak alone", async () => {
-    // Task-4 fix (Finding 2): highlight right after the scroll settles, before the trailing
-    // assertion — demo.ts's own contract requires the scroll to finish BEFORE highlight is
-    // called (the ring doesn't track scroll), so this is as early as it can legally run.
-    await demo.smoothScrollTo(wallet);
+  await demo.step("Six renewals — 600 free entries banked", async () => {
+    // highlight is the FIRST statement — the page is already settled (scrolled above), so the
+    // ring draws immediately at body start instead of after a multi-second glide.
+    //
+    // Caption also shortened (round 3, frame-audit, same class of fix as Beats 2 and 5 above):
+    // was "Six renewals in — 600 free entries banked from the streak alone" (12 tokens,
+    // holdFor 3600ms) against a ~6.8s span — the hold ALONE already exceeded half the span
+    // even with the scroll moved out of the body, which is why the ring still wasn't drawn
+    // yet at the geometric midpoint on a live render. 7 tokens (holdFor 2100ms) restores real
+    // margin.
     await demo.highlight(wallet, "600 free entries, on top of their monthly entries");
     await expect(wallet.getByText(/Streak/i).first()).toBeVisible({ timeout: 20_000 });
   });
@@ -240,6 +273,19 @@ async function runStreakJourney(page: Page, demo: Demo, testInfo: TestInfo): Pro
   await demo.step("Twelve renewals — the permanent Founding member badge", async () => {
     // Task-4 fix (Finding 3): shortened so the note fits at the desktop render width.
     await demo.highlight(streakCard, "The ladder repeats every year");
+    // Task-4 fix (round 3, frame-audit): a DIFFERENT timing defect than Beats 2/5/6 above —
+    // here the ring draws in good time (well before this cue's geometric midpoint, frame-
+    // verified), but Beat 8's setup runs immediately once this step returns, and its
+    // `page.goto("/my-account")` is a FULL navigation that wipes every injected overlay
+    // (the ring included) — measured live: the ring was on screen for barely ~1s before that
+    // navigation cleared it, so a frame-audit sampling this cue's geometric midpoint (which
+    // `post.ts` deliberately extends to just before Beat 8's OWN step opens, so it always
+    // includes that trailing setup work) landed on Beat 8's "Loading your dashboard" screen
+    // instead. Same sanctioned fix already used at Beat 8 and the closing terms beat (demo.ts's
+    // own contract: a short dwell after highlight is the correct tool once the ring itself is
+    // proven to draw correctly) — held here, not there, because it's THIS step returning that
+    // triggers the wipe.
+    await page.waitForTimeout(1_500);
   });
 
   // ── Beat 8 — forgiving ──────────────────────────────────────────────────
@@ -247,6 +293,46 @@ async function runStreakJourney(page: Page, demo: Demo, testInfo: TestInfo): Pro
   await page.goto("/my-account");
   await dismissSubscriptionExplainerIfItOpens();
   await expect(page.getByText(/Payment issue/i).first()).toBeVisible({ timeout: 30_000 });
+  // Task-4 fix (Finding 3, round 3): past-due /my-account auto-opens a SECOND overlay the
+  // explainer-dismiss helper above doesn't know about — RenewalFailedModal
+  // (src/components/modals/UnifiedModalManager.tsx: an effect gated on
+  // `hasFailedRenewal(userData)` fires `requestModal("renewal-failed", true)` as soon as
+  // account data loads on any /my-account route). Its Shell (src/components/modals/
+  // RenewalFailedModal/Shell.tsx) is a `position:fixed inset-0` dialog with a near-opaque
+  // `bg-black/85 backdrop-blur-md` backdrop at `zIndex:80` — nowhere near
+  // demo.ts's ring (`z-index:2147483646`), so the ring itself always paints on top, but
+  // `streakCard`'s OWN boundingBox() is still geometrically correct underneath: what a
+  // viewer actually SEES inside that ring's cutout is whatever sits at z:80 (the modal),
+  // not the hidden card. Verified live (task-4, round 3): a `.filter({hasText:
+  // /LEVEL|FOUNDING/i})` diagnostic dump at this exact point found exactly ONE matching
+  // `<section>` on the page — the real streak card, no ancestor-wrapper false match — so
+  // the locator was never the problem; the modal sitting on top of a correctly-targeted-but-
+  // hidden card is. Mirrors `dismissSubscriptionExplainerIfItOpens` above (same
+  // Escape-key-closes-it shape, confirmed via Shell.tsx's own `onEscape` listener) so the
+  // underlying card is what the camera actually sees before the ring is ever drawn.
+  //
+  // ONE checkpoint, placed AFTER the "Payment issue" assertion above (round 3, second pass):
+  // an earlier version of this fix checked twice (once right after `goto`, once here), mirroring
+  // dismissSubscriptionExplainerIfItOpens's own two-checkpoint shape — but that helper's SECOND
+  // call is near-free because it fast-skips on an already-seen localStorage key.
+  // RenewalFailedModal has no such flag, so a second blind `waitFor({state:"visible"})` after an
+  // already-successful first dismissal just burns its whole timeout waiting for a dialog that
+  // will never reopen — measured live, that alone added ~4s of dead setup time between Beat 7
+  // and Beat 8, which is exactly what pushed Beat 8's `page.goto` (and the "Loading your
+  // dashboard" screen it shows) out far enough to still be on screen at Beat 7's OWN
+  // geometric midpoint (that cue's declared span always runs right up until Beat 8's step
+  // opens). "Payment issue" and this modal's own open-effect both key off the same `userData`
+  // fetch, so by the time that text is visible the effect has already had every chance to
+  // fire — ONE check here is enough; it doesn't need to also be racing anything before it.
+  const dialog = page.getByRole("dialog");
+  const dialogOpened = await dialog
+    .waitFor({ state: "visible", timeout: 2_000 })
+    .then(() => true)
+    .catch(() => false);
+  if (dialogOpened) {
+    await page.keyboard.press("Escape");
+    await dialog.waitFor({ state: "hidden", timeout: 5_000 }).catch(() => {});
+  }
 
   await demo.step("A failed payment doesn't burn the streak — fixing the card carries it on", async () => {
     // Task-4 fix (Finding 2): highlight first — streakCard is already on screen (asserted via
@@ -395,23 +481,49 @@ async function runStreakJourney(page: Page, demo: Demo, testInfo: TestInfo): Pro
   // under demo.ts's own caption pill, which on mobile is pinned to `top:6px` (showCaption,
   // narrow-viewport branch) and sits at a HIGHER z-index than the highlight ring
   // (2147483647 vs 2147483646) — cue-midpoint frames showed the ring simply not visible,
-  // painted but covered by the caption's own near-opaque background. `topMargin` has to
-  // clear that pill's rendered height on the narrowest viewport this journey uses, not just
-  // keep `clause`'s top edge inside the frame.
+  // painted but covered by the caption's own near-opaque background. Round 2's fix (a flat
+  // `topMargin = 130` cap on the correction) cleared mobile but left desktop broken — this is
+  // the HARD LEGAL GATE (task-4 Finding 1, round 3).
+  //
+  // Root cause, live-measured (not guessed): on chromium-desktop's 1280x720 viewport (the
+  // proof-mode video then downscales that to the 800x450 a frame-audit sees — Playwright's
+  // default recordVideo size fits the viewport into 800x800 preserving aspect ratio, verified
+  // 1280x720 -> 800x450 and 412x839 -> 392x800, matching exactly what round 2's audit saw at
+  // each viewport), the initial 35%-from-top glide leaves `clause` only ~252px down the frame
+  // (a short viewport has little headroom above the fold to begin with) — so the OLD cap
+  // (`clauseBox.y - 130 = 122`) allowed only 122px of further correction where 280px was
+  // actually needed, a ~158px shortfall that left "entries sold" fully on screen. The cap
+  // can't protect what its own comment claims either way: `scrollBy(0, -delta)` only ever
+  // moves `clause` FURTHER from the top as `delta` grows (confirmed: clause ended up at
+  // y=532 on desktop under the full, uncapped correction below — nowhere near the caption).
+  // On mobile the same cap was already a no-op (164 > the 159.5 actually wanted), which is
+  // why mobile read as "already fixed" while desktop silently wasn't — same formula, two very
+  // different outcomes, exactly the "same offset, different viewport" trap the brief named.
+  //
+  // Fix: target the WHOLE §5.2 heading (a stronger bar than just its "entries sold" bullet —
+  // "5.2 Entry Limits:" is grepped unique on the page, src/app/(site)/terms/page.tsx), and
+  // drop the topMargin cap in favour of the one bound that's actually real — never ask for
+  // more upward scroll than the page has above its current position (scrollY can't go
+  // negative; the browser would just clamp, silently under-delivering the correction again).
   const soldClause = page.getByText(/entries sold/i).first();
-  const [clauseBox, soldBox] = await Promise.all([clause.boundingBox(), soldClause.boundingBox()]);
+  const sectionHeading = page.getByText(/5\.2 Entry Limits/i).first();
+  const [headingBox, currentScrollY] = await Promise.all([
+    sectionHeading.boundingBox(),
+    page.evaluate(() => window.scrollY),
+  ]);
   const viewport = page.viewportSize();
-  if (clauseBox && soldBox && viewport && soldBox.y < viewport.height) {
-    const topMargin = 130; // clears the mobile caption pill + breathing room
+  if (headingBox && viewport && headingBox.y < viewport.height) {
     const bottomMargin = 24;
-    // How far §5.2's bullet needs to move down (off the bottom) to clear the frame, capped so
-    // `clause` itself never gets pushed above topMargin in the process.
-    const wanted = viewport.height - soldBox.y + bottomMargin;
-    const capped = Math.min(wanted, Math.max(0, clauseBox.y - topMargin));
+    const wanted = viewport.height - headingBox.y + bottomMargin;
+    const capped = Math.min(wanted, currentScrollY);
     if (capped > 0) {
       await page.evaluate((delta) => window.scrollBy(0, -delta), capped);
     }
   }
+  // Regression guard: whatever the correction above computed, the legally-sensitive "sold"
+  // wording must be verifiably off-screen before this beat's own caption asserts "never
+  // sold" on camera — a hard assertion, not just a frame-audit hope.
+  await expect(soldClause).not.toBeInViewport();
 
   await demo.step("And it's covered in the terms — free entries, never sold", async () => {
     await demo.highlight(clause, "Section 5.1 — additional free entries");
