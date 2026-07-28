@@ -89,11 +89,12 @@ server.** The QA watchdog reporting a `400 Bad Request` is a real product bug, n
 The seed helpers this spec drives (`e2e/seed/streak.ts`) are documented in architecture.md — this
 is what broke specifically in proof mode getting them on camera.
 
-**The feature flag gate isn't optional set-dressing — it's the difference between a card and
-nothing.** The streak surfaces ship dark behind `DASHBOARD_FEATURES.loyaltyStreak` /
-`.milestoneProgress`, which read `NEXT_PUBLIC_DASHBOARD_STREAK_PREVIEW`. That var is now in the
-`e2e/lib/env.ts` overlay; without it every streak beat records a blank card, not a missing one —
-easy to miss in a quick local review of a single frame.
+**The feature flag gate is documented in architecture.md — the proof-mode-specific bite is how
+quietly it fails on camera.** (`NEXT_PUBLIC_DASHBOARD_STREAK_PREVIEW`, now in the `e2e/lib/env.ts`
+overlay; see architecture.md's streak section for what it gates and why.) A missing flag doesn't
+render an obviously broken layout — a blank card records as a plausible-looking frame, not an
+obvious error — so a quick spot-check of one exported screenshot can miss it. Verify the flag
+itself, not just that a video got produced.
 
 **The whole spec is one device: mutate Mongo, reload, narrate what's already true.** The demo
 walks ONE member through their entire lifecycle by writing state to Mongo between beats and

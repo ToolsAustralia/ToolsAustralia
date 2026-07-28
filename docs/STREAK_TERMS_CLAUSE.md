@@ -47,11 +47,24 @@ an **addition** (a new `5.1(e)`), not a replacement of the existing bullet.
 > milestones — the 2nd, 4th, 6th, 8th, 10th and 12th consecutive renewal — granted automatically
 > into the next eligible Major Giveaway. These free entries are included with the membership at
 > no additional cost and are not sold separately. A streak counts consecutive **paid** renewals
-> only. A membership that lapses in full resets the streak to zero and the milestone ladder
-> restarts. Paused or overdue memberships accrue no streak progress while no renewal payment is
-> made. The ladder repeats every twelve consecutive renewals. Tools Australia may vary or
-> withdraw future unearned milestones on reasonable notice; milestones already earned are
-> unaffected.
+> only. A membership that lapses and is not reinstated within 30 days resets the streak to zero
+> and the milestone ladder restarts. Paused or overdue memberships accrue no streak progress
+> while no renewal payment is made. The ladder repeats every twelve consecutive renewals. Tools
+> Australia may vary or withdraw future unearned milestones on reasonable notice; milestones
+> already earned are unaffected.
+
+**Decision for DJ — this line newly discloses a figure the product deliberately doesn't
+advertise elsewhere.** `StepStakes.tsx:14-16` (the cancellation flow's stakes screen) states the
+30-day rejoin grace is "deliberately NOT advertised here (truthful omission; Cobber's FAQ
+discloses it on request)" — a member who lapses and rejoins within 30 days keeps their streak
+(`src/utils/subscription/streak.ts:63-66`, `RESUBSCRIBE_GRACE_DAYS = 30`), but retention copy
+never says so. A governing terms document is a different risk class than an omission on a sales
+screen, so the clause above states the window rather than repeating that omission in a binding
+document. If you'd rather not put "30 days" in the terms, the alternative below states the same
+rule without the figure — pick one:
+
+> Alternative (no figure disclosed): A membership that lapses and is not reinstated within Tools
+> Australia's standard rejoin period resets the streak to zero and the milestone ladder restarts.
 
 ## Adopting this
 
