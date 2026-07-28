@@ -127,6 +127,45 @@ Full-file count after this task: **27 `<th>` / 27 `<td>`** across all three tabl
 Attribution 8/8 + per-page 11/11 + By Built Prize 8/8) — verified by direct regex count, not by
 inspection.
 
+## Promo Analytics — By Toolbox rollup (2026-07-28, panel finding F-006)
+
+A fourth table below **By Built Prize**, answering the one question the panel graded PARTIAL:
+*"do Kincrome-box builders convert better than Milwaukee-box builders?"* `byBuiltPrize` groups by the
+FULL combination (`milwaukee-kincrome`, `ryobi-kincrome`, `makita-kincrome`, …), so reading a
+per-toolbox rate previously meant summing five rows by hand.
+
+**Derived client-side on purpose.** The rollup is computed in a `useMemo` over the existing
+`byBuiltPrize` array — no new API field, no repository change. That deliberately avoids dragging the
+CLAUDE.md rule-10 Norm lockstep (schema + route + manifest + `norm-context.md`) along for a number
+the client can derive from data it already receives. Norm still gets `byBuiltPrize` and can roll it
+up itself.
+
+Three things about it that are easy to get wrong, and are therefore load-bearing:
+
+1. **The toolbox is resolved via `fromPrizeSlug()`** (`prize-selection/prize-builder-model.ts`),
+   which matches BOTH slug segments against the `TOOLSETS`/`TOOLBOXES` registries — not
+   `slug.split("-").pop()`. Positional splitting happens to work today (no toolset or toolbox id
+   contains a hyphen), but the registry lookup stays correct if that ever changes, and it is already
+   covered by `test:prize-builder`.
+2. **`cash-prize` is excluded.** `fromPrizeSlug` returns `null` for it (cash is the opt-out, not a
+   toolbox) and for any unrecognised slug, so neither can land in a bogus toolbox bucket.
+3. **Rates are recomputed from the SUMMED totals, never averaged.** Averaging per-combination rates
+   weights a 1-builder combo the same as a 100-builder one. Worked example:
+   `milwaukee-kincrome {builders:10, signups:4}` + `ryobi-kincrome {builders:5, signups:1}` rolls up
+   to `builders:15, signups:5` → **33.33%**, not the mean of 40% and 20% (30%). Zero-builder
+   toolboxes render `0`/an em dash, never `NaN` or `Infinity`.
+
+Sorted builders descending, toolbox name ascending as a deterministic tie-break. Toolbox names come
+from the `TOOLBOXES` registry so the column reads "Kincrome", not `kincrome`. Empty state renders a
+message rather than a bare header, matching the sibling tables. **8 `<th>` / 8 `<td>`.**
+
+Full-file count after this addition: **35 `<th>` / 35 `<td>`** across all four tables (UTM Channel
+Attribution 8/8 + per-page 11/11 + By Built Prize 8/8 + By Toolbox 8/8).
+
+> **Not visually verified.** No admin session was available in the session that added this, so the
+> structure was confirmed by `<th>`/`<td>` parity and type-check only. Confirm the rendered table
+> before trusting the layout.
+
 **Norm lockstep (CLAUDE.md rule 10).** `buildDistribution` and `byBuiltPrize` are now mirrored to
 Norm — see
 [docs/internal-norm/norm-context.md](../internal-norm/norm-context.md#get-v1promo-analytics),

@@ -127,6 +127,23 @@ flagged for awareness, not fixed, since `src/models/**` is out of scope for this
 `PaymentEvent` volume ever makes that scan slow, `{ "data.promotionSlug": 1, timestamp: -1 }` and
 `{ "data.builtPrizeSlug": 1, timestamp: -1 }` would both need adding together.
 
+**Planner ignores the `{builtPrizeSlug:1, timestamp:-1}` index — `.hint()` added (F-003, 2026-07-28).**
+A live `.explain("queryPlanner")` against the dev DB showed the planner picking the TTL index
+(`{timestamp:1}`) for both build aggregations above, then FETCHing every document in the 90-day
+window and filtering `builtPrizeSlug` in-stage — at current volume (~730 rows, ~0.4% carrying a
+build) the cost estimate favours the TTL index over the purpose-built one. Forcing the intended
+index with `.hint()` proved it well-formed and usable; the planner simply doesn't choose it
+unprompted, and at 100× volume the unhinted plan would FETCH the whole window on every dashboard
+load. Both `buildAgg` calls (`getAggregatedByPage`'s `1c` block and `getAggregatedByBuiltPrize`'s
+builders block) now pass `{ hint: { builtPrizeSlug: 1, timestamp: -1 } }` as the aggregate options
+argument — not the `.hint(...)` chained-method form, because the existing test stub
+(`PromoAnalyticsRepository-aggregation.test.ts`) mocks `Model.aggregate` to return a bare
+`{ exec }` object with no `.hint` method; passing the hint as `Model.aggregate(pipeline, options)`
+is functionally identical (`Aggregate.prototype.hint` just sets `this.options.hint` under the
+hood) and doesn't require the stub to grow a `.hint()` no-op. No other `.aggregate()` call in this
+file was touched — the rest (visits, cross-visits, signups, conversions) have no selective
+predicate to hint, so they legitimately scan the window.
+
 **Mirrored to Norm (2026-07-28, follow-up task).** `byBuiltPrize` and `buildDistribution` are now
 both declared on `NormPromoAnalyticsSummarySchema`, and `/v1/promo-analytics` was wired to supply
 `byBuiltPrize` — verified live with `npm run norm:smoke`. Full details:

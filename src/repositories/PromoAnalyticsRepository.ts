@@ -228,22 +228,28 @@ export class PromoAnalyticsRepository {
     // 1c. Built-prize engagement - unique visitors who actually assembled something, plus the
     // most-built combination per landing page. Visitors who never touched the reels have no
     // `builtPrizeSlug`, so they are correctly excluded from the numerator.
+    // Hint forces the index built for this query ({builtPrizeSlug:1, timestamp:-1}). Without it,
+    // the planner picks the TTL index ({timestamp:1}) at current data volume and FETCHes the
+    // whole 90-day window instead of the ~0.4% of rows carrying a build (F-003, panel review).
     const buildAgg = await PromoAnalyticsVisit.aggregate<
       { _id: { pageType: string; slug: string; builtPrizeSlug: string }; visitorIds: string[] }
-    >([
-      {
-        $match: {
-          timestamp: { $gte: startDate, $lte: endDate },
-          builtPrizeSlug: { $exists: true, $ne: "" },
+    >(
+      [
+        {
+          $match: {
+            timestamp: { $gte: startDate, $lte: endDate },
+            builtPrizeSlug: { $exists: true, $ne: "" },
+          },
         },
-      },
-      {
-        $group: {
-          _id: { pageType: "$pageType", slug: "$slug", builtPrizeSlug: "$builtPrizeSlug" },
-          visitorIds: { $addToSet: VISITOR_ID_EXPR },
+        {
+          $group: {
+            _id: { pageType: "$pageType", slug: "$slug", builtPrizeSlug: "$builtPrizeSlug" },
+            visitorIds: { $addToSet: VISITOR_ID_EXPR },
+          },
         },
-      },
-    ]).exec();
+      ],
+      { hint: { builtPrizeSlug: 1, timestamp: -1 } }
+    ).exec();
 
     const buildVisitorIds = new Map<string, Set<string>>();
     const buildDistributionMap = new Map<string, Array<{ builtPrizeSlug: string; visitors: number }>>();
@@ -564,16 +570,22 @@ export class PromoAnalyticsRepository {
     await connectDB();
 
     // 1. Builders - unique visitors who assembled this combination, on ANY landing page.
-    const buildAgg = await PromoAnalyticsVisit.aggregate<{ _id: string; builders: number }>([
-      {
-        $match: {
-          timestamp: { $gte: startDate, $lte: endDate },
-          builtPrizeSlug: { $exists: true, $ne: "" },
+    // Hint forces the index built for this query ({builtPrizeSlug:1, timestamp:-1}). Without it,
+    // the planner picks the TTL index ({timestamp:1}) at current data volume and FETCHes the
+    // whole 90-day window instead of the ~0.4% of rows carrying a build (F-003, panel review).
+    const buildAgg = await PromoAnalyticsVisit.aggregate<{ _id: string; builders: number }>(
+      [
+        {
+          $match: {
+            timestamp: { $gte: startDate, $lte: endDate },
+            builtPrizeSlug: { $exists: true, $ne: "" },
+          },
         },
-      },
-      { $group: { _id: "$builtPrizeSlug", visitorIds: { $addToSet: VISITOR_ID_EXPR } } },
-      { $project: { _id: 1, builders: { $size: "$visitorIds" } } },
-    ]).exec();
+        { $group: { _id: "$builtPrizeSlug", visitorIds: { $addToSet: VISITOR_ID_EXPR } } },
+        { $project: { _id: 1, builders: { $size: "$visitorIds" } } },
+      ],
+      { hint: { builtPrizeSlug: 1, timestamp: -1 } }
+    ).exec();
 
     const buildersMap = new Map<string, number>();
     for (const r of buildAgg) buildersMap.set(r._id, r.builders);
