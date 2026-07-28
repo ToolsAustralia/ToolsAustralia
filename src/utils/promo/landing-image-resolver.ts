@@ -82,8 +82,9 @@ export type LandingHeroToolboxSuffix = "milTB" | "sidTB" | "kinTB" | "gwTB";
  * users. Every brand × toolbox now ships all 12 variants (3 tiers × 2 viewports × 2 modes),
  * so that fallback is now a genuine safety net rather than the normal path.
  *
- * GearWrench (`gwTB`) joined in Draw 9. It has **no Ryobi pairing** — that artwork was not
- * produced — so `ryobi-gwTB` resolves through the fallback chain rather than to a real file.
+ * GearWrench (`gwTB`) joined in Draw 9. Its Ryobi pairing landed a day later (2026-07-28),
+ * so as of then every brand × toolbox pair — `gwTB` included — resolves to a real file in
+ * every mode, viewport and tier. No pair relies on the fallback chain as its normal path.
  */
 
 /**

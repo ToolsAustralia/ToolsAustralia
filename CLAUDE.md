@@ -435,7 +435,8 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "scripts/convert-drawn-tonight-tomorrow-to-webp.ts",
         "scripts/convert-drawn-tonight-tomorrow-videos.ts",
         "scripts/convert-draw9-landing-to-webp.ts",
-        "scripts/convert-draw9-landing-videos.ts"
+        "scripts/convert-draw9-landing-videos.ts",
+        "scripts/convert-ryobi-gearwrench-landing.ts"
       ],
       "lastVerified": "2026-07-27"
     },

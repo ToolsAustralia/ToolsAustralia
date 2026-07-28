@@ -75,12 +75,13 @@ const LANDING_HERO_MAP: Partial<Record<PrizeSlug, ExtendedPromoImagePaths>> = {
   "hikoki-milwaukee": resolveLandingHeroImages("hikoki", "milTB"),
 
   // GearWrench prizes — the fourth toolbox, landing art shipped with draw 9 (2026-07-27).
-  // `ryobi-gearwrench` is deliberately absent: that artwork was never produced, so it has no
-  // hero of its own and resolves through the resolver's fallback chain like any other gap.
+  // `ryobi-gearwrench` followed on 2026-07-28, completing the set; every toolset × toolbox
+  // pairing now has a hero of its own rather than leaning on the resolver's fallback chain.
   "milwaukee-gearwrench": resolveLandingHeroImages("milwaukee", "gwTB"),
   "dewalt-gearwrench": resolveLandingHeroImages("dewalt", "gwTB"),
   "makita-gearwrench": resolveLandingHeroImages("makita", "gwTB"),
   "hikoki-gearwrench": resolveLandingHeroImages("hikoki", "gwTB"),
+  "ryobi-gearwrench": resolveLandingHeroImages("ryobi", "gwTB"),
 };
 
 export function isToolsetLandingSlug(slug: string): slug is ToolsetLandingSlug {
