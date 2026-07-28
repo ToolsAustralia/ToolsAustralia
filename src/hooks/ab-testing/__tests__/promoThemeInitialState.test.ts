@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { resolveInitialPromoThemeState } from "../usePromoThemeExperiment";
+import { resolveInitialPromoThemeState, safeLocalStorage } from "../usePromoThemeExperiment";
 
 /**
  * Regression guard for the highest-severity bug this hook can produce: the
@@ -94,11 +94,55 @@ function run() {
   );
 
   // Storage that throws on getItem must not propagate — falls through to unsettled.
+  // This covers a THROW-ON-METHOD-CALL storage object (the failure mode the old
+  // fake-storage suite already exercised); it does NOT cover a throw on the
+  // `window.localStorage` PROPERTY ACCESS itself, which is a distinct WHATWG-spec
+  // failure mode (SecurityError in sandboxed/cross-origin iframes, or storage
+  // disabled by browser config) that happens before any `Storage` object even
+  // exists to call `.getItem` on. That path is covered separately below.
   assert.deepEqual(
     resolveInitialPromoThemeState("exp1", makeFakeStorage({}, { throwOnGet: true })),
     { settled: false, theme: null },
     "a throwing storage degrades gracefully to unsettled, not an uncaught error",
   );
+
+  // Regression case for the bug this fix addresses: `resolveInitialPromoThemeState`
+  // only ever receives an already-resolved `Storage | null`, so it cannot itself
+  // prove the ACCESS-throws path is handled — that guard lives in `safeLocalStorage`,
+  // which both call sites (the useState initializer and `hasManualThemeChoice`) now
+  // route through instead of referencing bare `localStorage`. This exercises
+  // `safeLocalStorage` directly against a `window` whose `localStorage` getter
+  // throws on mere property access (not inside `.getItem`/`.setItem`), simulating
+  // a sandboxed iframe / storage-disabled browser. It proves `safeLocalStorage`
+  // swallows that throw and returns `null` instead of letting it escape into the
+  // caller's frame (a `useState` initializer during render, or a value returned on
+  // every render from the cross-tab guard). It does NOT prove the full browser
+  // integration end-to-end (no DOM/React renderer in this harness) — that is
+  // covered by construction: every `localStorage` reference in the module either
+  // routes through this function or sits inside its own try/catch (verified by
+  // inspection, see the file's site-by-site guarantee in its module comment).
+  {
+    const globalWithWindow = globalThis as { window?: unknown };
+    const originalWindow = globalWithWindow.window;
+    globalWithWindow.window = {
+      get localStorage(): never {
+        throw new Error("SecurityError: localStorage access denied");
+      },
+    };
+    try {
+      assert.equal(
+        safeLocalStorage(),
+        null,
+        "a localStorage getter that throws on property access degrades to null, not an uncaught throw",
+      );
+    } finally {
+      if (originalWindow === undefined) {
+        delete globalWithWindow.window;
+      } else {
+        globalWithWindow.window = originalWindow;
+      }
+    }
+  }
 
   console.log("promoThemeInitialState: all assertions passed");
 }

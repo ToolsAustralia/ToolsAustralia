@@ -107,10 +107,28 @@ on the dependency array — re-running when `state.settled` changes would
 re-fire the network request) calls `POST /api/ab-testing/assign` with
 `{ experimentId, slug: PROMO_THEME_SLUG }`. On success, the assigned
 `variantConfig.promoTheme.defaultTheme` (defaulting to `"light"` if the
-variant didn't set one) is returned as `theme`. Every localStorage access is
-wrapped in try/catch — storage can throw in private browsing, under quota
-pressure, or with storage disabled — and a throw there degrades gracefully
-rather than breaking the page.
+variant didn't set one) is returned as `theme`. Every localStorage access in
+this file is wrapped in try/catch — storage can throw in private browsing,
+under quota pressure, or with storage disabled — and a throw there degrades
+gracefully rather than breaking the page. That guarantee covers the
+**property access itself** (reading `window.localStorage`), not only the
+`.getItem`/`.setItem` calls made on the result: per the WHATWG spec,
+`window.localStorage` can throw `SecurityError` on mere access (sandboxed or
+cross-origin iframes, storage disabled by browser configuration), before any
+method is ever called. Every call site that needs the real browser storage
+goes through the module-local `safeLocalStorage()` helper, which does the
+`window.localStorage` read inside its own try/catch and returns `Storage |
+null` — never a bare `localStorage` reference evaluated outside a try block.
+This includes the `useState` initializer that calls
+`resolveInitialPromoThemeState(experimentId, safeLocalStorage())` and
+`hasManualThemeChoice()`'s cross-tab check; the effect's device-marker
+`setItem` call sits inside its own local try/catch for the same reason. (A
+prior version of this hook evaluated `localStorage` as a bare argument
+expression at these two call sites — outside any try/catch — which meant an
+access-time throw would surface as an uncaught error during render instead of
+degrading gracefully; `safeLocalStorage()` is the fix, and
+`src/hooks/ab-testing/__tests__/promoThemeInitialState.test.ts` covers it
+directly.)
 
 **The device marker is only written when the response carries a usable
 assignment (`variantConfig` is non-null).** A `null` `variantConfig` happens

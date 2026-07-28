@@ -37,11 +37,31 @@ function hasManualThemeChoiceFromStorage(storage: Storage): boolean {
   }
 }
 
+/** `window.localStorage` can throw `SecurityError` on ACCESS (sandboxed/cross-origin
+ * iframes, storage disabled by browser configuration) — not only on `.getItem`/
+ * `.setItem`. So the property read itself must sit inside the try, not just the
+ * method call that follows it. Every call site below must go through this helper
+ * (or wrap the raw `localStorage` reference in its own try) rather than reference
+ * `localStorage` bare.
+ *
+ * Exported (in addition to being used internally) so the access-throws case can
+ * be unit-tested directly — see
+ * `src/hooks/ab-testing/__tests__/promoThemeInitialState.test.ts`. */
+export function safeLocalStorage(): Storage | null {
+  if (typeof window === "undefined") return null;
+  try {
+    return window.localStorage;
+  } catch {
+    return null;
+  }
+}
+
 /** Render-time convenience wrapper over `hasManualThemeChoiceFromStorage` for the
  * real browser `localStorage`. Server-safe: `typeof window === "undefined"` short-circuits. */
 function hasManualThemeChoice(): boolean {
-  if (typeof window === "undefined") return false;
-  return hasManualThemeChoiceFromStorage(localStorage);
+  const storage = safeLocalStorage();
+  if (!storage) return false;
+  return hasManualThemeChoiceFromStorage(storage);
 }
 
 /**
@@ -95,7 +115,7 @@ export function resolveInitialPromoThemeState(
  */
 export function usePromoThemeExperiment(experimentId: string | null): Resolved {
   const [state, setState] = useState<Resolved>(() =>
-    resolveInitialPromoThemeState(experimentId, typeof window === "undefined" ? null : localStorage),
+    resolveInitialPromoThemeState(experimentId, safeLocalStorage()),
   );
 
   const ranRef = useRef(false);
