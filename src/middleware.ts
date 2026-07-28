@@ -125,7 +125,7 @@ export default withAuth(
         value: generateAnonymousId(),
         httpOnly: true,
         sameSite: "lax",
-        secure: process.env.NODE_ENV === "production",
+        secure: isProduction,
         maxAge: ANON_ID_MAX_AGE,
         path: "/",
       });

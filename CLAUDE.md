@@ -623,7 +623,8 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/repositories/ab-testing/**",
         "src/app/api/ab-testing/**",
         "src/models/ab-testing/**",
-        "src/utils/ab-testing/**"
+        "src/utils/ab-testing/**",
+        "src/lib/ab-testing/**"
       ],
       "lastVerified": "2026-07-06"
     },
