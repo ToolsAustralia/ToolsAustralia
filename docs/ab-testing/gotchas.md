@@ -101,6 +101,43 @@ repaired on the next run, well inside the 30-day event TTL); (3) **excludes admi
 preview** events (`metadata.isPreview`). Unique visitors are NOT taken from this
 rollup — they come from the durable assignment table.
 
+## A client gate on an ISR page bakes its initial state into the shared HTML
+
+`/promotions/[slug]` is ISR-prerendered (`dynamicParams = false`, `revalidate = 60`)
+and its HTML is CDN-cached and served to **every** visitor of that snapshot,
+including crawlers. So any client component whose *initial* render is derived from
+experiment state writes that state into the shared document.
+
+`usePromoThemeExperiment`'s `useState` initializer originally read:
+
+```ts
+if (typeof window === "undefined") return { settled: false, theme: null }; // WRONG first
+if (!experimentId) return { settled: true, theme: null };
+```
+
+During the server pass `window` is always undefined, so the environment guard fired
+first and `settled: false` was baked in **even when no experiment was active** — the
+`!experimentId` short-circuit never got a chance to run. The gate that derives its
+overlay from `settled` would then have shipped a full-screen loader inside the static
+HTML to every visitor and every crawler, on a page whose control arm is meant to be
+byte-identical to today. It also produced a hydration mismatch, since the client
+initializer *does* reach `!experimentId` and yields `true`.
+
+**Rule:** in a client hook consumed by an ISR page, check the values that are
+**known at build/ISR time** (a baked experiment id) *before* the
+`typeof window === "undefined"` guard. Only checks that genuinely require `window` or
+`localStorage` belong after it. The guard test is the plan's build-output assertion:
+prerender with the experiment inactive and confirm the HTML still contains the real
+page markup and no overlay.
+
+**Accepted residual:** while an experiment *is* active, a returning visitor holding
+the device marker still receives the overlay in the shared HTML until hydration
+clears it — per-visitor `localStorage` cannot be known at ISR time. That visitor's
+theme has already been applied pre-paint by the CSP-hash-allowlisted bootstrap
+snippet, so what they may briefly see is a loader in their **correct** theme, not a
+light→dark snap. Do not try to fix this with a second inline snippet; the CSP hash
+allowlist makes that far more expensive than the symptom warrants.
+
 ## Migrated stubs
 
 Read all five `docs/AB_TESTING_*.md` root files and merge in next refresh:
