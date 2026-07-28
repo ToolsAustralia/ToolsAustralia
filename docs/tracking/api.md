@@ -37,6 +37,23 @@
     before `after()` is scheduled, since `request` cannot be touched once the response has been
     sent. See the full note in
     [`promo-page-visit/route.ts`](../../src/app/api/tracking/promo-page-visit/route.ts).
+  - **Rate limited: 20 requests / 5 minutes per identifier** (`createRateLimiter("promo-prize-build",
+    …)` + `getClientIdentifier` from
+    [`src/utils/security/rateLimiter.ts`](../../src/utils/security/rateLimiter.ts)), checked
+    **synchronously as the first thing in the handler** — before the Zod parse and before `after()`
+    is scheduled — so an over-limit caller never reaches the DB write. Over-limit responses are
+    `{ success: false, error: "Too many requests", retryAfterSeconds }` with `429` + `Retry-After`.
+    This matters more here than on the sibling `promo-page-visit` beacon (which is **not**
+    rate-limited as of this writing): that endpoint only ever inserts a new row, so abuse at least
+    shows up as inflated visit counts. This endpoint **updates an existing row in place via
+    `$set`**, so unlimited-volume abuse rewrites `builtPrizeSlug` / `toolboxSwitches` /
+    `toolsetSwitches` attribution with **zero row growth** — every visit-count sanity check stays
+    green while `topBuiltPrize`, `buildDistribution`, and the builder→signup→conversion funnel
+    quietly rot. A real visitor's beacon is debounced ~1s and flushed once on unload, so even heavy
+    reel-fiddling produces only a handful of requests per page view — 20/5min leaves large headroom
+    for genuine use. See
+    [`docs/tech-debt/panel-review-feature-drawn-tonight-tomorrow-july-assets.md`](../tech-debt/panel-review-feature-drawn-tonight-tomorrow-july-assets.md)
+    F-001.
   - Regression coverage: `npm run test:prize-build` →
     [`record-prize-build.test.ts`](../../src/utils/promo-analytics/__tests__/record-prize-build.test.ts)
     (validation, clamping, no-anonymous-id, no-matching-row, `$set`-never-`$inc` repository guard).

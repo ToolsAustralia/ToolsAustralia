@@ -53,10 +53,15 @@ without compensation. See `docs/promo/frontend.md` for the asset normalisation d
 [`PromoAnalyticsManagement`](../../src/components/admin/PromoAnalyticsManagement.tsx)'s per-page
 table gained a **Builds** column, inserted immediately after the existing **Cross-visits** column
 (same order in both the `<thead>` and each `<tbody>` row, so header and cell stay aligned). Cell
-shows `formatNumber(row.builds)` with a small sub-label line rendering the top combination
-(`getPrizeLabel(row.topBuiltPrize) ?? row.topBuiltPrize`) when one exists; the cell/header `title`
-attributes explain both states ("Nobody built a prize on this page in this period" when
-`topBuiltPrize` is `null` — never rendered as the literal string "null"). Sortable via the same
+shows `formatNumber(row.builds)` with a `Top: {label}` sub-label line rendering the top combination
+(`getPrizeLabel(row.topBuiltPrize) ?? row.topBuiltPrize`) when one exists — the `Top:` prefix makes
+the caption self-explanatory without a hover (panel-review F-005, fixed 2026-07-28). The sub-label
+is `truncate`d to one line at `max-w-[110px]` so it can't wrap into a multi-line staircase and
+balloon row height on narrow admin widths (panel-review F-011, fixed 2026-07-28 — measured at
+390px: an untruncated 44-char label wrapped to 8 lines / +39.5px row height); the full name stays
+reachable via the cell/header `title` attributes, which explain both states ("Nobody built a prize
+on this page in this period" when `topBuiltPrize` is `null` — never rendered as the literal string
+"null"). Sortable via the same
 `handleSort` / `getSortIcon` pair as every other numeric column — no separate `SortKey` type
 exists; both take `keyof PromoPageMetrics` directly, and `"builds"` is now a valid value of that
 union automatically since `builds` was added to the `PromoPageMetrics` interface. Data comes from the
@@ -82,11 +87,16 @@ Surfaces the two read-side additions from
 `data.byBuiltPrize` on `GET /api/admin/promo-analytics`) in the admin UI. Both additions are
 in [`PromoAnalyticsManagement.tsx`](../../src/components/admin/PromoAnalyticsManagement.tsx).
 
-**a) "Switched away %" column** — new trailing column on the existing per-page table (after
-`Conv %`; same `hidden md:table-cell` treatment and non-sortable static-text style as the other
-three rate columns — it isn't a stored field on `PromoPageMetrics`, it's derived client-side, so
-it follows the convention already used by `visitToSignupRate` et al. of never getting a sort
-button). Header + cell count: **11 `<th>` / 11 `<td>`** (was 10/10 before this task).
+**a) "Switched away % of Builds" column** — new trailing column on the existing per-page table
+(after `Conv %`; same `hidden md:table-cell` treatment and non-sortable static-text style as the
+other three rate columns — it isn't a stored field on `PromoPageMetrics`, it's derived
+client-side, so it follows the convention already used by `visitToSignupRate` et al. of never
+getting a sort button). The header text spells out the denominator ("of Builds") instead of
+relying on the `title` tooltip alone — the un-suffixed "Switched away %" read as a share of
+`visits` on a skim, a much larger and more alarming base than the real denominator (`builds`);
+matches the sibling By Built Prize table's `B→S %` naming convention of putting the ratio in the
+visible label (panel-review F-004, fixed 2026-07-28). Header + cell count: **11 `<th>` / 11
+`<td>`** (was 10/10 before this task).
 
 Derivation (`getSwitchAwayRate` + `getPageDefaultPrizeSlug`, both module-level pure functions
 above the component): the page's OWN default combination is what a visitor sees without

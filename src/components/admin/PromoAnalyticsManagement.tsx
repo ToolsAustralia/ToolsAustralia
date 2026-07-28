@@ -654,7 +654,7 @@ export default function PromoAnalyticsManagement() {
                     className="hidden md:table-cell text-right p-3 font-semibold text-gray-800 dark:text-neutral-100"
                     title="Share of builders who assembled a different combination than this page's own default build"
                   >
-                    Switched away %
+                    Switched away % of Builds
                   </th>
                 </tr>
               </thead>
@@ -709,8 +709,8 @@ export default function PromoAnalyticsManagement() {
                     >
                       {formatNumber(row.builds ?? 0)}
                       {row.topBuiltPrize && (
-                        <span className="block text-[10px] font-sans text-gray-500 dark:text-neutral-400">
-                          {getPrizeLabel(row.topBuiltPrize) ?? row.topBuiltPrize}
+                        <span className="block truncate text-[10px] font-sans text-gray-500 dark:text-neutral-400 max-w-[110px] ml-auto">
+                          Top: {getPrizeLabel(row.topBuiltPrize) ?? row.topBuiltPrize}
                         </span>
                       )}
                     </td>

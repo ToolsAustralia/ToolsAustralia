@@ -3,12 +3,24 @@ import { z } from "zod";
 import AnonymousIdService from "@/services/ab-testing/AnonymousIdService";
 import PromoAnalyticsService from "@/services/promo-analytics/PromoAnalyticsService";
 import { recordPrizeBuild } from "@/utils/promo-analytics/record-prize-build";
+import { createRateLimiter, getClientIdentifier } from "@/utils/security/rateLimiter";
 
 const promoPrizeBuildSchema = z.object({
   slug: z.string().min(1).max(100),
   builtPrizeSlug: z.string().min(1).max(100),
   toolboxSwitches: z.number().int().min(0).max(10_000),
   toolsetSwitches: z.number().int().min(0).max(10_000),
+});
+
+// Unauthenticated + keyed only on a format-checked cookie, and unlike the sibling visit beacon
+// this route UPDATES an existing row in place rather than inserting — so abuse leaves zero row
+// growth for a row-count sanity check to catch. A real visitor's beacon is debounced ~1s and
+// flushed once on unload, so even heavy reel-fiddling produces a handful of requests per page
+// view; 20/5min leaves enormous headroom for genuine use while removing the free unlimited-write
+// primitive. See docs/tech-debt/panel-review-feature-drawn-tonight-tomorrow-july-assets.md F-001.
+const promoPrizeBuildRateLimiter = createRateLimiter("promo-prize-build", {
+  windowMs: 5 * 60 * 1000,
+  maxRequests: 20,
 });
 
 /**
@@ -27,9 +39,24 @@ const promoPrizeBuildSchema = z.object({
  * highest-traffic ad-landing path, and a stalled Mongo connection must never 504 it. See the
  * long note in `promo-page-visit/route.ts`.
  *
+ * Rate limited (20 req / 5 min per identifier, checked synchronously before the Zod parse and
+ * before `after()` is scheduled) — this route UPDATES an existing visit row via `$set`, so
+ * unlike the sibling visit beacon (insert-only), abuse here leaves zero row growth for a
+ * row-count check to catch.
+ *
  * @see docs/tracking/api.md
  */
 export async function POST(request: NextRequest) {
+  const clientIp = request.headers.get("x-forwarded-for") ?? request.headers.get("x-real-ip") ?? null;
+  const identifier = getClientIdentifier(clientIp, request.headers.get("x-forwarded-for"));
+  const rateLimitResult = promoPrizeBuildRateLimiter.check(identifier);
+  if (!rateLimitResult.success) {
+    return NextResponse.json(
+      { success: false, error: "Too many requests", retryAfterSeconds: rateLimitResult.retryAfterSeconds },
+      { status: 429, headers: { "Retry-After": String(rateLimitResult.retryAfterSeconds) } }
+    );
+  }
+
   let validatedData: z.infer<typeof promoPrizeBuildSchema>;
   try {
     const body = await request.json();
