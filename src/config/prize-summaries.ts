@@ -502,8 +502,9 @@ export const PRIZE_SUMMARIES: PrizeSummary[] = [
     heroSubheading: "Complete Milwaukee 18V FUEL™ professional toolkit with Milwaukee PACKOUT™ 8pc modular storage and the GearWrench 288-piece mobile workstation plus $5000 cash.",
     summary: "Milwaukee 18V FUEL™ power tools, REDLITHIUM™ battery ecosystem, Milwaukee PACKOUT™ 8pc modular storage, and the GearWrench 288-piece tool set & mobile workstation plus $5000 cash.",
     prizeValueLabel: "$35,000+ Value",
+    cardBackgroundImage: "/images/majordraws/milwaukee-set/milwaukee-gearwrench.webp",
     gallery: [
-      { src: "/images/majordraws/toolbox/gearwrenchTB.webp", alt: "GearWrench 288-piece tool set and mobile workstation" },
+      { src: "/images/majordraws/milwaukee-set/milwaukee-gearwrench.webp", alt: "Milwaukee power toolset with the GearWrench 288-piece mobile workstation" },
       ...MILWAUKEE_GALLERY_SHOTS,
       ...GEARWRENCH_TOOLBOX_SHOTS,
     ],
@@ -521,8 +522,9 @@ export const PRIZE_SUMMARIES: PrizeSummary[] = [
     heroSubheading: "Heavy-duty DeWalt FlexVolt and XR cordless range with DeWalt TOUGHSYSTEM® 2.0 mobile storage and the GearWrench 288-piece mobile workstation plus $5000 cash.",
     summary: "Heavy-duty DeWalt FlexVolt cordless lineup, TOUGHSYSTEM® 2.0 mobile storage, and the GearWrench 288-piece tool set & mobile workstation plus $5000 cash.",
     prizeValueLabel: "$30,000+ Value",
+    cardBackgroundImage: "/images/majordraws/dewalt-set/dewalt-gearwrench.webp",
     gallery: [
-      { src: "/images/majordraws/toolbox/gearwrenchTB.webp", alt: "GearWrench 288-piece tool set and mobile workstation" },
+      { src: "/images/majordraws/dewalt-set/dewalt-gearwrench.webp", alt: "DeWalt power toolset with the GearWrench 288-piece mobile workstation" },
       ...DEWALT_GALLERY_SHOTS,
       ...GEARWRENCH_TOOLBOX_SHOTS,
     ],
@@ -540,8 +542,9 @@ export const PRIZE_SUMMARIES: PrizeSummary[] = [
     heroSubheading: "Complete Makita 18V LXT brushless professional toolkit with Makita MAKTRAK™ 7pc mobile storage and the GearWrench 288-piece mobile workstation plus $5000 cash.",
     summary: "Makita 18V LXT brushless power tools, MAKTRAK™ 7pc mobile storage system, and the GearWrench 288-piece tool set & mobile workstation plus $5000 cash.",
     prizeValueLabel: "$30,000+ Value",
+    cardBackgroundImage: "/images/majordraws/makita-set/makita-gearwrench.webp",
     gallery: [
-      { src: "/images/majordraws/toolbox/gearwrenchTB.webp", alt: "GearWrench 288-piece tool set and mobile workstation" },
+      { src: "/images/majordraws/makita-set/makita-gearwrench.webp", alt: "Makita power toolset with the GearWrench 288-piece mobile workstation" },
       ...MAKITA_GALLERY_SHOTS,
       ...GEARWRENCH_TOOLBOX_SHOTS,
     ],
@@ -578,8 +581,9 @@ export const PRIZE_SUMMARIES: PrizeSummary[] = [
     heroSubheading: "Complete HiKOKI 36V/18V MultiVolt 15-piece cordless kit with the HiKOKI Multi Cruiser 3-piece storage set and the GearWrench 288-piece mobile workstation plus $5000 cash.",
     summary: "HiKOKI MultiVolt brushless power tools and nailers, the IP65 Multi Cruiser storage system, and the GearWrench 288-piece tool set & mobile workstation plus $5000 cash.",
     prizeValueLabel: "$30,000+ Value",
+    cardBackgroundImage: "/images/majordraws/hikoki-set/hikoki-gearwrench.webp",
     gallery: [
-      { src: "/images/majordraws/toolbox/gearwrenchTB.webp", alt: "GearWrench 288-piece tool set and mobile workstation" },
+      { src: "/images/majordraws/hikoki-set/hikoki-gearwrench.webp", alt: "HiKOKI power toolset with the GearWrench 288-piece mobile workstation" },
       ...HIKOKI_GALLERY_SHOTS,
       ...GEARWRENCH_TOOLBOX_SHOTS,
     ],
