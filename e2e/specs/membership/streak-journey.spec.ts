@@ -51,13 +51,43 @@ async function runStreakJourney(page: Page, demo: Demo, testInfo: TestInfo): Pro
   // The dashboard's subscription-explainer overlay (src/app/(site)/my-account/page-client.tsx)
   // auto-opens ~2.5s after mount, but ONLY the first time a session with an ACTIVE
   // subscription lands on /my-account (gated on hasSeenExplainer(userId) — a fresh browser
-  // context has no localStorage). Beats 1-2 below are guest/one-time (never active), so
-  // Beat 3 is the very first qualifying load; dismissing it there is enough for the rest of
-  // the journey — Escape closes it via the same onClose path a backdrop click would, which
-  // calls markExplainerSeen(userId) (src/components/modals/UnifiedModalManager.tsx), and
-  // that localStorage key persists across every later reload/goto in this same context.
+  // context has no localStorage). Escape closes it via the same onClose path a backdrop click
+  // would, which calls markExplainerSeen(userId) (src/components/modals/UnifiedModalManager.tsx),
+  // and that localStorage key persists across every later reload/goto in this same context.
   // Mirrors the proven helper in e2e/specs/account/my-account.spec.ts.
+  //
+  // Task-4 root cause (Finding 1), round 1: dismissing ONLY around Beat 3 was not enough —
+  // the very first time this modal is requested, its component is a `next/dynamic` chunk
+  // (UnifiedModalManager.tsx) that has never been fetched/parsed by the browser before, and
+  // that fetch+parse can push #sem-headline's actual DOM appearance past this helper's own
+  // wait budget. When that race is lost, Escape is never pressed, markExplainerSeen(userId)
+  // never runs, hasSeenExplainer(userId) stays false, and the explainer's 2.5s auto-open
+  // timer re-arms on EVERY subsequent full-page navigation.
+  //
+  // Round 2 (live proof-mode evidence, not just theory): calling this helper after every
+  // navigation still was NOT enough — cue-midpoint frames from an actual proof render still
+  // caught the explainer open at cues 3, 4, 5, 6, AND 9 (mid-cancellation-flow, inside
+  // openManageSheetAndGetCancelButton). The wait below races the explainer's fixed 2.5s
+  // delay PLUS the `accountData` fetch that has to resolve before that delay even starts
+  // ticking (page-client.tsx's effect is gated on `accountData` being loaded) — under proof
+  // mode's slowMo:200 and this dev server's per-route first-compile latency, that combined
+  // time is not reliably bounded from the test side no matter how this helper is called.
+  //
+  // Fix: stop racing it. The app's own gate is a plain, synchronous localStorage read
+  // (`hasSeenExplainer`, src/utils/subscription-explainer-storage.ts) — seeding that exact
+  // key up front, via the SAME `page.addInitScript` technique `seedCelebrationMarker` below
+  // already uses in this file, makes the explainer provably unable to schedule its timer at
+  // all for the rest of this browser context, instead of probabilistically dismissing it
+  // after it's already on screen. See the `addInitScript` call right after this helper.
+  //
+  // This helper is kept as a defensive backstop at every navigation that can re-arm the
+  // modal (in case a future change to the app's gating logic ever bypasses the seeded key) —
+  // near-free once the key is set, since the fast-skip below returns immediately.
   const dismissSubscriptionExplainerIfItOpens = async () => {
+    const alreadySeen = await page
+      .evaluate((id) => !!window.localStorage.getItem(`subscriptionExplainerSeen_${id}`), userId)
+      .catch(() => false);
+    if (alreadySeen) return;
     const headline = page.locator("#sem-headline");
     const opened = await headline
       .waitFor({ state: "visible", timeout: 4_000 })
@@ -68,6 +98,16 @@ async function runStreakJourney(page: Page, demo: Demo, testInfo: TestInfo): Pro
       await headline.waitFor({ state: "hidden", timeout: 5_000 }).catch(() => {});
     }
   };
+  // Deterministic prevention (see comment above): pre-seed the explainer's own "seen" key so
+  // its auto-open effect (`if (hasSeenExplainer(userId)) return;`, page-client.tsx) never
+  // schedules the timer in the first place, on ANY navigation for the rest of this context.
+  // Registered once, applies to every future page.goto()/reload() automatically — the exact
+  // "PAGE-scoped, no unregister API" mechanism `seedCelebrationMarker`'s own comment (below)
+  // documents, used here for the opposite purpose (permanently OFF rather than re-armed).
+  await page.addInitScript(
+    (key) => window.localStorage.setItem(key, "true"),
+    `subscriptionExplainerSeen_${userId}`
+  );
 
   // ── Beat 1 — not a member yet ───────────────────────────────────────────
   // Warm the route BEFORE the first demo.step so the opening caption lands on a
@@ -88,8 +128,12 @@ async function runStreakJourney(page: Page, demo: Demo, testInfo: TestInfo): Pro
   await expect(guestCta).toBeVisible({ timeout: 30_000 });
 
   await demo.step("Someone with an account but no membership sees what they're missing", async () => {
-    await expect(page.getByText(/Members only/i).first()).toBeVisible({ timeout: 20_000 });
+    // Task-4 fix (Finding 2): highlight FIRST — demo.step already held the caption on screen
+    // before running this body, and streakCard is already visible (asserted above via
+    // guestCta), so there's nothing left to wait on before drawing the ring. The trailing
+    // assertion is unaffected by the reorder — it targets an unrelated locator.
     await demo.highlight(streakCard, "The full reward ladder — the reason to join");
+    await expect(page.getByText(/Members only/i).first()).toBeVisible({ timeout: 20_000 });
   });
 
   // ── Beat 2 — one-time buyer ─────────────────────────────────────────────
@@ -98,7 +142,9 @@ async function runStreakJourney(page: Page, demo: Demo, testInfo: TestInfo): Pro
   await expect(page.getByText(/Members only/i).first()).toBeVisible({ timeout: 30_000 });
 
   await demo.step("A one-time pack buyer sees it too — the ladder is members-only", async () => {
-    await demo.highlight(streakCard, "Still locked — membership is what starts a streak");
+    // Task-4 fix (Finding 3): shortened so the note fits at the desktop render width — it's
+    // supplementary to the caption above, not a second caption.
+    await demo.highlight(streakCard, "Locked — membership starts the streak");
   });
 
   // ── Beat 3 — day one ────────────────────────────────────────────────────
@@ -108,21 +154,26 @@ async function runStreakJourney(page: Page, demo: Demo, testInfo: TestInfo): Pro
   await expect(page.getByText(/New streak/i).first()).toBeVisible({ timeout: 30_000 });
 
   await demo.step("They join. Day one — the streak starts at zero", async () => {
-    await expect(page.getByText(/Fresh steel/i).first()).toBeVisible({ timeout: 20_000 });
+    // Task-4 fix (Finding 2): highlight first — "New streak" was already asserted before this
+    // step opened, so streakCard (and its "Fresh steel" copy) is already rendered.
     await demo.highlight(streakCard, "+100 free entries at their 2nd renewal");
+    await expect(page.getByText(/Fresh steel/i).first()).toBeVisible({ timeout: 20_000 });
   });
 
   // ── Beat 4 — building ───────────────────────────────────────────────────
   await setStreak(3);
   await page.reload();
+  await dismissSubscriptionExplainerIfItOpens();
   await expect(streakCard).toBeVisible({ timeout: 30_000 });
 
   await demo.step("Three renewals in — level 2 is banked, level 4 is next", async () => {
+    // Task-4 fix (Finding 2): highlight first — streakCard (and its "+200 free entries"
+    // pill) is already visible per the assertion above, before this step opened.
+    await demo.highlight(streakCard, "One more renewal for +200 free entries");
     // The "next rung" reward pill renders TWICE (a persistent copy + a hover-reveal
     // copy hidden via CSS `hidden`, both real DOM text) — .first() avoids a strict-mode
     // violation, not a loosened assertion (both nodes carry the identical, correct text).
     await expect(page.getByText(/\+200 free entries/i).first()).toBeVisible({ timeout: 20_000 });
-    await demo.highlight(streakCard, "One more renewal for +200 free entries");
   });
 
   // ── Beat 5 — the payoff ─────────────────────────────────────────────────
@@ -130,6 +181,7 @@ async function runStreakJourney(page: Page, demo: Demo, testInfo: TestInfo): Pro
   await seedCelebrationMarker(page, userId, 3);
   await setStreak(4, { streakEntries: 300 });
   await page.reload();
+  await dismissSubscriptionExplainerIfItOpens();
   await expect(page.getByText(/free entries landed/i).first()).toBeVisible({ timeout: 30_000 });
 
   // Regression guard (review round 2): from here on entriesBySource.streak > 0, which is
@@ -144,8 +196,13 @@ async function runStreakJourney(page: Page, demo: Demo, testInfo: TestInfo): Pro
   await expect(wallet).not.toContainText(/LEVEL|FOUNDING/i); // mirror-image check
 
   await demo.step("Their 4th renewal lands — 200 free entries, granted automatically", async () => {
+    // Task-4 fix (Finding 2): highlight first — the regression guard above already proved
+    // streakCard is the right, visible card before this step opened. The caption already
+    // says "200 free entries, granted automatically"; the note just adds which draw (Finding
+    // 3: shortened so it fits at the desktop render width, no longer repeating the entry
+    // count the caption already gave).
+    await demo.highlight(streakCard, `Straight into the ${DRAW_NAME}`);
     await expect(page.getByText(new RegExp(DRAW_NAME, "i")).first()).toBeVisible({ timeout: 20_000 });
-    await demo.highlight(streakCard, `+200 free entries, straight into the ${DRAW_NAME}`);
   });
 
   // seedCelebrationMarker's addInitScript is PAGE-scoped and Playwright has no API to
@@ -162,33 +219,48 @@ async function runStreakJourney(page: Page, demo: Demo, testInfo: TestInfo): Pro
   // ── Beat 6 — entries proof ──────────────────────────────────────────────
   await setStreak(6, { streakEntries: 600 });
   await page.reload();
+  await dismissSubscriptionExplainerIfItOpens();
   await expect(wallet).toBeVisible({ timeout: 30_000 });
 
   await demo.step("Six renewals in — 600 free entries banked from the streak alone", async () => {
+    // Task-4 fix (Finding 2): highlight right after the scroll settles, before the trailing
+    // assertion — demo.ts's own contract requires the scroll to finish BEFORE highlight is
+    // called (the ring doesn't track scroll), so this is as early as it can legally run.
     await demo.smoothScrollTo(wallet);
-    await expect(wallet.getByText(/Streak/i).first()).toBeVisible({ timeout: 20_000 });
     await demo.highlight(wallet, "600 free entries, on top of their monthly entries");
+    await expect(wallet.getByText(/Streak/i).first()).toBeVisible({ timeout: 20_000 });
   });
 
   // ── Beat 7 — Founding ───────────────────────────────────────────────────
   await setStreak(12, { streakEntries: 2100 });
   await page.goto("/my-account");
+  await dismissSubscriptionExplainerIfItOpens();
   await expect(page.getByText(/Founding member/i).first()).toBeVisible({ timeout: 30_000 });
 
   await demo.step("Twelve renewals — the permanent Founding member badge", async () => {
-    await demo.highlight(streakCard, "The ladder now repeats, every year they stay");
+    // Task-4 fix (Finding 3): shortened so the note fits at the desktop render width.
+    await demo.highlight(streakCard, "The ladder repeats every year");
   });
 
   // ── Beat 8 — forgiving ──────────────────────────────────────────────────
   await setPastDue(7);
   await page.goto("/my-account");
+  await dismissSubscriptionExplainerIfItOpens();
   await expect(page.getByText(/Payment issue/i).first()).toBeVisible({ timeout: 30_000 });
 
   await demo.step("A failed payment doesn't burn the streak — fixing the card carries it on", async () => {
+    // Task-4 fix (Finding 2): highlight first — streakCard is already on screen (asserted via
+    // "Payment issue" above). Finding 3: note shortened so it fits at the desktop render width.
+    await demo.highlight(streakCard, "Nothing lost");
+    // This caption is one of the longest in the journey (holdFor ≈ 4.2s), which pushed the
+    // ring's actual draw time past this cue's own geometric midpoint in a proof-mode
+    // frame-audit (verified: ring landed ~0.4s after the midpoint) — a short explicit dwell
+    // after highlight is the sanctioned fix (demo.ts's own contract), cheap here since it
+    // only delays the (already-passing) trailing assertion below.
+    await page.waitForTimeout(1_500);
     // "streak's safe" sits inside a <b> nested in the footer <p> — both contain the
     // matching substring, so .first() resolves the strict-mode ambiguity.
     await expect(page.getByText(/streak.{0,10}s safe/i).first()).toBeVisible({ timeout: 20_000 });
-    await demo.highlight(streakCard, "Nothing banked is lost");
   });
 
   // Beats 9 & 10 share this exact cancel-flow entry — extracted so the two can't drift out
@@ -203,18 +275,12 @@ async function runStreakJourney(page: Page, demo: Demo, testInfo: TestInfo): Pro
   // inside a narrated demo.step (its "tries to cancel" moment), beat 10 doesn't narrate
   // that part at all, so the click stays with each caller.
   //
-  // Task-4 fix: `dismissSubscriptionExplainerIfItOpens()` here too, BEFORE the "Manage
-  // membership" wait. Evidence (task-4-fix-report.md): the Beat-3 dismissal does NOT
-  // reliably stick — the end-of-step screenshots for Beat 3 AND the old Beat 9 both show
-  // the explainer ("Entry Accumulation Over Time", z-index 90) still fully open, meaning
-  // Escape was never pressed there (its 4s catch window loses the race against the
-  // component's first-ever `next/dynamic` chunk compile) and `markExplainerSeen` never
-  // ran — so `hasSeenExplainer` stays false and the explainer's own 2.5s auto-open timer
-  // re-arms on EVERY subsequent full-page navigation, including this one. This `goto` is
-  // exactly such a navigation, so it must be neutralized here too, every time — this is
-  // the shared choke point both beats already go through, and it runs entirely before
-  // either beat's `demo.step` opens (never inside one — a caption must not hold over a
-  // modal being dismissed, docs/e2e/proof-mode.md round 4).
+  // `dismissSubscriptionExplainerIfItOpens()` here too, BEFORE the "Manage membership" wait
+  // — see the helper's own comment for the root cause (a lost race on the explainer's
+  // first-ever `next/dynamic` chunk load re-arming its 2.5s auto-open timer on every later
+  // navigation). This `goto` is exactly such a navigation. Runs entirely before either
+  // beat's `demo.step` opens (never inside one — a caption must not hold over a modal being
+  // dismissed, docs/e2e/proof-mode.md round 4).
   const openManageSheetAndGetCancelButton = async () => {
     await page.goto("/my-account?open=subscription");
     await dismissSubscriptionExplainerIfItOpens();
@@ -228,18 +294,16 @@ async function runStreakJourney(page: Page, demo: Demo, testInfo: TestInfo): Pro
   // only the SCREEN it reveals afterward (and whether that reveal happens before or inside
   // the next demo.step) differs per beat.
   //
-  // Second `dismissSubscriptionExplainerIfItOpens()` checkpoint (task-4 fix, round 2):
-  // `openManageSheetAndGetCancelButton()`'s own dismissal above is a fixed 4s window
-  // starting right after `page.goto` — but the explainer's 2.5s timer only starts once
-  // `accountData` has loaded (page-client.tsx), so on a slower load its headline can still
-  // land AFTER that 4s window closes (verified live: the first attempt at this exact fix
-  // still failed here, in NORMAL mode, with the same "Entry Accumulation Over Time...
-  // intercepts pointer events" error — see task-4-fix-report.md). By the time we reach
-  // THIS point, `cancelButton.click()` + its own "what's making you leave" wait + the
+  // Second `dismissSubscriptionExplainerIfItOpens()` checkpoint: `openManageSheetAndGetCancelButton()`'s
+  // own dismissal above is a fixed window starting right after `page.goto` — but the
+  // explainer's 2.5s timer only starts once `accountData` has loaded (page-client.tsx), so
+  // on a slower load its headline can still land AFTER that window closes. By the time we
+  // reach THIS point, `cancelButton.click()` + its own "what's making you leave" wait + the
   // reason step's render have already consumed several more seconds since that `goto` —
   // comfortably past the explainer's 2.5s timer either way — so re-checking here is what
-  // actually closes the race, not just moving it later. Cheap when already dismissed
-  // (`#sem-headline` never appears, ~4s no-op); load-bearing when it isn't.
+  // actually closes the race, not just moving it later. Near-free once already dismissed
+  // (the helper's own localStorage fast-skip returns immediately — no #sem-headline wait at
+  // all by this point in the journey); load-bearing on the rare run where it isn't.
   //
   // Explicit `{ timeout: 10_000 }` on both clicks: playwright.config.ts sets no
   // `actionTimeout`, so an actionability wait with no bound never expires — a click on an
@@ -282,8 +346,11 @@ async function runStreakJourney(page: Page, demo: Demo, testInfo: TestInfo): Pro
   });
 
   await demo.step("Pausing freezes the streak instead of ending it — the strongest save we have", async () => {
-    await expect(page.getByText(/Pausing freezes your streak/i).first()).toBeVisible({ timeout: 20_000 });
+    // Task-4 fix (Finding 2): highlight first — this is the same stakes screen the previous
+    // step already asserted onto ("+400 free entries"), no click happened in between, so the
+    // "Keep my streak" button is already rendered.
     await demo.highlight(page.getByRole("button", { name: /Keep my streak/i }), "One tap keeps it alive");
+    await expect(page.getByText(/Pausing freezes your streak/i).first()).toBeVisible({ timeout: 20_000 });
   });
 
   // ── Beat 10 — forward framing ───────────────────────────────────────────
@@ -299,8 +366,10 @@ async function runStreakJourney(page: Page, demo: Demo, testInfo: TestInfo): Pro
   await expect(page.getByText(/just.{0,10}getting started/i).first()).toBeVisible({ timeout: 20_000 });
 
   await demo.step("A newer member sees the other side of it — the ladder ahead, not the loss", async () => {
-    await expect(page.getByText(/ONE renewal away/i).first()).toBeVisible({ timeout: 20_000 });
+    // Task-4 fix (Finding 2): highlight first — "just...getting started" was already
+    // asserted before this step opened, on the same screen that also renders "2nd renewal".
     await demo.highlight(page.getByText(/2nd renewal/i).first(), "One renewal from their first +100");
+    await expect(page.getByText(/ONE renewal away/i).first()).toBeVisible({ timeout: 20_000 });
   });
 
   // ── Beat 11 — the legals ────────────────────────────────────────────────
@@ -309,8 +378,51 @@ async function runStreakJourney(page: Page, demo: Demo, testInfo: TestInfo): Pro
   await expect(clause).toBeVisible({ timeout: 30_000 });
   await demo.smoothScrollTo(clause);
 
+  // Task-4 fix (Finding 4): demo.ts's shared smoothScrollTo (not modified here — it's generic
+  // infra every @demo spec uses) puts `clause` on screen via a fixed ~35%-from-top offset, but
+  // has no idea §5.2 sits directly below it on THIS page: "Mini Draws have a capped entry
+  // threshold based solely on Mini Pack entries sold" (src/app/(site)/terms/page.tsx) directly
+  // contradicts this beat's own caption ("free entries, never sold"). The owner decided NOT to
+  // change the live terms copy, so the SHOT is re-framed instead: after the human-paced glide
+  // settles, nudge the scroll further up (a plain instant scrollBy — the viewer already watched
+  // the page glide once, a second glide would be redundant motion) just far enough that §5.2's
+  // "entries sold" bullet clears the bottom edge, while keeping `clause` on screen with a
+  // margin. Computed from each locator's OWN current bounding box, not a hardcoded pixel
+  // guess, so it holds under both the mobile and desktop viewport heights this journey renders
+  // under. Grepped unique across the whole terms page (src/app/(site)/terms/page.tsx) — "entries
+  // sold" appears exactly once, in §5.2 — so `.first()` cannot resolve to anything else.
+  // Round 2 (live proof-mode evidence): a flat 24px top margin left `clause` sitting right
+  // under demo.ts's own caption pill, which on mobile is pinned to `top:6px` (showCaption,
+  // narrow-viewport branch) and sits at a HIGHER z-index than the highlight ring
+  // (2147483647 vs 2147483646) — cue-midpoint frames showed the ring simply not visible,
+  // painted but covered by the caption's own near-opaque background. `topMargin` has to
+  // clear that pill's rendered height on the narrowest viewport this journey uses, not just
+  // keep `clause`'s top edge inside the frame.
+  const soldClause = page.getByText(/entries sold/i).first();
+  const [clauseBox, soldBox] = await Promise.all([clause.boundingBox(), soldClause.boundingBox()]);
+  const viewport = page.viewportSize();
+  if (clauseBox && soldBox && viewport && soldBox.y < viewport.height) {
+    const topMargin = 130; // clears the mobile caption pill + breathing room
+    const bottomMargin = 24;
+    // How far §5.2's bullet needs to move down (off the bottom) to clear the frame, capped so
+    // `clause` itself never gets pushed above topMargin in the process.
+    const wanted = viewport.height - soldBox.y + bottomMargin;
+    const capped = Math.min(wanted, Math.max(0, clauseBox.y - topMargin));
+    if (capped > 0) {
+      await page.evaluate((delta) => window.scrollBy(0, -delta), capped);
+    }
+  }
+
   await demo.step("And it's covered in the terms — free entries, never sold", async () => {
     await demo.highlight(clause, "Section 5.1 — additional free entries");
+    // This is the CLOSING beat — unlike every earlier one, its cue span isn't padded by a
+    // following beat's setup work (there is no Beat 12), so it's just hold+body, and this
+    // caption's hold alone (~3.3s) already eats most of that short span. A proof-mode
+    // frame-audit confirmed the ring draws correctly (the raw end-of-step screenshot shows
+    // it cleanly) but not until near the very end of the cue — after its geometric midpoint.
+    // A held final frame is also just the right way to end a demo video, so this dwell is
+    // both the fix and the right call: let the last, legally-load-bearing shot linger.
+    await page.waitForTimeout(4_000);
   });
 }
 
