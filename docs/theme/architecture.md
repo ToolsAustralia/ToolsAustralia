@@ -12,15 +12,57 @@
 
 ## Default & persistence
 
-**Light is the hard default.** The theme changes only when the user taps the toggle; the
-choice is persisted in `localStorage` under `ta-theme` (Zustand `persist`). No time-of-day
-or `prefers-color-scheme` auto mode — a new visitor always gets light regardless of clock or
-OS preference.
+**Light is the hard default.** The theme changes only when the user taps the toggle, or when
+the promo default-theme experiment assigns one (see below); the resulting state is persisted
+in `localStorage` under `ta-theme` (Zustand `persist`). No time-of-day or `prefers-color-scheme`
+auto mode — a new, un-experimented visitor always gets light regardless of clock or OS preference.
 
-[src/stores/useThemeStore.ts](../../src/stores/useThemeStore.ts) holds `{ theme, setTheme, toggleTheme }`
-and a `persist` `version: 1` `migrate` that resolves **legacy auto-dark** (v0 wrote `theme: "dark"`
-with `userManualOverride === false` for users who never chose dark) back to the light default,
-while keeping a genuinely user-chosen dark.
+[src/stores/useThemeStore.ts](../../src/stores/useThemeStore.ts) holds
+`{ theme, userManualOverride?: true, setTheme, toggleTheme }` at **persist `version: 2`**.
+`userManualOverride` is typed as the literal `true` (not `boolean`) — this makes "persisted as
+`false`" unrepresentable at the type level, on purpose (see the never-`false` rule below).
+
+### `userManualOverride`: never persist `false`
+
+`userManualOverride` becomes `true` once — and only once — the visitor has picked a theme
+themselves. `setTheme` and `toggleTheme` are the **only** writers of the flag, and both set it
+to `true`; nothing in the codebase sets it to `false`. Two non-React readers of `ta-theme` key
+their behaviour off this flag being present and not `false`:
+
+- the CSP-hashed inline bootstrap script (`THEME_BOOTSTRAP_SNIPPET` in
+  `src/utils/security/inline-snippets.ts`), which applies `.dark` to `<html>` before paint, and
+- `readThemeFromPersistStorage()` in `src/utils/themeBootstrap.ts`.
+
+Both test `userManualOverride !== false`. Because `useThemeStore` has **no `partialize`**, every
+key in the store is written to `localStorage` — so if `userManualOverride: false` were ever set,
+it would persist and **both** readers would demote a stored `theme: "dark"` back to light. For
+the promo default-theme experiment this would silently evaporate the dark arm on every hard page
+load, with no error anywhere. The fix is structural, not just conventional: the flag is either
+`true` or absent, never `false`.
+
+### The unmarked write path: `useThemeStore.setState`
+
+`ThemeContext`'s bootstrap effect and the promo default-theme experiment both assign a theme via
+`useThemeStore.setState({ theme: ... })` directly, **bypassing** `setTheme`/`toggleTheme`. This is
+deliberate: it lets bootstrap resolve the effective theme from storage, and lets the experiment
+assign a default arm, without marking the visitor as having made a manual choice. If either of
+these called `setTheme`/`toggleTheme` instead, it would wrongly flag the visitor as having chosen
+their theme and permanently exclude them from future experiment assignment.
+
+### Migration: `migrateThemeState`, and no chaining
+
+`migrateThemeState` (exported from `useThemeStore.ts` for direct testing — see
+[testing.md](./testing.md)) resolves **legacy auto-dark** (v0 wrote `theme: "dark"` with
+`userManualOverride === false` for users who never chose dark) back to the light default, while
+keeping a genuinely user-chosen dark and dropping the flag entirely when it isn't `true`.
+
+zustand's `persist` middleware calls `migrate(persistedState, version)` **once**, with whatever
+version number is found in storage — it does **not** chain intermediate migrations. There are
+still live v0 records in the wild (`{ theme: "dark", userManualOverride: false }`), so the v2
+`migrateThemeState` must keep handling that shape directly; it cannot assume a v1 migration ran
+first. The v0 predicate is load-bearing and must stay verbatim:
+`prev.theme === "dark" && prev.userManualOverride !== false`. Dropping it would resurrect the
+removed auto-dark bug and pin those users to dark permanently.
 
 ## Bootstrap
 

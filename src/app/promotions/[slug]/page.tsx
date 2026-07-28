@@ -54,6 +54,8 @@ import { createCachedQuery } from "@/utils/database/queries/server-queries";
 import mongoose from "mongoose";
 import ExperimentService from "@/services/ab-testing/ExperimentService";
 import { VariantAssignmentWrapper } from "@/components/ab-testing/VariantAssignmentWrapper";
+import { PromoThemeExperimentGate } from "@/components/ab-testing/PromoThemeExperimentGate";
+import { PROMO_THEME_SLUG } from "@/lib/ab-testing/promo-theme-slug";
 import type { PromoImagePaths } from "@/utils/promo/promo-hero-types";
 import { resolveEvergreenHeroImages } from "@/utils/promo/landing-image-resolver";
 import { getLandingHeroImagePaths } from "@/config/promo-landing-slugs";
@@ -125,15 +127,26 @@ export default async function PromotionsPage({ params }: PromotionsPageProps) {
   }
 
   // Fetch effective promos (scheduled > toggle > alternating), major draw, and A/B testing experiment data server-side in parallel
-  const [effectivePromos, majorDraw, activeExperiment] = await Promise.all([
+  const [effectivePromos, majorDraw, activeExperiment, themeExperiment] = await Promise.all([
     getEffectivePromosForDisplay().catch(() => []), // Gracefully handle errors
     getCurrentMajorDrawServer().catch(() => null), // Gracefully handle errors
     ExperimentService.getActiveExperimentForSlug(slug).catch(() => null), // Gracefully handle errors
+    ExperimentService.getActiveExperimentForSentinelSlug(PROMO_THEME_SLUG).catch(() => null), // Gracefully handle errors
   ]);
 
   // Extract promo data for components (effective includes scheduled, toggle, and alternating)
   const membershipPromo = effectivePromos.find((p) => p.type === "membership-packages") || null;
   const oneTimePromo = effectivePromos.find((p) => p.type === "one-time-packages") || null;
+
+  // Sentinel default-theme experiment id, baked into this ISR snapshot — identical for
+  // every visitor of the current 60s window. Derived here (ahead of the preload block
+  // below) because the preload guard needs it; `experimentId` for the slug-targeted
+  // experiment stays where it was, further down.
+  const themeExperimentId = themeExperiment?._id
+    ? themeExperiment._id instanceof mongoose.Types.ObjectId
+      ? themeExperiment._id.toString()
+      : String(themeExperiment._id)
+    : null;
 
   // Preload: brand folder heroes per prize slug (`landing/{brand}/…`); cash-prize uses all-prizes collage
   const landingForPrize = getLandingHeroImagePaths(prize.slug);
@@ -153,12 +166,19 @@ export default async function PromotionsPage({ params }: PromotionsPageProps) {
   // image request actually resolves to, so it silently preloads nothing useful. See
   // docs/promo/gotchas.md and ToolsetLandingPage.tsx (same pattern).
   const heroVideo = getLandingHeroVideoPaths(prize.slug, landingDrawDayUrgency);
-  const heroImagePreload = heroVideo
-    ? null
-    : {
-        mobile: getImageProps({ src: heroImagePaths.mobile, alt: "", fill: true, sizes: "100vw" }).props,
-        desktop: getImageProps({ src: heroImagePaths.desktop, alt: "", fill: true, sizes: "100vw" }).props,
-      };
+  // A theme experiment makes the server's light-path preload a coin flip: half of
+  // visitors would download a hero they never display (the server has no theme, so
+  // this preload can only ever emit the LIGHT paths). Skipping it while the test is
+  // live costs both arms equally, which is the only fair option — a preload biased
+  // toward one arm would read as "dark converts worse" and corrupt the experiment's
+  // own result. See docs/promo/gotchas.md.
+  const heroImagePreload =
+    heroVideo || themeExperimentId
+      ? null
+      : {
+          mobile: getImageProps({ src: heroImagePaths.mobile, alt: "", fill: true, sizes: "100vw" }).props,
+          desktop: getImageProps({ src: heroImagePaths.desktop, alt: "", fill: true, sizes: "100vw" }).props,
+        };
 
   // Get experiment ID for variant assignment
   const experimentId = activeExperiment?._id 
@@ -194,69 +214,71 @@ export default async function PromotionsPage({ params }: PromotionsPageProps) {
       <VariantAssignmentWrapper
         experimentId={experimentId}
       >
-        <PromoThemeInitializer slug={prize.slug} />
-        <PromoViewTracking
-          promo={{
-            slug: prize.slug,
-            title: prize.heroHeading || prize.label,
-            prizeName: prize.label,
-            prizeImageUrl: prize.gallery?.[0]?.src,
-          }}
-        />
-        <div className="min-h-svh bg-white dark:bg-neutral-950 w-full overflow-hidden">
-          <PromoBanner initialMembershipPromo={membershipPromo} initialOneTimePromo={oneTimePromo} />
+        <PromoThemeExperimentGate experimentId={themeExperimentId}>
+          <PromoThemeInitializer slug={prize.slug} />
+          <PromoViewTracking
+            promo={{
+              slug: prize.slug,
+              title: prize.heroHeading || prize.label,
+              prizeName: prize.label,
+              prizeImageUrl: prize.gallery?.[0]?.src,
+            }}
+          />
+          <div className="min-h-svh bg-white dark:bg-neutral-950 w-full overflow-hidden">
+            <PromoBanner initialMembershipPromo={membershipPromo} initialOneTimePromo={oneTimePromo} />
 
-          <main className="w-full overflow-hidden">
-            <div className="flex flex-col lg:min-h-0 w-full">
-              <PromoHero
-                initialPromo={membershipPromo}
-                initialMajorDraw={majorDraw}
-                prizeSlug={prize.slug}
-              />
-            </div>
+            <main className="w-full overflow-hidden">
+              <div className="flex flex-col lg:min-h-0 w-full">
+                <PromoHero
+                  initialPromo={membershipPromo}
+                  initialMajorDraw={majorDraw}
+                  prizeSlug={prize.slug}
+                />
+              </div>
 
-            <PromoTrustBar initialMajorDraw={majorDraw} />
+              <PromoTrustBar initialMajorDraw={majorDraw} />
 
-            <Suspense fallback={<div className="min-h-[400px]" />}>
-              <PromoPackages />
-            </Suspense>
+              <Suspense fallback={<div className="min-h-[400px]" />}>
+                <PromoPackages />
+              </Suspense>
 
-            <Suspense fallback={<div className="min-h-[600px]" />}>
-              <PrizeShowcase slug={prize.slug} />
-            </Suspense>
+              <Suspense fallback={<div className="min-h-[600px]" />}>
+                <PrizeShowcase slug={prize.slug} />
+              </Suspense>
 
-            <Suspense fallback={<div className="min-h-[300px]" />}>
-              <GiveawayDetails />
-            </Suspense>
+              <Suspense fallback={<div className="min-h-[300px]" />}>
+                <GiveawayDetails />
+              </Suspense>
 
-            <Suspense fallback={<div className="min-h-[400px]" />}>
-              <LatestWinnerHero contentWrapperClassName="w-full px-4 sm:px-0 max-w-7xl mx-auto relative z-10" />
-            </Suspense>
+              <Suspense fallback={<div className="min-h-[400px]" />}>
+                <LatestWinnerHero contentWrapperClassName="w-full px-4 sm:px-0 max-w-7xl mx-auto relative z-10" />
+              </Suspense>
 
-            <Suspense fallback={<div className="min-h-[200px]" />}>
-              <WinnerTestimoniesClientLazy />
-            </Suspense>
+              <Suspense fallback={<div className="min-h-[200px]" />}>
+                <WinnerTestimoniesClientLazy />
+              </Suspense>
 
-            <Suspense fallback={null}>
-              <PartnerBenefitsPromoSectionClient />
-            </Suspense>
+              <Suspense fallback={null}>
+                <PartnerBenefitsPromoSectionClient />
+              </Suspense>
 
-            <Suspense fallback={<div className="min-h-[400px]" />}>
-              <PromoFAQs />
-            </Suspense>
+              <Suspense fallback={<div className="min-h-[400px]" />}>
+                <PromoFAQs />
+              </Suspense>
 
-            <BrandsShowcase />
+              <BrandsShowcase />
 
-            <Suspense fallback={<div className="min-h-[300px]" />}>
-              <UnlockDiscounts />
-            </Suspense>
-          </main>
+              <Suspense fallback={<div className="min-h-[300px]" />}>
+                <UnlockDiscounts />
+              </Suspense>
+            </main>
 
-        <FloatingGetEntriesButton />
-        <Suspense fallback={null}>
-          <PromotionsAccountButton />
-        </Suspense>
-      </div>
+          <FloatingGetEntriesButton />
+          <Suspense fallback={null}>
+            <PromotionsAccountButton />
+          </Suspense>
+        </div>
+        </PromoThemeExperimentGate>
       </VariantAssignmentWrapper>
     </>
   );

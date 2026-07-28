@@ -268,7 +268,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
 ```json
 {
   "version": 1,
-  "lastModified": "2026-07-27",
+  "lastModified": "2026-07-28",
   "domains": {
     "subscription": {
       "docs": "docs/subscription/",
@@ -424,6 +424,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/app/(site)/promotion/**",
         "src/components/promo/**",
         "src/components/banners/**",
+        "src/components/sections/promo/**",
         "src/hooks/usePromoLink.ts",
         "src/hooks/usePromoPageTracking.ts",
         "src/hooks/usePromoWelcomeModal.ts",
@@ -624,9 +625,10 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/repositories/ab-testing/**",
         "src/app/api/ab-testing/**",
         "src/models/ab-testing/**",
-        "src/utils/ab-testing/**"
+        "src/utils/ab-testing/**",
+        "src/lib/ab-testing/**"
       ],
-      "lastVerified": "2026-07-06"
+      "lastVerified": "2026-07-28"
     },
     "metrics-analytics": {
       "docs": "docs/metrics-analytics/",
@@ -665,7 +667,8 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/contexts/ThemeContext.tsx",
         "src/contexts/AdminThemeContext.tsx",
         "src/stores/useThemeStore.ts",
-        "src/stores/usePromoThemeStore.ts"
+        "src/stores/usePromoThemeStore.ts",
+        "src/stores/__tests__/**"
       ],
       "lastVerified": "2026-04-28"
     },
@@ -808,7 +811,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/models/RateLimit.ts",
         "next.config.ts"
       ],
-      "lastVerified": "2026-07-22"
+      "lastVerified": "2026-07-28"
     },
     "mongodb": {
       "docs": "docs/mongodb/",

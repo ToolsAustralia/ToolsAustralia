@@ -192,6 +192,36 @@ exists for brand prize slugs, so the toggle is a no-op on slugs with no video.
 Note admins are excluded from assignment, so to see a variant either browse as a
 non-admin or use admin **Preview**.
 
+## A/B VariantConfigEditor — config initializer now spreads stored config; "Promo Landing Default Theme" control (2026-07-28)
+
+[`VariantConfigEditor`](../../src/components/admin/ab-testing/VariantConfigEditor.tsx)'s
+`config:` initializer previously built the form's starting state from an explicit
+six-key whitelist (`hero` / `banner` / `packages` / `membershipModal` /
+`packageColors` / `membershipTheme`). Any key on `VariantConfig` outside that list —
+including the promo-theme-split experiment's `promoTheme` (added to the model in the
+same change) — was silently dropped the first time an admin opened a variant and hit
+Save, even though it correctly round-tripped through the API/service layer. The
+initializer now **spreads `variant?.config ?? {}` first**, then re-asserts the six
+explicit keys (plus the new `promoTheme` key) on top of the spread — the explicit
+keys must come after the spread, not before, since other code in this file reads them
+as always-present objects. This pattern (spread stored config, then re-assert
+known keys) is now the template for adding any future `VariantConfig` key here:
+add the key to the spread-preserving initializer AND surface a control for it,
+or it round-trips silently unless an admin never re-saves the variant.
+
+A new **"Promo Landing Default Theme"** `FormSection` (placed directly after
+"Membership Section Theme") is the admin control for `config.promoTheme.defaultTheme`
+— the theme-split A/B test that picks a bucketed visitor's default light/dark theme on
+promo landing pages (see [ab-testing/architecture.md § Promo landing default-theme
+experiment](../ab-testing/architecture.md) for the field/resolution rule: applies only
+to visitors who have never used the manual theme toggle). It uses the same `Select` primitive
+(`@/components/modals/ui`) as the neighbouring "Countdown behaviour" and package-color
+controls; `Select` has no `description` prop (only per-option descriptions), so the
+explanatory copy is a plain `<p className="text-xs text-gray-500 dark:text-neutral-500">`
+underneath, matching the caption style `Checkbox` renders for its own `description`
+prop elsewhere in this file. Options are `"light"` (labelled "Light (control)") and
+`"dark"`; defaults to `"light"` when unset, mirroring the service-layer default.
+
 ## Components
 
 [src/components/admin/](../../src/components/admin/):

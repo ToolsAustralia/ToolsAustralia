@@ -38,6 +38,39 @@ function run() {
     "error message mentions disableVideo",
   );
 
+  // promoTheme (promo landing default-theme experiment).
+  // Guards the merge whitelist: mergeVariantConfig rebuilds config from an explicit
+  // key list, so a new key that isn't added there is silently dropped on read —
+  // which would make the theme experiment an A/A with plausible-looking data.
+  assert.equal(def.promoTheme?.defaultTheme, "light", "default promoTheme is light");
+
+  const darkArm = VariantConfigService.mergeVariantConfig(def, {
+    promoTheme: { defaultTheme: "dark" },
+  });
+  assert.equal(darkArm.promoTheme?.defaultTheme, "dark", "merged promoTheme survives as dark");
+
+  const lightArm = VariantConfigService.mergeVariantConfig(def, {
+    promoTheme: { defaultTheme: "light" },
+  });
+  assert.equal(lightArm.promoTheme?.defaultTheme, "light", "explicit light arm survives merge");
+
+  const controlArm = VariantConfigService.mergeVariantConfig(def, {});
+  assert.equal(controlArm.promoTheme?.defaultTheme, "light", "empty config falls back to light");
+
+  const okTheme = VariantConfigService.validateVariantConfig({
+    promoTheme: { defaultTheme: "dark" },
+  });
+  assert.equal(okTheme.valid, true, `valid promoTheme should pass: ${okTheme.errors.join(", ")}`);
+
+  const badTheme = VariantConfigService.validateVariantConfig({
+    promoTheme: { defaultTheme: "purple" },
+  });
+  assert.equal(badTheme.valid, false, "unknown defaultTheme should fail validation");
+  assert.ok(
+    badTheme.errors.some((e) => e.includes("defaultTheme")),
+    "error message mentions defaultTheme",
+  );
+
   console.log("variantConfigService.membershipTheme + disableVideo: all assertions passed");
 }
 

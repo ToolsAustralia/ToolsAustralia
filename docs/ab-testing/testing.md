@@ -17,6 +17,16 @@ Run these directly via the `test:<scope>` entries in `package.json` (see [infras
 
 > `test:variant-config-design` was removed 2026-07-06 along with the `VariantConfig.packages.design` field when the promo packages-design experiment concluded (control won) — see [promo-packages-design-runbook.md](./promo-packages-design-runbook.md).
 
+## Seed scripts
+
+`npm run seed:promo-theme[:dry]` seeds the "Promo landing — default theme (light
+vs dark)" draft experiment (sentinel slug `__promo-theme__`). Full details,
+including the mandatory pre-activation `/assign` probe (which requires the admin
+**preview cookie** — a bare unauthenticated `curl` cannot target a specific arm),
+live under [infrastructure/testing.md](../infrastructure/testing.md#ab-seed-promo-landing-default-theme-light-vs-dark)
+per the seed-script documentation precedent (see also
+[seed-static-vs-video-hero-experiment](../infrastructure/testing.md#ab-seed-static-image-vs-video-hero-experiment)).
+
 ## What's NOT well tested
 
 - Statistical significance computation
