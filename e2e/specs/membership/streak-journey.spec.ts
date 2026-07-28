@@ -202,8 +202,22 @@ async function runStreakJourney(page: Page, demo: Demo, testInfo: TestInfo): Pro
   // visible) Cancel button locator; deliberately does NOT click it — beat 9 clicks it
   // inside a narrated demo.step (its "tries to cancel" moment), beat 10 doesn't narrate
   // that part at all, so the click stays with each caller.
+  //
+  // Task-4 fix: `dismissSubscriptionExplainerIfItOpens()` here too, BEFORE the "Manage
+  // membership" wait. Evidence (task-4-fix-report.md): the Beat-3 dismissal does NOT
+  // reliably stick — the end-of-step screenshots for Beat 3 AND the old Beat 9 both show
+  // the explainer ("Entry Accumulation Over Time", z-index 90) still fully open, meaning
+  // Escape was never pressed there (its 4s catch window loses the race against the
+  // component's first-ever `next/dynamic` chunk compile) and `markExplainerSeen` never
+  // ran — so `hasSeenExplainer` stays false and the explainer's own 2.5s auto-open timer
+  // re-arms on EVERY subsequent full-page navigation, including this one. This `goto` is
+  // exactly such a navigation, so it must be neutralized here too, every time — this is
+  // the shared choke point both beats already go through, and it runs entirely before
+  // either beat's `demo.step` opens (never inside one — a caption must not hold over a
+  // modal being dismissed, docs/e2e/proof-mode.md round 4).
   const openManageSheetAndGetCancelButton = async () => {
     await page.goto("/my-account?open=subscription");
+    await dismissSubscriptionExplainerIfItOpens();
     await expect(page.getByText("Manage membership")).toBeVisible({ timeout: 30_000 });
     const cancelButton = page.getByRole("button", { name: /cancel membership/i });
     await expect(cancelButton).toBeVisible({ timeout: 20_000 });
@@ -213,9 +227,36 @@ async function runStreakJourney(page: Page, demo: Demo, testInfo: TestInfo): Pro
   // Reason step: pick "Too expensive right now" and continue — identical in both beats,
   // only the SCREEN it reveals afterward (and whether that reveal happens before or inside
   // the next demo.step) differs per beat.
+  //
+  // Second `dismissSubscriptionExplainerIfItOpens()` checkpoint (task-4 fix, round 2):
+  // `openManageSheetAndGetCancelButton()`'s own dismissal above is a fixed 4s window
+  // starting right after `page.goto` — but the explainer's 2.5s timer only starts once
+  // `accountData` has loaded (page-client.tsx), so on a slower load its headline can still
+  // land AFTER that 4s window closes (verified live: the first attempt at this exact fix
+  // still failed here, in NORMAL mode, with the same "Entry Accumulation Over Time...
+  // intercepts pointer events" error — see task-4-fix-report.md). By the time we reach
+  // THIS point, `cancelButton.click()` + its own "what's making you leave" wait + the
+  // reason step's render have already consumed several more seconds since that `goto` —
+  // comfortably past the explainer's 2.5s timer either way — so re-checking here is what
+  // actually closes the race, not just moving it later. Cheap when already dismissed
+  // (`#sem-headline` never appears, ~4s no-op); load-bearing when it isn't.
+  //
+  // Explicit `{ timeout: 10_000 }` on both clicks: playwright.config.ts sets no
+  // `actionTimeout`, so an actionability wait with no bound never expires — a click on an
+  // element that's covered (the explainer bug above) or never becomes actionable hangs to
+  // the whole test's timeout with no useful error (docs/e2e/proof-mode.md). Bounding each
+  // click here means a future regression fails in ~10s with a clear "intercepts pointer
+  // events" / "not enabled" message at this exact line, not a 20-minute silent hang.
+  // `.check()` on the radio (not `.click()` on its label) is the correct Playwright
+  // primitive for a checkbox/radio — it asserts the resulting checked state as part of its
+  // own actionability wait, so `canContinue` (Step1Reason.tsx) is provably true before the
+  // Continue click ever attempts to fire.
   const chooseTooExpensiveAndContinue = async () => {
-    await page.getByText(/too expensive/i).first().click();
-    await page.getByRole("button", { name: /continue|next/i }).first().click();
+    await dismissSubscriptionExplainerIfItOpens();
+    const reasonRadio = page.getByRole("radio", { name: /too expensive/i });
+    await reasonRadio.check({ timeout: 10_000 });
+    await expect(reasonRadio).toBeChecked({ timeout: 5_000 });
+    await page.getByRole("button", { name: /continue|next/i }).first().click({ timeout: 10_000 });
   };
 
   // ── Beat 9 — the save ───────────────────────────────────────────────────
@@ -278,9 +319,17 @@ test.describe("Membership Streak demo @demo", () => {
   test.use({ storageState: MEMBER_STATE });
   // Proof mode holds every caption (holdFor: max(1800, 300×words) ms) BEFORE running its
   // body AND adds slowMo:200 to every action, so a recording of this 12-beat journey runs
-  // several times longer than a normal pass (~2.5m). A 300s budget timed out mid-render.
-  // Normal runs keep the tighter budget so a real hang still fails fast.
-  test.setTimeout(process.env.E2E_PROOF === "1" ? 1_200_000 : 300_000);
+  // several times longer than a normal pass. Measured (task-4-fix-report.md): the
+  // narration sidecar's own cues show beats 1-9 recording in 65s. 1_200_000 (20 minutes)
+  // was never real headroom for that — it was purely masking the explainer-modal click
+  // hang fixed in this same task, and cost two full render cycles before that hang
+  // surfaced. 300_000 (5 minutes) gives ~2x margin over the full 11-beat journey (beats
+  // 1-9 at 65s, plus beats 10-11's own captions/holds and the two explainer-dismiss
+  // retries `openManageSheetAndGetCancelButton` now performs) while still failing in
+  // minutes, not tens of minutes, if a real hang regresses. Same 300s budget as normal
+  // mode below (proof mode's slowdown is bounded and known, not open-ended, so it doesn't
+  // need a separate, larger number) — one constant covers both.
+  test.setTimeout(300_000);
 
   // This spec drives the ONE shared seeded member (e2e/helpers/db.ts MEMBER) through
   // eleven different lifecycle states via direct DB writes (e2e/seed/streak.ts) — the
