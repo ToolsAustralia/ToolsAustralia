@@ -1,4 +1,5 @@
 import type { Page } from "@playwright/test";
+import mongoose from "mongoose";
 import { connectE2eDb, MEMBER } from "../helpers/db";
 
 /**
@@ -43,7 +44,7 @@ export async function setOneTimeHolder(): Promise<void> {
     { email: MEMBER.email },
     {
       $unset: { subscription: "" },
-      $set: { oneTimePackages: [{ packageId: "apprentice-onetime", isActive: true, purchaseDate: new Date() }] },
+      $set: { oneTimePackages: [{ packageId: "apprentice-pack", isActive: true, purchaseDate: new Date() }] },
     }
   );
 }
@@ -104,8 +105,7 @@ export async function setPastDue(months: number): Promise<void> {
 async function setStreakEntries(streakEntries: number): Promise<void> {
   const db = await connectE2eDb();
   const membership = 15; // the seeded Tradie position (e2e/seed/draw.ts)
-  const { ObjectId } = await import("mongodb");
-  const userId = new ObjectId(await memberUserId());
+  const userId = new mongoose.Types.ObjectId(await memberUserId());
   await db.connection.collection("majordraws").updateOne(
     { status: "active" },
     {
