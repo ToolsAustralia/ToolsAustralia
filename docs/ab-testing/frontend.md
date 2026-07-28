@@ -137,12 +137,47 @@ already `fixed inset-0 z-[100]` with an opaque `background: var(--lo-bg)`
 (`src/app/globals.css`), confirmed before writing this component — so no
 extra wrapper container was needed.
 
-**`revealed` initializes from `settled`, not `false`.** `useState(() =>
-settled)` means that when the hook resolves synchronously (no experiment,
-manual theme choice, already-resolved device — see the three short-circuits
-above), the overlay never enters the DOM at all: it mounts already revealed.
-Only a visitor who is genuinely mid-resolution (a fresh bucketing, requiring
-the network round-trip) ever sees the loader mount.
+**`revealed` initializes from `experimentId`, NOT from `settled`.** It is
+tempting to write `useState(() => settled)` — that would work for a fresh
+visitor, since `settled` is `true` synchronously in the three short-circuit
+cases. But `settled` is not identical between the server and client passes
+for a RETURNING visitor of an ACTIVE experiment: the hook's device-marker
+short circuit reads `localStorage`, which resolves `settled: false` on the
+server (`typeof window === "undefined"`) and `settled: true` on the client
+(the marker is present). That is an element-presence difference between the
+SSR HTML and the client's first hydration render — the loader `<div>` exists
+in one pass and not the other — which React treats as a hydration mismatch
+and recovers from by discarding and re-rendering the affected subtree. On a
+page that deliberately server-renders eight sections for SEO
+(`/promotions/[slug]`), throwing that subtree away on hydration is a real
+cost, and it lands on exactly the visitor segment the device-marker fast
+path exists to help.
+
+`experimentId` does not have this problem: it is resolved server-side and
+baked into the ISR-prerendered, CDN-shared HTML, so it is identical in the
+server and client passes. `useState(() => experimentId === null)` is
+therefore what the initializer uses — `revealed` starts `true` only when
+there is provably no experiment for anyone viewing that snapshot, which
+server and client always agree on.
+
+**Accepted consequence: one extra client frame for a specific segment.**
+Because the client can no longer short-circuit to a revealed initial render
+just from the device marker, a *returning* visitor of an *active* experiment
+now mounts with the overlay showing and reveals it on the very next tick via
+the effect below (`settled` becomes `true` immediately for them, no network
+request). That is a loader flash for one frame, not a light-to-dark snap:
+their theme was already applied pre-paint by the CSP-hashed bootstrap
+snippet (`src/utils/security/inline-snippets.ts`), so the loader they
+briefly see is already in their correct theme. Do not "optimise" this back
+to initializing from `settled` — that reintroduces the hydration mismatch
+above. This cost disappears entirely once the experiment is deactivated
+(`experimentId` becomes `null`, which every visitor — server and client —
+agrees on immediately).
+
+Non-returning visitors and visitors with no active experiment are
+unaffected: for them `settled` is `true` on both passes anyway (no
+experiment) or the effect resolves it within one client tick, same as
+before.
 
 **The apply-once effect's three-step order is load-bearing — do not
 reorder.** Nothing in this app applies the `.dark` class to `<html>`
@@ -161,21 +196,35 @@ only ever run once) instead does, in this exact order:
    `document.documentElement.classList.toggle("dark", resolved === "dark")`
    and `style.colorScheme = resolved` are set directly, bypassing React and
    `ThemeContext` entirely.
-2. **`flushSync(() => setRevealed(true))`.** Forces React to commit the
-   reveal synchronously, in the same tick as step 1's DOM write, so the
-   content becomes visible and the loader unmounts in one paint that already
-   has the correct theme on `<html>` — no intermediate frame.
-3. **`useThemeStore.setState({ theme })` last, and only when `theme !==
-   null`.** This is persistence bookkeeping for future visits, not the
-   mechanism that makes the reveal flicker-free — the DOM was already correct
-   after step 1. `setState` (not `setTheme`/`toggleTheme`) is used
-   deliberately: it does not set `userManualOverride`, so an experiment
-   assignment is never mistaken for a real user choice on a later visit. When
-   `theme === null` (the hook's "nothing new to apply" case — a returning
-   already-bucketed device, a non-experiment visitor, or a manual override),
-   this write is skipped entirely: there is nothing to persist, and calling
-   `setState` here would risk overwriting `userManualOverride` bookkeeping
-   for no reason.
+2. **`queueMicrotask(() => { flushSync(() => setRevealed(true)); ... })`.**
+   `flushSync` cannot be called directly from inside a passive effect —
+   React wraps every effect callback in `CommitContext`, and calling
+   `flushSync` from within it triggers React's "flushSync was called from
+   inside a lifecycle method" `console.error`. That fires on *every* settle,
+   including the synchronous no-op path, so calling it un-deferred would
+   spam the console on every promo page load in dev. Switching to
+   `useLayoutEffect` does **not** fix this — layout effects are wrapped in
+   `CommitContext` too — and it would add an SSR "`useLayoutEffect` does
+   nothing on the server" warning, since this component genuinely renders
+   during ISR. The fix is to defer only the `flushSync` call itself to a
+   microtask via `queueMicrotask`: microtasks still run before the next
+   paint, so the reveal still commits in the same frame as step 1's
+   synchronous DOM write — the one-frame guarantee is preserved — while the
+   call is no longer inside the effect's own call stack. The manual
+   `classList`/`colorScheme` writes in step 1 stay synchronous and stay
+   first; only `flushSync` (and the `setState` in step 3, which now lives in
+   the same microtask callback) move.
+3. **`useThemeStore.setState({ theme })` last, inside the same microtask,
+   and only when `theme !== null`.** This is persistence bookkeeping for
+   future visits, not the mechanism that makes the reveal flicker-free — the
+   DOM was already correct after step 1. `setState` (not
+   `setTheme`/`toggleTheme`) is used deliberately: it does not set
+   `userManualOverride`, so an experiment assignment is never mistaken for a
+   real user choice on a later visit. When `theme === null` (the hook's
+   "nothing new to apply" case — a returning already-bucketed device, a
+   non-experiment visitor, or a manual override), this write is skipped
+   entirely: there is nothing to persist, and calling `setState` here would
+   risk overwriting `userManualOverride` bookkeeping for no reason.
 
 **`inert` for the occluded page.** While `!revealed`, the wrapper `div`
 around `children` gets `inert={!revealed}` so the server-rendered content

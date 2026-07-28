@@ -29,7 +29,13 @@ interface Props {
  */
 export function PromoThemeExperimentGate({ experimentId, children }: Props) {
   const { settled, theme } = usePromoThemeExperiment(experimentId);
-  const [revealed, setRevealed] = useState(() => settled);
+  // Must not initialise from `settled`: that consults localStorage, so it is
+  // false on the server and can be true on the client for a returning
+  // visitor of an active experiment (the device-marker short circuit),
+  // producing a hydration mismatch that makes React discard this page's
+  // server-rendered subtree. `experimentId` is baked into the ISR HTML and
+  // is identical in both passes, so server and client agree on it.
+  const [revealed, setRevealed] = useState(() => experimentId === null);
   const appliedRef = useRef(false);
 
   useEffect(() => {
@@ -48,11 +54,19 @@ export function PromoThemeExperimentGate({ experimentId, children }: Props) {
     root.classList.toggle("dark", resolved === "dark");
     root.style.colorScheme = resolved;
 
-    flushSync(() => setRevealed(true));
+    // flushSync cannot be called from inside a passive effect — React wraps
+    // effect callbacks in CommitContext and warns ("flushSync was called
+    // from inside a lifecycle method"). A microtask still runs before the
+    // next paint, so the content still commits in the same frame as the
+    // class write above; only the flushSync itself is deferred, not the
+    // synchronous DOM writes above it.
+    queueMicrotask(() => {
+      flushSync(() => setRevealed(true));
 
-    if (theme !== null) {
-      useThemeStore.setState({ theme });
-    }
+      if (theme !== null) {
+        useThemeStore.setState({ theme });
+      }
+    });
   }, [settled, theme]);
 
   return (
