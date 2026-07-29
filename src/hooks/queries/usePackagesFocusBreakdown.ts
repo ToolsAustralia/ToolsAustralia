@@ -38,7 +38,7 @@ export interface PackagesFocusBreakdownResponse {
   success: boolean;
   platform: "meta" | "tiktok";
   supported: boolean;
-  reason?: "awaiting-url-mapping";
+  reason?: "not-configured";
   meta: { startDate: string; endDate: string; currency: string; adAccountId: string };
   summary: {
     membership: PackagesFocusTotals;

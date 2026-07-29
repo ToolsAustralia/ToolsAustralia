@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, useEffect, useLayoutEffect, useRef, ReactNode } from "react";
+import React, { createContext, useContext, useLayoutEffect, useRef, ReactNode } from "react";
 import { useThemeStore } from "@/stores/useThemeStore";
 import { readThemeFromPersistStorage } from "@/utils/themeBootstrap";
 
@@ -45,7 +45,7 @@ export const ThemeProvider: React.FC<ThemeProviderProps> = ({ children }) => {
     }
   }, []);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (typeof window === "undefined") return;
 
     const root = document.documentElement;

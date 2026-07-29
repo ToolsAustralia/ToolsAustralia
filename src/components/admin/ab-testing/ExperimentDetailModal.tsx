@@ -21,6 +21,7 @@ import ExperimentResultsDashboard from "./ExperimentResultsDashboard";
 import { Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { DEFAULT_PRIZE_SLUG, listPrizeSummaries } from "@/config/prize-summaries";
+import { isNonConversionSentinelExperiment } from "@/lib/ab-testing/non-conversion-sentinels";
 
 interface ExperimentDetailModalProps {
   isOpen: boolean;
@@ -198,7 +199,11 @@ export default function ExperimentDetailModal({
                 <p className="text-sm text-gray-600 dark:text-neutral-400 mt-1">
                   {experiment.slugTargets.includes("*")
                     ? "All Pages"
-                    : `${experiment.slugTargets.length} page(s)`}
+                    : isNonConversionSentinelExperiment(experiment.slugTargets)
+                      ? // A sentinel is a marker, not a page. Rendering "1 page(s)" made a
+                        // site-wide experiment look scoped to a single URL.
+                        "Site-wide (promo pages)"
+                      : `${experiment.slugTargets.length} page(s)`}
                 </p>
               </div>
               <div>
@@ -405,7 +410,10 @@ export default function ExperimentDetailModal({
                   </Button>
                 </div>
               </div>
-              <ExperimentResultsDashboard experimentId={experimentId} />
+              <ExperimentResultsDashboard
+                experimentId={experimentId}
+                slugTargets={experiment.slugTargets}
+              />
             </>
           )}
         </div>

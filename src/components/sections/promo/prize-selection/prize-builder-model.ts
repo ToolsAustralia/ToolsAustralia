@@ -239,7 +239,10 @@ export interface ComboPresentation {
  * standalone toolbox render and let the caller badge it "combo photo coming". Delete the
  * entry when the shoot lands — nothing else needs to change.
  */
-const COMBOS_AWAITING_COMBO_ART = new Set<string>(["ryobi-gearwrench"]);
+// Empty — every combination now has its composite shot. `ryobi-gearwrench` was the last
+// one outstanding and landed 2026-07-28. Keep the set: it is the seam a future
+// combination slots into while its shoot is pending.
+const COMBOS_AWAITING_COMBO_ART = new Set<string>([]);
 
 /** True when this combination has no composite shot and is showing the standalone box. */
 export function isComboArtPending(toolbox: ToolboxOption, toolset: ToolsetOption): boolean {

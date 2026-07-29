@@ -4,6 +4,7 @@ import {
   derivePackagesFocusForDestination,
   resolvePrimaryRawUrl,
 } from "../packages-focus";
+import { canonicalizeLandingUrl } from "../canonicalize-landing-url";
 
 function testOneTimeParam() {
   assert.equal(
@@ -93,11 +94,67 @@ function testDestinationClassification() {
   );
 }
 
+/**
+ * Multi-URL ads (2026-07-29). TikTok Smart+ `landing_page_url_list` is a genuine array of
+ * DISTINCT promo pages, unlike Meta's carousel cards which usually share one destination.
+ * When the URLs disagree on focus we must NOT inherit a verdict from array order.
+ */
+function testMultiUrlDisagreement() {
+  const membership = "https://toolsaustralia.com.au/promotions/milwaukee";
+  const oneTime = "https://toolsaustralia.com.au/promotions/makita?packages=one-time";
+
+  assert.equal(
+    derivePackagesFocusForDestination({ rawUrls: [membership, oneTime], canonicalUrl: canonicalizeLandingUrl(membership) }),
+    "unclassified",
+    "URLs disagreeing on focus => unclassified, never the first entry's verdict",
+  );
+  assert.equal(
+    derivePackagesFocusForDestination({ rawUrls: [oneTime, membership], canonicalUrl: canonicalizeLandingUrl(oneTime) }),
+    "unclassified",
+    "disagreement is order-independent",
+  );
+
+  // Agreement must still classify — the guard must not make every multi-URL ad unclassified.
+  assert.equal(
+    derivePackagesFocusForDestination({
+      rawUrls: [membership, "https://toolsaustralia.com.au/promotions/dewalt"],
+      canonicalUrl: canonicalizeLandingUrl(membership),
+    }),
+    "membership",
+    "two membership URLs still classify as membership",
+  );
+  assert.equal(
+    derivePackagesFocusForDestination({
+      rawUrls: [oneTime, "https://toolsaustralia.com.au/promotions/hikoki?packages=one-time"],
+      canonicalUrl: canonicalizeLandingUrl(oneTime),
+    }),
+    "one-time",
+    "two one-time URLs still classify as one-time",
+  );
+
+  // Real TikTok shape: same page, different utm/macro params — NOT a disagreement.
+  const tt1 = "https://toolsaustralia.com.au/promotions/milwaukee-milwaukee?utm_source=TIKTOK&utm_id=__CAMPAIGN_ID__";
+  const tt2 = "https://toolsaustralia.com.au/promotions/milwaukee-milwaukee?utm_source=TIKTOK&utm_content=__AID_NAME__";
+  assert.equal(
+    derivePackagesFocusForDestination({ rawUrls: [tt1, tt2], canonicalUrl: canonicalizeLandingUrl(tt1) }),
+    "membership",
+    "same page with differing utm/macro params is not a disagreement",
+  );
+
+  // A single URL is never a disagreement.
+  assert.equal(
+    derivePackagesFocusForDestination({ rawUrls: [oneTime], canonicalUrl: canonicalizeLandingUrl(oneTime) }),
+    "one-time",
+    "single URL classifies normally",
+  );
+}
+
 function run() {
   testOneTimeParam();
   testMembershipDefault();
   testPrimaryRawUrlResolution();
   testDestinationClassification();
+  testMultiUrlDisagreement();
   console.log("packages-focus tests passed");
 }
 

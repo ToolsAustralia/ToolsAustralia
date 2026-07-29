@@ -15,13 +15,13 @@ interface UsePrizeBuildTrackingArgs {
   toolboxSwitches: number;
   toolsetSwitches: number;
   /**
-   * Did the visitor touch ANYTHING (toolbox reel, toolset reel, OR the cash toggle) — distinct
-   * from the two counters above, which count only REEL touches. Cash is not a reel card, so
-   * selecting it never bumps `toolboxSwitches`/`toolsetSwitches` (F-010), but it IS a build
-   * choice worth reporting. Gate the beacon on this flag, not on the counters — gating on
-   * `toolboxSwitches === 0 && toolsetSwitches === 0` would silently drop every cash-only
-   * visitor (their build choice would never reach the visit row). Do not simplify this back
-   * into a counter check.
+  /**
+   * Did the visitor touch ANYTHING (either reel, or the cash toggle)?
+   *
+   * Reported to the server, NOT used to decide whether to report at all — every visitor's build
+   * is recorded so that builders and signups are counted over the same population (F-018). This
+   * is what still answers "did they engage", and it cannot be derived from the two counters:
+   * cash is a toggle rather than a reel card, so a cash-only visitor stays at 0/0 (F-010).
    */
   hasInteracted: boolean;
 }
@@ -72,15 +72,26 @@ export function usePrizeBuildTracking({
       hasInteracted: interacted,
     } = latest.current;
     if (!slug || !built) return;
-    // Gate on INTERACTION, not on the reel counters: cash is a toggle, not a reel touch, so a
-    // cash-only visitor has tb === 0 && ts === 0 forever yet still made a real build choice.
-    // Gating on the counters would silently drop that visitor's build from the visit row (F-010).
-    if (!interacted) return; // never touched anything — the visit row is already correct
+    // NO interaction gate (F-018). It used to return early for a visitor who never touched the
+    // reels, which put the visit and signup rows on different populations: the signup path
+    // records the page's default build for those visitors, so `signups` counted them while
+    // `builders` did not, and `signups / builders` could exceed 100% — the same class of
+    // visibly-impossible number as the 250% switched-away column (F-013).
+    //
+    // An untouched visitor now reports the build they actually had on screen with both counters
+    // at 0, which is what the design specifies the field to mean. "Did they engage?" is answered
+    // by the counters being 0, never by this row's absence. `lastSent` below still collapses this
+    // to exactly one write per page-session, and the server `$set`s absolute values, so the extra
+    // write is idempotent and cannot inflate anything.
+    //
+    // Note this is also why the counters alone can't be the gate: cash is a toggle, not a reel
+    // touch, so a cash-only visitor sits at tb === 0 && ts === 0 yet made a real choice (F-010).
     const payload = JSON.stringify({
       slug,
       builtPrizeSlug: built,
       toolboxSwitches: tb,
       toolsetSwitches: ts,
+      interacted,
     });
     if (payload === lastSent.current) return; // nothing changed since the last report
     lastSent.current = payload;
@@ -102,15 +113,21 @@ export function usePrizeBuildTracking({
     });
   }, []);
 
-  // Debounce: restarted on every change, so five quick switches are one write. `hasInteracted`
-  // is included so a redundant cash click (already-selected cash re-clicked on a cash landing
-  // page, where neither the slug nor the counters move) still schedules a send instead of
-  // relying solely on the unload flush.
+  // Debounce: restarted on every change, so five quick switches are one write.
+  //
+  // Gated on `hasInteracted` — NOT because an untouched visitor goes unreported (F-018 requires
+  // that they ARE reported, or `builders` and `signups` count different populations), but because
+  // the unload flush below already covers them. Without this gate the mount timer fires once for
+  // every visitor and then again after their first switch, doubling writes on the highest-traffic
+  // path in the product for no extra information.
+  //
+  // So: untouched visitor -> exactly one write, at unload. Engaged visitor -> the debounced
+  // write(s), with the unload flush deduped by `lastSent`. One write per visitor either way.
   useEffect(() => {
-    if (!enabled) return;
+    if (!enabled || !hasInteracted) return;
     const timer = setTimeout(() => send(false), DEBOUNCE_MS);
     return () => clearTimeout(timer);
-  }, [enabled, builtPrizeSlug, toolboxSwitches, toolsetSwitches, hasInteracted, send]);
+  }, [enabled, hasInteracted, builtPrizeSlug, toolboxSwitches, toolsetSwitches, send]);
 
   /**
    * Unload flush, registered ONCE per mount.

@@ -104,6 +104,8 @@ export class PromoAnalyticsService {
     builtPrizeSlug: string;
     toolboxSwitches: number;
     toolsetSwitches: number;
+    /** Absent means engaged — see PromoAnalyticsVisit.buildInteracted. */
+    interacted?: boolean;
   }): Promise<{ success: boolean; error?: string }> {
     if (!isValidPromoSlug(data.slug)) {
       return { success: false, error: "Invalid promotion slug" };
@@ -118,6 +120,7 @@ export class PromoAnalyticsService {
       builtPrizeSlug: data.builtPrizeSlug.toLowerCase().trim(),
       toolboxSwitches: data.toolboxSwitches,
       toolsetSwitches: data.toolsetSwitches,
+      interacted: data.interacted,
     });
     return updated ? { success: true } : { success: false, error: "no_visit_row" };
   }

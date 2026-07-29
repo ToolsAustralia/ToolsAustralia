@@ -3,6 +3,7 @@ import { z } from "zod";
 import { requirePermission } from "@/lib/api-auth-permissions";
 import connectDB from "@/lib/mongodb";
 import { getTikTokAdInsights } from "@/services/admin/tiktok/tiktokAdInsightsQuery";
+import { getTikTokSyncHealth } from "@/services/admin/tiktok/tiktokSyncStatus";
 
 const querySchema = z.object({
   startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
@@ -12,8 +13,12 @@ const querySchema = z.object({
 /**
  * GET /api/admin/tiktok-ads/insights?startDate=YYYY-MM-DD&endDate=YYYY-MM-DD
  * Per-TikTok-ad breakdown (adName + spend + TikTok-reported conversions/revenue + ROAS)
- * from TikTokAdInsightsDaily. The TikTok analogue of /api/admin/facebook-ads/insights.
- * Gated on the same paid-ads-analytics permission as the rest of the TikTok tab.
+ * from TikTokAdInsightsDaily, plus `syncHealth` (last cron outcome + last row write)
+ * so the UI can distinguish "sync failing" from "genuinely no spend" (panel F-002).
+ * The TikTok analogue of /api/admin/facebook-ads/insights. Gated on the same
+ * paid-ads-analytics permission as the rest of the TikTok tab.
+ * NOTE: syncHealth is composed here at the route — getTikTokAdInsights' return shape
+ * is unchanged, so the Norm mirror's responseSchema stays in lockstep untouched.
  */
 export async function GET(request: NextRequest) {
   try {
@@ -32,8 +37,11 @@ export async function GET(request: NextRequest) {
 
     await connectDB();
 
-    const data = await getTikTokAdInsights(parsed.data);
-    return NextResponse.json({ success: true, data });
+    const [data, syncHealth] = await Promise.all([
+      getTikTokAdInsights(parsed.data),
+      getTikTokSyncHealth(),
+    ]);
+    return NextResponse.json({ success: true, data: { ...data, syncHealth } });
   } catch (e) {
     console.error("❌ /api/admin/tiktok-ads/insights error", e);
     return NextResponse.json(

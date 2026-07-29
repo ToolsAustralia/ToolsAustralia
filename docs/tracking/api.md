@@ -4,8 +4,15 @@
 
 - **`POST /api/tracking/conversion`** — funnel-event mirror (unauthenticated — it must accept guest traffic). Body is `CanonicalEvent`-shaped, but `eventName` is validated with `mirrorEventNameSchema` from [`src/utils/tracking/mirror-event-names.ts`](../../src/utils/tracking/mirror-event-names.ts) — only `ViewContent` / `AddToCart` / `InitiateCheckout` / `AddPaymentInfo` / `Lead` / `Search`. Value-bearing events (Purchase, Subscribe, …) are **not constructible** here — a forged Purchase would inflate Meta-only revenue; Purchases reach CAPI solely via the Stripe webhook. Client-supplied `eventTime` is untrusted: normalized via `normalizeEpochToUnixSeconds` (ms vs seconds) then clamped by `resolveEventTime` to Meta's accepted window (an out-of-range `event_time` rejects Meta's **entire** `/events` request). Response: `{ ok, results: { facebook, tiktok, snapchat } }`. See [`src/app/api/tracking/conversion/route.ts`](../../src/app/api/tracking/conversion/route.ts). The handler enriches `userData` server-side: session PII (when logged in), Meta `fbc`/`fbp`, TikTok `ttclid`/`ttp` (from cookies via `extractTikTokContext`), and IP/UA from request headers — so the browser mirror doesn't have to ship raw identifiers.
 - ~~`POST /api/facebook/track`~~ — **removed 2026-05-12**. Use `POST /api/tracking/conversion`.
-- `POST /api/tracking/promo-page-visit` — **rate limited: 20 requests / 5 minutes per identifier**
-  (added 2026-07-28, `createRateLimiter("promo-page-visit", …)` + `getClientIdentifier` from
+- `POST /api/tracking/promo-page-visit` — **rate limited: 60 requests / 5 minutes per identifier,
+  where the identifier is the `ta_anon_id` VISITOR cookie and falls back to the IP only when the
+  cookie is absent** (added 2026-07-28 at 20/IP; re-keyed and widened 2026-07-29, F-024 — an
+  IP-keyed budget let one ad burst behind a carrier CGNAT egress IP silently suppress genuine
+  visit rows for everyone behind it, and visit row counts are a must-not-change number. 60 matches
+  the repo's own public-endpoint precedent, `promo/link/validate`. Note `getClientIdentifier(ip,
+  forwardedFor)` returns arg 1 verbatim, so `x-real-ip` must be passed FIRST — passing
+  `x-forwarded-for` in both positions keys the bucket on the whole proxy chain.)
+  (`createRateLimiter("promo-page-visit", …)` + `getClientIdentifier` from
   [`src/utils/security/rateLimiter.ts`](../../src/utils/security/rateLimiter.ts)), checked
   **synchronously as the first thing in the handler** — before the Zod parse and before `after()`
   is scheduled — so an over-limit caller never reaches the DB write. Over-limit responses match the
@@ -52,7 +59,14 @@
     before `after()` is scheduled, since `request` cannot be touched once the response has been
     sent. See the full note in
     [`promo-page-visit/route.ts`](../../src/app/api/tracking/promo-page-visit/route.ts).
-  - **Rate limited: 20 requests / 5 minutes per identifier** (`createRateLimiter("promo-prize-build",
+  - Payload also carries **`interacted`** (optional boolean): did the visitor touch the builder at
+    all? Persisted as `PromoAnalyticsVisit.buildInteracted`. **Absent means engaged**, so an
+    in-flight older client or a queued `sendBeacon` from before a deploy is never miscounted.
+    Since F-018 the beacon fires for EVERY visitor (not only engaged ones), so the presence of
+    `builtPrizeSlug` no longer distinguishes engagement — this flag does. It cannot be derived
+    from the two counters: cash is a toggle, not a reel card, so a cash-only visitor sits at 0/0.
+  - **Rate limited: 60 requests / 5 minutes, keyed on the `ta_anon_id` visitor cookie** (IP only as
+    a fallback — see the sibling above and F-024) (`createRateLimiter("promo-prize-build",
     …)` + `getClientIdentifier` from
     [`src/utils/security/rateLimiter.ts`](../../src/utils/security/rateLimiter.ts)), checked
     **synchronously as the first thing in the handler** — before the Zod parse and before `after()`

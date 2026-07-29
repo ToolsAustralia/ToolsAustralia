@@ -105,7 +105,13 @@ async function main() {
       const date = windowDates[i];
       const insightCount = await MetaAdInsightsDaily.countDocuments({ adAccountId, date });
       insightTotal += insightCount;
-      const existing = await LandingPageMetricsDaily.countDocuments({ adAccountId, date });
+      // Meta-scoped: this backfill rebuilds Meta rows only, so the "will be replaced"
+      // count must exclude any TikTok rows for the same date (2026-07-29).
+      const existing = await LandingPageMetricsDaily.countDocuments({
+        platform: "meta",
+        adAccountId,
+        date,
+      });
       console.log(
         `  [dry] ${date}: ${insightCount} insight rows → currently ${existing} aggregate rows (pre-rebuild count)`,
       );
@@ -131,7 +137,7 @@ async function main() {
     for (let i = 0; i < windowDates.length; i++) {
       const date = windowDates[i];
       try {
-        const result = await service.recomputeForDateRange(adAccountId, date, date, {});
+        const result = await service.recomputeForDateRange("meta", adAccountId, date, date, {});
         rowsWritten += result.rowsWritten;
         ok++;
       } catch (e) {

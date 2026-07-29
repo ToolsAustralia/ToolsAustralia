@@ -34,8 +34,23 @@ interface MembershipPortalReturnBannerProps {
 
 const fmt = (n: number): string => n.toLocaleString("en-AU");
 
+// `min-h` is load-bearing, not cosmetic. The banner renders a loading skeleton first, then swaps
+// in one of six settled states, and any height difference either way moves the whole page. Before
+// this floor existed the measured CLS was 0.58-0.61 (Google's "good" bar is 0.10).
+//
+// Each value is the MEASURED tallest of {skeleton, every settled state} in that band — a floor set
+// from the skeleton alone is not enough, and both failure directions really occur:
+//   <768   skeleton 333px, tallest settled 361.8px (the longest short-of offer copy)  -> GROWS
+//   768+   skeleton 339px, tallest settled 333px                                      -> SHRINKS
+//   1024+  skeleton 273px, tallest settled 283.3px                                    -> GROWS
+// So the breakpoints are NOT decorative: 768 exists because the skeleton is taller than every
+// settled state there, which a single base value cannot express.
+//
+// Re-measure these if the banner copy, the CTA stack or the skeleton changes — the check is
+// `scripts`-free: load /membership?utm_campaign=rewards-return (with and without `offer_id`) at
+// 390/768/1280 and compare the section height before and after `aria-busy` clears.
 const SECTION_CLASS =
-  "relative border-b border-white/10 pt-[var(--app-header-h)] text-white lg:pt-[var(--app-header-h-lg)]";
+  "relative border-b border-white/10 pt-[var(--app-header-h)] text-white lg:pt-[var(--app-header-h-lg)] min-h-[362px] md:min-h-[339px] lg:min-h-[284px]";
 const SECTION_STYLE = {
   background:
     "radial-gradient(640px 300px at 88% 0%, rgba(238,0,0,.4), transparent 60%),linear-gradient(150deg,#1c0e0e 0%,#0b0a0d 55%,#140d14 100%)",

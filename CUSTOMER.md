@@ -220,7 +220,8 @@ Embedded subdocument `subscription` (one active membership at a time; [User.ts:2
 
 | Field | Type | Meaning | PII |
 |---|---|---|---|
-| `signupAttribution` | subdoc (opt) | Promo page + UTM/ad context at signup: `promotionPageType("evergreen"\|"toolset"), promotionSlug, builtPrizeSlug, visitedAt, anonymousId, utmSource, utmMedium, utmCampaign, utmContent, utmTerm, campaignId, adsetId, adId` ([User.ts:260-277](src/models/User.ts#L260)) | — |
+| `signupAttribution` | subdoc (opt) | Promo page + UTM/ad context at signup: `promotionPageType("evergreen"\|"toolset"), promotionSlug, builtPrizeSlug, visitedAt, anonymousId, utmSource, utmMedium, utmCampaign, utmContent, utmTerm, campaignId, adsetId, adId`, plus **`clickPlatform`** ([User.ts:260-284](src/models/User.ts#L260)) | — |
+| ↳ `signupAttribution.clickPlatform` | `"meta"\|"tiktok"\|"snapchat"\|"google"` (opt) | **Added 2026-07-24.** The paid platform whose **click id** (`_fbc` / `ttclid` / `_sc_click`) was present in the request cookies at registration, resolved server-side via the same `extractClickIdsFromRequest` the payment path uses (most-recent capture wins). **Only the platform name is stored — never the raw click id**, so signup-source analytics gain click-verified confidence with no new identifier added to the customer record. Stamped on all four registration branches. Absent for organic signups and for accounts created before this date. Powers the per-platform signup counts on the admin Advertising card. | — |
 
 > The resolved **`convertingPlatform`** is **not** on `User` — it lives on the `PaymentEvent` record (see §8).
 
@@ -311,10 +312,27 @@ The register route even hard-codes `isAuthenticated: false` in its Klaviyo "Star
 |------|-----------|
 | Email/mobile belong to a **converted** account (`accumulatedEntries > 0`) | Rejected `400` with `isExistingAccount: true` + `existingAccountEmail`; told to log in ([register/route.ts:302-337](src/app/api/auth/register/route.ts#L302)). |
 | Email/mobile belong to an account with **saved payment methods** | Same rejection ([register/route.ts:341-378](src/app/api/auth/register/route.ts#L341)). |
-| Email **and** mobile match the **same plain account** | Account is **updated in place** (name/email/mobile/attribution), re-fires `User Registered` ([register/route.ts:382-502](src/app/api/auth/register/route.ts#L382)). |
+| Email **and** mobile match the **same plain account** | Account is **updated in place** (name/email/mobile/attribution), re-fires `User Registered` ([register/route.ts:382-502](src/app/api/auth/register/route.ts#L382)). Attribution is **merged, not replaced** — see the note below the table. |
 | Email and mobile match **different** accounts | Rejected `400` "Registration conflict" ([register/route.ts:503-519](src/app/api/auth/register/route.ts#L503)). |
 | Only email **or** only mobile matches a plain account | That plain account is updated ([register/route.ts:523-700](src/app/api/auth/register/route.ts#L523)). |
 | No match | New passwordless account created; a Stripe customer is created and linked (`stripeCustomerId`) ([register/route.ts:702-770](src/app/api/auth/register/route.ts#L702)). |
+
+**Re-registration preserves where the customer came from (2026-07-29).** On all three
+existing-account branches, `signupAttribution` is now **merged** onto what the account already
+carries rather than assigned wholesale. The rule is **preserve-when-absent**: `promotionSlug`,
+`promotionPageType` and `builtPrizeSlug` survive only when the new signup does **not** carry one, so
+a customer returning on a bare ad click keeps the promo page and prize they originally came from —
+while a customer who genuinely lands on a *different* promo page and re-registers there is
+re-attributed to it. UTMs and `clickPlatform` are last-write-wins, so a newer ad click still
+refreshes. (This is deliberately **not** strict first-touch-wins; whether it should be is an open
+product question.)
+
+Before this, the whole subdocument was replaced. That became destructive once a bare `clickPlatform`
+was enough to persist on its own: a customer who landed on a promo page, built a prize, registered,
+abandoned payment, then came back days later through an ad with no promo slug and no UTMs would have
+their original promo page and built prize **silently erased**, and the eventual purchase attributed
+to no page and no build. That is precisely the customer the abandoned-checkout flow exists to bring
+back. New-account branches still assign directly — there is nothing to preserve.
 
 ### 4c. Login paths
 
@@ -460,6 +478,15 @@ The landing URL's **`?packages=one-time`** marker is also captured (as `packages
 
 Paid **click IDs** are captured into separate cookies on mount: Meta `_fbc`/`_fbc_ts` (synthesized from `?fbclid=` so it survives without the Meta SDK), TikTok `ttclid`, Snapchat `_sc_click`; the Meta browser-ID `_fbp` is set by the Pixel. A **signup snapshot** is also persisted server-side in `User.signupAttribution` (§2h).
 
+**Promo-page build capture changed 2026-07-29.** On `/promotions/*`, the visit row
+(`PromoAnalyticsVisit`, keyed on the `ta_anon_id` cookie — not the `User` record) now records
+`builtPrizeSlug` for **every** visitor, describing the prize combination that was on screen, rather
+than only for visitors who touched the reels. Whether they actually engaged moved to a separate
+boolean, `buildInteracted`. No new identifier is captured and nothing extra leaves to a third party —
+this is the same anonymous visit row, recorded for more visitors. The reason is that signups already
+recorded the page's default build for people who never touched the reels, so counting builders and
+signups over different populations let the admin funnel display rates above 100%.
+
 ### 8b. The "converting platform" concept
 
 At purchase, `resolveAttributionAtEdge` reads the click cookies + `_ta_attr` + the last-touch `_ta_attr_last` ([resolveAtEdge.ts:19-27](src/services/attribution/resolveAtEdge.ts#L19)) and resolves a **single** converting platform via a priority+recency ladder ([resolveConvertingPlatform.ts:11-76](src/services/attribution/resolveConvertingPlatform.ts#L11)). Window durations are defined in `platformPriority.ts` (`windowDaysFor`) ([platformPriority.ts:25](src/services/attribution/platformPriority.ts#L25)):
@@ -506,6 +533,9 @@ Hashing is plain SHA-256 of lowercased+trimmed input; **phones are first normali
 
 - **Klaviyo receives raw, unhashed PII** — email, first/last name, mobile (E.164), state, profession, plus the full behavioral/spend profile. **This is the largest clear-text PII export.**
 - **Meta/TikTok/Snapchat receive PII only as SHA-256 hashes** (email, phone, name, location, DOB, user `_id`), but **raw** click IDs, browser IDs, IP, and user agent. A SHA-256 email is a stable pseudonymous identifier, **not** anonymization.
+- **Public disclosure (2026-07-24, panel F-012):** the privacy policy's Cookies & Tracking section now names **TikTok** alongside Facebook (Marketing Cookies example + third-party providers list) and discloses the **server-side conversion sharing to Meta and TikTok with hashed identifiers** — previously it named Facebook Pixel only, understating the tracking footprint documented in §8d.
+- **No consent banner — deliberate (2026-07-24, panel F-019).** Tools Australia does **not** ask for cookie/pixel consent: the pixels load and the CAPIs fire for every visitor. `hasPixelConsent()` hard-returns `true` ("auto-accept mode"). The dead `PixelConsentModal` — unreachable (`isOpen={false}`) and with a Decline button that gated nothing — was deleted rather than left implying a control the visitor never had. Rationale + what a real consent gate would require: [docs/tracking/rules.md R9](docs/tracking/rules.md).
+- **`signupAttribution.clickPlatform` (2026-07-24)** records WHICH paid platform a signup came from, derived from a click-id cookie already present on the device. It stores the platform name only, not the click id — no new identifier, no third-party sharing; it is read solely by internal admin analytics.
 - **The first-touch `_ta_attr` cookie persists 90 days** and survives login/OAuth; it holds only campaign metadata, no direct PII.
 - **Contentsquare session-replay capture is env-gated, prod-only** (`NEXT_PUBLIC_CONTENTSQUARE_ID`, blank ⇒ disabled — [docs/tracking/rules.md R8](docs/tracking/rules.md)): dev/e2e/staging never record a session unless the id is explicitly set.
 

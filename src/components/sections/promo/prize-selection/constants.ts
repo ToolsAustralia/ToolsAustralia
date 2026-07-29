@@ -120,9 +120,9 @@ export interface ToolsetOption {
  * anticipated, added as one record here exactly as planned. It is the one entry that does
  * NOT use the mask path: see `markImageLight`.
  *
- * Its `{toolset}-gearwrench` art exists for DeWalt, HiKOKI, Makita and Milwaukee but **not
- * Ryobi** — that combination was never produced. The landing resolver degrades through its
- * fallback chain for `ryobi-gearwrench`; nothing here needs to special-case it.
+ * Its `{toolset}-gearwrench` art shipped for DeWalt, HiKOKI, Makita and Milwaukee on
+ * 2026-07-27 and for Ryobi on 2026-07-28, so all five combinations now have a composite
+ * shot and `COMBOS_AWAITING_COMBO_ART` is empty. Nothing here special-cases any of them.
  */
 export const TOOLBOXES: readonly ToolboxOption[] = [
   {

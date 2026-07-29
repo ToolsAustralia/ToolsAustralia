@@ -13,7 +13,7 @@ const MEMBERSHIP_THEME_SLUG = "__membership-theme__";
  */
 export async function GET() {
   try {
-    const experiment = await experimentService.getActiveExperimentForSlug(
+    const experiment = await experimentService.getActiveExperimentForSentinelSlug(
       MEMBERSHIP_THEME_SLUG,
     );
     return NextResponse.json({

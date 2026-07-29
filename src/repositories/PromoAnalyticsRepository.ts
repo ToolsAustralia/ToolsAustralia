@@ -150,6 +150,8 @@ export class PromoAnalyticsRepository {
     builtPrizeSlug: string;
     toolboxSwitches: number;
     toolsetSwitches: number;
+    /** Absent means engaged — pre-flag callers and legacy rows are counted as engaged. */
+    interacted?: boolean;
   }): Promise<boolean> {
     await connectDB();
     const result = await PromoAnalyticsVisit.findOneAndUpdate(
@@ -163,6 +165,7 @@ export class PromoAnalyticsRepository {
           builtPrizeSlug: args.builtPrizeSlug.toLowerCase().trim(),
           toolboxSwitches: args.toolboxSwitches,
           toolsetSwitches: args.toolsetSwitches,
+          buildInteracted: args.interacted !== false,
         },
       },
       { sort: { timestamp: -1 }, new: false, upsert: false }
@@ -225,12 +228,21 @@ export class PromoAnalyticsRepository {
       crossVisitMap.set(`${r._id.pageType}:${r._id.slug}`, r.crossVisits);
     }
 
-    // 1c. Built-prize engagement - unique visitors who actually assembled something, plus the
-    // most-built combination per landing page. Visitors who never touched the reels have no
-    // `builtPrizeSlug`, so they are correctly excluded from the numerator.
-    // Hint forces the index built for this query ({builtPrizeSlug:1, timestamp:-1}). Without it,
-    // the planner picks the TTL index ({timestamp:1}) at current data volume and FETCHes the
-    // whole 90-day window instead of the ~0.4% of rows carrying a build (F-003, panel review).
+    // 1c. Built-prize engagement - unique visitors who actually ENGAGED with the builder, plus
+    // the most-built combination per landing page.
+    //
+    // Gated on `buildInteracted`, not on the presence of `builtPrizeSlug`: every visitor now
+    // carries a `builtPrizeSlug` (it records what was on screen, which is what makes the
+    // built-prize funnel's builders and signups countable on the same population — F-018), so
+    // the field's presence no longer distinguishes "engaged" from "just landed". Rows written
+    // before that change have no `buildInteracted` and were only ever written for engaged
+    // visitors, so treating a missing flag as engaged keeps historic pages comparable.
+    // No `hint` (F-020). One was added believing it avoided a full-window FETCH; measured, it
+    // changed nothing — 764 keys / 764 docs examined either way — because the index was
+    // non-sparse and `$exists: true` therefore spanned its whole key range. It only added a
+    // failure mode, since MongoDB rejects a hint naming an absent index and 500s the route.
+    // The index is now PARTIAL (`builtPrizeSlug_ts_partial`, F-021) and the planner picks it
+    // unprompted: 8 keys / 8 docs examined, so no hint is needed or wanted here.
     const buildAgg = await PromoAnalyticsVisit.aggregate<
       { _id: { pageType: string; slug: string; builtPrizeSlug: string }; visitorIds: string[] }
     >(
@@ -239,6 +251,8 @@ export class PromoAnalyticsRepository {
           $match: {
             timestamp: { $gte: startDate, $lte: endDate },
             builtPrizeSlug: { $exists: true, $ne: "" },
+            // `$ne: false` (not `true`) so legacy rows, which predate the flag, still count.
+            buildInteracted: { $ne: false },
           },
         },
         {
@@ -247,8 +261,7 @@ export class PromoAnalyticsRepository {
             visitorIds: { $addToSet: VISITOR_ID_EXPR },
           },
         },
-      ],
-      { hint: { builtPrizeSlug: 1, timestamp: -1 } }
+      ]
     ).exec();
 
     const buildVisitorIds = new Map<string, Set<string>>();
@@ -569,10 +582,17 @@ export class PromoAnalyticsRepository {
   async getAggregatedByBuiltPrize(startDate: Date, endDate: Date): Promise<PromoAnalyticsByBuiltPrizeSummary> {
     await connectDB();
 
-    // 1. Builders - unique visitors who assembled this combination, on ANY landing page.
-    // Hint forces the index built for this query ({builtPrizeSlug:1, timestamp:-1}). Without it,
-    // the planner picks the TTL index ({timestamp:1}) at current data volume and FETCHes the
-    // whole 90-day window instead of the ~0.4% of rows carrying a build (F-003, panel review).
+    // 1. Builders - unique visitors who had this combination on screen, on ANY landing page.
+    // Deliberately NOT gated on `buildInteracted`: `signups` below counts every visitor whose
+    // signup carried this build, including those who never touched the reels, so gating here
+    // would divide two different populations and let `builderToSignupRate` exceed 100% (F-018).
+    //
+    // No `hint` here (F-020). One was added believing it avoided a full-window FETCH; measured,
+    // it changed nothing — 764 keys / 764 docs examined either way, because the index is
+    // non-sparse and `$exists: true` therefore spans its whole key range. It only added a
+    // failure mode: MongoDB rejects a hint naming an index that is not present (fresh deploy
+    // before the background build finishes, a restore, a dropped index), which 500s this whole
+    // route. Make the index partial before hinting it again.
     const buildAgg = await PromoAnalyticsVisit.aggregate<{ _id: string; builders: number }>(
       [
         {
@@ -583,8 +603,7 @@ export class PromoAnalyticsRepository {
         },
         { $group: { _id: "$builtPrizeSlug", visitorIds: { $addToSet: VISITOR_ID_EXPR } } },
         { $project: { _id: 1, builders: { $size: "$visitorIds" } } },
-      ],
-      { hint: { builtPrizeSlug: 1, timestamp: -1 } }
+      ]
     ).exec();
 
     const buildersMap = new Map<string, number>();

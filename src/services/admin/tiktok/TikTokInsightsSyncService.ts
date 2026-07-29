@@ -1,5 +1,5 @@
 import TikTokAdInsightsDaily from "@/models/TikTokAdInsightsDaily";
-import { fetchTikTokAdInsightsDaily, isTikTokAdInsightsConfigured } from "./tiktokAdInsights";
+import { fetchTikTokAdInsightsDaily } from "./tiktokAdInsights";
 
 /** Mongo bulkWrite batch size (ops per round-trip). */
 const INSIGHTS_BULK_BATCH = 800;
@@ -13,6 +13,22 @@ export interface SyncTikTokInsightsResult {
   rowsUpserted: number;
   adIds: string[];
   dateRange: { since: string; until: string };
+  /** Window sums of the synced rows — feeds the metric-name tripwire (panel F-005). */
+  totals: { clicks: number; conversions: number; revenueCents: number };
+}
+
+/**
+ * Metric-name tripwire (panel F-005): the report request names the metrics it wants, so
+ * a wrong guess (e.g. TikTok exposing "complete_payment" instead of the assumed
+ * "conversion") comes back as rows full of confident ZEROS — parseMetric's fallback keys
+ * can never appear in a response that only contains requested metrics. Real clicks with
+ * zero conversions AND zero revenue across a whole multi-day window is the signature of
+ * that failure (a genuinely converting account can't look like this once ads run).
+ * Callers (cron, seed script) must surface this loudly; verify the live names against a
+ * stored row's `raw.metrics` keys.
+ */
+export function metricNamesSuspect(totals: SyncTikTokInsightsResult["totals"]): boolean {
+  return totals.clicks > 0 && totals.conversions === 0 && totals.revenueCents === 0;
 }
 
 /**
@@ -30,24 +46,28 @@ export class TikTokInsightsSyncService {
       `[tiktok-insights] Downloading TikTok ad-level insights (ad × day). Range ${dateRange.since} → ${dateRange.until}.`,
     );
 
+    // Contract (panel F-002/F-008): `null` means NOT CONFIGURED — a clean no-op.
+    // A configured-but-failing API call THROWS a TikTokReportError from the fetcher
+    // (carrying TikTok's code/message), which propagates out of syncDateRange so the
+    // cron records the error status and returns 500 — Vercel cron monitoring surfaces
+    // the failure. A 200 {configured:false} must never hide a broken token/API outage.
     const rows = await fetchTikTokAdInsightsDaily(dateRange.since, dateRange.until);
     if (rows === null) {
-      // Distinguish "not configured" (clean no-op) from "configured but the API failed"
-      // (must THROW so the cron returns 500 and Vercel cron monitoring surfaces the
-      // failure — a 200 {configured:false} would hide a broken token/API outage).
-      if (isTikTokAdInsightsConfigured()) {
-        throw new Error(
-          "TikTok ad-insights fetch failed despite creds being configured (see [tiktokAdInsights] console.error for the API response)",
-        );
-      }
       log?.("[tiktok-insights] Skipped — TikTok Marketing-API creds not set.");
-      return { configured: false, rowsUpserted: 0, adIds: [], dateRange };
+      return {
+        configured: false,
+        rowsUpserted: 0,
+        adIds: [],
+        dateRange,
+        totals: { clicks: 0, conversions: 0, revenueCents: 0 },
+      };
     }
 
     log?.(`[tiktok-insights] Download finished: ${rows.length} rows. Upserting into MongoDB…`);
 
     const adIds = new Set<string>();
     let rowsUpserted = 0;
+    const totals = { clicks: 0, conversions: 0, revenueCents: 0 };
 
     const ops: Array<{
       updateOne: {
@@ -92,12 +112,15 @@ export class TikTokInsightsSyncService {
       });
       rowsUpserted++;
       adIds.add(row.adId);
+      totals.clicks += row.clicks;
+      totals.conversions += row.conversions;
+      totals.revenueCents += row.revenueCents;
       if (ops.length >= INSIGHTS_BULK_BATCH) await flush();
     }
 
     await flush();
     log?.(`[tiktok-insights] Done: ${rowsUpserted} rows upserted, ${adIds.size} distinct ad IDs.`);
 
-    return { configured: true, rowsUpserted, adIds: [...adIds], dateRange };
+    return { configured: true, rowsUpserted, adIds: [...adIds], dateRange, totals };
   }
 }

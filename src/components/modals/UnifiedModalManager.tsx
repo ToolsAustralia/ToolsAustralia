@@ -13,7 +13,8 @@ import { useUserContext } from "@/contexts/UserContext";
 const UserSetupModal = dynamic(() => import("./UserSetupModal"), { ssr: false });
 const UpsellModal = dynamic(() => import("./UpsellModal"), { ssr: false });
 const SpecialPackagesModal = dynamic(() => import("./SpecialPackagesModal"), { ssr: false });
-const PixelConsentModal = dynamic(() => import("./PixelConsentModal"), { ssr: false });
+// PixelConsentModal was deleted 2026-07-24 (panel F-019) — see the note on ModalType
+// in src/stores/useModalPriorityStore.ts and docs/tracking/rules.md R9.
 const GateClosedModal = dynamic(() => import("./GateClosedModal"), { ssr: false });
 const SubscriptionExplainerModal = dynamic(() => import("./SubscriptionExplainerModal"), {
   ssr: false,
@@ -121,7 +122,6 @@ const UnifiedModalManager: React.FC = () => {
       | "user-setup"
       | "upsell"
       | "special-packages"
-      | "pixel-consent"
       | "gate-closed"
       | "subscription-explainer"
       | "renewal-failed"
@@ -206,22 +206,6 @@ const UnifiedModalManager: React.FC = () => {
             onPackageSelect={(_pkg) => {
               // Handle package selection - this would typically trigger purchase flow
               // console.log("Special package selected:", pkg);
-            }}
-          />
-        );
-
-      case "pixel-consent":
-        return (
-          <PixelConsentModal
-            isOpen={false} // This would be controlled by pixel consent logic
-            onCloseAction={() => handleModalClose("pixel-consent")}
-            onAccept={() => {
-              // Handle pixel consent acceptance
-              handleModalClose("pixel-consent");
-            }}
-            onDecline={() => {
-              // Handle pixel consent decline
-              handleModalClose("pixel-consent");
             }}
           />
         );

@@ -130,12 +130,19 @@ calls [`trackInvoice()`](../../src/utils/integrations/klaviyo/klaviyo-invoice-se
 An accepted upsell is a separate PaymentIntent, so it gets its own receipt (two receipts per upsell
 purchase). See [gotchas.md](./gotchas.md) for the full incident and the removed combined-invoice path.
 
-#### Server-side Facebook CAPI Purchase — `event_time` = Stripe charge time
+#### Server-side CAPI Purchase — `event_time` = Stripe charge time
 
-`grantBenefits()` also fires the server-side Meta CAPI **Purchase** via
-[`trackPixelPurchase()`](../../src/utils/tracking/pixel-purchase-tracking.ts) with
+`grantBenefits()` also fires the server-side CAPI **Purchase** (Meta + TikTok + Snap, via
+[`trackPixelPurchase()`](../../src/utils/tracking/pixel-purchase-tracking.ts)'s `sendConversion` fan-out) with
 `actionSource: "system_generated"` (there is no live browser session in the webhook; the browser
-Pixel fires the matching event with `action_source=website` and Meta dedups the pair by `event_id`).
+Pixel fires the matching event with `action_source=website` and each platform dedups the pair by `event_id`).
+
+Because the webhook has no cookies, the per-platform **click ids** are handed over through Stripe
+metadata: the payment-creation routes write `capi_fbc`/`capi_fbp` (Meta) and `capi_ttclid`/`capi_ttp`
+(TikTok, added 2026-07-29), and `extractRequestContextFromMetadata()` in the webhook reads them back
+onto the `requestContext` that `grantBenefits()` forwards. `requestContext` is therefore the single
+carrier for every provider's match signals — see
+[docs/tracking/TIKTOK_EVENTS_API_IMPLEMENTATION.md](../tracking/TIKTOK_EVENTS_API_IMPLEMENTATION.md).
 It passes `eventTimeUnixSeconds: normalizeEpochToUnixSeconds(paymentMetadata?.chargedAt ?? paymentMetadata?.created)`
 ([`canonical-event.ts`](../../src/lib/tracking/canonical-event.ts)), so Meta books the conversion at
 the **payment SUCCESS moment** instead of the webhook-processing moment — a purchase paid at

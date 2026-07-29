@@ -8,7 +8,7 @@ const COMPUTED_AT = new Date("2026-07-11T00:00:00.000Z");
 const URL_MAKITA = "https://toolsaustralia.com.au/promotions/makita";
 
 function docs(insights: Parameters<typeof buildLandingPageDailyDocs>[0]["insights"], destByAd: Parameters<typeof buildLandingPageDailyDocs>[0]["destByAd"]) {
-  return buildLandingPageDailyDocs({ adAccountId: AD_ACCOUNT, date: DATE, computedAt: COMPUTED_AT, insights, destByAd });
+  return buildLandingPageDailyDocs({ platform: "meta", adAccountId: AD_ACCOUNT, date: DATE, computedAt: COMPUTED_AT, insights, destByAd });
 }
 
 function testMixedFocusSameUrlRow() {

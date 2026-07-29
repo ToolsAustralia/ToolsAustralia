@@ -8,7 +8,11 @@ import { subDays } from "date-fns";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, SectionTitle, DataTable, type Column } from "@/components/admin/ui";
 import { useMetricsFormatting } from "@/hooks/useMetricsFormatting";
-import { useSpendByUrlAnalytics } from "@/hooks/queries/useSpendByUrlAnalytics";
+import {
+  useSpendByUrlAnalytics,
+  type SpendByUrlPlatform,
+  type SpendByUrlRow,
+} from "@/hooks/queries/useSpendByUrlAnalytics";
 import { resolveAestDateWindow } from "@/utils/admin/resolveAestDateWindow";
 import { cn } from "@/utils/cn";
 import { TOOLSET_LANDING_SLUGS, type ToolsetLandingSlug } from "@/config/promo-landing-slugs";
@@ -32,6 +36,9 @@ const AEST_TIMEZONE = "Australia/Sydney";
  * landing URLs so the modal can pull its own per-ad detail. Presentation uses the
  * kit `Card` + `DataTable`.
  */
+/** Which platforms the table is showing. "all" sums spend across every configured platform. */
+type PlatformFilter = SpendByUrlPlatform | "all";
+
 interface PrizeRow extends Record<string, unknown> {
   id: string;
   brand: string;
@@ -40,8 +47,14 @@ interface PrizeRow extends Record<string, unknown> {
   revenue: number;
   conversions: number;
   roas: number;
-  /** Landing URLs matched to this brand — handed to the drill-down modal on row click. */
-  canonicalUrls: string[];
+  /**
+   * Landing URLs matched to this brand, PER PLATFORM — handed to the drill-down modal on
+   * row click. Per-platform (not a flat union) because the modal switches platform and each
+   * platform advertises a different set of URLs for the same brand.
+   */
+  canonicalUrlsByPlatform: Record<SpendByUrlPlatform, string[]>;
+  /** Which platforms actually contributed to this row (drives the blended-ROAS caveat). */
+  platforms: SpendByUrlPlatform[];
 }
 
 const COLUMNS: Column[] = [
@@ -110,7 +123,26 @@ export default function PrizePerformanceCard({
     [dateRange, customStartDate, customEndDate]
   );
 
-  const { data, isLoading, error } = useSpendByUrlAnalytics(startDate, endDate);
+  // One query per platform, never a blended server-side "all". Spend is additive and safe
+  // to sum; platform-REPORTED revenue is each platform's own attribution and the same
+  // purchase can be claimed by both, so the combined view labels its ROAS accordingly.
+  const metaQuery = useSpendByUrlAnalytics(startDate, endDate, { platform: "meta" });
+  const tiktokQuery = useSpendByUrlAnalytics(startDate, endDate, { platform: "tiktok" });
+
+  const [platformFilter, setPlatformFilter] = useState<PlatformFilter>("all");
+
+  const activeQueries =
+    platformFilter === "meta"
+      ? [metaQuery]
+      : platformFilter === "tiktok"
+        ? [tiktokQuery]
+        : [metaQuery, tiktokQuery];
+
+  const isLoading = activeQueries.some((q) => q.isLoading);
+  // A platform that isn't configured in this environment 500s. That must not blank the
+  // card when the OTHER platform has data — surface it as a note instead (below).
+  const error = activeQueries.every((q) => q.error) ? activeQueries[0].error : null;
+  const tiktokUnavailable = platformFilter !== "meta" && !!tiktokQuery.error;
 
   // Manual "Sync from Meta" (recovered from the legacy AdvertisingBreakdownSection):
   // POST the active date window, then refresh the spend-by-url query on success.
@@ -126,7 +158,9 @@ export default function PrizePerformanceCard({
       const res = await fetch("/api/admin/analytics/spend-by-url/sync", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ startDate: since, endDate: until }),
+        // Sync whatever the table is showing, so "Sync" can never refresh one platform
+        // while the reader is looking at another.
+        body: JSON.stringify({ startDate: since, endDate: until, platform: platformFilter }),
       });
       const json = await res.json();
       if (!res.ok) {
@@ -143,23 +177,51 @@ export default function PrizePerformanceCard({
 
   const canSync = !syncMutation.isPending;
 
+  const metaRows = metaQuery.data?.rows;
+  const tiktokRows = tiktokQuery.data?.rows;
+
   const rows = useMemo<PrizeRow[]>(() => {
-    if (!data?.rows) return [];
+    const included: Array<{ platform: SpendByUrlPlatform; rows: SpendByUrlRow[] }> = [];
+    if (platformFilter !== "tiktok" && metaRows) included.push({ platform: "meta", rows: metaRows });
+    if (platformFilter !== "meta" && tiktokRows) included.push({ platform: "tiktok", rows: tiktokRows });
+    if (included.length === 0) return [];
 
     return PROMOTION_BRANDS.map((promo) => {
-      // Sum every URL row whose TOOLSET segment is this brand. Meta can split spend across
-      // URL variants, so the toolset landing `/promotions/<brand>` AND every
+      // Sum every URL row whose TOOLSET segment is this brand. A platform can split spend
+      // across URL variants, so the toolset landing `/promotions/<brand>` AND every
       // `/promotions/<brand>-*` prize page roll up into this one brand row. Matching the
       // toolset segment (not a substring) keeps a `*-<brand>` toolbox suffix — e.g.
       // `/promotions/ryobi-milwaukee` — counted under its toolset (Ryobi), never Milwaukee.
-      const rowsForPromo = data.rows.filter(
-        (r) => promotionsToolsetSlug(r.canonicalUrl) === promo.slug
-      );
+      let spend = 0;
+      let revenue = 0;
+      let conversions = 0;
+      const platforms: SpendByUrlPlatform[] = [];
 
-      const spend = rowsForPromo.reduce((s, r) => s + r.spend, 0);
-      const revenue = rowsForPromo.reduce((s, r) => s + r.revenue, 0);
-      const conversions = rowsForPromo.reduce((s, r) => s + r.conversions, 0);
-      const roas = spend > 0 ? revenue / spend : 0;
+      for (const source of included) {
+        const rowsForPromo = source.rows.filter(
+          (r) => promotionsToolsetSlug(r.canonicalUrl) === promo.slug
+        );
+        if (rowsForPromo.length === 0) continue;
+        platforms.push(source.platform);
+        for (const r of rowsForPromo) {
+          spend += r.spend;
+          revenue += r.revenue;
+          conversions += r.conversions;
+        }
+      }
+
+      // The drill-down's URL set is built from BOTH platforms regardless of which tab is
+      // active, keyed by platform. The modal has its own platform chips, so scoping these
+      // to the active tab meant switching to Meta inside a modal opened from TikTok showed
+      // only the URLs TikTok happened to use — Milwaukee rendered $101 instead of its real
+      // $43.7k, because Meta's main /promotions/milwaukee URL was never passed (2026-07-29).
+      const urlsFor = (rows: SpendByUrlRow[] | undefined) => [
+        ...new Set(
+          (rows ?? [])
+            .filter((r) => promotionsToolsetSlug(r.canonicalUrl) === promo.slug)
+            .map((r) => r.canonicalUrl)
+        ),
+      ];
 
       return {
         id: promo.slug,
@@ -168,17 +230,38 @@ export default function PrizePerformanceCard({
         spend,
         revenue,
         conversions,
-        roas,
-        canonicalUrls: rowsForPromo.map((r) => r.canonicalUrl),
+        roas: spend > 0 ? revenue / spend : 0,
+        canonicalUrlsByPlatform: { meta: urlsFor(metaRows), tiktok: urlsFor(tiktokRows) },
+        platforms,
       };
     }).filter((m) => m.spend > 0 || m.revenue > 0 || m.conversions > 0); // Only show rows with data
-  }, [data?.rows]);
+  }, [metaRows, tiktokRows, platformFilter]);
+
+  /** True when at least one visible row actually mixes platforms — drives the ROAS caveat. */
+  const hasBlendedRow = rows.some((r) => (r.platforms as SpendByUrlPlatform[]).length > 1);
 
   const [selectedBrand, setSelectedBrand] = useState<{
     brand: string;
     slug: string;
-    canonicalUrls: string[];
+    canonicalUrlsByPlatform: Record<SpendByUrlPlatform, string[]>;
+    platform: SpendByUrlPlatform;
   } | null>(null);
+
+  const platformChip = (value: PlatformFilter, label: string) => (
+    <button
+      type="button"
+      onClick={() => setPlatformFilter(value)}
+      aria-pressed={platformFilter === value}
+      className={cn(
+        "rounded-full px-2.5 py-1 text-2xs font-medium border transition-colors",
+        platformFilter === value
+          ? "bg-neutral-900 text-white border-neutral-900 dark:bg-white dark:text-neutral-900 dark:border-white"
+          : "bg-white text-neutral-600 border-neutral-200 hover:bg-neutral-50 dark:bg-neutral-900 dark:text-neutral-400 dark:border-neutral-700 dark:hover:bg-neutral-800"
+      )}
+    >
+      {label}
+    </button>
+  );
 
   const renderCell = (key: string, row: PrizeRow) => {
     if (key === "brand") {
@@ -240,7 +323,11 @@ export default function PrizePerformanceCard({
             onClick={() => syncMutation.mutate()}
             disabled={!canSync}
             className="inline-flex items-center gap-1.5 rounded-lg border border-neutral-200/80 dark:border-neutral-700 bg-white dark:bg-neutral-900 px-2.5 py-1.5 text-xs font-medium text-neutral-700 dark:text-neutral-300 hover:bg-neutral-50 dark:hover:bg-neutral-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-            title="Sync the latest spend & revenue from Meta"
+            title={
+              platformFilter === "all"
+                ? "Sync the latest spend & revenue from every connected platform"
+                : `Sync the latest spend & revenue from ${platformFilter === "tiktok" ? "TikTok" : "Meta"}`
+            }
           >
             <RotateCw
               className={cn("w-3.5 h-3.5", syncMutation.isPending && "animate-spin")}
@@ -259,6 +346,18 @@ export default function PrizePerformanceCard({
         </p>
       )}
 
+      <div className="flex flex-wrap items-center gap-2 mb-3">
+        {platformChip("all", "All platforms")}
+        {platformChip("meta", "Meta")}
+        {platformChip("tiktok", "TikTok")}
+      </div>
+
+      {tiktokUnavailable && (
+        <p className="text-2xs text-neutral-500 dark:text-neutral-400 mb-3">
+          TikTok isn&apos;t connected in this environment, so these figures are Meta only.
+        </p>
+      )}
+
       {error ? (
         <p className="text-sm text-red-600 dark:text-red-400 py-4">
           {error instanceof Error ? error.message : "Failed to load spend data"}
@@ -272,18 +371,37 @@ export default function PrizePerformanceCard({
           No advertising data for promotion pages in this period.
         </p>
       ) : (
-        <DataTable<PrizeRow>
-          columns={COLUMNS}
-          rows={rows}
-          renderCell={renderCell}
-          onRowClick={(row) =>
-            setSelectedBrand({
-              brand: row.brand as string,
-              slug: row.id as string,
-              canonicalUrls: row.canonicalUrls as string[],
-            })
-          }
-        />
+        <>
+          <DataTable<PrizeRow>
+            columns={COLUMNS}
+            rows={rows}
+            renderCell={renderCell}
+            onRowClick={(row) => {
+              const platforms = row.platforms as SpendByUrlPlatform[];
+              setSelectedBrand({
+                brand: row.brand as string,
+                slug: row.id as string,
+                canonicalUrlsByPlatform: row.canonicalUrlsByPlatform as Record<
+                  SpendByUrlPlatform,
+                  string[]
+                >,
+                // Per-ad detail is single-platform (ad ids aren't unique across platforms).
+                // Open on the row's only platform, or Meta when it mixes — the modal's own
+                // chips let the reader switch, and each platform brings its own URL set.
+                platform: platforms.length === 1 ? platforms[0] : "meta",
+              });
+            }}
+          />
+          {hasBlendedRow && (
+            <p className="text-2xs text-neutral-500 dark:text-neutral-400 mt-3">
+              Spend is the true combined total across platforms. Revenue and ROAS are each
+              platform&apos;s <em>own</em> reported attribution added together — a purchase
+              claimed by both Meta and TikTok is counted twice, so a blended ROAS reads high.
+              Use the per-platform tabs, or the server ROAS on the Advertising card, for a
+              figure you can act on.
+            </p>
+          )}
+        </>
       )}
     </Card>
     <PrizePerformanceAdsModal
@@ -293,7 +411,10 @@ export default function PrizePerformanceCard({
       slug={selectedBrand?.slug ?? ""}
       startDate={startDate ?? ""}
       endDate={endDate ?? ""}
-      canonicalUrls={selectedBrand?.canonicalUrls ?? []}
+      canonicalUrlsByPlatform={
+        selectedBrand?.canonicalUrlsByPlatform ?? { meta: [], tiktok: [] }
+      }
+      platform={selectedBrand?.platform ?? "meta"}
     />
     </>
   );

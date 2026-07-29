@@ -11,7 +11,7 @@ Two `tsx` seeds create a login-ready member in a specific state so you can eyeba
 
 ## Pure unit tests are `tsx` scripts wired as `test:<scope>`
 
-There is no jest/vitest — each test is a standalone `tsx` script under `src/**/__tests__/*.test.ts` that throws on failure, registered as a `test:<scope>` entry in `package.json` (without the entry it's undiscoverable). Added 2026-07-17: `test:packages-focus` (landing-URL membership/one-time classification util), `test:landing-page-focus` (pure `buildLandingPageDailyDocs` aggregation split — mixed-focus rows, `unknown://` rows carry no subdoc), and `test:spend-freshness` (on-read refresh decision logic — trailing-window resolution, historical/future clamping, 5-min throttle; see `docs/metrics-analytics/backend.md` "On-read freshness"). Added 2026-07-20: `test:prize-summaries` (`src/config/__tests__/prize-summaries.test.ts`) — drift + size-budget guard for the `prizes.ts` / `prize-summaries.ts` catalog split (slug/field equality across both modules, ≤40 KB summaries source, no heavy import; see `docs/config-and-data/testing.md`). Added 2026-07-23: `test:privileged-account` (`src/utils/auth/__tests__/privileged-account.test.ts`) — pure guard that the public registration path can never create/overwrite a staff/admin account; anchors that the staff marker is `roleId`/`userType`, NOT the legacy `role` string (see `docs/auth/gotchas.md`). Keep tests pure (no live DB/Stripe/network) by injecting side effects: e.g. `npm run test:promo-visit` exercises `recordPromoVisit` with stubbed `hasRecentVisit`/`recordVisit` deps. Added 2026-07-28: `npm run test:prize-build` (`src/utils/promo-analytics/__tests__/record-prize-build.test.ts`) exercises `recordPrizeBuild` — the functional core behind the prize-build/engagement beacon — with an injected `updateVisitBuild` dep: a bogus built-prize slug or landing slug is rejected before any write, no `anonymousId` is a no-op, no matching visit row returns `no_visit_row` without creating one (mirrors the repository's never-insert rule, see `docs/mongodb/backend.md`), a write failure is reported rather than thrown, and out-of-range switch counts clamp (negative → 0, absurd → the 1000 ceiling) before reaching the database. No DB/env needed. `npm run test:repeat-purchase-analytics` (`src/services/admin/__tests__/repeatPurchaseAnalytics.test.ts`) covers the repeat-purchase reconversion shaper (`summarizeRepeatPurchases`) with an injected `diffAestDays` + fixed `now`, so bucket boundaries, matured-window denominators, and the became-member flag are verified without touching Mongo. Also added 2026-07-28: `npm run test:promo-analytics-aggregation` (`src/repositories/__tests__/PromoAnalyticsRepository-aggregation.test.ts`) — the arithmetic behind the admin promo-analytics dashboard and the Norm external feed. It stubs the `aggregate` statics by call order and calls the REAL `getAggregatedByPage` / `getAggregatedByBuiltPrize`, so it pins the numbers rather than the plumbing: the `buildDistribution` merge keeps both slugs for one page instead of overwriting, an equal-visitors tie sorts `builtPrizeSlug` ascending (deterministic), `topBuiltPrize` equals `buildDistribution[0]`, a build-less page yields `builds: 0` / `[]` / `null`, and — the regression that motivated it — a slug with signups but no builders yields `builderToSignupRate: 0`, never `Infinity`, which would otherwise misreport revenue attribution silently. No DB/env needed. See `.claude/skills/writing-tsx-test`.
+There is no jest/vitest — each test is a standalone `tsx` script under `src/**/__tests__/*.test.ts` that throws on failure, registered as a `test:<scope>` entry in `package.json` (without the entry it's undiscoverable). Added 2026-07-17: `test:packages-focus` (landing-URL membership/one-time classification util), `test:landing-page-focus` (pure `buildLandingPageDailyDocs` aggregation split — mixed-focus rows, `unknown://` rows carry no subdoc), and `test:spend-freshness` (on-read refresh decision logic — trailing-window resolution, historical/future clamping, 5-min throttle; see `docs/metrics-analytics/backend.md` "On-read freshness"). Added 2026-07-20: `test:prize-summaries` (`src/config/__tests__/prize-summaries.test.ts`) — drift + size-budget guard for the `prizes.ts` / `prize-summaries.ts` catalog split (slug/field equality across both modules, ≤40 KB summaries source, no heavy import; see `docs/config-and-data/testing.md`). Added 2026-07-23: `test:privileged-account` (`src/utils/auth/__tests__/privileged-account.test.ts`) — pure guard that the public registration path can never create/overwrite a staff/admin account; anchors that the staff marker is `roleId`/`userType`, NOT the legacy `role` string (see `docs/auth/gotchas.md`). Keep tests pure (no live DB/Stripe/network) by injecting side effects: e.g. `npm run test:promo-visit` exercises `recordPromoVisit` with stubbed `hasRecentVisit`/`recordVisit` deps. Added 2026-07-28: `npm run test:prize-build` (`src/utils/promo-analytics/__tests__/record-prize-build.test.ts`) exercises `recordPrizeBuild` — the functional core behind the prize-build/engagement beacon — with an injected `updateVisitBuild` dep: a bogus built-prize slug or landing slug is rejected before any write, no `anonymousId` is a no-op, no matching visit row returns `no_visit_row` without creating one (mirrors the repository's never-insert rule, see `docs/mongodb/backend.md`), a write failure is reported rather than thrown, and out-of-range switch counts clamp (negative → 0, absurd → the 1000 ceiling) before reaching the database. No DB/env needed. `npm run test:repeat-purchase-analytics` (`src/services/admin/__tests__/repeatPurchaseAnalytics.test.ts`) covers the repeat-purchase reconversion shaper (`summarizeRepeatPurchases`) with an injected `diffAestDays` + fixed `now`, so bucket boundaries, matured-window denominators, and the became-member flag are verified without touching Mongo. Also added 2026-07-28: `npm run test:promo-analytics-aggregation` (`src/repositories/__tests__/PromoAnalyticsRepository-aggregation.test.ts`) — the arithmetic behind the admin promo-analytics dashboard and the Norm external feed. It stubs the `aggregate` statics by call order and calls the REAL `getAggregatedByPage` / `getAggregatedByBuiltPrize`, so it pins the numbers rather than the plumbing: the `buildDistribution` merge keeps both slugs for one page instead of overwriting, an equal-visitors tie sorts `builtPrizeSlug` ascending (deterministic), `topBuiltPrize` equals `buildDistribution[0]`, a build-less page yields `builds: 0` / `[]` / `null`, and — the regression that motivated it — a slug with signups but no builders yields `builderToSignupRate: 0`, never `Infinity`, which would otherwise misreport revenue attribution silently. No DB/env needed. Added 2026-07-29: `npm run test:signup-attribution` (`src/services/attribution/__tests__/signup-attribution.test.ts`) — `buildSignupAttribution` / `mergeSignupAttribution` / `plainSignupAttribution`, moved out of the register route handler by panel F-038 and previously untested despite being the single gate deciding whether a signup's promo page and built prize ever reach the database. Pure, no DB/env. Beyond the persist guard and slug normalisation it carries an **argument-position guard** — four distinct values in one call, each asserted onto its own key — because all four params are optional and stringy, so transposing two type-checks cleanly, and `main` and the feature branch each added a *different* third parameter. Two assertions were added after mutation testing showed the merge's two preservation mechanisms are individually redundant: deleting either one still passed, so one assertion pins the `...previous` spread (the UTM/campaign snapshot) and another pins the explicit preserve branches (via a `next` carrying `promotionSlug: undefined` as a *present* key). See `docs/auth/testing.md`. See `.claude/skills/writing-tsx-test`.
 
 ## Health check
 
@@ -86,6 +86,77 @@ npm run seed:static-vs-video-hero:prod       # PROD: create the draft experiment
 ```
 
 > Historical: the promo packages-design experiment (2026-07, concluded — control won) had its own seed/cleanup scripts (`seed:promo-packages-design`, `cleanup:promo-packages-design`); both scripts and their npm entries were removed when the experiment ended.
+
+### A/B seed: promo landing default theme (light vs dark)
+
+`scripts/seed-promo-theme-experiment.ts` creates a **draft** experiment + two
+50/50 variants (`Light (control)` / `Dark`, via `promoTheme.defaultTheme`) that
+target the **sentinel** slug `__promo-theme__` — never a real prize slug, so it
+can't shadow a slug-targeted promo experiment (`findActiveBySlug` is a
+`findOne`). The reverse direction — a wildcard `"*"` experiment hijacking the
+sentinel — is guarded separately by the exact-match
+`ExperimentRepository.findActiveBySentinelSlug`. Idempotent (safe to re-run on
+a draft; skips unless `--force`); refuses to touch active/paused/ended
+experiments. No `--prod` npm variants exist for this one — it's seeded in
+dev/staging first, same as every other draft experiment; add `:prod` variants
+on request if a prod seed is ever needed (CLAUDE.md rule 4, don't add
+speculative flags/variants).
+
+```bash
+npm run seed:promo-theme:dry          # dev: preview, no writes
+npm run seed:promo-theme              # dev: create the draft experiment
+npm run seed:promo-theme -- --force   # dev: repopulate an existing draft's variants
+```
+
+#### Pre-activation check — do not skip
+
+`VariantConfigService.mergeVariantConfig` rebuilds variant config from an
+explicit key whitelist. If `promoTheme` were ever dropped from that whitelist,
+the config would be silently stripped between MongoDB and the browser — **both**
+arms would render light while the admin dashboard still shows a healthy,
+evenly-split experiment. That's a silent A/A producing confident, wrong
+conclusions, so probe it before every activation, not just the first.
+
+**A bare unauthenticated `curl -X POST /api/ab-testing/assign` CANNOT be used
+for this check and must not be.** Traced from `src/app/api/ab-testing/assign/route.ts`:
+the route only returns a *specific* variant's config when the request carries
+both an admin session **and** the httpOnly `ta_ab_preview_<experimentId>`
+cookie (the `previewVariantId && isAdmin` branch). Without both, it falls
+through to `VariantAssignmentService.assignVariant(experimentId, userId,
+anonymousId)`, which deterministically hashes `experimentId + anonymousId` — a
+cookie-less curl gets a fresh anonymous id every call and lands on whichever
+arm the hash happens to pick. Two such curls could hit the SAME arm by chance,
+see `defaultTheme` present, and the operator would wrongly conclude the
+whitelist is fine while the *other* arm is still silently stripped.
+
+The mechanism that actually targets a chosen arm is the **admin preview
+cookie** (`src/app/api/admin/ab-testing/preview/route.ts`, permission
+`abTesting.edit`), the same one the admin A/B Testing UI's per-variant
+**"Preview"** button (eye icon, `ExperimentDetailModal.handlePreviewVariant` in
+`src/components/admin/ab-testing/ExperimentDetailModal.tsx`) sets before
+opening a promo tab. Per variant:
+
+1. Sign in as a user with `role: "admin"` and keep that browser session (cookie
+   jar) for every step below — the assign route's preview branch checks
+   `session?.user?.role === "admin"`.
+2. Find the variant's `_id` (admin → A/B Testing → open the experiment →
+   Variants tab lists `Light (control)` / `Dark`; the id is visible in the
+   Preview/Edit/Delete network requests in devtools, or read it directly:
+   `db.variants.find({ experimentId: ObjectId("<experimentId>") })`).
+3. Set the preview cookie for that variant: click the variant's **"Preview"**
+   button in the admin UI, or call `POST /api/admin/ab-testing/preview` with
+   `{ "experimentId": "<experimentId>", "variantId": "<variantId>" }` from the
+   SAME authenticated session. This sets an httpOnly
+   `ta_ab_preview_<experimentId>` cookie (1-hour TTL, path `/`).
+4. Still in that session (both the admin session cookie and the preview cookie
+   must ride along — e.g. run this from the browser devtools console, or with
+   an HTTP client seeded from the browser's cookie jar, never a fresh
+   cookie-less request), call `POST /api/ab-testing/assign` with
+   `{ "experimentId": "<experimentId>", "slug": "__promo-theme__" }`.
+5. Assert the response is `{ ..., isPreview: true }` and
+   `variantConfig.promoTheme.defaultTheme` equals the expected arm
+   (`"light"` for `Light (control)`, `"dark"` for `Dark`).
+6. Repeat steps 2-5 for the other variant.
 
 ### Affiliate commission reconciliation (safety net)
 
@@ -173,6 +244,7 @@ npm run test:landing-video-resolver  # pure unit test for the landing hero video
 npm run test:prize-builder           # pure presentation model behind the "Build your prize" configurator (src/components/sections/promo/prize-selection/__tests__/prize-builder-model.test.ts): coverflow wrap-around + card geometry (hidden/dimmed/focused), {toolset}-{toolbox} slug round-trip, accent = selected TOOLSET (cash = green), darken(), combo hero copy, the derived POWERSET_*/TOOLBOX_* maps matching the TOOLBOXES/TOOLSETS registries, and the 6x2 contents-preview cap + "+N more" count. It also PARSES src/app/globals.css and asserts the `.prize-builder` reel variables match REEL_METRICS in both breakpoint blocks, so the hand-mirrored numbers cannot drift silently. No DB/env needed. See docs/promo/frontend.md "Prize builder".
 npm run test:prize-builder-card      # renderToStaticMarkup smoke test of PrizeBuilderCard (src/components/sections/promo/prize-selection/__tests__/PrizeBuilderCard.test.ts): renders EVERY toolbox x toolset combination, then asserts markup invariants a browser-only bug would break - one focused card per lane, the --pbc-off/-abs/-scale custom properties present on every card, radiogroup/radio + roving-tabindex a11y, no nested or block-content <button>, every <img> has alt, cash mode drops the contents strip and the $5,000 flag, the locked (toolset-landing) lane, all five payment marks, and CLAUDE.md 11 copy safety. Needs the asset stubs: run via the npm script, not tsx directly.
 npm run test:prize-gallery           # pure presentation model behind the /promotions "Spotlight" showroom (src/app/promotions/_components/__tests__/gallery-spotlight-model.test.ts): every TOOLSETS x TOOLBOXES combination resolves to a real catalog prize, a combo render that EXISTS ON DISK and a `/promotions/<slug>` link; the opening selection tracks DEFAULT_PRIZE_SLUG rather than a hard-coded pair; cash mode blanks the gear stats and links at cash-prize; every option has a distinct cross-fade key; and the CTA clears **WCAG AA (>= 4.5:1) on every brand accent** — that assertion is what caught white-on-Ryobi-lime at 2.9:1, and it guards a future brand automatically. Also pins `needsMarkOutline` to measured contrast, not a brand list, plus CLAUDE.md 11 copy safety. No DB/env needed. See docs/promo/frontend.md "/promotions Spotlight showroom".
+npm run test:signup-attribution      # the signup-attribution gate (src/services/attribution/__tests__/signup-attribution.test.ts): whether a signup's promo page, built prize and paid-click platform reach the database at all. Persist guard is promo OR utm OR click — builtPrizeSlug is deliberately NOT a standalone trigger; an invalid built prize is ABSENT, not undefined-valued (a literal undefined in a $set writes the key); slugs lowercase+trim. Carries an ARGUMENT-POSITION guard (four distinct values, each asserted onto its own key) because all four params are optional and stringy and two branches each added a different third parameter. Also pins the F-019 merge: preserve-when-absent for the promo fields, last-write-wins elsewhere, and BOTH preservation mechanisms independently. No DB/env needed. See docs/auth/testing.md + docs/auth/gotchas.md.
 npm run test:my-account-projection   # fences the /api/users/[id](/my-account) wire projections (src/utils/dashboard/my-account-projection.ts): MiniDraw entries[]/winner never ship (the MB-scale 2026-07 leak), wire-bloat + auth-secret User fields stay out, client-consumed fields (subscription, miniDrawParticipation, partnerDiscountQueue, …) stay in, and the lists remain include-lists. No DB/env needed. See docs/auth/gotchas.md.
 npm run test:reconcile-attribution   # pure reconciler (src/services/attribution/__tests__/reconcilePersistedAttribution.test.ts): when the cookie-only edge decision is `direct`/absent, recovers an OWNED-channel (klaviyo_email/sms) platform leniently, and (2026-07-19) a PAID platform strictly — only signup-anchored touches affirmatively within the 7d click window; undatable/stale paid UTMs stay `direct`. Locks the live path to the same logic as scripts/backfill-klaviyo-attribution-cycle.ts and scripts/backfill-paid-attribution-recovery.ts. No DB/env needed.
 npm run test:decline-guidance        # card-decline guidance pipeline (src/utils/payment/stripe/__tests__/payment-error-decline-guidance.test.ts): formatPaymentError / getCardDeclineGuidance / isStripeCardError / extractPaymentErrorCodes.

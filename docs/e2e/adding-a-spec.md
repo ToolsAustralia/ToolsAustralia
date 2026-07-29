@@ -206,3 +206,33 @@ spec** — the SSO route POSTs to the real iGoDirect production tenant and auto-
 permanent MyRewards record for the seeded fake member; highlight only. The assertion-focused
 `@smoke` coverage for this surface is tracked as panel-review finding F-023
 (`docs/tech-debt/panel-review-feature-igodirect-rewards-return.md`).
+
+A timed burst must be a real burst — clicks are not (2026-07-28, panel F-008): if a spec asserts
+that debounced behaviour COALESCES several interactions into one, driving it with several
+`click()`s measures the harness, not the product. Each Playwright click re-runs actionability
+checks, and on a dev server under three-project load the gap between clicks exceeded the 1000ms
+debounce in `usePrizeBuildTracking` — so three separate writes were *correct* and the assertion
+failed on all three projects. Drive the burst through the component's keyboard path instead
+(`e2e/specs/marketing/prize-build-url-params.spec.ts` steps an ARIA radiogroup with `ArrowRight`),
+which carries no per-step overhead. Same file, same lesson in reverse: **do not cross widgets
+mid-burst.** `SelectorReel.selectAndFocus` moves focus inside a `requestAnimationFrame`, which on
+WebKit landed *after* an explicit `focus()` on the second lane and stole the next key press back —
+the burst then reported `toolboxSwitches: 3, toolsetSwitches: 0` instead of 2/1. Assert
+cross-widget accumulation somewhere timing cannot interfere (cumulative counters only grow, so the
+LAST beacon carries the totals however many were sent).
+
+Scroll the element you are about to CLICK into view, not just its container (2026-07-28): a card
+at the viewport edge is clickable, but the native focus that a click brings scrolls it fully into
+view, which a scroll-delta assertion reads as page movement. Observed as an 82px drift on
+mobile-safari in a test whose whole point was "selecting a prize must not move the page".
+
+`ta_anon_id` IS assertable on page routes — since 2026-07-28 (superseded note, corrected
+2026-07-29): this note previously said the opposite, and that was true when written. The cookie's
+only writer used to be `/api/ab-testing/assign`, so a visitor who never triggered an experiment
+reached a promo page with no identity at all — 38.2% of real promo visits in the 30 days to
+2026-07-28 (panel finding F-014). Main's `c5a360c1` fixed it: `src/middleware.ts` now mints the
+cookie for every matched page route via the edge-safe `src/lib/ab-testing/anon-id-cookie.ts`.
+So a spec MAY now assert `ta_anon_id` is present, `anon_`-prefixed and stable across navigations —
+`prize-build-url-params.spec.ts` does, deliberately, because that assertion is what stops the
+regression coming back. Still never SEED the cookie to make a spec pass: that hides exactly the
+failure the assertion exists to catch.

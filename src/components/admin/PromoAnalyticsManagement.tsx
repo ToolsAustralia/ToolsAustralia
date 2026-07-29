@@ -121,23 +121,40 @@ function getPageDefaultPrizeSlug(slug: string): string {
 }
 
 /**
- * "Switched away" = builders whose built combination differs from the page's own default.
- * Percentage is of `builds` (visitors who built anything), not `visits` — builds is the
- * meaningful denominator ("of the people who built something, how many picked something
- * other than the default"). Returns `switchAwayPct: null` when `builds` is 0 so the caller
- * can render an em dash instead of a misleading "0%".
+ * "Switched away" = recorded builds whose combination differs from the page's own default.
+ *
+ * **The denominator must come from `buildDistribution`, NOT from `row.builds`.** They count
+ * different things, and mixing them produced a literal 250% on the dashboard:
+ *
+ *   `row.builds`        — unique VISITORS who built anything, deduped across the whole page
+ *   `buildDistribution` — unique visitors PER COMBINATION
+ *
+ * A visitor gets one visit row per page load, and each row keeps its own final build. So one
+ * person who lands four times and settles on a different combination each time contributes
+ * 1 to `builds` but 4 to the distribution. Summing distribution entries for the numerator while
+ * dividing by `builds` therefore lets the ratio exceed 100%.
+ *
+ * Found on staging with real traffic — every test missed it because they all used one row per
+ * visitor, which is the one shape that cannot reproduce it.
+ *
+ * Dividing the distribution by its own total keeps both sides in the same unit, so this reads
+ * "of the builds recorded on this page, what share were not the default". Returns null when
+ * nothing was built, so the caller renders an em dash rather than a misleading "0%".
  */
 function getSwitchAwayRate(row: PromoPageMetrics): {
   defaultSlug: string;
   switchAwayCount: number;
+  switchAwayTotal: number;
   switchAwayPct: number | null;
 } {
   const defaultSlug = getPageDefaultPrizeSlug(row.slug);
-  const switchAwayCount = (row.buildDistribution ?? [])
+  const distribution = row.buildDistribution ?? [];
+  const switchAwayTotal = distribution.reduce((sum, d) => sum + d.visitors, 0);
+  const switchAwayCount = distribution
     .filter((d) => d.builtPrizeSlug !== defaultSlug)
     .reduce((sum, d) => sum + d.visitors, 0);
-  const switchAwayPct = row.builds > 0 ? (switchAwayCount / row.builds) * 100 : null;
-  return { defaultSlug, switchAwayCount, switchAwayPct };
+  const switchAwayPct = switchAwayTotal > 0 ? (switchAwayCount / switchAwayTotal) * 100 : null;
+  return { defaultSlug, switchAwayCount, switchAwayTotal, switchAwayPct };
 }
 
 async function fetchPromoAnalytics(params: {
@@ -709,15 +726,15 @@ export default function PromoAnalyticsManagement() {
                   </th>
                   <th
                     className="hidden md:table-cell text-right p-3 font-semibold text-gray-800 dark:text-neutral-100"
-                    title="Share of builders who assembled a different combination than this page's own default build"
+                    title="Of the builds recorded on this page, the share that were a different combination than the page's own default. Counted per recorded build, not per visitor — one person landing several times contributes one build each time."
                   >
-                    Switched away % of Builds
+                    Switched away % of builds
                   </th>
                 </tr>
               </thead>
               <tbody>
                 {sortedPages.map((row) => {
-                  const { defaultSlug, switchAwayCount, switchAwayPct } = getSwitchAwayRate(row);
+                  const { defaultSlug, switchAwayCount, switchAwayTotal, switchAwayPct } = getSwitchAwayRate(row);
                   return (
                   <tr
                     key={`${row.pageType}-${row.slug}`}
@@ -786,8 +803,8 @@ export default function PromoAnalyticsManagement() {
                     <td
                       className="hidden md:table-cell p-3 text-right text-gray-600 dark:text-neutral-400"
                       title={
-                        row.builds > 0
-                          ? `${formatNumber(switchAwayCount)} of ${formatNumber(row.builds)} builders picked a different combination than this page's default (${getPrizeLabel(defaultSlug) ?? defaultSlug})`
+                        switchAwayTotal > 0
+                          ? `${formatNumber(switchAwayCount)} of ${formatNumber(switchAwayTotal)} recorded builds were a different combination than this page's default (${getPrizeLabel(defaultSlug) ?? defaultSlug})`
                           : "Nobody built a prize on this page in this period"
                       }
                     >

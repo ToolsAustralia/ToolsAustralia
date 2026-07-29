@@ -274,6 +274,14 @@ export interface IUser extends Document {
     campaignId?: string;
     adsetId?: string;
     adId?: string;
+    /**
+     * Paid platform whose CLICK ID (`_fbc` / `ttclid` / `_sc_click`) was present in the
+     * request cookies at registration. The resolved platform ONLY — the raw click id is
+     * deliberately not stored, so signup-source analytics get click-verified confidence
+     * (the same basis purchases use) without adding a new identifier to the user record.
+     * Absent for organic signups and for pre-2026-07-24 accounts.
+     */
+    clickPlatform?: "meta" | "tiktok" | "snapchat" | "google";
   };
 
   // Points Redemption History
@@ -1064,6 +1072,14 @@ const UserSchema = new Schema<IUser>(
       campaignId: { type: String, trim: true },
       adsetId: { type: String, trim: true },
       adId: { type: String, trim: true },
+      // Paid platform whose CLICK ID was present in the request cookies at registration
+      // (derived from extractPaidClickSignals). Stores the resolved platform only — never
+      // the raw click id — so signup-source analytics gain click-verified confidence
+      // without enlarging the PII footprint held on the user record.
+      clickPlatform: {
+        type: String,
+        enum: ["meta", "tiktok", "snapchat", "google"],
+      },
     },
 
     // Points Redemption History
@@ -1276,7 +1292,24 @@ UserSchema.index({ createdAt: -1 });
 UserSchema.index({ "referral.code": 1 }, { unique: true, sparse: true });
 UserSchema.index({ stripeCustomerId: 1 }, { sparse: true });
 UserSchema.index({ "signupAttribution.promotionSlug": 1, createdAt: 1 });
-UserSchema.index({ "signupAttribution.builtPrizeSlug": 1, createdAt: 1 });
+// PARTIAL, not plain (panel F-021). The built-prize signup aggregation filters
+// `"signupAttribution.builtPrizeSlug": { $exists: true }`, which a NON-sparse index cannot narrow
+// (a missing field is indexed as `null`, so the bounds span the whole key range). The plain index
+// was measured worse than useless: the planner correctly rejected it, and forcing it examined 128
+// keys / 127 docs. Measured on dev (895 users, 1 carrying the field), this partial index is chosen
+// unprompted and examines 1 key / 1 doc. The NAME must differ from the superseded
+// `signupAttribution.builtPrizeSlug_1_createdAt_1` — mongoose cannot alter an index in place;
+// re-declaring the same NAME with a changed `partialFilterExpression` is rejected by the server
+// (measured: code 86, "An existing index has the same name as the requested index"; commonly cited
+// as IndexOptionsConflict/85) and autoIndex swallows it, so the index would silently never build.
+// Superseded index dropped by scripts/migrations/2026-07-29-partial-build-prize-indexes.ts.
+UserSchema.index(
+  { "signupAttribution.builtPrizeSlug": 1, createdAt: 1 },
+  {
+    name: "signupBuiltPrize_createdAt_partial",
+    partialFilterExpression: { "signupAttribution.builtPrizeSlug": { $exists: true } },
+  }
+);
 // ✅ OPTION 1: Major Draw Entries index removed - using single source of truth
 
 // MiniDraw participation indexes

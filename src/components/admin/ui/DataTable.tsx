@@ -40,13 +40,29 @@ export function DataTable<T extends Record<string, unknown> & { id?: string | nu
             ))}
           </tr>
         </thead>
+        {/* When rows are clickable they must also be reachable by keyboard — onClick
+            alone leaves the drill-down modal unusable without a mouse (panel F-017).
+            tabIndex/role/keydown below are applied ONLY when an onRowClick exists, so
+            non-interactive tables stay out of the tab order. */}
         <tbody>
           {sorted.map((row, ri) => (
             <tr key={row.id ?? ri}
               onClick={onRowClick ? () => onRowClick(row) : undefined}
+              onKeyDown={
+                onRowClick
+                  ? (e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault(); // Space must activate, not scroll the page
+                        onRowClick(row);
+                      }
+                    }
+                  : undefined
+              }
+              tabIndex={onRowClick ? 0 : undefined}
+              role={onRowClick ? "button" : undefined}
               onMouseEnter={onRowMouseEnter ? (e) => onRowMouseEnter(row, e) : undefined}
               onMouseLeave={onRowMouseLeave}
-              className={`border-b border-neutral-100 dark:border-neutral-800/60 hover:bg-neutral-50 dark:hover:bg-neutral-800/40 transition-colors ${onRowClick ? "cursor-pointer" : ""}`}>
+              className={`border-b border-neutral-100 dark:border-neutral-800/60 hover:bg-neutral-50 dark:hover:bg-neutral-800/40 transition-colors ${onRowClick ? "cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500 dark:focus-visible:ring-blue-400" : ""}`}>
               {columns.map((c) => (
                 <td key={c.key} className={`py-2.5 px-2 ${c.align === "right" ? "text-right" : "text-left"}`}>
                   {renderCell ? renderCell(c.key, row) : (row[c.key] as ReactNode)}

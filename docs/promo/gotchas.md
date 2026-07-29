@@ -75,9 +75,19 @@ documented the gap without noticing it rendered as a 400.
 
 **`LandingHeroVideo`'s `onUnavailable` does not fire when every `<source>` is exhausted (known, practically unreachable).** `<source>` `error` events do not bubble to the parent `<video>` element — only an error on the `<video>` element ITSELF (e.g. a decode failure after a source loads) triggers `onError`. When all `<source>`s 404/fail to decode, the browser sets the media element to `networkState === NETWORK_NO_SOURCE` silently, with no error event at all — so `onUnavailable` (wired via `<video onError=...>`) never fires and the caller never falls back to the still. In practice this is unreachable today because every clip ships both a WebM and an MP4 twin (see the WebM-first entry in [frontend.md](./frontend.md)) and the resolver always emits at least the base tier, so total exhaustion would require BOTH format twins to be missing from disk — a deployment error, not a runtime condition. Documented so the next editor doesn't assume `onUnavailable` is a complete safety net if that assumption ever changes (e.g. a future tier ships only one format).
 
+## `PromoHero` withholds theme-forked art until the default-theme experiment settles (2026-07-28)
+
+An earlier draft of the default-theme A/B design (`docs/superpowers/specs/2026-07-28-promo-theme-split-design.md`) asserted "the hero physically cannot paint before JS runs, so the banner is never wrong." **That was wrong** — an audit caught it before ship. `PromoHero` only gates the `<video>` on the post-mount `viewport` tri-state (see the CSS-hidden-video entry above). Pre-mount, and whenever there's no video for a slug, BOTH the `isLoading` stage and the main-render still-image branch fall through to theme-forked assets: the `isLoading` stage background comes from `resolveLandingHeroBackground(themeMode)`, and the main branch's `<Image src>` comes from `getImageForMode(landingHeroPaths, themeMode, …)`. Both read `themeMode` from `useThemeStore`, which is populated from `localStorage`/media-query on mount — so on first paint of the *default*-theme experiment (before the visitor's assigned arm is known), these would paint (and fetch) the wrong-arm hero.
+
+That matters specifically because `PromoThemeExperimentGate` (`src/components/ab-testing/PromoThemeExperimentGate.tsx`, Task 8) is an **overlay**, not a replacement — the page is ISR-static for SEO, so `children` (including `PromoHero`) always render underneath the full-screen loader, gated only by `inert`/`aria-hidden`, not by unmounting. A mounted `<Image>` underneath an opaque loader still gets **fetched**. Without withholding the art, a dark-arm visitor would download the light hero (whatever `themeMode` resolves to pre-decision), discard it, then fetch the dark one once the experiment settles — a systematic bandwidth/LCP handicap on exactly one arm, which would corrupt the experiment's own result (the arm being penalized would look like it "converts worse" purely from the extra fetch + repaint).
+
+Fixed by reading `usePromoThemeSettled()` (default `true` outside the gate — a no-op everywhere except promo landings) and adding a new early return **above** the `isLoading` block: when `!themeSettled`, `PromoHero` returns the same reserved `<section>` box (identical className, so no layout shift either way it resolves) with a plain themed `bg-white dark:bg-neutral-950` div and **no `<Image>` elements at all** — no theme-forked asset is emitted until the arm is known. The `isLoading` and main-render still-image branches are unchanged; this only closes the gap between mount and the experiment settling.
+
 ## Raw-path image preloads never match `/_next/image` URLs — use `getImageProps` (2026-07-19)
 
 A `<link rel="preload" as="image" href="/images/foo.webp">` preloads the **raw source path**, but `next/image` actually requests the browser-optimized `/_next/image?url=...&w=...&q=75` URL — the two never match, so the hand-written preload silently does nothing useful (no error, just a wasted/ignored hint) while the real image request still incurs full latency. Fixed across the promo landing hero preloads (`ToolsetLandingPage` AND the dynamic-slug `app/promotions/[slug]/page.tsx` — both compute `getLandingHeroVideoPaths(slug, urgency)` first: a video-eligible slug emits NO image preload at all, since the still never paints there), the homepage `Hero`, and the `/promotions` gallery's featured card: compute the preload via `getImageProps({ src, alt: "", fill: true, sizes: "100vw" })` (from `next/image`) and pass its `props.srcSet` to `imageSrcSet` (+ `imageSizes`) on the `<link>`, so the preloaded URL is the SAME one the browser will actually request. `getImageProps` is a plain function (no hooks) — safe to call in both Server and Client Components. Also fold in the viewport split via `media="(max-width: 1023px)"` / `media="(min-width: 1024px)"` on each `<link>` rather than emitting both unconditionally — an unconditional pair downloads both the mobile AND desktop variant regardless of which one the visitor will actually see. **The preload `<link>` alone is not the whole fix** — if the visible markup still mounts two separate `<Image>`s toggled by CSS `hidden`/`lg:block`, BOTH still download regardless of what you preload; see [shared-ui/gotchas.md](../shared-ui/gotchas.md) "Viewport-correct `priority`/preload" for the paired `<picture>` fix (`Hero.tsx`, `/promotions` featured card).
+
+**Second skip trigger added 2026-07-28:** both files' `heroImagePreload` guard now also returns `null` when the baked `themeExperimentId` (the default-theme A/B sentinel, see [frontend.md](./frontend.md#default-theme-ab-gate-wired-into-both-promo-landing-pages-2026-07-28)) is non-null, not just when `heroVideo` is truthy. `heroImagePaths` here is always the LIGHT variant — the server has no theme — so with the theme test live, preloading it would hand exactly one arm (dark) a wasted download-then-discard while the other arm benefits, a one-sided LCP handicap that would bias the experiment's own conversion numbers.
 
 ## Hero "Enter Now" needs the page's package section to listen for `openMembershipModal` (2026-07-01)
 
@@ -149,3 +159,32 @@ The toolset lane wrote nothing, which is why it never jumped and also why the ch
 invisible to analytics until the build params landed.
 
 Use `replaceState`, never `pushState`: Back must leave the page, not step back through builds.
+
+## The prize-build beacon: report everyone, but only write once (2026-07-29, F-018)
+
+`usePrizeBuildTracking` has two senders and they are gated differently **on purpose**. Getting this
+wrong is a live regression that shipped once and was caught only by e2e.
+
+- **Debounced send** — gated on `hasInteracted`.
+- **Unload flush** (`pagehide` / `visibilitychange`) — **never** gated.
+
+The reasoning runs in two steps, and skipping either one breaks something:
+
+1. **Every visitor's build must reach the visit row**, including someone who never touches the reels.
+   The signup path records the page's default build for that visitor, so if the visit row omits it,
+   `builders` and `signups` count different populations and `builderToSignupRate` can exceed 100% —
+   the same class of visibly-impossible number as F-013's 250% column.
+2. **But the debounced sender must not run for them.** It fires on mount, so ungating it means one
+   write per visitor on arrival *plus* another after their first switch — **double the writes on the
+   highest-traffic ad-landing path in the product**, for no extra information. That regression was
+   real: `prize-build-url-params.spec.ts` failed with `Expected: 1, Received: 2` and
+   `Expected: 2, Received: 4` across all three browser projects.
+
+The unload flush already covers the untouched visitor, so gating only the debounce gives **one write
+per visitor** in both cases: untouched → one write at unload; engaged → the debounced write, with the
+unload flush suppressed by the `lastSent` payload dedup.
+
+**Do not "simplify" this by gating both senders** (untouched visitors vanish from `builders` again)
+**or neither** (writes double). And do not infer engagement from `toolboxSwitches`/`toolsetSwitches`:
+cash is a toggle, not a reel card, so a cash-only visitor sits at `0/0` and has still engaged (F-010).
+The payload carries `interacted` explicitly for that reason.

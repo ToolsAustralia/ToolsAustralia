@@ -125,6 +125,93 @@ function run() {
   assert.equal(agg.totalConversions, 142 + 20 + 31, "total conversions across channels");
   assert.equal(computeAggregate({ tiktok: ar.tiktok } as unknown as AR).overallRoas, null, "no spend → null overall ROAS");
 
+  // ── Signups per platform + dual ROAS (2026-07-24) ──────────────────────────────
+  const dual = buildAdvertisingRows({
+    meta: {
+      revenue: 41200, renewalRevenue: 0, conversions: 142, signups: 380,
+      byConfidence: { click: 100, utm_only: 0, inferred_backfill: 0 },
+      adSpend: 12400, trueRoas: 41200 / 12400,
+      platformRevenue: 52000, platformRoas: 52000 / 12400,
+    },
+    // Spend, but the platform reported no conversion value back.
+    tiktok: {
+      revenue: 900, renewalRevenue: 0, conversions: 4, signups: 25,
+      byConfidence: { click: 4, utm_only: 0, inferred_backfill: 0 },
+      adSpend: 500, trueRoas: 900 / 500,
+    },
+    // Owned channel — no spend, so neither ROAS applies.
+    klaviyo_email: {
+      revenue: 6100, renewalRevenue: 0, conversions: 20, signups: 12,
+      byConfidence: { click: 0, utm_only: 20, inferred_backfill: 0 },
+    },
+  } as unknown as AR);
+  const metaRow = dual.find((r) => r.platformKey === "meta")!;
+  const tiktokRow = dual.find((r) => r.platformKey === "tiktok")!;
+  const klaviyoRow = dual.find((r) => r.platformKey === "klaviyo_email")!;
+
+  assert.equal(metaRow.signups, 380, "signups surface on the row");
+  assert.equal(tiktokRow.signups, 25, "signups surface for every paid channel");
+  assert.equal(klaviyoRow.signups, 12, "owned channels carry signups too");
+
+  assert.equal(metaRow.platformRoas.kind, "value", "platform-reported ROAS present when the platform sent value");
+  if (metaRow.platformRoas.kind === "value") {
+    assert.ok(Math.abs(metaRow.platformRoas.value - 52000 / 12400) < 1e-9, "platform ROAS = platform revenue / spend");
+    assert.equal(metaRow.platformRoas.revenue, 52000, "platform revenue carried for the tooltip");
+  }
+  // The two ROAS figures are independent — server ROAS must NOT be overwritten by it.
+  assert.equal(metaRow.roas.kind, "value", "server ROAS still present alongside platform ROAS");
+  if (metaRow.roas.kind === "value") {
+    assert.ok(Math.abs(metaRow.roas.value - 41200 / 12400) < 1e-9, "server ROAS uses OUR attributed revenue");
+  }
+  assert.equal(
+    tiktokRow.platformRoas.kind,
+    "noData",
+    "spend but no platform-reported value → noData (distinct from 'not applicable')",
+  );
+  assert.equal(klaviyoRow.platformRoas.kind, "na", "owned channel → platform ROAS not applicable");
+
+  // A platform with signups but zero revenue must still render — that's the whole point
+  // of the signup column (a channel creating accounts that haven't converted yet).
+  const signupsOnly = buildAdvertisingRows({
+    tiktok: {
+      revenue: 0, renewalRevenue: 0, conversions: 0, signups: 17,
+      byConfidence: { click: 0, utm_only: 0, inferred_backfill: 0 },
+    },
+  } as unknown as AR);
+  assert.equal(
+    signupsOnly.find((r) => r.platformKey === "tiktok")!.signups,
+    17,
+    "signups-only platform still produces a row",
+  );
+
+  // A channel that SPENT money and returned NOTHING must still render — it is the most
+  // important row on the card, and it used to vanish (the headline Ad Spend KPI counted it
+  // while the table omitted it, so the two silently disagreed).
+  const spendNoReturn = buildAdvertisingRows({
+    meta: {
+      revenue: 0, renewalRevenue: 0, conversions: 0, signups: 0,
+      byConfidence: { click: 0, utm_only: 0, inferred_backfill: 0 },
+      adSpend: 19640.33, trueRoas: 0, platformRevenue: 14141.04, platformRoas: 0.72,
+    },
+  } as unknown as AR);
+  const burnRow = spendNoReturn.find((r) => r.platformKey === "meta")!;
+  assert.equal(burnRow.spend.kind, "amount", "spend-with-no-return still renders a spend amount");
+  if (burnRow.spend.kind === "amount") {
+    assert.ok(Math.abs(burnRow.spend.value - 19640.33) < 1e-9, "the full spend is shown");
+  }
+  assert.equal(burnRow.roas.kind, "value", "server ROAS renders as a real 0.00x, not 'needs spend'");
+  if (burnRow.roas.kind === "value") assert.equal(burnRow.roas.value, 0, "server ROAS is 0 — money out, nothing back");
+  assert.equal(burnRow.platformRoas.kind, "value", "the platform's own ROAS still shows for contrast");
+
+  // Direct row appears on signups alone, not just revenue/conversions.
+  const directSignups = buildDirectRow({
+    direct: {
+      revenue: 0, renewalRevenue: 0, conversions: 0, signups: 9,
+      byConfidence: { click: 0, utm_only: 0, inferred_backfill: 0 },
+    },
+  } as unknown as AR);
+  assert.equal(directSignups?.signups, 9, "direct row renders for signups-only traffic");
+
   console.log("advertisingCardModel helper tests passed");
 }
 

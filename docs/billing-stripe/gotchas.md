@@ -272,11 +272,12 @@ Before creating a new subscription, both `create-subscription` routes (`src/app/
 
 ## Metadata drift locks customers out of checkout for 24h
 
-Subscription create routes accept a client-supplied `subscriptionRequestId` UUID and use it as the Stripe idempotency key. The same call attaches request-derived metadata (`capi_client_ip`, `capi_user_agent`, `capi_fbc`, `capi_fbp`, `capi_event_source_url`, `attr_*`) which is rebuilt server-side on every call. If the customer retries with the same UUID and **any** of those values has drifted (mobile IP change, fbc rebuilt with different `Date.now()`, different referer), Stripe rejects with `StripeIdempotencyError` and locks the customer out of that key for 24h.
+Subscription create routes accept a client-supplied `subscriptionRequestId` UUID and use it as the Stripe idempotency key. The same call attaches request-derived metadata (`capi_client_ip`, `capi_user_agent`, `capi_fbc`, `capi_fbp`, `capi_ttclid`, `capi_ttp`, `capi_event_source_url`, `attr_*`) which is rebuilt server-side on every call. If the customer retries with the same UUID and **any** of those values has drifted (mobile IP change, fbc rebuilt with different `Date.now()`, different referer), Stripe rejects with `StripeIdempotencyError` and locks the customer out of that key for 24h.
 
 Mitigated by:
 - [P10. One-shot idempotency-retry](./patterns.md#p10-one-shot-idempotency-retry-on-key-collisions) — catches the error, cancels the orphan, retries with a fresh key.
 - `extractFBCFromRequest` reading `_fbc` cookie first ([docs/tracking/gotchas.md](../tracking/gotchas.md)) — eliminates the most common drift cause.
+- The TikTok keys (`capi_ttclid` / `capi_ttp`, added 2026-07-29) are cookie-reads, not per-call constructions, so they are stable across a retry the way `capi_fbc` is. The one drift window is `_ttp`: the pixel SDK sets that cookie asynchronously, so a very early first attempt can lack it while the retry has it. P10 covers that case; do not add per-call-derived values (anything using `Date.now()`, a random id, or a header that varies) to this metadata block.
 
 ## 2026-05-15 504 storm — index DDL + self-call in the webhook path
 

@@ -162,9 +162,33 @@ message rather than a bare header, matching the sibling tables. **8 `<th>` / 8 `
 Full-file count after this addition: **35 `<th>` / 35 `<td>`** across all four tables (UTM Channel
 Attribution 8/8 + per-page 11/11 + By Built Prize 8/8 + By Toolbox 8/8).
 
-> **Not visually verified.** No admin session was available in the session that added this, so the
-> structure was confirmed by `<th>`/`<td>` parity and type-check only. Confirm the rendered table
-> before trusting the layout.
+> **Now visually verified (2026-07-28).** Rendered on staging with a temporarily-promoted throwaway
+> account. All four tables display correctly, and the By Toolbox rollup correctly attributed a real
+> test purchase: `GearWrench · 2 builders · 1 registration · 1 conversion · $20.00`.
+
+## Switched-away % — the denominator must come from the distribution (2026-07-28, F-013)
+
+Staging showed **250%** in this column. The cause is worth remembering, because it is easy to
+reintroduce: `row.builds` and `buildDistribution` count **different units**.
+
+| | Counts |
+|---|---|
+| `row.builds` | unique **visitors** who built anything, deduped across the page |
+| `buildDistribution[].visitors` | unique visitors **per combination** |
+
+A visitor gets one visit row per page load, and each row keeps its own final build. So one person
+who lands four times and settles on a different combination each time contributes **1** to `builds`
+but **4** to the distribution. Summing distribution entries for the numerator and dividing by
+`builds` therefore lets the ratio exceed 100%. Real data: `makita` on 2026-07-28 had 5 recorded
+builds from 2 unique visitors — 5 ÷ 2 = 250%.
+
+`getSwitchAwayRate` now divides the distribution by **its own total**, so both sides are in the
+same unit and the value is bounded at 100%. The column reads "% of builds" — **records, not
+people** — and the tooltip states that explicitly.
+
+> Every automated test missed this. The unit suite, the seeded accuracy proof and the local browser
+> runs all used **one row per visitor**, which is the one shape that cannot reproduce it. If you add
+> coverage here, make a single visitor produce several different builds.
 
 **Norm lockstep (CLAUDE.md rule 10).** `buildDistribution` and `byBuiltPrize` are now mirrored to
 Norm — see
@@ -324,6 +348,36 @@ exists for brand prize slugs, so the toggle is a no-op on slugs with no video.
 Note admins are excluded from assignment, so to see a variant either browse as a
 non-admin or use admin **Preview**.
 
+## A/B VariantConfigEditor — config initializer now spreads stored config; "Promo Landing Default Theme" control (2026-07-28)
+
+[`VariantConfigEditor`](../../src/components/admin/ab-testing/VariantConfigEditor.tsx)'s
+`config:` initializer previously built the form's starting state from an explicit
+six-key whitelist (`hero` / `banner` / `packages` / `membershipModal` /
+`packageColors` / `membershipTheme`). Any key on `VariantConfig` outside that list —
+including the promo-theme-split experiment's `promoTheme` (added to the model in the
+same change) — was silently dropped the first time an admin opened a variant and hit
+Save, even though it correctly round-tripped through the API/service layer. The
+initializer now **spreads `variant?.config ?? {}` first**, then re-asserts the six
+explicit keys (plus the new `promoTheme` key) on top of the spread — the explicit
+keys must come after the spread, not before, since other code in this file reads them
+as always-present objects. This pattern (spread stored config, then re-assert
+known keys) is now the template for adding any future `VariantConfig` key here:
+add the key to the spread-preserving initializer AND surface a control for it,
+or it round-trips silently unless an admin never re-saves the variant.
+
+A new **"Promo Landing Default Theme"** `FormSection` (placed directly after
+"Membership Section Theme") is the admin control for `config.promoTheme.defaultTheme`
+— the theme-split A/B test that picks a bucketed visitor's default light/dark theme on
+promo landing pages (see [ab-testing/architecture.md § Promo landing default-theme
+experiment](../ab-testing/architecture.md) for the field/resolution rule: applies only
+to visitors who have never used the manual theme toggle). It uses the same `Select` primitive
+(`@/components/modals/ui`) as the neighbouring "Countdown behaviour" and package-color
+controls; `Select` has no `description` prop (only per-option descriptions), so the
+explanatory copy is a plain `<p className="text-xs text-gray-500 dark:text-neutral-500">`
+underneath, matching the caption style `Checkbox` renders for its own `description`
+prop elsewhere in this file. Options are `"light"` (labelled "Light (control)") and
+`"dark"`; defaults to `"light"` when unset, mirroring the service-layer default.
+
 ## Components
 
 [src/components/admin/](../../src/components/admin/):
@@ -465,7 +519,7 @@ Part of the admin Overview reskin (plan `docs/superpowers/plans/2026-06-01-admin
 Membership vs one-time landing-URL split surfaced across the Overview (data contract: [api.md — packages-focus](./api.md); domain background: `docs/metrics-analytics/`).
 
 - **Ad Spend + ROAS KPI tiles are now clickable** (`KpiGrid.tsx`): both share one `adSpendFocusOpen` state (both show the `active` ring while open) and open **[src/components/modals/AdSpendFocusModal.tsx](../../src/components/modals/AdSpendFocusModal.tsx)** — platform chips (Meta live / TikTok renders a dashed "awaiting URL mapping" box), Membership / One-time summary tiles (spend headline; revenue · ROAS · conversions subline; Unclassified tile only when its spend > 0) doubling as the focus-tab selector (default **One-time**), then a campaign → ad-set → ad tree for the selected bucket. An amber notice renders when `detail.complete === false` ("per-campaign detail covers {availableSince} onwards" — the per-ad insights TTL floor); the summary tiles always cover the full range. Revenue is Meta-reported, same basis as the ROAS KPI headline. `KpiGrid` gained `startDate?/endDate?` props (passed by `DashboardOverview` as `customStartDate || undefined` etc.) and resolves the concrete AEST window via [src/utils/admin/resolveAestDateWindow.ts](../../src/utils/admin/resolveAestDateWindow.ts) — the same helper `PrizePerformanceCard` now uses (its two inline date memos were extracted into it, behavior-identical).
-- **[src/components/admin/spend-by-url/CampaignTreeTable.tsx](../../src/components/admin/spend-by-url/CampaignTreeTable.tsx)** — shared expandable campaign → ad-set → ad tree (columns Name | Spend | Revenue | ROAS | Conv.; ROAS emerald ≥ 3 else amber; ad rows show adId mono over adName, an adFormat chip, and a focus `Badge` when the node carries `packagesFocus` — info "One-time" / neutral "Membership" / warning "Unclassified"). Node types come from `usePackagesFocusBreakdown`; consumed by `AdSpendFocusModal` (server-built tree) and `PrizePerformanceAdsModal` (client-grouped tree). Known kit limitation: `DataTable`/tree row clicks are mouse-only (no keyboard handler) — pre-existing, shared with `AdvertisingPlatformCard`.
+- **[src/components/admin/spend-by-url/CampaignTreeTable.tsx](../../src/components/admin/spend-by-url/CampaignTreeTable.tsx)** — shared expandable campaign → ad-set → ad tree (columns Name | Spend | Revenue | ROAS | Conv.; ROAS emerald ≥ 3 else amber; ad rows show adId mono over adName, an adFormat chip, and a focus `Badge` when the node carries `packagesFocus` — info "One-time" / neutral "Membership" / warning "Unclassified"). Node types come from `usePackagesFocusBreakdown`; consumed by `AdSpendFocusModal` (server-built tree) and `PrizePerformanceAdsModal` (client-grouped tree). ~~Known kit limitation: `DataTable`/tree row clicks are mouse-only (no keyboard handler).~~ **Fixed 2026-07-24 (panel F-017)** in `DataTable` itself: when (and only when) an `onRowClick` is supplied, rows get `tabIndex=0`, `role="button"`, an Enter/Space `onKeyDown` (Space `preventDefault`s so it activates instead of scrolling), and a `focus-visible` ring. Non-interactive tables stay out of the tab order. Every `DataTable` consumer — including `AdvertisingPlatformCard` — inherits this; `CampaignTreeTable`'s own custom tree rows are separate and still need the same treatment if they gain click handlers.
 - **Prize Performance row click → upgraded [`PrizePerformanceAdsModal`](../../src/components/modals/PrizePerformanceAdsModal.tsx)** — `PrizePerformanceCard` attaches each brand's `canonicalUrls` to its row (captured before the zero-row filter, so every rendered row carries them) and opens the modal via the kit `DataTable`'s `onRowClick`. The modal keeps its original props + `useSpendByUrlDetailMany` source and adds: brand-level Membership / One-time summary tiles (Unclassified only when present), focus chips (All / Membership / One-time / Unclassified) filtering ONE mixed tree (each ad badges with its own focus — unlike the KPI modal's pre-split buckets), platform chips (TikTok = awaiting box, no fetch), and the client-side grouper `groupSpendByUrlDetailRowsByCampaign` ([spendByUrlAdBreakdown.ts](../../src/utils/admin/spendByUrlAdBreakdown.ts)) producing the same node shape `CampaignTreeTable` renders.
 - **Facebook Ads → Spend by URL surfaces** (`SpendByUrlSection.tsx`, `SpendByUrlAdBreakdownTable.tsx`): a non-interactive focus summary strip above the toolbar (Membership / One-time / + Unclassified tiles from `usePackagesFocusBreakdown`; hidden when the range isn't ready, on query error, or when total focus spend is 0), per-URL-row `M $x` / `OT $y` split chips under the URL (only when the row carries the `packagesFocus` split), and a focus `Badge` under the ad name in the per-ad drill-down table (membership/one-time only — no new column, COL_SPANs unchanged).
 
@@ -888,7 +942,13 @@ Performance / correctness:
 
 Cards:
 - **`KpiGrid`** — Today's Revenue tile gained `sub="From all sources"` (height parity); "Conversion" → **"Conversion Rate"**.
-- **`AdvertisingPlatformCard`** (`overview/sections/`) — spend & return by platform (**Platform / Spend / Revenue / ROAS**). Revenue + ROAS are **server-side payment-attributed** (`stats.attributedRevenue`, keyed by `convertingPlatform`), **not** Meta pixel `spend × roas`; ad spend from the ads API. Row logic in the unit-tested `advertisingCardModel.ts` (`npm run test:advertising-card-model`) maps each platform to one of three classes: **paid + spend** (Meta — spend, revenue, true ROAS `revenue/adSpend`); **paid, spend not synced** (TikTok/Snapchat — revenue + conversions; spend "Awaiting sync", ROAS "Needs spend"); **owned** (Klaviyo Email/SMS — revenue + conversions; spend/ROAS "—"). Header = **Blended ROAS** (Σ revenue ÷ Σ spend over paid-with-spend channels; "—" when none) + total attributed acquisition revenue. **Money is shown in full** (`formatCurrency`, e.g. `$2,400.00` — not `fmtCompact`'s `$2.4k`) so exact spend/revenue is legible (2026-06-03). A **Direct** row (`buildDirectRow`, neutral globe logo) is **appended below the 5 channels** when the `direct` (unattributed — no fbclid/ttclid/Klaviyo tag) bucket has revenue, showing its acquisition revenue + count with spend/ROAS "—"; it is **deliberately excluded** from the header "attributed" total, blended ROAS, and `computeAggregate` (direct is unattributed, so it must not inflate ad metrics). `google`/`other` buckets are not surfaced as rows. Brand logos are inline SVG (`src/components/admin/ui/PlatformLogos.tsx`, now incl. `"direct"`). The dedicated Facebook Ads tab + ads-health views are untouched.
+- **`AdvertisingPlatformCard`** (`overview/sections/`) — spend & return by platform (**Platform / Spend / Revenue / ROAS · server / ROAS · platform**, 2026-07-24; previously a single ROAS column).
+  **Two ROAS columns (2026-07-24).** Labelled by SOURCE, not by quality: **`ROAS · server`** is our payment-attributed figure (`trueRoas`) and stays the colour-coded one (emerald ≥ 3, else amber) because it is the number to act on; **`ROAS · platform`** is what the ad platform itself reports (`platformRoas`), rendered in neutral weight with the platform-reported dollar value beneath and an explanatory `title`. The platform column is deliberately **not** colour-coded — two colour-coded ROAS figures side by side read as a pass/fail pair, when the platform number is context rather than a verdict. States: `value` · `noData` (spend, but the platform reported no conversion value — distinct from "not applicable") · `na` (owned channels / no spend). The two figures **disagree by design** and the gap is the point; see [backend.md](./backend.md#dual-roas-on-attributedrevenue-2026-07-24).
+  **Signups per platform (2026-07-24).** The Revenue cell's sub-line now reads `{conversions} new · {signups} signups` (the signups clause appears only when > 0), from `attributedRevenue[platform].signups`. Click-verified where a paid click id was present at registration, else UTM-derived, else `direct` — same basis as the conversions beside it. A platform with signups but zero revenue still renders a row. Revenue + ROAS are **server-side payment-attributed** (`stats.attributedRevenue`, keyed by `convertingPlatform`), **not** Meta pixel `spend × roas`; ad spend from the ads API. Row logic in the unit-tested `advertisingCardModel.ts` (`npm run test:advertising-card-model`) maps each platform to one of three classes: **paid + spend** (Meta — and TikTok once its nightly sync has rows, via `tiktokAdChannelProvider` 2026-07-24 — spend, revenue, true ROAS `revenue/adSpend`); **paid, spend not synced** (Snapchat, or TikTok pre-data — revenue + conversions; spend "Awaiting sync", ROAS "Needs spend"); **owned** (Klaviyo Email/SMS — revenue + conversions; spend/ROAS "—"). **Truthful awaiting state** (panel F-002): while the TikTok cell is "awaiting", the card checks `syncHealth` (via `useTikTokAdsInsights`, same-day range, query disabled once real spend arrives) and renders a red "Sync failing" (title = TikTok's error message) instead of the benign amber label when the nightly sync is actually erroring. The amber `AWAITING` token is **`text-amber-700`** in light mode (panel F-010) — the previous `amber-600/80` measured **2.51:1** on white at 10px, under the WCAG AA 4.5:1 floor; amber-700 measures **5.02:1**. Dark mode was already compliant (5.74:1) and is unchanged. `MerByDrawCard` uses the identical token — keep the two in step.
+
+**Hover popover placement** (panel F-016): the portalled source-breakdown popover is fixed-position at coordinates captured on mouse-enter. It now **flips above the row** when `r.bottom + gap + POPOVER_MAX_HEIGHT` would exceed the viewport (lower rows were clipped by the bottom edge, and since scrolling closes the popover you could never reach the cut-off part), clamps to an 8px top margin, and clamps `left` so the 300px panel stays inside the right edge. The box also carries `maxHeight: POPOVER_MAX_HEIGHT` + `overflowY: auto` so an unusually tall breakdown scrolls internally instead of overflowing. `POPOVER_WIDTH`/`POPOVER_MAX_HEIGHT` are shared constants so the fit math and the rendered box can't drift apart.
+
+**Page header title** (panel F-018): the header reads `adminTabLabel(selectedTab)` from [`adminTabs.ts`](../../src/app/admin/component/adminTabs.ts) — the **same** label the sidebar renders. It previously re-derived the title from the slug (`selectedTab.replace("-", " ")` + CSS `capitalize`), which mangles brand casing: `tiktok-ads` rendered as "Tiktok Ads" while the sidebar said "TikTok Ads". Brand names are not derivable from slugs. `adminTabLabel` falls back to the old slug transform for ids with no tab entry (deep-link-only views), and the `capitalize` class is gone since real labels are already cased. Header = **Blended ROAS** (Σ revenue ÷ Σ spend over paid-with-spend channels; "—" when none) + total attributed acquisition revenue. **Money is shown in full** (`formatCurrency`, e.g. `$2,400.00` — not `fmtCompact`'s `$2.4k`) so exact spend/revenue is legible (2026-06-03). A **Direct** row (`buildDirectRow`, neutral globe logo) is **appended below the 5 channels** when the `direct` (unattributed — no fbclid/ttclid/Klaviyo tag) bucket has revenue, showing its acquisition revenue + count with spend/ROAS "—"; it is **deliberately excluded** from the header "attributed" total, blended ROAS, and `computeAggregate` (direct is unattributed, so it must not inflate ad metrics). `google`/`other` buckets are not surfaced as rows. Brand logos are inline SVG (`src/components/admin/ui/PlatformLogos.tsx`, now incl. `"direct"`). The dedicated Facebook Ads tab + ads-health views are untouched.
 - **`MembershipCard`** — past-due badge shows `{n} past due · {moneyExact(totalPastDueRevenue)}` (exact money as of 2026-06-03; was `fmtCompact`). The header's past-due + paused badges **stack vertically on mobile** (`flex flex-col items-end … sm:flex-row`) so "paused" sits below "past due" instead of crowding beside it; they return to a row at `sm`. Donut arcs (`Donut.onSegmentClick`) + legend rows open `MembershipByPackageDetailModal` for that tier; users open via `useAdminUserModal`.
 - **`RevenueBreakdownCard`** — bar rows (`BarList.onItemClick`) open `RevenueDetailModal` (`category` = source key); gets `dateRange`/`startDate`/`endDate`/`onUserClick` from `DashboardOverview`. Passes `equalLength` to `BarList` so every source renders a **full-length, uniform** bar (the per-source comparison is read from the `$value` + `count unit` labels, not bar length). `BarList` (2026-06-02): added an `equalLength?: boolean` prop (fill `100%` vs proportional `value/max`); the trailing `count + unit` label shows the **full** unit (no `slice(0,4)`) in a fixed `w-28 truncate` column (the bar track is `flex-1 min-w-0`, so the fixed label column keeps all tracks — and thus all bars — equal length).
 - **`TopDrawsCard`** — wired via `useTopMiniDraws` (returns the full **active pool**, not a server top-5). **Ranked client-side by fill ratio** (`entries ÷ capacity`, uncapped, entries as tiebreak) and sliced to the top 5 — the draws **closest to drawing (100%)** surface first, not the ones with the most raw entries (the list route has no fill-ratio sort key). Subtitle: "Active draws · closest to drawing". Columns: **Mini Draw** (name + capacity bar + `fill%` underneath, bar capped at 100%) · **Entries** · **Status** (the `● Open` / `● At capacity` badge, moved out from under the name into its own right-aligned column). The capacity bar now renders on **mobile too** (the `hidden sm:block` was dropped). **Rows are clickable (2026-06-03):** clicking a row deep-links to `/admin/mini-draws?search=<encoded name>`; `MiniDrawManagement` reads `?search=` via `useSearchParams()` into its `searchTerm` initial state, so the draw is pre-filtered. Wired through a new optional `onRowClick?: (row) => void` prop on the kit `DataTable` (opt-in: adds `cursor-pointer` + a row `onClick`; other `DataTable` users are unaffected). Per-draw revenue isn't derivable, so omitted; "View all" → `/admin/mini-draws`.
@@ -904,7 +964,21 @@ Cards:
 
 `TikTokAdsManagement` (`src/components/admin/`) now renders **two** views over the same `useAdminDateFilter` AEST window: the existing `PlatformHourlyRevenueSection` (attributed revenue by hour) **and** the new **`TikTokAdBreakdownTable`** below it.
 
-- **`TikTokAdBreakdownTable`** (`src/components/admin/`) — per-ad table, the TikTok analogue of the Meta "Ads" / Spend-by-URL per-ad tables. Columns: **Ad** (adName + a `campaignName · adsetName` sub-line, falling back to `Ad {adId}`) · **Spend** · **Impr.** · **Clicks** · **Conv.** · **TikTok rev.** · **ROAS** (`revenue ÷ spend`, `.toFixed(2)+"×"`), plus a totals `<tfoot>`. **Revenue is TikTok's OWN attributed value**, labelled **"TikTok rev."** exactly as the Meta table labels **"Meta rev."** — the platform's reported number, **NOT** first-party `PaymentEvent` sales. Money is `en-AU` AUD. Data via `useTikTokAdsInsights({ startDate, endDate })` ([`src/hooks/queries/admin/useTikTokAdsInsights.ts`](../../src/hooks/queries/admin/useTikTokAdsInsights.ts), mirrors `useFacebookAdsInsights`) → `GET /api/admin/tiktok-ads/insights` (gated `facebookAds.view`). Empty state splits on the `configured` flag: "No TikTok ad spend recorded for this range yet" when creds are set, else "Awaiting sync — set `TIKTOK_ADVERTISER_ID` + `TIKTOK_MARKETING_ACCESS_TOKEN`, then the nightly sync populates this." Fed nightly by the `/api/cron/sync-tiktok-ads` sync (infrastructure domain) into `TikTokAdInsightsDaily`; see [backend.md](./backend.md#tiktok-ad-level-insights-per-ad-spend-breakdown) + [api.md](./api.md#tiktok-ad-level-insights-per-ad-breakdown).
+- **`TikTokAdBreakdownTable`** (`src/components/admin/`) — per-ad table, the TikTok analogue of the Meta "Ads" / Spend-by-URL per-ad tables. Columns: **Ad** (adName + a `campaignName · adsetName` sub-line, falling back to `Ad {adId}`) · **Spend** · **Impr.** · **Clicks** · **Conv.** · **TikTok rev.** · **ROAS** (`revenue ÷ spend`, `.toFixed(2)+"×"`), plus a totals `<tfoot>`. **Revenue is TikTok's OWN attributed value**, labelled **"TikTok rev."** exactly as the Meta table labels **"Meta rev."** — the platform's reported number, **NOT** first-party `PaymentEvent` sales. Money is `en-AU` AUD. Data via `useTikTokAdsInsights({ startDate, endDate })` ([`src/hooks/queries/admin/useTikTokAdsInsights.ts`](../../src/hooks/queries/admin/useTikTokAdsInsights.ts), mirrors `useFacebookAdsInsights`) → `GET /api/admin/tiktok-ads/insights` (gated `facebookAds.view`). **Truthful empty states** (2026-07-24, panel F-002 — driven by the response's `syncHealth`, via `emptyStateMessage()`): not configured → "TikTok Marketing API isn't connected yet…" (never surfaces raw env-var names to staff); last run errored → red "TikTok spend sync is FAILING — last attempt {AEST time}: {TikTok message} (code {N})"; last run ok but zero rows → "Synced {AEST time} — no TikTok ad spend recorded for this range."; configured with no run yet → "Waiting for the first TikTok spend sync (runs nightly)." When rows EXIST but the latest sync attempt failed, an amber banner above the table flags the figures as possibly stale. Fed nightly by the `/api/cron/sync-tiktok-ads` sync (infrastructure domain) into `TikTokAdInsightsDaily`; see [backend.md](./backend.md#tiktok-ad-level-insights-per-ad-spend-breakdown) + [api.md](./api.md#tiktok-ad-level-insights-per-ad-breakdown).
+
+## TikTok Ads tab — Ads / Spend-by-URL sub-views (2026-07-29)
+
+`TikTokAdsManagement` now mirrors the Facebook Ads tab's view switcher with two sub-views over the same `useAdminDateFilter` AEST window:
+
+- **Ads** — the existing `PlatformHourlyRevenueSection` + `TikTokAdBreakdownTable`.
+- **Spend by URL** — **the same `SpendByUrlSection` component the Facebook tab renders**, passed `platform="tiktok"`.
+
+`SpendByUrlSection` gained an optional `platform?: SpendByUrlPlatform` prop (default `"meta"`, so the Facebook tab is byte-identical). It threads that platform through all three of its queries (`useSpendByUrlAnalytics`, `useSpendByUrlDetail`, `usePackagesFocusBreakdown`), through the sync POST body, and through its user-visible labels ("Sync from TikTok", "TikTok revenue"). **Sharing the component rather than forking it is the point**: a fix to that table lands on both platforms, and the two tabs cannot drift into disagreeing about the same underlying `LandingPageMetricsDaily` rollup.
+
+**There is no TikTok Health sub-view, deliberately.** Meta's verdict engine
+([`src/services/facebook-ads-health/verdictEngine.ts`](../../src/services/facebook-ads-health/verdictEngine.ts)) reads `learningStatusBucket`, `learningStatusRaw`, `daysSinceLastSignificantEdit`, `daysInLearningLimited` and `lastBudgetChangePct` — all sourced from Meta's `learning_stage_info` / `last_significant_edit` adset metadata. TikTok's Marketing API exposes no equivalent, so a TikTok health tab would either be missing its primary signal or silently substitute a weaker one and present it with the same confidence. Left out until the inputs exist; `src/services/facebook-ads-health/types.ts` already notes that other platforms define their own equivalents.
+
+For reference, a live probe of TikTok's `/report/integrated/get/` on 2026-07-29 confirmed **33** additional metric names are available beyond the 11 currently synced — including `cpc`, `cpm`, `ctr`, `reach`, `frequency`, `cost_per_conversion`, `conversion_rate`, `result` / `cost_per_result` / `result_rate`, `total_landing_page_view`, `landing_page_view_rate`, `initiate_checkout`, and the video-engagement family (`video_watched_2s/6s`, `average_video_play`, `engaged_view`). `add_to_cart` and `cost_per_add_to_cart` are **not** valid for this account (code 40002). None of these are synced yet — they are recorded here so the next person doesn't have to re-probe.
 
 ## Klaviyo analytics tab (Part C, 2026-06-03)
 
@@ -936,3 +1010,43 @@ Components in this domain were touched by the sitewide `font-'[Poppins]'` → `f
 codemod (`npm run sweep:font-poppins`). Their Poppins-classed text now renders **real Poppins**
 instead of a browser fallback — an intended visual change. Details + rules:
 docs/shared-ui/tailwind-conventions.md §10.
+
+## Overview KPIs: Ad Spend / ROAS are all-platform (2026-07-29)
+
+The **Ad Spend**, **ROAS**, and **New-Member ROAS** cards in `KpiGrid.tsx` read `stats.adTotals` (every ad channel with a spend feed) instead of `stats.facebookAds` (Meta only). Before TikTok's spend sync went live those were the same number; now they are not, and the Meta-only version understated company ad spend.
+
+- **Ad Spend** — subtitle names the platforms actually contributing spend (e.g. "Meta + TikTok ad spend"), derived from which `attributedRevenue` entries carry `adSpend > 0`, so the headline is never ambiguous about what it includes. Falls back to "All ad platforms".
+- **ROAS** — subtitle "Platform-reported · all ads". Deliberately still the platform-reported figure (see [backend.md](./backend.md#adtotals--all-platform-ad-spend--roas-for-the-headline-kpis-2026-07-29)); the server-attributed view lives on the Advertising card as **Blended ROAS** and the **ROAS · server** column.
+- **New-Member ROAS** — its denominator was Meta-only while its numerator counted new-membership revenue from every channel; now uses `adTotals.spend`.
+
+`KpiGrid` deliberately does **not** read `stats.facebookAds` — that field stays Meta-scoped for the Norm gateway.
+
+## A/B experiment results — sentinel experiments hide the legacy panels (2026-07-29)
+
+`ExperimentResultsDashboard` renders three result blocks, but only the top one is current:
+the **user-level Bayesian** card reads durable tables, while **Variant Comparison** and the
+**Statistical Significance** / **Winner Determination** blocks below it are the previous
+generation, computed from TTL'd `ExperimentEvent` rows.
+
+For a **non-conversion sentinel** experiment (`__promo-theme__`, `__membership-theme__`)
+the legacy blocks can never have data — those experiments are deliberately excluded from
+purchase attribution — so the chi-square divided by zero and rendered a red
+`Lift 0.00% — Decline vs control` immediately beneath a Bayesian card reporting a 97%
+chance to win.
+
+The dashboard now takes an optional `slugTargets` prop and, via
+`isNonConversionSentinelExperiment()`, suppresses the two guaranteed-misleading blocks and
+the conversion/revenue rows in Variant Comparison, replacing them with a short explanation.
+**Engagement figures (visitors, clicks, CTR) still render** — they are real, and the
+Bayesian card does not show them. Nothing changes for wildcard or slug-targeted
+experiments.
+
+The experiment list's target label also special-cases sentinels: `slugTargets.length` made
+a site-wide experiment read as "1 page(s)", so sentinel targets now render
+"Site-wide (promo pages)".
+
+The sentinel registry lives in `src/lib/ab-testing/non-conversion-sentinels.ts` — a module
+that imports nothing, so both the admin UI and the server-side attribution logic can read
+it. Do **not** import it from `src/utils/ab-testing/get-user-experiment-assignment.ts` in a
+client component: that module pulls in mongoose and the repositories. See
+[docs/ab-testing/gotchas.md](../ab-testing/gotchas.md).

@@ -4,6 +4,13 @@
 
 TikTok conversion tracking runs through the same provider registry as Meta ([architecture.md](./architecture.md)): a browser **Pixel** and a server-side **Events API (v1.3)** call sharing one `event_id` so TikTok deduplicates them. This doc is the field-level reference; design rationale is in [`docs/superpowers/specs/2026-05-22-tiktok-events-api-design.md`](../superpowers/specs/2026-05-22-tiktok-events-api-design.md).
 
+## 2026-07-24 hardening (panel review F-009 / F-020 / F-022 / F-025)
+
+- **Transport.** `sendTikTokEvent` uses `resilientFetch` from [`src/lib/http/outbound.ts`](../../src/lib/http/outbound.ts) (keep-alive-bounded dispatcher + bounded retry — 5s per attempt, 2 retries), matching `src/lib/facebook.ts`. Retry is safe precisely because TikTok dedups on `event_id`. Transport failures now log `describeFetchError`'s undici cause code instead of an opaque `fetch failed`. It previously used raw `fetch`, exposing it to the frozen-serverless dead-socket race (`UND_ERR_SOCKET`) that `outbound.ts` exists to fix.
+- **Guards are under test.** `npm run test:tiktok-capi-guards` ([tiktok-capi-guards.test.ts](../../src/lib/tracking/__tests__/tiktok-capi-guards.test.ts), zero-network — stubs `globalThis.fetch`) pins every refusal: missing creds · non-prod without `TIKTOK_TEST_EVENT_CODE` (would pollute PRODUCTION reporting) · missing/blank `event_id` (the dedup key — omitting it double-counts) · HTTP 200 with body `code !== 0` (**TikTok signals failure in the BODY, not the status**) · unparseable body · transport error returns `false` rather than throwing. Also pins that production sends WITHOUT a test code unless `TIKTOK_USE_TEST_EVENTS=true`.
+- **Page views use `ttq.page()`, not `track("PageView")`.** TikTok's standard page view is `ttq.page()`; routing it through `ttq.track("PageView", …)` registers a *custom* event of that name instead. `tiktokProvider.pixelTrack` now translates the registry's canonical `PageView` into `ttq.page()`, so SPA route changes count as real page views (previously only the initial load did, via the `loadPixel` bootstrap). The translation lives in the provider so `ConversionPixels` stays provider-agnostic and nothing double-fires.
+- **Renewals are never sent.** `trackPixelSubscriptionRenewal` ([pixel-purchase-tracking.ts](../../src/utils/tracking/pixel-purchase-tracking.ts)) is now an explicit, documented no-op. Its old body built a payload and called the browser-only `trackTikTokEvent` from a **server** context (Stripe webhook), so it never sent anything — while its docstring claimed renewals were "tracked to TikTok/Klaviyo for internal analytics". Renewals must not be reported as ad-platform conversions: that inflates revenue and corrupts ROAS. The function is kept as the seam for future first-party internal analytics; deleting it would mean editing the Stripe webhook handler for zero behavioral gain.
+
 ## Files
 
 | File | Role |
@@ -33,7 +40,9 @@ Triangulated from working code (Stape GTM tag, a Python wrapper, mParticle, Adob
       "event_time": 1747872000,         // Unix SECONDS
       "event_id": "<deterministic id>", // dedup key — same on pixel + server
       "user": {
-        "email": "<sha256>", "phone_number": "<sha256>", "external_id": "<sha256>",
+        "email": "<sha256>", "phone": "<sha256>", "external_id": "<sha256>",
+        "first_name": "<sha256>", "last_name": "<sha256>", "zip_code": "<sha256>",
+        "city": "goldcoast", "state": "qld", "country": "au",   // PLAINTEXT, lowercased
         "ttclid": "<raw>", "ttp": "<raw>", "ip": "<raw>", "user_agent": "<raw>"
       },
       "properties": {
@@ -44,7 +53,8 @@ Triangulated from working code (Stape GTM tag, a Python wrapper, mParticle, Adob
     }]
   }
   ```
-- **Hashing (SHA-256 hex, via the shared `hashPII`):** `email` (lowercase+trim), `phone_number` (E.164 first), `external_id`. **Never hash:** `ttclid`, `ttp`, `ip`, `user_agent`.
+- **Phone key is `phone`, NOT `phone_number`.** `phone_number` is the v1.2 name *and* the pixel's `ttq.identify` name; v1.3 silently ignores unknown `user` keys, so sending it drops the parameter with no error anywhere except EMQ coverage. See [gotchas.md](./gotchas.md).
+- **Hashing (SHA-256 hex, via the shared `hashPII`):** `email` (lowercase+trim), `phone` (E.164 first), `external_id`, `first_name` / `last_name` / `zip_code` (lowercase, all whitespace stripped). **Plaintext (lowercase, alphanumerics only):** `city`, `state`, `country`. **Never hash:** `ttclid`, `ttp`, `ip`, `user_agent`.
 - **Success:** HTTP 200 **AND** body `code === 0`. `{ code, message, request_id, data }`. A 200 with non-zero `code` is a failure.
 - **Dedup:** same `event` name + same `event_id` + same pixel, 48h window; first event wins (server fires after browser; TikTok merges within 5 min).
 - **`event_time`:** Unix **seconds**; accepted up to ~7 days old.
@@ -55,9 +65,17 @@ Triangulated from working code (Stape GTM tag, a Python wrapper, mParticle, Adob
 
 > The legacy `trackPixelSubscriptionRenewal` still fires TikTok `CompletePayment` (browser-only, renewals are intentionally not deduped/sent to CAPI). Out of scope for this work.
 
-## Match quality — why we don't persist `ttclid` on orders
+## Match quality — how `ttclid` reaches the webhook-fired Purchase
 
-The money-event Purchase **dual-fires**: the **browser** copy carries `ttclid`/`ttp` (the SDK auto-attaches them) and the **server** copy (Stripe webhook — no browser cookies) carries hashed `email`/`phone_number`/`external_id` + IP. TikTok **merges** the two on the shared `event_id`, so Purchase gets the full signal set without touching the Order model. Funnel events via `/api/tracking/conversion` get `ttclid`/`ttp` directly from cookies server-side.
+The money-event Purchase **dual-fires**: the **browser** copy carries `ttclid`/`ttp` (the SDK auto-attaches them), and the **server** copy fires from the Stripe webhook, which has **no browser cookies**. TikTok does merge the two on the shared `event_id` — but relying on that alone meant the server copy went out with no click id whenever the browser copy was blocked or lost, which is exactly the case CAPI exists to cover. TikTok's own EMQ panel flagged it ("increase your click ID coverage to over 90%").
+
+So the click id rides through **Stripe metadata**, on the same channel Meta's already used:
+
+1. Payment-creation routes read the cookies at request time — `{ ...extractRequestContext(request), ...extractTikTokContext(request) }` — and write `capi_ttclid` / `capi_ttp` into the PaymentIntent/Subscription metadata beside `capi_fbc` / `capi_fbp`.
+2. The webhook's `extractRequestContextFromMetadata` reads them back into `requestContext`.
+3. `trackPixelPurchase` puts them on `userData.ttclid` / `userData.ttp`, where only the TikTok provider reads them (same way `fbc`/`fbp` are Meta-only).
+
+Routes wired: `create-subscription`, `create-subscription-existing-user`, `create-one-time-purchase`, `create-one-time-purchase-existing-user`, `upsell/purchase`, `mini-draw/purchase`. **A new payment-creation route must add those two metadata keys** or its Purchase loses the click id. Nothing is persisted on the Order/User model — Stripe metadata is the whole hand-off. Funnel events via `/api/tracking/conversion` still read `ttclid`/`ttp` straight from cookies server-side.
 
 ## Environment variables
 

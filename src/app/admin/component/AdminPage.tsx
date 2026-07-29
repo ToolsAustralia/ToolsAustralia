@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import AdminSidebar from "./AdminSidebar";
+import { adminTabLabel } from "./adminTabs";
 import DashboardOverview from "./overview/DashboardOverview";
 import AllPlatformsManagement from "./AllPlatformsManagement";
 import {
@@ -156,8 +157,11 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
               </button>
 
               <div>
-                <h1 className="text-lg sm:text-xl font-bold text-gray-900 dark:text-white capitalize">
-                  {selectedTab.replace("-", " ")}
+                {/* Read the sidebar's own label — never re-derive from the slug, or
+                    brand casing breaks ("Tiktok Ads" vs "TikTok Ads"; panel F-018).
+                    No `capitalize`: the labels are already correctly cased. */}
+                <h1 className="text-lg sm:text-xl font-bold text-gray-900 dark:text-white">
+                  {adminTabLabel(selectedTab)}
                 </h1>
                 <p className="text-xs sm:text-sm text-gray-600 dark:text-neutral-400 hidden sm:block">
                   {selectedTab === "overview" && "Dashboard overview and key metrics"}

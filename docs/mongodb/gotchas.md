@@ -26,3 +26,89 @@ Heavy aggregations on hot-path requests can starve the pool. Consider:
 - Materialised collections (e.g. `LandingPageMetricsDaily`)
 - `maxTimeMS` ceiling
 - Read-only secondary preference
+
+## Do not `hint` a non-partial index for an `$exists` filter (2026-07-29, panel F-020/F-021)
+
+`PromoAnalyticsRepository`'s two build aggregations briefly passed
+`{ hint: { builtPrizeSlug: 1, timestamp: -1 } }` to force the index added for them. Both hints were
+**removed** after measurement:
+
+| run | index used | keysExamined | docsExamined | returned |
+|---|---|---|---|---|
+| no hint | `promo_analytics_visits_ttl` | 764 | 764 | 7 |
+| with the hint | `builtPrizeSlug_1_timestamp_-1` | **764** | **764** | 7 |
+
+Identical. The index is **non-sparse**, so `$exists: true` spans its entire key range — the explain
+bounds come back `"builtPrizeSlug":["[MinKey, \"\")","(\"\", MaxKey]"]`. Only 8 of 764 rows carried
+the field, and the scan read all 764 either way.
+
+Two lessons, both general:
+
+1. **A hint is not free.** MongoDB does **not** fall back when a hint names an index that is not
+   present — it rejects the command outright. So a hint converts "slower query" into "500 for the
+   whole route" on a fresh deploy before the background index build finishes, after a restore, or
+   if anyone drops the index. The admin promo route wraps three services in one `Promise.all`, so
+   that took the visits/signups/revenue tables down with the build tables.
+2. **To make `$exists` cheap, the index must be partial**, not merely present:
+   `{ partialFilterExpression: { builtPrizeSlug: { $exists: true } } }`. Give it a **new name** when
+   you do — mongoose cannot alter an index in place; `createIndex` with changed options throws
+   an error — **measured as code 86** (`An existing index has the same name as the requested index`);
+   this is commonly cited as `IndexOptionsConflict` (85), so expect either — and `autoIndex`
+   swallows it, so the index silently never builds. Drop the superseded one in
+   a `scripts/migrations/` one-off.
+
+**Done 2026-07-29 (F-021).** Both indexes are now declared partial, under new names:
+
+| model | key pattern | new name |
+|---|---|---|
+| `PromoAnalyticsVisit` | `{ builtPrizeSlug: 1, timestamp: -1 }` | `builtPrizeSlug_ts_partial` |
+| `User` | `{ "signupAttribution.builtPrizeSlug": 1, createdAt: 1 }` | `signupBuiltPrize_createdAt_partial` |
+
+Re-measured on the dev DB with the partial indexes in place, running the two aggregations'
+`$match` stages verbatim. Both are now **chosen by the planner unprompted** — no `hint`, so F-020's
+500-on-missing-index failure mode is not reintroduced — and `totalDocsExamined` equals the number
+of rows that actually carry the field, which is the assertion F-021 asked for:
+
+| collection | docs | carry the field | plain index (forced) | **partial index (chosen)** |
+|---|---|---|---|---|
+| `promoanalyticsvisits` | 764 | 8 | 764 keys / 764 docs | **8 keys / 8 docs** |
+| `users` | 895 | 1 | 128 keys / 127 docs | **1 key / 1 doc** |
+
+The superseded `builtPrizeSlug_1_timestamp_-1` and `signupAttribution.builtPrizeSlug_1_createdAt_1`
+are dropped by `scripts/migrations/2026-07-29-partial-build-prize-indexes.ts`
+(`npm run migrate:partial-build-prize-indexes[:dry]` — **dry-run is the default**; the bare script
+reports and writes nothing, `--live` drops). It is idempotent: an already-absent index is a
+reported no-op, and `IndexNotFound` (code 27) from a concurrent drop is caught and counted as
+success rather than thrown.
+
+**Deploy order does not matter.** A *differently named* partial index may coexist with the old
+non-partial one on the same key pattern — probed directly, creating `builtPrizeSlug_ts_partial`
+while `builtPrizeSlug_1_timestamp_-1` still existed succeeded, and the planner preferred the
+partial one. So the app can deploy before or after the migration runs; there is never a window
+with no usable index.
+
+**The conflict error is on the NAME, and the code is 86 here.** Probed on this deployment,
+re-declaring the same name (`builtPrizeSlug_1_timestamp_-1`) with an added `partialFilterExpression`
+returns **code 86** — _"An existing index has the same name as the requested index."_ The conflict
+is widely cited as `IndexOptionsConflict` (85); 86 (`IndexKeySpecsConflict`) is what MongoDB
+actually returned. Either way the create fails and `autoIndex` swallows it, so match on the
+behaviour ("a same-name re-declaration silently never builds"), not on the number.
+
+## Renaming an index is a TWO-step change, and only one half is automatic
+
+The schema half (`Schema.index(..., { name })`) is picked up by mongoose's `autoIndex` — which
+`src/lib/mongodb.ts` leaves at its default `true` — so the **new** index builds itself on the next
+app start. The **old** index does not go anywhere: indexes survive deploys, and nothing in mongoose
+drops an index just because the schema stopped declaring it. Every rename therefore needs a
+`scripts/migrations/` one-off to drop the superseded name, or the collection quietly carries both
+and pays double the write amplification forever.
+
+Two practical consequences when writing that migration:
+
+- **Use the raw driver collection (`mongoose.connection.db.collection(name)`), not the model.**
+  Importing a Mongoose model *after* `connectDB()` triggers `autoIndex`, so a "dry run" that
+  imports the model would build indexes — a write. The 2026-07-29 migrations use the driver
+  handle for exactly this reason.
+- **Drop-then-let-autoIndex-rebuild is only safe when the old index is not load-bearing.** It was
+  safe here because the index being dropped provably narrowed nothing. When the old index *is*
+  serving queries, create the new one first and drop second.
