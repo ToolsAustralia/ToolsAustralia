@@ -10,17 +10,25 @@ const promoPrizeBuildSchema = z.object({
   builtPrizeSlug: z.string().min(1).max(100),
   toolboxSwitches: z.number().int().min(0).max(10_000),
   toolsetSwitches: z.number().int().min(0).max(10_000),
+  // Optional so an in-flight older client (or a queued `sendBeacon` from before a deploy) is
+  // still accepted; absent is treated as "engaged", matching how pre-flag rows are counted.
+  interacted: z.boolean().optional(),
 });
 
 // Unauthenticated + keyed only on a format-checked cookie, and unlike the sibling visit beacon
 // this route UPDATES an existing row in place rather than inserting — so abuse leaves zero row
 // growth for a row-count sanity check to catch. A real visitor's beacon is debounced ~1s and
 // flushed once on unload, so even heavy reel-fiddling produces a handful of requests per page
-// view; 20/5min leaves enormous headroom for genuine use while removing the free unlimited-write
-// primitive. See docs/tech-debt/panel-review-feature-drawn-tonight-tomorrow-july-assets.md F-001.
+// view. See docs/tech-debt/panel-review-feature-drawn-tonight-tomorrow-july-assets.md F-001.
+//
+// Budgeted per VISITOR, not per IP (F-024). Australian carriers put very large numbers of
+// users behind one CGNAT egress IP, so an IP-keyed budget lets one ad burst exhaust the quota
+// for everyone behind it — and because the beacon is fire-and-forget, the dropped writes are
+// silent. 60/5min matches the repo's own public-endpoint precedent (`promo/link/validate`,
+// 60/min); the earlier 20 was 15× tighter than anything else public here.
 const promoPrizeBuildRateLimiter = createRateLimiter("promo-prize-build", {
   windowMs: 5 * 60 * 1000,
-  maxRequests: 20,
+  maxRequests: 60,
 });
 
 /**
@@ -47,8 +55,19 @@ const promoPrizeBuildRateLimiter = createRateLimiter("promo-prize-build", {
  * @see docs/tracking/api.md
  */
 export async function POST(request: NextRequest) {
-  const clientIp = request.headers.get("x-forwarded-for") ?? request.headers.get("x-real-ip") ?? null;
-  const identifier = getClientIdentifier(clientIp, request.headers.get("x-forwarded-for"));
+  const anonymousId = AnonymousIdService.extractAnonymousId(request) ?? undefined;
+  // Prefer the visitor cookie over the IP so shared/CGNAT egress IPs do not share one budget.
+  // `ta_anon_id` is minted in middleware for every page request, so it is present on
+  // essentially every genuine beacon; the IP is only the fallback for a request without it.
+  // Note the argument order: `getClientIdentifier(ip, forwardedFor)` returns arg 1 verbatim when
+  // truthy, so `x-real-ip` must come first — passing `x-forwarded-for` in both positions keys
+  // the bucket on the whole proxy chain instead of the client (matches the four auth routes).
+  const identifier =
+    anonymousId ??
+    getClientIdentifier(
+      request.headers.get("x-real-ip"),
+      request.headers.get("x-forwarded-for")
+    );
   const rateLimitResult = promoPrizeBuildRateLimiter.check(identifier);
   if (!rateLimitResult.success) {
     return NextResponse.json(
@@ -71,8 +90,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ success: false, error: "Invalid request" }, { status: 400 });
   }
 
-  // Read from `request` synchronously — it must not be touched inside `after()`.
-  const anonymousId = AnonymousIdService.extractAnonymousId(request) ?? undefined;
+  // `anonymousId` is read synchronously at the top of the handler (it also keys the rate
+  // limiter) — `request` must not be touched inside `after()`.
 
   after(async () => {
     try {
@@ -82,6 +101,7 @@ export async function POST(request: NextRequest) {
           builtPrizeSlug: validatedData.builtPrizeSlug,
           toolboxSwitches: validatedData.toolboxSwitches,
           toolsetSwitches: validatedData.toolsetSwitches,
+          interacted: validatedData.interacted !== false,
           anonymousId,
         },
         {
