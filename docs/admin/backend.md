@@ -453,3 +453,20 @@ The platform figures were **already being captured** per channel by each `AdChan
 **Trends compare like with like.** `spendTrend`/`roasTrend` are computed from the previous period's *all-platform* totals. Comparing an all-platform current value against a Meta-only previous value would have rendered a huge spend "increase" on the day TikTok's sync went live, when nothing about the spending changed.
 
 **Also fixed a pre-existing mismatch:** the **New-Member ROAS** KPI divided new-membership revenue from *every* channel by *Meta-only* spend, inflating it. It now uses `adTotals.spend`.
+
+### TikTok ad → landing-URL resolution (W2, 2026-07-29)
+
+[`src/services/admin/tiktok/TikTokAdDestinationService.ts`](../../src/services/admin/tiktok/TikTokAdDestinationService.ts) implements the `AdDestinationResolver` seam; the shared tail (canonicalize → `unknown://` placeholder → `multiUrl` → upsert) lives once in [`src/services/analytics/adDestinationWriter.ts`](../../src/services/analytics/adDestinationWriter.ts) so Meta, TikTok and a future Snapchat do not each re-implement it.
+
+**The id bridge is the whole trick — get it wrong and you get a silent 0%.** Reporting rows are keyed by `ad_id`; `/smart_plus/ad/get/` is keyed by `smart_plus_ad_id`. **They are different ids.** Measured live:
+
+| join | result |
+|---|---|
+| reporting `ad_id` === `smart_plus_ad_id` | **0 / 31** |
+| `ad_id` → (`/ad/get/`) → `smart_plus_ad_id` → (`/smart_plus/ad/get/`) → URLs | **31 / 31** |
+
+So `/ad/get/` is a **mandatory bridge**, not a fallback — it is the only endpoint carrying both ids. Several `ad_id`s map to one `smart_plus_ad_id` (Smart+ spawns variants from one configuration); each variant correctly inherits that configuration's destinations. `/ad/get/`'s own `landing_page_url` is used as a secondary source for classic (non-Smart+) ads. **`/ad/get/` exposes no landing URL for Smart+ ads even when requested explicitly in `fields`** — that is why this indirection exists.
+
+**Unusable URLs are rejected, not stored** (`isUsableLandingUrl`): a macro in the PATH (`/promotions/__X__`) would canonicalize into a phantom landing page carrying real spend and matching no prize slug; a non-http scheme likewise. Macros in the QUERY are harmless — canonicalization drops the query entirely, which is why TikTok's `__CAMPAIGN_ID__`/`__AID_NAME__` utm params need no special handling.
+
+**Run it:** `npm run sync:tiktok-destinations:dry` (reports coverage, distinct landing paths, the packages-focus tally and the multi-URL count without writing), then `npm run sync:tiktok-destinations`. The run **fails below 50% coverage** — a silent drop to zero is exactly what a changed id bridge looks like, and it would otherwise present as "no TikTok URL data" rather than as an error. First live run: **31/31 ads, 100%, 3 distinct landing paths, 0 multi-URL ads.**
