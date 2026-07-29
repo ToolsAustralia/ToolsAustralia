@@ -38,7 +38,6 @@ import MembershipModal from "@/components/modals/MembershipModal";
 import SpecialPackagesModal from "@/components/modals/SpecialPackagesModal";
 import UserSetupModal from "@/components/modals/UserSetupModal";
 import UpsellModal from "@/components/modals/UpsellModal";
-import PixelConsentModal from "@/components/modals/PixelConsentModal";
 import SubscriptionExplainerModal from "@/components/modals/SubscriptionExplainerModal";
 import ExistingAccountModal from "@/components/modals/ExistingAccountModal";
 import ReferFriendModal from "@/components/modals/ReferFriendModal";
@@ -299,7 +298,6 @@ const GALLERY_SOURCE_PATH: Partial<Record<string, string>> = {
   "user-setup": "src/components/modals/UserSetupModal.tsx",
   "gate-closed": "src/components/modals/GateClosedModal.tsx",
   partner: "src/components/modals/PartnerModal.tsx",
-  "pixel-consent": "src/components/modals/PixelConsentModal.tsx",
   "refer-friend": "src/components/modals/ReferFriendModal/index.tsx",
   membership: "src/components/modals/MembershipModal.tsx",
   "special-packages": "src/components/modals/SpecialPackagesModal.tsx",
@@ -368,7 +366,6 @@ const BASE_ENTRIES: Omit<Entry, "sourcePath">[] = [
   { id: "user-setup", label: "UserSetupModal", category: "Auth" },
   { id: "gate-closed", label: "GateClosedModal", category: "Marketing" },
   { id: "partner", label: "PartnerModal", category: "Marketing" },
-  { id: "pixel-consent", label: "PixelConsentModal", category: "Marketing" },
   { id: "refer-friend", label: "ReferFriendModal", category: "Marketing" },
   { id: "membership", label: "MembershipModal", category: "Commerce", note: "Heavy — uses live hooks" },
   { id: "special-packages", label: "SpecialPackagesModal", category: "Commerce" },
@@ -984,7 +981,6 @@ export default function ModalsGalleryClient() {
         nextDrawName="Preview Draw"
       />
       <PartnerModal isOpen={isOpen("partner")} onClose={close} />
-      <PixelConsentModal isOpen={isOpen("pixel-consent")} onCloseAction={close} onAccept={close} onDecline={close} />
       <ReferFriendModal
         isOpen={isOpen("refer-friend")}
         onCloseAction={close}

@@ -1,5 +1,38 @@
 # Metrics-Analytics — Testing
 
+## `npm run verify:tiktok-accuracy` — cross-source accuracy pass
+
+[scripts/verify-tiktok-accuracy.ts](../../scripts/verify-tiktok-accuracy.ts). Read-only.
+Compares four sources that are each derived independently, so agreement is evidence rather
+than tautology:
+
+| | source | catches |
+| --- | --- | --- |
+| A | TikTok's live `/report/integrated/get/` | — |
+| B | `TikTokAdInsightsDaily` | A→B: a broken sync |
+| C | `LandingPageMetricsDaily` | B→C: a broken aggregation |
+| D | `PackagesFocusBreakdownService` | C→D: a broken read path |
+
+It also asserts the platform scoping holds (no unstamped rows in either shared collection, no
+cross-namespaced `unknown://` placeholders) and that **Meta's** rollup still reconciles with
+Meta's insights — the regression platform-scoping the shared collections could plausibly cause.
+
+**The current AEST day is excluded from A→B deliberately.** B is a snapshot from the last sync;
+A is live, and today's spend accrues between them. Comparing strictly would fail every run for a
+non-reason, and an alarm that always fires teaches people to ignore it. Today is still *reported*
+as drift alongside the last-sync time, so genuine staleness stays visible — it just isn't a
+failure. Meta gets a 50c tolerance because Meta restates spend after the fact.
+
+```bash
+npm run verify:tiktok-accuracy
+npm run verify:tiktok-accuracy -- --since=2026-06-01 --until=2026-06-30
+```
+
+Exit 0 = all passed, 1 = a check failed or creds/DB unavailable. Last run 2026-07-29 on the dev
+account: 13/13 passed; today's drift $7.40 over the hour since the sync, every closed day exact
+to the cent.
+
+
 ## Automated tsx tests
 
 | Script | Source | Covers |

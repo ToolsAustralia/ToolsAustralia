@@ -200,3 +200,13 @@ Stripe surfaces two related fields on a card decline:
 Most failed live attempts arrive with `errorCode === "card_declined"` and the actionable detail in `declineCode`. The `extractStripeErrorFields` helper in [`chargePastDueShared.ts`](../../src/server/admin/chargePastDueShared.ts) extracts both, and all four `InvoiceChargeLog.create` save sites in `payOpenInvoiceAsPastDueAdmin` persist them. The `PostPayDecision.failed` variant in [`chargePastDuePostPayPolicy.ts`](../../src/server/admin/chargePastDuePostPayPolicy.ts) also carries an optional `declineCode` (sourced from `paymentIntent.last_payment_error?.decline_code` in the `requires_payment_method` branch).
 
 **UI rule:** display `declineCode ?? errorCode ?? errorMessage`. Both `PastDueChargeHistory.tsx` and `PastDueChargeHistoryDrawer.tsx` follow this precedence; new admin views over `InvoiceChargeLog` should too.
+
+## A platform that SPENT money with zero return used to vanish from the Advertising card (fixed 2026-07-29)
+
+`DashboardStatsService` built `attributedRevenue` by skipping any platform whose attributed revenue, conversions and renewal revenue were all zero — **without checking ad spend**. So a channel that spent real money and returned nothing was dropped from the per-platform table entirely.
+
+That produced a silent contradiction: the headline **Ad Spend KPI counted the spend** (it sums the `adChannels` map directly) while the **Advertising card omitted the row**, and `computeBlendedRoas` — which iterates `attributedRevenue` — lost that spend from its denominator too. The dashboard showed money spent in one place and no trace of it in another.
+
+Caught on localhost, where the dev DB has ad spend but little attributed revenue: the headline read **$20,945.78** while the table listed only `direct`. It is not a dev-only bug — any production window where attribution has a gap (or a channel genuinely converts nothing) hits it, and **the worst-performing channel is exactly the one that disappears**.
+
+The skip test now includes `spend > 0`. Pinned by `npm run test:advertising-card-model` ("spend-with-no-return still renders"). When adding a new reason a row should exist, extend that condition — never assume revenue implies presence.

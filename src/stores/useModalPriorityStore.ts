@@ -10,11 +10,20 @@ import { devtools } from "zustand/middleware";
  * This store manages modal conflicts and ensures proper priority handling
  */
 
+/**
+ * NOTE (2026-07-24, panel F-019): `"pixel-consent"` was removed along with
+ * `PixelConsentModal`. It was permanently unreachable — the manager rendered it with a
+ * hard-coded `isOpen={false}`, and its Accept/Decline handlers both merely closed it,
+ * gating no pixel. Tools Australia deliberately runs **without a consent banner**: the
+ * tracking pixels load for every visitor. Do NOT re-add a consent modal without also
+ * wiring real gating (pixels must not load until consent, and Decline must actually
+ * block Meta/TikTok/Snapchat) — a banner that does nothing is worse than none, because
+ * it implies a control the visitor does not have. See docs/tracking/rules.md R9.
+ */
 export type ModalType =
   | "user-setup"
   | "upsell"
   | "special-packages"
-  | "pixel-consent"
   | "renewal-failed"
   | "gate-closed"
   | "subscription-explainer";
@@ -61,7 +70,6 @@ const MODAL_PRIORITIES: Record<ModalType, number> = {
   "gate-closed": 2.5, // Between user-setup and special-packages - important user communication
   "special-packages": 1, // Lower priority
   "subscription-explainer": 1, // Same as special-packages; active subscribers only, once per account
-  "pixel-consent": 0, // Lowest priority
 };
 
 // Modals that should only show once per session

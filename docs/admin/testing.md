@@ -21,8 +21,9 @@
 | `npm run test:dashboard-stats-dst` | `src/services/admin/dashboard-stats/__tests__/dstBoundary.test.ts` | `aestDayBounds` and `expandDateKeyRange` across Sydney DST transitions (April fallback = 25h day, October spring-forward = 23h day) |
 | `npm run test:dashboard-stats-schema` | `src/services/admin/dashboard-stats/__tests__/snapshotSchema.test.ts` | snapshot Zod schema validation |
 | `npm run test:dashboard-stats-reader` | `src/services/admin/dashboard-stats/__tests__/snapshotReader.test.ts` | `readStatsForRange`: seeds three snapshot rows, reads range, asserts revenue summation, user counts, ad-channel ROAS recompute, and `meta.snapshotDaysUsed` (10/10 pass) |
+| `npm run test:tiktok-sync-contract` | `src/services/admin/tiktok/__tests__/tiktokSyncContract.test.ts` | **Failure-visibility contract for the TikTok sync (panel F-008).** Stubs `globalThis.fetch` (zero-DB, zero-network): unconfigured → clean `{configured:false}` no-op with no API call; configured + `code 40001` → **throws `TikTokReportError`** carrying TikTok's code/message (so the cron 500s and Vercel cron monitoring stays red — a green cron over a dead token is the June-2026 Meta-spend-wipe failure class); configured + network error → also throws; configured + `code 0` with zero rows → clean success (empty ≠ failure). Also pins `metricNamesSuspect` (panel F-005) — fires only on clicks-with-zero-conversions-and-zero-revenue. |
 
-The first three are pure (no Mongo, no env vars) — run with just `tsx`. `test:dashboard-stats-reader` requires a live MongoDB connection (`.env.local`).
+The first three are pure (no Mongo, no env vars) — run with just `tsx`, as is `test:tiktok-sync-contract` (it stubs `fetch` and never reaches a write). `test:dashboard-stats-reader` requires a live MongoDB connection (`.env.local`).
 
 ## CLI diagnostic and test scripts
 
@@ -49,3 +50,18 @@ Both scripts load `.env.local` via dotenv and exit with an error if `MONGODB_URI
 - Try to bypass middleware on `/admin/foo` → must redirect
 - Try to call `/api/admin/users/foo` without admin role → must 401/403
 - Invalid confirmation on charge-past-due → must 400
+
+## `npm run verify:tiktok-readpath` (2026-07-29)
+
+[`scripts/verify-tiktok-readpath.ts`](../../scripts/verify-tiktok-readpath.ts) — read-only end-to-end check that the TikTok **read** paths still agree with what the sync **wrote**. Drives the real services (no re-implementation), so any writer↔reader drift surfaces:
+
+1. `getTikTokAdInsights()` — totals vs the raw `TikTokAdInsightsDaily` sums, per-ad rows summing to totals, `roas = value ÷ spend`, ad count, sort order.
+2. `tiktokAdChannelProvider.fetchForDay()` — the last three days' spend/value/ROAS against per-day sums, plus a future day returning `"empty"` (never a fabricated zero).
+
+Run it after any change to the metric mapping, the aggregation, or the provider — and once after each real sync. Needs `TIKTOK_ADVERTISER_ID` + a valid `TIKTOK_MARKETING_ACCESS_TOKEN` and reads the DB in `.env.local`. Exits non-zero on any mismatch. First run (2026-07-29, 86 rows / 31 ads): all checks passed.
+
+## `npm run verify:ad-platforms` (2026-07-29)
+
+[`scripts/verify-local-ad-platforms.ts`](../../scripts/verify-local-ad-platforms.ts) — answers "can I test ad analytics on localhost?" by driving the **real** `DashboardStatsService.getStats()` (the same call the admin route makes) and printing, per platform: credentials present, ad-channel spend that reached the snapshot layer, the Advertising-card row (spend · signups · conversions · revenue · both ROAS figures), and the combined `adTotals` behind the headline KPIs. Exits non-zero if either Meta or TikTok fails to surface spend, and tells you which side is at fault (missing creds vs missing rows vs expired token).
+
+Both platforms work locally as long as `.env.local` carries `FACEBOOK_AD_ACCOUNT_ID` + `FACEBOOK_MARKETING_ACCESS_TOKEN` and `TIKTOK_ADVERTISER_ID` + `TIKTOK_MARKETING_ACCESS_TOKEN`. **Meta is fetched live from its API per day in range; TikTok is read from `TikTokAdInsightsDaily`**, so TikTok needs a sync first — `npm run seed:tiktok-insights -- --days=30` against whichever DB `.env.local`'s `MONGODB_URI` points at. (There is no live-fetch fallback for TikTok by design: the per-ad sync is the source of truth and re-fetching it on every dashboard render would be slow and rate-limited.)

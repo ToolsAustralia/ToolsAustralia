@@ -1,5 +1,6 @@
 import MetaAdInsightsDaily, { type IMetaAdInsightsDaily } from "@/models/MetaAdInsightsDaily";
-import MetaAdDestination, { type IMetaAdDestination } from "@/models/MetaAdDestination";
+import TikTokAdInsightsDaily from "@/models/TikTokAdInsightsDaily";
+import AdDestination, { type IAdDestination } from "@/models/AdDestination";
 import LandingPageMetricsDaily, { type ILandingPageMetricsDaily } from "@/models/LandingPageMetricsDaily";
 import {
   derivePackagesFocusForDestination,
@@ -25,8 +26,8 @@ export interface PackagesFocusCampaignNode {
 }
 export interface PackagesFocusBreakdownResult {
   platform: AdsPlatform;
-  supported: boolean;                       // tiktok → false until its URL mapping ships
-  reason?: "awaiting-url-mapping";
+  supported: boolean;                       // false only when the platform has no account configured
+  reason?: "not-configured";
   meta: { startDate: string; endDate: string; currency: "AUD"; adAccountId: string };
   summary: {                                 // aggregate-backed: works for ANY range
     membership: PackagesFocusTotals;
@@ -73,12 +74,12 @@ function formatTotals(acc: CentsAcc): PackagesFocusTotals {
 }
 
 /**
- * membership vs one-time vs unclassified breakdown of Meta ad spend/ROAS.
+ * membership vs one-time vs unclassified breakdown of one platform's ad spend/ROAS.
  *
  * summary — sums LandingPageMetricsDaily rows (permanent, survives the per-ad
  *   insights TTL): rows with a packagesFocus split contribute per-focus; rows
  *   without one (unknown:// placeholders + pre-feature rows) → unclassified.
- * detail — live MetaAdInsightsDaily × MetaAdDestination join grouped
+ * detail — live <platform> insights × AdDestination join grouped
  *   focus → campaign → adset → ad; only covers dates the insights collection
  *   still holds (~60d prod TTL). availableSince is the account's true
  *   retained-data floor (an unbounded oldest-date lookup, independent of the
@@ -86,9 +87,14 @@ function formatTotals(acc: CentsAcc): PackagesFocusTotals {
  *   after that floor — a range with zero in-range rows is still "complete"
  *   (with empty buckets) when the floor predates it.
  *
- * platform is a first-class discriminator: "tiktok" short-circuits to an
- * explicit unsupported payload until a TikTok ad→URL destination resolver
- * ships (TikTokAdInsightsDaily has no landing-URL concept today).
+ * Both platforms take the same path (2026-07-29). TikTok used to short-circuit to
+ * `supported:false` because there was no ad→landing-URL mapping for it; the Smart+ id
+ * bridge in TikTokAdDestinationService supplies one, so the only remaining reason to
+ * report unsupported is a platform with no ad account configured in this environment.
+ *
+ * A caveat worth keeping in mind when reading TikTok's numbers: every TikTok ad observed
+ * so far points at a membership landing page, so its one-time bucket is legitimately $0 —
+ * that is the campaign setup, not a classification failure.
  */
 export class PackagesFocusBreakdownService {
   async getBreakdownFormatted(
@@ -105,10 +111,12 @@ export class PackagesFocusBreakdownService {
       total: formatTotals(emptyAcc()),
     });
 
-    if (platform === "tiktok") {
+    if (!adAccountId) {
+      // No account configured for this platform — say so rather than rendering $0 totals
+      // that read as "this platform spent nothing".
       return {
-        platform, supported: false, reason: "awaiting-url-mapping",
-        meta: { ...meta, adAccountId: "" },
+        platform, supported: false, reason: "not-configured",
+        meta,
         summary: emptySummary(),
         detail: { complete: false, availableSince: null, buckets: { membership: [], "one-time": [], unclassified: [] } },
       };
@@ -116,17 +124,31 @@ export class PackagesFocusBreakdownService {
 
     // Near-real-time: refresh the trailing 1-2 days from Meta when stale
     // (>5min), bounded by a hard time budget — see spendByUrlFreshness.
-    await ensureSpendByUrlFreshness(adAccountId, startDate, endDate);
+    // Meta-only: TikTok's rollup is rebuilt by its nightly cron (sync-tiktok-ads runs the
+    // full pipeline). Adding an on-read TikTok refresh is deliberate future work, not an
+    // oversight — TikTok's report API is slower per call and intraday drift there is not
+    // yet a reported problem.
+    if (platform === "meta") {
+      await ensureSpendByUrlFreshness(adAccountId, startDate, endDate);
+    }
 
     const [summary, detail] = await Promise.all([
-      this.buildSummary(adAccountId, startDate, endDate),
-      this.buildDetail(adAccountId, startDate, endDate),
+      this.buildSummary(platform, adAccountId, startDate, endDate),
+      this.buildDetail(platform, adAccountId, startDate, endDate),
     ]);
     return { platform, supported: true, meta, summary, detail };
   }
 
-  private async buildSummary(adAccountId: string, since: string, until: string) {
+  private async buildSummary(
+    platform: "meta" | "tiktok",
+    adAccountId: string,
+    since: string,
+    until: string,
+  ) {
+    // Platform-scoped: an unscoped read would sum two platforms' spend into one total
+    // with no indication, and divide one platform's revenue by combined spend.
     const rows = (await LandingPageMetricsDaily.find({
+      platform,
       adAccountId,
       date: { $gte: since, $lte: until },
     }).lean()) as unknown as ILandingPageMetricsDaily[];
@@ -154,7 +176,12 @@ export class PackagesFocusBreakdownService {
     };
   }
 
-  private async buildDetail(adAccountId: string, since: string, until: string) {
+  private async buildDetail(
+    platform: AdsPlatform,
+    adAccountId: string,
+    since: string,
+    until: string,
+  ) {
     type InsightRow = Pick<
       IMetaAdInsightsDaily,
       | "date"
@@ -170,7 +197,11 @@ export class PackagesFocusBreakdownService {
       | "conversions"
       | "revenueCents"
     >;
-    const insights = (await MetaAdInsightsDaily.find({
+    // Both collections share these field names by construction (TikTokAdInsightsDaily was
+    // modelled on MetaAdInsightsDaily precisely so the read side stays one code path).
+    const InsightsModel = platform === "tiktok" ? TikTokAdInsightsDaily : MetaAdInsightsDaily;
+
+    const insights = (await InsightsModel.find({
       adAccountId,
       date: { $gte: since, $lte: until },
     })
@@ -194,7 +225,7 @@ export class PackagesFocusBreakdownService {
     // collection, not the range-filtered query above — a separate unbounded
     // lookup for the oldest retained date, so a zero-delivery day at the
     // start of `since` doesn't falsely report complete:false.
-    const oldestDoc = (await MetaAdInsightsDaily.findOne({ adAccountId })
+    const oldestDoc = (await InsightsModel.findOne({ adAccountId })
       .sort({ date: 1 })
       .select({ date: 1 })
       .lean()) as unknown as { date: string } | null;
@@ -206,9 +237,12 @@ export class PackagesFocusBreakdownService {
     }
 
     const adIds = [...new Set(insights.map((i) => i.adId))];
-    const dests = (await MetaAdDestination.find({
+    // MUST filter by platform: ad ids are only unique WITHIN a platform, so an unscoped
+    // read would attach another platform's landing URL to this platform's ad (2026-07-29).
+    const dests = (await AdDestination.find({
+      platform,
       adId: { $in: adIds },
-    }).lean()) as unknown as IMetaAdDestination[];
+    }).lean()) as unknown as IAdDestination[];
     const destByAd = new Map(dests.map((d) => [d.adId, d]));
 
     type AdAcc = { adName?: string; adFormat: PackagesFocusAdNode["adFormat"]; acc: CentsAcc };

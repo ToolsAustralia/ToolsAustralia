@@ -7,6 +7,7 @@ import { ModalContainer, ModalHeader, ModalContent } from "@/components/modals/u
 import {
   useSpendByUrlDetailMany,
   type SpendByUrlDetailRow,
+  type SpendByUrlPlatform,
 } from "@/hooks/queries/useSpendByUrlAnalytics";
 import { groupSpendByUrlDetailRowsByCampaign } from "@/utils/admin/spendByUrlAdBreakdown";
 import CampaignTreeTable from "@/components/admin/spend-by-url/CampaignTreeTable";
@@ -19,6 +20,13 @@ export interface PrizePerformanceAdsModalProps {
   startDate: string;
   endDate: string;
   canonicalUrls: string[];
+  /**
+   * Which platform's ads to break down. Required rather than defaulted: ad ids are only
+   * unique WITHIN a platform, so a per-ad tree has to name one. The card passes whichever
+   * platform the row's figures came from (and "meta" when the card is showing All, where
+   * the reader can switch platform in the card itself).
+   */
+  platform: SpendByUrlPlatform;
 }
 
 type FocusKey = "membership" | "one-time" | "unclassified";
@@ -91,14 +99,16 @@ function formatRangeLabel(startDate: string, endDate: string): string {
 }
 
 /**
- * Per-prize ad drill-down opened from the Prize performance table. Now live with a
- * mixed-focus campaign → ad set → ad tree: `useSpendByUrlDetailMany` pulls every ad for
- * the brand's landing URLs (Meta-only today), brand-level tiles split spend/return by
- * packages focus (Membership + One-time always, Unclassified when present), and focus
- * chips filter the rows fed into the shared `CampaignTreeTable` (each ad node keeps its
- * own `packagesFocus`, so the "All" view badges every ad by its focus). A TikTok platform
- * chip shows the same "awaiting URL mapping" placeholder as AdSpendFocusModal — TikTok's
- * ad→landing-URL resolver isn't synced yet, so Meta is the only fetch.
+ * Per-prize ad drill-down opened from the Prize performance table: a mixed-focus
+ * campaign → ad set → ad tree. `useSpendByUrlDetailMany` pulls every ad for the brand's
+ * landing URLs, brand-level tiles split spend/return by packages focus (Membership +
+ * One-time always, Unclassified when present), and focus chips filter the rows fed into the
+ * shared `CampaignTreeTable` (each ad node keeps its own `packagesFocus`, so the "All" view
+ * badges every ad by its focus).
+ *
+ * The platform chips are live for both Meta and TikTok as of 2026-07-29 — switching refetches
+ * that platform's per-ad rows. One platform at a time is a hard constraint, not a UI choice:
+ * ad ids are only unique WITHIN a platform, so a merged tree would be ambiguous.
  */
 export default function PrizePerformanceAdsModal({
   isOpen,
@@ -108,23 +118,26 @@ export default function PrizePerformanceAdsModal({
   startDate,
   endDate,
   canonicalUrls,
+  platform: initialPlatform,
 }: PrizePerformanceAdsModalProps) {
+  // The chips own the live platform; the prop only seeds it, so opening from a TikTok row
+  // lands on TikTok while the reader can still flip to Meta without closing the modal.
+  const [platform, setPlatform] = useState<Platform>(initialPlatform);
+  const [focusFilter, setFocusFilter] = useState<FocusFilter>("all");
+
   const { data, isLoading, error } = useSpendByUrlDetailMany(
     canonicalUrls,
     startDate,
     endDate,
-    { enabled: isOpen && canonicalUrls.length > 0 }
+    { enabled: isOpen && canonicalUrls.length > 0, platform }
   );
-
-  const [platform, setPlatform] = useState<Platform>("meta");
-  const [focusFilter, setFocusFilter] = useState<FocusFilter>("all");
 
   useEffect(() => {
     if (!isOpen) {
-      setPlatform("meta");
+      setPlatform(initialPlatform);
       setFocusFilter("all");
     }
-  }, [isOpen]);
+  }, [isOpen, initialPlatform]);
 
   const rows = useMemo(() => data?.rows ?? [], [data?.rows]);
   const summary = useMemo(() => summarizeByFocus(rows), [rows]);
@@ -172,47 +185,42 @@ export default function PrizePerformanceAdsModal({
             {platformChip("tiktok", "TikTok")}
           </div>
 
-          {platform === "tiktok" ? (
-            <div className="p-6 text-center text-sm text-neutral-500 dark:text-neutral-400 border border-dashed border-neutral-300 dark:border-neutral-700 rounded-xl">
-              TikTok ad→landing-URL mapping isn&apos;t synced yet — the split lights up here once the TikTok
-              destination resolver ships. Spend itself is on the TikTok Ads tab.
+          {canonicalUrls.length === 0 && (
+            <p className="text-sm text-gray-500 dark:text-neutral-400">
+              No matching promotion URLs were found for this period.
+            </p>
+          )}
+          {error && canonicalUrls.length > 0 && (
+            <p className="text-sm text-red-600 dark:text-red-400">
+              {error instanceof Error ? error.message : "Failed to load ads"}
+            </p>
+          )}
+          {isLoading && canonicalUrls.length > 0 && (
+            <div className="flex items-center justify-center py-12 text-gray-500 dark:text-neutral-400 gap-2">
+              <Loader2 className="w-6 h-6 animate-spin shrink-0" aria-hidden />
+              <span>Loading ads…</span>
             </div>
-          ) : (
+          )}
+          {!isLoading && !error && canonicalUrls.length > 0 && data?.rows && (
             <>
-              {canonicalUrls.length === 0 && (
-                <p className="text-sm text-gray-500 dark:text-neutral-400">
-                  No matching promotion URLs were found for this period.
-                </p>
-              )}
-              {error && canonicalUrls.length > 0 && (
-                <p className="text-sm text-red-600 dark:text-red-400">
-                  {error instanceof Error ? error.message : "Failed to load ads"}
-                </p>
-              )}
-              {isLoading && canonicalUrls.length > 0 && (
-                <div className="flex items-center justify-center py-12 text-gray-500 dark:text-neutral-400 gap-2">
-                  <Loader2 className="w-6 h-6 animate-spin shrink-0" aria-hidden />
-                  <span>Loading ads…</span>
-                </div>
-              )}
-              {!isLoading && !error && canonicalUrls.length > 0 && data?.rows && (
-                <>
-                  <div className={`grid gap-3 ${hasUnclassified ? "grid-cols-1 sm:grid-cols-3" : "grid-cols-1 sm:grid-cols-2"}`}>
-                    <SummaryTile label="Membership focus" summary={summary.membership} />
-                    <SummaryTile label="One-time focus" summary={summary["one-time"]} />
-                    {hasUnclassified && <SummaryTile label="Unclassified" summary={summary.unclassified} />}
-                  </div>
+              <div className={`grid gap-3 ${hasUnclassified ? "grid-cols-1 sm:grid-cols-3" : "grid-cols-1 sm:grid-cols-2"}`}>
+                <SummaryTile label="Membership focus" summary={summary.membership} />
+                <SummaryTile label="One-time focus" summary={summary["one-time"]} />
+                {hasUnclassified && <SummaryTile label="Unclassified" summary={summary.unclassified} />}
+              </div>
 
-                  <div className="flex flex-wrap items-center gap-2">
-                    {focusChip("all", "All")}
-                    {focusChip("membership", "Membership")}
-                    {focusChip("one-time", "One-time")}
-                    {hasUnclassified && focusChip("unclassified", "Unclassified")}
-                  </div>
+              <div className="flex flex-wrap items-center gap-2">
+                {focusChip("all", "All")}
+                {focusChip("membership", "Membership")}
+                {focusChip("one-time", "One-time")}
+                {hasUnclassified && focusChip("unclassified", "Unclassified")}
+              </div>
 
-                  <CampaignTreeTable campaigns={campaigns} ariaLabel={`Campaigns for ${brandLabel}`} />
-                </>
-              )}
+              <CampaignTreeTable
+                campaigns={campaigns}
+                ariaLabel={`Campaigns for ${brandLabel}`}
+                emptyMessage={`No ${platform === "tiktok" ? "TikTok" : "Meta"} ads ran for ${brandLabel} in this range.`}
+              />
             </>
           )}
         </div>

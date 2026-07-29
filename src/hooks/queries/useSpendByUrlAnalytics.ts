@@ -26,8 +26,12 @@ export interface SpendByUrlRow {
   packagesFocus?: { membership: SpendByUrlFocusTotals; "one-time": SpendByUrlFocusTotals };
 }
 
+/** Which ad platform a spend-by-URL query is scoped to. One platform per query. */
+export type SpendByUrlPlatform = "meta" | "tiktok";
+
 export interface SpendByUrlResponse {
   success: boolean;
+  platform?: SpendByUrlPlatform;
   meta: {
     startDate: string;
     endDate: string;
@@ -37,14 +41,29 @@ export interface SpendByUrlResponse {
   rows: SpendByUrlRow[];
 }
 
-export function useSpendByUrlAnalytics(startDate: string | undefined, endDate: string | undefined) {
+/**
+ * Spend-by-URL rows for ONE platform (default meta).
+ *
+ * Each platform's `revenue` is its OWN attributed value, so callers wanting a company-wide
+ * view must sum spend (additive and safe) while keeping revenue per platform — the same
+ * purchase can be claimed by Meta and TikTok, and adding those together inflates ROAS.
+ * `options.enabled` lets a caller hold a platform's query back until it's known to be
+ * configured, so an unconfigured platform doesn't surface as an error banner.
+ */
+export function useSpendByUrlAnalytics(
+  startDate: string | undefined,
+  endDate: string | undefined,
+  options?: { platform?: SpendByUrlPlatform; enabled?: boolean }
+) {
+  const platform = options?.platform ?? "meta";
   return useQuery<SpendByUrlResponse>({
-    queryKey: ["admin", "analytics", "spend-by-url", startDate, endDate],
-    enabled: Boolean(startDate && endDate),
+    queryKey: ["admin", "analytics", "spend-by-url", platform, startDate, endDate],
+    enabled: options?.enabled !== false && Boolean(startDate && endDate),
     queryFn: async () => {
       const params = new URLSearchParams();
       if (startDate) params.set("startDate", startDate);
       if (endDate) params.set("endDate", endDate);
+      params.set("platform", platform);
       const res = await fetch(`/api/admin/analytics/spend-by-url?${params.toString()}`);
       const json = (await res.json()) as SpendByUrlResponse & { error?: string };
       if (!res.ok) {
@@ -97,16 +116,21 @@ function detailQueryKeyFingerprint(canonicalUrls: string[]): string {
 export function useSpendByUrlDetail(
   canonicalUrl: string | null,
   startDate: string | undefined,
-  endDate: string | undefined
+  endDate: string | undefined,
+  options?: { platform?: SpendByUrlPlatform }
 ) {
+  const platform = options?.platform ?? "meta";
   return useQuery<SpendByUrlDetailResponse>({
-    queryKey: ["admin", "analytics", "spend-by-url", "detail", canonicalUrl, startDate, endDate],
+    queryKey: [
+      "admin", "analytics", "spend-by-url", "detail", platform, canonicalUrl, startDate, endDate,
+    ],
     enabled: Boolean(canonicalUrl && startDate && endDate),
     queryFn: async () => {
       const params = new URLSearchParams();
       params.set("canonicalUrl", canonicalUrl!);
       if (startDate) params.set("startDate", startDate);
       if (endDate) params.set("endDate", endDate);
+      params.set("platform", platform);
       const res = await fetch(`/api/admin/analytics/spend-by-url/detail?${params.toString()}`);
       const json = (await res.json()) as SpendByUrlDetailResponse & { error?: string };
       if (!res.ok) {
@@ -121,8 +145,9 @@ export function useSpendByUrlDetailMany(
   canonicalUrls: string[] | null | undefined,
   startDate: string | undefined,
   endDate: string | undefined,
-  options?: { enabled?: boolean }
+  options?: { enabled?: boolean; platform?: SpendByUrlPlatform }
 ) {
+  const platform = options?.platform ?? "meta";
   const fingerprint = useMemo(
     () => (canonicalUrls?.length ? detailQueryKeyFingerprint(canonicalUrls) : ""),
     [canonicalUrls]
@@ -133,7 +158,9 @@ export function useSpendByUrlDetailMany(
     Boolean(fingerprint && startDate && endDate && canonicalUrls && canonicalUrls.length > 0);
 
   return useQuery<SpendByUrlDetailResponse>({
-    queryKey: ["admin", "analytics", "spend-by-url", "detail", "many", fingerprint, startDate, endDate],
+    queryKey: [
+      "admin", "analytics", "spend-by-url", "detail", "many", platform, fingerprint, startDate, endDate,
+    ],
     enabled,
     queryFn: async () => {
       const params = new URLSearchParams();
@@ -142,6 +169,7 @@ export function useSpendByUrlDetailMany(
       }
       if (startDate) params.set("startDate", startDate);
       if (endDate) params.set("endDate", endDate);
+      params.set("platform", platform);
       const res = await fetch(`/api/admin/analytics/spend-by-url/detail?${params.toString()}`);
       const json = (await res.json()) as SpendByUrlDetailResponse & { error?: string };
       if (!res.ok) {

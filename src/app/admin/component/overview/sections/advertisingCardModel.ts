@@ -26,6 +26,16 @@ export type RoasState =
   | { kind: "needsSpend" } // paid channel but no spend denominator yet
   | { kind: "na" }; // owned channel — ROAS not applicable
 
+/**
+ * Platform-reported ROAS cell state — the ad platform's OWN number, shown beside the
+ * server ROAS. Distinct from `RoasState` because it has an extra reason to be absent:
+ * the channel may have spend but report no conversion value back (`noData`).
+ */
+export type PlatformRoasState =
+  | { kind: "value"; value: number; revenue: number }
+  | { kind: "noData" } // paid channel with spend, but the platform reported no value
+  | { kind: "na" }; // owned channel / no spend — nothing to report
+
 /** Extends Record<string, unknown> to satisfy the DataTable generic constraint. */
 export interface AdvertisingRowVM extends Record<string, unknown> {
   id: string;
@@ -35,7 +45,9 @@ export interface AdvertisingRowVM extends Record<string, unknown> {
   spend: SpendState;
   revenue: number; // attributed acquisition revenue (dollars)
   conversions: number; // new-customer conversions
-  roas: RoasState;
+  signups: number; // accounts created attributed to this platform (click-verified, else UTM)
+  roas: RoasState; // SERVER ROAS — our payment-attributed revenue ÷ spend (the final word)
+  platformRoas: PlatformRoasState; // the platform's OWN reported ROAS, for comparison
   /** Multi-line native-title tooltip with the click/UTM/backfill split; undefined when no revenue. */
   confidenceTitle?: string;
 }
@@ -67,11 +79,13 @@ export function buildAdvertisingRows(ar: AttributedRevenue | undefined): Adverti
     const entry = ar?.[cfg.key];
     const revenue = toFinite(entry?.revenue);
     const conversions = toFinite(entry?.conversions);
+    const signups = toFinite(entry?.signups);
     const adSpend = entry?.adSpend;
     const trueRoas = entry?.trueRoas;
 
     let spend: SpendState;
     let roas: RoasState;
+    let platformRoas: PlatformRoasState = { kind: "na" };
     if (cfg.kind === "owned") {
       spend = { kind: "owned" };
       roas = { kind: "na" };
@@ -82,6 +96,15 @@ export function buildAdvertisingRows(ar: AttributedRevenue | undefined): Adverti
         trueRoas != null && Number.isFinite(trueRoas)
           ? { kind: "value", value: trueRoas }
           : { kind: "needsSpend" };
+      // Platform-reported ROAS: present only when the channel sent back a conversion
+      // value. Spend without reported value is `noData` (e.g. the platform's own pixel
+      // saw nothing), which is meaningfully different from "not applicable".
+      const pRoas = entry?.platformRoas;
+      const pRevenue = entry?.platformRevenue;
+      platformRoas =
+        pRoas != null && Number.isFinite(pRoas) && pRoas > 0
+          ? { kind: "value", value: pRoas, revenue: toFinite(pRevenue) }
+          : { kind: "noData" };
     } else {
       spend = { kind: "awaiting" };
       roas = { kind: "needsSpend" };
@@ -95,7 +118,9 @@ export function buildAdvertisingRows(ar: AttributedRevenue | undefined): Adverti
       spend,
       revenue,
       conversions,
+      signups,
       roas,
+      platformRoas,
       confidenceTitle: formatConfidenceTitle(entry),
     };
   });
@@ -114,7 +139,8 @@ export function buildDirectRow(ar: AttributedRevenue | undefined): AdvertisingRo
   const entry = ar?.["direct"];
   const revenue = toFinite(entry?.revenue);
   const conversions = toFinite(entry?.conversions);
-  if (revenue <= 0 && conversions <= 0) return null;
+  const signups = toFinite(entry?.signups);
+  if (revenue <= 0 && conversions <= 0 && signups <= 0) return null;
   return {
     id: "direct",
     platformKey: "direct",
@@ -123,7 +149,9 @@ export function buildDirectRow(ar: AttributedRevenue | undefined): AdvertisingRo
     spend: { kind: "owned" }, // renders "—" — direct has no ad spend
     revenue,
     conversions,
+    signups,
     roas: { kind: "na" }, // renders "—" — ROAS is not applicable to unattributed revenue
+    platformRoas: { kind: "na" }, // no ad platform reports on unattributed traffic
     confidenceTitle: undefined, // direct is unattributed by definition — no click/UTM split to show
   };
 }
