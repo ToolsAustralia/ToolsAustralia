@@ -159,3 +159,32 @@ The toolset lane wrote nothing, which is why it never jumped and also why the ch
 invisible to analytics until the build params landed.
 
 Use `replaceState`, never `pushState`: Back must leave the page, not step back through builds.
+
+## The prize-build beacon: report everyone, but only write once (2026-07-29, F-018)
+
+`usePrizeBuildTracking` has two senders and they are gated differently **on purpose**. Getting this
+wrong is a live regression that shipped once and was caught only by e2e.
+
+- **Debounced send** — gated on `hasInteracted`.
+- **Unload flush** (`pagehide` / `visibilitychange`) — **never** gated.
+
+The reasoning runs in two steps, and skipping either one breaks something:
+
+1. **Every visitor's build must reach the visit row**, including someone who never touches the reels.
+   The signup path records the page's default build for that visitor, so if the visit row omits it,
+   `builders` and `signups` count different populations and `builderToSignupRate` can exceed 100% —
+   the same class of visibly-impossible number as F-013's 250% column.
+2. **But the debounced sender must not run for them.** It fires on mount, so ungating it means one
+   write per visitor on arrival *plus* another after their first switch — **double the writes on the
+   highest-traffic ad-landing path in the product**, for no extra information. That regression was
+   real: `prize-build-url-params.spec.ts` failed with `Expected: 1, Received: 2` and
+   `Expected: 2, Received: 4` across all three browser projects.
+
+The unload flush already covers the untouched visitor, so gating only the debounce gives **one write
+per visitor** in both cases: untouched → one write at unload; engaged → the debounced write, with the
+unload flush suppressed by the `lastSent` payload dedup.
+
+**Do not "simplify" this by gating both senders** (untouched visitors vanish from `builders` again)
+**or neither** (writes double). And do not infer engagement from `toolboxSwitches`/`toolsetSwitches`:
+cash is a toggle, not a reel card, so a cash-only visitor sits at `0/0` and has still engaged (F-010).
+The payload carries `interacted` explicitly for that reason.

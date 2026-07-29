@@ -43,6 +43,13 @@ interface BuildBeacon {
   builtPrizeSlug: string;
   toolboxSwitches: number;
   toolsetSwitches: number;
+  /**
+   * F-018. `builtPrizeSlug` says what was on screen — recorded for EVERY visitor — and this says
+   * whether they touched the builder at all. The two used to be conflated in the field's presence,
+   * which put `builders` and `signups` on different populations. Not derivable from the counters:
+   * cash is a toggle, not a reel card, so a cash-only visitor sits at 0/0 and still engaged.
+   */
+  interacted: boolean;
 }
 
 type Page = import("@playwright/test").Page;
@@ -204,6 +211,8 @@ test.describe("prize build URL params @smoke", () => {
         builtPrizeSlug: "ryobi-gearwrench",
         toolboxSwitches: 3,
         toolsetSwitches: 1,
+        // F-018: the beacon now reports engagement explicitly rather than gating on it.
+        interacted: true,
       });
   });
 
@@ -264,6 +273,8 @@ test.describe("prize build URL params @smoke", () => {
       builtPrizeSlug: "makita-gearwrench",
       toolboxSwitches: 3,
       toolsetSwitches: 0,
+      // F-018: engagement is reported, not inferred from the counters (cash is not a reel touch).
+      interacted: true,
     });
   });
 

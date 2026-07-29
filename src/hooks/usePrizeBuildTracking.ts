@@ -113,14 +113,21 @@ export function usePrizeBuildTracking({
     });
   }, []);
 
-  // Debounce: restarted on every change, so five quick switches are one write. It also runs
-  // once on mount, which is what reports the untouched visitor's on-screen build with both
-  // counters at 0 (F-018); `lastSent` collapses that to a single write per page-session.
+  // Debounce: restarted on every change, so five quick switches are one write.
+  //
+  // Gated on `hasInteracted` — NOT because an untouched visitor goes unreported (F-018 requires
+  // that they ARE reported, or `builders` and `signups` count different populations), but because
+  // the unload flush below already covers them. Without this gate the mount timer fires once for
+  // every visitor and then again after their first switch, doubling writes on the highest-traffic
+  // path in the product for no extra information.
+  //
+  // So: untouched visitor -> exactly one write, at unload. Engaged visitor -> the debounced
+  // write(s), with the unload flush deduped by `lastSent`. One write per visitor either way.
   useEffect(() => {
-    if (!enabled) return;
+    if (!enabled || !hasInteracted) return;
     const timer = setTimeout(() => send(false), DEBOUNCE_MS);
     return () => clearTimeout(timer);
-  }, [enabled, builtPrizeSlug, toolboxSwitches, toolsetSwitches, hasInteracted, send]);
+  }, [enabled, hasInteracted, builtPrizeSlug, toolboxSwitches, toolsetSwitches, send]);
 
   /**
    * Unload flush, registered ONCE per mount.
