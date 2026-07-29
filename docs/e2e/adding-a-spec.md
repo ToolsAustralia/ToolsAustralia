@@ -226,8 +226,13 @@ at the viewport edge is clickable, but the native focus that a click brings scro
 view, which a scroll-delta assertion reads as page movement. Observed as an 82px drift on
 mobile-safari in a test whose whole point was "selecting a prize must not move the page".
 
-`/promotions/*` visitor identity is not guaranteed (2026-07-28): `ta_anon_id`'s only writer is
-`/api/ab-testing/assign`, so a visitor who never triggers an experiment reaches a promo page with
-no identity cookie — 38.2% of real promo visits in the 30 days to 2026-07-28. Never assert that
-cookie exists, and never seed it to make a spec pass; treat "one visitor" as "one browser context".
-Tracked as F-014 in `docs/tech-debt/panel-review-feature-drawn-tonight-tomorrow-july-assets.md`.
+`ta_anon_id` IS assertable on page routes — since 2026-07-28 (superseded note, corrected
+2026-07-29): this note previously said the opposite, and that was true when written. The cookie's
+only writer used to be `/api/ab-testing/assign`, so a visitor who never triggered an experiment
+reached a promo page with no identity at all — 38.2% of real promo visits in the 30 days to
+2026-07-28 (panel finding F-014). Main's `c5a360c1` fixed it: `src/middleware.ts` now mints the
+cookie for every matched page route via the edge-safe `src/lib/ab-testing/anon-id-cookie.ts`.
+So a spec MAY now assert `ta_anon_id` is present, `anon_`-prefixed and stable across navigations —
+`prize-build-url-params.spec.ts` does, deliberately, because that assertion is what stops the
+regression coming back. Still never SEED the cookie to make a spec pass: that hides exactly the
+failure the assertion exists to catch.

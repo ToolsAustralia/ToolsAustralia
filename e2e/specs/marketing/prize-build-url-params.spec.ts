@@ -86,10 +86,14 @@ async function openShowcase(page: Page, search = ""): Promise<void> {
  * amount so it costs nothing on a fast run.
  */
 async function settleAtShowcase(page: Page, target?: import("@playwright/test").Locator): Promise<number> {
-  // Scroll the element that is about to be CLICKED into view, not just its lane: a card sitting
-  // at the viewport edge is clickable, but the native focus a click brings scrolls it fully into
-  // view, and that shows up as a scroll delta. Observed on mobile-safari as an 82px drift.
-  await (target ?? toolboxLane(page)).scrollIntoViewIfNeeded();
+  // CENTRE the element that is about to be clicked — `scrollIntoViewIfNeeded` only guarantees it
+  // is *visible*, which can leave it flush against the viewport edge. WebKit then scrolls it
+  // further into view when the click focuses it, and a scroll-delta assertion reads that as page
+  // movement (observed twice on mobile-safari as an 82px drift, passing on retry). Centring
+  // leaves the native focus scroll with nothing to do, on every engine.
+  const anchor = target ?? toolboxLane(page);
+  await anchor.scrollIntoViewIfNeeded();
+  await anchor.evaluate((el) => el.scrollIntoView({ block: "center", inline: "nearest", behavior: "instant" as ScrollBehavior }));
   let previous = -1;
   for (let i = 0; i < 20; i++) {
     const current = await page.evaluate(() => Math.round(window.scrollY));
@@ -344,16 +348,22 @@ navHeavyTest.describe("prize build URL params — multi-load @smoke", () => {
    * builds. If a future change ever collapses a visitor to a single build, the premise behind
    * the fixed denominator changes and this goes red.
    *
-   * "One visitor" here is the Playwright CONTEXT — one cookie jar, reused across all three
-   * loads — not an assertion on a specific cookie. An earlier draft asserted `ta_anon_id` was
-   * present and stable; it is not set on this path at all. That cookie's only writer is
-   * `/api/ab-testing/assign` (the sole caller of `getOrCreateAnonymousId`), so a visitor who
-   * never hits a live experiment reaches `/promotions/*` without one. Measured against the real
-   * database on 2026-07-28: of 241 promo visits in the preceding 30 days, 149 carried an
-   * `anonymousId` and 92 (38.2%) carried no identity at all. Tracked separately as panel
-   * finding F-014 — do NOT "fix" this test by seeding the cookie, which would hide it.
+   * "One visitor" is enforced two ways: the Playwright CONTEXT is one cookie jar across all
+   * three loads, AND `ta_anon_id` — the cookie the visit row is actually keyed on — is asserted
+   * present and unchanged throughout.
+   *
+   * That assertion has history worth keeping. When this spec was first written (2026-07-28) it
+   * failed outright: the cookie's only writer was `/api/ab-testing/assign`, so a visitor who
+   * never triggered an experiment reached `/promotions/*` with no identity at all — measured
+   * against the real database, 92 of 241 promo visits in the preceding 30 days (38.2%) carried
+   * neither `anonymousId` nor `userId`. That was raised as panel finding F-014, and main's
+   * `c5a360c1` fixed it exactly as recommended: `src/middleware.ts` now mints the cookie for
+   * every matched page route via `src/lib/ab-testing/anon-id-cookie.ts`. F-014 is therefore
+   * SUPERSEDED, and the assertion below is what keeps it that way — narrow the middleware
+   * matcher or drop the minting and this test goes red rather than silently under-counting
+   * visitors again. Never seed the cookie to make it pass.
    */
-  navHeavyTest("one visitor can report several different builds across page loads", async ({ page }) => {
+  navHeavyTest("one visitor can report several different builds across page loads", async ({ page, context }) => {
     // Three full loads of a heavy route. Same reasoning as purchase-subscription.spec.ts's
     // budget note: the default 90s is sized for a single-page test, and a three-project
     // concurrent run shares one `next dev` server. Observed failing at `page.goto` on the
@@ -361,9 +371,16 @@ navHeavyTest.describe("prize build URL params — multi-load @smoke", () => {
     navHeavyTest.setTimeout(180_000);
 
     const beacons = captureBuildBeacons(page);
+    const anonId = async () =>
+      (await context.cookies()).find((cookie) => cookie.name === "ta_anon_id")?.value;
 
     await openShowcase(page);
     await settleAtShowcase(page);
+
+    // Minted by middleware on the very first page hit — see the block comment above.
+    const visitor = await anonId();
+    expect(visitor, "middleware must mint ta_anon_id on /promotions/* (F-014)").toBeTruthy();
+    expect(visitor, "the id must match AnonymousIdService's format or assignments split").toMatch(/^anon_/);
 
     await toolboxLane(page).getByRole("radio", { name: /kincrome/i }).click();
     await expect.poll(() => beacons.length, { timeout: 25_000 }).toBe(1);
@@ -378,7 +395,10 @@ navHeavyTest.describe("prize build URL params — multi-load @smoke", () => {
     await toolboxLane(page).getByRole("radio", { name: /sidchrome/i }).click();
     await expect.poll(() => beacons.length, { timeout: 25_000 }).toBe(3);
 
-    // All three reports name the same landing page, from the same session.
+    // All three reports name the same landing page, from the same session — and crucially the
+    // same VISITOR: a re-minted id mid-session would split one person into several, which is
+    // precisely the under-count F-014 described.
+    expect(await anonId(), "all three builds must come from ONE visitor identity").toBe(visitor);
     expect(beacons.map((beacon) => beacon.slug)).toEqual(["makita", "makita", "makita"]);
 
     const builds = beacons.map((beacon) => beacon.builtPrizeSlug);

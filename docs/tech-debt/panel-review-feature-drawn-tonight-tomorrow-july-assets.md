@@ -56,27 +56,27 @@
 Fresh session? Run `/panel-fix` on this branch, or paste:
 
 > Read `docs/tech-debt/panel-review-feature-drawn-tonight-tomorrow-july-assets.md`. Fix ONLY the Now
-> item: F-014.
+> item: F-015.
 > Findings were written against `99f4739f` — re-grep each `file:line`, they may have moved.
 > (F-014 and F-015 were raised later, on 2026-07-28, against the post-fix tree.)
 > One commit-worthy change per finding. Do NOT commit. When a finding is done, tick its box
 > and fill `_Handled:_` with the date. If a fix turns out to be wrong, mark it Overridden with
 > a reason instead of silently skipping it.
 
-**Now:** **F-014** — promo visitor identity. It is the only open item that affects data already
-being collected, and it is P1: 38% of promo visits are recorded against nobody.
+**Now:** **F-015** — the only open item. P2, and not root-caused.
 
-**Everything from the original panel is closed.** F-013 (found on staging) and F-008 (the e2e spec)
-are closed too. What remains was all raised *after* the panel:
-- **F-014** (P1, open) — `ta_anon_id` is only ever set by the A/B assign route, so 92 of 241 promo
-  visits in the last 30 days carry no visitor identity at all. Measured, not estimated. Affects
-  unique-visitor counts and disables the per-visitor visit dedup for those rows.
+**Everything from the original panel is closed**, as are F-013 (found on staging), F-008 (the e2e
+spec) and F-014 (superseded by main). What remains:
 - **F-015** (P2, open) — `/api/major-draw` intermittently 404s under load despite an active draw.
   Not root-caused; reproducible in the e2e run. Would make the draw vanish from a live promo page.
 - **F-009** — deferred with measurements (see its entry): the collection is 1.1 MB and no row carries
   the field yet, so the index would be premature.
 
-Everything else (F-001 … F-008, F-010 … F-013) is closed.
+**F-014 closed 2026-07-29 as SUPERSEDED** — `origin/main`'s `c5a360c1` mints `ta_anon_id` in
+middleware, exactly the fix the finding called for. Discovered while merging main into this branch;
+now guarded by an assertion in the prize-build e2e spec so it cannot silently regress.
+
+Everything else (F-001 … F-008, F-010 … F-014) is closed.
 
 ---
 
@@ -170,11 +170,12 @@ Everything else (F-001 … F-008, F-010 … F-013) is closed.
       _Shot:_ code-only  _Handled:_ **2026-07-28** — **owner ruled (b): the counters mean reel touches.** So the bump was REMOVED from `handleSelectCash` (a cash toggle is not a reel card) and nothing was added to `handleSelectToolset`.
       **This would have caused a regression, caught before implementing:** the beacon gated on `tb === 0 && ts === 0`, so once cash stopped bumping a counter, a visitor who clicked ONLY "take the $10,000 cash" would have had both counters at 0 and their choice would never have been recorded — despite `cash-prize` being a real build choice. Fixed by separating the two concepts: an explicit `hasInteracted` flag (set by all three handlers) now gates the beacon, while the counters stay pure reel-touch counts. **Proven live:** clicking only the cash CTA fires exactly one beacon with `{"builtPrizeSlug":"cash-prize","toolboxSwitches":0,"toolsetSwitches":0}`, scroll delta 0.
 
-- [ ] **F-014** · P1 · Bug · `src/services/ab-testing/AnonymousIdService.ts` + `src/app/api/tracking/promo-page-visit/route.ts:89` — **Nearly 4 in 10 promo-page visits are recorded against nobody, so "unique visitors" undercounts and the per-visitor dedup silently does not apply to them.**
+- [x] **F-014** · P1 · Bug · `src/services/ab-testing/AnonymousIdService.ts` + `src/app/api/tracking/promo-page-visit/route.ts:89` — **Nearly 4 in 10 promo-page visits are recorded against nobody, so "unique visitors" undercounts and the per-visitor dedup silently does not apply to them.**
       _What:_ Promo analytics keys a visitor on the `ta_anon_id` cookie. That cookie's **only writer is `/api/ab-testing/assign`** — it is the sole caller of `getOrCreateAnonymousId`, and `AnonymousIdService` itself never sets it (its own comment says "the cookie will be set by the API route that calls this service"). A visitor who lands on `/promotions/*` and never triggers an experiment assignment therefore has no id, and their visit row stores `anonymousId: undefined`. Found while writing F-008's spec: an assertion that the cookie existed failed outright in the e2e environment. **Measured against the real database on 2026-07-28** — of **241** promo visits in the preceding 30 days, **149 (61.8%)** carried an `anonymousId`, **0** carried a `userId`, and **92 (38.2%) carried neither**. Two consequences: the admin's unique-visitor counts are computed over the 62% that can be grouped, and `promo-page-visit`'s "one visit per slug per anonymousId per minute" dedup cannot fire for the other 38%, so their reloads each create a fresh row.
       _Fix:_ Decide where the id is minted, then do it in one place. The lean option: set the cookie in `src/middleware.ts` for public page requests when absent (it already runs per-request and injects the CSP nonce), so identity no longer depends on an unrelated A/B feature being live. Do **not** paper over it in the e2e spec — the spec deliberately documents the gap instead of seeding the cookie.
       _Raised by:_ controller, while writing the F-008 spec. _Verified:_ counts above are a direct read of `promoanalyticsvisits`.
-      _Shot:_ code-only  _Handled:_ —
+      _Shot:_ code-only  _Handled:_ **2026-07-29 — SUPERSEDED by `origin/main` `c5a360c1` ("fix(ab-testing): mint ta_anon_id in middleware so concurrent assigns share one identity"), found while merging main into this branch.** Main fixed it independently and by exactly the mechanism this finding recommended: `src/middleware.ts` now mints the cookie on every matched page route (the matcher covers all pages, excluding only `/api` and static assets) using the new edge-safe `src/lib/ab-testing/anon-id-cookie.ts` — `AnonymousIdService` imports `next/headers` + node `crypto`, neither available in the edge runtime, hence a shared contract module rather than a re-export. Main's stated motivation was a different symptom (concurrent `/assign` calls minting two ids and double-counting one visitor as two exposures), but the fix resolves this finding too.
+      **Now guarded, not just fixed:** `e2e/specs/marketing/prize-build-url-params.spec.ts` asserts `ta_anon_id` is present, `anon_`-prefixed, and unchanged across three navigations. Narrowing the matcher or dropping the minting turns that test red instead of silently under-counting visitors again. The 38.2% figure above stands as the measured pre-fix state; it is not a claim about the tree after `c5a360c1`.
 
 - [ ] **F-015** · P2 · Bug · `src/app/api/major-draw/route.ts:59` (via `getCurrentMajorDrawForDisplay`) — **`/api/major-draw` intermittently answers "No active major draw found" while an active draw plainly exists.**
       _What:_ Under a three-project concurrent e2e run, `/promotions/makita` occasionally logged `ApiError: No active major draw found` plus its companion 404. The e2e seed creates exactly one draw — `status: "active"`, `activationDate` −1 day, `drawDate` +20 days (`e2e/seed/draw.ts:19-39`) — which `getCurrentMajorDrawForDisplay`'s step-1 query matches unambiguously, so this is not seed state and not a missing-draw condition. It is intermittent and load-correlated, which points at `transitionMajorDrawsIfNeeded()` (called first, described as "debounced and idempotent") or a connection-pool failure being swallowed into a `null`. Not root-caused — it is orthogonal to the prize-build work and was not worth widening that task to chase.
