@@ -74,6 +74,40 @@ The route now fires a **server-side TikTok Events API `CompleteRegistration`** i
 
 A route-local helper `sendTikTokCompleteRegistration(request, user, eventId)` builds a `CanonicalEvent` (hashed email / phone / `external_id` = user id, plus `ttclid` / `_ttp` from `extractTikTokContext(request)` and client IP / user-agent from `extractRequestContext(request)`) and dispatches it via [`tiktokProvider.capiSend`](../../src/lib/tracking/providers/tiktok.ts). It passes the **same `pixelEventId` (`eventID`)** used for the Meta event so the browser and both server events dedup. It is `await`ed after the Meta send in each branch but is wrapped in its own try/catch and **never throws** — tracking must not break registration. Step-1 registration still does **not** auto-login (unchanged — see [gotchas.md](./gotchas.md)).
 
+### `POST /api/auth/register` — `builtPrizeSlug` attribution (2026-07-28)
+
+`registerSchema` accepts an optional `builtPrizeSlug` beside `promotionSlug` — the prize the
+visitor had assembled in "Build your prize" (e.g. `ryobi-kincrome`, `cash-prize`) at the moment
+they registered, sourced from the same `?toolset=`/`?toolbox=` URL params the promo-visit beacon
+already records against the VISIT row. It is validated with the **same** `isValidPromoSlug` guard
+as `promotionSlug` before being persisted — a hand-edited body or a crawler cannot write an
+arbitrary string into `User.signupAttribution`.
+
+`buildSignupAttribution(promotionSlug, attribution, builtPrizeSlug, clickPlatform)` takes it as a
+third argument and only includes `builtPrizeSlug` in the returned object when it passes validation
+(`hasBuiltPrize`). It deliberately does **not** join the `!hasPromo && !hasAttribution` "nothing to
+persist" guard — a built prize only ever exists alongside a promo slug, so widening that guard
+could start persisting attribution for visitors who previously had none. All **four** registration
+branches (new-user create, plain-account email+mobile match, email-only match, mobile-only match)
+call `buildSignupAttribution` and must all pass the third argument — see
+[subscription/models.md § `signupAttribution.builtPrizeSlug`](../subscription/models.md#signupattributionbuiltprizeslug-2026-07-28).
+
+When the slug is invalid the key is **omitted entirely**, never set to `undefined` — a literal
+`undefined` in a Mongo `$set` still writes the key, which would clear a previously captured build.
+
+**Location (2026-07-29, panel F-038):** `buildSignupAttribution`, `mergeSignupAttribution` and
+`plainSignupAttribution` now live in
+[`src/services/attribution/signup-attribution.ts`](../../src/services/attribution/signup-attribution.ts)
+and are imported by the route — `app/api/**` handlers hold no business logic. Names are unchanged.
+`resolveSignupClickPlatform` stays in the route: it reads `NextRequest` cookies, which is request
+parsing, not business logic.
+
+⚠️ **Argument order is load-bearing.** All four parameters are optional and stringy/objecty, so
+transposing two of them type-checks cleanly and silently writes a promo slug into the built-prize
+field. `main` and this branch each added a *different* third parameter (`clickPlatform` vs
+`builtPrizeSlug`), which is precisely the merge hazard. `npm run test:signup-attribution` carries an
+explicit argument-position guard — four distinct values in one call, each asserted onto its own key.
+
 ### `POST /api/auth/register` — per-IP abuse guard (2026-06-10)
 
 Registration awaits a Stripe customer create + a Facebook CAPI call + several Mongo writes on the request path, so an unthrottled scripted loop can burn the small per-instance Mongo pool and spawn junk accounts/Stripe customers. The route applies a per-IP limiter ([`createRateLimiter`](../../src/utils/security/rateLimiter.ts), bucket `auth-register`) **before `connectDB()`**: **20 requests / minute / IP** → `429` with a `Retry-After` header and a body carrying **both `error` and `message`** ("Too many registration attempts…") — `message` is required because MembershipModal renders `result.message` in its general-error branch; without it the user sees the generic "Registration failed" fallback and just retries. The limit is intentionally more lenient than login's `5/min` (bucket `auth-login`) because registration is funnel-rate and ad spikes can route many legitimate signups through one carrier-NAT / shared egress IP. **Caveat:** the limiter store is in-memory **per serverless instance** (no Redis), so the effective ceiling is `20 × warm-instance-count` — it stops a naive single-IP flood but is not a WAF substitute for a distributed attack.

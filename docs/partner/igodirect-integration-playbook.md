@@ -259,6 +259,10 @@ Update the **Answer / Status** column as IGodirect responds. 🔴 Open · 🟡 P
 | | Delivery model chosen (A / B / hybrid) | depends on Q1 |
 | | Subdomain name | proposed `perks.toolsaustralia.com.au` |
 | | Duration enforcement approach | depends on Q7/Q8/Q9 |
+| 2026-07-24 | **Blocked-offer redirect URL = `/membership` — PERMANENT.** Handed to iGoDirect: `https://toolsaustralia.com.au/membership?utm_source=partner_portal&utm_medium=referral&utm_campaign=rewards-return` | The portal sends a member who can't redeem an offer back to our membership page. Treat the URL as a published contract — don't move the page. |
+| 2026-07-24 | **Targeted-display strategy: resolve the blocked offer on OUR side.** `offer_id` in the redirect is looked up against the committed curated catalogue; URL params are untrusted display strings and never rendered raw | See §10. **`offer_id` is the reliable templating key.** The `offer_name` fallback resolves ONLY on an exact catalogue-name match (case/whitespace-insensitive) and the URL `level` param is **ignored entirely**; ambiguous or unrecognised names degrade to the generic banner. |
+| 2026-07-24 | **Product API empirics** (probed live): BASIC auth = `client_id:SSO-secret`; pagination broken (`limit`-only, ~300-row ceiling, `offset`/`page` ignored); undocumented `keyword=` substring search over name+details DOES reach the full catalogue; `user_id` is required-but-inert (any value accepted, response unchanged) | `keyword=` is the only workable full-catalogue read path until they fix pagination. |
+| 2026-07-24 | **The curated CSV is the DISPLAY ALLOWLIST.** The raw Product API feed contains **245+ offers outside** the curated 1,833-offer "Offers List Breakdown" — including brand-unsafe merchants | Never render vendor-feed offers directly; filter through `src/generated/partnerCatalogOffers.ts`. Vendor ask #3 in §10. |
 
 ---
 
@@ -346,3 +350,55 @@ First live round-trip succeeded against the **production** tenant (`client_id 24
 **Naming (per masterplan §4):** the route/signer use the **`partner-discount`** vocabulary — `src/lib/partner-discount-sso.ts` / `signPartnerDiscountSsoToken`, eventual route `POST /api/partner-discount/sso`. The older "perks" name used earlier in this doc is **dropped**.
 
 **Scope so far:** signer + connectivity probe ONLY. `member_level` is intentionally omitted (optional; tier-mapping deferred — slots in as a one-liner once iGoDirect confirms encoding). **Nothing is wired to a live user-facing route.** Still open (unchanged): the 🔴 revoke/deactivate + portal-session-lifetime risk — must be resolved before this gates real members.
+
+---
+
+## 10. Rewards-return funnel — Phase 1 (built 2026-07-24)
+
+The loop: **portal blocked-offer → `/membership` upsell banner → purchase → back to the portal.** A member (or lapsed visitor) who hits an offer above their access level in the MyRewards portal is redirected to our membership page with a personalised unlock pitch; a purchase grants access immediately via the existing webhook path, and the portal re-checks live entitlement (member-status API / SSO) on return. Our side is built. Vendor status (2026-07-28): offer_id templating AGREED and the production bearer key DELIVERED — so the offer-aware path is live-capable; only the curated-list guarantee remains open. See the status list below.
+
+### Data layer — the committed catalogue
+
+- **`src/data/partner-catalog/offers-list-breakdown.csv`** — the curated **1,833-offer** "Offers List Breakdown" (columns `ID,Category,Offer,Highlight,Product.terms_and_conditions,Supplier,AccessPercent`). This is the **display allowlist** (decision log 2026-07-24): the raw vendor feed has 245+ offers outside it, so anything shown to a member must resolve through this list.
+- **`src/utils/partner-discounts/portal-return.ts`** (panel-fix F-003, hardened by F-006/F-008/F-009, then F-028/F-029/F-031) — the pure rewards-return core: `resolvePortalReturn` (untrusted-URL parser; offers map dependency-injected so the client-shared module never imports the server-only map; prototype-key + all-digits guards on `offer_id`; **`offer_name` fallback allowlisted against the catalogue** — only exact-name matches resolve, catalogue values always win, URL `level` is **ignored entirely**, so name-only vendor templating works but content spoofing is impossible. Two classes of name deliberately fall back to the generic banner: the 7 vendor punctuation drifts ("JB HiFi" vs our "JB Hi-Fi") and, since F-029, the **6 ambiguous names that exist at two different access percents** (e.g. "Get Wines Direct" at both 100% and 50%) — resolving those to an arbitrary tier could tell a member they are covered for an offer they are not. **`offer_id` is exact and unaffected; it remains the primary vendor ask.**) and `resolvePortalBannerView` (the banner's copy/CTA matrix incl. the paused branch and the SSO-dark covered-state fallback). Tested via `npm run test:portal-return`.
+- **`scripts/build-partner-catalog-preview.ts`** (`npm run build:partner-catalog`) parses the CSV (RFC-4180, fail-loud validation, pinned aggregates: total 1,833; cumulative 25%→459, 50%→917, 100%→1,833) and emits two committed generated files — wired into `prebuild`/`predev` like the sibling generators (panel F-002), so a CSV edit without regeneration fails the next build; a legitimate new CSV means consciously re-pinning `EXPECTED_TOTAL`/`EXPECTED_CUMULATIVE` in the script:
+  - **`src/generated/partnerCatalogOffers.ts`** — SERVER-ONLY full map `id → {name, category, pct}`. Never import from a client component (1,833 rows = bundle bloat, and the full list is not client data).
+  - **`src/generated/partnerCatalogPreview.ts`** — CLIENT-SAFE aggregates only: `PARTNER_CATALOG_TOTAL` + `PARTNER_CATALOG_TIER_COUNTS` (cumulative offers unlocked per ladder percent).
+- **`src/utils/partner-discounts/unlock-packages.ts`** — pure helper `resolveUnlockPackagesForLevel(requiredPct)` → cheapest active subscription + cheapest active PUBLIC one-time pack covering the percent (fail-closed on non-ladder input; percents resolved via the membership-package-id resolver — see the trap note in the file header). Test: `npm run test:unlock-packages`.
+
+### Banner flow (frontend)
+
+`/membership`'s `page.tsx` resolves the redirect params **server-side**: `utm_campaign=rewards-return` (or a bare `offer_id`/`offer_name`) triggers the return context; `offer_id` is resolved against `PARTNER_CATALOG_OFFERS` so name + required percent come from OUR data; the `offer_name` fallback resolves only against the catalogue allowlist (**URL `level` is ignored entirely**, and ambiguous names — those existing at two different percents — are excluded); anything else degrades to a generic banner. `MembershipPortalReturnBanner` renders the state matrix (offer/generic × guest/authed-short/authed-covered/**paused**/past-due, the last split by whether a live one-time pack still covers the offer) with SSO CTAs behind `NEXT_PUBLIC_PARTNER_DISCOUNT_SSO_ENABLED`; `/purchase-success` gained an "Open partner portal" SSO CTA gated on webhook-processed + the same flag. Component detail: [docs/shared-ui/frontend.md](../shared-ui/frontend.md); page wiring: [docs/subscription/frontend.md](../subscription/frontend.md).
+
+### Vendor asks — status
+
+**✅ 1. Offer templating on the redirect — AGREED (2026-07-28).** iGoDirect will append the blocked
+offer's **`offer_id`** per redirect. This makes the **offer-aware banner the primary path**, not a
+fallback: the member sees the offer they came for by name, with the exact tier it needs and the
+cheapest package that unlocks it. Consequence worth recording — the `offer_name` allowlist
+(F-008/F-029) drops to belt-and-braces, so the two known degradation classes (7 vendor punctuation
+drifts, 6 ambiguous names carrying two different percents) stop mattering in practice; they only
+apply if a redirect ever arrives with a name and no id. **`level` is still ignored — do not send it.**
+
+**✅ 2. Production bearer key — DELIVERED (2026-07-28).** Tousif holds the production
+`IGODIRECT_MEMBER_STATUS_KEY`; the endpoint itself has been live in production since
+`IGODIRECT_MEMBER_STATUS_ENABLED=true` (verified 2026-07-24 — prod answered `401` on a wrong key
+rather than `503`, proving the route is enabled, not disabled).
+
+**🔴 3. Curated-list guarantee — STILL OPEN (the only remaining vendor ask).** The portal must display
+ONLY the curated 1,833-offer breakdown. The raw Product API feed carries **245+ extras**, including
+brand-unsafe merchants (Adultshop.com, Adulttoymegastore) that must never surface to a Tools Australia
+member. We enforce the allowlist on our surfaces — and since F-039 the build fails outright if a
+refreshed CSV introduces genuinely banned vocabulary — but the portal is theirs to enforce. Worth
+having in writing before launch, not because we expect a problem but because the failure mode is a
+brand incident rather than a bug.
+
+**Not a vendor ask — our own launch step (see docs/config-and-data/README.md):** set BOTH
+`PARTNER_DISCOUNT_SSO_ENABLED` and `NEXT_PUBLIC_PARTNER_DISCOUNT_SSO_ENABLED` to `true` in Vercel and
+**redeploy** — the `NEXT_PUBLIC_` twin is inlined at build time, so setting it alone leaves the route
+open with every button still hidden.
+
+**Joint launch check (agreed with the vendor):** for the 50%-access test user
+(`paymenttest@mail.com`, `member_id 6a3112352a4874b02fdf43f0`), the portal should permit exactly
+**917 of the 1,833** offers — the Amazon.com.au eGift Card (100%) being a deliberate blocked example.
+That single number is a pass/fail check that their gating and our AccessPercent ladder agree.

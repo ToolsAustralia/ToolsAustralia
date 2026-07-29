@@ -48,6 +48,160 @@ missing here while every other surface already had it. Logo path is derived by c
 are pre-normalised to a uniform frame, so all brand logos read at equal size in the table
 without compensation. See `docs/promo/frontend.md` for the asset normalisation details.
 
+## Promo Analytics table — Builds column added; Cross-visits deliberately kept (2026-07-28)
+
+[`PromoAnalyticsManagement`](../../src/components/admin/PromoAnalyticsManagement.tsx)'s per-page
+table gained a **Builds** column, inserted immediately after the existing **Cross-visits** column
+(same order in both the `<thead>` and each `<tbody>` row, so header and cell stay aligned). Cell
+shows `formatNumber(row.builds)` with a `Top: {label}` sub-label line rendering the top combination
+(`getPrizeLabel(row.topBuiltPrize) ?? row.topBuiltPrize`) when one exists — the `Top:` prefix makes
+the caption self-explanatory without a hover (panel-review F-005, fixed 2026-07-28). The sub-label
+is `truncate`d to one line at `max-w-[110px]` so it can't wrap into a multi-line staircase and
+balloon row height on narrow admin widths (panel-review F-011, fixed 2026-07-28 — measured at
+390px: an untruncated 44-char label wrapped to 8 lines / +39.5px row height); the full name stays
+reachable via the cell/header `title` attributes, which explain both states ("Nobody built a prize
+on this page in this period" when `topBuiltPrize` is `null` — never rendered as the literal string
+"null"). Sortable via the same
+`handleSort` / `getSortIcon` pair as every other numeric column — no separate `SortKey` type
+exists; both take `keyof PromoPageMetrics` directly, and `"builds"` is now a valid value of that
+union automatically since `builds` was added to the `PromoPageMetrics` interface. Data comes from the
+new `builds` / `topBuiltPrize` fields on `PromoPageMetrics` — see
+[docs/promo/backend.md](../promo/backend.md#prize-build-admin-surfacing--builds--topbuiltprize-2026-07-28)
+for the aggregation.
+
+**Cross-visits was NOT removed.** An earlier draft of this task assumed the column (reads
+`referrerSlug`) was structurally dead, since nothing has written a new `referrerSlug` since
+2026-07-24 (its only writer, the "Explore other toolsets" carousel, was removed when the prize
+builder's toolset reel took over that job). That premise was re-tested against the live DB and
+found false: 174 of 712 visit rows (~24%) still carry `referrerSlug`, spanning June–July, and
+remain inside the 90-day TTL — the column still renders real numbers for those date ranges. It
+will decay to all-zero on its own as those rows age out (~late October 2026), at which point
+dropping it becomes a safe one-line change. Until then it stays exactly as it was: same header,
+same cell, same `crossVisits` sort key, same `crossVisitMap` aggregation in the repository.
+
+## Promo Analytics — Switched-away % column + By Built Prize table (2026-07-28)
+
+Surfaces the two read-side additions from
+[docs/promo/backend.md](../promo/backend.md#read-side-gap-closure--builddistribution--getaggregatedbybuiltprize-2026-07-28)
+(`buildDistribution` on `PromoPageMetrics`, `PromoAnalyticsService.getAggregatedByBuiltPrize` /
+`data.byBuiltPrize` on `GET /api/admin/promo-analytics`) in the admin UI. Both additions are
+in [`PromoAnalyticsManagement.tsx`](../../src/components/admin/PromoAnalyticsManagement.tsx).
+
+**a) "Switched away % of Builds" column** — new trailing column on the existing per-page table
+(after `Conv %`; same `hidden md:table-cell` treatment and non-sortable static-text style as the
+other three rate columns — it isn't a stored field on `PromoPageMetrics`, it's derived
+client-side, so it follows the convention already used by `visitToSignupRate` et al. of never
+getting a sort button). The header text spells out the denominator ("of Builds") instead of
+relying on the `title` tooltip alone — the un-suffixed "Switched away %" read as a share of
+`visits` on a skim, a much larger and more alarming base than the real denominator (`builds`);
+matches the sibling By Built Prize table's `B→S %` naming convention of putting the ratio in the
+visible label (panel-review F-004, fixed 2026-07-28). Header + cell count: **11 `<th>` / 11
+`<td>`** (was 10/10 before this task).
+
+Derivation (`getSwitchAwayRate` + `getPageDefaultPrizeSlug`, both module-level pure functions
+above the component): the page's OWN default combination is what a visitor sees without
+touching a reel — `getDefaultPrizeForToolsetSlug(row.slug)` for a toolset landing slug,
+`row.slug` itself when `isToolsetLandingSlug(row.slug)` is false (evergreen pages' `slug` already
+IS a prize slug). "Switched away" sums `buildDistribution` visitor counts for every entry whose
+`builtPrizeSlug` differs from that default, as a percentage of `builds` (NOT `visits` — `builds`
+is the meaningful denominator: "of the people who built something, how many picked something
+other than the default"). **`builds === 0` renders an em dash** (`—`), never `"0%"` or `"NaN%"` —
+those would misleadingly read as "nobody switches" rather than "nobody built anything to measure
+switching on." The `title` tooltip on the non-zero-builds cell spells out the raw counts (e.g.
+"3 of 8 builders picked a different combination than this page's default (Milwaukee Kincrome)");
+the zero-builds cell's tooltip reads "Nobody built a prize on this page in this period", matching
+the existing Builds-column tooltip idiom.
+
+**b) "By Built Prize" table** — new table rendered below the per-page table, from
+`data?.byBuiltPrize ?? []` (optional-chained the same way `data?.byUTMSource` already is in this
+file, even though the API always includes the key — matches existing sibling-field convention).
+Mirrors the Channel Attribution table's structure (static IIFE-computed `rows`, explicit
+empty-state div — "No builds recorded for this period." — never a bare header with an empty
+`<tbody>`, non-sortable, `hidden md:table-cell` on the three rate columns). Columns: Built prize
+(via `getPrizeLabel(row.builtPrizeSlug) ?? row.builtPrizeSlug`, matching every other slug→label
+cell in this file), Builders, Registrations, Conversions, Revenue, B→S %, S→C %, Conv %. **8
+`<th>` / 8 `<td>`**. No row click / detail modal — not requested, and `byBuiltPrize` rows don't
+map to a single landing page the way `PromoPageDetailModal` expects.
+
+Full-file count after this task: **27 `<th>` / 27 `<td>`** across all three tables (UTM Channel
+Attribution 8/8 + per-page 11/11 + By Built Prize 8/8) — verified by direct regex count, not by
+inspection.
+
+## Promo Analytics — By Toolbox rollup (2026-07-28, panel finding F-006)
+
+A fourth table below **By Built Prize**, answering the one question the panel graded PARTIAL:
+*"do Kincrome-box builders convert better than Milwaukee-box builders?"* `byBuiltPrize` groups by the
+FULL combination (`milwaukee-kincrome`, `ryobi-kincrome`, `makita-kincrome`, …), so reading a
+per-toolbox rate previously meant summing five rows by hand.
+
+**Derived client-side on purpose.** The rollup is computed in a `useMemo` over the existing
+`byBuiltPrize` array — no new API field, no repository change. That deliberately avoids dragging the
+CLAUDE.md rule-10 Norm lockstep (schema + route + manifest + `norm-context.md`) along for a number
+the client can derive from data it already receives. Norm still gets `byBuiltPrize` and can roll it
+up itself.
+
+Three things about it that are easy to get wrong, and are therefore load-bearing:
+
+1. **The toolbox is resolved via `fromPrizeSlug()`** (`prize-selection/prize-builder-model.ts`),
+   which matches BOTH slug segments against the `TOOLSETS`/`TOOLBOXES` registries — not
+   `slug.split("-").pop()`. Positional splitting happens to work today (no toolset or toolbox id
+   contains a hyphen), but the registry lookup stays correct if that ever changes, and it is already
+   covered by `test:prize-builder`.
+2. **`cash-prize` is excluded.** `fromPrizeSlug` returns `null` for it (cash is the opt-out, not a
+   toolbox) and for any unrecognised slug, so neither can land in a bogus toolbox bucket.
+3. **Rates are recomputed from the SUMMED totals, never averaged.** Averaging per-combination rates
+   weights a 1-builder combo the same as a 100-builder one. Worked example:
+   `milwaukee-kincrome {builders:10, signups:4}` + `ryobi-kincrome {builders:5, signups:1}` rolls up
+   to `builders:15, signups:5` → **33.33%**, not the mean of 40% and 20% (30%). Zero-builder
+   toolboxes render `0`/an em dash, never `NaN` or `Infinity`.
+
+Sorted builders descending, toolbox name ascending as a deterministic tie-break. Toolbox names come
+from the `TOOLBOXES` registry so the column reads "Kincrome", not `kincrome`. Empty state renders a
+message rather than a bare header, matching the sibling tables. **8 `<th>` / 8 `<td>`.**
+
+Full-file count after this addition: **35 `<th>` / 35 `<td>`** across all four tables (UTM Channel
+Attribution 8/8 + per-page 11/11 + By Built Prize 8/8 + By Toolbox 8/8).
+
+> **Now visually verified (2026-07-28).** Rendered on staging with a temporarily-promoted throwaway
+> account. All four tables display correctly, and the By Toolbox rollup correctly attributed a real
+> test purchase: `GearWrench · 2 builders · 1 registration · 1 conversion · $20.00`.
+
+## Switched-away % — the denominator must come from the distribution (2026-07-28, F-013)
+
+Staging showed **250%** in this column. The cause is worth remembering, because it is easy to
+reintroduce: `row.builds` and `buildDistribution` count **different units**.
+
+| | Counts |
+|---|---|
+| `row.builds` | unique **visitors** who built anything, deduped across the page |
+| `buildDistribution[].visitors` | unique visitors **per combination** |
+
+A visitor gets one visit row per page load, and each row keeps its own final build. So one person
+who lands four times and settles on a different combination each time contributes **1** to `builds`
+but **4** to the distribution. Summing distribution entries for the numerator and dividing by
+`builds` therefore lets the ratio exceed 100%. Real data: `makita` on 2026-07-28 had 5 recorded
+builds from 2 unique visitors — 5 ÷ 2 = 250%.
+
+`getSwitchAwayRate` now divides the distribution by **its own total**, so both sides are in the
+same unit and the value is bounded at 100%. The column reads "% of builds" — **records, not
+people** — and the tooltip states that explicitly.
+
+> Every automated test missed this. The unit suite, the seeded accuracy proof and the local browser
+> runs all used **one row per visitor**, which is the one shape that cannot reproduce it. If you add
+> coverage here, make a single visitor produce several different builds.
+
+**Norm lockstep (CLAUDE.md rule 10).** `buildDistribution` and `byBuiltPrize` are now mirrored to
+Norm — see
+[docs/internal-norm/norm-context.md](../internal-norm/norm-context.md#get-v1promo-analytics),
+which closes the "Not yet mirrored to Norm" gap flagged in the backend task's note. Wiring
+`byBuiltPrize` into the Norm response required a small addition to
+[`src/app/api/internal/norm/v1/promo-analytics/route.ts`](../../src/app/api/internal/norm/v1/promo-analytics/route.ts)
+(a third parallel `PromoAnalyticsService.getAggregatedByBuiltPrize` call + one field on the
+response, mirroring the admin route's own already-verified wiring three lines above it) —
+without it, declaring `byBuiltPrize` as a required schema field while the route never returned it
+would have made `withNorm`'s `responseSchema` validation genuinely 500 on every call to this
+previously-working endpoint.
+
 ## Pages
 
 - `src/app/admin/page.tsx` — entry. Auth guard uses `usePermissions().isStaff` (Task 12, 2026-05-20). The legacy `useEffect` redirect and `session.user?.role !== "admin"` early-return have been removed; the component now checks `isLoading` / `isStaff` directly and calls `router.push("/")` when not staff. The admin layout's server-side guard (Task 14) is the primary gating mechanism; this is belt-and-suspenders for the client render.
@@ -175,10 +329,12 @@ stays side-effect-free (the clone is never persisted — the canonical sweep is 
 own `/api/partner-discount/queue`). The raw `partnerDiscountQueue` is still in the payload for full
 history, but the card uses the reconciled summary.
 
-> Not yet mirrored to Norm: `partnerDiscountSummary` is on the admin `buildAdminUserProfile` shape,
-> which Norm's `users.get` does not consume (Norm uses a separate projection). It could be exposed to
-> Norm (counts + dates are PII-safe) — flagged, not wired. The same applies to the 2026-07-09 additions
-> (`partnerAccessRing`, `subscription.nextRenewalEntries`, `subscription.cancelledAt`).
+> **Partially mirrored to Norm.** The 2026-07-09 additions `partnerAccessRing`,
+> `subscription.nextRenewalEntries`, and `subscription.cancelledAt` are now on Norm's
+> `/v1/users/{id}` — see [docs/internal-norm/norm-context.md](../internal-norm/norm-context.md).
+> `partnerDiscountSummary` itself is still **not** mirrored: it's on the admin
+> `buildAdminUserProfile` shape, which Norm's `users.get` does not consume (Norm uses a separate
+> projection). It could be exposed to Norm (counts + dates are PII-safe) — flagged, not wired.
 
 ## A/B VariantConfigEditor — "Static hero image only (disable hero video)" (2026-06-15)
 

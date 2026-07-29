@@ -3,12 +3,14 @@ module.exports = {
     type: "problem",
     docs: {
       description:
-        'Disallow importing server-only Mongoose models / the mongoose package / the Mongo connection helper from a client component (a file with a "use client" directive).',
+        'Disallow importing server-only modules — Mongoose models / the mongoose package / the Mongo connection helper / the generated partner-catalog offers map — from a client component (a file with a "use client" directive).',
     },
     schema: [],
     messages: {
       serverOnly:
         'Client component ("use client") must not import {{what}}. Mongoose models are server-only ("mongoose" is a serverExternalPackage); importing them into client code crashes at runtime or bundles the data layer. Fetch the data in a server component / route handler / service and pass plain serializable data down.',
+      serverOnlyData:
+        'Client component ("use client") must not import {{what}}. It would ship the whole 1,833-row catalogue in the client bundle. Resolve offers SERVER-side (see src/app/(site)/membership/page.tsx, which injects the map into resolvePortalReturn) and pass the resolved values down, or import the client-safe aggregates from @/generated/partnerCatalogPreview.',
     },
   },
   create(context) {
@@ -26,7 +28,16 @@ module.exports = {
       if (!isDirective) break; // prologue ends at the first non-string-literal statement
       if (stmt.expression.value === "use client") isClient = true;
     }
-    if (!isClient) return {};
+    // Client-SHARED utils carry no "use client" of their own but ARE imported by client
+    // components, so a server-only import here lands in the client bundle just the same.
+    // That is precisely the case the rule was added for (panel F-038): the whole
+    // dependency-injection design in portal-return.ts exists because it is imported by
+    // MembershipPortalReturnBanner, and without this the guard could only catch the
+    // mistake nobody would make.
+    const CLIENT_SHARED =
+      /[\\/]src[\\/]utils[\\/]partner-discounts[\\/](portal-return|unlock-packages|partner-catalog-visibility)\.ts$/;
+    const filename = context.filename ?? context.getFilename?.() ?? "";
+    if (!isClient && !CLIENT_SHARED.test(filename)) return {};
 
     function classify(spec) {
       if (typeof spec !== "string") return null;
@@ -40,9 +51,23 @@ module.exports = {
       return null;
     }
 
+    /** Server-only GENERATED data whose only sin is bundle size (panel F-021) — a
+     *  different message, since the fix is "resolve it server-side", not "it crashes". */
+    function classifyServerOnlyData(spec) {
+      if (typeof spec !== "string") return null;
+      if (spec === "@/generated/partnerCatalogOffers" || /(^|\/)generated\/partnerCatalogOffers$/.test(spec))
+        return "the server-only partner-catalog offers map (@/generated/partnerCatalogOffers)";
+      return null;
+    }
+
     function check(node, spec) {
       const what = classify(spec);
-      if (what) context.report({ node, messageId: "serverOnly", data: { what } });
+      if (what) {
+        context.report({ node, messageId: "serverOnly", data: { what } });
+        return;
+      }
+      const data = classifyServerOnlyData(spec);
+      if (data) context.report({ node, messageId: "serverOnlyData", data: { what: data } });
     }
 
     // Type-only imports/exports are ERASED at build — they never bundle the data layer, so they are

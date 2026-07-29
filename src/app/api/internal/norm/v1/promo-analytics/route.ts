@@ -32,9 +32,10 @@ export const GET = withNorm(
       return ctx.error(400, "bad_query", (e as Error).message);
     }
 
-    const [summary, utmSummary] = await Promise.all([
+    const [summary, utmSummary, builtPrizeSummary] = await Promise.all([
       PromoAnalyticsService.getAggregatedMetrics(range.start, range.end),
       PromoAnalyticsService.getAggregatedByUTMSource(range.start, range.end),
+      PromoAnalyticsService.getAggregatedByBuiltPrize(range.start, range.end),
     ]);
 
     return ctx.ok({
@@ -45,6 +46,7 @@ export const GET = withNorm(
       totalRevenue: summary.totalRevenue,
       byPage: summary.byPage,
       byUTMSource: utmSummary.byUTMSource,
+      byBuiltPrize: builtPrizeSummary.byBuiltPrize,
     });
   },
 );

@@ -17,6 +17,21 @@ export interface IPromoAnalyticsVisit extends Document {
   slug: string;
   /** Toolset slug user was on before visiting this page (e.g. from Other Toolsets carousel) */
   referrerSlug?: string;
+  /** Prize the visitor assembled in "Build your prize" (e.g. "makita-kincrome", "cash-prize"). */
+  builtPrizeSlug?: string;
+  /** How many times they changed the toolbox lane on this page. Counts REEL touches only. */
+  toolboxSwitches?: number;
+  /** How many times they changed the power-toolset lane on this page. */
+  toolsetSwitches?: number;
+  /**
+   * Did the visitor touch the builder at all on this page?
+   *
+   * Distinct from the two counters, and NOT derivable from them: cash is a toggle rather than a
+   * reel card, so a cash-only visitor sits at 0/0 yet made a real choice. `builtPrizeSlug` is now
+   * recorded for every visitor (it answers "what was on screen"), so this flag is what answers
+   * "did they engage" — the two questions were previously conflated in the field's presence.
+   */
+  buildInteracted?: boolean;
   anonymousId?: string;
   userId?: mongoose.Types.ObjectId;
   referrer?: string;
@@ -44,6 +59,26 @@ const PromoAnalyticsVisitSchema = new Schema<IPromoAnalyticsVisit>(
       required: false,
       trim: true,
       lowercase: true,
+    },
+    builtPrizeSlug: {
+      type: String,
+      required: false,
+      trim: true,
+      lowercase: true,
+    },
+    toolboxSwitches: {
+      type: Number,
+      required: false,
+      min: 0,
+    },
+    toolsetSwitches: {
+      type: Number,
+      required: false,
+      min: 0,
+    },
+    buildInteracted: {
+      type: Boolean,
+      required: false,
     },
     anonymousId: {
       type: String,
@@ -91,6 +126,24 @@ PromoAnalyticsVisitSchema.index({ pageType: 1, slug: 1, timestamp: -1 });
 PromoAnalyticsVisitSchema.index({ referrerSlug: 1, slug: 1, timestamp: -1 });
 PromoAnalyticsVisitSchema.index({ anonymousId: 1, timestamp: -1 });
 PromoAnalyticsVisitSchema.index({ userId: 1, timestamp: -1 });
+// PARTIAL, not plain (panel F-021). Every query that uses this index filters
+// `builtPrizeSlug: { $exists: true }`, and a NON-sparse index stores a missing field as `null`,
+// so those bounds come back as the entire key space (`[MinKey, "") ("", MaxKey]`) and the scan
+// reads every row in the window. Measured on dev (764 docs, 8 carrying the field): the plain index
+// examined 764 keys / 764 docs — identical to having no index at all. With this partial index the
+// planner picks it unprompted and examines 8 keys / 8 docs. No `hint` needed, and none should be
+// added: a hint naming an absent index 500s the whole admin route (F-020).
+// The NAME must differ from the superseded `builtPrizeSlug_1_timestamp_-1`: mongoose cannot alter
+// an index in place — re-declaring the same NAME with a changed `partialFilterExpression` is
+// rejected by the server (measured: code 86, "An existing index has the same name as the requested
+// index"; commonly cited as IndexOptionsConflict/85), and autoIndex swallows it, so the index would
+// silently never build. A *differently named* partial index may coexist with the old one, so the
+// deploy and the migration below are safe in either order.
+// Superseded index dropped by scripts/migrations/2026-07-29-partial-build-prize-indexes.ts.
+PromoAnalyticsVisitSchema.index(
+  { builtPrizeSlug: 1, timestamp: -1 },
+  { name: "builtPrizeSlug_ts_partial", partialFilterExpression: { builtPrizeSlug: { $exists: true } } }
+);
 
 // TTL index: auto-delete visits older than 90 days to manage growth
 PromoAnalyticsVisitSchema.index(

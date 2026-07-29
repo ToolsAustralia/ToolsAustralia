@@ -220,10 +220,12 @@ Embedded subdocument `subscription` (one active membership at a time; [User.ts:2
 
 | Field | Type | Meaning | PII |
 |---|---|---|---|
-| `signupAttribution` | subdoc (opt) | Promo page + UTM/ad context at signup: `promotionPageType("evergreen"\|"toolset"), promotionSlug, visitedAt, anonymousId, utmSource, utmMedium, utmCampaign, utmContent, utmTerm, campaignId, adsetId, adId`, plus **`clickPlatform`** ([User.ts:241-256](src/models/User.ts#L241)) | — |
+| `signupAttribution` | subdoc (opt) | Promo page + UTM/ad context at signup: `promotionPageType("evergreen"\|"toolset"), promotionSlug, builtPrizeSlug, visitedAt, anonymousId, utmSource, utmMedium, utmCampaign, utmContent, utmTerm, campaignId, adsetId, adId`, plus **`clickPlatform`** ([User.ts:260-284](src/models/User.ts#L260)) | — |
 | ↳ `signupAttribution.clickPlatform` | `"meta"\|"tiktok"\|"snapchat"\|"google"` (opt) | **Added 2026-07-24.** The paid platform whose **click id** (`_fbc` / `ttclid` / `_sc_click`) was present in the request cookies at registration, resolved server-side via the same `extractClickIdsFromRequest` the payment path uses (most-recent capture wins). **Only the platform name is stored — never the raw click id**, so signup-source analytics gain click-verified confidence with no new identifier added to the customer record. Stamped on all four registration branches. Absent for organic signups and for accounts created before this date. Powers the per-platform signup counts on the admin Advertising card. | — |
 
 > The resolved **`convertingPlatform`** is **not** on `User` — it lives on the `PaymentEvent` record (see §8).
+
+> **`promotionSlug` vs `builtPrizeSlug`:** the promo pages' "Build your prize" reels let a visitor assemble the toolset/toolbox combo they'd want to win (or pick the cash option), mirrored into the URL as `?toolset=`/`?toolbox=`. `promotionSlug` records **which page they landed on**; `builtPrizeSlug` records **the prize they had on screen when they registered** — either what they assembled, or, if they never touched the reels, the landing page's own default build (e.g. `makita-milwaukee` for `/promotions/makita`, never the bare `makita` landing slug). Both are indexed ([User.ts:1278-1279](src/models/User.ts#L1278)).
 
 ### 2i. Preferences, flags & engagement history
 
@@ -304,16 +306,33 @@ The register route even hard-codes `isAuthenticated: false` in its Klaviyo "Star
 
 ### 4b. Registration internals (guest account creation)
 
-`POST /api/auth/register` validates `firstName`, `lastName`, `email`, Australian `mobile` (normalised to `+61…`), plus optional `affiliateCode`, `promotionSlug`, `packageId`, and UTM/click-ID fields ([register/route.ts:56-86](src/app/api/auth/register/route.ts#L56)). Rate limited at 20/min/IP. A **"plain account"** = `!accumulatedEntries || accumulatedEntries === 0`.
+`POST /api/auth/register` validates `firstName`, `lastName`, `email`, Australian `mobile` (normalised to `+61…`), plus optional `affiliateCode`, `promotionSlug`, `builtPrizeSlug` (validated the same way as `promotionSlug`), `packageId`, and UTM/click-ID fields ([register/route.ts:56-86](src/app/api/auth/register/route.ts#L56)). Rate limited at 20/min/IP. A **"plain account"** = `!accumulatedEntries || accumulatedEntries === 0`. `builtPrizeSlug` is captured on all four outcomes below (matched-account update, mobile/email-only update, and new-account creation) via `buildSignupAttribution` — see §2h.
 
 | Case | Behaviour |
 |------|-----------|
 | Email/mobile belong to a **converted** account (`accumulatedEntries > 0`) | Rejected `400` with `isExistingAccount: true` + `existingAccountEmail`; told to log in ([register/route.ts:302-337](src/app/api/auth/register/route.ts#L302)). |
 | Email/mobile belong to an account with **saved payment methods** | Same rejection ([register/route.ts:341-378](src/app/api/auth/register/route.ts#L341)). |
-| Email **and** mobile match the **same plain account** | Account is **updated in place** (name/email/mobile/attribution), re-fires `User Registered` ([register/route.ts:382-502](src/app/api/auth/register/route.ts#L382)). |
+| Email **and** mobile match the **same plain account** | Account is **updated in place** (name/email/mobile/attribution), re-fires `User Registered` ([register/route.ts:382-502](src/app/api/auth/register/route.ts#L382)). Attribution is **merged, not replaced** — see the note below the table. |
 | Email and mobile match **different** accounts | Rejected `400` "Registration conflict" ([register/route.ts:503-519](src/app/api/auth/register/route.ts#L503)). |
 | Only email **or** only mobile matches a plain account | That plain account is updated ([register/route.ts:523-700](src/app/api/auth/register/route.ts#L523)). |
 | No match | New passwordless account created; a Stripe customer is created and linked (`stripeCustomerId`) ([register/route.ts:702-770](src/app/api/auth/register/route.ts#L702)). |
+
+**Re-registration preserves where the customer came from (2026-07-29).** On all three
+existing-account branches, `signupAttribution` is now **merged** onto what the account already
+carries rather than assigned wholesale. The rule is **preserve-when-absent**: `promotionSlug`,
+`promotionPageType` and `builtPrizeSlug` survive only when the new signup does **not** carry one, so
+a customer returning on a bare ad click keeps the promo page and prize they originally came from —
+while a customer who genuinely lands on a *different* promo page and re-registers there is
+re-attributed to it. UTMs and `clickPlatform` are last-write-wins, so a newer ad click still
+refreshes. (This is deliberately **not** strict first-touch-wins; whether it should be is an open
+product question.)
+
+Before this, the whole subdocument was replaced. That became destructive once a bare `clickPlatform`
+was enough to persist on its own: a customer who landed on a promo page, built a prize, registered,
+abandoned payment, then came back days later through an ad with no promo slug and no UTMs would have
+their original promo page and built prize **silently erased**, and the eventual purchase attributed
+to no page and no build. That is precisely the customer the abandoned-checkout flow exists to bring
+back. New-account branches still assign directly — there is nothing to preserve.
 
 ### 4c. Login paths
 
@@ -423,6 +442,8 @@ Four customer-facing perk systems. For the full mechanics (tier-% ladders, refer
 
 **What the rewards-portal vendor can read about a customer (2026-07-16, default-dark).** iGoDirect's MyRewards portal (the white-label rewards portal at `myrewards.toolsaustralia.com.au`) can query `GET /api/partner-discount/member-status` (bearer-authed; 503 in production until `IGODIRECT_MEMBER_STATUS_ENABLED=true`) at SSO sign-in, page load, and offer redemption. Per call, the vendor receives only `active` (boolean), `member_level` (catalog-visibility %), and `expires_at` — keyed by the opaque `member_id` (`User._id`) it already holds from the SSO hand-off. **No PII fields are in this response** (name/email leave only via the SSO payload itself, owner-approved 2026-06-24 — see [docs/partner/api.md](docs/partner/api.md)). Every answer is reconcile-then-read, so it reflects the customer's live entitlement, including packs promoted at read time.
 
+**Rewards-return journey (2026-07-24, built; hardened + polished 2026-07-28 — not yet visible to customers, waiting on our two SSO env flags + a redeploy, vendor side settled 2026-07-28).** A customer blocked from redeeming a partner-portal offer above their access level is redirected by the portal to `/membership` (`utm_campaign=rewards-return`), where a personalised unlock banner names the offer and the cheapest package that covers it — resolved from our committed catalogue, never from raw URL params; even the `offer_name` fallback is allowlisted against the catalogue, so only real offer names ever render ([portal-return.ts](src/utils/partner-discounts/portal-return.ts) + [MembershipPortalReturnBanner](src/components/sections/membership/MembershipPortalReturnBanner.tsx)). Per lifecycle state: guests get the unlock pitch **plus an "Already a member? Log in" path** — shown only to genuinely signed-out visitors, since a logged-in customer without active benefits would be bounced back to `/my-account`; a **past-due** customer with **no** live access is steered to fix payment, while one whose paid one-time pack is **still running** is told so honestly ("Your pack access is still running") and, when that pack covers the offer they came for, is sent straight back to redeem it rather than being told their discounts are off; **paused** members see their resume date and a Manage-membership link (never an upsell — their access returns on resume); an **active** member whose covered offer just needs redeeming is sent back to the portal (or, while SSO is dark, pointed at their still-open portal tab). A purchase grants the higher access immediately (same webhook path as any purchase), and the portal re-checks live entitlement on return (member-status API / SSO) — so the customer can go straight back and redeem ("Open partner portal" on `/purchase-success`, SSO-flag-gated). Cobber's redemption FAQs (16/72) describe this portal model and ship/launch together with it, in one spelling ("catalogue") across the whole corpus. Every way the hand-off can fail now shows the customer a plain-English reason on **all four** portal buttons — including the Rewards card and dashboard chip, which previously failed silently — from a single set of strings held in `PARTNER_SSO_ERRORS`.
+
 ### 7b. Referrals
 
 `User.referral` holds the customer's own code (`referral.code`, unique sparse index) and conversion counters (`successfulConversions`, `totalEntriesAwarded`). `User.affiliateReferral` stamps which affiliate referred this user. For reward amounts, eligibility rules, and conversion mechanics see [BUSINESS.md §13b](BUSINESS.md).
@@ -456,6 +477,15 @@ On landing with marketing query params, the client persists **`utm_source`, `utm
 The landing URL's **`?packages=one-time`** marker is also captured (as `packages_focus`, only ever `"one-time"`) into the same session store and `_ta_attr` cookie, and stamped onto payments as `PaymentEvent.data.packagesFocus` — a seed for future revenue-by-landing-focus reporting. **Membership is the default and is stored by absence**: ads never carry `?packages=membership`, so organic and pre-feature traffic stores nothing.
 
 Paid **click IDs** are captured into separate cookies on mount: Meta `_fbc`/`_fbc_ts` (synthesized from `?fbclid=` so it survives without the Meta SDK), TikTok `ttclid`, Snapchat `_sc_click`; the Meta browser-ID `_fbp` is set by the Pixel. A **signup snapshot** is also persisted server-side in `User.signupAttribution` (§2h).
+
+**Promo-page build capture changed 2026-07-29.** On `/promotions/*`, the visit row
+(`PromoAnalyticsVisit`, keyed on the `ta_anon_id` cookie — not the `User` record) now records
+`builtPrizeSlug` for **every** visitor, describing the prize combination that was on screen, rather
+than only for visitors who touched the reels. Whether they actually engaged moved to a separate
+boolean, `buildInteracted`. No new identifier is captured and nothing extra leaves to a third party —
+this is the same anonymous visit row, recorded for more visitors. The reason is that signups already
+recorded the page's default build for people who never touched the reels, so counting builders and
+signups over different populations let the admin funnel display rates above 100%.
 
 ### 8b. The "converting platform" concept
 

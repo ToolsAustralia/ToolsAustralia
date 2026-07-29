@@ -11,6 +11,7 @@ import PromoAnalyticsRepository, {
   type PromoAnalyticsSummary,
   type PromoPageMetrics,
   type PromoAnalyticsByUTMSummary,
+  type PromoAnalyticsByBuiltPrizeSummary,
 } from "@/repositories/PromoAnalyticsRepository";
 import { isValidPromoSlug, getPageTypeFromSlug } from "@/utils/promo-analytics/validate-promo-slug";
 import type { PromoPageType } from "@/models/PromoAnalyticsVisit";
@@ -94,6 +95,37 @@ export class PromoAnalyticsService {
   }
 
   /**
+   * Attach a built prize + engagement counters to an existing visit row.
+   * Validates BOTH slugs — the landing page and the built prize must be real.
+   */
+  async recordPrizeBuild(data: {
+    anonymousId: string;
+    slug: string;
+    builtPrizeSlug: string;
+    toolboxSwitches: number;
+    toolsetSwitches: number;
+    /** Absent means engaged — see PromoAnalyticsVisit.buildInteracted. */
+    interacted?: boolean;
+  }): Promise<{ success: boolean; error?: string }> {
+    if (!isValidPromoSlug(data.slug)) {
+      return { success: false, error: "Invalid promotion slug" };
+    }
+    if (!isValidPromoSlug(data.builtPrizeSlug)) {
+      return { success: false, error: "Invalid built prize slug" };
+    }
+    const updated = await PromoAnalyticsRepository.updateVisitBuild({
+      anonymousId: data.anonymousId,
+      slug: data.slug.toLowerCase().trim(),
+      pageType: getPageTypeFromSlug(data.slug),
+      builtPrizeSlug: data.builtPrizeSlug.toLowerCase().trim(),
+      toolboxSwitches: data.toolboxSwitches,
+      toolsetSwitches: data.toolsetSwitches,
+      interacted: data.interacted,
+    });
+    return updated ? { success: true } : { success: false, error: "no_visit_row" };
+  }
+
+  /**
    * Link anonymous visits to a user when they register.
    */
   async linkVisitsToUser(anonymousId: string, userId: string): Promise<number> {
@@ -118,6 +150,18 @@ export class PromoAnalyticsService {
     endDate: Date
   ): Promise<PromoAnalyticsByUTMSummary> {
     return PromoAnalyticsRepository.getAggregatedByUTMSource(startDate, endDate);
+  }
+
+  /**
+   * Get aggregated metrics by BUILT PRIZE (e.g. makita-kincrome) across every landing page.
+   * Answers "which combinations get built more than landed on?" and "do builders of one
+   * combination convert better than builders of another?"
+   */
+  async getAggregatedByBuiltPrize(
+    startDate: Date,
+    endDate: Date
+  ): Promise<PromoAnalyticsByBuiltPrizeSummary> {
+    return PromoAnalyticsRepository.getAggregatedByBuiltPrize(startDate, endDate);
   }
 
   /**

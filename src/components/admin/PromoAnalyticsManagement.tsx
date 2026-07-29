@@ -17,12 +17,16 @@ import {
   ArrowDown,
   Hash,
   HelpCircle,
+  Layers,
+  Package,
 } from "lucide-react";
 import { MetricCard } from "@/components/admin/metrics/shared/MetricCard";
 import { formatNumber, formatPercentage } from "@/utils/metrics/formatters";
 import { formatCurrency } from "@/utils/metrics/formatters";
 import { queryKeys } from "@/lib/queryKeys";
 import { getPrizeLabel } from "@/config/prize-summaries";
+import { isToolsetLandingSlug, getDefaultPrizeForToolsetSlug } from "@/config/promo-landing-slugs";
+import { fromPrizeSlug, getToolbox } from "@/components/sections/promo/prize-selection";
 import { DateRange } from "@/components/admin/DateRangeToggle";
 import { DateRangeDropdown } from "@/components/admin/overview/DateRangeDropdown";
 import { AdminMobileLayoutDateRangeShell } from "@/app/admin/component/AdminMobileLayoutDateRangeShell";
@@ -40,10 +44,44 @@ interface PromoPageMetrics {
   slug: string;
   visits: number;
   crossVisits: number;
+  /** Unique visitors who assembled a prize on this page (touched at least one reel). */
+  builds: number;
+  /** The combination built by the most visitors on this page, or null if nobody built one. */
+  topBuiltPrize: string | null;
+  /** Every combination built on this page, most-built first. Empty when nobody built one. */
+  buildDistribution: Array<{ builtPrizeSlug: string; visitors: number }>;
   signups: number;
   conversions: number;
   revenue: number;
   visitToSignupRate: number;
+  signupToConversionRate: number;
+  overallConversionRate: number;
+}
+
+/** Grouped by the BUILT combination itself, across every landing page (not per-page). */
+interface BuiltPrizeMetrics {
+  builtPrizeSlug: string;
+  builders: number;
+  signups: number;
+  conversions: number;
+  revenue: number;
+  builderToSignupRate: number;
+  signupToConversionRate: number;
+  overallConversionRate: number;
+}
+
+/**
+ * `byBuiltPrize` rolled up to the TOOLBOX only (summed across every toolset variant),
+ * derived client-side — see F-006. Rates are recomputed from the summed totals, never
+ * averaged from the per-combination rates.
+ */
+interface ToolboxRollupMetrics {
+  toolboxId: string;
+  builders: number;
+  signups: number;
+  conversions: number;
+  revenue: number;
+  builderToSignupRate: number;
   signupToConversionRate: number;
   overallConversionRate: number;
 }
@@ -68,8 +106,55 @@ interface PromoAnalyticsResponse {
     totalRevenue: number;
     byPage: PromoPageMetrics[];
     byUTMSource?: UTMSourceMetrics[];
+    byBuiltPrize?: BuiltPrizeMetrics[];
     dateRange: { start: string; end: string };
   };
+}
+
+/**
+ * The page's OWN default combination — what a visitor sees if they never touch a reel.
+ * Toolset landing slugs (ryobi/milwaukee/dewalt/makita/hikoki) resolve via
+ * getDefaultPrizeForToolsetSlug; evergreen pages' `slug` already IS the prize slug.
+ */
+function getPageDefaultPrizeSlug(slug: string): string {
+  return isToolsetLandingSlug(slug) ? getDefaultPrizeForToolsetSlug(slug) : slug;
+}
+
+/**
+ * "Switched away" = recorded builds whose combination differs from the page's own default.
+ *
+ * **The denominator must come from `buildDistribution`, NOT from `row.builds`.** They count
+ * different things, and mixing them produced a literal 250% on the dashboard:
+ *
+ *   `row.builds`        — unique VISITORS who built anything, deduped across the whole page
+ *   `buildDistribution` — unique visitors PER COMBINATION
+ *
+ * A visitor gets one visit row per page load, and each row keeps its own final build. So one
+ * person who lands four times and settles on a different combination each time contributes
+ * 1 to `builds` but 4 to the distribution. Summing distribution entries for the numerator while
+ * dividing by `builds` therefore lets the ratio exceed 100%.
+ *
+ * Found on staging with real traffic — every test missed it because they all used one row per
+ * visitor, which is the one shape that cannot reproduce it.
+ *
+ * Dividing the distribution by its own total keeps both sides in the same unit, so this reads
+ * "of the builds recorded on this page, what share were not the default". Returns null when
+ * nothing was built, so the caller renders an em dash rather than a misleading "0%".
+ */
+function getSwitchAwayRate(row: PromoPageMetrics): {
+  defaultSlug: string;
+  switchAwayCount: number;
+  switchAwayTotal: number;
+  switchAwayPct: number | null;
+} {
+  const defaultSlug = getPageDefaultPrizeSlug(row.slug);
+  const distribution = row.buildDistribution ?? [];
+  const switchAwayTotal = distribution.reduce((sum, d) => sum + d.visitors, 0);
+  const switchAwayCount = distribution
+    .filter((d) => d.builtPrizeSlug !== defaultSlug)
+    .reduce((sum, d) => sum + d.visitors, 0);
+  const switchAwayPct = switchAwayTotal > 0 ? (switchAwayCount / switchAwayTotal) * 100 : null;
+  return { defaultSlug, switchAwayCount, switchAwayTotal, switchAwayPct };
 }
 
 async function fetchPromoAnalytics(params: {
@@ -276,6 +361,45 @@ export default function PromoAnalyticsManagement() {
     });
     return arr;
   }, [data?.byPage, sortColumn, sortOrder]);
+
+  /**
+   * `byBuiltPrize` rolled up to the toolbox only — F-006. `builtPrizeSlug` is
+   * `{toolset}-{toolbox}`; `fromPrizeSlug` splits it by matching both segments against the
+   * `TOOLSETS`/`TOOLBOXES` registries (not a positional split), so it stays correct even if a
+   * future brand id ever gained a hyphen. It also returns `null` for `cash-prize` (no toolbox
+   * lane) and any unrecognised slug, so both are excluded from this rollup rather than landing
+   * in a bogus bucket.
+   */
+  const toolboxRollup = React.useMemo((): ToolboxRollupMetrics[] => {
+    const rows = data?.byBuiltPrize ?? [];
+    const sums = new Map<string, { builders: number; signups: number; conversions: number; revenue: number }>();
+    for (const row of rows) {
+      const parsed = fromPrizeSlug(row.builtPrizeSlug);
+      if (!parsed) continue; // cash-prize or unrecognised slug — no toolbox lane
+      const acc = sums.get(parsed.toolbox) ?? { builders: 0, signups: 0, conversions: 0, revenue: 0 };
+      acc.builders += row.builders;
+      acc.signups += row.signups;
+      acc.conversions += row.conversions;
+      acc.revenue += row.revenue;
+      sums.set(parsed.toolbox, acc);
+    }
+    const result: ToolboxRollupMetrics[] = Array.from(sums.entries()).map(([toolboxId, s]) => ({
+      toolboxId,
+      ...s,
+      // Recomputed from the SUMMED totals — averaging the per-combination rates would
+      // weight a 1-builder combo the same as a 100-builder one.
+      builderToSignupRate: s.builders > 0 ? (s.signups / s.builders) * 100 : 0,
+      signupToConversionRate: s.signups > 0 ? (s.conversions / s.signups) * 100 : 0,
+      overallConversionRate: s.builders > 0 ? (s.conversions / s.builders) * 100 : 0,
+    }));
+    result.sort((a, b) => {
+      if (b.builders !== a.builders) return b.builders - a.builders;
+      const aName = getToolbox(a.toolboxId)?.brandName ?? a.toolboxId;
+      const bName = getToolbox(b.toolboxId)?.brandName ?? b.toolboxId;
+      return aName.localeCompare(bName);
+    });
+    return result;
+  }, [data?.byBuiltPrize]);
 
   const handleSort = (col: keyof PromoPageMetrics) => {
     if (sortColumn === col) {
@@ -555,6 +679,15 @@ export default function PromoAnalyticsManagement() {
                       Cross-visits {getSortIcon("crossVisits")}
                     </button>
                   </th>
+                  <th className="text-right p-3 font-semibold text-gray-800 dark:text-neutral-100">
+                    <button
+                      onClick={() => handleSort("builds")}
+                      className="flex items-center justify-end gap-1 w-full hover:text-red-600 dark:hover:text-red-400"
+                      title="Visitors who assembled a prize in Build your prize"
+                    >
+                      Builds {getSortIcon("builds")}
+                    </button>
+                  </th>
                   <th
                     className="text-right p-3 font-semibold text-gray-800 dark:text-neutral-100"
                     title="New user accounts with this promo attribution"
@@ -591,10 +724,18 @@ export default function PromoAnalyticsManagement() {
                   <th className="hidden md:table-cell text-right p-3 font-semibold text-gray-800 dark:text-neutral-100">
                     Conv %
                   </th>
+                  <th
+                    className="hidden md:table-cell text-right p-3 font-semibold text-gray-800 dark:text-neutral-100"
+                    title="Of the builds recorded on this page, the share that were a different combination than the page's own default. Counted per recorded build, not per visitor — one person landing several times contributes one build each time."
+                  >
+                    Switched away % of builds
+                  </th>
                 </tr>
               </thead>
               <tbody>
-                {sortedPages.map((row) => (
+                {sortedPages.map((row) => {
+                  const { defaultSlug, switchAwayCount, switchAwayTotal, switchAwayPct } = getSwitchAwayRate(row);
+                  return (
                   <tr
                     key={`${row.pageType}-${row.slug}`}
                     className="border-t border-gray-100 dark:border-neutral-800 hover:bg-gray-50 dark:hover:bg-neutral-800/60 cursor-pointer transition-colors"
@@ -632,6 +773,21 @@ export default function PromoAnalyticsManagement() {
                     >
                       {formatNumber(row.crossVisits ?? 0)}
                     </td>
+                    <td
+                      className="p-3 text-right font-mono text-gray-900 dark:text-white tabular-nums"
+                      title={
+                        row.topBuiltPrize
+                          ? `Most built here: ${getPrizeLabel(row.topBuiltPrize) ?? row.topBuiltPrize}`
+                          : "Nobody built a prize on this page in this period"
+                      }
+                    >
+                      {formatNumber(row.builds ?? 0)}
+                      {row.topBuiltPrize && (
+                        <span className="block truncate text-[10px] font-sans text-gray-500 dark:text-neutral-400 max-w-[110px] ml-auto">
+                          Top: {getPrizeLabel(row.topBuiltPrize) ?? row.topBuiltPrize}
+                        </span>
+                      )}
+                    </td>
                     <td className="p-3 text-right font-mono text-gray-900 dark:text-white tabular-nums">
                       {formatNumber(row.signups)}
                     </td>
@@ -644,11 +800,194 @@ export default function PromoAnalyticsManagement() {
                     <td className="hidden md:table-cell p-3 text-right text-gray-600 dark:text-neutral-400">{formatPercentage(row.visitToSignupRate)}</td>
                     <td className="hidden md:table-cell p-3 text-right text-gray-600 dark:text-neutral-400">{formatPercentage(row.signupToConversionRate)}</td>
                     <td className="hidden md:table-cell p-3 text-right text-gray-600 dark:text-neutral-400">{formatPercentage(row.overallConversionRate)}</td>
+                    <td
+                      className="hidden md:table-cell p-3 text-right text-gray-600 dark:text-neutral-400"
+                      title={
+                        switchAwayTotal > 0
+                          ? `${formatNumber(switchAwayCount)} of ${formatNumber(switchAwayTotal)} recorded builds were a different combination than this page's default (${getPrizeLabel(defaultSlug) ?? defaultSlug})`
+                          : "Nobody built a prize on this page in this period"
+                      }
+                    >
+                      {switchAwayPct === null ? "—" : formatPercentage(switchAwayPct)}
+                    </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           )}
+        </div>
+      </div>
+
+      {/* By Built Prize breakdown */}
+      <div className="bg-white dark:bg-neutral-900 rounded-lg sm:rounded-xl shadow-sm dark:shadow-none border border-gray-200 dark:border-neutral-700 overflow-hidden">
+        <h3 className="text-lg font-semibold text-gray-900 dark:text-white p-4 border-b border-gray-200 dark:border-neutral-700 flex items-center gap-2">
+          <Layers className="w-5 h-5 text-indigo-500 dark:text-indigo-400" />
+          By Built Prize
+        </h3>
+        <p className="text-sm text-gray-500 dark:text-neutral-400 px-4 pt-2 pb-1">
+          Builders, registrations, conversions and revenue grouped by the exact combination
+          assembled in Build your prize, across every landing page — do Kincrome-box builders
+          convert better than Milwaukee-box builders?
+        </p>
+        <div className="overflow-x-auto">
+          {isLoading ? (
+            <div className="p-8 text-center text-gray-500 dark:text-neutral-400">Loading…</div>
+          ) : (() => {
+            const rows = data?.byBuiltPrize ?? [];
+            if (rows.length === 0) {
+              return (
+                <div className="p-8 text-center text-gray-500 dark:text-neutral-400">
+                  No builds recorded for this period.
+                </div>
+              );
+            }
+            return (
+              <table className="w-full text-sm">
+                <thead className="bg-gray-50 dark:bg-neutral-800 border-b border-gray-200 dark:border-neutral-700">
+                  <tr>
+                    <th className="text-left p-3 font-semibold text-gray-800 dark:text-neutral-100">Built prize</th>
+                    <th
+                      className="text-right p-3 font-semibold text-gray-800 dark:text-neutral-100"
+                      title="Unique visitors who assembled this combination, on any landing page"
+                    >
+                      Builders
+                    </th>
+                    <th
+                      className="text-right p-3 font-semibold text-gray-800 dark:text-neutral-100"
+                      title="New accounts whose signup carried this built combination"
+                    >
+                      Registrations
+                    </th>
+                    <th className="text-right p-3 font-semibold text-gray-800 dark:text-neutral-100">Conversions</th>
+                    <th className="text-right p-3 font-semibold text-gray-800 dark:text-neutral-100">Revenue</th>
+                    <th className="hidden md:table-cell text-right p-3 font-semibold text-gray-800 dark:text-neutral-100">
+                      B→S %
+                    </th>
+                    <th className="hidden md:table-cell text-right p-3 font-semibold text-gray-800 dark:text-neutral-100">
+                      S→C %
+                    </th>
+                    <th className="hidden md:table-cell text-right p-3 font-semibold text-gray-800 dark:text-neutral-100">
+                      Conv %
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map((row) => (
+                    <tr
+                      key={row.builtPrizeSlug}
+                      className="border-t border-gray-100 dark:border-neutral-800 hover:bg-gray-50 dark:hover:bg-neutral-800/60 transition-colors"
+                    >
+                      <td className="p-3 font-medium text-gray-900 dark:text-white">
+                        {getPrizeLabel(row.builtPrizeSlug) ?? row.builtPrizeSlug}
+                      </td>
+                      <td className="p-3 text-right font-mono text-gray-900 dark:text-white tabular-nums">
+                        {formatNumber(row.builders)}
+                      </td>
+                      <td className="p-3 text-right font-mono text-gray-900 dark:text-white tabular-nums">
+                        {formatNumber(row.signups)}
+                      </td>
+                      <td className="p-3 text-right font-mono text-gray-900 dark:text-white tabular-nums">
+                        {formatNumber(row.conversions)}
+                      </td>
+                      <td className="p-3 text-right font-mono text-gray-900 dark:text-white tabular-nums">
+                        {formatCurrency(row.revenue)}
+                      </td>
+                      <td className="hidden md:table-cell p-3 text-right text-gray-600 dark:text-neutral-400">{formatPercentage(row.builderToSignupRate)}</td>
+                      <td className="hidden md:table-cell p-3 text-right text-gray-600 dark:text-neutral-400">{formatPercentage(row.signupToConversionRate)}</td>
+                      <td className="hidden md:table-cell p-3 text-right text-gray-600 dark:text-neutral-400">{formatPercentage(row.overallConversionRate)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            );
+          })()}
+        </div>
+      </div>
+
+      {/* By Toolbox rollup — F-006: answers "Kincrome-box vs Milwaukee-box" without hand-summing */}
+      <div className="bg-white dark:bg-neutral-900 rounded-lg sm:rounded-xl shadow-sm dark:shadow-none border border-gray-200 dark:border-neutral-700 overflow-hidden">
+        <h3 className="text-lg font-semibold text-gray-900 dark:text-white p-4 border-b border-gray-200 dark:border-neutral-700 flex items-center gap-2">
+          <Package className="w-5 h-5 text-indigo-500 dark:text-indigo-400" />
+          By Toolbox
+        </h3>
+        <p className="text-sm text-gray-500 dark:text-neutral-400 px-4 pt-2 pb-1">
+          The table above rolled up to the toolbox only, summed across every toolset variant —
+          do Kincrome-box builders convert better than Milwaukee-box builders? Cash builds have
+          no toolbox and are excluded.
+        </p>
+        <div className="overflow-x-auto">
+          {isLoading ? (
+            <div className="p-8 text-center text-gray-500 dark:text-neutral-400">Loading…</div>
+          ) : (() => {
+            const rows = toolboxRollup;
+            if (rows.length === 0) {
+              return (
+                <div className="p-8 text-center text-gray-500 dark:text-neutral-400">
+                  No builds recorded for this period.
+                </div>
+              );
+            }
+            return (
+              <table className="w-full text-sm">
+                <thead className="bg-gray-50 dark:bg-neutral-800 border-b border-gray-200 dark:border-neutral-700">
+                  <tr>
+                    <th className="text-left p-3 font-semibold text-gray-800 dark:text-neutral-100">Toolbox</th>
+                    <th
+                      className="text-right p-3 font-semibold text-gray-800 dark:text-neutral-100"
+                      title="Unique visitors who assembled any toolset with this toolbox, summed across combinations"
+                    >
+                      Builders
+                    </th>
+                    <th
+                      className="text-right p-3 font-semibold text-gray-800 dark:text-neutral-100"
+                      title="New accounts whose signup carried a build with this toolbox"
+                    >
+                      Registrations
+                    </th>
+                    <th className="text-right p-3 font-semibold text-gray-800 dark:text-neutral-100">Conversions</th>
+                    <th className="text-right p-3 font-semibold text-gray-800 dark:text-neutral-100">Revenue</th>
+                    <th className="hidden md:table-cell text-right p-3 font-semibold text-gray-800 dark:text-neutral-100">
+                      B→S %
+                    </th>
+                    <th className="hidden md:table-cell text-right p-3 font-semibold text-gray-800 dark:text-neutral-100">
+                      S→C %
+                    </th>
+                    <th className="hidden md:table-cell text-right p-3 font-semibold text-gray-800 dark:text-neutral-100">
+                      Conv %
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map((row) => (
+                    <tr
+                      key={row.toolboxId}
+                      className="border-t border-gray-100 dark:border-neutral-800 hover:bg-gray-50 dark:hover:bg-neutral-800/60 transition-colors"
+                    >
+                      <td className="p-3 font-medium text-gray-900 dark:text-white">
+                        {getToolbox(row.toolboxId)?.brandName ?? row.toolboxId}
+                      </td>
+                      <td className="p-3 text-right font-mono text-gray-900 dark:text-white tabular-nums">
+                        {formatNumber(row.builders)}
+                      </td>
+                      <td className="p-3 text-right font-mono text-gray-900 dark:text-white tabular-nums">
+                        {formatNumber(row.signups)}
+                      </td>
+                      <td className="p-3 text-right font-mono text-gray-900 dark:text-white tabular-nums">
+                        {formatNumber(row.conversions)}
+                      </td>
+                      <td className="p-3 text-right font-mono text-gray-900 dark:text-white tabular-nums">
+                        {formatCurrency(row.revenue)}
+                      </td>
+                      <td className="hidden md:table-cell p-3 text-right text-gray-600 dark:text-neutral-400">{formatPercentage(row.builderToSignupRate)}</td>
+                      <td className="hidden md:table-cell p-3 text-right text-gray-600 dark:text-neutral-400">{formatPercentage(row.signupToConversionRate)}</td>
+                      <td className="hidden md:table-cell p-3 text-right text-gray-600 dark:text-neutral-400">{formatPercentage(row.overallConversionRate)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            );
+          })()}
         </div>
       </div>
 

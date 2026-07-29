@@ -106,6 +106,15 @@ export const queryKeys = {
     active: ["giveaways", "active"] as const,
   },
 
+  // Partner-discount queries.
+  // NOTE (panel F-019): the queue key is deliberately session-scoped, NOT keyed by
+  // userId — the endpoint reads the caller's own session. It lives here because a
+  // hand-copied literal in usePurchaseInvalidation once drifted from the registered
+  // key, so purchases silently never refreshed the queue. Import; never re-type it.
+  partnerDiscounts: {
+    queue: ["partnerDiscountQueue"] as const,
+  },
+
   // Rewards queries
   rewards: {
     user: (userId: string) => ["rewards", userId] as const,

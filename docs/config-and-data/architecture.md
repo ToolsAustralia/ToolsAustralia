@@ -22,7 +22,7 @@
 
 > **Feature toggles (2026-07-03):** `featureFlags.ts` gained **`partnerDiscountSsoEnabled()`** — env-driven
 > (`PARTNER_DISCOUNT_SSO_ENABLED`, **default OFF** until partner-portal SSO ships) — gating the
-> dashboard-hero "Reward portal" button + the Rewards-page "Open partner portal" button (which shows a
+> dashboard-hero "Partner portal" button + the Rewards-page "Open partner portal" button (which shows a
 > muted "Coming soon" in its place). `DASHBOARD_FEATURES` gained **`loyaltyStreak: false`** (the home
 > `LoyaltyStreak` card is hidden until the 6-month milestone-reward figures are confirmed and it's
 > re-flagged in a later session — same convention as the other coming-soon switches).

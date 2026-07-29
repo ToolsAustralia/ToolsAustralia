@@ -18,10 +18,13 @@ import path from "node:path";
 
 import { PRIZE_SUMMARIES, type PrizeMedia } from "@/config/prize-summaries";
 import {
-  TOOLSET_LANDING_SLUGS,
-  getDefaultPrizeForToolsetSlug,
-} from "@/config/promo-landing-slugs";
-import { TOOLBOX_QUERY_PARAM, buildToolsetLandingHref, parseToolboxQueryParam } from "../utils";
+  TOOLBOX_QUERY_PARAM,
+  TOOLSET_QUERY_PARAM,
+  buildPrizeSelectionHref,
+  parseToolboxQueryParam,
+  parseToolsetQueryParam,
+  resolveBuiltPrizeSlug,
+} from "../utils";
 import {
   CASH_OPTION,
   TOOLBOXES,
@@ -42,6 +45,7 @@ import {
   getComboPresentation,
   getContentsChips,
   getReelCardGeometry,
+  isComboArtPending,
   offsetFromFocus,
   resolveAccent,
   stepReel,
@@ -202,26 +206,38 @@ run("every combination resolves to a render that exists on disk", () => {
 });
 
 run("combo-art fallback is per COMBINATION, not per toolbox", () => {
-  // The GearWrench shoot delivered four of five: Milwaukee, DeWalt, Makita and HiKOKI have
-  // composites; Ryobi does not — the same combination missing from the rest of the draw 9
-  // drop. A toolbox-level flag (which this briefly was) would wrongly send the four that DO
-  // have art back to the standalone render.
+  // The GearWrench shoot originally delivered four of five — Ryobi was the one pairing draw 9
+  // missed, and this test pinned that gap. That art landed 2026-07-28 (`21671a66`), which
+  // emptied `COMBOS_AWAITING_COMBO_ART`, so the ryobi special case below became false and this
+  // assertion went red ON MAIN — the art commit did not update it. Corrected here 2026-07-29
+  // while merging main: the expectation now follows the shipped assets rather than the gap.
+  //
+  // The property under test is unchanged and still worth guarding: the fallback is keyed per
+  // COMBINATION (`{toolset}-{toolbox}`), not per toolbox. A toolbox-level flag — which this
+  // briefly was — would send every GearWrench pairing back to the standalone render the moment
+  // ONE of them was missing art. That is asserted directly against `isComboArtPending` below,
+  // so it keeps holding even now that no real combination is awaiting art.
   const gw = getToolbox("gearwrench")!;
 
   for (const set of TOOLSETS) {
     const combo = getComboPresentation(gw, set, false);
-    if (set.id === "ryobi") {
-      assert.equal(combo.image, gw.image, "ryobi × gearwrench has no composite — must show the standalone box");
-      assert.match(combo.imageAlt, /coming soon/i, "alt must not claim to show a combination it isn't showing");
-    } else {
-      assert.equal(
-        combo.image,
-        `/images/majordraws/${set.id}-set/${set.id}-gearwrench.webp`,
-        `${set.id} × gearwrench has a composite and must use it`
-      );
-      assert.doesNotMatch(combo.imageAlt, /coming soon/i, `${set.id} × gearwrench art exists — alt must not say coming soon`);
-    }
+    assert.equal(
+      combo.image,
+      `/images/majordraws/${set.id}-set/${set.id}-gearwrench.webp`,
+      `${set.id} × gearwrench has a composite and must use it`
+    );
+    assert.doesNotMatch(combo.imageAlt, /coming soon/i, `${set.id} × gearwrench art exists — alt must not say coming soon`);
+    assert.equal(
+      isComboArtPending(gw, set),
+      false,
+      `${set.id} × gearwrench art has shipped — nothing may still be flagged pending`
+    );
   }
+
+  // The seam itself: pending-ness is per combination. Every toolset paired with GearWrench
+  // resolves independently, so no single missing shoot can drag its siblings to the fallback.
+  const pendingKeys = TOOLSETS.filter((set) => isComboArtPending(gw, set)).map((set) => set.id);
+  assert.deepEqual(pendingKeys, [], "COMBOS_AWAITING_COMBO_ART is empty — no pairing is awaiting art");
 
   // A different toolbox is unaffected either way.
   const kincrome = getToolbox("kincrome")!;
@@ -276,55 +292,165 @@ run("darken produces a valid, strictly darker rgb()", () => {
 });
 
 /* -------------------------------------------------------------------------- */
-console.log("\nToolset landing pages — ?toolbox= round-trip");
+console.log("\nPrize build — ?toolset= / ?toolbox= round-trip");
 /* -------------------------------------------------------------------------- */
 
-run("picking a toolbox writes ?toolbox= and picking it back reads the same value", () => {
-  const path = "/promotions/milwaukee";
-  for (const brand of TOOLBOXES.map((b) => b.id)) {
-    const href = buildToolsetLandingHref(path, new URLSearchParams(), brand);
-    if (brand === "milwaukee") {
-      // Every toolset landing page DEFAULTS to the Milwaukee toolbox (asserted below), so
-      // omitting the param for it keeps a clean canonical URL that still reloads correctly.
-      assert.equal(href, path, "the default toolbox should not need a query param");
-      assert.equal(parseToolboxQueryParam(null), null);
-    } else {
-      assert.equal(href, `${path}?${TOOLBOX_QUERY_PARAM}=${brand}`, `${brand} must persist in the URL`);
-      const value = new URLSearchParams(href.split("?")[1]).get(TOOLBOX_QUERY_PARAM);
-      assert.equal(parseToolboxQueryParam(value), brand, `${brand} must hydrate back out of the URL`);
+run("both lanes are always written explicitly, including the page default", () => {
+  // Decision 5 of the spec: presence of params IS the engagement signal, so once the
+  // visitor touches a reel we write BOTH lanes even when a value equals the default.
+  // Omitting the default (the old behaviour) made "tried Milwaukee, switched back" look
+  // identical to "never touched the reels".
+  const href = buildPrizeSelectionHref("/promotions/makita", new URLSearchParams(), {
+    toolbox: "milwaukee",
+    toolset: "makita",
+    isCash: false,
+  });
+  const params = new URLSearchParams(href.split("?")[1]);
+  assert.equal(params.get(TOOLBOX_QUERY_PARAM), "milwaukee", "the default toolbox must still be written");
+  assert.equal(params.get(TOOLSET_QUERY_PARAM), "makita", "the toolset lane must be written");
+});
+
+run("every lane value round-trips through its parser", () => {
+  for (const toolbox of TOOLBOXES.map((b) => b.id)) {
+    for (const toolset of TOOLSETS.map((s) => s.id)) {
+      const href = buildPrizeSelectionHref("/promotions/makita", new URLSearchParams(), {
+        toolbox,
+        toolset,
+        isCash: false,
+      });
+      const params = new URLSearchParams(href.split("?")[1]);
+      assert.equal(parseToolboxQueryParam(params.get(TOOLBOX_QUERY_PARAM)), toolbox);
+      assert.equal(parseToolsetQueryParam(params.get(TOOLSET_QUERY_PARAM)), toolset);
     }
   }
 });
 
-run("the omitted-param default really IS every landing page's opening toolbox", () => {
-  // `buildToolsetLandingHref` drops `?toolbox=milwaukee`. That is only safe while every
-  // toolset landing page opens on the Milwaukee toolbox — otherwise a visitor who picked
-  // Milwaukee would reload onto a different one.
-  for (const slug of TOOLSET_LANDING_SLUGS) {
-    const openingPrize = getDefaultPrizeForToolsetSlug(slug);
-    assert.equal(
-      fromPrizeSlug(openingPrize)?.toolbox,
-      "milwaukee",
-      `/promotions/${slug} opens on ${openingPrize} — the dropped default param would desync a reload`
-    );
-  }
-});
-
 run("the cash opt-out round-trips, and other query params survive", () => {
-  const href = buildToolsetLandingHref("/promotions/makita", new URLSearchParams("aff=ABC"), "cash");
+  const href = buildPrizeSelectionHref("/promotions/makita", new URLSearchParams("aff=ABC"), {
+    toolbox: "kincrome",
+    toolset: "makita",
+    isCash: true,
+  });
   const params = new URLSearchParams(href.split("?")[1]);
   assert.equal(parseToolboxQueryParam(params.get(TOOLBOX_QUERY_PARAM)), "cash");
-  assert.equal(params.get("aff"), "ABC", "an affiliate code must never be dropped by a toolbox change");
+  assert.equal(params.get("aff"), "ABC", "an affiliate code must never be dropped by a build change");
+});
 
-  // Switching replaces the existing value rather than appending a second one.
-  const swapped = buildToolsetLandingHref(
+run("switching replaces a value rather than appending a second one", () => {
+  const href = buildPrizeSelectionHref(
     "/promotions/makita",
-    new URLSearchParams("toolbox=sidchrome&aff=ABC"),
-    "kincrome"
+    new URLSearchParams("toolbox=sidchrome&toolset=ryobi&aff=ABC"),
+    { toolbox: "kincrome", toolset: "dewalt", isCash: false }
   );
-  assert.equal(swapped.match(/toolbox=/g)?.length, 1, "no duplicate toolbox param");
-  assert.ok(swapped.includes("toolbox=kincrome"));
-  assert.ok(swapped.includes("aff=ABC"));
+  const params = new URLSearchParams(href.split("?")[1]);
+  assert.deepEqual(params.getAll(TOOLBOX_QUERY_PARAM), ["kincrome"]);
+  assert.deepEqual(params.getAll(TOOLSET_QUERY_PARAM), ["dewalt"]);
+  assert.equal(params.get("aff"), "ABC");
+});
+
+run("garbage lane values are rejected, not passed through", () => {
+  assert.equal(parseToolsetQueryParam("garbage"), null);
+  assert.equal(parseToolsetQueryParam(""), null);
+  assert.equal(parseToolsetQueryParam(null), null);
+  assert.equal(parseToolboxQueryParam("garbage"), null);
+});
+
+run("parsers accept every registry id — a new brand must not need a second edit", () => {
+  // The old hand-written VALID_TOOLBOX_QUERY_VALUES set would silently reject a 4th
+  // toolbox until someone remembered to edit it. Both parsers now derive from the registries.
+  for (const b of TOOLBOXES) assert.equal(parseToolboxQueryParam(b.id), b.id);
+  for (const s of TOOLSETS) assert.equal(parseToolsetQueryParam(s.id), s.id);
+  assert.equal(parseToolboxQueryParam("cash"), "cash", "cash is the opt-out, not a registry brand");
+});
+
+/* -------------------------------------------------------------------------- */
+console.log("\nBuilt prize slug resolution (shared by the card and the signup modal)");
+/* -------------------------------------------------------------------------- */
+
+run("no params means untouched — the page's own prize is the built prize", () => {
+  assert.equal(
+    resolveBuiltPrizeSlug(new URLSearchParams(), "makita-milwaukee"),
+    "makita-milwaukee"
+  );
+});
+
+run("params compose into the built prize slug", () => {
+  assert.equal(
+    resolveBuiltPrizeSlug(new URLSearchParams("toolset=ryobi&toolbox=kincrome"), "makita-milwaukee"),
+    "ryobi-kincrome"
+  );
+});
+
+run("one lane present falls back to the page's own value for the other", () => {
+  assert.equal(
+    resolveBuiltPrizeSlug(new URLSearchParams("toolset=ryobi"), "makita-milwaukee"),
+    "ryobi-milwaukee"
+  );
+  assert.equal(
+    resolveBuiltPrizeSlug(new URLSearchParams("toolbox=kincrome"), "makita-milwaukee"),
+    "makita-kincrome"
+  );
+});
+
+run("cash wins over both lanes", () => {
+  assert.equal(
+    resolveBuiltPrizeSlug(new URLSearchParams("toolset=ryobi&toolbox=cash"), "makita-milwaukee"),
+    CASH_OPTION.slug
+  );
+});
+
+run("a bare toolset LANDING fallback resolves to that page's default PRIZE, not the landing slug itself", () => {
+  // `/promotions/makita` names itself with the bare toolset slug ("makita"), which is not a
+  // prize — it has no toolbox lane. An untouched page must record the page's actual default
+  // BUILD ("makita-milwaukee"), not the landing slug — "makita" is already recorded separately
+  // as `promotionSlug`; recording it again here would make the field polymorphic (sometimes a
+  // real prize, sometimes a landing page) and defeat the point of the field. Regression guard
+  // for a bug shipped 2026-07-28: this assertion previously read `=== "makita"`.
+  assert.equal(resolveBuiltPrizeSlug(new URLSearchParams(), "makita"), "makita-milwaukee");
+});
+
+run("a fallback that is already a real prize slug (not a landing slug) passes through unchanged", () => {
+  assert.equal(
+    resolveBuiltPrizeSlug(new URLSearchParams(), "milwaukee-kincrome"),
+    "milwaukee-kincrome"
+  );
+});
+
+run("both lanes present with a LANDING-slug fallback compose from the params, ignoring the fallback entirely", () => {
+  assert.equal(
+    resolveBuiltPrizeSlug(new URLSearchParams("toolset=ryobi&toolbox=kincrome"), "makita"),
+    "ryobi-kincrome"
+  );
+});
+
+run("one lane only, with a LANDING-slug fallback — the missing lane comes from the RESOLVED default, not the bare landing slug", () => {
+  // The subtle case: "makita" has no toolbox lane of its own to fall back on. The missing
+  // toolbox lane must be filled from makita's RESOLVED default prize (makita-milwaukee's
+  // "milwaukee"), not left unresolved.
+  assert.equal(
+    resolveBuiltPrizeSlug(new URLSearchParams("toolset=ryobi"), "makita"),
+    "ryobi-milwaukee"
+  );
+});
+
+run("cash opt-out with a LANDING-slug fallback still short-circuits to cash", () => {
+  assert.equal(
+    resolveBuiltPrizeSlug(new URLSearchParams("toolbox=cash"), "makita"),
+    CASH_OPTION.slug
+  );
+});
+
+run("every resolvable build is a real catalog prize", () => {
+  const catalogSlugs = new Set<string>(PRIZE_SUMMARIES.map((p) => p.slug));
+  for (const toolbox of TOOLBOXES.map((b) => b.id)) {
+    for (const toolset of TOOLSETS.map((s) => s.id)) {
+      const slug = resolveBuiltPrizeSlug(
+        new URLSearchParams(`toolset=${toolset}&toolbox=${toolbox}`),
+        "makita-milwaukee"
+      );
+      assert.ok(catalogSlugs.has(slug), `${slug} must exist in the catalog`);
+    }
+  }
 });
 
 run("garbage query values fall back to the default rather than throwing", () => {

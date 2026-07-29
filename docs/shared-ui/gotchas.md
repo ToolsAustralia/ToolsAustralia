@@ -119,6 +119,12 @@ hook like [`useMembershipModalDeepLink`](../../src/hooks/useMembershipModalDeepL
   `npm run build && grep -c "Build your prize" .next/server/app/promotions/milwaukee.html`.
   Dev mode renders these routes dynamically and hides the whole class of bug.
 
+**See also:** `PrizeShowcase`'s `?toolset=`/`?toolbox=` URL sync (added 2026-07-27, after this
+fix) reads and writes via `window.location.search` / `window.history.replaceState` for the same
+reason — never `useSearchParams()`, and separately never `router.replace` (it resets scroll on
+this page). See [promo/gotchas.md](../promo/gotchas.md) "`router.replace` resets scroll on the
+prize builder".
+
 ## `getBaseUrl()` must strip a trailing slash — `NEXT_PUBLIC_APP_URL` may end in `/` (fixed 2026-07-23)
 
 [`getBaseUrl()`](../../src/utils/url/get-base-url.ts) returned `process.env.NEXT_PUBLIC_APP_URL`
@@ -534,3 +540,41 @@ Cash-green ink pairs with this: small cash-coloured text must use `--pbc-cash-in
 (#0e7434 light / #3ddc84 dark — same contract and value as `--pgs-cash-ink`), never raw
 `--pbc-cash`/#18a94d (3.08:1 on light surfaces). White-on-green pills use `--pbc-cash-dark`
 as the fill. Full node-by-node table: docs/e2e/a11y-baseline.md "redesigned prize-showcase".
+
+## A reserved skeleton must be a FLOOR, not a guess (2026-07-29, panel F-022)
+
+`MembershipPortalReturnBanner` reserved a fixed skeleton height to avoid layout shift, but the
+settled banner has six variants and the reserved height sat *between* the tallest and the shortest.
+When the data landed the section sometimes **shrank**, pulling the whole page up. Measured with a
+Chrome `layout-shift` observer: **CLS 0.5774 guest @1280, 0.6134 member @1280** (Google's "good" bar
+is 0.10), against 0.0100 for the same page with the banner absent — the hero `<h1>` moved up 34.8px.
+
+**Rule:** when a placeholder reserves space for content of unknown size, put the reservation on the
+**shared container as a `min-h`**, so the settled state can only ever grow into space already
+reserved. Sizing the placeholder alone only avoids shift for the one variant it happens to match.
+Keep the `min-h` values and the skeleton's own heights in sync — they are the same measurement.
+
+## `inkOn()` picking white does not mean white is legible (2026-07-29, panel F-023)
+
+`inkOn()` returns white for any brand colour under its luminance threshold, which is a
+*black-or-white* decision, not a contrast guarantee. On the lighter membership tiers that produced
+**2.07:1** for the Rewards partner-portal button's label (AA needs 4.5:1) — pixel-sampled from the
+rendered button, not computed from source; no part of the gradient passed.
+
+**Rule:** where white ink sits on a tier/brand gradient, darken the **gradient** (`shade(c, -44)` →
+`shade(c, -60)`) rather than flipping to dark ink — the tier stays recognisable as its tier and the
+label becomes legible (Tradie 5.95:1, Boss 10.5:1). Also avoid discounting small sub-labels with
+`rgba(255,255,255,.78)`: at 10px that was 1.79:1. Sample the rendered pixels; do not trust the
+token's own contrast.
+
+## Reused-not-remounted components must reset per-page state (2026-07-29, panel F-026)
+
+`/promotions/{a}` → `/promotions/{b}` is a client transition **within the same `[slug]` segment**, so
+`PrizeShowcase` is reused and its `useState` initialisers never re-run. The effect keyed on
+`slugProp` already re-derived the selection and cleared the URL params, but left the engagement
+counters and the interaction flag — so page B's visit row was credited with page A's reel activity,
+and (because the beacon re-fires on the new slug) with a build nobody made there.
+
+**Rule:** when an effect re-derives state for a route-param change, reset **every** piece of
+per-page state in that same effect, not just the visible ones. Analytics counters are the easy ones
+to miss because nothing on screen looks wrong.

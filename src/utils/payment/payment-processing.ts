@@ -161,6 +161,7 @@ interface UserDocument {
     promotionSlug: string;
     visitedAt: Date;
     anonymousId?: string;
+    builtPrizeSlug?: string;
   };
   upsellPurchases?: Array<{
     offerId: string;
@@ -424,10 +425,16 @@ async function processPaymentBenefitsInternal(
           if (signupAttr.adId) attributionData.adId = signupAttr.adId;
           attributionData.attributionSource = "signup";
         }
-        // Promotion fields (promotionSlug, promotionPageType) come from signup only
+        // Promotion fields (promotionSlug, promotionPageType, builtPrizeSlug) come from signup only
         if (signupAttr?.promotionSlug) {
           attributionData.promotionPageType = signupAttr.promotionPageType;
           attributionData.promotionSlug = signupAttr.promotionSlug;
+          // The prize they had built when they signed up, so revenue follows the BUILD and not
+          // just the landing page. Guarded separately: pre-feature users have the promo fields
+          // but no build.
+          if (signupAttr.builtPrizeSlug) {
+            attributionData.builtPrizeSlug = signupAttr.builtPrizeSlug;
+          }
         }
 
         // Landing-URL packages focus (seed for future true-ROAS-per-focus).

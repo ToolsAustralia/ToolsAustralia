@@ -50,5 +50,21 @@ test.describe("one-time pack purchase @purchase", () => {
     const ref = await findBenefitsGrantedRef(userId, "one-time");
     expect(ref.kind).toBe("pi");
     expect(await benefitsGrantedCount(ref.kind, ref.id)).toBe(1);
+
+    // Partner-portal hand-off (panel F-030). /purchase-success gates the CTA on BOTH
+    // the server-confirmed grant (`status.processed`) and the dark-launch SSO flag, and
+    // neither operand had coverage: a false positive hands a buyer a portal button
+    // before access exists (403 on click), a false negative hides the hand-off from a
+    // paying buyer. Assert whichever side the env is configured for — asserting ABSENCE
+    // when the flag is dark is what pins today's production behaviour.
+    // NEVER click it: the SSO route POSTs the REAL iGoDirect production tenant and
+    // auto-creates a permanent MyRewards record (see docs/e2e/adding-a-spec.md).
+    await page.waitForURL(/\/purchase-success/, { timeout: 60_000 });
+    const portalCta = page.getByRole("button", { name: "Open partner portal" });
+    if (process.env.NEXT_PUBLIC_PARTNER_DISCOUNT_SSO_ENABLED === "true") {
+      await expect(portalCta).toBeVisible({ timeout: 60_000 });
+    } else {
+      await expect(portalCta).toHaveCount(0);
+    }
   });
 });

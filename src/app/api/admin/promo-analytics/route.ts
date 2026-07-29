@@ -50,9 +50,10 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const [summary, utmSummary] = await Promise.all([
+    const [summary, utmSummary, builtPrizeSummary] = await Promise.all([
       PromoAnalyticsService.getAggregatedMetrics(range.start, range.end),
       PromoAnalyticsService.getAggregatedByUTMSource(range.start, range.end),
+      PromoAnalyticsService.getAggregatedByBuiltPrize(range.start, range.end),
     ]);
 
     return NextResponse.json({
@@ -60,6 +61,7 @@ export async function GET(request: NextRequest) {
       data: {
         ...summary,
         byUTMSource: utmSummary.byUTMSource,
+        byBuiltPrize: builtPrizeSummary.byBuiltPrize,
         dateRange: { start: range.start.toISOString(), end: range.end.toISOString() },
       },
     });

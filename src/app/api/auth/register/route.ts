@@ -26,7 +26,11 @@ import { parseReferrer } from "@/utils/tracking/referrer-helpers";
 import { userDataForRegistration } from "@/utils/tracking/registration-user-data";
 import { trackAffiliateSignup } from "@/lib/affiliate";
 import { extractBrandFromSlug } from "@/utils/integrations/klaviyo/brand-extraction";
-import { isValidPromoSlug, getPageTypeFromSlug } from "@/utils/promo-analytics/validate-promo-slug";
+import {
+  buildSignupAttribution,
+  mergeSignupAttribution,
+  plainSignupAttribution,
+} from "@/services/attribution/signup-attribution";
 import { IUser } from "@/models/User";
 import { isPrivilegedAccount } from "@/utils/auth/privileged-account";
 import type { AttributionParams } from "@/types/tracking";
@@ -71,6 +75,7 @@ const registerSchema = z.object({
     }, "Please enter a valid Australian mobile number (e.g., 0412345678 or +61412345678)"),
   affiliateCode: z.string().optional(),
   promotionSlug: z.string().optional(), // Optional promotion slug for brand interest tracking
+  builtPrizeSlug: z.string().optional(), // Prize assembled in "Build your prize" at signup
   utm_source: z.string().optional(),
   utm_medium: z.string().optional(),
   utm_campaign: z.string().optional(),
@@ -202,61 +207,6 @@ function getAttributionFromRequest(
     return extractAttributionParams(referer);
   }
   return {};
-}
-
-/**
- * Build signup attribution. Persists whenever a valid promo slug OR any attribution
- * param is present — promotionSlug/promotionPageType are optional (homepage ad-landers
- * carry UTM but no promo slug, and we must not drop their attribution).
- */
-function buildSignupAttribution(
-  promotionSlug?: string,
-  attribution?: AttributionParams,
-  /**
-   * Paid platform resolved from the request's click-id cookies (`_fbc`/`ttclid`/
-   * `_sc_click`). Gives signup-source analytics the SAME click-verified basis that
-   * purchases already use — without it, a paid signup that landed without UTM tags is
-   * indistinguishable from organic. Only the platform is persisted, never the click id.
-   */
-  clickPlatform?: "meta" | "tiktok" | "snapchat" | "google"
-): {
-  promotionPageType?: "evergreen" | "toolset";
-  promotionSlug?: string;
-  visitedAt: Date;
-  utmSource?: string;
-  utmMedium?: string;
-  utmCampaign?: string;
-  utmContent?: string;
-  utmTerm?: string;
-  campaignId?: string;
-  adsetId?: string;
-  adId?: string;
-  clickPlatform?: "meta" | "tiktok" | "snapchat" | "google";
-} | undefined {
-  const hasPromo = !!promotionSlug && isValidPromoSlug(promotionSlug);
-  const hasAttribution = !!(
-    attribution &&
-    (attribution.utm_source || attribution.utm_medium || attribution.utm_campaign ||
-     attribution.campaign_id || attribution.adset_id || attribution.ad_id)
-  );
-  // A paid click with no promo slug and no UTMs is still real attribution — persist it.
-  if (!hasPromo && !hasAttribution && !clickPlatform) return undefined;
-  return {
-    ...(hasPromo && {
-      promotionPageType: getPageTypeFromSlug(promotionSlug!),
-      promotionSlug: promotionSlug!.toLowerCase().trim(),
-    }),
-    visitedAt: new Date(),
-    ...(attribution?.utm_source && { utmSource: attribution.utm_source }),
-    ...(attribution?.utm_medium && { utmMedium: attribution.utm_medium }),
-    ...(attribution?.utm_campaign && { utmCampaign: attribution.utm_campaign }),
-    ...(attribution?.utm_content && { utmContent: attribution.utm_content }),
-    ...(attribution?.utm_term && { utmTerm: attribution.utm_term }),
-    ...(attribution?.campaign_id && { campaignId: attribution.campaign_id }),
-    ...(attribution?.adset_id && { adsetId: attribution.adset_id }),
-    ...(attribution?.ad_id && { adId: attribution.ad_id }),
-    ...(clickPlatform && { clickPlatform }),
-  };
 }
 
 /**
@@ -526,8 +476,17 @@ export async function POST(request: NextRequest) {
           existingUser.email = validatedData.email.toLowerCase().trim();
           existingUser.mobile = cleanedMobile;
 
-          const signupAttr = buildSignupAttribution(validatedData.promotionSlug, attribution, signupClickPlatform);
-          if (signupAttr) existingUser.signupAttribution = signupAttr;
+          const signupAttr = buildSignupAttribution(
+            validatedData.promotionSlug,
+            attribution,
+            validatedData.builtPrizeSlug,
+            signupClickPlatform
+          );
+          if (signupAttr)
+            existingUser.signupAttribution = mergeSignupAttribution(
+              plainSignupAttribution(existingUser.signupAttribution),
+              signupAttr
+            );
 
           // Handle affiliate code update (only if provided and not already set)
           if (
@@ -666,8 +625,17 @@ export async function POST(request: NextRequest) {
       existingUser.email = validatedData.email.toLowerCase().trim();
       existingUser.mobile = cleanedMobile;
 
-      const signupAttrEmail = buildSignupAttribution(validatedData.promotionSlug, attribution, signupClickPlatform);
-      if (signupAttrEmail) existingUser.signupAttribution = signupAttrEmail;
+      const signupAttrEmail = buildSignupAttribution(
+        validatedData.promotionSlug,
+        attribution,
+        validatedData.builtPrizeSlug,
+        signupClickPlatform
+      );
+      if (signupAttrEmail)
+        existingUser.signupAttribution = mergeSignupAttribution(
+          plainSignupAttribution(existingUser.signupAttribution),
+          signupAttrEmail
+        );
 
       // Handle affiliate code update (only if provided and not already set)
       if (
@@ -759,8 +727,17 @@ export async function POST(request: NextRequest) {
       existingUser.email = validatedData.email.toLowerCase().trim();
       existingUser.mobile = cleanedMobile;
 
-      const signupAttrMobile = buildSignupAttribution(validatedData.promotionSlug, attribution, signupClickPlatform);
-      if (signupAttrMobile) existingUser.signupAttribution = signupAttrMobile;
+      const signupAttrMobile = buildSignupAttribution(
+        validatedData.promotionSlug,
+        attribution,
+        validatedData.builtPrizeSlug,
+        signupClickPlatform
+      );
+      if (signupAttrMobile)
+        existingUser.signupAttribution = mergeSignupAttribution(
+          plainSignupAttribution(existingUser.signupAttribution),
+          signupAttrMobile
+        );
 
       // Handle affiliate code update (only if provided and not already set)
       if (
@@ -842,7 +819,12 @@ export async function POST(request: NextRequest) {
     }
 
     // No existing accounts found - create new user account (passwordless)
-    const signupAttr = buildSignupAttribution(validatedData.promotionSlug, attribution, signupClickPlatform);
+    const signupAttr = buildSignupAttribution(
+      validatedData.promotionSlug,
+      attribution,
+      validatedData.builtPrizeSlug,
+      signupClickPlatform
+    );
     const newUser = new User({
       firstName: validatedData.firstName.trim(),
       lastName: validatedData.lastName.trim(),

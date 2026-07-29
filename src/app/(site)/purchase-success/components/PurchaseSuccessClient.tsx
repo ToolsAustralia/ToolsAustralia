@@ -6,6 +6,8 @@ import { PaymentSuccessHandler } from "@/components/payment/PaymentSuccessHandle
 import { CheckCircle } from "lucide-react";
 import { SectionContainer } from "@/components/ui";
 import { usePaymentStatus } from "@/hooks/queries";
+import { usePartnerDiscountSso } from "@/hooks/queries/usePartnerDiscountSso";
+import { partnerDiscountSsoEnabled } from "@/config/featureFlags";
 import { trackConversion } from "@/lib/tracking/dispatch-client";
 import { buildPurchaseEvent } from "@/lib/tracking/canonical-event";
 import { markPurchasePixelFired, shouldSuppressPurchasePixel } from "@/utils/tracking/purchase-pixel-fired-storage";
@@ -20,7 +22,12 @@ interface PurchaseSuccessClientProps {
 export default function PurchaseSuccessClient({ searchParams }: PurchaseSuccessClientProps) {
   const paymentIntentId = searchParams.payment_intent;
   const { data: status } = usePaymentStatus(paymentIntentId, { enabled: !!paymentIntentId });
+  const sso = usePartnerDiscountSso();
   const firedRef = useRef(false);
+
+  // Only offer the portal hand-off once the server confirms benefits were granted
+  // (processed === true) AND the SSO integration is switched on.
+  const showPartnerPortalCta = status?.processed === true && partnerDiscountSsoEnabled();
 
   const wasResubscribe = status?.data?.wasRecentResubscribe === true;
   const newAccum = status?.data?.lastMonthAccumulatedEntries ?? 0;
@@ -113,7 +120,20 @@ export default function PurchaseSuccessClient({ searchParams }: PurchaseSuccessC
                 <Link href="/" className="inline-flex items-center justify-center px-6 py-3 bg-gray-200 text-gray-900 font-medium rounded-lg hover:bg-gray-300 transition-colors">
                   Continue Shopping
                 </Link>
+                {showPartnerPortalCta && (
+                  <button
+                    type="button"
+                    onClick={() => sso.mutate()}
+                    disabled={sso.isPending}
+                    className="inline-flex items-center justify-center px-6 py-3 bg-gray-200 text-gray-900 font-medium rounded-lg hover:bg-gray-300 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                  >
+                    {sso.isPending ? "Opening…" : "Open partner portal"}
+                  </button>
+                )}
               </div>
+              {showPartnerPortalCta && sso.error?.message && (
+                <p className="text-sm text-red-600 text-center">{sso.error.message}</p>
+              )}
             </div>
           </PaymentSuccessHandler>
         </div>

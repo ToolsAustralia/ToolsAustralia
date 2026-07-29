@@ -1,5 +1,6 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback } from "react";
+import { queryKeys } from "@/lib/queryKeys";
 
 // Interface for active period data from API
 interface ActivePeriod {
@@ -71,7 +72,7 @@ export const usePartnerDiscountQueue = () => {
   const queryClient = useQueryClient();
 
   const query = useQuery({
-    queryKey: ["partnerDiscountQueue"],
+    queryKey: queryKeys.partnerDiscounts.queue,
     queryFn: fetchPartnerDiscountQueue,
     staleTime: 1000 * 60 * 5, // 5 minutes
     gcTime: 1000 * 60 * 10, // 10 minutes
@@ -83,7 +84,7 @@ export const usePartnerDiscountQueue = () => {
 
   // Invalidate and refetch function
   const refetchQueue = useCallback(() => {
-    queryClient.invalidateQueries({ queryKey: ["partnerDiscountQueue"] });
+    queryClient.invalidateQueries({ queryKey: queryKeys.partnerDiscounts.queue });
   }, [queryClient]);
 
   // Optimistic update function
@@ -106,7 +107,7 @@ export const usePartnerDiscountQueue = () => {
     };
 
     // Update cache optimistically
-    queryClient.setQueryData(["partnerDiscountQueue"], {
+    queryClient.setQueryData(queryKeys.partnerDiscounts.queue, {
       ...query.data,
       queuedItems: [...query.data.queuedItems, optimisticItem],
       totalQueuedDays: query.data.totalQueuedDays + packageData.discountDays,

@@ -463,3 +463,32 @@ three render cycles instead of one:
 
 Related: proof mode's own "never hand `demo.highlight` a locator that might be hidden" rule
 (above) is the same failure class — an unbounded actionability wait with no `actionTimeout` net.
+
+## Beacon payload assertions use `toEqual`, so adding a field breaks them (2026-07-29)
+
+`e2e/specs/marketing/prize-build-url-params.spec.ts` asserts the prize-build beacon body with
+`toEqual`, which is an **exact** match — an added field fails the assertion even though the payload
+is correct. When the beacon contract changes, update all three places together: the `BuildBeacon`
+interface and both `toEqual` payloads.
+
+That is deliberate, not a nuisance: this spec exists to guard the beacon's write volume and
+attribution, so a silently-widened payload should fail loudly rather than pass. It is what caught
+F-018 doubling the write count.
+
+**Reading a failure here, do not assume a stale expectation.** The first `interacted: true` diff
+genuinely was one; the `Expected: 1, Received: 2` right behind it was a real regression. Read the
+assertion diff before concluding which you have.
+
+## Never read a Playwright summary through `tail`
+
+Playwright prints the failure list and the `N failed` line **above** `N flaky` and `N passed`, so
+`npm run e2e:smoke | tail -25` can show a clean-looking `73 passed / 10 flaky` while hiding
+`18 failed` just off the top. This produced a false "0 failed" report during the round-2 panel review.
+
+Two habits that prevent it:
+
+- **Redirect to a file** (`> smoke.log 2>&1`) and grep the whole thing; never pipe a suite through
+  `tail`.
+- **Reconcile the count.** `npx playwright test --grep @smoke --list` prints the true total
+  (107 at time of writing). If `passed + flaky + failed + skipped` does not equal it, the log is
+  truncated or tests did not run — the numbers you have are not the numbers that happened.

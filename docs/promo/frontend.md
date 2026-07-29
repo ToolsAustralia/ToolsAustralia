@@ -400,11 +400,18 @@ Previously, picking a combination on an evergreen `/promotions/{prize-slug}` pag
 another prize page (and `PromotionsLayoutShell` scrolled to top). It no longer does — the card
 updates in place on every surface. What is retained:
 
-- **`?toolbox=` sync on toolset landing pages** (`/promotions/makita` etc., i.e. `toolsetMode`).
-  The toolbox lane and the cash opt-out are persisted to the query string via
-  `buildToolsetLandingHref` (a `router.replace(…, { scroll: false })`) and hydrated back from
-  `parseToolboxQueryParam`, so a refresh or a shared link keeps the choice. Milwaukee (the
-  default) omits the param for a clean canonical URL.
+- **`?toolset=` + `?toolbox=` sync on every `/promotions/*` page** (both brand landing pages and
+  evergreen prize pages). Written with `window.history.replaceState` via
+  `buildPrizeSelectionHref`, read back **once on mount** by `parseToolsetQueryParam` /
+  `parseToolboxQueryParam`. Params win over the page's own prize, so a refresh or a shared link
+  restores the exact build.
+  - **Both lanes are always written, including the page default.** The old behaviour omitted
+    `?toolbox=milwaukee` for a clean canonical URL, which made "tried another brand and switched
+    back" indistinguishable from "never touched the reels". The URL stays clean until the first
+    interaction instead — nothing is written until then.
+  - **Never `router.replace`.** It resets scroll even with `{ scroll: false }` (see gotchas).
+  - **Mount-only read.** Re-reading the URL on every change created a URL -> state -> URL round
+    trip. React state owns the selection; the URL mirrors it.
 - **`toolsetMode` no longer locks the power-toolset lane.** A toolset landing page OPENS on its
   brand (via `slug={defaultPrizeSlug}`) but the reel still offers all five, so the visitor can
   switch brand in place. This replaced BOTH the deleted `StaticToolsetHighlight` **and** the
@@ -470,6 +477,48 @@ Covers reel wrap-around (`offsetFromFocus`, `stepReel`), card geometry + the hid
 slug round-tripping, accent resolution, `darken`, combo copy, the derived-map ↔ registry equality,
 and the preview-grid cap/overflow. Pure — no DB, no env. See also the details-modal write-up in
 [shared-ui/frontend.md](../shared-ui/frontend.md#prizespecificationsmodal).
+
+### Build tracking beacon — `usePrizeBuildTracking` (2026-07-27)
+
+`PrizeShowcase` counts reel switches (`toolboxSwitches` / `toolsetSwitches`) and hands them to
+[`usePrizeBuildTracking`](../../src/hooks/usePrizeBuildTracking.ts), which POSTs
+`/api/tracking/promo-prize-build` (see [tracking/api.md](../tracking/api.md)) to attach the
+assembled prize to the visit row `usePromoPageTracking` already created on landing. The component
+itself never calls the API — that would violate the components-don't-call-APIs layering rule.
+
+- **Debounced 1s**, restarted on every switch, so flicking through five brands is one write, not
+  five. A second effect registers `pagehide` / `visibilitychange` listeners **once per mount** (not
+  inside the debounce effect) so a fast bouncer is still captured; combining the two effects would
+  re-register the listeners on every switch and leak one per switch, since an inline-arrow handler
+  can never be removed. Both unload paths use `navigator.sendBeacon` (survives the page going away);
+  the debounce path uses `fetch` so the request is visible in the network tab during dev.
+- **Counts are CUMULATIVE**, and the server `$set`s them (never `$inc`), so a double delivery — the
+  debounce landing and then a `pagehide` flush — is idempotent.
+- **Counters are strictly per-reel touch counts (F-010).** `toolboxSwitches` / `toolsetSwitches`
+  mean "how many times did they touch THIS REEL" — a toolbox card click bumps `toolboxSwitches`, a
+  toolset card click bumps `toolsetSwitches`, and neither bumps when the visitor uses the **cash**
+  toggle, because cash is a button, not a reel card. (An earlier version bumped `toolboxSwitches`
+  from `handleSelectCash` on the theory that cash was "the toolbox lane's opt-out" — reverted; see
+  the panel-review tech-debt doc, F-010.)
+- **The beacon gates on an explicit `hasInteracted` flag, NOT on the counters.** `PrizeShowcase`
+  sets `hasInteracted` to `true` in all three handlers (toolbox, toolset, **and** cash), and
+  `usePrizeBuildTracking`'s `send()` no-ops unless `hasInteracted` is true. This has to be a
+  separate flag: since cash never bumps a counter, gating on `toolboxSwitches === 0 &&
+  toolsetSwitches === 0` would make a cash-only visitor (who touches no reel at all) look
+  "never engaged" and their build choice — which does resolve to a real prize, `cash-prize` — would
+  never reach the visit row. An untouched page still sends nothing (`hasInteracted` stays `false`);
+  the landing beacon's visit row is already correct for that visitor. `send()` also no-ops on an
+  unchanged payload (`lastSent` ref), so the debounce and the unload flush don't double the beacon
+  when nothing changed since the last report.
+- **`builtPrizeSlug` is `activeSlug`** (the catalog-RESOLVED prize from `usePrizeCatalog`, which
+  falls back when a combination has no entry), never the raw requested combination — so the
+  endpoint can never be asked to persist a slug the catalog doesn't have.
+- **`landingSlug` is the pathname segment** (`pathname.split("/")[2]`), not the page's own default
+  prize slug — it must match what `usePromoPageTracking` keyed the visit row on, or the update finds
+  no row (`no_visit_row`, a silent no-op — see [tracking/api.md](../tracking/api.md)).
+- **No `useSearchParams()`.** Like the rest of `PrizeShowcase`, the hook takes its inputs as plain
+  props/state — reintroducing `useSearchParams()` anywhere in this component tree fails the build on
+  `/` (see the file-header comment in `PrizeShowcase.tsx`).
 
 ## Promo-banner surface: compositor-friendly animation stack (2026-07-20, perf Tier-2 Task 1)
 
@@ -679,6 +728,7 @@ in both files — same reasoning, different trigger.
 |---|---|
 | `usePromoLink()` | Resolve a `PromoLink` from URL params |
 | `usePromoPageTracking()` | Write `PromoAnalyticsVisit` rows on promo-page visits |
+| `usePrizeBuildTracking()` | Debounced beacon that attaches the assembled prize + reel-switch counts to the existing visit row — see "Build tracking beacon" above |
 | `usePromoWelcomeModal()` | Welcome modal for first-time promo visitors |
 
 ## Stores

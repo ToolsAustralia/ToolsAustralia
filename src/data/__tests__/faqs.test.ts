@@ -148,7 +148,9 @@ function main() {
   // (reactivation timing), not added, so it does not change the count.
   // Bumped 68 → 71 (2026-07-15): ids 69-71 — the Membership Streak batch (what it is
   // + ladder, continuity rules, where to see it).
-  assert.strictEqual(entries.length, 71, `Expected 71 FAQ entries, got ${entries.length}`);
+  // Bumped 71 → 72 (2026-07-24): id 72 — partner-portal locked-offer explanation
+  // (offers unlock at an access percentage set by tier / one-time pack).
+  assert.strictEqual(entries.length, 72, `Expected 72 FAQ entries, got ${entries.length}`);
 
   // 8c. Membership Streak batch (ids 69-71) must exist, use free-entry framing, and
   // never frame the streak as something you BUY (rule 11: kept by KEEPING membership).

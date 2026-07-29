@@ -17,8 +17,11 @@ export { BrandMark } from "./BrandMark";
 
 export {
   TOOLBOX_QUERY_PARAM,
+  TOOLSET_QUERY_PARAM,
   parseToolboxQueryParam,
-  buildToolsetLandingHref,
+  parseToolsetQueryParam,
+  buildPrizeSelectionHref,
+  resolveBuiltPrizeSlug,
 } from "./utils";
 
 export {

@@ -47,7 +47,9 @@ export default function PartnerPortalPhone({
         <div className="rounded-[1.7rem] bg-gradient-to-b from-neutral-900 to-black p-2 pt-8">
           <div className="mb-4 flex items-start justify-between gap-2">
             <div>
-              <div className="text-sm font-bold text-white">My Rewards</div>
+              {/* The vendor's own product name ("My Rewards") must never appear in customer
+                  copy — we white-label this as the partner portal (panel F-032). */}
+              <div className="text-sm font-bold text-white">Partner portal</div>
               <div className="text-xs font-semibold" style={{ color: accentHex }}>
                 {tierName} member
               </div>
@@ -120,7 +122,7 @@ export default function PartnerPortalPhone({
             className="mt-4 inline-flex w-full items-center justify-center gap-1.5 rounded-xl px-3 py-2.5 text-xs font-extrabold"
             style={{ background: accentHex, color: "#000" }}
           >
-            Open rewards portal <ArrowRight className="h-3 w-3" />
+            Open partner portal <ArrowRight className="h-3 w-3" />
           </button>
         </div>
       </div>

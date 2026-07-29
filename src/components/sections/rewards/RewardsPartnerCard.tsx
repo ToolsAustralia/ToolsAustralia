@@ -90,7 +90,9 @@ export default function RewardsPartnerCard({
 
         {guest ? (
           <div className="mt-3.5 flex gap-2.5">
-            <button type="button" onClick={onBecomeMember} className="flex flex-1 items-center justify-center rounded-[10px] bg-gradient-to-br from-[#ff5a5a] to-[#c40d0d] px-3 py-3 text-[12.5px] font-extrabold text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-red-600">
+            {/* #e02424, not #ff5a5a — white on the lighter stop measured 3.06:1, below the
+                4.5:1 AA floor for 12.5px bold text (panel F-035). */}
+            <button type="button" onClick={onBecomeMember} className="flex flex-1 items-center justify-center rounded-[10px] bg-gradient-to-br from-[#e02424] to-[#c40d0d] px-3 py-3 text-[12.5px] font-extrabold text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-red-600">
               Become a member
             </button>
             <button type="button" onClick={onBuyPackage} className="flex flex-1 items-center justify-center gap-1.5 rounded-[10px] border border-token px-3 py-3 text-[12.5px] font-extrabold text-primary-token focus:outline-none focus-visible:ring-2 focus-visible:ring-red-600 dark:text-white">
@@ -105,22 +107,52 @@ export default function RewardsPartnerCard({
             {pastDueWithPack ? "Update payment to restore membership" : "Update payment"} <ArrowRight className="h-4 w-4" />
           </button>
         ) : partnerDiscountSsoEnabled() ? (
+          <>
           <button
             type="button"
             onClick={() => sso.mutate()}
             disabled={sso.isPending}
             className="mt-3.5 flex w-full items-center gap-3 rounded-[10px] px-4 py-3 text-left disabled:opacity-60 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-600"
-            style={{ color: inkOn(c), background: `linear-gradient(150deg, ${shade(c, 22)}, ${shade(c, -16)})`, boxShadow: `0 14px 30px -18px ${c}` }}
+            /* The darkening is CONDITIONAL on which ink `inkOn()` picked, and must stay that way.
+               White-ink tiers were failing badly — Tradie's cyan measured 2.07:1 against the old
+               `shade(c, 22) -> shade(c, -16)` ramp, under half the 4.5:1 AA minimum — so those get
+               a much darker ramp. But `inkOn()` returns DARK ink for a bright tier (Foreman's
+               yellow), and that tier was already passing at 9.64:1; applying the same darkening
+               unconditionally puts dark ink on a dark ground and drops it to 2.70:1, breaking a
+               tier that was fine. Computed with the repo's own `shade`/`inkOn` over all three
+               tiers, worst point of the gradient (both stops + midpoint):
+                 Tradie  1.85 -> 5.96   Boss  3.89 -> 10.51   Foreman  9.64 (unchanged). */
+            style={{
+              color: inkOn(c),
+              background:
+                inkOn(c) === "#ffffff"
+                  ? `linear-gradient(150deg, ${shade(c, -44)}, ${shade(c, -60)})`
+                  : `linear-gradient(150deg, ${shade(c, 22)}, ${shade(c, -16)})`,
+              boxShadow: `0 14px 30px -18px ${c}`,
+            }}
           >
             <span className="grid h-[34px] w-[34px] shrink-0 place-items-center rounded-[10px]" style={{ background: inkOn(c) === "#ffffff" ? "rgba(255,255,255,.18)" : "rgba(0,0,0,.14)" }}>
               <Store className="h-[17px] w-[17px]" />
             </span>
             <span className="min-w-0 flex-1">
               <b className="block font-poppins text-[13px] font-extrabold">{sso.isPending ? "Opening…" : "Open partner portal"}</b>
-              <span className="text-[10px] font-semibold" style={{ color: inkOn(c) === "#ffffff" ? "rgba(255,255,255,.78)" : "rgba(0,0,0,.6)" }}>See every deal · signed in via SSO</span>
+              {/* Solid ink, not a translucent one. At 10px this label was the worst contrast on the
+                  card in BOTH branches — `rgba(255,255,255,.78)` gave 1.79:1 on the old cyan ramp,
+                  and `rgba(0,0,0,.6)` still only reaches 4.45:1 on Foreman's yellow, just under AA.
+                  The 10px/13px size gap already carries the hierarchy without discounting opacity. */}
+              <span className="text-[10px] font-semibold" style={{ color: inkOn(c) }}>See every deal · signed in automatically</span>
             </span>
             <ExternalLink className="h-4 w-4" />
           </button>
+          {/* The SSO route's error bodies are customer copy and this is the surface
+              Cobber's FAQ points members at — swallowing them left the button flicking
+              "Opening…" and back with no explanation (panel F-033). */}
+          {sso.error?.message && (
+            <p className="mt-2 text-[11.5px] font-semibold text-[#c40d0d] dark:text-[#ff6b6b]" role="alert">
+              {sso.error.message}
+            </p>
+          )}
+          </>
         ) : (
           // Partner portal (SSO) not shipped yet — see partnerDiscountSsoEnabled().
           <div className="mt-3.5 flex w-full items-center gap-3 rounded-[10px] border border-token px-4 py-3">

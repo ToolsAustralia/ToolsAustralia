@@ -297,11 +297,12 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/hooks/useMemberships.ts",
         "src/hooks/useActivePackage.ts",
         "src/hooks/useMembershipModal.ts",
+        "src/hooks/useMembershipModalDeepLink.ts",
         "src/hooks/useMembershipCardCta.ts",
         "src/hooks/useOpenMembershipModalListener.ts",
         "src/app/(site)/membership/**"
       ],
-      "lastVerified": "2026-07-28"
+      "lastVerified": "2026-07-29"
     },
     "billing-stripe": {
       "docs": "docs/billing-stripe/",
@@ -425,14 +426,20 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/components/banners/**",
         "src/hooks/usePromoLink.ts",
         "src/hooks/usePromoPageTracking.ts",
+        "src/hooks/usePrizeBuildTracking.ts",
         "src/hooks/usePromoWelcomeModal.ts",
         "src/generated/landingImageManifest.ts",
+        "src/generated/landingVideoManifest.ts",
         "scripts/build-landing-image-manifest.ts",
+        "scripts/build-landing-video-manifest.ts",
         "scripts/check-landing-hero-assets.mjs",
         "scripts/convert-drawn-tonight-tomorrow-to-webp.ts",
-        "scripts/convert-drawn-tonight-tomorrow-videos.ts"
+        "scripts/convert-drawn-tonight-tomorrow-videos.ts",
+        "scripts/convert-draw9-landing-to-webp.ts",
+        "scripts/convert-draw9-landing-videos.ts",
+        "src/docs/PROMOTION_ANALYTICS.md"
       ],
-      "lastVerified": "2026-07-23"
+      "lastVerified": "2026-07-29"
     },
     "affiliate": {
       "docs": "docs/affiliate/",
@@ -472,7 +479,11 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/models/PartnerDiscountSsoIssuance.ts",
         "src/app/api/partner-applications/**",
         "src/app/api/partner-discount/**",
-        "src/app/(site)/partner/**"
+        "src/app/(site)/partner/**",
+        "src/data/partner-catalog/**",
+        "scripts/build-partner-catalog-preview.ts",
+        "src/generated/partnerCatalogPreview.ts",
+        "src/generated/partnerCatalogOffers.ts"
       ],
       "lastVerified": "2026-07-19"
     },
@@ -505,7 +516,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/contexts/CartContext.tsx",
         "src/hooks/usePurchaseInvalidation.ts"
       ],
-      "lastVerified": "2026-07-19"
+      "lastVerified": "2026-07-24"
     },
     "error-reporting": {
       "docs": "docs/error-reporting/",
@@ -546,7 +557,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "scripts/migrate-seed-staff-roles.ts",
         "src/contexts/UserContext.tsx"
       ],
-      "lastVerified": "2026-07-28"
+      "lastVerified": "2026-07-29"
     },
     "email": {
       "docs": "docs/email/",
@@ -618,9 +629,10 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/repositories/ab-testing/**",
         "src/app/api/ab-testing/**",
         "src/models/ab-testing/**",
-        "src/utils/ab-testing/**"
+        "src/utils/ab-testing/**",
+        "src/lib/ab-testing/**"
       ],
-      "lastVerified": "2026-07-06"
+      "lastVerified": "2026-07-29"
     },
     "metrics-analytics": {
       "docs": "docs/metrics-analytics/",
@@ -702,7 +714,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/app/(site)/privacy/**",
         "src/app/lazy-motion-features.ts"
       ],
-      "lastVerified": "2026-07-28"
+      "lastVerified": "2026-07-29"
     },
     "client-state": {
       "docs": "docs/client-state/",
@@ -812,9 +824,10 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/lib/jobs/**",
         "src/repositories/index.ts",
         "src/repositories/PaymentEventRepository.ts",
-        "src/repositories/PromoAnalyticsRepository.ts"
+        "src/repositories/PromoAnalyticsRepository.ts",
+        "src/repositories/__tests__/**"
       ],
-      "lastVerified": "2026-06-10"
+      "lastVerified": "2026-07-29"
     },
     "infrastructure": {
       "docs": "docs/infrastructure/",

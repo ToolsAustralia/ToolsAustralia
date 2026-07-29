@@ -5,6 +5,7 @@ import PromoAnalyticsService from "@/services/promo-analytics/PromoAnalyticsServ
 import PromoAnalyticsVisit from "@/models/PromoAnalyticsVisit";
 import connectDB from "@/lib/mongodb";
 import { recordPromoVisit } from "@/utils/promo-analytics/record-promo-visit";
+import { createRateLimiter, getClientIdentifier } from "@/utils/security/rateLimiter";
 
 const promoPageVisitSchema = z.object({
   pageType: z.enum(["evergreen", "toolset"]),
@@ -15,12 +16,36 @@ const promoPageVisitSchema = z.object({
   utmCampaign: z.string().optional(),
 });
 
+// Unauthenticated + keyed only on a format-checked cookie (same gap as the sibling
+// promo-prize-build beacon — see F-012). This route only ever INSERTS a new visit row, so
+// abuse here is less dangerous than the sibling's in-place $set (it shows up as inflated
+// visit counts rather than silently rewritten attribution), but it is still a free-write
+// primitive worth capping. A real visitor fires this once per page view (there is already a
+// 60s server-side dedup window below), so the budget leaves large headroom for genuine use.
+// Distinct bucket key from "promo-prize-build" so the two beacons have independent budgets.
+// See docs/tech-debt/panel-review-feature-drawn-tonight-tomorrow-july-assets.md F-012.
+//
+// Budgeted per VISITOR, not per IP (F-024). This is the highest-traffic ad-landing path in the
+// product, and Australian carriers put very large numbers of users behind one CGNAT egress IP —
+// an IP-keyed budget therefore lets a single ad burst suppress genuine visit rows for everyone
+// behind it, silently, because the beacon is fire-and-forget. Suppressed rows undercount visits
+// and every rate derived from them, which the design explicitly lists as must-not-change.
+// 60/5min matches the repo's own public-endpoint precedent (`promo/link/validate`, 60/min).
+const promoPageVisitRateLimiter = createRateLimiter("promo-page-visit", {
+  windowMs: 5 * 60 * 1000,
+  maxRequests: 60,
+});
+
 /**
  * POST /api/tracking/promo-page-visit
  *
  * Track promotion page visits for analytics attribution.
  * No auth required. Uses anonymousId cookie for session attribution.
  * Deduplication: one visit per slug per anonymousId within 1 minute.
+ *
+ * Rate limited (20 req / 5 min per identifier, checked synchronously before the Zod parse and
+ * before `after()` is scheduled) — distinct bucket key from the sibling `promo-prize-build`
+ * beacon so traffic on one can't exhaust the other's budget. See F-012.
  *
  * Why the DB work runs in `after()`:
  *   This beacon fires from promo/ad-landing pages — the highest-traffic path.
@@ -42,6 +67,27 @@ const promoPageVisitSchema = z.object({
  * @see docs/PROMO_PAGE_ANALYTICS.md
  */
 export async function POST(request: NextRequest) {
+  const anonymousId = AnonymousIdService.extractAnonymousId(request) ?? undefined;
+  // Prefer the visitor cookie over the IP so shared/CGNAT egress IPs do not share one budget.
+  // `ta_anon_id` is minted in middleware for every page request, so it is present on
+  // essentially every genuine beacon; the IP is only the fallback for a request without it.
+  // Note the argument order: `getClientIdentifier(ip, forwardedFor)` returns arg 1 verbatim when
+  // truthy, so `x-real-ip` must come first — passing `x-forwarded-for` in both positions keys
+  // the bucket on the whole proxy chain instead of the client (matches the four auth routes).
+  const identifier =
+    anonymousId ??
+    getClientIdentifier(
+      request.headers.get("x-real-ip"),
+      request.headers.get("x-forwarded-for")
+    );
+  const rateLimitResult = promoPageVisitRateLimiter.check(identifier);
+  if (!rateLimitResult.success) {
+    return NextResponse.json(
+      { success: false, error: "Too many requests", retryAfterSeconds: rateLimitResult.retryAfterSeconds },
+      { status: 429, headers: { "Retry-After": String(rateLimitResult.retryAfterSeconds) } }
+    );
+  }
+
   let validatedData: z.infer<typeof promoPageVisitSchema>;
   try {
     const body = await request.json();
@@ -58,7 +104,7 @@ export async function POST(request: NextRequest) {
 
   // Capture everything we need from `request` synchronously — it must not be
   // read inside `after()`, where the response has already been sent.
-  const anonymousId = AnonymousIdService.extractAnonymousId(request) ?? undefined;
+  // (`anonymousId` is already read at the top of the handler; it also keys the rate limiter.)
   const referrerHeader = request.headers.get("referer") || "";
   const url =
     request.headers.get("x-forwarded-url") || request.headers.get("referer") || request.url || "";
