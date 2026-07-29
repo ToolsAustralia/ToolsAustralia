@@ -2592,17 +2592,17 @@ Rows are sorted first by `adFormat` (`video` → `static` → `carousel` → `un
 
 ### `GET /v1/analytics/packages-focus`
 
-**Returns**: Membership vs one-time landing-URL split of Meta ad spend/ROAS — a materialized bucket summary (any date range) plus a live campaign→adset→ad breakdown per bucket, bounded by the `MetaAdInsightsDaily` retention window. Pure ad metrics — no PII.
+**Returns**: Membership vs one-time landing-URL split of ONE platform's ad spend/ROAS — a materialized bucket summary (any date range) plus a live campaign→adset→ad breakdown per bucket, bounded by that platform's insights retention window. Pure ad metrics — no PII.
 ```ts
 {
   platform: "meta" | "tiktok",
-  supported: boolean,                          // tiktok → false until its ad→URL resolver ships
-  reason?: "awaiting-url-mapping",              // present only when supported is false
+  supported: boolean,                          // false ONLY when this env has no account id for the platform
+  reason?: "not-configured",                    // present only when supported is false
   meta: {
     startDate: string,                          // YYYY-MM-DD
     endDate: string,                            // YYYY-MM-DD
     currency: "AUD",
-    adAccountId: string                         // "" for tiktok (no account concept yet)
+    adAccountId: string                         // "" when the platform is unconfigured here
   },
   summary: {                                    // materialized (LandingPageMetricsDaily) — works for ANY range
     membership: { spend: number, spendCents: number, revenue: number, revenueCents: number, roas: number, conversions: number, impressions: number, clicks: number },
@@ -2635,7 +2635,7 @@ Rows are sorted first by `adFormat` (`video` → `static` → `carousel` → `un
   }>
 }
 ```
-`spend`/`revenue` are AUD dollars, `spendCents`/`revenueCents` the underlying cent values (may carry fractional cents — upstream Meta returns fractional values on some rows); `roas` is `revenue / spend`, `0` when spend is `0`. `platform: "tiktok"` short-circuits to `supported: false`, `reason: "awaiting-url-mapping"`, an all-zero `summary`, and an empty `detail` — TikTok has no ad→landing-URL destination resolver yet (`TikTokAdInsightsDaily` carries no landing-URL concept). `detail.availableSince` is NOT clipped to the requested range: it is the account's true retained-data floor, so a range with zero in-range ad delivery can still report `complete: true` (with empty `buckets`) when that floor predates the range start — absence of delivery is not the same as missing data. Campaign/adset/ad nodes within each bucket are sorted descending by `totals.spendCents`.
+`spend`/`revenue` are AUD dollars, `spendCents`/`revenueCents` the underlying cent values (may carry fractional cents — upstream Meta returns fractional values on some rows); `roas` is `revenue / spend`, `0` when spend is `0`. **As of 2026-07-29 `platform: "tiktok"` is fully supported** and returns real buckets; `supported: false` / `reason: "not-configured"` now means only that this environment has no account id for the requested platform. Two things to know when reading TikTok's numbers: (1) its one-time bucket is legitimately `$0` because every TikTok ad observed so far points at a membership landing page — that is the campaign setup, not a classification failure; (2) its `detail.availableSince` is much more recent than Meta's because TikTok insights only began syncing in July 2026, so `complete: false` on longer ranges is expected and honest. `detail.availableSince` is NOT clipped to the requested range: it is the account's true retained-data floor, so a range with zero in-range ad delivery can still report `complete: true` (with empty `buckets`) when that floor predates the range start — absence of delivery is not the same as missing data. Campaign/adset/ad nodes within each bucket are sorted descending by `totals.spendCents`.
 
 **Inputs (query params)**:
 | Param | Required | Default | Notes |
@@ -4063,6 +4063,12 @@ If an operator requests a capability not in this document and not in the current
 ---
 
 ## Last updated
+
+`2026-07-29` — **`/v1/analytics/packages-focus` now supports `platform=tiktok` for real (no count change; one enum value changed).** TikTok used to short-circuit to `supported: false, reason: "awaiting-url-mapping"`; it now returns genuine buckets, because `TikTokAdDestinationService` supplies the missing ad→landing-URL mapping via TikTok's Smart+ id bridge (reporting `ad_id` → `/ad/get/` → `smart_plus_ad_id` → `/smart_plus/ad/get/` → landing URLs — the reporting id is NOT the Smart+ id, which is why a direct lookup resolved 0 of 31 ads). `reason` is now the literal `"not-configured"` and means only that this environment has no account id for the requested platform; there is no longer any `"awaiting-url-mapping"` case. The account id is resolved per platform (`FACEBOOK_AD_ACCOUNT_ID` vs `TIKTOK_ADVERTISER_ID`), and an unconfigured platform returns `supported: false` rather than `500 misconfigured`.
+
+Interpreting TikTok's figures: its **one-time bucket is legitimately `$0`** — every TikTok ad observed points at a membership landing page, which is the campaign setup rather than a classification failure; do not report it as missing data. Its `detail.availableSince` is far more recent than Meta's (TikTok insights only began syncing in July 2026), so `complete: false` on longer ranges is expected. Live check on the dev account for 2026-07-22 → 2026-07-29: spend `$1,314.44`, revenue `$1,024.93`, ROAS `0.78x`, 45 conversions, buckets reconciling to the total exactly and matching TikTok's own reported ROAS.
+
+`2026-07-29` — **`LandingPageMetricsDaily` and `AdDestination` are now platform-scoped (no API shape change).** Both carry a `platform` discriminator, and `unknown://` placeholders are namespaced per platform (`unknown://meta-ad/<id>`, `unknown://tiktok-ad/<id>`). This does not change any response shape, but it does change what a figure MEANS: spend-by-url reads are Meta-only by construction rather than by accident, so a Meta total can never silently absorb TikTok spend. `MetaAdDestination` was renamed `AdDestination` (same underlying `metaaddestinations` collection).
 
 `2026-07-17` — **On-read freshness for spend-by-url reads (behavioral; no shape/count change).** `/v1/analytics/spend-by-url`, `/detail`, and `/v1/analytics/packages-focus` (and their admin twins) now self-refresh: a read touching the trailing 1–2 AEST days with materialized data >5 min old triggers a minimal Meta sync for just that window (insights page → missing-only destination resolve → per-day aggregate rebuild) behind a hard 12s time budget — stale-but-consistent data is served if Meta is slow, and failures never fail the read. Intraday figures therefore track Meta closely instead of lagging up to ~3h behind the sync cron (now the history/restatement backstop). Expect these calls to occasionally take a few seconds longer when they land on a stale window. Note the mental-model shift: these `read`-tier calls may now trigger WRITES to the analytics materialization itself (insights/destination upserts + aggregate rebuild — the same idempotent writes the sync cron performs); the gateway remains read-only with respect to business data, and no Norm-controllable input changes what gets written.
 

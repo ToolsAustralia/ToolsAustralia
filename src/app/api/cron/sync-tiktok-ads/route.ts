@@ -2,10 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { subDays } from "date-fns";
 import { formatInTimeZone } from "date-fns-tz";
 import connectDB from "@/lib/mongodb";
+import { metricNamesSuspect } from "@/services/admin/tiktok/TikTokInsightsSyncService";
 import {
-  TikTokInsightsSyncService,
-  metricNamesSuspect,
-} from "@/services/admin/tiktok/TikTokInsightsSyncService";
+  runSpendByUrlSync,
+  tiktokSpendByUrlDescriptor,
+} from "@/services/analytics/runSpendByUrlSync";
 import {
   isTikTokAdInsightsConfigured,
   checkTikTokAccountAssumptions,
@@ -22,10 +23,15 @@ const TZ = "Australia/Sydney";
 /**
  * GET /api/cron/sync-tiktok-ads
  *
- * Nightly re-sync of TikTok ad-level insights into TikTokAdInsightsDaily (the TikTok
- * analogue of sync-meta-ads). Re-pulls a trailing 8-day window so TikTok's later
- * revisions to recent days are picked up. No-ops cleanly when the TikTok Marketing-API
- * creds are not set.
+ * Nightly re-sync of the FULL TikTok spend-by-URL pipeline — insights → ad→landing-URL
+ * destinations → per-URL daily aggregates — the TikTok analogue of sync-meta-ads. Re-pulls
+ * a trailing 8-day window so TikTok's later revisions to recent days are picked up. No-ops
+ * cleanly when the TikTok Marketing-API creds are not set.
+ *
+ * It ran insights-only until 2026-07-29. That left `LandingPageMetricsDaily` permanently
+ * empty for TikTok in production: the Ad Spend drill-down and Prize Performance read the
+ * rollup, not the raw insights, so TikTok showed $0 everywhere with nothing failing. The
+ * pipeline is shared with Meta (`runSpendByUrlSync`), so the two platforms cannot drift.
  *
  * Auth: matches the other cron routes — when CRON_SECRET is set the request must carry
  * `Authorization: Bearer <CRON_SECRET>` (Vercel cron sends this). Middleware does not
@@ -55,7 +61,14 @@ export async function GET(request: NextRequest) {
 
     await connectDB();
 
-    const data = await new TikTokInsightsSyncService().syncDateRange(dateRange);
+    const descriptor = tiktokSpendByUrlDescriptor();
+    if (!descriptor) {
+      console.error("sync-tiktok-ads: skipping — TIKTOK_ADVERTISER_ID not set");
+      return NextResponse.json({ ok: false, skipped: true, reason: "env" }, { status: 200 });
+    }
+
+    const result = await runSpendByUrlSync(descriptor, dateRange);
+    const data = result.insights;
 
     const ms = Date.now() - startTime;
     // Persist the outcome so the admin UI can render a truthful sync state (F-002).
@@ -70,13 +83,16 @@ export async function GET(request: NextRequest) {
       dateRange,
       rowsUpserted: data.rowsUpserted,
       adIds: data.adIds.length,
+      destinationsUpserted: result.destinations.upserted,
+      destinationCoverage: result.destinations.coverage,
+      aggregateRowsWritten: result.aggregation.rowsWritten,
       durationMs: ms,
     });
 
     // Metric-name tripwire (panel F-005): clicks with zero conversions AND zero revenue
     // across the whole window means the guessed metric names likely missed — the rows
     // were written with confident zeros. Shout; verify names against a row's raw.metrics.
-    const suspect = data.rowsUpserted > 0 && metricNamesSuspect(data.totals);
+    const suspect = data.rowsUpserted > 0 && !!data.totals && metricNamesSuspect(data.totals);
     if (suspect) {
       console.error(
         "sync-tiktok-ads: WARNING metric-names-suspect — clicks > 0 but conversions and revenue are ALL ZERO. " +

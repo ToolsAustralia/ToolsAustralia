@@ -387,7 +387,9 @@
     "test:e2e-srt": "tsx e2e/proof/__tests__/srt.test.ts",
     "verify:ad-platforms": "tsx scripts/verify-local-ad-platforms.ts",
     "sync:tiktok-destinations": "tsx scripts/sync-tiktok-destinations.ts",
-    "sync:tiktok-destinations:dry": "tsx scripts/sync-tiktok-destinations.ts --dry-run"
+    "sync:tiktok-destinations:dry": "tsx scripts/sync-tiktok-destinations.ts --dry-run",
+    "sync:tiktok-spend-by-url": "tsx scripts/sync-tiktok-spend-by-url.ts",
+    "sync:tiktok-spend-by-url:dry": "tsx scripts/sync-tiktok-spend-by-url.ts --dry-run"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^3.0.85",

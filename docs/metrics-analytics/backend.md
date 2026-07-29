@@ -38,6 +38,33 @@ Consumed by:
 joining the platform's per-ad daily insights (`MetaAdInsightsDaily` / `TikTokAdInsightsDaily`) with `AdDestination` (per-ad landing URL) on `adId`.
 Triggered by the Meta sync crons (`/api/cron/sync-meta-ads` hourly-gated, `/api/cron/sync-meta-spend-by-url` nightly, both trailing 8-day windows) and the admin "Sync from Meta" button (14-day window).
 
+### One pipeline, per-platform descriptors (2026-07-29)
+
+[src/services/analytics/runSpendByUrlSync.ts](../../src/services/analytics/runSpendByUrlSync.ts) —
+`runSpendByUrlSync(descriptor, dateRange)` owns the sequencing (insights → destinations →
+aggregate rebuild), the coverage warning, and the result shape. A platform contributes only a
+**descriptor** supplying its two fetch steps: `metaSpendByUrlDescriptor(adAccountId, token)` and
+`tiktokSpendByUrlDescriptor()` (returns `null` when `TIKTOK_ADVERTISER_ID` is unset, which
+callers treat as "not enabled here", not an error). Adding a platform is a descriptor plus an
+`AdDestinationResolver` — not a third copy of the orchestration, and not a third place to forget
+the platform argument on the aggregate rebuild.
+
+`runMetaSpendByUrlSync` is now a thin binding over it, keeping its original signature so the
+two crons, the admin "Sync from Meta" route and the ops script don't churn.
+
+An unconfigured platform returns `configured:false` and **skips the aggregate rebuild entirely** —
+rebuilding from zero insight rows would DELETE that platform's existing rows for the window.
+
+Coverage (`resolved ÷ requested`) is logged on every run and `console.error`s below 80%: the
+pipeline keeps working when a platform changes its creative shape (unresolved ads become
+`unknown://` rows), so without this the only symptom is spend quietly detaching from real pages.
+
+Ops entry points: `npm run sync:tiktok-spend-by-url[:dry]`
+([scripts/sync-tiktok-spend-by-url.ts](../../scripts/sync-tiktok-spend-by-url.ts), exit 2 on
+sub-80% coverage) and the nightly `/api/cron/sync-tiktok-ads`, which **runs the full pipeline as
+of 2026-07-29** — it was insights-only before, which left `LandingPageMetricsDaily` permanently
+empty for TikTok in production while nothing appeared to fail.
+
 ### `platform` is the first parameter, everywhere (2026-07-29)
 
 Every public method on the service takes `platform: "meta" | "tiktok"` **first**:
@@ -70,7 +97,21 @@ Read side: `getAggregatedSpendByUrl` sums the subdoc across days when present; `
 
 ### `PackagesFocusBreakdownService` (2026-07-17)
 
-[src/services/analytics/PackagesFocusBreakdownService.ts](../../src/services/analytics/PackagesFocusBreakdownService.ts) — data source for the Ad Spend / ROAS KPI drill-down (`GET /api/admin/analytics/packages-focus`, mirrored to Norm). `summary` sums the materialized `packagesFocus` subdocs (any range; rows without a subdoc → `unclassified`, plus a residue guard for split/total spend divergence); `detail` builds a campaign→adset→ad tree per bucket from the live insights×destination join, with `availableSince` = the account's oldest retained insights date (unbounded indexed `findOne`, range-independent) and `complete = availableSince <= startDate`. `platform` is a first-class discriminator — `tiktok` returns `supported:false` / `awaiting-url-mapping` until a TikTok destination resolver ships. Full endpoint contract: [docs/admin/api.md](../admin/api.md).
+[src/services/analytics/PackagesFocusBreakdownService.ts](../../src/services/analytics/PackagesFocusBreakdownService.ts) — data source for the Ad Spend / ROAS KPI drill-down (`GET /api/admin/analytics/packages-focus`, mirrored to Norm). `summary` sums the materialized `packagesFocus` subdocs (any range; rows without a subdoc → `unclassified`, plus a residue guard for split/total spend divergence); `detail` builds a campaign→adset→ad tree per bucket from the live insights×destination join, with `availableSince` = the account's oldest retained insights date (unbounded indexed `findOne`, range-independent) and `complete = availableSince <= startDate`. Full endpoint contract: [docs/admin/api.md](../admin/api.md).
+
+**Both platforms take the same path (2026-07-29).** TikTok used to short-circuit to
+`supported:false` / `awaiting-url-mapping`; the Smart+ id bridge in `TikTokAdDestinationService`
+supplies the missing ad→URL mapping, so it now returns real buckets. `supported:false` (reason
+`not-configured`) now means only that the environment has no account id for that platform —
+distinct from "$0 spent", which the modal states explicitly. `buildDetail` selects the insights
+collection from `platform` (the two collections share field names by construction), and the
+account id is resolved per platform via
+[adPlatformAccounts.ts](../../src/services/analytics/adPlatformAccounts.ts) — passing Meta's
+account id to a TikTok query matches nothing and renders a confident `$0`.
+
+On-read freshness stays **Meta-only**: TikTok's rollup is rebuilt by its nightly cron. That is
+a deliberate choice (TikTok's report API is slower per call and intraday drift there is not a
+reported problem), not an oversight.
 
 ### On-read freshness — near-real-time without forking sources (2026-07-17)
 

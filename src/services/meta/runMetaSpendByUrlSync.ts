@@ -1,6 +1,7 @@
-import { MetaInsightsSyncService } from "@/services/meta/MetaInsightsSyncService";
-import { MetaAdDestinationService } from "@/services/meta/MetaAdDestinationService";
-import { SpendByUrlAggregationService } from "@/services/analytics/SpendByUrlAggregationService";
+import {
+  metaSpendByUrlDescriptor,
+  runSpendByUrlSync,
+} from "@/services/analytics/runSpendByUrlSync";
 
 /** Optional human-readable progress (e.g. CLI with timestamps). */
 export type RunMetaSpendByUrlSyncProgress = (message: string) => void;
@@ -21,7 +22,13 @@ export interface RunMetaSpendByUrlSyncResult {
 }
 
 /**
- * End-to-end: daily ad insights → ad destinations → landing page aggregates.
+ * End-to-end Meta sync: daily ad insights → ad destinations → landing page aggregates.
+ *
+ * Now a thin binding over the platform-agnostic `runSpendByUrlSync` — the sequencing lives
+ * there so TikTok (and anything after it) runs the identical pipeline. Kept as a named
+ * function with its original signature and result shape because four callers (2 crons, the
+ * admin "Sync from Meta" route, and the ops script) depend on it; there is no behavioural
+ * reason to churn them.
  */
 export async function runMetaSpendByUrlSync(
   adAccountId: string,
@@ -29,43 +36,18 @@ export async function runMetaSpendByUrlSync(
   dateRange: { since: string; until: string },
   options?: { onProgress?: RunMetaSpendByUrlSyncProgress }
 ): Promise<RunMetaSpendByUrlSyncResult> {
-  const log = options?.onProgress;
-  const insightsService = new MetaInsightsSyncService();
-  const destService = new MetaAdDestinationService();
-  const aggService = new SpendByUrlAggregationService();
-
-  const syncInsights = await insightsService.syncDateRange(adAccountId, accessToken, dateRange, {
-    onProgress: log,
-  });
-
-  log?.(
-    `[destinations] Fetching creative landing URLs from Graph API for ${syncInsights.adIds.length} ads (batched)…`
-  );
-  const syncDest = await destService.syncDestinationsForAdIds(
-    adAccountId,
-    accessToken,
-    syncInsights.adIds,
-    { onProgress: log }
-  );
-
-  log?.(`[aggregate] Rebuilding per-URL daily metrics for ${dateRange.since} → ${dateRange.until}…`);
-  const agg = await aggService.recomputeForDateRange("meta", adAccountId, dateRange.since, dateRange.until, {
-    onProgress: log,
-  });
-
-  log?.(
-    `[done] Sync complete — insights rows: ${syncInsights.rowsUpserted}, destinations upserted: ${syncDest.upserted}, aggregate rows written: ${agg.rowsWritten}.`
+  const result = await runSpendByUrlSync(
+    metaSpendByUrlDescriptor(adAccountId, accessToken),
+    dateRange,
+    { onProgress: options?.onProgress }
   );
 
   return {
-    insights: {
-      rowsUpserted: syncInsights.rowsUpserted,
-      adIds: syncInsights.adIds,
-    },
+    insights: result.insights,
     destinations: {
-      upserted: syncDest.upserted,
-      missingUrlAds: syncDest.missingUrlAds,
+      upserted: result.destinations.upserted,
+      missingUrlAds: result.destinations.missingUrlAds,
     },
-    aggregation: agg,
+    aggregation: result.aggregation,
   };
 }
