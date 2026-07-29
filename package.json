@@ -190,6 +190,7 @@
     "seed:tiktok-insights": "tsx scripts/seed-tiktok-insights.ts",
     "seed:tiktok-insights:dry": "tsx scripts/seed-tiktok-insights.ts --dry-run",
     "verify:tiktok-readpath": "tsx scripts/verify-tiktok-readpath.ts",
+    "verify:tiktok-accuracy": "tsx scripts/verify-tiktok-accuracy.ts",
     "backfill:affiliate-membership-tied": "tsx scripts/backfill-affiliate-membership-tied.ts",
     "backfill:affiliate-recurring-commissions": "tsx scripts/sync-missing-affiliate-recurring-commissions.ts",
     "backfill:affiliate-recurring-commissions:all": "tsx scripts/sync-missing-affiliate-recurring-commissions.ts --live --no-limit",
