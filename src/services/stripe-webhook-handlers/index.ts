@@ -226,21 +226,29 @@ function extractRequestContextFromMetadata(metadata: Stripe.Metadata): {
   client_user_agent?: string;
   fbc?: string;
   fbp?: string;
+  ttclid?: string;
+  ttp?: string;
   event_source_url?: string;
 } | undefined {
   const clientIp = metadata.capi_client_ip;
   const userAgent = metadata.capi_user_agent;
   const fbc = metadata.capi_fbc;
   const fbp = metadata.capi_fbp;
+  // TikTok's click id / first-party browser id, stashed alongside Meta's at payment
+  // creation. The webhook has no cookies, so metadata is the only way they survive.
+  const ttclid = metadata.capi_ttclid;
+  const ttp = metadata.capi_ttp;
   const eventSourceUrl = metadata.capi_event_source_url;
 
   // Return context if at least one CAPI field is present (event_source_url alone is valid)
-  if (clientIp || userAgent || fbc || fbp || eventSourceUrl) {
+  if (clientIp || userAgent || fbc || fbp || ttclid || ttp || eventSourceUrl) {
     return {
       ...(clientIp && { client_ip_address: clientIp }),
       ...(userAgent && { client_user_agent: userAgent }),
       ...(fbc && { fbc }),
       ...(fbp && { fbp }),
+      ...(ttclid && { ttclid }),
+      ...(ttp && { ttp }),
       ...(eventSourceUrl && { event_source_url: eventSourceUrl }),
     };
   }

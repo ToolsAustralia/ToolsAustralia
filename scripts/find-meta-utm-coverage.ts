@@ -10,7 +10,7 @@ import path from "path";
 config({ path: path.resolve(process.cwd(), ".env.local") });
 
 import connectDB from "@/lib/mongodb";
-import MetaAdDestination from "@/models/MetaAdDestination";
+import AdDestination from "@/models/AdDestination";
 
 interface IMetaAdDestinationLean {
   adId: string;
@@ -21,7 +21,7 @@ async function main() {
   await connectDB();
   const cutoff = new Date();
   cutoff.setDate(cutoff.getDate() - 60);
-  const docs = await MetaAdDestination.find({ fetchedAt: { $gte: cutoff } })
+  const docs = await AdDestination.find({ platform: "meta", fetchedAt: { $gte: cutoff } })
     .select("adId rawUrls")
     .lean() as unknown as IMetaAdDestinationLean[];
   let withContent = 0;

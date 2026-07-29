@@ -163,13 +163,13 @@ const PackagesFocusCampaignNodeSchema = z.object({
 
 export const NormAnalyticsPackagesFocusSchema = z.object({
   platform: z.enum(["meta", "tiktok"]),
-  supported: z.boolean(),                      // tiktok → false until its ad→URL resolver ships
-  reason: z.literal("awaiting-url-mapping").optional(),
+  supported: z.boolean(),                      // false only when this env has no account id
+  reason: z.literal("not-configured").optional(),
   meta: z.object({
     startDate: z.string(),                     // YYYY-MM-DD
     endDate: z.string(),                       // YYYY-MM-DD
     currency: z.literal("AUD"),
-    adAccountId: z.string(),                   // "" for tiktok (no account concept yet)
+    adAccountId: z.string(),                   // "" when the platform is unconfigured here
   }),
   summary: z.object({
     membership: PackagesFocusTotalsSchema,

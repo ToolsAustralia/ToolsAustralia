@@ -2,6 +2,7 @@ import { z } from "zod";
 import { withNorm } from "@/lib/internal-norm/withNorm";
 import { NormAnalyticsPackagesFocusSchema } from "@/lib/internal-norm/schemas/analytics-spend";
 import { PackagesFocusBreakdownService } from "@/services/analytics/PackagesFocusBreakdownService";
+import { resolveAdAccountId } from "@/services/analytics/adPlatformAccounts";
 
 const QuerySchema = z.object({
   startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "startDate must be YYYY-MM-DD"),
@@ -17,10 +18,11 @@ const breakdownService = new PackagesFocusBreakdownService();
 
 /**
  * GET /v1/analytics/packages-focus
- * Membership vs one-time landing-URL split of Meta ad spend/ROAS: bucket
+ * Membership vs one-time landing-URL split of one platform's ad spend/ROAS: bucket
  * summary (materialized, any range) + campaign→adset→ad detail (live join,
- * ~60-day insights window). platform=tiktok returns supported:false until
- * its URL mapping ships.
+ * ~60-day insights window). Both meta and tiktok are supported since 2026-07-29;
+ * supported:false / "not-configured" now means only that this environment has no
+ * account id for the requested platform.
  */
 export const GET = withNorm(
   {
@@ -36,10 +38,9 @@ export const GET = withNorm(
       return ctx.error(400, "bad_query", "Invalid query params", parsed.error.issues);
     }
 
-    const adAccountId = process.env.FACEBOOK_AD_ACCOUNT_ID;
-    if (parsed.data.platform === "meta" && !adAccountId) {
-      return ctx.error(500, "misconfigured", "FACEBOOK_AD_ACCOUNT_ID not configured");
-    }
+    // Per-platform account id; an unconfigured platform yields supported:false rather
+    // than a 500, matching the admin route exactly.
+    const adAccountId = resolveAdAccountId(parsed.data.platform);
 
     const result = await breakdownService.getBreakdownFormatted(
       parsed.data.platform,

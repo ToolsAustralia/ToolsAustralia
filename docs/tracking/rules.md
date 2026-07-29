@@ -16,6 +16,8 @@ When a user is suppressed (Klaviyo unsubscribe) or requests deletion, don't send
 
 UTM params, generic user ids OK. Email + phone require Meta CAPI's hashing convention. Don't send raw PII.
 
+**Corollary — every tracking provider must be disclosed in the privacy policy.** `src/app/(site)/privacy/page.tsx` §7 (Cookies & Tracking) names the marketing pixels AND the server-side conversion APIs. When you add or remove a provider (or move one from pixel-only to server-side), update that section in the same change, and touch CUSTOMER.md §8e (rule 5b). 2026-07-24 (panel F-012): TikTok was tracking every visitor via pixel + Events API while the policy named only the Facebook Pixel — now both Meta and TikTok are disclosed, including the hashed-identifier server-side sharing.
+
 ## R5. UTM persistence respects same-origin
 
 `useUTMPersistence` writes to localStorage / sessionStorage. Don't try to share UTM across origins (privacy + tech limits).
@@ -37,3 +39,33 @@ Adding a new `afterInteractive` (or earlier) tag requires a written perf justifi
 ## R8. Every third-party script must be env-gated, no exceptions
 
 Every tracker mounted from `src/app/layout.tsx` or a loader component must no-op when its id/token env var is blank — `GoogleTagManager` (`!gtmId`), `KlaviyoScriptLoader` (`!companyId`), `ConversionPixels` (per-provider `enabled()`). Contentsquare's `<Script>` was the one exception (a hardcoded `src` with no gate, loading for every visitor in every environment) until 2026-07-22, when it was extracted to `NEXT_PUBLIC_CONTENTSQUARE_ID` (blank ⇒ renders nothing, mirrors `GoogleTagManager`'s convention) — see [.env.example](../../.env.example). Never hardcode a third-party tag id directly into a `<Script src>` — always route it through a `NEXT_PUBLIC_*` var so dev/e2e/staging can disable it without a source change.
+
+## R9. No consent banner — pixels load for every visitor (deliberate, 2026-07-24)
+
+**Tools Australia runs without a cookie/pixel consent banner.** The tracking pixels
+(Meta, TikTok, Snapchat) and the server-side conversion APIs load and fire for every
+visitor. This is a **deliberate product decision**, not an oversight — recorded here so
+nobody "restores" a consent gate believing it was lost by accident.
+
+The codebase already encoded this: `hasPixelConsent()` in
+[`src/components/PixelTracker.tsx`](../../src/components/PixelTracker.tsx) hard-returns
+`true` ("auto-accept mode"), and `grantPixelConsent`/`revokePixelConsent` are no-op
+stubs kept only so legacy deep imports keep compiling.
+
+**What was removed (panel F-019).** `PixelConsentModal` + its `"pixel-consent"`
+`ModalType`, priority entry, `UnifiedModalManager` case, and dev-gallery entry were
+deleted. The modal had been **permanently unreachable**: the manager rendered it with a
+hard-coded `isOpen={false}` and a `// This would be controlled by pixel consent logic`
+placeholder, and both its Accept and Decline handlers merely closed it — Decline gated
+nothing. A consent control that cannot appear, and would not work if it did, is worse
+than none: it implies a choice the visitor does not actually have.
+
+**If a consent banner is ever wanted, it is not a UI task.** It requires, at minimum:
+pixels must not load until consent is given (`ConversionPixels` currently mounts every
+enabled provider on first effect); Decline must actually prevent Meta/TikTok/Snapchat
+from loading AND suppress the server-side CAPI sends for that visitor; consent must
+persist across sessions; and `hasPixelConsent()` must become a real read. Expect
+measured conversions and ROAS to drop when it lands — that is the cost of the control,
+and it should be a planned, communicated change rather than a side effect.
+
+The privacy policy discloses the tracking that actually happens (see R4's corollary).

@@ -608,6 +608,71 @@ HiKOKI toolset render, converted from the supplied PNG). One asset is still a pl
 
 Both mounts pass the resolved `prize` from [src/config/prizes.ts](../../src/config/prizes.ts) — `title` prefers `prize.heroHeading` falling back to `prize.label`, `prizeName` is `prize.label`, `prizeImageUrl` is `prize.gallery?.[0]?.src` (omitted when absent, per the canonical no-sentinel rule). Mirrors the established pattern in [`MiniDrawViewTracking.tsx`](../../src/app/(site)/mini-draws/[id]/components/MiniDrawViewTracking.tsx) and [`ProductViewTracking.tsx`](../../src/app/(site)/shop/[slug]/components/ProductViewTracking.tsx). The event coexists with the existing `Viewed Page` (`PageType: "promotion"`) — does not replace it. Schema + snapshot test live under [docs/tracking/](../tracking/KLAVIYO_INTEGRATION.md).
 
+### Default-theme A/B gate wired into both promo landing pages (2026-07-28)
+
+[`src/app/promotions/[slug]/page.tsx`](../../src/app/promotions/[slug]/page.tsx) and
+[`ToolsetLandingPage.tsx`](../../src/app/promotions/_components/ToolsetLandingPage.tsx) each
+now resolve a **fourth** parallel lookup alongside their existing three (`effectivePromos`,
+`majorDraw`, the slug-targeted `activeExperiment`):
+
+```ts
+ExperimentService.getActiveExperimentForSentinelSlug(PROMO_THEME_SLUG).catch(() => null)
+```
+
+This is the **sentinel** method, not `getActiveExperimentForSlug` — it exact-matches
+`PROMO_THEME_SLUG` (`"__promo-theme__"`, defined in and imported from
+[`src/lib/ab-testing/promo-theme-slug.ts`](../../src/lib/ab-testing/promo-theme-slug.ts))
+and never matches a `"*"` wildcard experiment. **Do not import `PROMO_THEME_SLUG` from
+`usePromoThemeExperiment.ts` in server code** — that hook is `"use client"`, and a Server
+Component that imports a plain constant from a client module gets a client reference, not
+the string value; this is exactly the bug that made the whole feature silently inert (see
+[ab-testing/frontend.md](../ab-testing/frontend.md#usepromothemeexperimentexperimentid)).
+`themeExperimentId` is derived from the result
+with the same ObjectId-vs-string dance as the existing `experimentId`, and is baked into the
+ISR snapshot — identical for every visitor of the current 60s window, same as
+`experimentId`. It's derived earlier in the function than `experimentId` (right after the
+`Promise.all`) because the hero preload guard below needs it.
+
+**Gate mount point.** [`PromoThemeExperimentGate`](../../src/components/ab-testing/PromoThemeExperimentGate.tsx)
+(Task 8) is mounted **inside** `VariantAssignmentWrapper`, wrapping all of that wrapper's
+existing children (`PromoThemeInitializer`, `PromoViewTracking`, the full page `<div>`) in
+their original order:
+
+```tsx
+<VariantAssignmentWrapper experimentId={experimentId}>
+  <PromoThemeExperimentGate experimentId={themeExperimentId}>
+    <PromoThemeInitializer ... />
+    {/* ...existing children, unchanged order... */}
+  </PromoThemeExperimentGate>
+</VariantAssignmentWrapper>
+```
+
+`VariantAssignmentWrapper` itself is untouched — the slug-targeted experiment context is
+unaffected by the theme gate. The gate is an **overlay** (children always render; see its
+own doc comment), so this nesting does not change what the CDN-cached HTML contains — see
+the preload-skip rule below and [gotchas.md](./gotchas.md) for why the overlay property
+matters for the hero specifically.
+
+**Preload-skip rule.** Both files' `heroImagePreload` guard now also skips when
+`themeExperimentId` is non-null (previously it skipped only when `heroVideo` was truthy):
+
+```ts
+const heroImagePreload =
+  heroVideo || themeExperimentId
+    ? null
+    : { mobile: ..., desktop: ... };
+```
+
+Rationale: `heroImagePreload` is computed from `heroImagePaths.desktop/.mobile` — always the
+**light** paths, since the server has no theme and never consults the `*Dark` fields. With
+the gate wired in, a dark-arm visitor would preload the light hero, discard it once the
+client resolves their arm, then fetch the dark one — a systematic bandwidth/LCP handicap on
+exactly one arm. That would read as "dark converts worse" in the experiment's metrics and
+corrupt the result, which is the entire point of the feature. Skipping the preload while the
+sentinel experiment is active costs both arms equally (neither gets a preloaded hero), which
+is the only fair option. This mirrors the existing `heroVideo` skip rule immediately above it
+in both files — same reasoning, different trigger.
+
 ## Hooks
 
 | Hook | Purpose |

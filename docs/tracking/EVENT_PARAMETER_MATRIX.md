@@ -60,10 +60,16 @@ Two server entry points:
 | Source | TikTok key | Hashed? | Where set |
 |---|---|---|---|
 | email | `user.email` | **SHA-256** (lowercase+trim) | server: `mapCanonicalToTikTokEvent`; browser: `ttq.identify` (SDK hashes) |
-| phone | `user.phone_number` | **SHA-256** (E.164 first, via `normalizePhoneE164`) | server + `ttq.identify` |
+| phone | `user.phone` ⚠️ **not** `phone_number` | **SHA-256** (E.164 first, via `normalizePhoneE164`) | server + `ttq.identify` (the pixel SDK *does* use `phone_number` — see the note below) |
 | user `_id` | `user.external_id` | **SHA-256** | server + `ttq.identify` |
-| ttclid | `user.ttclid` | **raw** | URL `?ttclid=` → cookie ([captureTikTokClickId](../../src/utils/tracking/tiktok-helpers.ts)); server reads cookie; pixel auto-attaches |
-| `_ttp` cookie | `user.ttp` | **raw** | server reads cookie (`extractTikTokContext`); pixel sets/uses it |
+| firstName | `user.first_name` | **SHA-256** (lowercase, all whitespace stripped) | server |
+| lastName | `user.last_name` | **SHA-256** (lowercase, all whitespace stripped) | server |
+| zipCode | `user.zip_code` | **SHA-256** (lowercase, all whitespace stripped) | server |
+| city | `user.city` | **plaintext** (lowercase, alphanumerics only) | server |
+| state | `user.state` | **plaintext** (lowercase, alphanumerics only) | server |
+| country | `user.country` | **plaintext** (ISO alpha-2, lowercased) | server |
+| ttclid | `user.ttclid` | **raw** | URL `?ttclid=` → cookie ([captureTikTokClickId](../../src/utils/tracking/tiktok-helpers.ts)); server reads cookie; pixel auto-attaches; webhook Purchase reads Stripe metadata `capi_ttclid` |
+| `_ttp` cookie | `user.ttp` | **raw** | server reads cookie (`extractTikTokContext`); pixel sets/uses it; webhook Purchase reads `capi_ttp` |
 | IP | `user.ip` | **raw** | server from request headers |
 | user-agent | `user.user_agent` | **raw** | server from request headers |
 
@@ -114,7 +120,7 @@ Two server entry points:
 
 | | Hashed (SHA-256, lowercase+trim) | Sent raw |
 |---|---|---|
-| **TikTok** | email, phone_number (E.164), external_id | ttclid, ttp, ip, user_agent |
+| **TikTok** | email, **phone** (E.164), external_id, first_name, last_name, zip_code | ttclid, ttp, ip, user_agent, **city, state, country** (plaintext, lowercased) |
 | **Meta** | em, ph, fn, ln, ct, st, zp, country, db, external_id | fbc, fbp, client_ip_address, client_user_agent |
 
 Same `hashPII` helper ([canonical-event.ts](../../src/lib/tracking/canonical-event.ts)) is used server-side for both, and the browser SDKs (`ttq.identify`, `fbq` AM) hash with identical normalization — so browser and server hashes match and the platforms can merge identity across surfaces. **Never pre-hash a field the SDK already hashes (double-hash = no match); never hash a raw field (breaks click/IP matching).**

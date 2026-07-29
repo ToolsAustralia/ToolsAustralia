@@ -36,6 +36,28 @@ The matcher uses **a single regex** with all exclusions combined inside one nega
 
 **Gotcha to remember:** Splitting exclusions into two matcher entries causes middleware to run on paths that should be excluded. For example, two-entry exclusion of `/api/**` (entry 1) AND non-extension paths (entry 2) would still run middleware on `/api/admin/*` because entry 2's "non-extension" pattern matches it. Always keep all exclusions inside one negative lookahead in a single matcher entry.
 
+## Edge runtime constraint — `ta_anon_id` minted in middleware (2026-07-28)
+
+`src/middleware.ts` runs in the Edge runtime, which does not support Node's
+`crypto` module or `next/headers`. `AnonymousIdService`
+([src/services/ab-testing/AnonymousIdService.ts](../../src/services/ab-testing/AnonymousIdService.ts))
+imports both, so it **cannot** be imported into middleware — doing so breaks
+the build. Middleware instead mints the `ta_anon_id` cookie itself, on the
+"all other routes" path right after `const response = NextResponse.next();`,
+using a tiny standalone edge-safe module,
+[`src/lib/ab-testing/anon-id-cookie.ts`](../../src/lib/ab-testing/anon-id-cookie.ts),
+which uses only Web Crypto (`crypto.randomUUID()`, available as an edge
+global — no import needed). This duplicates (does not re-export) the cookie
+name, 90-day TTL and validation rule from `AnonymousIdService`; see
+[docs/ab-testing/architecture.md](../ab-testing/architecture.md) for why the
+mint had to move to middleware (concurrent `/assign` calls on the same page
+would otherwise split into two anonymous ids for one visitor). Setting a
+cookie on the middleware response does **not** change a page's
+static/dynamic rendering class — confirmed via `npm run build`: the
+`/promotions/[slug]` route stayed in the static route-table group after this
+change, so the marketing-class invariant above (route classes: nonce vs
+marketing) is unaffected.
+
 ## Rate limiting
 
 [src/lib/rate-limiting/](../../src/lib/rate-limiting/) — primitives for per-IP / per-user / global rate limits. Used by:

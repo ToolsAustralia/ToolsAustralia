@@ -43,7 +43,9 @@ const MODES = ["light", "dark"];
  * the guard forever on a healthy tree. Delete an entry the moment its art ships.
  */
 const KNOWN_GAPS = new Set([
-  "ryobi|gwTB", // GearWrench × Ryobi was not produced for Draw 9 — 24 files outstanding.
+  // Empty — every brand × toolbox pair now ships art. `ryobi|gwTB` was the last gap and
+  // landed 2026-07-28 (see scripts/convert-ryobi-gearwrench-landing.ts). Keep this set:
+  // it is where a future incomplete drop gets recorded rather than silently failing.
 ]);
 
 function landingPath(rel) {

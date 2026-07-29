@@ -293,6 +293,12 @@ The `signupAttribution` subdocument on `User` captures the marketing context at 
 
 Any code reading `user.signupAttribution.promotionSlug` must guard for `undefined`. The attribution resolver (`src/services/attribution/`) treats the absence of a promo slug as a normal non-promo registration — it does not treat it as missing attribution.
 
+### `signupAttribution.clickPlatform` (2026-07-24)
+
+New optional field: `"meta" | "tiktok" | "snapchat" | "google"`. The paid platform whose **click id** (`_fbc` / `ttclid` / `_sc_click`) was present in the request cookies at registration, resolved server-side in the register route via `extractClickIdsFromRequest` (most-recent capture wins). **Only the platform name is stored — never the raw click id**, so signup-source analytics gain click-verified confidence without adding a new identifier to the customer record.
+
+Absent for organic signups and for **every account created before 2026-07-24** — readers must fall back to `utmSource` (via `normalizeUtmToPlatform`) and then to `direct`, which is exactly what `getSignupsByPlatform` does. Note this field can now be the ONLY populated attribution on the subdoc: a paid click landing on an untagged URL persists `visitedAt` + `clickPlatform` with no promo slug and no UTMs (previously such a signup produced no `signupAttribution` at all).
+
 ## `User.retentionOffersConsumed` (top-level flags on `User`)
 
 Two boolean flags that gate the new cancellation-flow one-time retention offers. Both default to `false`. Set to `true` when the user successfully redeems the corresponding offer — prevents repeat redemption across sessions.

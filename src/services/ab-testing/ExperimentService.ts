@@ -51,6 +51,14 @@ export class ExperimentService {
   }
 
   /**
+   * Find an active experiment by sentinel slug (site-wide cosmetic tests).
+   * Exact match — a wildcard ("*") experiment must never resolve here.
+   */
+  async getActiveExperimentForSentinelSlug(slug: string) {
+    return ExperimentRepository.findActiveBySentinelSlug(slug);
+  }
+
+  /**
    * Check if experiment can be edited (not locked)
    */
   async canEditExperiment(experimentId: string): Promise<boolean> {

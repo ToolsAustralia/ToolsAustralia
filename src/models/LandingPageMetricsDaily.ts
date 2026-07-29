@@ -25,6 +25,16 @@ export interface ILandingPackagesFocusSplit {
  * Materialized aggregate: spend and delivery metrics per canonical landing URL per day.
  */
 export interface ILandingPageMetricsDaily extends Document {
+  /**
+   * Which ad platform produced this row (2026-07-29). Part of the unique key.
+   *
+   * Without it, two platforms' rollups for the same landing URL on the same day would
+   * collide — and worse, `PrizePerformanceCard` sums every returned row matching
+   * `/promotions/<slug>`, so unfiltered reads would blend Meta and TikTok spend into one
+   * figure with no visual indication, dividing one platform's revenue by combined spend.
+   * Every read and the delete-and-rebuild filter must pass a platform.
+   */
+  platform: "meta" | "tiktok";
   adAccountId: string;
   /** YYYY-MM-DD */
   date: string;
@@ -60,6 +70,8 @@ const PackagesFocusSplitSchema = new Schema<ILandingPackagesFocusSplit>(
 
 const LandingPageMetricsDailySchema = new Schema<ILandingPageMetricsDaily>(
   {
+    // No default: an unstamped row is a bug, and defaulting to "meta" would hide it.
+    platform: { type: String, required: true, enum: ["meta", "tiktok"] },
     adAccountId: { type: String, required: true, index: true },
     date: { type: String, required: true },
     canonicalUrl: { type: String, required: true },
@@ -75,8 +87,15 @@ const LandingPageMetricsDailySchema = new Schema<ILandingPageMetricsDaily>(
   { timestamps: false }
 );
 
-LandingPageMetricsDailySchema.index({ adAccountId: 1, date: 1, canonicalUrl: 1 }, { unique: true });
-LandingPageMetricsDailySchema.index({ adAccountId: 1, date: 1 });
+// The old unique key omitted `platform`; the migration
+// (scripts/migrations/2026-07-29-platform-scope-landing-page-metrics.ts) stamps existing
+// rows and swaps the index. Leaving the old index in place would let one platform's
+// recompute collide with another's row for the same URL and day.
+LandingPageMetricsDailySchema.index(
+  { platform: 1, adAccountId: 1, date: 1, canonicalUrl: 1 },
+  { unique: true },
+);
+LandingPageMetricsDailySchema.index({ platform: 1, adAccountId: 1, date: 1 });
 
 export default mongoose.models.LandingPageMetricsDaily ||
   mongoose.model<ILandingPageMetricsDaily>("LandingPageMetricsDaily", LandingPageMetricsDailySchema);

@@ -83,8 +83,17 @@ Targets the membership section site-wide without a global VariantProvider:
   `ExperimentRepository.findActiveBySlug` matches `slugTargets: { $in: [slug, "*"] }`;
   `*` would also resolve on `/promotions/[slug]` and collide with promo
   experiments (newest `createdAt` wins). The sentinel can never match a real
-  prize slug, so there is zero collision and zero change to ExperimentService /
-  ExperimentRepository / the promo page.
+  prize slug, so a page-targeted promo experiment can never shadow it — but
+  that is only a **prize-slug → sentinel** guarantee, not zero collision
+  overall: `findActiveBySlug` still matches `$in: [slug, "*"]`, so an active
+  **wildcard** ("All Pages") experiment created after the sentinel one would
+  still be the newest match and hijack the sentinel lookup. Site-wide sentinel
+  lookups (e.g. `__membership-theme__`, `__promo-theme__`) MUST go through
+  `ExperimentRepository.findActiveBySentinelSlug` /
+  `ExperimentService.getActiveExperimentForSentinelSlug`, which use
+  `buildActiveExperimentQuery(slug, { allowWildcard: false }, now)` — an exact
+  match on `slugTargets` that never matches `"*"`. `findActiveBySlug` (used by
+  page-targeted lookups) is unchanged and still legitimately matches `"*"`.
 - `GET /api/ab-testing/membership-theme-experiment` — read-only discovery,
   returns `{ experimentId | null }`, no DB writes.
 - `useMembershipThemeExperiment()` discovers the id then POSTs the existing
@@ -97,6 +106,67 @@ Targets the membership section site-wide without a global VariantProvider:
   config field. `MembershipSection` ANDs `!forceLight` into its `isDark` line.
 - Conversion = membership purchase, attributed via the existing
   pixel-purchase-tracking cookie path. No new tracking code.
+
+## Promo landing default-theme experiment
+
+`VariantConfig.promoTheme.defaultTheme` (`"light" | "dark"`) is the theme a
+bucketed visitor is defaulted into on promo landing pages. It is applied only
+when the visitor has never used the theme toggle — a manual toggle wins
+permanently. Control carries `defaultTheme: "light"` **explicitly** (not an
+absent key) so the admin config UI and `getDefaultConfig()` read
+unambiguously. Conversion + wiring for this experiment are covered by later
+tasks in this plan; this section documents the config field itself.
+
+### The merge-whitelist footgun
+
+`VariantConfigService.mergeVariantConfig` does **not** spread `baseConfig`/
+`variantConfig` wholesale — it rebuilds the returned object key-by-key from a
+hard-coded literal. `getDefaultConfig()` and `validateVariantConfig()` are
+built the same explicit way. This means:
+
+> Any new `VariantConfig` key **must** be added to all three of
+> `mergeVariantConfig`, `getDefaultConfig`, and `validateVariantConfig`, or it
+> is **silently stripped** between MongoDB and the browser on every
+> `POST /api/ab-testing/assign` response.
+
+`tsc` cannot catch this — every `VariantConfig` field is optional, so a
+variant config carrying a key that `mergeVariantConfig` doesn't know about
+still type-checks fine and simply vanishes at runtime. The practical failure
+mode is worse than a crash: assignments and page views still record
+normally, the admin dashboard still shows a healthy 50/50 split, but every
+arm renders identically — a silent A/A test producing confident, wrong
+conclusions. When adding a new experiment config field, add it to all three
+functions in the same change, and cover it with an assertion (see
+`variantConfigService.membershipTheme.test.ts` for the `promoTheme` guard
+pattern) rather than relying on type-checking alone.
+
+## Anonymous visitor identity (`ta_anon_id`) — minted in middleware (2026-07-28)
+
+A promo landing page can fire **two concurrent** `POST /api/ab-testing/assign`
+calls in the same effect flush — one for the page's slug-targeted experiment,
+one for the site-wide theme experiment (`__promo-theme__`, see above).
+`AnonymousIdService.getOrCreateAnonymousId` mints a fresh `anon_<uuid>` **per
+request** and cannot persist it (it runs inside a route handler, which can
+only `Set-Cookie` its own response) — so with no shared mint, each handler
+would generate its own id and Set-Cookie it, last write wins. The
+`VariantAssignment` unique index is `(experimentId, anonymousId)`, so **both**
+resulting rows are legal: the visitor is silently counted as two exposures
+and gets re-bucketed on a later visit when the surviving cookie doesn't match
+either assignment.
+
+Fix: `src/middleware.ts` mints the `ta_anon_id` cookie **once**, before either
+`/assign` handler runs, immediately after `const response = NextResponse.next();`
+in the "all other routes" path. Both concurrent `/assign` calls then read the
+same already-set cookie via `AnonymousIdService.extractAnonymousId` /
+`getOrCreateAnonymousId` and agree on one identity. The cookie contract (name,
+90-day TTL, `anon_` + length validation) is duplicated — not re-exported —
+in the edge-safe [`src/lib/ab-testing/anon-id-cookie.ts`](../../src/lib/ab-testing/anon-id-cookie.ts),
+because `AnonymousIdService` imports `next/headers` and node `crypto`, neither
+of which is available in middleware's edge runtime (see
+[docs/security-csp/architecture.md](../security-csp/architecture.md)). Keep
+the two modules' cookie name/TTL/validation rule identical by hand — if they
+drift, assignments split across two ids for the same visitor again, which is
+exactly the bug this fixes.
 
 ## Migrated from `docs/AB_TESTING_*.md`
 

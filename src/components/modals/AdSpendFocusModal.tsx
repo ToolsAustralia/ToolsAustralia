@@ -103,7 +103,9 @@ export default function AdSpendFocusModal({
         title="Ad spend — packages focus"
         subtitle={
           data?.supported
-            ? `Membership vs one-time landing URLs${rangeLabel ? ` · ${rangeLabel}` : ""} · Meta-reported revenue`
+            ? `Membership vs one-time landing URLs${rangeLabel ? ` · ${rangeLabel}` : ""} · ${
+                platform === "tiktok" ? "TikTok" : "Meta"
+              }-reported revenue`
             : rangeLabel
         }
         onClose={onClose}
@@ -115,10 +117,10 @@ export default function AdSpendFocusModal({
             {platformChip("tiktok", "TikTok")}
           </div>
 
-          {platform === "tiktok" && data && !data.supported && (
+          {data && !data.supported && (
             <div className="p-6 text-center text-sm text-neutral-500 dark:text-neutral-400 border border-dashed border-neutral-300 dark:border-neutral-700 rounded-xl">
-              TikTok ad→landing-URL mapping isn&apos;t synced yet — the split lights up here once the TikTok
-              destination resolver ships. Spend itself is on the TikTok Ads tab.
+              {platform === "tiktok" ? "TikTok" : "Meta"} isn&apos;t connected in this environment — no ad
+              account is configured, so there is nothing to split. This is not the same as $0 spent.
             </div>
           )}
 
@@ -165,6 +167,14 @@ export default function AdSpendFocusModal({
             <CampaignTreeTable
               campaigns={buckets[focusTab]}
               ariaLabel={`Campaigns — ${focusTab} focus`}
+              // An empty bucket has two very different causes and the reader can't tell them
+              // apart from a blank table: the bucket genuinely has no spend, or the per-ad
+              // detail behind it has aged out. Say which.
+              emptyMessage={
+                summary && summary[focusTab].spendCents > 0
+                  ? `No per-ad detail retained for the ${focusTab} bucket in this range — the summary tile above still counts its $${summary[focusTab].spend.toFixed(2)}.`
+                  : `No ${focusTab} spend on ${platform === "tiktok" ? "TikTok" : "Meta"} in this range.`
+              }
             />
           )}
         </div>

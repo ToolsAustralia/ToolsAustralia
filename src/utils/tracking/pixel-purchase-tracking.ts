@@ -62,6 +62,15 @@ export interface PixelPurchaseParams {
     client_user_agent?: string;
     fbc?: string;
     fbp?: string;
+    /**
+     * TikTok click id / first-party browser id, carried through Stripe metadata
+     * (`capi_ttclid` / `capi_ttp`) by the payment-creation routes. Purchase fires from the
+     * Stripe webhook, which has no browser cookies — without this hand-off the server
+     * Purchase reaches TikTok with no click id at all (the Meta side already did this
+     * with fbc/fbp; TikTok was simply never wired to the same channel).
+     */
+    ttclid?: string;
+    ttp?: string;
     event_source_url?: string;
   };
   // Alternative: Direct parameters (for flexibility)
@@ -255,6 +264,9 @@ export async function trackPixelPurchase(params: PixelPurchaseParams): Promise<b
         clientUserAgent: resolvedUserAgent,
         fbc,
         fbp,
+        // Read by the TikTok provider only (same way fbc/fbp are FB-only).
+        ttclid: requestContext?.ttclid,
+        ttp: requestContext?.ttp,
       },
       customData: {
         orderId,
@@ -842,12 +854,23 @@ export async function trackPixelSubscriptionDowngrade(params: {
 }
 
 /**
- * Track subscription renewal events
- * NOTE: Renewals are NOT sent to Facebook as Purchase events per best practices.
- * Only tracks to TikTok/Klaviyo for internal analytics.
- * Facebook should only receive new purchase events, not renewals.
+ * Subscription-renewal tracking seam — **intentionally sends nothing** (panel F-020).
+ *
+ * Renewals are deliberately excluded from ad-platform conversion tracking: counting a
+ * renewal as a Purchase inflates reported revenue and corrupts ROAS. That rule already
+ * held for Facebook; the old docstring's claim that renewals were "tracked to
+ * TikTok/Klaviyo for internal analytics" was **false** — the only call in the body was
+ * the browser helper `trackTikTokEvent`, and this function runs SERVER-side (Stripe
+ * webhook → `stripe-webhook-handlers`), where that helper returns immediately because
+ * `window` is undefined. There was no Klaviyo call either. So it has always been a
+ * no-op wearing a misleading label.
+ *
+ * Kept (rather than deleted along with its webhook call) as the documented seam for if
+ * renewals ever need FIRST-PARTY internal analytics — removing it would mean editing
+ * the Stripe webhook handler, a payments risk path, for zero behavioral gain. If you
+ * add anything here, it must NOT be an ad-platform conversion event.
  */
-export async function trackPixelSubscriptionRenewal(params: {
+export async function trackPixelSubscriptionRenewal(_params: {
   value: number;
   currency: string;
   subscriptionId: string;
@@ -873,57 +896,8 @@ export async function trackPixelSubscriptionRenewal(params: {
   clientIpAddress?: string;
   clientUserAgent?: string;
 }): Promise<void> {
-  try {
-    const {
-      value,
-      currency,
-      subscriptionId,
-      invoiceId,
-      packageId,
-      packageName,
-      userId,
-      userEmail,
-      userPhone: _userPhoneRenewal,
-      userFirstName: _userFirstNameRenewal,
-      userLastName: _userLastNameRenewal,
-      entriesPerMonth,
-      eventSourceUrl: _eventSourceUrlRenewal,
-      fbc: _providedFbcRenewal,
-      fbp: _providedFbpRenewal,
-      requestContext: _requestContextRenewal,
-      clientIpAddress: _clientIpAddressRenewal,
-      clientUserAgent: _clientUserAgentRenewal,
-    } = params;
-
-    // Generate unique event ID for deduplication
-    const eventID = generateEventID("renewal", subscriptionId);
-    const _eventTime = Math.floor(Date.now() / 1000);
-
-    // Prepare common parameters for TikTok/Klaviyo tracking
-    const commonParams = {
-      eventID,
-      value,
-      currency,
-      order_id: invoiceId, // Use invoice ID as order ID for renewals
-      content_type: "subscription_renewal",
-      content_ids: [packageId],
-      subscription_id: subscriptionId,
-      package_id: packageId,
-      package_name: packageName,
-      entries_per_month: entriesPerMonth,
-      user_id: userId,
-      user_email: userEmail,
-      platform: "tools-australia",
-    };
-
-    // ✅ CRITICAL: Renewals are NOT sent to Facebook as Purchase events per best practices
-    // Facebook should only receive new purchase events, not subscription renewals
-    // This ensures accurate conversion tracking and prevents inflated revenue metrics
-
-    // Track TikTok Pixel (optional - for internal analytics)
-    await trackTikTokEvent("CompletePayment", commonParams);
-    // console.log(`📱 TikTok Pixel: Subscription renewal tracked - $${value} ${currency}`);
-  } catch {
-    // console.error("❌ Error tracking pixel subscription renewal:", error);
-  }
+  // No-op by design — see the docstring above. The previous body destructured every
+  // param and built a `commonParams` payload solely to hand to a browser-only helper
+  // that cannot run here, so it has been removed rather than left as dead weight that
+  // reads like working tracking.
 }

@@ -1,5 +1,8 @@
 import { fetchFacebookInsights } from "@/lib/facebook-marketing";
 import { formatInTimeZone } from "date-fns-tz";
+import connectDB from "@/lib/mongodb";
+import TikTokAdInsightsDaily from "@/models/TikTokAdInsightsDaily";
+import { isTikTokAdInsightsConfigured } from "@/services/admin/tiktok/tiktokAdInsights";
 
 const AEST_TIMEZONE = "Australia/Sydney";
 
@@ -96,10 +99,88 @@ export const facebookAdChannelProvider: AdChannelProvider = {
 };
 
 /**
+ * TikTok spend/revenue per AEST day, read from TikTokAdInsightsDaily (filled by the
+ * nightly /api/cron/sync-tiktok-ads — NOT a live Marketing-API call, so this provider
+ * is cheap and rate-limit-free). Key "tiktok" is what PLATFORM_TO_AD_CHANNEL_KEY maps
+ * the tiktok platform to — without this provider the overview Advertising card, blended
+ * ROAS, and MER could never show TikTok spend (panel F-001).
+ *
+ * revenue here is TIKTOK-reported purchase value (platform attribution), matching how
+ * the facebook provider stores Meta-reported revenue — the card's trueRoas still uses
+ * first-party attributed revenue; this map is the spend + platform-reported side.
+ */
+export const tiktokAdChannelProvider: AdChannelProvider = {
+  key: "tiktok",
+  async fetchForDay({ dayStartUTC }) {
+    // Missing config counts as an ERROR (preserve), not "empty" — same rule as the
+    // facebook provider: an accidentally unset token must not wipe stored spend.
+    if (!isTikTokAdInsightsConfigured()) {
+      console.error(
+        "[adChannel:tiktok] TIKTOK_ADVERTISER_ID or TIKTOK_MARKETING_ACCESS_TOKEN not set — preserving any prior snapshot value"
+      );
+      return { status: "error" };
+    }
+
+    const dateStr = aestDateString(dayStartUTC);
+    // No ad data exists for future days — genuinely "empty", not an error.
+    if (dateStr > aestDateString(new Date())) return { status: "empty" };
+
+    try {
+      await connectDB();
+      const advertiserId = process.env.TIKTOK_ADVERTISER_ID?.trim();
+      const match: Record<string, unknown> = { date: dateStr };
+      if (advertiserId) match.adAccountId = advertiserId;
+      const agg = await TikTokAdInsightsDaily.aggregate<{
+        spendCents: number;
+        revenueCents: number;
+        impressions: number;
+        clicks: number;
+      }>([
+        { $match: match },
+        {
+          $group: {
+            _id: null,
+            spendCents: { $sum: "$spendCents" },
+            revenueCents: { $sum: "$revenueCents" },
+            impressions: { $sum: "$impressions" },
+            clicks: { $sum: "$clicks" },
+          },
+        },
+      ]);
+      // No synced rows for that day (e.g. pre-token history, or the nightly sync
+      // hasn't covered it) → absent, mirroring facebook's zero-insights branch.
+      if (agg.length === 0) return { status: "empty" };
+      const m = agg[0];
+      const spend = (m.spendCents ?? 0) / 100;
+      const revenue = (m.revenueCents ?? 0) / 100;
+      return {
+        status: "ok",
+        metrics: {
+          spend,
+          revenue,
+          roas: spend > 0 ? revenue / spend : 0,
+          impressions: m.impressions ?? 0,
+          clicks: m.clicks ?? 0,
+        },
+      };
+    } catch (err) {
+      console.error(
+        `[adChannel:tiktok] read FAILED for ${dateStr} — preserving prior snapshot value:`,
+        err
+      );
+      return { status: "error" };
+    }
+  },
+};
+
+/**
  * Registered providers. To add a new channel, append its provider here.
  * Snapshots will start capturing the new channel on the next cron run.
  */
-export const AD_CHANNEL_PROVIDERS: AdChannelProvider[] = [facebookAdChannelProvider];
+export const AD_CHANNEL_PROVIDERS: AdChannelProvider[] = [
+  facebookAdChannelProvider,
+  tiktokAdChannelProvider,
+];
 
 /**
  * Merge freshly-fetched per-channel results with the prior snapshot's stored

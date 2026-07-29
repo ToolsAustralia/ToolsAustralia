@@ -21,6 +21,7 @@ import {
   extractRequestContext,
 } from "@/utils/tracking/facebook-helpers";
 import { extractAttributionParams } from "@/utils/tracking/utm-helpers";
+import { extractClickIdsFromRequest } from "@/utils/tracking/click-capture";
 import { parseReferrer } from "@/utils/tracking/referrer-helpers";
 import { userDataForRegistration } from "@/utils/tracking/registration-user-data";
 import { trackAffiliateSignup } from "@/lib/affiliate";
@@ -210,7 +211,14 @@ function getAttributionFromRequest(
  */
 function buildSignupAttribution(
   promotionSlug?: string,
-  attribution?: AttributionParams
+  attribution?: AttributionParams,
+  /**
+   * Paid platform resolved from the request's click-id cookies (`_fbc`/`ttclid`/
+   * `_sc_click`). Gives signup-source analytics the SAME click-verified basis that
+   * purchases already use — without it, a paid signup that landed without UTM tags is
+   * indistinguishable from organic. Only the platform is persisted, never the click id.
+   */
+  clickPlatform?: "meta" | "tiktok" | "snapchat" | "google"
 ): {
   promotionPageType?: "evergreen" | "toolset";
   promotionSlug?: string;
@@ -223,6 +231,7 @@ function buildSignupAttribution(
   campaignId?: string;
   adsetId?: string;
   adId?: string;
+  clickPlatform?: "meta" | "tiktok" | "snapchat" | "google";
 } | undefined {
   const hasPromo = !!promotionSlug && isValidPromoSlug(promotionSlug);
   const hasAttribution = !!(
@@ -230,7 +239,8 @@ function buildSignupAttribution(
     (attribution.utm_source || attribution.utm_medium || attribution.utm_campaign ||
      attribution.campaign_id || attribution.adset_id || attribution.ad_id)
   );
-  if (!hasPromo && !hasAttribution) return undefined;
+  // A paid click with no promo slug and no UTMs is still real attribution — persist it.
+  if (!hasPromo && !hasAttribution && !clickPlatform) return undefined;
   return {
     ...(hasPromo && {
       promotionPageType: getPageTypeFromSlug(promotionSlug!),
@@ -245,7 +255,34 @@ function buildSignupAttribution(
     ...(attribution?.campaign_id && { campaignId: attribution.campaign_id }),
     ...(attribution?.adset_id && { adsetId: attribution.adset_id }),
     ...(attribution?.ad_id && { adId: attribution.ad_id }),
+    ...(clickPlatform && { clickPlatform }),
   };
+}
+
+/**
+ * Resolve the paid platform from the request's click-id cookies, if any.
+ *
+ * Reuses `extractClickIdsFromRequest` — the SAME extractor the payment-attribution path
+ * uses — so a signup and the purchase that follows it agree on the platform. When more
+ * than one click id is present (rare: a visitor clicked ads on two platforms), the most
+ * recently captured wins, matching the recency rule in `platformPriority.ts`; signals
+ * with no capture timestamp lose to any dated one and otherwise fall back to declaration
+ * order. Returns undefined for organic traffic.
+ */
+function resolveSignupClickPlatform(
+  request: NextRequest
+): "meta" | "tiktok" | "snapchat" | "google" | undefined {
+  try {
+    const signals = extractClickIdsFromRequest(request);
+    if (signals.length === 0) return undefined;
+    // capturedAt is epoch ms (or null when undatable) — a null loses to any dated signal.
+    const best = [...signals].sort((a, b) => (b.capturedAt ?? 0) - (a.capturedAt ?? 0))[0];
+    const p = best.platform;
+    return p === "meta" || p === "tiktok" || p === "snapchat" || p === "google" ? p : undefined;
+  } catch {
+    // Attribution is never allowed to break registration.
+    return undefined;
+  }
 }
 
 // Abuse guard: each registration triggers a Stripe customer create + a Facebook
@@ -336,6 +373,11 @@ export async function POST(request: NextRequest) {
 
     // Attribution for signup (client-sent or fallback to Referer)
     const attribution = getAttributionFromRequest(validatedData, request.headers.get("referer"));
+    // Resolved once here and threaded into every buildSignupAttribution call below —
+    // ALL FOUR registration branches (existing-plain-account, existing-by-email,
+    // existing-by-mobile, brand-new) must stamp it, or signup-source analytics would
+    // silently under-count paid signups for returning users.
+    const signupClickPlatform = resolveSignupClickPlatform(request);
 
     // console.log(`🔄 Attempting to register user: ${validatedData.email}`);
 
@@ -484,7 +526,7 @@ export async function POST(request: NextRequest) {
           existingUser.email = validatedData.email.toLowerCase().trim();
           existingUser.mobile = cleanedMobile;
 
-          const signupAttr = buildSignupAttribution(validatedData.promotionSlug, attribution);
+          const signupAttr = buildSignupAttribution(validatedData.promotionSlug, attribution, signupClickPlatform);
           if (signupAttr) existingUser.signupAttribution = signupAttr;
 
           // Handle affiliate code update (only if provided and not already set)
@@ -624,7 +666,7 @@ export async function POST(request: NextRequest) {
       existingUser.email = validatedData.email.toLowerCase().trim();
       existingUser.mobile = cleanedMobile;
 
-      const signupAttrEmail = buildSignupAttribution(validatedData.promotionSlug, attribution);
+      const signupAttrEmail = buildSignupAttribution(validatedData.promotionSlug, attribution, signupClickPlatform);
       if (signupAttrEmail) existingUser.signupAttribution = signupAttrEmail;
 
       // Handle affiliate code update (only if provided and not already set)
@@ -717,7 +759,7 @@ export async function POST(request: NextRequest) {
       existingUser.email = validatedData.email.toLowerCase().trim();
       existingUser.mobile = cleanedMobile;
 
-      const signupAttrMobile = buildSignupAttribution(validatedData.promotionSlug, attribution);
+      const signupAttrMobile = buildSignupAttribution(validatedData.promotionSlug, attribution, signupClickPlatform);
       if (signupAttrMobile) existingUser.signupAttribution = signupAttrMobile;
 
       // Handle affiliate code update (only if provided and not already set)
@@ -800,7 +842,7 @@ export async function POST(request: NextRequest) {
     }
 
     // No existing accounts found - create new user account (passwordless)
-    const signupAttr = buildSignupAttribution(validatedData.promotionSlug, attribution);
+    const signupAttr = buildSignupAttribution(validatedData.promotionSlug, attribution, signupClickPlatform);
     const newUser = new User({
       firstName: validatedData.firstName.trim(),
       lastName: validatedData.lastName.trim(),

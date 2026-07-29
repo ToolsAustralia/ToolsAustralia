@@ -21,7 +21,9 @@ import {
 
 const TZ = "Australia/Sydney";
 const MUTED = "text-neutral-300 dark:text-neutral-600";
-const AWAITING = "text-2xs text-amber-600/80 dark:text-amber-500/80 font-medium";
+// amber-700 for WCAG AA in light mode (5.02:1 vs amber-600/80's 2.51:1) — matches
+// AdvertisingPlatformCard's AWAITING (panel F-010).
+const AWAITING = "text-2xs text-amber-700 dark:text-amber-500/80 font-medium";
 
 function formatPeriod(startISO: string, endISO: string): string {
   const start = formatInTimeZone(new Date(startISO), TZ, "d MMM");

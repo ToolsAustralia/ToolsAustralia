@@ -20,6 +20,7 @@ import ExperimentDetailModal from "./ExperimentDetailModal";
 import { format } from "date-fns";
 import { ExperimentStatusBadge } from "@/components/admin/ui/AdminBadge";
 import { usePermissions } from "@/hooks/usePermissions";
+import { isNonConversionSentinelExperiment } from "@/lib/ab-testing/non-conversion-sentinels";
 
 /**
  * A/B Testing Management Component
@@ -210,6 +211,10 @@ export default function ABTestingManagement() {
                       <div className="text-xs sm:text-sm text-gray-500 dark:text-neutral-400">
                         {experiment.slugTargets.includes("*") ? (
                           <span className="font-medium">All Pages</span>
+                        ) : isNonConversionSentinelExperiment(experiment.slugTargets) ? (
+                          // A sentinel is a marker, not a page — "1 page(s)" made a
+                          // site-wide experiment look scoped to a single URL.
+                          <span className="font-medium">Site-wide (promo pages)</span>
                         ) : (
                           <span>{experiment.slugTargets.length} page(s)</span>
                         )}
