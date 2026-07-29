@@ -441,3 +441,15 @@ Neither ⇒ **`direct`**, never dropped — so per-platform counts always sum to
 The platform figures were **already being captured** per channel by each `AdChannelProvider` (`AdChannelMetrics { spend, revenue, roas }` — Meta from its API, TikTok summed from `TikTokAdInsightsDaily` by `tiktokAdChannelProvider`); the service simply read `.spend` and discarded the rest. Exposing them is a read change, not new plumbing.
 
 **The two ROAS values disagree by design** — different attribution models, lookback windows, and de-duplication — and the *gap* is the signal (a platform claiming far more than the server confirms is over-attributing). Never present them as one number or reconcile them. A platform with spend but no reported value yields `platformRoas` absent → the card renders `noData`, which is deliberately distinct from "not applicable" (owned channels). A platform with **signups but no revenue** now still produces a row — that channel is creating accounts that haven't converted, which is exactly what the signup column exists to reveal.
+
+### `adTotals` — all-platform Ad Spend / ROAS for the headline KPIs (2026-07-29)
+
+`DashboardStatsService` emits `adTotals: { spend, revenue, roas, spendTrend?, roasTrend? }` — every ad channel with a spend feed, summed (Meta + TikTok today; a new `AdChannelProvider` joins automatically).
+
+**Why it is a NEW field rather than a redefinition of `facebookAds`.** The Overview's Ad Spend / ROAS KPIs read `facebookAds` alone, which was accurate while Meta was the only channel with spend. TikTok's spend sync is live, so a Meta-only headline understates what the business actually spent. But `facebookAds` is **also read by the Norm gateway** (`/v1/dashboard/stats`), and silently widening its meaning would drift Norm's numbers with no schema change to notice (rule 10). So `facebookAds` stays Meta-only and true to its name; `adTotals` is the combined figure and the KPI cards read that.
+
+**ROAS keeps its semantic, widens its scope.** `adTotals.roas` is *platform-reported revenue ÷ spend* — exactly what `facebookAds.roas` always meant, now across every channel. It is **not** switched to server-attributed revenue: that figure is already surfaced as the Advertising card's **Blended ROAS** and its per-platform **ROAS · server** column, and quietly changing the definition of a number the team reads daily would be worse than the scope gap it fixes. The two answer different questions and the dashboard now shows both.
+
+**Trends compare like with like.** `spendTrend`/`roasTrend` are computed from the previous period's *all-platform* totals. Comparing an all-platform current value against a Meta-only previous value would have rendered a huge spend "increase" on the day TikTok's sync went live, when nothing about the spending changed.
+
+**Also fixed a pre-existing mismatch:** the **New-Member ROAS** KPI divided new-membership revenue from *every* channel by *Meta-only* spend, inflating it. It now uses `adTotals.spend`.

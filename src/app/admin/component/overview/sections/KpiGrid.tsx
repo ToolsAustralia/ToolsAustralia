@@ -177,8 +177,29 @@ export default function KpiGrid({
 
   const users = stats?.users;
   const revenue = stats?.revenue;
-  const facebookAds = stats?.facebookAds;
+  // All ad platforms combined — what the headline Ad Spend / ROAS KPIs render.
+  // (`stats.facebookAds` is deliberately NOT read here: it is Meta-only and kept that
+  // way for the Norm gateway; using it would understate company ad spend.)
+  const adTotals = stats?.adTotals;
   const summary = membership?.summary;
+
+  // Name the platforms actually contributing spend, so the headline figure is never
+  // ambiguous about what it includes. Falls back to a generic label before data loads
+  // or if a future channel appears that isn't in the map.
+  const AD_CHANNEL_LABELS: Record<string, string> = {
+    facebook: "Meta",
+    tiktok: "TikTok",
+    snapchat: "Snapchat",
+    google: "Google",
+  };
+  const contributingPlatforms = Object.entries(stats?.attributedRevenue ?? {})
+    .filter(([, v]) => (v?.adSpend ?? 0) > 0)
+    .map(([k]) => AD_CHANNEL_LABELS[k === "meta" ? "facebook" : k] ?? null)
+    .filter((v): v is string => v !== null);
+  const adPlatformsSub =
+    contributingPlatforms.length > 0
+      ? `${contributingPlatforms.join(" + ")} ad spend`
+      : "All ad platforms";
 
   // Only show skeletons when there is no data yet — a background refetch with
   // cached data should keep showing the cached values, not flash placeholders.
@@ -251,7 +272,10 @@ export default function KpiGrid({
   // `stats`. This is a NEW card only — it does NOT modify the Revenue-group Ad Spend /
   // ROAS cards (those stay untouched per request).
   const newMembershipRevenue = breakdownRevenue(revenue?.breakdown?.membershipPurchase);
-  const newMemberAdSpend = facebookAds?.spend ?? 0;
+  // All-platform spend, not Meta-only (2026-07-29). The numerator is new-membership
+  // revenue from EVERY channel, so a Meta-only denominator inflated this figure — a
+  // pre-existing mismatch that TikTok's live spend made materially wrong.
+  const newMemberAdSpend = adTotals?.spend ?? 0;
   const newMemberRoas = newMemberAdSpend > 0 ? newMembershipRevenue / newMemberAdSpend : null;
 
   return (
@@ -274,22 +298,22 @@ export default function KpiGrid({
           />
           <MetricCard
             title="Ad Spend"
-            value={moneyWhole(Math.round(facebookAds?.spend ?? 0))}
-            sub="Facebook Ads spend"
+            value={moneyWhole(Math.round(adTotals?.spend ?? 0))}
+            sub={adPlatformsSub}
             icon={BarChart3}
             tone="blue"
-            trend={trendPct(facebookAds?.spendTrend)}
+            trend={trendPct(adTotals?.spendTrend)}
             loading={showStatsSkeleton}
             onClick={() => setAdSpendFocusOpen(true)}
             active={adSpendFocusOpen}
           />
           <MetricCard
             title="ROAS"
-            value={`${(facebookAds?.roas ?? 0).toFixed(2)}x`}
-            sub="Return on ad spend"
+            value={`${(adTotals?.roas ?? 0).toFixed(2)}x`}
+            sub="Platform-reported · all ads"
             icon={Target}
             tone="green"
-            trend={trendPct(facebookAds?.roasTrend)}
+            trend={trendPct(adTotals?.roasTrend)}
             loading={showStatsSkeleton}
             onClick={() => setAdSpendFocusOpen(true)}
             active={adSpendFocusOpen}

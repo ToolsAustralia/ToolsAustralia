@@ -840,3 +840,13 @@ Components in this domain were touched by the sitewide `font-'[Poppins]'` → `f
 codemod (`npm run sweep:font-poppins`). Their Poppins-classed text now renders **real Poppins**
 instead of a browser fallback — an intended visual change. Details + rules:
 docs/shared-ui/tailwind-conventions.md §10.
+
+## Overview KPIs: Ad Spend / ROAS are all-platform (2026-07-29)
+
+The **Ad Spend**, **ROAS**, and **New-Member ROAS** cards in `KpiGrid.tsx` read `stats.adTotals` (every ad channel with a spend feed) instead of `stats.facebookAds` (Meta only). Before TikTok's spend sync went live those were the same number; now they are not, and the Meta-only version understated company ad spend.
+
+- **Ad Spend** — subtitle names the platforms actually contributing spend (e.g. "Meta + TikTok ad spend"), derived from which `attributedRevenue` entries carry `adSpend > 0`, so the headline is never ambiguous about what it includes. Falls back to "All ad platforms".
+- **ROAS** — subtitle "Platform-reported · all ads". Deliberately still the platform-reported figure (see [backend.md](./backend.md#adtotals--all-platform-ad-spend--roas-for-the-headline-kpis-2026-07-29)); the server-attributed view lives on the Advertising card as **Blended ROAS** and the **ROAS · server** column.
+- **New-Member ROAS** — its denominator was Meta-only while its numerator counted new-membership revenue from every channel; now uses `adTotals.spend`.
+
+`KpiGrid` deliberately does **not** read `stats.facebookAds` — that field stays Meta-scoped for the Norm gateway.

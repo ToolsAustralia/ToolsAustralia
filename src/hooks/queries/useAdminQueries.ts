@@ -130,10 +130,21 @@ export interface AdminDashboardStats {
   };
   conversionRate: number;
   conversionRateTrend?: TrendData;
+  /** META ONLY. Kept Meta-scoped because the Norm gateway reads it. For the headline
+   *  KPIs use `adTotals` — Meta-only figures now understate company ad spend. */
   facebookAds?: {
     spend: number;
-    spendTrend?: TrendData;
     roas: number;
+  };
+  /** All ad platforms with a spend feed, combined (Meta + TikTok as of 2026-07-29).
+   *  `roas` is platform-reported revenue ÷ spend — the same semantic `facebookAds.roas`
+   *  always had, widened to every channel. The server-attributed alternative is the
+   *  Advertising card's "Blended ROAS" / its "ROAS · server" column. */
+  adTotals?: {
+    spend: number;
+    revenue: number;
+    roas: number;
+    spendTrend?: TrendData;
     roasTrend?: TrendData;
   };
   attributedRevenue?: Record<string, {
