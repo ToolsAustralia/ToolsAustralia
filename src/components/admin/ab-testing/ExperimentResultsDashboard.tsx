@@ -195,7 +195,6 @@ export default function ExperimentResultsDashboard({
         name: v.variantName,
         Revenue: Number(v.firstPurchaseRevenue.toFixed(2)),
         "Revenue per User": Number(v.revenuePerUser.toFixed(2)),
-        Recurring: Number(v.recurringRevenue.toFixed(2)),
       }))
     : comparison.variants.map((v, index) => ({
         name: v.variantName || `Variant ${index + 1}`,
@@ -499,18 +498,32 @@ export default function ExperimentResultsDashboard({
           {/* Revenue Chart */}
           <div>
             <h4 className="text-sm font-medium text-gray-700 dark:text-neutral-200 mb-3">
-              {useBayesianSeries ? "Revenue (first purchase vs recurring)" : "Revenue Metrics"}
+              {useBayesianSeries ? "First-purchase revenue (user-level)" : "Revenue Metrics"}
             </h4>
             <ResponsiveContainer width="100%" height={300}>
+              {/* Two Y axes on purpose: totals run in the hundreds of dollars while
+                  revenue-per-user runs around $1, so on a shared axis the per-user bars
+                  scale to an invisible sliver and read as zero. Left axis = dollar totals,
+                  right axis = per-user. */}
               <BarChart data={revenueData}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="name" />
-                <YAxis />
+                <YAxis yAxisId="total" tickFormatter={(v) => `$${Number(v).toLocaleString()}`} />
+                <YAxis
+                  yAxisId="perUser"
+                  orientation="right"
+                  tickFormatter={(v) => `$${Number(v).toFixed(2)}`}
+                />
                 <Tooltip formatter={(value) => `$${Number(value).toLocaleString()}`} />
                 <Legend />
-                <Bar dataKey="Revenue" fill="#f59e0b" />
-                <Bar dataKey="Revenue per User" fill="#ef4444" />
-                {useBayesianSeries && <Bar dataKey="Recurring" fill="#8b5cf6" />}
+                {/* Recurring is deliberately NOT charted. It is renewal revenue from
+                    members who already subscribed, so a banner theme cannot have caused
+                    it — plotting it beside the real result invites reading "this arm
+                    earns more" when the difference is just which arm happened to receive
+                    more existing subscribers. It stays as a diagnostic column on the
+                    Bayesian table above, where it belongs. */}
+                <Bar yAxisId="total" dataKey="Revenue" fill="#f59e0b" />
+                <Bar yAxisId="perUser" dataKey="Revenue per User" fill="#ef4444" />
               </BarChart>
             </ResponsiveContainer>
           </div>
