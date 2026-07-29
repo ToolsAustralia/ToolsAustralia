@@ -283,6 +283,54 @@ useEffect(() => {
 Verified end to end: `npx playwright test e2e/specs/marketing/promo-theme-split.spec.ts
 --project=chromium-desktop` passes both tests, reproduced on two consecutive runs.
 
+## A Mongo projection that drops a field the consumer branches on = silent all-zero metrics
+
+**Shipped 2026-06-15 (`9d1d64c1`), found 2026-07-29. Six weeks of A/B results read $0.**
+
+`ExperimentMetricsService` ran two `PaymentEvent` queries. The refund query selected
+`eventType`; the purchases query did not. `toPaymentRow` then did `String(p.eventType)`,
+which for a missing field yields the **string `"undefined"`** — not `undefined`, not an
+error. Every purchase row reached the pure core as eventType `"undefined"`, hit
+
+```ts
+if (p.eventType !== "BenefitsGranted") continue;   // experiment-metrics-core.ts
+```
+
+and was skipped. Result: **every experiment reported 0 converters and $0 revenue**, while
+exposure counts stayed correct — so the card looked populated and merely unconverted.
+
+### Why nothing caught it
+
+- `tsc` cannot: `.select()` takes a string, and `String(undefined)` is valid.
+- The pure core's unit tests cannot: the core was always correct. The defect was one
+  layer up, in the DB projection.
+- Zero is a *plausible* number. "No conversions yet" and "the query is broken" look
+  identical on a dashboard. Nothing threw, nothing logged.
+- The legacy event-count panel (`ExperimentAnalyticsService` → `ExperimentEventRepository`)
+  was unaffected and kept showing real numbers, which made the Bayesian card's zeros look
+  like a scoring nuance rather than a bug.
+
+### The fix
+
+One projection constant, `PAYMENT_ROW_PROJECTION`, used by **both** queries so they cannot
+diverge again; and `toPaymentRow` now **throws** on a missing `eventType` instead of
+coercing it. A projection mistake is a programmer error — it should be loud, not a silent
+$0. Guarded by `npm run test:ab-metrics-projection`, which asserts the projection contains
+every field the mapper reads and that a row without `eventType` throws.
+
+### Recovery was automatic
+
+Metrics are computed at READ time from the durable `VariantAssignment` + `PaymentEvent`
+tables, so no backfill was needed — the numbers reappeared the moment the projection was
+fixed. Measured against production immediately after: static-vs-video went 0 → **743
+converters / $34,311.01**, promo-packages 0 → **171 / $6,490.27**.
+
+### The generalisable rule
+
+When a consumer **branches on a field**, the projection that feeds it is load-bearing.
+Either select the field explicitly in one shared constant, or make the mapper fail loudly
+when it is absent. Never let a missing field become a plausible-looking value.
+
 ## Migrated stubs
 
 Read all five `docs/AB_TESTING_*.md` root files and merge in next refresh:
