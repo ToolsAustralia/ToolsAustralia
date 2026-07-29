@@ -1292,7 +1292,24 @@ UserSchema.index({ createdAt: -1 });
 UserSchema.index({ "referral.code": 1 }, { unique: true, sparse: true });
 UserSchema.index({ stripeCustomerId: 1 }, { sparse: true });
 UserSchema.index({ "signupAttribution.promotionSlug": 1, createdAt: 1 });
-UserSchema.index({ "signupAttribution.builtPrizeSlug": 1, createdAt: 1 });
+// PARTIAL, not plain (panel F-021). The built-prize signup aggregation filters
+// `"signupAttribution.builtPrizeSlug": { $exists: true }`, which a NON-sparse index cannot narrow
+// (a missing field is indexed as `null`, so the bounds span the whole key range). The plain index
+// was measured worse than useless: the planner correctly rejected it, and forcing it examined 128
+// keys / 127 docs. Measured on dev (895 users, 1 carrying the field), this partial index is chosen
+// unprompted and examines 1 key / 1 doc. The NAME must differ from the superseded
+// `signupAttribution.builtPrizeSlug_1_createdAt_1` — mongoose cannot alter an index in place;
+// re-declaring the same NAME with a changed `partialFilterExpression` is rejected by the server
+// (measured: code 86, "An existing index has the same name as the requested index"; commonly cited
+// as IndexOptionsConflict/85) and autoIndex swallows it, so the index would silently never build.
+// Superseded index dropped by scripts/migrations/2026-07-29-partial-build-prize-indexes.ts.
+UserSchema.index(
+  { "signupAttribution.builtPrizeSlug": 1, createdAt: 1 },
+  {
+    name: "signupBuiltPrize_createdAt_partial",
+    partialFilterExpression: { "signupAttribution.builtPrizeSlug": { $exists: true } },
+  }
+);
 // ✅ OPTION 1: Major Draw Entries index removed - using single source of truth
 
 // MiniDraw participation indexes
