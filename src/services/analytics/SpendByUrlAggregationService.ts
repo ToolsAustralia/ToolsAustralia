@@ -477,7 +477,13 @@ export class SpendByUrlAggregationService {
       return [];
     }
 
-    const rows = await MetaAdInsightsDaily.find({
+    // MUST switch on platform. This read used to be hard-coded to MetaAdInsightsDaily even
+    // though the method takes `platform`, so a TikTok drill-down looked up TikTok ad ids in
+    // META's insights collection, matched nothing, and rendered "0 ads" under a row that
+    // plainly showed spend (2026-07-29). Ad ids are only unique WITHIN a platform, so
+    // querying the wrong collection is silent — it returns an empty set, never an error.
+    const InsightsModel = platform === "tiktok" ? TikTokAdInsightsDaily : MetaAdInsightsDaily;
+    const rows = await InsightsModel.find({
       adAccountId,
       adId: { $in: adIds },
       date: { $gte: since, $lte: until },

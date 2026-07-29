@@ -38,10 +38,7 @@ export const GET = withNorm(
 
     // Same near-real-time refresh the admin route gets — keeps Norm's figures
     // in lockstep with the dashboard (time-budgeted; see spendByUrlFreshness).
-    // Meta-only; TikTok's rollup is rebuilt by its nightly cron.
-    if (platform === "meta") {
-      await ensureSpendByUrlFreshness(adAccountId, parsed.data.startDate, parsed.data.endDate);
-    }
+    await ensureSpendByUrlFreshness(platform, adAccountId, parsed.data.startDate, parsed.data.endDate);
 
     const result = await aggService.getSpendByUrlListFormatted(
       platform,

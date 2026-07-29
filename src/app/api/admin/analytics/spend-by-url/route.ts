@@ -59,12 +59,9 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Near-real-time: refresh the trailing 1-2 days from Meta when stale (>5min),
-    // bounded by a hard time budget — see spendByUrlFreshness. Meta-only: TikTok's
-    // rollup is rebuilt by its nightly cron.
-    if (platform === "meta") {
-      await ensureSpendByUrlFreshness(adAccountId, startDate, endDate);
-    }
+    // Near-real-time: refresh the trailing 1-2 days when stale (>5min), bounded by a hard
+    // time budget — see spendByUrlFreshness. Both platforms (TikTok added 2026-07-29).
+    await ensureSpendByUrlFreshness(platform, adAccountId, startDate, endDate);
 
     const result = await aggService.getSpendByUrlListFormatted(
       platform,

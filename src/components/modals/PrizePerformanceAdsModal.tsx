@@ -19,12 +19,18 @@ export interface PrizePerformanceAdsModalProps {
   slug: string;
   startDate: string;
   endDate: string;
-  canonicalUrls: string[];
   /**
-   * Which platform's ads to break down. Required rather than defaulted: ad ids are only
-   * unique WITHIN a platform, so a per-ad tree has to name one. The card passes whichever
-   * platform the row's figures came from (and "meta" when the card is showing All, where
-   * the reader can switch platform in the card itself).
+   * The brand's landing URLs PER PLATFORM. Not a flat list: each platform advertises a
+   * different set of URLs for the same brand (Milwaukee runs on /promotions/milwaukee AND
+   * /promotions/milwaukee-milwaukee on Meta, but only the latter on TikTok), and the chips
+   * below switch platform — so the URL set has to switch with them or the drill-down
+   * silently under-reports whichever platform wasn't active when the modal opened.
+   */
+  canonicalUrlsByPlatform: Record<SpendByUrlPlatform, string[]>;
+  /**
+   * Which platform's ads to break down initially. Required rather than defaulted: ad ids are
+   * only unique WITHIN a platform, so a per-ad tree has to name one. The card passes whichever
+   * platform the row's figures came from (and "meta" when the card is showing All).
    */
   platform: SpendByUrlPlatform;
 }
@@ -117,13 +123,19 @@ export default function PrizePerformanceAdsModal({
   slug: _slug,
   startDate,
   endDate,
-  canonicalUrls,
+  canonicalUrlsByPlatform,
   platform: initialPlatform,
 }: PrizePerformanceAdsModalProps) {
   // The chips own the live platform; the prop only seeds it, so opening from a TikTok row
   // lands on TikTok while the reader can still flip to Meta without closing the modal.
   const [platform, setPlatform] = useState<Platform>(initialPlatform);
   const [focusFilter, setFocusFilter] = useState<FocusFilter>("all");
+
+  // Switch the URL set WITH the platform, not just the query's platform param.
+  const canonicalUrls = useMemo(
+    () => canonicalUrlsByPlatform[platform] ?? [],
+    [canonicalUrlsByPlatform, platform]
+  );
 
   const { data, isLoading, error } = useSpendByUrlDetailMany(
     canonicalUrls,
