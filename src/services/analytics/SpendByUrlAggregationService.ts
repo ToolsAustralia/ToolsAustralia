@@ -1,5 +1,6 @@
 import MetaAdInsightsDaily from "@/models/MetaAdInsightsDaily";
 import AdDestination from "@/models/AdDestination";
+import TikTokAdInsightsDaily from "@/models/TikTokAdInsightsDaily";
 import LandingPageMetricsDaily from "@/models/LandingPageMetricsDaily";
 import type { ILandingPackagesFocusSplit } from "@/models/LandingPageMetricsDaily";
 import {
@@ -19,6 +20,7 @@ function emptyFocusMetrics() {
 type FocusAccumulator = ILandingPackagesFocusSplit;
 
 export interface LandingPageDailyDoc {
+  platform: "meta" | "tiktok";
   adAccountId: string;
   date: string;
   canonicalUrl: string;
@@ -41,6 +43,8 @@ export interface LandingPageDailyDoc {
  * readers treat them as the "unclassified" bucket.
  */
 export function buildLandingPageDailyDocs(params: {
+  /** Stamped on every produced doc — half the unique key (2026-07-29). */
+  platform: "meta" | "tiktok";
   adAccountId: string;
   date: string;
   computedAt: Date;
@@ -69,7 +73,10 @@ export function buildLandingPageDailyDocs(params: {
 
   for (const row of params.insights) {
     const dest = params.destByAd.get(row.adId);
-    const canonicalUrl = dest?.canonicalUrl ?? `unknown://meta-ad/${row.adId}`;
+    // Platform-segmented placeholder. Sharing `unknown://meta-ad/` across platforms would
+    // make a TikTok unresolved row's drill-down resolve its adId against Meta's insights
+    // and render another platform's ads (2026-07-29).
+    const canonicalUrl = dest?.canonicalUrl ?? `unknown://${params.platform}-ad/${row.adId}`;
 
     const cur =
       agg.get(canonicalUrl) ?? {
@@ -103,6 +110,7 @@ export function buildLandingPageDailyDocs(params: {
   }
 
   return [...agg.entries()].map(([canonicalUrl, v]) => ({
+    platform: params.platform,
     adAccountId: params.adAccountId,
     date: params.date,
     canonicalUrl,
@@ -225,6 +233,12 @@ export type SpendByUrlDetailAggRow = {
  */
 export class SpendByUrlAggregationService {
   async recomputeForDateRange(
+    /**
+     * REQUIRED and load-bearing: the delete-and-rebuild below deletes by
+     * {platform, adAccountId, date}. Omitting it would wipe the OTHER platform's rows for
+     * that day — permanently, since this collection has no TTL (2026-07-29).
+     */
+    platform: "meta" | "tiktok",
     adAccountId: string,
     since: string,
     until: string,
@@ -245,19 +259,22 @@ export class SpendByUrlAggregationService {
       if (logThis) {
         log?.(`[aggregate] Day ${di + 1}/${totalDates} (${date})…`);
       }
-      const insights = await MetaAdInsightsDaily.find({ adAccountId, date }).lean();
+      const insights = await (platform === "tiktok"
+        ? TikTokAdInsightsDaily.find({ adAccountId, date }).lean()
+        : MetaAdInsightsDaily.find({ adAccountId, date }).lean());
       if (insights.length === 0) {
-        await LandingPageMetricsDaily.deleteMany({ adAccountId, date });
+        await LandingPageMetricsDaily.deleteMany({ platform, adAccountId, date });
         continue;
       }
 
       const adIds = [...new Set(insights.map((i) => i.adId))];
       // Platform-scoped: ad ids are only unique within a platform (2026-07-29).
-      const dests = await AdDestination.find({ platform: "meta", adId: { $in: adIds } }).lean();
+      const dests = await AdDestination.find({ platform, adId: { $in: adIds } }).lean();
 
-      await LandingPageMetricsDaily.deleteMany({ adAccountId, date });
+      await LandingPageMetricsDaily.deleteMany({ platform, adAccountId, date });
 
       const docs = buildLandingPageDailyDocs({
+        platform,
         adAccountId,
         date,
         computedAt: new Date(),
@@ -286,6 +303,7 @@ export class SpendByUrlAggregationService {
    * Sum materialized daily rows per canonical URL for a date range (dashboard table).
    */
   async getAggregatedSpendByUrl(
+    platform: "meta" | "tiktok",
     adAccountId: string,
     since: string,
     until: string
@@ -302,6 +320,7 @@ export class SpendByUrlAggregationService {
     }>
   > {
     const daily = await LandingPageMetricsDaily.find({
+      platform,
       adAccountId,
       date: { $gte: since, $lte: until },
     }).lean();
@@ -369,27 +388,37 @@ export class SpendByUrlAggregationService {
    * @see MetaAdDestinationService — if Graph API errors on the ad, no destination doc exists,
    * but aggregation still buckets spend under this string, so drill-down must not rely on MetaAdDestination alone.
    */
-  private static readonly UNKNOWN_META_AD_RE = /^unknown:\/\/meta-ad\/(\d+)$/;
+  /**
+   * Reverse-lookup for the unresolved-destination placeholder. Captures the PLATFORM as
+   * well as the ad id so a TikTok placeholder is never resolved against Meta's insights
+   * (2026-07-29). Meta ad ids are numeric; TikTok's are too, so the platform segment is
+   * the only thing distinguishing them.
+   */
+  private static readonly UNKNOWN_AD_RE = /^unknown:\/\/(meta|tiktok)-ad\/(\d+)$/;
 
   /**
    * Resolve ad ids and destination docs for one canonical URL (same rules as legacy drill-down).
    */
   private async collectAdIdsAndDestsForCanonicalUrl(
+    platform: "meta" | "tiktok",
     adAccountId: string,
     canonicalUrl: string,
     since: string,
     until: string
   ): Promise<{ adIds: string[]; destByAd: Map<string, (typeof dests)[number]> }> {
-    const dests = await AdDestination.find({ platform: "meta", adAccountId, canonicalUrl }).lean();
+    const dests = await AdDestination.find({ platform, adAccountId, canonicalUrl }).lean();
     const destByAd = new Map(dests.map((d) => [d.adId, d] as [string, (typeof dests)[number]]));
     let adIds = dests.map((d) => d.adId);
 
     if (adIds.length === 0) {
-      const parsed = canonicalUrl.match(SpendByUrlAggregationService.UNKNOWN_META_AD_RE);
-      if (parsed) {
-        adIds = [parsed[1]];
+      const parsed = canonicalUrl.match(SpendByUrlAggregationService.UNKNOWN_AD_RE);
+      // Only resolve a placeholder belonging to the platform being queried — a
+      // `unknown://meta-ad/123` asked for under platform "tiktok" must NOT return ad 123.
+      if (parsed && parsed[1] === platform) {
+        adIds = [parsed[2]];
       } else {
         const fromDistinct = await LandingPageMetricsDaily.distinct("adIds", {
+          platform,
           adAccountId,
           canonicalUrl,
           date: { $gte: since, $lte: until },
@@ -405,6 +434,7 @@ export class SpendByUrlAggregationService {
    * Per-ad totals for one or more canonical URLs (union of ads, single insights query).
    */
   async getSpendByUrlDetailForCanonicalUrls(
+    platform: "meta" | "tiktok",
     adAccountId: string,
     canonicalUrls: string[],
     since: string,
@@ -423,6 +453,7 @@ export class SpendByUrlAggregationService {
 
     for (const canonicalUrl of uniqueUrls) {
       const { adIds, destByAd } = await this.collectAdIdsAndDestsForCanonicalUrl(
+        platform,
         adAccountId,
         canonicalUrl,
         since,
@@ -534,12 +565,19 @@ export class SpendByUrlAggregationService {
    * Per-ad totals for one canonical URL (drill-down).
    */
   async getSpendByUrlDetail(
+    platform: "meta" | "tiktok",
     adAccountId: string,
     canonicalUrl: string,
     since: string,
     until: string
   ): Promise<SpendByUrlDetailAggRow[]> {
-    return this.getSpendByUrlDetailForCanonicalUrls(adAccountId, [canonicalUrl], since, until);
+    return this.getSpendByUrlDetailForCanonicalUrls(
+      platform,
+      adAccountId,
+      [canonicalUrl],
+      since,
+      until
+    );
   }
 
   /**
@@ -548,11 +586,12 @@ export class SpendByUrlAggregationService {
    * projection so the two surfaces match by construction.
    */
   async getSpendByUrlListFormatted(
+    platform: "meta" | "tiktok",
     adAccountId: string,
     since: string,
     until: string
   ): Promise<SpendByUrlListResult> {
-    const rows = await this.getAggregatedSpendByUrl(adAccountId, since, until);
+    const rows = await this.getAggregatedSpendByUrl(platform, adAccountId, since, until);
     return {
       meta: { startDate: since, endDate: until, currency: "AUD", adAccountId },
       rows: rows.map((r) => {
@@ -600,6 +639,7 @@ export class SpendByUrlAggregationService {
    * consumers. Shared by admin + Norm.
    */
   async getSpendByUrlDetailFormatted(
+    platform: "meta" | "tiktok",
     adAccountId: string,
     canonicalUrls: string[],
     since: string,
@@ -607,6 +647,7 @@ export class SpendByUrlAggregationService {
   ): Promise<SpendByUrlDetailResult> {
     const uniqueCanonicalUrls = [...new Set(canonicalUrls.map((u) => u.trim()).filter(Boolean))];
     const rows = await this.getSpendByUrlDetailForCanonicalUrls(
+      platform,
       adAccountId,
       uniqueCanonicalUrls,
       since,

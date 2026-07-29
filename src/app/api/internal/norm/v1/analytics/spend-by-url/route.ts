@@ -36,7 +36,9 @@ export const GET = withNorm(
     // in lockstep with the dashboard (time-budgeted; see spendByUrlFreshness).
     await ensureSpendByUrlFreshness(adAccountId, parsed.data.startDate, parsed.data.endDate);
 
+    // Meta-only today — mirrors the admin route exactly (see W7 for ?platform=).
     const result = await aggService.getSpendByUrlListFormatted(
+      "meta",
       adAccountId,
       parsed.data.startDate,
       parsed.data.endDate,

@@ -156,7 +156,7 @@ async function refreshWindow(
     }
   }
 
-  await aggService.recomputeForDateRange(adAccountId, window.since, window.until);
+  await aggService.recomputeForDateRange("meta", adAccountId, window.since, window.until);
 }
 
 /**
@@ -195,7 +195,11 @@ export async function ensureSpendByUrlFreshness(
     const attempted = lastAttemptMs.get(key);
     if (attempted !== undefined && now - attempted < FRESHNESS_MAX_AGE_MS) return;
 
+    // Platform-scoped: this module refreshes META only, so its staleness probe must
+    // look at Meta rows. Unscoped, a fresh TikTok recompute for the same window could
+    // read as "Meta is fresh" and suppress the Meta refresh indefinitely (2026-07-29).
     const newest = (await LandingPageMetricsDaily.findOne({
+      platform: "meta",
       adAccountId,
       date: { $gte: window.since, $lte: window.until },
     })

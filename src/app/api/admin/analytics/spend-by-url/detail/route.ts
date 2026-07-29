@@ -49,7 +49,9 @@ export async function GET(request: NextRequest) {
     // bounded by a hard time budget — see spendByUrlFreshness.
     await ensureSpendByUrlFreshness(adAccountId, startDate, endDate);
 
+    // Meta-only today; W7 adds a ?platform= param (see the list route).
     const result = await aggService.getSpendByUrlDetailFormatted(
+      "meta",
       adAccountId,
       uniqueCanonicalUrls,
       startDate,

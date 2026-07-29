@@ -35,13 +35,28 @@ Consumed by:
 
 `LandingPageMetricsDaily` rows are rebuilt per-date (delete + insertMany) by
 [`SpendByUrlAggregationService.recomputeForDateRange`](../../src/services/analytics/SpendByUrlAggregationService.ts),
-joining `MetaAdInsightsDaily` (per-ad daily spend/revenue) with `MetaAdDestination` (per-ad landing URL) on `adId`.
+joining the platform's per-ad daily insights (`MetaAdInsightsDaily` / `TikTokAdInsightsDaily`) with `AdDestination` (per-ad landing URL) on `adId`.
 Triggered by the Meta sync crons (`/api/cron/sync-meta-ads` hourly-gated, `/api/cron/sync-meta-spend-by-url` nightly, both trailing 8-day windows) and the admin "Sync from Meta" button (14-day window).
+
+### `platform` is the first parameter, everywhere (2026-07-29)
+
+Every public method on the service takes `platform: "meta" | "tiktok"` **first**:
+`recomputeForDateRange`, `getAggregatedSpendByUrl`, `getSpendByUrlDetail`,
+`getSpendByUrlDetailForCanonicalUrls`, `getSpendByUrlListFormatted`,
+`getSpendByUrlDetailFormatted`. Position-first is deliberate — a forgotten platform is a
+compile error rather than a silently cross-platform query. The read path switches insights
+collection on it, and `unknown://` placeholders are namespaced per platform
+(`unknown://meta-ad/<id>`, `unknown://tiktok-ad/<id>`) so a placeholder can never be parsed
+back as the wrong platform's ad id.
+
+The Meta-only HTTP surfaces (`/api/admin/analytics/spend-by-url` + `/detail`, and both Norm
+mirrors) pass the literal `"meta"`. See [gotchas.md](./gotchas.md#platform-scoping-is-mandatory-on-addestination--landingpagemetricsdaily)
+for why the delete-then-insert makes this data-loss-critical rather than merely untidy.
 
 ### Pure doc builder + packagesFocus split (2026-07-17)
 
 The per-day aggregation math is extracted into the exported pure function
-`buildLandingPageDailyDocs({ adAccountId, date, computedAt, insights, destByAd })` (same service file) so it is unit-testable without Mongo — `npm run test:landing-page-focus` covers it.
+`buildLandingPageDailyDocs({ platform, adAccountId, date, computedAt, insights, destByAd })` (same service file) so it is unit-testable without Mongo — `npm run test:landing-page-focus` covers it. It stamps `platform` onto every doc it emits.
 
 While accumulating row totals it also accumulates the **`packagesFocus`** split per resolved row: each ad is classified via
 [`derivePackagesFocusForDestination`](../../src/utils/metrics/packages-focus.ts) —
@@ -59,13 +74,21 @@ Read side: `getAggregatedSpendByUrl` sums the subdoc across days when present; `
 
 ### On-read freshness — near-real-time without forking sources (2026-07-17)
 
-[src/services/meta/spendByUrlFreshness.ts](../../src/services/meta/spendByUrlFreshness.ts) — `ensureSpendByUrlFreshness(adAccountId, since, until)` runs before every spend-by-url read (admin list/detail routes, their Norm mirrors, and `PackagesFocusBreakdownService`). When the requested range touches the trailing 1–2 AEST days and the materialized rows are older than **5 minutes**, it refreshes just that window — insights sync (one Meta page in practice) → destination resolve for **missing adIds only** (the cron still refetches all creatives to catch URL edits) → per-day aggregate rebuild — then the read proceeds from Mongo as usual. So the dashboard no longer waits for the sync cron; the cron demotes to a history + Meta-restatement backstop (its 8-day trailing window still converges revised figures for older days, which on-read never re-pulls).
+[src/services/meta/spendByUrlFreshness.ts](../../src/services/meta/spendByUrlFreshness.ts) — **Meta-only** (its staleness probe and recompute both pass `platform: "meta"`; an unscoped probe would let a fresh TikTok recompute mask a stale Meta window). `ensureSpendByUrlFreshness(adAccountId, since, until)` runs before every spend-by-url read (admin list/detail routes, their Norm mirrors, and `PackagesFocusBreakdownService`). When the requested range touches the trailing 1–2 AEST days and the materialized rows are older than **5 minutes**, it refreshes just that window — insights sync (one Meta page in practice) → destination resolve for **missing adIds only** (the cron still refetches all creatives to catch URL edits) → per-day aggregate rebuild — then the read proceeds from Mongo as usual. So the dashboard no longer waits for the sync cron; the cron demotes to a history + Meta-restatement backstop (its 8-day trailing window still converges revised figures for older days, which on-read never re-pulls).
 
 Tail protection: the Meta insights fetch retries rate limits with backoff capped at 120s/wait, so every ensure call carries a hard **12s time budget** — on expiry the read serves the stored (stale-but-consistent) data while the refresh finishes in the background for the next read. Failures log via `console.error` and never fail the read. Pure decision logic (`resolveOnReadRefreshWindow`, `isFreshEnough`) is unit-tested: `npm run test:spend-freshness`. Affected routes export `maxDuration = 60`.
 
 ### `packages-focus` derivation util
 
-[src/utils/metrics/packages-focus.ts](../../src/utils/metrics/packages-focus.ts) — pure, shared by the aggregation and (later tasks) the breakdown endpoint + spend-by-url detail. Exports `PackagesFocus` (`"membership" | "one-time"`), `PackagesFocusBucket` (+ `"unclassified"`), `derivePackagesFocusFromUrl`, `resolvePrimaryRawUrl` (first `rawUrls` entry whose canonicalization matches `canonicalUrl`, fallback `rawUrls[0]`), `derivePackagesFocusForDestination`. Classification is **binary** — `packages=one-time` → one-time, everything else (absent/invalid/explicit `membership`) → membership; param parsing reuses `parseMembershipPackagesTab`. Tests: `npm run test:packages-focus`.
+[src/utils/metrics/packages-focus.ts](../../src/utils/metrics/packages-focus.ts) — pure, shared by the aggregation, the breakdown endpoint and spend-by-url detail. Exports `PackagesFocus` (`"membership" | "one-time"`), `PackagesFocusBucket` (+ `"unclassified"`), `derivePackagesFocusFromUrl`, `resolvePrimaryRawUrl` (first `rawUrls` entry whose canonicalization matches `canonicalUrl`, fallback `rawUrls[0]`), `derivePackagesFocusForDestination`, and `canonicalizeLandingUrl` (moved here from `src/utils/meta/` in 2026-07-29 — it is platform-neutral and TikTok needs it too). Classification is **binary** — `packages=one-time` → one-time, everything else (absent/invalid/explicit `membership`) → membership; param parsing reuses `parseMembershipPackagesTab`. Tests: `npm run test:packages-focus`.
+
+**Multi-URL disagreement → `unclassified` (2026-07-29).** `derivePackagesFocusForDestination`
+no longer classifies from the primary URL alone when a destination holds several `rawUrls`.
+It classifies **every** raw URL that canonicalizes to the row's `canonicalUrl`; if they
+disagree (some one-time, some not), it returns `"unclassified"`. This matters for Meta
+carousels and TikTok Smart+ creatives, which legitimately rotate destinations — attributing a
+split ad's entire spend to whichever URL happened to sort first is a plausible-looking wrong
+number. Unanimous multi-URL destinations classify normally, so the common case is unaffected.
 
 ## Dashboard redesign
 

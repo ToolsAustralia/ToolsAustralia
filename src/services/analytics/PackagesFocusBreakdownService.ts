@@ -119,14 +119,22 @@ export class PackagesFocusBreakdownService {
     await ensureSpendByUrlFreshness(adAccountId, startDate, endDate);
 
     const [summary, detail] = await Promise.all([
-      this.buildSummary(adAccountId, startDate, endDate),
+      this.buildSummary(platform, adAccountId, startDate, endDate),
       this.buildDetail(adAccountId, startDate, endDate),
     ]);
     return { platform, supported: true, meta, summary, detail };
   }
 
-  private async buildSummary(adAccountId: string, since: string, until: string) {
+  private async buildSummary(
+    platform: "meta" | "tiktok",
+    adAccountId: string,
+    since: string,
+    until: string,
+  ) {
+    // Platform-scoped: an unscoped read would sum two platforms' spend into one total
+    // with no indication, and divide one platform's revenue by combined spend.
     const rows = (await LandingPageMetricsDaily.find({
+      platform,
       adAccountId,
       date: { $gte: since, $lte: until },
     }).lean()) as unknown as ILandingPageMetricsDaily[];

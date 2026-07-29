@@ -49,7 +49,7 @@ export async function runMetaSpendByUrlSync(
   );
 
   log?.(`[aggregate] Rebuilding per-URL daily metrics for ${dateRange.since} → ${dateRange.until}…`);
-  const agg = await aggService.recomputeForDateRange(adAccountId, dateRange.since, dateRange.until, {
+  const agg = await aggService.recomputeForDateRange("meta", adAccountId, dateRange.since, dateRange.until, {
     onProgress: log,
   });
 

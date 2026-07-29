@@ -44,7 +44,14 @@ export async function GET(request: NextRequest) {
     // bounded by a hard time budget — see spendByUrlFreshness.
     await ensureSpendByUrlFreshness(adAccountId, startDate, endDate);
 
-    const result = await aggService.getSpendByUrlListFormatted(adAccountId, startDate, endDate);
+    // Meta-only today; W7 adds a ?platform= param. Passing the literal keeps this
+    // route's behaviour identical across the platform-scoping refactor.
+    const result = await aggService.getSpendByUrlListFormatted(
+      "meta",
+      adAccountId,
+      startDate,
+      endDate
+    );
 
     return NextResponse.json({ success: true, ...result });
   } catch (e) {

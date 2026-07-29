@@ -18,6 +18,28 @@ The User Metrics view's "Active Memberships" card ([src/components/admin/metrics
 
 A user might convert hours after the daily aggregation runs. The dashboard for "today" might miss them until the next aggregation cycle. UX should communicate "data delay up to 24 hours."
 
+## Platform scoping is mandatory on `AdDestination` + `LandingPageMetricsDaily`
+
+Both collections now carry a `platform` discriminator (`"meta" | "tiktok"`). **Every** read and
+write must filter on it. Two distinct failure modes, both silent:
+
+1. **Ad ids are only unique WITHIN a platform.** An unscoped
+   `AdDestination.find({ adId })` can attach a TikTok ad's landing URL to a Meta ad with the
+   same numeric id. Nothing errors; the spend just lands on the wrong URL.
+2. **`recomputeForDateRange` deletes before it inserts.** Its filter is
+   `{platform, adAccountId, date}`. Unscoped, a TikTok recompute deletes that day's **Meta**
+   rows. `LandingPageMetricsDaily` has **no TTL**, so this is permanent data loss — recoverable
+   only while the source insights survive their own 60-day TTL.
+
+`SpendByUrlAggregationService` takes `platform` as its **first** parameter on every public
+method for exactly this reason: it can't be forgotten at a call site without a type error.
+The Meta-only surfaces (`/api/admin/analytics/spend-by-url`, its `/detail` sibling, and both
+Norm mirrors) pass the literal `"meta"`.
+
+`AdDestination` pins `collection: "metaaddestinations"`. Do not "tidy" that away — Mongoose
+would otherwise derive `addestinations`, and every Meta URL would resolve to `unknown://`
+overnight with no error.
+
 ## Spend-by-URL caveats
 
 (Migrated from `docs/spend-by-url-feature.md` — _TODO: read root and merge._)

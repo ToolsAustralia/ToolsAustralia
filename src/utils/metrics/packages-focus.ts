@@ -53,9 +53,25 @@ export function resolvePrimaryRawUrl(
 }
 
 /**
- * Classify a MetaAdDestination doc (or its lean projection). Unresolved
- * destinations — missing doc, empty rawUrls, or the `unknown://` placeholder —
- * are "unclassified"; a real http(s) primary URL classifies via the binary rule.
+ * Classify an `AdDestination` doc (or its lean projection) — any platform. Unresolved
+ * destinations — missing doc, empty rawUrls, or the `unknown://` placeholder — are
+ * "unclassified"; a real http(s) primary URL classifies via the binary rule.
+ *
+ * ## Multi-URL ads: disagreement means "unclassified", not "whatever URL came first"
+ *
+ * When an ad carries several DISTINCT landing URLs and they do not all imply the same
+ * focus, this returns "unclassified" rather than inheriting a verdict from array order.
+ *
+ * On Meta multiple URLs usually mean carousel cards pointing at one page, so the primary
+ * URL is representative. TikTok Smart+ `landing_page_url_list` is a genuine array of
+ * different promo pages, where "first entry wins" would fabricate a split from an ordering
+ * TikTok never promised. Spend is NOT divided across the URLs either — TikTok reports no
+ * per-URL delivery, so splitting would invent precision. Attribution stays on the primary
+ * URL (so totals still reconcile), and only the FOCUS claim is withheld.
+ *
+ * (Measured 2026-07-29: 0 of 31 live TikTok ads carry multiple URLs, so this is a
+ * correctness guard rather than a fix for a current miscount — it stops the first
+ * multi-destination Smart+ ad from silently inventing a split.)
  */
 export function derivePackagesFocusForDestination(
   dest: { rawUrls?: readonly string[] | null; canonicalUrl?: string | null } | null | undefined,
@@ -64,5 +80,16 @@ export function derivePackagesFocusForDestination(
   if (dest.canonicalUrl?.startsWith("unknown://")) return "unclassified";
   const primary = resolvePrimaryRawUrl(dest.rawUrls, dest.canonicalUrl);
   if (!primary || !/^https?:\/\//i.test(primary.trim())) return "unclassified";
-  return derivePackagesFocusFromUrl(primary);
+
+  const primaryFocus = derivePackagesFocusFromUrl(primary);
+
+  const usable = (dest.rawUrls ?? []).filter((u) => typeof u === "string" && /^https?:\/\//i.test(u.trim()));
+  if (usable.length > 1) {
+    // Compare on the classification, not the raw string: two URLs differing only by utm
+    // params carry the same focus and must not be treated as a disagreement.
+    const focuses = new Set(usable.map((u) => derivePackagesFocusFromUrl(u)));
+    if (focuses.size > 1) return "unclassified";
+  }
+
+  return primaryFocus;
 }
