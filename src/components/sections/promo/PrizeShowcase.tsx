@@ -162,11 +162,10 @@ function PrizeShowcase({
   // bump either counter (F-010). Absent/zero on the visit row means "never touched that reel".
   const [toolboxSwitches, setToolboxSwitches] = useState(0);
   const [toolsetSwitches, setToolsetSwitches] = useState(0);
-  // Separate from the counters above: "did the visitor interact AT ALL", set by all three
-  // handlers including cash. A cash-only visitor has tb === 0 && ts === 0 forever (cash isn't a
-  // reel touch) but DID make a real build choice (it resolves to `cash-prize`) that must still
-  // reach the beacon — see the gate in usePrizeBuildTracking. Do not fold this back into a
-  // counter check; that silently drops cash-only visitors again (F-010).
+  // "Did they touch the builder at all", set by all three handlers including cash. Reported
+  // alongside the build rather than gating whether the build is reported (F-018): cash is not a
+  // reel card, so a cash-only visitor sits at 0/0 forever and the counters alone cannot express
+  // engagement (F-010). Do not fold this back into a counter check.
   const [hasInteracted, setHasInteracted] = useState(false);
 
   // `requestedSlug` is what the two lanes add up to; `activeSlug` is what the catalog
@@ -298,6 +297,13 @@ function PrizeShowcase({
     const next = resolveStateForSlug(slugProp);
     setSelection(next.selection);
     setIsCash(next.isCash);
+    // Engagement is per page, and this component survives the page change, so the counters must
+    // be zeroed with the selection (F-026). Leaving them would carry page A's switch counts onto
+    // page B's visit row — crediting page B with reel activity that happened somewhere else, and
+    // (because the beacon re-fires on the new slug) recording a build nobody made there.
+    setToolboxSwitches(0);
+    setToolsetSwitches(0);
+    setHasInteracted(false);
     // The page's own prize changed under us (a client transition inside `[slug]` reuses this
     // component). Any build params still in the URL describe the PREVIOUS page, so drop them —
     // otherwise page A's build leaks onto page B and is attributed there.
@@ -360,9 +366,8 @@ function PrizeShowcase({
   const handleSelectCash = (next: boolean) => {
     setIsCash(next);
     syncSelectionQuery({ ...selection, isCash: next });
-    // Not a reel touch, so neither counter bumps here (F-010) — but it IS a real interaction,
-    // so hasInteracted still flips, or a cash-only visitor's build choice would never reach
-    // the beacon (see usePrizeBuildTracking's gate).
+    // Not a reel touch, so neither counter bumps here (F-010) — but it IS engagement, and the
+    // counters cannot express that, so the flag is what carries it to the visit row.
     setHasInteracted(true);
   };
 

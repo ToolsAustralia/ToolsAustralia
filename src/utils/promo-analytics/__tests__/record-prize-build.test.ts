@@ -86,7 +86,53 @@ async function main() {
       builtPrizeSlug: "makita-kincrome",
       toolboxSwitches: 2,
       toolsetSwitches: 1,
+      // `baseCapture` omits `interacted`, and absent means ENGAGED — the same default the
+      // route and the repository apply, so a pre-flag client is never miscounted as a
+      // drive-by visitor.
+      interacted: true,
     });
+  });
+
+  await run("an explicitly un-engaged visitor is recorded as such, not dropped", async () => {
+    // The build is still written — that is what keeps `builders` and `signups` countable over
+    // the same population (F-018). The flag is what separates "was on screen" from "engaged",
+    // and it cannot be inferred from the counters: cash is a toggle, not a reel touch (F-010).
+    const calls: Array<{ interacted?: boolean; toolboxSwitches: number }> = [];
+    const outcome = await recordPrizeBuild(
+      { ...baseCapture, toolboxSwitches: 0, toolsetSwitches: 0, interacted: false },
+      {
+        updateVisitBuild: async (payload) => {
+          calls.push(payload);
+          return true;
+        },
+      }
+    );
+    assert.deepEqual(outcome, { recorded: true });
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].interacted, false);
+    assert.equal(calls[0].toolboxSwitches, 0);
+  });
+
+  await run("a cash-only visitor engages without touching either reel", async () => {
+    const calls: Array<{ interacted?: boolean; builtPrizeSlug: string }> = [];
+    await recordPrizeBuild(
+      {
+        ...baseCapture,
+        builtPrizeSlug: "cash-prize",
+        toolboxSwitches: 0,
+        toolsetSwitches: 0,
+        interacted: true,
+      },
+      {
+        updateVisitBuild: async (payload) => {
+          calls.push(payload);
+          return true;
+        },
+      }
+    );
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].interacted, true, "0/0 counters must not be read as un-engaged");
+    assert.equal(calls[0].builtPrizeSlug, "cash-prize");
   });
 
   await run("an unknown built prize slug is rejected before any write", async () => {
