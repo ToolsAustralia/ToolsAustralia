@@ -34,6 +34,12 @@ test("mapCanonicalToTikTokEvent hashes PII, leaves ids/ip/ua raw", () => {
       email: "Test@Example.com ",
       phone: "0412 345 678",
       externalId: "abc123",
+      firstName: "Mc Donald",
+      lastName: "O'Brien",
+      city: "Gold Coast",
+      state: "QLD",
+      zipCode: "4217",
+      country: "AU",
       ttclid: "ttclid-raw",
       ttp: "ttp-raw",
       clientIpAddress: "1.2.3.4",
@@ -47,8 +53,19 @@ test("mapCanonicalToTikTokEvent hashes PII, leaves ids/ip/ua raw", () => {
   assert.equal(tt.event_time, 1747872000);
   assert.equal(tt.event_id, "pi_123");
   assert.equal(tt.user.email, sha256("test@example.com"));
-  assert.equal(tt.user.phone_number, sha256("+61412345678"));
+  // v1.3 field is `phone`, NOT the v1.2 / pixel-SDK name `phone_number`. TikTok drops
+  // unknown user keys silently, so a regression here is invisible until EMQ tanks.
+  assert.equal(tt.user.phone, sha256("+61412345678"));
+  assert.equal("phone_number" in tt.user, false);
   assert.equal(tt.user.external_id, sha256("abc123"));
+  // Names + postcode: hashed with ALL whitespace stripped.
+  assert.equal(tt.user.first_name, sha256("mcdonald"));
+  assert.equal(tt.user.last_name, sha256("o'brien"));
+  assert.equal(tt.user.zip_code, sha256("4217"));
+  // City/state/country: PLAINTEXT, lowercase, alphanumerics only — never hashed.
+  assert.equal(tt.user.city, "goldcoast");
+  assert.equal(tt.user.state, "qld");
+  assert.equal(tt.user.country, "au");
   assert.equal(tt.user.ttclid, "ttclid-raw");       // raw
   assert.equal(tt.user.ttp, "ttp-raw");             // raw
   assert.equal(tt.user.ip, "1.2.3.4");              // raw
@@ -66,6 +83,26 @@ test("mapCanonicalToTikTokEvent omits empty user fields", () => {
   );
   assert.equal("email" in tt.user, false);
   assert.equal("ttclid" in tt.user, false);
+});
+
+test("mapCanonicalToTikTokEvent omits whitespace/punctuation-only identity fields", () => {
+  const tt = mapCanonicalToTikTokEvent(
+    {
+      eventName: "ViewContent",
+      eventId: "v2",
+      eventTime: 1,
+      // Whitespace-only name and punctuation-only state must be dropped entirely —
+      // sending sha256("") or "" is a match signal that can never match anything.
+      userData: { firstName: "   ", lastName: "\t", zipCode: " ", city: "--", state: "//", country: "" },
+    },
+    {},
+  );
+  assert.equal("first_name" in tt.user, false);
+  assert.equal("last_name" in tt.user, false);
+  assert.equal("zip_code" in tt.user, false);
+  assert.equal("city" in tt.user, false);
+  assert.equal("state" in tt.user, false);
+  assert.equal("country" in tt.user, false);
 });
 
 test("mapCanonicalToTikTokEvent keeps quantity for a single content row", () => {

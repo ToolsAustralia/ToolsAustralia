@@ -27,8 +27,28 @@ export interface TikTokEvent {
   event_id: string;
   user: {
     email?: string; // sha256(lowercase+trim)
-    phone_number?: string; // sha256(E.164)
+    /**
+     * sha256(E.164). The field is `phone` — NOT `phone_number`.
+     *
+     * `phone_number` is the **v1.2** name AND the browser pixel's
+     * `ttq.identify({ phone_number })` name, so it looks right from both sides. v1.3
+     * silently IGNORES unknown user keys — no error, no Diagnostics warning — so the
+     * whole parameter just vanished. It surfaced only in Events Manager → EMQ, where
+     * CompleteRegistration (our one Events-API-ONLY event, and one that REQUIRES a
+     * mobile at signup) sat at 0% phone coverage while Purchase/AddPaymentInfo — which
+     * also fire from the browser pixel — showed 74%/91% off `ttq.identify` alone.
+     *
+     * Confirmed against Segment's production v1.3 destination (`TTUser.phone`).
+     * Do not "correct" this back to match the pixel: the two APIs genuinely differ.
+     */
+    phone?: string;
     external_id?: string; // sha256(lowercase+trim)
+    first_name?: string; // sha256(lowercase, ALL whitespace stripped)
+    last_name?: string; // sha256(lowercase, ALL whitespace stripped)
+    zip_code?: string; // sha256(lowercase, ALL whitespace stripped)
+    city?: string; // RAW plaintext — lowercase, alphanumerics only (NOT hashed)
+    state?: string; // RAW plaintext — lowercase, alphanumerics only (NOT hashed)
+    country?: string; // RAW plaintext — ISO 3166-1 alpha-2, lowercased (NOT hashed)
     ttclid?: string; // raw
     ttp?: string; // raw (_ttp cookie)
     ip?: string; // raw
@@ -58,6 +78,27 @@ export interface TikTokRequestBody {
   data: TikTokEvent[];
 }
 
+/**
+ * Hash a name / postcode the way v1.3 expects: strip ALL whitespace, lowercase, SHA-256.
+ * (`hashPII` lowercases + trims, so stripping whitespace first covers the rest — "Mc Donald"
+ * and "McDonald" must land on the same hash.) Returns undefined for whitespace-only input
+ * so we never send a hash of "".
+ */
+function hashCollapsed(value: string): string | undefined {
+  const collapsed = value.replace(/\s/g, "");
+  return collapsed ? hashPII(collapsed) : undefined;
+}
+
+/**
+ * Normalize city / state / country: lowercase, alphanumerics only, **sent as PLAINTEXT**.
+ * These are the only identity fields v1.3 does NOT hash — hashing them breaks matching just
+ * as silently as a wrong field name does, so keep them out of `hashPII`'s path.
+ */
+function normalizeGeo(value: string): string | undefined {
+  const normalized = value.replace(/[^A-Za-z0-9]/g, "").toLowerCase();
+  return normalized || undefined;
+}
+
 /** Map a provider-agnostic CanonicalEvent to a TikTok per-event object. Pure. */
 export function mapCanonicalToTikTokEvent(
   event: CanonicalEvent,
@@ -69,10 +110,26 @@ export function mapCanonicalToTikTokEvent(
   // Normalize phone once (pure fn) — reused for the presence guard and the hash.
   const phoneE164 = u.phone ? normalizePhoneE164(u.phone) : "";
 
+  // Name / geo / postcode: v1.3 accepts all of these and every caller already collects
+  // them for the Meta CAPI event, so omitting them was leaving free match quality behind.
+  // Note the split: names + zip are HASHED, city/state/country are PLAINTEXT.
+  const firstName = u.firstName ? hashCollapsed(u.firstName) : undefined;
+  const lastName = u.lastName ? hashCollapsed(u.lastName) : undefined;
+  const zipCode = u.zipCode ? hashCollapsed(u.zipCode) : undefined;
+  const city = u.city ? normalizeGeo(u.city) : undefined;
+  const state = u.state ? normalizeGeo(u.state) : undefined;
+  const country = u.country ? normalizeGeo(u.country) : undefined;
+
   const user: TikTokEvent["user"] = {
     ...(u.email && { email: hashPII(u.email) }),
-    ...(phoneE164 && { phone_number: hashPII(phoneE164) }),
+    ...(phoneE164 && { phone: hashPII(phoneE164) }),
     ...(u.externalId && { external_id: hashPII(u.externalId) }),
+    ...(firstName && { first_name: firstName }),
+    ...(lastName && { last_name: lastName }),
+    ...(zipCode && { zip_code: zipCode }),
+    ...(city && { city }),
+    ...(state && { state }),
+    ...(country && { country }),
     ...(u.ttclid && { ttclid: u.ttclid }),
     ...(u.ttp && { ttp: u.ttp }),
     ...((u.clientIpAddress ?? ctx.clientIpAddress) && {

@@ -8,6 +8,7 @@ import MiniDraw from "@/models/MiniDraw";
 import { getMiniDrawPackageById } from "@/data/miniDrawPackages";
 import { stripe } from "@/lib/stripe";
 import { extractRequestContext } from "@/utils/tracking/facebook-helpers";
+import { extractTikTokContext } from "@/utils/tracking/tiktok-helpers";
 import { safeEventSourceUrl } from "@/utils/tracking/event-source-url";
 // Benefits are now granted via webhook processing only
 import { createPaymentIntentConfig } from "@/utils/payment/stripe/payment-intent-config";
@@ -54,7 +55,10 @@ export async function POST(request: NextRequest) {
 
     // Extract request context for Facebook CAPI (IP, user agent, fbc, fbp)
     // Store in payment metadata so webhook can use it for improved match quality
-    const requestContext = extractRequestContext(request);
+    // Carries every provider's match signals: Meta's fbc/fbp and TikTok's ttclid/ttp.
+    // Both get stashed in Stripe metadata (capi_*) because Purchase fires from the
+    // webhook, which has no cookies to read them back from.
+    const requestContext = { ...extractRequestContext(request), ...extractTikTokContext(request) };
     const capiEventSourceUrl = safeEventSourceUrl(
       request.headers.get("referer") ??
       (process.env.NEXTAUTH_URL ? `${process.env.NEXTAUTH_URL}/shop` : undefined)
@@ -295,7 +299,9 @@ async function handleOneClickPurchase(
   },
   miniDrawId: string,
   paymentMethodId: string,
-  requestContext: { client_ip_address?: string; client_user_agent?: string; fbc?: string; fbp?: string } | undefined,
+  requestContext:
+    | { client_ip_address?: string; client_user_agent?: string; fbc?: string; fbp?: string; ttclid?: string; ttp?: string }
+    | undefined,
   capiEventSourceUrl?: string,
   attribution?: Parameters<typeof buildAttributionMetadata>[0],
   resolvedAttrMetadata?: Record<string, string>
@@ -450,6 +456,8 @@ async function handleOneClickPurchase(
           ...(requestContext?.client_user_agent ? { capi_user_agent: requestContext.client_user_agent } : {}),
           ...(requestContext?.fbc ? { capi_fbc: requestContext.fbc } : {}),
           ...(requestContext?.fbp ? { capi_fbp: requestContext.fbp } : {}),
+          ...(requestContext?.ttclid ? { capi_ttclid: requestContext.ttclid } : {}),
+          ...(requestContext?.ttp ? { capi_ttp: requestContext.ttp } : {}),
           ...(capiEventSourceUrl ? { capi_event_source_url: capiEventSourceUrl } : {}),
           ...buildAttributionMetadata(attribution),
           ...(resolvedAttrMetadata ?? {}),
@@ -583,7 +591,9 @@ async function handlePaymentIntentCreation(
   miniDrawPackage: { _id: string; name: string; price: number; entries: number },
   miniDrawId: string,
   paymentMethodId: string | undefined,
-  requestContext: { client_ip_address?: string; client_user_agent?: string; fbc?: string; fbp?: string } | undefined,
+  requestContext:
+    | { client_ip_address?: string; client_user_agent?: string; fbc?: string; fbp?: string; ttclid?: string; ttp?: string }
+    | undefined,
   request?: NextRequest, // ✅ Pass request for error logging
   capiEventSourceUrl?: string,
   attribution?: Parameters<typeof buildAttributionMetadata>[0],
@@ -622,6 +632,8 @@ async function handlePaymentIntentCreation(
         ...(requestContext?.client_user_agent ? { capi_user_agent: requestContext.client_user_agent } : {}),
         ...(requestContext?.fbc ? { capi_fbc: requestContext.fbc } : {}),
         ...(requestContext?.fbp ? { capi_fbp: requestContext.fbp } : {}),
+        ...(requestContext?.ttclid ? { capi_ttclid: requestContext.ttclid } : {}),
+        ...(requestContext?.ttp ? { capi_ttp: requestContext.ttp } : {}),
         ...(eventSourceUrl ? { capi_event_source_url: eventSourceUrl } : {}),
         ...buildAttributionMetadata(attribution),
         ...(resolvedAttrMetadata ?? {}),

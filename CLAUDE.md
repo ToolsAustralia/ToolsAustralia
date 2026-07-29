@@ -332,7 +332,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/hooks/queries/admin/useAllowlistStats.ts",
         "src/utils/billing/declineCodeLabels.ts"
       ],
-      "lastVerified": "2026-07-22"
+      "lastVerified": "2026-07-29"
     },
     "payment": {
       "docs": "docs/payment/",
@@ -348,7 +348,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/hooks/useSavedPaymentMethods.ts",
         "eslint/rules/no-eager-stripe.js"
       ],
-      "lastVerified": "2026-07-19"
+      "lastVerified": "2026-07-29"
     },
     "draws": {
       "docs": "docs/draws/",
@@ -381,7 +381,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/hooks/useMiniDrawPurchase.ts",
         "src/hooks/usePastDrawsData.ts"
       ],
-      "lastVerified": "2026-07-23"
+      "lastVerified": "2026-07-29"
     },
     "rewards-redeemables": {
       "docs": "docs/rewards-redeemables/",
@@ -489,7 +489,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/generated/upsellImageManifest.ts",
         "scripts/build-upsell-image-manifest.ts"
       ],
-      "lastVerified": "2026-07-08"
+      "lastVerified": "2026-07-29"
     },
     "cart-shop-products": {
       "docs": "docs/cart-shop-products/",
@@ -607,7 +607,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/hooks/useAttribution.ts",
         "src/hooks/useUTMPersistence.ts"
       ],
-      "lastVerified": "2026-07-28"
+      "lastVerified": "2026-07-29"
     },
     "ab-testing": {
       "docs": "docs/ab-testing/",

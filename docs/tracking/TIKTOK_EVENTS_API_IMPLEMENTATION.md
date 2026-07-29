@@ -40,7 +40,9 @@ Triangulated from working code (Stape GTM tag, a Python wrapper, mParticle, Adob
       "event_time": 1747872000,         // Unix SECONDS
       "event_id": "<deterministic id>", // dedup key — same on pixel + server
       "user": {
-        "email": "<sha256>", "phone_number": "<sha256>", "external_id": "<sha256>",
+        "email": "<sha256>", "phone": "<sha256>", "external_id": "<sha256>",
+        "first_name": "<sha256>", "last_name": "<sha256>", "zip_code": "<sha256>",
+        "city": "goldcoast", "state": "qld", "country": "au",   // PLAINTEXT, lowercased
         "ttclid": "<raw>", "ttp": "<raw>", "ip": "<raw>", "user_agent": "<raw>"
       },
       "properties": {
@@ -51,7 +53,8 @@ Triangulated from working code (Stape GTM tag, a Python wrapper, mParticle, Adob
     }]
   }
   ```
-- **Hashing (SHA-256 hex, via the shared `hashPII`):** `email` (lowercase+trim), `phone_number` (E.164 first), `external_id`. **Never hash:** `ttclid`, `ttp`, `ip`, `user_agent`.
+- **Phone key is `phone`, NOT `phone_number`.** `phone_number` is the v1.2 name *and* the pixel's `ttq.identify` name; v1.3 silently ignores unknown `user` keys, so sending it drops the parameter with no error anywhere except EMQ coverage. See [gotchas.md](./gotchas.md).
+- **Hashing (SHA-256 hex, via the shared `hashPII`):** `email` (lowercase+trim), `phone` (E.164 first), `external_id`, `first_name` / `last_name` / `zip_code` (lowercase, all whitespace stripped). **Plaintext (lowercase, alphanumerics only):** `city`, `state`, `country`. **Never hash:** `ttclid`, `ttp`, `ip`, `user_agent`.
 - **Success:** HTTP 200 **AND** body `code === 0`. `{ code, message, request_id, data }`. A 200 with non-zero `code` is a failure.
 - **Dedup:** same `event` name + same `event_id` + same pixel, 48h window; first event wins (server fires after browser; TikTok merges within 5 min).
 - **`event_time`:** Unix **seconds**; accepted up to ~7 days old.
@@ -62,9 +65,17 @@ Triangulated from working code (Stape GTM tag, a Python wrapper, mParticle, Adob
 
 > The legacy `trackPixelSubscriptionRenewal` still fires TikTok `CompletePayment` (browser-only, renewals are intentionally not deduped/sent to CAPI). Out of scope for this work.
 
-## Match quality — why we don't persist `ttclid` on orders
+## Match quality — how `ttclid` reaches the webhook-fired Purchase
 
-The money-event Purchase **dual-fires**: the **browser** copy carries `ttclid`/`ttp` (the SDK auto-attaches them) and the **server** copy (Stripe webhook — no browser cookies) carries hashed `email`/`phone_number`/`external_id` + IP. TikTok **merges** the two on the shared `event_id`, so Purchase gets the full signal set without touching the Order model. Funnel events via `/api/tracking/conversion` get `ttclid`/`ttp` directly from cookies server-side.
+The money-event Purchase **dual-fires**: the **browser** copy carries `ttclid`/`ttp` (the SDK auto-attaches them), and the **server** copy fires from the Stripe webhook, which has **no browser cookies**. TikTok does merge the two on the shared `event_id` — but relying on that alone meant the server copy went out with no click id whenever the browser copy was blocked or lost, which is exactly the case CAPI exists to cover. TikTok's own EMQ panel flagged it ("increase your click ID coverage to over 90%").
+
+So the click id rides through **Stripe metadata**, on the same channel Meta's already used:
+
+1. Payment-creation routes read the cookies at request time — `{ ...extractRequestContext(request), ...extractTikTokContext(request) }` — and write `capi_ttclid` / `capi_ttp` into the PaymentIntent/Subscription metadata beside `capi_fbc` / `capi_fbp`.
+2. The webhook's `extractRequestContextFromMetadata` reads them back into `requestContext`.
+3. `trackPixelPurchase` puts them on `userData.ttclid` / `userData.ttp`, where only the TikTok provider reads them (same way `fbc`/`fbp` are Meta-only).
+
+Routes wired: `create-subscription`, `create-subscription-existing-user`, `create-one-time-purchase`, `create-one-time-purchase-existing-user`, `upsell/purchase`, `mini-draw/purchase`. **A new payment-creation route must add those two metadata keys** or its Purchase loses the click id. Nothing is persisted on the Order/User model — Stripe metadata is the whole hand-off. Funnel events via `/api/tracking/conversion` still read `ttclid`/`ttp` straight from cookies server-side.
 
 ## Environment variables
 
