@@ -400,7 +400,8 @@
     "sync:tiktok-destinations": "tsx scripts/sync-tiktok-destinations.ts",
     "sync:tiktok-destinations:dry": "tsx scripts/sync-tiktok-destinations.ts --dry-run",
     "sync:tiktok-spend-by-url": "tsx scripts/sync-tiktok-spend-by-url.ts",
-    "sync:tiktok-spend-by-url:dry": "tsx scripts/sync-tiktok-spend-by-url.ts --dry-run"
+    "sync:tiktok-spend-by-url:dry": "tsx scripts/sync-tiktok-spend-by-url.ts --dry-run",
+    "test:ab-sentinels": "tsx src/lib/ab-testing/__tests__/nonConversionSentinels.test.ts"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^3.0.85",

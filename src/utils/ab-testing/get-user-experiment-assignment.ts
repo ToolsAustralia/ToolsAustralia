@@ -1,13 +1,14 @@
 import mongoose from "mongoose";
 import VariantAssignmentRepository from "@/repositories/ab-testing/VariantAssignmentRepository";
 import ExperimentRepository from "@/repositories/ab-testing/ExperimentRepository";
-import { PROMO_THEME_SLUG } from "@/lib/ab-testing/promo-theme-slug";
-
-/** Cosmetic site-wide experiments that must never be credited with purchases. */
-export const NON_CONVERSION_SENTINEL_SLUGS = new Set([
-  "__membership-theme__",
-  PROMO_THEME_SLUG,
-]);
+// Defined in `src/lib/` so the admin UI can read it too — this module imports mongoose
+// and the repositories, so a client component importing from here would pull the DB layer
+// into the browser bundle. Re-exported to keep existing server-side importers working.
+export {
+  NON_CONVERSION_SENTINEL_SLUGS,
+  isNonConversionSentinelExperiment,
+} from "@/lib/ab-testing/non-conversion-sentinels";
+import { NON_CONVERSION_SENTINEL_SLUGS } from "@/lib/ab-testing/non-conversion-sentinels";
 
 /**
  * Rank experiments for purchase attribution when no slug is provided.

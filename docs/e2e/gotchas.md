@@ -415,3 +415,51 @@ that isn't stabilizing — mask the specific dynamic region more precisely inste
 `visual.spec.ts`'s `topBar`/`floatingCountdown`/`brandScroller`/`drawCountdown`/`renewalNote`/
 `cycleFuse` masks and their comments for the pattern: wait for the dynamic element to settle,
 then mask its bounding box, rather than fighting it with a looser pixel tolerance).
+
+## Resolved gotcha — an auto-opening modal intercepts clicks in PROOF MODE ONLY
+
+Symptom: `streak-journey.spec.ts` passed every normal run and hung to its own test timeout on
+every `--proof` render — twice, costing a 5-minute and then a 20-minute cycle. No useful error:
+just `Test timeout of Nms exceeded`.
+
+Root cause: `/my-account` auto-opens the subscription-explainer modal (`#sem-headline`,
+"Entry Accumulation Over Time") ~2.5s after mount. Its `fixed inset-0` overlay intercepts
+pointer events for the whole viewport. Playwright's call log names the culprit exactly once you
+bound the click and let it fail:
+
+```
+- element is visible, enabled and stable
+- <h3 ...>Entry Accumulation Over Time</h3> from <div class="fixed inset-0 ...">…</div>
+  subtree intercepts pointer events
+- retrying click action   (× until timeout)
+```
+
+**Why proof mode and only proof mode:** `demo.step` paints its caption and holds for
+`holdFor(title)` (~1.8-4s) BEFORE running the beat body. A beat that navigates to `/my-account`
+and then clicks lands its clicks *after* that hold — i.e. after the 2.5s timer has fired and the
+modal is up. Outside proof mode there is no hold, the clicks land within the 2.5s window, and
+the spec passes. Any `@demo` beat that navigates to a route with a delayed auto-modal and then
+clicks has this exposure; dismissing the modal once earlier in the journey does NOT inoculate a
+later fresh navigation, which remounts the page and restarts the timer.
+
+Fix: dismiss the modal after every navigation that can re-arm it, at the shared choke point both
+beats route through — and per the round-4 caption rule, do it BEFORE the `demo.step` opens, never
+inside it.
+
+**The transferable lesson is the debugging method, not the modal.** Two things made this cost
+three render cycles instead of one:
+
+1. **`playwright.config.ts` sets no `actionTimeout`**, so an unactionable `click()` waits forever
+   and surfaces as a bare test-level timeout with no indication of *which* line or *why*. Bound
+   the clicks in a demo beat (`click({ timeout: 10_000 })`) — that alone converted a silent
+   20-minute hang into a pointed error in 2 minutes, with Playwright naming the intercepting
+   element. Same reasoning as `demo.ts` bounding its own `scrollIntoViewIfNeeded`/`boundingBox`
+   at 5s.
+2. **Read `narration.json` before touching a timeout.** Its cues are the per-beat clock: beats
+   1-9 recorded at 65s, then `endMs: 1200479`. That gap is a *hang*, not slowness — a raised
+   timeout only buys a longer hang. The first response here was to raise the budget 5m → 20m,
+   which diagnosed nothing and wasted a full cycle. If the last cue is an early beat and `endMs`
+   is the timeout, look for a blocked action, not a slow one.
+
+Related: proof mode's own "never hand `demo.highlight` a locator that might be hidden" rule
+(above) is the same failure class — an unbounded actionability wait with no `actionTimeout` net.

@@ -331,6 +331,63 @@ When a consumer **branches on a field**, the projection that feeds it is load-be
 Either select the field explicitly in one shared constant, or make the mapper fail loudly
 when it is absent. Never let a missing field become a plausible-looking value.
 
+## Three result panels, two generations — and what a sentinel experiment does to them
+
+The experiment results screen shows three blocks. They are **not** three independent views
+of the same thing; the bottom two are the previous generation:
+
+| Panel | Reads from | Status |
+|---|---|---|
+| **Result — user-level Bayesian** | `VariantAssignment` + `PaymentEvent`, at read time | **Current.** Durable, no TTL, per-user |
+| **Variant Comparison** | `ExperimentEvent` rows | Legacy — events carry a **30-day TTL** |
+| **Statistical Significance** / **Winner Determination** | chi-square over *Variant Comparison's* numbers | Legacy — derived, not independent |
+
+Statistical Significance is computed **from** Variant Comparison, so when that reads zero,
+the chi-square divides by zero and renders `p-value N/A`, `confidence NaN%`, and a red
+`Lift 0.00% — Decline vs control`.
+
+### Why that combination is dangerous for a sentinel experiment
+
+A non-conversion sentinel (`__promo-theme__`, `__membership-theme__`) is deliberately
+excluded from purchase attribution, so it can **never** accrue `conversion`/`purchase`
+events — its legacy panel is zero *by design*, permanently. The result was a red
+"0.00% Decline vs control" sitting directly beneath a Bayesian card reporting a **97%
+chance to win**. Not merely empty — actively contradicting the real result.
+
+This surfaced the first time a sentinel experiment ran in production. Every one of the 16
+prior experiments used a wildcard (`*`) or real slugs, which is why it had never been seen.
+
+**Fix:** `isNonConversionSentinelExperiment(slugTargets)` (in
+`src/lib/ab-testing/non-conversion-sentinels.ts`) gates the legacy panels off for sentinel
+experiments and replaces them with a one-line explanation. Engagement figures (visitors,
+clicks, CTR) stay — those are real and the Bayesian card doesn't show them. Guarded by
+`npm run test:ab-sentinels`, which pins the helper to `attributionRank`'s `.every(...)`
+semantics so a **mixed** target list is never treated as a sentinel (it earns real
+attribution and must keep its panels).
+
+### Where the sentinel registry lives, and why
+
+`src/lib/ab-testing/non-conversion-sentinels.ts` — importing **nothing**, because both the
+server (attribution) and the client (admin dashboard) read it. It cannot live in
+`get-user-experiment-assignment.ts`: that module imports mongoose and the repositories, so
+a client component importing from it drags the DB layer into the browser bundle. Same
+class of boundary trap as the `"use client"` constant described above.
+
+### "Recurring $" on the Bayesian card
+
+Renewal revenue from users in that arm, shown separately and **never counted as a
+conversion**. A subscription renewal was not caused by the banner theme someone saw on a
+landing page, so folding it into the conversion figure would inflate the winner. It is
+context, not scoreboard.
+
+### "N page(s)" in the experiment list
+
+That label is `slugTargets.length`. A sentinel experiment has exactly one target — the
+sentinel marker — so it rendered as "1 page(s)", making a site-wide experiment look scoped
+to a single URL. It is not: the promo page looks the sentinel up with a **constant**, never
+the page's own slug, so it resolves on every promo page. Sentinel targets now render as
+"Site-wide (promo pages)".
+
 ## Migrated stubs
 
 Read all five `docs/AB_TESTING_*.md` root files and merge in next refresh:

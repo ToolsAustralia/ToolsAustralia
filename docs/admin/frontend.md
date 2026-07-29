@@ -1020,3 +1020,33 @@ The **Ad Spend**, **ROAS**, and **New-Member ROAS** cards in `KpiGrid.tsx` read 
 - **New-Member ROAS** — its denominator was Meta-only while its numerator counted new-membership revenue from every channel; now uses `adTotals.spend`.
 
 `KpiGrid` deliberately does **not** read `stats.facebookAds` — that field stays Meta-scoped for the Norm gateway.
+
+## A/B experiment results — sentinel experiments hide the legacy panels (2026-07-29)
+
+`ExperimentResultsDashboard` renders three result blocks, but only the top one is current:
+the **user-level Bayesian** card reads durable tables, while **Variant Comparison** and the
+**Statistical Significance** / **Winner Determination** blocks below it are the previous
+generation, computed from TTL'd `ExperimentEvent` rows.
+
+For a **non-conversion sentinel** experiment (`__promo-theme__`, `__membership-theme__`)
+the legacy blocks can never have data — those experiments are deliberately excluded from
+purchase attribution — so the chi-square divided by zero and rendered a red
+`Lift 0.00% — Decline vs control` immediately beneath a Bayesian card reporting a 97%
+chance to win.
+
+The dashboard now takes an optional `slugTargets` prop and, via
+`isNonConversionSentinelExperiment()`, suppresses the two guaranteed-misleading blocks and
+the conversion/revenue rows in Variant Comparison, replacing them with a short explanation.
+**Engagement figures (visitors, clicks, CTR) still render** — they are real, and the
+Bayesian card does not show them. Nothing changes for wildcard or slug-targeted
+experiments.
+
+The experiment list's target label also special-cases sentinels: `slugTargets.length` made
+a site-wide experiment read as "1 page(s)", so sentinel targets now render
+"Site-wide (promo pages)".
+
+The sentinel registry lives in `src/lib/ab-testing/non-conversion-sentinels.ts` — a module
+that imports nothing, so both the admin UI and the server-side attribution logic can read
+it. Do **not** import it from `src/utils/ab-testing/get-user-experiment-assignment.ts` in a
+client component: that module pulls in mongoose and the repositories. See
+[docs/ab-testing/gotchas.md](../ab-testing/gotchas.md).

@@ -5,6 +5,7 @@ import { getPackageById } from "@/data/membershipPackages";
 import { stripe } from "@/lib/stripe";
 // Referral processing moved to webhook - no longer needed here
 import { extractRequestContext } from "@/utils/tracking/facebook-helpers";
+import { extractTikTokContext } from "@/utils/tracking/tiktok-helpers";
 import { safeEventSourceUrl } from "@/utils/tracking/event-source-url";
 import Stripe from "stripe";
 import { z } from "zod";
@@ -107,7 +108,10 @@ export async function POST(request: NextRequest) {
     }
 
     // Extract request context for Facebook CAPI (IP, user agent, fbc, fbp)
-    const requestContext = extractRequestContext(request);
+    // Carries every provider's match signals: Meta's fbc/fbp and TikTok's ttclid/ttp.
+    // Both get stashed in Stripe metadata (capi_*) because Purchase fires from the
+    // webhook, which has no cookies to read them back from.
+    const requestContext = { ...extractRequestContext(request), ...extractTikTokContext(request) };
     const capiEventSourceUrl = safeEventSourceUrl(
       request.headers.get("referer") ??
       (process.env.NEXTAUTH_URL ? `${process.env.NEXTAUTH_URL}/shop` : undefined)
@@ -488,6 +492,8 @@ export async function POST(request: NextRequest) {
       ...(requestContext.client_user_agent ? { capi_user_agent: requestContext.client_user_agent } : {}),
       ...(requestContext.fbc ? { capi_fbc: requestContext.fbc } : {}),
       ...(requestContext.fbp ? { capi_fbp: requestContext.fbp } : {}),
+      ...(requestContext.ttclid ? { capi_ttclid: requestContext.ttclid } : {}),
+      ...(requestContext.ttp ? { capi_ttp: requestContext.ttp } : {}),
       ...(capiEventSourceUrl ? { capi_event_source_url: capiEventSourceUrl } : {}),
       ...buildAttributionMetadata(validatedData.attribution),
       ...resolvedAttr,

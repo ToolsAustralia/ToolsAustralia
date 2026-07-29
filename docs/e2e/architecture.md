@@ -13,6 +13,7 @@ e2e/
   seed/
     index.ts                wipeAndSeed() — re-runs the safety guard, drops the DB, seeds
     users.ts / draw.ts       seed data (member, admin, one active MajorDraw)
+    streak.ts                imperative demo-state helpers (streak @demo spec only)
   setup/
     auth.setup.ts            Playwright "setup" project — logs in member + admin, saves storage state
   fixtures/
@@ -117,9 +118,43 @@ runs, not just once upstream in `resolveE2eEnv`), drops the e2e database, then s
 - **Admin** (`e2e.admin@e2e.local`) — `userType: "admin"`, not just `role: "admin"` (see the
   admin `userType` gotcha below).
 - **One active `MajorDraw`** — `activationDate` yesterday, `freezeEntriesAt` +19 days,
-  `drawDate` +20 days, empty `entries: []`.
+  `drawDate` +20 days, and a real 15-entry position for the seeded member
+  (`entriesBySource: { membership: 15 }`). An active Tradie subscriber holding zero entries is
+  a state production never produces, and it made the dashboard demo's EntryWallet render "0".
 
 CLI entry: `npx tsx e2e/seed/index.ts` (useful standalone, without booting the full orchestrator).
+
+### Membership Streak demo state (`e2e/seed/streak.ts`)
+
+Not part of `wipeAndSeed` — these are **imperative** helpers the streak `@demo` spec calls
+*between* recorded beats to walk one member through their whole lifecycle, so months of
+membership compress into seconds of video while every number on screen stays the real counter
+driving the real card.
+
+| Helper | Resulting state |
+|---|---|
+| `setNonMember()` | registered account, never purchased (`acct: "none"`) |
+| `setOneTimeHolder()` | Apprentice pack holder, no subscription (`acct: "onetime"`) |
+| `setStreak(months, { streakEntries? })` | active Tradie at N consecutive renewals |
+| `setPastDue(months)` | failed renewal (`acct: "pastdue"` → the at-risk card) |
+| `seedCelebrationMarker(page, userId, lastSeen)` | arms the one-shot milestone celebration |
+| `memberUserId()` / `renameDemoDraw(name)` | the member's `_id`; a presentable draw name |
+
+Three constraints these helpers exist to respect — each one a defect if broken:
+
+- **`totalEntries` must equal the sum of `entriesBySource`.** `EntryWallet` renders the buckets
+  while `entriesForUser()` in `e2e/helpers/db.ts` reads `totalEntries`; a mismatch puts two
+  different totals on screen in the same video.
+- **`packageId` values must exist in the real catalog** (`src/data/membershipPackages.ts`). An
+  unknown id makes `getPackageById` miss and the my-account route substitute a generic
+  `{ name: "One-Time Package", price: 0 }` placeholder — a wrong price, on camera.
+- **The celebration marker must be planted before page load** (`page.addInitScript`, not
+  `page.evaluate`). `useStreakCelebration` seeds its own marker silently on a first-ever visit,
+  so a marker written after load never fires the celebration.
+
+Requires `NEXT_PUBLIC_DASHBOARD_STREAK_PREVIEW: "true"` in the `e2e/lib/env.ts` overlay — the
+streak surfaces ship dark behind `DASHBOARD_FEATURES.loyaltyStreak`, so without it every streak
+beat records a blank card.
 
 ## Fixtures (`e2e/fixtures/test.ts`)
 

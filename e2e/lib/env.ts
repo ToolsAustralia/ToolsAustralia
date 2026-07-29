@@ -108,6 +108,11 @@ export function resolveE2eEnv(opts: { webhookSecret?: string } = {}): E2eEnv {
     // though the browser-edge blocklist (e2e/fixtures/test.ts, e2e/setup/auth.setup.ts)
     // already blocks its requests independently; see docs/e2e/gotchas.md.
     NEXT_PUBLIC_CONTENTSQUARE_ID: "",
+    // Membership Streak surfaces (LoyaltyStreak card, EntryWallet gold bucket,
+    // RewardsMilestones track) ship DARK behind DASHBOARD_FEATURES.loyaltyStreak /
+    // .milestoneProgress, which read this var (src/config/dashboardFeatures.ts).
+    // The streak-journey @demo spec is entirely blank without it.
+    NEXT_PUBLIC_DASHBOARD_STREAK_PREVIEW: "true",
   };
   if (opts.webhookSecret) overlay.STRIPE_WEBHOOK_SECRET = opts.webhookSecret;
   return { port, baseUrl, mongoUri: e2eUri!, overlay };
