@@ -5,9 +5,15 @@ import { BarChart3, Target, Award, AlertCircle, CheckCircle2 } from "lucide-reac
 import { useQuery } from "@tanstack/react-query";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
 import { cn } from "@/utils/cn";
+import { isNonConversionSentinelExperiment } from "@/lib/ab-testing/non-conversion-sentinels";
 
 interface ExperimentResultsDashboardProps {
   experimentId: string;
+  /**
+   * The experiment's slug targets, so the dashboard can tell a sentinel experiment from a
+   * normal one. Optional: when omitted the dashboard renders exactly as before.
+   */
+  slugTargets?: string[];
 }
 
 interface StatisticalResults {
@@ -94,8 +100,20 @@ const RECOMMENDATION_META: Record<
  * Experiment Results Dashboard
  * Displays comprehensive statistical analysis and metrics for A/B testing experiments
  */
-export default function ExperimentResultsDashboard({ experimentId }: ExperimentResultsDashboardProps) {
+export default function ExperimentResultsDashboard({
+  experimentId,
+  slugTargets,
+}: ExperimentResultsDashboardProps) {
   const [dateRange, _setDateRange] = useState<{ start?: Date; end?: Date }>({});
+
+  /**
+   * A sentinel experiment is excluded from purchase attribution by design, so it can NEVER
+   * accrue legacy `conversion`/`purchase` events. The chi-square panel therefore divides by
+   * zero and renders "N/A · 0.00% Decline vs control" in red — actively contradicting the
+   * Bayesian card above it, which is the real result. Hide the guaranteed-wrong panels
+   * rather than showing numbers that mean the opposite of what they appear to mean.
+   */
+  const isSentinelExperiment = isNonConversionSentinelExperiment(slugTargets);
 
   // Fetch analytics data
   const { data: analyticsData, isLoading } = useQuery<ExperimentResults>({
@@ -252,7 +270,23 @@ export default function ExperimentResultsDashboard({ experimentId }: ExperimentR
         </div>
       )}
 
+      {/* Sentinel experiments: explain the deliberate zeros instead of rendering a
+          chi-square over data that can never exist. */}
+      {isSentinelExperiment && (
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+          <p className="text-sm text-blue-900">
+            <span className="font-semibold">Scored on the Bayesian card above.</span> This is a
+            site-wide cosmetic experiment, so it is deliberately excluded from purchase
+            attribution — that is what stops it taking credit away from your page-targeted
+            promo experiments. It therefore records no legacy conversion or revenue events,
+            and the chi-square significance panel is hidden because it would divide by zero
+            and report a decline that is not real. Engagement figures below are unaffected.
+          </p>
+        </div>
+      )}
+
       {/* Statistical Significance Card */}
+      {!isSentinelExperiment && (
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
@@ -347,9 +381,11 @@ export default function ExperimentResultsDashboard({ experimentId }: ExperimentR
           </div>
         )}
       </div>
+      )}
 
-      {/* Winner Declaration */}
-      {winner && (
+      {/* Winner Declaration — also chi-square derived, so it reports "confidence: NaN%"
+          for a sentinel experiment. Suppressed for the same reason. */}
+      {!isSentinelExperiment && winner && (
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
@@ -382,22 +418,34 @@ export default function ExperimentResultsDashboard({ experimentId }: ExperimentR
                   <span className="text-gray-600 dark:text-neutral-400">Visitors:</span>
                   <span className="font-medium">{variant.metrics.uniqueVisitors.toLocaleString()}</span>
                 </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-gray-600 dark:text-neutral-400">Conversions:</span>
-                  <span className="font-medium">{variant.metrics.conversions.toLocaleString()}</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-gray-600 dark:text-neutral-400">Conversion Rate:</span>
-                  <span className="font-medium">{variant.metrics.conversionRate.toFixed(2)}%</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-gray-600 dark:text-neutral-400">Revenue:</span>
-                  <span className="font-medium">${variant.metrics.revenue.toLocaleString()}</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-gray-600 dark:text-neutral-400">Revenue/User:</span>
-                  <span className="font-medium">${variant.metrics.revenuePerUser.toFixed(2)}</span>
-                </div>
+                {/* Conversion + revenue come from legacy events, which a sentinel
+                    experiment never accrues. Rendering the zeros here reads as "nobody
+                    converted" when the Bayesian card above shows real conversions, so
+                    point at the real numbers instead. */}
+                {isSentinelExperiment ? (
+                  <div className="text-xs text-gray-500 dark:text-neutral-400 pt-1">
+                    Conversions &amp; revenue: see the Bayesian card above
+                  </div>
+                ) : (
+                  <>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-600 dark:text-neutral-400">Conversions:</span>
+                      <span className="font-medium">{variant.metrics.conversions.toLocaleString()}</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-600 dark:text-neutral-400">Conversion Rate:</span>
+                      <span className="font-medium">{variant.metrics.conversionRate.toFixed(2)}%</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-600 dark:text-neutral-400">Revenue:</span>
+                      <span className="font-medium">${variant.metrics.revenue.toLocaleString()}</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-600 dark:text-neutral-400">Revenue/User:</span>
+                      <span className="font-medium">${variant.metrics.revenuePerUser.toFixed(2)}</span>
+                    </div>
+                  </>
+                )}
               </div>
             </div>
           ))}
