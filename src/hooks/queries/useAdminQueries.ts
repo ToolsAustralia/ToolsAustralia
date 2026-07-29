@@ -140,9 +140,17 @@ export interface AdminDashboardStats {
     revenue: number;
     renewalRevenue: number;
     conversions: number;
+    /** Accounts created attributed to this platform (click-verified, else UTM). */
+    signups?: number;
     byConfidence: { click: number; utm_only: number; inferred_backfill: number };
     adSpend?: number;
+    /** SERVER ROAS — our payment-attributed acquisition revenue ÷ ad spend. */
     trueRoas?: number;
+    /** The ad platform's OWN reported conversion value (dollars). */
+    platformRevenue?: number;
+    /** PLATFORM ROAS — the platform's reported value ÷ the same spend. Differs from
+     *  `trueRoas` by design (different attribution model/window). */
+    platformRoas?: number;
     revenueTrend?: TrendData;
     trueRoasTrend?: TrendData;
   }>;

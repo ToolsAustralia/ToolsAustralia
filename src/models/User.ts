@@ -272,6 +272,14 @@ export interface IUser extends Document {
     campaignId?: string;
     adsetId?: string;
     adId?: string;
+    /**
+     * Paid platform whose CLICK ID (`_fbc` / `ttclid` / `_sc_click`) was present in the
+     * request cookies at registration. The resolved platform ONLY — the raw click id is
+     * deliberately not stored, so signup-source analytics get click-verified confidence
+     * (the same basis purchases use) without adding a new identifier to the user record.
+     * Absent for organic signups and for pre-2026-07-24 accounts.
+     */
+    clickPlatform?: "meta" | "tiktok" | "snapchat" | "google";
   };
 
   // Points Redemption History
@@ -1057,6 +1065,14 @@ const UserSchema = new Schema<IUser>(
       campaignId: { type: String, trim: true },
       adsetId: { type: String, trim: true },
       adId: { type: String, trim: true },
+      // Paid platform whose CLICK ID was present in the request cookies at registration
+      // (derived from extractPaidClickSignals). Stores the resolved platform only — never
+      // the raw click id — so signup-source analytics gain click-verified confidence
+      // without enlarging the PII footprint held on the user record.
+      clickPlatform: {
+        type: String,
+        enum: ["meta", "tiktok", "snapchat", "google"],
+      },
     },
 
     // Points Redemption History

@@ -14,6 +14,7 @@ import {
 } from "@/utils/admin/userFilterBuilder";
 import { trendCalculationService } from "@/services/admin/TrendCalculationService";
 import { PLATFORM_TO_AD_CHANNEL_KEY } from "@/services/admin/dashboard-stats/snapshotSchema";
+import { getSignupsByPlatform } from "@/services/admin/signupsByPlatform";
 import { ATTRIBUTED_PLATFORM_KEYS } from "@/models/DashboardStatsDailySnapshot";
 import type { TrendData } from "@/types/admin/trend-types";
 
@@ -122,6 +123,11 @@ export class DashboardStatsService {
       User.countDocuments(cancelledMembershipsQuery),
       User.countDocuments(totalScheduledCancellationQuery),
     ]);
+
+    // Signups per acquisition platform for the same window — feeds the Advertising
+    // card's per-platform signup count. Same date basis as `newSignupsInRange` above,
+    // so the per-platform figures sum to it.
+    const signupsByPlatform = await getSignupsByPlatform(startDate, endDate);
 
     // When the dashboard is in snapshot mode (asOfDate is in the past), override the
     // *standing* cancellation metrics with the corresponding values from the daily
@@ -248,26 +254,50 @@ export class DashboardStatsService {
       revenue: number;
       renewalRevenue: number;
       conversions: number;
+      signups?: number;
       byConfidence: { click: number; utm_only: number; inferred_backfill: number };
       adSpend?: number;
       trueRoas?: number;
+      platformRevenue?: number;
+      platformRoas?: number;
       revenueTrend?: TrendData;
       trueRoasTrend?: TrendData;
     }> = {};
     for (const p of ATTRIBUTED_PLATFORM_KEYS) {
       const ar = snapshotRead.attributedRevenue[p];
-      if (!ar || (ar.newRevenue === 0 && ar.conversions === 0 && ar.renewalRevenue === 0)) continue;
+      const signupsForPlatform = signupsByPlatform.byPlatform[p] ?? 0;
+      // A platform with signups but no revenue yet is still worth showing — a channel
+      // that creates accounts which haven't converted is exactly what the signup column
+      // exists to reveal. Only skip when it has nothing at all.
+      if (
+        (!ar || (ar.newRevenue === 0 && ar.conversions === 0 && ar.renewalRevenue === 0)) &&
+        signupsForPlatform === 0
+      ) {
+        continue;
+      }
       const adKey = PLATFORM_TO_AD_CHANNEL_KEY[p];
-      const spend = adKey ? (snapshotRead.adChannels[adKey]?.spend ?? 0) : 0;
+      const channel = adKey ? snapshotRead.adChannels[adKey] : undefined;
+      const spend = channel?.spend ?? 0;
       const entry: (typeof attributedRevenue)[string] = {
-        revenue: ar.newRevenue,          // acquisition revenue only — the ads-ROAS numerator
-        renewalRevenue: ar.renewalRevenue,
-        conversions: ar.conversions,
-        byConfidence: ar.byConfidence,
+        revenue: ar?.newRevenue ?? 0,     // acquisition revenue only — the ads-ROAS numerator
+        renewalRevenue: ar?.renewalRevenue ?? 0,
+        conversions: ar?.conversions ?? 0,
+        signups: signupsForPlatform,
+        byConfidence: ar?.byConfidence ?? { click: 0, utm_only: 0, inferred_backfill: 0 },
       };
       if (adKey && spend > 0) {
         entry.adSpend = spend;
-        entry.trueRoas = ar.newRevenue / spend;  // ROAS uses acquisition revenue only
+        // SERVER ROAS ("true" ROAS) — our own payment-attributed acquisition revenue ÷ spend.
+        entry.trueRoas = ar ? ar.newRevenue / spend : 0;
+        // PLATFORM ROAS — the ad platform's OWN reported conversion value ÷ the same spend.
+        // Already captured per channel by each AdChannelProvider (Meta from its API, TikTok
+        // summed from TikTokAdInsightsDaily); it was being discarded here. The two ROAS
+        // figures disagree by design — different attribution models, windows, and
+        // de-duplication — and seeing the gap is the point.
+        if (channel && channel.revenue > 0) {
+          entry.platformRevenue = channel.revenue;
+          entry.platformRoas = channel.roas > 0 ? channel.roas : channel.revenue / spend;
+        }
       }
       attributedRevenue[p] = entry;
     }

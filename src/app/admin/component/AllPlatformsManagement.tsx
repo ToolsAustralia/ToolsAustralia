@@ -110,8 +110,16 @@ export default function AllPlatformsManagement() {
         <MetricCard title="Conversions" value={agg.totalConversions.toLocaleString()} icon={Target} loading={statsLoading} />
       </div>
 
-      {/* Per-platform breakdown (reused overview card) */}
-      <AdvertisingPlatformCard stats={stats} loading={statsLoading} />
+      {/* Per-platform breakdown (reused overview card). Pass the tab's active date
+          filter through — without it the card's drill-down popover/modal default to
+          "today" while the surrounding tab shows the selected range (panel F-011). */}
+      <AdvertisingPlatformCard
+        stats={stats}
+        loading={statsLoading}
+        dateRange={df.dateRange}
+        startDate={df.startDate}
+        endDate={df.endDate}
+      />
 
       {/* Overall hour-of-day revenue across all channels */}
       <Card className="p-5">

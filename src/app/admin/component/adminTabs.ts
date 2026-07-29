@@ -152,3 +152,23 @@ export function firstAccessibleTabId(
   }
   return null;
 }
+
+/**
+ * The display label for a tab id — the SAME string the sidebar renders.
+ *
+ * The page header used to re-derive its title from the slug
+ * (`selectedTab.replace("-", " ")` + CSS `capitalize`), which mangles any label whose
+ * casing isn't title-case-per-word: `tiktok-ads` became "Tiktok Ads" while the sidebar
+ * two inches away said "TikTok Ads" (panel F-018). Brand names are not derivable from
+ * slugs — read the label instead of recomputing it.
+ *
+ * Falls back to the old slug transform for ids that have no tab entry (e.g. views
+ * reachable only by deep link).
+ */
+export function adminTabLabel(tabId: string): string {
+  for (const group of ADMIN_TAB_GROUPS) {
+    const tab = group.tabs.find((t) => t.id === tabId);
+    if (tab) return tab.label;
+  }
+  return tabId.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+}
