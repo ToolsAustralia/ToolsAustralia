@@ -13,6 +13,8 @@
  * **timezone** (assumed Australia/Sydney to match the revenue buckets), and the spend
  * **currency** (assumed AUD). Adjust here if any differ.
  */
+import { outboundFetch } from "@/lib/http/outbound";
+
 const TIKTOK_API = "https://business-api.tiktok.com/open_api/v1.3";
 
 interface TikTokReportRow {
@@ -50,13 +52,23 @@ export async function fetchTikTokHourlySpend(startDate: string, endDate: string)
         page: String(page),
         page_size: "1000",
       });
-      const res = await fetch(`${TIKTOK_API}/report/integrated/get/?${params.toString()}`, {
+      const res = await outboundFetch(`${TIKTOK_API}/report/integrated/get/?${params.toString()}`, {
         headers: { "Access-Token": token },
+        // Bounded (panel F-007): this runs on the admin request path, so a hanging
+        // TikTok API must not hold the Vercel function open until its own limit.
+        // outboundFetch adds the keep-alive-bounded dispatcher every third-party
+        // integration should use (src/lib/http/outbound.ts — the UND_ERR_SOCKET fix).
+        signal: AbortSignal.timeout(8000),
       });
-      const body = (await res.json().catch(() => ({}))) as TikTokReportResponse;
-      if (!res.ok || (body.code ?? 0) !== 0) {
+      // An unparseable body is an ERROR, not an empty success (panel F-013) — the old
+      // `.catch(() => ({}))` + `(body.code ?? 0)` pair read a malformed HTTP 200 as
+      // "code 0" and returned an all-zeros spend array (the UI then asserts $0 spend
+      // instead of "—"). Require an explicit code === 0.
+      const body = (await res.json().catch(() => null)) as TikTokReportResponse | null;
+      if (!res.ok || !body || body.code !== 0) {
+        const detail = body ? `code ${body.code} ${body.message ?? ""}` : "unparseable response body";
         // console.error survives the production removeConsole strip (per CLAUDE.md)
-        console.error(`[tiktokHourlySpend] report error: HTTP ${res.status} code ${body.code} ${body.message ?? ""}`);
+        console.error(`[tiktokHourlySpend] report error: HTTP ${res.status} ${detail}`);
         return null;
       }
       for (const row of body.data?.list ?? []) {

@@ -19,7 +19,10 @@ import { PaymentEventRepository } from "@/repositories/PaymentEventRepository";
 import { createAESTDateAsUTC } from "@/utils/common/timezone";
 import type { AttributedPlatformKey } from "@/models/DashboardStatsDailySnapshot";
 import { fetchFacebookInsightsHourly } from "@/lib/facebook-marketing";
-import { fetchTikTokHourlySpend } from "@/services/admin/tiktok/tiktokHourlySpend";
+import {
+  fetchTikTokHourlySpend,
+  isTikTokSpendConfigured,
+} from "@/services/admin/tiktok/tiktokHourlySpend";
 
 export interface HourlyRevenueInput {
   startDate: string;
@@ -73,22 +76,34 @@ async function fetchMetaHourlySpend(startDate: string, endDate: string): Promise
  * channels (Klaviyo) have no spend source. Returns null when the group has NO spend
  * source at all (e.g. klaviyo, or tiktok-only before its creds) so the UI renders "—",
  * not a misleading 0.
+ *
+ * A CONFIGURED source that fails is fatal for the whole group (return null): a
+ * meta-success + tiktok-failure sum would render Meta-only spend as the group total
+ * with no partial-data marker — understated spend, overstated efficiency (panel F-003).
  */
 async function computeGroupHourlySpend(
   keys: AttributedPlatformKey[],
   startDate: string,
   endDate: string
 ): Promise<number[] | null> {
-  const sources: number[][] = [];
-  if (keys.includes("meta")) {
-    const meta = await fetchMetaHourlySpend(startDate, endDate);
-    if (meta) sources.push(meta);
-  }
-  if (keys.includes("tiktok")) {
-    const tiktok = await fetchTikTokHourlySpend(startDate, endDate);
-    if (tiktok) sources.push(tiktok);
-  }
+  const metaConfigured =
+    keys.includes("meta") &&
+    Boolean(process.env.FACEBOOK_AD_ACCOUNT_ID && process.env.FACEBOOK_MARKETING_ACCESS_TOKEN);
+  const tiktokConfigured = keys.includes("tiktok") && isTikTokSpendConfigured();
+
+  // Fetch concurrently (panel F-007) — sequential awaits doubled the external latency
+  // on the request path. Each fetch is individually bounded (8s AbortSignal).
+  const [meta, tiktok] = await Promise.all([
+    metaConfigured ? fetchMetaHourlySpend(startDate, endDate) : Promise.resolve(null),
+    tiktokConfigured ? fetchTikTokHourlySpend(startDate, endDate) : Promise.resolve(null),
+  ]);
+
+  // Configured but FAILED → "—" for the whole group, never a partial sum (panel F-003).
+  if (metaConfigured && !meta) return null;
+  if (tiktokConfigured && !tiktok) return null;
+
   // Snapchat: no Marketing-API client yet → no spend source.
+  const sources = [meta, tiktok].filter((s): s is number[] => s !== null);
   if (sources.length === 0) return null;
   return Array.from({ length: 24 }, (_, h) => sources.reduce((s, arr) => s + (arr[h] ?? 0), 0));
 }

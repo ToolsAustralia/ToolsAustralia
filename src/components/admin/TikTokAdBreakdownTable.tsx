@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { useTikTokAdsInsights } from "@/hooks/queries/admin/useTikTokAdsInsights";
+import { useTikTokAdsInsights, type TikTokSyncHealth } from "@/hooks/queries/admin/useTikTokAdsInsights";
 
 function formatAud(amount: number) {
   return new Intl.NumberFormat("en-AU", {
@@ -14,6 +14,52 @@ function formatAud(amount: number) {
 
 function formatNum(n: number) {
   return new Intl.NumberFormat("en-AU").format(Math.round(n));
+}
+
+function formatSydney(iso: string) {
+  return new Date(iso).toLocaleString("en-AU", {
+    timeZone: "Australia/Sydney",
+    day: "numeric",
+    month: "short",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
+/**
+ * Truthful empty-state copy (panel F-002): staff must be able to tell "not connected"
+ * from "the sync is FAILING" from "synced fine, genuinely no spend". Never surfaces
+ * raw env-var names.
+ */
+function emptyStateMessage(health: TikTokSyncHealth | undefined): {
+  text: string;
+  failing: boolean;
+} {
+  if (!health || !health.configured) {
+    return {
+      text: "TikTok Marketing API isn't connected yet — ad spend will appear here once it's linked.",
+      failing: false,
+    };
+  }
+  if (health.lastRun?.outcome === "error") {
+    const code = health.lastRun.errorCode != null ? ` (code ${health.lastRun.errorCode})` : "";
+    return {
+      text:
+        `TikTok spend sync is FAILING — last attempt ${formatSydney(health.lastRun.finishedAt)} AEST: ` +
+        `${health.lastRun.errorMessage ?? "unknown error"}${code}`,
+      failing: true,
+    };
+  }
+  if (health.lastRun?.outcome === "ok") {
+    return {
+      text: `Synced ${formatSydney(health.lastRun.finishedAt)} AEST — no TikTok ad spend recorded for this range.`,
+      failing: false,
+    };
+  }
+  return {
+    text: "Waiting for the first TikTok spend sync (runs nightly).",
+    failing: false,
+  };
 }
 
 /**
@@ -54,13 +100,30 @@ export default function TikTokAdBreakdownTable({
         </p>
       )}
 
-      {!isLoading && !isError && data && data.rows.length === 0 && (
-        <p className="py-6 text-center text-sm text-neutral-500 dark:text-neutral-400">
-          {data.configured
-            ? "No TikTok ad spend recorded for this range yet."
-            : "Awaiting sync — set TIKTOK_ADVERTISER_ID + TIKTOK_MARKETING_ACCESS_TOKEN, then the nightly sync populates this."}
-        </p>
-      )}
+      {!isLoading && !isError && data && data.rows.length === 0 && (() => {
+        const state = emptyStateMessage(data.syncHealth);
+        return (
+          <p
+            className={`py-6 text-center text-sm ${
+              state.failing
+                ? "font-medium text-red-600 dark:text-red-400"
+                : "text-neutral-500 dark:text-neutral-400"
+            }`}
+          >
+            {state.text}
+          </p>
+        );
+      })()}
+
+      {/* Rows exist but the latest sync attempt failed → the table is showing STALE
+          data; say so instead of letting it read as current (panel F-002). */}
+      {!isLoading && !isError && data && data.rows.length > 0 &&
+        data.syncHealth?.lastRun?.outcome === "error" && (
+          <p className="mb-2 rounded-md bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800 dark:bg-amber-950/40 dark:text-amber-300">
+            Latest TikTok sync attempt failed ({formatSydney(data.syncHealth.lastRun.finishedAt)}{" "}
+            AEST) — figures below are from the last successful sync and may be stale.
+          </p>
+        )}
 
       {!isLoading && !isError && data && data.rows.length > 0 && (
         <div className="overflow-x-auto">

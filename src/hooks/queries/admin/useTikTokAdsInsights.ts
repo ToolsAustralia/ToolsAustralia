@@ -1,12 +1,19 @@
 import { useQuery } from "@tanstack/react-query";
-// Type-only import (erased at build) — keeps the Mongoose model out of the client bundle.
-import type { TikTokAdInsightsResult } from "@/services/admin/tiktok/tiktokAdInsightsQuery";
+// Type-only imports (erased at build) — keep the Mongoose models out of the client bundle.
+import type { TikTokAdInsightsResult as TikTokAdInsightsQueryResult } from "@/services/admin/tiktok/tiktokAdInsightsQuery";
+import type { TikTokSyncHealth } from "@/services/admin/tiktok/tiktokSyncStatus";
 
-export type { TikTokAdInsightsResult, TikTokAdInsightsRow } from "@/services/admin/tiktok/tiktokAdInsightsQuery";
+export type { TikTokAdInsightsRow } from "@/services/admin/tiktok/tiktokAdInsightsQuery";
+export type { TikTokSyncHealth, TikTokSyncRunSummary } from "@/services/admin/tiktok/tiktokSyncStatus";
+
+/** Route payload = the service result + syncHealth composed by the admin route (F-002). */
+export type TikTokAdInsightsResult = TikTokAdInsightsQueryResult & {
+  syncHealth?: TikTokSyncHealth;
+};
 
 /**
  * React Query hook for the per-TikTok-ad breakdown (adName + spend + TikTok-reported
- * conversions/revenue + ROAS). Mirrors useFacebookAdsInsights; reads
+ * conversions/revenue + ROAS) plus sync health. Mirrors useFacebookAdsInsights; reads
  * GET /api/admin/tiktok-ads/insights.
  */
 export function useTikTokAdsInsights(params: {
