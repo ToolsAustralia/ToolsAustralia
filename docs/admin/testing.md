@@ -59,3 +59,9 @@ Both scripts load `.env.local` via dotenv and exit with an error if `MONGODB_URI
 2. `tiktokAdChannelProvider.fetchForDay()` — the last three days' spend/value/ROAS against per-day sums, plus a future day returning `"empty"` (never a fabricated zero).
 
 Run it after any change to the metric mapping, the aggregation, or the provider — and once after each real sync. Needs `TIKTOK_ADVERTISER_ID` + a valid `TIKTOK_MARKETING_ACCESS_TOKEN` and reads the DB in `.env.local`. Exits non-zero on any mismatch. First run (2026-07-29, 86 rows / 31 ads): all checks passed.
+
+## `npm run verify:ad-platforms` (2026-07-29)
+
+[`scripts/verify-local-ad-platforms.ts`](../../scripts/verify-local-ad-platforms.ts) — answers "can I test ad analytics on localhost?" by driving the **real** `DashboardStatsService.getStats()` (the same call the admin route makes) and printing, per platform: credentials present, ad-channel spend that reached the snapshot layer, the Advertising-card row (spend · signups · conversions · revenue · both ROAS figures), and the combined `adTotals` behind the headline KPIs. Exits non-zero if either Meta or TikTok fails to surface spend, and tells you which side is at fault (missing creds vs missing rows vs expired token).
+
+Both platforms work locally as long as `.env.local` carries `FACEBOOK_AD_ACCOUNT_ID` + `FACEBOOK_MARKETING_ACCESS_TOKEN` and `TIKTOK_ADVERTISER_ID` + `TIKTOK_MARKETING_ACCESS_TOKEN`. **Meta is fetched live from its API per day in range; TikTok is read from `TikTokAdInsightsDaily`**, so TikTok needs a sync first — `npm run seed:tiktok-insights -- --days=30` against whichever DB `.env.local`'s `MONGODB_URI` points at. (There is no live-fetch fallback for TikTok by design: the per-ad sync is the source of truth and re-fetching it on every dashboard render would be slow and rate-limited.)

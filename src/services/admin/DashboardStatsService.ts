@@ -294,18 +294,20 @@ export class DashboardStatsService {
     for (const p of ATTRIBUTED_PLATFORM_KEYS) {
       const ar = snapshotRead.attributedRevenue[p];
       const signupsForPlatform = signupsByPlatform.byPlatform[p] ?? 0;
-      // A platform with signups but no revenue yet is still worth showing — a channel
-      // that creates accounts which haven't converted is exactly what the signup column
-      // exists to reveal. Only skip when it has nothing at all.
-      if (
-        (!ar || (ar.newRevenue === 0 && ar.conversions === 0 && ar.renewalRevenue === 0)) &&
-        signupsForPlatform === 0
-      ) {
-        continue;
-      }
       const adKey = PLATFORM_TO_AD_CHANNEL_KEY[p];
       const channel = adKey ? snapshotRead.adChannels[adKey] : undefined;
       const spend = channel?.spend ?? 0;
+      // Skip ONLY a platform with nothing at all to say. Note `spend > 0` is part of the
+      // test: a channel that SPENT MONEY AND RETURNED NOTHING is the single most important
+      // row on this card, and it used to be dropped here — the headline Ad Spend KPI counted
+      // it (that sums adChannels directly) while the per-platform table silently omitted it,
+      // so the two disagreed and the loss was invisible. Signups likewise keep a row alive:
+      // a channel creating accounts that haven't converted is exactly what that column is for.
+      const hasAttribution =
+        !!ar && (ar.newRevenue !== 0 || ar.conversions !== 0 || ar.renewalRevenue !== 0);
+      if (!hasAttribution && signupsForPlatform === 0 && spend <= 0) {
+        continue;
+      }
       const entry: (typeof attributedRevenue)[string] = {
         revenue: ar?.newRevenue ?? 0,     // acquisition revenue only — the ads-ROAS numerator
         renewalRevenue: ar?.renewalRevenue ?? 0,

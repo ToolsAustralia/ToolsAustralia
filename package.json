@@ -384,7 +384,8 @@
     "e2e:ui": "tsx e2e/run.ts --ui",
     "e2e:report": "playwright show-report e2e-artifacts/report",
     "test:e2e-env": "tsx e2e/lib/__tests__/env.test.ts",
-    "test:e2e-srt": "tsx e2e/proof/__tests__/srt.test.ts"
+    "test:e2e-srt": "tsx e2e/proof/__tests__/srt.test.ts",
+    "verify:ad-platforms": "tsx scripts/verify-local-ad-platforms.ts"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^3.0.85",

@@ -184,6 +184,25 @@ function run() {
     "signups-only platform still produces a row",
   );
 
+  // A channel that SPENT money and returned NOTHING must still render — it is the most
+  // important row on the card, and it used to vanish (the headline Ad Spend KPI counted it
+  // while the table omitted it, so the two silently disagreed).
+  const spendNoReturn = buildAdvertisingRows({
+    meta: {
+      revenue: 0, renewalRevenue: 0, conversions: 0, signups: 0,
+      byConfidence: { click: 0, utm_only: 0, inferred_backfill: 0 },
+      adSpend: 19640.33, trueRoas: 0, platformRevenue: 14141.04, platformRoas: 0.72,
+    },
+  } as unknown as AR);
+  const burnRow = spendNoReturn.find((r) => r.platformKey === "meta")!;
+  assert.equal(burnRow.spend.kind, "amount", "spend-with-no-return still renders a spend amount");
+  if (burnRow.spend.kind === "amount") {
+    assert.ok(Math.abs(burnRow.spend.value - 19640.33) < 1e-9, "the full spend is shown");
+  }
+  assert.equal(burnRow.roas.kind, "value", "server ROAS renders as a real 0.00x, not 'needs spend'");
+  if (burnRow.roas.kind === "value") assert.equal(burnRow.roas.value, 0, "server ROAS is 0 — money out, nothing back");
+  assert.equal(burnRow.platformRoas.kind, "value", "the platform's own ROAS still shows for contrast");
+
   // Direct row appears on signups alone, not just revenue/conversions.
   const directSignups = buildDirectRow({
     direct: {
