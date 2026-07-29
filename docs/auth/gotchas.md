@@ -165,7 +165,7 @@ As of 2026-07-16 the same route also fires a **TikTok Events API `CompleteRegist
 
 ## `buildSignupAttribution` now persists attribution without a promo slug (2026-06-01)
 
-`src/app/api/auth/register/route.ts` calls `buildSignupAttribution(data)` to persist marketing attribution to `User.signupAttribution` at the moment of registration. Before this change the helper silently returned early when `data.promotionSlug` was absent (i.e. non-promo landings). After this change it persists UTM + click-ID attribution even when no promo slug is present, so organic and ad-click registrations that did not arrive via a `/promotions/*` page also get attribution stamped.
+`src/app/api/auth/register/route.ts` calls `buildSignupAttribution(data)` (since 2026-07-29 imported from [`src/services/attribution/signup-attribution.ts`](../../src/services/attribution/signup-attribution.ts)) to persist marketing attribution to `User.signupAttribution` at the moment of registration. Before this change the helper silently returned early when `data.promotionSlug` was absent (i.e. non-promo landings). After this change it persists UTM + click-ID attribution even when no promo slug is present, so organic and ad-click registrations that did not arrive via a `/promotions/*` page also get attribution stamped.
 
 Practical consequence: `User.signupAttribution.promotionSlug` and `User.signupAttribution.promotionPageType` are now optional — they are only populated when the registration originated from a promo page. Code that reads `signupAttribution` must not assume those two fields are always set.
 
@@ -174,3 +174,51 @@ The attribution resolver (`src/services/attribution/`) reads `signupAttribution`
 ## Login flows: invalidate the full user-scoped cache off the fresh session
 
 After any successful login (password, Google, email-verify auto-login, login-code, and the `/login` page), read the post-login id via `await getSession()` (not the stale `useSession()` closure), invalidate via the canonical [`usePurchaseInvalidation`](../../src/hooks/usePurchaseInvalidation.ts) (covers `users.detail`/`dashboard`/`account`, `majorDraw.*`, orders, rewards — not just the old three keys), then `router.refresh()`. The password-login flow previously guarded this on the closure `session` (null at login time), so invalidation **and** Klaviyo `identify()` were dead code. See [LoginModal](../../src/components/modals/LoginModal/index.tsx) and [/login page](../../src/app/login/page.tsx). Note the real "entries show 0 after login" symptom was an HTTP-caching issue (see [draws/gotchas.md](../draws/gotchas.md)); this invalidation cleanup is defensive.
+
+## Re-registering must MERGE `signupAttribution`, never replace it (2026-07-29, panel F-019)
+
+`signupAttribution` is an **inline nested object** on the User schema, not a sub-`Schema`. Assigning
+it wholesale (`existingUser.signupAttribution = signupAttr`) emits a whole-subdocument `$set` —
+verified against mongoose 8.18.1, the emitted write is
+`{"$set":{"signupAttribution":{"visitedAt":"…","clickPlatform":"meta"}}}`, with nothing merged.
+
+That became destructive once a bare `clickPlatform` was enough to persist on its own. The path:
+
+1. Visitor lands on a promo page, builds a prize, completes step 1, abandons payment — precisely the
+   visitor the resume flow exists to bring back.
+2. Days later they click an ad, land somewhere with no promo slug and no UTMs, and re-register with
+   the same email. `_fbc` is present, so `clickPlatform` alone passes the guard.
+3. The whole object is replaced: `promotionSlug`, `promotionPageType`, `builtPrizeSlug` and the
+   original UTMs are gone, and the eventual purchase is attributed to no page and no build.
+
+Before the third trigger existed, such a request returned `undefined` from `buildSignupAttribution`
+and left the prior attribution untouched — the guard change made the replace reachable.
+
+**Rule:** all three existing-account branches go through `mergeSignupAttribution`, which
+**preserves the promo fields when the new signup does not carry them** (`promotionSlug` /
+`promotionPageType` / `builtPrizeSlug` identify where the visitor was acquired) and is
+last-write-wins for everything else, so a newer click/UTM still refreshes. Read the stored value
+through `plainSignupAttribution` first — a hydrated document can hand back a mongoose-wrapped
+object, and spreading that drags internal symbols onto the write. New-account branches still
+assign directly; there is nothing to preserve.
+
+**Precise wording matters here** (corrected 2026-07-29 while adding the test, panel F-038): the rule
+is **preserve-when-absent**, not a flat "first touch wins". The two differ when the NEW signup
+carries a promo field of its own — the preserve branches are guarded on `!next.promotionSlug` /
+`!next.builtPrizeSlug`, so a re-registration that DOES arrive from a second promo page overwrites
+`promotionSlug`, and one carrying its own built prize overwrites `builtPrizeSlug`. Only the absent
+case is protected. That is exactly the F-019 scenario (a bare click-id signup), so the fix is
+correct — but do not read the shorthand as a guarantee that the first promo page is immutable.
+
+**Two mechanisms, each individually redundant, deliberately kept.** Mutation testing while writing
+`npm run test:signup-attribution` showed that deleting *either* half leaves the F-019 scenario
+working: `buildSignupAttribution` OMITS absent keys (so `{...previous, ...next}` alone already
+preserves), and the explicit preserve branches re-add the promo fields (so `...previous` alone is
+not what saves them). They cover different failure modes — `...previous` protects the whole UTM /
+campaign snapshot, and the branches protect the promo fields against a future
+`buildSignupAttribution` that emits `promotionSlug: undefined` as a present key. Both are pinned by
+assertions; do not "simplify" one away on the grounds that the other covers it.
+
+**Where this logic lives:** `src/services/attribution/signup-attribution.ts` (moved out of the route
+handler 2026-07-29, panel F-038 — `app/api/**` handlers hold no business logic). All three functions
+keep their original names. Covered by `npm run test:signup-attribution`.

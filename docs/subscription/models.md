@@ -308,6 +308,29 @@ boundary before being persisted. Indexed: `{ "signupAttribution.builtPrizeSlug":
 (beside the existing `signupAttribution.promotionSlug` index) for funnel queries that slice signups
 by the prize actually built rather than the page visited.
 
+**That index is PARTIAL, and its name matters (2026-07-29, panel F-021).** It is declared as
+`{ name: "signupBuiltPrize_createdAt_partial", partialFilterExpression: { "signupAttribution.builtPrizeSlug": { $exists: true } } }`.
+A plain (non-sparse) index is useless here: every query that would use it filters
+`$exists: true`, and a non-sparse index stores a missing field as `null`, so the bounds span the
+entire key space and the scan reads every row anyway — the planner correctly refused to pick the
+plain version, and forcing it examined *more* keys than the `createdAt` index it replaced. The
+**name must differ** from the superseded `signupAttribution.builtPrizeSlug_1_createdAt_1`: mongoose
+cannot alter an index in place, re-declaring the same name with changed options is rejected by the
+server, and `autoIndex` swallows that error — so the index would silently never build. The
+superseded index is dropped by `scripts/migrations/2026-07-29-partial-build-prize-indexes.ts`
+(`npm run migrate:partial-build-prize-indexes:dry` first — dry-run is the default).
+
+**How re-registration merges attribution (2026-07-29, panel F-019).** On the three existing-account
+branches the subdocument is **merged, not replaced**, via `mergeSignupAttribution` in
+[`src/services/attribution/signup-attribution.ts`](../../src/services/attribution/signup-attribution.ts).
+The rule is **preserve-when-absent**, *not* strict first-touch-wins: `promotionSlug`,
+`promotionPageType` and `builtPrizeSlug` survive only when the new signup does **not** carry one. A
+re-registration that *does* arrive with a promo slug overwrites the old one. That protects the case
+F-019 was filed for — a returning visitor arriving on a bare ad click with no promo context no
+longer has their original promo page and built prize erased — while still letting a genuinely new
+promo landing re-attribute. Whether the stricter first-touch-wins is wanted instead is an open
+product question, not a bug.
+
 **Merge note (2026-07-29):** `builtPrizeSlug` and `clickPlatform` (below) were added on separate
 branches and both extend `buildSignupAttribution`. The merged signature takes both, in that order —
 `buildSignupAttribution(promotionSlug, attribution, builtPrizeSlug, clickPlatform)` — and all four

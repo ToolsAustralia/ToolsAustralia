@@ -83,14 +83,30 @@ already records against the VISIT row. It is validated with the **same** `isVali
 as `promotionSlug` before being persisted — a hand-edited body or a crawler cannot write an
 arbitrary string into `User.signupAttribution`.
 
-`buildSignupAttribution(promotionSlug, attribution, builtPrizeSlug)` takes it as a third argument
-and only includes `builtPrizeSlug` in the returned object when it passes validation
+`buildSignupAttribution(promotionSlug, attribution, builtPrizeSlug, clickPlatform)` takes it as a
+third argument and only includes `builtPrizeSlug` in the returned object when it passes validation
 (`hasBuiltPrize`). It deliberately does **not** join the `!hasPromo && !hasAttribution` "nothing to
 persist" guard — a built prize only ever exists alongside a promo slug, so widening that guard
 could start persisting attribution for visitors who previously had none. All **four** registration
 branches (new-user create, plain-account email+mobile match, email-only match, mobile-only match)
 call `buildSignupAttribution` and must all pass the third argument — see
 [subscription/models.md § `signupAttribution.builtPrizeSlug`](../subscription/models.md#signupattributionbuiltprizeslug-2026-07-28).
+
+When the slug is invalid the key is **omitted entirely**, never set to `undefined` — a literal
+`undefined` in a Mongo `$set` still writes the key, which would clear a previously captured build.
+
+**Location (2026-07-29, panel F-038):** `buildSignupAttribution`, `mergeSignupAttribution` and
+`plainSignupAttribution` now live in
+[`src/services/attribution/signup-attribution.ts`](../../src/services/attribution/signup-attribution.ts)
+and are imported by the route — `app/api/**` handlers hold no business logic. Names are unchanged.
+`resolveSignupClickPlatform` stays in the route: it reads `NextRequest` cookies, which is request
+parsing, not business logic.
+
+⚠️ **Argument order is load-bearing.** All four parameters are optional and stringy/objecty, so
+transposing two of them type-checks cleanly and silently writes a promo slug into the built-prize
+field. `main` and this branch each added a *different* third parameter (`clickPlatform` vs
+`builtPrizeSlug`), which is precisely the merge hazard. `npm run test:signup-attribution` carries an
+explicit argument-position guard — four distinct values in one call, each asserted onto its own key.
 
 ### `POST /api/auth/register` — per-IP abuse guard (2026-06-10)
 
