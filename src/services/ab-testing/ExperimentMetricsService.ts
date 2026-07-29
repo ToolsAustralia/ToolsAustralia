@@ -34,6 +34,54 @@ export interface ExperimentMetricsSummary {
 }
 
 /**
+ * Mongo projection for every PaymentEvent row fed to the pure core.
+ *
+ * ONE constant, used by BOTH the BenefitsGranted query and the refund query, because
+ * they diverged once and it cost real money in wrong numbers: the purchases query
+ * omitted `eventType`, so `toPaymentRow` produced the string `"undefined"`, the core's
+ * `if (p.eventType !== "BenefitsGranted") continue` skipped EVERY purchase, and every
+ * experiment reported 0 converters and $0 revenue from 2026-06-15 until 2026-07-29 —
+ * with no error anywhere, because zero is a plausible-looking number.
+ *
+ * Keep this in sync with the fields `toPaymentRow` reads. `test:ab-metrics-projection`
+ * asserts exactly that, so a future edit that drops a field fails loudly instead of
+ * silently zeroing the business metrics.
+ */
+export const PAYMENT_ROW_PROJECTION =
+  "paymentIntentId userId variantId data isRenewal timestamp eventType";
+
+/**
+ * Map a lean PaymentEvent doc to the pure core's `PaymentRow`.
+ *
+ * Throws on a missing `eventType` rather than coercing it. `String(undefined)` is the
+ * exact silent failure described above: it yields a row the core skips, so the metrics
+ * come back all-zero and look like "no conversions yet" instead of "the query is wrong".
+ * A projection mistake is a programmer error — it should be loud, and it can only reach
+ * here in development, since the shipped projection is asserted by a test.
+ */
+export function toPaymentRow(p: Record<string, unknown>): PaymentRow {
+  if (typeof p.eventType !== "string" || !p.eventType) {
+    throw new Error(
+      "ExperimentMetricsService.toPaymentRow: PaymentEvent row is missing `eventType`. " +
+        "The Mongo projection must include it (see PAYMENT_ROW_PROJECTION) — without it every " +
+        "purchase is silently dropped and all conversion/revenue metrics read zero."
+    );
+  }
+  const data = (p.data as { price?: number; refundAmount?: number } | undefined) ?? {};
+  const ts = p.timestamp as Date | string | undefined;
+  return {
+    paymentIntentId: String(p.paymentIntentId ?? ""),
+    userId: p.userId ? String(p.userId) : "",
+    variantId: p.variantId ? String(p.variantId) : null,
+    eventType: p.eventType,
+    priceDollars: typeof data.price === "number" ? data.price : null,
+    refundAmountCents: typeof data.refundAmount === "number" ? data.refundAmount : null,
+    isRenewal: !!p.isRenewal,
+    timestamp: ts instanceof Date ? ts : new Date(ts ?? 0),
+  };
+}
+
+/**
  * Experiment Metrics Service — the single source of truth for conversion and
  * revenue. Computes per-USER metrics over the durable assignment + PaymentEvent
  * tables (never from TTL'd events), via the pure `computeExperimentMetrics` core.
@@ -88,7 +136,7 @@ export class ExperimentMetricsService {
       eventType: "BenefitsGranted",
       $or: [{ experimentId }, ...(assignedUserObjIds.length ? [{ userId: { $in: assignedUserObjIds } }] : [])],
     })
-      .select("paymentIntentId userId variantId data isRenewal timestamp")
+      .select(PAYMENT_ROW_PROJECTION)
       .lean();
 
     // 4. Refunds for those payments (refund events carry no experimentId).
@@ -98,24 +146,10 @@ export class ExperimentMetricsService {
           eventType: { $in: ["RefundProcessed", "RefundPartial"] },
           paymentIntentId: { $in: paymentIntentIds },
         })
-          .select("paymentIntentId userId eventType data isRenewal timestamp")
+          .select(PAYMENT_ROW_PROJECTION)
           .lean()
       : [];
 
-    const toPaymentRow = (p: Record<string, unknown>): PaymentRow => {
-      const data = (p.data as { price?: number; refundAmount?: number } | undefined) ?? {};
-      const ts = p.timestamp as Date | string | undefined;
-      return {
-        paymentIntentId: String(p.paymentIntentId ?? ""),
-        userId: p.userId ? String(p.userId) : "",
-        variantId: p.variantId ? String(p.variantId) : null,
-        eventType: String(p.eventType),
-        priceDollars: typeof data.price === "number" ? data.price : null,
-        refundAmountCents: typeof data.refundAmount === "number" ? data.refundAmount : null,
-        isRenewal: !!p.isRenewal,
-        timestamp: ts instanceof Date ? ts : new Date(ts ?? 0),
-      };
-    };
     const payments: PaymentRow[] = [...benefitsDocs, ...refundDocs].map((p) =>
       toPaymentRow(p as Record<string, unknown>)
     );
