@@ -8,6 +8,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { getUpsellPackageById, type StaticUpsellPackage } from "@/data/upsellPackages";
 import { extractRequestContext } from "@/utils/tracking/facebook-helpers";
+import { extractTikTokContext } from "@/utils/tracking/tiktok-helpers";
 import { safeEventSourceUrl } from "@/utils/tracking/event-source-url";
 import { calculateUpsellEntriesFromContext } from "@/utils/payment/upsell-entries-calculator";
 import { getPackageBaseEntries } from "@/utils/payment/package-base-entries";
@@ -163,9 +164,9 @@ export async function POST(request: NextRequest) {
   try {
     await connectDB();
 
-    // Extract request context for Facebook CAPI (IP, user agent, fbc, fbp)
+    // Extract request context for CAPI (IP, user agent, Meta's fbc/fbp, TikTok's ttclid/ttp)
     // Store in payment metadata so webhook can use it for improved match quality
-    const requestContext = extractRequestContext(request);
+    const requestContext = { ...extractRequestContext(request), ...extractTikTokContext(request) };
     const capiEventSourceUrl = safeEventSourceUrl(
       request.headers.get("referer") ??
       (process.env.NEXTAUTH_URL ? `${process.env.NEXTAUTH_URL}/shop` : undefined)
@@ -508,7 +509,9 @@ async function handleOneClickPurchase(
   offer: StaticUpsellPackage,
   paymentMethodId: string | undefined,
   miniDrawInfo: { miniDrawId?: string; miniDrawName?: string } | undefined,
-  requestContext: { client_ip_address?: string; client_user_agent?: string; fbc?: string; fbp?: string } | undefined,
+  requestContext:
+    | { client_ip_address?: string; client_user_agent?: string; fbc?: string; fbp?: string; ttclid?: string; ttp?: string }
+    | undefined,
   calculatedEntriesCount: number,
   originalPurchaseContext?: { packageType?: "membership" | "one-time" | "mini-draw"; paymentIntentId?: string },
   capiEventSourceUrl?: string,
@@ -623,6 +626,8 @@ async function handleOneClickPurchase(
         ...(requestContext?.client_user_agent ? { capi_user_agent: requestContext.client_user_agent } : {}),
         ...(requestContext?.fbc ? { capi_fbc: requestContext.fbc } : {}),
         ...(requestContext?.fbp ? { capi_fbp: requestContext.fbp } : {}),
+        ...(requestContext?.ttclid ? { capi_ttclid: requestContext.ttclid } : {}),
+        ...(requestContext?.ttp ? { capi_ttp: requestContext.ttp } : {}),
         ...(capiEventSourceUrl ? { capi_event_source_url: capiEventSourceUrl } : {}),
         ...buildAttributionMetadata(attribution),
         ...(resolvedAttrMetadata ?? {}),
@@ -749,7 +754,9 @@ async function handlePaymentIntentCreation(
   offer: StaticUpsellPackage,
   paymentMethodId: string | undefined,
   miniDrawInfo: { miniDrawId?: string; miniDrawName?: string } | undefined,
-  requestContext: { client_ip_address?: string; client_user_agent?: string; fbc?: string; fbp?: string } | undefined,
+  requestContext:
+    | { client_ip_address?: string; client_user_agent?: string; fbc?: string; fbp?: string; ttclid?: string; ttp?: string }
+    | undefined,
   calculatedEntriesCount: number,
   originalPurchaseContext?: { packageType?: "membership" | "one-time" | "mini-draw"; paymentIntentId?: string },
   request?: NextRequest, // ✅ Pass request for error logging
@@ -790,6 +797,8 @@ async function handlePaymentIntentCreation(
       ...(requestContext?.client_user_agent ? { capi_user_agent: requestContext.client_user_agent } : {}),
       ...(requestContext?.fbc ? { capi_fbc: requestContext.fbc } : {}),
       ...(requestContext?.fbp ? { capi_fbp: requestContext.fbp } : {}),
+      ...(requestContext?.ttclid ? { capi_ttclid: requestContext.ttclid } : {}),
+      ...(requestContext?.ttp ? { capi_ttp: requestContext.ttp } : {}),
       ...(eventSourceUrl ? { capi_event_source_url: eventSourceUrl } : {}),
       ...buildAttributionMetadata(attribution),
       ...(resolvedAttrMetadata ?? {}),

@@ -62,6 +62,15 @@ export interface PixelPurchaseParams {
     client_user_agent?: string;
     fbc?: string;
     fbp?: string;
+    /**
+     * TikTok click id / first-party browser id, carried through Stripe metadata
+     * (`capi_ttclid` / `capi_ttp`) by the payment-creation routes. Purchase fires from the
+     * Stripe webhook, which has no browser cookies — without this hand-off the server
+     * Purchase reaches TikTok with no click id at all (the Meta side already did this
+     * with fbc/fbp; TikTok was simply never wired to the same channel).
+     */
+    ttclid?: string;
+    ttp?: string;
     event_source_url?: string;
   };
   // Alternative: Direct parameters (for flexibility)
@@ -255,6 +264,9 @@ export async function trackPixelPurchase(params: PixelPurchaseParams): Promise<b
         clientUserAgent: resolvedUserAgent,
         fbc,
         fbp,
+        // Read by the TikTok provider only (same way fbc/fbp are FB-only).
+        ttclid: requestContext?.ttclid,
+        ttp: requestContext?.ttp,
       },
       customData: {
         orderId,

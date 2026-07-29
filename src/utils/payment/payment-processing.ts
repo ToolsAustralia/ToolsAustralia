@@ -193,11 +193,14 @@ export async function processPaymentBenefits(
   processedBy: "api" | "webhook",
   paymentMetadata?: PaymentMetadata,
   requestContext?: {
-    // Optional request context for improved Facebook CAPI match quality (backward compatible)
+    // Optional request context for improved CAPI match quality (backward compatible).
+    // fbc/fbp are read by the Meta provider, ttclid/ttp by the TikTok provider.
     client_ip_address?: string;
     client_user_agent?: string;
     fbc?: string;
     fbp?: string;
+    ttclid?: string;
+    ttp?: string;
     event_source_url?: string;
   },
   billingReason?: string, // ✅ Stripe billing_reason (e.g., "subscription_create", "subscription_cycle") for accurate renewal tracking
@@ -295,6 +298,8 @@ async function processPaymentBenefitsInternal(
     client_user_agent?: string;
     fbc?: string;
     fbp?: string;
+    ttclid?: string;
+    ttp?: string;
     event_source_url?: string;
   },
   billingReason?: string, // ✅ Stripe billing_reason for accurate renewal tracking
@@ -1081,11 +1086,14 @@ async function grantBenefits(
   paymentMetadata?: PaymentMetadata,
   paymentIntentId?: string,
   requestContext?: {
-    // Optional request context for improved Facebook CAPI match quality (backward compatible)
+    // Optional request context for improved CAPI match quality (backward compatible).
+    // fbc/fbp are read by the Meta provider, ttclid/ttp by the TikTok provider.
     client_ip_address?: string;
     client_user_agent?: string;
     fbc?: string;
     fbp?: string;
+    ttclid?: string;
+    ttp?: string;
     event_source_url?: string;
   },
   billingReason?: string, // ✅ Stripe billing_reason for accurate renewal tracking
