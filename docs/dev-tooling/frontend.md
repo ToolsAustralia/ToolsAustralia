@@ -34,7 +34,9 @@ No Stripe, no providers, no real purchase. Mock data sourced from `src/data/memb
 - A `source` path (now updated to `src/components/modals/ReferFriendModal/index.tsx` for the decomposed folder structure)
 - A label + category for the sidebar
 
-When a modal is moved from a monolith `.tsx` file to a folder structure (`/index.tsx`), update the `source` path in the `MODAL_SOURCES` map inside this file.
+When a modal is moved from a monolith `.tsx` file to a folder structure (`/index.tsx`), update the `source` path in the `MODAL_SOURCES` map inside this file. When a modal is **deleted**, remove all four of its touch points here — the import, its `MODAL_SOURCES` entry, its `MODAL_LIST` entry, and its render — or the gallery fails to compile.
+
+Note (2026-07-24): the `pixel-consent` / `PixelConsentModal` entry was removed — the component was deleted (panel F-019, a permanently-unreachable consent modal whose Decline gated nothing). See [docs/tracking/rules.md R9](../tracking/rules.md) for the no-consent-banner posture.
 
 Note (2026-07-06): the gallery's `PackageSelectionModal` entry passes `onPlanSelect={close}` — the picker no
 longer self-closes after a pick (close-after-pick is the parent's job inside `onPlanSelect`; `onClose` is

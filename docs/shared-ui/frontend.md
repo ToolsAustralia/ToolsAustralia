@@ -1143,3 +1143,20 @@ Design of record: `claudeDesign/Membership milestone streak design` (Build Kit).
 ## (site) layout + homepage shell (2026-07-19)
 
 `src/app/(site)/layout.tsx` and `src/app/(site)/page.tsx` belong to this domain (composition shells over `src/components/sections/**`). The (site) layout no longer exports `force-dynamic` — its Suspense boundaries handle `useSearchParams`, and rendering-mode config in shared layouts is forbidden (it overrides every child page's `revalidate`; see docs/security-csp/architecture.md "Route classes").
+
+## Privacy policy — §7 Cookies & Tracking must name every live provider (2026-07-24)
+
+[`src/app/(site)/privacy/page.tsx`](../../src/app/(site)/privacy/page.tsx) is a static legal page in this domain, but its **§7 Cookies & Tracking** section is a **tracking-domain fact rendered here** — it is the public disclosure of what the site actually loads and sends. It named only the Facebook Pixel while TikTok had been tracking every visitor via pixel **and** the server-side Events API (panel F-012). It now:
+
+- lists **TikTok Pixel** alongside Facebook Pixel / Google Ads in the Marketing Cookies bullet, and TikTok in the third-party providers paragraph;
+- adds a paragraph disclosing that **conversion events are shared with Meta and TikTok via their server-side APIs**, with personal identifiers (email, phone) **hashed before sending**.
+
+**Rule when editing this page:** adding, removing, or upgrading a tracking provider (pixel-only → server-side) means editing §7 **in the same change**, plus CUSTOMER.md §8e (rule 5b — customer PII/third-party footprint). The tracking-side statement of this rule lives at [docs/tracking/rules.md R4](../tracking/rules.md); the ground truth for what is actually sent is CUSTOMER.md §8d. The page carries no `dynamic`/`revalidate` export — it stays in the **marketing/static** CSP route class ([docs/security-csp/architecture.md](../security-csp/architecture.md) R8); a production build was run to confirm the copy edit did not flip it to dynamic.
+
+## PixelConsentModal deleted — no consent banner (2026-07-24)
+
+`src/components/modals/PixelConsentModal.tsx` was **deleted** (panel F-019), along with its `UnifiedModalManager` case, its `"pixel-consent"` `ModalType` + priority entry ([client-state](../client-state/patterns.md)), and its dev-gallery entry ([dev-tooling](../dev-tooling/frontend.md)).
+
+It had been **permanently unreachable**: the manager rendered it with a hard-coded `isOpen={false}` next to a `// This would be controlled by pixel consent logic` placeholder, and both its Accept and Decline handlers merely closed it — Decline gated no pixel. Tools Australia deliberately runs **without a consent banner**; `hasPixelConsent()` in `src/components/PixelTracker.tsx` hard-returns `true` ("auto-accept mode"). A consent control that cannot appear, and would not work if it did, is worse than none — it implies a choice the visitor does not have.
+
+**Do not re-add a consent modal as a UI task.** Real gating means pixels must not load until consent, Decline must block both the browser pixels and the server-side CAPI sends, and consent must persist. Full requirements + the expected drop in measured conversions: [docs/tracking/rules.md R9](../tracking/rules.md).

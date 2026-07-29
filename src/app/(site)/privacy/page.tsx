@@ -289,16 +289,22 @@ export default async function PrivacyPolicyPage() {
                 <strong>Analytics Cookies:</strong> Track website usage (e.g., Google Analytics)
               </li>
               <li>
-                <strong>Marketing Cookies:</strong> Enable targeted advertising (e.g., Facebook Pixel, Google Ads)
+                <strong>Marketing Cookies:</strong> Enable targeted advertising (e.g., Facebook Pixel, TikTok Pixel,
+                Google Ads)
               </li>
             </ul>
+            <p className="text-gray-300">
+              In addition to browser pixels, we share conversion events (such as sign-ups and purchases) with Meta and
+              TikTok via their server-side APIs to measure our advertising. Personal identifiers in these events (such
+              as email address and phone number) are hashed before they are sent.
+            </p>
             <p className="text-gray-300">
               You can manage cookies through your browser settings, though disabling some may affect website
               functionality. Our website does not respond to &quot;Do Not Track&quot; signals.
             </p>
             <p className="text-gray-300">
-              Third-party cookies (Google Analytics, Facebook, payment processors, social media plugins) are subject to
-              those providers&apos; privacy policies.
+              Third-party cookies (Google Analytics, Facebook, TikTok, payment processors, social media plugins) are
+              subject to those providers&apos; privacy policies.
             </p>
           </section>
 

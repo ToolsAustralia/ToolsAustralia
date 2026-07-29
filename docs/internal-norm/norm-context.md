@@ -614,9 +614,18 @@ Monetary fields here are in **cents** (`spendCents` / `revenueCents`), unlike mo
       adSpend: number | null,               // null when the platform has no ad-spend source (e.g. klaviyo)
       trueRoas: number | null               // revenue / adSpend; null when no spend
     }
-  }                                         // platforms with zero revenue/conversions are omitted; trends dropped from the Norm projection
+  }                                         // trends dropped from the Norm projection
 }
 ```
+
+> **2026-07-24 — upstream shape grew; the Norm projection deliberately did NOT.**
+> `DashboardStatsService` now also emits, per platform, **`signups`** (accounts created attributed to that platform — click-verified via `signupAttribution.clickPlatform`, else UTM, else counted under `direct`), plus the platform-reported pair **`platformRevenue` / `platformRoas`** (the ad platform's OWN conversion value and ROAS, sitting alongside the server-side `trueRoas`).
+>
+> **Norm is unaffected — verified, not assumed.** The `/v1/dashboard/stats` route builds `attributedRevenue` by explicitly **picking** its six fields rather than spreading the upstream object, and `NormDashboardStatsSchema` is a non-strict Zod object (unknown keys are stripped). So the new fields are neither forwarded nor able to trip the runtime `responseSchema` validation — no 500 risk, no schema drift.
+>
+> One behavioural note that IS worth knowing: an `attributedRevenue` entry can now exist with **zero revenue and zero conversions** when the platform has signups only (previously such platforms were skipped entirely). Norm therefore may see a platform key whose `revenue`/`conversions` are both `0` — that is real data ("this channel created accounts that haven't converted"), not a bug, but any Norm-side logic that treats presence-of-key as "this channel earned money" must guard on the value.
+>
+> **Not yet mirrored, deliberately:** `signups` and `platformRoas` would be genuinely useful to Norm ("how many signups did TikTok drive?", "does TikTok's own reporting agree with ours?"). Wiring them is a four-step lockstep change — schema, route projection, `npm run build:norm-manifest`, this doc — plus `npm run norm:smoke`. Flagged rather than silently skipped, per CLAUDE.md rule 10.
 
 Several fields are date-range-independent (`users.total`, `majorDraw.totalEntries`, `users.activeSubscriptions`, `users.totalScheduledCancellation`) — they always reflect current state regardless of `dateRange`.
 
