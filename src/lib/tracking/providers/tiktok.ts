@@ -4,12 +4,18 @@
 import type { CanonicalEvent, ConversionProvider, RequestContext } from "../types";
 import { getAllowedHostnames } from "../hostname-gate";
 import { shouldTrackRoute } from "@/utils/tracking/should-track-route";
-import { mapCanonicalToTikTokEvent, sendTikTokEvent } from "@/lib/tiktok";
+// NO static import of "@/lib/tiktok" — this provider is isomorphic and its pixel half
+// runs in the BROWSER, while `@/lib/tiktok` reaches the server-only outbound transport
+// (undici → `node:net`). A static import pulls that into the client bundle and the page
+// dies at runtime with "Cannot find module 'node:net'". `capiSend` is server-only, so the
+// module is dynamically imported there instead — the same pattern providers/facebook.ts
+// uses for `@/lib/facebook`.
 
-// NOTE: The legacy `src/components/TikTokPixel.tsx` also augments `Window.ttq`. Both
-// declarations must match exactly (TS2687/TS2717) until that component becomes a
-// facade in Task 14. We mirror the legacy shape here and add the optional `event_id`
-// 3rd arg to `track`, which TikTok's pixel SDK supports for browser↔CAPI dedup.
+// This is the SOLE `Window.ttq` augmentation in the codebase. (The legacy
+// `src/components/TikTokPixel.tsx` that used to carry a duplicate declaration — and
+// forced both to match exactly to avoid TS2687/TS2717 — has been deleted; there is no
+// longer a second shape to keep in step.) `track`'s optional `event_id` 3rd arg is
+// TikTok's browser↔CAPI dedup key.
 declare global {
   interface Window {
     ttq: {
@@ -165,12 +171,26 @@ function pixelTrack(event: CanonicalEvent): void {
   if (event.customData?.orderId) params.order_id = event.customData.orderId;
   if (event.providerData?.tiktok) Object.assign(params, event.providerData.tiktok);
 
+  // TikTok's page view is `ttq.page()`, NOT a tracked event — routing it through
+  // `ttq.track("PageView", …)` would register a CUSTOM event of that name instead of
+  // the standard Pageview, so SPA navigations never counted as page views (only the
+  // initial load did, via the loadPixel bootstrap). ConversionPixels dispatches
+  // PageView to every provider on route change; translate it here so the provider
+  // owns its own vocabulary and nothing double-fires (panel F-022).
+  if (event.eventName === "PageView") {
+    window.ttq.page();
+    return;
+  }
+
   // TikTok dedup: 3rd arg `{ event_id }` matches Events API event_id (spec §3 invariant #1).
   window.ttq.track(event.eventName, params, { event_id: event.eventId });
 }
 
 async function capiSend(event: CanonicalEvent, ctx: RequestContext): Promise<boolean> {
   if (!envEnabled().capi) return false;
+  // Dynamic import keeps the server-only transport out of the client bundle (see the
+  // note at the top of this file). This function only ever runs server-side.
+  const { mapCanonicalToTikTokEvent, sendTikTokEvent } = await import("@/lib/tiktok");
   const ttEvent = mapCanonicalToTikTokEvent(event, ctx);
   return sendTikTokEvent(ttEvent);
 }

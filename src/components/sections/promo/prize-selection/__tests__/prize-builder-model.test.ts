@@ -45,6 +45,7 @@ import {
   getComboPresentation,
   getContentsChips,
   getReelCardGeometry,
+  isComboArtPending,
   offsetFromFocus,
   resolveAccent,
   stepReel,
@@ -205,26 +206,38 @@ run("every combination resolves to a render that exists on disk", () => {
 });
 
 run("combo-art fallback is per COMBINATION, not per toolbox", () => {
-  // The GearWrench shoot delivered four of five: Milwaukee, DeWalt, Makita and HiKOKI have
-  // composites; Ryobi does not — the same combination missing from the rest of the draw 9
-  // drop. A toolbox-level flag (which this briefly was) would wrongly send the four that DO
-  // have art back to the standalone render.
+  // The GearWrench shoot originally delivered four of five — Ryobi was the one pairing draw 9
+  // missed, and this test pinned that gap. That art landed 2026-07-28 (`21671a66`), which
+  // emptied `COMBOS_AWAITING_COMBO_ART`, so the ryobi special case below became false and this
+  // assertion went red ON MAIN — the art commit did not update it. Corrected here 2026-07-29
+  // while merging main: the expectation now follows the shipped assets rather than the gap.
+  //
+  // The property under test is unchanged and still worth guarding: the fallback is keyed per
+  // COMBINATION (`{toolset}-{toolbox}`), not per toolbox. A toolbox-level flag — which this
+  // briefly was — would send every GearWrench pairing back to the standalone render the moment
+  // ONE of them was missing art. That is asserted directly against `isComboArtPending` below,
+  // so it keeps holding even now that no real combination is awaiting art.
   const gw = getToolbox("gearwrench")!;
 
   for (const set of TOOLSETS) {
     const combo = getComboPresentation(gw, set, false);
-    if (set.id === "ryobi") {
-      assert.equal(combo.image, gw.image, "ryobi × gearwrench has no composite — must show the standalone box");
-      assert.match(combo.imageAlt, /coming soon/i, "alt must not claim to show a combination it isn't showing");
-    } else {
-      assert.equal(
-        combo.image,
-        `/images/majordraws/${set.id}-set/${set.id}-gearwrench.webp`,
-        `${set.id} × gearwrench has a composite and must use it`
-      );
-      assert.doesNotMatch(combo.imageAlt, /coming soon/i, `${set.id} × gearwrench art exists — alt must not say coming soon`);
-    }
+    assert.equal(
+      combo.image,
+      `/images/majordraws/${set.id}-set/${set.id}-gearwrench.webp`,
+      `${set.id} × gearwrench has a composite and must use it`
+    );
+    assert.doesNotMatch(combo.imageAlt, /coming soon/i, `${set.id} × gearwrench art exists — alt must not say coming soon`);
+    assert.equal(
+      isComboArtPending(gw, set),
+      false,
+      `${set.id} × gearwrench art has shipped — nothing may still be flagged pending`
+    );
   }
+
+  // The seam itself: pending-ness is per combination. Every toolset paired with GearWrench
+  // resolves independently, so no single missing shoot can drag its siblings to the fallback.
+  const pendingKeys = TOOLSETS.filter((set) => isComboArtPending(gw, set)).map((set) => set.id);
+  assert.deepEqual(pendingKeys, [], "COMBOS_AWAITING_COMBO_ART is empty — no pairing is awaiting art");
 
   // A different toolbox is unaffected either way.
   const kincrome = getToolbox("kincrome")!;

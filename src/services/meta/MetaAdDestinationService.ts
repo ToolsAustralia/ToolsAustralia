@@ -1,5 +1,5 @@
-import MetaAdDestination from "@/models/MetaAdDestination";
-import { canonicalizeLandingUrl } from "@/utils/meta/canonicalize-landing-url";
+import AdDestination from "@/models/AdDestination";
+import { canonicalizeLandingUrl } from "@/utils/metrics/canonicalize-landing-url";
 
 const API_VERSION = "v21.0";
 const BATCH_SIZE = 45;
@@ -221,7 +221,8 @@ export class MetaAdDestinationService {
 
       const bulkOps: Array<{
         updateOne: {
-          filter: { adId: string };
+          // `platform` is half the unique key — see the filter below.
+          filter: { platform: "meta"; adId: string };
           update: { $set: Record<string, unknown> };
           upsert: boolean;
         };
@@ -245,9 +246,13 @@ export class MetaAdDestinationService {
 
         bulkOps.push({
           updateOne: {
-            filter: { adId },
+            // The filter MUST carry platform — it is half the unique key. Without it the
+            // upsert can target another platform's row for the same numeric ad id, or
+            // insert a row that then violates {platform, adId} (2026-07-29).
+            filter: { platform: "meta" as const, adId },
             update: {
               $set: {
+                platform: "meta" as const,
                 adAccountId,
                 adId,
                 canonicalUrl,
@@ -265,7 +270,7 @@ export class MetaAdDestinationService {
       }
 
       if (bulkOps.length > 0) {
-        await MetaAdDestination.bulkWrite(bulkOps, { ordered: false });
+        await AdDestination.bulkWrite(bulkOps, { ordered: false });
       }
     }
 

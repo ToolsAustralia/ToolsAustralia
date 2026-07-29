@@ -6,6 +6,7 @@
 // help center — see docs/superpowers/specs/2026-05-22-tiktok-events-api-design.md §2/§2a.
 
 import { hashPII } from "./tracking/canonical-event";
+import { resilientFetch, describeFetchError } from "./http/outbound";
 import { getPixelEnv, isProductionPixelEnv } from "./facebook-env";
 import { normalizePhoneE164 } from "@/utils/tracking/tiktok-helpers";
 import type { CanonicalEvent, RequestContext } from "./tracking/types";
@@ -172,14 +173,23 @@ export async function sendTikTokEvent(event: TikTokEvent): Promise<boolean> {
   const body = buildTikTokRequestBody([event], { pixelId, testEventCode });
 
   try {
-    const res = await fetch(TIKTOK_EVENTS_API_URL, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Access-Token": accessToken,
+    // resilientFetch (NOT raw fetch): routes through the keep-alive-bounded dispatcher
+    // and retries the dead-socket race that a frozen Vercel function hits on thaw —
+    // the `UND_ERR_SOCKET` incident documented in src/lib/http/outbound.ts. Retry is
+    // safe here for the same reason it is for Meta CAPI: TikTok dedups on `event_id`
+    // (panel F-025). Matches src/lib/facebook.ts's transport exactly.
+    const res = await resilientFetch(
+      TIKTOK_EVENTS_API_URL,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Access-Token": accessToken,
+        },
+        body: JSON.stringify(body),
       },
-      body: JSON.stringify(body),
-    });
+      { label: "TikTok Events API", timeoutMs: 5_000, retries: 2 },
+    );
 
     const json = (await res.json().catch(() => null)) as
       | { code?: number; message?: string; request_id?: string }
@@ -198,9 +208,15 @@ export async function sendTikTokEvent(event: TikTokEvent): Promise<boolean> {
     }
     return true;
   } catch (err) {
+    // describeFetchError surfaces undici's `cause.code` — without it every transport
+    // failure logs as an opaque "fetch failed" and the next incident is undiagnosable.
+    const { message, code, causeMessage } = describeFetchError(err);
     console.error("[TikTok CAPI] Network error", {
       event: event.event,
-      err: err instanceof Error ? err.message : String(err),
+      event_id: event.event_id,
+      err: message,
+      code,
+      causeMessage,
     });
     return false;
   }

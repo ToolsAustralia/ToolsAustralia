@@ -133,17 +133,30 @@ rather than copying it — the clips were proven artwork-identical to the stills
 (whole-frame compare for brand/toolbox/mode, plus a badge-region compare for the tier, each
 with a control showing the test actually separates a mismatch from a true match).
 
-### `ryobi × gwTB` — the one gap, and what it renders
+### `ryobi × gwTB` — closed 2026-07-28
 
-No art in any mode, viewport or tier. Both resolvers degrade rather than 404:
+This was the one gap in the Draw 9 drop. Its art landed the next day via
+[`scripts/convert-ryobi-gearwrench-landing.ts`](../../scripts/convert-ryobi-gearwrench-landing.ts),
+so **every** brand × toolbox pair now resolves to a real file in all 3 tiers × 2 viewports ×
+2 modes. `KNOWN_GAPS` and `COMBOS_AWAITING_COMBO_ART` are both empty; keep the sets — they are
+where the next incomplete drop gets recorded instead of failing silently.
+
+The ingest repeated the Draw 9 naming lesson: **every source file was named `GW-HiK-*`
+(HiKOKI) while the artwork is Ryobi** — the headline reads "19 PIECE CUSTOM RYOBI TOOL KIT".
+The script's mapping table is therefore keyed to what each file actually shows, verified
+against the pixels: brand from the headline copy, light/dark from greyscale mean (A ≈ 75-85
+dark, B ≈ 193-203 light), and tier from a badge-region compare (true match ≈ 0-8, wrong tier
+≈ 37-52). One file was rejected and re-exported: the desktop light "without badge" still and
+clip both carried the **DRAWN TONIGHT** badge — the still scored **0.0**, i.e. byte-identical,
+against the tonight file.
+
+The fallback behaviour the gap used to exercise still matters as a safety net:
 
 - **Image:** `resolveLandingHeroImage` falls through to the **evergreen collage**. It used to
   `return desired` "so the failure is visible" — harmless while the case could not occur, but
   once it could, the visible failure was a **400 from `/_next/image`** and a blank hero on a
   live page. Caught by the e2e watchdog during the proof run, not by any unit test.
 - **Video:** `getLandingHeroVideoPaths` returns `null`, so the caller keeps the still hero.
-
-Delete `KNOWN_GAPS` in `scripts/check-landing-hero-assets.mjs` when that art ships.
 
 ## Banner behaviour
 

@@ -14,6 +14,7 @@ import {
 } from "@/utils/admin/userFilterBuilder";
 import { trendCalculationService } from "@/services/admin/TrendCalculationService";
 import { PLATFORM_TO_AD_CHANNEL_KEY } from "@/services/admin/dashboard-stats/snapshotSchema";
+import { getSignupsByPlatform } from "@/services/admin/signupsByPlatform";
 import { ATTRIBUTED_PLATFORM_KEYS } from "@/models/DashboardStatsDailySnapshot";
 import type { TrendData } from "@/types/admin/trend-types";
 
@@ -122,6 +123,11 @@ export class DashboardStatsService {
       User.countDocuments(cancelledMembershipsQuery),
       User.countDocuments(totalScheduledCancellationQuery),
     ]);
+
+    // Signups per acquisition platform for the same window — feeds the Advertising
+    // card's per-platform signup count. Same date basis as `newSignupsInRange` above,
+    // so the per-platform figures sum to it.
+    const signupsByPlatform = await getSignupsByPlatform(startDate, endDate);
 
     // When the dashboard is in snapshot mode (asOfDate is in the past), override the
     // *standing* cancellation metrics with the corresponding values from the daily
@@ -242,32 +248,86 @@ export class DashboardStatsService {
     const facebookAdsRoas = snapshotRead.adChannels.facebook?.roas ?? 0;
 
     // ========================================
+    // ALL AD PLATFORMS COMBINED (2026-07-29)
+    // ========================================
+    // The headline Ad Spend / ROAS KPIs used to read `facebookAds` alone, which was
+    // accurate while Meta was the only channel with a spend feed. TikTok's spend sync is
+    // live, so a Meta-only headline now UNDERSTATES what the business actually spent.
+    //
+    // This is deliberately a NEW field rather than a redefinition of `facebookAds`:
+    // that key is also read by the Norm gateway (/v1/dashboard/stats), and silently
+    // changing its meaning would drift Norm's numbers with no schema change to notice
+    // (CLAUDE.md rule 10). `facebookAds` stays Meta-only and truthful to its name.
+    //
+    // ROAS keeps its existing SEMANTIC — platform-reported revenue ÷ spend — and only
+    // widens its SCOPE to every channel. The server-attributed alternative is already
+    // surfaced separately as the Advertising card's "Blended ROAS" and its per-platform
+    // "ROAS · server" column; conflating the two here would silently change a number the
+    // team reads daily.
+    const sumAdChannels = (channels: Record<string, { spend: number; revenue: number }>) => {
+      let spend = 0;
+      let revenue = 0;
+      for (const c of Object.values(channels)) {
+        spend += Number.isFinite(c?.spend) ? c.spend : 0;
+        revenue += Number.isFinite(c?.revenue) ? c.revenue : 0;
+      }
+      return { spend, revenue, roas: spend > 0 ? revenue / spend : 0 };
+    };
+    const adTotalsCurrent = sumAdChannels(snapshotRead.adChannels);
+
+    // ========================================
     // ATTRIBUTED REVENUE PER PLATFORM
     // ========================================
     const attributedRevenue: Record<string, {
       revenue: number;
       renewalRevenue: number;
       conversions: number;
+      signups?: number;
       byConfidence: { click: number; utm_only: number; inferred_backfill: number };
       adSpend?: number;
       trueRoas?: number;
+      platformRevenue?: number;
+      platformRoas?: number;
       revenueTrend?: TrendData;
       trueRoasTrend?: TrendData;
     }> = {};
     for (const p of ATTRIBUTED_PLATFORM_KEYS) {
       const ar = snapshotRead.attributedRevenue[p];
-      if (!ar || (ar.newRevenue === 0 && ar.conversions === 0 && ar.renewalRevenue === 0)) continue;
+      const signupsForPlatform = signupsByPlatform.byPlatform[p] ?? 0;
       const adKey = PLATFORM_TO_AD_CHANNEL_KEY[p];
-      const spend = adKey ? (snapshotRead.adChannels[adKey]?.spend ?? 0) : 0;
+      const channel = adKey ? snapshotRead.adChannels[adKey] : undefined;
+      const spend = channel?.spend ?? 0;
+      // Skip ONLY a platform with nothing at all to say. Note `spend > 0` is part of the
+      // test: a channel that SPENT MONEY AND RETURNED NOTHING is the single most important
+      // row on this card, and it used to be dropped here — the headline Ad Spend KPI counted
+      // it (that sums adChannels directly) while the per-platform table silently omitted it,
+      // so the two disagreed and the loss was invisible. Signups likewise keep a row alive:
+      // a channel creating accounts that haven't converted is exactly what that column is for.
+      const hasAttribution =
+        !!ar && (ar.newRevenue !== 0 || ar.conversions !== 0 || ar.renewalRevenue !== 0);
+      if (!hasAttribution && signupsForPlatform === 0 && spend <= 0) {
+        continue;
+      }
       const entry: (typeof attributedRevenue)[string] = {
-        revenue: ar.newRevenue,          // acquisition revenue only — the ads-ROAS numerator
-        renewalRevenue: ar.renewalRevenue,
-        conversions: ar.conversions,
-        byConfidence: ar.byConfidence,
+        revenue: ar?.newRevenue ?? 0,     // acquisition revenue only — the ads-ROAS numerator
+        renewalRevenue: ar?.renewalRevenue ?? 0,
+        conversions: ar?.conversions ?? 0,
+        signups: signupsForPlatform,
+        byConfidence: ar?.byConfidence ?? { click: 0, utm_only: 0, inferred_backfill: 0 },
       };
       if (adKey && spend > 0) {
         entry.adSpend = spend;
-        entry.trueRoas = ar.newRevenue / spend;  // ROAS uses acquisition revenue only
+        // SERVER ROAS ("true" ROAS) — our own payment-attributed acquisition revenue ÷ spend.
+        entry.trueRoas = ar ? ar.newRevenue / spend : 0;
+        // PLATFORM ROAS — the ad platform's OWN reported conversion value ÷ the same spend.
+        // Already captured per channel by each AdChannelProvider (Meta from its API, TikTok
+        // summed from TikTokAdInsightsDaily); it was being discarded here. The two ROAS
+        // figures disagree by design — different attribution models, windows, and
+        // de-duplication — and seeing the gap is the point.
+        if (channel && channel.revenue > 0) {
+          entry.platformRevenue = channel.revenue;
+          entry.platformRoas = channel.roas > 0 ? channel.roas : channel.revenue / spend;
+        }
       }
       attributedRevenue[p] = entry;
     }
@@ -353,8 +413,10 @@ export class DashboardStatsService {
           ? Math.round((previousConvertedUsersInRange / previousNewSignupsInRange) * 100)
           : 0;
 
-      const previousFacebookAdsSpend = previousSnapshotRead.adChannels.facebook?.spend ?? 0;
-      const previousFacebookAdsRoas = previousSnapshotRead.adChannels.facebook?.roas ?? 0;
+      // Trends must compare like with like — an all-platform current value against a
+      // Meta-only previous value would read as a huge spend "increase" the day TikTok's
+      // sync went live, when nothing about the spending actually changed.
+      const previousAdTotals = sumAdChannels(previousSnapshotRead.adChannels);
 
       totalUsersTrend = trendCalculationService.calculateTrend(totalUsers, previousTotalUsers);
       newInRangeTrend = trendCalculationService.calculateTrend(newSignupsInRange, previousNewSignupsInRange);
@@ -378,11 +440,13 @@ export class DashboardStatsService {
         conversionRate,
         previousConversionRate
       );
+      // The KPI cards render all-platform figures, so their trends compare all-platform
+      // periods. (`facebookAds` keeps its own Meta-only values below for Norm.)
       adSpendTrend = trendCalculationService.calculateTrend(
-        facebookAdsSpend,
-        previousFacebookAdsSpend
+        adTotalsCurrent.spend,
+        previousAdTotals.spend
       );
-      roasTrend = trendCalculationService.calculateTrend(facebookAdsRoas, previousFacebookAdsRoas);
+      roasTrend = trendCalculationService.calculateTrend(adTotalsCurrent.roas, previousAdTotals.roas);
 
       revenueBreakdownTrends.membershipPurchase = trendCalculationService.calculateTrend(
         membershipPurchaseData.revenue,
@@ -555,10 +619,18 @@ export class DashboardStatsService {
       },
       conversionRate,
       ...(conversionRateTrend && { conversionRateTrend }),
+      // Meta-only, unchanged — the Norm gateway reads this and its name must stay true.
       facebookAds: {
         spend: facebookAdsSpend,
-        ...(adSpendTrend && { spendTrend: adSpendTrend }),
         roas: facebookAdsRoas,
+      },
+      // Every ad platform with a spend feed, combined (Meta + TikTok today). This is what
+      // the headline Ad Spend / ROAS KPIs render — see the note where it's computed.
+      adTotals: {
+        spend: adTotalsCurrent.spend,
+        revenue: adTotalsCurrent.revenue,
+        roas: adTotalsCurrent.roas,
+        ...(adSpendTrend && { spendTrend: adSpendTrend }),
         ...(roasTrend && { roasTrend }),
       },
       attributedRevenue,

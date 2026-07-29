@@ -3,7 +3,11 @@
 import React, { useMemo, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { RefreshCw, ChevronDown, ChevronUp, ChevronRight, Link2, ArrowDown, ArrowUp } from "lucide-react";
-import { useSpendByUrlAnalytics, useSpendByUrlDetail } from "@/hooks/queries/useSpendByUrlAnalytics";
+import {
+  useSpendByUrlAnalytics,
+  useSpendByUrlDetail,
+  type SpendByUrlPlatform,
+} from "@/hooks/queries/useSpendByUrlAnalytics";
 import { usePackagesFocusBreakdown, type PackagesFocusTotals } from "@/hooks/queries/usePackagesFocusBreakdown";
 import SpendByUrlAdBreakdownTable from "@/components/admin/spend-by-url/SpendByUrlAdBreakdownTable";
 import { Badge } from "@/components/admin/ui";
@@ -69,12 +73,25 @@ interface SpendByUrlSectionProps {
   endDate: string;
   /** When false, insights date range not ready (avoid empty fetch) */
   dateReady: boolean;
+  /**
+   * Which ad platform's rows to show. Defaults to meta so the Facebook Ads tab is unchanged;
+   * the TikTok tab passes "tiktok". Every query, the sync POST, and the revenue column label
+   * derive from this — the same component serves both tabs rather than being forked, so a fix
+   * to the table can't land on one platform and miss the other.
+   */
+  platform?: SpendByUrlPlatform;
 }
 
 /** expand + URL + 9 metric columns */
 const COL_SPAN = 11;
 
-export default function SpendByUrlSection({ startDate, endDate, dateReady }: SpendByUrlSectionProps) {
+export default function SpendByUrlSection({
+  startDate,
+  endDate,
+  dateReady,
+  platform = "meta",
+}: SpendByUrlSectionProps) {
+  const platformLabel = platform === "tiktok" ? "TikTok" : "Meta";
   const queryClient = useQueryClient();
   const [expandedUrl, setExpandedUrl] = useState<string | null>(null);
   const [sort, setSort] = useState<{ key: SortColumn; dir: SortDir }>({ key: "spend", dir: "desc" });
@@ -84,17 +101,19 @@ export default function SpendByUrlSection({ startDate, endDate, dateReady }: Spe
 
   const { data, isLoading, error, isFetching } = useSpendByUrlAnalytics(
     dateReady ? startDate : undefined,
-    dateReady ? endDate : undefined
+    dateReady ? endDate : undefined,
+    { platform }
   );
 
   const detailQuery = useSpendByUrlDetail(
     expandedUrl,
     dateReady ? startDate : undefined,
-    dateReady ? endDate : undefined
+    dateReady ? endDate : undefined,
+    { platform }
   );
 
   const focusQuery = usePackagesFocusBreakdown(
-    "meta",
+    platform,
     dateReady ? startDate : undefined,
     dateReady ? endDate : undefined
   );
@@ -161,7 +180,7 @@ export default function SpendByUrlSection({ startDate, endDate, dateReady }: Spe
       const res = await fetch("/api/admin/analytics/spend-by-url/sync", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ startDate, endDate }),
+        body: JSON.stringify({ startDate, endDate, platform }),
       });
       const json = await res.json();
       if (!res.ok) {
@@ -263,7 +282,7 @@ export default function SpendByUrlSection({ startDate, endDate, dateReady }: Spe
             className="inline-flex items-center justify-center gap-1.5 sm:gap-2 px-3 py-1.5 sm:px-4 sm:py-2 rounded-lg bg-slate-900 text-white text-xs sm:text-sm font-medium hover:bg-slate-800 disabled:opacity-50 shrink-0"
           >
             <RefreshCw className={cn("w-3.5 h-3.5 sm:w-4 sm:h-4", syncMutation.isPending ? "animate-spin" : "")} />
-            {syncMutation.isPending ? "Syncing…" : "Sync from Meta"}
+            {syncMutation.isPending ? "Syncing…" : `Sync from ${platformLabel}`}
           </button>
       </div>
 
@@ -372,7 +391,7 @@ export default function SpendByUrlSection({ startDate, endDate, dateReady }: Spe
                     className="sticky top-0 z-10 bg-gray-50 py-1.5 px-0.5 sm:py-2 sm:px-2 text-right text-emerald-900 whitespace-nowrap text-2xs sm:text-sm"
                   >
                     <span className="sm:hidden">Rev</span>
-                    <span className="hidden sm:inline">Meta revenue</span>
+                    <span className="hidden sm:inline">{platformLabel} revenue</span>
                   </SortHeader>
                   <SortHeader
                     column="conversions"
@@ -411,7 +430,7 @@ export default function SpendByUrlSection({ startDate, endDate, dateReady }: Spe
                     <td colSpan={COL_SPAN} className="py-6 sm:py-8 px-3 sm:px-4 text-center text-xs sm:text-sm text-gray-500 leading-snug">
                       {sortedRows.length === 0 ? (
                         <>
-                          No data for this range. Run <strong>Sync from Meta</strong> to import insights.
+                          No data for this range. Run <strong>Sync from {platformLabel}</strong> to import insights.
                         </>
                       ) : (
                         <>

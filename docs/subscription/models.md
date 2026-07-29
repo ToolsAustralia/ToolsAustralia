@@ -308,6 +308,20 @@ boundary before being persisted. Indexed: `{ "signupAttribution.builtPrizeSlug":
 (beside the existing `signupAttribution.promotionSlug` index) for funnel queries that slice signups
 by the prize actually built rather than the page visited.
 
+**Merge note (2026-07-29):** `builtPrizeSlug` and `clickPlatform` (below) were added on separate
+branches and both extend `buildSignupAttribution`. The merged signature takes both, in that order —
+`buildSignupAttribution(promotionSlug, attribution, builtPrizeSlug, clickPlatform)` — and all four
+registration branches pass both. The persistence guard is main's (`!hasPromo && !hasAttribution &&
+!clickPlatform`): a built prize is deliberately **not** a reason to persist on its own, because it
+only ever arrives alongside a promo slug.
+
+### `signupAttribution.clickPlatform` (2026-07-24)
+
+New optional field: `"meta" | "tiktok" | "snapchat" | "google"`. The paid platform whose **click id** (`_fbc` / `ttclid` / `_sc_click`) was present in the request cookies at registration, resolved server-side in the register route via `extractClickIdsFromRequest` (most-recent capture wins). **Only the platform name is stored — never the raw click id**, so signup-source analytics gain click-verified confidence without adding a new identifier to the customer record.
+
+Absent for organic signups and for **every account created before 2026-07-24** — readers must fall back to `utmSource` (via `normalizeUtmToPlatform`) and then to `direct`, which is exactly what `getSignupsByPlatform` does. Note this field can now be the ONLY populated attribution on the subdoc: a paid click landing on an untagged URL persists `visitedAt` + `clickPlatform` with no promo slug and no UTMs (previously such a signup produced no `signupAttribution` at all).
+
+
 ## `User.retentionOffersConsumed` (top-level flags on `User`)
 
 Two boolean flags that gate the new cancellation-flow one-time retention offers. Both default to `false`. Set to `true` when the user successfully redeems the corresponding offer — prevents repeat redemption across sessions.

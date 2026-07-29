@@ -30,6 +30,9 @@ export class VariantConfigService {
       membershipTheme: {
         forceLight: false,
       },
+      promoTheme: {
+        defaultTheme: "light",
+      },
     };
   }
 
@@ -77,6 +80,10 @@ export class VariantConfigService {
       membershipTheme: {
         ...baseConfig.membershipTheme,
         ...variantConfig.membershipTheme,
+      },
+      promoTheme: {
+        ...baseConfig.promoTheme,
+        ...variantConfig.promoTheme,
       },
     };
   }
@@ -245,6 +252,22 @@ export class VariantConfigService {
           typeof membershipTheme.forceLight !== "boolean"
         ) {
           errors.push("MembershipTheme forceLight must be a boolean");
+        }
+      }
+    }
+
+    // Validate promoTheme config (promo landing default-theme A/B test)
+    if (cfg.promoTheme !== undefined) {
+      if (typeof cfg.promoTheme !== "object" || cfg.promoTheme === null) {
+        errors.push("PromoTheme config must be an object");
+      } else {
+        const promoTheme = cfg.promoTheme as Record<string, unknown>;
+        if (
+          promoTheme.defaultTheme !== undefined &&
+          promoTheme.defaultTheme !== "light" &&
+          promoTheme.defaultTheme !== "dark"
+        ) {
+          errors.push('PromoTheme defaultTheme must be "light" or "dark"');
         }
       }
     }

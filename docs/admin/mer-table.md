@@ -70,16 +70,11 @@ Every column is sortable; default sort is period descending. Clicking a row **ex
 per-platform breakdown (Meta/TikTok/Snapchat/Klaviyo/Direct). Owned channels (Klaviyo,
 Direct) show `—` for spend/MER.
 
-## Known limitation — TikTok/Snapchat spend
+## Known limitation — Snapchat spend (TikTok resolved 2026-07-24)
 
-Only **Meta** ad spend is synced (`AD_CHANNEL_PROVIDERS = [facebookAdChannelProvider]`).
-TikTok and Snapchat have attributed *revenue* but no spend feed, so their spend reads
-**"Awaiting sync"** and their MER is `—`. The client's core question ("is TikTok worth
-it?") therefore needs TikTok ad-spend ingestion before TikTok MER is a real number — TikTok
-ads are not running yet. Adding it later is a one-provider append (see
-`docs/billing-stripe` / `adChannelProviders.ts`), after which the TikTok column/row fills in
-automatically with no UI change. Google/Other are folded into the blended numerator but get
-no dedicated breakdown row (typically ~0, no brand logo).
+**TikTok spend is now wired** (panel F-001): `AD_CHANNEL_PROVIDERS = [facebookAdChannelProvider, tiktokAdChannelProvider]` — the TikTok provider sums each AEST day's synced `TikTokAdInsightsDaily` rows, so TikTok MER becomes a real number automatically once the nightly `/api/cron/sync-tiktok-ads` has data (blocked on the Marketing-API token re-authorization as of 2026-07-24; backfill via `npm run seed:tiktok-insights`). Until rows exist, TikTok spend still reads **"Awaiting sync"** and MER `—`.
+
+**Snapchat** remains spend-less: attributed *revenue* but no spend feed. Adding it later is the same one-provider append (`adChannelProviders.ts`), after which the column/row fills in automatically with no UI change. Google/Other are folded into the blended numerator but get no dedicated breakdown row (typically ~0, no brand logo).
 
 ## Norm
 

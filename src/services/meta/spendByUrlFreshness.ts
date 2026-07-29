@@ -1,10 +1,17 @@
 import { after } from "next/server";
 import { formatInTimeZone } from "date-fns-tz";
 import LandingPageMetricsDaily from "@/models/LandingPageMetricsDaily";
-import MetaAdDestination from "@/models/MetaAdDestination";
+import AdDestination from "@/models/AdDestination";
 import { MetaInsightsSyncService } from "@/services/meta/MetaInsightsSyncService";
 import { MetaAdDestinationService } from "@/services/meta/MetaAdDestinationService";
 import { SpendByUrlAggregationService } from "@/services/analytics/SpendByUrlAggregationService";
+import { TikTokInsightsSyncService } from "@/services/admin/tiktok/TikTokInsightsSyncService";
+import { TikTokAdDestinationService } from "@/services/admin/tiktok/TikTokAdDestinationService";
+import { isTikTokAdInsightsConfigured } from "@/services/admin/tiktok/tiktokAdInsights";
+import { writeAdDestinations } from "@/services/analytics/adDestinationWriter";
+
+/** Platforms whose spend-by-url rollup supports an on-read refresh. */
+export type SpendByUrlFreshnessPlatform = "meta" | "tiktok";
 
 /**
  * On-read freshness for the Meta spend-by-url pipeline.
@@ -127,34 +134,83 @@ function completeAfterResponse(run: Promise<void>): void {
   }
 }
 
-/** The minimal refresh: insights window → missing destinations only → rebuild. */
+/**
+ * The minimal refresh: insights window → missing destinations only → rebuild.
+ *
+ * Deliberately NOT `runSpendByUrlSync`: that resolves EVERY ad's destination so the cron
+ * catches URL edits. Per-read that cost buys nothing — new ads are the only gap — so this
+ * resolves only adIds with no stored destination, and skips the platform's creative API
+ * entirely when there are none (the common case).
+ */
 async function refreshWindow(
+  platform: SpendByUrlFreshnessPlatform,
   adAccountId: string,
-  accessToken: string,
   window: { since: string; until: string },
 ): Promise<void> {
-  const insightsService = new MetaInsightsSyncService();
-  const destService = new MetaAdDestinationService();
   const aggService = new SpendByUrlAggregationService();
 
-  const synced = await insightsService.syncDateRange(adAccountId, accessToken, window, {
-    // Spend/revenue freshness doesn't need the 291-adset health-metadata
-    // refetch (several seconds); the cron keeps those fields current.
-    skipAdsetMetadata: true,
-  });
+  /** adIds seen in this window, per platform's own insights sync. */
+  let syncedAdIds: string[] = [];
 
-  if (synced.adIds.length > 0) {
-    const known = (await MetaAdDestination.find({ adId: { $in: synced.adIds } })
-      .select({ adId: 1 })
-      .lean()) as unknown as Array<{ adId: string }>;
-    const knownSet = new Set(known.map((d) => d.adId));
-    const missing = synced.adIds.filter((id) => !knownSet.has(id));
+  if (platform === "meta") {
+    const accessToken = process.env.FACEBOOK_MARKETING_ACCESS_TOKEN?.trim();
+    if (!accessToken) return;
+    const synced = await new MetaInsightsSyncService().syncDateRange(
+      adAccountId,
+      accessToken,
+      window,
+      {
+        // Spend/revenue freshness doesn't need the 291-adset health-metadata
+        // refetch (several seconds); the cron keeps those fields current.
+        skipAdsetMetadata: true,
+      },
+    );
+    syncedAdIds = synced.adIds;
+
+    const missing = await missingDestinationAdIds(platform, syncedAdIds);
     if (missing.length > 0) {
-      await destService.syncDestinationsForAdIds(adAccountId, accessToken, missing);
+      await new MetaAdDestinationService().syncDestinationsForAdIds(
+        adAccountId,
+        accessToken,
+        missing,
+      );
+    }
+  } else {
+    const synced = await new TikTokInsightsSyncService().syncDateRange(window);
+    if (!synced.configured) return;
+    syncedAdIds = synced.adIds;
+
+    const missing = await missingDestinationAdIds(platform, syncedAdIds);
+    if (missing.length > 0) {
+      const resolver = new TikTokAdDestinationService();
+      const resolved = await resolver.resolveForAdIds(missing);
+      await writeAdDestinations({
+        platform: "tiktok",
+        adAccountId,
+        requestedAdIds: missing,
+        resolved,
+      });
     }
   }
 
-  await aggService.recomputeForDateRange(adAccountId, window.since, window.until);
+  await aggService.recomputeForDateRange(platform, adAccountId, window.since, window.until);
+}
+
+/**
+ * Which of these adIds have no stored destination yet. Platform-scoped: an unscoped read
+ * would treat another platform's ad as "already resolved" and skip fetching this platform's
+ * real destination, since ad ids are only unique WITHIN a platform (2026-07-29).
+ */
+async function missingDestinationAdIds(
+  platform: SpendByUrlFreshnessPlatform,
+  adIds: string[],
+): Promise<string[]> {
+  if (adIds.length === 0) return [];
+  const known = (await AdDestination.find({ platform, adId: { $in: adIds } })
+    .select({ adId: 1 })
+    .lean()) as unknown as Array<{ adId: string }>;
+  const knownSet = new Set(known.map((d) => d.adId));
+  return adIds.filter((id) => !knownSet.has(id));
 }
 
 /**
@@ -165,21 +221,27 @@ async function refreshWindow(
  * refresh continues in the background. Never throws.
  */
 export async function ensureSpendByUrlFreshness(
+  platform: SpendByUrlFreshnessPlatform,
   adAccountId: string,
   since: string,
   until: string,
   options?: { timeBudgetMs?: number },
 ): Promise<void> {
   try {
-    const accessToken = process.env.FACEBOOK_MARKETING_ACCESS_TOKEN?.trim();
-    if (!adAccountId || !accessToken) return;
+    if (!adAccountId) return;
+    // Per-platform credential gate. Without this a TikTok read on a Meta-only environment
+    // would fall through and attempt a refresh that can only fail.
+    if (platform === "meta" && !process.env.FACEBOOK_MARKETING_ACCESS_TOKEN?.trim()) return;
+    if (platform === "tiktok" && !isTikTokAdInsightsConfigured()) return;
 
     const budgetMs = options?.timeBudgetMs ?? FRESHNESS_TIME_BUDGET_MS;
     const todayAest = formatInTimeZone(new Date(), AEST_TIMEZONE, "yyyy-MM-dd");
     const window = resolveOnReadRefreshWindow({ since, until, todayAest });
     if (!window) return;
 
-    const key = `${adAccountId}:${window.since}:${window.until}`;
+    // Platform is part of the key: the two platforms refresh independently, and a shared
+    // key would let one platform's in-flight refresh satisfy the other's staleness check.
+    const key = `${platform}:${adAccountId}:${window.since}:${window.until}`;
     const now = Date.now();
 
     const existing = inFlight.get(key);
@@ -193,7 +255,10 @@ export async function ensureSpendByUrlFreshness(
     const attempted = lastAttemptMs.get(key);
     if (attempted !== undefined && now - attempted < FRESHNESS_MAX_AGE_MS) return;
 
+    // Platform-scoped staleness probe. Unscoped, a fresh TikTok recompute for the same
+    // window could read as "Meta is fresh" and suppress the Meta refresh indefinitely.
     const newest = (await LandingPageMetricsDaily.findOne({
+      platform,
       adAccountId,
       date: { $gte: window.since, $lte: window.until },
     })
@@ -205,7 +270,7 @@ export async function ensureSpendByUrlFreshness(
     if (isFreshEnough(lastComputed, now)) return;
 
     lastAttemptMs.set(key, now);
-    const run = refreshWindow(adAccountId, accessToken, window)
+    const run = refreshWindow(platform, adAccountId, window)
       .catch((e) => {
         // Serve stale-but-consistent data instead of failing the read.
         console.error("[spendByUrlFreshness] on-read refresh failed:", e);

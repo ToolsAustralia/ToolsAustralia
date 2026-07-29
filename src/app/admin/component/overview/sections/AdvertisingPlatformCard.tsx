@@ -15,6 +15,7 @@ import {
 import { useMetricsFormatting } from "@/hooks/useMetricsFormatting";
 import type { AdminDashboardStats } from "@/hooks/queries/useAdminQueries";
 import { usePlatformRevenueBreakdown } from "@/hooks/queries/useAdminQueries";
+import { useTikTokAdsInsights } from "@/hooks/queries/admin/useTikTokAdsInsights";
 import type { DateRange } from "@/components/admin/DateRangeToggle";
 import PlatformRevenueModal from "@/components/modals/PlatformRevenueModal";
 import {
@@ -42,12 +43,28 @@ import {
 const COLUMNS: Column[] = [
   { key: "platform", label: "Platform", align: "left", sortable: false },
   { key: "spend", label: "Spend", align: "right", sortable: false },
+  // Signups sits between Spend and Revenue so the row reads as the funnel it is:
+  // spend → accounts created → revenue → return. Its own column (rather than a
+  // sub-line under Revenue) so it stays visible at zero — "this channel created no
+  // accounts" is itself information worth seeing.
+  { key: "signups", label: "Signups", align: "right", sortable: false },
   { key: "revenue", label: "Revenue", align: "right", sortable: false },
-  { key: "roas", label: "ROAS", align: "right", sortable: false },
+  // Two ROAS columns, deliberately labelled by SOURCE rather than by quality: "Server"
+  // is our own payment-attributed figure (the final word for budget decisions);
+  // "Platform" is what the ad platform reports back. They disagree by design — different
+  // attribution models and windows — and the gap is the signal.
+  { key: "roas", label: "ROAS · server", align: "right", sortable: false },
+  { key: "platformRoas", label: "ROAS · platform", align: "right", sortable: false },
 ];
 
 const MUTED = "text-neutral-300 dark:text-neutral-600";
-const AWAITING = "text-2xs text-amber-600/80 dark:text-amber-500/80 font-medium";
+/** Hover-popover box (fixed-position, portalled) — used for both render and fit math. */
+const POPOVER_WIDTH = 300;
+/** Upper bound for the popover's height (header + up to 5 category bars + padding). */
+const POPOVER_MAX_HEIGHT = 260;
+// amber-700 in light mode: the previous amber-600/80 measured 2.51:1 on white at 10px —
+// below the WCAG AA 4.5:1 floor for normal-size text; amber-700 measures 5.02:1 (panel F-010).
+const AWAITING = "text-2xs text-amber-700 dark:text-amber-500/80 font-medium";
 
 export default function AdvertisingPlatformCard({
   stats,
@@ -105,6 +122,26 @@ export default function AdvertisingPlatformCard({
     ...buildAdvertisingRows(stats?.attributedRevenue),
     ...(directRow ? [directRow] : []),
   ];
+
+  // Truthful "Awaiting sync" (panel F-002): while the TikTok spend cell is in the
+  // awaiting state, check the sync health — a FAILING nightly sync must not read as a
+  // benign "not set up yet". Range-independent, so a fixed same-day range is fine; the
+  // query is disabled entirely once real spend arrives (the cell stops being awaiting).
+  const tiktokAwaiting = rows.some(
+    (r) => r.platformKey === "tiktok" && r.spend.kind === "awaiting",
+  );
+  const todaySydney = new Date().toLocaleDateString("en-CA", { timeZone: "Australia/Sydney" });
+  const { data: tiktokHealthData } = useTikTokAdsInsights({
+    startDate: todaySydney,
+    endDate: todaySydney,
+    enabled: tiktokAwaiting && !showSkeleton,
+  });
+  const tiktokSyncFailing =
+    tiktokHealthData?.syncHealth?.configured === true &&
+    tiktokHealthData.syncHealth.lastRun?.outcome === "error";
+  const tiktokSyncErrorTitle = tiktokSyncFailing
+    ? `TikTok spend sync failing — ${tiktokHealthData?.syncHealth?.lastRun?.errorMessage ?? "unknown error"}`
+    : undefined;
   const blendedRoas = computeBlendedRoas(stats?.attributedRevenue);
   const totalRevenue = computeTotalAttributedRevenue(stats?.attributedRevenue);
 
@@ -137,9 +174,37 @@ export default function AdvertisingPlatformCard({
         return <span className="text-xs sm:text-sm font-semibold num">{formatCurrency(row.spend.value)}</span>;
       }
       if (row.spend.kind === "awaiting") {
+        // F-002: a failing sync must not masquerade as a benign "awaiting" state.
+        if (row.platformKey === "tiktok" && tiktokSyncFailing) {
+          return (
+            <span
+              className="text-2xs font-medium text-red-600 dark:text-red-400"
+              title={tiktokSyncErrorTitle}
+            >
+              Sync failing
+            </span>
+          );
+        }
         return <span className={AWAITING}>Awaiting sync</span>;
       }
       return <span className={MUTED}>—</span>; // owned
+    }
+
+    if (key === "signups") {
+      return (
+        <span
+          className={`num text-xs sm:text-sm font-semibold ${
+            row.signups > 0 ? "" : "text-neutral-300 dark:text-neutral-600"
+          }`}
+          title={
+            row.signups > 0
+              ? `${row.signups.toLocaleString()} account${row.signups === 1 ? "" : "s"} created from ${row.platform} in this range. Click-verified where a paid click id was present at registration, otherwise matched on UTM source; unattributed signups count under Direct.`
+              : undefined
+          }
+        >
+          {row.signups.toLocaleString()}
+        </span>
+      );
     }
 
     if (key === "revenue") {
@@ -153,7 +218,36 @@ export default function AdvertisingPlatformCard({
       );
     }
 
-    // roas
+    if (key === "platformRoas") {
+      if (row.platformRoas.kind === "value") {
+        return (
+          <div
+            className="flex flex-col items-end leading-tight"
+            title={`${row.platform} reports ${formatCurrency(row.platformRoas.revenue)} conversion value. This is the platform's own attribution — it will not match the server figure.`}
+          >
+            {/* Secondary by weight: the server ROAS is the one to act on. Deliberately
+                NOT colour-coded green/amber — two colour-coded ROAS numbers side by side
+                read as a pass/fail pair, when the platform figure is context, not a verdict. */}
+            <span className="num text-xs sm:text-sm font-medium text-neutral-600 dark:text-neutral-300">
+              {row.platformRoas.value.toFixed(2)}x
+            </span>
+            <span className="text-2xs text-neutral-400 dark:text-neutral-500 num">
+              {formatCurrency(row.platformRoas.revenue)}
+            </span>
+          </div>
+        );
+      }
+      if (row.platformRoas.kind === "noData") {
+        return (
+          <span className={MUTED} title="This platform reported no conversion value for the period.">
+            —
+          </span>
+        );
+      }
+      return <span className={MUTED}>—</span>; // na (owned / no spend)
+    }
+
+    // roas (server-side, payment-attributed — the final word)
     if (row.roas.kind === "value") {
       return (
         <span
@@ -206,7 +300,19 @@ export default function AdvertisingPlatformCard({
           onRowMouseEnter={(row, e) => {
             if (typeof window !== "undefined" && !window.matchMedia("(pointer: fine)").matches) return;
             const r = e.currentTarget.getBoundingClientRect();
-            setHovered({ key: row.platformKey, label: row.platform, top: r.bottom + 6, left: r.left });
+            // Flip above the row when the popover wouldn't fit below (panel F-016) —
+            // on the lower rows it was clipped by the viewport bottom, and because
+            // scrolling closes it you could never read the cut-off part. Height is
+            // content-dependent (up to 5 bars + header), so estimate conservatively
+            // and clamp to the top edge. Same 6px gap either side.
+            const estimatedHeight = POPOVER_MAX_HEIGHT;
+            const fitsBelow = r.bottom + 6 + estimatedHeight <= window.innerHeight;
+            const top = fitsBelow
+              ? r.bottom + 6
+              : Math.max(8, r.top - 6 - estimatedHeight);
+            // Keep the 300px-wide panel inside the right edge too.
+            const left = Math.max(8, Math.min(r.left, window.innerWidth - POPOVER_WIDTH - 8));
+            setHovered({ key: row.platformKey, label: row.platform, top, left });
           }}
           onRowMouseLeave={() => setHovered(null)}
         />
@@ -220,7 +326,15 @@ export default function AdvertisingPlatformCard({
           typeof document !== "undefined" &&
           createPortal(
             <div
-              style={{ position: "fixed", top: hovered.top, left: hovered.left, width: 300, zIndex: 60 }}
+              style={{
+                position: "fixed",
+                top: hovered.top,
+                left: hovered.left,
+                width: POPOVER_WIDTH,
+                maxHeight: POPOVER_MAX_HEIGHT,
+                overflowY: "auto",
+                zIndex: 60,
+              }}
               className="rounded-xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 shadow-xl p-3 pointer-events-none"
             >
               <p className="text-2xs uppercase tracking-wide text-neutral-400 mb-2">{hovered.label} — source breakdown</p>

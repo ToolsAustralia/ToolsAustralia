@@ -54,7 +54,14 @@ export async function getTikTokAdInsights(range: {
   };
   if (advertiserId) filter.adAccountId = advertiserId;
 
-  const docs = await TikTokAdInsightsDaily.find(filter).lean();
+  // Exclude `raw` (the full TikTok API row kept for field-name forensics) — the
+  // aggregation below never reads it, and shipping it per doc is the repo's
+  // unprojected-.find() footgun at 1000 ads × 60 days (panel F-023).
+  const docs = await TikTokAdInsightsDaily.find(filter)
+    .select(
+      "adId adName campaignName adsetName spendCents impressions clicks conversions revenueCents",
+    )
+    .lean();
 
   const byAd = new Map<string, AdAgg>();
   for (const d of docs) {
