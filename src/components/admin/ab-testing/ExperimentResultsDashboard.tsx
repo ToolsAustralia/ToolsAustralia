@@ -179,6 +179,10 @@ export default function ExperimentResultsDashboard({
    */
   const useBayesianSeries = isSentinelExperiment && (bayesian?.variants?.length ?? 0) > 0;
 
+  /** variantId → Bayesian row, so the comparison cards can show the same user-level
+   *  figures the Bayesian card computes rather than the structurally-zero legacy ones. */
+  const bayesianByVariantId = new Map((bayesian?.variants ?? []).map((v) => [v.variantId, v]));
+
   const conversionRateData = useBayesianSeries
     ? bayesian!.variants.map((v) => ({
         name: v.variantName,
@@ -447,9 +451,53 @@ export default function ExperimentResultsDashboard({
                     converted" when the Bayesian card above shows real conversions, so
                     point at the real numbers instead. */}
                 {isSentinelExperiment ? (
-                  <div className="text-xs text-gray-500 dark:text-neutral-400 pt-1">
-                    Conversions &amp; revenue: see the Bayesian card above
-                  </div>
+                  /* Sentinel: the legacy event counters are structurally zero, so read the
+                     same user-level figures the Bayesian card computes. Showing them here
+                     means this card carries the numbers and the charts below carry the
+                     shape — no cross-referencing two panels to read one result. */
+                  (() => {
+                    const b = bayesianByVariantId.get(variant.variantId);
+                    if (!b) {
+                      return (
+                        <div className="text-xs text-gray-500 dark:text-neutral-400 pt-1">
+                          Conversions &amp; revenue: see the Bayesian card above
+                        </div>
+                      );
+                    }
+                    return (
+                      <>
+                        <div className="flex justify-between text-sm">
+                          <span className="text-gray-600 dark:text-neutral-400">Conversions:</span>
+                          <span className="font-medium">{b.converters.toLocaleString()}</span>
+                        </div>
+                        <div className="flex justify-between text-sm">
+                          <span className="text-gray-600 dark:text-neutral-400">Conversion Rate:</span>
+                          <span className="font-medium">{(b.conversionRate * 100).toFixed(2)}%</span>
+                        </div>
+                        <div className="flex justify-between text-sm">
+                          <span className="text-gray-600 dark:text-neutral-400">Revenue:</span>
+                          <span className="font-medium">
+                            ${b.firstPurchaseRevenue.toLocaleString(undefined, {
+                              minimumFractionDigits: 2,
+                              maximumFractionDigits: 2,
+                            })}
+                          </span>
+                        </div>
+                        <div className="flex justify-between text-sm">
+                          <span className="text-gray-600 dark:text-neutral-400">Revenue/User:</span>
+                          <span className="font-medium">${b.revenuePerUser.toFixed(2)}</span>
+                        </div>
+                        {/* Recurring is renewal revenue a banner theme cannot have caused —
+                            labelled and de-emphasised so it never reads as part of the result. */}
+                        <div className="flex justify-between text-xs pt-1 border-t border-gray-200 dark:border-neutral-700 mt-1">
+                          <span className="text-gray-400 dark:text-neutral-500">Recurring (not a conversion):</span>
+                          <span className="text-gray-400 dark:text-neutral-500">
+                            ${b.recurringRevenue.toLocaleString()}
+                          </span>
+                        </div>
+                      </>
+                    );
+                  })()
                 ) : (
                   <>
                     <div className="flex justify-between text-sm">
