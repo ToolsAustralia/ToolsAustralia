@@ -26,7 +26,11 @@ import { parseReferrer } from "@/utils/tracking/referrer-helpers";
 import { userDataForRegistration } from "@/utils/tracking/registration-user-data";
 import { trackAffiliateSignup } from "@/lib/affiliate";
 import { extractBrandFromSlug } from "@/utils/integrations/klaviyo/brand-extraction";
-import { isValidPromoSlug, getPageTypeFromSlug } from "@/utils/promo-analytics/validate-promo-slug";
+import {
+  buildSignupAttribution,
+  mergeSignupAttribution,
+  plainSignupAttribution,
+} from "@/services/attribution/signup-attribution";
 import { IUser } from "@/models/User";
 import { isPrivilegedAccount } from "@/utils/auth/privileged-account";
 import type { AttributionParams } from "@/types/tracking";
@@ -203,71 +207,6 @@ function getAttributionFromRequest(
     return extractAttributionParams(referer);
   }
   return {};
-}
-
-/**
- * Build signup attribution. Persists whenever a valid promo slug OR any attribution
- * param is present — promotionSlug/promotionPageType are optional (homepage ad-landers
- * carry UTM but no promo slug, and we must not drop their attribution).
- */
-function buildSignupAttribution(
-  promotionSlug?: string,
-  attribution?: AttributionParams,
-  /** The prize the visitor actually assembled in the reels, when they touched them. */
-  builtPrizeSlug?: string,
-  /**
-   * Paid platform resolved from the request's click-id cookies (`_fbc`/`ttclid`/
-   * `_sc_click`). Gives signup-source analytics the SAME click-verified basis that
-   * purchases already use — without it, a paid signup that landed without UTM tags is
-   * indistinguishable from organic. Only the platform is persisted, never the click id.
-   */
-  clickPlatform?: "meta" | "tiktok" | "snapchat" | "google"
-): {
-  promotionPageType?: "evergreen" | "toolset";
-  promotionSlug?: string;
-  builtPrizeSlug?: string;
-  visitedAt: Date;
-  utmSource?: string;
-  utmMedium?: string;
-  utmCampaign?: string;
-  utmContent?: string;
-  utmTerm?: string;
-  campaignId?: string;
-  adsetId?: string;
-  adId?: string;
-  clickPlatform?: "meta" | "tiktok" | "snapchat" | "google";
-} | undefined {
-  const hasPromo = !!promotionSlug && isValidPromoSlug(promotionSlug);
-  const hasAttribution = !!(
-    attribution &&
-    (attribution.utm_source || attribution.utm_medium || attribution.utm_campaign ||
-     attribution.campaign_id || attribution.adset_id || attribution.ad_id)
-  );
-  // Validated exactly like promotionSlug — a hand-edited URL or a crawler must not be able to
-  // write an arbitrary string into attribution.
-  const hasBuiltPrize = !!builtPrizeSlug && isValidPromoSlug(builtPrizeSlug);
-  // A paid click with no promo slug and no UTMs is still real attribution — persist it.
-  // `builtPrizeSlug` is deliberately NOT a reason to persist on its own: it only ever arrives
-  // alongside a promo slug (it is derived from the promo page's own reels), so treating it as a
-  // trigger would let a bare crafted param mint an attribution row that means nothing.
-  if (!hasPromo && !hasAttribution && !clickPlatform) return undefined;
-  return {
-    ...(hasPromo && {
-      promotionPageType: getPageTypeFromSlug(promotionSlug!),
-      promotionSlug: promotionSlug!.toLowerCase().trim(),
-    }),
-    ...(hasBuiltPrize && { builtPrizeSlug: builtPrizeSlug!.toLowerCase().trim() }),
-    visitedAt: new Date(),
-    ...(attribution?.utm_source && { utmSource: attribution.utm_source }),
-    ...(attribution?.utm_medium && { utmMedium: attribution.utm_medium }),
-    ...(attribution?.utm_campaign && { utmCampaign: attribution.utm_campaign }),
-    ...(attribution?.utm_content && { utmContent: attribution.utm_content }),
-    ...(attribution?.utm_term && { utmTerm: attribution.utm_term }),
-    ...(attribution?.campaign_id && { campaignId: attribution.campaign_id }),
-    ...(attribution?.adset_id && { adsetId: attribution.adset_id }),
-    ...(attribution?.ad_id && { adId: attribution.ad_id }),
-    ...(clickPlatform && { clickPlatform }),
-  };
 }
 
 /**
@@ -543,7 +482,11 @@ export async function POST(request: NextRequest) {
             validatedData.builtPrizeSlug,
             signupClickPlatform
           );
-          if (signupAttr) existingUser.signupAttribution = signupAttr;
+          if (signupAttr)
+            existingUser.signupAttribution = mergeSignupAttribution(
+              plainSignupAttribution(existingUser.signupAttribution),
+              signupAttr
+            );
 
           // Handle affiliate code update (only if provided and not already set)
           if (
@@ -688,7 +631,11 @@ export async function POST(request: NextRequest) {
         validatedData.builtPrizeSlug,
         signupClickPlatform
       );
-      if (signupAttrEmail) existingUser.signupAttribution = signupAttrEmail;
+      if (signupAttrEmail)
+        existingUser.signupAttribution = mergeSignupAttribution(
+          plainSignupAttribution(existingUser.signupAttribution),
+          signupAttrEmail
+        );
 
       // Handle affiliate code update (only if provided and not already set)
       if (
@@ -786,7 +733,11 @@ export async function POST(request: NextRequest) {
         validatedData.builtPrizeSlug,
         signupClickPlatform
       );
-      if (signupAttrMobile) existingUser.signupAttribution = signupAttrMobile;
+      if (signupAttrMobile)
+        existingUser.signupAttribution = mergeSignupAttribution(
+          plainSignupAttribution(existingUser.signupAttribution),
+          signupAttrMobile
+        );
 
       // Handle affiliate code update (only if provided and not already set)
       if (
