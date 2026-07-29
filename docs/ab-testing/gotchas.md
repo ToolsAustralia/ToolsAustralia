@@ -396,3 +396,5 @@ Read all five `docs/AB_TESTING_*.md` root files and merge in next refresh:
 - `AB_TESTING_DEDUPLICATION.md`
 - `AB_TESTING_DATABASE_OPTIMIZATION.md`
 - `AB_TESTING_METRICS_CALCULATION.md`
+
+> **Update (2026-07-29):** the conversion-rate and revenue charts are NOT suppressed for sentinel experiments — they are repointed at the Bayesian series so revenue per variant stays visible. Only CTR is dropped (unavailable for sentinels, not zero).
