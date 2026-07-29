@@ -629,9 +629,10 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/repositories/ab-testing/**",
         "src/app/api/ab-testing/**",
         "src/models/ab-testing/**",
-        "src/utils/ab-testing/**"
+        "src/utils/ab-testing/**",
+        "src/lib/ab-testing/**"
       ],
-      "lastVerified": "2026-07-06"
+      "lastVerified": "2026-07-29"
     },
     "metrics-analytics": {
       "docs": "docs/metrics-analytics/",
@@ -823,9 +824,10 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/lib/jobs/**",
         "src/repositories/index.ts",
         "src/repositories/PaymentEventRepository.ts",
-        "src/repositories/PromoAnalyticsRepository.ts"
+        "src/repositories/PromoAnalyticsRepository.ts",
+        "src/repositories/__tests__/**"
       ],
-      "lastVerified": "2026-07-28"
+      "lastVerified": "2026-07-29"
     },
     "infrastructure": {
       "docs": "docs/infrastructure/",
