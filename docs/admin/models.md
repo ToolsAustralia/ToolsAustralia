@@ -106,3 +106,13 @@ One document per `ChargeJobRun`, snapshotting the eligible invoices for a chunke
 **Shape:** `{ runId, items: ChargeWorklistItem[], createdAt }` where each item is `{ invoiceId, customerId, userId, amount }` (`amount` is Stripe minor-units at snapshot time — display/estimate only; the live charge re-reads `amount_remaining`).
 
 The worklist is the **candidate set only**, not a "safe to charge" assertion — each chunk re-verifies eligibility live via `payOpenInvoiceAsPastDueAdmin`'s own guards. Resumability/progress is derived from which worklist invoices already have an `InvoiceChargeLog` row for the run, so a killed chunk resumes from the unlogged remainder.
+
+## `AdDestination` (was `MetaAdDestination`) — platform-scoped landing URLs (2026-07-29)
+
+[`src/models/AdDestination.ts`](../../src/models/AdDestination.ts). One resolved landing URL per **ad**, for **any** ad platform. Renamed from `MetaAdDestination` and given a `platform` discriminator so TikTok (and later Snapchat) share one collection, one aggregation service and one set of reader queries rather than forking all of them per platform.
+
+**The `platform` field is load-bearing, not decorative.** The old unique key was a **bare `adId`**, which asserts ad ids are globally unique — they are only unique *within* a platform. A TikTok `ad_id` numerically equal to a Meta ad id would either throw `E11000` (losing that ad's destination, so its spend silently books to `unknown://` and understates that URL's spend and the matching prize row) or overwrite the Meta row. Unique key is now **`{platform, adId}`**, and **every read must pass a platform** — three readers previously queried `find({adId: {$in}})` unscoped and would have cross-contaminated.
+
+**The collection name is pinned to `metaaddestinations` deliberately.** Without `collection: "metaaddestinations"` on the schema, Mongoose would derive `addestinations` from the new model name and silently create an *empty* collection — every Meta URL would resolve to `unknown://` overnight. The historical name is the price of a zero-downtime rename; do not "tidy" it without a data migration.
+
+**Migration:** `npx tsx scripts/migrations/2026-07-29-platform-scope-ad-destinations.ts` (dry-run default, `--live` to apply). Stamps `platform:"meta"` on existing rows **before** touching indexes (building the compound index over nulls would collide), then drops `adId_1` and creates `{platform, adId}` unique. Idempotent, aborts on duplicate pairs, and verifies the end state (index present, old index gone, stamped count === pre-migration total). **Must be run against production before any TikTok destination sync.** Local run: 3,078 documents stamped, `adId_1` dropped, verified.

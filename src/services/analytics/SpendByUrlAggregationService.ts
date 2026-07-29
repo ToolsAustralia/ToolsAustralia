@@ -1,5 +1,5 @@
 import MetaAdInsightsDaily from "@/models/MetaAdInsightsDaily";
-import MetaAdDestination from "@/models/MetaAdDestination";
+import AdDestination from "@/models/AdDestination";
 import LandingPageMetricsDaily from "@/models/LandingPageMetricsDaily";
 import type { ILandingPackagesFocusSplit } from "@/models/LandingPageMetricsDaily";
 import {
@@ -252,7 +252,8 @@ export class SpendByUrlAggregationService {
       }
 
       const adIds = [...new Set(insights.map((i) => i.adId))];
-      const dests = await MetaAdDestination.find({ adId: { $in: adIds } }).lean();
+      // Platform-scoped: ad ids are only unique within a platform (2026-07-29).
+      const dests = await AdDestination.find({ platform: "meta", adId: { $in: adIds } }).lean();
 
       await LandingPageMetricsDaily.deleteMany({ adAccountId, date });
 
@@ -379,7 +380,7 @@ export class SpendByUrlAggregationService {
     since: string,
     until: string
   ): Promise<{ adIds: string[]; destByAd: Map<string, (typeof dests)[number]> }> {
-    const dests = await MetaAdDestination.find({ adAccountId, canonicalUrl }).lean();
+    const dests = await AdDestination.find({ platform: "meta", adAccountId, canonicalUrl }).lean();
     const destByAd = new Map(dests.map((d) => [d.adId, d] as [string, (typeof dests)[number]]));
     let adIds = dests.map((d) => d.adId);
 

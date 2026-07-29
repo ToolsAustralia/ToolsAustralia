@@ -1,7 +1,7 @@
 import { after } from "next/server";
 import { formatInTimeZone } from "date-fns-tz";
 import LandingPageMetricsDaily from "@/models/LandingPageMetricsDaily";
-import MetaAdDestination from "@/models/MetaAdDestination";
+import AdDestination from "@/models/AdDestination";
 import { MetaInsightsSyncService } from "@/services/meta/MetaInsightsSyncService";
 import { MetaAdDestinationService } from "@/services/meta/MetaAdDestinationService";
 import { SpendByUrlAggregationService } from "@/services/analytics/SpendByUrlAggregationService";
@@ -144,7 +144,9 @@ async function refreshWindow(
   });
 
   if (synced.adIds.length > 0) {
-    const known = (await MetaAdDestination.find({ adId: { $in: synced.adIds } })
+    // Platform-scoped: an unscoped read would treat another platform's ad as "already
+    // resolved" and skip fetching this platform's real destination (2026-07-29).
+    const known = (await AdDestination.find({ platform: "meta", adId: { $in: synced.adIds } })
       .select({ adId: 1 })
       .lean()) as unknown as Array<{ adId: string }>;
     const knownSet = new Set(known.map((d) => d.adId));

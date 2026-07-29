@@ -1,5 +1,5 @@
 import MetaAdInsightsDaily, { type IMetaAdInsightsDaily } from "@/models/MetaAdInsightsDaily";
-import MetaAdDestination, { type IMetaAdDestination } from "@/models/MetaAdDestination";
+import AdDestination, { type IAdDestination } from "@/models/AdDestination";
 import LandingPageMetricsDaily, { type ILandingPageMetricsDaily } from "@/models/LandingPageMetricsDaily";
 import {
   derivePackagesFocusForDestination,
@@ -206,9 +206,12 @@ export class PackagesFocusBreakdownService {
     }
 
     const adIds = [...new Set(insights.map((i) => i.adId))];
-    const dests = (await MetaAdDestination.find({
+    // MUST filter by platform: ad ids are only unique WITHIN a platform, so an unscoped
+    // read would attach another platform's landing URL to this platform's ad (2026-07-29).
+    const dests = (await AdDestination.find({
+      platform: "meta",
       adId: { $in: adIds },
-    }).lean()) as unknown as IMetaAdDestination[];
+    }).lean()) as unknown as IAdDestination[];
     const destByAd = new Map(dests.map((d) => [d.adId, d]));
 
     type AdAcc = { adName?: string; adFormat: PackagesFocusAdNode["adFormat"]; acc: CentsAcc };

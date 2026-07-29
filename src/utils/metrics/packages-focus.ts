@@ -2,7 +2,7 @@ import {
   MEMBERSHIP_PACKAGES_QUERY_PARAM,
   parseMembershipPackagesTab,
 } from "@/utils/membership/packagesTabParam";
-import { canonicalizeLandingUrl } from "@/utils/meta/canonicalize-landing-url";
+import { canonicalizeLandingUrl } from "@/utils/metrics/canonicalize-landing-url";
 
 /**
  * packagesFocus — which package strategy an ad's landing URL targets.
